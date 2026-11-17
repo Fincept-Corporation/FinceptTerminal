@@ -63,13 +63,24 @@ int TokenMetadataService::size() const {
 }
 
 void TokenMetadataService::load_from_storage() {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kStorageKey));
-    if (r.is_err() || r.value().isEmpty()) {
-        LOG_INFO("TokenMetadata", "no cached token list — will fetch from Jupiter");
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kStorageKey));
+    if (r.failed()) {
+        // Not "no cached list": the store could not answer (it logs the key's error).
+        // Jupiter still fills the in-memory list; persist_to_storage() will not write
+        // over the stored copy while it is only temporarily unreadable.
+        storage_read_failed_ = true;
+        LOG_WARN("TokenMetadata", QStringLiteral("cached token list could not be read (%1) — fetching from Jupiter; "
+                                                 "the stored copy is not overwritten while unreadable")
+                                      .arg(QLatin1String(r.error_name())));
+        return;
+    }
+    storage_read_failed_ = false;
+    if (!r.found() || r.value.isEmpty()) {
+        LOG_DEBUG("TokenMetadata", "no cached token list — will fetch from Jupiter");
         return;
     }
     QJsonParseError pe;
-    const auto doc = QJsonDocument::fromJson(r.value().toUtf8(), &pe);
+    const auto doc = QJsonDocument::fromJson(r.value.toUtf8(), &pe);
     if (pe.error != QJsonParseError::NoError || !doc.isObject()) {
         LOG_WARN("TokenMetadata", "cached token list is malformed; ignoring");
         return;
@@ -95,12 +106,22 @@ void TokenMetadataService::load_from_storage() {
         cache_ = std::move(next);
         last_refreshed_ms_ = static_cast<qint64>(root.value(QStringLiteral("ts_ms")).toDouble());
     }
-    LOG_INFO("TokenMetadata", QStringLiteral("loaded %1 tokens from cache (age %2 h)")
+    LOG_DEBUG("TokenMetadata", QStringLiteral("loaded %1 tokens from cache (age %2 h)")
                                   .arg(size())
                                   .arg((QDateTime::currentMSecsSinceEpoch() - last_refreshed_ms_) / 3600000));
 }
 
 void TokenMetadataService::persist_to_storage() {
+    if (storage_read_failed_) {
+        const SecretRead current = SecureStorage::instance().read(QString::fromLatin1(kStorageKey));
+        if (current.failed() && current.error != SecretRead::Error::Corrupt) {
+            LOG_WARN_RL("TokenMetadata", QStringLiteral("persist_skipped"), 3600 * 1000,
+                        QStringLiteral("token cache not persisted: the stored copy is still unreadable (%1)")
+                            .arg(QLatin1String(current.error_name())));
+            return;
+        }
+        storage_read_failed_ = false; // readable again, absent, or damaged for good (replaced now)
+    }
     QJsonArray entries;
     {
         QReadLocker rl(&lock_);
@@ -124,8 +145,8 @@ void TokenMetadataService::persist_to_storage() {
     if (r.is_err()) {
         LOG_WARN("TokenMetadata", "failed to persist token cache: " + QString::fromStdString(r.error()));
     } else {
-        LOG_INFO("TokenMetadata",
-                 QStringLiteral("persisted %1 tokens (%2 KB)").arg(entries.size()).arg(blob.size() / 1024));
+        LOG_DEBUG("TokenMetadata",
+                  QStringLiteral("persisted %1 tokens (%2 KB)").arg(entries.size()).arg(blob.size() / 1024));
     }
 }
 
@@ -150,20 +171,26 @@ void TokenMetadataService::refresh_from_jupiter_async() {
             return;
         self->refresh_in_flight_ = false;
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_WARN("TokenMetadata", "Jupiter fetch failed: " + reply->errorString());
+            LOG_TRANSITION("TokenMetadata", QStringLiteral("jupiter_refresh"), 1, LogLevel::Warn,
+                           logf("Token list refresh from Jupiter failed, keeping the cached list",
+                                {{"reason", "network"}, {"error", reply->errorString()}}));
             return;
         }
         const auto payload = reply->readAll();
         QJsonParseError pe;
         const auto doc = QJsonDocument::fromJson(payload, &pe);
         if (pe.error != QJsonParseError::NoError) {
-            LOG_WARN("TokenMetadata", "Jupiter response is malformed JSON");
+            LOG_TRANSITION("TokenMetadata", QStringLiteral("jupiter_refresh"), 1, LogLevel::Warn,
+                           logf("Token list refresh from Jupiter failed, keeping the cached list",
+                                {{"reason", "invalid_json"}, {"bytes", payload.size()}}));
             return;
         }
         // Endpoint returns a top-level array of token objects.
         const auto arr = doc.isArray() ? doc.array() : doc.object().value(QStringLiteral("data")).toArray();
         if (arr.isEmpty()) {
-            LOG_WARN("TokenMetadata", "Jupiter returned 0 tokens; keeping old cache");
+            LOG_TRANSITION("TokenMetadata", QStringLiteral("jupiter_refresh"), 1, LogLevel::Warn,
+                           logf("Token list refresh from Jupiter failed, keeping the cached list",
+                                {{"reason", "empty_list"}}));
             return;
         }
 
@@ -196,7 +223,9 @@ void TokenMetadataService::refresh_from_jupiter_async() {
             self->last_refreshed_ms_ = QDateTime::currentMSecsSinceEpoch();
         }
         self->persist_to_storage();
-        LOG_INFO("TokenMetadata", QStringLiteral("refreshed: %1 verified tokens").arg(self->size()));
+        LOG_TRANSITION("TokenMetadata", QStringLiteral("jupiter_refresh"), 0, LogLevel::Info,
+                       logf("Token list refresh from Jupiter recovered", {{"count", self->size()}}));
+        LOG_DEBUG("TokenMetadata", QStringLiteral("refreshed: %1 verified tokens").arg(self->size()));
         emit self->metadata_changed();
     });
 }

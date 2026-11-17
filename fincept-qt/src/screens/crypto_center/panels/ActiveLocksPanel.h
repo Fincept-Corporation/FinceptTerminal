@@ -14,6 +14,10 @@ class QLabel;
 class QShowEvent;
 class QTableWidget;
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens::panels {
 
 /// ActiveLocksPanel — middle section of the STAKE tab (Phase 3 §3.2).
@@ -24,8 +28,10 @@ namespace fincept::screens::panels {
 ///
 /// Subscribes (visibility-driven, P3): `wallet:locks:<pubkey>` — only while
 /// `StakingService::staking_live()`. In this build staking is not live, so
-/// the panel never subscribes and shows a COMING SOON pill with an empty
-/// state that says why; it never shows positions that are not on-chain.
+/// the panel never subscribes and shows a compact ui::EmptyState that says
+/// why (note chip COMING SOON); it never shows positions that are not on-chain.
+/// No positions / feed error: the same EmptyState ("No active locks" /
+/// "Locks unavailable" with RETRY).
 ///
 /// Row context menu: Extend / Withdraw, both disabled with a "coming soon"
 /// tooltip — the extend / withdraw transactions are not implemented.
@@ -52,6 +58,8 @@ class ActiveLocksPanel : public QWidget {
     void on_row_context_menu(const QPoint& pos);
 
     void rebuild_table();
+    /// The empty / not-live / error page, built on first need under the table.
+    fincept::ui::EmptyState* ensure_empty_state();
     void show_error_strip(const QString& msg);
     void clear_error_strip();
     /// Head pill: LIVE (staking live, feed healthy), UNAVAILABLE (feed error)
@@ -65,7 +73,7 @@ class ActiveLocksPanel : public QWidget {
 
     // Body
     QTableWidget* table_ = nullptr;
-    QLabel* empty_state_ = nullptr;
+    fincept::ui::EmptyState* empty_state_ = nullptr; ///< lazily built (ensure_empty_state)
 
     // Error strip
     QFrame* error_strip_ = nullptr;

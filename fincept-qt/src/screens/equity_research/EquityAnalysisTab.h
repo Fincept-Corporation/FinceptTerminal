@@ -24,8 +24,9 @@ class AnalysisPriceTargetGauge;
 // Unlike Overview (which lists raw fundamentals), this tab *interprets* the
 // same StockInfo into decisions: an analyst price-target gauge plus six
 // color-coded verdict cards. All ratings are computed purely from StockInfo —
-// no extra backend calls. Heuristics are absolute screening signals (not
-// sector-adjusted); rationales stay factual rather than prescriptive.
+// no extra backend calls. Thresholds are relative to the company's sector (a
+// utility's leverage and a refiner's P/E are judged against their own norms;
+// banks and insurers are not judged on debt-to-cash); rationales stay factual.
 class EquityAnalysisTab : public QWidget {
     Q_OBJECT
   public:

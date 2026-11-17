@@ -1,0 +1,27 @@
+{
+ "RELIANCE.NS": {
+  "tz": "Asia/Kolkata",
+  "currency": "INR"
+ },
+ "7203.T": {
+  "tz": "Asia/Tokyo",
+  "currency": "JPY"
+ },
+ "BTC-USD": {
+  "tz": "UTC",
+  "currency": "USD"
+ },
+ "^NSEI": {
+  "tz": "Asia/Kolkata",
+  "currency": "INR"
+ },
+ "SPY": {
+  "tz": "America/New_York",
+  "currency": "USD"
+ },
+ "AAPL": {
+  "tz": "America/New_York",
+  "currency": "USD",
+  "laterSplitProduct": 1.0
+ }
+}

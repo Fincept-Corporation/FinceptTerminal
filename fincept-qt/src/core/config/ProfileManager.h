@@ -15,7 +15,7 @@ namespace fincept {
 ///   // AppPaths::data() now returns .../profiles/work/data/
 ///
 /// Profiles are stored under:
-///   %LOCALAPPDATA%/com.fincept.terminal/profiles/<name>/
+///   %LOCALAPPDATA%/com.fincept.terminal.community/profiles/<name>/  (AppPaths::root())
 ///
 /// A manifest at root/profiles.json tracks the list of profiles. Each entry
 /// carries a stable `ProfileId` UUID alongside its human-readable name —
@@ -86,6 +86,12 @@ class ProfileManager {
     /// SecureStorage key prefix — credentials are keyed as "profiles/<name>/<key>"
     /// so different profiles never share credential entries.
     QString secure_key_prefix() const;
+
+    /// Forget the cached manifest and re-read it from AppPaths::root(), then
+    /// re-apply the active profile (directories, UUID). For LegacyRootAdoption,
+    /// which can replace the whole data root after --profile already loaded the
+    /// manifest of the new, then empty, root.
+    void reload_after_root_change();
 
   private:
     ProfileManager() = default;

@@ -62,8 +62,23 @@ TradingEconomicsPanel::TradingEconomicsPanel(QWidget* parent)
 }
 
 void TradingEconomicsPanel::activate() {
-    show_empty(tr("Set TRADING_ECONOMICS_API_KEY environment variable, then select a dataset and click FETCH\n"
-                  "Get a key at: tradingeconomics.com/api"));
+    // Nothing to prepare: without a key the results pane names TRADING_ECONOMICS_API_KEY; with one it
+    // shows the remembered result or a preview with FETCH (paid, rate-limited plan — never automatic).
+}
+
+QList<ui::Requirement> TradingEconomicsPanel::load_requirements() const {
+    return {ui::Requirement::api_key(QStringLiteral("TRADING_ECONOMICS_API_KEY"), QStringLiteral("Trading Economics"))};
+}
+
+EconPanelBase::LoadPolicy TradingEconomicsPanel::load_policy() const {
+    LoadPolicy p;
+    p.manual = true;
+    p.shape = ui::LoadingSkeleton::Shape::Table;
+    p.preview_title = tr("Trading Economics");
+    p.preview_message = tr("Credit ratings, indicators and forecasts from your Trading Economics plan.");
+    p.preview_run = tr("FETCH");
+    p.preview_note = tr("Counts against your Trading Economics plan's request quota");
+    return p;
 }
 
 void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
@@ -76,13 +91,13 @@ void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_ = new QComboBox;
     for (const auto& d : kTEDatasets)
         dataset_combo_->addItem(d.label, d.command);
-    dataset_combo_->setFixedHeight(26);
+    dataset_combo_->setMinimumHeight(26);
     dataset_combo_->setMinimumWidth(200);
 
     country_combo_ = new QComboBox;
     for (const auto& c : kTECountries)
         country_combo_->addItem(c.first, c.second);
-    country_combo_->setFixedHeight(26);
+    country_combo_->setMinimumHeight(26);
     country_combo_->setMinimumWidth(130);
     country_combo_->setToolTip(tr("Required for yield_curve and country_data"));
 
@@ -107,9 +122,9 @@ void TradingEconomicsPanel::on_fetch() {
     if (dataset.country_arg == "required" || dataset.country_arg == "optional")
         args << country;
 
-    services::EconomicsService::instance().execute(kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command,
-                                                   args,
-                                                   "te_" + dataset.command + (args.isEmpty() ? "" : "_" + country));
+    execute_query(kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command,
+                  args,
+                  "te_" + dataset.command + (args.isEmpty() ? "" : "_" + country));
 }
 
 // Normalise various Trading Economics response shapes into displayable rows.
@@ -163,9 +178,13 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
 
     if (!result.success) {
         const QString msg = result.error;
-        if (msg.contains("API key") || msg.contains("TRADING_ECONOMICS_API_KEY")) {
+        if (!result.error_code.isEmpty()) {
+            // The script named the failure ("[missing_key] …" + env key, "[auth_failed] …", a rate
+            // limit): the base shows that kind's own page.
+            show_error(msg);
+        } else if (msg.contains("API key") || msg.contains("TRADING_ECONOMICS_API_KEY")) {
             show_error(tr("Trading Economics API key not configured.\n"
-                          "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (TRADING_ECONOMICS_API_KEY).\n"
                           "Get a key at: tradingeconomics.com/api"));
         } else {
             show_error(msg);
@@ -179,7 +198,7 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
         if (!err.isEmpty() && err != "false") {
             if (err.contains("API key") || err.contains("TRADING_ECONOMICS")) {
                 show_error(tr("Trading Economics API key not configured.\n"
-                              "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
+                              "Add it in Settings > Credentials (TRADING_ECONOMICS_API_KEY).\n"
                               "Get a key at: tradingeconomics.com/api"));
             } else {
                 show_error(err);
@@ -204,7 +223,7 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
         }
     }
     display(rows, title);
-    LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("TradingEconomicsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

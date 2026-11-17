@@ -8,31 +8,33 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('EIA_API_KEY', '')
 BASE_URL = "https://api.eia.gov/v2/electricity"
+SERVICE = "EIA"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every EIA v2 endpoint answers HTTP 403 without a key: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key("The EIA Open Data API", "https://www.eia.gov/opendata/register.php",
+                              "EIA_API_KEY", what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
-    if API_KEY:
-        params["api_key"] = API_KEY
+    params["api_key"] = API_KEY
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "EIA_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 
 def get_generation(source: str, state: str, start_period: str, end_period: str) -> Any:
@@ -104,7 +106,7 @@ def main(args=None):
         start_period = args[2] if len(args) > 2 else "2024-01"
         end_period = args[3] if len(args) > 3 else "2024-03"
         result = get_utility_data(utility_id, start_period, end_period)
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

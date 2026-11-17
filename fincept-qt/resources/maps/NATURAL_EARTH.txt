@@ -1,0 +1,19 @@
+natural_earth.bin — offline base map used by the Geopolitics and Maritime maps.
+
+Source: Natural Earth (https://www.naturalearthdata.com), GeoJSON copies from
+https://github.com/nvkelso/natural-earth-vector (geojson/):
+  ne_110m_land, ne_50m_land, ne_110m_lakes, ne_50m_lakes (scalerank <= 5),
+  ne_110m_admin_0_boundary_lines_land, ne_50m_admin_0_boundary_lines_land,
+  ne_110m_admin_0_countries (label points), ne_110m_geography_marine_polys (label points),
+  ne_10m_ports.
+
+Licence: public domain. "All versions of Natural Earth raster + vector map data found on
+this website are in the public domain. You may use the maps in any manner, including
+modifying the content and design, electronic dissemination, and offset printing."
+No permission or credit is required; the map shows "Made with Natural Earth".
+
+Rebuild: python -I build_natural_earth.py <dir with the .geojson files> natural_earth.bin
+
+Optional online imagery (SATELLITE / NIGHT LIGHTS basemaps) comes from NASA GIBS
+(https://gibs.earthdata.nasa.gov) — public, no key or account. The map shows
+"Imagery: NASA GIBS" while it is on screen, as NASA asks.

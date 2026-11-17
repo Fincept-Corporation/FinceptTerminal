@@ -1,6 +1,7 @@
 ﻿#include "trading/ExchangeSession.h"
 
 #include "core/logging/Logger.h"
+#include "core/process/ProcessTree.h"
 #include "python/PythonRunner.h"
 #include "storage/secure/SecureStorage.h"
 #include "trading/BrokerRegistry.h"
@@ -27,6 +28,11 @@ constexpr int kMaxWsRestartAttempts = 5;
 constexpr int kWsRestartBaseMs = 1000;    // first backoff; doubles each attempt
 constexpr int kWsRestartMaxMs = 30000;    // backoff ceiling
 constexpr qint64 kWsHealthyRunMs = 60000; // uptime past which a drop earns a fresh budget
+
+// Stored credentials that could not be read for a temporary reason (busy / closed
+// store) are read again after 2, 4, 8, 16 and 32 s; a permanent one waits for the user.
+constexpr int kCredReadRetryBaseMs = 2000;
+constexpr int kMaxCredReadRetries = 5;
 
 // SecureStorage keys for per-exchange crypto credentials. Keeping three
 // separate keys (rather than one JSON blob) matches the existing `auth`
@@ -84,10 +90,19 @@ void ExchangeSession::set_credentials(const ExchangeCredentials& creds) {
     {
         QMutexLocker lock(&mutex_);
         credentials_ = creds;
+        credentials_read_error_.clear(); // the user's explicit entry replaces what could not be read
     }
     // Tell the shared daemon pool to resend on next call (it fingerprints
     // per-exchange, so no wasted writes if the key didn't actually change).
-    ExchangeDaemonPool::instance().forget_credentials(exchange_id_);
+    // A CLEAR (every field empty) must also reach the running daemon right away:
+    // it otherwise kept the old keys and its authenticated client, and LIVE
+    // orders / cancels / leverage changes kept working on the "cleared" account.
+    const bool cleared = creds.api_key.isEmpty() && creds.secret.isEmpty() && creds.password.isEmpty() &&
+                         creds.wallet_address.isEmpty() && creds.private_key.isEmpty();
+    if (cleared)
+        ExchangeDaemonPool::instance().clear_credentials(exchange_id_);
+    else
+        ExchangeDaemonPool::instance().forget_credentials(exchange_id_);
 
     // Persist to OS-native encrypted storage so the next launch recovers
     // these without prompting. Empty fields map to a remove() so clearing
@@ -127,21 +142,53 @@ void ExchangeSession::load_stored_credentials() {
         QMutexLocker lock(&mutex_);
         next = credentials_;
     }
-    const auto r_api = ss.retrieve(creds_key(exchange_id_, "api_key"));
-    if (r_api.is_ok() && !r_api.value().isEmpty())
-        next.api_key = r_api.value();
-    const auto r_sec = ss.retrieve(creds_key(exchange_id_, "secret"));
-    if (r_sec.is_ok() && !r_sec.value().isEmpty())
-        next.secret = r_sec.value();
-    const auto r_pw = ss.retrieve(creds_key(exchange_id_, "password"));
-    if (r_pw.is_ok() && !r_pw.value().isEmpty())
-        next.password = r_pw.value();
-    const auto r_wallet = ss.retrieve(creds_key(exchange_id_, "wallet_address"));
-    if (r_wallet.is_ok() && !r_wallet.value().isEmpty())
-        next.wallet_address = r_wallet.value();
-    const auto r_pk = ss.retrieve(creds_key(exchange_id_, "private_key"));
-    if (r_pk.is_ok() && !r_pk.value().isEmpty())
-        next.private_key = r_pk.value();
+    SecretRead failed;
+    QString failed_field;
+    auto take = [&](const char* field, QString& dest) {
+        const SecretRead r = ss.read(creds_key(exchange_id_, QLatin1String(field)));
+        if (r.failed()) {
+            if (!failed.failed()) {
+                failed = r;
+                failed_field = QLatin1String(field);
+            }
+            return;
+        }
+        if (r.found() && !r.value.isEmpty())
+            dest = r.value;
+    };
+    take("api_key", next.api_key);
+    take("secret", next.secret);
+    take("password", next.password);
+    take("wallet_address", next.wallet_address);
+    take("private_key", next.private_key);
+
+    const bool failing = failed.failed();
+    {
+        QMutexLocker lock(&mutex_);
+        credentials_read_error_ =
+            failing ? tr("Could not read the stored credential: %1.").arg(failed.reason()) : QString();
+    }
+    LOG_TRANSITION(kSessionTag, QStringLiteral("cred_read|") + exchange_id_, failing,
+                   failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Stored exchange credentials could not be read; the session keeps no keys and "
+                                  "nothing is written",
+                                  {{"exchange", exchange_id_}, {"field", failed_field}, {"kind", failed.error_name()}})
+                           : logf("Stored exchange credentials readable again", {{"exchange", exchange_id_}}));
+    if (failing) {
+        // A partial key set (key without its secret, wallet without its private key)
+        // would authenticate as the wrong / an incomplete account: install nothing.
+        if (failed.transient() && cred_read_retries_ < kMaxCredReadRetries) {
+            const int delay_ms = kCredReadRetryBaseMs << cred_read_retries_;
+            ++cred_read_retries_;
+            QPointer<ExchangeSession> self = this;
+            QTimer::singleShot(delay_ms, this, [self]() {
+                if (self)
+                    self->load_stored_credentials();
+            });
+        }
+        return;
+    }
+    cred_read_retries_ = 0;
 
     if (next.api_key.isEmpty() && next.secret.isEmpty() && next.password.isEmpty() && next.wallet_address.isEmpty() &&
         next.private_key.isEmpty())
@@ -154,12 +201,17 @@ void ExchangeSession::load_stored_credentials() {
     // Invalidate any cached "already sent" state on the daemon so the next
     // RPC picks up the restored keys.
     ExchangeDaemonPool::instance().forget_credentials(exchange_id_);
-    LOG_INFO(kSessionTag, "Restored stored credentials for " + exchange_id_);
+    LOG_DEBUG(kSessionTag, "Restored stored credentials for " + exchange_id_);
 }
 
 ExchangeCredentials ExchangeSession::get_credentials() const {
     QMutexLocker lock(&mutex_);
     return credentials_;
+}
+
+QString ExchangeSession::credentials_read_error() const {
+    QMutexLocker lock(&mutex_);
+    return credentials_read_error_;
 }
 
 // ── Daemon RPC helper ──────────────────────────────────────────────────────
@@ -171,6 +223,31 @@ QJsonObject ExchangeSession::daemon_call(const QString& method, const QJsonObjec
         creds = credentials_;
     }
     return ExchangeDaemonPool::instance().call(exchange_id_, method, args, creds, timeout_ms);
+}
+
+QJsonObject ExchangeSession::request(const QString& method, const QJsonObject& args, int timeout_ms) {
+    return daemon_call(method, args, timeout_ms);
+}
+
+QJsonObject ExchangeSession::request_as(const QString& method, const QJsonObject& args,
+                                        const ExchangeCredentials& creds, int timeout_ms) {
+    return ExchangeDaemonPool::instance().call(exchange_id_, method, args, creds, timeout_ms);
+}
+
+QString ExchangeSession::account_id() const {
+    QMutexLocker lock(&mutex_);
+    return ExchangeDaemonPool::credential_fingerprint(credentials_);
+}
+
+QString ExchangeSession::account_label() const {
+    QMutexLocker lock(&mutex_);
+    const QString wallet = credentials_.wallet_address.trimmed();
+    if (!wallet.isEmpty())
+        return wallet.size() > 12 ? tr("wallet %1…%2").arg(wallet.left(6), wallet.right(4)) : tr("wallet %1").arg(wallet);
+    const QString key = credentials_.api_key.trimmed();
+    if (key.isEmpty())
+        return credentials_read_error_.isEmpty() ? tr("no API key") : tr("stored keys unreadable");
+    return key.size() > 10 ? tr("API key %1…%2").arg(key.left(4), key.right(4)) : tr("API key ****");
 }
 
 // ── Watch management ───────────────────────────────────────────────────────
@@ -233,7 +310,13 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
             LOG_ERROR(kSessionTag, "Broker stream requested but broker is not registered: " + exchange_id_);
             return false;
         }
-        auto creds = broker->load_credentials();
+        QString creds_error;
+        auto creds = broker->load_credentials(&creds_error);
+        if (!creds_error.isEmpty()) {
+            // Stored but unreadable — not "missing" (BrokerRegistry logged it once).
+            emit ws_failed(exchange_id_, tr("Live prices from %1 are unavailable: %2").arg(exchange_id_, creds_error));
+            return false;
+        }
         if (creds.api_key.isEmpty() || creds.access_token.isEmpty()) {
             LOG_ERROR(kSessionTag, "Broker stream credentials missing for " + exchange_id_);
             return false;
@@ -241,7 +324,11 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
         QString feed_token;
         QString user_id = creds.user_id;
         if (!creds.additional_data.isEmpty()) {
-            const auto ad = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+            QJsonParseError ad_error;
+            const auto ad = QJsonDocument::fromJson(creds.additional_data.toUtf8(), &ad_error).object();
+            if (ad_error.error != QJsonParseError::NoError) // never the blob itself
+                LOG_WARN(kSessionTag, logf("Broker additional_data is not valid JSON, feed token unavailable",
+                                           {{"exchange", exchange_id_}, {"error", ad_error.errorString()}}));
             if (user_id.isEmpty())
                 user_id = ad.value("client_code").toString();
             feed_token = ad.value("feed_token").toString();
@@ -284,6 +371,9 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
         script_path = session_resolve_script_path("exchange/ws_stream.py");
         if (python_path.isEmpty() || script_path.isEmpty()) {
             LOG_ERROR(kSessionTag, "Python or ws_stream.py not found");
+            emit ws_failed(exchange_id_, python_path.isEmpty() ? python::PythonRunner::python_unavailable_message()
+                                                               : tr("Live prices are unavailable: the streaming "
+                                                                    "script is missing from this installation."));
             return false;
         }
         args << "-u" << "-B" << script_path << exchange_id_;
@@ -292,14 +382,22 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
     }
 
     ws_process_ = new QProcess(this);
+    // The bridge and anything it starts are one unit: stop_ws() kills the whole tree,
+    // a crashed bridge's leftovers are reaped when its QProcess is deleted, and on
+    // Windows the OS kills the tree if the terminal itself dies (kill-on-close job).
+    // Also hides the console window. Must precede start().
+    process::own_tree(ws_process_);
     ws_process_->setProcessEnvironment(ws_env);
     connect(ws_process_, &QProcess::readyReadStandardOutput, this, &ExchangeSession::drain_ws_buffer);
     connect(ws_process_, &QProcess::readyReadStandardError, this, [this]() {
         if (!ws_process_)
             return;
         const QString err = QString::fromUtf8(ws_process_->readAllStandardError()).trimmed();
-        if (!err.isEmpty())
-            LOG_WARN(kSessionTag, QString("[%1] WS stderr: %2").arg(exchange_id_, err));
+        if (!err.isEmpty()) {
+            LOG_DEBUG(kSessionTag, QString("[%1] WS stderr: %2").arg(exchange_id_, err));
+            // The last line is reported with the process exit (handle_ws_finished).
+            ws_process_->setProperty("fincept_last_stderr", err.section(QLatin1Char('\n'), -1).trimmed().left(200));
+        }
     });
     connect(ws_process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
         LOG_ERROR(kSessionTag,
@@ -315,13 +413,26 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
     connect(ws_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [this](int code, QProcess::ExitStatus status) { handle_ws_finished(code, status); });
 
+    ws_last_error_.clear();
+    ws_error_fatal_ = false;
     ws_process_->start(python_path, args);
     ws_should_run_ = true;
     ws_hub_owned_ = hub_owned;
     ws_uptime_.restart();
-    LOG_INFO(kSessionTag, QString("WS stream start requested for %1/%2").arg(exchange_id_, primary_symbol));
+    LOG_DEBUG(kSessionTag, QString("WS stream start requested for %1/%2").arg(exchange_id_, primary_symbol));
     emit ws_state_changed(exchange_id_);
     return true;
+}
+
+QString ExchangeSession::ws_failure_text() const {
+    if (ws_error_fatal_ && ws_last_error_.contains(QLatin1String("not available"), Qt::CaseInsensitive))
+        return tr("Live prices are unavailable: the exchange streaming library (ccxt) is not installed. "
+                  "Open Settings > Python Environment to install it.");
+    if (ws_error_fatal_)
+        return tr("Live prices are unavailable: %1 is not supported for streaming.").arg(exchange_id_);
+    if (!ws_last_error_.isEmpty())
+        return tr("Live prices from %1 stopped: %2").arg(exchange_id_, ws_last_error_);
+    return tr("Live prices from %1 stopped and could not be restarted.").arg(exchange_id_);
 }
 
 bool ExchangeSession::is_ws_active() const {
@@ -341,21 +452,37 @@ void ExchangeSession::stop_ws() {
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
     QTimer::singleShot(3000, proc, [proc]() {
         if (proc->state() != QProcess::NotRunning)
-            proc->kill();
+            process::kill_tree(proc); // the bridge and every process it started
     });
     emit ws_state_changed(exchange_id_);
 }
 
 void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus status) {
     ws_connected_ = false;
-    LOG_WARN(kSessionTag, QString("[%1] WS process exited (code=%2, %3)")
-                              .arg(exchange_id_)
-                              .arg(exit_code)
-                              .arg(status == QProcess::CrashExit ? "crash" : "normal"));
+    QString last_stderr;
+    if (ws_process_) {
+        const QString tail = QString::fromUtf8(ws_process_->readAllStandardError()).trimmed();
+        last_stderr = tail.isEmpty() ? ws_process_->property("fincept_last_stderr").toString()
+                                     : tail.section(QLatin1Char('\n'), -1).trimmed().left(200);
+    }
+    LOG_WARN(kSessionTag, logf("Exchange stream process exited", {{"exchange", exchange_id_},
+                                                                  {"code", exit_code},
+                                                                  {"status", status == QProcess::CrashExit ? "crash"
+                                                                                                           : "normal"},
+                                                                  {"restarts", ws_restart_attempts_},
+                                                                  {"last_stderr", log_scrub(last_stderr)}}));
 
     // Reap the finished process object. stop_ws() disconnects `this` before a
     // deliberate terminate, so reaching here means an *unexpected* exit.
     if (ws_process_) {
+        // A script that fails at startup prints its reason and exits at once;
+        // `finished` can arrive before those lines were drained. Read them now,
+        // or the reason is lost with the process object.
+        while (ws_process_->canReadLine()) {
+            const QString line = QString::fromUtf8(ws_process_->readLine()).trimmed();
+            if (!line.isEmpty())
+                handle_ws_line(line);
+        }
         ws_process_->deleteLater();
         ws_process_ = nullptr;
     }
@@ -363,6 +490,19 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
 
     if (!ws_should_run_)
         return; // not supposed to be running — leave it down
+
+    // A missing library or an exchange the library does not know fails the same
+    // way on every respawn. Say so once instead of burning the retry budget
+    // while subscribers sit on a loading state. ws_should_run_ is dropped so
+    // nothing reports a respawn as pending; the DataHub demand path still
+    // re-checks periodically, which picks the stream up once the library is
+    // installed.
+    if (ws_error_fatal_) {
+        ws_should_run_ = false;
+        LOG_ERROR(kSessionTag, QString("[%1] WS not restarting — %2").arg(exchange_id_, ws_last_error_));
+        emit ws_failed(exchange_id_, ws_failure_text());
+        return;
+    }
 
     // A stream that ran healthily and only just dropped earns a fresh restart
     // budget; a fast crash-loop keeps burning the existing one.
@@ -373,12 +513,13 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
         LOG_ERROR(
             kSessionTag,
             QString("[%1] WS not restarting — gave up after %2 attempts").arg(exchange_id_).arg(ws_restart_attempts_));
+        emit ws_failed(exchange_id_, ws_failure_text());
         return;
     }
 
     ++ws_restart_attempts_;
     const int backoff_ms = qMin(kWsRestartBaseMs * (1 << (ws_restart_attempts_ - 1)), kWsRestartMaxMs);
-    LOG_INFO(kSessionTag, QString("[%1] WS restart attempt %2/%3 in %4ms")
+    LOG_DEBUG(kSessionTag, QString("[%1] WS restart attempt %2/%3 in %4ms")
                               .arg(exchange_id_)
                               .arg(ws_restart_attempts_)
                               .arg(kMaxWsRestartAttempts)
@@ -447,10 +588,17 @@ QString ExchangeSession::get_ws_primary_symbol() const {
 
 // ── WS line handler (ported from ExchangeService::handle_ws_line) ──────────
 
-QString ExchangeSession::remap_symbol(const QString& exchange_symbol) const {
-    QMutexLocker lock(&mutex_);
-    auto it = ws_symbol_map_.constFind(exchange_symbol);
-    return (it == ws_symbol_map_.constEnd()) ? exchange_symbol : it.value();
+QStringList ExchangeSession::publish_symbols(const QString& exchange_symbol) const {
+    QStringList out;
+    {
+        QMutexLocker lock(&mutex_);
+        out = ws_symbol_map_.value(exchange_symbol);
+    }
+    // The market's own symbol too: a screen that selected the exact market
+    // (e.g. "BTC/USDC:USDC" after choosing it over "BTC/USDT") subscribes to it.
+    if (!out.contains(exchange_symbol))
+        out.append(exchange_symbol);
+    return out;
 }
 
 void ExchangeSession::handle_ws_line(const QString& line) {
@@ -458,8 +606,13 @@ void ExchangeSession::handle_ws_line(const QString& line) {
         return;
     QJsonParseError err;
     const auto doc = QJsonDocument::fromJson(line.toUtf8(), &err);
-    if (err.error != QJsonParseError::NoError)
+    if (err.error != QJsonParseError::NoError) {
+        LOG_DEBUG_RL(kSessionTag, QStringLiteral("ws_line|") + exchange_id_, 60000,
+                     logf("Unparseable line from the stream process", {{"exchange", exchange_id_},
+                                                                       {"bytes", line.size()},
+                                                                       {"error", err.errorString()}}));
         return;
+    }
     const auto msg = doc.object();
     const QString type = msg.value("type").toString();
 
@@ -478,14 +631,45 @@ void ExchangeSession::handle_ws_line(const QString& line) {
         return;
     }
 
+    if (type == "error") {
+        // Per-symbol / per-channel errors carry a "source" and the stream keeps
+        // running; one without it is the process giving up (see ws_stream.py main()).
+        if (msg.contains("source"))
+            return;
+        ws_last_error_ = msg.value("message").toString();
+        const QString code = msg.value("code").toString();
+        ws_error_fatal_ = code == QLatin1String("missing_dependency") || code == QLatin1String("unknown_exchange");
+        LOG_WARN(kSessionTag, QString("[%1] WS error: %2").arg(exchange_id_, ws_last_error_));
+        return;
+    }
+
     if (type == "symbol_map") {
+        // MERGE, don't replace: the stream sends the full map once at startup, but
+        // a set_primary switch sends a ONE-entry map for the new primary only.
+        // Replacing dropped every other watchlist remap, so those tickers arrived
+        // under the exchange's symbol ("ETH/USDC:USDC"), were published on a topic
+        // nobody subscribes to, and their rows froze. The map is reset on a
+        // disconnect (status connected=false above), when the stream restarts.
+        // "aliases" lists every requested symbol shown from one market (two pairs
+        // can resolve to the same market); "map" is the older one-alias form.
         QMutexLocker lock(&mutex_);
-        ws_symbol_map_.clear();
+        auto add = [this](const QString& market, const QString& alias) {
+            if (market.isEmpty() || alias.isEmpty())
+                return;
+            QStringList& list = ws_symbol_map_[market];
+            if (!list.contains(alias))
+                list.append(alias);
+        };
         const auto map_obj = msg.value("map").toObject();
         for (auto it = map_obj.constBegin(); it != map_obj.constEnd(); ++it)
-            ws_symbol_map_[it.key()] = it.value().toString();
-        LOG_INFO(kSessionTag,
-                 QString("[%1] Symbol map updated: %2 remaps").arg(exchange_id_).arg(ws_symbol_map_.size()));
+            add(it.key(), it.value().toString());
+        const auto aliases = msg.value("aliases").toObject();
+        for (auto it = aliases.constBegin(); it != aliases.constEnd(); ++it) {
+            for (const auto& v : it.value().toArray())
+                add(it.key(), v.toString());
+        }
+        LOG_DEBUG(kSessionTag,
+                  QString("[%1] Symbol map updated: %2 remaps").arg(exchange_id_).arg(ws_symbol_map_.size()));
         return;
     }
 
@@ -512,26 +696,30 @@ void ExchangeSession::handle_ws_line(const QString& line) {
         }
         if (ticker.symbol.isEmpty() || ticker.last <= 0.0)
             return;
-        // Remap exchange_symbol → requested_symbol so downstream consumers
-        // (cache, hub topics) all key by the symbol the caller asked for.
-        // e.g. on Hyperliquid: "BTC/USDC:USDC" → "BTC/USDT".
-        ticker.symbol = remap_symbol(ticker.symbol);
-        {
-            QMutexLocker lock(&mutex_);
-            price_cache_[ticker.symbol] = ticker;
+        // Publish under every symbol shown from this market so consumers (cache,
+        // hub topics) key by the symbol they asked for — on Hyperliquid
+        // "BTC/USDC:USDC" reaches both "BTC/USDT" and "BTC/USDC:USDC".
+        for (const QString& sym : publish_symbols(ticker.symbol)) {
+            TickerData t = ticker;
+            t.symbol = sym;
+            {
+                QMutexLocker lock(&mutex_);
+                price_cache_[sym] = t;
+            }
+            if (publisher_.publish_ticker)
+                publisher_.publish_ticker(exchange_id_, sym, t);
         }
-        if (publisher_.publish_ticker)
-            publisher_.publish_ticker(exchange_id_, ticker.symbol, ticker);
         return;
     }
 
     if (type == "orderbook") {
-        OrderBookData ob = parse_orderbook(msg);
-        // Apply the same exchange→requested symbol remap as tickers, so
-        // per-symbol topics are consistent across all WS message types.
-        ob.symbol = remap_symbol(ob.symbol);
-        if (publisher_.publish_orderbook)
-            publisher_.publish_orderbook(exchange_id_, ob.symbol, ob);
+        const OrderBookData parsed = parse_orderbook(msg);
+        for (const QString& sym : publish_symbols(parsed.symbol)) {
+            OrderBookData ob = parsed;
+            ob.symbol = sym;
+            if (publisher_.publish_orderbook)
+                publisher_.publish_orderbook(exchange_id_, sym, ob);
+        }
         return;
     }
 
@@ -541,46 +729,51 @@ void ExchangeSession::handle_ws_line(const QString& line) {
         const QString raw_sym = msg.value("symbol").toString();
         if (raw_sym.isEmpty() || c.timestamp == 0)
             return;
-        const QString sym = remap_symbol(raw_sym);
         const QString interval = msg.value("interval").toString("1m");
-        if (publisher_.publish_candle)
-            publisher_.publish_candle(exchange_id_, sym, interval, c);
+        for (const QString& sym : publish_symbols(raw_sym)) {
+            if (publisher_.publish_candle)
+                publisher_.publish_candle(exchange_id_, sym, interval, c);
+        }
         return;
     }
 
     if (type == "trade") {
-        TradeData td;
-        td.symbol = remap_symbol(msg.value("symbol").toString());
-        td.side = msg.value("side").toString();
-        td.price = msg.value("price").toDouble();
-        td.amount = msg.value("amount").toDouble();
-        td.timestamp = msg.value("timestamp").toVariant().toLongLong();
-        if (td.symbol.isEmpty())
+        TradeData parsed;
+        const QString raw_sym = msg.value("symbol").toString();
+        parsed.side = msg.value("side").toString();
+        parsed.price = msg.value("price").toDouble();
+        parsed.amount = msg.value("amount").toDouble();
+        parsed.timestamp = msg.value("timestamp").toVariant().toLongLong();
+        if (raw_sym.isEmpty())
             return;
 
-        // Fast-path ticker update from trade — on exchanges where watch_ticker
-        // is slow (e.g. Kraken spot ~2/15s), trade flow keeps price_cache_
-        // current. Publish a synthetic ticker alongside so the hub's
-        // ticker:<pair> topic stays fresh.
-        TickerData fast_ticker;
-        bool emit_ticker = false;
-        if (td.price > 0.0) {
-            QMutexLocker lock(&mutex_);
-            auto& cached = price_cache_[td.symbol];
-            cached.symbol = td.symbol;
-            cached.last = td.price;
-            if (cached.bid <= 0.0)
-                cached.bid = td.price;
-            if (cached.ask <= 0.0)
-                cached.ask = td.price;
-            fast_ticker = cached;
-            emit_ticker = true;
-        }
+        for (const QString& sym : publish_symbols(raw_sym)) {
+            TradeData td = parsed;
+            td.symbol = sym;
+            // Fast-path ticker update from trade — on exchanges where watch_ticker
+            // is slow (e.g. Kraken spot ~2/15s), trade flow keeps price_cache_
+            // current. Publish a synthetic ticker alongside so the hub's
+            // ticker:<pair> topic stays fresh.
+            TickerData fast_ticker;
+            bool emit_ticker = false;
+            if (td.price > 0.0) {
+                QMutexLocker lock(&mutex_);
+                auto& cached = price_cache_[td.symbol];
+                cached.symbol = td.symbol;
+                cached.last = td.price;
+                if (cached.bid <= 0.0)
+                    cached.bid = td.price;
+                if (cached.ask <= 0.0)
+                    cached.ask = td.price;
+                fast_ticker = cached;
+                emit_ticker = true;
+            }
 
-        if (publisher_.publish_trade)
-            publisher_.publish_trade(exchange_id_, td.symbol, td);
-        if (emit_ticker && publisher_.publish_ticker)
-            publisher_.publish_ticker(exchange_id_, fast_ticker.symbol, fast_ticker);
+            if (publisher_.publish_trade)
+                publisher_.publish_trade(exchange_id_, td.symbol, td);
+            if (emit_ticker && publisher_.publish_ticker)
+                publisher_.publish_ticker(exchange_id_, fast_ticker.symbol, fast_ticker);
+        }
     }
 }
 
@@ -716,9 +909,19 @@ QVector<Candle> ExchangeSession::fetch_ohlcv(const QString& symbol, const QStrin
     if (j.contains("error") || !j.contains("candles")) {
         // Swallowing this left the chart silently empty and the terminal
         // showing live-only bars with no way to tell why (#338).
-        LOG_WARN(kSessionTag, QString("[%1] fetch_ohlcv %2 %3 failed: %4")
-                                  .arg(exchange_id_, symbol, timeframe,
-                                       j.value("error").toString(QStringLiteral("no candles in response"))));
+        // Daemon down: the pool reports the outage once; repeats of one failure once a minute.
+        const QString error = j.value("error").toString(QStringLiteral("no candles in response"));
+        if (j.value("code").toString() == QLatin1String("DAEMON_NOT_READY"))
+            LOG_DEBUG(kSessionTag, logf("Candles could not be fetched", {{"exchange", exchange_id_},
+                                                                        {"symbol", symbol},
+                                                                        {"timeframe", timeframe},
+                                                                        {"error", error}}));
+        else
+            LOG_WARN_RL(kSessionTag, QStringLiteral("ohlcv|") + exchange_id_, 60000,
+                        logf("Candles could not be fetched", {{"exchange", exchange_id_},
+                                                             {"symbol", symbol},
+                                                             {"timeframe", timeframe},
+                                                             {"error", error}}));
         return result;
     }
     const auto arr = j.value("candles").toArray();
@@ -743,6 +946,14 @@ QVector<MarketInfo> ExchangeSession::fetch_markets(const QString& type, const QS
     for (const auto& item : arr)
         result.append(parse_market(item.toObject()));
     return result;
+}
+
+MarketInfo ExchangeSession::fetch_market(const QString& symbol) {
+    const auto j = daemon_call("fetch_markets", {{"symbol", symbol}});
+    if (j.contains("error"))
+        return {};
+    const auto arr = j.value("markets").toArray();
+    return arr.isEmpty() ? MarketInfo{} : parse_market(arr.first().toObject());
 }
 
 QVector<TradeData> ExchangeSession::fetch_trades(const QString& symbol, int limit) {
@@ -808,28 +1019,12 @@ QJsonObject ExchangeSession::fetch_balance() {
     return daemon_call("fetch_balance", {});
 }
 
-QJsonObject ExchangeSession::place_exchange_order(const QString& symbol, const QString& side, const QString& type,
-                                                  double amount, double price, double stop_price, double sl, double tp,
-                                                  bool reduce_only) {
-    QJsonObject args;
-    args["symbol"] = symbol;
-    args["side"] = side;
-    args["type"] = type;
-    args["amount"] = amount;
-    if (price > 0)
-        args["price"] = price;
-    // Conditional / bracket / reduce-only fields — the daemon translates these
-    // into ccxt unified params (triggerPrice / stopLoss / takeProfit / reduceOnly).
-    if (stop_price > 0)
-        args["stop_price"] = stop_price;
-    if (sl > 0)
-        args["sl"] = sl;
-    if (tp > 0)
-        args["tp"] = tp;
-    if (reduce_only)
-        args["reduce_only"] = true;
-    return daemon_call("place_order", args);
-}
+// Orders: there is deliberately no one-call "place order" here any more. An
+// order is two daemon calls made by the caller with request_as():
+// "prepare_order" (decides and returns exactly what would be sent: market,
+// size in the exchange's units, price, params, confirm_hash) and, after the
+// user confirmed that, "place_order" with the confirm_hash, ref_price and
+// account_id — the daemon rebuilds the order and refuses if it differs.
 
 QJsonObject ExchangeSession::cancel_exchange_order(const QString& order_id, const QString& symbol) {
     return daemon_call("cancel_order", {{"order_id", order_id}, {"symbol", symbol}});

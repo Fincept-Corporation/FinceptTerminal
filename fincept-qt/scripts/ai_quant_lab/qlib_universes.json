@@ -1,0 +1,49 @@
+{
+  "as_of": "2026-11-17",
+  "note": "Ticker lists for the Yahoo Finance dataset builder (qlib_datasets.py build_dataset). Compiled on the as_of date from large, liquid US listings; the builder checks every ticker against Yahoo and reports the ones it cannot fetch. Today's members are applied to the whole history, so backtests on these lists carry survivorship bias.",
+  "benchmarks": ["SPY", "^GSPC"],
+  "default_benchmark": "SPY",
+  "default_universe": "us_large",
+  "default_start_date": "2016-01-01",
+  "universes": {
+    "us_large": {
+      "label": "US large caps",
+      "description": "Liquid US large caps across all sectors (mostly S&P 500 members)",
+      "tickers": [
+        "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "ORCL", "CRM",
+        "ADBE", "AMD", "CSCO", "ACN", "IBM", "INTU", "NOW", "QCOM", "TXN", "AMAT",
+        "LRCX", "KLAC", "ADI", "MU", "INTC", "SNPS", "CDNS", "ANET", "PANW", "CRWD",
+        "FTNT", "APH", "MSI", "ADSK", "WDAY", "PLTR", "MRVL", "NXPI", "MCHP", "ON",
+        "DELL", "HPQ", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "CHTR", "TTWO",
+        "UBER", "ABNB", "BKNG", "DASH", "PYPL", "APP", "BRK-B", "JPM", "V", "MA",
+        "BAC", "WFC", "GS", "MS", "C", "SCHW", "BLK", "AXP", "SPGI", "MCO",
+        "CME", "ICE", "CB", "PGR", "AON", "TRV", "AIG", "MET", "PRU", "AFL",
+        "ALL", "USB", "PNC", "TFC", "COF", "KKR", "BX", "APO", "COIN",
+        "LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "AMGN",
+        "GILD", "ISRG", "SYK", "BSX", "MDT", "VRTX", "REGN", "BMY", "ZTS", "CVS",
+        "CI", "ELV", "HCA", "MCK", "COR", "BDX", "EW", "IDXX", "DXCM", "IQV",
+        "A", "HUM", "BIIB", "MRNA", "GEHC", "RMD", "HD", "LOW", "MCD", "SBUX",
+        "NKE", "TJX", "ROST", "CMG", "ORLY", "AZO", "MAR", "HLT", "YUM", "LULU",
+        "DG", "TGT", "COST", "WMT", "PG", "KO", "PEP", "PM", "MO", "MDLZ",
+        "CL", "KMB", "GIS", "KDP", "STZ", "HSY", "EL", "KR", "SYY", "F",
+        "GM", "GE", "CAT", "DE", "HON", "UNP", "UPS", "FDX", "RTX", "LMT",
+        "NOC", "GD", "BA", "MMM", "ETN", "EMR", "ITW", "PH", "TT", "CTAS",
+        "CSX", "NSC", "WM", "RSG", "ROP", "TDG", "GEV", "CARR", "OTIS", "PCAR",
+        "JCI", "URI", "FAST", "CPRT", "ODFL", "XOM", "CVX", "COP", "EOG", "SLB",
+        "OXY", "MPC", "PSX", "VLO", "KMI", "WMB", "OKE", "HAL", "DVN", "FANG",
+        "NEE", "SO", "DUK", "AEP", "D", "EXC", "SRE", "XEL", "PCG", "CEG",
+        "VST", "LIN", "SHW", "APD", "ECL", "FCX", "NEM", "NUE", "DOW", "DD",
+        "PLD", "AMT", "EQIX", "CCI", "PSA", "SPG", "O", "WELL", "DLR"
+      ]
+    },
+    "starter": {
+      "label": "Starter",
+      "description": "30 of the largest US stocks: a fast first build",
+      "tickers": [
+        "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B", "JPM", "V",
+        "MA", "UNH", "JNJ", "LLY", "XOM", "CVX", "PG", "KO", "PEP", "WMT",
+        "COST", "HD", "BAC", "AVGO", "ORCL", "CSCO", "NFLX", "ABBV", "MRK", "CRM"
+      ]
+    }
+  }
+}

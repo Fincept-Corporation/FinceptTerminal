@@ -5,7 +5,9 @@
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OrderSourceCapture.h"
 #include "trading/OrderThreadPool.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -18,19 +20,20 @@ namespace fincept::screens::equity {
 
 using namespace fincept::ui;
 using namespace fincept::trading;
+namespace fmt = fincept::ui::formatting;
 
 BroadcastOrderDialog::BroadcastOrderDialog(const trading::UnifiedOrder& order, QWidget* parent)
     : QDialog(parent), order_(order) {
     setWindowTitle(tr("Broadcast Order"));
     setMinimumSize(450, 380);
     setStyleSheet(QString("QDialog { background: %1; color: %2; }"
-                          "QCheckBox { color: %2; font-size: 12px; spacing: 6px; }"
+                          "QCheckBox { color: %2; font-size: " + fincept::ui::fonts::px(-2) + "px; spacing: 6px; }"
                           "QCheckBox::indicator { width: 14px; height: 14px; }"
-                          "QLabel#header { color: %3; font-size: 14px; font-weight: 700; }"
-                          "QLabel#orderInfo { color: %4; font-size: 11px; }"
-                          "QLabel#resultOk { color: %5; font-size: 11px; }"
-                          "QLabel#resultErr { color: %6; font-size: 11px; }"
-                          "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }")
+                          "QLabel#header { color: %3; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700; }"
+                          "QLabel#orderInfo { color: %4; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
+                          "QLabel#resultOk { color: %5; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
+                          "QLabel#resultErr { color: %6; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
+                          "QPushButton { padding: 8px 16px; font-weight: 700; font-size: " + fincept::ui::fonts::px(-2) + "px; border-radius: 2px; }")
                       .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::AMBER(), colors::TEXT_SECONDARY(),
                            colors::POSITIVE(), colors::NEGATIVE()));
     setup_ui();
@@ -49,11 +52,18 @@ void BroadcastOrderDialog::setup_ui() {
     // Order summary
     const QString side_str = order_.side == OrderSide::Buy ? tr("BUY") : tr("SELL");
     const QString type_str = order_type_str(order_.order_type);
+    // The limit in the exchange's quote currency (venue table; a segment it does not
+    // list gets no unit rather than a guessed one).
+    const QString px_text =
+        order_.price > 0
+            ? fmt::price_with_symbol(order_.price,
+                                     fmt::instrument_for_symbol(order_.symbol, exchange_currency(order_.exchange)))
+            : tr("MKT");
     auto* info = new QLabel(QString("%1  %2  x%3  %4  @ %5")
                                 .arg(side_str, order_.symbol)
                                 .arg(format_quantity(order_.quantity))
                                 .arg(type_str)
-                                .arg(order_.price > 0 ? QString::number(order_.price, 'f', 2) : "MKT"));
+                                .arg(px_text));
     info->setObjectName("orderInfo");
     root->addWidget(info);
 
@@ -92,7 +102,7 @@ void BroadcastOrderDialog::setup_ui() {
         if (account.state == ConnectionState::Connected)
             cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_PRIMARY()));
         else
-            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_TERTIARY()));
+            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_SECONDARY()));
 
         list_layout->addWidget(cb);
         account_cbs_.append(cb);
@@ -141,9 +151,10 @@ void BroadcastOrderDialog::setup_ui() {
     btn_row->addWidget(cancel_btn_);
 
     place_btn_ = new QPushButton(order_.side == OrderSide::Buy ? tr("PLACE BUY") : tr("PLACE SELL"));
+    place_btn_->setProperty("fincept_agent_risk", "order");
     place_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; }")
-            .arg(order_.side == OrderSide::Buy ? colors::POSITIVE() : colors::NEGATIVE(), colors::BG_BASE()));
+            .arg(order_.side == OrderSide::Buy ? colors::POSITIVE() : colors::NEGATIVE(), colors::TEXT_ON_ACCENT()));
     connect(place_btn_, &QPushButton::clicked, this, &BroadcastOrderDialog::on_place_order);
     btn_row->addWidget(place_btn_);
 
@@ -169,6 +180,11 @@ void BroadcastOrderDialog::on_place_order() {
         return;
     }
 
+    // Provenance (UnifiedOrder::source), captured on the GUI thread at PLACE: the agent's
+    // while an agent pressed it, else the ticket — the orders run on a worker.
+    auto sourced = order_;
+    sourced.source = fincept::trading::capture_order_source(QStringLiteral("ticket"));
+
     // Semi-Auto gate (headless): each account's mode is independent, so queue
     // orders for Semi-Auto accounts (they surface in the status-bar popover) and
     // broadcast only the Auto accounts immediately.
@@ -178,7 +194,7 @@ void BroadcastOrderDialog::on_place_order() {
     for (const QString& acct : selected) {
         if (ActionCenter::instance().should_queue(acct, "placeorder")) {
             const QString pid =
-                ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(order_));
+                ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(sourced));
             if (!pid.isEmpty())
                 ++queued;
             else
@@ -228,7 +244,7 @@ void BroadcastOrderDialog::on_place_order() {
 
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
-    auto order_copy = order_;
+    auto order_copy = sourced;
     (void)QtConcurrent::run(&fincept::trading::order_thread_pool(), [self, immediate, order_copy, queued]() {
         auto results = UnifiedTrading::instance().broadcast_order(immediate, order_copy);
         if (!self)

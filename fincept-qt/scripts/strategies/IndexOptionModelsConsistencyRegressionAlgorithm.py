@@ -1,47 +1,33 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-02F5AEAE
-# Category: Options
-# Description: Volatility mean-reversion strategy inspired by options pricing
-#   models. Buys when 5-day price standard deviation drops below 80% of 20-day
-#   stdev (low vol regime), exits when 5-day exceeds 130% of 20-day (vol spike).
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
-class IndexOptionModelsConsistencyRegressionAlgorithm(QCAlgorithm):
-    """Volatility mean-reversion: enters in calm markets, exits on vol spikes."""
+from OptionModelsConsistencyRegressionAlgorithm import OptionModelsConsistencyRegressionAlgorithm
 
-    def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+### <summary>
+### Algorithm asserting that when setting custom models for canonical index options, a one-time warning is sent
+### informing the user that the contracts models are different (not the custom ones).
+### </summary>
+class IndexOptionModelsConsistencyRegressionAlgorithm(OptionModelsConsistencyRegressionAlgorithm):
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+    def initialize_algorithm(self) -> Security:
+        self.set_start_date(2021, 1, 4)
+        self.set_end_date(2021, 1, 5)
 
-        self._fast_std = self.std(self.symbol, 5, Resolution.DAILY)
-        self._slow_std = self.std(self.symbol, 20, Resolution.DAILY)
+        index = self.add_index("SPX", Resolution.MINUTE)
+        option = self.add_index_option(index.symbol, "SPX", Resolution.MINUTE)
+        option.set_filter(lambda u: u.strikes(-5, +5).expiration(0, 360))
 
-    def on_data(self, data):
-        if not self._fast_std.is_ready or not self._slow_std.is_ready:
-            return
-        if self.symbol not in data:
-            return
-
-        fast_vol = self._fast_std.current.value
-        slow_vol = self._slow_std.current.value
-
-        if slow_vol == 0:
-            return
-
-        vol_ratio = fast_vol / slow_vol
-
-        if not self.portfolio.invested and vol_ratio < 0.8:
-            self.set_holdings(self.symbol, 1)
-        elif self.portfolio.invested and vol_ratio > 1.3:
-            self.liquidate()
+        return option

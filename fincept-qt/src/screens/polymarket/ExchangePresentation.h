@@ -14,7 +14,7 @@ namespace fincept::screens::polymarket {
 
 /// How a given exchange should be presented to the user. Captures the
 /// per-exchange UX knobs that aren't part of the data model — accent color,
-/// currency symbol, price display mode, view pill set, status badge mapping,
+/// settlement currency, price display mode, view pill set, status badge mapping,
 /// and feature-flags for Polymarket-only tabs.
 ///
 /// One profile is installed into the screen + sub-panels whenever the active
@@ -23,7 +23,7 @@ namespace fincept::screens::polymarket {
 struct ExchangePresentation {
     enum class PriceStyle {
         ProbabilityCents, // 0.52 → "52¢"      (Polymarket: raw prob × 100 with cents suffix)
-        Dollars,          // 0.52 → "$0.52"    (Kalshi: dollar-denominated contract price)
+        Dollars,          // 0.52 → "$0.52"    (Kalshi: contract price in `currency`, unit per Settings)
     };
 
     enum class CategoryMode {
@@ -35,12 +35,18 @@ struct ExchangePresentation {
     QString display_name; // "Polymarket" | "Kalshi"
 
     // Visual identity — a single accent color is the clearest "different
-    // screen" signal without a full theme fork.
+    // screen" signal without a full theme fork. Both colours are theme tokens
+    // resolved when the profile is built, so a profile is rebuilt (for_id())
+    // after a theme change.
     QColor accent;     // active pill / underline / bar color
     QColor accent_dim; // subtle tint for backgrounds
 
     // Currency + number formatting.
-    QString currency_symbol; // "$" | "USDC"
+    /// Settlement currency CODE of the venue: "USDC" (Polymarket), "USD" (Kalshi),
+    /// "FNCPT" (Fincept demo). Money on this exchange — volume, liquidity, cost,
+    /// balances, P&L — is printed with ui::formatting::money(v, currency), never
+    /// converted (the venue's own figures).
+    QString currency;
     PriceStyle price_style = PriceStyle::ProbabilityCents;
     int price_decimal_places = 4; // ActivityFeed raw price column
 
@@ -60,8 +66,16 @@ struct ExchangePresentation {
 
     // Formatters — helpers that bake the profile's units into rendered text.
     QString format_price(double prob_0_to_1) const; // 0.52 → "52¢" or "$0.52"
-    QString format_volume(double v) const;          // 1_234_567 → "$1.2M"
+    QString format_volume(double v) const;          // 1_234_567 → "USDC 1.23M" / "$1.23M" (money in `currency`)
     QString format_liquidity(double v) const; // same as volume today; kept as a separate slot for future divergence
+
+    /// Probability (0–1) to DISPLAY for outcome `index` (bars, cards). Normally
+    /// the outcome's price. Kalshi outcome prices are each side's best BID, so an
+    /// unquoted side read $0.00 and YES + NO never summed to 1: for Kalshi the YES
+    /// figure is the last trade, else the bid/ask midpoint, and NO is 1 − YES;
+    /// with neither available the raw bids are kept. Display only — order
+    /// tickets and the book never read this.
+    double display_probability(const fincept::services::prediction::PredictionMarket& market, int index) const;
 
     /// Translate the prediction::PredictionMarket.active/closed pair (+ any
     /// exchange-specific hints in extras) into a status badge tuple:

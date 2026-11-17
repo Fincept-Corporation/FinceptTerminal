@@ -202,10 +202,10 @@ TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, 
 
     // Redacted: the Success block of this response *is* the session_token
     // (read below at `session_token`), alongside customer PII.
-    LOG_INFO("IciciDirect", QString("customerdetails HTTP %1 success=%2 body=%3")
-                                .arg(resp.status_code)
-                                .arg(resp.success)
-                                .arg(redact_body(resp.raw_body, 300)));
+    LOG_DEBUG("IciciDirect", QString("customerdetails HTTP %1 success=%2 body=%3")
+                                 .arg(resp.status_code)
+                                 .arg(resp.success)
+                                 .arg(redact_body(resp.raw_body, 300)));
 
     if (!resp.success) {
         result.error = resp.json.value("Error").toString(resp.error.isEmpty() ? QString("HTTP %1").arg(resp.status_code)
@@ -231,7 +231,8 @@ TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, 
     // ICICI sessions expire at the daily reset; re-auth needs a fresh web
     // SessionToken, so detect-only. Startup hint.
     result.additional_data = with_token_expiry(result.additional_data, next_ist_flush_epoch(6, 0));
-    LOG_INFO("IciciDirect", QString("exchange_token ok: user_id=%1").arg(result.user_id));
+    LOG_INFO("IciciDirect",
+             logf("Broker sign-in succeeded", {{"broker", "icicidirect"}, {"account", log_mask(result.user_id)}}));
     return result;
 }
 

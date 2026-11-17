@@ -10,7 +10,7 @@ Labels:
 
 import pandas as pd
 import numpy as np
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 
 
 class TripleBarrierLabeler:
@@ -187,17 +187,20 @@ class TripleBarrierPredictor:
         }
 
 
-def calculate_win_loss_ratio(matches_results: List[Dict]) -> Tuple[float, float]:
-    """Calculate win rate and win/loss ratio (for Kelly criterion)."""
+def calculate_win_loss_ratio(matches_results: List[Dict]) -> Tuple[Optional[float], Optional[float]]:
+    """Calculate win rate and win/loss ratio (for Kelly criterion).
+
+    (None, None) when nothing was measured — no results, or none that won or
+    lost. A made-up 50 % here used to flow into the vision score as if real."""
     if not matches_results:
-        return 0.5, 1.0
+        return None, None
 
     wins = [r["final_return"] for r in matches_results if r.get("final_return", 0) > 0]
     losses = [abs(r["final_return"]) for r in matches_results if r.get("final_return", 0) < 0]
 
     total = len(wins) + len(losses)
     if total == 0:
-        return 0.5, 1.0
+        return None, None
 
     win_rate = len(wins) / total
     avg_win = np.mean(wins) if wins else 0

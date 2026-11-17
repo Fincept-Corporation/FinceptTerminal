@@ -87,10 +87,9 @@ langchain-cohere==0.6.0
 tiktoken>=0.5.0
 
 # Agno AI Framework
-# Upper bound: agno 1.x → 2.x rewrote the Agent/Team API. `>=1.0.0` alone
-# already silently resolved to 2.x (venv has 2.6.7), i.e. the lower bound is
-# stale and a 3.0 would break the same way. Cap it.
-agno>=1.0.0,<3.0
+# The agent runtime under scripts/agents targets the agno 2 API (2.9+); 1.x and
+# a future 3.0 have different Agent/Team/memory/storage interfaces.
+agno>=2.9,<3.0
 
 # Ollama client — required by agno.models.ollama.Ollama and the Ollama embedder.
 # Without it, selecting the Ollama provider for an agent raises
@@ -106,10 +105,19 @@ ollama>=0.4.0
 mcp>=1.30.0,<2.0
 defusedxml>=0.7.1
 httpx>=0.28.1,<1.0
+# Imported directly (previously only transitive):
+#   orjson     — exchange_daemon.py / ws_stream.py
+#   sqlalchemy — agent storage (agno db backends)
+#   pypdf      — PDF knowledge for agents
+orjson>=3.9
+sqlalchemy>=2.0
+pypdf>=4.0
 
 # Agno Tool Dependencies (free tools - no API keys required)
 ddgs>=6.0.0
 wikipedia>=1.4.0
+# Article text extraction for agent cards that ask for an article reader (free, no key).
+trafilatura>=1.8
 
 # ML/DL (NumPy 2.x compatible)
 # PyTorch 2.3.1+ doesn't support macOS Intel, use 2.2.2 for compatibility
@@ -206,8 +214,8 @@ faiss-cpu>=1.7.0
 mplfinance>=0.12.0
 
 # Voice recognition (speech-to-text via Google API).
-# sounddevice ships PortAudio inside its wheel for every platform we support
-# (Windows x64, macOS x86_64 + arm64, Linux x86_64 + aarch64).
+# sounddevice bundles PortAudio in its Windows and macOS wheels only; on Linux it
+# needs the system library (libportaudio2 / portaudio) — a packaging dependency.
 # scripts/voice/* implements a thin SpeechRecognition AudioSource shim on top
 # of sd.RawInputStream so the SR API stays unchanged.
 SpeechRecognition>=3.10.0

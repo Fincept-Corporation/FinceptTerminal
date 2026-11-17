@@ -1,213 +1,242 @@
 #include "screens/dashboard/widgets/WatchlistWidget.h"
 
-#include "datahub/DataHub.h"
-#include "datahub/DataHubMetaTypes.h"
-#include "screens/dashboard/widgets/DashboardFormat.h"
+#include "core/events/EventBus.h"
+#include "core/market/MarketProfile.h"
+#include "screens/dashboard/widgets/SymbolListDialog.h"
+#include "storage/repositories/WatchlistRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
+#include <QHBoxLayout>
 #include <QJsonArray>
 #include <QLabel>
 
+#include <algorithm>
+
 namespace fincept::screens::widgets {
 
-WatchlistWidget::WatchlistWidget(QWidget* parent)
-    : BaseWidget(tr("WATCHLIST"), parent, ui::colors::INFO),
-      symbols_({"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "JPM"}) {
+WatchlistWidget::WatchlistWidget(const QJsonObject& cfg, QWidget* parent)
+    : QuoteTableWidget(QuoteListKind::Custom, cfg, parent) {
+    auto* bar = new QWidget(this);
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(6, 3, 6, 3);
+    hl->setSpacing(6);
+    auto* lbl = new QLabel(tr("LIST"), bar);
+    lbl->setObjectName("wlSourceLabel");
+    lbl->setStyleSheet(QString("QLabel#wlSourceLabel{color:%1;font-size:%2px;font-weight:bold;background:transparent;}")
+                           .arg(ui::colors::TEXT_SECONDARY())
+                           .arg(ui::fonts::px(-4)));
+    hl->addWidget(lbl);
+    source_ = new QComboBox(bar);
+    source_->setAccessibleName(tr("Watchlist source"));
+    source_->setToolTip(tr("Show one of your saved watchlists (edited in the Watchlist screen) or a list kept in "
+                           "this tile (edit it with the gear icon)"));
+    hl->addWidget(source_, 1);
+    content_layout()->insertWidget(0, bar);
 
-    auto* vl = content_layout();
-
-    // Symbol input bar
-    auto* input_row = new QWidget(this);
-    auto* irl = new QHBoxLayout(input_row);
-    irl->setContentsMargins(4, 4, 4, 4);
-    irl->setSpacing(4);
-
-    symbols_label_ = new QLabel(tr("SYMBOLS:"));
-    irl->addWidget(symbols_label_);
-
-    symbols_input_ = new QLineEdit(symbols_.join(", "));
-    symbols_input_->setAccessibleName(tr("Watchlist symbols"));
-    symbols_input_->setToolTip(tr("Comma-separated symbols, e.g. AAPL, MSFT, BTC-USD"));
-    irl->addWidget(symbols_input_, 1);
-
-    go_btn_ = new QPushButton(tr("GO"));
-    go_btn_->setFixedWidth(32);
-    go_btn_->setAccessibleName(tr("Apply watchlist symbols"));
-    connect(go_btn_, &QPushButton::clicked, this, &WatchlistWidget::commit_symbols);
-    // Enter in the symbol box is the same action as clicking GO.
-    connect(symbols_input_, &QLineEdit::returnPressed, this, &WatchlistWidget::commit_symbols);
-    irl->addWidget(go_btn_);
-
-    vl->addWidget(input_row);
-
-    // Table
-    table_ = new ui::DataTable;
-    table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
-    table_->set_column_widths({100, 90, 80, 70});
-    table_->setToolTip(tr("Double-click a row to open it in Equity Research · right-click for more"));
-    vl->addWidget(table_);
-    install_symbol_menu(table_, 0);
-
-    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
-        if (auto* it = table_->item(row, 0))
-            open_symbol(it->text());
+    connect(source_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+        if (filling_)
+            return;
+        bind(source_->currentData().toString());
+        region_chosen_ = watchlist_id_.isEmpty() && follow_region_;
+        emit config_changed(config());
+    });
+    EventBus::instance().subscribe(this, QStringLiteral("watchlist.updated"), [this](const QVariantMap&) {
+        reload_sources();
+        if (!watchlist_id_.isEmpty())
+            set_entries(default_entries());
+        update_footer();
+        update_empty_state();
     });
 
-    connect(this, &BaseWidget::refresh_requested, this, &WatchlistWidget::refresh_data);
-
-    apply_styles();
-    set_loading(true);
+    reload_sources();
+    apply_config(cfg);
 }
 
-void WatchlistWidget::commit_symbols() {
-    const QString text = symbols_input_->text().trimmed().toUpper();
-    QStringList next;
-    for (const QString& s : text.split(',')) {
-        const QString trimmed = s.trimmed();
-        if (!trimmed.isEmpty() && !next.contains(trimmed))
-            next << trimmed;
+QString WatchlistWidget::base_title() const {
+    return tr("WATCHLIST");
+}
+
+void WatchlistWidget::retranslateUi() {
+    QuoteTableWidget::retranslateUi();
+    reload_sources();
+    if (is_empty_state_shown())
+        update_empty_state();
+}
+
+void WatchlistWidget::reload_sources() {
+    filling_ = true;
+    source_->clear();
+    source_->addItem(tr("This tile's list"), QString());
+    const auto r = WatchlistRepository::instance().list_all();
+    if (r.is_ok()) {
+        auto lists = r.value();
+        std::stable_sort(lists.begin(), lists.end(),
+                         [](const Watchlist& a, const Watchlist& b) { return a.sort_order < b.sort_order; });
+        for (const auto& w : lists)
+            source_->addItem(w.name + (w.is_default ? tr(" (default)") : QString()), w.id);
     }
-    if (next.isEmpty())
-        return; // refuse to blank the watchlist — keep the previous set
-    if (next == symbols_)
+    const int idx = source_->findData(watchlist_id_);
+    source_->setCurrentIndex(idx >= 0 ? idx : 0);
+    filling_ = false;
+}
+
+void WatchlistWidget::bind(const QString& watchlist_id) {
+    watchlist_id_ = watchlist_id;
+    watchlist_name_.clear();
+    if (!watchlist_id_.isEmpty()) {
+        const auto w = WatchlistRepository::instance().get(watchlist_id_);
+        if (w.is_ok())
+            watchlist_name_ = w.value().name;
+        else
+            watchlist_id_.clear(); // deleted meanwhile — fall back to the tile's list
+        follow_region_ = false;
+        set_entries(default_entries());
+    } else if (grid()->entries().isEmpty()) {
+        follow_region_ = true;
+        set_entries(default_entries());
+    }
+    filling_ = true;
+    const int idx = source_->findData(watchlist_id_);
+    source_->setCurrentIndex(idx >= 0 ? idx : 0);
+    filling_ = false;
+    update_title();
+    update_footer();
+    update_empty_state();
+}
+
+void WatchlistWidget::update_empty_state() {
+    if (!grid()->entries().isEmpty()) {
+        hide_empty_state();
         return;
-    symbols_ = next;
-    // Dynamic symbol set: drop any cached rows for symbols no longer
-    // tracked, then rewire subscriptions to the new set.
-    row_cache_.clear();
-    table_->clear_data();
-    hub_resubscribe();
-    // Persist through the canvas so the edited list survives a restart.
+    }
+    // Only a bound saved watchlist can be empty here (the tile's own list and the
+    // region list never are); the name says which one.
+    const QString name = watchlist_id_.isEmpty() ? tr("This tile's list")
+                                                 : (watchlist_name_.isEmpty() ? tr("This watchlist") : watchlist_name_);
+    ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+        tr("%1 is empty").arg(name),
+        tr("Add symbols to it in the Watchlist screen and they show here with live prices — or show your region's "
+           "large caps in this tile meanwhile."),
+        tr("OPEN WATCHLIST"));
+    spec.secondary = tr("SHOW REGION LARGE CAPS");
+    show_empty_state(
+        spec,
+        []() {
+            EventBus::instance().publish(QStringLiteral("nav.switch_screen"),
+                                         QVariantMap{{"screen_id", QStringLiteral("watchlist")}, {"exclusive", true}});
+        },
+        [this]() { follow_region_large_caps(); });
+}
+
+void WatchlistWidget::follow_region_large_caps() {
+    // The fresh-tile fallback path (apply_config): the region's large caps,
+    // following region changes, kept as this tile's configuration.
+    watchlist_id_.clear();
+    watchlist_name_.clear();
+    follow_region_ = true;
+    region_chosen_ = true;
+    set_entries(default_entries());
+    bind(QString());
     emit config_changed(config());
 }
 
+QVector<QuoteGridEntry> WatchlistWidget::default_entries() const {
+    QVector<QuoteGridEntry> out;
+    if (!watchlist_id_.isEmpty()) {
+        const auto r = WatchlistRepository::instance().get_stocks(watchlist_id_);
+        if (r.is_ok()) {
+            auto stocks = r.value();
+            std::stable_sort(stocks.begin(), stocks.end(),
+                             [](const WatchlistStock& a, const WatchlistStock& b) { return a.sort_order < b.sort_order; });
+            for (const auto& s : stocks)
+                if (!s.symbol.trimmed().isEmpty())
+                    out.append({s.symbol.trimmed(), s.name, {}});
+        }
+        return out;
+    }
+    return profile_entries(QuoteListKind::Custom);
+}
+
+QString WatchlistWidget::source_text() const {
+    if (!watchlist_id_.isEmpty())
+        return tr("Saved watchlist: %1").arg(watchlist_name_.isEmpty() ? watchlist_id_ : watchlist_name_);
+    if (follow_region_)
+        return tr("%1 large caps — pick a saved watchlist above or edit with the gear")
+            .arg(core::market::market_profile_name(core::market::MarketProfileStore::instance().current()));
+    return tr("This tile's list");
+}
+
 QJsonObject WatchlistWidget::config() const {
-    QJsonArray arr;
-    for (const auto& s : symbols_)
-        arr.append(s);
-    QJsonObject o;
-    o.insert("symbols", arr);
+    if (!watchlist_id_.isEmpty())
+        return QJsonObject{{"watchlist_id", watchlist_id_}};
+    QJsonObject o = QuoteTableWidget::config();
+    if (region_chosen_ && follow_region_)
+        o.insert("list_source", QStringLiteral("region"));
     return o;
 }
 
 void WatchlistWidget::apply_config(const QJsonObject& cfg) {
-    QStringList next;
-    const QJsonArray arr = cfg.value("symbols").toArray();
-    for (const auto& v : arr) {
-        const QString s = v.toString().trimmed().toUpper();
-        if (!s.isEmpty() && !next.contains(s))
-            next << s;
-    }
-    if (next.isEmpty() || next == symbols_)
+    if (!source_)
+        return; // base-class construction: the real apply runs from our constructor
+    region_chosen_ = false;
+    if (cfg.value("list_source").toString() == QLatin1String("region")) {
+        region_chosen_ = true;
+        watchlist_id_.clear();
+        follow_region_ = true;
+        set_entries(default_entries());
+        bind(QString());
         return;
-    symbols_ = next;
-    if (symbols_input_)
-        symbols_input_->setText(symbols_.join(", "));
-    row_cache_.clear();
-    if (table_)
-        table_->clear_data();
-    if (isVisible())
-        hub_resubscribe();
-}
-
-void WatchlistWidget::apply_styles() {
-    symbols_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                      .arg(ui::colors::TEXT_TERTIARY()));
-    symbols_input_->setStyleSheet(
-        QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-                "font-size: 10px; padding: 2px 6px; font-family: Consolas; }"
-                "QLineEdit:focus { border-color: %4; }")
-            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    go_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; "
-                                   "font-size: 9px; font-weight: bold; padding: 3px; }"
-                                   "QPushButton:hover { background: %1; }")
-                               .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
-}
-
-void WatchlistWidget::on_theme_changed() {
-    apply_styles();
-}
-
-void WatchlistWidget::showEvent(QShowEvent* e) {
-    BaseWidget::showEvent(e);
-    if (!hub_active_)
-        hub_resubscribe();
-}
-
-void WatchlistWidget::hideEvent(QHideEvent* e) {
-    BaseWidget::hideEvent(e);
-    if (hub_active_)
-        hub_unsubscribe_all();
-}
-
-void WatchlistWidget::refresh_data() {
-    if (symbols_.isEmpty())
+    }
+    const QString id = cfg.value("watchlist_id").toString();
+    if (!id.isEmpty()) {
+        bind(id);
         return;
-    // User-triggered refresh: force-kick the hub for each current symbol.
-    auto& hub = datahub::DataHub::instance();
-    QStringList topics;
-    topics.reserve(symbols_.size());
-    for (const auto& sym : symbols_)
-        topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
-}
-
-void WatchlistWidget::hub_resubscribe() {
-    auto& hub = datahub::DataHub::instance();
-    // Drop old subscriptions wholesale — symbol set may have changed.
-    hub.unsubscribe(this);
-    // Kick off the determinate loading overlay — count is the live symbol
-    // count, not a hardcoded constant, so adding/removing symbols via the
-    // GO button updates the denominator correctly.
-    set_loading_progress(row_cache_.size(), symbols_.size());
-    for (const auto& sym : symbols_) {
-        const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
-            if (!v.canConvert<services::QuoteData>())
-                return;
-            row_cache_.insert(sym, v.value<services::QuoteData>());
-            // Numerator = unique symbols delivered so far; the overlay
-            // animates the count up and fades out when row_cache_ is full.
-            set_loading_progress(row_cache_.size(), symbols_.size());
-            // One render per delivery burst, not one per symbol.
-            schedule_render([this]() { render_from_cache(); });
-        });
     }
-    hub_active_ = true;
-}
-
-void WatchlistWidget::hub_unsubscribe_all() {
-    datahub::DataHub::instance().unsubscribe(this);
-    hub_active_ = false;
-}
-
-void WatchlistWidget::render_from_cache() {
-    table_->clear_data();
-    for (const auto& sym : symbols_) {
-        auto it = row_cache_.constFind(sym);
-        if (it == row_cache_.constEnd())
-            continue;
-        const auto& q = it.value();
-        // The watchlist is free-form (index levels, FX, futures, non-USD
-        // listings) and the feed carries no currency, so prices are plain
-        // grouped numbers with symbol-appropriate decimals (FX keeps pips).
-        table_->add_row({sym, dash_fmt::price(q.price, sym), dash_fmt::signed_change(q.change, q.price, sym),
-                         dash_fmt::signed_pct(q.change_pct)});
-        int row = table_->rowCount() - 1;
-        table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
-        table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
+    const auto list = entries_from_json(cfg);
+    if (!list.isEmpty()) {
+        watchlist_id_.clear();
+        follow_region_ = false;
+        set_entries(list);
+        bind(QString());
+        return;
     }
+    // Fresh tile: the default saved watchlist when the user has one.
+    QString default_id;
+    const auto r = WatchlistRepository::instance().list_all();
+    if (r.is_ok()) {
+        for (const auto& w : r.value())
+            if (w.is_default) {
+                default_id = w.id;
+                break;
+            }
+    }
+    if (!default_id.isEmpty()) {
+        bind(default_id);
+        return;
+    }
+    watchlist_id_.clear();
+    follow_region_ = true;
+    set_entries(default_entries());
+    bind(QString());
 }
 
-void WatchlistWidget::retranslateUi() {
-    BaseWidget::retranslateUi();
-    set_title(tr("WATCHLIST"));
-    if (symbols_label_)
-        symbols_label_->setText(tr("SYMBOLS:"));
-    if (go_btn_)
-        go_btn_->setText(tr("GO"));
-    if (table_)
-        table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
+QDialog* WatchlistWidget::make_config_dialog(QWidget* parent) {
+    auto* dlg = new SymbolListDialog(watchlist_id_.isEmpty()
+                                         ? tr("Edit watchlist tile")
+                                         : tr("Edit a copy of %1 (the tile then keeps its own list)").arg(watchlist_name_),
+                                     grid()->entries(), {}, parent);
+    connect(dlg, &QDialog::accepted, this, [this, dlg]() {
+        const auto list = dlg->entries();
+        if (list.isEmpty())
+            return;
+        watchlist_id_.clear();
+        follow_region_ = false;
+        set_entries(list);
+        bind(QString());
+        emit config_changed(config());
+    });
+    return dlg;
 }
 
 } // namespace fincept::screens::widgets

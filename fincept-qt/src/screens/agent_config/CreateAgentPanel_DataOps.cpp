@@ -8,6 +8,7 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "screens/agent_config/AgentResultFormat.h"
 #include "screens/agent_config/CreateAgentPanel.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
@@ -15,6 +16,7 @@
 #include "storage/repositories/McpServerRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,6 +38,7 @@
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -45,7 +48,7 @@ namespace {
 // Status-line styling in one place (was ten identical inline setStyleSheet pairs).
 void set_form_status(QLabel* lbl, const QString& text, const QString& color) {
     lbl->setText(text);
-    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(color));
+    lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:3px 0;").arg(color));
 }
 } // namespace
 
@@ -57,7 +60,32 @@ void CreateAgentPanel::load_saved_agents() {
         for (const auto& a : saved_agents_)
             saved_list_->addItem(QString("%1  [%2]").arg(a.name, a.category));
         saved_count_->setText(QString::number(saved_agents_.size()));
+        update_saved_state();
+    } else {
+        update_saved_state(QString::fromStdString(result.error()));
     }
+}
+
+void CreateAgentPanel::update_saved_state(const QString& error) {
+    if (!saved_stack_)
+        return;
+    if (error.isEmpty() && saved_list_->count() > 0) {
+        saved_stack_->setCurrentWidget(saved_list_);
+        return;
+    }
+    const bool failed = !error.isEmpty();
+    saved_empty_->setProperty("retry", failed);
+    saved_empty_->apply(failed ? ui::EmptyState::error_spec(error, tr("Saved agents could not be read"))
+                               : ui::EmptyState::no_data_spec(tr("No saved agents"),
+                                                              tr("Fill in the form and press SAVE, or import a JSON "
+                                                                 "definition."),
+                                                              tr("IMPORT")));
+    saved_stack_->setCurrentWidget(saved_empty_);
+}
+
+void CreateAgentPanel::set_test_page(bool output) {
+    if (test_stack_)
+        test_stack_->setCurrentWidget(output ? static_cast<QWidget*>(test_result_) : test_empty_);
 }
 
 void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
@@ -180,6 +208,11 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     set_form_status(status_lbl_, tr("Loaded: %1").arg(cfg.name), ui::colors::CYAN());
 }
 
+void CreateAgentPanel::start_new_agent() {
+    clear_form();
+    name_edit_->setFocus();
+}
+
 void CreateAgentPanel::clear_form() {
     editing_id_.clear();
     name_edit_->clear();
@@ -214,7 +247,8 @@ void CreateAgentPanel::clear_form() {
     terminal_name_exclude_edit_->clear();
     terminal_max_tools_spin_->setValue(0);
     mcp_servers_list_->clearSelection();
-    test_result_->clear();
+    agent_result::show_plain(test_result_, QString());
+    set_test_page(false);
     test_status_lbl_->clear();
     set_form_status(status_lbl_, tr("Form cleared"), ui::colors::TEXT_TERTIARY());
 }
@@ -352,7 +386,7 @@ QJsonObject CreateAgentPanel::build_config_json() const {
 void CreateAgentPanel::save_agent() {
     const QString name = name_edit_->text().trimmed();
     if (name.isEmpty()) {
-        set_form_status(status_lbl_, tr("Agent name is required"), ui::colors::NEGATIVE());
+        set_form_status(status_lbl_, tr("Agent name is required"), ui::colors::DANGER());
         return;
     }
     AgentConfig db;
@@ -392,9 +426,10 @@ void CreateAgentPanel::test_agent() {
         return;
     test_btn_->setEnabled(false);
     test_btn_->setText(tr("RUNNING..."));
-    test_result_->clear();
+    agent_result::show_plain(test_result_, QString());
+    set_test_page(true);
     test_status_lbl_->setText(tr("Running..."));
-    test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER()));
+    test_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::AMBER()));
     pending_request_id_ = services::AgentService::instance().run_agent_streaming(query, build_config_json());
 }
 
@@ -418,12 +453,24 @@ void CreateAgentPanel::export_json() {
     // Previously the status said "Exported" even when open() failed and nothing
     // was written — a silent data-loss report.
     if (!file.open(QIODevice::WriteOnly)) {
-        set_form_status(status_lbl_, tr("Export failed: cannot write %1").arg(path), ui::colors::NEGATIVE());
+        set_form_status(status_lbl_, tr("Export failed: cannot write %1").arg(path), ui::colors::DANGER());
         return;
     }
-    file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
+    // The write itself can fail too (disk full, file locked): check it, and the
+    // flush on close, before saying "Exported".
+    const QByteArray bytes = QJsonDocument(out).toJson(QJsonDocument::Indented);
+    const bool written = file.write(bytes) == bytes.size();
+    const bool flushed = file.flush();
+    const QString write_error = file.errorString();
     file.close();
-    set_form_status(status_lbl_, tr("Exported: %1").arg(path), ui::colors::POSITIVE());
+    if (!written || !flushed) {
+        LOG_WARN("CreateAgentPanel",
+                 QStringLiteral("Agent export could not be written path=%1 error=\"%2\"").arg(path, write_error));
+        set_form_status(status_lbl_, tr("Export failed: could not write %1 (%2)").arg(path, write_error),
+                        ui::colors::DANGER());
+        return;
+    }
+    set_form_status(status_lbl_, tr("Exported: %1").arg(path), ui::colors::SUCCESS());
 }
 
 void CreateAgentPanel::import_json() {
@@ -432,7 +479,7 @@ void CreateAgentPanel::import_json() {
         return;
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        set_form_status(status_lbl_, tr("Import failed: cannot read %1").arg(path), ui::colors::NEGATIVE());
+        set_form_status(status_lbl_, tr("Import failed: cannot read %1").arg(path), ui::colors::DANGER());
         return;
     }
     // A malformed file used to load as an empty object, silently wiping the form.
@@ -443,7 +490,7 @@ void CreateAgentPanel::import_json() {
         status_lbl_->setText(tr("Import failed: %1")
                                  .arg(perr.error == QJsonParseError::NoError ? tr("top level must be a JSON object")
                                                                              : perr.errorString()));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:3px 0;").arg(ui::colors::DANGER()));
         return;
     }
     const QJsonObject obj = doc.object();
@@ -487,8 +534,9 @@ QVariantMap CreateAgentPanel::save_draft() const {
         d["term_name_exclude"] = terminal_name_exclude_edit_->text();
     if (test_query_edit_)
         d["test_query"] = test_query_edit_->toPlainText();
-    if (test_result_ && !test_result_->toPlainText().isEmpty())
-        d["test_result"] = test_result_->toPlainText();
+    // The markdown source (not the rendered plain text), so a restore re-renders it.
+    if (test_result_ && !agent_result::saved_text(test_result_).isEmpty())
+        d["test_result"] = agent_result::saved_text(test_result_);
     return d;
 }
 
@@ -521,8 +569,10 @@ void CreateAgentPanel::restore_draft(const QVariantMap& d) {
         terminal_name_exclude_edit_->setText(d["term_name_exclude"].toString());
     if (test_query_edit_ && d.contains("test_query"))
         test_query_edit_->setPlainText(d["test_query"].toString());
-    if (test_result_ && d.contains("test_result"))
-        test_result_->setPlainText(d["test_result"].toString());
+    if (test_result_ && d.contains("test_result")) {
+        agent_result::show_markdown(test_result_, d["test_result"].toString());
+        set_test_page(true); // the last test answer, not the preview
+    }
 }
 
 } // namespace fincept::screens

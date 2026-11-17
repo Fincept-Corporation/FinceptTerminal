@@ -14,8 +14,18 @@
 #include "services/maritime/PortsCatalog.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/charts/RangeBar.h"
+#include "ui/charts/TimeSeriesChart.h"
+#include "ui/tables/NumericTableWidgetItem.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/Card.h"
+#include "ui/widgets/EmptyState.h"
 #include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/PlanHint.h"
+#include "ui/widgets/KpiStrip.h"
+#include "ui/widgets/LoadingSkeleton.h"
 #include "ui/widgets/LoadingOverlay.h"
+#include "ui/widgets/StatTile.h"
 #include "ui/widgets/WorldMapWidget.h"
 
 #include <QGridLayout>
@@ -27,7 +37,11 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTabWidget>
+
+#include <algorithm>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -69,7 +83,7 @@ void MaritimeScreen::build_ui() {
 QWidget* MaritimeScreen::build_top_bar() {
     auto* bar = new QWidget(this);
     bar->setObjectName(QStringLiteral("mtTopBar"));
-    bar->setFixedHeight(46);
+    bar->setMinimumHeight(46);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(14, 0, 14, 0);
@@ -93,6 +107,11 @@ QWidget* MaritimeScreen::build_top_bar() {
     credits_label_->setObjectName(QStringLiteral("mtCredits"));
     credits_label_->setToolTip(tr("Fincept API credit balance after the last vessel request"));
     hl->addWidget(credits_label_);
+    // What the plan changes for vessel data (half price on Pro) — hidden until
+    // the server has sent its plan table.
+    auto* plan_hint = new ui::PlanHintLabel(QStringLiteral("maritime"), bar);
+    plan_hint->set_compact(true);
+    hl->addWidget(plan_hint);
 
     plans_btn_ = new QPushButton(tr("PLANS"), bar);
     plans_btn_->setObjectName(QStringLiteral("mtPlansBtn"));
@@ -113,7 +132,7 @@ QWidget* MaritimeScreen::build_top_bar() {
 QWidget* MaritimeScreen::build_left_panel() {
     auto* panel = new QWidget(this);
     panel->setObjectName(QStringLiteral("mtLeftPanel"));
-    panel->setFixedWidth(260);
+    panel->setFixedWidth(std::max(260, mt_text_width(30, -1, QFont::Bold) + 24));
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(12, 12, 12, 12);
@@ -126,6 +145,7 @@ QWidget* MaritimeScreen::build_left_panel() {
     vl->addWidget(global_btn_);
 
     load_btn_ = new QPushButton(tr("LOAD VESSELS IN AREA"), panel);
+    load_btn_->setProperty("fincept_agent_risk", "spend"); // agents: loads vessels (credits)
     load_btn_->setCursor(Qt::PointingHandCursor);
     mt_set_role(load_btn_, "outline");
     connect(load_btn_, &QPushButton::clicked, this, &MaritimeScreen::on_load_vessels);
@@ -244,16 +264,31 @@ QWidget* MaritimeScreen::build_left_panel() {
     mt_set_role(routes_title_, "section");
     vl->addWidget(routes_title_);
 
-    routes_table_ = new QTableWidget(panel);
-    routes_table_->setColumnCount(3);
-    routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels"), tr("Status")});
+    // Corridors are derived from the loaded vessels' from/to ports; there is no
+    // corridor status or trade value in the data, so only the vessel count is shown.
+    // The corridors table shares its slot with a designed state until a load
+    // gives it rows.
+    routes_stack_ = new QStackedWidget(panel);
+    routes_table_ = new QTableWidget(routes_stack_);
+    routes_table_->setColumnCount(2);
+    routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels")});
+    routes_table_->setToolTip(tr("Select a corridor to show only its vessels in the table and on the map"));
     routes_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     routes_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     routes_table_->horizontalHeader()->setStretchLastSection(true);
     routes_table_->verticalHeader()->setVisible(false);
     connect(routes_table_, &QTableWidget::currentCellChanged, this,
             [this](int row, int, int, int) { on_route_selected(row); });
-    vl->addWidget(routes_table_, 1);
+    routes_stack_->addWidget(routes_table_);
+    routes_state_ = new ui::EmptyState(routes_stack_);
+    routes_state_->set_compact(true);
+    routes_state_->set_alignment(Qt::AlignTop);
+    routes_state_->set_content(QStringLiteral("⇄"), tr("Trade corridors"),
+                               tr("Departure → destination port pairs of the loaded vessels, busiest first. Click "
+                                  "one to show only its vessels."));
+    routes_stack_->addWidget(routes_state_);
+    routes_stack_->setCurrentWidget(routes_state_);
+    vl->addWidget(routes_stack_, 1);
 
     return panel;
 }
@@ -271,7 +306,7 @@ QWidget* MaritimeScreen::build_center_panel() {
     // exists (below) so its current basemap drives the initial selection.
     auto* header = new QWidget(panel);
     header->setObjectName("mtMapToolbar");
-    header->setFixedHeight(36);
+    header->setMinimumHeight(36);
     // Flat, even background matching the panels with a single hairline rule (root
     // sheet). WA_StyledBackground guarantees the whole rect fills uniformly.
     header->setAttribute(Qt::WA_StyledBackground, true);
@@ -288,16 +323,22 @@ QWidget* MaritimeScreen::build_center_panel() {
     center_title_->setObjectName(QStringLiteral("mtCenterTitle"));
     hhl->addWidget(center_title_);
     hhl->addStretch();
+    // "as of 14:02 · refreshing…" of the vessel list (kept by its AutoLoadPane).
+    vessels_asof_lbl_ = new QLabel(header);
+    mt_set_role(vessels_asof_lbl_, "tiny");
+    hhl->addWidget(vessels_asof_lbl_);
 
     // Manual refresh + visible AUTO-refresh toggle (off by default so it never
     // silently burns API credits — the user opts in).
     refresh_btn_ = new QPushButton(tr("⟳ REFRESH"), header);
+    refresh_btn_->setProperty("fincept_agent_risk", "spend"); // agents: reloads vessels (credits)
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     mt_set_role(refresh_btn_, "toolbar");
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() { do_refresh(); });
     hhl->addWidget(refresh_btn_);
 
     auto_refresh_btn_ = new QPushButton(tr("AUTO ⟳ OFF"), header);
+    auto_refresh_btn_->setProperty("fincept_agent_risk", "spend"); // agents: turns on billed auto-refresh
     auto_refresh_btn_->setCursor(Qt::PointingHandCursor);
     auto_refresh_btn_->setCheckable(true);
     mt_set_role(auto_refresh_btn_, "toolbar");
@@ -310,13 +351,27 @@ QWidget* MaritimeScreen::build_center_panel() {
     });
     hhl->addWidget(auto_refresh_btn_);
 
+    // Reference layers from the bundled (offline) map data.
+    ports_layer_btn_ = new QPushButton(tr("PORTS"), header);
+    ports_layer_btn_->setCheckable(true);
+    ports_layer_btn_->setCursor(Qt::PointingHandCursor);
+    ports_layer_btn_->setToolTip(tr("Show the world's major ports (Natural Earth, offline)"));
+    mt_set_role(ports_layer_btn_, "toolbar");
+    hhl->addWidget(ports_layer_btn_);
+    chokepoints_layer_btn_ = new QPushButton(tr("CHOKEPOINTS"), header);
+    chokepoints_layer_btn_->setCheckable(true);
+    chokepoints_layer_btn_->setCursor(Qt::PointingHandCursor);
+    chokepoints_layer_btn_->setToolTip(tr("Show the maritime chokepoints: straits and canals carrying most seaborne trade"));
+    mt_set_role(chokepoints_layer_btn_, "toolbar");
+    hhl->addWidget(chokepoints_layer_btn_);
+
     basemap_cap_ = new QLabel(tr("BASEMAP"), header);
     mt_set_role(basemap_cap_, "tiny");
     hhl->addWidget(basemap_cap_);
 
     map_type_combo_ = new QComboBox(header);
     map_type_combo_->setCursor(Qt::PointingHandCursor);
-    map_type_combo_->setFixedWidth(132);
+    map_type_combo_->setFixedWidth(std::max(132, mt_text_width(12, -1, QFont::Bold) + 40));
     hhl->addWidget(map_type_combo_);
 
     vl->addWidget(header);
@@ -332,7 +387,8 @@ QWidget* MaritimeScreen::build_center_panel() {
     map_loader_ = new fincept::ui::LoadingOverlay(map_widget_);
 
     // Populate + wire the basemap selector now that the map exists. The map
-    // defaults to SATELLITE; switching is instant and preserves camera/pins.
+    // opens on the offline MAP basemap; switching is instant and preserves
+    // camera/pins. Basemap, layers and camera are saved with the screen state.
     if (map_type_combo_) {
         map_type_combo_->addItems(fincept::ui::WorldMapWidget::basemap_labels());
         map_type_combo_->setCurrentIndex(map_widget_->current_basemap_index());
@@ -341,6 +397,27 @@ QWidget* MaritimeScreen::build_center_panel() {
                 map_widget_->set_basemap(idx);
         });
     }
+    connect(ports_layer_btn_, &QPushButton::toggled, this, [this](bool on) {
+        map_widget_->set_reference_layer(fincept::ui::MapLayer::Ports, on);
+    });
+    connect(chokepoints_layer_btn_, &QPushButton::toggled, this, [this](bool on) {
+        map_widget_->set_reference_layer(fincept::ui::MapLayer::Chokepoints, on);
+    });
+    connect(map_widget_, &fincept::ui::WorldMapWidget::view_changed, this, [this]() {
+        // Keep the toolbar in step with a restored view, then persist.
+        if (map_type_combo_ && map_type_combo_->currentIndex() != map_widget_->current_basemap_index()) {
+            const QSignalBlocker block(map_type_combo_);
+            map_type_combo_->setCurrentIndex(map_widget_->current_basemap_index());
+        }
+        for (auto [btn, layer] : {std::pair{ports_layer_btn_, fincept::ui::MapLayer::Ports},
+                                  std::pair{chokepoints_layer_btn_, fincept::ui::MapLayer::Chokepoints}}) {
+            if (btn && btn->isChecked() != map_widget_->reference_layer(layer)) {
+                const QSignalBlocker block(btn);
+                btn->setChecked(map_widget_->reference_layer(layer));
+            }
+        }
+        fincept::ScreenStateManager::instance().notify_changed(this);
+    });
 
     // Drawn-shape changes → load vessels for the union bbox and filter to
     // those inside the shapes.
@@ -370,7 +447,42 @@ QWidget* MaritimeScreen::build_center_panel() {
         }
     });
 
-    vessels_table_ = new QTableWidget(splitter);
+    // Voyage-history summary (history mode only): headline KPIs and the speed
+    // profile over the reported fixes, above the per-fix table.
+    history_panel_ = new QWidget(splitter);
+    history_panel_->setObjectName(QStringLiteral("mtHistoryPanel"));
+    auto* hpl = new QVBoxLayout(history_panel_);
+    hpl->setContentsMargins(8, 6, 8, 6);
+    hpl->setSpacing(6);
+    history_kpis_ = new ui::KpiStrip(history_panel_);
+    const std::pair<const char*, QString> history_tiles[] = {{"positions", tr("POSITIONS")},
+                                                             {"first", tr("FIRST FIX")},
+                                                             {"last", tr("LAST FIX")},
+                                                             {"avg", tr("AVG SPEED (KN)")},
+                                                             {"max", tr("MAX SPEED (KN)")}};
+    for (const auto& [key, label] : history_tiles)
+        history_kpis_->add_tile(QString::fromLatin1(key), label)->set_compact(true);
+    hpl->addWidget(history_kpis_);
+    history_chart_ = new ui::TimeSeriesChart(history_panel_);
+    history_chart_->set_title(tr("SPEED OVER GROUND (KN)"));
+    history_chart_->set_show_mode_buttons(false);
+    history_chart_->set_utc(true);
+    history_chart_->setMinimumHeight(140);
+    hpl->addWidget(history_chart_, 1);
+    history_empty_ = new QLabel(history_panel_);
+    mt_set_role(history_empty_, "hint");
+    history_empty_->setAlignment(Qt::AlignCenter);
+    history_empty_->setWordWrap(true);
+    history_empty_->hide();
+    hpl->addWidget(history_empty_);
+    history_panel_->hide();
+    splitter->addWidget(history_panel_);
+
+    // The vessel list lives in the shared AutoLoadPane (Manual: 8 credits per
+    // area search): the last result of the view with its "as of", else the
+    // preview of a paid load; skeleton while loading; failure + RETRY.
+    vessels_pane_ = new ui::AutoLoadPane(ui::AutoLoadPane::Policy::Manual, splitter);
+    vessels_table_ = new QTableWidget(vessels_pane_->content_parent());
     vessels_table_->setColumnCount(9);
     vessels_table_->setHorizontalHeaderLabels({tr("Name"), tr("IMO"), tr("Lat"), tr("Lng"), tr("Speed (kn)"),
                                                tr("Angle"), tr("From"), tr("To"), tr("Progress")});
@@ -387,12 +499,58 @@ QWidget* MaritimeScreen::build_center_panel() {
             [this](int row, int) { on_vessel_row_picked(row, false); });
     connect(vessels_table_, &QTableWidget::cellActivated, this,
             [this](int row, int) { on_vessel_row_picked(row, true); });
-    splitter->addWidget(vessels_table_);
+    vessels_pane_->set_content(vessels_table_);
+    vessels_pane_->skeleton()->set_shape(ui::LoadingSkeleton::Shape::Table);
+    vessels_pane_->skeleton()->set_row_count(8);
+    vessels_pane_->set_cost_credits(8, QStringLiteral("maritime")); // list price; a known balance below the plan's price → "Not enough credits" + VIEW PLANS
+    vessels_pane_->set_max_age(60 * 60); // older positions → "may be out of date · REFRESH"
+    vessels_pane_->set_persist_limit(0); // the service keeps the copy (remembered_vessels)
+    vessels_pane_->set_remembered_source(
+        [this](const QString& view, QJsonValue* payload, QDateTime* as_of) {
+            return remembered_vessels(view, payload, as_of);
+        });
+    vessels_pane_->set_start([this](quint64 id) { start_vessels_request(id); });
+    vessels_pane_->set_cancel([this](quint64 id) {
+        if (vessels_request_id_ == id)
+            vessels_request_id_ = 0; // the reply still updates map and figures; the pane ignores it
+    });
+    vessels_pane_->set_render([this](const QJsonValue& payload, const QDateTime&, bool from_cache) {
+        render_vessels_payload(payload, from_cache);
+    });
+    vessels_pane_->set_status_label(vessels_asof_lbl_);
+    // Free: the bundled ports and chokepoints layers.
+    connect(vessels_pane_->preview(), &ui::EmptyState::secondary_clicked, this, [this]() {
+        if (ports_layer_btn_)
+            ports_layer_btn_->setChecked(true);
+        if (chokepoints_layer_btn_)
+            chokepoints_layer_btn_->setChecked(true);
+    });
+    connect(vessels_pane_, &ui::AutoLoadPane::state_changed, this, [this](ui::AutoLoadPane::State st) {
+        if (st != ui::AutoLoadPane::State::Preview)
+            return;
+        // Nothing loaded for this view: say so on the map and in the status bar,
+        // and on a first visit (no saved map view) show the free reference layers.
+        if (map_widget_ && rendered_vessels_.isEmpty())
+            map_widget_->set_overlay_message(tr("Vessels not loaded yet — 8 credits per area search"));
+        set_status(tr("NOT LOADED"), "muted");
+        if (status_label_)
+            status_label_->setToolTip(tr("Vessel positions are loaded on request (8 credits per area search)."));
+        if (!restored_map_view_ && !layers_defaulted_) {
+            layers_defaulted_ = true;
+            if (ports_layer_btn_ && !ports_layer_btn_->isChecked())
+                ports_layer_btn_->setChecked(true);
+            if (chokepoints_layer_btn_ && !chokepoints_layer_btn_->isChecked())
+                chokepoints_layer_btn_->setChecked(true);
+        }
+    });
+    splitter->addWidget(vessels_pane_);
 
     vessels_table_->setMinimumHeight(180);
+    vessels_pane_->setMinimumHeight(180);
     splitter->setStretchFactor(0, 5);
-    splitter->setStretchFactor(1, 5);
-    splitter->setSizes({380, 360});
+    splitter->setStretchFactor(1, 3);
+    splitter->setStretchFactor(2, 5);
+    splitter->setSizes({380, 220, 360});
     vl->addWidget(splitter, 1);
 
     return panel;
@@ -402,7 +560,7 @@ QWidget* MaritimeScreen::build_center_panel() {
 QWidget* MaritimeScreen::build_right_panel() {
     auto* panel = new QWidget(this);
     panel->setObjectName(QStringLiteral("mtRightPanel"));
-    panel->setFixedWidth(280);
+    panel->setFixedWidth(std::max(280, mt_text_width(34, -1)));
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
@@ -441,38 +599,57 @@ QWidget* MaritimeScreen::build_right_panel() {
         QString imo;
         if (!read_imo(&imo))
             return;
-        set_status(tr("LOADING HISTORY..."), "amber");
-        show_map_loading(tr("LOADING HISTORY"));
-        MaritimeService::instance().get_vessel_history(imo);
+        // A view of the vessel-list pane of its own (5 credits; the service
+        // answers a copy younger than 30 min for free).
+        MtView v;
+        v.imo = imo;
+        const QString key = QStringLiteral("history/") + imo;
+        views_.insert(key, v);
+        configure_vessels_preview(v);
+        vessels_pane_->set_cost_credits(5, QStringLiteral("maritime"));
+        vessels_pane_->set_view(key);
+        vessels_pane_->run();
     });
     vl->addWidget(history_btn_);
 
-    // Search result card
-    search_result_card_ = new QWidget(content);
-    search_result_card_->setObjectName(QStringLiteral("mtSearchCard"));
+    // Selected-vessel card: headline KPIs, the route-progress bar between the
+    // two ports, and the fix itself. The card's title is the vessel name.
+    search_result_card_ = new ui::Card(tr("SELECTED VESSEL"), content);
     search_result_card_->setVisible(false);
-    auto* srvl = new QVBoxLayout(search_result_card_);
-    srvl->setContentsMargins(10, 10, 10, 10);
-    srvl->setSpacing(4);
+    connect(search_result_card_, &ui::Card::close_requested, search_result_card_, &QWidget::hide);
+    auto* srvl = search_result_card_->content_layout();
+    srvl->setSpacing(6);
 
-    sr_name_ = new QLabel(search_result_card_);
-    mt_set_role(sr_name_, "cardTitle");
-    srvl->addWidget(sr_name_);
     sr_imo_ = new QLabel(search_result_card_);
     mt_set_role(sr_imo_, "detail");
     srvl->addWidget(sr_imo_);
-    sr_position_ = new QLabel(search_result_card_);
-    mt_set_role(sr_position_, "detail");
-    srvl->addWidget(sr_position_);
-    sr_speed_ = new QLabel(search_result_card_);
-    mt_set_role(sr_speed_, "detail");
-    srvl->addWidget(sr_speed_);
+    sr_kpis_ = new ui::KpiStrip(search_result_card_);
+    sr_kpis_->set_max_columns(2);
+    sr_kpis_->set_min_tile_width(std::max(100, mt_text_width(9, -2)));
+    const std::pair<const char*, QString> sr_tiles[] = {{"speed", tr("SPEED (KN)")},
+                                                        {"heading", tr("HEADING")},
+                                                        {"draught", tr("DRAUGHT (M)")},
+                                                        {"progress", tr("ROUTE PROGRESS")},
+                                                        {"age", tr("FIX AGE")}};
+    for (const auto& [key, label] : sr_tiles)
+        sr_kpis_->add_tile(QString::fromLatin1(key), label)->set_compact(true);
+    srvl->addWidget(sr_kpis_);
+    sr_progress_ = new ui::RangeBar(search_result_card_);
+    sr_progress_->setMinimumHeight(44);
+    sr_progress_->set_value_formatter([](double v) { return QStringLiteral("%1%").arg(QLocale().toString(v, 'f', 0)); });
+    srvl->addWidget(sr_progress_);
     sr_from_ = new QLabel(search_result_card_);
     mt_set_role(sr_from_, "detail");
+    sr_from_->setWordWrap(true);
     srvl->addWidget(sr_from_);
     sr_to_ = new QLabel(search_result_card_);
     mt_set_role(sr_to_, "detail");
+    sr_to_->setWordWrap(true);
     srvl->addWidget(sr_to_);
+    sr_position_ = new QLabel(search_result_card_);
+    mt_set_role(sr_position_, "detail");
+    sr_position_->setWordWrap(true);
+    srvl->addWidget(sr_position_);
     vl->addWidget(search_result_card_);
 
     search_result_label_ = new QLabel(content);
@@ -508,7 +685,9 @@ QWidget* MaritimeScreen::build_right_panel() {
     };
     connect(place_query_edit_, &QLineEdit::returnPressed, this, run_place_search);
 
-    // Live typeahead: a completer popup fed by debounced geocoder results.
+    // Results of an explicit search (Enter / SEARCH PLACES) also feed a completer
+    // popup. No search-as-you-type: Nominatim's usage policy forbids client-side
+    // autocomplete on its public API (and allows at most one request per second).
     place_completer_model_ = new QStringListModel(this);
     place_completer_ = new QCompleter(place_completer_model_, this);
     place_completer_->setCaseSensitivity(Qt::CaseInsensitive);
@@ -527,20 +706,9 @@ QWidget* MaritimeScreen::build_right_panel() {
             }
         }
     });
+    // Kept for hideEvent()'s stop(); never started (see above).
     place_debounce_ = new QTimer(this);
     place_debounce_->setSingleShot(true);
-    place_debounce_->setInterval(350);
-    connect(place_debounce_, &QTimer::timeout, this, [this]() {
-        const QString q = place_query_edit_->text().trimmed();
-        if (q.size() < 3)
-            return;
-        if (place_status_)
-            place_status_->setText(tr("Searching…"));
-        place_req_ctx_ = q;
-        services::maritime::GeocodingService::instance().search(q);
-    });
-    // textEdited (not textChanged) so programmatic fills don't trigger searches.
-    connect(place_query_edit_, &QLineEdit::textEdited, this, [this](const QString&) { place_debounce_->start(); });
     vl->addWidget(place_query_edit_);
 
     place_btn_ = new QPushButton(tr("SEARCH PLACES"), content);
@@ -577,6 +745,7 @@ QWidget* MaritimeScreen::build_right_panel() {
     connect(place_table_, &QTableWidget::cellClicked, this, pick_place);
     connect(place_table_, &QTableWidget::cellActivated, this, pick_place);
     vl->addWidget(place_table_);
+    fill_default_places(); // key shipping areas until the user searches
 
     // ── Area Search (Advanced — raw lat/long) ───────────────────────────────
     vl->addSpacing(8);
@@ -678,7 +847,7 @@ QWidget* MaritimeScreen::build_right_panel() {
                 pin.latitude = p.latitude;
                 pin.longitude = p.longitude;
                 pin.label = QString("%1 (%2)").arg(p.name, p.locode.isEmpty() ? p.country : p.locode);
-                pin.color = QColor(ui::colors::AMBER.get());
+                pin.color = mt_marker_color(&ui::ThemeTokens::accent);
                 pin.radius = 6.0;
                 pin.id = -1;
                 map_widget_->add_pin(pin);
@@ -758,7 +927,7 @@ QWidget* MaritimeScreen::build_right_panel() {
         pin.latitude = p.latitude;
         pin.longitude = p.longitude;
         pin.label = QString("%1 (%2)").arg(p.name, p.locode.isEmpty() ? p.country : p.locode);
-        pin.color = QColor(ui::colors::AMBER.get());
+        pin.color = mt_marker_color(&ui::ThemeTokens::accent);
         pin.radius = 6.0;
         pin.id = -1;
         map_widget_->add_pin(pin);
@@ -767,6 +936,7 @@ QWidget* MaritimeScreen::build_right_panel() {
     connect(ports_table_, &QTableWidget::cellClicked, this, pick_port);
     connect(ports_table_, &QTableWidget::cellActivated, this, pick_port);
     vl->addWidget(ports_table_);
+    fill_default_ports(); // the busiest container ports until the user searches
 
     // ── Route Detail ───────────────────────────────────────────────────────
     vl->addSpacing(8);
@@ -793,6 +963,12 @@ QWidget* MaritimeScreen::build_right_panel() {
     rd_vessels_ = new QLabel(route_detail_);
     mt_set_role(rd_vessels_, "detail");
     rdvl->addWidget(rd_vessels_);
+    rd_clear_btn_ = new QPushButton(tr("SHOW ALL VESSELS"), route_detail_);
+    rd_clear_btn_->setCursor(Qt::PointingHandCursor);
+    rd_clear_btn_->setToolTip(tr("Drop the corridor filter and show the whole loaded fleet again"));
+    mt_set_role(rd_clear_btn_, "outline");
+    connect(rd_clear_btn_, &QPushButton::clicked, this, &MaritimeScreen::clear_route_filter);
+    rdvl->addWidget(rd_clear_btn_);
     vl->addWidget(route_detail_);
 
     // ── System Status ──────────────────────────────────────────────────────
@@ -822,7 +998,7 @@ QWidget* MaritimeScreen::build_right_panel() {
 QWidget* MaritimeScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setObjectName(QStringLiteral("mtStatusBar"));
-    bar->setFixedHeight(26);
+    bar->setMinimumHeight(26);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -870,15 +1046,114 @@ void MaritimeScreen::populate_routes_table() {
         routes_table_->setItem(i, 0, name_item);
         // The API doesn't expose trade-volume in $ — repurpose the middle
         // column for the live vessel count derived from the loaded set.
-        auto* count_item = new QTableWidgetItem(QString::number(r.vessels));
+        auto* count_item = new ui::NumericTableWidgetItem(QLocale().toString(r.vessels), r.vessels);
         count_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         routes_table_->setItem(i, 1, count_item);
-        auto* status_item = new QTableWidgetItem(r.status.isEmpty() ? QStringLiteral("-") : r.status.toUpper());
-        status_item->setForeground(route_status_color(r.status));
-        routes_table_->setItem(i, 2, status_item);
     }
     routes_table_->resizeColumnsToContents();
 }
 
-// ── Actions ──────────────────────────────────────────────────────────────────
+// ── Built-in starting points (free, no request) ──────────────────────────────
+
+namespace {
+
+/// Key shipping areas: chokepoints and lanes most users look up first. The
+/// bounding boxes are deliberately tight so an area search stays focused.
+struct MtLayArea {
+    const char* name;
+    const char* type;
+    double min_lat, max_lat, min_lng, max_lng;
+};
+constexpr MtLayArea kMtLayAreas[] = {
+    {"Strait of Malacca", "strait", 1.0, 6.5, 98.0, 104.5},
+    {"Singapore Strait", "strait", 1.0, 1.5, 103.4, 104.5},
+    {"Strait of Hormuz", "strait", 25.5, 27.2, 55.5, 57.5},
+    {"Suez Canal", "canal", 29.8, 31.4, 32.2, 32.7},
+    {"Bab-el-Mandeb", "strait", 12.2, 13.2, 42.9, 43.8},
+    {"Panama Canal", "canal", 8.8, 9.5, -80.0, -79.4},
+    {"Strait of Dover", "strait", 50.6, 51.3, 0.9, 2.0},
+    {"Strait of Gibraltar", "strait", 35.8, 36.2, -6.1, -5.2},
+    {"Bosphorus", "strait", 40.95, 41.25, 28.9, 29.2},
+    {"Taiwan Strait", "strait", 22.5, 25.5, 118.5, 121.0},
+    {"Cape of Good Hope", "cape", -35.5, -33.5, 17.5, 20.5},
+    {"Rotterdam approaches", "port area", 51.85, 52.05, 3.9, 4.5},
+};
+
+/// The busiest container ports (TEU), for the ports table until a search.
+struct MtLayPort {
+    const char* name;
+    const char* country;
+    const char* locode;
+    double lat, lng;
+};
+constexpr MtLayPort kMtLayPorts[] = {
+    {"Shanghai", "China", "CNSHA", 31.23, 121.49},       {"Singapore", "Singapore", "SGSIN", 1.26, 103.84},
+    {"Ningbo-Zhoushan", "China", "CNNGB", 29.87, 121.85}, {"Shenzhen", "China", "CNSZX", 22.50, 113.88},
+    {"Qingdao", "China", "CNTAO", 36.08, 120.32},        {"Guangzhou", "China", "CNCAN", 22.75, 113.62},
+    {"Busan", "South Korea", "KRPUS", 35.10, 129.04},    {"Tianjin", "China", "CNTXG", 38.97, 117.75},
+    {"Hong Kong", "China", "HKHKG", 22.30, 114.17},       {"Rotterdam", "Netherlands", "NLRTM", 51.95, 4.14},
+    {"Port Klang", "Malaysia", "MYPKG", 3.00, 101.39},    {"Jebel Ali", "UAE", "AEJEA", 25.01, 55.06},
+    {"Antwerp-Bruges", "Belgium", "BEANR", 51.26, 4.40},  {"Xiamen", "China", "CNXMN", 24.48, 118.08},
+    {"Tanjung Pelepas", "Malaysia", "MYTPP", 1.36, 103.55}, {"Los Angeles", "United States", "USLAX", 33.74, -118.26},
+    {"Long Beach", "United States", "USLGB", 33.75, -118.20}, {"Kaohsiung", "Taiwan", "TWKHH", 22.61, 120.29},
+    {"Laem Chabang", "Thailand", "THLCH", 13.08, 100.88}, {"Hamburg", "Germany", "DEHAM", 53.54, 9.97},
+};
+
+} // namespace
+
+void MaritimeScreen::fill_default_places() {
+    if (!place_table_)
+        return;
+    place_results_.clear();
+    for (const auto& a : kMtLayAreas) {
+        GeoPlace p;
+        p.display_name = QString::fromUtf8(a.name);
+        p.type = QString::fromUtf8(a.type);
+        p.min_lat = a.min_lat;
+        p.max_lat = a.max_lat;
+        p.min_lng = a.min_lng;
+        p.max_lng = a.max_lng;
+        p.latitude = (a.min_lat + a.max_lat) / 2.0;
+        p.longitude = (a.min_lng + a.max_lng) / 2.0;
+        place_results_.append(p);
+    }
+    place_table_->setSortingEnabled(false);
+    place_table_->setRowCount(place_results_.size());
+    for (int i = 0; i < place_results_.size(); ++i) {
+        const auto& p = place_results_[i];
+        auto* name = new QTableWidgetItem(p.display_name);
+        name->setToolTip(tr("Load the vessels in %1 (8 credits)").arg(p.display_name));
+        place_table_->setItem(i, 0, name);
+        place_table_->setItem(i, 1, new QTableWidgetItem(p.type));
+    }
+    if (place_status_)
+        place_status_->setText(tr("Key shipping lanes — click one to load its vessels (8 credits)."));
+}
+
+void MaritimeScreen::fill_default_ports() {
+    if (!ports_table_)
+        return;
+    port_results_.clear();
+    for (const auto& b : kMtLayPorts) {
+        PortRecord r;
+        r.name = QString::fromUtf8(b.name);
+        r.country = QString::fromUtf8(b.country);
+        r.locode = QString::fromLatin1(b.locode);
+        r.latitude = b.lat;
+        r.longitude = b.lng;
+        port_results_.append(r);
+    }
+    ports_table_->setSortingEnabled(false);
+    ports_table_->setRowCount(port_results_.size());
+    for (int i = 0; i < port_results_.size(); ++i) {
+        const auto& p = port_results_[i];
+        auto* name = new QTableWidgetItem(p.name);
+        name->setToolTip(QString("%1\nUN/LOCODE: %2").arg(p.name, p.locode));
+        ports_table_->setItem(i, 0, name);
+        ports_table_->setItem(i, 1, new QTableWidgetItem(p.country));
+        ports_table_->setItem(i, 2, new QTableWidgetItem(tr("Top 20")));
+    }
+    if (ports_status_)
+        ports_status_->setText(tr("The 20 busiest container ports — click one to plot it (free)."));
+}
 } // namespace fincept::screens

@@ -7,7 +7,9 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/PlanHint.h"
 #include "ui/widgets/PythonSetupChip.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QEvent>
 #include <QPushButton>
@@ -15,7 +17,7 @@
 namespace fincept::ui {
 
 StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(26);
+    metrics::follow_fixed_height(this, 26); // grows with the user's font
     setObjectName("appStatusBar");
 
     auto* hl = new QHBoxLayout(this);
@@ -61,6 +63,11 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     // Python environment install/sync progress — hidden unless a setup or
     // background sync is running or the last one failed (click retries).
     chips_layout_->addWidget(new PythonSetupChip(this));
+    // What the plan means for market data, always in view: on Free the price
+    // per call and "Included with Pro" (opens Plans & Pricing); on Pro the
+    // confirmation that data uses no credits. Hidden until the server has sent
+    // its plan table (PlanAccess).
+    chips_layout_->addWidget(new PlanHintLabel(QStringLiteral("market_data"), this));
 
     hl->addStretch();
 
@@ -70,10 +77,15 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     link_label_ = mk(QString(), "sbLink");
     link_label_->setVisible(false); // hidden until first publish
     hl->addWidget(link_label_);
-    hl->addWidget(mk("  |  ", "sbSep2"));
+    auto* ready_sep = mk("  |  ", "sbSep2");
+    hl->addWidget(ready_sep);
 
+    // READY / BUSY: nothing reports activity to set_ready() yet, so a label that always
+    // read READY (also while requests were in flight) is hidden until something does.
     ready_label_ = mk({}, "sbReady");
     hl->addWidget(ready_label_);
+    ready_label_->setVisible(false);
+    ready_sep->setVisible(false);
 
     retranslateUi();
 
@@ -167,11 +179,13 @@ void StatusBar::update_link_label(fincept::SymbolGroup g, const fincept::SymbolR
     link_label_->setText(text);
     link_label_->setVisible(true);
 
-    // Tint the label with the group's colour so it visually echoes the
-    // GroupBadge in the panel tab. Falls back to TEXT_DIM for unlinked.
-    const QColor tint =
-        (g == fincept::SymbolGroup::None) ? QColor(colors::TEXT_DIM()) : SymbolGroupRegistry::instance().color(g);
-    link_label_->setStyleSheet(QString("color:%1;background:transparent;font-weight:600;").arg(tint.name()));
+    // Tint the label with the group's colour (made legible on the active
+    // theme) so it visually echoes the GroupBadge in the panel tab. Falls back
+    // to TEXT_DIM for unlinked.
+    const QString tint = (g == fincept::SymbolGroup::None)
+                             ? QString(colors::TEXT_DIM())
+                             : colors::legible(SymbolGroupRegistry::instance().color(g));
+    link_label_->setStyleSheet(QString("color:%1;background:transparent;font-weight:600;").arg(tint));
 }
 
 void StatusBar::refresh_theme() {
@@ -185,15 +199,18 @@ void StatusBar::refresh_theme() {
                           "#sbFeed { color:%3; background:transparent; }"
                           "#sbSpacer { background:transparent; }"
                           "#sbReady { color:%4; font-weight:700; background:transparent; }")
-                      .arg(colors::BG_BASE(), colors::BORDER_DIM(), colors::TEXT_DIM(), colors::POSITIVE(),
+                      .arg(colors::BG_BASE(), colors::BORDER_MED(), colors::TEXT_DIM(), colors::SUCCESS(),
                            colors::AMBER(), colors::TEXT_PRIMARY()));
 }
 
 void StatusBar::set_ready(bool ready) {
     ready_state_ = ready;
+    ready_label_->setVisible(true);
+    if (auto* sep = findChild<QLabel*>(QStringLiteral("sbSep2")))
+        sep->setVisible(true);
     ready_label_->setText(ready ? tr("READY") : tr("BUSY"));
     ready_label_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-                                    .arg(ready ? colors::POSITIVE() : colors::TEXT_TERTIARY()));
+                                    .arg(ready ? colors::SUCCESS() : colors::TEXT_TERTIARY()));
 }
 
 } // namespace fincept::ui

@@ -486,7 +486,8 @@ class SuperAgent:
         query: str,
         session_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        user_config: Optional[Dict[str, Any]] = None
+        user_config: Optional[Dict[str, Any]] = None,
+        routing: Optional[RoutingResult] = None,
     ) -> Dict[str, Any]:
         """
         Route and execute query.
@@ -496,6 +497,8 @@ class SuperAgent:
             session_id: Optional session ID
             context: Optional context
             user_config: Optional user-provided model config (from UI settings)
+            routing: A routing decision already made (execute_multi passes each
+                of its routes); when None the query is routed here.
 
         Returns:
             Response from routed agent
@@ -507,8 +510,9 @@ class SuperAgent:
         if user_config and user_config.get("model"):
             self.llm_router.model_config = user_config["model"]
 
-        # Route query (LLM-based)
-        routing = self.route(query)
+        # Route query (LLM-based) unless the caller already did
+        if routing is None:
+            routing = self.route(query)
         logger.info(f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}")
 
         # Build config - use user's model config if provided, otherwise resolve from api_keys
@@ -666,7 +670,9 @@ class SuperAgent:
                 f"confidence={routing.confidence:.2f}"
             )
 
-            result = self.execute(query, session_id, user_config=user_config)
+            # Run THIS route's agent. Without `routing` execute() routed the query
+            # again and ran the same top agent once per matched intent.
+            result = self.execute(query, session_id, user_config=user_config, routing=routing)
             latency_ms = int((time.time() - step_started_at) * 1000)
 
             # Preserve original confidence as priority (route_multi's confidence
@@ -711,6 +717,10 @@ class SuperAgent:
             f"latency_ms={total_latency_ms}"
         )
 
+        # First failure text, for a run where no agent succeeded (the host shows
+        # `error` on failure and `response` on success).
+        first_error = next((r.get("error") for r in responses if not r.get("success") and r.get("error")), None)
+
         if aggregate and len(responses) > 1:
             # Simple aggregation - combine successful responses
             combined = []
@@ -718,20 +728,30 @@ class SuperAgent:
                 if resp.get("success"):
                     combined.append(f"[{resp['routing']['intent']}]\n{resp['response']}")
 
-            return {
+            result = {
                 "success": success_count > 0,
                 "response": "\n\n---\n\n".join(combined),
                 "responses": responses,
                 "aggregated": True,
                 "workflow": workflow,
             }
+            if success_count == 0 and first_error:
+                result["error"] = first_error
+            return result
 
-        return {
+        result = {
             "success": success_count > 0,
             "responses": responses,
             "aggregated": False,
             "workflow": workflow,
         }
+        # A single route (or aggregate=False with one answer): surface it as the
+        # `response` the host renders — without it the UI dumped this whole dict.
+        if len(responses) == 1:
+            result["response"] = responses[0].get("response", "")
+        if success_count == 0 and first_error:
+            result["error"] = first_error
+        return result
 
     def _get_instructions_for_intent(self, intent: QueryIntent) -> str:
         """Get specialized instructions for intent"""

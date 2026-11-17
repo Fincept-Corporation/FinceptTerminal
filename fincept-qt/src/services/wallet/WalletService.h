@@ -44,7 +44,14 @@ class WalletService : public QObject {
 
     /// Restore pubkey from SecureStorage if present. No network calls.
     /// Idempotent. Emits `wallet_connected` if a saved state was restored.
+    /// A saved wallet that cannot be read is NOT "no wallet": restore_failed()
+    /// is emitted with a plain sentence (restore_error() keeps it) and nothing is
+    /// written or removed; retry_restore() reads again.
     void restore_from_storage();
+    /// Read the saved wallet again after restore_failed (no-op when connected).
+    void retry_restore();
+    /// Why the saved wallet could not be read; empty when it could (or none is saved).
+    QString restore_error() const { return restore_error_; }
 
     /// Spawn the connect dialog modally on `parent`. Async — returns
     /// immediately. On success, emits `wallet_connected(pubkey)`.
@@ -95,6 +102,8 @@ class WalletService : public QObject {
     void wallet_connected(QString pubkey_b58, QString label);
     void wallet_disconnected();
     void connect_failed(QString reason);
+    /// The saved wallet exists but could not be read (see restore_from_storage).
+    void restore_failed(QString reason);
     void balance_mode_changed(bool is_stream);
 
   private:
@@ -108,6 +117,7 @@ class WalletService : public QObject {
     void set_state(WalletState s);
 
     WalletState state_;
+    QString restore_error_; ///< saved wallet unreadable (restore_from_storage)
     bool hub_registered_ = false;
     WalletBalanceProducer* balance_producer_ = nullptr;
     TokenPriceProducer* price_producer_ = nullptr;

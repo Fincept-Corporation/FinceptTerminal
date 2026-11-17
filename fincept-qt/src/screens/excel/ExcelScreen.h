@@ -3,6 +3,7 @@
 // formula bar, import/export (.xlsx), snapshots, and dark theme.
 #pragma once
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
 #include <QEvent>
@@ -19,10 +20,14 @@ namespace fincept::screens {
 class SpreadsheetWidget;
 struct ExcelImportResult; // defined in ExcelScreen.cpp (worker-thread XLSX read result)
 
-class ExcelScreen : public QWidget, public IStatefulScreen {
+class ExcelScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit ExcelScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — "import" (the IMPORT file picker; asks before discarding edits) |
+    /// "sheet:<name>" (that sheet tab, as a click). focus unused.
+    bool open_section(const QString& section, const QString& focus) override;
 
     /// Load a .xlsx/.csv from disk, replacing the workbook (asks before
     /// discarding unsaved edits). Returns false if nothing was opened.

@@ -12,33 +12,12 @@ import json
 import time
 import pandas as pd
 import akshare as ak
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error;
+# run_wrapper_cli: get_all_endpoints / <endpoint> [field=value ...] -> one JSON line on stdout.
+from akshare_screen_args import run_wrapper_cli, safe_call
 from typing import Dict, Any, List
 from datetime import datetime, timedelta, date
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class AKShareError:
-    """Custom error class for AKShare API errors"""
-    def __init__(self, endpoint: str, error: str, data_source: str = None):
-        self.endpoint = endpoint
-        self.error = error
-        self.data_source = data_source
-        self.timestamp = int(datetime.now().timestamp())
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "endpoint": self.endpoint,
-            "error": self.error,
-            "data_source": self.data_source,
-            "timestamp": self.timestamp,
-            "type": "AKShareError"
-        }
 
 
 class AlternativeDataWrapper:
@@ -50,108 +29,11 @@ class AlternativeDataWrapper:
         self.default_start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
         self.default_end_date = datetime.now().strftime('%Y%m%d')
 
-    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Convert DataFrame to JSON-safe format"""
-        df_copy = df.copy()
-        for col in df_copy.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
-                df_copy[col] = df_copy[col].astype(str)
-        return df_copy.to_dict('records')
-
-    def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
-        """Safely call AKShare function with retry logic"""
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                result = func(*args, **kwargs)
-
-                if result is not None:
-                    if hasattr(result, 'empty') and not result.empty:
-                        return {
-                            "success": True,
-                            "data": self._convert_dataframe_to_json_safe(result),
-                        "columns": (list(result.columns) if hasattr(result, "columns") else []),
-                            "count": len(result),
-                            "timestamp": int(datetime.now().timestamp()),
-                            "source": f"akshare.{func.__name__}"
-                        }
-                    elif hasattr(result, '__len__') and len(result) > 0:
-                        return {
-                            "success": True,
-                            "data": result if isinstance(result, list) else [result],
-                            "count": len(result) if isinstance(result, list) else 1,
-                            "timestamp": int(datetime.now().timestamp()),
-                            "source": f"akshare.{func.__name__}"
-                        }
-
-                return {
-                    "success": False,
-                    "error": "No data returned",
-                    "data": [],
-                    "count": 0,
-                    "timestamp": int(datetime.now().timestamp())
-                }
-
-            except ValueError as e:
-                error_msg = str(e)
-                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
-                    return {
-                        "success": False,
-                        "error": "AKShare API structure changed (column mismatch). Endpoint temporarily unavailable.",
-                        "data": [],
-                        "error_type": "api_mismatch",
-                        "timestamp": int(datetime.now().timestamp())
-                    }
-                last_error = error_msg
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay)
-                continue
-            except AttributeError as e:
-                error_msg = str(e)
-                if "NoneType" in error_msg and "find_all" in error_msg:
-                    return {
-                        "success": False,
-                        "error": "Data source returned empty response. Website may be unavailable.",
-                        "data": [],
-                        "error_type": "empty_response",
-                        "timestamp": int(datetime.now().timestamp())
-                    }
-                last_error = error_msg
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay)
-                continue
-            except KeyError as e:
-                return {
-                    "success": False,
-                    "error": f"Missing data field: {str(e)}. API format may have changed.",
-                    "data": [],
-                    "error_type": "missing_field",
-                    "timestamp": int(datetime.now().timestamp())
-                }
-            except (ConnectionError, TimeoutError) as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay * 2)
-                continue
-            except Exception as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay)
-                continue
-
-        error_obj = AKShareError(
-            endpoint=func.__name__,
-            error=last_error or "Unknown error",
-            data_source=getattr(func, '__module__', 'unknown')
-        )
-        return {
-            "success": False,
-            "error": error_obj.to_dict(),
-            "data": [],
-            "count": 0,
-            "timestamp": int(datetime.now().timestamp())
-        }
+    def _safe_call_with_retry(self, func, *args, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
+        """One akshare call -> {success, data, columns, count} or a plain-English error (shared
+        akshare_screen_args.safe_call: only a dropped connection or a timeout is retried, never a
+        rate limit or a refusal)."""
+        return safe_call(func, *args, _retries=max_retries, **kwargs)
 
     # ==================== ENERGY ====================
 
@@ -222,44 +104,12 @@ class AlternativeDataWrapper:
 alternative_wrapper = AlternativeDataWrapper()
 
 # ==================== CLI ====================
-if __name__ == "__main__":
-    import sys
-    import json
 
-    # Get wrapper instance
+def main():
     wrapper = AlternativeDataWrapper()
+    # One JSON line on stdout (NaN -> null, dates as ISO text); akshare's own prints go to stderr.
+    return run_wrapper_cli(wrapper, wrapper.get_all_available_endpoints, ascii=True, iso_dates=True)
 
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_alternative.py <endpoint> [args...]"}))
-        sys.exit(1)
 
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    # Handle get_all_endpoints
-    if endpoint == "get_all_endpoints":
-        if hasattr(wrapper, 'get_all_available_endpoints'):
-            result = wrapper.get_all_available_endpoints()
-        elif hasattr(wrapper, 'get_all_endpoints'):
-            result = wrapper.get_all_endpoints()
-        else:
-            result = {"success": False, "error": "Endpoint list not available"}
-        print(json.dumps(result, ensure_ascii=True))
-        sys.exit(0)
-
-    # Dynamic method resolution
-    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
-
-    if hasattr(wrapper, method_name):
-        method = getattr(wrapper, method_name)
-        try:
-            try:
-                result = method(*args)
-            except TypeError:
-                result = method()
-            print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
-        except Exception as e:
-            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
-    else:
-        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
-
+if __name__ == "__main__":
+    sys.exit(main())

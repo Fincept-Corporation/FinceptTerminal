@@ -7,12 +7,19 @@
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
+#include "services/billing/PlanAccess.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/Requirements.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QAbstractItemView>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
@@ -33,6 +40,57 @@ using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
 
+namespace {
+
+// Set on the RUN DEEP ANALYSIS button while check_status reports the deepagents
+// library unavailable.
+constexpr const char* kDeepUnavailableProp = "deepUnavailable";
+
+// clear_results(), set_run_buttons_enabled() and the deep_agent result / error
+// handlers re-enable every run button of the panel (an RD-Agent reply included).
+// A button carrying kDeepUnavailableProp is held disabled here instead.
+class HoldDisabledFilter final : public QObject {
+  public:
+    using QObject::QObject;
+
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::EnabledChange) {
+            auto* w = qobject_cast<QWidget*>(watched);
+            if (w && w->isEnabled() && w->property(kDeepUnavailableProp).toBool())
+                w->setEnabled(false);
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
+/// The cost line of an LLM run under the selected profile (`llm_cfg` = llm_config_from_combo()).
+/// With Fincept's hosted model and the server's plan table: what this account's plan charges for
+/// AI calls (category "ai"), after `duration`. Any other provider bills its own tokens, and without
+/// a plan table nothing is known about the plan: `fallback` (the line shown before plans existed).
+QString deep_llm_cost_note(const QJsonObject& llm_cfg, const QString& fallback, const QString& duration) {
+    const auto& access = fincept::billing::PlanAccess::instance();
+    const bool fincept_model = llm_cfg.value(QStringLiteral("llm_provider"))
+                                   .toString()
+                                   .compare(QLatin1String("fincept"), Qt::CaseInsensitive) == 0;
+    if (!fincept_model || !access.has_table())
+        return fallback;
+    if (access.included(QStringLiteral("ai")))
+        return QCoreApplication::translate("QuantModulePanel",
+                                           "%1 · Fincept's hosted model · included with your plan, no credits used")
+            .arg(duration);
+    if (const fincept::billing::PlanPrice* row = access.price(QStringLiteral("ai"))) {
+        const QString price = access.is_paid() ? row->pro_price : row->free_price;
+        if (!price.isEmpty())
+            return QCoreApplication::translate("QuantModulePanel",
+                                               "%1 · Fincept's hosted model, many calls per run · %2 on your plan")
+                .arg(duration, price);
+    }
+    return fallback;
+}
+
+} // namespace
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEEP AGENT PANEL — tabbed: LangGraph Deep Analysis + RD-Agent Research
@@ -48,120 +106,225 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     QComboBox* llm_combo = nullptr;
     auto* llm_bar = new QWidget(w);
     llm_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
     auto* llm_bar_l = new QHBoxLayout(llm_bar);
     llm_bar_l->setContentsMargins(16, 8, 16, 8);
     llm_bar_l->setSpacing(0);
     llm_bar_l->addWidget(build_llm_picker(llm_bar, &llm_combo));
     vl->addWidget(llm_bar);
 
-    auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(tab_ss(module_.color.name()));
+    auto* tabs = make_view_tabs(w);
 
     // ── Tab 1: LangGraph Deep Analysis ──────────────────────────────────────
-    auto* da_w = new QWidget(tabs);
-    auto* da_vl = new QVBoxLayout(da_w);
-    da_vl->setContentsMargins(16, 16, 16, 16);
-    da_vl->setSpacing(12);
+    // Several LLM calls, minutes: never runs by itself. Opens on the last report ("as of"), else on
+    // a preview of what it returns, with RUN DEEP ANALYSIS; with no LLM profile, on the setup page.
+    ViewSpec da_spec;
+    da_spec.key = QStringLiteral("deep_analysis");
+    da_spec.cost = ViewCost::Heavy;
+    da_spec.loading = tr("Running the multi-agent analysis — several LLM calls, typically a few minutes…");
+    da_spec.shape = ui::LoadingSkeleton::Shape::Text;
+    da_spec.llm = true;
+    da_spec.title = tr("Multi-agent deep analysis");
+    da_spec.returns = tr("A written research report: the orchestrator delegates the task to specialist agents "
+                         "(research, data analysis, risk, trading, portfolio) and combines their findings.");
+    da_spec.run_text = tr("RUN DEEP ANALYSIS");
+    da_spec.cost_note = tr("Calls the selected LLM profile many times · a few minutes · uses its tokens");
+    add_view_tab(tabs, da_spec, tr("Deep Analysis"), [this, llm_combo](QWidget* da_w, QVBoxLayout* da_vl) {
+        da_vl->setContentsMargins(16, 16, 16, 16);
+        da_vl->setSpacing(12);
 
-    auto* desc =
-        new QLabel(tr("Multi-agent financial analysis powered by LangGraph. Delegates to specialist subagents "
-                      "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter)."),
-                   da_w);
-    desc->setWordWrap(true);
-    desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                            .arg(ui::colors::TEXT_SECONDARY())
-                            .arg(ui::fonts::SMALL)
-                            .arg(ui::fonts::DATA_FAMILY));
-    da_vl->addWidget(desc);
+        auto* desc =
+            new QLabel(tr("Multi-agent financial analysis powered by LangGraph. Delegates to specialist subagents "
+                          "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter)."),
+                       da_w);
+        desc->setWordWrap(true);
+        desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                                .arg(ui::colors::TEXT_SECONDARY())
+                                .arg(ui::fonts::px(-1))
+                                .arg(ui::fonts::DATA_FAMILY));
+        da_vl->addWidget(desc);
 
-    auto* task_edit = new QTextEdit(da_w);
-    task_edit->setPlaceholderText(tr("Describe your analysis task...\n"
-                                     "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
-                                     "assess risks, and give a buy/sell/hold recommendation with price target\""));
-    task_edit->setFixedHeight(90);
-    task_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
-                                     "font-family:%4; font-size:%5px; padding:6px; }")
-                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
-                                 .arg(ui::fonts::DATA_FAMILY)
-                                 .arg(ui::fonts::SMALL));
-    da_vl->addWidget(build_input_row(tr("Task"), task_edit, da_w));
+        auto* task_edit = new QTextEdit(da_w);
+        task_edit->setPlaceholderText(tr("Describe your analysis task...\n"
+                                         "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
+                                         "assess risks, and give a buy/sell/hold recommendation with price target\""));
+        task_edit->setPlainText(tr("Conduct a full investment analysis of NVDA: research fundamentals, assess risks, "
+                                   "and give a buy/sell/hold recommendation with a price target."));
+        task_edit->setFixedHeight(90);
+        task_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                                         "font-family:%4; font-size:%5px; padding:6px; }")
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::px(-1)));
+        da_vl->addWidget(build_input_row(tr("Task"), task_edit, da_w));
 
-    auto* agent_type = new QComboBox(da_w);
-    agent_type->addItems({"general", "research", "trading_strategy", "portfolio_management", "risk_assessment"});
-    agent_type->setStyleSheet(combo_ss());
-    combo_inputs_["agent_type"] = agent_type;
-    da_vl->addWidget(build_input_row(tr("Agent Type"), agent_type, da_w));
+        auto* agent_type = new QComboBox(da_w);
+        // Shown while list_capabilities loads, and kept if it fails (probes below).
+        agent_type->addItems({"general", "research", "trading_strategy", "portfolio_management", "risk_assessment"});
+        agent_type->setStyleSheet(combo_ss());
+        combo_inputs_["agent_type"] = agent_type;
+        da_vl->addWidget(build_input_row(tr("Agent Type"), agent_type, da_w));
 
-    auto* thread_id = new QLineEdit(da_w);
-    thread_id->setPlaceholderText(tr("Optional — leave blank to auto-generate"));
-    thread_id->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                                     "font-family:%4; font-size:%5px; padding:6px 8px; }")
-                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
-                                 .arg(ui::fonts::DATA_FAMILY)
-                                 .arg(ui::fonts::SMALL));
-    text_inputs_["thread_id"] = thread_id;
-    da_vl->addWidget(build_input_row(tr("Thread ID"), thread_id, da_w));
+        auto* thread_id = new QLineEdit(da_w);
+        thread_id->setPlaceholderText(tr("Optional — leave blank to auto-generate"));
+        thread_id->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                                         "font-family:%4; font-size:%5px; padding:6px 8px; }")
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::px(-1)));
+        text_inputs_["thread_id"] = thread_id;
+        da_vl->addWidget(build_input_row(tr("Thread ID"), thread_id, da_w));
 
-    auto* da_run = make_run_button(tr("RUN DEEP ANALYSIS"), da_w);
-    // Re-enabled by the execute_task result / the deep_agent error handler.
-    da_run->setProperty("deepRun", true);
-    connect(da_run, &QPushButton::clicked, this, [this, da_run, task_edit, agent_type, thread_id, llm_combo]() {
-        auto task = task_edit->toPlainText().trimmed();
-        if (task.isEmpty()) {
-            display_error(tr("Please enter an analysis task."));
-            return;
-        }
-        auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) {
-            display_error(tr("Select an LLM profile before running."));
-            return;
-        }
-        status_label_->setText(tr("Running..."));
-        clear_results();
-        // A second click used to start a second multi-minute, multi-LLM-call run
-        // whose answer then overwrote the first.
-        da_run->setEnabled(false);
-        // The result lands in agent_output_, so put the in-flight message there
-        // too — otherwise the box keeps showing the previous run's answer and
-        // the user has no signal that anything is happening. (show_loading()
-        // would paint a spinner into the results pane below the 300px output
-        // box, and the execute_task result branch never clears it.)
-        if (agent_output_)
-            agent_output_->setPlainText(
-                tr("Running multi-agent analysis...\n\n"
-                   "The LangGraph orchestrator delegates to specialist subagents and calls the LLM "
-                   "several times; this typically takes a few minutes. Results replace this message."));
-        QJsonObject params;
-        params["task"] = task;
-        params["agent_type"] = agent_type->currentText();
-        params["config"] = cfg;
-        auto tid = thread_id->text().trimmed();
-        if (!tid.isEmpty())
-            params["thread_id"] = tid;
-        AIQuantLabService::instance().run_deep_agent(params);
+        // Availability notice, filled from check_status (probes below); hidden while
+        // the library is available or the check has not answered yet.
+        auto* da_notice = new QLabel(da_w);
+        da_notice->setObjectName(QStringLiteral("deepAgentNotice"));
+        da_notice->setWordWrap(true);
+        da_notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        da_notice->setVisible(false);
+        da_vl->addWidget(da_notice);
+
+        auto* da_run = make_run_button(tr("RUN DEEP ANALYSIS"), da_w);
+        da_run->setProperty("fincept_agent_risk", "spend"); // LLM agent run
+        // Re-enabled by the execute_task result / the deep_agent error handler.
+        da_run->setProperty("deepRun", true);
+        da_run->installEventFilter(new HoldDisabledFilter(da_run));
+        set_action(da_run, [this, da_run, task_edit, agent_type, thread_id, llm_combo]() {
+            if (da_run->property(kDeepUnavailableProp).toBool()) {
+                display_error(tr("The Deep Agent is not available here (see the notice above)."));
+                return;
+            }
+            auto task = task_edit->toPlainText().trimmed();
+            if (task.isEmpty()) {
+                display_error(tr("Please enter an analysis task."));
+                return;
+            }
+            auto cfg = llm_config_from_combo(llm_combo);
+            if (cfg.isEmpty()) {
+                display_error(tr("Select an LLM profile before running (Settings > LLM Config)."));
+                return;
+            }
+            show_loading(tr("Running the multi-agent analysis — the orchestrator delegates to specialist agents and "
+                            "calls the LLM several times; this typically takes a few minutes…"));
+            QJsonObject params;
+            params["task"] = task;
+            params["agent_type"] = agent_type->currentText();
+            params["config"] = cfg;
+            auto tid = thread_id->text().trimmed();
+            if (!tid.isEmpty())
+                params["thread_id"] = tid;
+            AIQuantLabService::instance().run_deep_agent(params);
     });
     da_vl->addWidget(da_run);
 
-    agent_output_ = new QTextEdit(da_w);
-    agent_output_->setReadOnly(true);
-    agent_output_->setPlaceholderText(tr("Analysis results will appear here..."));
-    agent_output_->setMinimumHeight(300);
-    agent_output_->setStyleSheet(output_ss());
-    da_vl->addWidget(agent_output_, 1);
+    // ── Probes: agent types (list_capabilities), then availability (check_status) ──
+    // Answered through callbacks, not result_ready (see AIQuantLabService). Run one
+    // after the other so the panel never holds two of PythonRunner's slots.
+    auto set_notice = [da_notice](const QString& text, const ui::ColorToken& tone) {
+        da_notice->setText(text);
+        da_notice->setStyleSheet(QString("color:%1; background:%2; border-left:3px solid %1; padding:6px 10px;"
+                                         "font-size:" + ui::fonts::px(-1) + "px; font-family:%3;")
+                                     .arg(tone(), ui::colors::tint(tone))
+                                     .arg(ui::fonts::DATA_FAMILY));
+        da_notice->setVisible(!text.isEmpty());
+    };
+    auto on_status = [da_run, set_notice](const QJsonObject& status) {
+        const QJsonValue available = status.value(QStringLiteral("available"));
+        if (available.isBool() && !available.toBool()) {
+            QString why = status.value(QStringLiteral("error")).toString().trimmed();
+            if (why.isEmpty())
+                why = tr("the deepagents library could not be loaded");
+            // Run stays usable: without the library the script falls back to a
+            // single-model run for providers that do not need tool calling, and
+            // reports its own error otherwise. Holding the button disabled would
+            // block that path.
+            const QString text =
+                tr("Deep Agent library is not available (%1). A run uses the basic single-model fallback.").arg(why);
+            set_notice(text, ui::colors::WARNING);
+            da_run->setToolTip(text);
+            return;
+        }
+        if (da_run->property(kDeepUnavailableProp).toBool()) {
+            da_run->setProperty(kDeepUnavailableProp, false);
+            da_run->setEnabled(true);
+            da_run->setToolTip(QString());
+        }
+        if (available.isBool()) {
+            set_notice(QString(), ui::colors::DANGER);
+        } else {
+            // The check itself failed: availability unknown, so Run stays usable.
+            set_notice(tr("Could not check Deep Agent availability: %1")
+                           .arg(status.value(QStringLiteral("error")).toString(tr("no diagnostic output"))),
+                       ui::colors::WARNING);
+        }
+    };
+    // The callbacks only run while da_w (which owns every widget they touch) exists.
+    AIQuantLabService::instance().deep_agent_list_capabilities(
+        da_w, [da_w, agent_type, on_status](const QJsonObject& caps) {
+            const QJsonObject types = caps.value(QStringLiteral("agent_types")).toObject();
+            if (!types.isEmpty()) {
+                // QJsonObject keys arrive sorted; "general" (the default) goes first.
+                QStringList names = types.keys();
+                if (names.removeOne(QStringLiteral("general")))
+                    names.prepend(QStringLiteral("general"));
+                const QString current = agent_type->currentText();
+                agent_type->clear();
+                for (const QString& name : names) {
+                    QStringList subs;
+                    for (const auto& s : types.value(name).toArray())
+                        subs << s.toString();
+                    agent_type->addItem(name);
+                    agent_type->setItemData(agent_type->count() - 1, tr("Subagents: %1").arg(subs.join(", ")),
+                                            Qt::ToolTipRole);
+                }
+                const int keep = agent_type->findText(current);
+                agent_type->setCurrentIndex(keep >= 0 ? keep : 0);
+            }
+            // Otherwise (failed or empty reply) the built-in list stays.
+            AIQuantLabService::instance().deep_agent_check_status(da_w, on_status);
+        });
+    });
 
-    auto* rc = new QWidget(da_w);
-    results_layout_ = new QVBoxLayout(rc);
-    results_layout_->setContentsMargins(0, 0, 0, 0);
-    results_layout_->setSpacing(0);
-    da_vl->addWidget(rc);
-
-    tabs->addTab(da_w, tr("Deep Analysis"));
+    // The preview's cost line follows the selected profile and the account's plan (Fincept's hosted
+    // model: the plan's AI price; another provider bills its own tokens — the line above). The view
+    // stays manual even when the plan includes AI calls: a run is minutes of agent work.
+    {
+        const QString da_fallback = da_spec.cost_note;
+        auto sync_da_cost = [this, llm_combo, da_fallback]() {
+            auto it = views_.find(QStringLiteral("deep_analysis"));
+            if (it == views_.end())
+                return;
+            const QString note =
+                deep_llm_cost_note(llm_config_from_combo(llm_combo), da_fallback, tr("A few minutes"));
+            if (note == it->spec.cost_note)
+                return;
+            it->spec.cost_note = note;
+            if (pane_ && current_view_ == it->spec.key)
+                configure_preview(*it);
+        };
+        sync_da_cost();
+        connect(llm_combo, &QComboBox::currentIndexChanged, w, sync_da_cost);
+        connect(&fincept::billing::PlanAccess::instance(), &fincept::billing::PlanAccess::changed, w, sync_da_cost);
+    }
 
     // ── Tab 2: RD-Agent ─────────────────────────────────────────────────────
-    tabs->addTab(build_rd_agent_tab(llm_combo), tr("RD-Agent"));
+    // Autonomous research loops (tens of minutes to hours, LLM calls every iteration) running in
+    // the background; their progress and results live in the tab's own Task Monitor, so the result
+    // pane is hidden for this view. Opening it checks the RD-Agent install (seconds, no LLM).
+    ViewSpec rd_spec;
+    rd_spec.key = QStringLiteral("rd_agent");
+    rd_spec.cost = ViewCost::Heavy;
+    rd_spec.pane = false;
+    add_view_tab(tabs, rd_spec, tr("RD-Agent"), [this, llm_combo](QWidget* page, QVBoxLayout* layout) {
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        layout->addWidget(build_rd_agent_tab(llm_combo), 1);
+        AIQuantLabService::instance().rd_agent_check_status();
+        Q_UNUSED(page)
+    });
 
-    vl->addWidget(tabs, 1);
+    vl->addWidget(tabs);
+    add_result_pane(vl);
     return w;
 }
 
@@ -178,24 +341,27 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     // shared styles
 
     auto* sub = new QTabWidget(w);
-    sub->setStyleSheet(sub_tab_ss(module_.color.name()));
+    sub->setObjectName(QStringLiteral("rdSubTabs")); // a START switches to Task Monitor (on_result)
+    sub->setUsesScrollButtons(true);
+    sub->setStyleSheet(sub_tab_ss(ui::colors::legible(module_.color)));
 
     // ── Status bar ───────────────────────────────────────────────────────────
     auto* status_bar = new QWidget(w);
-    status_bar->setFixedHeight(28);
+    status_bar->setMinimumHeight(28);
     status_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
     auto* sbl = new QHBoxLayout(status_bar);
     sbl->setContentsMargins(12, 0, 12, 0);
     sbl->setSpacing(8);
     auto* status_dot = new QLabel("●", status_bar);
-    status_dot->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_TERTIARY()));
+    status_dot->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
     sbl->addWidget(status_dot);
-    auto* status_txt = new QLabel(tr("RD-Agent ready"), status_bar);
+    // Not "ready" before anything was checked: opening the tab runs CHECK STATUS (on_result fills it).
+    auto* status_txt = new QLabel(tr("Checking the RD-Agent installation…"), status_bar);
     status_txt->setObjectName("rdStatusTxt");
     status_txt->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                  .arg(ui::colors::TEXT_TERTIARY())
-                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::colors::TEXT_SECONDARY())
+                                  .arg(ui::fonts::px(-2))
                                   .arg(ui::fonts::DATA_FAMILY));
     sbl->addWidget(status_txt, 1);
     auto* check_btn = new QPushButton(tr("CHECK STATUS"), status_bar);
@@ -203,10 +369,10 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     check_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                      "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
                                      "QPushButton:hover { background:%1; color:%4; }")
-                                 .arg(module_.color.name())
+                                 .arg(ui::colors::legible(module_.color))
                                  .arg(ui::fonts::DATA_FAMILY)
-                                 .arg(ui::fonts::TINY)
-                                 .arg(ui::colors::BG_BASE()));
+                                 .arg(ui::fonts::px(-2))
+                                 .arg(ui::colors::TEXT_ON_ACCENT()));
     connect(check_btn, &QPushButton::clicked, this, [status_txt]() {
         status_txt->setText(tr("Checking..."));
         AIQuantLabService::instance().rd_agent_check_status();
@@ -218,9 +384,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     ui_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                   "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
                                   "QPushButton:hover { background:%1; color:%4; }")
-                              .arg(ui::colors::TEXT_TERTIARY())
+                              .arg(ui::colors::TEXT_SECONDARY())
                               .arg(ui::fonts::DATA_FAMILY)
-                              .arg(ui::fonts::TINY)
+                              .arg(ui::fonts::px(-2))
                               .arg(ui::colors::BG_BASE()));
     connect(ui_btn, &QPushButton::clicked, this, [status_txt]() {
         status_txt->setText(tr("Starting log viewer..."));
@@ -232,6 +398,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     // toggle that un-checks would claim to have stopped a server that is still
     // running. Plain action + a status query instead.
     auto* mcp_btn = new QPushButton(tr("START MCP TOOLS"), status_bar);
+    mcp_btn->setProperty("fincept_agent_risk", "code"); // starts a background tool server process
     mcp_btn->setCursor(Qt::PointingHandCursor);
     mcp_btn->setToolTip(tr("Start the Fincept MCP tool server.\n"
                            "Gives RD-Agent loops access to market data,\n"
@@ -240,9 +407,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mcp_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                    "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
                                    "QPushButton:hover { background:%1; color:%4; }")
-                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::colors::TEXT_SECONDARY())
                                .arg(ui::fonts::DATA_FAMILY)
-                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::px(-2))
                                .arg(ui::colors::BG_BASE()));
     connect(mcp_btn, &QPushButton::clicked, this, [status_txt]() {
         status_txt->setText(tr("Starting MCP tool server..."));
@@ -259,7 +426,55 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         AIQuantLabService::instance().rd_agent_mcp_status();
     });
     sbl->addWidget(mcp_status_btn);
+
+    // Read by the three START handlers below: the RD-Agent CLI only hands the Fincept
+    // MCP tools to a loop when its params carry enable_mcp (it starts or reuses the
+    // server itself). Nothing in the panel used to set it.
+    auto* mcp_check = new QCheckBox(tr("Use Fincept MCP tools"), status_bar);
+    mcp_check->setToolTip(tr("Give Factor Mining, Model Optimization and Quant Research runs the Fincept MCP\n"
+                             "tools (market data, news, economics). The tool server is started if needed."));
+    mcp_check->setStyleSheet(QString("QCheckBox { color:%1; font-family:%2; font-size:%3px; background:transparent; }")
+                                 .arg(ui::colors::TEXT_SECONDARY())
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::px(-2)));
+    sbl->addWidget(mcp_check);
     vl->addWidget(status_bar);
+
+    // What a START costs, under each form; with no LLM profile, where to add one.
+    // The cost line follows the selected profile and the account's plan (deep_llm_cost_note).
+    auto add_cost_card = [this, llm_combo](QWidget* parent, QVBoxLayout* layout, const QString& title,
+                                           const QString& what) {
+        const ui::RequirementStatus llm = ui::check_requirements({ui::Requirement::llm()});
+        auto cost_spec = [this, llm_combo, title, what]() {
+            return ui::EmptyState::preview_spec(
+                title, what, QString(),
+                deep_llm_cost_note(llm_config_from_combo(llm_combo),
+                                   tr("Runs in the background for tens of minutes to hours · calls the selected LLM "
+                                      "every iteration · follow it in Task Monitor"),
+                                   tr("Tens of minutes to hours in the background")),
+                ui::EmptyState::Tone::Warning, ui::LoadingSkeleton::Shape::Table);
+        };
+        ui::EmptyState::Spec spec = llm.ok ? cost_spec() : ui::EmptyState::needs_setup_spec(llm);
+        auto* card = ui::EmptyState::create(spec, parent);
+        card->set_compact(true);
+        card->set_alignment(Qt::AlignTop);
+        if (!llm.ok) {
+            connect(card, &ui::EmptyState::primary_clicked, this, [card, link = llm.link]() { ui::open_setup_link(link, card); });
+        } else {
+            // apply() of an unchanged spec does nothing.
+            auto refresh = [card, cost_spec]() { card->apply(cost_spec()); };
+            connect(llm_combo, &QComboBox::currentIndexChanged, card, refresh);
+            connect(&fincept::billing::PlanAccess::instance(), &fincept::billing::PlanAccess::changed, card, refresh);
+        }
+        layout->addWidget(card);
+    };
+
+    auto apply_mcp = [mcp_check](QJsonObject& params) {
+        if (mcp_check->isChecked()) {
+            params["enable_mcp"] = true;
+            params["mcp_port"] = 18765;
+        }
+    };
 
     // Validation errors raised from the RD-Agent sub-tabs must NOT go through
     // display_error(): that paints into the Deep Analysis tab's results pane,
@@ -285,13 +500,14 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     fm_desc->setWordWrap(true);
     fm_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::px(-1))
                                .arg(ui::fonts::DATA_FAMILY));
     fm_vl->addWidget(fm_desc);
 
     auto* fm_task = new QTextEdit(fm_w);
     fm_task->setPlaceholderText(
         tr("Describe the factor hypothesis...\ne.g. \"Discover momentum-based alpha factors for US equities\""));
+    fm_task->setPlainText(tr("Discover momentum-based alpha factors for US equities"));
     fm_task->setFixedHeight(70);
     fm_task->setStyleSheet(input_ss());
     fm_vl->addWidget(build_input_row(tr("Task Description"), fm_task, fm_w));
@@ -311,8 +527,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     fm_vl->addWidget(build_input_row(tr("Target IC"), fm_ic, fm_w));
 
     auto* fm_run = make_run_button(tr("START FACTOR MINING"), fm_w);
+    fm_run->setProperty("fincept_agent_risk", "spend"); // RD-Agent LLM loop
     connect(fm_run, &QPushButton::clicked, this,
-            [this, fm_task, fm_market, fm_iter, fm_ic, status_txt, llm_combo, rd_error]() {
+            [this, fm_task, fm_market, fm_iter, fm_ic, status_txt, llm_combo, rd_error, apply_mcp]() {
                 auto desc_text = fm_task->toPlainText().trimmed();
                 if (desc_text.isEmpty()) {
                     rd_error(tr("Enter a task description."));
@@ -320,7 +537,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                 }
                 auto cfg = llm_config_from_combo(llm_combo);
                 if (cfg.isEmpty()) {
-                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    rd_error(tr("Select an LLM profile before running (Settings > LLM Config)."));
                     return;
                 }
                 status_label_->setText(tr("Starting..."));
@@ -331,9 +548,13 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                 params["max_iterations"] = fm_iter->value();
                 params["target_ic"] = fm_ic->value();
                 params["config"] = cfg;
+                apply_mcp(params);
                 AIQuantLabService::instance().rd_agent_start_factor_mining(params);
             });
     fm_vl->addWidget(fm_run);
+    add_cost_card(fm_w, fm_vl, tr("Factor mining"),
+                  tr("Proposes, codes, backtests and refines alpha factors until the target IC is reached; the "
+                     "factors it finds appear in Task Monitor (GET FACTORS)."));
     fm_vl->addStretch();
     sub->addTab(fm_w, tr("Factor Mining"));
 
@@ -350,7 +571,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mo_desc->setWordWrap(true);
     mo_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::px(-1))
                                .arg(ui::fonts::DATA_FAMILY));
     mo_vl->addWidget(mo_desc);
 
@@ -371,11 +592,12 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mo_vl->addWidget(build_input_row(tr("Max Iterations"), mo_iter, mo_w));
 
     auto* mo_run = make_run_button(tr("START MODEL OPTIMIZATION"), mo_w);
+    mo_run->setProperty("fincept_agent_risk", "spend"); // RD-Agent LLM loop
     connect(mo_run, &QPushButton::clicked, this,
-            [this, mo_model, mo_target, mo_iter, status_txt, llm_combo, rd_error]() {
+            [this, mo_model, mo_target, mo_iter, status_txt, llm_combo, rd_error, apply_mcp]() {
                 auto cfg = llm_config_from_combo(llm_combo);
                 if (cfg.isEmpty()) {
-                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    rd_error(tr("Select an LLM profile before running (Settings > LLM Config)."));
                     return;
                 }
                 status_label_->setText(tr("Starting..."));
@@ -385,9 +607,13 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                 params["optimization_target"] = mo_target->currentText();
                 params["max_iterations"] = mo_iter->value();
                 params["config"] = cfg;
+                apply_mcp(params);
                 AIQuantLabService::instance().rd_agent_start_model_optimization(params);
             });
     mo_vl->addWidget(mo_run);
+    add_cost_card(mo_w, mo_vl, tr("Model optimisation"),
+                  tr("Tunes the model iteratively for the chosen target; the best models appear in Task Monitor "
+                     "(GET MODEL)."));
     mo_vl->addStretch();
     sub->addTab(mo_w, tr("Model Optimization"));
 
@@ -403,13 +629,14 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     qr_desc->setWordWrap(true);
     qr_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::px(-1))
                                .arg(ui::fonts::DATA_FAMILY));
     qr_vl->addWidget(qr_desc);
 
     auto* qr_goal = new QTextEdit(qr_w);
     qr_goal->setPlaceholderText(
         tr("Research goal...\ne.g. \"Build a quantitative equity strategy for mid-cap US stocks\""));
+    qr_goal->setPlainText(tr("Build a quantitative equity strategy for mid-cap US stocks"));
     qr_goal->setFixedHeight(70);
     qr_goal->setStyleSheet(input_ss());
     qr_vl->addWidget(build_input_row(tr("Research Goal"), qr_goal, qr_w));
@@ -426,8 +653,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     qr_vl->addWidget(build_input_row(tr("Max Iterations"), qr_iter, qr_w));
 
     auto* qr_run = make_run_button(tr("START QUANT RESEARCH"), qr_w);
+    qr_run->setProperty("fincept_agent_risk", "spend"); // RD-Agent LLM loop
     connect(qr_run, &QPushButton::clicked, this,
-            [this, qr_goal, qr_market, qr_iter, status_txt, llm_combo, rd_error]() {
+            [this, qr_goal, qr_market, qr_iter, status_txt, llm_combo, rd_error, apply_mcp]() {
                 auto goal = qr_goal->toPlainText().trimmed();
                 if (goal.isEmpty()) {
                     rd_error(tr("Enter a research goal."));
@@ -435,7 +663,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                 }
                 auto cfg = llm_config_from_combo(llm_combo);
                 if (cfg.isEmpty()) {
-                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    rd_error(tr("Select an LLM profile before running (Settings > LLM Config)."));
                     return;
                 }
                 status_label_->setText(tr("Starting..."));
@@ -445,9 +673,13 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                 params["target_market"] = qr_market->currentText();
                 params["max_iterations"] = qr_iter->value();
                 params["config"] = cfg;
+                apply_mcp(params);
                 AIQuantLabService::instance().rd_agent_start_quant_research(params);
             });
     qr_vl->addWidget(qr_run);
+    add_cost_card(qr_w, qr_vl, tr("Quant research"),
+                  tr("Runs the whole pipeline end to end: factors, a model, a backtest, refined over the "
+                     "iterations; results in Task Monitor."));
     qr_vl->addStretch();
     sub->addTab(qr_w, tr("Quant Research"));
 
@@ -469,53 +701,49 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     filter_combo->addItem(tr("completed"), QStringLiteral("completed"));
     filter_combo->addItem(tr("stopped"), QStringLiteral("stopped"));
     filter_combo->addItem(tr("failed"), QStringLiteral("failed"));
-    filter_combo->setFixedWidth(120);
+    set_text_width(filter_combo, 120);
     filter_combo->setStyleSheet(combo_ss());
     tm_hl->addWidget(filter_combo);
 
     auto* refresh_btn = new QPushButton(tr("REFRESH"), tm_toolbar);
     refresh_btn->setCursor(Qt::PointingHandCursor);
-    refresh_btn->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                "font-family:%3; font-size:%4px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                "QPushButton:hover { background:%5; }")
-            .arg(module_.color.name())
-            .arg(ui::colors::BG_BASE())
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::TINY)
-            .arg(module_.color.lighter(120).name()));
+    const QString refresh_shape = QStringLiteral("border:none; font-weight:700; padding:5px 12px; border-radius:2px;");
+    refresh_btn->setProperty(kAccentShapeProp, refresh_shape);
+    refresh_btn->setProperty(kAccentFontProp, -2);
+    refresh_btn->setStyleSheet(accent_button_ss(module_.color, refresh_shape, -2));
     tm_hl->addWidget(refresh_btn);
 
     auto* task_id_input = new QLineEdit(tm_toolbar);
     task_id_input->setPlaceholderText(tr("Task ID..."));
     task_id_input->setStyleSheet(input_ss());
-    task_id_input->setFixedWidth(200);
+    set_text_width(task_id_input, 200);
     tm_hl->addWidget(task_id_input);
 
     auto* stop_btn = new QPushButton(tr("STOP"), tm_toolbar);
     stop_btn->setCursor(Qt::PointingHandCursor);
     stop_btn->setStyleSheet(
         QString("QPushButton { background:" + QString(ui::colors::NEGATIVE()) +
-                "; color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                "; color:" + QString(ui::colors::TEXT_ON_ACCENT()) +
                 "; border:none;"
                 "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
                 "QPushButton:hover { background:" +
                 QString(ui::colors::NEGATIVE()) + "; }")
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::TINY));
+            .arg(ui::fonts::px(-2)));
     tm_hl->addWidget(stop_btn);
 
     auto* resume_btn = new QPushButton(tr("RESUME"), tm_toolbar);
+    resume_btn->setProperty("fincept_agent_risk", "spend"); // resumes an RD-Agent LLM loop
     resume_btn->setCursor(Qt::PointingHandCursor);
     resume_btn->setStyleSheet(
         QString("QPushButton { background:" + QString(ui::colors::POSITIVE()) +
-                "; color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                "; color:" + QString(ui::colors::TEXT_ON_ACCENT()) +
                 "; border:none;"
                 "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
                 "QPushButton:hover { background:" +
                 QString(ui::colors::POSITIVE()) + "; }")
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::TINY));
+            .arg(ui::fonts::px(-2)));
     tm_hl->addWidget(resume_btn);
 
     auto* factors_btn = new QPushButton(tr("GET FACTORS"), tm_toolbar);
@@ -524,10 +752,10 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 "font-family:%2; font-size:%3px; font-weight:700; padding:5px 10px; border-radius:2px; }"
                 "QPushButton:hover { background:%1; color:%4; }")
-            .arg(module_.color.name())
+            .arg(ui::colors::legible(module_.color))
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::TINY)
-            .arg(ui::colors::BG_BASE()));
+            .arg(ui::fonts::px(-2))
+            .arg(ui::colors::TEXT_ON_ACCENT()));
     tm_hl->addWidget(factors_btn);
 
     // GET MODEL / STATUS were referenced by the output placeholder text and by
@@ -546,6 +774,19 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     tm_hl->addStretch();
     tm_vl->addWidget(tm_toolbar);
 
+    // No task in this session yet: what the monitor shows, and how to start one.
+    auto* tm_empty = ui::EmptyState::create(
+        ui::EmptyState::no_data_spec(tr("No RD-Agent tasks in this session"),
+                                     tr("Tasks you start in Factor Mining, Model Optimization or Quant Research are "
+                                        "listed here with their progress, best IC and results."),
+                                     tr("START FACTOR MINING")),
+        tm_w);
+    tm_empty->setObjectName(QStringLiteral("rdTasksEmpty"));
+    tm_empty->set_compact(true);
+    tm_empty->set_alignment(Qt::AlignTop);
+    connect(tm_empty, &ui::EmptyState::primary_clicked, this, [sub]() { sub->setCurrentIndex(0); });
+    tm_vl->addWidget(tm_empty);
+
     // Task table
     rd_task_table_ = new QTableWidget(0, 6, tm_w);
     rd_task_table_->setHorizontalHeaderLabels(
@@ -555,15 +796,27 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     rd_task_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     rd_task_table_->setAlternatingRowColors(true);
     rd_task_table_->setStyleSheet(table_ss());
+    rd_task_table_->hide(); // shown with the first task (on_result list_tasks)
     tm_vl->addWidget(rd_task_table_, 1);
 
     // Output area for factor results
     rd_agent_output_ = new QTextEdit(tm_w);
     rd_agent_output_->setReadOnly(true);
     rd_agent_output_->setPlaceholderText(tr("Select a task and click GET FACTORS / GET MODEL to view results..."));
+    rd_agent_output_->hide(); // shown with the first task (on_result list_tasks)
     rd_agent_output_->setFixedHeight(160);
     rd_agent_output_->setStyleSheet(output_ss());
     tm_vl->addWidget(rd_agent_output_);
+
+    // Structured results of TASK STATUS / GET FACTORS / GET MODEL (KPI strip + sortable
+    // table), filled by on_result(); hidden until the first such result.
+    auto* rd_results = new QWidget(tm_w);
+    rd_results->setObjectName(QStringLiteral("rdResultsHost"));
+    auto* rd_results_vl = new QVBoxLayout(rd_results);
+    rd_results_vl->setContentsMargins(0, 0, 0, 0);
+    rd_results_vl->setSpacing(6);
+    rd_results->hide();
+    tm_vl->addWidget(rd_results);
 
     // Auto-refresh while a task is running. list_tasks is served from the
     // service's in-memory registry (no Python process), so a 5 s cadence is
@@ -630,7 +883,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         // profile the resumed task had no LLM credentials and failed on its first call.
         const QJsonObject cfg = llm_config_from_combo(llm_combo);
         if (cfg.isEmpty()) {
-            rd_error(tr("Select an LLM profile before resuming (Settings → LLM Config)."));
+            rd_error(tr("Select an LLM profile before resuming (Settings > LLM Config)."));
             return;
         }
         status_txt->setText(tr("Resuming %1...").arg(tid));

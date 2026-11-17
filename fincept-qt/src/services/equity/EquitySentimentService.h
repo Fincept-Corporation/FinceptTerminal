@@ -4,11 +4,14 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 class QTimer;
 
 namespace fincept::services::equity {
+
+struct LoadFailure; // EquityResearchService.h
 
 // Computes the default, keyless Sentiment-tab content by blending free signals:
 //   • News headline sentiment (GNews/yfinance → NewsNlpService, finance-tuned VADER)
@@ -25,8 +28,9 @@ class EquitySentimentService : public QObject {
     static EquitySentimentService& instance();
 
     /// Kick off all source fetches for `symbol` and emit sentiment_loaded once
-    /// every awaited leg resolves (or the timeout fires).
-    void fetch_sentiment(const QString& symbol);
+    /// every awaited leg resolves (or the timeout fires; a leg that lands later for the
+    /// same request emits it again). `force` (REFRESH) bypasses the legs' caches.
+    void fetch_sentiment(const QString& symbol, bool force = false);
 
   signals:
     void sentiment_loaded(QString symbol, fincept::services::equity::EquitySentimentSnapshot snapshot);
@@ -38,6 +42,8 @@ class EquitySentimentService : public QObject {
     void on_news_loaded(const QString& symbol, const QVector<NewsArticle>& articles);
     void on_technicals_loaded(const TechnicalsData& data);
     void on_adanos_loaded(const QString& symbol, const MarketSentimentSnapshot& snapshot);
+    /// A failed News / Technicals fetch for the active symbol resolves that leg as unavailable.
+    void on_leg_failed(const LoadFailure& failure);
     void try_finalize();
     void finalize();
 
@@ -67,6 +73,7 @@ class EquitySentimentService : public QObject {
     int neutral_ = 0;
     QString engine_;
     QVector<ArticleSentiment> articles_;
+    QStringList failures_; // "<leg>: <reason>" of the legs that failed in this request
 
     QTimer* timeout_timer_ = nullptr;
 };

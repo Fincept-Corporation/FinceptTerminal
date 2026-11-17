@@ -1,6 +1,7 @@
 // src/screens/excel/SpreadsheetWidget.cpp
 #include "screens/excel/SpreadsheetWidget.h"
 
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -19,6 +20,7 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QUndoCommand>
@@ -341,6 +343,9 @@ QVariant SpreadsheetItem::data(int role) const {
             const fe::Value v = current_value();
             if (shows_import_cache(v))
                 return import_cached_;
+            // MIN/MAX of a date column is a date, shown the way the date cells are.
+            if (v.is_number() && owner && owner->result_is_date(this))
+                return fe::serial_date_text(v.number);
             return fe::display_text(v);
         }
         case Qt::TextAlignmentRole: {
@@ -361,7 +366,7 @@ QVariant SpreadsheetItem::data(int role) const {
             if (shows_import_cache(v))
                 return QColor(colors::TEXT_SECONDARY());
             if (v.is_error())
-                return QColor(colors::NEGATIVE()); // an error must never read like a number
+                return QColor(colors::DANGER()); // an error must never read like a number
             break;
         }
         case Qt::ToolTipRole: {
@@ -584,6 +589,53 @@ QString SpreadsheetWidget::cell_tooltip(const SpreadsheetItem* item) const {
     return tip;
 }
 
+bool SpreadsheetWidget::result_is_date(const SpreadsheetItem* item) const {
+    // The grid has no per-cell number formats, so a date-valued result is recognised from the
+    // formula's shape: exactly MIN(...) or MAX(...) whose every argument is a reference and
+    // whose referenced non-empty cells are all dates ("2024-01-15", how xlsx import writes
+    // them). Arithmetic on dates (=B2-A2, a number of days) is left a number.
+    static const QRegularExpression kMinMax(QStringLiteral("^=\\s*(?:MIN|MAX)\\s*\\(([^()\"]*)\\)\\s*$"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch m = kMinMax.match(item->raw_text_);
+    if (!m.hasMatch())
+        return false;
+    const fe::Compiled& compiled = item->compiled();
+    if (!compiled.program || compiled.refs.isEmpty() ||
+        m.captured(1).split(QLatin1Char(',')).size() != compiled.refs.size())
+        return false; // a literal argument (MIN(A1:A9, 0)) could be the result
+    qint64 budget = 20000; // cells inspected per call (paint path)
+    int dates = 0;
+    for (const fe::RangeRef& r : compiled.refs) {
+        const SpreadsheetWidget* sheet = sheet_named(r.sheet);
+        if (!sheet)
+            return false;
+        const int max_r = sheet->table_->rowCount() - 1;
+        const int max_c = sheet->table_->columnCount() - 1;
+        const int r1 = r.whole_col ? 0 : r.row1;
+        const int r2 = r.whole_col ? max_r : std::min(r.row2, max_r);
+        const int c1 = r.whole_row ? 0 : r.col1;
+        const int c2 = r.whole_row ? max_c : std::min(r.col2, max_c);
+        for (int row = r1; row <= r2; ++row) {
+            for (int col = c1; col <= c2; ++col) {
+                if (--budget < 0)
+                    return false;
+                const auto* cell = dynamic_cast<const SpreadsheetItem*>(sheet->table_->item(row, col));
+                if (!cell || cell->raw_text_.trimmed().isEmpty())
+                    continue;
+                if (cell->is_formula())
+                    return false;
+                const fe::Value v = fe::literal_value(cell->raw_text_);
+                double serial = 0.0;
+                if (!v.is_text() || cell->raw_text_.startsWith(QLatin1Char('\'')) ||
+                    !fe::iso_text_serial(v.text, &serial))
+                    return false;
+                ++dates;
+            }
+        }
+    }
+    return dates > 0;
+}
+
 fe::Value SpreadsheetWidget::value_at(int row, int col) const {
     const auto* it = dynamic_cast<const SpreadsheetItem*>(table_->item(row, col));
     if (!it)
@@ -615,26 +667,27 @@ SpreadsheetWidget::SpreadsheetWidget(const QString& sheet_name, int rows, int co
 // ── Build UI ─────────────────────────────────────────────────────────────────
 
 void SpreadsheetWidget::build_ui(int rows, int cols) {
-    // One stylesheet for the whole sheet, keyed on object names.
+    // One stylesheet for the whole sheet, keyed on object names. Grid chrome by
+    // role: raised formula row and headers, card-surface cells, separator-grade
+    // gridlines, an accent-tinted selection.
     setStyleSheet(QString("#sswFormulaRow { background:%1; border-bottom:1px solid %2; }"
-                          "#sswCellRef { color:%3; font-family:%4; font-size:11px; font-weight:700;"
+                          "#sswCellRef { color:%3; font-family:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700;"
                           "  border-right:1px solid %2; padding-right:6px; background:transparent; }"
-                          "#sswFx { color:%5; font-family:%4; font-size:11px; font-weight:700; background:transparent; }"
-                          "#sswFormulaBar { background:%1; color:%6; border:none; font-family:%4; font-size:11px;"
+                          "#sswFx { color:%5; font-family:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; background:transparent; }"
+                          "#sswFormulaBar { background:%1; color:%6; border:none; font-family:%4; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                           "  padding:2px 4px; }"
                           "#sswFormulaBar:focus { background:%7; }"
-                          "QTableWidget#sswTable { background:%7; color:%6; gridline-color:%8; font-family:%4;"
-                          "  font-size:11px; border:none; }"
+                          "QTableWidget#sswTable { background:%7; color:%6; gridline-color:%2; font-family:%4;"
+                          "  font-size:" + fincept::ui::fonts::px(-3) + "px; border:none; }"
                           "QTableWidget#sswTable::item { padding:2px 4px; }"
-                          "QTableWidget#sswTable::item:selected { background:%9; }"
-                          "QTableWidget#sswTable QHeaderView::section { background:%2; color:%10; border:none;"
-                          "  border-right:1px solid %8; border-bottom:1px solid %8; font-family:%4; font-size:10px;"
+                          "QTableWidget#sswTable::item:selected { background:%8; color:%6; }"
+                          "QTableWidget#sswTable QHeaderView::section { background:%1; color:%5; border:none;"
+                          "  border-right:1px solid %2; border-bottom:1px solid %2; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                           "  font-weight:600; padding:3px 4px; }"
-                          "QTableWidget#sswTable QTableCornerButton::section { background:%2; border:none; }")
+                          "QTableWidget#sswTable QTableCornerButton::section { background:%1; border:none; }")
                       .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::AMBER(), fonts::DATA_FAMILY,
-                           colors::TEXT_TERTIARY(), colors::TEXT_PRIMARY(), colors::BG_HOVER(), colors::TEXT_DIM(),
-                           colors::BORDER_BRIGHT())
-                      .arg(colors::TEXT_SECONDARY()));
+                           colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(), colors::BG_SURFACE(),
+                           colors::tint(colors::AMBER, 0.28)));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -644,7 +697,6 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     auto* formula_row = new QWidget(this);
     formula_row->setObjectName("sswFormulaRow");
     formula_row->setAttribute(Qt::WA_StyledBackground, true);
-    formula_row->setFixedHeight(28);
 
     auto* fhl = new QHBoxLayout(formula_row);
     fhl->setContentsMargins(8, 0, 8, 0);
@@ -652,7 +704,6 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
 
     cell_ref_label_ = new QLabel("A1", formula_row);
     cell_ref_label_->setObjectName("sswCellRef");
-    cell_ref_label_->setFixedWidth(64);
     cell_ref_label_->setAlignment(Qt::AlignCenter);
     fhl->addWidget(cell_ref_label_);
 
@@ -681,12 +732,24 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     table_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed |
                             QAbstractItemView::AnyKeyPressed);
-    table_->verticalHeader()->setDefaultSectionSize(22);
     table_->horizontalHeader()->setDefaultSectionSize(80);
     table_->horizontalHeader()->setMinimumSectionSize(30);
     table_->verticalHeader()->setMinimumSectionSize(18);
     table_->setAlternatingRowColors(false);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    // Row and formula-bar heights follow the text size (22 / 28 px clip the cell
+    // font at large base sizes); re-applied when the user changes the font.
+    auto apply_metrics = [this, formula_row]() {
+        const int line = QFontMetrics(fonts::font(-3)).height();
+        table_->verticalHeader()->setDefaultSectionSize(std::max(22, line + 6));
+        formula_row->setFixedHeight(std::max(28, line + 12));
+        const int ref_w = QFontMetrics(fonts::font(-3, QFont::Bold)).horizontalAdvance(QStringLiteral("AAA99999"));
+        cell_ref_label_->setFixedWidth(std::max(64, ref_w + 10));
+    };
+    apply_metrics();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [apply_metrics](const ThemeTokens&) { apply_metrics(); });
 
     // Cells are deliberately NOT pre-populated: a 20 000 × 64 import window is
     // 1.3M cells. Every read path tolerates a null item, so an empty grid costs
@@ -988,11 +1051,14 @@ QString SpreadsheetWidget::selection_summary() const {
     }
     if (count < 2)
         return {};
-    const QLocale loc = QLocale::system();
     QString out = tr("COUNT %1").arg(count);
-    if (numeric > 0)
-        out = tr("SUM %1  ·  AVG %2  ·  %3")
-                  .arg(loc.toString(sum, 'g', 12), loc.toString(sum / numeric, 'g', 12), out);
+    if (numeric > 0) {
+        // Grouped, 2 decimals (none for a whole sum) — not 12 significant digits
+        // ("AVG 1234.56666667").
+        namespace fmt = fincept::ui::formatting;
+        const int sum_decimals = (std::floor(sum) == sum && std::fabs(sum) < 1e15) ? 0 : 2;
+        out = tr("SUM %1  ·  AVG %2  ·  %3").arg(fmt::number(sum, sum_decimals), fmt::number(sum / numeric, 2), out);
+    }
     return out;
 }
 
@@ -1052,13 +1118,13 @@ void SpreadsheetWidget::on_formula_bar_return() {
 void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
     QMenu menu(this);
     menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3;"
-                               " font-family:%4; font-size:11px; }"
+                               " font-family:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                "QMenu::item { padding:6px 20px; }"
                                "QMenu::item:selected { background:%5; }"
-                               "QMenu::item:disabled { color:%3; }"
+                               "QMenu::item:disabled { color:%6; }"
                                "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
-                           .arg(colors::BORDER_MED(), colors::TEXT_PRIMARY(), colors::TEXT_DIM(), fonts::DATA_FAMILY,
-                                colors::TEXT_DIM()));
+                           .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_MED(), fonts::DATA_FAMILY,
+                                colors::BG_HOVER(), colors::TEXT_TERTIARY()));
 
     QAction* undo_act = menu.addAction(tr("Undo %1").arg(undo_stack_->undoText()), this, [this]() { undo(); });
     undo_act->setEnabled(undo_stack_->canUndo());

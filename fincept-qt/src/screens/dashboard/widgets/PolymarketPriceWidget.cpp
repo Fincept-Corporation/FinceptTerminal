@@ -1,9 +1,12 @@
 #include "screens/dashboard/widgets/PolymarketPriceWidget.h"
 
 #include "datahub/DataHub.h"
+#include "network/http/HttpClient.h"
 #include "services/polymarket/PolymarketWebSocket.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -18,6 +21,29 @@
 namespace fincept::screens::widgets {
 
 namespace {
+
+// Fresh-tile defaults: the most-traded open markets. Fetched here with a
+// callback (HttpClient, scoped to the tile) rather than through
+// PolymarketService::fetch_markets(), whose markets_ready is broadcast to the
+// Polymarket screen and would replace the list it is showing.
+// Order key: Gamma's "volumeNum" — the same one PolymarketService sorts "volume" by.
+constexpr const char* kPmDefaultsUrl =
+    "https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=12&order=volumeNum&ascending=false";
+constexpr int kPmDefaultsCount = 5;
+constexpr int kPmDefaultLabelChars = 60;
+
+// Row label for a market: its question, plus the outcome priced when that is
+// not plain "Yes" (the first token is the one the row streams).
+QString pm_default_label(const services::polymarket::Market& m) {
+    QString label = m.question.simplified();
+    const QString outcome = m.outcomes.isEmpty() ? QString() : m.outcomes.first().name.trimmed();
+    if (!outcome.isEmpty() && outcome.compare(QLatin1String("yes"), Qt::CaseInsensitive) != 0)
+        label += QStringLiteral(" \xc2\xb7 ") + outcome;
+    if (label.size() > kPmDefaultLabelChars)
+        label = label.left(kPmDefaultLabelChars - 1).trimmed() + QChar(0x2026);
+    return label;
+}
+
 // The probability label's colour band ("hi" >= 65 %, "lo" <= 35 %, else "mid")
 // is a property matched in the rows host's stylesheet. Every WS price message
 // used to call setStyleSheet() (full CSS re-parse); now the label is only
@@ -37,6 +63,14 @@ PolymarketPriceWidget::PolymarketPriceWidget(const QJsonObject& cfg, QWidget* pa
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
 
+    // Title-bar refresh = "retry" (it was wired to nothing): re-subscribing hands
+    // the rows the socket's latest price / book again and makes sure every
+    // configured token is being streamed.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (isVisible())
+            hub_resubscribe(); // showEvent() subscribes; never keep a hidden tile subscribed
+    });
+
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
@@ -44,6 +78,10 @@ PolymarketPriceWidget::PolymarketPriceWidget(const QJsonObject& cfg, QWidget* pa
 
 QJsonObject PolymarketPriceWidget::config() const {
     QJsonObject o;
+    // No list chosen yet (defaults not fetched): keep "entries" out, so the next
+    // load still fills the tile instead of persisting an empty list.
+    if (defaults_pending_ && entries_.isEmpty())
+        return o;
     QJsonArray arr;
     for (const auto& e : entries_) {
         QJsonObject item;
@@ -57,6 +95,15 @@ QJsonObject PolymarketPriceWidget::config() const {
 
 void PolymarketPriceWidget::apply_config(const QJsonObject& cfg) {
     entries_.clear();
+    // A config naming its list (even an empty one) ends any pending default
+    // fetch; its late answer is dropped (defaults_req_ / defaults_pending_).
+    defaults_pending_ = !cfg.contains(QStringLiteral("entries"));
+    if (!defaults_pending_) {
+        defaults_inflight_ = false;
+        defaults_failed_ = false;
+        ++defaults_req_;
+        hide_empty_state();
+    }
     const QJsonArray arr = cfg.value("entries").toArray();
     for (const auto& v : arr) {
         const QJsonObject obj = v.toObject();
@@ -99,6 +146,17 @@ void PolymarketPriceWidget::build_rows() {
     if (entries_.isEmpty()) {
         auto* host_layout = new QVBoxLayout(rows_host_);
         host_layout->setContentsMargins(0, 0, 0, 0);
+        if (defaults_inflight_) {
+            // The first list is on its way: placeholder lines, not a blank tile.
+            auto* sk = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Text, rows_host_);
+            sk->set_opaque(false);
+            sk->set_row_count(kPmDefaultsCount);
+            sk->set_message(tr("Finding the most-traded markets\xe2\x80\xa6"));
+            host_layout->addWidget(sk, 1);
+            vl->addWidget(rows_host_, 1);
+            apply_styles();
+            return;
+        }
         auto* hint = new QLabel(tr("No markets configured — click gear to add"), rows_host_);
         hint->setObjectName("pmPriceHint");
         host_layout->addWidget(hint);
@@ -142,12 +200,18 @@ void PolymarketPriceWidget::hub_resubscribe() {
     // PolymarketWebSocket publishes only for tokens it has been asked to stream.
     // Nothing on the dashboard asked, so the tile sat at "—" forever unless the
     // Polymarket screen happened to be streaming the same tokens. Ask for them
-    // here. This is additive and idempotent (the socket keeps a set); we never
-    // unsubscribe because the token set is shared with the Polymarket screen.
+    // here. The socket reference-counts subscribers per token, so each token is
+    // asked for once per tile (ws_tokens_) — re-asking on every show / refresh
+    // stacked references. We never unsubscribe (the stream is shared with the
+    // Polymarket screen).
     QStringList token_ids;
     token_ids.reserve(entries_.size());
-    for (const auto& e : entries_)
-        token_ids.append(e.asset_id);
+    for (const auto& e : entries_) {
+        if (!ws_tokens_.contains(e.asset_id)) {
+            ws_tokens_.insert(e.asset_id);
+            token_ids.append(e.asset_id);
+        }
+    }
     if (!token_ids.isEmpty())
         services::polymarket::PolymarketWebSocket::instance().subscribe(token_ids);
 
@@ -157,11 +221,38 @@ void PolymarketPriceWidget::hub_resubscribe() {
         hub.subscribe(this, topic, [this, asset_copy](const QVariant& v) {
             bool ok = false;
             const double p = v.toDouble(&ok);
-            if (ok)
+            if (ok) {
+                traded_.insert(asset_copy);
                 on_price(asset_copy, p);
+            }
+        });
+        // The price topic only carries last-trade prices, so a quiet market
+        // stayed on "—" until someone traded after the tile subscribed. The
+        // book (seeded by the subscribe-time snapshot, moved by every
+        // price_change) gives a probability at once: its midpoint.
+        const QString book_topic = QStringLiteral("prediction:polymarket:orderbook:") + e.asset_id;
+        hub.subscribe(this, book_topic, [this, asset_copy](const QVariant& v) {
+            if (!v.canConvert<services::polymarket::OrderBook>())
+                return;
+            on_book(asset_copy, v.value<services::polymarket::OrderBook>());
         });
     }
     hub_active_ = true;
+}
+
+void PolymarketPriceWidget::on_book(const QString& asset_id, const services::polymarket::OrderBook& book) {
+    // Levels are sorted best-first by PolymarketWebSocket (bids high->low, asks low->high).
+    if (book.bids.isEmpty() || book.asks.isEmpty())
+        return;
+    const double bid = book.bids.first().price;
+    const double ask = book.asks.first().price;
+    if (bid <= 0.0 || ask <= 0.0 || ask < bid)
+        return;
+    // Polymarket's own display rule: the midpoint, unless the spread is wider
+    // than 10 cents — then the last trade, when there is one.
+    if (ask - bid > 0.10 && traded_.contains(asset_id))
+        return;
+    on_price(asset_id, (bid + ask) / 2.0);
 }
 
 void PolymarketPriceWidget::hub_unsubscribe_all() {
@@ -171,8 +262,76 @@ void PolymarketPriceWidget::hub_unsubscribe_all() {
 
 void PolymarketPriceWidget::showEvent(QShowEvent* e) {
     BaseWidget::showEvent(e);
+    // Fresh tile: choose its markets once, when it is first seen (class B — a
+    // free public API, about a second). A failure waits for RETRY.
+    if (defaults_pending_ && !defaults_inflight_ && !defaults_failed_)
+        resolve_defaults();
     if (!hub_active_)
         hub_resubscribe();
+}
+
+void PolymarketPriceWidget::resolve_defaults() {
+    defaults_inflight_ = true;
+    defaults_failed_ = false;
+    hide_empty_state();
+    const quint64 id = ++defaults_req_;
+    build_rows(); // the skeleton
+    // `this` scopes the callback: a tile closed meanwhile never hears the answer.
+    HttpClient::instance().get(
+        QString::fromLatin1(kPmDefaultsUrl),
+        [this, id](Result<QJsonDocument> reply) { on_defaults(id, reply); }, this);
+}
+
+void PolymarketPriceWidget::on_defaults(quint64 request_id, const Result<QJsonDocument>& reply) {
+    if (request_id != defaults_req_ || !defaults_pending_)
+        return; // superseded (RETRY, or the user set the list meanwhile)
+    defaults_inflight_ = false;
+    if (reply.is_err()) {
+        const QString why = HttpClient::message_from_error(reply.error());
+        show_defaults_failure(why.isEmpty() ? QString::fromStdString(reply.error()) : why);
+        return;
+    }
+    const QJsonArray arr = reply.value().array();
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    QVector<Entry> picks;
+    QSet<QString> seen;
+    for (const auto& v : arr) {
+        const auto m = services::polymarket::Market::from_json(v.toObject());
+        if (m.closed || m.clob_token_ids.isEmpty() || m.question.trimmed().isEmpty())
+            continue;
+        // Gamma keeps markets "open" until resolution: skip ones already past their end.
+        const QDateTime end = QDateTime::fromString(m.end_date, Qt::ISODate);
+        if (end.isValid() && end < now)
+            continue;
+        const QString token = m.clob_token_ids.first().trimmed();
+        if (token.isEmpty() || seen.contains(token))
+            continue;
+        seen.insert(token);
+        picks.append(Entry{token, pm_default_label(m)});
+        if (picks.size() >= kPmDefaultsCount)
+            break;
+    }
+    if (picks.isEmpty()) {
+        show_defaults_failure(tr("Polymarket returned no open markets."));
+        return;
+    }
+    entries_ = picks;
+    defaults_pending_ = false;
+    build_rows();
+    if (isVisible())
+        hub_resubscribe();
+    // Written back: the tile keeps these markets (edit them with the gear).
+    emit config_changed(config());
+}
+
+void PolymarketPriceWidget::show_defaults_failure(const QString& reason) {
+    defaults_failed_ = true;
+    build_rows(); // drop the skeleton (no animation under the error)
+    ui::EmptyState::Spec spec =
+        ui::EmptyState::error_spec(tr("The list of most-traded markets could not be loaded: %1").arg(reason),
+                                   tr("Could not load Polymarket markets"), tr("RETRY"));
+    spec.secondary = tr("CHOOSE MARKETS");
+    show_empty_state(spec, [this]() { resolve_defaults(); }, [this]() { open_config(); });
 }
 
 void PolymarketPriceWidget::hideEvent(QHideEvent* e) {
@@ -238,10 +397,10 @@ void PolymarketPriceWidget::apply_styles() {
     if (!rows_host_)
         return; // ctor runs this before the first build_rows()
     // A probability label with no "lvl" yet (still "—") keeps the tertiary colour.
-    rows_host_->setStyleSheet(
-        QString("QLabel#pmPriceHint{color:%2;font-size:10px;background:transparent;padding:4px 0;}"
-                "QLabel#pmPriceLabel{color:%1;font-size:11px;font-weight:600;background:transparent;}"
-                "QLabel#pmPricePct{color:%2;font-size:11px;font-weight:700;background:transparent;}"
+    set_css_cached(rows_host_, 
+        QString("QLabel#pmPriceHint{color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;padding:4px 0;}"
+                "QLabel#pmPriceLabel{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
+                "QLabel#pmPricePct{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
                 "QLabel#pmPricePct[lvl=\"hi\"]{color:%3;}"
                 "QLabel#pmPricePct[lvl=\"lo\"]{color:%4;}"
                 "QLabel#pmPricePct[lvl=\"mid\"]{color:%1;}")

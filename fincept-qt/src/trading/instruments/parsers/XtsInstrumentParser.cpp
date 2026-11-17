@@ -27,7 +27,9 @@ QByteArray download_iifl(const BrokerCredentials& creds) {
     const QStringList parts = creds.access_token.split(":::");
     const QString feed = parts.size() > 1 ? parts[1] : QString();
     if (feed.isEmpty()) {
-        LOG_WARN("XtsSource", "IIFL feed token unavailable — cannot fetch master");
+        LOG_WARN("XtsSource", logf("IIFL instrument master not fetched: the market-data (feed) token is missing; sign "
+                                   "in to IIFL again",
+                                   {{"broker", "iifl"}, {"token_parts", static_cast<int>(parts.size())}}));
         return {};
     }
     const QMap<QString, QString> headers = {{"authorization", feed}, {"Accept", "application/json"}};
@@ -209,7 +211,7 @@ QVector<Instrument> parse_iifl(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("XtsSource", QString("Parsed %1 IIFL instruments").arg(out.size()));
+    LOG_DEBUG("XtsSource", QString("Parsed %1 IIFL instruments").arg(out.size()));
     return out;
 }
 

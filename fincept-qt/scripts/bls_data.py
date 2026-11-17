@@ -13,6 +13,7 @@ import asyncio
 import aiohttp
 
 import fincept_json  # scripts/fincept_json.py: NaN / Infinity -> null at the output boundary
+import fincept_connector as fc  # uniform missing-key failure
 
 # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
 # system DNS configuration on Windows and fails every request with
@@ -278,7 +279,10 @@ class BLSDataAPI:
                                 aspects: bool = False) -> Dict[str, Any]:
         """Get BLS timeseries data with API request chunking"""
         if not self.api_key:
-            return BLSError("bls_timeseries", "BLS API key required. Get one at: https://data.bls.gov/registrationEngine/").to_dict()
+            # Before any request: {"error": <sentence>, "code": "missing_key", "env_key", "docs_url"}.
+            out = fc.missing_key("BLS", "https://data.bls.gov/registrationEngine/", "BLS_API_KEY")
+            out["endpoint"] = "bls_timeseries"
+            return out
 
         # Convert single series to list
         symbols = series_ids.split(",") if isinstance(series_ids, str) else series_ids

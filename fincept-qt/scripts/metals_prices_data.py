@@ -9,16 +9,20 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('METALS_DEV_API_KEY', '')
 BASE_URL = "https://api.metals.dev/v1"
+SERVICE = "Metals.dev"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every Metals.dev endpoint answers HTTP 401 without a key: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://metals.dev/", "METALS_DEV_API_KEY", what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
@@ -26,13 +30,16 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "METALS_DEV_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # Metals.dev reports failures in the body, some with HTTP 200 (unknown endpoint, plan limits).
+    if isinstance(data, dict) and data.get("status") == "failure":
+        msg = data.get("error_message") or f"error code {data.get('error_code')}"
+        return {"error": f"{SERVICE}: {fc.scrub(msg, API_KEY).strip()}"}
+    return data
 
 
 def get_latest(currencies: str = "USD", metals: str = "gold,silver,platinum,palladium") -> Any:
@@ -43,13 +50,15 @@ def get_latest(currencies: str = "USD", metals: str = "gold,silver,platinum,pall
 
 
 def get_historical(date: str, currencies: str = "USD", metals: str = "gold,silver") -> Any:
-    params = {"date": date, "currency": currencies, "unit": "troy_oz"}
+    # There is no /v1/historical: one day of /v1/timeseries is the historical snapshot.
+    params = {"start_date": date, "end_date": date, "currency": currencies, "unit": "troy_oz"}
     metals_list = [m.strip() for m in metals.split(",")]
     params["metals"] = ",".join(metals_list)
-    return _make_request("historical", params)
+    return _make_request("timeseries", params)
 
 
 def get_timeframe(start: str, end: str, currencies: str = "USD", metals: str = "gold") -> Any:
+    # /v1/timeseries (the old /v1/timeframe path does not exist); Metals.dev caps it at 30 days.
     params = {
         "start_date": start,
         "end_date": end,
@@ -58,17 +67,34 @@ def get_timeframe(start: str, end: str, currencies: str = "USD", metals: str = "
     }
     metals_list = [m.strip() for m in metals.split(",")]
     params["metals"] = ",".join(metals_list)
-    return _make_request("timeframe", params)
+    return _make_request("timeseries", params)
 
 
 def convert(from_metal: str, to_currency: str, amount: str = "1") -> Any:
+    # There is no /v1/convert: value `amount` troy ounces at the /v1/metal/spot price.
     params = {
         "metal": from_metal.lower(),
         "currency": to_currency.upper(),
-        "amount": amount,
-        "unit": "troy_oz",
     }
-    return _make_request("convert", params)
+    data = _make_request("metal/spot", params)
+    if not isinstance(data, dict) or "error" in data:
+        return data
+    rate = data.get("rate") if isinstance(data.get("rate"), dict) else {}
+    price = rate.get("price")
+    try:
+        qty = float(amount)
+    except (TypeError, ValueError):
+        return {"error": f"amount must be a number, got {amount!r}"}
+    return {
+        "metal": from_metal.lower(),
+        "currency": to_currency.upper(),
+        "unit": data.get("unit", "toz"),
+        "amount": qty,
+        "price": price,
+        "value": price * qty if isinstance(price, (int, float)) else None,
+        "timestamp": data.get("timestamp"),
+        "spot": rate,
+    }
 
 
 def get_supported_metals() -> Any:
@@ -104,7 +130,7 @@ def main(args=None):
         metals = args[3] if len(args) > 3 else "gold,silver"
         result = get_historical(date, currencies, metals)
     elif command == "timeframe":
-        start = args[1] if len(args) > 1 else "2024-01-01"
+        start = args[1] if len(args) > 1 else "2024-12-01"
         end = args[2] if len(args) > 2 else "2024-12-31"
         currencies = args[3] if len(args) > 3 else "USD"
         metals = args[4] if len(args) > 4 else "gold"
@@ -119,7 +145,7 @@ def main(args=None):
     elif command == "currencies":
         result = get_supported_currencies()
 
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

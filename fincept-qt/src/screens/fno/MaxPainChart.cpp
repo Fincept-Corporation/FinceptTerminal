@@ -32,23 +32,14 @@ MaxPainChart::MaxPainChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
 
     chart_ = new QChart();
-    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
-    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
     chart_->setTitle(tr("Max Pain Profile"));
-    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
-    QFont title_font = chart_->titleFont();
-    title_font.setPointSize(9);
-    title_font.setBold(true);
-    chart_->setTitleFont(title_font);
     chart_->legend()->setVisible(false);
     setChart(chart_);
 
     others_set_ = new QBarSet(tr("Pain"));
     min_set_ = new QBarSet(tr("Max Pain"));
-    others_set_->setColor(with_alpha(colors::TEXT_TERTIARY(), 140));
-    min_set_->setColor(with_alpha(colors::AMBER(), 220));
     others_set_->setBorderColor(Qt::transparent);
     min_set_->setBorderColor(Qt::transparent);
 
@@ -59,20 +50,35 @@ MaxPainChart::MaxPainChart(QWidget* parent) : QChartView(parent) {
     chart_->addSeries(series_);
 
     axis_x_ = new QBarCategoryAxis();
-    axis_x_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_x_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_x_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
-
     axis_y_ = new QValueAxis();
     axis_y_->setLabelFormat("%.0f");
-    axis_y_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_y_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_y_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
 
     chart_->addAxis(axis_x_, Qt::AlignBottom);
     chart_->addAxis(axis_y_, Qt::AlignLeft);
     series_->attachAxis(axis_x_);
     series_->attachAxis(axis_y_);
+
+    refresh_theme();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+}
+
+void MaxPainChart::refresh_theme() {
+    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
+    chart_->setTitleFont(fonts::font(-2, QFont::Bold));
+
+    others_set_->setColor(with_alpha(colors::TEXT_TERTIARY(), 140));
+    min_set_->setColor(with_alpha(colors::AMBER(), 220));
+
+    const QFont label_font = fonts::font(-3);
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(axis_x_), static_cast<QAbstractAxis*>(axis_y_)}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(label_font);
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
+    }
 }
 
 void MaxPainChart::set_chain(const OptionChain& chain) {

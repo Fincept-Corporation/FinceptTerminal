@@ -6,6 +6,7 @@
 #include "services/alpha_arena/ArenaModelRegistry.h"
 #include "services/alpha_arena/ArenaPrompts.h"
 #include "services/alpha_arena/HyperliquidLiveVenue.h"
+#include "storage/secure/SecretMigration.h"
 #include "storage/secure/SecureStorage.h"
 
 #include <QDateTime>
@@ -116,16 +117,30 @@ Result<void> ArenaEngine::start(const QString& competition_id) {
     if (comp_.venue == QLatin1String("hyperliquid") && comp_.live_mode) {
         // The wizard's gate dialog ran before the competition existed and stored
         // the agent wallet key under ".../pending" — move it to this competition's
-        // handle so the live venue's signer can find it (store new, then delete old).
+        // handle so the live venue's signer can find it. A wallet key may be the
+        // only copy: write -> read back -> compare -> only then delete the pending
+        // one; an unreadable slot, or a competition handle that already holds a
+        // DIFFERENT key, leaves both as they are (retried at the next resume).
+        namespace sm = fincept::secret_migration;
         auto& ss = SecureStorage::instance();
         const QString pending_handle = QStringLiteral("alpha_arena/agent_key/pending");
-        if (auto key = ss.retrieve(pending_handle); key.is_ok()) {
-            const QString comp_handle = QStringLiteral("alpha_arena/agent_key/%1").arg(competition_id);
-            if (ss.store(comp_handle, key.value()).is_ok())
-                ss.remove(pending_handle);
-            else
-                LOG_ERROR(TAG, QStringLiteral("failed to re-key live wallet handle for %1").arg(competition_id));
-        }
+        const QString comp_handle = QStringLiteral("alpha_arena/agent_key/%1").arg(competition_id);
+        const SecretRead pending = ss.read(pending_handle);
+        const sm::OldCopy old = pending.failed()
+                                    ? sm::OldCopy::unreadable(QString::fromLatin1(pending.error_name()))
+                                    : sm::OldCopy::present(pending.found() ? pending.value : QString());
+        sm::Io io;
+        io.read_stored = [&ss, comp_handle]() { return ss.read(comp_handle); };
+        io.write_stored = [&ss, comp_handle](const QString& v) { return ss.store(comp_handle, v); };
+        io.delete_old = [&ss, pending_handle]() { return ss.remove(pending_handle); };
+        const sm::Outcome moved = sm::run(old, sm::OnConflict::KeepBoth, io);
+        LOG_TRANSITION(TAG, QStringLiteral("agent_key_rekey|") + competition_id, moved.pending(),
+                       moved.pending() ? LogLevel::Error : LogLevel::Info,
+                       moved.pending() ? logf("Live wallet key not moved to the competition yet, the pending copy is kept",
+                                              {{"competition", competition_id},
+                                               {"reason", sm::failure_name(moved.failure)},
+                                               {"error", moved.detail.left(200)}})
+                                       : logf("Live wallet key moved to the competition", {{"competition", competition_id}}));
         venue_ = std::make_unique<HyperliquidLiveVenue>(ArenaStore::instance(), competition_id);
     } else {
         venue_ = std::make_unique<PaperExchange>(ArenaStore::instance(), competition_id);
@@ -454,16 +469,19 @@ void ArenaEngine::refresh_marks_async(std::function<void()> then) {
             for (const auto& o : liqs)
                 emit order_executed(o.agent_id, o.id, o.status);
         } else if (r.is_err()) {
-            LOG_WARN(TAG, QStringLiteral("kill: marks refresh failed (%1) — closing at the last marks")
-                              .arg(QString::fromStdString(r.error())));
+            LOG_WARN(TAG, QStringLiteral("Marks refresh failed before closing positions competition=%1 error=\"%2\" "
+                                         "— closing at the last marks")
+                              .arg(comp_.id, QString::fromStdString(r.error())));
         }
         then();
     });
-    QTimer::singleShot(kKillMarksTimeoutMs, this, [settled, then]() {
+    QTimer::singleShot(kKillMarksTimeoutMs, this, [this, epoch, settled, then]() {
         if (*settled)
             return;
         *settled = true;
-        LOG_WARN(TAG, QStringLiteral("kill: marks refresh timed out after %1 ms — closing at the last marks")
+        LOG_WARN(TAG, QStringLiteral("Marks refresh timed out before closing positions competition=%1 timeout_ms=%2 "
+                                     "— closing at the last marks")
+                          .arg(epoch == epoch_ ? comp_.id : QStringLiteral("(ended)"))
                           .arg(kKillMarksTimeoutMs));
         then();
     });

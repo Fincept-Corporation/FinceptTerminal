@@ -1,5 +1,7 @@
 #include "ui/charts/SeriesLayer.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QChart>
 #include <QGraphicsScene>
 #include <QLineSeries>
@@ -10,15 +12,34 @@
 namespace fincept::ui {
 
 SeriesLayer::SeriesLayer(const QString& id, const QString& name, const QColor& color, int width, QObject* parent)
-    : OverlayLayer(parent), id_(id), name_(name), color_(color), width_(width) {}
+    : OverlayLayer(parent), id_(id), name_(name), color_(color), width_(width) {
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this]() { on_theme_changed(); });
+}
+
+QColor SeriesLayer::default_color() const {
+    return QColor(colors::AMBER());
+}
+
+QColor SeriesLayer::line_color() const {
+    return color_.isValid() ? color_ : default_color();
+}
 
 void SeriesLayer::set_color(const QColor& c) {
     color_ = c;
     if (series_) {
         QPen pen = series_->pen();
-        pen.setColor(c);
+        pen.setColor(line_color());
         series_->setPen(pen);
     }
+}
+
+void SeriesLayer::on_theme_changed() {
+    if (series_ && !color_.isValid()) {
+        QPen pen = series_->pen();
+        pen.setColor(line_color());
+        series_->setPen(pen);
+    }
+    refresh_theme_colors();
 }
 
 void SeriesLayer::set_line_width(int w) {
@@ -34,7 +55,7 @@ void SeriesLayer::attach(QGraphicsScene*, QChart* chart) {
     chart_ = chart;
     if (!series_) {
         series_ = new QLineSeries();
-        QPen pen(color_);
+        QPen pen(line_color());
         pen.setWidth(width_);
         series_->setPen(pen);
     }

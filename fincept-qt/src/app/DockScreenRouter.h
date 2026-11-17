@@ -1,10 +1,13 @@
 #pragma once
+#include "app/ScreenAliases.h"
 #include "core/identity/Uuid.h"
 #include "core/symbol/SymbolGroup.h"
 
 #include <QHash>
+#include <QList>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 
 #include <DockManager.h>
 #include <DockWidget.h>
@@ -32,10 +35,32 @@ void mark_user_configured_links();
 /// Lazy loading: factories are stored and only called when a screen is first
 /// navigated to (or when ensure_all_registered() pre-creates placeholders for
 /// state restore).
+///
+/// One instance per dock id, by construction: a screen's factory runs only
+/// through materialize_screen(), which returns the existing screen when there is
+/// one and joins a build of the same id that is still running (a nested
+/// visibilityChanged / navigate during the first build's construction or first
+/// show) instead of building a second one. navigate() for an id whose navigate
+/// is already running joins it too. Single-instance types (DockInstanceGuard.h;
+/// the default) also never get a "#dup" copy, and collapse_duplicates() removes
+/// any second instance that is found anyway (old saved layouts included).
 class DockScreenRouter : public QObject {
     Q_OBJECT
   public:
-    using ScreenFactory = std::function<QWidget*()>;
+    /// Builds a screen as a child of `parent` — the content host that already
+    /// sits inside the screen's dock widget. Constructing in place matters for
+    /// speed: re-parenting a finished widget tree makes Qt recompute the
+    /// stylesheet of every widget in it, and that pass was most of the cost of
+    /// opening a screen. A factory may ignore `parent`; the router then
+    /// re-parents the result (correct, just slower).
+    using ScreenFactory = std::function<QWidget*(QWidget* parent)>;
+
+    /// objectName of that per-dock-widget content host.
+    static constexpr const char* kScreenHostName = "dockScreenHost";
+
+    /// Dynamic property every screen the router builds or is given carries: its
+    /// dock id. How collapse_duplicates() recognises a second instance.
+    static constexpr const char* kScreenIdProperty = "_fincept_dock_id";
 
     explicit DockScreenRouter(ads::CDockManager* manager, QObject* parent = nullptr);
 
@@ -79,6 +104,10 @@ class DockScreenRouter : public QObject {
     /// ADS needs all dock widgets to exist by objectName.
     void ensure_all_registered();
 
+    /// ensure_all_registered() limited to the panels named in a saved ADS
+    /// layout (what restoreState() looks up). Use before restoring `dock_state`.
+    void ensure_registered_for_state(const QByteArray& dock_state);
+
     /// Find an existing dock widget by screen id, or nullptr.
     ads::CDockWidget* find_dock_widget(const QString& id) const;
 
@@ -86,7 +115,35 @@ class DockScreenRouter : public QObject {
     /// screen has not been created yet. This is the raw screen (not the ADS
     /// dock-widget wrapper), so callers can qobject_cast it to the concrete type
     /// to hand it a payload after navigate() (e.g. a notebook path to open).
-    QWidget* screen_widget(const QString& id) const { return screens_.value(id); }
+    QWidget* screen_widget(const QString& id) const { return screens_.value(screen_alias::canonical(id)); }
+
+    /// Run `fn` with the screen of `id` once it is fully materialised (built in
+    /// place, shown, its saved state restored): at once when it already is and
+    /// nothing is in flight for it; otherwise right after the build / navigate
+    /// in flight finishes (queued, on this router's thread) — `fn` then gets
+    /// nullptr if that build failed. Returns false, and drops `fn`, when the
+    /// screen is neither built nor being built. Use this, not screen_widget(),
+    /// to hand a screen a payload after navigate(): a navigate() that joined a
+    /// build already in flight returns before the screen exists.
+    bool when_materialised(const QString& id, std::function<void(QWidget*)> fn);
+
+    /// True while a build or a navigate() of `id` is running.
+    bool is_busy(const QString& id_in) const {
+        const QString id = screen_alias::canonical(id_in);
+        return building_.contains(id) || navigating_.contains(id);
+    }
+
+    /// Live screens of `id`'s type in this window (all its dock ids, every
+    /// instance inside each content host). 1 for a single-instance type once it
+    /// is built; 0 before.
+    int instance_count(const QString& id) const;
+
+    /// Self-heal: remove every second screen instance inside one content host,
+    /// and every surplus panel of a single-instance type (an old layout's
+    /// "equity_trading#dup2", or one restored next to its original), keeping the
+    /// one this router records. Logs one warning per removal. Returns how many
+    /// were removed. Runs after every build and after every layout restore.
+    int collapse_duplicates(const QString& where);
 
     /// Returns all registered screen IDs (both eager and factory).
     QStringList all_screen_ids() const;
@@ -128,7 +185,19 @@ class DockScreenRouter : public QObject {
     /// so navigate()/tab_into()/add_alongside() re-add them on demand via their
     /// needs_add path (triggered by dockManager()==nullptr). Returns the number
     /// of panels pruned. No-op (returns 0) when nothing is hidden.
+    ///
+    /// Expensive: every detached panel is re-parented, which re-computes the
+    /// stylesheet of its whole screen (hundreds of ms per screen) — and it is
+    /// re-parented again when re-opened. For saving, use
+    /// save_state_without_closed(), which leaves the live tree alone.
     int prune_hidden_panels();
+
+    /// CDockManager::saveState() with every closed panel — and every area,
+    /// splitter and floating container left empty by that — removed from the
+    /// serialised layout, as if prune_hidden_panels() had run first, but
+    /// without touching a single widget. This is what layout saves use. (Falls
+    /// back to prune_hidden_panels() + saveState() if the state cannot be read.)
+    QByteArray save_state_without_closed();
 
     /// Synchronously persist the UI state of EVERY materialized stateful screen
     /// (IStatefulScreen) right now, on the calling thread. Panels that are
@@ -158,7 +227,10 @@ class DockScreenRouter : public QObject {
     /// Public because Phase 9 command handlers (`panel.tear_off`) call this
     /// alongside the right-click menu path. Originally protected when only
     /// the menu invoked it.
-    bool tear_off_to_new_frame(const QString& id);
+    ///
+    /// `error` (optional) receives a user-facing reason when the call fails;
+    /// it stays empty when the user cancelled the monitor picker.
+    bool tear_off_to_new_frame(const QString& id, QString* error = nullptr);
 
     /// Phase 5: move a panel from this router to another router. Used by
     /// the right-click "Move to window > Window N" context menu and by
@@ -180,7 +252,14 @@ class DockScreenRouter : public QObject {
     ///
     /// Returns true on success. No-op if `target` == this router, if
     /// `target` is null, or if the panel id is unknown.
-    bool move_panel_to_frame(const QString& id, DockScreenRouter* target);
+    ///
+    /// If the target already holds a CLOSED shell for `id` (pre-registered
+    /// for layout restore, or opened and closed there earlier) the move
+    /// reuses that shell and the target's own instance id; the panel state
+    /// is written under the target's id. Refused only when the panel is
+    /// currently open in the target. `error` (optional) receives a
+    /// user-facing reason on failure.
+    bool move_panel_to_frame(const QString& id, DockScreenRouter* target, QString* error = nullptr);
 
     /// Phase 5 helper: adopt a (string id, PanelInstanceId) pair from
     /// another router. Updates the existing PanelHandle's frame_id to
@@ -212,11 +291,19 @@ class DockScreenRouter : public QObject {
     /// this returns. Idempotent: a no-op if `id` is already registered.
     void prepare_dock_widget(const QString& id);
 
+    /// Pre-create shells (prepare_dock_widget) for every duplicated panel
+    /// ("<base>#dup<N>") named in an ADS saveState() blob. Duplicate ids have
+    /// no factory of their own after a restart, so without this restoreState
+    /// silently drops them. Call before CDockManager::restoreState().
+    void prepare_duplicate_panels(const QByteArray& dock_state);
+
     /// Phase 8 staged materialisation: invoke the screen factory and
     /// install the constructed widget into the dock widget. Idempotent.
     /// Called by `PanelMaterialiser` during the staged drain triggered
     /// from `WindowFrame::apply_layout`. Restores per-panel state via
-    /// the same path navigate() uses.
+    /// the same path navigate() uses. A screen that has no dock widget yet
+    /// (never opened in this window) gets a hidden shell first, so it can be
+    /// built without being shown (the Research BUY / SELL order ticket).
     void materialize_now(const QString& id);
 
     /// Suppress/resume the visibilityChanged→materialize_screen autowire.
@@ -267,8 +354,37 @@ class DockScreenRouter : public QObject {
     // Phase 4 grid removal: previous `grid_top_left_/_top_right_/_bottom_left_/_bottom_right_`
     // and `panel_count_` members deleted. See note above near instance_ids_.
 
+    // ── One instance per dock id ──────────────────────────────────────────────
+    /// Ids whose factory / first show is running (materialize_screen).
+    QSet<QString> building_;
+    /// Ids whose navigate() is running.
+    QSet<QString> navigating_;
+    /// Work that arrived for an id while it was busy, run (queued) once it is
+    /// not: when_materialised() callbacks and deferred navigate / tab_into calls.
+    QHash<QString, QList<std::function<void(QWidget*)>>> after_busy_;
+    /// Called when a build or a navigate of `id` ends; flushes after_busy_[id]
+    /// once nothing is in flight for the id any more.
+    void settle(const QString& id);
+    /// An alias id (ScreenAliases.h) was opened as `canonical`: show its section
+    /// once the screen is materialised (screens::ISectionLinked).
+    void open_alias_section(const QString& alias, const QString& canonical);
+    /// Queue `fn` until `id` is not busy. Returns false when it is not busy.
+    bool defer_while_busy(const QString& id, std::function<void(QWidget*)> fn);
+    /// Tear one panel down completely (dock widget, screen, ids, registry entry).
+    void discard_panel(const QString& id);
+
     ads::CDockWidget* create_dock_widget(const QString& id);
-    void materialize_screen(const QString& id);
+    /// Shells for `ids`, tabbed hidden into one parking area (see ensure_all_registered).
+    void register_hidden(const QStringList& ids);
+    /// Build the screen of `id` (or return the one already built). nullptr when
+    /// it cannot be built, or when a build of `id` is already running further up
+    /// the stack — that build finishes on its own (see DockInstanceGuard.h).
+    QWidget* materialize_screen(const QString& id);
+
+    /// For a duplicate id ("<base>#dup<N>") with no factory of its own,
+    /// install a copy of the base screen's factory. Returns true when `id`
+    /// has a factory afterwards. Never touches ids without "#dup".
+    bool ensure_dup_factory(const QString& id);
 
     /// Re-tile all open panels into the auto-grid the product wants when a new
     /// panel is added: 1=full, 2=left|right, 3=top-row + full-width bottom,

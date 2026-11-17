@@ -1,4 +1,5 @@
 #include "screens/node_editor/canvas/NodeItem.h"
+#include "ui/theme/Theme.h"
 
 #include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/PortItem.h"
@@ -17,6 +18,20 @@
 
 namespace fincept::workflow {
 
+namespace {
+
+// The user's font at `offset` from the base size, capped at `max_px`: node
+// geometry is fixed in scene units (the canvas zoom scales it), so text never
+// grows past the row it is drawn in.
+QFont node_font(int offset, int max_px, int weight = QFont::Normal) {
+    QFont f = ui::fonts::font(offset, weight);
+    if (f.pixelSize() > max_px)
+        f.setPixelSize(max_px);
+    return f;
+}
+
+} // namespace
+
 NodeItem::NodeItem(const NodeDef& def, const NodeTypeDef& type_def, QGraphicsItem* parent)
     : QGraphicsObject(parent), def_(def), type_def_(type_def) {
     setFlag(ItemIsMovable);
@@ -29,6 +44,10 @@ NodeItem::NodeItem(const NodeDef& def, const NodeTypeDef& type_def, QGraphicsIte
     setPos(def_.x, def_.y);
 
     rebuild_layout();
+
+    // The paint cache holds theme colours and fonts.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { invalidate_cache(); });
 }
 
 void NodeItem::set_name(const QString& name) {
@@ -127,8 +146,6 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         cp.setRenderHint(QPainter::Antialiasing, false);
 
         const auto& t = ui::ThemeManager::instance().tokens();
-        QFont mono("Consolas", 10);
-        mono.setStyleHint(QFont::Monospace);
 
         // ── Node body ──────────────────────────────────────────────
         cp.setPen(Qt::NoPen);
@@ -140,44 +157,46 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         cp.setBrush(QColor(t.bg_raised));
         cp.drawRect(header);
 
-        // Accent bar (left edge of header)
-        QColor accent(type_def_.accent_color.isEmpty() ? t.accent : type_def_.accent_color.toUtf8().constData());
+        // Accent bar (left edge of header). Node-type colours are chosen for the
+        // dark canvas; legible_color() keeps them readable on the light one.
+        const QColor accent = type_def_.accent_color.isEmpty()
+                                  ? QColor(t.accent)
+                                  : ui::colors::legible_color(QColor(type_def_.accent_color));
         cp.setPen(Qt::NoPen);
         cp.setBrush(accent);
         cp.drawRect(QRectF(0, 0, 3, kHeaderHeight));
 
         // Icon text
-        QFont icon_font("Consolas", 8);
-        icon_font.setBold(true);
-        cp.setFont(icon_font);
+        cp.setFont(node_font(-3, 13, QFont::Bold));
         cp.setPen(accent);
         cp.drawText(QRectF(8, 0, 24, kHeaderHeight), Qt::AlignVCenter, type_def_.icon_text);
 
         // Node name
-        mono.setPointSize(9);
-        mono.setBold(true);
-        cp.setFont(mono);
+        const QFont name_font = node_font(-2, static_cast<int>(kHeaderHeight) - 10, QFont::Bold);
+        cp.setFont(name_font);
         cp.setPen(QColor(t.text_primary));
         QRectF name_rect(34, 0, kWidth - 44, kHeaderHeight);
-        QString elided = QFontMetrics(mono).elidedText(def_.name, Qt::ElideRight, (int)name_rect.width());
+        QString elided = QFontMetrics(name_font).elidedText(def_.name, Qt::ElideRight, (int)name_rect.width());
         cp.drawText(name_rect, Qt::AlignVCenter, elided);
 
         // ── Port labels ────────────────────────────────────────────
-        mono.setPointSize(8);
-        mono.setBold(false);
-        cp.setFont(mono);
+        const QFont port_font = node_font(-3, static_cast<int>(kPortSpacing) - 8);
+        const QFontMetrics port_fm(port_font);
+        const qreal label_w = kWidth / 2 - 20;
+        cp.setFont(port_font);
         cp.setPen(QColor(t.text_secondary));
 
         for (int i = 0; i < type_def_.inputs.size(); ++i) {
             qreal y = kHeaderHeight + kPortPadding + i * kPortSpacing;
-            cp.drawText(QRectF(14, y - 8, kWidth / 2 - 20, 16), Qt::AlignVCenter | Qt::AlignLeft,
-                        type_def_.inputs[i].label);
+            cp.drawText(QRectF(14, y - kPortSpacing / 2, label_w, kPortSpacing), Qt::AlignVCenter | Qt::AlignLeft,
+                        port_fm.elidedText(type_def_.inputs[i].label, Qt::ElideRight, (int)label_w));
         }
 
         for (int i = 0; i < type_def_.outputs.size(); ++i) {
             qreal y = kHeaderHeight + kPortPadding + i * kPortSpacing;
-            cp.drawText(QRectF(kWidth / 2 + 6, y - 8, kWidth / 2 - 20, 16), Qt::AlignVCenter | Qt::AlignRight,
-                        type_def_.outputs[i].label);
+            cp.drawText(QRectF(kWidth / 2 + 6, y - kPortSpacing / 2, label_w, kPortSpacing),
+                        Qt::AlignVCenter | Qt::AlignRight,
+                        port_fm.elidedText(type_def_.outputs[i].label, Qt::ElideRight, (int)label_w));
         }
 
         // ── Execution state indicator ──────────────────────────────
@@ -186,9 +205,9 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
             if (execution_state_ == "running")
                 state_color = QColor(t.accent);
             else if (execution_state_ == "completed")
-                state_color = QColor(t.positive);
+                state_color = QColor(t.success);
             else if (execution_state_ == "error" || execution_state_ == "invalid")
-                state_color = QColor(t.negative);
+                state_color = QColor(t.danger);
             else
                 state_color = QColor(t.text_tertiary); // skipped
 
@@ -212,7 +231,7 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     else if (isSelected())
         border_color = QColor(t2.accent);
     else if (execution_state_ == "error" || execution_state_ == "invalid")
-        border_color = QColor(t2.negative);
+        border_color = QColor(t2.danger);
     else if (hovered_)
         border_color = QColor(t2.border_bright);
     else
@@ -222,10 +241,12 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     painter->setBrush(Qt::NoBrush);
     painter->drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5));
 
-    // Disabled overlay
+    // Disabled overlay: the node fades into the canvas background.
     if (def_.disabled) {
+        QColor veil(t2.bg_base);
+        veil.setAlpha(150);
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(0, 0, 0, 140));
+        painter->setBrush(veil);
         painter->drawRect(rect);
     }
 }
@@ -281,16 +302,17 @@ void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
     menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                               "  font-family: Consolas; font-size: 12px; }"
+                               "  font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                                "QMenu::item { padding: 4px 20px; }"
                                "QMenu::item:selected { background: %4; color: %5; }"
                                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
-                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_med, tm.accent, tm.text_on_accent));
 
     auto* duplicate_action = menu.addAction(tr("Duplicate"));
     auto* disable_action = menu.addAction(def_.disabled ? tr("Enable") : tr("Disable"));
     menu.addSeparator();
     auto* exec_from_action = menu.addAction(tr("Execute From Here"));
+    exec_from_action->setProperty("fincept_agent_risk", "order");
     menu.addSeparator();
     auto* delete_action = menu.addAction(tr("Delete"));
     delete_action->setShortcut(QKeySequence::Delete);

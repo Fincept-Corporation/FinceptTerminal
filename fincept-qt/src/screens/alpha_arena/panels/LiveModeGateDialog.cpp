@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "services/alpha_arena/ArenaStore.h"
 #include "storage/secure/SecureStorage.h"
+#include "ui/theme/Theme.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -35,7 +36,7 @@ LiveModeGateDialog::LiveModeGateDialog(const QString& competition_id, QWidget* p
                                 "and may incur real losses. There is <b>no undo</b>.<br><br>"
                                 "Read every line of the next four prompts carefully."));
     warn_label_->setWordWrap(true);
-    warn_label_->setStyleSheet("color:#FF6B6B;");
+    warn_label_->setStyleSheet(QString("color:%1;").arg(ui::colors::DANGER()));
     root->addWidget(warn_label_);
 
     // The phrase itself is a logic value (compared verbatim against user input);
@@ -62,15 +63,17 @@ LiveModeGateDialog::LiveModeGateDialog(const QString& competition_id, QWidget* p
     root->addWidget(private_key_input_);
 
     status_label_ = new QLabel;
-    status_label_->setStyleSheet("color:#888;");
+    status_label_->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
     root->addWidget(status_label_);
 
     auto* btn_row = new QHBoxLayout;
     btn_row->addStretch(1);
     cancel_btn_ = new QPushButton(tr("Cancel"));
     confirm_btn_ = new QPushButton(tr("ENABLE LIVE MODE"));
+    confirm_btn_->setProperty("fincept_agent_risk", "order"); // agents: switches the competition to real funds
     confirm_btn_->setEnabled(false);
-    confirm_btn_->setStyleSheet("background:#C72020;color:#fff;font-weight:700;padding:6px 14px;");
+    confirm_btn_->setStyleSheet(QString("background:%1;color:%2;font-weight:700;padding:6px 14px;")
+                                    .arg(ui::colors::DANGER(), ui::colors::TEXT_ON_ACCENT()));
     btn_row->addWidget(cancel_btn_);
     btn_row->addWidget(confirm_btn_);
     root->addLayout(btn_row);

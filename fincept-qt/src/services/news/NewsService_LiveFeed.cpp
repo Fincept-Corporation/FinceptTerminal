@@ -32,16 +32,48 @@
 
 namespace fincept::services {
 
+// Capability switch for the live feed — the one place to turn it on. The
+// default URL is wss://<api host>/ws/news, and api.fincept.in has no WebSocket
+// route at all: every attempt was refused, the badge never lit, and the client
+// reconnected for as long as the News screen was open. Set to true once the
+// backend serves that route and pushes JSON text frames
+// {headline|title, summary|description, source, link|url, category, timestamp, tier}.
+static constexpr bool kNewsLiveFeedAvailable = false;
+
+bool NewsService::live_feed_available() {
+#ifdef HAS_QT_WEBSOCKETS
+    constexpr bool kNewsHasWebSockets = true;
+#else
+    constexpr bool kNewsHasWebSockets = false;
+#endif
+    return kNewsLiveFeedAvailable && kNewsHasWebSockets;
+}
+
 #ifdef HAS_QT_WEBSOCKETS
 // First WebSocket reconnect delay; doubles per consecutive failure up to the cap
 // so an unreachable endpoint is not hammered every 10 s for the whole session.
 static constexpr int kWsReconnectDelayMs = 10000;
 static constexpr int kWsReconnectMaxDelayMs = 300000;
+// Consecutive failed reconnects before giving up until the next explicit
+// connect (screen re-entry or a LIVE click): ~20 min of backoff.
+static constexpr int kWsMaxReconnectAttempts = 8;
 
 // Cap on the in-memory list that live pushes extend (newest first).
 static constexpr int kNewsLiveMaxRetained = 3000;
 
+// A refused handshake (HTTP 4xx: no such route, forbidden) is permanent;
+// retrying it only loops. Qt 6.8 reports it as ConnectionRefusedError with the
+// HTTP status in the error text ("...processHandshake: Unhandled http status
+// code: 404 (Not Found)."); a TCP-level refusal ("Connection refused") is the
+// same enum without a status code and stays retryable.
+static bool news_ws_handshake_refused(QAbstractSocket::SocketError error, const QString& error_text) {
+    static const QRegularExpression kNewsWsHttp4xx(QStringLiteral("\\b4\\d\\d\\b"));
+    return error == QAbstractSocket::ConnectionRefusedError && kNewsWsHttp4xx.match(error_text).hasMatch();
+}
+
 void NewsService::connect_live_feed(const QString& ws_url) {
+    if (!live_feed_available())
+        return; // no live-feed server exists — RSS polling carries the news
     if (live_ws_)
         return; // already connected
 
@@ -66,6 +98,12 @@ void NewsService::connect_live_feed(const QString& ws_url) {
     auto schedule_reconnect = [this, epoch]() {
         if (epoch != live_epoch_ || !live_ws_)
             return;
+        if (live_reconnect_attempts_ >= kWsMaxReconnectAttempts) {
+            LOG_WARN("NewsService", QString("WebSocket live feed: giving up after %1 failed reconnects")
+                                        .arg(live_reconnect_attempts_));
+            disconnect_live_feed();
+            return;
+        }
         const int delay_ms =
             std::min(kWsReconnectMaxDelayMs, kWsReconnectDelayMs << std::min(live_reconnect_attempts_, 5));
         const quint64 token = ++live_reconnect_token_;
@@ -92,11 +130,16 @@ void NewsService::connect_live_feed(const QString& ws_url) {
     });
 
     connect(live_ws_, &QWebSocket::errorOccurred, this,
-            [this, epoch, schedule_reconnect](QAbstractSocket::SocketError) {
+            [this, epoch, schedule_reconnect](QAbstractSocket::SocketError error) {
                 if (epoch != live_epoch_)
                     return;
-                LOG_WARN("NewsService",
-                         "WebSocket live feed error: " + (live_ws_ ? live_ws_->errorString() : QString()));
+                const QString text = live_ws_ ? live_ws_->errorString() : QString();
+                LOG_WARN("NewsService", "WebSocket live feed error: " + text);
+                if (news_ws_handshake_refused(error, text)) {
+                    LOG_WARN("NewsService", "WebSocket live feed: server refused the handshake — not retrying");
+                    disconnect_live_feed(); // bumps the epoch: the trailing `disconnected` is ignored
+                    return;
+                }
                 schedule_reconnect();
             });
 
@@ -156,7 +199,7 @@ void NewsService::connect_live_feed(const QString& ws_url) {
         persist_articles_async({article});
         emit articles_updated(latest_articles_);
         publish_articles_to_hub(latest_articles_);
-        LOG_INFO("NewsService", "Live article: " + article.headline.left(50));
+        LOG_DEBUG("NewsService", logf("Live article received", {{"id", article.id}, {"source", article.source}}));
     });
 
     QString ws_base = fincept::AppConfig::instance().api_base_url();

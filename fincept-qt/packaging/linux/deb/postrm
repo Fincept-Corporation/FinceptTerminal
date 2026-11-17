@@ -1,0 +1,39 @@
+#!/bin/sh
+# postrm of the fincept-terminal-community .deb (assembled by
+# .github/workflows/release.yml, job build-linux). POSIX sh.
+# Removes only what the package itself created; the user's data and settings
+# in their home folder are never touched (uninstall.sh in the install prefix
+# removes those on request).
+set -e
+
+PKG=fincept-terminal-community
+PROFILE="/etc/apparmor.d/$PKG"
+
+in_chroot() {
+    command -v ischroot >/dev/null 2>&1 && ischroot
+}
+
+case "$1" in
+    remove | purge)
+        # The AppArmor profile postinst installed (not a dpkg-owned file).
+        if [ -f "$PROFILE" ]; then
+            if command -v apparmor_parser >/dev/null 2>&1 && ! in_chroot; then
+                apparmor_parser --remove "$PROFILE" >/dev/null 2>&1 || true
+            fi
+            rm -f "$PROFILE"
+        fi
+        # Its compiled cache, where this AppArmor writes one.
+        rm -f "/etc/apparmor.d/cache/$PKG"
+        if [ -d /var/cache/apparmor ]; then
+            find /var/cache/apparmor -name "$PKG" -type f -delete 2>/dev/null || true
+        fi
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications || true
+        fi
+        if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -f /usr/share/icons/hicolor/index.theme ]; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+        fi
+        ;;
+esac
+
+exit 0

@@ -20,6 +20,7 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "services/markets/MarketDataService.h"
+#include "services/options/DerivMarketData.h"
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
@@ -62,6 +63,8 @@ void SurfaceAnalyticsScreen::load_demo_data() {
     // because a fetch only ever replaces one or two grids — the rest stay fake
     // and must keep saying DEMO when the user clicks over to them.
     real_data_charts_.clear();
+    free_charts_.clear();
+    free_chain_.reset();
     sync_synthetic_badge();
     QString qsym = current_symbol_or_default();
     std::string sym = qsym.toStdString();
@@ -123,7 +126,11 @@ void SurfaceAnalyticsScreen::load_demo_data() {
 
 // ── Chart routing ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::update_chart() {
-    auto minmax = [](const std::vector<std::vector<float>>& z, float& mn, float& mx) {
+    // An option surface whose underlying has no free delayed chain: the designed page
+    // ("No listed options for X", BACK TO …) instead of a sample surface.
+    if (show_free_failure_page())
+        return;
+    auto minmax =[](const std::vector<std::vector<float>>& z, float& mn, float& mx) {
         // Seeded with +/-infinity, not +/-9999: a grid whose values all sit above 9999
         // (index-futures prices, NQ ~20,000) never lowered a 9999 minimum, so the
         // surface was scaled from a floor that isn't in the data. Non-finite cells are
@@ -746,6 +753,20 @@ const std::vector<std::vector<float>>* SurfaceAnalyticsScreen::active_z_grid() c
 void SurfaceAnalyticsScreen::update_inspector_lineage() {
     if (!data_inspector_)
         return;
+    if (free_chain_ && free_charts_.contains(static_cast<int>(active_chart_))) {
+        // The delayed public chain on screen: its own source, symbol and quote time.
+        qint64 cells = 0;
+        if (const auto* z = active_z_grid())
+            for (const auto& row : *z)
+                cells += (qint64)row.size();
+        const QDateTime at = free_chain_->quote_time.isValid() ? free_chain_->quote_time : free_chain_->fetched_at;
+        data_inspector_->set_lineage(free_chain_->source_label.isEmpty() ? tr("Delayed public quotes")
+                                                                        : free_chain_->source_label,
+                                     tr("listed option chain"), tr("underlying"), free_chain_->symbol,
+                                     tr("quotes as of %1").arg(at.toLocalTime().toString("yyyy-MM-dd HH:mm")), cells,
+                                     0.0);
+        return;
+    }
     const auto& cap = capability_for(active_chart_);
     QString date_range;
     if (control_panel_) {
@@ -839,7 +860,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                                       : QStringLiteral("YIELD CURVE  %1")
                                             .arg(QString::fromStdString(yield_data_.time_labels.front()));
             surface_line_->set_curve(title, xs, ys, fmt_months_str(yield_data_.maturities), "Maturity (months)",
-                                     "Yield %", QColor(63, 185, 80));
+                                     "Yield %");
             return;
         }
         case ChartType::ContangoBackwardation: {
@@ -850,9 +871,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < contango_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)contango_data_.contract_months[k]);
                 s.y_values.assign(contango_data_.z[i].begin(), contango_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),  QColor(63, 185, 80),
-                                                 QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
-                s.color = palette[i % 6];
+                s.slot = static_cast<int>(i); // categorical chart colour, resolved at paint time
                 series.push_back(s);
             }
             surface_line_->set_series("CONTANGO / BACKWARDATION", series, "Contract month", "Roll %");
@@ -866,9 +885,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < cmdty_fwd_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)cmdty_fwd_data_.contract_months[k]);
                 s.y_values.assign(cmdty_fwd_data_.z[i].begin(), cmdty_fwd_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),  QColor(63, 185, 80),
-                                                 QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
-                s.color = palette[i % 6];
+                s.slot = static_cast<int>(i); // categorical chart colour, resolved at paint time
                 series.push_back(s);
             }
             surface_line_->set_series("FUTURES TERM STRUCTURE", series, "Contract month", "Price");
@@ -882,9 +899,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < crack_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)crack_data_.contract_months[k]);
                 s.y_values.assign(crack_data_.z[i].begin(), crack_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
-                                                 QColor(220, 80, 80)};
-                s.color = palette[i % 4];
+                s.slot = static_cast<int>(i); // categorical chart colour, resolved at paint time
                 series.push_back(s);
             }
             surface_line_->set_series("CRACK / CRUSH SPREAD", series, "Contract month", "Spread $/bbl");
@@ -898,9 +913,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < fx_fwd_data_.tenors.size(); ++k)
                     s.x_values.push_back((float)fx_fwd_data_.tenors[k]);
                 s.y_values.assign(fx_fwd_data_.z[i].begin(), fx_fwd_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
-                                                 QColor(220, 80, 80)};
-                s.color = palette[i % 4];
+                s.slot = static_cast<int>(i); // categorical chart colour, resolved at paint time
                 series.push_back(s);
             }
             surface_line_->set_series("FX FORWARD POINTS", series,
@@ -921,7 +934,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
             for (int h : inflation_data_.horizons)
                 xl << QString("%1Y").arg(h);
             surface_line_->set_curve("INFLATION EXPECTATIONS", xs, ys, xl, "Horizon (years)", "Breakeven %",
-                                     QColor(89, 196, 217));
+                                     QColor());
             return;
         }
         case ChartType::MonetaryPolicyPath: {
@@ -932,9 +945,7 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < monetary_data_.meetings_ahead.size(); ++k)
                     s.x_values.push_back((float)monetary_data_.meetings_ahead[k]);
                 s.y_values.assign(monetary_data_.z[i].begin(), monetary_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
-                                                 QColor(220, 80, 80)};
-                s.color = palette[i % 4];
+                s.slot = static_cast<int>(i); // categorical chart colour, resolved at paint time
                 series.push_back(s);
             }
             surface_line_->set_series("RATE PATH", series,

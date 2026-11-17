@@ -24,9 +24,11 @@ McpServer McpServerRepository::map_row(QSqlQuery& q) {
                 q.value(8).toBool(),   q.value(9).toBool(),   q.value(10).toString(), q.value(11).toString(),
                 q.value(12).toString()};
     if (s.env.isEmpty() && !s.id.isEmpty()) {
-        auto sr = SecureStorage::instance().retrieve(mcp_env_secret_key(s.id));
-        if (sr.is_ok())
-            s.env = sr.value();
+        // Error ≠ "nothing stored": env stays empty for this load only; save() stores
+        // the env only when one is given, so an unread env is never overwritten.
+        const SecretRead sr = SecureStorage::instance().read(mcp_env_secret_key(s.id));
+        if (sr.found())
+            s.env = sr.value;
     }
     return s;
 }
@@ -43,9 +45,10 @@ Result<McpServer> McpServerRepository::get(const QString& id) {
 }
 
 Result<void> McpServerRepository::save(const McpServer& s) {
-    // Encrypt the env blob; blank the column only if the encrypted store worked.
+    // Encrypt the env blob; blank the column only once the encrypted copy was
+    // written and read back equal — otherwise the plaintext stays (never lost).
     QString column_env = s.env;
-    if (!s.env.isEmpty() && SecureStorage::instance().store(mcp_env_secret_key(s.id), s.env).is_ok())
+    if (!s.env.isEmpty() && SecureStorage::instance().store_verified(mcp_env_secret_key(s.id), s.env).is_ok())
         column_env.clear();
     return exec_write(
         "INSERT OR REPLACE INTO mcp_servers "

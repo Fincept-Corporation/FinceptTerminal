@@ -1,4 +1,5 @@
 """Premium Analysis for Fairness Opinions"""
+import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import numpy as np
@@ -7,10 +8,12 @@ class PremiumAnalysis:
     """Analyze acquisition premiums for fairness opinion"""
 
     def __init__(self, offer_price_per_share: float,
-                 shares_outstanding: float):
+                 shares_outstanding: Optional[float] = None):
         self.offer_price_per_share = offer_price_per_share
-        self.shares_outstanding = shares_outstanding
-        self.offer_value = offer_price_per_share * shares_outstanding
+        # The total offer value needs the target's real share count. Without one it is left out - it used to be
+        # computed from an invented 50,000,000 shares and shown as a headline figure.
+        self.shares_outstanding = shares_outstanding if shares_outstanding and shares_outstanding > 0 else None
+        self.offer_value = (offer_price_per_share * self.shares_outstanding) if self.shares_outstanding else None
 
     def calculate_premiums(self, historical_prices: Dict[str, float]) -> Dict[str, Any]:
         """
@@ -31,11 +34,17 @@ class PremiumAnalysis:
                 'premium_dollar': premium_dollar
             }
 
-        return {
+        out = {
             'offer_price_per_share': self.offer_price_per_share,
             'premiums': premiums,
-            'offer_value': self.offer_value
         }
+        if self.offer_value is not None:
+            out['offer_value'] = self.offer_value
+            out['shares_outstanding'] = self.shares_outstanding
+        else:
+            out['missing_inputs'] = ['shares_outstanding']
+            out['notes'] = ["Total offer value not shown: enter the target's shares outstanding to see it."]
+        return out
 
     def unaffected_price_analysis(self, daily_prices: List[float],
                                   rumor_date: Optional[int] = None) -> Dict[str, Any]:
@@ -160,7 +169,7 @@ class PremiumAnalysis:
 
         premium_adequate = actual_premium >= min_expected_premium
 
-        if synergy_value and standalone_value:
+        if synergy_value and standalone_value and self.offer_value is not None:
             total_value = standalone_value + synergy_value
             premium_as_pct_of_synergies = ((self.offer_value - standalone_value) / synergy_value * 100) if synergy_value > 0 else 0
             synergy_capture_fair = 20 <= premium_as_pct_of_synergies <= 50
@@ -292,8 +301,9 @@ def _service_dispatch(argv):
                   if isinstance(p.get(key), (int, float)) and not isinstance(p.get(key), bool)}
         if not prices:
             raise ValueError("At least one reference price (e.g. price_1d) is required")
-        shares = p.get("shares_outstanding", 50_000_000)
-        analysis = PremiumAnalysis(offer_price_per_share=float(offer), shares_outstanding=float(shares))
+        shares = p.get("shares_outstanding")
+        shares = float(shares) if isinstance(shares, (int, float)) and not isinstance(shares, bool) and shares > 0             else None
+        analysis = PremiumAnalysis(offer_price_per_share=float(offer), shares_outstanding=shares)
         print(json.dumps({"success": True, "data": analysis.calculate_premiums(prices)}, default=str))
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
@@ -325,7 +335,8 @@ def main():
             offer_price = float(sys.argv[3])
             announcement_date = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
-            shares_outstanding = 50_000_000  # Default or could be passed as param
+            # Optional 5th argument: the target's shares outstanding (no invented default).
+            shares_outstanding = float(sys.argv[5]) if len(sys.argv) > 5 else None
 
             analyzer = PremiumAnalysis(
                 offer_price_per_share=offer_price,

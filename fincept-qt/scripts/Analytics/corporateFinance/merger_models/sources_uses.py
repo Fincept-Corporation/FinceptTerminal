@@ -132,20 +132,24 @@ class SourcesUsesBuilder:
         """Calculate debt/equity financing mix"""
 
         total_financing = self.new_debt + self.new_equity
+        # All three shares on one base (every source of funds), so they add up to 100.
+        total_funding = total_financing + self.acquirer_cash
 
-        if total_financing == 0:
+        if total_funding == 0:
             return {
                 'debt_percentage': 0,
                 'equity_percentage': 0,
-                'cash_percentage': 100,
-                'debt_to_equity': 0
+                'cash_percentage': 0,
+                'debt_to_equity': None,
+                'total_financing': 0
             }
 
-        debt_pct = (self.new_debt / total_financing) * 100
-        equity_pct = (self.new_equity / total_financing) * 100
-        cash_pct = (self.acquirer_cash / (total_financing + self.acquirer_cash)) * 100
+        debt_pct = (self.new_debt / total_funding) * 100
+        equity_pct = (self.new_equity / total_funding) * 100
+        cash_pct = (self.acquirer_cash / total_funding) * 100
 
-        debt_to_equity = self.new_debt / self.new_equity if self.new_equity else float('inf')
+        # None, not inf: json.dumps would print "Infinity", which is not JSON.
+        debt_to_equity = self.new_debt / self.new_equity if self.new_equity else None
 
         return {
             'debt_percentage': debt_pct,
@@ -262,6 +266,9 @@ def _service_argv(argv):
         "new_debt": _svc_num(p, "new_debt", "debt_raised", default=0.0),
         "new_equity": _svc_num(p, "stock_issuance", "new_equity", default=0.0),
     }
+    financing_fees = _svc_num(p, "financing_fees", default=None)
+    if financing_fees is not None:
+        financing["financing_fees"] = financing_fees
     explicit_cash = _svc_num(p, "acquirer_cash", "cash_offered")
     if explicit_cash is not None:
         financing["acquirer_cash"] = explicit_cash  # cash contribution as given (balanced with a cash plug)

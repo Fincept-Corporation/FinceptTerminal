@@ -2,6 +2,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "trading/TradingTypes.h"
 #include "ui/theme/Theme.h"
 
@@ -40,6 +41,14 @@ TradeTapeWidget::TradeTapeWidget(const QJsonObject& cfg, QWidget* parent) : Base
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     vl->addWidget(table_, 1);
 
+    // Title-bar refresh = "retry" (it was wired to nothing). Unsubscribe +
+    // subscribe makes ExchangeSessionManager re-sync the stream for this pair.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (!isVisible())
+            return; // showEvent() subscribes; never keep a hidden tile subscribed
+        hub_resubscribe();
+    });
+
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
@@ -61,6 +70,9 @@ void TradeTapeWidget::apply_config(const QJsonObject& cfg) {
     if (pair_.isEmpty())
         pair_ = "BTC/USD";
     max_rows_ = qBound(5, cfg.value("max_rows").toInt(20), 200);
+    // Name the stream in the title: two tapes on different pairs were both
+    // just "TRADES".
+    set_title(tr("TRADES \xc2\xb7 %1 \xc2\xb7 %2").arg(exchange_.toUpper(), pair_));
 
     trades_.clear();
     render_all();
@@ -73,7 +85,20 @@ void TradeTapeWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
     const QString topic = QStringLiteral("ws:") + exchange_ + QStringLiteral(":trades:") + pair_;
-    hub.subscribe(this, topic, [this](const QVariant& v) { on_trade(v); });
+    // Nothing on the tape yet: show the loading state, so a pair that never
+    // trades (unknown on this exchange, stream down) ends in the watchdog's
+    // "No data yet" instead of a silent empty grid.
+    if (trades_.isEmpty())
+        set_loading(true);
+    // The stream's own error ("kraken: connection refused", "unknown pair") is
+    // published on the topic's error channel: shown in place of the spinner /
+    // the watchdog's generic "No data yet" while the tape is empty.
+    track_topics({topic});
+    hub.subscribe(this, topic, [this, topic](const QVariant& v) {
+        if (v.isValid())
+            note_topic_value(topic);
+        on_trade(v);
+    });
     hub_active_ = true;
 }
 
@@ -146,7 +171,8 @@ void TradeTapeWidget::fill_row(int row, const Trade& t, const QColor& buy, const
     const QColor& col = (t.side.compare("buy", Qt::CaseInsensitive) == 0) ? buy : sell;
     cell(0)->setText(t.when.toString("HH:mm:ss"));
     QTableWidgetItem* px = cell(1);
-    px->setText(QString::number(t.price, 'f', 2));
+    // Shared dashboard price format: a sub-dollar coin printed "0.12" / "0.00".
+    px->setText(dash_fmt::price(t.price, pair_));
     px->setForeground(col);
     px->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     QTableWidgetItem* sz = cell(2);
@@ -190,7 +216,10 @@ void TradeTapeWidget::render_all() {
     const QColor sell = ui::colors::NEGATIVE();
     for (int i = 0; i < n; ++i)
         fill_row(i, trades_[i], buy, sell);
-    set_loading(false);
+    // An empty resync (config / theme / language) must not drop the loading or
+    // "No data yet" state that hub_resubscribe() / the watchdog put up.
+    if (n > 0)
+        set_loading(false);
 }
 
 QDialog* TradeTapeWidget::make_config_dialog(QWidget* parent) {
@@ -235,18 +264,18 @@ void TradeTapeWidget::on_theme_changed() {
 }
 
 void TradeTapeWidget::apply_styles() {
-    table_->setStyleSheet(
-        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+    set_css_cached(table_, 
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;border:none;}"
                 "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget::item{padding:2px 4px;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_TERTIARY()));
+                 ui::colors::TEXT_SECONDARY()));
 }
 
 void TradeTapeWidget::retranslateUi() {
     BaseWidget::retranslateUi();
-    set_title(tr("TRADES"));
+    set_title(tr("TRADES \xc2\xb7 %1 \xc2\xb7 %2").arg(exchange_.toUpper(), pair_));
     render_all(); // re-renders header + side labels in the new language
 }
 

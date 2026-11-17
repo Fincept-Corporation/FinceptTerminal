@@ -14,6 +14,8 @@ struct QuantModule {
     QString label;
     QString short_label;
     QString category; // CORE, AI_ML, ADVANCED, ANALYTICS
+    // Identity colour, written for the dark theme: draw it through
+    // ui::colors::legible() (text, lines) or ui::colors::tint() (fills).
     QColor color;
     QString script; // Python script to call
     QString description;
@@ -90,10 +92,10 @@ inline QVector<QuantModule> all_quant_modules() {
         {"cfa_quant", "CFA Quant", "CFA", "ANALYTICS", QColor("#FF6B35"), "Analytics/quant_analytics_cli.py",
          "Trend, ARIMA, ML prediction, PCA, bootstrap"},
         {"gs_quant", "GS Quant", "GS", "ANALYTICS", QColor("#9D4EDD"), "Analytics/gs_quant_wrapper/gs_quant_service.py",
-         "Risk metrics, portfolio analytics, options Greeks, VaR"},
+         "Risk metrics, portfolio analytics, options Greeks, VaR, component VaR"},
         {"statsmodels", "Statsmodels", "STATS", "ANALYTICS", QColor("#2196F3"),
          "Analytics/statsmodels_wrapper/statsmodels_service.py",
-         "OLS, ARIMA, stationarity, ACF/PACF, Granger causality, descriptive"},
+         "OLS, ARIMA, stationarity, ACF/PACF, Granger, cointegration, rolling beta, regimes, PCA, STL"},
         {"functime", "Functime", "FUNC", "ANALYTICS", QColor("#4CAF50"),
          "Analytics/functime_wrapper/functime_service.py",
          "Forecasting, anomaly detection, seasonality, intervals, stationarity"},

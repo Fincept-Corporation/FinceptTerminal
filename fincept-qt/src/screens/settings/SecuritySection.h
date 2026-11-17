@@ -59,6 +59,10 @@ class SecuritySection : public QWidget {
     QLineEdit* sec_confirm_pin_ = nullptr;
     QLabel* sec_pin_error_ = nullptr;
     QLabel* sec_pin_success_ = nullptr;
+    /// A PIN change is being checked (its key derivations run off the UI
+    /// thread): the form is disabled and reads "Verifying…" until the result.
+    bool pin_change_busy_ = false;
+    void set_pin_change_busy(bool busy);
 
     // Section titles, buttons, and row labels (cached for retranslateUi).
     QLabel* title_pin_ = nullptr;

@@ -5,14 +5,20 @@
 #include "core/symbol/SymbolContext.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/common/CommandRows.h"
 #include "screens/screener/ScreenerCriteriaBuilder.h"
 #include "screens/screener/ScreenerResultsModel.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/KeySortProxy.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QEvent>
@@ -82,8 +88,8 @@ QString screen_identity(const services::ScreenerQuery& q) {
 }
 
 QString thousands(qint64 v) {
-    static const QLocale loc(QLocale::English, QLocale::UnitedStates);
-    return loc.toString(v);
+    // The user's grouping marks (Settings > Formatting), as the result cells.
+    return fincept::ui::formatting::number(static_cast<double>(v), 0);
 }
 
 /// CSV cell for text. Cells starting with = + - @ are executed as formulas by spreadsheet apps,
@@ -121,8 +127,13 @@ ScreenerScreen::ScreenerScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::ScreenerService::catalog_ready, this, &ScreenerScreen::on_catalog_ready);
     connect(&svc, &services::ScreenerService::catalog_failed, this, &ScreenerScreen::on_catalog_failed);
     connect(&svc, &services::ScreenerService::saved_screens_changed, this, &ScreenerScreen::rebuild_tree);
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { apply_styles(); });
+    // Once an appearance change has settled (never inside theme_changed): the sheet (set only
+    // when its text changed), the font-sized row height, and the tree, whose group headers
+    // carry their colour as an item brush.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        apply_styles();
+        rebuild_tree();
+    });
 
     update_actions(); // retranslate() already listed the live basket, usable before the catalogue arrives
 }
@@ -226,17 +237,6 @@ void ScreenerScreen::build_ui() {
     });
     connect(prev_btn_, &QToolButton::clicked, this, [this]() { change_page(-1); });
     connect(next_btn_, &QToolButton::clicked, this, [this]() { change_page(+1); });
-    connect(retry_btn_, &QPushButton::clicked, this, [this]() {
-        auto& svc = services::ScreenerService::instance();
-        if (!svc.has_catalog()) {
-            catalog_retry_btn_->hide();
-            catalog_lbl_->setText(tr("Loading screener fields..."));
-            show_message(tr("Loading the screener..."), false);
-            svc.load_catalog();
-            return;
-        }
-        run_current(true);
-    });
 
     connect(table_, &QTableView::doubleClicked, this, [this](const QModelIndex& idx) {
         open_symbol_in(QStringLiteral("equity_research"), symbol_at(idx));
@@ -367,7 +367,7 @@ QWidget* ScreenerScreen::build_results_panel() {
 
     stack_ = new QStackedWidget(panel);
     model_ = new ScreenerResultsModel(this);
-    proxy_ = new ScreenerSortProxy(this);
+    proxy_ = new ui::KeySortProxy(this); // typed SortRole keys, missing ("—") last in both orders
     proxy_->setSourceModel(model_);
     proxy_->setSortRole(ScreenerResultsModel::SortRole);
     proxy_->setFilterRole(ScreenerResultsModel::SearchRole);
@@ -388,35 +388,23 @@ QWidget* ScreenerScreen::build_results_panel() {
     table_->setWordWrap(false);
     table_->setTextElideMode(Qt::ElideRight);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(24);
+    table_->verticalHeader()->setVisible(false); // row height follows the font: apply_styles()
     table_->horizontalHeader()->setHighlightSections(false);
     table_->horizontalHeader()->setSectionsMovable(true);
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setMinimumSectionSize(48);
+    // The one fit per new screen (show_result) measures a page's worth of rows, not all 250.
+    table_->horizontalHeader()->setResizeContentsPrecision(60);
 
-    message_page_ = new QWidget(stack_);
-    auto* mv = new QVBoxLayout(message_page_);
-    mv->setContentsMargins(24, 24, 24, 24);
-    mv->addStretch(1);
-    message_lbl_ = new QLabel(message_page_);
-    message_lbl_->setObjectName("screenerMessage");
-    message_lbl_->setAlignment(Qt::AlignCenter);
-    message_lbl_->setWordWrap(true);
-    mv->addWidget(message_lbl_);
-    retry_btn_ = new QPushButton(message_page_);
-    retry_btn_->setCursor(Qt::PointingHandCursor);
-    retry_btn_->hide();
-    auto* retry_row = new QHBoxLayout;
-    retry_row->addStretch(1);
-    retry_row->addWidget(retry_btn_);
-    retry_row->addStretch(1);
-    mv->addLayout(retry_row);
-    mv->addStretch(1);
+    // The first thing the results area does is load (catalogue, then the saved or
+    // default screen): open on a table skeleton, never on a blank page.
+    skeleton_page_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Table, stack_);
+    skeleton_page_->set_row_count(12);
+    skeleton_page_->set_message(tr("Loading the screener…"));
 
     stack_->addWidget(table_);
-    stack_->addWidget(message_page_);
-    stack_->setCurrentWidget(message_page_);
+    stack_->addWidget(skeleton_page_);
+    stack_->setCurrentWidget(skeleton_page_);
     v->addWidget(stack_, 1);
 
     status_lbl_ = new QLabel(panel);
@@ -434,11 +422,13 @@ void ScreenerScreen::apply_styles() {
         "#screenerScreen { background: {bg_base}; }"
         "#screenerHeader { background: {bg_surface}; border-bottom: 1px solid {border_dim}; }"
         "#screenerTitle { color: {amber}; font-size: {fs_title}px; font-weight: 700; letter-spacing: 1px; }"
-        "#screenerSubtitle, #screenerCount, #screenerPageLabel { color: {text3}; }"
+        "#screenerSubtitle, #screenerCount { color: {text3}; }"
+        "#screenerPageLabel { color: {text2}; }"
         "#screenerSidebar { background: {bg_surface}; }"
         "QSplitter#screenerSplitter::handle { background: {border_dim}; }"
         "#screenerSectionLabel { color: {amber}; font-weight: 700; letter-spacing: 1px; font-size: {fs_tiny}px; }"
-        "#screenerHint, #screenerUnit, #screenerCatalogStatus { color: {text3}; font-size: {fs_tiny}px; }"
+        "#screenerHint { color: {text3}; font-size: {fs_tiny}px; }"
+        "#screenerUnit, #screenerCatalogStatus { color: {text2}; font-size: {fs_tiny}px; }"
         "QTreeWidget#screenerTree { background: {bg_surface}; color: {text}; border: none; outline: 0; }"
         "QTreeWidget#screenerTree::item { padding: 3px 4px; }"
         "QTreeWidget#screenerTree::item:hover { background: {bg_hover}; }"
@@ -469,14 +459,13 @@ void ScreenerScreen::apply_styles() {
         " padding: 3px 8px; font-weight: 700; }"
         "#screenerScreen QToolButton:hover { border-color: {amber}; }"
         "#screenerScreen QToolButton:disabled { color: {text_dim}; border-color: {border_dim}; }"
-        "#screenerScreen QToolButton#screenerRemoveBtn { background: transparent; border: none; color: {text3}; }"
+        "#screenerScreen QToolButton#screenerRemoveBtn { background: transparent; border: none; color: {text2}; }"
         "#screenerScreen QToolButton#screenerRemoveBtn:hover { color: {neg}; }"
         "QTableView#screenerTable { background: {bg_base}; alternate-background-color: {row_alt}; color: {text};"
         " border: none; selection-background-color: {accent_bg}; selection-color: {text}; }"
         "QTableView#screenerTable QHeaderView::section { background: {bg_surface}; color: {text3}; border: none;"
         " border-bottom: 1px solid {border_med}; border-right: 1px solid {border_dim}; padding: 4px 6px;"
         " font-weight: 700; }"
-        "#screenerMessage { color: {text3}; font-size: {fs_body}px; }"
         "#screenerStatus { background: {bg_surface}; color: {text3}; border-top: 1px solid {border_dim};"
         " padding: 3px 10px; }"
         "#screenerStatus[warn=\"true\"] { color: {warn}; }");
@@ -488,6 +477,7 @@ void ScreenerScreen::apply_styles() {
         {"{border_dim}", ui::colors::BORDER_DIM()},
         {"{border_med}", ui::colors::BORDER_MED()},
         {"{text}", ui::colors::TEXT_PRIMARY()},
+        {"{text2}", ui::colors::TEXT_SECONDARY()},
         {"{text3}", ui::colors::TEXT_TERTIARY()},
         {"{text_dim}", ui::colors::TEXT_DIM()},
         {"{amber}", ui::colors::AMBER()},
@@ -496,13 +486,20 @@ void ScreenerScreen::apply_styles() {
         {"{row_alt}", ui::colors::ROW_ALT()},
         {"{neg}", ui::colors::NEGATIVE()},
         {"{warn}", ui::colors::WARNING()},
-        {"{fs_title}", QString::number(ui::fonts::font_px(2))},
-        {"{fs_body}", QString::number(ui::fonts::font_px(0))},
-        {"{fs_tiny}", QString::number(ui::fonts::font_px(-2))},
+        {"{fs_title}", ui::fonts::px(2)}, // px(): keeps the requested offset when the floor clamps
+        {"{fs_body}", ui::fonts::px(0)},
+        {"{fs_tiny}", ui::fonts::px(-2)},
     };
     for (const auto& [token, value] : tokens)
         css.replace(QLatin1String(token), value);
-    setStyleSheet(css);
+    // Only when the text differs: setStyleSheet() re-styles this whole screen even for the
+    // sheet already in place, and after a theme or font change the theme manager has
+    // already rewritten it (ThemeRestyle.cpp) and styles the screen once itself.
+    if (styleSheet() != css)
+        setStyleSheet(css);
+
+    // 24px rows at the default 14px font, growing with the user's font size.
+    table_->verticalHeader()->setDefaultSectionSize(ui::fonts::font_px(0) + 10);
 }
 
 void ScreenerScreen::retranslate() {
@@ -530,7 +527,6 @@ void ScreenerScreen::retranslate() {
     page_size_->setToolTip(tr("Rows per page (Yahoo returns at most 250 per request)"));
     prev_btn_->setToolTip(tr("Previous page"));
     next_btn_->setToolTip(tr("Next page"));
-    retry_btn_->setText(tr("RETRY"));
 
     model_->set_base_headers(
         {tr("SYMBOL"), tr("NAME"), tr("PRICE"), tr("CHG %"), tr("VOLUME"), tr("MKT CAP"), tr("P/E"), tr("SECTOR"),
@@ -546,8 +542,8 @@ void ScreenerScreen::retranslate() {
 
     if (status_lbl_->text().isEmpty())
         set_status(tr("Pick a screen on the left or build one, then press RUN."));
-    if (stack_->currentWidget() == message_page_ && message_lbl_->text().isEmpty())
-        message_lbl_->setText(tr("Loading the screener..."));
+    if (stack_->currentWidget() == skeleton_page_ && skeleton_page_->message().isEmpty())
+        skeleton_page_->set_message(tr("Loading the screener…"));
     rebuild_tree();
     subtitle_lbl_->setText(active_title());
 }
@@ -611,7 +607,7 @@ void ScreenerScreen::on_catalog_failed(const QString& error) {
     catalog_lbl_->show();
     catalog_retry_btn_->show();
     if (source_ == Source::None) {
-        show_message(tr("The screener could not start.\n%1").arg(error), true);
+        show_failure(tr("The screener could not start"), error);
         set_status(tr("Screener unavailable: %1").arg(error), {}, true);
     }
 }
@@ -628,7 +624,7 @@ void ScreenerScreen::rebuild_tree() {
         QFont f = g->font(0);
         f.setBold(true);
         g->setFont(0, f);
-        g->setForeground(0, QColor(ui::colors::TEXT_TERTIARY()));
+        g->setForeground(0, QColor(ui::colors::TEXT_SECONDARY()));
         return g;
     };
     const auto add_item = [](QTreeWidgetItem* parent, const QString& text, const QString& id, const QString& tip) {
@@ -709,6 +705,7 @@ void ScreenerScreen::show_tree_menu(const QPoint& pos) {
         set_status(tr("Deleted saved screen \"%1\".").arg(name));
         subtitle_lbl_->setText(active_title());
     });
+    menu.actions().constLast()->setProperty("fincept_agent_risk", "delete"); // "Delete Saved Screen"
     menu.exec(tree_->viewport()->mapToGlobal(pos));
 }
 
@@ -843,7 +840,7 @@ void ScreenerScreen::run_current(bool force) {
         model_->set_result({}, {});
         showing_result_ = false;
         shown_screen_.clear();
-        show_message(tr("Running %1...").arg(active_title()), false);
+        show_loading(tr("Running %1…").arg(active_title()));
     }
     pending_key_ = services::ScreenerService::instance().run(q, force);
     set_running(true);
@@ -884,7 +881,7 @@ void ScreenerScreen::on_run_failed(const QString& key, const QString& error) {
     showing_result_ = false;
     shown_screen_.clear();
     shown_ = services::ScreenerResult{};
-    show_message(tr("The screen could not be run.\n%1").arg(error), true);
+    show_failure(tr("The screen could not be run"), error);
     set_status(tr("Screen failed: %1").arg(error), {}, true);
     update_actions();
 }
@@ -911,9 +908,20 @@ void ScreenerScreen::show_result(const services::ScreenerResult& r, const QStrin
         select_symbol(keep_symbol);
 
     if (r.rows.isEmpty()) {
-        show_message(r.total > 0 ? tr("No rows on this page (the screen has %1 matches).").arg(thousands(r.total))
-                                 : tr("No stocks match these criteria. Loosen a filter and press RUN."),
-                     false);
+        if (r.total > 0)
+            show_empty(tr("No rows on this page"),
+                       tr("The screen has %1 matches; this page is past the last of them.").arg(thousands(r.total)),
+                       EmptyAction::FirstPage);
+        else if (source_ == Source::Custom)
+            show_empty(tr("No stocks match these criteria"),
+                       tr("Loosen a filter in the builder on the left (a wider range, fewer conditions), then "
+                          "press RUN."));
+        else
+            show_empty(tr("No stocks in this screen right now"),
+                       tr("Yahoo returned no rows for %1 — it can be empty outside market hours. Try again "
+                          "later or pick another screen.")
+                           .arg(active_title()),
+                       EmptyAction::Retry);
     } else {
         stack_->setCurrentWidget(table_);
     }
@@ -963,10 +971,63 @@ void ScreenerScreen::show_result(const services::ScreenerResult& r, const QStrin
     update_count_label();
 }
 
-void ScreenerScreen::show_message(const QString& text, bool offer_retry) {
-    message_lbl_->setText(text);
-    retry_btn_->setVisible(offer_retry);
-    stack_->setCurrentWidget(message_page_);
+void ScreenerScreen::show_loading(const QString& caption) {
+    skeleton_page_->set_message(caption);
+    stack_->setCurrentWidget(skeleton_page_);
+}
+
+ui::EmptyState* ScreenerScreen::state_page() {
+    // The results area's designed state page (failure / nothing to list): created on
+    // first use, reused, one primary handler that does what the current state offers.
+    if (!state_page_) {
+        state_page_ = new ui::EmptyState(stack_);
+        stack_->addWidget(state_page_);
+        connect(state_page_, &ui::EmptyState::primary_clicked, this, [this]() {
+            if (empty_action_ == EmptyAction::FirstPage) {
+                offset_ = 0;
+                run_current(false);
+            } else if (empty_action_ == EmptyAction::NewScreen) {
+                new_screen();
+            } else if (empty_action_ == EmptyAction::Retry) {
+                on_retry();
+            }
+        });
+    }
+    return state_page_;
+}
+
+void ScreenerScreen::show_failure(const QString& title, const QString& reason) {
+    auto* page = state_page();
+    empty_action_ = EmptyAction::Retry;
+    page->apply(ui::EmptyState::error_spec(reason.trimmed().isEmpty() ? tr("No reason was given.") : reason.trimmed(),
+                                           title, tr("RETRY")));
+    stack_->setCurrentWidget(page);
+}
+
+void ScreenerScreen::show_empty(const QString& title, const QString& message, EmptyAction action) {
+    state_page();
+    empty_action_ = action;
+    QString action_text;
+    if (action == EmptyAction::FirstPage)
+        action_text = tr("FIRST PAGE");
+    else if (action == EmptyAction::NewScreen)
+        action_text = tr("NEW SCREEN");
+    else if (action == EmptyAction::Retry)
+        action_text = tr("RUN AGAIN");
+    state_page_->apply(ui::EmptyState::no_data_spec(title, message, action_text));
+    stack_->setCurrentWidget(state_page_);
+}
+
+void ScreenerScreen::on_retry() {
+    auto& svc = services::ScreenerService::instance();
+    if (!svc.has_catalog()) {
+        catalog_retry_btn_->hide();
+        catalog_lbl_->setText(tr("Loading screener fields..."));
+        show_loading(tr("Loading the screener…"));
+        svc.load_catalog();
+        return;
+    }
+    run_current(true);
 }
 
 void ScreenerScreen::set_running(bool running) {
@@ -1228,7 +1289,8 @@ void ScreenerScreen::rebuild_basket() {
         r.change = has_price ? q.change : services::ScreenerRow::kMissing;
         r.change_pct = has_price ? q.change_pct : services::ScreenerRow::kMissing;
         r.volume = q.volume > 0.0 ? q.volume : services::ScreenerRow::kMissing;
-        r.currency = QStringLiteral("USD");
+        // The quote's own currency; the basket is US large caps, so USD when a quote omits it.
+        r.currency = q.currency.isEmpty() ? QStringLiteral("USD") : q.currency;
         r.market_cap_currency = r.currency;
         rows.append(r);
     }
@@ -1240,9 +1302,11 @@ void ScreenerScreen::rebuild_basket() {
     const int failed = static_cast<int>(basket_failed_.size());
     if (rows.isEmpty()) {
         const bool all_failed = failed >= kScreenerBasket.size();
-        show_message(all_failed ? tr("Quotes are unavailable right now. Press RUN to try again.")
-                                : tr("Loading live quotes..."),
-                     all_failed);
+        if (all_failed)
+            show_failure(tr("Quotes are unavailable right now"),
+                         tr("None of the basket's symbols could be quoted. Check your connection, then try again."));
+        else
+            show_loading(tr("Loading live quotes…"));
     } else {
         stack_->setCurrentWidget(table_);
     }
@@ -1480,5 +1544,153 @@ void ScreenerScreen::export_csv() {
     file.close();
     set_status(tr("Exported %1 rows to %2").arg(proxy_->rowCount()).arg(QDir::toNativeSeparators(path)));
 }
+
+// ── ISectionLinked + search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+struct ScrLinkRow {
+    const char* section;
+    const char* title;
+    const char* keywords;
+};
+
+// The live basket and the predefined screens of scripts/screener_data.py PREDEFINED (US movers and
+// strategies; the regional movers are reachable by id). Row ids "screener.basket",
+// "screener.predefined.<id>".
+const ScrLinkRow kScrLinkRows[] = {
+    {"basket", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "US large-cap live basket"),
+     "live quotes, large caps, mega caps, streaming, blue chips"},
+    {"predefined:day_gainers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Top gainers today"),
+     "gainers, top gainers, winners, biggest movers, stocks up"},
+    {"predefined:day_losers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Top losers today"),
+     "losers, decliners, biggest drops, stocks down"},
+    {"predefined:most_actives", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Most active stocks"),
+     "most active, volume leaders, high volume, actives"},
+    {"predefined:fifty_two_wk_gainers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "52-week gainers"),
+     "52 week high, yearly gainers, 52-week"},
+    {"predefined:fifty_two_wk_losers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "52-week losers"),
+     "52 week low, yearly losers, 52-week"},
+    {"predefined:most_watched_tickers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Most watched stocks"),
+     "most watched, popular stocks, trending tickers"},
+    {"predefined:undervalued_growth_stocks",
+     QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Undervalued growth stocks"),
+     "undervalued, value, peg, cheap growth, growth at a reasonable price"},
+    {"predefined:undervalued_large_caps", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Undervalued large caps"),
+     "undervalued, value stocks, large caps, low pe"},
+    {"predefined:growth_technology_stocks", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Growth tech stocks"),
+     "tech growth, technology stocks, growth stocks"},
+    {"predefined:aggressive_small_caps", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Aggressive small caps"),
+     "small caps, small cap growth, high growth"},
+    {"predefined:small_cap_gainers", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Small-cap gainers"),
+     "small caps up, small cap movers"},
+    {"predefined:high_dividend_yield", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "High dividend stocks"),
+     "dividend, high yield, income stocks, dividend yield"},
+    {"predefined:most_shorted_stocks", QT_TRANSLATE_NOOP("fincept::screens::ScreenerScreen", "Most shorted stocks"),
+     "short interest, most shorted, short squeeze"},
+};
+
+// Every predefined id scripts/screener_data.py offers (used until the catalogue has loaded).
+const char* const kScrLinkPredefined[] = {
+    "day_gainers",           "day_losers",           "most_actives",          "fifty_two_wk_gainers",
+    "fifty_two_wk_losers",   "most_watched_tickers", "undervalued_growth_stocks", "undervalued_large_caps",
+    "growth_technology_stocks", "aggressive_small_caps", "small_cap_gainers", "high_dividend_yield",
+    "most_shorted_stocks",   "day_gainers_americas", "day_losers_americas",   "most_actives_americas",
+    "day_gainers_europe",    "day_losers_europe",    "most_actives_europe",   "day_gainers_asia",
+    "day_losers_asia",       "most_actives_asia"};
+
+/// The predefined screen id `key` names (exact, else case-insensitive): the loaded catalogue's ids,
+/// or the script's table before it has loaded. "" = none.
+QString scr_link_predefined(const QString& key) {
+    QStringList ids;
+    const auto& svc = services::ScreenerService::instance();
+    if (svc.has_catalog()) {
+        for (const auto& v : svc.catalog().value("predefined").toArray())
+            ids.append(v.toObject().value("id").toString());
+    } else {
+        for (const char* id : kScrLinkPredefined)
+            ids.append(QString::fromLatin1(id));
+    }
+    for (const QString& id : std::as_const(ids))
+        if (id == key)
+            return id;
+    for (const QString& id : std::as_const(ids))
+        if (id.compare(key, Qt::CaseInsensitive) == 0)
+            return id;
+    return {};
+}
+
+} // namespace
+
+bool ScreenerScreen::open_section(const QString& section, const QString& focus) {
+    QString key = section.trimmed();
+    const QString filter = focus.trimmed();
+    QString view;
+    if (!key.isEmpty()) {
+        QString rest;
+        if (key.compare(kBasketView, Qt::CaseInsensitive) == 0) {
+            view = kBasketView;
+        } else if (command_rows::split_kind(key, "saved", &rest)) {
+            const auto list = services::ScreenerService::instance().saved_screens();
+            QString name;
+            if (list.is_ok()) {
+                for (const auto& s : list.value())
+                    if (name.isEmpty() && s.name == rest)
+                        name = s.name;
+                for (const auto& s : list.value())
+                    if (name.isEmpty() && s.name.compare(rest, Qt::CaseInsensitive) == 0)
+                        name = s.name;
+            }
+            if (name.isEmpty())
+                return false;
+            view = kSavedPrefix + name;
+        } else {
+            if (command_rows::split_kind(key, "predefined", &rest) || command_rows::split_kind(key, "pre", &rest))
+                key = rest;
+            const QString id = scr_link_predefined(key);
+            if (id.isEmpty())
+                return false;
+            view = kPredefinedPrefix + id;
+        }
+    }
+    if (!catalog_requested_ || !builder_->has_catalog()) {
+        // Applied with the catalogue (on the first show): the link replaces the remembered view / filter.
+        if (!view.isEmpty())
+            pending_state_.insert(QStringLiteral("view"), view);
+        if (!filter.isEmpty())
+            pending_state_.insert(QStringLiteral("search"), filter);
+        return true;
+    }
+    if (!view.isEmpty() && view != view_id())
+        activate_view(view); // the screens list's click path
+    if (!filter.isEmpty())
+        search_->setText(filter); // filters the rows on screen; nothing runs
+    return true;
+}
+
+namespace {
+
+QList<command::CommandItem> scr_command_rows() {
+    namespace rows = command_rows;
+    const QString where = ScreenerScreen::tr("Screener");
+    QList<command::CommandItem> out;
+    for (const ScrLinkRow& r : kScrLinkRows) {
+        QStringList keywords;
+        for (const QString& w : QString::fromLatin1(r.keywords).split(QLatin1Char(','), Qt::SkipEmptyParts))
+            keywords.append(w.trimmed());
+        keywords << QStringLiteral("screener") << QStringLiteral("stock screen");
+        out.append(rows::section(QStringLiteral("screener"), QString::fromLatin1(r.section),
+                                 QCoreApplication::translate("fincept::screens::ScreenerScreen", r.title), keywords,
+                                 where));
+    }
+    return out;
+}
+
+void scr_install_commands() {
+    command_rows::install(QStringLiteral("screener"), &scr_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(scr_install_commands)
 
 } // namespace fincept::screens

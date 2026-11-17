@@ -1,10 +1,12 @@
 // src/ui/notifications/DesktopNotifier.cpp
 #include "ui/notifications/DesktopNotifier.h"
+#include "ui/theme/Theme.h"
 
 #include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
 #include "core/window/WindowRegistry.h"
 #include "ui/notifications/NotificationService.h" // ToastService
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QApplication>
 #include <QGuiApplication>
@@ -29,7 +31,7 @@ void DesktopNotifier::init() {
     if (tray_)
         return;
     if (!QSystemTrayIcon::isSystemTrayAvailable()) {
-        LOG_WARN("DesktopNotifier", "No system tray available — native notifications disabled");
+        LOG_INFO("DesktopNotifier", "No system tray available — native notifications disabled");
         return;
     }
 
@@ -79,7 +81,7 @@ void DesktopNotifier::init() {
         show_inapp(title, n.message, static_cast<int>(n.severity));
     });
 
-    LOG_INFO("DesktopNotifier", "Native desktop notifications enabled");
+    LOG_DEBUG("DesktopNotifier", "Native desktop notifications enabled");
 }
 
 void DesktopNotifier::notify(const QString& title, const QString& body, int severity) {
@@ -103,16 +105,18 @@ void DesktopNotifier::notify(const QString& title, const QString& body, int seve
 }
 
 void DesktopNotifier::show_inapp(const QString& title, const QString& body, int severity) {
-    QString accent = QStringLiteral("#00BFA5");
+    // Status colours (never the price-direction ones); the toast is rebuilt
+    // from the active theme each time it is shown.
+    QString accent = colors::CYAN();
     switch (static_cast<ToastService::Severity>(severity)) {
         case ToastService::Severity::Warning:
-            accent = QStringLiteral("#FFC400");
+            accent = colors::WARNING();
             break;
         case ToastService::Severity::Error:
-            accent = QStringLiteral("#FF5252");
+            accent = colors::DANGER();
             break;
         case ToastService::Severity::Success:
-            accent = QStringLiteral("#26C281");
+            accent = colors::SUCCESS();
             break;
         default:
             break;
@@ -120,7 +124,6 @@ void DesktopNotifier::show_inapp(const QString& title, const QString& body, int 
     if (!toast_) {
         toast_ = new QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
         toast_->setAttribute(Qt::WA_ShowWithoutActivating);
-        toast_->setFixedWidth(360);
         auto* lay = new QVBoxLayout(toast_);
         lay->setContentsMargins(14, 12, 14, 12);
         toast_lbl_ = new QLabel(toast_);
@@ -134,9 +137,12 @@ void DesktopNotifier::show_inapp(const QString& title, const QString& body, int 
                 toast_->hide();
         });
     }
-    toast_->setStyleSheet(QString("background:#15181d; border:1px solid %1; border-radius:8px;").arg(accent));
-    toast_lbl_->setStyleSheet(QStringLiteral("color:#e6e6e6; font-size:12px; background:transparent; border:none;"));
-    toast_lbl_->setText(QString("<b style='color:%1; font-size:13px;'>%2</b><br><span>%3</span>")
+    toast_->setFixedWidth(metrics::width(360)); // widened with the user's font
+    toast_->setStyleSheet(
+        QString("background:%1; border:1px solid %2; border-radius:8px;").arg(colors::BG_SURFACE(), accent));
+    toast_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; background:transparent; border:none;")
+                                  .arg(colors::TEXT_PRIMARY()));
+    toast_lbl_->setText(QString("<b style='color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px;'>%2</b><br><span>%3</span>")
                             .arg(accent, title.toHtmlEscaped(), body.toHtmlEscaped()));
     toast_->adjustSize();
     if (auto* scr = QGuiApplication::primaryScreen()) {

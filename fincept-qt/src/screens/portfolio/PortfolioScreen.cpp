@@ -10,6 +10,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
+#include "screens/common/CommandRows.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
@@ -18,7 +19,7 @@
 #include "screens/portfolio/PortfolioHeatmap.h"
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioOrderPanel.h"
-#include "screens/portfolio/PortfolioPanelHeader.h"
+#include "ui/widgets/PanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
@@ -30,6 +31,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFrame>
@@ -70,9 +72,19 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::snapshots_loaded, this, &PortfolioScreen::on_snapshots_loaded);
-    connect(&svc, &services::PortfolioService::transactions_loaded, this, [this](QVector<portfolio::Transaction> txns) {
-        if (txn_panel_)
-            txn_panel_->set_transactions(txns);
+    // The signal carries a capped page of rows; the panel shows the whole ledger,
+    // read locally for the selected portfolio.
+    connect(&svc, &services::PortfolioService::transactions_loaded, this,
+            [this](QVector<portfolio::Transaction>) { reload_transactions(); });
+    // Market info (sector, country, 52-week range, yield) landed for some holdings.
+    connect(&svc, &services::PortfolioService::allocation_updated, this, [this](QString portfolio_id) {
+        if (portfolio_id == selected_id_)
+            refresh_allocation();
+    });
+    // Benchmark / risk-free / cash / lot settings changed: everything is revalued.
+    connect(&svc, &services::PortfolioService::portfolio_settings_changed, this, [this](QString portfolio_id) {
+        if (portfolio_id == selected_id_)
+            services::PortfolioService::instance().refresh_summary(portfolio_id);
     });
     // One analytics run per load delivers correlation, benchmark history,
     // risk-free rate and ex-ante risk together (was four Python spawns).
@@ -85,19 +97,23 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::ledger_changed, this, &PortfolioScreen::on_asset_changed);
     // Refused / failed writes (over-sell, DB error) used to be log-only, so the
     // action simply looked ignored.
+    // A database failure carries its raw reason in last_failure_details(): shown under
+    // "Show Details…", never as the message itself.
     connect(&svc, &services::PortfolioService::operation_failed, this,
             [this](QString portfolio_id, QString message) {
                 if (!isVisible() || (!portfolio_id.isEmpty() && portfolio_id != selected_id_))
                     return;
-                QMessageBox::warning(this, tr("Portfolio"), message);
+                show_failure(tr("Portfolio"), message, services::PortfolioService::instance().last_failure_details());
             });
+    connect(&svc, &services::PortfolioService::portfolios_load_failed, this,
+            [this](QString message, QString details) { set_storage_failure(message, details); });
     // After yfinance backfill lands, refresh snapshots and metrics so Beta/MDD
     // populate without requiring a manual refresh.
     connect(&svc, &services::PortfolioService::history_backfilled, this, [this](QString portfolio_id, int point_count) {
         if (point_count <= 0 || !summary_loaded_ || portfolio_id != selected_id_)
             return;
         services::PortfolioService::instance().load_snapshots(portfolio_id, kSnapshotHistoryDays);
-        services::PortfolioService::instance().compute_metrics(current_summary_);
+        request_metrics();
     });
 
     // Restore persisted refresh interval (P17)
@@ -120,9 +136,10 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     // Load portfolios
     svc.load_portfolios();
 
-    // Theme change: refresh all child component styles
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { refresh_theme(); });
+    // Theme / font change: refresh all child component styles (and font-sized fixed sizes)
+    // once the change has settled — never inside theme_changed. Sheets are set only when
+    // their text changed.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
 }
 
 void PortfolioScreen::showEvent(QShowEvent* event) {
@@ -185,10 +202,20 @@ void PortfolioScreen::retranslateUi() {
         positions_title_label_->setText(tr("POSITIONS"));
     if (positions_filter_edit_)
         positions_filter_edit_->setPlaceholderText(tr("Filter positions…"));
+    if (sector_filter_btn_)
+        sector_filter_btn_->setToolTip(tr("Showing one sector only - click to show all positions"));
+    if (!storage_error_message_.isEmpty())
+        set_storage_failure(storage_error_message_, storage_error_details_); // keeps its title / card state
 }
 
 void PortfolioScreen::refresh_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // build_ui() already set this exact stylesheet before the children existed. Applying the
+    // same text again (the constructor calls refresh_theme() once the tree is built)
+    // re-styled the whole screen; only a changed theme needs it.
+    const QString root_css = QString("background:%1;").arg(ui::colors::BG_BASE());
+    if (styleSheet() != root_css)
+        setStyleSheet(root_css);
+    apply_font_sizes();
 
     if (command_bar_)
         command_bar_->refresh_theme();
@@ -220,6 +247,43 @@ void PortfolioScreen::resizeEvent(QResizeEvent* event) {
             insights_panel_->setFixedHeight(h);
             insights_panel_->move(width() - insights_panel_->width(), top);
         }
+    }
+}
+
+void PortfolioScreen::show_failure(const QString& title, const QString& message, const QString& details) {
+    QMessageBox box(QMessageBox::Warning, title, message, QMessageBox::Ok, this);
+    if (!details.trimmed().isEmpty())
+        box.setDetailedText(tr("Technical reason (for support):\n%1").arg(details));
+    box.exec();
+}
+
+void PortfolioScreen::set_storage_failure(const QString& message, const QString& details) {
+    storage_error_message_ = message;
+    storage_error_details_ = details;
+    const bool failed = !message.isEmpty();
+    if (storage_error_label_) {
+        storage_error_label_->setText(message);
+        storage_error_label_->setToolTip(details.isEmpty() ? QString()
+                                                           : tr("Technical reason (for support):\n%1").arg(details));
+        storage_error_label_->setVisible(failed);
+    }
+    if (empty_sub_label_)
+        empty_sub_label_->setVisible(!failed);
+    if (empty_title_label_)
+        empty_title_label_->setText(failed ? tr("PORTFOLIO DATA UNAVAILABLE") : tr("PORTFOLIO WORKSPACE"));
+    // Every card writes to the tables that cannot be read: they could only fail.
+    for (auto* card : findChildren<QPushButton*>(QStringLiteral("pfCtaCard"))) {
+        card->setEnabled(!failed);
+        card->setToolTip(failed ? tr("Unavailable: this profile's portfolio data cannot be read by this build.")
+                                : QString());
+    }
+    if (failed) {
+        portfolios_.clear();
+        selected_id_.clear();
+        summary_loaded_ = false;
+        command_bar_->set_portfolios({});
+        command_bar_->set_has_portfolios(false);
+        update_content_state();
     }
 }
 
@@ -275,5 +339,161 @@ void PortfolioScreen::on_group_symbol_changed(const SymbolRef& ref) {
     if (order_panel_)
         order_panel_->set_holding(find_holding(ref.symbol));
 }
+
+// ── ISectionLinked ───────────────────────────────────────────────────────────
+
+namespace {
+
+struct PfSectionView {
+    const char* id;
+    portfolio::DetailView view;
+};
+
+const PfSectionView kPfSectionViews[] = {
+    {"sectors", portfolio::DetailView::AnalyticsSectors}, {"perf_risk", portfolio::DetailView::PerfRisk},
+    {"optimization", portfolio::DetailView::Optimization}, {"quantstats", portfolio::DetailView::QuantStats},
+    {"reports", portfolio::DetailView::ReportsPme},        {"indices", portfolio::DetailView::Indices},
+    {"risk", portfolio::DetailView::RiskMgmt},             {"tax_lots", portfolio::DetailView::TaxLots},
+    {"income", portfolio::DetailView::Income},             {"planning", portfolio::DetailView::Planning},
+    {"economics", portfolio::DetailView::Economics},
+};
+
+} // namespace
+
+bool PortfolioScreen::open_section(const QString& section, const QString& focus) {
+    const QString key = section.trimmed();
+    const QString lower = key.toLower();
+    // focus = a held symbol: selected as a click on its row would (exact, then any case).
+    auto apply_focus = [this, &focus]() {
+        const QString sym = focus.trimmed();
+        if (sym.isEmpty() || !summary_loaded_)
+            return;
+        const portfolio::HoldingWithQuote* h = find_holding(sym);
+        for (const auto& candidate : current_summary_.holdings) {
+            if (h)
+                break;
+            if (candidate.symbol.compare(sym, Qt::CaseInsensitive) == 0)
+                h = &candidate;
+        }
+        if (h && h->symbol != selected_symbol_)
+            on_symbol_selected(h->symbol);
+    };
+    if (key.isEmpty()) {
+        apply_focus();
+        return true;
+    }
+    for (const PfSectionView& v : kPfSectionViews) {
+        if (lower != QLatin1String(v.id))
+            continue;
+        const bool left_ffn = show_ffn_;
+        show_ffn_ = false; // as the FFN view's BACK: the detail view would sit under it
+        if (!active_detail_.has_value() || *active_detail_ != v.view)
+            on_detail_view_selected(v.view); // the detail tab's click
+        else if (left_ffn)
+            update_content_state();
+        apply_focus();
+        return true;
+    }
+    if (lower == QLatin1String("positions")) {
+        const bool left_ffn = show_ffn_;
+        show_ffn_ = false;
+        if (active_detail_.has_value())
+            on_detail_view_selected(*active_detail_); // a click on the open tab closes it
+        else if (left_ffn)
+            update_content_state();
+        apply_focus();
+        return true;
+    }
+    if (lower == QLatin1String("new")) {
+        // CREATE NEW (start page card / list button): a modal dialog, so after the link has landed.
+        // The start page disables it while the portfolio data cannot be read.
+        if (storage_error_message_.isEmpty())
+            QMetaObject::invokeMethod(this, [this]() { on_create_requested(); }, Qt::QueuedConnection);
+        return true;
+    }
+    QString rest;
+    if (command_rows::split_kind(key, "portfolio", &rest)) {
+        if (rest.isEmpty())
+            return false;
+        QString id;
+        for (const Qt::CaseSensitivity cs : {Qt::CaseSensitive, Qt::CaseInsensitive}) {
+            for (const auto& p : portfolios_) {
+                if (p.id.compare(rest, cs) == 0) {
+                    id = p.id;
+                    break;
+                }
+            }
+            if (!id.isEmpty())
+                break;
+        }
+        // The list is still loading: select it as restore_state does (checked when the list lands).
+        if (id.isEmpty() && portfolios_.isEmpty() && storage_error_message_.isEmpty())
+            id = rest;
+        if (id.isEmpty())
+            return false;
+        on_portfolio_selected(id); // the portfolio list's click
+        apply_focus();
+        return true;
+    }
+    return false;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> pf_command_rows() {
+    namespace rows = command_rows;
+    const QString where = PortfolioScreen::tr("Portfolio");
+    const QString screen = QStringLiteral("portfolio");
+    return {
+        rows::section(screen, QStringLiteral("positions"), PortfolioScreen::tr("Positions"),
+                      {QStringLiteral("holdings"), QStringLiteral("positions"), QStringLiteral("blotter"),
+                       QStringLiteral("heatmap"), QStringLiteral("pnl")},
+                      where),
+        rows::section(screen, QStringLiteral("sectors"), PortfolioScreen::tr("Sector allocation"),
+                      {QStringLiteral("sectors"), QStringLiteral("allocation"), QStringLiteral("diversification"),
+                       QStringLiteral("correlation")},
+                      where),
+        rows::section(screen, QStringLiteral("perf_risk"), PortfolioScreen::tr("Performance & risk"),
+                      {QStringLiteral("performance"), QStringLiteral("returns"), QStringLiteral("volatility"),
+                       QStringLiteral("drawdown"), QStringLiteral("sharpe"), QStringLiteral("benchmark")},
+                      where),
+        rows::section(screen, QStringLiteral("optimization"), PortfolioScreen::tr("Portfolio optimization"),
+                      {QStringLiteral("optimize"), QStringLiteral("optimise"), QStringLiteral("efficient frontier"),
+                       QStringLiteral("rebalance"), QStringLiteral("weights")},
+                      where),
+        rows::section(screen, QStringLiteral("quantstats"), PortfolioScreen::tr("QuantStats"),
+                      {QStringLiteral("tearsheet"), QStringLiteral("quant stats"), QStringLiteral("statistics")}, where),
+        rows::section(screen, QStringLiteral("reports"), PortfolioScreen::tr("Portfolio reports"),
+                      {QStringLiteral("reports"), QStringLiteral("pme"), QStringLiteral("public market equivalent")},
+                      where),
+        rows::section(screen, QStringLiteral("indices"), PortfolioScreen::tr("Custom indices"),
+                      {QStringLiteral("indices"), QStringLiteral("index"), QStringLiteral("benchmark")}, where),
+        rows::section(screen, QStringLiteral("risk"), PortfolioScreen::tr("Risk management"),
+                      {QStringLiteral("risk"), QStringLiteral("var"), QStringLiteral("value at risk"),
+                       QStringLiteral("stress test")},
+                      where),
+        rows::section(screen, QStringLiteral("tax_lots"), PortfolioScreen::tr("Tax lots"),
+                      {QStringLiteral("tax"), QStringLiteral("lots"), QStringLiteral("realised gains"),
+                       QStringLiteral("realized gains"), QStringLiteral("capital gains")},
+                      where),
+        rows::section(screen, QStringLiteral("income"), PortfolioScreen::tr("Dividend income"),
+                      {QStringLiteral("income"), QStringLiteral("dividends"), QStringLiteral("interest"),
+                       QStringLiteral("ex-dates")},
+                      where),
+        rows::section(screen, QStringLiteral("planning"), PortfolioScreen::tr("Financial planning"),
+                      {QStringLiteral("planning"), QStringLiteral("goals"), QStringLiteral("retirement")}, where),
+        rows::section(screen, QStringLiteral("economics"), PortfolioScreen::tr("Portfolio economics"),
+                      {QStringLiteral("economics"), QStringLiteral("macro"), QStringLiteral("rates")}, where),
+    };
+}
+
+void pf_install_commands() {
+    command_rows::install(QStringLiteral("portfolio"), &pf_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(pf_install_commands)
 
 } // namespace fincept::screens

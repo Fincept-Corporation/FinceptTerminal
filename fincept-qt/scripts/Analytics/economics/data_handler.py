@@ -47,6 +47,10 @@ from .core import EconomicsBase, ValidationError, CalculationError, DataError, D
 
 logger = logging.getLogger(__name__)
 
+# Seconds before an HTTP request to a data provider gives up (requests has no default timeout,
+# so a stalled connection would hang the calling worker forever).
+REQUEST_TIMEOUT = 30
+
 
 class DataProvider(ABC):
     """Abstract base class for data providers"""
@@ -229,7 +233,7 @@ class FREDConnector(DataProvider):
         url = f"{self.base_url}/series/observations"
 
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
             self._handle_api_error(response, f"series {series_id}")
 
             data = response.json()
@@ -288,7 +292,7 @@ class AlphaVantageConnector(DataProvider):
             }
 
             try:
-                response = requests.get(self.base_url, params=params)
+                response = requests.get(self.base_url, params=params, timeout=REQUEST_TIMEOUT)
                 self._handle_api_error(response, f"FX data {base_currency}/{target_currency}")
 
                 data = response.json()
@@ -371,7 +375,7 @@ class AlphaVantageConnector(DataProvider):
             }
 
             try:
-                response = requests.get(self.base_url, params=params)
+                response = requests.get(self.base_url, params=params, timeout=REQUEST_TIMEOUT)
                 self._handle_api_error(response, f"economic indicator {indicator}")
 
                 data = response.json()
@@ -459,7 +463,7 @@ class AlphaVantageConnector(DataProvider):
                     params['maturity'] = '3month'
 
             try:
-                response = requests.get(self.base_url, params=params)
+                response = requests.get(self.base_url, params=params, timeout=REQUEST_TIMEOUT)
                 self._handle_api_error(response, f"interest rate {rate_type}")
 
                 data = response.json()
@@ -748,6 +752,22 @@ class DataStandardizer(EconomicsBase):
     def __init__(self, precision: int = 8):
         super().__init__(precision)
 
+    def calculate(self, operation: str, **kwargs) -> Any:
+        """Dispatcher (EconomicsBase requires one; without it the class could not be created,
+        and DataHandler, which builds one in __init__, could not either)."""
+        operations = {
+            'standardize_exchange_rates': self.standardize_exchange_rates,
+            'standardize_economic_indicators': self.standardize_economic_indicators,
+            'calculate_returns': self.calculate_returns,
+            'detect_outliers': self.detect_outliers,
+            'clean_data': self.clean_data,
+        }
+        if operation == 'align_time_series':
+            return self.align_time_series(*kwargs.pop('dataframes', ()), **kwargs)
+        if operation not in operations:
+            raise ValidationError(f"Unknown standardizer operation: {operation}")
+        return operations[operation](**kwargs)
+
     def standardize_exchange_rates(self, fx_data: pd.DataFrame,
                                    target_frequency: str = 'D') -> pd.DataFrame:
         """Standardize exchange rate data format and frequency"""
@@ -767,7 +787,7 @@ class DataStandardizer(EconomicsBase):
             fx_data = fx_data.resample(target_frequency).last()
 
         # Forward fill missing values (carry forward last observation)
-        fx_data = fx_data.fillna(method='ffill')
+        fx_data = fx_data.ffill()
 
         # Drop any remaining NaN values
         fx_data = fx_data.dropna()
@@ -792,13 +812,14 @@ class DataStandardizer(EconomicsBase):
         # Remove any non-numeric data
         indicator_data = indicator_data.select_dtypes(include=[np.number])
 
-        # Resample to target frequency (typically monthly for economic data)
-        if target_frequency != 'M':
+        # Resample to target frequency (typically monthly for economic data). 'M' / 'ME' = the
+        # data is already monthly ('M' is pandas' deprecated alias of month-end 'ME').
+        if target_frequency not in ('M', 'ME'):
             # Use appropriate aggregation method based on data type
             indicator_data = indicator_data.resample(target_frequency).mean()
 
         # Handle missing values more carefully for economic data
-        indicator_data = indicator_data.fillna(method='ffill', limit=3)  # Max 3 forward fills
+        indicator_data = indicator_data.ffill(limit=3)  # Max 3 forward fills
 
         # Convert to high precision decimals
         for column in indicator_data.columns:
@@ -862,7 +883,7 @@ class DataStandardizer(EconomicsBase):
             aligned_df = df.reindex(common_dates)
             if join_method == 'outer':
                 # Forward fill missing values for outer join
-                aligned_df = aligned_df.fillna(method='ffill')
+                aligned_df = aligned_df.ffill()
             aligned_dfs.append(aligned_df)
 
         return aligned_dfs
@@ -894,8 +915,9 @@ class DataStandardizer(EconomicsBase):
             # Modified Z-score using median
             median = data.median()
             mad = np.median(np.abs(data - median))
-            modified_z_scores = 0.6745 * (data - median) / mad
-            outliers = np.abs(modified_z_scores) > threshold
+            if mad > 0:  # with MAD 0 the score is undefined: flag nothing rather than divide by 0
+                modified_z_scores = 0.6745 * (data - median) / mad
+                outliers = np.abs(modified_z_scores) > threshold
 
         else:
             raise ValidationError(f"Unknown outlier detection method: {method}")
@@ -920,9 +942,9 @@ class DataStandardizer(EconomicsBase):
         # Fill missing values if requested
         if fill_missing:
             if fill_method == 'ffill':
-                cleaned_data = cleaned_data.fillna(method='ffill')
+                cleaned_data = cleaned_data.ffill()
             elif fill_method == 'bfill':
-                cleaned_data = cleaned_data.fillna(method='bfill')
+                cleaned_data = cleaned_data.bfill()
             elif fill_method == 'interpolate':
                 cleaned_data = cleaned_data.interpolate()
             elif fill_method == 'mean':

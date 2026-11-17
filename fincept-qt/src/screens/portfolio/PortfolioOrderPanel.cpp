@@ -1,24 +1,42 @@
 // src/screens/portfolio/PortfolioOrderPanel.cpp
 #include "screens/portfolio/PortfolioOrderPanel.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens {
 
+// Side of the ✕ close button: 18px at the default font size, growing with it.
+static int order_panel_close_button_side() {
+    return std::max(18, ui::fonts::font_px(-3) + 7);
+}
+
 PortfolioOrderPanel::PortfolioOrderPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(200);
     build_ui();
+    // The close button is font-sized: re-sized once an appearance change has settled.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this,
+            [this]() { close_btn_->setFixedSize(order_panel_close_button_side(), order_panel_close_button_side()); });
+    ui::formatting::on_format_changed(this, [this]() { render_values(); }); // re-format, no restyle
 }
 
 void PortfolioOrderPanel::build_ui() {
-    setStyleSheet(
-        QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::POSITIVE()));
+    // An overlay over the dashboard panels: it must paint its own opaque background.
+    // A plain QWidget subclass paints no style-sheet background without
+    // WA_StyledBackground, so the panel was see-through ("No valued positions yet."
+    // showed through the order form). Scoped selector: the edge is the panel's only.
+    setObjectName(QStringLiteral("pfOrderPanel"));
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(QString("#pfOrderPanel { background:%1; border-left:2px solid %2; }")
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::POSITIVE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 6, 8, 6);
@@ -28,14 +46,14 @@ void PortfolioOrderPanel::build_ui() {
     auto* header_row = new QHBoxLayout;
     title_label_ = new QLabel(tr("ORDER ENTRY"));
     title_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
     header_row->addWidget(title_label_);
     header_row->addStretch();
 
     close_btn_ = new QPushButton("\u2715");
-    close_btn_->setFixedSize(18, 18);
+    close_btn_->setFixedSize(order_panel_close_button_side(), order_panel_close_button_side());
     close_btn_->setCursor(Qt::PointingHandCursor);
-    close_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none; font-size:11px; }"
+    close_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                       "QPushButton:hover { color:%2; }")
                                   .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY()));
     connect(close_btn_, &QPushButton::clicked, this, &PortfolioOrderPanel::close_requested);
@@ -48,14 +66,14 @@ void PortfolioOrderPanel::build_ui() {
     side_row->setSpacing(0);
 
     buy_tab_ = new QPushButton(tr("BUY"));
-    buy_tab_->setFixedHeight(26);
+    buy_tab_->setMinimumHeight(26);
     buy_tab_->setCursor(Qt::PointingHandCursor);
     buy_tab_->setCheckable(true);
     buy_tab_->setChecked(true);
     side_row->addWidget(buy_tab_);
 
     sell_tab_ = new QPushButton(tr("SELL"));
-    sell_tab_->setFixedHeight(26);
+    sell_tab_->setMinimumHeight(26);
     sell_tab_->setCursor(Qt::PointingHandCursor);
     sell_tab_->setCheckable(true);
     side_row->addWidget(sell_tab_);
@@ -78,18 +96,18 @@ void PortfolioOrderPanel::build_ui() {
 
     // Selected holding info
     symbol_label_ = new QLabel;
-    symbol_label_->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700;").arg(ui::colors::CYAN()));
+    symbol_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(2) + "px; font-weight:700;").arg(ui::colors::CYAN()));
     layout->addWidget(symbol_label_);
 
     auto add_info = [&](QLabel*& lbl, QLabel*& prefix_out, const QString& prefix) {
         auto* row = new QHBoxLayout;
         auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+        lab->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(ui::colors::TEXT_TERTIARY()));
         row->addWidget(lab);
         prefix_out = lab;
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
         row->addWidget(lbl);
         layout->addLayout(row);
     };
@@ -100,12 +118,12 @@ void PortfolioOrderPanel::build_ui() {
 
     // Submit button
     submit_btn_ = new QPushButton(tr("OPEN BUY ORDER"));
-    submit_btn_->setFixedHeight(32);
+    submit_btn_->setMinimumHeight(32);
     submit_btn_->setCursor(Qt::PointingHandCursor);
     submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { opacity:0.9; }")
-                                   .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
+                                   .arg(ui::colors::POSITIVE(), ui::colors::TEXT_ON_ACCENT()));
     connect(submit_btn_, &QPushButton::clicked, this, [this]() {
         if (side_ == "BUY")
             emit buy_submitted();
@@ -120,7 +138,7 @@ void PortfolioOrderPanel::build_ui() {
     note_label_ = new QLabel(tr("Orders are recorded\nin your portfolio"));
     note_label_->setWordWrap(true);
     note_label_->setAlignment(Qt::AlignCenter);
-    note_label_->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
+    note_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-6) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(note_label_);
 
     apply_side_styles();
@@ -129,26 +147,28 @@ void PortfolioOrderPanel::build_ui() {
 void PortfolioOrderPanel::apply_side_styles() {
     const bool is_buy = (side_ == "BUY");
     const char* active_color = is_buy ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    const char* inactive_color = ui::colors::TEXT_TERTIARY;
+    const char* inactive_color = ui::colors::TEXT_SECONDARY;
+    const char* on_fill = ui::colors::TEXT_ON_ACCENT;
 
     buy_tab_->setChecked(is_buy);
     sell_tab_->setChecked(!is_buy);
 
     buy_tab_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:none;"
-                "  font-size:10px; font-weight:700; }")
-            .arg(is_buy ? ui::colors::POSITIVE() : ui::colors::BG_RAISED(), is_buy ? "#000" : inactive_color));
+                "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }")
+            .arg(is_buy ? ui::colors::POSITIVE() : ui::colors::BG_RAISED(), is_buy ? on_fill : inactive_color));
     sell_tab_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:none;"
-                "  font-size:10px; font-weight:700; }")
-            .arg(!is_buy ? ui::colors::NEGATIVE() : ui::colors::BG_RAISED(), !is_buy ? "#fff" : inactive_color));
+                "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }")
+            .arg(!is_buy ? ui::colors::NEGATIVE() : ui::colors::BG_RAISED(), !is_buy ? on_fill : inactive_color));
 
     // Panel edge + panel title both follow the active side. The title was
     // previously stuck on POSITIVE green even while the SELL tab was active.
-    setStyleSheet(QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), active_color));
+    setStyleSheet(QString("#pfOrderPanel { background:%1; border-left:2px solid %2; }")
+                      .arg(ui::colors::BG_SURFACE(), active_color));
     if (title_label_)
         title_label_->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(active_color));
+            QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1px;").arg(active_color));
 }
 
 void PortfolioOrderPanel::set_holding(const portfolio::HoldingWithQuote* holding) {
@@ -190,19 +210,27 @@ void PortfolioOrderPanel::update_display() {
     submit_btn_->setEnabled(true);
 
     symbol_label_->setText(holding_->symbol);
-    price_label_->setText(QString::number(holding_->current_price, 'f', 2));
-    qty_label_->setText(
-        QString::number(holding_->quantity, 'f', holding_->quantity == std::floor(holding_->quantity) ? 0 : 2));
-    mv_label_->setText(QString("%1 %2").arg(currency_).arg(QString::number(holding_->market_value, 'f', 2)));
+    render_values();
 
     // Update submit button text — text source keys match retranslateUi().
     submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
     const char* btn_color = (side_ == "BUY") ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    const char* btn_text_color = (side_ == "BUY") ? "#000" : "#fff";
+    const char* btn_text_color = ui::colors::TEXT_ON_ACCENT;
     submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { opacity:0.9; }")
                                    .arg(btn_color, btn_text_color));
+}
+
+void PortfolioOrderPanel::render_values() {
+    if (!holding_)
+        return;
+    // The price in the instrument's own quote currency (pence stay pence), with its
+    // unit; the market value in the portfolio's base currency.
+    price_label_->setText(ui::formatting::price_with_symbol(
+        holding_->current_price, ui::formatting::instrument_for_symbol(holding_->symbol, holding_->price_currency)));
+    qty_label_->setText(ui::formatting::quantity(holding_->quantity, 8));
+    mv_label_->setText(ui::formatting::money(holding_->market_value, currency_));
 }
 
 void PortfolioOrderPanel::changeEvent(QEvent* event) {

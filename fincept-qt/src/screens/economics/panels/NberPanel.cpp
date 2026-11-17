@@ -52,9 +52,14 @@ NberPanel::NberPanel(QWidget* parent) : EconPanelBase(kNberSourceId, kNberColor,
 }
 
 void NberPanel::activate() {
-    show_empty(tr("Select a dataset and click FETCH\n"
-                  "Source: NBER Business Cycle Dating Committee (nber.org)\n"
-                  "No API key and no network required — the committee's dates ship with the app"));
+    // Nothing to prepare: the committee's dates ship with the app — the results pane loads them on show.
+}
+
+EconPanelBase::LoadPolicy NberPanel::load_policy() const {
+    LoadPolicy p;
+    p.max_age_s = 7 * 24 * 3600; // the dates change only with a new committee announcement
+    p.timeout_s = 60;
+    return p;
 }
 
 void NberPanel::build_controls(QHBoxLayout* thl) {
@@ -65,7 +70,7 @@ void NberPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_ = new QComboBox;
     for (const auto& d : kNberDatasets)
         dataset_combo_->addItem(d.label, d.command);
-    dataset_combo_->setFixedHeight(26);
+    dataset_combo_->setMinimumHeight(26);
     dataset_combo_->setMinimumWidth(260);
     dataset_combo_->setAccessibleName(tr("NBER dataset"));
 
@@ -86,7 +91,7 @@ void NberPanel::on_fetch() {
     // wrong is not hypothetical: four economics panels shipped with the command
     // duplicated, which shifted every subsequent argument and made the script
     // answer a completely different query.
-    services::EconomicsService::instance().execute(kNberSourceId, kNberScript, ds.command, {}, "nber_" + ds.command);
+    execute_query(kNberSourceId, kNberScript, ds.command, {}, "nber_" + ds.command);
 }
 
 void NberPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -133,7 +138,7 @@ void NberPanel::on_result(const QString& request_id, const services::EconomicsRe
         title += tr(" (last trough %1)").arg(latest_trough);
 
     display(rows, title);
-    LOG_INFO("NberPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(ds.label));
+    LOG_DEBUG("NberPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(ds.label));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

@@ -122,7 +122,7 @@ QVector<Instrument> parse_samco(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("SamcoSource", QString("Parsed %1 Samco instruments").arg(out.size()));
+    LOG_DEBUG("SamcoSource", QString("Parsed %1 Samco instruments").arg(out.size()));
     return out;
 }
 

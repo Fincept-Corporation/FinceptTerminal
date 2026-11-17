@@ -200,14 +200,40 @@ class TCMBWrapper:
         except Exception as e:
             return TCMBError("today", str(e)).to_dict()
 
-    def get_date(self, rate_date: str) -> Dict[str, Any]:
-        """Exchange rates for a specific date (YYYY-MM-DD). Must be a business day."""
+    def get_date(self, rate_date: str, max_lookback: int = 7) -> Dict[str, Any]:
+        """Exchange rates for a specific date (YYYY-MM-DD).
+
+        A day's bulletin only exists once TCMB publishes it (~15:30 Istanbul) and never on
+        weekends or Turkish holidays; the server then answers 404 or drops the connection. In that
+        case step back one business day at a time (up to `max_lookback`) and say which bulletin is
+        shown instead.
+        """
         try:
-            d        = datetime.strptime(rate_date, "%Y-%m-%d").date()
-            url      = self._date_url(d)
-            content  = self._fetch(url)
-            bulletin = self._parse_bulletin(content)
-            return {
+            asked = datetime.strptime(rate_date, "%Y-%m-%d").date()
+        except ValueError as e:
+            return TCMBError(f"date/{rate_date}", str(e)).to_dict()
+
+        d = asked
+        first_error: Optional[Dict[str, Any]] = None
+        for _ in range(max_lookback + 1):
+            while d.weekday() >= 5:  # no bulletins on Saturday / Sunday
+                d -= timedelta(days=1)
+            url = self._date_url(d)
+            try:
+                content  = self._fetch(url)
+                bulletin = self._parse_bulletin(content)
+            except requests.exceptions.HTTPError as e:
+                sc = e.response.status_code if e.response is not None else None
+                if first_error is None:
+                    first_error = TCMBError(f"date/{rate_date}", str(e), sc).to_dict()
+                d -= timedelta(days=1)
+                continue
+            except Exception as e:
+                if first_error is None:
+                    first_error = TCMBError(f"date/{rate_date}", str(e)).to_dict()
+                d -= timedelta(days=1)
+                continue
+            result = {
                 "success":   True,
                 "date":      bulletin["date"],
                 "bulten_no": bulletin["bulten_no"],
@@ -215,13 +241,14 @@ class TCMBWrapper:
                 "note":      "TRY per 1 unit of foreign currency",
                 "source":    "Central Bank of the Republic of Turkey",
                 "url":       url,
+                "requested_date": asked.isoformat(),
                 "timestamp": int(datetime.now(timezone.utc).timestamp()),
             }
-        except requests.exceptions.HTTPError as e:
-            sc = e.response.status_code if e.response is not None else None
-            return TCMBError(f"date/{rate_date}", str(e), sc).to_dict()
-        except Exception as e:
-            return TCMBError(f"date/{rate_date}", str(e)).to_dict()
+            if d != asked:
+                result["notice"] = (f"No bulletin for {asked.isoformat()} (not yet published, weekend "
+                                    f"or holiday); showing {bulletin['date'] or d.isoformat()}")
+            return result
+        return first_error or TCMBError(f"date/{rate_date}", "No bulletin found").to_dict()
 
     def get_range(self, start_date: str, end_date: Optional[str] = None,
                   currencies: Optional[List[str]] = None) -> Dict[str, Any]:

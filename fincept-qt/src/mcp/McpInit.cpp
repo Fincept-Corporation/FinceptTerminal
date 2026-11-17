@@ -57,7 +57,7 @@ static void audit_tool_schema_sizes() {
     std::sort(over_budget.begin(), over_budget.end(),
               [](const Offender& a, const Offender& b) { return a.bytes > b.bytes; });
 
-    LOG_INFO(
+    LOG_DEBUG(
         TAG,
         QString("Tool schema audit: %1 tools, %2 KB total schema bytes").arg(tools.size()).arg(total_bytes / 1024));
     if (over_budget.isEmpty())
@@ -82,7 +82,7 @@ void initialize_all_tools() {
     // so no screen needs a dedicated tool. See mcp/core/CoreTools.h.
     provider.register_tools(core::get_core_tools());
 
-    LOG_INFO(TAG, QString("Registered %1 internal MCP tools").arg(provider.tool_count()));
+    LOG_DEBUG(TAG, logf("Internal MCP tools registered", {{"count", static_cast<qint64>(provider.tool_count())}}));
 
     // Audit schema sizes after registration — surfaces bloated tools before
     // they bleed prompt tokens on every turn. Opt-in: it re-serialises every

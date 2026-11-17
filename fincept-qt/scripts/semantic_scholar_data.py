@@ -9,13 +9,13 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('SEMANTIC_SCHOLAR_API_KEY', '')
 BASE_URL = "https://api.semanticscholar.org/graph/v1"
+SERVICE = "Semantic Scholar"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 if API_KEY:
     session.headers.update({"x-api-key": API_KEY})
@@ -36,15 +36,19 @@ DEFAULT_AUTHOR_FIELDS = (
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=(10, 30))
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        msg = fc.request_error(SERVICE, e, "SEMANTIC_SCHOLAR_API_KEY", API_KEY)
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        if status == 429 and not API_KEY:
+            msg += (" (keyless calls share a small global quota; a free key from "
+                    "https://www.semanticscholar.org/product/api saved as SEMANTIC_SCHOLAR_API_KEY in "
+                    "Settings > Credentials raises it)")
+        return {"error": msg}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 
 def search_papers(query: str, fields: str = "", limit: int = 20, offset: int = 0) -> Dict:
@@ -143,6 +147,14 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
+    try:
+        result = _dispatch(command, args, result)
+    except ValueError:
+        result = {"error": "limit and offset must be whole numbers"}
+    print(json.dumps(result))
+
+
+def _dispatch(command: str, args: List[str], result: Dict) -> Any:
     if command == "search":
         query = args[1] if len(args) > 1 else "quantitative finance"
         fields = args[2] if len(args) > 2 else ""
@@ -184,7 +196,7 @@ def main(args=None):
         else:
             limit = int(args[2]) if len(args) > 2 else 10
             result = get_recommended(paper_id, limit)
-    print(json.dumps(result))
+    return result
 
 
 if __name__ == "__main__":

@@ -3,11 +3,18 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/llm/LlmErrors.h"
+#include "services/llm/ModelRouter.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ModelBadge.h"
+#include "ui/widgets/PlanHint.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QScrollBar>
 #include <QStyle>
@@ -30,7 +37,12 @@ const QString kQuickAskToolCallClear = QStringLiteral("\x01__TOOL_CALL_CLEAR__")
 constexpr int kQuickAskMaxQuestionChars = 2000;
 
 void quick_ask_open_screen(const QString& screen_id) {
-    EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen_id}});
+    EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen_id}, {"exclusive", true}});
+}
+
+// Settings opened on the LLM Configuration section (not just the Settings screen).
+void quick_ask_open_llm_settings(QWidget* context) {
+    ui::open_setup_link(ui::SetupLink{QStringLiteral("settings"), QStringLiteral("llm_config"), QString()}, context);
 }
 
 } // namespace
@@ -56,10 +68,12 @@ AiQuickAskWidget::AiQuickAskWidget(const QJsonObject& /*cfg*/, QWidget* parent)
     input_->setMaxLength(kQuickAskMaxQuestionChars);
     input_->setClearButtonEnabled(true);
     connect(input_, &QLineEdit::returnPressed, this, &AiQuickAskWidget::on_ask);
+    input_->setProperty("fincept_agent_risk", "spend"); // Enter asks the LLM (billed)
     ask_row->addWidget(input_, 1);
 
     ask_btn_ = new QPushButton(root_);
     ask_btn_->setObjectName(QStringLiteral("quickAskButton"));
+    ask_btn_->setProperty("fincept_agent_risk", "spend"); // LLM request (billed)
     ask_btn_->setCursor(Qt::PointingHandCursor);
     connect(ask_btn_, &QPushButton::clicked, this, &AiQuickAskWidget::on_ask);
     ask_row->addWidget(ask_btn_);
@@ -80,12 +94,17 @@ AiQuickAskWidget::AiQuickAskWidget(const QJsonObject& /*cfg*/, QWidget* parent)
     status_label_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     foot->addWidget(status_label_, 1);
 
+    // Which model answers Quick Ask (ModelRouter "quick_ask"); click = picker.
+    auto* model_badge = new ui::ModelBadge(QString::fromLatin1(ai_chat::kFeatureQuickAsk), root_);
+    model_badge->set_compact(true);
+    foot->addWidget(model_badge);
+
     settings_btn_ = new QPushButton(root_);
     settings_btn_->setObjectName(QStringLiteral("quickAskLink"));
     settings_btn_->setCursor(Qt::PointingHandCursor);
     settings_btn_->setFlat(true);
     settings_btn_->hide();
-    connect(settings_btn_, &QPushButton::clicked, this, []() { quick_ask_open_screen(QStringLiteral("settings")); });
+    connect(settings_btn_, &QPushButton::clicked, this, [this]() { quick_ask_open_llm_settings(this); });
     foot->addWidget(settings_btn_);
 
     // No API hands a prompt to the AI Chat screen, so this just opens it.
@@ -115,20 +134,20 @@ AiQuickAskWidget::~AiQuickAskWidget() {
 }
 
 void AiQuickAskWidget::apply_styles() {
-    root_->setStyleSheet(
+    set_css_cached(root_, 
         QString("QWidget#quickAskRoot{background:transparent;}"
                 "QLineEdit#quickAskInput{background:%1;color:%2;border:1px solid %3;padding:3px 6px;"
-                "font-size:11px;selection-background-color:%4;selection-color:%5;}"
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;selection-background-color:%4;selection-color:%5;}"
                 "QLineEdit#quickAskInput:focus{border-color:%6;}"
                 "QPushButton#quickAskButton{background:%7;color:%4;border:1px solid %8;padding:3px 12px;"
-                "font-size:10px;font-weight:bold;}"
+                "font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:bold;}"
                 "QPushButton#quickAskButton:hover{background:%4;color:%5;}"
                 "QTextBrowser#quickAskAnswer{background:%1;color:%2;border:1px solid %3;padding:4px;"
-                "font-size:11px;}"
-                "QLabel#quickAskStatus{color:%9;font-size:9px;background:transparent;}"
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                "QLabel#quickAskStatus{color:%9;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
                 "QLabel#quickAskStatus[error=\"true\"]{color:%10;}"
                 "QPushButton#quickAskLink{color:%4;background:transparent;border:none;padding:0px 2px;"
-                "font-size:9px;font-weight:bold;}"
+                "font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QPushButton#quickAskLink:hover{color:%2;text-decoration:underline;}"
                 "QScrollBar:vertical{width:5px;background:transparent;}"
                 "QScrollBar::handle:vertical{background:%6;min-height:20px;}"
@@ -136,7 +155,7 @@ void AiQuickAskWidget::apply_styles() {
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
                  ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_MED(), ui::colors::ACCENT_BG(),
                  ui::colors::AMBER_DIM(), ui::colors::TEXT_TERTIARY())
-            .arg(ui::colors::NEGATIVE()));
+            .arg(ui::colors::DANGER()));
 }
 
 void AiQuickAskWidget::showEvent(QShowEvent* e) {
@@ -156,7 +175,8 @@ void AiQuickAskWidget::refresh_config_state() {
         answer_->clear();
         set_state(AskState::Idle);
     } else {
-        update_status_text(); // the active model may have changed
+        update_status_text();  // the active model may have changed
+        update_answer_view();  // ...and the idle state names it
     }
 }
 
@@ -173,8 +193,8 @@ void AiQuickAskWidget::on_ask() {
     cancel_in_flight(); // a new question supersedes the one in flight
     const quint64 gen = request_gen_;
     pending_session_ = kQuickAskSessionPrefix + QUuid::createUuid().toString(QUuid::WithoutBraces);
-    req_provider_ = llm.active_provider();
-    req_model_ = llm.active_model();
+    req_provider_ = ai_chat::ModelRouter::instance().resolve(QString::fromLatin1(ai_chat::kFeatureQuickAsk)).label;
+    req_model_.clear();
     last_tokens_ = 0;
     last_error_.clear();
     stream_buffer_.clear();
@@ -198,7 +218,8 @@ void AiQuickAskWidget::on_ask() {
                 },
                 Qt::QueuedConnection);
         },
-        ai_chat::LlmService::ToolPolicy::None, pending_session_);
+        ai_chat::LlmService::ToolPolicy::None, pending_session_,
+        ai_chat::ChatRoute{QString::fromLatin1(ai_chat::kFeatureQuickAsk), QString(), QString()});
 }
 
 void AiQuickAskWidget::cancel_in_flight() {
@@ -242,6 +263,11 @@ void AiQuickAskWidget::on_finished(const ai_chat::LlmResponse& response) {
         return; // the AI Chat tab's, the Quick Chat bubble's, or a superseded question's
     pending_session_.clear();
     ++request_gen_; // nothing more may append to this answer
+    // Who answered (a fallback included) and, for a harness, who pays.
+    if (!response.route_label.isEmpty())
+        req_provider_ = response.billing_note.isEmpty() || !ai_chat::provider_is_harness(response.provider)
+                            ? response.route_label
+                            : response.route_label + QStringLiteral("  ·  ") + response.billing_note;
 
     if (response.cancelled) {
         set_state(AskState::Cancelled);
@@ -252,7 +278,8 @@ void AiQuickAskWidget::on_finished(const ai_chat::LlmResponse& response) {
             set_state(AskState::NotConfigured);
             return;
         }
-        last_error_ = response.error;
+        // "Ask" / "fail" after an unavailable harness: what happened, not a raw error.
+        last_error_ = response.unavailable_notice.isEmpty() ? response.error : response.unavailable_notice;
         render_failure();
         set_state(AskState::Failed);
         return;
@@ -277,6 +304,85 @@ void AiQuickAskWidget::set_state(AskState state) {
         (state == AskState::Failed && ai_chat::classify_llm_error(last_error_) != ai_chat::LlmErrorKind::Other);
     settings_btn_->setVisible(needs_settings);
     update_status_text();
+    update_answer_view();
+}
+
+QStringList AiQuickAskWidget::sample_questions() {
+    // Evergreen questions a model answers without live data.
+    return {tr("What does an inverted yield curve usually signal?"),
+            tr("Explain the difference between VaR and expected shortfall."),
+            tr("What are the main risks of a covered-call strategy?")};
+}
+
+void AiQuickAskWidget::build_idle_view() {
+    idle_view_ = new QWidget(root_);
+    idle_view_->setObjectName(QStringLiteral("quickAskIdle"));
+    auto* il = new QVBoxLayout(idle_view_);
+    il->setContentsMargins(0, 0, 0, 0);
+    il->setSpacing(4);
+
+    idle_state_ = new ui::EmptyState(idle_view_);
+    idle_state_->set_compact(true);
+    connect(idle_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (state_ == AskState::NotConfigured)
+            quick_ask_open_llm_settings(this);
+    });
+    // The sample questions are the state's suggestion rows (keyboard reachable,
+    // wrapped, dropped first when the tile is short). A click only fills the
+    // box — the user sends.
+    connect(idle_state_, &ui::EmptyState::suggestion_clicked, this, [this](int i) {
+        const QStringList qs = sample_questions();
+        if (state_ != AskState::Idle || i < 0 || i >= qs.size())
+            return;
+        input_->setText(qs.at(i));
+        input_->setFocus();
+        input_->end(false);
+    });
+    il->addWidget(idle_state_, 1);
+
+    if (auto* rl = qobject_cast<QVBoxLayout*>(root_->layout()))
+        rl->insertWidget(rl->indexOf(answer_) + 1, idle_view_, 1);
+}
+
+void AiQuickAskWidget::update_answer_view() {
+    const bool idle = state_ == AskState::Idle;
+    const bool setup = state_ == AskState::NotConfigured;
+    if (!idle && !setup) {
+        if (idle_view_)
+            idle_view_->hide();
+        answer_->show();
+        return;
+    }
+    if (!idle_view_)
+        build_idle_view();
+
+    ui::EmptyState::Spec spec;
+    if (setup) {
+        spec.glyph = QStringLiteral("⚙"); // ⚙
+        spec.glyph_tone = ui::EmptyState::Tone::Warning;
+        spec.title = tr("No AI model configured");
+        spec.message = tr("Add a provider and its API key — or choose the Fincept provider — in Settings > LLM "
+                          "Configuration, then ask your question here.");
+        spec.primary = tr("OPEN SETTINGS > LLM CONFIGURATION");
+    } else {
+        spec.glyph = QStringLiteral("✦"); // ✦
+        spec.glyph_tone = ui::EmptyState::Tone::Accent;
+        spec.title = tr("Ask the AI a quick question");
+        spec.message = tr("Type a question above, or pick one below to fill it in. Nothing is sent until you press "
+                          "ASK or Enter.");
+        const QString model =
+            ai_chat::ModelRouter::instance().resolve(QString::fromLatin1(ai_chat::kFeatureQuickAsk)).label;
+        if (!model.isEmpty()) {
+            spec.note = tr("Answers from %1").arg(model);
+            spec.note_tone = ui::EmptyState::Tone::Info;
+        }
+        for (const QString& q : sample_questions())
+            spec.suggestions.append({q, QString(), tr("Fill in this question (it is not sent)")});
+        spec.suggestions_heading = tr("TRY");
+    }
+    idle_state_->apply(spec);
+    answer_->hide();
+    idle_view_->show();
 }
 
 void AiQuickAskWidget::update_status_text() {
@@ -289,8 +395,8 @@ void AiQuickAskWidget::update_status_text() {
     };
     switch (state_) {
         case AskState::Idle: {
-            auto& llm = ai_chat::LlmService::instance();
-            const QString meta = model_meta(llm.active_provider(), llm.active_model());
+            const QString meta =
+                ai_chat::ModelRouter::instance().resolve(QString::fromLatin1(ai_chat::kFeatureQuickAsk)).label;
             text = meta.isEmpty() ? QString() : tr("Model: %1").arg(meta);
             break;
         }
@@ -332,10 +438,15 @@ void AiQuickAskWidget::render_not_configured() {
 void AiQuickAskWidget::render_failure() {
     QString msg;
     switch (ai_chat::classify_llm_error(last_error_)) {
-        case ai_chat::LlmErrorKind::FinceptOutOfCredits:
+        case ai_chat::LlmErrorKind::FinceptOutOfCredits: {
             msg = tr("You're out of Fincept credits. Top up, or add your own provider API key in "
                      "Settings › LLM Configuration.");
+            // "AI is included with Pro …" when the server's plan table says so (as in AI Chat).
+            const QString plan_note = ui::plan::out_of_credits_note(QStringLiteral("ai"));
+            if (!plan_note.isEmpty())
+                msg += QLatin1Char(' ') + plan_note;
             break;
+        }
         case ai_chat::LlmErrorKind::FinceptAuth:
             msg = tr("Fincept did not accept your sign-in. Sign in again, or add your own provider API key in "
                      "Settings › LLM Configuration.");
@@ -373,6 +484,8 @@ void AiQuickAskWidget::retranslateUi() {
     else if (state_ == AskState::Failed)
         render_failure();
     update_status_text();
+    if (idle_view_)
+        update_answer_view(); // the idle / setup texts in the new language
 }
 
 } // namespace fincept::screens::widgets

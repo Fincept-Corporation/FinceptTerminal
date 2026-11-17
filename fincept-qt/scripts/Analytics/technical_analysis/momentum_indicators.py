@@ -7,22 +7,58 @@ CLI: python momentum_indicators.py <indicator> '{"symbol": "AAPL", ...params}'
   native: python momentum_indicators.py <symbol> <indicator> [params_json]
 """
 
+import os
 import sys
 import json
-import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    import fincept_json
+
+
+def _mask_warmup(series, n):
+    """Blank the first n values: they come from a recursion seeded on the first bar, not from data."""
+    series = series.copy()
+    series.iloc[:max(0, int(n))] = np.nan
+    return series
+
+
+def wilder_rsi(close, period=14):
+    """Wilder's RSI, as in the terminal's own IndicatorEngine::compute_rsi.
+
+    The first average gain / loss is the simple mean of the first `period` changes; after that
+    avg = (prev_avg * (period - 1) + current) / period. RSI is 100 when the average loss is ~0.
+    The first `period` bars have no value.
+    """
+    close = pd.Series(close, dtype=float)
+    n = len(close)
+    out = np.full(n, np.nan)
+    if period < 1 or n < period + 1:
+        return pd.Series(out, index=close.index)
+    diff = close.diff().to_numpy()
+    gains = np.where(diff > 0, diff, 0.0)
+    losses = np.where(diff < 0, -diff, 0.0)
+    avg_gain = gains[1:period + 1].mean()
+    avg_loss = losses[1:period + 1].mean()
+
+    def _rsi(ag, al):
+        return 100.0 if al < 1e-10 else 100.0 - 100.0 / (1.0 + ag / al)
+
+    out[period] = _rsi(avg_gain, avg_loss)
+    for i in range(period + 1, n):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        out[i] = _rsi(avg_gain, avg_loss)
+    return pd.Series(out, index=close.index)
 
 
 def calculate_rsi(data, period=14):
-    """Calculate Relative Strength Index"""
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
+    """Calculate Relative Strength Index (Wilder smoothing, matching the Technicals tab)"""
+    rsi = wilder_rsi(data['Close'], int(period))
 
     result = []
     for idx, value in rsi.items():
@@ -42,6 +78,11 @@ def calculate_macd(data, fast_period=12, slow_period=26, signal_period=9):
     macd_line = exp1 - exp2
     signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
     histogram = macd_line - signal_line
+    # Warm-up: the EMAs start on the first bar, so the line reads 0.0 there; values are only
+    # meaningful once the slow EMA (and then the signal EMA) has seen a full window.
+    macd_line = _mask_warmup(macd_line, slow_period - 1)
+    signal_line = _mask_warmup(signal_line, slow_period + signal_period - 2)
+    histogram = _mask_warmup(histogram, slow_period + signal_period - 2)
 
     macd_result = []
     signal_result = []
@@ -177,6 +218,9 @@ def calculate_tsi(data, long_period=25, short_period=13, signal_period=13):
 
     tsi = 100 * (double_smooth / abs_double_smooth)
     signal_line = tsi.ewm(span=signal_period, adjust=False).mean()
+    # Warm-up (first change is on bar 1): the second bar read exactly +/-100.
+    tsi = _mask_warmup(tsi, long_period + short_period - 1)
+    signal_line = _mask_warmup(signal_line, long_period + short_period + signal_period - 2)
 
     tsi_result = []
     signal_result = []
@@ -198,13 +242,25 @@ def calculate_tsi(data, long_period=25, short_period=13, signal_period=13):
 
 
 def calculate_ultimate_oscillator(data, period1=7, period2=14, period3=28, weight1=4, weight2=2, weight3=1):
-    """Calculate Ultimate Oscillator"""
-    bp = data['Close'] - data[['Low', 'Close']].shift(1).min(axis=1)
-    tr = data[['High', 'Close']].shift(1).max(axis=1) - data[['Low', 'Close']].shift(1).min(axis=1)
+    """Calculate Ultimate Oscillator (Williams).
 
-    avg1 = bp.rolling(window=period1).sum() / tr.rolling(window=period1).sum()
-    avg2 = bp.rolling(window=period2).sum() / tr.rolling(window=period2).sum()
-    avg3 = bp.rolling(window=period3).sum() / tr.rolling(window=period3).sum()
+    Buying pressure BP = Close - min(Low, prior Close); true range TR = max(High, prior Close) -
+    min(Low, prior Close). Only the CLOSE is the prior bar's - the old code shifted High and Low too.
+    """
+    prev_close = data['Close'].shift(1)
+    true_low = pd.concat([data['Low'], prev_close], axis=1).min(axis=1)
+    true_high = pd.concat([data['High'], prev_close], axis=1).max(axis=1)
+    bp = data['Close'] - true_low
+    tr = true_high - true_low
+    # First bar has no prior close: leave it out of the sums instead of using its own range
+    bp.iloc[0] = np.nan
+    tr.iloc[0] = np.nan
+
+    def _avg(window):
+        tr_sum = tr.rolling(window=window).sum()
+        return bp.rolling(window=window).sum() / tr_sum.where(tr_sum != 0)  # flat window: no value
+
+    avg1, avg2, avg3 = _avg(period1), _avg(period2), _avg(period3)
 
     uo = 100 * ((weight1 * avg1) + (weight2 * avg2) + (weight3 * avg3)) / (weight1 + weight2 + weight3)
 
@@ -218,11 +274,16 @@ def calculate_ultimate_oscillator(data, period1=7, period2=14, period3=28, weigh
     return {'values': result}
 
 
+INDICATORS = ('rsi', 'macd', 'stochastic', 'cci', 'roc', 'williams_r', 'awesome_oscillator', 'tsi',
+              'ultimate_oscillator')
+
+
 def main():
     try:
-        # Qt bridge: accept (indicator_type, {"symbol":..., ...}) and expand into the
-        # native (symbol, indicator_type, params_json) argv. No effect on the CLI form
-        # (a plain indicator_type in argv[2] is not JSON, so this falls through).
+        # Second argv form (used by agents through the script index; there is no C++ caller):
+        # (indicator_type, {"symbol":..., ...}) is expanded into the native
+        # (symbol, indicator_type, params_json) argv. A plain indicator_type in argv[2] is not
+        # JSON, so the native form falls through unchanged.
         if len(sys.argv) == 3:
             try:
                 _qp = json.loads(sys.argv[2])
@@ -238,16 +299,22 @@ def main():
         symbol = sys.argv[1]
         indicator_type = sys.argv[2]
         params = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
+        if not isinstance(params, dict):
+            raise ValueError("params_json must be a JSON object")
+        if indicator_type not in INDICATORS:  # before the network fetch
+            raise ValueError(f"Unknown indicator type: {indicator_type} (available: {', '.join(INDICATORS)})")
 
         # Get timeframe and interval
         timeframe = params.get('timeframe', '1y')
         interval = params.get('interval', '1d')
 
         # Fetch data
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(period=timeframe, interval=interval)
+        import contextlib
+        import fincept_yahoo as fy  # the shared bar cache (one long download per symbol, sliced)
+        with contextlib.redirect_stdout(sys.stderr):  # keep library chatter out of the JSON stdout
+            data = fy.ticker_history(symbol, period=timeframe, interval=interval)
 
-        if data.empty:
+        if data is None or data.empty:
             raise ValueError(f"No data found for symbol {symbol}")
 
         # Calculate indicator based on type
@@ -298,11 +365,10 @@ def main():
         else:
             raise ValueError(f"Unknown indicator type: {indicator_type}")
 
-        print(json.dumps(result))
+        fincept_json.emit(result)  # ROC / %R / stochastic divide by prices or ranges that can be 0
 
     except Exception as e:
-        error_msg = {'error': str(e)}
-        print(json.dumps(error_msg))
+        fincept_json.emit({'error': str(e) or type(e).__name__})
         sys.exit(1)
 
 

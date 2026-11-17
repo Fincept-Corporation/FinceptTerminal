@@ -1,833 +1,1797 @@
 // src/screens/relationship_map/RelationshipGraphScene.cpp
-// Banded left/right tree layout — zero trig, zero collisions.
-// Right side: Peers, Holders, Funds, Analysts
-// Left side:  Board, Insiders, Metrics, Events, Supply
-// Each cluster owns an exclusive vertical band. No angle math.
 #include "screens/relationship_map/RelationshipGraphScene.h"
 
+#include "screens/relationship_map/RelationshipMapFormat.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
-#include <QFont>
-#include <QGraphicsPathItem>
+#include <QElapsedTimer>
+#include <QFontMetricsF>
+#include <QFutureWatcher>
+#include <QGraphicsItem>
+#include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsSceneMouseEvent>
-#include <QMouseEvent>
-#include <QTransform>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QPen>
 #include <QScrollBar>
 #include <QStyleOptionGraphicsItem>
+#include <QVariantAnimation>
 #include <QWheelEvent>
-#include <QtMath>
+#include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::relmap {
 
-// ── Layout constants ──────────────────────────────────────────────────────────
-static constexpr qreal kCenterW = 220.0;
-static constexpr qreal kCenterH = 110.0;
-static constexpr qreal kHubW = 158.0;
-static constexpr qreal kHubH = 34.0;
-static constexpr qreal kLeafW = 162.0;
-static constexpr qreal kLeafH = 46.0;
-static constexpr qreal kLeafGap = 8.0;     // gap between leaves in same cluster
-static constexpr qreal kClusterGap = 28.0; // gap between clusters on same side
-// Fixed horizontal positions — no trig
-static constexpr qreal kHubX_R = 310.0;   // hub center X, right side
-static constexpr qreal kLeafX_R = 500.0;  // leaf center X, right side
-static constexpr qreal kHubX_L = -310.0;  // hub center X, left side
-static constexpr qreal kLeafX_L = -500.0; // leaf center X, left side
+namespace {
 
-// ── Forward declarations ──────────────────────────────────────────────────────
-class RelNode;
-class RelEdge;
+namespace colors = fincept::ui::colors;
+namespace fonts = fincept::ui::fonts;
+namespace fmt = fincept::ui::formatting;
 
-// ── Edge item ─────────────────────────────────────────────────────────────────
-class RelEdge : public QGraphicsItem {
-  public:
-    RelEdge(RelNode* source, RelNode* dest, const QColor& color, bool thin = false)
-        : source_(source), dest_(dest), color_(color), thin_(thin) {
-        setZValue(-1);
-        setAcceptedMouseButtons(Qt::NoButton);
+constexpr double kRgsNaN = std::numeric_limits<double>::quiet_NaN();
+
+bool rgs_ok(double v) {
+    return std::isfinite(v);
+}
+
+QColor rgs_with_alpha(QColor c, double a) {
+    c.setAlphaF(static_cast<float>(std::clamp(a, 0.0, 1.0)));
+    return c;
+}
+
+/// A fixed categorical slot per group (markers only — the cards stay monochrome).
+QColor rgs_group_color(RelGroup g) {
+    switch (g) {
+        case RelGroup::Institutions:
+            return colors::chart_color(4);
+        case RelGroup::Funds:
+            return colors::chart_color(8);
+        case RelGroup::Insiders:
+            return colors::chart_color(2);
+        case RelGroup::Management:
+            return colors::chart_color(6);
+        case RelGroup::Peers:
+            return colors::chart_color(1);
+        case RelGroup::Holdings:
+            return colors::chart_color(1);
+        case RelGroup::Sectors:
+            return colors::chart_color(5);
+        case RelGroup::Correlated:
+            return colors::chart_color(9);
+        case RelGroup::Subsidiaries:
+            return colors::chart_color(7);
+        case RelGroup::SupplyChain:
+            return colors::chart_color(11);
+        case RelGroup::Count:
+            break;
     }
-    RelNode* source() const { return source_; }
-    RelNode* dest() const { return dest_; }
-    void adjust();
-    QRectF boundingRect() const override;
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+    return QColor(colors::TEXT_TERTIARY());
+}
 
-  private:
-    RelNode* source_;
-    RelNode* dest_;
-    QColor color_;
-    bool thin_;
-    QPointF source_pt_;
-    QPointF dest_pt_;
+QString rgs_group_title(RelGroup g, bool fund) {
+    switch (g) {
+        case RelGroup::Institutions:
+            return fund ? RelationshipGraphScene::tr("ISSUER") : RelationshipGraphScene::tr("INSTITUTIONAL HOLDERS");
+        case RelGroup::Funds:
+            return RelationshipGraphScene::tr("FUND HOLDERS");
+        case RelGroup::Insiders:
+            return RelationshipGraphScene::tr("INSIDERS & BOARD");
+        case RelGroup::Management:
+            return RelationshipGraphScene::tr("MANAGEMENT");
+        case RelGroup::Peers:
+            return RelationshipGraphScene::tr("PEERS");
+        case RelGroup::Holdings:
+            return RelationshipGraphScene::tr("TOP HOLDINGS");
+        case RelGroup::Sectors:
+            return RelationshipGraphScene::tr("SECTOR WEIGHTS");
+        case RelGroup::Correlated:
+            return RelationshipGraphScene::tr("CORRELATED");
+        case RelGroup::Subsidiaries:
+            return RelationshipGraphScene::tr("SUBSIDIARIES");
+        case RelGroup::SupplyChain:
+            return RelationshipGraphScene::tr("SUPPLY CHAIN");
+        case RelGroup::Count:
+            break;
+    }
+    return {};
+}
+
+/// Column captions of a group's cards: {c1, c2, c3}; an empty caption = no column.
+QStringList rgs_columns(RelGroup g) {
+    switch (g) {
+        case RelGroup::Institutions:
+        case RelGroup::Funds:
+            return {RelationshipGraphScene::tr("% HELD"), RelationshipGraphScene::tr("VALUE"), RelationshipGraphScene::tr("CHG")};
+        case RelGroup::Insiders:
+            return {RelationshipGraphScene::tr("SHARES"), RelationshipGraphScene::tr("VALUE"), RelationshipGraphScene::tr("LAST")};
+        case RelGroup::Management:
+            return {RelationshipGraphScene::tr("TITLE"), QString(), RelationshipGraphScene::tr("HELD")};
+        case RelGroup::Peers:
+            return {RelationshipGraphScene::tr("MKT CAP"), RelationshipGraphScene::tr("ρ 1Y"), RelationshipGraphScene::tr("52W")};
+        case RelGroup::Holdings:
+            return {RelationshipGraphScene::tr("WEIGHT"), RelationshipGraphScene::tr("VALUE"), RelationshipGraphScene::tr("ρ 1Y")};
+        case RelGroup::Sectors:
+            return {RelationshipGraphScene::tr("WEIGHT"), RelationshipGraphScene::tr("VALUE"), QString()};
+        case RelGroup::Correlated:
+            return {RelationshipGraphScene::tr("ρ 1Y"), RelationshipGraphScene::tr("β"), RelationshipGraphScene::tr("1Y RET")};
+        case RelGroup::Subsidiaries:
+            return {QString(), QString(), RelationshipGraphScene::tr("JURISDICTION")};
+        case RelGroup::SupplyChain:
+        case RelGroup::Count:
+            break;
+    }
+    return {QString(), QString(), QString()};
+}
+
+QString rgs_money(double v, const QString& ccy) {
+    return rgs_ok(v) && v != 0 ? amount_text(v, ccy) : QString();
+}
+QString rgs_pct(double v, int dec = 2) {
+    return rgs_ok(v) ? fmt::pct(v, dec, false) : QString();
+}
+QString rgs_rho(double v) {
+    return rgs_ok(v) ? fmt::number(v, 2) : QString();
+}
+/// Signed percent with a direction arrow (direction is never colour alone).
+QString rgs_change(double v, int dec = 1) {
+    if (!rgs_ok(v))
+        return {};
+    const QString arrow = v > 0 ? QStringLiteral("▲") : (v < 0 ? QStringLiteral("▼") : QString());
+    return arrow + fmt::pct(std::abs(v), dec, false);
+}
+
+QString rgs_tx_tag(const QString& kind) {
+    const QString k = kind.trimmed().toLower();
+    if (k == QLatin1String("buy"))
+        return RelationshipGraphScene::tr("▲ BUY");
+    if (k == QLatin1String("sell"))
+        return RelationshipGraphScene::tr("▼ SELL");
+    if (k.isEmpty())
+        return {};
+    if (k.contains(QLatin1String("gift")))
+        return RelationshipGraphScene::tr("GIFT");
+    if (k.contains(QLatin1String("grant")) || k.contains(QLatin1String("award")))
+        return RelationshipGraphScene::tr("GRANT");
+    if (k.contains(QLatin1String("option")) || k.contains(QLatin1String("exercise")) ||
+        k.contains(QLatin1String("conversion")))
+        return RelationshipGraphScene::tr("OPTION");
+    return k.left(8).toUpper();
+}
+
+/// The texts of one node, formatted for its group.
+struct RgsText {
+    QString name;
+    QString sub; ///< dim second text (title, jurisdiction)
+    QString c[3];
+    int dir[3] = {0, 0, 0}; ///< price-direction tint of a cell (-1 / 0 / +1)
+    bool span12 = false;    ///< c[0] spans the first two columns (management title)
+    bool span_all = false;  ///< c[2] spans all three (jurisdiction)
+    QString tooltip;
+    QString bubble_value; ///< one number under a bubble label
 };
 
-// ── Node item ─────────────────────────────────────────────────────────────────
-class RelNode : public QGraphicsItem {
-  public:
-    enum class Role { Center, Hub, Leaf };
-
-    RelNode(const QString& label, const QString& sub, const QColor& accent, qreal w, qreal h, Role role)
-        : label_(label), sub_(sub), accent_(accent), w_(w), h_(h), role_(role) {
-        setFlag(QGraphicsItem::ItemIsMovable, role != Role::Center);
-        setFlag(QGraphicsItem::ItemIsSelectable); // required for the click→detail-panel path
-        setFlag(QGraphicsItem::ItemSendsGeometryChanges);
-        setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-        setZValue(role == Role::Center ? 5 : (role == Role::Hub ? 3 : 1));
-        if (role == Role::Center)
-            setCursor(Qt::PointingHandCursor);
+RgsText rgs_text_for(const RelGraphNode& n, const RelationshipData& d) {
+    RgsText t;
+    t.name = n.kind == RelNodeKind::Company && !n.short_label.isEmpty() && n.group == RelGroup::Peers
+                 ? n.short_label + QStringLiteral("  ") + n.label
+                 : n.label;
+    t.sub = n.subtitle;
+    QStringList tip{n.label};
+    if (!n.subtitle.isEmpty() && n.subtitle != n.label)
+        tip << n.subtitle;
+    switch (n.group) {
+        case RelGroup::Institutions:
+        case RelGroup::Funds:
+            t.c[0] = rgs_pct(n.pct);
+            t.c[1] = rgs_money(n.value, n.value_currency);
+            t.c[2] = rgs_change(n.change);
+            t.dir[2] = rgs_ok(n.change) ? (n.change > 0 ? 1 : (n.change < 0 ? -1 : 0)) : 0;
+            t.bubble_value = t.c[0];
+            if (!n.date.isEmpty())
+                tip << RelationshipGraphScene::tr("Reported %1").arg(n.date);
+            if (n.kind == RelNodeKind::Institution && n.subtitle == QLatin1String("issuer")) {
+                t.c[0].clear();
+                t.c[2].clear();
+                t.sub = RelationshipGraphScene::tr("issuer");
+            }
+            break;
+        case RelGroup::Insiders:
+        case RelGroup::Management:
+            if (n.group == RelGroup::Management) {
+                t.c[0] = n.subtitle;
+                t.span12 = true;
+            } else {
+                t.c[0] = rgs_ok(n.shares) ? fmt::compact(n.shares) : QString();
+                t.c[1] = rgs_money(n.value, n.value_currency);
+            }
+            t.c[2] = n.group == RelGroup::Management ? rgs_money(n.value, n.value_currency) : rgs_tx_tag(n.note);
+            if (n.group == RelGroup::Insiders) {
+                const QString k = n.note.toLower();
+                t.dir[2] = k == QLatin1String("buy") ? 1 : (k == QLatin1String("sell") ? -1 : 0);
+            }
+            t.bubble_value = rgs_ok(n.shares) ? fmt::compact(n.shares) : QString();
+            if (rgs_ok(n.shares))
+                tip << RelationshipGraphScene::tr("%1 shares").arg(fmt::compact(n.shares));
+            if (!n.note.isEmpty())
+                tip << RelationshipGraphScene::tr("Last transaction: %1 %2").arg(n.note, n.date);
+            break;
+        case RelGroup::Peers:
+            t.c[0] = rgs_money(n.size_value, n.size_currency);
+            t.c[1] = rgs_rho(n.corr);
+            t.c[2] = rgs_change(n.change);
+            t.dir[2] = rgs_ok(n.change) ? (n.change > 0 ? 1 : (n.change < 0 ? -1 : 0)) : 0;
+            t.bubble_value = t.c[0];
+            break;
+        case RelGroup::Holdings:
+            t.c[0] = rgs_pct(n.pct);
+            t.c[1] = rgs_money(n.value, n.value_currency);
+            t.c[2] = rgs_rho(n.corr);
+            t.bubble_value = t.c[0];
+            break;
+        case RelGroup::Sectors:
+            t.c[0] = rgs_pct(n.pct, 1);
+            t.c[1] = rgs_money(n.value, n.value_currency);
+            t.bubble_value = t.c[0];
+            break;
+        case RelGroup::Correlated: {
+            t.c[0] = rgs_rho(n.corr);
+            const double beta = d.correlation.beta.value(n.symbol, kRgsNaN);
+            t.c[1] = rgs_ok(beta) ? fmt::number(beta, 2) : QString();
+            t.c[2] = rgs_change(n.change);
+            t.dir[2] = rgs_ok(n.change) ? (n.change > 0 ? 1 : (n.change < 0 ? -1 : 0)) : 0;
+            t.bubble_value = t.c[0].isEmpty() ? QString() : QStringLiteral("ρ ") + t.c[0];
+            break;
+        }
+        case RelGroup::Subsidiaries:
+            t.c[2] = n.subtitle;
+            t.span_all = true;
+            t.sub.clear();
+            break;
+        case RelGroup::SupplyChain:
+            t.c[0] = rgs_pct(n.pct, 1);
+            break;
+        case RelGroup::Count:
+            break;
+    }
+    if (n.kind == RelNodeKind::Cluster) {
+        const QString what = rgs_group_title(n.group, d.is_fund()).toLower();
+        if (n.hidden_count > 0)
+            t.name = RelationshipGraphScene::tr("+ %1 more %2").arg(fmt::number(n.hidden_count, 0), what);
         else
-            setCursor(Qt::OpenHandCursor);
+            t.name = RelationshipGraphScene::tr("+ %1 more not listed by the source").arg(fmt::number(n.universe_count, 0));
+        for (auto& c : t.c)
+            c.clear();
+        t.span12 = false;
+        t.span_all = false;
+        if (rgs_ok(n.hidden_pct) && n.hidden_pct > 0)
+            t.c[0] = QStringLiteral("≈") + rgs_pct(n.hidden_pct, 1);
+        if (rgs_ok(n.value) && n.group != RelGroup::Peers)
+            t.c[1] = rgs_money(n.value, n.value_currency);
+        t.tooltip = n.hidden_count > 0 ? RelationshipGraphScene::tr("Click to show all %1").arg(what)
+                                       : RelationshipGraphScene::tr("%1 further holders exist; Yahoo lists the largest only")
+                                             .arg(fmt::number(n.universe_count, 0));
+        t.bubble_value.clear();
+        return t;
+    }
+    if (n.user_holds)
+        tip << RelationshipGraphScene::tr("In your portfolio");
+    else if (n.in_watchlist)
+        tip << RelationshipGraphScene::tr("In your watchlist");
+    t.tooltip = tip.join(QLatin1Char('\n'));
+    return t;
+}
+
+QString rgs_placeholder_text(const RelGraphNode& n) {
+    switch (n.state) {
+        case RelSectionState::Loading:
+            return RelationshipGraphScene::tr("Loading…");
+        case RelSectionState::Timeout:
+            return RelationshipGraphScene::tr("Not loaded — the source did not answer in time · RETRY");
+        case RelSectionState::Skipped:
+            return RelationshipGraphScene::tr("Not loaded — time budget used up · RETRY");
+        case RelSectionState::Error:
+            return RelationshipGraphScene::tr("Not loaded — the source failed · RETRY");
+        case RelSectionState::Unavailable:
+            return n.state_note.isEmpty() ? RelationshipGraphScene::tr("Not available from free sources")
+                                          : n.state_note;
+        case RelSectionState::Empty:
+            return n.state_note.isEmpty() ? RelationshipGraphScene::tr("None reported by the source") : n.state_note;
+        default:
+            break;
+    }
+    return n.state_note;
+}
+
+// ── Items ───────────────────────────────────────────────────────────────────
+
+enum class RgsStyle { Card, Center, Bubble, CenterBubble, Bar, CenterBar };
+
+/// Paints a node marker shape (type) in `r`.
+void rgs_marker(QPainter* p, const QRectF& r, RelNodeKind kind, const QColor& c) {
+    p->setPen(Qt::NoPen);
+    p->setBrush(c);
+    switch (kind) {
+        case RelNodeKind::Institution: {
+            QPolygonF d{QPointF(r.center().x(), r.top()), QPointF(r.right(), r.center().y()),
+                        QPointF(r.center().x(), r.bottom()), QPointF(r.left(), r.center().y())};
+            p->drawPolygon(d);
+            break;
+        }
+        case RelNodeKind::Fund:
+            p->setBrush(Qt::NoBrush);
+            p->setPen(QPen(c, 1.6));
+            p->drawRect(r.adjusted(0.8, 0.8, -0.8, -0.8));
+            break;
+        case RelNodeKind::Person:
+            p->drawEllipse(r);
+            break;
+        case RelNodeKind::Etf: {
+            QPolygonF tri{QPointF(r.center().x(), r.top()), QPointF(r.right(), r.bottom()), QPointF(r.left(), r.bottom())};
+            p->drawPolygon(tri);
+            break;
+        }
+        case RelNodeKind::Index:
+            p->setBrush(Qt::NoBrush);
+            p->setPen(QPen(c, 1.6));
+            p->drawEllipse(r.adjusted(0.8, 0.8, -0.8, -0.8));
+            p->setPen(Qt::NoPen);
+            p->setBrush(c);
+            p->drawEllipse(r.center(), r.width() * 0.18, r.height() * 0.18);
+            break;
+        case RelNodeKind::Sector:
+            p->drawRect(QRectF(r.left(), r.center().y() - r.height() * 0.25, r.width(), r.height() * 0.5));
+            break;
+        case RelNodeKind::Entity:
+            p->drawRoundedRect(r.adjusted(1, 1, -1, -1), 1.5, 1.5);
+            break;
+        case RelNodeKind::Company:
+        case RelNodeKind::Center:
+            p->drawRect(r);
+            break;
+        case RelNodeKind::Cluster:
+        case RelNodeKind::Placeholder:
+            p->setBrush(Qt::NoBrush);
+            p->setPen(QPen(c, 1.2, Qt::DotLine));
+            p->drawEllipse(r.adjusted(1, 1, -1, -1));
+            break;
+    }
+}
+
+/// The company card's own numbers (formatted once per layout / format change).
+struct RgsCenterText {
+    QString ticker, venue, name, price, change, line;
+    int change_dir = 0;
+    QStringList stat_labels, stat_values; ///< 6 cells
+    QVector<QPair<QString, double>> split; ///< ownership / sector split: label -> fraction
+    QString badge; ///< "IN PORTFOLIO" / "WATCHLIST"
+};
+
+RgsCenterText rgs_center_text(const RelationshipData& d, const RelGraphNode& c) {
+    RgsCenterText t;
+    const CompanyInfo& co = d.company;
+    t.ticker = co.ticker;
+    QStringList venue;
+    if (!co.exchange.isEmpty())
+        venue << co.exchange;
+    if (!co.currency.isEmpty())
+        venue << co.currency;
+    t.venue = venue.join(QStringLiteral(" · "));
+    t.name = co.name;
+    t.price = co.current_price > 0 ? price_text(co.current_price, co.currency) : fmt::placeholder();
+    if (co.day_change_pct != 0) {
+        t.change = rgs_change(co.day_change_pct, 2);
+        t.change_dir = co.day_change_pct > 0 ? 1 : -1;
+    }
+    auto stat = [&t](const QString& label, const QString& value) {
+        t.stat_labels << label;
+        t.stat_values << (value.isEmpty() ? fmt::placeholder() : value);
+    };
+    if (d.is_fund()) {
+        stat(RelationshipGraphScene::tr("AUM"), rgs_money(d.fund.total_assets, co.currency));
+        stat(RelationshipGraphScene::tr("HOLDINGS"), d.fund.holdings.isEmpty() ? QString() : QString::number(d.fund.holdings.size()));
+        stat(RelationshipGraphScene::tr("YIELD"), co.dividend_yield > 0 ? fmt::pct(co.dividend_yield, 2, false) : QString());
+        stat(RelationshipGraphScene::tr("52W"), d.technicals.week52_change_pct != 0 ? rgs_change(d.technicals.week52_change_pct * 100) : QString());
+        stat(RelationshipGraphScene::tr("FAMILY"), d.fund.family);
+        stat(RelationshipGraphScene::tr("CATEGORY"), d.fund.category);
+        t.line = d.fund.legal_type;
+        for (int i = 0; i < d.fund.sector_weights.size() && i < 4; ++i)
+            t.split.append({d.fund.sector_weights[i].first, d.fund.sector_weights[i].second});
+    } else {
+        stat(RelationshipGraphScene::tr("MKT CAP"), rgs_money(co.market_cap, co.currency));
+        stat(RelationshipGraphScene::tr("P/E"), co.pe_ratio > 0 ? fmt::ratio(co.pe_ratio, 1) : QString());
+        stat(RelationshipGraphScene::tr("BETA"), d.technicals.beta > 0 ? fmt::number(d.technicals.beta, 2) : QString());
+        stat(RelationshipGraphScene::tr("DIV YLD"), co.dividend_yield > 0 ? fmt::pct(co.dividend_yield, 2, false) : QString());
+        stat(RelationshipGraphScene::tr("52W"), d.technicals.week52_change_pct != 0 ? rgs_change(d.technicals.week52_change_pct * 100) : QString());
+        stat(RelationshipGraphScene::tr("FLOAT"), co.float_shares > 0 ? fmt::compact(co.float_shares) : QString());
+        QStringList where;
+        if (!co.sector.isEmpty())
+            where << co.sector;
+        if (!co.industry.isEmpty())
+            where << co.industry;
+        t.line = where.join(QStringLiteral(" · "));
+        if (d.major_holders.present) {
+            const double inst = std::clamp(d.major_holders.institutions_pct, 0.0, 1.0);
+            const double ins = std::clamp(d.major_holders.insiders_pct, 0.0, 1.0 - inst);
+            t.split.append({RelationshipGraphScene::tr("INST"), inst});
+            t.split.append({RelationshipGraphScene::tr("INSIDERS"), ins});
+            t.split.append({RelationshipGraphScene::tr("OTHER"), std::max(0.0, 1.0 - inst - ins)});
+        }
+    }
+    if (c.user_holds)
+        t.badge = RelationshipGraphScene::tr("IN PORTFOLIO");
+    else if (c.in_watchlist)
+        t.badge = RelationshipGraphScene::tr("WATCHLIST");
+    return t;
+}
+
+class RgsNodeItem : public QGraphicsItem {
+  public:
+    enum { Type = QGraphicsItem::UserType + 0x5231 };
+    int type() const override { return Type; }
+
+    RgsNodeItem(const RelGraphNode& n, RgsStyle style) : node_(n), style_(style) {
+        setAcceptHoverEvents(false);
+        setAcceptedMouseButtons(Qt::NoButton); // the scene routes clicks
+        setZValue(style == RgsStyle::Center || style == RgsStyle::CenterBubble || style == RgsStyle::CenterBar ? 5 : 3);
     }
 
-    void add_edge(RelEdge* edge) { edges_.append(edge); }
-    Role role() const { return role_; }
-    /// Mark this node as a tradable symbol: double-clicking it asks the screen to open
-    /// that ticker in Equity Research.
-    void set_symbol(const QString& symbol) {
-        symbol_ = symbol;
-        setToolTip(symbol_.isEmpty()
-                       ? QString()
-                       : RelationshipGraphScene::tr("Double-click to open %1 in Equity Research").arg(symbol_));
+    const RelGraphNode& node() const { return node_; }
+    void set_node(const RelGraphNode& n) { node_ = n; }
+    RgsStyle style() const { return style_; }
+    void set_style(RgsStyle s) {
+        prepareGeometryChange();
+        style_ = s;
+    }
+    /// Geometry relative to the item position (the node centre).
+    void set_geometry(const RelNodeGeom& g, const QStringList& columns, double row_h, double col_w) {
+        prepareGeometryChange();
+        rect_ = g.rect.translated(-g.center);
+        label_ = g.label_visible && !g.label.isEmpty() ? g.label.translated(-g.center) : QRectF();
+        radius_ = g.radius;
+        columns_ = columns;
+        row_h_ = row_h;
+        col_w_ = col_w;
+    }
+    void set_text(const RgsText& t) {
+        text_ = t;
+        setToolTip(t.tooltip);
+    }
+    void set_center_text(const RgsCenterText& t) { center_ = t; }
+    void set_flags(bool selected, bool dimmed, bool hovered) {
+        if (selected == selected_ && dimmed == dimmed_ && hovered == hovered_)
+            return;
+        selected_ = selected;
+        dimmed_ = dimmed;
+        hovered_ = hovered;
+        update();
+    }
+    void set_pulse(double p) {
+        pulse_ = p;
+        update();
+    }
+    void set_motion(const QPointF& from, const QPointF& to, bool fade_in) {
+        from_ = from;
+        to_ = to;
+        fade_in_ = fade_in;
+    }
+    void apply_progress(double t) {
+        setPos(from_ + (to_ - from_) * t);
+        if (fade_in_)
+            setOpacity(t);
+    }
+    void finish_motion() {
+        setPos(to_);
+        setOpacity(1.0);
+        fade_in_ = false;
     }
 
-    QRectF boundingRect() const override { return QRectF(-w_ / 2 - 2, -h_ / 2 - 2, w_ + 4, h_ + 4); }
-
+    QRectF boundingRect() const override {
+        QRectF r = rect_.united(label_);
+        const double grow = (style_ == RgsStyle::Bubble || style_ == RgsStyle::CenterBubble) ? 10.0 : 6.0;
+        return r.adjusted(-grow, -grow, grow, grow);
+    }
     QPainterPath shape() const override {
-        QPainterPath path;
-        path.addRect(-w_ / 2, -h_ / 2, w_, h_);
-        return path;
+        QPainterPath p;
+        if (style_ == RgsStyle::Bubble || style_ == RgsStyle::CenterBubble)
+            p.addEllipse(rect_);
+        else
+            p.addRect(rect_);
+        if (!label_.isEmpty())
+            p.addRect(label_);
+        return p;
     }
 
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override {
-        painter->setRenderHint(QPainter::Antialiasing);
-        painter->setRenderHint(QPainter::TextAntialiasing);
+    void paint(QPainter* p, const QStyleOptionGraphicsItem* opt, QWidget*) override {
+        const double lod = opt ? QStyleOptionGraphicsItem::levelOfDetailFromTransform(p->worldTransform()) : 1.0;
+        p->setRenderHint(QPainter::Antialiasing, true);
+        p->setRenderHint(QPainter::TextAntialiasing, true);
+        p->setOpacity(p->opacity() * (dimmed_ ? 0.26 : 1.0));
+        switch (style_) {
+            case RgsStyle::Card:
+                paint_card(p, lod);
+                break;
+            case RgsStyle::Center:
+                paint_center(p, lod);
+                break;
+            case RgsStyle::Bubble:
+            case RgsStyle::CenterBubble:
+                paint_bubble(p, lod);
+                break;
+            case RgsStyle::Bar:
+            case RgsStyle::CenterBar:
+                paint_bar(p, lod);
+                break;
+        }
+        if (pulse_ > 0) {
+            const QColor acc(colors::AMBER());
+            for (int i = 0; i < 2; ++i) {
+                const double ph = std::fmod(pulse_ + i * 0.5, 1.0);
+                p->setPen(QPen(rgs_with_alpha(acc, (1.0 - ph) * 0.9), 2.0));
+                p->setBrush(Qt::NoBrush);
+                const double g = 4 + ph * 22;
+                if (style_ == RgsStyle::Bubble || style_ == RgsStyle::CenterBubble)
+                    p->drawEllipse(rect_.adjusted(-g, -g, g, g));
+                else
+                    p->drawRect(rect_.adjusted(-g, -g, g, g));
+            }
+        }
+    }
 
-        QRectF r(-w_ / 2, -h_ / 2, w_, h_);
+  private:
+    void paint_card(QPainter* p, double lod) {
+        const QRectF r = rect_;
+        const bool placeholder = node_.kind == RelNodeKind::Placeholder;
+        const bool cluster = node_.kind == RelNodeKind::Cluster;
+        // Surface: monochrome; hover lifts it, the selection takes the accent.
+        QColor bg = QColor(colors::BG_SURFACE());
+        if (hovered_)
+            bg = QColor(colors::BG_HOVER());
+        p->setPen(Qt::NoPen);
+        p->setBrush(placeholder || cluster ? Qt::NoBrush : QBrush(bg));
+        p->drawRect(r);
+        const QColor border = selected_ ? QColor(colors::AMBER()) : QColor(colors::BORDER_DIM());
+        p->setPen(QPen(border, selected_ ? 1.5 : 1.0, placeholder || cluster ? Qt::DashLine : Qt::SolidLine));
+        p->setBrush(Qt::NoBrush);
+        p->drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5));
+        if (selected_) {
+            p->setPen(Qt::NoPen);
+            p->setBrush(QColor(colors::AMBER()));
+            p->drawRect(QRectF(r.left(), r.top(), 3, r.height()));
+        }
+        if (lod < 0.42)
+            return; // far out: the card's outline only
 
-        if (role_ == Role::Center) {
-            // Outer glow
-            QColor glow = accent_;
-            glow.setAlpha(30);
-            painter->setPen(QPen(glow, 6.0));
-            painter->setBrush(Qt::NoBrush);
-            painter->drawRect(r.adjusted(-3, -3, 3, 3));
-
-            // Background gradient
-            QLinearGradient bg(r.topLeft(), r.bottomLeft());
-            bg.setColorAt(0.0, QColor(28, 16, 4, 252));
-            bg.setColorAt(1.0, QColor(14, 8, 2, 252));
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(QBrush(bg));
-            painter->drawRect(r);
-
-            // Top stripe
-            QColor stripe = accent_;
-            stripe.setAlpha(220);
-            painter->setBrush(QBrush(stripe));
-            painter->drawRect(QRectF(r.left(), r.top(), r.width(), 3));
-
-            // Border
-            painter->setPen(QPen(accent_, 1.5));
-            painter->setBrush(Qt::NoBrush);
-            painter->drawRect(r);
-
-            // Divider
-            qreal divY = r.top() + h_ * 0.42;
-            QColor div_col = accent_;
-            div_col.setAlpha(50);
-            painter->setPen(QPen(div_col, 1.0));
-            painter->drawLine(QPointF(r.left() + 10, divY), QPointF(r.right() - 10, divY));
-
-            // Ticker
-            QFont tf("Consolas", 15, QFont::Bold);
-            painter->setFont(tf);
-            painter->setPen(accent_);
-            painter->drawText(QRectF(r.left() + 12, r.top() + 8, r.width() - 24, h_ * 0.38),
-                              Qt::AlignLeft | Qt::AlignVCenter, label_);
-
-            // Sub lines
-            if (!sub_.isEmpty()) {
-                QStringList lines = sub_.split('\n');
-                QFont sf("Consolas", 8);
-                painter->setFont(sf);
-                qreal line_h = (h_ * 0.54) / qMax(lines.size(), 1);
-                for (int i = 0; i < lines.size(); ++i) {
-                    QColor col = (i == 0) ? QColor(220, 220, 220, 230) : QColor(160, 160, 160, 190);
-                    painter->setPen(col);
-                    painter->drawText(QRectF(r.left() + 12, divY + 5 + i * line_h, r.width() - 24, line_h),
-                                      Qt::AlignLeft | Qt::AlignVCenter, lines[i]);
+        const QFont name_font = fonts::font(-2, QFont::DemiBold);
+        const QFont cell_font = fonts::font(-2);
+        const QFont tag_font = fonts::font(-3, QFont::Bold);
+        const double pad = std::max(6.0, row_h_ * 0.28);
+        if (placeholder) {
+            const bool loading = node_.state == RelSectionState::Loading;
+            if (loading) {
+                // Skeleton rows: the size the section will take.
+                const int rows = std::max(1, static_cast<int>(std::round((r.height() + 3) / (row_h_ + 3))));
+                const QColor sk = colors::overlay_color(0.07);
+                for (int i = 0; i < rows; ++i) {
+                    const QRectF row(r.left(), r.top() + i * (row_h_ + 3), r.width(), row_h_);
+                    p->setPen(Qt::NoPen);
+                    p->setBrush(sk);
+                    p->drawRect(QRectF(row.left() + pad, row.center().y() - 3, row.width() * (0.45 - 0.05 * (i % 3)), 6));
+                    p->drawRect(QRectF(row.right() - pad - col_w_ * 0.8, row.center().y() - 3, col_w_ * 0.8, 6));
                 }
             }
-
-        } else if (role_ == Role::Hub) {
-            // Gradient background
-            QLinearGradient bg(r.topLeft(), r.bottomLeft());
-            QColor c1 = accent_.darker(130);
-            c1.setAlpha(240);
-            QColor c2 = accent_.darker(110);
-            c2.setAlpha(240);
-            bg.setColorAt(0.0, c1);
-            bg.setColorAt(1.0, c2);
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(QBrush(bg));
-            painter->drawRect(r);
-
-            // Shimmer line
-            QColor shimmer = accent_.lighter(180);
-            shimmer.setAlpha(70);
-            painter->setPen(QPen(shimmer, 1.0));
-            painter->drawLine(QPointF(r.left(), r.top() + 1), QPointF(r.right(), r.top() + 1));
-
-            // Border
-            QColor border = accent_.lighter(140);
-            border.setAlpha(160);
-            painter->setPen(QPen(border, 1.0));
-            painter->setBrush(Qt::NoBrush);
-            painter->drawRect(r);
-
-            // Label
-            QFont lf("Consolas", 9, QFont::Bold);
-            painter->setFont(lf);
-            painter->setPen(QColor(255, 255, 255, 235));
-            painter->drawText(r.adjusted(8, 0, -8, 0), Qt::AlignCenter, label_);
-
-        } else {
-            // Dark gradient background
-            QLinearGradient bg(r.topLeft(), r.bottomLeft());
-            bg.setColorAt(0.0, QColor(32, 32, 40, 235));
-            bg.setColorAt(1.0, QColor(20, 20, 26, 235));
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(QBrush(bg));
-            painter->drawRect(r);
-
-            // Left accent bar
-            QColor bar = accent_;
-            bar.setAlpha(255);
-            painter->setBrush(QBrush(bar));
-            painter->drawRect(QRectF(r.left(), r.top(), 3, r.height()));
-
-            // Top tint
-            QLinearGradient tint_g(r.topLeft(), QPointF(r.left(), r.top() + 12));
-            QColor tint = accent_;
-            tint.setAlpha(25);
-            tint_g.setColorAt(0.0, tint);
-            tint_g.setColorAt(1.0, Qt::transparent);
-            painter->setBrush(QBrush(tint_g));
-            painter->drawRect(r);
-
-            // Border
-            QColor border = accent_;
-            border.setAlpha(70);
-            painter->setPen(QPen(border, 1.0));
-            painter->setBrush(Qt::NoBrush);
-            painter->drawRect(r);
-
-            // Divider
-            if (!sub_.isEmpty()) {
-                qreal divY = r.top() + r.height() * 0.52;
-                painter->setPen(QPen(QColor(255, 255, 255, 12), 1.0));
-                painter->drawLine(QPointF(r.left() + 10, divY), QPointF(r.right() - 4, divY));
-            }
-
-            // Label
-            QFont lf("Consolas", 8, QFont::Bold);
-            painter->setFont(lf);
-            painter->setPen(QColor(238, 238, 238, 245));
-            QRectF top_r(r.left() + 10, r.top() + 4, r.width() - 16,
-                         sub_.isEmpty() ? r.height() - 8 : r.height() * 0.48);
-            painter->drawText(top_r, Qt::AlignLeft | Qt::AlignVCenter, label_);
-
-            // Sub label
-            if (!sub_.isEmpty()) {
-                QFont sf("Consolas", 7);
-                painter->setFont(sf);
-                QColor sub_col = accent_.lighter(160);
-                sub_col.setAlpha(180);
-                painter->setPen(sub_col);
-                QRectF bot_r(r.left() + 10, r.top() + r.height() * 0.52, r.width() - 16, r.height() * 0.44);
-                painter->drawText(bot_r, Qt::AlignLeft | Qt::AlignVCenter, sub_);
-            }
-        }
-    }
-
-  protected:
-    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override {
-        if (change == ItemPositionHasChanged)
-            for (RelEdge* e : std::as_const(edges_))
-                e->adjust();
-        return QGraphicsItem::itemChange(change, value);
-    }
-    void mousePressEvent(QGraphicsSceneMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton) {
-            if (auto* rms = qobject_cast<RelationshipGraphScene*>(scene())) {
-                // Every node (not just the center) opens the right-side detail
-                // panel. The panel slot looks up rich data by this label. A single
-                // click only inspects; navigating away is a deliberate double-click.
-                const QString category = (role_ == Role::Center) ? QStringLiteral("COMPANY")
-                                         : (role_ == Role::Hub)  ? QStringLiteral("SECTOR / GROUP")
-                                                                 : QStringLiteral("PEER / RELATED");
-                emit rms->node_activated(label_, sub_, category);
-            }
-        }
-        update();
-        QGraphicsItem::mousePressEvent(event);
-    }
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override {
-        update();
-        QGraphicsItem::mouseReleaseEvent(event);
-    }
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton && !symbol_.isEmpty()) {
-            if (auto* rms = qobject_cast<RelationshipGraphScene*>(scene()))
-                emit rms->symbol_open_requested(symbol_);
-            event->accept();
+            p->setFont(fonts::font(-3, QFont::DemiBold));
+            const bool failed = section_failed(node_.state);
+            p->setPen(failed ? QColor(colors::WARNING()) : QColor(colors::TEXT_TERTIARY()));
+            const QRectF tr = loading ? QRectF(r.left() + pad, r.top(), r.width() - 2 * pad, row_h_)
+                                      : r.adjusted(pad, 0, -pad, 0);
+            const Qt::Alignment al = loading ? (Qt::AlignRight | Qt::AlignVCenter) : (Qt::AlignLeft | Qt::AlignVCenter);
+            p->drawText(tr, al, p->fontMetrics().elidedText(rgs_placeholder_text(node_), Qt::ElideRight, int(tr.width())));
             return;
         }
-        QGraphicsItem::mouseDoubleClickEvent(event);
+
+        // Marker (type by shape), name, then up to three right-aligned number columns.
+        const double ms = std::max(6.0, row_h_ * 0.32);
+        const QRectF marker(r.left() + pad, r.center().y() - ms / 2, ms, ms);
+        rgs_marker(p, marker, node_.kind, cluster ? QColor(colors::TEXT_DIM()) : rgs_group_color(node_.group));
+        const double cols_w = 3 * col_w_;
+        const double name_left = marker.right() + pad * 0.8;
+        double name_right = r.right() - pad - cols_w;
+        if (text_.c[0].isEmpty() && text_.c[1].isEmpty() && text_.c[2].isEmpty())
+            name_right = r.right() - pad;
+        if (text_.span_all)
+            name_right = r.right() - pad - col_w_ * 1.6;
+        QString name = text_.name;
+        p->setFont(name_font);
+        p->setPen(cluster ? QColor(colors::TEXT_TERTIARY()) : QColor(colors::TEXT_PRIMARY()));
+        QRectF nr(name_left, r.top(), std::max(10.0, name_right - name_left), r.height());
+        // "You hold this": a small accent tag before the name.
+        if (node_.user_holds || node_.in_watchlist) {
+            const QString tag = node_.user_holds ? RelationshipGraphScene::tr("HELD") : RelationshipGraphScene::tr("WL");
+            p->setFont(tag_font);
+            const double tw = p->fontMetrics().horizontalAdvance(tag) + 6;
+            const QRectF tr2(nr.right() - tw, r.center().y() - row_h_ * 0.3, tw, row_h_ * 0.6);
+            p->setPen(QPen(QColor(colors::AMBER()), 1.0));
+            p->setBrush(Qt::NoBrush);
+            p->drawRect(tr2);
+            p->drawText(tr2, Qt::AlignCenter, tag);
+            nr.setRight(tr2.left() - 4);
+            p->setFont(name_font);
+            p->setPen(QColor(colors::TEXT_PRIMARY()));
+        }
+        p->drawText(nr, Qt::AlignLeft | Qt::AlignVCenter, p->fontMetrics().elidedText(name, Qt::ElideRight, int(nr.width())));
+
+        p->setFont(cell_font);
+        const QFontMetricsF cfm(cell_font);
+        auto cell_color = [&](int i) {
+            if (text_.dir[i] > 0)
+                return QColor(colors::POSITIVE());
+            if (text_.dir[i] < 0)
+                return QColor(colors::NEGATIVE());
+            return i == 0 ? QColor(colors::TEXT_PRIMARY()) : QColor(colors::TEXT_SECONDARY());
+        };
+        const double right = r.right() - pad;
+        if (text_.span_all) {
+            const QRectF cr(name_right + 4, r.top(), right - name_right - 4, r.height());
+            p->setPen(QColor(colors::TEXT_SECONDARY()));
+            p->drawText(cr, Qt::AlignRight | Qt::AlignVCenter, cfm.elidedText(text_.c[2], Qt::ElideRight, cr.width()));
+        } else {
+            for (int i = 0; i < 3; ++i) {
+                if (text_.c[i].isEmpty())
+                    continue;
+                double x0 = right - (3 - i) * col_w_;
+                double w = col_w_ - 4;
+                Qt::Alignment al = Qt::AlignRight | Qt::AlignVCenter;
+                if (i == 0 && text_.span12) {
+                    w = 2 * col_w_ - 6;
+                    al = Qt::AlignLeft | Qt::AlignVCenter;
+                    p->setPen(QColor(colors::TEXT_SECONDARY()));
+                } else {
+                    p->setPen(cell_color(i));
+                }
+                const QRectF cr(x0, r.top(), w, r.height());
+                p->drawText(cr, al, cfm.elidedText(text_.c[i], Qt::ElideRight, cr.width()));
+            }
+        }
+    }
+
+    void paint_center(QPainter* p, double lod) {
+        const QRectF r = rect_;
+        const QColor acc(colors::AMBER());
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(colors::BG_RAISED()));
+        p->drawRect(r);
+        p->setPen(QPen(selected_ ? acc : QColor(colors::BORDER_MED()), selected_ ? 1.6 : 1.0));
+        p->setBrush(Qt::NoBrush);
+        p->drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5));
+        p->setPen(Qt::NoPen);
+        p->setBrush(acc);
+        p->drawRect(QRectF(r.left(), r.top(), r.width(), 3));
+        if (lod < 0.3)
+            return;
+        const double pad = std::max(10.0, row_h_ * 0.5);
+        const double inner_w = r.width() - 2 * pad;
+        double y = r.top() + pad * 0.6;
+        // Ticker + venue.
+        QFont tf = fonts::font(5, QFont::Bold);
+        p->setFont(tf);
+        QFontMetricsF tfm(tf);
+        p->setPen(acc);
+        p->drawText(QRectF(r.left() + pad, y, inner_w, tfm.height()), Qt::AlignLeft | Qt::AlignVCenter, center_.ticker);
+        QFont vf = fonts::font(-3, QFont::DemiBold);
+        p->setFont(vf);
+        p->setPen(QColor(colors::TEXT_TERTIARY()));
+        QString right_txt = center_.venue;
+        p->drawText(QRectF(r.left() + pad, y, inner_w, tfm.height()), Qt::AlignRight | Qt::AlignVCenter, right_txt);
+        if (!center_.badge.isEmpty()) {
+            const QFontMetricsF vfm(vf);
+            const double bw = vfm.horizontalAdvance(center_.badge) + 8;
+            const QRectF br(r.right() - pad - bw, y + tfm.height() * 0.62, bw, vfm.height() + 2);
+            p->setPen(QPen(acc, 1.0));
+            p->drawRect(br);
+            p->setPen(acc);
+            p->drawText(br, Qt::AlignCenter, center_.badge);
+        }
+        y += tfm.height();
+        // Name.
+        QFont nf = fonts::font(-1);
+        p->setFont(nf);
+        QFontMetricsF nfm(nf);
+        p->setPen(QColor(colors::TEXT_SECONDARY()));
+        p->drawText(QRectF(r.left() + pad, y, inner_w, nfm.height()), Qt::AlignLeft | Qt::AlignVCenter,
+                    nfm.elidedText(center_.name, Qt::ElideRight, inner_w));
+        y += nfm.height() + 4;
+        // Price + change.
+        QFont pf = fonts::font(3, QFont::Bold);
+        p->setFont(pf);
+        QFontMetricsF pfm(pf);
+        p->setPen(QColor(colors::TEXT_PRIMARY()));
+        p->drawText(QRectF(r.left() + pad, y, inner_w, pfm.height()), Qt::AlignLeft | Qt::AlignVCenter, center_.price);
+        if (!center_.change.isEmpty()) {
+            const double pw = pfm.horizontalAdvance(center_.price);
+            QFont cf = fonts::font(-1, QFont::DemiBold);
+            p->setFont(cf);
+            p->setPen(center_.change_dir > 0 ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE()));
+            p->drawText(QRectF(r.left() + pad + pw + 10, y, inner_w - pw - 10, pfm.height()),
+                        Qt::AlignLeft | Qt::AlignVCenter, center_.change);
+        }
+        y += pfm.height() + 6;
+        // Hairline, then the 3 x 2 stat grid.
+        p->setPen(QPen(QColor(colors::BORDER_DIM()), 1.0));
+        p->drawLine(QPointF(r.left() + pad, y), QPointF(r.right() - pad, y));
+        y += 6;
+        QFont lf = fonts::font(-4, QFont::DemiBold);
+        QFont sf = fonts::font(-2, QFont::DemiBold);
+        QFontMetricsF lfm(lf), sfm(sf);
+        const double cell_w = inner_w / 3.0;
+        const double cell_h = lfm.height() + sfm.height() + 4;
+        for (int i = 0; i < center_.stat_labels.size() && i < 6; ++i) {
+            const double cx = r.left() + pad + (i % 3) * cell_w;
+            const double cy = y + (i / 3) * cell_h;
+            p->setFont(lf);
+            p->setPen(QColor(colors::TEXT_TERTIARY()));
+            p->drawText(QRectF(cx, cy, cell_w - 6, lfm.height()), Qt::AlignLeft | Qt::AlignVCenter, center_.stat_labels[i]);
+            p->setFont(sf);
+            p->setPen(QColor(colors::TEXT_PRIMARY()));
+            p->drawText(QRectF(cx, cy + lfm.height(), cell_w - 6, sfm.height() + 2), Qt::AlignLeft | Qt::AlignVCenter,
+                        sfm.elidedText(center_.stat_values.value(i), Qt::ElideRight, cell_w - 6));
+        }
+        y += 2 * cell_h + 4;
+        // Sector · industry.
+        p->setFont(fonts::font(-3));
+        p->setPen(QColor(colors::TEXT_TERTIARY()));
+        const QFontMetricsF ifm(fonts::font(-3));
+        p->drawText(QRectF(r.left() + pad, y, inner_w, ifm.height()), Qt::AlignLeft | Qt::AlignVCenter,
+                    ifm.elidedText(center_.line, Qt::ElideRight, inner_w));
+        y += ifm.height() + 6;
+        // Ownership (or sector) split: one stacked bar with its labels under it.
+        if (!center_.split.isEmpty() && y + 10 < r.bottom()) {
+            const double bh = std::max(5.0, row_h_ * 0.28);
+            double x = r.left() + pad;
+            const QColor seg[] = {QColor(colors::TEXT_SECONDARY()), acc, QColor(colors::BORDER_BRIGHT()),
+                                  QColor(colors::TEXT_DIM())};
+            double total = 0;
+            for (const auto& s : center_.split)
+                total += std::max(0.0, s.second);
+            if (total <= 0)
+                total = 1;
+            const double scale = std::min(1.0, 1.0 / total);
+            QFont kf = fonts::font(-4, QFont::DemiBold);
+            const QFontMetricsF kfm(kf);
+            double lx = r.left() + pad;
+            for (int i = 0; i < center_.split.size(); ++i) {
+                const double w = inner_w * std::max(0.0, center_.split[i].second) * scale;
+                p->setPen(Qt::NoPen);
+                p->setBrush(seg[i % 4]);
+                p->drawRect(QRectF(x, y, std::max(0.0, w - 1), bh));
+                x += w;
+                p->setFont(kf);
+                p->setPen(i == 1 ? acc : QColor(colors::TEXT_SECONDARY()));
+                const QString lab = center_.split[i].first + QLatin1Char(' ') +
+                                    fmt::fraction_pct(center_.split[i].second, 1, false);
+                const double lw = kfm.horizontalAdvance(lab) + 10;
+                if (lx + lw <= r.right() - pad + 1) {
+                    p->drawText(QRectF(lx, y + bh + 2, lw, kfm.height()), Qt::AlignLeft | Qt::AlignVCenter, lab);
+                    lx += lw;
+                }
+            }
+        }
+    }
+
+    void paint_bubble(QPainter* p, double lod) {
+        const bool center = style_ == RgsStyle::CenterBubble;
+        const QColor base = center ? QColor(colors::AMBER()) : rgs_group_color(node_.group);
+        const QRectF r = rect_;
+        p->setBrush(colors::tint_color(base, center ? 0.28 : 0.18));
+        p->setPen(QPen(selected_ ? QColor(colors::AMBER()) : rgs_with_alpha(base, hovered_ ? 1.0 : 0.85),
+                       selected_ ? 2.2 : 1.2,
+                       node_.kind == RelNodeKind::Cluster ? Qt::DashLine : Qt::SolidLine));
+        switch (node_.kind) {
+            case RelNodeKind::Institution: {
+                QPolygonF d{QPointF(0, r.top()), QPointF(r.right(), 0), QPointF(0, r.bottom()), QPointF(r.left(), 0)};
+                p->drawPolygon(d);
+                break;
+            }
+            case RelNodeKind::Fund:
+            case RelNodeKind::Sector:
+                p->drawRoundedRect(r.adjusted(r.width() * 0.08, r.height() * 0.08, -r.width() * 0.08, -r.height() * 0.08),
+                                   3, 3);
+                break;
+            case RelNodeKind::Etf: {
+                QPolygonF tri{QPointF(0, r.top()), QPointF(r.right(), r.bottom() * 0.8), QPointF(r.left(), r.bottom() * 0.8)};
+                p->drawPolygon(tri);
+                break;
+            }
+            default:
+                p->drawEllipse(r);
+                break;
+        }
+        if (center || node_.kind == RelNodeKind::Cluster) {
+            p->setFont(fonts::font(center ? 2 : -3, QFont::Bold));
+            p->setPen(center ? QColor(colors::AMBER()) : QColor(colors::TEXT_SECONDARY()));
+            const QString t = center ? center_.ticker
+                                     : (node_.hidden_count > 0 ? QStringLiteral("+") + QString::number(node_.hidden_count)
+                                                               : QStringLiteral("+"));
+            p->drawText(r, Qt::AlignCenter, t);
+            if (center && lod > 0.5) {
+                p->setFont(fonts::font(-3));
+                p->setPen(QColor(colors::TEXT_SECONDARY()));
+                p->drawText(r.adjusted(0, r.height() * 0.42, 0, 0), Qt::AlignHCenter | Qt::AlignTop,
+                            center_.stat_values.value(0));
+            }
+        }
+        if (label_.isEmpty() || lod < 0.5)
+            return;
+        p->setFont(fonts::font(-3, QFont::DemiBold));
+        p->setPen(QColor(colors::TEXT_PRIMARY()));
+        const QFontMetricsF fm(p->font());
+        const QString name = node_.short_label.isEmpty() ? node_.label : node_.short_label;
+        const bool right_side = label_.left() >= r.right() - 1;
+        const Qt::Alignment al = (right_side ? Qt::AlignLeft : (label_.right() <= r.left() + 1 ? Qt::AlignRight : Qt::AlignHCenter)) |
+                                 Qt::AlignVCenter;
+        p->drawText(label_, al, fm.elidedText(name, Qt::ElideRight, label_.width()));
+    }
+
+    void paint_bar(QPainter* p, double lod) {
+        const bool center = style_ == RgsStyle::CenterBar;
+        const QRectF r = rect_;
+        const QColor c = center ? QColor(colors::AMBER()) : rgs_group_color(node_.group);
+        p->setPen(Qt::NoPen);
+        p->setBrush(center ? rgs_with_alpha(c, 0.85) : rgs_with_alpha(c, selected_ || hovered_ ? 1.0 : 0.8));
+        p->drawRect(r);
+        if (lod < 0.4)
+            return;
+        p->setFont(fonts::font(-3, QFont::DemiBold));
+        const QFontMetricsF fm(p->font());
+        if (center) {
+            p->setPen(QColor(colors::AMBER()));
+            p->drawText(QRectF(r.center().x() - 120, r.top() - fm.height() * 2.2, 240, fm.height()),
+                        Qt::AlignCenter, center_.ticker);
+            p->setPen(QColor(colors::TEXT_SECONDARY()));
+            p->drawText(QRectF(r.center().x() - 160, r.top() - fm.height() * 1.2, 320, fm.height()), Qt::AlignCenter,
+                        RelationshipGraphScene::tr("100 % of shares"));
+            return;
+        }
+        const double gap = 8;
+        const QString label = text_.name + QStringLiteral("  ") + text_.c[0];
+        const bool left_side = r.center().x() < 0;
+        const double w = 280;
+        const QRectF lr = left_side ? QRectF(r.left() - gap - w, r.center().y() - fm.height() / 2, w, fm.height())
+                                    : QRectF(r.right() + gap, r.center().y() - fm.height() / 2, w, fm.height());
+        p->setPen(selected_ ? QColor(colors::AMBER()) : QColor(colors::TEXT_PRIMARY()));
+        p->drawText(lr, (left_side ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
+                    fm.elidedText(label, Qt::ElideLeft, w));
+    }
+
+    RelGraphNode node_;
+    RgsStyle style_;
+    QRectF rect_;
+    QRectF label_;
+    double radius_ = 0;
+    QStringList columns_;
+    double row_h_ = 24;
+    double col_w_ = 60;
+    RgsText text_;
+    RgsCenterText center_;
+    bool selected_ = false;
+    bool dimmed_ = false;
+    bool hovered_ = false;
+    double pulse_ = 0;
+    QPointF from_, to_;
+    bool fade_in_ = false;
+};
+
+class RgsEdgeItem : public QGraphicsItem {
+  public:
+    RgsEdgeItem(const RelGraphEdge& e, const RelEdgeGeom& g, double weight, bool arrow_at_end, bool arrow, bool dashed)
+        : edge_(e), weight_(weight), arrow_end_(arrow_at_end), arrow_(arrow), dashed_(dashed) {
+        setZValue(e.second_hop ? 0 : 1);
+        setAcceptedMouseButtons(Qt::NoButton);
+        set_geometry(g);
+    }
+    const RelGraphEdge& edge() const { return edge_; }
+    void set_geometry(const RelEdgeGeom& g) {
+        prepareGeometryChange();
+        geom_ = g;
+        path_ = QPainterPath();
+        if (!g.poly.isEmpty()) {
+            path_.moveTo(g.poly.first());
+            for (int i = 1; i < g.poly.size(); ++i)
+                path_.lineTo(g.poly[i]);
+        } else {
+            path_.moveTo(g.p0);
+            path_.cubicTo(g.c1, g.c2, g.p3);
+        }
+        if (g.band > 0) {
+            // A band of constant thickness: the curve offset up and down.
+            const double h = g.band / 2.0;
+            band_ = QPainterPath();
+            band_.moveTo(g.p0 + QPointF(0, -h));
+            band_.cubicTo(g.c1 + QPointF(0, -h), g.c2 + QPointF(0, -h), g.p3 + QPointF(0, -h));
+            band_.lineTo(g.p3 + QPointF(0, h));
+            band_.cubicTo(g.c2 + QPointF(0, h), g.c1 + QPointF(0, h), g.p0 + QPointF(0, h));
+            band_.closeSubpath();
+        }
+        bounds_ = (g.band > 0 ? band_.boundingRect() : path_.boundingRect()).adjusted(-12, -12, 12, 12);
+        if (!label_.isEmpty())
+            bounds_ = bounds_.united(label_rect());
+    }
+    void set_label(const QString& text) {
+        prepareGeometryChange();
+        label_ = text;
+        if (!label_.isEmpty())
+            bounds_ = bounds_.united(label_rect());
+    }
+    void set_emphasis(int e) { // -1 dimmed, 0 normal, 1 highlighted
+        if (e == emphasis_)
+            return;
+        emphasis_ = e;
+        update();
+    }
+    void set_weight(double w) {
+        weight_ = w;
+        update();
+    }
+    QRectF boundingRect() const override { return bounds_; }
+    void paint(QPainter* p, const QStyleOptionGraphicsItem* opt, QWidget*) override {
+        const double lod = opt ? QStyleOptionGraphicsItem::levelOfDetailFromTransform(p->worldTransform()) : 1.0;
+        if (lod < 0.35 && weight_ < 0.25 && emphasis_ <= 0 && geom_.band <= 0)
+            return; // thin edges drop out when far out
+        p->setRenderHint(QPainter::Antialiasing, true);
+        const QColor acc(colors::AMBER());
+        const QColor ink(colors::TEXT_TERTIARY());
+        double alpha = 0.22 + 0.55 * weight_;
+        if (emphasis_ < 0)
+            alpha *= 0.25;
+        QColor c = emphasis_ > 0 ? acc : ink;
+        if (edge_.second_hop)
+            c = emphasis_ > 0 ? acc : QColor(colors::CYAN());
+        if (geom_.band > 0) {
+            const QColor bc = rgs_group_color(edge_.group);
+            p->setPen(Qt::NoPen);
+            p->setBrush(rgs_with_alpha(emphasis_ > 0 ? acc : bc, emphasis_ < 0 ? 0.08 : (emphasis_ > 0 ? 0.55 : 0.32)));
+            p->drawPath(band_);
+            return;
+        }
+        const double w = edge_.second_hop ? 1.0 : 0.8 + 3.4 * weight_;
+        QPen pen(rgs_with_alpha(c, emphasis_ > 0 ? 0.95 : alpha), w);
+        pen.setCapStyle(Qt::FlatCap);
+        if (dashed_ || edge_.second_hop)
+            pen.setDashPattern({3.0, 3.0});
+        p->setPen(pen);
+        p->setBrush(Qt::NoBrush);
+        p->drawPath(path_);
+        if (arrow_ && lod > 0.45) {
+            // Arrowhead at the end the relationship points to.
+            const double len = path_.length();
+            const double t_end = arrow_end_ ? 1.0 : 0.0;
+            const double t_back = arrow_end_ ? std::max(0.0, 1.0 - 9.0 / std::max(1.0, len)) : std::min(1.0, 9.0 / std::max(1.0, len));
+            const QPointF tip = path_.pointAtPercent(path_.percentAtLength(t_end * len));
+            const QPointF back = path_.pointAtPercent(path_.percentAtLength(t_back * len));
+            QPointF d = tip - back;
+            const double dl = std::hypot(d.x(), d.y());
+            if (dl > 0.1) {
+                d /= dl;
+                const QPointF nrm(-d.y(), d.x());
+                const double s = 3.5 + w;
+                QPolygonF head{tip, tip - d * (s * 1.6) + nrm * s, tip - d * (s * 1.6) - nrm * s};
+                p->setPen(Qt::NoPen);
+                p->setBrush(rgs_with_alpha(c, emphasis_ > 0 ? 0.95 : std::min(1.0, alpha + 0.2)));
+                p->drawPolygon(head);
+            }
+        }
+        if (!label_.isEmpty() && lod > 0.55 && emphasis_ >= 0) {
+            const QRectF lr = label_rect();
+            p->setPen(QPen(emphasis_ > 0 ? acc : QColor(colors::BORDER_MED()), 1.0));
+            p->setBrush(QColor(colors::BG_BASE()));
+            p->drawRoundedRect(lr, 2, 2);
+            p->setFont(fonts::font(-4, QFont::DemiBold));
+            p->setPen(emphasis_ > 0 ? acc : QColor(colors::TEXT_SECONDARY()));
+            p->drawText(lr, Qt::AlignCenter, label_);
+        }
     }
 
   private:
-    QVector<RelEdge*> edges_;
-    QString symbol_;
-    QString label_, sub_;
-    QColor accent_;
-    qreal w_, h_;
-    Role role_;
+    QRectF label_rect() const {
+        const QFontMetricsF fm(fonts::font(-4, QFont::DemiBold));
+        const double w = fm.horizontalAdvance(label_) + 10;
+        const double h = fm.height() + 2;
+        return QRectF(geom_.label_pos.x() - w / 2, geom_.label_pos.y() - h / 2, w, h);
+    }
+    RelGraphEdge edge_;
+    RelEdgeGeom geom_;
+    QPainterPath path_;
+    QPainterPath band_;
+    QRectF bounds_;
+    QString label_;
+    double weight_ = 0.3;
+    bool arrow_end_ = true;
+    bool arrow_ = false;
+    bool dashed_ = false;
+    int emphasis_ = 0;
 };
 
-// ── Edge implementation ───────────────────────────────────────────────────────
-void RelEdge::adjust() {
-    if (!source_ || !dest_)
-        return;
-    QLineF line(mapFromItem(source_, 0, 0), mapFromItem(dest_, 0, 0));
-    prepareGeometryChange();
-    source_pt_ = line.p1();
-    dest_pt_ = line.p2();
-}
+/// Group header (title, summary, column captions) or a side caption.
+class RgsChromeItem : public QGraphicsItem {
+  public:
+    RgsChromeItem(const QRectF& r, const QString& title, const QString& summary, const QStringList& columns,
+                  double col_w, bool side_caption, const QColor& tick)
+        : rect_(r), title_(title), summary_(summary), columns_(columns), col_w_(col_w), side_(side_caption),
+          tick_(tick) {
+        setZValue(2);
+        setAcceptedMouseButtons(Qt::NoButton);
+    }
+    QRectF boundingRect() const override { return rect_.adjusted(-2, -2, 2, 2); }
+    void paint(QPainter* p, const QStyleOptionGraphicsItem* opt, QWidget*) override {
+        const double lod = opt ? QStyleOptionGraphicsItem::levelOfDetailFromTransform(p->worldTransform()) : 1.0;
+        p->setRenderHint(QPainter::Antialiasing, false);
+        p->setRenderHint(QPainter::TextAntialiasing, true);
+        if (side_) {
+            p->setPen(QPen(QColor(colors::BORDER_MED()), 1.0));
+            p->drawLine(QPointF(rect_.left(), rect_.bottom() - 0.5), QPointF(rect_.right(), rect_.bottom() - 0.5));
+            if (lod < 0.3)
+                return;
+            p->setFont(fonts::font(-2, QFont::Bold));
+            p->setPen(QColor(colors::TEXT_SECONDARY()));
+            p->drawText(rect_.adjusted(0, 0, 0, -3), Qt::AlignLeft | Qt::AlignBottom, title_);
+            return;
+        }
+        // Header strip: accent-free; a coloured tick says which marker the group uses.
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(colors::BG_BASE()));
+        p->drawRect(rect_);
+        p->setPen(QPen(QColor(colors::BORDER_MED()), 1.0));
+        p->drawLine(QPointF(rect_.left(), rect_.bottom() - 0.5), QPointF(rect_.right(), rect_.bottom() - 0.5));
+        p->setPen(Qt::NoPen);
+        p->setBrush(tick_);
+        const double th = std::max(8.0, rect_.height() * 0.38);
+        p->drawRect(QRectF(rect_.left(), rect_.top() + rect_.height() * 0.18, 3, th));
+        if (lod < 0.4)
+            return;
+        const QFont tf = fonts::font(-3, QFont::Bold);
+        const QFontMetricsF tfm(tf);
+        const double top_h = rect_.height() * 0.56;
+        p->setFont(tf);
+        p->setPen(QColor(colors::TEXT_PRIMARY()));
+        const QRectF title_r(rect_.left() + 9, rect_.top(), rect_.width() - 9, top_h);
+        p->drawText(title_r, Qt::AlignLeft | Qt::AlignVCenter, title_);
+        const double tw = tfm.horizontalAdvance(title_) + 16;
+        p->setFont(fonts::font(-4));
+        p->setPen(QColor(colors::TEXT_TERTIARY()));
+        const QRectF sum_r(rect_.left() + 9 + tw, rect_.top(), rect_.width() - 9 - tw - 4, top_h);
+        p->drawText(sum_r, Qt::AlignRight | Qt::AlignVCenter,
+                    QFontMetricsF(p->font()).elidedText(summary_, Qt::ElideRight, sum_r.width()));
+        // Column captions, right-aligned over the card columns.
+        p->setFont(fonts::font(-5, QFont::DemiBold));
+        p->setPen(QColor(colors::TEXT_DIM()));
+        const double right = rect_.right() - std::max(6.0, rect_.height() * 0.2);
+        for (int i = 0; i < columns_.size() && i < 3; ++i) {
+            if (columns_[i].isEmpty())
+                continue;
+            const double x0 = right - (3 - i) * col_w_;
+            const QRectF cr(x0, rect_.top() + top_h - 2, col_w_ - 4, rect_.height() - top_h);
+            p->drawText(cr, Qt::AlignRight | Qt::AlignVCenter, columns_[i]);
+        }
+    }
 
-QRectF RelEdge::boundingRect() const {
-    qreal extra = 4.0;
-    return QRectF(source_pt_, QSizeF(dest_pt_.x() - source_pt_.x(), dest_pt_.y() - source_pt_.y()))
-        .normalized()
-        .adjusted(-extra, -extra, extra, extra);
-}
-
-void RelEdge::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    if (!source_ || !dest_)
-        return;
-    QLineF line(source_pt_, dest_pt_);
-    if (qFuzzyCompare(line.length(), qreal(0.)))
-        return;
-
-    painter->setRenderHint(QPainter::Antialiasing);
-
-    QLinearGradient grad(source_pt_, dest_pt_);
-    QColor c_near = color_;
-    c_near.setAlpha(thin_ ? 90 : 140);
-    QColor c_far = color_;
-    c_far.setAlpha(thin_ ? 30 : 55);
-    grad.setColorAt(0.0, c_near);
-    grad.setColorAt(1.0, c_far);
-
-    QPen pen;
-    pen.setBrush(QBrush(grad));
-    pen.setWidthF(thin_ ? 1.0 : 1.8);
-    pen.setCapStyle(Qt::RoundCap);
-    painter->setPen(pen);
-    painter->drawLine(source_pt_, dest_pt_);
-}
-
-// ── Radial placement ──────────────────────────────────────────────────────────
-// Each cluster owns an angular sector (proportional to its leaf count); the hub sits
-// mid-sector and its leaves fan out across it, pushed outward along their own ray until
-// they clear every box placed so far. Deterministic, and overlap-free by construction.
-struct RelClusterPos {
-    QPointF hub;
-    QVector<QPointF> leaves;
+  private:
+    QRectF rect_;
+    QString title_;
+    QString summary_;
+    QStringList columns_;
+    double col_w_;
+    bool side_;
+    QColor tick_;
 };
 
-static QRectF relmap_rect_at(const QPointF& c, qreal w, qreal h) {
-    return QRectF(c.x() - w / 2, c.y() - h / 2, w, h);
+RgsNodeItem* rgs_node_item(QGraphicsItem* it) {
+    return it && it->type() == RgsNodeItem::Type ? static_cast<RgsNodeItem*>(it) : nullptr;
 }
 
-static bool relmap_hits_any(const QRectF& r, const QVector<QRectF>& placed, qreal gap) {
-    const QRectF probe = r.adjusted(-gap, -gap, gap, gap);
-    for (const auto& p : placed)
-        if (probe.intersects(p))
-            return true;
-    return false;
-}
-
-static QVector<RelClusterPos> relmap_radial_positions(const QVector<int>& leaf_counts) {
-    const int nc = leaf_counts.size();
-    QVector<RelClusterPos> out(nc);
-    if (nc == 0)
-        return out;
-
-    constexpr qreal kHubRadius = 330.0;
-    constexpr qreal kLeafRingStep = 215.0; // first leaf ring beyond the hub
-    constexpr qreal kGap = 6.0;
-    constexpr qreal kSectorGapDeg = 4.0;
-    constexpr qreal kPushStep = 12.0;
-
-    qreal total_w = 0;
-    for (int n : leaf_counts)
-        total_w += n + 1.5; // +1.5: the hub's own share of the sector
-    const qreal usable_deg = 360.0 - (nc > 1 ? nc * kSectorGapDeg : 0.0);
-
-    QVector<qreal> start_deg(nc), span_deg(nc);
-    qreal a = -90.0;
-    for (int i = 0; i < nc; ++i) {
-        start_deg[i] = a;
-        span_deg[i] = usable_deg * (leaf_counts[i] + 1.5) / total_w;
-        a += span_deg[i] + (nc > 1 ? kSectorGapDeg : 0.0);
+QString rgs_summary(const RelGraphGroup& g, const RelationshipData& d) {
+    using fmt::number;
+    QStringList parts;
+    const int shown_real = g.shown - ((g.expandable || g.universe > g.total_rows) ? 1 : 0);
+    if (g.status.state == RelSectionState::Loading && g.total_rows == 0)
+        return RelationshipGraphScene::tr("loading…");
+    if (g.total_rows == 0)
+        return QString();
+    switch (g.group) {
+        case RelGroup::Institutions:
+            if (d.is_fund())
+                return RelationshipGraphScene::tr("manager");
+            parts << (g.universe > 0 ? RelationshipGraphScene::tr("%1 of %2").arg(shown_real).arg(number(g.universe, 0))
+                                     : RelationshipGraphScene::tr("%1 listed").arg(shown_real));
+            if (rgs_ok(g.total_pct))
+                parts << RelationshipGraphScene::tr("%1 held").arg(fmt::pct(g.total_pct, 1, false));
+            break;
+        case RelGroup::Funds:
+        case RelGroup::Holdings:
+            parts << RelationshipGraphScene::tr("%1 of %2").arg(shown_real).arg(g.total_rows);
+            if (rgs_ok(g.rows_pct))
+                parts << RelationshipGraphScene::tr("%1 listed").arg(fmt::pct(g.rows_pct, 1, false));
+            break;
+        case RelGroup::Insiders:
+            parts << RelationshipGraphScene::tr("%1 of %2").arg(shown_real).arg(g.total_rows);
+            if (rgs_ok(g.total_pct))
+                parts << RelationshipGraphScene::tr("insiders hold %1").arg(fmt::pct(g.total_pct, 2, false));
+            break;
+        case RelGroup::Management:
+            parts << RelationshipGraphScene::tr("%1 officers").arg(g.total_rows);
+            break;
+        case RelGroup::Peers:
+            parts << RelationshipGraphScene::tr("%1 of %2").arg(shown_real).arg(g.total_rows);
+            if (d.peer_source.startsWith(QLatin1String("screen")))
+                parts << RelationshipGraphScene::tr("industry screen");
+            else if (d.peer_source == QLatin1String("generic_fallback"))
+                parts << RelationshipGraphScene::tr("generic — not comparable");
+            break;
+        case RelGroup::Sectors:
+            parts << RelationshipGraphScene::tr("%1 sectors").arg(g.total_rows);
+            break;
+        case RelGroup::Correlated:
+            parts << RelationshipGraphScene::tr("daily returns %1").arg(d.correlation.window.isEmpty()
+                                                                             ? QStringLiteral("1y")
+                                                                             : d.correlation.window);
+            break;
+        case RelGroup::Subsidiaries:
+            parts << RelationshipGraphScene::tr("%1 of %2").arg(shown_real).arg(g.total_rows);
+            if (!d.subsidiaries_filing.form.isEmpty())
+                parts << RelationshipGraphScene::tr("%1 %2").arg(d.subsidiaries_filing.form, d.subsidiaries_filing.filed);
+            break;
+        case RelGroup::SupplyChain:
+        case RelGroup::Count:
+            break;
     }
+    return parts.join(QStringLiteral(" · "));
+}
 
-    QVector<QRectF> placed;
-    placed.append(relmap_rect_at(QPointF(0, 0), kCenterW, kCenterH));
-
-    // Hubs first so the leaves route around them.
-    QVector<qreal> hub_r(nc, kHubRadius);
-    for (int i = 0; i < nc; ++i) {
-        const qreal th = qDegreesToRadians(start_deg[i] + span_deg[i] / 2.0);
-        qreal r = kHubRadius;
-        for (int it = 0; it < 200; ++it) {
-            const QPointF c(r * std::cos(th), r * std::sin(th));
-            if (!relmap_hits_any(relmap_rect_at(c, kHubW, kHubH), placed, kGap))
-                break;
-            r += kPushStep;
+/// The text on an edge for the chosen metric (the group's stand-in when it has none).
+QString rgs_edge_label(const RelGraphEdge& e, RelEdgeMetric m) {
+    const RelEdgeMetric chain[] = {m, effective_metric(e.group, m)};
+    for (RelEdgeMetric c : chain) {
+        const double v = edge_metric_value(e, c);
+        if (!rgs_ok(v))
+            continue;
+        switch (c) {
+            case RelEdgeMetric::Percent:
+                return fmt::pct(v, 2, false);
+            case RelEdgeMetric::Value:
+                return amount_text(v, e.currency);
+            case RelEdgeMetric::Change:
+                return rgs_change(v);
+            case RelEdgeMetric::Correlation:
+                return QStringLiteral("ρ ") + fmt::number(v, 2);
         }
-        hub_r[i] = r;
-        out[i].hub = QPointF(r * std::cos(th), r * std::sin(th));
-        placed.append(relmap_rect_at(out[i].hub, kHubW, kHubH));
     }
-
-    for (int i = 0; i < nc; ++i) {
-        const int n = leaf_counts[i];
-        out[i].leaves.reserve(n);
-        for (int j = 0; j < n; ++j) {
-            const qreal th = qDegreesToRadians(start_deg[i] + (j + 0.5) * span_deg[i] / n);
-            qreal r = hub_r[i] + kLeafRingStep;
-            QPointF c(r * std::cos(th), r * std::sin(th));
-            for (int it = 0; it < 240; ++it) {
-                c = QPointF(r * std::cos(th), r * std::sin(th));
-                if (!relmap_hits_any(relmap_rect_at(c, kLeafW, kLeafH), placed, kGap))
-                    break;
-                r += kPushStep;
-            }
-            out[i].leaves.append(c);
-            placed.append(relmap_rect_at(c, kLeafW, kLeafH));
-        }
-    }
-    return out;
+    return {};
 }
 
-// ── Scene ─────────────────────────────────────────────────────────────────────
+} // namespace
+
+// ── Scene ───────────────────────────────────────────────────────────────────
+
+struct RelationshipGraphScene::Measure {
+    RelLayoutMetrics met;
+    double col_w = 60;
+};
+
 RelationshipGraphScene::RelationshipGraphScene(QObject* parent) : QGraphicsScene(parent) {
-    setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
-    setSceneRect(-1400, -1100, 2800, 2200);
+    setItemIndexMethod(QGraphicsScene::BspTreeIndex);
+    setBackgroundBrush(Qt::NoBrush); // drawBackground paints the theme's base colour
+    // Painted items read the tokens at paint time: a theme switch is a repaint.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
+}
+
+RelationshipGraphScene::~RelationshipGraphScene() {
+    ++layout_seq_; // a layout still running is dropped
+}
+
+RelationshipGraphScene::Measure RelationshipGraphScene::measure() const {
+    Measure m;
+    const QFontMetricsF fm(fonts::font(-2));
+    const double ch = std::max(5.0, fm.horizontalAdvance(QLatin1Char('0')));
+    RelLayoutMetrics& met = m.met;
+    // Dense rows (the terminal look): about 1.45 lines per card, hairline gaps.
+    met.row_h = std::round(fm.height() * 1.45);
+    met.row_gap = 2;
+    m.col_w = std::round(ch * 7.8);
+    met.card_w = std::round(ch * 44.0);
+    met.center_w = std::round(ch * 44.0);
+    // The company card's height is exactly what paint_center() draws.
+    {
+        const double pad = std::max(10.0, met.row_h * 0.5);
+        const QFontMetricsF big(fonts::font(5, QFont::Bold)), name(fonts::font(-1)), price(fonts::font(3, QFont::Bold));
+        const QFontMetricsF lab(fonts::font(-4, QFont::DemiBold)), val(fonts::font(-2, QFont::DemiBold));
+        const QFontMetricsF line(fonts::font(-3)), key(fonts::font(-4, QFont::DemiBold));
+        const double bar = std::max(5.0, met.row_h * 0.28);
+        met.center_h = std::ceil(pad * 0.6 + big.height() + name.height() + 4 + price.height() + 6 + 6 +
+                                 2 * (lab.height() + val.height() + 4) + 4 + line.height() + 6 + bar + 2 +
+                                 key.height() + pad * 0.6);
+    }
+    met.header_h = std::round(fm.height() * 1.8);
+    met.group_gap = std::round(fm.height() * 0.9);
+    met.column_gap = std::round(ch * 17.0);
+    met.side_caption_h = std::round(fm.height() * 1.6);
+    met.bubble_min = std::round(fm.height() * 0.42);
+    met.bubble_max = std::round(fm.height() * 2.2);
+    const QFontMetricsF lfm(fonts::font(-3, QFont::DemiBold));
+    met.label_h = std::round(lfm.height() + 2);
+    met.char_w = lfm.horizontalAdvance(QLatin1Char('0'));
+    met.placeholder_rows = 3;
+    for (const auto& n : model_.nodes) {
+        const QString s = n.short_label.isEmpty() ? n.label : n.short_label;
+        met.label_w.insert(n.id, std::min(lfm.horizontalAdvance(s), met.char_w * 20) + 4);
+    }
+    return m;
+}
+
+void RelationshipGraphScene::set_graph(const RelationshipData& data, const RelGraphModel& model, RelLayoutMode mode,
+                                       RelEdgeMetric metric, bool animate) {
+    const bool same_company = !model_.center_id.isEmpty() && model_.center_id == model.center_id;
+    const bool same_mode = mode == mode_;
+    data_ = data;
+    model_ = model;
+    mode_ = mode;
+    metric_ = metric;
+    weights_ = edge_weights(model_, metric_);
+    if (!model_.index.contains(selected_))
+        selected_.clear();
+    start_layout(animate && same_company && same_mode);
+}
+
+void RelationshipGraphScene::relayout() {
+    if (!model_.center_id.isEmpty())
+        start_layout(false);
+}
+
+void RelationshipGraphScene::start_layout(bool animate) {
+    const quint64 seq = ++layout_seq_;
+    const Measure m = measure();
+    QHash<QString, QPointF> previous;
+    for (auto it = node_items_.cbegin(); it != node_items_.cend(); ++it)
+        previous.insert(it.key(), it.value()->pos());
+    const RelGraphModel model = model_;
+    const QVector<double> weights = weights_;
+    const RelLayoutMode mode = mode_;
+    const RelLayoutMetrics met = m.met;
+    auto* watcher = new QFutureWatcher<RelLayoutResult>(this);
+    connect(watcher, &QFutureWatcher<RelLayoutResult>::finished, this, [this, watcher, seq, animate]() {
+        watcher->deleteLater();
+        if (seq != layout_seq_)
+            return; // superseded by a newer picture
+        apply_layout(watcher->result(), animate);
+    });
+    watcher->setFuture(QtConcurrent::run([model, mode, met, weights, previous]() {
+        return compute_layout(model, mode, met, weights, previous);
+    }));
+}
+
+void RelationshipGraphScene::apply_layout(const RelLayoutResult& result, bool animate) {
+    QElapsedTimer t;
+    t.start();
+    layout_ = result;
+    const Measure m = measure();
+    const bool bubbles = mode_ == RelLayoutMode::Radial || mode_ == RelLayoutMode::Force;
+    const bool bars = mode_ == RelLayoutMode::Sankey;
+    const bool motion = animate && ui::motion_enabled();
+
+    if (anim_)
+        anim_->stop();
+    // Chrome and edges are rebuilt; node items are kept (they glide to their new place).
+    for (QGraphicsItem* it : std::as_const(chrome_items_)) {
+        removeItem(it);
+        delete it;
+    }
+    chrome_items_.clear();
+    for (QGraphicsItem* it : std::as_const(edge_items_)) {
+        removeItem(it);
+        delete it;
+    }
+    edge_items_.clear();
+
+    QHash<QString, QGraphicsItem*> next;
+    for (const auto& n : model_.nodes) {
+        const auto g = layout_.nodes.constFind(n.id);
+        if (g == layout_.nodes.constEnd())
+            continue;
+        const bool center = n.id == model_.center_id;
+        const RgsStyle style = center ? (bubbles ? RgsStyle::CenterBubble : (bars ? RgsStyle::CenterBar : RgsStyle::Center))
+                                      : (bubbles ? RgsStyle::Bubble : (bars ? RgsStyle::Bar : RgsStyle::Card));
+        RgsNodeItem* item = rgs_node_item(node_items_.take(n.id));
+        bool fresh = false;
+        QPointF from = g.value().center;
+        if (!item) {
+            item = new RgsNodeItem(n, style);
+            addItem(item);
+            fresh = true;
+        } else {
+            from = item->pos();
+            item->set_node(n);
+            if (item->style() != style)
+                item->set_style(style);
+        }
+        item->set_geometry(g.value(), rgs_columns(n.group), m.met.row_h, m.col_w);
+        if (center)
+            item->set_center_text(rgs_center_text(data_, n));
+        else
+            item->set_text(rgs_text_for(n, data_));
+        if (center && style == RgsStyle::Center)
+            item->setToolTip(data_.company.description);
+        item->set_motion(fresh ? g.value().center : from, g.value().center, fresh && motion);
+        if (motion)
+            item->apply_progress(0.0);
+        else
+            item->finish_motion();
+        next.insert(n.id, item);
+    }
+    for (QGraphicsItem* gone : std::as_const(node_items_)) {
+        removeItem(gone);
+        delete gone;
+    }
+    node_items_ = next;
+
+    // Edges.
+    const bool geom_from_node = mode_ == RelLayoutMode::Tiered || mode_ == RelLayoutMode::Hierarchy ||
+                                mode_ == RelLayoutMode::Sankey || mode_ == RelLayoutMode::Matrix;
+    for (int i = 0; i < model_.edges.size() && i < layout_.edges.size(); ++i) {
+        const RelEdgeGeom& eg = layout_.edges[i];
+        if (!eg.visible)
+            continue;
+        const RelGraphEdge& e = model_.edges[i];
+        const RelGraphNode* from = model_.node(e.from);
+        const RelGraphNode* to = model_.node(e.to);
+        const bool cluster = (from && from->kind == RelNodeKind::Cluster) || (to && to->kind == RelNodeKind::Cluster);
+        const bool arrow_at_end = geom_from_node ? (e.to == model_.center_id) : true;
+        auto* item = new RgsEdgeItem(e, eg, weights_.value(i, 0.3), arrow_at_end, e.directed && !bars, cluster);
+        if (eg.label_slot)
+            item->set_label(rgs_edge_label(e, metric_));
+        addItem(item);
+        if (motion)
+            item->setOpacity(0.0);
+        edge_items_.append(item);
+    }
+
+    // Group headers / captions.
+    const bool fund = data_.is_fund();
+    for (const auto& gg : layout_.groups) {
+        const RelGraphGroup* grp = model_.group(gg.group);
+        if (!grp || gg.header.isEmpty())
+            continue;
+        if (bars)
+            continue;
+        const bool compact = bubbles;
+        auto* item = new RgsChromeItem(gg.header, rgs_group_title(gg.group, fund), compact ? QString() : rgs_summary(*grp, data_),
+                                       compact ? QStringList() : rgs_columns(gg.group), m.col_w, compact,
+                                       rgs_group_color(gg.group));
+        addItem(item);
+        if (motion)
+            item->setOpacity(0.0);
+        chrome_items_.append(item);
+    }
+    if (!layout_.left_caption.isEmpty()) {
+        auto* item = new RgsChromeItem(layout_.left_caption,
+                                       fund ? tr("ISSUER & SECTORS") : tr("OWNERSHIP & MANAGEMENT"), QString(), {},
+                                       m.col_w, true, QColor());
+        addItem(item);
+        chrome_items_.append(item);
+    }
+    if (!layout_.right_caption.isEmpty()) {
+        auto* item = new RgsChromeItem(layout_.right_caption, fund ? tr("HOLDINGS & MARKET") : tr("MARKET & STRUCTURE"),
+                                       QString(), {}, m.col_w, true, QColor());
+        addItem(item);
+        chrome_items_.append(item);
+    }
+
+    content_rect_ = layout_.bounds;
+    // Room to pan beyond the content.
+    const double mx = std::max(200.0, content_rect_.width() * 0.6), my = std::max(200.0, content_rect_.height() * 0.6);
+    setSceneRect(content_rect_.adjusted(-mx, -my, mx, my));
+    update_emphasis();
+    last_layout_us_ = layout_.elapsed_us;
+    last_build_us_ = t.nsecsElapsed() / 1000;
+
+    if (motion) {
+        auto* a = new QVariantAnimation(this);
+        a->setStartValue(0.0);
+        a->setEndValue(1.0);
+        a->setDuration(260);
+        a->setEasingCurve(QEasingCurve::OutCubic);
+        connect(a, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) { set_progress(v.toDouble()); });
+        connect(a, &QVariantAnimation::finished, this, [this]() { set_progress(1.0); });
+        anim_ = a;
+        a->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+    emit layout_applied(last_layout_us_, last_build_us_);
+}
+
+void RelationshipGraphScene::set_progress(double t) {
+    for (QGraphicsItem* it : std::as_const(node_items_))
+        if (auto* n = rgs_node_item(it)) {
+            if (t >= 1.0)
+                n->finish_motion();
+            else
+                n->apply_progress(t);
+        }
+    for (QGraphicsItem* it : std::as_const(edge_items_))
+        it->setOpacity(t);
+    for (QGraphicsItem* it : std::as_const(chrome_items_))
+        it->setOpacity(t);
+}
+
+void RelationshipGraphScene::refresh_text() {
+    for (auto it = node_items_.begin(); it != node_items_.end(); ++it) {
+        auto* n = rgs_node_item(it.value());
+        if (!n)
+            continue;
+        if (it.key() == model_.center_id)
+            n->set_center_text(rgs_center_text(data_, n->node()));
+        else
+            n->set_text(rgs_text_for(n->node(), data_));
+        n->update();
+    }
+    // Headers and edge labels carry numbers too: the cheapest correct path is a re-apply.
+    if (!model_.center_id.isEmpty())
+        apply_layout(layout_, false);
 }
 
 void RelationshipGraphScene::clear_graph() {
-    if (sim_timer_)
-        sim_timer_->stop();
+    ++layout_seq_;
+    if (anim_)
+        anim_->stop();
     clear();
-    node_positions_.clear();
-    nodes_.clear();
-    timer_ticks_ = 0;
+    node_items_.clear();
+    edge_items_.clear();
+    chrome_items_.clear();
+    if (pulse_)
+        pulse_->stop();
+    model_ = {};
+    data_ = {};
+    layout_ = {};
+    selected_.clear();
+    hover_.clear();
+    neighbourhood_.clear();
+    content_rect_ = {};
 }
 
-// ── build_graph ───────────────────────────────────────────────────────────────
-//
-// Banded left/right layout — pure rectangle arithmetic, guaranteed no collisions:
-//
-//   RIGHT side (Peers, Holders, Funds, Analysts):
-//     Hub center X = kHubX_R,  Leaf center X = kLeafX_R
-//
-//   LEFT side (Board, Insiders, Metrics, Events, Supply):
-//     Hub center X = kHubX_L,  Leaf center X = kLeafX_L
-//
-//   Each cluster owns an exclusive vertical band:
-//     band_height = max(kHubH, n_leaves*(kLeafH+kLeafGap)-kLeafGap)
-//   Clusters stack top-to-bottom with kClusterGap between them.
-//   Hub and leaf column are both vertically centered inside their band.
-//   Center node sits at Y=0 (visual midpoint).
+// ── Selection, hover, emphasis ──────────────────────────────────────────────
 
-void RelationshipGraphScene::build_graph(const RelationshipData& data, const FilterState& filters,
-                                         LayoutMode layout) {
-    clear_graph();
-
-    const QColor cAmber("#d97706");
-    const QColor cPeer("#2563eb");
-    const QColor cInst("#16a34a");
-    const QColor cMF("#059669");
-    const QColor cIns("#0891b2");
-    const QColor cOff("#0e7490");
-    const QColor cAnal("#7c3aed");
-    const QColor cEvt("#b45309");
-    const QColor cSC("#ca8a04");
-    const QColor cMet("#6b7280");
-
-    // ── Center node ──────────────────────────────────────────────────────────
-    bool up = data.company.day_change_pct >= 0;
-    const QString ccy = data.company.currency;
-    QString center_sub = QString("%1\n%2  %3%4%\nMktCap %5")
-                             .arg(data.company.name.left(24))
-                             .arg(money(data.company.current_price, ccy))
-                             .arg(up ? "+" : "")
-                             .arg(data.company.day_change_pct, 0, 'f', 2)
-                             .arg(money(data.company.market_cap, ccy, /*compact=*/true));
-
-    auto* center_node = new RelNode(data.company.ticker, center_sub, cAmber, kCenterW, kCenterH, RelNode::Role::Center);
-    center_node->setPos(0, 0);
-    center_node->set_symbol(data.company.ticker);
-    addItem(center_node);
-    nodes_.append(center_node);
-
-    // ── Cluster data ─────────────────────────────────────────────────────────
-    struct LeafInfo {
-        QString label, sub;
-        QColor accent;
-    };
-    struct ClusterDef {
-        QString label;
-        QColor color;
-        QVector<LeafInfo> leaves;
-        bool right;              // true = right side
-        bool leaves_are_tickers; // leaf labels are tradable symbols (peers)
-    };
-
-    QVector<ClusterDef> right_side, left_side;
-
-    auto push_right = [&](const QString& lbl, const QColor& col, QVector<LeafInfo>&& lv, bool tickers = false) {
-        if (!lv.isEmpty())
-            right_side.push_back({lbl, col, std::move(lv), true, tickers});
-    };
-    auto push_left = [&](const QString& lbl, const QColor& col, QVector<LeafInfo>&& lv) {
-        if (!lv.isEmpty())
-            left_side.push_back({lbl, col, std::move(lv), false, false});
-    };
-
-    // PEERS → right
-    if (filters.show_peers && !data.peers.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& p : data.peers) {
-            if (lv.size() >= 12)
-                break;
-            QColor acc = (p.week52_change >= 0) ? cPeer : QColor("#dc2626");
-            lv.append({p.ticker, money(p.current_price, p.currency), acc});
+void RelationshipGraphScene::update_emphasis() {
+    const QString focus = !hover_.isEmpty() ? hover_ : selected_;
+    neighbourhood_.clear();
+    if (!focus.isEmpty()) {
+        neighbourhood_.insert(focus);
+        for (const auto& e : model_.edges) {
+            if (e.from == focus)
+                neighbourhood_.insert(e.to);
+            else if (e.to == focus)
+                neighbourhood_.insert(e.from);
         }
-        push_right(tr("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()), cPeer, std::move(lv), /*tickers=*/true);
     }
-
-    // INSTITUTIONAL → right
-    if (filters.show_institutional && !data.institutional_holders.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& h : data.institutional_holders) {
-            if (lv.size() >= 8)
-                break;
-            if (h.percentage < filters.min_ownership)
-                continue;
-            lv.append({h.name.left(14), QString("%1%").arg(h.percentage, 0, 'f', 2), cInst});
-        }
-        push_right(tr("Holders (%1/%2)").arg(lv.size()).arg(data.institutional_holders.size()), cInst, std::move(lv));
+    const bool dim_rest = !hover_.isEmpty() && hover_ != model_.center_id;
+    for (auto it = node_items_.begin(); it != node_items_.end(); ++it) {
+        auto* n = rgs_node_item(it.value());
+        if (!n)
+            continue;
+        const bool in = neighbourhood_.contains(it.key());
+        n->set_flags(it.key() == selected_, dim_rest && !in, it.key() == hover_);
     }
-
-    // MUTUAL FUNDS → right (own filter flag; used to share show_institutional)
-    if (filters.show_mutual_funds && !data.mutualfund_holders.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& h : data.mutualfund_holders) {
-            if (lv.size() >= 8)
-                break;
-            lv.append({h.name.left(14), QString("%1%").arg(h.percentage, 0, 'f', 2), cMF});
-        }
-        push_right(tr("Funds (%1/%2)").arg(lv.size()).arg(data.mutualfund_holders.size()), cMF, std::move(lv));
+    for (QGraphicsItem* it : std::as_const(edge_items_)) {
+        auto* e = static_cast<RgsEdgeItem*>(it);
+        const bool touches = !focus.isEmpty() && (e->edge().from == focus || e->edge().to == focus);
+        e->set_emphasis(touches ? 1 : (dim_rest ? -1 : 0));
     }
-
-    // ANALYSTS → right
-    if (filters.show_analysts) {
-        QVector<LeafInfo> lv;
-        if (data.company.analyst_count > 0) {
-            QString rec = data.company.recommendation.toUpper();
-            bool bull = rec.contains("BUY") || rec.contains("OUTPERFORM");
-            lv.append({rec, tr("PT %1").arg(money(data.company.target_mean, data.company.currency)),
-                       bull ? QColor("#16a34a") : QColor("#dc2626")});
-        }
-        for (const auto& ud : data.upgrades_downgrades) {
-            if (lv.size() >= 8)
-                break;
-            QColor acc = (ud.action == "up") ? QColor("#16a34a") : (ud.action == "down") ? QColor("#dc2626") : cAnal;
-            lv.append({ud.firm.left(14), ud.to_grade.left(12), acc});
-        }
-        push_right(tr("Analysts (%1)").arg(data.company.analyst_count), cAnal, std::move(lv));
-    }
-
-    // BOARD → left
-    if (filters.show_officers && !data.officers.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& off : data.officers) {
-            if (lv.size() >= 10)
-                break;
-            lv.append({off.name.left(14), off.title.left(14), cOff});
-        }
-        push_left(tr("Board (%1/%2)").arg(lv.size()).arg(data.officers.size()), cOff, std::move(lv));
-    }
-
-    // INSIDERS → left
-    if (filters.show_insiders && !data.insider_holders.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& ins : data.insider_holders) {
-            if (lv.size() >= 8)
-                break;
-            bool buy = ins.last_transaction.toLower() == "buy";
-            QString sub = ins.last_transaction.isEmpty() ? ins.title.left(12) : ins.last_transaction.toUpper();
-            lv.append({ins.name.left(14), sub, buy ? QColor("#16a34a") : cIns});
-        }
-        push_left(tr("Insiders (%1/%2)").arg(lv.size()).arg(data.insider_holders.size()), cIns, std::move(lv));
-    }
-
-    // METRICS → left
-    if (filters.show_metrics) {
-        QVector<LeafInfo> lv;
-        if (data.company.pe_ratio > 0)
-            lv.append({tr("P/E"),
-                       tr("%1  fwd %2").arg(data.company.pe_ratio, 0, 'f', 1).arg(data.company.forward_pe, 0, 'f', 1),
-                       cMet});
-        if (data.margins.gross > 0)
-            lv.append(
-                {tr("Margins"),
-                 tr("Gr %1%  Net %2%").arg(data.margins.gross * 100, 0, 'f', 1).arg(data.margins.net * 100, 0, 'f', 1),
-                 cMet});
-        if (data.technicals.beta > 0)
-            lv.append({tr("Beta"),
-                       tr("%1   52W $%2")
-                           .arg(data.technicals.beta, 0, 'f', 2)
-                           .arg(data.technicals.fifty_two_week_high, 0, 'f', 0),
-                       cMet});
-        if (data.short_interest.short_pct_float > 0)
-            lv.append({tr("Short Int"),
-                       tr("%1%  %2d cvr")
-                           .arg(data.short_interest.short_pct_float * 100, 0, 'f', 1)
-                           .arg(data.short_interest.short_ratio, 0, 'f', 1),
-                       data.short_interest.short_pct_float > 0.05 ? QColor("#dc2626") : cMet});
-        if (data.governance.overall_risk > 0)
-            lv.append({tr("Governance"),
-                       tr("Risk %1/10  Audit %2").arg(data.governance.overall_risk).arg(data.governance.audit_risk),
-                       data.governance.overall_risk > 6 ? QColor("#dc2626") : cMet});
-        push_left(tr("Metrics"), cMet, std::move(lv));
-    }
-
-    // EVENTS → left
-    if (filters.show_events && !data.events.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& ev : data.events) {
-            if (lv.size() >= 6)
-                break;
-            lv.append({ev.description.left(14), ev.date.left(10), cEvt});
-        }
-        push_left(tr("Events (%1/%2)").arg(lv.size()).arg(data.events.size()), cEvt, std::move(lv));
-    }
-
-    // SUPPLY CHAIN → left
-    if (filters.show_supply_chain && !data.supply_chain.isEmpty()) {
-        QVector<LeafInfo> lv;
-        for (const auto& sc : data.supply_chain) {
-            if (lv.size() >= 6)
-                break;
-            lv.append({sc.name.left(14), sc.relationship.left(10), cSC});
-        }
-        push_left(tr("Supply (%1)").arg(lv.size()), cSC, std::move(lv));
-    }
-
-    // ── Banded placement ──────────────────────────────────────────────────────
-    // band_height: the vertical space this cluster needs (hub + leaves, whichever taller)
-    auto band_h = [&](const ClusterDef& c) -> qreal {
-        int n = c.leaves.size();
-        qreal col_h = n * kLeafH + (n - 1) * kLeafGap;
-        return qMax(col_h, static_cast<qreal>(kHubH)) + kClusterGap;
-    };
-
-    // Total height of each side (subtract one trailing gap)
-    auto total_h = [&](const QVector<ClusterDef>& side) -> qreal {
-        qreal h = 0;
-        for (const auto& c : side)
-            h += band_h(c);
-        if (!side.isEmpty())
-            h -= kClusterGap;
-        return h;
-    };
-
-    // Instantiate one cluster (hub, leaves, edges) at positions the active layout chose.
-    auto make_cluster = [&](const ClusterDef& c, const QPointF& hub_pos, const QVector<QPointF>& leaf_pos) {
-        auto* hub = new RelNode(c.label, QString(), c.color, kHubW, kHubH, RelNode::Role::Hub);
-        hub->setPos(hub_pos);
-        addItem(hub);
-        nodes_.append(hub);
-
-        // Edge: center → hub
-        auto* ce = new RelEdge(center_node, hub, c.color, false);
-        addItem(ce);
-        ce->adjust();
-        center_node->add_edge(ce);
-        hub->add_edge(ce);
-
-        for (int i = 0; i < c.leaves.size() && i < leaf_pos.size(); ++i) {
-            auto* leaf = new RelNode(c.leaves[i].label, c.leaves[i].sub, c.leaves[i].accent, kLeafW, kLeafH,
-                                     RelNode::Role::Leaf);
-            leaf->setPos(leaf_pos[i]);
-            if (c.leaves_are_tickers)
-                leaf->set_symbol(c.leaves[i].label);
-            addItem(leaf);
-            nodes_.append(leaf);
-
-            auto* le = new RelEdge(hub, leaf, c.color, true);
-            addItem(le);
-            le->adjust();
-            hub->add_edge(le);
-            leaf->add_edge(le);
-        }
-    };
-
-    // Place one side: hub at hub_cx, leaves at leaf_cx, stacked vertically
-    auto place_side = [&](const QVector<ClusterDef>& side, qreal hub_cx, qreal leaf_cx) {
-        qreal tot = total_h(side);
-        qreal y = -tot / 2.0; // top of first band
-
-        for (const auto& c : side) {
-            int n = c.leaves.size();
-            qreal bh = band_h(c);
-            qreal bcy = y + (bh - kClusterGap) / 2.0; // band vertical center
-
-            // Leaves — vertical column centered on bcy
-            qreal col_h = n * kLeafH + (n - 1) * kLeafGap;
-            qreal ly0 = bcy - col_h / 2.0; // top-left Y of first leaf
-            QVector<QPointF> leaf_pos;
-            leaf_pos.reserve(n);
-            for (int i = 0; i < n; ++i)
-                leaf_pos.append(QPointF(leaf_cx, ly0 + i * (kLeafH + kLeafGap) + kLeafH / 2.0));
-
-            make_cluster(c, QPointF(hub_cx, bcy), leaf_pos);
-            y += bh; // advance to next band
-        }
-    };
-
-    if (layout == LayoutMode::Radial) {
-        // The layout selector used to be cosmetic (every mode fell through to the banded
-        // columns). RADIAL fans all clusters around the centre card.
-        QVector<ClusterDef> ring = right_side;
-        ring += left_side;
-        QVector<int> counts;
-        counts.reserve(ring.size());
-        for (const auto& c : std::as_const(ring))
-            counts.append(c.leaves.size());
-        const QVector<RelClusterPos> placement = relmap_radial_positions(counts);
-        for (int i = 0; i < ring.size(); ++i)
-            make_cluster(ring[i], placement[i].hub, placement[i].leaves);
-    } else {
-        place_side(right_side, kHubX_R, kLeafX_R);
-        place_side(left_side, kHubX_L, kLeafX_L);
-    }
-
-    // Fit scene rect tightly around content
-    QRectF bounds = itemsBoundingRect().adjusted(-80, -80, 80, 80);
-    setSceneRect(bounds);
 }
 
-// ── No-op stubs ───────────────────────────────────────────────────────────────
-void RelationshipGraphScene::start_simulation() {}
-void RelationshipGraphScene::simulation_step() {}
-void RelationshipGraphScene::apply_layout(QVector<GraphNode>&, const QVector<GraphEdge>&, LayoutMode) {}
-void RelationshipGraphScene::place_in_ring(const QVector<int>&, QVector<QPointF>&, double, double, const QPointF&) {}
-void RelationshipGraphScene::add_node_item(const GraphNode&, const QPointF&) {}
-void RelationshipGraphScene::add_edge_item(const QPointF&, const QPointF&, EdgeCategory, const QString&) {}
-
-// ── View ──────────────────────────────────────────────────────────────────────
-RelationshipGraphView::RelationshipGraphView(QGraphicsScene* scene, QWidget* parent) : QGraphicsView(scene, parent) {
-    setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
-    setDragMode(QGraphicsView::ScrollHandDrag);
-    setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
-    setResizeAnchor(QGraphicsView::AnchorViewCenter);
-    setViewportUpdateMode(QGraphicsView::BoundingRectViewportUpdate);
-    setStyleSheet(QString("QGraphicsView { border: none; background: %1; }").arg(ui::colors::BG_BASE()));
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    horizontalScrollBar()->setStyleSheet(
-        "QScrollBar:horizontal { height: 6px; background: #0a0a0a; }"
-        "QScrollBar::handle:horizontal { background: #2a2a2a; min-width: 40px; }"
-        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }");
-    verticalScrollBar()->setStyleSheet("QScrollBar:vertical { width: 6px; background: #0a0a0a; }"
-                                       "QScrollBar::handle:vertical { background: #2a2a2a; min-height: 40px; }"
-                                       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
-}
-
-void RelationshipGraphView::fit_to_content() {
-    if (!scene() || scene()->items().isEmpty())
+void RelationshipGraphScene::set_hover(const QString& id) {
+    if (id == hover_)
         return;
-    fitInView(scene()->itemsBoundingRect().adjusted(-60, -60, 60, 60), Qt::KeepAspectRatio);
-    current_zoom_ = transform().m11();
-    emit zoom_changed(current_zoom_);
+    hover_ = id;
+    update_emphasis();
+    emit hovered(id);
 }
 
-void RelationshipGraphView::reset_zoom() {
-    resetTransform();
-    current_zoom_ = 1.0;
-    fit_to_content();
+void RelationshipGraphScene::select_node(const QString& id, bool center_on) {
+    selected_ = model_.index.contains(id) ? id : QString();
+    update_emphasis();
+    if (center_on && !selected_.isEmpty()) {
+        if (QGraphicsItem* it = node_items_.value(selected_))
+            for (QGraphicsView* v : views())
+                v->centerOn(it);
+    }
 }
+
+QString RelationshipGraphScene::node_at(const QPointF& scene_pos) const {
+    for (QGraphicsItem* it : items(scene_pos, Qt::IntersectsItemShape, Qt::DescendingOrder)) {
+        if (auto* n = rgs_node_item(it))
+            return n->node().id;
+    }
+    return {};
+}
+
+void RelationshipGraphScene::step_selection(int dx, int dy) {
+    // Reading order: the groups in model order, the rows in rank order; the centre first.
+    QStringList order{model_.center_id};
+    for (const auto& g : model_.groups)
+        for (const QString& id : g.node_ids)
+            if (node_items_.contains(id))
+                order << id;
+    if (order.size() <= 1)
+        return;
+    QString cur = selected_.isEmpty() ? model_.center_id : selected_;
+    if (dy != 0) {
+        const int i = static_cast<int>(order.indexOf(cur));
+        cur = order.value(std::clamp(i + dy, 0, static_cast<int>(order.size()) - 1));
+    } else if (dx != 0) {
+        // Left / right: the nearest node on that side by geometry.
+        const QGraphicsItem* from = node_items_.value(cur);
+        const QPointF p = from ? from->pos() : QPointF();
+        QString best;
+        double best_d = 1e18;
+        for (auto it = node_items_.cbegin(); it != node_items_.cend(); ++it) {
+            const QPointF q = it.value()->pos();
+            if ((dx > 0 && q.x() <= p.x() + 1) || (dx < 0 && q.x() >= p.x() - 1))
+                continue;
+            const double dist = std::abs(q.x() - p.x()) * 0.3 + std::abs(q.y() - p.y());
+            if (dist < best_d) {
+                best_d = dist;
+                best = it.key();
+            }
+        }
+        if (!best.isEmpty())
+            cur = best;
+    }
+    select_node(cur, true);
+    emit node_clicked(cur);
+}
+
+QString RelationshipGraphScene::find_and_pulse(const QString& text) {
+    const QString q = text.trimmed();
+    if (q.isEmpty())
+        return {};
+    QString found;
+    for (const auto& n : model_.nodes) {
+        if (!node_items_.contains(n.id) || n.kind == RelNodeKind::Placeholder)
+            continue;
+        if (n.short_label.compare(q, Qt::CaseInsensitive) == 0 || n.symbol.compare(q, Qt::CaseInsensitive) == 0) {
+            found = n.id;
+            break;
+        }
+        if (found.isEmpty() && (n.label.contains(q, Qt::CaseInsensitive) || n.short_label.contains(q, Qt::CaseInsensitive)))
+            found = n.id;
+    }
+    if (found.isEmpty())
+        return {};
+    select_node(found, true);
+    if (pulse_) {
+        pulse_->stop();
+        if (auto* old = rgs_node_item(node_items_.value(pulse_id_)))
+            old->set_pulse(0);
+    }
+    pulse_id_ = found;
+    if (!ui::motion_enabled())
+        return found;
+    if (!pulse_) {
+        pulse_ = new QVariantAnimation(this);
+        pulse_->setStartValue(0.0);
+        pulse_->setEndValue(3.0);
+        pulse_->setDuration(1800);
+        connect(pulse_, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+            if (auto* n = rgs_node_item(node_items_.value(pulse_id_))) {
+                const double x = v.toDouble();
+                n->set_pulse(x >= 2.999 ? 0.0 : std::fmod(x, 1.0) + 1e-3);
+            }
+        });
+    }
+    pulse_->start();
+    return found;
+}
+
+// ── Mouse ───────────────────────────────────────────────────────────────────
 
 void RelationshipGraphScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
-    // Empty-canvas click (no item under cursor) → let listeners clear selection/detail.
-    if (!itemAt(event->scenePos(), QTransform()))
+    if (event->button() != Qt::LeftButton) {
+        QGraphicsScene::mousePressEvent(event);
+        return;
+    }
+    const QString id = node_at(event->scenePos());
+    if (id.isEmpty()) {
+        if (!selected_.isEmpty()) {
+            selected_.clear();
+            update_emphasis();
+        }
         emit background_clicked();
-    QGraphicsScene::mousePressEvent(event);
+        QGraphicsScene::mousePressEvent(event); // not accepted: the view pans
+        return;
+    }
+    event->accept();
+    const RelGraphNode* n = model_.node(id);
+    if (n && n->kind == RelNodeKind::Cluster) {
+        if (n->hidden_count > 0)
+            emit cluster_clicked(static_cast<int>(n->group));
+        return;
+    }
+    if (n && n->kind == RelNodeKind::Placeholder) {
+        if (section_failed(n->state))
+            emit retry_clicked(section_of(n->group));
+        return;
+    }
+    select_node(id);
+    emit node_clicked(id);
 }
 
-void RelationshipGraphView::wheelEvent(QWheelEvent* event) {
-    double delta = event->pixelDelta().isNull() ? event->angleDelta().y() / 120.0 : event->pixelDelta().y() / 120.0;
-    if (qFuzzyIsNull(delta)) {
+void RelationshipGraphScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    const QString id = node_at(event->scenePos());
+    if (event->button() == Qt::LeftButton && !id.isEmpty()) {
+        const RelGraphNode* n = model_.node(id);
+        if (n && n->kind != RelNodeKind::Cluster && n->kind != RelNodeKind::Placeholder)
+            emit node_double_clicked(id);
+        event->accept();
+        return;
+    }
+    QGraphicsScene::mouseDoubleClickEvent(event);
+}
+
+void RelationshipGraphScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (event->buttons() == Qt::NoButton) {
+        const QString id = node_at(event->scenePos());
+        const RelGraphNode* n = model_.node(id);
+        set_hover(n && n->kind != RelNodeKind::Placeholder ? id : QString());
+    }
+    QGraphicsScene::mouseMoveEvent(event);
+}
+
+void RelationshipGraphScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    const QString id = node_at(event->scenePos());
+    const RelGraphNode* n = model_.node(id);
+    if (!n || n->kind == RelNodeKind::Cluster || n->kind == RelNodeKind::Placeholder) {
         event->ignore();
         return;
     }
-    double factor = std::pow(1.10, delta);
-    double new_zoom = current_zoom_ * factor;
-    if (new_zoom < kMinZoom)
-        factor = kMinZoom / current_zoom_;
-    if (new_zoom > kMaxZoom)
-        factor = kMaxZoom / current_zoom_;
-    scale(factor, factor);
-    current_zoom_ *= factor;
-    emit zoom_changed(current_zoom_);
+    select_node(id);
+    emit node_clicked(id);
+    emit node_context_menu(id, event->screenPos());
     event->accept();
 }
 
-void RelationshipGraphView::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::MiddleButton) {
-        setDragMode(QGraphicsView::ScrollHandDrag);
-        QMouseEvent fake(event->type(), event->position(), event->scenePosition(), event->globalPosition(),
-                         Qt::LeftButton, Qt::LeftButton, event->modifiers());
-        QGraphicsView::mousePressEvent(&fake);
-    } else {
-        QGraphicsView::mousePressEvent(event);
-    }
+void RelationshipGraphScene::drawBackground(QPainter* painter, const QRectF& rect) {
+    painter->fillRect(rect, QColor(colors::BG_BASE()));
+    // A hairline grid, faint, every 4 rows: the "chart paper" of the terminal.
+    const double lod = QStyleOptionGraphicsItem::levelOfDetailFromTransform(painter->worldTransform());
+    if (lod < 0.45)
+        return;
+    const double step = std::max(24.0, QFontMetricsF(fonts::font(-2)).height() * 4.0);
+    painter->setPen(QPen(colors::overlay_color(0.035), 0));
+    const double x0 = std::floor(rect.left() / step) * step;
+    const double y0 = std::floor(rect.top() / step) * step;
+    for (double x = x0; x < rect.right(); x += step)
+        painter->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    for (double y = y0; y < rect.bottom(); y += step)
+        painter->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
 }
 
-void RelationshipGraphView::mouseReleaseEvent(QMouseEvent* event) {
-    if (event->button() == Qt::MiddleButton) {
-        QMouseEvent fake(event->type(), event->position(), event->scenePosition(), event->globalPosition(),
-                         Qt::LeftButton, Qt::LeftButton, event->modifiers());
-        QGraphicsView::mouseReleaseEvent(&fake);
-        setDragMode(QGraphicsView::ScrollHandDrag);
-    } else {
-        QGraphicsView::mouseReleaseEvent(event);
-    }
+// ── View ────────────────────────────────────────────────────────────────────
+
+RelationshipGraphView::RelationshipGraphView(RelationshipGraphScene* scene, QWidget* parent)
+    : QGraphicsView(scene, parent), rscene_(scene) {
+    setObjectName(QStringLiteral("relmapGraphView"));
+    setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+    setDragMode(QGraphicsView::ScrollHandDrag);
+    setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+    setResizeAnchor(QGraphicsView::AnchorViewCenter);
+    setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
+    setOptimizationFlag(QGraphicsView::DontAdjustForAntialiasing, true);
+    setFrameShape(QFrame::NoFrame);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setFocusPolicy(Qt::StrongFocus);
+    viewport()->setMouseTracking(true);
+    setAccessibleName(tr("Relationship graph"));
+    // A new picture fits itself unless the user has zoomed in on something.
+    connect(scene, &RelationshipGraphScene::layout_applied, this, [this](qint64, qint64) {
+        if (!user_zoomed_)
+            fit_to_content();
+    });
 }
 
-void RelationshipGraphView::mouseMoveEvent(QMouseEvent* event) {
-    QGraphicsView::mouseMoveEvent(event);
+void RelationshipGraphView::fit_to_content() {
+    if (!rscene_ || rscene_->content_rect().isEmpty())
+        return;
+    const QRectF r = rscene_->content_rect();
+    fitInView(r, Qt::KeepAspectRatio);
+    // Never blow a small map up past 1.25x (text would look coarse); never below the limit.
+    double z = transform().m11();
+    if (z > 1.25) {
+        resetTransform();
+        scale(1.25, 1.25);
+        centerOn(r.center());
+        z = 1.25;
+    }
+    if (z < kMinZoom) {
+        resetTransform();
+        scale(kMinZoom, kMinZoom);
+        centerOn(r.center());
+        z = kMinZoom;
+    }
+    current_zoom_ = z;
+    user_zoomed_ = false;
+    emit zoom_changed(current_zoom_);
+}
+
+void RelationshipGraphView::zoom_by(double factor) {
+    const double target = std::clamp(current_zoom_ * factor, kMinZoom, kMaxZoom);
+    const double f = target / current_zoom_;
+    if (std::abs(f - 1.0) < 1e-6)
+        return;
+    scale(f, f);
+    current_zoom_ = target;
+    user_zoomed_ = true;
+    emit zoom_changed(current_zoom_);
+}
+
+void RelationshipGraphView::wheelEvent(QWheelEvent* event) {
+    const double delta =
+        event->pixelDelta().isNull() ? event->angleDelta().y() / 120.0 : event->pixelDelta().y() / 120.0;
+    if (std::abs(delta) < 1e-9) {
+        event->ignore();
+        return;
+    }
+    zoom_by(std::pow(1.12, delta));
+    event->accept();
+}
+
+void RelationshipGraphView::keyPressEvent(QKeyEvent* event) {
+    if (!rscene_) {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+    switch (event->key()) {
+        case Qt::Key_Home:
+            fit_to_content();
+            break;
+        case Qt::Key_Up:
+            rscene_->step_selection(0, -1);
+            break;
+        case Qt::Key_Down:
+            rscene_->step_selection(0, 1);
+            break;
+        case Qt::Key_Left:
+            rscene_->step_selection(-1, 0);
+            break;
+        case Qt::Key_Right:
+            rscene_->step_selection(1, 0);
+            break;
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            if (!rscene_->selected_node().isEmpty())
+                emit activate_requested(rscene_->selected_node());
+            break;
+        case Qt::Key_Escape:
+            rscene_->select_node(QString());
+            emit rscene_->background_clicked();
+            break;
+        case Qt::Key_Plus:
+        case Qt::Key_Equal:
+            zoom_by(1.2);
+            break;
+        case Qt::Key_Minus:
+            zoom_by(1.0 / 1.2);
+            break;
+        default:
+            QGraphicsView::keyPressEvent(event);
+            return;
+    }
+    event->accept();
+}
+
+void RelationshipGraphView::resizeEvent(QResizeEvent* event) {
+    QGraphicsView::resizeEvent(event);
+    if (!user_zoomed_)
+        fit_to_content();
 }
 
 } // namespace fincept::relmap

@@ -1,10 +1,16 @@
-// AgentConnectSection.cpp — Settings › AI Agents (MCP). See the header.
+// AgentConnectSection.cpp — Settings › AI Agents. See the header.
 
 #include "screens/settings/AgentConnectSection.h"
 
+#include "core/process/HostExec.h"
 #include "mcp/McpProvider.h"
 #include "mcp/core/CoreTools.h"
+#include "mcp/server/McpClientProfile.h"
+#include "mcp/server/McpServerSelfCheck.h"
+#include "screens/agent_config/HarnessListWidget.h"
 #include "services/coding_agents/CodingAgentService.h"
+#include "services/harness/HarnessRegistry.h"
+#include "services/harness/IHarnessAdapter.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -14,6 +20,7 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -22,14 +29,19 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStandardItemModel>
 #include <QStyle>
 #include <QTableView>
 #include <QTimer>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <optional>
 
 namespace fincept::screens {
 
@@ -37,6 +49,11 @@ namespace ca = services::coding_agents;
 using mcp::McpHttpServer;
 
 namespace agent_connect_detail {
+
+// Name the terminal registers itself under in a harness's own config: this
+// edition's own ("fincept_community"), never one the private build uses.
+constexpr const char* kAcServerName = harness::kMcpServerName;
+constexpr int kAcToolTimeoutSec = 300;
 
 QLabel* make_label(const char* object_name, QWidget* parent, bool wrap = false) {
     auto* l = new QLabel(parent);
@@ -75,6 +92,40 @@ QString duration_text(qint64 secs) {
     if (secs < 3600)
         return QStringLiteral("%1 min").arg(secs / 60);
     return QStringLiteral("%1 h %2 min").arg(secs / 3600).arg((secs % 3600) / 60);
+}
+
+/// One argument as a user would type it in a shell (display / copy only — the
+/// one-click ADD passes the argument list directly, never through a shell).
+QString ac_shell_quote(const QString& arg) {
+    static const QString special = QStringLiteral(" \t\"'$&|<>;()*?`\\");
+    bool plain = !arg.isEmpty();
+    for (const QChar c : arg) {
+        if (special.contains(c)) {
+            plain = false;
+            break;
+        }
+    }
+    if (plain)
+        return arg;
+    if (arg.contains(QLatin1Char('$')) && !arg.contains(QLatin1Char('\'')))
+        return QLatin1Char('\'') + arg + QLatin1Char('\''); // no variable expansion
+    QString escaped = arg;
+    escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    return QLatin1Char('"') + escaped + QLatin1Char('"');
+}
+
+std::optional<harness::McpRegistration> ac_registration(const QString& harness_id) {
+    const harness::IHarnessAdapter* adapter = harness::HarnessRegistry::instance().adapter(harness_id);
+    if (!adapter)
+        return std::nullopt;
+    harness::McpEndpoint ep;
+    ep.name = QString::fromLatin1(kAcServerName);
+    ep.url = McpHttpServer::instance().url();
+    if (ep.url.isEmpty()) // stopped: show the address it will listen on
+        ep.url = QStringLiteral("http://127.0.0.1:%1/mcp").arg(McpHttpServer::instance().configured_port());
+    ep.token_env_var = QString::fromLatin1(McpHttpServer::kTokenEnvVar);
+    ep.tool_timeout_s = kAcToolTimeoutSec;
+    return adapter->mcp_registration(ep);
 }
 
 } // namespace agent_connect_detail
@@ -137,8 +188,9 @@ QVariant McpActivityModel::data(const QModelIndex& index, int role) const {
                 return {};
         }
     }
+    // State, not price direction: SUCCESS / DANGER / WARNING.
     if (role == Qt::ForegroundRole && col == ColOutcome)
-        return QColor(r.denied ? ui::colors::WARNING() : (r.success ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        return QColor(r.denied ? ui::colors::WARNING() : (r.success ? ui::colors::SUCCESS() : ui::colors::DANGER()));
     if (role == Qt::ForegroundRole)
         return QColor(ui::colors::TEXT_SECONDARY());
     if (role == Qt::ToolTipRole) {
@@ -181,8 +233,12 @@ void McpActivityModel::retranslate_headers() {
 // Section
 // ═════════════════════════════════════════════════════════════════════════════
 
-AgentConnectSection::AgentConnectSection(QWidget* parent) : QWidget(parent) {
+AgentConnectSection::AgentConnectSection(QWidget* parent, Sections sections) : QWidget(parent), sections_(sections) {
     setObjectName(QStringLiteral("agentConnectSection"));
+    // Once, before any child exists; the theme system rewrites it on an
+    // appearance change (re-setting it in a theme_changed handler re-styles the
+    // whole page widget by widget).
+    setStyleSheet(style_sheet());
 
     activity_timer_ = new QTimer(this);
     activity_timer_->setSingleShot(true);
@@ -194,15 +250,21 @@ AgentConnectSection::AgentConnectSection(QWidget* parent) : QWidget(parent) {
     connect(uptime_timer_, &QTimer::timeout, this, &AgentConnectSection::refresh_status);
 
     build_ui();
-    apply_theme();
+    fit_rows();
     retranslate();
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { apply_theme(); });
+    // Row heights and column widths follow the font, once a change has settled.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, &AgentConnectSection::fit_rows);
     // Registration results can arrive after the page was hidden — keep this one
     // connection for the widget's lifetime (rare and cheap).
     connect(&ca::CodingAgentService::instance(), &ca::CodingAgentService::client_registration_finished, this,
             &AgentConnectSection::on_registration_finished);
+    // A harness found or lost changes whether ADD can run.
+    connect(&harness::HarnessRegistry::instance(), &harness::HarnessRegistry::status_changed, this,
+            [this](const QString& id) {
+                if (id == current_harness() && isVisible())
+                    refresh_snippet();
+            });
 }
 
 void AgentConnectSection::build_ui() {
@@ -223,6 +285,15 @@ void AgentConnectSection::build_ui() {
 
     title_ = make_label("acTitle", page);
     v->addWidget(title_);
+    if (sections_ == Sections::All) {
+        // AGENT HARNESSES — the same widget as the workbench's HARNESSES tab.
+        harness_title_ = make_label("acTitle", page);
+        v->addWidget(harness_title_);
+        harness_list_ = new HarnessListWidget(page);
+        v->addWidget(harness_list_);
+        mcp_title_ = make_label("acTitle", page);
+        v->addWidget(mcp_title_);
+    }
     intro_ = make_label("acHint", page, true);
     v->addWidget(intro_);
 
@@ -230,6 +301,7 @@ void AgentConnectSection::build_ui() {
     v->addWidget(build_token_card(page));
     v->addWidget(build_permissions_card(page));
     v->addWidget(build_connect_card(page));
+    v->addWidget(build_check_card(page));
     v->addWidget(build_tools_card(page));
     v->addWidget(build_activity_card(page), 1);
     scroll->setWidget(page);
@@ -255,6 +327,7 @@ QWidget* AgentConnectSection::build_server_card(QWidget* parent) {
     connect(copy_url_btn_, &QPushButton::clicked, this, []() { copy_text(McpHttpServer::instance().url()); });
     row->addWidget(copy_url_btn_);
     start_btn_ = make_button("acPrimaryBtn", card);
+    start_btn_->setProperty("fincept_agent_risk", "account"); // agents: opens the terminal to AI agents
     connect(start_btn_, &QPushButton::clicked, this, &AgentConnectSection::on_start);
     row->addWidget(start_btn_);
     stop_btn_ = make_button("acDangerBtn", card);
@@ -271,6 +344,7 @@ QWidget* AgentConnectSection::build_server_card(QWidget* parent) {
     auto* opts = new QHBoxLayout;
     opts->setSpacing(10);
     autostart_check_ = new QCheckBox(card);
+    autostart_check_->setProperty("fincept_agent_risk", "account"); // agents: opens the terminal to AI agents at every start
     autostart_check_->setObjectName(QStringLiteral("acCheck"));
     connect(autostart_check_, &QCheckBox::toggled, this,
             [](bool on) { McpHttpServer::instance().set_enabled_at_startup(on); });
@@ -307,6 +381,7 @@ QWidget* AgentConnectSection::build_token_card(QWidget* parent) {
     token_edit_->setProperty("fincept_secret", true);
     row->addWidget(token_edit_, 1);
     show_token_btn_ = make_button("acBtn", card);
+    show_token_btn_->setProperty("fincept_agent_risk", "account"); // agents: reveals the agents' access token
     connect(show_token_btn_, &QPushButton::clicked, this, [this]() {
         show_token_ = !show_token_;
         refresh_status();
@@ -315,9 +390,11 @@ QWidget* AgentConnectSection::build_token_card(QWidget* parent) {
     });
     row->addWidget(show_token_btn_);
     copy_token_btn_ = make_button("acBtn", card);
+    copy_token_btn_->setProperty("fincept_agent_risk", "account"); // agents: copies the agents' access token
     connect(copy_token_btn_, &QPushButton::clicked, this, []() { copy_text(McpHttpServer::instance().token()); });
     row->addWidget(copy_token_btn_);
     regen_btn_ = make_button("acDangerBtn", card);
+    regen_btn_->setProperty("fincept_agent_risk", "account"); // agents: mints a new agents' access token
     connect(regen_btn_, &QPushButton::clicked, this, &AgentConnectSection::on_regenerate);
     row->addWidget(regen_btn_);
     v->addLayout(row);
@@ -344,6 +421,7 @@ QWidget* AgentConnectSection::build_permissions_card(QWidget* parent) {
     connect(scripts_check_, &QCheckBox::toggled, this, &AgentConnectSection::on_scripts_toggled);
     v->addWidget(scripts_check_);
     auto_check_ = new QCheckBox(card);
+    auto_check_->setProperty("fincept_agent_risk", "account"); // agents: turns off every approval for agents
     auto_check_->setObjectName(QStringLiteral("acCheck"));
     connect(auto_check_, &QCheckBox::toggled, this, &AgentConnectSection::on_auto_toggled);
     v->addWidget(auto_check_);
@@ -377,14 +455,15 @@ QWidget* AgentConnectSection::build_connect_card(QWidget* parent) {
     row->addWidget(client_lbl_);
     client_combo_ = new QComboBox(card);
     client_combo_->setObjectName(QStringLiteral("acCombo"));
-    for (int i = 0; i < ClientCount; ++i)
-        client_combo_->addItem(QString());
+    client_combo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    client_combo_->setMinimumContentsLength(18);
+    rebuild_client_list();
     connect(client_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
         add_result_->clear();
         refresh_snippet();
         retranslate();
     });
-    row->addWidget(client_combo_);
+    row->addWidget(client_combo_, 1);
     row->addStretch(1);
     v->addLayout(row);
     client_desc_ = make_label("acHint", card, true);
@@ -394,29 +473,7 @@ QWidget* AgentConnectSection::build_connect_card(QWidget* parent) {
     auto* actions = new QHBoxLayout;
     actions->setSpacing(6);
     copy_snippet_btn_ = make_button("acBtn", card);
-    connect(copy_snippet_btn_, &QPushButton::clicked, this, [this]() {
-        auto& srv = McpHttpServer::instance();
-        switch (client_combo_->currentIndex()) {
-            case ClaudeCode:
-                copy_text(srv.claude_code_add_command());
-                break;
-            case Codex:
-                copy_text(srv.codex_add_command());
-                break;
-            case GeminiCli:
-                copy_text(srv.gemini_add_command());
-                break;
-            case Cursor:
-                copy_text(srv.generic_http_json());
-                break;
-            case VsCode:
-                copy_text(srv.vscode_json());
-                break;
-            default:
-                copy_text(srv.stdio_bridge_json());
-                break;
-        }
-    });
+    connect(copy_snippet_btn_, &QPushButton::clicked, this, [this]() { copy_text(client_command(true)); });
     actions->addWidget(copy_snippet_btn_);
     add_btn_ = make_button("acPrimaryBtn", card);
     connect(add_btn_, &QPushButton::clicked, this, &AgentConnectSection::on_register);
@@ -430,12 +487,138 @@ QWidget* AgentConnectSection::build_connect_card(QWidget* parent) {
     second_snippet_ = make_snippet(card);
     v->addWidget(second_snippet_);
     copy_second_btn_ = make_button("acBtn", card);
-    connect(copy_second_btn_, &QPushButton::clicked, this, [this]() {
-        auto& srv = McpHttpServer::instance();
-        copy_text(client_combo_->currentIndex() == Codex ? srv.codex_config_toml() : srv.gemini_settings_json());
-    });
+    connect(copy_second_btn_, &QPushButton::clicked, this, [this]() { copy_text(client_config(true)); });
     v->addWidget(copy_second_btn_, 0, Qt::AlignLeft);
     return card;
+}
+
+QWidget* AgentConnectSection::build_check_card(QWidget* parent) {
+    QFrame* card = make_card(parent);
+    auto* v = new QVBoxLayout(card);
+    v->setContentsMargins(14, 12, 14, 14);
+    v->setSpacing(8);
+    auto* head = new QHBoxLayout;
+    check_title_ = make_label("acSection", card);
+    head->addWidget(check_title_);
+    head->addStretch(1);
+    check_btn_ = make_button("acBtn", card);
+    connect(check_btn_, &QPushButton::clicked, this, &AgentConnectSection::on_check_connections);
+    head->addWidget(check_btn_);
+    v->addLayout(head);
+    check_hint_ = make_label("acHint", card, true);
+    v->addWidget(check_hint_);
+
+    check_model_ = new QStandardItemModel(0, 3, this);
+    check_table_ = new QTableView(card);
+    check_table_->setObjectName(QStringLiteral("acTable"));
+    check_table_->setModel(check_model_);
+    check_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    check_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    check_table_->setAlternatingRowColors(true);
+    check_table_->setShowGrid(false);
+    check_table_->setWordWrap(false);
+    check_table_->verticalHeader()->hide();
+    check_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    check_table_->horizontalHeader()->setStretchLastSection(true);
+    check_table_->hide(); // shown with the first report
+    v->addWidget(check_table_);
+    return card;
+}
+
+void AgentConnectSection::on_check_connections() {
+    if (check_running_)
+        return;
+    if (!McpHttpServer::instance().is_running()) {
+        check_hint_->setText(tr("Start the server first — the check talks to it the way each client does."));
+        return;
+    }
+    check_running_ = true;
+    check_btn_->setEnabled(false);
+    check_hint_->setText(tr("Checking… each client's handshake, tool list and one read-only call (ui_overview). No AI "
+                            "model is called."));
+    QPointer<AgentConnectSection> self(this);
+    mcp::run_mcp_self_check_async(this, [self](const mcp::SelfCheckReport& report) {
+        if (!self)
+            return;
+        // One row per client profile (and the server / bridge rows), in the
+        // order the check ran them: the first failing step and its reason, or
+        // what passed.
+        struct Row {
+            QString id;
+            bool ok = true;
+            QString failure;
+            QString list_detail;
+            int steps = 0;
+            qint64 ms = 0;
+        };
+        QList<Row> rows;
+        for (const mcp::SelfCheckStep& s : report.steps) {
+            auto it = std::find_if(rows.begin(), rows.end(), [&s](const Row& r) { return r.id == s.profile; });
+            if (it == rows.end()) {
+                rows.append(Row{s.profile});
+                it = rows.end() - 1;
+            }
+            ++it->steps;
+            it->ms += s.ms;
+            if (!s.ok && it->ok) {
+                it->ok = false;
+                it->failure = s.step + QStringLiteral(": ") + s.detail;
+            }
+            if (s.ok && (s.step == QLatin1String("tools/list") || s.step == QLatin1String("edition") ||
+                         s.profile == QLatin1String("stdio-bridge")))
+                it->list_detail = s.detail;
+        }
+        QStringList clients, results, details;
+        for (const Row& r : rows) {
+            QString name = r.id;
+            if (r.id == QLatin1String("server"))
+                name = AgentConnectSection::tr("Server (which edition answers)");
+            else if (r.id == QLatin1String("protocol"))
+                name = AgentConnectSection::tr("Newer MCP clients (2026-07-28 fallback)");
+            else if (r.id == QLatin1String("stdio-bridge"))
+                name = AgentConnectSection::tr("stdio bridge (Claude Desktop)");
+            else
+                for (const mcp::profiles::ClientKind k : mcp::profiles::all_kinds()) {
+                    if (r.id == QLatin1String(mcp::profiles::profile(k).id))
+                        name = QString::fromUtf8(mcp::profiles::profile(k).display);
+                }
+            clients << name;
+            results << (r.ok ? AgentConnectSection::tr("PASS") : AgentConnectSection::tr("FAIL"));
+            details << (r.ok ? AgentConnectSection::tr("%1 step(s) in %2 ms%3")
+                                   .arg(r.steps)
+                                   .arg(r.ms)
+                                   .arg(r.list_detail.isEmpty() ? QString() : QStringLiteral(" · ") + r.list_detail)
+                             : r.failure);
+        }
+        self->show_check_report(clients, results, details);
+    });
+}
+
+void AgentConnectSection::show_check_report(const QStringList& clients, const QStringList& results,
+                                            const QStringList& details) {
+    check_running_ = false;
+    check_done_ = true;
+    check_btn_->setEnabled(true);
+    check_model_->removeRows(0, check_model_->rowCount());
+    int failed = 0;
+    for (qsizetype i = 0; i < clients.size(); ++i) {
+        QList<QStandardItem*> row{new QStandardItem(clients.at(i)), new QStandardItem(results.value(i)),
+                                  new QStandardItem(details.value(i))};
+        row.at(2)->setToolTip(details.value(i));
+        check_model_->appendRow(row);
+        failed += results.value(i) == tr("PASS") ? 0 : 1;
+    }
+    check_hint_->setText(clients.isEmpty() ? tr("The check could not run.")
+                         : failed == 0     ? tr("Every client connected: handshake, tool list and a read-only call "
+                                                "passed. No AI model was called.")
+                                           : tr("%1 of %2 failed — the reason is in the row.").arg(failed).arg(clients.size()));
+    check_table_->setVisible(!clients.isEmpty());
+    retranslate_check_headers();
+    fit_rows();
+}
+
+void AgentConnectSection::retranslate_check_headers() {
+    check_model_->setHorizontalHeaderLabels({tr("CLIENT"), tr("RESULT"), tr("DETAILS")});
 }
 
 QWidget* AgentConnectSection::build_tools_card(QWidget* parent) {
@@ -479,15 +662,10 @@ QWidget* AgentConnectSection::build_activity_card(QWidget* parent) {
     activity_table_->setShowGrid(false);
     activity_table_->setWordWrap(false);
     activity_table_->verticalHeader()->hide();
-    activity_table_->verticalHeader()->setDefaultSectionSize(24);
     activity_table_->setMinimumHeight(240);
     auto* hh = activity_table_->horizontalHeader();
     hh->setSectionResizeMode(QHeaderView::Interactive);
     hh->setSectionResizeMode(McpActivityModel::ColOutcome, QHeaderView::Stretch);
-    hh->resizeSection(McpActivityModel::ColTime, 80);
-    hh->resizeSection(McpActivityModel::ColClient, 150);
-    hh->resizeSection(McpActivityModel::ColTool, 130);
-    hh->resizeSection(McpActivityModel::ColDuration, 90);
     v->addWidget(activity_table_, 1);
 
     clients_title_ = make_label("acLabel", card);
@@ -498,54 +676,171 @@ QWidget* AgentConnectSection::build_activity_card(QWidget* parent) {
     return card;
 }
 
-void AgentConnectSection::apply_theme() {
+QString AgentConnectSection::style_sheet() const {
     using namespace ui::colors;
-    // One stylesheet for the whole page, by object name (P7) — re-applied only
-    // when the theme changes.
-    setStyleSheet(
-        QStringLiteral(
-            "#agentConnectSection, #acScroll, #acPage { background:%1; }"
-            "#acCard { background:%2; border:1px solid %3; }"
-            "#acTitle { color:%4; font-weight:700; letter-spacing:0.5px; font-size:15px; }"
-            "#acSection { color:%4; font-weight:700; letter-spacing:0.5px; }"
-            "#acLabel { color:%5; font-weight:600; }"
-            "#acHint { color:%6; }"
-            "#acNote { color:%5; border-left:2px solid %4; padding-left:8px; }"
-            "#acMono { color:%5; font-family:'Consolas','Menlo',monospace; }"
-            "#acError { color:%7; background:%8; padding:6px; }"
-            "#acState[state=\"running\"] { color:%9; font-weight:700; }"
-            "#acState[state=\"stopped\"] { color:%6; font-weight:700; }"
-            "#acState[state=\"error\"] { color:%7; font-weight:700; }"
-            "#acResult[state=\"ok\"] { color:%9; }"
-            "#acResult[state=\"error\"] { color:%7; }"
-            "#acResult { color:%6; }"
-            "QLineEdit#acField, QPlainTextEdit#acSnippet { background:%10; color:%11; border:1px solid %3; "
-            "padding:5px; font-family:'Consolas','Menlo',monospace; }"
-            "QSpinBox#acSpin, QComboBox#acCombo { background:%10; color:%11; border:1px solid %3; padding:4px 6px; "
-            "min-width:90px; }"
-            "QComboBox#acCombo QAbstractItemView { background:%10; color:%11; selection-background-color:%12; }"
-            "QCheckBox#acCheck { color:%11; }"
-            "QPushButton#acBtn { background:%10; color:%11; border:1px solid %13; padding:5px 12px; }"
-            "QPushButton#acBtn:hover { background:%12; }"
-            "QPushButton#acPrimaryBtn { background:%4; color:%1; border:none; padding:5px 14px; font-weight:700; }"
-            "QPushButton#acPrimaryBtn:disabled { background:%12; color:%6; }"
-            "QPushButton#acDangerBtn { background:%10; color:%7; border:1px solid %3; padding:5px 12px; }"
-            "QPushButton#acDangerBtn:disabled, QPushButton#acBtn:disabled { color:%6; }"
-            "QTableView#acTable { background:%10; alternate-background-color:%2; color:%5; border:1px solid %3; "
-            "gridline-color:%3; }"
-            "QTableView#acTable QHeaderView::section { background:%2; color:%6; border:none; "
-            "border-bottom:1px solid %3; padding:4px; font-weight:700; }")
-            .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), TEXT_SECONDARY(), TEXT_DIM(), NEGATIVE(),
-                 NEGATIVE_BG(), POSITIVE())
-            .arg(BG_RAISED(), TEXT_PRIMARY(), BG_HOVER(), BORDER_BRIGHT()));
+    // One stylesheet for the whole page, by object name (P7).
+    //
+    // Text widgets are transparent so they show the card behind them. Settings
+    // gives its whole tree a selector-less `background:BG_BASE` (every other
+    // settings section clears it per widget via settings_styles::label_ss /
+    // check_ss); without this rule each label and checkbox here painted a
+    // black band across its card. This sheet is nearer than the screen's, so it
+    // wins; the low specificity (type only) lets the #ac… rules below still set
+    // their own backgrounds (#acError). State colours are SUCCESS / DANGER, not
+    // the price-direction POSITIVE / NEGATIVE.
+    return QString("QLabel, QCheckBox, QRadioButton { background:transparent; }"
+                   "#agentConnectSection, #acScroll, #acPage { background:%1; }"
+                   "#acCard { background:%2; border:1px solid %3; }"
+                   "#acTitle { color:%4; font-weight:700; letter-spacing:0.5px; font-size:" +
+                   fincept::ui::fonts::px(1) +
+                   "px; }"
+                   "#acSection { color:%4; font-weight:700; letter-spacing:0.5px; }"
+                   "#acLabel { color:%5; font-weight:600; }"
+                   "#acHint { color:%6; }"
+                   "#acNote { color:%5; border-left:2px solid %4; padding-left:8px; }"
+                   "#acMono { color:%5; }"
+                   "#acError { color:%7; background:%8; padding:6px; }"
+                   "#acState[state=\"running\"] { color:%9; font-weight:700; }"
+                   "#acState[state=\"stopped\"] { color:%6; font-weight:700; }"
+                   "#acState[state=\"error\"] { color:%7; font-weight:700; }"
+                   "#acResult[state=\"ok\"] { color:%9; }"
+                   "#acResult[state=\"error\"] { color:%7; }"
+                   "#acResult { color:%6; }"
+                   "QLineEdit#acField, QPlainTextEdit#acSnippet { background:%10; color:%11; border:1px solid %3; "
+                   "padding:5px; }"
+                   "QSpinBox#acSpin, QComboBox#acCombo { background:%10; color:%11; border:1px solid %3; padding:4px 6px; "
+                   "min-width:90px; }"
+                   "QComboBox#acCombo QAbstractItemView { background:%10; color:%11; selection-background-color:%12; }"
+                   "QCheckBox#acCheck { color:%11; }"
+                   "QPushButton#acBtn { background:%10; color:%11; border:1px solid %13; padding:5px 12px; }"
+                   "QPushButton#acBtn:hover { background:%12; }"
+                   "QPushButton#acPrimaryBtn { background:%4; color:%14; border:none; padding:5px 14px; font-weight:700; }"
+                   "QPushButton#acPrimaryBtn:disabled { background:%10; color:%15; }"
+                   "QPushButton#acDangerBtn { background:%10; color:%7; border:1px solid %3; padding:5px 12px; }"
+                   "QPushButton#acDangerBtn:disabled, QPushButton#acBtn:disabled { color:%15; }"
+                   "QTableView#acTable { background:%10; alternate-background-color:%2; color:%5; border:1px solid %3; "
+                   "gridline-color:%3; }"
+                   "QTableView#acTable QHeaderView::section { background:%2; color:%6; border:none; "
+                   "border-bottom:1px solid %3; padding:4px; font-weight:700; }")
+        .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), TEXT_SECONDARY(), TEXT_DIM(), DANGER(), tint(DANGER()),
+             SUCCESS())
+        .arg(BG_RAISED(), TEXT_PRIMARY(), BG_HOVER(), BORDER_BRIGHT(), TEXT_ON_ACCENT(), TEXT_TERTIARY());
+}
+
+void AgentConnectSection::fit_rows() {
+    // Row height and starting column widths follow the user's font size.
+    activity_table_->verticalHeader()->setDefaultSectionSize(qMax(24, QFontMetrics(ui::fonts::font()).height() + 8));
+    const auto col_w = [](int w) { return qMax(w, w * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx); };
+    auto* hh = activity_table_->horizontalHeader();
+    hh->resizeSection(McpActivityModel::ColTime, col_w(80));
+    hh->resizeSection(McpActivityModel::ColClient, col_w(150));
+    hh->resizeSection(McpActivityModel::ColTool, col_w(130));
+    hh->resizeSection(McpActivityModel::ColDuration, col_w(90));
+    if (check_table_) {
+        const int row_h = qMax(24, QFontMetrics(ui::fonts::font()).height() + 8);
+        check_table_->verticalHeader()->setDefaultSectionSize(row_h);
+        auto* ch = check_table_->horizontalHeader();
+        ch->resizeSection(0, col_w(230));
+        ch->resizeSection(1, col_w(70));
+        // Every row visible without an inner scroll (about a dozen rows).
+        check_table_->setMinimumHeight(row_h * (qMax(3, check_model_->rowCount()) + 1) + 4);
+    }
+}
+
+void AgentConnectSection::rebuild_client_list() {
+    // Registry-driven: every harness that documents a way to add an MCP server,
+    // then the clients that are not harnesses.
+    auto& registry = harness::HarnessRegistry::instance();
+    const QString keep = current_client();
+    const QSignalBlocker b(client_combo_);
+    client_combo_->clear();
+    client_keys_.clear();
+    for (const QString& id : registry.ids()) {
+        const std::optional<harness::McpRegistration> reg = ac_registration(id);
+        if (!reg || (reg->manual_args.isEmpty() && reg->config_snippet.isEmpty() && !reg->add))
+            continue;
+        const harness::IHarnessAdapter* a = registry.adapter(id);
+        QString text = registry.display_name(id);
+        if (a && a->descriptor().beta)
+            text += QStringLiteral(" · ") + tr("BETA");
+        client_combo_->addItem(text);
+        client_keys_ << QStringLiteral("harness:") + id;
+    }
+    client_combo_->addItem(QString());
+    client_keys_ << QStringLiteral("vscode");
+    client_combo_->addItem(QString());
+    client_keys_ << QStringLiteral("stdio");
+    client_combo_->addItem(QString());
+    client_keys_ << QStringLiteral("http");
+    const int idx = client_keys_.indexOf(keep);
+    client_combo_->setCurrentIndex(idx >= 0 ? static_cast<int>(idx) : 0);
+}
+
+QString AgentConnectSection::current_client() const {
+    if (!client_combo_)
+        return {};
+    const int i = client_combo_->currentIndex();
+    return (i >= 0 && i < client_keys_.size()) ? client_keys_.at(i) : QString();
+}
+
+QString AgentConnectSection::current_harness() const {
+    const QString key = current_client();
+    return key.startsWith(QLatin1String("harness:")) ? key.mid(8) : QString();
+}
+
+QString AgentConnectSection::client_command(bool reveal) const {
+    auto& srv = McpHttpServer::instance();
+    const QString key = current_client();
+    QString text;
+    if (key == QLatin1String("vscode"))
+        text = srv.vscode_json();
+    else if (key == QLatin1String("stdio"))
+        text = srv.stdio_bridge_json();
+    else if (key == QLatin1String("http"))
+        text = srv.generic_http_json();
+    else if (const QString id = current_harness(); !id.isEmpty()) {
+        const std::optional<harness::McpRegistration> reg = ac_registration(id);
+        const harness::IHarnessAdapter* a = harness::HarnessRegistry::instance().adapter(id);
+        if (reg && a && !reg->manual_args.isEmpty()) {
+            QStringList parts{a->descriptor().executable_names.value(0, id)};
+            for (const QString& arg : reg->manual_args)
+                parts << ac_shell_quote(arg);
+            text = parts.join(QLatin1Char(' '));
+        } else if (reg) {
+            text = reg->config_snippet; // only a config entry is documented
+        }
+        text.replace(QLatin1String(harness::kMcpTokenPlaceholder), srv.token());
+    }
+    return reveal ? text : masked(text);
+}
+
+QString AgentConnectSection::client_config(bool reveal) const {
+    const QString id = current_harness();
+    if (id.isEmpty())
+        return {};
+    const std::optional<harness::McpRegistration> reg = ac_registration(id);
+    if (!reg || reg->manual_args.isEmpty() || reg->config_snippet.isEmpty())
+        return {}; // without a command, the config entry is the main snippet already
+    QString text = reg->config_snippet;
+    text.replace(QLatin1String(harness::kMcpTokenPlaceholder), McpHttpServer::instance().token());
+    return reveal ? text : masked(text);
 }
 
 void AgentConnectSection::retranslate() {
-    title_->setText(tr("AI AGENTS (MCP)"));
-    intro_->setText(tr("Let Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop work in this terminal. "
-                       "They operate it the way you do — open screens, read tables, charts and news, work the "
-                       "controls — and run the bundled Python analytics, through ten tools. Orders, money moves, "
-                       "spends and deletes ask you first unless you turn on auto mode."));
+    title_->setText(sections_ == Sections::All ? tr("AI AGENTS") : tr("TERMINAL MCP SERVER"));
+    if (harness_title_) {
+        harness_title_->setText(tr("AGENT HARNESSES"));
+        mcp_title_->setText(tr("TERMINAL MCP SERVER"));
+    }
+    {
+        QString intro = tr("Let your own agents — the harnesses above, VS Code, Claude Desktop or any MCP client — work in "
+                           "this terminal. They operate it the way you do — open screens, read tables, charts and news, "
+                           "work the controls — and run the bundled Python analytics, through ten tools. Orders, money "
+                           "moves, spends and deletes ask you first unless you turn on auto mode.");
+        if (process::host::in_flatpak())
+            intro += QLatin1Char(' ') + tr("Coding agents run on your system, outside the Flatpak sandbox.");
+        intro_->setText(intro);
+    }
     server_title_->setText(tr("SERVER"));
     copy_url_btn_->setText(tr("COPY URL"));
     start_btn_->setText(tr("START"));
@@ -582,50 +877,70 @@ void AgentConnectSection::retranslate() {
 
     connect_title_->setText(tr("CONNECT YOUR AGENT"));
     client_lbl_->setText(tr("CLIENT"));
-    client_combo_->setItemText(ClaudeCode, tr("Claude Code"));
-    client_combo_->setItemText(Codex, tr("OpenAI Codex CLI"));
-    client_combo_->setItemText(GeminiCli, tr("Gemini CLI"));
-    client_combo_->setItemText(Cursor, tr("Cursor / Windsurf / other HTTP clients"));
-    client_combo_->setItemText(VsCode, tr("VS Code (Copilot)"));
-    client_combo_->setItemText(ClaudeDesktop, tr("Claude Desktop / stdio clients"));
+    for (int i = 0; i < client_keys_.size(); ++i) {
+        const QString& key = client_keys_.at(i);
+        if (key == QLatin1String("vscode"))
+            client_combo_->setItemText(i, tr("VS Code (Copilot)"));
+        else if (key == QLatin1String("stdio"))
+            client_combo_->setItemText(i, tr("Claude Desktop / stdio clients"));
+        else if (key == QLatin1String("http"))
+            client_combo_->setItemText(i, tr("Windsurf / other HTTP clients"));
+    }
     copy_snippet_btn_->setText(tr("COPY"));
-    add_btn_->setText(client_combo_->currentIndex() == Codex ? tr("ADD TO CODEX") : tr("ADD TO CLAUDE CODE"));
-    switch (client_combo_->currentIndex()) {
-        case ClaudeCode:
-            client_desc_->setText(tr("Run this once in a terminal (or press ADD). Claude Code then sees the tools as "
-                                     "mcp__fincept_terminal__* in every project; /mcp shows the connection and the "
-                                     "prompts appear as slash commands."));
-            break;
-        case Codex:
-            client_desc_->setText(
-                tr("Run this once (or press ADD) — it registers the terminal through the bundled stdio "
-                   "bridge. Codex can also connect over HTTP directly with the config.toml entry "
-                   "below; set FINCEPT_MCP_TOKEN in your environment for it."));
-            second_lbl_->setText(tr("~/.codex/config.toml"));
-            copy_second_btn_->setText(tr("COPY TOML"));
-            break;
-        case GeminiCli:
-            client_desc_->setText(tr("Run this once, or add the settings.json entry below to ~/.gemini/settings.json "
-                                     "(user) or .gemini/settings.json (project)."));
-            second_lbl_->setText(tr("~/.gemini/settings.json"));
-            copy_second_btn_->setText(tr("COPY JSON"));
-            break;
-        case Cursor:
-            client_desc_->setText(
-                tr("Paste into ~/.cursor/mcp.json (Windsurf: ~/.codeium/windsurf/mcp_config.json — use "
-                   "\"serverUrl\" for \"url\") or your client's MCP settings. Streamable HTTP."));
-            break;
-        case VsCode:
-            client_desc_->setText(
-                tr("Paste into .vscode/mcp.json in a workspace (or your user mcp.json), then start the "
-                   "server from the MCP view and use Agent mode."));
-            break;
-        default:
-            client_desc_->setText(
-                tr("Paste into claude_desktop_config.json (Settings › Developer › Edit Config) or any "
-                   "stdio-only client's config, then restart it. It runs the bundled bridge "
-                   "script with the terminal's Python — standard library only."));
-            break;
+    copy_second_btn_->setText(tr("COPY ENTRY"));
+
+    check_title_->setText(tr("CONNECTION CHECK"));
+    check_btn_->setText(tr("CHECK CONNECTIONS"));
+    check_btn_->setToolTip(tr("Connects to the running server the way each supported client does — handshake, tool "
+                              "list, one read-only call — and reports pass or fail per client. Calls no AI model."));
+    check_table_->setAccessibleName(tr("Connection check results"));
+    if (!check_running_ && !check_done_)
+        check_hint_->setText(tr("Checks that Claude Code, Codex, Gemini CLI, Qwen Code, Cursor, Copilot, Grok, VS Code and "
+                                "stdio clients can connect, before you set one up. It first confirms that this edition of "
+                                "the terminal is the one answering, so the access token is never sent elsewhere."));
+    retranslate_check_headers();
+
+    const QString key = current_client();
+    const QString hid = current_harness();
+    if (!hid.isEmpty()) {
+        auto& registry = harness::HarnessRegistry::instance();
+        const std::optional<harness::McpRegistration> reg = ac_registration(hid);
+        const QString name = registry.display_name(hid);
+        add_btn_->setText(tr("ADD TO %1").arg(name.toUpper()).replace(QLatin1Char('&'), QStringLiteral("&&")));
+        QStringList desc;
+        if (reg && reg->add)
+            desc << tr("Run this once in a terminal, or press ADD — ADD keeps the token off the command line.");
+        else if (reg && !reg->manual_args.isEmpty())
+            desc << tr("Run this once in a terminal. %1 only takes the token on its command line, so the terminal "
+                       "does not run it for you; SHOW reveals the token.")
+                        .arg(name);
+        else
+            desc << tr("Add this entry to %1's MCP configuration.").arg(name);
+        if (reg && !reg->note.isEmpty())
+            desc << reg->note;
+        if (reg && reg->token_from_env)
+            desc << tr("Set %1 to the access token above in your user environment (Windows: Settings › "
+                       "System › About › Advanced system settings › Environment Variables; macOS / Linux: export it in "
+                       "your shell profile). Runs started from the workbench get it automatically.")
+                        .arg(QString::fromLatin1(harness::kMcpTokenEnvVar));
+        client_desc_->setText(desc.join(QLatin1Char(' ')));
+        second_lbl_->setText(reg && !reg->config_path_hint.isEmpty() ? tr("Or add this to %1:").arg(reg->config_path_hint)
+                                                                     : QString());
+    } else if (key == QLatin1String("vscode")) {
+        client_desc_->setText(tr("Paste into .vscode/mcp.json in a workspace (or your user mcp.json), then start the "
+                                 "server from the MCP view and use Agent mode."));
+    } else if (key == QLatin1String("stdio")) {
+        client_desc_->setText(
+            process::host::in_flatpak()
+                ? tr("Paste into claude_desktop_config.json (Settings › Developer › Edit Config) or any stdio-only "
+                     "client's config, then restart it. The bridge script and the terminal's Python are inside this "
+                     "app's Flatpak sandbox, so the entry starts them with “flatpak run” — standard library only.")
+                : tr("Paste into claude_desktop_config.json (Settings › Developer › Edit Config) or any "
+                     "stdio-only client's config, then restart it. It runs the bundled bridge script with the "
+                     "terminal's Python — standard library only."));
+    } else {
+        client_desc_->setText(tr("Paste into your client's MCP settings (Windsurf: ~/.codeium/windsurf/mcp_config.json — "
+                                 "use \"serverUrl\" for \"url\"). Streamable HTTP."));
     }
 
     tools_title_->setText(tr("WHAT AGENTS GET — %1 TOOLS").arg(mcp::core::core_tool_names().size()));
@@ -784,51 +1099,35 @@ void AgentConnectSection::refresh_status() {
     else
         port_hint_->setText(tr("Port changes apply the next time the server starts."));
     token_edit_->setEchoMode(show_token_ ? QLineEdit::Normal : QLineEdit::Password);
-    token_edit_->setText(srv.token());
+    const QString token = srv.token();
+    token_edit_->setText(token);
+    // Empty only when secure storage could not be read (the error line says why);
+    // no token is minted then, so the clients' saved one keeps working.
+    token_edit_->setPlaceholderText(token.isEmpty() ? tr("not available — secure storage could not be read")
+                                                    : QString());
+    copy_token_btn_->setEnabled(!token.isEmpty());
 }
 
 void AgentConnectSection::refresh_snippet() {
-    auto& srv = McpHttpServer::instance();
-    const int client = client_combo_->currentIndex();
-    QString text;
-    QString second;
-    switch (client) {
-        case ClaudeCode:
-            text = srv.claude_code_add_command();
-            break;
-        case Codex:
-            text = srv.codex_add_command();
-            second = srv.codex_config_toml();
-            break;
-        case GeminiCli:
-            text = srv.gemini_add_command();
-            second = srv.gemini_settings_json();
-            break;
-        case Cursor:
-            text = srv.generic_http_json();
-            break;
-        case VsCode:
-            text = srv.vscode_json();
-            break;
-        default:
-            text = srv.stdio_bridge_json();
-            break;
-    }
-    snippet_->setPlainText(masked(text));
+    snippet_->setPlainText(client_command(false));
+    const QString second = client_config(false);
     second_lbl_->setVisible(!second.isEmpty());
     second_snippet_->setVisible(!second.isEmpty());
     copy_second_btn_->setVisible(!second.isEmpty());
-    second_snippet_->setPlainText(masked(second));
+    second_snippet_->setPlainText(second);
 
-    const bool one_click = client == ClaudeCode || client == Codex;
+    const QString hid = current_harness();
+    const std::optional<harness::McpRegistration> reg = hid.isEmpty() ? std::nullopt : ac_registration(hid);
+    const bool one_click = reg && reg->add;
     add_btn_->setVisible(one_click);
     if (one_click) {
-        auto& svc = ca::CodingAgentService::instance();
-        const bool installed = svc.cli_info(client == Codex ? ca::AgentKind::Codex : ca::AgentKind::Claude).installed();
-        add_btn_->setEnabled(installed && !awaiting_registration_);
-        add_btn_->setToolTip(installed ? QString()
-                                       : (client == Codex ? tr("Codex CLI was not found on this computer")
-                                                          : tr("Claude Code was not found on this computer")));
+        auto& registry = harness::HarnessRegistry::instance();
+        const harness::HarnessStatus st = registry.status(hid);
+        const bool installed = st.installed();
+        add_btn_->setEnabled(installed && awaiting_harness_.isEmpty());
+        add_btn_->setToolTip(installed         ? QString()
+                             : st.host_blocked ? st.detect_error
+                                               : tr("%1 was not found on this computer").arg(registry.display_name(hid)));
     }
 }
 
@@ -878,8 +1177,9 @@ void AgentConnectSection::on_stop() {
 void AgentConnectSection::on_regenerate() {
     const auto answer = QMessageBox::question(
         this, tr("Regenerate access token"),
-        tr("Mint a new access token? Every connected client (Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude "
-           "Desktop) stops working until it is updated with the new token."),
+        tr("Mint a new access token? Every connected client stops working until it is updated with the new token "
+           "(clients that read %1 need the variable updated too).")
+            .arg(QString::fromLatin1(harness::kMcpTokenEnvVar)),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
@@ -933,43 +1233,42 @@ void AgentConnectSection::update_auto_note() {
 }
 
 void AgentConnectSection::on_register() {
-    const bool codex = client_combo_->currentIndex() == Codex;
-    awaiting_registration_ = true;
+    const QString hid = current_harness();
+    if (hid.isEmpty())
+        return;
+    awaiting_harness_ = hid;
     add_btn_->setEnabled(false);
     add_result_->setText(tr("Working…"));
     add_result_->setProperty("state", QString());
     add_result_->style()->unpolish(add_result_);
     add_result_->style()->polish(add_result_);
-    ca::CodingAgentService::instance().register_with_client(codex ? ca::AgentKind::Codex : ca::AgentKind::Claude,
-                                                            false);
+    ca::CodingAgentService::instance().register_with_client(hid, false);
 }
 
-void AgentConnectSection::on_registration_finished(const QString& agent, bool ok, bool already_exists,
+void AgentConnectSection::on_registration_finished(const QString& harness_id, bool ok, bool already_exists,
                                                    const QString& message) {
-    if (!awaiting_registration_)
+    if (awaiting_harness_.isEmpty() || awaiting_harness_ != harness_id)
         return; // another page asked
-    const bool codex = agent == ca::agent_id(ca::AgentKind::Codex);
-    const QString product = codex ? tr("Codex") : tr("Claude Code");
+    const QString product = harness::HarnessRegistry::instance().display_name(harness_id);
     if (already_exists) {
         const auto answer =
             QMessageBox::question(this, tr("Replace existing server?"),
-                                  tr("%1 already has an MCP server named “fincept_terminal”:\n\n%2\n\nReplace it with "
+                                  tr("%1 already has an MCP server named “%2”:\n\n%3\n\nReplace it with "
                                      "this terminal's server?")
-                                      .arg(product, message.left(1200)),
+                                      .arg(product, QString::fromLatin1(kAcServerName), message.left(1200)),
                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer == QMessageBox::Yes) {
             add_result_->setText(tr("Replacing…"));
-            ca::CodingAgentService::instance().register_with_client(
-                codex ? ca::AgentKind::Codex : ca::AgentKind::Claude, true);
+            ca::CodingAgentService::instance().register_with_client(harness_id, true);
             return;
         }
-        awaiting_registration_ = false;
+        awaiting_harness_.clear();
         add_result_->setText(tr("Kept the existing entry."));
         refresh_snippet();
         return;
     }
-    awaiting_registration_ = false;
-    add_result_->setText(ok ? tr("Added. Restart %1 sessions to pick it up.").arg(product) : message);
+    awaiting_harness_.clear();
+    add_result_->setText(ok ? tr("Added. Restart %1 sessions to pick it up.").arg(product) : message.left(400));
     add_result_->setToolTip(message);
     add_result_->setProperty("state", ok ? QStringLiteral("ok") : QStringLiteral("error"));
     add_result_->style()->unpolish(add_result_);

@@ -25,6 +25,7 @@ Each output line is a JSON object:
   {"type":"error",  "broker":"zerodha", "message":"..."}
 """
 
+import importlib.util
 import json
 import os
 import sys
@@ -32,7 +33,12 @@ import threading
 import time
 import argparse
 
-OPENALGO_PATH = r"C:\projects\openalgo"
+# The broker streaming adapters live in the external openalgo project, which is
+# neither part of this repository nor in the requirements. OPENALGO_PATH (an
+# openalgo checkout) makes them importable; without it the bridge exits at once
+# with one missing_dependency error (see check_dependencies). It used to be a
+# path on one developer's machine.
+OPENALGO_PATH = os.environ.get("OPENALGO_PATH", "")
 
 
 def emit(obj):
@@ -204,9 +210,9 @@ def run_broker(broker: str, api_key: str, access_token: str, user_id: str,
     subscribe to symbols, then start a ZMQ listener that re-emits ticks.
 
     symbols: list of (symbol, exchange, token_str)
-    """
-    sys.path.insert(0, OPENALGO_PATH)
 
+    Returns False when the adapter could not be started.
+    """
     # Build token map for SymbolMapper — use provided tokens where available.
     # For symbols with token "0", try to resolve via broker REST API.
     _BREXCH_MAP = {
@@ -232,12 +238,13 @@ def run_broker(broker: str, api_key: str, access_token: str, user_id: str,
 
     adapter = None
     zmq_thread = None
+    started = False
 
     try:
         adapter = _create_adapter(broker)
         if adapter is None:
             emit_error(broker, f"No adapter found for broker '{broker}'")
-            return
+            return False
 
         auth_data = {
             "auth_token":   access_token,
@@ -254,6 +261,7 @@ def run_broker(broker: str, api_key: str, access_token: str, user_id: str,
         # Connect
         conn = adapter.connect()
         emit_status(broker, True, f"Connected: {conn}")
+        started = True
 
         # Build sym_map for ZMQ listener
         sym_map = {}
@@ -293,6 +301,7 @@ def run_broker(broker: str, api_key: str, access_token: str, user_id: str,
         emit_error(broker, f"Fatal: {e}")
         import traceback
         traceback.print_exc(file=sys.stderr)
+        started = False
     finally:
         if adapter:
             try:
@@ -300,6 +309,7 @@ def run_broker(broker: str, api_key: str, access_token: str, user_id: str,
             except Exception:
                 pass
         emit_status(broker, False, "disconnected")
+    return started
 
 
 def _patch_db_modules(symbol_token_map: dict = None):
@@ -432,10 +442,38 @@ def read_credentials(args):
     return api_key, access_token, feed_token, user_id
 
 
+def check_dependencies(broker: str) -> bool:
+    """Fail fast, with one machine-readable line, when the bridge cannot run.
+
+    code "missing_dependency" tells the terminal not to respawn the process
+    (ExchangeSession treats it as fatal); the message avoids the phrase the
+    terminal maps to "ccxt is not installed"."""
+    if OPENALGO_PATH and os.path.isdir(OPENALGO_PATH) and OPENALGO_PATH not in sys.path:
+        sys.path.insert(0, OPENALGO_PATH)
+    missing = []
+    try:
+        if importlib.util.find_spec("broker") is None:
+            missing.append("the openalgo broker adapters (set OPENALGO_PATH to an openalgo checkout)")
+    except (ImportError, ValueError):
+        missing.append("the openalgo broker adapters (set OPENALGO_PATH to an openalgo checkout)")
+    try:
+        if importlib.util.find_spec("zmq") is None:
+            missing.append("pyzmq")
+    except (ImportError, ValueError):
+        missing.append("pyzmq")
+    if not missing:
+        return True
+    emit({"type": "error", "code": "missing_dependency", "broker": broker,
+          "message": "Broker streaming cannot start: missing " + " and ".join(missing) + "."})
+    return False
+
+
 def main():
     args = parse_args()
 
     broker = args.broker.lower()
+    if not check_dependencies(broker):
+        sys.exit(1)
     api_key, access_token, feed_token, user_id = read_credentials(args)
 
     if not api_key or not access_token:
@@ -468,8 +506,9 @@ def main():
     except Exception:
         pass
 
-    run_broker(broker, api_key, access_token, user_id, symbols, stop_event,
-               feed_token=feed_token)
+    if not run_broker(broker, api_key, access_token, user_id, symbols, stop_event,
+                      feed_token=feed_token):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,47 @@
+{
+  "parser": "grok",
+  "events": [
+    {
+      "kind": "thinking",
+      "partial": true,
+      "ref": "thought-1"
+    },
+    {
+      "kind": "thinking",
+      "ref": "thought-1"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "call_1"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "call_1",
+      "error": false
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-2"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-2"
+    },
+    {
+      "kind": "text",
+      "ref": "msg-2"
+    }
+  ],
+  "session_id": "",
+  "final_text": "The README has one heading.",
+  "saw_result": false,
+  "result_is_error": false,
+  "tool_calls": 1,
+  "failure": {
+    "exit_code": 0,
+    "kind": ""
+  },
+  "input": "streaming_json.jsonl"
+}

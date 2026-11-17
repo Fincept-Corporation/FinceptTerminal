@@ -48,6 +48,9 @@ class ConnectionHealthWidget : public BaseWidget {
         QString detail;
         QString tooltip;
         QString screen_id; // nav.switch_screen target on double-click; empty = none
+        /// Exchange whose stored keys could not be read: double-click re-reads
+        /// them (ExchangeSession::load_stored_credentials) instead of navigating.
+        QString retry_exchange;
         Tone tone = Tone::Dim;
     };
 

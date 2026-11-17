@@ -18,28 +18,28 @@ DeployDialog::DeployDialog(const QString& current_name, const QString& current_d
     // One stylesheet for the whole dialog (objectName selectors) instead of one per widget.
     setStyleSheet(
         QString("QDialog#deployDialog { background: %1; }"
-                "QLabel { color: %2; font-family: Consolas; font-size: 11px; }"
-                "QLabel#deployTitle { color: %3; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; }"
+                "QLabel { color: %2; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
+                "QLabel#deployTitle { color: %3; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: bold; letter-spacing: 0.5px; }"
                 "QLabel#deploySection { color: %2; font-weight: bold; letter-spacing: 0.5px; }"
                 "QLabel#deployLiveWarning { color: %4; font-weight: bold; }"
                 "QFrame#deploySep { background: %5; border: none; }"
                 "QLineEdit, QPlainTextEdit { background: %6; color: %7; border: 1px solid %5;"
-                "  font-family: Consolas; font-size: 12px; padding: 6px 8px; }"
+                "  font-size: " + fincept::ui::fonts::px(-2) + "px; padding: 6px 8px; }"
                 "QLineEdit:focus, QPlainTextEdit:focus { border: 1px solid %3; }"
-                "QPlainTextEdit#deployLiveList { color: %4; font-size: 11px; }"
+                "QPlainTextEdit#deployLiveList { color: %4; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
                 "QWidget#deployLivePanel { border: 1px solid %4; }"
-                "QRadioButton { color: %7; font-family: Consolas; font-size: 12px; }"
-                "QPushButton { background: %6; color: %2; border: 1px solid %5; font-family: Consolas;"
-                "  font-size: 11px; font-weight: bold; padding: 0 16px; min-height: 26px; }"
+                "QRadioButton { color: %7; font-size: " + fincept::ui::fonts::px(-2) + "px; }"
+                "QPushButton { background: %6; color: %2; border: 1px solid %5;"
+                "  font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; padding: 0 16px; min-height: 26px; }"
                 "QPushButton:hover { color: %7; }"
                 "QPushButton:disabled { color: %8; }"
                 "QPushButton#deployRunBtn { background: %9; color: %3; border: 1px solid %3; }"
                 "QPushButton#deployRunBtn:hover { background: %3; color: %10; }"
                 "QPushButton#deployRunBtn:disabled { background: %6; color: %8; border: 1px solid %5; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER(), ui::colors::NEGATIVE(),
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER(), ui::colors::DANGER(),
                  ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(),
                  ui::colors::ACCENT_BG())
-            .arg(ui::colors::BG_BASE()));
+            .arg(ui::colors::TEXT_ON_ACCENT()));
     build_ui(current_name, current_description, currently_live);
 }
 
@@ -89,6 +89,7 @@ void DeployDialog::build_ui(const QString& current_name, const QString& current_
 
     paper_radio_ = new QRadioButton;
     live_radio_ = new QRadioButton;
+    live_radio_->setProperty("fincept_agent_risk", "account"); // paper -> live switch
     auto* group = new QButtonGroup(this);
     group->addButton(paper_radio_);
     group->addButton(live_radio_);
@@ -140,6 +141,7 @@ void DeployDialog::build_ui(const QString& current_name, const QString& current_
 
     deploy_btn_ = new QPushButton;
     deploy_btn_->setObjectName("deployRunBtn");
+    deploy_btn_->setProperty("fincept_agent_risk", "order"); // runs the workflow; LIVE sends real orders
     connect(deploy_btn_, &QPushButton::clicked, this, [this]() {
         deploy_ = true;
         accept();

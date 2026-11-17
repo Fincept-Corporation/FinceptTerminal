@@ -1,7 +1,7 @@
 #pragma once
-// CodingAgentService.h — runs Claude Code and OpenAI Codex CLI agents LOCALLY as
-// long-running background tasks, wired to the terminal's own tools through the
-// external MCP server (mcp::McpHttpServer).
+// CodingAgentService.h — runs agent-harness CLIs (Claude Code, Codex, Grok, …;
+// see src/services/harness) LOCALLY as long-running background tasks, wired to
+// the terminal's own tools through the external MCP server (mcp::McpHttpServer).
 //
 // Ownership & threading
 //   * GUI-thread QObject singleton. Constructing it is cheap: no processes, no
@@ -14,19 +14,35 @@
 //   * Every SQLite write goes to a private single-thread pool, so writes stay
 //     ordered (run row before its events) and never touch the GUI thread.
 //     Transcript events are batched (every 500 ms or 50 events).
+//   * Every file-system touch — creating a run's working folder, the per-run
+//     files an adapter asks for, PROMPT.md / RESULT.md, deleting temp files,
+//     the folder checks and writes the screens ask for — runs on a second
+//     single-thread pool (FIFO), so a working folder on a slow or dead network
+//     share never stalls the UI or the database writes.
 //   * On QCoreApplication::aboutToQuit the process trees of running agents are
 //     killed and the runs are marked "interrupted".
 //
+// Harnesses
+//   * A run names its harness by registry id. Where it is installed, which
+//     version, its sign-in state, models, efforts and the user's defaults all
+//     come from harness::HarnessRegistry — the single source of truth; the
+//     adapter builds the command line and the stream parser; HarnessLaunch
+//     starts it. Nothing here is specific to one harness.
+//   * A failed run is classified by its adapter (signed out, rate limited,
+//     model, …) and reported to the registry, which re-checks the sign-in or
+//     sets a cooldown; the run's error starts with that plain sentence.
+//   * The run's time limit (or the 4 h hard cap) is enforced here for every
+//     harness by a watchdog.
+//
 // Process model
-//   * claude -p --output-format stream-json --verbose … (prompt on stdin)
-//   * codex exec --json --skip-git-repo-check … -        (prompt on stdin)
-//   The MCP bearer token reaches the child only through its environment
+//   The MCP bearer token reaches a child only through its environment
 //   (FINCEPT_MCP_TOKEN) — never argv, never disk. Stop = close stdin, SIGTERM
-//   the process group (POSIX), kill the whole tree 3 s later (Windows: a
-//   kill-on-close job object).
+//   the process group (POSIX), kill the whole tree after the adapter's grace
+//   period (Windows: a kill-on-close job object the child joins before it runs).
 
 #include "services/coding_agents/CodingAgentTypes.h"
 
+#include <QByteArray>
 #include <QHash>
 #include <QObject>
 #include <QPair>
@@ -61,16 +77,6 @@ class CodingAgentService : public QObject {
     void initialize_deferred();
     bool is_loaded() const { return loaded_; }
 
-    // ── CLI detection ────────────────────────────────────────────────────────
-    /// Last known detection result. Call refresh_cli_detection() to (re)probe.
-    CliInfo cli_info(AgentKind kind) const;
-    /// Resolve executable paths now (cheap) and probe `--version` async.
-    /// Emits cli_status_changed() after resolution and after each probe.
-    void refresh_cli_detection();
-    QString cli_path_override(AgentKind kind) const;
-    void set_cli_path_override(AgentKind kind, const QString& path);
-    static QString install_guide_url(AgentKind kind);
-
     // ── Settings ─────────────────────────────────────────────────────────────
     int max_concurrent() const { return max_concurrent_; }
     void set_max_concurrent(int n);
@@ -81,12 +87,14 @@ class CodingAgentService : public QObject {
 
     // ── Runs ─────────────────────────────────────────────────────────────────
     /// Queue a run. Returns its id, or an empty string with `error` set.
+    /// Options the harness does not support (a budget, a turn limit, an effort,
+    /// terminal tools without per-run MCP) are dropped, not refused.
     QString start_run(const RunRequest& request, QString* error = nullptr);
     /// Resume a finished run's session with a new prompt (a new run linked by parent_run_id).
     QString follow_up(const QString& run_id, const QString& prompt, QString* error = nullptr);
     bool can_follow_up(const QString& run_id, QString* why = nullptr) const;
     /// Queued → cancelled at once. Running → stdin closed, SIGTERM (POSIX), tree
-    /// killed after 3 s; a second stop kills immediately.
+    /// killed after the adapter's grace period; a second stop kills immediately.
     bool stop_run(const QString& run_id);
     /// Deletes finished runs (active ones are skipped). Working folders stay on disk.
     int delete_runs(const QStringList& ids);
@@ -98,6 +106,10 @@ class CodingAgentService : public QObject {
     int queued_count() const { return static_cast<int>(queue_.size()); }
     int queue_position(const QString& run_id) const; // 1-based; 0 = not queued
     bool has_active_tool_runs() const;               // a running/queued run uses the MCP server
+    /// The exact command line a run was started with in this session, with the
+    /// prompt / system prompt shown as their lengths and secrets masked. Empty
+    /// for runs from earlier sessions (their transcript's start event has it).
+    QString command_line(const QString& run_id) const { return command_lines_.value(run_id); }
 
     // Transcript
     bool has_cached_events(const QString& run_id) const;
@@ -115,11 +127,23 @@ class CodingAgentService : public QObject {
     void delete_schedule(const QString& id);
     QString run_schedule_now(const QString& id, QString* error = nullptr);
 
-    // ── External clients (Connect tab) ───────────────────────────────────────
-    /// Run `claude mcp add …` / `codex mcp add …` for the terminal's MCP server,
-    /// asynchronously. Without `replace_existing`, an existing `fincept` entry is
-    /// reported (already_exists=true) instead of being overwritten.
-    void register_with_client(AgentKind kind, bool replace_existing);
+    // ── External clients (CONNECT) ───────────────────────────────────────────
+    /// Add the terminal's MCP server to the user's own copy of a harness with
+    /// the adapter's one-click command (harness::McpRegistration::add — never
+    /// the token on its command line), asynchronously. Without
+    /// `replace_existing`, an existing entry is reported (already_exists=true)
+    /// instead of being overwritten.
+    void register_with_client(const QString& harness_id, bool replace_existing);
+
+    // ── Files, off the GUI thread ────────────────────────────────────────────
+    /// `path` is an existing folder? Answered on the GUI thread — dropped if
+    /// `context` died meanwhile.
+    void check_folder(const QString& path, QObject* context, std::function<void(bool exists)> done);
+    /// Create `path` (and parents).
+    void ensure_folder(const QString& path, QObject* context, std::function<void(bool ok, const QString& error)> done);
+    /// Write `bytes` to `path` atomically (QSaveFile).
+    void write_file(const QString& path, const QByteArray& bytes, QObject* context,
+                    std::function<void(bool ok, const QString& error)> done);
 
     // ── UI ───────────────────────────────────────────────────────────────────
     /// The Agent Workbench screen reports its visibility so a finished run only
@@ -129,12 +153,13 @@ class CodingAgentService : public QObject {
   signals:
     void run_added(const QString& run_id);
     void run_updated(const QString& run_id);
+    /// A recorded transcript event — or, with event.partial, the live text of a
+    /// message still streaming (coalesced to ≤ 10 per second; never stored).
     void run_event(const QString& run_id, const fincept::services::coding_agents::AgentEvent& event);
     void run_finished(const QString& run_id);
     void runs_reset();
     void schedules_changed();
-    void cli_status_changed();
-    void client_registration_finished(const QString& agent, bool ok, bool already_exists, const QString& message);
+    void client_registration_finished(const QString& harness_id, bool ok, bool already_exists, const QString& message);
 
   private:
     CodingAgentService();
@@ -142,9 +167,11 @@ class CodingAgentService : public QObject {
 
     // Persistence (writer thread)
     void submit_write(std::function<void()> job);
+    void submit_file_job(std::function<void()> job);
     void persist_run(const QString& run_id);
     void persist_schedule(const CodingAgentSchedule& schedule);
     void flush_events();
+    void flush_partials();
     void on_loaded(const QVector<CodingAgentRun>& runs, const QVector<CodingAgentSchedule>& schedules);
     void cache_loaded_events(const QString& run_id, const QVector<AgentEvent>& events);
     void touch_event_cache(const QString& run_id);
@@ -155,14 +182,15 @@ class CodingAgentService : public QObject {
     void record_status(const QString& run_id, const QString& title, const QString& body = {}, bool is_error = false);
     void schedule_pump();
     void pump_queue();
-    void finish_run(const QString& run_id, RunStatus status, const QString& error);
+    void finish_run(const QString& run_id, RunStatus status, const QString& error, const QString& failure = {});
     void write_prompt_file(const CodingAgentRun& run);
     void write_result_file(const CodingAgentRun& run);
     void notify_finished(const CodingAgentRun& run);
     void on_about_to_quit();
 
     // Processes (CodingAgentService_Process.cpp)
-    bool launch(const QString& run_id, QString* error);
+    bool launch(const QString& run_id, QString* error, QString* failure);
+    void on_launch_prepared(const QString& run_id, bool ok, const QString& error, const QStringList& temp_paths);
     void on_proc_started(const QString& run_id);
     void on_proc_stdout(const QString& run_id);
     void on_proc_stderr(const QString& run_id);
@@ -172,10 +200,9 @@ class CodingAgentService : public QObject {
     void kill_tree(LiveRun* live);
     void terminate_tree(LiveRun* live);
     void cleanup_live(const QString& run_id, bool immediate);
-    void resolve_cli_paths();
-    void probe_version(AgentKind kind);
-    void run_cli_async(AgentKind kind, const QStringList& args, std::function<void(int, const QString&)> done);
-    void add_to_client(AgentKind kind);
+    void run_cli_async(const QString& harness_id, const QStringList& args, bool with_token,
+                       std::function<void(int, const QString&)> done);
+    void add_to_client(const QString& harness_id);
 
     // Schedules
     void rearm_schedule_timer();
@@ -191,20 +218,21 @@ class CodingAgentService : public QObject {
     QStringList events_lru_;
     QHash<QString, int> next_seq_;
     QHash<QString, QStringList> stderr_tails_;
+    QHash<QString, QString> command_lines_; // runs started this session
     QVector<QPair<QString, AgentEvent>> pending_events_;
+    QHash<QString, AgentEvent> pending_partials_; // run id -> newest live text (coalesced)
     QHash<QString, CodingAgentSchedule> schedules_;
     QStringList schedule_order_;
-    CliInfo claude_cli_;
-    CliInfo codex_cli_;
 
-    QThreadPool* writer_ = nullptr;
+    QThreadPool* writer_ = nullptr; // SQLite, FIFO
+    QThreadPool* files_ = nullptr;  // folders and files, FIFO
     QTimer* flush_timer_ = nullptr;
+    QTimer* partial_timer_ = nullptr;
     QTimer* schedule_timer_ = nullptr;
     bool initialized_ = false;
     bool loaded_ = false;
     bool shutting_down_ = false;
     bool pump_scheduled_ = false;
-    bool cli_resolved_ = false;
     int view_visible_ = 0;
     int max_concurrent_ = kDefaultMaxConcurrent;
     bool notify_on_finish_ = true;

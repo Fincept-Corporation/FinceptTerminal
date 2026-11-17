@@ -94,6 +94,15 @@ class DataStreamManager : public QObject, public fincept::datahub::Producer {
                               const QVector<int>& ask_orders);
     void time_sales_for_symbol(const QString& account_id, const QString& symbol, const QVector<BrokerTrade>& trades);
     void latest_trade_for_symbol(const QString& account_id, const QString& symbol, const BrokerTrade& trade);
+    // Relays of AccountDataStream's tagged chart-history results and of the
+    // on-demand fetch failures (see AccountDataStream for the contract: only the
+    // newest fetch_candles() request is answered; `reason` is user-readable).
+    void candles_for_symbol(const QString& account_id, const QString& symbol, const QString& timeframe,
+                            const QVector<BrokerCandle>& candles);
+    void candles_failed(const QString& account_id, const QString& symbol, const QString& timeframe,
+                        const QString& reason);
+    void orderbook_failed(const QString& account_id, const QString& symbol, const QString& reason);
+    void time_sales_failed(const QString& account_id, const QString& symbol, const QString& reason);
     // Results of AccountDataStream::fetch_auctions() / fetch_condition_codes().
     void auctions_fetched(const QString& account_id, const QString& symbol, const QVector<BrokerAuction>& auctions);
     void condition_codes_fetched(const QString& account_id, const QMap<QString, QString>& codes);

@@ -14,23 +14,24 @@ LanguageSwitcher::LanguageSwitcher(QWidget* parent) : QPushButton(parent) {
     // Slight amber-tinted background so it reads as an interactive control
     // rather than a label, while still staying quiet on the grid backdrop.
     setStyleSheet(QString("QPushButton {"
-                          "  background: rgba(217,119,6,0.06);"
+                          "  background: %5;"
                           "  color: %1;"
                           "  border: 1px solid %2;"
                           "  padding: 5px 12px;"
-                          "  font-size: 12px; font-weight: 700;"
-                          "  font-family: 'Consolas','Courier New',monospace;"
+                          "  font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
                           "  letter-spacing: 0.5px;"
                           "}"
                           "QPushButton:hover {"
                           "  color: %3;"
                           "  border-color: %4;"
-                          "  background: rgba(217,119,6,0.12);"
+                          "  background: %6;"
                           "}"
                           "QPushButton:pressed {"
-                          "  background: rgba(217,119,6,0.18);"
+                          "  background: %7;"
                           "}")
-                      .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::AMBER(), colors::BORDER_BRIGHT()));
+                      .arg(colors::TEXT_SECONDARY(), colors::BORDER_MED(), colors::AMBER(), colors::BORDER_BRIGHT(),
+                           colors::alpha(colors::AMBER, 0.06), colors::alpha(colors::AMBER, 0.12),
+                           colors::alpha(colors::AMBER, 0.18)));
 
     rebuild_label();
 
@@ -62,20 +63,20 @@ void LanguageSwitcher::show_menu() {
                                "  color: %2;"
                                "  border: 1px solid %3;"
                                "  padding: 4px 0;"
-                               "  font-family: 'Consolas','Courier New',monospace;"
-                               "  font-size: 13px;"
+                               "  font-size: " + fincept::ui::fonts::px(-1) + "px;"
                                "}"
                                "QMenu::item {"
                                "  padding: 6px 18px;"
                                "}"
                                "QMenu::item:selected {"
-                               "  background: rgba(217,119,6,0.15);"
+                               "  background: %5;"
                                "  color: %4;"
                                "}"
                                "QMenu::item:checked {"
                                "  color: %4;"
                                "}")
-                           .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::AMBER()));
+                           .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_MED(), colors::AMBER(),
+                                colors::alpha(colors::AMBER, 0.15)));
 
     auto* group = new QActionGroup(&menu);
     const QString current_code = i18n::LanguageManager::instance().current_language();

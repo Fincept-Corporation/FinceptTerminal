@@ -3,20 +3,28 @@
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/fno/FnoFormat.h"
 #include "services/options/OptionChainService.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QColor>
 #include <QDoubleSpinBox>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QPointer>
 #include <QScrollBar>
 #include <QShowEvent>
+#include <QSignalBlocker>
+#include <QSortFilterProxyModel>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTableView>
 #include <QVBoxLayout>
 
@@ -33,29 +41,24 @@ namespace {
 
 constexpr double kEps = 1e-6;
 
-QString fmt_int_compact(qint64 v) {
+/// OI (contract counts, not money), abbreviated per the user's compact scheme.
+QString scr_fmt_count(qint64 v, const QString& ccy) {
     if (v == 0)
         return QStringLiteral("—");
-    const double a = std::abs(double(v));
-    if (a >= 1e7)
-        return QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (a >= 1e5)
-        return QString::number(v / 1.0e5, 'f', 2) + "L";
-    if (a >= 1e3)
-        return QString::number(v / 1.0e3, 'f', 1) + "k";
-    return QLocale(QLocale::English).toString(v);
+    return fno_fmt_oi(v, ccy);
 }
 
-QString fmt_pct(double v) {
+/// `v` is already a percentage (14.2 means 14.2%).
+QString scr_fmt_pct(double v) {
     if (std::abs(v) < kEps)
         return QStringLiteral("—");
-    return QString::number(v, 'f', 2) + "%";
+    return fincept::ui::formatting::pct(v, 2, false);
 }
 
-QString fmt_signed_pct(double v) {
+QString scr_fmt_signed_pct(double v) {
     if (std::abs(v) < kEps)
         return QStringLiteral("—");
-    return (v > 0 ? "+" : "") + QString::number(v, 'f', 2) + "%";
+    return fincept::ui::formatting::pct(v, 2, true);
 }
 
 QColor color_for_pct(double v) {
@@ -70,7 +73,10 @@ QColor color_for_pct(double v) {
 
 // ── Model ──────────────────────────────────────────────────────────────────
 
-ScreenedChainModel::ScreenedChainModel(QObject* parent) : QAbstractTableModel(parent) {}
+ScreenedChainModel::ScreenedChainModel(QObject* parent) : QAbstractTableModel(parent), ccy_(fno_ccy()) {
+    // Formats in data(): a number-format change repaints from the rows held.
+    fincept::ui::formatting::refresh_model_on_format_change(this);
+}
 
 int ScreenedChainModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid())
@@ -92,6 +98,25 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
 
     if (role == StrikeRole)
         return r.strike;
+    if (role == SortRole) {
+        switch (col) {
+            case ColStrike:
+                return r.strike;
+            case ColCeIv:
+                return r.ce_iv;
+            case ColCeOi:
+                return double(r.ce_quote.oi);
+            case ColCeChg:
+                return r.ce_quote.change_pct;
+            case ColPeChg:
+                return r.pe_quote.change_pct;
+            case ColPeOi:
+                return double(r.pe_quote.oi);
+            case ColPeIv:
+                return r.pe_iv;
+        }
+        return {};
+    }
 
     if (role == Qt::TextAlignmentRole) {
         if (col == ColStrike)
@@ -115,17 +140,17 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
         case ColStrike:
             return fincept::services::options::format_strike(r.strike);
         case ColCeIv:
-            return fmt_pct(r.ce_iv * 100.0);
+            return scr_fmt_pct(r.ce_iv * 100.0);
         case ColCeOi:
-            return fmt_int_compact(r.ce_quote.oi);
+            return scr_fmt_count(r.ce_quote.oi, ccy_);
         case ColCeChg:
-            return fmt_signed_pct(r.ce_quote.change_pct);
+            return scr_fmt_signed_pct(r.ce_quote.change_pct);
         case ColPeChg:
-            return fmt_signed_pct(r.pe_quote.change_pct);
+            return scr_fmt_signed_pct(r.pe_quote.change_pct);
         case ColPeOi:
-            return fmt_int_compact(r.pe_quote.oi);
+            return scr_fmt_count(r.pe_quote.oi, ccy_);
         case ColPeIv:
-            return fmt_pct(r.pe_iv * 100.0);
+            return scr_fmt_pct(r.pe_iv * 100.0);
     }
     return {};
 }
@@ -142,7 +167,8 @@ QVariant ScreenedChainModel::headerData(int section, Qt::Orientation orient, int
     return headers[section];
 }
 
-void ScreenedChainModel::set_rows(const QVector<OptionChainRow>& rows) {
+void ScreenedChainModel::set_rows(const QVector<OptionChainRow>& rows, const QString& chain_ccy) {
+    ccy_ = chain_ccy.isEmpty() ? fno_ccy() : chain_ccy;
     // Fast path: same strike set (the overwhelmingly common case — a chain
     // republish with unchanged filters). A full model reset on every publish
     // yanks the user's scroll position back to the top and drops the selected
@@ -173,16 +199,16 @@ ScreenerSubTab::ScreenerSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoScreenerTab");
     setStyleSheet(QString("#fnoScreenerTab { background:%1; }"
                           "#fnoScreenerHeader { background:%2; border-bottom:1px solid %3; }"
-                          "#fnoScreenerLabel { color:%4; font-size:9px; font-weight:700; "
+                          "#fnoScreenerLabel { color:%4; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; "
                           "                     letter-spacing:0.4px; background:transparent; }"
-                          "#fnoScreenerCount { color:%4; font-size:10px; background:transparent; padding:6px 12px; }"
+                          "#fnoScreenerCount { color:%4; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; padding:6px 12px; }"
                           "QDoubleSpinBox, QSpinBox { background:%2; color:%5; border:1px solid %3; "
-                          "                            padding:2px 4px; font-size:11px; min-width:70px; }"
+                          "                            padding:2px 4px; font-size:" + fincept::ui::fonts::px(-3) + "px; min-width:70px; }"
                           "QTableView { background:%1; color:%5; border:1px solid %3; "
-                          "              gridline-color:%3; selection-background-color:%6; }"
+                          "              gridline-color:%3; selection-background-color:%6; selection-color:%5; }"
                           "QHeaderView::section { background:%2; color:%4; border:none; "
                           "                       border-bottom:1px solid %3; padding:5px 8px; "
-                          "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }")
+                          "                       font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; }")
                       .arg(colors::BG_BASE(),        // %1
                            colors::BG_RAISED(),      // %2
                            colors::BORDER_DIM(),     // %3
@@ -257,8 +283,7 @@ void ScreenerSubTab::setup_ui() {
     iv_min_->setAccessibleName(tr("Minimum implied volatility"));
     iv_max_->setAccessibleName(tr("Maximum implied volatility"));
     distance_->setAccessibleName(tr("Maximum strikes away from at-the-money"));
-    ce_oi_min_->setAccessibleName(tr("Minimum call open interest in lakhs"));
-    pe_oi_min_->setAccessibleName(tr("Minimum put open interest in lakhs"));
+    label_oi_unit(); // lakhs until a US chain arrives (apply_oi_unit)
     setTabOrder(iv_min_, iv_max_);
     setTabOrder(iv_max_, distance_);
     setTabOrder(distance_, ce_oi_min_);
@@ -267,22 +292,43 @@ void ScreenerSubTab::setup_ui() {
     hlay->addStretch(1);
     root->addWidget(header);
 
-    // ── Body: table ───────────────────────────────────────────────────────
-    table_ = new QTableView(this);
+    // ── Body: table / skeleton while the chain loads / "needs a chain" page ─
+    body_ = new QStackedWidget(this);
+    table_ = new QTableView(body_);
     table_->setAccessibleName(tr("Screened strikes"));
     model_ = new ScreenedChainModel(this);
-    table_->setModel(model_);
+    // A screener ranks: click a header to order by IV / OI / move (numeric sort
+    // role). The model's in-place dataChanged path keeps working through the proxy.
+    proxy_ = new QSortFilterProxyModel(this);
+    proxy_->setSourceModel(model_);
+    proxy_->setSortRole(ScreenedChainModel::SortRole);
+    table_->setModel(proxy_);
+    table_->setSortingEnabled(true);
+    table_->sortByColumn(ScreenedChainModel::ColStrike, Qt::AscendingOrder);
     table_->setShowGrid(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setFocusPolicy(Qt::NoFocus);
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(22);
+    // 22px rows at the default font size, growing with the user's font.
+    const auto row_height = [] { return qMax(22, QFontMetrics(fonts::font()).height() + 6); };
+    table_->verticalHeader()->setDefaultSectionSize(row_height());
+    // Row height follows the font: re-fit once the appearance change has settled
+    // (never inside a theme_changed handler).
+    connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, table_,
+            [this, row_height]() { table_->verticalHeader()->setDefaultSectionSize(row_height()); });
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     table_->horizontalHeader()->setHighlightSections(false);
     table_->horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
-    root->addWidget(table_, 1);
+    body_->addWidget(table_);
+    skeleton_ = new fincept::ui::LoadingSkeleton(fincept::ui::LoadingSkeleton::Shape::Table, body_);
+    skeleton_->set_message(fno_chain_loading_caption());
+    body_->addWidget(skeleton_);
+    no_chain_ = new fincept::ui::EmptyState(body_);
+    connect(no_chain_, &fincept::ui::EmptyState::primary_clicked, this, &ScreenerSubTab::open_chain_requested);
+    body_->addWidget(no_chain_);
+    root->addWidget(body_, 1);
 
     // ── Footer: count label ───────────────────────────────────────────────
     count_label_ = new QLabel(tr("0 of 0 strikes match"), this);
@@ -295,6 +341,7 @@ void ScreenerSubTab::setup_ui() {
     const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
     if (!cached.rows.isEmpty())
         on_chain_published(QVariant::fromValue(cached));
+    update_body();
 }
 
 QVariantMap ScreenerSubTab::save_state() const {
@@ -302,8 +349,13 @@ QVariantMap ScreenerSubTab::save_state() const {
     m["iv_min"] = iv_min_ ? iv_min_->value() : 0.0;
     m["iv_max"] = iv_max_ ? iv_max_->value() : 200.0;
     m["distance"] = distance_ ? distance_->value() : 20;
-    m["ce_oi"] = ce_oi_min_ ? ce_oi_min_->value() : 0;
-    m["pe_oi"] = pe_oi_min_ ? pe_oi_min_->value() : 0;
+    // OI floors per unit: the boxes hold the current unit, the other one is kept aside.
+    const int ce = ce_oi_min_ ? ce_oi_min_->value() : 0;
+    const int pe = pe_oi_min_ ? pe_oi_min_->value() : 0;
+    m["ce_oi"] = oi_us_ ? oi_floor_lakh_[0] : ce; // lakhs (Indian chains)
+    m["pe_oi"] = oi_us_ ? oi_floor_lakh_[1] : pe;
+    m["ce_oi_us"] = oi_us_ ? ce : oi_floor_us_[0]; // contracts (US chains)
+    m["pe_oi_us"] = oi_us_ ? pe : oi_floor_us_[1];
     return m;
 }
 
@@ -315,9 +367,64 @@ void ScreenerSubTab::restore_state(const QVariantMap& state) {
     if (state.contains("distance"))
         distance_->setValue(state.value("distance").toInt());
     if (state.contains("ce_oi"))
-        ce_oi_min_->setValue(state.value("ce_oi").toInt());
+        oi_floor_lakh_[0] = std::max(0, state.value("ce_oi").toInt());
     if (state.contains("pe_oi"))
-        pe_oi_min_->setValue(state.value("pe_oi").toInt());
+        oi_floor_lakh_[1] = std::max(0, state.value("pe_oi").toInt());
+    if (state.contains("ce_oi_us"))
+        oi_floor_us_[0] = std::max(0, state.value("ce_oi_us").toInt());
+    if (state.contains("pe_oi_us"))
+        oi_floor_us_[1] = std::max(0, state.value("pe_oi_us").toInt());
+    // The boxes show the unit of the chain on screen (both set before one re-filter).
+    const int* floors = oi_us_ ? oi_floor_us_ : oi_floor_lakh_;
+    {
+        const QSignalBlocker block_ce(ce_oi_min_);
+        const QSignalBlocker block_pe(pe_oi_min_);
+        ce_oi_min_->setValue(floors[0]);
+        pe_oi_min_->setValue(floors[1]);
+    }
+    apply_filters();
+}
+
+void ScreenerSubTab::apply_oi_unit(bool us) {
+    if (!ce_oi_min_ || !pe_oi_min_ || us == oi_us_)
+        return;
+    // Keep the floors of the unit being left; they come back with it.
+    int* leaving = oi_us_ ? oi_floor_us_ : oi_floor_lakh_;
+    leaving[0] = ce_oi_min_->value();
+    leaving[1] = pe_oi_min_->value();
+    oi_us_ = us;
+    const int* floors = oi_us_ ? oi_floor_us_ : oi_floor_lakh_;
+    int i = 0;
+    for (QSpinBox* box : {ce_oi_min_, pe_oi_min_}) {
+        const QSignalBlocker block(box); // apply_filters() is running: no re-entry
+        if (oi_us_) {
+            box->setRange(0, 1'000'000);
+            box->setSingleStep(50);
+        } else {
+            box->setRange(0, 1000);
+            box->setSingleStep(1);
+        }
+        box->setValue(floors[i++]);
+    }
+    label_oi_unit();
+}
+
+void ScreenerSubTab::label_oi_unit() {
+    if (!ce_oi_min_ || !pe_oi_min_)
+        return;
+    // US listed options are counted in contracts (a lakh — 100,000 — would filter out
+    // nearly every US strike); NSE / BSE OI reads in lakhs of contracts.
+    const QString suffix = oi_us_ ? QStringLiteral(" ") + tr("contracts") : QStringLiteral(" L");
+    const QString tip = oi_us_ ? tr("Open-interest floor in contracts (US listed options).")
+                               : tr("Open-interest floor in lakhs of contracts (1 L = 100,000).");
+    for (QSpinBox* box : {ce_oi_min_, pe_oi_min_}) {
+        box->setSuffix(suffix);
+        box->setToolTip(tip);
+    }
+    ce_oi_min_->setAccessibleName(oi_us_ ? tr("Minimum call open interest in contracts")
+                                         : tr("Minimum call open interest in lakhs"));
+    pe_oi_min_->setAccessibleName(oi_us_ ? tr("Minimum put open interest in contracts")
+                                         : tr("Minimum put open interest in lakhs"));
 }
 
 void ScreenerSubTab::showEvent(QShowEvent* e) {
@@ -355,8 +462,42 @@ void ScreenerSubTab::hideEvent(QHideEvent* e) {
 void ScreenerSubTab::on_chain_published(const QVariant& v) {
     if (!v.canConvert<OptionChain>())
         return;
-    last_chain_ = v.value<OptionChain>();
+    const OptionChain incoming = v.value<OptionChain>();
+    // Every option:chain:* publish arrives here — screen only the Chain tab's series.
+    if (!fincept::services::options::OptionChainService::instance().is_focus_chain(incoming))
+        return;
+    last_chain_ = incoming;
     apply_filters();
+}
+
+void ScreenerSubTab::set_external_chain(const OptionChain& chain) {
+    last_chain_ = chain;
+    apply_filters();
+}
+
+void ScreenerSubTab::set_chain_status(FnoChainStatus status, const QString& reason) {
+    chain_status_ = status;
+    chain_reason_ = reason;
+    update_body();
+}
+
+void ScreenerSubTab::update_body() {
+    if (!body_)
+        return;
+    if (!last_chain_.rows.isEmpty()) {
+        body_->setCurrentWidget(table_);
+        return;
+    }
+    // Loading — or the Chain tab already shows a chain this tab is about to receive.
+    if (chain_status_ != FnoChainStatus::Unavailable) {
+        body_->setCurrentWidget(skeleton_);
+        return;
+    }
+    no_chain_->apply(fno_no_chain_spec(
+        tr("Chain screener"),
+        tr("Filters the chain on the Chain tab by implied volatility, distance from the money and open interest."),
+        chain_reason_, fincept::ui::LoadingSkeleton::Shape::Table));
+    body_->setCurrentWidget(no_chain_);
 }
 
 void ScreenerSubTab::changeEvent(QEvent* event) {
@@ -376,6 +517,7 @@ void ScreenerSubTab::retranslateUi() {
         ce_oi_label_->setText(tr("CE OI ≥").toUpper());
     if (pe_oi_label_)
         pe_oi_label_->setText(tr("PE OI ≥").toUpper());
+    label_oi_unit();
     // Refresh the count label string in the new language.
     apply_filters();
 }
@@ -385,12 +527,12 @@ void ScreenerSubTab::on_filter_changed() {
 }
 
 void ScreenerSubTab::apply_filters() {
+    update_body();
     if (last_chain_.rows.isEmpty()) {
         model_->set_rows({});
-        // Distinguish "no chain loaded yet" from "chain loaded, nothing passes
-        // your filters" — they need completely different user actions.
-        count_label_->setText(tr("No chain loaded — open the Chain tab and pick a broker, "
-                                 "underlying and expiry first."));
+        // Distinguish "no chain loaded yet" (the page above says what to do) from
+        // "chain loaded, nothing passes your filters".
+        count_label_->setText(tr("No chain loaded yet."));
         return;
     }
     int atm = 0;
@@ -403,8 +545,11 @@ void ScreenerSubTab::apply_filters() {
     const double iv_lo = iv_min_->value() / 100.0;
     const double iv_hi = iv_max_->value() / 100.0;
     const int dist = distance_->value();
-    const qint64 ce_oi_floor = qint64(ce_oi_min_->value()) * 100'000;
-    const qint64 pe_oi_floor = qint64(pe_oi_min_->value()) * 100'000;
+    // OI floors in the chain's unit: contracts on a US chain, lakhs on an Indian one.
+    apply_oi_unit(fno_is_us_source(last_chain_.broker_id));
+    const qint64 oi_scale = oi_us_ ? 1 : 100'000;
+    const qint64 ce_oi_floor = qint64(ce_oi_min_->value()) * oi_scale;
+    const qint64 pe_oi_floor = qint64(pe_oi_min_->value()) * oi_scale;
 
     QVector<OptionChainRow> filtered;
     for (int i = 0; i < last_chain_.rows.size(); ++i) {
@@ -434,14 +579,16 @@ void ScreenerSubTab::apply_filters() {
         keep_strike = cur.data(ScreenedChainModel::StrikeRole).toDouble();
     const int keep_scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
 
-    model_->set_rows(filtered);
+    model_->set_rows(filtered, fno_chain_ccy(last_chain_.broker_id));
 
     bool reselected = false;
     if (keep_strike > 0) {
         for (int i = 0; i < filtered.size(); ++i) {
             if (std::abs(filtered[i].strike - keep_strike) < 1e-6) {
-                table_->selectRow(i);
-                table_->scrollTo(model_->index(i, 0), QAbstractItemView::PositionAtCenter);
+                // Source row -> the row the (possibly sorted) view shows.
+                const QModelIndex at = proxy_->mapFromSource(model_->index(i, 0));
+                table_->selectRow(at.row());
+                table_->scrollTo(at, QAbstractItemView::PositionAtCenter);
                 reselected = true;
                 break;
             }

@@ -2,15 +2,15 @@
 
 #include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QHeaderView>
 
 namespace fincept::ui {
 
 namespace {
-/// Uniform row height, applied once on the vertical header in the constructor
-/// rather than per row. Kept in sync with the `height: 26px` item rule in the
-/// stylesheet below.
+/// Uniform row height at the default font size, applied on the vertical header
+/// rather than per row (metrics::follow_row_height grows it with the user's font).
 constexpr int kRowHeightPx = 26;
 } // namespace
 
@@ -26,7 +26,7 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     // setSectionResizeMode(Fixed) also lets the view skip per-row height
     // queries entirely when laying out.
     verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    verticalHeader()->setDefaultSectionSize(kRowHeightPx);
+    metrics::follow_row_height(this, kRowHeightPx);
     horizontalHeader()->setStretchLastSection(true);
     horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     // NOTE: sorting is intentionally NOT enabled here.
@@ -37,9 +37,17 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     // use setText() — e.g. "$10" sorts before "$2", "100K" before "2M".
     setStyleSheet(QString("QTableWidget { background: %1; alternate-background-color: %2; "
                           "gridline-color: %3; border: none; }"
-                          "QTableWidget::item { padding: 4px 8px; height: 26px; }"
-                          "QTableWidget::item:selected { background: #111111; }")
-                      .arg(colors::DARK(), colors::ROW_ALT(), colors::BORDER()));
+                          "QTableWidget::item { padding: 4px 8px; }"
+                          "QTableWidget::item:selected { background: %4; color: %5; }")
+                      .arg(colors::BG_BASE(), colors::ROW_ALT(), colors::BORDER_DIM(), colors::BG_RAISED(),
+                           colors::TEXT_PRIMARY()));
+
+    // Item brushes (the default text colour below, set_cell_color() colours)
+    // keep the value they were given; translate the token ones on a theme change.
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this](const ThemeTokens&) {
+        recolor_.advance();
+        recolor_.apply(this);
+    });
 }
 
 void DataTable::set_headers(const QStringList& headers) {
@@ -66,7 +74,7 @@ void DataTable::set_data(const QVector<QStringList>& rows) {
         const QStringList& row = rows[r];
         for (int c = 0; c < row.size() && c < columnCount(); ++c) {
             auto* item = new QTableWidgetItem(row[c]);
-            item->setForeground(QColor(colors::WHITE()));
+            item->setForeground(QColor(colors::TEXT_PRIMARY()));
             setItem(r, c, item);
         }
     }
@@ -82,7 +90,7 @@ void DataTable::add_row(const QStringList& row) {
     insertRow(r);
     for (int c = 0; c < row.size() && c < columnCount(); ++c) {
         auto* item = new QTableWidgetItem(row[c]);
-        item->setForeground(QColor(colors::WHITE()));
+        item->setForeground(QColor(colors::TEXT_PRIMARY()));
         setItem(r, c, item);
     }
     // Row height is a per-table constant, not a per-row property — it is set

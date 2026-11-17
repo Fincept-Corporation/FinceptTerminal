@@ -8,7 +8,12 @@ Provides access to fund flows, capital movement, block trades
 import sys
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import call_first_with_rows, china_today, recent_weekdays, run_endpoint_table, safe_call
 
 try:
     import akshare as ak
@@ -20,35 +25,6 @@ except ImportError as e:
         "data": []
     }))
     sys.exit(1)
-
-
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float("inf"), float("-inf")], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
 
 
 # ==================== INDIVIDUAL FUND FLOW ====================
@@ -75,9 +51,9 @@ def get_stock_main_fund_flow(symbol="全部股票"):
 
 # ==================== FUND FLOW BY TYPE ====================
 
-def get_stock_fund_flow_big_deal(symbol="000001"):
-    """Get big deal fund flow"""
-    return safe_call(ak.stock_fund_flow_big_deal, symbol=symbol)
+def get_stock_fund_flow_big_deal():
+    """Large-order trades across the market (THS); akshare no longer filters by stock"""
+    return safe_call(ak.stock_fund_flow_big_deal)
 
 def get_stock_fund_flow_concept(symbol="3日排行"):
     """Get concept fund flow"""
@@ -133,41 +109,48 @@ def get_stock_lhb_stock_detail_em(symbol="000001"):
     """Get LHB stock detail (EastMoney)"""
     return safe_call(ak.stock_lhb_stock_detail_em, symbol=symbol)
 
-def get_stock_lhb_stock_detail_date_em(symbol="000001", date="20240101"):
-    """Get LHB stock detail by date (EastMoney)"""
-    return safe_call(ak.stock_lhb_stock_detail_date_em, symbol=symbol, date=date)
+def get_stock_lhb_stock_detail_date_em(symbol="600077"):
+    """Dates on which one stock was on the dragon-tiger list (EastMoney)"""
+    return safe_call(ak.stock_lhb_stock_detail_date_em, symbol=symbol)
 
 def get_stock_lhb_stock_statistic_em(symbol="近一月"):
     """Get LHB stock statistic (EastMoney)"""
     return safe_call(ak.stock_lhb_stock_statistic_em, symbol=symbol)
 
-def get_stock_lhb_jgmx_sina(symbol="5"):
-    """Get LHB institutional detail (Sina)"""
-    return safe_call(ak.stock_lhb_jgmx_sina, recent_day=symbol)
+# The Sina dragon-tiger statistics take a look-back window in trading days ("5", "10", "30", "60").
+# The parameter is named recent_day here so a stock code in the SYMBOL box is not sent as the window.
 
-def get_stock_lhb_jgzz_sina(symbol="5"):
-    """Get LHB institutional positions (Sina)"""
-    return safe_call(ak.stock_lhb_jgzz_sina, recent_day=symbol)
+def get_stock_lhb_jgmx_sina():
+    """Institutional seat trades on the dragon-tiger list (Sina)"""
+    return safe_call(ak.stock_lhb_jgmx_sina)
 
-def get_stock_lhb_ggtj_sina(symbol="5"):
-    """Get LHB stock statistics (Sina)"""
-    return safe_call(ak.stock_lhb_ggtj_sina, recent_day=symbol)
+def get_stock_lhb_jgzz_sina(recent_day="5"):
+    """Institutional seat statistics over the last N trading days (Sina)"""
+    return safe_call(ak.stock_lhb_jgzz_sina, symbol=recent_day)
 
-def get_stock_lhb_yytj_sina(symbol="5"):
-    """Get LHB broker statistics (Sina)"""
-    return safe_call(ak.stock_lhb_yytj_sina, recent_day=symbol)
+def get_stock_lhb_ggtj_sina(recent_day="5"):
+    """Per-stock dragon-tiger statistics over the last N trading days (Sina)"""
+    return safe_call(ak.stock_lhb_ggtj_sina, symbol=recent_day)
 
-def get_stock_lhb_detail_daily_sina(trade_date="20240101"):
-    """Get LHB daily detail (Sina)"""
-    return safe_call(ak.stock_lhb_detail_daily_sina, trade_date=trade_date)
+def get_stock_lhb_yytj_sina(recent_day="5"):
+    """Broker-branch statistics over the last N trading days (Sina)"""
+    return safe_call(ak.stock_lhb_yytj_sina, symbol=recent_day)
+
+def get_stock_lhb_detail_daily_sina(date=""):
+    """Dragon-tiger list of one trading day (Sina); START picks the day, default the latest"""
+    if date:
+        return safe_call(ak.stock_lhb_detail_daily_sina, date=date)
+    return call_first_with_rows(ak.stock_lhb_detail_daily_sina, "date", recent_weekdays())
 
 def get_stock_lhb_hyyyb_em():
     """Get LHB post-premium broker (EastMoney)"""
     return safe_call(ak.stock_lhb_hyyyb_em)
 
-def get_stock_lhb_jgmmtj_em(symbol="近一月"):
-    """Get LHB institutional buy-sell statistics (EastMoney)"""
-    return safe_call(ak.stock_lhb_jgmmtj_em, symbol=symbol)
+def get_stock_lhb_jgmmtj_em(start_date="", end_date=""):
+    """Institutional buy/sell statistics on the dragon-tiger list (EastMoney); default the last 30 days"""
+    end = end_date or china_today().strftime("%Y%m%d")
+    start = start_date or (china_today() - timedelta(days=30)).strftime("%Y%m%d")
+    return safe_call(ak.stock_lhb_jgmmtj_em, start_date=start, end_date=end)
 
 def get_stock_lhb_jgstatistic_em():
     """Get LHB institutional statistics (EastMoney)"""
@@ -188,24 +171,24 @@ def get_stock_lhb_yybph_em(symbol="近一月"):
 
 # ==================== LH YYB (龙虎榜营业部) ====================
 
-def get_stock_lh_yyb_capital(symbol="近一月"):
-    """Get LHB broker capital"""
-    return safe_call(ak.stock_lh_yyb_capital, symbol=symbol)
+def get_stock_lh_yyb_capital():
+    """Dragon-tiger broker branches ranked by capital (THS)"""
+    return safe_call(ak.stock_lh_yyb_capital)
 
-def get_stock_lh_yyb_control(symbol="近一月"):
-    """Get LHB broker control"""
-    return safe_call(ak.stock_lh_yyb_control, symbol=symbol)
+def get_stock_lh_yyb_control():
+    """Dragon-tiger broker branches ranked by control (THS)"""
+    return safe_call(ak.stock_lh_yyb_control)
 
-def get_stock_lh_yyb_most(symbol="近一月"):
-    """Get LHB broker most"""
-    return safe_call(ak.stock_lh_yyb_most, symbol=symbol)
+def get_stock_lh_yyb_most():
+    """Most active dragon-tiger broker branches (THS)"""
+    return safe_call(ak.stock_lh_yyb_most)
 
 
 # ==================== REPURCHASE ====================
 
-def get_stock_repurchase_em(symbol="A股"):
-    """Get stock repurchase (EastMoney)"""
-    return safe_call(ak.stock_repurchase_em, symbol=symbol)
+def get_stock_repurchase_em():
+    """Share repurchases of all A-shares (EastMoney)"""
+    return safe_call(ak.stock_repurchase_em)
 
 
 # ==================== ALLOTMENT ====================
@@ -214,9 +197,9 @@ def get_stock_allotment_cninfo(symbol="000001"):
     """Get allotment data (CNINFO)"""
     return safe_call(ak.stock_allotment_cninfo, symbol=symbol)
 
-def get_stock_pg_em(symbol="全部"):
-    """Get allotment data (EastMoney)"""
-    return safe_call(ak.stock_pg_em, symbol=symbol)
+def get_stock_pg_em():
+    """Rights issues of all A-shares (EastMoney)"""
+    return safe_call(ak.stock_pg_em)
 
 
 # ==================== IPO ====================
@@ -291,9 +274,9 @@ def get_stock_hsgt_fund_flow_summary_em():
     """Get HSGT fund flow summary (EastMoney)"""
     return safe_call(ak.stock_hsgt_fund_flow_summary_em)
 
-def get_stock_sector_fund_flow_hist(symbol="近3日", indicator="行业资金流"):
-    """Get sector fund flow history"""
-    return safe_call(ak.stock_sector_fund_flow_hist, symbol=symbol, indicator=indicator)
+def get_stock_sector_fund_flow_hist(symbol="汽车服务"):
+    """Fund-flow history of one industry board (EastMoney board name, see stock_sector_fund_flow_rank)"""
+    return safe_call(ak.stock_sector_fund_flow_hist, symbol=symbol)
 
 def get_stock_sector_fund_flow_rank(indicator="5日排行", sector_type="行业资金流"):
     """Get sector fund flow ranking"""
@@ -396,56 +379,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -90,19 +90,32 @@ class FiscalPolicyAnalyzer(EconomicsBase):
 
         return {
             'tools_analysis': tools_analysis,
+            'multiplier_model': ('Keynesian cross: closed economy, lump-sum taxes, no crowding out or '
+                                 'monetary offset; empirical multipliers are typically 0.5-2'),
             'implementation_challenges': self._assess_implementation_challenges(),
             'policy_recommendation': self._recommend_fiscal_mix(policy_data)
         }
 
     def assess_debt_sustainability(self, debt_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess whether national debt relative to GDP matters"""
-        debt_gdp = self.to_decimal(debt_data.get('debt_to_gdp_ratio', 0))
-        gdp_growth = self.to_decimal(debt_data.get('gdp_growth_rate', 0))
-        interest_rate = self.to_decimal(debt_data.get('avg_interest_rate', 0))
-        primary_balance = self.to_decimal(debt_data.get('primary_balance_gdp', 0))
+        """Debt dynamics: d' = d (1 + r)/(1 + g) - pb, all in % (d = debt/GDP, r = average
+        NOMINAL effective interest rate on the debt, g = NOMINAL GDP growth, pb = primary balance,
+        surplus > 0, % of GDP). The debt-stabilising primary balance is pb* = d (r - g)/(100 + g);
+        sustainability_gap = pb* - pb > 0 means the debt ratio is rising."""
+        required = ['debt_to_gdp_ratio', 'gdp_growth_rate', 'avg_interest_rate', 'primary_balance_gdp']
+        missing = [k for k in required if debt_data.get(k) is None]
+        if missing:
+            raise ValidationError(f"debt_data is missing: {', '.join(missing)}")
+        debt_gdp = self.to_decimal(debt_data['debt_to_gdp_ratio'])
+        gdp_growth = self.to_decimal(debt_data['gdp_growth_rate'])
+        interest_rate = self.to_decimal(debt_data['avg_interest_rate'])
+        primary_balance = self.to_decimal(debt_data['primary_balance_gdp'])
+        if gdp_growth <= -100:
+            raise ValidationError("gdp_growth_rate must be above -100 %")
 
-        # Debt sustainability condition: r < g + primary_balance_ratio
-        sustainability_gap = interest_rate - gdp_growth - primary_balance
+        hundred = self.to_decimal(100)
+        required_pb = debt_gdp * (interest_rate - gdp_growth) / (hundred + gdp_growth)
+        sustainability_gap = required_pb - primary_balance
+        next_year_debt = debt_gdp * (hundred + interest_rate) / (hundred + gdp_growth) - primary_balance
 
         # Risk thresholds
         if debt_gdp > self.to_decimal(100):
@@ -116,12 +129,16 @@ class FiscalPolicyAnalyzer(EconomicsBase):
 
         return {
             'debt_to_gdp': debt_gdp,
+            'debt_stabilising_primary_balance': required_pb,
             'sustainability_gap': sustainability_gap,
-            'sustainable': sustainability_gap < self.to_decimal(0),
+            'sustainability_gap_units': 'percentage points of GDP (required minus actual primary balance)',
+            'sustainable': sustainability_gap <= self.to_decimal(0),
+            'next_year_debt_to_gdp': next_year_debt,
             'risk_level': risk_level,
+            'risk_level_basis': 'debt level thresholds 40 / 60 / 100 % of GDP',
             'debt_dynamics': {
-                'interest_burden': interest_rate * debt_gdp / self.to_decimal(100),
-                'growth_benefit': gdp_growth * debt_gdp / self.to_decimal(100),
+                'interest_burden': interest_rate * debt_gdp / hundred,
+                'growth_benefit': gdp_growth * debt_gdp / hundred,
                 'primary_contribution': primary_balance
             },
             'implications': self._get_debt_implications(debt_gdp, sustainability_gap)
@@ -158,19 +175,27 @@ class FiscalPolicyAnalyzer(EconomicsBase):
             'economic_impact': self._assess_stance_impact(stance, fiscal_impulse)
         }
 
-    def _calculate_spending_multiplier(self, data: Dict[str, Any]) -> Decimal:
-        """Calculate government spending multiplier"""
+    # Textbook Keynesian-cross multipliers: closed economy, lump-sum taxes, no crowding out,
+    # no monetary offset. Real-world estimates are much smaller (roughly 0.5-2).
+    def _mpc(self, data: Dict[str, Any]) -> Decimal:
         mpc = self.to_decimal(data.get('marginal_propensity_consume', 0.8))
+        if mpc < 0 or mpc >= 1:
+            raise ValidationError("marginal_propensity_consume must be in [0, 1)")
+        return mpc
+
+    def _calculate_spending_multiplier(self, data: Dict[str, Any]) -> Decimal:
+        """Government spending multiplier 1/(1 - MPC) (closed economy, no tax leakage)"""
+        mpc = self._mpc(data)
         return self.to_decimal(1) / (self.to_decimal(1) - mpc)
 
     def _calculate_tax_multiplier(self, data: Dict[str, Any]) -> Decimal:
-        """Calculate tax multiplier"""
-        mpc = self.to_decimal(data.get('marginal_propensity_consume', 0.8))
+        """Lump-sum tax multiplier -MPC/(1 - MPC)"""
+        mpc = self._mpc(data)
         return -mpc / (self.to_decimal(1) - mpc)
 
     def _calculate_transfer_multiplier(self, data: Dict[str, Any]) -> Decimal:
-        """Calculate transfer payment multiplier"""
-        mpc = self.to_decimal(data.get('marginal_propensity_consume', 0.8))
+        """Transfer multiplier MPC/(1 - MPC)"""
+        mpc = self._mpc(data)
         return mpc / (self.to_decimal(1) - mpc)
 
     def _assess_implementation_challenges(self) -> List[str]:
@@ -197,13 +222,21 @@ class FiscalPolicyAnalyzer(EconomicsBase):
             return {'recommendation': 'Neutral', 'focus': 'Maintain fiscal balance'}
 
     def _get_debt_implications(self, debt_gdp: Decimal, gap: Decimal) -> Dict[str, str]:
-        """Get implications of debt sustainability analysis"""
+        """Implications from the gap between the debt-stabilising and the actual primary balance
+        (percentage points of GDP; > 0 = debt ratio rising)"""
         if gap > self.to_decimal(2):
             return {
                 'fiscal_space': 'Limited',
                 'interest_burden': 'High and rising',
                 'policy_flexibility': 'Constrained',
                 'investor_confidence': 'At risk'
+            }
+        elif gap > self.to_decimal(0):
+            return {
+                'fiscal_space': 'Narrowing',
+                'interest_burden': 'Rising: debt ratio increases at the current primary balance',
+                'policy_flexibility': 'Reduced; a primary balance adjustment of the gap stabilises debt',
+                'investor_confidence': 'Watch'
             }
         else:
             return {

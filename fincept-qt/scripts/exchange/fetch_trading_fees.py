@@ -1,39 +1,31 @@
 """
-Fetch trading fee rates.
+Fetch maker / taker fees (one market, or the account's table) — a one-shot wrapper over the exchange daemon's own `fetch_trading_fees`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
+
 Usage: python fetch_trading_fees.py <exchange_id> [symbol]
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 2:
-        output_error("Usage: fetch_trading_fees.py <exchange_id> [symbol]", "INVALID_ARGS")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
 
-    exchange_id = sys.argv[1]
+USAGE = "fetch_trading_fees.py <exchange_id> [symbol]"
 
-    exchange = make_exchange(exchange_id)
 
-    if len(sys.argv) > 2:
-        symbol = sys.argv[2]
-        fee = exchange.fetch_trading_fee(symbol)
-        output_success({
-            "symbol": symbol,
-            "maker": fee.get("maker"),
-            "taker": fee.get("taker"),
-            "percentage": fee.get("percentage", True),
-        })
-    else:
-        fees = exchange.fetch_trading_fees()
-        result = []
-        for symbol, fee in list(fees.items())[:50]:
-            if isinstance(fee, dict) and "maker" in fee:
-                result.append({
-                    "symbol": symbol,
-                    "maker": fee.get("maker"),
-                    "taker": fee.get("taker"),
-                })
-        output_success({"fees": result, "count": len(result)})
+def main(argv):
+    if len(argv) < 2:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2]} if len(argv) > 2 else {}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_trading_fees", argv[1], args)[0]
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

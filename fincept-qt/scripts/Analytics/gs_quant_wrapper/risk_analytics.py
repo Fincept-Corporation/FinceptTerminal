@@ -36,24 +36,31 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
-# Import gs_quant risk module
+# gs_quant is imported LAZILY. Every calculation in this module (Greeks, VaR,
+# stress tests, ...) is plain numpy/scipy; gs_quant is only used to build the
+# optional gs_quant scenario objects in create_*_scenario(). Importing it eagerly
+# cost ~4.4 s on every greeks / var_analysis / stress_test call.
+# GS_AVAILABLE only says whether the package is installed (no import cost).
+import importlib.util as _importlib_util
+
 try:
-    from gs_quant import risk as gs_risk
-    from gs_quant.risk import (
-        RiskMeasure, RiskMeasureType, RiskMeasureUnit,
-        MarketDataShock, MarketDataShockType, MarketDataScenario,
-        CarryScenario, CompositeScenario, CurveScenario, RollFwd,
-        MarketDataPattern, MarketDataShockBasedScenario,
-        PnlExplain, PnlExplainClose, PnlExplainLive, PnlPredictLive,
-        LiquidityRequest, LiquidityResponse,
-        AggregationLevel, RiskKey, RiskRequest,
-        aggregate_results, aggregate_risk, sort_risk, subtract_risk,
-    )
-    from gs_quant.markets import PricingContext
-    GS_AVAILABLE = True
-except ImportError:
+    GS_AVAILABLE = _importlib_util.find_spec("gs_quant") is not None
+except (ImportError, ValueError):
     GS_AVAILABLE = False
-    warnings.warn("gs_quant.risk not available, using fallback implementations")
+
+_GS_RISK = None
+
+
+def _gs_risk():
+    """The gs_quant.risk module, imported on first use; None if unavailable."""
+    global _GS_RISK, GS_AVAILABLE
+    if _GS_RISK is None and GS_AVAILABLE:
+        try:
+            from gs_quant import risk as _risk_mod
+            _GS_RISK = _risk_mod
+        except Exception:
+            GS_AVAILABLE = False
+    return _GS_RISK
 
 warnings.filterwarnings('ignore')
 
@@ -316,26 +323,49 @@ class CurveShockSpec:
 
 @dataclass
 class GreeksResult:
-    """Complete Greeks result"""
+    """Complete Greeks result (None = not computed, never a placeholder 0.0).
+
+    Units (see GREEK_UNITS): delta/gamma/speed per 1.00 of spot; vega per 1 vol
+    point; theta/charm/color/veta per calendar day; rho/phi per 1 % rate / yield;
+    vanna/volga/zomma/ultima per 1.00 (100 points) of volatility.
+    """
     # First order
-    delta: float = 0.0
-    vega: float = 0.0
-    theta: float = 0.0
-    rho: float = 0.0
-    phi: float = 0.0  # Dividend rho
+    delta: Optional[float] = None
+    vega: Optional[float] = None
+    theta: Optional[float] = None
+    rho: Optional[float] = None
+    phi: Optional[float] = None  # Dividend rho
 
     # Second order
-    gamma: float = 0.0
-    vanna: float = 0.0
-    volga: float = 0.0  # Also called Vomma
-    charm: float = 0.0  # Delta decay
-    veta: float = 0.0  # Vega decay
+    gamma: Optional[float] = None
+    vanna: Optional[float] = None
+    volga: Optional[float] = None  # Also called Vomma
+    charm: Optional[float] = None  # Delta decay
+    veta: Optional[float] = None  # Vega decay
 
     # Third order
-    speed: float = 0.0
-    zomma: float = 0.0
-    color: float = 0.0
-    ultima: float = 0.0
+    speed: Optional[float] = None
+    zomma: Optional[float] = None
+    color: Optional[float] = None
+    ultima: Optional[float] = None
+
+
+GREEK_UNITS = {
+    "delta": "per 1.00 change in spot",
+    "gamma": "change in delta per 1.00 change in spot",
+    "vega": "per 1 volatility point (0.01)",
+    "theta": "per calendar day",
+    "rho": "per 1 % change in the risk-free rate",
+    "phi": "per 1 % change in the dividend yield",
+    "vanna": "change in delta per 1.00 (100 points) of volatility",
+    "volga": "change in raw vega per 1.00 of volatility",
+    "charm": "change in delta per calendar day",
+    "veta": "change in vega (per vol point) per calendar day",
+    "speed": "change in gamma per 1.00 change in spot",
+    "zomma": "change in gamma per 1.00 of volatility",
+    "color": "change in gamma per calendar day",
+    "ultima": "change in volga per 1.00 of volatility",
+}
 
 
 @dataclass
@@ -708,6 +738,67 @@ class RiskAnalytics:
 
         return color / 365  # Per day
 
+    def calculate_phi(
+        self,
+        option_type: str,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        volatility: float,
+        risk_free_rate: float = None,
+        dividend_yield: float = 0.0
+    ) -> float:
+        """Phi (dividend rho) - dV/dq, per 1 % change in the dividend yield."""
+        r = risk_free_rate if risk_free_rate is not None else self.config.risk_free_rate
+        d1 = self._calculate_d1(spot, strike, time_to_expiry, volatility, r, dividend_yield)
+        disc_q = np.exp(-dividend_yield * time_to_expiry)
+        if option_type.upper() == 'CALL':
+            return -spot * time_to_expiry * disc_q * self._norm_cdf(d1) / 100
+        return spot * time_to_expiry * disc_q * self._norm_cdf(-d1) / 100
+
+    def calculate_veta(
+        self,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        volatility: float,
+        risk_free_rate: float = None,
+        dividend_yield: float = 0.0
+    ) -> float:
+        """Veta - change in vega (per 1 vol point, like calculate_vega) per calendar
+        day of time passing (same time convention as theta / charm / color).
+
+        dnu/dtau = -S e^{-q tau} phi(d1) sqrt(tau) [q + (r-q) d1/(sigma sqrt(tau)) - (1 + d1 d2)/(2 tau)]
+        veta     = -dnu/dtau / (100 * 365)
+        """
+        r = risk_free_rate if risk_free_rate is not None else self.config.risk_free_rate
+        t = time_to_expiry
+        q = dividend_yield
+        d1 = self._calculate_d1(spot, strike, t, volatility, r, q)
+        d2 = d1 - volatility * np.sqrt(t)
+        dnu_dtau = -spot * np.exp(-q * t) * self._norm_pdf(d1) * np.sqrt(t) * (
+            q + (r - q) * d1 / (volatility * np.sqrt(t)) - (1 + d1 * d2) / (2 * t))
+        return -dnu_dtau / (100 * 365)
+
+    def calculate_ultima(
+        self,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        volatility: float,
+        risk_free_rate: float = None,
+        dividend_yield: float = 0.0
+    ) -> float:
+        """Ultima - d(volga)/d(vol), vol as a decimal (same unit basis as volga / vanna).
+
+        ultima = -nu / sigma^2 * [d1 d2 (1 - d1 d2) + d1^2 + d2^2],  nu = raw vega.
+        """
+        r = risk_free_rate if risk_free_rate is not None else self.config.risk_free_rate
+        d1 = self._calculate_d1(spot, strike, time_to_expiry, volatility, r, dividend_yield)
+        d2 = d1 - volatility * np.sqrt(time_to_expiry)
+        vega_raw = self.calculate_vega(spot, strike, time_to_expiry, volatility, r, dividend_yield) * 100
+        return -vega_raw / volatility ** 2 * (d1 * d2 * (1 - d1 * d2) + d1 ** 2 + d2 ** 2)
+
     def calculate_all_greeks(
         self,
         option_type: str,
@@ -743,15 +834,22 @@ class RiskAnalytics:
             vega=self.calculate_vega(spot, strike, time_to_expiry, volatility, r, dividend_yield),
             theta=self.calculate_theta(option_type, spot, strike, time_to_expiry, volatility, r, dividend_yield),
             rho=self.calculate_rho(option_type, spot, strike, time_to_expiry, volatility, r, dividend_yield),
+            phi=self.calculate_phi(option_type, spot, strike, time_to_expiry, volatility, r, dividend_yield),
         )
 
         if include_higher_order:
             result.vanna = self.calculate_vanna(spot, strike, time_to_expiry, volatility, r, dividend_yield)
             result.volga = self.calculate_volga(spot, strike, time_to_expiry, volatility, r, dividend_yield)
             result.charm = self.calculate_charm(option_type, spot, strike, time_to_expiry, volatility, r, dividend_yield)
+            result.veta = self.calculate_veta(spot, strike, time_to_expiry, volatility, r, dividend_yield)
             result.speed = self.calculate_speed(spot, strike, time_to_expiry, volatility, r, dividend_yield)
             result.zomma = self.calculate_zomma(spot, strike, time_to_expiry, volatility, r, dividend_yield)
             result.color = self.calculate_color(spot, strike, time_to_expiry, volatility, r, dividend_yield)
+            result.ultima = self.calculate_ultima(spot, strike, time_to_expiry, volatility, r, dividend_yield)
+        else:
+            # Not computed -> None, never a 0.0 that reads as a real value.
+            for name in ("vanna", "volga", "charm", "veta", "speed", "zomma", "color", "ultima"):
+                setattr(result, name, None)
 
         return result
 
@@ -766,7 +864,13 @@ class RiskAnalytics:
         confidence_level: float = None,
         time_horizon: int = None
     ) -> VaRResult:
-        """Calculate parametric (variance-covariance) VaR"""
+        """Calculate parametric (variance-covariance) VaR.
+
+        var_pct is the return at the (1 - cl) quantile of N(mu*h, sigma^2*h):
+        mu*h + z*sigma*sqrt(h) with z = Phi^-1(1 - cl) < 0 (negative = loss, like
+        the historical / Monte Carlo / CVaR methods beside it). The old
+        `mean - z*sigma` was the UPPER quantile mu + 1.645 sigma.
+        """
         cl = confidence_level or self.config.confidence_level
         horizon = time_horizon or self.config.time_horizon
 
@@ -774,7 +878,7 @@ class RiskAnalytics:
         std_return = returns.std()
 
         z_score = self._norm_ppf(1 - cl)
-        var_pct = mean_return - z_score * std_return * np.sqrt(horizon)
+        var_pct = mean_return * horizon + z_score * std_return * np.sqrt(horizon)
         var_amount = portfolio_value * abs(var_pct)
 
         return VaRResult(
@@ -885,28 +989,46 @@ class RiskAnalytics:
         portfolio_value: float,
         weights: np.ndarray,
         returns: pd.DataFrame,
-        confidence_level: float = None
-    ) -> Dict[str, float]:
-        """Calculate Component VaR for each asset"""
+        confidence_level: float = None,
+        time_horizon: int = None
+    ) -> Dict[str, Any]:
+        """Component VaR (delta-normal, zero mean) for each asset.
+
+        Uses the covariance of the returns AS GIVEN (per period, e.g. daily) scaled
+        by the horizon in periods -- the same 1-day basis as the other VaR methods
+        here; the previous version used the annualised covariance, i.e. a 1-YEAR
+        VaR next to 1-day figures.
+
+        Returns positive losses in currency:
+            portfolio_var        = z * sigma_p * sqrt(h) * V
+            marginal_var[i]      = d(portfolio_var / V) / d(w_i) = z * (S w)_i / sigma_p * sqrt(h)
+            component_var[i]     = w_i * marginal_var[i] * V      (sums to portfolio_var)
+            percentage_contribution[i] = component_var[i] / portfolio_var * 100
+        with z = Phi^-1(cl) > 0.
+        """
         cl = confidence_level or self.config.confidence_level
+        h = time_horizon or self.config.time_horizon
+        weights = np.asarray(weights, dtype=float)
 
-        cov_matrix = returns.cov() * self.config.annualization_factor
-        portfolio_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        cov_matrix = np.atleast_2d(np.asarray(returns.cov(), dtype=float))
+        portfolio_vol = float(np.sqrt(weights @ cov_matrix @ weights))
+        if portfolio_vol <= 0:
+            raise ValueError("portfolio volatility is zero; component VaR is undefined")
 
-        z_score = self._norm_ppf(1 - cl)
-        portfolio_var = portfolio_value * portfolio_vol * z_score
+        z_score = self._norm_ppf(cl)
+        portfolio_var = portfolio_value * portfolio_vol * z_score * np.sqrt(h)
 
-        # Marginal VaR
-        marginal_var = z_score * np.dot(cov_matrix, weights) / portfolio_vol
-
-        # Component VaR
+        marginal_var = z_score * (cov_matrix @ weights) / portfolio_vol * np.sqrt(h)
         component_var = weights * marginal_var * portfolio_value
 
         return {
-            'portfolio_var': float(abs(portfolio_var)),
+            'portfolio_var': float(portfolio_var),
+            'portfolio_volatility': portfolio_vol,
+            'z_score': float(z_score),
+            'time_horizon_days': int(h),
             'component_var': component_var.tolist(),
             'marginal_var': marginal_var.tolist(),
-            'percentage_contribution': (component_var / abs(portfolio_var) * 100).tolist()
+            'percentage_contribution': (component_var / portfolio_var * 100).tolist()
         }
 
     # =========================================================================
@@ -1000,9 +1122,9 @@ class RiskAnalytics:
 
         Equivalent to gs_quant CarryScenario
         """
-        if GS_AVAILABLE:
+        if _gs_risk() is not None:
             try:
-                scenario = CarryScenario(
+                scenario = _gs_risk().CarryScenario(
                     date=forward_date,
                     roll_to_fwds=roll_to_forwards,
                     holiday_calendar=holiday_calendar
@@ -1029,12 +1151,12 @@ class RiskAnalytics:
 
         Equivalent to gs_quant CurveScenario
         """
-        if GS_AVAILABLE:
+        if _gs_risk() is not None:
             try:
-                scenario = CurveScenario(
+                scenario = _gs_risk().CurveScenario(
                     parallel_shift=curve_spec.parallel_shift,
                     pivot_point=curve_spec.pivot_point,
-                    shock_type=MarketDataShockType[shock_type]
+                    shock_type=_gs_risk().MarketDataShockType[shock_type]
                 )
                 return {'gs_scenario': scenario, 'type': 'curve'}
             except:
@@ -1059,11 +1181,11 @@ class RiskAnalytics:
 
         Equivalent to gs_quant CompositeScenario
         """
-        if GS_AVAILABLE:
+        if _gs_risk() is not None:
             try:
                 gs_scenarios = [s.get('gs_scenario') for s in scenarios if 'gs_scenario' in s]
                 if gs_scenarios:
-                    scenario = CompositeScenario(scenarios=gs_scenarios)
+                    scenario = _gs_risk().CompositeScenario(scenarios=gs_scenarios)
                     return {'gs_scenario': scenario, 'type': 'composite', 'name': name}
             except:
                 pass

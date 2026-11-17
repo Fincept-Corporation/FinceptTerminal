@@ -19,6 +19,8 @@ class SpeedSparkline : public QWidget {
     /// Push a new sample; oldest is dropped when capacity is exceeded.
     void push(qint64 bytes_per_sec);
 
+    /// Override the colours; an invalid colour (the default) means the
+    /// theme accent, and the fill the accent at low alpha, read at paint time.
     void set_line_color(const QColor& c);
     void set_fill_color(const QColor& c);
 
@@ -28,8 +30,8 @@ class SpeedSparkline : public QWidget {
   private:
     QVector<qint64> samples_;
     int capacity_ = 60;
-    QColor line_color_ = QColor("#d97706");
-    QColor fill_color_ = QColor(217, 119, 6, 40);
+    QColor line_color_;
+    QColor fill_color_;
 };
 
 } // namespace fincept::ui

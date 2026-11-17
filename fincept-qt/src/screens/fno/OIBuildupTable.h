@@ -17,6 +17,8 @@
 #include <QTableView>
 #include <QVector>
 
+class QSortFilterProxyModel;
+
 namespace fincept::screens::fno {
 
 class OIBuildupModel : public QAbstractTableModel {
@@ -32,6 +34,10 @@ class OIBuildupModel : public QAbstractTableModel {
         ColPeOiChgPct,
         ColCount,
     };
+
+    /// Raw number of the cell (strike, change %, OI change %; the action
+    /// columns sort by their build-up kind) — the header-sort key.
+    enum Role : int { SortRole = Qt::UserRole + 1 };
 
     explicit OIBuildupModel(QObject* parent = nullptr);
 
@@ -59,6 +65,7 @@ class OIBuildupTable : public QTableView {
 
   private:
     OIBuildupModel* model_ = nullptr;
+    QSortFilterProxyModel* proxy_ = nullptr; // header-click sorting (SortRole)
 };
 
 } // namespace fincept::screens::fno

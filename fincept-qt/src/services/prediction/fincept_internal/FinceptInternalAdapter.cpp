@@ -103,7 +103,10 @@ QString FinceptInternalAdapter::id() const {
 }
 
 QString FinceptInternalAdapter::display_name() const {
-    return QStringLiteral("Fincept Internal");
+    // Shown in the Prediction Markets exchange selector next to the two real venues.
+    // Every market it serves is sample data and every trading call fails ("program
+    // not deployed"), so the name itself says it is a demo.
+    return QStringLiteral("Fincept Internal (Demo)");
 }
 
 ExchangeCapabilities FinceptInternalAdapter::capabilities() const {
@@ -131,15 +134,26 @@ ExchangeCapabilities FinceptInternalAdapter::capabilities() const {
 
 // ── Endpoint resolution ────────────────────────────────────────────────────
 
-QString FinceptInternalAdapter::resolve_endpoint() const {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyEndpoint));
-    if (r.is_ok())
-        return trim_trailing_slash(r.value().trimmed());
+QString FinceptInternalAdapter::resolve_endpoint(QString* read_error) const {
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyEndpoint));
+    const bool failing = r.failed();
+    LOG_TRANSITION("FinceptInternalAdapter", QStringLiteral("endpoint_read"), failing,
+                   failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Stored markets endpoint could not be read; neither demo data nor live requests",
+                                  {{"key", kKeyEndpoint}, {"kind", r.error_name()}})
+                           : QStringLiteral("Stored markets endpoint readable again"));
+    if (read_error)
+        *read_error = failing ? tr("Could not read the stored markets endpoint: %1.").arg(r.reason()) : QString();
+    if (r.found())
+        return trim_trailing_slash(r.value.trimmed());
     return {};
 }
 
 bool FinceptInternalAdapter::is_demo_mode() const {
-    return resolve_endpoint().isEmpty();
+    // An endpoint that is stored but unreadable is not demo mode: sample markets
+    // would pass for the configured service (emit_demo_unavailable says why instead).
+    QString read_error;
+    return resolve_endpoint(&read_error).isEmpty() && read_error.isEmpty();
 }
 
 // ── Read endpoints ─────────────────────────────────────────────────────────
@@ -308,8 +322,11 @@ bool FinceptInternalAdapter::is_ws_connected() const {
 // can stay disabled with a clear message.
 
 bool FinceptInternalAdapter::has_credentials() const {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyMarketProgramId));
-    return r.is_ok() && !r.value().trimmed().isEmpty();
+    // Unreadable program id → false: trading needs a readable one, and every trading
+    // call here refuses anyway (emit_demo_unavailable states the read error when the
+    // endpoint is the unreadable setting). Nothing is written.
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyMarketProgramId));
+    return r.found() && !r.value.trimmed().isEmpty();
 }
 
 QString FinceptInternalAdapter::account_label() const {
@@ -373,9 +390,9 @@ void FinceptInternalAdapter::ensure_registered_with_hub() {
     static std::atomic<bool> logged{false};
     if (!logged.exchange(true)) {
         if (is_demo_mode()) {
-            LOG_INFO("FinceptInternalAdapter", "registered (demo mode — no fincept.markets_endpoint configured)");
+            LOG_DEBUG("FinceptInternalAdapter", "registered (demo mode — no fincept.markets_endpoint configured)");
         } else {
-            LOG_INFO("FinceptInternalAdapter", QString("registered (endpoint=%1)").arg(resolve_endpoint()));
+            LOG_DEBUG("FinceptInternalAdapter", QString("registered (endpoint=%1)").arg(log_url(resolve_endpoint())));
         }
     }
 }
@@ -438,9 +455,15 @@ void FinceptInternalAdapter::emit_demo_unavailable(const QString& context) {
     // Be honest about WHY there is no data: the "set fincept.markets_endpoint" hint was
     // shown even when an endpoint was already configured (only the live HTTP path is
     // missing), sending the user off to fix a setting that was not the problem.
-    const auto msg = is_demo_mode()
-                         ? QStringLiteral("Fincept Internal markets are in demo mode — set "
-                                          "`fincept.markets_endpoint` in SecureStorage to enable live data.")
+    // The demo-mode text used to say "set fincept.markets_endpoint in SecureStorage to
+    // enable live data" — a key no screen can set, and setting it enables nothing
+    // (see the branch below). State the actual situation.
+    QString read_error;
+    const bool demo = resolve_endpoint(&read_error).isEmpty() && read_error.isEmpty();
+    const auto msg = !read_error.isEmpty() ? read_error
+                     : demo
+                         ? QStringLiteral("Fincept Internal is a demo preview — sample markets only. Trading and "
+                                          "account data are not available in this build.")
                          : QStringLiteral("Fincept Internal live markets are not available yet — an endpoint is "
                                           "configured, but the live HTTP client has not been implemented in this build.");
     QTimer::singleShot(0, this, [self, context, msg]() {

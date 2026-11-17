@@ -2,6 +2,7 @@
 """Kalshi trading bridge for Fincept Terminal.
 
 Invocation:
+    python prediction_kalshi.py <command> --stdin      (payload JSON on stdin — what the terminal uses)
     python prediction_kalshi.py <command> <json_payload>
 
 Commands:
@@ -268,12 +269,21 @@ def cmd_fills(payload: dict) -> None:
 
 
 def cmd_settlements(payload: dict) -> None:
-    ok, code, data = _request(payload, "GET", "/portfolio/settlements",
-                              params={"limit": int(payload.get("limit", 100))})
+    params = {"limit": int(payload.get("limit", 100))}
+    if payload.get("cursor"):
+        params["cursor"] = str(payload["cursor"])
+    if payload.get("ticker"):
+        params["ticker"] = str(payload["ticker"])
+    if payload.get("min_ts"):
+        params["min_ts"] = int(payload["min_ts"])
+    if payload.get("max_ts"):
+        params["max_ts"] = int(payload["max_ts"])
+    ok, code, data = _request(payload, "GET", "/portfolio/settlements", params=params)
     if not ok:
         _fail(f"HTTP {code}", detail=data)
         return
-    _emit({"ok": True, "settlements": data.get("settlements", []) or []})
+    _emit({"ok": True, "settlements": data.get("settlements", []) or [],
+           "cursor": data.get("cursor", "")})
 
 
 def cmd_place_order(payload: dict) -> None:
@@ -493,16 +503,35 @@ def main() -> int:
         _fail("usage: prediction_kalshi.py <command> [<json_payload>]")
         return 2
     command = sys.argv[1]
-    payload_str = sys.argv[2] if len(sys.argv) > 2 else "{}"
+    # The payload carries the RSA private key, so the terminal sends it on stdin
+    # ("--stdin") — argv is readable by any same-user process and lands in crash
+    # dumps. A literal JSON argv[2] is still accepted for manual / scripted use.
+    if len(sys.argv) > 2 and sys.argv[2] == "--stdin":
+        payload_str = sys.stdin.read()
+    else:
+        payload_str = sys.argv[2] if len(sys.argv) > 2 else "{}"
     try:
-        payload = json.loads(payload_str)
+        payload = json.loads(payload_str or "{}")
     except json.JSONDecodeError as exc:
-        _fail(f"invalid JSON payload: {exc}")
+        # The message carries only a position, never the payload text.
+        _fail(f"invalid JSON payload: {exc.msg} (line {exc.lineno}, column {exc.colno})")
+        return 2
+    if not isinstance(payload, dict):
+        _fail("invalid JSON payload: expected an object")
         return 2
 
     handler = COMMANDS.get(command)
     if handler is None:
         _fail(f"unknown command: {command}", available=list(COMMANDS.keys()))
+        return 2
+
+    # Every command is an authenticated portfolio call. Without this check an
+    # empty payload surfaced as "KeyError: 'api_key_id'".
+    missing = [k for k in ("api_key_id", "private_key_pem") if not str(payload.get(k) or "").strip()]
+    if missing:
+        _fail("Kalshi credentials missing: " + ", ".join(missing)
+              + " (connect a Kalshi account with an API key ID and its RSA private key)",
+              missing=missing)
         return 2
 
     if not _require_crypto():

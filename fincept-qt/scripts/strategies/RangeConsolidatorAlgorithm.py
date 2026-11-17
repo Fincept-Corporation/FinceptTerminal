@@ -1,45 +1,52 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-052CED9D
-# Category: Data Consolidation
-# Description: Breakout strategy using price range analysis. Buys when the
-#   current close breaks above the 10-day high, sells when it drops below the
-#   10-day low. Inspired by range consolidation breakout patterns.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+### <summary>
+### Example algorithm of how to use RangeConsolidator
+### </summary>
 class RangeConsolidatorAlgorithm(QCAlgorithm):
-    """Price range breakout strategy: enters on new highs, exits on new lows."""
+    def get_resolution(self):
+        return Resolution.DAILY
 
-    def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+    def get_range(self):
+        return 100
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+    def initialize(self):        
+        self.set_start_and_end_dates();
+        self.add_equity("SPY", self.get_resolution())
+        range_consolidator = self.create_range_consolidator()
+        range_consolidator.data_consolidated += self.on_data_consolidated
+        self.first_data_consolidated = None;
 
-        self._max = self.max(self.symbol, 10, Resolution.DAILY)
-        self._min = self.min(self.symbol, 10, Resolution.DAILY)
+        self.subscription_manager.add_consolidator("SPY", range_consolidator)
 
-    def on_data(self, data):
-        if not self._max.is_ready or not self._min.is_ready:
-            return
-        if self.symbol not in data:
-            return
+    def set_start_and_end_dates(self):
+        self.set_start_date(2013, 10, 7)
+        self.set_end_date(2013, 10, 11)
 
-        price = data[self.symbol].close
-        upper = self._max.current.value
-        lower = self._min.current.value
+    def on_end_of_algorithm(self):
+        if self.first_data_consolidated == None:
+            raise Exception("The consolidator should have consolidated at least one RangeBar, but it did not consolidated any one")
 
-        # Breakout above 10-day high → buy
-        if not self.portfolio.invested and price >= upper:
-            self.set_holdings(self.symbol, 1)
-        # Breakdown below 10-day low → sell
-        elif self.portfolio.invested and price <= lower:
-            self.liquidate()
+    def create_range_consolidator(self):
+        return RangeConsolidator(self.get_range())
+
+    def on_data_consolidated(self, sender, range_bar):
+        if (self.first_data_consolidated is None):
+            self.first_data_consolidated = range_bar
+
+        if round(range_bar.high - range_bar.low, 2) != self.get_range() * 0.01: # The minimum price change for SPY is 0.01, therefore the range size of each bar equals Range * 0.01
+            raise Exception(f"The difference between the High and Low for all RangeBar's should be {self.get_range() * 0.01}, but for this RangeBar was {round(range_bar.low - range_bar.high, 2)}")

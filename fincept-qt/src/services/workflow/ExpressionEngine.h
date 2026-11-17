@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
+#include <QStringList>
 
 namespace fincept::workflow {
 
@@ -16,6 +17,10 @@ class ExpressionEngine {
     /// Evaluate a parameter value. If it starts with "={{" and ends with "}}",
     /// resolve it against the input data context. Otherwise return as-is.
     static QJsonValue evaluate(const QJsonValue& param_value, const QJsonObject& context);
+    /// Same; a {{placeholder}} inside text whose path has no value is replaced by an empty
+    /// string (it used to print the word "null") and its expression is appended to
+    /// `missing` (when given), so a caller can refuse to send "AAPL is at ".
+    static QJsonValue evaluate(const QJsonValue& param_value, const QJsonObject& context, QStringList* missing);
 
     /// Resolve all string values in a parameters object.
     static QJsonObject resolve_params(const QJsonObject& params, const QJsonObject& context);
@@ -34,6 +39,15 @@ class ExpressionEngine {
     /// literal, a number, true/false/null nor a resolvable path is taken as a bare word
     /// (`status == active`). Never throws; a malformed expression is simply false.
     static bool evaluate_condition(const QString& expression, const QJsonValue& data);
+    /// Same, but a condition written in syntax the evaluator does not support (arithmetic,
+    /// a leading `!`, parentheses, function calls) is an error — `*error` is set and the
+    /// result is false — instead of silently taking the false branch.
+    static bool evaluate_condition(const QString& expression, const QJsonValue& data, QString* error);
+
+    /// Empty when `expression` only uses supported syntax; otherwise a message naming the
+    /// clause and the construct ("Cannot evaluate 'price * 1.05 > target': ..."). Used by
+    /// the nodes above and by workflow validation before a run.
+    static QString condition_syntax_error(const QString& expression);
 
     /// Number -> text without Qt's default 6-significant-digit truncation
     /// (QString::number(1234567.0) is "1.23457e+06"; this gives "1234567").

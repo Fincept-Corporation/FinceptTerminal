@@ -67,6 +67,17 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// that are lazily constructed after the initial chain publish.
     const fincept::services::options::OptionChain& last_chain() const { return last_chain_; }
 
+    /// The chain topic the F&O screen's Chain tab is showing (set by ChainSubTab).
+    /// The Builder / OI / Screener / Multi-Straddle tabs receive EVERY published
+    /// chain (other expiries, algo deployments' chains); they drop the ones that
+    /// are not this series. Empty = no filter. UI thread only.
+    void set_focus_topic(const QString& topic) { focus_topic_ = topic; }
+    QString focus_topic() const { return focus_topic_; }
+    /// True when `chain` is the focused series (or nothing is focused yet).
+    bool is_focus_chain(const fincept::services::options::OptionChain& chain) const {
+        return focus_topic_.isEmpty() || chain_topic(chain.broker_id, chain.underlying, chain.expiry) == focus_topic_;
+    }
+
     /// List underlyings + expiries from InstrumentService for picker UIs.
     /// For broker_id == "databento", returns hardcoded US equity list / cached expiries.
     QStringList list_underlyings(const QString& broker_id) const;
@@ -177,6 +188,7 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     static double compute_t_years(const QString& expiry);
 
     fincept::services::options::OptionChain last_chain_;
+    QString focus_topic_; ///< see set_focus_topic()
     bool hub_registered_ = false;
     /// Extra symbols pinned per topic (e.g. by FnoDataBridge for algo legs).
     /// Unioned into the WS subscription set inside maybe_start_ws_stream.

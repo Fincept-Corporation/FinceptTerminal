@@ -9,8 +9,12 @@
 // charts and texts, work the controls, and run the bundled analytics scripts.
 //
 //   POST http://127.0.0.1:<port>/mcp   — JSON-RPC request / notification / batch
+//                                        (a long tools/call streams its answer as SSE)
 //   GET  /mcp                          — 405 (no server-initiated stream)
+//   DELETE /mcp                        — ends the Mcp-Session-Id session
 //   GET  /health                       — {"ok":true,"name":"fincept-terminal","version":...}
+// The protocol engine is McpServerEngine (sessions, client profiles,
+// cancellation, deadlines, concurrency limits); this class is its facade.
 //
 // Security model
 //   * Binds 127.0.0.1 only. Every request passes auth/LoopbackGuard.h (Host must
@@ -30,12 +34,20 @@
 //   * Only the terminal's own tools are served — the user's other MCP servers
 //     are never re-exported.
 //
-// Threading: the listener and all socket I/O live on the GUI thread. Tool calls
-// run on a dedicated QThreadPool (never QThreadPool::globalInstance(), which the
-// LLM fan-out and the agent bridge already block on); the UI tools hop to the
-// GUI thread themselves and never block it. Replies are posted back to the GUI
-// thread. Long Python scripts answer with a job id that `python(action=status)`
-// long-polls.
+// Threading: the listener, every socket and the protocol engine live on the
+// server's own "mcp-http" thread — the GUI thread never parses, serialises or
+// waits for a client, and initialize / tools/list / ping answer even while the
+// GUI is busy. A tool call is started on a dedicated QThreadPool (never
+// QThreadPool::globalInstance(), which the LLM fan-out and the agent bridge
+// already block on) and completes through a continuation, so no thread waits
+// for a tool; the UI tools hop to the GUI thread themselves and never block it.
+// Every call is answered by its deadline (the tool's budget plus a grace) even
+// if the tool never resolves. Long Python scripts answer with a job id that
+// `python(action=status)` long-polls.
+
+#include "core/config/EditionNames.h"
+#include "mcp/server/McpHttpServer_RunTokens.h"
+#include "mcp/server/McpServerTypes.h"
 
 #include <QDateTime>
 #include <QJsonObject>
@@ -44,46 +56,19 @@
 #include <QString>
 #include <QStringList>
 
+#include <optional>
+
 namespace fincept::mcp {
-
-/// One external tool call, for the Connect tab's activity log. Never holds
-/// arguments or results verbatim (they may contain account data) — only a short
-/// summary.
-struct ExternalCallRecord {
-    QDateTime at;
-    QString client;          // clientInfo.name from `initialize` ("claude-code", "codex-mcp-client", …) or "unknown"
-    QString tool;            // bare tool name as the client called it
-    bool success = false;
-    bool denied = false;     // refused by policy or by the user
-    qint64 duration_ms = 0;
-    QString summary;         // short status / error text, never secrets
-};
-
-/// One client that said hello since start(), for the settings page.
-struct ExternalClientInfo {
-    QString name;       // clientInfo.name ("claude-code", "codex-mcp-client", …)
-    QString user_agent; // HTTP User-Agent, trimmed
-    QDateTime first_seen;
-    QDateTime last_seen;
-    int calls = 0;
-};
-
-/// Counters since start(), for the settings page.
-struct ExternalServerStats {
-    QDateTime started_at;
-    quint64 calls = 0;
-    quint64 ok = 0;
-    quint64 failed = 0;
-    quint64 denied = 0;
-};
 
 class McpHttpServer : public QObject {
     Q_OBJECT
   public:
     static McpHttpServer& instance();
 
-    static constexpr quint16 kDefaultPort = 41720;
-    static constexpr int kPortFallbackRange = 20; // tries port..port+20 when busy
+    static constexpr quint16 kDefaultPort = edition::kMcpDefaultPort;          // 41720
+    static constexpr int kPortFallbackRange = edition::kMcpPortFallbackRange; // tries port..port+19 when busy
+    // The private build's ports (47821, 47999) are never bound: refused as a
+    // configured port and skipped by the fallback scan (edition::kPrivateMcpPorts).
 
     /// Bind and start serving. Idempotent. Returns true when listening.
     bool start();
@@ -102,6 +87,22 @@ class McpHttpServer : public QObject {
     QString token() const;
     /// Mint a new token — every configured client must be updated.
     void regenerate_token();
+
+    // ── Run-scoped tokens (in-app harness calls; see McpHttpServer_RunTokens.h) ──
+    /// A bearer token for ONE in-app harness call, valid until end_run() or
+    /// `ttl_ms`, whichever comes first. The server enforces `policy` itself
+    /// (tools/list hides, tools/call refuses; paper_only runs every call as a
+    /// PAPER run). The long-lived token() keeps working for external clients.
+    /// Thread-safe. The token is handed to the child through the environment
+    /// (kTokenEnvVar), never argv, and is never logged.
+    QString begin_run(const RunTokenPolicy& policy, qint64 ttl_ms);
+    /// Retire a run token (thread-safe; no-op for an unknown one).
+    void end_run(const QString& run_token);
+    /// The policy of a live run token; nullopt for the long-lived token and for
+    /// anything unknown, ended or expired. Thread-safe.
+    std::optional<RunTokenPolicy> run_token_policy(const QString& supplied) const;
+    /// Live run tokens (diagnostics, tests).
+    int live_run_tokens() const;
 
     // ── User settings (persisted) ───────────────────────────────────────────
     bool enabled_at_startup() const;
@@ -138,32 +139,39 @@ class McpHttpServer : public QObject {
     // ── Connection snippets for the Connect tab (token inlined unless noted) ──
     /// claude mcp add --transport http fincept <url> -H "Authorization: Bearer <token>" -s user
     QString claude_code_add_command() const;
-    /// codex mcp add fincept --env FINCEPT_MCP_TOKEN=<token> -- <python> <bridge> --url <url>
+    /// codex mcp add fincept_community --env FINCEPT_COMMUNITY_MCP_TOKEN=<token> -- <python> <bridge> --url <url>
     QString codex_add_command() const;
-    /// [mcp_servers.fincept] url = "<url>"  bearer_token_env_var = "FINCEPT_MCP_TOKEN"
+    /// [mcp_servers.fincept_community] url = "<url>"  bearer_token_env_var = "FINCEPT_COMMUNITY_MCP_TOKEN"
     QString codex_config_toml() const;
-    /// gemini mcp add --transport http fincept_terminal <url> -H "Authorization: Bearer <token>" -s user
+    /// gemini mcp add --transport http fincept_community <url> -H "Authorization: Bearer <token>" -s user
     QString gemini_add_command() const;
-    /// ~/.gemini/settings.json: {"mcpServers":{"fincept_terminal":{"httpUrl":…,"headers":{…},"timeout":…}}}
+    /// ~/.gemini/settings.json: {"mcpServers":{"fincept_community":{"httpUrl":…,"headers":{…},"timeout":…}}}
     QString gemini_settings_json() const;
-    /// {"mcpServers":{"fincept":{"type":"http","url":"<url>","headers":{"Authorization":"Bearer <token>"}}}}
+    /// {"mcpServers":{"fincept_community":{"type":"http","url":"<url>","headers":{"Authorization":"Bearer <token>"}}}}
     QString generic_http_json() const;
-    /// VS Code (Copilot) .vscode/mcp.json: {"servers":{"fincept_terminal":{"type":"http",…}}}
+    /// VS Code (Copilot) .vscode/mcp.json: {"servers":{"fincept_community":{"type":"http",…}}}
     QString vscode_json() const;
-    /// Claude Desktop style stdio entry: {"mcpServers":{"fincept":{"command":<python>,"args":[<bridge>,"--url",<url>],"env":{"FINCEPT_MCP_TOKEN":<token>}}}}
+    /// Claude Desktop style stdio entry: {"mcpServers":{"fincept_community":{"command":<python>,"args":[<bridge>,"--url",<url>],"env":{"FINCEPT_COMMUNITY_MCP_TOKEN":<token>}}}}
+    /// (Flatpak: "command":"flatpak","args":["run","--command=<python>",<app id>,<bridge>,"--url",<url>]).
     QString stdio_bridge_json() const;
+    /// The bridge's command line for a stdio client on the user's system:
+    /// <python> <bridge> --url <url>; in the Flatpak the interpreter and the
+    /// script are inside the sandbox, so: flatpak run --command=<python> <app id> <bridge> --url <url>.
+    QStringList stdio_bridge_argv() const;
     /// Interpreter used for the stdio bridge (stdlib only; prefers the app's venv-numpy2 python).
     QString python_for_bridge() const;
     /// Absolute path of scripts/fincept_mcp/fincept_mcp_stdio.py.
     QString bridge_script_path() const;
 
-    // ── For in-app agent runs (token passed via env FINCEPT_MCP_TOKEN) ────────
-    /// Claude Code --mcp-config object; header uses ${FINCEPT_MCP_TOKEN} expansion.
+    // ── For in-app agent runs (token passed via env FINCEPT_COMMUNITY_MCP_TOKEN) ────────
+    /// Claude Code --mcp-config object; header uses ${FINCEPT_COMMUNITY_MCP_TOKEN} expansion.
     QJsonObject claude_mcp_config_env() const;
-    /// Codex CLI arguments: {"-c", "mcp_servers.fincept.url=\"<url>\"", "-c",
-    /// "mcp_servers.fincept.bearer_token_env_var=\"FINCEPT_MCP_TOKEN\""}.
+    /// Codex CLI arguments: {"-c", "mcp_servers.fincept_community.url=\"<url>\"", "-c",
+    /// "mcp_servers.fincept_community.bearer_token_env_var=\"FINCEPT_COMMUNITY_MCP_TOKEN\""}.
     QStringList codex_config_overrides() const;
-    static constexpr const char* kTokenEnvVar = "FINCEPT_MCP_TOKEN";
+    /// FINCEPT_COMMUNITY_MCP_TOKEN — edition-specific: the private build sets its
+    /// own token in FINCEPT_MCP_TOKEN, which this edition never reads.
+    static constexpr const char* kTokenEnvVar = edition::kMcpTokenEnvVar;
 
     McpHttpServer(const McpHttpServer&) = delete;
     McpHttpServer& operator=(const McpHttpServer&) = delete;
@@ -197,6 +205,3 @@ class McpHttpServer : public QObject {
 };
 
 } // namespace fincept::mcp
-
-Q_DECLARE_METATYPE(fincept::mcp::ExternalCallRecord)
-Q_DECLARE_METATYPE(fincept::mcp::ExternalClientInfo)

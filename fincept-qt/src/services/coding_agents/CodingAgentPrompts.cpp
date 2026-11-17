@@ -62,7 +62,7 @@ QString build_agent_system_prompt(const SystemPromptContext& ctx) {
 
     p << QStringLiteral("WORKING FOLDER");
     p << QStringLiteral("- Your working folder is the current directory: %1").arg(ctx.workdir);
-    if (ctx.mode == RunMode::WorkspaceEdits) {
+    if (ctx.permission != PermissionMode::ReadOnly) {
         p << QStringLiteral("- Save deliverables in the working folder (tables as CSV or XLSX, models as XLSX, write-ups "
                             "as Markdown) and list every file you created at the end of your answer. Do not modify "
                             "anything outside the working folder.");

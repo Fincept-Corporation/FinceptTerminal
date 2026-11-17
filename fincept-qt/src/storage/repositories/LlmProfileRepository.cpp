@@ -42,25 +42,53 @@ LlmProfile LlmProfileRepository::map_profile(QSqlQuery& q) {
     p.is_default = q.value(9).toBool();
     p.created_at = q.value(10).toString();
     p.updated_at = q.value(11).toString();
+    p.reasoning_effort = q.value(12).toString(); // v061
+    if (p.is_harness())
+        return p; // a harness profile never carries a key (nothing to decrypt)
     // Decrypt the api_key from SecureStorage when the column is blank (encrypted
     // row); a non-empty column is a legacy plaintext value, used as-is.
     if (p.api_key.isEmpty() && !p.id.isEmpty()) {
-        auto sr = SecureStorage::instance().retrieve(profile_secret_key(p.id));
-        if (sr.is_ok())
-            p.api_key = sr.value();
+        // Error ≠ "nothing stored": the key stays empty for this load only; save()
+        // stores a key only when one is given, so an unread key is never overwritten.
+        const SecretRead sr = SecureStorage::instance().read(profile_secret_key(p.id));
+        if (sr.found())
+            p.api_key = sr.value;
     }
     return p;
 }
 
 static const char* kSelectCols = "SELECT id, name, provider, model_id, api_key, base_url, "
                                  "       temperature, max_tokens, system_prompt, is_default, "
-                                 "       created_at, updated_at "
+                                 "       created_at, updated_at, reasoning_effort "
                                  "FROM llm_profiles ";
 
 // ── Profile CRUD ──────────────────────────────────────────────────────────────
 
 Result<QVector<LlmProfile>> LlmProfileRepository::list_profiles() const {
+    // Harness profiles serve terminal AI only (ModelRouter); the agent runtime,
+    // node editors and AI Quant Lab, which list profiles here, cannot use them.
+    return query_list(QString(kSelectCols) + "WHERE lower(provider) NOT LIKE 'harness:%' ORDER BY name", {},
+                      map_profile);
+}
+
+Result<QVector<LlmProfile>> LlmProfileRepository::list_all_profiles() const {
     return query_list(QString(kSelectCols) + "ORDER BY name", {}, map_profile);
+}
+
+Result<QVector<LlmProfileAssignment>> LlmProfileRepository::list_assignments() const {
+    auto r = db().execute("SELECT context_type, context_id, profile_id FROM llm_profile_assignments", {});
+    if (r.is_err())
+        return Result<QVector<LlmProfileAssignment>>::err(r.error());
+    QVector<LlmProfileAssignment> out;
+    auto& q = r.value();
+    while (q.next()) {
+        LlmProfileAssignment a;
+        a.context_type = q.value(0).toString();
+        a.context_id = q.value(1).isNull() ? QString() : q.value(1).toString();
+        a.profile_id = q.value(2).toString();
+        out.append(a);
+    }
+    return Result<QVector<LlmProfileAssignment>>::ok(out);
 }
 
 Result<LlmProfile> LlmProfileRepository::get_profile(const QString& id) const {
@@ -71,17 +99,25 @@ Result<void> LlmProfileRepository::save_profile(const LlmProfile& p) {
     // Generate id if empty (new profile)
     QString id = p.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : p.id;
 
-    // Encrypt the api_key; blank the column only if the encrypted store worked.
-    QString column_key = p.api_key;
-    if (!p.api_key.isEmpty() && SecureStorage::instance().store(profile_secret_key(id), p.api_key).is_ok())
+    // A harness profile never stores a key, never a base URL, and is never the
+    // global default (that one also serves the agent runtime).
+    const bool harness = p.is_harness();
+    const QString api_key = harness ? QString() : p.api_key;
+    // Encrypt the api_key; blank the column only once the encrypted copy was
+    // written and read back equal — otherwise the plaintext stays (never lost).
+    QString column_key = api_key;
+    if (!api_key.isEmpty() && SecureStorage::instance().store_verified(profile_secret_key(id), api_key).is_ok())
         column_key.clear();
+    if (harness)
+        SecureStorage::instance().remove(profile_secret_key(id)); // a provider switched to a harness drops its key
 
     return exec_write("INSERT OR REPLACE INTO llm_profiles "
                       "  (id, name, provider, model_id, api_key, base_url, "
-                      "   temperature, max_tokens, system_prompt, is_default, updated_at) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-                      {id, p.name, p.provider, p.model_id, column_key, p.base_url, p.temperature, p.max_tokens,
-                       p.system_prompt, p.is_default ? 1 : 0});
+                      "   temperature, max_tokens, system_prompt, is_default, reasoning_effort, updated_at) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                      {id, p.name, p.provider, p.model_id, column_key, harness ? QString() : p.base_url,
+                       p.temperature, p.max_tokens, p.system_prompt, (p.is_default && !harness) ? 1 : 0,
+                       p.reasoning_effort.trimmed()});
 }
 
 Result<void> LlmProfileRepository::delete_profile(const QString& id) {
@@ -91,6 +127,12 @@ Result<void> LlmProfileRepository::delete_profile(const QString& id) {
 }
 
 Result<void> LlmProfileRepository::set_default(const QString& id) {
+    {
+        const auto target = get_profile(id);
+        if (target.is_ok() && target.value().is_harness())
+            return Result<void>::err("A harness profile cannot be the default profile (the default also serves "
+                                     "Agent Studio, which cannot use a harness yet)");
+    }
     // Clear all defaults then set the target. idx_llm_profiles_default is a partial
     // UNIQUE index on is_default = 1, so this cannot be one CASE-style UPDATE (the
     // new default would collide with the old one mid-statement) — use a transaction
@@ -228,12 +270,14 @@ ResolvedLlmProfile LlmProfileRepository::legacy_fallback() const {
 
 ResolvedLlmProfile LlmProfileRepository::resolve_for_context(const QString& context_type,
                                                              const QString& context_id) const {
+    // A harness profile serves terminal AI only (ModelRouter): for the agent
+    // runtime an assignment to one is passed over and the next level answers.
     // ── Level 1: entity-specific assignment ──────────────────────────────────
     if (!context_id.isEmpty()) {
         QString pid = get_assignment(context_type, context_id);
         if (!pid.isEmpty()) {
             auto pr = get_profile(pid);
-            if (pr.is_ok()) {
+            if (pr.is_ok() && !pr.value().is_harness()) {
                 LOG_DEBUG("LlmProfileRepo",
                           QString("Resolved [%1/%2] → profile '%3'").arg(context_type, context_id, pr.value().name));
                 return profile_to_resolved(pr.value());
@@ -247,7 +291,7 @@ ResolvedLlmProfile LlmProfileRepository::resolve_for_context(const QString& cont
         QString pid = get_assignment(type_key, {});
         if (!pid.isEmpty()) {
             auto pr = get_profile(pid);
-            if (pr.is_ok()) {
+            if (pr.is_ok() && !pr.value().is_harness()) {
                 LOG_DEBUG("LlmProfileRepo",
                           QString("Resolved [%1] via type-default → profile '%2'").arg(context_type, pr.value().name));
                 return profile_to_resolved(pr.value());
@@ -257,10 +301,8 @@ ResolvedLlmProfile LlmProfileRepository::resolve_for_context(const QString& cont
 
     // ── Level 3: global default profile ──────────────────────────────────────
     {
-        auto r = db().execute("SELECT id, name, provider, model_id, api_key, base_url, "
-                              "       temperature, max_tokens, system_prompt, is_default, "
-                              "       created_at, updated_at "
-                              "FROM llm_profiles WHERE is_default = 1 LIMIT 1");
+        auto r = db().execute(QString(kSelectCols) +
+                              "WHERE is_default = 1 AND lower(provider) NOT LIKE 'harness:%' LIMIT 1");
         if (r.is_ok()) {
             auto& q = r.value();
             if (q.next()) {

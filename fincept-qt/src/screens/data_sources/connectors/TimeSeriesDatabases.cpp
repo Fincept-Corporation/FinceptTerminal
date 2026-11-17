@@ -60,7 +60,8 @@ static QVector<ConnectorConfig> timeseries_configs() {
          false,
          {{"url", "URL", FieldType::Url, "http://localhost:9090", true, "", {}},
           {"username", "Username", FieldType::Text, "", false, "", {}},
-          {"password", "Password", FieldType::Password, "", false, "", {}}}},
+          {"password", "Password", FieldType::Password, "", false, "", {}},
+          {"query", "Default PromQL Query", FieldType::Text, "up", false, "", {}}}},
 
         {"victoriametrics",
          "VictoriaMetrics",

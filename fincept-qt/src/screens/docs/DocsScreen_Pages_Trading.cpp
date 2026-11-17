@@ -451,17 +451,21 @@ QWidget* DocsScreen::page_ai_chat() {
 
 QWidget* DocsScreen::page_agent_config() {
     return make_page(
-        tr("AGENT STUDIO"), tr("Configure and manage AI agents, teams, and workflows"),
+        tr("AGENT CONFIG"), tr("Configure and manage AI agents, teams, and workflows"),
         {
-            {tr("OVERVIEW"), tr("The Agent Studio (Agent Config) provides an 8-view interface for creating, "
+            {tr("OVERVIEW"), tr("Agent Config provides one workspace for creating, "
                                 "managing, and orchestrating AI agents with specialized financial capabilities.")},
-            {tr("VIEWS (8)"), tr("■  Agents — Browse and manage configured agents\n"
+            {tr("VIEWS"), tr("■  Agents — Browse and manage configured agents\n"
                                  "■  Create — Build new agents with custom capabilities\n"
                                  "■  Teams — Organize agents into collaborative teams\n"
                                  "■  Workflows — Define multi-step agent pipelines\n"
                                  "■  Planner — AI task planning and decomposition\n"
                                  "■  Tools — Manage tools available to agents\n"
+                                 "■  Runs — Start a run and follow runs in progress and past runs\n"
                                  "■  Chat — Interact with agents in conversation\n"
+                                 "■  Schedules — Runs that start on a schedule\n"
+                                 "■  Harnesses — Claude Code / Codex agents running on this machine\n"
+                                 "■  Connect — Connect an outside agent to the terminal's tools\n"
                                  "■  System — System-level agent configuration")},
             {tr("AGENT TYPES"), tr("■  Geopolitics Agent — Monitors global events, conflict analysis\n"
                                    "■  Economic Agent — Macro analysis, indicator tracking\n"

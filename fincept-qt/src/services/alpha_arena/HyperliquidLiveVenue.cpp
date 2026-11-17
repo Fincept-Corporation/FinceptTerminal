@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
 
+#include <QElapsedTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -51,11 +52,41 @@ void HyperliquidLiveVenue::mirror_live(const OrderRow& o) {
     // Fire-and-record: the paper fill already happened (it is the ledger); a
     // live rejection is logged + persisted so the operator can reconcile.
     // Capture `o` by value only — the ack may outlive this venue.
-    hl_->place_order(req, [o](aav::OrderAck ack) {
-        if (ack.status == QLatin1String("accepted"))
+    // Real-money order flow: submitted / accepted / rejected go to the audit trail
+    // (policy B.7), paired by client_id = the paper order id. This live mirror does not
+    // go through UnifiedTrading, so these are its only order lines.
+    QElapsedTimer sent_clock;
+    sent_clock.start();
+    LOG_AUDIT("Orders", "Order submitted",
+              {{"venue", "hyperliquid"},
+               {"account", QStringLiteral("arena:") + o.competition_id},
+               {"mode", "live"},
+               {"symbol", o.coin},
+               {"side", req.side},
+               {"type", "market"},
+               {"qty", req.qty},
+               {"leverage", req.leverage},
+               {"reduce_only", req.reduce_only},
+               {"client_id", o.id},
+               {"source", QStringLiteral("arena:") + o.agent_id}});
+    hl_->place_order(req, [o, sent_clock](aav::OrderAck ack) {
+        if (ack.status == QLatin1String("accepted")) {
+            LOG_AUDIT("Orders", "Order accepted",
+                      {{"venue", "hyperliquid"},
+                       {"account", QStringLiteral("arena:") + o.competition_id},
+                       {"client_id", o.id},
+                       {"order_id", ack.venue_order_id},
+                       {"elapsed_ms", sent_clock.elapsed()}});
             return;
-        LOG_ERROR(TAG, QStringLiteral("live mirror failed for %1 %2 %3: %4")
-                           .arg(o.action, o.coin, o.id.isEmpty() ? QStringLiteral("(no id)") : o.id, ack.error));
+        }
+        LOG_AUDIT("Orders", "Order rejected",
+                  {{"venue", "hyperliquid"},
+                   {"account", QStringLiteral("arena:") + o.competition_id},
+                   {"client_id", o.id},
+                   {"symbol", o.coin},
+                   {"action", o.action},
+                   {"reason", ack.error},
+                   {"elapsed_ms", sent_clock.elapsed()}});
         ArenaStore::instance().insert_event(
             o.competition_id, o.agent_id, QStringLiteral("live_mirror_failed"),
             QString::fromUtf8(

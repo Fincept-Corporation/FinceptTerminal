@@ -2,6 +2,7 @@
 
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
+#include "ui/theme/ThemeManager.h"
 
 #ifdef HAS_QT_WEBENGINE
 #    include <QWebEnginePage>
@@ -23,6 +24,7 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QShowEvent>
+#include <QTimeZone>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -130,10 +132,16 @@ KLineChartWidget::KLineChartWidget(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    // The time axis defaults to the user's own zone; hosts showing a market in
+    // another zone call set_timezone() with the exchange's IANA id.
+    timezone_ = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this]() { apply_theme(); });
+
 #ifndef HAS_QT_WEBENGINE
     auto* fallback = new QLabel(this);
     fallback->setObjectName("klineFallback");
-    fallback->setText(QStringLiteral("Advanced charting unavailable.\nInstall Qt WebEngine to enable KLineChart."));
+    fallback->setText(tr("Advanced charting unavailable.\nInstall Qt WebEngine to enable KLineChart."));
     fallback->setAlignment(Qt::AlignCenter);
     layout->addWidget(fallback, 1);
 #endif
@@ -206,6 +214,25 @@ void KLineChartWidget::ensure_web_view() {
     web_view_->load(url);
 
     layout()->addWidget(web_view_);
+    arm_load_watchdog();
+#endif
+}
+
+void KLineChartWidget::arm_load_watchdog() {
+#ifdef HAS_QT_WEBENGINE
+    // `this` as context: the shot is dropped if the widget is destroyed first. It cannot be
+    // cancelled, so the handler re-checks state instead.
+    QTimer::singleShot(kLoadWatchdogMs, this, [this]() {
+        if (failed_ || page_ready_ || !web_view_)
+            return; // loaded, or already on the failure path
+        if (!isVisible()) {
+            // Hidden (tab switched away while loading): a throttled background page is not
+            // evidence of a broken runtime — judge it once it is on screen again.
+            arm_load_watchdog();
+            return;
+        }
+        fail_runtime(QStringLiteral("chart page did not finish loading within %1 s").arg(kLoadWatchdogMs / 1000));
+    });
 #endif
 }
 
@@ -221,6 +248,7 @@ void KLineChartWidget::on_load_finished(bool ok) {
         return;
     }
     page_ready_ = true;
+    push_page_state(); // theme, time zone, precision — before any queued candles
     flush_pending();
     install_chart_event_filter(); // render widget exists by now
     emit chart_ready();
@@ -337,7 +365,7 @@ namespace {
 // numbers, fixed indicator names), but the chart takes indicator/pane names
 // from callers that may one day be symbol- or config-derived; encoding here
 // makes that safe by construction rather than by convention.
-QString js_call(const QString& fn, const QJsonArray& args) {
+QString kline_js_call(const QString& fn, const QJsonArray& args) {
     const QString json = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
     return QStringLiteral("%1.apply(null,%2)").arg(fn, json);
 }
@@ -345,20 +373,20 @@ QString js_call(const QString& fn, const QJsonArray& args) {
 
 void KLineChartWidget::add_indicator(const QString& name, const QString& pane_id) {
     if (pane_id.isEmpty())
-        run_js(js_call(QStringLiteral("window.addIndicator"), {name}));
+        run_js(kline_js_call(QStringLiteral("window.addIndicator"), {name}));
     else
-        run_js(js_call(QStringLiteral("window.addIndicator"), {name, pane_id}));
+        run_js(kline_js_call(QStringLiteral("window.addIndicator"), {name, pane_id}));
 }
 
 void KLineChartWidget::remove_indicator(const QString& name, const QString& pane_id) {
     if (pane_id.isEmpty())
-        run_js(js_call(QStringLiteral("window.removeIndicator"), {name}));
+        run_js(kline_js_call(QStringLiteral("window.removeIndicator"), {name}));
     else
-        run_js(js_call(QStringLiteral("window.removeIndicator"), {name, pane_id}));
+        run_js(kline_js_call(QStringLiteral("window.removeIndicator"), {name, pane_id}));
 }
 
 void KLineChartWidget::set_position_line(double price, const QString& label, const QString& color_hex) {
-    run_js(js_call(QStringLiteral("window.setPositionLine"), {price, label, color_hex}));
+    run_js(kline_js_call(QStringLiteral("window.setPositionLine"), {price, label, color_hex}));
 }
 
 void KLineChartWidget::clear_position_line() {
@@ -367,6 +395,78 @@ void KLineChartWidget::clear_position_line() {
 
 void KLineChartWidget::clear() {
     run_js(QStringLiteral("window.clearChart()"));
+}
+
+QString KLineChartWidget::theme_js() const {
+    const auto& tm = ThemeManager::instance();
+    const ThemeTokens& t = tm.tokens();
+    const auto hex = [](const char* c) { return QColor(c).name(); };
+
+    QJsonArray palette;
+    for (int i = 0; i < ThemeManager::kChartColorCount; ++i)
+        palette.append(tm.chart_color(i).name());
+
+    QJsonObject o;
+    o[QStringLiteral("bg")] = hex(t.bg_base);
+    o[QStringLiteral("surface")] = hex(t.bg_surface);
+    o[QStringLiteral("raised")] = hex(t.bg_raised);
+    o[QStringLiteral("hover")] = hex(t.bg_hover);
+    o[QStringLiteral("borderDim")] = hex(t.border_dim);
+    o[QStringLiteral("borderMed")] = hex(t.border_med);
+    o[QStringLiteral("textPrimary")] = hex(t.text_primary);
+    o[QStringLiteral("textSecondary")] = hex(t.text_secondary);
+    o[QStringLiteral("textTertiary")] = hex(t.text_tertiary);
+    o[QStringLiteral("textDim")] = hex(t.text_dim);
+    o[QStringLiteral("accent")] = hex(t.accent);
+    o[QStringLiteral("textOnAccent")] = hex(t.text_on_accent);
+    o[QStringLiteral("up")] = hex(t.positive);
+    o[QStringLiteral("down")] = hex(t.negative);
+    o[QStringLiteral("flat")] = hex(t.text_tertiary);
+    // Text on the last-price tag, which is filled with the up or down colour.
+    o[QStringLiteral("onDirection")] = tm.contrast_text_on(QColor(t.positive)).name();
+    o[QStringLiteral("onPalette")] = tm.contrast_text_on(tm.chart_color(0)).name();
+    o[QStringLiteral("palette")] = palette;
+    o[QStringLiteral("fontFamily")] = QString::fromUtf8(t.font_family);
+    o[QStringLiteral("fontPx")] = t.font_size_base;
+    return kline_js_call(QStringLiteral("window.applyTheme"), {o});
+}
+
+void KLineChartWidget::push_page_state() {
+#ifdef HAS_QT_WEBENGINE
+    if (!page_ready_ || failed_ || !web_view_)
+        return;
+    QWebEnginePage* page = web_view_->page();
+    page->runJavaScript(theme_js());
+    if (!timezone_.isEmpty())
+        page->runJavaScript(kline_js_call(QStringLiteral("window.setTimezone"), {timezone_}));
+    if (price_precision_ >= 0)
+        page->runJavaScript(kline_js_call(QStringLiteral("window.setPrecision"), {price_precision_, volume_precision_}));
+#endif
+}
+
+void KLineChartWidget::apply_theme() {
+    // Before the page is ready there is nothing to do: on_load_finished()
+    // pushes the theme in effect at that moment.
+    if (page_ready_)
+        run_js(theme_js());
+}
+
+void KLineChartWidget::set_timezone(const QString& iana) {
+    QString zone = iana.trimmed();
+    if (zone.isEmpty())
+        zone = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+    if (zone == timezone_)
+        return;
+    timezone_ = zone;
+    if (page_ready_ && !timezone_.isEmpty())
+        run_js(kline_js_call(QStringLiteral("window.setTimezone"), {timezone_}));
+}
+
+void KLineChartWidget::set_price_precision(int price, int volume) {
+    price_precision_ = qMax(0, price);
+    volume_precision_ = qMax(0, volume);
+    if (page_ready_)
+        run_js(kline_js_call(QStringLiteral("window.setPrecision"), {price_precision_, volume_precision_}));
 }
 
 void KLineChartWidget::show_chart_context_menu(int local_y, const QPoint& global_pos) {

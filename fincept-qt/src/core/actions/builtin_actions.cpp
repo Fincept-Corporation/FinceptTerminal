@@ -4,6 +4,7 @@
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
 #include "core/actions/ActionRegistry.h"
+#include "core/config/EditionNames.h"
 #include "core/debug/StressLoad.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/keys/WindowCycler.h"
@@ -19,6 +20,7 @@
 #include "core/symbol/SymbolRef.h"
 #include "core/window/WindowRegistry.h"
 #include "screens/launchpad/OnboardingTour.h"
+#include "ui/navigation/CommandBar.h"
 #include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
@@ -104,7 +106,7 @@ Result<void> handler_screenshot(const CommandContext& ctx) {
     QPixmap px = scr->grabWindow(ctx.focused_frame->winId());
     const QString path = QFileDialog::getSaveFileName(
         ctx.focused_frame, "Save Screenshot",
-        QDir::homePath() + "/fincept_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".png",
+        QDir::homePath() + QLatin1Char('/') + edition::screenshot_file_name(QDateTime::currentDateTime()),
         "PNG Images (*.png)");
     if (!path.isEmpty()) {
         px.save(path, "PNG");
@@ -127,6 +129,17 @@ Result<void> handler_always_on_top(const CommandContext& ctx) {
 }
 
 Result<void> handler_browse_components(const CommandContext& ctx) {
+    if (!ctx.focused_frame || ctx.focused_frame->is_locked())
+        return Result<void>::ok();
+    // Ctrl+K (KeyAction::BrowseComponents, user-rebindable): the header search box. Without one showing
+    // (focus mode hides the toolbar) the Component Browser opens, as before.
+    if (ui::CommandBar::activate_in(ctx.focused_frame))
+        return Result<void>::ok();
+    ctx.focused_frame->open_component_browser();
+    return Result<void>::ok();
+}
+
+Result<void> handler_component_browser(const CommandContext& ctx) {
     if (!ctx.focused_frame || ctx.focused_frame->is_locked())
         return Result<void>::ok();
     ctx.focused_frame->open_component_browser();
@@ -590,12 +603,24 @@ void register_builtins() {
 
     register_one(ActionDef{
         "frame.browse_components",
-        "Browse Components",
+        "Search",
         "Frame",
-        {"components", "screen browser"},
+        {"search", "find", "components", "screen browser"},
         current_key_for(KeyAction::BrowseComponents),
         require_unlocked_frame(),
         &handler_browse_components,
+        {},
+    });
+
+    // The Component Browser dialog itself (Ctrl+K now focuses the header search box).
+    register_one(ActionDef{
+        "frame.component_browser",
+        "Component Browser",
+        "Frame",
+        {"components", "screen browser", "browse screens", "all screens"},
+        QKeySequence(),
+        require_unlocked_frame(),
+        &handler_component_browser,
         {},
     });
 
@@ -983,7 +1008,7 @@ void register_builtins() {
         "help.enterprise",
         "Fincept Terminal Enterprise",
         "Help",
-        {"enterprise", "private edition", "upgrade", "demo", "firm"},
+        {"enterprise", "private edition", "upgrade", "custom requirements", "partnership", "firm"},
         QKeySequence{},
         /*predicate*/ {},
         &handler_help_enterprise,
@@ -1003,7 +1028,7 @@ void register_builtins() {
         {},
     });
 
-    LOG_INFO(kBuiltinTag, QString("Registered %1 builtin actions").arg(ActionRegistry::instance().size()));
+    LOG_DEBUG(kBuiltinTag, QString("Registered %1 builtin actions").arg(ActionRegistry::instance().size()));
 }
 
 QString action_id_for(KeyAction a) {

@@ -90,13 +90,15 @@ class LiveTableDelegate : public QStyledItemDelegate {
         const QRect r = button_rect(opt.rect);
         const bool hot = (idx == hover_);
 
+        // Action styles are states (destructive / confirming), not price
+        // direction, so they use the status colours.
         QColor accent;
         switch (action_style_) {
         case Danger:
-            accent = QColor(colors::NEGATIVE());
+            accent = QColor(colors::DANGER());
             break;
         case Positive:
-            accent = QColor(colors::POSITIVE());
+            accent = QColor(colors::SUCCESS());
             break;
         default:
             accent = QColor(colors::TEXT_SECONDARY());
@@ -104,17 +106,22 @@ class LiveTableDelegate : public QStyledItemDelegate {
         }
 
         p->save();
-        // Obsidian: square corners, no gradients (DESIGN_SYSTEM §8/§9).
+        // Square corners, no gradients.
         if (hot) {
             p->fillRect(r, accent);
-            p->setPen(QColor(Qt::white));
+            p->setPen(QColor(colors::TEXT_ON_ACCENT())); // reads on every fill above, in both themes
         } else {
             p->setPen(accent);
             p->drawRect(r.adjusted(0, 0, -1, -1));
         }
+        // One px under the cell font. The application font is set in pixels,
+        // so pointSizeF() is -1 there; shrink whichever unit the font uses.
         QFont f = opt.font;
         f.setBold(true);
-        f.setPointSizeF(f.pointSizeF() - 1.0);
+        if (f.pixelSize() > 0)
+            f.setPixelSize(qMax(ThemeManager::kFloorFontPx, f.pixelSize() - 1));
+        else if (f.pointSizeF() > 1.0)
+            f.setPointSizeF(f.pointSizeF() - 1.0);
         p->setFont(f);
         if (!hot)
             p->setPen(accent);

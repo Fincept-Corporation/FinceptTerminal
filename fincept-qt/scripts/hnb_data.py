@@ -59,6 +59,13 @@ MAJOR_CURRENCIES = ["USD", "GBP", "CHF", "JPY", "CAD", "AUD", "NOK",
 # Error container
 # ---------------------------------------------------------------------------
 
+def _per_currency(rates, date=""):
+    """{CODE: rate, "date": ...} -> [{date, currency, rate}]: a snapshot as a row per currency."""
+    rates = rates or {}
+    d = rates.get("date", date) or date
+    return [{"date": d, "currency": k, "rate": v} for k, v in rates.items() if k != "date"]
+
+
 class HNBError:
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
         self.endpoint    = endpoint
@@ -211,7 +218,8 @@ class HNBWrapper:
                 "success":        True,
                 "date":           latest.get("date", ""),
                 "broj_tecajnice": latest.get("broj_tecajnice", ""),
-                "data":           flat,
+                "data":           _per_currency(flat, latest.get("date", "")),
+                "rates":          flat,
                 "full_data":      latest,
                 "note":           "EUR per 1 unit of foreign currency",
                 "source":         "Hrvatska Narodna Banka",

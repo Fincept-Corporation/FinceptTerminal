@@ -15,21 +15,26 @@
 #include <QCheckBox>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
+#include <QLayout>
 #include <QPointer>
 #include <QPropertyAnimation>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QShowEvent>
 #include <QStyle>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::ui {
 
@@ -99,12 +104,12 @@ QString ent_cta_ss(enterprise::CtaStyle style) {
     using enterprise::CtaStyle;
     switch (style) {
         case CtaStyle::Primary:
-            // Dark text on amber: white on #d97706 fails contrast.
+            // Accent fill: its text is TEXT_ON_ACCENT in both states.
             return QString("QPushButton{background:%1;color:%2;border:1px solid %1;padding:6px 16px;"
                            "font-weight:700;letter-spacing:0.5px;}"
                            "QPushButton:hover{border-color:%3;}"
-                           "QPushButton:pressed{background:%4;border-color:%4;color:%3;}")
-                .arg(colors::AMBER(), colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::AMBER_DIM());
+                           "QPushButton:pressed{background:%4;border-color:%4;color:%2;}")
+                .arg(colors::AMBER(), colors::TEXT_ON_ACCENT(), colors::TEXT_PRIMARY(), colors::AMBER_DIM());
         case CtaStyle::Outline:
             return QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:6px 16px;"
                            "font-weight:700;letter-spacing:0.5px;}"
@@ -122,9 +127,9 @@ QString ent_cta_ss(enterprise::CtaStyle style) {
                 .arg(colors::AMBER(), colors::TEXT_PRIMARY());
         case CtaStyle::Quiet:
             return QString("QPushButton{background:transparent;color:%1;border:none;padding:2px 0;"
-                           "font-size:11px;text-align:left;}"
+                           "font-size:" + fincept::ui::fonts::px(-3) + "px;text-align:left;}"
                            "QPushButton:hover{color:%2;}")
-                .arg(colors::TEXT_TERTIARY(), colors::AMBER());
+                .arg(colors::TEXT_SECONDARY(), colors::AMBER());
     }
     return {};
 }
@@ -142,8 +147,25 @@ void ent_apply_cta_style(QPushButton* btn, enterprise::CtaStyle style) {
 
 void ent_apply_mention_style(QLabel* label) {
     if (label)
-        label->setStyleSheet(QString("QLabel{color:%1;background:transparent;border:none;font-size:11px;}")
+        label->setStyleSheet(QString("QLabel{color:%1;background:transparent;border:none;font-size:" + fincept::ui::fonts::px(-3) + "px;}")
                                  .arg(colors::TEXT_TERTIARY()));
+}
+
+/// Dynamic properties holding a mention label's parts, so its rich text (whose
+/// link carries an inline accent colour) can be rebuilt on a theme change.
+constexpr const char* kEntMentionLeadProp = "entMentionLead";
+constexpr const char* kEntMentionLinkProp = "entMentionLink";
+constexpr const char* kEntMentionUrlProp = "entMentionUrl";
+
+void ent_render_mention(QLabel* label) {
+    if (!label || !label->property(kEntMentionUrlProp).isValid())
+        return;
+    const QString lead = label->property(kEntMentionLeadProp).toString();
+    const QString url = label->property(kEntMentionUrlProp).toString();
+    const QString link = QStringLiteral("<a href=\"%1\" style=\"color:%2;text-decoration:none;\">%3</a>")
+                             .arg(url.toHtmlEscaped(), QString(colors::AMBER()),
+                                  label->property(kEntMentionLinkProp).toString().toHtmlEscaped());
+    label->setText(lead.isEmpty() ? link : lead.toHtmlEscaped() + QStringLiteral(" ") + link);
 }
 
 /// Re-evaluates property-based selectors after a dynamic property change.
@@ -152,6 +174,98 @@ void ent_repolish(QWidget* w) {
         return;
     w->style()->unpolish(w);
     w->style()->polish(w);
+}
+
+// ── Button text that falls back to a compact label (set_fitting_text) ──────
+
+constexpr const char* kEntFitFullProp = "entFitFull";
+constexpr const char* kEntFitCompactProp = "entFitCompact";
+constexpr const char* kEntFitHookedProp = "entFitHooked";
+
+void ent_apply_fitting_text(QPushButton* btn) {
+    if (!btn)
+        return;
+    const QString full = btn->property(kEntFitFullProp).toString();
+    const QString compact = btn->property(kEntFitCompactProp).toString();
+    QString want = full;
+    if (!compact.isEmpty() && btn->width() > 0) {
+        const QFontMetrics fm = btn->fontMetrics();
+        // What the button needs beyond its text: padding, border, focus frame.
+        const int chrome = std::max(0, btn->sizeHint().width() - fm.horizontalAdvance(btn->text()));
+        if (fm.horizontalAdvance(full) + chrome > btn->width())
+            want = compact;
+    }
+    if (btn->text() != want)
+        btn->setText(want);
+}
+
+/// Re-picks the text when the layout resizes a fitted button, and when it is
+/// shown (a hidden button's first resize arrives before it is laid out).
+class EntFitFilter : public QObject {
+  public:
+    using QObject::QObject;
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::Resize || event->type() == QEvent::Show)
+            ent_apply_fitting_text(qobject_cast<QPushButton*>(watched));
+        return QObject::eventFilter(watched, event);
+    }
+};
+
+// ── Lock-screen promotion ────────────────────────────────────────────────────
+
+constexpr int kEntLockPanelMarginH = 24;
+constexpr int kEntLockStripRotateMs = 7000;
+
+/// One stylesheet for both forms, set once before any child exists. Every
+/// colour is a token and every size comes from ui::fonts::px(), so the central
+/// re-style pass carries it through theme and font changes.
+QString ent_lock_promo_ss() {
+    return QString("#entLockPromo{background:%1;border:1px solid %2;border-left:2px solid %3;}"
+                   "#entLockPromo QLabel{background:transparent;border:none;}"
+                   "#entLockKicker{color:%3;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}"
+                   "#entLockHeadline{color:%4;font-size:" + fincept::ui::fonts::px(4) + "px;font-weight:700;}"
+                   "#entLockPitch{color:%5;font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+                   "#entLockRule{background:%2;border:none;}"
+                   "#entLockPoint{color:%4;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                   "#entLockStripPoint{color:%5;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                   "#entLockNote{color:%6;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                   "QPushButton#entLockPrimary{background:%3;color:%7;border:1px solid %3;padding:7px 12px;"
+                   "  font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;letter-spacing:0.5px;}"
+                   "QPushButton#entLockPrimary:hover{border-color:%4;}"
+                   "QPushButton#entLockPrimary:pressed{background:%8;border-color:%8;color:%7;}"
+                   "QPushButton#entLockSecondary{background:transparent;color:%5;border:1px solid %9;padding:7px 12px;"
+                   "  font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;letter-spacing:0.5px;}"
+                   "QPushButton#entLockSecondary:hover{color:%3;border-color:%3;}"
+                   "QPushButton#entLockLink{background:transparent;color:%3;border:none;padding:2px 0;"
+                   "  font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;}"
+                   "QPushButton#entLockLink:hover{color:%4;text-decoration:underline;}"
+                   "QPushButton#entLockLinkQuiet{background:transparent;color:%5;border:none;padding:2px 0;"
+                   "  font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                   "QPushButton#entLockLinkQuiet:hover{color:%3;text-decoration:underline;}")
+        .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), colors::TEXT_PRIMARY(),
+             colors::TEXT_SECONDARY(), colors::TEXT_DIM(), colors::TEXT_ON_ACCENT(), colors::AMBER_DIM(),
+             colors::BORDER_MED());
+}
+
+/// Text, tooltip and accessible name of a make_partnership_link() button —
+/// hosts call it again from their retranslateUi().
+void ent_partnership_texts(QPushButton* btn) {
+    if (!btn)
+        return;
+    btn->setText(QCoreApplication::translate("EnterprisePromo", "Partnership enquiry"));
+    btn->setToolTip(QCoreApplication::translate("EnterprisePromo", "E-mail support@fincept.in about a partnership"));
+    btn->setAccessibleName(
+        QCoreApplication::translate("EnterprisePromo", "Partnership enquiry: e-mail support@fincept.in"));
+}
+
+/// A promo button on a locked screen: never focusable (typing and Enter stay
+/// with the PIN field), never a default button.
+void ent_make_unfocusable(QPushButton* btn) {
+    if (!btn)
+        return;
+    btn->setFocusPolicy(Qt::NoFocus);
+    btn->setAutoDefault(false);
+    btn->setDefault(false);
 }
 
 } // namespace
@@ -172,8 +286,20 @@ QString comparison_url() {
 QString signup_url() {
     return QStringLiteral("https://fincept.in/enterprise/signup");
 }
-QString demo_url() {
+QString meeting_url() {
+    // The owner's existing scheduling page; its slug is set in Calendly.
     return QStringLiteral("https://calendly.com/nikultilak/fincept-terminal-demo");
+}
+
+QString partnership_mailto() {
+    QUrl url;
+    url.setScheme(QStringLiteral("mailto"));
+    url.setPath(QStringLiteral("support@fincept.in"));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("subject"),
+                       QStringLiteral("Fincept Terminal ") + QChar(0x2014) + QStringLiteral(" partnership enquiry"));
+    url.setQuery(query);
+    return url.toString(QUrl::FullyEncoded);
 }
 
 QString url_with_ref(const QString& base, const QString& placement) {
@@ -233,18 +359,59 @@ QLabel* make_mention_label(QWidget* parent) {
         if (scheme == QLatin1String("https") || scheme == QLatin1String("http"))
             open_url(link);
     });
+    // The stylesheet follows the theme through the central re-style pass; the
+    // rich text's inline link colour does not.
     QObject::connect(&ThemeManager::instance(), &ThemeManager::theme_changed, label,
-                     [label](const ThemeTokens&) { ent_apply_mention_style(label); });
+                     [label](const ThemeTokens&) { ent_render_mention(label); });
     return label;
 }
 
 void set_mention_text(QLabel* label, const QString& lead, const QString& link_text, const QString& url) {
     if (!label)
         return;
-    const QString link = QStringLiteral("<a href=\"%1\" style=\"color:%2;text-decoration:none;\">%3</a>")
-                             .arg(url.toHtmlEscaped(), QString(colors::AMBER()), link_text.toHtmlEscaped());
-    label->setText(lead.isEmpty() ? link : lead.toHtmlEscaped() + QStringLiteral(" ") + link);
+    label->setProperty(kEntMentionLeadProp, lead);
+    label->setProperty(kEntMentionLinkProp, link_text);
+    label->setProperty(kEntMentionUrlProp, url);
+    ent_render_mention(label);
     label->setToolTip(url);
+}
+
+QPushButton* make_partnership_link(QWidget* parent) {
+    auto* btn = new QPushButton(parent);
+    btn->setObjectName(QStringLiteral("entPartnershipLink"));
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setStyleSheet(QString("QPushButton#entPartnershipLink{background:transparent;color:%1;border:none;padding:2px 0;"
+                               "font-size:" + fincept::ui::fonts::px(-3) + "px;text-align:left;text-decoration:underline;}"
+                               "QPushButton#entPartnershipLink:hover{color:%2;}")
+                           .arg(colors::TEXT_SECONDARY(), colors::AMBER()));
+    ent_partnership_texts(btn);
+    QObject::connect(btn, &QPushButton::clicked, btn, []() { open_url(partnership_mailto()); });
+    return btn;
+}
+
+void set_fitting_text(QPushButton* btn, const QString& full, const QString& compact) {
+    if (!btn)
+        return;
+    btn->setProperty(kEntFitFullProp, full);
+    btn->setProperty(kEntFitCompactProp, compact);
+    if (!btn->property(kEntFitHookedProp).toBool()) {
+        btn->setProperty(kEntFitHookedProp, true);
+        btn->installEventFilter(new EntFitFilter(btn));
+        // A font change re-sizes the text without always re-sizing the button.
+        QObject::connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, btn,
+                         [btn]() { ent_apply_fitting_text(btn); });
+    }
+    ent_apply_fitting_text(btn);
+}
+
+bool session_has_enterprise_plan() {
+    // The session AuthManager already holds in memory — nothing is fetched.
+    const auto& s = auth::AuthManager::instance().session();
+    if (!s.authenticated)
+        return false;
+    const QString effective = s.effective_plan();
+    const QString plan = effective.isEmpty() ? s.account_type().trimmed().toLower() : effective;
+    return plan == QLatin1String("enterprise");
 }
 
 bool placement_dismissed(const QString& placement) {
@@ -278,12 +445,35 @@ void open_plans(QWidget* origin) {
 
 // ── UpgradeDialog ────────────────────────────────────────────────────────────
 
+namespace {
+
+/// Give a fixed-width dialog the height its word-wrapped texts need at that
+/// width. A dialog sizes itself from its labels' unwrapped size hints, which
+/// came out too short here: the opening paragraph was squeezed so that its
+/// first and last lines were cut in half.
+void fit_dialog_height(QDialog* dlg) {
+    if (!dlg || !dlg->layout())
+        return;
+    dlg->ensurePolished(); // the stylesheet's font sizes decide where the texts wrap
+    const auto labels = dlg->findChildren<QWidget*>();
+    for (QWidget* w : labels)
+        w->ensurePolished();
+    QLayout* l = dlg->layout();
+    l->invalidate();
+    const int w = dlg->width();
+    const int h = l->hasHeightForWidth() ? l->totalHeightForWidth(w) : l->totalSizeHint().height();
+    dlg->setMinimumHeight(h);
+    dlg->resize(w, h);
+}
+
+} // namespace
+
 UpgradeDialog::UpgradeDialog(QWidget* parent, const QString& placement)
     : QDialog(parent), placement_(placement.isEmpty() ? QStringLiteral("app") : placement) {
     setObjectName("upgradeDialog");
     setModal(true);
-    setMinimumWidth(580);
-    setMaximumWidth(680);
+    // One width, scaled with the user's font: the height is then fitted to the wrapped texts.
+    setFixedWidth(std::max(620, QFontMetrics(fincept::ui::fonts::font(-1)).averageCharWidth() * 80));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(30, 26, 30, 22);
@@ -330,16 +520,19 @@ UpgradeDialog::UpgradeDialog(QWidget* parent, const QString& placement)
     oss_note_label_->setWordWrap(true);
     root->addWidget(oss_note_label_);
 
-    root->addSpacing(20);
+    root->addSpacing(16);
+
+    // On its own line: beside the three buttons there was no room for its text
+    // ("Don't remind me until t" was all that showed).
+    dont_remind_check_ = new QCheckBox;
+    dont_remind_check_->setObjectName("upgradeDontRemind");
+    dont_remind_check_->setCursor(Qt::PointingHandCursor);
+    root->addWidget(dont_remind_check_);
+    root->addSpacing(12);
 
     auto* buttons = new QHBoxLayout;
     buttons->setContentsMargins(0, 0, 0, 0);
     buttons->setSpacing(8);
-
-    dont_remind_check_ = new QCheckBox;
-    dont_remind_check_->setObjectName("upgradeDontRemind");
-    dont_remind_check_->setCursor(Qt::PointingHandCursor);
-    buttons->addWidget(dont_remind_check_);
     buttons->addStretch();
 
     later_btn_ = new QPushButton;
@@ -382,23 +575,23 @@ UpgradeDialog::UpgradeDialog(QWidget* parent, const QString& placement)
 void UpgradeDialog::refresh_theme() {
     setStyleSheet(QString("#upgradeDialog{background:%1;border:1px solid %2;}"
                           "QLabel{background:transparent;}"
-                          "#upgradeKicker{color:%3;font-weight:700;letter-spacing:1.5px;font-size:11px;}"
-                          "#upgradeTitle{color:%4;font-size:20px;font-weight:700;}"
-                          "#upgradePitch{color:%5;font-size:13px;}"
-                          "#upgradeFeature{color:%4;font-size:12px;}"
-                          "#upgradePricing{color:%5;font-size:12px;}"
-                          "#upgradeNote{color:%6;font-size:11px;}"
-                          "#upgradeDontRemind{color:%6;font-size:11px;background:transparent;}"
+                          "#upgradeKicker{color:%3;font-weight:700;letter-spacing:1.5px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                          "#upgradeTitle{color:%4;font-size:" + fincept::ui::fonts::px(6) + "px;font-weight:700;}"
+                          "#upgradePitch{color:%5;font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+                          "#upgradeFeature{color:%4;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                          "#upgradePricing{color:%5;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                          "#upgradeNote{color:%6;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                          "#upgradeDontRemind{color:%5;font-size:" + fincept::ui::fonts::px(-3) + "px;background:transparent;}"
                           "QPushButton#upgradeGhost{background:transparent;color:%5;border:1px solid %7;"
                           "  padding:7px 16px;font-weight:700;}"
                           "QPushButton#upgradeGhost:hover{color:%3;border-color:%3;}"
                           "QPushButton#upgradePrimary{background:%3;color:%8;border:1px solid %3;"
                           "  padding:7px 18px;font-weight:700;}"
                           "QPushButton#upgradePrimary:hover{border-color:%4;}"
-                          "QPushButton#upgradePrimary:pressed{background:%9;border-color:%9;color:%4;}")
-                      .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), colors::TEXT_PRIMARY(),
-                           colors::TEXT_SECONDARY(), colors::TEXT_TERTIARY(), colors::BORDER_MED(), colors::BG_BASE(),
-                           colors::AMBER_DIM()));
+                          "QPushButton#upgradePrimary:pressed{background:%9;border-color:%9;color:%8;}")
+                      .arg(colors::BG_SURFACE(), colors::BORDER_MED(), colors::AMBER(), colors::TEXT_PRIMARY(),
+                           colors::TEXT_SECONDARY(), colors::TEXT_TERTIARY(), colors::BORDER_MED(),
+                           colors::TEXT_ON_ACCENT(), colors::AMBER_DIM()));
     retranslateUi(); // the pricing link carries an inline colour
 }
 
@@ -448,6 +641,7 @@ void UpgradeDialog::retranslateUi() {
         compare_btn_->setText(tr("Compare editions"));
     if (primary_btn_)
         primary_btn_->setText(tr("See Enterprise ↗"));
+    fit_dialog_height(this);
 }
 
 void UpgradeDialog::show_now(QWidget* parent, const QString& placement) {
@@ -582,8 +776,10 @@ EnterpriseShowcase::EnterpriseShowcase(QWidget* parent) : QWidget(parent) {
     nav->addWidget(index_);
     root->addLayout(nav);
 
+    // Stacked, full width: "DISCUSS CUSTOM REQUIREMENTS" does not fit half the
+    // column beside the primary action.
     root->addSpacing(22);
-    auto* actions = new QHBoxLayout;
+    auto* actions = new QVBoxLayout;
     actions->setContentsMargins(0, 0, 0, 0);
     actions->setSpacing(8);
     primary_btn_ = new QPushButton(this);
@@ -591,15 +787,19 @@ EnterpriseShowcase::EnterpriseShowcase(QWidget* parent) : QWidget(parent) {
     primary_btn_->setCursor(Qt::PointingHandCursor);
     connect(primary_btn_, &QPushButton::clicked, this,
             [this]() { enterprise::open_url(enterprise::url_with_ref(enterprise::site_url(), placement_)); });
-    actions->addWidget(primary_btn_, 1);
-    demo_btn_ = new QPushButton(this);
-    demo_btn_->setObjectName("entShowcaseSecondary");
-    demo_btn_->setCursor(Qt::PointingHandCursor);
-    connect(demo_btn_, &QPushButton::clicked, this, []() { enterprise::open_url(enterprise::demo_url()); });
-    actions->addWidget(demo_btn_, 1);
+    actions->addWidget(primary_btn_);
+    // A meeting about custom requirements or a partnership — the team gives no demos.
+    meeting_btn_ = new QPushButton(this);
+    meeting_btn_->setObjectName("entShowcaseSecondary");
+    meeting_btn_->setCursor(Qt::PointingHandCursor);
+    connect(meeting_btn_, &QPushButton::clicked, this, []() { enterprise::open_url(enterprise::meeting_url()); });
+    actions->addWidget(meeting_btn_);
     root->addLayout(actions);
 
-    root->addSpacing(12);
+    root->addSpacing(8);
+    root->addWidget(enterprise::make_partnership_link(this), 0, Qt::AlignLeft);
+
+    root->addSpacing(10);
     note_ = new QLabel(this);
     note_->setObjectName("entShowcaseNote");
     note_->setWordWrap(true);
@@ -686,23 +886,25 @@ void EnterpriseShowcase::retranslateUi() {
     header_->setText(tr("FINCEPT TERMINAL ENTERPRISE · PRIVATE EDITION"));
     primary_btn_->setText(tr("SEE ENTERPRISE ↗"));
     primary_btn_->setToolTip(enterprise::site_url());
-    demo_btn_->setText(tr("BOOK A DEMO"));
-    demo_btn_->setToolTip(enterprise::demo_url());
+    enterprise::set_fitting_text(meeting_btn_, tr("DISCUSS CUSTOM REQUIREMENTS"), tr("CUSTOM REQUIREMENTS"));
+    meeting_btn_->setToolTip(tr("Book a meeting to talk through custom requirements or a partnership"));
+    meeting_btn_->setAccessibleName(tr("Discuss custom requirements: book a meeting (opens in your browser)"));
+    ent_partnership_texts(findChild<QPushButton*>(QStringLiteral("entPartnershipLink")));
     note_->setText(tr("Separate product · separate account. This open-source edition stays free under AGPL-3.0."));
     show_slide(current_, false);
 }
 
 void EnterpriseShowcase::refresh_theme() {
-    setStyleSheet(QString("#entShowcase{background:%1;border:1px solid %2;border-left:2px solid %3;}"
+    setStyleSheet(QString("#entShowcase{background:%1;border:1px solid %7;border-left:2px solid %3;}"
                           "QLabel{background:transparent;border:none;}"
                           "#entShowcaseSlide{background:transparent;}"
-                          "#entShowcaseHeader{color:%3;font-size:11px;font-weight:700;letter-spacing:1.5px;}"
+                          "#entShowcaseHeader{color:%3;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1.5px;}"
                           "#entShowcaseRule{background:%2;border:none;}"
-                          "#entShowcaseKicker{color:%3;font-size:11px;font-weight:700;letter-spacing:1px;}"
-                          "#entShowcaseTitle{color:%4;font-size:20px;font-weight:700;}"
-                          "#entShowcaseBody{color:%5;font-size:13px;}"
-                          "#entShowcaseIndex{color:%6;font-size:11px;letter-spacing:1px;}"
-                          "#entShowcaseNote{color:%6;font-size:11px;}"
+                          "#entShowcaseKicker{color:%3;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}"
+                          "#entShowcaseTitle{color:%4;font-size:" + fincept::ui::fonts::px(6) + "px;font-weight:700;}"
+                          "#entShowcaseBody{color:%5;font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+                          "#entShowcaseIndex{color:%6;font-size:" + fincept::ui::fonts::px(-3) + "px;letter-spacing:1px;}"
+                          "#entShowcaseNote{color:%6;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                           "QPushButton#entShowcaseDot{background:%7;border:none;padding:0;"
                           "  min-width:8px;max-width:8px;min-height:4px;max-height:4px;}"
                           "QPushButton#entShowcaseDot:hover{background:%5;}"
@@ -710,17 +912,279 @@ void EnterpriseShowcase::refresh_theme() {
                           "QPushButton#entShowcasePrimary{background:%3;color:%8;border:1px solid %3;"
                           "  padding:8px 12px;font-weight:700;letter-spacing:0.5px;}"
                           "QPushButton#entShowcasePrimary:hover{border-color:%4;}"
-                          "QPushButton#entShowcasePrimary:pressed{background:%9;border-color:%9;color:%4;}"
+                          "QPushButton#entShowcasePrimary:pressed{background:%9;border-color:%9;color:%8;}"
                           "QPushButton#entShowcaseSecondary{background:transparent;color:%5;border:1px solid %7;"
                           "  padding:8px 12px;font-weight:700;letter-spacing:0.5px;}"
                           "QPushButton#entShowcaseSecondary:hover{color:%3;border-color:%3;}")
                       .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), colors::TEXT_PRIMARY(),
-                           colors::TEXT_SECONDARY(), colors::TEXT_DIM(), colors::BORDER_MED(), colors::BG_BASE(),
-                           colors::AMBER_DIM()));
+                           colors::TEXT_SECONDARY(), colors::TEXT_DIM(), colors::BORDER_MED(),
+                           colors::TEXT_ON_ACCENT(), colors::AMBER_DIM()));
 }
 
 QWidget* make_enterprise_showcase(QWidget* parent) {
     return new EnterpriseShowcase(parent);
+}
+
+// ── EnterpriseLockPromo ──────────────────────────────────────────────────────
+
+EnterpriseLockPromo::EnterpriseLockPromo(Form form, QWidget* parent) : QWidget(parent), form_(form) {
+    setObjectName("entLockPromo");
+    setAttribute(Qt::WA_StyledBackground, true);
+    setFocusPolicy(Qt::NoFocus);
+    setStyleSheet(ent_lock_promo_ss()); // before any child exists
+    if (form_ == Form::Panel)
+        build_panel();
+    else
+        build_strip();
+
+    if (form_ == Form::Strip) {
+        // §P3: started in showEvent, stopped in hideEvent — runs only while the
+        // strip (and so the lock screen) is on screen.
+        rotate_timer_ = new QTimer(this);
+        rotate_timer_->setInterval(kEntLockStripRotateMs);
+        connect(rotate_timer_, &QTimer::timeout, this, [this]() {
+            const QStringList points = strip_points();
+            if (points.isEmpty())
+                return;
+            current_ = (current_ + 1) % static_cast<int>(points.size());
+            point_text_ = points.at(current_);
+            fit_strip();
+        });
+        // A font change re-sizes the texts without always re-sizing the strip.
+        connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, this, [this]() {
+            if (isVisible())
+                fit_strip();
+        });
+    }
+    retranslateUi();
+}
+
+void EnterpriseLockPromo::build_panel() {
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(kEntLockPanelMarginH, 22, kEntLockPanelMarginH, 20);
+    root->setSpacing(0);
+
+    kicker_ = new QLabel(this);
+    kicker_->setObjectName("entLockKicker");
+    root->addWidget(kicker_);
+    root->addSpacing(6);
+
+    headline_ = new QLabel(this);
+    headline_->setObjectName("entLockHeadline");
+    headline_->setWordWrap(true);
+    root->addWidget(headline_);
+    root->addSpacing(8);
+
+    pitch_ = new QLabel(this);
+    pitch_->setObjectName("entLockPitch");
+    pitch_->setWordWrap(true);
+    root->addWidget(pitch_);
+    root->addSpacing(14);
+
+    auto* rule = new QFrame(this);
+    rule->setObjectName("entLockRule");
+    rule->setFixedHeight(1);
+    root->addWidget(rule);
+    root->addSpacing(14);
+
+    const int point_count = static_cast<int>(panel_points().size());
+    for (int i = 0; i < point_count; ++i) {
+        auto* point = new QLabel(this);
+        point->setObjectName("entLockPoint");
+        point->setWordWrap(true);
+        point_labels_.append(point);
+        root->addWidget(point);
+        root->addSpacing(6);
+    }
+    root->addSpacing(12);
+
+    primary_btn_ = new QPushButton(this);
+    primary_btn_->setObjectName("entLockPrimary");
+    primary_btn_->setCursor(Qt::PointingHandCursor);
+    ent_make_unfocusable(primary_btn_);
+    connect(primary_btn_, &QPushButton::clicked, this,
+            []() { enterprise::open_url(enterprise::url_with_ref(enterprise::site_url(), QStringLiteral("lock"))); });
+    root->addWidget(primary_btn_);
+    root->addSpacing(8);
+
+    meeting_btn_ = new QPushButton(this);
+    meeting_btn_->setObjectName("entLockSecondary");
+    meeting_btn_->setCursor(Qt::PointingHandCursor);
+    ent_make_unfocusable(meeting_btn_);
+    connect(meeting_btn_, &QPushButton::clicked, this, []() { enterprise::open_url(enterprise::meeting_url()); });
+    root->addWidget(meeting_btn_);
+    root->addSpacing(8);
+
+    partner_btn_ = enterprise::make_partnership_link(this);
+    ent_make_unfocusable(partner_btn_);
+    root->addWidget(partner_btn_, 0, Qt::AlignLeft);
+    root->addSpacing(8);
+
+    note_ = new QLabel(this);
+    note_->setObjectName("entLockNote");
+    note_->setWordWrap(true);
+    root->addWidget(note_);
+}
+
+void EnterpriseLockPromo::build_strip() {
+    // Ignored width: the strip takes the PIN card's width and never widens the
+    // column it sits in; its height is one line.
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    auto* row = new QHBoxLayout(this);
+    row->setContentsMargins(12, 6, 10, 6);
+    row->setSpacing(10);
+
+    kicker_ = new QLabel(this);
+    kicker_->setObjectName("entLockKicker");
+    row->addWidget(kicker_, 0, Qt::AlignVCenter);
+
+    point_ = new QLabel(this);
+    point_->setObjectName("entLockStripPoint");
+    point_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    row->addWidget(point_, 1, Qt::AlignVCenter);
+
+    primary_btn_ = new QPushButton(this);
+    primary_btn_->setObjectName("entLockLink");
+    primary_btn_->setCursor(Qt::PointingHandCursor);
+    ent_make_unfocusable(primary_btn_);
+    connect(primary_btn_, &QPushButton::clicked, this,
+            []() { enterprise::open_url(enterprise::url_with_ref(enterprise::site_url(), QStringLiteral("lock"))); });
+    row->addWidget(primary_btn_, 0, Qt::AlignVCenter);
+
+    meeting_btn_ = new QPushButton(this);
+    meeting_btn_->setObjectName("entLockLinkQuiet");
+    meeting_btn_->setCursor(Qt::PointingHandCursor);
+    ent_make_unfocusable(meeting_btn_);
+    connect(meeting_btn_, &QPushButton::clicked, this, []() { enterprise::open_url(enterprise::meeting_url()); });
+    row->addWidget(meeting_btn_, 0, Qt::AlignVCenter);
+}
+
+int EnterpriseLockPromo::panel_min_width() {
+    // The meeting button on one line (bold, 0.5 px letter spacing, 12 px
+    // padding each side, border) and ~34 characters of body text per line.
+    const QFontMetrics button_fm(fonts::font(-1, QFont::Bold));
+    const QString meeting = tr("DISCUSS CUSTOM REQUIREMENTS");
+    const int button = button_fm.horizontalAdvance(meeting) + static_cast<int>(meeting.size()) + 24 + 2 + 8;
+    const int text = QFontMetrics(fonts::font(-1)).averageCharWidth() * 34;
+    return std::max(button, text) + 2 * kEntLockPanelMarginH + 3;
+}
+
+int EnterpriseLockPromo::panel_max_width() {
+    const int text = QFontMetrics(fonts::font(-1)).averageCharWidth() * 54 + 2 * kEntLockPanelMarginH + 3;
+    return std::max(panel_min_width(), text);
+}
+
+QStringList EnterpriseLockPromo::panel_points() const {
+    // Same claims as the Enterprise dialog — generic, nothing about the user.
+    return {
+        tr("Proprietary and private datasets with deeper point-in-time history"),
+        tr("Multi-agent AI research with AI credits included, plus a private dataroom"),
+        tr("41 modules across six research desks"),
+        tr("SSO/SAML, audit logs and role-based access control"),
+        tr("SLA-backed priority support"),
+    };
+}
+
+QStringList EnterpriseLockPromo::strip_points() const {
+    // The showcase's slide titles: short enough for one line.
+    return {
+        tr("Proprietary and private datasets"),
+        tr("Agents that plan, delegate and cite"),
+        tr("41 modules across six desks"),
+        tr("SSO, audit logs and an SLA"),
+        tr("The private edition, developed daily"),
+    };
+}
+
+void EnterpriseLockPromo::retranslateUi() {
+    setAccessibleName(tr("Fincept Terminal Enterprise"));
+    const QString meeting_tip = tr("Book a meeting to talk through custom requirements or a partnership");
+    const QString meeting_name = tr("Discuss custom requirements: book a meeting (opens in your browser)");
+    const QString primary_tip = tr("Open fincept.in/enterprise in your browser");
+    const QString primary_name = tr("See Fincept Terminal Enterprise (opens in your browser)");
+
+    if (form_ == Form::Panel) {
+        kicker_->setText(tr("PRIVATE EDITION"));
+        headline_->setText(tr("Fincept Terminal Enterprise"));
+        pitch_->setText(tr("The private, closed-source edition — built for funds, family offices and research desks."));
+        const QStringList points = panel_points();
+        const QString bullet = ent_bullet();
+        for (int i = 0; i < point_labels_.size() && i < points.size(); ++i)
+            point_labels_[i]->setText(bullet + points.at(i));
+        primary_btn_->setText(tr("SEE ENTERPRISE ↗"));
+        meeting_btn_->setText(tr("DISCUSS CUSTOM REQUIREMENTS"));
+        ent_partnership_texts(partner_btn_);
+        note_->setText(tr("Separate product · separate account. This open-source edition stays free under AGPL-3.0."));
+    } else {
+        kicker_->setText(tr("ENTERPRISE"));
+        primary_btn_->setText(tr("SEE ENTERPRISE ↗"));
+        meeting_btn_->setText(tr("DISCUSS CUSTOM REQUIREMENTS"));
+        const QStringList points = strip_points();
+        if (!points.isEmpty()) {
+            current_ = current_ % static_cast<int>(points.size());
+            point_text_ = points.at(current_);
+        }
+        fit_strip();
+    }
+    primary_btn_->setToolTip(primary_tip);
+    primary_btn_->setAccessibleName(primary_name);
+    meeting_btn_->setToolTip(meeting_tip);
+    meeting_btn_->setAccessibleName(meeting_name);
+}
+
+void EnterpriseLockPromo::fit_strip() {
+    if (form_ != Form::Strip || !point_)
+        return;
+    // Sizes asked for while the theme handlers run would style the window
+    // widget by widget; appearance_settled re-runs this afterwards.
+    if (ThemeManager::instance().notifying())
+        return;
+    QLayout* row = layout();
+    if (!row || !isVisible() || width() <= 0) {
+        point_->setText(point_text_); // showEvent fits it once the strip is laid out
+        return;
+    }
+    ensurePolished(); // the stylesheet's font sizes decide the widths below
+    const QMargins m = row->contentsMargins();
+    const int gap = row->spacing();
+    const int inner = width() - m.left() - m.right();
+    const QFontMetrics fm = point_->fontMetrics();
+    const int fixed = kicker_->sizeHint().width() + primary_btn_->sizeHint().width() + 2 * gap;
+    const int meeting = meeting_btn_->sizeHint().width() + gap;
+    const int min_point = fm.averageCharWidth() * 12;
+    const bool show_meeting = inner >= fixed + meeting + min_point;
+    if (meeting_btn_->isVisibleTo(this) != show_meeting)
+        meeting_btn_->setVisible(show_meeting);
+    const int room = std::max(0, inner - fixed - (show_meeting ? meeting : 0));
+    const QString shown = fm.elidedText(point_text_, Qt::ElideRight, room);
+    if (point_->text() != shown)
+        point_->setText(shown);
+    point_->setToolTip(shown == point_text_ ? QString() : point_text_);
+}
+
+void EnterpriseLockPromo::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (rotate_timer_)
+        rotate_timer_->start();
+    fit_strip();
+}
+
+void EnterpriseLockPromo::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (rotate_timer_)
+        rotate_timer_->stop();
+}
+
+void EnterpriseLockPromo::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    fit_strip();
+}
+
+void EnterpriseLockPromo::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
 }
 
 } // namespace fincept::ui

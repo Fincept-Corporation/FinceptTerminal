@@ -1,414 +1,244 @@
 // src/screens/backtesting/BacktestingScreen.h
+//
+// The Backtesting tab: "Portfolio for a simulated account". Bands, top to bottom:
+//   ui::ScreenCommandBar   BACKTEST · ENGINE ▾ · STRATEGY (F4) · 1Y 3Y 5Y 10Y MAX · PIN · EXPORT ▾ · SETUP · RUN
+//   progress line          determinate when the engine streams done / total, else indeterminate
+//   BtInputStrip           symbols · period · bars · capital · benchmark │ run state · warnings
+//   results ribbon         10 KPI tiles of the ACTIVE backtest (ui::KpiStrip), click → the tab that explains it
+//   SETUP panel │ tabs     OVERVIEW PERFORMANCE RISK TRADES EXPOSURE COSTS │ OPTIMISE WALK-FWD MONTE CARLO │
+//                          COMPARE ASSUMPTIONS RUNS RESEARCH (pages built on first activation)
+//   ui::ScreenStatusBar    engine + implementation + version · data source · bars · fill · costs · rf · ccy · clock
+//
+// No empty screens: the run tabs share ONE ui::AutoLoadPane (AutoRun) whose remembered result is the newest
+// saved backtest (run store) — shown at once with "as of"; on a fresh profile the default backtest (locale
+// index, SMA crossover 20/50, 5 years, venue cost preset) runs by itself behind a skeleton. OPTIMISE /
+// WALK-FWD / MONTE CARLO never run by themselves (remembered result or designed preview). Every result states
+// its engine, implementation, fill model, cost model, risk-free source and the data range actually used.
 #pragma once
+
 #include "core/symbol/IGroupLinked.h"
+#include "screens/backtesting/BtHost.h"
+#include "screens/backtesting/BtRunController.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/backtesting/BacktestingTypes.h"
-#include "ui/tables/LiveTableModel.h"
 
-#include <QCheckBox>
-#include <QComboBox>
-#include <QDateEdit>
-#include <QDoubleSpinBox>
-#include <QElapsedTimer>
-#include <QEvent>
-#include <QHideEvent>
-#include <QJsonArray>
+#include <QHash>
 #include <QJsonObject>
-#include <QKeyEvent>
-#include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QShowEvent>
-#include <QSpinBox>
-#include <QSplitter>
-#include <QStackedWidget>
-#include <QSortFilterProxyModel>
-#include <QTabWidget>
-#include <QTableView>
-#include <QTableWidget>
-#include <QTextEdit>
-#include <QTimer>
-#include <QVBoxLayout>
+#include <QPointer>
+#include <QVector>
 #include <QWidget>
+
+class QLabel;
+class QMenu;
+class QProgressBar;
+class QPushButton;
+class QSplitter;
+class QStackedWidget;
+class QTabBar;
+class QTimer;
+
+namespace fincept::ui {
+class AutoLoadPane;
+class InputMemory;
+class KpiStrip;
+class ScreenCommandBar;
+class ScreenStatusBar;
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
-/// One row of the DETAILS table (trades, optimisation runs, walk-forward windows,
-/// signals ...). `index` is the row's position in the provider payload - its
-/// stable key for the model.
-struct BtDetailRow {
-    int index = 0;
-    QJsonObject rec;
-};
+namespace bt {
+class BtAnalysisTab;
+class BtAssumptionsView;
+class BtCompareTab;
+class BtInputStrip;
+class BtResearchTab;
+class BtRunView;
+class BtRunsTab;
+class BtSelection;
+class BtSetupPanel;
+} // namespace bt
 
-/// Multi-provider backtesting terminal (6 providers, 11 commands).
-class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
+class BacktestingScreen : public QWidget,
+                          public IStatefulScreen,
+                          public IGroupLinked,
+                          public bt::BtHost,
+                          public ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit BacktestingScreen(QWidget* parent = nullptr);
+    ~BacktestingScreen() override;
 
+    // IStatefulScreen (v2: layout state only; inputs live in ui::InputMemory)
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return "backtesting"; }
-    int state_version() const override { return 1; }
+    int state_version() const override { return 2; }
 
-    // IGroupLinked — backtest is multi-symbol, but the *first* symbol in the
-    // line edit acts as the active ticker for group linking. Receiving a
-    // group symbol overwrites the entire field with that one symbol; users
-    // who want a multi-symbol backtest add more after publishing.
+    // IGroupLinked — the first symbol is the screen's ticker. A group symbol replaces the symbols and marks
+    // the result "Inputs changed"; it never starts a run by itself.
     void set_group(SymbolGroup g) override { link_group_ = g; }
     SymbolGroup group() const override { return link_group_; }
     void on_group_symbol_changed(const SymbolRef& ref) override;
     SymbolRef current_symbol() const override;
 
+    // bt::BtHost
+    services::backtest::BtSetup current_setup() const override;
+    QString setup_problem() const override;
+    QVector<services::backtest::StrategyParam> strategy_params() const override;
+    QString engine_slug() const override { return engine_; }
+    QString engine_label() const override;
+    bool engine_offers(const QString& command) const override;
+    bt::BtRunController* controller() const override { return controller_; }
+    services::backtest::BtRunPtr active_run() const override;
+    QString setup_currency() const override;
+    void apply_params(const QJsonObject& params) override;
+    void run_backtest_with(const QJsonObject& params) override;
+    void open_saved_run(qint64 store_id) override;
+    void load_saved_inputs(qint64 store_id, bool run) override;
+    void notify(const QString& text) override;
+
+    // ISectionLinked — a tab (overview performance risk trades exposure costs optimize walk_forward
+    // monte_carlo compare assumptions runs research), "engine:<slug>", "strategy:<id or name>",
+    // "run:<store id>" (opens the saved run, never re-runs it). focus "strategy:<text>" (any section
+    // or "") selects the best-matching strategy of the engine. Selecting never starts a run.
+    bool open_section(const QString& section, const QString& focus) override;
+
   protected:
-    void keyPressEvent(QKeyEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
-
-  private slots:
-    void on_provider_changed(int index);
-    void on_command_changed(int index);
-    void on_strategy_changed(int index);
-    void on_run();
-    void on_cancel();
-    // Catalogue loads (get_strategies / get_indicators) arrive on the legacy signals.
-    void on_result(const QString& provider, const QString& command, const QJsonObject& data);
-    void on_error(const QString& context, const QString& message);
-    // This screen's runs, correlated by run id.
-    void on_run_completed(quint64 run_id, const QString& provider, const QString& command, const QJsonObject& data);
-    void on_run_failed(quint64 run_id, const QString& context, const QString& message);
-    void on_run_cancelled(quint64 run_id, const QString& provider, const QString& command);
-    void on_command_options_loaded(const QString& provider, const QJsonObject& options);
+    void resizeEvent(QResizeEvent* event) override;
 
   private:
-    void build_ui();
-    QWidget* build_top_bar();
-    QWidget* build_left_panel();
-    QWidget* build_center_panel();
-    QWidget* build_right_panel();
-    QWidget* build_status_bar();
-    void connect_service();
-    /// Rebuild the screen's single root stylesheet from the active theme tokens.
-    /// Every widget is styled through an objectName / dynamic-property selector here
-    /// instead of an inline setStyleSheet call.
-    void refresh_theme();
-    /// state: ready | running | done | error | cancelled | synthetic
-    void set_status_state(const QString& text, const QString& state);
-    /// Leave the running state (RUN enabled, CANCEL hidden, ticker stopped).
-    void end_run();
-    /// Fill the DETAILS model (all rows - no cap) with the given columns.
-    void set_detail_rows(const QJsonArray& rows, const QStringList& columns);
-    /// CSV exports of the DETAILS rows and of the equity curve. Both carry a
-    /// "# ..." metadata header (provider, strategy, period, execution model) and an
-    /// unmistakable SYNTHETIC warning when the run used synthetic prices.
-    void export_details_csv();
-    void export_equity_csv();
-    QStringList export_header_lines() const;
-    bool write_text_file(const QString& path, const QString& text, const QString& title);
-    void update_provider_buttons();
-    void update_command_buttons();
-    void populate_strategies();
-    void rebuild_strategy_params();
-    void display_result(const QString& command, const QJsonObject& data);
-    /// Toggle the right/left-panel section containers based on the active command.
-    /// Each command consumes a different subset of the global config (e.g. ML
-    /// Labels doesn't use commission/slippage/leverage/benchmark/strategy).
-    void update_section_visibility();
-    void display_error(const QString& msg);
-    void clear_results();
-    QJsonObject gather_args();
-    QJsonObject gather_strategy_params();
-    /// Re-apply tr() strings to cached structural widgets on QEvent::LanguageChange.
-    void retranslateUi();
-
-    // ── Cached static labels for retranslateUi ──────────────────────────────
-    // Top bar
-    QLabel* brand_label_ = nullptr;
-    // Left panel section/field titles
-    QLabel* commands_title_ = nullptr;
-    QLabel* strategy_title_ = nullptr;
-    QLabel* strategy_cat_label_ = nullptr;
-    QLabel* strategy_pick_label_ = nullptr;
-    QLabel* params_title_ = nullptr;
-    // Center panel
-    QLabel* results_title_ = nullptr;
-    QPushButton* export_json_btn_ = nullptr;
-    QPushButton* export_csv_btn_ = nullptr;
-    QLabel* summary_hint_ = nullptr;
-    QLabel* equity_hint_ = nullptr;
-    // Right panel section/field titles
-    QLabel* market_data_title_ = nullptr;
-    QLabel* symbols_label_ = nullptr;
-    QLabel* start_label_ = nullptr;
-    QLabel* end_label_ = nullptr;
-    QLabel* interval_label_ = nullptr;
-    QLabel* execution_title_ = nullptr;
-    QLabel* commission_label_ = nullptr;
-    QLabel* slippage_label_ = nullptr;
-    QLabel* risk_free_label_ = nullptr;
-    QLabel* advanced_title_ = nullptr;
-    QLabel* leverage_label_ = nullptr;
-    QLabel* stop_loss_label_ = nullptr;
-    QLabel* take_profit_label_ = nullptr;
-    QLabel* pos_sizing_label_ = nullptr;
-    QLabel* benchmark_title_ = nullptr;
-    QLabel* benchmark_label_ = nullptr;
-    // Status bar
-    QLabel* providers_caption_ = nullptr;
-    QLabel* strategies_caption_ = nullptr;
-
-    // Provider state (cached to avoid repeated heap allocation)
-    QVector<services::backtest::Provider> providers_;
-    QVector<services::backtest::CommandDef> commands_;
-    QVector<services::backtest::Strategy> strategies_;
-    int active_provider_ = 0;
-    int active_command_ = 0;
-
-    // Top bar
-    QVector<QPushButton*> provider_buttons_;
-    QPushButton* run_button_ = nullptr;
-    QPushButton* cancel_button_ = nullptr;
-    QLabel* status_dot_ = nullptr;
-
-    // Left panel - commands + strategies
-    QVector<QPushButton*> command_buttons_;
-    QComboBox* strategy_category_combo_ = nullptr;
-    QComboBox* strategy_combo_ = nullptr;
-    QWidget* strategy_params_container_ = nullptr;
-    QVBoxLayout* strategy_params_layout_ = nullptr;
-    QVector<QDoubleSpinBox*> param_spinboxes_;
-    // Per-param explicit-range editor (one trio per strategy param). Always built
-    // alongside param_spinboxes_, but only made visible when the active command
-    // is `optimize`. Indexed in lockstep with param_spinboxes_.
-    QVector<QDoubleSpinBox*> param_min_spinboxes_;
-    QVector<QDoubleSpinBox*> param_max_spinboxes_;
-    QVector<QDoubleSpinBox*> param_step_spinboxes_;
-    // Wrapper widgets for each (min/max/step) row so we toggle them as a group.
-    QVector<QWidget*> param_range_rows_;
-
-    // Right panel - section containers (toggled per-command).
-    // Each wraps a labeled visual block (title + inputs) so the whole
-    // section can be hidden when the active command doesn't consume it.
-    QWidget* market_data_section_ = nullptr;
-    QWidget* execution_section_ = nullptr;
-    QWidget* advanced_section_ = nullptr;
-    QWidget* benchmark_section_ = nullptr;
-    // Left panel strategy block — only meaningful for backtest/optimize/walk_forward.
-    QWidget* strategy_section_ = nullptr;
-
-    // Right panel - config
-    QLineEdit* symbols_edit_ = nullptr;
-    QComboBox* interval_combo_ = nullptr;
-    QDoubleSpinBox* capital_spin_ = nullptr;
-    QDateEdit* start_date_ = nullptr;
-    QDateEdit* end_date_ = nullptr;
-    QDoubleSpinBox* commission_spin_ = nullptr;
-    QDoubleSpinBox* slippage_spin_ = nullptr;
-    QDoubleSpinBox* risk_free_spin_ = nullptr;
-    QDoubleSpinBox* leverage_spin_ = nullptr;
-    QDoubleSpinBox* stop_loss_spin_ = nullptr;
-    QDoubleSpinBox* take_profit_spin_ = nullptr;
-    QComboBox* pos_sizing_combo_ = nullptr;
-    QDoubleSpinBox* pos_sizing_value_spin_ = nullptr;
-    QLabel* pos_sizing_value_label_ = nullptr;
-    QCheckBox* allow_short_check_ = nullptr;
-    // Off by default and never persisted: a run on random-walk prices must be an
-    // explicit, per-session choice.
-    QCheckBox* allow_synthetic_check_ = nullptr;
-    QLineEdit* benchmark_edit_ = nullptr;
-
-    // Right panel - command-specific config (stacked)
-    QStackedWidget* cmd_config_stack_ = nullptr;
-    // Optimize config
-    QComboBox* opt_objective_combo_ = nullptr;
-    QComboBox* opt_method_combo_ = nullptr;
-    QSpinBox* opt_iterations_spin_ = nullptr;
-    // Walk-forward config
-    QSpinBox* wf_splits_spin_ = nullptr;
-    QDoubleSpinBox* wf_train_ratio_spin_ = nullptr;
-    // Indicator config
-    QComboBox* indicator_combo_ = nullptr;
-    QSpinBox* indicator_period_spin_ = nullptr;
-    // Indicator signals config — params shown depend on the chosen mode:
-    //   crossover_signals: fast_period + slow_period + ma_type
-    //   threshold_signals: period + lower + upper
-    //   breakout_signals:  channel + period
-    //   mean_reversion_signals: period + z_entry + z_exit
-    //   signal_filter:     base_indicator + base_period + filter_indicator
-    //                       + filter_period + filter_threshold + filter_type
-    QComboBox* ind_signal_indicator_combo_ = nullptr;
-    QComboBox* ind_signal_mode_combo_ = nullptr;
-    // crossover_signals
-    QWidget* is_fast_period_row_ = nullptr;
-    QSpinBox* is_fast_period_spin_ = nullptr;
-    QWidget* is_slow_period_row_ = nullptr;
-    QSpinBox* is_slow_period_spin_ = nullptr;
-    QWidget* is_ma_type_row_ = nullptr;
-    QComboBox* is_ma_type_combo_ = nullptr;
-    // threshold_signals
-    QWidget* is_period_row_ = nullptr;
-    QSpinBox* is_period_spin_ = nullptr;
-    QWidget* is_lower_row_ = nullptr;
-    QDoubleSpinBox* is_lower_spin_ = nullptr;
-    QWidget* is_upper_row_ = nullptr;
-    QDoubleSpinBox* is_upper_spin_ = nullptr;
-    // breakout_signals
-    QWidget* is_channel_row_ = nullptr;
-    QComboBox* is_channel_combo_ = nullptr;
-    // mean_reversion_signals
-    QWidget* is_z_entry_row_ = nullptr;
-    QDoubleSpinBox* is_z_entry_spin_ = nullptr;
-    QWidget* is_z_exit_row_ = nullptr;
-    QDoubleSpinBox* is_z_exit_spin_ = nullptr;
-    // signal_filter
-    QWidget* is_filter_indicator_row_ = nullptr;
-    QComboBox* is_filter_indicator_combo_ = nullptr;
-    QWidget* is_filter_period_row_ = nullptr;
-    QSpinBox* is_filter_period_spin_ = nullptr;
-    QWidget* is_filter_threshold_row_ = nullptr;
-    QDoubleSpinBox* is_filter_threshold_spin_ = nullptr;
-    QWidget* is_filter_type_row_ = nullptr;
-    QComboBox* is_filter_type_combo_ = nullptr;
-    // Labels config — different label generators use different params:
-    //   FIXLB:   horizon, threshold (forward-return classification)
-    //   MEANLB:  window, threshold (z-score mean reversion)
-    //   LEXLB:   window only (local extrema)
-    //   TRENDLB: window, threshold (rolling regression slope)
-    //   BOLB:    window, alpha     (Bollinger Band zones)
-    // Each row is wrapped in a container so labels_type_combo's change handler
-    // can show/hide rows that don't apply to the chosen generator.
-    QComboBox* labels_type_combo_ = nullptr;
-    QWidget* labels_horizon_row_ = nullptr;
-    QSpinBox* labels_horizon_spin_ = nullptr;
-    QWidget* labels_window_row_ = nullptr;
-    QSpinBox* labels_window_spin_ = nullptr;
-    QWidget* labels_threshold_row_ = nullptr;
-    QDoubleSpinBox* labels_threshold_spin_ = nullptr;
-    QWidget* labels_alpha_row_ = nullptr;
-    QDoubleSpinBox* labels_alpha_spin_ = nullptr;
-    // Splitters config — different splitters consume different params:
-    //   RollingSplitter:     window_len + test_len + step
-    //   ExpandingSplitter:   min_len + test_len + step
-    //   PurgedKFoldSplitter: n_splits + purge_len + embargo_len
-    QComboBox* splitter_type_combo_ = nullptr;
-    QWidget* splitter_window_row_ = nullptr;
-    QSpinBox* splitter_window_spin_ = nullptr;
-    QWidget* splitter_min_row_ = nullptr;
-    QSpinBox* splitter_min_spin_ = nullptr;
-    QWidget* splitter_test_row_ = nullptr;
-    QSpinBox* splitter_test_spin_ = nullptr;
-    QWidget* splitter_step_row_ = nullptr;
-    QSpinBox* splitter_step_spin_ = nullptr;
-    QWidget* splitter_n_splits_row_ = nullptr;
-    QSpinBox* splitter_n_splits_spin_ = nullptr;
-    QWidget* splitter_purge_row_ = nullptr;
-    QSpinBox* splitter_purge_spin_ = nullptr;
-    QWidget* splitter_embargo_row_ = nullptr;
-    QSpinBox* splitter_embargo_spin_ = nullptr;
-    // Returns config — different analysis types consume different params:
-    //   returns_stats: (no extra knobs beyond benchmark + risk_free)
-    //   drawdowns:     (no extra)
-    //   ranges:        threshold
-    //   rolling:       window + metric
-    QComboBox* returns_type_combo_ = nullptr;
-    QWidget* returns_window_row_ = nullptr;
-    QSpinBox* returns_window_spin_ = nullptr;
-    QWidget* returns_metric_row_ = nullptr;
-    QComboBox* returns_metric_combo_ = nullptr;
-    QWidget* returns_threshold_row_ = nullptr;
-    QDoubleSpinBox* returns_threshold_spin_ = nullptr;
-    // Signals config — params shown depend on the chosen generator:
-    //   RAND:    n
-    //   RANDX:   n
-    //   RANDNX:  n + min_hold + max_hold
-    //   RPROB:   entry_prob
-    //   RPROBX:  entry_prob + exit_prob
-    QComboBox* signal_gen_combo_ = nullptr;
-    QWidget* signal_count_row_ = nullptr;
-    QSpinBox* signal_count_spin_ = nullptr;
-    QWidget* signal_entry_prob_row_ = nullptr;
-    QDoubleSpinBox* signal_entry_prob_spin_ = nullptr;
-    QWidget* signal_exit_prob_row_ = nullptr;
-    QDoubleSpinBox* signal_exit_prob_spin_ = nullptr;
-    QWidget* signal_min_hold_row_ = nullptr;
-    QSpinBox* signal_min_hold_spin_ = nullptr;
-    QWidget* signal_max_hold_row_ = nullptr;
-    QSpinBox* signal_max_hold_spin_ = nullptr;
-    // Labels-to-signals config
-    QComboBox* l2s_label_type_combo_ = nullptr;
-    QSpinBox* l2s_entry_label_spin_ = nullptr;
-    QSpinBox* l2s_exit_label_spin_ = nullptr;
-    // Indicator sweep config
-    QComboBox* sweep_indicator_combo_ = nullptr;
-    QSpinBox* sweep_min_spin_ = nullptr;
-    QSpinBox* sweep_max_spin_ = nullptr;
-    QSpinBox* sweep_step_spin_ = nullptr;
-
-    // Center - results
-    QTabWidget* result_tabs_ = nullptr;
-    QWidget* equity_chart_tab_ = nullptr;
-    QVBoxLayout* summary_layout_ = nullptr;
-    QWidget* summary_container_ = nullptr;
-    QTableWidget* metrics_table_ = nullptr;
-    // DETAILS: model/view so a 100k-trade run renders lazily and sorts numerically.
-    QTableView* details_view_ = nullptr;
-    ui::LiveTableModel<BtDetailRow>* details_model_ = nullptr;
-    QSortFilterProxyModel* details_proxy_ = nullptr;
-    QStringList details_cols_;
-    QTextEdit* raw_json_edit_ = nullptr;
-    QLabel* status_label_ = nullptr;
-    QLabel* strategies_count_label_ = nullptr;
-    QLabel* providers_count_label_ = nullptr;
-
-    // Last completed result (full payload - the RAW JSON tab may show a capped
-    // preview) plus what was asked for, for exports.
-    QJsonObject last_payload_;
-    QString last_command_;
-    QJsonObject last_run_meta_;
-
-    // Custom combo strategy builder (up to 3 indicators)
-    struct ComboIndicatorRow {
-        QComboBox* type = nullptr;
-        QComboBox* cond = nullptr;
-        QDoubleSpinBox* val = nullptr;
-        QSpinBox* period = nullptr;
+    enum Tab {
+        TabOverview,
+        TabPerformance,
+        TabRisk,
+        TabTrades,
+        TabExposure,
+        TabCosts,
+        TabOptimize,
+        TabWalkForward,
+        TabMonteCarlo,
+        TabCompare,
+        TabAssumptions,
+        TabRuns,
+        TabResearch,
+        TabCount
     };
-    ComboIndicatorRow combo_rows_[3] = {};
-    QComboBox* combo_logic_ = nullptr;
-    QCheckBox* combo_ind3_enabled_ = nullptr;
 
+    void refresh_theme();
+    void build_ui();
+    void build_command_bar();
+    void build_ribbon();
+    void build_status_bar();
+    void build_run_pane();
+    void install_shortcuts();
+    void retranslate();
+
+    // engine / catalogue
+    void set_engine(const QString& slug);
+    /// Gate the inputs and the ENGINE menu tooltips by each engine's get_capabilities (else the built-in table).
+    void apply_engine_support();
+    void on_catalog(const QString& provider, const QJsonObject& data);
+    void on_catalog_failed(const QString& context, const QString& message);
+    /// A deep link's strategy (id, name or words): selected in the setup once the catalogue is in.
+    void select_linked_strategy(const QString& text);
+
+    // run pane
+    void start_run_pane(quint64 pane_request);
+    void render_run_ticket(const QJsonValue& payload);
+    void set_active(const bt::BtBundlePtr& bundle);
+    void show_active_in_visible_view();
+    QString backtest_signature() const;
+    void schedule_signature();
+    void update_signature();
+    void update_ribbon();
+    void update_status_bar();
+    void update_run_state();
+    void update_tab_badges();
+    void apply_regional_defaults();
     void apply_portfolio_config(const QJsonObject& config);
-    /// Dispatch a run on the next event-loop tick. Used by the auto-run path so
-    /// freshly-populated strategy combos/params settle before on_run() reads them.
-    void trigger_auto_run();
 
-    // Long-run feedback: ticks the status chip with elapsed seconds while a
-    // command is in flight so a 3-minute walk-forward never looks frozen.
-    // Started in on_run(), stopped on result/error/hide (P3).
-    QTimer* run_timer_ = nullptr;
-    QElapsedTimer run_elapsed_;
-    void start_run_ticker();
-    void stop_run_ticker();
+    // tabs
+    void on_tab_changed(int index);
+    QWidget* page_for(int tab);
+    bt::BtRunView* run_view(int tab);
+    bool is_run_tab(int tab) const;
+    void run_primary();
+    void cancel_current();
+    bt::BtAnalysisTab* analysis_tab(int tab) const;
 
-    QJsonArray pending_weights_;
+    // actions
+    void pin_active_run();
+    void export_kind(const QString& kind);
+    void show_raw_json();
+    bool write_file(const QString& suggested, const QString& filter, const QByteArray& bytes);
+
+    // services
+    bt::BtRunController* controller_ = nullptr;
+    bt::BtSelection* selection_ = nullptr;
+    ui::InputMemory* memory_ = nullptr; ///< "setup"
+
+    // bands
+    ui::ScreenCommandBar* bar_ = nullptr;
+    QMenu* engine_menu_ = nullptr;
+    QMenu* export_menu_ = nullptr;
+    QProgressBar* progress_ = nullptr;
+    bt::BtInputStrip* strip_ = nullptr;
+    QLabel* state_chip_ = nullptr;
+    QLabel* as_of_label_ = nullptr;
+    QPushButton* warnings_btn_ = nullptr;
+    QWidget* ribbon_box_ = nullptr;
+    ui::KpiStrip* ribbon_ = nullptr;
+    QSplitter* splitter_ = nullptr;
+    bt::BtSetupPanel* setup_ = nullptr;
+    QTabBar* tabs_ = nullptr;
+    QStackedWidget* pages_ = nullptr;
+    ui::ScreenStatusBar* status_ = nullptr;
+
+    // pages
+    QVector<QWidget*> page_slots_;           ///< outer stack page per tab (run tabs share one)
+    ui::AutoLoadPane* run_pane_ = nullptr;
+    QStackedWidget* run_stack_ = nullptr;    ///< inside the run pane: the run views
+    QHash<int, bt::BtRunView*> run_views_;
+    QHash<int, QWidget*> run_slots_;         ///< placeholder per run tab inside run_stack_
+    QHash<int, quint64> view_shown_;         ///< tab -> generation of the run it shows
+    quint64 active_generation_ = 0;
+    bt::BtAnalysisTab* optimize_tab_ = nullptr;
+    bt::BtAnalysisTab* walk_forward_tab_ = nullptr;
+    bt::BtAnalysisTab* monte_carlo_tab_ = nullptr;
+    bt::BtCompareTab* compare_tab_ = nullptr;
+    bt::BtRunsTab* runs_tab_ = nullptr;
+    bt::BtResearchTab* research_tab_ = nullptr;
+
+    // state
+    QString engine_ = QStringLiteral("vectorbt");
+    QVector<services::backtest::Provider> providers_;
+    QHash<QString, QJsonObject> engine_caps_; ///< slug -> get_capabilities reply (engines that answered)
+    bt::BtBundlePtr active_;
+    quint64 run_token_ = 0;
+    quint64 run_request_ = 0;
+    quint64 pending_start_ = 0;             ///< pane request waiting for the strategy list
+    bool run_auto_ = false;
+    qint64 pending_open_id_ = 0;            ///< OPEN of a saved run, delivered through the run pane
+    QJsonObject pending_params_run_;        ///< RUN of an optimised set once applied
+    bool pending_handoff_run_ = false;
+    QJsonObject pending_restore_payload_;   ///< v1 session state result, migrated into the store
+    QString pending_link_strategy_;         ///< deep-linked strategy waiting for the catalogue
+    QTimer* signature_timer_ = nullptr;
+    QTimer* ticker_ = nullptr;
     bool first_show_ = true;
-    bool is_running_ = false;
-    // The in-flight run. Results are matched on current_run_id_ (BacktestingService
-    // is a process-wide singleton that also serves Portfolio and workflow runs);
-    // provider/command are kept for the cost disclosure and exports.
-    QString running_provider_;
-    QString running_command_;
-    quint64 current_run_id_ = 0; // BacktestingService run id of the in-flight run (0 = none)
-    // Set when a caller requests an immediate backtest but strategies are still
-    // loading; the get_strategies callback fires the deferred run once ready.
-    bool pending_auto_run_ = false;
-
-    // Symbol-group link (None when unlinked).
+    int restored_tab_ = TabOverview;
+    QList<int> restored_sizes_;
+    bool setup_collapsed_ = false;
     SymbolGroup link_group_ = SymbolGroup::None;
-    void publish_first_symbol_to_group();
+    QString last_stylesheet_;
+    QString run_button_text_;    ///< last text set on the bar's RUN action (set only on change)
+    bool ribbon_compact_ = false;
 };
 
 } // namespace fincept::screens

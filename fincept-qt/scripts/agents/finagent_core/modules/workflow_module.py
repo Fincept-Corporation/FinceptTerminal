@@ -118,6 +118,44 @@ def _step_output(content: Any) -> Any:
     return StepOutput(content=content)
 
 
+def _make_ask(agent: Any, failures: List[str]):
+    """ask(prompt) -> StepOutput for one workflow step's agent call.
+
+    A failed run (no model configured, bad key, provider error) comes back from
+    agno as an ordinary response whose content is the error text. It used to
+    be passed on as the step's output, every later step built on it, and the
+    workflow reported success with the error as the report. Now the first
+    failure is recorded in `failures`, the step stops the workflow, and later
+    steps do not call the model again.
+    """
+    from agno.workflow.types import StepOutput
+    from finagent_core.run_errors import run_error_text
+
+    def ask(prompt: str) -> Any:
+        if failures:
+            return StepOutput(content=failures[0], success=False, error=failures[0], stop=True)
+        response = agent.run(prompt)
+        err = run_error_text(response)
+        if err:
+            failures.append(err)
+            return StepOutput(content=err, success=False, error=err, stop=True)
+        return StepOutput(content=getattr(response, "content", str(response)))
+
+    return ask
+
+
+def _workflow_outcome(result: Any, failures: List[str]) -> Dict[str, Any]:
+    """{"success": False, "error"} when any step's model call (or the workflow
+    itself) failed, else {"success": True, "response": <final content>}."""
+    from finagent_core.run_errors import run_error_text
+    if failures:
+        return {"success": False, "error": failures[0]}
+    err = run_error_text(result)
+    if err:
+        return {"success": False, "error": err}
+    return {"success": True, "response": getattr(result, "content", str(result))}
+
+
 def _extract_content(step_input: Any) -> Any:
     """Extract the input payload from a StepInput."""
     return getattr(step_input, "input", None) or getattr(step_input, "previous_step_content", None) or {}
@@ -153,49 +191,46 @@ class StockAnalysisWorkflow:
             self.model_config,
             tools=self._tools,
         )
+        failures: List[str] = []
+        ask = _make_ask(agent, failures)
 
         def fetch_step(step_input):
             inp = _extract_content(step_input)
             sym = inp.get("symbol", symbol) if isinstance(inp, dict) else symbol
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Fetch and summarize current market data for {sym} "
                 f"including price, volume, recent news, and key metrics."
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def tech_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Perform technical analysis for {symbol}. "
                 f"Market data context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def fund_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Perform fundamental analysis for {symbol} "
                 f"including valuation, financials, and competitive position. Context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def rec_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Based on the analysis, provide a clear "
                 f"buy/sell/hold recommendation for {symbol}. Analysis: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def report_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Generate a comprehensive investment report for {symbol}. "
                 f"Report Date MUST be {today}. "
                 f"Include executive summary, business overview, financials, risks, and recommendation. "
                 f"Analysis: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         workflow = Workflow(
             name=f"Stock Analysis: {symbol}",
@@ -211,7 +246,7 @@ class StockAnalysisWorkflow:
         )
 
         result = workflow.run(input={"symbol": symbol})
-        return {"success": True, "response": getattr(result, "content", str(result))}
+        return _workflow_outcome(result, failures)
 
 
 # ─── Portfolio Rebalancing Workflow ───────────────────────────────────────────
@@ -235,30 +270,29 @@ class PortfolioRebalancingWorkflow:
             self.model_config,
             tools=self._tools,
         )
+        failures: List[str] = []
+        ask = _make_ask(agent, failures)
 
         def analyze_step(step_input):
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Analyze this portfolio and calculate allocation drift: "
                 f"{portfolio_data}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def rebalance_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Calculate optimal rebalancing trades. Analysis: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def no_action_step(step_input):
             return _step_output("Portfolio is within tolerance. No rebalancing needed.")
 
         def orders_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Generate specific trade orders for rebalancing. Plan: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def needs_rebal(step_input):
             prev = str(getattr(step_input, "previous_step_content", ""))
@@ -279,7 +313,7 @@ class PortfolioRebalancingWorkflow:
         )
 
         result = workflow.run(input=portfolio_data)
-        return {"success": True, "response": getattr(result, "content", str(result))}
+        return _workflow_outcome(result, failures)
 
 
 # ─── Risk Assessment Workflow ─────────────────────────────────────────────────
@@ -303,49 +337,45 @@ class RiskAssessmentWorkflow:
             self.model_config,
             tools=self._tools,
         )
+        failures: List[str] = []
+        ask = _make_ask(agent, failures)
 
         def identify_step(step_input):
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Identify the primary risk type (market/credit/liquidity/operational) "
                 f"for this portfolio: {portfolio_data}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def market_risk_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Perform market risk analysis (VaR, beta, volatility). Context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def credit_risk_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Perform credit risk analysis. Context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def liquidity_risk_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Analyze liquidity risk (bid-ask, volume). Context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def general_risk_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Perform general risk assessment. Context: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         def report_step(step_input):
             prev = getattr(step_input, "previous_step_content", "")
-            response = agent.run(
+            return ask(
                 f"Today is {today}. Generate a comprehensive risk report. Report Date MUST be {today}. "
                 f"Analysis: {prev}"
             )
-            return _step_output(getattr(response, "content", str(response)))
 
         market_s  = Step(name="market_risk",    executor=market_risk_step)
         credit_s  = Step(name="credit_risk",    executor=credit_risk_step)
@@ -370,7 +400,7 @@ class RiskAssessmentWorkflow:
         )
 
         result = workflow.run(input=portfolio_data)
-        return {"success": True, "response": getattr(result, "content", str(result))}
+        return _workflow_outcome(result, failures)
 
 
 # ─── Backwards-compatible factory (used by core_agent.py) ────────────────────

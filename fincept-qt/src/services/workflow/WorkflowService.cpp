@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
@@ -393,6 +394,14 @@ QVector<WorkflowService::ValidationIssue> WorkflowService::validate(const Workfl
         {QStringLiteral("trading.modify_order"), QStringLiteral("order_id")},
         {QStringLiteral("trading.alert"), QStringLiteral("message")},
         {QStringLiteral("mcp.tool_call"), QStringLiteral("tool")}, // a Tool Picker can supply it
+        // Notification nodes forward the upstream text (response / message / text /
+        // summary, else the data as JSON) when Message is blank.
+        {QStringLiteral("notify.email"), QStringLiteral("message")},
+        {QStringLiteral("notify.slack"), QStringLiteral("message")},
+        {QStringLiteral("notify.discord"), QStringLiteral("message")},
+        {QStringLiteral("notify.telegram"), QStringLiteral("message")},
+        {QStringLiteral("notify.sms"), QStringLiteral("message")},
+        {QStringLiteral("notify.webhook"), QStringLiteral("message")},
     };
 
     for (const auto& nd : wf.nodes) {
@@ -401,6 +410,12 @@ QVector<WorkflowService::ValidationIssue> WorkflowService::validate(const Workfl
         const auto* td = reg.find(nd.type);
         if (!td) {
             issues.append({nd.id, tr("Unknown node type '%1' — this build cannot run it.").arg(nd.type)});
+            continue;
+        }
+        if (!td->unavailable_reason.isEmpty()) {
+            // Listed only for discoverability (shown disabled in the palette): it can never run.
+            issues.append({nd.id, tr("This node cannot run in this build — %1 Disable or remove it to run the rest.")
+                                      .arg(td->unavailable_reason)});
             continue;
         }
         for (const auto& pd : td->parameters) {
@@ -432,8 +447,15 @@ QVector<WorkflowService::ValidationIssue> WorkflowService::validate(const Workfl
             if (param_or(nd, "quantity", 0) <= 0)
                 issues.append({nd.id, tr("Quantity must be greater than 0.")});
             const QString ot = nd.parameters.value(QStringLiteral("order_type")).toString(QStringLiteral("market"));
-            if (ot != QLatin1String("market") && param_or(nd, "price", 0) <= 0)
-                issues.append({nd.id, tr("A %1 order needs a price greater than 0.").arg(ot)});
+            const bool is_stop = ot == QLatin1String("stop") || ot == QLatin1String("stop_limit");
+            const bool needs_limit = ot == QLatin1String("limit") || ot == QLatin1String("stop_limit");
+            if (!is_stop && !needs_limit && ot != QLatin1String("market"))
+                issues.append({nd.id, tr("Order type '%1' is not market, limit, stop or stop_limit.").arg(ot)});
+            if (needs_limit && param_or(nd, "price", 0) <= 0)
+                issues.append({nd.id, tr("A %1 order needs a Limit Price greater than 0.").arg(ot)});
+            // A stop order's trigger: without it paper always failed and live sent trigger 0.
+            if (is_stop && param_or(nd, "stop_price", 0) <= 0)
+                issues.append({nd.id, tr("A %1 order needs a Trigger Price greater than 0.").arg(ot)});
         } else if (nd.type == QLatin1String("trading.bracket_order")) {
             const double qty = param_or(nd, "quantity", 0);
             const double entry = param_or(nd, "entry_price", 0);
@@ -458,6 +480,13 @@ QVector<WorkflowService::ValidationIssue> WorkflowService::validate(const Workfl
         } else if (nd.type == QLatin1String("trading.trailing_stop")) {
             if (param_or(nd, "trail_value", 0) <= 0)
                 issues.append({nd.id, tr("Trail value must be greater than 0.")});
+        } else if (nd.type == QLatin1String("control.if_else") || nd.type == QLatin1String("utility.assert_node")) {
+            // Syntax the condition evaluator cannot read (arithmetic, '!', parentheses,
+            // function calls) used to make the condition silently false at run time.
+            const QString syntax = ExpressionEngine::condition_syntax_error(
+                nd.parameters.value(QStringLiteral("condition")).toString());
+            if (!syntax.isEmpty())
+                issues.append({nd.id, syntax});
         }
     }
 

@@ -1,35 +1,19 @@
 
-"""Portfolio Config Module
-===============================
+"""Shared constants, validators and CLI plumbing for Analytics/portfolioManagement (library, no CLI).
 
-Portfolio management configuration
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Portfolio holdings and transaction history
-  - Asset price data and market returns
-  - Benchmark indices and market data
-  - Investment policy statements and constraints
-  - Risk tolerance and preference parameters
-
-OUTPUT:
-  - Portfolio performance metrics and attribution
-  - Risk analysis and diversification metrics
-  - Rebalancing recommendations and optimization
-  - Portfolio analytics reports and visualizations
-  - Investment strategy recommendations
-
-PARAMETERS:
-  - optimization_method: Portfolio optimization method (default: 'mean_variance')
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
-  - max_weight: Maximum single asset weight (default: 0.10)
-  - benchmark: Portfolio benchmark index (default: 'market_index')
+Conventions used by every module here: returns are simple per-period (daily) fractions; annualisation
+uses 252 periods (mean x 252, stdev x sqrt(252)); the default risk-free rate is 3 % a year; VaR / ES are
+reported as POSITIVE loss fractions at the stated confidence level (0.95 = the 5 % left tail).
+Every CLI prints exactly one JSON object on stdout ({"error": "<message>"} and exit 1 on failure).
 """
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 from enum import Enum
+import json
+import os
+import sys
+
 import numpy as np
 
 
@@ -257,10 +241,155 @@ def validate_returns(returns: Union[List, np.ndarray]) -> bool:
 
 
 def validate_covariance_matrix(cov_matrix: np.ndarray) -> bool:
-    """Validate covariance matrix properties"""
+    """Validate covariance matrix properties (square, symmetric, finite, positive semi-definite)"""
+    cov_matrix = np.atleast_2d(cov_matrix)
     if cov_matrix.shape[0] != cov_matrix.shape[1]:
+        return False
+    if not np.all(np.isfinite(cov_matrix)):
         return False
     if not np.allclose(cov_matrix, cov_matrix.T):
         return False
-    eigenvals = np.linalg.eigvals(cov_matrix)
-    return np.all(eigenvals >= -1e-8)  # Allow small numerical errors
+    eigenvals = np.linalg.eigvalsh(cov_matrix)
+    return bool(np.all(eigenvals >= -1e-8))  # Allow small numerical errors
+
+
+# ============================================================================
+# CLI plumbing shared by the six command-line modules
+# ============================================================================
+
+class CliError(ValueError):
+    """A bad request: reported as {"error": <message>} with exit code 1, no traceback."""
+
+
+def _fincept_json():
+    try:
+        import fincept_json
+    except ImportError:  # scripts/ not on sys.path: it is three levels up from this file
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        import fincept_json
+    return fincept_json
+
+
+def _json_default(obj):
+    if isinstance(obj, Enum):
+        return obj.value
+    return str(obj)
+
+
+def cli_emit(obj) -> None:
+    """Print one JSON line (NaN / Infinity -> null, Enum -> its value)."""
+    _fincept_json().emit(obj, default=_json_default)
+
+
+class CliArgs:
+    """Arguments after the command, in either of the two accepted forms:
+
+    * positional (legacy):  <command> <arg1> <arg2> ...   ("null" or a missing arg = use the default)
+    * one JSON object:      <command> '{"<name1>": ..., "<name2>": ...}'
+      recognised when it is the only argument, is an object and contains the FIRST name of the
+      command's argument list (argmap). Missing keys mean "use the default" - the old bridge turned
+      them into the string 'null', which crashed float('null') / json.loads('null').get(...).
+    """
+
+    def __init__(self, argv: List[str], argmap: Dict[str, List[str]]):
+        self.command = argv[1] if len(argv) > 1 else None
+        raw = list(argv[2:])
+        self.object = None          # the whole JSON object in the object form
+        self._items = [(s, True) for s in raw]
+        names = argmap.get(self.command) or []
+        if names and len(raw) == 1:
+            try:
+                obj = json.loads(raw[0])
+            except ValueError:
+                obj = None
+            if isinstance(obj, dict) and names[0] in obj:
+                self.object = obj
+                self._items = [(obj.get(n), False) for n in names]
+
+    def _get(self, i):
+        if i >= len(self._items):
+            return None, False
+        value, is_raw = self._items[i]
+        if is_raw and (value is None or value.strip() in ("", "null", "None")):
+            return None, False
+        return value, is_raw
+
+    def get_json(self, i: int, name: str, default=None):
+        value, is_raw = self._get(i)
+        if value is None:
+            return default
+        if is_raw:
+            try:
+                return json.loads(value)
+            except ValueError:
+                raise CliError(f"{name} is not valid JSON")
+        return value
+
+    def get_float(self, i: int, name: str, default=None):
+        value, _ = self._get(i)
+        if value is None:
+            return default
+        try:
+            out = float(value)
+        except (TypeError, ValueError):
+            raise CliError(f"{name} must be a number (got {value!r})")
+        if not np.isfinite(out):
+            raise CliError(f"{name} must be a finite number")
+        return out
+
+    def get_str(self, i: int, name: str, default=None):
+        value, _ = self._get(i)
+        if value is None:
+            return default
+        return value if isinstance(value, str) else json.dumps(value)
+
+
+def return_series(values, name: str, min_len: int = 2) -> np.ndarray:
+    """A 1-D array of finite floats, or CliError with a plain message."""
+    if values is None:
+        raise CliError(f"{name} is required (a list of periodic returns as fractions, e.g. 0.012)")
+    if isinstance(values, dict):
+        raise CliError(f"{name} must be a list of numbers, not an object")
+    try:
+        arr = np.asarray(values, dtype=float)
+    except (TypeError, ValueError):
+        raise CliError(f"{name} must contain only numbers")
+    if arr.ndim != 1:
+        raise CliError(f"{name} must be a flat list of numbers")
+    if not np.all(np.isfinite(arr)):
+        raise CliError(f"{name} contains missing or non-finite values")
+    if arr.size < min_len:
+        raise CliError(f"{name} needs at least {min_len} observations (got {arr.size})")
+    return arr
+
+
+def run_cli(handlers: Dict, argmap: Dict[str, List[str]]) -> None:
+    """Dispatch sys.argv to handlers[command](CliArgs) and print exactly one JSON object.
+
+    A handler returns a dict; a dict with an "error" key exits 1. Unexpected exceptions are reported
+    as {"error": ...} with the traceback on stderr only.
+    """
+    commands = ", ".join(sorted(handlers))
+    code = 0
+    try:
+        if len(sys.argv) < 2:
+            raise CliError(f"No command specified. Commands: {commands}")
+        args = CliArgs(sys.argv, argmap)
+        handler = handlers.get(args.command)
+        if handler is None:
+            raise CliError(f"Unknown command: {args.command}. Commands: {commands}")
+        result = handler(args)
+        if isinstance(result, dict) and "error" in result:
+            code = 1
+    except CliError as exc:
+        result, code = {"error": str(exc)}, 1
+    except ValueError as exc:  # the libraries raise ValueError with a plain message for bad input
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        result, code = {"error": str(exc) or type(exc).__name__}, 1
+    except Exception as exc:  # noqa: BLE001 - every failure must still be one JSON object
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        result, code = {"error": f"{type(exc).__name__}: {exc}"}, 1
+    cli_emit(result)
+    sys.exit(code)

@@ -1,3 +1,5 @@
+import inspect
+import math
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Union, Any, Tuple
@@ -5,6 +7,42 @@ import json
 import statsmodels.api as sm
 from statsmodels.stats import api as stats_api
 from statsmodels.stats import diagnostic, stattools, weightstats, proportion, multitest, anova
+
+
+def _json_safe(obj):
+    """Plain-Python copy of obj that json.dumps accepts: numpy/pandas values converted, NaN/inf -> None."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, pd.DataFrame):
+        return [_json_safe(row) for row in obj.values.tolist()]
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return [_json_safe(v) for v in obj.tolist()]
+    if isinstance(obj, np.ndarray):
+        return _json_safe(obj.tolist())
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if math.isfinite(obj) else None
+    return obj
+
+
+def _call_result_object(func, *args, **kwargs):
+    """Call a statsmodels test asking for its result object where this version offers one.
+
+    statsmodels 0.15 warns that these tests stop returning plain tuples in 0.16; their result
+    objects are NamedTuples, so the positional reads below work with either return type.
+    """
+    try:
+        if 'result_object' in inspect.signature(func).parameters:
+            kwargs['result_object'] = True
+    except (TypeError, ValueError):
+        pass
+    return func(*args, **kwargs)
+
 
 def ttest_ind(
     x1: Union[List, np.ndarray],
@@ -18,11 +56,11 @@ def ttest_ind(
 
     result = stats_api.ttest_ind(x1, x2, alternative=alternative, usevar=usevar)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1]),
         'df': float(result[2])
-    }
+    })
 
 def ttest_1samp(
     data: Union[List, np.ndarray],
@@ -35,11 +73,11 @@ def ttest_1samp(
     d = weightstats.DescrStatsW(data)
     result = d.ttest_mean(popmean, alternative=alternative)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1]),
         'df': float(result[2])
-    }
+    })
 
 def ztest(
     x1: Union[List, np.ndarray],
@@ -53,25 +91,29 @@ def ztest(
 
     result = stats_api.ztest(x1, x2, value=value, alternative=alternative)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1])
-    }
+    })
 
 def anova_lm(
     *models
 ) -> Dict[str, Any]:
-    """ANOVA for linear models"""
+    """ANOVA for linear models.
+
+    Comparing several fitted models: one entry per model; the first model has nothing to be
+    compared with, so its ss_diff/F/Pr(>F) are null (df_diff 0).
+    """
     result = anova.anova_lm(*models)
 
-    return {
-        'df_resid': result['df_resid'].tolist() if hasattr(result['df_resid'], 'tolist') else list(result['df_resid']),
-        'ssr': result['ssr'].tolist() if hasattr(result['ssr'], 'tolist') else list(result['ssr']),
-        'df_diff': result['df_diff'].tolist() if hasattr(result['df_diff'], 'tolist') else list(result['df_diff']),
-        'ss_diff': result['ss_diff'].tolist() if hasattr(result['ss_diff'], 'tolist') else list(result['ss_diff']),
-        'F': result['F'].tolist() if hasattr(result['F'], 'tolist') else list(result['F']),
-        'Pr(>F)': result['Pr(>F)'].tolist() if hasattr(result['Pr(>F)'], 'tolist') else list(result['Pr(>F)'])
-    }
+    return _json_safe({
+        'df_resid': result['df_resid'],
+        'ssr': result['ssr'],
+        'df_diff': result['df_diff'],
+        'ss_diff': result['ss_diff'],
+        'F': result['F'],
+        'Pr(>F)': result['Pr(>F)']
+    })
 
 def proportions_ztest(
     count: Union[int, List[int], np.ndarray],
@@ -82,10 +124,10 @@ def proportions_ztest(
     """Test for proportions"""
     result = proportion.proportions_ztest(count, nobs, value=value, alternative=alternative)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1])
-    }
+    })
 
 def proportion_confint(
     count: int,
@@ -96,10 +138,10 @@ def proportion_confint(
     """Confidence interval for proportion"""
     result = proportion.proportion_confint(count, nobs, alpha=alpha, method=method)
 
-    return {
+    return _json_safe({
         'lower': float(result[0]),
         'upper': float(result[1])
-    }
+    })
 
 def chisquare_test(
     f_obs: Union[List, np.ndarray],
@@ -114,10 +156,10 @@ def chisquare_test(
 
     result = chisquare(f_obs, f_exp=f_exp, ddof=ddof)
 
-    return {
+    return _json_safe({
         'statistic': float(result.statistic),
         'pvalue': float(result.pvalue)
-    }
+    })
 
 def jarque_bera_test(
     data: Union[List, np.ndarray, pd.Series]
@@ -127,12 +169,12 @@ def jarque_bera_test(
 
     result = stattools.jarque_bera(data)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1]),
         'skewness': float(result[2]),
         'kurtosis': float(result[3])
-    }
+    })
 
 def omnibus_normtest(
     data: Union[List, np.ndarray, pd.Series]
@@ -142,10 +184,10 @@ def omnibus_normtest(
 
     result = stattools.omni_normtest(data)
 
-    return {
+    return _json_safe({
         'statistic': float(result[0]),
         'pvalue': float(result[1])
-    }
+    })
 
 def durbin_watson_test(
     resids: Union[List, np.ndarray, pd.Series]
@@ -155,9 +197,9 @@ def durbin_watson_test(
 
     result = stattools.durbin_watson(resids)
 
-    return {
+    return _json_safe({
         'statistic': float(result)
-    }
+    })
 
 def het_breuschpagan(
     resid: Union[List, np.ndarray, pd.Series],
@@ -169,12 +211,12 @@ def het_breuschpagan(
 
     result = diagnostic.het_breuschpagan(resid, exog)
 
-    return {
+    return _json_safe({
         'lm_statistic': float(result[0]),
         'lm_pvalue': float(result[1]),
         'f_statistic': float(result[2]),
         'f_pvalue': float(result[3])
-    }
+    })
 
 def het_white(
     resid: Union[List, np.ndarray, pd.Series],
@@ -186,12 +228,12 @@ def het_white(
 
     result = diagnostic.het_white(resid, exog)
 
-    return {
+    return _json_safe({
         'lm_statistic': float(result[0]),
         'lm_pvalue': float(result[1]),
         'f_statistic': float(result[2]),
         'f_pvalue': float(result[3])
-    }
+    })
 
 def het_arch(
     resid: Union[List, np.ndarray, pd.Series],
@@ -200,40 +242,43 @@ def het_arch(
     """ARCH test for heteroskedasticity"""
     resid = np.array(resid) if not isinstance(resid, (np.ndarray, pd.Series)) else resid
 
-    result = diagnostic.het_arch(resid, nlags=nlags)
+    result = _call_result_object(diagnostic.het_arch, resid, nlags=nlags)
 
-    return {
+    return _json_safe({
         'lm_statistic': float(result[0]),
         'lm_pvalue': float(result[1]),
         'f_statistic': float(result[2]),
         'f_pvalue': float(result[3])
-    }
+    })
 
 def acorr_breusch_godfrey(
     results,
     nlags: int = 1
 ) -> Dict[str, Any]:
     """Breusch-Godfrey test for serial correlation"""
-    result = diagnostic.acorr_breusch_godfrey(results, nlags=nlags)
+    result = _call_result_object(diagnostic.acorr_breusch_godfrey, results, nlags=nlags)
 
-    return {
+    return _json_safe({
         'lm_statistic': float(result[0]),
         'lm_pvalue': float(result[1]),
         'f_statistic': float(result[2]),
         'f_pvalue': float(result[3])
-    }
+    })
 
 def linear_reset(
     results,
     power: int = 3
 ) -> Dict[str, Any]:
-    """Ramsey RESET test"""
-    result = diagnostic.linear_reset(results, power=power)
+    """Ramsey RESET test (F form): adds fitted-value powers 2..power to the regression."""
+    # linear_reset returns a ContrastResults object, not a tuple
+    result = diagnostic.linear_reset(results, power=power, use_f=True)
 
-    return {
-        'f_statistic': float(result[0]),
-        'f_pvalue': float(result[1])
-    }
+    return _json_safe({
+        'f_statistic': float(np.squeeze(result.fvalue)),
+        'f_pvalue': float(result.pvalue),
+        'df_num': float(result.df_num),
+        'df_denom': float(result.df_denom)
+    })
 
 def linear_harvey_collier(
     results
@@ -241,10 +286,10 @@ def linear_harvey_collier(
     """Harvey-Collier test for linearity"""
     result = diagnostic.linear_harvey_collier(results)
 
-    return {
+    return _json_safe({
         't_statistic': float(result[0]),
         'pvalue': float(result[1])
-    }
+    })
 
 def multipletests_correction(
     pvalues: Union[List, np.ndarray],
@@ -256,12 +301,12 @@ def multipletests_correction(
 
     result = multitest.multipletests(pvalues, alpha=alpha, method=method)
 
-    return {
-        'reject': result[0].tolist() if hasattr(result[0], 'tolist') else list(result[0]),
-        'pvals_corrected': result[1].tolist() if hasattr(result[1], 'tolist') else list(result[1]),
+    return _json_safe({
+        'reject': result[0],
+        'pvals_corrected': result[1],
         'alphacSidak': float(result[2]),
         'alphacBonf': float(result[3])
-    }
+    })
 
 def fdrcorrection_twostage(
     pvalues: Union[List, np.ndarray],
@@ -272,10 +317,10 @@ def fdrcorrection_twostage(
 
     result = multitest.fdrcorrection_twostage(pvalues, alpha=alpha)
 
-    return {
-        'reject': result[0].tolist() if hasattr(result[0], 'tolist') else list(result[0]),
-        'pvals_corrected': result[1].tolist() if hasattr(result[1], 'tolist') else list(result[1])
-    }
+    return _json_safe({
+        'reject': result[0],
+        'pvals_corrected': result[1]
+    })
 
 def compare_means(
     data1: Union[List, np.ndarray],
@@ -289,11 +334,11 @@ def compare_means(
     cm = weightstats.CompareMeans(weightstats.DescrStatsW(data1), weightstats.DescrStatsW(data2))
     tstat, pval, df = cm.ttest_ind(usevar=usevar)
 
-    return {
+    return _json_safe({
         'statistic': float(tstat),
         'pvalue': float(pval),
         'df': float(df)
-    }
+    })
 
 def descr_stats(
     data: Union[List, np.ndarray]
@@ -303,13 +348,13 @@ def descr_stats(
 
     d = weightstats.DescrStatsW(data)
 
-    return {
+    return _json_safe({
         'mean': float(d.mean),
         'std': float(d.std),
         'std_mean': float(d.std_mean),
         'var': float(d.var),
         'nobs': float(d.nobs)
-    }
+    })
 
 def main():
     print("Testing statsmodels stats tests wrapper")

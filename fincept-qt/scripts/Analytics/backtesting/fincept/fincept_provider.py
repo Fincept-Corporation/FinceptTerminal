@@ -1,840 +1,332 @@
 #!/usr/bin/env python3
 """
-Fincept Engine Backtesting Provider
-Executes strategies from the 418+ Fincept Terminal strategy registry.
+"fincept" engine provider - the terminal's entry point (<command> --stdin, one JSON line on stdout).
 
-Wire shape (matches other providers — see base/base_provider.py::json_response):
-  Success: {"success": true, "data": {"performance": {...}, "trades": [...],
-                                      "equity": [...], "statistics": {...}, ...}}
-  Failure: {"success": false, "error": "...", "traceback": "..."}
+Runs the strategies of the Fincept strategy registry (scripts/strategies, 418 entries of which the
+catalogue marks the runnable ones) on Fincept's own QCAlgorithm-compatible bar-loop engine
+(scripts/strategies/fincept_engine, driven by base/fincept_strategy_runner.py).
 
-Stdout is reserved exclusively for the final JSON payload — every diagnostic
-goes to stderr so the C++ host's `extract_json` never picks up a leading '['
-from a log line like "[Fincept Engine] Executing...".
+WHAT RUNS (every result says it in `engine` / `engineImplementation` / assumptions / provenance)
+  run_backtest   fe_engine.run_backtest: the strategy's own code bar by bar in fincept_engine, whose
+                 broker fills the orders (native fill: market orders at the next bar's open; fillTiming
+                 next_close / same_close honoured for market orders); bars from base.price_store through
+                 fincept_engine.price_feed; result from base.result_normalizer.build_backtest_result with
+                 EngineIdentity('fincept', ...). base.simulator is NOT used.
+  optimize       base.robustness.run_optimization over fincept_evaluate.evaluate (a full engine run per
+                 combination with get_parameter values set; strategies that read no parameters: INPUT error).
+  walk_forward   base.robustness.run_walk_forward (re-optimised on every training window).
+  monte_carlo    base.monte_carlo over run_backtest.
+  get_strategies (supported / runnable / reason / optimizable per row, counts), get_capabilities,
+  get_command_options, get_indicators, get_historical_data (price store), test_import / test_connection.
+
+Progress lines go to STDERR (@@BT_PROGRESS, base.progress): data / run / metrics / optimize /
+walk_forward / monte_carlo. The host's cancelFile stops the run inside the bar loop and between trials
+(exit code 3 + the cancelled envelope). A watchdog stops a strategy that hangs in initialize() (90 s) or
+runs past the total limit (15 min run_backtest, 45 min the others) with a TIMEOUT envelope.
 """
 
-import sys
 import json
-import math
+import os
+import sys
+import threading as _threading
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Optional
 
-# Add paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-STRATEGIES_DIR = BASE_DIR.parent.parent / "strategies"
-sys.path.insert(0, str(STRATEGIES_DIR))
-sys.path.insert(0, str(BASE_DIR / "base"))
-# For json_response (camelCase conversion + NaN sanitisation, shared with the
-# other providers).
-sys.path.insert(0, str(BASE_DIR))
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_BACKTESTING_DIR = _SCRIPT_DIR.parent
+for _p in (str(_BACKTESTING_DIR), str(_BACKTESTING_DIR / 'base'), str(_SCRIPT_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-from fincept_strategy_runner import FinceptStrategyRunner
-from base.base_provider import (json_response, parse_json_input, read_cli_args, check_cancelled,
-                                build_assumptions, periods_per_year, describe_annualization)
+COMMANDS = ('run_backtest', 'execute_fincept_strategy', 'optimize', 'walk_forward', 'monte_carlo', 'get_strategies',
+            'get_capabilities', 'get_command_options', 'get_indicators', 'get_historical_data', 'test_import',
+            'test_connection', 'initialize')
+_LONG = ('run_backtest', 'execute_fincept_strategy', 'monte_carlo', 'optimize', 'walk_forward')
 
-
-def _log(msg: str) -> None:
-    """All provider diagnostics route to stderr to keep stdout JSON-clean."""
-    print(f"[Fincept Engine] {msg}", file=sys.stderr)
+# Watchdog state (see _start_watchdog): one JSON line on stdout, whoever prints first.
+_OUT_LOCK = _threading.Lock()
+_OUT_STATE = {'printed': False}
+_DONE = _threading.Event()
+_PHASE: Dict[str, Any] = {'name': 'start'}
 
 
-def _safe_float(x, default: float = 0.0) -> float:
-    """Coerce to float; return default for NaN/Inf/None/non-numeric."""
+def _num(v, default=0.0) -> float:
     try:
-        f = float(x)
-        if math.isnan(f) or math.isinf(f):
-            return default
-        return f
+        f = float(v)
+        return f if f == f and f not in (float('inf'), float('-inf')) else default
     except (TypeError, ValueError):
         return default
 
 
-def _day_str(ts) -> str:
-    """'YYYY-MM-DD' from the runner's 'YYYY-MM-DD HH:MM:SS' bar time."""
-    return str(ts).split(' ')[0].split('T')[0]
+# ════════════════════════════════════════════════════════════════════════════
+# Commands
+# ════════════════════════════════════════════════════════════════════════════
+
+def get_strategies(args):
+    import fe_engine as E
+    import fe_catalog as CAT
+    include_all = bool(args.get('includeUnsupported') or args.get('include_unsupported'))
+    return {'success': True, 'data': CAT.catalog(E.runner(), include_all=include_all)}
 
 
-def _normalize_equity(equity_curve: List[Dict[str, Any]], initial_capital: float) -> List[Dict[str, Any]]:
-    """Runner equity points are {time, equity}; the frontend's chart reads
-    {date, equity, returns, drawdown} (drawdown a NEGATIVE fraction, like every other
-    provider). With the old shape the chart found no `date` and stayed blank."""
-    out: List[Dict[str, Any]] = []
-    peak = initial_capital if initial_capital > 0 else 0.0
-    for pt in equity_curve or []:
-        if not isinstance(pt, dict):
-            continue
-        v = _safe_float(pt.get('equity'), float('nan'))
-        if math.isnan(v):
-            continue
-        peak = max(peak, v)
-        out.append({
-            'date': _day_str(pt.get('time', pt.get('date', ''))),
-            'equity': v,
-            'returns': ((v - initial_capital) / initial_capital) if initial_capital > 0 else 0.0,
-            'drawdown': ((v - peak) / peak) if peak > 0 else 0.0,
-        })
-    return out
+def get_capabilities(_args):
+    import fe_engine as E
+    from base.base_provider import capabilities_payload, NOT_MODELLED_VOCABULARY
+    from base.execution import fill_model_block
+    from base.costs import PRESETS
+    modelled = {'margin calls', 'borrow cost'}
+    data = capabilities_payload(
+        'fincept', None, None, installed=True, commands=list(COMMANDS), fill_model=fill_model_block('next_open'),
+        commission_models=['pct_notional', 'per_share', 'per_trade'], slippage_models=['pct_price', 'vol_scaled'],
+        # stops: the request's stopLoss / takeProfit are not applied (the strategy's own stop / limit / trailing
+        # orders are simulated against each bar's range - see notes); shortSelling / leverage: the engine models
+        # them for what the strategy orders, the request's allowShort / leverage are ignored (requestKeys)
+        short_selling=True, leverage=True, multi_symbol=True, intraday=False,
+        sizing_methods=['strategy'], stops=False, optimize_methods=['grid', 'random'],
+        walk_forward_modes=['rolling', 'anchored'],
+        not_modelled=[x for x in NOT_MODELLED_VOCABULARY if x not in modelled],
+        engine_implementation=E.IMPLEMENTATION, fill_timings=['next_open', 'next_close', 'same_close'],
+        intervals=['1d'], cost_presets=sorted(PRESETS),
+        request_keys={
+            'honoured': ['symbols', 'startDate', 'endDate', 'initialCapital', 'commission', 'slippage', 'costModel',
+                         'fillTiming', 'benchmarkSymbol', 'riskFreeRate', 'riskFreeSource', 'strategy', 'paramRanges',
+                         'optimizeMethod', 'optimizeObjective', 'maxIterations', 'seed', 'holdoutFraction',
+                         'maxWorkers', 'wfSplits', 'wfTrainRatio', 'wfMode', 'purgeBars', 'embargoBars', 'mcMethod',
+                         'mcSimulations', 'mcSeed', 'mcBlockSize', 'mcRuinLevel', 'cancelFile', 'includeUnsupported',
+                         'allowSyntheticData'],
+            'ignored': ['positionSizing', 'positionSizeValue', 'stopLoss', 'takeProfit', 'trailingStop', 'leverage',
+                        'allowShort', 'interval'],
+            'notes': {
+                'positionSizing': 'the strategy code sizes its own orders (set_holdings / order quantities)',
+                'positionSizeValue': 'the strategy code sizes its own orders',
+                'stopLoss': 'the strategy code places its own exits (its stop / limit / trailing orders are '
+                            'simulated against each bar\'s range)',
+                'takeProfit': 'the strategy code places its own exits',
+                'trailingStop': 'the strategy code places its own exits',
+                'leverage': 'each security uses the strategy\'s own leverage, capped per asset class (equities 2x, '
+                            'forex 50x, crypto / futures / indices 1x by default); margin calls are modelled',
+                'allowShort': 'the strategy code decides whether to sell short; borrow is charged from the cost '
+                              'model (allowShort false with a strategy that shorts: IGNORED_SETTING)',
+                'interval': 'the engine steps through daily bars only (intraday subscriptions run once a day)',
+                'costModel': 'commission pct / per share / per trade with min / max, slippage pct / vol-scaled + half '
+                             'spread, borrow are applied by the engine\'s broker; impactCoef, participationCap, '
+                             'cashRateAnnual, financingRateAnnual are not (IGNORED_SETTING when set)',
+                'fillTiming': 'next_open is the engine\'s native rule; next_close / same_close move MARKET orders '
+                              'only (limit / stop / MOO / MOC keep their own rules)',
+                'paramRanges': 'only parameters the strategy reads with get_parameter (catalogue row optimizable)',
+                'maxWorkers': 'capped by FINCEPT_BT_MAX_WORKERS; one process when the work is small',
+                'allowSyntheticData': 'the engine never runs on synthetic prices',
+                'costs.sensitivity': E.SENSITIVITY_NOTE}})
+    data['strategyApi'] = 'QCAlgorithm (LEAN-compatible Python API)'
+    data['executor'] = 'fincept_engine broker (base.simulator is not used)'
+    data['catalogue'] = 'get_strategies rows carry supported / runnable / reason / optimizable'
+    return {'success': True, 'data': data}
 
 
-def _build_round_trips(fills: List[Dict[str, Any]],
-                       open_positions: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
-    """Turn the runner's raw FILLS ({time, symbol, quantity(signed), price, type}) into
-    closed round-trip trades with realised P&L (average-cost method).
+def get_command_options(_args):
+    from base.robustness import OBJECTIVES
+    return {'success': True, 'data': {
+        'position_sizing_methods': ['strategy'],
+        'optimize_objectives': ['sharpe', 'sortino', 'calmar', 'return'] +
+                               [o for o in OBJECTIVES if o not in ('sharpe', 'sortino', 'calmar', 'return')],
+        'optimize_methods': ['grid', 'random'],
+        'walk_forward_modes': ['rolling', 'anchored'],
+        'fill_timings': ['next_open', 'next_close', 'same_close'],
+        'label_types': [], 'splitter_types': [], 'signal_generators': [], 'indicator_signal_modes': [],
+        'returns_analysis_types': [],
+    }}
 
-    The runner reports each order, with no pnl; `total_trades` therefore counted buys AND
-    sells separately, win rate / profit factor / expectancy were all 0, and the DETAILS table
-    was full of dashes. A reducing fill realises P&L against the position's average cost; a
-    fill through zero closes the old position and opens the remainder the other way. A position
-    still open at the end (`open_positions`) is reported as an open trade marked at its last
-    price, so a buy-and-hold run is not shown as "zero trades".
-    """
-    positions: Dict[str, List[Any]] = {}  # symbol -> [signed qty, avg cost, open time]
-    rows: List[Dict[str, Any]] = []
-    for f in fills or []:
-        if not isinstance(f, dict):
-            continue
-        sym = str(f.get('symbol', ''))
-        q = _safe_float(f.get('quantity'))
-        px = _safe_float(f.get('price'))
-        t = f.get('time')
-        if q == 0 or px <= 0:
-            continue
-        pos = positions.setdefault(sym, [0.0, 0.0, None])
-        qty, avg, opened = pos
-        if qty == 0 or (qty > 0) == (q > 0):  # open / add
-            new_qty = qty + q
-            avg = (abs(qty) * avg + abs(q) * px) / abs(new_qty)
-            pos[:] = [new_qty, avg, opened if qty != 0 else t]
-            continue
-        closing = min(abs(q), abs(qty))
-        direction = 1 if qty > 0 else -1
-        pnl = (px - avg) * closing * direction
+
+def get_indicators(_args):
+    """Fincept strategies are self-contained - no separate indicator catalogue."""
+    return {'success': True, 'indicators': {}, 'data': {'indicators': {}}}
+
+
+def get_historical_data(args):
+    from base.price_store import get_bars, normalize_symbol
+    from base.metrics import _fmt_date
+    syms = args.get('symbols') or []
+    res = get_bars(syms, str(args.get('startDate'))[:10], str(args.get('endDate'))[:10],
+                   interval=str(args.get('interval') or '1d'), progress=False)
+    out = []
+    for s in syms:
+        f = res.frames.get(normalize_symbol(s))
+        rows = [] if f is None else [
+            {'date': _fmt_date(t), 'open': float(r[0]), 'high': float(r[1]), 'low': float(r[2]), 'close': float(r[3]),
+             'volume': float(r[4])}
+            for t, r in zip(f.index, f[['Open', 'High', 'Low', 'Close', 'Volume']].to_numpy(float))]
+        item = {'symbol': s, 'timeframe': args.get('timeframe', args.get('interval', 'daily')), 'data': rows}
+        err = res.errors.get(normalize_symbol(s))
+        if err is not None:
+            item['error'] = str(err)
+        out.append(item)
+    return {'success': True, 'data': out}
+
+
+def _run_backtest(args):
+    import fe_engine as E
+    E.runner().phase = _PHASE
+    return E.run_backtest(args)
+
+
+def _monte_carlo(args):
+    from base.monte_carlo import run_monte_carlo
+
+    def bt(req):
         try:
-            from datetime import datetime as _dt
-            holding = (_dt.strptime(str(t)[:19], '%Y-%m-%d %H:%M:%S') -
-                       _dt.strptime(str(opened)[:19], '%Y-%m-%d %H:%M:%S')).days
-        except Exception:
-            holding = None
-        rows.append({
-            'id': f'trade_{len(rows)}',
-            'symbol': sym,
-            'entry_date': _day_str(opened),
-            'exit_date': _day_str(t),
-            'side': 'long' if direction > 0 else 'short',
-            'quantity': closing,
-            'entry_price': avg,
-            'exit_price': px,
-            'pnl': pnl,
-            'pnl_percent': ((px / avg - 1.0) * direction) if avg > 0 else 0.0,
-            'holding_period': holding,
-            'exit_reason': 'signal',
-            'commission': 0.0,
-            'slippage': 0.0,
-        })
-        new_qty = qty + q
-        if new_qty == 0:
-            pos[:] = [0.0, 0.0, None]
-        elif (new_qty > 0) != (qty > 0):  # flipped: the remainder opens the other way at px
-            pos[:] = [new_qty, px, t]
-        else:  # partial reduce keeps the original cost basis
-            pos[:] = [new_qty, avg, opened]
-
-    for op in open_positions or []:
-        sym = str(op.get('symbol', ''))
-        qty = _safe_float(op.get('quantity'))
-        mkt = _safe_float(op.get('market_price'))
-        if qty == 0 or mkt <= 0 or sym not in positions:
-            continue
-        _, avg, opened = positions[sym]
-        direction = 1 if qty > 0 else -1
-        last_t = op.get('time')
-        try:
-            from datetime import datetime as _dt
-            holding = (_dt.strptime(str(last_t)[:19], '%Y-%m-%d %H:%M:%S') -
-                       _dt.strptime(str(opened)[:19], '%Y-%m-%d %H:%M:%S')).days
-        except Exception:
-            holding = None
-        rows.append({
-            'id': f'trade_{len(rows)}',
-            'symbol': sym,
-            'entry_date': _day_str(opened),
-            'exit_date': _day_str(last_t),
-            'side': 'long' if direction > 0 else 'short',
-            'quantity': abs(qty),
-            'entry_price': avg,
-            'exit_price': mkt,
-            'pnl': (mkt - avg) * abs(qty) * direction,
-            'pnl_percent': ((mkt / avg - 1.0) * direction) if avg > 0 else 0.0,
-            'holding_period': holding,
-            'exit_reason': 'open_at_end',
-            'commission': 0.0,
-            'slippage': 0.0,
-        })
-    return rows
+            return _run_backtest(req)
+        except Exception as e:  # surfaces as the Monte Carlo failure envelope
+            return _error_from(e)
+    return run_monte_carlo(bt, args)
 
 
-# Frontend's display_result() reads these performance keys (all in fraction
-# form, e.g. 0.12 = 12%). Other providers all emit them via _enrich_metrics.
-def _enrich_metrics_from_equity(
-    runner_perf: Dict[str, Any],
-    equity_curve: List[Dict[str, Any]],
-    trades: List[Dict[str, Any]],
-    initial_capital: float,
-) -> Dict[str, Any]:
-    """Expand the runner's bare 6-key performance dict into the full set the
-    frontend (and every other provider) expects, computing missing metrics
-    from the equity curve.
-    """
-    # Convert equity curve into per-bar returns and drawdowns.
-    eq_values = []
-    for pt in equity_curve or []:
-        v = pt.get('equity') if isinstance(pt, dict) else None
-        if v is not None:
-            eq_values.append(_safe_float(v))
-    if not eq_values:
-        eq_values = [initial_capital]
+def _optimize(args):
+    import fe_engine as E
+    E.runner().phase = _PHASE
+    return E.optimize(args)
 
-    daily_returns: List[float] = []
-    for i in range(1, len(eq_values)):
-        prev = eq_values[i - 1]
-        if prev > 0:
-            daily_returns.append((eq_values[i] - prev) / prev)
-        else:
-            daily_returns.append(0.0)
 
-    # Drawdown from running max.
-    peak = eq_values[0] if eq_values else initial_capital
-    max_dd = 0.0
-    for v in eq_values:
-        if v > peak:
-            peak = v
-        if peak > 0:
-            dd = (peak - v) / peak
-            if dd > max_dd:
-                max_dd = dd
+def _walk_forward(args):
+    import fe_engine as E
+    E.runner().phase = _PHASE
+    return E.walk_forward(args)
 
-    # Annualisation basis from the bar spacing (252 for daily equities, 365 for 7-day
-    # markets such as crypto) rather than a hard-coded 252.
-    ppy = 252.0
+
+def _error_from(e: BaseException):
+    import traceback
+    from base.base_provider import error_envelope
+    import fe_engine as E
     try:
-        times = [pt.get('time') for pt in (equity_curve or []) if isinstance(pt, dict) and pt.get('time')]
-        if len(times) >= 3:
-            ppy = periods_per_year(times)
-    except Exception:
-        ppy = 252.0
-
-    # Sharpe / Sortino - annualised with ppy.
-    sharpe = 0.0
-    sortino = 0.0
-    volatility = 0.0
-    if daily_returns:
-        n = len(daily_returns)
-        mean_r = sum(daily_returns) / n
-        var = sum((r - mean_r) ** 2 for r in daily_returns) / max(1, n - 1)
-        std = math.sqrt(var)
-        ann_factor = math.sqrt(ppy)
-        if std > 1e-12:
-            sharpe = (mean_r * ppy) / (std * ann_factor)
-        volatility = std * ann_factor
-
-        # Standard downside deviation: sqrt(mean(min(r, 0)^2)) over ALL bars. (It was the RMS
-        # of the negative bars only — divided by the number of losing bars — which overstates
-        # downside risk and understates Sortino whenever losses are the minority.)
-        d_var = sum(min(r, 0.0) ** 2 for r in daily_returns) / n
-        d_std = math.sqrt(d_var)
-        if d_std > 1e-12:
-            sortino = (mean_r * ppy) / (d_std * ann_factor)
-
-    # Total return / annualised return — from the equity curve, as a FRACTION. The runner's
-    # own `total_return` is already in PERCENT, and used here as a fraction it showed a +12.5%
-    # run as "1250%" and blew the annualised figure up with it.
-    total_return = 0.0
-    if initial_capital > 0 and eq_values:
-        total_return = (eq_values[-1] - initial_capital) / initial_capital
-    years = max(1, len(eq_values) - 1) / ppy
-    if years > 0 and (1 + total_return) > 0:
-        annualized_return = (1 + total_return) ** (1 / years) - 1
-    else:
-        annualized_return = -1.0 if (1 + total_return) <= 0 else total_return
-
-    calmar = (annualized_return / max_dd) if max_dd > 1e-12 else 0.0
-
-    # Trade-level stats (closed round trips; see _build_round_trips).
-    total_trades = len(trades) if trades else 0
-    pnls: List[float] = []
-    for t in trades or []:
-        # Runner emits trades with quantity/price/type — no direct pnl.
-        # Callers may pass pre-computed pnl; otherwise default to 0.
-        if isinstance(t, dict) and 'pnl' in t:
-            pnls.append(_safe_float(t.get('pnl')))
-    wins = [p for p in pnls if p > 0]
-    losses = [p for p in pnls if p < 0]
-    winning_trades = len(wins)
-    losing_trades = len(losses)
-    win_rate = (winning_trades / total_trades) if total_trades > 0 else 0.0
-    loss_rate = (losing_trades / total_trades) if total_trades > 0 else 0.0
-    average_win = (sum(wins) / len(wins)) if wins else 0.0
-    average_loss = (sum(losses) / len(losses)) if losses else 0.0
-    largest_win = max(wins) if wins else 0.0
-    largest_loss = min(losses) if losses else 0.0
-    gross_profit = sum(wins) if wins else 0.0
-    gross_loss = abs(sum(losses)) if losses else 0.0
-    # Winners and no losing trade is +inf (the JSON layer emits null -> the UI shows "∞").
-    if gross_loss > 1e-12:
-        profit_factor = gross_profit / gross_loss
-    else:
-        profit_factor = float('inf') if gross_profit > 0 else 0.0
-
-    return {
-        'total_return': total_return,
-        'annualized_return': annualized_return,
-        'sharpe_ratio': sharpe,
-        'sortino_ratio': sortino,
-        'max_drawdown': max_dd,
-        'win_rate': win_rate,
-        'loss_rate': loss_rate,
-        'profit_factor': profit_factor,
-        'volatility': volatility,
-        'calmar_ratio': calmar,
-        'total_trades': total_trades,
-        'winning_trades': winning_trades,
-        'losing_trades': losing_trades,
-        'average_win': average_win,
-        'average_loss': average_loss,
-        'largest_win': largest_win,
-        'largest_loss': largest_loss,
-        'average_trade_return': (sum(pnls) / len(pnls)) if pnls else 0.0,
-        'expectancy': win_rate * average_win + loss_rate * average_loss,
-        'total_orders': int(runner_perf.get('total_trades', 0)),  # raw fills (buys + sells)
-        # Strategy metadata kept on the perf dict for parity with the
-        # original (lighter) shape.
-        'strategy_id': runner_perf.get('strategy_id'),
-        'strategy_name': runner_perf.get('strategy_name'),
-        'final_equity': _safe_float(runner_perf.get('final_equity', eq_values[-1] if eq_values else initial_capital)),
-        'initial_cash': _safe_float(runner_perf.get('initial_cash', initial_capital)),
-        '_ppy': ppy,
-    }
+        from base.price_store import PriceDataError
+    except Exception:  # pragma: no cover
+        PriceDataError = RuntimeError
+    if isinstance(e, E.EngineInputError):
+        return error_envelope(str(e), 'INPUT')
+    if isinstance(e, (E.EngineDataError, PriceDataError)):
+        return error_envelope(str(e), 'DATA')
+    if isinstance(e, E.EngineRunError):
+        env = error_envelope(str(e), e.code, traceback_text=e.traceback_text)
+        if e.not_supported:
+            env['notSupported'] = True
+            env['feature'] = e.feature
+        return env
+    if isinstance(e, (ValueError, KeyError, TypeError)):
+        return error_envelope(str(e) or type(e).__name__, 'INPUT', traceback_text=traceback.format_exc())
+    return error_envelope(f'{type(e).__name__}: {e}', 'ENGINE', traceback_text=traceback.format_exc())
 
 
-class FinceptProvider:
-    """
-    Fincept Engine backtesting provider.
-    Bridges Fincept Terminal frontend to 418+ QCAlgorithm strategies.
-    """
-
-    def __init__(self):
-        self.runner = FinceptStrategyRunner()
-
-    def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return strategy catalog in BT shape: {strategies: {category: [{id, name, params:[]}]}}."""
-        flat = self.runner.list_strategies()
-        grouped: Dict[str, List] = {}
-        for s in flat:
-            cat = s.get('category', 'General Strategy')
-            grouped.setdefault(cat, []).append({
-                'id':     s['id'],
-                'name':   s['name'],
-                'params': [],  # Fincept strategies use free-form strategy_params dict
-            })
-        return {'success': True, 'data': {'provider': 'fincept', 'strategies': grouped}}
-
-    def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Fincept strategies are self-contained — no separate indicator catalog."""
-        return {'indicators': {}}
-
-    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return provider-specific option lists.
-
-        Keys are snake_case here so we don't depend on json_response's camelCase
-        conversion — but the C++ frontend's `pick(camel, snake)` helper
-        (BacktestingScreen.cpp::on_command_options_loaded) tries both forms,
-        so this is a safety belt; either form works.
-        """
-        return {
-            'success': True,
-            'data': {
-                'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
-                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
-                'optimize_methods':        ['grid', 'random'],
-                'label_types':             [],
-                'splitter_types':          [],
-                'signal_generators':       [],
-                'indicator_signal_modes':  [],
-                'returns_analysis_types':  [],
-            },
-        }
-
-    # ------------------------------------------------------------------
-    # Internal: single backtest execution returning a flattened result_dict
-    # in the same shape the other providers emit (`performance`, `trades`,
-    # `equity`, `statistics`).
-    # ------------------------------------------------------------------
-    def _execute_one(
-        self,
-        strategy_id: str,
-        symbols: List[str],
-        start_date: str,
-        end_date: str,
-        initial_capital: float,
-        strategy_params: Dict[str, Any],
-        request: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        strategy_info = self.runner.get_strategy_info(strategy_id)
-        if not strategy_info:
-            return {
-                'success': False,
-                'error': f'Strategy {strategy_id} not found in registry',
-            }
-
-        _log(f"Executing strategy: {strategy_info['name']}")
-        _log(f"ID: {strategy_id}")
-        _log(f"Category: {strategy_info.get('category')}")
-        _log(f"Symbols: {symbols}")
-        _log(f"Period: {start_date} to {end_date}")
-
-        result = self.runner.execute_strategy(
-            strategy_id=strategy_id,
-            params={
-                'symbols': symbols,
-                'start_date': start_date,
-                'end_date': end_date,
-                'initial_cash': initial_capital,
-                'resolution': 'daily',
-                'strategy_params': strategy_params,
-            },
-        )
-
-        if not result.get('success'):
-            return {
-                'success': False,
-                'error': result.get('error', 'Unknown runner error'),
-                'traceback': result.get('traceback'),
-            }
-
-        # Runner returns {success: true, data: {performance, trades, equity}}.
-        # Flatten — return just the inner data block plus computed metrics.
-        inner = result.get('data') or {}
-        runner_perf = inner.get('performance') or {}
-        fills = inner.get('trades') or []
-        raw_equity = inner.get('equity') or []
-
-        # Frontend-shaped equity curve + realised round-trip trades (the runner emits raw
-        # time/fill records the screen cannot render).
-        equity = _normalize_equity(raw_equity, initial_capital)
-        trades = _build_round_trips(fills, inner.get('open_positions'))
-        performance = _enrich_metrics_from_equity(runner_perf, raw_equity, trades, initial_capital)
-        ppy = performance.pop('_ppy', 252.0)
-        notes = []
-        if inner.get('non_market_orders'):
-            notes.append(f"{inner['non_market_orders']} limit/stop/other order(s) were placed but the Fincept "
-                         f"engine only simulates MARKET orders - they never filled.")
-        if inner.get('unfilled_orders'):
-            notes.append(f"{inner['unfilled_orders']} market order(s) placed on the last bar had no next bar "
-                         f"to fill on.")
-        req = request or {}
-        ignored = []
-        for key in ('commission', 'slippage'):
-            if float(req.get(key, 0) or 0) > 0:
-                ignored.append(key)
-        if float(req.get('stopLoss', 0) or 0) > 0 or float(req.get('takeProfit', 0) or 0) > 0:
-            ignored.append('stop-loss/take-profit (the strategy code manages its own exits)')
-        if (str(req.get('positionSizing', 'percent')) != 'percent'
-                or float(req.get('positionSizeValue', 100) or 100) < 100):
-            ignored.append('position sizing (the strategy code sizes its own orders)')
-        if bool(req.get('allowShort', False)):
-            ignored.append('allow short (the strategy code decides)')
-        if str(req.get('interval', '1d') or '1d') != '1d':
-            ignored.append(f"interval {req.get('interval')} (Fincept engine runs on daily bars)")
-        assumptions = build_assumptions(
-            'Fincept Engine (QCAlgorithm-compatible, market orders only)',
-            'Strategy sees each bar after it closes; MARKET orders fill at the NEXT bar open. '
-            'Limit/stop orders are not simulated.',
-            req,
-            costs='none - the Fincept engine charges no commission or slippage (gross results)',
-            position_sizing='decided by the strategy code (set_holdings / order quantities)',
-            annualization=describe_annualization(ppy) + '; Sharpe = mean/std of bar returns x sqrt(bars/yr)',
-            ignored=ignored,
-            notes=notes,
-        )
-
-        # Build statistics block matching the dataclass other providers use.
-        statistics = {
-            'start_date': start_date,
-            'end_date': end_date,
-            'initial_capital': float(initial_capital),
-            'final_capital': performance.get('final_equity', float(initial_capital)),
-            'total_fees': 0.0,
-            'total_slippage': 0.0,
-            'total_trades': performance['total_trades'],
-            'winning_days': 0,
-            'losing_days': 0,
-            'average_daily_return': 0.0,
-            'best_day': 0.0,
-            'worst_day': 0.0,
-            'consecutive_wins': 0,
-            'consecutive_losses': 0,
-        }
-
-        return {
-            'success': True,
-            'data': {
-                'id': strategy_id,
-                'status': 'completed',
-                'performance': performance,
-                'trades': trades,
-                'fills': fills,
-                'equity': equity,
-                'statistics': statistics,
-                'assumptions': assumptions,
-                'using_synthetic_data': False,
-                'logs': [
-                    f"Fincept Engine backtest of {strategy_info['name']} ({strategy_id})",
-                    f"Symbols: {symbols}",
-                    f"Period: {start_date} to {end_date}",
-                ],
-            },
-        }
-
-    def _extract_request(self, request: Dict[str, Any]):
-        """Pull canonical fields from a backtest/optimize/walk_forward request,
-        accepting both new (`params`/`symbols`) and legacy (`parameters`/
-        `assets`) names."""
-        strategy_def = request.get('strategy', {}) or {}
-        strategy_id = strategy_def.get('type')
-        # Frontend sends `params`; legacy callers used `parameters`.
-        strategy_params = strategy_def.get('params') or strategy_def.get('parameters', {}) or {}
-
-        # Canonical: `symbols: [str]`. Fallback: `assets: [{symbol}]`.
-        symbols = request.get('symbols') or []
-        if not symbols and 'assets' in request:
-            symbols = [a.get('symbol') for a in (request['assets'] or [])
-                       if isinstance(a, dict) and a.get('symbol')]
-
-        start_date = request.get('startDate', '2025-01-01')
-        end_date = request.get('endDate',
-                               (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'))
-        initial_capital = float(request.get('initialCapital', 100000) or 100000)
-        return strategy_id, symbols, start_date, end_date, initial_capital, strategy_params
-
-    def run_backtest(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a single Fincept Engine strategy backtest."""
-        try:
-            strategy_id, symbols, start_date, end_date, initial_capital, strategy_params = (
-                self._extract_request(request))
-
-            if not strategy_id:
-                return {'success': False, 'error': 'strategy.type (strategy ID) is required'}
-            if not symbols:
-                return {'success': False, 'error': 'No symbols specified'}
-
-            return self._execute_one(strategy_id, symbols, start_date, end_date,
-                                     initial_capital, strategy_params, request)
-        except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            print(f'[Fincept Engine] Error: {e}', file=sys.stderr)
-            print(tb, file=sys.stderr)
-            return {'success': False, 'error': str(e), 'traceback': tb}
-
-    # ------------------------------------------------------------------
-    # Optimize: grid or random search over user-supplied param ranges.
-    # Surfaces winning iteration's data at `data.performance` so the screen's
-    # display_result() renders, plus `data.optimization` block.
-    # ------------------------------------------------------------------
-    def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            import itertools
-            import random
-
-            strategy_id, symbols, start_date, end_date, initial_capital, strategy_params = (
-                self._extract_request(request))
-            if not strategy_id:
-                return {'success': False, 'error': 'strategy.type (strategy ID) is required'}
-            if not symbols:
-                return {'success': False, 'error': 'No symbols specified'}
-
-            # Frontend canonical names (fall back to legacy).
-            param_ranges = request.get('paramRanges') or request.get('parameters') or {}
-            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
-            method = request.get('optimizeMethod') or request.get('method', 'grid')
-            max_iter = int(request.get('maxIterations', 50) or 50)
-
-            if not param_ranges:
-                return {'success': False, 'error': 'No parameter ranges supplied (expected paramRanges)'}
-
-            # Build per-key value lists from {min, max, step} specs.
-            def _native(x):
-                try:
-                    fx = float(x)
-                    return int(fx) if fx.is_integer() else fx
-                except (TypeError, ValueError):
-                    return x
-
-            param_values: Dict[str, List[Any]] = {}
-            for key, spec in param_ranges.items():
-                if isinstance(spec, dict):
-                    mn = _native(spec.get('min', 0))
-                    mx = _native(spec.get('max', 100))
-                    step = _native(spec.get('step', 1)) or 1
-                    vals = []
-                    cur = mn
-                    while cur <= mx:
-                        vals.append(_native(cur))
-                        cur = _native(cur + step)
-                    param_values[key] = vals or [mn]
-                elif isinstance(spec, list):
-                    param_values[key] = [_native(v) for v in spec]
-                else:
-                    param_values[key] = [_native(spec)]
-
-            keys = list(param_values.keys())
-            value_lists = [param_values[k] for k in keys]
-            if method == 'random':
-                combos = []
-                for _ in range(max_iter):
-                    combos.append({k: random.choice(param_values[k]) for k in keys})
-            else:  # grid
-                combos = [dict(zip(keys, c)) for c in itertools.product(*value_lists)]
-                if len(combos) > max_iter:
-                    random.shuffle(combos)
-                    combos = combos[:max_iter]
-
-            if not combos:
-                return {'success': False, 'error': 'paramRanges produced zero combinations'}
-
-            metric_key = {
-                'sharpe':  'sharpe_ratio',
-                'sortino': 'sortino_ratio',
-                'calmar':  'calmar_ratio',
-                'return':  'total_return',
-            }.get(objective, 'sharpe_ratio')
-
-            best_score = -math.inf
-            best_combo: Dict[str, Any] = {}
-            best_result: Optional[Dict[str, Any]] = None
-            all_results: List[Dict[str, Any]] = []
-
-            for i, combo in enumerate(combos):
-                check_cancelled(request)
-                merged_params = {**strategy_params, **combo}
-                result = self._execute_one(
-                    strategy_id, symbols, start_date, end_date,
-                    initial_capital, merged_params, request,
-                )
-                if not result.get('success'):
-                    all_results.append({'parameters': combo, 'score': None, 'error': result.get('error')})
-                    continue
-                perf = result['data']['performance']
-                score = _safe_float(perf.get(metric_key, 0))
-                all_results.append({
-                    'parameters': combo,
-                    'score': score,
-                    'total_return': perf.get('total_return', 0),
-                    'sharpe_ratio': perf.get('sharpe_ratio', 0),
-                })
-                if score > best_score:
-                    best_score = score
-                    best_combo = combo
-                    best_result = result
-
-            if best_result is None:
-                return {'success': False, 'error': 'All optimization iterations failed'}
-
-            data = best_result['data']
-            data['optimization'] = {
-                'objective': objective,
-                'method': method,
-                'objective_value': float(best_score) if best_score != -math.inf else 0.0,
-                'best_params': best_combo,
-                'iterations': len(combos),
-                'all_results': all_results[:100],
-            }
-            # The screen's OPTIMIZE view reads these keys at the TOP level (every other
-            # provider emits them there); they only existed nested under `optimization`, so
-            # the summary cards, best-parameter cards and results table all rendered empty.
-            data['iterations'] = len(combos)
-            data['total_combinations'] = len(combos)
-            data['method'] = method
-            data['objective'] = objective
-            data['best_objective_value'] = float(best_score) if best_score != -math.inf else 0.0
-            data['best_parameters'] = best_combo
-            data['best_performance'] = data.get('performance', {})
-            data['all_results'] = [
-                {
-                    'parameters': r.get('parameters', {}),
-                    'objective_value': r.get('score'),
-                    'performance': {
-                        'total_return': r.get('total_return'),
-                        'sharpe_ratio': r.get('sharpe_ratio'),
-                    },
-                }
-                for r in all_results[:100] if r.get('score') is not None
-            ]
-            return {'success': True, 'message': 'Optimization completed', 'data': data}
-
-        except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            print(f'[Fincept Engine] Optimize error: {e}', file=sys.stderr)
-            print(tb, file=sys.stderr)
-            return {'success': False, 'error': str(e), 'traceback': tb}
-
-    # ------------------------------------------------------------------
-    # Walk-forward: run the supplied params on N rolling test windows,
-    # surface the last fold's result + per-fold detail.
-    # ------------------------------------------------------------------
-    def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            strategy_id, symbols, start_date, end_date, initial_capital, strategy_params = (
-                self._extract_request(request))
-            if not strategy_id:
-                return {'success': False, 'error': 'strategy.type (strategy ID) is required'}
-            if not symbols:
-                return {'success': False, 'error': 'No symbols specified'}
-
-            n_splits = int(request.get('wfSplits', request.get('nSplits', 5)) or 5)
-            train_ratio = float(request.get('wfTrainRatio', request.get('trainRatio', 0.7)) or 0.7)
-            if not (1 <= n_splits <= 20):
-                return {'success': False, 'error': f'wfSplits must be between 1 and 20 (got {n_splits})'}
-            if not (0.1 <= train_ratio <= 0.95):
-                return {'success': False, 'error': f'wfTrainRatio must be between 0.1 and 0.95 (got {train_ratio})'}
-
-            sd = datetime.strptime(start_date, '%Y-%m-%d')
-            ed = datetime.strptime(end_date, '%Y-%m-%d')
-            total_days = (ed - sd).days
-            split_days = total_days // n_splits
-            if split_days < 5:
-                return {'success': False,
-                        'error': f'Date range too short for {n_splits} folds ({total_days} days)'}
-
-            folds: List[Dict[str, Any]] = []
-            last_result: Optional[Dict[str, Any]] = None
-
-            for i in range(n_splits):
-                check_cancelled(request)
-                fold_start = sd + timedelta(days=i * split_days)
-                fold_end = fold_start + timedelta(days=split_days)
-                train_end = fold_start + timedelta(days=int(split_days * train_ratio))
-                test_start = train_end
-                test_end = fold_end
-
-                # Fincept strategies are not parameterised per fold (no per-fold
-                # optimize step) — this measures parameter robustness across
-                # different time windows.
-                result = self._execute_one(
-                    strategy_id, symbols,
-                    test_start.strftime('%Y-%m-%d'),
-                    test_end.strftime('%Y-%m-%d'),
-                    initial_capital, strategy_params, request,
-                )
-                if not result.get('success'):
-                    folds.append({
-                        'fold': i,
-                        'trainStart': fold_start.strftime('%Y-%m-%d'),
-                        'trainEnd': train_end.strftime('%Y-%m-%d'),
-                        'testStart': test_start.strftime('%Y-%m-%d'),
-                        'testEnd': test_end.strftime('%Y-%m-%d'),
-                        'error': result.get('error'),
-                        'testReturn': 0.0,
-                        'testSharpe': 0.0,
-                        'testMaxDrawdown': 0.0,
-                    })
-                    continue
-                last_result = result
-                perf = result['data']['performance']
-                folds.append({
-                    'fold': i,
-                    'trainStart': fold_start.strftime('%Y-%m-%d'),
-                    'trainEnd': train_end.strftime('%Y-%m-%d'),
-                    'testStart': test_start.strftime('%Y-%m-%d'),
-                    'testEnd': test_end.strftime('%Y-%m-%d'),
-                    'testReturn': _safe_float(perf.get('total_return')),
-                    'testSharpe': _safe_float(perf.get('sharpe_ratio')),
-                    'testMaxDrawdown': _safe_float(perf.get('max_drawdown')),
-                })
-
-            if last_result is None or not folds:
-                return {'success': False, 'error': 'All walk-forward splits failed'}
-
-            data = last_result['data']
-            ok_folds = [f for f in folds if 'error' not in f]
-            # Top-level keys the WALK-FORWARD view reads (same names the other providers use).
-            oos_returns = [f['testReturn'] for f in ok_folds]
-            oos_sharpes = [f['testSharpe'] for f in ok_folds]
-            n_ok = len(ok_folds)
-            mean_ret = (sum(oos_returns) / n_ok) if n_ok else 0.0
-            data['n_windows'] = n_ok
-            data['avg_oos_return'] = mean_ret
-            data['avg_oos_sharpe'] = (sum(oos_sharpes) / n_ok) if n_ok else 0.0
-            data['oos_return_std'] = (
-                math.sqrt(sum((r - mean_ret) ** 2 for r in oos_returns) / (n_ok - 1)) if n_ok > 1 else 0.0)
-            data['robustness_score'] = (sum(1 for r in oos_returns if r > 0) / n_ok) if n_ok else 0.0
-            data['windows'] = [
-                {
-                    'window': f['fold'] + 1,
-                    'train_start': f['trainStart'], 'train_end': f['trainEnd'],
-                    'test_start': f['testStart'], 'test_end': f['testEnd'],
-                    'out_of_sample_return': f['testReturn'],
-                    'out_of_sample_sharpe': f['testSharpe'],
-                }
-                for f in ok_folds
-            ]
-            data['walk_forward'] = {
-                'n_splits': n_splits,
-                'train_ratio': train_ratio,
-                'folds': folds,
-                'mean_test_return': (sum(f['testReturn'] for f in ok_folds) / len(ok_folds)) if ok_folds else 0.0,
-                'mean_test_sharpe': (sum(f['testSharpe'] for f in ok_folds) / len(ok_folds)) if ok_folds else 0.0,
-            }
-            return {'success': True, 'message': 'Walk-forward completed', 'data': data}
-
-        except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            print(f'[Fincept Engine] Walk-forward error: {e}', file=sys.stderr)
-            print(tb, file=sys.stderr)
-            return {'success': False, 'error': str(e), 'traceback': tb}
-
-
-def main():
-    """CLI entry point. Stdout is reserved for the final JSON; diagnostics go to
-    stderr (see _log). Args come from stdin (--stdin, what the host sends) or argv."""
+def dispatch(command: str, args: dict) -> dict:
+    import fe_engine as E
+    simple = {'test_import': lambda a: {'success': True, 'version': E.ENGINE_VERSION, 'engine': 'fincept',
+                                        'library': None, 'engineImplementation': E.IMPLEMENTATION},
+              'test_connection': lambda a: {'success': True, 'message': f'{E.SHORT_IMPLEMENTATION} is available'},
+              'initialize': lambda a: {'success': True, 'message': f'{E.SHORT_IMPLEMENTATION} ready'}}
+    table = {'run_backtest': _run_backtest, 'execute_fincept_strategy': _run_backtest, 'optimize': _optimize,
+             'walk_forward': _walk_forward, 'monte_carlo': _monte_carlo, 'get_strategies': get_strategies,
+             'get_capabilities': get_capabilities, 'get_command_options': get_command_options,
+             'get_indicators': get_indicators, 'get_historical_data': get_historical_data, **simple}
+    fn = table.get(command)
+    if fn is None:
+        from base.base_provider import error_envelope
+        return error_envelope(f'Unknown command: {command}', 'INPUT')
     try:
-        command, args_json = read_cli_args()
-    except ValueError as e:
-        print(json_response({'success': False, 'error': str(e)}))
-        sys.exit(1)
-
-    try:
-        args = parse_json_input(args_json)
+        return fn(args if isinstance(args, dict) else {})
+    except SystemExit:
+        raise
     except Exception as e:
-        print(json_response({
-            'success': False,
-            'error': f'Invalid JSON: {e}',
-        }))
-        sys.exit(1)
+        return _error_from(e)
 
-    provider = FinceptProvider()
 
-    if command in ('run_backtest', 'execute_fincept_strategy'):
-        result = provider.run_backtest(args)
-    elif command == 'optimize':
-        result = provider.optimize(args)
-    elif command == 'walk_forward':
-        result = provider.walk_forward(args)
-    elif command == 'get_strategies':
-        result = provider.get_strategies(args)
-    elif command == 'get_indicators':
-        result = provider.get_indicators(args)
-    elif command == 'get_command_options':
-        result = provider.get_command_options(args)
-    else:
-        result = {'success': False, 'error': f'Unknown command: {command}'}
+# ════════════════════════════════════════════════════════════════════════════
+# Watchdog and output
+# ════════════════════════════════════════════════════════════════════════════
 
-    # json_response handles camelCase conversion + NaN/Inf sanitisation,
-    # matching every other provider's wire format.
-    print(json_response(result))
+def _limit(env_name: str, default: float, request: Optional[Dict[str, Any]] = None, key: str = '') -> float:
+    val = None
+    if request and key and request.get(key) not in (None, ''):
+        val = _num(request.get(key), 0.0)
+    if not val:
+        val = _num(os.environ.get(env_name), 0.0)
+    return val if val and val > 0 else default
+
+
+def _start_watchdog(command: str, request: Dict[str, Any]) -> None:
+    """Wall-clock guard. A strategy that hangs (a sleeping train() in initialize(), a loop over a huge
+    dataset) used to hold one of the host's runner slots until its 60-min kill. Past the limit this
+    thread prints the TIMEOUT envelope, flushes stdout and hard-exits (exit code 0, like every other
+    error envelope). A lock guarantees exactly one JSON line even if the run finishes at the same
+    moment. Threads + os._exit work on Windows too (no signal.alarm)."""
+    import time
+    init_limit = _limit('FINCEPT_BT_INIT_TIMEOUT', 90.0, request, 'initTimeoutSeconds')
+    total_default = 900.0 if command in ('run_backtest', 'execute_fincept_strategy') else 2700.0
+    total_limit = _limit('FINCEPT_BT_TIMEOUT', total_default, request, 'timeoutSeconds')
+    t0 = time.monotonic()
+
+    def _watch():
+        while not _DONE.wait(0.25):
+            now = time.monotonic()
+            msg = None
+            if _PHASE.get('name') == 'initialize' and now - _PHASE.get('since', now) > init_limit:
+                msg = (f"The strategy's initialize() did not finish within {init_limit:.0f} s and was stopped "
+                       f"(it may wait on a long training step or loop over data the engine does not have).")
+            elif now - t0 > total_limit:
+                msg = (f"The backtest did not finish within {total_limit / 60:.0f} min and was stopped "
+                       f"(phase: {_PHASE.get('name', '?')}).")
+            if msg:
+                from base.base_provider import error_envelope, json_response
+                with _OUT_LOCK:
+                    if _OUT_STATE['printed']:
+                        return
+                    _OUT_STATE['printed'] = True
+                    try:
+                        env = error_envelope(msg, 'TIMEOUT', timedOut=True)
+                        sys.__stdout__.write(json_response(env) + '\n')
+                        sys.__stdout__.flush()
+                        sys.stderr.flush()
+                    finally:
+                        os._exit(0)
+
+    _threading.Thread(target=_watch, name='fincept-bt-watchdog', daemon=True).start()
+
+
+def _emit(result) -> None:
+    """Print the single JSON line unless the watchdog already did."""
+    from base.base_provider import json_response
+    text = json_response(result)
+    with _OUT_LOCK:
+        if _OUT_STATE['printed']:
+            return
+        _OUT_STATE['printed'] = True
+        out = sys.__stdout__
+        try:
+            out.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+        out.write(text + '\n')
+        out.flush()
+    _DONE.set()
+
+
+def main(argv=None):
+    import warnings
+    warnings.filterwarnings('ignore')
+    os.environ.setdefault('PYTHONWARNINGS', 'ignore')
+    from base.base_provider import error_envelope, read_cli_args
+    try:
+        command, raw = read_cli_args(argv)
+        args = json.loads(raw) if raw and raw.strip() else {}
+    except (ValueError, json.JSONDecodeError) as e:
+        _emit(error_envelope(f'Bad request: {e}', 'INPUT'))
+        return
+    if command in _LONG:
+        _start_watchdog(command, args if isinstance(args, dict) else {})
+    real = sys.stdout
+    sys.stdout = sys.stderr          # strategy prints / library chatter never reach the JSON line
+    try:
+        result = dispatch(command, args)
+    finally:
+        sys.stdout = real
+    _emit(result)
 
 
 if __name__ == '__main__':

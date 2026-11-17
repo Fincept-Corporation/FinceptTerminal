@@ -1,5 +1,7 @@
 #include "ui/charts/IndicatorParamDialog.h"
 
+#include "ui/widgets/ThemeHelpers.h"
+
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -14,7 +16,7 @@ IndicatorParamDialog::IndicatorParamDialog(const QString& indicator_id, QWidget*
     : QDialog(parent), id_(indicator_id) {
     setObjectName("indicatorParamDialog");
     setWindowTitle(tr("Indicator Parameters"));
-    setFixedWidth(280);
+    metrics::follow_fixed_width(this, 280); // widened with the user's font
 
     auto* layout = new QVBoxLayout(this);
 

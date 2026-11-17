@@ -146,8 +146,7 @@ void FiiDiiFlowsChart::rebuild_cache() {
 
     QPainter p(&cache_);
     p.setRenderHint(QPainter::Antialiasing, false);
-    QFont f = font();
-    f.setPixelSize(9);
+    const QFont f = ui::fonts::font(-5);
     p.setFont(f);
     const QFontMetrics fm(f);
 
@@ -294,7 +293,7 @@ FiiDiiFlowsWidget::FiiDiiFlowsWidget(const QJsonObject& cfg, QWidget* parent)
     table_ = new QTableWidget(0, 3, root_);
     table_->setObjectName("fiiFlowsTable");
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(20);
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(20, -4));
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
@@ -471,22 +470,22 @@ void FiiDiiFlowsWidget::apply_texts() {
 void FiiDiiFlowsWidget::apply_styles() {
     // One stylesheet for the whole tile; children are styled by objectName and
     // the tone/stale dynamic properties.
-    root_->setStyleSheet(
+    set_css_cached(root_, 
         QString("#fiiFlowsRoot{background:transparent;}"
-                "QLabel#fiiFlowsCaption{color:%1;font-size:9px;font-weight:700;letter-spacing:0.5px;"
+                "QLabel#fiiFlowsCaption{color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;letter-spacing:0.5px;"
                 "background:transparent;}"
-                "QLabel#fiiFlowsValue{color:%2;font-size:12px;font-weight:700;background:transparent;}"
+                "QLabel#fiiFlowsValue{color:%2;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;background:transparent;}"
                 "QLabel#fiiFlowsValue[fiiFlowsTone=\"pos\"]{color:%3;}"
                 "QLabel#fiiFlowsValue[fiiFlowsTone=\"neg\"]{color:%4;}"
-                "QTableWidget#fiiFlowsTable{background:transparent;color:%5;border:none;font-size:10px;}"
+                "QTableWidget#fiiFlowsTable{background:transparent;color:%5;border:none;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
                 "QTableWidget#fiiFlowsTable::item{padding:0 4px;border-bottom:1px solid %6;}"
-                "QTableWidget#fiiFlowsTable QHeaderView::section{background:%7;color:%1;border:none;"
-                "border-bottom:1px solid %6;padding:2px 4px;font-size:9px;font-weight:700;}"
+                "QTableWidget#fiiFlowsTable QHeaderView::section{background:%7;color:%5;border:none;"
+                "border-bottom:1px solid %6;padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;}"
                 "QTableWidget#fiiFlowsTable QScrollBar:vertical{width:4px;background:transparent;}"
                 "QTableWidget#fiiFlowsTable QScrollBar::handle:vertical{background:%8;min-height:20px;}"
                 "QTableWidget#fiiFlowsTable QScrollBar::add-line:vertical,"
                 "QTableWidget#fiiFlowsTable QScrollBar::sub-line:vertical{height:0;}"
-                "QLabel#fiiFlowsFooter{color:%1;font-size:9px;background:transparent;}"
+                "QLabel#fiiFlowsFooter{color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
                 "QLabel#fiiFlowsFooter[fiiFlowsStale=\"true\"]{color:%9;}")
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
                  ui::colors::NEGATIVE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
@@ -495,6 +494,7 @@ void FiiDiiFlowsWidget::apply_styles() {
 
 void FiiDiiFlowsWidget::on_theme_changed() {
     apply_styles();
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(20, -4));
     chart_->refresh_theme();
     render(); // item colours are baked into the table items
 }

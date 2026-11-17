@@ -43,17 +43,32 @@ def get_countries_ndc(country: str = None) -> Any:
 
 
 def get_ghg_emissions(country: str = None, gas: str = None, sector: str = None, year: str = None) -> Any:
-    params = {}
+    """Historical GHG emissions, a row per (country, sector, gas, year). The old /emissions path
+    answers HTTP 400 to every request; the data lives at /data/historical_emissions, which filters
+    by region and year itself - gas and sector (names, e.g. CO2 / Energy) are matched here."""
+    params = {"per_page": 200}
     if country:
         params["regions[]"] = country
-    if gas:
-        params["gas"] = gas
-    if sector:
-        params["sector"] = sector
     if year:
         params["start_year"] = year
         params["end_year"] = year
-    return _make_request("emissions", params)
+    data = _make_request("data/historical_emissions", params)
+    if not isinstance(data, dict) or "error" in data:
+        return data
+    rows = []
+    for rec in data.get("data", []) or []:
+        if gas and str(rec.get("gas", "")).lower() != gas.lower():
+            continue
+        if sector and str(rec.get("sector", "")).lower() != sector.lower():
+            continue
+        for obs in rec.get("emissions", []) or []:
+            if year and str(obs.get("year")) != str(year):
+                continue
+            rows.append({"country": rec.get("country"), "iso_code3": rec.get("iso_code3"),
+                         "data_source": rec.get("data_source"), "sector": rec.get("sector"),
+                         "gas": rec.get("gas"), "unit": rec.get("unit"),
+                         "year": obs.get("year"), "value": obs.get("value")})
+    return {"country": country, "gas": gas, "sector": sector, "count": len(rows), "data": rows}
 
 
 def get_ndc_content(country: str) -> Any:

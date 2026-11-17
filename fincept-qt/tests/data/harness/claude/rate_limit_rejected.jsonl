@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"5c1d2f0e-0000-4000-8000-00000000c1a0","model":"claude-sonnet-4-5","tools":[],"mcp_servers":[{"name":"fincept","status":"failed"}]}
+{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":"2026-11-17T18:00:00Z"},"session_id":"5c1d2f0e-0000-4000-8000-00000000c1a0"}
+{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":1000,"error_status":429,"error":"rate_limit","session_id":"5c1d2f0e-0000-4000-8000-00000000c1a0"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":900,"num_turns":1,"session_id":"5c1d2f0e-0000-4000-8000-00000000c1a0","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"errors":["Rate limit reached"]}

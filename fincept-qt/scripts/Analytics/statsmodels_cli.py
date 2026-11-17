@@ -31,57 +31,12 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
-from decimal import Decimal
 
-
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Decimal):
-            return float(obj)
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, np.ndarray):
-            # Convert NaN/Inf to None in arrays
-            return [self._sanitize_value(x) for x in obj.tolist()]
-        if isinstance(obj, pd.Series):
-            return [self._sanitize_value(x) for x in obj.tolist()]
-        if isinstance(obj, pd.DataFrame):
-            return obj.to_dict('records')
-        if isinstance(obj, (np.int64, np.int32)):
-            return int(obj)
-        if isinstance(obj, (np.float64, np.float32)):
-            return self._sanitize_value(float(obj))
-        if pd.isna(obj):
-            return None
-        return super().default(obj)
-
-    def _sanitize_value(self, val):
-        """Convert NaN, Inf to None for valid JSON"""
-        if isinstance(val, float):
-            if np.isnan(val) or np.isinf(val):
-                return None
-        return val
-
-    def encode(self, obj):
-        """Override encode to handle NaN/Inf in nested structures"""
-        return super().encode(self._sanitize_obj(obj))
-
-    def _sanitize_obj(self, obj):
-        """Recursively sanitize NaN/Inf values in nested structures"""
-        if isinstance(obj, dict):
-            return {k: self._sanitize_obj(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._sanitize_obj(x) for x in obj]
-        elif isinstance(obj, float):
-            if np.isnan(obj) or np.isinf(obj):
-                return None
-            return obj
-        elif isinstance(obj, (np.float64, np.float32)):
-            val = float(obj)
-            if np.isnan(val) or np.isinf(val):
-                return None
-            return val
-        return obj
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(script_dir))
+    import fincept_json
 
 
 class StatsmodelsEngine:
@@ -218,13 +173,54 @@ class StatsmodelsEngine:
         except ImportError:
             self.nonparametric = {}
 
-    def _parse_data(self, params: Dict[str, Any]) -> pd.Series:
-        data = params.get('data', [])
+    def _parse_data(self, params: Dict[str, Any], key: str = 'data', min_length: int = 3) -> pd.Series:
+        """Numeric series from params[key] (list, dict or comma-separated string).
+
+        Non-numeric entries and nulls are dropped (one null used to blank every statistic while
+        still reporting success); the count is kept in self.dropped_values for the response.
+        """
+        data = params.get(key, [])
+        if data is None:
+            data = []
         if isinstance(data, str):
-            data = [float(x.strip()) for x in data.split(',') if x.strip()]
-        if isinstance(data, dict):
-            return pd.Series(data)
-        return pd.Series(data)
+            data = [x.strip() for x in data.split(',') if x.strip()]
+        series = pd.Series(data, dtype=object) if not isinstance(data, dict) else pd.Series(data)
+        numeric = pd.to_numeric(series, errors='coerce').astype(float)
+        numeric = numeric[np.isfinite(numeric)]
+        self.dropped_values = getattr(self, 'dropped_values', 0) + int(len(series) - len(numeric))
+        if len(numeric) < min_length:
+            raise ValueError(f"'{key}' needs at least {min_length} numeric values, got {len(numeric)}")
+        return numeric.reset_index(drop=True) if not isinstance(data, dict) else numeric
+
+    def _parse_regression(self, params: Dict[str, Any]) -> tuple:
+        """(y, X) for the regression commands: y from "y" (or "data"), X from "X" (or "x").
+
+        X may be a list of rows, a single regressor as a flat list, or omitted (time trend).
+        """
+        y_key = 'y' if params.get('y') is not None else 'data'
+        X = params.get('X', params.get('x'))
+        if X is None:
+            y = self._parse_data(params, y_key)
+            return y.values, np.arange(len(y), dtype=float).reshape(-1, 1)
+        # Keep y and X row-aligned: do not drop values from y independently of X.
+        y_raw = params.get(y_key)
+        if isinstance(y_raw, str):
+            y_raw = json.loads(y_raw) if y_raw.strip().startswith('[') else \
+                [v.strip() for v in y_raw.split(',') if v.strip()]
+        y = np.asarray(pd.to_numeric(pd.Series(y_raw, dtype=object), errors='coerce'), dtype=float)
+        if isinstance(X, str):
+            X = json.loads(X)
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if X.shape[0] != len(y):
+            raise ValueError(f"X has {X.shape[0]} rows but y has {len(y)} values")
+        keep = np.isfinite(y) & np.all(np.isfinite(X), axis=1)
+        self.dropped_values = getattr(self, 'dropped_values', 0) + int((~keep).sum())
+        y, X = y[keep], X[keep]
+        if len(y) < X.shape[1] + 2:
+            raise ValueError(f"Need more observations than regressors: {len(y)} rows for {X.shape[1]} regressor(s)")
+        return y, X
 
     def _parse_dataframe(self, params: Dict[str, Any], key: str = 'data') -> pd.DataFrame:
         data = params.get(key, {})
@@ -293,19 +289,47 @@ class StatsmodelsEngine:
         }
 
     def fit_exponential_smoothing(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        if 'fit_exponential_smoothing' not in self.ts_models:
-            return {"error": "Exponential smoothing module not available"}
+        # Fitted here rather than through statsmodels_wrapper.fit_exponential_smoothing, which
+        # returns the parameter NAMES (list() of the params dict) instead of their values.
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-        data = self._parse_data(params)
+        data = self._parse_data(params, min_length=10)
         trend = params.get('trend', None)
         seasonal = params.get('seasonal', None)
         seasonal_periods = params.get('seasonal_periods', None)
         if seasonal_periods:
             seasonal_periods = int(seasonal_periods)
+        if seasonal and not seasonal_periods:
+            return {"error": "seasonal_periods is required when seasonal is set"}
+        if seasonal and len(data) < 2 * seasonal_periods:
+            return {"error": f"A seasonal model needs at least two full cycles ({2 * seasonal_periods} values), "
+                             f"got {len(data)}"}
 
-        result = self.ts_models['fit_exponential_smoothing'](
-            data, trend=trend, seasonal=seasonal, seasonal_periods=seasonal_periods
-        )
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fit = ExponentialSmoothing(data, trend=trend, seasonal=seasonal,
+                                       seasonal_periods=seasonal_periods).fit()
+        fitted_params = {}
+        for name, val in fit.params.items():
+            if val is None or isinstance(val, (bool, np.bool_, str)):
+                # use_boxcox / remove_bias are flags: keep them as JSON booleans, not 0.0
+                fitted_params[name] = bool(val) if isinstance(val, np.bool_) else val
+                continue
+            arr = np.asarray(val, dtype=float)
+            if arr.size == 0:
+                fitted_params[name] = []
+            elif arr.ndim == 0:
+                fitted_params[name] = float(arr)
+            else:
+                fitted_params[name] = arr.tolist()
+        result = {
+            'params': fitted_params,
+            'aic': float(fit.aic),
+            'bic': float(fit.bic),
+            'fittedvalues': np.asarray(fit.fittedvalues, dtype=float).tolist(),
+            'level': np.asarray(fit.level, dtype=float).tolist(),
+        }
         return {
             "success": True,
             "analysis_type": "exponential_smoothing",
@@ -317,9 +341,12 @@ class StatsmodelsEngine:
         if 'stl_decompose' not in self.ts_models:
             return {"error": "STL decomposition module not available"}
 
-        data = self._parse_data(params)
         period = int(params.get('period', 12))
         seasonal = int(params.get('seasonal', 7))
+        if period < 2:
+            return {"error": f"period must be at least 2, got {period}"}
+        # STL needs two full seasonal cycles (it used to return three empty arrays on empty input)
+        data = self._parse_data(params, min_length=2 * period)
 
         result = self.ts_models['stl_decompose'](data, period=period, seasonal=seasonal)
         return {
@@ -333,7 +360,7 @@ class StatsmodelsEngine:
         if 'adf_test' not in self.ts_funcs:
             return {"error": "ADF test module not available"}
 
-        data = self._parse_data(params)
+        data = self._parse_data(params, min_length=10)
         result = self.ts_funcs['adf_test'](data)
         return {
             "success": True,
@@ -346,8 +373,16 @@ class StatsmodelsEngine:
         if 'kpss_test' not in self.ts_funcs:
             return {"error": "KPSS test module not available"}
 
-        data = self._parse_data(params)
-        result = self.ts_funcs['kpss_test'](data)
+        data = self._parse_data(params, min_length=10)
+        # statsmodels >= 0.15 rejects nlags=None (the wrapper's default); 'auto' is its documented default.
+        nlags = params.get('nlags', 'auto')
+        if nlags not in ('auto', 'legacy'):
+            nlags = int(nlags)
+        import warnings
+        with warnings.catch_warnings():
+            # p-value outside the KPSS table: statsmodels returns the table bound (0.01 / 0.1)
+            warnings.simplefilter('ignore')
+            result = self.ts_funcs['kpss_test'](data, regression=params.get('regression', 'c'), nlags=nlags)
         return {
             "success": True,
             "analysis_type": "kpss_test",
@@ -359,29 +394,40 @@ class StatsmodelsEngine:
         if 'acf' not in self.ts_funcs:
             return {"error": "ACF module not available"}
 
-        data = self._parse_data(params)
-        nlags = int(params.get('nlags', 40))
+        data = self._parse_data(params, min_length=4)
+        requested = int(params.get('nlags', 40))
+        nlags = max(1, min(requested, len(data) - 1))  # acf is defined up to nobs - 1
         result = self.ts_funcs['acf'](data, nlags=nlags)
-        return {
+        response = {
             "success": True,
             "analysis_type": "acf",
+            "nlags": nlags,
             "result": result,
             "timestamp": datetime.now().isoformat()
         }
+        if nlags != requested:
+            response["note"] = f"nlags reduced from {requested} to {nlags}: the series has {len(data)} values"
+        return response
 
     def calculate_pacf(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if 'pacf' not in self.ts_funcs:
             return {"error": "PACF module not available"}
 
-        data = self._parse_data(params)
-        nlags = int(params.get('nlags', 40))
+        data = self._parse_data(params, min_length=6)
+        requested = int(params.get('nlags', 40))
+        nlags = max(1, min(requested, len(data) // 2 - 1))  # statsmodels: nlags must be < nobs / 2
         result = self.ts_funcs['pacf'](data, nlags=nlags)
-        return {
+        response = {
             "success": True,
             "analysis_type": "pacf",
+            "nlags": nlags,
             "result": result,
             "timestamp": datetime.now().isoformat()
         }
+        if nlags != requested:
+            response["note"] = (f"nlags reduced from {requested} to {nlags}: PACF needs nlags < half the "
+                                f"series length ({len(data)} values)")
+        return response
 
     def ljung_box_test(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if 'ljung_box' not in self.ts_funcs:
@@ -401,16 +447,8 @@ class StatsmodelsEngine:
         if 'ols' not in self.regression:
             return {"error": "OLS regression module not available"}
 
-        y = self._parse_data(params)
-        X = params.get('X', None)
-        if X is None:
-            X = np.arange(len(y)).reshape(-1, 1)
-        else:
-            if isinstance(X, str):
-                X = json.loads(X)
-            X = np.array(X)
-
-        result = self.regression['ols'](y.values, X)
+        y, X = self._parse_regression(params)
+        result = self.regression['ols'](y, X)
         return {
             "success": True,
             "analysis_type": "ols_regression",
@@ -422,16 +460,8 @@ class StatsmodelsEngine:
         if 'diagnostics' not in self.regression:
             return {"error": "Regression diagnostics module not available"}
 
-        y = self._parse_data(params)
-        X = params.get('X', None)
-        if X is None:
-            X = np.arange(len(y)).reshape(-1, 1)
-        else:
-            if isinstance(X, str):
-                X = json.loads(X)
-            X = np.array(X)
-
-        result = self.regression['diagnostics'](y.values, X)
+        y, X = self._parse_regression(params)
+        result = self.regression['diagnostics'](y, X)
         return {
             "success": True,
             "analysis_type": "regression_diagnostics",
@@ -447,52 +477,31 @@ class StatsmodelsEngine:
         # If only 'data' is provided, treat it as a dataframe with y and X columns
         # Or if 'y' and 'X' are separate, use those
 
-        X = params.get('X', None)
-        y_data = params.get('y', params.get('data', None))
-
-        if y_data is None:
+        if params.get('y', params.get('data')) is None:
             return {"error": "Data (y) required for logit model"}
-
-        # Parse y
-        if isinstance(y_data, str):
-            try:
-                y_data = json.loads(y_data)
-            except json.JSONDecodeError:
-                y_data = [float(x.strip()) for x in y_data.split(',') if x.strip()]
-        y = np.array(y_data) if isinstance(y_data, list) else np.array(y_data)
+        y, X = self._parse_regression(params)
+        has_X = params.get('X', params.get('x')) is not None
 
         # Logit requires binary outcomes in [0, 1] range
         # Convert non-binary data to binary if needed
         unique_vals = np.unique(y)
+        conversion_note = None
 
         if len(unique_vals) == 2:
             # Already binary-like, convert to 0/1
             if not (np.all(np.isin(unique_vals, [0, 1]))):
                 y = (y == unique_vals[1]).astype(float)
         elif len(unique_vals) > 2:
-            # Convert continuous data to binary using returns
-            # Calculate returns: positive return = 1, negative = 0
-            returns = np.diff(y) / y[:-1]
-            y_binary = (returns >= 0).astype(float)
-            y = y_binary
-            # Adjust X to match the new length (one less due to diff)
-            # We'll create X after this block, so just note the conversion
-            conversion_note = f"Converted {len(unique_vals)} unique values to binary (positive/negative returns). Data length: {len(y)}"
+            if has_X:
+                return {"error": f"y has {len(unique_vals)} distinct values; logit needs a binary (0/1) outcome"}
+            # No predictors given: model the direction of each step (1 = up or flat, 0 = down)
+            # against a time trend.
+            y = (np.diff(y) >= 0).astype(float)
+            X = np.arange(len(y), dtype=float).reshape(-1, 1)
+            conversion_note = (f"Converted {len(unique_vals)} unique values to binary (1 = value rose or "
+                               f"stayed flat, 0 = fell). Data length: {len(y)}")
         else:
-            return {"error": "Data must have at least 2 values for logit analysis"}
-
-        # Parse X or create default X (must match y length after conversion)
-        X = params.get('X', None)
-        if X is None:
-            # If no X provided, create a simple trend predictor
-            X = np.arange(len(y)).reshape(-1, 1)
-        else:
-            if isinstance(X, str):
-                try:
-                    X = json.loads(X)
-                except json.JSONDecodeError:
-                    X = [[float(x.strip())] for x in X.split(',') if x.strip()]
-            X = np.array(X)
+            return {"error": "y must contain at least two different values for logit analysis"}
 
         result = self.glm['logit'](y, X)
         response = {
@@ -503,7 +512,7 @@ class StatsmodelsEngine:
         }
 
         # Add conversion note if data was converted
-        if 'conversion_note' in dir() and conversion_note:
+        if conversion_note:
             response["note"] = conversion_note
             response["data_info"] = {
                 "original_unique_values": int(len(unique_vals)),
@@ -519,29 +528,10 @@ class StatsmodelsEngine:
         if 'glm' not in self.glm:
             return {"error": "GLM module not available"}
 
-        # Parse y data
-        y_data = params.get('y', params.get('data', None))
-        if y_data is None:
+        # Parse y ("y" or "data") and X ("X" or "x"; a time trend when omitted)
+        if params.get('y', params.get('data')) is None:
             return {"error": "Data (y) required for GLM model"}
-
-        if isinstance(y_data, str):
-            try:
-                y_data = json.loads(y_data)
-            except json.JSONDecodeError:
-                y_data = [float(x.strip()) for x in y_data.split(',') if x.strip()]
-        y = np.array(y_data) if isinstance(y_data, list) else np.array(y_data)
-
-        # Parse X or create default X
-        X = params.get('X', None)
-        if X is None:
-            X = np.arange(len(y)).reshape(-1, 1)
-        else:
-            if isinstance(X, str):
-                try:
-                    X = json.loads(X)
-                except json.JSONDecodeError:
-                    X = [[float(x.strip())] for x in X.split(',') if x.strip()]
-            X = np.array(X)
+        y, X = self._parse_regression(params)
 
         # Get family type - default to gaussian
         family = params.get('family', 'gaussian').lower()
@@ -617,7 +607,7 @@ class StatsmodelsEngine:
         if 'descriptive' not in self.stats_tests:
             return {"error": "Descriptive statistics module not available"}
 
-        data = self._parse_data(params)
+        data = self._parse_data(params, min_length=2)
         result = self.stats_tests['descriptive'](data.values)
         return {
             "success": True,
@@ -710,7 +700,9 @@ class StatsmodelsEngine:
         else:
             if isinstance(x, str):
                 x = [float(v.strip()) for v in x.split(',')]
-            x = np.array(x)
+            x = np.array(x, dtype=float)
+            if len(x) != len(y):
+                return {"error": f"x has {len(x)} values but data has {len(y)} numeric values"}
 
         frac = float(params.get('frac', 0.3))
         result = self.nonparametric['lowess'](y.values, x, frac=frac)
@@ -722,54 +714,45 @@ class StatsmodelsEngine:
         }
 
     def get_available_analyses(self) -> Dict[str, Any]:
+        # Only commands the dispatcher in execute() actually runs.
         analyses = {
             "time_series": {
-                "arima": "Fit ARIMA model",
-                "arima_forecast": "ARIMA forecasting",
-                "sarimax": "Seasonal ARIMA with exogenous variables",
-                "exponential_smoothing": "Exponential smoothing models",
-                "stl_decompose": "STL seasonal decomposition",
-                "holt": "Holt exponential smoothing",
-                "autoreg": "Autoregressive model"
+                "arima": "Fit ARIMA model {data, order}",
+                "arima_forecast": "ARIMA forecasting {data, order, steps}",
+                "sarimax": "Seasonal ARIMA {data, order, seasonal_order}",
+                "exponential_smoothing": "Exponential smoothing {data, trend, seasonal, seasonal_periods}",
+                "stl_decompose": "STL seasonal decomposition {data, period, seasonal}"
             },
             "stationarity_tests": {
-                "adf_test": "Augmented Dickey-Fuller test",
-                "kpss_test": "KPSS stationarity test",
-                "acf": "Autocorrelation function",
-                "pacf": "Partial autocorrelation function",
-                "ljung_box": "Ljung-Box test for autocorrelation"
+                "adf_test": "Augmented Dickey-Fuller test {data}",
+                "kpss_test": "KPSS stationarity test {data, regression, nlags}",
+                "acf": "Autocorrelation function {data, nlags}",
+                "pacf": "Partial autocorrelation function {data, nlags}",
+                "ljung_box": "Ljung-Box test for autocorrelation {data, lags}"
             },
             "regression": {
-                "ols": "Ordinary Least Squares regression",
-                "wls": "Weighted Least Squares",
-                "gls": "Generalized Least Squares",
-                "rolling_ols": "Rolling window OLS",
-                "diagnostics": "Regression diagnostics"
+                "ols": "Ordinary Least Squares regression {y, x}",
+                "regression_diagnostics": "Regression diagnostics {y, x}"
             },
             "glm": {
-                "logit": "Logistic regression",
-                "probit": "Probit regression",
-                "poisson": "Poisson regression",
-                "quantreg": "Quantile regression"
+                "logit": "Logistic regression {y, x}",
+                "glm": "Generalized linear model {y, x, family}"
             },
             "statistical_tests": {
-                "ttest_ind": "Independent samples t-test",
-                "ttest_1samp": "One-sample t-test",
-                "jarque_bera": "Jarque-Bera normality test",
-                "descriptive": "Descriptive statistics"
+                "ttest_ind": "Independent samples t-test {sample1, sample2}",
+                "ttest_1samp": "One-sample t-test {data, popmean}",
+                "jarque_bera": "Jarque-Bera normality test {data}",
+                "descriptive": "Descriptive statistics {data}"
             },
             "power_analysis": {
-                "ttest_power": "T-test power analysis",
-                "ftest_power": "F-test power analysis",
-                "effect_size": "Effect size calculation"
+                "ttest_power": "T-test power analysis {effect_size, alpha, power | nobs}"
             },
             "multivariate": {
-                "pca": "Principal Component Analysis",
-                "factor_analysis": "Factor Analysis"
+                "pca": "Principal Component Analysis {data (columns), n_components}"
             },
             "nonparametric": {
-                "kde": "Kernel Density Estimation",
-                "lowess": "LOWESS smoothing"
+                "kde": "Kernel Density Estimation {data}",
+                "lowess": "LOWESS smoothing {data, x, frac}"
             }
         }
         return {
@@ -815,16 +798,27 @@ class StatsmodelsEngine:
                 "available_commands": list(command_map.keys())
             }
 
+        self.dropped_values = 0
         try:
-            return handler(params)
+            result = handler(params)
         except Exception as e:
             import traceback
+            traceback.print_exc(file=sys.stderr)  # diagnostics to stderr, not into the payload
             return {
-                "error": str(e),
-                "traceback": traceback.format_exc(),
+                "error": str(e) or type(e).__name__,
                 "command": command,
                 "timestamp": datetime.now().isoformat()
             }
+        if self.dropped_values and isinstance(result, dict) and "error" not in result:
+            result["dropped_values"] = self.dropped_values
+            result.setdefault("warning", f"{self.dropped_values} null or non-numeric value(s) were dropped")
+        return result
+
+
+COMMANDS = ["list", "arima", "arima_forecast", "sarimax", "exponential_smoothing", "stl_decompose",
+            "adf_test", "kpss_test", "acf", "pacf", "ljung_box", "ols", "regression_diagnostics", "logit",
+            "glm", "ttest_ind", "ttest_1samp", "jarque_bera", "descriptive", "ttest_power", "pca", "kde",
+            "lowess"]
 
 
 def main(args: List[str] = None) -> str:
@@ -835,16 +829,9 @@ def main(args: List[str] = None) -> str:
         result = {
             "error": "No command provided",
             "usage": "statsmodels_cli.py <command> [params_json]",
-            "available_commands": [
-                "list", "arima", "arima_forecast", "sarimax",
-                "exponential_smoothing", "stl_decompose", "adf_test",
-                "kpss_test", "acf", "pacf", "ljung_box", "ols",
-                "regression_diagnostics", "logit", "ttest_ind",
-                "ttest_1samp", "jarque_bera", "descriptive",
-                "ttest_power", "pca", "kde", "lowess"
-            ]
+            "available_commands": COMMANDS
         }
-        return json.dumps(result, cls=DecimalEncoder)
+        return fincept_json.dumps(result)
 
     command = args[0]
     params = {}
@@ -852,13 +839,16 @@ def main(args: List[str] = None) -> str:
     if len(args) > 1:
         try:
             params = json.loads(args[1])
-        except json.JSONDecodeError:
-            params = {"raw_input": args[1]}
+        except json.JSONDecodeError as e:
+            # Used to run the command on empty data and report an unrelated numpy error.
+            return fincept_json.dumps({"error": f"Invalid JSON parameters: {e}"})
+        if not isinstance(params, dict):
+            return fincept_json.dumps({"error": "Parameters must be a JSON object"})
 
     engine = StatsmodelsEngine()
     result = engine.execute(command, params)
 
-    return json.dumps(result, cls=DecimalEncoder)
+    return fincept_json.dumps(result)
 
 
 if __name__ == "__main__":

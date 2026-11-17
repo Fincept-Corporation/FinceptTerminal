@@ -5,13 +5,18 @@ class QScrollArea;
 
 namespace fincept::screens {
 
-/// Help Center — FAQ, quick actions, contact info, support ticket link.
+/// Help Center: where to get help (Docs, Support, the tour, Discord), short
+/// answers to the problems users actually run into, what data the terminal
+/// sends, and the version.
 ///
-/// Internationalised: all visible strings flow through tr(). The page contents
-/// are built once in the constructor and rebuilt on QEvent::LanguageChange —
-/// every label/button is a local in build_page(), so caching dozens of member
-/// pointers would dominate the file. Rebuilding via the scroll area is cheap
-/// (static content, no live data) and keeps the source readable.
+/// Two hosts: a dock panel after sign-in, and the pre-login info stack
+/// (WindowFrame connects the navigate_* signals there). build_page() tells them
+/// apart and swaps the actions that need a signed-in terminal (tickets, tour,
+/// About) for ones that work before sign-in (e-mail, password reset).
+///
+/// Static text: the page is built on first show and rebuilt on LanguageChange.
+/// Every widget is styled by one objectName-selector stylesheet on the root,
+/// rebuilt on ThemeManager::appearance_settled (set only when its text changed).
 class HelpScreen : public QWidget {
     Q_OBJECT
   public:
@@ -19,6 +24,7 @@ class HelpScreen : public QWidget {
 
   signals:
     void navigate_back();
+    /// Connected by the pre-login info stack; this page no longer offers sign-up.
     void navigate_register();
     void navigate_forgot_password();
 
@@ -29,6 +35,8 @@ class HelpScreen : public QWidget {
 
   private:
     QWidget* build_page();
+    void refresh_theme();
+
     QScrollArea* scroll_ = nullptr;
     bool page_built_ = false;
 };

@@ -5,8 +5,9 @@
 namespace fincept::ui {
 
 /// Converts a Markdown string to styled HTML suitable for display in QTextEdit/QTextBrowser.
-/// Uses md4c (CommonMark-compliant) for parsing and wraps the output in a dark-theme
-/// stylesheet matching the Obsidian design system.
+/// Uses md4c (CommonMark-compliant) for parsing and wraps the output in a stylesheet
+/// built from the active theme and font. The HTML holds the colours in effect when it
+/// was rendered: viewers re-render on ThemeManager::theme_changed.
 class MarkdownRenderer {
   public:
     /// Render markdown → complete HTML fragment (no <html>/<body> wrapper needed for QTextEdit).

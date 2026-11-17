@@ -1,4 +1,5 @@
 #include "screens/alpha_arena/AlphaArenaScreen.h"
+#include "ui/theme/Theme.h"
 
 #include "screens/alpha_arena/ArenaTabs.h"
 #include "screens/alpha_arena/EquityCurveWidget.h"
@@ -6,7 +7,11 @@
 #include "screens/alpha_arena/NewCompetitionWizard.h"
 #include "services/alpha_arena/ArenaEngine.h"
 #include "services/alpha_arena/ArenaMetrics.h"
+#include "services/alpha_arena/ArenaModelRegistry.h"
 #include "services/alpha_arena/ArenaStore.h"
+#include "services/llm/ProviderCatalog.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/ModelBadge.h"
 
 #include <QComboBox>
 #include <QPointer>
@@ -56,15 +61,18 @@ AlphaArenaScreen::AlphaArenaScreen(QWidget* parent) : QWidget(parent) {
 
     disclaimer_ = new QLabel(tr("⚠ LIVE MODE — orders are sent to Hyperliquid with real funds. "
                                 "Past performance ≠ future results. Not financial advice."));
-    disclaimer_->setStyleSheet("background:#5C1F1F;color:#FFD;padding:4px 12px;font-weight:700;"
-                               "font-size:11px;");
+    disclaimer_->setStyleSheet(QString("background:%1;color:%2;padding:4px 12px;font-weight:700;font-size:" +
+                                       fincept::ui::fonts::px(-3) + "px;")
+                                   .arg(ui::colors::DANGER(), ui::colors::TEXT_ON_ACCENT()));
     disclaimer_->hide();
     root->addWidget(disclaimer_);
 
-    body_ = new QStackedWidget;
+    // Placed before it is filled (moving finished pages into a new parent
+    // re-computes the stylesheet of every widget in them).
+    body_ = new QStackedWidget(this);
+    root->addWidget(body_, 1);
     body_->addWidget(build_empty_state());
     body_->addWidget(build_dashboard());
-    root->addWidget(body_, 1);
 
     countdown_ = new QTimer(this);
     countdown_->setInterval(1000);
@@ -74,26 +82,35 @@ AlphaArenaScreen::AlphaArenaScreen(QWidget* parent) : QWidget(parent) {
                                          : QStringLiteral("--"));
         round_label_->setText(tr("ROUND %1").arg(ArenaEngine::instance().round_seq()));
     });
+
+    // The mids ticker is rich text with its colours written in.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { render_ticker(); });
 }
 
 QWidget* AlphaArenaScreen::build_header() {
     auto* hdr = new QWidget;
     hdr->setObjectName(QStringLiteral("aaHeader"));
-    hdr->setFixedHeight(38);
+    hdr->setMinimumHeight(38);
     // One sheet for the header and its children, scoped by object name (the old
     // selector-less sheet cascaded its border-bottom onto every label in it).
+    // Running / paper are states (status green); live and KILL are the danger red.
+    using namespace ui::colors;
     hdr->setStyleSheet(
-        "QWidget#aaHeader{background:#111111;border-bottom:1px solid #222222;}"
-        "QLabel#aaTitle{color:#d97706;font-weight:700;font-size:12px;letter-spacing:1px;}"
-        "QLabel#aaBadge{background:#1a1a1a;color:#808080;padding:1px 7px;font-weight:700;font-size:10px;}"
-        "QLabel#aaBadge[tone=\"running\"]{background:#0A3A14;color:#16a34a;}"
-        "QLabel#aaBadge[tone=\"paper\"]{color:#16a34a;}"
-        "QLabel#aaBadge[tone=\"live\"]{background:#5C1F1F;color:#FFD;}"
-        "QLabel#aaMono{color:#e5e5e5;font-size:11px;font-family:'Consolas','Courier New',monospace;}"
-        "QLabel#aaMonoDim{color:#808080;font-size:11px;font-family:'Consolas','Courier New',monospace;}"
-        "QPushButton#aaKill{background:#dc2626;color:#FFF;font-weight:700;}"
-        "QPushButton#aaKill:disabled{background:#3a1414;color:#808080;}"
-        "QPushButton#aaNew{background:#d97706;color:#000;font-weight:700;}");
+        QString("QWidget#aaHeader{background:%1;border-bottom:1px solid %2;}"
+                "QLabel#aaTitle{color:%3;font-weight:700;font-size:" + fincept::ui::fonts::px(-2) + "px;letter-spacing:1px;}"
+                "QLabel#aaBadge{background:%4;color:%5;padding:1px 7px;font-weight:700;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
+                "QLabel#aaBadge[tone=\"running\"]{background:%6;color:%7;}"
+                "QLabel#aaBadge[tone=\"paper\"]{color:%7;}"
+                "QLabel#aaBadge[tone=\"live\"]{background:%8;color:%9;}"
+                "QLabel#aaMono{color:%10;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                "QLabel#aaMonoDim{color:%5;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                "QPushButton#aaKill{background:%8;color:%9;font-weight:700;}"
+                "QPushButton#aaKill:disabled{background:%11;color:%12;}"
+                "QPushButton#aaNew{background:%3;color:%9;font-weight:700;}")
+            .arg(BG_RAISED(), BORDER_DIM(), AMBER(), BG_HOVER(), TEXT_SECONDARY(), tint(SUCCESS, 0.18), SUCCESS(),
+                 DANGER(), TEXT_ON_ACCENT())
+            .arg(TEXT_PRIMARY(), tint(DANGER, 0.18), TEXT_TERTIARY()));
     auto* h = new QHBoxLayout(hdr);
     h->setContentsMargins(10, 0, 10, 0);
     h->setSpacing(8);
@@ -119,6 +136,7 @@ QWidget* AlphaArenaScreen::build_header() {
             [this](int idx) { show_competition(switcher_->itemData(idx).toString()); });
     h->addWidget(switcher_);
     pause_btn_ = new QPushButton(tr("⏸ PAUSE"));
+    pause_btn_->setProperty("fincept_agent_risk", "order"); // agents: pausing / resuming stops / restarts every agent's trading
     connect(pause_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_pause_resume);
     force_btn_ = new QPushButton(tr("⚡ FORCE ROUND"));
     connect(force_btn_, &QPushButton::clicked, this, [this]() {
@@ -134,13 +152,14 @@ QWidget* AlphaArenaScreen::build_header() {
         ArenaEngine::instance().force_round();
     });
     kill_btn_ = new QPushButton(tr("✖ KILL ALL"));
+    kill_btn_->setProperty("fincept_agent_risk", "order"); // agents: closes every position and halts all agents
     kill_btn_->setObjectName(QStringLiteral("aaKill"));
     kill_btn_->setToolTip(tr("Close every position at fresh marks and end the competition"));
     connect(kill_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_kill_all);
     auto* new_btn = new QPushButton(tr("+ NEW"));
     new_btn->setObjectName(QStringLiteral("aaNew"));
     for (auto* b : {pause_btn_, force_btn_, kill_btn_, new_btn})
-        b->setFixedHeight(24);
+        b->setMinimumHeight(24);
     // Run controls act on the ENGINE's active competition; they stay disabled until
     // show_competition()/update_badges() sees the viewed one is that competition.
     for (auto* b : {pause_btn_, force_btn_, kill_btn_})
@@ -154,101 +173,150 @@ QWidget* AlphaArenaScreen::build_header() {
 // Second strip: live mids ticker (left, monospace, colored vs previous tick)
 // + inline cadence editor (right: CADENCE [spin]s ✓).
 QWidget* AlphaArenaScreen::build_ticker_strip() {
+    using namespace ui::colors;
     auto* strip = new QWidget;
-    strip->setFixedHeight(24);
-    strip->setStyleSheet("background:#0D0D0D;border-bottom:1px solid #2A2A2A;");
+    strip->setMinimumHeight(24);
+    strip->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
     auto* h = new QHBoxLayout(strip);
     h->setContentsMargins(10, 0, 10, 0);
     h->setSpacing(8);
 
     ticker_ = new QLabel(QStringLiteral("--"));
     ticker_->setTextFormat(Qt::RichText);
-    ticker_->setStyleSheet("color:#777;font-size:11px;border:none;"
-                           "font-family:'Consolas','Courier New',monospace;");
+    ticker_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;border:none;")
+                               .arg(TEXT_TERTIARY()));
     h->addWidget(ticker_, 1);
 
     auto* cad = new QLabel(tr("CADENCE"));
-    cad->setStyleSheet("color:#777;font-size:10px;font-weight:700;border:none;");
+    cad->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;border:none;")
+                           .arg(TEXT_TERTIARY()));
     h->addWidget(cad);
     cadence_spin_ = new QSpinBox;
     cadence_spin_->setRange(60, 3600);
     cadence_spin_->setValue(180);
     cadence_spin_->setSuffix(QStringLiteral("s"));
-    cadence_spin_->setFixedHeight(18);
+    cadence_spin_->setMinimumHeight(18);
     cadence_spin_->setToolTip(tr("Round cadence (60–3600 seconds)"));
-    cadence_spin_->setStyleSheet("QSpinBox{background:#141414;color:#DDD;border:1px solid #2A2A2A;font-size:11px;"
-                                 " padding:0 2px;font-family:'Consolas','Courier New',monospace;}");
+    cadence_spin_->setStyleSheet(QString("QSpinBox{background:%1;color:%2;border:1px solid %3;font-size:" +
+                                         fincept::ui::fonts::px(-3) + "px; padding:0 2px;}")
+                                     .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED()));
     h->addWidget(cadence_spin_);
     auto* apply = new QPushButton(QStringLiteral("✓"));
     apply->setToolTip(tr("Apply cadence to the running competition"));
-    apply->setFixedSize(20, 18);
+    apply->setMinimumSize(20, 18);
     apply->setCursor(Qt::PointingHandCursor);
-    apply->setStyleSheet("QPushButton{background:#222;color:#FF8800;border:1px solid #2A2A2A;"
-                         "font-weight:700;padding:0;}QPushButton:hover{background:#2A2A2A;}");
+    apply->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
+                                 "font-weight:700;padding:0;}QPushButton:hover{background:%4;}")
+                             .arg(BG_RAISED(), AMBER(), BORDER_MED(), BG_HOVER()));
     connect(apply, &QPushButton::clicked, this, [this]() {
+        // set_cadence() targets the engine's ACTIVE competition; never apply a value
+        // shown for a different (viewed, finished) one to it.
+        if (competition_id_.isEmpty() || ArenaEngine::instance().active_competition_id() != competition_id_) {
+            QMessageBox::information(this, tr("Alpha Arena"),
+                                     tr("Cadence can only be changed on the competition that is running."));
+            return;
+        }
         if (auto r = ArenaEngine::instance().set_cadence(cadence_spin_->value()); r.is_err())
             QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
     });
     h->addWidget(apply);
+    cadence_apply_btn_ = apply;
     return strip;
 }
 
 QWidget* AlphaArenaScreen::build_empty_state() {
-    auto* page = new QWidget;
-    auto* v = new QVBoxLayout(page);
-    v->addStretch(2);
-    auto* big = new QLabel(tr("ALPHA ARENA"));
-    big->setAlignment(Qt::AlignCenter);
-    big->setStyleSheet("color:#FF8800;font-size:28px;font-weight:800;");
-    auto* sub = new QLabel(tr("Pit LLMs against each other in a live crypto trading competition.\n"
-                              "Real Hyperliquid market data · paper money · any provider, or free with Ollama."));
-    sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet("color:#999;font-size:13px;");
-    auto* cta = new QPushButton(tr("+  NEW COMPETITION"));
-    cta->setFixedSize(260, 44);
-    cta->setStyleSheet("background:#FF8800;color:#000;font-weight:800;font-size:14px;");
-    connect(cta, &QPushButton::clicked, this, &AlphaArenaScreen::on_new_competition);
-    v->addWidget(big);
-    v->addWidget(sub);
-    auto* hb = new QHBoxLayout;
-    hb->addStretch(1);
-    hb->addWidget(cta);
-    hb->addStretch(1);
-    v->addLayout(hb);
-    v->addStretch(3);
-    return page;
+    // The designed first-use state (no competition yet): the shared EmptyState,
+    // built in its final parent. Starting a competition calls models (class C),
+    // so nothing runs from here; the note says which models are ready
+    // (refresh_start_page, on show).
+    start_state_ = new ui::EmptyState(body_);
+    ui::EmptyState::Spec s;
+    s.glyph = QStringLiteral("⚔");
+    s.title = tr("Alpha Arena");
+    s.message = tr("Pit LLMs against each other in a live crypto trading competition: every round each model reads "
+                   "the market, decides and trades its own account; the leaderboard ranks them by equity.");
+    s.details = {{tr("Market data"), tr("Real Hyperliquid prices")},
+                 {tr("Money"), tr("Paper — simulated fills, no real funds")},
+                 {tr("Models"), tr("Any provider with an API key, an agent harness, or free with local Ollama")},
+                 {tr("Cost"), tr("One model call per competitor per round (default every 3 minutes)")}};
+    s.details_heading = tr("HOW IT RUNS");
+    s.primary = tr("+  NEW COMPETITION");
+    s.secondary = tr("MODEL SETTINGS");
+    s.illustration = true;
+    s.illustration_shape = ui::LoadingSkeleton::Shape::Table;
+    start_state_->apply(s);
+    connect(start_state_, &ui::EmptyState::primary_clicked, this, &AlphaArenaScreen::on_new_competition);
+    connect(start_state_, &ui::EmptyState::secondary_clicked, this, []() { ui::open_llm_settings(); });
+    return start_state_;
+}
+
+void AlphaArenaScreen::refresh_start_page() {
+    if (!start_state_)
+        return;
+    // Which competitors could be picked right now (the wizard's own registry).
+    // Keyless providers (Fincept LLM uses credits, local Ollama) are always
+    // listed; say so when nothing with the user's own key is ready.
+    QStringList ready;
+    bool keyed = false;
+    for (const auto& o : fincept::arena::ArenaModelRegistry::instance().available_models()) {
+        if (!o.ready)
+            continue;
+        const QString name = fincept::ai_chat::ProviderCatalog::display_name(o.provider);
+        if (!ready.contains(name))
+            ready << name;
+        const QString p = o.provider.toLower();
+        keyed = keyed || (p != QLatin1String("fincept") && p != QLatin1String("ollama"));
+    }
+    QString note;
+    ui::EmptyState::Tone tone = ui::EmptyState::Tone::Info;
+    if (!keyed) {
+        note = tr("No provider key yet — Fincept LLM (uses credits) and local Ollama work without one; add keys in "
+                  "Settings > LLM Configuration");
+        tone = ui::EmptyState::Tone::Warning;
+    } else {
+        note = tr("Ready: %1").arg(ready.join(QStringLiteral(", ")));
+    }
+    if (note != start_note_) {
+        start_note_ = note;
+        start_state_->set_note(note, tone);
+    }
 }
 
 QWidget* AlphaArenaScreen::build_dashboard() {
-    chart_ = new EquityCurveWidget;
-    cards_ = new LeaderboardCards;
-    grid_ = new ArenaPanelGrid;
+    // Built top-down, every widget inside its final parent (the page is
+    // created in body_, which is already in the screen). The old bottom-up
+    // build moved the finished chart / cards / grid through three new parents,
+    // re-computing the stylesheet of every widget at each move.
+    const QString handle_css = QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_MED());
+    auto* page = new QWidget(body_);
+    auto* v = new QVBoxLayout(page);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
 
-    auto* top = new QSplitter(Qt::Horizontal);
+    auto* body = new QSplitter(Qt::Vertical, page);
+    body->setHandleWidth(1);
+    body->setChildrenCollapsible(false);
+    body->setStyleSheet(handle_css);
+    v->addWidget(body, 1);
+
+    auto* top = new QSplitter(Qt::Horizontal, body);
     top->setHandleWidth(1);
     top->setChildrenCollapsible(false);
-    top->setStyleSheet("QSplitter::handle{background:#2A2A2A;}");
+    top->setStyleSheet(handle_css);
+    chart_ = new EquityCurveWidget(top);
+    cards_ = new LeaderboardCards(top);
     top->addWidget(chart_);
     top->addWidget(cards_);
     top->setStretchFactor(0, 58);
     top->setStretchFactor(1, 42);
     top->setSizes({580, 420});
 
-    auto* body = new QSplitter(Qt::Vertical);
-    body->setHandleWidth(1);
-    body->setChildrenCollapsible(false);
-    body->setStyleSheet("QSplitter::handle{background:#2A2A2A;}");
+    grid_ = new ArenaPanelGrid(body);
     body->addWidget(top);
     body->addWidget(grid_);
     body->setStretchFactor(0, 45);
     body->setStretchFactor(1, 55);
     body->setSizes({450, 550});
-
-    auto* page = new QWidget;
-    auto* v = new QVBoxLayout(page);
-    v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(0);
-    v->addWidget(body, 1);
 
     connect(cards_, &LeaderboardCards::agent_selected, this,
             [this](const QString& id) { grid_->set_agent_filter(id); });
@@ -299,11 +367,20 @@ void AlphaArenaScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     connect_engine();
     reload_competitions();
-    const QString active = ArenaEngine::instance().active_competition_id();
-    if (!active.isEmpty())
-        show_competition(active);
-    else if (!competition_id_.isEmpty())
-        show_competition(competition_id_);
+    // The active competition, else the remembered one, else the most recent
+    // past one (the switcher lists newest first) — the start page only when
+    // there is no competition at all (or the remembered one is gone).
+    QString target = ArenaEngine::instance().active_competition_id();
+    if (target.isEmpty())
+        target = competition_id_;
+    if (target.isEmpty() && switcher_->count() > 0)
+        target = switcher_->itemData(0).toString();
+    show_competition(target);
+    if (body_->currentIndex() == 0 && !target.isEmpty() && switcher_->count() > 0 &&
+        switcher_->itemData(0).toString() != target)
+        show_competition(switcher_->itemData(0).toString()); // the remembered one was deleted
+    if (body_->currentIndex() == 0)
+        refresh_start_page();
     countdown_->start();
     // The engine's crash_recovery_pending signal fires at app startup, before
     // any screen exists — poll the queryable list here so the offer isn't lost.
@@ -458,6 +535,7 @@ void AlphaArenaScreen::show_competition(const QString& id) {
     disclaimer_->setVisible(comp.value().live_mode);
     cadence_spin_->setValue(comp.value().cadence_seconds);
     last_mids_.clear(); // fresh ticker baseline for the new competition
+    ticker_dir_.clear();
     venue_badge_->setText(comp.value().live_mode ? tr("HYPERLIQUID • LIVE") : tr("PAPER"));
     aa_set_tone(venue_badge_, comp.value().live_mode ? "live" : "paper");
     update_badges(comp.value().status);
@@ -630,26 +708,38 @@ void AlphaArenaScreen::refresh_dashboard() {
 // previously displayed mid. Runs every marks tick — string building only.
 void AlphaArenaScreen::update_ticker() {
     const auto mids = ArenaEngine::instance().current_marks();
-    if (mids.isEmpty()) {
+    ticker_dir_.clear(); // empty = no marks: the ticker shows "--"
+    if (!mids.isEmpty()) {
+        for (auto it = mids.cbegin(); it != mids.cend(); ++it) {
+            const double prev = last_mids_.value(it.key(), it.value());
+            ticker_dir_.insert(it.key(), it.value() > prev ? 1 : it.value() < prev ? -1 : 0);
+        }
+        last_mids_ = mids;
+    }
+    render_ticker();
+}
+
+void AlphaArenaScreen::render_ticker() {
+    if (!ticker_)
+        return;
+    if (ticker_dir_.isEmpty()) {
         ticker_->setText(QStringLiteral("--"));
         return;
     }
-    QStringList coins = mids.keys();
+    using namespace ui::colors;
+    QStringList coins = ticker_dir_.keys();
     std::sort(coins.begin(), coins.end());
     QStringList parts;
     for (const auto& coin : coins) {
-        const double m = mids.value(coin);
-        const double prev = last_mids_.value(coin, m);
-        const QString color = m > prev   ? QStringLiteral("#26A65B")
-                              : m < prev ? QStringLiteral("#E0245E")
-                                         : QStringLiteral("#999");
-        const QString arrow = m > prev ? QStringLiteral("▲") : m < prev ? QStringLiteral("▼") : QStringLiteral("–");
-        parts << QStringLiteral("<span style='color:#777'>%1</span>"
-                                " <span style='color:%2'>%3 %4</span>")
-                     .arg(coin.toHtmlEscaped(), color, fmt_mid(m), arrow);
+        const int dir = ticker_dir_.value(coin);
+        const QString color = dir > 0 ? QString(POSITIVE()) : dir < 0 ? QString(NEGATIVE()) : QString(TEXT_SECONDARY());
+        const QString arrow = dir > 0 ? QStringLiteral("▲") : dir < 0 ? QStringLiteral("▼") : QStringLiteral("–");
+        parts << QStringLiteral("<span style='color:%1'>%2</span>"
+                                " <span style='color:%3'>%4 %5</span>")
+                     .arg(QString(TEXT_TERTIARY()), coin.toHtmlEscaped(), color, fmt_mid(last_mids_.value(coin)), arrow);
     }
-    last_mids_ = mids;
-    ticker_->setText(parts.join(QStringLiteral(" <span style='color:#444'>·</span> ")));
+    ticker_->setText(
+        parts.join(QStringLiteral(" <span style='color:%1'>·</span> ").arg(QString(TEXT_DIM()))));
 }
 
 // Cheap board rebuild on a marks tick: cached agent meta/tokens + live
@@ -686,9 +776,16 @@ void AlphaArenaScreen::rebuild_board_light() {
 }
 
 void AlphaArenaScreen::on_new_competition() {
-    if (ArenaEngine::instance().is_running()) {
+    // Guard on the ACTIVE competition, not just a running timer: a PAUSED one is still
+    // active, and starting a new one would silently end it with its positions left
+    // open and no final close.
+    if (ArenaEngine::instance().is_running() || !ArenaEngine::instance().active_competition_id().isEmpty()) {
         QMessageBox::information(this, tr("Alpha Arena"),
-                                 tr("A competition is already running. Stop it (KILL ALL) before starting a new one."));
+                                 ArenaEngine::instance().is_running()
+                                     ? tr("A competition is already running. Stop it (KILL ALL) before starting a new "
+                                          "one.")
+                                     : tr("A competition is paused. End it with KILL ALL (which closes its positions) "
+                                          "before starting a new one."));
         return;
     }
     NewCompetitionWizard wiz(this);
@@ -721,6 +818,11 @@ void AlphaArenaScreen::update_badges(const QString& status) {
     const bool controllable = (running || status == QLatin1String("paused")) && is_active && !killing_;
     for (auto* b : {pause_btn_, force_btn_, kill_btn_})
         b->setEnabled(controllable);
+    // Same rule for CADENCE: its ✓ applies to the engine's active competition.
+    if (cadence_apply_btn_)
+        cadence_apply_btn_->setEnabled(controllable);
+    if (cadence_spin_)
+        cadence_spin_->setEnabled(controllable);
     // A paused competition left over from a previous session can be resumed
     // (on_pause_resume starts it) when nothing else is running.
     if (!is_active && status == QLatin1String("paused") && eng.active_competition_id().isEmpty() && !killing_)
@@ -731,6 +833,37 @@ void AlphaArenaScreen::update_badges(const QString& status) {
 
 void AlphaArenaScreen::restore_state(const QVariantMap& state) {
     competition_id_ = state.value(QStringLiteral("competition_id")).toString();
+}
+
+bool AlphaArenaScreen::open_section(const QString& section, const QString& focus) {
+    // The header's own paths: NEW COMPETITION (on_new_competition) and the switcher
+    // (activated → show_competition). Validated before anything changes.
+    const QString raw = section.trimmed();
+    const QString key = raw.toLower();
+    if (key == QLatin1String("new")) {
+        // Its wizard is modal: opened after this link has been delivered, not inside it.
+        QTimer::singleShot(0, this, &AlphaArenaScreen::on_new_competition);
+        return true;
+    }
+    QString id;
+    if (key.startsWith(QLatin1String("competition:"))) {
+        id = raw.mid(12).trimmed();
+        if (id.isEmpty())
+            return false;
+    } else if (key.isEmpty()) {
+        id = focus.trimmed();
+        if (id.isEmpty())
+            return true;
+    } else {
+        return false;
+    }
+    for (int i = 0; i < switcher_->count(); ++i)
+        if (switcher_->itemData(i).toString() == id) {
+            switcher_->setCurrentIndex(i);
+            show_competition(id);
+            return true;
+        }
+    return false; // no such competition: nothing changes
 }
 
 QVariantMap AlphaArenaScreen::save_state() const {

@@ -1,7 +1,11 @@
 #include "screens/fno/FnoHeaderBar.h"
 
 #include "core/events/EventBus.h"
+#include "screens/fno/FnoChainState.h"
+#include "screens/fno/FnoFormat.h"
 #include "storage/repositories/IvHistoryRepository.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
@@ -27,16 +31,7 @@ using fincept::services::options::OptionChain;
 
 namespace {
 
-QString fmt_compact(qint64 v) {
-    const double a = std::abs(double(v));
-    if (a >= 1e7)
-        return QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (a >= 1e5)
-        return QString::number(v / 1.0e5, 'f', 2) + "L";
-    if (a >= 1e3)
-        return QString::number(v / 1.0e3, 'f', 1) + "k";
-    return QLocale(QLocale::English).toString(v);
-}
+namespace fmt = fincept::ui::formatting;
 
 QWidget* make_kv(QWidget* parent, QLabel*& value_out, QLabel*& key_out, const QString& key) {
     auto* wrap = new QWidget(parent);
@@ -67,8 +62,11 @@ FnoUnderlyingTargets fno_underlying_targets(const QString& broker_id, const QStr
     const QString u = underlying.trimmed().toUpper();
     if (u.isEmpty())
         return {};
-    if (broker_id == QLatin1String("databento")) // US listed options: the underlying is a US ticker
+    if (fno_is_us_source(broker_id)) { // US listed options: the underlying is a US ticker
+        if (fno_is_us_index_root(u)) // a US index (SPX / ^SPX): research + news, no order ticket
+            return {fno_us_index_yahoo(u), fno_us_chain_symbol(u), {}, QStringLiteral("US")};
         return {u, u, u, QStringLiteral("US")};
+    }
     struct IndexTarget {
         const char* research;
         const char* news;
@@ -99,30 +97,36 @@ void fno_open_symbol(const QString& screen_id, const QString& symbol, const QStr
 FnoHeaderBar::FnoHeaderBar(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoHeader");
     setStyleSheet(
-        QStringLiteral(
+        QString(
             "#fnoHeader { background:%1; border-bottom:2px solid %2; }"
-            "#fnoHdrKey { color:%3; font-size:8px; font-weight:700; letter-spacing:0.6px; background:transparent; }"
-            "#fnoHdrValue { color:%4; font-size:13px; font-weight:700; background:transparent; }"
-            "#fnoHdrValuePos { color:%5; font-size:13px; font-weight:700; background:transparent; }"
-            "#fnoHdrValueNeg { color:%6; font-size:13px; font-weight:700; background:transparent; }"
-            "#fnoHdrStatus { color:%3; font-size:9px; background:transparent; }"
-            "QComboBox { background:%7; color:%4; border:1px solid %8; padding:3px 8px; font-size:11px; "
+            "#fnoHdrKey { color:%3; font-size:" + fincept::ui::fonts::px(-6) + "px; font-weight:700; letter-spacing:0.6px; background:transparent; }"
+            "#fnoHdrValue { color:%4; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+            "#fnoHdrValuePos { color:%5; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+            "#fnoHdrValueNeg { color:%6; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+            "#fnoHdrStatus { color:%3; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent; }"
+            "QComboBox { background:%7; color:%4; border:1px solid %8; padding:3px 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; "
             "min-width:90px; }"
             "QComboBox:hover { border-color:%2; }"
             "QComboBox::drop-down { border:none; width:18px; }"
             "QComboBox QAbstractItemView { background:%1; color:%4; border:1px solid %8; "
-            "selection-background-color:%2; }"
-            "#fnoRefreshBtn { background:%2; color:%7; border:none; padding:5px 12px; font-size:9px; "
+            "selection-background-color:%2; selection-color:%9; }"
+            "#fnoRefreshBtn { background:%2; color:%9; border:none; padding:5px 12px; font-size:" + fincept::ui::fonts::px(-5) + "px; "
             "                 font-weight:700; letter-spacing:0.5px; }"
             "#fnoRefreshBtn:hover { background:%4; color:%7; }"
-            "#fnoOpenBtn { background:transparent; color:%2; border:1px solid %8; padding:4px 10px; font-size:9px; "
+            "#fnoOpenBtn { background:transparent; color:%2; border:1px solid %8; padding:4px 10px; font-size:" + fincept::ui::fonts::px(-5) + "px; "
             "              font-weight:700; letter-spacing:0.5px; }"
             "#fnoOpenBtn:hover { border-color:%2; }"
             "#fnoOpenBtn::menu-indicator { image:none; width:0px; }")
             .arg(colors::BG_RAISED(), colors::AMBER(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
-                 colors::POSITIVE(), colors::NEGATIVE(), colors::BG_BASE(), colors::BORDER_DIM()));
+                 colors::POSITIVE(), colors::NEGATIVE(), colors::BG_BASE(), colors::BORDER_DIM(),
+                 colors::TEXT_ON_ACCENT()));
 
     setup_ui();
+    // A currency / number-format change re-formats the chain already held.
+    fmt::on_format_changed(this, [this]() {
+        if (has_chain_)
+            render_chain();
+    });
 }
 
 void FnoHeaderBar::setup_ui() {
@@ -143,7 +147,7 @@ void FnoHeaderBar::setup_ui() {
     refresh_btn_->setObjectName("fnoRefreshBtn");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
 
-    lbl_broker_field_ = new QLabel(tr("Broker:"), this);
+    lbl_broker_field_ = new QLabel(tr("Source:"), this);
     lbl_under_field_ = new QLabel(tr("Underlying:"), this);
     lbl_expiry_field_ = new QLabel(tr("Expiry:"), this);
 
@@ -191,7 +195,7 @@ void FnoHeaderBar::setup_ui() {
     root->addWidget(lbl_status_, 0, Qt::AlignVCenter);
 
     // ── Accessibility + keyboard traversal ────────────────────────────────
-    broker_combo_->setAccessibleName(tr("Broker"));
+    broker_combo_->setAccessibleName(tr("Chain source"));
     under_combo_->setAccessibleName(tr("Underlying"));
     expiry_combo_->setAccessibleName(tr("Expiry"));
     refresh_btn_->setAccessibleName(tr("Refresh option chain"));
@@ -201,14 +205,43 @@ void FnoHeaderBar::setup_ui() {
     setTabOrder(expiry_combo_, refresh_btn_);
 
     // ── Wire signals ──────────────────────────────────────────────────────
-    connect(broker_combo_, &QComboBox::currentTextChanged, this, &FnoHeaderBar::broker_changed);
+    // The picker shows readable source names; the id travels as item data.
+    connect(broker_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) { emit broker_changed(broker_id()); });
     connect(under_combo_, &QComboBox::currentTextChanged, this, &FnoHeaderBar::underlying_changed);
     connect(expiry_combo_, &QComboBox::currentTextChanged, this, &FnoHeaderBar::expiry_changed);
     connect(refresh_btn_, &QPushButton::clicked, this, &FnoHeaderBar::refresh_requested);
 }
 
 QString FnoHeaderBar::broker_id() const {
-    return broker_combo_->currentText();
+    const QVariant id = broker_combo_->currentData();
+    return id.isValid() ? id.toString() : broker_combo_->currentText();
+}
+
+QString FnoHeaderBar::source_label(const QString& broker_id) {
+    if (broker_id == fno_free_source())
+        return tr("US options · delayed (free)");
+    if (broker_id == QLatin1String("databento"))
+        return tr("Databento · US (key)");
+    return broker_id;
+}
+
+bool FnoHeaderBar::select_broker(const QString& broker_id) {
+    const int i = broker_combo_->findData(broker_id);
+    if (i < 0)
+        return false;
+    if (broker_combo_->currentIndex() != i)
+        broker_combo_->setCurrentIndex(i); // emits broker_changed
+    else
+        emit broker_changed(broker_id);
+    return true;
+}
+
+void FnoHeaderBar::set_delayed_source(const QString& source_label) {
+    if (delayed_source_ == source_label)
+        return;
+    delayed_source_ = source_label;
+    update_freshness();
 }
 QString FnoHeaderBar::underlying() const {
     return under_combo_->currentText();
@@ -220,9 +253,16 @@ QString FnoHeaderBar::expiry() const {
 void FnoHeaderBar::set_brokers(const QStringList& broker_ids, const QString& selected) {
     QSignalBlocker block(broker_combo_);
     broker_combo_->clear();
-    broker_combo_->addItems(broker_ids);
+    for (const QString& id : broker_ids) {
+        broker_combo_->addItem(source_label(id), id);
+        if (id == fno_free_source())
+            broker_combo_->setItemData(broker_combo_->count() - 1,
+                                       tr("Cboe delayed quotes (Yahoo Finance fallback) — no broker or key "
+                                          "needed. Read-only: orders need a broker chain."),
+                                       Qt::ToolTipRole);
+    }
     if (!selected.isEmpty()) {
-        const int i = broker_combo_->findText(selected);
+        const int i = broker_combo_->findData(selected);
         if (i >= 0)
             broker_combo_->setCurrentIndex(i);
     }
@@ -250,6 +290,13 @@ bool FnoHeaderBar::select_underlying(const QString& underlying) {
     return true;
 }
 
+void FnoHeaderBar::set_underlying_picker_visible(bool visible) {
+    if (lbl_under_field_ && lbl_under_field_->isVisibleTo(this) != visible)
+        lbl_under_field_->setVisible(visible);
+    if (under_combo_ && under_combo_->isVisibleTo(this) != visible)
+        under_combo_->setVisible(visible);
+}
+
 void FnoHeaderBar::set_expiries(const QStringList& exps, const QString& selected) {
     QSignalBlocker block(expiry_combo_);
     expiry_combo_->clear();
@@ -262,16 +309,27 @@ void FnoHeaderBar::set_expiries(const QStringList& exps, const QString& selected
 }
 
 void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
-    lbl_spot_->setText(chain.spot > 0 ? QString::number(chain.spot, 'f', 2) : "--");
+    last_chain_ = chain;
+    has_chain_ = true;
+    render_chain();
+}
+
+void FnoHeaderBar::render_chain() {
+    const OptionChain& chain = last_chain_;
+    // The underlying's level / price in the chain's currency (rupees on NSE,
+    // dollars on Databento's US options); no unit — an index level is not money.
+    const QString ccy = fno_chain_ccy(chain.broker_id);
+    const fmt::InstrumentFmt px = fno_price_fmt(ccy);
+    lbl_spot_->setText(chain.spot > 0 ? fmt::price(chain.spot, px) : "--");
 
     // Day change — underlying's absolute + % move, plumbed through OptionChain
     // from the spot quote (REST refresh; WS keeps option legs current). Coloured
-    // green/red via the #fnoHdrValuePos / #fnoHdrValueNeg style selectors.
+    // green/red via the #fnoHdrValuePos / #fnoHdrValueNeg style selectors; the
+    // sign is always printed as well.
     if (chain.spot_change != 0.0 || chain.spot_change_pct != 0.0) {
         const bool up = chain.spot_change >= 0.0;
-        const QString sign = up ? QStringLiteral("+") : QString();
-        lbl_change_->setText(sign + QString::number(chain.spot_change, 'f', 2) + " (" + sign +
-                             QString::number(chain.spot_change_pct, 'f', 2) + "%)");
+        lbl_change_->setText(QStringLiteral("%1 (%2)").arg(fmt::price_change(chain.spot_change, chain.spot, px),
+                                                           fmt::pct(chain.spot_change_pct, 2)));
         lbl_change_->setObjectName(up ? "fnoHdrValuePos" : "fnoHdrValueNeg");
     } else {
         lbl_change_->setText("--");
@@ -282,10 +340,11 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     lbl_change_->style()->polish(lbl_change_);
 
     lbl_atm_->setText(chain.atm_strike > 0 ? fincept::services::options::format_strike(chain.atm_strike) : "--");
-    lbl_pcr_->setText(chain.pcr > 0 ? QString::number(chain.pcr, 'f', 3) : "--");
-    lbl_max_pain_->setText(chain.max_pain > 0 ? QString::number(chain.max_pain, 'f', 0) : "--");
-    lbl_ce_oi_->setText(fmt_compact(qint64(chain.total_ce_oi)));
-    lbl_pe_oi_->setText(fmt_compact(qint64(chain.total_pe_oi)));
+    lbl_pcr_->setText(chain.pcr > 0 ? fmt::number(chain.pcr, 3) : "--");
+    lbl_max_pain_->setText(chain.max_pain > 0 ? fincept::services::options::format_strike(chain.max_pain) : "--");
+    // Contract counts, abbreviated per the user's scheme (lakh / crore on an NSE chain by default).
+    lbl_ce_oi_->setText(fno_fmt_oi(qint64(chain.total_ce_oi), ccy));
+    lbl_pe_oi_->setText(fno_fmt_oi(qint64(chain.total_pe_oi), ccy));
 
     // ── IV Pctile pill ────────────────────────────────────────────────────
     // Compute today's ATM IV from the chain's ATM row, then percentile-rank
@@ -296,7 +355,22 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     // on every chain publish (seconds apart, on the UI thread). The percentile
     // only changes when the day rolls or the underlying changes, so the result
     // is memoised on (underlying, date) and the query runs once per day.
-    if (lbl_iv_pctile_) {
+    //
+    // A DELAYED chain (the free Cboe feed) has no IV history: the daily ATM IV is
+    // recorded only from chains published by a live source, so the pill reads "—"
+    // and says why — never "…0/30", which would suggest a history that never builds.
+    if (lbl_iv_pctile_ && !delayed_source_.isEmpty()) {
+        const QString why = tr("IV percentile ranks today's at-the-money IV against this terminal's own daily IV "
+                               "history, which is recorded from a live broker chain. The free delayed feed has no IV "
+                               "history, so there is no percentile for %1.")
+                                .arg(chain.underlying.isEmpty() ? tr("this chain") : chain.underlying);
+        lbl_iv_pctile_->setText(QStringLiteral("—"));
+        lbl_iv_pctile_->setToolTip(why);
+        if (key_iv_pctile_)
+            key_iv_pctile_->setToolTip(why);
+    } else if (lbl_iv_pctile_) {
+        if (key_iv_pctile_)
+            key_iv_pctile_->setToolTip(QString());
         double atm_iv = 0;
         for (const auto& row : chain.rows) {
             if (!row.is_atm)
@@ -314,35 +388,40 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
             const QString key = chain.underlying + QLatin1Char('|') + today.toString(Qt::ISODate);
             if (key != iv_pctile_cache_key_) {
                 iv_pctile_cache_key_ = key;
-                iv_pctile_cache_tip_.clear();
+                iv_pctile_hist_days_ = -1;
+                iv_pctile_value_ = 0.0;
+                iv_pctile_atm_iv_ = atm_iv;
                 const QString since = today.addDays(-90).toString(Qt::ISODate);
                 auto r = fincept::IvHistoryRepository::instance().get_window(chain.underlying, since);
                 if (r.is_ok()) {
                     const auto& hist = r.value();
+                    iv_pctile_hist_days_ = int(hist.size());
                     if (hist.size() >= 30) {
                         int below = 0;
                         for (const auto& row : hist)
                             if (row.atm_iv < atm_iv)
                                 ++below;
-                        const double pctile = 100.0 * double(below) / double(hist.size());
-                        iv_pctile_cache_text_ = QString::number(pctile, 'f', 0) + "%";
-                        iv_pctile_cache_tip_ = tr("Current ATM IV %1 ranks at %2th percentile of %3 days of history.")
-                                                   .arg(atm_iv * 100.0, 0, 'f', 1)
-                                                   .arg(pctile, 0, 'f', 0)
-                                                   .arg(hist.size());
-                    } else {
-                        // Not enough history yet — show accumulation progress instead
-                        // of a blank dash so it's clear it's building, not broken.
-                        iv_pctile_cache_text_ = tr("…%1/30").arg(hist.size());
-                        iv_pctile_cache_tip_ =
-                            tr("Building IV history — %1 of 30 days needed for a percentile.").arg(hist.size());
+                        iv_pctile_value_ = 100.0 * double(below) / double(hist.size());
                     }
-                } else {
-                    iv_pctile_cache_text_ = QStringLiteral("—");
                 }
             }
-            lbl_iv_pctile_->setText(iv_pctile_cache_text_);
-            lbl_iv_pctile_->setToolTip(iv_pctile_cache_tip_);
+            QString text;
+            QString tip;
+            if (iv_pctile_hist_days_ < 0) {
+                text = QStringLiteral("—");
+            } else if (iv_pctile_hist_days_ >= 30) {
+                text = fmt::pct(iv_pctile_value_, 0, false);
+                tip = tr("Current ATM IV %1 ranks at %2th percentile of %3 days of history.")
+                          .arg(fmt::pct(iv_pctile_atm_iv_ * 100.0, 1, false), fmt::number(iv_pctile_value_, 0))
+                          .arg(iv_pctile_hist_days_);
+            } else {
+                // Not enough history yet — show accumulation progress instead
+                // of a blank dash so it's clear it's building, not broken.
+                text = tr("…%1/30").arg(iv_pctile_hist_days_);
+                tip = tr("Building IV history — %1 of 30 days needed for a percentile.").arg(iv_pctile_hist_days_);
+            }
+            lbl_iv_pctile_->setText(text);
+            lbl_iv_pctile_->setToolTip(tip);
         } else {
             lbl_iv_pctile_->setText("—");
             lbl_iv_pctile_->setToolTip(QString());
@@ -359,6 +438,26 @@ void FnoHeaderBar::update_freshness() {
     if (last_chain_ts_ms_ <= 0) {
         lbl_status_->setText(QString());
         lbl_status_->setToolTip(QString());
+        return;
+    }
+    if (!delayed_source_.isEmpty()) {
+        // A delayed feed is never "live": say so and when the quotes are from, without
+        // the live-feed staleness alarm (a 15-minute-old Cboe quote is the expected state).
+        const QDateTime at = QDateTime::fromMSecsSinceEpoch(last_chain_ts_ms_);
+        const QString when = at.date() == QDate::currentDate() ? at.toString(QStringLiteral("HH:mm"))
+                                                                : QLocale().toString(at, QLocale::ShortFormat);
+        const QString text = tr("DELAYED · as of %1").arg(when);
+        const QString tip = tr("Delayed quotes from %1 (about 15 minutes behind the market), as of %2. "
+                               "Free source — no broker or key needed. REFRESH fetches a newer copy.")
+                                .arg(delayed_source_, QLocale().toString(at, QLocale::LongFormat));
+        if (lbl_status_->text() != text)
+            lbl_status_->setText(text);
+        if (lbl_status_->toolTip() != tip)
+            lbl_status_->setToolTip(tip);
+        const QString sheet = QString("color:%1;font-size:%2px;font-weight:700;background:transparent;")
+                                  .arg(colors::WARNING(), fincept::ui::fonts::px(-5));
+        if (lbl_status_->styleSheet() != sheet)
+            lbl_status_->setStyleSheet(sheet);
         return;
     }
     const qint64 age_ms = QDateTime::currentMSecsSinceEpoch() - last_chain_ts_ms_;
@@ -388,7 +487,7 @@ void FnoHeaderBar::update_freshness() {
         lbl_status_->setText(text);
     if (lbl_status_->toolTip() != tip)
         lbl_status_->setToolTip(tip);
-    const QString sheet = QStringLiteral("color:%1;font-size:9px;background:transparent;").arg(colour);
+    const QString sheet = QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(colour);
     if (lbl_status_->styleSheet() != sheet)
         lbl_status_->setStyleSheet(sheet);
 }
@@ -416,6 +515,8 @@ void FnoHeaderBar::clear_ribbon() {
         if (l)
             l->setText("--");
     last_chain_ts_ms_ = 0;
+    has_chain_ = false;
+    last_chain_ = OptionChain{};
     if (lbl_status_) {
         lbl_status_->setText("");
         lbl_status_->setToolTip(QString());
@@ -463,7 +564,7 @@ void FnoHeaderBar::retranslateUi() {
         open_btn_->setToolTip(tr("Open the underlying in Equity Research, Equity Trading or News"));
     }
     if (lbl_broker_field_)
-        lbl_broker_field_->setText(tr("Broker:"));
+        lbl_broker_field_->setText(tr("Source:"));
     if (lbl_under_field_)
         lbl_under_field_->setText(tr("Underlying:"));
     if (lbl_expiry_field_)

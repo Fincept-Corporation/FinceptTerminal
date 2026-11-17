@@ -160,10 +160,11 @@ const CatalogEntry kCatalog[] = {
     {"aihubmix", "*", kNoPublishedCap},
 
     // ── Fincept (proxies upstream) ──────────────────────────────────────
-    // Fincept's /research/llm/async wraps various upstream models. We
-    // don't know which one is selected server-side, so go with a generous
-    // default that most upstreams accept.
-    {"fincept", "*", kNoPublishedCap},
+    // Fincept's /research/llm(/async) wraps various upstream models, but the
+    // API itself rejects max_tokens > 8192 with a 422 (research.py
+    // validate_max_tokens). This cap is what resolved_max_tokens() clamps a
+    // user value to — and the value sent when none is set.
+    {"fincept", "*", ModelCatalog::kFinceptMaxOutputTokens},
 };
 
 // Glob → regex. Supports * (zero-or-more) and ? (single char). Anchored.
@@ -189,6 +190,9 @@ QRegularExpression compile_glob(const QString& glob) {
 
 int ModelCatalog::output_cap(const QString& provider, const QString& model) {
     const QString p = provider.toLower();
+    // An agent harness ("harness:<id>") picks its own output budget: no cap is sent.
+    if (p.startsWith(QLatin1String("harness:")))
+        return 0;
     for (const auto& e : kCatalog) {
         if (p != QString::fromLatin1(e.provider))
             continue;

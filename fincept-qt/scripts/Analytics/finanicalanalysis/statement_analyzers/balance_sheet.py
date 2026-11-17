@@ -30,7 +30,6 @@ PARAMETERS:
 
 
 import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
@@ -169,7 +168,7 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
 
         Args:
             statements: Current period financial statements
-            comparative_data: Historical financial statements for trend analysis
+            comparative_data: Historical financial statements (oldest first)
             industry_data: Industry benchmarks and peer data
 
         Returns:
@@ -177,56 +176,77 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
         """
         results = []
 
-        # Validate data sufficiency
         required_fields = ['total_assets', 'total_liabilities', 'total_equity']
         is_sufficient, missing_fields = self.validate_data_sufficiency(statements, required_fields)
+        if not is_sufficient and self.logger:
+            self.logger.warning(f"Insufficient data for complete analysis. Missing: {missing_fields}")
 
-        if not is_sufficient:
-            if self.logger:
-                self.logger.warning(f"Insufficient data for complete analysis. Missing: {missing_fields}")
-
-        # Liquidity analysis
         results.extend(self._analyze_liquidity(statements, comparative_data, industry_data))
-
-        # Asset analysis
         results.extend(self._analyze_assets(statements, comparative_data, industry_data))
-
-        # Liability analysis
         results.extend(self._analyze_liabilities(statements, comparative_data, industry_data))
-
-        # Equity analysis
         results.extend(self._analyze_equity(statements, comparative_data, industry_data))
-
-        # Financial position quality
         results.extend(self._assess_financial_position_quality(statements, comparative_data))
-
-        # Common-size analysis
         results.extend(self._perform_common_size_analysis(statements, comparative_data))
-
-        # Balance sheet relationships
         results.extend(self._analyze_balance_sheet_relationships(statements, comparative_data))
 
         return results
+
+    # ------------------------------------------------------------------ helpers
+
+    @staticmethod
+    def _quick_assets(bs: Dict[str, float]) -> Tuple[Optional[float], str]:
+        """CFA quick assets = cash + short-term marketable investments + receivables.
+        Falls back to current assets - inventory - prepaid only when none of the three
+        components is reported."""
+        parts = [k for k in ('cash_equivalents', 'short_term_investments', 'accounts_receivable') if k in bs]
+        if parts:
+            return sum(bs[k] for k in parts), "(Cash + Short-term Investments + Receivables) / Current Liabilities"
+        if 'current_assets' in bs:
+            value = bs['current_assets'] - bs.get('inventory', 0.0) - bs.get('prepaid_expenses', 0.0)
+            return value, ("(Current Assets - Inventory - Prepaid) / Current Liabilities "
+                           "(cash, investments and receivables not reported separately)")
+        return None, ""
+
+    @staticmethod
+    def _cash_and_investments(bs: Dict[str, float]) -> Optional[float]:
+        if 'cash_equivalents' not in bs and 'short_term_investments' not in bs:
+            return None
+        return bs.get('cash_equivalents', 0.0) + bs.get('short_term_investments', 0.0)
+
+    @staticmethod
+    def _shares(statements: FinancialStatements) -> Tuple[Optional[float], str]:
+        """Period-end shares outstanding if supplied, else weighted average basic shares."""
+        shares = statements.balance_sheet.get('shares_outstanding')
+        if shares and shares > 0:
+            return shares, "period-end shares outstanding"
+        shares = statements.income_statement.get('shares_outstanding_basic')
+        if shares and shares > 0:
+            return shares, "weighted average basic shares (period-end count not supplied)"
+        return None, ""
+
+    # ---------------------------------------------------------------- liquidity
 
     def _analyze_liquidity(self, statements: FinancialStatements,
                            comparative_data: Optional[List[FinancialStatements]] = None,
                            industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
         """Comprehensive liquidity analysis"""
         results = []
-        balance_sheet = statements.balance_sheet
+        bs = statements.balance_sheet
 
-        current_assets = balance_sheet.get('current_assets', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        cash_equivalents = balance_sheet.get('cash_equivalents', 0)
-        accounts_receivable = balance_sheet.get('accounts_receivable', 0)
-        inventory = balance_sheet.get('inventory', 0)
+        current_assets = bs.get('current_assets')
+        current_liabilities = bs.get('current_liabilities')
+
+        if current_liabilities is None or current_liabilities <= 0:
+            reason = ("current liabilities not reported (e.g. unclassified balance sheet of a bank or insurer)"
+                      if current_liabilities is None else "current liabilities are zero or negative")
+            results.append(self.unavailable(AnalysisType.LIQUIDITY, "Liquidity Ratios", reason,
+                                            "Current, quick and cash ratios divide by current liabilities"))
+            return results
 
         # Current Ratio
-        if current_liabilities > 0:
-            current_ratio = self.safe_divide(current_assets, current_liabilities)
-            benchmark = self.liquidity_benchmarks.get('current_ratio', {})
-            risk_level = self.assess_risk_level(current_ratio, benchmark, higher_is_better=True)
-
+        if current_assets is not None:
+            current_ratio = current_assets / current_liabilities
+            risk_level = self.assess_risk_level(current_ratio, self.liquidity_benchmarks['current_ratio'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.LIQUIDITY,
                 metric_name="Current Ratio",
@@ -239,14 +259,15 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                 methodology="Current Assets / Current Liabilities",
                 limitations=["Does not consider asset quality or conversion timing"]
             ))
+        else:
+            results.append(self.unavailable(AnalysisType.LIQUIDITY, "Current Ratio",
+                                            "current assets not reported", "Current Assets / Current Liabilities"))
 
         # Quick Ratio (Acid Test)
-        if current_liabilities > 0:
-            quick_assets = current_assets - inventory  # Excluding inventory
-            quick_ratio = self.safe_divide(quick_assets, current_liabilities)
-            benchmark = self.liquidity_benchmarks.get('quick_ratio', {})
-            risk_level = self.assess_risk_level(quick_ratio, benchmark, higher_is_better=True)
-
+        quick_assets, quick_method = self._quick_assets(bs)
+        if quick_assets is not None:
+            quick_ratio = quick_assets / current_liabilities
+            risk_level = self.assess_risk_level(quick_ratio, self.liquidity_benchmarks['quick_ratio'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.LIQUIDITY,
                 metric_name="Quick Ratio",
@@ -256,16 +277,15 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(quick_ratio, industry_data.get(
                     'quick_ratio') if industry_data else None),
-                methodology="(Current Assets - Inventory) / Current Liabilities",
+                methodology=quick_method,
                 limitations=["Assumes receivables are readily collectible"]
             ))
 
         # Cash Ratio
-        if current_liabilities > 0:
-            cash_ratio = self.safe_divide(cash_equivalents, current_liabilities)
-            benchmark = self.liquidity_benchmarks.get('cash_ratio', {})
-            risk_level = self.assess_risk_level(cash_ratio, benchmark, higher_is_better=True)
-
+        cash_and_inv = self._cash_and_investments(bs)
+        if cash_and_inv is not None:
+            cash_ratio = cash_and_inv / current_liabilities
+            risk_level = self.assess_risk_level(cash_ratio, self.liquidity_benchmarks['cash_ratio'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.LIQUIDITY,
                 metric_name="Cash Ratio",
@@ -275,17 +295,14 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(cash_ratio, industry_data.get(
                     'cash_ratio') if industry_data else None),
-                methodology="Cash and Cash Equivalents / Current Liabilities",
+                methodology="(Cash + Short-term Marketable Investments) / Current Liabilities",
                 limitations=["Most conservative liquidity measure"]
             ))
 
-        # Working Capital Analysis
-        working_capital = current_assets - current_liabilities
-        total_assets = balance_sheet.get('total_assets', 0)
-
-        if total_assets > 0:
-            working_capital_ratio = self.safe_divide(working_capital, total_assets)
-
+        # Working Capital Ratio
+        total_assets = bs.get('total_assets')
+        if current_assets is not None and total_assets and total_assets > 0:
+            working_capital_ratio = (current_assets - current_liabilities) / total_assets
             wc_interpretation = "Strong working capital position" if working_capital_ratio > 0.1 else "Adequate working capital" if working_capital_ratio > 0 else "Negative working capital - liquidity concern"
             wc_risk = RiskLevel.LOW if working_capital_ratio > 0.1 else RiskLevel.MODERATE if working_capital_ratio > 0 else RiskLevel.HIGH
 
@@ -301,36 +318,27 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
 
         return results
 
+    # ------------------------------------------------------------------- assets
+
     def _analyze_assets(self, statements: FinancialStatements,
                         comparative_data: Optional[List[FinancialStatements]] = None,
                         industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
         """Comprehensive asset analysis"""
         results = []
-        balance_sheet = statements.balance_sheet
-        income_statement = statements.income_statement
+        bs = statements.balance_sheet
+        revenue = statements.income_statement.get('revenue')
+        total_assets = bs.get('total_assets')
 
-        total_assets = balance_sheet.get('total_assets', 0)
-        current_assets = balance_sheet.get('current_assets', 0)
-        ppe_net = balance_sheet.get('ppe_net', 0)
-        intangible_assets = balance_sheet.get('intangible_assets', 0)
-        goodwill = balance_sheet.get('goodwill', 0)
-        revenue = income_statement.get('revenue', 0)
-
-        if total_assets == 0:
+        if total_assets is None or total_assets <= 0:
+            results.append(self.unavailable(AnalysisType.ACTIVITY, "Asset Analysis",
+                                            "total assets not reported or not positive"))
             return results
 
         # Asset Turnover
-        if revenue > 0:
-            # Calculate average assets if comparative data available
-            avg_total_assets = total_assets
-            if comparative_data and len(comparative_data) > 0:
-                prev_assets = comparative_data[-1].balance_sheet.get('total_assets', 0)
-                if prev_assets > 0:
-                    avg_total_assets = (total_assets + prev_assets) / 2
-
-            asset_turnover = self.safe_divide(revenue, avg_total_assets)
-            benchmark = self.activity_benchmarks.get('asset_turnover', {})
-            risk_level = self.assess_risk_level(asset_turnover, benchmark, higher_is_better=True)
+        if revenue is not None and revenue > 0:
+            avg_total_assets, basis = self.average_balance(statements, comparative_data, 'total_assets')
+            asset_turnover = revenue / avg_total_assets
+            risk_level = self.assess_risk_level(asset_turnover, self.activity_benchmarks['asset_turnover'], True)
 
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.ACTIVITY,
@@ -341,97 +349,96 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(asset_turnover, industry_data.get(
                     'asset_turnover') if industry_data else None),
-                methodology="Revenue / Average Total Assets",
+                methodology=f"Revenue / Total Assets ({self.basis_note(basis)})",
                 limitations=["Influenced by asset age and accounting methods"]
             ))
 
-        # Asset Composition Analysis
-        current_asset_ratio = self.safe_divide(current_assets, total_assets)
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.ACTIVITY,
-            metric_name="Current Asset Ratio",
-            value=current_asset_ratio,
-            interpretation=f"Current assets represent {self.format_percentage(current_asset_ratio)} of total assets",
-            risk_level=RiskLevel.LOW,
-            methodology="Current Assets / Total Assets"
-        ))
+        if 'current_assets' in bs:
+            current_asset_ratio = bs['current_assets'] / total_assets
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.ACTIVITY,
+                metric_name="Current Asset Ratio",
+                value=current_asset_ratio,
+                interpretation=f"Current assets represent {self.format_percentage(current_asset_ratio)} of total assets",
+                risk_level=RiskLevel.LOW,
+                methodology="Current Assets / Total Assets"
+            ))
 
-        # PPE Ratio
-        ppe_ratio = self.safe_divide(ppe_net, total_assets)
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.ACTIVITY,
-            metric_name="PPE Ratio",
-            value=ppe_ratio,
-            interpretation=f"Property, plant & equipment represents {self.format_percentage(ppe_ratio)} of total assets",
-            risk_level=RiskLevel.LOW,
-            methodology="Net PPE / Total Assets"
-        ))
+        if 'ppe_net' in bs:
+            ppe_ratio = bs['ppe_net'] / total_assets
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.ACTIVITY,
+                metric_name="PPE Ratio",
+                value=ppe_ratio,
+                interpretation=f"Property, plant & equipment represents {self.format_percentage(ppe_ratio)} of total assets",
+                risk_level=RiskLevel.LOW,
+                methodology="Net PPE / Total Assets"
+            ))
 
-        # Intangible Assets Analysis
-        if intangible_assets > 0:
-            intangible_ratio = self.safe_divide(intangible_assets, total_assets)
-
+        intangible_assets = bs.get('intangible_assets')
+        if intangible_assets is not None and intangible_assets > 0:
+            intangible_ratio = intangible_assets / total_assets
             intangible_interpretation = "High intangible asset intensity - knowledge-based business" if intangible_ratio > 0.2 else "Moderate intangible assets" if intangible_ratio > 0.1 else "Low intangible asset base"
-            intangible_risk = RiskLevel.MODERATE if intangible_ratio > 0.3 else RiskLevel.LOW
-
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Intangible Asset Ratio",
                 value=intangible_ratio,
                 interpretation=intangible_interpretation,
-                risk_level=intangible_risk,
-                methodology="Intangible Assets / Total Assets",
+                risk_level=RiskLevel.MODERATE if intangible_ratio > 0.3 else RiskLevel.LOW,
+                methodology="Intangible Assets (excluding goodwill) / Total Assets",
                 limitations=["Requires assessment of asset impairment risk"]
             ))
 
-        # Goodwill Analysis
-        if goodwill > 0:
-            goodwill_ratio = self.safe_divide(goodwill, total_assets)
-
+        goodwill = bs.get('goodwill')
+        if goodwill is not None and goodwill > 0:
+            goodwill_ratio = goodwill / total_assets
             goodwill_interpretation = "Significant goodwill from acquisitions - monitor for impairment" if goodwill_ratio > 0.15 else "Moderate goodwill level" if goodwill_ratio > 0.05 else "Low goodwill"
-            goodwill_risk = RiskLevel.MODERATE if goodwill_ratio > 0.2 else RiskLevel.LOW
-
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Goodwill Ratio",
                 value=goodwill_ratio,
                 interpretation=goodwill_interpretation,
-                risk_level=goodwill_risk,
+                risk_level=RiskLevel.MODERATE if goodwill_ratio > 0.2 else RiskLevel.LOW,
                 methodology="Goodwill / Total Assets",
                 limitations=["Subject to impairment testing and write-downs"]
             ))
 
-        # Asset Quality Assessment
         results.extend(self._assess_asset_quality(statements, comparative_data))
-
         return results
+
+    # -------------------------------------------------------------- liabilities
 
     def _analyze_liabilities(self, statements: FinancialStatements,
                              comparative_data: Optional[List[FinancialStatements]] = None,
                              industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
         """Comprehensive liability analysis"""
         results = []
-        balance_sheet = statements.balance_sheet
+        bs = statements.balance_sheet
+        total_assets = bs.get('total_assets')
+        total_equity = bs.get('total_equity')
+        total_debt = self.total_debt(bs)
 
-        total_assets = balance_sheet.get('total_assets', 0)
-        total_liabilities = balance_sheet.get('total_liabilities', 0)
-        total_equity = balance_sheet.get('total_equity', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        long_term_debt = balance_sheet.get('long_term_debt', 0)
-        short_term_debt = balance_sheet.get('short_term_debt', 0)
-
-        if total_assets == 0:
-            return results
-
-        # Total debt calculation
-        total_debt = long_term_debt + short_term_debt
-
-        # Debt-to-Equity Ratio
-        if total_equity > 0:
-            debt_to_equity = self.safe_divide(total_debt, total_equity)
-            benchmark = self.solvency_benchmarks.get('debt_to_equity', {})
-            risk_level = self.assess_risk_level(debt_to_equity, benchmark, higher_is_better=False)
-
+        # Debt-to-Equity
+        if total_debt is None:
+            results.append(self.unavailable(AnalysisType.SOLVENCY, "Debt-to-Equity Ratio",
+                                            "neither short-term nor long-term debt reported",
+                                            "Total Debt / Total Equity"))
+        elif total_equity is None:
+            results.append(self.unavailable(AnalysisType.SOLVENCY, "Debt-to-Equity Ratio",
+                                            "total equity not reported", "Total Debt / Total Equity"))
+        elif total_equity <= 0:
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.SOLVENCY,
+                metric_name="Debt-to-Equity Ratio",
+                value=None,
+                interpretation=(f"Not meaningful: total equity is {'negative' if total_equity < 0 else 'zero'} "
+                                f"({total_equity:,.2f}); liabilities exceed assets, which is itself a solvency red flag"),
+                risk_level=RiskLevel.VERY_HIGH,
+                methodology="Total Debt / Total Equity"
+            ))
+        else:
+            debt_to_equity = total_debt / total_equity
+            risk_level = self.assess_risk_level(debt_to_equity, self.solvency_benchmarks['debt_to_equity'], False)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.SOLVENCY,
                 metric_name="Debt-to-Equity Ratio",
@@ -441,212 +448,212 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(debt_to_equity, industry_data.get(
                     'debt_to_equity') if industry_data else None),
-                methodology="Total Debt / Total Equity",
+                methodology="(Short-term Debt + Long-term Debt) / Total Equity",
                 limitations=["Does not consider off-balance-sheet obligations"]
             ))
 
-        # Debt-to-Assets Ratio
-        debt_to_assets = self.safe_divide(total_debt, total_assets)
-        benchmark = self.solvency_benchmarks.get('debt_to_assets', {})
-        risk_level = self.assess_risk_level(debt_to_assets, benchmark, higher_is_better=False)
+        if total_assets is None or total_assets <= 0:
+            return results
 
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.SOLVENCY,
-            metric_name="Debt-to-Assets Ratio",
-            value=debt_to_assets,
-            interpretation=self.generate_interpretation("debt-to-assets ratio", debt_to_assets, risk_level,
-                                                        AnalysisType.SOLVENCY),
-            risk_level=risk_level,
-            benchmark_comparison=self.compare_to_industry(debt_to_assets, industry_data.get(
-                'debt_to_assets') if industry_data else None),
-            methodology="Total Debt / Total Assets",
-            limitations=["Asset values may not reflect market values"]
-        ))
+        # Debt-to-Assets
+        if total_debt is not None:
+            debt_to_assets = total_debt / total_assets
+            risk_level = self.assess_risk_level(debt_to_assets, self.solvency_benchmarks['debt_to_assets'], False)
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.SOLVENCY,
+                metric_name="Debt-to-Assets Ratio",
+                value=debt_to_assets,
+                interpretation=self.generate_interpretation("debt-to-assets ratio", debt_to_assets, risk_level,
+                                                            AnalysisType.SOLVENCY),
+                risk_level=risk_level,
+                benchmark_comparison=self.compare_to_industry(debt_to_assets, industry_data.get(
+                    'debt_to_assets') if industry_data else None),
+                methodology="(Short-term Debt + Long-term Debt) / Total Assets",
+                limitations=["Asset values may not reflect market values"]
+            ))
 
-        # Liability Structure Analysis
-        current_liability_ratio = self.safe_divide(current_liabilities, total_assets)
-        long_term_liability_ratio = self.safe_divide(long_term_debt, total_assets)
+        if 'current_liabilities' in bs:
+            current_liability_ratio = bs['current_liabilities'] / total_assets
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.SOLVENCY,
+                metric_name="Current Liability Ratio",
+                value=current_liability_ratio,
+                interpretation=f"Current liabilities represent {self.format_percentage(current_liability_ratio)} of total assets",
+                risk_level=RiskLevel.HIGH if current_liability_ratio > 0.4 else RiskLevel.MODERATE if current_liability_ratio > 0.25 else RiskLevel.LOW,
+                methodology="Current Liabilities / Total Assets"
+            ))
 
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.SOLVENCY,
-            metric_name="Current Liability Ratio",
-            value=current_liability_ratio,
-            interpretation=f"Current liabilities represent {self.format_percentage(current_liability_ratio)} of total assets",
-            risk_level=RiskLevel.HIGH if current_liability_ratio > 0.4 else RiskLevel.MODERATE if current_liability_ratio > 0.25 else RiskLevel.LOW,
-            methodology="Current Liabilities / Total Assets"
-        ))
+        if 'long_term_debt' in bs:
+            long_term_liability_ratio = bs['long_term_debt'] / total_assets
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.SOLVENCY,
+                metric_name="Long-term Debt Ratio",
+                value=long_term_liability_ratio,
+                interpretation=f"Long-term debt represents {self.format_percentage(long_term_liability_ratio)} of total assets",
+                risk_level=RiskLevel.HIGH if long_term_liability_ratio > 0.4 else RiskLevel.MODERATE if long_term_liability_ratio > 0.25 else RiskLevel.LOW,
+                methodology="Long-term Debt / Total Assets"
+            ))
 
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.SOLVENCY,
-            metric_name="Long-term Debt Ratio",
-            value=long_term_liability_ratio,
-            interpretation=f"Long-term debt represents {self.format_percentage(long_term_liability_ratio)} of total assets",
-            risk_level=RiskLevel.HIGH if long_term_liability_ratio > 0.4 else RiskLevel.MODERATE if long_term_liability_ratio > 0.25 else RiskLevel.LOW,
-            methodology="Long-term Debt / Total Assets"
-        ))
-
-        # Debt Maturity Analysis
-        if total_debt > 0:
-            short_term_debt_ratio = self.safe_divide(short_term_debt, total_debt)
-
+        # Debt maturity profile needs both debt lines
+        if 'short_term_debt' in bs and 'long_term_debt' in bs and total_debt and total_debt > 0:
+            short_term_debt_ratio = bs['short_term_debt'] / total_debt
             maturity_interpretation = "High short-term debt concentration - refinancing risk" if short_term_debt_ratio > 0.5 else "Balanced debt maturity profile" if short_term_debt_ratio > 0.2 else "Predominantly long-term debt structure"
-            maturity_risk = RiskLevel.HIGH if short_term_debt_ratio > 0.6 else RiskLevel.MODERATE if short_term_debt_ratio > 0.4 else RiskLevel.LOW
-
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.SOLVENCY,
                 metric_name="Short-term Debt Concentration",
                 value=short_term_debt_ratio,
                 interpretation=maturity_interpretation,
-                risk_level=maturity_risk,
+                risk_level=RiskLevel.HIGH if short_term_debt_ratio > 0.6 else RiskLevel.MODERATE if short_term_debt_ratio > 0.4 else RiskLevel.LOW,
                 methodology="Short-term Debt / Total Debt",
                 limitations=["Does not consider debt covenants or refinancing ability"]
             ))
 
-        # Interest Coverage Analysis (if income statement data available)
+        # Interest Coverage (EBIT / interest expense)
         income_statement = statements.income_statement
-        operating_income = income_statement.get('operating_income', 0)
-        interest_expense = income_statement.get('interest_expense', 0)
-
-        if interest_expense > 0:
-            interest_coverage = self.safe_divide(operating_income, interest_expense)
-            benchmark = self.solvency_benchmarks.get('interest_coverage', {})
-            risk_level = self.assess_risk_level(interest_coverage, benchmark, higher_is_better=True)
-
-            results.append(AnalysisResult(
-                analysis_type=AnalysisType.SOLVENCY,
-                metric_name="Interest Coverage Ratio",
-                value=interest_coverage,
-                interpretation=self.generate_interpretation("interest coverage ratio", interest_coverage, risk_level,
-                                                            AnalysisType.SOLVENCY),
-                risk_level=risk_level,
-                methodology="Operating Income / Interest Expense",
-                limitations=["Based on current operating performance"]
-            ))
+        operating_income = income_statement.get('operating_income')
+        interest_expense = income_statement.get('interest_expense')
+        if interest_expense is not None and interest_expense > 0:
+            if operating_income is None:
+                results.append(self.unavailable(AnalysisType.SOLVENCY, "Interest Coverage Ratio",
+                                                "operating income (EBIT) not reported",
+                                                "Operating Income (EBIT) / Interest Expense"))
+            else:
+                interest_coverage = operating_income / interest_expense
+                risk_level = self.assess_risk_level(interest_coverage,
+                                                    self.solvency_benchmarks['interest_coverage'], True)
+                if interest_coverage < 1:
+                    risk_level = RiskLevel.VERY_HIGH
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.SOLVENCY,
+                    metric_name="Interest Coverage Ratio",
+                    value=interest_coverage,
+                    interpretation=self.generate_interpretation("interest coverage ratio", interest_coverage,
+                                                                risk_level, AnalysisType.SOLVENCY),
+                    risk_level=risk_level,
+                    methodology="Operating Income (EBIT) / Interest Expense",
+                    limitations=["Based on current operating performance"]
+                ))
 
         return results
+
+    # ------------------------------------------------------------------- equity
 
     def _analyze_equity(self, statements: FinancialStatements,
                         comparative_data: Optional[List[FinancialStatements]] = None,
                         industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
         """Comprehensive equity analysis"""
         results = []
-        balance_sheet = statements.balance_sheet
+        bs = statements.balance_sheet
         income_statement = statements.income_statement
 
-        total_assets = balance_sheet.get('total_assets', 0)
-        total_equity = balance_sheet.get('total_equity', 0)
-        common_stock = balance_sheet.get('common_stock', 0)
-        retained_earnings = balance_sheet.get('retained_earnings', 0)
-        treasury_stock = balance_sheet.get('treasury_stock', 0)
-        intangible_assets = balance_sheet.get('intangible_assets', 0)
-        goodwill = balance_sheet.get('goodwill', 0)
+        total_assets = bs.get('total_assets')
+        total_equity = bs.get('total_equity')
 
-        if total_assets == 0:
+        if total_equity is None:
+            results.append(self.unavailable(AnalysisType.SOLVENCY, "Equity Analysis", "total equity not reported"))
             return results
 
         # Equity Ratio
-        equity_ratio = self.safe_divide(total_equity, total_assets)
-
-        equity_interpretation = "Strong equity position - low financial leverage" if equity_ratio > 0.6 else "Moderate equity position" if equity_ratio > 0.4 else "High financial leverage - elevated risk"
-        equity_risk = RiskLevel.LOW if equity_ratio > 0.5 else RiskLevel.MODERATE if equity_ratio > 0.3 else RiskLevel.HIGH
-
-        results.append(AnalysisResult(
-            analysis_type=AnalysisType.SOLVENCY,
-            metric_name="Equity Ratio",
-            value=equity_ratio,
-            interpretation=equity_interpretation,
-            risk_level=equity_risk,
-            benchmark_comparison=self.compare_to_industry(equity_ratio,
-                                                          industry_data.get('equity_ratio') if industry_data else None),
-            methodology="Total Equity / Total Assets"
-        ))
-
-        # Equity Multiplier
-        if total_equity > 0:
-            equity_multiplier = self.safe_divide(total_assets, total_equity)
-
-            multiplier_interpretation = "High financial leverage" if equity_multiplier > 3 else "Moderate financial leverage" if equity_multiplier > 2 else "Conservative financial leverage"
-            multiplier_risk = RiskLevel.HIGH if equity_multiplier > 4 else RiskLevel.MODERATE if equity_multiplier > 2.5 else RiskLevel.LOW
+        if total_assets is not None and total_assets > 0:
+            equity_ratio = total_equity / total_assets
+            if equity_ratio < 0:
+                equity_interpretation = "Negative equity - liabilities exceed assets (shareholders' deficit)"
+                equity_risk = RiskLevel.VERY_HIGH
+            else:
+                equity_interpretation = "Strong equity position - low financial leverage" if equity_ratio > 0.6 else "Moderate equity position" if equity_ratio > 0.4 else "High financial leverage - elevated risk"
+                equity_risk = RiskLevel.LOW if equity_ratio > 0.5 else RiskLevel.MODERATE if equity_ratio > 0.3 else RiskLevel.HIGH
 
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.SOLVENCY,
-                metric_name="Equity Multiplier",
-                value=equity_multiplier,
-                interpretation=multiplier_interpretation,
-                risk_level=multiplier_risk,
-                methodology="Total Assets / Total Equity",
-                limitations=["Component of DuPont analysis"]
+                metric_name="Equity Ratio",
+                value=equity_ratio,
+                interpretation=equity_interpretation,
+                risk_level=equity_risk,
+                benchmark_comparison=self.compare_to_industry(equity_ratio,
+                                                              industry_data.get('equity_ratio') if industry_data else None),
+                methodology="Total Equity / Total Assets"
             ))
 
-        # Retained Earnings Analysis
-        if total_equity > 0 and retained_earnings != 0:
-            retained_earnings_ratio = self.safe_divide(retained_earnings, total_equity)
+            # Equity Multiplier
+            if total_equity > 0:
+                equity_multiplier = total_assets / total_equity
+                multiplier_interpretation = "High financial leverage" if equity_multiplier > 3 else "Moderate financial leverage" if equity_multiplier > 2 else "Conservative financial leverage"
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.SOLVENCY,
+                    metric_name="Equity Multiplier",
+                    value=equity_multiplier,
+                    interpretation=multiplier_interpretation,
+                    risk_level=RiskLevel.HIGH if equity_multiplier > 4 else RiskLevel.MODERATE if equity_multiplier > 2.5 else RiskLevel.LOW,
+                    methodology="Total Assets / Total Equity (ending balances)",
+                    limitations=["Component of DuPont analysis"]
+                ))
+            else:
+                results.append(self.unavailable(AnalysisType.SOLVENCY, "Equity Multiplier",
+                                                "total equity is zero or negative", "Total Assets / Total Equity"))
 
-            re_interpretation = "Strong retained earnings base" if retained_earnings_ratio > 0.5 else "Moderate retained earnings" if retained_earnings_ratio > 0.2 else "Low retained earnings - recent losses or high dividends"
-            re_risk = RiskLevel.LOW if retained_earnings_ratio > 0.3 else RiskLevel.MODERATE if retained_earnings_ratio > 0 else RiskLevel.HIGH
-
+        # Retained Earnings Ratio
+        retained_earnings = bs.get('retained_earnings')
+        if total_equity > 0 and retained_earnings is not None:
+            retained_earnings_ratio = retained_earnings / total_equity
+            re_interpretation = "Strong retained earnings base" if retained_earnings_ratio > 0.5 else "Moderate retained earnings" if retained_earnings_ratio > 0.2 else "Low or negative retained earnings - accumulated losses or high distributions"
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Retained Earnings Ratio",
                 value=retained_earnings_ratio,
                 interpretation=re_interpretation,
-                risk_level=re_risk,
+                risk_level=RiskLevel.LOW if retained_earnings_ratio > 0.3 else RiskLevel.MODERATE if retained_earnings_ratio > 0 else RiskLevel.HIGH,
                 methodology="Retained Earnings / Total Equity"
             ))
 
-        # Book Value per Share (if share data available)
-        shares_outstanding = income_statement.get('shares_outstanding_basic', 0)
-        if shares_outstanding > 0 and total_equity > 0:
-            book_value_per_share = self.safe_divide(total_equity, shares_outstanding)
-
+        # Book Value per Share
+        shares, shares_basis = self._shares(statements)
+        if shares is not None:
+            book_value_per_share = total_equity / shares
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.VALUATION,
                 metric_name="Book Value per Share",
                 value=book_value_per_share,
-                interpretation=f"Book value per share is ${book_value_per_share:.2f}",
-                risk_level=RiskLevel.LOW,
-                methodology="Total Equity / Shares Outstanding"
+                interpretation=(f"Book value per share is {book_value_per_share:.2f}" if book_value_per_share >= 0
+                                else f"Negative book value per share ({book_value_per_share:.2f}) - shareholders' deficit"),
+                risk_level=RiskLevel.LOW if book_value_per_share > 0 else RiskLevel.HIGH,
+                methodology=f"Total Equity / Shares ({shares_basis})"
             ))
 
-            # Tangible Book Value per Share
-            tangible_equity = total_equity - intangible_assets - goodwill
-            if tangible_equity > 0:
-                tangible_bvps = self.safe_divide(tangible_equity, shares_outstanding)
-
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.VALUATION,
-                    metric_name="Tangible Book Value per Share",
-                    value=tangible_bvps,
-                    interpretation=f"Tangible book value per share is ${tangible_bvps:.2f}",
-                    risk_level=RiskLevel.LOW,
-                    methodology="(Total Equity - Intangibles - Goodwill) / Shares Outstanding",
-                    limitations=["Excludes intangible asset value"]
-                ))
-
-        # Return on Equity (if net income available)
-        net_income = income_statement.get('net_income', 0)
-        if total_equity > 0 and net_income != 0:
-            # Calculate average equity if comparative data available
-            avg_equity = total_equity
-            if comparative_data and len(comparative_data) > 0:
-                prev_equity = comparative_data[-1].balance_sheet.get('total_equity', 0)
-                if prev_equity > 0:
-                    avg_equity = (total_equity + prev_equity) / 2
-
-            roe = self.safe_divide(net_income, avg_equity)
-            benchmark = self.profitability_benchmarks.get('roe', {})
-            risk_level = self.assess_risk_level(roe, benchmark, higher_is_better=True)
-
+            tangible_equity = total_equity - bs.get('intangible_assets', 0.0) - bs.get('goodwill', 0.0)
+            tangible_bvps = tangible_equity / shares
             results.append(AnalysisResult(
-                analysis_type=AnalysisType.PROFITABILITY,
-                metric_name="Return on Equity",
-                value=roe,
-                interpretation=self.generate_interpretation("return on equity", roe, risk_level,
-                                                            AnalysisType.PROFITABILITY),
-                risk_level=risk_level,
-                benchmark_comparison=self.compare_to_industry(roe, industry_data.get('roe') if industry_data else None),
-                methodology="Net Income / Average Total Equity"
+                analysis_type=AnalysisType.VALUATION,
+                metric_name="Tangible Book Value per Share",
+                value=tangible_bvps,
+                interpretation=(f"Tangible book value per share is {tangible_bvps:.2f}" if tangible_bvps >= 0
+                                else f"Negative tangible book value per share ({tangible_bvps:.2f})"),
+                risk_level=RiskLevel.LOW if tangible_bvps > 0 else RiskLevel.HIGH,
+                methodology=f"(Total Equity - Intangibles - Goodwill) / Shares ({shares_basis})",
+                limitations=["Excludes intangible asset value"]
             ))
+
+        # Return on Equity
+        net_income = income_statement.get('net_income')
+        if net_income is not None:
+            avg_equity, basis = self.average_balance(statements, comparative_data, 'total_equity')
+            if avg_equity is None or avg_equity <= 0:
+                results.append(self.unavailable(
+                    AnalysisType.PROFITABILITY, "Return on Equity",
+                    "average shareholders' equity is zero or negative, ROE is not meaningful",
+                    "Net Income / Total Equity"))
+            else:
+                roe = net_income / avg_equity
+                risk_level = self.assess_risk_level(roe, self.profitability_benchmarks['roe'], True)
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.PROFITABILITY,
+                    metric_name="Return on Equity",
+                    value=roe,
+                    interpretation=self.generate_interpretation("return on equity", roe, risk_level,
+                                                                AnalysisType.PROFITABILITY),
+                    risk_level=risk_level,
+                    benchmark_comparison=self.compare_to_industry(roe, industry_data.get('roe') if industry_data else None),
+                    methodology=f"Net Income / Total Equity ({self.basis_note(basis)})"
+                ))
 
         return results
 
@@ -654,29 +661,23 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                               comparative_data: Optional[List[FinancialStatements]] = None) -> List[AnalysisResult]:
         """Assess asset quality and potential impairment issues"""
         results = []
-        balance_sheet = statements.balance_sheet
+        bs = statements.balance_sheet
 
-        # Asset age analysis (if depreciation data available)
-        ppe_gross = balance_sheet.get('ppe_gross', 0)
-        accumulated_depreciation = balance_sheet.get('accumulated_depreciation', 0)
-
-        if ppe_gross > 0 and accumulated_depreciation > 0:
-            asset_age_ratio = self.safe_divide(accumulated_depreciation, ppe_gross)
-
+        ppe_gross = bs.get('ppe_gross')
+        accumulated_depreciation = bs.get('accumulated_depreciation')
+        if ppe_gross and ppe_gross > 0 and accumulated_depreciation is not None:
+            asset_age_ratio = accumulated_depreciation / ppe_gross
             age_interpretation = "Assets approaching end of useful life - significant capex likely needed" if asset_age_ratio > 0.7 else "Moderately aged assets" if asset_age_ratio > 0.5 else "Relatively new assets"
-            age_risk = RiskLevel.HIGH if asset_age_ratio > 0.8 else RiskLevel.MODERATE if asset_age_ratio > 0.6 else RiskLevel.LOW
-
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Asset Age Ratio",
                 value=asset_age_ratio,
                 interpretation=age_interpretation,
-                risk_level=age_risk,
+                risk_level=RiskLevel.HIGH if asset_age_ratio > 0.8 else RiskLevel.MODERATE if asset_age_ratio > 0.6 else RiskLevel.LOW,
                 methodology="Accumulated Depreciation / Gross PPE",
                 limitations=["Based on historical cost and depreciation methods"]
             ))
 
-        # Impairment indicators
         impairment_indicators = self._identify_impairment_indicators(statements, comparative_data)
         if impairment_indicators:
             results.append(AnalysisResult(
@@ -693,65 +694,73 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
     def _assess_financial_position_quality(self, statements: FinancialStatements,
                                            comparative_data: Optional[List[FinancialStatements]] = None) -> List[
         AnalysisResult]:
-        """Assess overall financial position quality"""
+        """Composite financial position score over the factors that can be evaluated."""
         results = []
-
-        # Balance sheet strength score
-        balance_sheet = statements.balance_sheet
-
-        # Quality factors
+        bs = statements.balance_sheet
         quality_factors = []
+        evaluated = []
+        not_evaluated = []
         quality_score = 100
 
-        # Factor 1: Liquidity position
-        current_assets = balance_sheet.get('current_assets', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        if current_liabilities > 0:
-            current_ratio = self.safe_divide(current_assets, current_liabilities)
+        ca, cl = bs.get('current_assets'), bs.get('current_liabilities')
+        if ca is not None and cl and cl > 0:
+            evaluated.append("liquidity")
+            current_ratio = ca / cl
             if current_ratio >= 1.5:
                 quality_factors.append("Strong liquidity position")
             elif current_ratio < 1.0:
                 quality_score -= 20
+        else:
+            not_evaluated.append("liquidity (current assets/liabilities not reported)")
 
-        # Factor 2: Debt levels
-        total_assets = balance_sheet.get('total_assets', 0)
-        total_debt = balance_sheet.get('long_term_debt', 0) + balance_sheet.get('short_term_debt', 0)
-        if total_assets > 0:
-            debt_ratio = self.safe_divide(total_debt, total_assets)
+        total_assets = bs.get('total_assets')
+        total_debt = self.total_debt(bs)
+        if total_assets and total_assets > 0 and total_debt is not None:
+            evaluated.append("leverage")
+            debt_ratio = total_debt / total_assets
             if debt_ratio > 0.6:
                 quality_score -= 25
             elif debt_ratio < 0.3:
                 quality_factors.append("Conservative debt levels")
+        else:
+            not_evaluated.append("leverage (debt or total assets not reported)")
 
-        # Factor 3: Asset composition
-        intangible_assets = balance_sheet.get('intangible_assets', 0)
-        goodwill = balance_sheet.get('goodwill', 0)
-        if total_assets > 0:
-            intangible_ratio = self.safe_divide(intangible_assets + goodwill, total_assets)
-            if intangible_ratio > 0.4:
+        if total_assets and total_assets > 0 and ('intangible_assets' in bs or 'goodwill' in bs):
+            evaluated.append("asset composition")
+            if (bs.get('intangible_assets', 0.0) + bs.get('goodwill', 0.0)) / total_assets > 0.4:
                 quality_score -= 15
 
-        # Factor 4: Profitability (if available)
-        income_statement = statements.income_statement
-        net_income = income_statement.get('net_income', 0)
-        if net_income < 0:
-            quality_score -= 20
+        total_equity = bs.get('total_equity')
+        if total_equity is not None and total_equity < 0:
+            evaluated.append("equity")
+            quality_score -= 25
+
+        net_income = statements.income_statement.get('net_income')
+        if net_income is not None:
+            evaluated.append("profitability")
+            if net_income < 0:
+                quality_score -= 20
+        else:
+            not_evaluated.append("profitability (net income not reported)")
+
+        if len(evaluated) < 2:
+            results.append(self.unavailable(AnalysisType.QUALITY, "Financial Position Quality Score",
+                                            f"only {len(evaluated)} of the scored factors could be evaluated "
+                                            f"({', '.join(evaluated) or 'none'}); at least 2 are needed"))
+            return results
 
         quality_score = max(0, quality_score)
-
         quality_interpretation = "Excellent financial position" if quality_score > 80 else "Good financial position" if quality_score > 60 else "Fair financial position" if quality_score > 40 else "Weak financial position"
-        quality_risk = RiskLevel.LOW if quality_score > 70 else RiskLevel.MODERATE if quality_score > 50 else RiskLevel.HIGH
-
         results.append(AnalysisResult(
             analysis_type=AnalysisType.QUALITY,
             metric_name="Financial Position Quality Score",
             value=quality_score,
-            interpretation=quality_interpretation,
-            risk_level=quality_risk,
+            interpretation=quality_interpretation + f" (factors evaluated: {', '.join(evaluated)})",
+            risk_level=RiskLevel.LOW if quality_score > 70 else RiskLevel.MODERATE if quality_score > 50 else RiskLevel.HIGH,
             recommendations=quality_factors,
-            methodology="Composite score based on liquidity, leverage, asset quality, and profitability"
+            limitations=[f"Not evaluated: {x}" for x in not_evaluated],
+            methodology="100 minus penalties for weak liquidity, high leverage, intangible-heavy assets, negative equity and losses"
         ))
-
         return results
 
     def _perform_common_size_analysis(self, statements: FinancialStatements,
@@ -759,49 +768,37 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
         AnalysisResult]:
         """Perform common-size balance sheet analysis"""
         results = []
-        balance_sheet = statements.balance_sheet
-        total_assets = balance_sheet.get('total_assets', 0)
-
-        if total_assets == 0:
+        bs = statements.balance_sheet
+        total_assets = bs.get('total_assets')
+        if total_assets is None or total_assets <= 0:
             return results
 
-        # Asset composition as % of total assets
-        asset_items = {
-            'Current Assets': balance_sheet.get('current_assets', 0),
-            'PPE Net': balance_sheet.get('ppe_net', 0),
-            'Intangible Assets': balance_sheet.get('intangible_assets', 0),
-            'Goodwill': balance_sheet.get('goodwill', 0)
-        }
-
-        for item_name, item_value in asset_items.items():
-            if item_value > 0:
-                common_size_pct = self.safe_divide(item_value, total_assets)
-
+        asset_items = {'Current Assets': 'current_assets', 'PPE Net': 'ppe_net',
+                       'Intangible Assets': 'intangible_assets', 'Goodwill': 'goodwill'}
+        for item_name, key in asset_items.items():
+            item_value = bs.get(key)
+            if item_value is not None and item_value > 0:
+                pct = item_value / total_assets
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.ACTIVITY,
                     metric_name=f"{item_name} as % of Total Assets",
-                    value=common_size_pct,
-                    interpretation=f"{item_name} represents {self.format_percentage(common_size_pct)} of total assets",
+                    value=pct,
+                    interpretation=f"{item_name} represents {self.format_percentage(pct)} of total assets",
                     risk_level=RiskLevel.LOW,
                     methodology=f"{item_name} / Total Assets"
                 ))
 
-        # Liability and equity composition
-        liability_equity_items = {
-            'Current Liabilities': balance_sheet.get('current_liabilities', 0),
-            'Long-term Debt': balance_sheet.get('long_term_debt', 0),
-            'Total Equity': balance_sheet.get('total_equity', 0)
-        }
-
-        for item_name, item_value in liability_equity_items.items():
-            if item_value != 0:  # Include negative values
-                common_size_pct = self.safe_divide(item_value, total_assets)
-
+        le_items = {'Current Liabilities': 'current_liabilities', 'Long-term Debt': 'long_term_debt',
+                    'Total Equity': 'total_equity'}
+        for item_name, key in le_items.items():
+            item_value = bs.get(key)
+            if item_value is not None and item_value != 0:  # negative equity included
+                pct = item_value / total_assets
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.SOLVENCY,
                     metric_name=f"{item_name} as % of Total Assets",
-                    value=common_size_pct,
-                    interpretation=f"{item_name} represents {self.format_percentage(common_size_pct)} of total assets",
+                    value=pct,
+                    interpretation=f"{item_name} represents {self.format_percentage(pct)} of total assets",
                     risk_level=RiskLevel.LOW,
                     methodology=f"{item_name} / Total Assets"
                 ))
@@ -811,31 +808,24 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
     def _analyze_balance_sheet_relationships(self, statements: FinancialStatements,
                                              comparative_data: Optional[List[FinancialStatements]] = None) -> List[
         AnalysisResult]:
-        """Analyze key balance sheet relationships and efficiency metrics"""
+        """Long-term financing vs long-term assets"""
         results = []
+        bs = statements.balance_sheet
+        if not all(k in bs for k in ('total_assets', 'current_assets', 'total_equity')):
+            return results
 
-        # Asset-Liability matching analysis
-        balance_sheet = statements.balance_sheet
-        current_assets = balance_sheet.get('current_assets', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        long_term_assets = balance_sheet.get('total_assets', 0) - current_assets
-        long_term_debt = balance_sheet.get('long_term_debt', 0)
-
-        # Financing appropriateness
-        if long_term_assets > 0 and (long_term_debt + balance_sheet.get('total_equity', 0)) > 0:
-            long_term_financing = long_term_debt + balance_sheet.get('total_equity', 0)
-            financing_ratio = self.safe_divide(long_term_financing, long_term_assets)
-
+        long_term_assets = bs['total_assets'] - bs['current_assets']
+        long_term_financing = bs.get('long_term_debt', 0.0) + bs['total_equity']
+        if long_term_assets > 0:
+            financing_ratio = long_term_financing / long_term_assets
             financing_interpretation = "Appropriate long-term financing for long-term assets" if financing_ratio >= 1.0 else "Potential maturity mismatch - long-term assets financed with short-term funds"
-            financing_risk = RiskLevel.LOW if financing_ratio >= 1.0 else RiskLevel.MODERATE if financing_ratio >= 0.8 else RiskLevel.HIGH
-
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.SOLVENCY,
                 metric_name="Long-term Financing Ratio",
                 value=financing_ratio,
                 interpretation=financing_interpretation,
-                risk_level=financing_risk,
-                methodology="(Long-term Debt + Equity) / Long-term Assets",
+                risk_level=RiskLevel.LOW if financing_ratio >= 1.0 else RiskLevel.MODERATE if financing_ratio >= 0.8 else RiskLevel.HIGH,
+                methodology="(Long-term Debt + Equity) / (Total Assets - Current Assets)",
                 limitations=["Simplified maturity matching analysis"]
             ))
 
@@ -845,118 +835,132 @@ class BalanceSheetAnalyzer(BaseAnalyzer):
                                         comparative_data: Optional[List[FinancialStatements]] = None) -> List[str]:
         """Identify potential asset impairment indicators"""
         indicators = []
-
-        balance_sheet = statements.balance_sheet
+        bs = statements.balance_sheet
         income_statement = statements.income_statement
 
-        # Declining profitability
-        net_income = income_statement.get('net_income', 0)
-        if net_income < 0:
+        net_income = income_statement.get('net_income')
+        if net_income is not None and net_income < 0:
             indicators.append("Negative net income may indicate asset impairment")
 
-        # High goodwill relative to market cap (would need market data)
-        goodwill = balance_sheet.get('goodwill', 0)
-        total_assets = balance_sheet.get('total_assets', 0)
-        if goodwill > 0 and total_assets > 0:
-            goodwill_ratio = self.safe_divide(goodwill, total_assets)
-            if goodwill_ratio > 0.3:
-                indicators.append("High goodwill concentration - monitor for impairment")
+        goodwill = bs.get('goodwill')
+        total_assets = bs.get('total_assets')
+        if goodwill and goodwill > 0 and total_assets and total_assets > 0 and goodwill / total_assets > 0.3:
+            indicators.append("High goodwill concentration - monitor for impairment")
 
-        # Declining asset utilization
-        if comparative_data and len(comparative_data) > 0:
-            revenue = income_statement.get('revenue', 0)
-            prev_revenue = comparative_data[-1].income_statement.get('revenue', 0)
-
-            if prev_revenue > 0 and revenue < prev_revenue * 0.9:  # 10% decline
+        if comparative_data:
+            revenue = income_statement.get('revenue')
+            prev_revenue = self.prior_value(comparative_data, 'income_statement', 'revenue')
+            if revenue is not None and prev_revenue and prev_revenue > 0 and revenue < prev_revenue * 0.9:
                 indicators.append("Significant revenue decline may indicate asset impairment")
 
         return indicators
 
-    def get_key_metrics(self, statements: FinancialStatements) -> Dict[str, float]:
-        """Return key balance sheet metrics"""
-        balance_sheet = statements.balance_sheet
+    def get_key_metrics(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]] = None,
+                        unavailable: Optional[Dict[str, str]] = None) -> Dict[str, float]:
+        """Key balance sheet metrics. ROA/ROE/asset turnover use average balances when
+        `comparative_data` is supplied, else ending balances. Metrics whose inputs are
+        missing are omitted (reasons go to `unavailable`)."""
+        bs = statements.balance_sheet
         income_statement = statements.income_statement
-
         metrics = {}
+        skipped = unavailable if unavailable is not None else {}
 
-        # Liquidity metrics
-        current_assets = balance_sheet.get('current_assets', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        cash_equivalents = balance_sheet.get('cash_equivalents', 0)
+        current_liabilities = bs.get('current_liabilities')
+        if current_liabilities and current_liabilities > 0:
+            if 'current_assets' in bs:
+                metrics['current_ratio'] = bs['current_assets'] / current_liabilities
+            else:
+                skipped['current_ratio'] = "current assets not reported"
+            quick_assets, _ = self._quick_assets(bs)
+            if quick_assets is not None:
+                metrics['quick_ratio'] = quick_assets / current_liabilities
+            cash_and_inv = self._cash_and_investments(bs)
+            if cash_and_inv is not None:
+                metrics['cash_ratio'] = cash_and_inv / current_liabilities
+        else:
+            for k in ('current_ratio', 'quick_ratio', 'cash_ratio'):
+                skipped[k] = "current liabilities not reported or not positive"
 
-        if current_liabilities > 0:
-            metrics['current_ratio'] = self.safe_divide(current_assets, current_liabilities)
-            metrics['quick_ratio'] = self.safe_divide(current_assets - balance_sheet.get('inventory', 0),
-                                                      current_liabilities)
-            metrics['cash_ratio'] = self.safe_divide(cash_equivalents, current_liabilities)
+        total_assets = bs.get('total_assets')
+        total_equity = bs.get('total_equity')
+        total_debt = self.total_debt(bs)
 
-        # Solvency metrics
-        total_assets = balance_sheet.get('total_assets', 0)
-        total_equity = balance_sheet.get('total_equity', 0)
-        total_debt = balance_sheet.get('long_term_debt', 0) + balance_sheet.get('short_term_debt', 0)
+        if total_equity is not None and total_equity > 0:
+            if total_debt is not None:
+                metrics['debt_to_equity'] = total_debt / total_equity
+            else:
+                skipped['debt_to_equity'] = "debt not reported"
+            if total_assets is not None:
+                metrics['equity_multiplier'] = total_assets / total_equity
+        else:
+            reason = "total equity not reported" if total_equity is None else "total equity is zero or negative"
+            skipped['debt_to_equity'] = reason
+            skipped['equity_multiplier'] = reason
 
-        if total_equity > 0:
-            metrics['debt_to_equity'] = self.safe_divide(total_debt, total_equity)
-            metrics['equity_multiplier'] = self.safe_divide(total_assets, total_equity)
+        if total_assets is not None and total_assets > 0:
+            if total_debt is not None:
+                metrics['debt_to_assets'] = total_debt / total_assets
+            else:
+                skipped['debt_to_assets'] = "debt not reported"
+            if total_equity is not None:
+                metrics['equity_ratio'] = total_equity / total_assets
 
-        if total_assets > 0:
-            metrics['debt_to_assets'] = self.safe_divide(total_debt, total_assets)
-            metrics['equity_ratio'] = self.safe_divide(total_equity, total_assets)
+        revenue = income_statement.get('revenue')
+        net_income = income_statement.get('net_income')
+        avg_assets, _ = self.average_balance(statements, comparative_data, 'total_assets')
+        avg_equity, _ = self.average_balance(statements, comparative_data, 'total_equity')
 
-        # Activity metrics
-        revenue = income_statement.get('revenue', 0)
-        if total_assets > 0 and revenue > 0:
-            metrics['asset_turnover'] = self.safe_divide(revenue, total_assets)
+        if avg_assets is not None and avg_assets > 0:
+            if revenue is not None and revenue > 0:
+                metrics['asset_turnover'] = revenue / avg_assets
+            if net_income is not None:
+                metrics['roa'] = net_income / avg_assets
+            else:
+                skipped['roa'] = "net income not reported"
+        else:
+            skipped['roa'] = "total assets not reported or not positive"
 
-        # Return metrics
-        net_income = income_statement.get('net_income', 0)
-        if total_assets > 0:
-            metrics['roa'] = self.safe_divide(net_income, total_assets)
-        if total_equity > 0:
-            metrics['roe'] = self.safe_divide(net_income, total_equity)
+        if net_income is not None and avg_equity is not None and avg_equity > 0:
+            metrics['roe'] = net_income / avg_equity
+        else:
+            skipped['roe'] = ("net income not reported" if net_income is None
+                              else "shareholders' equity not reported, zero or negative")
 
         return metrics
 
     def create_liquidity_analysis(self, statements: FinancialStatements) -> LiquidityAnalysis:
-        """Create comprehensive liquidity analysis object"""
-        balance_sheet = statements.balance_sheet
+        """Create liquidity analysis object (ratios are None when not computable)."""
+        bs = statements.balance_sheet
+        current_assets = bs.get('current_assets')
+        current_liabilities = bs.get('current_liabilities')
+        total_assets = bs.get('total_assets')
 
-        current_assets = balance_sheet.get('current_assets', 0)
-        current_liabilities = balance_sheet.get('current_liabilities', 0)
-        cash_equivalents = balance_sheet.get('cash_equivalents', 0)
-        inventory = balance_sheet.get('inventory', 0)
+        def ratio(num):
+            return num / current_liabilities if num is not None and current_liabilities else None
 
-        # Calculate ratios
-        current_ratio = self.safe_divide(current_assets, current_liabilities)
-        quick_ratio = self.safe_divide(current_assets - inventory, current_liabilities)
-        cash_ratio = self.safe_divide(cash_equivalents, current_liabilities)
+        current_ratio = ratio(current_assets)
+        quick_ratio = ratio(self._quick_assets(bs)[0])
+        cash_ratio = ratio(self._cash_and_investments(bs))
+        working_capital = (current_assets - current_liabilities
+                           if current_assets is not None and current_liabilities is not None else None)
+        working_capital_ratio = (working_capital / total_assets
+                                 if working_capital is not None and total_assets else None)
 
-        working_capital = current_assets - current_liabilities
-        total_assets = balance_sheet.get('total_assets', 0)
-        working_capital_ratio = self.safe_divide(working_capital, total_assets)
-
-        # Assess liquidity quality
-        quality_score = 100
-        if current_ratio < 1.0:
-            quality_score -= 30
-        elif current_ratio < 1.2:
-            quality_score -= 15
-
-        if quick_ratio < 0.8:
-            quality_score -= 20
-
-        if cash_ratio < 0.1:
-            quality_score -= 10
-
-        quality_score = max(0, quality_score)
-
-        # Determine risk level
-        if quality_score > 80:
-            risk_level = RiskLevel.LOW
-        elif quality_score > 60:
-            risk_level = RiskLevel.MODERATE
-        else:
-            risk_level = RiskLevel.HIGH
+        quality_score = None
+        risk_level = None
+        if current_ratio is not None:
+            quality_score = 100
+            if current_ratio < 1.0:
+                quality_score -= 30
+            elif current_ratio < 1.2:
+                quality_score -= 15
+            if quick_ratio is not None and quick_ratio < 0.8:
+                quality_score -= 20
+            if cash_ratio is not None and cash_ratio < 0.1:
+                quality_score -= 10
+            quality_score = max(0, quality_score)
+            risk_level = RiskLevel.LOW if quality_score > 80 else RiskLevel.MODERATE if quality_score > 60 else RiskLevel.HIGH
 
         return LiquidityAnalysis(
             current_ratio=current_ratio,

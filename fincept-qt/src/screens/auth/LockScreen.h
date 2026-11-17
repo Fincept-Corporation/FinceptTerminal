@@ -6,6 +6,12 @@
 #include <QTimer>
 #include <QWidget>
 
+class QBoxLayout;
+
+namespace fincept::ui {
+class EnterpriseLockPromo;
+}
+
 namespace fincept::screens {
 
 /// Lock screen — PIN setup (mandatory first time) and PIN unlock (subsequent).
@@ -15,6 +21,13 @@ namespace fincept::screens {
 ///   0 — PIN setup (create new 6-digit PIN, confirm)
 ///   1 — PIN unlock (enter PIN to unlock terminal)
 ///   2 — Lockout (too many failed attempts, must re-authenticate)
+///
+/// Beside the PIN card (wide window) or as a slim strip under it (narrow
+/// window / large font, unlock page only) the screen advertises Fincept
+/// Terminal Enterprise (ui::EnterpriseLockPromo): static generic copy, no
+/// account data, links that open in the browser, nothing focusable — the PIN
+/// field keeps the keyboard. Hidden on the lockout page, when there is no room
+/// for it, and for an account whose in-memory plan is already Enterprise.
 ///
 /// Internationalised via tr() + retranslateUi(); reacts to runtime language
 /// switches through changeEvent(QEvent::LanguageChange).
@@ -44,6 +57,13 @@ class LockScreen : public QWidget {
 
   private:
     QStackedWidget* pages_ = nullptr;
+
+    // Layout: top row (version, language), then the body — a column holding the
+    // PIN card and the Enterprise strip, and the Enterprise panel beside it.
+    QBoxLayout* top_row_ = nullptr;
+    QBoxLayout* body_ = nullptr;
+    ui::EnterpriseLockPromo* promo_panel_ = nullptr; ///< wide: second column
+    ui::EnterpriseLockPromo* promo_strip_ = nullptr; ///< narrow: one line under the card
 
     // PIN Setup page (index 0) — text-bearing widgets
     QLabel* setup_title_ = nullptr;
@@ -82,6 +102,18 @@ class LockScreen : public QWidget {
     // Lockout countdown timer
     QTimer* lockout_timer_ = nullptr;
 
+    // PIN key derivation runs off the UI thread (PinManager); while a check or
+    // a PIN setup is in flight its page shows a busy state, its inputs are
+    // disabled and Enter / clicks are ignored, so one submission is exactly
+    // one attempt.
+    bool unlock_busy_ = false;
+    bool setup_busy_ = false;
+    /// Bumped when the app takes this screen away (a sibling window unlocked,
+    /// sign-out, window closing — not a minimise). A result that arrives for an
+    /// older serial is ignored: PinManager has accounted it, but it must not
+    /// unlock or touch a screen the user has left.
+    quint64 attempt_serial_ = 0;
+
     void build_setup_page();
     void build_unlock_page();
     void build_lockout_page();
@@ -90,17 +122,28 @@ class LockScreen : public QWidget {
 
     void on_setup_submit();
     void on_unlock_submit();
+    void on_unlock_result(bool ok);
+    void set_unlock_busy(bool busy);
+    void set_setup_busy(bool busy);
     void update_lockout_display();
     /// Recompute the attempts-remaining label using the live PinManager state.
     /// Called from show_unlock(), unlock failure paths, and retranslateUi() so
     /// the text stays in sync across both state and language changes.
     void refresh_attempts_label();
+    /// Card width from the font size (wider at larger fonts), never wider
+    /// than the screen leaves room for; and which Enterprise promotion fits —
+    /// the panel beside the card when the width (font-metric breakpoint) and
+    /// height allow, else the strip under the unlock card when the height
+    /// allows, else none. Re-run on resize, show, page change, language change
+    /// and ThemeManager::appearance_settled.
+    void fit_layout();
 
   protected:
     void paintEvent(QPaintEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 };
 
 } // namespace fincept::screens

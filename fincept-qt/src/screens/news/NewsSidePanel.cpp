@@ -1,19 +1,94 @@
 #include "screens/news/NewsSidePanel.h"
 
+#include "ui/formatting/DateFormat.h"
+#include "ui/tables/BarCellDelegate.h"
+#include "ui/tables/DataTable.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QFontMetrics>
+#include <QHeaderView>
 #include <QLocale>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens {
 
+namespace {
+
+/// Width of a text of `chars` characters in the user's font at `offset`.
+int text_width(int chars, int offset, int weight = QFont::Normal) {
+    return QFontMetrics(ui::fonts::font(offset, weight)).horizontalAdvance(QString(chars, QLatin1Char('M')));
+}
+
+/// A push button that shows as much of its text as fits and elides the rest
+/// (the full text is its tooltip), re-eliding when the drawer is resized —
+/// drawer rows used to be cut to a fixed 16–50 characters.
+class NewsElidedButton final : public QPushButton {
+  public:
+    NewsElidedButton(const QString& full, QWidget* parent) : QPushButton(parent), full_(full) {
+        setMinimumWidth(40);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        relabel();
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent* e) override {
+        QPushButton::resizeEvent(e);
+        relabel();
+    }
+
+  private:
+    void relabel() {
+        const int w = std::max(20, width() - 14);
+        QString t = fontMetrics().elidedText(full_, Qt::ElideRight, w);
+        setText(t.replace(QLatin1Char('&'), QStringLiteral("&&"))); // '&' is a mnemonic marker
+    }
+    QString full_;
+};
+
+/// The QLabel counterpart of NewsElidedButton.
+class NewsElidedLabel final : public QLabel {
+  public:
+    NewsElidedLabel(const QString& full, QWidget* parent) : QLabel(parent), full_(full) {
+        setTextFormat(Qt::PlainText);
+        setMinimumWidth(40);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        setToolTip(full);
+        relabel();
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent* e) override {
+        QLabel::resizeEvent(e);
+        relabel();
+    }
+
+  private:
+    void relabel() { setText(fontMetrics().elidedText(full_, Qt::ElideRight, std::max(20, width() - 4))); }
+    QString full_;
+};
+
+void nsp_clear_layout(QVBoxLayout* layout) {
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+}
+
+} // namespace
+
 NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     setObjectName("newsDrawerPanel");
-    setFixedWidth(280);
+    // Sized by the screen's splitter; this is only the floor (and the first-open
+    // width hint below).
+    setMinimumWidth(220);
     hide(); // start hidden — toggled by INTEL button
 
     auto* outer = new QVBoxLayout(this);
@@ -23,7 +98,7 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     // Drawer header with close button
     auto* header = new QWidget(this);
     header->setObjectName("newsDrawerHeader");
-    header->setFixedHeight(30);
+    header->setMinimumHeight(30);
     auto* header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(10, 0, 6, 0);
     header_layout->setSpacing(0);
@@ -37,8 +112,7 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     close_btn->setObjectName("newsDrawerCloseBtn");
     close_btn->setFixedSize(22, 22);
     close_btn->setCursor(Qt::PointingHandCursor);
-    // The screen owns open/close (it also syncs the INTEL button). Toggling here as
-    // well used to close the drawer and have the screen's handler reopen it at once.
+    // The screen owns open/close (it also syncs the INTEL button).
     connect(close_btn, &QPushButton::clicked, this, &NewsSidePanel::close_requested);
     header_layout->addWidget(close_btn);
     outer->addWidget(header);
@@ -109,18 +183,30 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     entities_section_ = build_hidden_section(tr("ENTITIES"), entities_layout_, &entities_title_);
     locations_section_ = build_hidden_section(tr("LOCATIONS"), locations_layout_, &locations_title_);
     signals_section_ = build_hidden_section(tr("SIGNALS"), signals_layout_, &signals_title_);
-    predictions_section_ = build_hidden_section(tr("PREDICTIONS"), predictions_layout_, &predictions_title_);
+    predictions_section_ = build_hidden_section(tr("PREDICTIONS ON THESE TOPICS"), predictions_layout_, &predictions_title_);
     // Say where the odds come from: Manifold Markets, a play-money site — not
-    // tradable real-money prices.
+    // tradable real-money prices — and that they are matched to the headlines.
     predictions_source_ = new QLabel(services::NewsCorrelationService::predictions_source_label(), predictions_section_);
     predictions_source_->setObjectName("newsPredSource");
+    predictions_source_->setWordWrap(true);
     if (auto* inner = qobject_cast<QVBoxLayout*>(predictions_section_->layout()))
         inner->insertWidget(1, predictions_source_);
     saved_section_ = build_hidden_section(tr("BOOKMARKS"), saved_layout_, &saved_title_);
+    saved_more_btn_ = new QPushButton(saved_section_);
+    saved_more_btn_->setObjectName("newsCategoryBtn");
+    saved_more_btn_->setCursor(Qt::PointingHandCursor);
+    saved_more_btn_->hide();
+    connect(saved_more_btn_, &QPushButton::clicked, this, [this]() {
+        saved_show_all_ = !saved_show_all_;
+        render_saved();
+    });
+    if (auto* inner = qobject_cast<QVBoxLayout*>(saved_section_->layout()))
+        inner->addWidget(saved_more_btn_);
 
     layout->addStretch();
     scroll->setWidget(content);
     outer->addWidget(scroll);
+    resize(std::max(300, text_width(40, -3)), height());
 }
 
 void NewsSidePanel::changeEvent(QEvent* event) {
@@ -151,13 +237,14 @@ void NewsSidePanel::retranslateUi() {
     if (signals_title_)
         signals_title_->setText(tr("SIGNALS"));
     if (predictions_title_)
-        predictions_title_->setText(tr("PREDICTIONS"));
+        predictions_title_->setText(tr("PREDICTIONS ON THESE TOPICS"));
     if (predictions_source_)
         predictions_source_->setText(services::NewsCorrelationService::predictions_source_label());
     if (saved_title_)
         saved_title_->setText(tr("BOOKMARKS"));
     if (monitor_input_)
         monitor_input_->setPlaceholderText(tr("label: kw1, kw2"));
+    render_saved();
     // Per-item rows (categories, monitors, entities, etc.) are rebuilt from
     // live data on the next update — not re-applied here.
 }
@@ -211,7 +298,7 @@ void NewsSidePanel::build_monitors_section(QVBoxLayout* parent) {
     monitor_input_ = new QLineEdit(add_row);
     monitor_input_->setObjectName("newsMonitorInput");
     monitor_input_->setPlaceholderText(tr("label: kw1, kw2"));
-    monitor_input_->setFixedHeight(22);
+    monitor_input_->setMinimumHeight(22);
 
     auto* add_btn = new QPushButton("+", add_row);
     add_btn->setObjectName("newsMonitorAddBtn");
@@ -259,6 +346,12 @@ void NewsSidePanel::build_deviations_section(QVBoxLayout* parent) {
     deviations_title_->setObjectName("newsDrawerSectionTitle");
     inner->addWidget(deviations_title_);
 
+    baseline_note_ = new QLabel(deviations_section_);
+    baseline_note_->setObjectName("newsPredSource");
+    baseline_note_->setWordWrap(true);
+    baseline_note_->hide();
+    inner->addWidget(baseline_note_);
+
     auto* container = new QWidget(deviations_section_);
     deviations_layout_ = new QVBoxLayout(container);
     deviations_layout_->setContentsMargins(0, 0, 0, 0);
@@ -271,31 +364,18 @@ void NewsSidePanel::build_deviations_section(QVBoxLayout* parent) {
 // ── Update methods ──────────────────────────────────────────────────────────
 
 void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top) {
-    // Clear existing
-    while (top_stories_layout_->count() > 0) {
-        auto* item = top_stories_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
+    nsp_clear_layout(top_stories_layout_);
     for (int i = 0; i < top.size(); ++i) {
         const auto& article = top[i];
-        auto* btn = new QPushButton(this);
+        auto* btn = new NewsElidedButton(QString("%1. %2").arg(i + 1).arg(article.headline), this);
         btn->setObjectName("newsTopStoryBtn");
         btn->setCursor(Qt::PointingHandCursor);
-
-        // '&' in a button label is a mnemonic marker ("AT&T" would render "ATT"
-        // with an underlined T) — double it.
-        QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(50).replace('&', "&&"));
-        btn->setText(label);
-        btn->setToolTip(article.headline);
-
+        btn->setToolTip(article.headline + QLatin1Char('\n') + article.source + QStringLiteral(" · ") +
+                        (article.undated ? tr("undated")
+                                         : ui::formatting::relative(static_cast<qint64>(article.sort_ts))));
         // Priority stripe (left border) — a rule per priority in the screen's sheet.
         btn->setProperty("prio", services::priority_string(article.priority).toLower());
-
         connect(btn, &QPushButton::clicked, this, [this, article]() { emit article_clicked(article); });
-
         top_stories_layout_->addWidget(btn);
     }
 }
@@ -303,40 +383,69 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
 void NewsSidePanel::fill_mentions(QVBoxLayout* layout, QWidget* section, const QVector<NewsTickerMention>& rows) {
     if (!layout || !section)
         return;
-    while (layout->count() > 0) {
-        auto* item = layout->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(layout);
     section->setVisible(!rows.isEmpty());
-    for (const auto& r : rows) {
-        auto* btn = new QPushButton(this);
-        btn->setObjectName("newsTickerBtn");
-        btn->setCursor(Qt::PointingHandCursor);
+    if (rows.isEmpty())
+        return;
+    // A compact table: symbol | mentions (bar) | change vs the previous window | tone.
+    auto* table = new ui::DataTable(this);
+    table->set_headers({tr("SYMBOL"), tr("MENT."), tr("VS PREV"), tr("TONE")});
+    table->verticalHeader()->hide();
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table->setItemDelegateForColumn(1, new ui::BarCellDelegate(ui::BarCellDelegate::Mode::Bar, table));
+    table->setRowCount(static_cast<int>(rows.size()));
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& m = rows[r];
+        auto* sym = new QTableWidgetItem(m.earnings.isEmpty() ? m.symbol : m.symbol + QStringLiteral("  ") + m.earnings);
+        sym->setData(Qt::UserRole, m.symbol);
+        sym->setForeground(QColor(ui::colors::WARNING()));
+        QString tip = tr("%1: %n article(s) in the current feed", "", m.count).arg(m.symbol) +
+                      tr("\n%1 bullish · %2 bearish").arg(m.bullish).arg(m.bearish);
+        if (m.scored > 0)
+            tip += tr(" · mean tone %1 over %n scored", "", m.scored).arg(QString::number(m.net_sentiment, 'f', 2));
+        if (m.latest_ts > 0)
+            tip += tr("\nLatest: %1").arg(ui::formatting::relative(static_cast<qint64>(m.latest_ts)));
+        if (!m.earnings.isEmpty())
+            tip += tr("\nEarnings: %1").arg(m.earnings);
+        tip += tr("\nClick to filter the feed by %1.").arg(m.symbol);
+        sym->setToolTip(tip);
+        auto* count = new QTableWidgetItem();
+        count->setData(Qt::EditRole, m.count);
+        count->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        QString delta = QStringLiteral("—");
+        if (m.previous == 0)
+            delta = tr("new");
+        else if (m.previous > 0)
+            delta = (m.count >= m.previous ? QStringLiteral("+") : QString()) + QString::number(m.count - m.previous);
+        auto* d = new QTableWidgetItem(delta);
+        d->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        d->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
+        auto* tone = new QTableWidgetItem(m.scored > 0 ? QString::number(m.net_sentiment, 'f', 2) : tr("n/s"));
+        tone->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         // Same ±0.15 band the sentiment engine labels articles with.
-        const char* tone = r.net_sentiment >= 0.15 ? "bull" : (r.net_sentiment <= -0.15 ? "bear" : "flat");
-        const QString arrow = r.net_sentiment >= 0.15    ? QStringLiteral("▲")
-                              : r.net_sentiment <= -0.15 ? QStringLiteral("▼")
-                                                         : QStringLiteral("•");
-        btn->setText(QString("%1  %2  %3 %4%5")
-                         .arg(r.symbol, -10)
-                         .arg(r.count, 3)
-                         .arg(arrow)
-                         .arg(r.net_sentiment >= 0 ? "+" : "")
-                         .arg(QString::number(r.net_sentiment, 'f', 2)));
-        btn->setToolTip(tr("%1: %n article(s) in the current feed", "", r.count).arg(r.symbol) +
-                        tr("\n%1 bullish · %2 bearish · mean tone %3")
-                            .arg(r.bullish)
-                            .arg(r.bearish)
-                            .arg(QString::number(r.net_sentiment, 'f', 2)) +
-                        (r.latest_ts > 0 ? tr("\nLatest: %1").arg(services::relative_time(r.latest_ts)) : QString()) +
-                        tr("\nClick to filter the feed by %1.").arg(r.symbol));
-        btn->setProperty("tone", QString::fromLatin1(tone));
-        const QString sym = r.symbol;
-        connect(btn, &QPushButton::clicked, this, [this, sym]() { emit ticker_clicked(sym); });
-        layout->addWidget(btn);
+        tone->setForeground(m.scored == 0              ? QColor(ui::colors::TEXT_TERTIARY())
+                            : m.net_sentiment >= 0.15  ? QColor(ui::colors::POSITIVE())
+                            : m.net_sentiment <= -0.15 ? QColor(ui::colors::NEGATIVE())
+                                                       : QColor(ui::colors::TEXT_SECONDARY()));
+        table->setItem(r, 0, sym);
+        table->setItem(r, 1, count);
+        table->setItem(r, 2, d);
+        table->setItem(r, 3, tone);
     }
+    table->resizeColumnsToContents();
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    int h = table->horizontalHeader()->sizeHint().height() + 2 * table->frameWidth();
+    for (int r = 0; r < table->rowCount(); ++r)
+        h += table->rowHeight(r);
+    table->setFixedHeight(h);
+    connect(table, &QTableWidget::cellClicked, this, [this, table](int row, int) {
+        if (auto* it = table->item(row, 0))
+            emit ticker_clicked(it->data(Qt::UserRole).toString());
+    });
+    layout->addWidget(table);
 }
 
 void NewsSidePanel::update_trending(const QVector<NewsTickerMention>& trending) {
@@ -348,34 +457,29 @@ void NewsSidePanel::update_holdings_mentions(const QVector<NewsTickerMention>& m
 }
 
 void NewsSidePanel::update_categories(const QMap<QString, int>& counts) {
-    while (categories_layout_->count() > 0) {
-        auto* item = categories_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
+    nsp_clear_layout(categories_layout_);
     for (auto it = counts.begin(); it != counts.end(); ++it) {
-        auto* btn = new QPushButton(this);
+        auto* row = new QWidget(this);
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(4);
+        auto* btn = new QPushButton(it.key(), row);
         btn->setObjectName("newsCategoryBtn");
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setText(QString("%1  %2").arg(it.key(), -10).arg(it.value()));
-
-        QString cat = it.key();
+        btn->setToolTip(tr("Filter the feed to %1").arg(it.key()));
+        const QString cat = it.key();
         connect(btn, &QPushButton::clicked, this, [this, cat]() { emit category_clicked(cat); });
-
-        categories_layout_->addWidget(btn);
+        hl->addWidget(btn, 1);
+        auto* n = new QLabel(QLocale().toString(it.value()), row);
+        n->setObjectName("newsCategoryBtn");
+        hl->addWidget(n);
+        categories_layout_->addWidget(row);
     }
 }
 
 void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monitors,
                                     const QMap<QString, QVector<services::NewsArticle>>& matches) {
-    while (monitors_layout_->count() > 0) {
-        auto* item = monitors_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(monitors_layout_);
 
     for (const auto& monitor : monitors) {
         auto* row = new QWidget(this);
@@ -387,20 +491,23 @@ void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monito
         // Color dot
         auto* dot = new QLabel(this);
         dot->setFixedSize(8, 8);
+        // The monitor's user-chosen colour, shown as a swatch.
         dot->setStyleSheet(QString("background: %1; border-radius: 0;").arg(monitor.color));
         hl->addWidget(dot);
 
-        // Label + match count
+        // Label + match count (labels can come from MCP/LLM tools: plain text, elided)
         int match_count = matches.contains(monitor.id) ? matches[monitor.id].size() : 0;
-        auto* label = new QLabel(QString("%1 (%2)").arg(monitor.label).arg(match_count), this);
+        // One .arg() call: a chained .arg(match_count) would also fill a "%2" inside the label.
+        auto* label = new NewsElidedLabel(QString("%1 (%2)").arg(monitor.label, QString::number(match_count)), this);
         label->setObjectName("newsMonitorLabel");
-        label->setTextFormat(Qt::PlainText); // labels can come from MCP/LLM tools
+        label->setToolTip(monitor.keywords.join(QStringLiteral(", ")));
         hl->addWidget(label, 1);
 
         // Toggle button
         auto* toggle = new QPushButton(monitor.enabled ? tr("ON") : tr("OFF"), this);
         toggle->setObjectName(monitor.enabled ? "newsMonitorToggleOn" : "newsMonitorToggleOff");
-        toggle->setFixedSize(28, 18);
+        toggle->setFixedSize(std::max(28, text_width(3, -5, QFont::Bold) + 8),
+                             std::max(18, QFontMetrics(ui::fonts::font(-5)).height() + 4));
         toggle->setCursor(Qt::PointingHandCursor);
         QString mid = monitor.id;
         connect(toggle, &QPushButton::clicked, this, [this, mid]() { emit monitor_toggled(mid); });
@@ -418,16 +525,28 @@ void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monito
     }
 }
 
-void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& deviations) {
-    while (deviations_layout_->count() > 0) {
-        auto* item = deviations_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+void NewsSidePanel::update_baseline_status(int observed_hours, int needed_hours) {
+    if (!baseline_note_)
+        return;
+    if (observed_hours >= needed_hours) {
+        baseline_note_->hide();
+        deviations_section_->setVisible(!last_deviations_.isEmpty());
+        return;
     }
+    baseline_note_->setText(tr("Volume baseline: %1 of %2 hours of history collected — spikes are flagged once "
+                               "the baseline is complete (history persists across restarts).")
+                                .arg(observed_hours)
+                                .arg(needed_hours));
+    baseline_note_->show();
+    deviations_section_->show();
+}
+
+void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& deviations) {
+    last_deviations_ = deviations;
+    nsp_clear_layout(deviations_layout_);
 
     if (deviations.isEmpty()) {
-        deviations_section_->hide();
+        deviations_section_->setVisible(baseline_note_ && baseline_note_->isVisibleTo(deviations_section_));
         return;
     }
 
@@ -461,43 +580,37 @@ void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& dev
 // ── Intelligence section update methods ────────────────────────────────────
 
 void NewsSidePanel::update_entities(const services::NerResult& ner) {
-    while (entities_layout_->count() > 0) {
-        auto* item = entities_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(entities_layout_);
     bool has_data = false;
-
-    for (const auto& c : ner.top_countries) {
-        auto* lbl = new QLabel(QString("%1  %2").arg(c.name, -6).arg(c.count), this);
-        lbl->setObjectName("newsCategoryBtn");
-        entities_layout_->addWidget(lbl);
+    auto add_row = [&](const QString& kind, const QString& name, int count) {
+        auto* row = new QWidget(this);
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(6);
+        auto* k = new QLabel(kind, row);
+        k->setObjectName("newsPredSource");
+        hl->addWidget(k);
+        auto* n = new NewsElidedLabel(name, row);
+        n->setObjectName("newsMonitorLabel");
+        hl->addWidget(n, 1);
+        auto* c = new QLabel(QString::number(count), row);
+        c->setObjectName("newsMonitorLabel");
+        hl->addWidget(c);
+        entities_layout_->addWidget(row);
         has_data = true;
-    }
-    for (const auto& o : ner.top_organizations) {
-        auto* lbl = new QLabel(QString("%1  %2").arg(o.name.left(16), -16).arg(o.count), this);
-        lbl->setObjectName("newsMonitorLabel");
-        entities_layout_->addWidget(lbl);
-        has_data = true;
-    }
-    for (const auto& p : ner.top_people) {
-        auto* lbl = new QLabel(QString("%1  %2").arg(p.name.left(16), -16).arg(p.count), this);
-        lbl->setObjectName("newsMonitorLabel");
-        entities_layout_->addWidget(lbl);
-        has_data = true;
-    }
+    };
+    for (const auto& c : ner.top_countries)
+        add_row(tr("CTY"), c.name, c.count);
+    for (const auto& o : ner.top_organizations)
+        add_row(tr("ORG"), o.name, o.count);
+    for (const auto& p : ner.top_people)
+        add_row(tr("PER"), p.name, p.count);
 
     entities_section_->setVisible(has_data);
 }
 
 void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
-    while (locations_layout_->count() > 0) {
-        auto* item = locations_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(locations_layout_);
 
     if (geo.isEmpty()) {
         locations_section_->hide();
@@ -516,19 +629,22 @@ void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
               [&](const QString& a, const QString& b) { return loc_counts[a] > loc_counts[b]; });
 
     for (int i = 0; i < std::min(8, static_cast<int>(sorted.size())); ++i) {
-        auto* lbl = new QLabel(QString("%1  %2").arg(sorted[i].left(18), -18).arg(loc_counts[sorted[i]]), this);
-        lbl->setObjectName("newsMonitorLabel");
-        locations_layout_->addWidget(lbl);
+        auto* row = new QWidget(this);
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(6);
+        auto* n = new NewsElidedLabel(sorted[i], row);
+        n->setObjectName("newsMonitorLabel");
+        hl->addWidget(n, 1);
+        auto* c = new QLabel(QString::number(loc_counts[sorted[i]]), row);
+        c->setObjectName("newsMonitorLabel");
+        hl->addWidget(c);
+        locations_layout_->addWidget(row);
     }
 }
 
 void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& sigs) {
-    while (signals_layout_->count() > 0) {
-        auto* item = signals_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(signals_layout_);
 
     if (sigs.isEmpty()) {
         signals_section_->hide();
@@ -539,22 +655,18 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
         // "critical" is red, everything else amber (rules in the screen's sheet).
-        auto* lbl = new QLabel(sig.detail.left(40), this);
+        auto* lbl = new NewsElidedLabel(sig.detail, this);
         lbl->setObjectName(sig.severity == QLatin1String("critical") ? "newsSignalCritical" : "newsSignalWarn");
-        lbl->setTextFormat(Qt::PlainText);
         lbl->setToolTip(QString("[%1] %2").arg(sig.severity.toUpper(), sig.detail));
         signals_layout_->addWidget(lbl);
     }
 }
 
 void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>& predictions) {
-    while (predictions_layout_->count() > 0) {
-        auto* item = predictions_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    nsp_clear_layout(predictions_layout_);
 
+    // Only markets matched to what the feed is discussing are shown; with no
+    // match the section stays hidden rather than listing unrelated markets.
     if (predictions.isEmpty()) {
         predictions_section_->hide();
         return;
@@ -564,42 +676,52 @@ void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>
     for (int i = 0; i < std::min(6, static_cast<int>(predictions.size())); ++i) {
         const auto& pm = predictions[i];
         const int pct = static_cast<int>(std::lround(pm.yes_price * 100.0));
-        auto* lbl = new QLabel(tr("YES %1%  %2").arg(pct, 2).arg(pm.question.left(30)), this);
+        const QString text = pm.matched_term.isEmpty()
+                                 ? tr("YES %1%  %2").arg(pct, 2).arg(pm.question)
+                                 : tr("[%1] YES %2%  %3").arg(pm.matched_term).arg(pct, 2).arg(pm.question);
+        auto* lbl = new NewsElidedLabel(text, this);
         lbl->setObjectName(pct >= 70 ? "newsPredHigh" : (pct <= 30 ? "newsPredLow" : "newsPredMid"));
-        lbl->setTextFormat(Qt::PlainText);
-        lbl->setToolTip(tr("%1\nYES %2% · volume %3 (play-money mana)")
-                            .arg(pm.question)
-                            .arg(pm.yes_price * 100.0, 0, 'f', 1)
-                            .arg(QLocale(QLocale::English).toString(pm.volume, 'f', 0)));
+        // One .arg() call: the question is network text, and a chained call would re-scan it.
+        lbl->setToolTip(tr("%1\nYES %2% · volume %3 (play-money mana)%4")
+                            .arg(pm.question, QString::number(pm.yes_price * 100.0, 'f', 1),
+                                 QLocale().toString(pm.volume, 'f', 0),
+                                 pm.matched_term.isEmpty()
+                                     ? QString()
+                                     : tr("\nMatched to the feed topic \"%1\"").arg(pm.matched_term)));
         predictions_layout_->addWidget(lbl);
     }
 }
 
 void NewsSidePanel::update_saved(const QVector<services::NewsArticle>& saved) {
-    while (saved_layout_->count() > 0) {
-        auto* item = saved_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    saved_all_ = saved;
+    render_saved();
+}
 
-    if (saved.isEmpty()) {
+void NewsSidePanel::render_saved() {
+    if (!saved_layout_)
+        return;
+    nsp_clear_layout(saved_layout_);
+    if (saved_all_.isEmpty()) {
         saved_section_->hide();
         return;
     }
     saved_section_->show();
-
-    for (int i = 0; i < std::min(10, static_cast<int>(saved.size())); ++i) {
-        const auto& a = saved[i];
-        QString title = a.headline.left(40).replace('&', "&&") + (a.headline.size() > 40 ? "..." : "");
-        auto* btn = new QPushButton(title, this);
+    const int n = static_cast<int>(saved_all_.size());
+    const int shown = saved_show_all_ ? n : std::min(kSavedPreview, n);
+    for (int i = 0; i < shown; ++i) {
+        const auto& a = saved_all_[i];
+        auto* btn = new NewsElidedButton(a.headline, this);
         btn->setObjectName("newsTopStoryBtn");
-        btn->setToolTip(a.headline + "\n" + a.source);
+        btn->setToolTip(a.headline + "\n" + a.source + QStringLiteral(" · ") +
+                        ui::formatting::date_time(static_cast<qint64>(a.sort_ts)));
         btn->setFlat(true);
         btn->setCursor(Qt::PointingHandCursor);
         connect(btn, &QPushButton::clicked, this, [this, a]() { emit article_clicked(a); });
         saved_layout_->addWidget(btn);
     }
+    saved_title_->setText(tr("BOOKMARKS (%1)").arg(n));
+    saved_more_btn_->setVisible(n > kSavedPreview);
+    saved_more_btn_->setText(saved_show_all_ ? tr("Show fewer") : tr("Show all %1").arg(n));
 }
 
 } // namespace fincept::screens

@@ -43,9 +43,7 @@ AkShareChinaPanel::AkShareChinaPanel(QWidget* parent)
 }
 
 void AkShareChinaPanel::activate() {
-    show_empty(tr("Select a series and click FETCH\n"
-                  "Source: AkShare — China NBS macroeconomic data (no API key required)\n"
-                  "Note: column headers are in Chinese as provided by the source"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
@@ -55,7 +53,7 @@ void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kAkShareSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(260);
     series_combo_->setToolTip(tr("Data from China National Bureau of Statistics via AkShare"));
 
@@ -68,8 +66,8 @@ void AkShareChinaPanel::on_fetch() {
     const auto& series = kAkShareSeries[idx];
 
     show_loading(tr("Fetching AkShare China: %1…").arg(series.label));
-    services::EconomicsService::instance().execute(kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
-                                                   "akcn_" + series.command);
+    execute_query(kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
+                  "akcn_" + series.command);
 }
 
 void AkShareChinaPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -96,7 +94,7 @@ void AkShareChinaPanel::on_result(const QString& request_id, const services::Eco
         "AkShare China: " + (idx >= 0 && idx < kAkShareSeries.size() ? kAkShareSeries[idx].label : request_id.mid(6));
 
     display(rows, title);
-    LOG_INFO("AkShareChinaPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("AkShareChinaPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

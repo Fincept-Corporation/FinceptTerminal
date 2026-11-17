@@ -3,8 +3,12 @@
 #include "services/connectors/ConnectorCredentialBridge.h"
 #include "storage/secure/SecureStorage.h"
 
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSet>
 #include <QStringList>
 
 namespace fincept {
@@ -37,6 +41,37 @@ bool ds_is_secret_key(const QString& key) {
     return k == QLatin1String("key") || k == QLatin1String("headers");
 }
 
+/// Connections whose stored credentials could NOT be read when their config was
+/// last loaded (SecureStorage error, not "nothing stored"). Their config reached
+/// the caller with blank secrets; a save of that config must not be taken as
+/// "the user cleared the secrets" and delete the stored copy it never read.
+struct DsUnreadable {
+    QMutex mutex;
+    QHash<QString, QString> ids; ///< id -> plain reason
+};
+DsUnreadable& ds_unreadable() {
+    static DsUnreadable s;
+    return s;
+}
+void ds_mark_unreadable(const QString& id, bool unreadable, const QString& reason = QString()) {
+    auto& u = ds_unreadable();
+    QMutexLocker lock(&u.mutex);
+    if (unreadable)
+        u.ids.insert(id, reason);
+    else
+        u.ids.remove(id);
+}
+bool ds_is_unreadable(const QString& id, QString* reason = nullptr) {
+    auto& u = ds_unreadable();
+    QMutexLocker lock(&u.mutex);
+    const auto it = u.ids.constFind(id);
+    if (it == u.ids.constEnd())
+        return false;
+    if (reason)
+        *reason = it.value();
+    return true;
+}
+
 bool ds_is_secret_entry(const QString& key, const QJsonValue& value) {
     return value.isString() && !value.toString().isEmpty() && ds_is_secret_key(key);
 }
@@ -55,12 +90,16 @@ bool ds_column_has_plaintext_secret(const QString& column_config) {
 }
 
 /// Text to store in the `config` column for `config`: secrets moved to
-/// SecureStorage and blanked. Returns `config` unchanged when it has no secrets,
-/// is not a JSON object, or the encrypted store failed.
-QString ds_config_for_column(const QString& id, const QString& config) {
+/// SecureStorage and blanked. `*column` = `config` unchanged when it has no
+/// secrets, is not a JSON object, or the encrypted store failed to write.
+/// Returns false (with `*error`) when the stored credentials could not be read
+/// when this connection was loaded and still cannot be: writing now would replace
+/// secrets that were never read, so nothing is changed.
+bool ds_config_for_column(const QString& id, const QString& config, QString* column, QString* error) {
+    *column = config;
     const QJsonDocument doc = QJsonDocument::fromJson(config.toUtf8());
     if (!doc.isObject() || id.isEmpty())
-        return config;
+        return true;
 
     QJsonObject obj = doc.object();
     QJsonObject secrets;
@@ -70,19 +109,57 @@ QString ds_config_for_column(const QString& id, const QString& config) {
     }
 
     if (secrets.isEmpty()) {
-        // Nothing sensitive left (secret cleared, or none ever set): drop any stale copy.
+        // Nothing sensitive left (secret cleared, or none ever set): drop any stale
+        // copy — unless the stored copy could not be read when this config was
+        // loaded: then the blanks are "unknown", not "cleared", and it is kept.
+        if (ds_is_unreadable(id)) {
+            LOG_WARN("DataSourceRepo", "Stored connection credentials kept: they could not be read when the "
+                                       "connection was loaded, so blank fields are not a deletion id=" + id);
+            return true;
+        }
         SecureStorage::instance().remove(ds_secret_handle(id));
-        return config;
+        return true;
     }
 
-    const QString payload = QString::fromUtf8(QJsonDocument(secrets).toJson(QJsonDocument::Compact));
-    if (SecureStorage::instance().store(ds_secret_handle(id), payload).is_err()) {
-        LOG_WARN("DataSourceRepo", "SecureStorage unavailable — keeping connection credentials in the config column");
-        return config;
+    if (ds_is_unreadable(id)) {
+        // The blanks of this config were "could not read", not "empty". Read again: when the
+        // store answers now, keep every stored value the user did not retype; when it still
+        // fails, refuse — a write would replace credentials nobody has read.
+        const SecretRead sr = SecureStorage::instance().read(ds_secret_handle(id));
+        if (sr.failed()) {
+            *error = QStringLiteral("Could not read secure storage: %1. The connection's saved credentials were "
+                                    "not changed.")
+                         .arg(sr.reason());
+            return false;
+        }
+        ds_mark_unreadable(id, false);
+        if (sr.found()) {
+            const QJsonObject stored = QJsonDocument::fromJson(sr.value.toUtf8()).object();
+            for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
+                const QJsonValue cur = obj.value(it.key());
+                if (!secrets.contains(it.key()) && cur.isString() && cur.toString().isEmpty())
+                    secrets.insert(it.key(), it.value());
+            }
+        }
     }
+
+    // The column is blanked only once the encrypted copy was written AND read back
+    // equal; otherwise the plaintext stays in the column (never lost) and the move
+    // is retried on the next read or save. One line per connection per session.
+    const QString payload = QString::fromUtf8(QJsonDocument(secrets).toJson(QJsonDocument::Compact));
+    const auto stored = SecureStorage::instance().store_verified(ds_secret_handle(id), payload);
+    LOG_TRANSITION("DataSourceRepo", QStringLiteral("secret_move|") + id, stored.is_err(),
+                   stored.is_err() ? LogLevel::Warn : LogLevel::Info,
+                   stored.is_err() ? logf("Connection credentials kept in the config column, secure storage write "
+                                          "not confirmed",
+                                          {{"id", id}, {"error", QString::fromStdString(stored.error())}})
+                                   : logf("Connection credentials stored in secure storage again", {{"id", id}}));
+    if (stored.is_err())
+        return true;
     for (const QString& key : secrets.keys())
         obj.insert(key, QString());
-    return QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    *column = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    return true;
 }
 
 /// Merge SecureStorage-held secrets back into a config read from the column.
@@ -104,12 +181,19 @@ QString ds_config_from_column(const QString& id, const QString& column_config) {
     if (!has_blank_secret)
         return column_config;
 
-    auto sr = SecureStorage::instance().retrieve(ds_secret_handle(id));
-    if (sr.is_err() || sr.value().isEmpty())
+    const SecretRead sr = SecureStorage::instance().read(ds_secret_handle(id));
+    // Error ≠ "nothing stored": remember it so a later save does not delete or
+    // replace the copy (the read failure itself is logged by SecureStorage).
+    ds_mark_unreadable(id, sr.failed(), sr.failed() ? sr.reason() : QString());
+    if (!sr.found() || sr.value.isEmpty())
         return column_config;
-    const QJsonDocument sdoc = QJsonDocument::fromJson(sr.value().toUtf8());
-    if (!sdoc.isObject())
+    const QJsonDocument sdoc = QJsonDocument::fromJson(sr.value.toUtf8());
+    if (!sdoc.isObject()) {
+        // Read on every list; one line per connection per hour, never the value.
+        LOG_WARN_RL("DataSourceRepo", QStringLiteral("secret_not_json|") + id, 3600 * 1000,
+                    logf("Stored data source secret is not valid JSON", {{"id", id}, {"bytes", sr.value.size()}}));
         return column_config;
+    }
 
     const QJsonObject secrets = sdoc.object();
     bool changed = false;
@@ -127,15 +211,28 @@ QString ds_config_from_column(const QString& id, const QString& column_config) {
 /// already the merged, complete one). Leaves `updated_at` alone — this is not a
 /// user edit. A failure is harmless: the row simply stays as it was.
 void ds_migrate_legacy_secrets(const DataSource& ds) {
-    const QString column = ds_config_for_column(ds.id, ds.config);
-    if (column == ds.config)
-        return; // encrypted store unavailable (or nothing to move)
+    // An automatic move never writes over a stored copy that cannot be read (it
+    // may hold values the column does not): the column keeps the plaintext and
+    // the move is retried on a later read.
+    const SecretRead current = SecureStorage::instance().read(ds_secret_handle(ds.id));
+    LOG_TRANSITION("DataSourceRepo", QStringLiteral("secret_move_read|") + ds.id, current.failed(),
+                   current.failed() ? LogLevel::Warn : LogLevel::Info,
+                   current.failed() ? logf("Connection credentials not moved, secure storage could not be read",
+                                           {{"id", ds.id}, {"kind", current.error_name()}})
+                                    : logf("Connection credentials readable again", {{"id", ds.id}}));
+    if (current.failed())
+        return;
+    QString column;
+    QString error;
+    if (!ds_config_for_column(ds.id, ds.config, &column, &error) || column == ds.config)
+        return; // write not confirmed (logged once) — or nothing to move
     auto r = Database::instance().execute("UPDATE data_sources SET config = ? WHERE id = ?", {column, ds.id});
     if (r.is_err())
-        LOG_WARN("DataSourceRepo", "Could not scrub migrated credentials from the config column: " +
-                                       QString::fromStdString(r.error()));
+        LOG_WARN_RL("DataSourceRepo", QStringLiteral("scrub|") + ds.id, 3600 * 1000,
+                    logf("Connection credentials moved but the config column could not be blanked",
+                         {{"id", ds.id}, {"error", QString::fromStdString(r.error())}}));
     else
-        LOG_INFO("DataSourceRepo", "Moved connection credentials into SecureStorage: " + ds.id);
+        LOG_INFO("DataSourceRepo", logf("Connection credentials moved into secure storage", {{"id", ds.id}}));
 }
 } // namespace
 
@@ -146,22 +243,32 @@ DataSourceRepository& DataSourceRepository::instance() {
 
 DataSource DataSourceRepository::map_row(QSqlQuery& q) {
     const QString id = q.value(0).toString();
-    return {id,
-            q.value(1).toString(),
-            q.value(2).toString(),
-            q.value(3).toString(),
-            q.value(4).toString(),
-            q.value(5).toString(),
-            q.value(6).toString(),
-            ds_config_from_column(id, q.value(7).toString()),
-            q.value(8).toBool(),
-            q.value(9).toString(),
-            q.value(10).toString(),
-            q.value(11).toString()};
+    DataSource ds{id,
+                  q.value(1).toString(),
+                  q.value(2).toString(),
+                  q.value(3).toString(),
+                  q.value(4).toString(),
+                  q.value(5).toString(),
+                  q.value(6).toString(),
+                  ds_config_from_column(id, q.value(7).toString()),
+                  q.value(8).toBool(),
+                  q.value(9).toString(),
+                  q.value(10).toString(),
+                  q.value(11).toString(),
+                  q.value(12).toString(),
+                  q.value(13).toString(),
+                  q.value(14).toString(),
+                  q.value(15).toString(),
+                  q.value(16).isNull() ? -1 : q.value(16).toLongLong()};
+    QString reason;
+    ds.secrets_unreadable = ds_is_unreadable(id, &reason);
+    ds.secrets_error = reason;
+    return ds;
 }
 
 static const char* kDsCols = "id, alias, display_name, description, type, provider, category, config, "
-                             "enabled, tags, created_at, updated_at";
+                             "enabled, tags, created_at, updated_at, last_status, last_code, last_message, "
+                             "last_tested_at, last_latency_ms";
 
 Result<QVector<DataSource>> DataSourceRepository::list_all() {
     QStringList legacy_ids; // rows whose column still holds plaintext secrets
@@ -195,7 +302,10 @@ Result<DataSource> DataSourceRepository::get(const QString& id) {
 
 Result<void> DataSourceRepository::save(const DataSource& ds) {
     // Credentials go to SecureStorage; the column keeps the non-secret fields.
-    const QString column_config = ds_config_for_column(ds.id, ds.config);
+    QString column_config;
+    QString secret_error;
+    if (!ds_config_for_column(ds.id, ds.config, &column_config, &secret_error))
+        return Result<void>::err(secret_error.toStdString());
     auto result =
         exec_write("INSERT INTO data_sources "
                    "(id, alias, display_name, description, type, provider, category, config, enabled, tags, "
@@ -227,6 +337,13 @@ Result<void> DataSourceRepository::save(const DataSource& ds) {
 Result<void> DataSourceRepository::remove(const QString& id) {
     SecureStorage::instance().remove(ds_secret_handle(id)); // drop the encrypted credentials too
     return exec_write("DELETE FROM data_sources WHERE id = ?", {id});
+}
+
+Result<void> DataSourceRepository::update_health(const QString& id, const QString& status, const QString& code,
+                                                 const QString& message, qint64 latency_ms) {
+    return exec_write("UPDATE data_sources SET last_status = ?, last_code = ?, last_message = ?, "
+                      "last_tested_at = datetime('now'), last_latency_ms = ? WHERE id = ?",
+                      {status, code, message.left(500), latency_ms, id});
 }
 
 Result<void> DataSourceRepository::set_enabled(const QString& id, bool enabled) {

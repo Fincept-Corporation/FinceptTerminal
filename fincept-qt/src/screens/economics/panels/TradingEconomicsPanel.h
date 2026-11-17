@@ -17,6 +17,8 @@ class TradingEconomicsPanel : public EconPanelBase {
     void activate() override;
 
   protected:
+    QList<ui::Requirement> load_requirements() const override;
+    LoadPolicy load_policy() const override;
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;

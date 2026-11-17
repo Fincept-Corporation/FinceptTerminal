@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "storage/secure/SecureStorage.h"
 
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -59,6 +60,24 @@ QString encode(const QJsonObject& obj) {
     return QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+/// Reads one credential blob. Found → its text; nothing stored → empty; unreadable →
+/// empty with `read_error` set and one log line per failure episode (name only).
+QString read_blob(const char* key, QString* read_error) {
+    const SecretRead r = fincept::SecureStorage::instance().read(QString::fromLatin1(key));
+    const bool failing = r.failed();
+    LOG_TRANSITION("PredictionCreds", QString::fromLatin1(key), failing, failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Stored prediction-market credentials could not be read; treated as unreadable, "
+                                  "not as absent",
+                                  {{"key", key}, {"kind", r.error_name()}})
+                           : logf("Stored prediction-market credentials readable again", {{"key", key}}));
+    if (read_error)
+        *read_error = failing ? QCoreApplication::translate("PredictionCredentialStore",
+                                                            "Could not read the stored credentials: %1.")
+                                    .arg(r.reason())
+                              : QString();
+    return r.found() ? r.value : QString();
+}
+
 std::optional<QJsonObject> decode(const QString& s) {
     if (s.isEmpty())
         return std::nullopt;
@@ -73,11 +92,8 @@ std::optional<QJsonObject> decode(const QString& s) {
 
 // ── Polymarket ──────────────────────────────────────────────────────────────
 
-std::optional<PolymarketCredentials> PredictionCredentialStore::load_polymarket() {
-    auto r = fincept::SecureStorage::instance().retrieve(QString::fromLatin1(kPolymarketKey));
-    if (r.is_err())
-        return std::nullopt;
-    auto obj = decode(r.value());
+std::optional<PolymarketCredentials> PredictionCredentialStore::load_polymarket(QString* read_error) {
+    auto obj = decode(read_blob(kPolymarketKey, read_error));
     if (!obj)
         return std::nullopt;
     auto creds = from_json_polymarket(*obj);
@@ -105,11 +121,8 @@ bool PredictionCredentialStore::clear_polymarket() {
 
 // ── Kalshi ──────────────────────────────────────────────────────────────────
 
-std::optional<kalshi_ns::KalshiCredentials> PredictionCredentialStore::load_kalshi() {
-    auto r = fincept::SecureStorage::instance().retrieve(QString::fromLatin1(kKalshiKey));
-    if (r.is_err())
-        return std::nullopt;
-    auto obj = decode(r.value());
+std::optional<kalshi_ns::KalshiCredentials> PredictionCredentialStore::load_kalshi(QString* read_error) {
+    auto obj = decode(read_blob(kKalshiKey, read_error));
     if (!obj)
         return std::nullopt;
     auto creds = from_json_kalshi(*obj);

@@ -2,8 +2,14 @@
 
 #include "services/report_builder/ReportBuilderService.h"
 
+#include "core/config/AppPaths.h"
+#include "core/config/AppSettings.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "core/report/ReportVariables.h"
+#include "services/report_builder/ReportBuilderTemplates.h"
+#include "services/report_builder/ReportLibrary.h"
+#include "services/report_builder/ReportScheduler.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -20,12 +26,53 @@ namespace fincept::services {
 
 static constexpr const char* RB_SVC_TAG = "ReportBuilderService";
 static constexpr int kAutosaveIntervalMs = 60'000;
+static constexpr int kLibraryDelayMs = 4'000; // library copy this long after edits stop
 static constexpr int kLlmWindowMs = 400;
 static constexpr int kRecentMax = 10;
 static constexpr const char* kRecentKey = "report_builder/recent";
 static constexpr const char* kCurrentFileKey = "report_builder/current_file";
+static constexpr const char* kLibraryIdKey = "report_builder/library_id";
+static constexpr const char* kFileLibraryKey = "report_builder/file_library_ids";
+static constexpr const char* kDefaultCompanyKey = "report_builder/default_company";
+static constexpr const char* kDefaultAuthorKey = "report_builder/default_author";
+static constexpr int kSchedulerStartDelayMs = 20'000; // let the terminal settle before schedules run
 
 namespace rep = report;
+
+namespace {
+
+QSettings rbs_settings() {
+    return app_settings::open();
+}
+
+// The library row a .fincept file was imported as, so opening the same file again
+// continues that row instead of adding another one.
+qint64 rbs_library_id_for_file(const QString& path) {
+    if (path.isEmpty())
+        return 0;
+    const QVariantMap m = rbs_settings().value(kFileLibraryKey).toMap();
+    return m.value(QFileInfo(path).absoluteFilePath()).toLongLong();
+}
+
+void rbs_remember_file_library_id(const QString& path, qint64 id) {
+    if (path.isEmpty() || id <= 0)
+        return;
+    QSettings s = rbs_settings();
+    QVariantMap m = s.value(kFileLibraryKey).toMap();
+    m.insert(QFileInfo(path).absoluteFilePath(), id);
+    // Keep the map small: drop entries whose file is gone.
+    if (m.size() > 200) {
+        for (auto it = m.begin(); it != m.end();) {
+            if (!QFileInfo::exists(it.key()))
+                it = m.erase(it);
+            else
+                ++it;
+        }
+    }
+    s.setValue(kFileLibraryKey, m);
+}
+
+} // namespace
 
 // ── Undo commands ────────────────────────────────────────────────────────────
 //
@@ -38,8 +85,8 @@ namespace {
 
 class AddCmd : public QUndoCommand {
   public:
-    AddCmd(ReportBuilderService* svc, rep::ReportComponent comp, int at)
-        : QUndoCommand("Add " + comp.type), svc_(svc), comp_(std::move(comp)), at_(at) {}
+    AddCmd(ReportBuilderService* svc, rep::ReportComponent comp, int at, QUndoCommand* parent = nullptr)
+        : QUndoCommand("Add " + comp.type, parent), svc_(svc), comp_(std::move(comp)), at_(at) {}
     void redo() override;
     void undo() override;
 
@@ -65,22 +112,26 @@ class RemoveCmd : public QUndoCommand {
 class UpdateCmd : public QUndoCommand {
   public:
     UpdateCmd(ReportBuilderService* svc, int id, QString old_content, QMap<QString, QString> old_config,
-              QString new_content, QMap<QString, QString> new_config)
-        : QUndoCommand("Edit component"),
+              QString new_content, QMap<QString, QString> new_config, const QString& text = {},
+              bool mergeable = true)
+        : QUndoCommand(text.isEmpty() ? QStringLiteral("Edit component") : text),
           svc_(svc),
           id_(id),
+          mergeable_(mergeable),
           old_content_(std::move(old_content)),
           new_content_(std::move(new_content)),
           old_config_(std::move(old_config)),
           new_config_(std::move(new_config)) {}
     void redo() override;
     void undo() override;
-    int id() const override { return 1001; }
+    // -1 = never merged (a data refresh stays its own undo step).
+    int id() const override { return mergeable_ ? 1001 : -1; }
     bool mergeWith(const QUndoCommand* other) override;
 
   private:
     ReportBuilderService* svc_;
     int id_;
+    bool mergeable_;
     QString old_content_, new_content_;
     QMap<QString, QString> old_config_, new_config_;
 };
@@ -285,7 +336,7 @@ void UpdateCmd::undo() {
     detail::ServiceFriend::direct_update_by_id(svc_, id_, old_content_, old_config_);
 }
 bool UpdateCmd::mergeWith(const QUndoCommand* other) {
-    if (other->id() != id())
+    if (!mergeable_ || other->id() != id())
         return false;
     auto* o = static_cast<const UpdateCmd*>(other);
     if (o->id_ != id_)
@@ -325,6 +376,7 @@ ReportBuilderService& ReportBuilderService::instance() {
 
 ReportBuilderService::ReportBuilderService() {
     doc_.metadata.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
+    apply_identity_defaults(doc_.metadata);
     undo_stack_ = new QUndoStack(this);
 
     // Autosave is driven by edits, not by the clock: the first change after a save
@@ -335,16 +387,30 @@ ReportBuilderService::ReportBuilderService() {
     autosave_timer_->setSingleShot(true);
     autosave_timer_->setInterval(kAutosaveIntervalMs);
     connect(autosave_timer_, &QTimer::timeout, this, &ReportBuilderService::trigger_autosave);
+
+    // The library copy follows a few seconds after edits stop (restarted by every edit),
+    // so a burst of typing is one write — and one cloud push when sync is on.
+    library_timer_ = new QTimer(this);
+    library_timer_->setSingleShot(true);
+    library_timer_->setInterval(kLibraryDelayMs);
+    connect(library_timer_, &QTimer::timeout, this, &ReportBuilderService::save_to_library);
+
     connect(this, &ReportBuilderService::document_changed, this, [this]() {
         autosave_dirty_ = true;
         if (!autosave_timer_->isActive())
             autosave_timer_->start();
+        library_dirty_ = true;
+        library_timer_->start();
+        if (!current_file_.isEmpty())
+            file_dirty_ = true;
     });
     // Don't lose the last < 60 s of edits on a normal quit.
     if (auto* app = QCoreApplication::instance())
         connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
             if (autosave_dirty_)
                 trigger_autosave();
+            if (library_dirty_ || library_timer_->isActive())
+                save_to_library_blocking();
         });
 
     llm_window_timer_ = new QTimer(this);
@@ -355,21 +421,26 @@ ReportBuilderService::ReportBuilderService() {
         if (macro_depth_ > 0) {
             macro_depth_ = 0;
             undo_stack_->endMacro();
-            LOG_INFO(RB_SVC_TAG, "LLM macro window closed");
+            LOG_DEBUG(RB_SVC_TAG, "LLM macro window closed");
         }
     });
 
-    autosave_path_ =
+    // In the profile's data folder, not %TEMP%: a fixed temp name was shared by
+    // every profile and by the private build's uninstaller sweep (%TEMP%\fincept_*).
+    autosave_path_ = AppPaths::data() + "/report_autosave.fincept";
+    const QString legacy_autosave =
         QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/fincept_report_autosave.fincept";
 
-    // Restore current_file_ from settings so the title bar shows the right
-    // path on relaunch. (The doc itself comes from autosave below.)
-    QSettings s("Fincept", "FinceptTerminal");
+    // Restore current_file_ / the library row from settings so the title bar and the
+    // library show the right report on relaunch. (The doc itself comes from autosave.)
+    QSettings s = rbs_settings();
     current_file_ = s.value(kCurrentFileKey).toString();
+    library_id_ = s.value(kLibraryIdKey).toLongLong();
 
     // Try to restore from autosave on construction. Failures are silent —
-    // an empty doc is the correct fallback.
-    QFile f(autosave_path_);
+    // an empty doc is the correct fallback. Until the first autosave in the new
+    // place, the one earlier versions left in the temp folder is read.
+    QFile f(QFile::exists(autosave_path_) ? autosave_path_ : legacy_autosave);
     if (f.exists() && f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QString json = QString::fromUtf8(f.readAll());
         f.close();
@@ -377,6 +448,82 @@ ReportBuilderService::ReportBuilderService() {
         if (r.is_ok()) {
             doc_ = r.value();
             LOG_INFO(RB_SVC_TAG, "Restored from autosave: " + autosave_path_);
+        }
+    }
+    chains_[library_generation_].id = library_id_;
+    chains_[library_generation_].file = current_file_;
+    chains_[library_generation_].expected = doc_.revision;
+
+    // The open report's row was deleted (library page, after its undo grace period).
+    connect(&ReportLibrary::instance(), &ReportLibrary::report_removed, this,
+            [this](qint64 id) { detach_library(id); });
+
+    // Scheduled regeneration runs while the terminal is open (in-process only).
+    if (QCoreApplication::instance())
+        QTimer::singleShot(kSchedulerStartDelayMs, this, []() { ReportScheduler::instance().start(); });
+}
+
+// ── Identity defaults ───────────────────────────────────────────────────────
+
+QString ReportBuilderService::default_company() {
+    return rbs_settings().value(kDefaultCompanyKey).toString();
+}
+
+QString ReportBuilderService::default_author() {
+    const QString a = rbs_settings().value(kDefaultAuthorKey).toString();
+    return a.isEmpty() ? QStringLiteral("Analyst") : a;
+}
+
+void ReportBuilderService::set_identity_defaults(const QString& author, const QString& company) {
+    QSettings s = rbs_settings();
+    s.setValue(kDefaultAuthorKey, author.trimmed());
+    s.setValue(kDefaultCompanyKey, company.trimmed());
+}
+
+void ReportBuilderService::apply_identity_defaults(rep::ReportMetadata& meta) {
+    if (meta.company.isEmpty())
+        meta.company = default_company();
+    if (meta.author.isEmpty() || meta.author == QLatin1String("Analyst"))
+        meta.author = default_author();
+}
+
+// ── Stale saves ─────────────────────────────────────────────────────────────
+
+void ReportBuilderService::resolve_library_conflict(ConflictChoice choice) {
+    if (conflict_.id <= 0)
+        return;
+    const LibraryConflict c = conflict_;
+    conflict_ = LibraryConflict{};
+    WriteChain& chain = chains_[library_generation_];
+    chain.conflict = false;
+    switch (choice) {
+        case ConflictChoice::KeepMine:
+            LOG_INFO(RB_SVC_TAG, logf("Report conflict resolved", {{"report", c.id}, {"choice", "keep_mine"}}));
+            chain.expected = c.theirs.revision;
+            chain.force_next = true;
+            library_dirty_ = true;
+            save_to_library();
+            break;
+        case ConflictChoice::TakeTheirs:
+            LOG_INFO(RB_SVC_TAG, logf("Report conflict resolved", {{"report", c.id}, {"choice", "take_theirs"}}));
+            open_document(c.theirs, c.id, current_file());
+            break;
+        case ConflictChoice::KeepBoth: {
+            LOG_INFO(RB_SVC_TAG, logf("Report conflict resolved", {{"report", c.id}, {"choice", "keep_both"}}));
+            // The stored version stays in its row; the open one becomes a new report.
+            {
+                QMutexLocker lock(&mutex_);
+                library_id_ = 0;
+                doc_.revision = rep::ReportRevision{};
+            }
+            chain.id = 0;
+            chain.expected = rep::ReportRevision{};
+            persist_library_id();
+            emit library_id_changed(0);
+            rep::ReportMetadata meta = metadata();
+            meta.title = tr("%1 (my copy)").arg(meta.title);
+            set_metadata(meta); // one undo step; also queues the library write (a new row)
+            break;
         }
     }
 }
@@ -403,6 +550,15 @@ int ReportBuilderService::index_of(int id) const {
     QMutexLocker lock(&mutex_);
     return doc_.index_of(id);
 }
+bool ReportBuilderService::component(int id, rep::ReportComponent* out) const {
+    QMutexLocker lock(&mutex_);
+    const int idx = doc_.index_of(id);
+    if (idx < 0)
+        return false;
+    if (out)
+        *out = doc_.components[idx];
+    return true;
+}
 QString ReportBuilderService::current_file() const {
     QMutexLocker lock(&mutex_);
     return current_file_;
@@ -412,9 +568,25 @@ QStringList ReportBuilderService::recent_files() const {
         load_recent();
     return recent_cache_;
 }
+qint64 ReportBuilderService::library_id() const {
+    QMutexLocker lock(&mutex_);
+    return library_id_;
+}
 rep::ReportDocument ReportBuilderService::snapshot() const {
     QMutexLocker lock(&mutex_);
     return doc_;
+}
+QVector<int> ReportBuilderService::unseen_ids() const {
+    QMutexLocker lock(&mutex_);
+    QVector<int> out;
+    for (int id : doc_.unseen_ids)
+        if (doc_.index_of(id) >= 0)
+            out.append(id);
+    return out;
+}
+QStringList ReportBuilderService::unseen_sources() const {
+    QMutexLocker lock(&mutex_);
+    return doc_.unseen_sources;
 }
 
 // ── Write API ────────────────────────────────────────────────────────────────
@@ -431,9 +603,44 @@ int ReportBuilderService::add_component(const rep::ReportComponent& comp, int in
         if (at < 0 || at > doc_.components.size())
             at = doc_.components.size();
     }
-    LOG_INFO(RB_SVC_TAG, QString("add_component: type=%1 id=%2 at=%3").arg(c.type).arg(c.id).arg(at));
+    LOG_DEBUG(RB_SVC_TAG, QString("add_component: type=%1 id=%2 at=%3").arg(c.type).arg(c.id).arg(at));
     push_undo(new AddCmd(this, c, at));
     return c.id;
+}
+
+QVector<int> ReportBuilderService::append_components(const QVector<rep::ReportComponent>& blocks,
+                                                     const QString& source_label, int insert_at, bool mark_unseen) {
+    QVector<int> ids;
+    if (blocks.isEmpty())
+        return ids;
+    int at = insert_at;
+    {
+        QMutexLocker lock(&mutex_);
+        if (at < 0 || at > doc_.components.size())
+            at = doc_.components.size();
+    }
+    // One undo step for the whole send ("Add from Derivatives"), even inside an open macro.
+    begin_macro(source_label.isEmpty() ? tr("Add blocks") : tr("Add from %1").arg(source_label));
+    for (const rep::ReportComponent& b : blocks) {
+        rep::ReportComponent c = b;
+        {
+            QMutexLocker lock(&mutex_);
+            c.id = doc_.allocate_id();
+        }
+        push_undo(new AddCmd(this, c, at++));
+        ids.append(c.id);
+    }
+    end_macro();
+    if (mark_unseen) {
+        {
+            QMutexLocker lock(&mutex_);
+            doc_.unseen_ids += ids;
+            if (!source_label.isEmpty() && !doc_.unseen_sources.contains(source_label))
+                doc_.unseen_sources.append(source_label);
+        }
+        emit inbox_changed();
+    }
+    return ids;
 }
 
 bool ReportBuilderService::update_component(int id, const QString& content, const QMap<QString, QString>& config) {
@@ -447,12 +654,15 @@ bool ReportBuilderService::update_component(int id, const QString& content, cons
         old_content = doc_.components[idx].content;
         old_config = doc_.components[idx].config;
     }
+    if (old_content == content && old_config == config)
+        return true; // nothing changed: no undo step, no re-render
     push_undo(new UpdateCmd(this, id, old_content, old_config, content, config));
     return true;
 }
 
 bool ReportBuilderService::patch_component(int id, const QString* content_or_null,
-                                           const QMap<QString, QString>& partial_config) {
+                                           const QMap<QString, QString>& partial_config, const QString& undo_text,
+                                           bool mergeable, bool empty_removes) {
     QString old_content, new_content;
     QMap<QString, QString> old_config, new_config;
     {
@@ -464,10 +674,16 @@ bool ReportBuilderService::patch_component(int id, const QString* content_or_nul
         old_config = doc_.components[idx].config;
         new_content = content_or_null ? *content_or_null : old_content;
         new_config = old_config;
-        for (auto it = partial_config.cbegin(); it != partial_config.cend(); ++it)
-            new_config[it.key()] = it.value();
+        for (auto it = partial_config.cbegin(); it != partial_config.cend(); ++it) {
+            if (empty_removes && it.value().isEmpty())
+                new_config.remove(it.key());
+            else
+                new_config[it.key()] = it.value();
+        }
     }
-    push_undo(new UpdateCmd(this, id, old_content, old_config, new_content, new_config));
+    if (new_content == old_content && new_config == old_config)
+        return true;
+    push_undo(new UpdateCmd(this, id, old_content, old_config, new_content, new_config, undo_text, mergeable));
     return true;
 }
 
@@ -520,30 +736,20 @@ void ReportBuilderService::set_theme(const rep::ReportTheme& th) {
 }
 
 void ReportBuilderService::clear_document() {
-    begin_macro("Clear report");
-    auto comps = components();
-    for (auto it = comps.crbegin(); it != comps.crend(); ++it)
-        remove_component(it->id);
-    set_metadata(rep::ReportMetadata{});
-    end_macro();
-    {
-        QMutexLocker lock(&mutex_);
-        doc_.metadata.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
-        current_file_.clear();
-    }
-    persist_current_file();
+    // "New report": the report that was open stays in the library; a blank one opens.
+    rep::ReportDocument fresh;
+    fresh.metadata.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
+    apply_identity_defaults(fresh.metadata);
+    fresh.theme = theme(); // the look the user picked carries over
+    open_document(fresh, 0, QString());
     // trigger_autosave() deliberately never writes an EMPTY document (so a stray timer tick
     // can't clobber a good recovery copy) — which meant "New Report" left the previous
     // report's autosave behind, and the next launch brought it back from the dead.
     QFile::remove(autosave_path_);
     autosave_hash_ = 0;
-    autosave_dirty_ = false; // nothing to recover in a blank report
+    autosave_dirty_ = false;
     autosave_timer_->stop();
-    // The date was stamped after set_metadata() had already announced the blank metadata;
-    // say so again or the fresh report's cover shows no date until the next edit.
-    emit metadata_changed();
     emit document_cleared();
-    emit current_file_changed({});
 }
 
 void ReportBuilderService::replace_document(const rep::ReportDocument& doc) {
@@ -555,11 +761,131 @@ void ReportBuilderService::replace_document(const rep::ReportDocument& doc) {
     emit document_changed();
     // document_changed() only tells a view to refresh its structure list — the canvas is
     // redrawn by the per-component signals, which a wholesale replacement never emits.
-    // After a template was applied the canvas therefore kept showing the OLD report, and
-    // the properties panel stayed bound to an index/id of the old document (ids restart
-    // at 1, so editing it wrote into whichever component now sat there). Views already
-    // know how to rebuild everything on "document_loaded"; an empty path = not from a file.
+    // Views already know how to rebuild everything on "document_loaded"; an empty path =
+    // not from a file.
     emit document_loaded(QString());
+}
+
+void ReportBuilderService::open_document(const rep::ReportDocument& doc, qint64 library_id, const QString& file_path) {
+    // The outgoing report's last state goes to its own library row first (its chain).
+    if (library_dirty_ || library_timer_->isActive())
+        save_to_library();
+    library_timer_->stop();
+    // Any open LLM / append macro belongs to the outgoing document.
+    if (macro_depth_ > 0) {
+        macro_depth_ = 0;
+        undo_stack_->endMacro();
+        llm_window_timer_->stop();
+    }
+
+    const QString json = doc.to_json();
+    {
+        QMutexLocker lock(&mutex_);
+        doc_ = doc;
+        current_file_ = file_path;
+        library_id_ = library_id;
+    }
+    ++library_generation_;
+    WriteChain& chain = chains_[library_generation_];
+    chain.id = library_id;
+    chain.file = file_path;
+    chain.expected = doc.revision;
+    conflict_ = LibraryConflict{};
+    detached_from_ = 0;
+    // The content hash leaves the revision out (the library stamps it on every write).
+    library_hash_ = library_id > 0 ? qHash(doc.to_json(false)) : 0;
+    library_dirty_ = false;
+    file_dirty_ = false;
+    undo_stack_->clear();
+    persist_current_file();
+    persist_library_id();
+    if (!file_path.isEmpty()) {
+        if (!recent_loaded_)
+            load_recent();
+        recent_cache_.removeAll(file_path);
+        recent_cache_.prepend(file_path);
+        if (recent_cache_.size() > kRecentMax)
+            recent_cache_ = recent_cache_.mid(0, kRecentMax);
+        save_recent();
+    }
+    if (library_id > 0)
+        ReportLibrary::instance().note_opened(library_id);
+    write_autosave(json);
+    autosave_dirty_ = false;
+    autosave_timer_->stop();
+
+    emit current_file_changed(file_path);
+    emit library_id_changed(library_id);
+    emit document_loaded(file_path);
+    emit inbox_changed();
+    // A report that is not in the library yet (template, file, blank with content) is
+    // added at once so it is listed and synced.
+    if (library_id <= 0) {
+        QMutexLocker lock(&mutex_);
+        if (worth_saving_locked()) {
+            lock.unlock();
+            library_dirty_ = true;
+            library_timer_->start(0);
+        }
+    }
+}
+
+void ReportBuilderService::open_file_document(const rep::ReportDocument& doc, const QString& path) {
+    open_document(doc, rbs_library_id_for_file(path), path);
+}
+
+Result<void> ReportBuilderService::fork_to_file(const QString& path) {
+    const rep::ReportDocument doc = snapshot();
+    open_document(doc, 0, path);
+    return save_to(path);
+}
+
+void ReportBuilderService::detach_library(qint64 deleted_id) {
+    if (deleted_id <= 0 || library_id() != deleted_id)
+        return;
+    {
+        QMutexLocker lock(&mutex_);
+        library_id_ = 0;
+    }
+    chains_[library_generation_].id = 0;
+    detached_from_ = deleted_id;
+    library_hash_ = 0;
+    library_timer_->stop();
+    library_dirty_ = false;
+    persist_library_id();
+    emit library_id_changed(0);
+}
+
+void ReportBuilderService::reattach_library(qint64 id) {
+    if (id <= 0 || detached_from_ != id || library_id() != 0)
+        return;
+    set_library_id(id);
+    detached_from_ = 0;
+}
+
+void ReportBuilderService::mark_inbox_seen() {
+    {
+        QMutexLocker lock(&mutex_);
+        if (doc_.unseen_ids.isEmpty() && doc_.unseen_sources.isEmpty())
+            return;
+        doc_.unseen_ids.clear();
+        doc_.unseen_sources.clear();
+    }
+    emit inbox_changed();
+    // Not an undoable edit, but the stored copies must forget the notice too.
+    library_dirty_ = true;
+    library_timer_->start();
+    autosave_dirty_ = true;
+    if (!autosave_timer_->isActive())
+        autosave_timer_->start();
+}
+
+void ReportBuilderService::apply_template(const QString& name, const QVariantMap& params) {
+    LOG_DEBUG(RB_SVC_TAG, "apply_template: " + name);
+    // A template starts a NEW report; the one that was open stays in the library.
+    rep::ReportDocument doc = report_templates::build(name, theme(), params);
+    apply_identity_defaults(doc.metadata);
+    open_document(doc, 0, QString());
 }
 
 // ── Undo helpers ────────────────────────────────────────────────────────────
@@ -584,7 +910,7 @@ void ReportBuilderService::note_llm_mutation() {
     if (macro_depth_ == 0) {
         macro_depth_ = 1;
         undo_stack_->beginMacro("AI: report changes");
-        LOG_INFO(RB_SVC_TAG, "LLM macro window opened (400ms)");
+        LOG_DEBUG(RB_SVC_TAG, "LLM macro window opened (400ms)");
     }
     // (Re)start the window timer — extend as long as mutations keep arriving.
     llm_window_timer_->start();
@@ -604,8 +930,7 @@ Result<void> ReportBuilderService::save_to(const QString& path) {
     }
     // QSaveFile writes to a sibling temp file and renames it over the target on commit(), so a
     // full disk, a crash or a permissions error mid-write leaves the user's existing report
-    // untouched. The previous QFile truncated the file on open and ignored write()/close()
-    // failures — a failed save could destroy the only copy AND still report success.
+    // untouched.
     QSaveFile f(path);
     f.setDirectWriteFallback(true); // read-only directory but writable file: still allow the save
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -619,8 +944,13 @@ Result<void> ReportBuilderService::save_to(const QString& path) {
     if (!f.commit())
         return Result<void>::err("Could not finish writing the file: " + f.errorString().toStdString());
     set_current_file(path);
+    chains_[library_generation_].file = path;
+    rbs_remember_file_library_id(path, library_id());
+    file_dirty_ = false;
     // The recovery copy must not lag behind what the user just saved.
     write_autosave(json);
+    // ...and neither must the library.
+    save_to_library();
     return Result<void>::ok();
 }
 
@@ -633,14 +963,8 @@ Result<void> ReportBuilderService::load_from(const QString& path) {
     auto r = rep::ReportDocument::from_json(json);
     if (r.is_err())
         return Result<void>::err("Parse error: " + r.error());
-    {
-        QMutexLocker lock(&mutex_);
-        doc_ = r.value();
-    }
-    undo_stack_->clear();
-    set_current_file(path);
-    emit document_loaded(path);
-    emit document_changed();
+    // A file opened again continues the library row it was imported as.
+    open_document(r.value(), rbs_library_id_for_file(path), path);
     return Result<void>::ok();
 }
 
@@ -662,9 +986,28 @@ void ReportBuilderService::set_current_file(const QString& path) {
     emit current_file_changed(path);
 }
 
+QStringList ReportBuilderService::prune_recent_files() {
+    if (!recent_loaded_)
+        load_recent();
+    QStringList kept;
+    for (const QString& p : recent_cache_)
+        if (QFileInfo::exists(p))
+            kept << p;
+    if (kept != recent_cache_) {
+        recent_cache_ = kept;
+        save_recent();
+    }
+    return recent_cache_;
+}
+
 void ReportBuilderService::persist_current_file() {
-    QSettings s("Fincept", "FinceptTerminal");
+    QSettings s = rbs_settings();
     s.setValue(kCurrentFileKey, current_file_);
+}
+
+void ReportBuilderService::persist_library_id() {
+    QSettings s = rbs_settings();
+    s.setValue(kLibraryIdKey, library_id_);
 }
 
 QString ReportBuilderService::autosave_path() const {
@@ -704,28 +1047,190 @@ void ReportBuilderService::write_autosave(const QString& json) {
 }
 
 void ReportBuilderService::load_recent() const {
-    QSettings s("Fincept", "FinceptTerminal");
-    recent_cache_ = s.value(kRecentKey).toStringList();
+    recent_cache_ = rbs_settings().value(kRecentKey).toStringList();
     recent_loaded_ = true;
 }
 
 void ReportBuilderService::save_recent() const {
-    QSettings s("Fincept", "FinceptTerminal");
+    QSettings s = rbs_settings();
     s.setValue(kRecentKey, recent_cache_);
 }
 
-// ── apply_template ──────────────────────────────────────────────────────────
-//
-// Templates are large literal data — keeping the table of templates here
-// (out of the screen) means the LLM and manual UI both build the same
-// content. The template body lives in ReportBuilderTemplates.cpp so this
-// file stays focused.
+// ── Library ─────────────────────────────────────────────────────────────────
 
-extern void apply_template_to_service(ReportBuilderService* svc, const QString& name);
+bool ReportBuilderService::worth_saving_locked() const {
+    // An existing row is always kept current; a new one is only created for a report
+    // with something in it (not for every blank "New Report").
+    return library_id_ > 0 || !doc_.components.isEmpty() || doc_.metadata.title != QLatin1String("Untitled Report");
+}
 
-void ReportBuilderService::apply_template(const QString& name) {
-    LOG_INFO(RB_SVC_TAG, "apply_template: " + name);
-    apply_template_to_service(this, name);
+void ReportBuilderService::set_library_id(qint64 id) {
+    {
+        QMutexLocker lock(&mutex_);
+        if (library_id_ == id)
+            return;
+        library_id_ = id;
+    }
+    chains_[library_generation_].id = id;
+    persist_library_id();
+    emit library_id_changed(id);
+}
+
+void ReportBuilderService::save_to_library() {
+    library_timer_->stop();
+    library_dirty_ = false;
+    if (chains_[library_generation_].conflict)
+        return; // paused until the user decides (the recovery copy keeps the edits)
+    QString json, title;
+    {
+        QMutexLocker lock(&mutex_);
+        if (!worth_saving_locked())
+            return;
+        json = doc_.to_json(/*with_revision=*/false);
+        title = rep::vars::display_title(doc_.metadata);
+    }
+    if (library_id() > 0 && qHash(json) == library_hash_) {
+        emit library_saved(library_id()); // unchanged since the last write (e.g. undone back)
+        return;
+    }
+    request_library_write(library_generation_, title, json);
+}
+
+void ReportBuilderService::save_to_library_blocking() {
+    library_timer_->stop();
+    library_dirty_ = false;
+    // A write still in flight may be creating this report's row: let it finish and
+    // deliver its id, or the synchronous save below would add a second row.
+    auto chain = chains_.find(library_generation_);
+    if (chain != chains_.end() && chain->in_flight) {
+        ReportLibrary::instance().wait_for_idle(3000);
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    }
+    QString json, title;
+    qint64 id;
+    {
+        QMutexLocker lock(&mutex_);
+        if (!worth_saving_locked())
+            return;
+        json = doc_.to_json(/*with_revision=*/false);
+        title = rep::vars::display_title(doc_.metadata);
+        id = library_id_;
+    }
+    WriteChain& wc = chains_[library_generation_];
+    if (id > 0 && qHash(json) == library_hash_ && !wc.conflict)
+        return;
+    // Quitting with an unresolved conflict (or meeting one now): nothing can be asked any
+    // more, so the open version is kept as a separate report instead of overwriting.
+    auto& lib = ReportLibrary::instance();
+    LibrarySaveOutcome out;
+    if (!wc.conflict)
+        out = lib.save_checked_blocking(id, title, json, wc.expected, wc.force_next);
+    if (wc.conflict || out.conflict) {
+        const QString copy_title = tr("%1 (unsynced copy)").arg(title);
+        const qint64 copy = lib.save_blocking(0, copy_title, json);
+        LOG_WARN(RB_SVC_TAG, logf("Report changed elsewhere; open version kept as a copy on quit",
+                                  {{"report", id}, {"copy", copy}}));
+        return;
+    }
+    if (out.ok) {
+        library_hash_ = qHash(json);
+        wc.expected = out.revision;
+        {
+            QMutexLocker lock(&mutex_);
+            doc_.revision = out.revision;
+        }
+        set_library_id(out.id);
+        rbs_remember_file_library_id(current_file(), out.id);
+    }
+}
+
+void ReportBuilderService::request_library_write(quint64 generation, const QString& title, const QString& json) {
+    WriteChain& chain = chains_[generation];
+    chain.has_next = true;
+    chain.next_title = title;
+    chain.next_json = json;
+    if (!chain.in_flight)
+        start_library_write(generation);
+}
+
+void ReportBuilderService::start_library_write(quint64 generation) {
+    auto it = chains_.find(generation);
+    if (it == chains_.end() || !it->has_next)
+        return;
+    if (it->conflict) {
+        it->has_next = false;
+        return;
+    }
+    it->in_flight = true;
+    it->has_next = false;
+    const QString title = it->next_title;
+    const QString json = it->next_json;
+    it->next_json.clear();
+    const bool force = it->force_next;
+    it->force_next = false;
+    const std::size_t hash = qHash(json);
+    ReportLibrary::instance().save_checked(
+        it->id, title, json, it->expected, force, this, [this, generation, hash](const LibrarySaveOutcome& out) {
+            auto c = chains_.find(generation);
+            if (c == chains_.end())
+                return;
+            c->in_flight = false;
+            if (out.conflict) {
+                c->conflict = true;
+                c->has_next = false;
+                if (generation == library_generation_) {
+                    conflict_.id = out.id;
+                    conflict_.theirs = out.theirs;
+                    conflict_.theirs_title = out.theirs_title;
+                    conflict_.theirs_updated = out.theirs_updated;
+                    emit library_conflict_detected();
+                } else {
+                    chains_.erase(c); // an older report: its last edits stay in the recovery copy
+                }
+                return;
+            }
+            if (out.ok) {
+                c->id = out.id;
+                c->expected = out.revision;
+                rbs_remember_file_library_id(c->file, out.id);
+                if (generation == library_generation_) {
+                    library_hash_ = hash;
+                    {
+                        QMutexLocker lock(&mutex_);
+                        doc_.revision = out.revision;
+                    }
+                    set_library_id(out.id);
+                    ReportLibrary::instance().note_opened(out.id);
+                    emit library_saved(out.id);
+                }
+            } else {
+                LOG_WARN(RB_SVC_TAG, "Library save failed: " + out.error);
+                if (generation == library_generation_)
+                    emit library_save_failed(out.error);
+            }
+            if (c->has_next)
+                start_library_write(generation);
+            else if (generation != library_generation_)
+                chains_.erase(c); // an older report, fully written
+        });
+}
+
+// ── Open requests ───────────────────────────────────────────────────────────
+
+void ReportBuilderService::request_open(const OpenRequest& request) {
+    // Only the newest request matters: the user asked for that report last.
+    open_requests_.clear();
+    open_requests_.append(request);
+    emit open_requested();
+}
+
+bool ReportBuilderService::take_open_request(OpenRequest* out) {
+    if (open_requests_.isEmpty())
+        return false;
+    if (out)
+        *out = open_requests_.takeLast();
+    open_requests_.clear();
+    return true;
 }
 
 } // namespace fincept::services

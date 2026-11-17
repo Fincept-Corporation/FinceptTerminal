@@ -52,7 +52,7 @@ def _make_post_request(endpoint: str, body: Dict = None) -> Any:
 def _check_auth() -> Optional[Dict]:
     if not API_KEY:
         return {
-            "error": "DATA_WORLD_TOKEN environment variable not set",
+            "error": "DATA_WORLD_TOKEN is not set: save it in Settings > Credentials",
             "note": "Get a free token at https://data.world/settings/advanced",
         }
     return None

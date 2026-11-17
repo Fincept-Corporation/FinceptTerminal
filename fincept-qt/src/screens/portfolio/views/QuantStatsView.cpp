@@ -2,36 +2,42 @@
 #include "screens/portfolio/views/QuantStatsView.h"
 
 #include "core/logging/Logger.h"
+#include "screens/portfolio/PortfolioSharedRun.h"
 #include "services/portfolio/PortfolioAnalyticsService.h"
 #include "services/portfolio/PortfolioService.h"
+#include "ui/charts/DistributionChart.h"
+#include "ui/charts/FanChart.h"
+#include "ui/charts/MonthlyReturnsHeatmap.h"
+#include "ui/charts/TimeSeriesChart.h"
+#include "ui/formatting/DateFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/InputMemory.h"
+#include "ui/widgets/KpiStrip.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/StatTile.h"
 
-#include <QAreaSeries>
-#include <QBarSeries>
-#include <QBarSet>
-#include <QChart>
-#include <QChartView>
 #include <QDate>
-#include <QDateTimeAxis>
 #include <QEvent>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QLineSeries>
-#include <QLocale>
-#include <QMap>
 #include <QPointer>
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QTabBar>
+#include <QTimeZone>
 #include <QVBoxLayout>
-#include <QValueAxis>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <optional>
 #include <utility>
 
 using fincept::services::AnalyticsResult;
@@ -41,35 +47,126 @@ namespace fincept::screens {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static QString pct_str(double v, int dp = 2) {
-    return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(QString::number(v, 'f', dp));
+/// An automatic or user run that has not answered after this long shows "Timed out" + RETRY.
+static constexpr int kQsTimeoutS = 120;
+
+// Locale-aware (grouping, decimal separator, em dash for NaN) through ui/formatting.
+static QString qs_pct_str(double v, int dp = 2) {
+    return ui::formatting::pct(v, dp, true);
+}
+
+/// Unsigned percentage, for quantities that are not returns (volatility, downside
+/// deviation, win/loss rate, probability of loss) — "+18.40%" read as a gain.
+static QString qs_upct_str(double v, int dp = 2) {
+    return ui::formatting::pct(v, dp, false);
 }
 
 static QString ratio_str(double v, int dp = 2) {
-    return QString::number(v, 'f', dp);
+    return ui::formatting::number(v, dp);
 }
 
-static QTableWidgetItem* make_item(const QString& text, Qt::Alignment align, const QColor& color) {
+/// A number from the script's JSON, scaled; nullopt for null / missing. The script reports
+/// undefined statistics (Sharpe with zero deviation, Calmar with no drawdown, Profit Factor
+/// with no losing day, ...) as null — they must read "--", not a real 0.00.
+static std::optional<double> qs_num(const QJsonObject& o, const QString& key, double scale = 1.0) {
+    const QJsonValue v = o.value(key);
+    if (!v.isDouble())
+        return std::nullopt;
+    return v.toDouble() * scale;
+}
+
+static QString opt_pct_str(const std::optional<double>& v, int dp = 2) {
+    return v ? qs_pct_str(*v, dp) : QStringLiteral("--");
+}
+
+static QString opt_upct_str(const std::optional<double>& v, int dp = 2) {
+    return v ? qs_upct_str(*v, dp) : QStringLiteral("--");
+}
+
+static QString opt_ratio_str(const std::optional<double>& v, int dp = 2) {
+    return v ? ratio_str(*v, dp) : QStringLiteral("--");
+}
+
+/// Direction of a signed figure (a return, a loss): +1 / -1, 0 when unknown.
+static int qs_sign(const std::optional<double>& v) {
+    if (!v)
+        return 0;
+    return *v >= 0.0 ? 1 : -1;
+}
+
+/// Tile tone for a signed figure; the value text carries the sign too (never colour alone).
+static ui::StatTile::Tone qs_tone(const std::optional<double>& v) {
+    const int s = qs_sign(v);
+    return s > 0 ? ui::StatTile::Tone::Positive : s < 0 ? ui::StatTile::Tone::Negative : ui::StatTile::Tone::Neutral;
+}
+
+/// The script's own plain sentence: a multi-line message (a traceback) is cut to its last line.
+static QString qs_plain_error(const QString& raw, const QString& fallback) {
+    const QStringList lines = raw.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    QString msg = lines.isEmpty() ? QString() : lines.last().trimmed();
+    if (msg.isEmpty())
+        msg = fallback;
+    return msg.left(300);
+}
+
+// Table row height: `design_h` at the default font size, growing with it.
+static int qs_row_height(int design_h) {
+    return std::max(design_h, ui::fonts::font_px(-3) + design_h - 11);
+}
+
+static QTableWidgetItem* qs_make_item(const QString& text, Qt::Alignment align, const QColor& color) {
     auto* item = new QTableWidgetItem(text);
     item->setTextAlignment(align);
     item->setForeground(color);
     return item;
 }
 
+/// Colour of a value cell: the direction colour for a signed figure, text otherwise.
+static QColor qs_value_color(int sign) {
+    if (sign > 0)
+        return QColor(ui::colors::POSITIVE());
+    if (sign < 0)
+        return QColor(ui::colors::NEGATIVE());
+    return QColor(ui::colors::TEXT_PRIMARY());
+}
+
 // Apply standard dark styling to a QTableWidget.
-static void style_table(QTableWidget* t) {
+static void qs_style_table(QTableWidget* t) {
     t->setSelectionMode(QAbstractItemView::NoSelection);
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
     t->setShowGrid(false);
     t->verticalHeader()->setVisible(false);
     t->horizontalHeader()->setStretchLastSection(true);
-    t->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+    t->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                              "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
                              "QHeaderView::section { background:%4; color:%5; border:none;"
-                             "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
+                             "  border-bottom:2px solid %6; padding:4px 8px; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                              "  font-weight:700; letter-spacing:0.5px; }")
                          .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                               ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
+}
+
+/// Amber section title used across the result tabs.
+static QString qs_title_style() {
+    return QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;")
+        .arg(ui::colors::AMBER());
+}
+
+/// A result page's own background, scoped to it (an unscoped rule would reach the
+/// shared state widgets inside).
+static void qs_scoped_background(QWidget* w, const QString& name) {
+    w->setObjectName(name);
+    w->setStyleSheet(QString("#%1 { background:%2; }").arg(name, ui::colors::BG_BASE()));
+}
+
+// The page stack inside `tabs` (QTabWidget's own child), so a tab page built there is not
+// moved — and re-styled as a whole — by addTab(). `fallback` when it cannot be found.
+static QWidget* qs_page_parent(QTabWidget* tabs, QWidget* fallback) {
+    if (!tabs)
+        return fallback;
+    QWidget* stack = tabs->findChild<QStackedWidget*>(QStringLiteral("qt_tabwidget_stackedwidget"),
+                                                     Qt::FindDirectChildrenOnly);
+    return stack ? stack : fallback;
 }
 
 // One line on a QuantStats time-series chart. Values are fractions (×100 for display).
@@ -84,109 +181,81 @@ struct QsLine {
     double scale = 100.0;
 };
 
-static qint64 qs_date_ms(const QJsonValue& v) {
-    const QDate d = QDate::fromString(v.toString(), Qt::ISODate);
-    return d.isValid() ? d.startOfDay().toMSecsSinceEpoch() : 0;
+static double qs_date_ms(const QJsonValue& v) {
+    const QDate d = QDate::fromString(v.toString().left(10), Qt::ISODate);
+    return d.isValid() ? static_cast<double>(QDateTime(d, QTime(0, 0), QTimeZone::UTC).toMSecsSinceEpoch())
+                       : std::numeric_limits<double>::quiet_NaN();
 }
 
-// Date-axis line chart for the series the script returns (cumulative, drawdown,
-// rolling). Null points (warm-up of a rolling window) are skipped.
-static QChartView* qs_line_chart(const QJsonArray& dates, const QVector<QsLine>& lines, const char* y_fmt,
-                                 QWidget* parent) {
-    auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
-    chart->setBackgroundRoundness(0);
-    chart->setMargins(QMargins(4, 4, 4, 4));
-    chart->setAnimationOptions(QChart::NoAnimation);
-    chart->legend()->setVisible(lines.size() > 1);
-    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
-    chart->legend()->setAlignment(Qt::AlignTop);
-
-    auto* x_axis = new QDateTimeAxis;
-    x_axis->setFormat("MMM yy");
-    x_axis->setTickCount(6);
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    x_axis->setLabelsFont(QFont("Consolas", 8));
-    auto* y_axis = new QValueAxis;
-    y_axis->setLabelFormat(y_fmt);
-    y_axis->setTickCount(5);
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    y_axis->setLabelsFont(QFont("Consolas", 8));
-    chart->addAxis(x_axis, Qt::AlignBottom);
-    chart->addAxis(y_axis, Qt::AlignLeft);
-
-    double lo = 0.0, hi = 0.0;
+// Date-axis chart for the series the script returns (cumulative, drawdown,
+// rolling) on the shared TimeSeriesChart: crosshair + tooltip, wheel zoom, range
+// presets, image / CSV export. Null points (rolling warm-up) are gaps. A y_fmt
+// with "%%" formats values as percent, anything else as a plain number.
+static QWidget* qs_line_chart(const QJsonArray& dates, const QVector<QsLine>& lines, const char* y_fmt,
+                              QWidget* parent) {
+    auto* chart = new ui::TimeSeriesChart(parent);
+    chart->set_utc(true);
+    chart->set_show_mode_buttons(false);
+    chart->set_show_legend(lines.size() > 1);
+    chart->set_range_presets({"3M", "6M", "YTD", "1Y", "ALL"});
+    chart->set_time_formatter([](double x) { return ui::formatting::bar_date(static_cast<qint64>(x / 1000.0)); });
+    const bool percent = QString::fromLatin1(y_fmt).contains(QStringLiteral("%%"));
+    const ui::TimeSeriesChart::ValueFormatter fmt = percent ? ui::TimeSeriesChart::ValueFormatter(
+                                                                  [](double v) { return ui::formatting::pct(v, 2); })
+                                                            : ui::TimeSeriesChart::ValueFormatter(
+                                                                  [](double v) { return ui::formatting::number(v, 2); });
+    chart->set_value_formatter(ui::TimeSeriesChart::Axis::Left, fmt);
     for (const auto& ln : lines) {
-        auto* s = new QLineSeries;
-        s->setName(ln.name);
-        QLineSeries* zero = ln.fill_to_zero ? new QLineSeries : nullptr;
+        QVector<QPointF> pts;
         const int n = static_cast<int>(std::min(dates.size(), ln.values.size()));
+        pts.reserve(n);
         for (int i = 0; i < n; ++i) {
-            if (!ln.values[i].isDouble())
+            const double x = qs_date_ms(dates[i]);
+            if (!std::isfinite(x))
                 continue;
-            const qint64 x = qs_date_ms(dates[i]);
-            if (x == 0)
-                continue;
-            const double y = ln.values[i].toDouble() * ln.scale;
-            s->append(static_cast<double>(x), y);
-            if (zero)
-                zero->append(static_cast<double>(x), 0.0);
-            lo = std::min(lo, y);
-            hi = std::max(hi, y);
+            pts.append({x, ln.values[i].isDouble() ? ln.values[i].toDouble() * ln.scale
+                                                   : std::numeric_limits<double>::quiet_NaN()});
         }
-        QPen pen(ln.color, ln.dashed ? 1.2 : 1.8);
-        if (ln.dashed)
-            pen.setStyle(Qt::DashLine);
-        if (zero) {
-            auto* area = new QAreaSeries(s, zero);
-            area->setName(ln.name);
-            QColor fill = ln.color;
-            fill.setAlpha(60);
-            area->setBrush(fill);
-            area->setPen(pen);
-            chart->addSeries(area);
-            area->attachAxis(x_axis);
-            area->attachAxis(y_axis);
-        } else {
-            s->setPen(pen);
-            chart->addSeries(s);
-            s->attachAxis(x_axis);
-            s->attachAxis(y_axis);
+        ui::TimeSeriesChart::SeriesSpec spec;
+        spec.name = ln.name;
+        spec.points = pts;
+        spec.color = ui::TimeSeriesChart::ColorRole::Custom;
+        spec.custom_color = ln.color;
+        spec.dashed = ln.dashed;
+        spec.rebase = false;
+        spec.formatter = fmt;
+        if (ln.fill_to_zero) {
+            spec.style = ui::TimeSeriesChart::Style::Area;
+            spec.baseline = 0.0;
         }
+        chart->add_series(spec);
     }
-    const double pad = std::max((hi - lo) * 0.08, 0.5);
-    y_axis->setRange(lo - pad, hi + pad);
-
-    auto* view = new QChartView(chart, parent);
-    view->setRenderHint(QPainter::Antialiasing, true);
-    view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
-    return view;
-}
-
-// Build a centred placeholder label inside a parent widget. Returns the wrapper
-// widget; @p out_label receives the inner QLabel so callers can retranslate it.
-static QWidget* make_placeholder(const QString& msg, QLabel** out_label = nullptr, QWidget* parent = nullptr) {
-    auto* w = new QWidget(parent);
-    auto* lay = new QVBoxLayout(w);
-    lay->setContentsMargins(24, 32, 24, 32);
-    auto* lbl = new QLabel(msg);
-    lbl->setAlignment(Qt::AlignCenter);
-    lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-    lay->addStretch();
-    lay->addWidget(lbl);
-    lay->addStretch();
-    if (out_label)
-        *out_label = lbl;
-    return w;
+    return chart;
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 QuantStatsView::QuantStatsView(QWidget* parent) : QWidget(parent) {
     build_ui();
+    // Tables and built charts carry their colours: re-render once the new
+    // appearance has settled (never inside theme_changed).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this,
+            &QuantStatsView::on_appearance_settled);
+    // Currency / number format changed: the same path — every tab with a result is
+    // re-rendered from its remembered payload (the visible one now, the others when
+    // shown). Nothing re-runs.
+    ui::formatting::on_format_changed(this, [this]() { on_appearance_settled(); });
+}
+
+QuantStatsView::~QuantStatsView() {
+    // The panes' cancel callbacks use the request maps: drop the panes while the
+    // members still exist (Qt would delete them only after the members are gone).
+    for (const auto& r : std::as_const(qs_requests_))
+        r.cancel();
+    for (const auto& r : std::as_const(mc_requests_))
+        r.cancel();
+    delete tabs_;
+    tabs_ = nullptr;
 }
 
 // ── build_ui ─────────────────────────────────────────────────────────────────
@@ -196,221 +265,443 @@ void QuantStatsView::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── Header bar ────────────────────────────────────────────────────────────
+    // ── Header: title · as-of · period · RUN on one row, the note wraps below ──
     auto* header = new QWidget(this);
-    header->setFixedHeight(36);
+    header->setMinimumHeight(36);
     header->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
 
-    auto* h_lay = new QHBoxLayout(header);
-    h_lay->setContentsMargins(12, 0, 12, 0);
+    auto* hv = new QVBoxLayout(header);
+    hv->setContentsMargins(12, 6, 12, 6);
+    hv->setSpacing(2);
+    auto* h_lay = new QHBoxLayout;
     h_lay->setSpacing(8);
 
-    title_lbl_ = new QLabel(tr("QUANTSTATS ANALYSIS"));
-    title_lbl_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    title_lbl_ = new QLabel(tr("QUANTSTATS ANALYSIS"), header);
+    title_lbl_->setStyleSheet(qs_title_style());
     h_lay->addWidget(title_lbl_);
-    h_lay->addStretch();
+    h_lay->addStretch(1);
 
-    qs_status_ = new QLabel;
-    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    qs_status_ = new QLabel(header);
+    qs_status_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     h_lay->addWidget(qs_status_);
 
-    qs_run_btn_ = new QPushButton(tr("\u25B6 RUN QUANTSTATS"));
-    qs_run_btn_->setFixedHeight(22);
+    // History window of the analysis (was a fixed one year).
+    qs_period_cb_ = new QComboBox(header);
+    for (const auto& [key, label] : {std::pair{"6mo", tr("6 months")}, std::pair{"1y", tr("1 year")},
+                                     std::pair{"2y", tr("2 years")}, std::pair{"3y", tr("3 years")},
+                                     std::pair{"5y", tr("5 years")}, std::pair{"10y", tr("10 years")},
+                                     std::pair{"ytd", tr("Year to date")}, std::pair{"max", tr("Max")}})
+        qs_period_cb_->addItem(label, QString::fromLatin1(key));
+    qs_period_cb_->setCurrentIndex(1);
+    qs_period_cb_->setToolTip(tr("Price history the analysis uses (current weights, back-tested)"));
+    qs_period_cb_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:1px 6px;"
+                                         "  font-size:" + fincept::ui::fonts::px(-4) + "px; }")
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
+    // A period the user picks is an explicit request: run it (a restored value is not).
+    connect(qs_period_cb_, &QComboBox::activated, this, [this](int) { on_period_activated(); });
+    h_lay->addWidget(qs_period_cb_);
+
+    qs_run_btn_ = new QPushButton(tr("▶ RUN QUANTSTATS"), header);
+    qs_run_btn_->setMinimumHeight(22);
     qs_run_btn_->setCursor(Qt::PointingHandCursor);
     qs_run_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none;"
-                "  padding:0 12px; font-size:9px; font-weight:700; }"
+        QString("QPushButton { background:%1; color:%5; border:none;"
+                "  padding:0 12px; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }"
                 "QPushButton:disabled { background:%3; color:%4; }")
-            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
-    connect(qs_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_quantstats);
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(),
+                 ui::colors::TEXT_ON_ACCENT()));
+    connect(qs_run_btn_, &QPushButton::clicked, this, [this]() {
+        if (ui::AutoLoadPane* p = current_qs_pane())
+            p->run();
+    });
     h_lay->addWidget(qs_run_btn_);
+    hv->addLayout(h_lay);
+
+    // Two analyses of the same back-test exist; say where the other one is and how they differ.
+    sibling_lbl_ = new QLabel(tr("Back-test of today's weights · the ffn-based equivalent is under ⋯ › FFN Analysis; "
+                                 "realised (time-weighted) performance is in PERF/RISK"),
+                              header);
+    sibling_lbl_->setWordWrap(true);
+    sibling_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(ui::colors::TEXT_TERTIARY()));
+    hv->addWidget(sibling_lbl_);
 
     root->addWidget(header);
 
     // ── Tab widget ────────────────────────────────────────────────────────────
-    tabs_ = new QTabWidget;
+    tabs_ = new QTabWidget(this);
     tabs_->tabBar()->setElideMode(Qt::ElideNone);
     tabs_->tabBar()->setExpanding(false);
-    tabs_->tabBar()->setUsesScrollButtons(false);
+    tabs_->tabBar()->setUsesScrollButtons(true); // 1280 px / large fonts: scroll instead of clipping
     tabs_->setDocumentMode(true);
     tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
                                  "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
-                                 "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
+                                 "  border-bottom:2px solid transparent; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                  "  letter-spacing:0.5px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
                              .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
                                   ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+    QWidget* pages = qs_page_parent(tabs_, this);
+
+    // One quantstats run feeds METRICS, RETURNS, DRAWDOWN and ROLLING.
+    qs_shared_ = new PortfolioSharedRun(this);
+    qs_shared_->set_launch([this](quint64 run) { launch_quantstats(run); });
+    qs_shared_->set_abort([this](quint64 run) { qs_requests_.take(run).cancel(); });
+
+    auto new_qs_tab = [&](ResultTab& tab, ui::LoadingSkeleton::Shape shape,
+                          const std::function<void(const QJsonValue&)>& render) {
+        tab.stack = new QStackedWidget(pages);
+        tab.pane = new ui::AutoLoadPane(ui::AutoLoadPane::Policy::AutoRun, tab.stack);
+        tab.stack->addWidget(tab.pane);
+        configure_pane(tab, static_cast<int>(shape), render);
+        tab.pane->set_cache_key(QStringLiteral("portfolio/quantstats"), kPortfolioResultTtlDays);
+        qs_shared_->attach(tab.pane);
+    };
 
     // ── METRICS tab ───────────────────────────────────────────────────────────
     {
-        auto* metrics_w = new QWidget(this);
+        new_qs_tab(metrics_tab_, ui::LoadingSkeleton::Shape::Table, [this](const QJsonValue& p) {
+            qs_data_ = p.toObject();
+            update_metrics();
+        });
+        metrics_tab_.pane->skeleton()->set_row_count(14);
+        metrics_tab_.empty_text = [this]() {
+            return tr("Performance, risk and ratio metrics of the current weights appear once the portfolio holds a "
+                      "position.");
+        };
+        auto* metrics_w = new QWidget(metrics_tab_.pane->content_parent());
         auto* ml = new QVBoxLayout(metrics_w);
         ml->setContentsMargins(12, 8, 12, 8);
         ml->setSpacing(4);
 
-        metrics_section_lbl_ = new QLabel(tr("KEY PERFORMANCE INDICATORS"));
-        metrics_section_lbl_->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        metrics_section_lbl_ = new QLabel(tr("KEY PERFORMANCE INDICATORS"), metrics_w);
+        metrics_section_lbl_->setStyleSheet(qs_title_style());
         ml->addWidget(metrics_section_lbl_);
 
-        metrics_table_ = new QTableWidget;
+        metrics_table_ = new QTableWidget(metrics_w);
         metrics_table_->setColumnCount(3);
         metrics_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE"), tr("BENCHMARK")});
         metrics_table_->setColumnWidth(0, 220);
         metrics_table_->setColumnWidth(1, 130);
-        style_table(metrics_table_);
+        qs_style_table(metrics_table_);
         ml->addWidget(metrics_table_, 1);
+        metrics_tab_.pane->set_content(metrics_w);
 
-        metrics_tab_index_ = tabs_->addTab(metrics_w, tr("METRICS"));
+        metrics_tab_index_ = tabs_->addTab(metrics_tab_.stack, tr("METRICS"));
     }
+
+    auto make_scroll = [](ui::AutoLoadPane* pane) {
+        auto* scroll = new QScrollArea(pane->content_parent());
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        pane->set_content(scroll);
+        return scroll;
+    };
 
     // ── RETURNS tab ───────────────────────────────────────────────────────────
     {
-        auto* returns_w = new QWidget(this);
-        returns_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-        auto* rl = new QVBoxLayout(returns_w);
-        rl->setContentsMargins(0, 0, 0, 0);
-        rl->setSpacing(0);
-
-        returns_stack_ = new QStackedWidget;
-        returns_stack_->addWidget(
-            make_placeholder(tr("Run QuantStats Analysis for return distribution"), &returns_placeholder_));
-        // Index 1 is added lazily in update_returns()
-        rl->addWidget(returns_stack_);
-
-        returns_tab_index_ = tabs_->addTab(returns_w, tr("RETURNS"));
+        new_qs_tab(returns_tab_, ui::LoadingSkeleton::Shape::Result, [this](const QJsonValue& p) {
+            qs_data_ = p.toObject();
+            update_returns();
+        });
+        returns_tab_.empty_text = [this]() {
+            return tr("The cumulative return, the distribution of daily returns and the monthly returns appear once "
+                      "the portfolio holds a position.");
+        };
+        returns_scroll_ = make_scroll(returns_tab_.pane);
+        returns_tab_index_ = tabs_->addTab(returns_tab_.stack, tr("RETURNS"));
     }
 
     // ── DRAWDOWN tab ──────────────────────────────────────────────────────────
     {
-        auto* dd_w = new QWidget(this);
-        dd_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-        auto* dl = new QVBoxLayout(dd_w);
-        dl->setContentsMargins(0, 0, 0, 0);
-        dl->setSpacing(0);
-
-        drawdown_stack_ = new QStackedWidget;
-        drawdown_stack_->addWidget(
-            make_placeholder(tr("Run QuantStats Analysis for drawdown metrics"), &drawdown_placeholder_));
-        dl->addWidget(drawdown_stack_);
-
-        drawdown_tab_index_ = tabs_->addTab(dd_w, tr("DRAWDOWN"));
+        new_qs_tab(drawdown_tab_, ui::LoadingSkeleton::Shape::Result, [this](const QJsonValue& p) {
+            qs_data_ = p.toObject();
+            update_drawdown();
+        });
+        drawdown_tab_.empty_text = [this]() {
+            return tr("The drawdown curve, the worst drawdown periods and the risk metrics appear once the portfolio "
+                      "holds a position.");
+        };
+        drawdown_scroll_ = make_scroll(drawdown_tab_.pane);
+        drawdown_tab_index_ = tabs_->addTab(drawdown_tab_.stack, tr("DRAWDOWN"));
     }
 
     // ── ROLLING tab ───────────────────────────────────────────────────────────
     {
-        auto* roll_w = new QWidget(this);
-        roll_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-        auto* rll = new QVBoxLayout(roll_w);
-        rll->setContentsMargins(0, 0, 0, 0);
-        rll->setSpacing(0);
-
-        rolling_stack_ = new QStackedWidget;
-        rolling_stack_->addWidget(
-            make_placeholder(tr("Run QuantStats Analysis for rolling metrics"), &rolling_placeholder_));
-        rll->addWidget(rolling_stack_);
-
-        rolling_tab_index_ = tabs_->addTab(roll_w, tr("ROLLING"));
+        new_qs_tab(rolling_tab_, ui::LoadingSkeleton::Shape::Chart, [this](const QJsonValue& p) {
+            qs_data_ = p.toObject();
+            update_rolling();
+        });
+        rolling_tab_.empty_text = [this]() {
+            return tr("Rolling Sharpe ratio, volatility and beta appear once the portfolio holds a position.");
+        };
+        rolling_scroll_ = make_scroll(rolling_tab_.pane);
+        rolling_tab_index_ = tabs_->addTab(rolling_tab_.stack, tr("ROLLING"));
     }
 
     // ── MONTE CARLO tab ───────────────────────────────────────────────────────
-    {
-        auto* mc_w = new QWidget(this);
-        mc_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-        auto* mcl = new QVBoxLayout(mc_w);
-        mcl->setContentsMargins(16, 12, 16, 12);
-        mcl->setSpacing(8);
-
-        mc_title_ = new QLabel(tr("MONTE CARLO SIMULATION"));
-        mc_title_->setStyleSheet(
-            QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        mcl->addWidget(mc_title_);
-
-        mc_desc_ = new QLabel(tr("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
-                                 "distributions of future returns, drawdowns, and terminal wealth."));
-        mc_desc_->setWordWrap(true);
-        mc_desc_->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-        mcl->addWidget(mc_desc_);
-
-        // Button row
-        auto* mc_btn_row = new QHBoxLayout;
-        mc_btn_row->setSpacing(8);
-
-        mc_run_btn_ = new QPushButton(tr("\u25B6 RUN MONTE CARLO (1000 paths)"));
-        mc_run_btn_->setFixedHeight(28);
-        mc_run_btn_->setCursor(Qt::PointingHandCursor);
-        mc_run_btn_->setStyleSheet(
-            QString("QPushButton { background:%1; color:#000; border:none;"
-                    "  padding:0 16px; font-size:10px; font-weight:700; }"
-                    "QPushButton:hover { background:%2; }"
-                    "QPushButton:disabled { background:%3; color:%4; }")
-                .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
-        connect(mc_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_monte_carlo);
-        mc_btn_row->addWidget(mc_run_btn_);
-
-        mc_status_ = new QLabel;
-        mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
-        mc_btn_row->addWidget(mc_status_);
-        mc_btn_row->addStretch();
-        mcl->addLayout(mc_btn_row);
-
-        // Stacked area: placeholder vs live content
-        mc_stack_ = new QStackedWidget;
-        mc_stack_->addWidget(
-            make_placeholder(tr("Press RUN MONTE CARLO to simulate 1,000 return paths"), &mc_placeholder_));
-        // Index 1 is built lazily in update_monte_carlo_chart()
-        mcl->addWidget(mc_stack_, 1);
-
-        // mc_results_ kept for backward compatibility (not used in display logic)
-        mc_results_ = new QWidget(this);
-        mc_results_->setVisible(false);
-
-        mc_tab_index_ = tabs_->addTab(mc_w, tr("MONTE CARLO"));
-    }
+    mc_tab_index_ = tabs_->addTab(build_mc_page(pages), tr("MONTE CARLO"));
 
     root->addWidget(tabs_, 1);
+
+    // Inputs remembered per sub-tab: the period (QuantStats) and paths / method (Monte Carlo).
+    qs_inputs_ = new ui::InputMemory(QStringLiteral("portfolio"), QStringLiteral("quantstats"), this);
+    qs_inputs_->track(QStringLiteral("period"), qs_period_cb_);
+    qs_inputs_->restore();
+    mc_inputs_ = new ui::InputMemory(QStringLiteral("portfolio"), QStringLiteral("montecarlo"), this);
+    mc_inputs_->track(QStringLiteral("paths"), mc_paths_spin_);
+    mc_inputs_->track(QStringLiteral("method"), mc_method_cb_);
+    mc_inputs_->restore();
+    connect(mc_inputs_, &ui::InputMemory::changed, this, [this]() {
+        mc_tab_.pane->set_loading_text(mc_loading_text());
+        if (has_data_ && !empty_book_)
+            mc_tab_.pane->set_signature(mc_signature()); // a result for other inputs shows "RUN AGAIN"
+    });
+
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_})
+        t->pane->set_loading_text(qs_loading_text());
+    mc_tab_.pane->set_loading_text(mc_loading_text());
+    metrics_tab_.pane->set_status_label(qs_status_);
+    header_pane_ = metrics_tab_.pane;
+    connect(tabs_, &QTabWidget::currentChanged, this, &QuantStatsView::on_tab_changed);
+}
+
+QWidget* QuantStatsView::build_mc_page(QWidget* parent) {
+    auto* mc_w = new QWidget(parent);
+    qs_scoped_background(mc_w, QStringLiteral("qsMcPage"));
+    auto* mcl = new QVBoxLayout(mc_w);
+    mcl->setContentsMargins(16, 12, 16, 12);
+    mcl->setSpacing(8);
+
+    mc_title_ = new QLabel(tr("MONTE CARLO SIMULATION"), mc_w);
+    mc_title_->setStyleSheet(
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    mcl->addWidget(mc_title_);
+
+    mc_desc_ = new QLabel(tr("Simulate portfolio return paths — bootstrap of whole historical days (keeps fat "
+                             "tails and co-movement) or geometric Brownian motion — to estimate the distribution "
+                             "of future returns, drawdowns and terminal wealth."),
+                          mc_w);
+    mc_desc_->setWordWrap(true);
+    mc_desc_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(ui::colors::TEXT_TERTIARY()));
+    mcl->addWidget(mc_desc_);
+
+    // Inputs row
+    auto* mc_btn_row = new QHBoxLayout;
+    mc_btn_row->setSpacing(8);
+
+    paths_lbl_ = new QLabel(tr("Paths:"), mc_w);
+    paths_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_SECONDARY()));
+    mc_btn_row->addWidget(paths_lbl_);
+    mc_paths_spin_ = new QSpinBox(mc_w);
+    mc_paths_spin_->setRange(100, 100000);
+    mc_paths_spin_->setSingleStep(1000);
+    mc_paths_spin_->setValue(5000);
+    mc_paths_spin_->setGroupSeparatorShown(true);
+    mc_paths_spin_->setToolTip(tr("More paths = steadier percentiles, slower run (100 – 100,000)"));
+    mc_btn_row->addWidget(mc_paths_spin_);
+    mc_method_cb_ = new QComboBox(mc_w);
+    mc_method_cb_->addItem(tr("Bootstrap"), QStringLiteral("bootstrap"));
+    mc_method_cb_->addItem(tr("GBM (normal)"), QStringLiteral("gbm"));
+    mc_btn_row->addWidget(mc_method_cb_);
+    for (QWidget* w : {static_cast<QWidget*>(mc_paths_spin_), static_cast<QWidget*>(mc_method_cb_)})
+        w->setStyleSheet(QString("background:%1; color:%2; border:1px solid %3; padding:1px 6px;")
+                             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
+
+    mc_run_btn_ = new QPushButton(tr("▶ RUN MONTE CARLO"), mc_w);
+    mc_run_btn_->setMinimumHeight(28);
+    mc_run_btn_->setCursor(Qt::PointingHandCursor);
+    mc_run_btn_->setStyleSheet(
+        QString("QPushButton { background:%1; color:%5; border:none;"
+                "  padding:0 16px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
+                "QPushButton:hover { background:%2; }"
+                "QPushButton:disabled { background:%3; color:%4; }")
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(),
+                 ui::colors::TEXT_ON_ACCENT()));
+    mc_btn_row->addWidget(mc_run_btn_);
+
+    mc_status_ = new QLabel(mc_w);
+    mc_status_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
+    mc_btn_row->addWidget(mc_status_);
+    mc_btn_row->addStretch();
+    mcl->addLayout(mc_btn_row);
+
+    // Result: its own run (a second Python process, only when this tab is shown).
+    mc_tab_.stack = new QStackedWidget(mc_w);
+    mc_tab_.pane = new ui::AutoLoadPane(ui::AutoLoadPane::Policy::AutoRun, mc_tab_.stack);
+    mc_tab_.stack->addWidget(mc_tab_.pane);
+    configure_pane(mc_tab_, static_cast<int>(ui::LoadingSkeleton::Shape::Chart), [this](const QJsonValue& p) {
+        mc_data_ = p.toObject();
+        update_monte_carlo_chart();
+    });
+    mc_tab_.pane->set_cache_key(QStringLiteral("portfolio/montecarlo"), kPortfolioResultTtlDays);
+    mc_tab_.pane->set_persist_limit(512 * 1024); // the payload carries 50 sample paths (~270 KB)
+    mc_tab_.pane->set_status_label(mc_status_);
+    mc_tab_.pane->set_start([this](quint64 id) { start_monte_carlo(id); });
+    mc_tab_.pane->set_cancel([this](quint64 id) { mc_requests_.take(id).cancel(); });
+    mc_tab_.empty_text = [this]() {
+        return tr("A Monte Carlo simulation of the current weights appears once the portfolio holds a position.");
+    };
+    connect(mc_run_btn_, &QPushButton::clicked, mc_tab_.pane, &ui::AutoLoadPane::run);
+
+    auto* content = new QWidget(mc_tab_.pane->content_parent());
+    auto* cl = new QVBoxLayout(content);
+    cl->setContentsMargins(0, 0, 0, 0);
+    cl->setSpacing(8);
+
+    mc_kpis_ = new ui::KpiStrip(content);
+    mc_kpis_->add_tile(QStringLiteral("median"), tr("MEDIAN RETURN"));
+    mc_kpis_->add_tile(QStringLiteral("p5"), tr("5TH PERCENTILE"));
+    mc_kpis_->add_tile(QStringLiteral("p95"), tr("95TH PERCENTILE"));
+    mc_kpis_->add_tile(QStringLiteral("prob_loss"), tr("PROB OF LOSS"));
+    mc_kpis_->add_tile(QStringLiteral("max_dd"), tr("EXP MAX DRAWDOWN"));
+    mc_kpis_->add_tile(QStringLiteral("cvar"), tr("WORST 5% AVG"));
+    mc_kpis_->add_tile(QStringLiteral("loss_at_risk"), tr("≈ LOSS AT RISK"));
+    cl->addWidget(mc_kpis_);
+
+    mc_fan_ = new ui::FanChart(content);
+    mc_fan_->set_value_formatter([](double v) { return ui::formatting::pct(v, 1); });
+    mc_fan_->set_x_formatter([](double x) { return QuantStatsView::tr("Day %1").arg(static_cast<int>(std::lround(x))); });
+    mc_fan_->add_reference_line(0.0, tr("Break-even"));
+    mc_fan_->setMinimumHeight(qs_row_height(220));
+    cl->addWidget(mc_fan_, 1);
+
+    // Distribution of the simulated one-year outcomes (shown when the payload has them).
+    mc_dist_ = new ui::DistributionChart(content);
+    mc_dist_->set_signed_colors(true);
+    mc_dist_->set_value_formatter([](double v) { return ui::formatting::pct(v, 1); });
+    mc_dist_->setMinimumHeight(qs_row_height(160));
+    mc_dist_->setVisible(false);
+    cl->addWidget(mc_dist_);
+
+    mc_caption_ = new QLabel(content);
+    mc_caption_->setWordWrap(true);
+    mc_caption_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    cl->addWidget(mc_caption_);
+    mc_tab_.pane->set_content(content);
+
+    mcl->addWidget(mc_tab_.stack, 1);
+    return mc_w;
+}
+
+void QuantStatsView::configure_pane(ResultTab& tab, int shape, const std::function<void(const QJsonValue&)>& render) {
+    ui::AutoLoadPane* pane = tab.pane;
+    tab.render = render;
+    pane->skeleton()->set_shape(static_cast<ui::LoadingSkeleton::Shape>(shape));
+    pane->set_max_age(kPortfolioScriptMaxAgeS);
+    pane->set_timeout(kQsTimeoutS);
+    pane->set_render([this, pane, render](const QJsonValue& payload, const QDateTime&, bool) {
+        theme_stale_.remove(pane);
+        render(payload);
+    });
+}
+
+// ── Tabs / state ──────────────────────────────────────────────────────────────
+
+QuantStatsView::ResultTab* QuantStatsView::tab_for_index(int index) {
+    if (index == metrics_tab_index_)
+        return &metrics_tab_;
+    if (index == returns_tab_index_)
+        return &returns_tab_;
+    if (index == drawdown_tab_index_)
+        return &drawdown_tab_;
+    if (index == rolling_tab_index_)
+        return &rolling_tab_;
+    if (index == mc_tab_index_)
+        return &mc_tab_;
+    return nullptr;
+}
+
+ui::AutoLoadPane* QuantStatsView::current_qs_pane() {
+    ResultTab* t = tabs_ ? tab_for_index(tabs_->currentIndex()) : nullptr;
+    if (!t || t == &mc_tab_)
+        return header_pane_ ? header_pane_ : metrics_tab_.pane; // the one the header's status shows
+    return t->pane;
+}
+
+void QuantStatsView::on_tab_changed(int index) {
+    if (ResultTab* t = tab_for_index(index))
+        rerender_if_stale(*t);
+    if (index == mc_tab_index_)
+        return; // the header keeps showing the QuantStats run; MONTE CARLO has its own status
+    // The header's "as of" follows the QuantStats tab on screen.
+    ui::AutoLoadPane* current = current_qs_pane();
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_})
+        if (t->pane != current)
+            t->pane->set_status_label(nullptr);
+    current->set_status_label(qs_status_);
+    header_pane_ = current;
+}
+
+void QuantStatsView::set_empty_book(bool empty) {
+    if (empty == empty_book_)
+        return;
+    empty_book_ = empty;
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_, &mc_tab_}) {
+        if (!empty) {
+            t->stack->setCurrentWidget(t->pane);
+            continue;
+        }
+        if (!t->empty) {
+            t->empty = new ui::EmptyState(t->stack);
+            t->stack->addWidget(t->empty);
+            connect(t->empty, &ui::EmptyState::primary_clicked, this, &QuantStatsView::add_position_requested);
+        }
+        t->empty->apply(ui::EmptyState::no_data_spec(tr("No positions to analyse"), t->empty_text(), tr("BUY")));
+        t->stack->setCurrentWidget(t->empty); // the pane is hidden: nothing runs
+    }
+    if (empty)
+        qs_status_->clear();
+}
+
+void QuantStatsView::on_appearance_settled() {
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_, &mc_tab_})
+        if (t->pane->has_result())
+            theme_stale_.insert(t->pane);
+    if (ResultTab* t = tabs_ ? tab_for_index(tabs_->currentIndex()) : nullptr)
+        rerender_if_stale(*t);
+}
+
+void QuantStatsView::rerender_if_stale(ResultTab& tab) {
+    if (!theme_stale_.contains(tab.pane))
+        return;
+    theme_stale_.remove(tab.pane);
+    if (tab.pane->has_result() && tab.render)
+        tab.render(tab.pane->payload());
 }
 
 // ── set_data ──────────────────────────────────────────────────────────────────
 
 void QuantStatsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
-    const bool portfolio_changed = summary.portfolio.id != summary_.portfolio.id;
     summary_ = summary;
     currency_ = currency;
+    has_data_ = true;
 
-    // Results belong to the book they were computed for - drop them when the
-    // user switches portfolio instead of showing the previous one's statistics
-    // until the new run lands.
-    if (portfolio_changed) {
-        qs_data_ = QJsonObject();
-        mc_data_ = QJsonObject();
-        for (QStackedWidget* st : {returns_stack_, drawdown_stack_, rolling_stack_, mc_stack_}) {
-            if (st)
-                st->setCurrentIndex(0);
-        }
+    // An empty book has nothing to analyse: the result tabs say so (with BUY) and nothing runs.
+    const bool has_holdings = !summary_.holdings.isEmpty();
+    const QString why = has_holdings ? QString() : tr("Add a position first");
+    for (QPushButton* b : {qs_run_btn_, mc_run_btn_}) {
+        b->setEnabled(has_holdings);
+        b->setToolTip(why);
+    }
+    set_empty_book(!has_holdings);
+
+    // Results are kept per portfolio and holdings: a switch or a trade selects
+    // another remembered result (or runs the analysis once for it); a price tick
+    // keeps the key, so nothing re-runs before the result's max age.
+    if (has_holdings) {
+        const QString key = portfolio_run_key(summary_);
+        qs_shared_->set_view(key, qs_signature());
+        mc_tab_.pane->set_view(key);
+        mc_tab_.pane->set_signature(mc_signature());
     }
 
-    // Populate metrics immediately from live summary data
-    update_metrics();
-
-    // Kick off the Python fetch automatically - but only when the analysis
-    // inputs changed. set_data() now also runs on every portfolio refresh (and
-    // on every re-entry to this tab); the 1-year history download + QuantStats
-    // run does not depend on live prices, so repeating it each minute only
-    // burned a Python slot. The RUN button still forces a fresh run.
-    QStringList parts;
-    parts.reserve(summary_.holdings.size());
-    for (const auto& h : summary_.holdings)
-        parts.append(h.symbol + QLatin1Char(':') + QString::number(h.quantity, 'g', 10));
-    parts.sort();
-    const QString signature = summary_.portfolio.id + QLatin1Char('|') + parts.join(QLatin1Char(','));
-    if (signature != qs_signature_ && !qs_running_) {
-        qs_signature_ = signature;
-        run_quantstats();
+    // METRICS carries live rows of the book: they follow every refresh.
+    if (metrics_tab_.pane->has_result()) {
+        qs_data_ = metrics_tab_.pane->payload().toObject();
+        update_metrics();
     }
 }
 
@@ -418,6 +709,10 @@ void QuantStatsView::set_data(const portfolio::PortfolioSummary& summary, const 
 
 void QuantStatsView::update_metrics() {
     metrics_table_->clearContents();
+    // clearContents() keeps the section rows' spans: after the run the rows shift, and a
+    // stale span over a data row hid its value cells (Avg Daily Return, Downside
+    // Deviation, Profit Factor showed no value at all).
+    metrics_table_->clearSpans();
 
     // ── Build row definitions ─────────────────────────────────────────────────
     struct Row {
@@ -425,26 +720,27 @@ void QuantStatsView::update_metrics() {
         QString name;
         QString value;
         QString benchmark = "--";
-        bool is_positive = true; // drives colour of value cell
+        int sign = 0; // direction of a signed figure (colours the value); 0 = neutral
         bool is_section = false;
     };
 
     QVector<Row> rows;
 
-    auto add_section = [&](const QString& label) { rows.push_back({label, {}, {}, {}, false, true}); };
+    auto add_section = [&](const QString& label) { rows.push_back({label, {}, {}, {}, 0, true}); };
 
     const bool have_qs = !qs_data_.isEmpty();
 
-    // Helper lambdas for reading qs_data_
-    auto qs_pct = [&](const QString& group, const QString& key) -> double {
+    // Helper lambdas for reading qs_data_ — nullopt when the script reported null / nothing,
+    // rendered as "--" instead of a fake 0.
+    auto qs_pct = [&](const QString& group, const QString& key) -> std::optional<double> {
         if (!have_qs)
-            return 0.0;
-        return qs_data_[group].toObject()[key].toDouble() * 100.0;
+            return std::nullopt;
+        return qs_num(qs_data_.value(group).toObject(), key, 100.0);
     };
-    auto qs_val = [&](const QString& group, const QString& key) -> double {
+    auto qs_val = [&](const QString& group, const QString& key) -> std::optional<double> {
         if (!have_qs)
-            return 0.0;
-        return qs_data_[group].toObject()[key].toDouble();
+            return std::nullopt;
+        return qs_num(qs_data_.value(group).toObject(), key);
     };
     auto qs_int = [&](const QString& group, const QString& key) -> int {
         if (!have_qs)
@@ -457,153 +753,121 @@ void QuantStatsView::update_metrics() {
         const QJsonValue v = bench_obj.value(group).toObject().value(key);
         if (!v.isDouble())
             return QStringLiteral("--");
-        return pct ? pct_str(v.toDouble() * 100.0, dp) : ratio_str(v.toDouble(), dp);
+        return pct ? qs_pct_str(v.toDouble() * 100.0, dp) : ratio_str(v.toDouble(), dp);
+    };
+    // Benchmark figure for a quantity that is not a return (no "+" sign).
+    auto b_uval = [&](const QString& group, const QString& key) -> QString {
+        return opt_upct_str(qs_num(bench_obj.value(group).toObject(), key, 100.0));
     };
 
-    // ── PERFORMANCE ──────────────────────────────────────────────────────────
-    add_section(tr("PERFORMANCE"));
-
-    if (have_qs) {
-        double total_ret = qs_pct("performance", "total_return");
-        double ann_ret = qs_pct("performance", "annualized_return");
-        int t_days = qs_int("performance", "trading_days");
-        double best_day = qs_pct("performance", "best_day");
-        double worst_day = qs_pct("performance", "worst_day");
-        double avg_daily = qs_pct("performance", "avg_daily_return");
-
-        rows.push_back({"", tr("Total Return"), pct_str(total_ret), b_val("performance", "total_return", true), total_ret >= 0});
-        rows.push_back({"", tr("Annualized Return"), pct_str(ann_ret), b_val("performance", "annualized_return", true), ann_ret >= 0});
-        rows.push_back({"", tr("Trading Days"), QString::number(t_days), "--", true});
-        rows.push_back({"", tr("Best Day"), pct_str(best_day), b_val("performance", "best_day", true), true});
-        rows.push_back({"", tr("Worst Day"), pct_str(worst_day), b_val("performance", "worst_day", true), worst_day >= 0});
-        rows.push_back({"", tr("Avg Daily Return"), pct_str(avg_daily, 4), "--", avg_daily >= 0});
-    } else {
-        // Pre-run: show live summary values
-        double pnl_pct = summary_.total_unrealized_pnl_percent;
-        double day_pct = summary_.total_day_change_percent;
-        rows.push_back({"", tr("Unrealized P&L %"), pct_str(pnl_pct), "--", pnl_pct >= 0});
-        rows.push_back({"", tr("Day Change %"), pct_str(day_pct), "--", day_pct >= 0});
-        rows.push_back({"", tr("Total Positions"), QString::number(summary_.total_positions), "--", true});
-        rows.push_back({"", tr("Gainers"), QString::number(summary_.gainers), "--", true});
-        rows.push_back({"", tr("Losers"), QString::number(summary_.losers), "--", summary_.losers == 0});
+    // ── THE BOOK TODAY (live, from the portfolio summary) ────────────────────
+    add_section(tr("PORTFOLIO TODAY"));
+    {
+        const double pnl_pct = summary_.total_unrealized_pnl_percent;
+        const double day_pct = summary_.total_day_change_percent;
+        rows.push_back({"", tr("Unrealized P&L %"), qs_pct_str(pnl_pct), "--", qs_sign(pnl_pct)});
+        rows.push_back({"", tr("Day Change %"), qs_pct_str(day_pct), "--", qs_sign(day_pct)});
+        rows.push_back({"", tr("Total Positions"), QString::number(summary_.total_positions), "--", 0});
+        rows.push_back({"", tr("Gainers"), QString::number(summary_.gainers), "--", 0});
+        rows.push_back({"", tr("Losers"), QString::number(summary_.losers), "--", 0});
     }
 
-    // ── RISK ─────────────────────────────────────────────────────────────────
-    add_section(tr("RISK"));
-
     if (have_qs) {
-        double ann_vol = qs_pct("risk", "annualized_volatility");
-        double max_dd = qs_pct("risk", "max_drawdown");
-        double var95 = qs_pct("risk", "var_95_daily");
-        double cvar95 = qs_pct("risk", "cvar_95_daily");
-        double down_dev = qs_pct("risk", "downside_deviation");
+        // ── PERFORMANCE ───────────────────────────────────────────────────────
+        add_section(tr("PERFORMANCE"));
+        const auto total_ret = qs_pct("performance", "total_return");
+        const auto ann_ret = qs_pct("performance", "annualized_return");
+        const int t_days = qs_int("performance", "trading_days");
+        const auto best_day = qs_pct("performance", "best_day");
+        const auto worst_day = qs_pct("performance", "worst_day");
+        const auto avg_daily = qs_pct("performance", "avg_daily_return");
 
-        rows.push_back({"", tr("Annualized Volatility"), pct_str(ann_vol), b_val("risk", "annualized_volatility", true), ann_vol < 20.0});
-        rows.push_back({"", tr("Max Drawdown"), pct_str(max_dd), b_val("risk", "max_drawdown", true), max_dd >= 0});
-        rows.push_back({"", tr("VaR 95% (Daily)"), pct_str(var95), b_val("risk", "var_95_daily", true), var95 >= 0});
-        rows.push_back({"", tr("CVaR 95% (Daily)"), pct_str(cvar95), b_val("risk", "cvar_95_daily", true), cvar95 >= 0});
-        rows.push_back({"", tr("Downside Deviation"), pct_str(down_dev), b_val("risk", "downside_deviation", true), down_dev < 15.0});
-    } else {
-        rows.push_back({"", tr("Annualized Volatility"), "--", "--", true});
-        rows.push_back({"", tr("Max Drawdown"), "--", "--", true});
-        rows.push_back({"", tr("VaR 95% (Daily)"), "--", "--", true});
-        rows.push_back({"", tr("CVaR 95% (Daily)"), "--", "--", true});
-        rows.push_back({"", tr("Downside Deviation"), "--", "--", true});
-    }
+        rows.push_back({"", tr("Total Return"), opt_pct_str(total_ret), b_val("performance", "total_return", true), qs_sign(total_ret)});
+        rows.push_back({"", tr("Annualized Return"), opt_pct_str(ann_ret), b_val("performance", "annualized_return", true), qs_sign(ann_ret)});
+        rows.push_back({"", tr("Trading Days"), QString::number(t_days), "--", 0});
+        rows.push_back({"", tr("Best Day"), opt_pct_str(best_day), b_val("performance", "best_day", true), qs_sign(best_day)});
+        rows.push_back({"", tr("Worst Day"), opt_pct_str(worst_day), b_val("performance", "worst_day", true), qs_sign(worst_day)});
+        rows.push_back({"", tr("Avg Daily Return"), opt_pct_str(avg_daily, 4), "--", qs_sign(avg_daily)});
 
-    // ── RATIOS ────────────────────────────────────────────────────────────────
-    add_section(tr("RATIOS"));
+        // ── RISK ──────────────────────────────────────────────────────────────
+        add_section(tr("RISK"));
+        const auto ann_vol = qs_pct("risk", "annualized_volatility");
+        const auto max_dd = qs_pct("risk", "max_drawdown");
+        const auto var95 = qs_pct("risk", "var_95_daily");
+        const auto cvar95 = qs_pct("risk", "cvar_95_daily");
+        const auto down_dev = qs_pct("risk", "downside_deviation");
 
-    if (have_qs) {
-        double sharpe = qs_val("ratios", "sharpe_ratio");
-        double sortino = qs_val("ratios", "sortino_ratio");
-        double calmar = qs_val("ratios", "calmar_ratio");
-        double pf = qs_val("ratios", "profit_factor");
+        rows.push_back({"", tr("Annualized Volatility"), opt_upct_str(ann_vol), b_uval("risk", "annualized_volatility"), 0});
+        rows.push_back({"", tr("Max Drawdown"), opt_pct_str(max_dd), b_val("risk", "max_drawdown", true), qs_sign(max_dd)});
+        rows.push_back({"", tr("VaR 95% (Daily)"), opt_pct_str(var95), b_val("risk", "var_95_daily", true), qs_sign(var95)});
+        rows.push_back({"", tr("CVaR 95% (Daily)"), opt_pct_str(cvar95), b_val("risk", "cvar_95_daily", true), qs_sign(cvar95)});
+        rows.push_back({"", tr("Downside Deviation"), opt_upct_str(down_dev), b_uval("risk", "downside_deviation"), 0});
 
-        rows.push_back({"", tr("Sharpe Ratio"), ratio_str(sharpe), b_val("ratios", "sharpe_ratio", false), sharpe >= 0});
-        rows.push_back({"", tr("Sortino Ratio"), ratio_str(sortino), b_val("ratios", "sortino_ratio", false), sortino >= 0});
-        rows.push_back({"", tr("Calmar Ratio"), ratio_str(calmar), b_val("ratios", "calmar_ratio", false), calmar >= 0});
-        rows.push_back({"", tr("Profit Factor"), ratio_str(pf), "--", pf >= 1.0});
-    } else {
-        rows.push_back({"", tr("Sharpe Ratio"), "--", "--", true});
-        rows.push_back({"", tr("Sortino Ratio"), "--", "--", true});
-        rows.push_back({"", tr("Calmar Ratio"), "--", "--", true});
-        rows.push_back({"", tr("Profit Factor"), "--", "--", true});
-    }
+        // ── RATIOS ────────────────────────────────────────────────────────────
+        add_section(tr("RATIOS"));
+        const auto sharpe = qs_val("ratios", "sharpe_ratio");
+        const auto sortino = qs_val("ratios", "sortino_ratio");
+        const auto calmar = qs_val("ratios", "calmar_ratio");
+        const auto pf = qs_val("ratios", "profit_factor");
 
-    // ── DISTRIBUTION ─────────────────────────────────────────────────────────
-    add_section(tr("DISTRIBUTION"));
+        rows.push_back({"", tr("Sharpe Ratio"), opt_ratio_str(sharpe), b_val("ratios", "sharpe_ratio", false), 0});
+        rows.push_back({"", tr("Sortino Ratio"), opt_ratio_str(sortino), b_val("ratios", "sortino_ratio", false), 0});
+        rows.push_back({"", tr("Calmar Ratio"), opt_ratio_str(calmar), b_val("ratios", "calmar_ratio", false), 0});
+        rows.push_back({"", tr("Profit Factor"), opt_ratio_str(pf), "--", 0});
 
-    if (have_qs) {
-        double skew = qs_val("distribution", "skewness");
-        double kurt = qs_val("distribution", "kurtosis");
-        double win_rate = qs_pct("distribution", "win_rate");
-        int win_days = qs_int("distribution", "win_days");
-        int los_days = qs_int("distribution", "loss_days");
-        double avg_win = qs_pct("distribution", "avg_win");
-        double avg_loss = qs_pct("distribution", "avg_loss");
+        // ── DISTRIBUTION ──────────────────────────────────────────────────────
+        add_section(tr("DISTRIBUTION"));
+        const auto skew = qs_val("distribution", "skewness");
+        const auto kurt = qs_val("distribution", "kurtosis");
+        const auto win_rate = qs_pct("distribution", "win_rate");
+        const int win_days = qs_int("distribution", "win_days");
+        const int los_days = qs_int("distribution", "loss_days");
+        const auto avg_win = qs_pct("distribution", "avg_win");
+        const auto avg_loss = qs_pct("distribution", "avg_loss");
 
-        rows.push_back({"", tr("Skewness"), ratio_str(skew, 3), b_val("distribution", "skewness", false, 3), skew >= 0});
-        rows.push_back({"", tr("Excess Kurtosis"), ratio_str(kurt, 3), b_val("distribution", "kurtosis", false, 3), kurt <= 1.0});
-        rows.push_back({"", tr("Win Rate"), pct_str(win_rate), "--", win_rate >= 50.0});
-        rows.push_back({"", tr("Win Days"), QString::number(win_days), "--", true});
-        rows.push_back({"", tr("Loss Days"), QString::number(los_days), "--", los_days == 0});
-        rows.push_back({"", tr("Avg Win"), pct_str(avg_win), "--", true});
-        rows.push_back({"", tr("Avg Loss"), pct_str(avg_loss), "--", avg_loss >= 0});
-    } else {
-        rows.push_back({"", tr("Skewness"), "--", "--", true});
-        rows.push_back({"", tr("Excess Kurtosis"), "--", "--", true});
-        rows.push_back({"", tr("Win Rate"), "--", "--", true});
-        rows.push_back({"", tr("Win Days"), "--", "--", true});
-        rows.push_back({"", tr("Loss Days"), "--", "--", true});
-        rows.push_back({"", tr("Avg Win"), "--", "--", true});
-        rows.push_back({"", tr("Avg Loss"), "--", "--", true});
+        rows.push_back({"", tr("Skewness"), opt_ratio_str(skew, 3), b_val("distribution", "skewness", false, 3), 0});
+        rows.push_back({"", tr("Excess Kurtosis"), opt_ratio_str(kurt, 3), b_val("distribution", "kurtosis", false, 3), 0});
+        rows.push_back({"", tr("Win Rate"), opt_upct_str(win_rate), "--", 0});
+        rows.push_back({"", tr("Win Days"), QString::number(win_days), "--", 0});
+        rows.push_back({"", tr("Loss Days"), QString::number(los_days), "--", 0});
+        rows.push_back({"", tr("Avg Win"), opt_pct_str(avg_win), "--", qs_sign(avg_win)});
+        rows.push_back({"", tr("Avg Loss"), opt_pct_str(avg_loss), "--", qs_sign(avg_loss)});
 
-        // Prompt row when pre-run
-        rows.push_back({"", tr("Run QuantStats for full metrics \u2192"), "", "--", true});
+        // RELATIVE TO BENCHMARK: how the back-tested mix behaves against the index — did it
+        // earn its risk? (Appended last so the existing section order stays put.)
+        const QJsonObject rel = qs_data_.value("relative").toObject();
+        if (!rel.isEmpty()) {
+            const QString bsym = bench_obj.value("symbol").toString();
+            add_section(bsym.isEmpty() ? tr("RELATIVE TO BENCHMARK") : tr("RELATIVE TO %1").arg(bsym));
+            auto num = [&rel](const char* key) { return rel.value(QLatin1String(key)); };
+            auto add_ratio = [&](const QString& name, const char* key, int dp) {
+                const QJsonValue v = num(key);
+                if (v.isDouble())
+                    rows.push_back({"", name, ratio_str(v.toDouble(), dp), "--", 0});
+            };
+            add_ratio(tr("Beta"), "beta", 2);
+            if (num("alpha").isDouble()) {
+                const double a = num("alpha").toDouble() * 100.0;
+                rows.push_back({"", tr("Alpha (annualized)"), qs_pct_str(a), "--", qs_sign(a)});
+            }
+            add_ratio(tr("Correlation"), "correlation", 2);
+            add_ratio(tr("R-Squared"), "r_squared", 2);
+            if (num("tracking_error").isDouble())
+                rows.push_back({"", tr("Tracking Error"), qs_upct_str(num("tracking_error").toDouble() * 100.0), "--", 0});
+            add_ratio(tr("Information Ratio"), "information_ratio", 2);
+            // Capture ratios: above 1 on the way up and below 1 on the way down is the
+            // asymmetry an active book wants.
+            add_ratio(tr("Up Capture"), "up_capture", 2);
+            add_ratio(tr("Down Capture"), "down_capture", 2);
+        }
     }
 
     // ── Populate table ────────────────────────────────────────────────────────
-    // RELATIVE TO BENCHMARK: how the back-tested mix behaves against the index — did it
-    // earn its risk? (Appended last so the existing section order stays put.)
-    const QJsonObject rel = qs_data_.value("relative").toObject();
-    if (have_qs && !rel.isEmpty()) {
-        const QString bsym = bench_obj.value("symbol").toString();
-        add_section(bsym.isEmpty() ? tr("RELATIVE TO BENCHMARK") : tr("RELATIVE TO %1").arg(bsym));
-        auto num = [&rel](const char* key) { return rel.value(QLatin1String(key)); };
-        auto add_ratio = [&](const QString& name, const char* key, int dp) {
-            const QJsonValue v = num(key);
-            if (v.isDouble())
-                rows.push_back({"", name, ratio_str(v.toDouble(), dp), "--", true});
-        };
-        auto add_pct = [&](const QString& name, const char* key, bool good_if_positive) {
-            const QJsonValue v = num(key);
-            if (v.isDouble())
-                rows.push_back(
-                    {"", name, pct_str(v.toDouble() * 100.0), "--", good_if_positive ? v.toDouble() >= 0 : true});
-        };
-        add_ratio(tr("Beta"), "beta", 2);
-        add_pct(tr("Alpha (annualized)"), "alpha", true);
-        add_ratio(tr("Correlation"), "correlation", 2);
-        add_ratio(tr("R-Squared"), "r_squared", 2);
-        add_pct(tr("Tracking Error"), "tracking_error", false);
-        if (num("information_ratio").isDouble())
-            rows.push_back({"", tr("Information Ratio"), ratio_str(num("information_ratio").toDouble(), 2), "--",
-                            num("information_ratio").toDouble() >= 0});
-        // Capture ratios: above 1 on the way up and below 1 on the way down is the
-        // asymmetry an active book wants.
-        if (num("up_capture").isDouble())
-            rows.push_back({"", tr("Up Capture"), ratio_str(num("up_capture").toDouble(), 2), "--",
-                            num("up_capture").toDouble() >= 1.0});
-        if (num("down_capture").isDouble())
-            rows.push_back({"", tr("Down Capture"), ratio_str(num("down_capture").toDouble(), 2), "--",
-                            num("down_capture").toDouble() <= 1.0});
-    }
-
+    metrics_table_->setUpdatesEnabled(false);
     metrics_table_->setRowCount(rows.size());
 
     for (int r = 0; r < rows.size(); ++r) {
-        metrics_table_->setRowHeight(r, 26);
+        metrics_table_->setRowHeight(r, qs_row_height(26));
         const auto& row = rows[r];
 
         if (row.is_section) {
@@ -613,7 +877,7 @@ void QuantStatsView::update_metrics() {
             item->setForeground(QColor(ui::colors::AMBER()));
             item->setBackground(QColor(ui::colors::BG_RAISED()));
             QFont f = item->font();
-            f.setPointSize(8);
+            f.setPixelSize(ui::fonts::font_px(-3));
             f.setBold(true);
             item->setFont(f);
             metrics_table_->setItem(r, 0, item);
@@ -622,41 +886,25 @@ void QuantStatsView::update_metrics() {
         }
 
         metrics_table_->setItem(
-            r, 0, make_item(row.name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
-
-        const char* val_color = row.value.isEmpty() ? ui::colors::TEXT_TERTIARY
-                                : row.is_positive   ? ui::colors::POSITIVE
-                                                    : ui::colors::NEGATIVE();
-        // Special: neutral colour for counters and "--"
-        if (row.value == "--" || row.name.contains("Days") || row.name.contains("Positions") ||
-            row.name == "Trading Days") {
-            val_color = ui::colors::TEXT_PRIMARY();
-        }
-
+            r, 0, qs_make_item(row.name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
+        const bool blank = row.value.isEmpty() || row.value == QLatin1String("--");
+        metrics_table_->setItem(r, 1,
+                                qs_make_item(blank ? QStringLiteral("--") : row.value, Qt::AlignRight | Qt::AlignVCenter,
+                                          blank ? QColor(ui::colors::TEXT_TERTIARY()) : qs_value_color(row.sign)));
         metrics_table_->setItem(
-            r, 1,
-            make_item(row.value.isEmpty() ? "--" : row.value, Qt::AlignRight | Qt::AlignVCenter, QColor(val_color)));
-
-        metrics_table_->setItem(
-            r, 2, make_item(row.benchmark, Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_TERTIARY())));
+            r, 2, qs_make_item(row.benchmark, Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_TERTIARY())));
     }
+    metrics_table_->setUpdatesEnabled(true);
 }
 
 // ── update_returns ────────────────────────────────────────────────────────────
 
 void QuantStatsView::update_returns() {
-    if (qs_data_.isEmpty())
+    if (qs_data_.isEmpty() || !returns_scroll_)
         return;
 
-    // Remove any previously injected widget at index 1
-    if (returns_stack_->count() > 1) {
-        QWidget* old = returns_stack_->widget(1);
-        returns_stack_->removeWidget(old);
-        old->deleteLater();
-    }
-
-    auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    auto* content = new QWidget; // handed to the scroll area below (which drops the previous one)
+    qs_scoped_background(content, QStringLiteral("qsReturnsContent"));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
@@ -664,9 +912,8 @@ void QuantStatsView::update_returns() {
     // Cumulative return of today's mix against the benchmark, same dates.
     const QJsonObject series = qs_data_["series"].toObject();
     if (!series.isEmpty()) {
-        auto* cum_title = new QLabel(tr("CUMULATIVE RETURN — CURRENT WEIGHTS, BACK-TESTED"));
-        cum_title->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        auto* cum_title = new QLabel(tr("CUMULATIVE RETURN — CURRENT WEIGHTS, BACK-TESTED"), content);
+        cum_title->setStyleSheet(qs_title_style());
         cl->addWidget(cum_title);
         QVector<QsLine> lines;
         lines.append({tr("Portfolio"), series["cumulative"].toArray(), QColor(ui::colors::POSITIVE())});
@@ -680,216 +927,171 @@ void QuantStatsView::update_returns() {
         cl->addWidget(cum_chart);
     }
 
-    auto* title = new QLabel(tr("RETURN DISTRIBUTION"));
-    title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    auto* title = new QLabel(tr("RETURN DISTRIBUTION"), content);
+    title->setStyleSheet(qs_title_style());
     cl->addWidget(title);
 
-    // Win/loss summary cards — 2-column grid
+    // Win / loss headline figures.
     const QJsonObject dist = qs_data_["distribution"].toObject();
-    double win_rate = dist["win_rate"].toDouble() * 100.0;
-    int win_days = dist["win_days"].toInt();
-    int loss_days = dist["loss_days"].toInt();
-    double avg_win = dist["avg_win"].toDouble() * 100.0;
-    double avg_loss = dist["avg_loss"].toDouble() * 100.0;
-    double skew = dist["skewness"].toDouble();
-    double kurt = dist["kurtosis"].toDouble();
+    const auto win_rate = qs_num(dist, "win_rate", 100.0);
+    const int win_days = dist["win_days"].toInt();
+    const int loss_days = dist["loss_days"].toInt();
+    const auto avg_win = qs_num(dist, "avg_win", 100.0);
+    const auto avg_loss = qs_num(dist, "avg_loss", 100.0);
+    const auto skew = qs_num(dist, "skewness");
+    const auto kurt = qs_num(dist, "kurtosis");
+    // LOSS RATE only when the win rate is known — a missing win rate used to read "+100.00%".
+    const std::optional<double> loss_rate =
+        win_rate ? std::optional<double>(100.0 - *win_rate) : std::nullopt;
 
-    struct Card {
-        QString label;
-        QString value;
-        const char* color;
-    };
-    QVector<Card> cards = {
-        {tr("WIN RATE"), pct_str(win_rate), ui::colors::POSITIVE()},
-        {tr("LOSS RATE"), pct_str(100.0 - win_rate), ui::colors::NEGATIVE()},
-        {tr("WIN DAYS"), QString::number(win_days), ui::colors::POSITIVE()},
-        {tr("LOSS DAYS"), QString::number(loss_days), ui::colors::NEGATIVE()},
-        {tr("AVG WIN"), pct_str(avg_win), ui::colors::POSITIVE()},
-        {tr("AVG LOSS"), pct_str(avg_loss), ui::colors::NEGATIVE()},
-        {tr("SKEWNESS"), ratio_str(skew, 3), ui::colors::TEXT_PRIMARY()},
-        {tr("EXCESS KURTOSIS"), ratio_str(kurt, 3), ui::colors::TEXT_PRIMARY()},
-    };
+    auto* kpis = new ui::KpiStrip(content);
+    kpis->add_tile(tr("WIN RATE"))->set_value(opt_upct_str(win_rate));
+    kpis->add_tile(tr("LOSS RATE"))->set_value(opt_upct_str(loss_rate));
+    kpis->add_tile(tr("WIN DAYS"))->set_value(QString::number(win_days));
+    kpis->add_tile(tr("LOSS DAYS"))->set_value(QString::number(loss_days));
+    {
+        auto* t = kpis->add_tile(tr("AVG WIN"));
+        t->set_value(opt_pct_str(avg_win));
+        t->set_tone(qs_tone(avg_win));
+    }
+    {
+        auto* t = kpis->add_tile(tr("AVG LOSS"));
+        t->set_value(opt_pct_str(avg_loss));
+        t->set_tone(qs_tone(avg_loss));
+    }
+    kpis->add_tile(tr("SKEWNESS"))->set_value(opt_ratio_str(skew, 3));
+    kpis->add_tile(tr("EXCESS KURTOSIS"))->set_value(opt_ratio_str(kurt, 3));
+    cl->addWidget(kpis);
 
-    auto* grid_w = new QWidget(this);
-    auto* grid = new QGridLayout(grid_w);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(8);
-
-    for (int i = 0; i < cards.size(); ++i) {
-        const auto& c = cards[i];
-        int row_i = i / 2;
-        int col_i = i % 2;
-
-        auto* card_w = new QWidget(this);
-        card_w->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
-        auto* card_l = new QVBoxLayout(card_w);
-        card_l->setContentsMargins(12, 10, 12, 10);
-        card_l->setSpacing(4);
-
-        auto* lbl = new QLabel(c.label);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-        card_l->addWidget(lbl);
-
-        auto* val_lbl = new QLabel(c.value);
-        val_lbl->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(c.color));
-        card_l->addWidget(val_lbl);
-
-        grid->addWidget(card_w, row_i, col_i);
+    // The distribution itself: a histogram of the daily returns with a fitted
+    // normal curve, the mean and the 5th percentile (historical 1-day VaR 95 %).
+    {
+        QVector<double> samples;
+        for (const auto v : qs_data_["returns"].toArray())
+            if (v.isDouble())
+                samples.append(v.toDouble() * 100.0);
+        if (samples.size() >= 2) {
+            auto* hist = new ui::DistributionChart(content);
+            hist->set_signed_colors(true);
+            hist->set_normal_overlay(true);
+            hist->set_value_formatter([](double v) { return ui::formatting::pct(v, 2); });
+            hist->set_samples(samples);
+            hist->add_marker(hist->mean(), tr("Mean"), ui::DistributionChart::MarkerRole::Mean);
+            hist->add_marker(hist->quantile(0.05), tr("5th pct (VaR 95%)"), ui::DistributionChart::MarkerRole::VaR);
+            hist->setMinimumHeight(qs_row_height(240));
+            hist->setToolTip(tr("%n daily return(s) of the current weights over the analysed period.", "",
+                                static_cast<int>(samples.size())));
+            cl->addWidget(hist);
+        }
     }
 
-    cl->addWidget(grid_w);
-
-    // Win/Loss bar chart (simple table-based visual)
-    auto* dist_table = new QTableWidget;
+    auto* dist_table = new QTableWidget(content);
     dist_table->setColumnCount(2);
     dist_table->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE")});
     dist_table->setColumnWidth(0, 200);
-    style_table(dist_table);
+    qs_style_table(dist_table);
 
     const QJsonObject perf = qs_data_["performance"].toObject();
-    double best_day = perf["best_day"].toDouble() * 100.0;
-    double worst_day = perf["worst_day"].toDouble() * 100.0;
-    double avg_daily = perf["avg_daily_return"].toDouble() * 100.0;
+    const auto best_day = qs_num(perf, "best_day", 100.0);
+    const auto worst_day = qs_num(perf, "worst_day", 100.0);
+    const auto avg_daily = qs_num(perf, "avg_daily_return", 100.0);
+    const auto profit_factor = qs_num(qs_data_["ratios"].toObject(), "profit_factor");
 
     struct TableRow {
         QString name;
         QString val;
-        bool positive;
+        int sign;
     };
-    QVector<TableRow> trows = {
-        {tr("Best Day"), pct_str(best_day), true},
-        {tr("Worst Day"), pct_str(worst_day), worst_day >= 0},
-        {tr("Avg Daily Return"), pct_str(avg_daily, 4), avg_daily >= 0},
-        {tr("Profit Factor"), ratio_str(qs_data_["ratios"].toObject()["profit_factor"].toDouble()),
-         qs_data_["ratios"].toObject()["profit_factor"].toDouble() >= 1.0},
+    const QVector<TableRow> trows = {
+        {tr("Best Day"), opt_pct_str(best_day), qs_sign(best_day)},
+        {tr("Worst Day"), opt_pct_str(worst_day), qs_sign(worst_day)},
+        {tr("Avg Daily Return"), opt_pct_str(avg_daily, 4), qs_sign(avg_daily)},
+        {tr("Profit Factor"), opt_ratio_str(profit_factor), 0},
     };
     dist_table->setRowCount(trows.size());
     for (int i = 0; i < trows.size(); ++i) {
-        dist_table->setRowHeight(i, 26);
+        dist_table->setRowHeight(i, qs_row_height(26));
         dist_table->setItem(
-            i, 0, make_item(trows[i].name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
+            i, 0, qs_make_item(trows[i].name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
         dist_table->setItem(i, 1,
-                            make_item(trows[i].val, Qt::AlignRight | Qt::AlignVCenter,
-                                      QColor(trows[i].positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
+                            qs_make_item(trows[i].val, Qt::AlignRight | Qt::AlignVCenter, qs_value_color(trows[i].sign)));
     }
-    dist_table->setMinimumHeight(26 * (static_cast<int>(trows.size()) + 1) + 4);
+    dist_table->setMinimumHeight(qs_row_height(26) * (static_cast<int>(trows.size()) + 1) + 4);
     cl->addWidget(dist_table);
 
     // Monthly returns grid (years × months + the year compounded) — the classic
     // QuantStats heatmap: seasonality and the bad months at a glance.
     const QJsonObject monthly = qs_data_["monthly"].toObject();
     if (!monthly.isEmpty()) {
-        auto* m_title = new QLabel(tr("MONTHLY RETURNS"));
-        m_title->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        auto* m_title = new QLabel(tr("MONTHLY RETURNS"), content);
+        m_title->setStyleSheet(qs_title_style());
         cl->addWidget(m_title);
 
-        QMap<int, QMap<int, double>> by_year; // year -> month -> return
+        // Every month of the analysed period (not just one year), on the shared
+        // heatmap: diverging theme scale with a robust clamp and a compounded year column.
+        ui::MonthlyReturnsHeatmap::MonthlyReturns by_year; // year -> month -> return %
         for (auto it = monthly.begin(); it != monthly.end(); ++it) {
             if (!it.value().isDouble())
                 continue;
             const QStringList ym = it.key().split(QLatin1Char('-'));
             if (ym.size() != 2)
                 continue;
-            by_year[ym[0].toInt()][ym[1].toInt()] = it.value().toDouble();
+            by_year[ym[0].toInt()][ym[1].toInt()] = it.value().toDouble() * 100.0;
         }
-        auto* mt = new QTableWidget(static_cast<int>(by_year.size()), 14, content);
-        QStringList hdr{tr("YEAR")};
-        for (int m = 1; m <= 12; ++m)
-            hdr << QLocale().monthName(m, QLocale::ShortFormat).toUpper();
-        hdr << tr("YEAR %");
-        mt->setHorizontalHeaderLabels(hdr);
-        style_table(mt);
-        mt->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-        int r = 0;
-        for (auto yit = by_year.constEnd(); yit != by_year.constBegin();) { // newest year first
-            --yit;
-            mt->setRowHeight(r, 24);
-            mt->setItem(r, 0,
-                        make_item(QString::number(yit.key()), Qt::AlignLeft | Qt::AlignVCenter,
-                                  QColor(ui::colors::TEXT_SECONDARY())));
-            double year_growth = 1.0;
-            for (int m = 1; m <= 12; ++m) {
-                if (!yit.value().contains(m)) {
-                    mt->setItem(r, m, make_item(QString(), Qt::AlignCenter, QColor(ui::colors::TEXT_TERTIARY())));
-                    continue;
-                }
-                const double v = yit.value().value(m);
-                year_growth *= 1.0 + v;
-                auto* item =
-                    make_item(QString::number(v * 100.0, 'f', 1), Qt::AlignCenter, QColor(ui::colors::TEXT_PRIMARY()));
-                QColor bg = v >= 0 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
-                bg.setAlpha(static_cast<int>(std::min(1.0, std::abs(v) / 0.10) * 150) + 20);
-                item->setBackground(bg);
-                mt->setItem(r, m, item);
-            }
-            const double yr = year_growth - 1.0;
-            mt->setItem(r, 13,
-                        make_item(pct_str(yr * 100.0, 1), Qt::AlignCenter,
-                                  QColor(yr >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
-            ++r;
-        }
-        mt->setMinimumHeight(24 * (r + 1) + 6);
+        auto* mt = new ui::MonthlyReturnsHeatmap(content);
+        mt->set_monthly_returns(by_year);
+        mt->setMinimumHeight(qs_row_height(28) * (static_cast<int>(by_year.size()) + 2));
         cl->addWidget(mt);
     }
     cl->addStretch();
 
-    // The tab now holds charts + tables: scroll rather than squeeze.
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(content);
-    returns_stack_->addWidget(scroll);
-    returns_stack_->setCurrentIndex(1);
+    returns_scroll_->setWidget(content);
 }
 
 // ── update_drawdown ───────────────────────────────────────────────────────────
 
 void QuantStatsView::update_drawdown() {
-    if (qs_data_.isEmpty())
+    if (qs_data_.isEmpty() || !drawdown_scroll_)
         return;
 
-    if (drawdown_stack_->count() > 1) {
-        QWidget* old = drawdown_stack_->widget(1);
-        drawdown_stack_->removeWidget(old);
-        old->deleteLater();
-    }
-
-    auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    auto* content = new QWidget; // handed to the scroll area below (which drops the previous one)
+    qs_scoped_background(content, QStringLiteral("qsDrawdownContent"));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
-    auto* title = new QLabel(tr("DRAWDOWN & RISK METRICS"));
-    title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    auto* title = new QLabel(tr("DRAWDOWN & RISK METRICS"), content);
+    title->setStyleSheet(qs_title_style());
     cl->addWidget(title);
 
-    // Prominent Max Drawdown display
+    // Headline risk figures (were a hero card and a repeated table).
     const QJsonObject risk = qs_data_["risk"].toObject();
-    double max_dd = risk["max_drawdown"].toDouble() * 100.0;
+    const auto max_dd = qs_num(risk, "max_drawdown", 100.0);
+    const auto var95 = qs_num(risk, "var_95_daily", 100.0);
+    const auto cvar95 = qs_num(risk, "cvar_95_daily", 100.0);
+    const auto ann_vol = qs_num(risk, "annualized_volatility", 100.0);
+    const auto down_dev = qs_num(risk, "downside_deviation", 100.0);
 
-    auto* hero_w = new QWidget(this);
-    hero_w->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE()));
-    auto* hero_l = new QVBoxLayout(hero_w);
-    hero_l->setContentsMargins(16, 12, 16, 12);
-    hero_l->setSpacing(2);
-
-    auto* hero_label = new QLabel(tr("MAX DRAWDOWN"));
-    hero_label->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
-    hero_l->addWidget(hero_label);
-
-    auto* hero_value = new QLabel(pct_str(max_dd));
-    hero_value->setStyleSheet(QString("color:%1; font-size:28px; font-weight:700;")
-                                  .arg(max_dd < 0 ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
-    hero_l->addWidget(hero_value);
-    cl->addWidget(hero_w);
+    auto* kpis = new ui::KpiStrip(content);
+    {
+        auto* t = kpis->add_tile(tr("MAX DRAWDOWN"));
+        t->set_value(opt_pct_str(max_dd));
+        t->set_tone(qs_tone(max_dd));
+        t->set_tooltip_text(tr("Worst peak-to-trough fall of the current weights over the analysed period."));
+    }
+    kpis->add_tile(tr("ANN. VOLATILITY"))->set_value(opt_upct_str(ann_vol));
+    {
+        auto* t = kpis->add_tile(tr("VAR 95% (DAILY)"));
+        t->set_value(opt_pct_str(var95));
+        t->set_tone(qs_tone(var95));
+    }
+    {
+        auto* t = kpis->add_tile(tr("CVAR 95% (DAILY)"));
+        t->set_value(opt_pct_str(cvar95));
+        t->set_tone(qs_tone(cvar95));
+    }
+    kpis->add_tile(tr("DOWNSIDE DEVIATION"))->set_value(opt_upct_str(down_dev));
+    cl->addWidget(kpis);
 
     // Underwater curve: how far below its running peak the mix was, every day.
     const QJsonObject series = qs_data_["series"].toObject();
@@ -906,91 +1108,44 @@ void QuantStatsView::update_drawdown() {
     // nothing about how long the money was under water.
     const QJsonArray episodes = qs_data_["drawdowns"].toArray();
     if (!episodes.isEmpty()) {
-        auto* ep_title = new QLabel(tr("WORST DRAWDOWN PERIODS"));
-        ep_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
+        auto* ep_title = new QLabel(tr("WORST DRAWDOWN PERIODS"), content);
+        ep_title->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px;")
                                     .arg(ui::colors::TEXT_SECONDARY()));
         cl->addWidget(ep_title);
         auto* ep = new QTableWidget(static_cast<int>(episodes.size()), 5, content);
         ep->setHorizontalHeaderLabels({tr("PEAK"), tr("TROUGH"), tr("RECOVERED"), tr("DEPTH"), tr("DAYS")});
-        style_table(ep);
+        qs_style_table(ep);
         ep->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
         for (int i = 0; i < episodes.size(); ++i) {
             const QJsonObject e = episodes[i].toObject();
-            ep->setRowHeight(i, 24);
+            ep->setRowHeight(i, qs_row_height(24));
             const auto left = Qt::AlignLeft | Qt::AlignVCenter;
             const auto right = Qt::AlignRight | Qt::AlignVCenter;
-            ep->setItem(i, 0, make_item(e["start"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
-            ep->setItem(i, 1, make_item(e["trough"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
+            ep->setItem(i, 0, qs_make_item(e["start"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
+            ep->setItem(i, 1, qs_make_item(e["trough"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
             const bool open = e["end"].isNull();
             ep->setItem(i, 2,
-                        make_item(open ? tr("not yet") : e["end"].toString(), left,
+                        qs_make_item(open ? tr("not yet") : e["end"].toString(), left,
                                   QColor(open ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY())));
-            ep->setItem(i, 3, make_item(pct_str(e["depth"].toDouble() * 100.0), right, QColor(ui::colors::NEGATIVE())));
-            ep->setItem(i, 4, make_item(QString::number(e["days"].toInt()), right, QColor(ui::colors::TEXT_PRIMARY())));
+            ep->setItem(i, 3, qs_make_item(qs_pct_str(e["depth"].toDouble() * 100.0), right, QColor(ui::colors::NEGATIVE())));
+            ep->setItem(i, 4, qs_make_item(QString::number(e["days"].toInt()), right, QColor(ui::colors::TEXT_PRIMARY())));
         }
-        ep->setMinimumHeight(24 * (static_cast<int>(episodes.size()) + 1) + 6);
+        ep->setMinimumHeight(qs_row_height(24) * (static_cast<int>(episodes.size()) + 1) + 6);
         cl->addWidget(ep);
     }
-
-    // Drawdown metrics table
-    auto* dd_table = new QTableWidget;
-    dd_table->setColumnCount(2);
-    dd_table->setHorizontalHeaderLabels({tr("RISK METRIC"), tr("VALUE")});
-    dd_table->setColumnWidth(0, 220);
-    style_table(dd_table);
-
-    struct DdRow {
-        QString name;
-        QString val;
-        bool positive;
-    };
-    double var95 = risk["var_95_daily"].toDouble() * 100.0;
-    double cvar95 = risk["cvar_95_daily"].toDouble() * 100.0;
-    double ann_vol = risk["annualized_volatility"].toDouble() * 100.0;
-    double down_dev = risk["downside_deviation"].toDouble() * 100.0;
-
-    QVector<DdRow> drows = {
-        {tr("Max Drawdown"), pct_str(max_dd), max_dd >= 0},
-        {tr("Annualized Volatility"), pct_str(ann_vol), ann_vol < 20.0},
-        {tr("VaR 95% (Daily)"), pct_str(var95), var95 >= 0},
-        {tr("CVaR 95% (Daily)"), pct_str(cvar95), cvar95 >= 0},
-        {tr("Downside Deviation"), pct_str(down_dev), down_dev < 15.0},
-    };
-    dd_table->setRowCount(drows.size());
-    for (int i = 0; i < drows.size(); ++i) {
-        dd_table->setRowHeight(i, 26);
-        dd_table->setItem(
-            i, 0, make_item(drows[i].name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
-        dd_table->setItem(i, 1,
-                          make_item(drows[i].val, Qt::AlignRight | Qt::AlignVCenter,
-                                    QColor(drows[i].positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE())));
-    }
-    dd_table->setMinimumHeight(26 * (static_cast<int>(drows.size()) + 1) + 4);
-    cl->addWidget(dd_table);
     cl->addStretch();
 
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(content);
-    drawdown_stack_->addWidget(scroll);
-    drawdown_stack_->setCurrentIndex(1);
+    drawdown_scroll_->setWidget(content);
 }
 
 // ── update_rolling ────────────────────────────────────────────────────────────
 
 void QuantStatsView::update_rolling() {
-    if (qs_data_.isEmpty())
+    if (qs_data_.isEmpty() || !rolling_scroll_)
         return;
 
-    if (rolling_stack_->count() > 1) {
-        QWidget* old = rolling_stack_->widget(1);
-        rolling_stack_->removeWidget(old);
-        old->deleteLater();
-    }
-
-    auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    auto* content = new QWidget; // handed to the scroll area below (which drops the previous one)
+    qs_scoped_background(content, QStringLiteral("qsRollingContent"));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
@@ -1000,20 +1155,24 @@ void QuantStatsView::update_rolling() {
     // (This tab used to repeat the RATIOS rows of the METRICS tab under a ROLLING title.)
     const QJsonObject rolling = qs_data_["rolling"].toObject();
     const int window = rolling["window"].toInt(63);
-    auto* title = new QLabel(tr("ROLLING %1-DAY METRICS — CURRENT WEIGHTS, BACK-TESTED").arg(window));
-    title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    auto* title = new QLabel(tr("ROLLING %1-DAY METRICS — CURRENT WEIGHTS, BACK-TESTED").arg(window), content);
+    title->setStyleSheet(qs_title_style());
     cl->addWidget(title);
 
     if (rolling.isEmpty()) {
-        auto* msg = new QLabel(tr("Not enough daily history for a %1-day rolling window yet.").arg(window));
-        msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-        cl->addWidget(msg);
+        auto* es = ui::EmptyState::create(
+            ui::EmptyState::no_data_spec(tr("Not enough history yet"),
+                                         tr("A %1-day rolling window needs more daily history than the analysed "
+                                            "period has. Pick a longer period in the header.")
+                                             .arg(window)),
+            content);
+        es->set_compact(true);
+        cl->addWidget(es, 1);
     } else {
         const QJsonArray dates = rolling["dates"].toArray();
         auto add_chart = [&](const QString& caption, const QVector<QsLine>& lines, const char* fmt) {
-            auto* cap = new QLabel(caption);
-            cap->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
+            auto* cap = new QLabel(caption, content);
+            cap->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px;")
                                    .arg(ui::colors::TEXT_SECONDARY()));
             cl->addWidget(cap);
             auto* view = qs_line_chart(dates, lines, fmt, content);
@@ -1031,366 +1190,285 @@ void QuantStatsView::update_rolling() {
                       {QsLine(tr("Beta"), rolling["beta"].toArray(), QColor(ui::colors::WARNING()), false, false, 1.0)},
                       "%.2f");
         }
+        cl->addStretch();
     }
-    cl->addStretch();
 
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(content);
-    rolling_stack_->addWidget(scroll);
-    rolling_stack_->setCurrentIndex(1);
+    rolling_scroll_->setWidget(content);
 }
 
 // ── update_monte_carlo_chart ──────────────────────────────────────────────────
 
 void QuantStatsView::update_monte_carlo_chart() {
-    if (mc_data_.isEmpty())
+    if (mc_data_.isEmpty() || !mc_kpis_)
         return;
+    const QJsonObject& d = mc_data_;
 
-    // Remove previously built live widget if any
-    if (mc_stack_->count() > 1) {
-        QWidget* old = mc_stack_->widget(1);
-        mc_stack_->removeWidget(old);
-        old->deleteLater();
-        mc_chart_ = nullptr;
-    }
-
-    auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    auto* cl = new QVBoxLayout(content);
-    cl->setContentsMargins(0, 0, 0, 0);
-    cl->setSpacing(0);
-
-    // ── Summary stats strip ───────────────────────────────────────────────────
-    auto* stats_bar = new QWidget(this);
-    stats_bar->setFixedHeight(56);
-    stats_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
-    auto* sb_lay = new QHBoxLayout(stats_bar);
-    sb_lay->setContentsMargins(16, 4, 16, 4);
-    sb_lay->setSpacing(24);
-
-    double median_ret = mc_data_["median_return"].toDouble();
-    double pct5 = mc_data_["percentile_5"].toDouble();
-    double pct95 = mc_data_["percentile_95"].toDouble();
-    double prob_loss = mc_data_["prob_loss"].toDouble();
-    double exp_max_dd = mc_data_["expected_max_dd"].toDouble();
-
-    struct StatItem {
-        QString label;
-        QString value;
-        const char* color;
+    // ── Headline figures (percent values from the script) ─────────────────────
+    auto num = [&d](const char* key) -> std::optional<double> {
+        const QJsonValue v = d.value(QLatin1String(key));
+        return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
     };
-    QVector<StatItem> stats = {
-        {tr("MEDIAN RETURN"), pct_str(median_ret), median_ret >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
-        {tr("5TH PERCENTILE"), pct_str(pct5), pct5 >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
-        {tr("95TH PERCENTILE"), pct_str(pct95), ui::colors::POSITIVE()},
-        {tr("PROB OF LOSS"), pct_str(prob_loss), ui::colors::WARNING()},
-        {tr("EXP MAX DRAWDOWN"), pct_str(exp_max_dd), ui::colors::NEGATIVE()},
+    auto set_tile = [this](const char* key, const QString& value, ui::StatTile::Tone tone) {
+        if (ui::StatTile* t = mc_kpis_->tile(QLatin1String(key))) {
+            t->set_value(value);
+            t->set_tone(tone);
+        }
     };
+    const auto median = num("median_return");
+    const auto p5 = num("percentile_5");
+    const auto p95 = num("percentile_95");
+    const auto prob_loss = num("prob_loss");
+    const auto max_dd = num("expected_max_dd");
+    const auto cvar5 = num("cvar_5");
+    set_tile("median", opt_pct_str(median), qs_tone(median));
+    set_tile("p5", opt_pct_str(p5), qs_tone(p5));
+    set_tile("p95", opt_pct_str(p95), qs_tone(p95));
+    set_tile("prob_loss", opt_upct_str(prob_loss), ui::StatTile::Tone::Warning);
+    set_tile("max_dd", opt_pct_str(max_dd), qs_tone(max_dd));
+    set_tile("cvar", opt_pct_str(cvar5), qs_tone(cvar5));
     // Tail in money: the average of the worst 5% of outcomes, on today's NAV.
-    if (mc_data_.contains("cvar_5")) {
-        const double cvar5 = mc_data_["cvar_5"].toDouble();
-        stats.append({tr("WORST 5% AVG"), pct_str(cvar5), ui::colors::NEGATIVE()});
-        if (summary_.total_market_value > 0)
-            stats.append({tr("≈ LOSS AT RISK"),
-                          QString("%1 %2").arg(currency_,
-                                               QLocale().toString(summary_.total_market_value * cvar5 / 100.0, 'f', 0)),
-                          ui::colors::NEGATIVE()});
+    if (cvar5 && summary_.total_market_value > 0) {
+        const double loss = summary_.total_market_value * *cvar5 / 100.0;
+        set_tile("loss_at_risk", ui::formatting::signed_money(loss, currency_, ui::formatting::Compact::None, 0),
+                 qs_tone(loss));
+    } else {
+        set_tile("loss_at_risk", QStringLiteral("--"), ui::StatTile::Tone::Neutral);
     }
 
-    for (const auto& s : stats) {
-        auto* col = new QWidget(this);
-        auto* col_l = new QVBoxLayout(col);
-        col_l->setContentsMargins(0, 0, 0, 0);
-        col_l->setSpacing(2);
-        auto* lbl = new QLabel(s.label);
-        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-        col_l->addWidget(lbl);
-        auto* val = new QLabel(s.value);
-        val->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(s.color));
-        col_l->addWidget(val);
-        sb_lay->addWidget(col);
-    }
-    sb_lay->addStretch();
-    cl->addWidget(stats_bar);
-
-    // ── Monte Carlo paths chart ───────────────────────────────────────────────
-    auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
-    chart->setBackgroundRoundness(0);
-    chart->setMargins(QMargins(8, 8, 8, 8));
-    chart->legend()->hide();
-    chart->setTitle("");
-
-    // Parse paths array
-    const QJsonArray paths_arr = mc_data_["paths"].toArray();
-    const int n_paths = paths_arr.size();
-
-    // Compute median path for highlighting
-    const int n_steps = (n_paths > 0) ? paths_arr[0].toArray().size() : 0;
-    QVector<double> median_path(n_steps, 0.0);
-    if (n_paths > 0 && n_steps > 0) {
-        for (int t = 0; t < n_steps; ++t) {
-            QVector<double> vals;
-            vals.reserve(n_paths);
-            for (int p = 0; p < n_paths; ++p) {
-                vals.append(paths_arr[p].toArray()[t].toDouble());
-            }
-            std::sort(vals.begin(), vals.end());
-            median_path[t] = vals[vals.size() / 2];
+    // ── Percentile fan over all simulations (the script computes it per step) ──
+    auto to_vec = [](const QJsonArray& a) {
+        QVector<double> v;
+        v.reserve(a.size());
+        for (const auto& x : a)
+            v.append(x.isDouble() ? x.toDouble() : std::numeric_limits<double>::quiet_NaN());
+        return v;
+    };
+    const QJsonObject bands = d["percentile_paths"].toObject();
+    const QVector<double> b5 = to_vec(bands["p5"].toArray());
+    const QVector<double> b25 = to_vec(bands["p25"].toArray());
+    const QVector<double> b50 = to_vec(bands["p50"].toArray());
+    const QVector<double> b75 = to_vec(bands["p75"].toArray());
+    const QVector<double> b95 = to_vec(bands["p95"].toArray());
+    const int n_steps = static_cast<int>(b50.size());
+    if (n_steps >= 2) {
+        QVector<double> x(n_steps);
+        for (int t = 0; t < n_steps; ++t)
+            x[t] = t + 1;
+        QVector<ui::FanBand> fan;
+        if (b5.size() == n_steps && b95.size() == n_steps)
+            fan.append(ui::FanBand{5, 95, b5, b95});
+        if (b25.size() == n_steps && b75.size() == n_steps)
+            fan.append(ui::FanBand{25, 75, b25, b75});
+        mc_fan_->set_fan(x, fan, b50);
+        mc_fan_->set_state(ui::PaintedChart::Ready);
+    } else {
+        // Older payloads: build the fan from the sample paths.
+        QVector<QVector<double>> paths;
+        for (const auto& p : d["paths"].toArray())
+            paths.append(to_vec(p.toArray()));
+        const int n = paths.isEmpty() ? 0 : static_cast<int>(paths.first().size());
+        if (n >= 2) {
+            QVector<double> x(n);
+            for (int t = 0; t < n; ++t)
+                x[t] = t + 1;
+            mc_fan_->set_paths(x, paths, {{5, 95}, {25, 75}}, 20);
+            mc_fan_->set_state(ui::PaintedChart::Ready);
+        } else {
+            mc_fan_->clear();
+            mc_fan_->set_state(ui::PaintedChart::Empty, tr("The simulation returned no paths."));
         }
     }
 
-    // Dim cyan for background paths
-    QColor path_color(ui::colors::CYAN());
-    path_color.setAlpha(40);
-    QPen path_pen(path_color);
-    path_pen.setWidth(1);
-
-    for (int p = 0; p < n_paths; ++p) {
-        const QJsonArray path_data = paths_arr[p].toArray();
-        auto* series = new QLineSeries;
-        series->setPen(path_pen);
-        const int pts = path_data.size();
-        for (int t = 0; t < pts; ++t) {
-            series->append(static_cast<qreal>(t + 1), path_data[t].toDouble());
+    // ── Terminal outcomes (a sample of all simulations, percent) ──────────────
+    {
+        QVector<double> terminal;
+        for (const auto& v : d["terminal_returns"].toArray())
+            if (v.isDouble())
+                terminal.append(v.toDouble());
+        if (terminal.size() >= 2) {
+            mc_dist_->clear_markers();
+            mc_dist_->set_samples(terminal);
+            mc_dist_->add_marker(mc_dist_->quantile(0.5), tr("Median"), ui::DistributionChart::MarkerRole::Median);
+            mc_dist_->add_marker(mc_dist_->quantile(0.05), tr("5th pct"), ui::DistributionChart::MarkerRole::VaR);
         }
-        chart->addSeries(series);
+        mc_dist_->setVisible(terminal.size() >= 2);
     }
 
-    // Percentile fan over ALL simulations (the script computes it per step); the median
-    // used to come from the 50 paths drawn, which wobbles from run to run.
-    const QJsonObject bands = mc_data_["percentile_paths"].toObject();
-    if (!bands.isEmpty()) {
-        const QJsonArray p50 = bands["p50"].toArray();
-        if (p50.size() == n_steps) {
-            for (int t = 0; t < n_steps; ++t)
-                median_path[t] = p50[t].toDouble();
-        }
-        struct Band {
-            const char* key;
-            Qt::PenStyle style;
-            QColor color;
-        };
-        const Band kBands[] = {
-            {"p5", Qt::DashLine, QColor(ui::colors::NEGATIVE())},
-            {"p25", Qt::DotLine, QColor(ui::colors::AMBER())},
-            {"p75", Qt::DotLine, QColor(ui::colors::AMBER())},
-            {"p95", Qt::DashLine, QColor(ui::colors::POSITIVE())},
-        };
-        for (const auto& b : kBands) {
-            const QJsonArray vals = bands[QLatin1String(b.key)].toArray();
-            if (vals.isEmpty())
-                continue;
-            auto* s = new QLineSeries;
-            QPen pen(b.color);
-            pen.setWidthF(1.5);
-            pen.setStyle(b.style);
-            s->setPen(pen);
-            for (int t = 0; t < vals.size(); ++t)
-                s->append(static_cast<qreal>(t + 1), vals[t].toDouble());
-            chart->addSeries(s);
-        }
-    }
+    // ── Caption: what was simulated ───────────────────────────────────────────
+    const QString method = d["method"].toString();
+    const QString method_label = method == QLatin1String("gbm") ? tr("geometric Brownian motion")
+                                 : method.isEmpty()             ? tr("bootstrap")
+                                                                : tr("bootstrap of historical days");
+    QString caption = tr("%1 simulated paths over %2 trading days (%3). Shaded bands: 5th–95th and 25th–75th "
+                         "percentile over all paths; line = median.")
+                          .arg(ui::formatting::number(d["num_simulations"].toDouble(), 0))
+                          .arg(d["horizon_days"].toInt(252))
+                          .arg(method_label);
+    if (d.contains("annual_drift"))
+        caption += QLatin1Char(' ') +
+                   tr("Calibrated to the mix's history: drift %1%/yr, volatility %2%/yr — a projection of the past, "
+                      "not a forecast.")
+                       .arg(ui::formatting::number(d["annual_drift"].toDouble(), 1),
+                            ui::formatting::number(d["annual_volatility"].toDouble(), 1));
+    if (d["seed"].isDouble())
+        caption += QLatin1Char(' ') + tr("Seed %1.").arg(d["seed"].toInteger());
+    mc_caption_->setText(caption);
 
-    // Median path — bright cyan
-    if (n_steps > 0) {
-        auto* median_series = new QLineSeries;
-        QPen med_pen{QColor(ui::colors::CYAN())};
-        med_pen.setWidth(2);
-        median_series->setPen(med_pen);
-        for (int t = 0; t < n_steps; ++t) {
-            median_series->append(static_cast<qreal>(t + 1), median_path[t]);
-        }
-        chart->addSeries(median_series);
-    }
-
-    // Zero line
-    auto* zero_series = new QLineSeries;
-    QPen zero_pen{QColor(ui::colors::BORDER_BRIGHT())};
-    zero_pen.setStyle(Qt::DashLine);
-    zero_pen.setWidth(1);
-    zero_series->setPen(zero_pen);
-    zero_series->append(1, 0.0);
-    zero_series->append(n_steps > 0 ? n_steps : 252, 0.0);
-    chart->addSeries(zero_series);
-
-    // Axes
-    auto* x_axis = new QValueAxis;
-    x_axis->setRange(1, n_steps > 0 ? n_steps : 252);
-    x_axis->setTitleText(tr("Trading Days"));
-    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
-    x_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
-    x_axis->setLabelsFont(QFont("Consolas", 8));
-
-    auto* y_axis = new QValueAxis;
-    y_axis->setTitleText(tr("Cumulative Return (%)"));
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
-    y_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
-    y_axis->setLabelsFont(QFont("Consolas", 8));
-
-    chart->addAxis(x_axis, Qt::AlignBottom);
-    chart->addAxis(y_axis, Qt::AlignLeft);
-
-    const auto& all_series = chart->series();
-    for (auto* s : all_series) {
-        s->attachAxis(x_axis);
-        s->attachAxis(y_axis);
-    }
-
-    auto* chart_view = new QChartView(chart);
-    chart_view->setRenderHint(QPainter::Antialiasing, false);
-    chart_view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
-    mc_chart_ = chart_view;
-
-    cl->addWidget(chart_view, 1);
-
-    // Caption
-    int n_shown = mc_data_["num_paths_shown"].toInt();
-    QString caption_text = tr("Showing %1 of %2 simulated paths over %3 trading days (GBM). Bright line = median; "
-                              "dashed = 5th / 95th percentile, dotted = 25th / 75th, over all paths.")
-                               .arg(n_shown)
-                               .arg(mc_data_["num_simulations"].toInt(1000))
-                               .arg(mc_data_["horizon_days"].toInt(252));
-    if (mc_data_.contains("annual_drift"))
-        caption_text += tr(" Calibrated to the mix's last 2 years: drift %1%/yr, volatility %2%/yr — a "
-                           "projection of the past, not a forecast.")
-                            .arg(QString::number(mc_data_["annual_drift"].toDouble(), 'f', 1),
-                                 QString::number(mc_data_["annual_volatility"].toDouble(), 'f', 1));
-    auto* caption = new QLabel(caption_text);
-    caption->setWordWrap(true);
-    caption->setStyleSheet(QString("color:%1; font-size:9px; padding:4px 16px;").arg(ui::colors::TEXT_TERTIARY()));
-    cl->addWidget(caption);
-
-    mc_stack_->addWidget(content);
-    mc_stack_->setCurrentIndex(1);
+    QStringList warns;
+    for (const auto& w : d["warnings"].toArray())
+        warns << w.toString();
+    if (warns.isEmpty())
+        mc_tab_.pane->clear_notice();
+    else
+        mc_tab_.pane->set_notice(warns.join(QStringLiteral("; ")), ui::EmptyState::Tone::Warning);
 }
 
-// ── make_chart_view ───────────────────────────────────────────────────────────
+// ── Runs ──────────────────────────────────────────────────────────────────────
 
-QChartView* QuantStatsView::make_chart_view(const QString& title) {
-    auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
-    chart->setBackgroundRoundness(0);
-    chart->setMargins(QMargins(8, 8, 8, 8));
-    chart->legend()->hide();
-    if (!title.isEmpty()) {
-        chart->setTitle(title);
-        chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER())));
-    }
-    auto* view = new QChartView(chart, this);
-    view->setRenderHint(QPainter::Antialiasing, false);
-    view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
-    return view;
+QString QuantStatsView::period_key() const {
+    return qs_period_cb_ ? qs_period_cb_->currentData().toString() : QStringLiteral("1y");
 }
 
-// ── run_quantstats ────────────────────────────────────────────────────────────
+QString QuantStatsView::qs_loading_text() const {
+    const QString key = period_key();
+    if (key == QLatin1String("ytd"))
+        return tr("Downloading this year's prices…");
+    if (key == QLatin1String("max"))
+        return tr("Downloading the full price history…");
+    return tr("Downloading %1 of prices…").arg(qs_period_cb_ ? qs_period_cb_->currentText() : tr("1 year"));
+}
 
-void QuantStatsView::run_quantstats() {
-    if (qs_running_ || summary_.holdings.isEmpty())
+QString QuantStatsView::mc_loading_text() const {
+    return tr("Simulating %1 paths…").arg(ui::formatting::number(mc_paths_spin_ ? mc_paths_spin_->value() : 5000, 0));
+}
+
+QString QuantStatsView::qs_signature() const {
+    return ui::autoload::signature_of(QVariantMap{{QStringLiteral("period"), period_key()}});
+}
+
+QString QuantStatsView::mc_signature() const {
+    return ui::autoload::signature_of(QVariantMap{
+        {QStringLiteral("paths"), mc_paths_spin_ ? mc_paths_spin_->value() : 5000},
+        {QStringLiteral("method"), mc_method_cb_ ? mc_method_cb_->currentData().toString() : QStringLiteral("bootstrap")},
+        {QStringLiteral("period"), period_key()}});
+}
+
+void QuantStatsView::on_period_activated() {
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_})
+        t->pane->set_loading_text(qs_loading_text());
+    if (!has_data_ || empty_book_)
         return;
-    qs_running_ = true;
-    qs_run_btn_->setEnabled(false);
-    qs_status_->setText(tr("Fetching 1-year price history..."));
-    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
+    qs_shared_->set_view(qs_shared_->view(), qs_signature());
+    mc_tab_.pane->set_signature(mc_signature()); // the simulation uses the same window: "RUN AGAIN" there
+    if (ui::AutoLoadPane* p = current_qs_pane())
+        p->run();
+}
 
+void QuantStatsView::launch_quantstats(quint64 run_id) {
+    // Before the first set_data() there is no book yet: the run stays open and is
+    // dropped when set_data() switches the panes to the portfolio's key.
+    if (!has_data_)
+        return;
+
+    // Valued holdings only: an unpriced position has no weight (NaN), and sending it
+    // as 0 / NaN would silently change the book being analysed.
     QStringList symbols;
     QList<double> weights;
     for (const auto& h : summary_.holdings) {
+        if (!h.valued() || !std::isfinite(h.weight))
+            continue;
         symbols.append(h.symbol);
         weights.append(h.weight / 100.0);
     }
+    if (symbols.isEmpty()) {
+        qs_shared_->fail(run_id, tr("No position can be valued yet — there is nothing to analyse."));
+        return;
+    }
 
-    // Live risk-free rate and the portfolio currency's benchmark, so the
-    // BENCHMARK column is filled and Sharpe/Sortino use the same rf as the
-    // rest of the tab (the script used to hard-code 4%).
+    // The portfolio's own benchmark and risk-free rate (base currency); an unknown
+    // rate is sent as absent so the script reports it instead of inventing one.
     auto& psvc = services::PortfolioService::instance();
-    const QString bench = services::PortfolioService::default_benchmark_for_currency(summary_.portfolio.currency);
+    const QString bench = services::PortfolioService::benchmark_for(summary_.portfolio);
+    const auto rf = psvc.risk_free_for(summary_.portfolio);
+    const QJsonObject context = psvc.analytics_context(summary_);
 
     QPointer<QuantStatsView> self = this;
-    PortfolioAnalyticsService::instance().run_quantstats(symbols, weights, psvc.risk_free_rate(), bench,
-                                                         [self](const AnalyticsResult& r) {
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, r]() {
-                if (!self)
-                    return;
-                self->qs_running_ = false;
-                self->qs_run_btn_->setEnabled(true);
-
-                if (!r.success) {
-                    self->qs_status_->setText(tr("QuantStats: %1").arg(r.error));
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    return;
-                }
-
-                self->qs_data_ = r.data;
-                self->qs_status_->setText(tr("Complete"));
-                self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
-                self->update_metrics();
-                self->update_returns();
-                self->update_drawdown();
-                self->update_rolling();
-            },
-            Qt::QueuedConnection);
-    });
-}
-
-// ── run_monte_carlo ───────────────────────────────────────────────────────────
-
-void QuantStatsView::run_monte_carlo() {
-    if (mc_running_ || summary_.holdings.isEmpty())
-        return;
-    mc_running_ = true;
-    mc_run_btn_->setEnabled(false);
-    mc_status_->setText(tr("Running 1000 simulation paths..."));
-    mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::AMBER()));
-
-    QStringList symbols;
-    QList<double> weights;
-    for (const auto& h : summary_.holdings) {
-        symbols.append(h.symbol);
-        weights.append(h.weight / 100.0);
-    }
-
-    QPointer<QuantStatsView> self = this;
-    PortfolioAnalyticsService::instance().run_monte_carlo(
-        symbols, weights, /*num_simulations=*/1000, [self](const AnalyticsResult& r) {
+    const services::AnalyticsRequest req = PortfolioAnalyticsService::instance().run_quantstats(
+        symbols, weights, rf.known ? rf.rate : std::numeric_limits<double>::quiet_NaN(), bench,
+        [self, run_id](const AnalyticsResult& r) {
             if (!self)
                 return;
             QMetaObject::invokeMethod(
                 self,
-                [self, r]() {
+                [self, run_id, r]() {
                     if (!self)
                         return;
-                    self->mc_running_ = false;
-                    self->mc_run_btn_->setEnabled(true);
-
+                    self->qs_requests_.remove(run_id);
+                    if (r.cancelled)
+                        return; // the panes left it; nothing to show
                     if (!r.success) {
-                        self->mc_status_->setText(tr("Monte Carlo: %1").arg(r.error));
-                        self->mc_status_->setStyleSheet(
-                            QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
+                        self->qs_shared_->fail(run_id,
+                                               qs_plain_error(r.error, QuantStatsView::tr("The QuantStats analysis failed.")));
                         return;
                     }
-
-                    self->mc_data_ = r.data;
-                    self->mc_status_->setText(
-                        tr("Complete — %1 paths simulated").arg(r.data["num_paths_shown"].toInt() > 0 ? "1000" : "0"));
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
-                    self->update_monte_carlo_chart();
+                    self->qs_shared_->finish(run_id, r.data);
                 },
                 Qt::QueuedConnection);
-        });
+        },
+        period_key(), context);
+    qs_requests_.insert(run_id, req);
 }
+
+void QuantStatsView::start_monte_carlo(quint64 request_id) {
+    if (!has_data_)
+        return; // dropped when set_data() switches the pane to the portfolio's key
+
+    QStringList symbols;
+    QList<double> weights;
+    for (const auto& h : summary_.holdings) {
+        if (!h.valued() || !std::isfinite(h.weight))
+            continue;
+        symbols.append(h.symbol);
+        weights.append(h.weight / 100.0);
+    }
+    if (symbols.isEmpty()) {
+        mc_tab_.pane->fail(request_id, tr("No position can be valued yet — there is nothing to simulate."));
+        return;
+    }
+    const int paths = mc_paths_spin_ ? mc_paths_spin_->value() : 5000;
+    QJsonObject context = services::PortfolioService::instance().analytics_context(summary_);
+    if (mc_method_cb_)
+        context.insert(QStringLiteral("method"), mc_method_cb_->currentData().toString());
+    context.insert(QStringLiteral("period"), period_key());
+
+    QPointer<QuantStatsView> self = this;
+    const services::AnalyticsRequest req = PortfolioAnalyticsService::instance().run_monte_carlo(
+        symbols, weights, paths,
+        [self, request_id](const AnalyticsResult& r) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, request_id, r]() {
+                    if (!self)
+                        return;
+                    self->mc_requests_.remove(request_id);
+                    if (r.cancelled)
+                        return;
+                    if (!r.success) {
+                        self->mc_tab_.pane->fail(
+                            request_id, qs_plain_error(r.error, QuantStatsView::tr("The Monte Carlo simulation failed.")));
+                        return;
+                    }
+                    self->mc_tab_.pane->deliver(request_id, r.data); // a stale id is ignored by the pane
+                },
+                Qt::QueuedConnection);
+        },
+        context);
+    mc_requests_.insert(request_id, req);
+}
+
+// ── Language ──────────────────────────────────────────────────────────────────
 
 void QuantStatsView::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
@@ -1413,6 +1491,9 @@ void QuantStatsView::retranslateUi() {
     }
     if (title_lbl_)
         title_lbl_->setText(tr("QUANTSTATS ANALYSIS"));
+    if (sibling_lbl_)
+        sibling_lbl_->setText(tr("Back-test of today's weights · the ffn-based equivalent is under ⋯ › FFN Analysis; "
+                                 "realised (time-weighted) performance is in PERF/RISK"));
     if (qs_run_btn_)
         qs_run_btn_->setText(tr("▶ RUN QUANTSTATS"));
     if (metrics_section_lbl_)
@@ -1420,35 +1501,35 @@ void QuantStatsView::retranslateUi() {
     if (mc_title_)
         mc_title_->setText(tr("MONTE CARLO SIMULATION"));
     if (mc_desc_)
-        mc_desc_->setText(tr("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
-                             "distributions of future returns, drawdowns, and terminal wealth."));
+        mc_desc_->setText(tr("Simulate portfolio return paths — bootstrap of whole historical days (keeps fat "
+                             "tails and co-movement) or geometric Brownian motion — to estimate the distribution "
+                             "of future returns, drawdowns and terminal wealth."));
+    if (paths_lbl_)
+        paths_lbl_->setText(tr("Paths:"));
     if (mc_run_btn_)
-        mc_run_btn_->setText(tr("▶ RUN MONTE CARLO (1000 paths)"));
-
-    if (returns_placeholder_)
-        returns_placeholder_->setText(tr("Run QuantStats Analysis for return distribution"));
-    if (drawdown_placeholder_)
-        drawdown_placeholder_->setText(tr("Run QuantStats Analysis for drawdown metrics"));
-    if (rolling_placeholder_)
-        rolling_placeholder_->setText(tr("Run QuantStats Analysis for rolling metrics"));
-    if (mc_placeholder_)
-        mc_placeholder_->setText(tr("Press RUN MONTE CARLO to simulate 1,000 return paths"));
-
+        mc_run_btn_->setText(tr("▶ RUN MONTE CARLO"));
     if (metrics_table_)
         metrics_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE"), tr("BENCHMARK")});
+    if (mc_kpis_) {
+        const std::pair<const char*, QString> labels[] = {
+            {"median", tr("MEDIAN RETURN")},   {"p5", tr("5TH PERCENTILE")},     {"p95", tr("95TH PERCENTILE")},
+            {"prob_loss", tr("PROB OF LOSS")}, {"max_dd", tr("EXP MAX DRAWDOWN")}, {"cvar", tr("WORST 5% AVG")},
+            {"loss_at_risk", tr("≈ LOSS AT RISK")}};
+        for (const auto& [key, label] : labels)
+            if (ui::StatTile* t = mc_kpis_->tile(QLatin1String(key)))
+                t->set_label(label);
+    }
 
-    // re-render tabs whose stacks already hold live content. The update_* methods
-    // pluck source-key tr() strings on each call, so re-running them picks up the
-    // new locale for section labels, row names, and embedded sub-table headers.
-    update_metrics();
-    if (returns_stack_ && returns_stack_->count() > 1)
-        update_returns();
-    if (drawdown_stack_ && drawdown_stack_->count() > 1)
-        update_drawdown();
-    if (rolling_stack_ && rolling_stack_->count() > 1)
-        update_rolling();
-    if (mc_stack_ && mc_stack_->count() > 1)
-        update_monte_carlo_chart();
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_})
+        t->pane->set_loading_text(qs_loading_text());
+    mc_tab_.pane->set_loading_text(mc_loading_text());
+    for (ResultTab* t : {&metrics_tab_, &returns_tab_, &drawdown_tab_, &rolling_tab_, &mc_tab_})
+        if (t->empty)
+            t->empty->apply(ui::EmptyState::no_data_spec(tr("No positions to analyse"), t->empty_text(), tr("BUY")));
+
+    // The rendered results carry translated row names and titles: render them again
+    // (the visible tab now, the others on their next show).
+    on_appearance_settled();
 }
 
 } // namespace fincept::screens

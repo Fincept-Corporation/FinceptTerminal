@@ -523,6 +523,8 @@ void an_run_backtest(const QJsonObject& params, const QVector<QJsonValue>& input
 
 } // anonymous namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_analytics_nodes(NodeRegistry& registry) {
     registry.register_type({
         .type_id = "analytics.technical_indicators",
@@ -713,7 +715,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"benchmark", "Benchmark", "string", "SPY", {}, "Benchmark symbol"},
+                // (A "Benchmark" field was offered but never read — removed; no beta / alpha here.)
                 {"risk_free_rate", "Risk-Free Rate", "number", 0.05, {}, ""},
             },
         .execute =
@@ -746,16 +748,15 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 for (int i = 1; i < prices.size(); ++i)
                     returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
+                double rfr = params.value("risk_free_rate").toDouble(0.05) / 252.0;
                 double sum = 0, sum_sq = 0, max_dd = 0, peak = prices[0];
-                double neg_sum_sq = 0;
-                int neg_count = 0;
+                double down_sum_sq = 0;
                 for (double r : returns) {
                     sum += r;
                     sum_sq += r * r;
-                    if (r < 0) {
-                        neg_sum_sq += r * r;
-                        ++neg_count;
-                    }
+                    // Downside measured against the same daily risk-free target as the numerator.
+                    const double shortfall = std::min(r - rfr, 0.0);
+                    down_sum_sq += shortfall * shortfall;
                 }
                 for (double p : prices) {
                     if (p > peak)
@@ -768,9 +769,10 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int n = returns.size();
                 double mean_return = sum / n;
                 double std_dev = std::sqrt(sum_sq / n - mean_return * mean_return);
-                double rfr = params.value("risk_free_rate").toDouble(0.05) / 252.0;
                 double sharpe = std_dev > 0 ? (mean_return - rfr) / std_dev * std::sqrt(252.0) : 0;
-                double downside_dev = neg_count > 0 ? std::sqrt(neg_sum_sq / neg_count) : 0;
+                // Downside deviation averages over ALL observations, not just the losing days
+                // (dividing by the losing-day count overstated it by ~sqrt(2) and understated Sortino).
+                double downside_dev = std::sqrt(down_sum_sq / n);
                 double sortino = downside_dev > 0 ? (mean_return - rfr) / downside_dev * std::sqrt(252.0) : 0;
                 double total_return = (prices.back() - prices.front()) / prices.front();
                 double annualized = std::pow(1.0 + total_return, 252.0 / n) - 1.0;
@@ -800,8 +802,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                // No "Period" field: the matrix covers whatever range the upstream history
+                // nodes delivered (set the period there); the field here was never read.
                 {"method", "Method", "select", "pearson", {"pearson", "spearman", "kendall"}, ""},
-                {"period", "Period", "string", "1y", {}, "Lookback period"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
@@ -909,7 +912,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .type_id = "analytics.risk_analysis",
         .display_name = "Risk Analysis",
         .category = "Analytics",
-        .description = "VaR, CVaR, stress testing, Monte Carlo simulation",
+        .description = "Historical or parametric VaR / CVaR and volatility of a price or return series",
         .icon_text = "A",
         .accent_color = "#7c3aed",
         .version = 1,
@@ -917,39 +920,51 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::RiskData}},
         .parameters =
             {
-                {"method",
-                 "Method",
-                 "select",
-                 "historical_var",
-                 {"historical_var", "parametric_var", "monte_carlo", "stress_test"},
-                 ""},
+                // monte_carlo / stress_test were offered but never implemented (analytics.monte_carlo
+                // is its own node); a saved workflow holding one still runs historical VaR with a note.
+                {"method", "Method", "select", "historical_var", {"historical_var", "parametric_var"}, ""},
                 {"confidence", "Confidence Level", "number", 0.95, {}, ""},
                 {"horizon", "Horizon (days)", "number", 1, {}, ""},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Extract returns from input and compute VaR/CVaR inline
+                // Rows that carry a "return" are used as returns. Otherwise the close
+                // column (close / Close / price — Historical Data emits lowercase) is
+                // turned into returns. A bare list of numbers counts as returns only
+                // when every value looks like one (|x| <= 1), else as prices.
+                // Reading only "return" / "Close" used to turn every Historical Data
+                // row into 0 and report VaR = CVaR = volatility = 0 as a success.
+                const QJsonArray rows =
+                    (!inputs.isEmpty() && inputs[0].isArray()) ? inputs[0].toArray() : QJsonArray{};
                 QVector<double> returns;
-                if (!inputs.isEmpty() && inputs[0].isArray()) {
-                    for (const QJsonValue& v : inputs[0].toArray()) {
-                        if (v.isObject()) {
-                            double p = v.toObject().value("return").toDouble(v.toObject().value("Close").toDouble(0));
-                            returns.append(p);
-                        } else if (v.isDouble()) {
+                for (const QJsonValue& v : rows) {
+                    const QJsonValue r = v.isObject() ? v.toObject().value("return") : QJsonValue();
+                    if (r.isDouble())
+                        returns.append(r.toDouble());
+                }
+                if (returns.isEmpty() && !rows.isEmpty()) {
+                    bool bare_returns = true;
+                    for (const QJsonValue& v : rows)
+                        bare_returns = bare_returns && v.isDouble() && std::abs(v.toDouble()) <= 1.0;
+                    if (bare_returns) {
+                        for (const QJsonValue& v : rows)
                             returns.append(v.toDouble());
-                        }
+                    } else {
+                        returns = an_returns(an_closes(rows));
                     }
                 }
 
-                if (returns.size() < 10) {
-                    cb(false, {}, "Need at least 10 data points for risk analysis");
+                if (returns.isEmpty()) {
+                    cb(false, {},
+                       "Risk Analysis found no return or close values in the input (connect a price history, e.g. "
+                       "Historical Data, or rows with a 'return' field)");
                     return;
                 }
-
-                // Convert prices to returns if values are large (prices, not returns)
-                if (std::abs(returns[0]) > 1.0)
-                    returns = an_returns(returns);
+                if (std::all_of(returns.cbegin(), returns.cend(), [](double r) { return r == 0.0; })) {
+                    cb(false, {}, "Risk Analysis found no usable returns in the input — every value is 0");
+                    return;
+                }
                 if (returns.size() < 10) {
                     cb(false, {}, "Need at least 10 return observations for risk analysis");
                     return;
@@ -1063,17 +1078,15 @@ void register_analytics_nodes(NodeRegistry& registry) {
                     returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
                 double rfr = params.value("risk_free_rate").toDouble(0.05) / 252.0;
-                double sum = 0, sum_sq = 0, neg_sum_sq = 0;
+                double sum = 0, sum_sq = 0, down_sum_sq = 0;
                 double max_dd = 0, peak = prices[0];
-                int neg_count = 0;
 
                 for (double r : returns) {
                     sum += r;
                     sum_sq += r * r;
-                    if (r < 0) {
-                        neg_sum_sq += r * r;
-                        ++neg_count;
-                    }
+                    // Downside against the daily risk-free target, as in the numerator.
+                    const double shortfall = std::min(r - rfr, 0.0);
+                    down_sum_sq += shortfall * shortfall;
                 }
                 for (double p : prices) {
                     if (p > peak)
@@ -1086,7 +1099,8 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int n = returns.size();
                 double mean = sum / n;
                 double std_dev = std::sqrt(sum_sq / n - mean * mean);
-                double downside_dev = neg_count > 0 ? std::sqrt(neg_sum_sq / neg_count) : 0;
+                // Averaged over all observations (standard downside deviation).
+                double downside_dev = std::sqrt(down_sum_sq / n);
                 double ann_return = mean * 252.0;
                 double ann_rfr = params.value("risk_free_rate").toDouble(0.05);
 

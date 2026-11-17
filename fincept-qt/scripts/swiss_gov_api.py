@@ -433,6 +433,25 @@ def _make_request(action: str, params: Optional[Dict[str, Any]] = None) -> Dict[
             "error": f"An unexpected error occurred: {str(e)}"
         }
 
+def _ml(value: Any) -> str:
+    """
+    opendata.swiss returns titles, notes, descriptions and resource names as multilingual objects
+    ({'de': '...', 'fr': '', 'it': '', 'en': ''}); everything downstream (language detection,
+    translation, the desktop table) expects text. Pick the first non-empty language, English first.
+    """
+    if isinstance(value, dict):
+        for lang in ('en', 'de', 'fr', 'it'):
+            text = value.get(lang)
+            if isinstance(text, str) and text.strip():
+                return text
+        for text in value.values():
+            if isinstance(text, str) and text.strip():
+                return text
+        return ""
+    if value is None:
+        return ""
+    return value if isinstance(value, str) else str(value)
+
 # --- 2. CORE FUNCTIONS (GROUPED BY API CATEGORY) ---
 
 # ====== CATALOGUE (ORGANIZATIONS/PUBLISHERS) ======
@@ -499,8 +518,8 @@ def get_publisher_details(publisher_id: str) -> Dict[str, Any]:
         publisher_data = result.get("data", {})
 
         # Detect and translate content
-        title = publisher_data.get("title", "")
-        description = publisher_data.get("description", "")
+        title = _ml(publisher_data.get("title", ""))
+        description = _ml(publisher_data.get("description", ""))
 
         title_lang = _detect_language(title)
         desc_lang = _detect_language(description)
@@ -547,9 +566,12 @@ def get_datasets_by_publisher(publisher_id: str, rows: int = 100) -> Dict[str, A
         JSON response with dataset list
     """
     try:
-        # Search for datasets by owner_org
-        query = f"owner_org:{publisher_id}"
-        params = {'q': query, 'rows': rows}
+        # organization_list returns publisher *names* (slugs), and CKAN's `owner_org` field holds
+        # the organisation's UUID - `q=owner_org:<slug>` matched nothing, so every publisher looked
+        # empty. Filter on the `organization` (name) field; keep owner_org for real UUIDs.
+        looks_like_uuid = len(publisher_id) == 36 and publisher_id.count('-') == 4
+        field = 'owner_org' if looks_like_uuid else 'organization'
+        params = {'fq': f'{field}:{publisher_id}', 'rows': rows}
 
         result = _make_request("package_search", params)
 
@@ -564,14 +586,14 @@ def get_datasets_by_publisher(publisher_id: str, rows: int = 100) -> Dict[str, A
         enhanced_data = []
         for dataset in datasets:
             # Detect and translate content
-            title = dataset.get("title", "")
-            notes = dataset.get("notes", "")
+            title = _ml(dataset.get("title", ""))
+            notes = _ml(dataset.get("notes", ""))
 
             title_lang = _detect_language(title)
             notes_lang = _detect_language(notes)
 
             enhanced_dataset = {
-                "id": dataset.get("id"),
+                "id": dataset.get("id") or dataset.get("name"),
                 "name": dataset.get("name"),
                 "title": _translate_text(title, title_lang),
                 "original_title": title,
@@ -639,14 +661,14 @@ def search_datasets(query: str, rows: int = 50, fq: Optional[str] = None,
         enhanced_data = []
         for dataset in datasets:
             # Detect and translate content
-            title = dataset.get("title", "")
-            notes = dataset.get("notes", "")
+            title = _ml(dataset.get("title", ""))
+            notes = _ml(dataset.get("notes", ""))
 
             title_lang = _detect_language(title)
             notes_lang = _detect_language(notes)
 
             enhanced_dataset = {
-                "id": dataset.get("id"),
+                "id": dataset.get("id") or dataset.get("name"),
                 "name": dataset.get("name"),
                 "title": _translate_text(title, title_lang),
                 "original_title": title,
@@ -702,14 +724,14 @@ def get_dataset_details(dataset_id: str) -> Dict[str, Any]:
         dataset_data = result.get("data", {})
 
         # Detect and translate content
-        title = dataset_data.get("title", "")
-        notes = dataset_data.get("notes", "")
+        title = _ml(dataset_data.get("title", ""))
+        notes = _ml(dataset_data.get("notes", ""))
 
         title_lang = _detect_language(title)
         notes_lang = _detect_language(notes)
 
         enhanced_dataset = {
-            "id": dataset_data.get("id"),
+            "id": dataset_data.get("id") or dataset_data.get("name"),
             "name": dataset_data.get("name"),
             "title": _translate_text(title, title_lang),
             "original_title": title,
@@ -772,8 +794,8 @@ def get_dataset_resources(dataset_id: str) -> Dict[str, Any]:
         enhanced_data = []
         for resource in resources:
             # Detect and translate content
-            name = resource.get("name", "")
-            description = resource.get("description", "")
+            name = _ml(resource.get("name", "")) or _ml(resource.get("title", ""))
+            description = _ml(resource.get("description", ""))
 
             name_lang = _detect_language(name)
             desc_lang = _detect_language(description)
@@ -838,8 +860,8 @@ def get_resource_info(resource_id: str) -> Dict[str, Any]:
         resource_data = result.get("data", {})
 
         # Detect and translate content
-        name = resource_data.get("name", "")
-        description = resource_data.get("description", "")
+        name = _ml(resource_data.get("name", "")) or _ml(resource_data.get("title", ""))
+        description = _ml(resource_data.get("description", ""))
 
         name_lang = _detect_language(name)
         desc_lang = _detect_language(description)
@@ -1055,14 +1077,14 @@ def get_recent_datasets(limit: int = 50) -> Dict[str, Any]:
         enhanced_data = []
         for dataset in datasets:
             # Detect and translate content
-            title = dataset.get("title", "")
-            notes = dataset.get("notes", "")
+            title = _ml(dataset.get("title", ""))
+            notes = _ml(dataset.get("notes", ""))
 
             title_lang = _detect_language(title)
             notes_lang = _detect_language(notes)
 
             enhanced_dataset = {
-                "id": dataset.get("id"),
+                "id": dataset.get("id") or dataset.get("name"),
                 "name": dataset.get("name"),
                 "title": _translate_text(title, title_lang),
                 "original_title": title,

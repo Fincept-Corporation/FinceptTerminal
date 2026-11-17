@@ -38,6 +38,11 @@ class TodayPnLWidget : public BaseWidget {
     void hub_resubscribe();
     void hub_unsubscribe_all();
     QString resolve_account_id() const;
+    QString positions_topic() const;
+    /// Account name in the header, or why the broker session is unusable.
+    void update_session_state();
+    /// No account: "No broker account connected" over the tile (BaseWidget helper).
+    void show_no_account_state();
 
     QString account_id_;
     QString broker_id_;

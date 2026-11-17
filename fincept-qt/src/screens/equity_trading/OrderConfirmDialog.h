@@ -17,7 +17,9 @@
 
 #include <QDialog>
 #include <QString>
+#include <QStringList>
 
+class QCheckBox;
 class QLabel;
 class QPushButton;
 
@@ -30,17 +32,40 @@ class OrderConfirmDialog : public QDialog {
     // known LTP (<= 0 = unknown) and drives the estimated value + the
     // fat-finger check. `account_id` is optional; when given, the dialog reads
     // the account's live/paper mode and fetches the broker's required margin.
+    // `price_currency` = the instrument's quote currency as quoted ("USD", "GBp");
+    // empty = the exchange's from the venue table (else the broker account's).
+    // `price_digits` = price decimals (-1 = from the value). Every price and amount
+    // is shown with its currency; the estimated value is also shown converted into
+    // the account currency when that differs (with the rate and its time; "—" when
+    // no rate is known, never 1:1).
     static bool confirm(QWidget* parent, const trading::UnifiedOrder& order, const QString& account_label,
-                        double ref_price, const QString& account_id = QString());
+                        double ref_price, const QString& account_id = QString(),
+                        const QString& price_currency = QString(), int price_digits = -1);
+
+    // Simulated (built-in paper) order on delayed prices. Same review, plus what
+    // is simulated: `price_note` ("Yahoo Finance · delayed 15 min · last trade
+    // 15:29 IST"), `outcome_note` (fills now / queues for the open / rests) and the
+    // cash the order books in the account currency (`cash_note`, may be empty).
+    // `*skip_next` (optional) is set when the user ticks "don't ask again for paper
+    // orders". `price_currency` / `price_digits` as for confirm() (empty = the
+    // exchange's from the venue table, else no unit).
+    static bool confirm_simulated(QWidget* parent, const trading::UnifiedOrder& order, const QString& account_label,
+                                  double ref_price, const QString& price_note, const QString& outcome_note,
+                                  const QString& cash_note, bool* skip_next = nullptr,
+                                  const QString& price_currency = QString(), int price_digits = -1);
 
   private:
     OrderConfirmDialog(QWidget* parent, const trading::UnifiedOrder& order, const QString& account_label,
-                       double ref_price, const QString& account_id);
+                       double ref_price, const QString& account_id, const QStringList& sim_notes = {},
+                       const QString& price_currency = QString(), int price_digits = -1);
+
+    QCheckBox* skip_box_ = nullptr;
 
     void start_margin_fetch();
 
     trading::UnifiedOrder order_;
     QString account_id_;
+    QString account_currency_; // broker account's currency (margin, converted value); empty = unknown
     QLabel* margin_value_ = nullptr;
     QPushButton* send_btn_ = nullptr;
     bool margin_done_ = false;

@@ -120,7 +120,9 @@ QString KotakBroker::lookup_psymbol(const QString& symbol, const QString& exchan
         if (tok.has_value() && tok.value() > 0)
             return QString::number(static_cast<qlonglong>(tok.value()));
     }
-    LOG_WARN(TAG, QString("pSymbol not found for %1:%2").arg(exchange, symbol));
+    // Quote polls ask again every few seconds: one line per symbol every 5 minutes.
+    LOG_WARN_RL(TAG, exchange + QLatin1Char(':') + symbol, 300000,
+                QString("pSymbol not found for %1:%2").arg(exchange, symbol));
     return {};
 }
 
@@ -293,7 +295,7 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
     const QString view_token = d1.value("token").toString();
     const QString view_sid = d1.value("sid").toString();
     // The view session id is a live session credential — log only that it arrived (P14).
-    LOG_INFO(TAG, QString("Kotak Step1 OK, view session %1").arg(view_sid.isEmpty() ? "missing" : "received"));
+    LOG_DEBUG(TAG, QString("Kotak Step1 OK, view session %1").arg(view_sid.isEmpty() ? "missing" : "received"));
 
     // ── Step 2: MPIN validation ───────────────────────────────────────────────
     QJsonObject step2_body;
@@ -327,7 +329,8 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
         server_id = d2.value("dataCenter").toString();
 
     if (base_url.isEmpty())
-        LOG_WARN(TAG, "baseUrl missing from MPIN response — API calls may fail");
+        LOG_WARN(TAG, logf("baseUrl missing from MPIN response, API calls may fail",
+                           {{"broker", "kotak"}, {"account", log_mask(ucc)}, {"status", r2.status_code}}));
     if (server_id.isEmpty())
         LOG_WARN(TAG, "hsServerId/dataCenter missing from MPIN response — sId routing disabled");
 
@@ -341,7 +344,8 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
     QJsonObject extra_obj{{"totp_secret", auth_code.trimmed()}};
     const QString extra = with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
                                             next_ist_flush_epoch(6, 0));
-    LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url + " sId=" + server_id);
+    // Never the session id or the full UCC.
+    LOG_INFO(TAG, logf("Broker sign-in succeeded", {{"broker", "kotak"}, {"account", log_mask(ucc)}}));
     return {.success = true, .access_token = packed, .user_id = ucc, .additional_data = extra};
 }
 
@@ -389,12 +393,16 @@ OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds, cons
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok") {
         const QString err = checked_error(resp, "place_order failed");
-        LOG_ERROR(TAG, "place_order: " + err);
+        LOG_ERROR(TAG, logf("Order placement failed", {{"venue", "kotak"},
+                                                       {"symbol", order.symbol},
+                                                       {"status", resp.status_code},
+                                                       {"error", err}}));
         return {false, "", err};
     }
 
     const QString order_id = resp.json.value("nOrdNo").toString();
-    LOG_INFO(TAG, "place_order OK: " + order_id);
+    // The order audit trail is written centrally (UnifiedTrading); adapter detail only.
+    LOG_DEBUG(TAG, logf("Order placed", {{"venue", "kotak"}, {"symbol", order.symbol}, {"order_id", order_id}}));
     return {true, order_id, ""};
 }
 
@@ -419,7 +427,8 @@ ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& cred
     for (const QString& key : required_keys) {
         if (mods.value(key).toString().trimmed().isEmpty()) {
             const QString err = QString("Cannot modify: order %1 unknown").arg(key);
-            LOG_ERROR(TAG, "modify_order: " + err);
+            LOG_ERROR(TAG, logf("Order modify refused, a required field is missing",
+                                {{"venue", "kotak"}, {"order_id", order_id}, {"key", key}, {"error", err}}));
             return {false, std::nullopt, err, ts};
         }
     }

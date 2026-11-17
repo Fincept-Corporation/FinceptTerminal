@@ -47,7 +47,7 @@ AlpacaWebSocket::~AlpacaWebSocket() {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 void AlpacaWebSocket::open() {
-    LOG_INFO(kTag, "Checking market clock before connecting...");
+    LOG_DEBUG(kTag, "Checking market clock before connecting...");
 
     QPointer<AlpacaWebSocket> self = this;
     const QString api_key = api_key_;
@@ -74,14 +74,14 @@ void AlpacaWebSocket::open() {
                 if (result.success && result.data) {
                     const auto& clock = *result.data;
                     if (!clock.is_open) {
-                        LOG_INFO(kTag, QString("Market is closed. Next open: %1").arg(clock.next_open));
+                        LOG_DEBUG(kTag, QString("Market is closed. Next open: %1").arg(clock.next_open));
                         should_connect = false;
                         emit self->market_closed();
                     }
                 }
 
                 if (should_connect) {
-                    LOG_INFO(kTag, QString("Connecting to %1").arg(kWsUrl));
+                    LOG_DEBUG(kTag, QString("Connecting to %1").arg(kWsUrl));
                     self->ws_->connect_to(QString::fromLatin1(kWsUrl));
                 }
 
@@ -130,13 +130,15 @@ void AlpacaWebSocket::set_subscriptions(const QStringList& symbols) {
 // ── WebSocketClient callbacks ───────────────────────────────────────────────
 
 void AlpacaWebSocket::on_ws_connected() {
-    LOG_INFO(kTag, "WebSocket connected, sending auth...");
+    LOG_DEBUG(kTag, "WebSocket connected, sending auth...");
     heartbeat_timer_->start();
     send_auth();
 }
 
 void AlpacaWebSocket::on_ws_disconnected() {
-    LOG_WARN(kTag, "WebSocket disconnected");
+    // Per drop, including every failed reconnect attempt; AccountDataStream writes the
+    // once-per-state-change "Alpaca WS disconnected" line.
+    LOG_DEBUG(kTag, "WebSocket disconnected");
     heartbeat_timer_->stop();
     authenticated_ = false;
     if (connected_.exchange(false))
@@ -149,7 +151,9 @@ void AlpacaWebSocket::on_ws_error(const QString& error) {
 }
 
 void AlpacaWebSocket::on_heartbeat_timeout() {
-    LOG_WARN(kTag, "No messages received in 15s — forcing reconnect");
+    // Can repeat every 15 s on a quiet stream: at most one line every 5 minutes.
+    LOG_WARN_RL(kTag, QStringLiteral("heartbeat_timeout"), 300000,
+                QStringLiteral("No messages received in 15s — forcing reconnect"));
     if (ws_)
         ws_->disconnect();
 }
@@ -180,10 +184,10 @@ void AlpacaWebSocket::on_clock_check() {
 
                 const auto& clock = *result.data;
                 if (clock.is_open && !self->connected_.load()) {
-                    LOG_INFO(kTag, "Market opened — connecting WebSocket");
+                    LOG_DEBUG(kTag, "Market opened — connecting WebSocket");
                     self->ws_->connect_to(QString::fromLatin1(kWsUrl));
                 } else if (!clock.is_open && self->connected_.load()) {
-                    LOG_INFO(kTag, "Market closed — disconnecting WebSocket");
+                    LOG_DEBUG(kTag, "Market closed — disconnecting WebSocket");
                     self->close();
                     self->clock_timer_->start();
                     emit self->market_closed();
@@ -217,7 +221,7 @@ void AlpacaWebSocket::send_subscribe(const QStringList& symbols) {
     msg["quotes"] = syms;
     msg["bars"] = syms;
 
-    LOG_INFO(kTag, QString("Subscribing to %1 symbols").arg(symbols.size()));
+    LOG_DEBUG(kTag, QString("Subscribing to %1 symbols").arg(symbols.size()));
     ws_->send(compact_json(msg));
 }
 
@@ -280,9 +284,9 @@ void AlpacaWebSocket::handle_message(const QJsonObject& msg) {
 void AlpacaWebSocket::handle_success(const QJsonObject& msg) {
     const QString m = msg.value("msg").toString();
     if (m == QLatin1String("connected")) {
-        LOG_INFO(kTag, "Server acknowledged connection");
+        LOG_DEBUG(kTag, "Server acknowledged connection");
     } else if (m == QLatin1String("authenticated")) {
-        LOG_INFO(kTag, "Authentication successful");
+        LOG_DEBUG(kTag, "Authentication successful");
         authenticated_ = true;
         if (!connected_.exchange(true))
             emit connected();
@@ -294,15 +298,17 @@ void AlpacaWebSocket::handle_success(const QJsonObject& msg) {
 void AlpacaWebSocket::handle_error(const QJsonObject& msg) {
     const int code = msg.value("code").toInt();
     const QString err_msg = msg.value("msg").toString();
-    LOG_ERROR(kTag, QString("Error %1: %2").arg(code).arg(err_msg));
-
+    // One line per error frame, by kind.
     if (code == 402) {
-        LOG_ERROR(kTag, "Authentication failed — invalid credentials");
+        LOG_ERROR(kTag, logf("Alpaca stream authentication failed, invalid credentials",
+                             {{"code", code}, {"error", err_msg}}));
         emit error_occurred("Authentication failed: " + err_msg);
     } else if (code == 406) {
-        LOG_WARN(kTag, "Connection limit exceeded — another session may be active");
+        LOG_WARN(kTag, logf("Alpaca stream connection limit exceeded, another session may be active",
+                            {{"code", code}, {"error", err_msg}}));
         emit error_occurred("Connection limit exceeded");
     } else {
+        LOG_ERROR(kTag, logf("Alpaca stream error", {{"code", code}, {"error", err_msg}}));
         emit error_occurred(QString("Error %1: %2").arg(code).arg(err_msg));
     }
 }
@@ -311,10 +317,10 @@ void AlpacaWebSocket::handle_subscription(const QJsonObject& msg) {
     const auto trades = msg.value("trades").toArray();
     const auto quotes = msg.value("quotes").toArray();
     const auto bars = msg.value("bars").toArray();
-    LOG_INFO(kTag, QString("Subscribed — trades: %1, quotes: %2, bars: %3")
-                       .arg(trades.size())
-                       .arg(quotes.size())
-                       .arg(bars.size()));
+    LOG_DEBUG(kTag, QString("Subscribed — trades: %1, quotes: %2, bars: %3")
+                        .arg(trades.size())
+                        .arg(quotes.size())
+                        .arg(bars.size()));
 }
 
 void AlpacaWebSocket::handle_trade(const QJsonObject& msg) {

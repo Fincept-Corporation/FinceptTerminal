@@ -18,6 +18,9 @@ import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
 from itertools import product
 
+# Upper bound on optimisation rows returned to the UI (each row is ~300 bytes of JSON).
+MAX_RETURNED_RESULTS = 10000
+
 
 def optimize(
     vbt,
@@ -69,13 +72,19 @@ def optimize(
     if len(combinations) == 0:
         return _empty_optimization_result('No valid parameter combinations')
 
-    # Limit combinations
+    # Limit combinations. The full grid size is reported as totalCombinations so the
+    # UI can say how much of the space was searched (both fields used to be the
+    # truncated count).
+    total_combinations = len(combinations)
     if len(combinations) > max_iterations:
         if method == 'random':
             np.random.shuffle(combinations)
             combinations = combinations[:max_iterations]
         else:
-            combinations = combinations[:max_iterations]
+            # An evenly strided subset of the grid: the first N in product order only
+            # ever varied the last parameter, leaving the rest of the space untested.
+            pick = np.unique(np.linspace(0, len(combinations) - 1, max_iterations).round().astype(int))
+            combinations = [combinations[i] for i in pick]
 
     # Run vectorized optimization
     results = _run_vectorized_optimization(
@@ -109,11 +118,17 @@ def optimize(
         'bestParameters': best['parameters'],
         'bestObjectiveValue': best['objective_value'],
         'bestPerformance': best.get('performance', {}),
-        'iterations': len(combinations),
-        'totalCombinations': len(combinations),
+        'iterations': len(results),
+        'totalCombinations': total_combinations,
+        'truncated': total_combinations > len(combinations),
         'method': method,
         'objective': objective,
-        'allResults': results[:100],  # Top 100 results
+        # Every evaluated combination (sorted best first) so the UI can draw the full
+        # parameter heatmap; capped only as a payload guard. It used to be the top 100,
+        # which left most of a 2-parameter grid blank.
+        'allResults': results[:MAX_RETURNED_RESULTS],
+        'resultsReturned': min(len(results), MAX_RETURNED_RESULTS),
+        'paramNames': param_names,
         'parameterSensitivity': _calculate_sensitivity(results, param_names),
         'walkForward': walk_forward_results,
         'statisticalSignificance': random_benchmark,
@@ -158,6 +173,7 @@ def walk_forward_optimize(
     n = len(close_series)
     window_size = n // n_splits
     results = []
+    oos_points = []
 
     for i in range(n_splits):
         check_cancelled(request)
@@ -188,23 +204,48 @@ def walk_forward_optimize(
 
         best_params = opt_result['bestParameters']
 
-        # Validate on test data
-        test_perf = _evaluate_params(
-            vbt, test_data, strategy_type, best_params,
-            initial_capital, request
+        # Validate on test data. The strategy runs over the test window PLUS the bars
+        # before it that its indicators need: run on the test bars alone, a 20-bar SMA
+        # never warmed up inside a 15-bar window, so every window traded nothing and
+        # the walk-forward read 0.00 % everywhere. Metrics are then taken from the
+        # test-window part of the equity curve only.
+        test_start_pos = start_idx + train_end
+        warm = _warmup_bars(best_params)
+        eval_data = close_series.iloc[max(0, test_start_pos - warm):end_idx]
+        test_perf, test_values = _evaluate_params(
+            vbt, eval_data, strategy_type, best_params,
+            initial_capital, request, with_equity=True
         )
+        if test_values is not None and len(eval_data) > len(test_data):
+            test_values = test_values.loc[test_data.index[0]:]
+            test_perf = _perf_from_equity(test_values, test_perf)
 
+        # Stitched out-of-sample equity: each test window's curve, rescaled to start
+        # where the previous one ended (what trading the walk-forward live would have
+        # produced, gaps between windows excluded).
+        if test_values is not None and len(test_values) > 1 and float(test_values.iloc[0]) > 0:
+            scale = (oos_points[-1]['equity'] if oos_points else float(initial_capital)) / float(test_values.iloc[0])
+            for ts, v in test_values.items():
+                oos_points.append({'date': str(ts).split(' ')[0] if _daily_index(test_values.index) else str(ts)[:19],
+                                   'equity': float(v) * scale, 'window': i + 1})
+
+        best_perf = opt_result.get('bestPerformance', {})
         results.append({
             'window': i + 1,
             'trainStart': str(train_data.index[0]).split(' ')[0],
             'trainEnd': str(train_data.index[-1]).split(' ')[0],
             'testStart': str(test_data.index[0]).split(' ')[0],
             'testEnd': str(test_data.index[-1]).split(' ')[0],
+            'trainBars': int(len(train_data)),
+            'testBars': int(len(test_data)),
             'bestParams': best_params,
-            'inSampleReturn': opt_result.get('bestPerformance', {}).get('totalReturn', 0),
-            'inSampleSharpe': opt_result.get('bestPerformance', {}).get('sharpeRatio', 0),
+            'inSampleReturn': best_perf.get('totalReturn', 0),
+            'inSampleSharpe': best_perf.get('sharpeRatio', 0),
+            'inSampleMaxDrawdown': best_perf.get('maxDrawdown', 0),
             'outOfSampleReturn': test_perf.get('totalReturn', 0),
             'outOfSampleSharpe': test_perf.get('sharpeRatio', 0),
+            'outOfSampleMaxDrawdown': test_perf.get('maxDrawdown', 0),
+            'outOfSampleTrades': test_perf.get('totalTrades', 0),
         })
 
     if not results:
@@ -216,6 +257,7 @@ def walk_forward_optimize(
 
     return {
         'success': True,
+        'oosEquity': oos_points,
         'windows': results,
         'nWindows': len(results),
         'avgOosReturn': float(np.mean(oos_returns)),
@@ -376,11 +418,62 @@ def _get_objective_value(portfolio, objective: str) -> float:
         return -999.0
 
 
+def _daily_index(index) -> bool:
+    """True when no bar of `index` carries a time of day."""
+    try:
+        idx = pd.DatetimeIndex(index)
+        return not bool(((idx.hour != 0) | (idx.minute != 0) | (idx.second != 0)).any())
+    except Exception:
+        return True
+
+
+def _warmup_bars(params: Dict[str, Any]) -> int:
+    """Bars of history a parameter set's indicators need before they produce values:
+    the largest integer period-like parameter, doubled (EMA / MACD settle slowly),
+    at least 30."""
+    longest = 0
+    for v in (params or {}).values():
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(f) and f >= 2 and float(f).is_integer():
+            longest = max(longest, int(f))
+    return max(30, 2 * longest)
+
+
+def _perf_from_equity(values: pd.Series, fallback: Dict[str, Any]) -> Dict[str, Any]:
+    """Return / Sharpe / Sortino / max drawdown of an equity slice (rebased to its first
+    value); the trade count stays the evaluated run's."""
+    perf = dict(fallback)
+    v = values.dropna()
+    if len(v) < 2 or float(v.iloc[0]) <= 0:
+        return perf
+    rets = v.pct_change().dropna()
+    # Bars per year from the slice itself (252 for stocks, 365 for crypto, more intraday).
+    ann = np.sqrt(252.0)
+    try:
+        span_days = (v.index[-1] - v.index[0]).total_seconds() / 86400.0
+        if span_days > 0:
+            ann = np.sqrt(max(1.0, (len(v) - 1) / span_days * 365.25))
+    except Exception:
+        pass
+    std = float(rets.std()) if len(rets) > 1 else 0.0
+    down = rets[rets < 0]
+    dstd = float(down.std()) if len(down) > 1 else 0.0
+    perf['totalReturn'] = float(v.iloc[-1] / v.iloc[0] - 1.0)
+    perf['sharpeRatio'] = float(rets.mean() / std * ann) if std > 0 else 0.0
+    perf['sortinoRatio'] = float(rets.mean() / dstd * ann) if dstd > 0 else 0.0
+    perf['maxDrawdown'] = float(abs((v / v.cummax() - 1.0).min()))
+    return perf
+
+
 def _evaluate_params(
     vbt, close_series, strategy_type, params,
-    initial_capital, request
-) -> Dict[str, float]:
-    """Evaluate a single parameter set and return performance metrics."""
+    initial_capital, request, with_equity: bool = False
+):
+    """Evaluate a single parameter set and return performance metrics
+    (and, with `with_equity`, a (metrics, equity Series or None) pair)."""
 
     try:
         portfolio = _signals_and_portfolio(vbt, close_series, strategy_type, params, initial_capital, request)
@@ -395,15 +488,23 @@ def _evaluate_params(
             except:
                 return default
 
-        return {
+        perf = {
             'totalReturn': total_return,
             'sharpeRatio': safe_s('Sharpe Ratio'),
             'sortinoRatio': safe_s('Sortino Ratio'),
             'maxDrawdown': abs(safe_s('Max Drawdown [%]')) / 100,
             'totalTrades': int(safe_s('Total Trades')),
         }
+        if with_equity:
+            try:
+                values = portfolio.value()
+            except Exception:
+                values = None
+            return perf, values
+        return perf
     except Exception:
-        return {'totalReturn': 0, 'sharpeRatio': 0, 'sortinoRatio': 0, 'maxDrawdown': 0, 'totalTrades': 0}
+        perf = {'totalReturn': 0, 'sharpeRatio': 0, 'sortinoRatio': 0, 'maxDrawdown': 0, 'totalTrades': 0}
+        return (perf, None) if with_equity else perf
 
 
 def _walk_forward_optimization(
@@ -473,7 +574,8 @@ def _calculate_significance(
     p_value = 0.5 * (1 - _erf(z_score / np.sqrt(2)))
 
     return {
-        'significant': p_value < 0.05,
+        # bool(): a numpy bool is serialised by json_response's default=str as "True".
+        'significant': bool(p_value < 0.05),
         'pValue': float(p_value),
         'zScore': float(z_score),
         'bestVsMean': float(best - mean_obj),

@@ -30,6 +30,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG = "FyersWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_fyers_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG, key, 0);
+    } else if (Logger::instance().transition(TAG, key, 1)) {
+        LOG_WARN(TAG, "Fyers WS disconnected");
+    } else {
+        LOG_DEBUG(TAG, "Fyers WS still disconnected");
+    }
+}
+
 // ── Segment code → name mapping ────────────────────────────────────────────
 
 static QString segment_name(const QString& code) {
@@ -222,11 +237,15 @@ FyersWebSocket::FyersWebSocket(const QString& client_id, const QString& access_t
 
 void FyersWebSocket::open() {
     if (hsm_key_.isEmpty()) {
-        LOG_ERROR(TAG, "Cannot connect — failed to extract hsm_key from JWT");
+        LOG_ERROR(TAG, logf("Cannot connect, the access token carries no HSM key",
+                            {{"reason", access_token_.isEmpty()            ? "token_missing"
+                                        : access_token_.count('.') < 2 ? "not_a_jwt"
+                                                                       : "hsm_key_claim_missing"}}));
         emit error_occurred("hsm_key extraction failed");
         return;
     }
-    LOG_INFO(TAG, QString("Connecting to HSM (hsm_key=%1...)").arg(hsm_key_.left(8)));
+    // Never log the HSM key (no part of it).
+    LOG_DEBUG(TAG, "Connecting to Fyers HSM");
     ws_->connect_to(QString(kWsUrl));
 }
 
@@ -286,7 +305,7 @@ void FyersWebSocket::clear_subscriptions() {
 // ── Connection slots ───────────────────────────────────────────────────────
 
 void FyersWebSocket::on_ws_connected() {
-    LOG_INFO(TAG, "WS transport connected — sending auth");
+    LOG_DEBUG(TAG, "WS transport connected — sending auth");
     authenticated_ = false;
     msg_count_ = 0;
     ws_->send_binary(build_auth_message());
@@ -295,12 +314,13 @@ void FyersWebSocket::on_ws_connected() {
 void FyersWebSocket::on_ws_disconnected() {
     ping_timer_->stop();
     authenticated_ = false;
-    LOG_WARN(TAG, "Disconnected");
+    log_fyers_stream_state(this, false);
     emit disconnected();
 }
 
 void FyersWebSocket::on_text_message(const QString& msg) {
-    LOG_INFO(TAG, QString("Text: %1").arg(msg.left(200)));
+    // Per frame: size only (frames carry account data), at most one line a minute.
+    LOG_DEBUG_RL(TAG, QStringLiteral("text_frame"), 60000, logf("Text frame", {{"bytes", msg.size()}}));
 }
 
 void FyersWebSocket::on_binary_message(const QByteArray& data) {
@@ -344,11 +364,12 @@ void FyersWebSocket::on_binary_message(const QByteArray& data) {
                         ack_interval_ = read_u32_be(buf + pos);
                 }
                 authenticated_ = true;
-                LOG_INFO(TAG, QString("Auth OK (ack_interval=%1) — sending full mode").arg(ack_interval_));
+                LOG_DEBUG(TAG, QString("Auth OK (ack_interval=%1) — sending full mode").arg(ack_interval_));
                 ws_->send_binary(build_mode_message(false));
                 ping_timer_->start();
                 if (!subscribed_symbols_.isEmpty())
                     resolve_and_subscribe(subscribed_symbols_);
+                log_fyers_stream_state(this, true);
                 emit connected();
             } else {
                 LOG_ERROR(TAG, QString("Auth failed: %1").arg(val));
@@ -357,7 +378,7 @@ void FyersWebSocket::on_binary_message(const QByteArray& data) {
             break;
         }
         case 4: // Subscribe ACK
-            LOG_INFO(TAG, "Subscribe acknowledged");
+            LOG_DEBUG(TAG, "Subscribe acknowledged");
             break;
         case 5: // Unsubscribe ACK
             LOG_DEBUG(TAG, "Unsubscribe acknowledged");
@@ -366,7 +387,7 @@ void FyersWebSocket::on_binary_message(const QByteArray& data) {
             parse_data_feed(data, 3);
             break;
         case 12: // Mode ACK
-            LOG_INFO(TAG, "Mode set acknowledged");
+            LOG_DEBUG(TAG, "Mode set acknowledged");
             break;
         default:
             LOG_DEBUG(TAG, QString("Unknown resp_type=%1 (size=%2)").arg(resp_type).arg(sz));
@@ -405,7 +426,9 @@ void FyersWebSocket::parse_data_feed(const QByteArray& data, int offset) {
                 parse_lite_update(buf, sz, offset);
                 break;
             default:
-                LOG_WARN(TAG, QString("Unknown data_type=%1 at offset %2").arg(data_type).arg(offset));
+                // Per frame: at most one line a minute per unknown type.
+                LOG_WARN_RL(TAG, QStringLiteral("data_type:%1").arg(data_type), 60000,
+                            QString("Unknown data_type=%1 at offset %2").arg(data_type).arg(offset));
                 return; // Can't safely skip unknown types
         }
     }
@@ -487,7 +510,7 @@ void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
     ts.precision = precision;
     ts.fields = fields;
 
-    LOG_INFO(TAG, QString("Snapshot: topic=%1 id=%2 sym=%3 exch=%4 prec=%5 mul=%6 fields=%7")
+    LOG_DEBUG(TAG, QString("Snapshot: topic=%1 id=%2 sym=%3 exch=%4 prec=%5 mul=%6 fields=%7")
                       .arg(topic_name)
                       .arg(topic_id)
                       .arg(symbol_name)
@@ -666,20 +689,7 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
             arr.append(s);
         QJsonObject body;
         body["symbols"] = arr;
-        {
-            // [subdbg] F&O symbols being sent for token resolution (equities omitted
-            // to keep the line readable). Lets us confirm a held option is actually
-            // requested — and below, whether Fyers resolved or rejected it.
-            QStringList fno;
-            for (const auto& s : fyers_syms)
-                if (!s.endsWith(QLatin1String("-EQ")) &&
-                    (s.contains(QLatin1String("CE")) || s.contains(QLatin1String("PE")) ||
-                     s.contains(QLatin1String("FUT"))))
-                    fno << s;
-            LOG_INFO(
-                "subdbg",
-                QString("resolve_and_subscribe: sending %1 syms, F&O=[%2]").arg(fyers_syms.size()).arg(fno.join(',')));
-        }
+        LOG_DEBUG("FyersWS", logf("Resolving symbols to feed topics", {{"count", fyers_syms.size()}}));
 
         auto resp = BrokerHttp::instance().post_json(QStringLiteral("https://api-t1.fyers.in/data/symbol-token"), body,
                                                      {{"Authorization", auth}, {"Content-Type", "application/json"}});
@@ -697,17 +707,16 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
                 topics.append(QStringLiteral("sf|%1|%2").arg(seg, exch_token));
                 topics.append(QStringLiteral("dp|%1|%2").arg(seg, exch_token));
             }
-            LOG_INFO("FyersWS", QString("Resolved %1 symbols → %2 topics").arg(fyers_syms.size()).arg(topics.size()));
-            // [subdbg] any symbols we SENT that Fyers did NOT return as valid —
+            LOG_DEBUG("FyersWS", QString("Resolved %1 symbols → %2 topics").arg(fyers_syms.size()).arg(topics.size()));
+            // Any symbols we SENT that Fyers did NOT return as valid —
             // these silently get no live feed (the suspected option failure mode).
             QStringList unresolved;
             for (const auto& s : fyers_syms)
                 if (!valid.contains(s))
                     unresolved << s;
             if (!unresolved.isEmpty())
-                LOG_WARN("subdbg", QString("resolve_and_subscribe: %1 UNRESOLVED (no feed): [%2]")
-                                       .arg(unresolved.size())
-                                       .arg(unresolved.join(',')));
+                LOG_WARN("FyersWS", logf("Symbols have no Fyers live feed, not subscribed",
+                                         {{"count", unresolved.size()}, {"symbol", unresolved.join(',')}}));
             for (const auto& t : topics)
                 LOG_DEBUG("FyersWS", QString("  topic: %1").arg(t));
         } else {
@@ -723,7 +732,7 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
                     if (!self->subscribed_topics_.contains(t))
                         self->subscribed_topics_.append(t);
                 self->ws_->send_binary(self->build_subscribe_message(topics));
-                LOG_INFO("FyersWS", QString("Sent subscribe for %1 topics").arg(topics.size()));
+                LOG_DEBUG("FyersWS", QString("Sent subscribe for %1 topics").arg(topics.size()));
             },
             Qt::QueuedConnection);
     });

@@ -1,132 +1,70 @@
 // src/screens/equity_research/EquityFinancialsTab.h
+//
+// Equity Research → Financials. Wires the free statements feed (EquityResearchService::
+// fetch_financials → yfinance_data.py financials: annual, quarterly and Yahoo-TTM statements)
+// to EquityFinancialsView, which holds the whole UI:
+//   * statements load with the symbol behind a skeleton; the analytics (fin_an) are computed on a
+//     worker thread, never on the GUI thread;
+//   * each symbol's result is remembered for the session: re-opening it shows it at once and only
+//     refreshes it quietly once it is older than 24 h (the service also replays its 30-day saved
+//     copy, flagged, while it refreshes);
+//   * failures: an error page with RETRY when nothing is on screen, a notice when a refresh fails,
+//     a designed page for instruments without statements (ETFs, indices, crypto);
+//   * PEERS reuses the peer group the Peers / Valuation tabs load (same service and cache, free).
+// Nothing here calls a billed route.
 #pragma once
-#include "services/equity/EquityResearchModels.h"
-#include "ui/widgets/LoadingOverlay.h"
 
-#include <QChartView>
-#include <QLabel>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QTableWidget>
+#include "screens/equity_research/EquityFinancialsCommon.h"
+#include "services/equity/EquityResearchModels.h"
+
+#include <QFutureWatcher>
+#include <QHash>
+#include <QStringList>
 #include <QWidget>
 
+namespace fincept::services::equity {
+struct LoadFailure;
+}
+
 namespace fincept::screens {
+
+class EquityFinancialsView;
 
 class EquityFinancialsTab : public QWidget {
     Q_OBJECT
   public:
     explicit EquityFinancialsTab(QWidget* parent = nullptr);
+    ~EquityFinancialsTab() override;
     void set_symbol(const QString& symbol);
-
-  protected:
-    void changeEvent(QEvent* event) override;
+    /// Section routing hook (for an ISectionLinked-style router; the Equity Research screen does
+    /// not route sections yet): "overview" | "income" | "balance" | "cashflow" | "ratios" | "peers".
+    void show_section(const QString& key);
 
   private slots:
     void on_financials_loaded(services::equity::FinancialsData data);
 
   private:
-    void build_ui();
-    void retranslateUi();
-    void rebuild_views(); ///< Tear down + rebuild stack_ pages so new locale text flows through.
-
-    // Statement view builders
-    QWidget* build_income_view();
-    QWidget* build_balance_view();
-    QWidget* build_cashflow_view();
-
-    // Populate helpers
-    void populate_income_view(const services::equity::FinancialsData& d);
-    void populate_balance_view(const services::equity::FinancialsData& d);
-    void populate_cashflow_view(const services::equity::FinancialsData& d);
-    void populate_table(QTableWidget* tbl, const QVector<QPair<QString, QJsonObject>>& stmt);
-    void rebuild_revenue_chart(const services::equity::FinancialsData& d);
-    void rebuild_margin_chart(const services::equity::FinancialsData& d);
-    void rebuild_balance_chart(const services::equity::FinancialsData& d);
-    void rebuild_cashflow_chart(const services::equity::FinancialsData& d);
-    void rebuild_return_chart(const services::equity::FinancialsData& d);
-
-    // Helpers
-    static double get_val(const QJsonObject& o, const QStringList& keys);
-    static QString fmt_large(double v);
-    static QString fmt_pct(double v);
-    static QString fmt_ratio(double v);
+    void on_load_failed(const services::equity::LoadFailure& f);
+    void request();
+    void compute();
+    void on_computed();
+    void remember(const FinBundlePtr& bundle);
+    void request_peers();
 
     QString current_symbol_;
-    bool loaded_ = false;
-
-    // Statement selector buttons
-    QPushButton* btn_income_ = nullptr;
-    QPushButton* btn_balance_ = nullptr;
-    QPushButton* btn_cashflow_ = nullptr;
-    QPushButton* btn_export_csv_ = nullptr;
-    QLabel* period_note_ = nullptr; ///< "Annual · fiscal years · as reported" + freshness
-
-    QStackedWidget* stack_ = nullptr;
-
-    // ── Income statement widgets ───────────────────────────────────────────────
-    QLabel* inc_revenue_val_ = nullptr;
-    QLabel* inc_revenue_sub_ = nullptr;
-    QLabel* inc_gross_val_ = nullptr;
-    QLabel* inc_gross_sub_ = nullptr;
-    QLabel* inc_opincome_val_ = nullptr;
-    QLabel* inc_opincome_sub_ = nullptr;
-    QLabel* inc_netincome_val_ = nullptr;
-    QLabel* inc_netincome_sub_ = nullptr;
-    QLabel* inc_ebitda_val_ = nullptr;
-    QLabel* inc_ebitda_sub_ = nullptr;
-    QLabel* inc_gross_margin_ = nullptr;
-    QLabel* inc_op_margin_ = nullptr;
-    QLabel* inc_net_margin_ = nullptr;
-    QLabel* inc_ebitda_margin_ = nullptr;
-    QChartView* inc_revenue_chart_ = nullptr;
-    QChartView* inc_margin_chart_ = nullptr;
-    QTableWidget* inc_table_ = nullptr;
-
-    // DuPont labels (income view)
-    QLabel* dupont_net_margin_ = nullptr;
-    QLabel* dupont_asset_turn_ = nullptr;
-    QLabel* dupont_eq_mult_ = nullptr;
-    QLabel* dupont_roe_result_ = nullptr;
-
-    // Return metrics
-    QLabel* ret_roe_val_ = nullptr;
-    QLabel* ret_roa_val_ = nullptr;
-    QLabel* ret_roic_val_ = nullptr;
-    QLabel* ret_roce_val_ = nullptr;
-    QChartView* ret_chart_ = nullptr;
-
-    // ── Balance sheet widgets ──────────────────────────────────────────────────
-    QLabel* bal_assets_val_ = nullptr;
-    QLabel* bal_liabilities_val_ = nullptr;
-    QLabel* bal_equity_val_ = nullptr;
-    QLabel* bal_debt_val_ = nullptr;
-    QLabel* bal_cash_val_ = nullptr;
-    QLabel* bal_current_ratio_ = nullptr;
-    QLabel* bal_quick_ratio_ = nullptr;
-    QLabel* bal_debt_equity_ = nullptr;
-    QLabel* bal_debt_assets_ = nullptr;
-    QLabel* bal_int_coverage_ = nullptr;
-    QLabel* bal_working_cap_ = nullptr;
-    QChartView* bal_chart_ = nullptr;
-    QTableWidget* bal_table_ = nullptr;
-
-    // ── Cash flow widgets ──────────────────────────────────────────────────────
-    QLabel* cf_operating_val_ = nullptr;
-    QLabel* cf_investing_val_ = nullptr;
-    QLabel* cf_financing_val_ = nullptr;
-    QLabel* cf_capex_val_ = nullptr;
-    QLabel* cf_fcf_val_ = nullptr;
-    QLabel* cf_fcf_sub_ = nullptr;
-    QLabel* cf_dividends_val_ = nullptr;
-    QLabel* cf_buybacks_val_ = nullptr;
-    QLabel* cf_fcf_margin_ = nullptr;
-    QLabel* cf_capex_rev_ = nullptr;
-    QChartView* cf_chart_ = nullptr;
-    QTableWidget* cf_table_ = nullptr;
-
-    services::equity::FinancialsData cached_data_;
-
-    ui::LoadingOverlay* loading_overlay_ = nullptr;
+    services::equity::FinancialsData raw_;
+    bool have_raw_ = false;
+    services::equity::StockInfo info_;
+    EquityFinancialsView* view_ = nullptr;
+    QFutureWatcher<FinBundlePtr>* watcher_ = nullptr;
+    QHash<QString, FinBundlePtr> memo_; ///< this session's results by symbol (LRU, kMemoSize)
+    QStringList memo_order_;
+    bool peers_pending_ = false;
+    /// A failure that arrived while the statements replayed with it were still being computed.
+    QString pending_failure_;
+    QString pending_failure_code_;
+    static constexpr int kMemoSize = 12;
+    static constexpr qint64 kQuietRefreshSec = 24 * 3600;
 };
 
 } // namespace fincept::screens

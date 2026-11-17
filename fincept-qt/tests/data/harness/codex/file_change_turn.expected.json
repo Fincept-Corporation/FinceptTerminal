@@ -1,0 +1,62 @@
+{
+  "parser": "codex",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "thinking",
+      "ref": "item_0"
+    },
+    {
+      "kind": "command",
+      "ref": "item_1"
+    },
+    {
+      "kind": "command",
+      "ref": "item_1"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "item_2"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "item_2",
+      "error": false
+    },
+    {
+      "kind": "file_change",
+      "ref": "item_3"
+    },
+    {
+      "kind": "text",
+      "ref": "item_4"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "0199a213-81c0-7800-8aa1-bbab2a035a53",
+  "input_tokens": 24763,
+  "output_tokens": 122,
+  "cached_tokens": 24448,
+  "final_text": "Updated README.md and added NOTES.md.",
+  "saw_result": true,
+  "result_is_error": false,
+  "tool_calls": 1,
+  "file_changes": [
+    [
+      "update",
+      "README.md"
+    ],
+    [
+      "add",
+      "NOTES.md"
+    ]
+  ],
+  "input": "file_change_turn.jsonl"
+}

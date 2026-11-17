@@ -1,4 +1,5 @@
 #include "screens/node_editor/canvas/EdgeItem.h"
+#include "ui/theme/Theme.h"
 
 #include "screens/node_editor/canvas/PortItem.h"
 #include "ui/theme/ThemeManager.h"
@@ -113,10 +114,10 @@ void EdgeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
     menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                               "  font-family: Consolas; font-size: 12px; }"
+                               "  font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                                "QMenu::item { padding: 4px 20px; }"
                                "QMenu::item:selected { background: %4; color: %5; }")
-                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.negative, tm.text_primary));
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_med, tm.danger, tm.text_on_accent));
     auto* del = menu.addAction(tr("Delete Connection"));
     if (menu.exec(event->screenPos()) == del)
         emit delete_requested(id_);

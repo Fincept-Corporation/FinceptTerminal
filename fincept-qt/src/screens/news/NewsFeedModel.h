@@ -6,6 +6,7 @@
 #include <QAbstractListModel>
 #include <QHash>
 #include <QSet>
+#include <QStringList>
 #include <QVector>
 
 namespace fincept::screens {
@@ -33,6 +34,10 @@ enum NewsFeedRole {
     FormattedTickersRole, // "$AAPL $MSFT" pre-joined string
     ThreatColorRole,      // threat_level_color() string
     PriorityColorRole,    // priority_color() string
+    DuplicateCountRole,   // other sources carrying the same headline (WIRE view, collapsed)
+    EventLabelRole,       // short market-impact event label ("RATES", "EARN", "M&A" ...)
+    EarningsBadgeRole,    // "ER 3d" when a tagged ticker reports soon; empty otherwise
+    CardHeightRole,       // CLUSTERS: number of "also" lines the card shows
 };
 
 /// QAbstractListModel holding article/cluster data for QListView.
@@ -52,9 +57,20 @@ class NewsFeedModel : public QAbstractListModel {
     void set_monitor_matches(const QMap<QString, QVector<services::NewsArticle>>& matches,
                              const QVector<services::NewsMonitor>& monitors);
 
-    void mark_all_seen();
+    /// Mark every row of the active view seen; returns the ids that were unseen
+    /// (the caller persists them).
+    QStringList mark_all_seen();
     void mark_seen(const QString& article_id);
     int unseen_count() const;
+    bool is_seen(const QString& article_id) const { return seen_ids_.contains(article_id); }
+    /// Snapshot of the read set (implicitly shared — cheap to copy) for the
+    /// filter worker's UNREAD filter.
+    QSet<QString> seen_ids() const { return seen_ids_; }
+
+    /// WIRE view: how many other sources carried each shown headline (lead id -> count).
+    void set_duplicate_counts(const QHash<QString, int>& counts);
+    /// Upcoming earnings per symbol ("AAPL" -> days until the report, 0 = today).
+    void set_earnings_days(const QHash<QString, int>& days);
 
     void set_geo_articles(const QSet<QString>& geolocated_ids);
     void advance_pulse(); // called by timer to animate new-item pulse
@@ -68,6 +84,12 @@ class NewsFeedModel : public QAbstractListModel {
     QString monitor_color_for(const QString& article_id) const;
     /// Recount unseen rows for the ACTIVE view mode (WIRE rows or cluster leads).
     void recount_unseen();
+    /// Full hover text of an article: headline, source, absolute time with zone,
+    /// language, tone, impact, tags with confidence.
+    QString tooltip_for(const services::NewsArticle& a, int duplicates) const;
+    QString earnings_badge_for(const services::NewsArticle& a) const;
+    QHash<QString, int> duplicate_counts_;
+    QHash<QString, int> earnings_days_;
 
     QVector<services::NewsArticle> articles_;
     QVector<services::NewsCluster> clusters_;
@@ -83,12 +105,13 @@ class NewsFeedModel : public QAbstractListModel {
 
     // Per-row pre-formatted display strings — avoids string allocations in paint()
     struct FormattedRow {
-        QString source;  // source.left(10).toUpper()
+        QString source;  // source.toUpper() (the delegate elides to the column)
         QString lang;    // lang.toUpper()
         QString threat;  // threat_level_string().left(4) or ""
         QString tickers; // "$AAPL $MSFT" or ""
         QString threat_color;
         QString priority_color;
+        QString event;   // "RATES", "EARN", "M&A" ...
     };
     QVector<FormattedRow> formatted_rows_;
 };

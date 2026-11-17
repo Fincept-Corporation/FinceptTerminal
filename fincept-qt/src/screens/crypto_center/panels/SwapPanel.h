@@ -88,7 +88,11 @@ class SwapPanel : public QWidget {
     bool is_supported_pair() const;
     QString unsupported_pair_message() const;
     int slippage_pct() const;
-    int slippage_bps() const;
+    /// Saved tolerance in bps. When it cannot be read: the tightest one (100 bps,
+    /// never a wider default) and `read_error` set; nothing is written.
+    int slippage_bps(QString* read_error = nullptr) const;
+    /// slippage_label_ text, with a note when the saved tolerance cannot be read.
+    void show_slippage();
 
     /// Poll `getSignatureStatuses` after `sign_and_send` until the tx is
     /// confirmed, errored, or the attempt cap is reached. Owned by a parented

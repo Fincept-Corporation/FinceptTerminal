@@ -9,8 +9,126 @@ Guardrails, Evaluation, Tracing, Compression, Hooks, Structured Outputs.
 from typing import Dict, Any, Optional, List
 import logging
 import json
+import os
 
 logger = logging.getLogger(__name__)
+
+
+# Agent Studio's CREATE tab spells a few options differently from the embedder
+# registry; saved agent configs keep that spelling, so both are accepted.
+_UI_EMBEDDER_ALIASES = {
+    "sentence-transformers": "sentence_transformer",
+    "sentence_transformers": "sentence_transformer",
+}
+
+
+def _ui_str(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _parse_json_answer(text: str) -> Any:
+    """JSON from a model answer: as is, else without ```json fences, else the
+    outermost {...} span. Raises ValueError when none of them parses."""
+    s = text.strip()
+    try:
+        return json.loads(s)
+    except ValueError:
+        pass
+    if s.startswith("```"):
+        body = s[3:]
+        if body[:4].lower() == "json":
+            body = body[4:]
+        if body.rstrip().endswith("```"):
+            body = body.rstrip()[:-3]
+        try:
+            return json.loads(body.strip())
+        except ValueError:
+            pass
+    start, end = s.find("{"), s.rfind("}")
+    if start != -1 and end > start:
+        return json.loads(s[start:end + 1])
+    raise ValueError("The model did not return JSON")
+
+
+def _ui_knowledge_config(ui_cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """CREATE tab KNOWLEDGE block {type, urls, vector_db, embedder} ->
+    KnowledgeModule.from_config shape {embedder, vectordb, documents}.
+    None when no source is listed (nothing to index)."""
+    sources = [_ui_str(u) for u in (ui_cfg.get("urls") or []) if _ui_str(u)]
+    if not sources:
+        return None
+    doc_type = _ui_str(ui_cfg.get("type")).lower() or "url"
+    documents = []
+    for src in sources:
+        t = doc_type
+        if t == "combined":
+            low = src.lower()
+            if low.startswith(("http://", "https://")):
+                t = "url"
+            elif low.endswith(".pdf"):
+                t = "pdf"
+            else:
+                t = "text"
+        documents.append({"source": src, "type": t})
+    out: Dict[str, Any] = {"documents": documents}
+    embedder = ui_cfg.get("embedder")
+    if isinstance(embedder, dict):
+        out["embedder"] = embedder
+    elif _ui_str(embedder):
+        provider = _ui_str(embedder).lower()
+        out["embedder"] = {"provider": _UI_EMBEDDER_ALIASES.get(provider, provider)}
+    vector_db = _ui_str(ui_cfg.get("vector_db")).lower()
+    if vector_db:
+        out["vectordb"] = {"type": vector_db}
+    return out
+
+
+def normalize_ui_config(config: Any) -> Any:
+    """Translate the CREATE tab's saved agent shape into the keys the agent
+    builders read. Idempotent; returns a new dict (the input is not changed).
+
+    The editor saves on/off flags (`knowledge`, `memory`, `storage`,
+    `agentic_memory`: bool) plus the options in separate blocks
+    (`knowledge_config`, `memory_config`, `storage_config`,
+    `agentic_memory_user_id`) that nothing read — so a ticked KNOWLEDGE gave no
+    RAG, STORAGE's options were ignored and memory sub-options changed nothing.
+    Existing saved configs keep that shape, so it is translated here rather than
+    changed in the editor.
+    """
+    if not isinstance(config, dict):
+        return config
+    out = dict(config)
+
+    kc = out.get("knowledge_config")
+    if out.get("knowledge") is True and isinstance(kc, dict):
+        knowledge = _ui_knowledge_config(kc)
+        if knowledge:
+            out["knowledge"] = knowledge
+
+    mc = out.get("memory_config")
+    if out.get("memory") is True and isinstance(mc, dict):
+        memory: Dict[str, Any] = {"enabled": True}
+        for key in ("db_path", "table_name"):
+            if _ui_str(mc.get(key)):
+                memory[key] = _ui_str(mc.get(key))
+        for key in ("create_user_memories", "create_session_summary"):
+            if key in mc:
+                memory[key] = bool(mc[key])
+        out["memory"] = memory
+
+    sc = out.get("storage_config")
+    if out.get("storage") is True and isinstance(sc, dict):
+        storage: Dict[str, Any] = {"type": _ui_str(sc.get("type")).lower() or "sqlite"}
+        for key in ("db_path", "table_name", "db_url"):
+            if _ui_str(sc.get(key)):
+                storage[key] = _ui_str(sc.get(key))
+        out["storage"] = storage
+
+    user_id = _ui_str(out.get("agentic_memory_user_id"))
+    if out.get("agentic_memory") is True and user_id:
+        out["agentic_memory"] = {"user_id": user_id}
+
+    return out
 
 
 class CoreAgent:
@@ -44,6 +162,11 @@ class CoreAgent:
         self.api_keys = api_keys or {}
         self.user_id = user_id
         self._modules = {}
+        # Notes from the last _create_agent() (tools that could not be loaded,
+        # ...) and from the persona used by the last run(). main.py returns
+        # them as the result's "warnings".
+        self.build_warnings: List[str] = []
+        self.last_warnings: List[str] = []
 
         # Advanced modules — kept as attrs for backward-compat with setup_* calls;
         # actual per-persona state lives inside PersonaRuntime instances.
@@ -91,6 +214,7 @@ class CoreAgent:
         Returns:
             Agent response
         """
+        config = normalize_ui_config(config)
         if session_id:
             config = {**config, "session_id": session_id}
 
@@ -113,6 +237,8 @@ class CoreAgent:
             config=config,
             api_keys=self.api_keys,
         )
+        runtime_warnings = getattr(runtime, "warnings", None)
+        self.last_warnings = list(runtime_warnings) if isinstance(runtime_warnings, list) else []
         return runtime.run(query, session_id=session_id, stream=stream)
 
     def run_team(
@@ -159,6 +285,7 @@ class CoreAgent:
         so a team-member Buffett reuses the same PersonaRuntime as a solo Buffett
         run, preserving memory/storage consistency across team/solo contexts.
         """
+        member_config = normalize_ui_config(member_config)
         resolved_user_id = self.user_id or member_config.get("user_id") or "default"
         resolved_agent_id = (
             member_config.get("agent_id")
@@ -191,11 +318,26 @@ class CoreAgent:
         config["output_model"] = model_class
         config["structured_outputs"] = True
 
+        # The model class itself is not handed to the agent builder, so the model
+        # answers in JSON only when asked to: spell out the expected schema.
+        schema = OutputModelRegistry.get_schema(output_model)
+        if schema:
+            query = (
+                f"{query}\n\nRespond ONLY with a single JSON object (no prose, no code fences) "
+                f"that matches this JSON schema:\n{json.dumps(schema, default=str)}"
+            )
+
         response = self.run(query, config, session_id)
+        # A failed run (no model configured, bad key, ...) used to surface as
+        # "The model did not return JSON" with the real cause in raw_response.
+        from finagent_core.run_errors import run_error_text
+        run_err = run_error_text(response)
+        if run_err:
+            return {"success": False, "model": output_model, "error": run_err}
         content = self.get_response_content(response)
 
         try:
-            data = json.loads(content) if isinstance(content, str) else content
+            data = _parse_json_answer(content) if isinstance(content, str) else content
             validation = OutputValidator.validate(data, output_model)
             return {
                 "success": True,
@@ -441,17 +583,38 @@ class CoreAgent:
         from finagent_core.modules import OutputModelRegistry
 
         tools = self.list_available_tools()
+        unavailable = {
+            "tools": ToolsRegistry.unavailable_tools(),
+            "model_providers": ModelsRegistry.unavailable_providers(),
+            "embedders": EmbedderRegistry.unavailable_providers(),
+            "vectordbs": VectorDBRegistry.unavailable_vectordbs(),
+        }
+        n_tools = sum(len(v) for v in tools.values())
+        n_models = len(ModelsRegistry.list_providers())
+        vectordbs = VectorDBRegistry.list_vectordbs()
+        embedders = EmbedderRegistry.list_providers()
         return {
             "success": True,
             "version": "2.0.0",
             "framework": "agno",
             "capabilities": {
-                "model_providers": len(ModelsRegistry.list_providers()),
-                "tools": sum(len(v) for v in tools.values()),
+                # Catalogue sizes (unchanged meaning) ...
+                "model_providers": n_models,
+                "tools": n_tools,
                 "tool_categories": list(tools.keys()),
-                "vectordbs": VectorDBRegistry.list_vectordbs(),
-                "embedders": EmbedderRegistry.list_providers(),
-                "output_models": OutputModelRegistry.list_models()
+                "vectordbs": vectordbs,
+                "embedders": embedders,
+                "output_models": OutputModelRegistry.list_models(),
+                # ... and what can actually load on this install. `unavailable`
+                # maps each entry that cannot load to the reason (usually the
+                # package to install), so the UI can grey it out.
+                "available_counts": {
+                    "tools": n_tools - len(unavailable["tools"]),
+                    "model_providers": n_models - len(unavailable["model_providers"]),
+                    "embedders": len(embedders) - len(unavailable["embedders"]),
+                    "vectordbs": len(vectordbs) - len(unavailable["vectordbs"]),
+                },
+                "unavailable": unavailable,
             },
             "features": [
                 "multi_agent_teams", "workflow_orchestration", "parallel_execution",
@@ -504,9 +667,12 @@ class CoreAgent:
                         parts.append(f"### Summary\n{coord_str}")
                 return "\n\n---\n\n".join(parts)
 
-        # Standard RunResponse / single-agent: .content attribute
-        if hasattr(response, 'content') and response.content is not None:
-            return str(response.content)
+        # Standard RunResponse / single-agent: .content attribute. A run that
+        # produced no text has content None; that is an empty answer, not the
+        # object's repr (the str() fallback below used to return
+        # "RunOutput(run_id=..., content=None, ...)" as the answer).
+        if hasattr(response, 'content'):
+            return "" if response.content is None else str(response.content)
 
         # Dict response (from custom models)
         if isinstance(response, dict):
@@ -550,6 +716,10 @@ class CoreAgent:
         """
         from agno.agent import Agent
         from finagent_core.registries import ModelsRegistry, ToolsRegistry
+
+        # CREATE-tab shape (bool flags + *_config blocks) -> builder keys.
+        config = normalize_ui_config(config)
+        self.build_warnings = []
 
         # =================================================================
         # 1. Create Model
@@ -616,10 +786,24 @@ class CoreAgent:
         all_tools = []
 
         if tool_names:
-            tools = ToolsRegistry.get_tools(tool_names, api_keys=self.api_keys)
+            # Names served by the terminal bridge (e.g. polymarket_get_markets)
+            # are loaded below by TerminalToolkit, not by the registry.
+            terminal_names = {d.get("name") for d in (config.get("terminal_tools") or [])
+                              if isinstance(d, dict)}
+            registry_names = [n for n in tool_names if n not in terminal_names]
+            # Substitutions (e.g. DuckDuckGo for an unconfigured Tavily) come back
+            # as notes and are reported with the run like a missing tool.
+            substitution_notes: List[str] = []
+            tools, unavailable = ToolsRegistry.resolve_tools(registry_names, api_keys=self.api_keys,
+                                                             notes=substitution_notes)
             all_tools.extend(tools)
-            if not tools:
-                logger.warning(f"No tools loaded from: {tool_names}")
+            self.build_warnings.extend(substitution_notes)
+            # A requested tool that cannot load used to be dropped at DEBUG level,
+            # so the agent answered without it and the user never knew.
+            for name, reason in unavailable.items():
+                self.build_warnings.append(f"Tool '{name}' is unavailable: {reason}")
+            if unavailable:
+                logger.warning(f"Tools unavailable for this agent: {unavailable}")
 
         # MCP servers — user-configured servers from the MCP tab
         # Format: [{"id", "name", "command", "args", "env", "transport"}]
@@ -662,13 +846,22 @@ class CoreAgent:
         enable_memory = memory_config if isinstance(memory_config, bool) else memory_config.get("enabled", False)
 
         if enable_memory:
+            # agno 2.x: the model manages memories through a tool (agentic
+            # memory) and stored memories are added to its context. The
+            # CREATE tab's "User Memories" / "Session Summary" boxes add an
+            # extra model call after each run, so they stay opt-in.
             agent_kwargs["enable_agentic_memory"] = True
             agent_kwargs["add_memories_to_context"] = True
+            mc = memory_config if isinstance(memory_config, dict) else {}
+            if mc.get("create_user_memories"):
+                agent_kwargs["update_memory_on_run"] = True
+            if mc.get("create_session_summary"):
+                agent_kwargs["enable_session_summaries"] = True
 
-            # Create memory backend if configured
+            # agno 2.x memory backend: a MemoryManager with its own db
             memory_backend = self._create_memory_backend(memory_config)
-            if memory_backend:
-                agent_kwargs["memory"] = memory_backend
+            if memory_backend is not None:
+                agent_kwargs["memory_manager"] = memory_backend
 
         # =================================================================
         # 6. Knowledge Base (RAG)
@@ -678,9 +871,14 @@ class CoreAgent:
 
         if enable_knowledge and isinstance(knowledge_config, dict):
             knowledge_setup = self._setup_knowledge(knowledge_config)
-            agent_kwargs.update(knowledge_setup)
-            agent_kwargs["search_knowledge"] = True
-            agent_kwargs["add_knowledge_to_context"] = True
+            if knowledge_setup:
+                agent_kwargs.update(knowledge_setup)
+                agent_kwargs["search_knowledge"] = True
+                agent_kwargs["add_knowledge_to_context"] = True
+        elif knowledge_config is True:
+            self.build_warnings.append(
+                "Knowledge is enabled but no sources (URLs or files) are configured; "
+                "the agent runs without a knowledge base.")
 
         # =================================================================
         # 7. Reasoning (Extended Thinking)
@@ -709,10 +907,10 @@ class CoreAgent:
                     agent_kwargs["reasoning_model"] = reasoning_model
 
         # =================================================================
-        # 8. Structured Outputs
+        # 8. Structured Outputs (agno 2.x renamed response_model -> output_schema)
         # =================================================================
         if config.get("response_model"):
-            agent_kwargs["response_model"] = config["response_model"]
+            agent_kwargs["output_schema"] = config["response_model"]
         elif config.get("structured_outputs"):
             agent_kwargs["structured_outputs"] = config["structured_outputs"]
 
@@ -739,46 +937,36 @@ class CoreAgent:
         # =================================================================
         # 11. Session/Storage for persistence
         # =================================================================
-        if config.get("session_id") or config.get("storage"):
+        # `storage: {}` (what build_agno_agent injects for a pre-built store) is
+        # "on with defaults"; the old truthiness test treated it as off, so a
+        # session store built for the persona was never attached.
+        storage_flag = config.get("storage")
+        storage_on = storage_flag is not None and storage_flag is not False
+        if config.get("session_id") or storage_on:
             storage = self._create_storage(config)
-            if storage:
-                agent_kwargs["storage"] = storage
+            if storage is not None:
+                # agno 2.x: sessions live in the agent's `db`; history of the
+                # session is replayed into the context on the next turn.
+                agent_kwargs["db"] = storage
+                agent_kwargs["add_history_to_context"] = True
 
         logger.debug(f"Creating agent with params: {list(agent_kwargs.keys())}")
         return Agent(**agent_kwargs)
 
     def _create_memory_backend(self, memory_config: Any) -> Optional[Any]:
-        """Create Agno memory backend."""
-        if isinstance(memory_config, bool):
-            return None
-
-        try:
-            from agno.memory import AgentMemory
-            from agno.memory.db.sqlite import SqliteMemoryDb
-
-            # A bare relative name used to resolve against the process cwd —
-            # the scripts directory, which dev builds prune and installs keep
-            # read-only. Default into the per-profile agent data dir instead.
-            from finagent_core.paths import agent_data_dir
-            db_path = memory_config.get("db_path") or str(agent_data_dir() / "agent_memory.db")
-            table_name = memory_config.get("table_name", "agent_memory")
-
-            db = SqliteMemoryDb(
-                table_name=table_name,
-                db_file=db_path,
-            )
-
-            return AgentMemory(
-                db=db,
-                create_user_memories=memory_config.get("create_user_memories", True),
-                create_session_summary=memory_config.get("create_session_summary", True),
-            )
-        except ImportError as e:
-            logger.warning(f"Memory backend not available: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Failed to create memory backend: {e}")
-            return None
+        """agno 2.x memory backend for agents built outside a PersonaRuntime
+        (the streaming path). Raises AgentFeatureUnavailable when it cannot be
+        built — memory used to be dropped silently."""
+        from finagent_core.paths import agent_data_dir
+        from finagent_core.persona_runtime import _build_memory_backend
+        mc = memory_config if isinstance(memory_config, dict) else {}
+        # A bare relative name used to resolve against the process cwd —
+        # the scripts directory, which dev builds prune and installs keep
+        # read-only. Default into the per-profile agent data dir instead.
+        db_path = mc.get("db_path") or ""
+        if not db_path or not os.path.isabs(db_path):
+            db_path = str(agent_data_dir() / (db_path or "agent_memory.db"))
+        return _build_memory_backend(db_path=db_path, table_name=mc.get("table_name") or "agent_memory")
 
     def _connect_mcp_servers(self, mcp_servers: List[Dict[str, Any]]) -> List[Any]:
         """
@@ -879,37 +1067,41 @@ class CoreAgent:
         return connected
 
     def _create_storage(self, config: Dict[str, Any]) -> Optional[Any]:
-        """Create storage backend for session persistence."""
-        try:
-            storage_config = config.get("storage", {})
-            storage_type = storage_config.get("type", "sqlite")
-
-            if storage_type == "sqlite":
-                from agno.storage.sqlite import SqliteStorage
-                from finagent_core.paths import agent_data_dir
-                return SqliteStorage(
-                    table_name=storage_config.get("table_name", "agent_sessions"),
-                    # Per-profile agent data dir, not the cwd (= scripts dir).
-                    db_file=storage_config.get("db_path") or str(agent_data_dir() / "agent_storage.db"),
-                )
-            elif storage_type == "postgres":
-                from agno.storage.postgres import PostgresStorage
-                return PostgresStorage(
-                    table_name=storage_config.get("table_name", "agent_sessions"),
-                    db_url=storage_config.get("db_url"),
-                )
-        except ImportError as e:
-            logger.warning(f"Storage backend not available: {e}")
-        except Exception as e:
-            logger.error(f"Failed to create storage: {e}")
-        return None
+        """agno 2.x session store (Agent `db`) for agents built outside a
+        PersonaRuntime. Raises AgentFeatureUnavailable naming what is missing
+        (it used to log and return None, so storage was silently off)."""
+        from finagent_core.paths import agent_data_dir
+        from finagent_core.persona_runtime import _build_storage_backend
+        storage_config = config.get("storage", {})
+        # The CREATE tab saves `storage: true` (a bool) — that means "on, defaults".
+        if not isinstance(storage_config, dict):
+            storage_config = {}
+        db_path = storage_config.get("db_path") or ""
+        if not db_path or not os.path.isabs(db_path):
+            # Per-profile agent data dir, not the cwd (= scripts dir).
+            db_path = str(agent_data_dir() / (db_path or "agent_storage.db"))
+        return _build_storage_backend(
+            db_path=db_path,
+            table_name=storage_config.get("table_name") or "agent_sessions",
+            storage_type=storage_config.get("type") or "sqlite",
+            db_url=storage_config.get("db_url"),
+        )
 
     def _setup_knowledge(self, knowledge_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Setup knowledge module."""
+        """Setup knowledge module. A knowledge base that cannot be built (no
+        embedder key, vector DB library missing, unreadable sources) raises
+        AgentFeatureUnavailable with the reason — it used to be logged and
+        skipped, so the agent answered without it and the user never knew."""
         from finagent_core.modules import KnowledgeModule
-        module = KnowledgeModule.from_config({**knowledge_config, "api_keys": self.api_keys})
+        from finagent_core.paths import agent_data_dir
+        cfg = {**knowledge_config, "api_keys": self.api_keys}
+        # Vector store under the per-profile agent data dir, not the cwd / /tmp.
+        cfg.setdefault("path", str(agent_data_dir() / "knowledge"))
+        module = KnowledgeModule.from_config(cfg)
+        agent_cfg = module.to_agent_config()
+        self.build_warnings.extend(module.warnings)
         self._modules["knowledge"] = module
-        return module.to_agent_config()
+        return agent_cfg
 
 # =============================================================================
 # Builder Pattern

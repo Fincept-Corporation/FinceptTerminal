@@ -3,9 +3,13 @@
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -35,9 +39,10 @@ OpenPositionsWidget::OpenPositionsWidget(const QJsonObject& cfg, QWidget* parent
     table_->setShowGrid(false);
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    // Fitted once after each fill (populate), not re-measured on every cell set.
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
+    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Interactive);
+    table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Interactive);
     table_->setToolTip(tr("Double-click a position to open it in Equity Trading"));
     vl->addWidget(table_, 1);
 
@@ -67,13 +72,39 @@ OpenPositionsWidget::OpenPositionsWidget(const QJsonObject& cfg, QWidget* parent
         ensure_stream_running();
         if (table_->rowCount() == 0)
             set_loading(true);
-        datahub::DataHub::instance().request(
-            trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions")), /*force=*/true);
+        datahub::DataHub::instance().request(positions_topic(), /*force=*/true);
+        update_session_state(); // a still-dead session says so again instead of spinning
+    });
+
+    // A dead broker session (expired token, connection error) used to end in the
+    // generic "No data yet": the poll fails silently. Name it in the header and,
+    // with nothing on screen, on the overlay.
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::connection_state_changed, this,
+            [this](const QString& account_id, trading::ConnectionState) {
+                if (account_id == account_id_)
+                    update_session_state();
+            });
+
+    // Settings > Currency & Number Format: re-format the positions on screen, no fetch.
+    ui::formatting::on_format_changed(this, [this]() {
+        if (!positions_.isEmpty())
+            populate(positions_);
     });
 
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
+}
+
+QString OpenPositionsWidget::positions_topic() const {
+    if (broker_id_.isEmpty() || account_id_.isEmpty())
+        return {};
+    return trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+}
+
+void OpenPositionsWidget::update_session_state() {
+    if (header_hint_ && !account_id_.isEmpty())
+        header_hint_->setText(broker_account_hint(account_id_, positions_topic()));
 }
 
 QJsonObject OpenPositionsWidget::config() const {
@@ -91,17 +122,26 @@ void OpenPositionsWidget::apply_config(const QJsonObject& cfg) {
     // Resolve broker_id from AccountManager for the topic key
     broker_id_.clear();
     if (!account_id_.isEmpty()) {
-        const auto acct = trading::AccountManager::instance().get_account(account_id_);
-        broker_id_ = acct.broker_id;
-        header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
+        hide_empty_state();
+        broker_id_ = trading::AccountManager::instance().get_account(account_id_).broker_id;
+        update_session_state();
     } else {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
     }
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
         ensure_stream_running();
         hub_resubscribe();
     }
+}
+
+void OpenPositionsWidget::show_no_account_state() {
+    // Class C (needs a broker login): explain and point to Equity Trading, never
+    // connect anything here. An account that becomes active fills the tile.
+    show_no_broker_account(tr("This tile lists the open positions of a broker account — quantity, average, last "
+                              "price and P&L, live."),
+                           [this]() { apply_config({}); });
 }
 
 QString OpenPositionsWidget::resolve_account_id() const {
@@ -120,17 +160,21 @@ void OpenPositionsWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
-    const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+    const QString topic = positions_topic();
     // Nothing on screen yet → show the loading state, so a disconnected account
     // ends in "No data yet" (BaseWidget watchdog) instead of a silent blank grid.
     if (table_->rowCount() == 0)
         set_loading(true);
-    hub.subscribe(this, topic, [this](const QVariant& v) {
+    // Producer errors on the positions topic replace the spinner / mark the tile STALE.
+    track_topics({topic});
+    hub.subscribe(this, topic, [this, topic](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerPosition>>())
             return;
+        note_topic_value(topic);
         populate(v.value<QVector<trading::BrokerPosition>>());
     });
     hub_active_ = true;
+    update_session_state();
 }
 
 void OpenPositionsWidget::hub_unsubscribe_all() {
@@ -154,6 +198,7 @@ void OpenPositionsWidget::hideEvent(QHideEvent* e) {
 }
 
 void OpenPositionsWidget::populate(const QVector<trading::BrokerPosition>& rows) {
+    positions_ = rows;
     // Cell items are reused between publishes (setText & co. skip unchanged
     // values) instead of allocating 5 per row per publish. Switching between the
     // empty-state message and data rows starts from clean cells, so no cell
@@ -189,25 +234,32 @@ void OpenPositionsWidget::populate(const QVector<trading::BrokerPosition>& rows)
     table_->setRowCount(static_cast<int>(rows.size()));
     const QColor pos_color(ui::colors::POSITIVE());
     const QColor neg_color(ui::colors::NEGATIVE());
+    // P&L in the broker account's own currency; unknown broker -> no unit (never a guessed one).
+    const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
+    const QString ccy = broker ? broker->profile().currency : QString();
     for (int i = 0; i < rows.size(); ++i) {
         const auto& p = rows[i];
         auto* sym = cell(i, 0);
         sym->setText(p.symbol);
         sym->setData(Qt::UserRole, p.exchange);
         auto* qty = cell(i, 1);
-        qty->setText(QString::number(p.quantity, 'f', 0));
+        // Fractional positions (0.5 share, 0.0123 BTC) used to print as "0" / "1";
+        // prices get the same adaptive decimals / grouping as the Holdings tile.
+        qty->setText(dash_fmt::quantity(p.quantity));
         qty->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         auto* avg = cell(i, 2);
-        avg->setText(QString::number(p.avg_price, 'f', 2));
+        avg->setText(dash_fmt::grouped(p.avg_price, dash_fmt::price_decimals(p.avg_price)));
         avg->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         auto* ltp = cell(i, 3);
-        ltp->setText(QString::number(p.ltp, 'f', 2));
+        ltp->setText(dash_fmt::grouped(p.ltp, dash_fmt::price_decimals(p.ltp)));
         ltp->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         auto* pnl = cell(i, 4);
-        pnl->setText(QString("%1%2").arg(p.pnl >= 0 ? "+" : "").arg(p.pnl, 0, 'f', 2));
+        pnl->setText(ui::formatting::signed_money(p.pnl, ccy));
         pnl->setForeground(p.pnl >= 0 ? pos_color : neg_color);
         pnl->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     }
+    for (int c = 1; c <= 3; ++c)
+        table_->resizeColumnToContents(c);
     set_loading(false);
 }
 
@@ -245,18 +297,20 @@ QDialog* OpenPositionsWidget::make_config_dialog(QWidget* parent) {
 
 void OpenPositionsWidget::on_theme_changed() {
     apply_styles();
+    if (table_->rowCount() > 0)
+        populate(positions_);
 }
 
 void OpenPositionsWidget::apply_styles() {
-    header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
-    table_->setStyleSheet(
-        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+    set_css_cached(header_hint_, 
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    set_css_cached(table_, 
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;border:none;}"
                 "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget::item{padding:2px 4px;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_TERTIARY()));
+                 ui::colors::TEXT_SECONDARY()));
 }
 
 void OpenPositionsWidget::retranslateUi() {
@@ -266,8 +320,12 @@ void OpenPositionsWidget::retranslateUi() {
     // subscription and translates nothing. Re-apply the actual strings.
     if (table_)
         table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg"), tr("LTP"), tr("P&L")});
-    if (header_hint_ && account_id_.isEmpty())
+    if (header_hint_ && account_id_.isEmpty()) {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
+    } else {
+        update_session_state();
+    }
 }
 
 } // namespace fincept::screens::widgets

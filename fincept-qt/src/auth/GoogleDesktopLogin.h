@@ -25,6 +25,14 @@ class GoogleDesktopLogin : public QObject {
 
     void start();
 
+    /// The user gave up waiting (closed the tab, cancelled at Google, or the
+    /// sign-in failed on the website, which never calls the loopback back):
+    /// stop listening and emit failed(message). No-op once finished.
+    void cancel(const QString& message);
+
+    /// True until code_received / failed has been emitted.
+    bool is_pending() const { return !done_; }
+
   signals:
     void code_received(const QString& code);
     void failed(const QString& message);

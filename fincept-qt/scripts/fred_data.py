@@ -36,7 +36,7 @@ def make_fred_request(endpoint: str, params: Dict[str, Any]) -> Dict:
     """Make request to FRED API using connection pool"""
     if not FRED_API_KEY:
         return {
-            "error": "FRED API key not configured. Set FRED_API_KEY environment variable.",
+            "error": "FRED API key not configured. Save it as FRED_API_KEY in Settings > Credentials.",
             "error_code": "MISSING_API_KEY",
         }
 

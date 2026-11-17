@@ -10,6 +10,8 @@ import io
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 BASE_URL = "https://raw.githubusercontent.com/owid/co2-data/master"
 
 session = requests.Session()
@@ -42,18 +44,19 @@ def _load_owid_csv() -> Any:
     try:
         resp = session.get(url, timeout=60)
         resp.raise_for_status()
-        lines = resp.text.strip().split('\n')
-        headers = [h.strip() for h in lines[0].split(',')]
-        records = []
-        for line in lines[1:]:
-            parts = line.split(',')
-            if len(parts) >= len(headers):
-                row = {headers[i]: parts[i].strip() for i in range(len(headers))}
-                records.append(row)
+        import csv
+        records = [{(k or "").strip(): (v or "").strip() for k, v in row.items() if k}
+                   for row in csv.DictReader(io.StringIO(resp.text.strip()))]
         _CACHE["owid_co2"] = records
         return records
     except Exception as e:
         return {"error": f"Failed to load OWID CSV: {str(e)}"}
+
+
+def _typed(rows: List[Dict]) -> List[Dict]:
+    """The CSV is all text: copies of `rows` with the numeric columns (year, population, gdp,
+    co2...) as numbers and empty cells as null; names and ISO codes stay text."""
+    return fc.numeric_columns([dict(r) for r in rows])
 
 
 def get_country_co2(country: str = "United States", start_year: int = 2000,
@@ -65,7 +68,7 @@ def get_country_co2(country: str = "United States", start_year: int = 2000,
                 if r.get("country", "").lower() == country.lower()
                 and start_year <= int(r.get("year", 0) or 0) <= end_year]
     return {"country": country, "start_year": start_year, "end_year": end_year,
-            "count": len(filtered), "data": filtered}
+            "count": len(filtered), "data": _typed(filtered)}
 
 
 def get_global_co2(start_year: int = 1990, end_year: int = 2022) -> Any:
@@ -76,7 +79,7 @@ def get_global_co2(start_year: int = 1990, end_year: int = 2022) -> Any:
                 if r.get("country", "").lower() == "world"
                 and start_year <= int(r.get("year", 0) or 0) <= end_year]
     return {"region": "World", "start_year": start_year, "end_year": end_year,
-            "count": len(filtered), "data": filtered}
+            "count": len(filtered), "data": _typed(filtered)}
 
 
 def get_energy_mix(country: str = "United States", year: int = 2021) -> Any:
@@ -92,7 +95,7 @@ def get_energy_mix(country: str = "United States", year: int = 2021) -> Any:
                      ["coal", "oil", "gas", "nuclear", "renewab", "hydro", "solar", "wind",
                       "energy", "electricity"])]
     energy_data = {k: row[k] for k in energy_fields}
-    return {"country": country, "year": year, "energy_mix": energy_data}
+    return {"country": country, "year": year, "energy_mix": {k: fc.number(v) for k, v in energy_data.items()}}
 
 
 def get_per_capita(country: str = "United States", start_year: int = 2000,
@@ -112,7 +115,7 @@ def get_per_capita(country: str = "United States", start_year: int = 2000,
                     row_data[f] = r.get(f)
                 filtered.append(row_data)
     return {"country": country, "start_year": start_year, "end_year": end_year,
-            "fields": per_capita_fields, "count": len(filtered), "data": filtered}
+            "fields": per_capita_fields, "count": len(filtered), "data": _typed(filtered)}
 
 
 def get_cumulative_co2(country: str = "United States") -> Any:
@@ -127,7 +130,8 @@ def get_cumulative_co2(country: str = "United States") -> Any:
     latest = sorted(filtered, key=lambda x: int(x.get("year", 0) or 0), reverse=True)
     result = {"country": country, "latest_year": latest[0].get("year") if latest else None,
               "cumulative_fields": cumulative_fields,
-              "cumulative_data": {f: latest[0].get(f) for f in cumulative_fields} if latest else {}}
+              "cumulative_data": {f: fc.number(latest[0].get(f)) for f in cumulative_fields} if latest else {}}
+    result["latest_year"] = fc.number(result["latest_year"])
     return result
 
 

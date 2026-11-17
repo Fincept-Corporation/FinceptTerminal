@@ -4,12 +4,14 @@
 #include "screens/portfolio/views/AnalyticsSectorsView.h"
 #include "screens/portfolio/views/CustomIndexView.h"
 #include "screens/portfolio/views/EconomicsView.h"
+#include "screens/portfolio/views/IncomeView.h"
 #include "screens/portfolio/views/PerformanceRiskView.h"
 #include "screens/portfolio/views/PlanningView.h"
 #include "screens/portfolio/views/PortfolioOptimizationView.h"
 #include "screens/portfolio/views/QuantStatsView.h"
 #include "screens/portfolio/views/ReportsView.h"
 #include "screens/portfolio/views/RiskManagementView.h"
+#include "screens/portfolio/views/TaxLotsView.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
@@ -30,7 +32,7 @@ void PortfolioDetailWrapper::build_ui() {
 
     // ── Header bar (36px) ────────────────────────────────────────────────────
     auto* header = new QWidget(this);
-    header->setFixedHeight(36);
+    header->setMinimumHeight(36);
     // Flat fill — DESIGN_SYSTEM §9 forbids gradients ("depth comes from
     // background layering only").
     header->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
@@ -41,13 +43,13 @@ void PortfolioDetailWrapper::build_ui() {
     h_layout->setSpacing(8);
 
     // Back button
-    back_btn_ = new QPushButton(tr("\u2190 BACK"));
-    back_btn_->setFixedHeight(24);
+    back_btn_ = new QPushButton(tr("\u2190 BACK"), header);
+    back_btn_->setMinimumHeight(24);
     back_btn_->setCursor(Qt::PointingHandCursor);
     back_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                     "  padding:0 10px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
-                                     "QPushButton:hover { background:%1; color:#000; }")
-                                 .arg(ui::colors::AMBER()));
+                                     "  padding:0 10px; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.5px; }"
+                                     "QPushButton:hover { background:%1; color:%2; }")
+                                 .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT()));
     // Esc leaves the detail view. Owned by the button, so it is inert while
     // this page is not the visible one in PortfolioScreen's stack.
     back_btn_->setShortcut(QKeySequence(Qt::Key_Escape));
@@ -63,23 +65,26 @@ void PortfolioDetailWrapper::build_ui() {
     h_layout->addWidget(div);
 
     // View title
-    title_label_ = new QLabel;
+    title_label_ = new QLabel(header);
     title_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     h_layout->addWidget(title_label_);
 
     h_layout->addStretch();
 
     // Portfolio info (right side)
-    portfolio_label_ = new QLabel;
+    portfolio_label_ = new QLabel(header);
     portfolio_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
     h_layout->addWidget(portfolio_label_);
 
     layout->addWidget(header);
 
     // ── View stack ───────────────────────────────────────────────────────────
-    view_stack_ = new QStackedWidget;
+    // Created under its final parent, and every view is created inside it
+    // (get_or_create_view): a view built parentless and then moved into the stack
+    // was re-styled as a whole by the move (~0.2 s of the Optimization first open).
+    view_stack_ = new QStackedWidget(this);
     view_stack_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     layout->addWidget(view_stack_, 1);
 }
@@ -91,7 +96,7 @@ void PortfolioDetailWrapper::show_view(portfolio::DetailView view, const portfol
     current_currency_ = currency;
 
     title_label_->setText(view_title(view));
-    portfolio_label_->setText(QString("\U0001F4BC %1 | %2").arg(summary.portfolio.name, summary.portfolio.currency));
+    portfolio_label_->setText(tr("%1 · base %2").arg(summary.portfolio.name, summary.portfolio.currency));
 
     auto* widget = get_or_create_view(view);
     view_stack_->setCurrentWidget(widget);
@@ -153,6 +158,10 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
         plan_v->set_metrics(current_metrics_);
     } else if (auto* econ_v = qobject_cast<EconomicsView*>(current)) {
         econ_v->set_data(summary, currency);
+    } else if (auto* lots_v = qobject_cast<TaxLotsView*>(current)) {
+        lots_v->set_data(summary, currency);
+    } else if (auto* inc_v = qobject_cast<IncomeView*>(current)) {
+        inc_v->set_data(summary, currency);
     }
 }
 
@@ -190,16 +199,25 @@ void PortfolioDetailWrapper::set_optimization_target(double annual_return) {
         opt->set_target_return(annual_return);
 }
 
+void PortfolioDetailWrapper::show_risk_stress() {
+    auto* widget = get_or_create_view(portfolio::DetailView::RiskMgmt);
+    if (auto* risk = qobject_cast<RiskManagementView*>(widget))
+        risk->show_stress_tab();
+}
+
 QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) {
     int key = static_cast<int>(view);
     auto it = views_.find(key);
     if (it != views_.end())
         return *it;
 
+    // Each view is built directly inside the stack: addWidget() below then does not move
+    // (and re-style) a finished widget tree.
+    QWidget* const host = view_stack_;
     QWidget* widget = nullptr;
     switch (view) {
         case portfolio::DetailView::AnalyticsSectors: {
-            auto* asv = new AnalyticsSectorsView;
+            auto* asv = new AnalyticsSectorsView(host);
             connect(asv, &AnalyticsSectorsView::sector_selected, this, &PortfolioDetailWrapper::sector_selected);
             if (!current_analytics_.correlation.isEmpty())
                 asv->set_correlation(current_analytics_.correlation);
@@ -207,7 +225,7 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
             break;
         }
         case portfolio::DetailView::PerfRisk: {
-            auto* prv = new PerformanceRiskView;
+            auto* prv = new PerformanceRiskView(host);
             if (!current_snapshots_.isEmpty())
                 prv->set_snapshots(current_snapshots_);
             prv->set_metrics(current_metrics_);
@@ -217,26 +235,34 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
             break;
         }
         case portfolio::DetailView::RiskMgmt: {
-            auto* rmv = new RiskManagementView;
+            auto* rmv = new RiskManagementView(host);
             rmv->set_metrics(current_metrics_);
             rmv->set_analytics(current_analytics_);
+            connect(rmv, &RiskManagementView::add_position_requested, this, &PortfolioDetailWrapper::buy_requested);
             widget = rmv;
             break;
         }
-        case portfolio::DetailView::Optimization:
-            widget = new PortfolioOptimizationView;
+        case portfolio::DetailView::Optimization: {
+            auto* pov = new PortfolioOptimizationView(host);
+            connect(pov, &PortfolioOptimizationView::add_position_requested, this,
+                    &PortfolioDetailWrapper::buy_requested);
+            widget = pov;
             break;
-        case portfolio::DetailView::QuantStats:
-            widget = new QuantStatsView;
+        }
+        case portfolio::DetailView::QuantStats: {
+            auto* qsv = new QuantStatsView(host);
+            connect(qsv, &QuantStatsView::add_position_requested, this, &PortfolioDetailWrapper::buy_requested);
+            widget = qsv;
             break;
+        }
         case portfolio::DetailView::ReportsPme:
-            widget = new ReportsView;
+            widget = new ReportsView(host);
             break;
         case portfolio::DetailView::Indices:
-            widget = new CustomIndexView;
+            widget = new CustomIndexView(host);
             break;
         case portfolio::DetailView::Planning: {
-            auto* pv = new PlanningView;
+            auto* pv = new PlanningView(host);
             if (!current_snapshots_.isEmpty())
                 pv->set_snapshots(current_snapshots_);
             pv->set_metrics(current_metrics_);
@@ -246,8 +272,18 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
             widget = pv;
             break;
         }
-        case portfolio::DetailView::Economics:
-            widget = new EconomicsView;
+        case portfolio::DetailView::Economics: {
+            auto* ev = new EconomicsView(host);
+            connect(ev, &EconomicsView::add_position_requested, this, &PortfolioDetailWrapper::buy_requested);
+            connect(ev, &EconomicsView::open_stress_requested, this, &PortfolioDetailWrapper::risk_stress_requested);
+            widget = ev;
+            break;
+        }
+        case portfolio::DetailView::TaxLots:
+            widget = new TaxLotsView(host);
+            break;
+        case portfolio::DetailView::Income:
+            widget = new IncomeView(host);
             break;
     }
 
@@ -285,7 +321,7 @@ QString PortfolioDetailWrapper::view_title(portfolio::DetailView view) const {
         case portfolio::DetailView::QuantStats:
             return tr("QUANTSTATS REPORT");
         case portfolio::DetailView::ReportsPme:
-            return tr("REPORTS & PME");
+            return tr("REPORTS"); // no PME analysis exists; the command-bar tab already says REPORTS
         case portfolio::DetailView::Indices:
             return tr("CUSTOM INDICES");
         case portfolio::DetailView::RiskMgmt:
@@ -294,6 +330,10 @@ QString PortfolioDetailWrapper::view_title(portfolio::DetailView view) const {
             return tr("FINANCIAL PLANNING");
         case portfolio::DetailView::Economics:
             return tr("ECONOMICS");
+        case portfolio::DetailView::TaxLots:
+            return tr("TAX LOTS & REALISED GAINS");
+        case portfolio::DetailView::Income:
+            return tr("INCOME");
     }
     return tr("DETAIL VIEW");
 }

@@ -8,7 +8,13 @@ Provides access to shareholder data, holdings, institutional ownership
 import sys
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import (between_dates, call_first_with_rows, china_today, recent_period_ends,
+                                 recent_weekdays, run_endpoint_table, safe_call)
 
 try:
     import akshare as ak
@@ -20,35 +26,6 @@ except ImportError as e:
         "data": []
     }))
     sys.exit(1)
-
-
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float("inf"), float("-inf")], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
 
 
 # ==================== MAJOR SHAREHOLDERS ====================
@@ -88,17 +65,26 @@ def get_stock_gdfx_holding_analyse_em(date="20231231"):
     """Get shareholder holding analysis (EastMoney)"""
     return safe_call(ak.stock_gdfx_holding_analyse_em, date=date)
 
-def get_stock_gdfx_holding_change_em(symbol="000001"):
-    """Get shareholder holding change (EastMoney)"""
-    return safe_call(ak.stock_gdfx_holding_change_em, symbol=symbol)
+# The gdfx tables are market-wide for one report period (quarter end): START picks it, default the
+# newest quarter that has been published.
+
+def _report_period(func, date):
+    if date:
+        return safe_call(func, date=date)
+    return call_first_with_rows(func, "date", recent_period_ends(count=4))
+
+
+def get_stock_gdfx_holding_change_em(date=""):
+    """Top-10 shareholder holding changes, all stocks, one report period (EastMoney)"""
+    return _report_period(ak.stock_gdfx_holding_change_em, date)
 
 def get_stock_gdfx_holding_detail_em(symbol="000001"):
     """Get shareholder holding detail (EastMoney)"""
     return safe_call(ak.stock_gdfx_holding_detail_em, symbol=symbol)
 
-def get_stock_gdfx_holding_statistics_em(symbol="000001"):
-    """Get shareholder holding statistics (EastMoney)"""
-    return safe_call(ak.stock_gdfx_holding_statistics_em, symbol=symbol)
+def get_stock_gdfx_holding_statistics_em(date=""):
+    """Top-10 shareholder statistics, one report period (EastMoney)"""
+    return _report_period(ak.stock_gdfx_holding_statistics_em, date)
 
 def get_stock_gdfx_holding_teamwork_em(symbol="000001"):
     """Get shareholder teamwork (EastMoney)"""
@@ -108,17 +94,17 @@ def get_stock_gdfx_free_holding_analyse_em(date="20231231"):
     """Get free float shareholder analysis (EastMoney)"""
     return safe_call(ak.stock_gdfx_free_holding_analyse_em, date=date)
 
-def get_stock_gdfx_free_holding_change_em(symbol="000001"):
-    """Get free float shareholder change (EastMoney)"""
-    return safe_call(ak.stock_gdfx_free_holding_change_em, symbol=symbol)
+def get_stock_gdfx_free_holding_change_em(date=""):
+    """Top-10 free-float shareholder changes, one report period (EastMoney)"""
+    return _report_period(ak.stock_gdfx_free_holding_change_em, date)
 
-def get_stock_gdfx_free_holding_detail_em(symbol="000001"):
-    """Get free float shareholder detail (EastMoney)"""
-    return safe_call(ak.stock_gdfx_free_holding_detail_em, symbol=symbol)
+def get_stock_gdfx_free_holding_detail_em(date=""):
+    """Top-10 free-float shareholder details, one report period (EastMoney)"""
+    return _report_period(ak.stock_gdfx_free_holding_detail_em, date)
 
-def get_stock_gdfx_free_holding_statistics_em(symbol="000001"):
-    """Get free float shareholder statistics (EastMoney)"""
-    return safe_call(ak.stock_gdfx_free_holding_statistics_em, symbol=symbol)
+def get_stock_gdfx_free_holding_statistics_em(date=""):
+    """Top-10 free-float shareholder statistics, one report period (EastMoney)"""
+    return _report_period(ak.stock_gdfx_free_holding_statistics_em, date)
 
 def get_stock_gdfx_free_holding_teamwork_em(symbol="000001"):
     """Get free float shareholder teamwork (EastMoney)"""
@@ -153,9 +139,13 @@ def get_stock_report_fund_hold_detail(symbol="000001", date=""):
 
 # ==================== INSTITUTIONAL HOLDINGS ====================
 
-def get_stock_institute_hold(symbol="20231231"):
-    """Get institutional holdings"""
-    return safe_call(ak.stock_institute_hold, quarter=symbol)
+def get_stock_institute_hold(quarter=""):
+    """Institutional holdings, all stocks, one quarter (Sina). quarter is YYYYQ (20251 = 2025 Q1);
+    default the newest published quarter. Named `quarter` so a stock code in SYMBOL is not sent."""
+    if quarter:
+        return safe_call(ak.stock_institute_hold, symbol=quarter)
+    codes = [f"{d[:4]}{int(d[4:6]) // 3}" for d in recent_period_ends(count=4)]
+    return call_first_with_rows(ak.stock_institute_hold, "symbol", codes)
 
 def get_stock_institute_hold_detail(stock="000001", quarter=""):
     """Get institutional holding detail"""
@@ -168,9 +158,9 @@ def get_stock_hold_management_detail_cninfo(symbol="000001"):
     """Get management holding detail (CNINFO)"""
     return safe_call(ak.stock_hold_management_detail_cninfo, symbol=symbol)
 
-def get_stock_hold_management_detail_em(symbol="000001"):
-    """Get management holding detail (EastMoney)"""
-    return safe_call(ak.stock_hold_management_detail_em, symbol=symbol)
+def get_stock_hold_management_detail_em():
+    """Director / executive share dealings, all stocks (EastMoney)"""
+    return safe_call(ak.stock_hold_management_detail_em)
 
 def get_stock_hold_management_person_em():
     """Get management holding person (EastMoney)"""
@@ -184,9 +174,10 @@ def get_stock_hold_control_cninfo(symbol="000001"):
     """Get actual controller (CNINFO)"""
     return safe_call(ak.stock_hold_control_cninfo, symbol=symbol)
 
-def get_stock_hold_change_cninfo(symbol="增持", start_date="2024-01-01", end_date="2024-12-31"):
-    """Get holding change (CNINFO)"""
-    return safe_call(ak.stock_hold_change_cninfo, symbol=symbol, start_date=start_date, end_date=end_date)
+def get_stock_hold_change_cninfo(market="全部", start_date="", end_date=""):
+    """Shareholder holding changes (CNINFO). market: 全部/深市主板/沪市/创业板/科创板/北交所 (named
+    `market` so a stock code in SYMBOL is not sent); START/END narrow it by announcement date."""
+    return safe_call(lambda: between_dates(ak.stock_hold_change_cninfo(symbol=market), start_date, end_date))
 
 
 # ==================== SHARE CHANGES ====================
@@ -229,9 +220,12 @@ def get_stock_restricted_release_queue_sina(symbol="全部"):
     """Get restricted release queue (Sina)"""
     return safe_call(ak.stock_restricted_release_queue_sina, symbol=symbol)
 
-def get_stock_restricted_release_detail_em(symbol="全部"):
-    """Get restricted release detail (EastMoney)"""
-    return safe_call(ak.stock_restricted_release_detail_em, symbol=symbol)
+def get_stock_restricted_release_detail_em(start_date="", end_date=""):
+    """Lock-up expiries, all stocks (EastMoney); default from 30 days ago to 90 days ahead"""
+    today = china_today()
+    start = start_date or (today - timedelta(days=30)).strftime("%Y%m%d")
+    end = end_date or (today + timedelta(days=90)).strftime("%Y%m%d")
+    return safe_call(ak.stock_restricted_release_detail_em, start_date=start, end_date=end)
 
 def get_stock_restricted_release_stockholder_em(symbol="全部"):
     """Get restricted release stockholder (EastMoney)"""
@@ -248,9 +242,9 @@ def get_stock_gpzy_pledge_ratio_em(date="20231231"):
     """Get equity pledge ratio (EastMoney)"""
     return safe_call(ak.stock_gpzy_pledge_ratio_em, date=date)
 
-def get_stock_gpzy_pledge_ratio_detail_em(symbol="000001"):
-    """Get equity pledge ratio detail (EastMoney)"""
-    return safe_call(ak.stock_gpzy_pledge_ratio_detail_em, symbol=symbol)
+def get_stock_gpzy_pledge_ratio_detail_em():
+    """Share pledge details, all stocks (EastMoney)"""
+    return safe_call(ak.stock_gpzy_pledge_ratio_detail_em)
 
 def get_stock_gpzy_distribute_statistics_bank_em():
     """Get equity pledge bank statistics (EastMoney)"""
@@ -267,9 +261,12 @@ def get_stock_gpzy_industry_data_em():
 
 # ==================== CNINFO HOLDINGS ====================
 
-def get_stock_cg_equity_mortgage_cninfo(symbol="000001"):
-    """Get equity mortgage (CNINFO)"""
-    return safe_call(ak.stock_cg_equity_mortgage_cninfo, symbol=symbol)
+def get_stock_cg_equity_mortgage_cninfo(date=""):
+    """Share pledge announcements of one day, all stocks (CNINFO); START picks the day, default the
+    newest weekday with announcements"""
+    if date:
+        return safe_call(ak.stock_cg_equity_mortgage_cninfo, date=date)
+    return call_first_with_rows(ak.stock_cg_equity_mortgage_cninfo, "date", recent_weekdays())
 
 def get_stock_cg_guarantee_cninfo(symbol="000001"):
     """Get guarantee data (CNINFO)"""
@@ -356,56 +353,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

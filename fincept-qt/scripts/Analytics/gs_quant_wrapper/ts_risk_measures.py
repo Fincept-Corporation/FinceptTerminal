@@ -126,8 +126,13 @@ def daily_risk(x: Series, w: int = None) -> Union[Series, float]:
 def downside_risk(x: Series, threshold: float = 0.0, w: int = None,
                   annualize: bool = True, periods_per_year: int = 252) -> Union[Series, float]:
     """
-    Calculate downside risk (downside deviation).
-    Only considers returns below the threshold.
+    Calculate downside risk (downside deviation, target semideviation).
+
+        DD = sqrt( mean over ALL periods of min(r - threshold, 0)^2 ) * sqrt(periods_per_year)
+
+    The previous version took the standard deviation of the below-threshold
+    returns around their OWN mean, which is not the downside deviation (it
+    ignores how far below the threshold the losses are and how often they occur).
 
     Args:
         x: Returns series
@@ -143,12 +148,13 @@ def downside_risk(x: Series, threshold: float = 0.0, w: int = None,
 
     if w is not None:
         def _dr(arr):
-            below = arr[arr < threshold]
-            return below.std() if len(below) > 1 else 0.0
+            return float(np.sqrt(np.mean(np.minimum(arr - threshold, 0.0) ** 2)))
         return x.rolling(window=w).apply(_dr, raw=True) * factor
 
-    below = x[x < threshold]
-    dr = below.std() if len(below) > 1 else 0.0
+    arr = np.asarray(x.dropna(), dtype=float)
+    if len(arr) == 0:
+        return float("nan")
+    dr = np.sqrt(np.mean(np.minimum(arr - threshold, 0.0) ** 2))
     return float(dr * factor)
 
 
@@ -214,18 +220,55 @@ def drawdown_length(x: Series) -> Series:
     return lengths
 
 
-def max_recovery_period(x: Series) -> int:
+def max_recovery_period(x: Series) -> Optional[int]:
     """
-    Calculate maximum recovery period (longest time from drawdown to new high).
+    Maximum recovery period: the longest number of periods from a drawdown's
+    trough to the first subsequent new high (only drawdowns that recovered).
+
+    The previous version returned the longest drawdown length again (peak to
+    recovery, or peak to the end), which is a different quantity.
 
     Args:
         x: Returns series
 
     Returns:
-        Maximum recovery period in number of periods
+        Periods from trough to recovery, maximised over recovered drawdowns;
+        None when no drawdown has recovered (undefined, not 0).
     """
-    lengths = drawdown_length(x)
-    return int(lengths.max())
+    return recovery_periods(x)["max_recovery_period"]
+
+
+def recovery_periods(x: Series) -> Dict[str, Any]:
+    """Trough-to-recovery statistics of a returns series.
+
+    Returns {'max_recovery_period': int | None  (completed recoveries only),
+             'n_recovered_drawdowns': int,
+             'ongoing_drawdown_periods_since_trough': int | None}
+    """
+    wealth = np.asarray((1 + x.fillna(0.0)).cumprod(), dtype=float)
+    peak = np.maximum.accumulate(wealth) if len(wealth) else wealth
+    best = None
+    n_recovered = 0
+    i, n = 0, len(wealth)
+    while i < n:
+        if wealth[i] < peak[i]:
+            start = i
+            while i < n and wealth[i] < peak[i]:
+                i += 1
+            seg = wealth[start:i]
+            trough = start + int(np.argmin(seg))
+            if i < n:  # recovered at index i (new high reached)
+                n_recovered += 1
+                length = i - trough
+                best = length if best is None else max(best, length)
+            else:
+                ongoing = n - 1 - trough
+                return {"max_recovery_period": best, "n_recovered_drawdowns": n_recovered,
+                        "ongoing_drawdown_periods_since_trough": int(ongoing)}
+        else:
+            i += 1
+    return {"max_recovery_period": best, "n_recovered_drawdowns": n_recovered,
+            "ongoing_drawdown_periods_since_trough": None}
 
 
 def sharpe_ratio(x: Series, risk_free_rate: float = 0.0,
@@ -246,8 +289,8 @@ def sharpe_ratio(x: Series, risk_free_rate: float = 0.0,
     ann_return = excess.mean() * periods_per_year
     ann_vol = x.std() * np.sqrt(periods_per_year)
 
-    if ann_vol == 0:
-        return 0.0
+    if ann_vol == 0 or not np.isfinite(ann_vol):
+        return float('nan')  # undefined, not 0
     return float(ann_return / ann_vol)
 
 
@@ -268,7 +311,7 @@ def calmar_ratio(x: Series, periods_per_year: int = 252) -> float:
     max_dd = abs(dd['max_drawdown'])
 
     if max_dd == 0:
-        return 0.0
+        return float('nan')  # no drawdown: undefined, not 0
     return float(ann_return / max_dd)
 
 
@@ -291,8 +334,8 @@ def sortino_ratio(x: Series, risk_free_rate: float = 0.0,
     ann_excess = excess.mean() * periods_per_year
 
     dd = downside_risk(x, rf_daily, annualize=True, periods_per_year=periods_per_year)
-    if dd == 0:
-        return 0.0
+    if dd == 0 or not np.isfinite(dd):
+        return float('nan')  # no downside: undefined, not 0
     return float(ann_excess / dd)
 
 

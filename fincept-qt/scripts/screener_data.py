@@ -32,6 +32,9 @@ Each run makes two Yahoo calls:
      criteria fields, which the quote format does not carry.
 Yahoo evaluates criteria on its screener snapshot, which lags the live quote. A row's current
 price / % change can therefore sit slightly outside a price or % change bound; the output says so.
+Both calls go through fincept_yahoo's shared session (limiter, back-off, persisted crumb), and the
+answer to an identical screen (same screen / criteria, count, sort and offset) is reused for 10
+minutes by every process; when Yahoo does not answer, an older answer is shown with a warning.
 
 Units (verified against live responses, Oct 2026):
   * percent fields are percent points (25 = 25 %);
@@ -42,6 +45,7 @@ Units (verified against live responses, Oct 2026):
     ``market_cap_currency``.
 """
 
+import hashlib
 import json
 import math
 import os
@@ -60,6 +64,7 @@ PREDEFINED_URL = SCREENER_URL + "/predefined/saved"
 MAX_COUNT = 250  # Yahoo's hard limit per request
 DEFAULT_COUNT = 50
 DEFAULT_SORT = "market_cap"
+SCREEN_TTL_S = 600  # an identical screen is answered from the shared cache for 10 minutes
 
 try:
     NET_TIMEOUT = float(os.environ.get("FINCEPT_YF_TIMEOUT", "20"))
@@ -468,9 +473,10 @@ def _int_arg(text, name, lo, hi):
 # ── Yahoo transport ──────────────────────────────────────────────────────────
 
 def _session():
-    # Lazy: the `fields` command must not pay for importing yfinance/pandas.
-    from yfinance.data import YfData
-    return YfData()
+    # Lazy: the `fields` command must not pay for importing yfinance/pandas. fincept_yahoo's
+    # session: the shared cookie / crumb plus the cross-process limiter and back-off.
+    import fincept_yahoo as fy
+    return fy.session()
 
 
 def _unwrap(resp, what):
@@ -711,11 +717,13 @@ def _assemble(session, kind, quotes, total, offset, columns, sort_field, sort_as
     rows = [_row_from_quote(q) for q in quotes if isinstance(q, dict) and q.get("symbol")]
     warnings = list(meta.pop("warnings", []))
     symbols = [r["symbol"] for r in rows]
+    records_failed = False
     try:
         records = _records_for(session, symbols, columns)
     except ScreenerError as exc:
         _log(f"records lookup failed: {exc}")
         records = {}
+        records_failed = True
         warnings.append(f"Sector, industry and criteria columns are unavailable for this run: {exc}")
 
     for row in rows:
@@ -749,6 +757,32 @@ def _assemble(session, kind, quotes, total, offset, columns, sort_field, sort_as
         "warnings": warnings,
     }
     out.update(meta)
+    if records_failed:
+        out["_records_failed"] = True  # internal: kept a minute only (see _cached_screen)
+    return out
+
+
+def _cached_screen(kind, request, run):
+    """run() at most once per SCREEN_TTL_S for an identical `request`, shared by every process
+    (fincept_yahoo's JSON cache). A run whose records lookup failed is kept a minute only; when
+    Yahoo does not answer (network / rate limit), an older answer is returned with a warning."""
+    import fincept_yahoo as fy
+
+    key = kind + "-" + hashlib.sha1(json.dumps(request, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+    def fetch():
+        res = run()
+        if res.pop("_records_failed", False):
+            return fy.Partial(res, 60)
+        return res
+
+    out = dict(fy.cached("screen", key, fetch, max_age=SCREEN_TTL_S))
+    out.pop("_records_failed", None)
+    fetched = out.get("fetched_at")
+    if isinstance(fetched, (int, float)) and time.time() - fetched > SCREEN_TTL_S + 5:
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(fetched))
+        out["warnings"] = list(out.get("warnings") or []) + [
+            f"Yahoo Finance did not answer; showing this screen as fetched at {when}."]
     return out
 
 
@@ -900,7 +934,8 @@ def main(argv):
             raise ScreenerError("Usage: screener_data.py predefined <screen_id> [count] [offset]")
         count = _int_arg(_arg(argv, 2) or DEFAULT_COUNT, "count", 1, MAX_COUNT)
         offset = _int_arg(_arg(argv, 3) or 0, "offset", 0, 100_000)
-        return run_predefined(screen_id, count, offset)
+        return _cached_screen("predefined", {"id": screen_id, "count": count, "offset": offset},
+                              lambda: run_predefined(screen_id, count, offset))
     if cmd == "custom":
         if _arg(argv, 1) is None:
             raise ScreenerError("Usage: screener_data.py custom <criteria-json|-> [count] [sort_field] "
@@ -916,7 +951,10 @@ def main(argv):
         else:
             sort_asc = bool(criteria.get("sort_asc", False))
         offset = _int_arg(_arg(argv, 5) or criteria.get("offset", 0), "offset", 0, 100_000)
-        return run_custom(criteria, count, sort_field, sort_asc, offset)
+        request = {"criteria": {k: v for k, v in criteria.items()
+                                if k not in ("count", "offset", "sort_field", "sort_asc")},
+                   "count": count, "sort_field": sort_field, "sort_asc": sort_asc, "offset": offset}
+        return _cached_screen("custom", request, lambda: run_custom(criteria, count, sort_field, sort_asc, offset))
     raise ScreenerError(f"Unknown command '{cmd}'. Use predefined, custom or fields.")
 
 
@@ -928,7 +966,10 @@ def _emit(obj):
 
 if __name__ == "__main__":
     try:
-        _emit(main(sys.argv[1:]))
+        # yfinance's session code (cookie / crumb) must not print onto the one JSON line.
+        with fincept_json.stdout_to_stderr():
+            result = main(sys.argv[1:])
+        _emit(result)
         sys.exit(0)
     except ScreenerError as exc:
         _emit({"error": str(exc)})

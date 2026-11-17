@@ -1,832 +1,616 @@
 """
-BT Strategy Implementations
+Strategy library of the "bt" engine (20 catalogue strategies). Nothing here imports the bt
+library: signal strategies never need it, and allocation strategies are only DESCRIBED here
+(the algo stack bt_algos builds from the description).
 
-Portfolio-level strategies using bt's composable algo pipeline.
-Each strategy returns a bt.Strategy object (or a builder function
-that creates one given data).
+TWO KINDS (catalogue `kind`, and what runs - every result says it)
+  signals     long / flat (short with allowShort) rules on each symbol's OWN bars, decided on a
+              bar's close; executed by base.simulator's signals mode (an entry takes the symbol's
+              slot of the equity, positions are held until the exit rule fires). The bt library is
+              not used for these: it would only rebalance a 0/1 weight every bar (3.5 s of algo
+              stack per 10-year run) without adding anything to the rule.
+  allocation  the bt library's algo stack DECIDES target weights on its schedule (bt.algos
+              RunDaily / RunWeekly / RunMonthly / RunQuarterly / RunYearly / RunEveryNPeriods /
+              RunOnce, SelectAll, SelectN, WeighEqually + the Fincept bar-lookback algos of
+              bt_algos that call ffn's weighting functions); base.simulator's weights mode (or bt's
+              own Backtest for fillTiming next_close) executes them.
 
-Also provides numpy-based indicator helper functions shared with
-the provider for calculate_indicator().
+Lookbacks are in BARS (rolling windows on the bars), not calendar days (v1 used
+pd.DateOffset(days=n): "lookback 20" was ~14 trading days - audit T3).
 
-Strategies unique to bt:
-- Portfolio allocation: equal weight, inverse vol, mean-var, risk parity,
-  target vol, min variance
-- Momentum selection: top-N momentum, momentum + inverse vol
-- Trend/mean-reversion: SMA/EMA crossover, RSI, Bollinger bands, z-score
+SIGNAL RULES (indicators computed once on the full history, causal, NaN during warm-up so no
+rule fires before its inputs exist; entries / exits are conditions - the simulator enters only
+when flat and exits only when holding, which gives each rule its hysteresis)
+  sma_crossover    long while SMA(fast) > SMA(slow) (state rule: bt's SelectWhere convention -
+                   the first bar with both averages and fast above enters)
+  ema_crossover    long while EMA(fast) > EMA(slow) (EMAs seeded with the SMA of their first bars)
+  macd             long while the MACD line > its signal line
+  adx_trend        long while Wilder ADX > threshold and +DI > -DI; out when either fails
+  mean_reversion   z-score of the close vs its N-bar mean (sample std): enter z < -threshold, exit
+                   when z >= exitZ (default 0 = back at the mean)
+  bollinger_bands  enter on a close below the lower band, exit on a close above the UPPER band
+                   (bands = N-bar mean +- k x population std, Bollinger's definition). The entry
+                   equals mean_reversion's at the same window / threshold; the exit differs (upper
+                   band vs the mean), so the two never return the same trades (audit T0.2).
+  rsi              Wilder RSI: enter below oversold, exit above OVERBOUGHT (v1 ignored overbought)
+  stochastic       %K crosses above %D while %K < oversold (enter); %K crosses below %D while
+                   %K > overbought (exit). %K over kPeriod high/low, %D = SMA(dPeriod) of %K.
+  breakout         Donchian: close above the previous N-bar HIGH (enter) / below the previous
+                   N-bar LOW (exit)
+  momentum         rate of change over N bars: enter when ROC > threshold, exit when ROC <
+                   -threshold (threshold is a fraction: 0.02 = 2 %)
+ALLOCATION STACKS (bt algos; schedule = rebalancePeriod: daily | weekly | monthly | quarterly |
+yearly, or a number of bars)
+  buy_and_hold     RunOnce, SelectAll, WeighEqually (equal weights once, never rebalanced)
+  equal_weight     schedule, SelectAll, WeighEqually
+  inv_vol          schedule, SelectAll, WeighInvVolBars(lookback)            (1 / std of returns)
+  mean_var         schedule, SelectAll, WeighMeanVarBars(lookback)           (ffn max-Sharpe, Ledoit-Wolf)
+  min_var          schedule, SelectAll, WeighMinVarBars(lookback)            (minimum variance, Ledoit-Wolf)
+  risk_parity      schedule, SelectAll, WeighERCBars(lookback)               (ffn equal risk contribution)
+  target_vol       schedule, SelectAll, WeighEqually, TargetVolBars(target %, lookback) - scaled to the
+                   target volatility, capped at 100 % invested (no leverage)
+  momentum_topn    schedule, SelectAll, StatTotalReturnBars(lookback), SelectN(topN), WeighEqually
+  momentum_inv_vol schedule, SelectAll, StatTotalReturnBars(lookback), SelectN(topN), WeighInvVolBars(lookback)
+  dual_momentum    schedule, SelectAll, StatTotalReturnBars(relativePeriod), SelectN(topN),
+                   AbsoluteMomentumBars(absolutePeriod, > 0), WeighEqually - relative momentum picks
+                   the leaders, absolute momentum keeps only those with a positive return over
+                   absolutePeriod (else cash): Antonacci's dual momentum. (momentum above is a
+                   time-series signal on each symbol - a different strategy.)
 """
 
-import sys
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import numpy as np
-import pandas as pd
-from typing import Dict, Any, Callable, Tuple, List, Optional
+
+Signals = Tuple[np.ndarray, np.ndarray]
 
 
-# ============================================================================
-# Strategy registry
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Parameter helpers
+# ════════════════════════════════════════════════════════════════════════════
 
-_STRATEGY_REGISTRY: Dict[str, Dict[str, Any]] = {}
-
-
-def _register(strategy_id: str, category: str, name: str, description: str,
-              params_spec: List[Dict[str, Any]]):
-    """Decorator factory to register a strategy builder function."""
-    def decorator(fn):
-        _STRATEGY_REGISTRY[strategy_id] = {
-            'id': strategy_id,
-            'name': name,
-            'category': category,
-            'description': description,
-            'params': params_spec,
-            'builder': fn,
-        }
-        return fn
-    return decorator
+def _i(params, key, default, *alts) -> int:
+    for k in (key,) + alts:
+        if k in params and params[k] is not None:
+            try:
+                return int(round(float(params[k])))
+            except (TypeError, ValueError):
+                raise ValueError(f'parameter {k} must be a number, not {params[k]!r}')
+    return int(default)
 
 
-def get_strategy(strategy_type: str, params: Dict[str, Any]):
-    """
-    Look up a strategy by type and return a builder function.
-
-    The builder function signature: build(data, name=None) -> bt.Strategy
-    It creates a bt.Strategy with the appropriate algo pipeline.
-
-    If bt is not installed, returns a fallback that does numpy simulation.
-    """
-    entry = _STRATEGY_REGISTRY.get(strategy_type)
-    if entry is None:
-        raise ValueError(f'Unknown strategy: {strategy_type}. '
-                         f'Available: {sorted(_STRATEGY_REGISTRY.keys())}')
-    return entry['builder'](params)
+def _f(params, key, default, *alts) -> float:
+    for k in (key,) + alts:
+        if k in params and params[k] is not None:
+            try:
+                return float(params[k])
+            except (TypeError, ValueError):
+                raise ValueError(f'parameter {k} must be a number, not {params[k]!r}')
+    return float(default)
 
 
-def get_strategy_catalog() -> Dict[str, Any]:
-    """Return full catalog of strategies grouped by category."""
-    catalog: Dict[str, list] = {}
-    for sid, info in _STRATEGY_REGISTRY.items():
-        cat = info['category']
-        if cat not in catalog:
-            catalog[cat] = []
-        catalog[cat].append({
-            'id': info['id'],
-            'name': info['name'],
-            'description': info['description'],
-            'params': info['params'],
-        })
-    return catalog
+def _pos(name, v) -> int:
+    if v < 1:
+        raise ValueError(f'{name} must be at least 1 (got {v})')
+    return v
 
 
-# ============================================================================
-# Helper: rolling calculations (numpy-only, no TA-lib dependency)
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Indicators (numpy / pandas, vectorised, causal)
+# ════════════════════════════════════════════════════════════════════════════
 
-def _rolling_mean(series, window):
-    """Simple rolling mean using numpy cumsum trick."""
-    arr = np.asarray(series, dtype=float)
-    cumsum = np.cumsum(np.insert(arr, 0, 0))
-    result = np.full_like(arr, np.nan)
-    result[window - 1:] = (cumsum[window:] - cumsum[:-window]) / window
-    return result
+def sma(x, n: int) -> np.ndarray:
+    from base.signals import sma as _sma
+    return _sma(x, n)
 
 
-def _rolling_std(series, window):
-    """Rolling standard deviation."""
-    arr = np.asarray(series, dtype=float)
-    result = np.full_like(arr, np.nan)
-    for i in range(window - 1, len(arr)):
-        result[i] = np.std(arr[i - window + 1:i + 1], ddof=1)
-    return result
+def ema_valid(x, n: int) -> np.ndarray:
+    """EMA (alpha 2/(n+1)) seeded with the SMA of the first n VALID values (works on a series with a
+    NaN warm-up, e.g. the MACD line)."""
+    from base.signals import ema as _ema
+    v = np.asarray(x, dtype=float)
+    out = np.full(len(v), np.nan)
+    ok = np.flatnonzero(np.isfinite(v))
+    if not len(ok):
+        return out
+    f = int(ok[0])
+    out[f:] = _ema(v[f:], n)
+    return out
 
 
-def _ema(series, span):
-    """Exponential moving average."""
-    arr = np.asarray(series, dtype=float)
-    alpha = 2.0 / (span + 1)
-    result = np.empty_like(arr)
-    result[0] = arr[0]
-    for i in range(1, len(arr)):
-        result[i] = alpha * arr[i] + (1 - alpha) * result[i - 1]
-    return result
+def rolling_std(x, n: int, ddof: int = 1) -> np.ndarray:
+    import pandas as pd
+    return pd.Series(np.asarray(x, dtype=float)).rolling(int(n)).std(ddof=ddof).to_numpy()
 
 
-def _rsi(series, period=14):
-    """Relative Strength Index."""
-    arr = np.asarray(series, dtype=float)
-    deltas = np.diff(arr)
-    gains = np.where(deltas > 0, deltas, 0.0)
-    losses = np.where(deltas < 0, -deltas, 0.0)
-
-    avg_gain = np.full(len(arr), np.nan)
-    avg_loss = np.full(len(arr), np.nan)
-    rsi_vals = np.full(len(arr), np.nan)
-
-    if len(gains) < period:
-        return rsi_vals
-
-    avg_gain[period] = np.mean(gains[:period])
-    avg_loss[period] = np.mean(losses[:period])
-
-    for i in range(period + 1, len(arr)):
-        avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gains[i - 1]) / period
-        avg_loss[i] = (avg_loss[i - 1] * (period - 1) + losses[i - 1]) / period
-
-    for i in range(period, len(arr)):
-        if avg_loss[i] == 0:
-            rsi_vals[i] = 100.0
-        else:
-            rs = avg_gain[i] / avg_loss[i]
-            rsi_vals[i] = 100.0 - 100.0 / (1.0 + rs)
-
-    return rsi_vals
+def rolling_max(x, n: int) -> np.ndarray:
+    import pandas as pd
+    return pd.Series(np.asarray(x, dtype=float)).rolling(int(n)).max().to_numpy()
 
 
-def _macd_calc(series, fast=12, slow=26, signal=9):
-    """MACD calculation returning (macd_line, signal_line, histogram)."""
-    arr = np.asarray(series, dtype=float)
-    fast_ema = _ema(arr, fast)
-    slow_ema = _ema(arr, slow)
-    macd_line = fast_ema - slow_ema
-    signal_line = _ema(macd_line, signal)
-    histogram = macd_line - signal_line
-    return macd_line, signal_line, histogram
+def rolling_min(x, n: int) -> np.ndarray:
+    import pandas as pd
+    return pd.Series(np.asarray(x, dtype=float)).rolling(int(n)).min().to_numpy()
 
 
-def _zscore_calc(series, window):
-    """Rolling z-score."""
-    arr = np.asarray(series, dtype=float)
-    mean = _rolling_mean(arr, window)
-    std = _rolling_std(arr, window)
-    result = np.full_like(arr, np.nan)
-    valid = ~np.isnan(mean) & ~np.isnan(std) & (std > 0)
-    result[valid] = (arr[valid] - mean[valid]) / std[valid]
-    return result
+def prev(x) -> np.ndarray:
+    v = np.asarray(x, dtype=float)
+    out = np.full(len(v), np.nan)
+    out[1:] = v[:-1]
+    return out
 
 
-def _bollinger_bands(series, period=20, std_dev=2.0):
-    """Bollinger Bands returning (upper, middle, lower)."""
-    arr = np.asarray(series, dtype=float)
-    middle = _rolling_mean(arr, period)
-    std = _rolling_std(arr, period)
-    upper = middle + std_dev * std
-    lower = middle - std_dev * std
-    return upper, middle, lower
+def wilder(x, n: int) -> np.ndarray:
+    """Wilder's smoothing (RMA, alpha 1/n) seeded with the mean of the first n valid values."""
+    import pandas as pd
+    v = np.asarray(x, dtype=float)
+    out = np.full(len(v), np.nan)
+    ok = np.flatnonzero(np.isfinite(v))
+    if len(ok) < n:
+        return out
+    f = int(ok[0])
+    seed = float(np.mean(v[f:f + n]))
+    tail = v[f + n:]
+    s = pd.Series(np.concatenate([[seed], tail])).ewm(alpha=1.0 / n, adjust=False).mean().to_numpy()
+    out[f + n - 1:] = s
+    return out
 
 
-def _atr(high, low, close, period=14):
-    """Average True Range."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
+def rsi(close, n: int) -> np.ndarray:
+    from base.signals import rsi_wilder
+    return rsi_wilder(close, n)
+
+
+def macd(close, fast: int, slow: int, signal: int) -> Dict[str, np.ndarray]:
+    from base.signals import ema as _ema
+    line = _ema(close, fast) - _ema(close, slow)
+    sig = ema_valid(line, signal)
+    return {'macd': line, 'signal': sig, 'histogram': line - sig}
+
+
+def adx(high, low, close, n: int) -> Dict[str, np.ndarray]:
+    """Wilder's ADX / +DI / -DI."""
+    h, lo, c = (np.asarray(a, dtype=float) for a in (high, low, close))
+    pc = prev(c)
+    tr = np.fmax(h - lo, np.fmax(np.abs(h - pc), np.abs(lo - pc)))
+    tr[0] = np.nan
+    up = h - prev(h)
+    dn = prev(lo) - lo
+    pdm = np.where((up > dn) & (up > 0), up, 0.0)
+    mdm = np.where((dn > up) & (dn > 0), dn, 0.0)
+    pdm[0] = mdm[0] = np.nan
+    atr = wilder(tr, n)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        pdi = 100.0 * wilder(pdm, n) / atr
+        mdi = 100.0 * wilder(mdm, n) / atr
+        dx = 100.0 * np.abs(pdi - mdi) / (pdi + mdi)
+    dx = np.where(np.isfinite(dx), dx, np.nan)
+    return {'adx': wilder(dx, n), 'plus_di': pdi, 'minus_di': mdi}
+
+
+def stochastic(high, low, close, k: int, d: int) -> Dict[str, np.ndarray]:
+    hh, ll = rolling_max(high, k), rolling_min(low, k)
     c = np.asarray(close, dtype=float)
-    tr = np.maximum(h - l, np.maximum(np.abs(h - np.roll(c, 1)),
-                                       np.abs(l - np.roll(c, 1))))
-    tr[0] = h[0] - l[0]
-    return _rolling_mean(tr, period)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        kk = np.where(hh - ll > 0, 100.0 * (c - ll) / (hh - ll), 50.0)
+    kk = np.where(np.isfinite(hh) & np.isfinite(ll), kk, np.nan)
+    return {'k': kk, 'd': sma(kk, d)}
 
 
-def _adx_calc(high, low, close, period=14):
-    """ADX calculation."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
+def roc(close, n: int) -> np.ndarray:
     c = np.asarray(close, dtype=float)
-    n = len(c)
-
-    up_move = np.diff(h, prepend=h[0])
-    down_move = -np.diff(l, prepend=l[0])
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-
-    atr_vals = _atr(h, l, c, period)
-    smooth_plus = _ema(plus_dm, period)
-    smooth_minus = _ema(minus_dm, period)
-
-    plus_di = np.where(atr_vals > 0, 100 * smooth_plus / atr_vals, 0.0)
-    minus_di = np.where(atr_vals > 0, 100 * smooth_minus / atr_vals, 0.0)
-
-    dx = np.where((plus_di + minus_di) > 0,
-                  100 * np.abs(plus_di - minus_di) / (plus_di + minus_di), 0.0)
-    adx = _ema(dx, period)
-    return adx, plus_di, minus_di
-
-
-def _momentum_calc(series, period=12):
-    """Rate of change momentum."""
-    arr = np.asarray(series, dtype=float)
-    result = np.full_like(arr, np.nan)
-    result[period:] = arr[period:] / arr[:-period] - 1.0
-    return result
-
-
-def _stochastic_calc(high, low, close, k_period=14, d_period=3):
-    """Stochastic oscillator."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    n = len(c)
-    k_vals = np.full(n, np.nan)
-    for i in range(k_period - 1, n):
-        hh = np.max(h[i - k_period + 1:i + 1])
-        ll = np.min(l[i - k_period + 1:i + 1])
-        if hh - ll > 0:
-            k_vals[i] = 100 * (c[i] - ll) / (hh - ll)
-        else:
-            k_vals[i] = 50.0
-    d_vals = _rolling_mean(k_vals, d_period)
-    return k_vals, d_vals
-
-
-def _williams_r_calc(high, low, close, period=14):
-    """Williams %R oscillator."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    n = len(c)
-    wr = np.full(n, np.nan)
-    for i in range(period - 1, n):
-        hh = np.max(h[i - period + 1:i + 1])
-        ll = np.min(l[i - period + 1:i + 1])
-        if hh - ll > 0:
-            wr[i] = -100 * (hh - c[i]) / (hh - ll)
-        else:
-            wr[i] = -50.0
-    return wr
-
-
-def _cci_calc(high, low, close, period=20):
-    """Commodity Channel Index."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    tp = (h + l + c) / 3.0
-    tp_ma = _rolling_mean(tp, period)
-    n = len(c)
-    mad = np.full(n, np.nan)
-    for i in range(period - 1, n):
-        window = tp[i - period + 1:i + 1]
-        mad[i] = np.mean(np.abs(window - np.mean(window)))
-    result = np.full(n, np.nan)
-    valid = ~np.isnan(tp_ma) & ~np.isnan(mad) & (mad > 0)
-    result[valid] = (tp[valid] - tp_ma[valid]) / (0.015 * mad[valid])
-    return result
-
-
-def _obv_calc(close, volume):
-    """On-Balance Volume."""
-    c = np.asarray(close, dtype=float)
-    v = np.asarray(volume, dtype=float)
-    obv = np.zeros(len(c))
-    for i in range(1, len(c)):
-        if c[i] > c[i - 1]:
-            obv[i] = obv[i - 1] + v[i]
-        elif c[i] < c[i - 1]:
-            obv[i] = obv[i - 1] - v[i]
-        else:
-            obv[i] = obv[i - 1]
-    return obv
-
-
-def _donchian_calc(high, low, period=20):
-    """Donchian channels returning (upper, lower)."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    n = len(h)
-    upper = np.full(n, np.nan)
-    lower = np.full(n, np.nan)
-    for i in range(period - 1, n):
-        upper[i] = np.max(h[i - period + 1:i + 1])
-        lower[i] = np.min(l[i - period + 1:i + 1])
-    return upper, lower
-
-
-def _keltner_calc(high, low, close, period=20, atr_mult=2.0):
-    """Keltner channels returning (upper, middle, lower)."""
-    c = np.asarray(close, dtype=float)
-    middle = _ema(c, period)
-    atr_vals = _atr(high, low, close, period)
-    upper = middle + atr_mult * atr_vals
-    lower = middle - atr_mult * atr_vals
-    return upper, middle, lower
-
-
-def _vwap_calc(high, low, close, volume):
-    """Volume Weighted Average Price."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    v = np.asarray(volume, dtype=float)
-    tp = (h + l + c) / 3.0
-    cum_tpv = np.cumsum(tp * v)
-    cum_v = np.cumsum(v)
-    return np.where(cum_v > 0, cum_tpv / cum_v, 0.0)
-
-
-# ============================================================================
-# bt algo helpers — try to import bt, fall back gracefully
-# ============================================================================
-
-from bt_data import import_bt_library as _import_bt
-
-_bt = _import_bt()
-_BT_AVAILABLE = _bt is not None
-
-
-# ── No look-ahead ──────────────────────────────────────────────────────────
-# bt rebalances at the CLOSE of the bar it runs on. A signal (or a momentum /
-# volatility estimate) computed from that same close therefore trades on
-# information it could not have had before the close. Every selection and
-# weighting below uses data up to the PREVIOUS bar: SelectWhere gets the signal
-# shifted by one bar and the lookback algos get lag=1 day.
-_LAG = pd.DateOffset(days=1)
-
-
-def _lagged(signal):
-    """Signal known at the previous close (bool/float frame shifted one bar)."""
-    return signal.shift(1).fillna(0)
-
-
-def _days(n):
-    """bt lookbacks are DateOffsets; an int lookback raised inside bt.run and the
-    provider silently switched to its numpy fallback."""
-    return pd.DateOffset(days=int(n))
-
-
-def _make_bt_strategy(name, algos, data):
-    """Create a bt.Strategy + bt.Backtest if bt is available."""
-    if not _BT_AVAILABLE:
-        return None, None
-    strategy = _bt.Strategy(name, algos)
-    return strategy, data
-
-
-# ============================================================================
-# Portfolio Allocation Strategies (unique to bt)
-# ============================================================================
-
-@_register('equal_weight', 'portfolio', 'Equal Weight',
-           'Equal-weight allocation across all assets, rebalanced periodically',
-           [{'name': 'rebalancePeriod', 'label': 'Rebalance Period', 'default': 'monthly'}])
-def _build_equal_weight(params):
-    """Equal-weight portfolio strategy."""
-    def build(data, name='equal_weight'):
-        if _BT_AVAILABLE:
-            algos = [
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('inv_vol', 'portfolio', 'Inverse Volatility',
-           'Weight assets inversely proportional to their volatility',
-           [{'name': 'lookback', 'label': 'Lookback (days)', 'default': 20}])
-def _build_inv_vol(params):
-    """Inverse volatility weighted portfolio."""
-    lookback = int(params.get('lookback', 20))
-
-    def build(data, name='inv_vol'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighInvVol(lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('mean_var', 'portfolio', 'Mean-Variance',
-           'Mean-variance optimized portfolio (Markowitz)',
-           [{'name': 'lookback', 'label': 'Lookback (days)', 'default': 60}])
-def _build_mean_var(params):
-    """Mean-variance optimized portfolio."""
-    lookback = int(params.get('lookback', 60))
-
-    def build(data, name='mean_var'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighMeanVar(lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('risk_parity', 'portfolio', 'Risk Parity',
-           'Equal risk contribution (ERC) portfolio',
-           [{'name': 'lookback', 'label': 'Lookback (days)', 'default': 60}])
-def _build_risk_parity(params):
-    """Risk parity (equal risk contribution) portfolio."""
-    lookback = int(params.get('lookback', 60))
-
-    def build(data, name='risk_parity'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighERC(lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('target_vol', 'portfolio', 'Target Volatility',
-           'Target a specific portfolio volatility level',
-           [{'name': 'targetVol', 'label': 'Target Vol (%)', 'default': 10, 'min': 1, 'max': 50},
-            {'name': 'lookback', 'label': 'Lookback (days)', 'default': 20}])
-def _build_target_vol(params):
-    """Target volatility portfolio."""
-    target = float(params.get('targetVol', 10)) / 100.0
-    lookback = int(params.get('lookback', 20))
-
-    def build(data, name='target_vol'):
-        if _BT_AVAILABLE:
-            # It used to be plain equal weight - targetVol/lookback were read and ignored.
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighEqually(),
-                _bt.algos.TargetVol(target, lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('min_var', 'portfolio', 'Minimum Variance',
-           'Minimum variance portfolio (lowest risk)',
-           [{'name': 'lookback', 'label': 'Lookback (days)', 'default': 60}])
-def _build_min_var(params):
-    """Minimum variance portfolio."""
-    lookback = int(params.get('lookback', 60))
-
-    def build(data, name='min_var'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),
-                _bt.algos.WeighMeanVar(lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-# ============================================================================
-# Momentum Selection Strategies
-# ============================================================================
-
-@_register('momentum_topn', 'momentum', 'Momentum Top-N',
-           'Select top N assets by momentum, equal weight',
-           [{'name': 'topN', 'label': 'Top N', 'default': 5, 'min': 1, 'max': 50},
-            {'name': 'lookback', 'label': 'Momentum Lookback', 'default': 60}])
-def _build_momentum_topn(params):
-    """Momentum top-N selection strategy."""
-    top_n = int(params.get('topN', 5))
-    lookback = int(params.get('lookback', 60))
-
-    def build(data, name='momentum_topn'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),  # SelectMomentum ranks the current selection
-                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback), lag=_LAG),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('momentum_inv_vol', 'momentum', 'Momentum + Inv Vol',
-           'Select top N by momentum, weight by inverse volatility',
-           [{'name': 'topN', 'label': 'Top N', 'default': 5, 'min': 1, 'max': 50},
-            {'name': 'lookback', 'label': 'Lookback', 'default': 60}])
-def _build_momentum_inv_vol(params):
-    """Momentum selection with inverse volatility weighting."""
-    top_n = int(params.get('topN', 5))
-    lookback = int(params.get('lookback', 60))
-
-    def build(data, name='momentum_inv_vol'):
-        if _BT_AVAILABLE:
-            algos = [
-                # Wait until the lookback window has data (the first rebalance otherwise
-                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
-                # it, the counter only advanced on month starts (lookback MONTHS).
-                _bt.algos.RunAfterDays(int(lookback) + 2),
-                _bt.algos.RunMonthly(),
-                _bt.algos.SelectAll(),  # SelectMomentum ranks the current selection
-                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback), lag=_LAG),
-                _bt.algos.WeighInvVol(lookback=_days(lookback), lag=_LAG),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('momentum', 'momentum', 'Momentum (ROC)',
-           'Rate of change momentum',
-           [{'name': 'period', 'label': 'Period', 'default': 12, 'min': 5, 'max': 50},
-            {'name': 'threshold', 'label': 'Threshold', 'default': 0.02, 'min': 0.01, 'max': 0.1}])
-def _build_momentum(params):
-    """Simple momentum (rate of change) strategy."""
-    period = int(params.get('period', 12))
-    threshold = float(params.get('threshold', 0.02))
-
-    def build(data, name='momentum'):
-        # Uses numpy fallback for signal-based strategies
-        return None
-    return build
-
-
-@_register('dual_momentum', 'momentum', 'Dual Momentum',
-           'Absolute + relative momentum',
-           [{'name': 'absolutePeriod', 'label': 'Absolute Period', 'default': 12, 'min': 3, 'max': 24},
-            {'name': 'relativePeriod', 'label': 'Relative Period', 'default': 12, 'min': 3, 'max': 24}])
-def _build_dual_momentum(params):
-    """Dual momentum strategy."""
-    def build(data, name='dual_momentum'):
-        return None
-    return build
-
-
-# ============================================================================
-# Trend Following Strategies
-# ============================================================================
-
-@_register('sma_crossover', 'trend', 'SMA Crossover',
-           'Fast SMA crosses Slow SMA',
-           [{'name': 'fastPeriod', 'label': 'Fast Period', 'default': 10, 'min': 2, 'max': 100},
-            {'name': 'slowPeriod', 'label': 'Slow Period', 'default': 20, 'min': 5, 'max': 200}])
-def _build_sma_crossover(params):
-    """SMA crossover strategy."""
-    fast = int(params.get('fastPeriod', 10))
-    slow = int(params.get('slowPeriod', 20))
-
-    def build(data, name='sma_crossover'):
-        if _BT_AVAILABLE:
-            # Create signal: 1 when fast > slow, 0 otherwise
-            import pandas as pd
-            fast_ma = data.rolling(fast).mean()
-            slow_ma = data.rolling(slow).mean()
-            signal = (fast_ma > slow_ma).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('ema_crossover', 'trend', 'EMA Crossover',
-           'Fast EMA crosses Slow EMA',
-           [{'name': 'fastPeriod', 'label': 'Fast Period', 'default': 10, 'min': 2, 'max': 100},
-            {'name': 'slowPeriod', 'label': 'Slow Period', 'default': 20, 'min': 5, 'max': 200}])
-def _build_ema_crossover(params):
-    """EMA crossover strategy."""
-    fast = int(params.get('fastPeriod', 10))
-    slow = int(params.get('slowPeriod', 20))
-
-    def build(data, name='ema_crossover'):
-        if _BT_AVAILABLE:
-            import pandas as pd
-            fast_ema = data.ewm(span=fast).mean()
-            slow_ema = data.ewm(span=slow).mean()
-            signal = (fast_ema > slow_ema).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('macd', 'trend', 'MACD Crossover',
-           'MACD line crosses Signal line',
-           [{'name': 'fastPeriod', 'label': 'Fast Period', 'default': 12, 'min': 2, 'max': 50},
-            {'name': 'slowPeriod', 'label': 'Slow Period', 'default': 26, 'min': 10, 'max': 100},
-            {'name': 'signalPeriod', 'label': 'Signal Period', 'default': 9, 'min': 2, 'max': 50}])
-def _build_macd(params):
-    """MACD crossover strategy."""
-    fast = int(params.get('fastPeriod', 12))
-    slow = int(params.get('slowPeriod', 26))
-    sig = int(params.get('signalPeriod', 9))
-
-    def build(data, name='macd'):
-        if _BT_AVAILABLE:
-            import pandas as pd
-            fast_ema = data.ewm(span=fast).mean()
-            slow_ema = data.ewm(span=slow).mean()
-            macd_line = fast_ema - slow_ema
-            signal_line = macd_line.ewm(span=sig).mean()
-            signal = (macd_line > signal_line).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('adx_trend', 'trend', 'ADX Trend Filter',
-           'ADX-based trend following',
-           [{'name': 'adxPeriod', 'label': 'ADX Period', 'default': 14, 'min': 5, 'max': 50},
-            {'name': 'adxThreshold', 'label': 'ADX Threshold', 'default': 25, 'min': 10, 'max': 50}])
-def _build_adx_trend(params):
-    """ADX trend filter strategy."""
-    def build(data, name='adx_trend'):
-        return None  # Uses numpy fallback (needs OHLC)
-    return build
-
-
-# ============================================================================
-# Mean Reversion Strategies
-# ============================================================================
-
-@_register('mean_reversion', 'meanReversion', 'Z-Score Reversion',
-           'Z-score mean reversion',
-           [{'name': 'window', 'label': 'Window', 'default': 20, 'min': 5, 'max': 100},
-            {'name': 'threshold', 'label': 'Z-Score Threshold', 'default': 2.0, 'min': 0.5, 'max': 5.0}])
-def _build_mean_reversion(params):
-    """Z-score mean reversion strategy."""
-    window = int(params.get('window', 20))
-    threshold = float(params.get('threshold', 2.0))
-
-    def build(data, name='mean_reversion'):
-        if _BT_AVAILABLE:
-            import pandas as pd
-            mean = data.rolling(window).mean()
-            std = data.rolling(window).std()
-            zscore = (data - mean) / std
-            signal = (zscore < -threshold).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('bollinger_bands', 'meanReversion', 'Bollinger Bands',
-           'Bollinger band mean reversion',
-           [{'name': 'period', 'label': 'Period', 'default': 20, 'min': 5, 'max': 100},
-            {'name': 'stdDev', 'label': 'Std Dev', 'default': 2.0, 'min': 1.0, 'max': 4.0}])
-def _build_bollinger_bands(params):
-    """Bollinger band mean reversion strategy."""
-    period = int(params.get('period', 20))
-    std_dev = float(params.get('stdDev', 2.0))
-
-    def build(data, name='bollinger_bands'):
-        if _BT_AVAILABLE:
-            import pandas as pd
-            mean = data.rolling(period).mean()
-            std = data.rolling(period).std()
-            lower = mean - std_dev * std
-            signal = (data < lower).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-@_register('rsi', 'meanReversion', 'RSI Mean Reversion',
-           'RSI oversold/overbought',
-           [{'name': 'period', 'label': 'Period', 'default': 14, 'min': 2, 'max': 50},
-            {'name': 'oversold', 'label': 'Oversold', 'default': 30, 'min': 10, 'max': 40},
-            {'name': 'overbought', 'label': 'Overbought', 'default': 70, 'min': 60, 'max': 90}])
-def _build_rsi(params):
-    """RSI mean reversion strategy."""
-    period = int(params.get('period', 14))
-    oversold = float(params.get('oversold', 30))
-
-    def build(data, name='rsi'):
-        # Uses numpy fallback for RSI calculation
-        return None
-    return build
-
-
-@_register('stochastic', 'meanReversion', 'Stochastic',
-           'Stochastic oscillator',
-           [{'name': 'kPeriod', 'label': 'K Period', 'default': 14, 'min': 5, 'max': 50},
-            {'name': 'dPeriod', 'label': 'D Period', 'default': 3, 'min': 2, 'max': 20},
-            {'name': 'oversold', 'label': 'Oversold', 'default': 20, 'min': 10, 'max': 30},
-            {'name': 'overbought', 'label': 'Overbought', 'default': 80, 'min': 70, 'max': 90}])
-def _build_stochastic(params):
-    """Stochastic oscillator strategy."""
-    def build(data, name='stochastic'):
-        return None  # Needs OHLC, uses numpy fallback
-    return build
-
-
-# ============================================================================
-# Breakout Strategies
-# ============================================================================
-
-@_register('breakout', 'breakout', 'Donchian Breakout',
-           'Donchian channel breakout',
-           [{'name': 'period', 'label': 'Period', 'default': 20, 'min': 5, 'max': 100}])
-def _build_breakout(params):
-    """Donchian breakout strategy."""
-    period = int(params.get('period', 20))
-
-    def build(data, name='breakout'):
-        if _BT_AVAILABLE:
-            import pandas as pd
-            upper = data.rolling(period).max()
-            signal = (data >= upper).astype(float)
-            algos = [
-                _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(_lagged(signal)),
-                _bt.algos.WeighEqually(),
-                _bt.algos.Rebalance(),
-            ]
-            return _bt.Strategy(name, algos)
-        return None
-    return build
-
-
-# ============================================================================
-# Indicator catalog for get_indicators command
-# ============================================================================
-
-INDICATOR_CATALOG = {
-    'trend': [
-        {'id': 'ma', 'name': 'Moving Average', 'params': ['period', 'ewm']},
-        {'id': 'ema', 'name': 'EMA', 'params': ['period']},
-        {'id': 'macd', 'name': 'MACD', 'params': ['fast', 'slow', 'signal']},
-        {'id': 'adx', 'name': 'ADX', 'params': ['period']},
-        {'id': 'keltner', 'name': 'Keltner Channels', 'params': ['period', 'atrMult']},
-        {'id': 'donchian', 'name': 'Donchian Channels', 'params': ['period']},
-    ],
-    'momentum': [
-        {'id': 'rsi', 'name': 'RSI', 'params': ['period']},
-        {'id': 'stoch', 'name': 'Stochastic', 'params': ['kPeriod', 'dPeriod']},
-        {'id': 'momentum', 'name': 'Momentum (ROC)', 'params': ['period']},
-        {'id': 'williams_r', 'name': 'Williams %R', 'params': ['period']},
-        {'id': 'cci', 'name': 'CCI', 'params': ['period']},
-    ],
-    'volatility': [
-        {'id': 'bbands', 'name': 'Bollinger Bands', 'params': ['period', 'alpha']},
-        {'id': 'atr', 'name': 'ATR', 'params': ['period']},
-        {'id': 'mstd', 'name': 'Moving Std Dev', 'params': ['period']},
-        {'id': 'zscore', 'name': 'Z-Score', 'params': ['window']},
-    ],
-    'volume': [
-        {'id': 'obv', 'name': 'OBV', 'params': []},
-        {'id': 'vwap', 'name': 'VWAP', 'params': []},
-    ],
+    out = np.full(len(c), np.nan)
+    if len(c) > n:
+        with np.errstate(divide='ignore', invalid='ignore'):
+            out[n:] = c[n:] / c[:-n] - 1.0
+    return out
+
+
+def _gt(a, b) -> np.ndarray:
+    a, b = np.broadcast_arrays(np.asarray(a, dtype=float), np.asarray(b, dtype=float))
+    with np.errstate(invalid='ignore'):
+        return np.isfinite(a) & np.isfinite(b) & (a > b)
+
+
+def _lt(a, b) -> np.ndarray:
+    a, b = np.broadcast_arrays(np.asarray(a, dtype=float), np.asarray(b, dtype=float))
+    with np.errstate(invalid='ignore'):
+        return np.isfinite(a) & np.isfinite(b) & (a < b)
+
+
+def _ge(a, b) -> np.ndarray:
+    a, b = np.broadcast_arrays(np.asarray(a, dtype=float), np.asarray(b, dtype=float))
+    with np.errstate(invalid='ignore'):
+        return np.isfinite(a) & np.isfinite(b) & (a >= b)
+
+
+def _state(cond: np.ndarray, valid: np.ndarray) -> Signals:
+    """A 'long while cond' rule: enter while it holds, exit once it fails (on valid bars)."""
+    c = np.asarray(cond, dtype=bool)
+    return c, np.asarray(valid, dtype=bool) & ~c
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Signal builders: (o, h, l, c, v, params) -> (entries, exits)
+# ════════════════════════════════════════════════════════════════════════════
+
+class Bars:
+    """One symbol's OHLCV arrays (its own session dates) with a small indicator memo."""
+
+    def __init__(self, o, h, l, c, v=None):
+        self.c = np.asarray(c, dtype=float)
+        self.o = self.c if o is None else np.asarray(o, dtype=float)
+        self.h = self.c if h is None else np.asarray(h, dtype=float)
+        self.l = self.c if l is None else np.asarray(l, dtype=float)
+        self.v = np.zeros(len(self.c)) if v is None else np.asarray(v, dtype=float)
+        self.n = len(self.c)
+        self._memo: Dict[tuple, Any] = {}
+
+    def memo(self, key, fn):
+        hit = self._memo.get(key)
+        if hit is None:
+            hit = fn()
+            if len(self._memo) > 512:
+                self._memo.clear()
+            self._memo[key] = hit
+        return hit
+
+
+def _sma_crossover(b: Bars, p) -> Signals:
+    f, s = _pos('fastPeriod', _i(p, 'fastPeriod', 10)), _pos('slowPeriod', _i(p, 'slowPeriod', 20))
+    a = b.memo(('sma', f), lambda: sma(b.c, f))
+    z = b.memo(('sma', s), lambda: sma(b.c, s))
+    return _state(_gt(a, z), np.isfinite(a) & np.isfinite(z))
+
+
+def _ema_crossover(b: Bars, p) -> Signals:
+    from base.signals import ema as _ema
+    f, s = _pos('fastPeriod', _i(p, 'fastPeriod', 10)), _pos('slowPeriod', _i(p, 'slowPeriod', 20))
+    a = b.memo(('ema', f), lambda: _ema(b.c, f))
+    z = b.memo(('ema', s), lambda: _ema(b.c, s))
+    return _state(_gt(a, z), np.isfinite(a) & np.isfinite(z))
+
+
+def _macd(b: Bars, p) -> Signals:
+    f, s, g = (_pos(k, _i(p, k, d)) for k, d in (('fastPeriod', 12), ('slowPeriod', 26), ('signalPeriod', 9)))
+    m = b.memo(('macd', f, s, g), lambda: macd(b.c, f, s, g))
+    return _state(_gt(m['macd'], m['signal']), np.isfinite(m['macd']) & np.isfinite(m['signal']))
+
+
+def _adx_trend(b: Bars, p) -> Signals:
+    n = _pos('adxPeriod', _i(p, 'adxPeriod', 14, 'period'))
+    th = _f(p, 'adxThreshold', 25, 'threshold')
+    d = b.memo(('adx', n), lambda: adx(b.h, b.l, b.c, n))
+    valid = np.isfinite(d['adx']) & np.isfinite(d['plus_di']) & np.isfinite(d['minus_di'])
+    return _state(_gt(d['adx'], th) & _gt(d['plus_di'], d['minus_di']), valid)
+
+
+def _zscore(b: Bars, n: int) -> np.ndarray:
+    def calc():
+        m, sd = sma(b.c, n), rolling_std(b.c, n, ddof=1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            z = (b.c - m) / sd
+        return np.where(np.isfinite(z), z, np.nan)
+    return b.memo(('z', n), calc)
+
+
+def _mean_reversion(b: Bars, p) -> Signals:
+    n = _pos('window', _i(p, 'window', 20, 'period'))
+    th = _f(p, 'threshold', 2.0, 'zThreshold')
+    ex = _f(p, 'exitZ', 0.0)
+    z = _zscore(b, n)
+    return _lt(z, -th), _ge(z, ex)
+
+
+def _bollinger_bands(b: Bars, p) -> Signals:
+    n = _pos('period', _i(p, 'period', 20))
+    k = _f(p, 'stdDev', 2.0)
+
+    def bands():
+        m, sd = sma(b.c, n), rolling_std(b.c, n, ddof=0)
+        return m - k * sd, m + k * sd
+    lo, up = b.memo(('bb', n, k), bands)
+    return _lt(b.c, lo), _gt(b.c, up)
+
+
+def _rsi(b: Bars, p) -> Signals:
+    n = _pos('period', _i(p, 'period', 14))
+    r = b.memo(('rsi', n), lambda: rsi(b.c, n))
+    return _lt(r, _f(p, 'oversold', 30)), _gt(r, _f(p, 'overbought', 70))
+
+
+def _stochastic(b: Bars, p) -> Signals:
+    from base.signals import crossover, crossunder
+    k, d = _pos('kPeriod', _i(p, 'kPeriod', 14)), _pos('dPeriod', _i(p, 'dPeriod', 3))
+    st = b.memo(('stoch', k, d), lambda: stochastic(b.h, b.l, b.c, k, d))
+    kk, dd = st['k'], st['d']
+    return (crossover(kk, dd) & _lt(kk, _f(p, 'oversold', 20)),
+            crossunder(kk, dd) & _gt(kk, _f(p, 'overbought', 80)))
+
+
+def _breakout(b: Bars, p) -> Signals:
+    n = _pos('period', _i(p, 'period', 20))
+    up = b.memo(('dc_up', n), lambda: prev(rolling_max(b.h, n)))
+    lo = b.memo(('dc_lo', n), lambda: prev(rolling_min(b.l, n)))
+    return _gt(b.c, up), _lt(b.c, lo)
+
+
+def _momentum(b: Bars, p) -> Signals:
+    n = _pos('period', _i(p, 'period', 12, 'lookback'))
+    th = _f(p, 'threshold', 0.02)
+    r = b.memo(('roc', n), lambda: roc(b.c, n))
+    return _gt(r, th), _lt(r, -th)
+
+
+BUILDERS: Dict[str, Callable[[Bars, Dict[str, Any]], Signals]] = {
+    'sma_crossover': _sma_crossover, 'ema_crossover': _ema_crossover, 'macd': _macd, 'adx_trend': _adx_trend,
+    'mean_reversion': _mean_reversion, 'bollinger_bands': _bollinger_bands, 'rsi': _rsi,
+    'stochastic': _stochastic, 'breakout': _breakout, 'momentum': _momentum,
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# Allocation stacks (descriptions; bt_algos builds the bt algos)
+# ════════════════════════════════════════════════════════════════════════════
+
+PERIODS = ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
+_PERIOD_ALIASES = {'day': 'daily', 'd': 'daily', 'week': 'weekly', 'w': 'weekly', 'month': 'monthly', 'm': 'monthly',
+                   'quarter': 'quarterly', 'q': 'quarterly', 'year': 'yearly', 'annual': 'yearly',
+                   'annually': 'yearly', 'y': 'yearly'}
+
+
+def parse_period(value: Any):
+    """rebalancePeriod -> 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' or an int number of
+    bars (a number sent by an older screen's spin box is honoured as bars)."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return 'monthly'
+    if isinstance(value, str):
+        s = value.strip().lower()
+        s = _PERIOD_ALIASES.get(s, s)
+        if s in PERIODS:
+            return s
+        try:
+            value = float(s)
+        except ValueError:
+            raise ValueError(f'rebalancePeriod must be one of {", ".join(PERIODS)} or a number of bars '
+                             f'(got {value!r})')
+    try:
+        n = int(round(float(value)))
+    except (TypeError, ValueError):
+        raise ValueError(f'rebalancePeriod must be one of {", ".join(PERIODS)} or a number of bars (got {value!r})')
+    if n < 1:
+        raise ValueError('rebalancePeriod must be at least 1 bar')
+    return n
+
+
+def describe_period(per) -> str:
+    return f'every {per} bars' if isinstance(per, int) else per
+
+
+def allocation_stack(sid: str, p: Dict[str, Any]) -> Dict[str, Any]:
+    """{'schedule': period | 'once', 'steps': [(algo, kwargs)...], 'lookback': bars or 0} - the bt algo stack
+    of an allocation strategy (bt_algos.build_stack turns it into bt algos)."""
+    if sid == 'buy_and_hold':
+        return {'schedule': 'once', 'steps': [('SelectAll', {}), ('WeighEqually', {})], 'lookback': 0}
+    per = parse_period(p.get('rebalancePeriod', 'monthly'))
+    if sid == 'equal_weight':
+        steps = [('SelectAll', {}), ('WeighEqually', {})]
+        look = 0
+    elif sid in ('inv_vol', 'mean_var', 'min_var', 'risk_parity'):
+        look = _pos('lookback', _i(p, 'lookback', 20 if sid == 'inv_vol' else 60))
+        algo = {'inv_vol': 'WeighInvVolBars', 'mean_var': 'WeighMeanVarBars', 'min_var': 'WeighMinVarBars',
+                'risk_parity': 'WeighERCBars'}[sid]
+        steps = [('SelectAll', {}), (algo, {'lookback': look})]
+    elif sid == 'target_vol':
+        look = _pos('lookback', _i(p, 'lookback', 20))
+        tv = _f(p, 'targetVol', 10.0)
+        if not tv > 0:
+            raise ValueError('targetVol must be a positive percentage')
+        steps = [('SelectAll', {}), ('WeighEqually', {}), ('TargetVolBars', {'target': tv / 100.0, 'lookback': look})]
+    elif sid in ('momentum_topn', 'momentum_inv_vol'):
+        look = _pos('lookback', _i(p, 'lookback', 60))
+        n = _pos('topN', _i(p, 'topN', 2))
+        last = ('WeighEqually', {}) if sid == 'momentum_topn' else ('WeighInvVolBars', {'lookback': look})
+        steps = [('SelectAll', {}), ('StatTotalReturnBars', {'lookback': look}), ('SelectN', {'n': n}), last]
+    elif sid == 'dual_momentum':
+        rel = _pos('relativePeriod', _i(p, 'relativePeriod', 252))
+        ab = _pos('absolutePeriod', _i(p, 'absolutePeriod', 252))
+        n = _pos('topN', _i(p, 'topN', 1))
+        look = max(rel, ab)
+        steps = [('SelectAll', {}), ('StatTotalReturnBars', {'lookback': rel}), ('SelectN', {'n': n}),
+                 ('AbsoluteMomentumBars', {'lookback': ab, 'threshold': 0.0}), ('WeighEqually', {})]
+    else:
+        raise ValueError(f'{sid} is not an allocation strategy')
+    return {'schedule': per, 'steps': steps, 'lookback': look}
+
+
+def describe_stack(stack: Dict[str, Any]) -> str:
+    sch = stack['schedule']
+    sched = 'RunOnce' if sch == 'once' else (f'RunEveryNPeriods({sch})' if isinstance(sch, int) else
+                                            {'daily': 'RunDaily', 'weekly': 'RunWeekly', 'monthly': 'RunMonthly',
+                                             'quarterly': 'RunQuarterly', 'yearly': 'RunYearly'}[sch] + '()')
+    parts = [sched] + [f'{a}({", ".join(f"{k}={v}" for k, v in kw.items())})' for a, kw in stack['steps']]
+    return ' > '.join(parts)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Registry
+# ════════════════════════════════════════════════════════════════════════════
+
+ALLOCATION = ('buy_and_hold', 'equal_weight', 'inv_vol', 'mean_var', 'min_var', 'risk_parity', 'target_vol',
+              'momentum_topn', 'momentum_inv_vol', 'dual_momentum')
+# cross-sectional stacks: with one symbol they would hold it 100 % (= buy_and_hold's result under another
+# name - audit T0.1 / T0.2), so they refuse to run on fewer symbols (INPUT error naming the reason)
+MIN_SYMBOLS = {'equal_weight': 2, 'inv_vol': 2, 'mean_var': 2, 'min_var': 2, 'risk_parity': 2, 'momentum_topn': 2,
+               'momentum_inv_vol': 2}
+ALIASES = {'sma': 'sma_crossover', 'ema': 'ema_crossover', 'macd_crossover': 'macd', 'bollinger': 'bollinger_bands',
+           'zscore': 'mean_reversion', 'donchian_breakout': 'breakout', 'buy_hold': 'buy_and_hold',
+           'buyandhold': 'buy_and_hold', 'inverse_volatility': 'inv_vol', 'erc': 'risk_parity',
+           'min_variance': 'min_var', 'mean_variance': 'mean_var', 'rebalance_periodic': 'equal_weight'}
+
+
+def resolve(strategy_type: Any) -> str:
+    s = str(strategy_type or 'sma_crossover').strip().lower()
+    s = ALIASES.get(s, s)
+    if s not in BUILDERS and s not in ALLOCATION:
+        raise ValueError(f'Unknown strategy {strategy_type!r}. Available: '
+                         f'{", ".join(sorted(set(BUILDERS) | set(ALLOCATION)))}.')
+    return s
+
+
+def kind_of(sid: str) -> str:
+    return 'allocation' if sid in ALLOCATION else 'signals'
+
+
+def build_signals(sid: str, bars: Bars, params: Dict[str, Any]) -> Signals:
+    e, x = BUILDERS[sid](bars, params or {})
+    return np.asarray(e, dtype=bool), np.asarray(x, dtype=bool)
+
+
+def default_warmup(sid: str, params: Dict[str, Any]) -> int:
+    """Bars a strategy's inputs need before its first possible decision (provenance, walk-forward
+    warm-up)."""
+    p = params or {}
+    if sid in ALLOCATION:
+        try:
+            return int(allocation_stack(sid, p)['lookback'])
+        except ValueError:
+            return 0
+    if sid == 'macd':
+        return _i(p, 'slowPeriod', 26) + _i(p, 'signalPeriod', 9)
+    if sid == 'adx_trend':
+        return 2 * _i(p, 'adxPeriod', 14, 'period')
+    if sid == 'stochastic':
+        return _i(p, 'kPeriod', 14) + _i(p, 'dPeriod', 3)
+    look = [int(round(float(v))) for k, v in p.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
+            and any(w in k.lower() for w in ('period', 'lookback', 'window'))]
+    return int(max(look)) if look else 0
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Catalogue (get_strategies)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _p(pid, name, default, lo, hi, step=1, typ='int', desc=None, choices=None):
+    d = {'id': pid, 'name': name, 'label': name, 'type': typ, 'default': default, 'min': lo, 'max': hi, 'step': step}
+    if choices is not None:
+        d['choices'] = list(choices)
+    if desc:
+        d['description'] = desc
+    return d
+
+
+_REBAL = _p('rebalancePeriod', 'Rebalance', 'monthly', None, None, None, 'choice',
+            'When bt\'s schedule algo fires (first bar of each period); a number = every N bars', PERIODS)
+_FAST_SLOW = [{'lt': ['fastPeriod', 'slowPeriod'], 'message': 'The fast period must be shorter than the slow period.'}]
+_SIM = 'base.simulator (signals mode) - the bt library is not used for signal strategies'
+_BTS = 'bt library algo stack decides target weights; base.simulator executes them (bt itself at next_close)'
+
+CATALOG: List[Dict[str, Any]] = [
+    # ── allocation (bt algo stack) ─────────────────────────────────────────
+    {'type': 'buy_and_hold', 'name': 'Buy & Hold', 'category': 'portfolio',
+     'description': 'bt RunOnce + SelectAll + WeighEqually: equal weights on the first decision, never rebalanced',
+     'parameters': []},
+    {'type': 'equal_weight', 'name': 'Equal Weight', 'category': 'portfolio',
+     'description': 'Equal weights across all symbols, rebalanced on bt\'s schedule (monthly by default; needs 2+ '
+                    'symbols - on one symbol it would be buy and hold)',
+     'parameters': [_REBAL]},
+    {'type': 'inv_vol', 'name': 'Inverse Volatility', 'category': 'portfolio',
+     'description': 'Weights proportional to 1 / volatility of the last N bars (needs 2+ symbols)',
+     'parameters': [_p('lookback', 'Lookback (bars)', 20, 5, 252), _REBAL]},
+    {'type': 'mean_var', 'name': 'Mean-Variance (max Sharpe)', 'category': 'portfolio',
+     'description': 'Markowitz tangency weights (ffn calc_mean_var_weights, Ledoit-Wolf covariance, long only) '
+                    'from the last N bars (needs 2+ symbols)',
+     'parameters': [_p('lookback', 'Lookback (bars)', 60, 20, 504), _REBAL]},
+    {'type': 'min_var', 'name': 'Minimum Variance', 'category': 'portfolio',
+     'description': 'Long-only minimum-variance weights (Ledoit-Wolf covariance of the last N bars; no return '
+                    'estimate) (needs 2+ symbols)',
+     'parameters': [_p('lookback', 'Lookback (bars)', 60, 20, 504), _REBAL]},
+    {'type': 'risk_parity', 'name': 'Risk Parity (ERC)', 'category': 'portfolio',
+     'description': 'Equal risk contribution weights (ffn calc_erc_weights, Ledoit-Wolf) from the last N bars '
+                    '(needs 2+ symbols)',
+     'parameters': [_p('lookback', 'Lookback (bars)', 60, 20, 504), _REBAL]},
+    {'type': 'target_vol', 'name': 'Target Volatility', 'category': 'portfolio',
+     'description': 'Equal weights scaled so the portfolio\'s N-bar volatility meets the target; capped at 100 % '
+                    'invested (the rest stays in cash)',
+     'parameters': [_p('targetVol', 'Target Vol (%)', 10.0, 1.0, 50.0, 0.5, 'float'),
+                    _p('lookback', 'Lookback (bars)', 20, 5, 252), _REBAL]},
+    {'type': 'momentum_topn', 'name': 'Momentum Top-N', 'category': 'momentum',
+     'description': 'Hold the N symbols with the highest N-bar total return, equal weight (needs 2+ symbols)',
+     'parameters': [_p('topN', 'Top N', 2, 1, 50), _p('lookback', 'Lookback (bars)', 60, 5, 504), _REBAL]},
+    {'type': 'momentum_inv_vol', 'name': 'Momentum + Inv Vol', 'category': 'momentum',
+     'description': 'Top N by N-bar total return, weighted by inverse volatility (needs 2+ symbols)',
+     'parameters': [_p('topN', 'Top N', 2, 1, 50), _p('lookback', 'Lookback (bars)', 60, 5, 504), _REBAL]},
+    {'type': 'dual_momentum', 'name': 'Dual Momentum', 'category': 'momentum',
+     'description': 'Relative momentum picks the top N symbols by return over the relative period; absolute '
+                    'momentum keeps only those with a positive return over the absolute period (else cash)',
+     'parameters': [_p('relativePeriod', 'Relative Period (bars)', 252, 20, 504),
+                    _p('absolutePeriod', 'Absolute Period (bars)', 252, 20, 504), _p('topN', 'Top N', 1, 1, 50),
+                    _REBAL]},
+    # ── signals (base.simulator) ───────────────────────────────────────────
+    {'type': 'momentum', 'name': 'Momentum (ROC)', 'category': 'momentum',
+     'description': 'Long when the N-bar rate of change > threshold, out when it falls below -threshold',
+     'parameters': [_p('period', 'Period (bars)', 12, 2, 252),
+                    _p('threshold', 'Threshold (fraction)', 0.02, 0.0, 0.2, 0.005, 'float', '0.02 = 2 %')]},
+    {'type': 'sma_crossover', 'name': 'SMA Crossover', 'category': 'trend',
+     'description': 'Long while the fast SMA is above the slow SMA',
+     'parameters': [_p('fastPeriod', 'Fast Period', 10, 2, 100), _p('slowPeriod', 'Slow Period', 20, 5, 300)],
+     'constraints': _FAST_SLOW},
+    {'type': 'ema_crossover', 'name': 'EMA Crossover', 'category': 'trend',
+     'description': 'Long while the fast EMA is above the slow EMA',
+     'parameters': [_p('fastPeriod', 'Fast Period', 10, 2, 100), _p('slowPeriod', 'Slow Period', 20, 5, 300)],
+     'constraints': _FAST_SLOW},
+    {'type': 'macd', 'name': 'MACD', 'category': 'trend', 'description': 'Long while the MACD line is above its signal line',
+     'parameters': [_p('fastPeriod', 'Fast Period', 12, 2, 50), _p('slowPeriod', 'Slow Period', 26, 10, 100),
+                    _p('signalPeriod', 'Signal Period', 9, 2, 50)], 'constraints': _FAST_SLOW},
+    {'type': 'adx_trend', 'name': 'ADX Trend', 'category': 'trend',
+     'description': 'Long while Wilder ADX > threshold and +DI > -DI',
+     'parameters': [_p('adxPeriod', 'ADX Period', 14, 5, 50), _p('adxThreshold', 'ADX Threshold', 25.0, 10.0, 50.0, 1.0,
+                                                                   'float')]},
+    {'type': 'breakout', 'name': 'Donchian Breakout', 'category': 'breakout',
+     'description': 'Enter on a close above the previous N-bar high, exit on a close below the previous N-bar low',
+     'parameters': [_p('period', 'Channel Period', 20, 5, 200)]},
+    {'type': 'mean_reversion', 'name': 'Z-Score Reversion', 'category': 'meanReversion',
+     'description': 'Enter when the z-score of the close < -threshold, exit when it is back at exitZ (0 = the mean)',
+     'parameters': [_p('window', 'Window', 20, 5, 200), _p('threshold', 'Z Threshold', 2.0, 0.5, 4.0, 0.1, 'float'),
+                    _p('exitZ', 'Exit Z', 0.0, -2.0, 3.0, 0.1, 'float')]},
+    {'type': 'bollinger_bands', 'name': 'Bollinger Bands', 'category': 'meanReversion',
+     'description': 'Enter on a close below the lower band, exit on a close above the upper band',
+     'parameters': [_p('period', 'Period', 20, 5, 200), _p('stdDev', 'Std Dev', 2.0, 0.5, 4.0, 0.1, 'float')]},
+    {'type': 'rsi', 'name': 'RSI Mean Reversion', 'category': 'meanReversion',
+     'description': 'Wilder RSI: enter below oversold, exit above overbought',
+     'parameters': [_p('period', 'Period', 14, 2, 50), _p('oversold', 'Oversold', 30.0, 5.0, 50.0, 1.0, 'float'),
+                    _p('overbought', 'Overbought', 70.0, 50.0, 95.0, 1.0, 'float')],
+     'constraints': [{'lt': ['oversold', 'overbought'], 'message': 'Oversold must be below overbought.'}]},
+    {'type': 'stochastic', 'name': 'Stochastic', 'category': 'meanReversion',
+     'description': '%K crosses above %D below the oversold level (enter) / below %D above overbought (exit)',
+     'parameters': [_p('kPeriod', '%K Period', 14, 3, 50), _p('dPeriod', '%D Period', 3, 1, 20),
+                    _p('oversold', 'Oversold', 20.0, 5.0, 45.0, 1.0, 'float'),
+                    _p('overbought', 'Overbought', 80.0, 55.0, 95.0, 1.0, 'float')],
+     'constraints': [{'lt': ['oversold', 'overbought'], 'message': 'Oversold must be below overbought.'}]},
+]
+
+
+def catalog_entry(sid: str) -> Optional[Dict[str, Any]]:
+    return next((c for c in CATALOG if c['type'] == sid), None)
+
+
+def defaults(sid: str) -> Dict[str, Any]:
+    c = catalog_entry(sid)
+    return {p['id']: p['default'] for p in (c or {}).get('parameters', [])}
+
+
+def get_strategy_catalog() -> List[Dict[str, Any]]:
+    out = []
+    for s in CATALOG:
+        d = dict(s)
+        d['id'] = s['type']
+        d['kind'] = kind_of(s['type'])
+        d['implementation'] = _BTS if d['kind'] == 'allocation' else _SIM
+        d['minSymbols'] = MIN_SYMBOLS.get(s['type'], 1)
+        d.setdefault('constraints', [])
+        d['parameters'] = [dict(p) for p in s['parameters']]
+        d['params'] = d['parameters']
+        out.append(d)
+    return out

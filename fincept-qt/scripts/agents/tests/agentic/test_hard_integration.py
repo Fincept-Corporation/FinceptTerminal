@@ -34,13 +34,20 @@ from pathlib import Path
 
 
 # ── Gating ──────────────────────────────────────────────────────────────────
-if os.environ.get("AGENTIC_INTEGRATION") != "1":
-    print("AGENTIC_INTEGRATION!=1 — skipping (set =1 to opt in).")
-    sys.exit(0)
-
+# Run as a script it exits 0 when not opted in. Collected by pytest it must not
+# call sys.exit (pytest aborted the whole run with INTERNALERROR SystemExit):
+# the module is skipped instead, with the reason.
 _TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("AGENTIC_TEST_API_KEY")
-if not _TOKEN:
-    print("ANTHROPIC_AUTH_TOKEN unset — skipping.")
+_SKIP_REASON = None
+if os.environ.get("AGENTIC_INTEGRATION") != "1":
+    _SKIP_REASON = "AGENTIC_INTEGRATION!=1 — skipping (set =1 to opt in)."
+elif not _TOKEN:
+    _SKIP_REASON = "ANTHROPIC_AUTH_TOKEN (or AGENTIC_TEST_API_KEY) unset — skipping."
+if _SKIP_REASON:
+    if __name__ != "__main__":
+        import pytest
+        pytest.skip(_SKIP_REASON, allow_module_level=True)
+    print(_SKIP_REASON)
     sys.exit(0)
 
 # ── Routing — defaults to MiniMax-as-Anthropic but fully overridable ────────
@@ -358,4 +365,12 @@ for name, ok, dt, err in RESULTS:
 print(f"\n{passed}/{len(RESULTS)} scenarios passed.")
 print(f"DB: {TMP_DB}")
 
-sys.exit(0 if passed == len(RESULTS) else 1)
+if __name__ == "__main__":
+    sys.exit(0 if passed == len(RESULTS) else 1)
+
+
+def test_hard_integration_scenarios():
+    """pytest entry point: the scenarios above ran when the module was
+    collected; fail with the ones that did not pass."""
+    failed = [(name, err) for name, ok, _, err in RESULTS if not ok]
+    assert not failed, failed

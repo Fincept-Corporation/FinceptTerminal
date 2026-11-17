@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QFontMetrics>
 #include <QPainter>
 
 namespace fincept::screens::polymarket {
@@ -9,7 +10,23 @@ namespace fincept::screens::polymarket {
 using namespace fincept::ui;
 using namespace fincept::services::prediction;
 
-static const char* OUTCOME_BAR_COLORS[] = {"#00D66F", "#FF3B3B", "#FF8800", "#4F8EF7", "#A855F7"};
+namespace {
+
+// Card fonts and the vertical space they need, from the user's font size.
+QFont card_title_font() {
+    return fonts::font(-1, QFont::DemiBold);
+}
+QFont card_price_font() {
+    return fonts::font(-2, QFont::Bold);
+}
+int card_title_height() { // two wrapped title lines
+    return 2 * QFontMetrics(card_title_font()).lineSpacing();
+}
+int card_bar_pitch() { // one outcome bar row, price label included
+    return qMax(12, QFontMetrics(card_price_font()).height());
+}
+
+} // namespace
 
 // ── Model ───────────────────────────────────────────────────────────────────
 
@@ -88,7 +105,8 @@ const PredictionEvent* PolymarketMarketCardModel::event_at(int row) const {
 PolymarketMarketCardDelegate::PolymarketMarketCardDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 
 QSize PolymarketMarketCardDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const {
-    return {280, 80};
+    // 10 top pad + title + 2 gap + two bar rows + bottom pad; 80 at the default size.
+    return {280, qMax(80, 10 + card_title_height() + 2 + 2 * card_bar_pitch() + 10)};
 }
 
 void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -164,60 +182,70 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     }
 
     // ── Title ─────────────────────────────────────────────────────────────
-    QFont title_font(fonts::DATA_FAMILY, 10);
-    title_font.setWeight(QFont::DemiBold);
-    painter->setFont(title_font);
+    painter->setFont(card_title_font());
 
     QColor title_color = selected ? accent : QColor(colors::TEXT_PRIMARY());
     if (is_closed)
         title_color = QColor(colors::TEXT_DIM());
     painter->setPen(title_color);
 
-    const QRect title_rect(x, y, w, 28);
+    const int title_h = card_title_height();
+    const QRect title_rect(x, y, w, title_h);
     painter->drawText(title_rect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, title.left(90));
-    y += 30;
+    y += title_h + 2;
 
     // ── Outcome probability bars ──────────────────────────────────────────
+    const QFont price_font = card_price_font();
+    const QFontMetrics price_fm(price_font);
+    const int pitch = card_bar_pitch();
     const int bars_to_draw = qMin(2, outcomes.size());
     if (bars_to_draw >= 1) {
-        const int bar_w = w - 62; // leave space for price label
+        // Wide enough for the longest price either style prints: "100.0¢", or a
+        // contract price with its currency unit per the user's settings ("USD 1.00").
+        const int label_w = qMax(56, qMax(price_fm.horizontalAdvance(QStringLiteral("100.0¢")),
+                                          price_fm.horizontalAdvance(pres.format_price(1.0))) +
+                                         4);
+        const int bar_w = w - label_w - 6; // leave space for price label
         const int bar_h = 8;
-        const int gap = 4;
 
-        QFont price_font(fonts::DATA_FAMILY, 9);
-        price_font.setWeight(QFont::Bold);
-
+        // Kalshi outcome prices are bids; the presentation turns them into a
+        // displayable probability (last / mid, NO = 1 − YES).
+        const PredictionMarket* bar_market = mkt ? mkt : (evt && !evt->markets.isEmpty() ? &evt->markets[0] : nullptr);
         for (int i = 0; i < bars_to_draw; ++i) {
             const auto& o = outcomes[i];
-            const double pct = qBound(0.0, o.price, 1.0);
+            const double pct = bar_market ? pres.display_probability(*bar_market, i) : qBound(0.0, o.price, 1.0);
             const int filled = static_cast<int>(bar_w * pct);
 
-            QColor bar_color = (i == 0) ? pres.accent : QColor(OUTCOME_BAR_COLORS[qMin(i, 4)]);
+            // First outcome in the exchange accent, the second in the theme's
+            // next categorical chart colour.
+            QColor bar_color = (i == 0) ? pres.accent : colors::chart_color(i);
             if (is_closed)
                 bar_color = QColor(colors::BORDER_BRIGHT());
 
+            const int bar_y = y + (pitch - bar_h) / 2;
             // Track (background)
-            painter->fillRect(x, y, bar_w, bar_h, QColor(colors::BG_RAISED()));
+            painter->fillRect(x, bar_y, bar_w, bar_h, QColor(colors::BG_RAISED()));
             // Fill
             if (filled > 0)
-                painter->fillRect(x, y, filled, bar_h, bar_color);
+                painter->fillRect(x, bar_y, filled, bar_h, bar_color);
 
             // Price label (right-aligned to bar gutter)
             painter->setFont(price_font);
             painter->setPen(is_closed ? QColor(colors::TEXT_DIM()) : bar_color);
             const QString price_str = pres.format_price(pct);
-            painter->drawText(x + bar_w + 4, y - 1, 56, bar_h + 2, Qt::AlignLeft | Qt::AlignVCenter, price_str);
+            painter->drawText(x + bar_w + 4, y, label_w, pitch, Qt::AlignLeft | Qt::AlignVCenter, price_str);
 
-            y += bar_h + gap;
+            y += pitch;
         }
     } else {
         // Single-outcome or no-outcome: show volume
-        QFont meta_font(fonts::DATA_FAMILY, 9);
-        painter->setFont(meta_font);
+        painter->setFont(fonts::font(-2));
         painter->setPen(QColor(colors::TEXT_SECONDARY()));
-        painter->drawText(x, y, w, 14, Qt::AlignLeft | Qt::AlignVCenter, pres.format_volume(vol));
+        const QString vol_str = pres.format_volume(vol);
+        painter->drawText(x, y, w, pitch, Qt::AlignLeft | Qt::AlignVCenter, vol_str);
         if (evt && sub_market_count > 0) {
-            painter->drawText(x + 80, y, w - 80, 14, Qt::AlignLeft | Qt::AlignVCenter,
+            const int count_x = qMax(80, price_fm.horizontalAdvance(vol_str) + 12);
+            painter->drawText(x + count_x, y, w - count_x, pitch, Qt::AlignLeft | Qt::AlignVCenter,
                               tr("%1 mkts").arg(sub_market_count));
         }
     }
@@ -231,7 +259,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         painter->drawEllipse(dot_x, dot_y, 5, 5);
     } else if (is_active) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(colors::POSITIVE()));
+        painter->setBrush(QColor(colors::SUCCESS()));
         painter->drawEllipse(dot_x, dot_y, 5, 5);
     }
 

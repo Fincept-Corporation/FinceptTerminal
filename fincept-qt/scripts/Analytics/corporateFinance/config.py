@@ -1,5 +1,6 @@
 """Configuration for Corporate Finance Module"""
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
@@ -13,15 +14,12 @@ def get_database_dir() -> Path:
     if data_dir := os.environ.get("FINCEPT_DATA_DIR"):
         return Path(data_dir)
 
-    # Default to platform-specific user data directory
-    if os.name == "nt":  # Windows
-        base = Path(os.environ.get("LOCALAPPDATA", "C:/Users/Default/AppData/Local"))
-    elif os.uname().sysname == "Darwin":  # macOS
-        base = Path.home() / "Library" / "Application Support"
-    else:  # Linux
-        base = Path.home() / ".local" / "share"
-
-    return base / "fincept-dev"
+    # Run by hand: the edition's default data root (fincept_paths), the folder the
+    # terminal itself uses.
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.append(str(SCRIPTS_DIR))
+    import fincept_paths
+    return fincept_paths.data_root()
 
 DATABASE_DIR = get_database_dir()
 MA_DATABASE = DATABASE_DIR / "ma_deals.db"

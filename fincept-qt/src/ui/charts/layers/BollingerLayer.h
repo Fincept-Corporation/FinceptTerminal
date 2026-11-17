@@ -18,6 +18,10 @@ class BollingerLayer : public SeriesLayer {
     int period() const { return period_; }
     double num_std() const { return num_std_; }
 
+  protected:
+    QColor default_color() const override;
+    void refresh_theme_colors() override;
+
   private:
     int period_;
     double num_std_;
@@ -25,6 +29,7 @@ class BollingerLayer : public SeriesLayer {
     QLineSeries* lower_ = nullptr;
 
     void attach_band(QLineSeries*& s, QChart* chart);
+    void style_band(QLineSeries* s) const;
     void detach_band(QLineSeries*& s, QChart* chart);
 };
 

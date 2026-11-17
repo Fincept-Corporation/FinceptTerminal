@@ -1,63 +1,51 @@
 #include "screens/screener/ScreenerResultsModel.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QColor>
 #include <QCoreApplication>
 #include <QFont>
-#include <QLocale>
 
 #include <cmath>
 
 namespace fincept::screens {
 
+// The user's number format (Settings > Formatting: grouping / decimal marks, compact scheme) through
+// fincept::ui::formatting — this used to be a fixed en_US formatter. The view re-reads the cells
+// when that format changes (refresh_model_on_format_change in the constructor).
 namespace screener_format {
 
-namespace {
-const QLocale& number_locale() {
-    // Fixed English grouping/decimal marks: a terminal reads the same on every machine.
-    static const QLocale loc(QLocale::English, QLocale::UnitedStates);
-    return loc;
-}
-const QString kDash = QStringLiteral("—");
-} // namespace
+namespace sfmt = fincept::ui::formatting;
 
 QString fixed(double v, int decimals) {
     if (std::isnan(v))
-        return kDash;
-    return number_locale().toString(v, 'f', decimals);
+        return sfmt::placeholder();
+    return sfmt::number(v, decimals);
 }
 
 QString price(double v) {
     if (std::isnan(v))
-        return kDash;
-    return fixed(v, std::fabs(v) >= 1.0 || v == 0.0 ? 2 : 4);
+        return sfmt::placeholder();
+    return sfmt::price(v);
 }
 
 QString compact(double v) {
     if (std::isnan(v))
-        return kDash;
-    const double a = std::fabs(v);
-    if (a >= 1e12)
-        return fixed(v / 1e12, 2) + QLatin1Char('T');
-    if (a >= 1e9)
-        return fixed(v / 1e9, 2) + QLatin1Char('B');
-    if (a >= 1e6)
-        return fixed(v / 1e6, 2) + QLatin1Char('M');
-    if (a >= 1e3)
-        return fixed(v / 1e3, 2) + QLatin1Char('K');
-    return fixed(v, 0);
+        return sfmt::placeholder();
+    return sfmt::compact(v, sfmt::Compact::FromSettings);
 }
 
 QString percent(double v, bool with_sign) {
     if (std::isnan(v))
-        return kDash;
-    return (with_sign && v > 0 ? QStringLiteral("+") : QString()) + fixed(v, 2) + QLatin1Char('%');
+        return sfmt::placeholder();
+    return sfmt::pct(v, 2, with_sign);
 }
 
 QString by_unit(double v, const QString& unit) {
     if (std::isnan(v))
-        return kDash;
+        return sfmt::placeholder();
     if (unit == QLatin1String("pct"))
         return percent(v, false);
     if (unit == QLatin1String("price") || unit == QLatin1String("per_share"))
@@ -106,6 +94,8 @@ QString model_tr(const char* text) {
 ScreenerResultsModel::ScreenerResultsModel(QObject* parent) : ui::LiveTableModel<services::ScreenerRow>(parent) {
     set_key([](const services::ScreenerRow& r) { return r.symbol; });
     set_cell([this](const services::ScreenerRow& r, int col, int role) { return cell(r, col, role); });
+    // Cells are formatted per the user's number format: re-read them when it changes.
+    fincept::ui::formatting::refresh_model_on_format_change(this);
 }
 
 void ScreenerResultsModel::set_base_headers(const QStringList& headers, const QStringList& tooltips) {
@@ -302,24 +292,6 @@ QVariant ScreenerResultsModel::extra_cell(const services::ScreenerRow& r, const 
         default:
             return {};
     }
-}
-
-bool ScreenerSortProxy::lessThan(const QModelIndex& left, const QModelIndex& right) const {
-    const QVariant a = left.data(sortRole());
-    const QVariant b = right.data(sortRole());
-    const bool a_missing = !a.isValid();
-    const bool b_missing = !b.isValid();
-    if (a_missing || b_missing) {
-        if (a_missing && b_missing)
-            return false;
-        // Qt sorts descending by comparing with the arguments swapped, so "missing" has to be the
-        // largest value ascending and the smallest descending to land at the bottom both ways.
-        const bool descending = sortOrder() == Qt::DescendingOrder;
-        return a_missing ? descending : !descending;
-    }
-    if (a.typeId() == QMetaType::Double && b.typeId() == QMetaType::Double)
-        return a.toDouble() < b.toDouble();
-    return QString::compare(a.toString(), b.toString(), Qt::CaseInsensitive) < 0;
 }
 
 } // namespace fincept::screens

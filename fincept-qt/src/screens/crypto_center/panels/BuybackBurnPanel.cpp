@@ -1,8 +1,11 @@
 #include "screens/crypto_center/panels/BuybackBurnPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -11,7 +14,6 @@
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QStyle>
@@ -20,6 +22,8 @@
 
 #include <cmath>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
@@ -27,31 +31,28 @@ namespace {
 constexpr const char* kTopicEpoch = "treasury:buyback_epoch";
 constexpr const char* kTopicBurnTotal = "treasury:burn_total";
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-QString format_usd(double v) {
-    if (v <= 0.0)
-        return QStringLiteral("$0");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 0));
+// The buyback / burn worker publishes Fincept's revenue and spend in USD: shown
+// in USD as published, never converted.
+QString bbp_format_usd(double v) {
+    return cc_fmt::money(v > 0.0 ? v : 0.0, QStringLiteral("USD"), cc_fmt::Compact::None, 0);
 }
 
 QString format_usd_precise(double v) {
-    if (v <= 0.0)
-        return QStringLiteral("$0.00");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 2));
+    return cc_fmt::money(v > 0.0 ? v : 0.0, QStringLiteral("USD"));
 }
 
 QString format_usd_micro(double v) {
     // Per-unit price for $FNCPT — needs many decimals.
     if (v <= 0.0)
         return QStringLiteral("—");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 7));
+    return cc_fmt::money_precise(v, QStringLiteral("USD"));
 }
 
 /// Convert an integer-string atomic amount into a human-friendly count
-/// like "82.4M" / "1.42B" given the token decimals.
+/// like "82.4M" / "1.42B" given the token decimals (a token quantity, abbreviated
+/// per the user's compact-number setting).
 QString format_token_compact(const QString& raw, int decimals) {
     if (raw.isEmpty())
         return QStringLiteral("—");
@@ -62,13 +63,7 @@ QString format_token_compact(const QString& raw, int decimals) {
     const double ui = static_cast<double>(units) / std::pow(10.0, std::max(0, decimals));
     if (ui <= 0.0)
         return QStringLiteral("0");
-    if (ui >= 1e9)
-        return QStringLiteral("%1 B").arg(QLocale::system().toString(ui / 1e9, 'f', 2));
-    if (ui >= 1e6)
-        return QStringLiteral("%1 M").arg(QLocale::system().toString(ui / 1e6, 'f', 1));
-    if (ui >= 1e3)
-        return QStringLiteral("%1 K").arg(QLocale::system().toString(ui / 1e3, 'f', 1));
-    return QLocale::system().toString(ui, 'f', 0);
+    return cc_fmt::compact(ui, cc_fmt::Compact::FromSettings);
 }
 
 QString format_window(qint64 start_ms, qint64 end_ms) {
@@ -95,6 +90,17 @@ BuybackBurnPanel::BuybackBurnPanel(QWidget* parent) : QWidget(parent) {
 
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this, &BuybackBurnPanel::on_topic_error);
+    // A number-format / currency change re-renders the figures on screen from the hub's last
+    // values (no new request).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!has_data_)
+            return;
+        auto& h = fincept::datahub::DataHub::instance();
+        if (const QVariant v = h.peek_raw(QString::fromLatin1(kTopicEpoch)); v.isValid())
+            on_epoch_update(v);
+        if (const QVariant v = h.peek_raw(QString::fromLatin1(kTopicBurnTotal)); v.isValid())
+            on_burn_total_update(v);
+    });
 }
 
 BuybackBurnPanel::~BuybackBurnPanel() = default;
@@ -115,7 +121,7 @@ void BuybackBurnPanel::build_ui() {
     title_->setObjectName(QStringLiteral("buybackBurnTitle"));
     epoch_window_ = new QLabel(tr("epoch — · — → —"), head);
     epoch_window_->setObjectName(QStringLiteral("buybackBurnHeadCaption"));
-    status_pill_ = new QLabel(tr("LIVE"), head);
+    status_pill_ = new QLabel(tr("LOADING"), head); // LIVE/DEMO once a value arrives
     status_pill_->setObjectName(QStringLiteral("buybackBurnPill"));
     hl->addWidget(title_);
     hl->addWidget(epoch_window_);
@@ -227,43 +233,43 @@ void BuybackBurnPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#buybackBurnPanel { background:%1; }"
+    const QString ss = QString("QWidget#buybackBurnPanel { background:%1; }"
                                       "QWidget#buybackBurnHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#buybackBurnTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#buybackBurnTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#buybackBurnHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#buybackBurnHeadCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
                                       "QLabel#buybackBurnPill { color:%7; background:%8; border:1px solid %3;"
-                                      "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
+                                      "  font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
-                                      "QLabel#buybackBurnPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
+                                      "QLabel#buybackBurnPillDemo { color:%4; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
+                                      "  border:1px solid %11; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
 
                                       "QWidget#buybackBurnBody { background:%1; }"
-                                      "QLabel#buybackBurnSectionTitle { color:%4; font-family:%5; font-size:10px;"
+                                      "QLabel#buybackBurnSectionTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.5px; background:transparent;"
                                       "  padding:0; margin-top:4px; }"
-                                      "QLabel#buybackBurnCaption { color:%6; font-family:%5; font-size:9px;"
+                                      "QLabel#buybackBurnCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#buybackBurnValue { color:%7; font-family:%5; font-size:12px;"
+                                      "QLabel#buybackBurnValue { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#buybackBurnValueAmber { color:%4; font-family:%5; font-size:13px;"
+                                      "QLabel#buybackBurnValueAmber { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#buybackBurnSubMeta { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#buybackBurnSubMeta { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  background:transparent; }"
-                                      "QPushButton#buybackBurnSig { color:%4; font-family:%5; font-size:11px;"
+                                      "QPushButton#buybackBurnSig { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  text-decoration:underline; background:transparent; border:none;"
                                       "  padding:0; text-align:right; }"
                                       "QPushButton#buybackBurnSig:hover { color:%10; }"
 
                                       "QFrame#buybackBurnSeparator { color:%3; background:%3; }"
 
-                                      "QFrame#buybackBurnErrorStrip { background:rgba(220,38,38,0.10);"
+                                      "QFrame#buybackBurnErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                                       "  border:1px solid %9; }"
-                                      "QLabel#buybackBurnErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                                      "QLabel#buybackBurnErrorIcon { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#buybackBurnErrorText { color:%9; font-family:%5; font-size:11px;"
+                                      "QLabel#buybackBurnErrorText { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }")
                            .arg(BG_BASE(),                  // %1
                                 BG_SURFACE(),               // %2
@@ -273,14 +279,14 @@ void BuybackBurnPanel::apply_theme() {
                                 TEXT_TERTIARY(),            // %6
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
-                                NEGATIVE())                 // %9
+                                DANGER())                   // %9
                            // One arg per marker, in ascending marker order — a
                            // marker cannot be "reserved" by passing an unused
                            // arg: QString::arg fills the LOWEST marker present,
                            // so the spare shifts every later colour by one and
                            // warns "Argument missing" for the overflow.
                            .arg(BORDER_BRIGHT(),            // %10
-                                QStringLiteral("#78350f")); // %11 darker amber
+                                AMBER_DIM());               // %11 darker amber
 
     setStyleSheet(ss);
 }
@@ -338,7 +344,7 @@ void BuybackBurnPanel::retranslateUi() {
         spent_caption_->setText(tr("SPENT ON BUYBACK"));
     if (burn_signature_link_) {
         burn_signature_link_->setToolTip(epoch_is_mock_ ? tr("Demo data — no such transaction exists on-chain. "
-                                                             "Configure fincept.treasury_endpoint for real burn data.")
+                                                             "A live burn feed is not available in this build.")
                                                         : tr("Open burn transaction in Solscan"));
     }
     // Re-render the LIVE/DEMO pill in the new locale.
@@ -352,6 +358,7 @@ void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
         return;
     const auto e = v.value<fincept::wallet::BuybackEpoch>();
     epoch_is_mock_ = e.is_mock;
+    has_data_ = true;
     update_demo_chip(epoch_is_mock_ || burn_total_is_mock_);
 
     // The DEMO pill sits at the far right of the head; on a wide panel it is
@@ -364,17 +371,17 @@ void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
     if (epoch_section_title_)
         epoch_section_title_->setText(e.is_mock ? tr("THIS EPOCH · SAMPLE DATA") : tr("THIS EPOCH"));
 
-    revenue_total_->setText(format_usd(e.revenue_total_usd));
+    revenue_total_->setText(bbp_format_usd(e.revenue_total_usd));
     revenue_split_->setText(tr("subs %1 · pred-mkt %2 · misc %3")
-                                .arg(format_usd(e.revenue_subs_usd))
-                                .arg(format_usd(e.revenue_predmkt_usd))
-                                .arg(format_usd(e.revenue_misc_usd)));
+                                .arg(bbp_format_usd(e.revenue_subs_usd))
+                                .arg(bbp_format_usd(e.revenue_predmkt_usd))
+                                .arg(bbp_format_usd(e.revenue_misc_usd)));
 
     auto pct_of_revenue = [&](double v) {
         return (e.revenue_total_usd > 0.0) ? (100.0 * v / e.revenue_total_usd) : 0.0;
     };
     auto fmt_pct = [&](double v) {
-        return QStringLiteral("%1 (%2%)").arg(format_usd(v)).arg(QLocale::system().toString(pct_of_revenue(v), 'f', 0));
+        return QStringLiteral("%1 (%2)").arg(bbp_format_usd(v), cc_fmt::pct(pct_of_revenue(v), 0, /*signed_=*/false));
     };
     buyback_usd_->setText(fmt_pct(e.buyback_usd));
     staker_yield_usd_->setText(fmt_pct(e.staker_yield_usd));
@@ -391,7 +398,7 @@ void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
         // placeholder that does nothing when clicked reads as a broken link.
         burn_signature_link_->setText(tr("demo — no on-chain tx"));
         burn_signature_link_->setToolTip(tr("Demo data — no such transaction exists on-chain. "
-                                            "Configure fincept.treasury_endpoint for real burn data."));
+                                            "A live burn feed is not available in this build."));
     } else {
         burn_signature_link_->setText(e.burn_signature.isEmpty() ? QStringLiteral("—")
                                                                  : truncate_signature(e.burn_signature));
@@ -406,6 +413,7 @@ void BuybackBurnPanel::on_burn_total_update(const QVariant& v) {
         return;
     const auto t = v.value<fincept::wallet::BurnTotal>();
     burn_total_is_mock_ = t.is_mock;
+    has_data_ = true;
     update_demo_chip(epoch_is_mock_ || burn_total_is_mock_);
     // The all-time figures (burned, remaining supply, spend) are the most
     // quotable numbers on the screen — state the sample status in their title,
@@ -424,6 +432,8 @@ void BuybackBurnPanel::on_topic_error(const QString& topic, const QString& error
         return;
     }
     show_error_strip(tr("Treasury feed error: %1").arg(error));
+    feed_failed_ = true;
+    update_demo_chip(epoch_is_mock_ || burn_total_is_mock_); // OFFLINE when nothing has arrived yet
 }
 
 void BuybackBurnPanel::on_burn_signature_clicked() {
@@ -437,7 +447,7 @@ void BuybackBurnPanel::on_burn_signature_clicked() {
     if (epoch_is_mock_ || current_burn_signature_.startsWith(QStringLiteral("FinceptTreasury")) ||
         current_burn_signature_.contains(QStringLiteral("Mock"))) {
         burn_signature_link_->setToolTip(tr("Demo signature — no such transaction exists on-chain. "
-                                            "Configure fincept.treasury_endpoint for real burn data."));
+                                            "A live burn feed is not available in this build."));
         return;
     }
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://solscan.io/tx/") + current_burn_signature_));
@@ -458,12 +468,22 @@ void BuybackBurnPanel::clear_error_strip() {
 }
 
 void BuybackBurnPanel::update_demo_chip(bool any_mock) {
-    if (any_mock) {
+    // The tooltip used to send users to a SecureStorage key no screen can set. Say
+    // plainly what the figures are instead.
+    if (!has_data_) {
+        // Nothing received yet: LIVE would vouch for a column of dashes.
+        status_pill_->setText(feed_failed_ ? tr("OFFLINE") : tr("LOADING"));
+        status_pill_->setObjectName(QStringLiteral("buybackBurnPill"));
+        status_pill_->setToolTip(QString());
+    } else if (any_mock) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("buybackBurnPillDemo"));
+        status_pill_->setToolTip(tr("Sample data for preview only — the buyback / burn programme is not live "
+                                    "and no live treasury feed is available in this build."));
     } else {
         status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("buybackBurnPill"));
+        status_pill_->setToolTip(QString());
     }
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);

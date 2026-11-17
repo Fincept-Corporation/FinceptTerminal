@@ -1,0 +1,67 @@
+{
+  "parser": "gemini",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-1"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-1"
+    },
+    {
+      "kind": "text",
+      "ref": "msg-1"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "list_directory-1"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "list_directory-1",
+      "error": false
+    },
+    {
+      "kind": "tool_call",
+      "ref": "read_file-2"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "read_file-2",
+      "error": true
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-2"
+    },
+    {
+      "kind": "text",
+      "ref": "msg-2"
+    },
+    {
+      "kind": "final"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "c6b5e3a2-1f4d-4b8e-9a0c-2d7e8f9a1b3c",
+  "input_tokens": 1500,
+  "output_tokens": 150,
+  "cached_tokens": 1000,
+  "final_text": "Two entries: README.md and src.",
+  "saw_result": true,
+  "result_is_error": false,
+  "tool_calls": 2,
+  "input": "stream_json.jsonl"
+}

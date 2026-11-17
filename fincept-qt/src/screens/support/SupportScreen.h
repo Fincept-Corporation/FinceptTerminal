@@ -1,4 +1,6 @@
 #pragma once
+#include "screens/common/ISectionLinked.h"
+
 #include <QComboBox>
 #include <QJsonArray>
 #include <QLabel>
@@ -12,6 +14,11 @@
 #include <QTextEdit>
 #include <QWidget>
 
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
+
 namespace fincept::screens {
 
 /// Support — two-panel layout: ticket sidebar + detail/create content area.
@@ -22,10 +29,15 @@ namespace fincept::screens {
 /// rebuilt from build_*() on QEvent::LanguageChange, and load_tickets()
 /// re-runs to refresh sidebar rows. In-progress form input is preserved
 /// across language switches by snapshotting + restoring text fields.
-class SupportScreen : public QWidget {
+class SupportScreen : public QWidget, public ISectionLinked {
     Q_OBJECT
   public:
     explicit SupportScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — "new" (the New Ticket form; focus = subject, typed in when the field is
+    /// empty — nothing is sent until CREATE) | "tickets" (the ticket search box; focus = search text).
+    /// "" + focus = search text.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -103,6 +115,54 @@ class SupportScreen : public QWidget {
     QList<QPair<QString, QString>> server_categories_;
     /// Fill category_combo_ from server_categories_ (no-op until the API answered).
     void populate_category_combo();
+
+    // ── Designed states (never a blank pane) ─────────────────────────────────
+    /// Sidebar list area: 0 = the ticket rows (list_scroll_), then a skeleton
+    /// and a compact EmptyState, both created on first use.
+    QStackedWidget* list_stack_ = nullptr;
+    ui::LoadingSkeleton* list_skeleton_ = nullptr;
+    ui::EmptyState* list_state_ = nullptr;
+    enum class ListAction { None, Retry, ClearFilters };
+    ListAction list_action_ = ListAction::None;
+    /// Content page 0 ("home"): a designed EmptyState, or a skeleton while the
+    /// first list is on its way. Rebuilt with the page (retranslateUi).
+    ui::EmptyState* home_state_ = nullptr;
+    ui::LoadingSkeleton* home_skeleton_ = nullptr;
+    enum class HomeAction { None, Create, Retry };
+    HomeAction home_action_ = HomeAction::None;
+    /// Shown instead of the splitter while signed out (sign-in requirement
+    /// page) or while the saved sign-in is still being checked (skeleton).
+    ui::EmptyState* signin_state_ = nullptr;
+    ui::LoadingSkeleton* signin_skeleton_ = nullptr;
+    /// The account whose tickets are shown ("" = signed out / not loaded).
+    QString account_key_;
+    /// A ticket list reply arrived for this account (an empty list included).
+    bool tickets_loaded_ = false;
+    bool list_in_flight_ = false;
+    /// Bumped by reset_tickets(): a list reply started for an earlier account is dropped.
+    quint64 account_generation_ = 0;
+    /// Raw failure text of the last list load (behind the error page's DETAILS).
+    QString last_error_;
+    /// Ticket just created: opened when the refreshed list arrives.
+    int open_after_load_id_ = -1;
+
+    /// Signed in → the screen; signed out → the sign-in requirement page;
+    /// still checking the saved sign-in → a skeleton. Starts the first load and
+    /// drops a previous account's tickets on an account change.
+    void apply_auth_gate();
+    /// Categories + tickets for the signed-in account (both in parallel).
+    void start_initial_load();
+    /// Forget the tickets, the selection and any half-written text (sign-out / account change).
+    void reset_tickets();
+    /// Content page 0's state for the current list state.
+    void update_home_page();
+    /// Back / Cancel from the create page: the ticket that was open, else the
+    /// default ticket, else page 0.
+    void show_home();
+    /// Open the first open / in-progress ticket, else the newest one. False when there is none.
+    bool open_default_ticket();
+    void on_list_state_action();
+    void on_home_action();
 
     // ── Builders ─────────────────────────────────────────────────────────────
     QWidget* build_sidebar();

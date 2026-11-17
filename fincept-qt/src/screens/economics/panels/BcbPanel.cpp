@@ -56,8 +56,7 @@ BcbPanel::BcbPanel(QWidget* parent) : EconPanelBase(kBcbSourceId, kBcbColor, par
 }
 
 void BcbPanel::activate() {
-    show_empty(tr("Select a series and click FETCH\n"
-                  "Source: Banco Central do Brasil — no API key required"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void BcbPanel::build_controls(QHBoxLayout* thl) {
@@ -67,7 +66,7 @@ void BcbPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kBcbSeries)
         series_combo_->addItem(s.label + " (" + s.unit + ")", s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(260);
 
     thl->addWidget(series_lbl_);
@@ -79,8 +78,8 @@ void BcbPanel::on_fetch() {
     const auto& series = kBcbSeries[idx];
 
     show_loading(tr("Fetching BCB: %1…").arg(series.label));
-    services::EconomicsService::instance().execute(kBcbSourceId, kBcbScript, series.command, {},
-                                                   "bcb_" + series.command);
+    execute_query(kBcbSourceId, kBcbScript, series.command, {},
+                  "bcb_" + series.command);
 }
 
 void BcbPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -115,7 +114,7 @@ void BcbPanel::on_result(const QString& request_id, const services::EconomicsRes
     for (const auto& rv : raw) {
         const QJsonObject r = rv.toObject();
         QJsonObject row;
-        row["date"] = bcb_date_to_iso(r["date"].toString());
+        row["date"] = bcb_date_to_iso(r["date"].toVariant().toString());
         // value may be under the specific key or already normalised
         if (series_ptr && r.contains(series_ptr->value_key)) {
             row["value"] = r[series_ptr->value_key];
@@ -147,7 +146,7 @@ void BcbPanel::on_result(const QString& request_id, const services::EconomicsRes
     }
     set_series_meta(meta);
     display(rows, title);
-    LOG_INFO("BcbPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("BcbPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

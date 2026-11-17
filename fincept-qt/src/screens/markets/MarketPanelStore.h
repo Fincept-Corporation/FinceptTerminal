@@ -20,6 +20,10 @@ class MarketPanelStore {
     /// Reset to factory defaults and persist.
     void reset_to_defaults();
 
+    /// True when the last load() could not read the stored panels (the defaults
+    /// are shown and save() refuses to overwrite the stored set this session).
+    bool load_failed() const;
+
   private:
     MarketPanelStore() = default;
     static QVector<MarketPanelConfig> build_defaults();

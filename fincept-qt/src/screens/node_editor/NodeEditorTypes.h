@@ -75,6 +75,13 @@ struct NodeTypeDef {
     using ExecuteFn = std::function<void(const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                          std::function<void(bool success, QJsonValue output, QString error)> callback)>;
     ExecuteFn execute;
+
+    /// Non-empty when this node can never run in this build (no live connector,
+    /// no inbound listener, ...). The palette and the canvas quick-add menu show
+    /// it disabled with this text as the reason. The type stays registered so
+    /// saved workflows still load and report the problem when run.
+    /// (Default member initializer: designated initializers may omit it silently.)
+    QString unavailable_reason = {};
 };
 
 // ── Node instance (placed on canvas) ───────────────────────────────────

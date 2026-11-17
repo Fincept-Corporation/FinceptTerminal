@@ -7,6 +7,7 @@
 //   - DockScreenRouter_PanelOps.cpp    — duplicate / tear-off / tile / move
 //   - DockScreenRouter_Materialize.cpp — dock-widget construction + lazy materialise
 #include "app/DockScreenRouter.h"
+#include "ui/theme/Theme.h"
 
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
@@ -77,6 +78,7 @@ QString DockScreenRouter::title_for_id(const QString& id) {
         {"derivatives", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Derivatives")},
         {"fno", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "F&O")},
         {"screener", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Screener")},
+        {"calendars", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Calendars")},
         {"crypto_center", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Crypto Center")},
         {"alt_investments", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alt Investments")},
         {"ma_analytics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "M&A Analytics")},
@@ -85,6 +87,7 @@ QString DockScreenRouter::title_for_id(const QString& id) {
         {"ai_quant_lab", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "AI Quant Lab")},
         {"alpha_arena", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alpha Arena")},
         {"agent_config", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Agent Config")},
+        // An alias of agent_config now (ScreenAliases.h); the title keeps the old name findable.
         {"agent_workbench", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Agent Workbench")},
         {"mcp_servers", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "MCP Servers")},
         {"node_editor", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Node Editor")},
@@ -277,6 +280,8 @@ void DockScreenRouter::attach_group_badge_to_tab(const QString& id, QWidget* scr
 void DockScreenRouter::register_screen(const QString& id, QWidget* screen) {
     // Store the screen widget — the CDockWidget is only created on first navigate().
     // This prevents all eagerly registered screens from appearing at startup.
+    if (screen)
+        screen->setProperty(kScreenIdProperty, id); // see instance_count()
     screens_[id] = screen;
     factories_.remove(id);
 }
@@ -286,7 +291,7 @@ void DockScreenRouter::register_factory(const QString& id, ScreenFactory factory
 }
 
 ads::CDockWidget* DockScreenRouter::find_dock_widget(const QString& id) const {
-    return dock_widgets_.value(id, nullptr);
+    return dock_widgets_.value(screen_alias::canonical(id), nullptr);
 }
 
 QStringList DockScreenRouter::all_screen_ids() const {
@@ -297,6 +302,12 @@ QStringList DockScreenRouter::all_screen_ids() const {
     for (auto it = factories_.cbegin(); it != factories_.cend(); ++it) {
         if (!ids.contains(it.key()))
             ids.append(it.key());
+    }
+    // Old ids that live on as aliases stay findable (MCP ui_open, the palettes):
+    // opening one opens its screen on the alias's section.
+    for (const QString& alias : screen_alias::alias_ids()) {
+        if (factories_.contains(screen_alias::canonical(alias)) && !ids.contains(alias))
+            ids.append(alias);
     }
     return ids;
 }
@@ -333,14 +344,19 @@ bool DockScreenRouter::eventFilter(QObject* obj, QEvent* event) {
     editor->setText(dw->windowTitle());
     editor->selectAll();
     editor->setFrame(false);
-    editor->setStyleSheet("QLineEdit{"
-                          "  background:#1a1a1a;"
-                          "  color:#ffffff;"
-                          "  border:1px solid #d97706;"
-                          "  padding:0 4px;"
-                          "  font-size:11px;"
-                          "  font-family:'Consolas',monospace;"
-                          "}");
+    editor->setStyleSheet(QString("QLineEdit{"
+                                  "  background:%1;"
+                                  "  color:%2;"
+                                  "  border:1px solid %3;"
+                                  "  padding:0 4px;"
+                                  "  font-size:" +
+                                  ui::fonts::px(-3) +
+                                  "px;"
+                                  "  selection-background-color:%3;"
+                                  "  selection-color:%4;"
+                                  "}")
+                              .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(),
+                                   ui::colors::TEXT_ON_ACCENT()));
     // Map label rect into the tab frame's coordinate space
     editor->setGeometry(tab_frame->mapFromGlobal(lbl->mapToGlobal(QPoint(0, 0))).x(), 2, lbl->width(),
                         tab_frame->height() - 4);
@@ -464,7 +480,11 @@ int DockScreenRouter::flush_all_screen_states() {
             ScreenStateManager::instance().save_now_sync(stateful);
         ++flushed;
     }
-    LOG_INFO("DockRouter", QString("flush_all_screen_states: persisted %1 screen(s)").arg(flushed));
+    // Anything still inside the debounce window that is not an open panel of
+    // this router (another window's screen, a non-panel IStatefulScreen) is
+    // written now too — the async flush would race process exit.
+    ScreenStateManager::instance().flush_pending_sync();
+    LOG_DEBUG("DockRouter", QString("Screen states persisted count=%1").arg(flushed));
     return flushed;
 }
 

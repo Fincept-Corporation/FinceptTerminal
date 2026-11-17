@@ -124,7 +124,7 @@ void PumpFunSwapService::build_swap(Action action, const QString& mint, double a
                 }
             }
             const QString combined = detail.isEmpty() ? err_str : (err_str + ": " + detail);
-            LOG_WARN("PumpFunSwap", "trade-local failed: " + combined);
+            LOG_WARN("PumpFunSwap", logf("Pump.fun swap transaction could not be built", {{"error", combined}}));
             if (cb)
                 cb(Result<SwapTransaction>::err(combined.toStdString()));
             return;
@@ -170,7 +170,7 @@ void PumpFunSwapService::build_swap(Action action, const QString& mint, double a
         SwapTransaction out;
         out.tx_base64 = QString::fromLatin1(body_bytes.toBase64());
         // last_valid_block_height left at 0 — wallet/RPC will reject stale txs.
-        LOG_INFO("PumpFunSwap", QStringLiteral("trade-local ok (%1 raw bytes, %2 b64 chars)")
+        LOG_DEBUG("PumpFunSwap", QStringLiteral("trade-local ok (%1 raw bytes, %2 b64 chars)")
                                     .arg(body_bytes.size())
                                     .arg(out.tx_base64.size()));
         if (cb)

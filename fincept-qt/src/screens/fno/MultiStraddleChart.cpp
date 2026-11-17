@@ -1,5 +1,8 @@
 #include "screens/fno/MultiStraddleChart.h"
 
+#include "screens/fno/FnoFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -23,64 +26,90 @@ using namespace fincept::ui;
 namespace {
 
 QColor series_color_at(int i) {
-    static const QStringList kPalette = {
-        colors::POSITIVE(),
-        colors::AMBER(),
-        colors::TEXT_PRIMARY(),
-        colors::NEGATIVE(),
-    };
-    return QColor(kPalette.at(i % kPalette.size()));
+    const ColorToken palette[] = {colors::POSITIVE, colors::AMBER, colors::TEXT_PRIMARY, colors::NEGATIVE};
+    return QColor(palette[i % 4]());
+}
+
+QPen series_pen_at(int i) {
+    QPen pen(series_color_at(i));
+    pen.setWidth(2);
+    return pen;
 }
 
 } // namespace
 
-MultiStraddleChart::MultiStraddleChart(QWidget* parent) : QChartView(parent) {
+MultiStraddleChart::MultiStraddleChart(QWidget* parent) : QChartView(parent), ccy_(fno_ccy()) {
     setRenderHint(QPainter::Antialiasing, true);
     setMouseTracking(true);
 
     chart_ = new QChart();
-    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
-    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
     chart_->setTitle(tr("Synthetic Premium (intraday)"));
-    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
-    QFont title_font = chart_->titleFont();
-    title_font.setPointSize(9);
-    title_font.setBold(true);
-    chart_->setTitleFont(title_font);
     chart_->legend()->setVisible(true);
     chart_->legend()->setAlignment(Qt::AlignTop);
-    chart_->legend()->setLabelColor(QColor(colors::TEXT_SECONDARY()));
     setChart(chart_);
 
     axis_x_ = new QDateTimeAxis();
     axis_x_->setFormat("HH:mm");
-    axis_x_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_x_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_x_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
 
     axis_y_ = new QValueAxis();
-    axis_y_->setLabelFormat("%.2f");
-    axis_y_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_y_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_y_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
+    apply_axis_unit();
 
     chart_->addAxis(axis_x_, Qt::AlignBottom);
     chart_->addAxis(axis_y_, Qt::AlignLeft);
 
-    QPen hover_pen(QColor(colors::TEXT_TERTIARY()), 1, Qt::DashLine);
     hover_line_ = new QGraphicsLineItem(chart_);
-    hover_line_->setPen(hover_pen);
     hover_line_->setVisible(false);
     hover_line_->setZValue(10);
 
     tooltip_ = new QLabel(this);
     tooltip_->setWindowFlags(Qt::ToolTip);
     tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
-                                    " font-size:11px; font-weight:600; padding:4px 8px; }")
+                                    " font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; padding:4px 8px; }")
                                 .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_MED()));
     tooltip_->hide();
+
+    refresh_theme();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+    // The axis carries the currency unit; the hover tooltip is built on each move.
+    fincept::ui::formatting::on_format_changed(this, [this]() { apply_axis_unit(); });
+}
+
+void MultiStraddleChart::apply_axis_unit() {
+    // Premium: the unit sits on the axis labels, placed per the user's settings.
+    if (axis_y_)
+        axis_y_->setLabelFormat(fincept::ui::formatting::axis_printf_format(ccy_, 2));
+}
+
+void MultiStraddleChart::set_currency(const QString& ccy) {
+    const QString c = ccy.trimmed().isEmpty() ? fno_ccy() : ccy.trimmed();
+    if (c == ccy_)
+        return;
+    ccy_ = c;
+    apply_axis_unit();
+}
+
+void MultiStraddleChart::refresh_theme() {
+    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
+    chart_->setTitleFont(fonts::font(-2, QFont::Bold));
+    chart_->legend()->setLabelColor(QColor(colors::TEXT_SECONDARY()));
+    chart_->legend()->setFont(fonts::font(-3));
+
+    const QFont label_font = fonts::font(-3);
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(axis_x_), static_cast<QAbstractAxis*>(axis_y_)}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(label_font);
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
+    }
+
+    hover_line_->setPen(QPen(QColor(colors::TEXT_TERTIARY()), 1, Qt::DashLine));
+    for (int i = 0; i < series_.size(); ++i)
+        series_[i]->setPen(series_pen_at(i));
 }
 
 void MultiStraddleChart::set_straddles(const QVector<Selection>& selections) {
@@ -98,9 +127,7 @@ void MultiStraddleChart::set_straddles(const QVector<Selection>& selections) {
     for (int i = 0; i < selections.size(); ++i) {
         auto* line = new QLineSeries();
         line->setName(selections[i].label);
-        QPen pen(series_color_at(i));
-        pen.setWidth(2);
-        line->setPen(pen);
+        line->setPen(series_pen_at(i));
         for (const auto& p : selections[i].points) {
             const qint64 ms = p.ts_secs * 1000;
             line->append(double(ms), p.premium);
@@ -175,7 +202,8 @@ void MultiStraddleChart::update_crosshair(const QPoint& widget_pos) {
                 near = i;
             }
         }
-        lines.append(QString("%1: ₹ %2").arg(sel.label).arg(sel.points.at(near).premium, 0, 'f', 2));
+        lines.append(QString("%1: %2").arg(sel.label, fincept::ui::formatting::price_with_symbol(
+                                                           sel.points.at(near).premium, fno_price_fmt(ccy_))));
     }
     tooltip_->setText(lines.join("\n"));
     tooltip_->adjustSize();

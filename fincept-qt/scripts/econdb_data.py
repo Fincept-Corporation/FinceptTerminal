@@ -27,6 +27,11 @@ ECONDB_API_BASE = f"{ECONDB_BASE_URL}/api/series"
 ECONDB_CONTEXT_BASE = f"{ECONDB_BASE_URL}/series/context"
 ECONDB_TRENDS_BASE = f"{ECONDB_BASE_URL}/trends"
 
+ECONDB_UNAVAILABLE = (
+    "EconDB source unavailable: econdb.com blocks anonymous API access (HTTP 403, browser "
+    "challenge). The same indicators are available key-free on the DBnomics screen."
+)
+
 # Country mapping (ISO 2-letter codes)
 COUNTRIES = {
     "us": "US", "usa": "US", "united_states": "US",
@@ -136,8 +141,16 @@ async def make_econdb_request(url: str, token: Optional[str] = None) -> Dict:
             async with session.get(request_url, timeout=20) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    return {"error": f"HTTP {response.status}: {response.reason}"}
+                if response.status == 403:
+                    # econdb.com now answers every anonymous API call with a Cloudflare JS challenge
+                    # ("Just a moment..."), which no script can (or should) pass.
+                    return {
+                        "error": ECONDB_UNAVAILABLE,
+                        "code": "not_supported",   # not a bad key or an outage: the upstream refuses scripts
+                        "source_unavailable": True,
+                        "status_code": 403,
+                    }
+                return {"error": f"HTTP {response.status}: {response.reason}"}
     except asyncio.TimeoutError:
         return {"error": "Request timeout"}
     except Exception as e:
@@ -486,7 +499,7 @@ def main():
             transform = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else None
 
             result = asyncio.run(get_economic_indicators(symbol, country, start_date, end_date, transform))
-            print(json.dumps(result, indent=2))
+            print(json.dumps(result))  # one line: the host reads the last line
 
         elif command == "profile":
             if len(sys.argv) < 3:
@@ -497,7 +510,7 @@ def main():
             latest = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else True
 
             result = asyncio.run(get_country_profile(country, latest))
-            print(json.dumps(result, indent=2))
+            print(json.dumps(result))  # one line: the host reads the last line
 
         elif command == "main":
             if len(sys.argv) < 3:
@@ -511,15 +524,15 @@ def main():
             transform = sys.argv[6] if len(sys.argv) > 6 else "toya"
 
             result = asyncio.run(get_main_indicators(country, start_date, end_date, frequency, transform))
-            print(json.dumps(result, indent=2))
+            print(json.dumps(result))  # one line: the host reads the last line
 
         elif command == "list-indicators":
             result = asyncio.run(list_indicators())
-            print(json.dumps(result, indent=2))
+            print(json.dumps(result))  # one line: the host reads the last line
 
         elif command == "list-countries":
             result = asyncio.run(list_countries())
-            print(json.dumps(result, indent=2))
+            print(json.dumps(result))  # one line: the host reads the last line
 
         else:
             print(json.dumps({"error": f"Unknown command: {command}"}))

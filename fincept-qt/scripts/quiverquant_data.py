@@ -8,27 +8,29 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('QUIVER_API_KEY', '')
 BASE_URL = "https://api.quiverquant.com/beta"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+SERVICE = "Quiver Quantitative"
+KEY_ENV = "QUIVER_API_KEY"
+
+session = fc.http_session()
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://www.quiverquant.com/", KEY_ENV)
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         headers = {"Accept": "application/json", "Authorization": f"Token {API_KEY}"}
         response = session.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 def get_congress_trades(ticker: str, limit: int = 50) -> Any:
     return _make_request(f"historical/congresstrading/{ticker}", {"limit": limit})
@@ -81,4 +83,7 @@ def main(args=None):
     print(json.dumps(result))
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:  # bad argument (e.g. a non-numeric limit): still answer in JSON
+        print(json.dumps({"error": fc.scrub(f"{type(e).__name__}: {e}", API_KEY)}))

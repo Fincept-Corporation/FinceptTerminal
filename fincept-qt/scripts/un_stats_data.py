@@ -8,6 +8,7 @@ import json
 import os
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 API_KEY = os.environ.get('UN_STATS_API_KEY', '')
 BASE_URL = "https://unstats.un.org/sdgapi/v1"
@@ -115,7 +116,7 @@ def _get_wb_indicator(country: str, wb_indicator: str, year: str = "") -> Dict:
         if isinstance(data, list) and len(data) >= 2:
             observations = data[1] or []
             return [
-                {"year": obs.get("date", ""), "value": obs.get("value", None)}
+                {"year": fc.number(obs.get("date", "")), "value": obs.get("value", None)}
                 for obs in observations
                 if obs.get("value") is not None
             ]

@@ -19,7 +19,9 @@ Response contract (all ops):
     data: dict   (when success)
     error: str   (when failure)
     error_kind: str | None    (validation | runtime | unknown_op)
-    traceback: str | None     (only on uncaught exceptions)
+    warning: str              (optional; the panel shows it as a banner)
+Tracebacks go to stderr; values that cannot be computed are null (never 0.0,
+never a bare Infinity, which makes the host reject the whole payload).
 """
 
 import sys
@@ -30,6 +32,12 @@ import traceback
 from typing import Dict, List, Any
 
 import numpy as np
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    import fincept_json
 
 try:
     from scipy import stats as scstats
@@ -91,7 +99,13 @@ def _require_min_length(values, n, field_name):
             f"{field_name} needs at least {n} values, got {len(values)}")
 
 
-def _safe_float(v, default=0.0):
+def _quantile_label(q):
+    """0.025 -> 'q2.5', 0.5 -> 'q50', 0.975 -> 'q97.5' (distinct labels for distinct
+    quantiles; rounding to an integer made 0.975 and 0.98 both 'q98')."""
+    return "q" + format(round(q * 100.0, 6), "g")
+
+
+def _safe_float(v, default=None):
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -261,7 +275,8 @@ def op_quantile_forecast(data):
     for q in qs:
         if not (0.0 < q < 1.0):
             raise ValidationError(f"quantile {q} must be in (0, 1)")
-    qs = sorted(qs)
+    # Sorted, without duplicates (two equal quantiles would share one label / column).
+    qs = sorted({round(q, 9) for q in qs})
     horizon_raw = _safe_int(data.get("horizon", 14))
     if horizon_raw < 1:
         raise ValidationError(f"horizon must be >= 1, got {horizon_raw}")
@@ -280,7 +295,7 @@ def op_quantile_forecast(data):
     for h in range(horizon):
         row = {"step": h + 1}
         for i, q in enumerate(qs):
-            row[f"q{int(round(q * 100))}"] = _safe_float(quantile_arr[i, h])
+            row[_quantile_label(q)] = _safe_float(quantile_arr[i, h])
         quantile_rows.append(row)
 
     # Per-quantile summary across horizon
@@ -289,7 +304,7 @@ def op_quantile_forecast(data):
         col = quantile_arr[i]
         quantile_summary.append({
             "quantile": _safe_float(q),
-            "label": f"q{int(round(q * 100))}",
+            "label": _quantile_label(q),
             "mean": _safe_float(float(col.mean())),
             "min": _safe_float(float(col.min())),
             "max": _safe_float(float(col.max())),
@@ -325,6 +340,10 @@ def op_distribution_fit(data):
     _require_min_length(values, 30, "values")
     arr = np.asarray(values, dtype=float)
     n = len(arr)
+    if not np.all(np.isfinite(arr)):
+        raise ValidationError("values contain NaN or infinite numbers")
+    if float(np.ptp(arr)) == 0.0:
+        raise ValidationError("values are constant; no distribution can be fitted to a zero-variance series")
 
     candidates = []
     # Normal
@@ -350,27 +369,33 @@ def op_distribution_fit(data):
         except Exception as e:
             params = ()
             log_lik = float("nan")
-            aic = float("inf")
-            bic = float("inf")
+            aic = float("nan")
+            bic = float("nan")
             ks_stat = float("nan")
-            ks_p = 0.0
+            ks_p = float("nan")
 
+        # A failed / degenerate fit has no information criterion: null (the old code
+        # turned a NaN AIC into a bare Infinity token, which voids the whole payload).
+        aic_v = _safe_float(aic)
+        bic_v = _safe_float(bic)
+        ks_p_v = _safe_float(ks_p)
         fits.append({
             "distribution": name,
             "n_params": len(params),
             "params": [_safe_float(p) for p in params],
             "log_likelihood": _safe_float(log_lik),
-            "aic": _safe_float(aic, default=float("inf")) if not math.isinf(aic) else None,
-            "bic": _safe_float(bic, default=float("inf")) if not math.isinf(bic) else None,
+            "aic": aic_v,
+            "bic": bic_v,
             "ks_statistic": _safe_float(ks_stat),
-            "ks_p_value": _safe_float(ks_p),
-            "cannot_reject_at_5pct": bool(ks_p > 0.05),
+            "ks_p_value": ks_p_v,
+            "cannot_reject_at_5pct": bool(ks_p_v > 0.05) if ks_p_v is not None else False,
         })
 
     # Pick best by AIC (lowest)
-    valid = [f for f in fits if f["aic"] is not None and not math.isinf(float(f["aic"]))]
+    valid = [f for f in fits if f["aic"] is not None]
     best_by_aic = min(valid, key=lambda f: f["aic"])["distribution"] if valid else None
-    best_by_bic = min(valid, key=lambda f: f["bic"])["distribution"] if valid else None
+    valid_bic = [f for f in fits if f["bic"] is not None]
+    best_by_bic = min(valid_bic, key=lambda f: f["bic"])["distribution"] if valid_bic else None
 
     # Also compute basic stats so the user can sanity-check the fits
     return {
@@ -450,20 +475,26 @@ def op_evaluate_forecast(data):
         coverage_pct = float(within.mean() * 100.0)
         avg_width = float((u - l).mean())
         # Winkler/interval score with target alpha = 1 - coverage_target/100
-        coverage_target = _safe_float(data.get("coverage_target_pct", 80.0))
+        coverage_target = _safe_float(data.get("coverage_target_pct"), 80.0)
         alpha = max(1e-9, 1.0 - coverage_target / 100.0)
         below = a < l
         above = a > u
         score = (u - l) + (2.0 / alpha) * (l - a) * below + (2.0 / alpha) * (a - u) * above
         interval_score = float(score.mean())
 
-    # Direction accuracy on first differences
+    # Direction accuracy on first differences, scored only on the steps where the forecast
+    # calls a direction. A flat step (a naive / constant forecast) makes no call, so it is
+    # neither a hit nor a miss; with no call at all the metric is undefined -> None, never
+    # 0 % (which would read as "always wrong").
+    direction_acc = None
+    direction_steps = 0
     if len(a) > 1:
         actual_dir = np.sign(np.diff(a))
         pred_dir = np.sign(np.diff(p))
-        direction_acc = float(np.mean(actual_dir == pred_dir) * 100.0)
-    else:
-        direction_acc = 0.0
+        called = pred_dir != 0
+        direction_steps = int(called.sum())
+        if direction_steps > 0:
+            direction_acc = float(np.mean(actual_dir[called] == pred_dir[called]) * 100.0)
 
     return {
         "n_observations": len(actuals),
@@ -474,10 +505,11 @@ def op_evaluate_forecast(data):
         "smape_pct": _safe_float(smape),
         "mase": _safe_float(mase) if mase is not None else None,
         "bias": _safe_float(bias),
-        "direction_accuracy_pct": _safe_float(direction_acc),
+        "direction_accuracy_pct": _safe_float(direction_acc) if direction_acc is not None else None,
+        "direction_steps": direction_steps,
         "has_intervals": has_intervals,
         "coverage_pct": _safe_float(coverage_pct) if coverage_pct is not None else None,
-        "coverage_target_pct": _safe_float(data.get("coverage_target_pct", 80.0)),
+        "coverage_target_pct": _safe_float(data.get("coverage_target_pct"), 80.0),
         "avg_interval_width": _safe_float(avg_width) if avg_width is not None else None,
         "interval_score": _safe_float(interval_score) if interval_score is not None else None,
     }
@@ -544,36 +576,45 @@ def dispatch(operation, data):
         }
     try:
         result = handler(data or {})
-        return {"success": True, "operation": operation, "data": result}
+        envelope = {"success": True, "operation": operation, "data": result}
+        warning = result.pop("_warning", None) if isinstance(result, dict) else None
+        if warning:
+            envelope["warning"] = warning  # shown by the panel as a banner
+        return envelope
     except ValidationError as e:
         return {"success": False, "operation": operation, "error": str(e),
                 "error_kind": "validation"}
     except Exception as e:
-        return {"success": False, "operation": operation, "error": str(e),
-                "error_kind": "runtime", "traceback": traceback.format_exc()}
+        traceback.print_exc(file=sys.stderr)  # diagnostics to stderr only
+        return {"success": False, "operation": operation,
+                "error": f"{type(e).__name__}: {e}" if str(e) else type(e).__name__,
+                "error_kind": "runtime"}
 
 
 def main(args):
     if len(args) < 1:
-        print(json.dumps({
+        fincept_json.emit({
             "success": False,
             "error": "Usage: gluonts_service.py <operation> [json_data]",
             "error_kind": "usage",
-        }))
+        })
         return
     operation = args[0]
     data = {}
-    if len(args) > 1:
+    if len(args) > 1 and args[1].strip():
         try:
             data = json.loads(args[1])
         except json.JSONDecodeError as e:
-            print(json.dumps({
+            fincept_json.emit({
                 "success": False, "operation": operation,
                 "error": f"Invalid JSON: {e}", "error_kind": "validation",
-            }))
+            })
             return
-    result = dispatch(operation, data)
-    print(json.dumps(result, default=str))
+    if not isinstance(data, dict):
+        fincept_json.emit({"success": False, "operation": operation,
+                           "error": "parameters must be a JSON object", "error_kind": "validation"})
+        return
+    fincept_json.emit(dispatch(operation, data))
 
 
 if __name__ == "__main__":

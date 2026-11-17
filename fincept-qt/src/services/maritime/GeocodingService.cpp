@@ -5,6 +5,7 @@
 #include "storage/cache/CacheManager.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -12,8 +13,11 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+
+#include <utility>
 
 namespace fincept::services::maritime {
 
@@ -137,6 +141,26 @@ void GeocodingService::search(const QString& query, int limit) {
         return;
     }
 
+    // At most one request per second (Nominatim usage policy). Cache hits above
+    // are free; a request inside the window waits for it, latest query wins.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 wait_ms = last_request_ms_ + 1100 - now;
+    if (wait_ms > 0) {
+        waiting_query_ = q;
+        waiting_limit_ = limit;
+        if (!wait_scheduled_) {
+            wait_scheduled_ = true;
+            QTimer::singleShot(static_cast<int>(wait_ms), this, [this]() {
+                wait_scheduled_ = false;
+                const QString next = std::exchange(waiting_query_, QString());
+                if (!next.isEmpty())
+                    search(next, waiting_limit_);
+            });
+        }
+        return;
+    }
+    last_request_ms_ = now;
+
     QUrl url(QString::fromLatin1(kNominatimEndpoint));
     QUrlQuery params;
     params.addQueryItem("format", "jsonv2");
@@ -171,7 +195,7 @@ void GeocodingService::search(const QString& query, int limit) {
         fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(geo_serialize_results(places))),
                                               kGeoCacheTtlSec, "maritime");
 
-        LOG_INFO("Geocoding", QString("Place search '%1': %2 result(s)").arg(context).arg(places.size()));
+        LOG_DEBUG("Geocoding", QString("Place search '%1': %2 result(s)").arg(context).arg(places.size()));
         emit self->places_found(places, context);
     });
 }

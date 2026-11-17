@@ -4,24 +4,28 @@
 #include "algo_engine/AlgoEngine.h"
 #include "core/logging/Logger.h"
 #include "screens/algo_trading/AlgoDeployDialog.h"
+#include "screens/algo_trading/StrategyBuilderPanel.h"
+#include "screens/algo_trading/StrategyLibraryView.h"
 #include "services/algo_trading/AlgoTradingService.h"
-#include "ui/theme/Theme.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/widgets/ScreenStatusBar.h"
+#include "ui/widgets/algo/AlgoCurrency.h"
 
 #include <QDate>
 #include <QDateEdit>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QFormLayout>
-#include <QHBoxLayout>
-#include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QScrollArea>
-#include <QTableWidgetItem>
+#include <QRegularExpression>
+#include <QUuid>
 #include <QVBoxLayout>
-
-#include <algorithm>
 
 namespace fincept::screens {
 
@@ -29,34 +33,47 @@ using namespace fincept::services::algo;
 
 namespace {
 
-// P7: the four per-row action buttons used to carry an inline setStyleSheet
-// each, so rendering a 50-row page cost 200 CSS parses + 200 repolishes — every
-// keystroke in the search box. The skins are identical per column, so they live
-// on the table's stylesheet as ID selectors and the rows only set objectName.
-QString row_button_qss() {
-    using namespace fincept::ui;
-    auto rule = [](const char* id, const QString& color, const QString& hover) {
-        return QString("QPushButton#%1 { background: transparent; color: %2; border: 1px solid %2;"
-                       " font-size: %3px; font-weight: 700; font-family: %4; padding: 1px 8px; }"
-                       "QPushButton#%1:hover { background: %5; }")
-            .arg(QLatin1String(id), color)
-            .arg(fonts::TINY)
-            .arg(fonts::DATA_FAMILY(), hover);
-    };
-    return rule("slRowEdit", colors::CYAN(), QStringLiteral("rgba(34,211,238,0.1)")) +
-           rule("slRowBacktest", colors::POSITIVE(), QStringLiteral("rgba(22,163,74,0.1)")) +
-           rule("slRowDeploy", colors::AMBER(), QStringLiteral("rgba(217,119,6,0.1)")) +
-           rule("slRowDelete", colors::NEGATIVE(), QStringLiteral("rgba(220,38,38,0.1)"));
+/// The strategy as a portable JSON document (everything the Builder needs to recreate it).
+QJsonObject slp_strategy_json(const AlgoStrategy& s) {
+    QJsonObject o;
+    o["id"] = s.id;
+    o["name"] = s.name;
+    o["description"] = s.description;
+    o["timeframe"] = s.timeframe;
+    o["instrument_type"] = s.instrument_type;
+    o["entry_conditions"] = s.entry_conditions;
+    o["exit_conditions"] = s.exit_conditions;
+    o["entry_logic"] = s.entry_logic;
+    o["exit_logic"] = s.exit_logic;
+    o["stop_loss"] = s.stop_loss;
+    o["take_profit"] = s.take_profit;
+    o["trailing_stop"] = s.trailing_stop;
+    o["position_size_pct"] = s.position_size_pct;
+    o["cost_model"] = s.cost_model;
+    o["entry_side"] = s.entry_side;
+    o["risk_free_pct"] = s.risk_free_pct;
+    o["legs"] = s.legs;
+    if (!s.last_backtest.isEmpty())
+        o["last_backtest"] = s.last_backtest;
+    return QJsonObject{{"format", "fincept.algo.strategy"}, {"version", 1}, {"strategy", o}};
 }
 
 } // namespace
 
-// ── Constructor ──────────────────────────────────────────────────────────────
-
 StrategyListPanel::StrategyListPanel(QWidget* parent) : QWidget(parent) {
-    build_ui();
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    view_ = new StrategyLibraryView(this);
+    root->addWidget(view_);
+    connect(view_, &StrategyLibraryView::action_requested, this, &StrategyListPanel::on_action);
+    connect(view_, &StrategyLibraryView::retry_requested, this,
+            []() { AlgoTradingService::instance().list_strategies(); });
+    connect(view_, &StrategyLibraryView::builder_requested, this, &StrategyListPanel::open_builder_requested);
     connect_service();
-    LOG_INFO("AlgoTrading", "StrategyListPanel constructed");
+    // Currency / number / date format changed: re-render from the loaded strategies.
+    fincept::ui::formatting::on_format_changed(this, [this]() { view_->refresh_text(); });
+    LOG_DEBUG("AlgoTrading", "StrategyListPanel constructed");
 }
 
 // ── Service connections ──────────────────────────────────────────────────────
@@ -65,357 +82,120 @@ void StrategyListPanel::connect_service() {
     auto& svc = AlgoTradingService::instance();
     connect(&svc, &AlgoTradingService::strategies_loaded, this, &StrategyListPanel::on_strategies_loaded);
     connect(&svc, &AlgoTradingService::strategy_deleted, this, [&svc](const QString&) { svc.list_strategies(); });
-    connect(&svc, &AlgoTradingService::error_occurred, this, &StrategyListPanel::on_error);
+    // A copy saved here (or a strategy saved in the Builder while this tab shows) is listed at once.
+    connect(&svc, &AlgoTradingService::strategy_saved, this, [this, &svc](const QString& id) {
+        if (id == select_after_load_ || isVisible())
+            svc.list_strategies();
+    });
+    connect(&svc, &AlgoTradingService::error_occurred, this, [this](const QString& context, const QString& msg) {
+        LOG_ERROR("AlgoTrading", QString("StrategyList error [%1]: %2").arg(context, msg));
+        // A failed delete / copy used to be log-only: the row stayed and nothing said why.
+        // (Backtest / Builder save errors are reported by the Builder, which runs those.)
+        if (context == QLatin1String("delete_strategy") && isVisible())
+            QMessageBox::warning(this, tr("Delete Strategy"), tr("The strategy could not be deleted:\n%1").arg(msg));
+        else if (context == QLatin1String("save_strategy") && !select_after_load_.isEmpty() && isVisible()) {
+            select_after_load_.clear();
+            QMessageBox::warning(this, tr("Duplicate Strategy"), tr("The copy could not be saved:\n%1").arg(msg));
+        }
+    });
+    // A finished backtest updates that strategy's LAST BACKTEST cells in place.
+    connect(&svc, &AlgoTradingService::strategy_backtest_saved, this,
+            [this](const QString& id, const QJsonObject& summary) {
+                for (auto& s : strategies_)
+                    if (s.id == id)
+                        s.last_backtest = summary;
+                view_->set_last_backtest(id, summary);
+            });
+    // Live / paper deployments of each strategy (running count, net P&L per currency).
+    connect(&fincept::algo::AlgoEngine::instance(), &fincept::algo::AlgoEngine::deployments_loaded, this,
+            [this](const QVector<AlgoDeployment>& deps) {
+                QHash<QString, StrategyLibraryView::Deployments> by_id;
+                for (const auto& d : deps) {
+                    auto& a = by_id[d.strategy_id];
+                    ++a.total;
+                    if (d.status == QLatin1String("running") || d.status == QLatin1String("starting")) {
+                        ++a.running;
+                        if (d.mode == QLatin1String("live"))
+                            ++a.live_running;
+                    }
+                    const QString sym = d.symbol.isEmpty() ? d.underlying : d.symbol;
+                    // P&L is in the instrument's quote currency (same rule as the dashboard);
+                    // unknown -> "" and printed without a unit, never as the display currency.
+                    const QString ccy = fincept::ui::algo::algo_currency_for(sym, d.exchange, d.broker_id);
+                    a.pnl_by_ccy[ccy] += d.total_pnl + d.unrealized_pnl;
+                    a.trades += d.total_trades;
+                }
+                view_->set_deployments(by_id);
+            });
 }
 
-// ── Build UI ─────────────────────────────────────────────────────────────────
-
-void StrategyListPanel::build_ui() {
-    using namespace fincept::ui;
-
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
-
-    // ── Top bar ──────────────────────────────────────────────────────────────
-    auto* top_bar = new QWidget(this);
-    top_bar->setFixedHeight(44);
-    top_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
-    auto* top_hl = new QHBoxLayout(top_bar);
-    top_hl->setContentsMargins(12, 0, 12, 0);
-    top_hl->setSpacing(8);
-
-    search_edit_ = new QLineEdit(top_bar);
-    search_edit_->setPlaceholderText(tr("Search strategies..."));
-    search_edit_->setFixedHeight(28);
-    search_edit_->setStyleSheet(QString("QLineEdit { background:%1; border:1px solid %2; color:%3;"
-                                        " padding:4px 8px; font-size:%4px; font-family:%5; }"
-                                        "QLineEdit:focus { border-color:%6; }")
-                                    .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::TEXT_PRIMARY())
-                                    .arg(fonts::SMALL)
-                                    .arg(fonts::DATA_FAMILY(), colors::BORDER_BRIGHT()));
-    top_hl->addWidget(search_edit_, 2);
-
-    // Category filter
-    cat_combo_ = new QComboBox(top_bar);
-    cat_combo_->setFixedHeight(28);
-    cat_combo_->setFixedWidth(150);
-    cat_combo_->addItem(tr("All Categories"));
-    const QString combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                        " padding:2px 6px; font-size:%4px; font-family:%5; }"
-                                        "QComboBox::drop-down { border:none; }"
-                                        "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
-                                        " selection-background-color:%6; font-family:%5; }")
-                                    .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM())
-                                    .arg(fonts::TINY)
-                                    .arg(fonts::DATA_FAMILY(), colors::BG_HOVER());
-    cat_combo_->setStyleSheet(combo_style);
-    top_hl->addWidget(cat_combo_);
-
-    // Sort
-    sort_caption_ = new QLabel(tr("SORT:"), top_bar);
-    sort_caption_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                         " background:transparent; border:none;")
-                                     .arg(colors::TEXT_TERTIARY())
-                                     .arg(fonts::TINY)
-                                     .arg(fonts::DATA_FAMILY()));
-    top_hl->addWidget(sort_caption_);
-
-    sort_combo_ = new QComboBox(top_bar);
-    sort_combo_->setFixedHeight(28);
-    sort_combo_->setFixedWidth(120);
-    sort_combo_->addItems({tr("Name A→Z"), tr("Name Z→A"), tr("Category")});
-    sort_combo_->setStyleSheet(combo_style);
-    top_hl->addWidget(sort_combo_);
-
-    count_label_ = new QLabel(tr("%1 strategies").arg(0), top_bar);
-    count_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                        " background:transparent; border:none;")
-                                    .arg(colors::TEXT_SECONDARY())
-                                    .arg(fonts::TINY)
-                                    .arg(fonts::DATA_FAMILY()));
-    top_hl->addWidget(count_label_);
-
-    root->addWidget(top_bar);
-
-    // ── Table ────────────────────────────────────────────────────────────────
-    table_ = new QTableWidget(this);
-    table_->setColumnCount(8); // #, NAME, CATEGORY, ID, EDIT, BACKTEST, DEPLOY, DELETE
-    table_->setHorizontalHeaderLabels(
-        {tr("#"), tr("STRATEGY NAME"), tr("CATEGORY"), tr("ID"), QString(), QString(), QString(), QString()});
-    table_->verticalHeader()->setVisible(false);
-    table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table_->setAlternatingRowColors(true);
-    table_->setSortingEnabled(false);
-    table_->setShowGrid(false);
-    table_->setFocusPolicy(Qt::NoFocus);
-    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
-    table_->setColumnWidth(0, 40);
-    table_->setColumnWidth(2, 150);
-    table_->setColumnWidth(3, 100);
-    table_->setColumnWidth(4, 56);
-    table_->setColumnWidth(5, 76);
-    table_->setColumnWidth(6, 72);
-    table_->setColumnWidth(7, 66);
-    table_->verticalHeader()->setDefaultSectionSize(30);
-    table_->setStyleSheet(QString("QTableWidget { background:%1; alternate-background-color:%2;"
-                                  " color:%3; border:none; font-size:%4px; font-family:%5; gridline-color:%6; }"
-                                  "QTableWidget::item { padding:2px 8px; border:none; }"
-                                  "QTableWidget::item:selected { background:%7; color:%3; }"
-                                  "QHeaderView::section { background:%8; color:%9; font-size:%4px;"
-                                  " font-weight:700; font-family:%5; border:none;"
-                                  " border-bottom:1px solid %6; padding:4px 8px; }")
-                              .arg(colors::BG_BASE(), colors::BG_SURFACE(), colors::TEXT_PRIMARY())
-                              .arg(fonts::SMALL)
-                              .arg(fonts::DATA_FAMILY(), colors::BORDER_DIM(), colors::BG_HOVER(), colors::BG_RAISED(),
-                                   colors::TEXT_TERTIARY()) +
-                          row_button_qss());
-    root->addWidget(table_, 1);
-
-    // ── Pagination bar ───────────────────────────────────────────────────────
-    auto* page_bar = new QWidget(this);
-    page_bar->setFixedHeight(36);
-    page_bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
-    auto* page_hl = new QHBoxLayout(page_bar);
-    page_hl->setContentsMargins(12, 0, 12, 0);
-    page_hl->setSpacing(8);
-
-    const QString btn_style = QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                                      " font-size:%4px; font-family:%5; padding:2px 12px; }"
-                                      "QPushButton:hover { border-color:%6; color:%6; }"
-                                      "QPushButton:disabled { color:%3; border-color:%3; }")
-                                  .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM())
-                                  .arg(fonts::TINY)
-                                  .arg(fonts::DATA_FAMILY(), colors::CYAN());
-
-    prev_btn_ = new QPushButton(tr("◀ PREV"), page_bar);
-    prev_btn_->setFixedHeight(24);
-    prev_btn_->setCursor(Qt::PointingHandCursor);
-    prev_btn_->setStyleSheet(btn_style);
-    page_hl->addWidget(prev_btn_);
-
-    page_label_ = new QLabel(tr("Page %1 of %2").arg(1).arg(1), page_bar);
-    page_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                       " background:transparent; border:none;")
-                                   .arg(colors::TEXT_SECONDARY())
-                                   .arg(fonts::TINY)
-                                   .arg(fonts::DATA_FAMILY()));
-    page_label_->setAlignment(Qt::AlignCenter);
-    page_hl->addWidget(page_label_, 1);
-
-    next_btn_ = new QPushButton(tr("NEXT ▶"), page_bar);
-    next_btn_->setFixedHeight(24);
-    next_btn_->setCursor(Qt::PointingHandCursor);
-    next_btn_->setStyleSheet(btn_style);
-    page_hl->addWidget(next_btn_);
-
-    root->addWidget(page_bar);
-
-    // ── Connections ──────────────────────────────────────────────────────────
-    connect(search_edit_, &QLineEdit::textChanged, this, &StrategyListPanel::on_filter_changed);
-    connect(cat_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this](int) { on_filter_changed(search_edit_->text()); });
-    connect(sort_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &StrategyListPanel::on_sort_changed);
-    connect(prev_btn_, &QPushButton::clicked, this, [this]() { go_to_page(current_page_ - 1); });
-    connect(next_btn_, &QPushButton::clicked, this, [this]() { go_to_page(current_page_ + 1); });
-}
-
-// ── Render page ──────────────────────────────────────────────────────────────
-
-void StrategyListPanel::render_page() {
-    using namespace fincept::ui;
-
-    table_->setSortingEnabled(false);
-    table_->setRowCount(0);
-
-    const int total = filtered_.size();
-    const int start = current_page_ * kPageSize;
-    const int end = qMin(start + kPageSize, total);
-    const int page_num = total > 0 ? current_page_ + 1 : 0;
-    const int total_pages = (total + kPageSize - 1) / qMax(kPageSize, 1);
-
-    table_->setRowCount(end - start);
-
-    for (int i = start; i < end; ++i) {
-        const auto& s = filtered_[i];
-        const int row = i - start;
-
-        // Col 0: row number
-        auto* num_item = new QTableWidgetItem(QString::number(i + 1));
-        num_item->setTextAlignment(Qt::AlignCenter);
-        num_item->setForeground(QColor(colors::TEXT_TERTIARY()));
-        table_->setItem(row, 0, num_item);
-
-        // Col 1: name
-        auto* name_item = new QTableWidgetItem(s.name);
-        name_item->setForeground(QColor(colors::AMBER()));
-        table_->setItem(row, 1, name_item);
-
-        // Col 2: category (description field)
-        auto* cat_item = new QTableWidgetItem(s.description);
-        cat_item->setForeground(QColor(colors::CYAN()));
-        cat_item->setTextAlignment(Qt::AlignCenter);
-        table_->setItem(row, 2, cat_item);
-
-        // Col 3: ID
-        auto* id_item = new QTableWidgetItem(s.id);
-        id_item->setForeground(QColor(colors::TEXT_TERTIARY()));
-        table_->setItem(row, 3, id_item);
-
-        // Skins come from the table-level stylesheet (row_button_qss) — rows only
-        // tag an objectName, so a page render costs zero CSS parses.
-        auto make_btn = [&](const QString& text, const char* obj_name, const QString& a11y, int col, auto handler) {
-            auto* btn = new QPushButton(text, table_);
-            btn->setObjectName(QLatin1String(obj_name));
-            btn->setCursor(Qt::PointingHandCursor);
-            btn->setFixedHeight(22);
-            btn->setAccessibleName(a11y);
-            connect(btn, &QPushButton::clicked, this, handler);
-            table_->setCellWidget(row, col, btn);
-        };
-
-        // Col 4: EDIT (Builder). 5: BACKTEST. 6: DEPLOY. 7: DELETE.
-        make_btn(tr("EDIT"), "slRowEdit", tr("Edit strategy %1").arg(s.name), 4,
-                 [this, row]() { on_edit_clicked(row); });
-        make_btn(tr("BACKTEST"), "slRowBacktest", tr("Backtest strategy %1").arg(s.name), 5,
-                 [this, row]() { on_backtest_clicked(row); });
-        make_btn(tr("DEPLOY"), "slRowDeploy", tr("Deploy strategy %1").arg(s.name), 6,
-                 [this, row]() { on_deploy_clicked(row); });
-        make_btn(tr("DELETE"), "slRowDelete", tr("Delete strategy %1").arg(s.name), 7,
-                 [this, row]() { on_delete_clicked(row); });
+void StrategyListPanel::on_strategies_loaded(const QVector<AlgoStrategy>& strategies) {
+    strategies_ = strategies;
+    view_->set_strategies(strategies_);
+    if (!select_after_load_.isEmpty()) {
+        view_->select_id(select_after_load_);
+        select_after_load_.clear();
+    } else if (!link_select_.isEmpty()) {
+        view_->select_id(link_select_);
+        link_select_.clear();
     }
-
-    update_pagination_controls();
-
-    page_label_->setText(total > 0 ? tr("Page %1 of %2  ·  %3 strategies").arg(page_num).arg(total_pages).arg(total)
-                                   : tr("No strategies"));
-
-    count_label_->setText(tr("%1 of %2").arg(total).arg(strategies_.size()));
+    LOG_DEBUG("AlgoTrading", QString("Loaded %1 strategies").arg(strategies_.size()));
 }
 
-void StrategyListPanel::update_pagination_controls() {
-    const int total_pages = (filtered_.size() + kPageSize - 1) / qMax(kPageSize, 1);
-    prev_btn_->setEnabled(current_page_ > 0);
-    next_btn_->setEnabled(current_page_ < total_pages - 1);
+void StrategyListPanel::select_strategy(const QString& strategy_id) {
+    // Kept for the reload the tab switch asks for (set_strategies() rebuilds the rows).
+    link_select_ = strategy_id;
+    AlgoStrategy s;
+    if (find_strategy(strategy_id, &s))
+        view_->select_id(strategy_id);
 }
 
-void StrategyListPanel::go_to_page(int page) {
-    const int total_pages = (filtered_.size() + kPageSize - 1) / qMax(kPageSize, 1);
-    current_page_ = qBound(0, page, qMax(0, total_pages - 1));
-    render_page();
-}
-
-// ── Filter + sort ─────────────────────────────────────────────────────────────
-
-void StrategyListPanel::apply_sort() {
-    const int index = sort_combo_ ? sort_combo_->currentIndex() : 0;
-    if (index == 1) { // Name Z→A
-        std::sort(filtered_.begin(), filtered_.end(),
-                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name > b.name; });
-    } else if (index == 2) { // Category, then name
-        std::sort(filtered_.begin(), filtered_.end(), [](const AlgoStrategy& a, const AlgoStrategy& b) {
-            return a.description < b.description || (a.description == b.description && a.name < b.name);
-        });
-    } else { // Name A→Z (default)
-        std::sort(filtered_.begin(), filtered_.end(),
-                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name < b.name; });
-    }
-}
-
-void StrategyListPanel::on_filter_changed(const QString&) {
-    const QString text = search_edit_->text().trimmed().toLower();
-    const QString cat = cat_combo_->currentIndex() == 0 ? QString() : cat_combo_->currentText();
-
-    filtered_.clear();
-    filtered_.reserve(strategies_.size());
+bool StrategyListPanel::find_strategy(const QString& id, AlgoStrategy* out) const {
     for (const auto& s : strategies_) {
-        if (!text.isEmpty() && !s.name.toLower().contains(text) && !s.description.toLower().contains(text))
-            continue;
-        if (!cat.isEmpty() && s.description != cat)
-            continue;
-        filtered_.append(s);
+        if (s.id == id) {
+            *out = s;
+            return true;
+        }
     }
-
-    // Re-apply the active sort: filtering rebuilt `filtered_` in load order, so
-    // without this the SORT selector silently reverted to "as loaded" on every
-    // keystroke in the search box.
-    apply_sort();
-
-    current_page_ = 0;
-    render_page();
+    return false;
 }
 
-void StrategyListPanel::on_sort_changed(int) {
-    apply_sort();
-    current_page_ = 0;
-    render_page();
-}
+// ── Actions ──────────────────────────────────────────────────────────────────
 
-// ── Slots ─────────────────────────────────────────────────────────────────────
-
-void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
-    strategies_ = std::move(strategies);
-
-    // Populate category combo from unique categories
-    const QString prev_cat = cat_combo_->currentIndex() > 0 ? cat_combo_->currentText() : QString();
-    cat_combo_->blockSignals(true);
-    cat_combo_->clear();
-    cat_combo_->addItem(tr("All Categories"));
-    QStringList cats;
-    for (const auto& s : strategies_)
-        if (!cats.contains(s.description))
-            cats.append(s.description);
-    cats.sort();
-    for (const auto& c : cats)
-        cat_combo_->addItem(c);
-    if (!prev_cat.isEmpty()) {
-        int idx = cat_combo_->findText(prev_cat);
-        if (idx >= 0)
-            cat_combo_->setCurrentIndex(idx);
-    }
-    cat_combo_->blockSignals(false);
-
-    // Re-apply the live search/category filter and the active sort so a background
-    // reload doesn't silently reset what the user is looking at.
-    on_filter_changed(search_edit_->text());
-
-    LOG_INFO("AlgoTrading", QString("Loaded %1 strategies").arg(strategies_.size()));
-}
-
-void StrategyListPanel::on_error(const QString& context, const QString& msg) {
-    LOG_ERROR("AlgoTrading", QString("StrategyList error [%1]: %2").arg(context, msg));
-}
-
-void StrategyListPanel::on_edit_clicked(int row) {
-    const int abs_index = current_page_ * kPageSize + row;
-    if (abs_index < 0 || abs_index >= filtered_.size())
+void StrategyListPanel::on_action(const QString& action, const QString& strategy_id) {
+    AlgoStrategy s;
+    if (!find_strategy(strategy_id, &s)) // a copy: the dialogs below outlive any reload
         return;
-    emit edit_requested(filtered_[abs_index]); // AlgoTradingScreen routes to the Builder
+    if (action == QLatin1String("open"))
+        emit edit_requested(s); // AlgoTradingScreen routes to the Builder
+    else if (action == QLatin1String("backtest"))
+        prompt_backtest(s);
+    else if (action == QLatin1String("deploy"))
+        deploy(s);
+    else if (action == QLatin1String("duplicate"))
+        duplicate(s);
+    else if (action == QLatin1String("export"))
+        export_json(s);
+    else if (action == QLatin1String("delete"))
+        confirm_delete(s);
 }
 
-void StrategyListPanel::on_backtest_clicked(int row) {
-    const int abs_index = current_page_ * kPageSize + row;
-    if (abs_index < 0 || abs_index >= filtered_.size())
-        return;
-    const AlgoStrategy strategy = filtered_[abs_index]; // copy: a modal exec() below outlives any reload of filtered_
-
+void StrategyListPanel::prompt_backtest(const AlgoStrategy& strategy) {
     // Prompt for symbol + date range before running.
     QDialog dlg(this);
     dlg.setWindowTitle(tr("Backtest: %1").arg(strategy.name));
     auto* form = new QFormLayout(&dlg);
 
-    auto* symbol = new QLineEdit(QStringLiteral("RELIANCE"), &dlg);
-    symbol->setPlaceholderText(tr("e.g. RELIANCE, AAPL"));
+    // Pre-fill the symbol the strategy was last backtested on (no implicit default
+    // market). A bare ticker is read on the connected broker's exchange / the user's
+    // market region; add a Yahoo suffix to pick another market (RELIANCE.NS, VOD.L).
+    // Never backtested: the Builder's default (a broad fund of the user's market, else SPY).
+    QString last_symbol = strategy.last_backtest.value(QStringLiteral("symbol")).toString();
+    if (last_symbol.isEmpty())
+        last_symbol = StrategyBuilderPanel::default_backtest_symbol();
+    auto* symbol = new QLineEdit(last_symbol, &dlg);
+    symbol->setPlaceholderText(tr("e.g. AAPL, RELIANCE.NS, VOD.L, BTC-USD"));
+    symbol->setAccessibleName(tr("Symbol"));
     const QDate today = QDate::currentDate();
     // Default range sized to the strategy's timeframe (daily needs years for
     // SMA200; intraday must stay under Yahoo's history cap).
@@ -428,6 +208,8 @@ void StrategyListPanel::on_backtest_clicked(int row) {
         d->setMinimumDate(QDate(2000, 1, 1));
         d->setMaximumDate(today);
     }
+    start->setAccessibleName(tr("Start date"));
+    end->setAccessibleName(tr("End date"));
     form->addRow(tr("Symbol"), symbol);
     form->addRow(tr("Start"), start);
     form->addRow(tr("End"), end);
@@ -440,20 +222,19 @@ void StrategyListPanel::on_backtest_clicked(int row) {
 
     if (dlg.exec() != QDialog::Accepted)
         return;
-    if (symbol->text().trimmed().isEmpty() || start->date() >= end->date())
+    if (symbol->text().trimmed().isEmpty()) {
+        QMessageBox::warning(this, tr("Backtest"), tr("Enter a symbol to backtest on."));
         return;
-
+    }
+    if (start->date() >= end->date()) {
+        QMessageBox::warning(this, tr("Backtest"), tr("The start date must be before the end date."));
+        return;
+    }
     emit backtest_requested(strategy, symbol->text().trimmed(), start->date().toString(QStringLiteral("yyyy-MM-dd")),
                             end->date().toString(QStringLiteral("yyyy-MM-dd")));
 }
 
-void StrategyListPanel::on_deploy_clicked(int row) {
-    const int abs_index = current_page_ * kPageSize + row;
-    if (abs_index < 0 || abs_index >= filtered_.size())
-        return;
-
-    const AlgoStrategy strategy = filtered_[abs_index]; // copy: the modal dialog below outlives any reload of filtered_
-
+void StrategyListPanel::deploy(const AlgoStrategy& strategy) {
     // An option/future strategy deploys as a multi-leg basket on an underlying + expiry
     // rule that only the Builder collects. Deploying it from here went through the
     // plain-equity path: the leg rules were ignored and the runner would evaluate and
@@ -467,69 +248,96 @@ void StrategyListPanel::on_deploy_clicked(int row) {
         return;
     }
 
-    // Strategy-aware constructor: seeds the deploy dialog's timeframe from the strategy
-    // (the (id, name) form left it on its fixed default, so a "15m" strategy deployed
-    // from this list evaluated on the wrong bars).
+    // Strategy-aware constructor: seeds the deploy dialog's timeframe from the strategy.
+    // The dialog (paper by default; its OK carries the order marker) is the only way
+    // anything starts from here.
     AlgoDeployDialog dialog(strategy, this);
-    if (dialog.exec() == QDialog::Accepted) {
-        auto deployment = dialog.result();
-        fincept::algo::AlgoEngine::instance().start_deployment(deployment, strategy);
-        LOG_INFO("AlgoTrading", QString("Deploy requested: %1 on %2").arg(strategy.name, deployment.symbol));
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    auto deployment = dialog.result();
+    // Same duplicate check as the Builder's deploy.
+    if (fincept::algo::AlgoEngine::instance().has_active_duplicate(deployment.strategy_id, deployment.symbol,
+                                                                    deployment.mode, deployment.entry_side)) {
+        const auto btn = QMessageBox::question(
+            this, tr("Already deployed"),
+            tr("An identical deployment is already running:\n\n%1 · %2 · %3 · %4\n\nDeploy another copy anyway?")
+                .arg(deployment.strategy_name, deployment.symbol, deployment.mode.toUpper(), deployment.entry_side),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (btn != QMessageBox::Yes)
+            return;
     }
+    fincept::algo::AlgoEngine::instance().start_deployment(deployment, strategy);
+    LOG_INFO("AlgoTrading", QString("Deploy requested: %1 on %2").arg(strategy.name, deployment.symbol));
+    emit deployed(); // AlgoTradingScreen jumps to the Dashboard
 }
 
-void StrategyListPanel::on_delete_clicked(int row) {
-    const int abs_index = current_page_ * kPageSize + row;
-    if (abs_index < 0 || abs_index >= filtered_.size())
-        return;
-
-    const auto& strategy = filtered_[abs_index];
-    auto answer = QMessageBox::question(this, tr("Delete Strategy"), tr("Delete \"%1\"?").arg(strategy.name),
-                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (answer == QMessageBox::Yes) {
-        AlgoTradingService::instance().delete_strategy(strategy.id);
-        LOG_INFO("AlgoTrading", QString("Delete requested: %1").arg(strategy.name));
+void StrategyListPanel::duplicate(const AlgoStrategy& strategy) {
+    AlgoStrategy copy = strategy;
+    copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    // A unique name: save_strategy() upserts by name when no id is given, and two rows
+    // with one name read as one strategy in every picker.
+    QString name = tr("%1 (copy)").arg(strategy.name);
+    for (int n = 2; n < 100; ++n) {
+        bool taken = false;
+        for (const auto& s : std::as_const(strategies_))
+            taken = taken || s.name == name;
+        if (!taken)
+            break;
+        name = tr("%1 (copy %2)").arg(strategy.name).arg(n);
     }
+    copy.name = name;
+    // A library entry keeps its category in `description`; the copy is the user's own.
+    if (strategy.id.startsWith(QLatin1String("LIB-")))
+        copy.description = tr("Copy of %1 (%2)").arg(strategy.name, strategy.description);
+    // The copy has not been backtested itself.
+    copy.last_backtest = QJsonObject();
+    copy.last_backtest_at.clear();
+    copy.created_at.clear();
+    copy.updated_at.clear();
+    select_after_load_ = copy.id;
+    LOG_INFO("AlgoTrading", QString("Duplicate requested: %1 -> %2").arg(strategy.name, copy.name));
+    AlgoTradingService::instance().save_strategy(copy);
+    if (auto* sb = view_->status_bar())
+        sb->show_notice(tr("Saved a copy: %1").arg(copy.name), QString(), {}, 6000,
+                        fincept::ui::ScreenStatusBar::Tone::Ok);
+}
+
+void StrategyListPanel::export_json(const AlgoStrategy& strategy) {
+    QString base = strategy.name;
+    base.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.-]+")), QStringLiteral("_"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export strategy"), base + QStringLiteral(".json"),
+                                                      tr("Strategy JSON (*.json)"));
+    if (path.isEmpty())
+        return;
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QMessageBox::warning(this, tr("Export strategy"), tr("Could not write %1:\n%2").arg(path, f.errorString()));
+        return;
+    }
+    f.write(QJsonDocument(slp_strategy_json(strategy)).toJson(QJsonDocument::Indented));
+    f.close();
+    LOG_INFO("AlgoTrading", QString("Strategy exported: %1 -> %2").arg(strategy.name, path));
+    if (auto* sb = view_->status_bar())
+        sb->show_notice(tr("Exported %1 to %2").arg(strategy.name, path), QString(), {}, 8000,
+                        fincept::ui::ScreenStatusBar::Tone::Ok);
+}
+
+void StrategyListPanel::confirm_delete(const AlgoStrategy& strategy) {
+    const auto answer = QMessageBox::question(this, tr("Delete Strategy"),
+                                              tr("Delete \"%1\"?\n\nIts deployments and their history are kept.")
+                                                  .arg(strategy.name),
+                                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+        return;
+    AlgoTradingService::instance().delete_strategy(strategy.id);
+    LOG_INFO("AlgoTrading", QString("Delete requested: %1").arg(strategy.name));
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────
 
 void StrategyListPanel::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
+    // The view retranslates itself (its own changeEvent).
     QWidget::changeEvent(event);
-}
-
-void StrategyListPanel::retranslateUi() {
-    if (search_edit_)
-        search_edit_->setPlaceholderText(tr("Search strategies..."));
-    if (sort_caption_)
-        sort_caption_->setText(tr("SORT:"));
-
-    // cat_combo_ item 0 is the fixed "All Categories" entry; remaining items are
-    // category data names and stay as-is.
-    if (cat_combo_ && cat_combo_->count() > 0)
-        cat_combo_->setItemText(0, tr("All Categories"));
-
-    // sort_combo_ — selection index drives logic, only the visible labels change.
-    if (sort_combo_ && sort_combo_->count() >= 3) {
-        sort_combo_->setItemText(0, tr("Name A→Z"));
-        sort_combo_->setItemText(1, tr("Name Z→A"));
-        sort_combo_->setItemText(2, tr("Category"));
-    }
-
-    if (prev_btn_)
-        prev_btn_->setText(tr("◀ PREV"));
-    if (next_btn_)
-        next_btn_->setText(tr("NEXT ▶"));
-
-    if (table_) {
-        table_->setHorizontalHeaderLabels(
-            {tr("#"), tr("STRATEGY NAME"), tr("CATEGORY"), tr("ID"), QString(), QString(), QString(), QString()});
-    }
-
-    // render_page() re-applies per-row button labels, page_label_, and count_label_.
-    render_page();
 }
 
 } // namespace fincept::screens

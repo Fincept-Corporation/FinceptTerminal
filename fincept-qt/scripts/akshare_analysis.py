@@ -187,15 +187,17 @@ def _to_result(df):
 
 
 def run_endpoint(name, args):
-    fetch = ENDPOINTS[name][2]
-    for attempt in range(2):
-        try:
-            return _to_result(fetch(args))
-        except Exception as e:  # network hiccups are retried once
-            if attempt == 0:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": f"{name}: {e}", "data": []}
+    """Fetch and convert; a dropped connection or timeout is retried once (never a rate limit or a
+    refusal), and any failure comes back as a plain-English error."""
+    from akshare_screen_args import safe_call
+
+    payload = {}
+
+    def fetch():  # this script keeps its own row conversion (_to_result), so its date text is unchanged
+        payload.update(_to_result(ENDPOINTS[name][2](args)))
+
+    failed = safe_call(fetch)
+    return payload or failed
 
 
 def get_all_endpoints():
@@ -211,19 +213,23 @@ def get_all_endpoints():
 
 
 def main():
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if len(sys.argv) < 2:
-        result = {"success": False, "error": "Usage: python akshare_analysis.py <endpoint> [symbol] [start] [end]",
-                  "available_endpoints": list(ENDPOINTS)}
-    elif sys.argv[1] == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif sys.argv[1] in ENDPOINTS:
-        result = run_endpoint(sys.argv[1], sys.argv[2:])
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {sys.argv[1]}", "data": []}
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    from akshare_screen_args import run_cli, screen_values, usage_error
+
+    def handler():
+        if len(sys.argv) < 2:
+            return usage_error("Usage: python akshare_analysis.py <endpoint> [symbol] [start] [end]")
+        if sys.argv[1] == "get_all_endpoints":
+            return get_all_endpoints()
+        if sys.argv[1] in ENDPOINTS:
+            # The screens send symbol=/start_date=/end_date=; the endpoints here read [symbol, start, end].
+            values = screen_values(sys.argv[2:])
+            args = [values.get("symbol", ""), values.get("start_date", ""), values.get("end_date", "")]
+            return run_endpoint(sys.argv[1], args)
+        return {"success": False, "error": f"Unknown endpoint: {sys.argv[1]}", "data": []}
+
+    # One JSON line on stdout through fincept_json (NaN -> null); akshare's own prints go to stderr.
+    return run_cli(handler)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

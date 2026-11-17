@@ -16,9 +16,25 @@ def _to_iso_date(raw):
     if not raw:
         return ""
     try:
-        return email.utils.parsedate_to_datetime(raw).strftime("%Y-%m-%dT%H:%M:%S")
+        from datetime import timezone
+
+        d = email.utils.parsedate_to_datetime(raw)
+        if d.tzinfo is not None:  # GNews stamps are GMT: say so (ISO UTC with Z)
+            return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return d.strftime("%Y-%m-%dT%H:%M:%S")
     except Exception:
         return raw
+
+
+def _with_retry(fetch):
+    """Google News' RSS answers an empty feed now and then (rate limiting): ask once more."""
+    import time
+
+    news = fetch()
+    if not news:
+        time.sleep(1.5)
+        news = fetch()
+    return news
 
 def fetch_company_news(query, max_results=10, period='7d', language='en', country='US'):
     """
@@ -44,7 +60,7 @@ def fetch_company_news(query, max_results=10, period='7d', language='en', countr
         )
 
         # Fetch news
-        news = google_news.get_news(query)
+        news = _with_retry(lambda: google_news.get_news(query))
 
         if not news:
             return json.dumps({
@@ -107,7 +123,7 @@ def fetch_news_by_topic(topic, max_results=10):
     """
     try:
         google_news = GNews(max_results=max_results)
-        news = google_news.get_news_by_topic(topic)
+        news = _with_retry(lambda: google_news.get_news_by_topic(topic))
 
         if not news:
             return json.dumps({
@@ -125,7 +141,7 @@ def fetch_news_by_topic(topic, max_results=10):
                 "url": article.get('url', '#'),
                 "publisher": article.get('publisher', {}).get('title', 'Unknown'),
                 "publisher_url": article.get('publisher', {}).get('href', '#'),
-                "published_date": article.get('published date', 'Unknown'),
+                "published_date": _to_iso_date(article.get('published date', '')),
             }
             articles.append(processed_article)
 

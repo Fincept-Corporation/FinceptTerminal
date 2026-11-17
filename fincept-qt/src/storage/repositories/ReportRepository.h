@@ -27,11 +27,15 @@ class ReportRepository : public BaseRepository<Report> {
     Result<qint64> create(const QString& title, const QString& content_json);
     Result<Report> get(int id);
     Result<QVector<Report>> list_all();
+    /// Rows whose title or content contains `query` (case-insensitive; empty = all),
+    /// newest first, at most `limit` (<= 0 = no limit). Used by the Report Builder library.
+    Result<QVector<Report>> search(const QString& query, int limit);
     Result<void> update(int id, const QString& title, const QString& content_json);
     Result<void> remove(int id);
 
     // Templates
     Result<QVector<ReportTemplate>> list_templates();
+    Result<ReportTemplate> get_template(const QString& id);
     Result<void> save_template(const ReportTemplate& t);
     Result<void> remove_template(const QString& id);
 

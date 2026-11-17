@@ -191,6 +191,9 @@ class SpreadsheetWidget : public QWidget {
     formula::Value evaluate_item(const SpreadsheetItem* item) const;
     formula::Value literal_or_cached(const SpreadsheetWidget* sheet, int row, int col) const;
     QString cell_tooltip(const SpreadsheetItem* item) const;
+    /// True when `item` is exactly MIN(...) / MAX(...) over date cells only, so its
+    /// numeric result is a date and is shown as one (not as its serial day number).
+    bool result_is_date(const SpreadsheetItem* item) const;
 
     QTableWidget* table_ = nullptr;
     QLineEdit* formula_bar_ = nullptr;

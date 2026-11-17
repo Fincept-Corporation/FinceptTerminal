@@ -32,11 +32,15 @@ UnComtradePanel::UnComtradePanel(QWidget* parent) : EconPanelBase(kUnComtradeSou
             &UnComtradePanel::on_result);
 }
 
+EconPanelBase::LoadPolicy UnComtradePanel::load_policy() const {
+    LoadPolicy p;
+    p.shape = ui::LoadingSkeleton::Shape::Table; // one row per partner / commodity
+    p.max_age_s = 24 * 3600;                     // annual data; the public preview is rate-limited
+    return p;
+}
+
 void UnComtradePanel::activate() {
-    show_empty(tr("Select reporter, flow, year and commodity level, then click FETCH\n"
-                  "Source: UN Comtrade — annual (A) merchandise trade, HS classification\n"
-                  "Values are current US dollars. Free tier: up to 500 records per request;\n"
-                  "set UN_COMTRADE_API_KEY for 100,000 records/call (register at comtradedeveloper.un.org)"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void UnComtradePanel::build_controls(QHBoxLayout* thl) {
@@ -49,26 +53,29 @@ void UnComtradePanel::build_controls(QHBoxLayout* thl) {
     reporter_combo_ = new QComboBox;
     for (const auto& p : kReporters)
         reporter_combo_->addItem(p.first, p.second);
-    reporter_combo_->setFixedHeight(26);
+    reporter_combo_->setMinimumHeight(26);
 
     flow_combo_ = new QComboBox;
     flow_combo_->addItem(tr("Exports"), "X");
     flow_combo_->addItem(tr("Imports"), "M");
     flow_combo_->addItem(tr("Re-exports"), "RX");
     flow_combo_->addItem(tr("Re-imports"), "RM");
-    flow_combo_->setFixedHeight(26);
+    flow_combo_->setMinimumHeight(26);
 
     // Last 5 years
     period_combo_ = new QComboBox;
     int cur_year = QDate::currentDate().year();
     for (int y = cur_year; y >= cur_year - 5; --y)
         period_combo_->addItem(QString::number(y), QString::number(y));
-    period_combo_->setFixedHeight(26);
+    period_combo_->setMinimumHeight(26);
+    // Annual merchandise trade is published with a lag of about 18 months: the default year is the
+    // latest one that is complete for most reporters (the current year returned nothing).
+    period_combo_->setCurrentIndex(2);
 
     cmd_combo_ = new QComboBox;
     cmd_combo_->addItem(tr("Total (all commodities)"), "TOTAL");
     cmd_combo_->addItem(tr("HS 2-digit chapters"), "AG2");
-    cmd_combo_->setFixedHeight(26);
+    cmd_combo_->setMinimumHeight(26);
 
     thl->addWidget(reporter_lbl_ = lbl(tr("REPORTER")));
     thl->addWidget(reporter_combo_);
@@ -96,9 +103,9 @@ void UnComtradePanel::on_fetch() {
     // CLI: trade_data <reporter_code> <period> [flow_code] [cmd_code]
     show_loading(tr("Fetching UN Comtrade: %1 %2 %3…")
                      .arg(reporter_combo_->currentText(), flow_combo_->currentText(), period));
-    services::EconomicsService::instance().execute(kUnComtradeSourceId, kUnComtradeScript, "trade_data",
-                                                   {reporter, period, flow, cmd_code},
-                                                   "comtrade_" + reporter + "_" + period + "_" + flow + "_" + cmd_code);
+    execute_query(kUnComtradeSourceId, kUnComtradeScript, "trade_data",
+                  {reporter, period, flow, cmd_code},
+                  "comtrade_" + reporter + "_" + period + "_" + flow + "_" + cmd_code);
 }
 
 void UnComtradePanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -123,7 +130,7 @@ void UnComtradePanel::on_result(const QString& request_id, const services::Econo
                               flow_combo_->currentText() + " " + period_combo_->currentText() + " (" +
                               cmd_combo_->currentText() + ")";
         display(arr, title);
-        LOG_INFO("UnComtradePanel", QString("Displayed %1 rows").arg(arr.size()));
+        LOG_DEBUG("UnComtradePanel", QString("Displayed %1 rows").arg(arr.size()));
     }
 }
 

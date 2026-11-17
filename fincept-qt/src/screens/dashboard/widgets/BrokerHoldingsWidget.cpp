@@ -3,14 +3,18 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderThreadPool.h"
 #include "trading/UnifiedTrading.h"
 #include "screens/dashboard/widgets/DashboardFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -56,6 +60,7 @@ BrokerHoldingsWidget::BrokerHoldingsWidget(const QJsonObject& cfg, QWidget* pare
     header_hint_ = new QLabel("—");
     header_row->addWidget(header_hint_, 1);
     square_off_all_btn_ = new QPushButton(tr("SQUARE OFF ALL"));
+    square_off_all_btn_->setProperty("fincept_agent_risk", "order");
     square_off_all_btn_->setCursor(Qt::PointingHandCursor);
     square_off_all_btn_->setEnabled(false);
     connect(square_off_all_btn_, &QPushButton::clicked, this, &BrokerHoldingsWidget::square_off_all);
@@ -71,11 +76,9 @@ BrokerHoldingsWidget::BrokerHoldingsWidget(const QJsonObject& cfg, QWidget* pare
     table_->setShowGrid(false);
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    // Fitted once after each fill (populate), not re-measured on every cell set.
+    for (int c = 1; c <= 5; ++c)
+        table_->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Interactive);
     table_->setToolTip(tr("Double-click a holding to open it in Equity Trading"));
     vl->addWidget(table_, 1);
 
@@ -106,13 +109,39 @@ BrokerHoldingsWidget::BrokerHoldingsWidget(const QJsonObject& cfg, QWidget* pare
         ensure_stream_running();
         if (table_->rowCount() == 0)
             set_loading(true);
-        datahub::DataHub::instance().request(
-            trading::broker_topic(broker_id_, account_id_, QStringLiteral("holdings")), /*force=*/true);
+        datahub::DataHub::instance().request(holdings_topic(), /*force=*/true);
+        update_session_state(); // a still-dead session says so again instead of spinning
+    });
+
+    // A dead broker session (expired token, connection error) used to end in the
+    // generic "No data yet": the poll fails silently. Name it in the header and,
+    // with nothing on screen, on the overlay.
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::connection_state_changed, this,
+            [this](const QString& account_id, trading::ConnectionState) {
+                if (account_id == account_id_)
+                    update_session_state();
+            });
+
+    // Settings > Currency & Number Format: re-format the holdings on screen, no fetch.
+    ui::formatting::on_format_changed(this, [this]() {
+        if (!holdings_.isEmpty())
+            populate(holdings_);
     });
 
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
+}
+
+QString BrokerHoldingsWidget::holdings_topic() const {
+    if (broker_id_.isEmpty() || account_id_.isEmpty())
+        return {};
+    return trading::broker_topic(broker_id_, account_id_, QStringLiteral("holdings"));
+}
+
+void BrokerHoldingsWidget::update_session_state() {
+    if (header_hint_ && !account_id_.isEmpty())
+        header_hint_->setText(broker_account_hint(account_id_, holdings_topic()));
 }
 
 QJsonObject BrokerHoldingsWidget::config() const {
@@ -129,17 +158,26 @@ void BrokerHoldingsWidget::apply_config(const QJsonObject& cfg) {
 
     broker_id_.clear();
     if (!account_id_.isEmpty()) {
-        const auto acct = trading::AccountManager::instance().get_account(account_id_);
-        broker_id_ = acct.broker_id;
-        header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
+        hide_empty_state();
+        broker_id_ = trading::AccountManager::instance().get_account(account_id_).broker_id;
+        update_session_state();
     } else {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
     }
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
         ensure_stream_running();
         hub_resubscribe();
     }
+}
+
+void BrokerHoldingsWidget::show_no_account_state() {
+    // Class C (needs a broker login): explain and point to Equity Trading, never
+    // connect anything here. An account that becomes active fills the tile.
+    show_no_broker_account(tr("This tile lists the long-term holdings of a broker account — quantity, average cost, "
+                              "last price and return."),
+                           [this]() { apply_config({}); });
 }
 
 QString BrokerHoldingsWidget::resolve_account_id() const {
@@ -158,15 +196,19 @@ void BrokerHoldingsWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
-    const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("holdings"));
+    const QString topic = holdings_topic();
     if (table_->rowCount() == 0)
         set_loading(true); // see OpenPositionsWidget::hub_resubscribe
-    hub.subscribe(this, topic, [this](const QVariant& v) {
+    // Producer errors on the holdings topic replace the spinner / mark the tile STALE.
+    track_topics({topic});
+    hub.subscribe(this, topic, [this, topic](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerHolding>>())
             return;
+        note_topic_value(topic);
         populate(v.value<QVector<trading::BrokerHolding>>());
     });
     hub_active_ = true;
+    update_session_state();
 }
 
 void BrokerHoldingsWidget::hub_unsubscribe_all() {
@@ -192,9 +234,20 @@ void BrokerHoldingsWidget::hideEvent(QHideEvent* e) {
 void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows) {
     holdings_ = rows;
 
+    // Switching between the empty-state message and holding rows starts from
+    // clean cells (same as OrderBookMiniWidget). Without this, squaring off the
+    // last holding left row 0's old cells and its "Exit" button under the
+    // "No holdings" span — still clickable, offering a MARKET SELL of a holding
+    // the account no longer has. clearContents() also deletes the cell widgets.
+    const bool want_empty = rows.isEmpty();
+    if (want_empty != showing_empty_) {
+        table_->clearContents();
+        showing_empty_ = want_empty;
+    }
+
     // Empty state — an account with no holdings used to render a blank grid.
     table_->clearSpans();
-    if (rows.isEmpty()) {
+    if (want_empty) {
         table_->setRowCount(1);
         auto* msg = new QTableWidgetItem(tr("No holdings"));
         msg->setTextAlignment(Qt::AlignCenter);
@@ -208,6 +261,9 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
 
     table_->setRowCount(static_cast<int>(rows.size()));
     int sellable = 0;
+    // The P&L amount (tooltip) in the broker account's own currency; unknown broker -> no unit.
+    const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
+    const QString ccy = broker ? broker->profile().currency : QString();
     for (int i = 0; i < rows.size(); ++i) {
         const auto& h = rows[i];
         auto* sym = new QTableWidgetItem(h.symbol);
@@ -218,7 +274,8 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         auto* avg = new QTableWidgetItem(dash_fmt::grouped(h.avg_price, dash_fmt::price_decimals(h.avg_price)));
         auto* ltp = new QTableWidgetItem(h.ltp > 0 ? dash_fmt::grouped(h.ltp, dash_fmt::price_decimals(h.ltp))
                                                    : QStringLiteral("--"));
-        auto* pnl_pct = new QTableWidgetItem(QString("%1%2%").arg(h.pnl_pct >= 0 ? "+" : "").arg(h.pnl_pct, 0, 'f', 2));
+        auto* pnl_pct = new QTableWidgetItem(ui::formatting::pct(h.pnl_pct, 2));
+        pnl_pct->setToolTip(tr("P&L %1").arg(ui::formatting::signed_money(h.pnl, ccy)));
         const QColor col(h.pnl_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
         pnl_pct->setForeground(col);
         qty->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -236,6 +293,7 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         auto* exit_btn = new QPushButton(tr("Exit"), table_);
         exit_btn->setCursor(Qt::PointingHandCursor);
         exit_btn->setProperty("holdingsExit", true);
+        exit_btn->setProperty("fincept_agent_risk", "order");
         const bool can_sell = h.quantity > 0;
         exit_btn->setEnabled(can_sell);
         connect(exit_btn, &QPushButton::clicked, this, [this, h]() { square_off_holding(h); });
@@ -243,6 +301,8 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         if (can_sell)
             ++sellable;
     }
+    for (int c = 1; c <= 5; ++c)
+        table_->resizeColumnToContents(c);
     square_off_all_btn_->setEnabled(sellable > 0);
     set_loading(false);
 }
@@ -283,37 +343,38 @@ void BrokerHoldingsWidget::square_off_holding(const trading::BrokerHolding& h) {
     if (account_id_.isEmpty() || h.quantity <= 0)
         return;
 
-    const auto answer = QMessageBox::warning(
-        this, tr("Square Off Holding"),
-        tr("Place a MARKET SELL order for %1 %2 (CNC)?").arg(dash_fmt::quantity(h.quantity), h.symbol),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (answer != QMessageBox::Yes)
-        return;
-
-    // place_order blocks on a synchronous broker REST call for a live account —
-    // run it off the UI thread (P1) and marshal the result dialog back.
+    // The order is fixed at click time, so Yes places exactly what the box names.
     const trading::UnifiedOrder order = make_square_off_order(h);
     const QString account = account_id_;
     const QString sym = h.symbol;
-    QPointer<BrokerHoldingsWidget> self = this;
-    (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, order, sym]() {
-        const auto resp = trading::UnifiedTrading::instance().place_order(account, order);
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, resp, sym]() {
-                if (!self)
-                    return;
-                if (resp.success)
-                    QMessageBox::information(self, tr("Square Off Holding"),
-                                             tr("Sell order placed for %1 (order %2).").arg(sym, resp.order_id));
-                else
-                    QMessageBox::critical(self, tr("Square Off Holding"),
-                                          tr("Failed to square off %1: %2").arg(sym, resp.message));
-            },
-            Qt::QueuedConnection);
-    });
+    // Non-blocking confirm (BaseWidget::confirm_async): QMessageBox::warning()
+    // ran a nested event loop, and a tile destroyed while it was open (layout
+    // reload, MCP remove) left the code after it running on a dead object.
+    confirm_async(
+        QMessageBox::Warning, tr("Square Off Holding"),
+        tr("Place a MARKET SELL order for %1 %2 (CNC)?").arg(dash_fmt::quantity(h.quantity), h.symbol),
+        [this, account, order, sym]() {
+            // place_order blocks on a synchronous broker REST call for a live
+            // account — run it off the UI thread (P1) and marshal the result back
+            // through the application object, checking the tile on the GUI thread.
+            QPointer<BrokerHoldingsWidget> self = this;
+            (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, order, sym]() {
+                const auto resp = trading::UnifiedTrading::instance().place_order(account, order);
+                QMetaObject::invokeMethod(
+                    QCoreApplication::instance(),
+                    [self, resp, sym]() {
+                        if (!self)
+                            return;
+                        if (resp.success)
+                            self->notify_async(QMessageBox::Information, tr("Square Off Holding"),
+                                               tr("Sell order placed for %1 (order %2).").arg(sym, resp.order_id));
+                        else
+                            self->notify_async(QMessageBox::Critical, tr("Square Off Holding"),
+                                               tr("Failed to square off %1: %2").arg(sym, resp.message));
+                    },
+                    Qt::QueuedConnection);
+            });
+        });
 }
 
 void BrokerHoldingsWidget::square_off_all() {
@@ -327,22 +388,14 @@ void BrokerHoldingsWidget::square_off_all() {
         if (h.quantity > 0)
             targets.append(h);
     if (targets.isEmpty()) {
-        QMessageBox::information(this, tr("Square Off All Holdings"), tr("No holdings to square off."));
+        notify_async(QMessageBox::Information, tr("Square Off All Holdings"), tr("No holdings to square off."));
         return;
     }
-
-    const auto answer =
-        QMessageBox::warning(this, tr("Square Off All Holdings"),
-                             tr("This will place MARKET SELL orders to exit ALL %1 holding(s) in this account.\n\n"
-                                "Positions are NOT affected. Continue?")
-                                 .arg(targets.size()),
-                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (answer != QMessageBox::Yes)
-        return;
 
     // Pre-build every order on the UI thread, then place them off the UI thread:
     // each place_order is a blocking broker REST round-trip for a live account,
     // so looping synchronously here froze the whole terminal for seconds (P1).
+    // Built before the confirm, so Yes places exactly the snapshot it counted.
     struct SquareOffJob {
         QString symbol;
         trading::UnifiedOrder order;
@@ -351,66 +404,78 @@ void BrokerHoldingsWidget::square_off_all() {
     jobs.reserve(targets.size());
     for (const auto& h : targets)
         jobs.append({h.symbol, make_square_off_order(h)});
-
     const QString account = account_id_;
-    QPointer<BrokerHoldingsWidget> self = this;
-    (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, jobs]() {
-        int placed = 0;
-        QStringList failures;
-        for (const auto& j : jobs) {
-            const auto resp = trading::UnifiedTrading::instance().place_order(account, j.order);
-            if (resp.success)
-                ++placed;
-            else
-                failures.append(QStringLiteral("%1 (%2)").arg(j.symbol, resp.message));
-        }
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, placed, failures]() {
-                if (!self)
-                    return;
-                if (failures.isEmpty())
-                    QMessageBox::information(self, tr("Square Off All Holdings"),
-                                             tr("Placed %1 sell order(s).").arg(placed));
-                else
-                    QMessageBox::warning(self, tr("Square Off All Holdings"),
-                                         tr("Placed %1 order(s). %2 failed:\n%3")
-                                             .arg(placed)
-                                             .arg(failures.size())
-                                             .arg(failures.join(QStringLiteral("\n"))));
-            },
-            Qt::QueuedConnection);
-    });
+
+    // Non-blocking confirm (BaseWidget::confirm_async) — see square_off_holding().
+    confirm_async(
+        QMessageBox::Warning, tr("Square Off All Holdings"),
+        tr("This will place MARKET SELL orders to exit ALL %1 holding(s) in this account.\n\n"
+           "Positions are NOT affected. Continue?")
+            .arg(targets.size()),
+        [this, account, jobs]() {
+            QPointer<BrokerHoldingsWidget> self = this;
+            (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, jobs]() {
+                int placed = 0;
+                QStringList failures;
+                for (const auto& j : jobs) {
+                    const auto resp = trading::UnifiedTrading::instance().place_order(account, j.order);
+                    if (resp.success)
+                        ++placed;
+                    else
+                        failures.append(QStringLiteral("%1 (%2)").arg(j.symbol, resp.message));
+                }
+                // Marshal through the application object; check the tile on the GUI thread.
+                QMetaObject::invokeMethod(
+                    QCoreApplication::instance(),
+                    [self, placed, failures]() {
+                        if (!self)
+                            return;
+                        if (failures.isEmpty())
+                            self->notify_async(QMessageBox::Information, tr("Square Off All Holdings"),
+                                               tr("Placed %1 sell order(s).").arg(placed));
+                        else
+                            self->notify_async(QMessageBox::Warning, tr("Square Off All Holdings"),
+                                               tr("Placed %1 order(s). %2 failed:\n%3")
+                                                   .arg(placed)
+                                                   .arg(failures.size())
+                                                   .arg(failures.join(QStringLiteral("\n"))));
+                    },
+                    Qt::QueuedConnection);
+            });
+        });
 }
 
 void BrokerHoldingsWidget::on_theme_changed() {
     apply_styles();
+    // P&L colours are baked into the table items: rebuild what is on screen.
+    if (table_->rowCount() > 0)
+        populate(holdings_);
 }
 
 void BrokerHoldingsWidget::apply_styles() {
-    header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
-    table_->setStyleSheet(
-        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+    set_css_cached(header_hint_, 
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    set_css_cached(table_, 
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;border:none;}"
                 "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget::item{padding:2px 4px;}"
                 "QPushButton[holdingsExit=\"true\"]{color:%5;background:transparent;border:1px solid %5;"
-                "border-radius:2px;padding:0 6px;font-size:9px;font-weight:bold;}"
+                "border-radius:2px;padding:0 6px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QPushButton[holdingsExit=\"true\"]:hover{color:%6;background:%5;}"
-                "QPushButton[holdingsExit=\"true\"]:disabled{color:%2;border-color:%2;}")
+                "QPushButton[holdingsExit=\"true\"]:disabled{color:%7;border-color:%2;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
+                 ui::colors::TEXT_SECONDARY(), ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT(),
+                 ui::colors::TEXT_TERTIARY()));
 
     if (square_off_all_btn_)
-        square_off_all_btn_->setStyleSheet(
+        set_css_cached(square_off_all_btn_, 
             QString("QPushButton{color:%1;background:transparent;border:1px solid %1;border-radius:2px;"
-                    "padding:2px 8px;font-size:9px;font-weight:bold;}"
+                    "padding:2px 8px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                     "QPushButton:hover{color:%2;background:%1;}"
-                    "QPushButton:disabled{color:%3;border-color:%3;}")
-                .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
+                    "QPushButton:disabled{color:%4;border-color:%3;}")
+                .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_DIM(),
+                     ui::colors::TEXT_TERTIARY()));
 }
 
 void BrokerHoldingsWidget::retranslateUi() {
@@ -427,8 +492,12 @@ void BrokerHoldingsWidget::retranslateUi() {
     }
     if (square_off_all_btn_)
         square_off_all_btn_->setText(tr("SQUARE OFF ALL"));
-    if (header_hint_ && account_id_.isEmpty())
+    if (header_hint_ && account_id_.isEmpty()) {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
+    } else {
+        update_session_state();
+    }
 }
 
 } // namespace fincept::screens::widgets

@@ -26,6 +26,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_IIFL_WS = "IIFLWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_iifl_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_IIFL_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_IIFL_WS, key, 1)) {
+        LOG_WARN(TAG_IIFL_WS, "IIFL WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_IIFL_WS, "IIFL WS still disconnected");
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Construction
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,7 +72,7 @@ void IIFLWebSocket::open() {
                                 "?EIO=4&transport=websocket&token=%1&userID=%2&publishFormat=JSON&broadcastMode=Full")
                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(market_token_)),
                                  QString::fromUtf8(QUrl::toPercentEncoding(user_id_)));
-    LOG_INFO(TAG_IIFL_WS, "Connecting to IIFL XTS Socket.IO");
+    LOG_DEBUG(TAG_IIFL_WS, "Connecting to IIFL XTS Socket.IO");
     ws_->connect_to(url);
     start_health_check();
 }
@@ -158,8 +173,8 @@ void IIFLWebSocket::http_subscription(const QVector<qint64>& tokens, bool subscr
                                           .arg(status)
                                           .arg(reply->errorString()));
             } else {
-                LOG_INFO(TAG_IIFL_WS,
-                         QString("%1 ok (xtsCode %2)").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(code));
+                LOG_DEBUG(TAG_IIFL_WS,
+                          QString("%1 ok (xtsCode %2)").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(code));
             }
             reply->deleteLater();
         });
@@ -174,11 +189,11 @@ void IIFLWebSocket::on_ws_connected() {
     // Transport is up; the Engine.IO handshake ("0{...}") drives the rest. We
     // emit BrokerWebSocketBase::connected() only after the SIO namespace
     // connect ("40") is acknowledged.
-    LOG_INFO(TAG_IIFL_WS, "WebSocket transport open — awaiting Engine.IO handshake");
+    LOG_DEBUG(TAG_IIFL_WS, "WebSocket transport open — awaiting Engine.IO handshake");
 }
 
 void IIFLWebSocket::on_ws_disconnected() {
-    LOG_WARN(TAG_IIFL_WS, "Disconnected");
+    log_iifl_stream_state(this, false);
     sio_connected_ = false;
     emit disconnected();
 }
@@ -211,8 +226,9 @@ void IIFLWebSocket::handle_engineio(const QString& packet) {
             const QString sio_rest = rest.mid(1);
             switch (sio_type.toLatin1()) {
                 case '0': // CONNECT ack — namespace joined.
-                    LOG_INFO(TAG_IIFL_WS, "Socket.IO namespace connected");
+                    LOG_DEBUG(TAG_IIFL_WS, "Socket.IO namespace connected");
                     sio_connected_ = true;
+                    log_iifl_stream_state(this, true);
                     emit connected();
                     // (Re)subscribe everything we already wanted.
                     if (!subscribed_tokens_.isEmpty()) {
@@ -228,7 +244,7 @@ void IIFLWebSocket::handle_engineio(const QString& packet) {
                     handle_socketio_event(sio_rest);
                     break;
                 case '4': // CONNECT_ERROR
-                    LOG_ERROR(TAG_IIFL_WS, QString("Socket.IO connect error: %1").arg(sio_rest));
+                    LOG_ERROR(TAG_IIFL_WS, QString("Socket.IO connect error: %1").arg(sio_rest.left(200)));
                     emit error_occurred(QStringLiteral("IIFL Socket.IO connect error"));
                     break;
                 default:

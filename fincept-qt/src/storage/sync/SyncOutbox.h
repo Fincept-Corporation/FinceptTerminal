@@ -26,6 +26,12 @@ struct OutboxRow {
 /// calling thread's `Database` connection.
 class SyncOutbox {
   public:
+    /// A row whose push has failed MORE than this many times is dead-lettered:
+    /// pending_all() no longer returns it and StorageManager's retention sweep
+    /// deletes it (both read this constant; CloudSyncEngine relies on
+    /// pending_all()'s filter).
+    static constexpr int kMaxPushAttempts = 20;
+
     /// Append a change. Returns ok() but does NOTHING (no row inserted) when:
     ///   (a) an `ApplyGuard` is active on the current thread — a pull is writing
     ///       remote rows into the local cache, so recording would echo-loop; or
@@ -42,7 +48,10 @@ class SyncOutbox {
     static Result<void> record_unique(const QString& entity, const QString& local_id, const QString& op,
                                       const QString& payload = {});
 
-    /// Pending rows across all entities, FIFO by id, capped at `limit`.
+    /// Pending rows across all entities, FIFO by id, capped at `limit`. Only
+    /// rows still eligible for a push (attempts <= kMaxPushAttempts): the
+    /// dead-lettered ones are filtered in SQL, so they neither count against
+    /// `limit` nor get read just to be skipped.
     static Result<QVector<OutboxRow>> pending_all(int limit = 500);
 
     /// Count of pending rows for one entity.

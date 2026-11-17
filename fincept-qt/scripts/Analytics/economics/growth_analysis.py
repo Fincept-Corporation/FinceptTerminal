@@ -30,8 +30,6 @@ PARAMETERS:
 from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
 from .core import EconomicsBase, ValidationError, CalculationError, DataError, CalculationUtils
 
 
@@ -55,154 +53,77 @@ class GrowthAnalyzer(EconomicsBase):
         else:
             return self._analyze_developing_economy_factors(economic_data)
 
-    def _analyze_developed_economy_factors(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze growth factors for developed economies"""
+    # The factor lists below used to carry made-up "scores" (fixed 85 / 70 / 80 / 60 points and
+    # unbounded rescalings such as GDP per capita / 1000) and a weighted "net growth potential"
+    # built from them. The scales are uncalibrated, so the composite was not a meaningful number.
+    # Each factor now reports the indicator it rests on and the value supplied (null if absent).
+    _NO_COMPOSITE = ('No composite score: the factors are measured on different, uncalibrated '
+                     'scales (and some have no data input), so a weighted sum would not be meaningful.')
 
-        # Extract key metrics
-        gdp_per_capita = self.to_decimal(data.get('gdp_per_capita', 0))
-        rd_spending = self.to_decimal(data.get('rd_spending_percent_gdp', 0))
-        education_index = self.to_decimal(data.get('education_index', 0))
-        infrastructure_quality = self.to_decimal(data.get('infrastructure_quality', 0))
-        population_growth = self.to_decimal(data.get('population_growth_rate', 0))
-        aging_ratio = self.to_decimal(data.get('old_age_dependency_ratio', 0))
-
-        favoring_factors = {
-            'technological_innovation': {
-                'score': rd_spending * self.to_decimal(10),  # R&D as % of GDP scaled
-                'description': 'High R&D spending drives innovation-led growth',
-                'weight': self.to_decimal(0.25)
-            },
-            'human_capital': {
-                'score': education_index * self.to_decimal(100),
-                'description': 'Skilled workforce enables productivity gains',
-                'weight': self.to_decimal(0.20)
-            },
-            'institutional_quality': {
-                'score': infrastructure_quality,
-                'description': 'Strong institutions support efficient markets',
-                'weight': self.to_decimal(0.20)
-            },
-            'capital_deepening': {
-                'score': self.to_decimal(85),  # Typically high in developed economies
-                'description': 'Existing capital stock supports productivity',
-                'weight': self.to_decimal(0.15)
-            }
-        }
-
-        limiting_factors = {
-            'demographic_constraints': {
-                'score': aging_ratio,
-                'description': 'Aging population reduces labor force growth',
-                'weight': self.to_decimal(0.30)
-            },
-            'diminishing_returns': {
-                'score': gdp_per_capita / self.to_decimal(1000),  # Higher GDP per capita = more diminishing returns
-                'description': 'High income levels face diminishing marginal returns',
-                'weight': self.to_decimal(0.25)
-            },
-            'low_population_growth': {
-                'score': max(self.to_decimal(0), self.to_decimal(2) - population_growth) * self.to_decimal(50),
-                'description': 'Low population growth limits labor force expansion',
-                'weight': self.to_decimal(0.20)
-            },
-            'mature_economy_constraints': {
-                'score': self.to_decimal(70),  # Fixed score for developed economies
-                'description': 'Limited catch-up growth opportunities',
-                'weight': self.to_decimal(0.25)
-            }
-        }
-
-        # Calculate composite scores
-        favoring_score = sum(factor['score'] * factor['weight'] for factor in favoring_factors.values())
-        limiting_score = sum(factor['score'] * factor['weight'] for factor in limiting_factors.values())
-
+    def _factor(self, data: Dict[str, Any], indicator: Optional[str], description: str) -> Dict[str, Any]:
+        value = data.get(indicator) if indicator else None
         return {
-            'country_type': 'developed',
-            'favoring_factors': favoring_factors,
-            'limiting_factors': limiting_factors,
-            'composite_favoring_score': favoring_score,
-            'composite_limiting_score': limiting_score,
-            'net_growth_potential': favoring_score - limiting_score,
-            'primary_growth_drivers': ['technological_innovation', 'human_capital'],
-            'main_constraints': ['demographic_constraints', 'diminishing_returns']
+            'indicator': indicator,
+            'value': self.to_decimal(value) if value is not None else None,
+            'description': description,
         }
+
+    def _factor_result(self, country_type: str, data: Dict[str, Any], favoring: Dict[str, Any],
+                       limiting: Dict[str, Any], drivers: List[str], constraints: List[str]) -> Dict[str, Any]:
+        used = {f['indicator'] for f in list(favoring.values()) + list(limiting.values()) if f['indicator']}
+        return {
+            'country_type': country_type,
+            'favoring_factors': favoring,
+            'limiting_factors': limiting,
+            'composite_favoring_score': None,
+            'composite_limiting_score': None,
+            'net_growth_potential': None,
+            'scoring_note': self._NO_COMPOSITE,
+            'missing_inputs': sorted(k for k in used if data.get(k) is None),
+            'primary_growth_drivers': drivers,
+            'main_constraints': constraints
+        }
+
+    def _analyze_developed_economy_factors(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Growth factors for developed economies (qualitative, with the supplied indicators)"""
+        f = lambda key, text: self._factor(data, key, text)
+        favoring = {
+            'technological_innovation': f('rd_spending_percent_gdp', 'High R&D spending drives innovation-led growth'),
+            'human_capital': f('education_index', 'Skilled workforce enables productivity gains'),
+            'infrastructure_quality': f('infrastructure_quality', 'Quality infrastructure supports efficient markets'),
+            'capital_deepening': f(None, 'Existing capital stock supports productivity'),
+        }
+        limiting = {
+            'demographic_constraints': f('old_age_dependency_ratio', 'Aging population reduces labor force growth'),
+            'diminishing_returns': f('gdp_per_capita', 'High income levels face diminishing marginal returns'),
+            'low_population_growth': f('population_growth_rate', 'Low population growth limits labor force expansion'),
+            'mature_economy_constraints': f(None, 'Limited catch-up growth opportunities'),
+        }
+        return self._factor_result('developed', data, favoring, limiting,
+                                   ['technological_innovation', 'human_capital'],
+                                   ['demographic_constraints', 'diminishing_returns'])
 
     def _analyze_developing_economy_factors(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze growth factors for developing economies"""
-
-        # Extract key metrics
-        gdp_per_capita = self.to_decimal(data.get('gdp_per_capita', 0))
-        savings_rate = self.to_decimal(data.get('savings_rate', 0))
-        fdi_inflows = self.to_decimal(data.get('fdi_percent_gdp', 0))
-        population_growth = self.to_decimal(data.get('population_growth_rate', 0))
-        institutional_quality = self.to_decimal(data.get('institutional_quality_index', 0))
-        education_enrollment = self.to_decimal(data.get('secondary_education_enrollment', 0))
-
-        favoring_factors = {
-            'catch_up_potential': {
-                'score': max(self.to_decimal(0), self.to_decimal(50) - gdp_per_capita / self.to_decimal(1000)),
-                'description': 'Low income levels allow rapid catch-up growth',
-                'weight': self.to_decimal(0.25)
-            },
-            'demographic_dividend': {
-                'score': min(population_growth * self.to_decimal(25), self.to_decimal(100)),
-                'description': 'Young population provides growing workforce',
-                'weight': self.to_decimal(0.20)
-            },
-            'capital_accumulation': {
-                'score': savings_rate * self.to_decimal(2),
-                'description': 'High savings enable capital investment',
-                'weight': self.to_decimal(0.20)
-            },
-            'technology_transfer': {
-                'score': fdi_inflows * self.to_decimal(10),
-                'description': 'FDI brings advanced technology and knowledge',
-                'weight': self.to_decimal(0.15)
-            },
-            'education_expansion': {
-                'score': education_enrollment,
-                'description': 'Growing human capital base',
-                'weight': self.to_decimal(0.20)
-            }
+        """Growth factors for developing economies (qualitative, with the supplied indicators)"""
+        f = lambda key, text: self._factor(data, key, text)
+        favoring = {
+            'catch_up_potential': f('gdp_per_capita', 'Low income levels allow rapid catch-up growth'),
+            'demographic_dividend': f('population_growth_rate', 'Young population provides growing workforce'),
+            'capital_accumulation': f('savings_rate', 'High savings enable capital investment'),
+            'technology_transfer': f('fdi_percent_gdp', 'FDI brings advanced technology and knowledge'),
+            'education_expansion': f('secondary_education_enrollment', 'Growing human capital base'),
         }
-
-        limiting_factors = {
-            'institutional_weaknesses': {
-                'score': self.to_decimal(100) - institutional_quality,
-                'description': 'Weak institutions hinder efficient resource allocation',
-                'weight': self.to_decimal(0.30)
-            },
-            'infrastructure_gaps': {
-                'score': self.to_decimal(80),  # Typically high in developing countries
-                'description': 'Inadequate infrastructure limits productivity',
-                'weight': self.to_decimal(0.25)
-            },
-            'human_capital_deficits': {
-                'score': self.to_decimal(100) - education_enrollment,
-                'description': 'Limited education reduces productivity potential',
-                'weight': self.to_decimal(0.20)
-            },
-            'external_dependence': {
-                'score': self.to_decimal(60),  # Moderate score for most developing economies
-                'description': 'Dependence on external financing and technology',
-                'weight': self.to_decimal(0.25)
-            }
+        limiting = {
+            'institutional_weaknesses': f('institutional_quality_index',
+                                          'Weak institutions hinder efficient resource allocation'),
+            'infrastructure_gaps': f(None, 'Inadequate infrastructure limits productivity'),
+            'human_capital_deficits': f('secondary_education_enrollment',
+                                        'Limited education reduces productivity potential'),
+            'external_dependence': f(None, 'Dependence on external financing and technology'),
         }
-
-        # Calculate composite scores
-        favoring_score = sum(factor['score'] * factor['weight'] for factor in favoring_factors.values())
-        limiting_score = sum(factor['score'] * factor['weight'] for factor in limiting_factors.values())
-
-        return {
-            'country_type': 'developing',
-            'favoring_factors': favoring_factors,
-            'limiting_factors': limiting_factors,
-            'composite_favoring_score': favoring_score,
-            'composite_limiting_score': limiting_score,
-            'net_growth_potential': favoring_score - limiting_score,
-            'primary_growth_drivers': ['catch_up_potential', 'demographic_dividend'],
-            'main_constraints': ['institutional_weaknesses', 'infrastructure_gaps']
-        }
+        return self._factor_result('developing', data, favoring, limiting,
+                                   ['catch_up_potential', 'demographic_dividend'],
+                                   ['institutional_weaknesses', 'infrastructure_gaps'])
 
     def analyze_stock_market_growth_relationship(self, market_data: Dict[str, Any],
                                                  economic_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -284,8 +205,12 @@ class GrowthAnalyzer(EconomicsBase):
     def potential_gdp_importance(self, gdp_data: Dict[str, Any], investor_type: str) -> Dict[str, Any]:
         """Explain importance of potential GDP for equity and fixed income investors"""
 
-        potential_gdp = self.to_decimal(gdp_data.get('potential_gdp', 0))
-        actual_gdp = self.to_decimal(gdp_data.get('actual_gdp', 0))
+        if gdp_data.get('potential_gdp') is None or gdp_data.get('actual_gdp') is None:
+            raise ValidationError("potential_gdp and actual_gdp are required")
+        potential_gdp = self.to_decimal(gdp_data['potential_gdp'])
+        actual_gdp = self.to_decimal(gdp_data['actual_gdp'])
+        if potential_gdp <= 0:
+            raise ValidationError("potential_gdp must be positive")
         potential_growth = self.to_decimal(gdp_data.get('potential_growth_rate', 0))
 
         # Calculate output gap
@@ -344,7 +269,8 @@ class GrowthAnalyzer(EconomicsBase):
             },
             'inflation_expectations': {
                 'gap_pressure': 'Positive gap = inflationary pressure' if output_gap > 0 else 'Negative gap = disinflationary pressure',
-                'long_term_anchor': f'Long-term inflation should align with potential growth of {potential_growth:.1f}%',
+                'long_term_anchor': (f'Long-run nominal yields anchor on potential real growth '
+                                     f'({potential_growth:.1f}%) plus expected inflation'),
                 'current_risk': 'Inflation risk elevated' if output_gap > self.to_decimal(
                     2) else 'Inflation risk contained'
             },
@@ -665,8 +591,12 @@ class ConvergenceAnalyzer(EconomicsBase):
     """Economic convergence hypotheses analysis"""
 
     def test_convergence_hypotheses(self, country_data: List[Dict[str, Any]],
-                                    convergence_type: str = 'beta') -> Dict[str, Any]:
-        """Test convergence hypotheses (beta and sigma convergence)"""
+                                    convergence_type: str = 'beta',
+                                    years: Optional[float] = None,
+                                    growth_rate_units: str = 'percent') -> Dict[str, Any]:
+        """Test convergence hypotheses (beta and sigma convergence).
+        years = length T of the window over which avg_growth_rate was measured (needed for the
+        beta-convergence speed and half-life); growth_rate_units = 'percent' (3.5) or 'fraction'."""
 
         if convergence_type not in ['beta', 'sigma', 'both']:
             raise ValidationError("Convergence type must be 'beta', 'sigma', or 'both'")
@@ -674,7 +604,7 @@ class ConvergenceAnalyzer(EconomicsBase):
         results = {}
 
         if convergence_type in ['beta', 'both']:
-            results['beta_convergence'] = self._test_beta_convergence(country_data)
+            results['beta_convergence'] = self._test_beta_convergence(country_data, years, growth_rate_units)
 
         if convergence_type in ['sigma', 'both']:
             results['sigma_convergence'] = self._test_sigma_convergence(country_data)
@@ -683,47 +613,80 @@ class ConvergenceAnalyzer(EconomicsBase):
 
         return results
 
-    def _test_beta_convergence(self, country_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Test beta convergence (catch-up effect)"""
+    def _test_beta_convergence(self, country_data: List[Dict[str, Any]], years: Optional[float] = None,
+                               growth_rate_units: str = 'percent') -> Dict[str, Any]:
+        """Barro beta convergence: OLS of the average annual growth rate g_i over the window on
+        ln(initial GDP per capita): g_i = a + b ln(y_i0). Convergence means b < 0; with window
+        length T the implied speed is beta = -ln(1 + bT)/T and the half-life ln 2 / beta
+        (Barro & Sala-i-Martin; g as a fraction per year)."""
 
-        # Extract initial GDP per capita and growth rates
-        initial_gdp = []
+        if growth_rate_units not in ('percent', 'fraction'):
+            raise ValidationError("growth_rate_units must be 'percent' or 'fraction'")
+        scale = Decimal(100) if growth_rate_units == 'percent' else Decimal(1)
+
+        ln_initial = []
         growth_rates = []
-
         for country in country_data:
-            initial_gdp.append(self.to_decimal(country['initial_gdp_per_capita']))
-            growth_rates.append(self.to_decimal(country['avg_growth_rate']))
+            y0 = self.to_decimal(country['initial_gdp_per_capita'])
+            if y0 <= 0:
+                raise ValidationError("initial_gdp_per_capita must be positive")
+            ln_initial.append(y0.ln())
+            growth_rates.append(self.to_decimal(country['avg_growth_rate']) / scale)
 
-        if len(initial_gdp) < 3:
+        if len(ln_initial) < 3:
             raise ValidationError("At least 3 countries required for convergence analysis")
 
-        # Simple correlation analysis (in practice would use regression)
-        # Beta convergence: negative correlation between initial GDP and growth
-        correlation = self._calculate_correlation(initial_gdp, growth_rates)
+        n = Decimal(len(ln_initial))
+        mx = sum(ln_initial) / n
+        my = sum(growth_rates) / n
+        sxx = sum((x - mx) ** 2 for x in ln_initial)
+        if sxx == 0:
+            raise ValidationError("initial_gdp_per_capita must differ across countries")
+        slope = sum((x - mx) * (y - my) for x, y in zip(ln_initial, growth_rates)) / sxx
+        correlation = self._calculate_correlation(ln_initial, growth_rates)
 
-        convergence_speed = -correlation * self.to_decimal(0.02)  # Simplified speed calculation
-        half_life = self.to_decimal(0.693) / abs(convergence_speed) if convergence_speed != 0 else None
+        speed = half_life = None
+        speed_note = None
+        if years is None:
+            speed_note = 'needs years (length of the growth window) for speed and half-life'
+        else:
+            T = Decimal(str(years))
+            if T <= 0:
+                raise ValidationError("years must be positive")
+            inner = Decimal(1) + slope * T
+            if slope >= 0:
+                speed_note = 'no convergence (slope >= 0): speed and half-life undefined'
+            elif inner <= 0:
+                speed_note = 'slope too steep for the window (1 + bT <= 0): speed undefined'
+            else:
+                speed = -inner.ln() / T
+                half_life = Decimal(2).ln() / speed
 
         return {
+            'regression_slope_b': slope,
+            'slope_units': 'change in annual growth (fraction) per unit of ln(initial GDP per capita)',
             'correlation_coefficient': correlation,
-            'convergence_exists': correlation < self.to_decimal(-0.3),
-            'convergence_speed': convergence_speed,
+            'convergence_exists': slope < 0,
+            'convergence_speed': speed,
             'half_life_years': half_life,
+            'speed_note': speed_note,
             'interpretation': self._interpret_beta_convergence(correlation),
             'countries_analyzed': len(country_data)
         }
 
     def _test_sigma_convergence(self, country_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Test sigma convergence (dispersion reduction)"""
+        """Sigma convergence: is the cross-country dispersion of LOG GDP per capita (sample
+        standard deviation of ln y) falling? (Dispersion of levels rises under uniform growth.)"""
 
         # Extract GDP per capita over time
         time_periods = {}
 
         for country in country_data:
             for year, gdp in country.get('gdp_time_series', {}).items():
-                if year not in time_periods:
-                    time_periods[year] = []
-                time_periods[year].append(self.to_decimal(gdp))
+                value = self.to_decimal(gdp)
+                if value <= 0:
+                    raise ValidationError("gdp_time_series values must be positive")
+                time_periods.setdefault(year, []).append(value.ln())
 
         # Calculate standard deviation over time
         dispersions = {}
@@ -740,12 +703,15 @@ class ConvergenceAnalyzer(EconomicsBase):
 
         initial_dispersion = dispersions[years[0]]
         final_dispersion = dispersions[years[-1]]
-        dispersion_change = (final_dispersion - initial_dispersion) / initial_dispersion
+        dispersion_change = ((final_dispersion - initial_dispersion) / initial_dispersion
+                             if initial_dispersion != 0 else None)
 
         return {
+            'dispersion_measure': 'sample standard deviation of ln(GDP per capita) across countries',
             'initial_dispersion': initial_dispersion,
             'final_dispersion': final_dispersion,
-            'dispersion_change_percent': dispersion_change * self.to_decimal(100),
+            'dispersion_change_percent': (dispersion_change * self.to_decimal(100)
+                                          if dispersion_change is not None else None),
             'sigma_convergence_exists': final_dispersion < initial_dispersion,
             'time_periods_analyzed': len(years),
             'dispersion_trend': 'Decreasing' if final_dispersion < initial_dispersion else 'Increasing'
@@ -805,7 +771,8 @@ class ConvergenceAnalyzer(EconomicsBase):
 
     def calculate(self, convergence_type: str = 'both', **kwargs) -> Dict[str, Any]:
         """Calculate convergence analysis"""
-        return self.test_convergence_hypotheses(kwargs['country_data'], convergence_type)
+        return self.test_convergence_hypotheses(kwargs['country_data'], convergence_type,
+                                                kwargs.get('years'), kwargs.get('growth_rate_units', 'percent'))
 
 
 class DemographicAnalyzer(EconomicsBase):
@@ -829,7 +796,18 @@ class DemographicAnalyzer(EconomicsBase):
         labor_force_participation = self.to_decimal(demographic_data.get('labor_force_participation_rate', 0))
         female_participation = self.to_decimal(demographic_data.get('female_labor_participation', 0))
 
+        expected = ['population_growth_rate', 'working_age_population_share', 'dependency_ratio',
+                    'life_expectancy', 'fertility_rate', 'net_immigration_rate',
+                    'labor_force_participation_rate', 'female_labor_participation']
+        missing = [k for k in expected if demographic_data.get(k) is None]
+        if len(missing) == len(expected):
+            raise ValidationError("demographic_data is empty: supply at least the working-age share, "
+                                  "dependency ratio and fertility rate")
+
         return {
+            # Absent inputs are read as 0 by the sections below; they are listed here so a
+            # narrative built on a 0 is recognisable.
+            'missing_inputs': missing,
             'demographic_dividend_analysis': self._analyze_demographic_dividend(
                 working_age_share, dependency_ratio, population_growth
             ),
@@ -920,8 +898,14 @@ class DemographicAnalyzer(EconomicsBase):
             'current_participation_rate': overall_lfpr,
             'female_participation_rate': female_lfpr,
             'participation_gap': participation_gap,
+            'participation_gap_basis': 'percentage points below an assumed 85 % maximum participation rate',
             'female_participation_potential': female_potential,
+            # Workers added if participation rose to the 85 % ceiling, as percentage points of the
+            # TOTAL population (gap x working-age share); and as % of today's labour force.
             'growth_potential_from_participation': participation_gap * working_age_share / self.to_decimal(100),
+            'growth_potential_from_participation_unit': 'percentage points of total population',
+            'labor_force_increase_pct': (participation_gap / overall_lfpr * self.to_decimal(100)
+                                         if overall_lfpr > 0 else None),
             'policy_levers': [
                 'Childcare support to increase female participation',
                 'Flexible work arrangements',

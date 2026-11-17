@@ -51,6 +51,10 @@ class EquityChart : public QWidget {
 
     QString current_timeframe() const;
     fincept::ui::ChartOverlayManager* overlay_manager() const { return overlay_mgr_; }
+    // The plot view (below the timeframe header + indicator picker). The owning
+    // panel lays its loading / no-data overlay over exactly this area so the
+    // timeframe buttons stay usable while the chart has nothing to show.
+    QWidget* plot_widget() const;
 
   signals:
     void timeframe_changed(const QString& tf);
@@ -63,6 +67,9 @@ class EquityChart : public QWidget {
 
   private:
     void retranslateUi();
+    /// Re-applies the colours and fonts held by the chart, its axes, the scene
+    /// overlays and the EMA layers (on ThemeManager::theme_changed).
+    void refresh_theme();
     // Pop the right-click trading menu (Buy/Sell @ price + watchlist) at the
     // given screen position; `price` is the y-axis value under the cursor.
     void show_trade_menu(double price, const QPoint& global_pos);

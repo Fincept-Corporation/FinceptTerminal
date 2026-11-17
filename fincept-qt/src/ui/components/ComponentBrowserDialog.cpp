@@ -4,6 +4,7 @@
 #include "core/components/PopularityTracker.h"
 #include "ui/components/ComponentCard.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -43,7 +44,7 @@ bool matches_query(const ComponentMeta& m, const QString& query) {
 ComponentBrowserDialog::ComponentBrowserDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("Component Browser"));
     setModal(true);
-    resize(960, 640);
+    resize(metrics::width(960), metrics::width(640)); // widened with the user's font
     setStyleSheet(QString("QDialog{background:%1;font-family:%2;} QLabel{color:%3;}")
                       .arg(colors::BG_BASE())
                       .arg(fonts::DATA_FAMILY())
@@ -59,7 +60,7 @@ void ComponentBrowserDialog::build_ui() {
 
     // Header bar — title + search.
     auto* header = new QWidget(this);
-    header->setFixedHeight(56);
+    header->setMinimumHeight(56); // grows with the user's font
     header->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_RAISED()).arg(colors::BORDER_MED()));
     auto* hl = new QHBoxLayout(header);
@@ -68,7 +69,7 @@ void ComponentBrowserDialog::build_ui() {
 
     title_label_ = new QLabel(tr("COMPONENT BROWSER"), header);
     title_label_->setStyleSheet(
-        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(colors::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;letter-spacing:2px;").arg(colors::AMBER()));
     hl->addWidget(title_label_);
 
     hl->addSpacing(24);
@@ -89,7 +90,7 @@ void ComponentBrowserDialog::build_ui() {
     hl->addStretch(1);
 
     count_label_ = new QLabel(header);
-    count_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+    count_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
     hl->addWidget(count_label_);
 
     root->addWidget(header);
@@ -101,7 +102,7 @@ void ComponentBrowserDialog::build_ui() {
     sl->setSpacing(0);
 
     category_list_ = new QListWidget(split);
-    category_list_->setFixedWidth(180);
+    metrics::follow_fixed_width(category_list_, 180);
     category_list_->setStyleSheet(QString("QListWidget{background:%1;border:none;border-right:1px solid %2;color:%3;}"
                                           "QListWidget::item{padding:8px 14px;border:none;}"
                                           "QListWidget::item:selected{background:%4;color:%5;border-left:3px solid %5;}"

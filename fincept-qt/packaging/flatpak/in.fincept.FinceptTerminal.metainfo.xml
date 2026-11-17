@@ -71,33 +71,32 @@
   </provides>
 
   <releases>
-    <!-- 4.5.2: inert until v4.5.2 is tagged and the Flatpak manifest's tag+commit
-         are bumped to it (same rule as the blocks below).
-    <release version="4.5.2" date="2026-11-09">
+    <!-- The newest <release> MUST equal project(FinceptTerminal VERSION ...) in
+         fincept-qt/CMakeLists.txt: this file is installed from the tree being
+         built, so every build of it (the release pipeline's .flatpak included)
+         reports that entry as the app version. Add the entry in the commit that
+         bumps the version. Enforced by .github/scripts/check_version_drift.sh
+         and the pre-flight in release.yml's build-flatpak job. The
+         Flathub-form manifest's tag pin may lag behind
+         this list; see the comment on that source in the manifest. -->
+    <release version="4.5.3" date="2026-11-16">
       <description>
-        <p>Connect Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop to the terminal from Settings › AI Agents (MCP): a built-in MCP server with ten tools that work the terminal the way you do, while orders, money moves, spends and deletions always ask you first.</p>
-        <p>Several analytics that ran as Python scripts now run natively in C++, and the version number is now shown on the sign-in and setup screens.</p>
+        <p>The terminal now updates itself in place on Windows, macOS and Linux (AppImage, .deb and .rpm): each time it starts it checks for a new release and, when you agree, downloads it, replaces the installation and restarts, keeping your settings and data.</p>
+        <p>Light and dark themes, with adjustable font family and size, and more reliable loading of market data.</p>
       </description>
     </release>
-    -->
-    <!-- 4.5.1: inert until v4.5.1 is tagged and the Flatpak manifest's tag+commit
-         are bumped to it (same rule as the 4.5.0 block below).
-    <release version="4.5.1" date="2026-10-31">
+    <release version="4.5.2" date="2026-11-09">
+      <description>
+        <p>Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop can work in the terminal through its built-in MCP server (Settings › AI Agents (MCP)) with ten tools; orders, money moves, spends and deletions ask you first unless auto mode is on.</p>
+        <p>Several analytics that ran as Python scripts now run natively in C++, and the version number is shown on the sign-in and setup screens.</p>
+      </description>
+    </release>
+    <release version="4.5.1" date="2026-10-13">
       <description>
         <p>Plans simplified to Free and Pro ($10/month). New Agent Workbench runs Claude Code and OpenAI Codex inside the terminal with live access to its data, and the terminal can act as an MCP server for external agents.</p>
         <p>Faster first-run setup with parallel installs, a catalog of 240+ runnable data connectors, faster live tables and instrument search, and safer trading: confirmations for live orders, pre-trade risk limits, a kill switch and pending-order expiry.</p>
       </description>
     </release>
-    -->
-    <!-- 4.5.0 is NOT released yet: no v4.4.1-style tag exists for it and
-         updates.json still reports 4.4.1. The Flatpak manifest therefore
-         builds v4.4.1, and the newest release listed here must match what
-         is actually shipped, or Flathub advertises a version whose binary
-         it does not have. Notes kept verbatim: on tagging v4.5.0, delete
-         these two comment lines and bump tag+commit in the manifest.
-    <release version="4.5.0" ...> block below is inert until then.
-    -->
-    <!--
     <release version="4.5.0" date="2026-08-31">
       <description>
         <p>Fixes AI tool calling with Google Gemini. Around 150 tools take a free-form options object, which Gemini's schema cannot express; those tools were being advertised to Gemini as taking no arguments at all, so the assistant could call them but never pass them anything. They now work on Gemini as they already did on other providers.</p>
@@ -106,7 +105,6 @@
         <p>Tool sequences now have a time limit as well as a step limit, and say which one ran out instead of stopping without explanation. Also fixes the AstraFlow and AstraFlow CN providers failing to find their endpoint when the base URL field was cleared.</p>
       </description>
     </release>
-    -->
     <release version="4.4.1" date="2026-08-19">
       <description>
         <p>Adds the TickerAll (MetaTrader 5) broker integration, so MT5 accounts can be linked, funded and traded from the equity trading screen alongside the existing brokers.</p>

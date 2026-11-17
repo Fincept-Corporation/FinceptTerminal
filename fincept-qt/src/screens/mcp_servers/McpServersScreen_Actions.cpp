@@ -13,6 +13,7 @@
 #include "screens/mcp_servers/McpServersScreen.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -161,7 +162,7 @@ void McpServersScreen::on_install_server(int index) {
     QList<QPair<QString, QLineEdit*>> env_fields;
     if (!e.env_keys.isEmpty()) {
         auto* env_header = new QLabel(tr("Environment Variables"));
-        env_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(colors::TEXT_SECONDARY()));
+        env_header->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(colors::TEXT_SECONDARY()));
         form->addRow(env_header);
         for (int ki = 0; ki < e.env_keys.size(); ++ki) {
             const QString& key = e.env_keys[ki];
@@ -209,7 +210,7 @@ void McpServersScreen::on_install_server(int index) {
         auto* env_note = new QLabel(tr("Values are stored locally and handed to the server process as environment "
                                        "variables."));
         env_note->setWordWrap(true);
-        env_note->setStyleSheet(QString("color:%1;font-size:9px;").arg(colors::TEXT_DIM()));
+        env_note->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_DIM()));
         form->addRow(env_note);
     }
 
@@ -388,7 +389,7 @@ void McpServersScreen::on_add_server() {
     auto* warn = new QLabel(tr("This runs a program on your machine and exposes its tools to the assistant. "
                                "Only add servers you trust."));
     warn->setWordWrap(true);
-    warn->setStyleSheet(QString("color:%1;font-size:9px;").arg(colors::WARNING()));
+    warn->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::WARNING()));
     form->addRow(warn);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -501,11 +502,15 @@ void McpServersScreen::on_tool_enabled_changed(int row, int col) {
 void McpServersScreen::refresh_installed() {
     const QString search = search_input_ ? search_input_->text().trimmed() : "";
 
-    // Remove old cards
+    // Remove old cards (the empty state is reused, not deleted)
     while (inst_cards_layout_->count() > 1) {
         auto* item = inst_cards_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
+        if (QWidget* w = item->widget()) {
+            if (w == inst_empty_)
+                w->hide();
+            else
+                w->deleteLater();
+        }
         delete item;
     }
 
@@ -523,14 +528,38 @@ void McpServersScreen::refresh_installed() {
     }
 
     if (shown == 0) {
-        auto* empty = new QLabel(
-            servers.empty()
-                ? tr("No servers installed yet.\nUse MARKETPLACE to add one, or click ADD CUSTOM MCP SERVER below.")
-                : tr("No servers match the search."));
-        empty->setObjectName("srvCardDesc");
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setWordWrap(true);
-        inst_cards_layout_->insertWidget(0, empty);
+        if (!inst_empty_) {
+            inst_empty_ = new ui::EmptyState(inst_cards_widget_);
+            connect(inst_empty_, &ui::EmptyState::primary_clicked, this, [this]() {
+                if (McpManager::instance().get_servers().empty())
+                    on_view_changed(0); // MARKETPLACE
+                else if (search_input_)
+                    search_input_->clear(); // textChanged -> on_search_changed -> refresh
+            });
+            connect(inst_empty_, &ui::EmptyState::secondary_clicked, this, &McpServersScreen::on_add_server);
+        }
+        ui::EmptyState::Spec spec;
+        if (servers.empty()) {
+            spec = ui::EmptyState::no_data_spec(
+                tr("No MCP servers installed"),
+                tr("An MCP server gives the AI assistant and agents extra tools — files, databases, web search and "
+                   "more. Install one from the marketplace, or add any server you run with a command line."),
+                tr("OPEN MARKETPLACE"));
+            spec.glyph = QStringLiteral("⧉");
+            spec.secondary = tr("ADD CUSTOM MCP SERVER");
+            spec.note = tr("Nothing starts until you switch a server on");
+            spec.note_tone = ui::EmptyState::Tone::Info;
+        } else {
+            spec = ui::EmptyState::no_data_spec(
+                tr("No servers match"),
+                tr("None of your %n installed server(s) matches \"%1\".", nullptr, static_cast<int>(servers.size()))
+                    .arg(search),
+                tr("CLEAR SEARCH"));
+            spec.glyph = QStringLiteral("⌕");
+        }
+        inst_empty_->apply(spec);
+        inst_cards_layout_->insertWidget(0, inst_empty_);
+        inst_empty_->show();
     }
 }
 
@@ -544,6 +573,7 @@ void McpServersScreen::refresh_tools() {
     const auto external_tools = McpManager::instance().get_all_external_tools();
     const int total = static_cast<int>(internal_tools.size() + external_tools.size());
     tools_table_->setRowCount(total);
+    const int row_h = qMax(26, QFontMetrics(ui::fonts::font()).height() + 8);
 
     int row = 0;
     for (const auto& t : internal_tools) {
@@ -560,13 +590,17 @@ void McpServersScreen::refresh_tools() {
         tools_table_->setItem(row, 2, si);
         tools_table_->setItem(row, 3, new QTableWidgetItem(tr("internal")));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));
-        tools_table_->setRowHeight(row, 26);
+        tools_table_->setRowHeight(row, row_h);
         ++row;
     }
     for (const auto& t : external_tools) {
-        auto* chk = new QTableWidgetItem;
-        chk->setCheckState(Qt::Checked);
+        // No per-tool switch exists for external tools (on_tool_enabled_changed only
+        // persists internal ones): a ticked box that could not be unticked looked
+        // like the internal switch and did nothing. Show the state as text instead.
+        auto* chk = new QTableWidgetItem(tr("on"));
         chk->setFlags(Qt::ItemIsEnabled);
+        chk->setTextAlignment(Qt::AlignCenter);
+        chk->setToolTip(tr("Controlled by starting or stopping the server on the INSTALLED tab"));
         tools_table_->setItem(row, 0, chk);
         tools_table_->setItem(row, 1, new QTableWidgetItem(t.name));
         auto* si = new QTableWidgetItem(t.server_name);
@@ -575,7 +609,7 @@ void McpServersScreen::refresh_tools() {
         tools_table_->setItem(row, 2, si);
         tools_table_->setItem(row, 3, new QTableWidgetItem(tr("external")));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));
-        tools_table_->setRowHeight(row, 26);
+        tools_table_->setRowHeight(row, row_h);
         ++row;
     }
 

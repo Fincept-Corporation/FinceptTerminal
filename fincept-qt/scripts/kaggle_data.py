@@ -45,7 +45,7 @@ SORT_BY_OPTIONS = {
 def _check_auth() -> Optional[Dict]:
     if not API_KEY or not KAGGLE_USERNAME:
         return {
-            "error": "KAGGLE_KEY and KAGGLE_USERNAME environment variables not set",
+            "error": "KAGGLE_KEY and KAGGLE_USERNAME are not set: save them in Settings > Credentials",
             "note": "Get credentials at https://www.kaggle.com/settings/account -> Create New Token",
         }
     return None

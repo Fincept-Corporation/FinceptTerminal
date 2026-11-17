@@ -1,103 +1,76 @@
 """
-Place an order on an exchange (requires API credentials via stdin).
+Place an order on an exchange — a one-shot wrapper over the exchange daemon's
+own prepare_order + place_order handlers (exchange_daemon.py), so it applies
+exactly the rules the terminal applies: the market must exist exactly (no
+quote substitution), the amount is in BASE COINS and converted to the
+exchange's own unit (contracts on derivatives), prices must be on the price
+grid, stops / SL / TP only where the exchange supports them, a client order id
+is attached, and the outcome is classified (accepted / rejected / unknown).
+
+Credentials come as JSON on stdin, never on the command line.
 
 Usage: echo '{"api_key":"...","secret":"..."}' | python place_order.py <exchange_id> <symbol> <side> <type> <amount> [price]
-Example:
-  Market buy:  echo '{"api_key":"...","secret":"..."}' | python place_order.py binance BTC/USDT buy market 0.001
-  Limit sell:  echo '{"api_key":"...","secret":"..."}' | python place_order.py binance BTC/USDT sell limit 0.001 75000
+         [--stop-price P] [--sl P] [--tp P] [--reduce-only] [--margin-mode cross|isolated]
+         [--leverage N] [--contracts] [--prepare-only]
+  <type>     market | limit | stop | stop_limit
+  <amount>   base-currency quantity (coins); with --contracts, a number of contracts
+  --prepare-only  print what would be sent (market, exchange quantity, price, params) and send nothing
 
-Output JSON:
-{
-  "success": true,
-  "data": {
-    "id": "12345678",
-    "symbol": "BTC/USDT",
-    "side": "buy",
-    "type": "market",
-    "amount": 0.001,
-    "price": null,
-    "status": "open",
-    "filled": 0.0,
-    "remaining": 0.001,
-    "cost": 0.0,
-    "average": null,
-    "timestamp": 1773466621013,
-    "exchange": "binance"
-  }
-}
+Output: one JSON line in the daemon's reply shape, e.g.
+  {"id":"cli","success":true,"data":{"outcome":"accepted","id":"12345","symbol":"BTC/USDT",...,"prepared":{...}}}
+  {"id":"cli","success":false,"error":"...","code":"ORDER_REFUSED","outcome":"rejected","alternatives":[...]}
 """
 
+import os
 import sys
-from exchange_client import (
-    make_exchange, output_success, output_error,
-    parse_credentials_from_stdin, run_with_error_handling,
-    load_cached_markets, save_markets_cache,
-)
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
+
+USAGE = ("place_order.py <exchange_id> <symbol> <side> <type> <amount> [price] [--stop-price P] [--sl P] "
+         "[--tp P] [--reduce-only] [--margin-mode cross|isolated] [--leverage N] [--contracts] [--prepare-only]")
+_VALUE_FLAGS = {"--stop-price": "stop_price", "--sl": "sl", "--tp": "tp", "--margin-mode": "margin_mode",
+                "--leverage": "leverage"}
 
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 6:
-        output_error(
-            "Usage: place_order.py <exchange_id> <symbol> <side> <type> <amount> [price]",
-            "INVALID_ARGS",
-        )
+def main(argv):
+    pos, args, prepare_only = [], {}, False
+    i = 1
+    while i < len(argv):
+        a = argv[i]
+        if a in _VALUE_FLAGS and i + 1 < len(argv):
+            args[_VALUE_FLAGS[a]] = argv[i + 1]
+            i += 2
+            continue
+        if a == "--reduce-only":
+            args["reduce_only"] = True
+        elif a == "--contracts":
+            args["amount_unit"] = "contracts"
+        elif a == "--prepare-only":
+            prepare_only = True
+        elif a.startswith("--"):
+            return D.cli_usage_error(USAGE)
+        else:
+            pos.append(a)
+        i += 1
+    if len(pos) < 5:
+        return D.cli_usage_error(USAGE)
+    exchange_id = pos[0]
+    args.update({"symbol": pos[1], "side": pos[2], "type": pos[3], "amount": pos[4]})
+    if len(pos) > 5:
+        args["price"] = pos[5]
+    creds = D.cli_credentials()
 
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2]
-    side = sys.argv[3]        # buy or sell
-    order_type = sys.argv[4]  # market or limit
-    amount = float(sys.argv[5])
-    price = float(sys.argv[6]) if len(sys.argv) > 6 else None
-
-    if side not in ("buy", "sell"):
-        output_error(f"Invalid side: {side}. Must be 'buy' or 'sell'.", "INVALID_ARGS")
-    if order_type not in ("market", "limit"):
-        output_error(f"Invalid type: {order_type}. Must be 'market' or 'limit'.", "INVALID_ARGS")
-    if order_type == "limit" and price is None:
-        output_error("Limit orders require a price.", "INVALID_ARGS")
-    if amount <= 0:
-        output_error("Amount must be positive.", "INVALID_ARGS")
-
-    credentials = parse_credentials_from_stdin()
-    if not credentials.get("api_key"):
-        output_error("API key required. Pass credentials via stdin JSON.", "AUTH_ERROR")
-
-    exchange = make_exchange(exchange_id, credentials)
-
-    # Use disk-cached markets (TTL 30min) to skip 3-10s load_markets() network call.
-    # Use set_markets() so ccxt rebuilds all internal indexes correctly.
-    cached = load_cached_markets(exchange_id)
-    if cached is not None:
-        try:
-            exchange.set_markets(cached)
-        except Exception:
-            exchange.load_markets()
-            save_markets_cache(exchange_id, exchange.markets)
-    else:
-        exchange.load_markets()
-        save_markets_cache(exchange_id, exchange.markets)
-
-    order = exchange.create_order(symbol, order_type, side, amount, price)
-
-    output_success({
-        "id": order.get("id"),
-        "client_order_id": order.get("clientOrderId"),
-        "symbol": order.get("symbol"),
-        "side": order.get("side"),
-        "type": order.get("type"),
-        "amount": order.get("amount"),
-        "price": order.get("price"),
-        "status": order.get("status"),
-        "filled": order.get("filled"),
-        "remaining": order.get("remaining"),
-        "cost": order.get("cost"),
-        "average": order.get("average"),
-        "fee": order.get("fee"),
-        "timestamp": order.get("timestamp"),
-        "exchange": exchange_id,
-    })
+    status, prepared = D.run_cli("prepare_order", exchange_id, args, creds, emit=prepare_only)
+    if prepare_only or status != 0:
+        if status != 0 and not prepare_only:
+            D._write_line(D._dumps(prepared))
+        return status
+    p = prepared["data"]
+    args.update(client_order_token=p["client_order_token"], confirm_hash=p["confirm_hash"],
+                ref_price=p["ref_price"], account_id=p["account_id"])
+    return D.run_cli("place_order", exchange_id, args, creds)[0]
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

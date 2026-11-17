@@ -90,7 +90,7 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
     // Theme header
     auto* theme_hdr = new QWidget(this);
     theme_hdr->setStyleSheet(section_hdr_style());
-    theme_hdr->setFixedHeight(32);
+    theme_hdr->setMinimumHeight(32);
     auto* thl = new QHBoxLayout(theme_hdr);
     thl->setContentsMargins(8, 0, 8, 0);
     theme_lbl_ = new QLabel(tr("THEME"));
@@ -99,7 +99,7 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
     theme_combo_->addItem(tr("Education"), "education");
     theme_combo_->addItem(tr("Science & Tech"), "science");
     theme_combo_->addItem(tr("Culture"), "culture");
-    theme_combo_->setFixedHeight(22);
+    theme_combo_->setMinimumHeight(22);
     connect(theme_combo_, &QComboBox::currentIndexChanged, this, &UnescoPanel::on_theme_changed);
     thl->addWidget(theme_lbl_);
     thl->addWidget(theme_combo_, 1);
@@ -109,7 +109,8 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
-    indicator_search_->setFixedHeight(28);
+    mark_local_input(indicator_search_); // filters the list: not part of the query
+    indicator_search_->setMinimumHeight(28);
     connect(indicator_search_, &QLineEdit::textChanged, this, &UnescoPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
@@ -135,9 +136,7 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
 }
 
 void UnescoPanel::activate() {
-    show_empty(tr("Select a theme, indicator and country code, then click FETCH\n"
-                  "Source: UNESCO Institute for Statistics (UIS) — free, no API key required\n"
-                  "Use 3-letter ISO country codes: USA, GBR, IND, CHN, BRA, DEU"));
+    // The results pane shows the remembered result or loads the selection on show.
     // Replace the curated fallback list with the live UIS indicator catalogue
     // once per session. load_indicators() existed but was never called, so the
     // `unesco_list_indicators` branch in on_result() was unreachable and the
@@ -158,18 +157,18 @@ void UnescoPanel::build_controls(QHBoxLayout* thl) {
     country_input_ = new QLineEdit;
     country_input_->setPlaceholderText(tr("Country (e.g. USA, GBR, IND)"));
     country_input_->setText("USA");
-    country_input_->setFixedHeight(26);
-    country_input_->setFixedWidth(140);
+    country_input_->setMinimumHeight(26);
+    set_text_width(country_input_, 140);
 
     start_input_ = new QLineEdit;
     start_input_->setPlaceholderText(tr("Start year"));
-    start_input_->setFixedHeight(26);
-    start_input_->setFixedWidth(70);
+    start_input_->setMinimumHeight(26);
+    set_text_width(start_input_, 70);
 
     end_input_ = new QLineEdit;
     end_input_->setPlaceholderText(tr("End year"));
-    end_input_->setFixedHeight(26);
-    end_input_->setFixedWidth(70);
+    end_input_->setMinimumHeight(26);
+    set_text_width(end_input_, 70);
 
     thl->addWidget(country_lbl_ = make_lbl(tr("COUNTRY")));
     thl->addWidget(country_input_);
@@ -203,6 +202,9 @@ bool UnescoPanel::populate_indicators_from_records(int theme_index, const QStrin
         return false;
 
     current_indicators_ = found;
+    // The live catalogue has thousands of indicators; filling the list with repaints on held the
+    // window for about a second. Paint once, after the last row.
+    indicator_list_->setUpdatesEnabled(false);
     indicator_list_->clear();
     int restore_row = -1;
     for (int i = 0; i < found.size(); ++i) {
@@ -213,6 +215,7 @@ bool UnescoPanel::populate_indicators_from_records(int theme_index, const QStrin
         if (!keep_code.isEmpty() && found[i].code == keep_code)
             restore_row = i;
     }
+    indicator_list_->setUpdatesEnabled(true);
     indicator_list_->setCurrentRow(restore_row >= 0 ? restore_row : 0);
     // Re-apply any active text filter to the freshly built list.
     on_indicator_filter(indicator_search_->text());
@@ -282,6 +285,12 @@ void UnescoPanel::on_fetch() {
         return;
     }
 
+    // START / END are positional script arguments: END cannot be sent alone (it used to be dropped
+    // silently).
+    if (start.isEmpty() && !end.isEmpty()) {
+        show_empty(tr("Enter a START period to use END"));
+        return;
+    }
     QStringList args = {indicator_code, country};
     if (!start.isEmpty())
         args << start;
@@ -289,8 +298,8 @@ void UnescoPanel::on_fetch() {
         args << end;
 
     show_loading(tr("Fetching UNESCO: %1 for %2…").arg(sel_item->text(), country));
-    services::EconomicsService::instance().execute(kUnescoSourceId, kUnescoScript, "fetch", args,
-                                                   "unesco_fetch_" + indicator_code + "_" + country);
+    execute_query(kUnescoSourceId, kUnescoScript, "fetch", args,
+                  "unesco_fetch_" + indicator_code + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -345,7 +354,7 @@ void UnescoPanel::on_result(const QString& request_id, const services::Economics
     const QString title = "UNESCO: " + ind_name + " — " + country;
     display(rows, title);
 
-    LOG_INFO("UnescoPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("UnescoPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

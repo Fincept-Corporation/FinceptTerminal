@@ -93,18 +93,20 @@ class MonitorMapWidget : public QWidget {
             const QRectF body = mapped.adjusted(border_w * 0.5, border_w * 0.5, -border_w * 0.5, -border_w * 0.5);
             p.drawRect(body);
 
+            // The hovered monitor is filled with the accent, so its text uses
+            // the on-accent colour.
             QFont label_font = font();
-            label_font.setPixelSize(28);
+            label_font.setPixelSize(ui::fonts::font_px(14));
             label_font.setBold(true);
             p.setFont(label_font);
-            p.setPen(is_hover ? QColor(ui::colors::TEXT_PRIMARY()) : QColor(ui::colors::TEXT_PRIMARY()));
+            p.setPen(is_hover ? QColor(ui::colors::TEXT_ON_ACCENT()) : QColor(ui::colors::TEXT_PRIMARY()));
             const QString label = QString::number(i + 1) + (is_primary ? QStringLiteral(" ★") : QString());
             p.drawText(mapped_int, Qt::AlignCenter, label);
 
             QFont sub_font = font();
-            sub_font.setPixelSize(10);
+            sub_font.setPixelSize(ui::fonts::font_px(-4));
             p.setFont(sub_font);
-            p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
+            p.setPen(is_hover ? QColor(ui::colors::TEXT_ON_ACCENT()) : QColor(ui::colors::TEXT_SECONDARY()));
             const QString sub = QStringLiteral("%1×%2").arg(g.width()).arg(g.height());
             p.drawText(mapped_int.adjusted(4, 4, -4, -4), Qt::AlignHCenter | Qt::AlignBottom, sub);
 
@@ -112,7 +114,7 @@ class MonitorMapWidget : public QWidget {
                 QFont tag_font = sub_font;
                 tag_font.setBold(true);
                 p.setFont(tag_font);
-                p.setPen(QColor(ui::colors::AMBER()));
+                p.setPen(is_hover ? QColor(ui::colors::TEXT_ON_ACCENT()) : QColor(ui::colors::AMBER()));
                 p.drawText(mapped_int.adjusted(4, 4, -4, -4), Qt::AlignHCenter | Qt::AlignTop, tr("CURRENT"));
             }
         }
@@ -174,7 +176,7 @@ MonitorPickerDialog::MonitorPickerDialog(QWidget* parent, QScreen* current) : QD
 
     title_label_ = new QLabel(tr("Open new window on:"), this);
     title_label_->setStyleSheet(
-        QStringLiteral("color: %1; font-size: 13px; font-weight: 600;").arg(QString(ui::colors::TEXT_PRIMARY())));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 600;").arg(QString(ui::colors::TEXT_PRIMARY())));
     vl->addWidget(title_label_);
 
     auto* map = new MonitorMapWidget(
@@ -189,7 +191,7 @@ MonitorPickerDialog::MonitorPickerDialog(QWidget* parent, QScreen* current) : QD
 
     hint_label_ = new QLabel(tr("★ = primary monitor.  Click a monitor to open the new window there."), this);
     hint_label_->setStyleSheet(
-        QStringLiteral("color: %1; font-size: 10px;").arg(QString(ui::colors::TEXT_SECONDARY())));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;").arg(QString(ui::colors::TEXT_SECONDARY())));
     vl->addWidget(hint_label_);
 
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Cancel, this);

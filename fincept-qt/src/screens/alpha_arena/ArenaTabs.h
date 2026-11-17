@@ -8,8 +8,13 @@
 class QHBoxLayout;
 class QLabel;
 class QListWidget;
+class QStackedWidget;
 class QTableWidget;
 class QTextBrowser;
+
+namespace fincept::ui {
+class EmptyState;
+}
 
 namespace fincept::screens::alpha_arena {
 
@@ -34,6 +39,9 @@ class ArenaPanelGrid : public QWidget {
     void update_hitl_banner_visibility();
 
     QString competition_id_, agent_filter_;
+    QStackedWidget* chat_stack_ = nullptr;       ///< 0 = chat_, 1 = chat_empty_
+    fincept::ui::EmptyState* chat_empty_ = nullptr; ///< before the first round / no decisions / read error
+    QString chat_empty_key_;                         ///< what chat_empty_ shows (applied only on change)
     QTextBrowser* chat_ = nullptr;
     QTableWidget* positions_ = nullptr;
     QTableWidget* trades_ = nullptr;

@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 BASE_URL = "https://api.alternative.me"
 
 session = requests.Session()
@@ -31,11 +33,33 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
+# The API's date_format values and the text they produce ("" = Unix seconds). Rows always carry an
+# ISO date: the format only changes what the API is asked for.
+FNG_DATE_FORMATS = {"us": "%m-%d-%Y", "cn": "%Y-%m-%d", "kr": "%Y-%m-%d", "world": "%d-%m-%Y", "": None}
+
+
+def _typed_fng(item: Dict, date_format: str = "") -> Dict:
+    """value / time_until_update as integers and timestamp as an ISO date (UTC)."""
+    for k in ("value", "time_until_update"):
+        if isinstance(item.get(k), str) and item[k].strip().lstrip("-").isdigit():
+            item[k] = int(item[k])
+    ts = item.get("timestamp")
+    fmt = FNG_DATE_FORMATS.get(date_format)
+    if fmt:
+        item["timestamp"] = fc.iso_date(ts, fmt)
+    elif ts not in (None, ""):
+        iso = fc.epoch_iso(ts)  # a daily index: the date is the whole information
+        item["timestamp"] = iso[:10] if isinstance(iso, str) and iso.endswith("Z") else ts
+    return item
+
+
 def get_fear_greed_index(limit: int = 10, date_format: str = "us") -> Any:
+    if date_format not in FNG_DATE_FORMATS:
+        return {"error": f"Unknown date_format {date_format!r}: use us, cn, kr or world", "code": "bad_args"}
     params = {"limit": limit, "date_format": date_format}
     data = _make_request("fng/", params)
     if isinstance(data, dict) and "data" in data:
-        result = data["data"]
+        result = [_typed_fng(i, date_format) for i in data["data"]]
         for item in result:
             val = int(item.get("value", 0))
             if val <= 24:
@@ -56,7 +80,7 @@ def get_crypto_fear_greed(limit: int = 30) -> Any:
     params = {"limit": limit}
     data = _make_request("fng/", params)
     if isinstance(data, dict) and "data" in data:
-        items = data["data"]
+        items = [_typed_fng(i) for i in data["data"]]
         values = [int(i.get("value", 0)) for i in items if i.get("value")]
         avg = sum(values) / len(values) if values else 0
         return {

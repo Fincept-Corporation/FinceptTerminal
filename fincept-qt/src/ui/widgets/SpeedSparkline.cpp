@@ -1,6 +1,8 @@
 // src/ui/widgets/SpeedSparkline.cpp
 #include "ui/widgets/SpeedSparkline.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QPainter>
 #include <QPainterPath>
 #include <QtGlobal>
@@ -67,10 +69,17 @@ void SpeedSparkline::paintEvent(QPaintEvent*) {
     fill.lineTo(r.right(), r.bottom());
     fill.closeSubpath();
 
-    p.setRenderHint(QPainter::Antialiasing, true);
-    p.fillPath(fill, fill_color_);
+    const QColor line_color = line_color_.isValid() ? line_color_ : QColor(colors::AMBER());
+    QColor fill_color = fill_color_;
+    if (!fill_color.isValid()) {
+        fill_color = line_color;
+        fill_color.setAlpha(40);
+    }
 
-    QPen pen(line_color_);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.fillPath(fill, fill_color);
+
+    QPen pen(line_color);
     pen.setWidthF(1.3);
     p.setPen(pen);
     p.drawPath(line);

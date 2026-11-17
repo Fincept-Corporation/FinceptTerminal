@@ -25,11 +25,15 @@ AgentErrorsWidget::AgentErrorsWidget(const QJsonObject& cfg, QWidget* parent) : 
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setShowGrid(false);
     table_->horizontalHeader()->setStretchLastSection(true);
-    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    // Fitted once after each fill (render), not re-measured on every cell set.
+    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
     vl->addWidget(table_, 1);
 
     set_configurable(true);
+    // Push-only: errors arrive as agents publish them and there is nothing to
+    // re-request, so the title-bar refresh button (wired to nothing) is hidden.
+    set_refreshable(false);
     apply_styles();
     AgentErrorsWidget::apply_config(cfg); // qualified: no dynamic dispatch inside a constructor
 }
@@ -94,13 +98,34 @@ void AgentErrorsWidget::render() {
         auto* tm = new QTableWidgetItem(e.when.toString("HH:mm:ss"));
         auto* ctx = new QTableWidgetItem(e.context);
         auto* msg = new QTableWidgetItem(e.message);
-        msg->setForeground(QColor(ui::colors::NEGATIVE()));
+        msg->setForeground(QColor(ui::colors::DANGER()));
         msg->setToolTip(e.message);
         table_->setItem(i, 0, tm);
         table_->setItem(i, 1, ctx);
         table_->setItem(i, 2, msg);
     }
+    if (!entries_.isEmpty()) {
+        table_->resizeColumnToContents(0);
+        table_->resizeColumnToContents(1);
+    }
     set_loading(false);
+    // Already up: nothing to re-apply (render() also runs on theme changes).
+    if (entries_.isEmpty()) {
+        if (!is_empty_state_shown())
+            show_no_errors_state();
+    } else {
+        hide_empty_state();
+    }
+}
+
+void AgentErrorsWidget::show_no_errors_state() {
+    // Push-only tile, nothing failed yet: a good state, said so, not a bare header.
+    ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+        tr("No agent errors this session"),
+        tr("When an AI agent or automation fails, the time, the agent and the error appear here as it happens."));
+    spec.glyph = QStringLiteral("✓"); // ✓
+    spec.glyph_tone = ui::EmptyState::Tone::Success;
+    show_empty_state(spec);
 }
 
 QDialog* AgentErrorsWidget::make_config_dialog(QWidget* parent) {
@@ -129,22 +154,25 @@ QDialog* AgentErrorsWidget::make_config_dialog(QWidget* parent) {
 
 void AgentErrorsWidget::on_theme_changed() {
     apply_styles();
+    render(); // the message colour is baked into the table items
 }
 
 void AgentErrorsWidget::apply_styles() {
-    table_->setStyleSheet(
-        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+    set_css_cached(table_, 
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;border:none;}"
                 "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget::item{padding:2px 4px;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_TERTIARY()));
+                 ui::colors::TEXT_SECONDARY()));
 }
 
 void AgentErrorsWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("AGENT ERRORS"));
     render(); // re-renders cached error rows in the new language
+    if (entries_.isEmpty())
+        show_no_errors_state(); // its text in the new language
 }
 
 } // namespace fincept::screens::widgets

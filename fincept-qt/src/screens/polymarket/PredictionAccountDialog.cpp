@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "services/prediction/PredictionCredentialStore.h"
 #include "services/prediction/kalshi/KalshiCredentials.h"
+#include "ui/theme/Theme.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -25,6 +26,37 @@ namespace fincept::screens::polymarket {
 
 namespace pr = fincept::services::prediction;
 namespace ks = fincept::services::prediction::kalshi_ns;
+
+namespace {
+
+enum class StatusKind { Neutral, Ok, Error };
+
+/// Shows a status line in the state colour of the active theme. Some messages
+/// are translations whose source text wraps them in <span style='color:…'>;
+/// that inline colour is dropped so the label's own (theme-following)
+/// stylesheet colour applies.
+void show_status(QLabel* label, const QString& message, StatusKind kind) {
+    if (!label)
+        return;
+    static const QRegularExpression kSpanTag(QStringLiteral("</?span[^>]*>"));
+    QString text = message;
+    text.remove(kSpanTag);
+    label->setTextFormat(Qt::PlainText);
+    label->setText(text);
+    switch (kind) {
+        case StatusKind::Ok:
+            label->setStyleSheet(QString("color: %1;").arg(ui::colors::SUCCESS()));
+            break;
+        case StatusKind::Error:
+            label->setStyleSheet(QString("color: %1;").arg(ui::colors::DANGER()));
+            break;
+        case StatusKind::Neutral:
+            label->setStyleSheet(QString());
+            break;
+    }
+}
+
+} // namespace
 
 // ── Construction ────────────────────────────────────────────────────────────
 
@@ -49,10 +81,9 @@ void PredictionAccountDialog::set_test_result(const QString& exchange_id, bool o
     QLabel* target = (exchange_id == QStringLiteral("kalshi")) ? ks_status_ : pm_status_;
     if (!target)
         return;
-    const QString color = ok ? QStringLiteral("#16a34a") : QStringLiteral("#dc2626");
     const QString head = ok ? tr("Connection OK") : tr("Connection failed");
-    target->setText(QStringLiteral("<span style='color:%1'>%2%3</span>")
-                        .arg(color, head, message.isEmpty() ? QString() : QStringLiteral(" — ") + message.toHtmlEscaped()));
+    show_status(target, head + (message.isEmpty() ? QString() : QStringLiteral(" — ") + message),
+                ok ? StatusKind::Ok : StatusKind::Error);
     // Re-enable the button so the user can retry.
     if (exchange_id == QStringLiteral("kalshi")) {
         if (ks_test_btn_)
@@ -194,7 +225,7 @@ void PredictionAccountDialog::build_polymarket_tab() {
     form->addRow(tr("Signature Type:"), pm_signature_type_);
 
     pm_derived_status_ = new QLabel(tr("L2 API credentials: not derived"), page);
-    pm_derived_status_->setStyleSheet("color: #9ca3af;");
+    pm_derived_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::TEXT_TERTIARY()));
     form->addRow(QString(), pm_derived_status_);
 
     vl->addLayout(form);
@@ -207,6 +238,8 @@ void PredictionAccountDialog::build_polymarket_tab() {
     pm_save_btn_ = new QPushButton(tr("Save"), page);
     pm_test_btn_ = new QPushButton(tr("Test Connection"), page);
     pm_clear_btn_ = new QPushButton(tr("Clear"), page);
+    pm_save_btn_->setProperty("fincept_agent_risk", "account");  // stores the wallet credentials
+    pm_clear_btn_->setProperty("fincept_agent_risk", "account"); // removes them
     btns->addWidget(pm_save_btn_);
     btns->addWidget(pm_test_btn_);
     btns->addStretch(1);
@@ -244,7 +277,7 @@ void PredictionAccountDialog::build_kalshi_tab() {
     ks_private_key_pem_ = new QTextEdit(page);
     ks_private_key_pem_->setPlaceholderText(
         tr("-----BEGIN RSA PRIVATE KEY-----\n…paste PEM contents here…\n-----END RSA PRIVATE KEY-----"));
-    ks_private_key_pem_->setFont(QFont("Courier New", 9));
+    ks_private_key_pem_->setFont(ui::fonts::font(-2));
     ks_private_key_pem_->setFixedHeight(160);
     form->addRow(tr("Private Key (PEM):"), ks_private_key_pem_);
 
@@ -252,6 +285,7 @@ void PredictionAccountDialog::build_kalshi_tab() {
     form->addRow(QString(), ks_load_pem_btn_);
 
     ks_use_demo_ = new QCheckBox(tr("Use demo (paper trading) environment"), page);
+    ks_use_demo_->setProperty("fincept_agent_risk", "account"); // paper <-> live switch
     form->addRow(QString(), ks_use_demo_);
 
     vl->addLayout(form);
@@ -264,6 +298,8 @@ void PredictionAccountDialog::build_kalshi_tab() {
     ks_save_btn_ = new QPushButton(tr("Save"), page);
     ks_test_btn_ = new QPushButton(tr("Test Connection"), page);
     ks_clear_btn_ = new QPushButton(tr("Clear"), page);
+    ks_save_btn_->setProperty("fincept_agent_risk", "account");
+    ks_clear_btn_->setProperty("fincept_agent_risk", "account");
     btns->addWidget(ks_save_btn_);
     btns->addWidget(ks_test_btn_);
     btns->addStretch(1);
@@ -288,15 +324,15 @@ void PredictionAccountDialog::load_existing() {
             pm_signature_type_->setCurrentIndex(idx);
         if (!pm->api_key.isEmpty()) {
             pm_derived_status_->setText(tr("L2 API credentials: derived (%1…)").arg(pm->api_key.left(8)));
-            pm_derived_status_->setStyleSheet("color: #16a34a;");
+            pm_derived_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::SUCCESS()));
         }
-        pm_status_->setText(tr("Polymarket credentials loaded from secure store."));
+        show_status(pm_status_, tr("Polymarket credentials loaded from secure store."), StatusKind::Neutral);
     }
     if (auto ks_creds = pr::PredictionCredentialStore::load_kalshi()) {
         ks_api_key_id_->setText(ks_creds->api_key_id);
         ks_private_key_pem_->setPlainText(ks_creds->private_key_pem);
         ks_use_demo_->setChecked(ks_creds->use_demo);
-        ks_status_->setText(tr("Kalshi credentials loaded from secure store."));
+        show_status(ks_status_, tr("Kalshi credentials loaded from secure store."), StatusKind::Neutral);
     }
 }
 
@@ -309,7 +345,7 @@ void PredictionAccountDialog::on_save_polymarket() {
     c.signature_type = pm_signature_type_->currentData().toInt();
 
     if (c.private_key.isEmpty()) {
-        pm_status_->setText(tr("<span style='color:#dc2626'>Private key is required.</span>"));
+        show_status(pm_status_, tr("<span style='color:#dc2626'>Private key is required.</span>"), StatusKind::Error);
         return;
     }
     if (!c.private_key.startsWith(QStringLiteral("0x"))) {
@@ -319,7 +355,7 @@ void PredictionAccountDialog::on_save_polymarket() {
     // opaque signing error from the Python bridge) — check the characters too.
     static const QRegularExpression kPrivKeyRe(QStringLiteral("^0x[0-9a-fA-F]{64}$"));
     if (!kPrivKeyRe.match(c.private_key).hasMatch()) {
-        pm_status_->setText(tr("<span style='color:#dc2626'>Private key should be 0x + 64 hex chars.</span>"));
+        show_status(pm_status_, tr("<span style='color:#dc2626'>Private key should be 0x + 64 hex chars.</span>"), StatusKind::Error);
         return;
     }
 
@@ -328,12 +364,12 @@ void PredictionAccountDialog::on_save_polymarket() {
     // signing key: without it orders are signed for the wrong maker and rejected, and
     // positions are read from an empty address.
     if (c.signature_type != 0 && c.funder_address.isEmpty()) {
-        pm_status_->setText(tr("<span style='color:#dc2626'>Funder address is required for this wallet type — "
-                               "copy your wallet address from the polymarket.com profile menu.</span>"));
+        show_status(pm_status_, tr("<span style='color:#dc2626'>Funder address is required for this wallet type — "
+                               "copy your wallet address from the polymarket.com profile menu.</span>"), StatusKind::Error);
         return;
     }
     if (!c.funder_address.isEmpty() && !kAddrRe.match(c.funder_address).hasMatch()) {
-        pm_status_->setText(tr("<span style='color:#dc2626'>Funder address should be 0x + 40 hex chars.</span>"));
+        show_status(pm_status_, tr("<span style='color:#dc2626'>Funder address should be 0x + 40 hex chars.</span>"), StatusKind::Error);
         return;
     }
 
@@ -347,10 +383,10 @@ void PredictionAccountDialog::on_save_polymarket() {
     }
 
     if (pr::PredictionCredentialStore::save_polymarket(c)) {
-        pm_status_->setText(tr("<span style='color:#16a34a'>Polymarket credentials saved.</span>"));
+        show_status(pm_status_, tr("<span style='color:#16a34a'>Polymarket credentials saved.</span>"), StatusKind::Ok);
         emit credentials_saved(QStringLiteral("polymarket"));
     } else {
-        pm_status_->setText(tr("<span style='color:#dc2626'>Save failed — see logs.</span>"));
+        show_status(pm_status_, tr("<span style='color:#dc2626'>Save failed — see logs.</span>"), StatusKind::Error);
     }
 }
 
@@ -365,8 +401,8 @@ void PredictionAccountDialog::on_clear_polymarket() {
     pm_private_key_->clear();
     pm_funder_->clear();
     pm_derived_status_->setText(tr("L2 API credentials: not derived"));
-    pm_derived_status_->setStyleSheet("color: #9ca3af;");
-    pm_status_->setText(tr("Polymarket credentials cleared."));
+    pm_derived_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::TEXT_TERTIARY()));
+    show_status(pm_status_, tr("Polymarket credentials cleared."), StatusKind::Neutral);
     emit credentials_saved(QStringLiteral("polymarket"));
 }
 
@@ -379,19 +415,19 @@ void PredictionAccountDialog::on_save_kalshi() {
     c.use_demo = ks_use_demo_->isChecked();
 
     if (c.api_key_id.isEmpty() || c.private_key_pem.isEmpty()) {
-        ks_status_->setText(tr("<span style='color:#dc2626'>Both API Key ID and PEM private key are required.</span>"));
+        show_status(ks_status_, tr("<span style='color:#dc2626'>Both API Key ID and PEM private key are required.</span>"), StatusKind::Error);
         return;
     }
     if (!c.private_key_pem.contains(QStringLiteral("BEGIN"))) {
-        ks_status_->setText(tr("<span style='color:#dc2626'>Private key must be a PEM-encoded RSA key.</span>"));
+        show_status(ks_status_, tr("<span style='color:#dc2626'>Private key must be a PEM-encoded RSA key.</span>"), StatusKind::Error);
         return;
     }
 
     if (pr::PredictionCredentialStore::save_kalshi(c)) {
-        ks_status_->setText(tr("<span style='color:#16a34a'>Kalshi credentials saved.</span>"));
+        show_status(ks_status_, tr("<span style='color:#16a34a'>Kalshi credentials saved.</span>"), StatusKind::Ok);
         emit credentials_saved(QStringLiteral("kalshi"));
     } else {
-        ks_status_->setText(tr("<span style='color:#dc2626'>Save failed — see logs.</span>"));
+        show_status(ks_status_, tr("<span style='color:#dc2626'>Save failed — see logs.</span>"), StatusKind::Error);
     }
 }
 
@@ -405,7 +441,7 @@ void PredictionAccountDialog::on_clear_kalshi() {
     ks_api_key_id_->clear();
     ks_private_key_pem_->clear();
     ks_use_demo_->setChecked(false);
-    ks_status_->setText(tr("Kalshi credentials cleared."));
+    show_status(ks_status_, tr("Kalshi credentials cleared."), StatusKind::Neutral);
     emit credentials_saved(QStringLiteral("kalshi"));
 }
 
@@ -417,16 +453,16 @@ void PredictionAccountDialog::on_load_kalshi_pem() {
 
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        ks_status_->setText(tr("<span style='color:#dc2626'>Could not read %1.</span>").arg(path));
+        show_status(ks_status_, tr("<span style='color:#dc2626'>Could not read %1.</span>").arg(path), StatusKind::Error);
         return;
     }
     const QString content = QString::fromUtf8(f.readAll());
     if (!content.contains(QStringLiteral("BEGIN"))) {
-        ks_status_->setText(tr("<span style='color:#dc2626'>%1 does not look like a PEM file.</span>").arg(path));
+        show_status(ks_status_, tr("<span style='color:#dc2626'>%1 does not look like a PEM file.</span>").arg(path), StatusKind::Error);
         return;
     }
     ks_private_key_pem_->setPlainText(content.trimmed());
-    ks_status_->setText(tr("Loaded PEM from %1.").arg(QFileInfo(path).fileName()));
+    show_status(ks_status_, tr("Loaded PEM from %1.").arg(QFileInfo(path).fileName()), StatusKind::Neutral);
 }
 
 } // namespace fincept::screens::polymarket

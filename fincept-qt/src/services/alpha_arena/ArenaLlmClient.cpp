@@ -1,6 +1,7 @@
 #include "services/alpha_arena/ArenaLlmClient.h"
 
 #include "auth/AuthManager.h"
+#include "services/alpha_arena/HarnessArenaClient.h"
 #include "core/config/AppConfig.h"
 #include "services/llm/LlmErrors.h"
 #include "services/llm/ModelCatalog.h"
@@ -119,6 +120,14 @@ ArenaLlmResult ArenaLlmClient::parse_response(const QString& provider, const QBy
 }
 
 void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(ArenaLlmResult)> cb) {
+    // An agent-harness competitor ("harness:<id>"): a harness process, not HTTP.
+    if (ProviderCatalog::is_harness(req.provider)) {
+        auto* harness = findChild<HarnessArenaClient*>(QString(), Qt::FindDirectChildrenOnly);
+        if (!harness)
+            harness = new HarnessArenaClient(this);
+        harness->complete(req, std::move(cb));
+        return;
+    }
     const QString p = req.provider.toLower();
     QString url = ProviderCatalog::chat_endpoint(p, req.base_url, req.model_id);
     if (p == "fincept")
@@ -168,8 +177,20 @@ void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(Are
         }
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (provider == QLatin1String("fincept")) {
-            // Out of credits / key rejected: the same readable sentence the AI
-            // Chat shows, recorded on the decision row instead of a JSON blob.
+            // Refused by the Fincept API (only — a 401 from another provider is
+            // about the user's own key there). This QNAM bypasses HttpClient, so
+            // report it: a replaced session token is dropped / a revoked key
+            // signs out (401), an IP block pauses polling (403). The decision
+            // row records the server's reason.
+            if (status == 401 || status == 403) {
+                r.error = fincept::ai_chat::report_fincept_refusal(
+                    status, body, QString::fromUtf8(reply->request().rawHeader("X-Session-Token")),
+                    reply->rawHeader("X-Session-Expired").trimmed().compare("true", Qt::CaseInsensitive) == 0);
+                cb(r);
+                return;
+            }
+            // Out of credits: the same readable sentence the AI Chat shows,
+            // recorded on the decision row instead of a JSON blob.
             const auto kind = fincept::ai_chat::classify_fincept_failure(status, QString::fromUtf8(body));
             if (status >= 400 && kind != fincept::ai_chat::LlmErrorKind::Other) {
                 r.error = fincept::ai_chat::make_fincept_error(kind, QString::fromUtf8(body));

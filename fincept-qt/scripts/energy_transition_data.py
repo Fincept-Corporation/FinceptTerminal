@@ -1,7 +1,7 @@
 """
 Energy Transition Data Fetcher
-Provides global renewable energy capacity, energy transition indicators,
-clean technology deployment, EV adoption, and CO2 intensity via IEA and IRENA open data.
+Renewable power capacity (IRENA), total energy supply by source and CO2 intensity (IEA)
+from the agencies' open statistics APIs - no API key needed.
 """
 import sys
 import json
@@ -9,108 +9,182 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-API_KEY = os.environ.get('IEA_API_KEY', '')
-BASE_URL = "https://api.iea.org/stats"
+import fincept_connector as fc
+import fincept_json
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# IEA energy-statistics API behind iea.org/data-and-statistics (keyless; series per indicator).
+IEA_STATS_URL = "https://api.iea.org/stats"
+# IRENASTAT PxWeb API (keyless). The table id changes with each release (e.g. Country_ELECSTAT_2026_H2_PX.px),
+# so it is looked up in this folder at run time.
+IRENA_FOLDER_URL = "https://pxweb.irena.org/api/v1/en/IRENASTAT/Power%20Capacity%20and%20Generation"
+
+session = fc.http_session()
+TIMEOUT = (10, 40)
 
 
-def _make_request(endpoint: str, params: Dict = None) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
-    headers = {}
-    if API_KEY:
-        headers["Authorization"] = f"Bearer {API_KEY}"
+def _get_json(service: str, url: str, params: Dict = None, body: Dict = None) -> Any:
     try:
-        response = session.get(url, params=params, headers=headers, timeout=30)
+        if body is None:
+            response = session.get(url, params=params, timeout=TIMEOUT)
+        else:
+            response = session.post(url, json=body, timeout=TIMEOUT)
+        if response.status_code in (400, 404) and "json" not in response.headers.get("Content-Type", ""):
+            reason = response.text.strip()[:160] if len(response.text) < 300 else ""
+            return {"error": f"{service}: {reason or f'HTTP {response.status_code}'}"}
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(service, e)}
+    except ValueError:
+        return {"error": f"{service} returned a response that is not JSON"}
+
+
+def _iea_indicator(series: str, country: str, year: Optional[int] = None) -> Any:
+    """Rows of one IEA indicator series for one country (ISO3 code, e.g. USA)."""
+    code = country.strip().upper()
+    data = _get_json("IEA", f"{IEA_STATS_URL}/indicator/{series}", {"countries": code})
+    if isinstance(data, dict) and "error" in data:
+        return data
+    if not isinstance(data, list):
+        return {"error": "IEA returned an unexpected response"}
+    # An unknown country code is silently answered with regional aggregates: keep only this country.
+    rows = [{"year": r.get("year"), "flow": r.get("flowLabel") or r.get("flow"),
+             "product": r.get("productLabel") or r.get("product"), "value": r.get("value"),
+             "units": r.get("units")}
+            for r in data if str(r.get("short", "")).upper() == code or str(r.get("country", "")).upper() == code]
+    if year:
+        rows = [r for r in rows if str(r["year"]) == str(year)]
+    if not rows:
+        return {"error": f"IEA has no {series} data for '{country}'" + (f" in {year}" if year else "")
+                         + " - use an ISO3 country code such as USA, DEU or IND"}
+    return rows
+
+
+def _irena_capacity(country: Optional[str], technology: Optional[str], year: Optional[int]) -> Any:
+    listing = _get_json("IRENA", IRENA_FOLDER_URL + "/")
+    if isinstance(listing, dict) and "error" in listing:
+        return listing
+    table = next((t.get("id") for t in listing if isinstance(t, dict)
+                  and str(t.get("id", "")).startswith("Country_ELECSTAT")), None) if isinstance(listing, list) else None
+    if not table:
+        return {"error": "IRENA: the country electricity statistics table was not found in IRENASTAT"}
+    url = f"{IRENA_FOLDER_URL}/{table}"
+    meta = _get_json("IRENA", url)
+    if isinstance(meta, dict) and "error" in meta:
+        return meta
+    variables = {v.get("code"): v for v in meta.get("variables", [])} if isinstance(meta, dict) else {}
+    needed = ("Country/area", "Technology", "Data Type", "Grid connection", "Year")
+    if not all(k in variables for k in needed):
+        return {"error": "IRENA changed the layout of its electricity statistics table"}
+
+    def texts(code):
+        v = variables[code]
+        return dict(zip(v["values"], v.get("valueTexts", v["values"])))
+
+    countries, techs, years = texts("Country/area"), texts("Technology"), texts("Year")
+    if country:
+        if country.upper() not in countries:
+            return {"error": f"IRENA has no country '{country}' - use an ISO3 code such as USA, DEU or IND"}
+        country_sel = {"filter": "item", "values": [country.upper()]}
+    else:
+        country_sel = {"filter": "all", "values": ["*"]}
+    if technology:
+        t = technology.strip().lower()
+        tech_codes = [c for c, name in techs.items() if t == c or t in name.lower()]
+        if not tech_codes:
+            return {"error": f"Unknown technology '{technology}'", "available": sorted(techs.values())}
+    else:
+        tech_codes = [c for c, name in techs.items() if name == "Total Renewable"] or ["1"]
+    year_by_text = {name: c for c, name in years.items()}
+    if year:
+        if str(year) not in year_by_text:
+            return {"error": f"IRENA has no capacity data for {year}",
+                    "available_years": f"{min(year_by_text)}-{max(year_by_text)}"}
+        year_codes = [year_by_text[str(year)]]
+    else:
+        # PxWeb's "top" filter returns the OLDEST years for this table: ask for the last two explicitly.
+        year_codes = [year_by_text[y] for y in sorted(year_by_text)[-2:]]
+    capacity_code = next((c for c, name in texts("Data Type").items() if "Capacity" in name), "1")
+    all_grid = next((c for c, name in texts("Grid connection").items() if name == "All"), "0")
+    query = {"query": [
+        {"code": "Country/area", "selection": country_sel},
+        {"code": "Technology", "selection": {"filter": "item", "values": tech_codes}},
+        {"code": "Data Type", "selection": {"filter": "item", "values": [capacity_code]}},
+        {"code": "Grid connection", "selection": {"filter": "item", "values": [all_grid]}},
+        {"code": "Year", "selection": {"filter": "item", "values": year_codes}},
+    ], "response": {"format": "json"}}
+    data = _get_json("IRENA", url, body=query)
+    if isinstance(data, dict) and "error" in data:
+        return data
+    latest: Dict[tuple, Dict] = {}
+    for row in (data.get("data") or []) if isinstance(data, dict) else []:
+        key, values = row.get("key") or [], row.get("values") or []
+        if len(key) < 5 or not values:
+            continue
+        try:
+            value = float(values[0])
+        except (TypeError, ValueError):
+            continue  # ".." = not available
+        item = {"iso3": key[0], "country": countries.get(key[0], key[0]), "technology": techs.get(key[1], key[1]),
+                "year": int(years.get(key[4], key[4])), "capacity_mw": value}
+        ident = (key[0], key[1])
+        if ident not in latest or item["year"] > latest[ident]["year"]:
+            latest[ident] = item  # without a year: keep each country's most recent reported value
+    rows = sorted(latest.values(), key=lambda r: (r["country"], r["technology"]))
+    if not rows:
+        return {"error": "IRENA returned no capacity figures for this selection"}
+    return rows
 
 
 def get_renewable_capacity(country: str = None, technology: str = None, year: int = None) -> Any:
-    """Return installed renewable energy capacity (GW) by country and technology."""
-    params = {}
-    if country:
-        params["country"] = country
-    if technology:
-        params["product"] = technology
-    if year:
-        params["year"] = year
-    params["flow"] = "REPOWCAP"
-    data = _make_request("", params=params)
+    """Return installed renewable power capacity (MW) by country and technology (IRENA)."""
+    data = _irena_capacity(country, technology, year)
     if isinstance(data, dict) and "error" in data:
-        # Fall back to IRENA public data structure
-        return {"country": country, "technology": technology, "year": year,
-                "source": "IEA/IRENA", "note": "Capacity data requires IEA_API_KEY", "data": []}
-    return {"country": country, "technology": technology, "year": year, "data": data}
+        return data
+    return {"country": country, "technology": technology or "Total Renewable", "year": year,
+            "source": "IRENA Renewable Energy Statistics (IRENASTAT)", "unit": "MW",
+            "count": len(data), "data": data}
 
 
 def get_energy_mix(country: str, year: int = None) -> Any:
-    """Return total primary energy supply by source for a country."""
-    params = {"country": country, "flow": "TES"}
-    if year:
-        params["year"] = year
-    data = _make_request("", params=params)
+    """Return total energy supply by source for a country (IEA, TJ)."""
+    data = _iea_indicator("TESbySource", country, year)
     if isinstance(data, dict) and "error" in data:
-        return {"country": country, "year": year, "note": "Energy mix data requires IEA_API_KEY", "data": []}
-    return {"country": country, "year": year, "energy_mix": data}
+        return data
+    return {"country": country, "year": year, "source": "IEA World Energy Balances", "energy_mix": data}
 
 
 def get_co2_intensity(country: str, year: int = None) -> Any:
-    """Return CO2 intensity of electricity generation (gCO2/kWh) for a country."""
-    params = {"country": country, "flow": "CO2ELEC"}
-    if year:
-        params["year"] = year
-    data = _make_request("", params=params)
+    """Return the CO2 intensity of a country's total energy supply (IEA, t CO2/TJ)."""
+    data = _iea_indicator("CO2Intensity", country, year)
     if isinstance(data, dict) and "error" in data:
-        return {"country": country, "year": year, "note": "CO2 intensity data requires IEA_API_KEY", "data": []}
-    return {"country": country, "year": year, "co2_intensity": data}
+        return data
+    return {"country": country, "year": year, "source": "IEA Greenhouse Gas Emissions from Energy",
+            "co2_intensity": data}
 
 
 def get_energy_investment(country: str, sector: str = None, year: int = None) -> Any:
-    """Return clean energy investment flows by country and sector."""
-    params = {"country": country, "flow": "CLEANINV"}
-    if sector:
-        params["product"] = sector
-    if year:
-        params["year"] = year
-    data = _make_request("", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return {"country": country, "sector": sector, "year": year,
-                "note": "Investment data requires IEA_API_KEY", "data": []}
-    return {"country": country, "sector": sector, "year": year, "investment": data}
+    """Clean energy investment: the IEA publishes it only in its World Energy Investment reports."""
+    return {"error": "Clean energy investment data is not available from an open API (the IEA publishes it "
+                     "only in its World Energy Investment report downloads)"}
 
 
 def get_ev_adoption(country: str, year: int = None) -> Any:
-    """Return electric vehicle stock and market share data for a country."""
-    params = {"country": country, "flow": "EVSTOCK"}
-    if year:
-        params["year"] = year
-    data = _make_request("", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return {"country": country, "year": year, "note": "EV data requires IEA_API_KEY", "data": []}
-    return {"country": country, "year": year, "ev_data": data}
+    """EV stock / sales share: the IEA Global EV Data Explorer has no open API."""
+    return {"error": "EV adoption data is not available from an open API (the IEA Global EV Data Explorer "
+                     "offers only manual downloads)"}
 
 
 def get_countries() -> Any:
-    """Return all countries available in the IEA statistics database."""
-    data = _make_request("countries")
+    """Return the countries and regions available in the IEA statistics database."""
+    data = _get_json("IEA", f"{IEA_STATS_URL}/countries")
     if isinstance(data, dict) and "error" in data:
-        # Return known IEA member countries as fallback
-        iea_members = ["AUS", "AUT", "BEL", "CAN", "CZE", "DNK", "EST", "FIN", "FRA",
-                        "DEU", "GRC", "HUN", "IRL", "ITA", "JPN", "KOR", "LVA", "LTU",
-                        "LUX", "MEX", "NLD", "NZL", "NOR", "POL", "PRT", "SVK", "SVN",
-                        "ESP", "SWE", "CHE", "TUR", "GBR", "USA"]
-        return {"countries": iea_members, "count": len(iea_members), "source": "IEA member list"}
-    return {"countries": data}
+        return data
+    if not isinstance(data, list):
+        return {"error": "IEA returned an unexpected response"}
+    countries = [{"iso3": c.get("iso3"), "name": c.get("name"), "iea_member": c.get("isMember"),
+                  "is_region": c.get("isRegion")} for c in data if isinstance(c, dict)]
+    return {"countries": countries, "count": len(countries), "source": "IEA"}
 
 
 def main(args=None):
@@ -157,8 +231,11 @@ def main(args=None):
             result = get_ev_adoption(country, year)
     elif command == "countries":
         result = get_countries()
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as e:  # e.g. a non-numeric year
+        print(json.dumps({"error": f"Invalid argument: {e}"}))

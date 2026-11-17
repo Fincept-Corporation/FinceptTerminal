@@ -129,7 +129,7 @@ def get_access_token() -> Dict[str, Any]:
 
         if not client_id or not client_secret:
             return {
-                "error": "Missing Sentinel Hub credentials. Set SENTINELHUB_CLIENT_ID and SENTINELHUB_CLIENT_SECRET environment variables."
+                "error": "Missing Sentinel Hub credentials. Save them as SENTINELHUB_CLIENT_ID and SENTINELHUB_CLIENT_SECRET in Settings > Credentials."
             }
 
         # Prepare authentication request

@@ -1,1112 +1,1200 @@
+// ChatAgentPanel.cpp — Chat Mode's run inspector (WP2) and agent panel.
+//
+// Two kinds (AgentPanelPages, 2026-11-17 revamp): the right rail's Inspector —
+// CONTEXT (ChatContextPage) | PLAN | ACTIVITY | FILES (RunArtefactsPanel) — and
+// the left rail's Agent panel — MEMORY | MCP. Every page is an empty container
+// until it is first shown; then its content is built into it. The run pages
+// follow set_current_run(). The page picked last is remembered per kind
+// (QSettings "chat_mode/inspector_page" / "chat_mode/agent_page", string ids;
+// read once from the old index key "chat_mode/inspector_tab" when they are new).
+//
+// MEMORY and MCP keep their server calls (ChatModeService) but lost their modal
+// flows: adding is an inline form, deleting asks in an inline strip, failures
+// show in the tab's status line. The old Tasks tab (server background tasks,
+// QInputDialog + nested dlg.exec() activity — plan defect B7) is removed: long
+// tasks are runs (RUNS tab + this inspector).
+
 #include "screens/chat_mode/ChatAgentPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/chat_mode/ChatContextPage.h"
 #include "screens/chat_mode/ChatModeService.h"
+#include "screens/chat_mode/ComposerContextBar.h"
+#include "screens/chat_mode/RunActivityView.h"
+#include "screens/chat_mode/RunArtefactsPanel.h"
+#include "screens/chat_mode/RunPlanPanel.h"
+#include "screens/chat_mode/RunViewWidgets.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
+#include <QAbstractItemView>
+#include <QComboBox>
 #include <QEvent>
+#include <QFrame>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QJsonObject>
-#include <QMessageBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QPointer>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QSettings>
+#include <QSignalBlocker>
+#include <QStackedWidget>
+#include <QTabBar>
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <array>
+#include <functional>
+
 namespace fincept::chat_mode {
 
-// Drives the panel's data load off visibility instead of construction (§P3).
-//
-// The five refresh_*() calls used to sit in the constructor. WindowFrame builds
-// ChatModeScreen eagerly at startup, so they fired five HTTP GETs before first
-// paint — each allocating a 15 s timeout QTimer, and all of them pre-login, so
-// they went out with an empty X-API-Key and 401'd. Pure waste that also delayed
-// first paint.
-//
-// The natural home is a showEvent() override; this filter is the identical hook
-// installed from the .cpp so ChatAgentPanel.h stays untouched. Fold it into a
-// real `void showEvent(QShowEvent*) override` when the header is next edited.
-// Lives at file scope so MOC doesn't choke on local classes.
-class AgentPanelShowLoader : public QObject {
-  public:
-    explicit AgentPanelShowLoader(ChatAgentPanel* panel) : QObject(panel), panel_(panel) {
-        panel->installEventFilter(this);
+namespace rv = fincept::chat_mode::run_view;
+
+namespace chat_agent_panel_detail {
+
+/// Every page a panel can carry; a panel carries the ones of its kind (cap_pages_of).
+enum CapPage { kCapContext = 0, kCapPlan, kCapActivity, kCapFiles, kCapMemory, kCapMcp, kCapPageCount };
+
+constexpr const char* kCapOldTabKey = "chat_mode/inspector_tab"; ///< before 2026-11-17: index of 5 tabs
+constexpr const char* kCapInspectorKey = "chat_mode/inspector_page";
+constexpr const char* kCapAgentKey = "chat_mode/agent_page";
+constexpr int kCapStatusRole = Qt::UserRole + 2;
+
+const char* cap_page_id(int page) {
+    switch (page) {
+        case kCapContext:
+            return "context";
+        case kCapPlan:
+            return "plan";
+        case kCapActivity:
+            return "activity";
+        case kCapFiles:
+            return "files";
+        case kCapMemory:
+            return "memory";
+        case kCapMcp:
+            return "mcp";
+        default:
+            break;
     }
+    return "";
+}
 
-  protected:
-    bool eventFilter(QObject* watched, QEvent* event) override;
+int cap_page_from_id(const QString& id) {
+    for (int p = 0; p < kCapPageCount; ++p)
+        if (id == QLatin1String(cap_page_id(p)))
+            return p;
+    if (id == QLatin1String("artefacts"))
+        return kCapFiles; // the page's old name
+    return -1;
+}
 
-  private:
-    ChatAgentPanel* panel_ = nullptr;
+QVector<int> cap_pages_of(AgentPanelPages kind) {
+    if (kind == AgentPanelPages::Agent)
+        return {kCapMemory, kCapMcp};
+    return {kCapContext, kCapPlan, kCapActivity, kCapFiles};
+}
+
+/// The page of the old index key (0 plan, 1 activity, 2 artefacts, 3 memory, 4 mcp)
+/// for a panel of `kind`, -1 when it named a page the kind does not carry.
+int cap_page_from_old_index(int index, AgentPanelPages kind) {
+    static constexpr int kOld[] = {kCapPlan, kCapActivity, kCapFiles, kCapMemory, kCapMcp};
+    if (index < 0 || index >= static_cast<int>(std::size(kOld)))
+        return -1;
+    const int page = kOld[index];
+    return cap_pages_of(kind).contains(page) ? page : -1;
+}
+
+QString cap_style() {
+    return QStringLiteral(
+               "#chatAgentPanel{background:%1;border:none;}"
+               "#chatAgentPanel[capBorder=\"true\"]{border-left:1px solid %2;}"
+               "#chatAgentPanel QTabBar#capTabs{background:%1;border-bottom:1px solid %2;}"
+               "#chatAgentPanel QTabBar#capTabs::tab{background:%1;color:%3;padding:6px 9px;border:none;"
+               "border-right:1px solid %2;border-bottom:2px solid transparent;font-size:%9px;font-weight:700;}"
+               "#chatAgentPanel QTabBar#capTabs::tab:last{border-right:none;}"
+               "#chatAgentPanel QTabBar#capTabs QToolButton{background:%1;border:1px solid %2;color:%3;}"
+               "#chatAgentPanel QTabBar#capTabs::tab:selected{color:%4;border-bottom:2px solid %4;}"
+               "#chatAgentPanel QTabBar#capTabs::tab:hover{color:%5;}"
+               "#chatAgentPanel QWidget#capPage{background:%1;}"
+               "#chatAgentPanel QLabel{background:transparent;border:none;color:%3;font-size:%9px;}"
+               "#chatAgentPanel QLabel#capTitle{color:%3;font-weight:700;letter-spacing:1px;}"
+               "#chatAgentPanel QLabel#capHint{color:%6;}"
+               "#chatAgentPanel QLabel#capStatus[error=\"true\"]{color:%10;}"
+               "#chatAgentPanel QListWidget{background:%1;border:1px solid %2;color:%5;font-size:%11px;outline:none;}"
+               "#chatAgentPanel QListWidget::item{padding:6px 8px;border-bottom:1px solid %7;}"
+               "#chatAgentPanel QListWidget::item:selected{background:%7;color:%4;}"
+               "#chatAgentPanel QListWidget::item:hover{background:%8;}"
+               "#chatAgentPanel QPushButton{background:%7;color:%3;border:1px solid %2;padding:3px 8px;"
+               "font-size:%9px;}"
+               "#chatAgentPanel QPushButton:hover{background:%8;color:%5;border-color:%4;}"
+               "#chatAgentPanel QPushButton:focus{border-color:%4;}"
+               "#chatAgentPanel QPushButton:disabled{color:%12;border-color:%2;background:transparent;}"
+               "#chatAgentPanel QPushButton#capDanger{background:%13;color:%10;border-color:%10;}"
+               "#chatAgentPanel QFrame#capForm{background:%7;border:1px solid %2;}"
+               "#chatAgentPanel QFrame#capConfirm{background:%13;border:1px solid %10;}"
+               "#chatAgentPanel QLineEdit,#chatAgentPanel QComboBox{background:%1;color:%5;border:1px solid %2;"
+               "padding:3px 6px;font-size:%11px;}"
+               "#chatAgentPanel QLineEdit:focus,#chatAgentPanel QComboBox:focus{border-color:%14;}"
+               "#chatAgentPanel QComboBox QAbstractItemView{background:%1;color:%5;border:1px solid %2;}"
+               "#chatAgentPanel QScrollBar:vertical{background:transparent;width:6px;}"
+               "#chatAgentPanel QScrollBar::handle:vertical{background:%15;min-height:20px;}"
+               "#chatAgentPanel QScrollBar::add-line:vertical,#chatAgentPanel QScrollBar::sub-line:vertical{height:0;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER(),
+             ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(), ui::colors::BG_HOVER(),
+             ui::fonts::px(-3))
+        .arg(ui::colors::DANGER(), ui::fonts::px(-2), ui::colors::TEXT_DIM(),
+             ui::colors::tint(QColor(ui::colors::DANGER()), 0.12), ui::colors::BORDER_BRIGHT(),
+             ui::colors::BORDER_MED());
+}
+
+QColor cap_mcp_color(const QString& status) {
+    if (status == QLatin1String("connected"))
+        return QColor(ui::colors::SUCCESS());
+    if (status == QLatin1String("error"))
+        return QColor(ui::colors::DANGER());
+    return QColor(ui::colors::TEXT_SECONDARY());
+}
+
+QPushButton* cap_button(QWidget* parent) {
+    auto* b = new QPushButton(parent);
+    b->setCursor(Qt::PointingHandCursor);
+    return b;
+}
+
+QLabel* cap_label(QWidget* parent, const char* object_name = nullptr) {
+    auto* l = new QLabel(parent);
+    if (object_name)
+        l->setObjectName(QLatin1String(object_name));
+    l->setWordWrap(true);
+    return l;
+}
+
+/// A disabled placeholder row ("Loading…", "No entries yet.").
+void cap_placeholder(QListWidget* list, const QString& text, const QString& tip = {}) {
+    auto* item = new QListWidgetItem(text, list);
+    item->setFlags(item->flags() & ~(Qt::ItemIsEnabled | Qt::ItemIsSelectable));
+    if (!tip.isEmpty())
+        item->setToolTip(tip);
+}
+
+/// Inline "are you sure?" strip: text + a destructive and a keep button.
+struct CapConfirm {
+    QFrame* frame = nullptr;
+    QLabel* text = nullptr;
+    QPushButton* yes = nullptr;
+    QPushButton* no = nullptr;
+    std::function<void()> action;
+
+    void build(QWidget* parent, QVBoxLayout* into) {
+        frame = new QFrame(parent);
+        frame->setObjectName(QStringLiteral("capConfirm"));
+        auto* vl = new QVBoxLayout(frame);
+        vl->setContentsMargins(8, 6, 8, 6);
+        vl->setSpacing(4);
+        text = cap_label(frame);
+        vl->addWidget(text);
+        auto* hl = new QHBoxLayout;
+        hl->setSpacing(4);
+        yes = cap_button(frame);
+        yes->setObjectName(QStringLiteral("capDanger"));
+        no = cap_button(frame);
+        hl->addWidget(yes);
+        hl->addWidget(no);
+        hl->addStretch();
+        vl->addLayout(hl);
+        frame->setVisible(false);
+        into->addWidget(frame);
+        QObject::connect(no, &QPushButton::clicked, frame, [this]() { hide(); });
+        QObject::connect(yes, &QPushButton::clicked, frame, [this]() {
+            auto fn = std::move(action);
+            hide();
+            if (fn)
+                fn();
+        });
+        for (QPushButton* b : {yes, no})
+            new rv::RvKeyHook(b, [this](const QKeyEvent* ke, bool apply) {
+                if (ke->key() != Qt::Key_Escape)
+                    return false;
+                if (apply)
+                    hide();
+                return true;
+            });
+    }
+    void ask(const QString& question, const QString& yes_text, const QString& no_text, std::function<void()> fn) {
+        text->setText(question);
+        yes->setText(yes_text);
+        no->setText(no_text);
+        action = std::move(fn);
+        frame->setVisible(true);
+        yes->setFocus();
+    }
+    void hide() {
+        frame->setVisible(false);
+        action = nullptr;
+    }
 };
 
-static QString list_ss() {
-    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;"
-                   "font-size:12px;font-family:'Consolas','Courier New',monospace;"
-                   "border-radius:0px;outline:none;}"
-                   "QListWidget::item{padding:6px 8px;border-bottom:1px solid %4;}"
-                   "QListWidget::item:selected{background:%4;color:%5;}"
-                   "QListWidget::item:hover{background:%7;}"
-                   "QScrollBar:vertical{background:transparent;width:4px;}"
-                   "QScrollBar::handle:vertical{background:%6;border-radius:0px;}"
-                   "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
-             ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER());
-}
-
-static QString section_title_ss() {
-    return QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;"
-                   "font-family:'Consolas','Courier New',monospace;background:transparent;")
-        .arg(ui::colors::TEXT_SECONDARY());
-}
-
-static QString hint_ss() {
-    return QString("color:%1;font-size:11px;"
-                   "font-family:'Consolas','Courier New',monospace;background:transparent;")
-        .arg(ui::colors::TEXT_DIM());
-}
-
-// A mutation the user asked for (add / delete / toggle / cancel) that the backend
-// rejected used to be logged and nothing else: the list refreshed to its old state
-// and the click looked like it did nothing. Name the action and the reason.
-static void agent_panel_warn_failed(QWidget* parent, const QString& what, const QString& err) {
-    QMessageBox::warning(parent, what, ChatAgentPanel::tr("Failed: %1").arg(err));
-}
-
-// ── Constructor ───────────────────────────────────────────────────────────────
-
-bool AgentPanelShowLoader::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == panel_ && event->type() == QEvent::Show) {
-        panel_->refresh_memory();
-        panel_->refresh_schedules();
-        panel_->refresh_tasks();
-        panel_->refresh_mcp_servers();
-        panel_->refresh_monitors();
+void cap_set_status(QLabel* status, const QString& text, bool error) {
+    status->setText(text);
+    status->setVisible(!text.isEmpty());
+    if (status->property("error").toBool() != error) {
+        status->setProperty("error", error);
+        status->style()->unpolish(status);
+        status->style()->polish(status);
     }
-    return QObject::eventFilter(watched, event);
 }
 
-ChatAgentPanel::ChatAgentPanel(QWidget* parent) : QWidget(parent) {
-    build_ui();
-    // No data load here — AgentPanelShowLoader runs it on first (and every)
-    // show, so nothing hits the network until the user is actually in chat
-    // mode and logged in. See the comment on that class above.
-    new AgentPanelShowLoader(this); // parented to this; destroyed with the panel
-}
+} // namespace chat_agent_panel_detail
 
-// ── Build UI ──────────────────────────────────────────────────────────────────
+using namespace chat_agent_panel_detail;
 
-void ChatAgentPanel::build_ui() {
-    setFixedWidth(280);
-    setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+// ── Impl ─────────────────────────────────────────────────────────────────────
 
-    auto* vl = new QVBoxLayout(this);
-    vl->setContentsMargins(0, 0, 0, 0);
+struct ChatAgentPanel::Impl {
+    ChatAgentPanel* q = nullptr;
+    AgentPanelPages kind = AgentPanelPages::Inspector;
+    QVector<int> order; ///< CapPage of each tab (tab index == stack index)
+    QString run_id;
+    QPointer<ComposerContextBar> context_bar;
+    QTabBar* tabs = nullptr;
+    QStackedWidget* stack = nullptr;
+    std::array<QWidget*, kCapPageCount> pages{};
+    std::array<bool, kCapPageCount> built{};
+
+    ChatContextPage* context = nullptr;
+    RunPlanPanel* plan = nullptr;
+    RunActivityView* activity = nullptr;
+    RunArtefactsPanel* artefacts = nullptr;
+
+    // MEMORY
+    QLabel* mem_title = nullptr;
+    QLabel* mem_hint = nullptr;
+    QListWidget* mem_list = nullptr;
+    QPushButton* mem_add = nullptr;
+    QPushButton* mem_del = nullptr;
+    QPushButton* mem_clear = nullptr;
+    QPushButton* mem_refresh = nullptr;
+    QFrame* mem_form = nullptr;
+    QLineEdit* mem_key = nullptr;
+    QLineEdit* mem_value = nullptr;
+    QComboBox* mem_type = nullptr;
+    QPushButton* mem_save = nullptr;
+    QPushButton* mem_cancel = nullptr;
+    CapConfirm mem_confirm;
+    QLabel* mem_status = nullptr;
+    bool mem_busy = false;
+
+    // MCP
+    QLabel* mcp_title = nullptr;
+    QLabel* mcp_hint = nullptr;
+    QListWidget* mcp_list = nullptr;
+    QPushButton* mcp_add = nullptr;
+    QPushButton* mcp_del = nullptr;
+    QPushButton* mcp_refresh = nullptr;
+    QFrame* mcp_form = nullptr;
+    QLabel* mcp_form_hint = nullptr;
+    QLineEdit* mcp_name = nullptr;
+    QComboBox* mcp_transport = nullptr;
+    QLineEdit* mcp_url = nullptr;
+    QPushButton* mcp_save = nullptr;
+    QPushButton* mcp_cancel = nullptr;
+    CapConfirm mcp_confirm;
+    QLabel* mcp_status = nullptr;
+    bool mcp_busy = false;
+    int mcp_total_tools = -1;
+    QVector<McpServer> mcp_servers;
+
+    void build();
+    void retranslate();
+    void fit_width();
+    int page_at(int tab) const { return order.value(tab, -1); }
+    int tab_of(int page) const { return static_cast<int>(order.indexOf(page)); }
+    const char* settings_key() const { return kind == AgentPanelPages::Agent ? kCapAgentKey : kCapInspectorKey; }
+    int initial_page() const;
+    void ensure_page(int page);
+    void show_tab(int index);
+    void build_memory(QWidget* page);
+    void build_mcp(QWidget* page);
+    void update_memory_buttons();
+    void update_mcp_buttons();
+    void fill_memory(bool ok, const QVector<AgentMemory>& memories, const QString& err);
+    void fill_mcp(bool ok, const QVector<McpServer>& servers, int total_tools, const QString& err);
+    void save_memory();
+    void save_mcp();
+};
+
+void ChatAgentPanel::Impl::build() {
+    order = cap_pages_of(kind);
+    const bool inspector = kind == AgentPanelPages::Inspector;
+    q->setObjectName(QStringLiteral("chatAgentPanel"));
+    q->setAttribute(Qt::WA_StyledBackground, true);
+    // The right rail draws a rule on its left edge; the left rail's agent panel none.
+    q->setProperty("capBorder", inspector);
+    q->setStyleSheet(cap_style());
+    // In a QSplitter now: no fixed width, a minimum the tabs and the run views need
+    // (from the font; re-fitted once a new appearance has settled).
+    fit_width();
+
+    auto* vl = new QVBoxLayout(q);
+    vl->setContentsMargins(inspector ? 1 : 0, 0, 0, 0); // the left border line
     vl->setSpacing(0);
 
-    tab_bar_ = new QTabBar;
-    tab_bar_->setExpanding(true);
-    tab_bar_->addTab(tr("Mem"));
-    tab_bar_->addTab(tr("Sched"));
-    tab_bar_->addTab(tr("Tasks"));
-    tab_bar_->addTab(tr("MCP"));
-    tab_bar_->addTab(tr("Monitor"));
-    tab_bar_->setStyleSheet(QString("QTabBar{background:%1;border-bottom:1px solid %2;}"
-                                    "QTabBar::tab{background:%1;color:%3;padding:6px 0;"
-                                    "font-size:11px;font-family:'Consolas','Courier New',monospace;"
-                                    "border:none;border-bottom:2px solid transparent;}"
-                                    "QTabBar::tab:selected{color:%4;border-bottom:2px solid %4;}"
-                                    "QTabBar::tab:hover{color:%5;}")
-                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(),
-                                     ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
-    connect(tab_bar_, &QTabBar::currentChanged, this, &ChatAgentPanel::on_tab_changed);
-    vl->addWidget(tab_bar_);
+    tabs = new QTabBar(q);
+    tabs->setObjectName(QStringLiteral("capTabs"));
+    // Several tabs in a narrow column: each gets its full name, padding and a divider
+    // while they fit; when they do not (large fonts, a narrow rail), names are
+    // elided to a few letters (the tooltip has the whole name) and only then do
+    // scroll arrows appear — never words run together ("ACTIVITY FILES").
+    tabs->setExpanding(true);
+    tabs->setDrawBase(false);
+    tabs->setElideMode(Qt::ElideRight);
+    tabs->setUsesScrollButtons(true);
+    for (int i = 0; i < order.size(); ++i)
+        tabs->addTab(QString());
+    vl->addWidget(tabs);
 
-    stack_ = new QStackedWidget;
-    stack_->addWidget(build_memory_tab());
-    stack_->addWidget(build_schedules_tab());
-    stack_->addWidget(build_tasks_tab());
-    stack_->addWidget(build_mcp_tab());
-    stack_->addWidget(build_monitors_tab());
-    vl->addWidget(stack_, 1);
-}
+    stack = new QStackedWidget(q);
+    for (int p : std::as_const(order)) {
+        auto* page = new QWidget(stack);
+        page->setObjectName(QStringLiteral("capPage"));
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(0);
+        stack->addWidget(page);
+        pages[static_cast<size_t>(p)] = page;
+    }
+    vl->addWidget(stack, 1);
 
-QPushButton* ChatAgentPanel::make_btn(const QString& text, const QString& tooltip) {
-    auto* btn = new QPushButton(text);
-    btn->setToolTip(tooltip);
-    btn->setFixedHeight(22);
-    btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
-                               "border-radius:0px;font-size:11px;"
-                               "font-family:'Consolas','Courier New',monospace;}"
-                               "QPushButton:hover{background:%4;color:%5;border-color:%6;}"
-                               "QPushButton:disabled{color:%7;border-color:%1;}")
-                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
-                                ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(),
-                                ui::colors::BORDER_BRIGHT()));
-    return btn;
-}
-
-QWidget* ChatAgentPanel::build_memory_tab() {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(6);
-
-    mem_title_ = new QLabel(tr("AGENT MEMORY"));
-    mem_title_->setStyleSheet(section_title_ss());
-    vl->addWidget(mem_title_);
-
-    memory_list_ = new QListWidget;
-    memory_list_->setStyleSheet(list_ss());
-    vl->addWidget(memory_list_, 1);
-
-    auto* btn_row = new QHBoxLayout;
-    btn_row->setSpacing(4);
-    mem_add_btn_ = make_btn(tr("+ Add"), tr("Add memory entry"));
-    mem_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
-    mem_clear_btn_ = make_btn(tr("Clear"), tr("Clear all memory"));
-    mem_del_btn_->setEnabled(false);
-    btn_row->addWidget(mem_add_btn_);
-    btn_row->addWidget(mem_del_btn_);
-    btn_row->addWidget(mem_clear_btn_);
-    vl->addLayout(btn_row);
-
-    connect(memory_list_, &QListWidget::itemSelectionChanged, this,
-            [this]() { mem_del_btn_->setEnabled(!memory_list_->selectedItems().isEmpty()); });
-    connect(mem_add_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_add_memory);
-    connect(mem_del_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_delete_memory);
-    connect(mem_clear_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_clear_all_memory);
-
-    return w;
-}
-
-QWidget* ChatAgentPanel::build_schedules_tab() {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(6);
-
-    sched_title_ = new QLabel(tr("SCHEDULED QUERIES"));
-    sched_title_->setStyleSheet(section_title_ss());
-    vl->addWidget(sched_title_);
-
-    sched_hint_ = new QLabel(tr("Cron-based agent queries (e.g. daily 9 AM)."));
-    sched_hint_->setWordWrap(true);
-    sched_hint_->setStyleSheet(hint_ss());
-    vl->addWidget(sched_hint_);
-
-    sched_list_ = new QListWidget;
-    sched_list_->setStyleSheet(list_ss());
-    vl->addWidget(sched_list_, 1);
-
-    auto* btn_row = new QHBoxLayout;
-    btn_row->setSpacing(4);
-    sched_add_btn_ = make_btn(tr("+ Add"), tr("Create schedule"));
-    sched_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
-    sched_toggle_btn_ = make_btn(tr("Pause"), tr("Pause/resume"));
-    sched_del_btn_->setEnabled(false);
-    sched_toggle_btn_->setEnabled(false);
-    btn_row->addWidget(sched_add_btn_);
-    btn_row->addWidget(sched_toggle_btn_);
-    btn_row->addWidget(sched_del_btn_);
-    vl->addLayout(btn_row);
-
-    connect(sched_list_, &QListWidget::itemSelectionChanged, this, [this]() {
-        const bool sel = !sched_list_->selectedItems().isEmpty();
-        sched_del_btn_->setEnabled(sel);
-        sched_toggle_btn_->setEnabled(sel);
-        // The button toggles: name what it will do to the selected schedule. It always read
-        // "Pause", even on a paused one where the click actually resumes.
-        const bool paused =
-            sel && sched_list_->selectedItems().first()->data(Qt::UserRole + 1).toString() != QLatin1String("active");
-        sched_toggle_btn_->setText(paused ? tr("Resume") : tr("Pause"));
+    QObject::connect(tabs, &QTabBar::currentChanged, q, [this](int index) {
+        // A page is built (and memory / MCP read) only once the panel is on screen;
+        // a pick made while it is hidden (the rail's switch) is built by showEvent.
+        if (q->isVisible())
+            show_tab(index);
+        else
+            stack->setCurrentIndex(index);
+        const QString id = QString::fromLatin1(cap_page_id(page_at(index)));
+        QSettings().setValue(QLatin1String(settings_key()), id);
+        emit q->page_changed(id);
     });
-    connect(sched_add_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_add_schedule);
-    connect(sched_del_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_delete_schedule);
-    connect(sched_toggle_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_toggle_schedule);
-
-    return w;
+    QObject::connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, q, [this]() { fit_width(); });
 }
 
-QWidget* ChatAgentPanel::build_tasks_tab() {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
+void ChatAgentPanel::Impl::fit_width() {
+    // Room for the tab names and a run view's two-column rows at the current font.
+    const QFontMetrics fm(ui::fonts::font(-3, QFont::Bold));
+    const int w = std::max(200, fm.averageCharWidth() * 30);
+    if (q->minimumWidth() != w)
+        q->setMinimumWidth(w);
+}
+
+int ChatAgentPanel::Impl::initial_page() const {
+    QSettings s;
+    const QString key = QLatin1String(settings_key());
+    if (s.contains(key)) {
+        const int p = cap_page_from_id(s.value(key).toString());
+        if (order.contains(p))
+            return p;
+    } else if (s.contains(QLatin1String(kCapOldTabKey))) {
+        // Before 2026-11-17 one panel had all five tabs, remembered by index: read it
+        // once (the new key is written on the first pick).
+        const int p = cap_page_from_old_index(s.value(QLatin1String(kCapOldTabKey)).toInt(), kind);
+        if (p >= 0)
+            return p;
+    }
+    return order.value(0, kCapContext);
+}
+
+void ChatAgentPanel::Impl::retranslate() {
+    for (int i = 0; i < order.size(); ++i) {
+        QString name;
+        QString tip;
+        switch (order.at(i)) {
+            case kCapContext:
+                name = ChatAgentPanel::tr("CONTEXT");
+                tip = ChatAgentPanel::tr("What the run can see and use: context, tools, files, budget and run stats");
+                break;
+            case kCapPlan:
+                name = ChatAgentPanel::tr("PLAN");
+                tip = ChatAgentPanel::tr("The run's steps, budget and controls");
+                break;
+            case kCapActivity:
+                name = ChatAgentPanel::tr("ACTIVITY");
+                tip = ChatAgentPanel::tr("Everything the run did: steps, tool calls, questions, results");
+                break;
+            case kCapFiles:
+                name = ChatAgentPanel::tr("FILES");
+                tip = ChatAgentPanel::tr("Reports, tables and files the run produced");
+                break;
+            case kCapMemory:
+                name = ChatAgentPanel::tr("MEMORY");
+                tip = ChatAgentPanel::tr("What the cloud agent remembers about you");
+                break;
+            case kCapMcp:
+                name = ChatAgentPanel::tr("MCP");
+                tip = ChatAgentPanel::tr("Remote MCP tool servers of the cloud agent");
+                break;
+            default:
+                break;
+        }
+        tabs->setTabText(i, name);
+        tabs->setTabToolTip(i, tip);
+    }
+    tabs->setAccessibleName(kind == AgentPanelPages::Agent ? ChatAgentPanel::tr("Agent memory and MCP servers")
+                                                           : ChatAgentPanel::tr("Run inspector"));
+
+    if (mem_title) {
+        mem_title->setText(ChatAgentPanel::tr("AGENT MEMORY"));
+        mem_hint->setText(ChatAgentPanel::tr("Facts and preferences the cloud agent keeps across conversations."));
+        mem_add->setText(ChatAgentPanel::tr("+ ADD"));
+        mem_add->setToolTip(ChatAgentPanel::tr("Add a memory entry"));
+        mem_del->setText(ChatAgentPanel::tr("DELETE"));
+        mem_clear->setText(ChatAgentPanel::tr("CLEAR ALL"));
+        mem_refresh->setText(ChatAgentPanel::tr("REFRESH"));
+        mem_refresh->setToolTip(ChatAgentPanel::tr("Read the memory again"));
+        mem_key->setPlaceholderText(ChatAgentPanel::tr("Key, e.g. risk_tolerance"));
+        mem_key->setAccessibleName(ChatAgentPanel::tr("Memory key"));
+        mem_value->setPlaceholderText(ChatAgentPanel::tr("Value, e.g. moderate"));
+        mem_value->setAccessibleName(ChatAgentPanel::tr("Memory value"));
+        mem_type->setItemText(0, ChatAgentPanel::tr("Fact"));
+        mem_type->setItemText(1, ChatAgentPanel::tr("Preference"));
+        mem_type->setItemText(2, ChatAgentPanel::tr("Entity"));
+        mem_type->setAccessibleName(ChatAgentPanel::tr("Memory type"));
+        mem_save->setText(ChatAgentPanel::tr("SAVE"));
+        mem_cancel->setText(ChatAgentPanel::tr("CANCEL"));
+        mem_list->setAccessibleName(ChatAgentPanel::tr("Agent memory entries"));
+        update_memory_buttons();
+    }
+    if (mcp_title) {
+        mcp_title->setText(ChatAgentPanel::tr("MCP SERVERS"));
+        mcp_add->setText(ChatAgentPanel::tr("+ ADD"));
+        mcp_add->setToolTip(ChatAgentPanel::tr("Add a remote MCP server (https)"));
+        mcp_del->setText(ChatAgentPanel::tr("DELETE"));
+        mcp_refresh->setText(ChatAgentPanel::tr("REFRESH"));
+        mcp_refresh->setToolTip(ChatAgentPanel::tr("Reconnect every server and list their tools again"));
+        mcp_form_hint->setText(ChatAgentPanel::tr("The cloud agent can use remote MCP servers reachable over https. "
+                                                  "Local (stdio) servers, such as uvx / npx commands, belong in the "
+                                                  "terminal's MCP Servers screen."));
+        mcp_name->setPlaceholderText(ChatAgentPanel::tr("Name: 2-48 of a-z, 0-9 and -"));
+        mcp_name->setAccessibleName(ChatAgentPanel::tr("Server name"));
+        mcp_transport->setItemText(0, ChatAgentPanel::tr("Streamable HTTP (recommended)"));
+        mcp_transport->setItemText(1, ChatAgentPanel::tr("SSE (Server-Sent Events)"));
+        mcp_transport->setAccessibleName(ChatAgentPanel::tr("Transport"));
+        mcp_url->setPlaceholderText(QStringLiteral("https://mcp.example.com/mcp"));
+        mcp_url->setAccessibleName(ChatAgentPanel::tr("Server URL"));
+        mcp_save->setText(ChatAgentPanel::tr("ADD SERVER"));
+        mcp_cancel->setText(ChatAgentPanel::tr("CANCEL"));
+        mcp_list->setAccessibleName(ChatAgentPanel::tr("MCP servers"));
+        if (mcp_total_tools < 0)
+            mcp_hint->setText(ChatAgentPanel::tr("Model Context Protocol tool servers."));
+        else
+            mcp_hint->setText(ChatAgentPanel::tr("%1 server(s) | %2 tools").arg(mcp_servers.size()).arg(mcp_total_tools));
+        update_mcp_buttons();
+    }
+}
+
+void ChatAgentPanel::Impl::ensure_page(int index) {
+    if (index < 0 || index >= kCapPageCount || built[static_cast<size_t>(index)] || !pages[static_cast<size_t>(index)])
+        return;
+    built[static_cast<size_t>(index)] = true;
+    QWidget* page = pages[static_cast<size_t>(index)];
+    auto* layout = static_cast<QVBoxLayout*>(page->layout());
+    switch (index) {
+        case kCapContext:
+            context = new ChatContextPage(page);
+            layout->addWidget(context);
+            context->set_context_bar(context_bar);
+            context->set_run(run_id);
+            // A file row: the FILES page (it lists, previews and acts on every artefact).
+            QObject::connect(context, &ChatContextPage::files_requested, q,
+                             [this](const QString&) { q->show_page(QStringLiteral("files")); });
+            QObject::connect(context, &ChatContextPage::mcp_state_changed, q, &ChatAgentPanel::mcp_state_changed);
+            break;
+        case kCapPlan:
+            plan = new RunPlanPanel(page);
+            layout->addWidget(plan);
+            QObject::connect(plan, &RunPlanPanel::run_created, q, &ChatAgentPanel::run_selection_requested);
+            QObject::connect(plan, &RunPlanPanel::conversation_requested, q, &ChatAgentPanel::run_open_requested);
+            plan->set_run(run_id);
+            break;
+        case kCapActivity:
+            activity = new RunActivityView(page);
+            layout->addWidget(activity);
+            activity->set_run(run_id);
+            break;
+        case kCapFiles:
+            artefacts = new RunArtefactsPanel(page);
+            layout->addWidget(artefacts);
+            QObject::connect(artefacts, &RunArtefactsPanel::new_run_requested, q, &ChatAgentPanel::new_run_requested);
+            QObject::connect(artefacts, &RunArtefactsPanel::open_screen_requested, q,
+                             &ChatAgentPanel::open_screen_requested);
+            artefacts->set_run(run_id);
+            break;
+        case kCapMemory:
+            build_memory(page);
+            retranslate();
+            q->refresh_memory();
+            break;
+        case kCapMcp:
+            build_mcp(page);
+            retranslate();
+            q->refresh_mcp_servers();
+            break;
+        default:
+            break;
+    }
+}
+
+void ChatAgentPanel::Impl::show_tab(int index) {
+    if (index < 0 || index >= order.size())
+        return;
+    ensure_page(page_at(index));
+    stack->setCurrentIndex(index);
+}
+
+// ── MEMORY ───────────────────────────────────────────────────────────────────
+
+void ChatAgentPanel::Impl::build_memory(QWidget* page) {
+    auto* layout = static_cast<QVBoxLayout*>(page->layout());
+    auto* body = new QWidget(page);
+    layout->addWidget(body);
+    auto* vl = new QVBoxLayout(body);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    tasks_title_ = new QLabel(tr("BACKGROUND TASKS"));
-    tasks_title_->setStyleSheet(section_title_ss());
-    vl->addWidget(tasks_title_);
+    mem_title = cap_label(body, "capTitle");
+    mem_hint = cap_label(body, "capHint");
+    vl->addWidget(mem_title);
+    vl->addWidget(mem_hint);
 
-    task_status_lbl_ = new QLabel(tr("Long-running agent queries."));
-    task_status_lbl_->setWordWrap(true);
-    task_status_lbl_->setStyleSheet(hint_ss());
-    vl->addWidget(task_status_lbl_);
+    mem_list = new QListWidget(body);
+    mem_list->setProperty("fincept_agent_risk_keys", "Delete=delete"); // agents: Delete deletes the selected memories
+    mem_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    mem_list->setWordWrap(true);
+    vl->addWidget(mem_list, 1);
 
-    task_list_ = new QListWidget;
-    task_list_->setStyleSheet(list_ss());
-    vl->addWidget(task_list_, 1);
+    mem_form = new QFrame(body);
+    mem_form->setObjectName(QStringLiteral("capForm"));
+    auto* fl = new QVBoxLayout(mem_form);
+    fl->setContentsMargins(8, 6, 8, 6);
+    fl->setSpacing(4);
+    mem_key = new QLineEdit(mem_form);
+    mem_key->setMaxLength(120);
+    mem_value = new QLineEdit(mem_form);
+    mem_value->setMaxLength(2000);
+    mem_type = new QComboBox(mem_form);
+    // Memory types are stored keys sent to the service — labels are translated, data is not.
+    mem_type->addItem(QString(), QStringLiteral("fact"));
+    mem_type->addItem(QString(), QStringLiteral("preference"));
+    mem_type->addItem(QString(), QStringLiteral("entity"));
+    auto* fb = new QHBoxLayout;
+    fb->setSpacing(4);
+    mem_save = cap_button(mem_form);
+    mem_cancel = cap_button(mem_form);
+    fb->addWidget(mem_save);
+    fb->addWidget(mem_cancel);
+    fb->addStretch();
+    fl->addWidget(mem_key);
+    fl->addWidget(mem_value);
+    fl->addWidget(mem_type);
+    fl->addLayout(fb);
+    mem_form->setVisible(false);
+    vl->addWidget(mem_form);
 
-    auto* row1 = new QHBoxLayout;
-    row1->setSpacing(4);
-    // The tab could list, inspect, cancel and answer tasks but not START one —
-    // ChatModeService::create_task() existed with no caller anywhere.
-    task_add_btn_ = make_btn(tr("+ New"), tr("Run a long agent query in the background"));
-    task_refresh_btn_ = make_btn(tr("Refresh"), tr("Refresh task list"));
-    task_detail_btn_ = make_btn(tr("Detail"), tr("View task result"));
-    task_detail_btn_->setEnabled(false);
-    row1->addWidget(task_add_btn_);
-    row1->addWidget(task_refresh_btn_);
-    row1->addWidget(task_detail_btn_);
-    vl->addLayout(row1);
+    mem_confirm.build(body, vl);
 
-    auto* row2 = new QHBoxLayout;
-    row2->setSpacing(4);
-    task_feedback_btn_ = make_btn(tr("Feedback"), tr("Send feedback"));
-    task_cancel_btn_ = make_btn(tr("Cancel"), tr("Cancel task"));
-    task_feedback_btn_->setEnabled(false);
-    task_cancel_btn_->setEnabled(false);
-    row2->addWidget(task_feedback_btn_);
-    row2->addWidget(task_cancel_btn_);
-    row2->addStretch();
-    vl->addLayout(row2);
+    mem_status = cap_label(body, "capStatus");
+    mem_status->setVisible(false);
+    vl->addWidget(mem_status);
 
-    connect(task_list_, &QListWidget::itemSelectionChanged, this, [this]() {
-        const bool sel = !task_list_->selectedItems().isEmpty();
-        task_cancel_btn_->setEnabled(sel);
-        task_detail_btn_->setEnabled(sel);
-        task_feedback_btn_->setEnabled(sel);
+    auto* buttons = new QWidget(body);
+    auto* flow = new rv::RvFlowLayout(buttons, 4, 4);
+    mem_add = cap_button(buttons);
+    mem_del = cap_button(buttons);
+    mem_del->setProperty("fincept_agent_risk", "delete"); // agents: deletes agent memories
+    mem_clear = cap_button(buttons);
+    mem_clear->setProperty("fincept_agent_risk", "delete"); // agents: deletes every agent memory
+    mem_refresh = cap_button(buttons);
+    for (QPushButton* b : {mem_add, mem_del, mem_clear, mem_refresh})
+        flow->addWidget(b);
+    vl->addWidget(buttons);
+
+    QObject::connect(mem_list, &QListWidget::itemSelectionChanged, q, [this]() { update_memory_buttons(); });
+    QObject::connect(mem_add, &QPushButton::clicked, q, [this]() {
+        mem_form->setVisible(true);
+        mem_key->clear();
+        mem_value->clear();
+        mem_type->setCurrentIndex(0);
+        mem_key->setFocus();
+        update_memory_buttons();
     });
-    connect(task_add_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_add_task);
-    connect(task_refresh_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_refresh_tasks);
-    connect(task_cancel_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_cancel_task);
-    connect(task_detail_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_view_task_detail);
-    connect(task_feedback_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_send_feedback);
-
-    return w;
-}
-
-QWidget* ChatAgentPanel::build_mcp_tab() {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(6);
-
-    mcp_title_ = new QLabel(tr("MCP SERVERS"));
-    mcp_title_->setStyleSheet(section_title_ss());
-    vl->addWidget(mcp_title_);
-
-    mcp_tools_lbl_ = new QLabel(tr("Model Context Protocol tool servers."));
-    mcp_tools_lbl_->setWordWrap(true);
-    mcp_tools_lbl_->setStyleSheet(hint_ss());
-    vl->addWidget(mcp_tools_lbl_);
-
-    mcp_list_ = new QListWidget;
-    mcp_list_->setStyleSheet(list_ss());
-    vl->addWidget(mcp_list_, 1);
-
-    auto* btn_row = new QHBoxLayout;
-    btn_row->setSpacing(4);
-    mcp_add_btn_ = make_btn(tr("+ Add"), tr("Add MCP server"));
-    mcp_del_btn_ = make_btn(tr("Delete"), tr("Remove selected"));
-    mcp_refresh_btn_ = make_btn(tr("Refresh"), tr("Refresh all"));
-    mcp_del_btn_->setEnabled(false);
-    btn_row->addWidget(mcp_add_btn_);
-    btn_row->addWidget(mcp_refresh_btn_);
-    btn_row->addWidget(mcp_del_btn_);
-    vl->addLayout(btn_row);
-
-    connect(mcp_list_, &QListWidget::itemSelectionChanged, this,
-            [this]() { mcp_del_btn_->setEnabled(!mcp_list_->selectedItems().isEmpty()); });
-    connect(mcp_add_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_add_mcp_server);
-    connect(mcp_del_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_delete_mcp_server);
-    connect(mcp_refresh_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_refresh_mcp_servers);
-
-    return w;
-}
-
-QWidget* ChatAgentPanel::build_monitors_tab() {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(6);
-
-    mon_title_ = new QLabel(tr("DATA MONITORS"));
-    mon_title_->setStyleSheet(section_title_ss());
-    vl->addWidget(mon_title_);
-
-    mon_hint_ = new QLabel(tr("Watch sources, trigger agent analysis."));
-    mon_hint_->setWordWrap(true);
-    mon_hint_->setStyleSheet(hint_ss());
-    vl->addWidget(mon_hint_);
-
-    monitor_list_ = new QListWidget;
-    monitor_list_->setStyleSheet(list_ss());
-    vl->addWidget(monitor_list_, 1);
-
-    auto* btn_row = new QHBoxLayout;
-    btn_row->setSpacing(4);
-    mon_add_btn_ = make_btn(tr("+ Add"), tr("Create monitor"));
-    mon_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
-    mon_toggle_btn_ = make_btn(tr("Pause"), tr("Pause/resume"));
-    mon_del_btn_->setEnabled(false);
-    mon_toggle_btn_->setEnabled(false);
-    btn_row->addWidget(mon_add_btn_);
-    btn_row->addWidget(mon_toggle_btn_);
-    btn_row->addWidget(mon_del_btn_);
-    vl->addLayout(btn_row);
-
-    connect(monitor_list_, &QListWidget::itemSelectionChanged, this, [this]() {
-        const bool sel = !monitor_list_->selectedItems().isEmpty();
-        mon_del_btn_->setEnabled(sel);
-        mon_toggle_btn_->setEnabled(sel);
-        // Same toggle-labelling as the schedules tab.
-        const bool paused =
-            sel && monitor_list_->selectedItems().first()->data(Qt::UserRole + 1).toString() != QLatin1String("active");
-        mon_toggle_btn_->setText(paused ? tr("Resume") : tr("Pause"));
+    QObject::connect(mem_cancel, &QPushButton::clicked, q, [this]() {
+        mem_form->setVisible(false);
+        update_memory_buttons();
     });
-    connect(mon_add_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_add_monitor);
-    connect(mon_del_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_delete_monitor);
-    connect(mon_toggle_btn_, &QPushButton::clicked, this, &ChatAgentPanel::on_toggle_monitor);
-
-    return w;
+    QObject::connect(mem_key, &QLineEdit::textChanged, q, [this]() { update_memory_buttons(); });
+    QObject::connect(mem_value, &QLineEdit::textChanged, q, [this]() { update_memory_buttons(); });
+    QObject::connect(mem_value, &QLineEdit::returnPressed, q, [this]() {
+        if (mem_save->isEnabled())
+            save_memory();
+    });
+    QObject::connect(mem_save, &QPushButton::clicked, q, [this]() { save_memory(); });
+    QObject::connect(mem_refresh, &QPushButton::clicked, q, [this]() { q->refresh_memory(); });
+    QObject::connect(mem_del, &QPushButton::clicked, q, [this]() {
+        QListWidgetItem* item = mem_list->currentItem();
+        const QString key = item ? item->data(Qt::UserRole).toString() : QString();
+        if (key.isEmpty())
+            return;
+        QPointer<ChatAgentPanel> self(q);
+        mem_confirm.ask(ChatAgentPanel::tr("Delete the memory entry “%1”?").arg(key),
+                        ChatAgentPanel::tr("DELETE"), ChatAgentPanel::tr("KEEP"), [this, self, key]() {
+                            if (!self)
+                                return;
+                            mem_busy = true;
+                            update_memory_buttons();
+                            ChatModeService::instance().delete_memory(key, [this, self](bool ok, QString err) {
+                                if (!self)
+                                    return;
+                                mem_busy = false;
+                                if (!ok) {
+                                    LOG_WARN("ChatAgentPanel", "Delete memory failed: " + err);
+                                    cap_set_status(mem_status, ChatAgentPanel::tr("Could not delete: %1").arg(err), true);
+                                }
+                                q->refresh_memory();
+                            });
+                        });
+    });
+    QObject::connect(mem_clear, &QPushButton::clicked, q, [this]() {
+        QPointer<ChatAgentPanel> self(q);
+        mem_confirm.ask(ChatAgentPanel::tr("Delete ALL memory entries? The agent forgets everything it learned about "
+                                           "you."),
+                        ChatAgentPanel::tr("CLEAR ALL"), ChatAgentPanel::tr("KEEP"), [this, self]() {
+                            if (!self)
+                                return;
+                            mem_busy = true;
+                            update_memory_buttons();
+                            ChatModeService::instance().clear_all_memory([this, self](bool ok, QString err) {
+                                if (!self)
+                                    return;
+                                mem_busy = false;
+                                if (!ok) {
+                                    LOG_WARN("ChatAgentPanel", "Clear memory failed: " + err);
+                                    cap_set_status(mem_status, ChatAgentPanel::tr("Could not clear: %1").arg(err), true);
+                                }
+                                q->refresh_memory();
+                            });
+                        });
+    });
+    new rv::RvKeyHook(mem_list, [this](const QKeyEvent* ke, bool apply) {
+        if (ke->key() != Qt::Key_Delete || !mem_del->isEnabled())
+            return false;
+        if (apply)
+            mem_del->click();
+        return true;
+    });
+    for (QWidget* w : {static_cast<QWidget*>(mem_key), static_cast<QWidget*>(mem_value), static_cast<QWidget*>(mem_type)})
+        new rv::RvKeyHook(w, [this](const QKeyEvent* ke, bool apply) {
+            if (ke->key() != Qt::Key_Escape)
+                return false;
+            if (apply) {
+                mem_form->setVisible(false);
+                mem_add->setFocus();
+                update_memory_buttons();
+            }
+            return true;
+        });
 }
 
-// ── Tab switch ────────────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_tab_changed(int index) {
-    stack_->setCurrentIndex(index);
+void ChatAgentPanel::Impl::update_memory_buttons() {
+    if (!mem_list)
+        return;
+    QListWidgetItem* item = mem_list->currentItem();
+    const bool has = item && !item->data(Qt::UserRole).toString().isEmpty() && item->isSelected();
+    mem_del->setEnabled(has && !mem_busy);
+    mem_del->setToolTip(has ? ChatAgentPanel::tr("Delete the selected entry")
+                            : ChatAgentPanel::tr("Select an entry to delete it"));
+    bool any = false;
+    for (int i = 0; i < mem_list->count() && !any; ++i)
+        any = !mem_list->item(i)->data(Qt::UserRole).toString().isEmpty();
+    mem_clear->setEnabled(any && !mem_busy);
+    mem_clear->setToolTip(any ? ChatAgentPanel::tr("Delete every memory entry")
+                              : ChatAgentPanel::tr("There is nothing to clear"));
+    mem_add->setEnabled(!mem_form->isVisible());
+    mem_add->setToolTip(mem_form->isVisible() ? ChatAgentPanel::tr("Finish the entry below first")
+                                              : ChatAgentPanel::tr("Add a memory entry"));
+    const bool complete = !mem_key->text().trimmed().isEmpty() && !mem_value->text().trimmed().isEmpty();
+    mem_save->setEnabled(complete && !mem_busy);
+    mem_save->setToolTip(complete ? ChatAgentPanel::tr("Save the entry")
+                                  : ChatAgentPanel::tr("Fill in both the key and the value"));
+    mem_refresh->setEnabled(!mem_busy);
 }
 
-// ── Refresh methods ───────────────────────────────────────────────────────────
+void ChatAgentPanel::Impl::save_memory() {
+    const QString key = mem_key->text().trimmed();
+    const QString value = mem_value->text().trimmed();
+    const QString type = mem_type->currentData().toString();
+    if (key.isEmpty() || value.isEmpty())
+        return;
+    mem_busy = true;
+    update_memory_buttons();
+    cap_set_status(mem_status, ChatAgentPanel::tr("Saving…"), false);
+    QPointer<ChatAgentPanel> self(q);
+    ChatModeService::instance().save_memory(key, value, type, [this, self](bool ok, QString err) {
+        if (!self)
+            return;
+        mem_busy = false;
+        if (!ok) {
+            LOG_WARN("ChatAgentPanel", "Save memory failed: " + err);
+            cap_set_status(mem_status, ChatAgentPanel::tr("Could not save: %1").arg(err), true);
+            update_memory_buttons();
+            return;
+        }
+        mem_form->setVisible(false);
+        cap_set_status(mem_status, QString(), false);
+        q->refresh_memory();
+    });
+}
 
-// P8: these five run unprompted (constructor, tab switch, language change) and
-// their callbacks are owned by the ChatModeService singleton, which outlives the
-// panel. A window closed with a request in flight used to land in a dangling
-// `this`. QPointer guard on each.
+void ChatAgentPanel::Impl::fill_memory(bool ok, const QVector<AgentMemory>& memories, const QString& err) {
+    mem_list->clear();
+    if (!ok) {
+        LOG_WARN("ChatAgentPanel", "Memory load failed: " + err);
+        cap_placeholder(mem_list, ChatAgentPanel::tr("Not available."), err);
+        cap_set_status(mem_status, ChatAgentPanel::tr("The memory could not be read: %1").arg(err), true);
+    } else if (memories.isEmpty()) {
+        cap_placeholder(mem_list, ChatAgentPanel::tr("No entries yet."));
+    } else {
+        for (const AgentMemory& m : memories) {
+            auto* item = new QListWidgetItem(QStringLiteral("[%1] %2: %3").arg(m.memory_type, m.key, m.value), mem_list);
+            item->setData(Qt::UserRole, m.key);
+            item->setToolTip(m.value);
+        }
+    }
+    update_memory_buttons();
+}
+
+// ── MCP ──────────────────────────────────────────────────────────────────────
+
+void ChatAgentPanel::Impl::build_mcp(QWidget* page) {
+    auto* layout = static_cast<QVBoxLayout*>(page->layout());
+    auto* body = new QWidget(page);
+    layout->addWidget(body);
+    auto* vl = new QVBoxLayout(body);
+    vl->setContentsMargins(8, 8, 8, 8);
+    vl->setSpacing(6);
+
+    mcp_title = cap_label(body, "capTitle");
+    mcp_hint = cap_label(body, "capHint");
+    vl->addWidget(mcp_title);
+    vl->addWidget(mcp_hint);
+
+    mcp_list = new QListWidget(body);
+    mcp_list->setProperty("fincept_agent_risk_keys", "Delete=account"); // agents: Delete removes an MCP server from the agents' tools
+    mcp_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    mcp_list->setWordWrap(true);
+    vl->addWidget(mcp_list, 1);
+
+    mcp_form = new QFrame(body);
+    mcp_form->setObjectName(QStringLiteral("capForm"));
+    auto* fl = new QVBoxLayout(mcp_form);
+    fl->setContentsMargins(8, 6, 8, 6);
+    fl->setSpacing(4);
+    mcp_form_hint = cap_label(mcp_form, "capHint");
+    mcp_name = new QLineEdit(mcp_form);
+    mcp_name->setMaxLength(48);
+    mcp_transport = new QComboBox(mcp_form);
+    // Labels translated; the data values are protocol identifiers.
+    mcp_transport->addItem(QString(), QStringLiteral("streamable-http"));
+    mcp_transport->addItem(QString(), QStringLiteral("sse"));
+    mcp_url = new QLineEdit(mcp_form);
+    auto* fb = new QHBoxLayout;
+    fb->setSpacing(4);
+    mcp_save = cap_button(mcp_form);
+    mcp_save->setProperty("fincept_agent_risk", "account"); // agents: adds / changes an MCP server the agents may call
+    mcp_cancel = cap_button(mcp_form);
+    fb->addWidget(mcp_save);
+    fb->addWidget(mcp_cancel);
+    fb->addStretch();
+    fl->addWidget(mcp_form_hint);
+    fl->addWidget(mcp_name);
+    fl->addWidget(mcp_transport);
+    fl->addWidget(mcp_url);
+    fl->addLayout(fb);
+    mcp_form->setVisible(false);
+    vl->addWidget(mcp_form);
+
+    mcp_confirm.build(body, vl);
+
+    mcp_status = cap_label(body, "capStatus");
+    mcp_status->setVisible(false);
+    vl->addWidget(mcp_status);
+
+    auto* buttons = new QWidget(body);
+    auto* flow = new rv::RvFlowLayout(buttons, 4, 4);
+    mcp_add = cap_button(buttons);
+    mcp_refresh = cap_button(buttons);
+    mcp_del = cap_button(buttons);
+    mcp_del->setProperty("fincept_agent_risk", "account"); // agents: removes an MCP server from the agents' tools
+    for (QPushButton* b : {mcp_add, mcp_refresh, mcp_del})
+        flow->addWidget(b);
+    vl->addWidget(buttons);
+
+    QObject::connect(mcp_list, &QListWidget::itemSelectionChanged, q, [this]() { update_mcp_buttons(); });
+    QObject::connect(mcp_add, &QPushButton::clicked, q, [this]() {
+        mcp_form->setVisible(true);
+        mcp_name->clear();
+        mcp_url->setText(QStringLiteral("https://"));
+        mcp_transport->setCurrentIndex(0);
+        mcp_name->setFocus();
+        update_mcp_buttons();
+    });
+    QObject::connect(mcp_cancel, &QPushButton::clicked, q, [this]() {
+        mcp_form->setVisible(false);
+        update_mcp_buttons();
+    });
+    QObject::connect(mcp_name, &QLineEdit::textChanged, q, [this]() { update_mcp_buttons(); });
+    QObject::connect(mcp_url, &QLineEdit::textChanged, q, [this]() { update_mcp_buttons(); });
+    QObject::connect(mcp_url, &QLineEdit::returnPressed, q, [this]() {
+        if (mcp_save->isEnabled())
+            save_mcp();
+    });
+    QObject::connect(mcp_save, &QPushButton::clicked, q, [this]() { save_mcp(); });
+    QObject::connect(mcp_refresh, &QPushButton::clicked, q, [this]() {
+        mcp_busy = true;
+        update_mcp_buttons();
+        cap_set_status(mcp_status, ChatAgentPanel::tr("Reconnecting the servers…"), false);
+        QPointer<ChatAgentPanel> self(q);
+        ChatModeService::instance().refresh_mcp_servers(
+            [this, self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+                if (!self)
+                    return;
+                mcp_busy = false;
+                if (!ok) {
+                    LOG_WARN("ChatAgentPanel", "Refresh MCP failed: " + err);
+                    cap_set_status(mcp_status, ChatAgentPanel::tr("Could not refresh: %1").arg(err), true);
+                    update_mcp_buttons();
+                    return;
+                }
+                cap_set_status(mcp_status, QString(), false);
+                fill_mcp(true, servers, total_tools, {});
+            });
+    });
+    QObject::connect(mcp_del, &QPushButton::clicked, q, [this]() {
+        QListWidgetItem* item = mcp_list->currentItem();
+        if (!item || item->data(Qt::UserRole + 1).toString() == QLatin1String("global"))
+            return; // shared server: not the user's to remove (the button is disabled for it)
+        const QString name = item->data(Qt::UserRole).toString();
+        if (name.isEmpty())
+            return;
+        QPointer<ChatAgentPanel> self(q);
+        mcp_confirm.ask(ChatAgentPanel::tr("Remove the server “%1”? The cloud agent loses its tools.").arg(name),
+                        ChatAgentPanel::tr("REMOVE"), ChatAgentPanel::tr("KEEP"), [this, self, name]() {
+                            if (!self)
+                                return;
+                            mcp_busy = true;
+                            update_mcp_buttons();
+                            ChatModeService::instance().delete_mcp_server(name, [this, self](bool ok, QString err) {
+                                if (!self)
+                                    return;
+                                mcp_busy = false;
+                                if (!ok) {
+                                    LOG_WARN("ChatAgentPanel", "Delete MCP server failed: " + err);
+                                    cap_set_status(mcp_status, ChatAgentPanel::tr("Could not remove: %1").arg(err),
+                                                   true);
+                                }
+                                q->refresh_mcp_servers();
+                            });
+                        });
+    });
+    new rv::RvKeyHook(mcp_list, [this](const QKeyEvent* ke, bool apply) {
+        if (ke->key() != Qt::Key_Delete || !mcp_del->isEnabled())
+            return false;
+        if (apply)
+            mcp_del->click();
+        return true;
+    });
+    for (QWidget* w : {static_cast<QWidget*>(mcp_name), static_cast<QWidget*>(mcp_transport),
+                       static_cast<QWidget*>(mcp_url)})
+        new rv::RvKeyHook(w, [this](const QKeyEvent* ke, bool apply) {
+            if (ke->key() != Qt::Key_Escape)
+                return false;
+            if (apply) {
+                mcp_form->setVisible(false);
+                mcp_add->setFocus();
+                update_mcp_buttons();
+            }
+            return true;
+        });
+}
+
+void ChatAgentPanel::Impl::update_mcp_buttons() {
+    if (!mcp_list)
+        return;
+    QListWidgetItem* item = mcp_list->currentItem();
+    const bool has = item && item->isSelected() && !item->data(Qt::UserRole).toString().isEmpty();
+    const bool shared = has && item->data(Qt::UserRole + 1).toString() == QLatin1String("global");
+    mcp_del->setEnabled(has && !shared && !mcp_busy);
+    mcp_del->setToolTip(!has     ? ChatAgentPanel::tr("Select a server to remove it")
+                        : shared ? ChatAgentPanel::tr("Shared server, managed by Fincept: it cannot be removed")
+                                 : ChatAgentPanel::tr("Remove the selected server"));
+    mcp_add->setEnabled(!mcp_form->isVisible() && !mcp_busy);
+    mcp_refresh->setEnabled(!mcp_busy);
+    static const QRegularExpression kName(QStringLiteral("^[a-z0-9][a-z0-9-]{1,47}$"));
+    const bool name_ok = kName.match(mcp_name->text().trimmed()).hasMatch();
+    const QUrl url(mcp_url->text().trimmed(), QUrl::StrictMode);
+    const bool url_ok = url.isValid() && url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0 &&
+                        !url.host().isEmpty();
+    mcp_save->setEnabled(name_ok && url_ok && !mcp_busy);
+    mcp_save->setToolTip(!name_ok  ? ChatAgentPanel::tr("Name: 2-48 characters of lowercase letters, digits and '-'")
+                         : !url_ok ? ChatAgentPanel::tr("Enter a full https:// URL, e.g. https://mcp.example.com/mcp")
+                                   : ChatAgentPanel::tr("Add the server"));
+}
+
+void ChatAgentPanel::Impl::save_mcp() {
+    QJsonObject config;
+    config[QStringLiteral("transport")] = mcp_transport->currentData().toString();
+    config[QStringLiteral("url")] = mcp_url->text().trimmed();
+    const QString name = mcp_name->text().trimmed();
+    mcp_busy = true;
+    update_mcp_buttons();
+    cap_set_status(mcp_status, ChatAgentPanel::tr("Adding and connecting the server…"), false);
+    QPointer<ChatAgentPanel> self(q);
+    ChatModeService::instance().add_mcp_server(name, config, [this, self](bool ok, McpServer srv, QString err) {
+        if (!self)
+            return;
+        mcp_busy = false;
+        if (!ok) {
+            cap_set_status(mcp_status, err, true); // the backend's own explanation
+            update_mcp_buttons();
+            return;
+        }
+        mcp_form->setVisible(false);
+        if (srv.status == QLatin1String("error"))
+            cap_set_status(mcp_status,
+                           ChatAgentPanel::tr("'%1' was added but could not be connected: %2")
+                               .arg(srv.name, srv.error.isEmpty() ? ChatAgentPanel::tr("connection failed") : srv.error),
+                           true);
+        else
+            cap_set_status(mcp_status, ChatAgentPanel::tr("'%1' was added.").arg(srv.name), false);
+        q->refresh_mcp_servers();
+    });
+}
+
+void ChatAgentPanel::Impl::fill_mcp(bool ok, const QVector<McpServer>& servers, int total_tools, const QString& err) {
+    mcp_list->clear();
+    if (!ok) {
+        LOG_WARN("ChatAgentPanel", "MCP load failed: " + err);
+        mcp_total_tools = -1;
+        mcp_servers.clear();
+        cap_placeholder(mcp_list, ChatAgentPanel::tr("Not available."), err);
+        mcp_hint->setText(ChatAgentPanel::tr("MCP not available."));
+        update_mcp_buttons();
+        emit q->mcp_state_changed(-1, -1);
+        return;
+    }
+    mcp_servers = servers;
+    mcp_total_tools = total_tools;
+    mcp_hint->setText(ChatAgentPanel::tr("%1 server(s) | %2 tools").arg(servers.size()).arg(total_tools));
+    if (servers.isEmpty())
+        cap_placeholder(mcp_list, ChatAgentPanel::tr("No servers connected."));
+    for (const McpServer& s : servers) {
+        auto* item = new QListWidgetItem(mcp_list);
+        QString name = s.name;
+        if (s.is_shared())
+            name += ChatAgentPanel::tr(" (shared)");
+        item->setText(ChatAgentPanel::tr("%1\n  %2 | %3 tools").arg(name, s.status).arg(s.tools_count));
+        item->setData(Qt::UserRole, s.name);
+        item->setData(Qt::UserRole + 1, s.scope);
+        item->setData(kCapStatusRole, s.status);
+        QString tip = s.is_shared() ? ChatAgentPanel::tr("Shared server, managed by Fincept") : QString();
+        if (!s.error.isEmpty())
+            tip += (tip.isEmpty() ? QString() : QStringLiteral("\n")) + s.error;
+        item->setToolTip(tip);
+        item->setForeground(cap_mcp_color(s.status));
+    }
+    update_mcp_buttons();
+    int connected = 0;
+    for (const McpServer& s : servers)
+        if (s.status == QLatin1String("connected"))
+            ++connected;
+    emit q->mcp_state_changed(connected, static_cast<int>(servers.size()));
+}
+
+// ── ChatAgentPanel ───────────────────────────────────────────────────────────
+
+ChatAgentPanel::ChatAgentPanel(QWidget* parent, AgentPanelPages pages)
+    : QWidget(parent), d_(std::make_unique<Impl>()) {
+    d_->q = this;
+    d_->kind = pages;
+    d_->build();
+    d_->retranslate();
+    // Server rows carry their status colour as an item brush. (The panel's own
+    // stylesheet is kept in step by the theme manager's re-style pass: no
+    // setStyleSheet() in a theme_changed handler.)
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        if (!d_->mcp_list)
+            return;
+        for (int i = 0; i < d_->mcp_list->count(); ++i) {
+            QListWidgetItem* item = d_->mcp_list->item(i);
+            const QVariant status = item->data(kCapStatusRole);
+            if (status.isValid())
+                item->setForeground(cap_mcp_color(status.toString()));
+        }
+    });
+    // The page picked last (any window) — only the shown page is built, on show.
+    const int last = std::max(0, d_->tab_of(d_->initial_page()));
+    {
+        const QSignalBlocker block(d_->tabs);
+        d_->tabs->setCurrentIndex(last);
+    }
+    d_->stack->setCurrentIndex(last);
+}
+
+ChatAgentPanel::~ChatAgentPanel() = default;
+
+AgentPanelPages ChatAgentPanel::pages() const {
+    return d_->kind;
+}
+
+void ChatAgentPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Nothing loads before the panel is on screen (no request before login).
+    const int index = d_->tabs->currentIndex();
+    const int page = d_->page_at(index);
+    if (page < 0)
+        return;
+    if (!d_->built[static_cast<size_t>(page)]) {
+        d_->show_tab(index); // builds it (and loads memory / MCP for those pages)
+        return;
+    }
+    if (page == kCapMemory)
+        refresh_memory();
+    else if (page == kCapMcp)
+        refresh_mcp_servers();
+}
+
+void ChatAgentPanel::set_context_bar(ComposerContextBar* bar) {
+    d_->context_bar = bar;
+    if (d_->context)
+        d_->context->set_context_bar(bar);
+}
+
+bool ChatAgentPanel::show_page(const QString& id) {
+    const int tab = d_->tab_of(cap_page_from_id(id.trimmed().toLower()));
+    if (tab < 0)
+        return false;
+    if (d_->tabs->currentIndex() != tab) {
+        d_->tabs->setCurrentIndex(tab); // currentChanged: builds, remembers, page_changed()
+    } else {
+        // Already the current tab: make sure it is built (a panel not shown yet builds on show).
+        if (isVisible())
+            d_->show_tab(tab);
+    }
+    return true;
+}
+
+QString ChatAgentPanel::current_page() const {
+    return QString::fromLatin1(cap_page_id(d_->page_at(d_->tabs->currentIndex())));
+}
+
+void ChatAgentPanel::set_tabs_visible(bool visible) {
+    if (d_->tabs->isVisibleTo(this) != visible)
+        d_->tabs->setVisible(visible);
+}
+
+void ChatAgentPanel::focus_page() {
+    const int index = d_->tabs->currentIndex();
+    const int page = d_->page_at(index);
+    if (page < 0)
+        return;
+    d_->show_tab(index);
+    switch (page) {
+        case kCapContext:
+            if (d_->context) {
+                d_->context->focus_first();
+                return;
+            }
+            break;
+        case kCapMemory:
+            if (d_->mem_list) {
+                d_->mem_list->setFocus(Qt::OtherFocusReason);
+                return;
+            }
+            break;
+        case kCapMcp:
+            if (d_->mcp_list) {
+                d_->mcp_list->setFocus(Qt::OtherFocusReason);
+                return;
+            }
+            break;
+        default:
+            break;
+    }
+    // PLAN / ACTIVITY / FILES: the first control that takes the Tab key — a list first.
+    QWidget* host = d_->pages[static_cast<size_t>(page)];
+    QWidget* first = nullptr;
+    for (QWidget* w : host->findChildren<QWidget*>()) {
+        if (!w->isVisibleTo(host) || !w->isEnabled() || !(w->focusPolicy() & Qt::TabFocus))
+            continue;
+        if (qobject_cast<QAbstractItemView*>(w)) {
+            first = w;
+            break;
+        }
+        if (!first)
+            first = w;
+    }
+    if (first)
+        first->setFocus(Qt::OtherFocusReason);
+    else
+        d_->tabs->setFocus(Qt::OtherFocusReason);
+}
 
 void ChatAgentPanel::refresh_memory() {
+    if (!d_->mem_list)
+        return; // the tab was never opened
+    cap_set_status(d_->mem_status, QString(), false);
     QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().list_memory([this, self](bool ok, QVector<AgentMemory> memories, QString err) {
-        if (!self)
-            return; // panel destroyed while the request was in flight
-        memory_list_->clear();
-        if (!ok) {
-            auto* item = new QListWidgetItem(tr("Not available."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            memory_list_->addItem(item);
-            LOG_WARN("ChatAgentPanel", "Memory load failed: " + err);
-            return;
-        }
-        memories_ = std::move(memories);
-        if (memories_.isEmpty()) {
-            auto* item = new QListWidgetItem(tr("No entries yet."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            memory_list_->addItem(item);
-            return;
-        }
-        for (const auto& m : memories_) {
-            auto* item = new QListWidgetItem(memory_list_);
-            item->setText(QString("[%1] %2: %3").arg(m.memory_type, m.key, m.value));
-            item->setData(Qt::UserRole, m.key);
-        }
-    });
-}
-
-void ChatAgentPanel::refresh_schedules() {
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().list_schedules([this, self](bool ok, QVector<AgentSchedule> schedules, QString err) {
-        if (!self)
-            return;
-        sched_list_->clear();
-        if (!ok) {
-            auto* item = new QListWidgetItem(tr("Not available."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            sched_list_->addItem(item);
-            LOG_WARN("ChatAgentPanel", "Schedules load failed: " + err);
-            return;
-        }
-        schedules_ = std::move(schedules);
-        if (schedules_.isEmpty()) {
-            auto* item = new QListWidgetItem(tr("No schedules yet."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            sched_list_->addItem(item);
-            return;
-        }
-        for (const auto& s : schedules_) {
-            auto* item = new QListWidgetItem(sched_list_);
-            const QString icon = (s.status == "active") ? ">" : "||";
-            item->setText(QString("%1 %2\n  %3").arg(icon, s.query.left(30), s.cron_expression));
-            item->setData(Qt::UserRole, s.schedule_id);
-            item->setData(Qt::UserRole + 1, s.status);
-        }
-    });
-}
-
-void ChatAgentPanel::refresh_tasks() {
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().list_tasks([this, self](bool ok, QVector<AgentTask> tasks, QString err) {
-        if (!self)
-            return;
-        task_list_->clear();
-        if (!ok) {
-            auto* item = new QListWidgetItem(tr("Not available."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            task_list_->addItem(item);
-            LOG_WARN("ChatAgentPanel", "Tasks load failed: " + err);
-            return;
-        }
-        tasks_ = std::move(tasks);
-        task_status_lbl_->setText(tr("%1 task(s)").arg(tasks_.size()));
-        if (tasks_.isEmpty()) {
-            auto* item = new QListWidgetItem(tr("No tasks yet."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            task_list_->addItem(item);
-            return;
-        }
-        for (const auto& t : tasks_) {
-            auto* item = new QListWidgetItem(task_list_);
-            const QString icon = t.status == "completed"   ? "[OK]"
-                                 : t.status == "error"     ? "[!]"
-                                 : t.status == "cancelled" ? "[x]"
-                                 : t.status == "running"   ? "[..]"
-                                                           : "[.]";
-            item->setText(QString("%1 %2\n  %3").arg(icon, t.query.left(35), t.status));
-            item->setData(Qt::UserRole, t.task_id);
-            // Color by status
-            if (t.status == "completed")
-                item->setForeground(QColor(ui::colors::POSITIVE()));
-            else if (t.status == "error")
-                item->setForeground(QColor(ui::colors::NEGATIVE()));
-            else if (t.status == "running")
-                item->setForeground(QColor(ui::colors::AMBER()));
-        }
+    ChatModeService::instance().list_memory([self](bool ok, QVector<AgentMemory> memories, QString err) {
+        if (self)
+            self->d_->fill_memory(ok, memories, err);
     });
 }
 
 void ChatAgentPanel::refresh_mcp_servers() {
+    if (!d_->mcp_list)
+        return;
     QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().list_mcp_servers(
-        [this, self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
-            if (!self)
-                return;
-            mcp_list_->clear();
-            if (!ok) {
-                auto* item = new QListWidgetItem(tr("Not available."));
-                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-                mcp_list_->addItem(item);
-                mcp_tools_lbl_->setText(tr("MCP not available."));
-                LOG_WARN("ChatAgentPanel", "MCP load failed: " + err);
-                return;
-            }
-            mcp_servers_ = std::move(servers);
-            mcp_tools_lbl_->setText(tr("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
-
-            if (mcp_servers_.isEmpty()) {
-                auto* item = new QListWidgetItem(tr("No servers connected."));
-                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-                mcp_list_->addItem(item);
-                return;
-            }
-            for (const auto& s : mcp_servers_) {
-                auto* item = new QListWidgetItem(mcp_list_);
-                item->setText(tr("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
-                item->setData(Qt::UserRole, s.name);
-                if (s.status == "connected")
-                    item->setForeground(QColor(ui::colors::POSITIVE()));
-                else if (s.status == "error")
-                    item->setForeground(QColor(ui::colors::NEGATIVE()));
-                else
-                    item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
-            }
+        [self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+            if (self)
+                self->d_->fill_mcp(ok, servers, total_tools, err);
         });
 }
 
-void ChatAgentPanel::refresh_monitors() {
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().list_monitors([this, self](bool ok, QVector<AgentMonitor> monitors, QString err) {
-        if (!self)
-            return;
-        monitor_list_->clear();
-        if (!ok) {
-            auto* item = new QListWidgetItem(tr("Not available."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            monitor_list_->addItem(item);
-            LOG_WARN("ChatAgentPanel", "Monitors load failed: " + err);
-            return;
-        }
-        monitors_ = std::move(monitors);
-        if (monitors_.isEmpty()) {
-            auto* item = new QListWidgetItem(tr("No monitors configured."));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            monitor_list_->addItem(item);
-            return;
-        }
-        for (const auto& m : monitors_) {
-            auto* item = new QListWidgetItem(monitor_list_);
-            const QString icon = (m.status == "active") ? ">" : "||";
-            item->setText(QString("%1 %2\n  %3 | %4s").arg(icon, m.name, m.source_type).arg(m.check_interval_seconds));
-            item->setData(Qt::UserRole, m.monitor_id);
-            item->setData(Qt::UserRole + 1, m.status);
-            if (m.status == "active")
-                item->setForeground(QColor(ui::colors::POSITIVE()));
-        }
-    });
+void ChatAgentPanel::set_current_run(const QString& run_id) {
+    d_->run_id = run_id;
+    if (d_->context)
+        d_->context->set_run(run_id);
+    if (d_->plan)
+        d_->plan->set_run(run_id);
+    if (d_->activity)
+        d_->activity->set_run(run_id);
+    if (d_->artefacts)
+        d_->artefacts->set_run(run_id);
 }
 
-// ── Memory actions ────────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_add_memory() {
-    bool ok = false;
-    const QString key = QInputDialog::getText(this, tr("Add Memory"), tr("Key:"), QLineEdit::Normal, {}, &ok);
-    if (!ok || key.trimmed().isEmpty())
-        return;
-
-    const QString value =
-        QInputDialog::getText(this, tr("Add Memory"), tr("Value for \"%1\":").arg(key), QLineEdit::Normal, {}, &ok);
-    if (!ok || value.trimmed().isEmpty())
-        return;
-
-    // Memory-type values are stored keys passed to the service — not translated.
-    const QStringList types = {"fact", "preference", "entity"};
-    const QString type = QInputDialog::getItem(this, tr("Type"), tr("Memory type:"), types, 0, false, &ok);
-    if (!ok)
-        return;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().save_memory(key.trimmed(), value.trimmed(), type,
-                                            [this, self](bool saved_ok, QString err) {
-                                                if (!self)
-                                                    return;
-                                                if (!saved_ok) {
-                                                    LOG_WARN("ChatAgentPanel", "Save memory failed: " + err);
-                                                    agent_panel_warn_failed(this, tr("Add Memory"), err);
-                                                }
-                                                refresh_memory();
-                                            });
+QString ChatAgentPanel::current_run() const {
+    return d_->run_id;
 }
-
-void ChatAgentPanel::on_delete_memory() {
-    auto* item = memory_list_->currentItem();
-    if (!item)
-        return;
-    const QString key = item->data(Qt::UserRole).toString();
-    if (QMessageBox::question(this, tr("Delete Memory"), tr("Delete \"%1\"?").arg(key),
-                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().delete_memory(key, [this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Delete memory failed: " + err);
-            agent_panel_warn_failed(this, tr("Delete Memory"), err);
-        }
-        refresh_memory();
-    });
-}
-
-void ChatAgentPanel::on_clear_all_memory() {
-    if (QMessageBox::question(this, tr("Clear Memory"), tr("Delete ALL memory entries?"),
-                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().clear_all_memory([this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Clear memory failed: " + err);
-            agent_panel_warn_failed(this, tr("Clear Memory"), err);
-        }
-        refresh_memory();
-    });
-}
-
-// ── Schedule actions ──────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_add_schedule() {
-    bool ok = false;
-    const QString query = QInputDialog::getText(this, tr("New Schedule"), tr("Query:"), QLineEdit::Normal, {}, &ok);
-    if (!ok || query.trimmed().isEmpty())
-        return;
-
-    const QString cron = QInputDialog::getText(this, tr("New Schedule"), tr("Cron (e.g. 0 9 * * 1-5):"),
-                                               QLineEdit::Normal, "0 9 * * 1-5", &ok);
-    if (!ok || cron.trimmed().isEmpty())
-        return;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().create_schedule(query.trimmed(), cron.trimmed(), {},
-                                                [this, self](bool created_ok, AgentSchedule, QString err) {
-                                                    if (!self)
-                                                        return;
-                                                    if (!created_ok) {
-                                                        LOG_WARN("ChatAgentPanel", "Create schedule failed: " + err);
-                                                        agent_panel_warn_failed(this, tr("New Schedule"), err);
-                                                    }
-                                                    refresh_schedules();
-                                                });
-}
-
-void ChatAgentPanel::on_delete_schedule() {
-    auto* item = sched_list_->currentItem();
-    if (!item)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().delete_schedule(item->data(Qt::UserRole).toString(),
-                                                [this, self](bool ok, QString err) {
-                                                    if (!self)
-                                                        return;
-                                                    if (!ok) {
-                                                        LOG_WARN("ChatAgentPanel", "Delete schedule failed: " + err);
-                                                        agent_panel_warn_failed(this, tr("Delete Schedule"), err);
-                                                    }
-                                                    refresh_schedules();
-                                                });
-}
-
-void ChatAgentPanel::on_toggle_schedule() {
-    auto* item = sched_list_->currentItem();
-    if (!item)
-        return;
-    const QString id = item->data(Qt::UserRole).toString();
-    const QString status = item->data(Qt::UserRole + 1).toString();
-    QPointer<ChatAgentPanel> self = this;
-    auto cb = [this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Toggle schedule failed: " + err);
-            agent_panel_warn_failed(this, tr("Schedule"), err);
-        }
-        refresh_schedules();
-    };
-    if (status == "active")
-        ChatModeService::instance().pause_schedule(id, cb);
-    else
-        ChatModeService::instance().resume_schedule(id, cb);
-}
-
-// ── Task actions ──────────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_add_task() {
-    bool ok = false;
-    const QString query = QInputDialog::getMultiLineText(this, tr("New Background Task"),
-                                                         tr("What should the agent work on?"), {}, &ok);
-    if (!ok || query.trimmed().isEmpty())
-        return;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().create_task(query.trimmed(), {}, [this, self](bool created_ok, AgentTask, QString err) {
-        if (!self)
-            return;
-        if (!created_ok) {
-            LOG_WARN("ChatAgentPanel", "Create task failed: " + err);
-            agent_panel_warn_failed(this, tr("New Task"), err);
-        }
-        refresh_tasks();
-    });
-}
-
-void ChatAgentPanel::on_refresh_tasks() {
-    refresh_tasks();
-}
-
-void ChatAgentPanel::on_cancel_task() {
-    auto* item = task_list_->currentItem();
-    if (!item)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().cancel_task(item->data(Qt::UserRole).toString(), [this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Cancel task failed: " + err);
-            agent_panel_warn_failed(this, tr("Cancel Task"), err);
-        }
-        refresh_tasks();
-    });
-}
-
-void ChatAgentPanel::on_view_task_detail() {
-    auto* item = task_list_->currentItem();
-    if (!item)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().get_task(
-        item->data(Qt::UserRole).toString(), [this, self](bool ok, AgentTask task, QString err) {
-            if (!self)
-                return;
-            if (!ok) {
-                QMessageBox::warning(this, tr("Task"), tr("Failed: %1").arg(err));
-                return;
-            }
-            QString info = tr("ID: %1\nQuery: %2\nStatus: %3\n"
-                              "Created: %4\nStarted: %5\nCompleted: %6\n\n"
-                              "Result:\n%7")
-                               .arg(task.task_id, task.query, task.status, task.created_at, task.started_at,
-                                    task.completed_at, task.result.isEmpty() ? tr("(none)") : task.result.left(2000));
-            QMessageBox::information(this, tr("Task Detail"), info);
-        });
-}
-
-void ChatAgentPanel::on_send_feedback() {
-    auto* item = task_list_->currentItem();
-    if (!item)
-        return;
-    bool ok = false;
-    const QString feedback =
-        QInputDialog::getText(this, tr("Task Feedback"), tr("Feedback:"), QLineEdit::Normal, {}, &ok);
-    if (!ok || feedback.trimmed().isEmpty())
-        return;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().send_task_feedback(item->data(Qt::UserRole).toString(), feedback.trimmed(),
-                                                   [this, self](bool sent_ok, QString err) {
-                                                       if (!self)
-                                                           return;
-                                                       if (!sent_ok) {
-                                                           LOG_WARN("ChatAgentPanel", "Feedback failed: " + err);
-                                                           agent_panel_warn_failed(this, tr("Feedback"), err);
-                                                       } else
-                                                           QMessageBox::information(this, tr("Feedback"), tr("Sent."));
-                                                   });
-}
-
-// ── MCP Server actions ────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_add_mcp_server() {
-    // The cloud agent only accepts REMOTE MCP servers from users: an https URL over
-    // streamable-http or SSE. Local (stdio) servers run on this machine and are
-    // configured in the terminal's own MCP Servers screen, not here.
-    bool ok = false;
-    const QString name = QInputDialog::getText(
-        this, tr("Add Remote MCP Server"),
-        tr("The cloud agent can use remote MCP servers reachable over https.\n"
-           "Local (stdio) servers such as uvx / npx commands run on your machine: add them in the\n"
-           "terminal's MCP Servers screen instead.\n\n"
-           "Server name (2-48 characters: lowercase letters, digits and '-'):"),
-        QLineEdit::Normal, {}, &ok);
-    if (!ok || name.trimmed().isEmpty())
-        return;
-
-    // Display labels are translated; the matching wire values are protocol identifiers.
-    const QStringList transport_labels = {tr("Streamable HTTP (recommended)"), tr("SSE (Server-Sent Events)")};
-    const QStringList transport_ids = {QStringLiteral("streamable-http"), QStringLiteral("sse")};
-    const QString picked =
-        QInputDialog::getItem(this, tr("Transport"), tr("Remote transport:"), transport_labels, 0, false, &ok);
-    if (!ok)
-        return;
-    const int transport_index = transport_labels.indexOf(picked);
-    if (transport_index < 0)
-        return;
-
-    const QString url_text =
-        QInputDialog::getText(this, tr("Server URL"), tr("https:// URL of the MCP server endpoint:"),
-                              QLineEdit::Normal, QStringLiteral("https://"), &ok)
-            .trimmed();
-    if (!ok || url_text.isEmpty() || url_text == QStringLiteral("https://"))
-        return;
-    const QUrl url(url_text, QUrl::StrictMode);
-    if (!url.isValid() || url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0 ||
-        url.host().isEmpty()) {
-        QMessageBox::warning(this, tr("MCP Server"),
-                             tr("Enter a full https:// URL (for example https://mcp.example.com/mcp).\n\n"
-                                "Local stdio servers are configured in the terminal's MCP Servers screen."));
-        return;
-    }
-
-    QJsonObject config;
-    config["transport"] = transport_ids.at(transport_index);
-    config["url"] = url_text;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().add_mcp_server(
-        name.trimmed(), config, [this, self](bool added_ok, McpServer srv, QString err) {
-            if (!self)
-                return;
-            if (!added_ok) {
-                // err is the backend's own explanation (shown verbatim).
-                QMessageBox::warning(this, tr("MCP Server"), err);
-                return;
-            }
-            if (srv.status == "error") {
-                const QString reason = srv.error.isEmpty() ? tr("connection failed") : srv.error;
-                QMessageBox::warning(this, tr("MCP Server"),
-                                     tr("'%1' was added but could not be connected:\n\n%2").arg(srv.name, reason));
-            }
-            refresh_mcp_servers();
-        });
-}
-
-void ChatAgentPanel::on_delete_mcp_server() {
-    auto* item = mcp_list_->currentItem();
-    if (!item)
-        return;
-    const QString name = item->data(Qt::UserRole).toString();
-    if (QMessageBox::question(this, tr("Remove Server"), tr("Remove \"%1\"?").arg(name),
-                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().delete_mcp_server(name, [this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Delete MCP server failed: " + err);
-            agent_panel_warn_failed(this, tr("Remove Server"), err);
-        }
-        refresh_mcp_servers();
-    });
-}
-
-void ChatAgentPanel::on_refresh_mcp_servers() {
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().refresh_mcp_servers(
-        [this, self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
-            if (!self)
-                return;
-            if (!ok) {
-                LOG_WARN("ChatAgentPanel", "Refresh MCP failed: " + err);
-                agent_panel_warn_failed(this, tr("MCP Server"), err);
-                return;
-            }
-            mcp_servers_ = std::move(servers);
-            mcp_list_->clear();
-            mcp_tools_lbl_->setText(tr("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
-            if (mcp_servers_.isEmpty()) {
-                auto* item = new QListWidgetItem(tr("No servers connected."));
-                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-                mcp_list_->addItem(item);
-                return;
-            }
-            for (const auto& s : mcp_servers_) {
-                auto* item = new QListWidgetItem(mcp_list_);
-                item->setText(tr("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
-                item->setData(Qt::UserRole, s.name);
-                if (s.status == "connected")
-                    item->setForeground(QColor(ui::colors::POSITIVE()));
-                else if (s.status == "error")
-                    item->setForeground(QColor(ui::colors::NEGATIVE()));
-                else
-                    item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
-            }
-        });
-}
-
-// ── Monitor actions ───────────────────────────────────────────────────────────
-
-void ChatAgentPanel::on_add_monitor() {
-    bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("New Monitor"), tr("Name:"), QLineEdit::Normal, {}, &ok);
-    if (!ok || name.trimmed().isEmpty())
-        return;
-
-    // Source-type values are data-source identifiers passed to the service — not translated.
-    const QStringList types = {"equity", "macro", "news"};
-    const QString source_type = QInputDialog::getItem(this, tr("Source"), tr("Data source:"), types, 0, false, &ok);
-    if (!ok)
-        return;
-
-    const QString analysis =
-        QInputDialog::getText(this, tr("Analysis"), tr("What should the agent analyze?:"), QLineEdit::Normal, {}, &ok);
-    if (!ok || analysis.trimmed().isEmpty())
-        return;
-
-    const int interval =
-        QInputDialog::getInt(this, tr("Interval"), tr("Check interval (seconds):"), 300, 60, 86400, 60, &ok);
-    if (!ok)
-        return;
-
-    QJsonObject source_config;
-    if (source_type == "equity") {
-        const QString sym = QInputDialog::getText(this, tr("Symbol"), tr("Symbol:"), QLineEdit::Normal, {}, &ok);
-        if (!ok || sym.trimmed().isEmpty())
-            return;
-        source_config["symbol"] = sym.trimmed();
-    } else if (source_type == "macro") {
-        const QString ind = QInputDialog::getText(this, tr("Indicator"), tr("Indicator:"), QLineEdit::Normal, {}, &ok);
-        if (!ok || ind.trimmed().isEmpty())
-            return;
-        source_config["indicator"] = ind.trimmed();
-    } else {
-        const QString q = QInputDialog::getText(this, tr("Query"), tr("News query:"), QLineEdit::Normal, {}, &ok);
-        if (!ok || q.trimmed().isEmpty())
-            return;
-        source_config["query"] = q.trimmed();
-    }
-
-    QJsonObject trigger_config;
-    // "any" is the stable default condition value sent to the service — not translated.
-    const QString cond = QInputDialog::getText(this, tr("Trigger"), tr("Condition:"), QLineEdit::Normal, "any", &ok);
-    if (!ok)
-        return;
-    trigger_config["condition"] = cond;
-
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().create_monitor(
-        name.trimmed(), source_type, source_config, trigger_config, analysis.trimmed(), interval, {},
-        [this, self](bool created_ok, AgentMonitor, QString err) {
-            if (!self)
-                return;
-            if (!created_ok)
-                QMessageBox::warning(this, tr("Monitor"), tr("Failed: %1").arg(err));
-            refresh_monitors();
-        });
-}
-
-void ChatAgentPanel::on_delete_monitor() {
-    auto* item = monitor_list_->currentItem();
-    if (!item)
-        return;
-    if (QMessageBox::question(this, tr("Delete Monitor"), tr("Delete?"), QMessageBox::Yes | QMessageBox::No) !=
-        QMessageBox::Yes)
-        return;
-    QPointer<ChatAgentPanel> self = this;
-    ChatModeService::instance().delete_monitor(item->data(Qt::UserRole).toString(),
-                                               [this, self](bool ok, QString err) {
-                                                   if (!self)
-                                                       return;
-                                                   if (!ok) {
-                                                       LOG_WARN("ChatAgentPanel", "Delete monitor failed: " + err);
-                                                       agent_panel_warn_failed(this, tr("Delete Monitor"), err);
-                                                   }
-                                                   refresh_monitors();
-                                               });
-}
-
-void ChatAgentPanel::on_toggle_monitor() {
-    auto* item = monitor_list_->currentItem();
-    if (!item)
-        return;
-    const QString id = item->data(Qt::UserRole).toString();
-    const QString status = item->data(Qt::UserRole + 1).toString();
-    QPointer<ChatAgentPanel> self = this;
-    auto cb = [this, self](bool ok, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatAgentPanel", "Toggle monitor failed: " + err);
-            agent_panel_warn_failed(this, tr("Monitor"), err);
-        }
-        refresh_monitors();
-    };
-    if (status == "active")
-        ChatModeService::instance().pause_monitor(id, cb);
-    else
-        ChatModeService::instance().resume_monitor(id, cb);
-}
-
-// ── Re-translation ──────────────────────────────────────────────────────────
 
 void ChatAgentPanel::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
+        d_->retranslate();
     QWidget::changeEvent(event);
-}
-
-void ChatAgentPanel::retranslateUi() {
-    // Tab bar
-    if (tab_bar_ && tab_bar_->count() >= 5) {
-        tab_bar_->setTabText(0, tr("Mem"));
-        tab_bar_->setTabText(1, tr("Sched"));
-        tab_bar_->setTabText(2, tr("Tasks"));
-        tab_bar_->setTabText(3, tr("MCP"));
-        tab_bar_->setTabText(4, tr("Monitor"));
-    }
-
-    // Section titles + hints
-    if (mem_title_)
-        mem_title_->setText(tr("AGENT MEMORY"));
-    if (sched_title_)
-        sched_title_->setText(tr("SCHEDULED QUERIES"));
-    if (sched_hint_)
-        sched_hint_->setText(tr("Cron-based agent queries (e.g. daily 9 AM)."));
-    if (tasks_title_)
-        tasks_title_->setText(tr("BACKGROUND TASKS"));
-    if (mcp_title_)
-        mcp_title_->setText(tr("MCP SERVERS"));
-    if (mon_title_)
-        mon_title_->setText(tr("DATA MONITORS"));
-    if (mon_hint_)
-        mon_hint_->setText(tr("Watch sources, trigger agent analysis."));
-
-    // Buttons (text + tooltip)
-    if (mem_add_btn_) {
-        mem_add_btn_->setText(tr("+ Add"));
-        mem_add_btn_->setToolTip(tr("Add memory entry"));
-    }
-    if (mem_del_btn_) {
-        mem_del_btn_->setText(tr("Delete"));
-        mem_del_btn_->setToolTip(tr("Delete selected"));
-    }
-    if (mem_clear_btn_) {
-        mem_clear_btn_->setText(tr("Clear"));
-        mem_clear_btn_->setToolTip(tr("Clear all memory"));
-    }
-    if (sched_add_btn_) {
-        sched_add_btn_->setText(tr("+ Add"));
-        sched_add_btn_->setToolTip(tr("Create schedule"));
-    }
-    if (sched_del_btn_) {
-        sched_del_btn_->setText(tr("Delete"));
-        sched_del_btn_->setToolTip(tr("Delete selected"));
-    }
-    if (sched_toggle_btn_) {
-        sched_toggle_btn_->setText(tr("Pause"));
-        sched_toggle_btn_->setToolTip(tr("Pause/resume"));
-    }
-    if (task_add_btn_) {
-        task_add_btn_->setText(tr("+ New"));
-        task_add_btn_->setToolTip(tr("Run a long agent query in the background"));
-    }
-    if (task_refresh_btn_) {
-        task_refresh_btn_->setText(tr("Refresh"));
-        task_refresh_btn_->setToolTip(tr("Refresh task list"));
-    }
-    if (task_detail_btn_) {
-        task_detail_btn_->setText(tr("Detail"));
-        task_detail_btn_->setToolTip(tr("View task result"));
-    }
-    if (task_feedback_btn_) {
-        task_feedback_btn_->setText(tr("Feedback"));
-        task_feedback_btn_->setToolTip(tr("Send feedback"));
-    }
-    if (task_cancel_btn_) {
-        task_cancel_btn_->setText(tr("Cancel"));
-        task_cancel_btn_->setToolTip(tr("Cancel task"));
-    }
-    if (mcp_add_btn_) {
-        mcp_add_btn_->setText(tr("+ Add"));
-        mcp_add_btn_->setToolTip(tr("Add MCP server"));
-    }
-    if (mcp_del_btn_) {
-        mcp_del_btn_->setText(tr("Delete"));
-        mcp_del_btn_->setToolTip(tr("Remove selected"));
-    }
-    if (mcp_refresh_btn_) {
-        mcp_refresh_btn_->setText(tr("Refresh"));
-        mcp_refresh_btn_->setToolTip(tr("Refresh all"));
-    }
-    if (mon_add_btn_) {
-        mon_add_btn_->setText(tr("+ Add"));
-        mon_add_btn_->setToolTip(tr("Create monitor"));
-    }
-    if (mon_del_btn_) {
-        mon_del_btn_->setText(tr("Delete"));
-        mon_del_btn_->setToolTip(tr("Delete selected"));
-    }
-    if (mon_toggle_btn_) {
-        mon_toggle_btn_->setText(tr("Pause"));
-        mon_toggle_btn_->setToolTip(tr("Pause/resume"));
-    }
-
-    // Re-render lists so placeholders / count labels pick up the new language.
-    refresh_memory();
-    refresh_schedules();
-    refresh_tasks();
-    refresh_mcp_servers();
-    refresh_monitors();
 }
 
 } // namespace fincept::chat_mode

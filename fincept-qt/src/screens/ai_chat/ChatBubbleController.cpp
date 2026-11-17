@@ -26,7 +26,7 @@ void ChatBubbleController::initialise() {
     for (auto* w : reg.frames())
         on_frame_added(w);
 
-    LOG_INFO(kBubbleTag, QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
+    LOG_DEBUG(kBubbleTag, QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
 }
 
 void ChatBubbleController::on_frame_added(fincept::WindowFrame* w) {

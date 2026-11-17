@@ -77,6 +77,10 @@ class MacroSeriesWidget : public BaseWidget {
     /// Empty when `series` is usable for `source`, else a user-facing reason.
     static QString series_problem(const QString& source, const QString& series);
     static QString title_for(const QString& source, const QString& series);
+    /// A config with no "source" (a fresh tile) starts on the DBnomics default
+    /// (no key) when no FRED key is stored; an unreadable secure store keeps
+    /// FRED and records why (key_read_error_). Constructor only.
+    void resolve_default_source(const QJsonObject& cfg);
 
     void build_ui();
     void apply_styles();
@@ -108,6 +112,9 @@ class MacroSeriesWidget : public BaseWidget {
     QString units_;
     QString frequency_;
     QString last_error_; // raw producer error for the current config (empty = none)
+    /// Secure storage could not be read when the source was chosen (FRED kept):
+    /// a "missing key" error then says so instead of asking for a key.
+    QString key_read_error_;
 
     QWidget* body_ = nullptr; // hosts every label + the one stylesheet styling them
     QLabel* value_label_ = nullptr;

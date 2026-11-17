@@ -1,47 +1,32 @@
 """
-Fetch open positions (futures/margin).
-Usage: python fetch_positions.py <exchange_id> [symbol]
-Credentials via stdin JSON.
+Fetch open positions (all markets without a symbol) — a one-shot wrapper over the exchange daemon's own `fetch_positions`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
+Credentials come as JSON on stdin, never on the command line.
+
+Usage: echo '{"api_key":"...","secret":"..."}' | python fetch_positions.py <exchange_id> [symbol]
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling, parse_credentials_from_stdin
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 2:
-        output_error("Usage: fetch_positions.py <exchange_id> [symbol]", "INVALID_ARGS")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
 
-    exchange_id = sys.argv[1]
-    symbols = [sys.argv[2]] if len(sys.argv) > 2 else None
+USAGE = "fetch_positions.py <exchange_id> [symbol]"
 
-    creds = parse_credentials_from_stdin()
-    exchange = make_exchange(exchange_id, credentials=creds)
-    exchange.options["defaultType"] = "swap"
 
-    positions = exchange.fetch_positions(symbols)
-    output_success({
-        "positions": [
-            {
-                "symbol": p.get("symbol"),
-                "side": p.get("side"),
-                "contracts": p.get("contracts"),
-                "contractSize": p.get("contractSize"),
-                "notional": p.get("notional"),
-                "leverage": p.get("leverage"),
-                "unrealizedPnl": p.get("unrealizedPnl"),
-                "realizedPnl": p.get("realizedPnl", 0),
-                "entryPrice": p.get("entryPrice"),
-                "markPrice": p.get("markPrice"),
-                "liquidationPrice": p.get("liquidationPrice"),
-                "marginMode": p.get("marginMode"),
-                "marginRatio": p.get("marginRatio"),
-                "collateral": p.get("collateral"),
-                "timestamp": p.get("timestamp"),
-            }
-            for p in positions if p.get("contracts") and float(p["contracts"]) != 0
-        ],
-        "count": len(positions),
-    })
+def main(argv):
+    if len(argv) < 2:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2]} if len(argv) > 2 else {}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_positions", argv[1], args, D.cli_credentials())[0]
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

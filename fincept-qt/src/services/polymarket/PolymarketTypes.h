@@ -97,6 +97,8 @@ struct Trade {
     double size = 0.0;
     int64_t timestamp = 0;
     QString condition_id;
+    QString outcome;        // outcome token traded ("Yes", "Saints", …)
+    int outcome_index = -1; // index into the market's outcomes; -1 = unknown
 
     static Trade from_json(const QJsonObject& obj);
 };
@@ -125,7 +127,8 @@ struct TopHolder {
     QString display_name;
     double position_size = 0.0;
     double entry_price = 0.0;
-    int rank = 0;
+    int rank = 0;           // rank within its outcome's list (1 = largest)
+    int outcome_index = -1; // outcome token held; -1 = unknown
 
     static TopHolder from_json(const QJsonObject& obj);
 };

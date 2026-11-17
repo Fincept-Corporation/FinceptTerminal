@@ -4,9 +4,12 @@
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QCheckBox>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -14,6 +17,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QShowEvent>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -45,7 +49,7 @@ static QString btn_primary_ss() {
                    "padding:0 14px;height:30px;}"
                    "QPushButton:hover{background:%3;}"
                    "QPushButton:disabled{background:%4;color:%5;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM(), ui::colors::BG_RAISED(),
+        .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM(), ui::colors::BG_RAISED(),
              ui::colors::TEXT_TERTIARY());
 }
 static QString btn_secondary_ss() {
@@ -93,6 +97,9 @@ PythonEnvSection::PythonEnvSection(QWidget* parent) : QWidget(parent) {
 #endif
 
     build_ui();
+    refresh_theme();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 // ── build_ui ──────────────────────────────────────────────────────────────────
@@ -124,14 +131,14 @@ void PythonEnvSection::build_ui() {
     auto* warn_frame = new QFrame(this);
     warn_frame->setFrameShape(QFrame::NoFrame);
     warn_frame->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;padding:2px;}")
-                                  .arg(ui::colors::BG_RAISED(), ui::colors::AMBER()));
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::WARNING()));
     auto* warn_layout = new QHBoxLayout(warn_frame);
     warn_layout->setContentsMargins(10, 7, 10, 7);
     warn_layout->setSpacing(8);
 
     auto* warn_icon = new QLabel("⚠", this);
     warn_icon->setStyleSheet(
-        QString("color:%1;font-size:14px;background:transparent;font-weight:bold;").arg(ui::colors::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(0) + "px;background:transparent;font-weight:bold;").arg(ui::colors::WARNING()));
     warn_layout->addWidget(warn_icon);
 
     warn_text_ = new QLabel(
@@ -140,7 +147,7 @@ void PythonEnvSection::build_ui() {
            "Incompatible version changes can cause analytics scripts to crash or produce incorrect results."),
         this);
     warn_text_->setWordWrap(true);
-    warn_text_->setStyleSheet(QString("color:%1;background:transparent;font-size:11px;").arg(ui::colors::AMBER()));
+    warn_text_->setStyleSheet(QString("color:%1;background:transparent;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(ui::colors::WARNING()));
     warn_layout->addWidget(warn_text_, 1);
 
     root->addWidget(warn_frame);
@@ -171,6 +178,7 @@ void PythonEnvSection::build_ui() {
     thl->addWidget(refresh_btn_);
 
     install_missing_btn_ = new QPushButton(tr("Install Missing"), this);
+    install_missing_btn_->setProperty("fincept_agent_risk", "code"); // agents: installs Python packages on this computer
     install_missing_btn_->setStyleSheet(btn_secondary_ss());
     install_missing_btn_->setCursor(Qt::PointingHandCursor);
     thl->addWidget(install_missing_btn_);
@@ -184,7 +192,10 @@ void PythonEnvSection::build_ui() {
     root->addSpacing(10);
 
     // ── Package table ─────────────────────────────────────────────────────────
-    pkg_table_ = new QTableWidget(0, 7, this);
+    // The table shares its slot with a skeleton (the listing runs on every
+    // first show) and a designed state (Python not set up / no package list).
+    pkg_stack_ = new QStackedWidget(this);
+    pkg_table_ = new QTableWidget(0, 7, pkg_stack_);
     pkg_table_->setHorizontalHeaderLabels(
         {"", tr("Package"), tr("Venv"), tr("Required"), tr("Installed"), tr("Status"), tr("Action")});
     // Per-row cell-widget styling lives here, keyed by objectName, instead of
@@ -196,11 +207,11 @@ void PythonEnvSection::build_ui() {
                 "QCheckBox#pkgChk::indicator{width:13px;height:13px;}"
                 "QCheckBox#pkgChk::indicator:unchecked{border:1px solid %1;background:%2;}"
                 "QCheckBox#pkgChk::indicator:checked{border:1px solid %3;background:%3;}"
-                "QPushButton#pkgInstall{background:%3;color:%4;border:none;font-size:10px;font-weight:700;}"
+                "QPushButton#pkgInstall{background:%3;color:%4;border:none;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;}"
                 "QPushButton#pkgInstall:hover{background:%5;}"
-                "QPushButton#pkgUpgrade{background:transparent;color:%6;border:1px solid %7;font-size:10px;}"
+                "QPushButton#pkgUpgrade{background:transparent;color:%6;border:1px solid %7;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
                 "QPushButton#pkgUpgrade:hover{background:%2;}")
-            .arg(ui::colors::BORDER_BRIGHT(), ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::BG_BASE(),
+            .arg(ui::colors::BORDER_BRIGHT(), ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(),
                  ui::colors::AMBER_DIM(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM()));
     pkg_table_->setSelectionMode(QAbstractItemView::NoSelection);
     pkg_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -214,12 +225,25 @@ void PythonEnvSection::build_ui() {
     pkg_table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     pkg_table_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
     pkg_table_->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
-    pkg_table_->setColumnWidth(0, 30); // checkbox
-    pkg_table_->setColumnWidth(2, 90); // venv
-    pkg_table_->setColumnWidth(5, 76); // status
-    pkg_table_->setColumnWidth(6, 80); // action button
+    // Fixed column widths are set in refresh_theme() — they follow the font size.
     pkg_table_->setShowGrid(true);
-    root->addWidget(pkg_table_, 1);
+    pkg_stack_->addWidget(pkg_table_);
+    pkg_skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Table, pkg_stack_);
+    pkg_skeleton_->set_row_count(10);
+    pkg_skeleton_->set_message(tr("LISTING THE INSTALLED PACKAGES…"));
+    pkg_stack_->addWidget(pkg_skeleton_);
+    pkg_state_ = new ui::EmptyState(pkg_stack_);
+    pkg_state_->set_compact(true);
+    connect(pkg_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        // Not set up → the library card's SET UP PYTHON; otherwise list again.
+        if (lib_setup_btn_ && lib_setup_btn_->isVisible() &&
+            !QFileInfo::exists(python::PythonSetupManager::instance().uv_path()))
+            lib_setup_btn_->click();
+        else
+            load_packages();
+    });
+    pkg_stack_->addWidget(pkg_state_);
+    root->addWidget(pkg_stack_, 1);
     root->addSpacing(8);
 
     // ── Bottom bar: batch button + status ─────────────────────────────────────
@@ -229,6 +253,7 @@ void PythonEnvSection::build_ui() {
     bhl->setSpacing(10);
 
     batch_action_btn_ = new QPushButton(tr("Install / Upgrade Selected"), this);
+    batch_action_btn_->setProperty("fincept_agent_risk", "code"); // agents: installs / upgrades Python packages on this computer
     batch_action_btn_->setStyleSheet(btn_primary_ss());
     batch_action_btn_->setCursor(Qt::PointingHandCursor);
     bhl->addWidget(batch_action_btn_);
@@ -253,7 +278,7 @@ void PythonEnvSection::build_ui() {
 
     install_log_ = new QLabel(this);
     install_log_->setStyleSheet(
-        QString("color:%1;background:transparent;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;background:transparent;font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     install_log_->setVisible(false);
     root->addWidget(install_log_);
 
@@ -346,21 +371,22 @@ QWidget* PythonEnvSection::build_library_card() {
     card->setStyleSheet(
         QString("QFrame#pyLibCard{background:%1;border:1px solid %2;}"
                 "QLabel#pyLibTitle{color:%3;font-weight:700;letter-spacing:0.5px;background:transparent;border:none;}"
-                "QLabel#pyLibKey{color:%4;font-weight:700;letter-spacing:0.5px;background:transparent;border:none;}"
+                "QLabel#pyLibKey{color:%11;font-weight:700;letter-spacing:0.5px;background:transparent;border:none;}"
                 "QLabel#pyLibVal{color:%5;background:transparent;border:none;}"
-                "QLabel#pyLibHint{color:%4;font-size:11px;background:transparent;border:none;}"
+                "QLabel#pyLibHint{color:%4;font-size:" + fincept::ui::fonts::px(-3) + "px;background:transparent;border:none;}"
                 "QProgressBar#pyLibBar{background:%6;border:1px solid %2;}"
                 "QProgressBar#pyLibBar::chunk{background:%3;}"
-                "QPushButton#pyLibPrimary{background:%3;color:%6;border:none;font-weight:700;padding:0 14px;"
+                "QPushButton#pyLibPrimary{background:%3;color:%12;border:none;font-weight:700;padding:0 14px;"
                 "height:30px;}"
                 "QPushButton#pyLibPrimary:hover{background:%7;}"
-                "QPushButton#pyLibPrimary:disabled{background:%1;color:%4;border:1px solid %2;}"
-                "QPushButton#pyLibSecondary{background:%1;color:%5;border:1px solid %8;padding:0 12px;height:30px;}"
+                "QPushButton#pyLibPrimary:disabled{background:%10;color:%4;border:1px solid %2;}"
+                "QPushButton#pyLibSecondary{background:%10;color:%5;border:1px solid %8;padding:0 12px;height:30px;}"
                 "QPushButton#pyLibSecondary:hover{background:%9;}"
                 "QPushButton#pyLibSecondary:disabled{color:%4;border-color:%2;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::TEXT_TERTIARY(),
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::TEXT_TERTIARY(),
                  ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM(),
-                 ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER()));
+                 ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER())
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_ON_ACCENT()));
 
     auto* v = new QVBoxLayout(card);
     v->setContentsMargins(12, 10, 12, 10);
@@ -554,6 +580,12 @@ void PythonEnvSection::load_packages() {
 
     if (!QFileInfo::exists(PythonSetupManager::instance().uv_path())) {
         show_status(tr("Python is not set up yet — use SET UP PYTHON above"), true);
+        pkg_state_->set_glyph(QStringLiteral("!"), ui::EmptyState::Tone::Warning);
+        pkg_state_->set_title(tr("Python is not set up yet"));
+        pkg_state_->set_message(tr("The analytics, data and agent features run on two bundled Python environments. "
+                                   "Set them up once; their packages are listed here afterwards."));
+        pkg_state_->set_primary_action(tr("SET UP PYTHON"));
+        pkg_stack_->setCurrentWidget(pkg_state_);
         return;
     }
 
@@ -568,11 +600,12 @@ void PythonEnvSection::load_packages() {
     installed_v2_.clear();
     pkg_table_->setRowCount(0);
     show_status(tr("Loading..."));
+    pkg_stack_->setCurrentWidget(pkg_skeleton_);
 
     parse_requirements("requirements-numpy1.txt", "venv-numpy1", "Trading");
     parse_requirements("requirements-numpy2.txt", "venv-numpy2", "Analytics");
 
-    LOG_INFO("PythonEnv", QString("Parsed %1 packages from requirements files").arg(all_packages_.size()));
+    LOG_DEBUG("PythonEnv", QString("Parsed %1 packages from requirements files").arg(all_packages_.size()));
 
     start_list_venv("venv-numpy1");
 }
@@ -671,12 +704,14 @@ void PythonEnvSection::merge_and_populate_table() {
 
     pkg_table_->setUpdatesEnabled(false);
     pkg_table_->setRowCount(0);
+    const int row_h = package_row_height();
+    const int btn_h = qMax(22, QFontMetrics(ui::fonts::font(-4)).height() + 4);
 
     for (int i = 0; i < all_packages_.size(); ++i) {
         const PackageRow& row = all_packages_[i];
 
         pkg_table_->insertRow(i);
-        pkg_table_->setRowHeight(i, 28);
+        pkg_table_->setRowHeight(i, row_h);
 
         // Col 0: checkbox (styling comes from the table-level stylesheet)
         auto* chk = new QCheckBox(this);
@@ -691,39 +726,34 @@ void PythonEnvSection::merge_and_populate_table() {
 
         // Col 1: package name
         auto* name_item = new QTableWidgetItem(row.display_name);
-        name_item->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
         pkg_table_->setItem(i, 1, name_item);
 
-        // Col 2: venv label — Trading=blue, Analytics=amber so they're visually distinct
+        // Col 2: venv label
         auto* venv_item = new QTableWidgetItem(row.venv_label);
-        venv_item->setForeground(QColor(row.venv == "venv-numpy1" ? "#38bdf8" : ui::colors::AMBER()));
         venv_item->setTextAlignment(Qt::AlignCenter);
-        QFont venv_font = venv_item->font();
-        venv_font.setBold(true);
-        venv_item->setFont(venv_font);
         pkg_table_->setItem(i, 2, venv_item);
 
         // Col 3: required spec
         auto* req_item = new QTableWidgetItem(row.required_spec);
-        req_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         pkg_table_->setItem(i, 3, req_item);
 
         // Col 4: installed version
         auto* inst_item = new QTableWidgetItem(row.missing ? QString("—") : row.installed_ver);
-        inst_item->setForeground(QColor(row.missing ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_PRIMARY()));
         inst_item->setTextAlignment(Qt::AlignCenter);
         pkg_table_->setItem(i, 4, inst_item);
 
         // Col 5: status badge
         auto* status_item = new QTableWidgetItem(row.missing ? tr("MISSING") : tr("OK"));
-        status_item->setForeground(QColor(row.missing ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
         status_item->setTextAlignment(Qt::AlignCenter);
         pkg_table_->setItem(i, 5, status_item);
 
+        color_package_row(i);
+
         // Col 6: action button (styling comes from the table-level stylesheet)
         auto* btn = new QPushButton(row.missing ? tr("Install") : tr("Upgrade"), this);
+        btn->setProperty("fincept_agent_risk", "code"); // agents: installs / upgrades a Python package on this computer
         btn->setObjectName(row.missing ? QStringLiteral("pkgInstall") : QStringLiteral("pkgUpgrade"));
-        btn->setFixedHeight(22);
+        btn->setFixedHeight(btn_h);
         btn->setCursor(Qt::PointingHandCursor);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_row_action_clicked(i); });
         pkg_table_->setCellWidget(i, 6, btn);
@@ -732,10 +762,65 @@ void PythonEnvSection::merge_and_populate_table() {
     pkg_table_->setUpdatesEnabled(true);
 
     show_status(tr("%1 packages — %2 missing").arg(total).arg(missing), missing > 0);
+    if (all_packages_.isEmpty()) {
+        // No requirements files in this installation: say so instead of a bare grid.
+        pkg_state_->set_glyph(QStringLiteral("∅"), ui::EmptyState::Tone::Info);
+        pkg_state_->set_title(tr("No package list found"));
+        pkg_state_->set_message(tr("The requirements files that list the bundled packages were not found in this "
+                                   "installation, so there is nothing to compare against."));
+        pkg_state_->set_primary_action(tr("LIST AGAIN"));
+        pkg_stack_->setCurrentWidget(pkg_state_);
+    } else {
+        pkg_stack_->setCurrentWidget(pkg_table_);
+    }
 
     LOG_INFO("PythonEnv", QString("Table populated: %1 total, %2 missing").arg(total).arg(missing));
 
     apply_filter();
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+
+int PythonEnvSection::package_row_height() const {
+    return qMax(28, QFontMetrics(ui::fonts::font()).height() + 10);
+}
+
+void PythonEnvSection::color_package_row(int i) {
+    if (i < 0 || i >= all_packages_.size())
+        return;
+    const PackageRow& row = all_packages_[i];
+    const auto paint = [this, i](int col, const QColor& c) {
+        if (auto* item = pkg_table_->item(i, col))
+            item->setForeground(c);
+    };
+    paint(1, QColor(ui::colors::TEXT_PRIMARY()));
+    // Venv label — Trading and Analytics in two distinct hues.
+    paint(2, QColor(row.venv == "venv-numpy1" ? ui::colors::CYAN() : ui::colors::AMBER()));
+    if (auto* venv_item = pkg_table_->item(i, 2)) {
+        QFont bold = pkg_table_->font(); // follows the user's font family and size
+        bold.setBold(true);
+        venv_item->setFont(bold);
+    }
+    paint(3, QColor(ui::colors::TEXT_SECONDARY()));
+    paint(4, QColor(row.missing ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_PRIMARY()));
+    paint(5, QColor(row.missing ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
+}
+
+void PythonEnvSection::refresh_theme() {
+    if (!pkg_table_)
+        return;
+    // Fixed columns are sized for the default font and grow with the user's.
+    const auto col_w = [](int w) { return qMax(w, w * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx); };
+    pkg_table_->setColumnWidth(0, col_w(30)); // checkbox
+    pkg_table_->setColumnWidth(2, col_w(90)); // venv
+    pkg_table_->setColumnWidth(5, col_w(76)); // status
+    pkg_table_->setColumnWidth(6, col_w(80)); // action button
+    // Item colours are brushes on the items, not stylesheet text.
+    const int row_h = package_row_height();
+    for (int i = 0; i < pkg_table_->rowCount(); ++i) {
+        pkg_table_->setRowHeight(i, row_h);
+        color_package_row(i);
+    }
 }
 
 // ── on_row_action_clicked ────────────────────────────────────────────────────
@@ -878,7 +963,7 @@ void PythonEnvSection::run_next_batch() {
     connect(action_proc_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
         if (err != QProcess::FailedToStart)
             return;
-        LOG_ERROR("PythonEnv", "uv pip install could not start");
+        LOG_ERROR("PythonEnv", logf("uv pip install could not start", {{"error", action_proc_->errorString()}}));
         action_queue_.clear();
         QMetaObject::invokeMethod(
             this, [this]() { on_action_finished(-1); }, Qt::QueuedConnection);

@@ -18,23 +18,36 @@ class VectorDBRegistry:
 
     # VectorDB providers and their configurations
     VECTORDB_CATALOG = {
+        # Built in: one SQLite file per persona, numpy cosine search. Needs no
+        # extra package, so it is the default store (see local_vectordb.py).
+        "local": {
+            "class": "finagent_core.registries.local_vectordb.LocalVectorDb",
+            "config_keys": ["table_name", "path", "db_file"],
+            "name_kwarg": "table_name",
+            "path_kwarg": "path",
+            "description": "Built-in SQLite vector store (no extra package needed)",
+        },
+
         # PostgreSQL-based
         "pgvector": {
             "class": "agno.vectordb.pgvector.PgVector",
             "config_keys": ["table_name", "db_url", "schema"],
+            "name_kwarg": "table_name",
             "description": "PostgreSQL with pgvector extension",
         },
 
         # Cloud Vector DBs
         "pinecone": {
-            "class": "agno.vectordb.pineconedb.Pinecone",
+            "class": "agno.vectordb.pineconedb.PineconeDb",
             "config_keys": ["api_key", "index_name", "namespace", "environment"],
             "api_key_env": "PINECONE_API_KEY",
             "description": "Pinecone managed vector database",
         },
         "qdrant": {
             "class": "agno.vectordb.qdrant.Qdrant",
-            "config_keys": ["collection_name", "url", "api_key", "host", "port"],
+            "config_keys": ["collection", "url", "api_key", "host", "port", "path"],
+            "name_kwarg": "collection",
+            "path_kwarg": "path",  # local (on-disk) mode
             "api_key_env": "QDRANT_API_KEY",
             "description": "Qdrant vector database",
         },
@@ -52,24 +65,29 @@ class VectorDBRegistry:
 
         # Lightweight / Local
         "chroma": {
-            "class": "agno.vectordb.chroma.Chroma",
-            "config_keys": ["collection_name", "path", "host", "port"],
+            "class": "agno.vectordb.chroma.ChromaDb",
+            "config_keys": ["collection", "path", "persistent_client"],
+            "name_kwarg": "collection",
+            "path_kwarg": "path",
+            "path_extra": {"persistent_client": True},
             "description": "ChromaDB - lightweight local vector store",
         },
         "lancedb": {
-            "class": "agno.vectordb.lancedb.LanceDB",
-            "config_keys": ["table_name", "uri", "db_path"],
+            "class": "agno.vectordb.lancedb.LanceDb",
+            "config_keys": ["table_name", "uri"],
+            "name_kwarg": "table_name",
+            "path_kwarg": "uri",
             "description": "LanceDB - serverless vector database",
         },
 
         # Redis-based
         "redis": {
-            "class": "agno.vectordb.redis.Redis",
+            "class": "agno.vectordb.redis.RedisDB",
             "config_keys": ["index_name", "url", "host", "port"],
             "description": "Redis with vector search",
         },
         "upstash": {
-            "class": "agno.vectordb.upstashdb.Upstash",
+            "class": "agno.vectordb.upstashdb.UpstashVectorDb",
             "config_keys": ["index_name", "url", "token"],
             "api_key_env": "UPSTASH_VECTOR_REST_TOKEN",
             "description": "Upstash serverless Redis vector",
@@ -77,7 +95,7 @@ class VectorDBRegistry:
 
         # Database-integrated
         "mongodb": {
-            "class": "agno.vectordb.mongodb.MongoDB",
+            "class": "agno.vectordb.mongodb.MongoDb",
             "config_keys": ["collection_name", "connection_string", "database_name", "index_name"],
             "description": "MongoDB Atlas vector search",
         },
@@ -87,12 +105,12 @@ class VectorDBRegistry:
             "description": "Apache Cassandra with vector support",
         },
         "couchbase": {
-            "class": "agno.vectordb.couchbase.Couchbase",
+            "class": "agno.vectordb.couchbase.CouchbaseSearch",
             "config_keys": ["bucket_name", "scope_name", "collection_name", "connection_string"],
             "description": "Couchbase vector search",
         },
         "clickhouse": {
-            "class": "agno.vectordb.clickhouse.ClickHouse",
+            "class": "agno.vectordb.clickhouse.Clickhouse",
             "config_keys": ["table_name", "host", "port", "database"],
             "description": "ClickHouse with vector support",
         },
@@ -102,26 +120,26 @@ class VectorDBRegistry:
             "description": "SingleStore vector database",
         },
         "surrealdb": {
-            "class": "agno.vectordb.surrealdb.SurrealDB",
+            "class": "agno.vectordb.surrealdb.SurrealDb",
             "config_keys": ["table_name", "url", "namespace", "database"],
             "description": "SurrealDB vector search",
         },
 
         # Framework integrations
         "langchain": {
-            "class": "agno.vectordb.langchaindb.LangchainDB",
+            "class": "agno.vectordb.langchaindb.LangChainVectorDb",
             "config_keys": ["vectorstore"],
             "description": "LangChain vectorstore wrapper",
         },
         "llamaindex": {
-            "class": "agno.vectordb.llamaindex.LlamaIndex",
+            "class": "agno.vectordb.llamaindex.LlamaIndexVectorDb",
             "config_keys": ["index"],
             "description": "LlamaIndex vector index wrapper",
         },
 
         # Graph-based
         "lightrag": {
-            "class": "agno.vectordb.lightrag.LightRAG",
+            "class": "agno.vectordb.lightrag.LightRag",
             "config_keys": ["working_dir"],
             "description": "LightRAG graph-based retrieval",
         },
@@ -158,12 +176,8 @@ class VectorDBRegistry:
         db_config = cls.VECTORDB_CATALOG[db_type_lower]
 
         try:
-            # Dynamic import
-            import importlib
-            class_path = db_config["class"]
-            module_path, class_name = class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            db_class = getattr(module, class_name)
+            from finagent_core.registries.availability import load_class
+            db_class = load_class(db_config["class"])
 
             # Build constructor arguments
             db_kwargs = {}
@@ -194,8 +208,41 @@ class VectorDBRegistry:
 
     @classmethod
     def list_vectordbs(cls) -> List[str]:
-        """List all available vector databases"""
+        """List every catalogued vector database (see unavailable_vectordbs())."""
         return list(cls.VECTORDB_CATALOG.keys())
+
+    @classmethod
+    def unavailable_reason(cls, db_type: str, static: bool = False) -> Optional[str]:
+        """None when the store's class loads here, else why not. static=True
+        reads source instead of importing (for listings)."""
+        cfg = cls.VECTORDB_CATALOG.get((db_type or "").lower())
+        if cfg is None:
+            return f"unknown vector database '{db_type}' (available: {', '.join(cls.VECTORDB_CATALOG)})"
+        from finagent_core.registries.availability import class_static_reason, class_unavailable_reason
+        return (class_static_reason if static else class_unavailable_reason)(cfg["class"])
+
+    @classmethod
+    def unavailable_vectordbs(cls) -> Dict[str, str]:
+        """{db_type: reason} for every store whose class cannot load here."""
+        out: Dict[str, str] = {}
+        for name in cls.VECTORDB_CATALOG:
+            reason = cls.unavailable_reason(name, static=True)
+            if reason:
+                out[name] = reason
+        return out
+
+    @classmethod
+    def placement_kwargs(cls, db_type: str, directory: Optional[str], table: Optional[str]) -> Dict[str, Any]:
+        """Constructor kwargs that put the store in `directory` (on-disk stores)
+        and name its table/collection `table`, using each class's own names."""
+        cfg = cls.VECTORDB_CATALOG.get((db_type or "").lower(), {})
+        out: Dict[str, Any] = {}
+        if directory and cfg.get("path_kwarg"):
+            out[cfg["path_kwarg"]] = str(directory)
+            out.update(cfg.get("path_extra") or {})
+        if table and cfg.get("name_kwarg"):
+            out[cfg["name_kwarg"]] = table
+        return out
 
     @classmethod
     def get_vectordb_info(cls, db_type: str) -> Optional[Dict[str, Any]]:

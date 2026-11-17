@@ -65,7 +65,7 @@ void KalshiWsClient::subscribe(const QStringList& market_tickers) {
     for (const auto& t : market_tickers)
         subscribed_tickers_.insert(t);
     if (!creds_.is_valid()) {
-        LOG_INFO("KalshiWS", "Subscribe deferred — no credentials configured (Phase 7 will enable streaming)");
+        LOG_DEBUG("KalshiWS", "Subscribe deferred — no credentials configured (Phase 7 will enable streaming)");
         return;
     }
     ensure_connected();
@@ -129,7 +129,7 @@ void KalshiWsClient::send_subscribe(const QStringList& tickers) {
     msg.insert("params", params);
 
     ws_->send(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
-    LOG_INFO("KalshiWS", "Subscribed to " + QString::number(tickers.size()) + " tickers");
+    LOG_DEBUG("KalshiWS", "Subscribed to " + QString::number(tickers.size()) + " tickers");
 }
 
 void KalshiWsClient::send_ping() {
@@ -146,7 +146,9 @@ void KalshiWsClient::send_ping() {
 void KalshiWsClient::on_connected() {
     connected_ = true;
     ping_timer_->start();
-    LOG_INFO("KalshiWS", "Connected");
+    if (Logger::instance().transition_possible(0))
+        Logger::instance().transition("KalshiWS", QStringLiteral("ws"), 0);
+    LOG_INFO("KalshiWS", "Kalshi stream connected");
     emit connection_status_changed(true);
     if (!subscribed_tickers_.isEmpty()) {
         send_subscribe(QStringList(subscribed_tickers_.begin(), subscribed_tickers_.end()));
@@ -156,12 +158,13 @@ void KalshiWsClient::on_connected() {
 void KalshiWsClient::on_disconnected() {
     connected_ = false;
     ping_timer_->stop();
-    LOG_WARN("KalshiWS", "Disconnected");
+    LOG_TRANSITION("KalshiWS", QStringLiteral("ws"), 1, LogLevel::Warn, "Kalshi stream disconnected, reconnecting");
     emit connection_status_changed(false);
 }
 
 void KalshiWsClient::on_error(const QString& err) {
-    LOG_ERROR("KalshiWS", "Error: " + err);
+    LOG_TRANSITION("KalshiWS", QStringLiteral("ws"), 1, LogLevel::Warn,
+                   logf("Kalshi stream failed, reconnecting", {{"error", err}}));
 }
 
 void KalshiWsClient::on_message(const QString& msg) {
@@ -195,6 +198,7 @@ void KalshiWsClient::on_message(const QString& msg) {
         t.asset_id = ticker + QStringLiteral(":yes");
         const QString ts_side = payload.value("taker_side").toString().toLower();
         t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL") : QStringLiteral("BUY");
+        t.outcome = QStringLiteral("Yes"); // price and side are both in YES terms
         t.price = kalshi_fp_to_double(payload.value("yes_price_dollars"));
         t.size = kalshi_fp_to_double(payload.value("count_fp"));
         const QString iso = payload.value("created_time").toString();
@@ -214,21 +218,12 @@ void KalshiWsClient::on_message(const QString& msg) {
         return;
     }
 
-    if (type != QStringLiteral("orderbook_snapshot") && type != QStringLiteral("orderbook_delta")) {
-        return;
-    }
-    if (ticker.isEmpty())
-        return;
-
-    // Snapshot / delta path — callers should rebuild their local book from
-    // the snapshot then apply deltas. Phase 4 ships only the transport;
-    // full reconciliation (seq gap detection, REST resnapshot) lands with
-    // Phase 7 trading work when live streaming is genuinely exercised.
-    pr::PredictionOrderBook book;
-    const QString side = payload.value("side").toString();
-    book.asset_id = ticker + QStringLiteral(":") + (side.isEmpty() ? "yes" : side);
-    book.last_update_ms = payload.value("ts").toVariant().toLongLong() * 1000;
-    publish_orderbook(book.asset_id, book);
+    // orderbook_snapshot / orderbook_delta: deliberately NOT published. No
+    // levels are parsed or reconciled yet (seq gap detection, REST resnapshot),
+    // so the book built here was always EMPTY — asset id + timestamp only — and
+    // publishing it would blank the order book the screen loaded over REST.
+    // The REST book (refreshed by the screen) stays authoritative until real
+    // snapshot/delta reconciliation lands.
 }
 
 // ── Hub publish helpers ─────────────────────────────────────────────────────
@@ -274,7 +269,7 @@ void KalshiWsClient::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("prediction:kalshi:orderbook:*"), push_only);
 
     hub_registered_ = true;
-    LOG_INFO("KalshiWS", "Registered with DataHub (prediction:kalshi:price:*, prediction:kalshi:orderbook:*)");
+    LOG_DEBUG("KalshiWS", "Registered with DataHub (prediction:kalshi:price:*, prediction:kalshi:orderbook:*)");
 }
 
 } // namespace fincept::services::prediction::kalshi_ns

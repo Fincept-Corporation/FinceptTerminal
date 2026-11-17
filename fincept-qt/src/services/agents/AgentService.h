@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
+#include <QProcess>
 #include <QProcessEnvironment>
 #include <QSet>
 
@@ -68,7 +69,9 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QString run_agent_streaming(const QString& query, const QJsonObject& config);
     QString run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model);
     QString route_query(const QString& query);
-    void execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
+    /// Returns the request id its agent_result carries (results without an id
+    /// used to be taken by every idle Agent Studio panel).
+    QString execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
 
     /// Stop a streaming run (run_agent_streaming / run_team) by the request id it
     /// returned. Kills the Python subprocess and emits agent_stream_done with
@@ -80,7 +83,8 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     static constexpr const char* kCancelledError = "Cancelled by user";
 
     // ── Portfolio analysis (Portfolio › Insights) ────────────────────────────
-    void run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary = {});
+    // Returns the request_id set on the emitted agent_result, like run_agent().
+    QString run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary = {});
 
     // ── Team execution ───────────────────────────────────────────────────────
     QString run_team(const QString& query, const QJsonObject& team_config);
@@ -205,6 +209,20 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     /// PythonRunner's standard env plus FINCEPT_AGENT_DATA_DIR — used by every
     /// finagent_core spawn so all of them agree on where agent state lives.
     QProcessEnvironment agent_process_env() const;
+    /// Every finagent_core child: agent_process_env(), the scripts dir as cwd, no
+    /// console window, and ONE process tree (core/process/ProcessTree.h) — cancel and
+    /// quit kill the agent runtime together with what it started (tool scripts, MCP
+    /// stdio servers); a run that ends by itself releases its tree. Not started yet.
+    QProcess* new_agent_process();
+    /// Cancel / quit: kill the child and its whole tree.
+    static void kill_agent_tree(QProcess* proc);
+    /// From a finished() handler: a child that exited by itself (not killed) releases
+    /// its tree, so a server it started on purpose keeps running.
+    static void release_agent_tree(QProcess* proc, QProcess::ExitStatus status);
+    /// aboutToQuit: kill every agent child still running (bounded wait).
+    void kill_agent_processes_for_quit();
+    QSet<QProcess*> agent_procs_; ///< live finagent_core children (removed when destroyed)
+    bool quit_hooked_ = false;
     /// `model` block for a saved LLM profile id; when `profile_id` is empty (or
     /// unknown) the assignment-chain default for `context_type` is used. Empty
     /// object when no provider resolves — callers then fall back to the global

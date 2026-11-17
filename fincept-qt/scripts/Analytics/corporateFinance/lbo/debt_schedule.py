@@ -168,7 +168,7 @@ def _service_argv(argv):
         "subordinated": {"amount": sub, "rate": _svc_num(p, "sub_rate", default=0.085), "term": 10},
         "revolver": {"amount": revolver, "rate": _svc_num(p, "revolver_rate", default=0.04)},
     }
-    years = int(_svc_num(p, "years", "projection_years", default=7.0))
+    years = int(_svc_num(p, "years", "projection_years", "holding_period", default=7.0))
     years = min(max(years, 1), 20)
     ebitda = _svc_num(p, "ebitda", default=0.0)
     growth = _svc_num(p, "ebitda_growth", default=0.0)

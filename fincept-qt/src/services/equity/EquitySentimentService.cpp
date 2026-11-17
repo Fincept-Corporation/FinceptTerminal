@@ -27,6 +27,8 @@ constexpr double kConfidenceFloor = 0.15;
 
 constexpr int kTimeoutMs = 15000;
 constexpr int kMaxArticles = 40;
+// Indicator period of the price-momentum leg (the Technicals tab's default too).
+constexpr const char* kTechnicalsPeriod = "1y";
 // Recency weighting of the news leg: an article's weight halves every N days (undated
 // articles count as one half-life old).
 constexpr double kNewsHalfLifeDays = 3.0;
@@ -61,14 +63,22 @@ EquitySentimentService::EquitySentimentService(QObject* parent) : QObject(parent
     });
 
     connect(&EquityResearchService::instance(), &EquityResearchService::news_loaded, this,
-            [this](const QString& symbol, const QVector<NewsArticle>& articles) { on_news_loaded(symbol, articles); });
+            [this](const QString& symbol, NewsProvider provider, bool, const QVector<NewsArticle>& articles) {
+                // The blend fetches the Auto chain; a NewsAPI answer the News tab asked for is not ours.
+                if (provider == NewsProvider::Auto)
+                    on_news_loaded(symbol, articles);
+            });
     connect(&EquityResearchService::instance(), &EquityResearchService::technicals_loaded, this,
             [this](const TechnicalsData& data) { on_technicals_loaded(data); });
+    // A failed news / technicals fetch used to go unnoticed here: the tab sat on "LOADING
+    // SENTIMENT…" for the full timeout and then said "unavailable" without the reason.
+    connect(&EquityResearchService::instance(), &EquityResearchService::load_failed, this,
+            [this](const LoadFailure& failure) { on_leg_failed(failure); });
     connect(&MarketSentimentService::instance(), &MarketSentimentService::snapshot_loaded, this,
             [this](const QString& symbol, const MarketSentimentSnapshot& snap) { on_adanos_loaded(symbol, snap); });
 }
 
-void EquitySentimentService::fetch_sentiment(const QString& symbol) {
+void EquitySentimentService::fetch_sentiment(const QString& symbol, bool force) {
     const QString sym = symbol.trimmed().toUpper();
     if (sym.isEmpty())
         return;
@@ -90,16 +100,42 @@ void EquitySentimentService::fetch_sentiment(const QString& symbol) {
     neutral_ = 0;
     engine_.clear();
     articles_.clear();
+    failures_.clear();
 
     need_adanos_ = MarketSentimentService::instance().is_configured();
     adanos_.done = !need_adanos_; // not awaited when no key is configured
 
     timeout_timer_->start(kTimeoutMs);
 
-    EquityResearchService::instance().fetch_news(sym);
-    EquityResearchService::instance().fetch_technicals(sym);
+    // `force` (REFRESH) bypasses the news (10 min) / technicals (5 min) / Adanos caches — without
+    // it the button re-rendered the identical cached snapshot.
+    EquityResearchService::instance().fetch_news(sym, 20, NewsProvider::Auto, force);
+    EquityResearchService::instance().fetch_technicals(sym, QString::fromLatin1(kTechnicalsPeriod), force);
     if (need_adanos_)
-        MarketSentimentService::instance().fetch_snapshot(sym);
+        MarketSentimentService::instance().fetch_snapshot(sym, 7, force);
+}
+
+void EquitySentimentService::on_leg_failed(const LoadFailure& failure) {
+    if (failure.symbol != active_symbol_)
+        return;
+    if (failure.leg == QLatin1String("News")) {
+        if (news_consumed_)
+            return;
+        news_consumed_ = true;
+        news_.available = false;
+        news_.done = true;
+    } else if (failure.leg == QLatin1String("Technicals")) {
+        // Only the period this blend asked for (the Technicals tab may fetch another one).
+        if (tech_consumed_ || (!failure.period.isEmpty() && failure.period != QLatin1String(kTechnicalsPeriod)))
+            return;
+        tech_consumed_ = true;
+        price_.available = false;
+        price_.done = true;
+    } else {
+        return;
+    }
+    failures_.append(QStringLiteral("%1: %2").arg(failure.leg, failure.message));
+    try_finalize();
 }
 
 void EquitySentimentService::on_news_loaded(const QString& symbol, const QVector<NewsArticle>& articles) {
@@ -196,7 +232,14 @@ void EquitySentimentService::on_technicals_loaded(const TechnicalsData& data) {
     tech_consumed_ = true;
 
     const int total = data.strong_buy + data.buy + data.neutral + data.sell + data.strong_sell;
-    if (total > 0) {
+    if (data.rating_ok && std::isfinite(data.summary_score)) {
+        // The two-group technical rating (price vs moving averages, oscillators): only voting
+        // indicators count, so informational readings no longer drag the score to neutral.
+        price_.score = std::clamp(data.summary_score, -1.0, 1.0);
+        const int voters = data.buy + data.sell + data.neutral;
+        price_.confidence = voters > 0 ? static_cast<double>(data.buy + data.sell) / voters : 0.0;
+        price_.available = true;
+    } else if (total > 0) {
         const double raw =
             (data.strong_buy + 0.5 * data.buy - 0.5 * data.sell - data.strong_sell) / static_cast<double>(total);
         price_.score = std::clamp(raw, -1.0, 1.0);
@@ -223,12 +266,15 @@ void EquitySentimentService::on_adanos_loaded(const QString& symbol, const Marke
 }
 
 void EquitySentimentService::try_finalize() {
-    if (finalized_)
-        return;
     if (!news_.done || !price_.done)
         return;
     if (need_adanos_ && !adanos_.done)
         return;
+    // Every caller is a leg of the active request (symbol / request-id / consumed guards), so a
+    // call after finalize() means that leg landed after the timeout had answered without it —
+    // e.g. a cold news subprocess. Recompute and emit again instead of dropping it (the tab
+    // kept showing "unavailable" until REFRESH).
+    finalized_ = false;
     finalize();
 }
 
@@ -263,10 +309,19 @@ void EquitySentimentService::finalize() {
     };
 
     double weight_sum = 0.0;
+    double base_included = 0.0, base_available = 0.0;
     for (const auto& c : contribs) {
-        if (c.include && c.state->available)
+        if (!c.include)
+            continue;
+        base_included += c.base;
+        if (c.state->available) {
             weight_sum += c.base * std::max(c.state->confidence, kConfidenceFloor);
+            base_available += c.base;
+        }
     }
+    // Confidence covers only the signals that answered: price momentum alone (no news
+    // for SAP.DE) read "BULLISH, confidence 73%" off zero headlines.
+    const double coverage = base_included > 0.0 ? base_available / base_included : 0.0;
 
     double blended = 0.0;
     double confidence_acc = 0.0;
@@ -293,13 +348,15 @@ void EquitySentimentService::finalize() {
         snap.status = QStringLiteral("ok");
         snap.overall_score = std::clamp(blended, -1.0, 1.0);
         snap.label = sentiment_label(snap.overall_score);
-        snap.confidence = std::clamp(confidence_acc, 0.0, 1.0);
+        snap.confidence = std::clamp(confidence_acc * coverage, 0.0, 1.0);
     } else {
         snap.available = false;
         snap.status = QStringLiteral("unavailable");
         snap.label = QStringLiteral("NEUTRAL");
         snap.message =
             QStringLiteral("No sentiment signal yet — news and price momentum are unavailable for this symbol.");
+        if (!failures_.isEmpty()) // the real reason(s), e.g. "News: rate limited"
+            snap.message += QStringLiteral("\n") + failures_.join(QStringLiteral("\n"));
     }
 
     emit sentiment_loaded(active_symbol_, snap);

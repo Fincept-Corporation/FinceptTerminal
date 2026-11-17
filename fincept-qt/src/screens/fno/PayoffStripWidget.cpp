@@ -1,7 +1,10 @@
 #include "screens/fno/PayoffStripWidget.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
+#include <QFontMetrics>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPen>
@@ -24,6 +27,17 @@ PayoffStripWidget::PayoffStripWidget(QWidget* parent) : QWidget(parent) {
                                 "the current spot and each breakeven."));
     setToolTip(tr("Solid: P/L at expiry.  Dashed: P/L at the TARGET date.  "
                   "Amber vertical: spot.  Dotted verticals: breakevens."));
+    // The strip is rendered into a cached pixmap with the theme's colours and font.
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this](const ThemeTokens&) {
+        dirty_ = true;
+        update();
+    });
+    // The spot / breakeven / axis labels follow the user's number locale: repaint
+    // the held curve on a format change.
+    fincept::ui::formatting::on_format_changed(this, [this]() {
+        dirty_ = true;
+        update();
+    });
 }
 
 void PayoffStripWidget::set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve, double spot,
@@ -179,22 +193,21 @@ void PayoffStripWidget::rebuild_pixmap() {
         p.drawLine(QPointF(x1, y1), QPointF(x2, y2));
     }
 
+    const QFont small_font = fonts::font(-5);
+    const QFontMetrics fm(small_font);
+    p.setFont(small_font);
+
     // Spot marker (amber vertical)
     if (spot_ > spot_min && spot_ < spot_max) {
         double sx = to_x(spot_);
         p.setPen(QPen(QColor(colors::AMBER()), 1));
         p.drawLine(QPointF(sx, 0), QPointF(sx, h));
-        QFont f = p.font();
-        f.setPixelSize(9);
-        p.setFont(f);
-        p.drawText(QPointF(sx + 2, 10), QString::number(spot_, 'f', 0));
+        // Underlying levels (index points / share price), not amounts: no unit.
+        p.drawText(QPointF(sx + 2, qMax(10, fm.ascent() + 1)), fincept::ui::formatting::number(spot_, 0));
     }
 
     // Breakeven markers (dotted) — show at most 4
     QPen be_pen(QColor(colors::TEXT_SECONDARY()), 1, Qt::DotLine);
-    QFont small_font = p.font();
-    small_font.setPixelSize(9);
-    p.setFont(small_font);
     int be_drawn = 0;
     for (double be : breakevens_) {
         if (be_drawn >= 4)
@@ -205,16 +218,19 @@ void PayoffStripWidget::rebuild_pixmap() {
         p.setPen(be_pen);
         p.drawLine(QPointF(bx, 0), QPointF(bx, h));
         p.setPen(QPen(QColor(colors::TEXT_SECONDARY())));
-        p.drawText(QPointF(bx + 2, h - 4), QString::number(be, 'f', 0));
+        p.drawText(QPointF(bx + 2, h - 4), fincept::ui::formatting::number(be, 0));
         ++be_drawn;
     }
 
     // X-axis scale labels (5 evenly spaced)
     p.setPen(QPen(QColor(colors::TEXT_DIM())));
+    const int label_h = qMax(12, fm.height());
     for (int i = 0; i <= 4; ++i) {
         double spot_val = spot_min + spot_range * i / 4.0;
         double lx = to_x(spot_val);
-        p.drawText(QRectF(lx - 25, h - 12, 50, 12), Qt::AlignCenter, QString::number(spot_val, 'f', 0));
+        const QString label = fincept::ui::formatting::number(spot_val, 0);
+        const int label_w = qMax(50, fm.horizontalAdvance(label) + 4);
+        p.drawText(QRectF(lx - label_w / 2.0, h - label_h, label_w, label_h), Qt::AlignCenter, label);
     }
 }
 

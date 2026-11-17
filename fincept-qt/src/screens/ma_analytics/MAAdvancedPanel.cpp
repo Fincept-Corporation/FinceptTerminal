@@ -2,6 +2,7 @@
 // Method definition split from MAModulePanel.cpp.
 
 #include "screens/ma_analytics/MAModulePanel.h"
+#include "screens/ma_analytics/MaDealGrid.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
@@ -40,120 +41,120 @@ QWidget* MAModulePanel::build_advanced_panel() {
     apply_tab_stylesheet();
 
     // ── Monte Carlo ──
-    auto* mc = new QWidget(this);
-    auto* mc_vl = new QVBoxLayout(mc);
-    mc_vl->setContentsMargins(12, 12, 12, 12);
-    mc_vl->setSpacing(8);
+    add_lazy_sub_tab(QT_TR_NOOP("Monte Carlo"), [this](QWidget* mc) {
+        auto* mc_vl = new QVBoxLayout(mc);
+        mc_vl->setContentsMargins(12, 12, 12, 12);
+        mc_vl->setSpacing(8);
 
-    auto* mc_base = make_double_spin(0, 1e15, 1e9, 0, "", mc);
-    double_inputs_["mc_base"] = mc_base;
-    mc_vl->addWidget(build_input_row(tr("Base Valuation") + " ($)", mc_base, mc));
+        // The central case the simulation spreads around (required; e.g. your DCF enterprise value).
+        auto* mc_base = make_double_spin(0, 1e15, 1e9, 0, "", mc);
+        mc_base->setToolTip(tr("Central valuation: the simulated values are spread around it by the uncertainty "
+                               "below"));
+        double_inputs_["mc_base"] = mc_base;
+        mc_vl->addWidget(build_input_row(tr("Base Valuation") + " ($)", mc_base, mc));
 
-    auto* mc_rg_mean = make_double_spin(-100, 500, 15, 1, "%", mc);
-    double_inputs_["mc_rev_growth_mean"] = mc_rg_mean;
-    mc_vl->addWidget(build_input_row(tr("Rev Growth Mean"), mc_rg_mean, mc));
+        auto* mc_rg_mean = make_double_spin(-100, 500, 15, 1, "%", mc);
+        double_inputs_["mc_rev_growth_mean"] = mc_rg_mean;
+        mc_vl->addWidget(build_input_row(tr("Rev Growth Mean"), mc_rg_mean, mc));
 
-    auto* mc_rg_std = make_double_spin(0, 100, 5, 1, "%", mc);
-    double_inputs_["mc_rev_growth_std"] = mc_rg_std;
-    mc_vl->addWidget(build_input_row(tr("Rev Growth Std Dev"), mc_rg_std, mc));
+        auto* mc_rg_std = make_double_spin(0, 100, 5, 1, "%", mc);
+        double_inputs_["mc_rev_growth_std"] = mc_rg_std;
+        mc_vl->addWidget(build_input_row(tr("Rev Growth Std Dev"), mc_rg_std, mc));
 
-    auto* mc_mg_mean = make_double_spin(-100, 100, 25, 1, "%", mc);
-    double_inputs_["mc_margin_mean"] = mc_mg_mean;
-    mc_vl->addWidget(build_input_row(tr("EBITDA Margin Mean"), mc_mg_mean, mc));
+        auto* mc_mg_mean = make_double_spin(-100, 100, 25, 1, "%", mc);
+        double_inputs_["mc_margin_mean"] = mc_mg_mean;
+        mc_vl->addWidget(build_input_row(tr("EBITDA Margin Mean"), mc_mg_mean, mc));
 
-    auto* mc_mg_std = make_double_spin(0, 100, 3, 1, "%", mc);
-    double_inputs_["mc_margin_std"] = mc_mg_std;
-    mc_vl->addWidget(build_input_row(tr("EBITDA Margin Std Dev"), mc_mg_std, mc));
+        auto* mc_mg_std = make_double_spin(0, 100, 3, 1, "%", mc);
+        double_inputs_["mc_margin_std"] = mc_mg_std;
+        mc_vl->addWidget(build_input_row(tr("EBITDA Margin Std Dev"), mc_mg_std, mc));
 
-    auto* mc_disc = make_double_spin(0, 50, 10, 1, "%", mc);
-    double_inputs_["mc_discount"] = mc_disc;
-    mc_vl->addWidget(build_input_row(tr("Discount Rate"), mc_disc, mc));
+        auto* mc_disc = make_double_spin(0, 50, 10, 1, "%", mc);
+        double_inputs_["mc_discount"] = mc_disc;
+        mc_vl->addWidget(build_input_row(tr("Discount Rate"), mc_disc, mc));
 
-    auto* mc_sims = make_int_spin(100, 100000, 10000, mc);
-    int_inputs_["mc_simulations"] = mc_sims;
-    mc_vl->addWidget(build_input_row(tr("Simulations"), mc_sims, mc));
+        auto* mc_sims = make_int_spin(100, 100000, 10000, mc);
+        int_inputs_["mc_simulations"] = mc_sims;
+        mc_vl->addWidget(build_input_row(tr("Simulations"), mc_sims, mc));
 
-    auto* mc_run = make_run_button(tr("RUN MONTE CARLO"), mc);
-    connect(mc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running Monte Carlo..."));
-        QJsonObject params;
-        params["base_valuation"] = double_inputs_["mc_base"]->value();
-        params["rev_growth_mean"] = double_inputs_["mc_rev_growth_mean"]->value() / 100.0;
-        params["rev_growth_std"] = double_inputs_["mc_rev_growth_std"]->value() / 100.0;
-        params["margin_mean"] = double_inputs_["mc_margin_mean"]->value() / 100.0;
-        params["margin_std"] = double_inputs_["mc_margin_std"]->value() / 100.0;
-        params["discount_rate"] = double_inputs_["mc_discount"]->value() / 100.0;
-        params["simulations"] = int_inputs_["mc_simulations"]->value();
-        MAAnalyticsService::instance().run_monte_carlo(params);
+        auto* mc_run = make_run_button(tr("RUN MONTE CARLO"), mc);
+        connect(mc_run, &QPushButton::clicked, this, [this]() {
+            status_label_->setText(tr("Running Monte Carlo..."));
+            QJsonObject params;
+            params["base_valuation"] = double_inputs_["mc_base"]->value();
+            params["rev_growth_mean"] = double_inputs_["mc_rev_growth_mean"]->value() / 100.0;
+            params["rev_growth_std"] = double_inputs_["mc_rev_growth_std"]->value() / 100.0;
+            params["margin_mean"] = double_inputs_["mc_margin_mean"]->value() / 100.0;
+            params["margin_std"] = double_inputs_["mc_margin_std"]->value() / 100.0;
+            params["discount_rate"] = double_inputs_["mc_discount"]->value() / 100.0;
+            params["simulations"] = int_inputs_["mc_simulations"]->value();
+            MAAnalyticsService::instance().run_monte_carlo(params);
+        });
+        mc_vl->addWidget(mc_run);
+        mc_vl->addStretch();
     });
-    mc_vl->addWidget(mc_run);
-    mc_vl->addStretch();
-    add_sub_tab(mc, QT_TR_NOOP("Monte Carlo"));
 
     // ── Regression ──
-    auto* reg = new QWidget(this);
-    auto* reg_vl = new QVBoxLayout(reg);
-    reg_vl->setContentsMargins(12, 12, 12, 12);
-    reg_vl->setSpacing(8);
+    add_lazy_sub_tab(QT_TR_NOOP("Regression"), [this](QWidget* reg) {
+        auto* reg_vl = new QVBoxLayout(reg);
+        reg_vl->setContentsMargins(12, 12, 12, 12);
+        reg_vl->setSpacing(8);
 
-    auto* reg_type = new QComboBox(reg);
-    reg_type->addItems({"OLS", "Multiple"});
-    reg_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
-                                .arg(ui::fonts::DATA_FAMILY)
-                                .arg(ui::fonts::SMALL));
-    combo_inputs_["reg_type"] = reg_type;
-    reg_vl->addWidget(build_input_row(tr("Regression Type"), reg_type, reg));
+        auto* reg_type = new QComboBox(reg);
+        reg_type->addItems({"OLS", "Multiple"});
+        reg_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                        "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::fonts::SMALL));
+        combo_inputs_["reg_type"] = reg_type;
+        reg_vl->addWidget(build_input_row(tr("Regression Type"), reg_type, reg));
 
-    auto* subj_rev = make_double_spin(0, 1e15, 1e9, 0, "", reg);
-    double_inputs_["reg_subj_revenue"] = subj_rev;
-    reg_vl->addWidget(build_input_row(tr("Subject Revenue") + " ($)", subj_rev, reg));
+        auto* subj_rev = make_double_spin(0, 1e15, 1e9, 0, "", reg);
+        double_inputs_["reg_subj_revenue"] = subj_rev;
+        reg_vl->addWidget(build_input_row(tr("Subject Revenue") + " ($)", subj_rev, reg));
 
-    auto* subj_ebitda = make_double_spin(0, 1e15, 300e6, 0, "", reg);
-    double_inputs_["reg_subj_ebitda"] = subj_ebitda;
-    reg_vl->addWidget(build_input_row(tr("Subject EBITDA") + " ($)", subj_ebitda, reg));
+        auto* subj_ebitda = make_double_spin(0, 1e15, 300e6, 0, "", reg);
+        double_inputs_["reg_subj_ebitda"] = subj_ebitda;
+        reg_vl->addWidget(build_input_row(tr("Subject EBITDA") + " ($)", subj_ebitda, reg));
 
-    auto* subj_growth = make_double_spin(-100, 500, 14, 1, "%", reg);
-    double_inputs_["reg_subj_growth"] = subj_growth;
-    reg_vl->addWidget(build_input_row(tr("Subject Growth"), subj_growth, reg));
+        auto* subj_growth = make_double_spin(-100, 500, 14, 1, "%", reg);
+        double_inputs_["reg_subj_growth"] = subj_growth;
+        reg_vl->addWidget(build_input_row(tr("Subject Growth"), subj_growth, reg));
 
-    // The regression needs a comparable set. It used to be fed nothing (the script then had no data at all);
-    // paste one here, or leave this empty to use the deals already in the local deal database. Three drivers
-    // plus the intercept need at least five comparables to leave a degree of freedom for the statistics.
-    auto* reg_comps = new QTextEdit(reg);
-    reg_comps->setPlaceholderText(tr("Comparable companies (optional) - JSON array: [{\"name\":\"A\",\"ev\":5e9,"
-                                     "\"revenue\":1e9,\"ebitda\":2e8,\"growth\":0.1}, ...] (at least 5). "
-                                     "Leave empty to use the local deal database."));
-    reg_comps->setMaximumHeight(110);
-    reg_vl->addWidget(reg_comps);
+        // The regression needs a comparable set: typed, pasted from a spreadsheet or imported (opens with six
+        // labelled sample peers). Leave the grid empty to use the deals verified in the Deal Database. Three drivers
+        // plus the intercept need at least five comparables to leave a degree of freedom for the statistics.
+        auto* reg_hint = new QLabel(tr("Comparable companies (at least 5) - leave the grid empty to use the deals you "
+                                       "verified in the Deal Database."),
+                                    reg);
+        reg_hint->setWordWrap(true);
+        reg_hint->setStyleSheet(QString("color:%1; font-size:%2px;").arg(ui::colors::TEXT_SECONDARY()).arg(ui::fonts::px(-2)));
+        reg_vl->addWidget(reg_hint);
+        auto* reg_grid = new MaDealGrid(MaDealGrid::Kind::Regression, QStringLiteral("reg_comps_grid"), reg);
+        reg_vl->addWidget(reg_grid);
+        deal_grids_["regression"] = reg_grid; // filled by USE SAMPLE COMPARABLES
 
-    auto* reg_run = make_run_button(tr("RUN REGRESSION"), reg);
-    connect(reg_run, &QPushButton::clicked, this, [this, reg_comps]() {
-        QJsonObject params;
-        const QString comps_text = reg_comps->toPlainText().trimmed();
-        if (!comps_text.isEmpty()) {
-            QJsonParseError perr{};
-            const QJsonDocument comps_doc = QJsonDocument::fromJson(comps_text.toUtf8(), &perr);
-            if (perr.error != QJsonParseError::NoError || !comps_doc.isArray()) {
-                status_label_->setText(tr("Invalid JSON"));
-                display_error(tr("Comparable companies must be a valid JSON array (%1).").arg(perr.errorString()));
+        auto* reg_run = make_run_button(tr("RUN REGRESSION"), reg);
+        connect(reg_run, &QPushButton::clicked, this, [this, reg_grid]() {
+            QJsonObject params;
+            QJsonArray comps;
+            if (!grid_deals(reg_grid, &comps, /*allow_empty=*/reg_grid->row_count() == 0))
                 return;
-            }
-            params["comp_data"] = comps_doc.array();
-        }
-        status_label_->setText(tr("Running Regression..."));
-        params["type"] = combo_inputs_["reg_type"]->currentText().toLower();
-        QJsonObject subject;
-        subject["revenue"] = double_inputs_["reg_subj_revenue"]->value();
-        subject["ebitda"] = double_inputs_["reg_subj_ebitda"]->value();
-        subject["growth"] = double_inputs_["reg_subj_growth"]->value() / 100.0;
-        params["subject"] = subject;
-        MAAnalyticsService::instance().run_regression(params);
+            if (!comps.isEmpty())
+                params["comp_data"] = comps;
+            status_label_->setText(tr("Running Regression..."));
+            params["type"] = combo_inputs_["reg_type"]->currentText().toLower();
+            QJsonObject subject;
+            subject["revenue"] = double_inputs_["reg_subj_revenue"]->value();
+            subject["ebitda"] = double_inputs_["reg_subj_ebitda"]->value();
+            subject["growth"] = double_inputs_["reg_subj_growth"]->value() / 100.0;
+            params["subject"] = subject;
+            MAAnalyticsService::instance().run_regression(params);
+        });
+        reg_vl->addWidget(reg_run);
+        reg_vl->addStretch();
     });
-    reg_vl->addWidget(reg_run);
-    reg_vl->addStretch();
-    add_sub_tab(reg, QT_TR_NOOP("Regression"));
 
     vl->addWidget(sub_tabs_);
 

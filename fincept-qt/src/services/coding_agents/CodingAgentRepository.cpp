@@ -1,4 +1,5 @@
-// CodingAgentRepository.cpp — parameterized SQL for coding_agent_* tables (v052).
+// CodingAgentRepository.cpp — parameterized SQL for coding_agent_* tables
+// (v052, extended by v061).
 
 #include "services/coding_agents/CodingAgentRepository.h"
 
@@ -14,16 +15,23 @@ namespace coding_agent_repo_detail {
 
 constexpr const char* kCodingAgentRepoTag = "CodingAgentRepo";
 
+// v052 columns, then the v061 ones (effort … cached_tokens). `agent` is the
+// harness id, read and written verbatim — an id this build has no adapter for
+// is never relabelled.
 constexpr const char* kRunColumns =
     "id, title, agent, prompt, model, mode, workdir, workdir_auto, use_fincept_tools, max_budget_usd, status, "
     "created_at, started_at, finished_at, session_id, exit_code, cost_usd, input_tokens, output_tokens, final_text, "
-    "error, parent_run_id, schedule_id, origin";
+    "error, parent_run_id, schedule_id, origin, effort, permission_mode, harness_version, time_limit_s, max_turns, "
+    "cached_tokens";
+constexpr int kRunColumnCount = 30;
 
 constexpr const char* kEventColumns = "seq, ts, kind, title, body, raw_json, is_error, ref_id";
 
 constexpr const char* kScheduleColumns =
     "id, name, agent, prompt, model, mode, use_fincept_tools, max_budget_usd, kind, interval_minutes, daily_time, "
-    "weekdays_mask, enabled, last_run_at, next_run_at, created_at, updated_at";
+    "weekdays_mask, enabled, last_run_at, next_run_at, created_at, updated_at, effort, permission_mode, time_limit_s, "
+    "max_turns, workdir";
+constexpr int kScheduleColumnCount = 22;
 
 /// SQLite's historical bound-parameter limit is 999 — chunk IN (...) lists well below it.
 constexpr int kDeleteChunk = 400;
@@ -44,14 +52,19 @@ QVariant text(const QString& s) {
     return s.isNull() ? QVariant(QStringLiteral("")) : QVariant(s);
 }
 
+/// Text column as stored; NULL (a row written outside the repository) → "".
+QString text_of(const QVariant& v) {
+    return v.isNull() ? QString() : v.toString();
+}
+
 CodingAgentRun map_run(QSqlQuery& q) {
     CodingAgentRun r;
     r.id = q.value(0).toString();
     r.title = q.value(1).toString();
-    r.agent = agent_from_id(q.value(2).toString()).value_or(AgentKind::Claude);
+    r.harness = text_of(q.value(2)); // verbatim — "unknown harness (<id>)" is the UI's business
     r.prompt = q.value(3).toString();
     r.model = q.value(4).toString();
-    r.mode = mode_from_id(q.value(5).toString());
+    r.permission = permission_from_columns(text_of(q.value(25)), text_of(q.value(5)));
     r.workdir = q.value(6).toString();
     r.workdir_auto = q.value(7).toInt() != 0;
     r.use_fincept_tools = q.value(8).toInt() != 0;
@@ -72,6 +85,11 @@ CodingAgentRun map_run(QSqlQuery& q) {
     r.parent_run_id = q.value(21).toString();
     r.schedule_id = q.value(22).toString();
     r.origin = q.value(23).toString();
+    r.effort = text_of(q.value(24));
+    r.harness_version = text_of(q.value(26));
+    r.time_limit_s = qMax(0, q.value(27).toInt());
+    r.max_turns = qMax(0, q.value(28).toInt());
+    r.cached_tokens = qMax<qint64>(0, q.value(29).toLongLong());
     return r;
 }
 
@@ -92,10 +110,10 @@ CodingAgentSchedule map_schedule(QSqlQuery& q) {
     CodingAgentSchedule s;
     s.id = q.value(0).toString();
     s.name = q.value(1).toString();
-    s.agent = agent_from_id(q.value(2).toString()).value_or(AgentKind::Claude);
+    s.harness = text_of(q.value(2)); // verbatim
     s.prompt = q.value(3).toString();
     s.model = q.value(4).toString();
-    s.mode = mode_from_id(q.value(5).toString());
+    s.permission = permission_from_columns(text_of(q.value(18)), text_of(q.value(5)));
     s.use_fincept_tools = q.value(6).toInt() != 0;
     s.max_budget_usd = q.value(7).isNull() ? 0.0 : q.value(7).toDouble();
     s.kind = schedule_kind_from_id(q.value(8).toString());
@@ -107,6 +125,10 @@ CodingAgentSchedule map_schedule(QSqlQuery& q) {
     s.next_run_at_ms = q.value(14).isNull() ? 0 : q.value(14).toLongLong();
     s.created_at_ms = q.value(15).toLongLong();
     s.updated_at_ms = q.value(16).toLongLong();
+    s.effort = text_of(q.value(17));
+    s.time_limit_s = qMax(0, q.value(19).toInt());
+    s.max_turns = qMax(0, q.value(20).toInt());
+    s.workdir = text_of(q.value(21));
     return s;
 }
 
@@ -144,14 +166,17 @@ Result<void> CodingAgentRepository::upsert_run(const CodingAgentRun& r) const {
                        "session_id=excluded.session_id, exit_code=excluded.exit_code, cost_usd=excluded.cost_usd, "
                        "input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, "
                        "final_text=excluded.final_text, error=excluded.error, parent_run_id=excluded.parent_run_id, "
-                       "schedule_id=excluded.schedule_id, origin=excluded.origin")
-            .arg(QLatin1String(kRunColumns), placeholders(24));
+                       "schedule_id=excluded.schedule_id, origin=excluded.origin, effort=excluded.effort, "
+                       "permission_mode=excluded.permission_mode, harness_version=excluded.harness_version, "
+                       "time_limit_s=excluded.time_limit_s, max_turns=excluded.max_turns, "
+                       "cached_tokens=excluded.cached_tokens")
+            .arg(QLatin1String(kRunColumns), placeholders(kRunColumnCount));
     return exec_write(sql, {r.id,
                             text(r.title),
-                            agent_id(r.agent),
+                            text(r.harness),
                             text(r.prompt),
                             text(r.model),
-                            mode_id(r.mode),
+                            legacy_mode_id(r.permission),
                             text(r.workdir),
                             r.workdir_auto ? 1 : 0,
                             r.use_fincept_tools ? 1 : 0,
@@ -169,7 +194,13 @@ Result<void> CodingAgentRepository::upsert_run(const CodingAgentRun& r) const {
                             text(r.error),
                             str_or_null(r.parent_run_id),
                             str_or_null(r.schedule_id),
-                            r.origin.isEmpty() ? QStringLiteral("user") : r.origin});
+                            r.origin.isEmpty() ? QStringLiteral("user") : r.origin,
+                            text(r.effort),
+                            harness::permission_id(r.permission),
+                            text(r.harness_version),
+                            qMax(0, r.time_limit_s),
+                            qMax(0, r.max_turns),
+                            qMax<qint64>(0, r.cached_tokens)});
 }
 
 Result<void> CodingAgentRepository::delete_runs(const QStringList& ids) const {
@@ -270,9 +301,8 @@ Result<int> CodingAgentRepository::insert_events(const QVector<RunEventRow>& row
             ++failed;
     }
     if (failed > 0)
-        LOG_WARN(kCodingAgentRepoTag, QStringLiteral("insert_events: %1 of %2 rows skipped (run deleted or constraint)")
-                                          .arg(failed)
-                                          .arg(rows.size()));
+        LOG_WARN(kCodingAgentRepoTag, logf("Agent run events not saved (run deleted or constraint)",
+                                           {{"skipped", failed}, {"of", rows.size()}}));
     auto c = db().commit();
     if (c.is_err()) {
         db().rollback();
@@ -312,14 +342,16 @@ Result<void> CodingAgentRepository::upsert_schedule(const CodingAgentSchedule& s
                        "kind=excluded.kind, interval_minutes=excluded.interval_minutes, "
                        "daily_time=excluded.daily_time, weekdays_mask=excluded.weekdays_mask, "
                        "enabled=excluded.enabled, last_run_at=excluded.last_run_at, "
-                       "next_run_at=excluded.next_run_at, updated_at=excluded.updated_at")
-            .arg(QLatin1String(kScheduleColumns), placeholders(17));
+                       "next_run_at=excluded.next_run_at, updated_at=excluded.updated_at, effort=excluded.effort, "
+                       "permission_mode=excluded.permission_mode, time_limit_s=excluded.time_limit_s, "
+                       "max_turns=excluded.max_turns, workdir=excluded.workdir")
+            .arg(QLatin1String(kScheduleColumns), placeholders(kScheduleColumnCount));
     return exec_write(sql, {s.id,
                             text(s.name),
-                            agent_id(s.agent),
+                            text(s.harness),
                             text(s.prompt),
                             text(s.model),
-                            mode_id(s.mode),
+                            legacy_mode_id(s.permission),
                             s.use_fincept_tools ? 1 : 0,
                             s.max_budget_usd > 0.0 ? QVariant(s.max_budget_usd) : QVariant(),
                             schedule_kind_id(s.kind),
@@ -330,7 +362,12 @@ Result<void> CodingAgentRepository::upsert_schedule(const CodingAgentSchedule& s
                             ms_or_null(s.last_run_at_ms),
                             ms_or_null(s.next_run_at_ms),
                             s.created_at_ms,
-                            s.updated_at_ms});
+                            s.updated_at_ms,
+                            text(s.effort),
+                            harness::permission_id(s.permission),
+                            qMax(0, s.time_limit_s),
+                            qMax(0, s.max_turns),
+                            text(s.workdir)});
 }
 
 Result<void> CodingAgentRepository::delete_schedule(const QString& id) const {

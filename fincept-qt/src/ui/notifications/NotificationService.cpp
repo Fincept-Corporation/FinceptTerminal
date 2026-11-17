@@ -37,7 +37,9 @@ void ToastService::post(Severity sev, const QString& message, const QString& sou
         case Severity::Info:
             break;
     }
-    LOG_INFO("Toast", QString("[%1] %2 (%3)").arg(level, message, source.isEmpty() ? QStringLiteral("-") : source));
+    // The toast text is not logged (it quotes file names, symbols, account names, error
+    // bodies); the code that raised the toast logs its own event.
+    LOG_DEBUG("Toast", fincept::logf("Toast shown", {{"level", level}, {"source", source}, {"chars", message.size()}}));
 
     emit posted(n);
 }

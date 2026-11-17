@@ -76,6 +76,8 @@ class LegEditorModel : public QAbstractTableModel {
     double resolve_ltp(const fincept::services::options::StrategyLeg& leg) const;
     double resolve_delta(const fincept::services::options::StrategyLeg& leg) const;
     double resolve_pnl(const fincept::services::options::StrategyLeg& leg) const;
+    /// The chain's premium currency (FnoFormat.h fno_chain_ccy): rupees on NSE.
+    QString ccy() const;
 
     QVector<fincept::services::options::StrategyLeg> legs_;
     fincept::services::options::OptionChain chain_;
@@ -92,7 +94,12 @@ class LegEditorTable : public QTableView {
     void mousePressEvent(QMouseEvent* event) override;
 
   private:
+    /// Column widths and row height for the table's text size; re-applied when
+    /// the user's font size changes.
+    void apply_metrics();
+
     LegEditorModel* model_ = nullptr;
+    int metrics_font_px_ = 0;
 };
 
 } // namespace fincept::screens::fno

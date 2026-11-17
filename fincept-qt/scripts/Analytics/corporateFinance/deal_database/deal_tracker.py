@@ -1,4 +1,18 @@
-"""M&A Deal Tracker - Main API for deal tracking and analysis"""
+"""M&A Deal Tracker - Main API for deal tracking and analysis
+
+CLI (used by the Qt MAAnalyticsService; every command prints one JSON object on stdout):
+  scan <days> [max_filings] [forms_csv]   search EDGAR for M&A filings of the last <days> days (1-90), store them,
+                                          and extract deals from up to <max_filings> high-confidence filings not
+                                          read before. Progress goes to stderr as one line per step:
+                                          @@PROGRESS {"phase", "done", "total", "message", "filings", "deals_created"}
+  list                                    every deal, with verified (0/1), source and quality_issues
+  search <text>                           deals whose names / industry / tickers contain <text>
+  filings [limit]                         stored filings, newest first, with their sec.gov index URL
+  upsert <json>                           save a deal the user entered or edited (marks it verified)
+  verify <deal_id> <0|1>                  mark a deal verified / unverified
+  delete <deal_id>                        delete a deal (its filing stays in the index)
+  track <ticker> | summary [days] | comps <industry> <value>
+"""
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -11,74 +25,131 @@ sys.path.insert(0, str(analytics_path))
 
 # Use absolute imports instead of relative imports
 from corporateFinance.deal_database.database_schema import MADatabase
-from corporateFinance.deal_database.deal_scanner import MADealScanner
+from corporateFinance.deal_database.deal_scanner import (MADealScanner, DEFAULT_SCAN_FORMS, filing_index_url,
+                                                         sec_throttled, sec_request_count)
+from corporateFinance.deal_database.deal_parser import MADealParser, deal_quality_issues
 
-try:
-    from corporateFinance.deal_database.deal_parser import MADealParser
-    PARSER_AVAILABLE = True
-except ImportError:
-    MADealParser = None
-    PARSER_AVAILABLE = False
+MAX_SCAN_DAYS = 90
+DEFAULT_MAX_FILINGS = 40
+
+
+def _progress(phase: str, done: int, total: int, message: str, **extra):
+    """One machine-readable progress line on stderr (the Qt side shows `message` and a done/total bar)."""
+    payload = {"phase": phase, "done": done, "total": total, "message": message}
+    payload.update(extra)
+    print("@@PROGRESS " + json.dumps(payload), file=sys.stderr, flush=True)
 
 
 class MADealTracker:
     def __init__(self, db_path: Optional[Path] = None):
         self.db = MADatabase(db_path)
         self.scanner = MADealScanner(self.db)
-        self.parser = MADealParser(self.db) if PARSER_AVAILABLE else None
+        self.parser = MADealParser(self.db)
 
-    def update_deal_database(self, days_back: int = 7, auto_parse: bool = True) -> Dict[str, Any]:
-        """Update database with recent M&A deals"""
-        print(f"[DealTracker] Scanning SEC filings from last {days_back} days...", file=sys.stderr)
-        filings = self.scanner.scan_recent_filings(days_back=days_back)
-
+    def update_deal_database(self, days_back: int = 7, auto_parse: bool = True,
+                             max_filings: int = DEFAULT_MAX_FILINGS,
+                             forms: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Search EDGAR, store the filings, extract (unverified) deals from the high-confidence ones."""
+        days_back = max(1, min(int(days_back), MAX_SCAN_DAYS))
+        started = datetime.now()
+        print(f"[DealTracker] Scanning SEC filings from last {days_back} days...", file=sys.stderr, flush=True)
         results = {
-            'filings_found': len(filings),
-            'deals_parsed': 0,
-            'deals_created': 0,
-            'parsing_failed': 0,
-            'filings': filings,
-            'timestamp': datetime.now().isoformat()
+            'days_scanned': days_back,
+            'filings_found': 0,
+            'deals_parsed': 0,      # filings that produced a deal row (created + updated)
+            'deals_created': 0,     # new deal rows
+            'deals_updated': 0,     # existing unverified rows refreshed
+            'deals_kept_verified': 0,  # rows the user verified: never overwritten
+            'deals_rejected': 0,    # failed the quality guards (not stored)
+            'parsing_failed': 0,    # could not read the filing
+            'already_parsed': 0,
+            'rejections': [],
+            'filings': [],
+            'timestamp': started.isoformat(),
         }
 
-        if not filings:
-            return results
+        state = {'filings': 0}
 
-        # Store filings into sec_filings table
-        for filing in filings:
-            try:
-                self.db.insert_sec_filing({
-                    'accession_number': filing['accession_number'],
-                    'filing_type': filing['filing_type'],
-                    'filing_date': filing['filing_date'],
-                    'company_name': filing['company_name'],
-                    'cik': filing['cik'],
-                    'filing_url': filing.get('filing_url', ''),
-                    'confidence_score': filing['confidence_score'],
-                    'contains_ma_flag': filing.get('contains_ma_flag', 1),
-                    'parsed_flag': 0,
-                })
-            except Exception:
-                pass
+        def search_progress(phase, done, total, message):
+            _progress(phase, done, total, message, filings=state['filings'], deals_created=0)
 
-        # Try to parse high-confidence filings into actual deals
-        if auto_parse and self.parser:
-            high_confidence = [f for f in filings if f['confidence_score'] > 0.75]
-            print(f"[DealTracker] Parsing {len(high_confidence)} high-confidence filings...", file=sys.stderr)
+        filings = self.scanner.scan_recent_filings(days_back=days_back, forms=forms, progress=search_progress)
+        results['filings_found'] = len(filings)
+        results['filings'] = filings
+        state['filings'] = len(filings)
+        _progress("stored", len(filings), len(filings), f"{len(filings)} filings stored",
+                  filings=len(filings), deals_created=0)
 
-            for filing in high_confidence:
-                try:
-                    deal = self.parser.parse_filing(filing['accession_number'])
-                    if deal:
-                        results['deals_parsed'] += 1
-                except Exception as e:
+        if auto_parse and filings and not sec_throttled():
+            parsed_before = {row['accession_number'] for row in self.db.list_filings(100000)
+                             if int(row.get('parsed_flag') or 0) == 1}
+            candidates = [f for f in filings if f.get('confidence_score', 0) >= 0.75
+                          and f.get('filing_type') != 'SC TO-I']
+            fresh = [f for f in candidates if f['accession_number'] not in parsed_before]
+            results['already_parsed'] = len(candidates) - len(fresh)
+            todo = fresh[:max(0, int(max_filings))]
+            results['parse_skipped_over_limit'] = max(0, len(fresh) - len(todo))
+            print(f"[DealTracker] Reading {len(todo)} high-confidence filings...", file=sys.stderr, flush=True)
+
+            for i, filing in enumerate(todo, start=1):
+                if sec_throttled():
+                    break
+                _progress("parse", i - 1, len(todo),
+                          f"Reading SEC filings - {i} of {len(todo)}: {filing.get('company_name', '')} "
+                          f"({filing.get('filing_type', '')})",
+                          filings=len(filings), deals_created=results['deals_created'])
+                deal = self.parser.parse_filing(filing['accession_number'], filing.get('filing_type'))
+                status = self.parser.last_status
+                if deal and status == 'created':
+                    results['deals_created'] += 1
+                    results['deals_parsed'] += 1
+                elif deal and status == 'updated':
+                    results['deals_updated'] += 1
+                    results['deals_parsed'] += 1
+                elif deal and status == 'kept_verified':
+                    results['deals_kept_verified'] += 1
+                elif status == 'rejected':
+                    results['deals_rejected'] += 1
+                    if len(results['rejections']) < 50:
+                        results['rejections'].append({'accession_number': filing['accession_number'],
+                                                      'company_name': filing.get('company_name', ''),
+                                                      'reason': self.parser.last_error})
+                else:
                     results['parsing_failed'] += 1
-                    print(f"[DealTracker] Parse error: {e}", file=sys.stderr)
+            _progress("parse", len(todo), len(todo), "Done", filings=len(filings),
+                      deals_created=results['deals_created'])
 
-        if results['deals_parsed'] == 0:
-            print("[DealTracker] No deals parsed from filings.", file=sys.stderr)
-
+        if sec_throttled():
+            results['warning'] = ("SEC stopped answering (HTTP 403/429: request rate limit). The filings and deals "
+                                  "found so far are kept - try again in a minute.")
+        results['sec_requests'] = sec_request_count()
+        results['elapsed_s'] = round((datetime.now() - started).total_seconds(), 1)
         return results
+
+    def list_deals(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Deals for the Deals screen: verified flag, source and, for unverified rows, why they look doubtful."""
+        deals = self.db.search_deals({'query': query} if query else {})
+        for d in deals:
+            d['verified'] = int(d.get('verified') or 0)
+            if not d.get('source'):
+                d['source'] = 'SEC EDGAR (auto-extracted)' if d.get('data_source') == 'SEC EDGAR' else 'User'
+            d['quality_issues'] = [] if d['verified'] else deal_quality_issues(d)
+        return deals
+
+    def list_filings(self, limit: int = 500) -> List[Dict[str, Any]]:
+        rows = self.db.list_filings(limit)
+        for r in rows:
+            extra = {}
+            try:
+                extra = json.loads(r.pop('extracted_data', None) or '{}') or {}
+            except ValueError:
+                pass
+            r.update({k: extra.get(k, '') for k in ('ticker', 'industry', 'deal_indicators')})
+            url = r.get('filing_url') or ''
+            if not url or 'browse-edgar' in url:
+                r['filing_url'] = filing_index_url(r.get('cik', ''), r.get('accession_number', '')) or url
+            r['parsed_flag'] = int(r.get('parsed_flag') or 0)
+        return rows
 
     def search_deals(self, **filters) -> List[Dict[str, Any]]:
         """Search M&A deals with filters"""
@@ -141,7 +212,7 @@ class MADealTracker:
 
     def track_company(self, ticker: str, years_back: int = 5) -> Dict[str, Any]:
         """Track M&A activity for specific company"""
-        print(f"Tracking M&A history for {ticker}...")
+        print(f"Tracking M&A history for {ticker}...", file=sys.stderr)
 
         filings = self.scanner.scan_company_ma_history(ticker, years_back)
 
@@ -254,16 +325,21 @@ class MADealTracker:
         """Close database connection"""
         self.db.close()
 
+def _missing_fields_error(fields: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    missing = [k for k, label in (('acquirer_name', 'acquirer'), ('target_name', 'target'))
+               if not str(fields.get(k) or '').strip()]
+    if not missing:
+        return None
+    labels = {'acquirer_name': 'Acquirer', 'target_name': 'Target'}
+    return {"success": False, "missing_inputs": missing,
+            "error": "Enter the " + " and the ".join(labels[k].lower() for k in missing) + " name to save the deal."}
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
-    import json
-
     if len(sys.argv) < 2:
-        result = {
-            "success": False,
-            "error": "No command specified. Usage: deal_tracker.py <command> [args...]"
-        }
-        print(json.dumps(result))
+        print(json.dumps({"success": False,
+                          "error": "No command specified. Usage: deal_tracker.py <command> [args...]"}))
         sys.exit(1)
 
     command = sys.argv[1]
@@ -271,124 +347,101 @@ def main():
 
     try:
         if command in ("update", "scan"):
-            # Update deal database ("scan" is the name the Qt MAAnalyticsService uses)
+            # scan <days> [max_filings] [forms_csv]  ("scan" is the name the Qt MAAnalyticsService uses)
             days_back = int(sys.argv[2]) if len(sys.argv) > 2 else 7
-            result = tracker.update_deal_database(days_back=days_back)
+            max_filings = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_MAX_FILINGS
+            forms = [f.strip() for f in sys.argv[4].split(',') if f.strip()] if len(sys.argv) > 4 else None
+            result = tracker.update_deal_database(days_back=days_back, max_filings=max_filings, forms=forms)
 
-            # Return only summary + slim filing list (no full deals query — frontend calls get_all separately)
-            filings = result.get('filings', [])
             slim_filings = [
                 {
                     'accession_number': f.get('accession_number', ''),
                     'filing_type': f.get('filing_type', ''),
                     'filing_date': f.get('filing_date', ''),
                     'company_name': f.get('company_name', ''),
+                    'ticker': f.get('ticker', ''),
                     'cik': f.get('cik', ''),
+                    'items': f.get('items', ''),
+                    'industry': f.get('industry', ''),
                     'filing_url': f.get('filing_url', ''),
                     'confidence_score': f.get('confidence_score', 0),
                     'deal_indicators': f.get('deal_indicators', ''),
                 }
-                for f in filings
+                for f in result.get('filings', [])
             ]
-
-            output = {
-                "success": True,
-                "data": {
-                    'filings_found': result.get('filings_found', 0),
-                    'deals_parsed': result.get('deals_parsed', 0),
-                    'deals_created': result.get('deals_created', 0),
-                    'parsing_failed': result.get('parsing_failed', 0),
-                    'timestamp': result.get('timestamp', ''),
-                    'filings': slim_filings,
-                    'deals': [],
-                    'deals_count': 0,
-                }
-            }
-            print(json.dumps(output, default=str))
+            data = {k: v for k, v in result.items() if k != 'filings'}
+            data['filings'] = slim_filings
+            print(json.dumps({"success": True, "data": data}, default=str))
 
         elif command == "list":
-            # Every deal in the local database (used by the Deals panel's LOAD ALL DEALS)
-            deals = tracker.search_deals()
-
-            result = {
-                "success": True,
-                "data": deals,
-                "count": len(deals)
-            }
-            print(json.dumps(result, default=str))
+            deals = tracker.list_deals()
+            print(json.dumps({"success": True, "data": deals, "count": len(deals),
+                              "verified_count": sum(1 for d in deals if d['verified'])}, default=str))
 
         elif command == "search":
-            # Search deals: free-text across target / acquirer / industry / tickers (a superset of the old
-            # exact-industry match, which made the Deals panel's search box return nothing for company names)
             if len(sys.argv) < 3:
                 raise ValueError("Search text required")
+            deals = tracker.list_deals(sys.argv[2])
+            print(json.dumps({"success": True, "data": deals, "count": len(deals)}, default=str))
 
-            query = sys.argv[2]
-            deals = tracker.search_deals(query=query)
+        elif command == "filings":
+            limit = int(sys.argv[2]) if len(sys.argv) > 2 else 500
+            rows = tracker.list_filings(limit)
+            print(json.dumps({"success": True, "data": rows, "count": len(rows)}, default=str))
 
-            result = {
-                "success": True,
-                "data": deals,
-                "count": len(deals)
-            }
-            print(json.dumps(result))
+        elif command == "upsert":
+            if len(sys.argv) < 3:
+                raise ValueError("Deal fields (JSON) required")
+            fields = json.loads(sys.argv[2])
+            if not isinstance(fields, dict):
+                raise ValueError("Deal fields must be a JSON object")
+            err = _missing_fields_error(fields)
+            if err:
+                print(json.dumps(err))
+                sys.exit(1)
+            deal_id = tracker.db.upsert_user_deal(fields, verified=bool(fields.get('verified', True)))
+            deal = tracker.db.get_deal_by_id(deal_id) or {'deal_id': deal_id}
+            deal['verified'] = int(deal.get('verified') or 0)
+            print(json.dumps({"success": True, "data": deal}, default=str))
+
+        elif command == "verify":
+            if len(sys.argv) < 4:
+                raise ValueError("Deal id and 0/1 required")
+            if not tracker.db.set_verified(sys.argv[2], sys.argv[3] not in ('0', 'false', 'False')):
+                raise ValueError(f"Deal {sys.argv[2]} not found")
+            print(json.dumps({"success": True, "data": {"deal_id": sys.argv[2],
+                                                        "verified": 0 if sys.argv[3] in ('0', 'false', 'False') else 1}}))
+
+        elif command == "delete":
+            if len(sys.argv) < 3:
+                raise ValueError("Deal id required")
+            if not tracker.db.delete_deal(sys.argv[2]):
+                raise ValueError(f"Deal {sys.argv[2]} not found")
+            print(json.dumps({"success": True, "data": {"deal_id": sys.argv[2], "deleted": True}}))
 
         elif command == "track":
-            # Track company M&A activity
             if len(sys.argv) < 3:
                 raise ValueError("Company ticker required")
-
-            ticker = sys.argv[2]
-            result = tracker.track_company(ticker)
-
-            output = {
-                "success": True,
-                "data": result
-            }
-            print(json.dumps(output))
+            print(json.dumps({"success": True, "data": tracker.track_company(sys.argv[2])}, default=str))
 
         elif command == "summary":
-            # Get recent deals summary
             days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            summary = tracker.get_recent_deals_summary(days=days)
-
-            result = {
-                "success": True,
-                "data": summary
-            }
-            print(json.dumps(result))
+            print(json.dumps({"success": True, "data": tracker.get_recent_deals_summary(days=days)}, default=str))
 
         elif command == "comps":
-            # Build transaction comp table
             if len(sys.argv) < 4:
                 raise ValueError("Industry and target value required")
-
-            industry = sys.argv[2]
-            target_value = float(sys.argv[3])
-
-            comp_table = tracker.build_transaction_comp_table(industry, target_value)
-
-            result = {
-                "success": True,
-                "data": comp_table
-            }
-            print(json.dumps(result))
+            comp_table = tracker.build_transaction_comp_table(sys.argv[2], float(sys.argv[3]))
+            print(json.dumps({"success": True, "data": comp_table}, default=str))
 
         else:
-            result = {
-                "success": False,
-                "error": f"Unknown command: {command}. Available: update, scan, list, search, track, summary, comps"
-            }
-            print(json.dumps(result))
+            print(json.dumps({"success": False,
+                              "error": f"Unknown command: {command}. Available: scan, list, search, filings, "
+                                       "upsert, verify, delete, track, summary, comps"}))
             sys.exit(1)
 
     except Exception as e:
-        result = {
-            "success": False,
-            "error": str(e),
-            "command": command
-        }
-        print(json.dumps(result))
+        print(json.dumps({"success": False, "error": str(e), "command": command}))
         sys.exit(1)
     finally:
         tracker.close()

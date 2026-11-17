@@ -53,8 +53,12 @@ class MarginUsageWidget : public BaseWidget {
     QVector<QLabel*> row_labels_;
     /// Last usage % rendered — retranslateUi() needs it to rebuild the caption.
     int last_usage_pct_ = -1;
-    /// Re-applies the account name / "no account" hint in the current language.
+    /// Re-applies the account name / "no account" hint in the current language,
+    /// plus why the broker session is unusable (expired token, connection error).
     void refresh_header_hint();
+    QString balance_topic() const;
+    /// No account: "No broker account connected" over the tile (BaseWidget helper).
+    void show_no_account_state();
 
     bool hub_active_ = false;
 };

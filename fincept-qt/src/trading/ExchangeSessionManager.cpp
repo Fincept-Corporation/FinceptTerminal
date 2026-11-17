@@ -93,8 +93,21 @@ ExchangeSession* ExchangeSessionManager::session(const QString& exchange_id) {
     // that routes its fan-out to DataHub via the manager's policies.
     auto* s = new ExchangeSession(exchange_id, build_publisher(), this);
     connect(s, &ExchangeSession::ws_state_changed, this, &ExchangeSessionManager::ws_state_changed);
+    // A stream that cannot run publishes nothing, so `ws:<exchange>:*` subscribers
+    // (dashboard ticker, trade tape) would wait on a loading state forever. Report
+    // the reason on every topic that currently has demand; the next successful
+    // publish clears it.
+    connect(s, &ExchangeSession::ws_failed, this, [this](const QString& exchange, const QString& message) {
+        const auto it = hub_demand_.constFind(exchange);
+        if (it == hub_demand_.constEnd())
+            return;
+        auto& hub = fincept::datahub::DataHub::instance();
+        const QSet<QString> topics = it->topics; // publish_error runs subscriber slots, which may change demand
+        for (const auto& topic : topics)
+            hub.publish_error(topic, message);
+    });
     sessions_.insert(exchange_id, s);
-    LOG_INFO(kMgrTag, "Created ExchangeSession for " + exchange_id);
+    LOG_DEBUG(kMgrTag, "Created ExchangeSession for " + exchange_id);
     return s;
 }
 
@@ -268,7 +281,7 @@ void ExchangeSessionManager::ensure_registered_with_hub() {
     }
 
     hub_registered_ = true;
-    LOG_INFO(kMgrTag, QString("Registered with DataHub (%1 exchanges)").arg(supported_exchange_ids().size()));
+    LOG_DEBUG(kMgrTag, QString("Registered with DataHub (%1 exchanges)").arg(supported_exchange_ids().size()));
 }
 
 // ── DataHub-driven stream demand ────────────────────────────────────────────
@@ -353,7 +366,7 @@ void ExchangeSessionManager::sync_hub_exchange(const QString& exchange_id) {
                     return; // demand came back
                 ExchangeSession* sess = self->session(exchange_id);
                 if (sess->is_ws_hub_owned() && sess->is_ws_active()) {
-                    LOG_INFO(kMgrTag, QString("No DataHub subscribers left — stopping %1 stream").arg(exchange_id));
+                    LOG_DEBUG(kMgrTag, QString("No DataHub subscribers left — stopping %1 stream").arg(exchange_id));
                     sess->stop_ws();
                 }
             });
@@ -367,7 +380,7 @@ void ExchangeSessionManager::sync_hub_exchange(const QString& exchange_id) {
         list.removeAll(primary);
         list.prepend(primary);
         if (s->start_ws(primary, list, /*hub_owned=*/true))
-            LOG_INFO(kMgrTag, QString("Started %1 stream for DataHub subscribers (%2 pair(s))")
+            LOG_DEBUG(kMgrTag, QString("Started %1 stream for DataHub subscribers (%2 pair(s))")
                                   .arg(exchange_id)
                                   .arg(list.size()));
         return;
@@ -395,7 +408,7 @@ void ExchangeSessionManager::sync_hub_exchange(const QString& exchange_id) {
     // since launch may have changed it without reordering the launch list.
     merged.removeAll(primary);
     merged.prepend(primary);
-    LOG_INFO(kMgrTag, QString("Extending %1 stream with %2 DataHub pair(s)")
+    LOG_DEBUG(kMgrTag, QString("Extending %1 stream with %2 DataHub pair(s)")
                           .arg(exchange_id)
                           .arg(merged.size() - have.size()));
     s->start_ws(primary, merged, s->is_ws_hub_owned());

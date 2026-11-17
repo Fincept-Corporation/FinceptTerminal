@@ -61,6 +61,9 @@ class SettingsTab : public QWidget {
 
     QSlider* slippage_slider_ = nullptr;
     QLabel* slippage_value_ = nullptr;
+    /// The saved slippage could not be read: the slider shows the tightest value and
+    /// the panel head says so until the user picks a value (or a later read works).
+    bool slippage_unreadable_ = false;
 
     QCheckBox* show_unverified_checkbox_ = nullptr;
 

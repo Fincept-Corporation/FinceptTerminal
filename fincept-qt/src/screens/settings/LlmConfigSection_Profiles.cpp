@@ -7,7 +7,11 @@
 
 #include "core/logging/Logger.h"
 #include "screens/settings/LlmConfigSection.h"
+#include "services/harness/HarnessRegistry.h"
+#include "services/harness/IHarnessAdapter.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/ModelCatalog.h"
+#include "services/llm/ProviderCatalog.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -17,7 +21,9 @@
 // Unity-build hygiene: see LlmConfigSection_Providers.cpp for the rationale.
 namespace {
 constexpr const char* TAG_PROFILES = "LlmConfigSection";
-}
+// Per-profile Max Tokens ceiling for providers other than Fincept.
+constexpr int kLlmProfilesTokensMax = 128000;
+} // namespace
 
 #include <QFormLayout>
 #include <QFrame>
@@ -34,6 +40,99 @@ constexpr const char* TAG_PROFILES = "LlmConfigSection";
 #include <memory>
 
 namespace fincept::screens {
+
+namespace {
+// The Fincept API rejects max_tokens above ModelCatalog::kFinceptMaxOutputTokens
+// and profile_to_json() caps a Fincept profile there, so its field must not
+// offer more — the same ceiling the main LLM settings section applies. Setting
+// the maximum also brings a stored larger value down to what is really sent.
+void llm_profiles_apply_tokens_cap(QSpinBox* spin, const QString& provider) {
+    if (!spin)
+        return;
+    const bool fincept = provider.trimmed().compare(QLatin1String("fincept"), Qt::CaseInsensitive) == 0;
+    const int cap = fincept ? ai_chat::ModelCatalog::kFinceptMaxOutputTokens : kLlmProfilesTokensMax;
+    spin->setMaximum(cap);
+    spin->setToolTip(fincept ? LlmConfigSection::tr("The Fincept AI service accepts at most %1 output tokens.").arg(cap)
+                             : QString());
+}
+} // namespace
+
+// ── Harness profiles (provider "harness:<id>") ───────────────────────────────
+// A harness profile names an agent harness (Claude Code, Codex) answering
+// terminal AI: its model and reasoning effort, never a key or an endpoint (the
+// harness authenticates with the user's own CLI setup). Widgets that the
+// header does not declare are found by objectName.
+namespace llm_profiles_harness_detail {
+
+constexpr const char* kLphEffortCombo = "profileEffortCombo";
+constexpr const char* kLphEffortLabel = "profileEffortLabel";
+constexpr const char* kLphHint = "profileHarnessHint";
+
+bool lph_is_harness(const QString& provider) {
+    return ai_chat::ProviderCatalog::is_harness(provider);
+}
+
+/// "harness:<id>" of every harness that can answer terminal AI, registration order.
+QStringList lph_harness_providers() {
+    QStringList out;
+    auto& reg = harness::HarnessRegistry::instance();
+    for (const QString& id : reg.ids()) {
+        const harness::IHarnessAdapter* a = reg.adapter(id);
+        if (a && a->descriptor().caps.chat)
+            out << QStringLiteral("harness:") + id;
+    }
+    return out;
+}
+
+/// The model currently chosen: the item's id (its data), or what was typed.
+QString lph_model_of(const QComboBox* combo) {
+    const int i = combo->currentIndex();
+    if (i >= 0 && combo->itemText(i) == combo->currentText())
+        return combo->itemData(i).toString();
+    return combo->currentText().trimmed();
+}
+
+/// "CLI default" first (data ""), then the harness's models (text = id).
+void lph_fill_models(QComboBox* combo, const QString& harness_id, const QString& current) {
+    const QSignalBlocker block(combo);
+    combo->clear();
+    combo->addItem(LlmConfigSection::tr("CLI default"), QString());
+    const harness::HarnessStatus st = harness::HarnessRegistry::instance().status(harness_id);
+    for (const harness::ModelInfo& m : st.models) {
+        combo->addItem(m.id, m.id);
+        if (!m.label.isEmpty() && m.label != m.id)
+            combo->setItemData(combo->count() - 1, m.label, Qt::ToolTipRole);
+    }
+    int idx = combo->findData(current);
+    if (idx < 0 && !current.isEmpty()) {
+        combo->addItem(current, current);
+        idx = combo->count() - 1;
+    }
+    combo->setCurrentIndex(qMax(0, idx));
+}
+
+void lph_fill_efforts(QComboBox* combo, const QString& harness_id, const QString& model, const QString& current) {
+    if (!combo)
+        return;
+    const QSignalBlocker block(combo);
+    combo->clear();
+    combo->addItem(LlmConfigSection::tr("CLI default"), QString());
+    for (const QString& e : harness::HarnessRegistry::instance().efforts(harness_id, model))
+        combo->addItem(e, e);
+    int idx = combo->findData(current);
+    if (idx < 0 && !current.isEmpty()) {
+        combo->addItem(current, current);
+        idx = combo->count() - 1;
+    }
+    combo->setCurrentIndex(qMax(0, idx));
+}
+
+bool lph_has_effort(const QString& harness_id) {
+    const harness::IHarnessAdapter* a = harness::HarnessRegistry::instance().adapter(harness_id);
+    return a && a->descriptor().caps.effort;
+}
+
+} // namespace llm_profiles_harness_detail
 
 QWidget* LlmConfigSection::build_profiles_tab() {
     auto* w = new QWidget(this);
@@ -101,6 +200,7 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     btn_row->addWidget(profile_add_btn_);
 
     profile_delete_btn_ = new QPushButton(tr("Delete"));
+    profile_delete_btn_->setProperty("fincept_agent_risk", "delete"); // agents: deletes the model profile
     profile_delete_btn_->setEnabled(false);
     profile_delete_btn_->setStyleSheet("QPushButton{background:transparent;color:" + QString(ui::colors::NEGATIVE()) +
                                        ";border:1px solid " + QString(ui::colors::NEGATIVE()) +
@@ -110,7 +210,7 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
                                        QString(ui::colors::BG_RAISED()) +
                                        ";}"
                                        "QPushButton:disabled{color:" +
-                                       QString(ui::colors::BORDER_BRIGHT()) +
+                                       QString(ui::colors::TEXT_TERTIARY()) +
                                        ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
     connect(profile_delete_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_delete_profile);
     btn_row->addWidget(profile_delete_btn_);
@@ -136,12 +236,12 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     vl->setContentsMargins(20, 16, 20, 16);
     vl->setSpacing(10);
 
-    static auto lbl = [](const QString& t) {
+    auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
         l->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
         return l;
     };
-    static auto field_style = []() {
+    auto field_style = []() {
         return QString("background:" + QString(ui::colors::BG_RAISED()) +
                        ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
                        QString(ui::colors::BORDER_MED()) + ";padding:6px 10px;");
@@ -160,6 +260,13 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     // Formatted names, alphabetical; the provider id rides in itemData.
     for (const auto& id : providers_sorted())
         profile_provider_combo_->addItem(provider_display_name(id), id);
+    // Agent harnesses that can answer terminal AI ("Claude Code (harness)").
+    const QStringList harness_providers = llm_profiles_harness_detail::lph_harness_providers();
+    if (!harness_providers.isEmpty()) {
+        profile_provider_combo_->insertSeparator(profile_provider_combo_->count());
+        for (const QString& hp : harness_providers)
+            profile_provider_combo_->addItem(provider_display_name(hp), hp);
+    }
     profile_provider_combo_->setStyleSheet(
         QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
     connect(profile_provider_combo_, &QComboBox::currentIndexChanged, this,
@@ -172,6 +279,36 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     profile_model_combo_->setEditable(true);
     profile_model_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
     vl->addWidget(profile_model_combo_);
+
+    // Harness profiles only: reasoning effort, and what such a profile is.
+    auto* effort_lbl = lbl(tr("REASONING EFFORT"));
+    effort_lbl->setObjectName(QString::fromLatin1(llm_profiles_harness_detail::kLphEffortLabel));
+    effort_lbl->setVisible(false);
+    vl->addWidget(effort_lbl);
+    auto* effort_combo = new QComboBox;
+    effort_combo->setObjectName(QString::fromLatin1(llm_profiles_harness_detail::kLphEffortCombo));
+    effort_combo->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
+    effort_combo->setVisible(false);
+    vl->addWidget(effort_combo);
+    auto* harness_hint = new QLabel(tr("Authenticates with your own Claude Code / Codex setup — no key is stored. It "
+                                       "answers terminal AI only when signed in with an API key (Settings › LLM "
+                                       "Configuration › Terminal AI); Agent Studio cannot use it yet."));
+    harness_hint->setObjectName(QString::fromLatin1(llm_profiles_harness_detail::kLphHint));
+    harness_hint->setWordWrap(true);
+    harness_hint->setStyleSheet("color:" + QString(ui::colors::TEXT_TERTIARY()) + ";");
+    harness_hint->setVisible(false);
+    vl->addWidget(harness_hint);
+    // A harness's efforts depend on the model.
+    connect(profile_model_combo_, &QComboBox::currentTextChanged, this, [this, effort_combo](const QString&) {
+        const QString provider = profile_provider_combo_->currentData().toString();
+        if (!llm_profiles_harness_detail::lph_is_harness(provider))
+            return;
+        const QString id = ai_chat::ProviderCatalog::harness_id(provider);
+        if (llm_profiles_harness_detail::lph_has_effort(id))
+            llm_profiles_harness_detail::lph_fill_efforts(
+                effort_combo, id, llm_profiles_harness_detail::lph_model_of(profile_model_combo_),
+                effort_combo->currentData().toString());
+    });
 
     profile_api_key_field_lbl_ = lbl(tr("API KEY"));
     vl->addWidget(profile_api_key_field_lbl_);
@@ -204,7 +341,7 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     profile_tokens_field_lbl_ = lbl(tr("MAX TOKENS"));
     tok_col->addWidget(profile_tokens_field_lbl_);
     profile_tokens_spin_ = new QSpinBox;
-    profile_tokens_spin_->setRange(256, 128000);
+    profile_tokens_spin_->setRange(256, kLlmProfilesTokensMax); // per provider: llm_profiles_apply_tokens_cap
     profile_tokens_spin_->setSingleStep(256);
     profile_tokens_spin_->setValue(4096);
     profile_tokens_spin_->setStyleSheet(field_style());
@@ -223,7 +360,7 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     auto* btn_row = new QHBoxLayout;
     profile_save_btn_ = new QPushButton(tr("SAVE PROFILE"));
     profile_save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) +
-                                     ";color:" + QString(ui::colors::BG_BASE()) +
+                                     ";color:" + QString(ui::colors::TEXT_ON_ACCENT()) +
                                      ";border:none;padding:8px 20px;"
                                      "font-weight:700;letter-spacing:1px;}"
                                      "QPushButton:hover{background:" +
@@ -241,7 +378,7 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
                                         QString(ui::colors::BG_RAISED()) +
                                         ";}"
                                         "QPushButton:disabled{color:" +
-                                        QString(ui::colors::BORDER_BRIGHT()) +
+                                        QString(ui::colors::TEXT_TERTIARY()) +
                                         ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
     connect(profile_default_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_set_default_profile);
     btn_row->addWidget(profile_default_btn_);
@@ -265,17 +402,27 @@ void LlmConfigSection::load_profiles() {
     profile_list_->blockSignals(true);
     profile_list_->clear();
 
-    auto result = LlmProfileRepository::instance().list_profiles();
+    // Every profile, harness profiles included (list_profiles() leaves those out
+    // for the agent runtime's pickers).
+    auto result = LlmProfileRepository::instance().list_all_profiles();
     if (result.is_ok()) {
         for (const auto& p : result.value()) {
             QString display = p.name;
             if (p.is_default)
                 display += "  ★";
-            display += QString("  [%1 / %2]").arg(p.provider, p.model_id);
+            if (p.is_harness()) {
+                QString what = p.model_id.isEmpty() ? tr("CLI default") : p.model_id;
+                if (!p.reasoning_effort.isEmpty())
+                    what += QStringLiteral(" · ") + p.reasoning_effort;
+                display += QString("  [%1 / %2]  · %3").arg(provider_display_name(p.provider), what, tr("terminal AI only"));
+            } else {
+                display += QString("  [%1 / %2]").arg(p.provider, p.model_id);
+            }
             auto* item = new QListWidgetItem(display);
             item->setData(Qt::UserRole, p.id);
+            item->setData(Qt::UserRole + 1, p.is_default); // read by the theme_changed recolour
             if (p.is_default)
-                item->setForeground(QColor("" + QString(ui::colors::AMBER()) + ""));
+                item->setForeground(QColor(ui::colors::AMBER()));
             profile_list_->addItem(item);
             // Keep the profile being edited highlighted across a reload (signals
             // are blocked, so this does not re-populate the form).
@@ -299,20 +446,34 @@ void LlmConfigSection::populate_profile_form(const LlmProfile& p) {
         profile_provider_combo_->setCurrentIndex(profile_provider_combo_->count() - 1);
     }
 
-    // Populate model combo from fallback list, then select saved model
-    profile_model_combo_->clear();
-    profile_model_combo_->addItems(fallback_models(p.provider));
-    profile_model_combo_->setCurrentText(p.model_id);
+    const bool is_harness = llm_profiles_harness_detail::lph_is_harness(p.provider);
+    if (is_harness) {
+        // The provider combo may not have changed: put the harness form in place, then its values.
+        on_profile_provider_changed(p.provider);
+        const QString hid = ai_chat::ProviderCatalog::harness_id(p.provider);
+        llm_profiles_harness_detail::lph_fill_models(profile_model_combo_, hid, p.model_id);
+        if (auto* effort = findChild<QComboBox*>(QString::fromLatin1(llm_profiles_harness_detail::kLphEffortCombo)))
+            llm_profiles_harness_detail::lph_fill_efforts(effort, hid, p.model_id, p.reasoning_effort);
+    } else {
+        // Populate model combo from fallback list, then select saved model
+        profile_model_combo_->clear();
+        profile_model_combo_->addItems(fallback_models(p.provider));
+        profile_model_combo_->setCurrentText(p.model_id);
+    }
 
-    profile_api_key_edit_->setText(p.api_key);
-    profile_base_url_edit_->setText(p.base_url);
+    profile_api_key_edit_->setText(is_harness ? QString() : p.api_key);
+    profile_base_url_edit_->setText(is_harness ? QString() : p.base_url);
     profile_temp_spin_->setValue(p.temperature);
+    // The provider combo may not have changed (no provider_changed signal), so
+    // apply this profile's ceiling before its value.
+    llm_profiles_apply_tokens_cap(profile_tokens_spin_, p.provider);
     profile_tokens_spin_->setValue(p.max_tokens);
     profile_prompt_edit_->setPlainText(p.system_prompt);
 
     editing_profile_id_ = p.id;
     profile_delete_btn_->setEnabled(true);
-    profile_default_btn_->setEnabled(!p.is_default);
+    // A harness profile cannot be the default (that also serves Agent Studio).
+    profile_default_btn_->setEnabled(!p.is_default && !is_harness);
 }
 
 void LlmConfigSection::clear_profile_form() {
@@ -355,7 +516,45 @@ void LlmConfigSection::on_profile_selected(int row) {
 }
 
 void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
+    namespace lph = llm_profiles_harness_detail;
+    const bool is_harness = lph::lph_is_harness(provider);
+    auto* effort_combo = findChild<QComboBox*>(QString::fromLatin1(lph::kLphEffortCombo));
+    auto* effort_lbl = findChild<QLabel*>(QString::fromLatin1(lph::kLphEffortLabel));
+    auto* harness_hint = findChild<QLabel*>(QString::fromLatin1(lph::kLphHint));
+    const QString harness_id = ai_chat::ProviderCatalog::harness_id(provider);
+    const bool show_effort = is_harness && lph::lph_has_effort(harness_id);
+    if (effort_combo)
+        effort_combo->setVisible(show_effort);
+    if (effort_lbl)
+        effort_lbl->setVisible(show_effort);
+    if (harness_hint)
+        harness_hint->setVisible(is_harness);
+    // A harness has no key, endpoint, temperature or token cap of ours.
+    profile_base_url_edit_->setEnabled(!is_harness);
+    profile_temp_spin_->setEnabled(!is_harness);
+    profile_tokens_spin_->setEnabled(!is_harness);
+    if (is_harness) {
+        profile_api_key_edit_->clear();
+        profile_api_key_edit_->setEnabled(false);
+        profile_api_key_edit_->setPlaceholderText(tr("Not used — the harness authenticates itself"));
+        profile_base_url_edit_->clear();
+        // Keep the model only when it is one of this harness's (not the previous provider's).
+        QString model = lph::lph_model_of(profile_model_combo_);
+        bool known = false;
+        for (const harness::ModelInfo& m : harness::HarnessRegistry::instance().status(harness_id).models)
+            known = known || m.id == model;
+        if (!known)
+            model.clear();
+        lph::lph_fill_models(profile_model_combo_, harness_id, model);
+        if (show_effort)
+            lph::lph_fill_efforts(effort_combo, harness_id, lph::lph_model_of(profile_model_combo_),
+                                  effort_combo->currentData().toString());
+        profile_default_btn_->setEnabled(false);
+        return;
+    }
+
     const bool is_ollama = (provider.toLower() == "ollama");
+    llm_profiles_apply_tokens_cap(profile_tokens_spin_, provider);
 
     profile_model_combo_->clear();
     profile_model_combo_->addItems(fallback_models(provider));
@@ -414,15 +613,18 @@ void LlmConfigSection::on_save_profile() {
         return;
     }
     QString provider = profile_provider_combo_->currentData().toString().trimmed();
-    QString model = profile_model_combo_->currentText().trimmed();
-    if (model.isEmpty()) {
+    const bool is_harness = llm_profiles_harness_detail::lph_is_harness(provider);
+    // A harness may run its CLI's default model ("CLI default" = empty).
+    QString model = is_harness ? llm_profiles_harness_detail::lph_model_of(profile_model_combo_)
+                               : profile_model_combo_->currentText().trimmed();
+    if (model.isEmpty() && !is_harness) {
         show_profile_status(tr("Model is required"), true);
         return;
     }
 
-    // If api_key is empty, inherit from saved provider
-    QString api_key = profile_api_key_edit_->text().trimmed();
-    if (api_key.isEmpty()) {
+    // If api_key is empty, inherit from saved provider (a harness never stores one).
+    QString api_key = is_harness ? QString() : profile_api_key_edit_->text().trimmed();
+    if (api_key.isEmpty() && !is_harness) {
         auto providers = LlmConfigRepository::instance().list_providers();
         if (providers.is_ok()) {
             for (const auto& p : providers.value()) {
@@ -436,7 +638,7 @@ void LlmConfigSection::on_save_profile() {
 
     // A custom endpoint must be a real http(s) URL — a typo otherwise only surfaces
     // as an opaque connection error the first time an agent uses the profile.
-    const QString base_url = profile_base_url_edit_->text().trimmed();
+    const QString base_url = is_harness ? QString() : profile_base_url_edit_->text().trimmed();
     if (!base_url.isEmpty()) {
         const QUrl u(base_url, QUrl::StrictMode);
         const QString scheme = u.scheme().toLower();
@@ -470,7 +672,13 @@ void LlmConfigSection::on_save_profile() {
     profile.temperature = profile_temp_spin_->value();
     profile.max_tokens = profile_tokens_spin_->value();
     profile.system_prompt = profile_prompt_edit_->toPlainText().trimmed();
-    profile.is_default = was_default;
+    profile.is_default = was_default && !is_harness;
+    if (is_harness) {
+        if (auto* effort =
+                findChild<QComboBox*>(QString::fromLatin1(llm_profiles_harness_detail::kLphEffortCombo));
+            effort && !effort->isHidden())
+            profile.reasoning_effort = effort->currentData().toString();
+    }
 
     auto r = LlmProfileRepository::instance().save_profile(profile);
     if (r.is_err()) {
@@ -480,7 +688,7 @@ void LlmConfigSection::on_save_profile() {
 
     editing_profile_id_ = profile.id;
     profile_delete_btn_->setEnabled(true);
-    profile_default_btn_->setEnabled(!was_default);
+    profile_default_btn_->setEnabled(!profile.is_default && !is_harness);
 
     show_profile_status(tr("Profile saved"), false);
     load_profiles();

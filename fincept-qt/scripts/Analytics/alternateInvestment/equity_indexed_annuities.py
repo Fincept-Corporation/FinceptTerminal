@@ -135,8 +135,10 @@ class EquityIndexedAnnuityAnalyzer(AlternativeInvestmentBase):
                           'Floor' if scenario < self.floor_rate else 'Partial'
             })
 
-        # Calculate average upside capture
-        avg_capture = sum(r['upside_captured'] for r in results) / len(results) if results else 0
+        # Average upside capture over the UP scenarios (a down year has no upside to capture; counting
+        # it as 0% would understate the capture once down years are in the list).
+        up = [r['upside_captured'] for r in results if r['index_return'] > 0]
+        avg_capture = sum(up) / len(up) if up else 0
 
         return {
             'crediting_parameters': {

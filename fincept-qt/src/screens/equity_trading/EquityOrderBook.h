@@ -15,6 +15,10 @@
 #include <QVector>
 #include <QWidget>
 
+namespace fincept::ui {
+class PanelHeader;
+}
+
 namespace fincept::screens::equity {
 
 class EquityOrderBook : public QWidget {
@@ -33,6 +37,15 @@ class EquityOrderBook : public QWidget {
     // price with a level that belongs to the old symbol.
     void clear();
 
+    // What the empty ladder says instead of the generic "No depth data" — e.g. that
+    // depth needs a broker connection. Empty restores the generic text.
+    void set_empty_message(const QString& text);
+    // Levels shown per side (1..5): 5 on a wide screen, fewer where the column is
+    // short (EquityLayoutPlan). The levels held are kept; only the ladder's height
+    // and painting change.
+    void set_visible_levels(int levels);
+    int visible_levels() const { return levels_; }
+
   signals:
     void price_clicked(double price);
 
@@ -47,12 +60,14 @@ class EquityOrderBook : public QWidget {
   private:
     void rebuild_cache();
     void retranslateUi();
+    // Sizes the header and the painted bands for the active font and pins the
+    // widget to the resulting content height.
+    void update_metrics();
     // Maps a widget-space y to a price level. Returns true on a hit and fills
     // `is_ask`/`index` (index into asks_/bids_, 0 = best of book).
     bool level_at_y(int widget_y, bool& is_ask, int& index) const;
 
-    QLabel* title_label_ = nullptr;
-    QLabel* levels_label_ = nullptr; // right-of-header badge: "L2 · 5×5" / "L1 SYNTH"
+    fincept::ui::PanelHeader* header_ = nullptr; // "MARKET DEPTH" + level badge
     QWidget* canvas_ = nullptr;      // transparent layout spacer; painting happens on `this`
 
     QVector<QPair<double, double>> bids_;
@@ -62,6 +77,7 @@ class EquityOrderBook : public QWidget {
     double spread_ = 0;
     double spread_pct_ = 0;
     bool has_data_ = false;
+    QString empty_message_; // see set_empty_message()
 
     QPixmap cache_;
     bool cache_dirty_ = true;
@@ -77,12 +93,22 @@ class EquityOrderBook : public QWidget {
     int hover_index_ = -1;
     bool hover_is_ask_ = false;
 
+    // Band heights at the default font size (the minimums)...
     static constexpr int ROW_H = 22;
     static constexpr int HEADER_H = 28;
     static constexpr int COLHDR_H = 18;
     static constexpr int SPREAD_H = 26;
     static constexpr int FOOTER_H = 26;
-    static constexpr int MAX_LEVELS = 5; // visible levels per side
+    static constexpr int MAX_LEVELS = 5; // levels held per side (the most ever shown)
+    int levels_ = MAX_LEVELS;            // levels shown per side (set_visible_levels)
+    QString levels_badge_;               // "L2 · 5×5" / "L1 · synthetic"
+
+    // ...and for the active font size (see update_metrics()).
+    int row_h_ = ROW_H;
+    int header_h_ = HEADER_H;
+    int colhdr_h_ = COLHDR_H;
+    int spread_h_ = SPREAD_H;
+    int footer_h_ = FOOTER_H;
 };
 
 } // namespace fincept::screens::equity

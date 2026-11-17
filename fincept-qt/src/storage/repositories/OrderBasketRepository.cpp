@@ -20,9 +20,18 @@ QString legs_to_json(const QVector<trading::UnifiedOrder>& legs) {
     return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }
 
-QVector<trading::UnifiedOrder> legs_from_json(const QString& json) {
+QVector<trading::UnifiedOrder> legs_from_json(const QString& json, const QString& basket_id) {
     QVector<trading::UnifiedOrder> legs;
-    const auto doc = QJsonDocument::fromJson(json.toUtf8());
+    if (json.trimmed().isEmpty())
+        return legs;
+    QJsonParseError err{};
+    const auto doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isArray()) {
+        // The basket shows no legs; never the stored order data itself.
+        LOG_ERROR("BasketRepo", logf("Order basket legs are not valid JSON",
+                                     {{"basket", basket_id}, {"bytes", json.size()}, {"parse_error", err.errorString()}}));
+        return legs;
+    }
     for (const auto& v : doc.array())
         legs.append(trading::ActionCenter::deserialize_unified_order(v.toObject()));
     return legs;
@@ -47,7 +56,7 @@ QVector<OrderBasket> OrderBasketRepository::list_all() const {
         OrderBasket b;
         b.id = q.value(0).toString();
         b.name = q.value(1).toString();
-        b.legs = legs_from_json(q.value(2).toString());
+        b.legs = legs_from_json(q.value(2).toString(), b.id);
         out.append(b);
     }
     return out;

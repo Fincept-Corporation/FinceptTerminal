@@ -32,6 +32,17 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "settings"; }
 
+    /// Deep link: switch to a section exactly as a click on its nav entry does.
+    /// `section_id` (stable, lower_snake): general, appearance, notifications,
+    /// keybindings, voice, logging, developer, profiles, credentials, security,
+    /// data_sources, llm_config, ai_agents, mcp_servers, python_env, storage,
+    /// cloud_sync. An unknown id leaves the screen where it is (logged).
+    /// `focus`: for credentials, narrows the cards to it (an env-key name such
+    /// as "FRED_API_KEY" or a provider name; empty shows every card); ignored
+    /// by the other sections. Driven by nav.switch_screen {"screen_id":
+    /// "settings", "section": ..., "focus": ...} (WindowFrame).
+    void open_section(const QString& section_id, const QString& focus = QString());
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -44,6 +55,8 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
     void refresh_theme();
     void retranslateUi();
+    /// Width of the left panel: follows the font size and the footer link's text.
+    void fit_nav_width();
 
     /// Wire the signals of the section at `idx` (if it has any) to external
     /// services. Called after that section is (re)built — first visit, or a

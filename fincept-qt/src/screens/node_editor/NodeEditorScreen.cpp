@@ -1,7 +1,9 @@
 #include "screens/node_editor/NodeEditorScreen.h"
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "screens/node_editor/NodeEditorCommands.h"
 #include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/MiniMap.h"
@@ -17,10 +19,14 @@
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "services/workflow/WorkflowService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QApplication>
+#include <QCheckBox>
+#include <QCoreApplication>
 #include <QFileDialog>
 #include <QFrame>
 #include <QInputDialog>
@@ -38,8 +44,25 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <iterator>
 
 namespace fincept::workflow {
+
+namespace {
+// Templates offered as one-click rows on the empty canvas (indices into
+// NodeEditorScreen::template_titles()): the ones that only read data.
+constexpr int kNodeEditorSuggestedTemplates[] = {0, 1, 2, 4};
+
+// "1. Hello World — Trigger → Set Variable → Display" → "Hello World" + the rest.
+void node_editor_split_template_title(const QString& title, QString* label, QString* secondary) {
+    static const QRegularExpression kNumberPrefix(QStringLiteral("^\\d+\\.\\s*"));
+    QString t = title;
+    t.remove(kNumberPrefix);
+    const int dash = t.indexOf(QStringLiteral(" — "));
+    *label = dash > 0 ? t.left(dash).trimmed() : t.trimmed();
+    *secondary = dash > 0 ? t.mid(dash + 3).trimmed() : QString();
+}
+} // namespace
 
 // The scene is a child of this screen and the views (canvas, minimap) live in the splitter,
 // so on quit the scene can be destroyed while both views are still attached.
@@ -60,6 +83,9 @@ NodeEditorScreen::NodeEditorScreen(QWidget* parent)
     : QWidget(parent), undo_stack_(new QUndoStack(this)), auto_save_timer_(new QTimer(this)) {
     build_ui();
     wire_signals();
+    // keyPressEvent: Ctrl+Enter runs the workflow — the same kind as EXECUTE (`order`);
+    // while a run is going it stops it instead and carries no marker (execution signals).
+    setProperty(fincept::core::agent::kAgentRiskKeysProperty, QStringLiteral("Ctrl+Return=order;Ctrl+Enter=order"));
 
     // Auto-save every 30 seconds (P3: started/stopped in show/hideEvent)
     auto_save_timer_->setInterval(30000);
@@ -107,7 +133,7 @@ void NodeEditorScreen::showEvent(QShowEvent* event) {
     }
     settings.endGroup();
 
-    LOG_INFO("NodeEditor", "Node editor shown");
+    LOG_DEBUG("NodeEditor", "Node editor shown");
 }
 
 void NodeEditorScreen::hideEvent(QHideEvent* event) {
@@ -129,7 +155,7 @@ void NodeEditorScreen::hideEvent(QHideEvent* event) {
         settings.setValue("last_workflow_id", current_workflow_id_);
     settings.endGroup();
 
-    LOG_INFO("NodeEditor", "Node editor hidden");
+    LOG_DEBUG("NodeEditor", "Node editor hidden");
 }
 
 void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
@@ -218,7 +244,7 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
             if (selected_ids.contains(ed.source_node) && selected_ids.contains(ed.target_node))
                 clipboard_edges_.append(ed);
         }
-        LOG_INFO("NodeEditor", QString("Copied %1 nodes").arg(clipboard_nodes_.size()));
+        LOG_DEBUG("NodeEditor", QString("Copied %1 nodes").arg(clipboard_nodes_.size()));
         event->accept();
     } else if (event->matches(QKeySequence::Paste)) {
         // Ctrl+V — paste nodes with offset and new IDs
@@ -251,7 +277,7 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
         }
         // Single undoable step for the whole paste, wiring included.
         push_add_nodes(pasted_nodes, pasted_edges, tr("Paste %1 node(s)").arg(pasted_nodes.size()));
-        LOG_INFO("NodeEditor", QString("Pasted %1 nodes").arg(pasted_nodes.size()));
+        LOG_DEBUG("NodeEditor", QString("Pasted %1 nodes").arg(pasted_nodes.size()));
         event->accept();
     } else {
         QWidget::keyPressEvent(event);
@@ -274,23 +300,27 @@ void NodeEditorScreen::build_ui() {
     root->addWidget(sep);
 
     // ── 3-panel splitter ───────────────────────────────────────────
-    auto* splitter = new QSplitter(Qt::Horizontal);
+    // Every panel is created inside its final parent (the splitter, itself
+    // already in this screen): adding a finished panel to a different parent
+    // makes Qt recompute the stylesheet of every widget in it, and the palette
+    // alone holds hundreds — that re-parenting was most of this screen's cost.
+    auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
     splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }"
                                     "QSplitter::handle:hover { background: %2; }")
                                 .arg(ui::colors::BORDER_MED(), ui::colors::TEXT_DIM()));
 
     // Left: Node palette
-    palette_ = new NodePalette(this);
+    palette_ = new NodePalette(splitter);
     splitter->addWidget(palette_);
 
     // Center: Canvas
     scene_ = new NodeScene(this);
-    canvas_ = new NodeCanvas(scene_);
+    canvas_ = new NodeCanvas(scene_, splitter);
     splitter->addWidget(canvas_);
 
     // Right: Properties panel
-    properties_ = new NodePropertiesPanel(this);
+    properties_ = new NodePropertiesPanel(splitter);
     splitter->addWidget(properties_);
 
     splitter->setSizes({240, 700, 280});
@@ -308,6 +338,80 @@ void NodeEditorScreen::build_ui() {
     minimap_ = new MiniMap(scene_, canvas_, canvas_);
     minimap_->move(canvas_->width() - 210, canvas_->height() - 160);
     minimap_->show();
+
+    build_canvas_empty_state();
+}
+
+void NodeEditorScreen::build_canvas_empty_state() {
+    canvas_empty_ = new ui::EmptyState(canvas_->viewport());
+    apply_canvas_empty_texts();
+    connect(canvas_empty_, &ui::EmptyState::primary_clicked, this, &NodeEditorScreen::on_show_templates);
+    connect(canvas_empty_, &ui::EmptyState::secondary_clicked, this, &NodeEditorScreen::on_load_workflow);
+    connect(canvas_empty_, &ui::EmptyState::suggestion_clicked, this, [this](int row) {
+        if (row >= 0 && row < static_cast<int>(std::size(kNodeEditorSuggestedTemplates)))
+            load_template(kNodeEditorSuggestedTemplates[row]);
+    });
+    // The canvas shows it while the scene has no node and keeps it the viewport's size.
+    canvas_->set_empty_state(canvas_empty_);
+}
+
+void NodeEditorScreen::apply_canvas_empty_texts() {
+    if (!canvas_empty_)
+        return;
+    const QStringList titles = template_titles();
+    ui::EmptyState::Spec spec;
+    spec.glyph = QStringLiteral("◇");
+    spec.glyph_tone = ui::EmptyState::Tone::Accent;
+    spec.title = tr("Build a workflow");
+    spec.message = tr("Drag nodes from the palette, right-click the canvas for quick add, or start from a "
+                      "ready-made template.");
+    spec.note = tr("Nothing runs until you press EXECUTE");
+    spec.note_tone = ui::EmptyState::Tone::Info;
+    spec.primary = tr("START FROM A TEMPLATE");
+    spec.primary_tooltip = tr("Choose one of %n built-in templates", "", static_cast<int>(titles.size()));
+    spec.secondary = tr("LOAD SAVED WORKFLOW");
+    spec.secondary_tooltip = tr("Open a workflow you saved earlier");
+    for (const int idx : kNodeEditorSuggestedTemplates) {
+        if (idx < 0 || idx >= titles.size())
+            continue;
+        ui::EmptyState::Suggestion row;
+        node_editor_split_template_title(titles.at(idx), &row.label, &row.secondary);
+        row.tooltip = tr("Load this template onto the canvas");
+        spec.suggestions.append(row);
+    }
+    spec.suggestions_heading = tr("OR START WITH");
+    canvas_empty_->apply(spec);
+}
+
+void NodeEditorScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        apply_canvas_empty_texts();
+    QWidget::changeEvent(event);
+}
+
+void NodeEditorScreen::select_entry_node() {
+    NodeItem* pick = nullptr;
+    bool pick_is_trigger = false;
+    for (auto* item : scene_->node_items()) {
+        const bool trigger = item->node_def().type.startsWith(QLatin1String("trigger."));
+        if (pick) {
+            if (pick_is_trigger && !trigger)
+                continue;
+            const QPointF a = item->pos();
+            const QPointF b = pick->pos();
+            const bool before = (trigger && !pick_is_trigger) || a.x() < b.x() || (a.x() == b.x() && a.y() < b.y());
+            if (!before)
+                continue;
+        }
+        pick = item;
+        pick_is_trigger = trigger;
+    }
+    if (!pick) {
+        properties_->clear();
+        return;
+    }
+    scene_->clearSelection();
+    pick->setSelected(true); // NodeItem::node_selected → on_node_selected fills the properties panel
 }
 
 void NodeEditorScreen::wire_signals() {
@@ -357,6 +461,16 @@ void NodeEditorScreen::wire_signals() {
                     item->set_disabled(value);
                 else if (flag == QLatin1String("continue_on_fail"))
                     item->set_continue_on_fail(value);
+                else if (flag == QLatin1String("retry_on_fail"))
+                    item->node_def_mutable().retry_on_fail = value; // no visual; reaches serialize()
+                mark_dirty();
+            });
+    connect(properties_, &NodePropertiesPanel::node_max_tries_changed, this,
+            [this](const QString& node_id, int max_tries) {
+                auto* item = scene_->find_node(node_id);
+                if (!item)
+                    return;
+                item->node_def_mutable().max_tries = max_tries;
                 mark_dirty();
             });
     connect(scene_, &NodeScene::node_execute_from_requested, this, [this](const QString& node_id) {
@@ -424,6 +538,7 @@ void NodeEditorScreen::wire_signals() {
             toolbar_->set_status_text(tr("PARTIAL LOAD"));
         }
         LOG_INFO("NodeEditor", QString("Workflow loaded: %1").arg(wf.name));
+        select_entry_node(); // the properties panel opens on the workflow's entry node
     });
     connect(&svc, &WorkflowService::workflow_load_failed, this,
             [](const QString& err) { LOG_ERROR("NodeEditor", QString("Load failed: %1").arg(err)); });
@@ -439,6 +554,7 @@ void NodeEditorScreen::wire_signals() {
         results_panel_->set_started(wf_id);
         results_panel_->set_mode_banner(pending_banner_, pending_banner_live_);
         toolbar_->set_executing(true);
+        setProperty(fincept::core::agent::kAgentRiskKeysProperty, QVariant()); // Ctrl+Enter now stops
     });
     connect(&svc, &WorkflowService::node_execution_started, this, [this](const QString& node_id) {
         auto* item = scene_->find_node(node_id);
@@ -455,12 +571,14 @@ void NodeEditorScreen::wire_signals() {
                 if (item)
                     item->set_execution_state(!result.success ? "error" : skipped ? "skipped" : "completed");
                 scene_->set_edges_animated(node_id, false);
-                results_panel_->add_node_result(result, item ? item->node_def().name : QString());
+                results_panel_->add_node_result(result, item ? item->node_def().name : QString(),
+                                                item ? item->node_def().type : QString());
             });
     connect(&svc, &WorkflowService::execution_finished, this, [this](const WorkflowExecutionResult& result) {
         scene_->stop_all_edge_animations();
         results_panel_->set_finished(result);
         toolbar_->set_executing(false);
+        setProperty(fincept::core::agent::kAgentRiskKeysProperty, QStringLiteral("Ctrl+Return=order;Ctrl+Enter=order"));
         QString msg = result.success ? QString("Execution completed in %1ms").arg(result.total_duration_ms)
                                      : QString("Execution failed: %1").arg(result.error);
         LOG_INFO("NodeEditor", msg);
@@ -573,20 +691,39 @@ void NodeEditorScreen::on_node_selected(const QString& node_id) {
     properties_->show_properties(&node_item->node_def(), type_def);
 }
 
+// Parameter / name edits go on the undo stack (consecutive keystrokes into one field merge
+// into one step). They used to be applied directly, so Ctrl+Z after an edit reverted the
+// previous structural change and left the edit in place.
 void NodeEditorScreen::on_param_changed(const QString& node_id, const QString& key, QJsonValue value) {
     auto* node_item = scene_->find_node(node_id);
-    if (node_item) {
-        node_item->set_parameter(key, value);
-        mark_dirty();
-    }
+    if (!node_item)
+        return;
+    const QJsonValue before = node_item->node_def().parameters.value(key);
+    if (before == value)
+        return;
+    undo_stack_->push(new commands::SetNodeFieldCommand(scene_, node_id, key, before, value,
+                                                        [this](const QString& id) { reshow_properties(id); }));
+    mark_dirty();
 }
 
 void NodeEditorScreen::on_name_changed(const QString& node_id, const QString& new_name) {
     auto* node_item = scene_->find_node(node_id);
-    if (node_item) {
-        node_item->set_name(new_name);
-        mark_dirty();
-    }
+    if (!node_item)
+        return;
+    const QString before = node_item->node_def().name;
+    if (before == new_name)
+        return;
+    undo_stack_->push(new commands::SetNodeFieldCommand(scene_, node_id, QString(), QJsonValue(before),
+                                                        QJsonValue(new_name),
+                                                        [this](const QString& id) { reshow_properties(id); }));
+    mark_dirty();
+}
+
+void NodeEditorScreen::reshow_properties(const QString& node_id) {
+    // An undo / redo of a field edit: show the restored value if that node is on display.
+    if (properties_ && properties_->current_node_id() == node_id)
+        on_node_selected(node_id);
+    mark_dirty();
 }
 
 void NodeEditorScreen::on_delete_node(const QString& node_id) {
@@ -607,7 +744,7 @@ void NodeEditorScreen::on_clear_workflow() {
         undo_stack_->push(
             new commands::ReplaceGraphCommand(scene_, scene_->serialize(), WorkflowDef{}, tr("Clear workflow")));
         properties_->clear();
-        LOG_INFO("NodeEditor", "Workflow cleared");
+        LOG_DEBUG("NodeEditor", "Workflow cleared");
     }
 }
 
@@ -665,6 +802,7 @@ void NodeEditorScreen::on_import_workflow() {
                                  .arg(wf.nodes.size()));
     }
     LOG_INFO("NodeEditor", QString("Imported workflow: %1").arg(wf.name));
+    select_entry_node();
 }
 
 void NodeEditorScreen::on_export_workflow() {
@@ -936,7 +1074,33 @@ bool NodeEditorScreen::confirm_run(const WorkflowDef& wf, const QString& action,
     QStringList other_rows;
     for (const auto& r : rows)
         (r.moves_money ? money_rows : other_rows) << r.text;
-    if (rows.isEmpty())
+
+    // PAPER: the order nodes (WorkflowExecutor::is_moded_order_type) trade the paper
+    // account without a prompt — say so once per run, unless the user turned it off.
+    static const QString kPaperSkipKey = QStringLiteral("node_editor.paper_run_confirm_skip");
+    int paper_placing = 0;
+    QStringList paper_rows;
+    bool calls_subworkflow = false;
+    if (!live_mode_ && !already_confirmed) {
+        for (const auto& nd : wf.nodes) {
+            if (nd.disabled)
+                continue;
+            if (nd.type == QLatin1String("control.execute_workflow"))
+                calls_subworkflow = true;
+            if (!WorkflowExecutor::is_moded_order_type(nd.type))
+                continue;
+            if (nd.type != QLatin1String("trading.cancel_order") && nd.type != QLatin1String("trading.modify_order"))
+                ++paper_placing;
+            paper_rows << QStringLiteral("  • %1  [%2]").arg(nd.name.isEmpty() ? nd.type : nd.name, nd.type);
+        }
+        // A failed read counts as "ask" (never skip a confirmation on an unknown value).
+        if (!paper_rows.isEmpty()) {
+            const auto skip = SettingsRepository::instance().get(kPaperSkipKey);
+            if (skip.is_ok() && skip.value() == QLatin1String("1"))
+                paper_rows.clear();
+        }
+    }
+    if (rows.isEmpty() && paper_rows.isEmpty())
         return true; // nothing acts for real — proceed silently
 
     auto cap = [](const QStringList& l) {
@@ -960,6 +1124,34 @@ bool NodeEditorScreen::confirm_run(const WorkflowDef& wf, const QString& action,
             if (ok && !go)
                 QMessageBox::information(this, action, tr("Not confirmed — nothing was run."));
         }
+    } else if (!paper_rows.isEmpty()) {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Question);
+        box.setWindowTitle(action);
+        box.setText(paper_placing > 0 ? tr("This run can place %n paper order(s).", "", paper_placing)
+                                      : tr("This run can change or cancel paper orders."));
+        QString info = tr("PAPER mode: these order nodes trade the paper account only — nothing reaches a "
+                          "broker.\n\n%1")
+                           .arg(cap(paper_rows));
+        if (calls_subworkflow)
+            info += QStringLiteral("\n\n") + tr("Sub-workflows it calls can place more paper orders.");
+        if (!other_rows.isEmpty())
+            info += QStringLiteral("\n\n") + tr("These nodes also call destructive tools:\n\n%1").arg(cap(other_rows));
+        box.setInformativeText(info);
+        auto* dont_ask = new QCheckBox(tr("Don't ask again for paper runs"), &box);
+        box.setCheckBox(dont_ask);
+        auto* proceed = box.addButton(tr("Run"), QMessageBox::AcceptRole);
+        proceed->setProperty("fincept_agent_risk", "order"); // same kind as EXECUTE
+        box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(QMessageBox::Cancel); // Enter must not fire it
+        box.exec();
+        go = (box.clickedButton() == proceed);
+        if (go && dont_ask->isChecked()) {
+            const auto saved = SettingsRepository::instance().set(kPaperSkipKey, QStringLiteral("1"),
+                                                                  QStringLiteral("node_editor"));
+            if (saved.is_err())
+                LOG_WARN("NodeEditor", "Could not save the paper-run confirmation choice");
+        }
     } else {
         QMessageBox box(this);
         box.setIcon(QMessageBox::Warning);
@@ -980,8 +1172,8 @@ bool NodeEditorScreen::confirm_run(const WorkflowDef& wf, const QString& action,
     return go;
 }
 
-void NodeEditorScreen::on_show_templates() {
-    QStringList templates = {
+QStringList NodeEditorScreen::template_titles() const {
+    return {
         // Beginner
         tr("1. Hello World — Trigger → Set Variable → Display"),
         tr("2. Stock Quote Lookup — Fetch quote for multiple tickers"),
@@ -992,24 +1184,35 @@ void NodeEditorScreen::on_show_templates() {
         // Trading
         tr("6. Price Alert Trading — Auto-trade when price crosses threshold"),
         tr("7. Mean Reversion Strategy — Buy oversold / sell overbought with risk checks"),
-        tr("8. Portfolio Rebalancer — Check drift → optimize → place orders"),
+        tr("8. Portfolio Rebalancer — Holdings → optimize → target weights"),
         // Risk & Safety
-        tr("9. Daily Risk Monitor — Positions → VaR → loss limit → alert"),
+        tr("9. Daily Risk Monitor — 9:30 weekdays: VaR → threshold → alert"),
         tr("10. Pre-Trade Compliance — Full validation before order execution"),
         // Data & AI
         tr("11. News Sentiment Pipeline — Fetch news → NLP → filter → alert"),
         tr("12. AI Research Agent — Multi-agent analysis with mediator"),
         // Operations
-        tr("13. Scheduled Report — Daily P&L report to email"),
-        tr("14. Data Export Pipeline — Fetch → transform → CSV export"),
+        tr("13. Scheduled Report — 17:00 weekdays: positions, P&L & balance to email"),
+        tr("14. Data Export Pipeline — Fetch history → filter → sort → CSV export"),
         tr("15. Signal Automation — Signal → validate → risk check → order"),
     };
+}
 
+void NodeEditorScreen::on_show_templates() {
+    const QStringList templates = template_titles();
     bool ok = false;
-    QString chosen =
+    const QString chosen =
         QInputDialog::getItem(this, tr("Workflow Templates"), tr("Select a template:"), templates, 0, false, &ok);
     if (!ok)
         return;
+    load_template(static_cast<int>(templates.indexOf(chosen)));
+}
+
+void NodeEditorScreen::load_template(int idx) {
+    const QStringList templates = template_titles();
+    if (idx < 0 || idx >= templates.size())
+        return;
+    const QString chosen = templates.at(idx);
 
     // Loading a template wipes the canvas. Confirm, and capture the current graph
     // so the whole swap is a single Ctrl+Z.
@@ -1024,7 +1227,6 @@ void NodeEditorScreen::on_show_templates() {
             return;
     }
 
-    int idx = templates.indexOf(chosen);
     scene_->clear_all();
     properties_->clear();
     auto& reg = NodeRegistry::instance();
@@ -1173,16 +1375,27 @@ void NodeEditorScreen::on_show_templates() {
         set_param(n1, "price", 200.0);
         auto n2 = make_node("market.get_quote", "Latest Quote", 400, 200);
         set_param(n2, "symbol", "AAPL");
-        auto n3 = make_node("safety.risk_check", "Risk Check", 700, 200);
-        auto n4 = make_node("trading.place_order", "Buy AAPL", 1000, 100);
+        // Risk Check sizes the trade from quantity x price against portfolio_value and
+        // fails closed without them — a bare quote has neither, so add them here.
+        auto n2q = make_node("core.set", "Order Qty: 10", 650, 200);
+        set_param(n2q, "key", "quantity");
+        set_param(n2q, "value", "10");
+        auto n2p = make_node("core.set", "Portfolio Value (edit)", 900, 200);
+        set_param(n2p, "key", "portfolio_value");
+        set_param(n2p, "value", "100000");
+        auto n3 = make_node("safety.risk_check", "Risk Check", 1150, 200);
+        auto n4 = make_node("trading.place_order", "Buy AAPL", 1450, 100);
         set_param(n4, "symbol", "AAPL");
+        set_param(n4, "exchange", "NASDAQ");
         set_param(n4, "side", "buy");
         set_param(n4, "quantity", 10);
-        auto n5 = make_node("notify.telegram", "Alert: Blocked", 1000, 350);
-        auto n6 = make_node("output.results_display", "Order Result", 1300, 100);
-        auto n7 = make_node("output.results_display", "Risk Alert", 1300, 350);
+        auto n5 = make_node("notify.telegram", "Alert: Blocked", 1450, 350);
+        auto n6 = make_node("output.results_display", "Order Result", 1750, 100);
+        auto n7 = make_node("output.results_display", "Risk Alert", 1750, 350);
         make_edge(n1.id, "output_main", n2.id, "input_0");
-        make_edge(n2.id, "output_main", n3.id, "input_0");
+        make_edge(n2.id, "output_main", n2q.id, "input_0");
+        make_edge(n2q.id, "output_main", n2p.id, "input_0");
+        make_edge(n2p.id, "output_main", n3.id, "input_0");
         make_edge(n3.id, "output_pass", n4.id, "input_0");
         make_edge(n3.id, "output_fail", n5.id, "input_0");
         make_edge(n4.id, "output_main", n6.id, "input_0");
@@ -1197,89 +1410,127 @@ void NodeEditorScreen::on_show_templates() {
         auto n3 = make_node("analytics.technical_indicators", "RSI (14)", 700, 250);
         set_param(n3, "indicator", "RSI");
         set_param(n3, "period", 14);
+        // The indicator node reports the latest RSI as "value" (an empty condition was plain
+        // truthiness — always TRUE).
         auto n4 = make_node("control.if_else", "RSI < 30?", 1000, 250);
-        auto n5 = make_node("safety.position_size_limit", "Size Check", 1300, 100);
-        auto n6 = make_node("trading.place_order", "Buy TSLA", 1600, 100);
+        set_param(n4, "condition", "value < 30");
+        // Size Check needs quantity and price in the payload (it fails closed without them):
+        // take the last close from the indicator's "latest" bar and add the order size.
+        auto n4p = make_node("core.set", "Price: Last Close", 1300, 100);
+        set_param(n4p, "key", "price");
+        set_param(n4p, "value", "{{$input.latest.close}}");
+        auto n4q = make_node("core.set", "Order Qty: 5", 1550, 100);
+        set_param(n4q, "key", "quantity");
+        set_param(n4q, "value", "5");
+        auto n5 = make_node("safety.position_size_limit", "Size Check", 1800, 100);
+        auto n6 = make_node("trading.place_order", "Buy TSLA", 2100, 50);
         set_param(n6, "symbol", "TSLA");
+        set_param(n6, "exchange", "NASDAQ");
         set_param(n6, "side", "buy");
         set_param(n6, "quantity", 5);
         auto n7 = make_node("core.set", "Skip: Not Oversold", 1300, 400);
         set_param(n7, "key", "action");
         set_param(n7, "value", "no_trade");
-        auto n8 = make_node("output.results_display", "Trade Result", 1900, 100);
+        auto n8 = make_node("output.results_display", "Trade Result", 2400, 50);
         auto n9 = make_node("output.results_display", "Skip Result", 1600, 400);
+        auto n10 = make_node("output.results_display", "Size Rejected", 2100, 250);
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n2.id, "output_main", n3.id, "input_0");
         make_edge(n3.id, "output_main", n4.id, "input_0");
-        make_edge(n4.id, "output_true", n5.id, "input_0");
+        make_edge(n4.id, "output_true", n4p.id, "input_0");
+        make_edge(n4p.id, "output_main", n4q.id, "input_0");
+        make_edge(n4q.id, "output_main", n5.id, "input_0");
         make_edge(n4.id, "output_false", n7.id, "input_0");
         make_edge(n5.id, "output_pass", n6.id, "input_0");
+        make_edge(n5.id, "output_fail", n10.id, "input_0");
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Mean Reversion Strategy");
     } else if (idx == 7) {
         // ── 8. Portfolio Rebalancer ─────────────────────────────────
+        // Holdings → optimizer → target weights to review. (The old chain fed the optimizer's
+        // weights object into Risk Analysis, which needs a price series, and ended in a
+        // single "Rebalance Order" with no symbol — it could never pass validation. One
+        // fixed order cannot express a rebalance; place the orders from the weights shown.)
+        // Get Holdings reads the broker account (live read; no paper holdings exist).
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("trading.get_holdings", "Current Holdings", 400, 200);
         auto n3 = make_node("analytics.portfolio_optimization", "Optimize", 700, 200);
         set_param(n3, "method", "mean_variance");
-        auto n4 = make_node("analytics.risk_analysis", "Risk Check", 1000, 200);
-        set_param(n4, "method", "parametric_var");
-        auto n5 = make_node("safety.loss_limit", "Loss Limit", 1300, 200);
-        auto n6 = make_node("trading.place_order", "Rebalance Order", 1600, 100);
-        auto n7 = make_node("notify.email", "Limit Breached", 1600, 350);
-        auto n8 = make_node("output.results_display", "Order Confirmation", 1900, 100);
-        auto n9 = make_node("output.results_display", "Alert", 1900, 350);
+        auto n4 = make_node("output.results_display", "Target Weights", 1000, 200);
+        set_param(n4, "label", "Target Weights");
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n2.id, "output_main", n3.id, "input_0");
         make_edge(n3.id, "output_main", n4.id, "input_0");
-        make_edge(n4.id, "output_main", n5.id, "input_0");
-        make_edge(n5.id, "output_pass", n6.id, "input_0");
-        make_edge(n5.id, "output_fail", n7.id, "input_0");
-        make_edge(n6.id, "output_main", n8.id, "input_0");
-        make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Portfolio Rebalancer");
     } else if (idx == 8) {
         // ── 9. Daily Risk Monitor ───────────────────────────────────
-        // No scheduler runs saved workflows yet: this runs when you press EXECUTE.
+        // The Schedule trigger holds the run until 9:30 on the next weekday, then fires once
+        // (no background scheduler: press EXECUTE and keep the app open).
+        // VaR needs a price series — positions rows carry none — so it is computed from the
+        // benchmark history; the If/Else replaces a Loss Limit gate that needs P&L figures.
         auto n1 = make_node("trigger.schedule", "Start (cron 9:30 Mon-Fri)", 100, 200);
         set_param(n1, "cron", "30 9 * * 1-5");
-        auto n2 = make_node("trading.get_positions", "Open Positions", 400, 200);
+        auto n2 = make_node("market.get_historical", "SPY 1y (portfolio proxy)", 400, 200);
+        set_param(n2, "symbol", "SPY");
+        set_param(n2, "period", "1y");
         auto n3 = make_node("analytics.risk_analysis", "VaR Analysis", 700, 200);
         set_param(n3, "method", "historical_var");
         set_param(n3, "confidence", 0.99);
-        auto n4 = make_node("safety.loss_limit", "Check Daily Limit", 1000, 200);
+        auto n4 = make_node("control.if_else", "1-day VaR under 3%?", 1000, 200);
+        set_param(n4, "condition", "var < 0.03");
         auto n5 = make_node("notify.slack", "All Clear", 1300, 100);
         set_param(n5, "channel", "#risk-alerts");
         auto n6 = make_node("notify.discord", "RISK ALERT!", 1300, 350);
-        auto n7 = make_node("output.results_display", "Risk Report", 1600, 200);
+        auto n7 = make_node("output.results_display", "Risk Report", 1000, 450);
+        set_param(n7, "label", "Risk Report");
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n2.id, "output_main", n3.id, "input_0");
         make_edge(n3.id, "output_main", n4.id, "input_0");
-        make_edge(n4.id, "output_pass", n5.id, "input_0");
-        make_edge(n4.id, "output_fail", n6.id, "input_0");
-        make_edge(n5.id, "output_main", n7.id, "input_0");
+        make_edge(n4.id, "output_true", n5.id, "input_0");
+        make_edge(n4.id, "output_false", n6.id, "input_0");
+        make_edge(n3.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Daily Risk Monitor");
     } else if (idx == 9) {
         // ── 10. Pre-Trade Compliance ────────────────────────────────
+        // The gates check the order's own figures (they fail closed without them), so the
+        // order is described first: live price from a quote, then size and account value.
+        // (A Loss Limit gate needs daily / weekly P&L, which nothing upstream can supply —
+        // it always blocked; it was dropped.)
         auto n1 = make_node("trigger.manual", "New Order", 100, 250);
         auto n2 = make_node("safety.trading_hours", "Market Open?", 400, 250);
         set_param(n2, "exchange", "NYSE");
-        auto n3 = make_node("safety.risk_check", "Position Limits", 700, 150);
-        auto n4 = make_node("safety.position_size_limit", "Size Limits", 1000, 150);
-        auto n5 = make_node("safety.loss_limit", "PnL Limits", 1300, 150);
-        auto n6 = make_node("trading.place_order", "Execute Order", 1600, 150);
+        auto n2a = make_node("market.get_quote", "Order Price (AAPL quote)", 700, 150);
+        set_param(n2a, "symbol", "AAPL");
+        auto n2b = make_node("core.set", "Order Qty: 10", 950, 150);
+        set_param(n2b, "key", "quantity");
+        set_param(n2b, "value", "10");
+        auto n2c = make_node("core.set", "Portfolio Value (edit)", 1200, 150);
+        set_param(n2c, "key", "portfolio_value");
+        set_param(n2c, "value", "100000");
+        auto n3 = make_node("safety.risk_check", "Position Limits", 1450, 150);
+        auto n4 = make_node("safety.position_size_limit", "Size Limits", 1700, 150);
+        auto n6 = make_node("trading.place_order", "Execute Order", 1950, 150);
+        set_param(n6, "symbol", "AAPL");
+        set_param(n6, "exchange", "NASDAQ");
+        set_param(n6, "side", "buy");
+        set_param(n6, "quantity", 10);
         auto n7 = make_node("core.set", "Market Closed", 700, 400);
         set_param(n7, "key", "reason");
         set_param(n7, "value", "Market is closed");
-        auto n8 = make_node("output.results_display", "Execution Result", 1900, 150);
+        auto n8 = make_node("output.results_display", "Execution Result", 2250, 150);
         auto n9 = make_node("output.results_display", "Rejected", 1000, 400);
+        auto n10 = make_node("output.results_display", "Blocked by Limits", 1950, 350);
         make_edge(n1.id, "output_main", n2.id, "input_0");
-        make_edge(n2.id, "output_open", n3.id, "input_0");
+        make_edge(n2.id, "output_open", n2a.id, "input_0");
+        make_edge(n2a.id, "output_main", n2b.id, "input_0");
+        make_edge(n2b.id, "output_main", n2c.id, "input_0");
+        make_edge(n2c.id, "output_main", n3.id, "input_0");
         make_edge(n2.id, "output_closed", n7.id, "input_0");
         make_edge(n3.id, "output_pass", n4.id, "input_0");
-        make_edge(n4.id, "output_pass", n5.id, "input_0");
-        make_edge(n5.id, "output_pass", n6.id, "input_0");
+        make_edge(n3.id, "output_fail", n10.id, "input_0");
+        make_edge(n4.id, "output_pass", n6.id, "input_0");
+        make_edge(n4.id, "output_fail", n10.id, "input_0");
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Pre-Trade Compliance");
@@ -1347,39 +1598,43 @@ void NodeEditorScreen::on_show_templates() {
         toolbar_->set_workflow_name("AI Research Agent");
     } else if (idx == 12) {
         // ── 13. Scheduled Report ────────────────────────────────────
+        // The Schedule trigger holds the run until 17:00 on the next weekday, then fires once.
+        // Positions (with their realized / unrealized P&L) and the balance are merged and
+        // mailed. (Performance Metrics used to sit here, but it needs a price series and
+        // always failed on positions + balance.)
         auto n1 = make_node("trigger.schedule", "Start (cron 17:00 Mon-Fri)", 100, 200);
         set_param(n1, "cron", "0 17 * * 1-5");
         auto n2 = make_node("trading.get_positions", "Positions", 400, 100);
         auto n3 = make_node("trading.get_balance", "Balance", 400, 300);
         auto n4 = make_node("control.merge", "Merge", 700, 200);
-        auto n5 = make_node("analytics.performance_metrics", "Daily P&L", 1000, 200);
-        set_param(n5, "benchmark", "SPY");
-        auto n6 = make_node("notify.email", "Send Report", 1300, 200);
-        set_param(n6, "subject", "Daily Portfolio Report");
-        auto n7 = make_node("output.results_display", "Report", 1600, 200);
+        auto n6 = make_node("notify.email", "Send Report", 1000, 200);
+        set_param(n6, "title", "Daily Portfolio Report");
+        auto n7 = make_node("output.results_display", "Report", 1300, 200);
+        set_param(n7, "label", "Daily Portfolio Report");
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n1.id, "output_main", n3.id, "input_0");
         make_edge(n2.id, "output_main", n4.id, "input_0");
         make_edge(n3.id, "output_main", n4.id, "input_1");
-        make_edge(n4.id, "output_main", n5.id, "input_0");
-        make_edge(n5.id, "output_main", n6.id, "input_0");
+        make_edge(n4.id, "output_main", n6.id, "input_0");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Scheduled Daily Report");
     } else if (idx == 13) {
         // ── 14. Data Export Pipeline ────────────────────────────────
+        // A keyless source that returns rows (the old example.com URL always failed). Swap in
+        // an HTTP Request / API Call node for your own endpoint.
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
-        auto n2 = make_node("utility.http_request", "Fetch API Data", 400, 200);
-        set_param(n2, "url", "https://api.example.com/data");
-        set_param(n2, "method", "GET");
-        auto n3 = make_node("transform.filter", "Filter Valid", 700, 200);
-        set_param(n3, "field", "status");
-        set_param(n3, "operator", "equals");
-        set_param(n3, "value", "active");
+        auto n2 = make_node("market.get_historical", "Fetch AAPL 3mo", 400, 200);
+        set_param(n2, "symbol", "AAPL");
+        set_param(n2, "period", "3mo");
+        auto n3 = make_node("transform.filter", "Filter Traded Days", 700, 200);
+        set_param(n3, "field", "volume");
+        set_param(n3, "operator", "greater_than");
+        set_param(n3, "value", "0");
         auto n4 = make_node("transform.sort", "Sort by Date", 1000, 200);
-        set_param(n4, "field", "date");
+        set_param(n4, "field", "timestamp");
         set_param(n4, "direction", "desc");
         auto n5 = make_node("transform.deduplicate", "Remove Dupes", 1300, 200);
-        set_param(n5, "field", "id");
+        set_param(n5, "field", "timestamp");
         auto n6 = make_node("file.convert", "Export CSV", 1600, 200);
         set_param(n6, "format", "csv");
         set_param(n6, "path", "output/export.csv");
@@ -1396,22 +1651,41 @@ void NodeEditorScreen::on_show_templates() {
         // (Was driven by trigger.webhook, which needs the workflow scheduler and
         // therefore never fires — the template was inert. Start it manually and put
         // the signal in "Signal".)
+        // Risk Check fails closed without quantity / price / portfolio_value, and a bare
+        // {signal} payload has none of them: price the order from a quote and size it first.
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("core.set", "Signal", 400, 200);
         set_param(n2, "key", "signal");
         set_param(n2, "value", "BUY");
         auto n3 = make_node("control.if_else", "Valid Signal?", 700, 200);
         set_param(n3, "condition", "signal == BUY");
-        auto n4 = make_node("safety.risk_check", "Risk Check", 1000, 100);
-        auto n5 = make_node("trading.place_order", "Execute Trade", 1300, 100);
+        auto n3a = make_node("market.get_quote", "Order Price (AAPL quote)", 1000, 100);
+        set_param(n3a, "symbol", "AAPL");
+        auto n3b = make_node("core.set", "Order Qty: 10", 1250, 100);
+        set_param(n3b, "key", "quantity");
+        set_param(n3b, "value", "10");
+        auto n3c = make_node("core.set", "Portfolio Value (edit)", 1500, 100);
+        set_param(n3c, "key", "portfolio_value");
+        set_param(n3c, "value", "100000");
+        auto n4 = make_node("safety.risk_check", "Risk Check", 1750, 100);
+        auto n5 = make_node("trading.place_order", "Execute Trade", 2000, 50);
+        set_param(n5, "symbol", "AAPL");
+        set_param(n5, "exchange", "NASDAQ");
+        set_param(n5, "side", "buy");
+        set_param(n5, "quantity", 10);
         auto n6 = make_node("notify.discord", "Invalid Signal", 1000, 350);
-        auto n7 = make_node("output.results_display", "Trade Executed", 1600, 100);
+        auto n7 = make_node("output.results_display", "Trade Executed", 2300, 50);
         auto n8 = make_node("output.results_display", "Rejected", 1300, 350);
+        auto n9 = make_node("output.results_display", "Blocked by Risk Check", 2000, 250);
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n2.id, "output_main", n3.id, "input_0");
-        make_edge(n3.id, "output_true", n4.id, "input_0");
+        make_edge(n3.id, "output_true", n3a.id, "input_0");
+        make_edge(n3a.id, "output_main", n3b.id, "input_0");
+        make_edge(n3b.id, "output_main", n3c.id, "input_0");
+        make_edge(n3c.id, "output_main", n4.id, "input_0");
         make_edge(n3.id, "output_false", n6.id, "input_0");
         make_edge(n4.id, "output_pass", n5.id, "input_0");
+        make_edge(n4.id, "output_fail", n9.id, "input_0");
         make_edge(n5.id, "output_main", n7.id, "input_0");
         make_edge(n6.id, "output_main", n8.id, "input_0");
         toolbar_->set_workflow_name("Signal Automation");
@@ -1426,7 +1700,9 @@ void NodeEditorScreen::on_show_templates() {
     // whatever was on the canvas before. (push() re-applies `after`, which
     // rebuilds an identical graph.)
     undo_stack_->push(new commands::ReplaceGraphCommand(scene_, before, scene_->serialize(), tr("Load template")));
-    LOG_INFO("NodeEditor", QString("Loaded template: %1").arg(chosen));
+    LOG_DEBUG("NodeEditor", QString("Loaded template: %1").arg(chosen));
+    // push() rebuilt the graph from `after` (same ids): select on the final items.
+    select_entry_node();
 }
 
 void NodeEditorScreen::on_deploy() {
@@ -1482,5 +1758,49 @@ void NodeEditorScreen::restore_state(const QVariantMap& state) {
     current_workflow_id_ = wf_id;
     WorkflowService::instance().load_workflow(wf_id);
 }
+
+bool NodeEditorScreen::open_section(const QString& section, const QString& focus) {
+    Q_UNUSED(focus);
+    const QString key = section.trimmed().toLower();
+    if (key.isEmpty())
+        return true;
+    // Both pickers are modal: opened after the link has landed, as the toolbar buttons open them.
+    if (key == QLatin1String("templates")) {
+        QMetaObject::invokeMethod(this, [this]() { on_show_templates(); }, Qt::QueuedConnection);
+        return true;
+    }
+    if (key == QLatin1String("load")) {
+        QMetaObject::invokeMethod(this, [this]() { on_load_workflow(); }, Qt::QueuedConnection);
+        return true;
+    }
+    return false;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<fincept::command::CommandItem> ne_command_rows() {
+    namespace rows = fincept::screens::command_rows;
+    const QString where = NodeEditorScreen::tr("Node Editor");
+    const QString screen = QStringLiteral("node_editor");
+    return {
+        rows::section(screen, QStringLiteral("templates"), NodeEditorScreen::tr("Workflow templates"),
+                      {QStringLiteral("templates"), QStringLiteral("workflow"), QStringLiteral("automation"),
+                       QStringLiteral("examples"), QStringLiteral("pipeline")},
+                      where),
+        rows::section(screen, QStringLiteral("load"), NodeEditorScreen::tr("Open saved workflow"),
+                      {QStringLiteral("load workflow"), QStringLiteral("saved workflows"), QStringLiteral("my workflows"),
+                       QStringLiteral("open workflow")},
+                      where),
+    };
+}
+
+void ne_install_commands() {
+    fincept::screens::command_rows::install(QStringLiteral("node_editor"), &ne_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(ne_install_commands)
 
 } // namespace fincept::workflow

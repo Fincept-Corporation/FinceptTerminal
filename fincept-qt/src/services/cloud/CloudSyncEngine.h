@@ -7,6 +7,8 @@
 #include <QString>
 #include <QVector>
 
+#include <functional>
+
 class QTimer;
 
 namespace fincept::services::cloud {
@@ -18,8 +20,12 @@ namespace fincept::services::cloud {
 class CloudSyncEngine : public QObject {
     Q_OBJECT
   public:
-    enum class Status { Disabled, Idle, Syncing, Error, Paused /* credits */ };
+    enum class Status { Disabled, Idle, Syncing, Error, Paused /* credits */, Unavailable /* no cloud service */ };
     Q_ENUM(Status)
+
+    /// Outcome of the one-request availability check run before sync is
+    /// switched on and whenever an enabled sync resumes.
+    enum class Availability { Available, NotDeployed, AuthRejected, Unreachable, ServerError };
 
     static CloudSyncEngine& instance();
 
@@ -35,7 +41,18 @@ class CloudSyncEngine : public QObject {
     bool master_enabled() const;
     bool can_enable() const; // authenticated && has api_key
 
+    /// set_master_enabled(true) is waiting for its availability check.
+    bool enable_in_progress() const { return enable_pending_; }
+    /// Sync is enabled but paused because the cloud service is not there (or
+    /// refused the credentials). Local saves are unaffected. Cleared by a
+    /// successful check: next start-up, sign-in, or refresh_all().
+    bool service_paused() const { return service_paused_; }
+    QString service_message() const { return service_message_; }
+
     // ── User actions (Settings UI) ──
+    /// Turning sync ON first asks the cloud service one cheap authenticated
+    /// question; only a working service enables it (then the local DB snapshot
+    /// and first-enable reconcile run). The answer arrives as enable_finished().
     void set_master_enabled(bool on);
     void set_domain_excluded(const QString& entity, bool excluded);
     void refresh_all();                                                  // manual Refresh
@@ -55,15 +72,28 @@ class CloudSyncEngine : public QObject {
     void cloud_data_changed(QString entity);    // open screens should reload
     void credits_exhausted();                   // sync paused until top-up / refresh
     void first_enable_conflict(QString entity); // both local & cloud have data → UI prompts
+    /// Answer to set_master_enabled(true): enabled, or refused with the reason
+    /// (refused = nothing changed: no flag, no snapshot, no requests queued).
+    void enable_finished(bool enabled, QString message);
+    /// Enabled sync paused / resumed because of the cloud service's availability.
+    void service_state_changed(bool paused, QString message);
 
   private:
     CloudSyncEngine();
     Q_DISABLE_COPY(CloudSyncEngine)
 
+    using ProbeDone = std::function<void(Availability, int http_status)>;
+
     void update_credentials();
+    void probe_service(ProbeDone done);
+    void resume_sync();    // probe, then drain + pull everything (startup, sign-in, Refresh)
+    void verify_service(); // probe only; pauses when the service has gone
+    void pause_unavailable(Availability why, int http_status);
+    void clear_pause_notice();
     void schedule_drain();
     void drain();
     void push_next();
+    void end_pass();
     void perform_first_enable();
     void snapshot_local_db();
     void set_status(const QString& entity, Status s, const QString& error = {});
@@ -79,6 +109,21 @@ class CloudSyncEngine : public QObject {
     bool draining_ = false;
     bool paused_credits_ = false;
     bool initialized_ = false;
+
+    // Availability (see set_master_enabled / resume_sync).
+    bool probing_ = false;
+    bool enable_pending_ = false; // an enable is waiting on its check (cleared by switching off)
+    bool service_paused_ = false;
+    bool pause_notice_shown_ = false; // pause announced (also remembered across restarts in settings)
+    QString service_message_;
+
+    // Push-pass accounting for the retry backoff (see end_pass).
+    QTimer* backoff_timer_ = nullptr;
+    int failed_passes_ = 0;     // consecutive passes that had a failed request
+    qint64 next_drain_ms_ = 0;  // no drain before this time (0 = no backoff)
+    int pass_failures_ = 0;     // failed requests in the current pass
+    int pass_successes_ = 0;    // successful pushes in the current pass
+    bool pass_only_404_ = true; // every failure in this pass was a 404
 };
 
 } // namespace fincept::services::cloud

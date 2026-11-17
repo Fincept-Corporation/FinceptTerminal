@@ -171,7 +171,8 @@ def _execute_with_orchestrator(
     """Execute via FinceptOrchestrator (non-tool-calling LLM fallback)."""
     from orchestrator import FinceptOrchestrator
     subagent_names = [s["name"] for s in get_subagents_for_type(agent_type)]
-    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"))
+    # The provider decides whether llm_api_key may be sent to api.fincept.in at all.
+    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"), provider=config.get("llm_provider", ""))
     result = orch.execute(task, agent_type, subagent_names)
     result["thread_id"] = thread_id
     return result

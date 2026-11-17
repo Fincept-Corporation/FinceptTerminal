@@ -15,7 +15,10 @@
 
     { "id": "portfolio",         "title": "Portfolio",          "category": "Research",    "description": "Holdings, P&L, allocation and performance attribution",    "tags": ["portfolio","pnl","holdings"] },
     { "id": "equity_research",   "title": "Equity Research",    "category": "Research",    "description": "Fundamentals, technicals, peers, sentiment in one view",   "tags": ["research","fundamentals","peers"] },
+    { "id": "screener",          "title": "Screener",           "category": "Research",    "description": "Filter and rank stocks by fundamentals and technicals",   "tags": ["screener","filter","scan"] },
+    { "id": "calendars",         "title": "Calendars",          "category": "Research",    "description": "Earnings, IPO, split and economic event calendars",        "tags": ["calendar","earnings","ipo","splits","economic"] },
     { "id": "derivatives",       "title": "Derivatives",        "category": "Research",    "description": "Bond, option, swap and CDS pricing",                       "tags": ["derivatives","pricing","options"] },
+    { "id": "fno",               "title": "F&O",                "category": "Trading",     "description": "Option chain, strategy builder, OI analytics",            "tags": ["fno","options","chain","futures","oi"] },
     { "id": "surface_analytics", "title": "Surface Analytics",  "category": "Research",    "description": "Volatility surfaces, Greeks, yield curves, correlation",   "tags": ["surface","vol","greeks"] },
     { "id": "ma_analytics",      "title": "M&A Analytics",      "category": "Research",    "description": "Deal comparables, accretion/dilution, event studies",      "tags": ["m&a","deals","comparables"] },
     { "id": "alt_investments",   "title": "Alt. Investments",   "category": "Research",    "description": "Private markets, real assets, infrastructure screens",     "tags": ["alts","private","infra"] },

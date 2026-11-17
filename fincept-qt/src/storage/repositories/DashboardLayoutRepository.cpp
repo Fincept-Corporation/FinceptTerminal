@@ -63,7 +63,7 @@ Result<screens::GridLayout> DashboardLayoutRepository::load_layout(const QString
         layout.items.append(item);
     }
 
-    LOG_INFO("DashboardRepo", QString("Loaded %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
+    LOG_DEBUG("DashboardRepo", QString("Loaded %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
     return Result<screens::GridLayout>::ok(std::move(layout));
 }
 
@@ -122,7 +122,7 @@ Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& l
     if (auto cr = db().commit(); cr.is_err())
         return cr;
 
-    LOG_INFO("DashboardRepo", QString("Saved %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
+    LOG_DEBUG("DashboardRepo", QString("Saved %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
     SyncOutbox::record_unique("dashboard", profile_name, "upsert");
     return Result<void>::ok();
 }

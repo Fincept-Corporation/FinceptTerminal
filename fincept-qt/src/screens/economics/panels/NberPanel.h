@@ -22,6 +22,7 @@ class NberPanel : public EconPanelBase {
     void activate() override;
 
   protected:
+    LoadPolicy load_policy() const override;
     void build_controls(QHBoxLayout* toolbar_layout) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;

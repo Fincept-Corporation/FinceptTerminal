@@ -4,6 +4,8 @@
 
 namespace fincept::workflow {
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_trading_nodes(NodeRegistry& registry) {
     registry.register_type({
         .type_id = "trading.place_order",
@@ -40,7 +42,10 @@ void register_trading_nodes(NodeRegistry& registry) {
                  "Delivery = CNC/Holdings, Intraday = MIS"},
                 {"order_type", "Order Type", "select", "market", {"market", "limit", "stop", "stop_limit"}, ""},
                 {"quantity", "Quantity", "number", 1, {}, "Number of shares/contracts", true},
-                {"price", "Limit Price", "number", 0, {}, "Price for limit orders"},
+                {"price", "Limit Price", "number", 0, {}, "Required for limit / stop_limit orders"},
+                // Stop / stop_limit orders had no trigger field: paper always failed and live
+                // went to the broker as SL / SL-M with trigger 0.
+                {"stop_price", "Trigger Price", "number", 0, {}, "Required for stop / stop_limit orders"},
                 {"validity", "Validity", "select", "DAY", {"DAY", "IOC"}, ""},
             },
         .execute = nullptr,

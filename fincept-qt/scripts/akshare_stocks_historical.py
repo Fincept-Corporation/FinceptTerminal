@@ -10,6 +10,11 @@ import json
 import time
 from datetime import datetime
 
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import between_dates, china_today, run_endpoint_table, safe_call
+
 try:
     import akshare as ak
     import pandas as pd
@@ -20,35 +25,6 @@ except ImportError as e:
         "data": []
     }))
     sys.exit(1)
-
-
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float("inf"), float("-inf")], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
 
 
 # ==================== A-SHARES HISTORICAL ====================
@@ -114,9 +90,9 @@ def get_stock_us_hist(symbol="105.AAPL", period="daily", start_date="20200101", 
     """Get US stocks historical data"""
     return safe_call(ak.stock_us_hist, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-def get_stock_us_hist_min_em(symbol="105.AAPL", period="1", start_date="2024-01-01 09:30:00", end_date="2026-12-31 16:00:00", adjust=""):
-    """Get US stocks minute historical data"""
-    return safe_call(ak.stock_us_hist_min_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
+def get_stock_us_hist_min_em(symbol="105.AAPL", start_date="1979-09-01 09:32:00", end_date="2222-01-01 09:32:00"):
+    """1-minute bars of one US stock, recent sessions (EastMoney code, e.g. 105.AAPL); START/END narrow"""
+    return safe_call(ak.stock_us_hist_min_em, symbol=symbol, start_date=start_date, end_date=end_date)
 
 def get_stock_us_daily(symbol="AAPL", adjust="qfq"):
     """Get US stocks daily data"""
@@ -125,9 +101,12 @@ def get_stock_us_daily(symbol="AAPL", adjust="qfq"):
 
 # ==================== A+H SHARES HISTORICAL ====================
 
-def get_stock_zh_ah_daily(symbol="02318", start_date="20200101", end_date="20261231"):
-    """Get A+H shares daily data"""
-    return safe_call(ak.stock_zh_ah_daily, symbol=symbol, start_date=start_date, end_date=end_date)
+def get_stock_zh_ah_daily(symbol="02318", start_date="", end_date=""):
+    """Daily history of one A+H dual-listed stock (HK code); akshare takes whole years, so START/END
+    pick the first and last year (default last year to this year)"""
+    this_year = china_today().year
+    return safe_call(ak.stock_zh_ah_daily, symbol=symbol, start_year=(start_date or str(this_year - 1))[:4],
+                     end_year=(end_date or str(this_year))[:4])
 
 
 # ==================== INDEX HISTORICAL ====================
@@ -152,9 +131,9 @@ def get_stock_zh_index_value_csindex(symbol="000001"):
     """Get CSIndex value data"""
     return safe_call(ak.stock_zh_index_value_csindex, symbol=symbol)
 
-def get_stock_hk_index_daily_em(symbol="HSI", start_date="20200101", end_date="20261231"):
-    """Get HK index daily data (EastMoney)"""
-    return safe_call(ak.stock_hk_index_daily_em, symbol=symbol, start_date=start_date, end_date=end_date)
+def get_stock_hk_index_daily_em(symbol="HSI", start_date="", end_date=""):
+    """Daily history of one HK index (EastMoney); START/END narrow it (akshare returns the full history)"""
+    return safe_call(lambda: between_dates(ak.stock_hk_index_daily_em(symbol=symbol), start_date, end_date))
 
 def get_stock_hk_index_daily_sina(symbol="HSI"):
     """Get HK index daily data (Sina)"""
@@ -167,9 +146,9 @@ def get_stock_zh_kcb_daily(symbol="688001", adjust="qfq"):
     """Get STAR Market daily data"""
     return safe_call(ak.stock_zh_kcb_daily, symbol=symbol, adjust=adjust)
 
-def get_stock_zh_kcb_report_em(symbol="688001"):
-    """Get STAR Market report data"""
-    return safe_call(ak.stock_zh_kcb_report_em, symbol=symbol)
+def get_stock_zh_kcb_report_em():
+    """Latest STAR Market company announcements (first 5 pages; akshare no longer filters by stock)"""
+    return safe_call(ak.stock_zh_kcb_report_em, from_page=1, to_page=5)
 
 
 # ==================== INTRADAY ====================
@@ -214,17 +193,17 @@ def get_stock_sector_spot(indicator="new_blhy"):
     """Get sector spot data"""
     return safe_call(ak.stock_sector_spot, indicator=indicator)
 
-def get_stock_sector_fund_flow_hist(symbol="即时", indicator="新浪行业"):
-    """Get sector fund flow historical data"""
-    return safe_call(ak.stock_sector_fund_flow_hist, symbol=symbol, indicator=indicator)
+def get_stock_sector_fund_flow_hist(symbol="汽车服务"):
+    """Fund-flow history of one industry board (EastMoney board name)"""
+    return safe_call(ak.stock_sector_fund_flow_hist, symbol=symbol)
 
 def get_stock_sector_fund_flow_rank(indicator="今日", sector_type="行业资金流"):
     """Get sector fund flow ranking"""
     return safe_call(ak.stock_sector_fund_flow_rank, indicator=indicator, sector_type=sector_type)
 
-def get_stock_sector_fund_flow_summary(indicator="今日", sector_type="行业资金流"):
-    """Get sector fund flow summary"""
-    return safe_call(ak.stock_sector_fund_flow_summary, indicator=indicator, sector_type=sector_type)
+def get_stock_sector_fund_flow_summary(symbol="电源设备", indicator="今日"):
+    """Fund flow of the stocks in one industry board (EastMoney board name); indicator 今日/5日/10日"""
+    return safe_call(ak.stock_sector_fund_flow_summary, symbol=symbol, indicator=indicator)
 
 
 # ==================== CLASSIFICATION ====================
@@ -396,56 +375,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

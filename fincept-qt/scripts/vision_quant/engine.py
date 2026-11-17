@@ -31,6 +31,21 @@ from utils import (
 )
 
 
+_diag_seen = set()
+
+
+def _diag_once(message):
+    """One stderr line per distinct failure kind — stdout carries only JSON."""
+    key = message.split(":", 1)[-1][:120]
+    if key in _diag_seen:
+        return
+    _diag_seen.add(key)
+    try:
+        sys.stderr.write(f"[vision_quant.engine] {message}\n")
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Helper functions for DTW and shape features
 # ---------------------------------------------------------------------------
@@ -278,7 +293,7 @@ class VisionEngine:
             if not self._try_load_model():
                 return json_response("error", error="Model not loaded. Run setup first.")
 
-        # 1. Fetch price data
+        # 1. Fetch price data (timezone-naive index, see utils.fetch_ohlcv)
         df = fetch_ohlcv(symbol, period="1y")
         if df is None or len(df) < lookback + 1:
             return json_response("error", error=f"Insufficient data for {symbol}")
@@ -380,8 +395,9 @@ class VisionEngine:
                                 )
                                 feature_sim = (cos + 1.0) / 2.0
                                 trend_match = 1 if m_feat[0] == query_trend else 0
-            except Exception:
-                pass
+            except Exception as e:
+                # The match keeps its visual score only; say why (stderr).
+                _diag_once(f"price metrics for {sym} {d_str} skipped: {type(e).__name__}: {e}")
 
             sim_score = self._vector_score_to_similarity(vector_score)
 
@@ -458,18 +474,21 @@ class VisionEngine:
                 m["tb_hit_day"] = hit_day
                 m["tb_hit_type"] = hit_type
                 m["final_return_pct"] = round(float(rets.iloc[-1]) * 100, 2) if len(rets) > 0 else 0
-            except Exception:
+            except Exception as e:
+                _diag_once(f"triple-barrier label for {m.get('symbol')} {m.get('date')} skipped: "
+                           f"{type(e).__name__}: {e}")
                 continue
 
-        # 7. Compute win-rate stats
+        # 7. Compute win-rate stats. With nothing measured the rate is null, not
+        # a made-up 50 % (the scorer refuses a null rate).
         total_tb = len(tb_results)
         bullish = sum(1 for r in tb_results if r["label"] == 1)
         bearish = sum(1 for r in tb_results if r["label"] == -1)
         neutral = sum(1 for r in tb_results if r["label"] == 0)
         win_rate, wl_ratio = calculate_win_loss_ratio(tb_results)
 
-        avg_return = np.mean([r["final_return"] for r in tb_results]) if tb_results else 0
-        avg_hit_day = np.mean([r["hit_day"] for r in tb_results]) if tb_results else 0
+        avg_return = np.mean([r["final_return"] for r in tb_results]) if tb_results else None
+        avg_hit_day = np.mean([r["hit_day"] for r in tb_results]) if tb_results else None
 
         return json_response("success", data={
             "matches": top_matches,
@@ -483,10 +502,10 @@ class VisionEngine:
                 "bullish": bullish,
                 "neutral": neutral,
                 "bearish": bearish,
-                "win_rate": round(win_rate * 100, 1),
-                "win_loss_ratio": round(wl_ratio, 2),
-                "avg_return_pct": round(float(avg_return), 2),
-                "avg_holding_days": round(float(avg_hit_day), 1),
+                "win_rate": round(win_rate * 100, 1) if win_rate is not None else None,
+                "win_loss_ratio": round(wl_ratio, 2) if wl_ratio is not None else None,
+                "avg_return_pct": round(float(avg_return), 2) if avg_return is not None else None,
+                "avg_holding_days": round(float(avg_hit_day), 1) if avg_hit_day is not None else None,
             },
         })
 
@@ -560,4 +579,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # A failure (e.g. a yfinance call past its deadline) ends as one JSON error
+    # line; the traceback goes to stderr.
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        output_json(json_response("error", error=f"{type(e).__name__}: {e}"))
+        sys.exit(1)

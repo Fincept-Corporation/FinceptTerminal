@@ -1,0 +1,58 @@
+{
+  "parser": "cursor",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "text"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "toolu_vrtx_01"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "toolu_vrtx_01",
+      "error": false
+    },
+    {
+      "kind": "tool_call",
+      "ref": "toolu_vrtx_02"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "toolu_vrtx_02",
+      "error": false
+    },
+    {
+      "kind": "file_change",
+      "ref": "toolu_vrtx_02"
+    },
+    {
+      "kind": "text"
+    },
+    {
+      "kind": "final"
+    },
+    {
+      "kind": "status"
+    }
+  ],
+  "session_id": "6f1e1c1d-2b3a-4c5d-8e9f-0a1b2c3d4e5f",
+  "final_text": "I'll read the README first.Created NOTES.md.",
+  "saw_result": true,
+  "result_is_error": false,
+  "tool_calls": 2,
+  "file_changes": [
+    [
+      "write",
+      "/w/run/NOTES.md"
+    ]
+  ],
+  "failure": {
+    "exit_code": 0,
+    "kind": ""
+  },
+  "input": "stream_json.jsonl"
+}

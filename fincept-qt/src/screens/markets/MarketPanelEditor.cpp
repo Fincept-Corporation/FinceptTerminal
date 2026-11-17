@@ -1,6 +1,8 @@
 #include "screens/markets/MarketPanelEditor.h"
 
-#include "services/markets/MarketSearchService.h"
+#include "core/instrument/VenueSymbols.h"
+#include "screens/markets/MarketsLogic.h"
+#include "screens/markets/MarketsSymbolEntry.h"
 #include "ui/theme/Theme.h"
 
 #include <QDialogButtonBox>
@@ -19,8 +21,8 @@
 
 namespace fincept::screens {
 
-static constexpr int kDebounceMs = 300;
-static constexpr int kMaxResults = 15;
+
+
 
 static QString input_ss() {
     return QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
@@ -40,8 +42,8 @@ static QString list_ss() {
 }
 
 static QString section_lbl_ss() {
-    return QString("color:%1;font-weight:700;letter-spacing:1px;background:transparent;font-size:11px;")
-        .arg(ui::colors::TEXT_TERTIARY());
+    return QString("color:%1;font-weight:700;letter-spacing:1px;background:transparent;font-size:" + fincept::ui::fonts::px(-3) + "px;")
+        .arg(ui::colors::TEXT_SECONDARY());
 }
 
 MarketPanelEditor::MarketPanelEditor(const MarketPanelConfig& config, QWidget* parent)
@@ -90,12 +92,12 @@ void MarketPanelEditor::build_ui() {
     tickers_hl->addWidget(tickers_lbl_);
     tickers_hl->addStretch();
     remove_btn_ = new QPushButton(tr("✕ REMOVE"));
-    remove_btn_->setFixedHeight(20);
+    remove_btn_->setMinimumHeight(20);
     remove_btn_->setCursor(Qt::PointingHandCursor);
-    remove_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                                       "padding:0 8px;font-size:11px;font-weight:bold;}"
+    remove_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%3;border:1px solid %1;"
+                                       "padding:0 8px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:bold;}"
                                        "QPushButton:hover{color:%2;border-color:%2;}")
-                                   .arg(ui::colors::BORDER_MED(), ui::colors::NEGATIVE()));
+                                   .arg(ui::colors::BORDER_MED(), ui::colors::DANGER(), ui::colors::TEXT_SECONDARY()));
     connect(remove_btn_, &QPushButton::clicked, this, &MarketPanelEditor::on_remove_selected);
     tickers_hl->addWidget(remove_btn_);
     root->addWidget(tickers_hdr);
@@ -109,38 +111,28 @@ void MarketPanelEditor::build_ui() {
     root->addWidget(make_sep());
 
     // Search / add
-    search_lbl_ = new QLabel(tr("ADD TICKER  ·  type to search, click or Enter to add"));
+    search_lbl_ = new QLabel(tr("ADD TICKERS  ·  ticker, name or ISIN; several separated by commas"));
     search_lbl_->setStyleSheet(section_lbl_ss());
     root->addWidget(search_lbl_);
 
-    search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText(tr("Search symbol or name: AAPL, Reliance, Bitcoin ..."));
-    search_edit_->setStyleSheet(input_ss());
-    search_edit_->installEventFilter(this);
-    root->addWidget(search_edit_);
-
-    // Debounce timer
-    search_debounce_ = new QTimer(this);
-    search_debounce_->setSingleShot(true);
-    search_debounce_->setInterval(kDebounceMs);
-    connect(search_debounce_, &QTimer::timeout, this, [this]() { fire_search(pending_query_); });
-
-    connect(search_edit_, &QLineEdit::textChanged, this, &MarketPanelEditor::on_search_text_changed);
-    connect(search_edit_, &QLineEdit::returnPressed, this, [this]() {
-        if (dropdown_->isVisible() && dropdown_->currentItem())
-            on_add_symbol(dropdown_->currentItem()->data(Qt::UserRole).toString());
-        else if (!search_edit_->text().trimmed().isEmpty())
-            on_add_symbol(search_edit_->text().trimmed().toUpper());
-    });
-
-    // Floating dropdown — parented to dialog, floats above layout
-    dropdown_ = new QListWidget(this);
-    dropdown_->setStyleSheet(list_ss());
-    dropdown_->setFixedHeight(160);
-    dropdown_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    dropdown_->hide();
-    connect(dropdown_, &QListWidget::itemClicked, this,
-            [this](QListWidgetItem* item) { on_add_symbol(item->data(Qt::UserRole).toString()); });
+    // The shared symbol box (multi entry): what is added is always a resolved
+    // instrument's market-data symbol, never typed text.
+    MarketsSymbolEntryOptions entry_opts;
+    entry_opts.multi = true;
+    entry_opts.compact = false;
+    entry_opts.clear_on_pick = true;
+    entry_opts.recent_key = QStringLiteral("markets");
+    entry_opts.placeholder = tr("Search symbol or name: AAPL, Reliance, Bitcoin ...");
+    entry_ = markets_make_symbol_entry(
+        this, entry_opts,
+        [this](const QVector<MarketsSymbolPick>& picks) {
+            for (const MarketsSymbolPick& p : picks) {
+                markets_learn(p);
+                on_add_symbol(p.symbol);
+            }
+        },
+        [this](const QStringList&, const QString& message) { show_validation_error(message); });
+    root->addWidget(entry_);
 
     // Dialog buttons
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -160,20 +152,20 @@ void MarketPanelEditor::build_ui() {
         }
         if (ticker_list_->count() == 0) {
             show_validation_error(tr("Add at least one ticker."));
-            search_edit_->setFocus();
+            markets_symbol_entry_focus(entry_);
             return;
         }
         config_.title = title;
         config_.symbols.clear();
         for (int i = 0; i < ticker_list_->count(); ++i)
-            config_.symbols << ticker_list_->item(i)->text();
+            config_.symbols << ticker_list_->item(i)->data(Qt::UserRole).toString(); // the stored symbol
         if (config_.id.isEmpty())
             config_.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        hide_dropdown();
+
         accept();
     });
     connect(btns, &QDialogButtonBox::rejected, this, [this]() {
-        hide_dropdown();
+
         reject();
     });
     // Inline validation message (hidden until something is wrong) — a modal
@@ -182,21 +174,20 @@ void MarketPanelEditor::build_ui() {
     error_lbl_->setWordWrap(true);
     error_lbl_->setVisible(false);
     error_lbl_->setStyleSheet(
-        QString("color:%1;background:transparent;font-size:11px;font-weight:bold;").arg(ui::colors::NEGATIVE()));
+        QString("color:%1;background:transparent;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:bold;").arg(ui::colors::DANGER()));
     root->addWidget(error_lbl_);
 
     root->addWidget(btns);
 
     // ── Accessibility + keyboard ──
     title_edit_->setAccessibleName(tr("Panel title"));
-    search_edit_->setAccessibleName(tr("Search for a ticker to add"));
+    entry_->setAccessibleName(tr("Search for a ticker to add"));
     ticker_list_->setAccessibleName(tr("Tickers in this panel"));
     remove_btn_->setAccessibleName(tr("Remove the selected ticker"));
-    dropdown_->setAccessibleName(tr("Ticker search results"));
     setTabOrder(title_edit_, ticker_list_);
     setTabOrder(ticker_list_, remove_btn_);
-    setTabOrder(remove_btn_, search_edit_);
-    setTabOrder(search_edit_, btns);
+    setTabOrder(remove_btn_, entry_);
+    setTabOrder(entry_, btns);
     title_edit_->setFocus();
 
     refresh_ticker_list();
@@ -209,143 +200,53 @@ void MarketPanelEditor::show_validation_error(const QString& message) {
     error_lbl_->setVisible(true);
 }
 
-void MarketPanelEditor::reposition_dropdown() {
-    if (!search_edit_ || !dropdown_)
-        return;
-    QPoint pos = search_edit_->mapTo(this, QPoint(0, search_edit_->height()));
-    dropdown_->setGeometry(pos.x(), pos.y(), search_edit_->width(), 160);
-    dropdown_->raise();
-}
-
-void MarketPanelEditor::hide_dropdown() {
-    search_debounce_->stop();
-    if (dropdown_)
-        dropdown_->hide();
-}
-
-void MarketPanelEditor::resizeEvent(QResizeEvent* event) {
-    QDialog::resizeEvent(event);
-    reposition_dropdown();
-}
-
-void MarketPanelEditor::moveEvent(QMoveEvent* event) {
-    QDialog::moveEvent(event);
-    reposition_dropdown();
-}
-
-bool MarketPanelEditor::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == search_edit_) {
-        if (event->type() == QEvent::KeyPress) {
-            auto* ke = static_cast<QKeyEvent*>(event);
-            if (ke->key() == Qt::Key_Down && dropdown_->isVisible()) {
-                dropdown_->setFocus();
-                dropdown_->setCurrentRow(0);
-                return true;
-            }
-            if (ke->key() == Qt::Key_Escape) {
-                hide_dropdown();
-                return true;
-            }
-        }
-        if (event->type() == QEvent::FocusOut) {
-            // Delay hide so click on dropdown item registers first
-            QTimer::singleShot(150, this, [this]() { hide_dropdown(); });
-        }
-    }
-    return QDialog::eventFilter(obj, event);
-}
-
-void MarketPanelEditor::on_search_text_changed(const QString& text) {
-    const QString q = text.trimmed();
-    if (q.isEmpty()) {
-        hide_dropdown();
-        return;
-    }
-    pending_query_ = q;
-    search_debounce_->start();
-}
-
-void MarketPanelEditor::fire_search(const QString& query) {
-    if (query.isEmpty())
-        return;
-
-    auto& svc = services::MarketSearchService::instance();
-    const QString rid = QString::number(reinterpret_cast<quintptr>(this), 16);
-    if (!search_connected_) {
-        connect(&svc, &services::MarketSearchService::results_ready, this,
-                [this](const QString& request_id, const QString& q,
-                       const QList<services::MarketSearchService::Item>& items) {
-                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
-                    if (request_id != my_rid)
-                        return;
-                    if (pending_query_ != q)
-                        return; // stale response
-                    on_search_results(items);
-                });
-        // A failed lookup used to vanish: the dropdown simply never appeared and the user had
-        // no idea whether the box was broken. Say so, and that Enter still adds the typed ticker.
-        connect(&svc, &services::MarketSearchService::search_failed, this,
-                [this](const QString& request_id, const QString& q, const QString&) {
-                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
-                    if (request_id != my_rid || pending_query_ != q)
-                        return;
-                    show_validation_error(
-                        tr("Symbol search is unavailable — press Enter to add \"%1\" as typed.").arg(q.toUpper()));
-                });
-        search_connected_ = true;
-    }
-    svc.search(query, /*type=*/QString(), kMaxResults, rid);
-}
-
-void MarketPanelEditor::on_search_results(const QList<services::MarketSearchService::Item>& results) {
-    dropdown_->clear();
-
-    for (const auto& entry : results) {
-        if (entry.symbol.isEmpty())
-            continue;
-        const QString display =
-            entry.name.isEmpty() ? entry.symbol : QString("%1  ·  %2").arg(entry.symbol, entry.name);
-        auto* item = new QListWidgetItem(display);
-        item->setData(Qt::UserRole, entry.symbol); // store raw symbol for adding
-        dropdown_->addItem(item);
-    }
-
-    if (dropdown_->count() > 0) {
-        reposition_dropdown();
-        dropdown_->show();
-        dropdown_->raise();
-    } else {
-        hide_dropdown();
-    }
-}
-
 void MarketPanelEditor::refresh_ticker_list() {
     ticker_list_->clear();
     for (const auto& s : config_.symbols) {
-        auto* item = new QListWidgetItem(s);
-        item->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
+        // What the screen shows ("USD/JPY", "NIFTY 50"), with the stored market-data
+        // symbol beside it when the two differ; the item keeps the stored one.
+        const QString display = core::instrument::display_symbol(s);
+        auto* item = new QListWidgetItem(display.isEmpty() || display == s ? s
+                                                                           : QStringLiteral("%1   %2").arg(display, s));
+        item->setData(Qt::UserRole, s);
         ticker_list_->addItem(item);
     }
 }
 
+void MarketPanelEditor::set_other_symbols(const QStringList& symbols) {
+    other_symbols_ = symbols;
+}
+
 void MarketPanelEditor::on_add_symbol(const QString& symbol) {
-    const QString sym = symbol.trimmed().toUpper();
+    // The canonical market-data key (USDJPY=X -> JPY=X, brk.b -> BRK-B, 700.HK -> 0700.HK);
+    // text canonical_symbol cannot place is kept as typed, upper-cased.
+    const QString sym = markets_logic::canonical_or_kept(symbol);
     if (sym.isEmpty() || config_.symbols.contains(sym))
         return;
+    if (config_.symbols.size() >= markets_logic::kMaxSymbolsPerPanel) {
+        show_validation_error(tr("A panel can hold up to %1 symbols.").arg(markets_logic::kMaxSymbolsPerPanel));
+        return;
+    }
+    QSet<QString> all(other_symbols_.cbegin(), other_symbols_.cend());
+    for (const QString& s : config_.symbols)
+        all.insert(s);
+    if (!all.contains(sym) && all.size() >= markets_logic::kMaxSymbolsOnScreen) {
+        show_validation_error(tr("This layout already tracks %1 symbols. Remove some before adding more.")
+                                  .arg(markets_logic::kMaxSymbolsOnScreen));
+        return;
+    }
     config_.symbols << sym;
     if (error_lbl_)
         error_lbl_->setVisible(false);
     refresh_ticker_list();
-    search_edit_->clear();
-    hide_dropdown();
-    search_edit_->setFocus();
+    markets_symbol_entry_focus(entry_); // the box cleared itself on the pick
 }
 
 void MarketPanelEditor::on_remove_selected() {
     auto* item = ticker_list_->currentItem();
     if (!item)
         return;
-    config_.symbols.removeAll(item->text());
+    config_.symbols.removeAll(item->data(Qt::UserRole).toString());
     refresh_ticker_list();
 }
 
@@ -374,9 +275,9 @@ void MarketPanelEditor::retranslateUi() {
     if (remove_btn_)
         remove_btn_->setText(tr("✕ REMOVE"));
     if (search_lbl_)
-        search_lbl_->setText(tr("ADD TICKER  ·  type to search, click or Enter to add"));
-    if (search_edit_)
-        search_edit_->setPlaceholderText(tr("Search symbol or name: AAPL, Reliance, Bitcoin ..."));
+        search_lbl_->setText(tr("ADD TICKERS  ·  ticker, name or ISIN; several separated by commas"));
+    if (entry_)
+        markets_symbol_entry_set_placeholder(entry_, tr("Search symbol or name: AAPL, Reliance, Bitcoin ..."));
 }
 
 } // namespace fincept::screens

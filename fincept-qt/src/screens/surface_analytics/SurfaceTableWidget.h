@@ -29,6 +29,10 @@ class SurfaceTableWidget : public QWidget {
   private:
     QTableWidget* table_;
     void apply_heatmap(float value, float min_val, float max_val, bool diverging, int row, int col);
+    /// Colours one cell from its stored scale position (see apply_heatmap).
+    static void paint_cell(QTableWidgetItem* item);
+    /// Re-colours every cell and re-fits the row height after a theme / font change.
+    void refresh_theme();
     static QColor heat_color(float t, bool diverging);
 };
 

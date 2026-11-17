@@ -117,7 +117,8 @@ DcfResult dcf(const DcfInputs& in) {
         return r;
     }
     if (!has(in.fcf) || in.fcf <= 0.0) {
-        r.error = vtr("A DCF needs positive free cash flow — this company's base-year FCF is zero or negative.");
+        r.error = vtr("A DCF needs a positive base cash flow — this base is zero or negative. Pick a normalised "
+                      "base (a multi-year average) or the unlevered (FCFF) path.");
         return r;
     }
     double fcf_t = in.fcf;
@@ -129,18 +130,80 @@ DcfResult dcf(const DcfInputs& in) {
                                                static_cast<double>(in.years - 1)
                              : in.growth;
         fcf_t *= 1.0 + g;
-        pv += fcf_t / std::pow(1.0 + in.discount, t);
+        const double df = 1.0 / std::pow(1.0 + in.discount, t);
+        pv += fcf_t * df;
+        r.growth.append(g);
+        r.cash_flow.append(fcf_t);
+        r.discount_factor.append(df);
+        r.present_value.append(fcf_t * df);
     }
     const double terminal = fcf_t * (1.0 + in.terminal_growth) / (in.discount - in.terminal_growth);
     const double pv_terminal = terminal / std::pow(1.0 + in.discount, in.years);
+    r.terminal_value = terminal;
     r.pv_fcf = pv;
     r.pv_terminal = pv_terminal;
-    r.equity_value = pv + pv_terminal;
+    const double total = pv + pv_terminal;
+    if (in.unlevered) {
+        r.enterprise_value = total;
+        r.equity_value = total - (has(in.net_debt) ? in.net_debt : 0.0) - (has(in.minority) ? in.minority : 0.0);
+    } else {
+        r.enterprise_value = total;
+        r.equity_value = total;
+    }
     r.per_share = r.equity_value / in.shares;
-    r.terminal_fraction = r.equity_value != 0.0 ? pv_terminal / r.equity_value : 0.0;
+    r.terminal_fraction = total != 0.0 ? pv_terminal / total : 0.0;
     r.ok = has(r.per_share);
     if (!r.ok)
         r.error = vtr("The DCF did not produce a finite value.");
+    return r;
+}
+
+DdmResult ddm(const DdmInputs& in) {
+    DdmResult r;
+    if (!(in.dps > 0.0) || !has(in.dps)) {
+        r.error = vtr("No dividend on file — a dividend discount model needs one.");
+        return r;
+    }
+    if (!(in.cost_of_equity > in.terminal_growth)) {
+        r.error = vtr("The cost of equity must exceed terminal growth.");
+        return r;
+    }
+    double d = in.dps, pv = 0.0;
+    const int n = std::clamp(in.years, 1, 30);
+    for (int t = 1; t <= n; ++t) {
+        d *= 1.0 + in.growth;
+        pv += d / std::pow(1.0 + in.cost_of_equity, t);
+    }
+    const double tv = d * (1.0 + in.terminal_growth) / (in.cost_of_equity - in.terminal_growth);
+    const double pv_tv = tv / std::pow(1.0 + in.cost_of_equity, n);
+    r.per_share = pv + pv_tv;
+    r.terminal_fraction = r.per_share != 0.0 ? pv_tv / r.per_share : 0.0;
+    r.ok = has(r.per_share);
+    return r;
+}
+
+ResidualIncomeResult residual_income(const ResidualIncomeInputs& in) {
+    ResidualIncomeResult r;
+    if (!(in.book_value_ps > 0.0) || !has(in.book_value_ps)) {
+        r.error = vtr("Book value per share is missing or negative.");
+        return r;
+    }
+    if (!has(in.roe) || !(in.cost_of_equity > 0.0)) {
+        r.error = vtr("Return on equity or the cost of equity is missing.");
+        return r;
+    }
+    const int n = std::clamp(in.years, 1, 30);
+    const double payout = std::clamp(has(in.payout) ? in.payout : 0.0, 0.0, 1.0);
+    double bv = in.book_value_ps, pv = 0.0;
+    for (int t = 1; t <= n; ++t) {
+        const double roe = n > 1 ? in.roe + (in.long_run_roe - in.roe) * static_cast<double>(t - 1) / (n - 1) : in.roe;
+        const double earnings = roe * bv;
+        pv += (roe - in.cost_of_equity) * bv / std::pow(1.0 + in.cost_of_equity, t);
+        bv += earnings * (1.0 - payout);
+    }
+    r.pv_residual = pv;
+    r.per_share = in.book_value_ps + pv;
+    r.ok = has(r.per_share);
     return r;
 }
 

@@ -538,8 +538,9 @@ def zscores(x: Series, w: int = None) -> Series:
 
 def semi_variance(x: Series, threshold: float = 0, w: int = None) -> Union[Series, float]:
     """
-    Calculate semi-variance (variance of values below threshold).
-    Used for downside risk.
+    Calculate semi-variance below a threshold: mean over ALL observations of
+    min(x - threshold, 0)^2 (Markowitz / target semivariance; the square of the
+    downside deviation). Used for downside risk.
 
     Args:
         x: Returns series
@@ -551,12 +552,13 @@ def semi_variance(x: Series, threshold: float = 0, w: int = None) -> Union[Serie
     """
     if w is not None:
         def _sv(arr):
-            below = arr[arr < threshold]
-            return below.var() if len(below) > 1 else 0.0
+            return float(np.mean(np.minimum(arr - threshold, 0.0) ** 2))
         return x.rolling(window=w).apply(_sv, raw=True)
 
-    below = x[x < threshold]
-    return float(below.var()) if len(below) > 1 else 0.0
+    arr = np.asarray(x.dropna(), dtype=float)
+    if len(arr) == 0:
+        return float("nan")
+    return float(np.mean(np.minimum(arr - threshold, 0.0) ** 2))
 
 
 def realized_var(x: Series, w: int = None) -> Union[Series, float]:

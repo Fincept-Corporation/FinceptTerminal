@@ -1,17 +1,24 @@
 #pragma once
-// cur:: — call-site helpers built on CurrencyManager.
+// cur:: — call-site helpers for the display currency. A thin facade over
+// ui/formatting (FormatSettings, CurrencyTable, NumberFormat, FormatWidgets),
+// kept so existing callers compile and follow Settings > Currency & Number
+// Format. New code should call ui/formatting directly:
 //
-//   cur::symbol()                   -> current global symbol, e.g. "€"
-//   cur::money(v)                   -> "€1,234.56" using the global currency
-//   cur::money(v, true)             -> "€1.2B" compact (K/M/B)
+//   cur::symbol()                   -> fmt::currency_unit()          "€"
+//   cur::symbol_for("CAD")          -> fmt::currency_unit("CAD")     "C$"
+//   cur::money(v)                   -> fmt::money(v, fmt::display_currency())
+//   cur::money(v, true)             -> fmt::money(v, display, fmt::Compact::FromSettings)
 //   cur::money(v, true, "USD")      -> pin to an intrinsic currency (market data)
-//   cur::bindLabel(lbl, "Rev (%1)") -> set text now + on every currency_changed
-//   cur::bindPrefix(spin)           -> set spinbox prefix now + on change
+//   cur::bindLabel(lbl, "Rev (%1)") -> fmt::bind_currency_label(lbl, "Rev (%1)")
+//   cur::bindPrefix(spin)           -> fmt::bind_currency_affix(spin)
 //
-// Binders use the bound widget as the Qt receiver/context, so the connection
-// auto-disconnects when the widget is destroyed — no manual cleanup needed.
+// Symbol-only: these never convert. A value in another currency must be
+// converted first (FxRateService::convert_for_display) or formatted with its
+// own currency.
 
 #include "core/currency/CurrencyManager.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 
 #include <QAbstractSpinBox>
 #include <QDoubleSpinBox>
@@ -24,58 +31,37 @@
 
 namespace cur {
 
+/// The display currency's unit in the user's symbol style, e.g. "€".
 inline QString symbol() {
-    return fincept::currency::CurrencyManager::instance().symbol();
+    return fincept::ui::formatting::currency_unit();
 }
 
-/// Symbol for a specific currency code, independent of the global preference.
+/// Unit for a specific currency code, independent of the display currency.
 /// Use for intrinsic-currency surfaces (e.g. a portfolio's own currency).
 inline QString symbol_for(const QString& code) {
     return fincept::currency::CurrencyManager::symbol_for(code);
 }
 
-/// Format an amount. `compact` abbreviates to K/M/B. `intrinsic` (if non-empty)
-/// pins the symbol to that currency code instead of the global preference.
+/// Format an amount. `compact` abbreviates per the user's scheme (K/M/B or
+/// lakh / crore). `intrinsic` (if non-empty) is the amount's own currency;
+/// otherwise the display currency is printed. Symbol placement, grouping,
+/// decimals and negative style follow the user's settings; NaN / inf print "—".
 inline QString money(double v, bool compact = false, const QString& intrinsic = QString()) {
-    const QString sym = intrinsic.isEmpty() ? symbol() : fincept::currency::CurrencyManager::symbol_for(intrinsic);
-    const QString sign = v < 0 ? QStringLiteral("-") : QString();
-    const double a = std::abs(v);
-    if (compact) {
-        if (a >= 1e9)
-            return sign + sym + QString::number(a / 1e9, 'f', 1) + "B";
-        if (a >= 1e6)
-            return sign + sym + QString::number(a / 1e6, 'f', 1) + "M";
-        if (a >= 1e3)
-            return sign + sym + QString::number(a / 1e3, 'f', 0) + "K";
-    }
-    return sign + sym + QLocale(QLocale::English).toString(a, 'f', 2);
+    namespace uifmt = fincept::ui::formatting;
+    return uifmt::money(v, intrinsic.isEmpty() ? uifmt::display_currency() : intrinsic,
+                        compact ? uifmt::Compact::FromSettings : uifmt::Compact::None);
 }
 
-/// `tmpl` must contain a single "%1" placeholder for the symbol.
+/// `tmpl` must contain a single "%1" placeholder for the unit; kept in sync
+/// with the settings.
 inline void bindLabel(QLabel* lbl, const QString& tmpl) {
-    if (!lbl)
-        return;
-    lbl->setText(tmpl.arg(symbol()));
-    QObject::connect(&fincept::currency::CurrencyManager::instance(),
-                     &fincept::currency::CurrencyManager::currency_changed, lbl,
-                     [lbl, tmpl](const QString&, const QString& s) { lbl->setText(tmpl.arg(s)); });
+    fincept::ui::formatting::bind_currency_label(lbl, tmpl);
 }
 
-/// Sets the spin box prefix to the current symbol (plus a space) and keeps it
-/// in sync with currency changes.
+/// Puts the display currency's unit on the spin box (prefix or suffix, per the
+/// user's settings) and keeps it in sync.
 inline void bindPrefix(QAbstractSpinBox* spin) {
-    if (!spin)
-        return;
-    auto apply = [spin](const QString& s) {
-        if (auto* d = qobject_cast<QDoubleSpinBox*>(spin))
-            d->setPrefix(s + " ");
-        else if (auto* i = qobject_cast<QSpinBox*>(spin))
-            i->setPrefix(s + " ");
-    };
-    apply(symbol());
-    QObject::connect(&fincept::currency::CurrencyManager::instance(),
-                     &fincept::currency::CurrencyManager::currency_changed, spin,
-                     [apply](const QString&, const QString& s) { apply(s); });
+    fincept::ui::formatting::bind_currency_affix(spin);
 }
 
 } // namespace cur

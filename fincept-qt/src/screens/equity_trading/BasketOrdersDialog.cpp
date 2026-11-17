@@ -4,7 +4,9 @@
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OrderSourceCapture.h"
 #include "trading/UnifiedTrading.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QCheckBox>
@@ -26,6 +28,7 @@
 namespace fincept::screens::equity {
 
 using namespace fincept::ui;
+namespace fmt = fincept::ui::formatting;
 using trading::OrderSide;
 using trading::OrderType;
 using trading::ProductType;
@@ -49,22 +52,27 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
     auto* lv = new QVBoxLayout(left);
     lv->setContentsMargins(8, 8, 4, 8);
     auto* title = new QLabel(tr("BASKETS"));
-    title->setStyleSheet("color:#808080;font-size:10px;font-weight:700;");
+    title->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;")
+                             .arg(colors::TEXT_SECONDARY()));
     lv->addWidget(title);
     basket_list_ = new QListWidget;
-    basket_list_->setStyleSheet("QListWidget{background:#080808;border:1px solid #1a1a1a;font-size:12px;}"
-                                "QListWidget::item{padding:6px 8px;}"
-                                "QListWidget::item:selected{background:rgba(217,119,6,0.15);color:#d97706;}");
+    basket_list_->setStyleSheet(
+        QString("QListWidget{background:%1;border:1px solid %2;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+                "QListWidget::item{padding:6px 8px;}"
+                "QListWidget::item:selected{background:%3;color:%4;}")
+            .arg(colors::BG_BASE(), colors::BORDER_MED(), colors::alpha(colors::AMBER, 0.15), colors::AMBER()));
     connect(basket_list_, &QListWidget::currentRowChanged, this, &BasketOrdersDialog::on_basket_selected);
     lv->addWidget(basket_list_, 1);
     auto* lbtns = new QHBoxLayout;
     new_btn_ = new QPushButton(tr("+ NEW"));
     delete_btn_ = new QPushButton(tr("DELETE"));
+    delete_btn_->setProperty("fincept_agent_risk", "delete");
     for (auto* b : {new_btn_, delete_btn_}) {
         b->setCursor(Qt::PointingHandCursor);
-        b->setStyleSheet("QPushButton{background:#111;border:1px solid #2a2a2a;color:#d97706;"
-                         "padding:5px 10px;font-size:11px;font-weight:600;}"
-                         "QPushButton:hover{border-color:#d97706;}");
+        b->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;color:%3;"
+                                 "padding:5px 10px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;}"
+                                 "QPushButton:hover{border-color:%3;}")
+                             .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::AMBER()));
         lbtns->addWidget(b);
     }
     connect(new_btn_, &QPushButton::clicked, this, &BasketOrdersDialog::on_new_basket);
@@ -84,9 +92,10 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
     name_row->addWidget(name_edit_, 1);
     save_btn_ = new QPushButton(tr("SAVE BASKET"));
     save_btn_->setCursor(Qt::PointingHandCursor);
-    save_btn_->setStyleSheet("QPushButton{background:#111;border:1px solid #d97706;color:#d97706;"
-                             "padding:5px 12px;font-size:11px;font-weight:700;}"
-                             "QPushButton:hover{background:#d97706;color:#080808;}");
+    save_btn_->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;color:%2;"
+                                     "padding:5px 12px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;}"
+                                     "QPushButton:hover{background:%2;color:%3;}")
+                                 .arg(colors::BG_RAISED(), colors::AMBER(), colors::TEXT_ON_ACCENT()));
     connect(save_btn_, &QPushButton::clicked, this, &BasketOrdersDialog::on_save_basket);
     name_row->addWidget(save_btn_);
     rv->addLayout(name_row);
@@ -100,7 +109,8 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
     legs_table_->setColumnWidth(LRemove, 36);
     legs_table_->verticalHeader()->setVisible(false);
     legs_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    legs_table_->setStyleSheet("QTableWidget{background:#080808;border:1px solid #1a1a1a;font-size:12px;}");
+    legs_table_->setStyleSheet(QString("QTableWidget{background:%1;border:1px solid %2;font-size:" + fincept::ui::fonts::px(-2) + "px;}")
+                                   .arg(colors::BG_BASE(), colors::BORDER_MED()));
     rv->addWidget(legs_table_, 1);
 
     // Add-leg row
@@ -126,9 +136,10 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
     leg_product_->addItems({tr("INTRADAY"), tr("DELIVERY"), tr("MARGIN")});
     auto* add_btn = new QPushButton(tr("+ ADD"));
     add_btn->setCursor(Qt::PointingHandCursor);
-    add_btn->setStyleSheet("QPushButton{background:#111;border:1px solid #2a2a2a;color:#d97706;"
-                           "padding:4px 10px;font-size:11px;font-weight:600;}"
-                           "QPushButton:hover{border-color:#d97706;}");
+    add_btn->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;color:%3;"
+                                   "padding:4px 10px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;}"
+                                   "QPushButton:hover{border-color:%3;}")
+                               .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::AMBER()));
     connect(add_btn, &QPushButton::clicked, this, &BasketOrdersDialog::on_add_leg);
     connect(leg_symbol_, &QLineEdit::returnPressed, this, &BasketOrdersDialog::on_add_leg);
     for (QWidget* w : std::initializer_list<QWidget*>{leg_symbol_, leg_exchange_, leg_side_, leg_qty_, leg_type_,
@@ -141,7 +152,8 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
 
     status_label_ = new QLabel;
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet("color:#808080;font-size:11px;");
+    status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;")
+                                     .arg(colors::TEXT_SECONDARY()));
     rv->addWidget(status_label_);
 
     split->addWidget(right);
@@ -154,7 +166,8 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
 
 void BasketOrdersDialog::build_accounts_box(QVBoxLayout* into) {
     auto* cap = new QLabel(tr("EXECUTE ON"));
-    cap->setStyleSheet("color:#808080;font-size:10px;font-weight:700;margin-top:6px;");
+    cap->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;margin-top:6px;")
+                           .arg(colors::TEXT_SECONDARY()));
     into->addWidget(cap);
 
     auto* row = new QHBoxLayout;
@@ -164,7 +177,8 @@ void BasketOrdersDialog::build_accounts_box(QVBoxLayout* into) {
         const QString broker_name = broker ? broker->profile().display_name : account.broker_id;
         const QString mode_tag = account.trading_mode == "live" ? tr("LIVE") : tr("PAPER");
         auto* cb = new QCheckBox(QString("%1 [%2·%3]").arg(account.display_name, broker_name, mode_tag));
-        cb->setStyleSheet("QCheckBox{color:#9ca3af;font-size:11px;}");
+        cb->setStyleSheet(QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;}")
+                              .arg(colors::TEXT_SECONDARY()));
         account_cbs_.append(cb);
         account_ids_.append(account.account_id);
         row->addWidget(cb);
@@ -172,10 +186,12 @@ void BasketOrdersDialog::build_accounts_box(QVBoxLayout* into) {
     row->addStretch(1);
 
     execute_btn_ = new QPushButton(tr("EXECUTE BASKET"));
+    execute_btn_->setProperty("fincept_agent_risk", "order");
     execute_btn_->setCursor(Qt::PointingHandCursor);
-    execute_btn_->setStyleSheet("QPushButton{background:#052e16;border:1px solid #16a34a;color:#22c55e;"
-                                "padding:6px 16px;font-size:12px;font-weight:700;}"
-                                "QPushButton:hover{background:#16a34a;color:#080808;}");
+    execute_btn_->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;color:%2;"
+                                        "padding:6px 16px;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;}"
+                                        "QPushButton:hover{background:%2;color:%3;}")
+                                    .arg(colors::POSITIVE_BG(), colors::POSITIVE(), colors::TEXT_ON_ACCENT()));
     connect(execute_btn_, &QPushButton::clicked, this, &BasketOrdersDialog::on_execute);
     row->addWidget(execute_btn_);
     into->addLayout(row);
@@ -239,7 +255,7 @@ void BasketOrdersDialog::on_save_basket() {
     const QString id = b->id;
     reload_baskets(id);
     status_label_->setText(tr("Basket saved"));
-    status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::POSITIVE()));
+    status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::POSITIVE()));
 }
 
 // ── Legs ─────────────────────────────────────────────────────────────────────
@@ -260,13 +276,19 @@ void BasketOrdersDialog::refresh_legs_table() {
                                                                               : QColor(colors::NEGATIVE()));
         set(LQty, format_quantity(leg.quantity));
         set(LType, leg.order_type == OrderType::Market ? tr("MKT") : tr("LMT"));
-        set(LPrice, leg.order_type == OrderType::Market ? QStringLiteral("—") : QString::number(leg.price, 'f', 2));
+        // A limit in the leg's exchange currency (venue table; MCX / CDS are not listed
+        // there and print without a unit rather than a guessed one).
+        set(LPrice, leg.order_type == OrderType::Market
+                        ? fmt::placeholder()
+                        : fmt::price_with_symbol(leg.price, fmt::instrument_for_symbol(
+                                                                leg.symbol, exchange_currency(leg.exchange))));
         set(LProduct, leg.product_type == ProductType::Delivery ? tr("CNC")
                       : leg.product_type == ProductType::Margin ? tr("NRML")
                                                                 : tr("MIS"));
         auto* rm = new QPushButton(QStringLiteral("✕"));
         rm->setCursor(Qt::PointingHandCursor);
-        rm->setStyleSheet("QPushButton{background:transparent;border:none;color:#ef4444;font-size:12px;}");
+        rm->setStyleSheet(QString("QPushButton{background:transparent;border:none;color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;}")
+                              .arg(colors::NEGATIVE()));
         connect(rm, &QPushButton::clicked, this, [this, i]() {
             if (auto* bb = current_basket()) {
                 if (i < bb->legs.size()) {
@@ -284,7 +306,7 @@ void BasketOrdersDialog::on_add_leg() {
     auto* b = current_basket();
     if (!b) {
         status_label_->setText(tr("Create or select a basket first"));
-        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::NEGATIVE()));
+        status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::NEGATIVE()));
         return;
     }
     const QString symbol = leg_symbol_->text().trimmed().toUpper();
@@ -293,7 +315,7 @@ void BasketOrdersDialog::on_add_leg() {
     const bool is_limit = leg_type_->currentIndex() == 1;
     if (is_limit && leg_price_->value() <= 0.0) {
         status_label_->setText(tr("Enter a limit price for %1").arg(symbol));
-        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::NEGATIVE()));
+        status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::NEGATIVE()));
         return;
     }
 
@@ -322,7 +344,7 @@ void BasketOrdersDialog::on_execute() {
     auto* b = current_basket();
     if (!b || b->legs.isEmpty()) {
         status_label_->setText(tr("Basket is empty — add legs first"));
-        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::NEGATIVE()));
+        status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::NEGATIVE()));
         return;
     }
     QStringList selected;
@@ -335,7 +357,7 @@ void BasketOrdersDialog::on_execute() {
     }
     if (selected.isEmpty()) {
         status_label_->setText(tr("Select at least one account"));
-        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::NEGATIVE()));
+        status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::NEGATIVE()));
         return;
     }
 
@@ -352,6 +374,10 @@ void BasketOrdersDialog::on_execute() {
     trading::BasketOrderRequest req;
     req.orders = b->legs;
     req.strategy_name = b->name;
+    // Provenance of every leg, captured after the confirmation on the GUI thread: the
+    // agent's while an agent executed the basket, else "basket".
+    for (auto& leg : req.orders)
+        leg.source = trading::capture_order_source(QStringLiteral("basket"));
 
     // Semi-Auto gate. Every other order path in the terminal (order ticket,
     // BroadcastOrderDialog, options strategies) consults ActionCenter before
@@ -375,7 +401,7 @@ void BasketOrdersDialog::on_execute() {
         status_label_->setText(none_queued ? tr("Could not queue the basket for approval — nothing was sent")
                                            : tr("%1 basket(s) queued for approval").arg(queued));
         status_label_->setStyleSheet(
-            QString("color:%1;font-size:11px;").arg(none_queued ? colors::NEGATIVE() : colors::AMBER()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(none_queued ? colors::NEGATIVE() : colors::AMBER()));
         return;
     }
 
@@ -384,7 +410,7 @@ void BasketOrdersDialog::on_execute() {
                                             .arg(immediate.size())
                                             .arg(queued)
                                       : tr("Executing on %1 account(s)…").arg(immediate.size()));
-    status_label_->setStyleSheet("color:#d97706;font-size:11px;");
+    status_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::AMBER()));
 
     // place_basket_orders runs on its own background thread per call and
     // invokes the callback on this (caller's) thread. Aggregate across accounts.
@@ -417,7 +443,7 @@ void BasketOrdersDialog::on_execute() {
                         msg += tr(" — ✗ %1 failed: %2").arg(tally->fail).arg(tally->errors.join("; "));
                     self->status_label_->setText(msg);
                     self->status_label_->setStyleSheet(
-                        QString("color:%1;font-size:11px;")
+                        QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;")
                             .arg(tally->fail == 0 ? colors::POSITIVE() : colors::NEGATIVE()));
                     self->execute_btn_->setEnabled(true);
                 }

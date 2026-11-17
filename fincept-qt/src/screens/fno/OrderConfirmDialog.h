@@ -46,10 +46,19 @@ class OrderConfirmDialog : public QDialog {
     void start_margin_fetch();
     void on_margin_loaded(bool ok, fincept::trading::BasketMargin margin, QString error);
     void retranslateUi();
+    /// Spot line, premium and max P/L from the figures passed in (also on a
+    /// currency / number-format change — nothing is recomputed or fetched).
+    void render_summary();
+    /// The basket-margin cell from margin_, when the broker answered.
+    void render_margin();
 
     fincept::services::options::Strategy strategy_;
     fincept::services::options::OptionChain chain_;
     std::optional<fincept::trading::BasketMargin> margin_;
+    double premium_ = 0.0;
+    double max_profit_ = 0.0;
+    double max_loss_ = 0.0;
+    QString ccy_; ///< the chain's premium currency (FnoFormat.h fno_chain_ccy)
 
     QTableWidget* legs_table_ = nullptr;
     QLabel* title_label_ = nullptr;

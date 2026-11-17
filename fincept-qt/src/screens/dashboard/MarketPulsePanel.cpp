@@ -1,11 +1,14 @@
 #include "screens/dashboard/MarketPulsePanel.h"
 
 #include "core/events/EventBus.h"
+#include "core/market/MarketProfile.h"
+#include "core/market/MarketSessions.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/dashboard/widgets/DashboardFormat.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/markets/MarketDataService.h"
+#include "services/markets/RiskCompositeService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -22,77 +25,60 @@ namespace fincept::screens {
 
 // ── Symbols used by this panel ───────────────────────────────────────────────
 
-// Broad basket: used for fear/greed score + NYSE/NASDAQ/S&P breadth proxy
-static const QStringList kBreadthSymbols = {
-    "^VIX",
-    // S&P large caps (proxy for S&P 500 breadth)
-    "AAPL",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "NVDA",
-    "META",
-    "TSLA",
-    "BRK-B",
-    "JPM",
-    "UNH",
-    "V",
-    "XOM",
-    "LLY",
-    "JNJ",
-    "WMT",
-    "MA",
-    "PG",
-    "HD",
-    "CVX",
-    "MRK",
-    // NASDAQ-heavy tech
-    "NFLX",
-    "AMD",
-    "INTC",
-    "QCOM",
-    "ADBE",
-    "CSCO",
-    "ORCL",
-    "CRM",
-    "AVGO",
-    "TXN",
-    // NYSE diversified (financials, energy, consumer, industrials)
-    "GS",
-    "BAC",
-    "WFC",
-    "C",
-    "MS",
-    "BLK",
-    "AXP",
-    "CAT",
-    "BA",
-    "GE",
-    "DIS",
-    "NKE",
-    "KO",
-    "PEP",
-    "MCD",
-    "PFE",
-    "ABT",
-    "TMO",
-    "UPS",
-    "FDX",
+// Breadth baskets, from the user's MarketProfile. Each is named for what it is
+// (the region's large-cap basket, its sector set, the world's headline
+// indices) — never presented as exchange-wide advance / decline.
+struct PulseGroup {
+    QString label;
+    QStringList symbols;
 };
 
+static QVector<PulseGroup> pulse_breadth_groups() {
+    const auto& p = core::market::MarketProfileStore::instance().current();
+    const QString region = core::market::market_profile_name(p).toUpper();
+    QStringList world;
+    for (const auto& g : core::market::global_index_universe())
+        world << g.symbol;
+    const QStringList sectors = core::market::profile_symbols(p.sectors);
+    return {{MarketPulsePanel::tr("%1 LARGE CAPS · %2").arg(region).arg(p.movers.size()), p.movers},
+            {MarketPulsePanel::tr("%1 SECTORS · %2").arg(region).arg(sectors.size()), sectors},
+            {MarketPulsePanel::tr("WORLD INDICES · %1").arg(world.size()), world}};
+}
+
+static QStringList pulse_breadth_symbols() {
+    QStringList out;
+    for (const auto& g : pulse_breadth_groups())
+        for (const auto& s : g.symbols)
+            if (!out.contains(s))
+                out << s;
+    return out;
+}
+
+// Movers: the region's large caps (gainers / losers rows).
+static QStringList pulse_mover_symbols() {
+    return core::market::MarketProfileStore::instance().current().movers;
+}
+
 // setStyleSheet() only when the sheet changed — the data-driven colours below
-// are re-applied on every delivery burst / minute tick but rarely differ.
+// are re-applied on every delivery burst / minute tick but rarely differ, and
+// after an appearance change the theme manager has usually rewritten a sheet
+// to exactly the new text already (so the live sheet is what is compared).
 static void pulse_set_css_cached(QWidget* w, const QString& css) {
-    if (!w || w->property("fincept_pulse_css").toString() == css)
+    if (!w || w->styleSheet() == css)
         return;
     w->setProperty("fincept_pulse_css", css);
     w->setStyleSheet(css);
 }
 
-// Movers: used for gainers/losers rows
-static const QStringList kMoverSymbols = services::MarketDataService::mover_symbols();
+static QString pulse_scroll_css() {
+    return QString("QScrollArea{border:none;background:transparent;}"
+                   "QScrollBar:vertical{width:6px;background:transparent;}"
+                   "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
+                   "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+        .arg(ui::colors::BORDER_MED());
+}
 
-// Global snapshot symbols
+// Global snapshot symbols (global context whatever the region)
 static const QStringList kSnapshotSymbols = services::MarketDataService::global_snapshot_symbols();
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -105,6 +91,10 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     // the majority of space before the user sees the dashboard.
     // The user can still drag the splitter handle wider if needed.
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    // The root sheet goes on before any child exists, so each child is styled
+    // once, at creation (refresh_theme() below then skips the unchanged sheet).
+    root_css_ = QString("background:%1;").arg(ui::colors::PANEL());
+    setStyleSheet(root_css_);
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -112,9 +102,11 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
 
     vl->addWidget(build_header());
 
-    scroll_area_ = new QScrollArea;
+    scroll_area_ = new QScrollArea(this);
     scroll_area_->setWidgetResizable(true);
-    // Styling applied by refresh_theme() called at end of constructor
+    // Styled now, before the sections move in (refresh_theme() then finds the
+    // sheet unchanged and leaves it, instead of re-polishing every section).
+    pulse_set_css_cached(scroll_area_, pulse_scroll_css());
 
     auto* content = new QWidget(this);
     auto* cl = new QVBoxLayout(content);
@@ -142,8 +134,11 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     // ── Timers ──
 
     hours_timer_ = new QTimer(this);
-    hours_timer_->setInterval(60000); // 1 min — market open/close status
+    hours_timer_->setInterval(30000); // market state + countdowns
     connect(hours_timer_, &QTimer::timeout, this, &MarketPulsePanel::refresh_market_hours);
+    // Baskets, movers and venues follow the user's market region.
+    connect(&core::market::MarketProfileStore::instance(), &core::market::MarketProfileStore::profile_changed, this,
+            [this]() { on_profile_changed(); });
 
     // Coalesces a burst of ~70 per-symbol hub deliveries into one render pass.
     render_timer_ = new QTimer(this);
@@ -151,8 +146,9 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     render_timer_->setInterval(0);
     connect(render_timer_, &QTimer::timeout, this, &MarketPulsePanel::flush_render);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { refresh_theme(); });
+    // Never inside theme_changed (restyling there stalls a theme switch): once the
+    // appearance has settled, each sheet only when its text changed.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
     refresh_theme();
 }
 
@@ -165,42 +161,43 @@ void MarketPulsePanel::refresh_theme() {
     setPalette(pal);
 
     // ── Root panel ──
-    setStyleSheet(QString("background:%1;").arg(ui::colors::PANEL()));
+    // Only when it changed: re-setting the root sheet re-polishes every child of
+    // the panel (most of a ~1.6 s stall when the constructor ended with it).
+    const QString root_css = QString("background:%1;").arg(ui::colors::PANEL());
+    if (styleSheet() != root_css) {
+        root_css_ = root_css;
+        pulse_set_css_cached(this, root_css);
+    }
 
     // ── Header bar ──
     if (header_bar_)
-        header_bar_->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+        pulse_set_css_cached(header_bar_, QString("background: %1; border-bottom: 1px solid %2;")
                                        .arg(ui::colors::BG_RAISED(), ui::colors::AMBER_DIM()));
     if (header_icon_)
-        header_icon_->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+        pulse_set_css_cached(header_icon_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;").arg(ui::colors::AMBER()));
     if (header_title_)
-        header_title_->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; letter-spacing: 1px; background: transparent;")
+        pulse_set_css_cached(header_title_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; letter-spacing: 1px; background: transparent;")
                 .arg(ui::colors::AMBER()));
-    if (header_live_dot_)
-        header_live_dot_->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE()));
+    live_dot_css_.clear(); // theme colours changed: re-apply the dot's state colour
+    apply_live_dot();
 
-    // ── Scroll area ──
+    // ── Scroll area ── (cached: re-setting it re-polishes every section)
     if (scroll_area_)
-        scroll_area_->setStyleSheet(
-            QString("QScrollArea{border:none;background:transparent;}"
-                    "QScrollBar:vertical{width:6px;background:transparent;}"
-                    "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
-                    "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                .arg(ui::colors::BORDER_MED()));
+        pulse_set_css_cached(scroll_area_, pulse_scroll_css());
 
     // ── Section headers ──
     auto style_section = [](SectionHeader& sh, const QString& icon_color) {
         if (sh.container)
-            sh.container->setStyleSheet(
+            pulse_set_css_cached(sh.container, 
                 QString("background: %1; border-bottom: 1px solid %2; border-top: 1px solid %2;")
                     .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         if (sh.icon)
-            sh.icon->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(icon_color));
+            pulse_set_css_cached(sh.icon, QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; background: transparent;").arg(icon_color));
         if (sh.title)
-            sh.title->setStyleSheet(
-                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+            pulse_set_css_cached(sh.title, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
                     .arg(ui::colors::TEXT_SECONDARY()));
     };
 
@@ -212,47 +209,47 @@ void MarketPulsePanel::refresh_theme() {
 
     // ── Fear & Greed ──
     if (fg_header_label_)
-        fg_header_label_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+        pulse_set_css_cached(fg_header_label_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
                 .arg(ui::colors::TEXT_SECONDARY()));
     if (fg_gauge_icon_)
-        fg_gauge_icon_->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+        pulse_set_css_cached(fg_gauge_icon_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;").arg(ui::colors::AMBER()));
     if (fg_gradient_bar_)
-        fg_gradient_bar_->setStyleSheet(QString("QFrame { border-radius: 3px; "
+        pulse_set_css_cached(fg_gradient_bar_, QString("QFrame { border-radius: 3px; "
                                                 "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
                                                 "stop:0 %1, stop:0.25 %2, stop:0.5 %3, stop:0.75 %4, stop:1 %5); }")
                                             .arg(ui::colors::NEGATIVE(), ui::colors::AMBER(), ui::colors::WARNING(),
                                                  ui::colors::POSITIVE_DIM(), ui::colors::POSITIVE()));
     if (fg_score_val_)
-        fg_score_val_->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
+        pulse_set_css_cached(fg_score_val_, QString("color: %1; font-size: " + fincept::ui::fonts::px(4) + "px; font-weight: bold; background: transparent;")
                                          .arg(ui::colors::TEXT_TERTIARY()));
     if (fg_score_max_)
-        fg_score_max_->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        pulse_set_css_cached(fg_score_max_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     if (fg_sentiment_)
-        fg_sentiment_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+        pulse_set_css_cached(fg_sentiment_, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
                 .arg(ui::colors::TEXT_TERTIARY()));
 
     // ── Market Breadth rows ──
     auto style_breadth = [](BreadthRow& row) {
         if (row.name)
-            row.name->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            pulse_set_css_cached(row.name, QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; background: transparent;")
                                         .arg(ui::colors::TEXT_SECONDARY()));
         if (row.adv)
-            row.adv->setStyleSheet(
-                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::POSITIVE()));
+            pulse_set_css_cached(row.adv, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(ui::colors::POSITIVE()));
         if (row.slash)
-            row.slash->setStyleSheet(
-                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+            pulse_set_css_cached(row.slash, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         if (row.dec)
-            row.dec->setStyleSheet(
-                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::NEGATIVE()));
+            pulse_set_css_cached(row.dec, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(ui::colors::NEGATIVE()));
         if (row.green)
-            row.green->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
+            pulse_set_css_cached(row.green, QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
         if (row.red)
-            row.red->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
+            pulse_set_css_cached(row.red, QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
     };
 
     style_breadth(nyse_row_);
@@ -273,27 +270,27 @@ void MarketPulsePanel::refresh_theme() {
 
     for (auto& sd : stat_defs) {
         if (sd.row.container)
-            sd.row.container->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+            pulse_set_css_cached(sd.row.container, QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         if (sd.row.name_lbl)
-            sd.row.name_lbl->setStyleSheet(
-                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
+            pulse_set_css_cached(sd.row.name_lbl, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
                     .arg(ui::colors::TEXT_SECONDARY()));
         if (sd.row.val)
-            sd.row.val->setStyleSheet(
-                QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(sd.val_color));
+            pulse_set_css_cached(sd.row.val, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; background: transparent;").arg(sd.val_color));
         if (sd.row.chg)
             sd.row.chg->setProperty("fincept_pulse_css", QVariant());
         if (sd.row.chg)
-            sd.row.chg->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
+            pulse_set_css_cached(sd.row.chg, QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: bold; background: transparent;")
                                           .arg(ui::colors::TEXT_TERTIARY()));
     }
 
     // ── Market Hours rows ──
     for (auto& hr : hours_rows_) {
         if (hr.container)
-            hr.container->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+            pulse_set_css_cached(hr.container, QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         if (hr.name_lbl)
-            hr.name_lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            pulse_set_css_cached(hr.name_lbl, QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; background: transparent;")
                                            .arg(ui::colors::TEXT_SECONDARY()));
         // dot and status colors are data-driven (open/closed/pre) —
         // refresh_market_hours() handles those, call it to re-resolve tokens.
@@ -321,6 +318,8 @@ void MarketPulsePanel::showEvent(QShowEvent* e) {
     refresh_theme();
     if (!hub_active_)
         hub_subscribe_all();
+    services::RiskCompositeService::instance().attach(this);
+    render_risk();
     refresh_market_hours();
     hours_timer_->start();
 }
@@ -328,6 +327,7 @@ void MarketPulsePanel::showEvent(QShowEvent* e) {
 void MarketPulsePanel::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     hub_unsubscribe_all();
+    services::RiskCompositeService::instance().detach(this);
     hours_timer_->stop();
     if (render_timer_)
         render_timer_->stop();
@@ -432,9 +432,11 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     hrl->setContentsMargins(0, 0, 0, 0);
 
     // Home-made composite — not CNN's Fear & Greed Index, so not named after it.
-    fg_header_label_ = new QLabel(tr("BASKET SENTIMENT"));
-    fg_header_label_->setToolTip(tr("0-100 score from the share of 50 US large caps up/down more than 0.3% "
-                                    "today, adjusted by the VIX level."));
+    // The app-wide documented composite (RiskCompositeService), not a basket score.
+    fg_header_label_ = new QLabel(tr("RISK-ON / RISK-OFF"));
+    fg_header_label_->setToolTip(services::RiskCompositeService::methodology());
+    connect(&services::RiskCompositeService::instance(), &services::RiskCompositeService::updated, this,
+            [this]() { render_risk(); });
     hrl->addWidget(fg_header_label_);
     hrl->addStretch();
 
@@ -532,11 +534,14 @@ QWidget* MarketPulsePanel::build_breadth_section() {
         bl->addWidget(rw);
     };
 
-    make_row(tr("NYSE · 20 NAMES"), nyse_row_);
-    make_row(tr("NASDAQ · 10 TECH"), nasdaq_row_);
-    make_row(tr("S&P · TOP 20"), sp500_row_);
-    bars->setToolTip(tr("Advancers / decliners among the panel's fixed 50-stock basket (moves beyond ±0.3%), "
-                        "grouped by venue/size. A proxy, not exchange-wide breadth."));
+    // Rows are relabelled from the region's baskets in rebuild_breadth_from_cache().
+    const auto groups = pulse_breadth_groups();
+    make_row(groups.value(0).label, nyse_row_);
+    make_row(groups.value(1).label, nasdaq_row_);
+    make_row(groups.value(2).label, sp500_row_);
+    bars->setToolTip(tr("Up / down today within three named baskets: your region's large caps, its sector set and "
+                        "the world's headline indices. Not exchange-wide breadth — no source in the terminal "
+                        "publishes advancers / decliners for a whole exchange."));
 
     vl->addWidget(bars);
     return w;
@@ -605,10 +610,10 @@ void MarketPulsePanel::style_mover_section(QWidget* container, bool positive_sec
     container->setStyleSheet(
         QString("QWidget#pulseMoverRow{border-bottom:1px solid %1;}"
                 "QWidget#pulseMoverRow QLabel{background:transparent;}"
-                "QLabel#pulseMoverSym{color:%2;font-size:10px;font-weight:bold;}"
-                "QLabel#pulseMoverArrow{color:%3;font-size:8px;}"
-                "QLabel#pulseMoverChg{color:%3;font-size:10px;font-weight:bold;}"
-                "QLabel#pulseMoverVol{color:%4;font-size:8px;}")
+                "QLabel#pulseMoverSym{color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:bold;}"
+                "QLabel#pulseMoverArrow{color:%3;font-size:" + fincept::ui::fonts::px(-6) + "px;}"
+                "QLabel#pulseMoverChg{color:%3;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:bold;}"
+                "QLabel#pulseMoverVol{color:%4;font-size:" + fincept::ui::fonts::px(-6) + "px;}")
             .arg(ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), accent, ui::colors::TEXT_TERTIARY()));
 }
 
@@ -731,256 +736,211 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
 
     vl->addWidget(build_section_header("MARKET HOURS", QChar(0x26A1), ui::colors::WARNING()));
 
-    auto* content = new QWidget(this);
-    auto* cl = new QVBoxLayout(content);
+    hours_content_ = new QWidget(this);
+    auto* cl = new QVBoxLayout(hours_content_);
     cl->setContentsMargins(12, 6, 12, 6);
     cl->setSpacing(0);
+    rebuild_hours_rows();
 
-    struct ExDef {
-        const char* name;
-        const char* region;
-    };
-    ExDef exchanges[] = {
-        {"NYSE/NASDAQ", "US"}, {"LSE", "UK"}, {"TSE (TOKYO)", "JP"}, {"SSE (SHANGHAI)", "CN"}, {"NSE (INDIA)", "IN"},
-    };
+    vl->addWidget(hours_content_);
+    return w;
+}
 
-    for (auto& ex : exchanges) {
-        auto* row = new QWidget(this);
+void MarketPulsePanel::rebuild_hours_rows() {
+    if (!hours_content_)
+        return;
+    auto* cl = qobject_cast<QVBoxLayout*>(hours_content_->layout());
+    for (auto& hr : hours_rows_)
+        if (hr.container)
+            hr.container->deleteLater();
+    hours_rows_.clear();
+
+    // The region's venues first, then the world's main ones (MarketSessions ids).
+    QStringList venues = core::market::MarketProfileStore::instance().current().venues;
+    for (const char* v : {"NYSE", "LSE", "XETRA", "TSE", "HKEX", "NSE"})
+        if (!venues.contains(QLatin1String(v)))
+            venues << QString::fromLatin1(v);
+    venues = venues.mid(0, 7);
+
+    for (const QString& id : venues) {
+        const auto* venue = core::market::venue_by_code(id);
+        if (!venue)
+            continue;
+        auto* row = new QWidget(hours_content_);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 3, 0, 3);
 
-        auto* name = new QLabel(tr(ex.name));
+        auto* name = new QLabel(venue->id, row);
+        name->setToolTip(core::market::venue_display_name(*venue));
         rl->addWidget(name);
         rl->addStretch();
 
         HoursRow hr;
         hr.container = row;
         hr.name_lbl = name;
-        hr.region = ex.region;
-        hr.name_source_key = QString::fromUtf8(ex.name);
+        hr.region = venue->id; // a MarketSessions venue id
+        hr.name_source_key = venue->id;
 
-        hr.dot = new QLabel;
+        hr.dot = new QLabel(row);
         hr.dot->setFixedSize(5, 5);
         rl->addWidget(hr.dot);
 
-        hr.status = new QLabel;
+        hr.status = new QLabel(row);
         rl->addWidget(hr.status);
-        // All styling applied by refresh_theme() + refresh_market_hours()
-
+        // Same chrome refresh_theme() gives the rows (it re-applies on theme change).
+        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+        name->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold; background: transparent;")
+                                .arg(ui::colors::TEXT_SECONDARY())
+                                .arg(ui::fonts::px(-5)));
         hours_rows_.append(hr);
         cl->addWidget(row);
     }
+}
 
-    vl->addWidget(content);
-    return w;
+void MarketPulsePanel::on_profile_changed() {
+    breadth_cache_.clear();
+    movers_cache_.clear();
+    if (hub_active_) {
+        hub_unsubscribe_all();
+        hub_subscribe_all();
+        refresh_data();
+    }
+    rebuild_hours_rows();
+    refresh_market_hours();
+    rebuild_breadth_from_cache();
 }
 
 // ── Market status helper ─────────────────────────────────────────────────────
 
 namespace {
 
-// One trading venue's regular session, in the exchange's OWN local time.
-//
-// The old implementation compared fixed UTC hours (US "14-21 UTC", UK "8-17
-// UTC", ...), which are winter-time values: for ~8 months of the year the US
-// and UK sessions are an hour off (the panel showed NYSE OPEN for the first
-// hour after the close), and the half-hour opens (NYSE 09:30, NSE 09:15,
-// SSE 09:30) were rounded to the hour. Resolving the exchange's time zone makes
-// DST and the real session times correct. Midday breaks (TSE, SSE) report CLOSED.
-struct PulseSession {
-    const char* region;
-    const char* tz_id;
-    int pre_min;     // pre-market / pre-open start, minutes after local midnight (== open_min if none)
-    int open_min;    // regular session open
-    int close_min;   // regular session close
-    int break_start; // midday break [start, end); 0/0 when the venue has none
-    int break_end;
-};
-
-constexpr PulseSession kPulseSessions[] = {
-    {"US", "America/New_York", 4 * 60, 9 * 60 + 30, 16 * 60, 0, 0},
-    {"UK", "Europe/London", 7 * 60, 8 * 60, 16 * 60 + 30, 0, 0},
-    {"JP", "Asia/Tokyo", 9 * 60, 9 * 60, 15 * 60 + 30, 11 * 60 + 30, 12 * 60 + 30},
-    {"CN", "Asia/Shanghai", 9 * 60 + 15, 9 * 60 + 30, 15 * 60, 11 * 60 + 30, 13 * 60},
-    {"IN", "Asia/Kolkata", 9 * 60, 9 * 60 + 15, 15 * 60 + 30, 0, 0},
-};
-
-// Pure function of (region, instant) so it can be checked without a clock.
-QString pulse_session_status(const QString& region, const QDateTime& utc_now) {
-    for (const auto& s : kPulseSessions) {
-        if (region != QLatin1String(s.region))
-            continue;
-        const QTimeZone tz{QByteArray(s.tz_id)};
-        if (!tz.isValid())
-            break;
-        const QDateTime local = utc_now.toTimeZone(tz);
-        if (local.date().dayOfWeek() >= 6) // Sat / Sun in the exchange's own calendar
-            return QStringLiteral("CLOSED");
-        const int m = local.time().hour() * 60 + local.time().minute();
-        if (m >= s.break_start && m < s.break_end)
-            return QStringLiteral("CLOSED");
-        if (m >= s.open_min && m < s.close_min)
-            return QStringLiteral("OPEN");
-        if (m >= s.pre_min && m < s.open_min)
-            return QStringLiteral("PRE");
-        break;
-    }
-    return QStringLiteral("CLOSED");
+/// "45m", "3h 12m", "2d 4h".
+QString pulse_countdown(qint64 secs) {
+    const qint64 m = std::max<qint64>(1, secs / 60);
+    if (m < 60)
+        return QStringLiteral("%1m").arg(m);
+    const qint64 h = m / 60;
+    if (h < 48)
+        return QStringLiteral("%1h %2m").arg(h).arg(m % 60, 2, 10, QLatin1Char('0'));
+    return QStringLiteral("%1d %2h").arg(h / 24).arg(h % 24);
 }
 
 } // namespace
 
-QString MarketPulsePanel::market_status(const QString& region) {
-    // Returns an English source key. Display-time translation happens in
-    // refresh_market_hours() so the key is stable for retranslateUi().
-    // No exchange-holiday calendar: a weekday holiday still reads as open.
-    return pulse_session_status(region, QDateTime::currentDateTimeUtc());
+QString MarketPulsePanel::market_status(const QString& venue_id) {
+    // English source key from the exchange calendar (core/market/MarketSessions:
+    // DST, lunch breaks, holidays where the calendar covers the venue).
+    const auto* v = core::market::venue_by_code(venue_id);
+    if (!v)
+        return QStringLiteral("CLOSED");
+    return core::market::session_state_key(core::market::session_status(*v, QDateTime::currentDateTimeUtc()).state);
 }
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
 
 void MarketPulsePanel::refresh_market_hours() {
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     for (auto& hr : hours_rows_) {
-        const QString status_key = market_status(hr.region);
-        const QString color = (status_key == QLatin1String("OPEN"))  ? ui::colors::POSITIVE()
-                              : (status_key == QLatin1String("PRE")) ? ui::colors::WARNING()
-                                                                     : ui::colors::NEGATIVE();
+        const auto* v = core::market::venue_by_code(hr.region);
+        if (!v || !hr.status)
+            continue;
+        const auto st = core::market::session_status(*v, now);
+        // Session state, not price direction: the status colours.
+        const QString color = st.state == core::market::SessionState::Open ? ui::colors::SUCCESS()
+                              : (st.state == core::market::SessionState::Pre || st.state == core::market::SessionState::Post ||
+                                 st.state == core::market::SessionState::Lunch || st.state == core::market::SessionState::Holiday)
+                                  ? ui::colors::WARNING()
+                                  : ui::colors::TEXT_TERTIARY();
         pulse_set_css_cached(hr.dot, QString("background: %1; border-radius: 2px;").arg(color));
-        // Translate at display time. retranslateUi() also calls back into this
-        // function so a language switch picks up the new locale.
-        if (status_key == QLatin1String("OPEN"))
-            hr.status->setText(tr("OPEN"));
-        else if (status_key == QLatin1String("PRE"))
-            hr.status->setText(tr("PRE"));
-        else
-            hr.status->setText(tr("CLOSED"));
-        pulse_set_css_cached(hr.status, 
-            QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(color));
+        QString text = core::market::session_state_label(st.state);
+        if (st.next_change_utc.isValid())
+            text += QStringLiteral(" · ") + pulse_countdown(now.secsTo(st.next_change_utc));
+        hr.status->setText(text);
+        QString tip = core::market::venue_display_name(*v) + QStringLiteral("\n") +
+                      tr("Local time %1").arg(st.venue_local_now.toString(QStringLiteral("HH:mm")));
+        if (st.next_change_utc.isValid())
+            tip += QStringLiteral("\n") + tr("%1 in %2").arg(core::market::session_state_label(st.next_state),
+                                                             pulse_countdown(now.secsTo(st.next_change_utc)));
+        const QString hol = core::market::holiday_name(*v, st.trading_date);
+        if (!hol.isEmpty())
+            tip += QStringLiteral("\n") + hol;
+        hr.status->setToolTip(tip);
+        pulse_set_css_cached(hr.status,
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: bold; background: transparent;").arg(color));
     }
 }
 
 void MarketPulsePanel::rebuild_breadth_from_cache() {
-    if (breadth_cache_.isEmpty())
-        return;
 
-    // Classify basket into 3 groups mirroring real exchange composition.
-    int sp500_adv = 0, sp500_dec = 0;
-    int nasdaq_adv = 0, nasdaq_dec = 0;
-    int nyse_adv = 0, nyse_dec = 0;
-    double vix = -1;
-    int bullish = 0, bearish = 0, neutral_count = 0;
-
-    const QStringList sp500_set = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "JPM", "UNH",
-                                   "V",    "XOM",  "LLY",   "JNJ",  "WMT",  "MA",   "PG",   "HD",    "CVX", "MRK"};
-    const QStringList nasdaq_set = {"NFLX", "AMD", "INTC", "QCOM", "ADBE", "CSCO", "ORCL", "CRM", "AVGO", "TXN"};
-
-    for (const auto& sym : kBreadthSymbols) {
-        if (!breadth_cache_.contains(sym))
-            continue;
-        const auto& q = breadth_cache_.value(sym);
-        if (q.symbol == "^VIX") {
-            vix = q.price;
-            continue;
+    // Advancers / decliners (up / down today) per named basket.
+    const auto groups = pulse_breadth_groups();
+    auto count = [this](const QStringList& syms, int* adv, int* dec) {
+        *adv = *dec = 0;
+        for (const auto& s : syms) {
+            const auto it = breadth_cache_.constFind(s);
+            if (it == breadth_cache_.constEnd())
+                continue;
+            if (it->change_pct > 0)
+                ++*adv;
+            else if (it->change_pct < 0)
+                ++*dec;
         }
-        bool in_sp = sp500_set.contains(q.symbol);
-        bool in_nq = nasdaq_set.contains(q.symbol);
-        if (q.change_pct > 0.3) {
-            if (in_sp)
-                ++sp500_adv;
-            else if (in_nq)
-                ++nasdaq_adv;
-            else
-                ++nyse_adv;
-            ++bullish;
-        } else if (q.change_pct < -0.3) {
-            if (in_sp)
-                ++sp500_dec;
-            else if (in_nq)
-                ++nasdaq_dec;
-            else
-                ++nyse_dec;
-            ++bearish;
-        } else {
-            ++neutral_count;
-        }
-    }
-
-    auto update_row = [](MarketPulsePanel::BreadthRow& row, int adv, int dec) {
-        if (!row.adv)
-            return;
-        row.adv->setText(QString::number(adv));
-        row.dec->setText(QString::number(dec));
-        int total = adv + dec;
-        if (total == 0)
-            total = 1;
-        int adv_pct = static_cast<int>((double(adv) / total) * 100);
-        auto* layout = qobject_cast<QHBoxLayout*>(row.green->parentWidget()->layout());
-        if (layout) {
+    };
+    BreadthRow* rows[] = {&nyse_row_, &nasdaq_row_, &sp500_row_};
+    for (int g = 0; g < 3 && g < groups.size(); ++g) {
+        int adv = 0, dec = 0;
+        count(groups[g].symbols, &adv, &dec);
+        if (rows[g]->name)
+            rows[g]->name->setText(groups[g].label);
+        if (!rows[g]->adv)
+            continue;
+        rows[g]->adv->setText(QString::number(adv));
+        rows[g]->dec->setText(QString::number(dec));
+        const int total = std::max(1, adv + dec);
+        const int adv_pct = static_cast<int>((double(adv) / total) * 100);
+        if (auto* layout = qobject_cast<QHBoxLayout*>(rows[g]->green->parentWidget()->layout())) {
             layout->setStretch(0, adv_pct);
             layout->setStretch(1, 100 - adv_pct);
         }
-    };
-    update_row(nyse_row_, nyse_adv, nyse_dec);
-    update_row(nasdaq_row_, nasdaq_adv, nasdaq_dec);
-    update_row(sp500_row_, sp500_adv, sp500_dec);
-
-    // ── Fear & Greed score ──
-    int total_stocks = bullish + bearish + neutral_count;
-    if (total_stocks == 0)
-        total_stocks = 1;
-    int score = 50 + static_cast<int>(((bullish - bearish) / static_cast<double>(total_stocks)) * 50);
-    if (vix > 0) {
-        if (vix > 30)
-            score -= 20;
-        else if (vix > 25)
-            score -= 10;
-        else if (vix < 15)
-            score += 10;
     }
-    score = qBound(0, score, 100);
+}
 
-    QString sentiment_text, sentiment_color, sentiment_key;
-    if (score <= 20) {
-        sentiment_key = QStringLiteral("EXTREME FEAR");
-        sentiment_text = tr("EXTREME FEAR");
-        sentiment_color = ui::colors::NEGATIVE();
-    } else if (score <= 40) {
-        sentiment_key = QStringLiteral("FEAR");
-        sentiment_text = tr("FEAR");
-        sentiment_color = ui::colors::WARNING();
-    } else if (score <= 60) {
-        sentiment_key = QStringLiteral("NEUTRAL");
-        sentiment_text = tr("NEUTRAL");
-        sentiment_color = ui::colors::WARNING();
-    } else if (score <= 80) {
-        sentiment_key = QStringLiteral("GREED");
-        sentiment_text = tr("GREED");
-        sentiment_color = ui::colors::POSITIVE();
+void MarketPulsePanel::render_risk() {
+    // One documented risk-on / risk-off score app-wide (RiskCompositeService);
+    // the panel's own basket score is gone.
+    const auto& c = services::RiskCompositeService::instance().current();
+    QString text, color, key;
+    if (!c.complete) {
+        key = QStringLiteral("INCOMPLETE");
+        text = c.inputs.isEmpty() ? tr("LOADING...") : tr("INCOMPLETE");
+        color = ui::colors::TEXT_TERTIARY();
+        if (fg_score_val_) {
+            fg_score_val_->setText(QStringLiteral("--"));
+            fg_score_val_->setToolTip(c.missing.isEmpty() ? QString()
+                                                          : tr("Missing: %1").arg(c.missing.join(QStringLiteral(", "))));
+        }
     } else {
-        sentiment_key = QStringLiteral("EXTREME GREED");
-        sentiment_text = tr("EXTREME GREED");
-        sentiment_color = ui::colors::POSITIVE();
+        key = c.regime;
+        text = c.regime.toUpper();
+        color = c.score >= 55 ? ui::colors::POSITIVE() : c.score <= 45 ? ui::colors::NEGATIVE() : ui::colors::WARNING();
+        if (fg_score_val_) {
+            fg_score_val_->setText(QString::number(qRound(c.score)));
+            fg_score_val_->setToolTip(QString());
+        }
     }
-    fg_sentiment_key_ = sentiment_key;
-
-    if (fg_score_val_)
-        fg_score_val_->setText(QString::number(score));
+    fg_sentiment_key_ = key;
     if (fg_sentiment_)
-        fg_sentiment_->setText(sentiment_text);
-
-    // The two colour stylesheets only change when the regime bucket changes —
-    // re-applying them on every one of ~50 breadth deliveries was pure CSS
-    // reparse cost for an identical result.
-    if (sentiment_color != fg_applied_color_) {
-        fg_applied_color_ = sentiment_color;
+        fg_sentiment_->setText(text);
+    if (color != fg_applied_color_) {
+        fg_applied_color_ = color;
         if (fg_score_val_)
             fg_score_val_->setStyleSheet(
-                QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
-                    .arg(sentiment_color));
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(4) + "px; font-weight: bold; background: transparent;")
+                    .arg(color));
         if (fg_sentiment_)
             fg_sentiment_->setStyleSheet(
-                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-                    .arg(sentiment_color));
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                    .arg(color));
     }
 }
 
@@ -990,7 +950,7 @@ void MarketPulsePanel::rebuild_movers_from_cache() {
 
     QVector<services::QuoteData> quotes;
     quotes.reserve(movers_cache_.size());
-    for (const auto& sym : kMoverSymbols) {
+    for (const auto& sym : pulse_mover_symbols()) {
         if (movers_cache_.contains(sym))
             quotes.append(movers_cache_.value(sym));
     }
@@ -1037,16 +997,25 @@ void MarketPulsePanel::rebuild_snapshot_from_cache() {
         return widgets::dash_fmt::signed_pct(q.change_pct);
     };
     auto update_stat = [&](const QString& sym, StatRow& row) {
-        if (!snapshot_cache_.contains(sym) || !row.val)
+        if (!row.val)
             return;
+        if (!snapshot_cache_.contains(sym)) {
+            // Still "--": hovering it says why (empty while merely loading).
+            row.val->setToolTip(pulse_errors_.value(sym));
+            return;
+        }
         const auto& q = snapshot_cache_.value(sym);
+        row.val->setToolTip(QString());
         row.val->setText(fmt_price(q));
         row.chg->setText(fmt_chg(q));
-        QString chg_color = q.change_pct > 0   ? ui::colors::POSITIVE()
-                            : q.change_pct < 0 ? ui::colors::NEGATIVE()
-                                               : ui::colors::TEXT_TERTIARY();
+        // The VIX is a fear gauge: a rising VIX is bad news, so its move is
+        // coloured inverted (it was painted positive when fear rose).
+        const double tone = sym == QLatin1String("^VIX") ? -q.change_pct : q.change_pct;
+        QString chg_color = tone > 0   ? ui::colors::POSITIVE()
+                            : tone < 0 ? ui::colors::NEGATIVE()
+                                       : ui::colors::TEXT_TERTIARY();
         pulse_set_css_cached(row.chg, 
-            QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(chg_color));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: bold; background: transparent;").arg(chg_color));
     };
     update_stat("^VIX", vix_row_);
     update_stat("^TNX", us10y_row_);
@@ -1061,10 +1030,12 @@ void MarketPulsePanel::hub_subscribe_all() {
 
     // Union of all three symbol sets — but dispatch per-set so each cache
     // only holds its own universe (keeps rebuild_* loops cheap).
+    const QStringList breadth_syms = pulse_breadth_symbols();
+    const QStringList mover_syms = pulse_mover_symbols();
     QSet<QString> all_syms;
-    for (const auto& s : kBreadthSymbols)
+    for (const auto& s : breadth_syms)
         all_syms.insert(s);
-    for (const auto& s : kMoverSymbols)
+    for (const auto& s : mover_syms)
         all_syms.insert(s);
     for (const auto& s : kSnapshotSymbols)
         all_syms.insert(s);
@@ -1074,14 +1045,15 @@ void MarketPulsePanel::hub_subscribe_all() {
 
     for (const QString& sym : all_syms) {
         const QString topic = QStringLiteral("market:quote:") + sym;
-        const bool in_breadth = kBreadthSymbols.contains(sym);
-        const bool in_movers = kMoverSymbols.contains(sym);
+        const bool in_breadth = breadth_syms.contains(sym);
+        const bool in_movers = mover_syms.contains(sym);
         const bool in_snapshot = kSnapshotSymbols.contains(sym);
 
         hub.subscribe(this, topic, [this, sym, in_breadth, in_movers, in_snapshot](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             const auto q = v.value<services::QuoteData>();
+            pulse_errors_.remove(sym); // a value clears the symbol's failure
             if (in_breadth) {
                 breadth_cache_.insert(sym, q);
                 breadth_dirty_ = true;
@@ -1097,11 +1069,53 @@ void MarketPulsePanel::hub_subscribe_all() {
             // Render once for the whole delivery burst.
             schedule_render();
         });
+        // Without an error channel a failed fetch left the panel on "LOADING n / N"
+        // forever (or a row on "--") with no reason. Same owner as the value
+        // subscription, so hub_unsubscribe_all()'s unsubscribe(this) removes both.
+        hub.subscribe_errors(this, topic, [this, sym](const QString& error) {
+            pulse_errors_.insert(sym, error);
+            pulse_last_error_ = error;
+            snapshot_dirty_ = true; // a "--" row shows the reason in its tooltip
+            schedule_render();
+        });
     }
     hub_active_ = true;
 }
 
+void MarketPulsePanel::apply_live_dot() {
+    // The header dot was painted POSITIVE once and never touched again — green
+    // while the panel itself said "Market data unavailable". It now follows the
+    // quote caches: green when data is in and nothing failed, amber when some
+    // symbols failed, red when nothing loaded and the hub reported failures,
+    // dim while the first quotes are still on their way.
+    if (!header_live_dot_)
+        return;
+    const bool has_data = !breadth_cache_.isEmpty() || !movers_cache_.isEmpty() || !snapshot_cache_.isEmpty();
+    QString color;
+    QString tip;
+    if (has_data && pulse_errors_.isEmpty()) {
+        color = ui::colors::SUCCESS();
+        tip = tr("Market data live");
+    } else if (has_data) {
+        color = ui::colors::WARNING();
+        tip = tr("%1 symbol(s) failed to load").arg(pulse_errors_.size());
+    } else if (!pulse_errors_.isEmpty()) {
+        color = ui::colors::DANGER();
+        tip = tr("Market data unavailable — %1").arg(pulse_last_error_);
+    } else {
+        color = ui::colors::TEXT_TERTIARY();
+        tip = tr("Loading market data…");
+    }
+    header_live_dot_->setToolTip(tip);
+    const QString css = QString("background: %1; border-radius: 3px;").arg(color);
+    if (css == live_dot_css_)
+        return;
+    live_dot_css_ = css;
+    header_live_dot_->setStyleSheet(css);
+}
+
 void MarketPulsePanel::update_loading_progress() {
+    apply_live_dot();
     if (!loading_overlay_)
         return;
     // Numerator = unique symbols received across the three caches. Each
@@ -1114,7 +1128,20 @@ void MarketPulsePanel::update_loading_progress() {
         seen.insert(it.key());
     for (auto it = snapshot_cache_.constBegin(); it != snapshot_cache_.constEnd(); ++it)
         seen.insert(it.key());
-    loading_overlay_->set_progress(seen.size(), total_expected_symbols_);
+    if (seen.isEmpty() && !pulse_errors_.isEmpty()) {
+        // Nothing loaded and the hub said why: show it where the panel would be
+        // (cleared by the next value — set_progress() leaves error mode).
+        loading_overlay_->set_error(tr("Market data unavailable — %1").arg(pulse_last_error_));
+        return;
+    }
+    // A symbol that failed is settled too: one dead ticker must not hold the
+    // overlay at "LOADING 69 / 70" over data that did arrive.
+    int settled = static_cast<int>(seen.size());
+    for (auto it = pulse_errors_.constBegin(); it != pulse_errors_.constEnd(); ++it) {
+        if (!seen.contains(it.key()))
+            ++settled;
+    }
+    loading_overlay_->set_progress(settled, total_expected_symbols_);
 }
 
 void MarketPulsePanel::hub_unsubscribe_all() {
@@ -1138,10 +1165,11 @@ void MarketPulsePanel::refresh_data() {
             topics.append(QStringLiteral("market:quote:") + s);
         }
     };
-    push(kBreadthSymbols);
-    push(kMoverSymbols);
+    push(pulse_breadth_symbols());
+    push(pulse_mover_symbols());
     push(kSnapshotSymbols);
     hub.request(topics, /*force=*/true); // user-triggered refresh
+    services::RiskCompositeService::instance().refresh();
 }
 
 bool MarketPulsePanel::eventFilter(QObject* obj, QEvent* event) {
@@ -1166,7 +1194,9 @@ void MarketPulsePanel::retranslateUi() {
     if (header_title_)
         header_title_->setText(tr("MARKET PULSE"));
     if (fg_header_label_)
-        fg_header_label_->setText(tr("BASKET SENTIMENT"));
+        fg_header_label_->setText(tr("RISK-ON / RISK-OFF"));
+    if (fg_header_label_)
+        fg_header_label_->setToolTip(services::RiskCompositeService::methodology());
 
     auto set_sh = [](SectionHeader& sh) {
         if (!sh.title)
@@ -1189,37 +1219,14 @@ void MarketPulsePanel::retranslateUi() {
     set_sh(sh_snapshot_);
     set_sh(sh_hours_);
 
-    if (fg_sentiment_ && !fg_sentiment_key_.isEmpty()) {
-        const QString& k = fg_sentiment_key_;
-        if (k == QLatin1String("EXTREME FEAR"))
-            fg_sentiment_->setText(tr("EXTREME FEAR"));
-        else if (k == QLatin1String("FEAR"))
-            fg_sentiment_->setText(tr("FEAR"));
-        else if (k == QLatin1String("NEUTRAL"))
-            fg_sentiment_->setText(tr("NEUTRAL"));
-        else if (k == QLatin1String("GREED"))
-            fg_sentiment_->setText(tr("GREED"));
-        else if (k == QLatin1String("EXTREME GREED"))
-            fg_sentiment_->setText(tr("EXTREME GREED"));
-        else if (k == QLatin1String("LOADING..."))
-            fg_sentiment_->setText(tr("LOADING..."));
-    }
-
-    for (auto& hr : hours_rows_) {
-        if (!hr.name_lbl)
-            continue;
-        const QString& k = hr.name_source_key;
-        if (k == QLatin1String("NYSE/NASDAQ"))
-            hr.name_lbl->setText(tr("NYSE/NASDAQ"));
-        else if (k == QLatin1String("LSE"))
-            hr.name_lbl->setText(tr("LSE"));
-        else if (k == QLatin1String("TSE (TOKYO)"))
-            hr.name_lbl->setText(tr("TSE (TOKYO)"));
-        else if (k == QLatin1String("SSE (SHANGHAI)"))
-            hr.name_lbl->setText(tr("SSE (SHANGHAI)"));
-        else if (k == QLatin1String("NSE (INDIA)"))
-            hr.name_lbl->setText(tr("NSE (INDIA)"));
-    }
+    // The risk regime label comes translated from RiskCompositeService.
+    render_risk();
+    // Venue rows show venue ids (proper names); their tooltips are re-resolved here.
+    for (auto& hr : hours_rows_)
+        if (hr.name_lbl)
+            if (const auto* v = core::market::venue_by_code(hr.region))
+                hr.name_lbl->setToolTip(core::market::venue_display_name(*v));
+    rebuild_breadth_from_cache(); // basket labels
     refresh_market_hours();
     if (isVisible())
         rebuild_movers_from_cache(); // mover rows have "VOL: %1" labels rebuilt here

@@ -271,7 +271,7 @@ def main():
 
     if command == "build":
         symbols = params.get("symbols", DEFAULT_SYMBOLS)
-        start = params.get("start", params.get("start_date", "2020-01-01"))
+        start = str(params.get("start", params.get("start_date", "2020-01-01")))
         if len(start) == 8 and "-" not in start:
             start = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
         stride = int(params.get("stride", 5))
@@ -290,4 +290,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Any failure (bad parameters, download, chart rendering, training, FAISS)
+    # ends as one JSON error line instead of a bare traceback with no result;
+    # the traceback goes to stderr for diagnosis.
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        output_json(json_response("error", error=f"VisionQuant setup failed: {type(e).__name__}: {e}"))
+        sys.exit(1)

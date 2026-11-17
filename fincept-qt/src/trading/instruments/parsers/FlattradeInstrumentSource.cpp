@@ -72,7 +72,7 @@ QVector<Instrument> parse_flattrade(const QByteArray& payload) {
         out.append(noren_build(QStringLiteral("flattrade"), r));
     }
 
-    LOG_INFO("FlattradeSource", QString("Parsed %1 Flattrade instruments").arg(out.size()));
+    LOG_DEBUG("FlattradeSource", QString("Parsed %1 Flattrade instruments").arg(out.size()));
     return out;
 }
 

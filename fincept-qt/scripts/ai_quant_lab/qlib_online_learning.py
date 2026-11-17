@@ -17,23 +17,58 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import pandas as pd
 
-# Qlib online learning imports
-ONLINE_LEARNING_AVAILABLE = False
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
+
+# Qlib online learning imports -- loaded on demand. Importing qlib costs several
+# seconds (it pulls gym, mlflow, ...), and create_model / train / predict /
+# performance only need river. Only initialize pays for it.
+#
+# The status used to import OnlineManager from qlib.contrib.online.manager, which has
+# no such class in pyqlib 0.9.x (it lives in qlib.workflow.online.manager), so the
+# panel reported QLIB ONLINE: MISSING with qlib installed.
+ONLINE_LEARNING_AVAILABLE = None   # unknown until _load_qlib_online()
 ONLINE_ERROR = None
 
-try:
-    import qlib
-    from qlib.contrib.online.manager import OnlineManager
-    from qlib.contrib.online.operator import Operator
-    from qlib.contrib.online.user import User
-    from qlib.contrib.online.utils import get_date_range
-    from qlib.data import D
-    from qlib.config import REG_CN, REG_US
-    from qlib.workflow import R
-    from qlib.utils import init_instance_by_config
-    ONLINE_LEARNING_AVAILABLE = True
-except ImportError as e:
-    ONLINE_ERROR = str(e)
+
+def _load_qlib_online() -> bool:
+    global ONLINE_LEARNING_AVAILABLE, ONLINE_ERROR, qlib, REG_CN, REG_US
+    if ONLINE_LEARNING_AVAILABLE is None:
+        try:
+            import qlib
+            from qlib.workflow.online.manager import OnlineManager  # noqa: F401
+            from qlib.config import REG_CN, REG_US
+            ONLINE_LEARNING_AVAILABLE = True
+        except Exception as e:  # ImportError, or a broken optional dependency
+            ONLINE_LEARNING_AVAILABLE = False
+            ONLINE_ERROR = str(e)
+    return ONLINE_LEARNING_AVAILABLE
+
+
+def _qlib_online_installed() -> bool:
+    """qlib and its online-serving module are installed -- from the files, without the
+    multi-second import (list_models runs every time the panel lists its models)."""
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec("qlib")
+        if spec is None or not spec.submodule_search_locations:
+            return False
+        base = Path(list(spec.submodule_search_locations)[0])
+        return (base / "workflow" / "online" / "manager.py").exists()
+    except (ImportError, ValueError):
+        return False
+
+
+def _qlib_dataset():
+    """The local qlib market dataset initialize() would use (the freshest one), or None."""
+    try:
+        sys.path.insert(1, os.path.dirname(os.path.abspath(__file__)))
+        import qlib_datasets
+        info, _err = qlib_datasets.resolve(None)
+        return qlib_datasets.brief(info) if info else None
+    except Exception as e:
+        print(f"Warning: could not list qlib datasets: {e}", file=sys.stderr)
+        return None
 
 # River for online/incremental learning
 RIVER_AVAILABLE = False
@@ -49,8 +84,8 @@ class OnlineLearningManager:
     """
     Online Learning Manager for real-time model updates
     Handles incremental training, concept drift detection, and model adaptation
+    Models are kept in <data root>/script-data/online_learning (fincept_paths).
     """
-    CACHE_DIR = Path.home() / '.fincept' / 'online_learning'
 
     def __init__(self):
         self.qlib_initialized = False
@@ -58,9 +93,12 @@ class OnlineLearningManager:
         self.drift_detectors = {}
         self.performance_history = []
         self.update_schedule = None
+        self.load_warning = None
 
-        # Create cache directory
-        self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # Model folder, resolved here (not at import); the ~/.fincept/online_learning of
+        # releases is copied in once, never moved.
+        import fincept_paths
+        self.CACHE_DIR = fincept_paths.user_data_dir('online_learning', legacy='online_learning')
 
         # Load existing models from disk
         self._load_models()
@@ -75,11 +113,22 @@ class OnlineLearningManager:
                     self.online_models = data.get('models', {})
                     self.drift_detectors = data.get('detectors', {})
             except Exception as e:
+                # Usually a river upgrade: the old pickles no longer load. Say so in the
+                # payload (it used to be a stderr line followed by an empty model list),
+                # and keep the file aside instead of overwriting it on the next save.
                 print(f"Warning: Could not load cached models: {e}", file=sys.stderr)
+                self.load_warning = (f"Saved online models could not be loaded ({type(e).__name__}: {e}); "
+                                     "they were probably created with an older library version. "
+                                     "The file is kept as models.pkl.unreadable; create the models again.")
 
     def _save_models(self):
         """Save all models to disk"""
         cache_file = self.CACHE_DIR / 'models.pkl'
+        if self.load_warning and cache_file.exists():
+            try:
+                cache_file.replace(self.CACHE_DIR / 'models.pkl.unreadable')
+            except OSError as e:
+                print(f"Warning: could not set the unreadable model file aside: {e}", file=sys.stderr)
         try:
             with open(cache_file, 'wb') as f:
                 pickle.dump({
@@ -90,11 +139,21 @@ class OnlineLearningManager:
             print(f"Warning: Could not save models: {e}", file=sys.stderr)
 
     def initialize(self,
-                  provider_uri: str = "~/.qlib/qlib_data/cn_data",
-                  region: str = "cn") -> Dict[str, Any]:
-        """Initialize Qlib for online learning"""
-        if not ONLINE_LEARNING_AVAILABLE:
+                  provider_uri: Optional[str] = None,
+                  region: Optional[str] = None,
+                  dataset: Optional[str] = None) -> Dict[str, Any]:
+        """Initialize Qlib for online learning. Without a provider_uri: the local dataset
+        named by `dataset`, else the freshest one (qlib_datasets)."""
+        if not _load_qlib_online():
             return {'success': False, 'error': f'Qlib online learning not available: {ONLINE_ERROR}'}
+        if not provider_uri:
+            sys.path.insert(1, os.path.dirname(os.path.abspath(__file__)))
+            import qlib_datasets
+            info, err = qlib_datasets.resolve(dataset)
+            if info is None:
+                return {'success': False, 'error': err or qlib_datasets.no_dataset_message()}
+            provider_uri, region = info['provider_uri'], info['region']
+        region = (region or "us").lower()
 
         try:
             if region == "cn":
@@ -130,14 +189,20 @@ class OnlineLearningManager:
         try:
             model_id = model_id or f"online_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            # Create model based on type
-            # Linear models
+            # Create model based on type.
+            # Linear models are SGD-style learners: on raw price-scale features
+            # (close ~ 100, rsi ~ 50) a 0.01 step makes them diverge within a few
+            # samples (predictions 4.7 -> -1e3 -> 2.6e5 -> ...). A running
+            # StandardScaler in front keeps every input at unit scale.
+            def scaled(m):
+                return preprocessing.StandardScaler() | m
+
             if model_type == 'linear':
-                model = linear_model.LinearRegression()
+                model = scaled(linear_model.LinearRegression())
             elif model_type == 'bayesian_linear':
-                model = linear_model.BayesianLinearRegression()
+                model = scaled(linear_model.BayesianLinearRegression())
             elif model_type == 'pa':
-                model = linear_model.PARegressor()
+                model = scaled(linear_model.PARegressor())
 
             # Tree models
             elif model_type == 'tree':
@@ -155,7 +220,7 @@ class OnlineLearningManager:
                 )
             elif model_type == 'ewa':
                 model = ensemble.EWARegressor(
-                    [linear_model.LinearRegression() for _ in range(3)]
+                    [scaled(linear_model.LinearRegression()) for _ in range(3)]
                 )
             elif model_type == 'srp':
                 model = ensemble.SRPRegressor(
@@ -178,6 +243,8 @@ class OnlineLearningManager:
             self.online_models[model_id] = {
                 'model': model,
                 'type': model_type,
+                # 2 = linear learners standardise their inputs (earlier ones diverged).
+                'pipeline_version': 2,
                 'created_at': datetime.now().isoformat(),
                 'samples_trained': 0,
                 'last_updated': None,
@@ -283,12 +350,15 @@ class OnlineLearningManager:
                 # Save to disk
                 self._save_models()
 
+                # NOT "error": a top-level "error" member marks the whole run as
+                # failed in the terminal (PythonRunner), although the sample was learned.
                 return {
                     'success': True,
                     'model_id': model_id,
                     'prediction': float(y_pred) if y_pred is not None else None,
                     'actual': float(target),
-                    'error': float(error),
+                    'abs_error': float(error) if y_pred is not None else None,
+                    'residual': float(target - y_pred) if y_pred is not None else None,
                     'samples_trained': model_info['samples_trained'],
                     'current_mae': float(metric.get()),
                     'drift_detected': drift_detected
@@ -311,7 +381,7 @@ class OnlineLearningManager:
                 predictions = []
                 for idx, row in features.iterrows():
                     pred = model.predict_one(row.to_dict())
-                    predictions.append(pred if pred is not None else 0.0)
+                    predictions.append(float(pred) if pred is not None else None)
 
                 return {
                     'success': True,
@@ -449,6 +519,7 @@ class OnlineLearningManager:
     def get_all_models(self) -> Dict[str, Any]:
         """Get information about all online models"""
         models_info = []
+        legacy = []
         for model_id, model_info in self.online_models.items():
             models_info.append({
                 'model_id': model_id,
@@ -457,14 +528,57 @@ class OnlineLearningManager:
                 'created_at': model_info['created_at'],
                 'last_updated': model_info['last_updated']
             })
+            if (model_info['type'] in ('linear', 'bayesian_linear', 'pa', 'ewa')
+                    and model_info.get('pipeline_version', 1) < 2
+                    and not _has_scaler(model_info.get('model'))):
+                legacy.append(model_id)
 
-        return {
+        result = {
             'success': True,
             'models': models_info,
             'count': len(models_info),
             'river_available': RIVER_AVAILABLE,
-            'qlib_online_available': ONLINE_LEARNING_AVAILABLE
+            # The library (qlib with its online module) and, separately, whether there is a
+            # local market dataset for it to read.
+            'qlib_online_available': _qlib_online_installed(),
         }
+        ds = _qlib_dataset()
+        result['qlib_dataset_available'] = ds is not None
+        result['qlib_dataset'] = ds
+        warnings_out = [w for w in (self.load_warning,) if w]
+        if legacy:
+            warnings_out.append("Linear model(s) created before input scaling was added can diverge to huge "
+                                "predictions: " + ", ".join(legacy) + ". Create them again.")
+        if warnings_out:
+            result['warning'] = " ".join(warnings_out)
+        return result
+
+
+def _has_scaler(model) -> bool:
+    """True when the (pickled) model standardises its inputs: a river Pipeline, or an
+    ensemble whose members all are."""
+    try:
+        from river import compose
+        if isinstance(model, compose.Pipeline):
+            return True
+        members = list(getattr(model, 'models', None) or (model if isinstance(model, list) else []))
+        return bool(members) and all(isinstance(m, compose.Pipeline) for m in members)
+    except Exception:
+        return False
+
+
+def _numeric_features(features) -> Dict[str, float]:
+    """The panel's feature dict as {name: float}; raises ValueError on anything else."""
+    if not isinstance(features, dict) or not features:
+        raise ValueError('features must be a non-empty object of name -> number, e.g. {"close": 95.0, "rsi": 55}')
+    out = {}
+    for k, v in features.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f'feature "{k}" must be a number, got {v!r}')
+        if not np.isfinite(v):
+            raise ValueError(f'feature "{k}" is not a finite number')
+        out[str(k)] = float(v)
+    return out
 
 
 def _json_safe(obj):
@@ -485,38 +599,47 @@ def _json_safe(obj):
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({
+        fincept_json.emit({
             'success': False,
             'error': 'Usage: python qlib_online_learning.py <command> [args...]'
-        }))
+        })
         return
 
     command = sys.argv[1]
+    try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+    except (json.JSONDecodeError, ValueError) as e:
+        fincept_json.emit({'success': False, 'error': f'Invalid JSON parameters: {e}'})
+        return
     manager = OnlineLearningManager()
-
-    params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
 
     try:
         if command == 'initialize':
             result = manager.initialize(
-                params.get('provider_uri', "~/.qlib/qlib_data/cn_data"),
-                params.get('region', "cn")
+                params.get('provider_uri'),
+                params.get('region'),
+                params.get('dataset')
             )
 
         elif command == 'create_model':
             result = manager.create_online_model(**params)
 
         elif command == 'train':
+            if 'target' not in params:
+                raise ValueError('target is required (the realised value to learn from)')
+            target = float(params['target'])
+            if not np.isfinite(target):
+                raise ValueError('target is not a finite number')
             result = manager.incremental_train(
                 model_id=params.get('model_id', ''),
-                features=params.get('features', {}),
-                target=float(params.get('target', 0.0))
+                features=_numeric_features(params.get('features', {})),
+                target=target
             )
 
         elif command == 'predict':
             result = manager.predict_online(
                 model_id=params.get('model_id', ''),
-                features=params.get('features', {})
+                features=_numeric_features(params.get('features', {}))
             )
 
         elif command == 'performance':
@@ -537,7 +660,7 @@ def main():
     except Exception as e:
         result = {'success': False, 'error': str(e)}
 
-    print(json.dumps(_json_safe(result), indent=2))
+    fincept_json.emit(_json_safe(result))
 
 
 if __name__ == '__main__':

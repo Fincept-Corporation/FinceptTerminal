@@ -1,7 +1,10 @@
 #include "screens/alpha_arena/LeaderboardCards.h"
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include "services/alpha_arena/ArenaMetrics.h"
 
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLocale>
@@ -11,6 +14,7 @@
 
 namespace fincept::screens::alpha_arena {
 namespace {
+using namespace ui::colors;
 
 enum Col {
     ColRank = 0,
@@ -28,7 +32,10 @@ enum Col {
     ColCount
 };
 
-constexpr int kRowHeight = 22;
+// Row height for the board's text size (22 px at the default font size).
+int row_height() {
+    return qMax(22, QFontMetrics(ui::fonts::font(-3)).height() + 6);
+}
 
 QTableWidgetItem* cell(const QString& text, const QColor& fg, Qt::Alignment align = Qt::AlignRight | Qt::AlignVCenter) {
     auto* it = new QTableWidgetItem(text);
@@ -46,7 +53,7 @@ QPushButton* icon_btn(const QString& glyph, const QString& tip, const char* kind
     b->setToolTip(tip);
     b->setAccessibleName(tip);
     b->setCursor(Qt::PointingHandCursor);
-    b->setFixedSize(20, 18);
+    b->setMinimumSize(20, 18);
     b->setFlat(true);
     b->setObjectName(QStringLiteral("arenaActBtn"));
     b->setProperty("act", QString::fromLatin1(kind));
@@ -89,7 +96,7 @@ LeaderboardCards::LeaderboardCards(QWidget* parent) : QWidget(parent) {
         if (auto* h = table_->horizontalHeaderItem(c))
             h->setToolTip(header_tips[c]);
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(kRowHeight);
+    table_->verticalHeader()->setDefaultSectionSize(row_height());
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
@@ -97,20 +104,27 @@ LeaderboardCards::LeaderboardCards(QWidget* parent) : QWidget(parent) {
     table_->setSortingEnabled(false); // caller order = rank (sorted by equity)
     // Includes the ACT cell-widget rules — cell widgets are descendants of the
     // table, so this one stylesheet covers every row's buttons and container.
-    table_->setStyleSheet("QTableWidget{background:#0D0D0D;border:none;font-size:11px;"
-                          " font-family:'Consolas','Courier New',monospace;}"
-                          "QTableWidget::item{padding:0 6px;border-bottom:1px solid #1C1C1C;}"
-                          "QHeaderView::section{background:#141414;color:#777;border:none;"
-                          " border-bottom:1px solid #2A2A2A;padding:2px 6px;font-size:10px;font-weight:700;}"
-                          "QWidget#arenaAct{background:#0D0D0D;}"
-                          "QWidget#arenaAct[sel=\"true\"]{background:#1F1A10;}"
-                          "QPushButton#arenaActBtn{background:transparent;border:none;font-size:11px;padding:0;}"
-                          "QPushButton#arenaActBtn:hover{background:#2A2A2A;}"
-                          "QPushButton#arenaActBtn[act=\"halt\"]{color:#E0A800;}"
-                          "QPushButton#arenaActBtn[act=\"resume\"]{color:#26A65B;}"
-                          "QPushButton#arenaActBtn[act=\"kill\"]{color:#E0245E;}");
+    // Halt is a caution, resume a good state, kill destructive — state colours.
+    table_->setStyleSheet(QString("QTableWidget{background:%1;border:none;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                                  "QTableWidget::item{padding:0 6px;border-bottom:1px solid %2;}"
+                                  "QHeaderView::section{background:%3;color:%4;border:none;"
+                                  " border-bottom:1px solid %5;padding:2px 6px;font-size:" + fincept::ui::fonts::px(-4) +
+                                  "px;font-weight:700;}"
+                                  "QWidget#arenaAct{background:%1;}"
+                                  "QWidget#arenaAct[sel=\"true\"]{background:%6;}"
+                                  "QPushButton#arenaActBtn{background:transparent;border:none;font-size:" +
+                                  fincept::ui::fonts::px(-3) + "px;padding:0;}"
+                                  "QPushButton#arenaActBtn:hover{background:%7;}"
+                                  "QPushButton#arenaActBtn[act=\"halt\"]{color:%8;}"
+                                  "QPushButton#arenaActBtn[act=\"resume\"]{color:%9;}"
+                                  "QPushButton#arenaActBtn[act=\"kill\"]{color:%10;}")
+                              .arg(BG_SURFACE(), BORDER_DIM(), BG_RAISED(), TEXT_SECONDARY(), BORDER_MED(), ACCENT_BG(),
+                                   BG_HOVER(), WARNING(), SUCCESS())
+                              .arg(DANGER()));
+    // Interactive + one fit after a fill (rebuild): a ResizeToContents header
+    // re-measured every cell on every ~1 Hz marks tick while rows were written.
     auto* hh = table_->horizontalHeader();
-    hh->setSectionResizeMode(QHeaderView::ResizeToContents);
+    hh->setSectionResizeMode(QHeaderView::Interactive);
     hh->setSectionResizeMode(ColModel, QHeaderView::Stretch);
     hh->setHighlightSections(false);
 
@@ -128,6 +142,17 @@ LeaderboardCards::LeaderboardCards(QWidget* parent) : QWidget(parent) {
         rebuild();
     });
     v->addWidget(table_, 1);
+
+    // Cell colours are item brushes and the row height follows the font size.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        table_->verticalHeader()->setDefaultSectionSize(row_height());
+        rebuild();
+    });
+    // A font change settles after the theme pass: fit the columns once then.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        refit_ = true;
+        rebuild();
+    });
 }
 
 void LeaderboardCards::set_data(QVector<AgentCardData> cards) {
@@ -144,18 +169,22 @@ void LeaderboardCards::set_controls_enabled(bool on) {
 }
 
 void LeaderboardCards::rebuild() {
+    const int row_h = row_height();
     table_->setRowCount(cards_.size());
     for (int i = 0; i < cards_.size(); ++i) {
         const auto& d = cards_[i];
         const bool selected = d.agent_id == selected_;
-        const QColor pnl_fg = d.pnl_pct >= 0 ? QColor("#26A65B") : QColor("#E0245E");
-        const QColor upnl_fg = d.upnl >= 0 ? QColor("#26A65B") : QColor("#E0245E");
+        const QColor up(POSITIVE());
+        const QColor down(NEGATIVE());
+        const QColor pnl_fg = d.pnl_pct >= 0 ? up : down;
+        const QColor upnl_fg = d.upnl >= 0 ? up : down;
 
-        table_->setItem(i, ColRank, cell(QString::number(i + 1), QColor("#777"), Qt::AlignCenter));
-        table_->setItem(i, ColChip, cell(QStringLiteral("●"), d.color, Qt::AlignCenter));
+        table_->setItem(i, ColRank, cell(QString::number(i + 1), QColor(TEXT_TERTIARY()), Qt::AlignCenter));
+        // The agent's provider brand colour, made legible on the theme.
+        table_->setItem(i, ColChip, cell(QStringLiteral("●"), legible_color(d.color), Qt::AlignCenter));
         table_->setItem(i, ColModel,
-                        cell(d.name, selected ? QColor("#FF8800") : QColor("#EEE"), Qt::AlignLeft | Qt::AlignVCenter));
-        table_->setItem(i, ColEquity, cell(fmt_usd(d.equity), QColor("#FFF")));
+                        cell(d.name, selected ? QColor(AMBER()) : QColor(TEXT_PRIMARY()), Qt::AlignLeft | Qt::AlignVCenter));
+        table_->setItem(i, ColEquity, cell(fmt_usd(d.equity), QColor(TEXT_PRIMARY())));
         table_->setItem(
             i, ColPnlPct,
             cell(QStringLiteral("%1%2%").arg(d.pnl_pct >= 0 ? "+" : "").arg(QString::number(d.pnl_pct, 'f', 2)),
@@ -163,9 +192,9 @@ void LeaderboardCards::rebuild() {
         table_->setItem(i, ColDd,
                         cell(d.max_dd_pct > 0.005 ? QStringLiteral("-%1%").arg(QString::number(d.max_dd_pct, 'f', 2))
                                                   : QStringLiteral("0.00%"),
-                             d.max_dd_pct > 0.005 ? QColor("#E0245E") : QColor("#999")));
+                             d.max_dd_pct > 0.005 ? down : QColor(TEXT_SECONDARY())));
         auto* sh = cell(d.sharpe_valid ? QString::number(d.sharpe, 'f', 2) : QStringLiteral("—"),
-                        !d.sharpe_valid ? QColor("#777") : d.sharpe >= 0 ? QColor("#26A65B") : QColor("#E0245E"));
+                        !d.sharpe_valid ? QColor(TEXT_TERTIARY()) : d.sharpe >= 0 ? up : down);
         sh->setToolTip(d.sharpe_valid
                            ? tr("From %n per-round return(s)", "", d.sharpe_returns)
                            : tr("Needs at least %1 per-round returns (%2 so far)")
@@ -175,35 +204,38 @@ void LeaderboardCards::rebuild() {
         table_->setItem(
             i, ColUpnl,
             cell(QStringLiteral("%1%2").arg(d.upnl >= 0 ? "+" : "").arg(QString::number(d.upnl, 'f', 2)), upnl_fg));
-        table_->setItem(i, ColPos, cell(QString::number(d.open_positions), QColor("#DDD"), Qt::AlignCenter));
+        table_->setItem(i, ColPos, cell(QString::number(d.open_positions), QColor(TEXT_PRIMARY()), Qt::AlignCenter));
         table_->setItem(i, ColTok,
                         cell(d.tokens >= 1000 ? QStringLiteral("%1k").arg(QString::number(d.tokens / 1000.0, 'f', 1))
                                               : QString::number(d.tokens),
-                             QColor("#999")));
+                             QColor(TEXT_SECONDARY())));
         const bool active = d.status == QLatin1String("active");
         const bool circuit = d.status == QLatin1String("halted_circuit");
         auto* st = cell(active    ? QStringLiteral("▶")
                         : circuit ? QStringLiteral("⚡")
                                   : QStringLiteral("⏸"),
-                        active    ? QColor("#26A65B")
-                        : circuit ? QColor("#E0A800")
-                                  : QColor("#E0245E"),
+                        active    ? QColor(SUCCESS())
+                        : circuit ? QColor(WARNING())
+                                  : QColor(DANGER()),
                         Qt::AlignCenter);
         st->setToolTip(d.status);
         table_->setItem(i, ColSt, st);
 
-        // Per-row selection tint (set after all items exist).
-        const QColor bg = selected ? QColor("#1F1A10") : QColor("#0D0D0D");
-        for (int c = 0; c < ColCount; ++c)
-            if (auto* it = table_->item(i, c))
-                it->setBackground(bg);
+        // Per-row selection tint (set after all items exist); other rows show
+        // the table background.
+        if (selected) {
+            const QColor bg(ACCENT_BG());
+            for (int c = 0; c < ColCount; ++c)
+                if (auto* it = table_->item(i, c))
+                    it->setBackground(bg);
+        }
 
         // ACT: halt/resume toggle + kill. Emissions are deferred — handlers
         // refresh the dashboard, which calls set_data → rebuild and would
         // delete the clicked button under its own clicked() handler.
         if (!controls_enabled_) {
             table_->removeCellWidget(i, ColAct);
-            table_->setRowHeight(i, kRowHeight);
+            table_->setRowHeight(i, row_h);
             continue;
         }
         auto* act = new QWidget;
@@ -215,6 +247,7 @@ void LeaderboardCards::rebuild() {
         const QString id = d.agent_id;
         auto* toggle = icon_btn(active ? QStringLiteral("⏸") : QStringLiteral("▶"),
                                 active ? tr("Halt agent") : tr("Resume agent"), active ? "halt" : "resume");
+        toggle->setProperty("fincept_agent_risk", "order"); // agents: halts / resumes this agent's trading
         connect(toggle, &QPushButton::clicked, this, [this, id, active]() {
             QMetaObject::invokeMethod(
                 this,
@@ -227,13 +260,23 @@ void LeaderboardCards::rebuild() {
                 Qt::QueuedConnection);
         });
         auto* kill = icon_btn(QStringLiteral("✖"), tr("Close positions & halt (kill)"), "kill");
+        kill->setProperty("fincept_agent_risk", "order"); // agents: closes this agent's positions and halts it
         connect(kill, &QPushButton::clicked, this, [this, id]() {
             QMetaObject::invokeMethod(this, [this, id]() { emit kill_requested(id); }, Qt::QueuedConnection);
         });
         h->addWidget(toggle);
         h->addWidget(kill);
         table_->setCellWidget(i, ColAct, act);
-        table_->setRowHeight(i, kRowHeight);
+        table_->setRowHeight(i, row_h);
+    }
+    // Fit once after the fill (ColModel stretches): first fill, another number
+    // of agents, or a font change. Value-only ticks keep the widths.
+    if (refit_ || fitted_rows_ != static_cast<int>(cards_.size())) {
+        for (int c = 0; c < ColCount; ++c)
+            if (c != ColModel)
+                table_->resizeColumnToContents(c);
+        fitted_rows_ = static_cast<int>(cards_.size());
+        refit_ = false;
     }
 }
 

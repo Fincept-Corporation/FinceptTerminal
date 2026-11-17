@@ -121,21 +121,17 @@ void ConnectWalletDialog::start_handshake() {
 }
 
 void ConnectWalletDialog::on_payload(QString pubkey, QString signature, QString label) {
-    LOG_INFO("ConnectWalletDialog", QStringLiteral("on_payload: pubkey=%1 sig_chars=%2 label=%3 msg_len=%4")
-                                        .arg(pubkey)
-                                        .arg(signature.size())
-                                        .arg(label)
-                                        .arg(expected_message_.size()));
+    LOG_DEBUG("ConnectWalletDialog", logf("Wallet connect payload received", {{"wallet", log_mask(pubkey)},
+                                                                              {"label", label},
+                                                                              {"sig_chars", signature.size()},
+                                                                              {"msg_len", expected_message_.size()}}));
     if (handshake_done_) {
         LOG_WARN("ConnectWalletDialog", "ignoring late payload (handshake already done)");
         return;
     }
     if (!Ed25519Verifier::verify(pubkey, expected_message_, signature)) {
-        LOG_WARN("ConnectWalletDialog",
-                 QStringLiteral("signature verification FAILED. pubkey=%1 sig=%2 msg_first40='%3'")
-                     .arg(pubkey)
-                     .arg(signature)
-                     .arg(QString::fromUtf8(expected_message_.left(40))));
+        LOG_WARN("ConnectWalletDialog", logf("Wallet signature verification failed",
+                                             {{"wallet", log_mask(pubkey)}, {"sig_chars", signature.size()}}));
         fail_and_close(tr("signature verification failed"));
         return;
     }
@@ -143,7 +139,8 @@ void ConnectWalletDialog::on_payload(QString pubkey, QString signature, QString 
     if (bridge_) {
         bridge_->stop();
     }
-    LOG_INFO("ConnectWalletDialog", "Handshake verified for " + pubkey + " (" + label + ")");
+    LOG_INFO("ConnectWalletDialog",
+             logf("Wallet handshake verified", {{"wallet", log_mask(pubkey)}, {"label", label}}));
     emit connected(pubkey, label);
     accept();
 }

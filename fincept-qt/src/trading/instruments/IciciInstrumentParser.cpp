@@ -171,7 +171,7 @@ QVector<Instrument> IciciInstrumentParser::parse(const QByteArray& csv_data) {
         results.append(inst);
     }
 
-    LOG_INFO("IciciParser",
+    LOG_DEBUG("IciciParser",
              QString("Parsed %1 instruments (skipped %2 malformed rows)").arg(results.size()).arg(skipped));
     return results;
 }

@@ -1,0 +1,8 @@
+{
+  "harness_version": "2.1.325",
+  "date": "2026-11-17",
+  "command": "claude -p --output-format stream-json … (terminal-AI call)",
+  "source": "recorded-shape",
+  "url": "https://code.claude.com/docs/en/headless",
+  "note": "Synthetic: system/init with apiKeySource \"none\" (the value the recorded partial_messages_edits fixture shows for a subscription sign-in). The chat backend must stop before any output (owner decision: terminal AI never runs on a personal subscription)."
+}

@@ -1,4 +1,5 @@
 #include "screens/recovery/CrashRecoveryDialog.h"
+#include "ui/theme/Theme.h"
 
 #include "core/layout/LayoutTypes.h"
 #include "core/layout/WorkspaceShell.h"
@@ -22,20 +23,6 @@
 namespace {
 constexpr const char* kRecoveryTag = "CrashRecovery";
 constexpr int kMaxListed = 5;
-
-// Theme tokens — hardcoded for now because the dialog runs *before* any
-// WindowFrame exists, so ui::ThemeManager may not be subscribable yet.
-// Values match the project's "obsidian / amber" theme (see ui/theme/Theme.h).
-constexpr const char* kBgBase = "#0a0a0a";
-constexpr const char* kBgSurface = "#111111";
-constexpr const char* kBgRaised = "#161616";
-constexpr const char* kBorder = "#1f1f1f";
-constexpr const char* kText = "#e5e5e5";
-constexpr const char* kTextDim = "#808080";
-constexpr const char* kTextMuted = "#404040";
-constexpr const char* kAmber = "#d97706";
-constexpr const char* kAmberDim = "#a85a05";
-constexpr const char* kRed = "#dc2626";
 } // namespace
 
 namespace fincept::screens {
@@ -95,7 +82,7 @@ void CrashRecoveryDialog::build_ui() {
     // Section header above the list — column labels, terminal-style.
     auto* col_header = new QWidget(body);
     col_header->setObjectName(QStringLiteral("recoveryColHeader"));
-    col_header->setFixedHeight(24);
+    col_header->setMinimumHeight(24);
     auto* chl = new QHBoxLayout(col_header);
     chl->setContentsMargins(10, 0, 10, 0);
     col_name_ = new QLabel(tr("SESSION"), col_header);
@@ -204,7 +191,9 @@ void CrashRecoveryDialog::retranslateUi() {
 void CrashRecoveryDialog::apply_styles() {
     // Fincept-terminal aesthetic: zero radii, sharp 1px borders, monospaced
     // tracking on labels. Single dialog stylesheet keyed by objectName so
-    // children inherit without per-widget styling.
+    // children inherit without per-widget styling. The dialog can run before
+    // any WindowFrame exists; the theme tokens are readable from the start and
+    // the theme's stylesheet pass keeps this sheet current afterwards.
     setStyleSheet(
         QString(R"(
         QDialog#CrashRecoveryDialog {
@@ -219,14 +208,14 @@ void CrashRecoveryDialog::apply_styles() {
         }
         QLabel#recoveryHeading {
             color: %2;
-            font-size: 13px;
+            font-size: )" + fincept::ui::fonts::px(-1) + R"(px;
             font-weight: 700;
             letter-spacing: 1.5px;
         }
         QLabel#recoveryBadge {
-            color: %1;
+            color: %11;
             background: %8;
-            font-size: 9px;
+            font-size: )" + fincept::ui::fonts::px(-5) + R"(px;
             font-weight: 700;
             letter-spacing: 1px;
             padding: 3px 8px;
@@ -236,7 +225,7 @@ void CrashRecoveryDialog::apply_styles() {
         QWidget#recoveryBody { background: %1; }
         QLabel#recoveryExplainer {
             color: %3;
-            font-size: 11px;
+            font-size: )" + fincept::ui::fonts::px(-3) + R"(px;
             padding: 0 2px;
         }
 
@@ -248,7 +237,7 @@ void CrashRecoveryDialog::apply_styles() {
         }
         QLabel#recoveryColLabel {
             color: %3;
-            font-size: 9px;
+            font-size: )" + fincept::ui::fonts::px(-5) + R"(px;
             font-weight: 700;
             letter-spacing: 1px;
             background: transparent;
@@ -257,7 +246,7 @@ void CrashRecoveryDialog::apply_styles() {
         /* Empty state */
         QLabel#recoveryEmptyLabel {
             color: %4;
-            font-size: 11px;
+            font-size: )" + fincept::ui::fonts::px(-3) + R"(px;
             font-weight: 700;
             letter-spacing: 1px;
             background: %5;
@@ -299,7 +288,7 @@ void CrashRecoveryDialog::apply_styles() {
         QWidget#recoveryRow { background: transparent; }
         QLabel#recoveryRowName {
             color: %2;
-            font-size: 12px;
+            font-size: )" + fincept::ui::fonts::px(-2) + R"(px;
             font-weight: 600;
             background: transparent;
         }
@@ -307,20 +296,20 @@ void CrashRecoveryDialog::apply_styles() {
             color: %3;
             background: %7;
             padding: 1px 6px;
-            font-size: 8px;
+            font-size: )" + fincept::ui::fonts::px(-6) + R"(px;
             font-weight: 700;
             letter-spacing: 1px;
         }
         QLabel#recoveryRowRel {
             color: %8;
-            font-size: 10px;
+            font-size: )" + fincept::ui::fonts::px(-4) + R"(px;
             font-weight: 700;
             letter-spacing: 0.5px;
             background: transparent;
         }
         QLabel#recoveryRowAbs {
             color: %4;
-            font-size: 10px;
+            font-size: )" + fincept::ui::fonts::px(-4) + R"(px;
             background: transparent;
         }
 
@@ -335,14 +324,14 @@ void CrashRecoveryDialog::apply_styles() {
             min-height: 30px;
             min-width: 90px;
             padding: 0 16px;
-            font-size: 10px;
+            font-size: )" + fincept::ui::fonts::px(-4) + R"(px;
             font-weight: 700;
             letter-spacing: 1px;
             border-radius: 0;
         }
         QPushButton#recoveryPrimaryButton {
             background: %8;
-            color: %1;
+            color: %11;
             border: 1px solid %8;
         }
         QPushButton#recoveryPrimaryButton:hover {
@@ -350,7 +339,7 @@ void CrashRecoveryDialog::apply_styles() {
             border-color: %9;
         }
         QPushButton#recoveryPrimaryButton:disabled {
-            background: %6;
+            background: %7;
             color: %4;
             border-color: %6;
         }
@@ -373,7 +362,7 @@ void CrashRecoveryDialog::apply_styles() {
             border: 1px solid %10;
         }
         QPushButton#recoveryDangerButton:hover {
-            background: rgba(220, 38, 38, 0.12);
+            background: %12;
         }
         QPushButton#recoveryDangerButton:disabled {
             color: %4;
@@ -398,7 +387,10 @@ void CrashRecoveryDialog::apply_styles() {
             height: 0;
         }
     )")
-            .arg(kBgBase, kText, kTextDim, kTextMuted, kBgSurface, kBorder, kBgRaised, kAmber, kAmberDim, kRed));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_SECONDARY(),
+                 ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(),
+                 ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::NEGATIVE(),
+                 ui::colors::TEXT_ON_ACCENT(), ui::colors::NEGATIVE_BG()));
 }
 
 void CrashRecoveryDialog::populate_snapshots() {
@@ -457,7 +449,8 @@ void CrashRecoveryDialog::populate_snapshots() {
         auto* kind_lbl = new QLabel(kind.toUpper().remove('[').remove(']'), row);
         kind_lbl->setObjectName(QStringLiteral("recoveryRowKind"));
         kind_lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        kind_lbl->setMaximumWidth(80);
+        // 80px at the default font size, more for a larger one.
+        kind_lbl->setMaximumWidth(qMax(80, 80 * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx));
 
         left->addWidget(name_lbl);
         left->addWidget(kind_lbl, 0, Qt::AlignLeft);
@@ -547,7 +540,9 @@ QString CrashRecoveryDialog::display_name(const fincept::WorkspaceSnapshotRing::
 }
 
 void CrashRecoveryDialog::on_selection_changed() {
-    const bool has = (list_->currentItem() != nullptr);
+    // A snapshot disabled by a failed restore is not actionable.
+    const auto* item = list_->currentItem();
+    const bool has = item && item->flags().testFlag(Qt::ItemIsEnabled);
     restore_button_->setEnabled(has);
     rename_button_->setEnabled(has);
     delete_button_->setEnabled(has);
@@ -567,6 +562,13 @@ void CrashRecoveryDialog::on_restore_clicked() {
     // Tell the user what happened and why the entry is now disabled.
     auto reject_snapshot = [this, item](const QString& reason) {
         item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        // The row is drawn by an item widget, so the flag alone neither greys it
+        // nor deselects it: grey the widget, drop the selection and disable the
+        // buttons so a second click cannot repeat the same failure.
+        if (auto* row = list_->itemWidget(item))
+            row->setEnabled(false);
+        list_->setCurrentItem(nullptr);
+        on_selection_changed();
         QMessageBox::warning(this, tr("Cannot restore this session"),
                              tr("%1\n\nThis snapshot has been disabled. Pick another one, or Skip to start "
                                 "with a fresh workspace.")
@@ -617,6 +619,11 @@ void CrashRecoveryDialog::on_restore_clicked() {
         // empty workspace with no explanation.
         reject_snapshot(tr("The workspace could not be applied — no windows were restored."));
         return;
+    }
+    if (applied < ws.frames.size()) {
+        // Partial restore: say so instead of closing as if everything came back.
+        QMessageBox::information(this, tr("Session partly restored"),
+                                 tr("Restored %1 of %2 windows from this session.").arg(applied).arg(ws.frames.size()));
     }
 
     restored_ = true;

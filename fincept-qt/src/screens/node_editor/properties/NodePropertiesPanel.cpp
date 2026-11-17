@@ -1,9 +1,12 @@
 #include "screens/node_editor/properties/NodePropertiesPanel.h"
 
 #include "screens/node_editor/properties/ParameterWidgets.h"
+#include "services/workflow/WorkflowExecutor.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -24,16 +27,14 @@ void NodePropertiesPanel::build_ui() {
 
     stack_ = new QStackedWidget;
 
-    // ── Empty state ────────────────────────────────────────────────
-    empty_page_ = new QWidget(this);
-    auto* el = new QVBoxLayout(empty_page_);
-    el->setContentsMargins(20, 40, 20, 20);
-    el->setAlignment(Qt::AlignCenter);
-    empty_label_ = new QLabel(tr("Select a node\nto edit properties"));
-    empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setStyleSheet(
-        QString("color: %1; font-family: Consolas; font-size: 12px;").arg(ui::colors::TEXT_TERTIARY()));
-    el->addWidget(empty_label_);
+    // ── Empty state (nothing selected) ─────────────────────────────
+    // The screen selects the entry node after a load, so this shows only on an
+    // empty canvas or after the user clicks away.
+    empty_state_ = new ui::EmptyState(stack_);
+    empty_state_->set_compact(true);
+    empty_state_->set_alignment(Qt::AlignTop);
+    apply_empty_texts();
+    empty_page_ = empty_state_;
 
     // ── Editor page (populated dynamically) ────────────────────────
     editor_page_ = new QWidget(this);
@@ -101,27 +102,28 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
 
     // ── Header ─────────────────────────────────────────────────────
     auto* header = new QWidget(this);
-    header->setFixedHeight(34);
-    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
+    header->setMinimumHeight(34);
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
 
     props_title_ = new QLabel(tr("PROPERTIES"));
-    props_title_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
+    props_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;"
                                         "font-weight: bold; letter-spacing: 0.5px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(props_title_);
     hl->addStretch();
 
     del_btn_ = new QPushButton(tr("DEL"));
-    del_btn_->setFixedSize(36, 22);
+    del_btn_->setMinimumSize(36, 22);
     del_btn_->setStyleSheet(QString("QPushButton {"
                                     "  background: %1; color: %2;"
-                                    "  border: 1px solid rgba(220,38,38,0.3); font-family: Consolas;"
-                                    "  font-size: 10px; font-weight: bold;"
+                                    "  border: 1px solid %4;"
+                                    "  font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold;"
                                     "}"
                                     "QPushButton:hover { background: %2; color: %3; }")
-                                .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+                                .arg(ui::colors::tint(ui::colors::DANGER(), 0.14), ui::colors::DANGER(),
+                                     ui::colors::TEXT_ON_ACCENT(), ui::colors::alpha(ui::colors::DANGER, 0.3)));
     QString node_id = node.id;
     connect(del_btn_, &QPushButton::clicked, this, [this, node_id]() { emit delete_requested(node_id); });
     hl->addWidget(del_btn_);
@@ -141,7 +143,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     nsl->setSpacing(4);
 
     name_label_ = new QLabel(tr("NAME"));
-    name_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+    name_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold;")
                                    .arg(ui::colors::TEXT_SECONDARY()));
     nsl->addWidget(name_label_);
 
@@ -149,10 +151,10 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     name_edit->setStyleSheet(
         QString("QLineEdit {"
                 "  background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 12px; padding: 4px 6px;"
+                "  font-size: " + fincept::ui::fonts::px(-2) + "px; padding: 4px 6px;"
                 "}"
                 "QLineEdit:focus { border: 1px solid %4; }")
-            .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
     nsl->addWidget(name_edit);
 
     connect(name_edit, &QLineEdit::textChanged, this, [this](const QString& text) {
@@ -164,7 +166,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
 
     // ── Type info ──────────────────────────────────────────────────
     auto* type_label = new QLabel(QString("%1  |  %2").arg(type_def.category, type_def.type_id));
-    type_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px; padding: 0 0 6px 0;")
+    type_label->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; padding: 0 0 6px 0;")
                                   .arg(ui::colors::TEXT_TERTIARY()));
     editor_layout_->insertWidget(pos++, type_label);
 
@@ -177,7 +179,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     // ── Parameters ─────────────────────────────────────────────────
     if (!type_def.parameters.isEmpty()) {
         param_header_ = new QLabel(tr("PARAMETERS"));
-        param_header_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+        param_header_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px;"
                                              "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
                                          .arg(ui::colors::AMBER()));
         editor_layout_->insertWidget(pos++, param_header_);
@@ -202,7 +204,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     editor_layout_->insertWidget(pos++, sep3);
 
     settings_header_ = new QLabel(tr("SETTINGS"));
-    settings_header_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+    settings_header_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px;"
                                             "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
                                         .arg(ui::colors::AMBER()));
     editor_layout_->insertWidget(pos++, settings_header_);
@@ -211,7 +213,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     disabled_check_ = new QCheckBox(tr("Disabled"));
     disabled_check_->setChecked(node.disabled);
     disabled_check_->setStyleSheet(
-        QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
+        QString("QCheckBox { color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                 "QCheckBox::indicator { width: 14px; height: 14px; background: %2; border: 1px solid %3; }"
                 "QCheckBox::indicator:checked { background: %4; }")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
@@ -232,6 +234,56 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
             emit node_flag_changed(current_node_id_, QStringLiteral("continue_on_fail"), on);
     });
     editor_layout_->insertWidget(pos++, cof_check_);
+
+    // Retry on fail + max tries (the executor re-runs a failed node with a short back-off).
+    // Never offered for nodes that can place orders or move money.
+    const bool retryable = WorkflowExecutor::is_retryable_type(type_def.type_id);
+    retry_check_ = new QCheckBox(tr("Retry on Fail"));
+    retry_check_->setChecked(retryable && node.retry_on_fail);
+    retry_check_->setEnabled(retryable);
+    retry_check_->setStyleSheet(disabled_check_->styleSheet());
+    retry_check_->setToolTip(retryable ? tr("Run this node again when it fails, up to Max Tries attempts in total")
+                                       : tr("Not available for trading, agent, MCP tool and sub-workflow nodes: a "
+                                            "failed attempt may already have acted"));
+    editor_layout_->insertWidget(pos++, retry_check_);
+
+    auto* tries_row = new QWidget(this);
+    auto* trl = new QHBoxLayout(tries_row);
+    trl->setContentsMargins(20, 2, 0, 4);
+    trl->setSpacing(6);
+    max_tries_label_ = new QLabel(tr("Max Tries"));
+    max_tries_label_->setStyleSheet(
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;").arg(ui::colors::TEXT_SECONDARY()));
+    trl->addWidget(max_tries_label_);
+    max_tries_spin_ = new QSpinBox;
+    max_tries_spin_->setRange(2, 10);
+    max_tries_spin_->setValue(qBound(2, node.max_tries, 10));
+    max_tries_spin_->setEnabled(retry_check_->isChecked());
+    max_tries_spin_->setToolTip(tr("Attempts in total, the first run included"));
+    max_tries_spin_->setStyleSheet(
+        QString("QSpinBox { background: %1; color: %2; border: 1px solid %3; font-size: " +
+                fincept::ui::fonts::px(-2) + "px; padding: 2px 4px; }"
+                "QSpinBox:disabled { color: %4; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                 ui::colors::TEXT_TERTIARY()));
+    trl->addWidget(max_tries_spin_);
+    trl->addStretch();
+    editor_layout_->insertWidget(pos++, tries_row);
+
+    connect(retry_check_, &QCheckBox::toggled, this, [this](bool on) {
+        if (max_tries_spin_)
+            max_tries_spin_->setEnabled(on);
+        if (current_node_id_.isEmpty())
+            return;
+        emit node_flag_changed(current_node_id_, QStringLiteral("retry_on_fail"), on);
+        // A node saved with max_tries 1 would never retry: arm it with the spin's value.
+        if (on && max_tries_spin_)
+            emit node_max_tries_changed(current_node_id_, max_tries_spin_->value());
+    });
+    connect(max_tries_spin_, &QSpinBox::valueChanged, this, [this](int value) {
+        if (!current_node_id_.isEmpty())
+            emit node_max_tries_changed(current_node_id_, value);
+    });
 }
 
 void NodePropertiesPanel::changeEvent(QEvent* event) {
@@ -240,9 +292,22 @@ void NodePropertiesPanel::changeEvent(QEvent* event) {
     QWidget::changeEvent(event);
 }
 
+void NodePropertiesPanel::apply_empty_texts() {
+    if (!empty_state_)
+        return;
+    ui::EmptyState::Spec spec;
+    spec.glyph = QStringLiteral("◇");
+    spec.glyph_tone = ui::EmptyState::Tone::Neutral;
+    spec.title = tr("No node selected");
+    spec.message = tr("Click a node on the canvas to edit its name, parameters and run settings.");
+    spec.details = ui::EmptyState::bullet_rows({tr("Drag a node in from the palette, or right-click the canvas"),
+                                                tr("Delete removes the selection; Ctrl+Z undoes it")});
+    spec.details_heading = tr("TIPS");
+    empty_state_->apply(spec);
+}
+
 void NodePropertiesPanel::retranslateUi() {
-    if (empty_label_)
-        empty_label_->setText(tr("Select a node\nto edit properties"));
+    apply_empty_texts();
     // Dynamic editor labels (recreated on each node selection) — update the
     // live instances if a node is currently shown.
     if (props_title_)
@@ -259,6 +324,10 @@ void NodePropertiesPanel::retranslateUi() {
         disabled_check_->setText(tr("Disabled"));
     if (cof_check_)
         cof_check_->setText(tr("Continue on Fail"));
+    if (retry_check_)
+        retry_check_->setText(tr("Retry on Fail"));
+    if (max_tries_label_)
+        max_tries_label_->setText(tr("Max Tries"));
 }
 
 } // namespace fincept::workflow

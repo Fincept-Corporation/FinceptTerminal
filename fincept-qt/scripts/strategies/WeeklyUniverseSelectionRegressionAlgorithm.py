@@ -1,47 +1,51 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-161A4DE8
-# Category: Universe Selection
-# Description: Weekly rotation strategy inspired by universe selection. Buys
-#   at the start of each week if price is above 10-day SMA, exits at the end
-#   of the week. Captures weekly momentum trends.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+### <summary>
+### Regression algorithm to test universe additions and removals with open positions
+### </summary>
+### <meta name="tag" content="regression test" />
 class WeeklyUniverseSelectionRegressionAlgorithm(QCAlgorithm):
-    """Weekly momentum rotation with SMA filter."""
 
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
         self.set_cash(100000)
+        self.set_start_date(2013,10,1)
+        self.set_end_date(2013,10,31)
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+        self.universe_settings.resolution = Resolution.HOUR
 
-        self._sma = self.sma(self.symbol, 10, Resolution.DAILY)
-        self._last_week = -1
+        # select IBM once a week, empty universe the other days
+        self.add_universe("my-custom-universe", lambda dt: ["IBM"] if dt.day % 7 == 0 else [])
 
-    def on_data(self, data):
-        if not self._sma.is_ready:
-            return
-        if self.symbol not in data:
-            return
+    def on_data(self, slice):
+        if self.changes is None: return
 
-        price = data[self.symbol].close
-        current_week = self.time.isocalendar()[1]
+        # liquidate removed securities
+        for security in self.changes.removed_securities:
+            if security.invested:
+                self.log("{} Liquidate {}".format(self.time, security.symbol))
+                self.liquidate(security.symbol)
 
-        if current_week != self._last_week:
-            self._last_week = current_week
-            # Weekly decision: enter if price > SMA, exit otherwise
-            if price > self._sma.current.value:
-                if not self.portfolio.invested:
-                    self.set_holdings(self.symbol, 1)
-            else:
-                if self.portfolio.invested:
-                    self.liquidate()
+        # we'll simply go long each security we added to the universe
+        for security in self.changes.added_securities:
+            if not security.invested:
+                self.log("{} Buy {}".format(self.time, security.symbol))
+                self.set_holdings(security.symbol, 1)
+
+        self.changes = None
+
+    def on_securities_changed(self, changes):
+        self.changes = changes

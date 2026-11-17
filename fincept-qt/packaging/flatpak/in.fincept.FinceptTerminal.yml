@@ -1,6 +1,10 @@
 id: in.fincept.FinceptTerminal
 runtime: org.kde.Platform
-runtime-version: '6.8'
+# A supported KDE runtime (6.8 is end-of-life: Flathub rejects it and users are
+# warned on every update). Keep it equal to the image tag of the build-flatpak
+# job in .github/workflows/release.yml; move both to the newest kde-6.x that
+# github.com/flathub-infra/actions-images lists.
+runtime-version: '6.11'
 sdk: org.kde.Sdk
 command: FinceptTerminal
 
@@ -8,16 +12,87 @@ finish-args:
   # Network — market data, trading APIs, LLM providers, news feeds,
   # WebSocket streams, and first-run Python runtime download.
   - --share=network
-  # X11 / Wayland display
+  # X11 / Wayland display.
+  # Both sockets on purpose. The app prefers X11 whenever an X display exists
+  # (main.cpp choose_linux_platform: "xcb;wayland") because its docking layout
+  # — floating and tear-off panels, drag-to-dock — and custom window chrome have
+  # only been validated on X11/XWayland; native Wayland is the fallback for
+  # sessions without X. With fallback-x11 Flatpak withholds the X socket in a
+  # Wayland session, which would silently put every Wayland user on the
+  # unvalidated path. Flathub's linter asks for fallback-x11 instead: switch
+  # back once the docking UI has been validated on native Wayland
+  # (FINCEPT_WAYLAND=1 forces it for testing).
   - --share=ipc
-  - --socket=fallback-x11
+  - --socket=x11
   - --socket=wayland
   # GPU acceleration for Qt rendering and charts
   - --device=dri
   # Audio — voice commands / speech recognition
   - --socket=pulseaudio
-  # Persist app data across updates (Python runtime, databases, cache)
-  - --persist=.local/share/com.fincept.terminal
+  # Persist app data across updates (Python runtime, databases, cache). The app
+  # keeps its data in ~/.local/share/com.fincept.terminal.community; releases
+  # before the edition split used ~/.local/share/com.fincept.terminal. One
+  # persisted .local/share holds both (the old folder stays where it was, under
+  # ~/.var/app/<id>/.local/share), so the first start can adopt the old folder
+  # with a same-filesystem rename — two separate --persist bind mounts would
+  # turn that into a full copy. The bundled Python scripts keep their files in
+  # that data root too (scripts/fincept_paths.py): any other folder of the
+  # sandbox's home (~/.fincept, ~/.cache, ...) is discarded at exit.
+  - --persist=.local/share
+  # Desktop notifications and the tray icon (ui/notifications/DesktopNotifier:
+  # QSystemTrayIcon talks to these D-Bus services directly; without them alerts
+  # are silently dropped and no tray icon appears).
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # Coding agents (Agent Workbench runs, terminal AI through a harness, the
+  # CONNECT tab's one-click "claude mcp add" / "codex mcp add") are CLIs the
+  # USER installed on their own system — Claude Code, Codex, Gemini CLI, Qwen
+  # Code, Cursor, Copilot, Grok — with their own sign-in and config in the
+  # user's home. They cannot run inside the sandbox, so the app starts them on
+  # the host with `flatpak-spawn --host` (src/core/process/HostExec.cpp), which
+  # needs this name (org.freedesktop.Flatpak.Development.HostCommand). Flathub
+  # linter: finish-args-flatpak-spawn-access (a warning; review needs the
+  # justification above). Optional: without it (flatpak override --user
+  # --no-talk-name=org.freedesktop.Flatpak in.fincept.FinceptTerminal) the rest
+  # of the app works and the harness rows say how to allow it again. Nothing
+  # else is granted for this: no home/host filesystem access — the CLIs reach
+  # their own files on the host, per-run files go through the per-app runtime
+  # folder and the persisted data root, and the CLIs reach the terminal's MCP
+  # server on 127.0.0.1 through the shared network namespace (--share=network).
+  - --talk-name=org.freedesktop.Flatpak
+  # Reports exported without a file dialog (the Report Builder's default export
+  # folder, scheduled report runs, the MCP report tool) go to
+  # ~/Documents/Fincept Reports; without this grant they would land in the
+  # sandbox's private home and be lost. File dialogs go through the document
+  # portal and need no grant. No secret-service access is needed: credentials
+  # live in the app's own encrypted SQLite store in the persisted data root.
+  - --filesystem=xdg-documents/Fincept Reports:create
+
+# Files the build installs that the sandboxed app never uses. Without this the
+# package also exported a second desktop entry and a second AppStream file under
+# the non-Flatpak id (fincept-terminal.desktop / .appdata.xml), which software
+# centres and the Flathub linter read as a second, broken application.
+cleanup:
+  # Static libraries, headers and CMake/pkg-config files of the bundled deps
+  # (md4c, QXlsx, Qt-Advanced-Docking-System) — build-time only.
+  - /include
+  - /lib64
+  - /lib/cmake
+  - /lib/pkgconfig
+  - '*.a'
+  - /bin/md2html
+  - /share/man
+  # Desktop integration for the .deb id (fincept-terminal-community,
+  # CMakeLists.txt "Edition identity"); Flatpak exports only the
+  # in.fincept.FinceptTerminal.* files.
+  - /share/applications/fincept-terminal-community.desktop
+  - /share/metainfo/fincept-terminal-community.appdata.xml
+  - /share/icons/hicolor/256x256/apps/fincept-terminal-community.png
+  # Uninstaller for system packages — meaningless inside a sandbox.
+  - /share/fincept-terminal/uninstall.sh
+  # Copies of the runtime's own Qt Wayland plugins; Qt loads them from the
+  # KDE runtime, never from here.
+  - /share/fincept-terminal/plugins
 
 modules:
   # ── md4c (CommonMark markdown parser) ──────────────────────────────────────
@@ -34,6 +109,8 @@ modules:
         commit: 729e6b8b320caa96328968ab27d7db2235e4fb47
 
   # ── Main application ───────────────────────────────────────────────────────
+  # FINCEPT_QT_PIN_MODE=ANY: a Flatpak uses the Qt of its runtime, which is
+  # newer than the 6.8.x the other installers pin.
   - name: FinceptTerminal
     buildsystem: simple
     build-commands:
@@ -42,13 +119,15 @@ modules:
         cmake -B _build -S fincept-qt -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=/app \
-          -DFINCEPT_QT_PIN_MODE=MINOR \
+          -DFINCEPT_QT_PIN_MODE=ANY \
           -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
           -DFETCHCONTENT_SOURCE_DIR_QXLSX=$SRC/vendor/qxlsx \
           -DFETCHCONTENT_SOURCE_DIR_MD4C=$SRC/vendor/md4c \
           -DFETCHCONTENT_SOURCE_DIR_QGEOVIEW=$SRC/vendor/qgeoview \
           -DFETCHCONTENT_SOURCE_DIR_QTADS=$SRC/vendor/qtads \
-          -DFETCHCONTENT_SOURCE_DIR_ED25519=$SRC/vendor/ed25519
+          -DFETCHCONTENT_SOURCE_DIR_ED25519=$SRC/vendor/ed25519 \
+          -DFINCEPT_DOWNLOAD_YTDLP=OFF \
+          -DFINCEPT_YTDLP_EXE=$SRC/vendor/ytdlp/yt-dlp_linux
       - cmake --build _build --parallel
       - cmake --install _build
     sources:
@@ -56,11 +135,19 @@ modules:
       # Flathub's linter REQUIRES a commit alongside a tag ("this is an error
       # for new submissions if a commit is missing with a tag") — tags are
       # mutable, so the commit is what makes the build reproducible.
-      # Pinned to the latest *released* tag. Bump both fields together on each
-      # release; a tag that does not exist fails the build at source fetch,
-      # which is what v4.5.0 did here before it was ever tagged. Keep this on the
-      # last tag that exists; move it to the current release (v4.5.2) only after
-      # that tag is pushed.
+      # This pin lags the project version by design: a commit cannot pin its
+      # own hash, so it moves only after a release is tagged, both fields
+      # together, and only to a tag that exists (a missing tag fails at source
+      # fetch, which is what v4.5.0 did here before it was tagged) and whose
+      # tree builds in the offline sandbox. v4.4.1 and v4.5.2 do NOT build
+      # here: both predate the CMakeLists.txt fixes for the QtADS module path
+      # and the configure-time yt-dlp download. The first release that
+      # contains those fixes is the first tag this pin can move to.
+      # The release pipeline never builds this pin:
+      # release.yml (build-flatpak, "Derive the CI manifest") swaps this source
+      # for the checkout being released; its "Version + metadata consistency"
+      # step checks the pin ([manifest-pin]: a warning while it lags the newest
+      # <release>; move it to that release before a Flathub submission).
       - type: git
         url: https://github.com/Fincept-Corporation/FinceptTerminal.git
         tag: v4.4.1
@@ -86,3 +173,15 @@ modules:
         url: https://github.com/orlp/ed25519.git
         commit: b1f19fab4aebe607805620d25a5e42566ce46a0e
         dest: vendor/ed25519
+      # yt-dlp for dashboard video playback. The build sandbox has no network,
+      # so CMake's configure-time download cannot run here; the same pinned
+      # release (FINCEPT_YTDLP_VERSION / FINCEPT_YTDLP_SHA256 in CMakeLists.txt)
+      # is fetched as a checksummed source instead and handed over with
+      # -DFINCEPT_YTDLP_EXE. Bump it together with those two values.
+      - type: file
+        url: https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_linux
+        sha256: c2b0189f581fe4a2ddd41954f1bcb7d327db04b07ed0dea97e4f1b3e09b5dd8e
+        dest: vendor/ytdlp
+        dest-filename: yt-dlp_linux
+        only-arches:
+          - x86_64

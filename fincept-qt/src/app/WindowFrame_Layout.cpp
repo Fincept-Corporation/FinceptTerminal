@@ -7,6 +7,8 @@
 // Part of the partial-class split of WindowFrame.cpp.
 
 #include "app/DockScreenRouter.h"
+#include "app/DockStateFilter.h"
+#include "app/ScreenAliases.h"
 #include "app/WindowFrame.h"
 #include "core/layout/LayoutCatalog.h"
 #include "core/layout/WorkspaceShell.h"
@@ -38,14 +40,12 @@ layout::FrameLayout WindowFrame::capture_layout() const {
     if (!dock_manager_ || !dock_router_)
         return fl;
 
-    // ADS dock state — opaque blob covering splits, tab order, sizes. Prune
-    // closed panels first so workspace snapshots capture only the visible grid
-    // and don't carry phantom areas that reshuffle the layout on restore. The
-    // session-layout timer keeps the live tree pruned continuously, so this is
-    // normally a no-op; it just guarantees a clean blob if a snapshot lands in
-    // the sub-500ms window after a layout change.
-    dock_router_->prune_hidden_panels();
-    fl.dock_state = dock_manager_->saveState();
+    // ADS dock state — opaque blob covering splits, tab order, sizes. Closed
+    // panels are cut from it so workspace snapshots capture only the visible
+    // grid and don't carry phantom areas that reshuffle the layout on restore
+    // (from the serialised state only — detaching them from the live tree
+    // re-styles every closed screen).
+    fl.dock_state = dock_router_->save_state_without_closed();
 
     // Active panel — whichever dock widget currently has focus.
     if (auto* focused = dock_manager_->focusedDockWidget()) {
@@ -87,10 +87,14 @@ layout::FrameLayout WindowFrame::capture_layout() const {
         if (dup_idx > 0)
             type_id = type_id.left(dup_idx);
         ps.type_id = type_id;
+        // The real dock id ("watchlist#dup3") — apply_layout must register
+        // exactly this name for restoreState to place the panel.
+        ps.dock_id = id;
 
         // IGroupLinked screens carry a link group letter. SymbolGroup is
         // a single-char enum class; we serialise as the letter.
-        if (auto* w = dw->widget()) {
+        // The screen itself (the dock widget's content is the host around it).
+        if (auto* w = dock_router_->screen_widget(id) ? dock_router_->screen_widget(id) : dw->widget()) {
             if (auto* linked = dynamic_cast<IGroupLinked*>(w)) {
                 const SymbolGroup g = linked->group();
                 if (g != SymbolGroup::None)
@@ -110,20 +114,67 @@ layout::FrameLayout WindowFrame::capture_layout() const {
         fl.panels.append(ps);
     }
 
-    LOG_INFO("WindowFrame", QString("capture_layout: window %1 -> %2 panels, dock_state=%3 bytes")
+    LOG_DEBUG("WindowFrame", QString("capture_layout: window %1 -> %2 panels, dock_state=%3 bytes")
                                 .arg(window_id_)
                                 .arg(fl.panels.size())
                                 .arg(fl.dock_state.size()));
     return fl;
 }
 
-bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
+bool WindowFrame::apply_layout(const layout::FrameLayout& fl_in) {
     if (!dock_manager_ || !dock_router_) {
-        LOG_WARN("WindowFrame", "apply_layout: dock manager/router not ready");
+        LOG_WARN("WindowFrame", "Layout not applied, the dock manager is not ready");
         return false;
     }
+    // Never restore a duplicate of a single-instance trading screen (an old
+    // layout saved with "equity_trading#dup2"): drop it from the blob and the
+    // panel list, keep everything else (DockStateFilter.h).
+    layout::FrameLayout fl = fl_in;
+    {
+        // A panel of a merged screen's old id ("agent_workbench") is the merged
+        // screen now (ScreenAliases.h): renamed in the blob and the panel list
+        // first, so a layout holding both collapses to one just below.
+        QStringList renamed;
+        fl.dock_state = screen_alias::with_aliases(fl.dock_state, &renamed);
+        for (auto& ps : fl.panels) {
+            if (screen_alias::is_alias(ps.type_id) || screen_alias::is_alias(ps.dock_id)) {
+                renamed << (ps.dock_id.isEmpty() ? ps.type_id : ps.dock_id);
+                ps.type_id = screen_alias::canonical(ps.type_id);
+                if (!ps.dock_id.isEmpty())
+                    ps.dock_id = screen_alias::canonical(ps.dock_id);
+            }
+        }
+        if (!renamed.isEmpty())
+            LOG_INFO("WindowFrame", QString("Layout panels renamed to their merged screen window=%1 panels=\"%2\"")
+                                        .arg(window_id_)
+                                        .arg(renamed.join(QLatin1Char(','))));
+        QStringList dropped;
+        fl.dock_state = dock_state::without_single_instance_duplicates(fl.dock_state, &dropped);
+        // The panel list too: a "#dup" copy of a single-instance screen, and every
+        // further panel of a single-instance type after its first (an older layout
+        // that recorded no dock ids lists two "equity_trading" panels).
+        QStringList single_seen;
+        for (qsizetype i = 0; i < fl.panels.size();) {
+            const auto& ps = fl.panels.at(i);
+            const QString id = ps.dock_id.isEmpty() ? ps.type_id : ps.dock_id;
+            const bool single = dock_instance::is_single_instance_type(ps.type_id);
+            if (dock_state::is_single_instance_duplicate(id) || (single && single_seen.contains(ps.type_id))) {
+                if (!dropped.contains(id))
+                    dropped << id;
+                fl.panels.removeAt(i);
+                continue;
+            }
+            if (single)
+                single_seen << ps.type_id;
+            ++i;
+        }
+        if (!dropped.isEmpty())
+            LOG_INFO("WindowFrame", QString("Layout cleaned, single-instance duplicates dropped window=%1 panels=\"%2\"")
+                                        .arg(window_id_)
+                                        .arg(dropped.join(QLatin1Char(','))));
+    }
 
-    LOG_INFO("WindowFrame", QString("apply_layout: window %1, %2 panels, dock_state=%3 bytes")
+    LOG_DEBUG("WindowFrame", QString("apply_layout: window %1, %2 panels, dock_state=%3 bytes")
                                 .arg(window_id_)
                                 .arg(fl.panels.size())
                                 .arg(fl.dock_state.size()));
@@ -153,7 +204,9 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // incomplete intermediate state.
     suppress_layout_save_ = true;
 
-    dock_router_->ensure_all_registered();
+    // Only the panels the blob names (what restoreState looks up) — registering
+    // every screen made each layout restore take seconds.
+    dock_router_->ensure_registered_for_state(fl.dock_state);
 
     // Track each panel's resolved string id alongside its FrameLayout
     // entry so the deferred pass doesn't have to recompute the
@@ -168,15 +221,22 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // ids; still needed for "<type>#dup<n>" panels not in factories_.
     for (const auto& ps : fl.panels) {
         QString id = ps.type_id;
-        int dup_index = 0;
-        for (const auto& other : fl.panels) {
-            if (&other == &ps)
-                break;
-            if (other.type_id == ps.type_id)
-                ++dup_index;
+        if (!ps.dock_id.isEmpty() &&
+            (ps.dock_id == ps.type_id || ps.dock_id.startsWith(ps.type_id + QLatin1String("#dup")))) {
+            // Saved by a build that records the real dock id.
+            id = ps.dock_id;
+        } else {
+            // Older layouts: rebuild the "#dup<n>" suffix from panel order.
+            int dup_index = 0;
+            for (const auto& other : fl.panels) {
+                if (&other == &ps)
+                    break;
+                if (other.type_id == ps.type_id)
+                    ++dup_index;
+            }
+            if (dup_index > 0)
+                id = QString("%1#dup%2").arg(ps.type_id).arg(dup_index + 1);
         }
-        if (dup_index > 0)
-            id = QString("%1#dup%2").arg(ps.type_id).arg(dup_index + 1);
 
         panel_ids.append(id);
 
@@ -187,6 +247,10 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
         if (!ps.link_group.isEmpty())
             dock_router_->set_pending_link_group(id, symbol_group_from_char(ps.link_group.at(0)));
     }
+    // Any other "#dup<n>" widget the blob names (e.g. an older layout whose
+    // order-based ids above don't match) still needs a shell, or restoreState
+    // drops it together with its dock area.
+    dock_router_->prepare_duplicate_panels(fl.dock_state);
 
     // Phase 2: restore the ADS dock layout blob. CDockManager::restoreState
     // returns false if the blob is incompatible (version mismatch, missing
@@ -194,9 +258,21 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // fall back to a default layout.
     bool ok = true;
     if (!fl.dock_state.isEmpty()) {
+        // As in the constructor's restore: restoreState() shows every restored
+        // panel, and building each screen inline there froze the window for
+        // seconds. Screens are built below — the active one now, the others
+        // one per event-loop turn or when first shown.
+        dock_router_->set_suppress_materialize(true);
         ok = dock_manager_->restoreState(fl.dock_state);
+        dock_router_->set_suppress_materialize(false);
+        // A second panel of a single-instance screen that survived the filter
+        // above (any path an older build found) is removed before anything is built.
+        if (ok)
+            dock_router_->collapse_duplicates(QStringLiteral("layout_apply"));
         if (!ok) {
-            LOG_WARN("WindowFrame", "apply_layout: CDockManager::restoreState rejected dock blob");
+            LOG_WARN("WindowFrame", QString("Layout not applied, the saved dock state was rejected window=%1 bytes=%2")
+                                        .arg(window_id_)
+                                        .arg(fl.dock_state.size()));
             suppress_layout_save_ = false;
             return false;
         }
@@ -249,8 +325,14 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
         if (id == active_id)
             continue; // already materialised synchronously above
         auto* dw = dock_router_->find_dock_widget(id);
-        const bool currently_visible = dw && !dw->isClosed();
-        const int priority = (frame_active && currently_visible) ? 1 : 2;
+        // Only panels that will be on screen: a closed panel or a background
+        // tab is built when it is first shown (visibilityChanged →
+        // materialize_screen), not at start-up.
+        const bool on_screen = dw && !dw->isClosed() && dw->dockAreaWidget() &&
+                               dw->dockAreaWidget()->currentDockWidget() == dw;
+        if (!on_screen)
+            continue;
+        const int priority = frame_active ? 1 : 2;
 
         PanelMaterialiser::instance().enqueue(
             id,
@@ -263,7 +345,7 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
             /*owner=*/this);
     }
 
-    LOG_INFO("WindowFrame", QString("apply_layout: window %1 staged %2 panels (active='%3')")
+    LOG_DEBUG("WindowFrame", QString("apply_layout: window %1 staged %2 panels (active='%3')")
                                 .arg(window_id_)
                                 .arg(panel_ids.size())
                                 .arg(active_id));

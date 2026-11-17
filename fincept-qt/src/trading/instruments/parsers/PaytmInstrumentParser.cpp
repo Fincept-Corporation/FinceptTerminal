@@ -99,7 +99,7 @@ QVector<Instrument> parse_paytm(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("PaytmSource", QString("Parsed %1 Paytm instruments").arg(out.size()));
+    LOG_DEBUG("PaytmSource", QString("Parsed %1 Paytm instruments").arg(out.size()));
     return out;
 }
 

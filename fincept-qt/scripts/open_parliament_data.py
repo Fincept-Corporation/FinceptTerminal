@@ -72,7 +72,7 @@ def main(args=None):
         print(json.dumps({"error": "No command provided"}))
         return
     if not API_KEY:
-        print(json.dumps({"error": "TWFY_API_KEY environment variable not set"}))
+        print(json.dumps({"error": "TWFY_API_KEY is not set: save it in Settings > Credentials"}))
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}

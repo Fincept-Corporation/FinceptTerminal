@@ -478,13 +478,18 @@ ApiResponse<BrokerFunds> TradejiniBroker::get_funds(const BrokerCredentials& cre
 
 // ---------- get_quotes ----------
 // Tradejini exposes real-time quotes only through its WebSocket SDK (NxtradStream),
-// not a REST endpoint. Stream live quotes via the ws adapter; this REST method
-// has no upstream equivalent.
+// not a REST endpoint, and this build has no Tradejini stream adapter. The error
+// text is user-facing: the order book panel shows it verbatim (AccountDataStream::
+// fetch_orderbook → market_data_failure_reason), so it must say plainly that this
+// broker supplies no prices here rather than point at a stream that doesn't exist.
 
 ApiResponse<QVector<BrokerQuote>> TradejiniBroker::get_quotes(const BrokerCredentials& /*creds*/,
                                                               const QVector<QString>& /*symbols*/) {
     return {false, std::nullopt,
-            "Tradejini quotes are WebSocket-only — use the streaming adapter (no REST quote endpoint)", now_ts()};
+            "Tradejini provides no live quotes in this build (its prices are streaming-only and no Tradejini "
+            "stream is available): watchlist prices, the ticker and the order book stay empty for this broker. "
+            "Orders, positions, holdings and charts still work.",
+            now_ts()};
 }
 
 // Roll up intraday OHLCV bars into one bar per IST civil day. Input must be

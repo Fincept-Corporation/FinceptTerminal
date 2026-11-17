@@ -66,9 +66,9 @@ void PortItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     const bool connected = !edges_.isEmpty();
     QColor fill;
     if (connect_highlight_ == 1)
-        fill = QColor(t.positive);
+        fill = QColor(t.success);
     else if (connect_highlight_ == -1)
-        fill = QColor(t.negative);
+        fill = QColor(t.danger);
     else if (hovered_ || connected)
         fill = QColor(t.accent);
     else

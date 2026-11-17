@@ -5,481 +5,354 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "python/PythonRunner.h"
+#include "services/relationship_map/RelationshipMapParse.h"
 #include "storage/cache/CacheManager.h"
 
-#include <QJsonArray>
+#include <QElapsedTimer>
+#include <QFutureWatcher>
 #include <QJsonDocument>
-#include <QJsonObject>
+#include <QPointer>
+#include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
 #include <utility>
 
 namespace fincept::services {
 
 using namespace fincept::relmap;
 
+namespace {
+
+constexpr int kRmsCompleteTtlSec = 36 * 3600; // the screen refreshes quietly after 24 h
+constexpr int kRmsPartialTtlSec = 30 * 60;    // a partial map is retried soon, not kept for a day
+constexpr int kRmsScriptTimeoutMs = 150 * 1000;
+
+QString rms_cache_key(const QString& ticker) {
+    return QStringLiteral("relmap:v2:") + ticker;
+}
+
+QString rms_norm(const QString& ticker) {
+    return ticker.trimmed().toUpper();
+}
+
+QString rms_run_key(const QString& ticker, QStringList sections) {
+    std::sort(sections.begin(), sections.end());
+    return ticker + QLatin1Char('|') + sections.join(QLatin1Char(','));
+}
+
+/// A remembered payload, read and parsed on a worker thread.
+struct RmsCached {
+    bool found = false;
+    RelationshipData data;
+    QDateTime as_of;
+};
+
+RmsCached rms_read_cache(const QString& ticker) {
+    RmsCached out;
+    const QVariant v = fincept::CacheManager::instance().get(rms_cache_key(ticker));
+    if (v.isNull())
+        return out;
+    RelParseOutcome p = parse_payload(v.toString().toUtf8(), ticker);
+    if (!p.ok) {
+        fincept::CacheManager::instance().remove(rms_cache_key(ticker)); // an unreadable entry is a miss
+        return out;
+    }
+    out.found = true;
+    out.as_of = p.data.fetched_at.isValid() ? p.data.fetched_at : QDateTime::currentDateTimeUtc();
+    out.data = std::move(p.data);
+    return out;
+}
+
+/// What a finished run produced, prepared on a worker thread (merge, parse, cache write).
+struct RmsDone {
+    bool ok = false;
+    QString error;
+    RelationshipData data;
+    QDateTime as_of;
+};
+
+RmsDone rms_prepare(const QString& ticker, const QStringList& sections, const QString& output) {
+    RmsDone out;
+    const QJsonDocument doc = QJsonDocument::fromJson(output.trimmed().toUtf8());
+    if (!doc.isObject()) {
+        out.error = QStringLiteral("The relationship data could not be read (invalid reply).");
+        return out;
+    }
+    QJsonObject root = doc.object();
+    if (root.contains(QLatin1String("error"))) {
+        out.error = root.value(QLatin1String("error")).toString().simplified();
+        if (out.error.isEmpty())
+            out.error = QStringLiteral("The relationship data could not be loaded.");
+        return out;
+    }
+    if (!sections.isEmpty()) {
+        // A retry of some sections: fold it into the remembered full payload.
+        const QVariant base = fincept::CacheManager::instance().get(rms_cache_key(ticker));
+        const QJsonDocument bdoc = QJsonDocument::fromJson(base.toString().toUtf8());
+        if (bdoc.isObject())
+            root = merge_retry_json(bdoc.object(), root, sections);
+    }
+    const QByteArray text = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    RelParseOutcome p = parse_payload(text, ticker);
+    if (!p.ok) {
+        out.error = p.error;
+        return out;
+    }
+    // A complete map is remembered for a day and a half, a partial one briefly.
+    fincept::CacheManager::instance().put(rms_cache_key(ticker), QVariant(QString::fromUtf8(text)),
+                                          p.data.partial ? kRmsPartialTtlSec : kRmsCompleteTtlSec, "relmap");
+    out.ok = true;
+    out.as_of = p.data.fetched_at.isValid() ? p.data.fetched_at : QDateTime::currentDateTimeUtc();
+    out.data = std::move(p.data);
+    return out;
+}
+
+QString rms_section_counts(const RelationshipData& d) {
+    QStringList parts;
+    QStringList ids = d.sections.keys();
+    std::sort(ids.begin(), ids.end());
+    for (const QString& id : ids) {
+        const RelSectionStatus& s = d.sections[id];
+        parts << QStringLiteral("%1=%2:%3").arg(id, section_state_text(s.state)).arg(s.count);
+    }
+    return parts.join(QLatin1Char(' '));
+}
+
+} // namespace
+
 RelationshipMapService& RelationshipMapService::instance() {
     static RelationshipMapService s;
     return s;
 }
 
-static constexpr int kRelMapTtlSec = 10 * 60; // 10 min
+// ── Requests ────────────────────────────────────────────────────────────────
 
-void RelationshipMapService::fetch(const QString& ticker) {
-    const QString requested = ticker.trimmed().toUpper();
-    if (requested.isEmpty())
-        return;
-    if (loading_) {
-        // A different symbol asked for mid-download used to be dropped, so the screen
-        // ended up showing the in-flight symbol while the search box said the new one.
-        // Remember the latest request; it starts as soon as the current one lands.
-        pending_ticker_ = (requested == current_ticker_) ? QString() : requested;
-        return;
+quint64 RelationshipMapService::request(const QString& ticker, const RelMapRequestOptions& opts) {
+    const quint64 id = ++next_request_;
+    const QString t = rms_norm(ticker);
+    if (t.isEmpty()) {
+        QMetaObject::invokeMethod(
+            this, [this, id]() { emit request_failed(id, QStringLiteral("No symbol to analyse.")); },
+            Qt::QueuedConnection);
+        return id;
     }
-
-    current_ticker_ = requested;
-
-    // Check cache first
-    const QString cache_key = "relmap:" + current_ticker_;
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
-    if (!cached.isNull()) {
-        LOG_DEBUG("RelMapService", "Cache hit for " + current_ticker_);
-        emit progress_changed(100, "Loaded from cache");
-        if (parse_result(cached.toString()))
+    request_run_.insert(id, QString()); // waiting for the remembered-payload look-up
+    const bool force = opts.force;
+    const QStringList sections = opts.sections;
+    QPointer<RelationshipMapService> self = this;
+    auto* watcher = new QFutureWatcher<RmsCached>(this);
+    connect(watcher, &QFutureWatcher<RmsCached>::finished, this, [this, self, watcher, id, t, force, sections]() {
+        watcher->deleteLater();
+        if (!self || !request_run_.contains(id))
+            return; // cancelled meanwhile
+        const RmsCached c = watcher->result();
+        if (c.found && !force && sections.isEmpty()) {
+            request_run_.remove(id);
+            LOG_INFO("RelMapService", logf("Map from the remembered payload",
+                                           {{"ticker", t}, {"as_of", c.as_of.toString(Qt::ISODate)}}));
+            emit request_finished(id, c.data, c.as_of, true);
             return;
-        // Entries cached before failures stopped being stored can hold an error shell;
-        // drop it and fall through to a real fetch instead of serving it until the TTL.
-        fincept::CacheManager::instance().remove(cache_key);
+        }
+        // A section retry needs the remembered map to merge into; without it, the whole map.
+        const QStringList secs = (c.found && !sections.isEmpty()) ? sections : QStringList();
+        const QString key = rms_run_key(t, secs);
+        if (!runs_.contains(key))
+            start_run(key, t, secs);
+        runs_[key].requests.insert(id);
+        request_run_.insert(id, key);
+    });
+    watcher->setFuture(QtConcurrent::run([t]() { return rms_read_cache(t); }));
+    return id;
+}
+
+void RelationshipMapService::cancel(quint64 request_id) {
+    if (!request_run_.contains(request_id))
+        return;
+    const QString key = request_run_.take(request_id);
+    if (key.isEmpty())
+        return; // still in the cache look-up: its answer is dropped
+    auto it = runs_.find(key);
+    if (it == runs_.end())
+        return;
+    it->requests.remove(request_id);
+    if (it->requests.isEmpty() && !it->for_hub) {
+        if (it->cancel)
+            it->cancel->store(true); // PythonRunner kills the script within ~250 ms
+        LOG_DEBUG("RelMapService", logf("Run abandoned", {{"ticker", it->ticker}}));
+        runs_.erase(it); // its callback no longer finds it: nothing is cached or emitted
     }
+}
 
-    loading_ = true;
-    data_ = {};
+bool RelationshipMapService::is_pending(quint64 request_id) const {
+    return request_run_.contains(request_id);
+}
 
-    emit progress_changed(5, "Starting data fetch for " + current_ticker_ + "...");
+void RelationshipMapService::load_remembered(
+    const QString& ticker, QObject* ctx,
+    std::function<void(bool, const fincept::relmap::RelationshipData&, const QDateTime&)> done) {
+    const QString t = rms_norm(ticker);
+    QPointer<QObject> guard = ctx;
+    auto* watcher = new QFutureWatcher<RmsCached>(this);
+    connect(watcher, &QFutureWatcher<RmsCached>::finished, this, [watcher, guard, done]() {
+        watcher->deleteLater();
+        if (!guard || !done)
+            return;
+        const RmsCached c = watcher->result();
+        done(c.found, c.data, c.as_of);
+    });
+    watcher->setFuture(QtConcurrent::run([t]() { return t.isEmpty() ? RmsCached{} : rms_read_cache(t); }));
+}
 
-    python::PythonRunner::instance().run(
-        "relationship_map.py", {current_ticker_}, [this, cache_key](python::PythonResult result) {
-            loading_ = false;
-            // A newer symbol was requested while this one downloaded: whatever this run
-            // produced is stale for the UI, so start the newer one straight away.
-            const QString next = std::exchange(pending_ticker_, QString());
+// ── Runs ────────────────────────────────────────────────────────────────────
 
-            if (!result.success || result.output.trimmed().isEmpty()) {
-                LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
-                if (!next.isEmpty()) {
-                    fetch(next);
-                    return;
-                }
-                fail_fetch("Failed to fetch data for " + current_ticker_);
-                return;
-            }
+void RelationshipMapService::start_run(const QString& key, const QString& ticker, const QStringList& sections) {
+    Run run;
+    run.key = key;
+    run.ticker = ticker;
+    run.sections = sections;
+    run.cancel = std::make_shared<std::atomic<bool>>(false);
+    run.seq = ++next_seq_;
+    run.started_ms = QDateTime::currentMSecsSinceEpoch();
+    run.snapshot.company.ticker = ticker;
+    run.snapshot.schema = 2;
+    const quint64 seq = run.seq;
+    runs_.insert(key, run);
 
-            if (!next.isEmpty()) {
-                // Keep the good payload cached so flipping back is instant, but don't
-                // render it - the user has already moved on.
-                if (!QJsonDocument::fromJson(result.output.toUtf8()).object().contains("error"))
-                    fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec,
-                                                          "relmap");
-                fetch(next);
-                return;
-            }
+    QStringList args{ticker};
+    if (!sections.isEmpty())
+        args << QStringLiteral("--sections") << sections.join(QLatin1Char(','));
+    LOG_INFO("RelMapService", logf("Load started", {{"ticker", ticker},
+                                                    {"sections", sections.isEmpty() ? QStringLiteral("all")
+                                                                                    : sections.join(QLatin1Char(','))}}));
 
-            emit progress_changed(70, "Parsing results...");
-            // Only a payload that parsed into a real company is worth caching: caching
-            // the raw output first pinned script-level {"error": ...} replies (and
-            // empty "unknown ticker" shells) for the whole 10-minute TTL.
-            if (parse_result(result.output))
-                fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec, "relmap");
+    python::PythonRunner::RunOptions opts;
+    opts.cancel_token = run.cancel;
+    opts.timeout_ms = kRmsScriptTimeoutMs;
+    opts.stream_stdout = false; // progress on stderr; the one big JSON on stdout is never scanned per line
+    QPointer<RelationshipMapService> self = this;
+    python::PythonRunner::instance().run_with_options(
+        QStringLiteral("relationship_map.py"), args, opts,
+        [self, key, seq](python::PythonResult result) {
+            if (self)
+                self->on_run_done(key, seq, result.success, result.output, result.error);
+        },
+        [self, key, seq](QString line, bool is_stderr) {
+            if (self && is_stderr)
+                self->on_run_line(key, seq, line);
         });
 }
 
-void RelationshipMapService::fail_fetch(const QString& message) {
-    emit fetch_failed(message);
-    if (hub_registered_ && !current_ticker_.isEmpty())
-        fincept::datahub::DataHub::instance().publish_error(
-            QStringLiteral("geopolitics:relationship_graph:") + current_ticker_, message.left(200));
+void RelationshipMapService::on_run_line(const QString& key, quint64 seq, const QString& line) {
+    auto it = runs_.find(key);
+    if (it == runs_.end() || it->seq != seq)
+        return;
+    RelStreamEvent ev;
+    if (!parse_stream_line(line, &ev))
+        return; // library chatter
+    apply_stream_event(it->snapshot, ev);
+    const QList<quint64> ids = it->requests.values();
+    if (ev.kind == QLatin1String("plan")) {
+        for (quint64 id : ids)
+            emit request_planned(id, it->ticker, ev.planned);
+        return;
+    }
+    const RelationshipData snap = it->snapshot;
+    for (quint64 id : ids)
+        emit request_section(id, snap, ev.id);
 }
 
-void RelationshipMapService::clear() {
-    data_ = {};
-    loading_ = false;
-    current_ticker_.clear();
-}
-
-bool RelationshipMapService::parse_result(const QString& json_output) {
-    QJsonDocument doc = QJsonDocument::fromJson(json_output.toUtf8());
-    if (!doc.isObject()) {
-        fail_fetch("Invalid JSON response");
-        return false;
+void RelationshipMapService::on_run_done(const QString& key, quint64 seq, bool success, const QString& output,
+                                         const QString& error) {
+    auto it = runs_.find(key);
+    if (it == runs_.end() || it->seq != seq) {
+        LOG_DEBUG("RelMapService", logf("Dropped the output of an abandoned run", {{"run", key}}));
+        return;
     }
-
-    QJsonObject root = doc.object();
-    if (root.contains("error")) {
-        fail_fetch(root["error"].toString());
-        return false;
+    if (!success || output.trimmed().isEmpty()) {
+        // The script's own sentence when it printed one ("Yahoo Finance did not answer in time…").
+        QString msg = QJsonDocument::fromJson(output.trimmed().toUtf8()).object().value(QLatin1String("error")).toString();
+        if (msg.trimmed().isEmpty())
+            msg = error.trimmed().isEmpty() ? QStringLiteral("Failed to fetch data for %1").arg(it->ticker)
+                                            : error.simplified().left(300);
+        finish_run(key, seq, false, {}, msg, {});
+        return;
     }
-
-    // Start from a blank slate on every parse. Only the fresh-download path used to reset
-    // data_; a cache hit appended its peers / holders / officers onto whatever symbol was
-    // loaded before it (duplicated rows, another company's peers).
-    data_ = {};
-
-    emit progress_changed(80, "Building graph data...");
-
-    // ── Company ──────────────────────────────────────────────────────────
-    QJsonObject co = root["company"].toObject();
-    data_.company.ticker = co["ticker"].toString();
-    data_.company.name = co["name"].toString();
-    data_.company.sector = co["sector"].toString();
-    data_.company.industry = co["industry"].toString();
-    data_.company.website = co["website"].toString();
-    data_.company.description = co["description"].toString();
-    data_.company.country = co["country"].toString();
-    data_.company.exchange = co["exchange"].toString();
-    data_.company.currency = co["currency"].toString();
-    data_.company.employees = co["employees"].toInt();
-    data_.company.market_cap = co["market_cap"].toDouble();
-    data_.company.current_price = co["current_price"].toDouble();
-    data_.company.previous_close = co["previous_close"].toDouble();
-    data_.company.day_change_pct = co["day_change_pct"].toDouble();
-    data_.company.pe_ratio = co["pe_ratio"].toDouble();
-    data_.company.forward_pe = co["forward_pe"].toDouble();
-    data_.company.price_to_book = co["price_to_book"].toDouble();
-    data_.company.roe = co["roe"].toDouble();
-    data_.company.roa = co["roa"].toDouble();
-    data_.company.revenue_growth = co["revenue_growth"].toDouble();
-    data_.company.earnings_growth = co["earnings_growth"].toDouble();
-    data_.company.profit_margins = co["profit_margins"].toDouble();
-    data_.company.revenue = co["revenue"].toDouble();
-    data_.company.ebitda = co["ebitda"].toDouble();
-    data_.company.free_cashflow = co["free_cashflow"].toDouble();
-    data_.company.operating_cashflow = co["operating_cashflow"].toDouble();
-    data_.company.total_cash = co["total_cash"].toDouble();
-    data_.company.total_debt = co["total_debt"].toDouble();
-    data_.company.insider_percent = co["insider_percent"].toDouble();
-    data_.company.institutional_percent = co["institutional_percent"].toDouble();
-    data_.company.recommendation = co["recommendation"].toString();
-    data_.company.recommendation_mean = co["recommendation_mean"].toDouble();
-    data_.company.target_high = co["target_high"].toDouble();
-    data_.company.target_low = co["target_low"].toDouble();
-    data_.company.target_mean = co["target_mean"].toDouble();
-    data_.company.target_median = co["target_median"].toDouble();
-    data_.company.analyst_count = co["analyst_count"].toInt();
-    data_.company.dividend_yield = co["dividend_yield"].toDouble();
-    data_.company.payout_ratio = co["payout_ratio"].toDouble();
-    data_.company.trailing_eps = co["trailing_eps"].toDouble();
-    data_.company.forward_eps = co["forward_eps"].toDouble();
-    data_.company.shares_outstanding = co["shares_outstanding"].toDouble();
-
-    // yfinance answers an unknown / delisted symbol with an empty record rather than an
-    // error, and the script fills every field with defaults - which rendered a graph of
-    // zeros. No price and no market cap means there is nothing to show.
-    if (data_.company.current_price <= 0 && data_.company.market_cap <= 0) {
-        data_ = {};
-        fail_fetch(QStringLiteral("No market data found for %1 - check the symbol").arg(current_ticker_));
-        return false;
-    }
-
-    // ── Governance ───────────────────────────────────────────────────────
-    QJsonObject gov = root["governance"].toObject();
-    data_.governance.audit_risk = gov["audit_risk"].toInt();
-    data_.governance.board_risk = gov["board_risk"].toInt();
-    data_.governance.compensation_risk = gov["compensation_risk"].toInt();
-    data_.governance.shareholder_rights_risk = gov["shareholder_rights_risk"].toInt();
-    data_.governance.overall_risk = gov["overall_risk"].toInt();
-
-    // ── Technicals ───────────────────────────────────────────────────────
-    QJsonObject tech = root["technicals"].toObject();
-    data_.technicals.fifty_two_week_high = tech["fifty_two_week_high"].toDouble();
-    data_.technicals.fifty_two_week_low = tech["fifty_two_week_low"].toDouble();
-    data_.technicals.fifty_day_avg = tech["fifty_day_avg"].toDouble();
-    data_.technicals.two_hundred_day_avg = tech["two_hundred_day_avg"].toDouble();
-    data_.technicals.beta = tech["beta"].toDouble();
-    data_.technicals.week52_change_pct = tech["week52_change_pct"].toDouble();
-    data_.technicals.sp500_52wk_change = tech["sp500_52wk_change"].toDouble();
-    data_.technicals.avg_volume = tech["avg_volume"].toInt();
-    data_.technicals.avg_volume_10d = tech["avg_volume_10d"].toInt();
-
-    // ── Short Interest ────────────────────────────────────────────────────
-    QJsonObject si = root["short_interest"].toObject();
-    data_.short_interest.shares_short = si["shares_short"].toDouble();
-    data_.short_interest.short_ratio = si["short_ratio"].toDouble();
-    data_.short_interest.short_pct_float = si["short_pct_float"].toDouble();
-    data_.short_interest.float_shares = si["float_shares"].toDouble();
-
-    // ── Enterprise ────────────────────────────────────────────────────────
-    QJsonObject ent = root["enterprise"].toObject();
-    data_.enterprise.enterprise_value = ent["enterprise_value"].toDouble();
-    data_.enterprise.ev_to_revenue = ent["ev_to_revenue"].toDouble();
-    data_.enterprise.ev_to_ebitda = ent["ev_to_ebitda"].toDouble();
-    data_.enterprise.peg_ratio = ent["peg_ratio"].toDouble();
-    data_.enterprise.price_to_sales = ent["price_to_sales"].toDouble();
-    data_.enterprise.book_value = ent["book_value"].toDouble();
-
-    // ── Margins & Debt ────────────────────────────────────────────────────
-    QJsonObject mg = root["margins"].toObject();
-    data_.margins.gross = mg["gross"].toDouble();
-    data_.margins.operating = mg["operating"].toDouble();
-    data_.margins.ebitda = mg["ebitda"].toDouble();
-    data_.margins.net = mg["net"].toDouble();
-    data_.margins.debt_to_equity = mg["debt_to_equity"].toDouble();
-    data_.margins.current_ratio = mg["current_ratio"].toDouble();
-    data_.margins.quick_ratio = mg["quick_ratio"].toDouble();
-
-    // ── Analyst Targets ───────────────────────────────────────────────────
-    QJsonObject at = root["analyst_targets"].toObject();
-    data_.analyst_targets.current = at["current"].toDouble();
-    data_.analyst_targets.high = at["high"].toDouble();
-    data_.analyst_targets.low = at["low"].toDouble();
-    data_.analyst_targets.mean = at["mean"].toDouble();
-    data_.analyst_targets.median = at["median"].toDouble();
-
-    // ── Recommendations Summary ───────────────────────────────────────────
-    for (const auto& v : root["recommendations_summary"].toArray()) {
-        QJsonObject r = v.toObject();
-        RecommendationSnapshot snap;
-        snap.period = r["period"].toString();
-        snap.strong_buy = r["strong_buy"].toInt();
-        snap.buy = r["buy"].toInt();
-        snap.hold = r["hold"].toInt();
-        snap.sell = r["sell"].toInt();
-        snap.strong_sell = r["strong_sell"].toInt();
-        data_.recommendations.append(snap);
-    }
-
-    // ── Upgrades / Downgrades ─────────────────────────────────────────────
-    for (const auto& v : root["upgrades_downgrades"].toArray()) {
-        QJsonObject u = v.toObject();
-        AnalystUpgrade upg;
-        upg.date = u["date"].toString();
-        upg.firm = u["firm"].toString();
-        upg.to_grade = u["to_grade"].toString();
-        upg.from_grade = u["from_grade"].toString();
-        upg.action = u["action"].toString();
-        upg.price_target = u["price_target"].toDouble();
-        upg.prior_target = u["prior_target"].toDouble();
-        data_.upgrades_downgrades.append(upg);
-    }
-
-    // ── Officers ──────────────────────────────────────────────────────────
-    for (const auto& v : root["officers"].toArray()) {
-        QJsonObject o = v.toObject();
-        CompanyOfficer off;
-        off.name = o["name"].toString();
-        off.title = o["title"].toString();
-        off.total_pay = o["total_pay"].toInt();
-        off.year_born = o["year_born"].toInt();
-        if (!off.name.isEmpty())
-            data_.officers.append(off);
-    }
-
-    // ── Calendar ──────────────────────────────────────────────────────────
-    QJsonObject cal = root["calendar"].toObject();
-    data_.calendar.earnings_date = cal["earnings_date"].toString();
-    data_.calendar.earnings_avg = cal["earnings_avg"].toDouble();
-    data_.calendar.earnings_low = cal["earnings_low"].toDouble();
-    data_.calendar.earnings_high = cal["earnings_high"].toDouble();
-    data_.calendar.revenue_avg = cal["revenue_avg"].toDouble();
-    data_.calendar.revenue_low = cal["revenue_low"].toDouble();
-    data_.calendar.revenue_high = cal["revenue_high"].toDouble();
-    data_.calendar.ex_dividend_date = cal["ex_dividend_date"].toString();
-    data_.calendar.dividend_date = cal["dividend_date"].toString();
-
-    // The script has no corporate-events feed, so the Events cluster (and its filter
-    // checkbox) were permanently empty. The earnings / dividend calendar it does return
-    // is the closest real data - surface it as the events.
-    const auto add_calendar_event = [this](const QString& date, const QString& what) {
-        if (date.trimmed().isEmpty())
+    const QString ticker = it->ticker;
+    const QStringList sections = it->sections;
+    QPointer<RelationshipMapService> self = this;
+    auto* watcher = new QFutureWatcher<RmsDone>(this);
+    connect(watcher, &QFutureWatcher<RmsDone>::finished, this, [self, watcher, key, seq]() {
+        watcher->deleteLater();
+        if (!self)
             return;
-        CorporateEvent ev;
-        ev.date = date.trimmed();
-        ev.form = QStringLiteral("calendar");
-        ev.description = what;
-        ev.category = QStringLiteral("calendar");
-        data_.events.append(ev);
-    };
-    add_calendar_event(data_.calendar.earnings_date, QStringLiteral("Earnings"));
-    add_calendar_event(data_.calendar.ex_dividend_date, QStringLiteral("Ex-dividend"));
-    add_calendar_event(data_.calendar.dividend_date, QStringLiteral("Dividend paid"));
+        const RmsDone r = watcher->result();
+        self->finish_run(key, seq, r.ok, r.data, r.error, r.as_of);
+    });
+    watcher->setFuture(QtConcurrent::run([ticker, sections, output]() { return rms_prepare(ticker, sections, output); }));
+}
 
-    // ── Institutional Holders ─────────────────────────────────────────────
-    for (const auto& v : root["institutional_holders"].toArray()) {
-        QJsonObject h = v.toObject();
-        InstitutionalHolder holder;
-        holder.name = h["name"].toString();
-        holder.shares = h["shares"].toDouble();
-        holder.value = h["value"].toDouble();
-        holder.percentage = h["percentage"].toDouble();
-        holder.change_percent = h["change_percent"].toDouble();
-        holder.fund_family = h["fund_family"].toString();
-        holder.type = "institutional";
-        if (!holder.name.isEmpty())
-            data_.institutional_holders.append(holder);
-    }
-
-    // ── Mutual Fund Holders ───────────────────────────────────────────────
-    for (const auto& v : root["mutualfund_holders"].toArray()) {
-        QJsonObject h = v.toObject();
-        InstitutionalHolder holder;
-        holder.name = h["name"].toString();
-        holder.shares = h["shares"].toDouble();
-        holder.value = h["value"].toDouble();
-        holder.percentage = h["percentage"].toDouble();
-        holder.change_percent = h["change_percent"].toDouble();
-        holder.fund_family = h["fund_family"].toString();
-        holder.type = "mutualfund";
-        if (!holder.name.isEmpty())
-            data_.mutualfund_holders.append(holder);
-    }
-
-    // ── Insider Holders ───────────────────────────────────────────────────
-    for (const auto& v : root["insider_holders"].toArray()) {
-        QJsonObject h = v.toObject();
-        InsiderHolder insider;
-        insider.name = h["name"].toString();
-        insider.title = h["title"].toString();
-        insider.shares = h["shares"].toDouble();
-        insider.percentage = h["percentage"].toDouble();
-        insider.last_transaction = h["last_transaction"].toString();
-        if (!insider.name.isEmpty())
-            data_.insider_holders.append(insider);
-    }
-
-    // ── Peers ─────────────────────────────────────────────────────────────
-    for (const auto& v : root["peers"].toArray()) {
-        QJsonObject p = v.toObject();
-        PeerCompany peer;
-        peer.ticker = p["ticker"].toString();
-        peer.name = p["name"].toString();
-        peer.market_cap = p["market_cap"].toDouble();
-        peer.pe_ratio = p["pe_ratio"].toDouble();
-        peer.forward_pe = p["forward_pe"].toDouble();
-        peer.roe = p["roe"].toDouble();
-        peer.revenue_growth = p["revenue_growth"].toDouble();
-        peer.profit_margins = p["profit_margins"].toDouble();
-        peer.gross_margins = p["gross_margins"].toDouble();
-        peer.current_price = p["current_price"].toDouble();
-        peer.sector = p["sector"].toString();
-        peer.beta = p["beta"].toDouble();
-        peer.ev_to_ebitda = p["ev_to_ebitda"].toDouble();
-        peer.price_to_book = p["price_to_book"].toDouble();
-        peer.week52_change = p["week52_change"].toDouble();
-        peer.recommendation = p["recommendation"].toString();
-        peer.currency = p["currency"].toString();
-        if (!peer.ticker.isEmpty())
-            data_.peers.append(peer);
-    }
-
-    // ── Valuation Signal ──────────────────────────────────────────────────
-    data_.peer_source = root["peer_source"].toString();
-    if (data_.peer_source == QLatin1String("generic_fallback")) {
-        // The script found no industry peer list and fell back to mega-cap tech:
-        // a P/E comparison against that set says nothing about this company.
-        data_.valuation.status = QStringLiteral("N/A — no comparable peer set");
-        data_.valuation.action = QStringLiteral("HOLD");
+void RelationshipMapService::finish_run(const QString& key, quint64 seq, bool ok, const RelationshipData& data,
+                                        const QString& error, const QDateTime& as_of) {
+    auto it = runs_.find(key);
+    if (it == runs_.end() || it->seq != seq)
+        return; // abandoned while its output was being parsed
+    const Run run = *it;
+    runs_.erase(it);
+    const qint64 ms = QDateTime::currentMSecsSinceEpoch() - run.started_ms;
+    if (ok) {
+        LOG_INFO("RelMapService", logf("Load finished", {{"ticker", run.ticker},
+                                                         {"ms", QString::number(ms)},
+                                                         {"partial", data.partial ? "yes" : "no"},
+                                                         {"sections", rms_section_counts(data)}}));
     } else {
-        data_.valuation = compute_valuation(data_.company, data_.peers);
+        LOG_WARN("RelMapService", logf("Load failed", {{"ticker", run.ticker}, {"ms", QString::number(ms)},
+                                                       {"error", error.left(200)}}));
     }
+    for (quint64 id : run.requests) {
+        request_run_.remove(id);
+        if (ok)
+            emit request_finished(id, data, as_of, false);
+        else
+            emit request_failed(id, error);
+    }
+    if (run.for_hub) {
+        if (ok)
+            publish_to_hub(data);
+        else
+            hub_error(run.ticker, error);
+    }
+}
 
-    data_.data_quality = root["data_quality"].toInt();
-    data_.timestamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+// ── DataHub ─────────────────────────────────────────────────────────────────
 
-    emit progress_changed(100, "Complete");
-    emit data_ready(data_);
-
-    if (hub_registered_ && !data_.company.ticker.isEmpty()) {
+void RelationshipMapService::publish_to_hub(const RelationshipData& data) {
+    if (hub_registered_ && !data.company.ticker.isEmpty())
         fincept::datahub::DataHub::instance().publish(
-            QStringLiteral("geopolitics:relationship_graph:") + data_.company.ticker, QVariant::fromValue(data_));
-    }
-
-    LOG_INFO("RelMapService", QString("Loaded %1: %2 inst, %3 insiders, %4 peers, quality=%5%")
-                                  .arg(data_.company.ticker)
-                                  .arg(data_.institutional_holders.size())
-                                  .arg(data_.insider_holders.size())
-                                  .arg(data_.peers.size())
-                                  .arg(data_.data_quality));
-    return true;
+            QStringLiteral("geopolitics:relationship_graph:") + data.company.ticker, QVariant::fromValue(data));
 }
 
-ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co, const QVector<PeerCompany>& peers) {
-    ValuationSignal sig;
-    if (peers.isEmpty() || co.pe_ratio <= 0) {
-        sig.status = "INSUFFICIENT DATA";
-        sig.action = "HOLD";
-        sig.score = 0;
-        return sig;
-    }
-
-    // Peer median P/E — only peers quoted in the company's currency: the curated peer
-    // lists are US listings, and a P/E across markets/currencies (an INR-listed name vs
-    // US utilities) is not a like-for-like comparison.
-    const QString co_ccy = co.currency.trimmed().toUpper();
-    QVector<double> peer_pes;
-    for (const auto& p : peers) {
-        const QString p_ccy = p.currency.trimmed().toUpper();
-        if (p.pe_ratio > 0 && (p_ccy.isEmpty() || co_ccy.isEmpty() || p_ccy == co_ccy))
-            peer_pes.append(p.pe_ratio);
-    }
-    if (peer_pes.isEmpty()) {
-        sig.status = "INSUFFICIENT DATA";
-        sig.action = "HOLD";
-        sig.score = 0;
-        return sig;
-    }
-
-    std::sort(peer_pes.begin(), peer_pes.end());
-    // True median (the upper-middle element was used for even counts).
-    const qsizetype n = peer_pes.size();
-    const double median_pe = (n % 2 == 1) ? peer_pes[n / 2] : (peer_pes[n / 2 - 1] + peer_pes[n / 2]) / 2.0;
-    const double pe_ratio_vs_peers = co.pe_ratio / median_pe;
-    sig.pe_vs_peers = pe_ratio_vs_peers;
-    sig.peer_count = static_cast<int>(n);
-
-    double score = 0;
-    // P/E vs peer median: cheap below 0.85x (0.7x strongly), rich above 1.15x (1.3x strongly)
-    if (pe_ratio_vs_peers < 0.7)
-        score += 2;
-    else if (pe_ratio_vs_peers < 0.85)
-        score += 1;
-    else if (pe_ratio_vs_peers > 1.3)
-        score -= 2;
-    else if (pe_ratio_vs_peers > 1.15)
-        score -= 1;
-
-    // Growth premium
-    if (co.revenue_growth > 0.2)
-        score += 1;
-    else if (co.revenue_growth < -0.05)
-        score -= 1;
-
-    // Profitability
-    if (co.profit_margins > 0.2)
-        score += 0.5;
-
-    sig.score = std::max(-3.0, std::min(3.0, score));
-
-    if (sig.score >= 1.5) {
-        sig.status = "UNDERVALUED";
-        sig.action = "BUY";
-    } else if (sig.score >= 0.5) {
-        sig.status = "POTENTIALLY UNDERVALUED";
-        sig.action = "BUY";
-    } else if (sig.score <= -1.5) {
-        sig.status = "OVERVALUED";
-        sig.action = "SELL";
-    } else if (sig.score <= -0.5) {
-        sig.status = "POTENTIALLY OVERVALUED";
-        sig.action = "SELL";
-    } else {
-        sig.status = "FAIRLY VALUED";
-        sig.action = "HOLD";
-    }
-
-    return sig;
+void RelationshipMapService::hub_error(const QString& ticker, const QString& message) {
+    if (hub_registered_ && !ticker.isEmpty())
+        fincept::datahub::DataHub::instance().publish_error(QStringLiteral("geopolitics:relationship_graph:") + ticker,
+                                                            message.left(200));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DATAHUB PRODUCER — geopolitics:relationship_graph:<ticker>
-// ═══════════════════════════════════════════════════════════════════════════════
+void RelationshipMapService::fetch(const QString& ticker) {
+    const QString t = rms_norm(ticker);
+    if (t.isEmpty())
+        return;
+    // The remembered map first (worker read); a run only when there is none.
+    load_remembered(t, this, [this, t](bool found, const RelationshipData& data, const QDateTime&) {
+        if (found && !data.partial) {
+            publish_to_hub(data);
+            return;
+        }
+        const QString key = rms_run_key(t, {});
+        if (!runs_.contains(key))
+            start_run(key, t, {});
+        runs_[key].for_hub = true;
+    });
+}
 
 QStringList RelationshipMapService::topic_patterns() const {
     return {QStringLiteral("geopolitics:relationship_graph:*")};
@@ -488,15 +361,14 @@ QStringList RelationshipMapService::topic_patterns() const {
 void RelationshipMapService::refresh(const QStringList& topics) {
     for (const auto& topic : topics) {
         const QStringList parts = topic.split(QLatin1Char(':'));
-        // geopolitics:relationship_graph:<ticker>
-        if (parts.size() != 3)
+        if (parts.size() != 3) // geopolitics:relationship_graph:<ticker>
             continue;
         fetch(parts[2]);
     }
 }
 
 int RelationshipMapService::max_requests_per_sec() const {
-    return 1; // Heavy yfinance aggregation per call; cap at 1/sec.
+    return 1; // heavy multi-source aggregation per call
 }
 
 void RelationshipMapService::ensure_registered_with_hub() {
@@ -504,16 +376,13 @@ void RelationshipMapService::ensure_registered_with_hub() {
         return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
-
-    // Matches kRelMapTtlSec (10 min). Min 2 min between refreshes — the Python
-    // fetch is slow (~5-15 s) and consumers are dashboards, not tickers.
+    // Consumers are dashboards, not tickers: a map is good for hours.
     fincept::datahub::TopicPolicy policy;
-    policy.ttl_ms = kRelMapTtlSec * 1000;
+    policy.ttl_ms = 6 * 3600 * 1000;
     policy.min_interval_ms = 2 * 60 * 1000;
     hub.set_policy_pattern(QStringLiteral("geopolitics:relationship_graph:*"), policy);
-
     hub_registered_ = true;
-    LOG_INFO("RelMapService", "Registered with DataHub (geopolitics:relationship_graph:*)");
+    LOG_DEBUG("RelMapService", "Registered with DataHub (geopolitics:relationship_graph:*)");
 }
 
 } // namespace fincept::services

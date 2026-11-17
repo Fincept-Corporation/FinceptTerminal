@@ -36,10 +36,34 @@ namespace fincept::trading {
 
 namespace {
 constexpr const char* ADS_TAG = "AccountDataStream";
+
+/// A broker whose daily session has not been signed in yet (no token for its live feed):
+/// an expected state, written once per account until its stream is (re)started.
+void ads_log_not_signed_in(const QString& broker_id, const QString& account_id) {
+    LOG_TRANSITION(ADS_TAG, QStringLiteral("ws_session|") + account_id, 1, LogLevel::Info,
+                   logf("Live stream not started: broker session not signed in",
+                        {{"broker", broker_id}, {"account", log_mask(account_id)}}));
+}
 constexpr int ADS_QUOTE_POLL_MS = 300000;
 constexpr int ADS_PORTFOLIO_POLL_MS = 300000;
 constexpr int ADS_WATCHLIST_POLL_MS = 300000;
 constexpr int ADS_ACTIVE_FEED_POLL_MS = 3000; // fast poll for algo/active-feed symbols (non-WS brokers)
+
+// Chart timeframe -> history look-back window in days (the per-timeframe windows
+// the chart has always used), handed to HistoricalDataService.
+int ads_candle_lookback_days(const QString& tf) {
+    if (tf == "1d" || tf == "D" || tf == "1w" || tf == "W")
+        return 3 * 365;
+    if (tf == "1h" || tf == "60")
+        return 60;
+    if (tf == "30m")
+        return 45;
+    if (tf == "15m")
+        return 30;
+    if (tf == "5m")
+        return 15;
+    return 7;
+}
 } // namespace
 
 // ── Construction / Destruction ──────────────────────────────────────────────
@@ -65,6 +89,12 @@ AccountDataStream::AccountDataStream(const QString& account_id, QObject* parent)
     active_feed_timer_ = new QTimer(this);
     active_feed_timer_->setInterval(ADS_ACTIVE_FEED_POLL_MS);
     connect(active_feed_timer_, &QTimer::timeout, this, &AccountDataStream::on_active_feed_timer);
+
+    // Armed only while a chart request waits behind one that has not answered.
+    request_clock_.start();
+    candle_gate_timer_ = new QTimer(this);
+    candle_gate_timer_->setSingleShot(true);
+    connect(candle_gate_timer_, &QTimer::timeout, this, &AccountDataStream::on_candle_gate_timer);
 }
 
 AccountDataStream::~AccountDataStream() {
@@ -98,7 +128,10 @@ void AccountDataStream::start() {
     async_fetch_orders();
     async_fetch_funds();
 
-    LOG_INFO(ADS_TAG, QString("Started stream for account %1 (%2)").arg(account_id_, broker_id_));
+    // A (re)started stream re-arms the "not signed in" line of its account.
+    if (Logger::instance().transition_possible(0))
+        Logger::instance().transition(ADS_TAG, QStringLiteral("ws_session|") + account_id_, 0);
+    LOG_DEBUG(ADS_TAG, QString("Started stream for account %1 (%2)").arg(account_id_, broker_id_));
 }
 
 void AccountDataStream::stop() {
@@ -110,9 +143,10 @@ void AccountDataStream::stop() {
     portfolio_timer_->stop();
     watchlist_timer_->stop();
     active_feed_timer_->stop();
+    candle_gate_timer_->stop();
     ws_teardown();
 
-    LOG_INFO(ADS_TAG, QString("Stopped stream for account %1").arg(account_id_));
+    LOG_DEBUG(ADS_TAG, QString("Stopped stream for account %1").arg(account_id_));
 }
 
 void AccountDataStream::pause() {
@@ -185,12 +219,20 @@ void AccountDataStream::adopt_subscriptions(const AccountDataStream& previous) {
         async_fetch_quote();
         async_fetch_watchlist_quotes();
     }
+
+    // A chart request the previous stream had not answered yet would otherwise be
+    // lost: that stream is stopped (its late answer is dropped) and about to be
+    // destroyed. Ask again here so the waiting chart still gets data or a failure.
+    if (previous.candle_gate_.outstanding()) {
+        const MarketDataKey k = previous.candle_gate_.wanted();
+        fetch_candles(k.symbol, k.timeframe);
+    }
 }
 
 // ── Symbol management ───────────────────────────────────────────────────────
 
 void AccountDataStream::subscribe_symbols(const QString& consumer_id, const QStringList& symbols) {
-    LOG_INFO("subdbg", QString("subscribe_symbols consumer='%1' (%2 syms): [%3] ws_connected=%4")
+    LOG_DEBUG(ADS_TAG, QString("subscribe_symbols consumer='%1' (%2 syms): [%3] ws_connected=%4")
                            .arg(consumer_id)
                            .arg(symbols.size())
                            .arg(symbols.join(','), ws_connected() ? "Y" : "N"));
@@ -421,7 +463,7 @@ void AccountDataStream::async_fetch_positions() {
         }
         // Success — log the count so an empty live blotter can be told apart from a
         // token/error (which logs WARN above): 0 rows here = genuinely no positions.
-        LOG_INFO(ADS_TAG, QString("get_positions %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
+        LOG_DEBUG(ADS_TAG, QString("get_positions %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
         QMetaObject::invokeMethod(
             self,
             [self, acct_id, data = *result.data]() {
@@ -454,7 +496,7 @@ void AccountDataStream::async_fetch_holdings() {
                 self->check_token_expiry(result.error);
             return;
         }
-        LOG_INFO(ADS_TAG, QString("get_holdings %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
+        LOG_DEBUG(ADS_TAG, QString("get_holdings %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
         QMetaObject::invokeMethod(
             self,
             [self, acct_id, data = *result.data]() {
@@ -487,7 +529,7 @@ void AccountDataStream::async_fetch_orders() {
                 self->check_token_expiry(result.error);
             return;
         }
-        LOG_INFO(ADS_TAG, QString("get_orders %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
+        LOG_DEBUG(ADS_TAG, QString("get_orders %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
         QMetaObject::invokeMethod(
             self,
             [self, acct_id, data = *result.data]() {
@@ -622,41 +664,91 @@ void AccountDataStream::async_fetch_active_feed_quotes() {
 }
 
 void AccountDataStream::fetch_candles(const QString& symbol, const QString& timeframe) {
-    if (candles_fetching_.exchange(true))
+    // Latest request wins. This used to be a busy flag that silently DROPPED any
+    // call made while one was in flight, so a quick symbol/timeframe switch left the
+    // chart on the previous request's answer (painted as current) or on nothing.
+    const auto ticket = candle_gate_.request({symbol, timeframe}, request_clock_.elapsed());
+    if (!ticket) {
+        LOG_DEBUG(ADS_TAG, QString("fetch_candles %1/%2 queued behind the request in flight").arg(symbol, timeframe));
+        arm_candle_gate_timer();
         return;
-    const QString acct_id = account_id_;
+    }
+    issue_candles(*ticket);
+}
+
+void AccountDataStream::issue_candles(const LatestRequestGate::Ticket& ticket) {
     QPointer<AccountDataStream> self = this;
-
-    // Map the chart timeframe to a look-back window (preserves the prior per-tf
-    // windows), then delegate to the shared HistoricalDataService (broker fetch +
-    // symbol resolution + 60s cache). Yahoo fallback is algo-only, not used here.
-    auto lookback_for = [](const QString& tf) -> int {
-        if (tf == "1d" || tf == "D" || tf == "1w" || tf == "W")
-            return 3 * 365;
-        if (tf == "1h" || tf == "60")
-            return 60;
-        if (tf == "30m")
-            return 45;
-        if (tf == "15m")
-            return 30;
-        if (tf == "5m")
-            return 15;
-        return 7;
-    };
-
+    const quint64 id = ticket.id;
+    const MarketDataKey key = ticket.key;
+    // Shared HistoricalDataService: broker fetch + symbol resolution + 60 s cache.
+    // Its callback runs on the main thread — synchronously for a cache hit or a
+    // missing credential — so everything below stays on this object's thread.
+    // Yahoo fallback is algo-only, not used here.
     HistoricalDataService::instance().fetch(
-        symbol, timeframe, lookback_for(timeframe), broker_id_, acct_id,
-        [self, acct_id](bool ok, const QVector<BrokerCandle>& candles, const QString& err) {
+        key.symbol, key.timeframe, ads_candle_lookback_days(key.timeframe), broker_id_, account_id_,
+        [self, id, key](bool ok, const QVector<BrokerCandle>& candles, const QString& err) {
             if (!self)
-                return;
-            self->candles_fetching_ = false;
-            if (ok) {
-                emit self->candles_fetched(acct_id, candles);
-            } else {
-                self->check_token_expiry(err);
-                LOG_WARN(ADS_TAG, QString("fetch_candles failed for %1/%2: %3").arg(self->broker_id_, acct_id, err));
-            }
+                return; // stream destroyed — nothing left to deliver to
+            self->on_candles_answer(id, key, ok, candles, err);
         });
+}
+
+void AccountDataStream::on_candles_answer(quint64 ticket_id, const MarketDataKey& key, bool ok,
+                                          const QVector<BrokerCandle>& candles, const QString& error) {
+    if (!ok)
+        check_token_expiry(error); // a real verdict on the session even if this answer is stale
+
+    const auto done = candle_gate_.complete(ticket_id, key, request_clock_.elapsed());
+    // Stopped = being replaced (restart_stream) or torn down: the successor stream
+    // re-issues the request (adopt_subscriptions), so deliver nothing from here.
+    if (!running_)
+        return;
+
+    if (done.current) {
+        if (ok && !candles.isEmpty()) {
+            emit candles_fetched(account_id_, candles);
+            emit candles_for_symbol(account_id_, key.symbol, key.timeframe, candles);
+        } else {
+            const QString reason = market_data_failure_reason(
+                error, QCoreApplication::translate("MarketData", "The broker returned no price history for %1 on the "
+                                                                 "%2 timeframe.")
+                           .arg(key.symbol, key.timeframe));
+            LOG_WARN(ADS_TAG, QString("fetch_candles failed for %1/%2 [%3 %4]: %5")
+                                  .arg(broker_id_, account_id_, key.symbol, key.timeframe, error));
+            emit candles_failed(account_id_, key.symbol, key.timeframe, reason);
+        }
+    } else {
+        LOG_DEBUG(ADS_TAG, QString("fetch_candles: dropping the stale answer for %1/%2 (now wanted: %3/%4)")
+                               .arg(key.symbol, key.timeframe, candle_gate_.wanted().symbol,
+                                    candle_gate_.wanted().timeframe));
+    }
+
+    if (done.next)
+        issue_candles(*done.next);
+    arm_candle_gate_timer();
+}
+
+void AccountDataStream::arm_candle_gate_timer() {
+    const qint64 wait = candle_gate_.ms_until_expiry(request_clock_.elapsed());
+    if (wait < 0) {
+        candle_gate_timer_->stop();
+        return;
+    }
+    candle_gate_timer_->start(static_cast<int>(qMin<qint64>(wait, LatestRequestGate::kAbandonAfterMs)) + 50);
+}
+
+void AccountDataStream::on_candle_gate_timer() {
+    // The request in flight has been silent past the gate's abandonment window:
+    // stop letting it block the newest one.
+    if (const auto ticket = candle_gate_.expire(request_clock_.elapsed())) {
+        LOG_WARN(ADS_TAG, logf("Candle request unanswered, sending the newest one anyway",
+                               {{"broker", broker_id_},
+                                {"waited_ms", static_cast<qint64>(LatestRequestGate::kAbandonAfterMs)},
+                                {"symbol", ticket->key.symbol},
+                                {"timeframe", ticket->key.timeframe}}));
+        issue_candles(*ticket);
+    }
+    arm_candle_gate_timer();
 }
 
 void AccountDataStream::fetch_orderbook(const QString& symbol) {
@@ -666,32 +758,62 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
     if (creds.api_key.isEmpty()) {
-        LOG_WARN(ADS_TAG, QString("fetch_orderbook: no credentials for %1").arg(acct_id));
+        LOG_WARN_RL(ADS_TAG, QStringLiteral("depth_nocreds|") + acct_id, 60000,
+                    logf("Market depth not fetched: the account has no credentials",
+                         {{"broker", bid}, {"account", log_mask(acct_id)}, {"symbol", symbol}}));
+        emit orderbook_failed(acct_id, symbol, market_data_failure_reason(QStringLiteral("No credentials"), {}));
         return;
     }
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
+        // Every failure below used to be a bare `return` — the depth panel could not
+        // tell "still loading" from "failed". Report it, on the stream's thread.
+        auto fail = [&self, &acct_id, &symbol](const QString& broker_error) {
+            const QString reason = market_data_failure_reason(
+                broker_error,
+                QCoreApplication::translate("MarketData", "The broker returned no market depth for %1.").arg(symbol));
+            QMetaObject::invokeMethod(
+                self,
+                [self, acct_id, symbol, broker_error, reason]() {
+                    if (!self)
+                        return;
+                    self->check_token_expiry(broker_error);
+                    emit self->orderbook_failed(acct_id, symbol, reason);
+                },
+                Qt::QueuedConnection);
+        };
+
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker)
+        if (!broker) {
+            fail(QStringLiteral("Broker '%1' is not available").arg(bid));
             return;
+        }
 
         const QString today = QDate::currentDate().toString("yyyy-MM-dd");
         auto result = broker->get_historical_quotes_single(creds, symbol, today + "T00:00:00Z", "", 1000);
 
         if (!result.success || !result.data || result.data->isEmpty()) {
-            LOG_WARN(
-                ADS_TAG,
-                QString("fetch_orderbook: L2 depth failed for %1 (%2), trying snapshot").arg(symbol, result.error));
+            // Most brokers have no L2 history: the snapshot below is the normal path.
+            LOG_DEBUG(ADS_TAG, logf("Market depth (L2) unavailable, using the quote snapshot",
+                                    {{"broker", bid}, {"symbol", symbol}, {"error", result.error}}));
             auto snap = broker->get_quotes(creds, {symbol});
             if (!snap.success || !snap.data || snap.data->isEmpty()) {
-                LOG_WARN(ADS_TAG, QString("fetch_orderbook: snapshot fallback also failed for %1").arg(symbol));
+                LOG_WARN_RL(ADS_TAG, QStringLiteral("depth_failed|") + acct_id + QLatin1Char('|') + symbol, 60000,
+                            logf("Market depth could not be fetched",
+                                 {{"broker", bid}, {"symbol", symbol}, {"error", snap.error}}));
+                // The snapshot is the broker's last word; its error explains more
+                // than the L2 one (which is "Not supported" for most brokers).
+                fail(snap.error.trimmed().isEmpty() ? result.error : snap.error);
                 return;
             }
             const auto& q = snap.data->first();
             const double b = q.bid > 0 ? q.bid : (q.ltp > 0 ? q.ltp * 0.9995 : 0);
             const double a = q.ask > 0 ? q.ask : (q.ltp > 0 ? q.ltp * 1.0005 : 0);
-            if (b <= 0 || a <= 0)
+            if (b <= 0 || a <= 0) {
+                fail(QCoreApplication::translate("MarketData", "The broker returned no bid, ask or last price for %1.")
+                         .arg(symbol));
                 return;
+            }
             QVector<QPair<double, double>> bids{{b, q.bid_size > 0 ? q.bid_size : 100.0}};
             QVector<QPair<double, double>> asks{{a, q.ask_size > 0 ? q.ask_size : 100.0}};
             const double spread = a - b;
@@ -737,11 +859,14 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
             asks.append({p, ask_map[p]});
             ask_orders.append(ask_ord_map.value(p, 0));
         }
-        if (bids.isEmpty() || asks.isEmpty())
+        if (bids.isEmpty() || asks.isEmpty()) {
+            fail(QCoreApplication::translate("MarketData", "The broker's depth for %1 has no bids or no asks.")
+                     .arg(symbol));
             return;
+        }
 
-        LOG_INFO(ADS_TAG,
-                 QString("fetch_orderbook: %1 bids, %2 asks for %3").arg(bids.size()).arg(asks.size()).arg(symbol));
+        LOG_DEBUG(ADS_TAG,
+                  QString("fetch_orderbook: %1 bids, %2 asks for %3").arg(bids.size()).arg(asks.size()).arg(symbol));
 
         const double best_bid = bids.first().first;
         const double best_ask = asks.first().first;
@@ -766,17 +891,42 @@ void AccountDataStream::fetch_time_sales(const QString& symbol) {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty())
+    if (creds.api_key.isEmpty()) {
+        emit time_sales_failed(acct_id, symbol, market_data_failure_reason(QStringLiteral("No credentials"), {}));
         return;
+    }
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
+        // As in fetch_orderbook: a failure used to return silently.
+        auto fail = [&self, &acct_id, &symbol](const QString& broker_error) {
+            const QString reason = market_data_failure_reason(
+                broker_error,
+                QCoreApplication::translate("MarketData", "The broker returned no trades for %1.").arg(symbol));
+            QMetaObject::invokeMethod(
+                self,
+                [self, acct_id, symbol, broker_error, reason]() {
+                    if (!self)
+                        return;
+                    self->check_token_expiry(broker_error);
+                    emit self->time_sales_failed(acct_id, symbol, reason);
+                },
+                Qt::QueuedConnection);
+        };
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker)
+        if (!broker) {
+            fail(QStringLiteral("Broker '%1' is not available").arg(bid));
             return;
+        }
         const QString today = QDate::currentDate().toString("yyyy-MM-dd");
         auto result = broker->get_historical_trades_single(creds, symbol, today + "T00:00:00Z", "", 500);
-        if (!result.success || !result.data)
+        if (!result.success || !result.data) {
+            // Debug, not warn: most brokers answer "Not supported" for the tape, and
+            // the consumer that shows it reports a real failure itself.
+            LOG_DEBUG(ADS_TAG, QString("fetch_time_sales failed for %1/%2 [%3]: %4").arg(bid, acct_id, symbol,
+                                                                                        result.error));
+            fail(result.error);
             return;
+        }
         QMetaObject::invokeMethod(
             self,
             [self, acct_id, symbol, data = *result.data]() {
@@ -955,16 +1105,7 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
         // symbol, but the depth table is single-symbol. Drop books that aren't for
         // the selected symbol, else every stock's book rotates through the table.
         // Guarded on a populated d.symbol so brokers that don't tag depth are unaffected.
-        auto bare = [](QString s) {
-            const int colon = s.lastIndexOf(QLatin1Char(':'));
-            if (colon >= 0)
-                s = s.mid(colon + 1);
-            if (s.endsWith(QLatin1String("-EQ")))
-                s.chop(3);
-            return s;
-        };
-        if (!selected_symbol_.isEmpty() && !d.symbol.isEmpty() &&
-            bare(d.symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
+        if (!selected_symbol_.isEmpty() && !d.symbol.isEmpty() && !market_symbols_match(d.symbol, selected_symbol_))
             return;
         QVector<QPair<double, double>> bids, asks;
         for (const auto& b : d.bids)
@@ -1044,15 +1185,7 @@ void AccountDataStream::ws_init() {
                     // The WS streams depth for every subscribed watchlist symbol, but the
                     // depth table is single-symbol. Drop ticks that aren't for the selected
                     // symbol, else every watchlist symbol's book overwrites the table.
-                    auto bare = [](QString s) {
-                        const int colon = s.lastIndexOf(QLatin1Char(':'));
-                        if (colon >= 0)
-                            s = s.mid(colon + 1);
-                        if (s.endsWith(QLatin1String("-EQ")))
-                            s.chop(3);
-                        return s;
-                    };
-                    if (bare(symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
+                    if (!market_symbols_match(symbol, selected_symbol_))
                         return;
                     if (bids.isEmpty() && asks.isEmpty())
                         return;
@@ -1096,7 +1229,7 @@ void AccountDataStream::ws_init() {
                 for (const auto& s : fyers_symbols)
                     if (is_fyers_fno_symbol(s.section(QLatin1Char(':'), -1)))
                         fno << s;
-                LOG_INFO("subdbg", QString("[connect] consumers=%1 → %2 fyers syms (F&O: [%3]); raw subscribed=[%4]")
+                LOG_DEBUG(ADS_TAG, QString("[connect] consumers=%1 → %2 fyers syms (F&O: [%3]); raw subscribed=[%4]")
                                        .arg(subscribed_symbols().size())
                                        .arg(fyers_symbols.size())
                                        .arg(fno.join(','), subscribed_symbols().join(',')));
@@ -1106,7 +1239,8 @@ void AccountDataStream::ws_init() {
         });
 
         connect(fws, &FyersWebSocket::disconnected, this, [this]() {
-            LOG_WARN(ADS_TAG, QString("Fyers HSM disconnected for %1").arg(account_id_));
+            // FyersWebSocket writes one WARN per outage; this fires on every drop.
+            LOG_DEBUG(ADS_TAG, QString("Fyers HSM disconnected for %1").arg(account_id_));
             emit connection_state_changed(account_id_, ConnectionState::Disconnected);
         });
 
@@ -1192,7 +1326,7 @@ void AccountDataStream::ws_init() {
     if (broker_id_ == "zerodha") {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         if (creds.api_key.isEmpty() || creds.access_token.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Zerodha WS: missing api_key/access_token for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* zws = new ZerodhaWebSocket(creds.api_key, creds.access_token, this);
@@ -1251,7 +1385,7 @@ void AccountDataStream::ws_init() {
                     spread = best_ask - best_bid;
                     spread_pct = (spread / best_bid) * 100.0;
                 }
-                LOG_INFO(ADS_TAG, QString("Zerodha WS depth: %1 bids, %2 asks for %3")
+                LOG_DEBUG(ADS_TAG, QString("Zerodha WS depth: %1 bids, %2 asks for %3")
                                       .arg(bids.size())
                                       .arg(asks.size())
                                       .arg(q.symbol));
@@ -1337,7 +1471,7 @@ void AccountDataStream::ws_init() {
     if (broker_id_ == "upstox") {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         if (creds.access_token.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Upstox WS: missing access_token for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* uws = new UpstoxWebSocket(creds.access_token, this);
@@ -1355,7 +1489,7 @@ void AccountDataStream::ws_init() {
     if (broker_id_ == "dhan") {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         if (creds.access_token.isEmpty() || creds.api_key.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Dhan WS: missing access_token/client_id for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* dws = new DhanWebSocket(creds.access_token, creds.api_key, this);
@@ -1383,7 +1517,7 @@ void AccountDataStream::ws_init() {
         const QString access_tok = parts.value(3);
         const QString server_id = parts.value(4);
         if (auth_token.isEmpty() || sid.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Kotak WS: missing auth_token/sid for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* kws = new KotakWebSocket(auth_token, sid, server_id, access_tok, this);
@@ -1407,7 +1541,7 @@ void AccountDataStream::ws_init() {
         const QStringList parts = creds.access_token.split(":::");
         const QString market_token = parts.size() >= 2 ? parts.value(1) : creds.access_token;
         if (market_token.isEmpty() || creds.user_id.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("IIFL WS: missing market_token/user_id for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* iws = new IIFLWebSocket(market_token, creds.user_id, this);
@@ -1434,7 +1568,7 @@ void AccountDataStream::ws_init() {
         if (client_code.isEmpty())
             client_code = creds.user_id;
         if (creds.access_token.isEmpty() || client_code.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("5Paisa WS: missing access_token/client_code for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* fws = new FivePaisaWebSocket(creds.access_token, client_code, this);
@@ -1453,7 +1587,7 @@ void AccountDataStream::ws_init() {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         // client_id stored in user_id; session JWT in access_token.
         if (creds.user_id.isEmpty() || creds.access_token.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("AliceBlue WS: missing client_id/jwt for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* aws = new AliceBlueWebSocket(creds.user_id, creds.access_token, this);
@@ -1475,7 +1609,7 @@ void AccountDataStream::ws_init() {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         // user_id = uid/actid; access_token = susertoken (sent verbatim).
         if (creds.user_id.isEmpty() || creds.access_token.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Shoonya WS: missing user_id/susertoken for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* sws = new ShoonyaWebSocket(creds.user_id, creds.user_id, creds.access_token, this);
@@ -1496,7 +1630,7 @@ void AccountDataStream::ws_init() {
     if (broker_id_ == "motilal") {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         if (creds.api_key.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("Motilal poller: missing credentials for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         // Motilal has no streaming socket — MotilalPoller polls quotes by symbol.
@@ -1516,7 +1650,7 @@ void AccountDataStream::ws_init() {
         auto creds = AccountManager::instance().load_credentials(account_id_);
         // access_token = base64("user_id:session_key") from the Breeze session flow.
         if (creds.access_token.isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("ICICI WS: missing session token for %1").arg(account_id_));
+            ads_log_not_signed_in(broker_id_, account_id_);
             return;
         }
         auto* iws = new IciciDirectWebSocket(creds.access_token, creds.user_id, this);
@@ -1545,7 +1679,7 @@ void AccountDataStream::ws_init() {
     const QString feed_token = obj.value("feed_token").toString();
     const QString client_code = obj.value("client_code").toString();
     if (feed_token.isEmpty() || client_code.isEmpty()) {
-        LOG_WARN(ADS_TAG, QString("AngelOne WS: missing feed_token/client_code for %1").arg(account_id_));
+        ads_log_not_signed_in(broker_id_, account_id_);
         return;
     }
 
@@ -1667,7 +1801,7 @@ void AccountDataStream::ws_resubscribe() {
             for (const auto& s : fyers_symbols)
                 if (is_fyers_fno_symbol(s.section(QLatin1Char(':'), -1)))
                     fno << s;
-            LOG_INFO("subdbg", QString("[ws_resubscribe] consumers=%1 → %2 fyers syms (F&O: [%3])")
+            LOG_DEBUG(ADS_TAG, QString("[ws_resubscribe] consumers=%1 → %2 fyers syms (F&O: [%3])")
                                    .arg(subscribed_symbols().size())
                                    .arg(fyers_symbols.size())
                                    .arg(fno.join(',')));

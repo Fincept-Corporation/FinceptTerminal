@@ -76,7 +76,8 @@ void PythonSetupBanner::refresh_theme() {
                        "#pySetupBannerTitle { color:%3; background:transparent; font-weight:700;"
                        " letter-spacing:1px; }"
                        "#pySetupBanner[bannerState=\"failed\"] #pySetupBannerTitle { color:%5; }")
-            .arg(colors::ACCENT_BG(), colors::BORDER_DIM(), colors::AMBER(), colors::NEGATIVE_BG(), colors::NEGATIVE());
+            .arg(colors::ACCENT_BG(), colors::BORDER_MED(), colors::AMBER(), colors::tint(colors::DANGER, 0.12),
+                 colors::DANGER());
     const QString controls =
         QStringLiteral("#pySetupBannerBody { color:%1; background:transparent; }"
                        "#pySetupBannerAction { background:%2; color:%3; border:none; padding:4px 12px;"
@@ -85,7 +86,7 @@ void PythonSetupBanner::refresh_theme() {
                        "#pySetupBannerClose { background:transparent; color:%5; border:none; padding:2px 6px; }"
                        "#pySetupBannerClose:hover { color:%6; }")
             .arg(colors::TEXT_SECONDARY(), colors::AMBER(), colors::TEXT_ON_ACCENT(), colors::AMBER_DIM(),
-                 colors::TEXT_TERTIARY(), colors::TEXT_PRIMARY());
+                 colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY());
     setStyleSheet(frame + controls);
 }
 

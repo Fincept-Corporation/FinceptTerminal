@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -25,13 +26,52 @@ class NewsFeedPanel : public QWidget {
     NewsFeedModel* model() { return model_; }
     QListView* list_view() { return list_view_; }
 
+    /// Breaking banner: up to kMaxBannerItems fresh breaking stories, newest
+    /// first, with a pager (‹ 1/3 ›) to step through them.
     void show_breaking(const QVector<services::NewsCluster>& breaking_clusters);
     void clear_breaking();
+
+    /// Loading page (a titled progress state over placeholder rows) instead of
+    /// the list. Shown while nothing that passes the filters has arrived yet.
     void set_loading(bool loading);
-    /// When loading has finished but no articles arrived, show a non-blocking
-    /// empty-state message ("No articles available — check connection").
-    /// Calling with `false` (or any successful set_wire_articles) hides it.
-    void set_empty_state(bool empty);
+    /// "N of M sources answered · K articles" on the loading page.
+    void set_loading_progress(int sources_done, int sources_total, int articles);
+    /// Articles have arrived but none pass the filters: the loading page says
+    /// so and offers CLEAR FILTERS instead of looking like nothing is happening.
+    void set_loading_filtered_out(bool filtered_out);
+    /// The article list (leaves the loading / empty pages).
+    void show_list();
+
+    /// Why the list is empty — each case says something different:
+    ///   NoArticles  feeds returned nothing (yet) — check sources / retry;
+    ///   Filtered    articles exist but the filters exclude all of them;
+    ///   Error       the fetch failed — `detail` lists the failing feeds;
+    ///   Symbol      nothing is tagged with the symbol the feed is narrowed to
+    ///               (`detail` = the symbol) — SHOW ALL NEWS / search headlines.
+    enum class EmptyKind { NoArticles, Filtered, Error, Symbol };
+    /// Show the empty state of `kind` (with an optional detail line) or, with
+    /// `empty` false, the list again.
+    void set_empty_state(bool empty, EmptyKind kind = EmptyKind::NoArticles, const QString& detail = {});
+
+    /// The symbol context bar above the list, the loading page and the empty
+    /// state, so a narrowed feed always says why and how to undo it:
+    ///   Active — "NEWS FOR [AAPL]" (+ "following link group A", or "nothing
+    ///            tagged yet — showing all news"), FOLLOW LINK, SHOW ALL NEWS;
+    ///   Offer  — the link group's symbol, not applied: "Group A is on [AAPL]",
+    ///            SHOW ITS NEWS, FOLLOW LINK, dismiss.
+    struct ContextBar {
+        enum class Mode { Hidden, Active, Offer };
+        Mode mode = Mode::Hidden;
+        QString symbol;
+        QChar group;            ///< link group letter; null = not linked
+        bool from_link = false; ///< Active: applied by following the link group
+        bool follow = false;    ///< FOLLOW LINK is on
+        bool fallback = false;  ///< Active + from_link: nothing tagged, the whole feed is shown
+    };
+    void set_context_bar(const ContextBar& state);
+    /// Uniform row heights are a big win for the dense WIRE list but wrong for
+    /// the variable-height cluster cards.
+    void set_view_mode_hint(const QString& mode);
     void scroll_to(const QString& article_id);
     void set_selected(const QString& article_id);
     void select_next();
@@ -52,9 +92,25 @@ class NewsFeedPanel : public QWidget {
     /// Context-menu "filter feed by $TICKER" — the screen routes it through the
     /// same path as a typed search.
     void ticker_filter_requested(const QString& ticker);
+    /// Empty state's "Clear filters" button.
+    void clear_filters_requested();
+    /// Empty / error state's "Retry" button.
+    void retry_requested();
+    /// Error state's "Sources" button (open the feed manager).
+    void manage_sources_requested();
+    /// Context bar: SHOW ITS NEWS (Offer mode).
+    void context_show_requested();
+    /// Context bar / symbol empty state: SHOW ALL NEWS (Active) or dismiss (Offer).
+    void context_clear_requested();
+    /// Context bar: FOLLOW LINK toggled by the user.
+    void follow_link_toggled(bool on);
+    /// Symbol empty state: search the headlines for the symbol as text instead.
+    void symbol_text_search_requested(const QString& symbol);
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// Clicking the breaking banner (outside its dismiss button) opens its story.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private slots:
     void on_item_clicked(const QModelIndex& index);
@@ -90,6 +146,16 @@ class NewsFeedPanel : public QWidget {
     QLabel* banner_headline_ = nullptr;
     QLabel* banner_source_ = nullptr;
     QTimer* banner_dismiss_timer_ = nullptr;
+    QLabel* banner_pos_ = nullptr;        // "1/3"
+    QPushButton* banner_prev_ = nullptr;
+    QPushButton* banner_next_ = nullptr;
+    /// Lead article of the story on the banner (opened when the banner is clicked).
+    services::NewsArticle banner_article_;
+    /// Stories the banner steps through (newest first) and the one shown.
+    QVector<services::NewsArticle> banner_items_;
+    int banner_index_ = 0;
+    static constexpr int kMaxBannerItems = 3;
+    void show_banner_item(int index);
 
     struct BreakingEntry {
         QString headline_key;
@@ -102,16 +168,45 @@ class NewsFeedPanel : public QWidget {
     static constexpr int SOUND_COOLDOWN_SEC = 300;         // 5 min
     int64_t last_sound_at_ = 0;
 
-    // Skeleton loading
+    // Loading page: title, progress, "filtered out" note + CLEAR FILTERS, then
+    // placeholder rows. Colours come from the screen's sheet (theme-refreshed).
     QWidget* skeleton_overlay_ = nullptr;
-    QTimer* skeleton_anim_timer_ = nullptr;
-    int skeleton_phase_ = 0;
+    QLabel* loading_title_ = nullptr;
+    QLabel* loading_progress_ = nullptr;
+    QLabel* loading_filtered_note_ = nullptr;
+    QPushButton* loading_clear_btn_ = nullptr;
+    int loading_done_ = 0;
+    int loading_total_ = 0;
+    int loading_articles_ = 0;
     bool is_loading_ = false;
+    void apply_loading_texts();
 
     // Empty-state widget (shown when loading is done + no articles)
     QWidget* empty_state_ = nullptr;
     QLabel* empty_state_title_ = nullptr;
     QLabel* empty_state_hint_ = nullptr;
+    QLabel* empty_state_detail_ = nullptr;
+    QPushButton* empty_clear_btn_ = nullptr;
+    QPushButton* empty_retry_btn_ = nullptr;
+    QPushButton* empty_sources_btn_ = nullptr;
+    QPushButton* empty_show_all_btn_ = nullptr;
+    QPushButton* empty_search_btn_ = nullptr;
+    EmptyKind empty_kind_ = EmptyKind::NoArticles;
+    QString empty_symbol_; ///< EmptyKind::Symbol
+
+    // Symbol context bar (see set_context_bar).
+    void build_context_bar();
+    void apply_context_texts();
+    QWidget* context_bar_ = nullptr;
+    QLabel* context_lead_ = nullptr;   // "NEWS FOR" / "GROUP A IS ON"
+    QLabel* context_symbol_ = nullptr; // the symbol chip
+    QLabel* context_note_ = nullptr;   // "following link group A" / "nothing tagged yet …"
+    QPushButton* context_show_btn_ = nullptr;
+    QPushButton* context_follow_btn_ = nullptr;
+    QPushButton* context_clear_btn_ = nullptr;
+    ContextBar context_;
+    /// Re-apply the texts of the current empty-state kind (also on language change).
+    void apply_empty_texts();
 
     // Scroll/selection preservation across model resets.
     QString anchor_article_id_;  // article at the top of the viewport

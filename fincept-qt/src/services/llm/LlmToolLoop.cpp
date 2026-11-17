@@ -45,6 +45,16 @@ void llm_tool_loop_add_usage(LlmResponse& total, const LlmResponse& round) {
 
 void emit_tool_done(const QString& display, const QJsonObject& args, const mcp::ToolResult& tr, qint64 elapsed_ms,
                     bool parallel) {
+    // Every provider path reports a finished call here, so this is the one INFO line per
+    // tool call (policy B.4): the tool by name, never its arguments or its result.
+    if (Logger::instance().should_log(LogLevel::Info, kLlmToolLoopTag)) {
+        QList<LogField> fields{{"tool", display}, {"ok", tr.success}, {"duration_ms", elapsed_ms}};
+        if (parallel)
+            fields.append(LogField("parallel", true));
+        if (!tr.success)
+            fields.append(LogField("error", tr.error.left(120)));
+        LOG_INFO(kLlmToolLoopTag, logf("LLM tool call finished", fields));
+    }
     detail::emit_progress(tool_stream_prefix() +
                           encode_tool_done(make_tool_done(detail::tool_progress_label(display, args), tr, elapsed_ms,
                                                           parallel)) +
@@ -62,15 +72,19 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
     // long-polls a background job can take 30 s, so MAX_ROUNDS alone leaves the
     // turn unbounded in wall-clock terms.
     detail::ToolLoopBudget budget(MAX_ROUNDS);
-    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, %2 s deadline, model=%3)")
-                                  .arg(MAX_ROUNDS)
-                                  .arg(detail::tool_loop_deadline_ms() / 1000)
-                                  .arg(model_));
+    LOG_DEBUG(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, %2 s deadline, model=%3)")
+                                   .arg(MAX_ROUNDS)
+                                   .arg(detail::tool_loop_deadline_ms() / 1000)
+                                   .arg(model_));
+
+    // Replies that only announced a next step ("I'll look for…") and were sent back.
+    int intent_nudges = 0;
+    constexpr int kMaxIntentNudges = 3;
 
     for (int round = 0; !budget.exhausted(); ++round) {
         // Stop pressed: leave before issuing another request or running more tools.
         if (detail::cancel_requested()) {
-            LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: cancelled by user before round %1").arg(round));
+            LOG_DEBUG(kLlmToolLoopTag, QString("TOOL LOOP: cancelled by user before round %1").arg(round));
             resp.cancelled = true;
             resp.error = "Request cancelled";
             return resp;
@@ -96,6 +110,11 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         auto doc = QJsonDocument::fromJson(http.body);
         if (doc.isNull()) {
             resp.error = "Parse error in tool follow-up";
+            LOG_ERROR(kLlmToolLoopTag, logf("Tool follow-up response is not valid JSON",
+                                            {{"provider", provider_},
+                                             {"model", model_},
+                                             {"round", round},
+                                             {"bytes", http.body.size()}}));
             return resp;
         }
         QJsonObject rj = doc.object();
@@ -137,11 +156,11 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     c.display = c.display.mid(sep + 2);
                 c.display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
 
-                LOG_INFO(kLlmToolLoopTag,
-                         QString("TOOL LOOP r%1: executing %2 args=%3")
-                             .arg(round)
-                             .arg(c.wire_name,
-                                  QString::fromUtf8(QJsonDocument(c.args).toJson(QJsonDocument::Compact)).left(200)));
+                LOG_DEBUG(kLlmToolLoopTag,
+                          logf("LLM tool call started",
+                               {{"tool", c.display},
+                                {"round", round},
+                                {"args_bytes", QJsonDocument(c.args).toJson(QJsonDocument::Compact).size()}}));
                 // Progress lines are emitted here, on the loop thread, in the
                 // model's order — not from the workers, whose completion order
                 // is arbitrary and whose thread has no business touching the UI.
@@ -156,12 +175,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             for (std::size_t k = 0; k < calls.size(); ++k) {
                 const auto& c = calls[k];
                 const auto& tr = results[k];
-                LOG_INFO(kLlmToolLoopTag,
-                         QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
-                             .arg(round)
-                             .arg(c.wire_name, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 // Completion record, in the model's order like the start lines.
                 // A multi-call round reports its wall time (calls overlap).
+                // emit_tool_done also writes the "LLM tool call finished" line.
                 emit_tool_done(c.display, c.args, tr, round_ms, calls.size() > 1);
                 loop_messages.append(QJsonObject{{"role", "tool"},
                                                  {"tool_call_id", c.call_id},
@@ -172,6 +188,23 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 
         // Final text response
         resp.content = strip_think_blocks(extract_openai_message_text(msg));
+
+        // An announcement is not an answer. "I'll look for a script that…" with no tool
+        // call ends the turn on a promise; send it back (bounded) so the model either
+        // takes the step or writes the answer it has.
+        if (intent_nudges < kMaxIntentNudges && looks_like_unfinished_intent(resp.content)) {
+            ++intent_nudges;
+            LOG_INFO(kLlmToolLoopTag, logf("Model announced a step without taking it, asking it to act",
+                                           {{"provider", provider_}, {"round", round}, {"attempt", intent_nudges}}));
+            loop_messages.append(QJsonObject{{"role", "assistant"}, {"content", resp.content}});
+            loop_messages.append(QJsonObject{
+                {"role", "user"},
+                {"content", "That was an announcement, not an answer, and nothing was done. Take that step now by "
+                            "calling the tool(s), or — if you already have what you need — write the complete final "
+                            "answer with the actual figures. Do not describe what you are going to do."}});
+            continue;
+        }
+
         resp.prompt_tokens = usage.prompt_tokens;
         resp.completion_tokens = usage.completion_tokens;
         resp.total_tokens = usage.total_tokens;
@@ -180,9 +213,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         // the Quick Chat bubble rendered as a bare "Error: ".
         if (!resp.success)
             resp.error = "The model returned an empty reply after using tools";
-        LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
-                                      .arg(round + 1)
-                                      .arg(resp.content.length()));
+        LOG_DEBUG(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
+                                       .arg(round + 1)
+                                       .arg(resp.content.length()));
 
         // The "final" text may actually contain text-based tool markup
         // (<minimax:tool_call>, <invoke name=…>, etc.) that the model emitted
@@ -193,8 +226,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b|<\\s*invoke\\s+name="),
             QRegularExpression::CaseInsensitiveOption);
         if (resp.success && rx_has_text_markup.match(resp.content).hasMatch()) {
-            LOG_INFO(kLlmToolLoopTag,
-                     "TOOL LOOP: final content has text-tool markup — re-routing through text-extraction");
+            LOG_DEBUG(kLlmToolLoopTag,
+                      "TOOL LOOP: final content has text-tool markup — re-routing through text-extraction");
             QString user_msg;
             for (const auto& v : loop_messages) {
                 QJsonObject o = v.toObject();
@@ -254,8 +287,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     resp.completion_tokens = usage.completion_tokens;
                     resp.total_tokens = usage.total_tokens;
                     resp.success = !resp.content.isEmpty();
-                    LOG_INFO(kLlmToolLoopTag,
-                             QString("TOOL LOOP: summary fallback produced %1 chars").arg(resp.content.length()));
+                    LOG_DEBUG(kLlmToolLoopTag,
+                              QString("TOOL LOOP: summary fallback produced %1 chars").arg(resp.content.length()));
 
                     // If the model emitted text-tool markup instead of structured
                     // tool_calls, run it through extraction so the markup is
@@ -264,7 +297,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                         QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b|<\\s*invoke\\s+name="),
                         QRegularExpression::CaseInsensitiveOption);
                     if (resp.success && rx_has_text_markup.match(resp.content).hasMatch()) {
-                        LOG_INFO(kLlmToolLoopTag, "TOOL LOOP: summary fallback has text-tool markup — re-routing");
+                        LOG_DEBUG(kLlmToolLoopTag, "TOOL LOOP: summary fallback has text-tool markup — re-routing");
                         QString user_msg;
                         for (const auto& v : loop_messages) {
                             QJsonObject o = v.toObject();
@@ -307,8 +340,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     // ── Pattern 4: ```tool_call\n{"name":"...", "arguments":{...}}\n```
     // ── Pattern 5: function_name(arg1, arg2) style calls embedded in text
 
-    LOG_INFO(kLlmToolLoopTag,
-             "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
+    LOG_DEBUG(kLlmToolLoopTag,
+              "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
 
     // Pattern matching lives in LlmContentExtractors (shared with the Fincept
     // async path, which is prompt-injected and therefore always text-mode).
@@ -348,14 +381,14 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     if (calls.empty())
         return std::nullopt;
 
-    LOG_INFO(kLlmToolLoopTag, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
+    LOG_DEBUG(kLlmToolLoopTag, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
 
     // Execute each detected tool call
     QString tool_results;
     for (const auto& tc : calls) {
         if (detail::cancel_requested())
             break;
-        LOG_INFO(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
+        LOG_DEBUG(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
         int sep_disp = tc.name.indexOf(QStringLiteral("__"));
         QString display = (sep_disp >= 0) ? tc.name.mid(sep_disp + 2) : tc.name;
         display.replace(QStringLiteral("-dot-"), QStringLiteral("."));

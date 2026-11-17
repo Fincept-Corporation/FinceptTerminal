@@ -16,6 +16,7 @@ class CDockManager;
 }
 namespace fincept {
 class DockScreenRouter;
+class SecureStoreBlockedView;
 }
 namespace fincept::ui {
 class DockToolBar;
@@ -250,6 +251,9 @@ class WindowFrame : public QMainWindow {
     bool chat_mode_ = false;
     bool always_on_top_ = false;
     bool locked_ = false;           ///< True while lock/PIN screen is active — blocks navigation.
+    /// Shown instead of login / PIN screens while SecureStorage cannot be read
+    /// (built on first need). See route_secure_store_problem().
+    SecureStoreBlockedView* secure_blocked_ = nullptr;
     bool pin_gate_cleared_ = false; ///< Set once the user has passed the PIN gate this session.
                                     ///< Prevents subsequent auth_state_changed events (profile
                                     ///< refresh, subscription fetch, focus refresh) from
@@ -266,6 +270,15 @@ class WindowFrame : public QMainWindow {
 
     // Chat mode
     chat_mode::ChatModeScreen* chat_mode_screen_ = nullptr;
+    /// Stack page (index 2) Chat Mode is built inside on first use; null while
+    /// the screen is still built eagerly by the constructor.
+    QWidget* chat_mode_host_ = nullptr;
+    /// Build Chat Mode inside chat_mode_host_ if it does not exist yet (first
+    /// F9 / CHAT, or the idle pre-build). No-op once built.
+    void ensure_chat_mode_screen();
+    /// LOGOUT (toolbar button, More menu, Navigate menu): ask first — one stray
+    /// click used to end the session and drop the user on the sign-in screen.
+    void confirm_logout();
 
     // Lock/PIN screen
     screens::LockScreen* lock_screen_ = nullptr;
@@ -274,6 +287,10 @@ class WindowFrame : public QMainWindow {
     void setup_docking_mode();
     void setup_dock_screens();
     void on_auth_state_changed();
+    /// When the saved sign-in or the PIN record could not be read, show
+    /// "Could not read secure storage: <reason>. Retry" (terminal locked) and
+    /// return true; otherwise leave that page if it is showing and return false.
+    bool route_secure_store_problem();
     void toggle_chat_mode();
     void show_lock_screen();
     /// Apply the lock UI state to THIS window. Idempotent. Wired to
@@ -290,8 +307,8 @@ class WindowFrame : public QMainWindow {
     /// Bring the terminal up after sign-in or PIN unlock, for every plan. The
     /// first call of a sign-in also restores the layout, warms the instrument
     /// cache and shows free accounts Plans & Pricing once per release; later
-    /// unlocks only resume. Schedules the silent update check and the
-    /// cadence-gated Enterprise reminder.
+    /// unlocks only resume. Schedules the cadence-gated Enterprise reminder
+    /// (the update check runs from main.cpp once the first window is up).
     void enter_terminal_after_auth();
     /// Leave Plans & Pricing (its BACK / CONTINUE WITH FREE / Esc) and return
     /// to the dock UI or chat mode — or to the lock screen if an inactivity

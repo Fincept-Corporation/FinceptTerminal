@@ -96,10 +96,10 @@ class SolanaRpcClient : public QObject {
     /// `getTokenAccountsByOwner` filtered by mint, parsed for amount + decimals.
     void get_token_balance(const QString& owner_b58, const QString& mint_b58, TokenBalancesCallback callback);
 
-    /// `getTokenAccountsByOwner` with no mint filter — returns every SPL
-    /// token account the wallet owns under the standard SPL Token Program
-    /// (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA). One RPC call per
-    /// wallet; cheap. Used by the multi-token holdings path (Phase 2 §2A.5).
+    /// `getTokenAccountsByOwner` with no mint filter — returns every non-zero
+    /// token account the wallet owns under both the classic SPL Token Program
+    /// and Token-2022 ($FNCPT is a Token-2022 mint). Two RPC calls per wallet;
+    /// fails if either fails. Used by the multi-token holdings path (Phase 2 §2A.5).
     void get_all_token_balances(const QString& owner_b58, TokenBalancesCallback callback);
 
     /// `getLatestBlockhash` (commitment = `confirmed`).
@@ -141,18 +141,25 @@ class SolanaRpcClient : public QObject {
     void reload_endpoint();
 
     /// Currently-resolved HTTP endpoint (for diagnostics / WS-URL derivation).
+    /// Empty when the stored RPC setting could not be read (see endpoint_error()).
     QString http_endpoint() const { return endpoint_; }
+
+    /// Plain sentence when the stored RPC override / Helius key exists but could
+    /// not be read. Then no endpoint is used at all — never the public mainnet RPC
+    /// in its place — and every request fails with this sentence.
+    QString endpoint_error() const { return endpoint_error_; }
 
     /// Derive the WebSocket endpoint from the HTTP endpoint (Helius and the
     /// public mainnet RPC both use the same hostname for `wss://`).
     QString ws_endpoint() const;
 
   private:
-    QString resolve_endpoint() const;
+    QString resolve_endpoint(QString* read_error) const;
     void post_rpc(const QString& method, const QJsonObject& params, std::function<void(Result<QJsonObject>)> callback);
 
     QNetworkAccessManager* nam_ = nullptr;
     QString endpoint_;
+    QString endpoint_error_;
 };
 
 } // namespace fincept::wallet

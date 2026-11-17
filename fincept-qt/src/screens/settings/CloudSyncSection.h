@@ -30,6 +30,9 @@ class CloudSyncSection : public QWidget {
     void build_ui();
     void update_enabled_state();
     void update_credits_banner();
+    /// Availability line under the master switch: the check in progress, why
+    /// enabling was refused, or why an enabled sync is paused. Empty hides it.
+    void show_availability(const QString& text, bool warn);
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
@@ -37,6 +40,7 @@ class CloudSyncSection : public QWidget {
 
     QCheckBox* master_toggle_ = nullptr;
     QLabel* sign_in_hint_ = nullptr;
+    QLabel* availability_label_ = nullptr;
     QLabel* credits_banner_ = nullptr;
     QHash<QString, QCheckBox*> domain_toggles_; // entity -> "sync this domain" checkbox
     QHash<QString, QLabel*> domain_status_;     // entity -> status label

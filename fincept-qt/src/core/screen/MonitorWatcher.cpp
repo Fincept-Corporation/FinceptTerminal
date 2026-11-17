@@ -32,7 +32,7 @@ MonitorWatcher::MonitorWatcher() {
         connect(gapp, &QGuiApplication::primaryScreenChanged, this, [this](QScreen*) { on_raw_screen_event(); });
     }
 
-    LOG_INFO("MonitorWatcher", QString("Initialised; topology=%1").arg(current_topology_.value));
+    LOG_DEBUG("MonitorWatcher", QString("Initialised; topology=%1").arg(current_topology_.value));
 }
 
 void MonitorWatcher::on_raw_screen_event() {
@@ -50,7 +50,7 @@ void MonitorWatcher::on_debounce_fired() {
     const auto fresh = MonitorTopology::current_key();
     if (fresh.value != current_topology_.value)
         current_topology_ = fresh;
-    LOG_INFO("MonitorWatcher", QString("Topology settled to: %1").arg(current_topology_.value));
+    LOG_DEBUG("MonitorWatcher", QString("Topology settled to: %1").arg(current_topology_.value));
     emit topology_changed(current_topology_);
 }
 

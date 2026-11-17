@@ -55,6 +55,7 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
         {"geopolitics_events", QString(QChar(0x2691))}, // ⚑
         {"maritime_vessels", QString(QChar(0x2693))},   // ⚓
         {"notes", QString(QChar(0x270E))},              // ✎
+        {"desk_note", QString(QChar(0x270D))},          // ✍
         // Widgets added after the original set — they all fell back to the generic dot.
         {"candle_chart", QString(QChar(0x25AE))},      // ▮
         {"working_orders", QString(QChar(0x2630))},    // ☰
@@ -77,6 +78,17 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
         {"ai_quick_ask", QString(QChar(0x2726))},      // ✦
         {"options_snapshot", QString(QChar(0x03C3))},  // σ
         {"fii_dii_flows", QString(QChar(0x21F5))},     // ⇵
+        // Market dashboard upgrade (MarketProfile-driven tiles)
+        {"market_performance", QString(QChar(0x21D7))}, // ⇗
+        {"market_risk", QString(QChar(0x26A1))},        // ⚡
+        {"global_indices", QString(QChar(0x25CE))},     // ◎
+        {"world_clock", QString(QChar(0x25F7))},        // ◷
+        {"yield_curve", QString(QChar(0x2312))},        // ⌒
+        {"volatility", QString(QChar(0x223F))},         // ∿
+        {"crypto_overview", QString(QChar(0x25D4))},    // ◔
+        {"fx_matrix", QString(QChar(0x25A6))},          // ▦
+        {"market_breadth", QString(QChar(0x2261))},     // ≡
+        {"earnings_calendar", QString(QChar(0x25F4))},  // ◴
         {"kalshi_prices", QString(QChar(0x25D2))},     // ◒
     };
     return icons.value(type_id, QString(QChar(0x25CF))); // ● default
@@ -86,7 +98,8 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
 
 AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("Add Widget"));
-    setFixedSize(620, 520);
+    // The default size; the layout's minimum enlarges it when a large font needs room.
+    resize(620, 520);
     setStyleSheet(QString("QDialog { background: %1; }").arg(ui::colors::BG_BASE()));
 
     auto* root = new QVBoxLayout(this);
@@ -97,22 +110,22 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     auto* title_row = new QHBoxLayout;
     title_label_ = new QLabel(tr("ADD WIDGET"));
     title_label_->setStyleSheet(
-        QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER()));
     title_row->addWidget(title_label_);
     title_row->addStretch();
 
     subtitle_label_ = new QLabel(tr("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
-    subtitle_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
+    subtitle_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     title_row->addWidget(subtitle_label_);
     root->addLayout(title_row);
 
     // ── Search ──
     search_bar_ = new QLineEdit;
     search_bar_->setPlaceholderText(tr("Search widgets..."));
-    search_bar_->setFixedHeight(30);
+    search_bar_->setMinimumHeight(30);
     search_bar_->setStyleSheet(
         QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; "
-                "padding: 4px 10px; font-size: 11px; border-radius: 2px; }"
+                "padding: 4px 10px; font-size: " + fincept::ui::fonts::px(-3) + "px; border-radius: 2px; }"
                 "QLineEdit:focus { border-color: %4; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
     connect(search_bar_, &QLineEdit::textChanged, this, &AddWidgetDialog::filter_changed);
@@ -146,26 +159,26 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     bot->addStretch();
 
     cancel_btn_ = new QPushButton(tr("CANCEL"));
-    cancel_btn_->setFixedSize(90, 30);
+    cancel_btn_->setMinimumSize(90, 30);
     cancel_btn_->setCursor(Qt::PointingHandCursor);
     cancel_btn_->setStyleSheet(
         QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
-                "font-size: 10px; font-weight: bold; border-radius: 2px; }"
+                "font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; border-radius: 2px; }"
                 "QPushButton:hover { border-color: %4; color: %4; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
     connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
     bot->addWidget(cancel_btn_);
 
     add_btn_ = new QPushButton(tr("ADD WIDGET"));
-    add_btn_->setFixedSize(110, 30);
+    add_btn_->setMinimumSize(110, 30);
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setEnabled(false);
     add_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %4; border: none; "
-                                    "font-size: 10px; font-weight: bold; border-radius: 2px; letter-spacing: 0.5px; }"
+                                    "font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; border-radius: 2px; letter-spacing: 0.5px; }"
                                     "QPushButton:hover { background: %5; }"
                                     "QPushButton:disabled { background: %2; color: %3; }")
                                 .arg(ui::colors::AMBER(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(),
-                                     ui::colors::BG_BASE(), ui::colors::WARNING()));
+                                     ui::colors::TEXT_ON_ACCENT(), ui::colors::WARNING()));
     connect(add_btn_, &QPushButton::clicked, this, &AddWidgetDialog::confirm);
     bot->addWidget(add_btn_);
     root->addLayout(bot);
@@ -223,17 +236,17 @@ void AddWidgetDialog::build_category_bar(QVBoxLayout* root) {
         const QString label = (cat == QLatin1String("All")) ? tr("All") : WidgetRegistry::category_tr(cat);
         auto* btn = new QPushButton(label.toUpper());
         btn->setCheckable(true);
-        btn->setFixedHeight(24);
+        btn->setMinimumHeight(24);
         btn->setCursor(Qt::PointingHandCursor);
 
         QString accent = (cat == QLatin1String("All")) ? ui::colors::AMBER() : accent_for_category(cat);
         btn->setStyleSheet(QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
-                                   "padding: 2px 12px; font-size: 10px; font-weight: bold; "
+                                   "padding: 2px 12px; font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; "
                                    "letter-spacing: 0.5px; border-radius: 2px; }"
                                    "QPushButton:hover { border-color: %4; color: %4; }"
                                    "QPushButton:checked { background: %4; color: %5; border-color: %4; }")
                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
-                                    accent, ui::colors::BG_BASE()));
+                                    accent, ui::colors::TEXT_ON_ACCENT()));
 
         if (cat == QLatin1String("All"))
             btn->setChecked(true);
@@ -374,6 +387,11 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
             item->widget()->deleteLater();
         delete item;
     }
+    // takeAt() leaves row stretches behind: the trailing stretch an earlier
+    // (shorter) result list set on row N stayed on row N, giving card rows of a
+    // later list uneven gaps. rowCount() never shrinks, so this covers them all.
+    for (int r = 0; r < card_grid_->rowCount(); ++r)
+        card_grid_->setRowStretch(r, 0);
     selected_id_.clear();
     if (add_btn_)
         add_btn_->setEnabled(false);
@@ -405,7 +423,7 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         card->setProperty("wtype", meta.type_id);
         card->setProperty("wcat", meta.category);
         card->setCursor(Qt::PointingHandCursor);
-        card->setFixedHeight(72);
+        card->setMinimumHeight(72);
         card->setStyleSheet(QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }"
                                     "QWidget#widgetCard:hover { background: %3; border-color: %4; }")
                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
@@ -425,7 +443,7 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         icon_lbl->setAlignment(Qt::AlignCenter);
         icon_lbl->setGeometry(0, 0, 36, 36);
         icon_lbl->setStyleSheet(
-            QString("color: %1; font-size: 14px; background: transparent; border: none;").arg(accent));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; background: transparent; border: none;").arg(accent));
 
         cl->addWidget(icon_frame);
 
@@ -436,12 +454,12 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
 
         auto* name_lbl = new QLabel(name_tr);
         name_lbl->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; border: none;")
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; background: transparent; border: none;")
                 .arg(ui::colors::TEXT_PRIMARY()));
 
         auto* desc_lbl = new QLabel(desc_tr);
         desc_lbl->setWordWrap(true);
-        desc_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent; border: none;")
+        desc_lbl->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent; border: none;")
                                     .arg(ui::colors::TEXT_SECONDARY()));
 
         text_col->addWidget(name_lbl);
@@ -453,8 +471,8 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         // ── Right: category badge ──
         auto* badge = new QLabel(cat_tr.toUpper());
         badge->setAlignment(Qt::AlignCenter);
-        badge->setFixedHeight(16);
-        badge->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: bold; letter-spacing: 0.5px; "
+        badge->setMinimumHeight(16);
+        badge->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: bold; letter-spacing: 0.5px; "
                                      "background: %2; border: 1px solid %1; border-radius: 2px; "
                                      "padding: 1px 6px;")
                                  .arg(accent, ui::colors::BG_BASE()));
@@ -500,7 +518,7 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
                                                   : tr("No widgets match \"%1\".").arg(filter));
         empty->setAlignment(Qt::AlignCenter);
         empty->setWordWrap(true);
-        empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 24px; background: transparent;")
+        empty->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; padding: 24px; background: transparent;")
                                  .arg(ui::colors::TEXT_TERTIARY()));
         card_grid_->addWidget(empty, 0, 0, 1, 2);
         ++row;

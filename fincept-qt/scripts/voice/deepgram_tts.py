@@ -118,6 +118,14 @@ def main() -> int:
             "Open Settings -> Python Env -> Reinstall packages."
         )})
         return 1
+    except OSError as e:
+        # The Linux sounddevice wheel does not bundle PortAudio: a missing
+        # libportaudio raises OSError at import (it used to escape as a bare
+        # traceback with no {"fatal"} line).
+        diag(f"sounddevice import failed: {e}")
+        emit({"fatal": f"Audio output unavailable: {e}. On Linux install the PortAudio library "
+                       f"(libportaudio2)."})
+        return 1
 
     qs = urllib.parse.urlencode({
         "model":       model,

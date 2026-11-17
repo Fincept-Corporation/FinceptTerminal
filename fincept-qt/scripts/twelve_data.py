@@ -8,26 +8,40 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('TWELVE_DATA_API_KEY', '')
 BASE_URL = "https://api.twelvedata.com"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+SERVICE = "Twelve Data"
+KEY_ENV = "TWELVE_DATA_API_KEY"
+
+session = fc.http_session()
+
+# Reference lists Twelve Data serves without an API key; every other endpoint answers 401.
+KEYLESS_ENDPOINTS = {"exchanges", "cryptocurrencies", "forex_pairs"}
+
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    params = dict(params or {})
+    if not API_KEY:
+        if endpoint not in KEYLESS_ENDPOINTS:
+            return fc.missing_key(SERVICE, "https://twelvedata.com/pricing", KEY_ENV)
+        params.pop("apikey", None)
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # Twelve Data reports most failures (bad symbol, credits exhausted) as {"status": "error", ...}.
+    if isinstance(data, dict) and data.get("status") == "error":
+        return {"error": f"{SERVICE}: {fc.scrub(data.get('message') or 'request failed', API_KEY)}",
+                "code": data.get("code")}
+    return data
 
 def get_time_series(symbol: str, interval: str = "1day", start_date: str = None, end_date: str = None, outputsize: int = 30) -> Any:
     params = {"symbol": symbol, "interval": interval, "outputsize": outputsize, "apikey": API_KEY}
@@ -108,4 +122,7 @@ def main(args=None):
     print(json.dumps(result))
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:  # bad argument (e.g. a non-numeric limit): still answer in JSON
+        print(json.dumps({"error": fc.scrub(f"{type(e).__name__}: {e}", API_KEY)}))

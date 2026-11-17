@@ -74,8 +74,13 @@ BlsPanel::BlsPanel(QWidget* parent) : EconPanelBase(kBlsSourceId, kBlsColor, par
 }
 
 void BlsPanel::activate() {
-    show_empty(tr("Set BLS_API_KEY environment variable, then select a series and click FETCH\n"
-                  "Get a free key at: data.bls.gov/registrationEngine/"));
+    // Nothing to prepare: the results pane runs the query on show — or, without a BLS key, shows the
+    // page that names BLS_API_KEY and opens Settings > Credentials.
+}
+
+QList<ui::Requirement> BlsPanel::load_requirements() const {
+    // bls_data.py refuses every call without it.
+    return {ui::Requirement::api_key(QStringLiteral("BLS_API_KEY"), QStringLiteral("BLS"))};
 }
 
 void BlsPanel::build_controls(QHBoxLayout* thl) {
@@ -88,7 +93,7 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
     preset_combo_ = new QComboBox;
     for (const auto& p : kBlsPresets)
         preset_combo_->addItem(p.label, p.command + "|" + p.series_id);
-    preset_combo_->setFixedHeight(26);
+    preset_combo_->setMinimumHeight(26);
     preset_combo_->setMinimumWidth(240);
 
     connect(preset_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
@@ -104,13 +109,18 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText(tr("e.g. CES0000000001"));
-    series_input_->setFixedHeight(26);
-    series_input_->setFixedWidth(140);
+    series_input_->setMinimumHeight(26);
+    set_text_width(series_input_, 140);
 
     thl->addWidget(preset_lbl_ = lbl(tr("PRESET")));
     thl->addWidget(preset_combo_);
     thl->addWidget(series_lbl_);
     thl->addWidget(series_input_);
+    // A real default instead of "-- Select a series --": the U-3 unemployment rate (LNS14000000).
+    // Restored inputs replace it.
+    const int u3 = preset_combo_->findData(QStringLiteral("get_series|LNS14000000"));
+    if (u3 >= 0)
+        preset_combo_->setCurrentIndex(u3); // fills the series field
 }
 
 void BlsPanel::on_fetch() {
@@ -123,8 +133,8 @@ void BlsPanel::on_fetch() {
             return;
         }
         show_loading(tr("Fetching BLS series %1…").arg(sid));
-        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, "get_series", {sid},
-                                                       "bls_series_" + sid);
+        execute_query(kBlsSourceId, kBlsScript, "get_series", {sid},
+                      "bls_series_" + sid);
         return;
     }
 
@@ -134,11 +144,11 @@ void BlsPanel::on_fetch() {
     if (preset.command == "get_series") {
         const QString sid = series_input_->text().trimmed().toUpper();
         const QString use_sid = sid.isEmpty() ? preset.series_id : sid;
-        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, "get_series", {use_sid},
-                                                       "bls_series_" + use_sid);
+        execute_query(kBlsSourceId, kBlsScript, "get_series", {use_sid},
+                      "bls_series_" + use_sid);
     } else {
-        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, preset.command, {},
-                                                       "bls_" + preset.command);
+        execute_query(kBlsSourceId, kBlsScript, preset.command, {},
+                      "bls_" + preset.command);
     }
 }
 
@@ -162,8 +172,8 @@ static QJsonArray extract_bls_rows(const QJsonObject& result) {
         const QJsonObject r = v.toObject();
         // BLS periods: M01–M12 monthly, M13 = ANNUAL AVERAGE, Q01–Q04 quarterly (Q05 = annual
         // avg), S01–S02 semi-annual (S03 = annual avg), A01 annual.
-        const QString year = r.value(QStringLiteral("year")).toString();
-        const QString period = r.value(QStringLiteral("period")).toString();
+        const QString year = r.value(QStringLiteral("year")).toVariant().toString();
+        const QString period = r.value(QStringLiteral("period")).toVariant().toString();
         // Drop the synthetic annual-average rows: mixing them into a monthly/quarterly series
         // inflates the point count and skews MIN/MAX/AVG and CHANGE's "previous" value.
         if (r.value(QStringLiteral("annual_average")).toBool() || period == QLatin1String("M13") ||
@@ -182,7 +192,7 @@ static QJsonArray extract_bls_rows(const QJsonObject& result) {
             else
                 date = year; // annual
         } else {
-            date = r.value(QStringLiteral("date")).toString(); // period-start date (older answers)
+            date = r.value(QStringLiteral("date")).toVariant().toString(); // period-start date (older answers)
         }
         if (date.isEmpty())
             continue;
@@ -212,9 +222,13 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     if (!result.success) {
         const QString msg = result.error;
-        if (msg.contains("API key") || msg.contains("api_key") || msg.contains("BLS_API_KEY")) {
+        if (!result.error_code.isEmpty()) {
+            // The script named the failure ("[missing_key] …" + env key, "[auth_failed] …", a rate
+            // limit): the base shows that kind's own page.
+            show_error(msg);
+        } else if (msg.contains("API key") || msg.contains("api_key") || msg.contains("BLS_API_KEY")) {
             show_error(tr("BLS API key not configured.\n"
-                          "Set BLS_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (BLS_API_KEY).\n"
                           "Free key at: data.bls.gov/registrationEngine/"));
         } else {
             show_error(msg);
@@ -227,7 +241,7 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
         const QString msg = result.data["message"].toString(result.data["error"].toString());
         if (msg.contains("API key") || msg.contains("BLS_API_KEY")) {
             show_error(tr("BLS API key not configured.\n"
-                          "Set BLS_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (BLS_API_KEY).\n"
                           "Free key at: data.bls.gov/registrationEngine/"));
         } else {
             show_error(msg);
@@ -269,7 +283,7 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
     }
     set_series_meta(meta);
     display(rows, title);
-    LOG_INFO("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));
+    LOG_DEBUG("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

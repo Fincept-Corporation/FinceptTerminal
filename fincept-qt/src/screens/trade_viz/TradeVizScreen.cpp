@@ -3,14 +3,20 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "services/economics/EconomicsService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadGate.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QCoreApplication>
 #include <QDate>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
@@ -18,7 +24,9 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStandardItemModel>
 #include <QStyle>
 #include <QTextStream>
@@ -26,16 +34,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace fincept::screens {
 
 // ── Style constants ─────────────────────────────────────────────────────────
 
-static const char* FONT = "'Consolas','Courier New',monospace";
 
 static QString combo_ss() {
     return QString("QComboBox { background: %1; color: %2; border: 1px solid %3;"
-                   "  padding: 2px 8px; font-size: 11px; font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 2px 8px; font-size: " + fincept::ui::fonts::px(-3) + "px;"
                    "  min-width: 100px; }"
                    "QComboBox:hover { border-color: %4; }"
                    "QComboBox::drop-down { border: none; width: 16px; }"
@@ -43,19 +51,19 @@ static QString combo_ss() {
                    "  border-right: 4px solid transparent; border-top: 5px solid %5; }"
                    "QComboBox QAbstractItemView { background: %6; color: %2;"
                    "  border: 1px solid %3; selection-background-color: %7;"
-                   "  selection-color: %8; font-family: 'Consolas','Courier New',monospace; }")
+                   "  selection-color: %8; }")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT(),
              ui::colors::TEXT_SECONDARY(), ui::colors::BG_BASE(), ui::colors::BG_HOVER(), ui::colors::AMBER());
 }
 
 static QString table_ss() {
     return QString("QTableWidget { background: %1; color: %2; border: none;"
-                   "  gridline-color: %3; font-size: 13px; font-family: 'Consolas','Courier New',monospace; }"
+                   "  gridline-color: %3; font-size: " + fincept::ui::fonts::px(-1) + "px; }"
                    "QTableWidget::item { padding: 3px 10px; border-bottom: 1px solid %3; }"
                    "QTableWidget::item:selected { background: %4; color: %2; }"
-                   "QHeaderView::section { background: %5; color: %6; font-size: 12px;"
+                   "QHeaderView::section { background: %5; color: %6; font-size: " + fincept::ui::fonts::px(-2) + "px;"
                    "  font-weight: bold; border: none; border-bottom: 1px solid %7;"
-                   "  padding: 6px 10px; font-family: 'Consolas','Courier New',monospace; }"
+                   "  padding: 6px 10px; }"
                    "QScrollBar:vertical { width: 5px; background: transparent; }"
                    "QScrollBar::handle:vertical { background: %8; }"
                    "QScrollBar::handle:vertical:hover { background: %9; }"
@@ -226,17 +234,16 @@ class TradeFlowChordWidget : public QWidget {
         // ── Provenance note ──────────────────────────────────────────────────
         // Always say where the numbers come from (UN Comtrade vs the static offline snapshot).
         {
-            QFont nf(FONT, 8);
-            nf.setBold(true);
+            const QFont nf = ui::fonts::font(-3, QFont::Bold);
             p.setFont(nf);
             p.setPen(QColor(ui::colors::AMBER()));
-            p.drawText(QRect(10, 6, w - 20, 16), Qt::AlignLeft | Qt::AlignTop, note_);
+            p.drawText(QRect(10, 6, w - 20, std::max(16, QFontMetrics(nf).height() + 2)), Qt::AlignLeft | Qt::AlignTop,
+                       note_);
         }
 
         const int n = static_cast<int>(partners_.size());
         if (n == 0) {
-            QFont mf(FONT, 11);
-            p.setFont(mf);
+            p.setFont(ui::fonts::font());
             p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
             p.drawText(QRect(20, 30, w - 40, h - 60), Qt::AlignCenter | Qt::TextWordWrap, empty_message_);
             return;
@@ -247,7 +254,7 @@ class TradeFlowChordWidget : public QWidget {
             return;
 
         // ── Concentric grid rings ────────────────────────────────────────────
-        QPen grid_pen(QColor(26, 26, 26), 1);
+        QPen grid_pen(QColor(ui::colors::BORDER_DIM()), 1);
         p.setPen(grid_pen);
         for (int r = 1; r <= 5; ++r) {
             p.drawEllipse(QPointF(cx, cy), radius * r / 5.0, radius * r / 5.0);
@@ -258,9 +265,13 @@ class TradeFlowChordWidget : public QWidget {
             double angle = 2.0 * M_PI * i / n - M_PI / 2.0;
             int x2 = cx + static_cast<int>((radius + 8) * std::cos(angle));
             int y2 = cy + static_cast<int>((radius + 8) * std::sin(angle));
-            p.setPen(QPen(QColor(22, 22, 22), 1));
+            p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
             p.drawLine(cx, cy, x2, y2);
         }
+
+        // Flow colours: imports in the accent, exports in a categorical magenta.
+        const QColor import_col(ui::colors::AMBER());
+        const QColor export_col = ui::colors::chart_color(7);
 
         // ── Normalization ────────────────────────────────────────────────────
         double max_val = 0;
@@ -296,8 +307,9 @@ class TradeFlowChordWidget : public QWidget {
                 double curve = 25.0 + 20.0 * strength + offset * 2.0;
 
                 int alpha = 100 + static_cast<int>(120 * strength);
-                // Orange/amber color with slight variation per strand
-                QColor col(217, 119 + s * 5, 6, alpha);
+                // Accent colour with slight variation per strand
+                QColor col = import_col.lighter(100 + s * 4);
+                col.setAlpha(alpha);
                 p.setPen(QPen(col, 1.5));
 
                 QPainterPath path;
@@ -331,9 +343,9 @@ class TradeFlowChordWidget : public QWidget {
                 double curve = -(25.0 + 20.0 * strength + offset * 2.0);
 
                 int alpha = 100 + static_cast<int>(130 * strength);
-                // Purple to magenta gradient
-                int rv = 180 + static_cast<int>(50 * (1.0 - strength)) + s * 3;
-                QColor col(rv, 30, 180 - s * 8, alpha);
+                // Export colour, a touch lighter for weaker flows and per strand
+                QColor col = export_col.lighter(100 + static_cast<int>(15 * (1.0 - strength)) + s * 3);
+                col.setAlpha(alpha);
                 p.setPen(QPen(col, 1.5));
 
                 QPainterPath path;
@@ -351,8 +363,8 @@ class TradeFlowChordWidget : public QWidget {
 
             // Node rectangle
             QRect node(px - 14, py - 9, 28, 18);
-            p.fillRect(node, QColor(40, 40, 40));
-            p.setPen(QPen(QColor(60, 60, 60), 1));
+            p.fillRect(node, QColor(ui::colors::BG_RAISED()));
+            p.setPen(QPen(QColor(ui::colors::BORDER_MED()), 1));
             p.drawRect(node);
 
             // Country abbreviation label — outside the circle
@@ -360,63 +372,71 @@ class TradeFlowChordWidget : public QWidget {
             int lx = cx + static_cast<int>(label_r * std::cos(angle));
             int ly = cy + static_cast<int>(label_r * std::sin(angle));
 
-            QFont lf(FONT, 9);
-            lf.setBold(true);
+            const QFont lf = ui::fonts::font(-2, QFont::Bold);
             p.setFont(lf);
             p.setPen(QColor(ui::colors::TEXT_PRIMARY()));
-            QRect lr(lx - 32, ly - 9, 64, 18);
+            const QFontMetrics lfm(lf);
+            const int lw = std::max(64, lfm.horizontalAdvance(partners_[i].code) + 8);
+            const int lh = std::max(18, lfm.height() + 2);
+            QRect lr(lx - lw / 2, ly - lh / 2, lw, lh);
             p.drawText(lr, Qt::AlignCenter, partners_[i].code);
         }
 
         // ── Centre node — the reporting country ──────────────────────────────
-        QRect us_rect(cx - 16, cy - 12, 32, 24);
-        p.fillRect(us_rect, QColor(30, 30, 30));
+        const QFont us_font = ui::fonts::font(-1, QFont::Bold);
+        const QFontMetrics us_fm(us_font);
+        const int us_w = std::max(32, us_fm.horizontalAdvance(center_label_) + 8);
+        const int us_h = std::max(24, us_fm.height() + 6);
+        QRect us_rect(cx - us_w / 2, cy - us_h / 2, us_w, us_h);
+        p.fillRect(us_rect, QColor(ui::colors::BG_RAISED()));
         p.setPen(QPen(QColor(ui::colors::AMBER()), 1));
         p.drawRect(us_rect);
 
-        QFont us_font(FONT, 10);
-        us_font.setBold(true);
         p.setFont(us_font);
         p.setPen(QColor(ui::colors::AMBER()));
         p.drawText(us_rect, Qt::AlignCenter, center_label_);
 
         // ── Scale axis labels (values are USD millions → shown in $B) ────────
-        QFont sf(FONT, 7);
+        const QFont sf = ui::fonts::font(-4);
+        const QFontMetrics sfm(sf);
         p.setFont(sf);
         p.setPen(QColor(ui::colors::TEXT_DIM()));
 
         // Import scale — above center
         int sx = cx - 50;
         int sy = cy - radius / 5;
+        const int tick_step = std::max(26, sfm.horizontalAdvance(QStringLiteral("000.0B")) + 4);
         p.drawText(sx, sy - 2, QCoreApplication::translate("TradeFlowChordWidget", "Imports ($B)"));
         for (int i = 0; i <= 4; ++i) {
             const double billions = max_val * i / 4.0 / 1000.0;
-            int tx = sx + i * 26;
-            p.drawText(tx, sy + 10, QString("%1B").arg(billions, 0, 'f', billions < 10.0 ? 1 : 0));
+            int tx = sx + i * tick_step;
+            p.drawText(tx, sy + std::max(10, sfm.ascent() + 2),
+                       QString("%1B").arg(billions, 0, 'f', billions < 10.0 ? 1 : 0));
         }
 
         // Export scale — below center
         sy = cy + radius / 5;
-        p.drawText(sx, sy + 14, QCoreApplication::translate("TradeFlowChordWidget", "Exports ($B)"));
+        p.drawText(sx, sy + std::max(14, sfm.height() + 2), QCoreApplication::translate("TradeFlowChordWidget", "Exports ($B)"));
 
-        // ── Color legend bar (bottom-left) ───────────────────────────────────
+        // ── Color legend bar (bottom-left): page background → import colour ──
+        const int bar_w = std::max(90, 3 * (sfm.horizontalAdvance(QStringLiteral("000.0B")) + 6));
         int bx = 10;
         int by = h - 18;
-        for (int i = 0; i < 90; ++i) {
-            double t = i / 90.0;
-            int r_comp = static_cast<int>(217 * t);
-            int g_comp = static_cast<int>(119 * t);
-            int b_comp = static_cast<int>(6 * t);
-            p.fillRect(bx + i, by, 1, 8, QColor(r_comp, g_comp, b_comp));
+        const QColor bar_lo(ui::colors::BG_BASE());
+        for (int i = 0; i < bar_w; ++i) {
+            const double t = static_cast<double>(i) / bar_w;
+            p.fillRect(bx + i, by, 1, 8,
+                       QColor::fromRgbF(bar_lo.redF() + (import_col.redF() - bar_lo.redF()) * t,
+                                        bar_lo.greenF() + (import_col.greenF() - bar_lo.greenF()) * t,
+                                        bar_lo.blueF() + (import_col.blueF() - bar_lo.blueF()) * t));
         }
-        p.setFont(QFont(FONT, 7));
         p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
         double lo = max_val * 0.1;
         double mid = max_val * 0.5;
         double hi = max_val;
         p.drawText(bx, by - 2, QString("%1B").arg(lo / 1000.0, 0, 'f', 1));
-        p.drawText(bx + 38, by - 2, QString("%1B").arg(mid / 1000.0, 0, 'f', 1));
-        p.drawText(bx + 72, by - 2, QString("%1B").arg(hi / 1000.0, 0, 'f', 1));
+        p.drawText(bx + bar_w * 38 / 90, by - 2, QString("%1B").arg(mid / 1000.0, 0, 'f', 1));
+        p.drawText(bx + bar_w * 72 / 90, by - 2, QString("%1B").arg(hi / 1000.0, 0, 'f', 1));
     }
 
   private:
@@ -438,18 +458,18 @@ QWidget* TradeVizScreen::build_tab_bar() {
     // style the function-number labels, the view label and the Export button by object name.
     bar->setStyleSheet(
         QString("#tvTabBar, #tvTabBar * { background: %1; border-bottom: 1px solid %2; }"
-                "QLabel#tvTabNum { color: %3; font-size: 11px; background: transparent;"
-                " font-family: 'Consolas','Courier New',monospace; }"
-                "QLabel#tvTabName { color: %4; font-size: 13px; font-weight: bold; background: transparent;"
-                " font-family: 'Consolas','Courier New',monospace; }"
-                "QPushButton#tvTabExport { color: %4; font-size: 13px; font-weight: bold;"
+                "QLabel#tvTabNum { color: %3; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;"
+                " }"
+                "QLabel#tvTabName { color: %4; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: bold; background: transparent;"
+                " }"
+                "QPushButton#tvTabExport { color: %4; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: bold;"
                 " background: transparent; border: none; padding: 0;"
-                " font-family: 'Consolas','Courier New',monospace; }"
+                " }"
                 "QPushButton#tvTabExport:hover { color: %5; }"
                 "QPushButton#tvTabExport:disabled { color: %6; }")
             .arg(ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_SECONDARY(),
                  ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(), ui::colors::TEXT_DIM()));
-    bar->setFixedHeight(28);
+    bar->setMinimumHeight(28);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(0);
@@ -459,7 +479,7 @@ QWidget* TradeVizScreen::build_tab_bar() {
     // cells were plain labels with no handler behind them.
     auto make_cell = [&](const char* num) {
         auto* cell = new QWidget(this);
-        cell->setFixedHeight(28);
+        cell->setMinimumHeight(28);
         auto* bl = new QHBoxLayout(cell);
         bl->setContentsMargins(14, 0, 14, 0);
         bl->setSpacing(4);
@@ -497,8 +517,8 @@ QWidget* TradeVizScreen::build_tab_bar() {
 
     // Right side: "Trade Flow" title
     flow_title_ = new QLabel(tr("Trade Flow"));
-    flow_title_->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: bold; background: transparent;"
-                                       " padding-right: 14px; font-family: 'Consolas','Courier New',monospace;")
+    flow_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(2) + "px; font-weight: bold; background: transparent;"
+                                       " padding-right: 14px;")
                                    .arg(ui::colors::AMBER()));
     hl->addWidget(flow_title_);
 
@@ -513,7 +533,7 @@ QWidget* TradeVizScreen::build_filter_bar() {
     auto* bar = new QWidget(this);
     bar->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    bar->setFixedHeight(32);
+    bar->setMinimumHeight(32);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(10);
@@ -528,8 +548,8 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Browse button
     browse_label_ = new QLabel(tr("20) Browse"));
-    browse_label_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
-                                         " font-family: 'Consolas','Courier New',monospace;")
+    browse_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: bold; background: transparent;"
+                                         "")
                                      .arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(browse_label_);
 
@@ -537,8 +557,8 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Order by
     order_caption_ = new QLabel(tr("Order by"));
-    order_caption_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
-                                          " font-family: 'Consolas','Courier New',monospace;")
+    order_caption_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; background: transparent;"
+                                          "")
                                       .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(order_caption_);
 
@@ -554,8 +574,8 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Periodicity
     period_caption_ = new QLabel(tr("Periodicity"));
-    period_caption_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
-                                           " font-family: 'Consolas','Courier New',monospace;")
+    period_caption_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; background: transparent;"
+                                           "")
                                        .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(period_caption_);
 
@@ -571,12 +591,12 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Year navigation — "<<" steps to the previous (earlier) year, ">>" to the next. The
     // combo lists years newest-first, so earlier == higher index.
-    const QString nav_style = QString("QToolButton { color: %1; font-size: 12px; font-weight: bold;"
+    const QString nav_style = QString("QToolButton { color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: bold;"
                                       " background: transparent; border: none; padding: 0 4px;"
-                                      " font-family: 'Consolas','Courier New',monospace; }"
+                                      " }"
                                       "QToolButton:hover { color: %2; }"
                                       "QToolButton:disabled { color: %3; }")
-                                  .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER(), ui::colors::TEXT_DIM());
+                                  .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER(), ui::colors::TEXT_TERTIARY());
     prev_year_btn_ = new QToolButton;
     prev_year_btn_->setText(QStringLiteral("<<"));
     prev_year_btn_->setCursor(Qt::PointingHandCursor);
@@ -586,7 +606,7 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     year_combo_ = new QComboBox;
     year_combo_->setStyleSheet(combo_ss());
-    year_combo_->setFixedWidth(80);
+    year_combo_->setFixedWidth(std::max(80, QFontMetrics(ui::fonts::font(-3)).horizontalAdvance(QStringLiteral("0000")) + 52));
     // Newest selectable year = last calendar year (UN Comtrade publishes annual data
     // with a lag, so the default selection is the year before that).
     const int newest_year = QDate::currentDate().year() - 1;
@@ -619,9 +639,9 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Clock
     clock_label_ = new QLabel(QDateTime::currentDateTime().toString("HH:mm:ss"));
-    clock_label_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
-                                        " font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::TEXT_TERTIARY()));
+    clock_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;"
+                                        "")
+                                    .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(clock_label_);
 
     // Persist filter selections so the user returns to the same country/period
@@ -676,11 +696,13 @@ QWidget* TradeVizScreen::build_partner_table() {
 
     auto* hdr = partner_table_->horizontalHeader();
     hdr->setSectionResizeMode(0, QHeaderView::Fixed);
-    hdr->resizeSection(0, 35);
+    hdr->resizeSection(0, std::max(35, QFontMetrics(ui::fonts::font(1)).horizontalAdvance(QStringLiteral("00)")) + 14));
     hdr->setSectionResizeMode(1, QHeaderView::Stretch);
+    // Interactive, fitted once after each fill (rebuild_views) — never ResizeToContents
+    // while the rows go in.
     for (int col = 2; col < 6; ++col)
-        hdr->setSectionResizeMode(col, QHeaderView::ResizeToContents);
-    partner_table_->verticalHeader()->setDefaultSectionSize(28);
+        hdr->setSectionResizeMode(col, QHeaderView::Interactive);
+    partner_table_->verticalHeader()->setDefaultSectionSize(std::max(28, QFontMetrics(ui::fonts::font(2, QFont::Bold)).height() + 8));
 
     vl->addWidget(partner_table_, 1);
     return panel;
@@ -725,19 +747,19 @@ void TradeVizScreen::rebuild_views() {
         auto* rank = new QTableWidgetItem(QString("%1)").arg(i + 1));
         rank->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         rank->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rank->setFont(QFont(FONT, 12));
+        rank->setFont(ui::fonts::font(1));
         partner_table_->setItem(i, 0, rank);
 
         auto* name = new QTableWidgetItem(partner.name);
-        name->setForeground(pos);
-        name->setFont(QFont(FONT, 13, QFont::Bold));
+        name->setForeground(QColor(ui::colors::CYAN()));
+        name->setFont(ui::fonts::font(2, QFont::Bold));
         name->setToolTip(partner.code);
         partner_table_->setItem(i, 1, name);
 
         auto num_item = [&](int col, double usd_millions, const QColor& colour, bool signed_value) {
             auto* item = new QTableWidgetItem(tv_money(usd_millions, signed_value));
             item->setForeground(colour);
-            item->setFont(QFont(FONT, 12, col == ranked_col ? QFont::Bold : QFont::Normal));
+            item->setFont(ui::fonts::font(1, col == ranked_col ? QFont::Bold : QFont::Normal));
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             partner_table_->setItem(i, col, item);
         };
@@ -746,6 +768,8 @@ void TradeVizScreen::rebuild_views() {
         num_item(4, partner.exports, primary, false);
         num_item(5, partner.balance(), partner.balance() >= 0.0 ? pos : neg, true);
     }
+    for (int col = 2; col < 6; ++col)
+        partner_table_->resizeColumnToContents(col); // once, after the fill
     partner_table_->setUpdatesEnabled(true);
 
     if (export_btn_) {
@@ -789,7 +813,7 @@ void TradeVizScreen::show_static_fallback(const QString& why) {
 // Live data — UN Comtrade via EconomicsService
 // ============================================================================
 
-void TradeVizScreen::refresh_data() {
+void TradeVizScreen::refresh_data(bool automatic) {
     // Not shown yet (a restored selection fires the combo signals during construction): the
     // first showEvent fetches, so a screen nobody opens never spawns a Python process (P2).
     if (!isVisible() || !country_combo_ || !year_combo_)
@@ -804,23 +828,91 @@ void TradeVizScreen::refresh_data() {
     if (key == shown_key_ || key == loading_key_)
         return; // already on screen / already asked for
 
+    cancel_fetch(); // another country / year still loading: its answer is no longer wanted
     loading_key_ = key;
     flow_rows_.clear();
     shown_key_.clear();
-    show_message(tr("UN Comtrade — %1 — %2").arg(country_combo_->currentText(), year),
-                 tr("Loading UN Comtrade trade flows…"));
+    loading_->set_message(tr("Loading UN Comtrade trade flows — %1, %2…").arg(country_combo_->currentText(), year));
+    body_stack_->setCurrentWidget(loading_);
 
+    if (!automatic) {
+        issue_fetch(code, year);
+        return;
+    }
+    // The default load of the visible screen waits for a slot in the app-wide gate (two
+    // automatic loads at a time; the user's own picks never wait).
+    QPointer<TradeVizScreen> self(this);
+    quint64 ticket = 0;
+    const bool now = ui::AutoLoadGate::instance().enter(
+        this,
+        [self, key, code, year]() {
+            if (!self)
+                return;
+            if (self->loading_key_ != key || !self->isVisible()) {
+                self->release_gate();
+                return;
+            }
+            self->loading_->set_message(tr("Loading UN Comtrade trade flows — %1, %2…")
+                                            .arg(self->country_combo_->currentText(), year));
+            self->issue_fetch(code, year);
+        },
+        0, &ticket);
+    gate_ticket_ = ticket;
+    if (now)
+        issue_fetch(code, year);
+    else
+        loading_->set_message(tr("Queued — UN Comtrade trade flows load after the other loads running now…"));
+}
+
+void TradeVizScreen::issue_fetch(int code, const QString& year) {
     // Exports and imports are separate calls: one combined call would hit the free tier's
     // 500-row cap (~230 partners x 2 flows). EconomicsService caches both for 10 minutes and
-    // may answer synchronously on a hit, so all state above is set BEFORE the first execute().
+    // answers on its own thread (never from inside execute()).
     auto& svc = services::EconomicsService::instance();
-    for (const char* flow : {"X", "M"}) {
+    for (const char* flow : {"X", "M"})
         svc.execute(QString::fromLatin1(kTvSourceId), QString::fromLatin1(kTvScript), QStringLiteral("trade_data"),
                     {QString::number(code), year, QString::fromLatin1(flow), QStringLiteral("TOTAL")},
                     QString("tradeviz_%1_%2_%3").arg(code).arg(year).arg(QString::fromLatin1(flow)));
-        if (loading_key_ != key)
-            return; // a synchronous failure already ended this load
+}
+
+void TradeVizScreen::cancel_fetch() {
+    if (!loading_key_.isEmpty()) {
+        auto& svc = services::EconomicsService::instance();
+        for (const char* flow : {"X", "M"})
+            svc.cancel(QStringLiteral("tradeviz_") + loading_key_ + QLatin1Char('_') + QString::fromLatin1(flow));
     }
+    loading_key_.clear();
+    flow_rows_.clear();
+    release_gate();
+}
+
+void TradeVizScreen::release_gate() {
+    if (gate_ticket_ != 0)
+        ui::AutoLoadGate::instance().leave(std::exchange(gate_ticket_, 0));
+}
+
+void TradeVizScreen::show_failure(const QString& title, const QString& message, const QString& details) {
+    ui::EmptyState::Spec spec = ui::EmptyState::error_spec(message, title, QString(), details);
+    spec.illustration = true;
+    spec.illustration_shape = ui::LoadingSkeleton::Shape::Result;
+    state_->apply(spec);
+    state_action_ = QStringLiteral("retry");
+    body_stack_->setCurrentWidget(state_);
+}
+
+void TradeVizScreen::show_no_records(const QString& title) {
+    const bool has_prev = year_combo_ && year_combo_->currentIndex() + 1 < year_combo_->count();
+    ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+        tr("No UN Comtrade records yet"),
+        tr("%1: the reporter has not published this year's partner data yet (UN Comtrade publishes with a delay).")
+            .arg(title),
+        has_prev ? tr("TRY %1").arg(year_combo_->itemText(year_combo_->currentIndex() + 1)) : QString());
+    spec.glyph = QStringLiteral("◌");
+    spec.illustration = true;
+    spec.illustration_shape = ui::LoadingSkeleton::Shape::Result;
+    state_->apply(spec);
+    state_action_ = QStringLiteral("prev_year");
+    body_stack_->setCurrentWidget(state_);
 }
 
 void TradeVizScreen::on_econ_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -837,13 +929,25 @@ void TradeVizScreen::on_econ_result(const QString& request_id, const services::E
     const QString title = tr("UN Comtrade — %1 — %2").arg(country_combo_->currentText(), year_combo_->currentText());
 
     if (!result.success) {
-        loading_key_.clear(); // ends the load; the other flow's reply is now ignored as stale
+        cancel_fetch(); // ends the load (the other flow is stopped / ignored) and frees the gate
         LOG_WARN("TradeViz", QString("UN Comtrade fetch failed for %1: %2").arg(key, result.error));
         // Offline / rate-limited: the only offline data we have is the US snapshot.
-        if (key == QStringLiteral("842_2024"))
+        if (key == QStringLiteral("842_2024")) {
             show_static_fallback(tr("(live data unavailable: %1)").arg(result.error));
+            body_stack_->setCurrentIndex(0);
+            return;
+        }
+        const QString code = result.error_code;
+        const QString message =
+            code == QLatin1String("rate_limited")
+                ? tr("UN Comtrade's free service is rate-limited right now. Wait a minute, then RETRY.")
+            : code == QLatin1String("upstream_down") ? tr("UN Comtrade did not answer. RETRY in a moment.")
+            : code == QLatin1String("no_data")       ? QString()
+                                                     : tr("The UN Comtrade request failed.");
+        if (message.isEmpty())
+            show_no_records(title);
         else
-            show_message(title, tr("Could not load UN Comtrade data:\n%1").arg(result.error));
+            show_failure(tr("Could not load trade flows"), message, result.error);
         return;
     }
 
@@ -855,14 +959,18 @@ void TradeVizScreen::on_econ_result(const QString& request_id, const services::E
                                                    flow_rows_.value(QStringLiteral("M")));
     loading_key_.clear();
     flow_rows_.clear();
+    release_gate();
     if (all.isEmpty()) {
         // Comtrade publishes with a lag — recent years are often missing for a reporter.
-        show_message(title, tr("No UN Comtrade records for this country and year yet.\n"
-                               "Try an earlier year (data is published with a delay)."));
+        show_no_records(title);
         return;
     }
     shown_key_ = key;
-    set_dataset(all, tr("%1 · goods, USD millions").arg(title));
+    const QDateTime at = result.fetched_at.isValid() ? result.fetched_at : QDateTime::currentDateTimeUtc();
+    set_dataset(all, tr("%1 · goods, USD millions · %2%3")
+                         .arg(title, ui::AutoLoadPane::as_of_text(at.toLocalTime()),
+                              result.from_cache ? tr(" (cached)") : QString()));
+    body_stack_->setCurrentIndex(0);
 }
 
 void TradeVizScreen::export_csv() {
@@ -923,13 +1031,15 @@ void TradeVizScreen::showEvent(QShowEvent* event) {
         clock_timer_->start();
     // First show (or a selection restored while hidden): load the chosen country/year. A
     // no-op when that dataset is already on screen or in flight.
-    refresh_data();
+    refresh_data(/*automatic=*/true);
 }
 
 void TradeVizScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     if (clock_timer_)
         clock_timer_->stop();
+    // Leaving the screen stops a load in flight; the next show starts it again.
+    cancel_fetch();
 }
 
 // ============================================================================
@@ -938,9 +1048,8 @@ void TradeVizScreen::hideEvent(QHideEvent* event) {
 
 TradeVizScreen::TradeVizScreen(QWidget* parent) : QWidget(parent) {
     setup_ui();
-    // Until the first live fetch lands (showEvent), draw the static US snapshot rather than
-    // an empty panel (P11) — its note says it is illustrative.
-    show_static_fallback(tr("Loading live data…"));
+    // Until the first live fetch lands (showEvent), the chord + table area shows its
+    // loading skeleton (the static US snapshot is only the offline fallback).
 
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
@@ -950,13 +1059,26 @@ TradeVizScreen::TradeVizScreen(QWidget* parent) : QWidget(parent) {
     // only this screen's requests (source id "trade_viz").
     connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
             &TradeVizScreen::on_econ_result);
+
+    // The partner table's text colours and fonts are set per item; rebuild them
+    // (and the font-derived row height) for the new theme / font — once the appearance
+    // change has settled (sizing work never runs inside a theme_changed handler).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        if (partner_table_) {
+            partner_table_->verticalHeader()->setDefaultSectionSize(
+                std::max(28, QFontMetrics(ui::fonts::font(2, QFont::Bold)).height() + 8));
+            partner_table_->horizontalHeader()->resizeSection(
+                0, std::max(35, QFontMetrics(ui::fonts::font(1)).horizontalAdvance(QStringLiteral("00)")) + 14));
+        }
+        rebuild_views();
+    });
 }
 
 void TradeVizScreen::setup_ui() {
     setObjectName("tradeVizScreen");
     setStyleSheet(QString("QWidget#tradeVizScreen { background: %1; }"
-                          "QLabel#tvSourceNote { color: %2; background: %1; font-size: 11px; padding: 4px 10px;"
-                          " border-bottom: 1px solid %3; font-family: 'Consolas','Courier New',monospace; }"
+                          "QLabel#tvSourceNote { color: %2; background: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; padding: 4px 10px;"
+                          " border-bottom: 1px solid %3; }"
                           "QLabel#tvSourceNote[illustrative=\"true\"] { color: %4; font-weight: bold; }")
                       .arg(ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
                            ui::colors::WARNING()));
@@ -972,7 +1094,8 @@ void TradeVizScreen::setup_ui() {
     root->addWidget(build_filter_bar());
 
     // ── Main content: chord diagram (left) + partner table (right) ───────────
-    auto* splitter = new QSplitter(Qt::Horizontal);
+    body_stack_ = new QStackedWidget(this);
+    auto* splitter = new QSplitter(Qt::Horizontal, body_stack_);
     splitter->setStyleSheet(QString("QSplitter { background: %1; }"
                                     "QSplitter::handle { background: %2; width: 1px; }")
                                 .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
@@ -983,8 +1106,30 @@ void TradeVizScreen::setup_ui() {
     splitter->addWidget(build_partner_table());
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 2);
+    body_stack_->addWidget(splitter); // 0
 
-    root->addWidget(splitter, 1);
+    // 1 — while a country / year loads: the shape of the chord + ranking that is coming.
+    loading_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Result, body_stack_);
+    loading_->set_kpi_count(0);
+    loading_->set_row_count(10);
+    loading_->set_message(tr("Loading UN Comtrade trade flows…"));
+    body_stack_->addWidget(loading_);
+
+    // 2 — a failure (RETRY) or no records for the year (TRY the previous year).
+    state_ = new ui::EmptyState(body_stack_);
+    connect(state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (state_action_ == QLatin1String("prev_year") && year_combo_ &&
+            year_combo_->currentIndex() + 1 < year_combo_->count()) {
+            year_combo_->setCurrentIndex(year_combo_->currentIndex() + 1); // → refresh_data()
+            return;
+        }
+        shown_key_.clear();
+        refresh_data();
+    });
+    body_stack_->addWidget(state_);
+    body_stack_->setCurrentWidget(loading_);
+
+    root->addWidget(body_stack_, 1);
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────
@@ -1089,5 +1234,60 @@ void TradeVizScreen::restore_state(const QVariantMap& state) {
     // The period combo always stays on Yearly; "period" is still written by save_state for
     // forward compatibility but deliberately not applied here.
 }
+
+// ── ISectionLinked ───────────────────────────────────────────────────────────
+
+bool TradeVizScreen::open_section(const QString& section, const QString& focus) {
+    const QString key = section.trimmed();
+    QString wanted;
+    if (key.isEmpty()) {
+        wanted = focus.trimmed();
+        if (wanted.isEmpty())
+            return true;
+    } else if (!command_rows::split_kind(key, "country", &wanted) || wanted.isEmpty()) {
+        return false;
+    }
+    // The reporter by label, name or UN code (exact, then any case).
+    int idx = -1;
+    for (const Qt::CaseSensitivity cs : {Qt::CaseSensitive, Qt::CaseInsensitive}) {
+        for (int i = 0; i < kTvReporterCount && idx < 0; ++i) {
+            const TvReporter& r = kTvReporters[i];
+            if (wanted.compare(QLatin1String(r.label), cs) == 0 || wanted.compare(QLatin1String(r.name), cs) == 0 ||
+                wanted == QString::number(r.code))
+                idx = i;
+        }
+    }
+    if (idx < 0)
+        return key.isEmpty(); // "" + an unknown focus: nothing to do
+    if (country_combo_ && country_combo_->currentIndex() != idx)
+        country_combo_->setCurrentIndex(idx); // the combo pick (filters, saved state, its data load)
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> tv_command_rows() {
+    namespace rows = command_rows;
+    const QString where = TradeVizScreen::tr("Trade Visualization");
+    QList<command::CommandItem> out;
+    for (const TvReporter& r : kTvReporters) {
+        const QString name = QString::fromLatin1(r.name);
+        out.append(rows::section(QStringLiteral("trade_viz"), QStringLiteral("country:") + QString::fromLatin1(r.label),
+                                 TradeVizScreen::tr("Trade flows: %1").arg(name),
+                                 {name, QString::fromLatin1(r.label), QStringLiteral("trade partners"),
+                                  QStringLiteral("imports"), QStringLiteral("exports"), QStringLiteral("comtrade")},
+                                 where));
+    }
+    return out;
+}
+
+void tv_install_commands() {
+    command_rows::install(QStringLiteral("trade_viz"), &tv_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(tv_install_commands)
 
 } // namespace fincept::screens

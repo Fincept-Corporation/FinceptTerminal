@@ -10,6 +10,7 @@
 #include "screens/ai_quant_lab/QuantModulePanel_AdvancedHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
+#include "screens/ai_quant_lab/QuantModulePanel_ResultCharts.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 #include "ui/theme/Theme.h"
 
@@ -45,13 +46,14 @@ using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
 using namespace fincept::screens::quant_advanced_helpers;
+using namespace fincept::screens::quant_charts;
 
 void QuantModulePanel::display_factor_evaluation_result(const QString& command, const QJsonObject& payload) {
     clear_results();
     if (!check_success(payload, [this](const QString& s) { display_error(s); }))
         return;
 
-    const QString accent = module_.color.name();
+    const QString accent = ui::colors::legible(module_.color);
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
@@ -113,27 +115,47 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             results_layout_->addWidget(note);
         }
 
-        // Sample IC series
+        // IC per date over the whole evaluation period (bars coloured by sign around the
+        // mean line), then the latest dates newest first.
         const auto series = payload.value("ic_series").toArray();
         if (!series.isEmpty()) {
-            const int rows = std::min<int>(15, series.size());
-            const int step = std::max<int>(1, series.size() / rows);
+            QcChartSpec spec;
+            spec.title = tr("DAILY IC");
+            const XAxis x = qc_x_axis(series, {QStringLiteral("date")});
+            spec.x_time = x.time;
+            spec.xs = x.xs;
+            spec.fmt = qc_fmt_num(3);
+            QcLine l;
+            l.name = tr("IC");
+            l.ys = qc_column(series, QStringLiteral("ic"));
+            l.style = ui::TimeSeriesChart::Style::Baseline;
+            l.has_baseline = true;
+            l.baseline = 0.0;
+            spec.lines.append(l);
+            auto* chart = qc_series_chart(spec, this);
+            if (rolling)
+                chart->add_hline(ic_mean, tr("Mean %1").arg(ic_mean, 0, 'f', 4), ui::ChartColorRole::Accent);
+            results_layout_->addWidget(chart);
+
+            const QVector<int> latest = qc_latest_rows(series.size());
+            const int rows = latest.size();
+            results_layout_->addWidget(qc_caption(qc_latest_caption(rows, series.size())));
             auto* table = new QTableWidget(rows, 2, this);
             table->setHorizontalHeaderLabels({tr("Date"), tr("IC")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(rows * 22 + 32);
-            for (int i = 0, r = 0; i < series.size() && r < rows; i += step, ++r) {
-                const auto o = series[i].toObject();
+            table->setMaximumHeight(rows * row_px(22) + row_px(32));
+            for (int r = 0; r < rows; ++r) {
+                const auto o = series[latest.at(r)].toObject();
                 table->setItem(r, 0, new QTableWidgetItem(o.value("date").toString()));
                 const double ic = o.value("ic").toDouble();
                 auto* it = new QTableWidgetItem(QString::number(ic, 'f', 4));
                 it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 it->setForeground(QColor(gs_pos_neg_color(ic)));
                 table->setItem(r, 1, it);
-                table->setRowHeight(r, 22);
+                table->setRowHeight(r, row_px(22));
             }
             results_layout_->addWidget(table);
         }
@@ -257,6 +279,85 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         return;
     }
 
+    // ── combine_factors ──────────────────────────────────────────────────────
+    // {method, num_factors, observations, weights{name: w}, combined_factor[...],
+    //  factor_ic{name: ic}?, combined_ic?, in_sample?, note?}
+    if (command == "combine_factors") {
+        const QString method = payload.value("method").toString();
+        const QJsonObject weights = payload.value("weights").toObject();
+        const QJsonObject factor_ic = payload.value("factor_ic").toObject();
+        const QJsonValue combined_ic = payload.value("combined_ic");
+        const QJsonArray combined = payload.value("combined_factor").toArray();
+
+        QList<QWidget*> top = {
+            gs_make_card(tr("METHOD"), method.toUpper(), this),
+            gs_make_card(tr("FACTORS"), fmt_int_safe(payload.value("num_factors")), this),
+            gs_make_card(tr("OBSERVATIONS"), fmt_int_safe(payload.value("observations")), this),
+            gs_make_card(payload.value("in_sample").toBool() ? tr("COMPOSITE IC (IN-SAMPLE)") : tr("COMPOSITE IC"),
+                         fmt_num_safe(combined_ic, 4), this),
+        };
+        results_layout_->addWidget(gs_card_row(top, this));
+
+        if (!weights.isEmpty()) {
+            results_layout_->addWidget(gs_section_header(tr("WEIGHTS ON THE STANDARDISED FACTORS"), accent));
+            const bool has_ic = !factor_ic.isEmpty();
+            auto* table = new QTableWidget(weights.size(), has_ic ? 3 : 2, this);
+            table->setHorizontalHeaderLabels(has_ic ? QStringList{tr("Factor"), tr("Weight"), tr("IC")}
+                                                    : QStringList{tr("Factor"), tr("Weight")});
+            table->verticalHeader()->setVisible(false);
+            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            table->setStyleSheet(table_ss());
+            table->setMaximumHeight(qMin(static_cast<int>(weights.size()) * row_px(24) + row_px(32), row_px(320)));
+            int r = 0;
+            for (auto it = weights.begin(); it != weights.end(); ++it, ++r) {
+                table->setItem(r, 0, new QTableWidgetItem(it.key()));
+                const double wv = it.value().toDouble();
+                table->setItem(r, 1, num_item(QString::number(wv * 100.0, 'f', 2) + "%", wv));
+                if (has_ic) {
+                    const QJsonValue icv = factor_ic.value(it.key());
+                    if (icv.isDouble())
+                        table->setItem(r, 2, num_item(QString::number(icv.toDouble(), 'f', 4), icv.toDouble()));
+                    else
+                        table->setItem(r, 2, new QTableWidgetItem(QString::fromUtf8("—")));
+                }
+                table->setRowHeight(r, row_px(24));
+            }
+            finish_table(table);
+            results_layout_->addWidget(table);
+        }
+
+        if (combined.size() >= 2) {
+            QcChartSpec spec;
+            spec.title = tr("COMPOSITE FACTOR (Z-SCORE UNITS)");
+            spec.xs = qc_x_positions(combined.size()).xs;
+            spec.fmt = qc_fmt_num(3);
+            spec.x_label = [](double v) {
+                return QStringLiteral("#%1").arg(static_cast<qlonglong>(std::llround(v)));
+            };
+            QcLine l;
+            l.name = tr("Composite");
+            l.ys = qc_values(combined);
+            l.color = ui::ChartColorRole::Accent;
+            spec.lines.append(l);
+            results_layout_->addWidget(qc_series_chart(spec, this));
+        }
+
+        const QString note_text = payload.value("note").toString();
+        if (!note_text.isEmpty()) {
+            auto* note = gs_section_header(note_text, ui::colors::WARNING());
+            note->setWordWrap(true);
+            results_layout_->addWidget(note);
+        }
+        status_label_->setText(combined_ic.isDouble()
+                                   ? tr("%1: %2 factors, composite IC %3")
+                                         .arg(method)
+                                         .arg(weights.size())
+                                         .arg(combined_ic.toDouble(), 0, 'f', 4)
+                                   : tr("%1: %2 factors combined").arg(method).arg(weights.size()));
+        return;
+    }
+
     display_result(payload);
 }
 
@@ -268,7 +369,7 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
     if (!check_success(payload, [this](const QString& s) { display_error(s); }))
         return;
 
-    const QString accent = module_.color.name();
+    const QString accent = ui::colors::legible(module_.color);
     const QString stype = payload.value("strategy_type").toString();
     QString header_text = (stype.isEmpty() ? command : stype).toUpper();
     header_text.replace('_', ' ');
@@ -325,9 +426,9 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
 
     // Strategy creation commands — common fields: strategy_id, strategy_type, config?, weights?, suitable_for[]
     QList<QWidget*> top = {
-        gs_make_card(tr("STRATEGY ID"), payload.value("strategy_id").toString(), this, ui::colors::POSITIVE()),
+        gs_make_card(tr("STRATEGY ID"), payload.value("strategy_id").toString(), this),
         gs_make_card(tr("TYPE"), stype, this),
-        gs_make_card(tr("STATUS"), tr("CREATED"), this, ui::colors::POSITIVE()),
+        gs_make_card(tr("STATUS"), tr("CREATED"), this, ui::colors::SUCCESS()),
         gs_make_card(tr("DESCRIPTION"), tr("↓ see below"), this, ui::colors::INFO()),
     };
     results_layout_->addWidget(gs_card_row(top, this));
@@ -360,7 +461,11 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
             results_layout_->addWidget(gs_card_row(rp, this));
         }
         results_layout_->addWidget(gs_section_header(tr("WEIGHTS"), accent));
-        results_layout_->addWidget(build_weights_table(weights, this));
+        // Scaled risk-parity weights need not sum to 100%: no allocation donut for those.
+        if (payload.contains("gross_exposure"))
+            results_layout_->addWidget(build_weights_table(weights, this));
+        else
+            results_layout_->addWidget(build_weights_view(weights, this));
         // Risk parity scales the equal-risk weights to the target volatility, so they need not
         // sum to 100%; show the gross exposure and the unscaled (fully invested) weights too.
         if (payload.contains("gross_exposure")) {
@@ -373,9 +478,39 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
             const auto unscaled = payload.value("unscaled_weights").toObject();
             if (!unscaled.isEmpty()) {
                 results_layout_->addWidget(gs_section_header(tr("UNSCALED WEIGHTS (FULLY INVESTED)"), accent));
-                results_layout_->addWidget(build_weights_table(unscaled, this));
+                results_layout_->addWidget(build_weights_view(unscaled, this));
             }
         }
+        // TopK-Dropout: every name ranked by its signal, and whether the book holds it.
+        const QJsonArray ranking = payload.value("ranking").toArray();
+        if (!ranking.isEmpty()) {
+            results_layout_->addWidget(
+                gs_section_header(tr("RANKING  |  %n NAME(S)", "", static_cast<int>(ranking.size())), accent));
+            auto* table = new QTableWidget(ranking.size(), 4, this);
+            table->setHorizontalHeaderLabels({tr("Rank"), tr("Asset"), tr("Signal"), tr("In book")});
+            table->verticalHeader()->setVisible(false);
+            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            table->setStyleSheet(table_ss());
+            table->setMaximumHeight(qMin(static_cast<int>(ranking.size()) * row_px(24) + row_px(32), 320));
+            for (int r = 0; r < ranking.size(); ++r) {
+                const QJsonObject o = ranking.at(r).toObject();
+                table->setItem(r, 0, num_item(QString::number(o.value("rank").toInt()), o.value("rank").toInt()));
+                table->setItem(r, 1, new QTableWidgetItem(o.value("asset").toString()));
+                table->setItem(r, 2, num_item(fmt_num_safe(o.value("signal"), 4), o.value("signal").toDouble()));
+                const bool held = o.value("held").toBool();
+                // A state with its word (never colour alone).
+                table->setItem(r, 3, new QTableWidgetItem(held ? tr("yes") : tr("no")));
+                if (held)
+                    table->item(r, 3)->setForeground(QColor(ui::colors::SUCCESS()));
+                table->setRowHeight(r, row_px(24));
+            }
+            finish_table(table);
+            results_layout_->addWidget(table);
+        }
+        if (payload.contains("expected_turnover"))
+            results_layout_->addWidget(gs_card_row(
+                {gs_make_card(tr("EXPECTED TURNOVER"), payload.value("expected_turnover").toString(), this)}, this));
     } else if (payload.contains("config")) {
         // TopK-Dropout / Enhanced Indexing / Weight Strategy: render config dict
         const auto cfg = payload.value("config").toObject();
@@ -387,14 +522,14 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(cfg.size() * 24 + 32, 240));
+            table->setMaximumHeight(qMin(cfg.size() * row_px(24) + row_px(32), 240));
             int r = 0;
             for (auto it = cfg.begin(); it != cfg.end(); ++it, ++r) {
                 table->setItem(r, 0, new QTableWidgetItem(it.key().toUpper()));
                 auto* vi = new QTableWidgetItem(format_val(it.value()));
                 vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(r, 1, vi);
-                table->setRowHeight(r, 24);
+                table->setRowHeight(r, row_px(24));
             }
             results_layout_->addWidget(table);
         }
@@ -429,7 +564,7 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
         auto* lbl = new QLabel(desc);
         lbl->setWordWrap(true);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:11px; padding:8px 10px; background:%2; border-left:3px solid %3;")
+            QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; padding:8px 10px; background:%2; border-left:3px solid %3;")
                 .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
         results_layout_->addWidget(lbl);
     }
@@ -440,7 +575,7 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
             sf_list << "• " + v.toString();
         auto* sf_lbl = new QLabel(tr("Suitable for:\n%1").arg(sf_list.join("\n")));
         sf_lbl->setWordWrap(true);
-        sf_lbl->setStyleSheet(QString("color:%1; font-size:10px; padding:6px 10px;").arg(ui::colors::TEXT_SECONDARY()));
+        sf_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; padding:6px 10px;").arg(ui::colors::TEXT_SECONDARY()));
         results_layout_->addWidget(sf_lbl);
     }
 

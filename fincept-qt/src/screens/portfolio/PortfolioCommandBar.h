@@ -23,8 +23,14 @@ class PortfolioCommandBar : public QWidget {
     void set_selected_portfolio(const portfolio::Portfolio& p);
     void set_refreshing(bool refreshing);
     void set_detail_view(std::optional<portfolio::DetailView> view);
+    /// Appends a host-supplied control (e.g. a Pro analytics button) to the tools cluster.
+    void add_tool(QWidget* tool);
     void set_has_selection(bool has_selection);
     void set_has_portfolios(bool has_portfolios);
+    /// Disable (with an "Add a position first" tooltip) the actions that need at least one
+    /// holding: SELL, DIV, AI, AGENT, FFN Analysis, Backtest Portfolio. They used to stay
+    /// enabled on an empty book and silently do nothing.
+    void set_has_holdings(bool has_holdings);
     void set_refresh_interval(int ms);
     void refresh_theme();
 
@@ -48,6 +54,9 @@ class PortfolioCommandBar : public QWidget {
     void ai_analyze_requested();
     void agent_run_requested();
     void backtest_requested();
+    void cash_requested();
+    void split_requested();
+    void settings_requested();
 
   private:
     void build_ui();
@@ -62,6 +71,7 @@ class PortfolioCommandBar : public QWidget {
     void update_selector_label();
     void apply_row1_styles();
     void apply_row2_styles();
+    void apply_holdings_state(); // enabled state + "Add a position first" tooltips from has_holdings_
     void retranslateUi();
 
     // Portfolio selector
@@ -76,6 +86,9 @@ class PortfolioCommandBar : public QWidget {
     QPushButton* buy_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
     QPushButton* div_btn_ = nullptr;
+    QPushButton* cash_btn_ = nullptr;
+    QPushButton* split_btn_ = nullptr;
+    QAction* settings_action_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
     QComboBox* interval_cb_ = nullptr;
     QToolButton* overflow_btn_ = nullptr;
@@ -104,6 +117,7 @@ class PortfolioCommandBar : public QWidget {
     std::optional<portfolio::DetailView> active_detail_;
     bool dropdown_visible_ = false;
     bool has_portfolios_ = false; // tracked for retranslateUi() to pick the right selector text
+    bool has_holdings_ = true;    // false = selected portfolio has no positions (see set_has_holdings)
 };
 
 } // namespace fincept::screens

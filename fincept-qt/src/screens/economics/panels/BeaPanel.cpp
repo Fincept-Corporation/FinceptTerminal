@@ -127,7 +127,7 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
     // Category header
     auto* cat_hdr = new QWidget(this);
     cat_hdr->setStyleSheet(section_hdr_style());
-    cat_hdr->setFixedHeight(32);
+    cat_hdr->setMinimumHeight(32);
     auto* chl = new QHBoxLayout(cat_hdr);
     chl->setContentsMargins(8, 0, 8, 0);
     category_lbl_ = new QLabel(tr("CATEGORY"));
@@ -135,7 +135,7 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
     category_combo_ = new QComboBox;
     for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
-    category_combo_->setFixedHeight(22);
+    category_combo_->setMinimumHeight(22);
     connect(category_combo_, &QComboBox::currentIndexChanged, this, &BeaPanel::on_category_changed);
     chl->addWidget(category_lbl_);
     chl->addWidget(category_combo_, 1);
@@ -145,7 +145,8 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
-    indicator_search_->setFixedHeight(28);
+    mark_local_input(indicator_search_); // filters the list: not part of the query
+    indicator_search_->setMinimumHeight(28);
     connect(indicator_search_, &QLineEdit::textChanged, this, &BeaPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
@@ -174,9 +175,12 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
 }
 
 void BeaPanel::activate() {
-    show_empty(tr("Select a category and indicator, then click FETCH\n"
-                  "Requires BEA_API_KEY — free at: www.bea.gov/data/api/register\n"
-                  "All data is US national accounts (NIPA)"));
+    // Nothing to prepare: the results pane runs the query on show — or, without a BEA key, shows the
+    // page that names BEA_API_KEY and opens Settings > Credentials.
+}
+
+QList<ui::Requirement> BeaPanel::load_requirements() const {
+    return {ui::Requirement::api_key(QStringLiteral("BEA_API_KEY"), QStringLiteral("BEA"))};
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -191,14 +195,14 @@ void BeaPanel::build_controls(QHBoxLayout* thl) {
     start_input_ = new QLineEdit;
     start_input_->setPlaceholderText(tr("Start year"));
     start_input_->setText("2000");
-    start_input_->setFixedHeight(26);
-    start_input_->setFixedWidth(75);
+    start_input_->setMinimumHeight(26);
+    set_text_width(start_input_, 75);
 
     end_input_ = new QLineEdit;
     end_input_->setPlaceholderText(tr("End year"));
     end_input_->setText(QString::number(QDate::currentDate().year()));
-    end_input_->setFixedHeight(26);
-    end_input_->setFixedWidth(75);
+    end_input_->setMinimumHeight(26);
+    set_text_width(end_input_, 75);
 
     thl->addWidget(from_lbl_ = make_lbl(tr("FROM")));
     thl->addWidget(start_input_);
@@ -257,9 +261,9 @@ void BeaPanel::on_fetch() {
 
     // CLI: fetch <indicator_id> <start_year>-01-01 <end_year>-12-31
     show_loading(tr("Fetching BEA: %1…").arg(sel->text().split("  [").first()));
-    services::EconomicsService::instance().execute(kBeaSourceId, kBeaScript, "fetch",
-                                                   {indicator_id, start + "-01-01", end + "-12-31"},
-                                                   "bea_fetch_" + indicator_id);
+    execute_query(kBeaSourceId, kBeaScript, "fetch",
+                  {indicator_id, start + "-01-01", end + "-12-31"},
+                  "bea_fetch_" + indicator_id);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -271,9 +275,14 @@ void BeaPanel::on_result(const QString& request_id, const services::EconomicsRes
         return;
 
     if (!result.success) {
-        if (result.error.contains("API key") || result.error.contains("UserID") || result.error.contains("register")) {
+        if (!result.error_code.isEmpty()) {
+            // The script named the failure ("[missing_key] …" + env key, "[auth_failed] …", a rate
+            // limit): the base shows that kind's own page.
+            show_error(result.error);
+        } else if (result.error.contains("API key") || result.error.contains("UserID") ||
+                   result.error.contains("register")) {
             show_error(tr("BEA API key not configured.\n"
-                          "Set BEA_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (BEA_API_KEY).\n"
                           "Free registration at: www.bea.gov/data/api/register"));
         } else {
             show_error(result.error);
@@ -295,7 +304,7 @@ void BeaPanel::on_result(const QString& request_id, const services::EconomicsRes
         indicator_list_->currentItem() ? indicator_list_->currentItem()->text().split("  [").first() : tr("Indicator"));
 
     display(rows, "BEA: " + ind_name);
-    LOG_INFO("BeaPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("BeaPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

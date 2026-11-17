@@ -3,9 +3,12 @@ FAOSTAT API Data Fetcher
 Wrapper for the UN Food and Agriculture Organization (FAO) FAOSTAT database.
 Covers crop production, trade, food security, emissions, prices, land use, and more.
 
-Base URL:  https://fenixservices.fao.org/faostat/api/v1/en/
-Auth:      None required - fully public API
-Bulk CDN:  https://bulks-faostat.fao.org/production/datasets_E.json
+Base URL:  https://faostatservices.fao.org/api/v1/en/
+Auth:      The data API now needs a bearer token: it answers HTTP 401 "Missing Authorization Header" (the
+           website gets one through a browser guest handshake); the old keyless host
+           fenixservices.fao.org/faostat/api/v1 is offline (Cloudflare 521). Checked 2026-11-16.
+Bulk CDN:  https://bulks-faostat.fao.org/production/datasets_E.json  (keyless; backs list_domains /
+           list_datasets)
 
 Key domain codes:
   QCL  - Crops and Livestock Products
@@ -31,8 +34,15 @@ import requests
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://fenixservices.fao.org/faostat/api/v1/en"
+import fincept_connector as fc
+import fincept_json
+
+BASE_URL = "https://faostatservices.fao.org/api/v1/en"
 BULK_URL = "https://bulks-faostat.fao.org/production/datasets_E.json"
+SERVICE = "FAOSTAT"
+AUTH_REQUIRED = ("FAOSTAT's data API (faostatservices.fao.org) now requires a sign-in token (HTTP {code}) and "
+                 "the keyless API it replaced (fenixservices.fao.org) is offline - only list_domains and "
+                 "list_datasets (the keyless bulk-download catalogue) still work")
 
 DOMAIN_CODES = {
     "QCL": "Crops and Livestock Products",
@@ -70,14 +80,17 @@ DOMAIN_CODES = {
 
 class FAOSTATWrapper:
     def __init__(self):
-        self.session = requests.Session()
+        self.session = fc.http_session()
         self.session.headers.update({"User-Agent": "Fincept-Terminal/1.0", "Accept": "application/json"})
 
     def _get(self, path: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         try:
             p = {k: v for k, v in (params or {}).items() if v is not None}
             p.setdefault("output_type", "objects")
-            r = self.session.get(f"{BASE_URL}/{path}", params=p, timeout=45)
+            r = self.session.get(f"{BASE_URL}/{path}", params=p, timeout=(10, 45))
+            if r.status_code in (401, 403):
+                return {"success": False, "error": AUTH_REQUIRED.format(code=r.status_code), "endpoint": path,
+                        "status_code": r.status_code}
             r.raise_for_status()
             data = r.json()
             records = data.get("data", data) if isinstance(data, dict) else data
@@ -87,9 +100,12 @@ class FAOSTATWrapper:
                 "timestamp": int(datetime.now(timezone.utc).timestamp()),
             }
         except requests.exceptions.HTTPError as e:
-            return {"success": False, "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}", "endpoint": path, "status_code": e.response.status_code}
-        except Exception as e:
-            return {"success": False, "error": str(e), "endpoint": path}
+            return {"success": False, "error": fc.request_error(SERVICE, e), "endpoint": path,
+                    "status_code": e.response.status_code}
+        except requests.exceptions.RequestException as e:
+            return {"success": False, "error": fc.request_error(SERVICE, e), "endpoint": path}
+        except ValueError:
+            return {"success": False, "error": f"{SERVICE} returned a response that is not JSON", "endpoint": path}
 
     def _fmt(self, v) -> Optional[str]:
         if v is None:
@@ -113,7 +129,15 @@ class FAOSTATWrapper:
 
     # --- Metadata ---
     def list_domains(self):
-        r = self._get("groupsanddomains")
+        """Dataset (domain) codes, names, last update and bulk file, from the keyless bulk catalogue
+        (the groupsanddomains API endpoint now requires a token)."""
+        r = self.list_all_datasets()
+        if r.get("success"):
+            r["data"] = [{"code": d.get("DatasetCode"), "name": d.get("DatasetName"),
+                          "updated": (d.get("DateUpdate") or "")[:10], "rows": d.get("FileRows"),
+                          "bulk_file": d.get("FileLocation"), "bulk_size": d.get("FileSize")}
+                         for d in r["data"] if isinstance(d, dict)]
+            r["count"] = len(r["data"])
         r["domain_reference"] = DOMAIN_CODES
         return r
 
@@ -131,13 +155,17 @@ class FAOSTATWrapper:
 
     def list_all_datasets(self):
         try:
-            r = self.session.get(BULK_URL, timeout=30)
+            r = self.session.get(BULK_URL, timeout=(10, 30))
             r.raise_for_status()
             d = r.json()
-            return {"success": True, "data": d, "count": len(d) if isinstance(d, list) else None,
-                    "timestamp": int(datetime.now(timezone.utc).timestamp())}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except requests.exceptions.RequestException as e:
+            return {"success": False, "error": fc.request_error(SERVICE, e)}
+        except ValueError:
+            return {"success": False, "error": f"{SERVICE} bulk catalogue is not valid JSON"}
+        if isinstance(d, dict):  # {"Datasets": {"Dataset": [...]}}
+            d = (d.get("Datasets") or {}).get("Dataset", d)
+        return {"success": True, "data": d, "count": len(d) if isinstance(d, list) else None,
+                "timestamp": int(datetime.now(timezone.utc).timestamp())}
 
     # --- Production ---
     def get_crop_production(self, countries=None, items=None, years=None, elements=None, limit=5000):
@@ -256,26 +284,29 @@ class FAOSTATWrapper:
     def get_country_agri_profile(self, country_iso3: str, year: int):
         """Full agricultural profile combining production, trade, food balance, land use."""
         c, y = [country_iso3], [year]
-        return {
-            "success": True, "country": country_iso3, "year": year,
-            "production":   self.get_crop_production(countries=c, years=y, limit=2000).get("data", []),
-            "trade":        self.get_trade_data(countries=c, years=y, limit=2000).get("data", []),
-            "food_balance": self.get_food_balances(countries=c, years=y, limit=1000).get("data", []),
-            "land_use":     self.get_land_use(countries=c, years=y).get("data", []),
-            "timestamp": int(datetime.now(timezone.utc).timestamp()),
-        }
+        parts = {}
+        for name, fetch in (("production", lambda: self.get_crop_production(countries=c, years=y, limit=2000)),
+                            ("trade", lambda: self.get_trade_data(countries=c, years=y, limit=2000)),
+                            ("food_balance", lambda: self.get_food_balances(countries=c, years=y, limit=1000)),
+                            ("land_use", lambda: self.get_land_use(countries=c, years=y))):
+            r = fetch()
+            if not r.get("success"):
+                return r  # do not dress a failed call up as an empty profile
+            parts[name] = r.get("data", [])
+        return {"success": True, "country": country_iso3, "year": year, **parts,
+                "timestamp": int(datetime.now(timezone.utc).timestamp())}
 
     def get_agri_emissions_summary(self, countries=None, years=None):
         """Combined agricultural GHG emissions across land use, livestock, and crops."""
-        return {
-            "success": True,
-            "data": {
-                "land_use":  self.get_emissions_land_use(countries=countries, years=years, limit=2000).get("data", []),
-                "livestock": self.get_emissions_livestock(countries=countries, years=years).get("data", []),
-                "crops":     self.get_emissions_crops(countries=countries, years=years).get("data", []),
-            },
-            "timestamp": int(datetime.now(timezone.utc).timestamp()),
-        }
+        parts = {}
+        for name, fetch in (("land_use", lambda: self.get_emissions_land_use(countries=countries, years=years, limit=2000)),
+                            ("livestock", lambda: self.get_emissions_livestock(countries=countries, years=years)),
+                            ("crops", lambda: self.get_emissions_crops(countries=countries, years=years))):
+            r = fetch()
+            if not r.get("success"):
+                return r
+            parts[name] = r.get("data", [])
+        return {"success": True, "data": parts, "timestamp": int(datetime.now(timezone.utc).timestamp())}
 
 
 def _a(n, d=None):
@@ -293,7 +324,7 @@ def _li(n):
 def main():
     w = FAOSTATWrapper()
     if len(sys.argv) < 2:
-        print(json.dumps({
+        print(fincept_json.dumps({
             "success": False, "error": "No command",
             "available_commands": [
                 "list_domains", "list_datasets",
@@ -328,7 +359,7 @@ def main():
                 "agri_emissions [countries_csv] [years_csv]",
             ],
             "domain_codes": DOMAIN_CODES,
-        }, indent=2))
+        }))
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -371,7 +402,7 @@ def main():
         if cmd not in dispatch:
             print(json.dumps({"success": False, "error": f"Unknown command: {cmd}"}))
             sys.exit(1)
-        print(json.dumps(dispatch[cmd](), indent=2))
+        print(fincept_json.dumps(dispatch[cmd]()))
     except KeyboardInterrupt:
         print(json.dumps({"success": False, "error": "Cancelled"}))
         sys.exit(1)

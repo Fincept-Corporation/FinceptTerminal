@@ -17,12 +17,17 @@
 #include "mcp/core/CoreApproval.h"
 #include "mcp/core/CoreToolsCommon.h"
 #include "mcp/core/UiEngine.h"
+#include "mcp/core/UiErrors.h"
+#include "mcp/core/UiRisk.h"
+#include "mcp/server/CallApproval.h"
 
 #include <QApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QMap>
 #include <QRegularExpression>
+#include <QTimer>
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
@@ -35,6 +40,28 @@ namespace fincept::mcp::core::ui {
 namespace ui_nav_detail {
 
 constexpr int kOpenSettleMs = 450;
+constexpr int kOpenReadyMs = 2500; // ui_open waits at most this long for a lazily built screen to show something
+
+WindowFrame* wf(QWidget* w) {
+    return qobject_cast<WindowFrame*>(w);
+}
+
+ads::CDockWidget* adock(QWidget* w) {
+    return qobject_cast<ads::CDockWidget*>(w);
+}
+
+WindowFrame* active_wf() {
+    return wf(active_frame());
+}
+
+QList<WindowFrame*> all_wf() {
+    QList<WindowFrame*> out;
+    for (QWidget* f : frames()) {
+        if (WindowFrame* w = wf(f))
+            out << w;
+    }
+    return out;
+}
 
 QString screen_title(const QString& id) {
     const ComponentMeta meta = ComponentCatalog::instance().by_id(id);
@@ -190,7 +217,7 @@ QString settled_summary(ads::CDockWidget* dock, const QString& headline) {
 }
 
 WindowFrame* frame_by_id(int id) {
-    for (WindowFrame* f : frames()) {
+    for (WindowFrame* f : all_wf()) {
         if (f->window_id() == id)
             return f;
     }
@@ -200,7 +227,7 @@ WindowFrame* frame_by_id(int id) {
 /// A window from `window` (id number or w-ref) or the active one.
 WindowFrame* window_arg(const QJsonValue& v, QString* error) {
     if (v.isUndefined() || v.isNull() || (v.isString() && v.toString().trimmed().isEmpty())) {
-        WindowFrame* f = active_frame();
+        WindowFrame* f = active_wf();
         if (!f)
             *error = QStringLiteral("No terminal window is open.");
         return f;
@@ -221,7 +248,7 @@ WindowFrame* window_arg(const QJsonValue& v, QString* error) {
         return f;
     }
     if (auto r = Refs::instance().resolve(s)) {
-        if (WindowFrame* f = frame_of(r->widget ? r->widget.data() : r->dock.data()))
+        if (WindowFrame* f = wf(frame_of(r->widget ? r->widget.data() : r->dock.data())))
             return f;
     }
     *error = QStringLiteral("\"%1\" is not a window (pass its id or w-ref from ui_overview).").arg(s);
@@ -230,22 +257,22 @@ WindowFrame* window_arg(const QJsonValue& v, QString* error) {
 
 ads::CDockWidget* panel_arg(const QString& panel, QString* error) {
     if (panel.trimmed().isEmpty()) {
-        if (WindowFrame* f = active_frame()) {
-            if (ads::CDockWidget* d = focused_dock(f))
+        if (WindowFrame* f = active_wf()) {
+            if (ads::CDockWidget* d = adock(focused_dock(f)))
                 return d;
         }
         *error = QStringLiteral("Which panel? Pass `panel` (its p-ref or screen id).");
         return nullptr;
     }
     if (auto r = Refs::instance().resolve(panel)) {
-        if (r->dock)
-            return r->dock;
+        if (ads::CDockWidget* d = adock(r->dock))
+            return d;
         if (r->widget) {
-            if (ads::CDockWidget* d = dock_of(r->widget))
+            if (ads::CDockWidget* d = adock(dock_of(r->widget)))
                 return d;
         }
     }
-    if (ads::CDockWidget* d = find_open_panel(panel))
+    if (ads::CDockWidget* d = adock(find_open_panel(panel)))
         return d;
     *error = QStringLiteral("Panel \"%1\" is not open (ui_overview lists open panels).").arg(panel);
     return nullptr;
@@ -272,7 +299,7 @@ void ui_open(const QJsonObject& args, Reply reply) {
         reply(ToolResult::fail(QStringLiteral("The terminal is locked — the user must unlock it first.")));
         return;
     }
-    WindowFrame* f = active_frame();
+    WindowFrame* f = active_wf();
     if (!f || !f->dock_router()) {
         reply(ToolResult::fail(QStringLiteral("No terminal window is open.")));
         return;
@@ -282,7 +309,13 @@ void ui_open(const QJsonObject& args, Reply reply) {
             QStringLiteral("%1 is open and blocks the terminal — answer it first.").arg(location_label(modal))));
         return;
     }
-    const QString screen = args.value(QStringLiteral("screen")).toString().trimmed();
+    QString screen = args.value(QStringLiteral("screen")).toString().trimmed();
+    // "Open Apple" / "show me TSLA": a symbol with no screen is the stock's research page
+    // (a crypto pair goes to the crypto screen) — never the list of screens.
+    if (screen.isEmpty() && !args.value(QStringLiteral("symbol")).toString().trimmed().isEmpty())
+        screen = args.value(QStringLiteral("type")).toString().trimmed().toLower() == QLatin1String("crypto")
+                     ? QStringLiteral("crypto_trading")
+                     : QStringLiteral("equity_research");
     if (screen.isEmpty()) {
         reply(ToolResult::ok(list_screens(f)));
         return;
@@ -323,7 +356,7 @@ void ui_open(const QJsonObject& args, Reply reply) {
         placement = QStringLiteral("full");
     }
     DockScreenRouter* router = f->dock_router();
-    ads::CDockWidget* anchor = focused_dock(f);
+    ads::CDockWidget* anchor = adock(focused_dock(f));
 
     if (placement == QLatin1String("full") || placement == QLatin1String("only") ||
         placement == QLatin1String("replace"))
@@ -360,17 +393,35 @@ void ui_open(const QJsonObject& args, Reply reply) {
             note = QStringLiteral(" (this screen does not take a symbol — type it into the screen's own search box)");
         }
     }
-    LOG_INFO("UiTools", QStringLiteral("ui_open %1 (%2)%3")
+    LOG_DEBUG("UiTools", QStringLiteral("ui_open %1 (%2)%3")
                             .arg(id, placement, symbol.isEmpty() ? QString() : QLatin1Char(' ') + symbol));
     QPointer<ads::CDockWidget> dg(dock);
     const QString headline = QStringLiteral("Opened %1%2 (%3).").arg(panel_label(dock), note, placement);
-    after_settle(kOpenSettleMs, [dg, headline, reply]() {
-        if (!dg) {
-            reply(ToolResult::fail(QStringLiteral("The panel closed right after opening.")));
-            return;
-        }
-        reply(ToolResult::ok(settled_summary(dg, headline)));
-    });
+    // Screens are built lazily: answer once the panel shows something and is
+    // not loading — bounded, never a fixed guess.
+    auto clock = std::make_shared<QElapsedTimer>();
+    clock->start();
+    common::poll_until(
+        100, kOpenReadyMs,
+        [dg, clock]() {
+            if (!dg)
+                return true;
+            if (clock->elapsed() < kOpenSettleMs / 2)
+                return false;
+            WalkOptions o;
+            o.detail = Detail::Brief;
+            o.max_nodes = 3;
+            o.budget_ms = 20;
+            bool t = false;
+            return !collect_nodes(dg, o, &t).isEmpty() && !busy_state(dg).busy();
+        },
+        [dg, headline, reply](bool) {
+            if (!dg) {
+                reply(ui_fail(Err::StaleRef, QStringLiteral("The panel closed right after opening.")));
+                return;
+            }
+            reply(ToolResult::ok(settled_summary(dg, headline)));
+        });
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -387,7 +438,7 @@ void ui_workspace(const QJsonObject& args, const QString& origin, Reply reply) {
 
     if (action == QLatin1String("list")) {
         QStringList lines;
-        for (WindowFrame* f : frames()) {
+        for (WindowFrame* f : all_wf()) {
             QStringList ps;
             for (const PanelInfo& p : panels_of(f))
                 ps << QStringLiteral("%1 %2").arg(Refs::instance().ref_for(p.dock.data(), RefKind::Panel), p.screen_id);
@@ -438,7 +489,7 @@ void ui_workspace(const QJsonObject& args, const QString& origin, Reply reply) {
             reply(ToolResult::fail(error));
             return;
         }
-        WindowFrame* f = frame_of(dock);
+        WindowFrame* f = wf(frame_of(dock));
         DockScreenRouter* router = f ? f->dock_router() : nullptr;
         const QString id = dock->objectName();
         QPointer<ads::CDockWidget> dg(dock);
@@ -479,7 +530,7 @@ void ui_workspace(const QJsonObject& args, const QString& origin, Reply reply) {
             } else if (f) {
                 for (const PanelInfo& p : panels_of(f)) {
                     if (p.dock != dock && p.visible) {
-                        anchor = p.dock;
+                        anchor = adock(p.dock);
                         if (p.focused)
                             break;
                     }
@@ -600,6 +651,10 @@ void ui_workspace(const QJsonObject& args, const QString& origin, Reply reply) {
                 QStringLiteral("Delete the saved layout %1 — this cannot be undone.").arg(common::quoted(name));
             req.args = QJsonObject{{QStringLiteral("layout"), name}};
             req.destructive = true;
+            req.kind = QStringLiteral("delete");
+            const ::fincept::core::agent::AgentActor who = agent_actor_for_call(origin);
+            req.client_id = who.client_id;
+            req.run_id = who.run_id;
             ask_user_approval(req, [id, name, reply](ToolApprovalVerdict v) {
                 if (v != ToolApprovalVerdict::Approved) {
                     reply(ToolResult::fail(approval_refusal_text(v, QStringLiteral("delete layout %1").arg(name))));
@@ -788,7 +843,7 @@ void ui_invoke(const QJsonObject& args, const QString& origin, Reply reply) {
             d->setAsCurrentTab();
             if (QWidget* c = d->widget())
                 c->setFocus(Qt::OtherFocusReason);
-            frame = frame_of(d);
+            frame = wf(frame_of(d));
         } else {
             error.clear();
             frame = window_arg(target, &error);
@@ -798,7 +853,7 @@ void ui_invoke(const QJsonObject& args, const QString& origin, Reply reply) {
             }
         }
     } else {
-        frame = active_frame();
+        frame = active_wf();
     }
     CommandContext ctx;
     ctx.shell = &TerminalShell::instance();
@@ -823,23 +878,40 @@ void ui_invoke(const QJsonObject& args, const QString& origin, Reply reply) {
     // there from a guarded pointer rather than carrying a raw one across.
     const QPointer<WindowFrame> frame_guard(frame);
     const QVariantMap cmd_args = ctx.args;
-    auto run = [id, display, frame_guard, cmd_args, reply]() {
+    const ::fincept::core::agent::AgentActor actor = agent_actor_for_call(origin); // synchronous entry
+    auto run = [id, display, frame_guard, cmd_args, reply, actor]() {
         const int dialogs_before = static_cast<int>(open_dialogs().size());
         auto result = std::make_shared<QString>();
         auto done = std::make_shared<bool>(false);
-        QTimer::singleShot(0, QCoreApplication::instance(), [id, frame_guard, cmd_args, result, done]() {
-            CommandContext c;
-            c.shell = &TerminalShell::instance();
-            c.focused_frame = frame_guard.data();
-            c.args = cmd_args;
-            auto r = ActionRegistry::instance().invoke(id, c);
-            *result = r.is_err() ? QString::fromStdString(r.error()) : QString();
+        // A file dialog the command opens is a Qt dialog the agent can answer.
+        auto dialogs_guard = std::make_shared<common::NonNativeDialogs>();
+        // The command runs as the agent's action (core/agent/AgentActionScope.h):
+        // synchronously under a scope, its deferred work under a hold released
+        // when the call answers.
+        auto agent_hold = std::make_shared<std::unique_ptr<::fincept::core::agent::AgentActionHold>>();
+        auto answered = std::make_shared<bool>(false);
+        QTimer::singleShot(0, QCoreApplication::instance(),
+                           [id, frame_guard, cmd_args, result, done, actor, agent_hold, answered]() {
+            if (!*answered)
+                *agent_hold = std::make_unique<::fincept::core::agent::AgentActionHold>(actor, 3000);
+            ::fincept::core::agent::AgentActionScope scope(actor);
+            common::run_guarded("ui_invoke command", [&]() {
+                CommandContext c;
+                c.shell = &TerminalShell::instance();
+                c.focused_frame = frame_guard.data();
+                c.args = cmd_args;
+                auto r = ActionRegistry::instance().invoke(id, c);
+                *result = r.is_err() ? QString::fromStdString(r.error()) : QString();
+            });
             *done = true;
         });
         common::poll_until(
             50, 600,
             [done, dialogs_before]() { return *done || static_cast<int>(open_dialogs().size()) != dialogs_before; },
-            [id, display, result, done, reply](bool) {
+            [id, display, result, done, reply, dialogs_guard, agent_hold, answered](bool) {
+                dialogs_guard->release();
+                *answered = true;
+                agent_hold->reset();
                 if (*done && !result->isEmpty()) {
                     reply(ToolResult::fail(QStringLiteral("%1 failed: %2").arg(id, *result)));
                     return;
@@ -852,17 +924,41 @@ void ui_invoke(const QJsonObject& args, const QString& origin, Reply reply) {
             });
     };
 
-    // Locking the terminal, signing out and anything that deletes data ask first.
+    // Locking the terminal, signing out and anything that deletes data ask first;
+    // a command that would place an order, move money or spend is judged by the
+    // same words as a button (and refused outright in a PAPER run).
     static const QRegularExpression risky(
         QStringLiteral(R"(lock|logout|log_out|sign_out|delete|remove|reset|clear|quit|exit)"),
         QRegularExpression::CaseInsensitiveOption);
-    if (risky.match(id + QLatin1Char(' ') + display).hasMatch()) {
+    QString words = id + QLatin1Char(' ') + display;
+    words.replace(QLatin1Char('.'), QLatin1Char(' ')).replace(QLatin1Char('_'), QLatin1Char(' '));
+    const Risk by_words = classify_words(words.toLower());
+    if (by_words.money && is_paper_run_origin(origin)) {
+        reply(ui_fail(Err::Denied,
+                      QStringLiteral("Refused: %1 — this workflow runs in PAPER mode, so it cannot place, change or "
+                                     "cancel real orders or move money.")
+                          .arg(id)));
+        return;
+    }
+    if (risky.match(id + QLatin1Char(' ') + display).hasMatch() || by_words.risky) {
         ToolApprovalRequest req;
         req.client = origin;
         req.tool = QStringLiteral("ui_invoke: ") + id;
         req.description = QStringLiteral("Run the terminal command \"%1\" (%2).").arg(display, id);
         req.args = args.value(QStringLiteral("args")).toObject();
         req.destructive = true;
+        // The kind (ApprovalPolicy.h): the words' judgement, else what the command name says.
+        static const QRegularExpression account_words(QStringLiteral(R"(lock|logout|log_out|sign_out)"),
+                                                      QRegularExpression::CaseInsensitiveOption);
+        static const QRegularExpression delete_words(QStringLiteral(R"(delete|remove|reset|clear)"),
+                                                     QRegularExpression::CaseInsensitiveOption);
+        req.kind = by_words.risky                                   ? by_words.kind
+                   : account_words.match(id).hasMatch()             ? QStringLiteral("account")
+                   : delete_words.match(id + QLatin1Char(' ') + display).hasMatch() ? QStringLiteral("delete")
+                                                                    : QStringLiteral("generic");
+        req.live_trading = is_order_kind(by_words);
+        req.client_id = actor.client_id;
+        req.run_id = actor.run_id;
         ask_user_approval(req, [run, id, reply](ToolApprovalVerdict v) {
             if (v != ToolApprovalVerdict::Approved) {
                 reply(ToolResult::fail(approval_refusal_text(v, QStringLiteral("run %1").arg(id))));

@@ -9,31 +9,36 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('NUMBEO_API_KEY', '')
 BASE_URL = "https://www.numbeo.com/api"
+SERVICE = "Numbeo"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every Numbeo API endpoint needs the key: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://www.numbeo.com/api/", "NUMBEO_API_KEY")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
-    if API_KEY:
-        params["api_key"] = API_KEY
+    params["api_key"] = API_KEY
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "NUMBEO_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # Numbeo answers HTTP 200 with {"error": "invalid api_key= <the key>"}: never echo the key.
+    if isinstance(data, dict) and isinstance(data.get("error"), str):
+        return {"error": f"{SERVICE}: {fc.scrub(data['error'], API_KEY)}"}
+    return data
 
 
 def get_cost_of_living(city: str = "New York, NY", currency: str = "USD") -> Any:
@@ -41,29 +46,31 @@ def get_cost_of_living(city: str = "New York, NY", currency: str = "USD") -> Any
     return _make_request("city_prices", params)
 
 
+# The old paths quality_of_life / crime / healthcare / property_prices_by_city / historical_currency
+# do not exist on numbeo.com/api (they return the HTML error page); these are the documented ones.
 def get_quality_of_life(city: str = "New York, NY") -> Any:
     params = {"query": city}
-    return _make_request("quality_of_life", params)
+    return _make_request("indices", params)  # quality_of_life_index and the other city indices
 
 
 def get_crime_index(city: str = "New York, NY") -> Any:
     params = {"query": city}
-    return _make_request("crime", params)
+    return _make_request("city_crime", params)
 
 
 def get_healthcare_index(city: str = "New York, NY") -> Any:
     params = {"query": city}
-    return _make_request("healthcare", params)
+    return _make_request("city_healthcare", params)
 
 
 def get_property_prices(city: str = "New York, NY") -> Any:
     params = {"query": city}
-    return _make_request("property_prices_by_city", params)
+    return _make_request("indices", params)  # property_price_to_income_ratio, mortgage/rent indices
 
 
 def get_historical_cpi(city: str = "New York, NY", year: int = 2023) -> Any:
     params = {"query": city, "year": year}
-    return _make_request("historical_currency", params)
+    return _make_request("historical_city_prices", params)
 
 
 def main(args=None):
@@ -94,7 +101,7 @@ def main(args=None):
         city = args[1] if len(args) > 1 else "New York, NY"
         year = int(args[2]) if len(args) > 2 else 2023
         result = get_historical_cpi(city, year)
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

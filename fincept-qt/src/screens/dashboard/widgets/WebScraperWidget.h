@@ -67,6 +67,8 @@ class WebScraperWidget : public BaseWidget {
     void render_selected_table();
     void set_status(const QString& msg, bool error = false);
     void apply_timer_state();
+    /// No URL yet: what the tile does + SET URL (opens the gear dialog).
+    void show_setup_state();
 
     // Config
     QString url_;

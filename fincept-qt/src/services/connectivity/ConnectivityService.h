@@ -19,8 +19,9 @@
 // HttpClient: it needs no session credentials, and a health check must not
 // queue behind (or be rate-limited with) real API traffic.
 //
-// Cadence is owned by the hub (CLAUDE.md D3): TTL 30 s while healthy, 15 s
-// after a failure so recovery shows up quickly; min_interval 10 s. Consumers
+// Cadence is owned by the hub (CLAUDE.md D3): TTL 2 min while healthy, 30 s
+// after a failure so recovery shows up quickly — each stretched to the server's
+// X-Poll-Interval when that is longer (capped at an hour); min_interval 20 s. Consumers
 // subscribe in showEvent() and unsubscribe in hideEvent(); with no subscriber
 // nothing is probed.
 

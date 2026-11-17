@@ -9,8 +9,10 @@
 // keep that file maintainable.
 #include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
+#include "screens/ai_quant_lab/QuantModulePanel_AdvancedHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
+#include "screens/ai_quant_lab/QuantModulePanel_ResultCharts.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
@@ -55,6 +57,7 @@ using namespace fincept::services::quant;
 using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
+using namespace fincept::screens::quant_charts;
 
 namespace {
 
@@ -78,11 +81,9 @@ void cfa_flatten_scalars(const QJsonObject& obj, const QString& prefix, QStringL
     }
 }
 
-QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
-    if (v.isNull() || v.isUndefined())
-        return QStringLiteral("—");
-    return QString::number(v.toDouble(), 'f', decimals);
-}
+// The same helper as QuantModulePanel_AdvancedHelpers.h (one definition: in a unity build this
+// file's own copy was ambiguous with that one in files using the helpers' namespace).
+using fincept::screens::quant_advanced_helpers::fmt_num_safe;
 
 [[maybe_unused]] QString fmt_pct(const QJsonValue& v, int decimals = 2) {
     if (v.isNull() || v.isUndefined())
@@ -110,7 +111,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
     const QString method = result.value("method").toString();
     const double calc_time = result.value("calculation_time").toDouble();
     const QString analysis_type = payload.value("analysis_type").toString(command);
-    const QString accent = module_.color.name();
+    const QString accent = ui::colors::legible(module_.color);
 
     // ── Section header ──────────────────────────────────────────────────────
     QString header_text = analysis_type.toUpper();
@@ -204,7 +205,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
         if (!h0.isEmpty()) {
             auto* note = new QLabel(tr("H₀: %1").arg(h0));
             note->setStyleSheet(
-                QString("color:%1; font-size:10px; padding:6px 10px; background:%2; border-left:3px solid %3;")
+                QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; padding:6px 10px; background:%2; border-left:3px solid %3;")
                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), accent));
             note->setWordWrap(true);
             results_layout_->addWidget(note);
@@ -263,7 +264,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
         if (!coef_lines.isEmpty()) {
             auto* coef_lbl = new QLabel(tr("Coefficients: %1").arg(coef_lines.join("   ")));
             coef_lbl->setWordWrap(true);
-            coef_lbl->setStyleSheet(QString("color:%1; font-family:'Courier New'; font-size:10px;"
+            coef_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                             "padding:6px 10px; background:%2; border-left:3px solid %3;")
                                         .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
             results_layout_->addWidget(coef_lbl);
@@ -283,6 +284,10 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
         const QJsonValue mae = meta.value("mae");
         const QJsonValue rmse = meta.value("rmse");
         const QJsonValue mape = meta.value("mape");
+        // The forecast beyond the last observation (same method refitted on the whole series),
+        // or the reason that refit failed — never both.
+        const QJsonArray oos = meta.value("forecast_out_of_sample").toArray();
+        const QString oos_error = meta.value("forecast_out_of_sample_error").toString().trimmed();
 
         QList<QWidget*> top = {
             gs_make_card(tr("METHOD"), fmethod.isEmpty() ? QStringLiteral("—") : fmethod, this),
@@ -294,36 +299,163 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
 
         QList<QWidget*> err = {
             gs_make_card(tr("MAE"), fmt_num_safe(mae, 4), this,
-                         mae.isNull() ? ui::colors::TEXT_TERTIARY() : ui::colors::WARNING()),
+                         mae.isNull() ? ui::colors::TEXT_SECONDARY() : ui::colors::WARNING()),
             gs_make_card(tr("RMSE"), fmt_num_safe(rmse, 4), this,
-                         rmse.isNull() ? ui::colors::TEXT_TERTIARY() : ui::colors::WARNING()),
+                         rmse.isNull() ? ui::colors::TEXT_SECONDARY() : ui::colors::WARNING()),
             gs_make_card(tr("MAPE"),
                          mape.isNull() ? QStringLiteral("—") : QString::number(mape.toDouble(), 'f', 2) + "%", this),
             gs_make_card(tr("FCST POINTS"), QString::number(value_raw.toArray().size()), this),
         };
         results_layout_->addWidget(gs_card_row(err, this));
 
-        // Forecast values table
+        if (!oos_error.isEmpty()) {
+            auto* note = new QLabel(
+                tr("No forecast beyond the last observation: refitting %1 on the whole series failed — %2")
+                    .arg(fmethod, oos_error));
+            note->setWordWrap(true);
+            note->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            note->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) +
+                                        "px; padding:6px 10px; background:%2; border-left:3px solid %1;")
+                                    .arg(ui::colors::WARNING(), ui::colors::BG_SURFACE()));
+            results_layout_->addWidget(note);
+        }
+
+        // Two forecasts against the series:
+        //  * hold-out — fitted on the first TRAIN observations, so its step t+1 is observation
+        //    TRAIN, inside the test window where the actual values continue (the MAE / RMSE /
+        //    MAPE above are measured on that overlap);
+        //  * forward — the same method refitted on the whole series, continuing from the last
+        //    observation (metadata.forecast_out_of_sample).
+        // With no test window (train == all data) the script's value already IS the forward
+        // forecast, so it is drawn once, as the forward line.
         if (value_raw.isArray()) {
             const auto arr = value_raw.toArray();
-            auto* table = new QTableWidget(arr.size(), 2, this);
-            table->setHorizontalHeaderLabels({tr("Step"), tr("Forecast")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(arr.size() * 24 + 32, 280));
-            for (int i = 0; i < arr.size(); ++i) {
-                table->setItem(i, 0, new QTableWidgetItem(QString("t+%1").arg(i + 1)));
-                auto* it = new QTableWidgetItem(QString::number(arr[i].toDouble(), 'f', 6));
-                it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                table->setItem(i, 1, it);
-                table->setRowHeight(i, 24);
+            const QVector<double> data = qc_values(params.value("data").toArray());
+            const qsizetype n = data.size();
+            const bool has_holdout = test_n > 0 && !arr.isEmpty();
+            const QJsonArray fwd = !oos.isEmpty() ? oos : (test_n > 0 ? QJsonArray() : arr);
+            const int train = (train_n > 0 && train_n <= n) ? train_n : static_cast<int>(n);
+            if ((has_holdout || !fwd.isEmpty()) && n > 0) {
+                QcChartSpec spec;
+                if (has_holdout && !fwd.isEmpty())
+                    spec.title = tr("SERIES  ·  HOLD-OUT FORECAST FROM OBS %1  ·  %2-STEP FORECAST BEYOND THE LAST "
+                                    "OBSERVATION")
+                                     .arg(train - 1)
+                                     .arg(fwd.size());
+                else if (has_holdout)
+                    spec.title = tr("SERIES + %1-STEP FORECAST FROM THE END OF TRAINING (OBS %2)")
+                                     .arg(arr.size())
+                                     .arg(train - 1);
+                else
+                    spec.title = tr("SERIES + %1-STEP FORECAST BEYOND THE LAST OBSERVATION").arg(fwd.size());
+                spec.fmt = qc_fmt_auto();
+                spec.height = 280;
+                // Observations are "obs i"; steps past the last one read t+1, t+2, ...
+                spec.x_label = [n](double x) {
+                    const qlonglong i = std::llround(x);
+                    return i >= n ? QStringLiteral("t+%1").arg(i - n + 1) : QStringLiteral("obs %1").arg(i);
+                };
+
+                QcLine actual;
+                actual.name = tr("Actual");
+                actual.xs = qc_x_positions(n).xs;
+                actual.ys = data;
+                actual.color = ui::ChartColorRole::Text;
+                actual.width = 1.25;
+                spec.lines.append(actual);
+
+                // A forecast line starting at the observation it continues from.
+                const auto anchored = [&data](int anchor, const QJsonArray& values) {
+                    QPair<QVector<double>, QVector<double>> out;
+                    out.first.append(static_cast<double>(anchor));
+                    out.second.append(data.at(anchor));
+                    for (qsizetype i = 0; i < values.size(); ++i) {
+                        out.first.append(static_cast<double>(anchor + 1 + i));
+                        out.second.append(values.at(i).isDouble() ? values.at(i).toDouble() : kQcNaN);
+                    }
+                    return out;
+                };
+                if (has_holdout) {
+                    const auto pts = anchored(train - 1, arr);
+                    QcLine hold;
+                    hold.name = tr("Hold-out forecast (from obs %1)").arg(train - 1);
+                    hold.xs = pts.first;
+                    hold.ys = pts.second;
+                    hold.color = ui::ChartColorRole::Accent;
+                    hold.width = 2.0;
+                    spec.lines.append(hold);
+                }
+                if (!fwd.isEmpty()) {
+                    const auto pts = anchored(static_cast<int>(n - 1), fwd);
+                    QcLine ahead;
+                    ahead.name = tr("Forecast beyond last obs");
+                    ahead.xs = pts.first;
+                    ahead.ys = pts.second;
+                    ahead.color = ui::ChartColorRole::Info;
+                    ahead.dashed = true;
+                    ahead.width = 2.0;
+                    spec.lines.append(ahead);
+                }
+                auto* chart = qc_series_chart(spec, this);
+                if (has_holdout) {
+                    // Shade the hold-out forecast span, up to where the forward span begins.
+                    const double from = train - 1;
+                    double to = static_cast<double>(train - 1 + arr.size());
+                    if (!fwd.isEmpty())
+                        to = std::min(to, static_cast<double>(n - 1));
+                    if (to > from)
+                        chart->add_band(from, to, ui::ChartColorRole::Muted, tr("Hold-out"));
+                }
+                if (!fwd.isEmpty())
+                    chart->add_band(static_cast<double>(n - 1), static_cast<double>(n - 1 + fwd.size()),
+                                    ui::ChartColorRole::Info, tr("Out of sample"));
+                results_layout_->addWidget(chart);
             }
-            results_layout_->addWidget(table);
+
+            // Step table: hold-out forecast next to the actual it is scored on, and the forward
+            // forecast for the same step count.
+            const int rows = static_cast<int>(std::max(has_holdout ? arr.size() : qsizetype(0), fwd.size()));
+            if (rows > 0) {
+                QStringList headers{tr("Step")};
+                if (has_holdout)
+                    headers << tr("Hold-out forecast") << tr("Actual");
+                if (!fwd.isEmpty())
+                    headers << tr("Beyond last obs");
+                auto* table = new QTableWidget(rows, headers.size(), this);
+                table->setHorizontalHeaderLabels(headers);
+                table->verticalHeader()->setVisible(false);
+                table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+                table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+                table->setStyleSheet(table_ss());
+                table->setMaximumHeight(qMin(rows * row_px(24) + row_px(32), 280));
+                const auto num_cell = [](const QJsonValue& v) {
+                    auto* it = new QTableWidgetItem(fmt_num_safe(v, 6));
+                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    return it;
+                };
+                for (int i = 0; i < rows; ++i) {
+                    int col = 0;
+                    table->setItem(i, col++, new QTableWidgetItem(QString("t+%1").arg(i + 1)));
+                    if (has_holdout) {
+                        table->setItem(i, col++, num_cell(i < arr.size() ? arr.at(i) : QJsonValue()));
+                        const int obs = train + i;
+                        table->setItem(i, col++,
+                                       num_cell(obs < n && std::isfinite(data.at(obs)) ? QJsonValue(data.at(obs))
+                                                                                       : QJsonValue()));
+                    }
+                    if (!fwd.isEmpty())
+                        table->setItem(i, col++, num_cell(i < fwd.size() ? fwd.at(i) : QJsonValue()));
+                    table->setRowHeight(i, row_px(24));
+                }
+                results_layout_->addWidget(table);
+            }
         }
-        status_label_->setText(
-            tr("%1 forecast (%2 steps)  MAE=%3").arg(fmethod).arg(horizon).arg(fmt_num_safe(mae, 4)));
+        QString status = tr("%1 forecast (%2 steps)  MAE=%3").arg(fmethod).arg(horizon).arg(fmt_num_safe(mae, 4));
+        if (!oos.isEmpty())
+            status += tr("  ·  t+%1 beyond last obs: %2").arg(oos.size()).arg(fmt_num_safe(oos.last(), 4));
+        else if (!oos_error.isEmpty())
+            status += tr("  ·  no forecast beyond the last observation");
+        status_label_->setText(status);
         rendered = true;
     }
 
@@ -336,6 +468,8 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
         const int train_n = meta.value("train_size").toInt();
         const int test_n = meta.value("test_size").toInt();
         const int n_feat = meta.value("n_features").toInt();
+        // Classification: accuracy of always predicting the test window's most common class.
+        const QJsonValue baseline = meta.value("majority_class_accuracy");
 
         QList<QWidget*> top = {
             gs_make_card(tr("PROBLEM"), problem.toUpper(), this),
@@ -344,6 +478,13 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             gs_make_card(tr("FEATURES"), QString::number(n_feat), this),
             gs_make_card(tr("TRAIN / TEST"), QString("%1 / %2").arg(train_n).arg(test_n), this),
         };
+        if (!is_reg) {
+            auto* card = gs_make_card(tr("BASELINE"), fmt_num_safe(baseline, 4), this);
+            card->setToolTip(tr("Majority-class accuracy: the accuracy of always predicting the most common class "
+                                "of the test window. A classifier has learned something only if its accuracy "
+                                "beats this."));
+            top.append(card);
+        }
         results_layout_->addWidget(gs_card_row(top, this));
 
         // Per-algorithm metrics table
@@ -365,7 +506,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(rows.size() * 26 + 32, 320));
+            table->setMaximumHeight(qMin(rows.size() * row_px(26) + row_px(32), 320));
             for (int r = 0; r < rows.size(); ++r) {
                 const auto& algo = rows[r].first;
                 const auto& metrics = rows[r].second;
@@ -381,22 +522,28 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                     table->setSpan(r, 1, 1, headers.size() - 1);
                 } else {
                     for (int c = 0; c < score_keys.size(); ++c) {
-                        const double v = metrics.value(score_keys[c]).toDouble();
-                        auto* it = new QTableWidgetItem(QString::number(v, 'f', 4));
+                        const QJsonValue raw = metrics.value(score_keys[c]);
+                        const double v = raw.toDouble();
+                        auto* it = new QTableWidgetItem(fmt_num_safe(raw, 4));
                         it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                        // R² and accuracy: green if good
-                        if ((score_keys[c] == "r2_score" || score_keys[c] == "accuracy") && v > 0.5)
+                        // R² and accuracy: green if good. A null (non-finite in the script) reads
+                        // "—" and is not coloured.
+                        const bool scored = raw.isDouble() && (score_keys[c] == "r2_score" || score_keys[c] == "accuracy");
+                        if (scored && v > 0.5)
                             it->setForeground(QColor(ui::colors::POSITIVE()));
-                        else if ((score_keys[c] == "r2_score" || score_keys[c] == "accuracy") && v < 0)
+                        else if (scored && v < 0)
                             it->setForeground(QColor(ui::colors::NEGATIVE()));
                         table->setItem(r, c + 1, it);
                     }
                 }
-                table->setRowHeight(r, 26);
+                table->setRowHeight(r, row_px(26));
             }
             results_layout_->addWidget(table);
         }
-        status_label_->setText(tr("Supervised %1: best=%2 (%3 algos)").arg(problem).arg(best).arg(rows.size()));
+        QString status = tr("Supervised %1: best=%2 (%3 algos)").arg(problem).arg(best).arg(rows.size());
+        if (!is_reg && baseline.isDouble())
+            status += tr("  ·  baseline %1").arg(fmt_num_safe(baseline, 4));
+        status_label_->setText(status);
         rendered = true;
     }
 
@@ -440,7 +587,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                 table->setEditTriggers(QAbstractItemView::NoEditTriggers);
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
                 table->setStyleSheet(table_ss());
-                table->setMaximumHeight(rows * 24 + 32);
+                table->setMaximumHeight(rows * row_px(24) + row_px(32));
                 for (int i = 0; i < rows; ++i) {
                     table->setItem(i, 0, new QTableWidgetItem(QString("PC%1").arg(i + 1)));
                     auto* e = new QTableWidgetItem(QString::number(evr[i].toDouble() * 100, 'f', 3) + "%");
@@ -449,7 +596,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                     auto* c = new QTableWidgetItem(QString::number(cum[i].toDouble() * 100, 'f', 3) + "%");
                     c->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     table->setItem(i, 2, c);
-                    table->setRowHeight(i, 24);
+                    table->setRowHeight(i, row_px(24));
                 }
                 results_layout_->addWidget(table);
             }
@@ -486,7 +633,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                 table->setEditTriggers(QAbstractItemView::NoEditTriggers);
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
                 table->setStyleSheet(table_ss());
-                table->setMaximumHeight(qMin(sil.size() * 24 + 32, 280));
+                table->setMaximumHeight(qMin(sil.size() * row_px(24) + row_px(32), 280));
                 for (int i = 0; i < sil.size(); ++i) {
                     const auto sp = sil[i].toArray();
                     const auto ip = i < ine.size() ? ine[i].toArray() : QJsonArray();
@@ -506,7 +653,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                     auto* in_it = new QTableWidgetItem(QString::number(in_v, 'f', 2));
                     in_it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     table->setItem(i, 2, in_it);
-                    table->setRowHeight(i, 24);
+                    table->setRowHeight(i, row_px(24));
                 }
                 results_layout_->addWidget(table);
             }
@@ -529,80 +676,131 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
     // ── 7. MODEL EVALUATION ─────────────────────────────────────────────────
     else if (command == "model_evaluation") {
         const QJsonObject params = result.value("parameters").toObject();
-        const QString model = params.value("model_type").toString().toUpper();
+        const QString requested = params.value("model_type").toString();
+        // The estimator that actually ran — e.g. "svr" on 0/1 data runs an SVC classifier.
+        const QString model_run = meta.value("model").toString();
+        const QString model = !model_run.isEmpty() ? model_run
+                              : requested.isEmpty() ? QStringLiteral("—")
+                                                    : requested.toUpper();
         const QString problem = params.value("problem_type").toString().toUpper();
+        const QString scoring = meta.value("scoring").toString(); // r2 | accuracy
+        const QString score_name = scoring == QLatin1String("r2")         ? QStringLiteral("R²")
+                                   : scoring == QLatin1String("accuracy") ? tr("ACCURACY")
+                                                                          : scoring.toUpper();
         const int folds = params.value("cv_folds").toInt();
-        const double mean_cv = meta.value("mean_cv_score").toDouble();
-        const double std_cv = meta.value("std_cv_score").toDouble();
-        const double overfit = meta.value("overfitting_score").toDouble();
+        // Any score can be null (a fold / learning-curve point the model could not fit, e.g. a
+        // classification slice holding a single class): rendered "—", never 0.0000.
+        const QJsonValue mean_cv = meta.value("mean_cv_score");
+        const QJsonValue std_cv = meta.value("std_cv_score");
+        const QJsonValue overfit = meta.value("overfitting_score");
         const bool is_overfit = meta.value("is_overfitting").toBool();
-        const double final_train = meta.value("final_train_score").toDouble();
-        const double final_val = meta.value("final_val_score").toDouble();
+        const double threshold = meta.value("overfitting_threshold").toDouble(0.1);
+        const QJsonValue final_train = meta.value("final_train_score");
+        const QJsonValue final_val = meta.value("final_val_score");
+        const int n_train = meta.value("train_size").toInt();
+        const int n_holdout = meta.value("holdout_size").toInt();
 
+        auto* model_card = gs_make_card(tr("MODEL"), model, this);
+        if (!requested.isEmpty() && !model_run.isEmpty())
+            model_card->setToolTip(tr("Requested: %1 — ran: %2").arg(requested, model_run));
         QList<QWidget*> top = {
-            gs_make_card(tr("MODEL"), model.isEmpty() ? QStringLiteral("—") : model, this),
-            gs_make_card(tr("PROBLEM"), problem, this),
+            model_card,
+            gs_make_card(tr("PROBLEM"), score_name.isEmpty() ? problem : QString("%1 · %2").arg(problem, score_name),
+                         this),
             gs_make_card(tr("CV FOLDS"), QString::number(folds), this),
-            gs_make_card(tr("MEAN CV ± σ"), QString("%1 ± %2").arg(mean_cv, 0, 'f', 4).arg(std_cv, 0, 'f', 4), this,
-                         mean_cv > 0.5 ? ui::colors::POSITIVE()
-                         : mean_cv > 0 ? ui::colors::WARNING()
-                                       : ui::colors::NEGATIVE()),
+            gs_make_card(tr("MEAN CV ± σ"), QString("%1 ± %2").arg(fmt_num_safe(mean_cv, 4), fmt_num_safe(std_cv, 4)),
+                         this,
+                         !mean_cv.isDouble()          ? ui::colors::TEXT_SECONDARY()
+                         : mean_cv.toDouble() > 0.5 ? ui::colors::SUCCESS()
+                         : mean_cv.toDouble() > 0   ? ui::colors::WARNING()
+                                                    : ui::colors::DANGER()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
         QList<QWidget*> overfit_cards = {
-            gs_make_card(tr("FINAL TRAIN"), gs_fmt_num(final_train, 4), this),
-            gs_make_card(tr("FINAL VAL"), gs_fmt_num(final_val, 4), this,
-                         final_val > 0.5 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("OVERFIT GAP"), gs_fmt_num(overfit, 4), this,
-                         overfit > 0.1 ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()),
+            gs_make_card(tr("FINAL TRAIN"), fmt_num_safe(final_train, 4), this),
+            gs_make_card(tr("FINAL HOLD-OUT"), fmt_num_safe(final_val, 4), this,
+                         !final_val.isDouble()          ? ui::colors::TEXT_SECONDARY()
+                         : final_val.toDouble() > 0.5 ? ui::colors::SUCCESS()
+                                                      : ui::colors::WARNING()),
+            gs_make_card(tr("OVERFIT GAP"), fmt_num_safe(overfit, 4), this,
+                         !overfit.isDouble()                ? ui::colors::TEXT_SECONDARY()
+                         : overfit.toDouble() > threshold ? ui::colors::DANGER()
+                                                          : ui::colors::SUCCESS()),
             gs_make_card(tr("OVERFITTING"), is_overfit ? tr("YES") : tr("NO"), this,
-                         is_overfit ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()),
+                         is_overfit ? ui::colors::DANGER() : ui::colors::SUCCESS()),
         };
         results_layout_->addWidget(gs_card_row(overfit_cards, this));
 
-        // CV scores + learning curves table
-        const QJsonArray cv = value_obj.value("cv_scores").toArray();
-        const QJsonArray train_s = value_obj.value("train_scores").toArray();
-        const QJsonArray val_s = value_obj.value("val_scores").toArray();
-        if (!cv.isEmpty() || !train_s.isEmpty()) {
-            auto* table = new QTableWidget(std::max(cv.size(), train_s.size()), 3, this);
-            table->setHorizontalHeaderLabels({tr("Idx"), tr("CV / Train Score"), tr("Val Score")});
+        auto score_cell = [](const QJsonValue& v) {
+            auto* it = new QTableWidgetItem(fmt_num_safe(v, 4));
+            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            if (!v.isDouble())
+                it->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+            return it;
+        };
+        auto make_table = [this](int rows, const QStringList& headers) {
+            auto* table = new QTableWidget(rows, headers.size(), this);
+            table->setHorizontalHeaderLabels(headers);
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(table->rowCount() * 24 + 32, 280));
-            const int rows = table->rowCount();
+            table->setMaximumHeight(qMin(rows * row_px(24) + row_px(32), 280));
+            return table;
+        };
+
+        // Learning curve: fits on growing shares of the training part, each scored on its own
+        // training rows (Train) and on the fixed hold-out at the end of the sample (Hold-out).
+        const QJsonArray sizes = value_obj.value("train_sizes").toArray();
+        const QJsonArray train_s = value_obj.value("train_scores").toArray();
+        const QJsonArray val_s = value_obj.value("val_scores").toArray();
+        if (!sizes.isEmpty()) {
+            results_layout_->addWidget(gs_section_header(
+                tr("LEARNING CURVE  |  %1  |  TRAIN PART %2 OBS, HOLD-OUT = LAST %3 OBS")
+                    .arg(score_name)
+                    .arg(n_train)
+                    .arg(n_holdout),
+                accent));
+            const int rows = static_cast<int>(sizes.size());
+            auto* table = make_table(rows, {tr("Train size"), tr("Train"), tr("Hold-out")});
             for (int i = 0; i < rows; ++i) {
-                table->setItem(i, 0, new QTableWidgetItem(QString::number(i)));
-                if (i < cv.size()) {
-                    auto* it = new QTableWidgetItem(tr("%1 (cv)").arg(QString::number(cv[i].toDouble(), 'f', 4)));
-                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    table->setItem(i, 1, it);
-                } else if (i < train_s.size()) {
-                    auto* it = new QTableWidgetItem(tr("%1 (tr)").arg(QString::number(train_s[i].toDouble(), 'f', 4)));
-                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    table->setItem(i, 1, it);
-                }
-                if (i < val_s.size()) {
-                    const double v = val_s[i].toDouble();
-                    auto* it = new QTableWidgetItem(QString::number(v, 'f', 4));
-                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (v > 0.5)
-                        it->setForeground(QColor(ui::colors::POSITIVE()));
-                    else if (v < 0)
-                        it->setForeground(QColor(ui::colors::NEGATIVE()));
-                    table->setItem(i, 2, it);
-                }
-                table->setRowHeight(i, 24);
+                auto* size_it = new QTableWidgetItem(sizes.at(i).isDouble()
+                                                         ? QString::number(sizes.at(i).toInt())
+                                                         : QStringLiteral("—"));
+                size_it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                table->setItem(i, 0, size_it);
+                table->setItem(i, 1, score_cell(i < train_s.size() ? train_s.at(i) : QJsonValue()));
+                table->setItem(i, 2, score_cell(i < val_s.size() ? val_s.at(i) : QJsonValue()));
+                table->setRowHeight(i, row_px(24));
+            }
+            results_layout_->addWidget(table);
+        }
+
+        // Walk-forward CV: TimeSeriesSplit over the whole sample — each fold is scored on the
+        // observations right after the ones it was trained on.
+        const QJsonArray cv = value_obj.value("cv_scores").toArray();
+        if (!cv.isEmpty()) {
+            results_layout_->addWidget(gs_section_header(
+                tr("WALK-FORWARD CV  |  %1  |  %2 FOLDS  |  MEAN %3 ± %4")
+                    .arg(score_name)
+                    .arg(cv.size())
+                    .arg(fmt_num_safe(mean_cv, 4), fmt_num_safe(std_cv, 4)),
+                accent));
+            const int rows = static_cast<int>(cv.size());
+            auto* table = make_table(rows, {tr("Fold"), tr("Score")});
+            for (int i = 0; i < rows; ++i) {
+                auto* fold_it = new QTableWidgetItem(QString::number(i + 1));
+                fold_it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                table->setItem(i, 0, fold_it);
+                table->setItem(i, 1, score_cell(cv.at(i)));
+                table->setRowHeight(i, row_px(24));
             }
             results_layout_->addWidget(table);
         }
         status_label_->setText(tr("%1: CV %2±%3  Overfit: %4")
                                    .arg(model)
-                                   .arg(mean_cv, 0, 'f', 3)
-                                   .arg(std_cv, 0, 'f', 3)
+                                   .arg(fmt_num_safe(mean_cv, 3), fmt_num_safe(std_cv, 3))
                                    .arg(is_overfit ? tr("YES") : tr("NO")));
         rendered = true;
     }
@@ -703,7 +901,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(methods.size() * 26 + 32, 240));
+            table->setMaximumHeight(qMin(methods.size() * row_px(26) + row_px(32), 240));
             for (int r = 0; r < methods.size(); ++r) {
                 const auto& name = methods[r].first;
                 const auto& m = methods[r].second;
@@ -734,7 +932,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                     add_n(3, pm);
                     add_n(4, bias, true);
                 }
-                table->setRowHeight(r, 26);
+                table->setRowHeight(r, row_px(26));
             }
             results_layout_->addWidget(table);
         }
@@ -781,7 +979,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(rows.size() * 26 + 32, 320));
+            table->setMaximumHeight(qMin(rows.size() * row_px(26) + row_px(32), 320));
             for (int r = 0; r < rows.size(); ++r) {
                 const auto& o = rows[r].second;
                 table->setItem(r, 0, new QTableWidgetItem(QString::number(rows[r].first)));
@@ -806,7 +1004,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                 if (!norm.isNull())
                     ni->setForeground(QColor(norm.toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()));
                 table->setItem(r, 6, ni);
-                table->setRowHeight(r, 26);
+                table->setRowHeight(r, row_px(26));
             }
             results_layout_->addWidget(table);
         }
@@ -850,7 +1048,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(rows.size() * 26 + 32, 320));
+            table->setMaximumHeight(qMin(rows.size() * row_px(26) + row_px(32), 320));
             for (int r = 0; r < rows.size(); ++r) {
                 const auto& o = rows[r].second;
                 table->setItem(r, 0, new QTableWidgetItem(QString::number(rows[r].first)));
@@ -868,7 +1066,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                 ci->setForeground(QColor(cov >= conf - 0.02 ? ui::colors::POSITIVE() : ui::colors::WARNING()));
                 table->setItem(r, 4, ci);
                 add(5, o.value("mean_squared_error").toDouble(), 6);
-                table->setRowHeight(r, 26);
+                table->setRowHeight(r, row_px(26));
             }
             results_layout_->addWidget(table);
         }
@@ -917,7 +1115,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                 table->setEditTriggers(QAbstractItemView::NoEditTriggers);
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
                 table->setStyleSheet(table_ss());
-                table->setMaximumHeight(qMin(sk.size() * 24 + 32, 280));
+                table->setMaximumHeight(qMin(sk.size() * row_px(24) + row_px(32), 280));
                 for (int r = 0; r < sk.size(); ++r) {
                     QString lbl = sk[r];
                     lbl.replace('_', ' ');
@@ -925,7 +1123,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                     auto* vi = new QTableWidgetItem(format_val(sv.value(sk[r])));
                     vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     table->setItem(r, 1, vi);
-                    table->setRowHeight(r, 24);
+                    table->setRowHeight(r, row_px(24));
                 }
                 results_layout_->addWidget(table);
             }
@@ -937,7 +1135,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             if (items.isEmpty())
                 return;
             auto* hdr = new QLabel(tr("%1  (%2)").arg(title).arg(items.size()));
-            hdr->setStyleSheet(QString("color:%1; font-weight:700; font-size:10px; letter-spacing:1px;"
+            hdr->setStyleSheet(QString("color:%1; font-weight:700; font-size:" + fincept::ui::fonts::px(-4) + "px; letter-spacing:1px;"
                                        "padding:6px 10px; background:%2; border-left:3px solid %3;")
                                    .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), bar_color));
             results_layout_->addWidget(hdr);
@@ -992,7 +1190,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             table->verticalHeader()->setVisible(false);
-            table->setMaximumHeight(qMin(keys.size() * 28 + 32, 480));
+            table->setMaximumHeight(qMin(keys.size() * row_px(28) + row_px(32), 480));
             table->setStyleSheet(table_ss());
             for (int r = 0; r < keys.size(); ++r) {
                 QString label = keys[r];
@@ -1008,7 +1206,7 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
 
     // ── Raw JSON viewer (collapsed by default — capped height) ──────────────
     auto* raw_hdr = new QLabel(tr("RAW JSON"));
-    raw_hdr->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px; margin-top:4px;")
+    raw_hdr->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1px; margin-top:4px;")
                                .arg(ui::colors::TEXT_TERTIARY()));
     results_layout_->addWidget(raw_hdr);
 
@@ -1022,13 +1220,14 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
     // ── Export button ───────────────────────────────────────────────────────
     auto* export_btn = new QPushButton(tr("EXPORT RESULTS"));
     export_btn->setCursor(Qt::PointingHandCursor);
-    export_btn->setFixedHeight(28);
+    export_btn->setMinimumHeight(28);
     export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
                                       "font-size:%3px; font-family:%4; padding:0 12px; }"
-                                      "QPushButton:hover { color:%1; background:rgba(255,255,255,0.05); }")
-                                  .arg(module_.color.name(), ui::colors::BORDER_DIM())
-                                  .arg(ui::fonts::SMALL)
-                                  .arg(ui::fonts::DATA_FAMILY));
+                                      "QPushButton:hover { color:%1; background:%5; }")
+                                  .arg(ui::colors::legible(module_.color), ui::colors::BORDER_DIM())
+                                  .arg(ui::fonts::px(-1))
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::colors::overlay(0.05)));
     const QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str, command]() {
         QString safe_name = module_.label + "_" + command;
@@ -1043,6 +1242,11 @@ void QuantModulePanel::display_cfa_result(const QString& command, const QJsonObj
                                                                    QFileInfo(dest).size(), "application/json",
                                                                    "ai_quant_lab");
             LOG_INFO("AIQuantLab", "Exported result: " + stored_name);
+        } else {
+            LOG_WARN("AIQuantLab", fincept::logf("Result export could not be written",
+                                                 {{"path", fincept::log_path(dest)}, {"error", f.errorString()}}));
+            if (status_label_)
+                status_label_->setText(tr("Export failed: %1").arg(f.errorString()));
         }
     });
     results_layout_->addWidget(export_btn);

@@ -2,6 +2,7 @@
 #include "services/news/RssFeedProbeService.h"
 
 #include "core/logging/Logger.h"
+#include "services/news/NewsFeedParse.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -23,22 +24,16 @@ constexpr int kProbeTimeoutMs = 8000;
 constexpr qint64 kProbeMaxBytes = 8LL * 1024 * 1024;
 constexpr qint64 kStaleFeedSecs = 7LL * 86400;
 constexpr const char* kProbeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+                                        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 QString tr_probe(const char* text) {
     return QCoreApplication::translate("RssFeedProbeService", text);
 }
 
 qint64 parse_feed_date(const QString& raw) {
-    const QString s = raw.trimmed();
-    if (s.isEmpty())
-        return 0;
-    QDateTime dt = QDateTime::fromString(s, Qt::RFC2822Date); // RSS pubDate
-    if (!dt.isValid())
-        dt = QDateTime::fromString(s, Qt::ISODateWithMs); // Atom updated / dc:date
-    if (!dt.isValid())
-        dt = QDateTime::fromString(s, Qt::ISODate);
-    return dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+    // The fetcher's own date reader: Qt's RFC 2822 parser rejects "GMT", named
+    // zones and "+09:00", so the probe reported dated feeds as undated.
+    return news_feed::parse_time(raw);
 }
 
 /// Sniff the payload: root element decides RSS / Atom / RDF / HTML; then count

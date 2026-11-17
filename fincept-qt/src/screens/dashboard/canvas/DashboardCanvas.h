@@ -36,7 +36,17 @@ class DashboardCanvas : public QWidget {
     /// narrower fold of that layout (small panel, no edits since), this returns
     /// the original rather than the squashed fold.
     GridLayout current_layout() const;
-    void apply_template(const QString& template_id, TileBuild mode = TileBuild::Immediate);
+    /// Replace the layout with a built-in template (compact density, tiles
+    /// pre-configured). Returns false for an unknown template id.
+    bool apply_template(const QString& template_id, TileBuild mode = TileBuild::Immediate);
+    /// Template the current layout came from ("" = none).
+    QString template_id() const { return layout_.template_id; }
+    /// The current layout is exactly a template / a saved named layout (no user
+    /// edit since) — replacing it discards nothing the user made.
+    bool is_pristine() const { return layout_.pristine; }
+    /// The layout now equals a saved named layout (after "save as" / "switch to").
+    void mark_saved() { layout_.pristine = true; }
+    int row_height() const { return layout_.row_h; }
     void add_widget(const QString& widget_type_id);
     /// Add a tile with a per-instance config and, optionally, an explicit
     /// position/size (x/y < 0 = auto-place, w/h <= 0 = widget default). The
@@ -59,6 +69,8 @@ class DashboardCanvas : public QWidget {
     bool has_pending_tiles() const { return !pending_build_.isEmpty(); }
 
     int tile_count() const { return tiles_.size(); }
+    /// No tile and none queued: the user closed every tile (or loaded an empty layout).
+    bool is_empty() const { return layout_.items.isEmpty() && pending_ids_.isEmpty(); }
 
   signals:
     void layout_changed(GridLayout layout);
@@ -78,11 +90,24 @@ class DashboardCanvas : public QWidget {
     void on_resize_released(WidgetTile* tile);
     void on_tile_close(WidgetTile* tile);
     void on_scroll_tick();
+    /// Fill the visible canvas with `tile` (others hidden, so they stop
+    /// polling) or restore the grid when it is already maximised.
+    void toggle_maximize(WidgetTile* tile);
+    /// Add a copy of `tile` (same type, config and size) at the first free cell.
+    void duplicate_tile(WidgetTile* tile);
 
   private:
     void apply_bg();
-    /// Clamp every item into layout_.cols columns and re-compact.
-    void fit_items_to_cols();
+    /// Re-map every item from `from_cols` onto layout_.cols columns (proportional
+    /// edges, so filled rows stay filled) and re-compact.
+    void fit_items_to_cols(int from_cols);
+    /// Column count for a canvas `w` px wide: the canonical count when it fits,
+    /// else the 9 / 6 column fold.
+    int target_cols_for(int w) const {
+        return (w >= 1000) ? canonical_cols_ : (w >= 600) ? std::min(canonical_cols_, 9) : std::min(canonical_cols_, 6);
+    }
+    /// A user edit (tile added / removed / moved / resized / reconfigured).
+    void mark_edited();
     void reflow_tiles(bool animate = false);
     void update_canvas_height();
     void update_placeholder(const GridCell& cell);
@@ -103,6 +128,9 @@ class DashboardCanvas : public QWidget {
 
     GridLayout layout_;
     QVector<WidgetTile*> tiles_;
+    QString maximized_id_; ///< instance id of the maximised tile; empty = grid view
+    /// Leave the maximised view (show every tile again) without reflowing.
+    void clear_maximized();
     PlaceholderOverlay* placeholder_ = nullptr;
 
     // Progressive build queue (instance ids, build order) and its generation:

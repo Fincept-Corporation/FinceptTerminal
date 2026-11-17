@@ -48,9 +48,7 @@ OnsPanel::OnsPanel(QWidget* parent) : EconPanelBase(kOnsSourceId, kOnsColor, par
 }
 
 void OnsPanel::activate() {
-    show_empty(tr("Select a series and click FETCH\n"
-                  "Source: UK Office for National Statistics (no API key required)\n"
-                  "Data via api.beta.ons.gov.uk — GDP, CPI, labour market, housing"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void OnsPanel::build_controls(QHBoxLayout* thl) {
@@ -60,7 +58,7 @@ void OnsPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kOnsSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(240);
 
     thl->addWidget(series_lbl_);
@@ -72,8 +70,8 @@ void OnsPanel::on_fetch() {
     const auto& series = kOnsSeries[idx];
 
     show_loading(tr("Fetching ONS: %1…").arg(series.label));
-    services::EconomicsService::instance().execute(kOnsSourceId, kOnsScript, series.command, {},
-                                                   "ons_" + series.command);
+    execute_query(kOnsSourceId, kOnsScript, series.command, {},
+                  "ons_" + series.command);
 }
 
 void OnsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -120,7 +118,7 @@ void OnsPanel::on_result(const QString& request_id, const services::EconomicsRes
         meta.seasonal_adj = tr("Seasonally adjusted");
     set_series_meta(meta);
     display(rows, title);
-    LOG_INFO("OnsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("OnsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

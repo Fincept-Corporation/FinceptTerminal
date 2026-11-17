@@ -77,7 +77,15 @@ def _parse_sdmx_json(data: Any, series_name: str = "series") -> Any:
                 "obs_count": len(observations),
             })
 
-        return {series_name: series_list, "total_series": len(series_list)}
+        # The same observations as one table, a row per (series, period) with the series'
+        # dimensions as columns, for callers that want rows rather than nested series.
+        rows = []
+        for s in series_list:
+            for o in s["observations"]:
+                row = {"period": o["period"], "value": o["value"]}
+                row.update({k: v for k, v in s["dimensions"].items() if k not in row})
+                rows.append(row)
+        return {series_name: series_list, "total_series": len(series_list), "data": rows}
     except Exception as e:
         return {"error": f"Parse error: {str(e)}", "raw_keys": list(data.keys()) if isinstance(data, dict) else []}
 
@@ -110,28 +118,43 @@ def get_hicp_inflation(country: str = "U2", freq: str = "M") -> Any:
     return result
 
 
+EURO_AREA = {"U2", "EA", "EZ", "EUR", "EURO", "EUROAREA"}
+YC_MATURITIES = {"3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "15Y", "20Y", "30Y"}
+
+
 def get_bond_yields(country: str = "DE", maturity: str = "10Y") -> Any:
     """Get government bond yields.
-    country: DE, FR, IT, ES, NL, AT, BE, PT, GR, FI, IE.
-    maturity: 3M, 6M, 1Y, 2Y, 5Y, 10Y, 30Y.
+    country: an EU member (DE, FR, IT, ES, NL, AT, BE, PT, GR, FI, IE, ...) -> its 10-year
+             benchmark yield (ECB IRS dataset, monthly; other maturities are not published per
+             country), or U2 / EA -> the euro-area AAA government yield curve at `maturity`
+             (ECB YC dataset, daily).
+    maturity: 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 15Y, 20Y, 30Y.
     """
-    maturity_map = {
-        "3M": "3", "6M": "6", "1Y": "12", "2Y": "24",
-        "5Y": "60", "10Y": "120", "30Y": "360"
-    }
-    months = maturity_map.get(maturity.upper(), "120")
-    params = {"format": "jsondata", "detail": "dataonly", "lastNObservations": 260}
-    key = f"YC/B.U2.EUR.4F.G_N_{country.upper()}.SV_C_YM.SR_{months}Y"
-    data = _make_request(key, params=params)
-    if isinstance(data, dict) and "error" not in data:
-        result = _parse_sdmx_json(data, "bond_yields")
+    c = country.upper()
+    m = maturity.upper()
+    if c in EURO_AREA:
+        if m not in YC_MATURITIES:
+            return {"error": f"Unknown maturity {maturity!r}: use one of {', '.join(sorted(YC_MATURITIES))}",
+                    "code": "bad_args"}
+        params = {"format": "jsondata", "detail": "dataonly", "lastNObservations": 260}
+        data = _make_request(f"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_{m}", params=params)
+        source = "ECB YC: euro-area AAA government bond yield curve (spot rate)"
     else:
-        # Fallback: try IRS dataset
-        key2 = f"FM/B.{country.upper()}.EUR.FR.BB.{maturity.upper()}._Z.D"
-        data = _make_request(key2, params=params)
-        result = _parse_sdmx_json(data, "bond_yields")
-    result["country"] = country.upper()
-    result["maturity"] = maturity
+        if m != "10Y":
+            return {"error": f"Per-country yields are published for the 10-year maturity only; use "
+                             f"maturity 10Y for {c}, or country U2 for the euro-area curve at {maturity}",
+                    "code": "bad_args"}
+        params = {"format": "jsondata", "detail": "dataonly", "lastNObservations": 120}
+        data = _make_request(f"IRS/M.{c}.L.L40.CI.0000.EUR.N.Z", params=params)
+        source = "ECB IRS: long-term (10-year) government bond yield, monthly"
+    if isinstance(data, dict) and "error" in data and "404" in str(data["error"]):
+        return {"error": f"No ECB bond-yield series for country {c!r}: use an EU member code (DE, FR, IT, "
+                         f"...) or U2 for the euro area", "code": "bad_args"}
+    result = _parse_sdmx_json(data, "bond_yields")
+    if isinstance(result, dict) and "error" not in result:
+        result["country"] = c
+        result["maturity"] = m
+        result["source"] = source
     return result
 
 
@@ -177,21 +200,29 @@ def get_interest_rates(rate_type: str = "MRO") -> Any:
 def get_datasets() -> Any:
     """Get list of available ECB data flow/dataset IDs."""
     url = f"{META_URL}/dataflow/ECB"
-    params = {"format": "jsondata"}
+    # The structure endpoints only speak SDMX-ML (asking for JSON gets HTTP 406).
+    headers = {"Accept": "application/vnd.sdmx.structure+xml;version=2.1"}
     try:
-        response = session.get(url, params=params, timeout=30)
+        import xml.etree.ElementTree as ET
+
+        response = session.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        data = response.json()
-        dataflows = data.get("dataflows", data.get("Dataflows", []))
-        if isinstance(dataflows, list):
-            datasets = [
-                {"id": df.get("id"), "name": df.get("name", {}).get("en", df.get("name", ""))}
-                for df in dataflows
-            ]
-            return {"datasets": datasets[:100], "total_count": len(datasets)}
-        return {"raw": list(data.keys()) if isinstance(data, dict) else data}
-    except Exception as e:
+        root = ET.fromstring(response.content)
+        datasets = []
+        for el in root.iter():
+            if el.tag.endswith("}Dataflow") and el.get("id"):
+                name = ""
+                for child in el:
+                    if child.tag.endswith("}Name") and (child.get("{http://www.w3.org/XML/1998/namespace}lang")
+                                                        in (None, "en")):
+                        name = (child.text or "").strip()
+                        break
+                datasets.append({"id": el.get("id"), "name": name})
+        return {"datasets": datasets, "total_count": len(datasets)}
+    except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
+    except ET.ParseError as e:
+        return {"error": f"The ECB answered with something that is not SDMX-ML: {e}"}
 
 
 def main(args=None):

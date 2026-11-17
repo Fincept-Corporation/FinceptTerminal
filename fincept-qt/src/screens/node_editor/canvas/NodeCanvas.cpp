@@ -5,6 +5,7 @@
 #include "services/workflow/NodeRegistry.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QAction>
 #include <QContextMenuEvent>
@@ -15,6 +16,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QScrollBar>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include <cmath>
@@ -40,6 +42,40 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene,
         if (this->scene())
             this->scene()->update();
     });
+    if (node_scene_)
+        connect(node_scene_, &NodeScene::emptiness_changed, this, &NodeCanvas::on_scene_emptiness);
+}
+
+// ── First-run state (no node on the canvas) ────────────────────────────
+
+void NodeCanvas::set_empty_state(ui::EmptyState* state) {
+    empty_state_ = state;
+    sync_empty_state();
+}
+
+void NodeCanvas::on_scene_emptiness(bool empty) {
+    if (!empty) {
+        // A node arrived (drop, paste, load): out of the way at once.
+        if (empty_state_)
+            empty_state_->hide();
+        return;
+    }
+    // Emptied: a load clears the scene and refills it in the same turn, so look
+    // again on the next one instead of flashing the state in between.
+    if (empty_sync_pending_)
+        return;
+    empty_sync_pending_ = true;
+    QTimer::singleShot(0, this, &NodeCanvas::sync_empty_state);
+}
+
+void NodeCanvas::sync_empty_state() {
+    empty_sync_pending_ = false;
+    if (!empty_state_)
+        return;
+    const bool show = node_scene_ && node_scene_->is_empty();
+    if (show)
+        empty_state_->setGeometry(viewport()->rect());
+    empty_state_->setVisible(show);
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────
@@ -189,38 +225,6 @@ PortItem* NodeCanvas::port_at(const QPoint& view_pos) const {
     return nullptr;
 }
 
-// ── Empty state placeholder ────────────────────────────────────────────
-
-void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
-    Q_UNUSED(rect);
-    // P9: this runs on every canvas repaint. items() materialises a QList of
-    // EVERY graphics item (each node plus all of its ports plus every edge), so
-    // at a few hundred nodes it allocated and populated a multi-thousand-entry
-    // list per frame just to ask "is the canvas empty?". is_empty() is a hash
-    // lookup on the node map.
-    if (!node_scene_ || !node_scene_->is_empty())
-        return;
-
-    painter->save();
-    painter->resetTransform();
-
-    const auto& t = ui::ThemeManager::instance().tokens();
-    QFont font("Consolas", 13);
-    painter->setFont(font);
-    painter->setPen(QColor(t.text_tertiary));
-
-    QRect vp = viewport()->rect();
-    painter->drawText(vp, Qt::AlignCenter, tr("Drag nodes from the palette to begin"));
-
-    // Subtle arrow hint
-    QFont small("Consolas", 10);
-    painter->setFont(small);
-    painter->setPen(QColor(t.border_med));
-    painter->drawText(QRect(vp.x(), vp.y() + vp.height() / 2 + 24, vp.width(), 20), Qt::AlignCenter,
-                      tr("or right-click for quick add"));
-    painter->restore();
-}
-
 // ── Canvas context menu ────────────────────────────────────────────────
 
 void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
@@ -234,11 +238,11 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
     menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                               "  font-family: Consolas; font-size: 12px; }"
+                               "  font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                                "QMenu::item { padding: 4px 16px; }"
                                "QMenu::item:selected { background: %4; color: %5; }"
                                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
-                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_med, tm.accent, tm.text_on_accent));
 
     auto& registry = NodeRegistry::instance();
     QStringList cats = registry.categories();
@@ -251,10 +255,17 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
 
         auto* sub = menu.addMenu(cat);
         sub->setStyleSheet(menu.styleSheet());
+        sub->setToolTipsVisible(true);
 
         for (const auto& n : nodes) {
             QString type_id = n.type_id;
             auto* action = sub->addAction(QString("%1  %2").arg(n.icon_text, n.display_name));
+            if (!n.unavailable_reason.isEmpty()) {
+                // Cannot run in this build — same rule as the palette: listed, not addable.
+                action->setEnabled(false);
+                action->setToolTip(tr("Unavailable — %1").arg(n.unavailable_reason));
+                continue;
+            }
             connect(action, &QAction::triggered, this,
                     [this, type_id, scene_pos]() { emit node_drop_requested(type_id, scene_pos); });
         }
@@ -269,22 +280,17 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
 void NodeCanvas::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
 
+    // The first-run state covers the viewport (laid out before this handler runs).
+    // isHidden(), not isVisible(): the canvas is sized before its window is shown.
+    if (empty_state_ && !empty_state_->isHidden())
+        empty_state_->setGeometry(viewport()->rect());
+
     // Reposition minimap child widget if present
     for (auto* child : findChildren<QGraphicsView*>()) {
         if (child != this && child->objectName() != objectName()) {
             child->move(width() - child->width() - 10, height() - child->height() - 10);
         }
     }
-}
-
-void NodeCanvas::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange) {
-        // The only translatable text (empty-state placeholder) is painted in
-        // drawForeground — repaint the viewport to pick up the new language.
-        if (viewport())
-            viewport()->update();
-    }
-    QGraphicsView::changeEvent(event);
 }
 
 } // namespace fincept::workflow

@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Union, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-import pandas as pd
+import math
 import numpy as np
 from datetime import datetime, date
 import logging
@@ -72,12 +72,18 @@ class TrendDirection(Enum):
 
 @dataclass
 class AnalysisResult:
-    """Standardized analysis result structure"""
+    """Standardized analysis result structure.
+
+    ``value`` is None (and ``risk_level`` None) when the metric could not be
+    computed from the supplied data; ``interpretation`` then states why.
+    ``label`` carries a categorical answer (e.g. a business-model class) for
+    results whose value is not a number.
+    """
     analysis_type: AnalysisType
     metric_name: str
-    value: float
+    value: Optional[float]
     interpretation: str
-    risk_level: RiskLevel
+    risk_level: Optional[RiskLevel]
     trend: TrendDirection = None
     benchmark_comparison: str = None
     industry_percentile: float = None
@@ -85,6 +91,11 @@ class AnalysisResult:
     methodology: str = None
     limitations: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    label: str = None
+
+    @property
+    def available(self) -> bool:
+        return self.value is not None
 
 
 @dataclass
@@ -239,34 +250,28 @@ class BaseAnalyzer(ABC):
                 volatility_measure=0.0
             )
 
-        # Calculate growth rate (CAGR if multiple periods)
-        if len(values) > 1:
-            if values[0] != 0:
-                if len(values) == 2:
-                    growth_rate = (values[-1] / values[0]) - 1
-                else:
-                    n_periods = len(values) - 1
-                    growth_rate = (values[-1] / values[0]) ** (1 / n_periods) - 1
-            else:
-                growth_rate = None
-        else:
-            growth_rate = None
+        # Growth rate: CAGR over the window (simple growth for two points). A growth
+        # rate is only defined when both ends are positive; over a zero or negative
+        # base (a turnaround, a loss year) it is reported as None, never as a
+        # complex number or a sign-flipped percentage.
+        growth_rate = self.cagr(values[0], values[-1], len(values) - 1)
 
-        # Calculate volatility (coefficient of variation)
-        mean_value = np.mean(values)
-        std_value = np.std(values)
-        volatility = std_value / mean_value if mean_value != 0 else 0
+        # Volatility: coefficient of variation on |mean| (None when the mean is 0)
+        mean_value = float(np.mean(values))
+        std_value = float(np.std(values))
+        volatility = std_value / abs(mean_value) if mean_value != 0 else None
+        scale = abs(mean_value)
 
         # Determine trend direction
         if len(values) >= 3:
             recent_trend = np.polyfit(range(len(values)), values, 1)[0]
-            if recent_trend > 0.05 * mean_value:
+            if recent_trend > 0.05 * scale:
                 trend_description = "Strong upward trend"
-            elif recent_trend > 0.02 * mean_value:
+            elif recent_trend > 0.02 * scale:
                 trend_description = "Moderate upward trend"
-            elif recent_trend < -0.05 * mean_value:
+            elif recent_trend < -0.05 * scale:
                 trend_description = "Strong downward trend"
-            elif recent_trend < -0.02 * mean_value:
+            elif recent_trend < -0.02 * scale:
                 trend_description = "Moderate downward trend"
             else:
                 trend_description = "Stable trend"
@@ -373,14 +378,17 @@ class BaseAnalyzer(ABC):
         Returns:
             Comparison interpretation or None if no data available
         """
-        if not industry_data:
+        if not isinstance(industry_data, dict) or metric_value is None:
             return None
 
         industry_median = industry_data.get('median')
         industry_q1 = industry_data.get('q1')
         industry_q3 = industry_data.get('q3')
 
-        if not all([industry_median, industry_q1, industry_q3]):
+        def is_num(v):
+            return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+        if not all(is_num(v) for v in (industry_median, industry_q1, industry_q3)):
             return None
 
         if metric_value >= industry_q3:
@@ -430,28 +438,27 @@ class BaseAnalyzer(ABC):
 
         # Check for negative values where inappropriate
         negative_checks = {
-            'revenue': statements.income_statement.get('revenue', 0),
-            'total_assets': statements.balance_sheet.get('total_assets', 0),
-            'cash_equivalents': statements.balance_sheet.get('cash_equivalents', 0)
+            'revenue': statements.income_statement.get('revenue'),
+            'total_assets': statements.balance_sheet.get('total_assets'),
+            'cash_equivalents': statements.balance_sheet.get('cash_equivalents')
         }
 
-        for field, value in negative_checks.items():
-            if value < 0:
-                warning_signs.append(f"Negative {field}: {value}")
+        for field_name, value in negative_checks.items():
+            if value is not None and value < 0:
+                warning_signs.append(f"Negative {field_name}: {value}")
 
-        # Check balance sheet equation
-        assets = statements.balance_sheet.get('total_assets', 0)
-        liabilities = statements.balance_sheet.get('total_liabilities', 0)
-        equity = statements.balance_sheet.get('total_equity', 0)
-
-        if abs(assets - (liabilities + equity)) > 0.01:
-            quality_issues.append("Balance sheet equation does not balance")
-        else:
-            quality_drivers.append("Balance sheet equation balances correctly")
+        # Check balance sheet equation (relative tolerance, minority interest allowed)
+        bs = statements.balance_sheet
+        if all(k in bs for k in ('total_assets', 'total_liabilities', 'total_equity')):
+            assets = bs['total_assets']
+            other_side = bs['total_liabilities'] + bs['total_equity'] + bs.get('minority_interest', 0.0)
+            if abs(assets - other_side) > max(abs(assets) * 0.005, 0.01):
+                quality_issues.append("Balance sheet equation does not balance")
+            else:
+                quality_drivers.append("Balance sheet equation balances correctly")
 
         # Check for unusual relationships
-        current_assets = statements.balance_sheet.get('current_assets', 0)
-        if current_assets > assets:
+        if 'current_assets' in bs and 'total_assets' in bs and bs['current_assets'] > bs['total_assets']:
             warning_signs.append("Current assets exceed total assets")
 
         # Assess audit quality indicators
@@ -465,7 +472,7 @@ class BaseAnalyzer(ABC):
         balance_sheet_quality = max(0, 100 - len(quality_issues) * 15 - len(warning_signs) * 8)
         cash_flow_quality = max(0, 100 - len(quality_issues) * 25 - len(warning_signs) * 12)
 
-        overall_score = np.mean([earnings_quality, balance_sheet_quality, cash_flow_quality])
+        overall_score = float(np.mean([earnings_quality, balance_sheet_quality, cash_flow_quality]))
 
         return QualityAssessment(
             overall_score=overall_score,
@@ -489,9 +496,114 @@ class BaseAnalyzer(ABC):
         Returns:
             Division result or default value
         """
-        if denominator == 0 or denominator is None:
+        if denominator is None or numerator is None or denominator == 0:
             return default
-        return numerator / denominator
+        result = numerator / denominator
+        return result if math.isfinite(result) else default
+
+    # ------------------------------------------------------------------
+    # Shared helpers (presence-aware: a missing line item is never 0)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def cagr(first: Optional[float], last: Optional[float], periods: int) -> Optional[float]:
+        """Compound growth rate; None unless both ends are positive and periods >= 1."""
+        if first is None or last is None or periods < 1 or first <= 0 or last <= 0:
+            return None
+        if periods == 1:
+            return last / first - 1
+        return (last / first) ** (1.0 / periods) - 1
+
+    @staticmethod
+    def growth(current: Optional[float], prior: Optional[float]) -> Optional[float]:
+        """Period-over-period growth; None over a zero/negative or missing base."""
+        if current is None or prior is None or prior <= 0:
+            return None
+        return current / prior - 1
+
+    @staticmethod
+    def change_over_abs_base(current: Optional[float], prior: Optional[float]) -> Optional[float]:
+        """(current - prior) / |prior| - a direction-correct change for bases that can be negative."""
+        if current is None or prior is None or prior == 0:
+            return None
+        return (current - prior) / abs(prior)
+
+    @staticmethod
+    def prior_value(comparative_data: Optional[List[FinancialStatements]], section: str,
+                    key: str) -> Optional[float]:
+        """Value of `key` in the most recent prior period, or None."""
+        if not comparative_data:
+            return None
+        return getattr(comparative_data[-1], section).get(key)
+
+    def average_balance(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]],
+                        key: str, section: str = 'balance_sheet') -> Tuple[Optional[float], str]:
+        """(average of opening and closing balance, basis) - falls back to the ending
+        balance when no prior period is supplied. basis is 'average' or 'ending'."""
+        current = getattr(statements, section).get(key)
+        if current is None:
+            return None, 'missing'
+        prior = self.prior_value(comparative_data, section, key)
+        if prior is not None:
+            return (current + prior) / 2.0, 'average'
+        return current, 'ending'
+
+    @staticmethod
+    def basis_note(basis: str) -> str:
+        return ("average of opening and closing balances" if basis == 'average'
+                else "ending balance (no prior period supplied, so no average)")
+
+    def unavailable(self, analysis_type: AnalysisType, metric_name: str, reason: str,
+                    methodology: str = None) -> AnalysisResult:
+        """A result that says why a metric could not be computed (value None)."""
+        return AnalysisResult(
+            analysis_type=analysis_type,
+            metric_name=metric_name,
+            value=None,
+            interpretation=f"Not available: {reason}",
+            risk_level=None,
+            methodology=methodology,
+        )
+
+    @staticmethod
+    def note_number(notes: Dict[str, Any], key: str, default: Optional[float] = None) -> Optional[float]:
+        """A numeric note disclosure, or `default` when absent / not numeric."""
+        v = notes.get(key)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            return default
+        return float(v)
+
+    @staticmethod
+    def note_text(notes: Dict[str, Any], key: str, default: str = '') -> str:
+        """A text note disclosure, lower-cased; `default` when absent."""
+        v = notes.get(key)
+        return str(v).strip().lower() if v is not None else default
+
+    @staticmethod
+    def gross_profit(income: Dict[str, float]) -> Optional[float]:
+        """Reported gross profit, or revenue - cost of sales; None when neither is known."""
+        if 'gross_profit' in income:
+            return income['gross_profit']
+        if 'revenue' in income and 'cost_of_sales' in income:
+            return income['revenue'] - income['cost_of_sales']
+        return None
+
+    @staticmethod
+    def sga(income: Dict[str, float]) -> Optional[float]:
+        """SG&A: combined line if reported, else selling + administrative; None if neither."""
+        if 'sga_expense' in income:
+            return income['sga_expense']
+        if 'selling_expenses' in income or 'administrative_expenses' in income:
+            return income.get('selling_expenses', 0.0) + income.get('administrative_expenses', 0.0)
+        return None
+
+    @staticmethod
+    def total_debt(balance: Dict[str, float]) -> Optional[float]:
+        """Short-term + long-term debt; None when neither line is reported."""
+        if 'short_term_debt' not in balance and 'long_term_debt' not in balance:
+            return None
+        return balance.get('short_term_debt', 0.0) + balance.get('long_term_debt', 0.0)
 
     def format_percentage(self, value: float, decimal_places: int = 1) -> str:
         """Format decimal as percentage string"""

@@ -10,6 +10,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QThreadPool>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -71,12 +72,14 @@ static pr::PredictionMarket parse_market(const QJsonObject& obj) {
     m.open_interest = fp_to_double(obj.value("open_interest_fp"));
     m.liquidity = str_or_num(obj.value("liquidity_dollars"));
 
-    // Kalshi v2 market statuses: unopened, open, active, paused, closed, settled.
-    // Real API returns "active" (not "open") for live markets — compare
-    // case-insensitively since casing has varied across API versions.
+    // Kalshi v2 market statuses: initialized/unopened, open/active, paused,
+    // closed, determined, settled/finalized. Real API returns "active" (not
+    // "open") for live markets and "finalized" for /historical/markets rows —
+    // compare case-insensitively since casing has varied across API versions.
     const QString status = obj.value("status").toString().toLower();
     m.active = (status == QStringLiteral("open") || status == QStringLiteral("active"));
-    m.closed = (status == QStringLiteral("closed") || status == QStringLiteral("settled"));
+    m.closed = (status == QStringLiteral("closed") || status == QStringLiteral("settled") ||
+                status == QStringLiteral("finalized") || status == QStringLiteral("determined"));
 
     pr::Outcome yes;
     yes.name = QStringLiteral("Yes");
@@ -93,8 +96,14 @@ static pr::PredictionMarket parse_market(const QJsonObject& obj) {
     // parse_market is called from parse_event the caller patches this in.
     // We still insert an empty placeholder so callers can unconditionally read.
     m.extras.insert(QStringLiteral("series_ticker"), QString());
+    // Outcome prices above are each side's best BID (the dashboard reads them as
+    // such); the raw quotes are also kept here so the detail view can derive the
+    // midpoint / spread / display probability (ExchangePresentation).
+    m.extras.insert(QStringLiteral("yes_bid_dollars"), yes.price);
+    m.extras.insert(QStringLiteral("no_bid_dollars"), no.price);
     m.extras.insert(QStringLiteral("yes_ask_dollars"), str_or_num(obj.value("yes_ask_dollars")));
     m.extras.insert(QStringLiteral("no_ask_dollars"), str_or_num(obj.value("no_ask_dollars")));
+    m.extras.insert(QStringLiteral("open_time"), obj.value("open_time").toString());
     m.extras.insert(QStringLiteral("last_price_dollars"), str_or_num(obj.value("last_price_dollars")));
     m.extras.insert(QStringLiteral("volume_24h_fp"), fp_to_double(obj.value("volume_24h_fp")));
     m.extras.insert(QStringLiteral("can_close_early"), obj.value("can_close_early").toBool());
@@ -137,6 +146,19 @@ static pr::PredictionEvent parse_event(const QJsonObject& obj) {
         e.volume += m.volume;
         e.markets.push_back(m);
     }
+    // /events rows carry no "status" key at all, so both flags stayed false and
+    // no event got a status dot. Derive them from the nested markets instead:
+    // active if any market trades, closed once every market has closed.
+    if (!obj.contains(QStringLiteral("status")) && !e.markets.isEmpty()) {
+        bool any_active = false;
+        bool all_closed = true;
+        for (const auto& m : e.markets) {
+            any_active = any_active || m.active;
+            all_closed = all_closed && m.closed;
+        }
+        e.active = any_active;
+        e.closed = all_closed;
+    }
     return e;
 }
 
@@ -177,6 +199,32 @@ void KalshiRestClient::get_json(const QString& path, JsonCallback on_success, co
             emit self->request_error(error_ctx, msg);
             return;
         }
+        // A large answer (the series list is several MB) took over 2 s to parse here, on the GUI
+        // thread, and froze the window while Kalshi loaded. Parse big payloads on a pool thread
+        // and deliver the document back on this object's thread; small ones stay inline.
+        constexpr qsizetype kParseOffThreadBytes = 256 * 1024;
+        if (data.size() >= kParseOffThreadBytes) {
+            QThreadPool::globalInstance()->start([self, data, on_success, error_ctx]() {
+                QJsonParseError perr;
+                const QJsonDocument doc = QJsonDocument::fromJson(data, &perr);
+                const QString parse_error = doc.isNull() ? perr.errorString() : QString();
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self.data(),
+                    [self, doc, parse_error, on_success, error_ctx]() {
+                        if (!self)
+                            return;
+                        if (doc.isNull()) {
+                            emit self->request_error(error_ctx, QStringLiteral("JSON parse: ") + parse_error);
+                            return;
+                        }
+                        on_success(doc);
+                    },
+                    Qt::QueuedConnection);
+            });
+            return;
+        }
         QJsonParseError perr;
         auto doc = QJsonDocument::fromJson(data, &perr);
         if (doc.isNull()) {
@@ -200,6 +248,11 @@ void KalshiRestClient::fetch_markets(const QString& status, const QString& event
         q.addQueryItem("series_ticker", series_ticker);
     if (!tickers.isEmpty())
         q.addQueryItem("tickers", tickers);
+    // An unfiltered /markets page is all multivariate "combo" (KXMVE…) parlay
+    // markets — zero volume, $0.00 / $1.00 — so the default list showed nothing
+    // tradeable. Exclude them unless the caller asked for specific markets.
+    if (event_ticker.isEmpty() && series_ticker.isEmpty() && tickers.isEmpty())
+        q.addQueryItem("mve_filter", "exclude");
     q.addQueryItem("limit", QString::number(qBound(1, limit, 1000)));
     if (!cursor.isEmpty())
         q.addQueryItem("cursor", cursor);
@@ -311,6 +364,52 @@ void KalshiRestClient::fetch_markets_by_tickers(const QStringList& tickers, Mark
     });
 }
 
+// ── fetch_open_series_markets (callback-style, search) ─────────────────────
+
+void KalshiRestClient::fetch_open_series_markets(const QString& series_ticker, int limit, MarketsCallback on_ok,
+                                                 ErrorCallback on_error) {
+    QUrlQuery q;
+    q.addQueryItem("status", "open");
+    q.addQueryItem("series_ticker", series_ticker);
+    q.addQueryItem("limit", QString::number(qBound(1, limit, 1000)));
+    QUrl u(base_url() + QStringLiteral("/markets"));
+    u.setQuery(q);
+
+    QNetworkRequest req{u};
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("FinceptTerminal/4.0"));
+    req.setTransferTimeout(15000);
+    auto* reply = nam_->get(req);
+    connect(reply, &QNetworkReply::finished, this,
+            [reply, series_ticker, on_ok = std::move(on_ok), on_error = std::move(on_error)]() {
+                reply->deleteLater();
+                const QByteArray data = reply->readAll();
+                if (reply->error() != QNetworkReply::NoError) {
+                    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                    const QString msg = status > 0 ? QStringLiteral("HTTP %1").arg(status) : reply->errorString();
+                    if (on_error)
+                        on_error(msg);
+                    return;
+                }
+                QJsonParseError perr;
+                const QJsonDocument doc = QJsonDocument::fromJson(data, &perr);
+                if (doc.isNull()) {
+                    if (on_error)
+                        on_error(QStringLiteral("JSON parse: ") + perr.errorString());
+                    return;
+                }
+                const QJsonArray arr = doc.object().value("markets").toArray();
+                QVector<pr::PredictionMarket> markets;
+                markets.reserve(arr.size());
+                for (const auto& v : arr) {
+                    auto m = parse_market(v.toObject());
+                    m.extras.insert(QStringLiteral("series_ticker"), series_ticker);
+                    markets.push_back(std::move(m));
+                }
+                if (on_ok)
+                    on_ok(markets);
+            });
+}
+
 // ── fetch_events ────────────────────────────────────────────────────────────
 
 void KalshiRestClient::fetch_events(const QString& status, const QString& series_ticker, bool with_nested_markets,
@@ -381,12 +480,26 @@ void KalshiRestClient::fetch_series(const QString& status) {
             const auto arr = doc.object().value("series").toArray();
             QStringList tickers;
             tickers.reserve(arr.size());
+            QHash<QString, SeriesSearchEntry> index;
+            index.reserve(arr.size());
             for (const auto& v : arr) {
                 const auto o = v.toObject();
                 const QString t = o.value("ticker").toString();
-                if (!t.isEmpty())
-                    tickers.push_back(t);
+                if (t.isEmpty())
+                    continue;
+                tickers.push_back(t);
+                // Text the free-text market search matches against (Kalshi has
+                // no search endpoint): ticker, title, category and tags.
+                SeriesSearchEntry entry;
+                entry.title = o.value("title").toString().toLower();
+                QStringList hay{t.toLower(), entry.title, o.value("category").toString().toLower()};
+                for (const auto& tag : o.value("tags").toArray())
+                    hay << tag.toString().toLower();
+                entry.haystack = hay.join(QLatin1Char(' '));
+                entry.updated = o.value("last_updated_ts").toString();
+                index.insert(t.toUpper(), entry);
             }
+            self->series_index_ = std::move(index);
             emit self->tags_ready(tickers);
         },
         QStringLiteral("Kalshi.fetch_series"));
@@ -527,6 +640,7 @@ void KalshiRestClient::fetch_market_trades(const QString& ticker, int limit, con
                 // unified shape. YES-taker = BUY of YES; NO-taker = SELL.
                 const QString ts_side = o.value("taker_side").toString().toLower();
                 t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL") : QStringLiteral("BUY");
+                t.outcome = QStringLiteral("Yes"); // price and side are both in YES terms
                 t.price = str_or_num(o.value("yes_price_dollars"));
                 t.size = fp_to_double(o.value("count_fp"));
                 // Kalshi returns ISO 8601 `created_time`; there is no
@@ -547,6 +661,7 @@ static pr::PredictionTrade parse_trade(const QJsonObject& o) {
     t.asset_id = o.value("ticker").toString() + QStringLiteral(":yes");
     const QString ts_side = o.value("taker_side").toString().toLower();
     t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL") : QStringLiteral("BUY");
+    t.outcome = QStringLiteral("Yes"); // price and side are both in YES terms
     t.price = str_or_num(o.value("yes_price_dollars"));
     t.size = fp_to_double(o.value("count_fp"));
     const QString iso = o.value("created_time").toString();
@@ -676,6 +791,8 @@ void KalshiRestClient::fetch_historical_markets(const QString& series_ticker, in
     QUrlQuery q;
     if (!series_ticker.isEmpty())
         q.addQueryItem("series_ticker", series_ticker);
+    else
+        q.addQueryItem("mve_filter", "exclude"); // same combo-market flood as /markets (accepted here too)
     q.addQueryItem("limit", QString::number(qBound(1, limit, 1000)));
     if (!cursor.isEmpty())
         q.addQueryItem("cursor", cursor);

@@ -1,6 +1,8 @@
 #include "trading/DataStreamManager.h"
 
 #include "core/logging/Logger.h"
+#include "core/market/InstrumentCurrency.h"
+#include "core/market/MarketSessions.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "trading/AccountManager.h"
@@ -26,6 +28,48 @@ constexpr const char* DSM_TAG = "DataStreamManager";
 bool is_daily_expiring_broker(const QString& broker_id) {
     auto* b = BrokerRegistry::instance().get(broker_id);
     return b != nullptr && b->profile().region == QLatin1String("IN");
+}
+
+// A currency code as an adapter may report it: 3-5 letters, upper-cased; else empty.
+QString dsm_currency_code(const QString& raw) {
+    const QString c = raw.trimmed().toUpper();
+    if (c.size() < 3 || c.size() > 5)
+        return {};
+    for (const QChar ch : c)
+        if (ch < QLatin1Char('A') || ch > QLatin1Char('Z'))
+            return {};
+    return c;
+}
+
+// The currency a broker reported its funds in: the account-currency field some
+// adapters keep in raw_data (Alpaca, MetaApi, TickerAll: "currency"), else the
+// broker profile's account currency; empty when neither is known (the risk gate
+// then takes the account's currency, the documented fallback).
+QString dsm_funds_currency(const QString& account_id, const BrokerFunds& f) {
+    for (const char* key : {"currency", "Currency", "base_currency", "baseCurrency"}) {
+        const QString c = dsm_currency_code(f.raw_data.value(QLatin1String(key)).toString());
+        if (!c.isEmpty())
+            return c;
+    }
+    if (IBroker* b = AccountManager::instance().broker_for(account_id))
+        return dsm_currency_code(b->profile().currency);
+    return {};
+}
+
+// The currency each position row's P&L is in, as far as the adapter tells: the
+// row's venue ("LSE", "NASDAQ", "NSE" — core::market venue table), in its major
+// unit (brokers report P&L in pounds, not pence). Empty for a venue the table does
+// not know (NFO, MCX, FOREX / CFD books, a blank exchange): the funds' currency —
+// MetaApi / TickerAll FOREX profit is already in the account's currency.
+QStringList dsm_position_pnl_currencies(const QVector<BrokerPosition>& positions) {
+    namespace mk = fincept::core::market;
+    QStringList out;
+    out.reserve(positions.size());
+    for (const auto& p : positions) {
+        const mk::Venue* v = p.exchange.trimmed().isEmpty() ? nullptr : mk::venue_by_code(p.exchange.trimmed());
+        out << ((v && !v->currency.isEmpty()) ? mk::major_currency(v->currency) : QString());
+    }
+    return out;
 }
 
 // Hourly cadence is enough to catch the 3:00 AM IST window without polling
@@ -133,7 +177,7 @@ void DataStreamManager::start_stream(const QString& account_id) {
     streams_.insert(account_id, stream);
     stream->start();
 
-    LOG_INFO(DSM_TAG, QString("Started data stream for account %1").arg(account_id));
+    LOG_DEBUG(DSM_TAG, QString("Started data stream for account %1").arg(account_id));
 }
 
 void DataStreamManager::stop_stream(const QString& account_id) {
@@ -145,7 +189,7 @@ void DataStreamManager::stop_stream(const QString& account_id) {
     it.value()->deleteLater();
     streams_.erase(it);
 
-    LOG_INFO(DSM_TAG, QString("Stopped data stream for account %1").arg(account_id));
+    LOG_DEBUG(DSM_TAG, QString("Stopped data stream for account %1").arg(account_id));
 }
 
 void DataStreamManager::restart_stream(const QString& account_id) {
@@ -173,7 +217,7 @@ void DataStreamManager::start_all_active() {
         if (!streams_.contains(account.account_id))
             start_stream(account.account_id);
     }
-    LOG_INFO(DSM_TAG, QString("Started %1 data streams for active accounts").arg(streams_.size()));
+    LOG_DEBUG(DSM_TAG, QString("Started %1 data streams for active accounts").arg(streams_.size()));
 }
 
 void DataStreamManager::stop_all() {
@@ -182,7 +226,7 @@ void DataStreamManager::stop_all() {
         it.value()->deleteLater();
     }
     streams_.clear();
-    LOG_INFO(DSM_TAG, "All data streams stopped");
+    LOG_DEBUG(DSM_TAG, "All data streams stopped");
 }
 
 void DataStreamManager::pause_all() {
@@ -232,16 +276,23 @@ void DataStreamManager::wire_stream_signals(AccountDataStream* stream) {
     connect(stream, &AccountDataStream::latest_trade_for_symbol, this, &DataStreamManager::latest_trade_for_symbol);
     connect(stream, &AccountDataStream::auctions_fetched, this, &DataStreamManager::auctions_fetched);
     connect(stream, &AccountDataStream::condition_codes_fetched, this, &DataStreamManager::condition_codes_fetched);
+    // Tagged chart history + on-demand fetch failures (additive relays).
+    connect(stream, &AccountDataStream::candles_for_symbol, this, &DataStreamManager::candles_for_symbol);
+    connect(stream, &AccountDataStream::candles_failed, this, &DataStreamManager::candles_failed);
+    connect(stream, &AccountDataStream::orderbook_failed, this, &DataStreamManager::orderbook_failed);
+    connect(stream, &AccountDataStream::time_sales_failed, this, &DataStreamManager::time_sales_failed);
 
     // Thread-safe mirror for the pre-trade risk gate. Orders are placed from executor
     // threads, where these GUI-thread caches must not be read; OrderValidator keeps
     // a mutex-guarded copy of funds / positions / last prices per account.
+    // Each with the currency the broker reported it in, so the gate never assumes the
+    // broker profile's currency for funds, nor the account's for every position's P&L.
     connect(stream, &AccountDataStream::funds_updated, this, [](const QString& account_id, const BrokerFunds& f) {
-        OrderValidator::note_funds(account_id, f.available_balance);
+        OrderValidator::note_funds(account_id, f.available_balance, dsm_funds_currency(account_id, f));
     });
     connect(stream, &AccountDataStream::positions_updated, this,
             [](const QString& account_id, const QVector<BrokerPosition>& positions) {
-                OrderValidator::note_positions(account_id, positions);
+                OrderValidator::note_positions(account_id, positions, dsm_position_pnl_currencies(positions));
             });
     connect(stream, &AccountDataStream::quote_updated, this,
             [](const QString& account_id, const QString& symbol, const BrokerQuote& q) {
@@ -376,7 +427,7 @@ void DataStreamManager::ensure_registered_with_hub() {
         connect(s, &AccountDataStream::quote_updated, this, &DataStreamManager::on_quote_for_hub);
     }
 
-    LOG_INFO(DSM_TAG, "Registered with DataHub (broker:*)");
+    LOG_DEBUG(DSM_TAG, "Registered with DataHub (broker:*)");
 }
 
 // ── Dual-fire hub publishers ────────────────────────────────────────────────
@@ -448,7 +499,8 @@ void DataStreamManager::open_quote_feed(QObject* owner, const QString& consumer_
                 start_stream(account_id);
             auto* stream = stream_for(account_id);
             if (!stream) {
-                LOG_WARN(DSM_TAG, QString("open_quote_feed: no stream for account %1").arg(account_id));
+                LOG_WARN(DSM_TAG, logf("Quote feed could not be opened: the account has no data stream",
+                                       {{"consumer", consumer_id}, {"symbol", symbol}, {"account", log_mask(account_id)}}));
                 return;
             }
             // Join the account stream as an independent consumer + request fast (3s)
@@ -477,8 +529,8 @@ void DataStreamManager::open_quote_feed(QObject* owner, const QString& consumer_
                                                                                  Qt::QueuedConnection);
                                                                          });
             quote_feeds_.insert(consumer_id, QuoteFeed{account_id, topic, guard});
-            LOG_INFO(DSM_TAG,
-                     QString("Opened quote feed '%1' for %2 on account %3").arg(consumer_id, symbol, account_id));
+            LOG_DEBUG(DSM_TAG,
+                      QString("Opened quote feed '%1' for %2 on account %3").arg(consumer_id, symbol, account_id));
         },
         Qt::QueuedConnection);
 }

@@ -8,6 +8,7 @@
 #include <QDialog>
 #include <QEvent>
 #include <QFrame>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
@@ -19,6 +20,8 @@
 #include <QTimer>
 
 namespace fincept::screens {
+
+class TradeCostsBox; // PortfolioLedgerDialogs.h
 
 /// Dialog for creating a new portfolio.
 class CreatePortfolioDialog : public QDialog {
@@ -85,6 +88,10 @@ class AddAssetDialog : public QDialog {
     /// selected — the user should not have to retype a symbol the terminal
     /// already knows.
     void preset(const QString& symbol, double price = 0.0);
+    /// Portfolio base currency (the costs block's FX field is relative to it).
+    void set_base_currency(const QString& base_ccy);
+    /// Fees, taxes, trade currency and trade FX.
+    TradeCostsBox* costs() const { return costs_; }
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -111,6 +118,8 @@ class AddAssetDialog : public QDialog {
     QLabel* date_row_label_ = nullptr;
     QPushButton* cancel_btn_ = nullptr;
     QPushButton* add_btn_ = nullptr;
+    TradeCostsBox* costs_ = nullptr;
+    QString base_ccy_;
 
     // Ticker search dropdown (parented to dialog, floats over form)
     QFrame* search_frame_ = nullptr;
@@ -133,6 +142,9 @@ class SellAssetDialog : public QDialog {
     QString date() const;
     /// Pre-fill the sale price (e.g. with the last price).
     void preset_price(double price);
+    /// Base currency + the instrument's quoted currency for the costs block.
+    void set_currency_context(const QString& base_ccy, const QString& instrument_ccy);
+    TradeCostsBox* costs() const { return costs_; }
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -142,6 +154,7 @@ class SellAssetDialog : public QDialog {
 
     QString symbol_;
     double held_qty_ = 0;
+    TradeCostsBox* costs_ = nullptr;
     QLineEdit* quantity_edit_ = nullptr;
     QLineEdit* price_edit_ = nullptr;
     QLabel* title_label_ = nullptr;
@@ -164,6 +177,12 @@ class EditTransactionDialog : public QDialog {
     double price() const;
     QString date() const;
     QString notes() const;
+    /// Base currency for the costs block (not shown for a SPLIT).
+    void set_base_currency(const QString& base_ccy);
+    /// nullptr for a SPLIT (no costs).
+    TradeCostsBox* costs() const { return costs_; }
+    /// True when fees / taxes / currency / FX differ from the row as opened.
+    bool costs_changed() const;
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -173,6 +192,8 @@ class EditTransactionDialog : public QDialog {
 
     QString txn_type_;
     QString txn_symbol_;
+    portfolio::Transaction original_;
+    TradeCostsBox* costs_ = nullptr;
     QLineEdit* quantity_edit_ = nullptr;
     QLineEdit* price_edit_ = nullptr;
     QDateEdit* date_edit_ = nullptr;
@@ -196,13 +217,32 @@ class AddDividendDialog : public QDialog {
     double amount_per_share() const;
     QString date() const;
     QString notes() const;
+    /// Units entitled — pre-filled with the ledger quantity held at the start of the
+    /// ex-date (editable; falls back to today's holding when the ledger has none).
+    double quantity() const;
+    /// Ledger + current holdings for the entitlement, and the base currency.
+    void set_context(const QString& base_ccy, const QVector<portfolio::Transaction>& ledger,
+                     const QHash<QString, double>& held_now, const QHash<QString, QString>& quote_ccy);
+    /// Withholding tax (taxes), charges (fees), currency and FX of the payment.
+    TradeCostsBox* costs() const { return costs_; }
+    /// Pre-select the paying holding.
+    void set_symbol(const QString& symbol);
 
   protected:
     void changeEvent(QEvent* event) override;
 
   private:
     void retranslateUi();
+    void update_entitlement();
 
+    QVector<portfolio::Transaction> ledger_;
+    QHash<QString, double> held_now_;
+    QHash<QString, QString> quote_ccy_;
+    QLineEdit* qty_edit_ = nullptr;
+    QLabel* qty_row_label_ = nullptr;
+    QLabel* entitled_label_ = nullptr;
+    TradeCostsBox* costs_ = nullptr;
+    bool qty_user_edited_ = false;
     QComboBox* symbol_cb_ = nullptr;
     QLineEdit* amount_edit_ = nullptr;
     QDateEdit* date_edit_ = nullptr;

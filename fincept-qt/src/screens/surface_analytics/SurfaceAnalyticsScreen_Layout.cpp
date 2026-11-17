@@ -3,8 +3,7 @@
 // UI construction for the volatility/surface analytics screen: setup_ui,
 // build_category_bar, build_surface_bar, refresh_surface_bar, and the
 // view-mode button skinning (apply_view_mode_buttons). The category-accent
-// colour helpers and the MONO font constant live here too — only the layout
-// code consumes them.
+// colour helper lives here too — only the layout code consumes it.
 //
 // Part of the partial-class split of SurfaceAnalyticsScreen.cpp.
 
@@ -23,6 +22,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QFileDialog>
 #include <QFrame>
@@ -40,43 +40,31 @@ namespace fincept::surface {
 
 using namespace fincept::ui;
 
-static const char* MONO = "'Consolas','Courier New',monospace";
-
-// ── Category accent colors (muted, functional only) ─────────────────────────
-// R,G,B kept but used as muted accent — no bright blobs
-static constexpr int CAT_ACCENT[][3] = {
-    {88, 166, 255},  // EQUITY DERIV
-    {63, 185, 80},   // FIXED INCOME
-    {217, 164, 6},   // FX
-    {220, 80, 80},   // CREDIT
-    {155, 114, 255}, // COMMODITIES
-    {217, 119, 6},   // RISK  → amber
-    {89, 196, 217},  // MACRO
-};
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
+// Category accent: the theme's categorical chart colour for the category's
+// position (EQUITY DERIV, FIXED INCOME, FX, CREDIT, COMMODITIES, RISK, MACRO).
 static QString cat_hex(int i) {
-    return QString("rgb(%1,%2,%3)").arg(CAT_ACCENT[i][0]).arg(CAT_ACCENT[i][1]).arg(CAT_ACCENT[i][2]);
+    return colors::chart_color(i).name();
 }
 
 static QLabel* make_sep(QWidget* parent) {
     auto* s = new QLabel("|", parent);
-    s->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
+    s->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent;"
                              " font-family:%2;")
                          .arg(colors::BORDER_MED())
-                         .arg(MONO));
+                         .arg(fonts::DATA_FAMILY()));
     return s;
 }
 
 static QString btn_inactive() {
     return QString("QPushButton { background:%1; border:1px solid %2; color:%3;"
-                   " font-size:11px; font-weight:bold; font-family:%4;"
+                   " font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:bold; font-family:%4;"
                    " padding:0 10px; }"
                    "QPushButton:hover { background:%5; color:%6; border-color:%7; }")
         .arg(colors::BG_RAISED())
         .arg(colors::BORDER_DIM())
         .arg(colors::TEXT_SECONDARY())
-        .arg(MONO)
+        .arg(fonts::DATA_FAMILY())
         .arg(colors::BG_HOVER())
         .arg(colors::TEXT_PRIMARY())
         .arg(colors::BORDER_BRIGHT());
@@ -99,7 +87,7 @@ void SurfaceAnalyticsScreen::setup_ui() {
     setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }")
                       .arg(colors::BG_BASE())
                       .arg(colors::TEXT_PRIMARY())
-                      .arg(MONO));
+                      .arg(fonts::DATA_FAMILY()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -137,10 +125,23 @@ void SurfaceAnalyticsScreen::setup_ui() {
     demo_banner_->setWordWrap(true);
     demo_banner_->setAlignment(Qt::AlignCenter);
     demo_banner_->setAccessibleName(tr("Synthetic data warning"));
-    demo_banner_->setStyleSheet(QString("background:rgba(217,119,6,0.18); color:%1; border-bottom:1px solid %2;"
-                                        " font-size:10px; font-weight:bold; letter-spacing:0.4px; padding:5px 8px;")
+    // One stylesheet, set once: the banner's tone is a dynamic property ("sample" amber,
+    // "delayed" info, "loading" neutral) — update_source_banner() only re-polishes.
+    demo_banner_->setProperty("tone", QStringLiteral("sample"));
+    demo_banner_->setStyleSheet(QString("QLabel { background:%3; color:%1; border-bottom:1px solid %2;"
+                                        " font-size:%4px; font-weight:bold; letter-spacing:0.4px; padding:5px 8px; }"
+                                        "QLabel[tone=\"delayed\"] { background:%5; color:%6; border-bottom:1px solid %7; }"
+                                        "QLabel[tone=\"loading\"] { background:%8; color:%9; border-bottom:1px solid %10; }")
                                     .arg(colors::AMBER())
-                                    .arg(colors::AMBER_DIM()));
+                                    .arg(colors::AMBER_DIM())
+                                    .arg(colors::alpha(colors::AMBER, 0.18))
+                                    .arg(fincept::ui::fonts::px(-4))
+                                    .arg(colors::alpha(colors::INFO, 0.14))
+                                    .arg(colors::INFO())
+                                    .arg(colors::alpha(colors::INFO, 0.45))
+                                    .arg(colors::BG_RAISED())
+                                    .arg(colors::TEXT_SECONDARY())
+                                    .arg(colors::BORDER_DIM()));
     rvl->addWidget(demo_banner_);
 
     view_stack_ = new QStackedWidget(right);
@@ -150,6 +151,17 @@ void SurfaceAnalyticsScreen::setup_ui() {
     view_stack_->addWidget(surface_3d_);    // 0
     view_stack_->addWidget(surface_table_); // 1
     view_stack_->addWidget(surface_line_);  // 2
+    // 3: the option surfaces' page when the free delayed feed has no chain for the
+    // underlying (show_free_failure_page) — BACK TO the last one that loaded, RETRY.
+    chain_state_ = new fincept::ui::EmptyState(view_stack_);
+    view_stack_->addWidget(chain_state_);
+    connect(chain_state_, &fincept::ui::EmptyState::primary_clicked, this, [this]() {
+        if (!chain_state_back_.isEmpty() && control_panel_)
+            control_panel_->choose_symbol(chain_state_back_);
+        else
+            start_free_chain(true);
+    });
+    connect(chain_state_, &fincept::ui::EmptyState::secondary_clicked, this, [this]() { start_free_chain(true); });
     rvl->addWidget(view_stack_, 1);
 
     hsplit->addWidget(right);
@@ -178,7 +190,7 @@ void SurfaceAnalyticsScreen::setup_ui() {
 // ── Category bar (32px, Obsidian tab style) ──────────────────────────────────
 QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(32);
+    bar->setMinimumHeight(32);
     bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
                            .arg(colors::BG_SURFACE())
                            .arg(colors::BORDER_DIM()));
@@ -191,26 +203,27 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     for (int i = 0; i < (int)categories.size(); i++) {
         bool active = (i == active_category_);
         auto* btn = new QPushButton(categories[i].name, bar);
-        btn->setFixedHeight(32);
+        btn->setMinimumHeight(32);
 
         if (active) {
-            btn->setStyleSheet(QString("QPushButton { background:#b45309; color:%1;"
+            btn->setStyleSheet(QString("QPushButton { background:%4; color:%1;"
                                        " border:none; border-bottom:2px solid %2;"
-                                       " padding:0 14px; font-size:11px; font-weight:bold;"
+                                       " padding:0 14px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:bold;"
                                        " font-family:%3; }"
-                                       "QPushButton:hover { background:#b45309; }")
-                                   .arg(colors::TEXT_PRIMARY())
+                                       "QPushButton:hover { background:%4; }")
+                                   .arg(colors::TEXT_ON_ACCENT())
                                    .arg(cat_hex(i))
-                                   .arg(MONO));
+                                   .arg(fonts::DATA_FAMILY())
+                                   .arg(colors::AMBER()));
         } else {
             btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1;"
-                                       " border:none; padding:0 14px; font-size:11px;"
+                                       " border:none; padding:0 14px; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                        " font-family:%2; }"
                                        "QPushButton:hover { background:%3; color:%4; }")
-                                   .arg(colors::TEXT_TERTIARY())
-                                   .arg(MONO)
+                                   .arg(colors::TEXT_SECONDARY())
+                                   .arg(fonts::DATA_FAMILY())
                                    .arg(colors::BG_RAISED())
-                                   .arg(colors::TEXT_SECONDARY()));
+                                   .arg(colors::TEXT_PRIMARY()));
         }
 
         btn->setProperty("cat_index", i);
@@ -222,7 +235,7 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
 
     // Right controls — flat Obsidian buttons
     import_btn_ = new QPushButton(tr("IMPORT CSV"), bar);
-    import_btn_->setFixedHeight(20);
+    import_btn_->setMinimumHeight(20);
     import_btn_->setStyleSheet(btn_inactive());
     connect(import_btn_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_import_csv);
     hl->addWidget(import_btn_);
@@ -234,9 +247,9 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     btn_3d_ = new QPushButton(tr("3D"), bar);
     btn_table_ = new QPushButton(tr("TABLE"), bar);
     btn_line_ = new QPushButton(tr("LINE"), bar);
-    btn_3d_->setFixedHeight(20);
-    btn_table_->setFixedHeight(20);
-    btn_line_->setFixedHeight(20);
+    btn_3d_->setMinimumHeight(20);
+    btn_table_->setMinimumHeight(20);
+    btn_line_->setMinimumHeight(20);
     btn_3d_->setCheckable(true);
     btn_table_->setCheckable(true);
     btn_line_->setCheckable(true);
@@ -258,7 +271,8 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     hl->addSpacing(4);
 
     refresh_btn_ = new QPushButton(tr("REFRESH"), bar);
-    refresh_btn_->setFixedHeight(20);
+    refresh_btn_->setProperty("fincept_agent_risk", "spend"); // re-fetches from Databento when a key is set
+    refresh_btn_->setMinimumHeight(20);
     refresh_btn_->setStyleSheet(btn_inactive());
     connect(refresh_btn_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_refresh);
     hl->addWidget(refresh_btn_);
@@ -269,7 +283,7 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
 // ── Surface chip bar (26px, hairline) ────────────────────────────────────────
 QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(26);
+    bar->setMinimumHeight(26);
     bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
                            .arg(colors::BG_SURFACE())
                            .arg(colors::BORDER_DIM()));
@@ -287,10 +301,10 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
 
     // Category label prefix
     auto* cat_lbl = new QLabel(QString("■ %1").arg(categories[active_category_].name), bar);
-    cat_lbl->setStyleSheet(QString("color:%1; font-size:11px; font-weight:bold; background:transparent;"
+    cat_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:bold; background:transparent;"
                                    " font-family:%2;")
                                .arg(acol)
-                               .arg(MONO));
+                               .arg(fonts::DATA_FAMILY()));
     hl->addWidget(cat_lbl);
     hl->addWidget(make_sep(bar));
 
@@ -299,22 +313,23 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
         const char* name = chart_type_name(cat.types[i]);
 
         auto* btn = new QPushButton(name, bar);
-        btn->setFixedHeight(18);
+        btn->setMinimumHeight(18);
 
         if (active) {
-            btn->setStyleSheet(QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
-                                       " font-size:11px; font-weight:bold; font-family:%3; padding:0 8px; }"
+            btn->setStyleSheet(QString("QPushButton { background:%5; border:1px solid %1; color:%2;"
+                                       " font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:bold; font-family:%3; padding:0 8px; }"
                                        "QPushButton:hover { background:%2; color:%4; }")
                                    .arg(colors::AMBER_DIM())
                                    .arg(colors::AMBER())
-                                   .arg(MONO)
-                                   .arg(colors::BG_BASE()));
+                                   .arg(fonts::DATA_FAMILY())
+                                   .arg(colors::TEXT_ON_ACCENT())
+                                   .arg(colors::alpha(colors::AMBER, 0.12)));
         } else {
             btn->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
-                                       " font-size:11px; font-family:%2; padding:0 8px; }"
+                                       " font-size:" + fincept::ui::fonts::px(-3) + "px; font-family:%2; padding:0 8px; }"
                                        "QPushButton:hover { color:%3; border-bottom:1px solid %4; }")
                                    .arg(colors::TEXT_SECONDARY())
-                                   .arg(MONO)
+                                   .arg(fonts::DATA_FAMILY())
                                    .arg(colors::TEXT_PRIMARY())
                                    .arg(acol));
         }
@@ -329,12 +344,13 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
 
 void SurfaceAnalyticsScreen::apply_view_mode_buttons() {
     auto active = [&]() {
-        return QString("QPushButton { background:rgba(217,119,6,0.18); color:%1; "
-                       "border:1px solid %2; padding:0 10px; font-size:11px; "
+        return QString("QPushButton { background:%4; color:%1; "
+                       "border:1px solid %2; padding:0 10px; font-size:" + fincept::ui::fonts::px(-3) + "px; "
                        "font-weight:bold; font-family:%3; }")
             .arg(colors::AMBER())
             .arg(colors::AMBER_DIM())
-            .arg(MONO);
+            .arg(fonts::DATA_FAMILY())
+            .arg(colors::alpha(colors::AMBER, 0.18));
     };
     if (btn_3d_) {
         btn_3d_->setChecked(view_mode_ == ViewMode::Surface3D);

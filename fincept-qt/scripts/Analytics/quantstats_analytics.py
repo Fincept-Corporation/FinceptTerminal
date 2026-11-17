@@ -11,7 +11,8 @@ Usage:
         params_json = {"tickers": {"AAPL": 0.6, "MSFT": 0.4} | ["AAPL", "MSFT"] | "AAPL,MSFT",
                        "weights": [...], "benchmark": "SPY", "period": "1y", "risk_free_rate": 0.02,
                        "num_sims": 1000}   (equal weights when only symbols are given)
-Prices come from yfinance (network).
+Prices come from Yahoo through fincept_yahoo's shared bar cache (one long download per
+symbol shared by every script; a bare ticker is resolved with one batched quote request).
 
 Actions:
     stats           - 50+ performance/risk metrics
@@ -29,6 +30,7 @@ import warnings
 import base64
 import tempfile
 import os
+import time
 
 warnings.filterwarnings("ignore")
 
@@ -41,7 +43,16 @@ try:
 except ImportError:  # run by hand without PYTHONPATH=scripts
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import fincept_json
-import yfinance as yf
+import fincept_yahoo as fy  # guards every yfinance request of the process
+
+
+ACTIONS = ("stats", "returns", "drawdown", "rolling", "montecarlo", "full_report", "html_report")
+MIN_RELIABLE_OBS = 30  # below this, annualised ratios are flagged in the stats payload
+
+
+def _emit_error(message: str, exit_code: int = 0) -> None:
+    print(fincept_json.dumps({"error": message, "success": False}))
+    sys.exit(exit_code)
 
 
 def safe_float(val):
@@ -83,23 +94,28 @@ def _resolve_ticker(ticker: str) -> str:
         _ticker_cache[ticker] = ticker
         return ticker
 
+    # The bare ticker first, then common exchange suffixes (Indian exchanges first since this
+    # app has Indian broker integrations) - all asked in ONE batched quote request: a candidate
+    # is valid when Yahoo quotes it with a price from the last two weeks (it trades).
+    candidates = [ticker] + [ticker + suffix for suffix in ['.NS', '.BO', '.L', '.TO', '.AX', '.HK', '.T']]
+    try:
+        rows = fy.quotes(candidates)
+    except Exception:
+        rows = {}
+    recent = time.time() - 14 * 86400
+
     def _quick_check(symbol: str) -> bool:
-        """Quick check if a yfinance symbol has valid data."""
+        row = rows.get(symbol) or {}
         try:
-            t = yf.Ticker(symbol)
-            hist = t.history(period='5d')
-            return hist is not None and len(hist) > 1
-        except Exception:
+            return float(row.get("regularMarketPrice") or 0) > 0 and float(row.get("regularMarketTime") or 0) > recent
+        except (TypeError, ValueError):
             return False
 
-    # Try the bare ticker first
     if _quick_check(ticker):
         _ticker_cache[ticker] = ticker
         return ticker
 
-    # Try common exchange suffixes (Indian exchanges first since this app has Indian broker integrations)
-    for suffix in ['.NS', '.BO', '.L', '.TO', '.AX', '.HK', '.T']:
-        candidate = ticker + suffix
+    for candidate in candidates[1:]:
         if _quick_check(candidate):
             sys.stderr.write(f"[QuantStats] Resolved bare ticker '{ticker}' -> '{candidate}'\n")
             _ticker_cache[ticker] = candidate
@@ -116,10 +132,7 @@ def _download_single_ticker(ticker: str, period: str) -> pd.Series:
     # Resolve bare tickers to yfinance-compatible symbols
     resolved = _resolve_ticker(ticker)
 
-    try:
-        data = yf.download(resolved, period=period, progress=False, auto_adjust=True)
-    except Exception:
-        data = yf.download(resolved, period=period, progress=False)
+    data = fy.download(resolved, period=period, auto_adjust=True)  # the shared bar cache
 
     if data is None or data.empty:
         raise ValueError(f"No data for {ticker} (tried as '{resolved}')")
@@ -229,6 +242,12 @@ def compute_stats(portfolio_returns: pd.Series, benchmark_returns: pd.Series, rf
     qs.extend_pandas()
 
     metrics = {}
+    n_obs = int(len(portfolio_returns))
+    metrics["n_observations"] = n_obs
+    if n_obs < MIN_RELIABLE_OBS:
+        metrics["warning"] = (f"Only {n_obs} return observations: annualised figures (CAGR, Sharpe, Sortino, "
+                              f"Calmar, volatility) extrapolate a very short sample and are unreliable below "
+                              f"about {MIN_RELIABLE_OBS} observations")
 
     def _safe_metric(func, *args, **kwargs):
         """Call a quantstats metric function safely, returning None on error."""
@@ -244,7 +263,7 @@ def compute_stats(portfolio_returns: pd.Series, benchmark_returns: pd.Series, rf
     metrics["sortino"] = _safe_metric(qs.stats.sortino, portfolio_returns, rf=rf)
     metrics["calmar"] = _safe_metric(qs.stats.calmar, portfolio_returns)
     metrics["max_drawdown"] = _safe_metric(qs.stats.max_drawdown, portfolio_returns)
-    metrics["avg_drawdown"] = _safe_metric(qs.stats.avg_loss, portfolio_returns)
+    metrics["avg_drawdown"] = None  # mean depth of the drawdown episodes; filled in below
     metrics["volatility"] = _safe_metric(qs.stats.volatility, portfolio_returns)
     metrics["win_rate"] = _safe_metric(qs.stats.win_rate, portfolio_returns)
     metrics["avg_win"] = _safe_metric(qs.stats.avg_win, portfolio_returns)
@@ -345,12 +364,24 @@ def compute_stats(portfolio_returns: pd.Series, benchmark_returns: pd.Series, rf
 
     # Drawdown metrics
     metrics["max_drawdown_duration"] = None
+    metrics["drawdown_count"] = None
     try:
         dd_details = qs.stats.drawdown_details(qs.stats.to_drawdown_series(portfolio_returns))
         if dd_details is not None and len(dd_details) > 0:
+            if isinstance(dd_details.columns, pd.MultiIndex):
+                dd_details.columns = dd_details.columns.get_level_values(-1)
             metrics["max_drawdown_duration"] = int(dd_details["days"].max()) if "days" in dd_details.columns else None
+            if "max drawdown" in dd_details.columns:
+                # "avg_drawdown" used to be qs.stats.avg_loss (the average losing DAY). It is the mean
+                # depth of the drawdown episodes; drawdown_details reports depth in percent.
+                depths = pd.to_numeric(dd_details["max drawdown"], errors="coerce").dropna()
+                if len(depths) > 0:
+                    metrics["avg_drawdown"] = safe_float(depths.mean() / 100.0)
+                metrics["drawdown_count"] = int(len(depths))
+        elif dd_details is not None:
+            metrics["drawdown_count"] = 0
     except Exception as e:
-        sys.stderr.write(f"[QuantStats] max_drawdown_duration error: {e}\n")
+        sys.stderr.write(f"[QuantStats] drawdown details error: {e}\n")
 
     # Benchmark comparison metrics
     if benchmark_returns is not None and len(benchmark_returns) > 0:
@@ -361,14 +392,13 @@ def compute_stats(portfolio_returns: pd.Series, benchmark_returns: pd.Series, rf
             b = benchmark_returns.loc[common_idx]
 
             try:
-                greeks = qs.stats.greeks(p, b)
-                if isinstance(greeks, dict):
-                    metrics["alpha"] = safe_float(greeks.get("alpha", None))
-                    metrics["beta"] = safe_float(greeks.get("beta", None))
-                else:
-                    metrics["alpha"] = None
-                    metrics["beta"] = None
-            except Exception:
+                # quantstats returns a pandas Series {beta, alpha} (alpha annualised); the old
+                # isinstance(dict) test sent every call to the None branch.
+                greeks = dict(qs.stats.greeks(p, b))
+                metrics["alpha"] = safe_float(greeks.get("alpha"))
+                metrics["beta"] = safe_float(greeks.get("beta"))
+            except Exception as e:
+                sys.stderr.write(f"[QuantStats] greeks error: {e}\n")
                 metrics["alpha"] = None
                 metrics["beta"] = None
 
@@ -590,7 +620,7 @@ def compute_rolling(portfolio_returns: pd.Series, benchmark_returns: pd.Series, 
     return result
 
 
-def compute_montecarlo(portfolio_returns: pd.Series, sims: int = 1000) -> dict:
+def compute_montecarlo(portfolio_returns: pd.Series, sims: int = 1000, seed=None) -> dict:
     """Run Monte Carlo simulations via bootstrap resampling of historical returns.
 
     qs.stats.montecarlo* functions do not exist in quantstats 0.0.64.
@@ -609,7 +639,8 @@ def compute_montecarlo(portfolio_returns: pd.Series, sims: int = 1000) -> dict:
         result.update(null)
         return result
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)  # seed=None: a fresh draw each run; pass "seed" to reproduce
+    result["seed"] = seed
     # Each simulated path has the same length as the observed history
     T = n
 
@@ -727,102 +758,116 @@ def generate_html_report(portfolio_returns: pd.Series, benchmark_returns: pd.Ser
             pass
 
 
+def _run_action(action, tickers_weights, benchmark, period, risk_free_rate, num_sims, seed) -> dict:
+    # Download data
+    sys.stderr.write(f"[QuantStats] Action={action}, Tickers={list(tickers_weights.keys())}, Benchmark={benchmark}, Period={period}\n")
+    portfolio_returns = download_portfolio_returns(tickers_weights, period)
+    sys.stderr.write(f"[QuantStats] Portfolio returns: shape={portfolio_returns.shape}, dtype={portfolio_returns.dtype}, len={len(portfolio_returns)}\n")
+
+    benchmark_returns = None
+    try:
+        benchmark_returns = download_benchmark_returns(benchmark, period)
+    except Exception as e:
+        sys.stderr.write(f"Warning: Could not download benchmark {benchmark}: {e}\n")
+
+    result = {"success": True, "action": action}
+
+    if action == "stats":
+        result["data"] = compute_stats(portfolio_returns, benchmark_returns, risk_free_rate)
+
+    elif action == "returns":
+        result["data"] = compute_returns_analysis(portfolio_returns)
+
+    elif action == "drawdown":
+        result["data"] = compute_drawdowns(portfolio_returns)
+
+    elif action == "rolling":
+        result["data"] = compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate)
+
+    elif action == "montecarlo":
+        result["data"] = compute_montecarlo(portfolio_returns, sims=num_sims, seed=seed)
+
+    elif action == "full_report":
+        result["data"] = {
+            "stats": compute_stats(portfolio_returns, benchmark_returns, risk_free_rate),
+            "returns": compute_returns_analysis(portfolio_returns),
+            "drawdown": compute_drawdowns(portfolio_returns),
+            "rolling": compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate),
+            "montecarlo": compute_montecarlo(portfolio_returns, sims=num_sims, seed=seed),
+        }
+
+    elif action == "html_report":
+        html_b64 = generate_html_report(portfolio_returns, benchmark_returns)
+        result["data"] = {"html_base64": html_b64}
+
+    return result
+
+
 def main():
     if len(sys.argv) < 3:
-        print(json.dumps({"error": "Usage: quantstats_analytics.py <action> <tickers_json> [benchmark] [period] [risk_free_rate]"}))
-        sys.exit(1)
+        _emit_error("Usage: quantstats_analytics.py <action> <tickers_json> [benchmark] [period] [risk_free_rate] "
+                    "[num_sims]", 1)
 
     action = sys.argv[1]
+    # Checked before any download (an unknown action used to cost two network fetches first).
+    if action not in ACTIONS:
+        _emit_error(f"Unknown action: {action} (available: {', '.join(ACTIONS)})", 1)
     tickers_json = sys.argv[2]
-    benchmark = sys.argv[3] if len(sys.argv) > 3 else "SPY"
-    period = sys.argv[4] if len(sys.argv) > 4 else "1y"
-    risk_free_rate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.02
-    num_sims = int(sys.argv[6]) if len(sys.argv) > 6 else 1000
+    try:
+        benchmark = sys.argv[3] if len(sys.argv) > 3 else "SPY"
+        period = sys.argv[4] if len(sys.argv) > 4 else "1y"
+        risk_free_rate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.02
+        num_sims = int(sys.argv[6]) if len(sys.argv) > 6 else 1000
+    except ValueError as e:
+        _emit_error(f"Invalid argument: {e}", 1)
+    seed = None
 
     try:
         tickers_weights = json.loads(tickers_json)
     except json.JSONDecodeError as e:
-        print(json.dumps({"error": f"Invalid tickers JSON: {str(e)}"}))
-        sys.exit(1)
+        _emit_error(f"Invalid tickers JSON: {str(e)}", 1)
 
     # `<action> <params_json>` form: {"tickers": {sym: weight} | [syms] | "A,B", "weights": [...], "benchmark",
     # "period", "risk_free_rate", "num_sims"}. Without a tickers/symbols key the JSON is the native
     # {ticker: weight} map and the other settings come from argv.
     if isinstance(tickers_weights, dict) and ("tickers" in tickers_weights or "symbols" in tickers_weights):
         params = tickers_weights
-        syms = params.get("tickers", params.get("symbols"))
-        if isinstance(syms, str):
-            syms = [s.strip() for s in syms.split(",") if s.strip()]
-        if isinstance(syms, dict):
-            tickers_weights = {str(k): float(v) for k, v in syms.items()}
-        elif syms:
-            weights = params.get("weights") or [1.0 / len(syms)] * len(syms)  # equal weight by default
-            tickers_weights = {str(s): float(w) for s, w in zip(syms, weights)}
-        else:
-            tickers_weights = {}
-        benchmark = str(params.get("benchmark", benchmark))
-        period = str(params.get("period", period))
-        risk_free_rate = float(params.get("risk_free_rate", risk_free_rate))
-        num_sims = int(params.get("num_sims", num_sims))
+        try:
+            syms = params.get("tickers", params.get("symbols"))
+            if isinstance(syms, str):
+                syms = [s.strip() for s in syms.split(",") if s.strip()]
+            if isinstance(syms, dict):
+                tickers_weights = {str(k): float(v) for k, v in syms.items()}
+            elif syms:
+                weights = params.get("weights") or [1.0 / len(syms)] * len(syms)  # equal weight by default
+                tickers_weights = {str(s): float(w) for s, w in zip(syms, weights)}
+            else:
+                tickers_weights = {}
+            benchmark = str(params.get("benchmark", benchmark))
+            period = str(params.get("period", period))
+            risk_free_rate = float(params.get("risk_free_rate", risk_free_rate))
+            num_sims = int(params.get("num_sims", num_sims))
+            if params.get("seed") is not None:
+                seed = int(params["seed"])
+        except (TypeError, ValueError) as e:
+            _emit_error(f"Invalid parameter: {e}", 1)
 
-    if not tickers_weights:
-        print(json.dumps({"error": "No tickers provided"}))
-        sys.exit(1)
+    if not tickers_weights or not isinstance(tickers_weights, dict):
+        _emit_error("No tickers provided", 1)
+    if num_sims < 1:
+        _emit_error(f"num_sims must be at least 1, got {num_sims}", 1)
 
     try:
-        # Download data
-        sys.stderr.write(f"[QuantStats] Script version: 2026-02-04-v3\n")
-        sys.stderr.write(f"[QuantStats] Action={action}, Tickers={list(tickers_weights.keys())}, Benchmark={benchmark}, Period={period}\n")
-        portfolio_returns = download_portfolio_returns(tickers_weights, period)
-        sys.stderr.write(f"[QuantStats] Portfolio returns: shape={portfolio_returns.shape}, dtype={portfolio_returns.dtype}, len={len(portfolio_returns)}\n")
-
-        benchmark_returns = None
-        try:
-            benchmark_returns = download_benchmark_returns(benchmark, period)
-        except Exception as e:
-            sys.stderr.write(f"Warning: Could not download benchmark {benchmark}: {e}\n")
-
-        result = {"success": True, "action": action}
-
-        if action == "stats":
-            result["data"] = compute_stats(portfolio_returns, benchmark_returns, risk_free_rate)
-
-        elif action == "returns":
-            result["data"] = compute_returns_analysis(portfolio_returns)
-
-        elif action == "drawdown":
-            result["data"] = compute_drawdowns(portfolio_returns)
-
-        elif action == "rolling":
-            result["data"] = compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate)
-
-        elif action == "montecarlo":
-            result["data"] = compute_montecarlo(portfolio_returns, sims=num_sims)
-
-        elif action == "full_report":
-            result["data"] = {
-                "stats": compute_stats(portfolio_returns, benchmark_returns, risk_free_rate),
-                "returns": compute_returns_analysis(portfolio_returns),
-                "drawdown": compute_drawdowns(portfolio_returns),
-                "rolling": compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate),
-                "montecarlo": compute_montecarlo(portfolio_returns, sims=num_sims),
-            }
-
-        elif action == "html_report":
-            html_b64 = generate_html_report(portfolio_returns, benchmark_returns)
-            result["data"] = {"html_base64": html_b64}
-
-        else:
-            result = {"error": f"Unknown action: {action}"}
-
+        import contextlib
+        with contextlib.redirect_stdout(sys.stderr):  # library chatter must not reach the JSON stdout
+            result = _run_action(action, tickers_weights, benchmark, period, risk_free_rate, num_sims, seed)
         print(fincept_json.dumps(result))  # quantstats metrics are NaN/inf on short or flat series
 
     except Exception as e:
         import traceback
         sys.stderr.write(traceback.format_exc())
-        print(json.dumps({"error": str(e), "success": False}))
         # Exit 0 so the host extracts our JSON error instead of wrapping it in "Script failed"
-        sys.exit(0)
+        _emit_error(str(e) or type(e).__name__, 0)
 
 
 if __name__ == "__main__":

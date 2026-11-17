@@ -197,64 +197,50 @@ def get_organizations() -> Dict[str, Any]:
         List of organizations with enhanced information
     """
     try:
-        # Get organization list (returns list of organization names)
-        result = _make_request('organization_list')
-
-        if result["error"]:
-            return result
-
-        # Get basic organization names
-        org_names = result.get("data", [])
+        # ONE package_search facet query lists every publishing organisation with its dataset count.
+        # (organization_show per organisation took ~76 s for the first 50 names alphabetically, and
+        # its dataset count was always 0 - organization_show carries no package list.) The id is the
+        # organisation name, which is what the organization:"<name>" dataset filter matches.
+        result = _make_request('package_search', {
+            'rows': 0, 'facet.field': ['organization'], 'facet.limit': -1})
         enhanced_orgs = []
+        if not result["error"] and isinstance(result.get("data"), dict):
+            facets = (result["data"].get("search_facets") or {}).get("organization") or {}
+            for item in facets.get("items") or []:
+                name = item.get("name") or ""
+                if not name:
+                    continue
+                title = item.get("display_name") or name.replace("-", " ").title()
+                enhanced_orgs.append({
+                    "id": name,
+                    "name": name,
+                    "title": title,
+                    "description": "",
+                    "image_url": "",
+                    "created": "",
+                    "dataset_count": int(item.get("count") or 0),
+                    "state": "active",
+                    "display_name": title
+                })
+            enhanced_orgs.sort(key=lambda o: (-o["dataset_count"], o["display_name"].lower()))
 
-        # Get details for each organization (limited to avoid timeouts)
-        for org_name in org_names[:50]:  # Limit to first 50 to avoid timeouts
-            try:
-                # Get detailed info for each organization
-                org_result = _make_request('organization_show', {'id': org_name})
-
-                if not org_result["error"] and org_result.get("data"):
-                    org_data = org_result["data"]
-                    enhanced_org = {
-                        "id": org_data.get("id", ""),
-                        "name": org_data.get("name", ""),
-                        "title": org_data.get("title", org_data.get("display_name", "")),
-                        "description": org_data.get("description", ""),
-                        "image_url": org_data.get("image_display_url", ""),
-                        "created": org_data.get("created", ""),
-                        "dataset_count": len(org_data.get("packages", [])),
-                        "state": org_data.get("state", "active"),
-                        "display_name": org_data.get("title", org_data.get("display_name", org_data.get("name", "")))
-                    }
-                    enhanced_orgs.append(enhanced_org)
-                else:
-                    # Fallback to basic info if detailed fetch fails
-                    enhanced_org = {
-                        "id": org_name,
-                        "name": org_name,
-                        "title": org_name.replace("-", " ").title(),
-                        "description": "",
-                        "image_url": "",
-                        "created": "",
-                        "dataset_count": 0,
-                        "state": "active",
-                        "display_name": org_name.replace("-", " ").title()
-                    }
-                    enhanced_orgs.append(enhanced_org)
-
-                # Small delay to be respectful to the API
-                time.sleep(RATE_LIMIT_DELAY)
-
-            except Exception as e:
-                # Skip this organization but continue with others
-                continue
-
-        # Sort by dataset count (descending)
-        enhanced_orgs.sort(key=lambda x: x.get("dataset_count", 0), reverse=True)
+        if not enhanced_orgs:
+            # Facets unavailable: names only, dataset count unknown (-1).
+            result = _make_request('organization_list')
+            if result["error"]:
+                return result
+            for name in result.get("data") or []:
+                if isinstance(name, str) and name:
+                    title = name.replace("-", " ").title()
+                    enhanced_orgs.append({
+                        "id": name, "name": name, "title": title, "description": "",
+                        "image_url": "", "created": "", "dataset_count": -1,
+                        "state": "active", "display_name": title
+                    })
 
         result["data"] = enhanced_orgs
         result["metadata"]["count"] = len(enhanced_orgs)
-        result["metadata"]["description"] = "List of Australian government data publishing organizations on data.gov.au (limited to 50 with most data)"
+        result["metadata"]["description"] = "Australian government data publishing organizations on data.gov.au, largest first"
 
         return result
 

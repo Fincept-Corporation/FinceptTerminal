@@ -1,6 +1,7 @@
 // src/screens/gov_data/GovDataScreen.h
 #pragma once
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
 #include <QFrame>
@@ -15,7 +16,7 @@
 
 namespace fincept::screens {
 
-class GovDataScreen : public QWidget, public IStatefulScreen {
+class GovDataScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit GovDataScreen(QWidget* parent = nullptr);
@@ -24,6 +25,10 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "gov_data"; }
     int state_version() const override { return 1; }
+
+    /// ISectionLinked — a provider id ("us-treasury", "uk", … — GovDataService::providers()),
+    /// also as "provider:<id>". Selects the sidebar row (the click path); focus is unused.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;

@@ -209,12 +209,18 @@ class BaseCalculator(ABC):
         Returns:
             Rounded result
         """
+        # bool before the number branch: bool is an int subclass, so round(True, 6)
+        # returned the integer 1 and the host's QJsonValue::toBool() read it as false.
+        if isinstance(result, (bool, np.bool_)):
+            return bool(result)
         if isinstance(result, (int, float)):
             return round(result, self.precision)
         elif isinstance(result, np.ndarray):
+            if result.dtype == bool:
+                return result
             return np.round(result, self.precision)
         elif isinstance(result, dict):
-            return {k: self._round_result(v) if isinstance(v, (int, float, np.ndarray)) else v
+            return {k: self._round_result(v) if isinstance(v, (bool, np.bool_, int, float, np.ndarray)) else v
                     for k, v in result.items()}
         else:
             return result
@@ -316,7 +322,7 @@ class BaseCalculator(ABC):
             elif method == 'interpolate':
                 return data.interpolate()
             elif method == 'forward_fill':
-                return data.fillna(method='ffill')
+                return data.ffill()
             else:
                 raise ValueError(f"Unknown missing data method: {method}")
 

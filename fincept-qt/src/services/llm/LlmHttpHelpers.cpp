@@ -2,7 +2,10 @@
 // extraction used by LlmService. These are static methods of LlmService living
 // in this TU so the main file stays smaller.
 
+#include "auth/AuthManager.h"
+#include "network/http/HttpClient.h"
 #include "services/llm/LlmContentExtractors.h"
+#include "services/llm/LlmErrors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/LlmService.h"
 
@@ -86,6 +89,25 @@ QString parse_server_error_message(const QByteArray& body) {
         server_msg = ej["error"].toString();
 
     return server_msg;
+}
+
+// ── Fincept API refusal (401 / 403) → AuthManager / HttpClient ─────────────
+// See LlmErrors.h. Callers pass only replies from the Fincept API.
+QString report_fincept_refusal(int http_status, const QByteArray& body, const QString& sent_session_token,
+                               bool session_expired) {
+    if (http_status != 401 && http_status != 403)
+        return {};
+    // {"success": false, "message": <string | {"error", "message", "hint"}>, "error_code"}
+    const QString server_msg = fincept::HttpClient::error_text_from_body(QJsonDocument::fromJson(body).object());
+    if (http_status == 403 && fincept::HttpClient::instance().report_forbidden_response(body)) {
+        // IP block: the account is fine, so no sign-in advice — just what the server said.
+        return server_msg.isEmpty() ? QStringLiteral("The Fincept server has temporarily blocked requests from this "
+                                                     "network. Please try again later.")
+                                    : server_msg;
+    }
+    if (http_status == 401)
+        fincept::auth::AuthManager::instance().handle_unauthorized(sent_session_token, session_expired);
+    return make_fincept_error(LlmErrorKind::FinceptAuth, {}, server_msg);
 }
 
 // HTTP statuses that mean "the provider did not process this request": rate
@@ -180,6 +202,11 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
         reply->abort();
         result.cancelled = detail::cancel_requested();
         result.error = result.cancelled ? QStringLiteral("Request cancelled") : QStringLiteral("Request timed out");
+        if (result.cancelled)
+            LOG_DEBUG("LlmService", logf("LLM request cancelled", {{"method", method}, {"url", log_url(url)}}));
+        else
+            LOG_WARN("LlmService", logf("LLM request timed out",
+                                        {{"method", method}, {"url", log_url(url)}, {"timeout_ms", timeout_ms}}));
         drain();
         return result;
     }
@@ -188,6 +215,9 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     result.body = reply->readAll();
     result.success = (result.status >= 200 && result.status < 300);
     if (!result.success) {
+        // The Fincept API marks a replaced session token this way (401 only).
+        result.session_expired =
+            reply->rawHeader("X-Session-Expired").trimmed().compare("true", Qt::CaseInsensitive) == 0;
         bool ok = false;
         const int retry_after = QString::fromLatin1(reply->rawHeader("Retry-After")).trimmed().toInt(&ok);
         result.retry_after_s = ok && retry_after > 0 ? retry_after : 0;
@@ -199,6 +229,21 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
                                              : reply->errorString();
         else
             result.error = QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+        // Transport-layer line (policy B.2.1). Refusals the callers turn into a sign-in /
+        // credits message (401/402/403) and 404 are expected answers: DEBUG.
+        const bool expected = result.status == 401 || result.status == 402 || result.status == 403 ||
+                              result.status == 404;
+        if (expected)
+            LOG_DEBUG("LlmService", logf("LLM request refused", {{"method", method},
+                                                                 {"url", log_url(url)},
+                                                                 {"status", result.status},
+                                                                 {"error", result.error}}));
+        else
+            LOG_WARN_RL("LlmService", QUrl(url).host() + QLatin1Char('|') + QString::number(result.status), 60000,
+                        logf("LLM request failed", {{"method", method},
+                                                    {"url", log_url(url)},
+                                                    {"status", result.status},
+                                                    {"error", result.error}}));
     }
     drain();
     return result;

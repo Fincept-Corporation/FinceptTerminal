@@ -25,14 +25,15 @@ FeedPanel::FeedPanel(QWidget* parent) : QWidget(parent) {
 
     auto* bar = new QWidget;
     bar->setObjectName("feedToolbar");
-    bar->setFixedHeight(30);
+    bar->setMinimumHeight(30); // grows with the button at large font sizes
+    bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     bar->setStyleSheet(QString("#feedToolbar{background:%1;border-bottom:1px solid %2;}")
                            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::BORDER_DIM()));
     auto* bl = new QHBoxLayout(bar);
     bl->setContentsMargins(6, 0, 6, 0);
     auto* heading = new QLabel(tr("FEEDS"));
     heading->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;").arg(fincept::ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;").arg(fincept::ui::colors::TEXT_SECONDARY()));
     bl->addWidget(heading);
     bl->addStretch();
     auto* add = new QPushButton(tr("+ Add Feed"));
@@ -103,7 +104,7 @@ void FeedPanel::rebuild() {
         auto* empty = new QLabel(tr("No feeds configured.\nClick “+ Add Feed”."));
         empty->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
         empty->setContentsMargins(8, 16, 8, 8);
-        empty->setStyleSheet(QString("color:%1;font-size:11px;").arg(fincept::ui::colors::TEXT_TERTIARY()));
+        empty->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(fincept::ui::colors::TEXT_TERTIARY()));
         stack_->addWidget(empty);
         stack_->addStretch();
     }

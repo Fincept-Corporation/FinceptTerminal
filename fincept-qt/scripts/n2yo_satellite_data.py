@@ -148,7 +148,7 @@ def _make_request(endpoint: str, params: Optional[Dict[str, str]] = None,
             return {
                 "data": [],
                 "metadata": {"source": "N2YO"},
-                "error": "N2YO API key not configured. Set N2YO_API_KEY environment variable."
+                "error": "N2YO API key not configured. Save it as N2YO_API_KEY in Settings > Credentials."
             }
 
         # Build full URL

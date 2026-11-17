@@ -7,27 +7,27 @@ import sys
 import json
 import os
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('WORLDBANK_API_KEY', '')
 BASE_URL = "https://api.worldbank.org/v2"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# The World Bank API often takes 10-20 s per uncached query and sometimes stalls for minutes:
+# no read retries (they multiplied the timeout), a bounded timeout, and the indicators of one
+# category are fetched concurrently so a command finishes well inside the runner's limits.
+session = fc.http_session()
+TIMEOUT = (8, 30)
 
 FISCAL_INDICATORS = {
     "sovereign_debt": {
         "total_debt_gdp": "GC.DOD.TOTL.GD.ZS",
         "external_debt_gdp": "DT.DOD.DECT.GN.ZS",
-        "domestic_debt": "GC.DOD.DOMX.CN",
         "central_govt_debt": "GC.DOD.TOTL.CN",
     },
     "fiscal_balance": {
-        "fiscal_balance_gdp": "GC.BAL.CASH.GD.ZS",
-        "primary_balance_gdp": "GC.SUR.TOTL.GD.ZS",
-        "revenue_gdp": "GC.REV.TOTL.GD.ZS",
+        "fiscal_balance_gdp": "GC.NLD.TOTL.GD.ZS",
+        "revenue_gdp": "GC.REV.XGRT.GD.ZS",
         "expenditure_gdp": "GC.XPN.TOTL.GD.ZS",
     },
     "tax_revenue": {
@@ -35,27 +35,27 @@ FISCAL_INDICATORS = {
         "income_tax": "GC.TAX.YPKG.RV.ZS",
         "goods_services_tax": "GC.TAX.GSRV.RV.ZS",
         "trade_tax": "GC.TAX.INTT.RV.ZS",
-        "customs_duties": "TM.TAX.MRCH.IP.ZS",
+        "customs_duties": "GC.TAX.IMPT.ZS",
     },
     "government_expenditure": {
         "total_expenditure": "GC.XPN.TOTL.GD.ZS",
         "education": "SE.XPD.TOTL.GD.ZS",
         "health": "SH.XPD.GHED.GD.ZS",
         "military": "MS.MIL.XPND.GD.ZS",
-        "social_protection": "GC.XPN.SOCL.ZS",
-        "infrastructure": "GC.XPN.OFST.ZS",
+        "subsidies_transfers": "GC.XPN.TRFT.ZS",
+        "compensation_of_employees": "GC.XPN.COMP.ZS",
     },
     "debt_service": {
         "debt_service_exports": "DT.TDS.DECT.EX.ZS",
         "debt_service_gni": "DT.TDS.DECT.GN.ZS",
-        "interest_payments_gdp": "GC.XPN.INTP.GD.ZS",
+        "interest_payments_revenue": "GC.XPN.INTP.RV.ZS",
         "principal_repayments": "DT.AMT.DECT.CD",
     },
     "external_debt": {
         "external_debt_stocks": "DT.DOD.DECT.CD",
         "external_debt_gni": "DT.DOD.DECT.GN.ZS",
         "short_term_debt": "DT.DOD.DSTC.CD",
-        "concessional_debt": "DT.DOD.PCBK.CD",
+        "concessional_debt": "DT.DOD.ALLC.CD",
         "reserves_months_imports": "FI.RES.TOTL.MO",
     },
 }
@@ -78,15 +78,18 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     params["format"] = "json"
     params["per_page"] = params.get("per_page", 50)
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error("World Bank API", e)}
+    except ValueError:
+        return {"error": "World Bank API returned a response that is not JSON"}
+    # Errors come back as HTTP 200 with [{"message": [{"id", "key", "value"}]}].
+    if isinstance(data, list) and data and isinstance(data[0], dict) and "message" in data[0]:
+        msg = (data[0].get("message") or [{}])[0]
+        return {"error": f"World Bank API: {msg.get('value') or msg.get('key') or 'request rejected'}"}
+    return data
 
 
 def _get_indicator(country: str, indicator_id: str, year: str = "") -> Dict:
@@ -100,7 +103,7 @@ def _get_indicator(country: str, indicator_id: str, year: str = "") -> Dict:
         meta = data[0]
         observations = data[1] or []
         cleaned = [
-            {"year": obs.get("date", ""), "value": obs.get("value", None)}
+            {"year": fc.number(obs.get("date", "")), "value": obs.get("value", None)}
             for obs in observations
             if obs.get("value") is not None
         ]
@@ -113,15 +116,12 @@ def _get_indicator(country: str, indicator_id: str, year: str = "") -> Dict:
             "data": sorted(cleaned, key=lambda x: x["year"]),
         }
     if isinstance(data, dict) and "error" in data:
-        return data
-    return {"error": "Unexpected response format", "raw": str(data)[:200]}
+        return {"error": f"{data['error']} (indicator {indicator_id})"}
+    return {"error": f"Unexpected World Bank API response for indicator {indicator_id}"}
 
 
 def _get_multiple_indicators(country: str, indicators: Dict[str, str], year: str = "") -> Dict:
-    result = {}
-    for name, indicator_id in indicators.items():
-        result[name] = _get_indicator(country, indicator_id, year)
-    return result
+    return fc.parallel_map(lambda indicator_id: _get_indicator(country, indicator_id, year), indicators)
 
 
 def get_sovereign_debt(country: str, year: str = "") -> Dict:

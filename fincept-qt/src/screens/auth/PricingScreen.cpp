@@ -4,16 +4,20 @@
 #include "auth/AuthManager.h"
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
+#include "services/billing/PlanAccess.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/ConfettiOverlay.h"
 #include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/MnemonicText.h"
+#include "ui/widgets/PlanHint.h"
 
 #include <QApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
@@ -73,11 +77,42 @@ QJsonArray pricing_extract_plans(const QJsonObject& payload) {
     return {};
 }
 
+/// When the account's paid pass ends (ISO, naive UTC as the API sends it).
+/// The subscription record is fetched last in a refresh, so it wins.
+QString pricing_pass_end(const auth::SessionData& s) {
+    return s.subscription.credits_expire_at.isEmpty() ? s.user_info.credits_expire_at
+                                                      : s.subscription.credits_expire_at;
+}
+
+/// `a` is a later API timestamp than `b` (an empty `b` = none yet). Both are
+/// read the same way, so the missing offset does not matter for the comparison.
+bool pricing_is_later(const QString& a, const QString& b) {
+    if (a.isEmpty())
+        return false;
+    if (b.isEmpty())
+        return true;
+    QDateTime ta = QDateTime::fromString(a, Qt::ISODateWithMs);
+    if (!ta.isValid())
+        ta = QDateTime::fromString(a, Qt::ISODate);
+    QDateTime tb = QDateTime::fromString(b, Qt::ISODateWithMs);
+    if (!tb.isValid())
+        tb = QDateTime::fromString(b, Qt::ISODate);
+    if (ta.isValid() && tb.isValid())
+        return ta > tb;
+    return a != b;
+}
+
+/// Height of a plan card's badge row: 20px at the default font size, more for
+/// a larger one.
+int pricing_badge_height() {
+    return qMax(20, QFontMetrics(ui::fonts::font(-4)).height() + 4);
+}
+
 /// The whole screen is styled by this one sheet on the root widget — cards,
 /// badges and buttons select on objectName + dynamic properties (variant,
 /// tone, planAction), so rendering a card costs no stylesheet parse.
 QString pricing_qss() {
-    QString ss = QStringLiteral(
+    QString ss = QString(
         "#pricingRoot{background:{BG_BASE};}"
         "QScrollArea#pricingScroll{background:transparent;border:none;}"
         "#pricingContent{background:transparent;}"
@@ -86,10 +121,10 @@ QString pricing_qss() {
         "QScrollBar::handle:vertical:hover{background:{BORDER_BRIGHT};}"
         "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         "QLabel{background:transparent;border:none;}"
-        "#pricingTitle{color:{AMBER};font-size:20px;font-weight:700;letter-spacing:2px;}"
-        "#pricingSubtitle{color:{TEXT_SECONDARY};font-size:13px;}"
-        "#pricingAccount{color:{TEXT_TERTIARY};font-size:12px;}"
-        "#pricingStatus{color:{TEXT_SECONDARY};font-size:12px;}"
+        "#pricingTitle{color:{AMBER};font-size:" + fincept::ui::fonts::px(6) + "px;font-weight:700;letter-spacing:2px;}"
+        "#pricingSubtitle{color:{TEXT_SECONDARY};font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+        "#pricingAccount{color:{TEXT_TERTIARY};font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+        "#pricingStatus{color:{TEXT_SECONDARY};font-size:" + fincept::ui::fonts::px(-2) + "px;}"
         "#pricingStatus[tone=\"error\"]{color:{NEGATIVE};}"
         "#pricingStatus[tone=\"success\"]{color:{POSITIVE};}"
         "QPushButton#pricingRetry{background:transparent;color:{AMBER};border:1px solid {AMBER_DIM};"
@@ -100,41 +135,44 @@ QString pricing_qss() {
         "QFrame#planCard[variant=\"current\"]{border-top:2px solid {POSITIVE};}"
         "QFrame#planCard[variant=\"enterprise\"]{background:{BG_RAISED};border:1px solid {BORDER_MED};"
         "  border-top:2px solid {AMBER_DIM};}"
-        "#planBadge{font-size:10px;font-weight:700;letter-spacing:1px;padding:0 8px;}"
+        // The enterprise card sits on BG_RAISED, where the muted text tones are too faint.
+        "QFrame#planCard[variant=\"enterprise\"] QLabel#planDesc,"
+        "QFrame#planCard[variant=\"enterprise\"] QLabel#planNote{color:{TEXT_SECONDARY};}"
+        "#planBadge{font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;padding:0 8px;}"
         "#planBadge[tone=\"recommended\"]{color:{AMBER};border:1px solid {AMBER_DIM};}"
         "#planBadge[tone=\"current\"]{color:{POSITIVE};border:1px solid {POSITIVE};}"
         "#planBadge[tone=\"enterprise\"]{color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
-        "#planName{color:{TEXT_PRIMARY};font-size:15px;font-weight:700;letter-spacing:1.5px;}"
+        "#planName{color:{TEXT_PRIMARY};font-size:" + fincept::ui::fonts::px(1) + "px;font-weight:700;letter-spacing:1.5px;}"
         "#planName[accent=\"true\"]{color:{AMBER};}"
-        "#planDesc{color:{TEXT_TERTIARY};font-size:12px;}"
-        "#planPrice{color:{TEXT_PRIMARY};font-size:30px;font-weight:700;}"
+        "#planDesc{color:{TEXT_TERTIARY};font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+        "#planPrice{color:{TEXT_PRIMARY};font-size:" + fincept::ui::fonts::px(16) + "px;font-weight:700;}"
         "#planPrice[accent=\"true\"]{color:{AMBER};}"
-        "#planPeriod{color:{TEXT_DIM};font-size:12px;}"
+        "#planPeriod{color:{TEXT_DIM};font-size:" + fincept::ui::fonts::px(-2) + "px;}"
         "QFrame#planRule{background:{BORDER_DIM};border:none;}"
-        "#planFeature{color:{TEXT_SECONDARY};font-size:12px;}"
-        "#planNote{color:{TEXT_DIM};font-size:11px;}"
-        "QPushButton#planPriceLink{background:transparent;border:none;padding:0;color:{AMBER};font-size:16px;"
+        "#planFeature{color:{TEXT_SECONDARY};font-size:" + fincept::ui::fonts::px(-2) + "px;}"
+        "#planNote{color:{TEXT_DIM};font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+        "QPushButton#planPriceLink{background:transparent;border:none;padding:0;color:{AMBER};font-size:" + fincept::ui::fonts::px(2) + "px;"
         "  font-weight:700;text-align:left;}"
         "QPushButton#planPriceLink:hover{color:{TEXT_PRIMARY};}"
         "QPushButton#planBtn{min-height:34px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
         "  background:transparent;color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
         "QPushButton#planBtn:hover{color:{TEXT_PRIMARY};border-color:{TEXT_SECONDARY};}"
-        "QPushButton#planBtn[planAction=\"select\"]{background:{AMBER};color:{BG_BASE};border-color:{AMBER};}"
+        "QPushButton#planBtn[planAction=\"select\"]{background:{AMBER};color:{TEXT_ON_ACCENT};border-color:{AMBER};}"
         "QPushButton#planBtn[planAction=\"select\"]:hover{border-color:{TEXT_PRIMARY};}"
-        "QPushButton#planBtn[planAction=\"select\"]:pressed{background:{AMBER_DIM};color:{TEXT_PRIMARY};"
+        "QPushButton#planBtn[planAction=\"select\"]:pressed{background:{AMBER_DIM};color:{TEXT_ON_ACCENT};"
         "  border-color:{AMBER_DIM};}"
         "QPushButton#planBtn[planAction=\"current\"]:disabled{color:{POSITIVE};border-color:{POSITIVE};}"
         "QPushButton#planBtn[planAction=\"included\"]:disabled{color:{TEXT_DIM};border-color:{BORDER_DIM};}"
-        "QPushButton#planBtn[planAction=\"processing\"]:disabled{color:{TEXT_DIM};border-color:{BORDER_DIM};"
+        "QPushButton#planBtn[planAction=\"processing\"]:disabled{color:{TEXT_TERTIARY};border-color:{BORDER_DIM};"
         "  background:{BG_RAISED};}"
         "QPushButton#planEntPrimary{min-height:34px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
         "  background:transparent;color:{AMBER};border:1px solid {AMBER};}"
-        "QPushButton#planEntPrimary:hover{background:{AMBER};color:{BG_BASE};}"
+        "QPushButton#planEntPrimary:hover{background:{AMBER};color:{TEXT_ON_ACCENT};}"
         "QPushButton#planEntSecondary{min-height:30px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
         "  background:transparent;color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
         "QPushButton#planEntSecondary:hover{color:{AMBER};border-color:{AMBER};}"
-        "#pricingFootnote{color:{TEXT_DIM};font-size:11px;}"
-        "QPushButton#pricingBack{background:transparent;border:none;color:{TEXT_SECONDARY};font-size:12px;"
+        "#pricingFootnote{color:{TEXT_DIM};font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+        "QPushButton#pricingBack{background:transparent;border:none;color:{TEXT_SECONDARY};font-size:" + fincept::ui::fonts::px(-2) + "px;"
         "  font-weight:700;letter-spacing:0.5px;padding:6px 10px;}"
         "QPushButton#pricingBack:hover{color:{AMBER};}");
     const std::pair<const char*, const char*> tokens[] = {
@@ -150,6 +188,7 @@ QString pricing_qss() {
         {"{TEXT_DIM}", ui::colors::TEXT_DIM()},
         {"{AMBER}", ui::colors::AMBER()},
         {"{AMBER_DIM}", ui::colors::AMBER_DIM()},
+        {"{TEXT_ON_ACCENT}", ui::colors::TEXT_ON_ACCENT()},
         {"{POSITIVE}", ui::colors::POSITIVE()},
         {"{NEGATIVE}", ui::colors::NEGATIVE()},
     };
@@ -170,6 +209,11 @@ PricingScreen::PricingScreen(QWidget* parent) : QWidget(parent) {
     // only when the plan actually changes (see render_cards()).
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
             &PricingScreen::on_session_changed);
+    // Balance moved by a billed call (no profile refresh, so no auth_state_changed).
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::credit_balance_changed, this, [this](double) {
+        if (isVisible())
+            update_account_line();
+    });
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
 
@@ -255,6 +299,23 @@ void PricingScreen::build_ui() {
     vl->addLayout(cards_row);
     vl->addSpacing(20);
 
+    // ── Plan value: what the account saved (or would save), a rollover waiting
+    // for a renewal, what Pro adds and the per-plan price of every category.
+    // Server-owned (PlanAccess); hides itself when the server sent no table.
+    {
+        auto* value_row = new QHBoxLayout;
+        value_row->setContentsMargins(0, 0, 0, 0);
+        value_row->setSpacing(0);
+        value_row->addStretch(1);
+        auto* value = new ui::PlanBenefitsView(content);
+        value->set_show_upgrade_button(false); // the PRO card above is the action
+        value->setMaximumWidth(kPricingCardMaxWidth * 2 + 14);
+        value_row->addWidget(value, 100);
+        value_row->addStretch(1);
+        vl->addLayout(value_row);
+        vl->addSpacing(12);
+    }
+
     // ── Footer ───────────────────────────────────────────────────────────────
     footnote_label_ = new QLabel(content);
     footnote_label_->setObjectName("pricingFootnote");
@@ -318,13 +379,19 @@ void PricingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     load_cached_plans(); // first visit: last-known-good plans render instantly
     update_account_line();
-    fetch_plans(); // refresh in the background; cached cards stay up meanwhile
+    // The catalogue changes with a release, not between visits: re-ask only
+    // when it is missing or old (RETRY always asks).
+    if (plans_.empty() || QDateTime::currentMSecsSinceEpoch() - plans_fetched_ms_ > kPlansFreshMs)
+        fetch_plans(); // refresh in the background; cached cards stay up meanwhile
     render_cards();
-    // Fresh plan + credits for the account line and the cards' current-plan
-    // state; the reply lands in on_session_changed().
+    billing::PlanAccess::instance().refresh(); // plan value section (reuses a recent table)
+    // Plan + credits for the account line and the cards' current-plan state,
+    // re-fetched only if the session's copy is more than a couple of minutes
+    // old (the balance itself follows billed calls); the reply lands in
+    // on_session_changed().
     auto& auth = auth::AuthManager::instance();
     if (auth.is_authenticated())
-        auth.refresh_user_data();
+        auth.refresh_user_data(auth::AuthManager::Refresh::OnView);
 }
 
 void PricingScreen::hideEvent(QHideEvent* event) {
@@ -449,6 +516,7 @@ void PricingScreen::fetch_plans() {
             }
             if (!awaiting_payment_)
                 clear_status();
+            plans_fetched_ms_ = QDateTime::currentMSecsSinceEpoch();
             const auto saved = SettingsRepository::instance().set(
                 kPricingPlansCacheKey, QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)),
                 QStringLiteral("billing"));
@@ -465,8 +533,14 @@ void PricingScreen::render_cards() {
     const bool signed_in = mgr.is_authenticated();
     const QString state = plans_.empty() ? (loading_ ? QStringLiteral("loading") : QStringLiteral("failed"))
                                          : QStringLiteral("ready");
-    const QString key = state + QLatin1Char('|') +
-                        (signed_in ? mgr.session().account_type().toLower() : QStringLiteral("-"));
+    // Plan, plan in force (a lapsed pass) and pass end: a renewal changes only
+    // the last one, and the current card's "valid until" note must follow it.
+    const auto& s = mgr.session();
+    QString account = QStringLiteral("-");
+    if (signed_in)
+        account = s.account_type().toLower() + QLatin1Char('|') + s.effective_plan() + QLatin1Char('|') +
+                  s.user_info.credits_expire_at;
+    const QString key = state + QLatin1Char('|') + account;
     if (key == rendered_for_)
         return;
     rendered_for_ = key;
@@ -518,10 +592,15 @@ void PricingScreen::set_plan_action(QPushButton* btn, PlanAction action) {
 QWidget* PricingScreen::build_plan_card(const auth::SubscriptionPlan& plan) {
     auto& mgr = auth::AuthManager::instance();
     const bool signed_in = mgr.is_authenticated();
+    // Paid = the plan in force right now (effective_plan): a Pro pass that has
+    // lapsed is on Free, even though account_type still says "pro" until the
+    // server settles it.
     const bool user_paid = signed_in && mgr.session().has_paid_plan();
+    const bool lapsed = signed_in && mgr.session().pass_lapsed();
     const QString user_plan = signed_in ? mgr.session().account_type().trimmed().toLower() : QString();
+    const bool own_plan = user_plan == plan.plan_id.toLower();
     // A free account is on the free plan even if its account_type is empty.
-    const bool is_current = signed_in && (plan.is_free ? !user_paid : user_plan == plan.plan_id.toLower());
+    const bool is_current = signed_in && (plan.is_free ? !user_paid : (user_paid && own_plan));
 
     auto* card = new QFrame(cards_host_);
     card->setObjectName("planCard");
@@ -538,7 +617,7 @@ QWidget* PricingScreen::build_plan_card(const auth::SubscriptionPlan& plan) {
     badge_row->setContentsMargins(0, 0, 0, 0);
     auto* badge = new QLabel(card);
     badge->setObjectName("planBadge");
-    badge->setFixedHeight(20);
+    badge->setFixedHeight(pricing_badge_height()); // same on every card, so the rows line up
     if (is_current) {
         badge->setText(tr("CURRENT PLAN"));
         badge->setProperty("tone", "current");
@@ -630,13 +709,25 @@ QWidget* PricingScreen::build_plan_card(const auth::SubscriptionPlan& plan) {
             connect(btn, &QPushButton::clicked, this, &PricingScreen::back_requested);
         }
     } else if (is_current) {
-        btn->setText(tr("CURRENT PLAN"));
-        set_plan_action(btn, PlanAction::Current);
-        const QString expires = mgr.session().user_info.credits_expire_at.left(10);
-        if (!expires.isEmpty())
-            note = tr("Credits valid until %1").arg(expires);
+        // The server sells a pass repeatedly — each purchase adds credits and
+        // extends it — so the plan you are on is still something you can buy:
+        // the only way to top up a Pro account out of credits. The badge above
+        // says CURRENT PLAN.
+        btn->setText(tr("RENEW / ADD CREDITS"));
+        set_plan_action(btn, PlanAction::Select);
+        const QString expires_at = mgr.session().user_info.credits_expire_at;
+        // Local date, as Profile shows it (the raw UTC date could be a day off).
+        note = expires_at.isEmpty()
+                   ? tr("Renewing adds credits and extends your pass.")
+                   : tr("Credits valid until %1. Renewing adds credits and extends your pass.")
+                         .arg(auth::format_local_stamp(expires_at, false));
+        const QString pid = plan.plan_id;
+        connect(btn, &QPushButton::clicked, this, [this, pid]() { on_select_plan(pid); });
     } else {
-        btn->setText(user_paid ? tr("SWITCH TO %1").arg(plan_name) : tr("UPGRADE TO %1").arg(plan_name));
+        if (lapsed && own_plan)
+            btn->setText(tr("RENEW %1").arg(plan_name)); // the pass ran out
+        else
+            btn->setText(user_paid ? tr("SWITCH TO %1").arg(plan_name) : tr("UPGRADE TO %1").arg(plan_name));
         set_plan_action(btn, PlanAction::Select);
         note = tr("Secure checkout on fincept.in — opens in your browser");
         const QString pid = plan.plan_id;
@@ -673,7 +764,7 @@ QWidget* PricingScreen::build_enterprise_card() {
     auto* badge = new QLabel(tr("PRIVATE EDITION"), card);
     badge->setObjectName("planBadge");
     badge->setProperty("tone", "enterprise");
-    badge->setFixedHeight(20);
+    badge->setFixedHeight(pricing_badge_height());
     badge_row->addWidget(badge);
     badge_row->addStretch();
     vl->addLayout(badge_row);
@@ -696,7 +787,7 @@ QWidget* PricingScreen::build_enterprise_card() {
 
     // No price on purpose: Enterprise prices live on the website, and this
     // build ships monthly. The price slot links there instead.
-    auto* price_link = new QPushButton(tr("See plans & pricing ↗"), card);
+    auto* price_link = new QPushButton(fincept::ui::literal_ampersands(tr("See plans & pricing ↗")), card);
     price_link->setObjectName("planPriceLink");
     price_link->setCursor(Qt::PointingHandCursor);
     price_link->setMinimumHeight(36);
@@ -737,12 +828,19 @@ QWidget* PricingScreen::build_enterprise_card() {
     vl->addWidget(primary);
     vl->addSpacing(6);
 
-    auto* demo = new QPushButton(tr("BOOK A DEMO"), card);
-    demo->setObjectName("planEntSecondary");
-    demo->setCursor(Qt::PointingHandCursor);
-    demo->setToolTip(ent::demo_url());
-    connect(demo, &QPushButton::clicked, this, []() { ui::enterprise::open_url(ui::enterprise::demo_url()); });
-    vl->addWidget(demo);
+    // A meeting about custom requirements or a partnership — the team gives no
+    // product demos. The compact label takes over when a large font leaves the
+    // card too narrow for the full one.
+    auto* meeting = new QPushButton(card);
+    meeting->setObjectName("planEntSecondary");
+    meeting->setCursor(Qt::PointingHandCursor);
+    ent::set_fitting_text(meeting, tr("DISCUSS CUSTOM REQUIREMENTS"), tr("CUSTOM REQUIREMENTS"));
+    meeting->setToolTip(tr("Book a meeting to talk through custom requirements or a partnership"));
+    meeting->setAccessibleName(tr("Discuss custom requirements: book a meeting (opens in your browser)"));
+    connect(meeting, &QPushButton::clicked, this, []() { ui::enterprise::open_url(ui::enterprise::meeting_url()); });
+    vl->addWidget(meeting);
+    vl->addSpacing(6);
+    vl->addWidget(ent::make_partnership_link(card), 0, Qt::AlignLeft);
     vl->addSpacing(8);
 
     auto* note = new QLabel(tr("Separate product · separate account"), card);
@@ -797,7 +895,11 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
 
             awaiting_payment_ = true;
             awaiting_plan_id_ = plan_id;
-            pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
+            // What a completed purchase changes — see on_session_changed().
+            const auto& s = auth::AuthManager::instance().session();
+            pre_payment_plan_ = s.account_type().toLower();
+            pre_payment_purchase_at_ = s.subscription.last_credit_purchase_at;
+            pre_payment_expires_at_ = pricing_pass_end(s);
             payment_poll_ticks_ = 0;
             payment_poll_in_flight_ = false;
             set_status(StatusTone::Info, tr("Checkout opened in your browser. Complete the payment there — this "
@@ -851,7 +953,7 @@ void PricingScreen::poll_payment_status() {
     }
     payment_poll_in_flight_ = true;
     payment_poll_issued_ms_ = now;
-    auth.refresh_user_data(); // answered by on_session_changed()
+    auth.refresh_user_data(auth::AuthManager::Refresh::Now); // answered by on_session_changed()
 }
 
 void PricingScreen::on_session_changed() {
@@ -862,9 +964,18 @@ void PricingScreen::on_session_changed() {
 
     auto& mgr = auth::AuthManager::instance();
     if (awaiting_payment_ && mgr.is_authenticated()) {
-        const QString plan = mgr.session().account_type().toLower();
-        if (plan != pre_payment_plan_) {
-            LOG_INFO(kPricingTag, QString("Plan changed after checkout (%1)").arg(awaiting_plan_id_));
+        const auto& s = mgr.session();
+        // Every purchase stamps last_credit_purchase_at and extends the pass.
+        // Watching the plan name alone missed a renewal (Pro → Pro) and polled
+        // to the 10-minute give-up. A plan change still counts, but only INTO a
+        // paid plan: the server settling a lapsed pass (Pro → Free) mid-checkout
+        // is not a payment. The balance is no signal — settling refills it.
+        const QString purchase_at = s.subscription.last_credit_purchase_at;
+        const bool new_purchase = !purchase_at.isEmpty() && purchase_at != pre_payment_purchase_at_;
+        const bool pass_extended = pricing_is_later(pricing_pass_end(s), pre_payment_expires_at_);
+        const bool upgraded = s.account_type().toLower() != pre_payment_plan_ && s.has_paid_plan();
+        if (new_purchase || pass_extended || upgraded) {
+            LOG_INFO(kPricingTag, QString("Purchase recorded after checkout (%1)").arg(awaiting_plan_id_));
             stop_payment_polling();
             set_status(StatusTone::Success,
                        tr("Payment received — your %1 plan is active.").arg(mgr.session().plan_label()));

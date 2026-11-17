@@ -1,5 +1,7 @@
 #include "screens/dashboard/DashboardStatusBar.h"
+#include "screens/dashboard/DashboardPaint.h"
 
+#include "core/market/MarketProfile.h"
 #include "datahub/DataHub.h"
 #include "screens/action_center/PendingOrdersBadge.h"
 #include "services/connectivity/ConnectivityService.h"
@@ -14,6 +16,7 @@
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QPalette>
+#include <QResizeEvent>
 #include <QStyle>
 
 #if defined(Q_OS_WIN)
@@ -28,18 +31,6 @@
 #endif
 
 namespace {
-
-void apply_solid_background(QWidget* widget, const QColor& color) {
-    if (!widget)
-        return;
-
-    widget->setAttribute(Qt::WA_StyledBackground, true);
-    widget->setAutoFillBackground(true);
-
-    QPalette pal = widget->palette();
-    pal.setColor(QPalette::Window, color);
-    widget->setPalette(pal);
-}
 
 // A quote topic is "live" while its newest publish is within this many ms
 // (3 × the 30 s market:quote TTL — one missed refresh is not an outage).
@@ -59,9 +50,9 @@ QString status_bar_age_text(qint64 age_ms) {
 namespace fincept::screens {
 
 DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(24);
+    setMinimumHeight(24); // one text line; grows with a large base font
     setObjectName("dashStatusBar");
-    apply_solid_background(this, QColor(ui::colors::BG_BASE()));
+    dashboard_paint::apply_solid_window_background(this, QColor(ui::colors::BG_BASE()));
 
     start_time_ = QDateTime::currentMSecsSinceEpoch();
 
@@ -85,7 +76,14 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     const QString version_text = QStringLiteral("v") + QApplication::applicationVersion();
     version_label_ = make_lbl(version_text, "dsVersion");
     ll->addWidget(version_label_);
-    ll->addWidget(make_sep());
+    left_ = left;
+    // One entry per group, each starting with its separator (fit_left_groups()).
+    const auto begin_group = [&]() {
+        QLabel* sep = make_sep();
+        ll->addWidget(sep);
+        left_groups_.append(QVector<QWidget*>{sep});
+    };
+    begin_group(); // feed lamps
 
     // Per-asset-class quote freshness. Each lamp follows the newest publish
     // among a few representative quote topics — the ones the dashboard's own
@@ -110,24 +108,27 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
         lamp.label->setProperty("state", QStringLiteral("none"));
         ll->addWidget(lamp.label);
         lamps_.append(lamp);
+        left_groups_.last().append(lamp.label);
     }
 
-    ll->addWidget(make_sep());
+    begin_group(); // session clock
     session_lbl_ = make_lbl(tr("SESSION:"), "dsLabel");
     ll->addWidget(session_lbl_);
     uptime_label_ = new QLabel("00:00:00");
     uptime_label_->setObjectName("dsUptime");
     ll->addWidget(uptime_label_);
+    left_groups_.last() << session_lbl_ << uptime_label_;
 
-    ll->addWidget(make_sep());
+    begin_group(); // layout state
     layout_caption_lbl_ = make_lbl(tr("LAYOUT:"), "dsLabel");
     ll->addWidget(layout_caption_lbl_);
     layout_label_ = new QLabel(tr("EMPTY"));
     layout_label_->setObjectName("dsLayout");
     layout_label_->setProperty("tone", QStringLiteral("dim"));
     ll->addWidget(layout_label_);
+    left_groups_.last() << layout_caption_lbl_ << layout_label_;
 
-    ll->addWidget(make_sep());
+    begin_group(); // API state
     // The probe checks the Fincept API, not the market-data feeds (those are
     // the EQ/FX/… lamps) — the caption used to say "FEEDS".
     feeds_caption_lbl_ = make_lbl(tr("API:"), "dsLabel");
@@ -136,9 +137,15 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     feeds_label_->setObjectName("dsFeeds");
     feeds_label_->setProperty("tone", QStringLiteral("dim"));
     ll->addWidget(feeds_label_);
+    left_groups_.last() << feeds_caption_lbl_ << feeds_label_;
+    ll->addStretch();
 
-    hl->addWidget(left);
-    hl->addStretch();
+    // The left side may shrink (groups that no longer fit whole are hidden, see
+    // fit_left_groups()) so the bar never makes the dashboard wider than a
+    // narrow panel; the right-hand status stays whole.
+    left->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    left->setMinimumWidth(0);
+    hl->addWidget(left, 1);
 
     // ── Right ──
     auto* right = new QWidget(this);
@@ -174,8 +181,13 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
 
     hl->addWidget(right);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { refresh_theme(); });
+    // Never inside theme_changed (restyling there stalls a theme switch): once the
+    // appearance has settled — the sheet only when it changed — then the text
+    // widths, which follow the font.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        refresh_theme();
+        fit_left_groups();
+    });
 
     // P3: only set intervals + connect signals here. Timer.start() is
     // deferred to showEvent so the status bar doesn't tick when the
@@ -202,11 +214,13 @@ void DashboardStatusBar::set_tone(QWidget* w, const char* prop, const QString& v
 }
 
 void DashboardStatusBar::refresh_theme() {
-    apply_solid_background(this, QColor(ui::colors::BG_BASE()));
+    dashboard_paint::apply_solid_window_background(this, QColor(ui::colors::BG_BASE()));
 
     // Every data-driven colour is a property selector here, so updates only
-    // flip a property (set_tone) instead of re-parsing a per-label sheet.
-    setStyleSheet(QString("#dashStatusBar { background:%1; border-top:1px solid %2; }"
+    // flip a property (set_tone) instead of re-parsing a per-label sheet. The
+    // tones are states (live / degraded / down), so they take the status
+    // colours, not the price-direction ones.
+    const QString sheet = QString("#dashStatusBar { background:%1; border-top:1px solid %2; }"
                           "#dsSep { color:%3; background:transparent; }"
                           "#dsVersion { color:%4; font-weight:bold; background:transparent; }"
                           "#dsLabel { color:%4; background:transparent; }"
@@ -219,26 +233,76 @@ void DashboardStatusBar::refresh_theme() {
                           "#dsMem { background:transparent; }"
                           "#dsLayout[tone=\"pos\"], #dsFeeds[tone=\"pos\"], #dsLatency[tone=\"pos\"],"
                           " #dsMem[tone=\"pos\"] { color:%5; }"
-                          "#dsLatency[tone=\"warn\"], #dsMem[tone=\"warn\"] { color:%9; }"
-                          "#dsFeeds[tone=\"neg\"], #dsLatency[tone=\"neg\"], #dsMem[tone=\"neg\"] { color:%10; }"
+                          "#dsLatency[tone=\"warn\"], #dsMem[tone=\"warn\"] { color:%6; }"
+                          "#dsFeeds[tone=\"neg\"], #dsLatency[tone=\"neg\"], #dsMem[tone=\"neg\"] { color:%9; }"
                           "#dsLayout[tone=\"dim\"], #dsFeeds[tone=\"dim\"], #dsLatency[tone=\"dim\"] { color:%4; }"
                           "#dsMem[tone=\"info\"] { color:%7; }"
-                          "#dsReady { color:%5; font-weight:bold; background:transparent; }")
+                          "#dsReady { color:%5; font-weight:bold; background:transparent; }"
+                          "#dsReady[tone=\"neg\"] { color:%9; }"
+                          "#dsReady[tone=\"dim\"] { color:%4; }")
                       .arg(ui::colors::BG_BASE())        // %1 — match global status bar
                       .arg(ui::colors::BORDER_DIM())     // %2
                       .arg(ui::colors::BORDER_MED())     // %3
                       .arg(ui::colors::TEXT_SECONDARY()) // %4
-                      .arg(ui::colors::POSITIVE())       // %5
+                      .arg(ui::colors::SUCCESS())        // %5
                       .arg(ui::colors::WARNING())        // %6
                       .arg(ui::colors::CYAN())           // %7
                       .arg(ui::colors::TEXT_DIM())       // %8
-                      .arg(ui::colors::AMBER())          // %9
-                      .arg(ui::colors::NEGATIVE()));     // %10
+                      .arg(ui::colors::DANGER());        // %9
+    if (styleSheet() != sheet) // re-styles the whole bar even for an identical sheet
+        setStyleSheet(sheet);
+}
+
+void DashboardStatusBar::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    fit_left_groups();
+}
+
+void DashboardStatusBar::fit_left_groups() {
+    // Squeezed, every label lost its tail at once ("SESSIO", "API: OFFLIN" run
+    // into the memory figure at a 24 px font). Whole groups give way instead,
+    // last first: API state, layout state, session clock, feed lamps.
+    // Not while the theme_changed handlers run (ThemeManager::notifying()):
+    // showing a label there is expensive; appearance_settled() re-fits.
+    auto* hl = qobject_cast<QHBoxLayout*>(layout());
+    if (!left_ || !hl || left_groups_.isEmpty() || width() <= 0 || ui::ThemeManager::instance().notifying())
+        return;
+    const auto hint = [](QWidget* w) {
+        w->ensurePolished(); // font weight / padding from the stylesheet are part of the hint
+        return w->sizeHint().width();
+    };
+    // Room for the left side: the bar minus its margins and the right-hand side.
+    const QMargins m = hl->contentsMargins();
+    int room = width() - m.left() - m.right();
+    for (int i = 0; i < hl->count(); ++i) {
+        QWidget* w = hl->itemAt(i)->widget();
+        if (w && w != left_ && !w->isHidden())
+            room -= hint(w) + hl->spacing();
+    }
+    const int gap = left_->layout() ? left_->layout()->spacing() : 0;
+    int needed = version_label_ ? hint(version_label_) : 0;
+    int shown = 0;
+    for (const auto& group : std::as_const(left_groups_)) {
+        int group_w = 0;
+        for (QWidget* w : group)
+            group_w += hint(w) + gap;
+        if (needed + group_w > room)
+            break;
+        needed += group_w;
+        ++shown;
+    }
+    for (int g = 0; g < left_groups_.size(); ++g) {
+        for (QWidget* w : std::as_const(left_groups_[g])) {
+            if (w->isHidden() == (g < shown))
+                w->setVisible(g < shown);
+        }
+    }
 }
 
 void DashboardStatusBar::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_theme();
+    fit_left_groups();
     // P3: start every owned QTimer here, stop in hideEvent.
     if (!uptime_timer_.isActive())
         uptime_timer_.start();
@@ -318,12 +382,48 @@ void DashboardStatusBar::set_api_state(int state) {
     feeds_label_->setText(state > 0 ? tr("ONLINE") : state == 0 ? tr("OFFLINE") : tr("CHECKING"));
     set_tone(feeds_label_, "tone",
              state > 0 ? QStringLiteral("pos") : state == 0 ? QStringLiteral("neg") : QStringLiteral("dim"));
+    update_ready_label();
     if (changed && state >= 0)
         emit connectivity_changed(state > 0);
 }
 
+void DashboardStatusBar::update_ready_label() {
+    // "● READY" used to be a constant green label that nothing drove — it stayed
+    // green with the API offline. It now follows the API health probe.
+    if (!ready_lbl_)
+        return;
+    ready_lbl_->setText(QString::fromUtf8("● ") + (api_state_ > 0    ? tr("READY")
+                                                    : api_state_ == 0 ? tr("OFFLINE")
+                                                                      : tr("CHECKING")));
+    set_tone(ready_lbl_, "tone",
+             api_state_ > 0 ? QStringLiteral("pos") : api_state_ == 0 ? QStringLiteral("neg") : QStringLiteral("dim"));
+}
+
 void DashboardStatusBar::update_feed_lamps() {
     auto& hub = datahub::DataHub::instance();
+    // The lamps follow the instruments the region's tiles keep subscribed
+    // (MarketProfile), plus the fixed global ones.
+    const auto& p = core::market::MarketProfileStore::instance().current();
+    auto topics_of = [](const QStringList& syms) {
+        QStringList t;
+        for (const auto& s : syms)
+            t << QStringLiteral("market:quote:") + s;
+        return t;
+    };
+    for (auto& lamp : lamps_) {
+        QStringList extra;
+        if (lamp.code == QLatin1String("EQ"))
+            extra = QStringList{p.benchmark} + core::market::profile_symbols(p.indices) + p.movers.mid(0, 4);
+        else if (lamp.code == QLatin1String("FX"))
+            extra = core::market::profile_symbols(p.fx);
+        else if (lamp.code == QLatin1String("CM"))
+            extra = core::market::profile_symbols(p.commodities);
+        else if (lamp.code == QLatin1String("CR"))
+            extra = core::market::profile_symbols(p.crypto);
+        for (const auto& t : topics_of(extra))
+            if (!lamp.topics.contains(t))
+                lamp.topics.append(t);
+    }
     for (auto& lamp : lamps_) {
         qint64 best = -1;
         QString best_topic;
@@ -334,9 +434,12 @@ void DashboardStatusBar::update_feed_lamps() {
                 best_topic = t;
             }
         }
-        const QString state = best < 0                         ? QStringLiteral("none")
-                              : best <= kStatusBarFreshQuoteMs ? QStringLiteral("live")
-                                                               : QStringLiteral("stale");
+        // A closed market's quote is kept for its whole closed session (not re-published every
+        // 30 s): still inside its freshness window it is current, however old the publish.
+        const bool current = best > kStatusBarFreshQuoteMs && hub.peek(best_topic).isValid();
+        const QString state = best < 0                                    ? QStringLiteral("none")
+                              : (best <= kStatusBarFreshQuoteMs || current) ? QStringLiteral("live")
+                                                                          : QStringLiteral("stale");
         set_tone(lamp.label, "state", state);
         const QString sym = best_topic.mid(QStringLiteral("market:quote:").size());
         lamp.label->setToolTip(best < 0 ? tr("%1 — no quote received this session (no widget on screen is "
@@ -416,8 +519,7 @@ void DashboardStatusBar::retranslateUi() {
         feeds_caption_lbl_->setText(tr("API:"));
         feeds_caption_lbl_->setToolTip(tr("Fincept API health — probed every 30 s while the dashboard is visible"));
     }
-    if (ready_lbl_)
-        ready_lbl_->setText(QString::fromUtf8("● ") + tr("READY"));
+    update_ready_label();
     if (layout_label_)
         layout_label_->setText(layout_count_ > 0 ? tr("ACTIVE") : tr("EMPTY"));
     if (feeds_label_)

@@ -4,11 +4,11 @@
 // Storage SQL console (on screen) and the settings MCP tools (to an LLM).
 //
 // Secrets belong in SecureStorage. The plaintext tables still carry them in
-// three situations: legacy installs that predate the encrypted store, the
-// "SecureStorage unavailable — keeping the value in settings" fallback paths
-// (LlmConfigRepository, McpServerRepository, NotificationsSection), and a few
-// keys that never moved (telemetry.cloud_api_key). So any value read back from
-// SQLite has to be treated as possibly secret before it is displayed.
+// two situations: legacy installs that predate the encrypted store (and keys
+// older builds never moved), and the "SecureStorage unavailable — keeping the
+// value in settings" fallback paths (LlmConfigRepository, McpServerRepository,
+// NotificationsSection). So any value read back from SQLite has to be treated
+// as possibly secret before it is displayed.
 //
 // Header-only and free of widget dependencies on purpose; every symbol lives
 // in its own namespace so unity builds cannot collide with it.
@@ -34,7 +34,7 @@ inline QString placeholder() {
     return QStringLiteral("••••••••");
 }
 
-/// "Telemetry.Cloud-API-Key" → "telemetry_cloud_api_key".
+/// "Broker.Client-API-Key" → "broker_client_api_key".
 inline QString normalise_name(const QString& name) {
     QString out;
     out.reserve(name.size());

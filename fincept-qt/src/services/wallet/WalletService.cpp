@@ -75,34 +75,54 @@ void WalletService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("wallet:activity:*"), activity_policy);
 
     hub_registered_ = true;
-    LOG_INFO("WalletService", "Registered with DataHub (wallet:balance:*, market:price:token:*, "
-                              "market:price:fncpt[deprecated alias], wallet:activity:*)");
+    LOG_DEBUG("WalletService", "Registered with DataHub (wallet:balance:*, market:price:token:*, "
+                               "market:price:fncpt[deprecated alias], wallet:activity:*)");
 }
 
 void WalletService::restore_from_storage() {
-    auto pk_res = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyPubkey));
-    if (pk_res.is_err() || pk_res.value().isEmpty()) {
+    const SecretRead pk_res = SecureStorage::instance().read(QString::fromLatin1(kKeyPubkey));
+    const bool failing = pk_res.failed();
+    LOG_TRANSITION("WalletService", QStringLiteral("restore_read"), failing, failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Saved wallet could not be read; shown as unreadable, nothing written",
+                                  {{"key", kKeyPubkey}, {"kind", pk_res.error_name()}})
+                           : QStringLiteral("Saved wallet readable again"));
+    if (failing) {
+        // Not "no wallet": say so (the Crypto Center shows it with a retry) and keep
+        // the saved row untouched — connecting a wallet anew is the user's choice.
+        restore_error_ = tr("Could not read the saved wallet: %1.").arg(pk_res.reason());
+        emit restore_failed(restore_error_);
+        return;
+    }
+    restore_error_.clear();
+    if (!pk_res.found() || pk_res.value.isEmpty()) {
         return;
     }
     WalletState s;
-    s.pubkey_b58 = pk_res.value();
+    s.pubkey_b58 = pk_res.value;
 
-    auto lbl_res = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyLabel));
-    if (lbl_res.is_ok()) {
-        s.label = lbl_res.value();
+    // Label and timestamp are display-only: an unreadable one stays empty / 0.
+    const SecretRead lbl_res = SecureStorage::instance().read(QString::fromLatin1(kKeyLabel));
+    if (lbl_res.found()) {
+        s.label = lbl_res.value;
     }
-    auto ts_res = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyConnectedAt));
-    if (ts_res.is_ok()) {
+    const SecretRead ts_res = SecureStorage::instance().read(QString::fromLatin1(kKeyConnectedAt));
+    if (ts_res.found()) {
         bool ok = false;
-        const auto v = ts_res.value().toLongLong(&ok);
+        const auto v = ts_res.value.toLongLong(&ok);
         if (ok) {
             s.connected_at_ms = v;
         }
     }
     s.soft_connected = true;
     set_state(std::move(s));
-    LOG_INFO("WalletService", "Restored soft-connected wallet: " + state_.pubkey_b58);
+    LOG_INFO("WalletService", logf("Wallet restored", {{"wallet", log_mask(state_.pubkey_b58)}, {"label", state_.label}}));
     emit wallet_connected(state_.pubkey_b58, state_.label);
+}
+
+void WalletService::retry_restore() {
+    if (state_.is_connected())
+        return;
+    restore_from_storage();
 }
 
 void WalletService::connect_with_dialog(QWidget* parent) {
@@ -119,15 +139,17 @@ void WalletService::connect_with_dialog(QWidget* parent) {
         s.connected_at_ms = QDateTime::currentMSecsSinceEpoch();
         s.soft_connected = false;
         self->set_state(std::move(s));
+        self->restore_error_.clear(); // the user connected a wallet: it replaces the unreadable one
         self->persist_state();
-        LOG_INFO("WalletService", "Wallet connected: " + self->state_.pubkey_b58);
+        LOG_INFO("WalletService",
+                 logf("Wallet connected", {{"wallet", log_mask(self->state_.pubkey_b58)}, {"label", self->state_.label}}));
         emit self->wallet_connected(self->state_.pubkey_b58, self->state_.label);
     });
     connect(dlg, &ConnectWalletDialog::failed, this, [self](QString reason) {
         if (!self) {
             return;
         }
-        LOG_WARN("WalletService", "Connect failed: " + reason);
+        LOG_WARN("WalletService", logf("Wallet connect failed", {{"reason", reason}}));
         emit self->connect_failed(reason);
     });
     dlg->open();
@@ -137,7 +159,7 @@ void WalletService::disconnect() {
     if (!state_.is_connected()) {
         return;
     }
-    LOG_INFO("WalletService", "Disconnecting wallet: " + state_.pubkey_b58);
+    LOG_INFO("WalletService", logf("Wallet disconnected", {{"wallet", log_mask(state_.pubkey_b58)}}));
     clear_persisted_state();
     state_ = {};
     emit wallet_disconnected();
@@ -172,7 +194,7 @@ void WalletService::set_balance_mode(bool stream) {
     SecureStorage::instance().store(QStringLiteral("wallet.balance_mode"),
                                     stream ? QStringLiteral("stream") : QStringLiteral("poll"));
     balance_producer_->set_mode(wanted);
-    LOG_INFO("WalletService", QStringLiteral("balance mode set to %1").arg(stream ? "stream" : "poll"));
+    LOG_DEBUG("WalletService", QStringLiteral("balance mode set to %1").arg(stream ? "stream" : "poll"));
 
     // Force a refresh so subscribers see fresh data via the new path.
     if (state_.is_connected()) {

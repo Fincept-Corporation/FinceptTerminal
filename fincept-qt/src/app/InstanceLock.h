@@ -42,12 +42,15 @@ class InstanceLock : public QObject {
     /// run as an unsynchronised primary than to refuse to start. Logged.
     Status acquire(const QString& key, const QStringList& args = {});
 
-    /// Map an arbitrary key into a stable, length-bounded local-socket name.
-    /// Static so tests can verify the mapping. Uses SHA-1 truncation for the
-    /// uniqueness component — long enough to avoid collisions, short enough
-    /// to fit inside macOS POSIX semaphore-style namespaces (the original
-    /// bug at the heart of #252).
+    /// Map an arbitrary key into a stable, length-bounded local-socket name,
+    /// scoped to this edition and this OS user (edition::instance_socket_name in
+    /// core/config/EditionNames.h). Short enough to fit the macOS $TMPDIR
+    /// socket-path cap (the original bug at the heart of #252).
     static QString socket_name_for(const QString& key);
+
+    /// The address the private build and releases before the edition split use
+    /// for `key` — for probing whether such a program runs, never for listening.
+    static QString legacy_socket_name_for(const QString& key);
 
   signals:
     /// Emitted on the primary when a secondary connects and sends its argv.

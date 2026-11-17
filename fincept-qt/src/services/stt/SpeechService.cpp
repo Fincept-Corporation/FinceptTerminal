@@ -17,6 +17,7 @@
 
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "core/process/ProcessTree.h"
 #include "python/PythonRunner.h"
 #include "python/PythonSetupManager.h"
 #include "storage/secure/SecureStorage.h"
@@ -43,7 +44,7 @@ class PythonSttProvider : public SttProvider {
     using SttProvider::SttProvider;
 
     void start() override {
-        LOG_INFO(TAG, QString("PythonSttProvider[%1]::start() — entry").arg(name()));
+        LOG_DEBUG(TAG, QString("PythonSttProvider[%1]::start() — entry").arg(name()));
         if (process_) {
             LOG_WARN(
                 TAG,
@@ -52,9 +53,9 @@ class PythonSttProvider : public SttProvider {
         }
 
         QString python_exe = python::PythonSetupManager::instance().python_path("venv-numpy2");
-        LOG_INFO(TAG, QString("Resolving python_exe — venv-numpy2 path: '%1' (exists=%2)")
-                          .arg(python_exe)
-                          .arg(QFileInfo::exists(python_exe)));
+        LOG_DEBUG(TAG, QString("Resolving python_exe — venv-numpy2 path: '%1' (exists=%2)")
+                           .arg(log_path(python_exe))
+                           .arg(QFileInfo::exists(python_exe)));
         if (python_exe.isEmpty() || !QFileInfo::exists(python_exe)) {
             const QString fallback = python::PythonRunner::instance().python_path();
             LOG_WARN(TAG,
@@ -69,7 +70,8 @@ class PythonSttProvider : public SttProvider {
         }
 
         const QString script = script_path();
-        LOG_INFO(TAG, QString("Resolving script — path: '%1' (exists=%2)").arg(script).arg(QFileInfo::exists(script)));
+        LOG_DEBUG(TAG,
+                  QString("Resolving script — path: '%1' (exists=%2)").arg(log_path(script)).arg(QFileInfo::exists(script)));
         if (!QFileInfo::exists(script)) {
             LOG_ERROR(TAG, QString("STT script not found at '%1' — aborting").arg(script));
             emit fatal_error(QStringLiteral("Voice script not found: ") + script);
@@ -95,7 +97,13 @@ class PythonSttProvider : public SttProvider {
         env.insert("PYTHONPATH", new_pypath);
 
         // Give subclass a chance to inject API keys / model / language
-        extend_environment(env);
+        const QString env_problem = extend_environment(env);
+        if (!env_problem.isEmpty()) {
+            delete process_; // never started, nothing connected yet
+            process_ = nullptr;
+            emit fatal_error(env_problem);
+            return;
+        }
 
         process_->setProcessEnvironment(env);
         process_->setWorkingDirectory(scripts_dir);
@@ -103,23 +111,30 @@ class PythonSttProvider : public SttProvider {
         // the C++ log instead of being silently dropped.
         process_->setProcessChannelMode(QProcess::SeparateChannels);
 
-#ifdef _WIN32
-        process_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-            cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-        });
-#endif
+        // The recogniser and anything it starts are one unit: stop() kills the whole
+        // tree, leftovers of a recogniser that ended are reaped when its QProcess is
+        // deleted, and on Windows the OS kills the tree if the terminal itself dies
+        // (kill-on-close job). Never released: nothing it starts should outlive it.
+        // Also hides the console window (was the CREATE_NO_WINDOW modifier here).
+        // Before start() and before the started handler below (adoption runs first).
+        process::own_tree(process_);
 
         connect(process_, &QProcess::readyReadStandardOutput, this, &PythonSttProvider::on_stdout_ready);
         connect(process_, &QProcess::readyReadStandardError, this, &PythonSttProvider::on_stderr_ready);
         connect(process_, &QProcess::started, this, [this]() {
-            LOG_INFO(TAG, QString("Provider[%1]: QProcess::started — pid=%2")
-                              .arg(name())
-                              .arg(process_ ? process_->processId() : 0));
+            LOG_DEBUG(TAG, QString("Provider[%1]: QProcess::started — pid=%2")
+                               .arg(name())
+                               .arg(process_ ? process_->processId() : 0));
         });
         connect(process_, &QProcess::finished, this, &PythonSttProvider::on_process_finished);
         connect(process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
-            LOG_ERROR(TAG,
-                      QString("Provider[%1]: QProcess::errorOccurred err=%2").arg(name()).arg(static_cast<int>(err)));
+            // Only a failed start is its own event; a crash is reported by on_process_finished.
+            if (err == QProcess::FailedToStart)
+                LOG_ERROR(TAG, logf("Voice process could not start",
+                                    {{"provider", name()}, {"error", process_ ? process_->errorString() : QString()}}));
+            else
+                LOG_DEBUG(TAG,
+                          QString("Provider[%1]: QProcess::errorOccurred err=%2").arg(name()).arg(static_cast<int>(err)));
             if (err == QProcess::FailedToStart) {
                 emit fatal_error(QStringLiteral("Failed to start voice recognition process"));
                 stop();
@@ -127,12 +142,13 @@ class PythonSttProvider : public SttProvider {
         });
 
         stdout_buffer_.clear();
-        LOG_INFO(TAG,
-                 QString("Provider[%1]: launching '%2' '%3' (cwd='%4')").arg(name(), python_exe, script, scripts_dir));
+        last_stderr_.clear();
+        LOG_DEBUG(TAG, QString("Provider[%1]: launching '%2' '%3' (cwd='%4')")
+                           .arg(name(), log_path(python_exe), log_path(script), log_path(scripts_dir)));
         process_->start(python_exe, {script});
 
         active_.store(true, std::memory_order_release);
-        LOG_INFO(TAG, QString("Voice provider '%1' marked active — emitting active_changed(true)").arg(name()));
+        LOG_INFO(TAG, logf("Voice input started", {{"provider", name()}}));
         emit active_changed(true);
     }
 
@@ -155,7 +171,7 @@ class PythonSttProvider : public SttProvider {
         } else {
             connect(dying, &QProcess::finished, dying, &QObject::deleteLater);
             connect(dying, &QProcess::errorOccurred, dying, &QObject::deleteLater);
-            dying->kill();
+            process::kill_tree(dying);
         }
 
         const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
@@ -172,8 +188,9 @@ class PythonSttProvider : public SttProvider {
     virtual QString script_path() const = 0;
 
     /// Hook for subclasses to add API keys / model / language etc. to the
-    /// child process environment. Default: no extra vars.
-    virtual void extend_environment(QProcessEnvironment& /*env*/) const {}
+    /// child process environment. Default: no extra vars. A non-empty return
+    /// is a plain sentence: the process is not started (fatal_error instead).
+    virtual QString extend_environment(QProcessEnvironment& /*env*/) const { return {}; }
 
   private:
     void on_stdout_ready() {
@@ -209,9 +226,11 @@ class PythonSttProvider : public SttProvider {
         // Strip trailing newlines for cleaner log lines but preserve embedded
         // ones — multi-line tracebacks read better in the log file than a
         // single mashed-together line.
+        // Policy B.9: stderr at DEBUG only; its last line goes into the exit line if the process fails.
         const QString text = QString::fromUtf8(chunk).trimmed();
         if (!text.isEmpty()) {
-            LOG_WARN(TAG, QString("Provider[%1] stderr: %2").arg(name(), text));
+            last_stderr_ = text.section(QLatin1Char('\n'), -1).trimmed();
+            LOG_DEBUG(TAG, QString("Provider[%1] stderr: %2").arg(name(), text));
         }
     }
 
@@ -219,8 +238,8 @@ class PythonSttProvider : public SttProvider {
         QJsonParseError parse_err;
         const QJsonDocument doc = QJsonDocument::fromJson(line, &parse_err);
         if (parse_err.error != QJsonParseError::NoError) {
-            LOG_WARN(TAG,
-                     QString("Provider[%1]: non-JSON stdout line ignored: %2").arg(name(), QString::fromUtf8(line)));
+            LOG_DEBUG(TAG,
+                      QString("Provider[%1]: non-JSON stdout line ignored: %2").arg(name(), QString::fromUtf8(line)));
             return;
         }
 
@@ -229,10 +248,7 @@ class PythonSttProvider : public SttProvider {
         if (obj.contains("text")) {
             const QString text = obj["text"].toString().trimmed();
             if (!text.isEmpty()) {
-                LOG_INFO(TAG, QString("Provider[%1]: transcript len=%2 \"%3\"")
-                                  .arg(name())
-                                  .arg(text.length())
-                                  .arg(text.left(120)));
+                LOG_DEBUG(TAG, logf("Transcript received", {{"provider", name()}, {"chars", text.length()}}));
                 emit transcription(text);
             } else {
                 LOG_WARN(TAG, QString("Provider[%1]: empty transcript object").arg(name()));
@@ -248,7 +264,7 @@ class PythonSttProvider : public SttProvider {
             stop();
         } else if (obj.contains("status")) {
             const QString status = obj["status"].toString();
-            LOG_INFO(TAG, QString("Provider[%1] STT status: %2").arg(name(), status));
+            LOG_DEBUG(TAG, QString("Provider[%1] STT status: %2").arg(name(), status));
         } else {
             LOG_WARN(TAG, QString("Provider[%1]: JSON line had no recognised key — %2")
                               .arg(name(), QString::fromUtf8(line.left(200))));
@@ -261,23 +277,38 @@ class PythonSttProvider : public SttProvider {
         if (process_) {
             const QByteArray remaining_err = process_->readAllStandardError();
             if (!remaining_err.isEmpty()) {
-                LOG_WARN(
-                    TAG,
-                    QString("Provider[%1] final stderr: %2").arg(name(), QString::fromUtf8(remaining_err).trimmed()));
+                const QString tail = QString::fromUtf8(remaining_err).trimmed();
+                if (!tail.isEmpty())
+                    last_stderr_ = tail.section(QLatin1Char('\n'), -1).trimmed();
+                LOG_DEBUG(TAG, QString("Provider[%1] final stderr: %2").arg(name(), tail));
             }
             const QByteArray remaining_out = process_->readAllStandardOutput();
             if (!remaining_out.isEmpty()) {
-                LOG_INFO(
-                    TAG,
-                    QString("Provider[%1] final stdout: %2").arg(name(), QString::fromUtf8(remaining_out).trimmed()));
+                // Never the text itself: it can be a transcript.
+                LOG_DEBUG(TAG, logf("Provider left unread stdout", {{"provider", name()}, {"bytes", remaining_out.size()}}));
             }
         }
 
-        LOG_INFO(TAG, QString("Voice provider '%1' process exited (code=%2, status=%3, was_active=%4)")
-                          .arg(name())
-                          .arg(exit_code)
-                          .arg(status == QProcess::CrashExit ? "crash" : "normal")
-                          .arg(active_.load(std::memory_order_relaxed)));
+        // One line per exit: ERROR when a running session died (the user sees the error),
+        // WARN for an abnormal exit outside a session, INFO otherwise.
+        {
+            const bool abnormal = status == QProcess::CrashExit || exit_code != 0;
+            const bool in_session = active_.load(std::memory_order_relaxed);
+            if (abnormal && in_session)
+                LOG_ERROR(TAG, logf("Voice process exited abnormally",
+                                    {{"provider", name()},
+                                     {"exit", exit_code},
+                                     {"status", status == QProcess::CrashExit ? "crash" : "normal"},
+                                     {"error", last_stderr_}}));
+            else if (abnormal)
+                LOG_WARN(TAG, logf("Voice process exited abnormally",
+                                   {{"provider", name()},
+                                    {"exit", exit_code},
+                                    {"status", status == QProcess::CrashExit ? "crash" : "normal"},
+                                    {"error", last_stderr_}}));
+            else
+                LOG_INFO(TAG, logf("Voice process exited", {{"provider", name()}, {"exit", exit_code}}));
+        }
 
         if (process_) {
             process_->deleteLater();
@@ -289,9 +320,7 @@ class PythonSttProvider : public SttProvider {
         if (was_active) {
             emit active_changed(false);
             if (status == QProcess::CrashExit || exit_code != 0) {
-                LOG_ERROR(TAG, QString("Provider[%1] exited abnormally (code=%2) — surfacing error to UI")
-                                   .arg(name())
-                                   .arg(exit_code));
+                // Logged once above ("Voice process exited abnormally").
                 emit error(QStringLiteral("Voice recognition stopped unexpectedly"));
             }
         }
@@ -299,6 +328,7 @@ class PythonSttProvider : public SttProvider {
 
     QProcess* process_ = nullptr;
     QByteArray stdout_buffer_;
+    QString last_stderr_; // last stderr line, for the exit line (policy B.9)
     std::atomic<bool> active_{false};
 };
 
@@ -335,15 +365,22 @@ class DeepgramSttProvider final : public PythonSttProvider {
         return python::PythonRunner::instance().scripts_dir() + QStringLiteral("/voice/deepgram_stt.py");
     }
 
-    void extend_environment(QProcessEnvironment& env) const override {
-        auto key_res = SecureStorage::instance().retrieve(QStringLiteral("voice.deepgram.api_key"));
-        const QString api_key = key_res.is_ok() ? key_res.value() : QString();
-
-        if (key_res.is_err()) {
-            LOG_ERROR(
-                TAG,
-                QString("Deepgram: SecureStorage::retrieve failed — %1").arg(QString::fromStdString(key_res.error())));
+    QString extend_environment(QProcessEnvironment& env) const override {
+        const SecretRead key_res = SecureStorage::instance().read(QStringLiteral("voice.deepgram.api_key"));
+        const bool unreadable = key_res.failed();
+        LOG_TRANSITION(TAG, QStringLiteral("deepgram_key_read"), unreadable,
+                       unreadable ? LogLevel::Warn : LogLevel::Info,
+                       unreadable ? logf("Deepgram API key could not be read; voice input not started",
+                                         {{"key", "voice.deepgram.api_key"}, {"kind", key_res.error_name()}})
+                                  : QStringLiteral("Deepgram API key readable again"));
+        if (unreadable) {
+            // Stored but unreadable — not "no key": starting the script with an empty
+            // key would report a missing key the user already entered.
+            return tr("Could not read the stored Deepgram API key: %1. Voice input was not started — try again "
+                      "in a moment.")
+                .arg(key_res.reason());
         }
+        const QString api_key = key_res.found() ? key_res.value : QString();
 
         auto& cfg = AppConfig::instance();
         const QString model = cfg.get("voice/deepgram/model", "nova-3").toString();
@@ -354,14 +391,13 @@ class DeepgramSttProvider final : public PythonSttProvider {
         const QString gain = cfg.get("voice/deepgram/gain", "3.0").toString();
         const QString device = cfg.get("voice/deepgram/device", "").toString();
 
-        // Never log the key itself — only its length, so we can tell at a
-        // glance whether SecureStorage returned anything.
-        LOG_INFO(TAG, QString("Deepgram env: api_key_len=%1 model='%2' language='%3' "
-                              "keyterms_len=%4 gain=%5 device='%6'")
-                          .arg(api_key.length())
-                          .arg(model, lang)
-                          .arg(keyterms.length())
-                          .arg(gain, device));
+        // Never the key, not even its length (policy B.6): only whether one is set.
+        LOG_DEBUG(TAG, QString("Deepgram env: api_key_set=%1 model='%2' language='%3' "
+                               "keyterms_len=%4 gain=%5 device='%6'")
+                           .arg(api_key.isEmpty() ? QStringLiteral("false") : QStringLiteral("true"))
+                           .arg(model, lang)
+                           .arg(keyterms.length())
+                           .arg(gain, device));
 
         env.insert("DEEPGRAM_API_KEY", api_key);
         env.insert("FINCEPT_STT_MODEL", model);
@@ -369,6 +405,7 @@ class DeepgramSttProvider final : public PythonSttProvider {
         env.insert("FINCEPT_STT_KEYTERMS", keyterms);
         env.insert("FINCEPT_STT_GAIN", gain);
         env.insert("FINCEPT_STT_DEVICE", device);
+        return {};
     }
 };
 
@@ -382,7 +419,7 @@ SpeechService& SpeechService::instance() {
 }
 
 SpeechService::SpeechService(QObject* parent) : QObject(parent) {
-    LOG_INFO(TAG, "SpeechService initialised");
+    LOG_DEBUG(TAG, "SpeechService initialised");
 }
 
 SpeechService::~SpeechService() {
@@ -402,31 +439,32 @@ QString SpeechService::configured_provider() {
 }
 
 void SpeechService::start_listening() {
-    LOG_INFO(TAG, QString("SpeechService::start_listening() — listening_=%1 provider=%2")
-                      .arg(listening_.load(std::memory_order_relaxed))
-                      .arg(provider_ ? provider_->name() : QStringLiteral("<none>")));
+    LOG_DEBUG(TAG, QString("SpeechService::start_listening() — listening_=%1 provider=%2")
+                       .arg(listening_.load(std::memory_order_relaxed))
+                       .arg(provider_ ? provider_->name() : QStringLiteral("<none>")));
     if (listening_.load(std::memory_order_relaxed)) {
-        LOG_WARN(TAG, "start_listening: already listening — ignoring");
+        // A second click while listening: expected, nothing degraded.
+        LOG_DEBUG(TAG, "Voice input already listening, start ignored");
         return;
     }
 
     install_provider();
     if (!provider_) {
-        LOG_ERROR(TAG, "start_listening: install_provider() left provider_ null — cannot start");
+        LOG_ERROR(TAG, logf("Voice input could not start, no provider installed", {{"provider", configured_provider()}}));
         emit error_occurred(QStringLiteral("Voice provider could not be installed"));
         return;
     }
 
-    LOG_INFO(TAG, QString("start_listening: delegating to provider '%1'").arg(provider_->name()));
+    LOG_DEBUG(TAG, QString("start_listening: delegating to provider '%1'").arg(provider_->name()));
     provider_->start();
 }
 
 void SpeechService::stop_listening() {
-    LOG_INFO(TAG, QString("SpeechService::stop_listening() — listening_=%1 provider=%2")
-                      .arg(listening_.load(std::memory_order_relaxed))
-                      .arg(provider_ ? provider_->name() : QStringLiteral("<none>")));
+    LOG_DEBUG(TAG, QString("SpeechService::stop_listening() — listening_=%1 provider=%2")
+                       .arg(listening_.load(std::memory_order_relaxed))
+                       .arg(provider_ ? provider_->name() : QStringLiteral("<none>")));
     if (!listening_.load(std::memory_order_relaxed)) {
-        LOG_INFO(TAG, "stop_listening: not active — no-op");
+        LOG_DEBUG(TAG, "stop_listening: not active — no-op");
         return;
     }
     if (provider_)
@@ -445,10 +483,10 @@ void SpeechService::reload_config() {
     install_provider();
 
     if (was_listening && provider_) {
-        LOG_INFO(TAG, "Voice config reloaded — restarting active session");
+        LOG_DEBUG(TAG, "Voice config reloaded — restarting active session");
         provider_->start();
     } else {
-        LOG_INFO(TAG, "Voice config reloaded (idle)");
+        LOG_DEBUG(TAG, "Voice config reloaded (idle)");
     }
 }
 
@@ -460,12 +498,12 @@ bool SpeechService::is_listening() const noexcept {
 
 void SpeechService::install_provider() {
     const QString id = configured_provider();
-    LOG_INFO(TAG, QString("install_provider() — configured='%1' current='%2'")
-                      .arg(id, provider_ ? provider_->name() : QStringLiteral("<none>")));
+    LOG_DEBUG(TAG, QString("install_provider() — configured='%1' current='%2'")
+                       .arg(id, provider_ ? provider_->name() : QStringLiteral("<none>")));
 
     // If an existing provider matches the selection, reuse it.
     if (provider_ && provider_->name() == id) {
-        LOG_INFO(TAG, "install_provider: reusing existing provider instance");
+        LOG_DEBUG(TAG, "install_provider: reusing existing provider instance");
         return;
     }
 
@@ -480,12 +518,12 @@ void SpeechService::install_provider() {
     connect(provider_.get(), &SttProvider::error, this, &SpeechService::error_occurred);
     connect(provider_.get(), &SttProvider::fatal_error, this, &SpeechService::error_occurred);
     connect(provider_.get(), &SttProvider::active_changed, this, [this](bool active) {
-        LOG_INFO(TAG, QString("Provider active_changed — active=%1 (forwarding listening_changed)").arg(active));
+        LOG_DEBUG(TAG, QString("Provider active_changed — active=%1 (forwarding listening_changed)").arg(active));
         listening_.store(active, std::memory_order_release);
         emit listening_changed(active);
     });
 
-    LOG_INFO(TAG, QString("Voice provider installed: %1").arg(id));
+    LOG_DEBUG(TAG, QString("Voice provider installed: %1").arg(id));
 }
 
 void SpeechService::teardown_provider() {

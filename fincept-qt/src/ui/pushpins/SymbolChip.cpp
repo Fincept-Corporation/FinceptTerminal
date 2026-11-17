@@ -4,6 +4,7 @@
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolGroupRegistry.h"
 #include "services/pushpins/PushpinService.h"
+#include "ui/theme/Theme.h"
 
 #include <QAction>
 #include <QApplication>
@@ -84,11 +85,11 @@ void SymbolChip::paintEvent(QPaintEvent*) {
 
     QPainterPath path;
     path.addRoundedRect(r, r.height() / 2.0, r.height() / 2.0);
-    p.fillPath(path, QColor("#1f2937"));
-    p.setPen(QColor("#d97706"));
+    p.fillPath(path, QColor(colors::BG_RAISED()));
+    p.setPen(QColor(colors::AMBER()));
     p.drawPath(path);
 
-    p.setPen(QColor("#f3f4f6"));
+    p.setPen(QColor(colors::TEXT_PRIMARY()));
     QFont f = p.font();
     f.setBold(true);
     p.setFont(f);

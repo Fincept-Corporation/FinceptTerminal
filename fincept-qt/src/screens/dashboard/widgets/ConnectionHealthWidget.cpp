@@ -32,6 +32,8 @@ constexpr int kConnHealthColSource = 0;
 constexpr int kConnHealthColState = 1;
 constexpr int kConnHealthColDetail = 2;
 constexpr int kConnHealthRowHeight = 22;
+// Source-cell role carrying Row::retry_exchange (KEYS UNREADABLE rows).
+constexpr int kConnHealthRetryRole = Qt::UserRole + 1;
 // A failed Python run carries a uv log tail; the tooltip keeps its head.
 constexpr int kConnHealthMaxErrorChars = 600;
 
@@ -87,7 +89,7 @@ ConnectionHealthWidget::ConnectionHealthWidget(const QJsonObject& /*cfg*/, QWidg
     table_->setObjectName(QStringLiteral("connHealthTable"));
     table_->setAccessibleName(tr("Connection health"));
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(kConnHealthRowHeight);
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(kConnHealthRowHeight, -4));
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
@@ -95,8 +97,9 @@ ConnectionHealthWidget::ConnectionHealthWidget(const QJsonObject& /*cfg*/, QWidg
     table_->setWordWrap(false);
     table_->setTextElideMode(Qt::ElideRight);
     table_->horizontalHeader()->setStretchLastSection(true);
-    table_->horizontalHeader()->setSectionResizeMode(kConnHealthColSource, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(kConnHealthColState, QHeaderView::ResizeToContents);
+    // Fitted once per render() (resizeColumnToContents), not re-measured on every cell set.
+    table_->horizontalHeader()->setSectionResizeMode(kConnHealthColSource, QHeaderView::Interactive);
+    table_->horizontalHeader()->setSectionResizeMode(kConnHealthColState, QHeaderView::Interactive);
     bl->addWidget(table_, 1);
 
     vl->addWidget(body_, 1);
@@ -369,8 +372,19 @@ void ConnectionHealthWidget::append_exchange_rows(QVector<Row>& rows) const {
             if (s->is_ws_hub_owned())
                 parts << tr("dashboard feed");
         }
+        // Stored keys that exist but could not be read leave the session keyless —
+        // that is not "no API key" and not a stopped stream: say so, keep the WS
+        // state in the detail, and let a double-click read them again.
+        const QString read_error = s->credentials_read_error();
+        if (!read_error.isEmpty()) {
+            parts.insert(1, r.state);
+            r.state = tr("KEYS UNREADABLE");
+            r.tone = Tone::Warn;
+            r.retry_exchange = id;
+        }
         r.detail = parts.join(QStringLiteral(" · "));
-        r.tooltip = tr("%1 WebSocket — %2").arg(r.source, r.state);
+        r.tooltip = read_error.isEmpty() ? tr("%1 WebSocket — %2").arg(r.source, r.state)
+                                         : read_error + QLatin1Char('\n') + tr("Double-click to retry.");
         rows.append(r);
     }
 }
@@ -384,9 +398,10 @@ void ConnectionHealthWidget::render() {
     append_broker_rows(rows);
     append_exchange_rows(rows);
 
-    const QColor pos = ui::colors::POSITIVE();
+    // Health states, not price direction: the status colours.
+    const QColor pos = ui::colors::SUCCESS();
     const QColor warn = ui::colors::WARNING();
-    const QColor neg = ui::colors::NEGATIVE();
+    const QColor neg = ui::colors::DANGER();
     const QColor dim = ui::colors::TEXT_TERTIARY();
     const QColor primary = ui::colors::TEXT_PRIMARY();
     const QColor secondary = ui::colors::TEXT_SECONDARY();
@@ -401,6 +416,7 @@ void ConnectionHealthWidget::render() {
         src->setText(r.source);
         src->setForeground(primary);
         src->setData(Qt::UserRole, r.screen_id);
+        src->setData(kConnHealthRetryRole, r.retry_exchange);
         src->setToolTip(r.tooltip);
 
         QTableWidgetItem* state = connhealth_cell(table_, i, kConnHealthColState);
@@ -418,6 +434,9 @@ void ConnectionHealthWidget::render() {
         else if (r.tone == Tone::Warn)
             degraded << r.source;
     }
+    // Fitted once per render, not re-measured on every cell set.
+    table_->resizeColumnToContents(kConnHealthColSource);
+    table_->resizeColumnToContents(kConnHealthColState);
 
     if (!down.isEmpty())
         set_summary(tr("%1 DOWN · %2").arg(down.size()).arg((down + degraded).join(QStringLiteral(", "))),
@@ -444,31 +463,44 @@ void ConnectionHealthWidget::set_summary(const QString& text, const QString& ton
 
 void ConnectionHealthWidget::on_row_double_clicked(int row) {
     const QTableWidgetItem* item = table_->item(row, kConnHealthColSource);
+    // KEYS UNREADABLE row: read the stored keys again (only for a session that
+    // already exists — never create one), then show the outcome.
+    const QString retry = item ? item->data(kConnHealthRetryRole).toString() : QString();
+    if (!retry.isEmpty()) {
+        auto& esm = fincept::trading::ExchangeSessionManager::instance();
+        if (esm.active_exchange_ids().contains(retry)) {
+            if (fincept::trading::ExchangeSession* s = esm.session(retry))
+                s->load_stored_credentials();
+        }
+        request_render();
+        return;
+    }
     const QString screen = item ? item->data(Qt::UserRole).toString() : QString();
     if (!screen.isEmpty())
-        EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen}});
+        EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen}, {"exclusive", true}});
 }
 
 // ── Theme / language ────────────────────────────────────────────────────────
 
 void ConnectionHealthWidget::apply_styles() {
-    body_->setStyleSheet(
+    set_css_cached(body_, 
         QString("#connHealthBody{background:transparent;}"
                 "#connHealthSummary{color:%1;background:%2;border-bottom:1px solid %3;padding:3px 8px;"
-                "font-size:9px;font-weight:bold;letter-spacing:0.5px;}"
+                "font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;letter-spacing:0.5px;}"
                 "#connHealthSummary[tone=\"pos\"]{color:%4;}"
                 "#connHealthSummary[tone=\"warn\"]{color:%5;}"
                 "#connHealthSummary[tone=\"neg\"]{color:%6;}"
-                "QTableWidget#connHealthTable{background:transparent;color:%7;border:none;font-size:10px;}"
+                "QTableWidget#connHealthTable{background:transparent;color:%7;border:none;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
                 "QTableWidget#connHealthTable QHeaderView::section{background:%2;color:%1;border:none;"
-                "border-bottom:1px solid %3;padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "border-bottom:1px solid %3;padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget#connHealthTable::item{padding:0px 4px;border-bottom:1px solid %3;}")
-            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::POSITIVE(),
-                 ui::colors::WARNING(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::SUCCESS(),
+                 ui::colors::WARNING(), ui::colors::DANGER(), ui::colors::TEXT_PRIMARY()));
 }
 
 void ConnectionHealthWidget::on_theme_changed() {
     apply_styles();
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(kConnHealthRowHeight, -4));
     request_render(); // row colours come from the theme tokens
 }
 

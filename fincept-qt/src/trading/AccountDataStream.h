@@ -7,8 +7,10 @@
 // Signals are emitted on the main thread for UI consumption.
 
 #include "trading/BrokerAccount.h"
+#include "trading/MarketDataRequests.h"
 #include "trading/TradingTypes.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QMap>
 #include <QMutex>
@@ -60,7 +62,8 @@ class AccountDataStream : public QObject {
     // stream. DataStreamManager::restart_stream() destroys and recreates a stream
     // on every credential change, and the subscriptions live ONLY on the stream
     // object, so without this every consumer's symbols silently vanished and the
-    // WebSocket re-subscribed to nothing.
+    // WebSocket re-subscribed to nothing. A chart request `previous` had not
+    // answered yet is re-issued here (the stopped stream drops its late answer).
     void adopt_subscriptions(const AccountDataStream& previous);
 
     // --- Symbol management (multi-consumer) ---
@@ -79,7 +82,16 @@ class AccountDataStream : public QObject {
     QString selected_symbol() const { return selected_symbol_; }
 
     // --- On-demand fetches (for chart, orderbook, time & sales) ---
+    // Chart history, "latest request wins": every call is honoured (a call made
+    // while one is in flight is queued, the newest replacing any older queued one,
+    // and issued when the in-flight one answers), and only the answer for the
+    // NEWEST request is emitted — candles_fetched + candles_for_symbol on success,
+    // candles_failed on failure. Answers for a symbol/timeframe the caller has since
+    // moved off are dropped. Main thread only.
     void fetch_candles(const QString& symbol, const QString& timeframe);
+    // Depth / tape for `symbol`: orderbook_fetched + orderbook_for_symbol (resp.
+    // time_sales_fetched + time_sales_for_symbol) on success, orderbook_failed
+    // (resp. time_sales_failed) when nothing could be fetched.
     void fetch_orderbook(const QString& symbol);
     void fetch_time_sales(const QString& symbol);
     void fetch_latest_trade(const QString& symbol);
@@ -128,6 +140,22 @@ class AccountDataStream : public QObject {
                               const QVector<int>& ask_orders);
     void time_sales_for_symbol(const QString& account_id, const QString& symbol, const QVector<BrokerTrade>& trades);
     void latest_trade_for_symbol(const QString& account_id, const QString& symbol, const BrokerTrade& trade);
+
+    // Symbol + timeframe-tagged twin of candles_fetched, emitted right after it, for
+    // the newest fetch_candles() request only. `symbol` / `timeframe` are exactly
+    // the strings that request passed, so a consumer compares them with its own
+    // selection and drops anything else.
+    void candles_for_symbol(const QString& account_id, const QString& symbol, const QString& timeframe,
+                            const QVector<BrokerCandle>& candles);
+    // The newest fetch_candles() request failed (the broker refused it, returned no
+    // bars, the session expired, ...). `reason` is user-readable: the broker's own
+    // error text, an expired session spelled out, or "no price history".
+    void candles_failed(const QString& account_id, const QString& symbol, const QString& timeframe,
+                        const QString& reason);
+    // fetch_orderbook() / fetch_time_sales() for `symbol` produced nothing; same
+    // `reason` rules as candles_failed.
+    void orderbook_failed(const QString& account_id, const QString& symbol, const QString& reason);
+    void time_sales_failed(const QString& account_id, const QString& symbol, const QString& reason);
     // Results of fetch_auctions() / fetch_condition_codes(). `codes` maps
     // condition code → description (EquityBottomPanel::set_condition_codes shape).
     void auctions_fetched(const QString& account_id, const QString& symbol, const QVector<BrokerAuction>& auctions);
@@ -144,6 +172,13 @@ class AccountDataStream : public QObject {
     // thread before touching AccountManager / emitting signals. No-op if the
     // error does not indicate token expiry. Returns true if expiry was handled.
     bool check_token_expiry(const QString& error);
+
+    // --- Chart history (see fetch_candles) ---
+    void issue_candles(const LatestRequestGate::Ticket& ticket);
+    void on_candles_answer(quint64 ticket_id, const MarketDataKey& key, bool ok, const QVector<BrokerCandle>& candles,
+                           const QString& error);
+    void on_candle_gate_timer();
+    void arm_candle_gate_timer();
 
     // --- Async fetch methods (all follow P8: QPointer + QtConcurrent + QueuedConnection) ---
     void async_fetch_quote();
@@ -209,9 +244,14 @@ class AccountDataStream : public QObject {
     BrokerFunds funds_;
     QHash<QString, BrokerQuote> quote_cache_;
 
+    // Chart history: latest-request-wins gate + its clock (main thread only). The
+    // timer wakes a request queued behind one that went silent (gate abandonment).
+    LatestRequestGate candle_gate_;
+    QElapsedTimer request_clock_;
+    QTimer* candle_gate_timer_ = nullptr;
+
     // Fetch guards
     std::atomic<bool> quote_fetching_{false};
-    std::atomic<bool> candles_fetching_{false};
     std::atomic<bool> portfolio_fetching_{false};
     std::atomic<int> ws_tick_count_{0};
 };

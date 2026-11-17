@@ -2,17 +2,19 @@
 
 #include "core/logging/Logger.h"
 #include "screens/equity_trading/EquityTypes.h"
+#include "services/markets/FxRateService.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
+#include <QCheckBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
-#include <QLocale>
 #include <QMetaObject>
 #include <QPointer>
 #include <QPushButton>
@@ -27,6 +29,8 @@ namespace fincept::screens {
 using trading::OrderSide;
 using trading::OrderType;
 using trading::UnifiedOrder;
+namespace fmt = fincept::ui::formatting;
+namespace fx = fincept::services::fx;
 
 namespace {
 
@@ -53,8 +57,14 @@ QString type_str(OrderType t) {
     return QStringLiteral("MARKET");
 }
 
-QString money(double v) {
-    return QLocale(QLocale::English).toString(v, 'f', 2);
+// The broker account's currency (its profile's): margin and the converted value are in it.
+QString account_currency_of(const QString& account_id) {
+    if (account_id.isEmpty())
+        return {};
+    const auto acct = trading::AccountManager::instance().get_account(account_id);
+    if (auto* broker = trading::BrokerRegistry::instance().get(acct.broker_id))
+        return broker->profile().currency;
+    return {};
 }
 
 bool needs_limit(OrderType t) {
@@ -68,8 +78,23 @@ bool needs_trigger(OrderType t) {
 } // namespace
 
 OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& order, const QString& account_label,
-                                       double ref_price, const QString& account_id)
+                                       double ref_price, const QString& account_id, const QStringList& sim_notes,
+                                       const QString& price_currency, int price_digits)
     : QDialog(parent), order_(order), account_id_(account_id) {
+    const bool simulated = !sim_notes.isEmpty();
+
+    // Every price below is in the instrument's currency as quoted (never converted);
+    // amounts (qty x price) in its major unit; margin in the account's currency.
+    account_currency_ = account_currency_of(account_id_);
+    const QString px_ccy =
+        !price_currency.isEmpty() ? price_currency : equity::exchange_currency(order.exchange, account_currency_);
+    fmt::InstrumentFmt px_fmt = fmt::instrument_for_symbol(order.symbol, px_ccy);
+    if (price_digits >= 0)
+        px_fmt.decimals = price_digits;
+    auto px = [&px_fmt](double v) { return fmt::price_with_symbol(v, px_fmt); };
+    auto value = [&px_ccy](double v) {
+        return fmt::money(fmt::to_major_units(v, px_ccy), fmt::major_currency(px_ccy));
+    };
     setWindowTitle(tr("Confirm Order"));
     setModal(true);
     setMinimumWidth(430);
@@ -91,27 +116,37 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
     root->setSpacing(10);
 
     // ── Banner: LIVE MONEY vs PAPER ──────────────────────────────────────────
-    auto* banner = new QLabel(is_live ? tr("\xe2\x9a\xa0  LIVE ORDER \xe2\x80\x94 real money. Review before sending.")
-                                      : tr("PAPER ORDER \xe2\x80\x94 simulated. Review before sending."));
+    auto* banner = new QLabel(is_live     ? tr("\xe2\x9a\xa0  LIVE ORDER \xe2\x80\x94 real money. Review before sending.")
+                              : simulated ? tr("PAPER ORDER \xe2\x80\x94 a SIMULATED fill on DELAYED public prices. "
+                                               "Nothing is sent to a broker or an exchange.")
+                                          : tr("PAPER ORDER \xe2\x80\x94 simulated. Review before sending."));
     banner->setWordWrap(true);
     banner->setStyleSheet(QString("color:%1;font-weight:700;")
-                              .arg(is_live ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
+                              .arg(is_live ? ui::colors::DANGER() : ui::colors::SUCCESS()));
     root->addWidget(banner);
+    for (const QString& note : sim_notes) {
+        if (note.trimmed().isEmpty())
+            continue;
+        auto* n = new QLabel(note);
+        n->setWordWrap(true);
+        n->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
+        root->addWidget(n);
+    }
 
     // ── Headline: SIDE QTY SYMBOL @ price ────────────────────────────────────
-    const QString px_headline = needs_limit(order.order_type) ? money(order.price) : tr("MARKET");
+    const QString px_headline = needs_limit(order.order_type) ? px(order.price) : tr("MARKET");
     auto* headline = new QLabel(QStringLiteral("%1  %2  %3  @ %4")
                                     .arg(side)
                                     .arg(equity::format_quantity(order.quantity))
                                     .arg(order.symbol)
                                     .arg(px_headline));
-    headline->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;").arg(side_color));
+    headline->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(1) + "px;font-weight:700;").arg(side_color));
     root->addWidget(headline);
 
     auto* rule = new QFrame;
     rule->setFrameShape(QFrame::HLine);
     rule->setFixedHeight(1);
-    rule->setStyleSheet(QString("background:%1;border:none;").arg(ui::colors::BORDER_DIM()));
+    rule->setStyleSheet(QString("background:%1;border:none;").arg(ui::colors::BORDER_MED()));
     root->addWidget(rule);
 
     // ── Detail grid — every field that reaches the broker ────────────────────
@@ -142,24 +177,51 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
     add_row(tr("Quantity"), equity::format_quantity(order.quantity));
     add_row(tr("Type"), type_str(order.order_type));
     if (needs_limit(order.order_type))
-        add_row(tr("Limit price"), money(order.price));
+        add_row(tr("Limit price"), px(order.price));
     if (needs_trigger(order.order_type) || order.stop_price > 0)
-        add_row(tr("Trigger"), money(order.stop_price));
+        add_row(tr("Trigger"), px(order.stop_price));
     if (order.stop_loss > 0)
-        add_row(tr("Stop loss"), money(order.stop_loss), ui::colors::NEGATIVE());
+        add_row(tr("Stop loss"), px(order.stop_loss), ui::colors::NEGATIVE());
     if (order.take_profit > 0)
-        add_row(tr("Take profit"), money(order.take_profit), ui::colors::POSITIVE());
+        add_row(tr("Take profit"), px(order.take_profit), ui::colors::POSITIVE());
     add_row(tr("Validity"), order.validity.isEmpty() ? QStringLiteral("DAY") : order.validity);
     if (ref_price > 0)
-        add_row(tr("Reference LTP"), money(ref_price));
+        add_row(tr("Reference LTP"), px(ref_price));
+    // Name the currency even where the symbol alone is ambiguous ("$" = USD / CAD / AUD ...).
+    if (!px_ccy.isEmpty())
+        add_row(tr("Price currency"), px_ccy == fmt::major_currency(px_ccy)
+                                          ? px_ccy
+                                          : tr("%1 (%2)").arg(px_ccy, fmt::currency_name(px_ccy)));
 
     // Estimated value uses the price that will actually be paid: the limit for a
     // limit order, the reference LTP for a market order. (Previously this always
     // used the LTP, so a limit order's estimate was simply wrong.)
     const double est_px = needs_limit(order.order_type) && order.price > 0 ? order.price : ref_price;
-    if (est_px > 0)
-        add_row(tr("Est. value"), money(est_px * order.quantity));
-    margin_value_ = add_row(tr("Est. margin"), is_live ? tr("Loading\xe2\x80\xa6") : QStringLiteral("\xe2\x80\x94"));
+    if (est_px > 0) {
+        const double est = est_px * order.quantity;
+        add_row(tr("Est. value"), value(est));
+        // The account is in another currency: the value there at the current rate, with
+        // the rate and its time. No rate -> "—", never taken as 1:1.
+        if (!account_currency_.isEmpty() && !px_ccy.isEmpty() &&
+            fmt::major_currency(px_ccy) != fmt::major_currency(account_currency_)) {
+            const fmt::ConvertedMoney c = fx::convert_for_display(est, px_ccy, account_currency_);
+            const QString acct_ccy = fmt::major_currency(account_currency_);
+            if (c.ok()) {
+                QLabel* conv = add_row(tr("Est. value in %1").arg(acct_ccy),
+                                       QStringLiteral("\xe2\x89\x88 ") + fmt::money(c.amount, c.currency));
+                conv->setToolTip(tr("At the current rate; the broker converts at its own rate."));
+                const QString note = fmt::fx_note(c);
+                if (!note.isEmpty())
+                    add_row(tr("FX rate"), note);
+            } else {
+                add_row(tr("Est. value in %1").arg(acct_ccy),
+                        tr("%1 (no %2\xe2\x86\x92%3 rate yet)")
+                            .arg(fmt::placeholder(), fmt::major_currency(px_ccy), acct_ccy),
+                        ui::colors::WARNING());
+            }
+        }
+    }
+    margin_value_ = add_row(tr("Est. margin"), is_live ? tr("Loading\xe2\x80\xa6") : fmt::placeholder());
     root->addLayout(grid);
 
     // ── Fat-finger guard ─────────────────────────────────────────────────────
@@ -176,9 +238,9 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
         if (check_px > 0) {
             const double dev = std::fabs(check_px - ref_price) / ref_price * 100.0;
             if (dev >= kFatFingerPct) {
-                auto* warn = new QLabel(tr("\xe2\x9a\xa0  The %1 (%2) is %3% away from the last traded price (%4). "
+                auto* warn = new QLabel(tr("\xe2\x9a\xa0  The %1 (%2) is %3 away from the last traded price (%4). "
                                            "Check for a typo before sending.")
-                                            .arg(what, money(check_px), QString::number(dev, 'f', 1), money(ref_price)));
+                                            .arg(what, px(check_px), fmt::pct(dev, 1, false), px(ref_price)));
                 warn->setWordWrap(true);
                 warn->setStyleSheet(QString("color:%1;font-weight:700;").arg(ui::colors::WARNING()));
                 root->addWidget(warn);
@@ -188,18 +250,25 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
 
     // ── Buttons ──────────────────────────────────────────────────────────────
     auto* btns = new QHBoxLayout;
+    if (simulated) {
+        skip_box_ = new QCheckBox(tr("Don't ask again for paper orders"));
+        skip_box_->setProperty("fincept_agent_risk", "account"); // turns off future order confirmations
+        btns->addWidget(skip_box_);
+    }
     btns->addStretch(1);
     auto* cancel = new QPushButton(tr("CANCEL"));
     cancel->setObjectName(QStringLiteral("orderConfirmCancel"));
     cancel->setCursor(Qt::PointingHandCursor);
     cancel->setAccessibleName(tr("Cancel order"));
-    send_btn_ = new QPushButton(is_buy ? tr("SEND BUY ORDER") : tr("SEND SELL ORDER"));
+    send_btn_ = new QPushButton(simulated ? (is_buy ? tr("SIMULATE BUY") : tr("SIMULATE SELL"))
+                                          : (is_buy ? tr("SEND BUY ORDER") : tr("SEND SELL ORDER")));
     send_btn_->setObjectName(QStringLiteral("orderConfirmSend"));
+    send_btn_->setProperty("fincept_agent_risk", "order");
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setAccessibleName(tr("Send order to broker"));
-    send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:#000;font-weight:700;"
+    send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;font-weight:700;"
                                      "padding:6px 20px;border:none;}")
-                                 .arg(side_color));
+                                 .arg(side_color, ui::colors::TEXT_ON_ACCENT()));
     // CANCEL is the default and holds focus: a stray Enter (the trader just
     // pressed Enter in the quantity box) must never fire a live order. The send
     // button requires a deliberate click, Space on focus, or Alt+S.
@@ -255,7 +324,8 @@ void OrderConfirmDialog::start_margin_fetch() {
                     return;
                 self->margin_done_ = true;
                 if (resp.success && resp.data.has_value() && resp.data->error.isEmpty()) {
-                    self->margin_value_->setText(money(resp.data->total));
+                    // BrokerMargin is in the account's currency (empty = unknown: no unit, never a guess).
+                    self->margin_value_->setText(fmt::money(resp.data->total, self->account_currency_));
                 } else {
                     self->margin_value_->setText(QStringLiteral("\xe2\x80\x94"));
                     self->margin_value_->setToolTip(resp.error.isEmpty() ? tr("Margin unavailable") : resp.error);
@@ -275,9 +345,24 @@ void OrderConfirmDialog::start_margin_fetch() {
 }
 
 bool OrderConfirmDialog::confirm(QWidget* parent, const UnifiedOrder& order, const QString& account_label,
-                                 double ref_price, const QString& account_id) {
-    OrderConfirmDialog dlg(parent, order, account_label, ref_price, account_id);
+                                 double ref_price, const QString& account_id, const QString& price_currency,
+                                 int price_digits) {
+    OrderConfirmDialog dlg(parent, order, account_label, ref_price, account_id, {}, price_currency, price_digits);
     return dlg.exec() == QDialog::Accepted;
+}
+
+bool OrderConfirmDialog::confirm_simulated(QWidget* parent, const UnifiedOrder& order, const QString& account_label,
+                                           double ref_price, const QString& price_note, const QString& outcome_note,
+                                           const QString& cash_note, bool* skip_next, const QString& price_currency,
+                                           int price_digits) {
+    QStringList notes;
+    notes << price_note << outcome_note << cash_note;
+    // No account id: the margin call to a broker never applies to a simulated order.
+    OrderConfirmDialog dlg(parent, order, account_label, ref_price, QString(), notes, price_currency, price_digits);
+    const bool ok = dlg.exec() == QDialog::Accepted;
+    if (ok && skip_next && dlg.skip_box_)
+        *skip_next = dlg.skip_box_->isChecked();
+    return ok;
 }
 
 } // namespace fincept::screens

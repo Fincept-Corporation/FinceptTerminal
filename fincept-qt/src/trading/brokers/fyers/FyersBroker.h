@@ -41,6 +41,9 @@ class FyersBroker : public IBroker {
             .supports_intraday = true,
             .supports_bracket_order = true,
             .supports_cover_order = true,
+            // place_order sends stopLoss / takeProfit, which Fyers honours only for BO (both)
+            // and CO (stopLoss) — not for INTRADAY / CNC / MARGIN.
+            .sl_tp_on_bracket_products = true,
             .has_native_paper = false,
             .default_paper_balance = 1000000.0,
             // Nifty 50 constituents (NSE large-caps). Plain symbols; the stream's

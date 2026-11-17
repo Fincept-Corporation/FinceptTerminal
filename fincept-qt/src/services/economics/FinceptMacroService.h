@@ -54,8 +54,17 @@ class FinceptMacroService : public QObject {
     /// The `data` object last cached for this exact query, if any — no request, no credits.
     std::optional<QJsonObject> cached_payload(const QString& endpoint, const Params& params) const;
 
-    /// Credits the backend charges for one non-cached call (UI hint; the server is authoritative).
+    /// LIST price in credits of one non-cached call (the backend defaults; the server is authoritative).
     static double credit_cost(const QString& endpoint);
+    /// The billing category of every /macro call in the server's plan table (billing::PlanAccess).
+    static QString plan_category();
+    /// What one non-cached call costs THIS account: credit_cost() through the plan
+    /// (PlanAccess::effective_cost — 0 when the plan includes macro data). The list price when
+    /// the server has sent no plan table. Use it for every price shown or balance check.
+    static double effective_credit_cost(const QString& endpoint);
+    /// The account's plan includes macro data at no credit cost (false without a plan table):
+    /// billed views may then load by themselves, like free ones. Re-read on PlanAccess::changed.
+    static bool included_in_plan();
     /// How long a response is reused without asking the server again.
     static int fresh_seconds(const QString& endpoint);
 

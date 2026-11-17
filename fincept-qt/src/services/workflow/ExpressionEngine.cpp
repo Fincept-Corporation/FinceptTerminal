@@ -399,7 +399,75 @@ bool ExpressionEngine::evaluate_condition(const QString& expression, const QJson
     return false;
 }
 
+bool ExpressionEngine::evaluate_condition(const QString& expression, const QJsonValue& data, QString* error) {
+    const QString syntax = condition_syntax_error(expression);
+    if (!syntax.isEmpty()) {
+        if (error)
+            *error = syntax;
+        return false;
+    }
+    return evaluate_condition(expression, data);
+}
+
+QString ExpressionEngine::condition_syntax_error(const QString& expression) {
+    QString expr = expression.trimmed();
+    if (expr.startsWith(QLatin1String("={{")) && expr.endsWith(QLatin1String("}}")))
+        expr = expr.mid(3, expr.length() - 5).trimmed();
+    else if (expr.startsWith(QLatin1String("{{")) && expr.endsWith(QLatin1String("}}")) &&
+             expr.count(QLatin1String("{{")) == 1)
+        expr = expr.mid(2, expr.length() - 4).trimmed();
+    if (expr.isEmpty())
+        return {};
+
+    // `name(` not preceded by '.', i.e. a function call rather than a helper method on a path
+    // (prices.sum() is supported, abs(change) is not).
+    static const QRegularExpression call_re(QStringLiteral(R"((^|[^.\w$])([A-Za-z_]\w*)\s*\()"));
+    const QString supported = QStringLiteral(
+        "supported: field comparisons (> < >= <= == !=), contains / startsWith / endsWith, && and ||");
+
+    for (const QString& or_part : expr_eng_split_logic(expr, QStringLiteral("||"))) {
+        for (const QString& and_part : expr_eng_split_logic(or_part, QStringLiteral("&&"))) {
+            const QString clause = and_part.trimmed();
+            if (clause.isEmpty())
+                continue;
+            // Quoted text masked out: operators inside "..." are data.
+            QString masked = clause;
+            QChar quote;
+            for (int i = 0; i < masked.size(); ++i) {
+                const QChar c = masked[i];
+                if (!quote.isNull()) {
+                    if (c == quote)
+                        quote = QChar();
+                    masked[i] = QLatin1Char('x');
+                } else if (c == QLatin1Char('"') || c == QLatin1Char('\'')) {
+                    quote = c;
+                    masked[i] = QLatin1Char('x');
+                }
+            }
+            QString why;
+            if (masked.startsWith(QLatin1Char('!')) && !masked.startsWith(QLatin1String("!=")))
+                why = QStringLiteral("'!' (not) is not supported — write `field == false`");
+            else if (masked.startsWith(QLatin1Char('(')))
+                why = QStringLiteral("parentheses are not supported — use && / || without grouping");
+            else if (masked.contains(QLatin1Char('*')) || masked.contains(QLatin1Char('/')) ||
+                     masked.contains(QLatin1Char('+')) || masked.contains(QLatin1String(" - ")))
+                why = QStringLiteral("arithmetic (+ - * /) is not supported — compute the value in an "
+                                     "upstream node and compare the field");
+            else if (call_re.match(masked).hasMatch())
+                why = QStringLiteral("function calls are not supported (helpers like prices.sum() are)");
+            if (!why.isEmpty())
+                return QString("Cannot evaluate '%1': %2; %3").arg(clause, why, supported);
+        }
+    }
+    return {};
+}
+
 QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value, const QJsonObject& context) {
+    return evaluate(param_value, context, nullptr);
+}
+
+QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value, const QJsonObject& context,
+                                      QStringList* missing) {
     if (!param_value.isString())
         return param_value;
 
@@ -428,10 +496,15 @@ QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value, const QJson
 
         // Qt's QString::number(double) keeps 6 significant digits ("1.23457e+06" for a
         // volume of 1234567); numbers are rendered at full precision instead, and
-        // objects / arrays as JSON rather than the old literal "null".
-        const QString replacement = (resolved.isNull() || resolved.isUndefined())
-                                        ? QStringLiteral("null")
-                                        : value_to_string(resolved);
+        // objects / arrays as JSON. A placeholder with no value becomes empty text and is
+        // reported — it used to print the word "null" into the message ("AAPL is at null").
+        QString replacement;
+        if (resolved.isNull() || resolved.isUndefined()) {
+            if (missing && !missing->contains(expr))
+                missing->append(expr);
+        } else {
+            replacement = value_to_string(resolved);
+        }
 
         result.replace(match.captured(0), replacement);
     }

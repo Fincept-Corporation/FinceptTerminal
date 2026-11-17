@@ -29,6 +29,10 @@
 #include "trading/brokers/upstox/UpstoxBroker.h"
 #include "trading/brokers/zerodha/ZerodhaBroker.h"
 
+#include <QCoreApplication>
+
+#include <utility>
+
 namespace fincept::trading {
 
 // ============================================================================
@@ -46,35 +50,54 @@ static QString cred_prefix(const QString& broker_id, const QString& additional_d
     return QString("broker.%1.%2.").arg(broker_id, env);
 }
 
-BrokerCredentials IBroker::load_credentials() const {
-    return load_credentials_for_env("");
+BrokerCredentials IBroker::load_credentials(QString* read_error) const {
+    return load_credentials_for_env("", read_error);
 }
 
-BrokerCredentials IBroker::load_credentials_for_env(const QString& env) const {
+BrokerCredentials IBroker::load_credentials_for_env(const QString& env, QString* read_error) const {
     BrokerCredentials creds;
     creds.broker_id = broker_id_str(id());
     const bool hnp = profile().has_native_paper;
     // env="" means: try to find whichever env has a key stored (live first)
     auto& secure = SecureStorage::instance();
+    QString failure; // first unreadable field: the whole load is reported as failed
+    QString failed_key;
 
+    // true = this env decided the answer (a key is stored, or a read failed) — stop there.
     auto try_load = [&](const QString& e) {
         QString prefix = cred_prefix(creds.broker_id, e, hnp);
-        auto key_r = secure.retrieve(prefix + "api_key");
-        if (!key_r.is_ok())
+        auto fail = [&](const SecretRead& r, const QString& key) {
+            if (failure.isEmpty()) {
+                failure = QCoreApplication::translate("IBroker", "Could not read the stored credential: %1.")
+                              .arg(r.reason());
+                failed_key = key;
+            }
+        };
+        const SecretRead key_r = secure.read(prefix + "api_key");
+        if (key_r.failed()) {
+            // Unknown whether this env holds a key: never fall through to the other
+            // env's credentials (live unreadable must not quietly become paper).
+            fail(key_r, prefix + "api_key");
+            return true;
+        }
+        if (!key_r.found())
             return false;
-        creds.api_key = key_r.value();
-        auto secret_r = secure.retrieve(prefix + "api_secret");
-        auto token_r = secure.retrieve(prefix + "access_token");
-        auto user_r = secure.retrieve(prefix + "user_id");
-        auto extra_r = secure.retrieve(prefix + "additional_data");
-        if (secret_r.is_ok())
-            creds.api_secret = secret_r.value();
-        if (token_r.is_ok())
-            creds.access_token = token_r.value();
-        if (user_r.is_ok())
-            creds.user_id = user_r.value();
-        if (extra_r.is_ok())
-            creds.additional_data = extra_r.value();
+        creds.api_key = key_r.value;
+        const SecretRead secret_r = secure.read(prefix + "api_secret");
+        const SecretRead token_r = secure.read(prefix + "access_token");
+        const SecretRead user_r = secure.read(prefix + "user_id");
+        const SecretRead extra_r = secure.read(prefix + "additional_data");
+        for (const auto& [r, name] : {std::pair<const SecretRead*, const char*>{&secret_r, "api_secret"},
+                                      {&token_r, "access_token"},
+                                      {&user_r, "user_id"},
+                                      {&extra_r, "additional_data"}}) {
+            if (r->failed())
+                fail(*r, prefix + QLatin1String(name));
+        }
+        creds.api_secret = secret_r.value;
+        creds.access_token = token_r.value;
+        creds.user_id = user_r.value;
+        creds.additional_data = extra_r.value;
         return true;
     };
 
@@ -87,6 +110,22 @@ BrokerCredentials IBroker::load_credentials_for_env(const QString& env) const {
     } else {
         try_load("");
     }
+
+    const bool failing = !failure.isEmpty();
+    LOG_TRANSITION("BrokerRegistry", QStringLiteral("cred_read|") + creds.broker_id, failing,
+                   failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Broker credentials could not be read; returned empty, nothing written",
+                                  {{"broker", creds.broker_id}, {"key", failed_key}})
+                           : logf("Broker credentials readable again", {{"broker", creds.broker_id}}));
+    if (failing) {
+        // Partial credentials are worse than none: a caller would act on a key without
+        // its secret / token. Empty set + the reason.
+        const QString broker_id = creds.broker_id;
+        creds = BrokerCredentials{};
+        creds.broker_id = broker_id;
+    }
+    if (read_error)
+        *read_error = failure;
     return creds;
 }
 
@@ -146,7 +185,7 @@ void BrokerRegistry::register_all() {
     brokers_["metatrader4"] = std::make_unique<MetaApiBroker>();   // via metaapi.cloud
     brokers_["metatrader5"] = std::make_unique<TickerAllBroker>(); // via tickerall.com
 
-    LOG_INFO("BrokerRegistry", QString("Registered %1 brokers").arg(brokers_.size()));
+    LOG_DEBUG("BrokerRegistry", QString("Registered %1 brokers").arg(brokers_.size()));
 }
 
 IBroker* BrokerRegistry::get(const QString& broker_id) const {

@@ -1,46 +1,28 @@
 
-"""Portfolio Active Management Module
-===============================
+"""Active management analytics: value added and its significance, information ratio, tracking risk,
+Fundamental Law of Active Management, multifactor / APT helpers, manager selection.
 
-Active portfolio management strategies
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Portfolio holdings and transaction history
-  - Asset price data and market returns
-  - Benchmark indices and market data
-  - Investment policy statements and constraints
-  - Risk tolerance and preference parameters
-
-OUTPUT:
-  - Portfolio performance metrics and attribution
-  - Risk analysis and diversification metrics
-  - Rebalancing recommendations and optimization
-  - Portfolio analytics reports and visualizations
-  - Investment strategy recommendations
-
-PARAMETERS:
-  - optimization_method: Portfolio optimization method (default: 'mean_variance')
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
-  - max_weight: Maximum single asset weight (default: 0.10)
-  - benchmark: Portfolio benchmark index (default: 'market_index')
-
-CLI: python active_management.py <command> <json>   value_added | information_ratio | tracking_risk
-  {portfolio_returns: [...], benchmark_returns: [...] (, weights)}; comprehensive_analysis {portfolio_data,
-  benchmark_data}; manager_selection.
+CLI (one JSON object on stdout; {"error": ...} and exit 1 on failure). Positional or one JSON object:
+  value_added        {"portfolio_returns": [...], "benchmark_returns": [...], "weights": ...}
+                     weights (optional) = {"portfolio_weights", "benchmark_weights", "portfolio_returns",
+                     "benchmark_returns"} as {sector: value} for a Brinson-Fachler attribution
+  information_ratio  {"portfolio_returns": [...], "benchmark_returns": [...]}
+  tracking_risk      {"portfolio_returns": [...], "benchmark_returns": [...]}
+  comprehensive_analysis {"portfolio_data": {"returns": [...], "fundamental_law_inputs": {...}},
+                          "benchmark_data": {"returns": [...]}}
+  manager_selection  {"manager_candidates": [{"manager_id", "returns", "benchmark_returns",
+                                              "track_record_years", "aum_billions"}]}
+Returns are aligned daily fractions; annualised with 252 periods (mean x 252, stdev x sqrt(252)).
 """
 
-
-
-import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Union, Tuple, Callable
 from dataclasses import dataclass
 from enum import Enum
 import warnings
 
-from config import MathConstants, validate_returns, ERROR_MESSAGES
+import numpy as np
+
+from config import MathConstants, validate_returns, ERROR_MESSAGES, CliError, return_series, run_cli
 from math_engine import StatisticalCalculations, PerformanceCalculations
 
 
@@ -77,34 +59,27 @@ class ValueAddedMeasurement:
     @staticmethod
     def calculate_value_added(portfolio_returns: np.ndarray,
                               benchmark_returns: np.ndarray,
-                              portfolio_weights: Optional[np.ndarray] = None) -> Dict:
-        """Calculate value added by active management"""
+                              portfolio_weights: Optional[Union[np.ndarray, Dict]] = None) -> Dict:
+        """Calculate value added by active management (aligned periodic returns)"""
 
         if not validate_returns(portfolio_returns) or not validate_returns(benchmark_returns):
             raise ValueError(ERROR_MESSAGES["insufficient_data"])
+        if len(portfolio_returns) != len(benchmark_returns):
+            raise ValueError(f"portfolio and benchmark returns must have the same length "
+                             f"({len(portfolio_returns)} vs {len(benchmark_returns)})")
 
-        # Active returns (excess returns over benchmark)
-        active_returns = np.array(portfolio_returns) - np.array(benchmark_returns)
+        active_returns = np.array(portfolio_returns, dtype=float) - np.array(benchmark_returns, dtype=float)
 
-        # Basic value added metrics
         mean_active_return = np.mean(active_returns)
         tracking_error = np.std(active_returns, ddof=1)
 
-        # Annualize metrics
         annualized_active_return = mean_active_return * MathConstants.TRADING_DAYS_YEAR
         annualized_tracking_error = tracking_error * MathConstants.SQRT_TRADING_DAYS
 
-        # Information ratio
-        information_ratio = mean_active_return / tracking_error if tracking_error > 0 else 0
+        information_ratio = mean_active_return / tracking_error if tracking_error > 0 else float("nan")
         annualized_ir = information_ratio * MathConstants.SQRT_TRADING_DAYS
 
-        # Hit rate (percentage of periods with positive active returns)
         hit_rate = np.sum(active_returns > 0) / len(active_returns)
-
-        # Value added decomposition
-        value_decomposition = ValueAddedMeasurement._decompose_value_added(
-            portfolio_returns, benchmark_returns, portfolio_weights
-        )
 
         return {
             "active_return_daily": mean_active_return,
@@ -114,7 +89,9 @@ class ValueAddedMeasurement:
             "information_ratio_daily": information_ratio,
             "information_ratio_annualized": annualized_ir,
             "hit_rate": hit_rate,
-            "value_added_decomposition": value_decomposition,
+            "value_added_decomposition": ValueAddedMeasurement._decompose_value_added(
+                portfolio_returns, benchmark_returns, portfolio_weights
+            ),
             "statistical_significance": ValueAddedMeasurement._test_statistical_significance(
                 active_returns
             )
@@ -123,56 +100,97 @@ class ValueAddedMeasurement:
     @staticmethod
     def _decompose_value_added(portfolio_returns: np.ndarray,
                                benchmark_returns: np.ndarray,
-                               portfolio_weights: Optional[np.ndarray]) -> Dict:
-        """Decompose value added into sources"""
+                               portfolio_weights: Optional[Union[np.ndarray, Dict]]) -> Dict:
+        """Brinson-Fachler attribution when sector data is supplied; otherwise none.
 
-        # Simplified decomposition - in practice would need detailed holdings data
-        total_active_return = np.mean(portfolio_returns) - np.mean(benchmark_returns)
-
-        # Estimate allocation vs selection effects (simplified)
-        # This would require sector/security level data in practice
-        estimated_allocation_effect = total_active_return * 0.3  # Rough estimate
-        estimated_selection_effect = total_active_return * 0.7  # Rough estimate
-
+        portfolio_weights may be {"portfolio_weights", "benchmark_weights", "portfolio_returns",
+        "benchmark_returns"}, each {sector: value} for one period. Return series alone cannot be split
+        into allocation and selection (the old block reported a fixed 30 % / 70 % split).
+        """
+        keys = ("portfolio_weights", "benchmark_weights", "portfolio_returns", "benchmark_returns")
+        if isinstance(portfolio_weights, dict) and all(isinstance(portfolio_weights.get(k), dict) for k in keys):
+            return brinson_fachler(*(portfolio_weights[k] for k in keys))
         return {
-            "total_active_return": total_active_return * MathConstants.TRADING_DAYS_YEAR,
-            "estimated_allocation_effect": estimated_allocation_effect * MathConstants.TRADING_DAYS_YEAR,
-            "estimated_selection_effect": estimated_selection_effect * MathConstants.TRADING_DAYS_YEAR,
-            "interaction_effect": 0.0,  # Would calculate with detailed data
-            "note": "Decomposition requires detailed holdings data for precision"
+            "total_active_return": (np.mean(portfolio_returns) - np.mean(benchmark_returns))
+            * MathConstants.TRADING_DAYS_YEAR,
+            "allocation_effect": None,
+            "selection_effect": None,
+            "interaction_effect": None,
+            "note": "allocation / selection need sector weights and returns for portfolio and benchmark "
+                    "(pass weights = {portfolio_weights, benchmark_weights, portfolio_returns, "
+                    "benchmark_returns}, each {sector: value})"
         }
 
     @staticmethod
     def _test_statistical_significance(active_returns: np.ndarray) -> Dict:
-        """Test statistical significance of active returns"""
+        """t-test of mean active return = 0: t = mean / (stdev / sqrt(n)), Student-t with n-1 df,
+        two-sided p-value (the 1.645 / 1.96 / 2.576 normal cut-offs overstated significance for
+        short track records)."""
+        from scipy.special import stdtr  # Student-t CDF; far lighter to import than scipy.stats
 
         mean_active = np.mean(active_returns)
         std_active = np.std(active_returns, ddof=1)
         n_periods = len(active_returns)
+        standard_error = std_active / np.sqrt(n_periods)
 
-        # T-statistic for testing if mean active return is significantly different from zero
-        t_statistic = mean_active / (std_active / np.sqrt(n_periods)) if std_active > 0 else 0
+        if not std_active > 0:
+            return {"t_statistic": None, "p_value": None, "significance_level": "Undefined (no active risk)",
+                    "is_significant_95": None, "sample_size": n_periods, "standard_error": standard_error}
 
-        # Critical values (approximate)
-        critical_90 = 1.645
-        critical_95 = 1.96
-        critical_99 = 2.576
+        t_statistic = mean_active / standard_error
+        p_value = float(2.0 * stdtr(n_periods - 1, -abs(t_statistic)))
 
         significance_level = "Not significant"
-        if abs(t_statistic) > critical_99:
+        if p_value < 0.01:
             significance_level = "99% significant"
-        elif abs(t_statistic) > critical_95:
+        elif p_value < 0.05:
             significance_level = "95% significant"
-        elif abs(t_statistic) > critical_90:
+        elif p_value < 0.10:
             significance_level = "90% significant"
 
         return {
             "t_statistic": t_statistic,
+            "p_value": p_value,
+            "degrees_of_freedom": n_periods - 1,
             "significance_level": significance_level,
-            "is_significant_95": bool(abs(t_statistic) > critical_95),
+            "is_significant_95": bool(p_value < 0.05),
             "sample_size": n_periods,
-            "standard_error": std_active / np.sqrt(n_periods)
+            "standard_error": standard_error
         }
+
+
+def brinson_fachler(portfolio_weights: Dict[str, float], benchmark_weights: Dict[str, float],
+                    portfolio_returns: Dict[str, float], benchmark_returns: Dict[str, float]) -> Dict:
+    """Single-period Brinson-Fachler attribution by sector (weights normalised to sum 1).
+
+    allocation_i  = (wp_i - wb_i)(Rb_i - Rb)
+    selection_i   = wb_i (Rp_i - Rb_i)
+    interaction_i = (wp_i - wb_i)(Rp_i - Rb_i)       sum of all three = Rp - Rb
+    A sector one side does not hold takes the other side's sector return.
+    """
+    sectors = list(dict.fromkeys(list(portfolio_weights) + list(benchmark_weights)))
+    wp = np.array([float(portfolio_weights.get(s, 0.0)) for s in sectors])
+    wb = np.array([float(benchmark_weights.get(s, 0.0)) for s in sectors])
+    if wp.sum() <= 0 or wb.sum() <= 0:
+        raise ValueError("sector weights must sum to a positive number for portfolio and benchmark")
+    wp, wb = wp / wp.sum(), wb / wb.sum()
+    rb = np.array([float(benchmark_returns.get(s, portfolio_returns.get(s, 0.0))) for s in sectors])
+    rp = np.array([float(portfolio_returns.get(s, benchmark_returns.get(s, 0.0))) for s in sectors])
+    total_p, total_b = float(wp @ rp), float(wb @ rb)
+    allocation = (wp - wb) * (rb - total_b)
+    selection = wb * (rp - rb)
+    interaction = (wp - wb) * (rp - rb)
+    return {
+        "method": "Brinson-Fachler, single period",
+        "portfolio_return": total_p,
+        "benchmark_return": total_b,
+        "total_active_return": total_p - total_b,
+        "allocation_effect": float(allocation.sum()),
+        "selection_effect": float(selection.sum()),
+        "interaction_effect": float(interaction.sum()),
+        "by_sector": {s: {"allocation": float(a), "selection": float(b), "interaction": float(c)}
+                      for s, a, b, c in zip(sectors, allocation, selection, interaction)}
+    }
 
 
 class InformationRatioAnalysis:
@@ -181,18 +199,21 @@ class InformationRatioAnalysis:
     @staticmethod
     def calculate_information_ratio_ex_post(portfolio_returns: np.ndarray,
                                             benchmark_returns: np.ndarray) -> Dict:
-        """Calculate ex-post (realized) information ratio"""
+        """Ex-post IR = mean(active) / stdev(active, ddof=1); annualised x sqrt(252)"""
+        if len(portfolio_returns) != len(benchmark_returns):
+            raise ValueError(f"portfolio and benchmark returns must have the same length "
+                             f"({len(portfolio_returns)} vs {len(benchmark_returns)})")
+        if len(portfolio_returns) < 2:
+            raise ValueError(ERROR_MESSAGES["insufficient_data"])
 
-        active_returns = np.array(portfolio_returns) - np.array(benchmark_returns)
+        active_returns = np.array(portfolio_returns, dtype=float) - np.array(benchmark_returns, dtype=float)
 
         mean_active_return = np.mean(active_returns)
         tracking_error = np.std(active_returns, ddof=1)
 
-        # Information ratio
-        ir_daily = mean_active_return / tracking_error if tracking_error > 0 else 0
+        ir_daily = mean_active_return / tracking_error if tracking_error > 0 else float("nan")
         ir_annualized = ir_daily * MathConstants.SQRT_TRADING_DAYS
 
-        # Compare to Sharpe ratio
         portfolio_sharpe = PerformanceCalculations.sharpe_ratio(portfolio_returns)
         benchmark_sharpe = PerformanceCalculations.sharpe_ratio(benchmark_returns)
 
@@ -204,33 +225,39 @@ class InformationRatioAnalysis:
             "portfolio_sharpe_ratio": portfolio_sharpe,
             "benchmark_sharpe_ratio": benchmark_sharpe,
             "sharpe_ratio_difference": portfolio_sharpe - benchmark_sharpe,
-            "ir_quality_assessment": InformationRatioAnalysis._assess_ir_quality(ir_annualized)
+            "sharpe_basis": f"annualised, risk-free {MathConstants.DEFAULT_RISK_FREE_RATE:.0%} a year",
+            "ir_quality_assessment": (InformationRatioAnalysis._assess_ir_quality(ir_annualized)
+                                      if np.isfinite(ir_annualized) else None)
         }
 
     @staticmethod
     def calculate_information_ratio_ex_ante(expected_active_return: float,
                                             expected_tracking_error: float,
                                             forecast_horizon_months: int = 12) -> Dict:
-        """Calculate ex-ante (expected) information ratio"""
+        """Ex-ante IR = expected annual active return / expected annual tracking error.
 
-        # Convert to appropriate time horizon
-        time_factor = np.sqrt(forecast_horizon_months / 12)
+        The IR itself does not depend on the horizon; over T = months / 12 years the expected active
+        return scales with T and the tracking error with sqrt(T), so P(active return > 0) =
+        Phi(IR sqrt(T)) and a realised IR measured from T years of daily data has a standard error of
+        about sqrt((1 + IR^2 / 504) / T) (Lo 2002) - roughly 1 / sqrt(T).
+        """
+        horizon_years = forecast_horizon_months / 12.0
 
-        ex_ante_ir = expected_active_return / expected_tracking_error if expected_tracking_error > 0 else 0
-
-        # Confidence intervals for ex-ante IR
-        confidence_intervals = InformationRatioAnalysis._calculate_ir_confidence_intervals(
-            ex_ante_ir, forecast_horizon_months
-        )
+        ex_ante_ir = (expected_active_return / expected_tracking_error
+                      if expected_tracking_error > 0 else float("nan"))
 
         return {
             "ex_ante_information_ratio": ex_ante_ir,
             "expected_active_return": expected_active_return,
             "expected_tracking_error": expected_tracking_error,
             "forecast_horizon_months": forecast_horizon_months,
-            "confidence_intervals": confidence_intervals,
+            "expected_active_return_over_horizon": expected_active_return * horizon_years,
+            "tracking_error_over_horizon": expected_tracking_error * np.sqrt(horizon_years),
+            "confidence_intervals": InformationRatioAnalysis._calculate_ir_confidence_intervals(
+                ex_ante_ir, forecast_horizon_months
+            ) if np.isfinite(ex_ante_ir) else None,
             "probability_of_positive_alpha": InformationRatioAnalysis._probability_positive_alpha(
-                expected_active_return, expected_tracking_error
+                expected_active_return, expected_tracking_error, horizon_years
             )
         }
 
@@ -294,13 +321,16 @@ class InformationRatioAnalysis:
 
     @staticmethod
     def _calculate_ir_confidence_intervals(ir: float, horizon_months: int) -> Dict:
-        """Calculate confidence intervals for information ratio"""
+        """95 % interval for the IR that would be MEASURED over the horizon from daily data.
 
-        # Standard error of IR (simplified)
-        n_observations = horizon_months * 21  # Approximate daily observations
-        ir_standard_error = np.sqrt((1 + ir ** 2 / 2) / n_observations)
+        Lo (2002): the per-period ratio from n IID observations has SE sqrt((1 + SR^2 / 2) / n).
+        Annualised (x sqrt(252)) with n = 252 T: SE = sqrt((1 + IR^2 / (2 x 252)) / T). The old
+        formula used the annual IR with the DAILY count, which made the interval ~16x too narrow.
+        """
+        horizon_years = max(horizon_months, 1) / 12.0
+        ppy = MathConstants.TRADING_DAYS_YEAR
+        ir_standard_error = np.sqrt((1 + ir ** 2 / (2 * ppy)) / horizon_years)
 
-        # 95% confidence interval
         margin_of_error = 1.96 * ir_standard_error
 
         return {
@@ -313,18 +343,15 @@ class InformationRatioAnalysis:
         }
 
     @staticmethod
-    def _probability_positive_alpha(expected_return: float, tracking_error: float) -> float:
-        """Calculate probability of generating positive alpha"""
+    def _probability_positive_alpha(expected_return: float, tracking_error: float,
+                                    horizon_years: float = 1.0) -> Optional[float]:
+        """P(cumulative active return over the horizon > 0) = Phi(IR sqrt(T)), normal active returns"""
 
         if tracking_error <= 0:
-            return 0.5
+            return None
 
-        # Assuming normal distribution
-        from scipy import stats
-        z_score = expected_return / tracking_error
-        probability = stats.norm.cdf(z_score)
-
-        return probability
+        from scipy.special import ndtr  # standard normal CDF
+        return float(ndtr(expected_return / tracking_error * np.sqrt(horizon_years)))
 
 
 class FundamentalLawActiveManagement:
@@ -463,34 +490,63 @@ class FundamentalLawActiveManagement:
 
     @staticmethod
     def _decompose_ir_change(current: Dict, proposed: Dict) -> Dict:
-        """Decompose change in IR into component contributions"""
+        """Split the IR change into IC, breadth and TC parts that add up EXACTLY.
 
-        # Calculate marginal contribution of each component
-        # This is a simplified linear approximation
+        Sequential substitution in the order IC -> breadth -> TC (each part is measured with the
+        components already changed before it); the linear approximation it replaces did not add up
+        to the actual change.
+        """
+        ic0 = current.get("information_coefficient", 0.05)
+        br0 = current.get("breadth", 100)
+        tc0 = current.get("transfer_coefficient", 0.8)
 
-        current_ic = current.get("information_coefficient", 0.05)
-        current_breadth = current.get("breadth", 100)
-        current_tc = current.get("transfer_coefficient", 0.8)
+        ic1 = proposed.get("information_coefficient", 0.05)
+        br1 = proposed.get("breadth", 100)
+        tc1 = proposed.get("transfer_coefficient", 0.8)
 
-        proposed_ic = proposed.get("information_coefficient", 0.05)
-        proposed_breadth = proposed.get("breadth", 100)
-        proposed_tc = proposed.get("transfer_coefficient", 0.8)
-
-        # Marginal contributions (approximate)
-        ic_contribution = (proposed_ic - current_ic) * np.sqrt(current_breadth) * current_tc
-        breadth_contribution = current_ic * (np.sqrt(proposed_breadth) - np.sqrt(current_breadth)) * current_tc
-        tc_contribution = current_ic * np.sqrt(current_breadth) * (proposed_tc - current_tc)
+        ic_contribution = (ic1 - ic0) * np.sqrt(br0) * tc0
+        breadth_contribution = ic1 * (np.sqrt(br1) - np.sqrt(br0)) * tc0
+        tc_contribution = ic1 * np.sqrt(br1) * (tc1 - tc0)
 
         return {
             "ic_contribution": ic_contribution,
             "breadth_contribution": breadth_contribution,
             "tc_contribution": tc_contribution,
             "total_change": ic_contribution + breadth_contribution + tc_contribution,
+            "method": "sequential substitution IC -> breadth -> TC (order-dependent, sums exactly)",
             "largest_contributor": max([
                 ("IC", ic_contribution),
                 ("Breadth", breadth_contribution),
                 ("TC", tc_contribution)
             ], key=lambda x: abs(x[1]))[0]
+        }
+
+    @staticmethod
+    def _generate_strategy_recommendation(ir_change: float, component_contributions: Dict) -> str:
+        """Plain-language verdict on a proposed strategy change"""
+        driver = component_contributions.get("largest_contributor", "IC")
+        if ir_change > 0:
+            return (f"Proposed strategy raises the expected IR by {ir_change:.3f}, mainly through {driver}; "
+                    "adopt it if the higher IC / breadth / TC assumptions are credible and costs do not erode it")
+        if ir_change < 0:
+            return (f"Proposed strategy lowers the expected IR by {abs(ir_change):.3f}, mainly through {driver}; "
+                    "keep the current strategy unless other benefits justify the loss")
+        return "No change in expected IR: decide on costs, capacity and implementation risk"
+
+    @staticmethod
+    def _compare_implementation_challenges() -> Dict:
+        """Practical hurdles of each style (static reference text)"""
+        return {
+            "market_timing": [
+                "Few independent bets a year: results depend on a handful of calls",
+                "Large, concentrated tracking error around each decision",
+                "Hard to tell skill from luck without a long record"
+            ],
+            "security_selection": [
+                "Needs research coverage of a broad universe",
+                "Turnover and trading costs across many positions",
+                "Constraints (long-only, position limits) cut the transfer coefficient"
+            ]
         }
 
 
@@ -743,8 +799,8 @@ class MultifactorModels:
         """Assess market efficiency based on APT deviations"""
 
         abs_differences = np.abs(return_differences)
-        mean_abs_difference = np.mean(abs_differences)
-        max_abs_difference = np.max(abs_differences)
+        mean_abs_difference = float(np.mean(abs_differences))
+        max_abs_difference = float(np.max(abs_differences))
 
         if mean_abs_difference < 0.01:
             efficiency = "High"
@@ -761,7 +817,62 @@ class MultifactorModels:
             "assessment": assessment,
             "mean_absolute_deviation": mean_abs_difference,
             "maximum_deviation": max_abs_difference,
-            "number_of_large_deviations": np.sum(abs_differences > 0.02)
+            "number_of_large_deviations": int(np.sum(abs_differences > 0.02))
+        }
+
+    @staticmethod
+    def _analyze_return_decomposition(factor_contributions: np.ndarray, total_risk_premium: float) -> Dict:
+        """Share of each factor in the total risk premium (shares sum to 100 % when the premium != 0)"""
+        contributions = np.asarray(factor_contributions, dtype=float)
+        shares = (contributions / total_risk_premium * 100.0) if total_risk_premium != 0 else None
+        largest = int(np.argmax(np.abs(contributions))) if contributions.size else None
+        return {
+            "factor_share_of_premium_pct": ({f"factor_{i + 1}": float(s) for i, s in enumerate(shares)}
+                                            if shares is not None else None),
+            "dominant_factor": f"factor_{largest + 1}" if largest is not None else None,
+            "offsetting_factors": [f"factor_{i + 1}" for i, c in enumerate(contributions)
+                                   if np.sign(c) != np.sign(total_risk_premium) and c != 0]
+        }
+
+    @staticmethod
+    def _example_risk_decomposition(portfolio_data: Dict) -> Dict:
+        """Factor vs specific variance of the supplied portfolio, when its inputs are given.
+
+        Needs factor_exposures (k), factor_covariance (k x k) and optionally specific_variance;
+        without them there is nothing to decompose (no invented example numbers).
+        """
+        exposures = portfolio_data.get("factor_exposures") if isinstance(portfolio_data, dict) else None
+        factor_cov = portfolio_data.get("factor_covariance") if isinstance(portfolio_data, dict) else None
+        if exposures is None or factor_cov is None:
+            return {"available": False,
+                    "note": "pass factor_exposures and factor_covariance (and specific_variance) to decompose risk"}
+        x = np.asarray(exposures, dtype=float).reshape(-1)
+        f = np.atleast_2d(np.asarray(factor_cov, dtype=float))
+        if f.shape != (x.size, x.size):
+            raise ValueError("factor_covariance must be k x k for k factor_exposures")
+        factor_var = float(x @ f @ x)
+        specific_var = float(portfolio_data.get("specific_variance", 0.0))
+        total = factor_var + specific_var
+        return {
+            "available": True,
+            "factor_variance": factor_var,
+            "specific_variance": specific_var,
+            "total_volatility": float(np.sqrt(max(total, 0.0))),
+            "factor_share_pct": factor_var / total * 100.0 if total > 0 else None,
+            "factor_contributions_pct": ({f"factor_{i + 1}": float(c) for i, c in enumerate(x * (f @ x) / total * 100)}
+                                         if total > 0 else None)
+        }
+
+    @staticmethod
+    def _performance_attribution_framework() -> Dict:
+        """Factor-based return attribution (reference text)"""
+        return {
+            "model": "R_p - R_f = alpha + sum_k beta_k F_k + e",
+            "factor_return_contribution": "beta_k x F_k for each factor k",
+            "alpha": "return not explained by the factor exposures (skill or omitted factors)",
+            "active_version": "use active exposures (portfolio - benchmark) to attribute active return",
+            "requirements": ["factor return series", "portfolio factor exposures over the period",
+                             "consistent rebalancing / holding-period alignment"]
         }
 
 
@@ -774,67 +885,79 @@ class ActiveRiskTracking:
                               factor_exposures: np.ndarray,
                               factor_covariance: np.ndarray,
                               specific_risk: np.ndarray) -> Dict:
-        """Decompose active risk into factor and specific components"""
+        """Active risk^2 = x' F x (factor) + sum a_i^2 s_i^2 (specific), x = active weights . B.
 
-        # Active weights
-        active_weights = portfolio_weights - benchmark_weights
+        Factor and specific risk are assumed uncorrelated (the standard risk-model assumption). The
+        percentages are VARIANCE shares, so they add up to 100 (ratios of standard deviations, used
+        before, did not).
+        """
+        active_weights = np.asarray(portfolio_weights, dtype=float) - np.asarray(benchmark_weights, dtype=float)
 
-        # Factor risk contribution
         portfolio_factor_exposure = np.dot(active_weights, factor_exposures)
-        factor_risk = np.sqrt(np.dot(portfolio_factor_exposure,
-                                     np.dot(factor_covariance, portfolio_factor_exposure)))
+        factor_variance = float(np.dot(portfolio_factor_exposure, np.dot(factor_covariance, portfolio_factor_exposure)))
+        specific_variance = float(np.dot(active_weights ** 2, np.asarray(specific_risk, dtype=float) ** 2))
+        factor_risk = np.sqrt(max(factor_variance, 0.0))
+        specific_risk_contribution = np.sqrt(max(specific_variance, 0.0))
 
-        # Specific risk contribution
-        specific_risk_contribution = np.sqrt(np.dot(active_weights ** 2, specific_risk ** 2))
-
-        # Total active risk (simplified - ignoring factor-specific correlation)
-        total_active_risk = np.sqrt(factor_risk ** 2 + specific_risk_contribution ** 2)
+        total_variance = factor_variance + specific_variance
+        total_active_risk = np.sqrt(max(total_variance, 0.0))
 
         return {
             "total_active_risk": total_active_risk,
             "factor_risk_contribution": factor_risk,
             "specific_risk_contribution": specific_risk_contribution,
-            "factor_risk_percentage": (factor_risk / total_active_risk) * 100 if total_active_risk > 0 else 0,
-            "specific_risk_percentage": (
-                                                    specific_risk_contribution / total_active_risk) * 100 if total_active_risk > 0 else 0,
+            "factor_risk_percentage": factor_variance / total_variance * 100 if total_variance > 0 else None,
+            "specific_risk_percentage": specific_variance / total_variance * 100 if total_variance > 0 else None,
+            "percentage_basis": "share of active VARIANCE",
             "risk_decomposition_analysis": ActiveRiskTracking._analyze_risk_decomposition(
                 factor_risk, specific_risk_contribution, total_active_risk
-            )
+            ) if total_active_risk > 0 else None
         }
 
     @staticmethod
     def calculate_tracking_risk(portfolio_returns: np.ndarray,
                                 benchmark_returns: np.ndarray,
                                 rolling_window: int = 252) -> Dict:
-        """Calculate tracking risk with rolling analysis"""
+        """Tracking risk (annualised stdev of active returns) plus a rolling view.
 
+        Window = min(rolling_window, max(20, n // 4)) so short histories still get a rolling series;
+        each window ends at an observation, the last one at the final observation. With fewer than
+        20 observations there is no rolling series (empty list, statistics null).
+        """
+        portfolio_returns = np.asarray(portfolio_returns, dtype=float)
+        benchmark_returns = np.asarray(benchmark_returns, dtype=float)
+        if len(portfolio_returns) != len(benchmark_returns):
+            raise ValueError(f"portfolio and benchmark returns must have the same length "
+                             f"({len(portfolio_returns)} vs {len(benchmark_returns)})")
         active_returns = portfolio_returns - benchmark_returns
+        n = len(active_returns)
+        if n < 2:
+            raise ValueError(ERROR_MESSAGES["insufficient_data"])
 
-        # Overall tracking risk
         tracking_risk = np.std(active_returns, ddof=1) * MathConstants.SQRT_TRADING_DAYS
 
-        # Rolling tracking risk
-        rolling_tracking_risk = []
-        for i in range(rolling_window, len(active_returns)):
-            window_returns = active_returns[i - rolling_window:i]
-            rolling_te = np.std(window_returns, ddof=1) * MathConstants.SQRT_TRADING_DAYS
-            rolling_tracking_risk.append(rolling_te)
+        window = min(int(rolling_window), max(20, n // 4))
+        rolling_tracking_risk = np.array([
+            np.std(active_returns[i - window:i], ddof=1) * MathConstants.SQRT_TRADING_DAYS
+            for i in range(window, n + 1)
+        ]) if n >= window else np.array([])
 
-        rolling_tracking_risk = np.array(rolling_tracking_risk)
-
+        has_rolling = rolling_tracking_risk.size > 0
         return {
             "tracking_risk_annualized": tracking_risk,
+            "rolling_window": window if has_rolling else None,
             "rolling_tracking_risk": rolling_tracking_risk,
             "tracking_risk_statistics": {
                 "mean_rolling_te": np.mean(rolling_tracking_risk),
                 "std_rolling_te": np.std(rolling_tracking_risk),
                 "min_rolling_te": np.min(rolling_tracking_risk),
                 "max_rolling_te": np.max(rolling_tracking_risk)
-            },
+            } if has_rolling else None,
             "tracking_risk_stability": ActiveRiskTracking._assess_tracking_risk_stability(
                 rolling_tracking_risk
-            ),
-            "active_return_analysis": ActiveRiskTracking._analyze_active_returns(active_returns)
+            ) if has_rolling else None,
+            "active_return_analysis": ActiveRiskTracking._analyze_active_returns(
+                active_returns, portfolio_returns, benchmark_returns)
         }
 
     @staticmethod
@@ -918,8 +1041,10 @@ class ActiveRiskTracking:
         return analysis
 
     @staticmethod
-    def _assess_tracking_risk_stability(rolling_tracking_risk: np.ndarray) -> Dict:
+    def _assess_tracking_risk_stability(rolling_tracking_risk: np.ndarray) -> Optional[Dict]:
         """Assess stability of tracking risk over time"""
+        if len(rolling_tracking_risk) == 0 or np.mean(rolling_tracking_risk) == 0:
+            return None
 
         coefficient_of_variation = np.std(rolling_tracking_risk) / np.mean(rolling_tracking_risk)
 
@@ -941,27 +1066,45 @@ class ActiveRiskTracking:
         }
 
     @staticmethod
-    def _analyze_active_returns(active_returns: np.ndarray) -> Dict:
-        """Analyze active return characteristics"""
+    def _analyze_active_returns(active_returns: np.ndarray,
+                                portfolio_returns: Optional[np.ndarray] = None,
+                                benchmark_returns: Optional[np.ndarray] = None) -> Dict:
+        """Active return characteristics.
+
+        up_capture / down_capture are capture ratios: mean portfolio return / mean benchmark return on
+        the days the benchmark rose / fell (arithmetic means). They used to be the mean positive /
+        negative ACTIVE return, which are now reported under their own names.
+        """
+        up_capture = down_capture = None
+        if portfolio_returns is not None and benchmark_returns is not None:
+            up, down = benchmark_returns > 0, benchmark_returns < 0
+            if up.any():
+                up_capture = float(np.mean(portfolio_returns[up]) / np.mean(benchmark_returns[up]))
+            if down.any():
+                down_capture = float(np.mean(portfolio_returns[down]) / np.mean(benchmark_returns[down]))
 
         return {
             "mean_active_return": np.mean(active_returns) * MathConstants.TRADING_DAYS_YEAR,
             "active_return_volatility": np.std(active_returns, ddof=1) * MathConstants.SQRT_TRADING_DAYS,
             "active_return_skewness": ActiveRiskTracking._calculate_skewness(active_returns),
             "hit_rate": np.sum(active_returns > 0) / len(active_returns),
-            "up_capture": np.mean(active_returns[active_returns > 0]) if np.any(active_returns > 0) else 0,
-            "down_capture": np.mean(active_returns[active_returns < 0]) if np.any(active_returns < 0) else 0
+            "up_capture": up_capture,
+            "down_capture": down_capture,
+            "mean_positive_active_return": np.mean(active_returns[active_returns > 0]) if np.any(active_returns > 0) else None,
+            "mean_negative_active_return": np.mean(active_returns[active_returns < 0]) if np.any(active_returns < 0) else None
         }
 
     @staticmethod
     def _calculate_skewness(data: np.ndarray) -> float:
         """Calculate skewness of data"""
+        n = len(data)
+        if n < 3:
+            return None
         mean = np.mean(data)
         std = np.std(data, ddof=1)
-        n = len(data)
 
         if std == 0:
-            return 0
+            return None
 
         skewness = n / ((n - 1) * (n - 2)) * np.sum(((data - mean) / std) ** 3)
         return skewness
@@ -975,29 +1118,25 @@ class StrategyCombination:
                                      correlation: float = 0.3) -> Dict:
         """Analyze combination of two active management strategies"""
 
-        # Extract strategy metrics
         s1_return = strategy1_data.get("expected_return", 0.02)
         s1_risk = strategy1_data.get("tracking_error", 0.04)
-        s1_ir = s1_return / s1_risk if s1_risk > 0 else 0
+        s1_ir = s1_return / s1_risk if s1_risk > 0 else None
 
         s2_return = strategy2_data.get("expected_return", 0.015)
         s2_risk = strategy2_data.get("tracking_error", 0.03)
-        s2_ir = s2_return / s2_risk if s2_risk > 0 else 0
+        s2_ir = s2_return / s2_risk if s2_risk > 0 else None
 
-        # Equal weight combination (can be optimized)
         weight1 = 0.5
         weight2 = 0.5
 
-        # Combined portfolio metrics
         combined_return = weight1 * s1_return + weight2 * s2_return
         combined_variance = (weight1 * s1_risk) ** 2 + (
                     weight2 * s2_risk) ** 2 + 2 * weight1 * weight2 * correlation * s1_risk * s2_risk
         combined_risk = np.sqrt(combined_variance)
-        combined_ir = combined_return / combined_risk if combined_risk > 0 else 0
+        combined_ir = combined_return / combined_risk if combined_risk > 0 else None
 
-        # Optimal weights for maximum IR
         optimal_weights = StrategyCombination._calculate_optimal_weights(
-            s1_return, s1_risk, s2_return, s2_risk, correlation
+            s1_return, s1_risk, s2_return, s2_risk, correlation, equal_weight_ir=combined_ir
         )
 
         return {
@@ -1022,43 +1161,55 @@ class StrategyCombination:
 
     @staticmethod
     def _calculate_optimal_weights(return1: float, risk1: float, return2: float,
-                                   risk2: float, correlation: float) -> Dict:
-        """Calculate optimal weights for maximum Information Ratio"""
+                                   risk2: float, correlation: float,
+                                   equal_weight_ir: Optional[float] = None) -> Dict:
+        """Weights maximising IR = w'mu / sqrt(w' S w): w proportional to S^-1 mu, scaled to sum 1.
 
-        # Covariance matrix
+        improvement_vs_equal_weight = optimal IR - equal-weight IR (it used to subtract the optimal IR
+        from itself, so it was always 0).
+        """
         cov_matrix = np.array([
             [risk1 ** 2, correlation * risk1 * risk2],
             [correlation * risk1 * risk2, risk2 ** 2]
         ])
-
-        # Expected returns vector
         returns = np.array([return1, return2])
 
-        # Calculate optimal weights (maximize IR = w'μ / sqrt(w'Σw))
         try:
-            inv_cov = np.linalg.inv(cov_matrix)
-            optimal_weights = np.dot(inv_cov, returns)
-            optimal_weights = optimal_weights / np.sum(optimal_weights)  # Normalize to sum to 1
-
-            # Calculate optimal portfolio metrics
-            opt_return = np.dot(optimal_weights, returns)
-            opt_variance = np.dot(optimal_weights, np.dot(cov_matrix, optimal_weights))
-            opt_risk = np.sqrt(opt_variance)
-            opt_ir = opt_return / opt_risk if opt_risk > 0 else 0
-
-            return {
-                "optimal_weights": optimal_weights.tolist(),
-                "optimal_return": opt_return,
-                "optimal_risk": opt_risk,
-                "optimal_ir": opt_ir,
-                "improvement_vs_equal_weight": opt_ir - (opt_return / opt_risk if opt_risk > 0 else 0)
-            }
-
+            raw = np.linalg.solve(cov_matrix, returns)
         except np.linalg.LinAlgError:
-            return {
-                "optimal_weights": [0.5, 0.5],
-                "note": "Singular covariance matrix - using equal weights"
-            }
+            return {"optimal_weights": None, "note": "Singular covariance matrix - no unique optimum"}
+        if raw.sum() == 0:
+            return {"optimal_weights": None, "note": "the optimal weights cannot be scaled to sum to 1"}
+        optimal_weights = raw / np.sum(raw)
+
+        opt_return = float(optimal_weights @ returns)
+        opt_risk = float(np.sqrt(max(optimal_weights @ cov_matrix @ optimal_weights, 0.0)))
+        opt_ir = opt_return / opt_risk if opt_risk > 0 else None
+        if equal_weight_ir is None:
+            eq = np.array([0.5, 0.5])
+            eq_risk = float(np.sqrt(eq @ cov_matrix @ eq))
+            equal_weight_ir = float(eq @ returns) / eq_risk if eq_risk > 0 else None
+
+        return {
+            "optimal_weights": optimal_weights.tolist(),
+            "optimal_return": opt_return,
+            "optimal_risk": opt_risk,
+            "optimal_ir": opt_ir,
+            "improvement_vs_equal_weight": (opt_ir - equal_weight_ir
+                                            if opt_ir is not None and equal_weight_ir is not None else None)
+        }
+
+    @staticmethod
+    def _calculate_diversification_benefit(risk1: float, risk2: float, combined_risk: float,
+                                           weight1: float, weight2: float) -> Dict:
+        """Risk saved by combining: weighted-average tracking error minus the combined one"""
+        weighted_avg = weight1 * risk1 + weight2 * risk2
+        return {
+            "weighted_average_risk": weighted_avg,
+            "combined_risk": combined_risk,
+            "risk_reduction": weighted_avg - combined_risk,
+            "risk_reduction_pct": (weighted_avg - combined_risk) / weighted_avg * 100 if weighted_avg > 0 else None
+        }
 
     @staticmethod
     def _analyze_correlation_impact(risk1: float, risk2: float, correlation: float) -> Dict:
@@ -1095,20 +1246,17 @@ class ActiveManagement:
                                                  factor_data: Optional[Dict] = None) -> Dict:
         """Comprehensive active management analysis"""
 
-        portfolio_returns = np.array(portfolio_data.get("returns", []))
-        benchmark_returns = np.array(benchmark_data.get("returns", []))
+        portfolio_returns = np.array(portfolio_data.get("returns", []), dtype=float)
+        benchmark_returns = np.array(benchmark_data.get("returns", []), dtype=float)
 
-        # Value added measurement
         value_added = self.value_measurement.calculate_value_added(
-            portfolio_returns, benchmark_returns
+            portfolio_returns, benchmark_returns, portfolio_data.get("attribution")
         )
 
-        # Information ratio analysis
         ir_analysis = self.ir_analysis.calculate_information_ratio_ex_post(
             portfolio_returns, benchmark_returns
         )
 
-        # Fundamental law analysis
         if "fundamental_law_inputs" in portfolio_data:
             fl_analysis = self.fundamental_law.calculate_fundamental_law_components(
                 portfolio_data["fundamental_law_inputs"]
@@ -1116,7 +1264,6 @@ class ActiveManagement:
         else:
             fl_analysis = {"note": "Fundamental law inputs not provided"}
 
-        # Risk decomposition if factor data available
         risk_analysis = {}
         if factor_data:
             portfolio_weights = np.array(portfolio_data.get("weights", []))
@@ -1126,12 +1273,11 @@ class ActiveManagement:
                 risk_analysis = self.active_risk_tracking.decompose_active_risk(
                     portfolio_weights,
                     benchmark_weights,
-                    factor_data.get("factor_exposures", np.array([])),
-                    factor_data.get("factor_covariance", np.array([])),
-                    factor_data.get("specific_risk", np.array([]))
+                    np.asarray(factor_data.get("factor_exposures", [])),
+                    np.asarray(factor_data.get("factor_covariance", [])),
+                    np.asarray(factor_data.get("specific_risk", []))
                 )
 
-        # Tracking risk analysis
         tracking_analysis = self.active_risk_tracking.calculate_tracking_risk(
             portfolio_returns, benchmark_returns
         )
@@ -1154,42 +1300,82 @@ class ActiveManagement:
         """Analyze and compare active manager candidates"""
 
         manager_scores = {}
+        skipped = {}
 
         for i, manager in enumerate(manager_candidates):
-            manager_id = manager.get("manager_id", f"Manager_{i + 1}")
+            manager_id = str(manager.get("manager_id", f"Manager_{i + 1}"))
 
-            # Calculate key metrics
-            returns = np.array(manager.get("returns", []))
-            benchmark_returns = np.array(manager.get("benchmark_returns", []))
+            returns = np.array(manager.get("returns", []), dtype=float)
+            benchmark_returns = np.array(manager.get("benchmark_returns", []), dtype=float)
 
-            if len(returns) > 0 and len(benchmark_returns) > 0:
-                ir_analysis = self.ir_analysis.calculate_information_ratio_ex_post(
-                    returns, benchmark_returns
-                )
+            if len(returns) < 2 or len(benchmark_returns) < 2:
+                skipped[manager_id] = "needs at least 2 returns and benchmark_returns"
+                continue
+            if len(returns) != len(benchmark_returns):
+                skipped[manager_id] = (f"returns and benchmark_returns differ in length "
+                                       f"({len(returns)} vs {len(benchmark_returns)})")
+                continue
+            if not (np.all(np.isfinite(returns)) and np.all(np.isfinite(benchmark_returns))):
+                skipped[manager_id] = "returns contain missing or non-finite values"
+                continue
 
-                # Manager scoring
-                score = self._calculate_manager_score(ir_analysis, manager)
+            ir_analysis = self.ir_analysis.calculate_information_ratio_ex_post(returns, benchmark_returns)
+            score = self._calculate_manager_score(ir_analysis, manager)
 
-                manager_scores[manager_id] = {
-                    "information_ratio": ir_analysis["information_ratio_annualized"],
-                    "tracking_error": ir_analysis["tracking_error_annualized"],
-                    "active_return": ir_analysis["active_return_annualized"],
-                    "overall_score": score,
-                    "strengths": self._identify_manager_strengths(ir_analysis, manager),
-                    "concerns": self._identify_manager_concerns(ir_analysis, manager)
-                }
+            manager_scores[manager_id] = {
+                "information_ratio": ir_analysis["information_ratio_annualized"],
+                "tracking_error": ir_analysis["tracking_error_annualized"],
+                "active_return": ir_analysis["active_return_annualized"],
+                "observations": int(len(returns)),
+                "overall_score": score,
+                "strengths": self._identify_manager_strengths(ir_analysis, manager),
+                "concerns": self._identify_manager_concerns(ir_analysis, manager)
+            }
 
-        # Rank managers
         ranked_managers = sorted(manager_scores.items(),
-                                 key=lambda x: x[1]["overall_score"], reverse=True)
+                                 key=lambda x: (x[1]["overall_score"] if np.isfinite(x[1]["overall_score"])
+                                                else -np.inf), reverse=True)
 
         return {
             "manager_analysis": manager_scores,
             "manager_ranking": [manager[0] for manager in ranked_managers],
             "top_manager": ranked_managers[0][0] if ranked_managers else None,
+            "skipped_candidates": skipped,
             "selection_criteria": self._define_manager_selection_criteria(),
             "due_diligence_framework": self._manager_due_diligence_framework()
         }
+
+    def _identify_manager_concerns(self, ir_analysis: Dict, manager_data: Dict) -> List[str]:
+        """Mirror of _identify_manager_strengths: red flags in the record"""
+        concerns = []
+
+        ir = ir_analysis.get("information_ratio_annualized")
+        if ir is None or not np.isfinite(ir):
+            concerns.append("Information ratio undefined (no active risk)")
+        elif ir < 0:
+            concerns.append("Negative information ratio: active decisions have cost return")
+        elif ir < 0.25:
+            concerns.append("Information ratio below 0.25")
+
+        te = ir_analysis.get("tracking_error_annualized", 0.0)
+        if te > 0.08:
+            concerns.append("High tracking error (above 8 % a year)")
+
+        if ir_analysis.get("active_return_annualized", 0.0) < 0:
+            concerns.append("Negative active return")
+
+        n_obs = len(manager_data.get("returns", []))
+        track_record = manager_data.get("track_record_years", n_obs / MathConstants.TRADING_DAYS_YEAR)
+        if track_record < 3:
+            concerns.append(f"Short track record ({track_record:.1f} years): IR estimate is unreliable")
+
+        aum = manager_data.get("aum_billions")
+        if aum is not None and aum > 20:
+            concerns.append("Large AUM may limit capacity")
+        elif aum is not None and aum < 0.5:
+            concerns.append("Small AUM: business / key-person risk")
+
+        return concerns
 
     def factor_model_implementation(self, factor_data: Dict) -> Dict:
         """Implement and analyze factor model for active management"""
@@ -1248,7 +1434,7 @@ class ActiveManagement:
             quality_score += 15
 
         # Consistency component (10%)
-        te_stability = tracking_analysis.get("tracking_risk_stability", {}).get("stability_level", "Low")
+        te_stability = (tracking_analysis.get("tracking_risk_stability") or {}).get("stability_level", "Low")
         if te_stability == "High":
             quality_score += 10
         elif te_stability == "Moderate":
@@ -1269,19 +1455,20 @@ class ActiveManagement:
 
         recommendations = []
 
-        ir = ir_analysis.get("information_ratio_annualized", 0)
-        if ir < 0.25:
+        ir = ir_analysis.get("information_ratio_annualized")
+        if ir is not None and np.isfinite(ir) and ir < 0.25:
             recommendations.append("Focus on improving information ratio through better forecasting or risk control")
 
         hit_rate = value_added.get("hit_rate", 0.5)
         if hit_rate < 0.55:
             recommendations.append("Improve hit rate through better market timing or security selection")
 
-        if "fundamental_law_inputs" in fl_analysis:
-            fl_inputs = fl_analysis.get("fundamental_law_inputs", {})
-            ic = fl_inputs.get("information_coefficient", 0)
-            breadth = fl_inputs.get("breadth", 0)
-            tc = fl_inputs.get("transfer_coefficient", 0)
+        # fl_analysis is calculate_fundamental_law_components' output (the old test looked for a
+        # "fundamental_law_inputs" key it never has, so these never fired)
+        if "information_coefficient" in fl_analysis:
+            ic = fl_analysis.get("information_coefficient", 0)
+            breadth = fl_analysis.get("breadth", 0)
+            tc = fl_analysis.get("transfer_coefficient", 0)
 
             if ic < 0.05:
                 recommendations.append("Enhance forecasting skill (information coefficient)")
@@ -1299,7 +1486,9 @@ class ActiveManagement:
         """Calculate overall manager score"""
 
         ir = ir_analysis.get("information_ratio_annualized", 0)
-        track_record_length = manager_data.get("track_record_years", 3)
+        # not supplied: the length of the return history (daily), as in _identify_manager_concerns
+        track_record_length = manager_data.get("track_record_years",
+                                               len(manager_data.get("returns", [])) / MathConstants.TRADING_DAYS_YEAR)
         assets_under_management = manager_data.get("aum_billions", 1)
 
         # Base score from IR (60%)
@@ -1331,7 +1520,8 @@ class ActiveManagement:
         if active_return > 0.02:
             strengths.append("Strong active return generation")
 
-        track_record = manager_data.get("track_record_years", 3)
+        track_record = manager_data.get("track_record_years",
+                                        len(manager_data.get("returns", [])) / MathConstants.TRADING_DAYS_YEAR)
         if track_record > 5:
             strengths.append("Long track record demonstrates consistency")
 
@@ -1434,88 +1624,56 @@ class ActiveManagement:
 # CLI Interface
 # ============================================================================
 
+_ARGMAP = {"value_added": ["portfolio_returns", "benchmark_returns", "weights"],
+           "information_ratio": ["portfolio_returns", "benchmark_returns"],
+           "tracking_risk": ["portfolio_returns", "benchmark_returns"],
+           "comprehensive_analysis": ["portfolio_data", "benchmark_data"],
+           "manager_selection": ["manager_candidates"]}
+
+
+def _pair(args):
+    p = return_series(args.get_json(0, "portfolio_returns"), "portfolio_returns")
+    b = return_series(args.get_json(1, "benchmark_returns"), "benchmark_returns")
+    if len(p) != len(b):
+        raise CliError(f"portfolio_returns and benchmark_returns must be aligned and of the same length "
+                       f"({len(p)} vs {len(b)})")
+    return p, b
+
+
+def _cmd_value_added(args):
+    p, b = _pair(args)
+    weights = args.get_json(2, "weights")
+    return ValueAddedMeasurement.calculate_value_added(p, b, weights)
+
+
+def _cmd_comprehensive_analysis(args):
+    portfolio_data = args.get_json(0, "portfolio_data")
+    benchmark_data = args.get_json(1, "benchmark_data")
+    if not isinstance(portfolio_data, dict) or not isinstance(benchmark_data, dict):
+        raise CliError('portfolio_data and benchmark_data are required: {"returns": [...]} each')
+    p = return_series(portfolio_data.get("returns"), "portfolio_data.returns")
+    b = return_series(benchmark_data.get("returns"), "benchmark_data.returns")
+    if len(p) != len(b):
+        raise CliError(f"portfolio and benchmark returns must have the same length ({len(p)} vs {len(b)})")
+    return ActiveManagement().comprehensive_active_management_analysis(
+        dict(portfolio_data, returns=p), dict(benchmark_data, returns=b))
+
+
+def _cmd_manager_selection(args):
+    candidates = args.get_json(0, "manager_candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise CliError("manager_candidates must be a non-empty list of {manager_id, returns, benchmark_returns}")
+    if not all(isinstance(c, dict) for c in candidates):
+        raise CliError("each manager candidate must be an object")
+    return ActiveManagement().manager_selection_analysis(candidates)
+
+
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "No command specified"}))
-        sys.exit(1)
-
-    command = sys.argv[1]
-    # ── Qt bridge: accept (command, single JSON object) and expand into the
-    # positional argv the handlers below expect. No effect on the legacy CLI form.
-    _QT_ARGMAP = {"value_added": [["portfolio_returns", "json"], ["benchmark_returns", "json"], ["weights", "json"]], "information_ratio": [["portfolio_returns", "json"], ["benchmark_returns", "json"]], "tracking_risk": [["portfolio_returns", "json"], ["benchmark_returns", "json"]], "comprehensive_analysis": [["portfolio_data", "json"], ["benchmark_data", "json"]], "manager_selection": [["manager_candidates", "json"]]}
-    if len(sys.argv) == 3 and command in _QT_ARGMAP:
-        try:
-            _qp = json.loads(sys.argv[2])
-            if isinstance(_qp, dict) and (not _QT_ARGMAP[command] or _QT_ARGMAP[command][0][0] in _qp):
-                _qav = [sys.argv[0], command]
-                for _qn, _qk in _QT_ARGMAP[command]:
-                    if _qn in _qp and _qp[_qn] is not None:
-                        _qav.append(json.dumps(_qp[_qn]) if _qk == 'json' else str(_qp[_qn]))
-                    else:
-                        _qav.append('null')
-                sys.argv = _qav
-        except Exception:
-            pass
-
-    try:
-        if command == "value_added":
-            portfolio_returns = json.loads(sys.argv[2])
-            benchmark_returns = json.loads(sys.argv[3])
-            weights = json.loads(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] != "null" else None
-
-            result = ValueAddedMeasurement.calculate_value_added(
-                np.array(portfolio_returns),
-                np.array(benchmark_returns),
-                np.array(weights) if weights else None
-            )
-            print(json.dumps(result))
-
-        elif command == "information_ratio":
-            portfolio_returns = json.loads(sys.argv[2])
-            benchmark_returns = json.loads(sys.argv[3])
-
-            result = InformationRatioAnalysis.calculate_information_ratio_ex_post(
-                np.array(portfolio_returns),
-                np.array(benchmark_returns)
-            )
-            print(json.dumps(result))
-
-        elif command == "tracking_risk":
-            portfolio_returns = json.loads(sys.argv[2])
-            benchmark_returns = json.loads(sys.argv[3])
-
-            result = ActiveRiskTracking.calculate_tracking_risk(
-                np.array(portfolio_returns),
-                np.array(benchmark_returns)
-            )
-            print(json.dumps(result))
-
-        elif command == "comprehensive_analysis":
-            portfolio_data = json.loads(sys.argv[2])
-            benchmark_data = json.loads(sys.argv[3])
-
-            am = ActiveManagement()
-            result = am.comprehensive_active_management_analysis(
-                portfolio_data,
-                benchmark_data
-            )
-            print(json.dumps(result))
-
-        elif command == "manager_selection":
-            manager_candidates = json.loads(sys.argv[2])
-
-            am = ActiveManagement()
-            result = am.manager_selection_analysis(manager_candidates)
-            print(json.dumps(result))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}))
-            sys.exit(1)
-
-    except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+    run_cli({
+        "value_added": _cmd_value_added,
+        "information_ratio": lambda a: InformationRatioAnalysis.calculate_information_ratio_ex_post(*_pair(a)),
+        "tracking_risk": lambda a: ActiveRiskTracking.calculate_tracking_risk(*_pair(a)),
+        "comprehensive_analysis": _cmd_comprehensive_analysis,
+        "manager_selection": _cmd_manager_selection,
+    }, _ARGMAP)
 

@@ -424,11 +424,14 @@ class DCFModel:
                 fcf_projections_calc = self.project_cash_flows(base_fcf, growth_rates)
                 fcf_values = [p['fcf'] for p in fcf_projections_calc]
 
-                terminal_value_calc = self.calculate_terminal_value(
-                    fcf_values[-1],
-                    terminal_growth,
-                    wacc
-                )
+                try:
+                    terminal_value_calc = self.calculate_terminal_value(
+                        fcf_values[-1],
+                        terminal_growth,
+                        wacc
+                    )
+                except ValueError:
+                    continue  # a growth outside the model's 0-5% band: that cell is not computed
 
                 ev_calc = self.calculate_enterprise_value(
                     fcf_values,
@@ -453,7 +456,8 @@ class DCFModel:
                     'wacc': wacc * 100,
                     'terminal_growth': terminal_growth * 100,
                     'price_per_share': price_calc['price_per_share'],
-                    'equity_value': equity_calc['equity_value']
+                    'equity_value': equity_calc['equity_value'],
+                    'enterprise_value': ev_calc['enterprise_value']
                 })
 
         return {
@@ -563,6 +567,41 @@ class DCFModel:
 
         return inputs
 
+def sensitivity_grid(sensitivity_result: Dict[str, Any], wacc_scenarios: List[float],
+                     terminal_growth_scenarios: List[float], base_wacc: Optional[float] = None,
+                     base_growth: Optional[float] = None) -> Dict[str, Any]:
+    """The flat sensitivity list as matrices: rows = WACC, columns = terminal growth (both in percent); a cell that
+    could not be computed (WACC <= growth, growth outside 0-5%) is None. base_row / base_col point at the scenario
+    nearest the base case."""
+    waccs = [w * 100 for w in wacc_scenarios]
+    tgs = [g * 100 for g in terminal_growth_scenarios]
+    cells = {(round(c['wacc'], 9), round(c['terminal_growth'], 9)): c
+             for c in sensitivity_result.get('sensitivity_matrix', [])}
+
+    def matrix(key):
+        return [[(cells.get((round(w, 9), round(g, 9))) or {}).get(key) for g in tgs] for w in waccs]
+
+    def nearest(values, target):
+        if target is None or not values:
+            return (len(values) - 1) // 2 if values else -1
+        return min(range(len(values)), key=lambda i: abs(values[i] - target * 100))
+
+    return {
+        'wacc_values': waccs,
+        'terminal_growth_values': tgs,
+        'price_per_share': matrix('price_per_share'),
+        'equity_value': matrix('equity_value'),
+        'enterprise_value': matrix('enterprise_value'),
+        'base_row': nearest(waccs, base_wacc),
+        'base_col': nearest(tgs, base_growth),
+    }
+
+
+def _centred(base: float, step: float, steps: int) -> List[float]:
+    half = (steps - 1) // 2
+    return [round(base + (i - half) * step, 6) for i in range(steps)]
+
+
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----
 # The Qt MAAnalyticsService calls `dcf_model.py <command> <flat-params-json>` (argv length 3). This CLI's native
 # form is positional (`dcf wacc_inputs fcf_inputs growth_rates terminal_growth balance_sheet shares`), so a
@@ -645,8 +684,14 @@ def _service_argv(argv):
         return argv
     if argv[1] == "calculate":
         wacc_inputs, fcf_inputs, growth_rates, tg, balance_sheet, shares = _svc_dcf_inputs(p)
+        # The WACC x terminal-growth grid around the result (steps in fractions; fewer than 3 steps = no grid).
+        spec = {
+            "wacc_step": _svc_num(p, "sens_wacc_step", default=0.01),
+            "growth_step": _svc_num(p, "sens_growth_step", default=0.005),
+            "steps": int(_svc_num(p, "sens_steps", default=5)),
+        }
         return [argv[0], "dcf", json.dumps(wacc_inputs), json.dumps(fcf_inputs), json.dumps(growth_rates), repr(tg),
-                json.dumps(balance_sheet), repr(shares)]
+                json.dumps(balance_sheet), repr(shares), json.dumps(spec)]
     # sensitivity: MCP shape {base_params: {...}, wacc_range: [...], tgr_range: [...]}; a flat dict is its own base.
     base = p.get("base_params") if isinstance(p.get("base_params"), dict) else p
     wacc_inputs, fcf_inputs, growth_rates, tg, balance_sheet, shares = _svc_dcf_inputs(base)
@@ -703,6 +748,17 @@ def main():
                 shares_outstanding=shares_outstanding
             )
 
+            # Optional 9th argument: the sensitivity grid around this result, computed in the same run.
+            spec = json.loads(sys.argv[8]) if len(sys.argv) > 8 else None
+            if isinstance(spec, dict) and int(spec.get("steps", 0) or 0) >= 3:
+                steps = min(int(spec["steps"]), 9)
+                base_wacc = dcf_result['wacc']['wacc']
+                waccs = _centred(base_wacc, float(spec.get("wacc_step", 0.01)), steps)
+                tgs = _centred(terminal_growth_rate, float(spec.get("growth_step", 0.005)), steps)
+                base_fcf = dcf_result['base_year_fcf']['free_cash_flow']
+                sens = dcf.sensitivity_analysis(base_fcf, growth_rates, tgs, waccs, balance_sheet, shares_outstanding)
+                dcf_result['sensitivity'] = sensitivity_grid(sens, waccs, tgs, base_wacc, terminal_growth_rate)
+
             result = {
                 "success": True,
                 "data": dcf_result
@@ -731,6 +787,8 @@ def main():
                 shares_outstanding=shares_outstanding
             )
 
+            sensitivity_result['grid'] = sensitivity_grid(sensitivity_result, wacc_scenarios,
+                                                          terminal_growth_scenarios)
             result = {
                 "success": True,
                 "data": sensitivity_result

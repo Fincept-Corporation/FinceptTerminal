@@ -23,6 +23,11 @@ class FinceptMacroPanel : public EconPanelBase {
     void activate() override;
 
   protected:
+    /// Every request costs Fincept credits: never automatic. Each VIEW keeps its own remembered
+    /// result (free to show) and its own preview naming the cost.
+    LoadPolicy load_policy() const override;
+    QList<ui::Requirement> load_requirements() const override;
+    void on_query_cancelled() override;
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     /// Unused: this panel's data comes from FinceptMacroService, not EconomicsService.
@@ -34,6 +39,8 @@ class FinceptMacroPanel : public EconPanelBase {
     QString current_view() const;
     void update_controls_for_view();
     void update_credit_hint();
+    /// Point the results pane at the selected VIEW (its remembered result or its preview).
+    void sync_load_view();
     void run_query(bool force);
     void load_ceic_countries();
     void load_ceic_indicators();

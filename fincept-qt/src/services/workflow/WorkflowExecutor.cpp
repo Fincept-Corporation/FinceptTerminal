@@ -12,8 +12,10 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QSet>
+#include <QTimer>
 #include <QUuid>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <stdexcept>
@@ -107,6 +109,14 @@ bool WorkflowExecutor::mcp_tool_moves_money(const QString& tool) {
     return tool == QLatin1String("ui_act") || tool == QLatin1String("python");
 }
 
+bool WorkflowExecutor::is_retryable_type(const QString& type) {
+    // A node that can place / change orders or move money is never re-run: a call
+    // that reported failure may still have reached the broker (or, for an agent or
+    // a sub-workflow, have run its own trading steps before failing).
+    return !type.startsWith(QLatin1String("trading.")) && !type.startsWith(QLatin1String("agent.")) &&
+           type != QLatin1String("mcp.tool_call") && type != QLatin1String("control.execute_workflow");
+}
+
 QStringList WorkflowExecutor::find_cycle(const QHash<QString, QVector<QString>>& adjacency) {
     // Iterative three-colour DFS (a recursive one overflows the stack on long chains),
     // keeping the current path so a back edge can be turned into the list of nodes on
@@ -164,6 +174,10 @@ bool WorkflowExecutor::is_run_active(const QString& run_token) {
     return wf_executor_detail::g_active_runs.contains(run_token);
 }
 
+WorkflowExecutor* WorkflowExecutor::launching_executor() {
+    return wf_executor_detail::g_launching_parent;
+}
+
 void WorkflowExecutor::release_run_token() {
     if (run_token_.isEmpty())
         return;
@@ -184,6 +198,7 @@ bool WorkflowExecutor::prepare_run(const WorkflowDef& workflow) {
     abort_reason_.clear();
     hard_abort_reason_.clear();
     in_flight_.clear();
+    retries_.clear();
     results_.clear();
     node_map_.clear();
     type_cache_.clear();
@@ -711,10 +726,29 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
         return;
     }
 
-    QJsonObject node_params = resolved_parameters(nd, *type_def, inputs);
+    QStringList missing_fields;
+    QJsonObject node_params = resolved_parameters(nd, *type_def, inputs, &missing_fields);
+    if (!missing_fields.isEmpty()) {
+        // A notification must not go out with holes in it ("AAPL is at " — it used to read
+        // "AAPL is at null"); other nodes run with the placeholder left empty.
+        QStringList named;
+        for (const QString& f : missing_fields)
+            named << QStringLiteral("{{%1}}").arg(f);
+        if (nd.type.startsWith(QLatin1String("notify."))) {
+            const QString why = QString("Message refers to %1, which the input does not have").arg(named.join(", "));
+            LOG_WARN("Executor", why);
+            fail_without_running(node_id, why);
+            return;
+        }
+        LOG_WARN("Executor", QString("Node '%1': %2 had no value in the input and was left empty")
+                                 .arg(nd.name.isEmpty() ? nd.type : nd.name, named.join(", ")));
+    }
     const QString refusal = enforce_trading_mode(nd, node_params, inputs);
-    if (nd.type.startsWith(QLatin1String("trading.")))
+    if (nd.type.startsWith(QLatin1String("trading."))) {
         node_params[QStringLiteral("_run_token")] = run_token_;
+        // Order provenance: the bridges stamp UnifiedOrder::source = "workflow:<id>".
+        node_params[QStringLiteral("_workflow_id")] = workflow_.id;
+    }
     if (!refusal.isEmpty()) {
         LOG_WARN("Executor", refusal);
         fail_without_running(node_id, refusal);
@@ -777,8 +811,35 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const 
                                     !live_allowed_);
         return;
     }
-    if (!in_flight_.remove(node_id))
+    if (!in_flight_.contains(node_id))
         return; // already settled (defensive — callers guarantee a single report)
+
+    // "Retry on fail": run the node again after a short back-off instead of settling
+    // it. It stays in flight (and pending) meanwhile, so a STOP in between still
+    // waits for it — and a second STOP settles it as abandoned — like any running node.
+    if (!success && should_retry(node_id)) {
+        const int attempt = ++retries_[node_id];
+        LOG_WARN("Executor", QString("Node '%1' failed (%2) — retry %3 of %4")
+                                 .arg(node_label(node_id), error.isEmpty() ? QStringLiteral("unknown error") : error)
+                                 .arg(attempt)
+                                 .arg(qBound(1, node_map_.value(node_id).max_tries, 10) - 1));
+        QPointer<WorkflowExecutor> self = this;
+        QTimer::singleShot(qMin(1000 * attempt, 5000), this, [self, node_id, error]() {
+            if (!self || !self->running_ || !self->in_flight_.contains(node_id))
+                return; // finished / abandoned meanwhile
+            if (self->stop_requested_) {
+                // Stopped during the back-off: settle with the last failure (no further retry).
+                self->on_node_done(node_id, false, {}, error);
+                return;
+            }
+            self->in_flight_.remove(node_id);
+            self->pending_count_--;
+            self->launch_single_node(node_id);
+        });
+        return;
+    }
+
+    in_flight_.remove(node_id);
     pending_count_--;
 
     NodeExecutionResult nr;
@@ -847,6 +908,16 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const 
     }
 }
 
+bool WorkflowExecutor::should_retry(const QString& node_id) const {
+    if (!running_ || stop_requested_ || !hard_abort_reason_.isEmpty())
+        return false;
+    auto it = node_map_.constFind(node_id);
+    if (it == node_map_.constEnd() || !it->retry_on_fail || !is_retryable_type(it->type))
+        return false;
+    const int max_tries = qBound(1, it->max_tries, 10); // max_tries counts the first attempt
+    return retries_.value(node_id, 0) + 1 < max_tries;
+}
+
 void WorkflowExecutor::finish_execution() {
     if (!running_)
         return; // already finished (e.g. forced stop followed by a queued launch)
@@ -908,7 +979,7 @@ void WorkflowExecutor::finish_execution() {
 }
 
 QJsonObject WorkflowExecutor::resolved_parameters(const NodeDef& node, const NodeTypeDef& type,
-                                                  const QVector<QJsonValue>& inputs) const {
+                                                  const QVector<QJsonValue>& inputs, QStringList* missing) const {
     // Fast path: nothing to resolve.
     bool has_template = false;
     for (auto it = node.parameters.constBegin(); it != node.parameters.constEnd(); ++it) {
@@ -947,13 +1018,38 @@ QJsonObject WorkflowExecutor::resolved_parameters(const NodeDef& node, const Nod
         const QJsonValue raw = out.value(pd.key);
         if (!raw.isString() || !raw.toString().contains(QLatin1String("{{")))
             continue;
-        const QJsonValue resolved = ExpressionEngine::evaluate(raw, context);
+        const QJsonValue resolved = ExpressionEngine::evaluate(raw, context, missing);
         // A text parameter must stay text: ={{$input.price}} would otherwise hand the node a
         // number, which the executors' toString() reads as an empty string.
         out[pd.key] = resolved.isString() ? resolved : QJsonValue(ExpressionEngine::value_to_string(resolved));
     }
     return out;
 }
+
+namespace {
+
+/// Index of `port` among the node type's declared input ports, or -1 when the
+/// edge names no port / a port the type does not declare (older saves).
+int input_port_index(const NodeTypeDef* type_def, const QString& port) {
+    if (!type_def || port.isEmpty())
+        return -1;
+    for (int i = 0; i < type_def->inputs.size(); ++i) {
+        if (type_def->inputs[i].id == port)
+            return i;
+    }
+    return -1;
+}
+
+/// Executors that read their inputs by position — inputs[0] is always Dataset A,
+/// inputs[1] always Dataset B — and so need one slot per declared port, with a
+/// null where a port received nothing.
+bool is_positional_multi_input(const NodeTypeDef* type_def) {
+    return type_def && type_def->inputs.size() > 1 &&
+           (type_def->type_id == QLatin1String("transform.join") ||
+            type_def->type_id == QLatin1String("format.compare_datasets"));
+}
+
+} // namespace
 
 QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) const {
     QVector<QJsonValue> inputs;
@@ -962,10 +1058,34 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
     const bool is_error_handler =
         self_it != node_map_.constEnd() && self_it->type == QLatin1String("control.error_handler");
 
-    for (const auto& edge : incoming_edges_.value(node_id)) {
+    // Deliver inputs in the order of the node's declared input ports (Dataset A
+    // before Dataset B, Branch 1 before Branch 2), not in the order the edges
+    // happen to be stored. Edges into the same port, and edges whose port is not
+    // recorded, keep their stored (creation) order; unmatched ports come last.
+    const NodeTypeDef* type_def = type_cache_.value(node_id, nullptr);
+    QVector<EdgeDef> edges = incoming_edges_.value(node_id);
+    if (type_def && type_def->inputs.size() > 1 && edges.size() > 1) {
+        const int unmatched = type_def->inputs.size();
+        auto rank = [&](const EdgeDef& e) {
+            const int idx = input_port_index(type_def, e.target_port);
+            return idx < 0 ? unmatched : idx;
+        };
+        std::stable_sort(edges.begin(), edges.end(),
+                         [&](const EdgeDef& a, const EdgeDef& b) { return rank(a) < rank(b); });
+    }
+
+    const bool positional = is_positional_multi_input(type_def);
+    QVector<int> input_ports; // parallel to `inputs`: the port index each value arrived on (-1 = unknown)
+
+    for (const auto& edge : edges) {
         auto it = results_.constFind(edge.source_node);
         if (it == results_.constEnd())
             continue;
+
+        auto deliver = [&](const QJsonValue& v) {
+            inputs.append(v);
+            input_ports.append(input_port_index(type_def, edge.target_port));
+        };
 
         // An upstream node that failed (and was allowed to continue) produced no
         // data. Only an Error Handler consumes it — as an error record — every other
@@ -977,7 +1097,7 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
                 err["error"] = it->error;
                 err["node_id"] = edge.source_node;
                 err["node_name"] = node_label(edge.source_node);
-                inputs.append(err);
+                deliver(err);
             }
             continue;
         }
@@ -1022,11 +1142,11 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
             // "output_item" receives the items array, "output_done" the summary.
             if (obj.contains("_loop")) {
                 if (edge.source_port == "output_item") {
-                    inputs.append(obj.value("items"));
+                    deliver(obj.value("items"));
                     continue;
                 }
                 if (edge.source_port == "output_done") {
-                    inputs.append(obj.value("done"));
+                    deliver(obj.value("done"));
                     continue;
                 }
             }
@@ -1037,16 +1157,49 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
             if (obj.value("_ports").isObject()) {
                 const QJsonObject ports = obj.value("_ports").toObject();
                 if (ports.contains(edge.source_port)) {
-                    inputs.append(ports.value(edge.source_port));
+                    deliver(ports.value(edge.source_port));
                     continue;
                 }
             }
         }
 
-        inputs.append(output);
+        deliver(output);
     }
 
-    return inputs;
+    if (!positional || inputs.isEmpty())
+        return inputs;
+
+    // One slot per declared port, so inputs[0] is Dataset A even when only B is
+    // wired. A port with no data gets a null. A second edge into an already
+    // filled port is ignored; an edge whose port is not recorded fills the next
+    // empty slot in stored order. Nothing delivered at all → empty vector, so
+    // the "all inputs filtered out → skipped" rule still applies.
+    const int slot_count = type_def->inputs.size();
+    QVector<QJsonValue> by_port(slot_count);
+    QVector<bool> filled(slot_count, false);
+    QVector<QJsonValue> unplaced;
+    for (int i = 0; i < inputs.size(); ++i) {
+        const int k = input_ports.value(i, -1);
+        if (k < 0) {
+            unplaced.append(inputs[i]);
+        } else if (!filled[k]) {
+            by_port[k] = inputs[i];
+            filled[k] = true;
+        } else {
+            LOG_WARN("Executor", QString("Node '%1': more than one connection into input '%2' — only the first is used")
+                                     .arg(node_label(node_id), type_def->inputs[k].label));
+        }
+    }
+    for (const auto& v : unplaced) {
+        const int k = filled.indexOf(false);
+        if (k < 0)
+            break;
+        by_port[k] = v;
+        filled[k] = true;
+    }
+    if (!filled.contains(true))
+        return {};
+    return by_port;
 }
 
 } // namespace fincept::workflow

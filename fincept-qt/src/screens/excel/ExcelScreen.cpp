@@ -3,12 +3,15 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "screens/excel/SpreadsheetWidget.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -18,6 +21,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QShortcut>
 #include <QTabBar>
 #include <QTextStream>
@@ -48,8 +52,8 @@ namespace fincept::screens {
 using namespace fincept::ui;
 
 static QString kAccent() {
-    return QString("#ea580c");
-} // Orange accent
+    return QString(colors::AMBER()); // the theme accent
+}
 
 // A workbook parsed on a worker thread and handed back to the UI thread. Plain
 // values only — no widgets are created or touched off-thread.
@@ -106,7 +110,7 @@ bool ExcelScreen::open_file_path(const QString& path) {
 
 void ExcelScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    LOG_INFO("ExcelScreen", "Screen shown");
+    LOG_DEBUG("ExcelScreen", "Screen shown");
 
     // A file handed over by the File Manager before this screen existed.
     if (!g_excel_pending_path.isEmpty()) {
@@ -117,7 +121,7 @@ void ExcelScreen::showEvent(QShowEvent* event) {
 
 void ExcelScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    LOG_INFO("ExcelScreen", "Screen hidden");
+    LOG_DEBUG("ExcelScreen", "Screen hidden");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,12 +146,13 @@ void ExcelScreen::build_ui() {
     sheet_tabs_->setStyleSheet(QString("QTabWidget::pane { border:none; background:%3; }"
                                        "QTabBar { background:%4; }"
                                        "QTabBar::tab { background:%5; color:%6; border:1px solid %7;"
-                                       "  padding:4px 14px; font-family:%1; font-size:10px; margin-right:2px; }"
+                                       "  padding:4px 14px; font-family:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; margin-right:2px; }"
                                        "QTabBar::tab:selected { background:%2; color:%8; border-color:%2; }"
-                                       "QTabBar::tab:hover { background:%7; }")
-                                   .arg(fonts::DATA_FAMILY, kAccent(), colors::BG_HOVER(), colors::BORDER_MED(),
-                                        colors::TEXT_DIM(), colors::TEXT_SECONDARY(), colors::TEXT_TERTIARY(),
-                                        colors::TEXT_PRIMARY()));
+                                       "QTabBar::tab:!selected:hover { background:%9; color:%10; }")
+                                   .arg(fonts::DATA_FAMILY, kAccent(), colors::BG_BASE(), colors::BG_RAISED(),
+                                        colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_MED(),
+                                        colors::TEXT_ON_ACCENT(), colors::BG_HOVER())
+                                   .arg(colors::TEXT_PRIMARY()));
 
     // Add initial sheet
     auto* sheet1 = new SpreadsheetWidget("Sheet1", 100, 26, sheet_tabs_);
@@ -167,9 +172,10 @@ void ExcelScreen::build_ui() {
 
     // Status bar
     auto* status_bar = new QWidget(this);
-    status_bar->setFixedHeight(24);
+    status_bar->setMinimumHeight(24); // grows with the status text at large font sizes
+    status_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     status_bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(colors::BG_HOVER(), colors::BORDER_MED()));
+        QString("background:%1; border-top:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_MED()));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
@@ -177,7 +183,7 @@ void ExcelScreen::build_ui() {
 
     status_label_ = new QLabel(this);
     status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
     status_hl->addWidget(status_label_);
     status_hl->addStretch();
 
@@ -190,7 +196,7 @@ QWidget* ExcelScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(40);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BORDER_MED(), colors::TEXT_DIM()));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_MED()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -199,7 +205,7 @@ QWidget* ExcelScreen::build_toolbar() {
     // Title
     toolbar_title_ = new QLabel(tr("EXCEL SPREADSHEET"), bar);
     toolbar_title_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
+        QString("color:%1; font-family:%2; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; margin-right:12px;")
             .arg(kAccent(), fonts::DATA_FAMILY));
     hl->addWidget(toolbar_title_);
 
@@ -208,15 +214,16 @@ QWidget* ExcelScreen::build_toolbar() {
         auto* btn = new QPushButton(text, bar);
         btn->setToolTip(tooltip);
         btn->setStyleSheet(QString("QPushButton { background:%3; color:%4; border:none;"
-                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                                   " font-family:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:600; padding:6px 12px; }"
                                    "QPushButton:hover { background:%5; }"
-                                   "QPushButton:pressed { background:%2; }")
-                               .arg(fonts::DATA_FAMILY, kAccent(), colors::TEXT_DIM(), colors::TEXT_PRIMARY(),
-                                    colors::TEXT_TERTIARY()));
+                                   "QPushButton:pressed { background:%2; color:%6; }")
+                               .arg(fonts::DATA_FAMILY, kAccent(), colors::BG_HOVER(), colors::TEXT_PRIMARY(),
+                                    colors::BORDER_MED(), colors::TEXT_ON_ACCENT()));
         return btn;
     };
 
     import_btn_ = make_btn(tr("IMPORT"), tr("Import XLSX/CSV file"));
+    import_btn_->setProperty("fincept_agent_risk", "destructive"); // replaces the open workbook
     connect(import_btn_, &QPushButton::clicked, this, &ExcelScreen::on_import);
     hl->addWidget(import_btn_);
 
@@ -231,7 +238,7 @@ QWidget* ExcelScreen::build_toolbar() {
     // Separator
     auto* sep1 = new QWidget(bar);
     sep1->setFixedSize(1, 20);
-    sep1->setStyleSheet(QString("background:%1;").arg(colors::TEXT_TERTIARY()));
+    sep1->setStyleSheet(QString("background:%1;").arg(colors::BORDER_MED()));
     hl->addWidget(sep1);
 
     add_sheet_btn_ = make_btn(tr("+ SHEET"), tr("Add new sheet"));
@@ -243,11 +250,13 @@ QWidget* ExcelScreen::build_toolbar() {
     hl->addWidget(rename_btn_);
 
     delete_btn_ = make_btn(tr("DELETE"), tr("Delete current sheet"));
+    delete_btn_->setProperty("fincept_agent_risk", "delete");
     delete_btn_->setStyleSheet(
         QString("QPushButton { background:%2; color:%3; border:none;"
-                " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                "QPushButton:hover { background:%4; }")
-            .arg(fonts::DATA_FAMILY, colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::NEGATIVE()));
+                " font-family:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:600; padding:6px 12px; }"
+                "QPushButton:hover { background:%4; color:%5; }")
+            .arg(fonts::DATA_FAMILY, colors::BG_HOVER(), colors::TEXT_PRIMARY(), colors::DANGER(),
+                 colors::TEXT_ON_ACCENT()));
     connect(delete_btn_, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
     hl->addWidget(delete_btn_);
 
@@ -257,7 +266,7 @@ QWidget* ExcelScreen::build_toolbar() {
     auto* fname_label = new QLabel(file_name_, bar);
     fname_label->setObjectName("excelFileName");
     fname_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
     hl->addWidget(fname_label);
 
     return bar;
@@ -376,7 +385,7 @@ void ExcelScreen::on_import() {
         return;
 
     QString path = QFileDialog::getOpenFileName(this, tr("Import Spreadsheet"), {},
-                                                tr("Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)"));
+                                                tr("Spreadsheet Files (*.xlsx *.csv);;All Files (*)"));
     if (path.isEmpty())
         return;
     import_path(path);
@@ -386,8 +395,16 @@ void ExcelScreen::import_path(const QString& path) {
     // CSV is advertised in the file filter (and in the no-QXlsx message) but was
     // never actually handled — QXlsx::Document on a .csv just reported "no
     // sheets" to the log and the screen silently did nothing.
-    if (QFileInfo(path).suffix().compare(QLatin1String("csv"), Qt::CaseInsensitive) == 0) {
+    const QString suffix = QFileInfo(path).suffix();
+    if (suffix.compare(QLatin1String("csv"), Qt::CaseInsensitive) == 0) {
         import_csv(path);
+        return;
+    }
+    // Legacy binary .xls is not readable by QXlsx (Office Open XML only): it always
+    // ended in "Import failed — No sheets could be read". Say what to do instead.
+    if (suffix.compare(QLatin1String("xls"), Qt::CaseInsensitive) == 0) {
+        QMessageBox::information(this, tr("Import Spreadsheet"),
+                                 tr("Legacy .xls is not supported — save it as .xlsx or .csv and import that."));
         return;
     }
     import_xlsx(path);
@@ -433,8 +450,20 @@ static QString xlsx_number_text(double v, const QXlsx::Format& fmt) {
         return QString::number(v * 100.0, 'f', decimals()) + QLatin1Char('%');
     if (positive.contains(QLatin1String("#,##"))) {
         QString s = QLocale::c().toString(std::fabs(v), 'f', decimals());
-        if (positive.contains(QLatin1Char('$')))
-            s.prepend(QLatin1Char('$'));
+        // The format's currency: Excel's locale-currency syntax "[$<symbol>-<lcid>]" ("[$€-407]",
+        // "[$₹-4009]", "[$£-809]") carries the symbol; a bare '$' is dollars. Every such format
+        // used to come in as "$" ("[$" always contains '$'). A symbol the engine cannot read
+        // back as part of a number (CHF, kr) is left off so the cell stays a number.
+        static const QRegularExpression cur_re(QStringLiteral(R"(\[\$([^\]\-]*)(?:-[0-9A-Fa-f]+)?\])"));
+        const QRegularExpressionMatch cur = cur_re.match(positive);
+        QString symbol;
+        if (cur.hasMatch())
+            symbol = cur.captured(1).trimmed();
+        else if (positive.contains(QLatin1Char('$')))
+            symbol = QStringLiteral("$");
+        double probe = 0.0;
+        if (!symbol.isEmpty() && formula::parse_number(symbol + QStringLiteral("1"), &probe))
+            s.prepend(symbol);
         if (v < 0)
             s = code.section(QLatin1Char(';'), 1, 1).contains(QLatin1Char('(')) ? QLatin1Char('(') + s + QLatin1Char(')')
                                                                                   : QLatin1Char('-') + s;
@@ -707,8 +736,9 @@ static QString excel_format_for_typed(const QString& raw) {
 static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSheetSnapshot>& snapshots) {
     using QXlsx::Format;
 
-    // Header row: bold, dark text on the terminal's amber accent. Numbers in it
-    // stay numbers (years used to be exported as text).
+    // Header row: bold, dark text on an amber fill. Numbers in it stay numbers
+    // (years used to be exported as text). These are cell formats inside the
+    // exported file — document content, fixed whatever the terminal theme.
     Format header_fmt;
     header_fmt.setFontBold(true);
     header_fmt.setFontColor(QColor(Qt::black));
@@ -931,7 +961,13 @@ void ExcelScreen::finish_xlsx_export(const QString& path, int outcome) {
     } else if (outcome == 1) {
         QMessageBox::warning(this, tr("Export failed"), tr("Could not build the workbook contents."));
     } else {
-        LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
+        // QXlsx's saveAs() reports no reason: name the likely one from the target itself.
+        const QFileInfo target(path);
+        const QString why = !target.dir().exists()            ? QStringLiteral("folder does not exist")
+                            : target.exists() && !target.isWritable() ? QStringLiteral("file is read-only")
+                                                                      : QStringLiteral("write failed (file open "
+                                                                                       "elsewhere or no permission)");
+        LOG_ERROR("ExcelScreen", logf("Failed to save XLSX file", {{"path", log_path(path)}, {"error", why}}));
         // Silently logging a failed save is the worst possible outcome — the
         // user believes their workbook is on disk when it isn't.
         QMessageBox::warning(this, tr("Export failed"),
@@ -1211,5 +1247,52 @@ void ExcelScreen::restore_state(const QVariantMap& state) {
     if (sheet_tabs_ && idx < sheet_tabs_->count())
         sheet_tabs_->setCurrentIndex(idx);
 }
+
+// ── ISectionLinked ────────────────────────────────────────────────────────────
+
+bool ExcelScreen::open_section(const QString& section, const QString& focus) {
+    Q_UNUSED(focus);
+    const QString key = section.trimmed();
+    if (key.isEmpty())
+        return true;
+    if (key.compare(QLatin1String("import"), Qt::CaseInsensitive) == 0) {
+        // The IMPORT button (discard question + file picker, both modal): after the link has landed.
+        QMetaObject::invokeMethod(this, [this]() { on_import(); }, Qt::QueuedConnection);
+        return true;
+    }
+    QString name;
+    if (command_rows::split_kind(key, "sheet", &name) && !name.isEmpty() && sheet_tabs_) {
+        for (const Qt::CaseSensitivity cs : {Qt::CaseSensitive, Qt::CaseInsensitive}) {
+            for (int i = 0; i < sheet_tabs_->count(); ++i) {
+                if (sheet_tabs_->tabText(i).compare(name, cs) == 0) {
+                    sheet_tabs_->setCurrentIndex(i); // the sheet tab's click
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> xl_command_rows() {
+    namespace rows = command_rows;
+    return {
+        rows::section(QStringLiteral("excel"), QStringLiteral("import"), ExcelScreen::tr("Import spreadsheet"),
+                      {QStringLiteral("import"), QStringLiteral("xlsx"), QStringLiteral("csv"),
+                       QStringLiteral("open spreadsheet"), QStringLiteral("workbook")},
+                      ExcelScreen::tr("Excel")),
+    };
+}
+
+void xl_install_commands() {
+    command_rows::install(QStringLiteral("excel"), &xl_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(xl_install_commands)
 
 } // namespace fincept::screens

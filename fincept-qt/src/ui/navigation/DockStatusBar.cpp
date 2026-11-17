@@ -2,13 +2,14 @@
 
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 namespace fincept::ui {
 
 DockStatusBar::DockStatusBar(QWidget* parent) : QStatusBar(parent) {
     inner_ = new StatusBar(this);
     addPermanentWidget(inner_, 1);
-    setFixedHeight(26);
+    metrics::follow_fixed_height(this, 26); // grows with the user's font
     setSizeGripEnabled(false);
 
     auto apply_style = [this]() {

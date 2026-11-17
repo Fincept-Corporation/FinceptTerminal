@@ -110,7 +110,7 @@ void NotebookLibraryService::load_catalog() {
 
     QFile f(dir + "/notebooks_manifest.json");
     if (!f.open(QIODevice::ReadOnly)) {
-        LOG_WARN(kTag, "Cannot open notebooks_manifest.json");
+        LOG_WARN(kTag, logf("Cannot open notebooks_manifest.json", {{"path", log_path(f.fileName())}, {"error", f.errorString()}}));
         return;
     }
     const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
@@ -129,10 +129,15 @@ void NotebookLibraryService::load_catalog() {
         e.requirements = o["requires"].toString();
         e.summary = o["summary"].toString();
         e.file = o["file"].toString();
+        for (const QJsonValue& t : o["tags"].toArray())
+            if (!t.toString().trimmed().isEmpty())
+                e.tags << t.toString().trimmed();
+        e.featured = o["featured"].toBool(false);
+        e.network = o["network"].toBool(false);
         if (!e.id.isEmpty() && !e.file.isEmpty())
             catalog_.append(e);
     }
-    LOG_INFO(kTag, QString("Loaded %1 prebuilt notebooks").arg(catalog_.size()));
+    LOG_DEBUG(kTag, QString("Loaded %1 prebuilt notebooks").arg(catalog_.size()));
 }
 
 // ── Seeding ───────────────────────────────────────────────────────────────────
@@ -174,8 +179,12 @@ void NotebookLibraryService::seed_into_files(bool force) {
     if (marker.open(QIODevice::WriteOnly)) {
         marker.write("seeded\n");
         marker.close();
+    } else {
+        // Without the marker the notebooks are re-seeded at every launch.
+        LOG_WARN(kTag, logf("Seed marker could not be written",
+                            {{"path", log_path(marker.fileName())}, {"error", marker.errorString()}}));
     }
-    LOG_INFO(kTag, QString("Seeded %1 prebuilt notebooks into File Manager").arg(seeded));
+    LOG_DEBUG(kTag, QString("Seeded %1 prebuilt notebooks into File Manager").arg(seeded));
 }
 
 // ── Working copy (copy-on-open) ────────────────────────────────────────────────
@@ -208,6 +217,63 @@ QString NotebookLibraryService::working_copy_for(const NotebookCatalogEntry& ent
     return src;
 }
 
+// ── Saved notebooks / names ─────────────────────────────────────────────────────
+
+QVector<NotebookFileEntry> NotebookLibraryService::saved_notebooks() {
+    auto& fm = FileManagerService::instance();
+    QSet<QString> template_files;
+    for (const NotebookCatalogEntry& e : catalog())
+        template_files.insert(e.file);
+    QVector<NotebookFileEntry> out;
+    QSet<QString> seen;
+    for (const QJsonValue& v : fm.files_for_screen("code_editor")) {
+        const QJsonObject o = v.toObject();
+        const QString path = fm.full_path(o["name"].toString());
+        if (path.isEmpty() || seen.contains(path) || !path.endsWith(QLatin1String(".ipynb"), Qt::CaseInsensitive))
+            continue;
+        const QFileInfo fi(path);
+        if (!fi.isFile())
+            continue;
+        seen.insert(path);
+        NotebookFileEntry e;
+        e.path = fi.absoluteFilePath();
+        e.name = o["originalName"].toString();
+        if (e.name.isEmpty())
+            e.name = fi.fileName();
+        e.modified = fi.lastModified();
+        e.from_template = template_files.contains(e.name);
+        out.append(e);
+    }
+    std::sort(out.begin(), out.end(),
+              [](const NotebookFileEntry& a, const NotebookFileEntry& b) { return a.modified > b.modified; });
+    return out;
+}
+
+QString NotebookLibraryService::display_name_for(const QString& path) {
+    const QFileInfo fi(path);
+    auto& fm = FileManagerService::instance();
+    const QString storage = QDir::cleanPath(QDir(fm.storage_dir()).absolutePath());
+    if (QDir::cleanPath(fi.absolutePath()).compare(storage, Qt::CaseInsensitive) == 0) {
+        for (const QJsonValue& v : fm.files_for_screen("code_editor")) {
+            const QJsonObject o = v.toObject();
+            if (o["name"].toString() == fi.fileName()) {
+                const QString original = o["originalName"].toString();
+                if (!original.isEmpty())
+                    return original;
+            }
+        }
+    }
+    return fi.fileName();
+}
+
+const NotebookCatalogEntry* NotebookLibraryService::template_for(const QString& path) {
+    const QString name = display_name_for(path);
+    for (const NotebookCatalogEntry& e : catalog())
+        if (e.file == name)
+            return &e;
+    return nullptr;
+}
+
 // ── Cell execution ────────────────────────────────────────────────────────────
 // Runs scripts/notebook_cell_runner.py through PythonRunner (D1/P4). The cell
 // source goes over stdin; the runner streams the cell's stdout/stderr and
@@ -215,6 +281,7 @@ QString NotebookLibraryService::working_copy_for(const NotebookCatalogEntry& ent
 
 namespace {
 constexpr int kNbMaxOutputChars = 2 * 1024 * 1024; // per run; the rest is dropped and flagged
+constexpr int kNbMaxDisplays = 16;                  // figures / tables kept per run
 constexpr int kNbFlushIntervalMs = 100;
 const QLatin1String kNbEventMarker("\x1e" "FNB ");
 } // namespace
@@ -277,8 +344,10 @@ QString NotebookLibraryService::run_cell(const NotebookRunRequest& request, QObj
         return run_id;
     }
 
-    run->cancel_file = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-                           .filePath(QStringLiteral("fincept_nbcancel_%1").arg(run_id));
+    // The profile's own temp folder: run ids restart at 1 in every process, and
+    // the OS temp folder is shared with other profiles, builds and accounts.
+    run->cancel_file = fincept::AppPaths::temp_file(
+        QStringLiteral("nbcancel_%1_%2").arg(QCoreApplication::applicationPid()).arg(run_id));
     runs_.insert(run_id, run);
 
     if (!flush_timer_) {
@@ -301,7 +370,16 @@ QString NotebookLibraryService::run_cell(const NotebookRunRequest& request, QObj
     // The runner enforces the cell limit itself and reports it; the watchdog is
     // only the backstop for a runner that cannot (grace + process start-up).
     opts.timeout_ms = (std::max(1, request.timeout_s) + 30) * 1000;
-    opts.stdin_data = request.code.toUtf8();
+    if (request.prefix_code.isEmpty()) {
+        opts.stdin_data = request.code.toUtf8();
+    } else {
+        // Earlier cells to replay first (silently) so this cell sees their variables.
+        args << QStringLiteral("--json-stdin");
+        QJsonObject payload;
+        payload[QStringLiteral("prefix")] = QJsonArray::fromStringList(request.prefix_code);
+        payload[QStringLiteral("code")] = request.code;
+        opts.stdin_data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    }
     if (opts.stdin_data.isEmpty())
         opts.stdin_data = QByteArrayLiteral("\n");
 
@@ -331,6 +409,9 @@ void NotebookLibraryService::on_run_line(const QString& run_id, const QString& l
             run.started = true;
         } else if (type == QLatin1String("result")) {
             run.result.result_text = ev.value(QStringLiteral("text")).toString();
+        } else if (type == QLatin1String("display")) {
+            if (run.result.displays.size() < kNbMaxDisplays)
+                run.result.displays.append(ev);
         } else if (type == QLatin1String("error")) {
             run.result.error_name = ev.value(QStringLiteral("ename")).toString();
             run.result.error_value = ev.value(QStringLiteral("evalue")).toString();

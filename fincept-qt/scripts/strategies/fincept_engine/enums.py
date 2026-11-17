@@ -75,6 +75,7 @@ class OrderType(IntEnum):
     COMBO_LIMIT = 8
     COMBO_LEG_LIMIT = 9
     TRAILING_STOP = 10
+    OPTION_EXERCISE = 11
 
 
 class OrderStatus(IntEnum):
@@ -137,6 +138,42 @@ class TimeInForce:
     @staticmethod
     def day():
         return TimeInForce.DAY
+
+    @staticmethod
+    def good_til_date(expiry):
+        return _GoodTilDate(expiry)
+
+    GoodTilDate = good_til_date
+
+
+class _GoodTilDate(str):
+    """time_in_force value that expires the order after `expiry` (a date)."""
+    def __new__(cls, expiry):
+        obj = super().__new__(cls, "gtd")
+        obj.expiry = expiry
+        return obj
+
+
+class OrderField(IntEnum):
+    LIMIT_PRICE = 0
+    STOP_PRICE = 1
+    TRIGGER_PRICE = 2
+    TRAILING_AMOUNT = 3
+    TRAILING_AS_PERCENTAGE = 4
+    LimitPrice = 0
+    StopPrice = 1
+    TriggerPrice = 2
+
+
+class OrderRequestStatus(IntEnum):
+    UNPROCESSED = 0
+    PROCESSING = 1
+    PROCESSED = 2
+    ERROR = 3
+    Unprocessed = 0
+    Processing = 1
+    Processed = 2
+    Error = 3
 
 
 class DataNormalizationMode(IntEnum):

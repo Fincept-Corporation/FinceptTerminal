@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/node_editor/NodeEditorTypes.h"
 
@@ -9,6 +10,10 @@
 #include <QTimer>
 #include <QUndoStack>
 #include <QWidget>
+
+namespace fincept::ui {
+class EmptyState;
+}
 
 namespace fincept::workflow {
 
@@ -22,11 +27,15 @@ class MiniMap;
 class ExecutionResultsPanel;
 
 /// Main node editor screen — 3-panel layout with toolbar.
-class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScreen {
+class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit NodeEditorScreen(QWidget* parent = nullptr);
     ~NodeEditorScreen() override;
+
+    /// ISectionLinked — "templates" (the TEMPLATES picker) | "load" (the LOAD picker of saved
+    /// workflows). Loading replaces the canvas only after its own question; nothing runs. focus unused.
+    bool open_section(const QString& section, const QString& focus) override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
@@ -37,10 +46,23 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void wire_signals();
+    /// The canvas's first-run state (shown while no node is placed): what it is,
+    /// START FROM A TEMPLATE / LOAD SAVED WORKFLOW and a few templates to click.
+    void build_canvas_empty_state();
+    void apply_canvas_empty_texts();
+    /// The built-in templates, in picker order ("1. Hello World — …").
+    QStringList template_titles() const;
+    /// Replace the canvas with template `index` of template_titles() (asks first
+    /// when the canvas has nodes; one undo step).
+    void load_template(int index);
+    /// After a load: select the entry node (a trigger, else the left-most) so the
+    /// properties panel shows something instead of "nothing selected".
+    void select_entry_node();
 
     /// Ask before a run that can act for real. In LIVE mode, any node that would reach
     /// a broker requires typing LIVE (skipped when `already_confirmed`, i.e. the user
@@ -88,6 +110,8 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     /// Push a RemoveNodesCommand for `ids`, capturing their current defs and
     /// every edge that touches them so undo restores the wiring too.
     void push_remove_nodes(const QStringList& ids, const QString& label);
+    /// After an undo / redo of a parameter or name edit: re-show that node's properties.
+    void reshow_properties(const QString& node_id);
     /// Snapshot every node position (drag start) / diff against it (drag end).
     void begin_move_snapshot();
     void commit_move_snapshot();
@@ -102,6 +126,7 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     NodeCanvas* canvas_ = nullptr;
     NodeScene* scene_ = nullptr;
     NodePropertiesPanel* properties_ = nullptr;
+    fincept::ui::EmptyState* canvas_empty_ = nullptr; // child of canvas_->viewport()
 
     QUndoStack* undo_stack_ = nullptr;
     QTimer* auto_save_timer_ = nullptr;

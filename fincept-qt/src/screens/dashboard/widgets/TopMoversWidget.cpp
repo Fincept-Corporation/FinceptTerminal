@@ -2,278 +2,418 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
-#include "screens/dashboard/widgets/DashboardFormat.h"
+#include "screens/dashboard/widgets/RegionPin.h"
+#include "screens/dashboard/widgets/SymbolListDialog.h"
+#include "services/markets/MarketDataService.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/tables/DataTable.h"
 #include "ui/theme/Theme.h"
 
-#include <QDialogButtonBox>
-#include <QFormLayout>
+#include <QButtonGroup>
+#include <QHBoxLayout>
+#include <QHeaderView>
 #include <QJsonArray>
-#include <QLineEdit>
-#include <QRegularExpression>
+#include <QLabel>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QTimer>
+
+#include <algorithm>
+#include <cmath>
 
 namespace fincept::screens::widgets {
 
 namespace {
-constexpr int kTopMoversMaxSymbols = 60;
 
-QStringList top_movers_parse_symbols(const QString& text) {
-    static const QRegularExpression kSep(QStringLiteral("[,\\s]+"));
-    QStringList out;
-    for (const QString& p : text.split(kSep, Qt::SkipEmptyParts)) {
-        const QString s = p.trimmed().toUpper();
-        if (!s.isEmpty() && !out.contains(s))
-            out << s;
-    }
-    return out.mid(0, kTopMoversMaxSymbols);
-}
+namespace tm_fmt = fincept::ui::formatting;
+using fincept::services::MarketDataService;
+using fincept::services::ScreenerService;
+
+enum TmCol { TmSym = 0, TmLast, TmPct, TmVol, TmRel, TmCap, TmCount };
+
 } // namespace
 
-TopMoversWidget::TopMoversWidget(const QJsonObject& cfg, QWidget* parent) : BaseWidget(tr("TOP MOVERS"), parent) {
-    // Tab toggle
-    auto* tab_bar = new QWidget(this);
-    tab_bar->setFixedHeight(26);
-    auto* tl = new QHBoxLayout(tab_bar);
-    tl->setContentsMargins(4, 2, 4, 2);
-    tl->setSpacing(0);
-
-    gainers_btn_ = new QPushButton(QString(QChar(0x25B2)) + " " + tr("GAINERS"));
-    losers_btn_ = new QPushButton(QString(QChar(0x25BC)) + " " + tr("LOSERS"));
-    gainers_btn_->setAccessibleName(tr("Show top gainers"));
-    losers_btn_->setAccessibleName(tr("Show top losers"));
-
-    connect(gainers_btn_, &QPushButton::clicked, this, [this]() { show_tab(true); });
-    connect(losers_btn_, &QPushButton::clicked, this, [this]() { show_tab(false); });
-
-    tl->addWidget(gainers_btn_, 1);
-    tl->addWidget(losers_btn_, 1);
-
-    content_layout()->addWidget(tab_bar);
-
-    universe_label_ = new QLabel(this);
-    universe_label_->setObjectName("topMoversUniverse");
-    universe_label_->setContentsMargins(6, 2, 6, 2);
-    content_layout()->addWidget(universe_label_);
-
-    // Table
-    table_ = new ui::DataTable;
-    table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG%")});
-    table_->set_column_widths({100, 90, 80});
-    table_->setToolTip(tr("Double-click a row to open it in Equity Research · right-click for more"));
-    content_layout()->addWidget(table_);
-    install_symbol_menu(table_, 0);
-
-    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
-        if (auto* it = table_->item(row, 0))
-            open_symbol(it->text());
+TopMoversWidget::TopMoversWidget(const QJsonObject& cfg, QWidget* parent)
+    : BaseWidget(tr("TOP MOVERS"), parent, ui::colors::AMBER()) {
+    auto* bar = new QWidget(this);
+    bar->setObjectName("tmTabs");
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(6, 3, 6, 3);
+    hl->setSpacing(2);
+    tabs_ = new QButtonGroup(this);
+    tabs_->setExclusive(true);
+    const QString labels[] = {tr("GAINERS"), tr("LOSERS"), tr("MOST ACTIVE")};
+    for (int i = 0; i < 3; ++i) {
+        auto* b = new QPushButton(labels[i], bar);
+        b->setObjectName("tmTab");
+        b->setCheckable(true);
+        b->setCursor(Qt::PointingHandCursor);
+        tabs_->addButton(b, i);
+        hl->addWidget(b);
+    }
+    hl->addStretch();
+    content_layout()->addWidget(bar);
+    connect(tabs_, &QButtonGroup::idClicked, this, [this](int id) {
+        tab_ = id;
+        rows_.clear();
+        if (list_mode_)
+            render();
+        else
+            run_screen(false);
+        emit config_changed(config());
     });
 
-    connect(this, &BaseWidget::refresh_requested, this, &TopMoversWidget::refresh_data);
+    table_ = new ui::DataTable(this);
+    table_->set_headers({tr("SYMBOL"), tr("LAST"), tr("CHG%"), tr("VOL"), tr("REL VOL"), tr("MCAP")});
+    table_->horizontalHeader()->setStretchLastSection(false);
+    table_->horizontalHeader()->setSectionResizeMode(TmSym, QHeaderView::Stretch);
+    table_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table_->setToolTip(tr("Double-click a row to open it in Equity Research · right-click for more"));
+    content_layout()->addWidget(table_, 1);
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        if (auto* it = table_->item(row, TmSym))
+            open_symbol(it->data(Qt::UserRole).toString());
+    });
+    install_symbol_menu(table_, TmSym, Qt::UserRole);
 
-    symbols_ = services::MarketDataService::mover_symbols();
+    footer_ = new QLabel(this);
+    footer_->setWordWrap(true);
+    content_layout()->addWidget(footer_);
+
+    auto& svc = ScreenerService::instance();
+    connect(&svc, &ScreenerService::results_ready, this, [this](const services::ScreenerResult& r) {
+        if (!list_mode_ && r.key == pending_key_)
+            apply_result(r);
+    });
+    connect(&svc, &ScreenerService::run_failed, this, [this](const QString& key, const QString& err) {
+        if (list_mode_ || key != pending_key_)
+            return;
+        if (rows_.isEmpty())
+            set_error(tr("Movers unavailable: %1").arg(err));
+        else
+            footer_->setText(tr("Last refresh failed — showing earlier results: %1").arg(err));
+    });
+    connect(&core::market::MarketProfileStore::instance(), &core::market::MarketProfileStore::profile_changed, this,
+            [this]() {
+                if (!region_pin_.isEmpty())
+                    return; // pinned to its own region (RegionPin.h)
+                update_title();
+                if (!list_mode_) {
+                    rows_.clear();
+                    if (isVisible())
+                        run_screen(false);
+                }
+            });
+
+    refresh_timer_ = new QTimer(this);
+    refresh_timer_->setInterval(5 * 60 * 1000);
+    connect(refresh_timer_, &QTimer::timeout, this, [this]() {
+        if (!list_mode_)
+            run_screen(false);
+    });
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (list_mode_) {
+            QStringList t;
+            for (const auto& s : symbols_)
+                t << MarketDataService::quote_topic(s);
+            datahub::DataHub::instance().request(t, true);
+        } else {
+            run_screen(true);
+        }
+    });
+
+    // Settings > Currency & Number Format: re-format the rows held, no fetch.
+    tm_fmt::on_format_changed(this, [this]() { schedule_render([this]() { render(); }); });
+
     set_configurable(true);
-    apply_styles();
+    on_theme_changed();
     set_loading(true);
     apply_config(cfg);
 }
 
+void TopMoversWidget::apply_result(const services::ScreenerResult& r) {
+    rows_.clear();
+    for (const auto& s : r.rows) {
+        Row row;
+        row.symbol = s.symbol;
+        row.name = s.name;
+        row.currency = s.currency;
+        row.price = s.price;
+        row.change_pct = s.change_pct;
+        row.volume = s.volume;
+        row.rel_volume = (std::isfinite(s.volume) && std::isfinite(s.avg_volume_3m) && s.avg_volume_3m > 0)
+                             ? s.volume / s.avg_volume_3m
+                             : services::kMarketDataAbsent;
+        row.market_cap = s.market_cap;
+        row.mcap_currency = s.market_cap_currency.isEmpty() ? s.currency : s.market_cap_currency;
+        rows_.append(row);
+    }
+    set_loading(false);
+    footer_->setText(dash_screens::result_footer(r, tile_profile(region_pin_)));
+    render();
+}
+
+dash_screens::MoverKind TopMoversWidget::kind() const {
+    return tab_ == 1 ? dash_screens::MoverKind::Losers
+                     : tab_ == 2 ? dash_screens::MoverKind::Active : dash_screens::MoverKind::Gainers;
+}
+
+void TopMoversWidget::update_title() {
+    set_title(list_mode_ ? tr("TOP MOVERS · MY LIST")
+                         : tr("TOP MOVERS · %1")
+                               .arg(core::market::market_profile_name(tile_profile(region_pin_))
+                                        .toUpper()));
+}
+
 QJsonObject TopMoversWidget::config() const {
-    // Persist only a user-chosen universe; the default keeps tracking
-    // MarketDataService::mover_symbols() if that list is ever updated.
-    QJsonObject o;
-    if (symbols_ != services::MarketDataService::mover_symbols())
+    QJsonObject o{{"universe", list_mode_ ? "list" : "region"}, {"tab", tab_}};
+    if (list_mode_)
         o.insert("symbols", QJsonArray::fromStringList(symbols_));
+    store_region_pin(o, region_pin_);
     return o;
 }
 
 void TopMoversWidget::apply_config(const QJsonObject& cfg) {
-    QStringList next;
+    region_pin_ = region_pin_from(cfg);
+    QStringList syms;
     for (const auto& v : cfg.value("symbols").toArray()) {
         const QString s = v.toString().trimmed().toUpper();
-        if (!s.isEmpty() && !next.contains(s))
-            next << s;
+        if (!s.isEmpty() && !syms.contains(s))
+            syms << s;
     }
-    if (next.isEmpty())
-        next = services::MarketDataService::mover_symbols();
-    next = next.mid(0, kTopMoversMaxSymbols);
-    if (next != symbols_) {
-        symbols_ = next;
-        row_cache_.clear();
-        all_quotes_.clear();
-        if (isVisible()) {
-            datahub::DataHub::instance().unsubscribe(this);
-            hub_active_ = false;
-            hub_subscribe_all();
-        }
+    const QString universe = cfg.value("universe").toString();
+    // Legacy configs carried only "symbols": keep showing that list.
+    list_mode_ = universe == QLatin1String("list") || (universe.isEmpty() && !syms.isEmpty());
+    symbols_ = syms;
+    tab_ = std::clamp(cfg.value("tab").toInt(0), 0, 2);
+    if (auto* b = tabs_->button(tab_))
+        b->setChecked(true);
+    rows_.clear();
+    quotes_.clear();
+    update_title();
+    if (isVisible()) {
+        datahub::DataHub::instance().unsubscribe(this);
+        hub_active_ = false;
+        untrack_topics();
+        if (list_mode_)
+            subscribe_list();
+        else
+            run_screen(false);
     }
-    show_tab(showing_gainers_);
 }
 
 QDialog* TopMoversWidget::make_config_dialog(QWidget* parent) {
-    auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle(tr("Configure — Top Movers"));
-    auto* form = new QFormLayout(dlg);
-    auto* edit = new QLineEdit(dlg);
-    edit->setText(symbols_.join(QStringLiteral(", ")));
-    edit->setPlaceholderText(tr("e.g. AAPL, MSFT, NVDA (empty = default list)"));
-    edit->setToolTip(tr("Movers are ranked within these symbols only (up to %1).").arg(kTopMoversMaxSymbols));
-    form->addRow(tr("Universe"), edit);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
-    form->addRow(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, dlg, [this, dlg, edit]() {
-        QJsonObject cfg;
-        cfg.insert("symbols", QJsonArray::fromStringList(top_movers_parse_symbols(edit->text())));
+    QVector<QuoteGridEntry> current;
+    const QStringList base = list_mode_ ? symbols_ : tile_profile(region_pin_).movers;
+    for (const auto& s : base)
+        current.append({s, {}, {}});
+    auto* dlg = new SymbolListDialog(tr("Movers universe — your own list, or Region defaults for the region's "
+                                        "large-cap screener"),
+                                     current,
+                                     [pin = region_pin_]() {
+                                         QVector<QuoteGridEntry> d;
+                                         for (const auto& s : tile_profile(pin).movers)
+                                             d.append({s, {}, {}});
+                                         return d;
+                                     },
+                                     parent, 100);
+    connect(dlg, &QDialog::accepted, this, [this, dlg]() {
+        QJsonObject cfg{{"tab", tab_}};
+        store_region_pin(cfg, region_pin_);
+        if (dlg->follows_defaults()) {
+            cfg.insert("universe", "region");
+        } else {
+            QJsonArray arr;
+            for (const auto& e : dlg->entries())
+                arr.append(e.symbol);
+            cfg.insert("universe", "list");
+            cfg.insert("symbols", arr);
+        }
         apply_config(cfg);
         emit config_changed(config());
-        dlg->accept();
     });
-    connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     return dlg;
 }
 
-void TopMoversWidget::apply_styles() {
-    if (universe_label_)
-        universe_label_->setStyleSheet(
-            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    // Theme changed → force the tab-button stylesheets to be re-applied.
-    tab_style_applied_ = false;
-    show_tab(showing_gainers_);
+void TopMoversWidget::run_screen(bool force) {
+    const auto& p = tile_profile(region_pin_);
+    auto& svc = ScreenerService::instance();
+    pending_key_ = svc.run(dash_screens::movers_query(p, kind(), 25), force);
+    if (const auto* last = svc.last_result(pending_key_); last && rows_.isEmpty()) {
+        // Show the last-known result at once; the run's answer replaces it.
+        apply_result(*last);
+    } else if (rows_.isEmpty()) {
+        set_loading(true);
+    }
 }
 
-void TopMoversWidget::on_theme_changed() {
-    apply_styles();
+void TopMoversWidget::subscribe_list() {
+    auto& hub = datahub::DataHub::instance();
+    hub.unsubscribe(this);
+    QStringList topics;
+    for (const auto& s : symbols_)
+        topics << MarketDataService::quote_topic(s);
+    track_topics(topics, /*drive_loading_overlay=*/true);
+    for (const auto& s : symbols_) {
+        const QString t = MarketDataService::quote_topic(s);
+        hub.subscribe(this, t, [this, s, t](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            quotes_.insert(s, v.value<services::QuoteData>());
+            note_topic_value(t);
+            schedule_render([this]() { render(); });
+        });
+    }
+    hub_active_ = true;
+    footer_->setText(tr("Ranked from live quotes of your %n symbol(s)", "", int(symbols_.size())));
+}
+
+void TopMoversWidget::on_topic_errors_changed() {
+    schedule_render([this]() { render(); });
+}
+
+int TopMoversWidget::visible_rows() const {
+    const int rh = std::max(12, table_->verticalHeader()->defaultSectionSize());
+    const int h = table_->viewport()->height();
+    return std::max(3, h / rh);
+}
+
+void TopMoversWidget::render() {
+    QVector<Row> rows = rows_;
+    if (list_mode_) {
+        rows.clear();
+        for (const auto& s : symbols_) {
+            const auto q = quotes_.constFind(s);
+            if (q == quotes_.constEnd())
+                continue;
+            Row r;
+            r.symbol = s;
+            r.name = q->name;
+            r.currency = q->currency;
+            r.price = q->price;
+            r.change_pct = q->change_pct;
+            r.volume = q->volume;
+            r.rel_volume = (q->volume > 0 && std::isfinite(q->average_volume) && q->average_volume > 0)
+                               ? q->volume / q->average_volume
+                               : services::kMarketDataAbsent;
+            rows.append(r);
+        }
+        const auto k = kind();
+        std::sort(rows.begin(), rows.end(), [k](const Row& a, const Row& b) {
+            if (k == dash_screens::MoverKind::Active)
+                return (std::isfinite(a.volume) ? a.volume : -1) > (std::isfinite(b.volume) ? b.volume : -1);
+            const double x = std::isfinite(a.change_pct) ? a.change_pct : 0;
+            const double y = std::isfinite(b.change_pct) ? b.change_pct : 0;
+            return k == dash_screens::MoverKind::Losers ? x < y : x > y;
+        });
+        if (k == dash_screens::MoverKind::Gainers)
+            rows.erase(std::remove_if(rows.begin(), rows.end(), [](const Row& r) { return !(r.change_pct > 0); }),
+                       rows.end());
+        if (k == dash_screens::MoverKind::Losers)
+            rows.erase(std::remove_if(rows.begin(), rows.end(), [](const Row& r) { return !(r.change_pct < 0); }),
+                       rows.end());
+    }
+    const int n = std::min<int>(rows.size(), visible_rows());
+    // Market caps keep their own currency; a column that mixes currencies says which.
+    tm_fmt::CurrencyMix cap_mix;
+    for (int i = 0; i < n; ++i)
+        cap_mix.add(rows[i].mcap_currency);
+    table_->setRowCount(n);
+    for (int i = 0; i < n; ++i) {
+        const Row& r = rows[i];
+        auto cell = [&](int c) {
+            auto* it = table_->item(i, c);
+            if (!it) {
+                it = new QTableWidgetItem;
+                if (c != TmSym)
+                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                table_->setItem(i, c, it);
+            }
+            it->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
+            return it;
+        };
+        auto* sym = cell(TmSym);
+        sym->setText(r.symbol);
+        sym->setData(Qt::UserRole, r.symbol);
+        sym->setToolTip(r.name.isEmpty() ? r.symbol : r.symbol + QStringLiteral(" — ") + r.name);
+        cell(TmLast)->setText(tm_fmt::price(r.price, tm_fmt::instrument_for_symbol(r.symbol, r.currency)));
+        auto* pct = cell(TmPct);
+        pct->setText(tm_fmt::pct(r.change_pct));
+        pct->setForeground(QColor(!std::isfinite(r.change_pct) || r.change_pct == 0 ? ui::colors::TEXT_SECONDARY()
+                                  : r.change_pct > 0                              ? ui::colors::POSITIVE()
+                                                                                  : ui::colors::NEGATIVE()));
+        cell(TmVol)->setText(tm_fmt::volume(r.volume));
+        auto* rel = cell(TmRel);
+        rel->setText(std::isfinite(r.rel_volume) ? tm_fmt::ratio(r.rel_volume, 1) : tm_fmt::placeholder());
+        rel->setToolTip(tr("Today's volume over the 3-month average"));
+        if (std::isfinite(r.rel_volume) && r.rel_volume >= 2.0)
+            rel->setForeground(QColor(ui::colors::WARNING()));
+        cell(TmCap)->setText(std::isfinite(r.market_cap)
+                                 ? tm_fmt::money_in_column(r.market_cap, r.mcap_currency, cap_mix,
+                                                           tm_fmt::Compact::FromSettings)
+                                 : tm_fmt::placeholder());
+    }
+    // Columns drop out as the tile narrows.
+    const int dw = std::max(6, table_->fontMetrics().horizontalAdvance(QLatin1Char('0')));
+    const int w = table_->viewport()->width();
+    const bool show[TmCount] = {true, true, true, w >= 40 * dw, w >= 48 * dw, w >= 58 * dw && !list_mode_};
+    for (int c = TmLast; c < TmCount; ++c) {
+        table_->setColumnHidden(c, !show[c]);
+        table_->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
+        // + 18: DataTable cells pad 8 px each side ("+39.1…" was elided with + 10).
+        table_->setColumnWidth(c, (c == TmCap ? 10 : 8) * dw + 18);
+    }
 }
 
 void TopMoversWidget::showEvent(QShowEvent* e) {
     BaseWidget::showEvent(e);
-    if (!hub_active_)
-        hub_subscribe_all();
+    if (list_mode_) {
+        if (!hub_active_)
+            subscribe_list();
+    } else {
+        run_screen(false);
+        refresh_timer_->start();
+    }
 }
 
 void TopMoversWidget::hideEvent(QHideEvent* e) {
     BaseWidget::hideEvent(e);
-    if (hub_active_)
-        hub_unsubscribe_all();
-}
-
-void TopMoversWidget::refresh_data() {
-    auto& hub = datahub::DataHub::instance();
-    QStringList topics;
-    topics.reserve(symbols_.size());
-    for (const auto& sym : symbols_)
-        topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
-}
-
-void TopMoversWidget::hub_subscribe_all() {
-    auto& hub = datahub::DataHub::instance();
-    set_loading_progress(row_cache_.size(), symbols_.size());
-    for (const auto& sym : symbols_) {
-        const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
-            if (!v.canConvert<services::QuoteData>())
-                return;
-            row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading_progress(row_cache_.size(), symbols_.size());
-            // One sort + redraw per delivery burst, not one per symbol.
-            schedule_render([this]() { rebuild_from_cache(); });
-        });
-    }
-    hub_active_ = true;
-}
-
-void TopMoversWidget::hub_unsubscribe_all() {
-    datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
+    refresh_timer_->stop();
 }
 
-void TopMoversWidget::rebuild_from_cache() {
-    all_quotes_.clear();
-    all_quotes_.reserve(row_cache_.size());
-    for (const auto& sym : symbols_) {
-        auto it = row_cache_.constFind(sym);
-        if (it != row_cache_.constEnd())
-            all_quotes_.append(it.value());
-    }
-    std::sort(all_quotes_.begin(), all_quotes_.end(),
-              [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
-    show_tab(showing_gainers_);
+void TopMoversWidget::resizeEvent(QResizeEvent* e) {
+    BaseWidget::resizeEvent(e);
+    schedule_render([this]() { render(); });
 }
 
-void TopMoversWidget::show_tab(bool gainers) {
-    // show_tab() runs on every hub delivery (via rebuild_from_cache), but the
-    // two tab-button stylesheets only depend on `gainers` + the theme. Each
-    // setStyleSheet is a full CSS reparse, so re-applying them per tick was
-    // pure waste — only touch them when the state actually changed.
-    const bool tab_style_dirty = (!tab_style_applied_ || showing_gainers_ != gainers);
-    showing_gainers_ = gainers;
-
-    if (tab_style_dirty) {
-        tab_style_applied_ = true;
-        auto active_g = QString("QPushButton { background: %1; color: %2; border: none; "
-                                "font-size: 9px; font-weight: bold; padding: 4px; }")
-                            .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE());
-        auto active_l = QString("QPushButton { background: %1; color: %2; border: none; "
-                                "font-size: 9px; font-weight: bold; padding: 4px; }")
-                            .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE());
-        auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
-                                "font-size: 9px; font-weight: bold; padding: 4px; }")
-                            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY());
-
-        gainers_btn_->setStyleSheet(gainers ? active_g : inactive);
-        losers_btn_->setStyleSheet(gainers ? inactive : active_l);
-    }
-
-    table_->clear_data();
-
-    QVector<services::QuoteData> filtered;
-    for (const auto& q : all_quotes_) {
-        if (gainers && q.change_pct > 0)
-            filtered.append(q);
-        if (!gainers && q.change_pct < 0)
-            filtered.append(q);
-    }
-
-    // Show top 6
-    const int count = static_cast<int>(std::min(filtered.size(), qsizetype(6)));
-    for (int i = 0; i < count; ++i) {
-        const auto& q = gainers ? filtered[i] : filtered[filtered.size() - 1 - i];
-        table_->add_row({q.symbol, dash_fmt::price(q.price, q.symbol), dash_fmt::signed_pct(q.change_pct)});
-        int row = table_->rowCount() - 1;
-        table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
-    }
-
-    // Say what the ranking is drawn from — and why the list can be empty.
-    if (universe_label_) {
-        const int have = static_cast<int>(all_quotes_.size());
-        const int total = static_cast<int>(symbols_.size());
-        QString text = tr("Ranked among %1 tracked symbols").arg(total);
-        if (have > 0 && have < total)
-            text += tr(" (%1 quoted)").arg(have);
-        if (have > 0 && count == 0)
-            text += gainers ? tr(" — none is up today") : tr(" — none is down today");
-        universe_label_->setText(text);
-        universe_label_->setToolTip(symbols_.join(QStringLiteral(", ")));
-    }
+void TopMoversWidget::on_theme_changed() {
+    QWidget* tab_bar = tabs_->buttons().isEmpty() ? nullptr : tabs_->buttons().first()->parentWidget();
+    if (tab_bar)
+        set_css_cached(tab_bar, QString("QWidget#tmTabs{background:transparent;}"
+                          "QPushButton#tmTab{background:%1;color:%2;border:1px solid %3;padding:1px 8px;"
+                          "font-size:%4px;font-weight:bold;}"
+                          "QPushButton#tmTab:checked{background:%5;color:%6;border-color:%6;}"
+                          "QPushButton#tmTab:hover{color:%7;}")
+                      .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
+                      .arg(ui::fonts::px(-4))
+                      .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+    set_css_cached(footer_, QString("color:%1;font-size:%2px;padding:0 6px 2px 6px;background:transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::fonts::px(-4)));
+    render();
 }
 
 void TopMoversWidget::retranslateUi() {
     BaseWidget::retranslateUi();
-    set_title(tr("TOP MOVERS"));
-    // Keep the ▲ / ▼ glyph prefixes the constructor applied — dropping them
-    // here silently changed the button labels on any language switch.
-    if (gainers_btn_) {
-        gainers_btn_->setText(QString(QChar(0x25B2)) + " " + tr("GAINERS"));
-        gainers_btn_->setAccessibleName(tr("Show top gainers"));
-    }
-    if (losers_btn_) {
-        losers_btn_->setText(QString(QChar(0x25BC)) + " " + tr("LOSERS"));
-        losers_btn_->setAccessibleName(tr("Show top losers"));
-    }
-    // Table headers are set once in the ctor — re-apply them here, which the
-    // old rebuild_from_cache() call never did.
-    if (table_)
-        table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG%")});
-    rebuild_from_cache();
+    const QString labels[] = {tr("GAINERS"), tr("LOSERS"), tr("MOST ACTIVE")};
+    for (int i = 0; i < 3; ++i)
+        if (auto* b = tabs_->button(i))
+            b->setText(labels[i]);
+    table_->set_headers({tr("SYMBOL"), tr("LAST"), tr("CHG%"), tr("VOL"), tr("REL VOL"), tr("MCAP")});
+    update_title();
 }
 
 } // namespace fincept::screens::widgets

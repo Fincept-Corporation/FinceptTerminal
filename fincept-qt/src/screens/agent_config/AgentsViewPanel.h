@@ -12,9 +12,16 @@
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTextEdit>
 #include <QWidget>
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
@@ -26,6 +33,12 @@ class AgentsViewPanel : public QWidget {
     explicit AgentsViewPanel(QWidget* parent = nullptr);
     QVariantMap save_draft() const;
     void restore_draft(const QVariantMap& draft);
+    /// The agents screen's rail is the agent list: it hides this panel's own list.
+    void set_list_visible(bool visible);
+    /// Open an agent in the editor (switches the category to All when needed);
+    /// false while discovery has not listed it.
+    bool select_agent(const QString& agent_id);
+    QString selected_agent_id() const;
 
   public slots:
     void apply_tools_selection(const QStringList& tools);
@@ -59,9 +72,31 @@ class AgentsViewPanel : public QWidget {
     void toggle_json_editor();
     void refresh_llm_pill();
     void load_profile_combo();
+    /// A run's answer: a structured model's laid-out view (with a RAW toggle to
+    /// the JSON), or the markdown answer.
+    void show_result(const services::AgentExecutionResult& r);
+    /// Rebuild the structured page from structured_model_ / structured_data_.
+    void rebuild_structured_view();
+    /// Back to the markdown page with no structured result.
+    void clear_structured();
+    /// The agent list's page: the list, the loading skeleton (cold discovery),
+    /// or a state (discovery failed + RETRY / no agents / none in the category).
+    void show_list_state();
+    /// Discover again from Python (cache dropped); shows the skeleton when the list is empty.
+    void rediscover();
+    /// The test pane's preview (class C: a run sends the query to the LLM):
+    /// which agent and model would answer, the cost note, RUN.
+    void refresh_test_preview();
 
     // ── Left panel ───────────────────────────────────────────────────────────
+    QWidget* list_panel_ = nullptr;
+    bool list_hidden_by_host_ = false; // set_list_visible(false): shown only for its states
     QLabel* list_title_ = nullptr;
+    QStackedWidget* list_stack_ = nullptr; // 0 = agent_list_, 1 = list_skeleton_, 2 = list_state_
+    ui::LoadingSkeleton* list_skeleton_ = nullptr;
+    ui::EmptyState* list_state_ = nullptr;
+    bool discovering_ = false;     // a discovery is running and the list had nothing to show
+    QString discover_error_;       // last discovery failure (shown when the list is empty)
     QListWidget* agent_list_ = nullptr;
     QComboBox* category_combo_ = nullptr;
     QLabel* list_count_label_ = nullptr;
@@ -105,6 +140,16 @@ class AgentsViewPanel : public QWidget {
     QPlainTextEdit* query_input_ = nullptr;
     QPushButton* run_btn_ = nullptr;
     QTextEdit* result_display_ = nullptr;
+    // Page 0 = result_display_ (markdown / raw JSON), page 1 = structured view,
+    // page 2 = test_empty_ (no result yet: what a run would do, RUN).
+    QStackedWidget* result_stack_ = nullptr;
+    ui::EmptyState* test_empty_ = nullptr;
+    bool test_llm_ok_ = false; // an LLM resolves for the selected agent (refresh_llm_pill)
+    QScrollArea* structured_scroll_ = nullptr;
+    QPushButton* raw_toggle_btn_ = nullptr; // CARDS <-> RAW, shown for structured results
+    QString structured_model_;
+    QJsonObject structured_data_;
+    bool structured_valid_ = true;
     QLabel* result_status_ = nullptr;
     QComboBox* output_model_combo_ = nullptr;
     QCheckBox* auto_route_check_ = nullptr;
@@ -116,6 +161,7 @@ class AgentsViewPanel : public QWidget {
     int selected_agent_idx_ = -1;
     bool executing_ = false;
     QString pending_request_id_; // guards against cross-panel signal contamination
+    QString routing_request_id_; // Auto-Route: the route_query() whose routing_result labels the run
 };
 
 } // namespace fincept::screens

@@ -14,12 +14,12 @@
 #include "core/panel/PanelRegistry.h"
 #include "core/profile/ProfilePaths.h"
 #include "core/screen/MonitorWatcher.h"
-#include "core/telemetry/CloudTelemetryProvider.h"
-#include "core/telemetry/LocalTelemetrySink.h"
-#include "core/telemetry/TelemetryProvider.h"
+#include "core/telemetry/ClientInfo.h"
+#include "core/telemetry/UsageReporter.h"
 #include "core/window/WindowRegistry.h"
 #include "screens/ai_chat/ChatBubbleController.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/sqlite/SqliteSupport.h"
 #include "storage/workspace/CrashRecovery.h"
 #include "storage/workspace/WorkspaceDb.h"
 #include "storage/workspace/WorkspaceFwspImporter.h"
@@ -28,7 +28,6 @@
 #include <QDateTime>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QUuid>
 
 namespace fincept {
 
@@ -47,13 +46,13 @@ void TerminalShell::initialise() {
         return;
     }
 
-    LOG_INFO(kShellTag, "Shell initialising");
+    LOG_DEBUG(kShellTag, "Shell initialising");
 
     // Resolve and cache the active profile UUID so every later phase has
     // a stable handle without re-reading the manifest. ProfileManager
     // mints + persists a UUID on first read if the manifest is legacy.
     active_profile_id_ = ProfileManager::instance().active_profile_id();
-    LOG_INFO(kShellTag, QString("Active profile: %1 (id=%2)")
+    LOG_DEBUG(kShellTag, QString("Active profile: %1 (id=%2)")
                             .arg(ProfileManager::instance().active())
                             .arg(active_profile_id_.to_string()));
     // Create the new per-profile directory tree (workspace.db, layouts/,
@@ -142,39 +141,6 @@ void TerminalShell::initialise() {
         }
     }
 
-    // Phase 10: install telemetry providers per opt-in settings. Defaults
-    // off — no telemetry without consent.
-    //
-    //   telemetry.local_enabled  → LocalTelemetrySink writes to workspace.db
-    //   telemetry.cloud_enabled  → CloudTelemetryProvider also POSTs to
-    //                              telemetry.cloud_endpoint with bearer
-    //                              telemetry.cloud_api_key. Always wraps a
-    //                              LocalTelemetrySink so disk persistence
-    //                              survives network outages.
-    {
-        auto local_r = SettingsRepository::instance().get("telemetry.local_enabled");
-        const bool local_enabled = local_r.is_ok() && local_r.value() == "true";
-        auto cloud_r = SettingsRepository::instance().get("telemetry.cloud_enabled");
-        const bool cloud_enabled = cloud_r.is_ok() && cloud_r.value() == "true";
-
-        // Provider singletons live for the process lifetime; statics keep
-        // them out of the heap-leak audit. Construction order matters:
-        // local first so cloud can chain to it.
-        static telemetry::LocalTelemetrySink local_sink;
-        static telemetry::CloudTelemetryProvider cloud_sink(&local_sink);
-
-        if (cloud_enabled) {
-            cloud_sink.start();
-            telemetry::TelemetrySink::instance().set_provider(&cloud_sink);
-            LOG_INFO(kShellTag, "Cloud telemetry enabled (chains LocalTelemetrySink)");
-        } else if (local_enabled) {
-            telemetry::TelemetrySink::instance().set_provider(&local_sink);
-            LOG_INFO(kShellTag, "Local telemetry enabled");
-        } else {
-            LOG_DEBUG(kShellTag, "Telemetry off");
-        }
-    }
-
     // Phase 4 Track B: populate the action registry with the built-ins that
     // replaced WindowFrame's hard-coded keyboard wiring. Must happen before
     // any WindowFrame is constructed so the per-frame hotkey-binding loop
@@ -184,10 +150,17 @@ void TerminalShell::initialise() {
     workspace_db_ = &WorkspaceDb::instance();
     auto db_open = workspace_db_->open(ProfilePaths::workspace_db());
     if (db_open.is_err()) {
-        LOG_ERROR(kShellTag, QString("Failed to open workspace.db: %1").arg(QString::fromStdString(db_open.error())));
-        // Keep going — the shell can still run without persistence; later
-        // saves just become no-ops. We don't want a corrupted db to brick
-        // the terminal entirely.
+        // open() has already moved a damaged or other-build workspace.db aside
+        // and created a fresh one, and it leaves the wrapper fully closed on
+        // failure. What still fails here is environmental — another process
+        // holding the file, a read-only folder, a full disk, no permission —
+        // and a new file would fail the same way. Keep going without
+        // persistence for this session (saves become no-ops, crash recovery is
+        // off) rather than brick the terminal.
+        const QString raw = QString::fromStdString(db_open.error());
+        LOG_ERROR(kShellTag,
+                  QString("Workspace persistence is off for this session. %1 Details: %2")
+                      .arg(db::user_message(db::classify_text(raw), QStringLiteral("The workspace database")), raw));
         workspace_db_ = nullptr;
     } else {
         snapshot_ring_ = new WorkspaceSnapshotRing(workspace_db_);
@@ -204,12 +177,13 @@ void TerminalShell::initialise() {
         // started after a crash" signal must read started_after_crash_.
         started_after_crash_ = crash_recovery_->needs_recovery();
         if (started_after_crash_) {
-            LOG_WARN(kShellTag, "Previous session ended uncleanly — recovery candidates available");
+            LOG_WARN(kShellTag, "Previous session ended uncleanly recovery_candidates=yes");
         }
 
         // Mint a fresh session_id and open a session_history row.
         // ended_at + exit_kind stay NULL until shutdown() updates them.
-        session_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        // It is the process's run id, the one the Fincept API sees (X-Fincept-Run).
+        session_id_ = telemetry::ClientInfo::run_id();
         const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
         auto sess =
             workspace_db_->execute("INSERT INTO session_history(session_id, profile_id, started_at) VALUES(?, ?, ?)",
@@ -217,20 +191,30 @@ void TerminalShell::initialise() {
         if (sess.is_err()) {
             LOG_WARN(kShellTag, QString("session_history insert failed: %1").arg(QString::fromStdString(sess.error())));
         } else {
-            LOG_INFO(kShellTag, QString("Session %1 started").arg(session_id_));
+            LOG_INFO(kShellTag, QString("Session started session_id=%1 previous_exit=%2")
+                                    .arg(session_id_, started_after_crash_ ? QStringLiteral("crash")
+                                                      : crash_recovery_    ? QStringLiteral("clean")
+                                                                           : QStringLiteral("unknown")));
         }
     }
 
+    // Usage report (core/telemetry/UsageReporter.h); inert in headless runs.
+    telemetry::UsageReporter::instance().start(started_after_crash_ ? QStringLiteral("crash")
+                                               : crash_recovery_    ? QStringLiteral("clean")
+                                                                    : QStringLiteral("unknown"));
+
     initialised_ = true;
-    LOG_INFO(kShellTag, "Shell initialised");
+    LOG_DEBUG(kShellTag, "Shell initialised");
     emit started();
 }
 
 void TerminalShell::shutdown() {
     if (!initialised_)
         return;
-    LOG_INFO(kShellTag, "Shell shutting down");
+    LOG_DEBUG(kShellTag, "Shell shutting down");
     emit shutting_down();
+    // Unsent usage goes to a file for the next start — no network on the way out.
+    telemetry::UsageReporter::instance().shutdown();
 
     // Update the session row + write the clean-shutdown marker. Order
     // matters: marker last, so that if the marker write fails the row's
@@ -268,9 +252,15 @@ void TerminalShell::shutdown() {
     delete snapshot_ring_;
     snapshot_ring_ = nullptr;
     if (workspace_db_) {
+        // Orderly: PRAGMA optimize + wal_checkpoint(TRUNCATE), then the
+        // connection is closed and unregistered; late worker calls get a clean
+        // "unavailable" instead of re-growing the -wal.
         workspace_db_->close();
         workspace_db_ = nullptr;
     }
+    // Same for the layouts index (UI-thread store, opened in initialise()). A
+    // late save/list after this reopens it lazily.
+    LayoutCatalog::instance().close();
 
     initialised_ = false;
     // The underlying singletons (Logger, SessionManager, etc.) clean
@@ -285,7 +275,7 @@ void TerminalShell::bootstrap_auth() {
         return;
     }
 
-    LOG_INFO(kShellTag, "Bootstrapping auth");
+    LOG_DEBUG(kShellTag, "Bootstrapping auth");
 
     // 1. AuthManager — loads saved session, validates with server. The
     //    HTTP-bearing call here means we MUST be on the UI thread post
@@ -313,7 +303,7 @@ void TerminalShell::bootstrap_auth() {
     }
 
     auth_bootstrapped_ = true;
-    LOG_INFO(kShellTag, "Auth bootstrapped");
+    LOG_DEBUG(kShellTag, "Auth bootstrapped");
 }
 
 ProfileId TerminalShell::active_profile_id() const {

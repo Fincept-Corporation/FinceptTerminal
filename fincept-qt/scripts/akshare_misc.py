@@ -7,27 +7,22 @@ Categories: get, spot, amac, stock, article, fx, air, car, sw, fund, movie, qdii
 """
 
 import akshare as ak
-import inspect
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error;
+# run_wrapper_cli: get_all_endpoints / <endpoint> [field=value ...] -> one JSON line on stdout.
+from akshare_screen_args import china_today, run_wrapper_cli, safe_call
 import json
 import sys
 from typing import Dict, Any, List, Optional
-from datetime import datetime, date, time as dt_time
+from datetime import datetime, date, time as dt_time, timedelta
 import pandas as pd
 
 
-class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder for datetime objects"""
-    def default(self, obj):
-        if isinstance(obj, (datetime, date, dt_time)):  # spot_quotations_sge has time-of-day cells
-            return obj.isoformat()
-        if isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class AKShareError(Exception):
-    """Custom exception for AKShare errors"""
-    pass
+def _days_back(days: int, start_date: str = "", end_date: str = ""):
+    """(start, end) as YYYYMMDD: the dates typed, else the last `days` days up to today."""
+    today = china_today()
+    return (start_date or (today - timedelta(days=days)).strftime("%Y%m%d"),
+            end_date or today.strftime("%Y%m%d"))
 
 
 def _vars_list(symbol: str) -> Dict[str, Any]:
@@ -35,17 +30,9 @@ def _vars_list(symbol: str) -> Dict[str, Any]:
     return {"vars_list": [symbol.strip().upper()]} if symbol and symbol.strip() else {}
 
 
-def call_with_screen_args(func, name: str, args: List[str]) -> Dict[str, Any]:
-    """The AkShare screen sends up to three positional values (symbol, start, end). Pass as many as
-    the endpoint takes; one that needs more answers with a JSON error naming its parameters instead
-    of dying with a TypeError traceback."""
-    params = [prm for prm in inspect.signature(func).parameters.values()
-              if prm.kind in (prm.POSITIONAL_ONLY, prm.POSITIONAL_OR_KEYWORD)]
-    required = [prm.name for prm in params if prm.default is prm.empty]
-    if len(args) < len(required):
-        return {"success": False, "data": None,
-                "error": f"{name} needs {len(required)} value(s): {', '.join(required)} (got {len(args)})"}
-    return func(*args[:len(params)])
+# The AkShare screen sends its boxes as symbol=/start_date=/end_date=/period=; run_wrapper_cli
+# applies each by parameter name (START fills `date` for the single-day endpoints) and answers a
+# missing required value with a JSON error naming the box instead of a TypeError traceback.
 
 
 class MiscWrapper:
@@ -54,38 +41,11 @@ class MiscWrapper:
     def __init__(self):
         self.version = "1.18.20"
 
-    def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs):
-        """Safely call akshare function with retry logic"""
-        for attempt in range(max_retries):
-            try:
-                df = func(*args, **kwargs)
-                if isinstance(df, dict) and df and all(isinstance(v, pd.DataFrame) for v in df.values()):
-                    # futures position rankings: {contract: DataFrame} -> one table with a contract column
-                    df = pd.concat([v.assign(contract=k) for k, v in df.items()], ignore_index=True)
-                if isinstance(df, pd.Series):  # e.g. article_rlab_rv
-                    df = df.to_frame().reset_index()
-                if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-                    return {"success": False, "error": "No data returned", "data": None}
-
-                if isinstance(df, pd.DataFrame):
-                    for col in df.columns:
-                        if pd.api.types.is_datetime64_any_dtype(df[col]):
-                            df[col] = df[col].astype(str)
-                    # Replace NaN/Infinity with None for valid JSON
-                    df = df.replace([float('inf'), float('-inf')], None)
-                    df = df.where(pd.notna(df), None)
-                    data = df.to_dict(orient='records')
-                else:
-                    data = df
-
-                return {"success": True, "data": data, "columns": (list(df.columns) if hasattr(df, 'columns') else []), "error": None}
-
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    return {"success": False, "error": str(e), "data": None}
-                continue
-
-        return {"success": False, "error": "Max retries exceeded", "data": None}
+    def _safe_call_with_retry(self, func, *args, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
+        """One akshare call -> {success, data, columns, count} or a plain-English error (shared
+        akshare_screen_args.safe_call: only a dropped connection or a timeout is retried, never a
+        rate limit or a refusal)."""
+        return safe_call(func, *args, _retries=max_retries, _key_column="contract", **kwargs)
 
     # ==================== FUTURES EXCHANGE DATA (akshare futures_* functions) ====================
     # Dates are trading days as YYYYMMDD; symbol is a futures variety code (IF, RB, M, ...).
@@ -121,11 +81,6 @@ class MiscWrapper:
     def get_ine_daily(self, date: str) -> Dict[str, Any]:
         """Get INE daily data"""
         return self._safe_call_with_retry(ak.futures_daily_ine, date=date)
-
-
-
-
-
 
 
     def get_rank_sum(self, date: str, symbol: str = "") -> Dict[str, Any]:
@@ -332,7 +287,6 @@ class MiscWrapper:
         return self._safe_call_with_retry(ak.article_ff_crr)
 
 
-
     def article_rlab_rv(self) -> Dict[str, Any]:
         """RLAB realized volatility"""
         return self._safe_call_with_retry(ak.article_rlab_rv)
@@ -365,17 +319,23 @@ class MiscWrapper:
         """Air quality city table"""
         return self._safe_call_with_retry(ak.air_city_table)
 
-    def air_quality_hist(self, city: str, period: str = "day", start_date: str = "20140101", end_date: str = "20991231") -> Dict[str, Any]:
-        """Air quality historical data"""
-        return self._safe_call_with_retry(ak.air_quality_hist, city=city, period=period, start_date=start_date, end_date=end_date)
+    # The screen has no box for a city, area or question: these endpoints open a useful default
+    # (Beijing, the last weeks) and a manual run can name another (air_quality_hist 上海 day ...).
+
+    def air_quality_hist(self, city: str = "北京", period: str = "day", start_date: str = "",
+                         end_date: str = "") -> Dict[str, Any]:
+        """Daily air quality of one city (Chinese name); default the last 30 days"""
+        start, end = _days_back(30, start_date, end_date)
+        return self._safe_call_with_retry(ak.air_quality_hist, city=city, period=period, start_date=start, end_date=end)
 
     def air_quality_rank(self) -> Dict[str, Any]:
         """Air quality ranking"""
         return self._safe_call_with_retry(ak.air_quality_rank)
 
-    def air_quality_watch_point(self, city: str) -> Dict[str, Any]:
-        """Air quality watch point"""
-        return self._safe_call_with_retry(ak.air_quality_watch_point, city=city)
+    def air_quality_watch_point(self, city: str = "北京", start_date: str = "", end_date: str = "") -> Dict[str, Any]:
+        """Air quality per monitoring station of one city; default the last 7 days"""
+        start, end = _days_back(7, start_date, end_date)
+        return self._safe_call_with_retry(ak.air_quality_watch_point, city=city, start_date=start, end_date=end)
 
     # ==================== CAR MARKET (4) ====================
 
@@ -464,9 +424,10 @@ class MiscWrapper:
 
     # ==================== MIGRATION (2) ====================
 
-    def migration_area_baidu(self, area: str, indicator: str, date: str) -> Dict[str, Any]:
-        """Baidu migration area data"""
-        return self._safe_call_with_retry(ak.migration_area_baidu, area=area, indicator=indicator, date=date)
+    def migration_area_baidu(self, area: str = "北京市", indicator: str = "move_in", date: str = "") -> Dict[str, Any]:
+        """Baidu migration sources (move_in) or destinations (move_out) of one area, one day (default yesterday)"""
+        day = date or (china_today() - timedelta(days=1)).strftime("%Y%m%d")
+        return self._safe_call_with_retry(ak.migration_area_baidu, area=area, indicator=indicator, date=day)
 
     def migration_scale_baidu(self, area: str = "广州市", indicator: str = "move_in") -> Dict[str, Any]:
         """Baidu migration scale index for a city (indicator: move_in / move_out)"""
@@ -474,13 +435,12 @@ class MiscWrapper:
 
     # ==================== NLP (2) ====================
 
-    def nlp_answer(self, question: str) -> Dict[str, Any]:
-        """NLP question answering"""
-        return self._safe_call_with_retry(ak.nlp_answer, question=question)
+    def nlp_answer(self, symbol: str = "人工智能") -> Dict[str, Any]:
+        """Knowledge-base answer (ownthink) to the question typed in the SYMBOL box"""
+        return self._safe_call_with_retry(ak.nlp_answer, question=symbol)
 
 
     # ==================== QHKC TOOLS (2) ====================
-
 
 
     # ==================== REPO (2) ====================
@@ -495,13 +455,20 @@ class MiscWrapper:
 
     # ==================== REALIZED VOLATILITY (2) ====================
 
-    def rv_from_futures_zh_minute_sina(self, symbol: str, period: str) -> Dict[str, Any]:
-        """Realized volatility from futures minute data (Sina)"""
+    # Realized volatility from minute bars; `period` is the bar length in minutes ("1", "5", ...), which
+    # the screen's daily/weekly/monthly PERIOD box does not set.
+
+    def rv_from_futures_zh_minute_sina(self, symbol: str = "RB0", period: str = "5") -> Dict[str, Any]:
+        """Realized volatility of one futures contract (Sina; RB0 = rebar main contract)"""
         return self._safe_call_with_retry(ak.rv_from_futures_zh_minute_sina, symbol=symbol, period=period)
 
-    def rv_from_stock_zh_a_hist_min_em(self, symbol: str, period: str, adjust: str = "") -> Dict[str, Any]:
-        """Realized volatility from A-share minute data (EastMoney)"""
-        return self._safe_call_with_retry(ak.rv_from_stock_zh_a_hist_min_em, symbol=symbol, period=period, adjust=adjust)
+    def rv_from_stock_zh_a_hist_min_em(self, symbol: str = "000001", period: str = "5", adjust: str = "",
+                                       start_date: str = "", end_date: str = "") -> Dict[str, Any]:
+        """Realized volatility of one A-share from minute bars (EastMoney); default the last 5 days"""
+        start, end = _days_back(5, start_date, end_date)
+        return self._safe_call_with_retry(ak.rv_from_stock_zh_a_hist_min_em, symbol=symbol, period=period,
+                                          adjust=adjust, start_date=f"{start[:4]}-{start[4:6]}-{start[6:8]} 09:30:00",
+                                          end_date=f"{end[:4]}-{end[4:6]}-{end[6:8]} 15:00:00")
 
     # ==================== SUNRISE (2) ====================
 
@@ -597,58 +564,13 @@ class MiscWrapper:
         }
 
 
+# ==================== CLI ====================
+
 def main():
-    """CLI interface for miscellaneous functions wrapper"""
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "error": "Usage: python akshare_misc.py <function_name> [args]",
-            "categories": {
-                "get_functions": 23,
-                "spot_functions": 16,
-                "amac_functions": 13,
-                "stock_functions": 9,
-                "article_functions": 5,
-                "fx_functions": 5,
-                "air_quality": 4,
-                "car_market": 4,
-                "sw_index": 4,
-                "fund_announcements": 3,
-                "movie_boxoffice": 3,
-                "qdii": 3,
-                "fred": 2,
-                "migration": 2,
-                "nlp": 2,
-                "repo": 2,
-                "realized_volatility": 2,
-                "sunrise": 2,
-                "video": 2,
-                "single_functions": 15
-            },
-            "total_functions": 122,
-            "example": "python akshare_misc.py get_cffex_daily 20261106"
-        }, cls=DateTimeEncoder, ensure_ascii=False, indent=2))
-        sys.exit(1)
-
     wrapper = MiscWrapper()
-    function_name = sys.argv[1]
-
-    # Handle get_all_endpoints special case
-    if function_name == "get_all_endpoints":
-        result = wrapper.get_all_available_endpoints()
-        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
-    elif hasattr(wrapper, function_name):
-        func = getattr(wrapper, function_name)
-        # Parse additional arguments if needed
-        args = sys.argv[2:] if len(sys.argv) > 2 else []
-        result = call_with_screen_args(func, function_name, args)
-        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
-    else:
-        print(json.dumps({
-            "error": f"Function '{function_name}' not found",
-            "hint": "Use 'python akshare_misc.py' to see available functions"
-        }, cls=DateTimeEncoder, ensure_ascii=True))
-        sys.exit(1)
+    # One JSON line on stdout (NaN -> null, dates as ISO text); akshare's own prints go to stderr.
+    return run_wrapper_cli(wrapper, wrapper.get_all_available_endpoints, ascii=True, iso_dates=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

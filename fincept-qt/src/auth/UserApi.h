@@ -1,6 +1,8 @@
 #pragma once
 #include "auth/AuthTypes.h"
 
+#include <QByteArray>
+#include <QMap>
 #include <QObject>
 
 #include <functional>
@@ -26,6 +28,8 @@ class UserApi : public QObject {
     // Profile
     void get_user_profile(Callback cb, const QObject* context = nullptr);
     void update_user_profile(const QJsonObject& data, Callback cb, const QObject* context = nullptr);
+    /// Low-level call. The old key stops working the moment the server answers,
+    /// so use AuthManager::regenerate_api_key(), which adopts the new one.
     void regenerate_api_key(Callback cb, const QObject* context = nullptr);
     void get_user_usage(int days, Callback cb, const QObject* context = nullptr);
     /// Credit fields of GET /user/profile, reshaped to {"success":true,"data":{credit_balance,
@@ -39,10 +43,14 @@ class UserApi : public QObject {
 
     // MFA
     void enable_mfa(Callback cb, const QObject* context = nullptr);
-    void disable_mfa(Callback cb, const QObject* context = nullptr);
+    /// POST /user/mfa/disable {"password"} — the API refuses it without the password.
+    void disable_mfa(const QString& password, Callback cb, const QObject* context = nullptr);
 
-    // Subscriptions — GET /cashfree/subscription (plan, credits, expiry, support type)
-    void get_user_subscription(Callback cb, const QObject* context = nullptr);
+    // Subscriptions — GET /cashfree/subscription (plan, credits, expiry, support type).
+    // With `if_none_match` (an earlier answer's ETag for the same key) an unchanged
+    // record comes back as success with status_code 304 and empty data, once the
+    // server supports it; until then the header is ignored and a full answer comes.
+    void get_user_subscription(Callback cb, const QObject* context = nullptr, const QString& if_none_match = {});
 
     // Payment — GET /cashfree/payments (plan purchases, paginated)
     void get_payment_history(int page, int limit, Callback cb, const QObject* context = nullptr);
@@ -60,7 +68,7 @@ class UserApi : public QObject {
     UserApi() = default;
 
     void request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb,
-                 const QObject* context = nullptr);
+                 const QObject* context = nullptr, const QMap<QByteArray, QByteArray>& extra_headers = {});
 };
 
 } // namespace fincept::auth

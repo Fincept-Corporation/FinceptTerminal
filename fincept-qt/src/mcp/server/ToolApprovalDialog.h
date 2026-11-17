@@ -23,11 +23,18 @@
 //     keyboard focus (the user is typically typing in another app when an agent
 //     asks), with APPROVE disarmed for the first second and DENY as the default
 //     button — a stray Enter can only ever deny.
-//   * "Allow this tool for this client for 15 minutes" records an in-memory,
-//     session-only grant keyed by (client, tool). It is not offered for
-//     state-changing live-trading tools: every live order is approved on its own.
+//   * The dialog says WHAT KIND of action it is (ApprovalPolicy.h: order with
+//     LIVE / PAPER stated truthfully, money, spend with the cost when known,
+//     delete, account, code, file, generic), who asks (label, client id, run)
+//     and the exact control and values.
+//   * A timed grant ("allow … for 15 minutes") is offered only for spend,
+//     delete, file and generic actions, scoped to the same client + run + kind +
+//     screen, and dropped when the run ends. Orders, money moves, account and
+//     code actions are approved one at a time, always.
 //   * When the terminal has no visible window (headless self-tests, a window
 //     that never opened) the request is denied immediately.
+
+#include "mcp/server/ApprovalPolicy.h"
 
 #include <QDialog>
 #include <QJsonObject>
@@ -44,22 +51,7 @@ class QTimer;
 
 namespace fincept::mcp {
 
-/// What the user is asked to approve. Built by McpHttpServer on the worker thread.
-struct ToolApprovalRequest {
-    QString client;       ///< clientInfo.name of the caller ("claude-code", "codex-mcp-client", "unknown")
-    QString tool;         ///< what is being approved ("ui_act: click Place order", "python: exchange/place_order")
-    QString description;  ///< the tool's own description
-    QJsonObject args;     ///< arguments — shown as a bounded preview, never logged
-    bool destructive = false;
-    bool live_trading = false;
-};
-
-enum class ToolApprovalVerdict {
-    Approved,
-    Denied,     ///< the user pressed DENY / Esc / closed the dialog
-    TimedOut,   ///< nobody answered before the deadline
-    Unavailable ///< no visible terminal window to ask in, or called on the GUI thread
-};
+// ToolApprovalRequest and ToolApprovalVerdict: mcp/server/ApprovalPolicy.h.
 
 class ToolApprovalDialog : public QDialog {
     Q_OBJECT
@@ -68,22 +60,26 @@ class ToolApprovalDialog : public QDialog {
     /// CLI applies, so a timed-out approval is reported as such rather than as a
     /// client-side transport timeout.
     static constexpr int kDefaultTimeoutMs = 50000;
-    static constexpr int kGrantMinutes = 15;
+    static constexpr int kGrantMinutes = approval::kGrantMinutes;
     static constexpr int kArgPreviewMaxChars = 1536;
     static constexpr int kArmDelayMs = 1000;
 
     /// WORKER THREAD ONLY. Asks the user and blocks the calling thread until a
     /// verdict, the deadline (`timeout_ms` from now), or Unavailable. An active
-    /// session grant for (client, tool) approves immediately without a dialog.
+    /// timed grant for exactly this request's client + run + kind + screen
+    /// approves immediately without a dialog (never for order / money / account /
+    /// code). Empty client_id / run_id are taken from ScopedCallClient on the
+    /// calling thread.
     static ToolApprovalVerdict request_approval(const ToolApprovalRequest& request,
                                                 int timeout_ms = kDefaultTimeoutMs);
 
-    /// True while an unexpired "allow for 15 minutes" grant covers (client, tool).
-    /// Thread-safe.
-    static bool has_active_grant(const QString& client, const QString& tool);
+    /// True while an unexpired timed grant covers this request. Thread-safe.
+    static bool has_active_grant(const ToolApprovalRequest& request);
 
     /// Forget every session grant. Thread-safe.
     static void clear_grants();
+    /// Forget the grants made during one run (the run ended). Thread-safe.
+    static void clear_grants_for_run(const QString& run_id);
 
     /// GUI THREAD. Deny every queued request and the one on screen (used when the
     /// MCP server stops, so no worker keeps waiting on a dialog nobody needs).
@@ -139,10 +135,11 @@ class ToolApprovalDialog : public QDialog {
     static QString argument_preview(const QJsonObject& args);
 
     ToolApprovalRequest request_;
+    approval::Presentation presentation_;
     qint64 deadline_ms_ = 0;
     qint64 shown_at_ms_ = 0;
     bool finished_ = false;
-    bool grant_allowed_ = true;
+    bool grant_allowed_ = false;
 
     QLabel* title_label_ = nullptr;
     QLabel* status_label_ = nullptr;

@@ -7,26 +7,15 @@ Organized by region: Australia, Brazil, India, Russia, New Zealand, Canada, Euro
 """
 
 import akshare as ak
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error;
+# run_wrapper_cli: get_all_endpoints / <endpoint> [field=value ...] -> one JSON line on stdout.
+from akshare_screen_args import run_wrapper_cli, safe_call
 import json
 import sys
 from typing import Dict, Any, Optional
 from datetime import datetime, date
 import pandas as pd
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder for datetime objects"""
-    def default(self, obj):
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        if isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class AKShareError(Exception):
-    """Custom exception for AKShare errors"""
-    pass
 
 
 class MacroEconomicWrapper:
@@ -35,63 +24,11 @@ class MacroEconomicWrapper:
     def __init__(self):
         self.version = "1.18.20"
 
-    def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs):
-        """
-        Safely call akshare function with retry logic
-
-        Args:
-            func: The akshare function to call
-            max_retries: Maximum number of retry attempts
-            *args, **kwargs: Arguments to pass to the function
-
-        Returns:
-            Dictionary with success status and data/error message
-        """
-        for attempt in range(max_retries):
-            try:
-                df = func(*args, **kwargs)
-                if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-                    return {
-                        "success": False,
-                        "error": "No data returned",
-                        "data": None
-                    }
-
-                # Convert DataFrame to JSON-serializable format
-                if isinstance(df, pd.DataFrame):
-                    # Convert date columns to strings
-                    for col in df.columns:
-                        if pd.api.types.is_datetime64_any_dtype(df[col]):
-                            df[col] = df[col].astype(str)
-
-                    # Replace NaN/Infinity with None for valid JSON
-                    df = df.replace([float('inf'), float('-inf')], None)
-                    df = df.where(pd.notna(df), None)
-                    data = df.to_dict(orient='records')
-                else:
-                    data = df
-
-                return {
-                    "success": True,
-                    "data": data,
-                    "columns": (list(df.columns) if hasattr(df, "columns") else []),
-                    "error": None
-                }
-
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    return {
-                        "success": False,
-                        "error": str(e),
-                        "data": None
-                    }
-                continue
-
-        return {
-            "success": False,
-            "error": "Max retries exceeded",
-            "data": None
-        }
+    def _safe_call_with_retry(self, func, *args, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
+        """One akshare call -> {success, data, columns, count} or a plain-English error (shared
+        akshare_screen_args.safe_call: only a dropped connection or a timeout is retried, never a
+        rate limit or a refusal)."""
+        return safe_call(func, *args, _retries=max_retries, **kwargs)
 
     # ==================== AUSTRALIA (5 functions) ====================
 
@@ -527,50 +464,13 @@ class MacroEconomicWrapper:
         }
 
 
+# ==================== CLI ====================
+
 def main():
-    """CLI interface for macro economic data wrapper"""
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "error": "Usage: python akshare_macro.py <function_name> [args]",
-            "available_regions": [
-                "Australia (5 functions)",
-                "Brazil, India, Russia, New Zealand (4 functions)",
-                "Canada (6 functions)",
-                "China (2 functions)",
-                "Commodities (3 functions)",
-                "Euro Zone (10 functions)",
-                "Germany (6 functions)",
-                "Global (3 functions)",
-                "Japan (3 functions)",
-                "China Financial (3 functions)",
-                "Shipping (4 functions)",
-                "Switzerland (4 functions)",
-                "UK (11 functions)",
-                "USA (31 functions)"
-            ],
-            "total_functions": 96,
-            "example": "python akshare_macro.py macro_usa_pmi"
-        }, cls=DateTimeEncoder, ensure_ascii=False, indent=2))
-        sys.exit(1)
-
     wrapper = MacroEconomicWrapper()
-    function_name = sys.argv[1]
-
-    # Handle get_all_endpoints special case
-    if function_name == "get_all_endpoints":
-        result = wrapper.get_all_available_endpoints()
-        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
-    elif hasattr(wrapper, function_name):
-        func = getattr(wrapper, function_name)
-        result = func()
-        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
-    else:
-        print(json.dumps({
-            "error": f"Function '{function_name}' not found",
-            "hint": "Use 'python akshare_macro.py' to see available functions"
-        }, cls=DateTimeEncoder, ensure_ascii=True))
-        sys.exit(1)
+    # One JSON line on stdout (NaN -> null, dates as ISO text); akshare's own prints go to stderr.
+    return run_wrapper_cli(wrapper, wrapper.get_all_available_endpoints, ascii=True, iso_dates=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

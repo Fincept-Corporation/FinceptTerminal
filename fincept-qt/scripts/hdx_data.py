@@ -151,6 +151,7 @@ def extract_dataset_summary(dataset: Dict[str, Any]) -> Dict[str, Any]:
         "organization": dataset.get("organization", {}).get("title", "") if isinstance(dataset.get("organization"), dict) else "",
         "dataset_date": dataset.get("dataset_date", ""),
         "num_resources": dataset.get("num_resources", 0),
+        "license_title": dataset.get("license_title", ""),
         "tags": [tag.get("name", "") if isinstance(tag, dict) else tag for tag in dataset.get("tags", [])],
         "notes": (dataset.get("notes", "")[:200] + "...") if dataset.get("notes") and len(dataset.get("notes", "")) > 200 else dataset.get("notes", "")
     }

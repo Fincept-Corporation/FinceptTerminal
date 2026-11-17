@@ -88,7 +88,9 @@ NewsSentimentResult analyze_sentiment(const QVector<TextItem>& items);
 
 // ── Translation ─────────────────────────────────────────────────────────────
 
-/// Script-range guess — "zh" "ja" "ko" "ar" "ru" "hi", else "en" (every Latin script).
+/// Language guess: script ranges for non-Latin text, stop-word profiles for
+/// Latin-script text (en fr de es pt it nl sv — see NewsLanguage.h); "en" when
+/// nothing decides.
 QString detect_language(const QString& text);
 
 struct Translation {

@@ -1,166 +1,133 @@
 #pragma once
+// DerivativesScreen — the Derivatives tab: analysis for anyone on free delayed data
+// (live trading with a broker is the F&O tab, linked from the header).
+//
+// A shell — a one-line header (title, page segments, engine chip, refresh, F&O link) and a
+// status line — over lazily built pages:
+//   PRICER       the calculators (bonds, equity / FX options, swaps, CDS) — built at once;
+//   CHAIN & VOL  free delayed option chain, smile + SVI, term structure, surface, OI;
+//   STRATEGY     multi-leg positions from templates or the chain;
+//   SCENARIOS    spot × vol grid, probability cone, stress presets;
+//   CURVES       U.S. Treasury curve (editable; zero / forward, swap, FRA, cap, key-rate
+//                DV01, swaption, bond Z-spread / ASW), futures curves and cost of carry;
+//   CREDIT       CDS hazard bootstrap, survival curve, CS01, upfront ↔ running spread;
+//   BOOK         saved positions with live delayed marks, P&L and aggregated Greeks.
+// Each page is its own widget (src/screens/derivatives/Deriv*Page), created the first
+// time it is opened. The pages share a DerivContext (the chain in view, the position,
+// the hand-offs between pages). State: the pricer's inputs under the long-standing
+// keys ("instrument", "inputs") plus the open page; the other pages remember their
+// inputs through ui::InputMemory.
+//
+// Between tabs: the screen takes a symbol through nav.open_symbol / symbol-group linking
+// (IGroupLinked): it opens that underlying's chain on CHAIN & VOL. The F&O link is enabled
+// only while a broker account is connected (trading::AccountManager, read-only).
+
+#include "core/symbol/IGroupLinked.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
-#include <QComboBox>
-#include <QDateEdit>
-#include <QDoubleSpinBox>
 #include <QEvent>
-#include <QJsonObject>
-#include <QLabel>
 #include <QList>
-#include <QPair>
-#include <QPushButton>
-#include <QScrollArea>
-#include <QStackedWidget>
+#include <QVariantMap>
+#include <QVector>
 #include <QWidget>
+
+class QLabel;
+class QPushButton;
+class QStackedWidget;
+class QToolButton;
+
+namespace fincept::screens::deriv {
+class DerivBookPage;
+class DerivChainPage;
+class DerivContext;
+class DerivCreditPage;
+class DerivCurvesPage;
+class DerivPricerPage;
+class DerivScenarioPage;
+class DerivStrategyPage;
+} // namespace fincept::screens::deriv
 
 namespace fincept::screens {
 
-/// Professional derivatives pricing screen.
-/// Supports: Bonds, Equity Options, FX Options, IR Swaps, Credit (CDS).
-/// Calculations run in-process through services/options/DerivativesPricing — pure,
-/// synchronous C++ (microseconds per click). Inputs are entered in percent
-/// (rates/vols/yields) as the calculators take them; DerivativesPricing.h documents
-/// each calculator's conventions and output units.
-class DerivativesScreen : public QWidget, public IStatefulScreen {
+class DerivativesScreen : public QWidget,
+                          public IStatefulScreen,
+                          public fincept::IGroupLinked,
+                          public fincept::screens::ISectionLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit DerivativesScreen(QWidget* parent = nullptr);
 
-    // IStatefulScreen — persists the instrument the user last had open and the
-    // last inputs of every calculator (as-of dates excluded).
+    // ISectionLinked — "pricer" "chain" "strategy" "scenarios" "curves" "credit" "book" (the page
+    // segments); "pricer:<instrument>" / "pricer/<instrument>" with bond(s), equity(_options), fx(_options),
+    // swap(s) / ir_swaps / irs, cds / credit (the pricer's instrument buttons). `focus` = an
+    // underlying: opens its chain (the same path as a linked symbol); with an empty section it acts
+    // on the page in view like a linked symbol does.
+    bool open_section(const QString& section, const QString& focus) override;
+
     QVariantMap save_state() const override;
     void restore_state(const QVariantMap& state) override;
     QString state_key() const override { return "derivatives"; }
 
+    // IGroupLinked — subscribe-only: a symbol from a linked group or nav.open_symbol opens
+    // that underlying's option chain (never re-published).
+    void set_group(fincept::SymbolGroup g) override { link_group_ = g; }
+    fincept::SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const fincept::SymbolRef& ref) override;
+    fincept::SymbolRef current_symbol() const override;
+
   protected:
     void changeEvent(QEvent* event) override;
-
-  private slots:
-    void on_instrument_changed(int index);
-    void on_calculate();
-    void on_calculate_secondary();
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
   private:
-    // UI setup
+    enum Page { kPricer = 0, kChain, kStrategy, kScenarios, kCurves, kCredit, kBook, kPageCount };
+    void update_fno_link();
+    void open_chain_symbol(const QString& symbol);
+
     void setup_ui();
-    void retranslateUi();
+    /// The one-line header: title, the page segments (create_page_bar), chip, refresh, F&O link.
     QWidget* create_header_bar();
-    QWidget* create_instrument_bar();
-    QWidget* create_bonds_panel();
-    QWidget* create_equity_options_panel();
-    QWidget* create_fx_options_panel();
-    QWidget* create_swaps_panel();
-    QWidget* create_credit_panel();
+    QWidget* create_page_bar();
     QWidget* create_status_bar();
-    QWidget* create_results_panel();
+    /// Narrow / large font: the engine chip, then the title give way (resize, appearance_settled).
+    void fit_header();
+    /// `persist`: tell ScreenStateManager (not while constructing: nothing is restored yet).
+    void show_page(int index, bool persist = true);
+    QWidget* ensure_page(int index);
+    void refresh_current();
+    void retranslate();
+    QString page_name(int index) const;
 
-    // Helpers
-    QWidget* create_input_row(const QString& label, QWidget* input);
-    QWidget* create_two_col(QWidget* left, QWidget* right);
-    QWidget* create_three_col(QWidget* a, QWidget* b, QWidget* c);
-    QDoubleSpinBox* create_spin(double val, double min_val, double max_val, int decimals, const QString& suffix = "");
-    QDateEdit* create_date(const QDate& date);
-    QComboBox* create_combo(const QStringList& items);
-    QPushButton* create_calc_button(const QString& text);
-    void display_results(const QJsonObject& result);
-    void display_error(const QString& error);
-    void clear_results();
+    deriv::DerivContext* ctx_ = nullptr;
+    QStackedWidget* pages_ = nullptr;
+    QVector<QWidget*> holders_;
+    deriv::DerivPricerPage* pricer_ = nullptr;
+    deriv::DerivChainPage* chain_ = nullptr;
+    deriv::DerivStrategyPage* strategy_ = nullptr;
+    deriv::DerivScenarioPage* scenarios_ = nullptr;
+    deriv::DerivCurvesPage* curves_ = nullptr;
+    deriv::DerivCreditPage* credit_ = nullptr;
+    deriv::DerivBookPage* book_ = nullptr;
+    int page_ = kPricer;
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
+    QString pending_symbol_; ///< a linked symbol that arrived while the screen was hidden
+    QString last_symbol_;
 
-    /// Shows one calculation: `error` when non-empty, else `result`.
-    void show_calculation(const QJsonObject& result, const QString& error);
-
-    /// Registers an input whose value is saved with the screen state.
-    void track_input(const QString& key, QWidget* input);
-
-    // State
-    int active_instrument_ = 0; // 0=bonds, 1=equity, 2=fx, 3=swaps, 4=credit
-    QList<QPair<QString, QWidget*>> persisted_inputs_;
-
-    // Layout
-    QStackedWidget* panel_stack_ = nullptr;
-    QWidget* results_container_ = nullptr;
-    QLabel* status_instrument_ = nullptr;
-    QLabel* status_engine_ = nullptr;
-
-    // Header + status fixed-label widgets (cached for retranslateUi)
+    QWidget* header_bar_ = nullptr;
+    QWidget* page_bar_ = nullptr;
     QLabel* header_title_ = nullptr;
     QLabel* header_sub_ = nullptr;
     QLabel* header_badge_ = nullptr;
+    QToolButton* refresh_btn_ = nullptr;
+    QPushButton* fno_btn_ = nullptr;
+    QList<QPushButton*> page_btns_;
     QLabel* status_left_ = nullptr;
-    QLabel* results_title_ = nullptr;
-
-    // Instrument tab buttons
-    QList<QPushButton*> instrument_btns_;
-
-    // Bond inputs
-    QDateEdit* bond_issue_date_ = nullptr;
-    QDateEdit* bond_settle_date_ = nullptr;
-    QDateEdit* bond_maturity_date_ = nullptr;
-    QDoubleSpinBox* bond_coupon_ = nullptr;
-    QDoubleSpinBox* bond_ytm_ = nullptr;
-    QComboBox* bond_freq_ = nullptr;
-    QDoubleSpinBox* bond_clean_price_ = nullptr;
-
-    // The YTM-from-price card's OWN inputs. They are separate fields on screen from the
-    // price calculator's, and must be the ones sent to the solver - they used to be
-    // unnamed locals, so edits to this card's dates / coupon / frequency were
-    // silently discarded and the left card's values were solved instead.
-    QDateEdit* ytm_issue_date_ = nullptr;
-    QDateEdit* ytm_settle_date_ = nullptr;
-    QDateEdit* ytm_maturity_date_ = nullptr;
-    QDoubleSpinBox* ytm_coupon_ = nullptr;
-    QComboBox* ytm_freq_ = nullptr;
-
-    // Equity option inputs
-    QDoubleSpinBox* opt_strike_ = nullptr;
-    QDoubleSpinBox* opt_spot_ = nullptr;
-    QDoubleSpinBox* opt_vol_ = nullptr;
-    QDoubleSpinBox* opt_rate_ = nullptr;
-    QDoubleSpinBox* opt_div_ = nullptr;
-    QComboBox* opt_type_ = nullptr;
-    QDoubleSpinBox* opt_time_ = nullptr;
-
-    // Implied-volatility panel inputs. These are a SEPARATE set from the
-    // Black-Scholes panel above: the IV card has its own spot / strike / time /
-    // rate / dividend / type fields on screen, and they must be the ones sent to
-    // the solver. They used to be unnamed locals, so everything the user typed
-    // into this card was discarded and the left panel's values were solved
-    // instead — a silently wrong implied vol.
-    QDoubleSpinBox* opt_market_price_ = nullptr;
-    QDoubleSpinBox* iv_spot_ = nullptr;
-    QDoubleSpinBox* iv_strike_ = nullptr;
-    QDoubleSpinBox* iv_time_ = nullptr;
-    QDoubleSpinBox* iv_rate_ = nullptr;
-    QDoubleSpinBox* iv_div_ = nullptr;
-    QComboBox* iv_type_ = nullptr;
-
-    // FX option inputs
-    QDoubleSpinBox* fx_strike_ = nullptr;
-    QDoubleSpinBox* fx_spot_ = nullptr;
-    QDoubleSpinBox* fx_vol_ = nullptr;
-    QDoubleSpinBox* fx_dom_rate_ = nullptr;
-    QDoubleSpinBox* fx_for_rate_ = nullptr;
-    QComboBox* fx_type_ = nullptr;
-    QDoubleSpinBox* fx_time_ = nullptr;
-    QDoubleSpinBox* fx_notional_ = nullptr;
-
-    // Swap inputs
-    QDateEdit* swap_eff_date_ = nullptr;
-    QDateEdit* swap_mat_date_ = nullptr;
-    QDoubleSpinBox* swap_fixed_rate_ = nullptr;
-    QComboBox* swap_freq_ = nullptr;
-    QDoubleSpinBox* swap_discount_ = nullptr;
-    QDoubleSpinBox* swap_notional_ = nullptr;
-
-    // CDS inputs
-    QDateEdit* cds_val_date_ = nullptr;
-    QDateEdit* cds_mat_date_ = nullptr;
-    QDoubleSpinBox* cds_recovery_ = nullptr;
-    QDoubleSpinBox* cds_spread_ = nullptr;
-    QDoubleSpinBox* cds_notional_ = nullptr;
-    QDoubleSpinBox* cds_coupon_ = nullptr; // contractual premium (bps); spread above is the MARKET level
-    QDoubleSpinBox* cds_rate_ = nullptr;   // flat risk-free rate (%) used to discount both legs
+    QLabel* status_page_ = nullptr;
+    QLabel* status_engine_ = nullptr;
+    QString pricer_instrument_;
 };
 
 } // namespace fincept::screens

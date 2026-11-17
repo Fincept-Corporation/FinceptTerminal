@@ -114,13 +114,9 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
 
     connect(&psm, &python::PythonSetupManager::progress_changed, this,
             [this](const python::SetupProgress&) { render(); });
-    // The essentials are in: open the terminal right away — whatever is left
-    // (bytecode precompile, or the full set if it was requested) finishes in
-    // the background with the status-bar chip reporting it.
-    connect(&psm, &python::PythonSetupManager::core_ready, this, [this]() {
-        render();
-        schedule_auto_launch();
-    });
+    // The essentials are in: the buttons now offer the choice between
+    // completing the setup and opening the terminal. Nothing launches by itself.
+    connect(&psm, &python::PythonSetupManager::core_ready, this, [this]() { render(); });
     connect(&psm, &python::PythonSetupManager::running_changed, this, [this](bool) {
         render();
         sync_activity();
@@ -228,12 +224,23 @@ void SetupScreen::build_ui() {
     buttons->setContentsMargins(0, 0, 0, 0);
     buttons->setSpacing(10);
     primary_btn_ = new QPushButton(main_panel);
+    primary_btn_->setProperty("fincept_agent_risk", "code"); // agents: installs the Python analytics environment
     primary_btn_->setObjectName(QStringLiteral("setupPrimaryBtn"));
     primary_btn_->setFixedHeight(40);
     primary_btn_->setMinimumWidth(230);
     primary_btn_->setCursor(Qt::PointingHandCursor);
     connect(primary_btn_, &QPushButton::clicked, this, &SetupScreen::on_primary_clicked);
     buttons->addWidget(primary_btn_);
+    later_btn_ = new QPushButton(main_panel);
+    later_btn_->setObjectName(QStringLiteral("setupLaterBtn"));
+    later_btn_->setFixedHeight(40);
+    later_btn_->setCursor(Qt::PointingHandCursor);
+    later_btn_->setVisible(false);
+    connect(later_btn_, &QPushButton::clicked, this, [this]() {
+        LOG_INFO("SetupScreen", "User opened the terminal with the essentials only");
+        launch();
+    });
+    buttons->addWidget(later_btn_);
     quit_btn_ = new QPushButton(main_panel);
     quit_btn_->setObjectName(QStringLiteral("setupQuitBtn"));
     quit_btn_->setFixedHeight(40);
@@ -335,20 +342,20 @@ QWidget* SetupScreen::build_stage_row(QWidget* parent, int index) {
 void SetupScreen::refresh_theme() {
     // The whole screen is styled by this one stylesheet (objectName selectors;
     // stage state through the dynamic `state` property).
-    QString css = QStringLiteral(R"(
+    QString css = QString(R"(
 #setupRoot { background: @bg_base; }
 QFrame#setupMain { background: @bg_surface; border: 1px solid @border_dim; }
-QLabel#setupTitle { color: @amber_main; font-family: @font; font-size: 16px; font-weight: 700; letter-spacing: 2px; background: transparent; border: none; }
-QLabel#setupSubtitle { color: @text_secondary; font-family: @font; font-size: 12px; background: transparent; border: none; }
+QLabel#setupTitle { color: @amber_main; font-family: @font; font-size: )" + fincept::ui::fonts::px(2) + R"(px; font-weight: 700; letter-spacing: 2px; background: transparent; border: none; }
+QLabel#setupSubtitle { color: @text_secondary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-2) + R"(px; background: transparent; border: none; }
 QProgressBar#setupOverallBar { background: @bg_raised; border: 1px solid @border_dim; }
 QProgressBar#setupOverallBar::chunk { background: @amber_main; }
-QLabel#setupOverallPct { color: @amber_main; font-family: @font; font-size: 14px; font-weight: 700; background: transparent; border: none; }
-QLabel#setupElapsed { color: @text_tertiary; font-family: @font; font-size: 10px; letter-spacing: 1px; background: transparent; border: none; }
+QLabel#setupOverallPct { color: @amber_main; font-family: @font; font-size: )" + fincept::ui::fonts::px(0) + R"(px; font-weight: 700; background: transparent; border: none; }
+QLabel#setupElapsed { color: @text_tertiary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; letter-spacing: 1px; background: transparent; border: none; }
 QFrame#setupHairline { background: @border_dim; border: none; }
-QLabel#setupStageName { color: @text_primary; font-family: @font; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; background: transparent; border: none; }
-QLabel#setupStageDesc { color: @text_dim; font-family: @font; font-size: 10px; background: transparent; border: none; }
-QLabel#setupStageTime { color: @text_tertiary; font-family: @font; font-size: 10px; background: transparent; border: none; }
-QLabel#setupStageStatus { color: @text_tertiary; font-family: @font; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: transparent; border: none; }
+QLabel#setupStageName { color: @text_primary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-3) + R"(px; font-weight: 700; letter-spacing: 1.5px; background: transparent; border: none; }
+QLabel#setupStageDesc { color: @text_dim; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; background: transparent; border: none; }
+QLabel#setupStageTime { color: @text_tertiary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; background: transparent; border: none; }
+QLabel#setupStageStatus { color: @text_tertiary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; font-weight: 700; letter-spacing: 1px; background: transparent; border: none; }
 QLabel#setupStageStatus[state="running"] { color: @amber_main; }
 QLabel#setupStageStatus[state="done"], QLabel#setupStageStatus[state="skipped"] { color: @positive; }
 QLabel#setupStageStatus[state="failed"] { color: @negative; }
@@ -357,19 +364,19 @@ QProgressBar#setupStageBar { background: @bg_raised; border: none; }
 QProgressBar#setupStageBar::chunk { background: @amber_main; }
 QProgressBar#setupStageBar[state="done"]::chunk, QProgressBar#setupStageBar[state="skipped"]::chunk { background: @positive; }
 QProgressBar#setupStageBar[state="failed"]::chunk { background: @negative; }
-QLabel#setupStageDetail { color: @text_secondary; font-family: @font; font-size: 11px; background: transparent; border: none; }
+QLabel#setupStageDetail { color: @text_secondary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-3) + R"(px; background: transparent; border: none; }
 QLabel#setupStageDetail[state="failed"] { color: @negative; }
-QLabel#setupNet { color: @text_secondary; font-family: @font; font-size: 10px; letter-spacing: 1px; background: transparent; border: none; }
-QPlainTextEdit#setupErrorBox { background: @bg_base; color: @text_secondary; border: 1px solid @negative; font-family: @font; font-size: 11px; padding: 6px; }
-QPushButton#setupPrimaryBtn { background: @amber_main; color: @on_amber; border: 1px solid @amber_main; font-family: @font; font-size: 13px; font-weight: 700; letter-spacing: 2px; padding: 0px 22px; }
+QLabel#setupNet { color: @text_secondary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; letter-spacing: 1px; background: transparent; border: none; }
+QPlainTextEdit#setupErrorBox { background: @bg_base; color: @text_secondary; border: 1px solid @negative; font-family: @font; font-size: )" + fincept::ui::fonts::px(-3) + R"(px; padding: 6px; }
+QPushButton#setupPrimaryBtn { background: @amber_main; color: @on_amber; border: 1px solid @amber_main; font-family: @font; font-size: )" + fincept::ui::fonts::px(-1) + R"(px; font-weight: 700; letter-spacing: 2px; padding: 0px 22px; }
 QPushButton#setupPrimaryBtn:hover { background: @amber_dim; border-color: @amber_dim; }
 QPushButton#setupPrimaryBtn:disabled { background: @bg_raised; color: @text_tertiary; border: 1px solid @border_med; }
-QPushButton#setupQuitBtn { background: transparent; color: @text_secondary; border: 1px solid @border_med; font-family: @font; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 0px 18px; }
-QPushButton#setupQuitBtn:hover { color: @text_primary; border-color: @text_tertiary; }
-QPushButton#setupLinkBtn { background: transparent; color: @amber_main; border: none; font-family: @font; font-size: 11px; text-decoration: underline; padding: 0px 4px; }
+QPushButton#setupQuitBtn, QPushButton#setupLaterBtn { background: transparent; color: @text_secondary; border: 1px solid @border_med; font-family: @font; font-size: )" + fincept::ui::fonts::px(-2) + R"(px; font-weight: 700; letter-spacing: 1.5px; padding: 0px 18px; }
+QPushButton#setupQuitBtn:hover, QPushButton#setupLaterBtn:hover { color: @text_primary; border-color: @text_tertiary; }
+QPushButton#setupLinkBtn { background: transparent; color: @amber_main; border: none; font-family: @font; font-size: )" + fincept::ui::fonts::px(-3) + R"(px; text-decoration: underline; padding: 0px 4px; }
 QPushButton#setupLinkBtn:hover { color: @text_primary; }
-QLabel#setupNote { color: @text_tertiary; font-family: @font; font-size: 11px; background: transparent; border: none; }
-QLabel#setupInstallDir { color: @text_dim; font-family: @font; font-size: 10px; background: transparent; border: none; }
+QLabel#setupNote { color: @text_tertiary; font-family: @font; font-size: )" + fincept::ui::fonts::px(-3) + R"(px; background: transparent; border: none; }
+QLabel#setupInstallDir { color: @text_dim; font-family: @font; font-size: )" + fincept::ui::fonts::px(-4) + R"(px; background: transparent; border: none; }
 )");
     // No token is a prefix of another, so plain replace() is safe.
     const std::pair<const char*, QString> tokens[] = {
@@ -405,6 +412,7 @@ void SetupScreen::retranslateUi() {
     setWindowTitle(tr("Fincept Terminal — First-Time Setup"));
     title_lbl_->setText(tr("FINCEPT TERMINAL — FIRST-TIME SETUP"));
     quit_btn_->setText(tr("QUIT"));
+    later_btn_->setText(tr("NOT NOW — LAUNCH TERMINAL"));
     install_dir_lbl_->setText(
         tr("Installing to: %1").arg(QDir::toNativeSeparators(python::PythonSetupManager::instance().install_dir())));
 
@@ -539,6 +547,14 @@ void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, boo
     QString note;
     link_action_ = LinkAction::None;
 
+    // "Full" from here on also covers the choice made in this window: once
+    // COMPLETE FULL SETUP is clicked the offer is not made again, even in the
+    // moment between the essentials run ending and the full run starting.
+    full_scope = full_scope || full_chosen_;
+    // The essentials are in and the user has not decided about the rest yet.
+    const bool offer_full =
+        has_run && core_ready && !full_scope && !python::PythonSetupManager::instance().is_full_installed();
+
     if (!has_run) {
         primary_action_ = PrimaryAction::Begin;
         primary = anything_installed_ ? tr("CONTINUE SETUP") : tr("BEGIN SETUP");
@@ -550,29 +566,40 @@ void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, boo
                          : tr("Fincept Terminal installs its own Python runtime and the essential market-data "
                               "libraries — about a minute. AI, machine-learning and backtesting libraries are "
                               "optional: install them later from Settings → Python Env while you keep working.");
-        note = full_scope ? tr("Needs an internet connection. The terminal opens as soon as the essentials are "
-                               "installed; the remaining libraries finish in the background.")
-                          : tr("Needs an internet connection (about 100 MB). The terminal opens automatically as "
-                               "soon as the essentials are installed.");
+        note = full_scope ? tr("Needs an internet connection. You can open the terminal as soon as the essentials "
+                               "are installed; the remaining libraries finish in the background.")
+                          : tr("Needs an internet connection (about 100 MB). Once the essentials are installed you "
+                               "choose whether to complete the full setup or open the terminal.");
+    } else if (offer_full) {
+        primary_action_ = PrimaryAction::InstallFull;
+        primary = tr("COMPLETE FULL SETUP");
+        subtitle = tr("The essentials are installed. Complete the setup now, or open the terminal and do it later?");
+        note = tr("Complete Full Setup also installs the AI, machine-learning, backtesting and trading libraries — "
+                  "a larger download; you can open the terminal while it runs. Not Now opens the terminal with the "
+                  "essentials; install the rest any time from Settings → Python Env.");
     } else if (running) {
         if (core_ready) {
             primary_action_ = PrimaryAction::Launch;
             primary = tr("LAUNCH TERMINAL");
-            subtitle = tr("The essentials are ready — opening the terminal…");
-            note = full_scope ? tr("Remaining analytics libraries keep installing in the background.")
+            subtitle = full_scope ? tr("Installing the full libraries — the essentials are ready, so the terminal "
+                                       "can be opened now.")
+                                  : tr("The essentials are ready.");
+            note = full_scope ? tr("Launch Terminal opens it now; the remaining libraries keep installing in the "
+                                   "background. Or wait here — it opens by itself when everything is installed.")
                               : tr("Final optimizations finish in the background.");
         } else {
             primary_action_ = PrimaryAction::Wait;
             primary = tr("INSTALLING…");
             link_action_ = LinkAction::ContinueInBackground;
             subtitle = tr("Installing the Python runtime and the essential libraries…");
-            note = tr("The terminal opens automatically as soon as the essentials are installed.");
+            note = tr("Once the essentials are installed you choose whether to complete the full setup or open "
+                      "the terminal.");
         }
     } else if (succeeded) {
         primary_action_ = PrimaryAction::Launch;
         primary = tr("LAUNCH TERMINAL");
         subtitle = full_scope ? tr("Everything is installed.") : tr("The essential libraries are installed.");
-        note = tr("Launching Fincept Terminal…");
+        note = full_scope ? tr("Launching Fincept Terminal…") : QString();
     } else if (core_ready) {
         primary_action_ = PrimaryAction::Launch;
         primary = tr("LAUNCH TERMINAL");
@@ -609,6 +636,7 @@ void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, boo
             break;
     }
     link_btn_->setVisible(link_action_ != LinkAction::None && !launched_);
+    later_btn_->setVisible(offer_full && !launched_);
 
     const bool show_error = has_run && !running && !succeeded && !error.isEmpty();
     if (show_error && error_box_->toPlainText() != error)
@@ -674,6 +702,16 @@ void SetupScreen::on_primary_clicked() {
         case PrimaryAction::Launch:
             launch();
             break;
+        case PrimaryAction::InstallFull:
+            LOG_INFO("SetupScreen", "User chose to complete the full setup");
+            full_chosen_ = true;
+            error_box_->clear();
+            // Remembered on disk and started now (queued behind an essentials
+            // run that is still finishing).
+            python::PythonSetupManager::instance().request_full_install();
+            render();
+            sync_activity();
+            break;
         case PrimaryAction::Wait:
             break;
     }
@@ -697,7 +735,7 @@ void SetupScreen::on_link_clicked() {
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
             if (answer != QMessageBox::Yes)
                 break;
-            LOG_WARN("SetupScreen", "User skipped the Python setup");
+            LOG_INFO("SetupScreen", "User skipped the Python setup");
             launch();
             break;
         }
@@ -730,6 +768,11 @@ void SetupScreen::launch() {
     LOG_INFO("SetupScreen", python::PythonSetupManager::instance().is_running()
                                 ? "Launching the terminal — remaining installs continue in the background"
                                 : "Launching the terminal");
+    // Building the main window takes a moment and this window stays up meanwhile
+    // (main.cpp hides it once the terminal is on screen): say so, and paint it now —
+    // the hand-off below runs before the next paint event would.
+    primary_btn_->setText(tr("OPENING THE TERMINAL…"));
+    repaint();
     emit launch_requested();
 }
 
@@ -746,8 +789,17 @@ void SetupScreen::schedule_auto_launch() {
 void SetupScreen::on_setup_done(bool success, const QString& error) {
     render();
     sync_activity();
-    if (success)
+    auto& psm = python::PythonSetupManager::instance();
+    // Open the terminal by itself only when this run left nothing to choose:
+    // it installed the full set. After an essentials-only run the buttons ask
+    // (see render_buttons), and when the full setup was just chosen its own run
+    // is still to come.
+    const bool everything_installed =
+        psm.snapshot().scope == python::SetupScope::Full || psm.is_full_installed();
+    if (success && everything_installed)
         schedule_auto_launch();
+    else if (success)
+        LOG_INFO("SetupScreen", "Essentials installed — waiting for the user to choose full setup or launch");
     else
         LOG_WARN("SetupScreen", "Setup ended without success: " + error.left(500));
 }

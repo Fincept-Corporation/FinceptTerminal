@@ -1,5 +1,6 @@
 // src/screens/ma_analytics/MAAnalyticsScreen.h
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
@@ -20,7 +21,7 @@ class MAModulePanel;
 /// Left: module navigation by category (CORE / SPECIALIZED / ANALYTICS)
 /// Center: active module content (stacked widget)
 /// Right: module info & capabilities sidebar
-class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
+class MAAnalyticsScreen : public QWidget, public IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit MAAnalyticsScreen(QWidget* parent = nullptr);
@@ -29,6 +30,11 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "ma_analytics"; }
     int state_version() const override { return 1; }
+
+    // ISectionLinked — the modules by their ModuleInfo::key ("valuation" "merger" "deals" "startup"
+    // "fairness" "industry" "advanced" "comparison"; "module:<key>" too), through on_module_selected.
+    // `focus` is not used.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -48,6 +54,10 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     void update_right_panel();
     void update_sidebar_selection();
     void retranslateUi();
+    /// The module panel at `index`, built on first use. Each panel is a full
+    /// input form with several sub-tabs; building all of them up front (only
+    /// one is ever visible) made opening the screen take seconds.
+    MAModulePanel* ensure_panel(int index);
 
     // Module data
     QVector<services::ma::ModuleInfo> modules_;
@@ -55,6 +65,7 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
 
     // Widgets
     QStackedWidget* content_stack_ = nullptr;
+    QVector<MAModulePanel*> panels_; // one slot per module; nullptr until first shown
     QWidget* left_panel_ = nullptr;
     QWidget* right_panel_ = nullptr;
     QVBoxLayout* left_items_layout_ = nullptr;

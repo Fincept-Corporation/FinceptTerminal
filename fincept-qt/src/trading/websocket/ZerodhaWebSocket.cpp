@@ -12,6 +12,21 @@
 
 namespace fincept::trading {
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts, e.g. a 403 handshake), silent
+// reset once it is connected again (AccountDataStream writes "<broker> WS connected").
+static void log_zerodha_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition("ZerodhaWS", key, 0);
+    } else if (Logger::instance().transition("ZerodhaWS", key, 1)) {
+        LOG_WARN("ZerodhaWS", "Zerodha WS disconnected");
+    } else {
+        LOG_DEBUG("ZerodhaWS", "Zerodha WS still disconnected");
+    }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Big-endian read helpers
 // ────────────────────────────────────────────────────────────────────────────
@@ -59,7 +74,7 @@ ZerodhaWebSocket::ZerodhaWebSocket(const QString& api_key, const QString& access
 
 void ZerodhaWebSocket::open() {
     QString url = QString("%1?api_key=%2&access_token=%3").arg(kWsUrl, api_key_, access_token_);
-    LOG_INFO("ZerodhaWS", "Connecting to KiteTicker");
+    LOG_DEBUG("ZerodhaWS", "Connecting to KiteTicker");
     ws_->connect_to(url);
 }
 
@@ -116,13 +131,14 @@ void ZerodhaWebSocket::clear_subscriptions() {
 // ────────────────────────────────────────────────────────────────────────────
 
 void ZerodhaWebSocket::on_connected() {
-    LOG_INFO("ZerodhaWS", "Connected — resubscribing all tokens");
+    LOG_DEBUG("ZerodhaWS", "Connected — resubscribing all tokens");
     resubscribe_all();
+    log_zerodha_stream_state(this, true);
     emit connected();
 }
 
 void ZerodhaWebSocket::on_disconnected() {
-    LOG_WARN("ZerodhaWS", "Disconnected");
+    log_zerodha_stream_state(this, false);
     emit disconnected();
 }
 

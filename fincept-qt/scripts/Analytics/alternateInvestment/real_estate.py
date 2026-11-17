@@ -80,23 +80,37 @@ class RealEstateAnalyzer(AlternativeInvestmentBase):
 
     def dcf_valuation(self, projection_years: int = 10,
                       terminal_cap_rate: Decimal = None,
-                      discount_rate: Decimal = None) -> Dict[str, Decimal]:
+                      discount_rate: Decimal = None,
+                      rent_growth: Decimal = Decimal('0.03'),
+                      include_schedule: bool = False) -> Dict[str, Any]:
         """
         Discounted Cash Flow valuation
         CFA Standard: DCF approach for income-producing real estate
+
+        NOI convention (shared with financing_analysis): the entered income and expenses are the
+        current (year 0) run rate; year t NOI = NOI_0 * (1 + rent_growth) ** t. The exit value at the
+        end of the hold is next year's NOI capitalised at the exit cap rate.
         """
         if not self.gross_rental_income:
             return {"error": "Gross rental income required for DCF"}
+
+        projection_years = int(projection_years)
+        if projection_years < 1:
+            return {"error": "The hold period must be at least one year"}
 
         if discount_rate is None:
             discount_rate = self.config.RISK_FREE_RATE + Decimal('0.04')  # Add 4% risk premium
 
         if terminal_cap_rate is None:
             terminal_cap_rate = self.calculate_cap_rate() or Decimal('0.06')
+        if terminal_cap_rate <= 0:
+            return {"error": "The exit cap rate must be above 0%"}
+        if discount_rate <= Decimal('-1'):
+            return {"error": "The discount rate must be above -100%"}
 
         # Project cash flows
         current_noi = self.calculate_noi()
-        annual_growth_rate = Decimal('0.03')  # 3% annual growth assumption
+        annual_growth_rate = Decimal(str(rent_growth))
 
         projected_cfs = []
         for year in range(1, projection_years + 1):
@@ -109,21 +123,157 @@ class RealEstateAnalyzer(AlternativeInvestmentBase):
 
         # Discount cash flows to present value
         pv_cash_flows = Decimal('0')
+        schedule = []
         for year, cf in enumerate(projected_cfs, 1):
-            pv = cf / ((Decimal('1') + discount_rate) ** year)
+            factor = Decimal('1') / ((Decimal('1') + discount_rate) ** year)
+            pv = cf * factor
             pv_cash_flows += pv
+            exit_value = terminal_value if year == projection_years else Decimal('0')
+            schedule.append({
+                'year': year,
+                'noi': float(cf),
+                'exit_value': float(exit_value),
+                'cash_flow': float(cf + exit_value),
+                'discount_factor': float(factor),
+                'present_value': float((cf + exit_value) * factor),
+            })
 
         # Discount terminal value
         pv_terminal = terminal_value / ((Decimal('1') + discount_rate) ** projection_years)
 
         total_property_value = pv_cash_flows + pv_terminal
 
-        return {
+        result = {
             "dcf_value": total_property_value,
             "pv_cash_flows": pv_cash_flows,
             "pv_terminal_value": pv_terminal,
             "terminal_value": terminal_value,
             "implied_cap_rate": current_noi / total_property_value if total_property_value > 0 else Decimal('0')
+        }
+        if include_schedule:
+            result["yearly_cash_flows"] = schedule
+        return result
+
+    def financing_analysis(self, loan_amount: float, interest_rate: float, loan_term_years: float,
+                           hold_years: int = 10, exit_cap_rate: float = 0.06,
+                           rent_growth: float = 0.03) -> Dict[str, Any]:
+        """
+        Levered view of the property: a fully amortising loan with monthly payments.
+
+        Debt service, DSCR, LTV, debt yield, cash-on-cash and the levered vs unlevered IRR over the
+        hold (exit at next year's NOI / exit cap rate, loan balance repaid from the sale). NOI follows
+        the same convention as dcf_valuation (year t = NOI_0 * (1 + growth) ** t).
+        """
+        from fincept_irr import irr as periodic_irr
+
+        price = float(self.acquisition_price or 0)
+        if price <= 0:
+            return {"error": "A purchase price above 0 is required for the financing analysis"}
+        if not self.gross_rental_income:
+            return {"error": "Gross rental income required for the financing analysis"}
+        loan = max(0.0, float(loan_amount))
+        rate = float(interest_rate)
+        term = float(loan_term_years)
+        hold = int(hold_years)
+        exit_cap = float(exit_cap_rate)
+        growth = float(rent_growth)
+        if loan >= price:
+            return {"error": "The loan must be smaller than the purchase price (no equity left to invest)"}
+        if hold < 1:
+            return {"error": "The hold period must be at least one year"}
+        if exit_cap <= 0:
+            return {"error": "The exit cap rate must be above 0%"}
+        if loan > 0 and term <= 0:
+            return {"error": "The loan term must be above 0 years"}
+
+        months = int(round(term * 12)) if loan > 0 else 0
+        r_m = rate / 12.0
+        if loan <= 0:
+            payment = 0.0
+        elif abs(r_m) < 1e-12:
+            payment = loan / months
+        else:
+            payment = loan * r_m / (1.0 - (1.0 + r_m) ** (-months))
+
+        def balance_after(k: int) -> float:
+            if loan <= 0 or k >= months:
+                return 0.0
+            if abs(r_m) < 1e-12:
+                return loan - payment * k
+            return loan * (1.0 + r_m) ** k - payment * ((1.0 + r_m) ** k - 1.0) / r_m
+
+        noi0 = float(self.calculate_noi())
+        equity = price - loan
+        levered = [-equity]
+        unlevered = [-price]
+        yearly = []
+        dscrs = []
+        total_levered_in = 0.0
+        for year in range(1, hold + 1):
+            noi = noi0 * (1.0 + growth) ** year
+            paid_months = max(0, min(12, months - (year - 1) * 12))
+            debt_service = payment * paid_months
+            cfads = noi - debt_service
+            balance = balance_after(year * 12)
+            sale = 0.0
+            if year == hold:
+                sale = noi * (1.0 + growth) / exit_cap
+            dscr = noi / debt_service if debt_service > 0 else None
+            if dscr is not None:
+                dscrs.append(dscr)
+            levered_cf = cfads + (sale - balance if year == hold else 0.0)
+            unlevered_cf = noi + sale
+            levered.append(levered_cf)
+            unlevered.append(unlevered_cf)
+            total_levered_in += levered_cf
+            yearly.append({
+                'year': year,
+                'noi': noi,
+                'debt_service': debt_service,
+                'cash_flow_after_debt': cfads,
+                'dscr': dscr,
+                'loan_balance': balance,
+                'exit_proceeds': sale - balance if year == hold else 0.0,
+                'levered_cash_flow': levered_cf,
+            })
+
+        noi1 = noi0 * (1.0 + growth)
+        ads = payment * min(12, months)
+        dscr1 = noi1 / ads if ads > 0 else None
+        exit_value = yearly[-1]['noi'] * (1.0 + growth) / exit_cap
+        balance_exit = yearly[-1]['loan_balance']
+        if dscr1 is None:
+            assessment = 'No debt - all-equity purchase'
+        elif dscr1 >= 1.25:
+            assessment = 'Meets the common 1.25x lender minimum'
+        elif dscr1 >= 1.0:
+            assessment = 'Covers debt service but below the common 1.25x lender minimum'
+        else:
+            assessment = 'NOI does not cover debt service - the property needs cash from the owner'
+
+        return {
+            'loan_amount': loan,
+            'interest_rate': rate,
+            'loan_term_years': term,
+            'monthly_payment': payment,
+            'annual_debt_service': ads,
+            'equity_required': equity,
+            'loan_to_value': loan / price,
+            'noi_year1': noi1,
+            'debt_yield': noi1 / loan if loan > 0 else None,
+            'dscr_year1': dscr1,
+            'min_dscr': min(dscrs) if dscrs else None,
+            'cash_on_cash_year1': (noi1 - ads) / equity,
+            'levered_irr': periodic_irr(levered),
+            'unlevered_irr': periodic_irr(unlevered),
+            'equity_multiple': total_levered_in / equity,
+            'exit_value': exit_value,
+            'loan_balance_at_exit': balance_exit,
+            'hold_period_years': hold,
+            'exit_cap_rate': exit_cap,
+            'rent_growth': growth,
+            'dscr_assessment': assessment,
+            'yearly_cash_flows': yearly,
         }
 
     def calculate_real_estate_ratios(self) -> Dict[str, Decimal]:

@@ -1,5 +1,6 @@
 #include "screens/news/NewsTickerStrip.h"
 
+#include "services/news/NewsFeedParse.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -9,6 +10,7 @@
 #include <QTextLayout>
 #include <QTextOption>
 
+#include <algorithm>
 #include <limits>
 
 namespace fincept::screens {
@@ -46,9 +48,9 @@ QList<QGlyphRun> news_ticker_layout_runs(const QString& text, const QFont& font,
 } // namespace
 
 NewsTickerStrip::NewsTickerStrip(QWidget* parent)
-    : QWidget(parent), ticker_font_(ui::fonts::DATA_FAMILY, 10), ticker_fm_(ticker_font_) {
+    : QWidget(parent), ticker_font_(ui::fonts::font(-1)), ticker_fm_(ticker_font_) {
     setObjectName("newsTickerStrip");
-    setFixedHeight(22);
+    setFixedHeight(std::max(22, ticker_fm_.height() + 6));
     refresh_colors();
 
     connect(&scroll_timer_, &QTimer::timeout, this, [this]() {
@@ -62,6 +64,7 @@ NewsTickerStrip::NewsTickerStrip(QWidget* parent)
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
         refresh_colors();
+        refresh_font();
         update();
     });
 }
@@ -70,37 +73,59 @@ void NewsTickerStrip::refresh_colors() {
     source_color_ = QColor(ui::colors::CYAN());
     headline_color_ = QColor(ui::colors::TEXT_SECONDARY());
     for (auto& entry : entries_)
-        entry.tag_color = QColor(services::priority_color(entry.article.priority));
+        entry.tag_color = ui::colors::legible_color(QColor(services::priority_color(entry.article.priority)));
 }
 
-void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breaking_articles) {
+void NewsTickerStrip::refresh_font() {
+    ticker_font_ = ui::fonts::font(-1);
+    ticker_fm_ = QFontMetrics(ticker_font_);
+    setFixedHeight(std::max(22, ticker_fm_.height() + 6));
+
+    total_width_ = 0;
+    for (auto& entry : entries_) {
+        entry.tag_width = ticker_fm_.horizontalAdvance(entry.tag_text);
+        entry.source_width = ticker_fm_.horizontalAdvance(entry.source_text);
+        entry.headline_width = ticker_fm_.horizontalAdvance(entry.headline_text);
+        entry.total_width =
+            entry.tag_width + SEGMENT_GAP + entry.source_width + SEGMENT_GAP + entry.headline_width + ITEM_SPACING;
+        entry.tag_runs = news_ticker_layout_runs(entry.tag_text, ticker_font_, layoutDirection(), this);
+        entry.source_runs = news_ticker_layout_runs(entry.source_text, ticker_font_, layoutDirection(), this);
+        entry.headline_runs = news_ticker_layout_runs(entry.headline_text, ticker_font_, layoutDirection(), this);
+        total_width_ += entry.total_width;
+    }
+    if (total_width_ > 0 && offset_ >= total_width_)
+        offset_ = 0;
+}
+
+void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& articles) {
+    // Breaking headlines in the order every news view uses — publication time,
+    // newest first, ties by id — whatever order (e.g. relevance) the list
+    // handed in has.
+    QVector<services::NewsArticle> breaking;
+    for (const auto& article : articles) {
+        if (article.priority == services::Priority::FLASH || article.priority == services::Priority::URGENT ||
+            article.priority == services::Priority::BREAKING)
+            breaking.append(article);
+    }
+    services::news_feed::sort_newest_first(breaking);
+    if (breaking.size() > kMaxEntries)
+        breaking.resize(kMaxEntries);
+
     // The screen re-pushes this list on every filter pass and every progressive
     // partial. When it hasn't actually changed, keep the scroll position instead
     // of snapping the strip back to the start each time.
-    {
-        QStringList incoming;
-        for (const auto& article : breaking_articles) {
-            if (article.priority == services::Priority::FLASH || article.priority == services::Priority::URGENT ||
-                article.priority == services::Priority::BREAKING)
-                incoming << article.id;
-        }
-        if (!incoming.isEmpty() && incoming.size() == entries_.size()) {
-            bool same = true;
-            for (int i = 0; i < incoming.size() && same; ++i)
-                same = entries_[i].article.id == incoming[i];
-            if (same)
-                return;
-        }
+    if (!breaking.isEmpty() && breaking.size() == entries_.size()) {
+        bool same = true;
+        for (int i = 0; i < breaking.size() && same; ++i)
+            same = entries_[i].article.id == breaking[i].id;
+        if (same)
+            return;
     }
 
     entries_.clear();
     total_width_ = 0;
 
-    for (const auto& article : breaking_articles) {
-        if (article.priority != services::Priority::FLASH && article.priority != services::Priority::URGENT &&
-            article.priority != services::Priority::BREAKING)
-            continue;
-
+    for (const auto& article : std::as_const(breaking)) {
         TickerEntry entry;
         entry.article = article;
         entry.tag_text = services::priority_string(article.priority);
@@ -116,7 +141,7 @@ void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breakin
         entry.tag_runs = news_ticker_layout_runs(entry.tag_text, ticker_font_, layoutDirection(), this);
         entry.source_runs = news_ticker_layout_runs(entry.source_text, ticker_font_, layoutDirection(), this);
         entry.headline_runs = news_ticker_layout_runs(entry.headline_text, ticker_font_, layoutDirection(), this);
-        entry.tag_color = QColor(services::priority_color(article.priority));
+        entry.tag_color = ui::colors::legible_color(QColor(services::priority_color(article.priority)));
 
         total_width_ += entry.total_width;
         entries_.append(entry);

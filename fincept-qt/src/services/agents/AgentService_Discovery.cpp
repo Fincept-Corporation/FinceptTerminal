@@ -69,7 +69,7 @@ void AgentService::discover_agents() {
         }
     }
 
-    LOG_INFO("AgentService", "Discovering agents from Python");
+    LOG_DEBUG("AgentService", "Discovering agents from Python");
     QPointer<AgentService> self = this;
 
     run_python_light("discover_agents", {}, [self](bool ok, QJsonObject result) {
@@ -79,6 +79,15 @@ void AgentService::discover_agents() {
             emit self->error_occurred("discover_agents", result["error"].toString());
             return;
         }
+        // main.py answers every exception with {"success": false, "error"} and
+        // exit 0. Report it and do not cache that answer — the saved (DB) agents
+        // are still listed below.
+        const bool py_failed = !result.value("success").toBool(true);
+        if (py_failed)
+            LOG_WARN("AgentService", logf("Agent discovery failed, listing saved agents only",
+                                          {{"error", result["error"].toString().section(QLatin1Char('\n'), 0, 0)}}));
+        if (py_failed)
+            emit self->error_occurred("discover_agents", result["error"].toString("Agent discovery failed"));
 
         QVector<AgentInfo> agents;
         QMap<QString, int> cat_counts;
@@ -184,12 +193,13 @@ void AgentService::discover_agents() {
         QJsonObject root;
         root["agents"] = agents_arr;
         root["categories"] = cats_arr;
-        fincept::CacheManager::instance().put(
-            "agents:list", QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
-            kAgentCacheTtlSec, "agents");
+        if (!py_failed)
+            fincept::CacheManager::instance().put(
+                "agents:list", QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+                kAgentCacheTtlSec, "agents");
 
-        LOG_INFO("AgentService",
-                 QString("Discovered %1 agents in %2 categories").arg(agents.size()).arg(categories.size()));
+        LOG_DEBUG("AgentService",
+                  QString("Discovered %1 agents in %2 categories").arg(agents.size()).arg(categories.size()));
         emit self->agents_discovered(agents, categories);
     });
 }
@@ -216,8 +226,9 @@ void AgentService::get_system_info() {
     run_python_light("system_info", {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (!ok) {
-            emit self->error_occurred("system_info", result["error"].toString());
+        // {"success": false} arrives with exit 0 — never parse or cache it.
+        if (!ok || !result.value("success").toBool(true)) {
+            emit self->error_occurred("system_info", result["error"].toString("System info unavailable"));
             return;
         }
 
@@ -255,8 +266,8 @@ void AgentService::list_tools() {
     run_python_light("list_tools", {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (!ok) {
-            emit self->error_occurred("list_tools", result["error"].toString());
+        if (!ok || !result.value("success").toBool(true)) {
+            emit self->error_occurred("list_tools", result["error"].toString("Tool listing failed"));
             return;
         }
 
@@ -294,8 +305,8 @@ void AgentService::list_models() {
     run_python_light("list_models", {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (!ok) {
-            emit self->error_occurred("list_models", result["error"].toString());
+        if (!ok || !result.value("success").toBool(true)) {
+            emit self->error_occurred("list_models", result["error"].toString("Model listing failed"));
             return;
         }
 

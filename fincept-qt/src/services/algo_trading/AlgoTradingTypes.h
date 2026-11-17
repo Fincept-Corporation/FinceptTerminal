@@ -1,5 +1,7 @@
 // src/services/algo_trading/AlgoTradingTypes.h
 #pragma once
+#include "ui/theme/Theme.h"
+
 #include <QColor>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -67,11 +69,19 @@ struct AlgoStrategy {
     double stop_loss = 0;
     double take_profit = 0;
     double trailing_stop = 0;
-    double position_size_pct = 100.0; // in-memory only — % of capital allocated per backtest entry
+    double position_size_pct = 100.0; // % of capital allocated per backtest entry (persisted, v057)
+    // Execution cost model (algo_engine/ExecutionModel CostModel::to_json): used by the
+    // backtest, by paper fills and for the estimated fees deducted from live P&L.
+    QJsonObject cost_model;
+    QString entry_side = "BUY"; // BUY = long entries, SELL = short entries (backtest side)
+    double risk_free_pct = 0;   // annual %, Sharpe / Sortino of its backtests
     bool is_active = true;
     QString created_at;
     QString updated_at;
-    QJsonObject last_backtest; // in-memory only — populated when backtest runs, not persisted
+    // Summary of the most recent backtest (headline metrics + a thinned equity
+    // curve, see AlgoTradingService::backtest_summary), persisted per strategy.
+    QJsonObject last_backtest;
+    QString last_backtest_at; // ISO-8601 UTC
 
     StrategyKind kind() const { return kind_from_id(id); }
 };
@@ -100,7 +110,13 @@ struct AlgoDeployment {
     QString timeframe;
     double quantity = 1.0;
     double max_order_value = 0; // 0 = no limit
-    double max_daily_loss = 0;  // 0 = no limit
+    double max_daily_loss = 0;  // 0 = no limit (realized + unrealized, exchange trading day)
+    // Extra, more-conservative risk limits (algo_engine/RiskLimits.h): max drawdown,
+    // max trades per day, entry window, regular-session-only, flatten-on-stop.
+    QJsonObject risk_limits;
+    // Cost model copied from the strategy at deploy time (paper fill realism and
+    // estimated live fees).
+    QJsonObject cost_model;
     QString error_message;
     qint64 pid = 0; // OS pid of runner process; 0 if not running
     QString created_at;
@@ -116,22 +132,25 @@ struct AlgoDeployment {
     QString position_side;
     double position_entry = 0;
     double current_price = 0;
+    double total_fees = 0;   // estimated fees deducted from P&L (v057)
+    double daily_pnl = 0;    // realized P&L of the current exchange trading day
+    bool risk_halted = false; // halted by a risk limit until reset / resumed
+    QString halt_reason;
 
     StrategyKind kind() const { return kind_from_id(strategy_id); }
     TradingBackend backend_enum() const { return backend_from_string(backend); }
     bool is_live() const { return mode == QStringLiteral("live"); }
 };
 
+/// Status colour of a deployment, read from the active theme on every call.
 inline QColor deployment_status_color(const QString& status) {
     if (status == "running")
-        return QColor("#00D66F");
+        return ui::colors::SUCCESS;
     if (status == "starting")
-        return QColor("#FFC400");
+        return ui::colors::WARNING;
     if (status == "error")
-        return QColor("#FF3B3B");
-    if (status == "stopped")
-        return QColor("#787878");
-    return QColor("#787878"); // pending
+        return ui::colors::DANGER;
+    return ui::colors::TEXT_SECONDARY; // stopped / pending
 }
 
 // ── Condition ───────────────────────────────────────────────────────────────
@@ -254,9 +273,9 @@ inline int algo_default_lookback_days(const QString& tf) {
         return 365;
     if (tf == "1m")
         return 7;
-    if (tf == "live")
-        return 365;
-    return 55; // 3m / 5m / 10m / 15m / 30m — just under Yahoo's ~60-day cap
+    // "live" strategies are warmed up and backtested on 5-minute bars (the bars the
+    // runner aggregates — algo_engine/AlgoMarket live_bar_timeframe()).
+    return 55; // live / 3m / 5m / 10m / 15m / 30m — just under Yahoo's ~60-day cap
 }
 
 // ── Strategy templates ────────────────────────────────────────────────────
@@ -347,6 +366,34 @@ inline QVector<StrategyTemplate> algo_strategy_templates() {
     st.exit = {ci("CLOSE", {}, "value", "crosses_below", "SUPERTREND", {{"period", 10}, {"multiplier", 3}}, "value")};
     t.append(st);
 
+    // Channel breakout: the channel of the PREVIOUS bars (compare_offset 1) — the current
+    // bar's own high is part of today's channel, so "close above it" could never happen.
+    StrategyTemplate don;
+    don.name = "Donchian Breakout";
+    don.description = "Close above the 20-bar high, exit below the 10-bar low";
+    don.timeframe = "1d";
+    don.stop_loss = 0;
+    don.take_profit = 0;
+    {
+        QJsonObject e = ci("CLOSE", {}, "value", ">", "DONCHIAN", {{"period", 20}}, "upper");
+        e["compare_offset"] = 1;
+        QJsonObject x = ci("CLOSE", {}, "value", "<", "DONCHIAN", {{"period", 10}}, "lower");
+        x["compare_offset"] = 1;
+        don.entry = {e};
+        don.exit = {x};
+    }
+    t.append(don);
+
+    StrategyTemplate rev;
+    rev.name = "Bollinger Reversion";
+    rev.description = "Close crosses below the lower band, exit back at the middle band";
+    rev.timeframe = "1d";
+    rev.stop_loss = 5;
+    rev.take_profit = 0;
+    rev.entry = {ci("CLOSE", {}, "value", "crosses_below", "BOLLINGER", {{"period", 20}, {"std_dev", 2}}, "lower")};
+    rev.exit = {ci("CLOSE", {}, "value", "crosses_above", "BOLLINGER", {{"period", 20}, {"std_dev", 2}}, "middle")};
+    t.append(rev);
+
     return t;
 }
 
@@ -404,6 +451,8 @@ inline QVector<ScannerPreset> scanner_presets() {
 
 // ── Nifty watchlists ────────────────────────────────────────────────────────
 
+// NOTE: the 20 largest NIFTY 50 constituents — NOT the full index. UI labels say
+// "NIFTY top 20" accordingly.
 inline QStringList nifty50_symbols() {
     return {"RELIANCE",   "TCS",   "HDFCBANK",  "INFY",       "ICICIBANK", "HINDUNILVR", "SBIN",
             "BHARTIARTL", "ITC",   "KOTAKBANK", "LT",         "AXISBANK",  "BAJFINANCE", "ASIANPAINT",

@@ -1,5 +1,6 @@
 #pragma once
-// AppearanceSection.h — typography, theme density, and interface toggles.
+// AppearanceSection.h — theme (dark / light / system), typography, density,
+// and interface toggles.
 // Live preview is debounced (300ms) to coalesce rapid combobox changes.
 
 #include <QCheckBox>
@@ -31,6 +32,11 @@ class AppearanceSection : public QWidget {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
+    /// Push what the controls currently show to ThemeManager (queued, one
+    /// coalesced re-style).
+    void apply_from_controls();
+
+    QComboBox* app_theme_ = nullptr;
     QComboBox* app_font_size_ = nullptr;
     QComboBox* app_font_family_ = nullptr;
     QComboBox* app_density_ = nullptr;
@@ -46,7 +52,10 @@ class AppearanceSection : public QWidget {
 
     // Row labels + descriptions captured from make_row() (the shared helper
     // builds the QLabel internally, so we grab it back from the row's children).
+    QLabel* theme_label_ = nullptr;
+    QLabel* theme_desc_ = nullptr;
     QLabel* font_size_label_ = nullptr;
+    QLabel* font_family_desc_ = nullptr;
     QLabel* font_family_label_ = nullptr;
     QLabel* density_label_ = nullptr;
     QLabel* density_desc_ = nullptr;

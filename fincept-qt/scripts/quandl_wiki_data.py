@@ -46,7 +46,7 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 def _check_key() -> Optional[Dict]:
     if not API_KEY:
         return {
-            "error": "NASDAQ_DATA_LINK_API_KEY environment variable not set",
+            "error": "NASDAQ_DATA_LINK_API_KEY is not set: save it in Settings > Credentials",
             "note": "Get a free API key at https://data.nasdaq.com/sign-up",
         }
     return None

@@ -63,7 +63,9 @@ class AccountManagementDialog : public QDialog {
     void on_connect_zerodha_totp();
     void on_connect_zerodha_browser();
     void on_connect_zerodha_manual_paste();
-    void persist_zerodha_creds_before_auth();
+    /// Saves the form's Zerodha fields before auth; false (nothing saved, reason shown)
+    /// while the stored record could not be read and the form is not fully re-entered.
+    bool persist_zerodha_creds_before_auth();
     void exchange_and_store_token_async(const QString& api_key, const QString& api_secret,
                                         const QString& request_token);
 
@@ -175,6 +177,22 @@ class AccountManagementDialog : public QDialog {
 
     // Currently selected account
     QString selected_account_id_;
+
+    // Stored credentials that could not be read (secure storage locked / failing).
+    // load_saved_credentials() then fills NOTHING (the fields that did read are a
+    // partial set) and shows the reason; until a later read succeeds or the user has
+    // entered every field anew, nothing typed in the form may be saved over the record
+    // — a blank TOTP secret saved over the unreadable one would lose it.
+    QString cred_read_error_;
+    QString cred_read_error_account_;
+    /// The status label of the page that shows `account_id`'s credentials.
+    QLabel* cred_status_label_for(const QString& account_id) const;
+    void show_cred_read_error(QLabel* status, const QString& read_error);
+    /// Gate before saving credentials typed in the form. `full_entry`: every field the
+    /// stored record holds is filled in (that replaces the unreadable record). Without
+    /// it the store is read again: readable now -> the form is filled from it and the
+    /// user confirms with another click; still unreadable -> the reason. Both false.
+    bool cred_save_allowed(QLabel* status, bool full_entry);
 };
 
 } // namespace fincept::screens::equity

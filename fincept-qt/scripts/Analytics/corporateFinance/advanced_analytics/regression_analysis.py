@@ -281,19 +281,25 @@ _SERVICE_COMMANDS = ("run",)
 
 
 def _svc_db_comps():
-    """Comparable rows {name, ev, revenue, ebitda, growth} from the local deal database (complete rows only)."""
+    """Comparable rows {name, ev, revenue, ebitda} from the deals the USER verified in the local deal database:
+    EV = enterprise value or deal value; revenue / EBITDA = the target figures entered, or EV / the multiple."""
     try:
         from corporateFinance.deal_database.database_schema import MADatabase
         db = MADatabase()
         rows = []
         for deal in db.get_all_deals():
+            if int(deal.get("verified") or 0) != 1:
+                continue
             ev = deal.get("enterprise_value") or deal.get("deal_value")
-            for fin in db.get_deal_financials(deal["deal_id"]) or []:
-                revenue, ebitda, growth = fin.get("revenue"), fin.get("ebitda"), fin.get("revenue_growth")
-                if ev and revenue and ebitda is not None and growth is not None:
-                    rows.append({"name": deal.get("target_name", ""), "ev": float(ev), "revenue": float(revenue),
-                                 "ebitda": float(ebitda), "growth": float(growth)})
-                    break
+            if not ev:
+                continue
+            ev = float(ev)
+            revenue = deal.get("target_revenue") or (ev / float(deal["ev_revenue"]) if deal.get("ev_revenue") else None)
+            ebitda = deal.get("target_ebitda") or (ev / float(deal["ev_ebitda"]) if deal.get("ev_ebitda") else None)
+            if revenue and ebitda:
+                rows.append({"name": deal.get("target_name", ""), "ev": ev, "revenue": float(revenue),
+                             "ebitda": float(ebitda)})
+        db.close()
         return rows
     except Exception:
         return []
@@ -310,17 +316,33 @@ def _service_argv(argv):
     if not isinstance(p, dict):
         return argv
     comps = p.get("comp_data")
-    if not isinstance(comps, list) or not comps:
+    from_db = not isinstance(comps, list) or not comps
+    if from_db:
         comps = _svc_db_comps()
     drivers = [k for k in comps[0] if k not in ("name", "ev")] if comps and isinstance(comps[0], dict) else []
     needed = max(len(drivers), 3) + 2
     if len(comps) < needed:
-        # Printed as the script-level error envelope; PythonRunner surfaces `error` to the screen.
-        print(json.dumps({"success": False, "error": "Regression needs at least %d comparable companies with EV, "
-                          "revenue, EBITDA and growth (got %d): fewer leave no degrees of freedom for the "
-                          "statistics. Paste them as `comp_data` (list of {name, ev, revenue, ebitda, growth}) or "
-                          "load deals into the Deal Database first." % (needed, len(comps)), "command": argv[1]}))
-        sys.exit(1)
+        # Not an error: nothing to compute until there is a comparable set. Say what is needed.
+        print(json.dumps({
+            "success": True,
+            "needs_data": {
+                "title": "Not enough comparable companies for a regression",
+                "message": ("Regression needs at least %d comparable companies with enterprise value, revenue and "
+                            "EBITDA (%s %d). Fewer leave no degrees of freedom for the statistics."
+                            % (needed, "your verified deals give" if from_db else "you entered", len(comps))),
+                "steps": ["Add comparable companies in the grid above (name, enterprise value, revenue, EBITDA, "
+                          "growth): type them, paste rows from a spreadsheet or import a CSV file.",
+                          "Or verify deals in Deal Database > Deals with a deal value and target revenue / EBITDA "
+                          "(or EV/Revenue and EV/EBITDA)."],
+                "have": len(comps), "need": needed,
+            },
+            "data": {"num_comparables": len(comps)},
+        }))
+        sys.exit(0)
+    if from_db:
+        # Database rows carry no growth figure: regress on the drivers they have.
+        p = dict(p)
+        p["subject"] = {k: v for k, v in (p.get("subject") or {}).items() if k in drivers}
     subject = p.get("subject") if isinstance(p.get("subject"), dict) else {}
     regression_type = str(p.get("type", p.get("regression_type", "multiple"))).lower()
     return [argv[0], "regression", json.dumps(comps), json.dumps(subject), regression_type]

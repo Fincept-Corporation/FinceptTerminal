@@ -31,6 +31,22 @@ from typing import Dict, List, Optional, Union, Literal
 import re
 import urllib.parse
 
+try:
+    import fincept_connector as fc
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    import os as _os_path
+    sys.path.append(_os_path.dirname(_os_path.abspath(__file__)))
+    import fincept_connector as fc
+
+WTO_SIGNUP_URL = "https://apiportal.wto.org/"
+# Commands that call a WTO data API (subscription key required); available_apis and overview do not.
+WTO_KEYED_COMMANDS = {
+    "qr_members", "qr_products", "qr_notifications", "qr_details", "qr_list", "qr_hs_versions",
+    "eping_members", "eping_search", "timeseries_topics", "timeseries_indicators", "timeseries_data",
+    "timeseries_reporters", "tfad_data", "trade_restrictions_analysis", "notifications_analysis",
+    "trade_statistics_analysis", "comprehensive_analysis",
+}
+
 # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
 # system DNS configuration on Windows and fails every request with
 # "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
@@ -791,6 +807,15 @@ def main():
 
     command = sys.argv[1]
 
+    # Every WTO data API (QR, ePing, timeseries, TFAD) answers HTTP 401 without a subscription
+    # key: say so before any request, with the code the terminal turns into "add key".
+    # available_apis (a local description) and overview (keyless summary) need none.
+    if not api_key and command in WTO_KEYED_COMMANDS:
+        out = {"success": False}
+        out.update(fc.missing_key("WTO", WTO_SIGNUP_URL, "WTO_API_KEY", "an API subscription key"))
+        print(json.dumps(out))
+        return
+
     # Parse command line arguments
     args = {}
     for i, arg in enumerate(sys.argv[2:], 2):
@@ -966,7 +991,8 @@ def main():
                 "error": f"Unknown command: {command}"
             }
 
-        print(json.dumps(result, indent=2))
+        # One line: the host reads the last stdout line as the payload (indent=2 split it).
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({

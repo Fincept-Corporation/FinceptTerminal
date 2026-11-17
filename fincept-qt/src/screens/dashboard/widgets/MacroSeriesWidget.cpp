@@ -5,6 +5,7 @@
 #include "services/dbnomics/DBnomicsService.h"
 #include "services/economics/EconomicsService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QComboBox>
 #include <QDialog>
@@ -192,9 +193,7 @@ void MacroSeriesCanvas::rebuild_cache() {
     cache_.fill(QColor(ui::colors::BG_BASE()));
 
     QPainter p(&cache_);
-    QFont font;
-    font.setFamily(ui::fonts::DATA_FAMILY);
-    font.setPixelSize(9);
+    const QFont font = ui::fonts::font(-5);
     p.setFont(font);
     const QFontMetrics fm(font);
 
@@ -297,6 +296,7 @@ MacroSeriesWidget::MacroSeriesWidget(const QJsonObject& cfg, QWidget* parent)
       source_(macro_norm_source(cfg.value("source").toString())),
       series_(macro_norm_series(source_, cfg.value("series").toString())),
       range_(macro_norm_range(cfg.value("range").toString())) {
+    resolve_default_source(cfg);
     build_ui();
     update_title();
     update_link();
@@ -306,6 +306,27 @@ MacroSeriesWidget::MacroSeriesWidget(const QJsonObject& cfg, QWidget* parent)
     set_configurable(true);
     connect(this, &BaseWidget::refresh_requested, this, &MacroSeriesWidget::refresh_data);
     set_loading(true);
+}
+
+void MacroSeriesWidget::resolve_default_source(const QJsonObject& cfg) {
+    // Only a config that names no source (a fresh tile) — and no FRED-style
+    // series either — is ours to choose; an explicit choice is always kept.
+    const QString cfg_source = cfg.value("source").toString().trimmed();
+    const QString cfg_series = cfg.value("series").toString().trimmed();
+    if (!cfg_source.isEmpty() || (!cfg_series.isEmpty() && !cfg_series.contains(QLatin1Char('/'))))
+        return;
+    // FRED needs a free key; without one the tile would open on "key not set".
+    // Start on the DBnomics default (no key) instead. A store that cannot be read
+    // is not "no key": stay on FRED and say so if the key then turns out missing.
+    QString reason;
+    const ui::SecretPresence key =
+        ui::live_requirement_environment().secret_presence(QStringLiteral("FRED_API_KEY"), &reason);
+    if (key == ui::SecretPresence::Absent) {
+        source_ = QString::fromLatin1(kMacroSourceDbn);
+        series_ = macro_norm_series(source_, cfg_series);
+    } else if (key == ui::SecretPresence::Unreadable) {
+        key_read_error_ = reason.trimmed().isEmpty() ? tr("unknown error") : reason.trimmed();
+    }
 }
 
 QString MacroSeriesWidget::series_problem(const QString& source, const QString& series) {
@@ -380,13 +401,13 @@ void MacroSeriesWidget::build_ui() {
 void MacroSeriesWidget::apply_styles() {
     if (!body_)
         return;
-    body_->setStyleSheet(QString("QLabel#macroValue{color:%1;font-size:16px;font-weight:700;background:transparent;}"
-                                 "QLabel#macroChange{color:%2;font-size:11px;font-weight:700;background:transparent;}"
+    set_css_cached(body_, QString("QLabel#macroValue{color:%1;font-size:" + fincept::ui::fonts::px(2) + "px;font-weight:700;background:transparent;}"
+                                 "QLabel#macroChange{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
                                  "QLabel#macroChange[dir=\"up\"]{color:%3;}"
                                  "QLabel#macroChange[dir=\"down\"]{color:%4;}"
-                                 "QLabel#macroDate{color:%2;font-size:9px;background:transparent;}"
-                                 "QLabel#macroName{color:%2;font-size:10px;background:transparent;}"
-                                 "QLabel#macroMeta{color:%5;font-size:9px;background:transparent;}"
+                                 "QLabel#macroDate{color:%2;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
+                                 "QLabel#macroName{color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;}"
+                                 "QLabel#macroMeta{color:%5;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
                                  "QLabel#macroMeta[state=\"warn\"]{color:%6;}")
                              .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_SECONDARY(), ui::colors::POSITIVE(),
                                   ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY(), ui::colors::WARNING()));
@@ -433,6 +454,7 @@ void MacroSeriesWidget::apply_config(const QJsonObject& cfg) {
     units_.clear();
     frequency_.clear();
     last_error_.clear();
+    key_read_error_.clear(); // an explicit choice now: the plain FRED messages apply
     halted_ = false;
     render();
     set_loading(true);
@@ -470,7 +492,7 @@ QDialog* MacroSeriesWidget::make_config_dialog(QWidget* parent) {
 
     auto* problem = new QLabel(dlg);
     problem->setWordWrap(true);
-    problem->setStyleSheet(QString("color:%1;").arg(ui::colors::NEGATIVE()));
+    problem->setStyleSheet(QString("color:%1;").arg(ui::colors::DANGER()));
     problem->setVisible(false);
     form->addRow(problem);
 
@@ -679,6 +701,13 @@ void MacroSeriesWidget::on_hub_error(const QString& error) {
 
 QString MacroSeriesWidget::error_message(const QString& error) const {
     if (source_ == QLatin1String(kMacroSourceFred)) {
+        // The key may well be stored: secure storage could not be read when the
+        // tile chose its source. Never "add a key" for that.
+        if (macro_is_missing_key(error) && !key_read_error_.isEmpty())
+            return tr("Could not read secure storage: %1. The FRED key may be stored but could not be read — "
+                      "click refresh to retry, or switch this tile to a DBnomics series (no key) with the gear "
+                      "icon.")
+                .arg(key_read_error_);
         if (macro_is_missing_key(error))
             return tr("FRED API key not set. Add a free key in Settings \xe2\x80\xba Credentials \xe2\x80\xba FRED "
                       "(Federal Reserve), then click refresh. Or switch this tile to a DBnomics series (no key) "

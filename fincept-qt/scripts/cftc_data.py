@@ -16,6 +16,7 @@ try:
 except ImportError:  # scripts dir not on sys.path (unusual launcher)
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
     import fincept_json
+import fincept_connector as fc
 
 
 class CFTCError:
@@ -44,7 +45,7 @@ class CFTCDataWrapper:
         self.app_token = app_token or os.environ.get('CFTC_APP_TOKEN', '')
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Fincept Terminal - financial analysis tool (contact@fincept.com)',
+            'User-Agent': 'Fincept Terminal - financial analysis tool (support@fincept.in)',
             'Accept': 'application/json'
         })
 
@@ -318,6 +319,10 @@ class CFTCDataWrapper:
                         clean_record[clean_key] = value
 
                 processed_data.append(clean_record)
+
+            # Socrata sends every number as text: positions, open interest and changes become
+            # numbers; market/contract codes (cftc_*_code, *_id) stay text.
+            fc.numeric_columns(processed_data)
 
             return {
                 "success": True,

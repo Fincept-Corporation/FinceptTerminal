@@ -2,48 +2,37 @@
 Bond Pricing Analytics Module
 =============================
 
-Core bond valuation and pricing calculations implementing CFA Institute standard
-methodologies for fixed income securities analysis.
+Core bond valuation and pricing calculations (CFA-curriculum methods).
 
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Bond specifications (face value, coupon rate, maturity)
-  - Market yields and discount rates
-  - Settlement and maturity dates
-  - Day count conventions
-  - Call/put schedules for callable/putable bonds
+Conventions (see fi_common.py for the full list)
+------------------------------------------------
+* Yields are nominal annual rates compounded `frequency` times a year (frequency 2 =
+  bond-equivalent basis); frequency 0 = zero-coupon bond with annual compounding.
+* `price` is the clean (quoted) price; dirty_price = price + accrued_interest.
+* Time to maturity is measured from settlement. A fractional number of coupon periods is
+  priced with a fractional first period (no truncation). Alternatively give
+  settlement_date + maturity_date (YYYY-MM-DD) and day_count.
+* Day counts: 30/360 (default), 30E/360, ACT/360, ACT/365, ACT/ACT (ICMA).
 
-OUTPUT:
-  - Clean and dirty bond prices
-  - Yield measures (YTM, YTC, YTW, current yield)
-  - Accrued interest calculations
-  - Spot rate derivations
-  - Price-yield sensitivity metrics
-
-PARAMETERS:
-  - face_value: Par/face value of the bond - default: 1000
-  - coupon_rate: Annual coupon rate as decimal - default: 0.05
-  - years_to_maturity: Time to maturity in years
-  - ytm: Yield to maturity as decimal
-  - frequency: Coupon payment frequency per year - default: 2
-  - day_count: Day count convention - default: DayCountConvention.THIRTY_360
-  - settlement_date: Trade settlement date
-  - maturity_date: Bond maturity date
-  - call_price: Call price for callable bonds
-  - call_date: First call date for callable bonds
+PARAMETERS (cli.py commands price, ytm, ytc, ytw, clean_dirty, spot_rate, forward_rate,
+price_spot_curve):
+  face_value (1000), coupon_rate (0.05), years_to_maturity (10), ytm, price,
+  frequency (2), day_count, settlement_date, maturity_date, price_type (clean|dirty)
 """
 
-from abc import ABC, abstractmethod
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple, Union
-from datetime import datetime, date
-import numpy as np
-from scipy import optimize
 import logging
+import math
+import os
+import sys
+from dataclasses import dataclass, field
+from datetime import date
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fi_common as fc  # noqa: E402
+from fi_common import FIError, num, r  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,26 +89,26 @@ class BondSpecification:
     put_schedule: List[Tuple[date, float]] = field(default_factory=list)
 
 
+def _yield_conventions(frequency: int, timing: fc.BondTiming) -> Dict[str, Any]:
+    conv = dict(timing.info)
+    conv["yield_compounding"] = ("annual (zero-coupon)" if frequency == 0
+                                 else f"nominal annual, compounded {frequency}x per year")
+    conv["price"] = "clean (quoted); dirty_price = price + accrued_interest = PV of remaining cash flows"
+    if frequency == 0:
+        conv["coupon"] = "none (zero-coupon bond; coupon_rate is ignored)"
+    return conv
+
+
 class BondPricer:
     """
-    Bond pricing engine implementing CFA-standard valuation methods.
-
-    Provides comprehensive bond analytics including:
-    - Present value calculations
-    - Yield measures (YTM, YTC, YTW)
-    - Accrued interest
-    - Clean and dirty prices
+    Bond pricing engine: price from yield, yield from price (YTM / YTC / YTW),
+    accrued interest, clean and dirty prices, spot and forward rates.
     """
 
     def __init__(self, specification: Optional[BondSpecification] = None):
-        """
-        Initialize bond pricer.
-
-        Args:
-            specification: Bond specification object
-        """
         self.spec = specification or BondSpecification()
-        self._cash_flows: List[BondCashFlow] = []
+
+    # -- price / yield -----------------------------------------------------------------
 
     def calculate_price(
         self,
@@ -128,60 +117,61 @@ class BondPricer:
         coupon_rate: float = 0.05,
         years_to_maturity: float = 10.0,
         frequency: int = 2,
+        timing: Optional[fc.BondTiming] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate bond price given yield to maturity.
+        Bond price given yield to maturity.
 
-        PV = sum(C/(1+y/n)^t) + FV/(1+y/n)^N
-
-        Args:
-            ytm: Yield to maturity (decimal)
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with price and component details
+        dirty = sum_k CF_k / (1 + y/f)^(k - 1 + v);  clean = dirty - accrued
+        (v = fraction of the current coupon period still to run; v = 1 on a coupon date)
         """
+        fc.check_frequency(frequency)
+        if timing is None:
+            timing = fc.timing_from_years(years_to_maturity, frequency, coupon_rate)
+        if ytm <= -(frequency or 1):
+            raise FIError(f"ytm must be > {-(frequency or 1)} for frequency {frequency}")
+        flows = fc.bond_flows(face_value, coupon_rate, timing)
+        b = 1 + (ytm if frequency == 0 else ytm / frequency)
+        pv_principal = face_value * b ** (-flows[-1][0])
+        dirty = fc.dirty_price(ytm, flows, frequency)
+        pv_coupons = dirty - pv_principal
+        accrued = face_value * timing.accrued_per_face
+        clean = dirty - accrued
+
         if frequency == 0:
-            # Zero coupon bond
-            price = face_value / ((1 + ytm) ** years_to_maturity)
             return {
-                'price': round(price, 4),
+                'price': round(clean, 6),
+                'clean_price': round(clean, 6),
+                'dirty_price': round(dirty, 6),
+                'accrued_interest': 0.0,
                 'pv_coupons': 0.0,
-                'pv_principal': round(price, 4),
-                'num_periods': years_to_maturity,
-                'bond_type': 'zero_coupon'
+                'pv_principal': round(pv_principal, 4),
+                'num_periods': round(timing.years_from_settlement, 6),
+                'premium_discount': round(clean - face_value, 4),
+                'price_percent': round(clean / face_value * 100, 4),
+                'bond_type': 'zero_coupon',
+                'conventions': _yield_conventions(frequency, timing),
             }
 
-        # Periodic values
-        periods = int(years_to_maturity * frequency)
-        periodic_rate = ytm / frequency
-        coupon_payment = (coupon_rate * face_value) / frequency
-
-        # PV of coupon payments (annuity formula)
-        if periodic_rate > 0:
-            pv_coupons = coupon_payment * (1 - (1 + periodic_rate) ** -periods) / periodic_rate
-        else:
-            pv_coupons = coupon_payment * periods
-
-        # PV of principal
-        pv_principal = face_value / ((1 + periodic_rate) ** periods)
-
-        # Total price
-        price = pv_coupons + pv_principal
-
         return {
-            'price': round(price, 4),
+            'price': round(clean, 6),
+            'clean_price': round(clean, 6),
+            'dirty_price': round(dirty, 6),
+            'accrued_interest': round(accrued, 6),
             'pv_coupons': round(pv_coupons, 4),
             'pv_principal': round(pv_principal, 4),
-            'num_periods': periods,
-            'periodic_coupon': round(coupon_payment, 4),
-            'periodic_rate': round(periodic_rate, 6),
-            'premium_discount': round(price - face_value, 4),
-            'price_percent': round((price / face_value) * 100, 4)
+            'num_periods': timing.n,
+            'periodic_coupon': round(face_value * coupon_rate / frequency, 4),
+            'periodic_rate': round(ytm / frequency, 6),
+            'premium_discount': round(clean - face_value, 4),
+            'price_percent': round(clean / face_value * 100, 4),
+            'conventions': _yield_conventions(frequency, timing),
         }
+
+    def _dirty_target(self, price: float, face_value: float, timing: fc.BondTiming, price_type: str) -> float:
+        if price <= 0:
+            raise FIError("price must be > 0")
+        return price + face_value * timing.accrued_per_face if price_type == 'clean' else price
 
     def calculate_ytm(
         self,
@@ -190,67 +180,57 @@ class BondPricer:
         coupon_rate: float = 0.05,
         years_to_maturity: float = 10.0,
         frequency: int = 2,
+        price_type: str = 'clean',
+        timing: Optional[fc.BondTiming] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate yield to maturity given bond price.
+        Yield to maturity given price (exact root of the price-yield equation).
 
-        Uses Newton-Raphson iteration to solve for YTM.
-
-        Args:
-            price: Current market price
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with YTM and related metrics
+        ytm is nominal annual compounded `frequency` times a year (annual for frequency 0).
         """
-        coupon_payment = (coupon_rate * face_value) / frequency if frequency > 0 else 0
-        periods = int(years_to_maturity * frequency) if frequency > 0 else years_to_maturity
+        fc.check_frequency(frequency)
+        if timing is None:
+            timing = fc.timing_from_years(years_to_maturity, frequency, coupon_rate)
+        flows = fc.bond_flows(face_value, coupon_rate, timing)
+        dirty = self._dirty_target(price, face_value, timing, price_type)
+        accrued = face_value * timing.accrued_per_face
+        clean = dirty - accrued
 
-        def price_diff(y):
-            if frequency == 0:
-                return face_value / ((1 + y) ** years_to_maturity) - price
-            periodic_rate = y / frequency
-            if periodic_rate <= -1:
-                return float('inf')
-            pv_coupons = coupon_payment * (1 - (1 + periodic_rate) ** -periods) / periodic_rate if periodic_rate != 0 else coupon_payment * periods
-            pv_principal = face_value / ((1 + periodic_rate) ** periods)
-            return pv_coupons + pv_principal - price
+        if frequency == 0:
+            T = timing.years_from_settlement
+            ytm = (face_value / dirty) ** (1.0 / T) - 1.0
+            bey = 2.0 * ((1.0 + ytm) ** 0.5 - 1.0)
+            eay = ytm
+        else:
+            ytm = fc.solve_yield(dirty, flows, frequency)
+            bey = 2.0 * ((1.0 + ytm / frequency) ** (frequency / 2.0) - 1.0)
+            eay = (1.0 + ytm / frequency) ** frequency - 1.0
 
-        try:
-            ytm = optimize.brentq(price_diff, -0.99, 2.0, xtol=1e-10)
-        except ValueError:
-            # Fallback to Newton method
-            try:
-                ytm = optimize.newton(price_diff, coupon_rate, tol=1e-10)
-            except:
-                ytm = None
+        warnings = []
+        undiscounted = sum(cf for _, cf in flows)
+        if dirty > undiscounted:
+            warnings.append('price exceeds the sum of all remaining cash flows, so the yield is negative')
 
-        if ytm is None:
-            return {'error': 'Could not converge to YTM solution'}
-
-        # Calculate related metrics
-        current_yield = (coupon_rate * face_value) / price if price > 0 else 0
-
-        # Bond equivalent yield (for comparison)
-        bey = ytm if frequency == 2 else 2 * ((1 + ytm / frequency) ** (frequency / 2) - 1)
-
-        # Effective annual yield
-        eay = (1 + ytm / frequency) ** frequency - 1 if frequency > 0 else ytm
-
-        return {
+        current_yield = coupon_rate * face_value / clean if clean > 0 else None
+        out = {
             'ytm': round(ytm, 6),
             'ytm_percent': round(ytm * 100, 4),
-            'current_yield': round(current_yield, 6),
-            'current_yield_percent': round(current_yield * 100, 4),
+            'current_yield': r(current_yield, 6),
+            'current_yield_percent': r(current_yield * 100, 4) if current_yield is not None else None,
             'bond_equivalent_yield': round(bey, 6),
             'effective_annual_yield': round(eay, 6),
             'price_used': price,
-            'is_premium': price > face_value,
-            'is_discount': price < face_value
+            'price_type': price_type,
+            'clean_price': round(clean, 6),
+            'dirty_price': round(dirty, 6),
+            'accrued_interest': round(accrued, 6),
+            'is_premium': clean > face_value,
+            'is_discount': clean < face_value,
+            'conventions': _yield_conventions(frequency, timing),
         }
+        if warnings:
+            out['warnings'] = warnings
+        return out
 
     def calculate_ytc(
         self,
@@ -260,46 +240,32 @@ class BondPricer:
         years_to_call: float = 5.0,
         call_price: float = 1050.0,
         frequency: int = 2,
+        price_type: str = 'clean',
+        accrued_per_face: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate yield to call for callable bonds.
-
-        Args:
-            price: Current market price
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_call: Years until first call date
-            call_price: Call redemption price
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with YTC and related metrics
+        Yield to call: the call date is treated as a coupon date on which the bond is redeemed at
+        call_price. Yield convention as for YTM.
         """
-        coupon_payment = (coupon_rate * face_value) / frequency
-        periods = int(years_to_call * frequency)
-
-        def price_diff(y):
-            periodic_rate = y / frequency
-            if periodic_rate <= -1:
-                return float('inf')
-            pv_coupons = coupon_payment * (1 - (1 + periodic_rate) ** -periods) / periodic_rate if periodic_rate != 0 else coupon_payment * periods
-            pv_call = call_price / ((1 + periodic_rate) ** periods)
-            return pv_coupons + pv_call - price
-
-        try:
-            ytc = optimize.brentq(price_diff, -0.99, 2.0, xtol=1e-10)
-        except:
-            try:
-                ytc = optimize.newton(price_diff, coupon_rate, tol=1e-10)
-            except:
-                return {'error': 'Could not converge to YTC solution'}
-
+        fc.check_frequency(frequency, allow_zero=False)
+        if call_price <= 0:
+            raise FIError("call_price must be > 0")
+        timing = fc.timing_from_years(years_to_call, frequency, coupon_rate)
+        if accrued_per_face is not None:
+            timing.accrued_per_face = accrued_per_face
+        flows = fc.bond_flows(face_value, coupon_rate, timing, redemption=call_price)
+        dirty = self._dirty_target(price, face_value, timing, price_type)
+        ytc = fc.solve_yield(dirty, flows, frequency)
         return {
             'ytc': round(ytc, 6),
             'ytc_percent': round(ytc * 100, 4),
             'years_to_call': years_to_call,
             'call_price': call_price,
-            'call_premium': round(call_price - face_value, 2)
+            'call_premium': round(call_price - face_value, 2),
+            'price_type': price_type,
+            'dirty_price': round(dirty, 6),
+            'conventions': {'yield_compounding': f'nominal annual, compounded {frequency}x per year',
+                            'call_date': 'assumed to fall on a coupon date'},
         }
 
     def calculate_ytw(
@@ -310,95 +276,73 @@ class BondPricer:
         years_to_maturity: float = 10.0,
         call_schedule: List[Tuple[float, float]] = None,
         frequency: int = 2,
+        price_type: str = 'clean',
     ) -> Dict[str, Any]:
         """
-        Calculate yield to worst - minimum of YTM and all YTCs.
-
-        Args:
-            price: Current market price
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            call_schedule: List of (years_to_call, call_price) tuples
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with YTW and comparison of all yields
+        Yield to worst: the lowest of YTM and the YTC for every call date in call_schedule
+        ([[years_to_call, call_price], ...]). Call dates must fall on coupon dates.
         """
+        fc.check_frequency(frequency, allow_zero=False)
+        mat_timing = fc.timing_from_years(years_to_maturity, frequency, coupon_rate)
         yields = []
+        ytm_result = self.calculate_ytm(price, face_value, coupon_rate, years_to_maturity, frequency,
+                                        price_type, timing=mat_timing)
+        yields.append(('YTM', ytm_result['ytm'], years_to_maturity))
 
-        # Calculate YTM
-        ytm_result = self.calculate_ytm(price, face_value, coupon_rate, years_to_maturity, frequency)
-        if 'ytm' in ytm_result:
-            yields.append(('YTM', ytm_result['ytm'], years_to_maturity))
+        phase = (years_to_maturity * frequency) % 1.0
+        for i, item in enumerate(call_schedule or []):
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
+                raise FIError(f"call_schedule[{i}] must be [years_to_call, call_price]")
+            t_call = fc.as_num(item[0], f'call_schedule[{i}] years_to_call', lo=0, lo_open=True)
+            c_price = fc.as_num(item[1], f'call_schedule[{i}] call_price', lo=0, lo_open=True)
+            if t_call > years_to_maturity + 1e-9:
+                raise FIError(f"call_schedule[{i}]: call date {t_call:g}y is after maturity {years_to_maturity:g}y")
+            p = (t_call * frequency) % 1.0
+            if min(abs(p - phase), 1 - abs(p - phase)) > 1e-6:
+                raise FIError(f"call_schedule[{i}]: call date {t_call:g}y is not a coupon date of this bond")
+            ytc_result = self.calculate_ytc(price, face_value, coupon_rate, t_call, c_price, frequency,
+                                            price_type, accrued_per_face=mat_timing.accrued_per_face)
+            yields.append((f'YTC_{t_call:g}y', ytc_result['ytc'], t_call))
 
-        # Calculate YTC for each call date
-        if call_schedule:
-            for years_to_call, call_price in call_schedule:
-                ytc_result = self.calculate_ytc(price, face_value, coupon_rate, years_to_call, call_price, frequency)
-                if 'ytc' in ytc_result:
-                    yields.append((f'YTC_{years_to_call}y', ytc_result['ytc'], years_to_call))
-
-        if not yields:
-            return {'error': 'No valid yields calculated'}
-
-        # Find minimum yield
         min_yield = min(yields, key=lambda x: x[1])
-
         return {
             'ytw': round(min_yield[1], 6),
             'ytw_percent': round(min_yield[1] * 100, 4),
             'ytw_type': min_yield[0],
             'ytw_horizon': min_yield[2],
-            'all_yields': [{'type': y[0], 'yield': round(y[1], 6), 'horizon': y[2]} for y in yields]
+            'all_yields': [{'type': y[0], 'yield': round(y[1], 6), 'horizon': y[2]} for y in yields],
+            'price_type': price_type,
         }
+
+    # -- accrued interest / clean & dirty ---------------------------------------------
 
     def calculate_accrued_interest(
         self,
         coupon_rate: float,
         face_value: float = 1000.0,
         days_since_last_coupon: int = 0,
-        days_in_coupon_period: int = 180,
-        day_count: DayCountConvention = DayCountConvention.THIRTY_360,
+        days_in_coupon_period: Optional[float] = None,
+        day_count: Any = DayCountConvention.THIRTY_360,
         frequency: int = 2,
     ) -> Dict[str, Any]:
         """
-        Calculate accrued interest since last coupon payment.
+        Accrued interest since the last coupon.
 
-        AI = (Coupon Payment) * (Days Since Last Coupon / Days in Period)
-
-        Args:
-            coupon_rate: Annual coupon rate (decimal)
-            face_value: Face/par value
-            days_since_last_coupon: Days elapsed since last coupon
-            days_in_coupon_period: Total days in coupon period
-            day_count: Day count convention
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with accrued interest details
+        30/360, 30E/360, ACT/360: AI = C_annual * days / 360;  ACT/365: C_annual * days / 365;
+        ACT/ACT (ICMA): AI = C_period * days / days_in_period.
         """
-        coupon_payment = (coupon_rate * face_value) / frequency
-
-        # Calculate accrual fraction based on day count
-        if day_count == DayCountConvention.THIRTY_360:
-            accrual_fraction = days_since_last_coupon / 360 * frequency
-        elif day_count == DayCountConvention.ACT_365:
-            accrual_fraction = days_since_last_coupon / 365 * frequency
-        elif day_count == DayCountConvention.ACT_360:
-            accrual_fraction = days_since_last_coupon / 360 * frequency
-        else:  # ACT/ACT
-            accrual_fraction = days_since_last_coupon / days_in_coupon_period
-
-        accrued_interest = coupon_payment * accrual_fraction
-
+        dc = fc.norm_day_count(day_count.value if isinstance(day_count, DayCountConvention) else day_count)
+        timing = fc.timing_from_days(1.0, frequency, coupon_rate, days_since_last_coupon,
+                                     days_in_coupon_period, dc, True)
+        coupon_payment = coupon_rate * face_value / frequency
+        accrued = face_value * timing.accrued_per_face
         return {
-            'accrued_interest': round(accrued_interest, 4),
-            'accrual_fraction': round(accrual_fraction, 6),
+            'accrued_interest': round(accrued, 6),
+            'accrual_fraction': round(accrued / coupon_payment, 6) if coupon_payment else 0.0,
             'coupon_payment': round(coupon_payment, 4),
             'days_since_last_coupon': days_since_last_coupon,
-            'days_in_period': days_in_coupon_period,
-            'day_count_convention': day_count.value
+            'days_in_period': timing.info['days_in_coupon_period'],
+            'day_count_convention': dc,
         }
 
     def calculate_clean_dirty_price(
@@ -407,48 +351,47 @@ class BondPricer:
         face_value: float = 1000.0,
         coupon_rate: float = 0.05,
         years_to_maturity: float = 10.0,
-        days_since_last_coupon: int = 45,
-        days_in_coupon_period: int = 180,
+        days_since_last_coupon: float = 45,
+        days_in_coupon_period: Optional[float] = None,
         frequency: int = 2,
+        day_count: str = '30/360',
+        timing: Optional[fc.BondTiming] = None,
+        days_given: bool = True,
     ) -> Dict[str, Any]:
         """
-        Calculate clean price (quoted) and dirty price (invoice/full).
+        Clean (quoted) and dirty (full / invoice) price between coupon dates.
 
-        Dirty Price = Clean Price + Accrued Interest
+        dirty = PV at the last coupon date * (1 + y/f)^(days_since / days_in_period)
+              = sum_k CF_k / (1 + y/f)^(k - 1 + v)
+        clean = dirty - accrued_interest (accrued per the day-count convention)
 
-        Args:
-            ytm: Yield to maturity (decimal)
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            days_since_last_coupon: Days since last coupon
-            days_in_coupon_period: Days in coupon period
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with clean and dirty prices
+        years_to_maturity: a whole number of coupon periods = counted from the last coupon date;
+        a fractional one = time from settlement (must agree with days_since_last_coupon).
         """
-        # Calculate full price at settlement
-        price_result = self.calculate_price(ytm, face_value, coupon_rate, years_to_maturity, frequency)
-        dirty_price = price_result['price']
-
-        # Calculate accrued interest
-        ai_result = self.calculate_accrued_interest(
-            coupon_rate, face_value, days_since_last_coupon,
-            days_in_coupon_period, DayCountConvention.THIRTY_360, frequency
-        )
-        accrued_interest = ai_result['accrued_interest']
-
-        # Clean price = Dirty price - Accrued interest
-        clean_price = dirty_price - accrued_interest
-
+        fc.check_frequency(frequency, allow_zero=False)
+        if timing is None:
+            timing = fc.timing_from_days(years_to_maturity * frequency, frequency, coupon_rate,
+                                         days_since_last_coupon, days_in_coupon_period,
+                                         fc.norm_day_count(day_count), days_given)
+        if ytm <= -frequency:
+            raise FIError(f"ytm must be > {-frequency}")
+        flows = fc.bond_flows(face_value, coupon_rate, timing)
+        dirty = fc.dirty_price(ytm, flows, frequency)
+        accrued = face_value * timing.accrued_per_face
+        clean = dirty - accrued
+        # price at the last coupon date (whole periods) for reference
+        price_at_last_coupon = dirty / (1 + ytm / frequency) ** (1.0 - timing.v)
         return {
-            'clean_price': round(clean_price, 4),
-            'dirty_price': round(dirty_price, 4),
-            'accrued_interest': round(accrued_interest, 4),
-            'clean_price_percent': round((clean_price / face_value) * 100, 4),
-            'dirty_price_percent': round((dirty_price / face_value) * 100, 4)
+            'clean_price': round(clean, 6),
+            'dirty_price': round(dirty, 6),
+            'accrued_interest': round(accrued, 6),
+            'clean_price_percent': round(clean / face_value * 100, 4),
+            'dirty_price_percent': round(dirty / face_value * 100, 4),
+            'price_at_last_coupon_date': round(price_at_last_coupon, 4),
+            'conventions': _yield_conventions(frequency, timing),
         }
+
+    # -- spot / forward ----------------------------------------------------------------
 
     def calculate_spot_rate(
         self,
@@ -458,94 +401,49 @@ class BondPricer:
         coupon_rate: float = 0.0,
     ) -> Dict[str, Any]:
         """
-        Calculate spot rate from zero-coupon bond price.
-
-        Spot Rate = (FV/PV)^(1/n) - 1
-
-        Args:
-            price: Current market price
-            face_value: Face/par value
-            years_to_maturity: Years until maturity
-            coupon_rate: Should be 0 for spot rate calculation
-
-        Returns:
-            Dictionary with spot rate
+        Spot rate from a zero-coupon bond price: s = (FV/PV)^(1/T) - 1 (annual compounding).
         """
-        if coupon_rate > 0:
-            logger.warning("Spot rate calculation assumes zero-coupon bond")
-
-        if price <= 0 or years_to_maturity <= 0:
-            return {'error': 'Invalid inputs for spot rate calculation'}
-
+        if coupon_rate:
+            raise FIError("spot_rate needs a zero-coupon price (coupon_rate 0); use bootstrap for coupon bonds")
+        if price <= 0 or years_to_maturity <= 0 or face_value <= 0:
+            raise FIError("price, face_value and years_to_maturity must be > 0")
         spot_rate = (face_value / price) ** (1 / years_to_maturity) - 1
-
-        # Discount factor
-        discount_factor = price / face_value
-
         return {
             'spot_rate': round(spot_rate, 6),
             'spot_rate_percent': round(spot_rate * 100, 4),
-            'discount_factor': round(discount_factor, 6),
-            'maturity': years_to_maturity
+            'discount_factor': round(price / face_value, 6),
+            'maturity': years_to_maturity,
+            'compounding': 'annual',
         }
 
     def bootstrap_spot_rates(
         self,
         bonds: List[Dict[str, float]],
+        frequency: int = 2,
     ) -> Dict[str, Any]:
         """
-        Bootstrap spot rate curve from coupon bond prices.
+        Bootstrap the spot curve from coupon bond prices (same engine as cli.py `bootstrap`).
 
-        Args:
-            bonds: List of dicts with keys: price, coupon_rate, years, face_value
-                  Must be sorted by maturity, starting with shortest
-
-        Returns:
-            Dictionary with spot rate curve
+        bonds: [{years|maturity, coupon_rate, price, face_value, frequency}], any order, any
+        maturities (coupons that fall between known maturities are discounted on the
+        interpolated curve).
         """
+        instruments = fc.bond_instruments(bonds, frequency)
+        curve, inst = fc.bootstrap_zero_curve(instruments)
         spot_rates = []
-
-        for i, bond in enumerate(bonds):
-            price = bond.get('price', 1000)
-            coupon_rate = bond.get('coupon_rate', 0)
-            years = bond.get('years', i + 1)
-            face_value = bond.get('face_value', 1000)
-            frequency = bond.get('frequency', 2)
-
-            if coupon_rate == 0:
-                # Zero coupon - direct calculation
-                spot = (face_value / price) ** (1 / years) - 1
-            else:
-                # Coupon bond - bootstrap using previous spot rates
-                coupon = (coupon_rate * face_value) / frequency
-                periods = int(years * frequency)
-
-                # PV of known cash flows using known spot rates
-                pv_known = 0
-                for j, sr in enumerate(spot_rates):
-                    t = (j + 1) / frequency
-                    if t < years:
-                        pv_known += coupon / ((1 + sr['spot_rate']) ** t)
-
-                # Solve for current spot rate
-                remaining_pv = price - pv_known
-                final_cf = coupon + face_value
-
-                if remaining_pv > 0:
-                    spot = (final_cf / remaining_pv) ** (1 / years) - 1
-                else:
-                    spot = 0
-
+        for d in inst:
+            z = d['zero_rate_cc']
+            spot = math.exp(z) - 1.0
             spot_rates.append({
-                'maturity': years,
+                'maturity': d['maturity'],
                 'spot_rate': round(spot, 6),
                 'spot_rate_percent': round(spot * 100, 4),
-                'discount_factor': round(1 / ((1 + spot) ** years), 6)
+                'discount_factor': round(curve.df(d['maturity']), 6),
             })
-
         return {
             'spot_curve': spot_rates,
-            'num_points': len(spot_rates)
+            'num_points': len(spot_rates),
+            'compounding': 'annual',
         }
 
     def calculate_forward_rate(
@@ -556,33 +454,24 @@ class BondPricer:
         t2: float,
     ) -> Dict[str, Any]:
         """
-        Calculate implied forward rate between two periods.
-
+        Implied forward rate (annual compounding):
         f(t1,t2) = [(1+s2)^t2 / (1+s1)^t1]^(1/(t2-t1)) - 1
-
-        Args:
-            spot_rate_1: Spot rate for period t1
-            spot_rate_2: Spot rate for period t2
-            t1: First time period (years)
-            t2: Second time period (years)
-
-        Returns:
-            Dictionary with forward rate
         """
+        if t1 < 0:
+            raise FIError('t1 must be >= 0')
         if t2 <= t1:
-            return {'error': 't2 must be greater than t1'}
-
-        forward_rate = (
-            ((1 + spot_rate_2) ** t2 / (1 + spot_rate_1) ** t1) ** (1 / (t2 - t1))
-        ) - 1
-
+            raise FIError('t2 must be greater than t1')
+        if spot_rate_1 <= -1 or spot_rate_2 <= -1:
+            raise FIError('spot rates must be > -1')
+        forward_rate = (((1 + spot_rate_2) ** t2 / (1 + spot_rate_1) ** t1) ** (1 / (t2 - t1))) - 1
         return {
             'forward_rate': round(forward_rate, 6),
             'forward_rate_percent': round(forward_rate * 100, 4),
-            'period': f'{t1}y x {t2}y',
-            'notation': f'f({t1},{t2})',
+            'period': f'{t1:g}y x {t2:g}y',
+            'notation': f'f({t1:g},{t2:g})',
             'spot_rate_t1': spot_rate_1,
-            'spot_rate_t2': spot_rate_2
+            'spot_rate_t2': spot_rate_2,
+            'compounding': 'annual',
         }
 
     def price_with_spot_rates(
@@ -593,29 +482,23 @@ class BondPricer:
         frequency: int = 2,
     ) -> Dict[str, Any]:
         """
-        Price bond using term structure of spot rates.
-
-        Args:
-            spot_rates: List of spot rates for each period
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with price from spot rates
+        Price a bond on a term structure: spot_rates[i] is the annually-compounded spot rate
+        for the cash flow at t = (i+1)/frequency; the bond matures at the last one.
         """
+        fc.check_frequency(frequency, allow_zero=False)
+        if not spot_rates:
+            raise FIError('spot_rates must be a non-empty list (one rate per coupon period)')
         coupon = (coupon_rate * face_value) / frequency
         num_periods = len(spot_rates)
-
         cash_flow_pvs = []
-        total_pv = 0
-
+        total_pv = 0.0
         for i, spot in enumerate(spot_rates):
+            if spot <= -1:
+                raise FIError(f'spot_rates[{i}] must be > -1')
             t = (i + 1) / frequency
             cf = coupon if i < num_periods - 1 else coupon + face_value
             discount_factor = 1 / ((1 + spot) ** t)
             pv = cf * discount_factor
-
             cash_flow_pvs.append({
                 'period': i + 1,
                 'time': t,
@@ -625,136 +508,122 @@ class BondPricer:
                 'present_value': round(pv, 4)
             })
             total_pv += pv
-
         return {
             'price': round(total_pv, 4),
             'price_percent': round((total_pv / face_value) * 100, 4),
             'cash_flows': cash_flow_pvs,
-            'num_periods': num_periods
+            'num_periods': num_periods,
+            'compounding': 'annual spot rates',
         }
+
+
+ANALYSIS_TYPES = ('price', 'ytm', 'ytc', 'ytw', 'clean_dirty', 'spot_rate', 'bootstrap', 'forward_rate',
+                  'price_spot_curve')
+
+
+def _common(params: Dict[str, Any]):
+    face = num(params, 'face_value', 1000, lo=0, lo_open=True)
+    coupon = num(params, 'coupon_rate', 0.05, lo=0)
+    freq = fc.check_frequency(num(params, 'frequency', 2, integer=True))
+    return face, coupon, freq
 
 
 def run_bond_pricing_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Main entry point for bond pricing analysis.
 
-    Args:
-        params: Dictionary with analysis parameters
-            - analysis_type: Type of analysis to run
-            - Additional parameters based on analysis type
-
-    Returns:
-        Analysis results dictionary
+    params['analysis_type'] in ANALYSIS_TYPES; other keys depend on the analysis.
+    Returns a result dict or {'error': message}.
     """
     pricer = BondPricer()
     analysis_type = params.get('analysis_type', 'price')
 
     try:
         if analysis_type == 'price':
+            face, coupon, freq = _common(params)
+            timing = fc.resolve_timing(params, coupon, freq)
             return pricer.calculate_price(
-                ytm=params.get('ytm', 0.05),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                frequency=params.get('frequency', 2)
-            )
+                ytm=num(params, 'ytm', 0.05), face_value=face, coupon_rate=coupon,
+                frequency=freq, timing=timing)
 
         elif analysis_type == 'ytm':
+            face, coupon, freq = _common(params)
+            timing = fc.resolve_timing(params, coupon, freq)
             return pricer.calculate_ytm(
-                price=params.get('price', 1000),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                frequency=params.get('frequency', 2)
-            )
+                price=num(params, 'price', 1000, lo=0, lo_open=True), face_value=face, coupon_rate=coupon,
+                frequency=freq, price_type=fc.text(params, 'price_type', 'clean', choices=('clean', 'dirty')),
+                timing=timing)
 
         elif analysis_type == 'ytc':
+            face, coupon, freq = _common(params)
             return pricer.calculate_ytc(
-                price=params.get('price', 1000),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_call=params.get('years_to_call', 5),
-                call_price=params.get('call_price', 1050),
-                frequency=params.get('frequency', 2)
-            )
+                price=num(params, 'price', 1000, lo=0, lo_open=True), face_value=face, coupon_rate=coupon,
+                years_to_call=num(params, 'years_to_call', 5, lo=0, lo_open=True),
+                call_price=num(params, 'call_price', 1050, lo=0, lo_open=True), frequency=freq,
+                price_type=fc.text(params, 'price_type', 'clean', choices=('clean', 'dirty')))
 
         elif analysis_type == 'ytw':
+            face, coupon, freq = _common(params)
+            schedule = params.get('call_schedule')
+            if schedule is not None and not isinstance(schedule, list):
+                raise FIError('call_schedule must be a list of [years_to_call, call_price]')
             return pricer.calculate_ytw(
-                price=params.get('price', 1000),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                call_schedule=params.get('call_schedule'),
-                frequency=params.get('frequency', 2)
-            )
+                price=num(params, 'price', 1000, lo=0, lo_open=True), face_value=face, coupon_rate=coupon,
+                years_to_maturity=num(params, 'years_to_maturity', 10, lo=0, lo_open=True),
+                call_schedule=schedule, frequency=freq,
+                price_type=fc.text(params, 'price_type', 'clean', choices=('clean', 'dirty')))
 
         elif analysis_type == 'clean_dirty':
+            face, coupon, freq = _common(params)
+            dc = fc.norm_day_count(params.get('day_count'))
+            if params.get('settlement_date') is not None or params.get('maturity_date') is not None:
+                timing = fc.resolve_timing(params, coupon, freq)
+                return pricer.calculate_clean_dirty_price(
+                    ytm=num(params, 'ytm', 0.05), face_value=face, coupon_rate=coupon,
+                    frequency=freq, timing=timing)
+            days_given = params.get('days_since_last_coupon') is not None
             return pricer.calculate_clean_dirty_price(
-                ytm=params.get('ytm', 0.05),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                days_since_last_coupon=params.get('days_since_last_coupon', 45),
-                days_in_coupon_period=params.get('days_in_coupon_period', 180),
-                frequency=params.get('frequency', 2)
-            )
+                ytm=num(params, 'ytm', 0.05), face_value=face, coupon_rate=coupon,
+                years_to_maturity=num(params, 'years_to_maturity', 10, lo=0, lo_open=True),
+                days_since_last_coupon=num(params, 'days_since_last_coupon', 45, lo=0),
+                days_in_coupon_period=num(params, 'days_in_coupon_period', None, lo=0, lo_open=True),
+                frequency=freq, day_count=dc, days_given=days_given)
 
         elif analysis_type == 'spot_rate':
             return pricer.calculate_spot_rate(
-                price=params.get('price', 950),
-                face_value=params.get('face_value', 1000),
-                years_to_maturity=params.get('years_to_maturity', 1)
-            )
+                price=num(params, 'price', 950, lo=0, lo_open=True),
+                face_value=num(params, 'face_value', 1000, lo=0, lo_open=True),
+                years_to_maturity=num(params, 'years_to_maturity', 1, lo=0, lo_open=True),
+                coupon_rate=num(params, 'coupon_rate', 0.0, lo=0))
 
         elif analysis_type == 'bootstrap':
             return pricer.bootstrap_spot_rates(
-                bonds=params.get('bonds', [])
-            )
+                bonds=params.get('bonds', []),
+                frequency=fc.check_frequency(num(params, 'frequency', 2, integer=True)))
 
         elif analysis_type == 'forward_rate':
             return pricer.calculate_forward_rate(
-                spot_rate_1=params.get('spot_rate_1', 0.03),
-                spot_rate_2=params.get('spot_rate_2', 0.04),
-                t1=params.get('t1', 1),
-                t2=params.get('t2', 2)
-            )
+                spot_rate_1=num(params, 'spot_rate_1', 0.03),
+                spot_rate_2=num(params, 'spot_rate_2', 0.04),
+                t1=num(params, 't1', 1), t2=num(params, 't2', 2))
 
         elif analysis_type == 'price_spot_curve':
             return pricer.price_with_spot_rates(
-                spot_rates=params.get('spot_rates', []),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                frequency=params.get('frequency', 2)
-            )
+                spot_rates=fc.num_list(params, 'spot_rates', min_len=1),
+                face_value=num(params, 'face_value', 1000, lo=0, lo_open=True),
+                coupon_rate=num(params, 'coupon_rate', 0.05, lo=0),
+                frequency=fc.check_frequency(num(params, 'frequency', 2, integer=True), allow_zero=False))
 
         else:
-            return {'error': f'Unknown analysis type: {analysis_type}'}
+            return {'error': f'Unknown analysis type: {analysis_type}', 'analysis_types': list(ANALYSIS_TYPES)}
 
-    except Exception as e:
-        logger.error(f"Bond pricing analysis error: {str(e)}")
+    except FIError as e:
         return {'error': str(e)}
+    except Exception as e:
+        logger.error(f"Bond pricing analysis error: {e}")
+        return {'error': str(e) or type(e).__name__}
 
 
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) > 1:
-        try:
-            params = json.loads(sys.argv[1])
-            result = run_bond_pricing_analysis(params)
-            print(json.dumps(result, indent=2))
-        except json.JSONDecodeError as e:
-            print(json.dumps({'error': f'Invalid JSON: {str(e)}'}))
-    else:
-        # Demo
-        print("Bond Pricing Demo:")
-        pricer = BondPricer()
-
-        # Price calculation
-        result = pricer.calculate_price(ytm=0.06, coupon_rate=0.05, years_to_maturity=10)
-        print(f"\nPrice at 6% YTM: ${result['price']}")
-
-        # YTM calculation
-        result = pricer.calculate_ytm(price=925.61, coupon_rate=0.05, years_to_maturity=10)
-        print(f"YTM at $925.61: {result['ytm_percent']}%")
+    fc.import_fincept_json()
+    fc.emit_usage_or_run(sys.argv, run_bond_pricing_analysis, ANALYSIS_TYPES, 'bond_pricing')

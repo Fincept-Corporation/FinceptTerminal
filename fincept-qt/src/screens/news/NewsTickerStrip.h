@@ -59,6 +59,8 @@ class NewsTickerStrip : public QWidget {
 
     /// Re-reads the theme / priority colours paintEvent uses (once, not per frame).
     void refresh_colors();
+    /// Re-reads the user's font, re-fits the strip height and re-shapes the entries.
+    void refresh_font();
 
     QVector<TickerEntry> entries_;
     QTimer scroll_timer_;
@@ -72,6 +74,11 @@ class NewsTickerStrip : public QWidget {
     QColor headline_color_;
     static constexpr int ITEM_SPACING = 50;
     static constexpr int SEGMENT_GAP = 8;
+    /// The newest breaking headlines only: every entry is text-shaped on the GUI
+    /// thread when the set changes (with font fallback for CJK / Devanagari
+    /// headlines that measured ~160 ms for a few hundred entries), and a
+    /// scrolling strip shows a handful at a time anyway.
+    static constexpr int kMaxEntries = 40;
 };
 
 } // namespace fincept::screens

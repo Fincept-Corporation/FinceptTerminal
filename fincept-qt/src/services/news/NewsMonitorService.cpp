@@ -2,16 +2,25 @@
 
 #include "core/logging/Logger.h"
 #include "storage/repositories/NewsMonitorRepository.h"
+#include "ui/theme/ThemeTokens.h"
 
 #include <QRegularExpression>
 #include <QUuid>
 
 namespace fincept::services {
 
+// Colours handed to new monitors in turn. A monitor's colour is stored with it,
+// so it must not depend on the theme in effect when the monitor was created:
+// these are the dark preset's categorical chart colours (fixed values, never
+// the active theme's), drawn through ui::colors::legible() / tint() like any
+// other identity colour.
 const QStringList& monitor_colors() {
-    static const QStringList colors = {
-        "#00E5FF", "#00FF88", "#FF6B35", "#FFD700", "#9D4EDD", "#FF4D6D", "#4CC9F0", "#F72585", "#7FFF00", "#FF9500",
-    };
+    static const QStringList colors = [] {
+        QStringList out;
+        for (const char* c : ui::THEME_OBSIDIAN.chart_palette)
+            out << QString::fromLatin1(c);
+        return out;
+    }();
     return colors;
 }
 

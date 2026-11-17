@@ -32,19 +32,31 @@ logger = logging.getLogger(__name__)
 # Uses a lock file so multiple Python subprocesses (AI panel + Agent panel)
 # share the same rate limit rather than each having their own in-memory counter.
 import os
-import tempfile
+import sys
+from pathlib import Path
 
-_RATE_LOCK_FILE = os.path.join(tempfile.gettempdir(), "fincept_llm_rate.lock")
-_RATE_TS_FILE   = os.path.join(tempfile.gettempdir(), "fincept_llm_rate.ts")
 _fincept_proc_lock = threading.Lock()  # within-process serialisation
+
+
+def _rate_files():
+    """(lock file, timestamp file) in the edition's cache folder: shared by this edition's
+    processes, never by another edition or OS user. Resolved at first use, not at import."""
+    root = str(Path(__file__).resolve().parents[3])  # registries -> finagent_core -> agents -> scripts
+    if root not in sys.path:
+        sys.path.append(root)
+    import fincept_paths
+    return (str(fincept_paths.cache_file("locks", "llm_rate.lock")),
+            str(fincept_paths.cache_file("locks", "llm_rate.ts")))
+
 
 def _rate_limit_fincept() -> None:
     """
     Block until at least 1.2 seconds have passed since the last call
-    across ALL Python processes on this machine.
+    across ALL Python processes of this edition.
     Uses an exclusive file lock + a shared timestamp file.
     """
     with _fincept_proc_lock:
+        _RATE_LOCK_FILE, _RATE_TS_FILE = _rate_files()
         # Acquire the cross-process file lock
         while True:
             try:
@@ -52,6 +64,15 @@ def _rate_limit_fincept() -> None:
                 os.close(fd)
                 break  # we hold the lock
             except FileExistsError:
+                # A holder keeps the lock for at most ~1.2 s. One older than 10 s
+                # was left by a process that was killed while holding it: without
+                # this every later call of every script would wait forever.
+                try:
+                    if time.time() - os.path.getmtime(_RATE_LOCK_FILE) > 10.0:
+                        os.remove(_RATE_LOCK_FILE)
+                        continue
+                except OSError:
+                    pass
                 time.sleep(0.05)
 
         try:

@@ -1,231 +1,83 @@
-// CodingAgentService_Process.cpp — CLI detection, command lines, the QProcess
-// lifecycle of a run (stdin prompt, stdout/stderr streaming, exit
-// classification), process-tree stop/kill, and `claude|codex mcp add` for the
-// Connect tab. Part of the CodingAgentService partial-class split.
+// CodingAgentService_Process.cpp — launching a run (two phases: the command
+// line on the GUI thread, then its folder and per-run files on the file thread,
+// then the process), stream handling, failure classification, process-tree
+// stop/kill, and the CONNECT tab's one-click registration. Part of the
+// CodingAgentService partial-class split.
+//
+// Where a CLI is, which version, the argument lists, the stream parser, the
+// failure classes, the child environment and the process-tree mechanics all
+// come from the harness layer (src/services/harness): HarnessRegistry holds
+// the detected installation and the user's settings, the adapter builds the
+// LaunchPlan and the parser, HarnessLaunch starts it. Nothing below names a
+// particular harness.
 
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
+#include "core/process/HostExec.h"
 #include "mcp/server/McpHttpServer.h"
 #include "services/coding_agents/CodingAgentLiveRun.h"
 #include "services/coding_agents/CodingAgentPrompts.h"
 #include "services/coding_agents/CodingAgentService.h"
+#include "services/harness/HarnessDetect.h"
+#include "services/harness/HarnessLaunch.h"
+#include "services/harness/HarnessRegistry.h"
+#include "services/harness/IHarnessAdapter.h"
+#include "services/harness/McpLegacyEntry.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
-#include <QFileInfo>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QPointer>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QSaveFile>
-#include <QStandardPaths>
 #include <QTimer>
 
-#ifdef Q_OS_WIN
-#    include <windows.h>
-#else
-#    include <signal.h>
-#    include <sys/types.h>
-#endif
+#include <limits>
+#include <string_view>
 
 namespace fincept::services::coding_agents {
 
 namespace coding_agent_process_detail {
 
+// The harness layer is QtCore-only and names the token variable itself.
+static_assert(std::string_view(mcp::McpHttpServer::kTokenEnvVar) == std::string_view(harness::kMcpTokenEnvVar),
+              "harness::kMcpTokenEnvVar must match McpHttpServer::kTokenEnvVar");
+
 constexpr const char* kCodingAgentProcTag = "CodingAgents";
-constexpr int kVersionProbeTimeoutMs = 20000;
 constexpr int kCliCommandTimeoutMs = 60000;
-constexpr const char* kTerminalServerName = "fincept";
-// Name used when registering this terminal with the user's own Claude Code /
-// Codex config. Distinct from "fincept", which Enterprise users already map to
-// the Enterprise MCP server.
-constexpr const char* kClientServerName = "fincept_terminal";
-
-struct LaunchSpec {
-    QString program;
-    QStringList args;
-    QString native_args; // Windows cmd.exe shim only
-    bool use_native = false;
-    QString error;
-};
-
-[[maybe_unused]] bool is_cmd_shim(const QString& path) {
-#ifdef Q_OS_WIN
-    return path.endsWith(QLatin1String(".cmd"), Qt::CaseInsensitive) ||
-           path.endsWith(QLatin1String(".bat"), Qt::CaseInsensitive);
-#else
-    Q_UNUSED(path);
-    return false;
-#endif
-}
-
-/// MSVC / CommandLineToArgvW quoting (what node and Rust parse on Windows).
-[[maybe_unused]] QString msvc_quote(const QString& arg) {
-    static const QRegularExpression needs_quotes(QStringLiteral("[\\s\"]"));
-    if (!arg.isEmpty() && !arg.contains(needs_quotes))
-        return arg;
-    QString out = QStringLiteral("\"");
-    int backslashes = 0;
-    for (const QChar c : arg) {
-        if (c == QLatin1Char('\\')) {
-            ++backslashes;
-            continue;
-        }
-        if (c == QLatin1Char('"')) {
-            out += QString(backslashes * 2 + 1, QLatin1Char('\\'));
-            out += QLatin1Char('"');
-            backslashes = 0;
-            continue;
-        }
-        out += QString(backslashes, QLatin1Char('\\'));
-        backslashes = 0;
-        out += c;
-    }
-    out += QString(backslashes * 2, QLatin1Char('\\'));
-    out += QLatin1Char('"');
-    return out;
-}
-
-/// cmd.exe expands %VAR% (and !VAR! with delayed expansion) even inside quotes
-/// and treats ^ & | < > as operators outside them; a line break ends the command.
-[[maybe_unused]] bool cmd_arg_safe(const QString& arg) {
-    static const QRegularExpression bad(QStringLiteral("[%!^&|<>\\r\\n]"));
-    return !arg.contains(bad);
-}
-
-LaunchSpec make_launch_spec(const CliInfo& cli, const QStringList& args) {
-    LaunchSpec s;
-#ifdef Q_OS_WIN
-    if (cli.via_cmd_shim) {
-        if (!cmd_arg_safe(cli.path)) {
-            s.error = QStringLiteral("The CLI path contains characters cmd.exe cannot pass safely: %1").arg(cli.path);
-            return s;
-        }
-        QString line = msvc_quote(QDir::toNativeSeparators(cli.path));
-        for (const auto& a : args) {
-            if (!cmd_arg_safe(a)) {
-                s.error = QStringLiteral("An argument contains %^&|<>! or a line break, which cannot pass through the "
-                                         "npm .cmd launcher. Install the native %1 binary or point Agent Workbench "
-                                         "settings at it.")
-                              .arg(QFileInfo(cli.path).completeBaseName());
-                return s;
-            }
-            line += QLatin1Char(' ') + msvc_quote(a);
-        }
-        s.program = qEnvironmentVariable("ComSpec", QStringLiteral("cmd.exe"));
-        s.native_args = QStringLiteral("/d /s /c \"%1\"").arg(line);
-        s.use_native = true;
-        return s;
-    }
-#endif
-    s.program = cli.path;
-    s.args = args;
-    return s;
-}
-
-void apply_launch_spec(QProcess* proc, const LaunchSpec& spec) {
-    proc->setProgram(spec.program);
-#ifdef Q_OS_WIN
-    // No console window flashing up for a console-subsystem child of a GUI app.
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= CREATE_NO_WINDOW;
-    });
-    if (spec.use_native) {
-        proc->setNativeArguments(spec.native_args);
-        return;
-    }
-#endif
-    proc->setArguments(spec.args);
-}
-
-/// Environment for every CLI child: drop Claude Code's nested-session markers
-/// (a terminal launched from inside Claude Code must still be able to run it),
-/// never inherit a stale token, and on POSIX make sure node-based launchers
-/// find `node` even though GUI apps start with a minimal PATH.
-QProcessEnvironment child_environment(const CliInfo& cli, const QString& token) {
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.remove(QStringLiteral("CLAUDECODE"));
-    env.remove(QStringLiteral("CLAUDE_CODE_ENTRYPOINT"));
-    env.remove(QString::fromLatin1(mcp::McpHttpServer::kTokenEnvVar));
-    if (!token.isEmpty())
-        env.insert(QString::fromLatin1(mcp::McpHttpServer::kTokenEnvVar), token);
-#ifndef Q_OS_WIN
-    const QString home = QDir::homePath();
-    const QStringList extra = {QFileInfo(cli.path).absolutePath(),
-                               home + QStringLiteral("/.local/bin"),
-                               QStringLiteral("/opt/homebrew/bin"),
-                               QStringLiteral("/usr/local/bin"),
-                               home + QStringLiteral("/.npm-global/bin"),
-                               home + QStringLiteral("/.bun/bin")};
-    QStringList path = env.value(QStringLiteral("PATH")).split(QLatin1Char(':'), Qt::SkipEmptyParts);
-    for (auto it = extra.crbegin(); it != extra.crend(); ++it) {
-        if (!it->isEmpty() && !path.contains(*it))
-            path.prepend(*it);
-    }
-    env.insert(QStringLiteral("PATH"), path.join(QLatin1Char(':')));
-#else
-    Q_UNUSED(cli);
-#endif
-    return env;
-}
-
-QString detect_cli_path(AgentKind kind) {
-    const QString name = kind == AgentKind::Codex ? QStringLiteral("codex") : QStringLiteral("claude");
-    const QString home = QDir::homePath();
-    QStringList candidates;
-    const QString on_path = QStandardPaths::findExecutable(name);
-    if (!on_path.isEmpty())
-        candidates << on_path;
-#ifdef Q_OS_WIN
-    const QString local = qEnvironmentVariable("LOCALAPPDATA");
-    const QString roaming = qEnvironmentVariable("APPDATA");
-    candidates << home + QStringLiteral("/.local/bin/") + name + QStringLiteral(".exe");
-    if (kind == AgentKind::Codex && !local.isEmpty())
-        candidates << local + QStringLiteral("/Programs/OpenAI/Codex/bin/codex.exe");
-    if (!local.isEmpty())
-        candidates << local + QStringLiteral("/Microsoft/WinGet/Links/") + name + QStringLiteral(".exe");
-    candidates << home + QStringLiteral("/.bun/bin/") + name + QStringLiteral(".exe");
-    if (!roaming.isEmpty())
-        candidates << roaming + QStringLiteral("/npm/") + name + QStringLiteral(".cmd");
-#else
-    candidates << home + QStringLiteral("/.local/bin/") + name;
-    if (kind == AgentKind::Claude)
-        candidates << home + QStringLiteral("/.claude/local/claude");
-    candidates << QStringLiteral("/opt/homebrew/bin/") + name << QStringLiteral("/usr/local/bin/") + name
-               << home + QStringLiteral("/.npm-global/bin/") + name << home + QStringLiteral("/.bun/bin/") + name
-               << QStringLiteral("/usr/bin/") + name;
-#endif
-    // Prefer a native executable: a .cmd shim needs cmd.exe and restricts arguments.
-    QString shim;
-    for (const auto& c : candidates) {
-        const QFileInfo fi(c);
-        if (!fi.isFile())
-            continue;
-#ifndef Q_OS_WIN
-        if (!fi.isExecutable())
-            continue;
-#endif
-        const QString abs = fi.absoluteFilePath();
-        if (is_cmd_shim(abs)) {
-            if (shim.isEmpty())
-                shim = abs;
-            continue;
-        }
-        return abs;
-    }
-    return shim;
-}
+constexpr int kMcpToolTimeoutSec = 300; // Codex's 60 s default is shorter than ui_act / ui_wait
+// Name used when registering this terminal with the user's own harness config:
+// edition-specific ("fincept_community", EditionIdentity.h), so it never
+// replaces or removes the private build's entries ("fincept", "fincept-cloud", …).
+constexpr const char* kClientServerName = harness::kMcpServerName;
 
 QString mask_secrets(QString text, const QString& token) {
     if (!token.isEmpty())
         text.replace(token, QStringLiteral("••••"));
     static const QRegularExpression bearer(QStringLiteral(R"((Bearer\s+)[A-Za-z0-9._~+/=-]{6,})"));
     text.replace(bearer, QStringLiteral("\\1••••"));
-    static const QRegularExpression env_token(QStringLiteral(R"((FINCEPT_MCP_TOKEN\s*[=:]\s*)\S+)"));
+    // Either edition's token variable, as an assignment in a CLI's output.
+    static const QRegularExpression env_token(
+        QStringLiteral("((?:%1|%2)\\s*[=:]\\s*)[^\\s$]\\S*")
+            .arg(QRegularExpression::escape(QString::fromLatin1(edition::kMcpTokenEnvVar)),
+                 QRegularExpression::escape(QString::fromLatin1(edition::kForeignMcpTokenEnvVar))));
     text.replace(env_token, QStringLiteral("\\1••••"));
     return text;
+}
+
+/// Notes about the one-time rename of a pre-split "fincept_terminal" entry,
+/// shown with the registration result (GUI thread only).
+QHash<QString, QString>& migration_notes() {
+    static QHash<QString, QString> notes;
+    return notes;
+}
+
+QString with_migration_note(const QString& harness_id, const QString& message) {
+    const QString note = migration_notes().take(harness_id);
+    return note.isEmpty() ? message : note + QStringLiteral("\n\n") + message;
 }
 
 bool stderr_looks_like_error(const QString& line) {
@@ -235,177 +87,129 @@ bool stderr_looks_like_error(const QString& line) {
     return rx.match(line).hasMatch();
 }
 
-QString shown_command(const QString& program, const QStringList& args, const QString& system_prompt) {
+/// The command line as shown in the transcript and the run header: the
+/// prompts as their lengths, the adapter's redact list and the token masked.
+QString shown_command(const QString& program, const harness::LaunchPlan& plan, const QString& token) {
     QStringList parts{QDir::toNativeSeparators(program)};
-    for (const auto& a : args) {
-        if (!system_prompt.isEmpty() && a == system_prompt) {
+    for (const auto& a : plan.args) {
+        if (!plan.system_prompt_arg.isEmpty() && a == plan.system_prompt_arg) {
             parts << QStringLiteral("<system prompt: %1 chars>").arg(a.size());
             continue;
         }
-        parts << (a.contains(QLatin1Char(' ')) || a.isEmpty() ? QLatin1Char('"') + a + QLatin1Char('"') : a);
+        if (!plan.prompt_arg.isEmpty() && a == plan.prompt_arg) {
+            parts << QStringLiteral("<prompt: %1 chars>").arg(a.size());
+            continue;
+        }
+        QString shown = a;
+        for (const QString& secret : plan.redact) {
+            if (!secret.isEmpty())
+                shown.replace(secret, QStringLiteral("••••"));
+        }
+        parts << (shown.contains(QLatin1Char(' ')) || shown.isEmpty() ? QLatin1Char('"') + shown + QLatin1Char('"') : shown);
     }
-    return parts.join(QLatin1Char(' '));
+    return mask_secrets(parts.join(QLatin1Char(' ')), token);
 }
 
-#ifdef Q_OS_WIN
-void* create_kill_on_close_job() {
-    HANDLE job = CreateJobObjectW(nullptr, nullptr);
-    if (!job)
-        return nullptr;
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
-    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info, sizeof(info))) {
-        CloseHandle(job);
-        return nullptr;
+/// The plain sentence that leads a failed run's error.
+QString failure_sentence(harness::FailureKind kind, const harness::HarnessDescriptor& d, const StreamFacts& f,
+                         const QString& model) {
+    switch (kind) {
+        case harness::FailureKind::Auth:
+            return QStringLiteral("Signed out of %1. %2").arg(d.display_name, d.signin_hint);
+        case harness::FailureKind::RateLimit:
+            if (f.rate_limit_resets_at_ms > QDateTime::currentMSecsSinceEpoch())
+                return QStringLiteral("Rate limited until %1 — %2 reported the limit.")
+                    .arg(QDateTime::fromMSecsSinceEpoch(f.rate_limit_resets_at_ms).toString(QStringLiteral("ddd HH:mm")),
+                         d.display_name);
+            return QStringLiteral("Rate limited by %1 — try again later.").arg(d.display_name);
+        case harness::FailureKind::Model:
+            return model.isEmpty() ? QStringLiteral("%1 rejected its default model.").arg(d.display_name)
+                                   : QStringLiteral("%1 rejected the model “%2”.").arg(d.display_name, model);
+        case harness::FailureKind::NotInstalled:
+            return QStringLiteral("%1 is not installed (or could not be started).").arg(d.display_name);
+        case harness::FailureKind::Timeout:
+        case harness::FailureKind::Other:
+        case harness::FailureKind::None:
+            break;
     }
-    return job;
+    return {};
 }
 
-bool assign_to_job(void* job, qint64 pid) {
-    if (!job || pid <= 0)
-        return false;
-    HANDLE h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
-    if (!h)
-        return false;
-    const BOOL ok = AssignProcessToJobObject(static_cast<HANDLE>(job), h);
-    CloseHandle(h);
-    return ok != FALSE;
+/// Worker (file) thread: create the run's folders and write the adapter's
+/// per-run files. Returns the error text, or an empty string.
+QString prepare_run_files(const QString& workdir, const QString& temp_dir, const QVector<harness::TempFile>& files,
+                          QStringList* written) {
+    // Flatpak: a folder of the user's system may be out of the sandbox's reach;
+    // the CLI's host-side start creates it there (HostExec.h), and reports it if it cannot.
+    if (!QDir().mkpath(workdir) && !process::host::in_flatpak())
+        return QStringLiteral("Cannot create the working folder %1").arg(QDir::toNativeSeparators(workdir));
+    if (files.isEmpty())
+        return {};
+    if (!QDir().mkpath(temp_dir))
+        return QStringLiteral("Cannot create %1").arg(QDir::toNativeSeparators(temp_dir));
+    for (const harness::TempFile& tf : files) {
+        const QString path = temp_dir + QLatin1Char('/') + tf.name;
+        QSaveFile f(path);
+        if (!f.open(QIODevice::WriteOnly) || f.write(tf.content) != tf.content.size() || !f.commit()) {
+            for (const QString& p : std::as_const(*written))
+                QFile::remove(p);
+            written->clear();
+            return QStringLiteral("Cannot write the run file %1: %2").arg(tf.name, f.errorString());
+        }
+        *written << path;
+    }
+    return {};
 }
-#endif
 
 } // namespace coding_agent_process_detail
 
 using namespace coding_agent_process_detail;
 
-// ── CLI detection ────────────────────────────────────────────────────────────
-
-CliInfo CodingAgentService::cli_info(AgentKind kind) const {
-    return kind == AgentKind::Codex ? codex_cli_ : claude_cli_;
-}
-
-void CodingAgentService::resolve_cli_paths() {
-    for (AgentKind kind : {AgentKind::Claude, AgentKind::Codex}) {
-        CliInfo& current = kind == AgentKind::Codex ? codex_cli_ : claude_cli_;
-        CliInfo fresh;
-        fresh.kind = kind;
-        const QString override_path = cli_path_override(kind);
-        if (!override_path.isEmpty()) {
-            const QFileInfo fi(override_path);
-            if (fi.isFile()) {
-                fresh.path = fi.absoluteFilePath();
-                fresh.path_overridden = true;
-            }
-        }
-        if (fresh.path.isEmpty())
-            fresh.path = detect_cli_path(kind);
-        fresh.via_cmd_shim = is_cmd_shim(fresh.path);
-        if (!fresh.path.isEmpty() && fresh.path == current.path) {
-            // Same binary — keep what the last probe learned.
-            fresh.version = current.version;
-            fresh.version_line = current.version_line;
-            fresh.probed = current.probed;
-            fresh.probing = current.probing;
-            fresh.probe_error = current.probe_error;
-        }
-        current = fresh;
-    }
-    cli_resolved_ = true;
-}
-
-void CodingAgentService::refresh_cli_detection() {
-    resolve_cli_paths();
-    emit cli_status_changed();
-    probe_version(AgentKind::Claude);
-    probe_version(AgentKind::Codex);
-}
-
-void CodingAgentService::probe_version(AgentKind kind) {
-    CliInfo& ci = kind == AgentKind::Codex ? codex_cli_ : claude_cli_;
-    if (!ci.installed() || ci.probing)
-        return;
-    const LaunchSpec spec = make_launch_spec(ci, {QStringLiteral("--version")});
-    if (!spec.error.isEmpty()) {
-        ci.probed = true;
-        ci.probe_error = spec.error;
-        emit cli_status_changed();
-        return;
-    }
-    ci.probing = true;
-    const QString path = ci.path;
-    auto* proc = new QProcess(this);
-    proc->setProcessEnvironment(child_environment(ci, {}));
-    apply_launch_spec(proc, spec);
-    auto* timer = new QTimer(proc);
-    timer->setSingleShot(true);
-    connect(timer, &QTimer::timeout, proc, [proc]() { proc->kill(); });
-    connect(proc, &QProcess::finished, this, [this, proc, kind, path](int code, QProcess::ExitStatus status) {
-        const QString out = QString::fromUtf8(proc->readAllStandardOutput()).trimmed();
-        const QString err = QString::fromUtf8(proc->readAllStandardError()).trimmed();
-        proc->deleteLater();
-        CliInfo& c = kind == AgentKind::Codex ? codex_cli_ : claude_cli_;
-        if (c.path != path)
-            return; // re-resolved to another binary meanwhile
-        c.probing = false;
-        c.probed = true;
-        c.version_line = out.section(QLatin1Char('\n'), 0, 0).trimmed();
-        c.version = parse_cli_version(c.version_line);
-        if (status == QProcess::NormalExit && code == 0 && !c.version.isEmpty())
-            c.probe_error.clear();
-        else
-            c.probe_error = err.isEmpty() ? QStringLiteral("`--version` exited with code %1").arg(code) : err.left(300);
-        emit cli_status_changed();
-    });
-    connect(proc, &QProcess::errorOccurred, this, [this, proc, kind, path](QProcess::ProcessError e) {
-        if (e != QProcess::FailedToStart)
-            return;
-        const QString msg = proc->errorString();
-        proc->deleteLater();
-        CliInfo& c = kind == AgentKind::Codex ? codex_cli_ : claude_cli_;
-        if (c.path != path)
-            return;
-        c.probing = false;
-        c.probed = true;
-        c.probe_error = msg;
-        emit cli_status_changed();
-    });
-    timer->start(kVersionProbeTimeoutMs);
-    proc->start();
-}
-
 // ── Launch ───────────────────────────────────────────────────────────────────
 
-bool CodingAgentService::launch(const QString& run_id, QString* error) {
-    auto fail = [error](const QString& message) {
+bool CodingAgentService::launch(const QString& run_id, QString* error, QString* failure) {
+    auto fail = [error, failure](const QString& message, harness::FailureKind kind = harness::FailureKind::Other) {
         if (error)
             *error = message;
+        if (failure)
+            *failure = harness::failure_id(kind);
         return false;
     };
     auto it = runs_.find(run_id);
     if (it == runs_.end())
         return fail(QStringLiteral("Run not found."));
 
-    resolve_cli_paths();
-    const CliInfo cli = cli_info(it->agent);
-    const QString agent_name = agent_display_name(it->agent);
-    if (!cli.installed())
-        return fail(QStringLiteral("%1 CLI not found. Install it (%2) or set its path in Agent Workbench settings.")
-                        .arg(agent_name, install_guide_url(it->agent)));
-    if (!QDir().mkpath(it->workdir))
-        return fail(QStringLiteral("Cannot create the working folder %1").arg(QDir::toNativeSeparators(it->workdir)));
-
+    // Everything comes from the registry's cached state — no file-system search here.
+    auto& registry = harness::HarnessRegistry::instance();
+    const QString harness_id = it->harness;
+    const harness::IHarnessAdapter* adapter = registry.adapter(harness_id);
+    if (!adapter)
+        return fail(QStringLiteral("%1 is not available in this build.").arg(registry.display_name(harness_id)),
+                    harness::FailureKind::NotInstalled);
+    const harness::HarnessDescriptor& desc = adapter->descriptor();
+    const harness::HarnessStatus st = registry.status(harness_id);
+    if (!st.installation) {
+        if (st.host_blocked) // Flatpak without the host-command permission: say that, not "not installed"
+            return fail(st.detect_error, harness::FailureKind::NotInstalled);
+        registry.report_failure(harness_id, harness::FailureKind::NotInstalled);
+        return fail(QStringLiteral("%1 is not installed on this computer. Install it (%2) or set its path in Agent "
+                                   "Workbench › HARNESSES.")
+                        .arg(desc.display_name, desc.install_url),
+                    harness::FailureKind::NotInstalled);
+    }
+    const harness::Installation cli = *st.installation;
+    // Flatpak: the CLI runs on the user's system; the folders and files it is
+    // handed must be spelled so the host finds them (~/.local/share/… of the
+    // sandbox is ~/.var/app/<id>/.local/share/… there). Identity elsewhere.
+    const QString run_dir = process::host::shared_path(it->workdir);
     const bool resume = !it->parent_run_id.isEmpty() && !it->session_id.isEmpty();
-    static const QRegularExpression session_rx(QStringLiteral("^[A-Za-z0-9_-]{1,128}$"));
-    if (resume && !session_rx.match(it->session_id).hasMatch())
-        return fail(QStringLiteral("The session id to resume is not valid."));
 
     // ── Terminal tools: the external MCP server must be up ───────────────────
     QString token;
-    QString server_name = it->agent == AgentKind::Codex ? QStringLiteral("fincept_terminal")
-                                                        : QString::fromLatin1(kTerminalServerName);
     QString mcp_url;
-    QJsonObject claude_servers;
-    QStringList codex_overrides;
-    if (it->use_fincept_tools) {
+    const QString server_name = desc.run_mcp_server_name.isEmpty() ? QStringLiteral("fincept") : desc.run_mcp_server_name;
+    std::optional<harness::McpEndpoint> endpoint;
+    if (it->use_fincept_tools && desc.caps.per_run_mcp) {
         auto& srv = mcp::McpHttpServer::instance();
         if (!srv.is_running() && !srv.start())
             return fail(QStringLiteral("The terminal's MCP server could not start (%1). Open Agent Workbench › CONNECT, "
@@ -415,128 +219,148 @@ bool CodingAgentService::launch(const QString& run_id, QString* error) {
         mcp_url = srv.url();
         if (token.isEmpty())
             return fail(QStringLiteral("The terminal's MCP server has no access token."));
-        if (it->agent == AgentKind::Claude) {
-            const QJsonObject cfg = srv.claude_mcp_config_env();
-            claude_servers = cfg.value(QStringLiteral("mcpServers")).toObject();
-            if (claude_servers.isEmpty() && (cfg.contains(QStringLiteral("url")) || cfg.contains(QStringLiteral("type"))))
-                claude_servers.insert(QString::fromLatin1(kTerminalServerName), cfg);
-            if (claude_servers.isEmpty())
-                return fail(QStringLiteral("The terminal's MCP server returned no client configuration."));
-            server_name = claude_servers.keys().constFirst();
-        } else {
-            // A user's own `[mcp_servers.fincept]` entry (e.g. the Enterprise
-            // server, or the stdio bridge from the CONNECT tab) must not merge
-            // with ours — use a distinct name for in-app runs.
-            static const QRegularExpression rename(QStringLiteral(R"(^mcp_servers\.fincept(?=[.=]))"));
-            for (QString o : srv.codex_config_overrides()) {
-                o.replace(rename, QStringLiteral("mcp_servers.fincept_terminal"));
-                codex_overrides << o;
-            }
-            if (codex_overrides.isEmpty())
-                return fail(QStringLiteral("The terminal's MCP server returned no Codex configuration."));
-        }
+        if (mcp_url.isEmpty())
+            return fail(QStringLiteral("The terminal's MCP server returned no client configuration."));
+        // The token itself never goes into the endpoint: the child reads it from
+        // the variable named here.
+        harness::McpEndpoint ep;
+        ep.name = server_name;
+        ep.url = mcp_url;
+        ep.token_env_var = QString::fromLatin1(mcp::McpHttpServer::kTokenEnvVar);
+        ep.tool_timeout_s = kMcpToolTimeoutSec;
+        endpoint = ep;
     }
 
     // ── System context ───────────────────────────────────────────────────────
     SystemPromptContext ctx;
-    ctx.agent = it->agent;
-    ctx.mode = it->mode;
-    ctx.tools_enabled = it->use_fincept_tools;
+    ctx.harness = harness_id;
+    ctx.permission = it->permission;
+    ctx.tools_enabled = endpoint.has_value();
     ctx.mcp_server_name = server_name;
-    ctx.workdir = QDir::toNativeSeparators(it->workdir);
+    ctx.workdir = QDir::toNativeSeparators(run_dir);
     ctx.now = QDateTime::currentDateTime();
-    const QString system_prompt = build_agent_system_prompt(ctx);
 
-    // ── Command line ─────────────────────────────────────────────────────────
-    QStringList args;
-    QString mcp_config_path;
-    QString shown_system_prompt;
-    QByteArray stdin_payload;
-    if (it->agent == AgentKind::Claude) {
-        args << QStringLiteral("-p") << QStringLiteral("--output-format") << QStringLiteral("stream-json")
-             << QStringLiteral("--verbose");
-        // Unattended: anything not pre-approved below is denied instead of waiting on a prompt.
-        args << QStringLiteral("--permission-mode") << QStringLiteral("dontAsk");
-        if (cli_version_at_least(cli.version, 2, 1, 259))
-            args << QStringLiteral("--permission-prompts") << QStringLiteral("none");
-        if (!claude_servers.isEmpty()) {
-            const QString dir = AppPaths::cache() + QStringLiteral("/coding_agents");
-            QDir().mkpath(dir);
-            mcp_config_path = dir + QStringLiteral("/mcp-") + run_id.left(8) + QStringLiteral(".json");
-            QSaveFile f(mcp_config_path);
-            const QByteArray json =
-                QJsonDocument(QJsonObject{{QStringLiteral("mcpServers"), claude_servers}}).toJson(QJsonDocument::Compact);
-            if (!f.open(QIODevice::WriteOnly) || f.write(json) != json.size() || !f.commit())
-                return fail(QStringLiteral("Cannot write the MCP configuration file: %1").arg(f.errorString()));
-            args << QStringLiteral("--mcp-config") << mcp_config_path;
-        }
-        args << QStringLiteral("--strict-mcp-config"); // only the terminal's server, never the user's others
-        QStringList builtins = {QStringLiteral("Read"), QStringLiteral("Grep"), QStringLiteral("Glob"),
-                                QStringLiteral("WebSearch"), QStringLiteral("WebFetch")};
-        if (it->mode == RunMode::WorkspaceEdits)
-            builtins << QStringLiteral("Edit") << QStringLiteral("Write");
-        args << QStringLiteral("--tools") << builtins.join(QLatin1Char(','));
-        QStringList allowed;
-        for (const auto& name : claude_servers.keys())
-            allowed << QStringLiteral("mcp__%1__*").arg(name);
-        allowed << builtins;
-        args << QStringLiteral("--allowedTools") << allowed.join(QLatin1Char(','));
-        shown_system_prompt = cli.via_cmd_shim ? cmd_safe_text(system_prompt) : system_prompt;
-        args << QStringLiteral("--append-system-prompt") << shown_system_prompt;
-        if (!it->model.isEmpty())
-            args << QStringLiteral("--model") << it->model;
-        if (it->max_budget_usd > 0.0)
-            args << QStringLiteral("--max-budget-usd") << QString::number(it->max_budget_usd, 'f', 2);
-        if (resume)
-            args << QStringLiteral("--resume") << it->session_id;
-        stdin_payload = it->prompt.toUtf8();
-    } else {
-        const QString sandbox =
-            it->mode == RunMode::WorkspaceEdits ? QStringLiteral("workspace-write") : QStringLiteral("read-only");
-        args << QStringLiteral("exec");
-        if (resume)
-            args << QStringLiteral("resume");
-        args << QStringLiteral("--json") << QStringLiteral("--skip-git-repo-check");
-        if (resume) // `exec resume` has no -s/-C; the sandbox goes through config
-            args << QStringLiteral("-c") << QStringLiteral("sandbox_mode=\"%1\"").arg(sandbox);
-        else
-            args << QStringLiteral("-s") << sandbox;
-        args << QStringLiteral("-c") << QStringLiteral("approval_policy=\"never\"");
-        if (!it->model.isEmpty())
-            args << QStringLiteral("-m") << it->model;
-        args << codex_overrides;
-        if (resume)
-            args << it->session_id;
-        args << QStringLiteral("-"); // prompt from stdin
-        stdin_payload = (resume ? it->prompt : wrap_codex_prompt(system_prompt, it->prompt)).toUtf8();
-    }
+    // ── Command line (the adapter) ───────────────────────────────────────────
+    harness::RunSpec spec;
+    spec.prompt = it->prompt;
+    spec.system_prompt = build_agent_system_prompt(ctx);
+    spec.model = it->model;
+    spec.effort = desc.caps.effort ? it->effort : QString();
+    spec.cwd = run_dir;
+    spec.resume_session_id = resume ? it->session_id : QString();
+    spec.permission = it->permission;
+    spec.mcp = endpoint;
+    spec.max_budget_usd = desc.caps.budget_usd ? it->max_budget_usd : 0.0;
+    spec.max_turns = desc.caps.max_turns ? it->max_turns : 0;
+    spec.want_deltas = desc.caps.text_deltas;
+    spec.run_id = run_id;
+    spec.temp_dir = process::host::shared_path(AppPaths::cache() + QStringLiteral("/coding_agents"));
+    spec.api_key_env_present = registry.api_key_reaches_child(harness_id);
+    // Entry NAMES of the user's own MCP config that the CLI would merge into this
+    // run (Codex): the adapter switches them off so the run sees the terminal's
+    // server only — never the other Fincept edition's. A small local file (in
+    // the Flatpak: read on the host by the registry, see user_mcp_server_names()).
+    spec.user_mcp_server_names = registry.user_mcp_server_names(harness_id);
+    const harness::LaunchPlan plan = adapter->build_command(spec, cli);
+    if (!plan.error.isEmpty())
+        return fail(plan.error);
+    const harness::LaunchSpec launch_spec = harness::make_launch_spec(cli, plan.args);
+    if (!launch_spec.error.isEmpty())
+        return fail(launch_spec.error);
 
-    const LaunchSpec spec = make_launch_spec(cli, args);
-    if (!spec.error.isEmpty()) {
-        if (!mcp_config_path.isEmpty())
-            QFile::remove(mcp_config_path);
-        return fail(spec.error);
-    }
-
-    // ── Process ──────────────────────────────────────────────────────────────
+    // ── The live run (the process starts once its files exist) ───────────────
     auto* live = new LiveRun;
     live->run_id = run_id;
-    live->agent = it->agent;
-    live->stdin_payload = stdin_payload;
-    live->mcp_config_path = mcp_config_path;
-#ifdef Q_OS_WIN
-    live->job = create_kill_on_close_job();
-#endif
+    live->harness = harness_id;
+    live->parser = adapter->make_parser();
+    live->cancel = adapter->cancel_plan();
+    live->spec = launch_spec;
+    // THE child environment: registry policy (API-key stripping), the adapter's
+    // env_set / env_unset and the MCP token — the only place the token goes.
+    live->env = registry.child_environment(harness_id, cli, &plan, token);
+    live->host_env_names = harness::host_env_names(desc, &plan);
+    live->workdir = run_dir;
+    live->display_name = desc.display_name;
+    live->version = cli.version;
+    live->resume = resume;
+    live->stdin_payload = plan.stdin_payload;
+    live->shown_command = shown_command(cli.path, plan, token);
+    live->tools_note = endpoint ? QStringLiteral("%1 (server `%2`)").arg(mcp_url, server_name) : QStringLiteral("off");
+    const qint64 limit_ms = it->time_limit_s > 0 ? static_cast<qint64>(it->time_limit_s) * 1000 : kCodingAgentMaxRunMs;
+    live->time_limit_ms = qMin(limit_ms, kCodingAgentMaxRunMs);
+    if (!live->parser) {
+        delete live;
+        return fail(QStringLiteral("%1 has no output parser.").arg(desc.display_name));
+    }
+    live_.insert(run_id, live); // occupies a slot from now on
+
+    it->status = RunStatus::Running;
+    it->started_at_ms = QDateTime::currentMSecsSinceEpoch();
+    it->harness_version = cli.version;
+    it->error.clear();
+    it->failure.clear();
+    command_lines_.insert(run_id, live->shown_command);
+    persist_run(run_id);
+    // `it` is not used past this point: slots of the signals below may touch runs_.
+    emit run_updated(run_id);
+
+    // Folder + per-run files on the file thread; back on the GUI thread to start.
+    const QString workdir = live->workdir;
+    const QString temp_dir = spec.temp_dir;
+    const QVector<harness::TempFile> files = plan.temp_files;
+    QPointer<CodingAgentService> self(this);
+    submit_file_job([self, run_id, workdir, temp_dir, files]() {
+        QStringList written;
+        const QString err = prepare_run_files(workdir, temp_dir, files, &written);
+        QCoreApplication* app = QCoreApplication::instance();
+        if (!app)
+            return;
+        QMetaObject::invokeMethod(
+            app,
+            [self, run_id, err, written]() {
+                if (self)
+                    self->on_launch_prepared(run_id, err.isEmpty(), err, written);
+                else
+                    for (const QString& p : written)
+                        QFile::remove(p); // shutdown race: tiny files, the app is ending
+            },
+            Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void CodingAgentService::on_launch_prepared(const QString& run_id, bool ok, const QString& error,
+                                            const QStringList& temp_paths) {
+    LiveRun* live = live_.value(run_id);
+    if (!live || !live->preparing || shutting_down_) {
+        // Stopped (or the app is closing) while its files were being prepared.
+        if (!temp_paths.isEmpty())
+            submit_file_job([temp_paths]() {
+                for (const QString& p : temp_paths)
+                    QFile::remove(p);
+            });
+        return;
+    }
+    live->preparing = false;
+    live->temp_paths = temp_paths;
+    if (!ok) {
+        finish_run(run_id, RunStatus::Failed, error, harness::failure_id(harness::FailureKind::Other));
+        return;
+    }
+    const auto it = runs_.constFind(run_id);
+    if (it == runs_.cend())
+        return;
+
+    // Windows: kill-on-close job; the child is created suspended and joins it in
+    // on_proc_started() before it runs (nothing it spawns can escape). POSIX: own session.
+    live->job = harness::create_kill_on_close_job();
     auto* proc = new QProcess(this);
     live->proc = proc;
-    proc->setWorkingDirectory(it->workdir);
-    proc->setProcessEnvironment(child_environment(cli, token));
+    proc->setWorkingDirectory(live->workdir);
+    proc->setProcessEnvironment(live->env);
     proc->setProcessChannelMode(QProcess::SeparateChannels);
-#ifndef Q_OS_WIN
-    // Own process group ⇒ Stop can signal the agent AND everything it spawned.
-    proc->setUnixProcessParameters(QProcess::UnixProcessFlag::CreateNewSession);
-#endif
-    apply_launch_spec(proc, spec);
+    // The launch boundary (Flatpak: the CLI runs on the user's system).
+    harness::apply_launch_spec(proc, live->spec, /*own_tree=*/true, live->host_env_names);
 
     connect(proc, &QProcess::started, this, [this, run_id]() { on_proc_started(run_id); });
     connect(proc, &QProcess::readyReadStandardOutput, this, [this, run_id]() { on_proc_stdout(run_id); });
@@ -549,6 +373,7 @@ bool CodingAgentService::launch(const QString& run_id, QString* error) {
             on_proc_failed_to_start(run_id, proc->errorString());
     });
 
+    // The run's time limit, for every harness alike.
     auto* watchdog = new QTimer(this);
     watchdog->setSingleShot(true);
     live->watchdog = watchdog;
@@ -557,33 +382,25 @@ bool CodingAgentService::launch(const QString& run_id, QString* error) {
         if (!l)
             return;
         l->timed_out = true;
-        record_status(run_id, QStringLiteral("Run limit reached"),
-                      QStringLiteral("Stopping the agent after %1 hours.").arg(kCodingAgentMaxRunMs / 3600000), true);
+        record_status(run_id, QStringLiteral("Time limit reached"),
+                      QStringLiteral("Stopping the agent after %1 minutes.").arg(l->time_limit_ms / 60000), true);
+        if (l->proc && l->cancel.close_stdin)
+            l->proc->closeWriteChannel();
         kill_tree(l);
     });
 
-    live_.insert(run_id, live);
-    it->status = RunStatus::Running;
-    it->started_at_ms = QDateTime::currentMSecsSinceEpoch();
-    it->error.clear();
-    const QString workdir = it->workdir;
-    const bool tools = it->use_fincept_tools;
-    persist_run(run_id);
     write_prompt_file(*it);
-    // `it` is not used past this point: slots of the signals below may touch runs_.
-    emit run_updated(run_id);
-
-    const QString version = cli.version.isEmpty() ? QString() : QLatin1Char(' ') + cli.version;
+    const QString version = live->version.isEmpty() ? QString() : QLatin1Char(' ') + live->version;
     record_status(run_id,
-                  QStringLiteral("Starting %1%2%3").arg(agent_name, version, resume ? QStringLiteral(" (resume)") : QString()),
+                  QStringLiteral("Starting %1%2%3").arg(live->display_name, version,
+                                                         live->resume ? QStringLiteral(" (resume)") : QString()),
                   QStringLiteral("Command: %1\nWorking folder: %2\nTerminal tools: %3")
-                      .arg(shown_command(cli.path, args, shown_system_prompt), QDir::toNativeSeparators(workdir),
-                           tools ? QStringLiteral("%1 (server `%2`)").arg(mcp_url, server_name) : QStringLiteral("off")));
-    LOG_INFO(kCodingAgentProcTag, QStringLiteral("Run %1: starting %2 in %3").arg(run_id.left(8), agent_name, workdir));
+                      .arg(live->shown_command, QDir::toNativeSeparators(live->workdir), live->tools_note));
+    LOG_INFO(kCodingAgentProcTag,
+             QStringLiteral("Run %1: starting %2 in %3").arg(run_id.left(8), live->display_name, live->workdir));
 
-    watchdog->start(static_cast<int>(kCodingAgentMaxRunMs));
+    watchdog->start(static_cast<int>(qMin<qint64>(live->time_limit_ms, std::numeric_limits<int>::max())));
     proc->start(); // may fail synchronously → on_proc_failed_to_start → finish_run; `live` must not be touched after this
-    return true;
 }
 
 void CodingAgentService::on_proc_started(const QString& run_id) {
@@ -591,16 +408,26 @@ void CodingAgentService::on_proc_started(const QString& run_id) {
     if (!live || !live->proc)
         return;
     live->pid = live->proc->processId();
-#ifdef Q_OS_WIN
-    live->job_assigned = assign_to_job(live->job, live->pid);
+    // Windows: the child was created suspended — join the job, then resume.
+    const harness::TreeStart tree = harness::adopt_started_process(live->proc, live->job);
+    live->job_assigned = tree.assigned;
     if (!live->job_assigned)
         LOG_WARN(kCodingAgentProcTag, QStringLiteral("Run %1: job object assignment failed — Stop kills only the CLI "
                                                      "process, not its children")
                                           .arg(run_id.left(8)));
-#endif
-    // The prompt travels over stdin: no quoting or length limits, never in the
-    // process list. Closing stdin tells the CLI the prompt is complete.
-    live->proc->write(live->stdin_payload);
+    if (!tree.resumed) {
+        LOG_WARN(kCodingAgentProcTag, QStringLiteral("Run %1: the agent process could not be resumed").arg(run_id.left(8)));
+        record_status(run_id, QStringLiteral("Could not start the agent"),
+                      QStringLiteral("The agent process was created but could not be resumed; it is being stopped."),
+                      true);
+        kill_tree(live);
+        return;
+    }
+    // The prompt travels over stdin when the adapter puts it there: no quoting
+    // or length limits, never in the process list. Closing stdin tells the CLI
+    // the prompt is complete (an adapter that keeps a session open says so).
+    if (!live->stdin_payload.isEmpty())
+        live->proc->write(live->stdin_payload);
     live->proc->closeWriteChannel();
     live->stdin_payload.clear();
 }
@@ -646,7 +473,7 @@ void CodingAgentService::on_proc_stderr(const QString& run_id) {
 void CodingAgentService::sync_facts(const QString& run_id) {
     LiveRun* live = live_.value(run_id);
     auto it = runs_.find(run_id);
-    if (!live || it == runs_.end())
+    if (!live || it == runs_.end() || !live->parser)
         return;
     const StreamFacts& f = live->facts();
     bool changed = false;
@@ -660,11 +487,14 @@ void CodingAgentService::sync_facts(const QString& run_id) {
         it->model = f.model; // the model actually used — follow-ups keep it
         changed = persist = true;
     }
-    if (f.input_tokens != live->synced_in || f.output_tokens != live->synced_out) {
+    if (f.input_tokens != live->synced_in || f.output_tokens != live->synced_out ||
+        f.cached_tokens != live->synced_cached) {
         live->synced_in = f.input_tokens;
         live->synced_out = f.output_tokens;
+        live->synced_cached = f.cached_tokens;
         it->input_tokens = f.input_tokens;
         it->output_tokens = f.output_tokens;
+        it->cached_tokens = f.cached_tokens;
         changed = true;
     }
     if (f.cost_usd.has_value() && (!it->cost_usd.has_value() || *it->cost_usd != *f.cost_usd)) {
@@ -681,7 +511,8 @@ void CodingAgentService::on_proc_finished(const QString& run_id, int exit_code, 
     LiveRun* live = live_.value(run_id);
     if (!live || !runs_.contains(run_id))
         return;
-    // Drain the pipes, including an unterminated last line.
+    // Drain the pipes, including an unterminated last line, then let the parser
+    // flush whatever it still assembles from deltas.
     on_proc_stdout(run_id);
     on_proc_stderr(run_id);
     const QByteArray out_rest = live->out_buf.take_rest();
@@ -689,6 +520,8 @@ void CodingAgentService::on_proc_finished(const QString& run_id, int exit_code, 
         for (const auto& ev : live->parse(QString::fromUtf8(out_rest)))
             record_event(run_id, ev);
     }
+    for (const auto& ev : live->parser->finish())
+        record_event(run_id, ev);
     const QString err_rest = QString::fromUtf8(live->err_buf.take_rest()).trimmed();
     if (!err_rest.isEmpty()) {
         live->stderr_tail.append(err_rest.left(2000));
@@ -699,51 +532,74 @@ void CodingAgentService::on_proc_finished(const QString& run_id, int exit_code, 
     auto it = runs_.find(run_id);
     if (it == runs_.end())
         return;
+    auto& registry = harness::HarnessRegistry::instance();
+    const harness::IHarnessAdapter* adapter = registry.adapter(it->harness);
     const StreamFacts& f = live->facts();
-    const QString agent_name = agent_display_name(it->agent);
+    const QString name = live->display_name;
     it->exit_code = exit_code;
     if (!f.final_text.isEmpty())
         it->final_text = f.final_text;
 
     RunStatus status = RunStatus::Failed;
     QString err;
+    harness::FailureKind kind = harness::FailureKind::Other;
     if (live->stop_requested) {
         status = RunStatus::Cancelled;
         err = QStringLiteral("Stopped by the user.");
+        kind = harness::FailureKind::None;
     } else if (live->timed_out) {
-        err = QStringLiteral("Stopped after exceeding the %1-hour run limit.").arg(kCodingAgentMaxRunMs / 3600000);
+        kind = harness::FailureKind::Timeout;
+        err = QStringLiteral("Timed out — stopped after the %1-minute time limit.").arg(live->time_limit_ms / 60000);
     } else {
-        const bool clean_exit = !crashed && exit_code == 0;
-        const bool ok = it->agent == AgentKind::Claude
-                            ? (clean_exit && f.saw_result && !f.result_is_error)
-                            : (clean_exit && !f.result_is_error && (f.saw_result || !f.final_text.isEmpty()));
-        if (ok) {
+        kind = adapter ? adapter->classify_failure(crashed ? -1 : exit_code, f, live->stderr_tail)
+                       : harness::FailureKind::Other;
+        if (!crashed && kind == harness::FailureKind::None) {
             status = RunStatus::Succeeded;
         } else {
+            if (kind == harness::FailureKind::None)
+                kind = harness::FailureKind::Other; // crashed after a clean-looking stream
+            QString detail;
             if (!f.result_error.isEmpty())
-                err = f.result_error;
+                detail = f.result_error;
             else if (!f.last_error.isEmpty())
-                err = f.last_error;
+                detail = f.last_error;
             else if (crashed)
-                err = QStringLiteral("%1 crashed.").arg(agent_name);
+                detail = QStringLiteral("%1 crashed.").arg(name);
             else if (exit_code != 0)
-                err = QStringLiteral("%1 exited with code %2.").arg(agent_name).arg(exit_code);
+                detail = QStringLiteral("%1 exited with code %2.").arg(name).arg(exit_code);
             else
-                err = QStringLiteral("%1 exited without producing a result.").arg(agent_name);
+                detail = QStringLiteral("%1 exited without producing a result.").arg(name);
             if (f.result_error.isEmpty() && !live->stderr_tail.isEmpty()) {
                 const qsizetype from = qMax<qsizetype>(0, live->stderr_tail.size() - 8);
-                err += QStringLiteral("\n\nLast stderr output:\n") + live->stderr_tail.mid(from).join(QLatin1Char('\n'));
+                detail += QStringLiteral("\n\nLast stderr output:\n") + live->stderr_tail.mid(from).join(QLatin1Char('\n'));
             }
+            const QString lead = adapter ? failure_sentence(kind, adapter->descriptor(), f, it->model) : QString();
+            err = lead.isEmpty() ? detail : lead + QStringLiteral("\n\n") + detail;
         }
     }
-    finish_run(run_id, status, err);
+    // Feed the registry: a sign-in re-check, a cooldown, a re-detection — or clear them.
+    const QString harness_id = it->harness;
+    if (status == RunStatus::Succeeded)
+        registry.report_success(harness_id);
+    else if (kind == harness::FailureKind::Auth || kind == harness::FailureKind::RateLimit ||
+             kind == harness::FailureKind::NotInstalled || kind == harness::FailureKind::Model)
+        registry.report_failure(harness_id, kind, f.rate_limit_resets_at_ms);
+    finish_run(run_id, status, err, status == RunStatus::Succeeded ? QString() : harness::failure_id(kind));
 }
 
 void CodingAgentService::on_proc_failed_to_start(const QString& run_id, const QString& message) {
     const CodingAgentRun* run = find_run(run_id);
-    const QString path = run ? cli_info(run->agent).path : QString();
+    if (!run)
+        return;
+    auto& registry = harness::HarnessRegistry::instance();
+    const QString harness_id = run->harness;
+    const harness::HarnessStatus st = registry.status(harness_id);
+    const QString path = st.installation ? st.installation->path : QString();
+    registry.report_failure(harness_id, harness::FailureKind::NotInstalled); // re-detects
     finish_run(run_id, RunStatus::Failed,
-               QStringLiteral("Could not start %1: %2").arg(QDir::toNativeSeparators(path), message));
+               QStringLiteral("%1 could not be started (%2): %3")
+                   .arg(registry.display_name(harness_id), QDir::toNativeSeparators(path), message),
+               harness::failure_id(harness::FailureKind::NotInstalled));
 }
 
 // ── Stop / kill ──────────────────────────────────────────────────────────────
@@ -751,26 +607,19 @@ void CodingAgentService::on_proc_failed_to_start(const QString& run_id, const QS
 void CodingAgentService::terminate_tree(LiveRun* live) {
     if (!live)
         return;
-#ifdef Q_OS_WIN
-    // Console processes have no window to receive WM_CLOSE: the graceful step on
-    // Windows is the stdin close the caller already did; kill_tree follows.
-    Q_UNUSED(live);
-#else
-    if (live->pid > 0)
-        ::kill(-static_cast<pid_t>(live->pid), SIGTERM);
-#endif
+    // POSIX: SIGTERM to the process group (Flatpak: also the CLI's group on the
+    // host). Windows: console processes have no window to receive WM_CLOSE — the
+    // graceful step is the stdin close the caller already did; kill_tree follows.
+    harness::signal_tree(live->proc.data(), live->pid, /*force=*/false);
 }
 
 void CodingAgentService::kill_tree(LiveRun* live) {
     if (!live)
         return;
-#ifdef Q_OS_WIN
     if (live->job && live->job_assigned)
-        TerminateJobObject(static_cast<HANDLE>(live->job), 1);
-#else
-    if (live->pid > 0)
-        ::kill(-static_cast<pid_t>(live->pid), SIGKILL);
-#endif
+        harness::terminate_job(live->job); // Windows: the whole tree, npm shim's node included
+    // POSIX: SIGKILL to the process group (Flatpak: the host group first).
+    harness::signal_tree(live->proc.data(), live->pid, /*force=*/true);
     if (live->proc && live->proc->state() != QProcess::NotRunning)
         live->proc->kill();
 }
@@ -799,37 +648,54 @@ void CodingAgentService::cleanup_live(const QString& run_id, bool immediate) {
         else
             proc->deleteLater();
     }
-#ifdef Q_OS_WIN
-    if (live->job)
-        CloseHandle(static_cast<HANDLE>(live->job)); // kill-on-close: reaps anything the agent left behind
-#endif
-    if (!live->mcp_config_path.isEmpty())
-        QFile::remove(live->mcp_config_path);
+    harness::close_job(live->job); // kill-on-close: reaps anything the agent left behind
+    live->job = nullptr;
+    if (!live->temp_paths.isEmpty()) {
+        const QStringList paths = live->temp_paths;
+        if (immediate || shutting_down_) {
+            for (const QString& p : paths)
+                QFile::remove(p); // teardown: a few small files in the app's own cache
+        } else {
+            submit_file_job([paths]() {
+                for (const QString& p : paths)
+                    QFile::remove(p);
+            });
+        }
+    }
     stderr_tails_.insert(run_id, live->stderr_tail);
     delete live;
 }
 
-// ── External clients (Connect tab) ───────────────────────────────────────────
+// ── External clients (CONNECT) ───────────────────────────────────────────────
 
-void CodingAgentService::run_cli_async(AgentKind kind, const QStringList& args,
+void CodingAgentService::run_cli_async(const QString& harness_id, const QStringList& args, bool with_token,
                                        std::function<void(int, const QString&)> done) {
-    resolve_cli_paths();
-    const CliInfo cli = cli_info(kind);
-    if (!cli.installed()) {
-        QTimer::singleShot(0, this, [done, kind]() {
-            done(-1, QStringLiteral("%1 is not installed on this computer.").arg(agent_display_name(kind)));
-        });
+    auto& registry = harness::HarnessRegistry::instance();
+    const harness::HarnessStatus st = registry.status(harness_id);
+    const std::optional<harness::Installation> cli = st.installation;
+    if (!cli) {
+        const QString why = st.host_blocked ? st.detect_error
+                                            : QStringLiteral("%1 is not installed on this computer.")
+                                                  .arg(registry.display_name(harness_id));
+        QTimer::singleShot(0, this, [done, why]() { done(-1, why); });
         return;
     }
-    const LaunchSpec spec = make_launch_spec(cli, args);
+    const harness::LaunchSpec spec = harness::make_launch_spec(*cli, args);
     if (!spec.error.isEmpty()) {
         QTimer::singleShot(0, this, [done, err = spec.error]() { done(-1, err); });
         return;
     }
     auto* proc = new QProcess(this);
-    proc->setProcessEnvironment(child_environment(cli, {}));
+    // The token only for a command that connects to the server (a health check);
+    // registration itself writes the variable's NAME, never its value.
+    const QString token = with_token ? mcp::McpHttpServer::instance().token() : QString();
+    proc->setProcessEnvironment(registry.child_environment(harness_id, *cli, nullptr, token));
     proc->setProcessChannelMode(QProcess::MergedChannels);
-    apply_launch_spec(proc, spec);
+    proc->setStandardInputFile(QProcess::nullDevice());
+    // Flatpak: `claude mcp add` & co. change the user's config on the host, where the CLI is.
+    const harness::IHarnessAdapter* adapter = registry.adapter(harness_id);
+    harness::apply_launch_spec(proc, spec, /*own_tree=*/false,
+                               adapter ? harness::host_env_names(adapter->descriptor()) : QStringList{});
     auto* timer = new QTimer(proc);
     timer->setSingleShot(true);
     connect(timer, &QTimer::timeout, proc, [proc]() { proc->kill(); });
@@ -849,82 +715,170 @@ void CodingAgentService::run_cli_async(AgentKind kind, const QStringList& args,
     proc->start();
 }
 
-void CodingAgentService::register_with_client(AgentKind kind, bool replace_existing) {
-    const QString agent = agent_id(kind);
-    resolve_cli_paths();
-    if (!cli_info(kind).installed()) {
-        emit client_registration_finished(agent, false, false,
-                                          QStringLiteral("%1 is not installed on this computer.").arg(agent_display_name(kind)));
+namespace coding_agent_process_detail {
+
+std::optional<harness::McpRegistration> client_registration(const QString& harness_id,
+                                                            const char* server_name = kClientServerName) {
+    const harness::IHarnessAdapter* adapter = harness::HarnessRegistry::instance().adapter(harness_id);
+    if (!adapter)
+        return std::nullopt;
+    auto& srv = mcp::McpHttpServer::instance();
+    harness::McpEndpoint ep;
+    ep.name = QString::fromLatin1(server_name);
+    ep.url = srv.url();
+    ep.token_env_var = QString::fromLatin1(mcp::McpHttpServer::kTokenEnvVar);
+    ep.tool_timeout_s = kMcpToolTimeoutSec;
+    return adapter->mcp_registration(ep);
+}
+
+} // namespace coding_agent_process_detail
+
+void CodingAgentService::register_with_client(const QString& harness_id, bool replace_existing) {
+    auto& registry = harness::HarnessRegistry::instance();
+    const QString name = registry.display_name(harness_id);
+    if (const harness::HarnessStatus st = registry.status(harness_id); !st.installation) {
+        emit client_registration_finished(harness_id, false, false,
+                                          st.host_blocked ? st.detect_error
+                                                          : QStringLiteral("%1 is not installed on this computer.").arg(name));
         return;
     }
     auto& srv = mcp::McpHttpServer::instance();
     if (!srv.is_running() && !srv.start()) {
-        emit client_registration_finished(agent, false, false,
+        emit client_registration_finished(harness_id, false, false,
                                           QStringLiteral("The terminal's MCP server is not running: %1").arg(srv.last_error()));
         return;
     }
-    const QString server = QString::fromLatin1(kClientServerName);
-    if (replace_existing) {
-        run_cli_async(kind, {QStringLiteral("mcp"), QStringLiteral("remove"), server},
-                      [this, kind](int, const QString&) { add_to_client(kind); });
+    const std::optional<harness::McpRegistration> reg = client_registration(harness_id);
+    if (!reg || !reg->add) {
+        emit client_registration_finished(harness_id, false, false,
+                                          QStringLiteral("%1 has no one-click registration that keeps the token off its "
+                                                         "command line — use the command shown instead.")
+                                              .arg(name));
         return;
     }
-    const QString token = srv.token();
-    run_cli_async(kind, {QStringLiteral("mcp"), QStringLiteral("get"), server},
-                  [this, kind, agent, token](int code, const QString& out) {
-                      if (code == 0) {
-                          emit client_registration_finished(agent, false, true,
-                                                            mask_secrets(out, token).trimmed().left(2000));
-                          return;
+
+    // The registration under the edition's name (after the rename step below).
+    auto proceed = [this, harness_id, replace_existing]() {
+        const std::optional<harness::McpRegistration> current = client_registration(harness_id);
+        if (!current || !current->add) {
+            emit client_registration_finished(harness_id, false, false,
+                                              with_migration_note(harness_id, QStringLiteral("Nothing to run.")));
+            return;
+        }
+        if (replace_existing) {
+            if (current->remove)
+                run_cli_async(harness_id, current->remove->args, false,
+                              [this, harness_id](int, const QString&) { add_to_client(harness_id); });
+            else
+                add_to_client(harness_id);
+            return;
+        }
+        if (!current->check) {
+            add_to_client(harness_id);
+            return;
+        }
+        const QString token = mcp::McpHttpServer::instance().token();
+        run_cli_async(harness_id, current->check->args, false, [this, harness_id, token](int code, const QString& out) {
+            if (code == 0) {
+                emit client_registration_finished(
+                    harness_id, false, true,
+                    with_migration_note(harness_id, mask_secrets(out, token).trimmed().left(2000)));
+                return;
+            }
+            add_to_client(harness_id);
+        });
+    };
+
+    // One-time rename of this edition's pre-split entry ("fincept_terminal"): only
+    // when the harness reports that it points at THIS edition's loopback port —
+    // an entry pointing anywhere else (the private build listens on 47821) is
+    // left untouched. The output is parsed for its URL only and never logged.
+    const std::optional<harness::McpRegistration> legacy =
+        client_registration(harness_id, edition::kLegacyMcpServerName);
+    if (!legacy || !legacy->check || !legacy->remove) {
+        proceed();
+        return;
+    }
+    const quint16 own_port = srv.port() != 0 ? srv.port() : srv.configured_port();
+    const QStringList remove_args = legacy->remove->args;
+    run_cli_async(harness_id, legacy->check->args, false,
+                  [this, harness_id, own_port, remove_args, proceed](int code, const QString& out) {
+                      const QString old_name = QString::fromLatin1(edition::kLegacyMcpServerName);
+                      const QString new_name = QString::fromLatin1(kClientServerName);
+                      switch (harness::classify_legacy_entry(code, out, own_port)) {
+                          case harness::LegacyEntryAction::Absent:
+                              proceed();
+                              return;
+                          case harness::LegacyEntryAction::LeaveForeign:
+                              migration_notes().insert(
+                                  harness_id, QStringLiteral("An older entry named “%1” points somewhere other than this "
+                                                             "terminal, so it was left as it is.")
+                                                  .arg(old_name));
+                              LOG_INFO(kCodingAgentProcTag,
+                                       logf("Pre-split MCP entry left untouched", {{"harness", harness_id},
+                                                                                   {"reason", "not this edition's port"}}));
+                              proceed();
+                              return;
+                          case harness::LegacyEntryAction::Migrate:
+                              break;
                       }
-                      add_to_client(kind);
+                      run_cli_async(harness_id, remove_args, false,
+                                    [this, harness_id, old_name, new_name, proceed](int rc, const QString&) {
+                                        migration_notes().insert(
+                                            harness_id,
+                                            rc == 0 ? QStringLiteral("Renamed this terminal's older entry “%1” to “%2”.")
+                                                          .arg(old_name, new_name)
+                                                    : QStringLiteral("Could not remove this terminal's older entry “%1”; "
+                                                                     "remove it yourself.")
+                                                          .arg(old_name));
+                                        LOG_INFO(kCodingAgentProcTag,
+                                                 logf("Pre-split MCP entry renamed",
+                                                      {{"harness", harness_id}, {"ok", rc == 0}}));
+                                        proceed();
+                                    });
                   });
 }
 
-void CodingAgentService::add_to_client(AgentKind kind) {
-    auto& srv = mcp::McpHttpServer::instance();
-    const QString url = srv.url();
-    const QString token = srv.token();
-    const QString server = QString::fromLatin1(kClientServerName);
-    const QString env_var = QString::fromLatin1(mcp::McpHttpServer::kTokenEnvVar);
-    QStringList args;
-    QString note;
-    if (kind == AgentKind::Claude) {
-        // --header is variadic in the claude CLI: it must come last.
-        args = {QStringLiteral("mcp"), QStringLiteral("add"), QStringLiteral("--transport"), QStringLiteral("http"),
-                QStringLiteral("--scope"), QStringLiteral("user"), server, url, QStringLiteral("--header"),
-                QStringLiteral("Authorization: Bearer ") + token};
-    } else {
-        const QString python = srv.python_for_bridge();
-        const QString bridge = srv.bridge_script_path();
-        if (!python.isEmpty() && QFileInfo::exists(bridge)) {
-            args = {QStringLiteral("mcp"), QStringLiteral("add"), server, QStringLiteral("--env"),
-                    QStringLiteral("%1=%2").arg(env_var, token), QStringLiteral("--"), python, bridge,
-                    QStringLiteral("--url"), url};
-        } else {
-            args = {QStringLiteral("mcp"), QStringLiteral("add"), server, QStringLiteral("--url"), url,
-                    QStringLiteral("--bearer-token-env-var"), env_var};
-            note = QStringLiteral("No Python interpreter was found for the stdio bridge, so Codex reads the token from "
-                                  "the %1 environment variable — set it to the token shown on this tab.")
-                       .arg(env_var);
-        }
+void CodingAgentService::add_to_client(const QString& harness_id) {
+    const std::optional<harness::McpRegistration> reg = client_registration(harness_id);
+    if (!reg || !reg->add) {
+        emit client_registration_finished(harness_id, false, false,
+                                          with_migration_note(harness_id, QStringLiteral("Nothing to run.")));
+        return;
     }
-    const QString agent = agent_id(kind);
-    run_cli_async(kind, args, [this, agent, token, note](int code, const QString& out) {
-        QString msg = mask_secrets(out, token).trimmed();
-        if (code == 0) {
-            if (msg.isEmpty())
-                msg = QStringLiteral("Added the `fincept` MCP server.");
-            if (!note.isEmpty())
-                msg += QLatin1Char('\n') + note;
-        } else if (msg.isEmpty()) {
-            msg = QStringLiteral("Exit code %1.").arg(code);
-        }
-        const bool exists = code != 0 && msg.contains(QLatin1String("already exists"), Qt::CaseInsensitive);
-        LOG_INFO(kCodingAgentProcTag,
-                 QStringLiteral("Register with %1: %2").arg(agent, code == 0 ? QStringLiteral("ok") : QStringLiteral("failed")));
-        emit client_registration_finished(agent, code == 0, exists, msg.left(2000));
-    });
+    const QString token = mcp::McpHttpServer::instance().token();
+    const QString note = reg->note;
+    const std::optional<harness::ProbeCommand> check = reg->check;
+    run_cli_async(harness_id, reg->add->args, false,
+                  [this, harness_id, token, note, check](int code, const QString& out) {
+                      QString msg = mask_secrets(out, token).trimmed();
+                      const bool ok = code == 0;
+                      if (ok && msg.isEmpty())
+                          msg = QStringLiteral("Added the `%1` MCP server.").arg(QString::fromLatin1(kClientServerName));
+                      else if (!ok && msg.isEmpty())
+                          msg = QStringLiteral("Exit code %1.").arg(code);
+                      if (ok && !note.isEmpty())
+                          msg += QLatin1Char('\n') + note;
+                      msg = with_migration_note(harness_id, msg);
+                      const bool exists = !ok && msg.contains(QLatin1String("already exists"), Qt::CaseInsensitive);
+                      LOG_INFO(kCodingAgentProcTag, QStringLiteral("Register with %1: %2")
+                                                        .arg(harness_id, ok ? QStringLiteral("ok") : QStringLiteral("failed")));
+                      if (!ok || !check) {
+                          emit client_registration_finished(harness_id, ok, exists, msg.left(2000));
+                          return;
+                      }
+                      // Show what the harness itself now reports for the entry (a
+                      // connection check where it has one), with the token in its
+                      // environment the way the user's own sessions will need it.
+                      run_cli_async(harness_id, check->args, true,
+                                    [this, harness_id, msg, token](int, const QString& check_out) {
+                                        QString full = msg;
+                                        const QString shown = mask_secrets(check_out, token).trimmed();
+                                        if (!shown.isEmpty())
+                                            full += QStringLiteral("\n\nCheck:\n") + shown.left(1200);
+                                        emit client_registration_finished(harness_id, true, false, full.left(2400));
+                                    });
+                  });
 }
 
 } // namespace fincept::services::coding_agents

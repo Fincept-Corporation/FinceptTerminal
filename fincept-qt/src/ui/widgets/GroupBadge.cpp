@@ -1,6 +1,7 @@
 #include "ui/widgets/GroupBadge.h"
 
 #include "core/symbol/SymbolGroupRegistry.h"
+#include "ui/theme/Theme.h"
 
 #include <QAction>
 #include <QColorDialog>
@@ -29,7 +30,8 @@ GroupBadge::GroupBadge(QWidget* parent) : QWidget(parent) {
 
 QColor GroupBadge::color_for_group(SymbolGroup g) {
     if (g == SymbolGroup::None)
-        return QColor("#4b5563");
+        return QColor(colors::BORDER_BRIGHT()); // neutral pill for "unlinked"
+    // The group's own colour (user-chosen or the registry default) is the content.
     return SymbolGroupRegistry::instance().color(g);
 }
 
@@ -129,18 +131,12 @@ void GroupBadge::paintEvent(QPaintEvent*) {
     path.addRoundedRect(r, 3.0, 3.0);
     p.fillPath(path, fill);
 
-    // Letter
-    p.setPen(QColor("#ffffff"));
-    QFont f = p.font();
-    // The app font is defined in PIXELS (ThemeManager::current_font uses
-    // setPixelSize), so pointSizeF() returns -1 here. Subtracting from -1 yields
-    // a negative point size that QFont::setPointSizeF rejects with a warning and
-    // ignores. Shrink whichever metric the inherited font actually uses.
-    if (f.pixelSize() > 0)
-        f.setPixelSize(f.pixelSize() > 1 ? f.pixelSize() - 1 : 1);
-    else if (f.pointSizeF() > 0)
-        f.setPointSizeF(f.pointSizeF() - 1.0);
-    f.setBold(true);
+    // Letter — near-white or near-black, whichever reads on the group colour.
+    // The badge keeps its size inside fixed-height title bars, so the letter
+    // follows the user's font but never outgrows the pill.
+    p.setPen(colors::contrast_text_on(fill));
+    QFont f = fonts::font(-1, QFont::Bold);
+    f.setPixelSize(qMax(ThemeManager::kFloorFontPx, qMin(f.pixelSize(), qRound(r.height() * 0.85))));
     p.setFont(f);
     const QString label = group_ == SymbolGroup::None ? QStringLiteral("·") // middle dot for unlinked
                                                       : QString(symbol_group_letter(group_));

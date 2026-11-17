@@ -1,6 +1,7 @@
 #include "storage/HistoricalDataStore.h"
 
 #include "core/logging/Logger.h"
+#include "core/privacy/LogRedact.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
@@ -109,7 +110,11 @@ bool HistoricalDataStore::store_candles(const QString& symbol, const QString& ex
     auto begin = db().begin_transaction();
     const bool in_tx = begin.is_ok();
     if (!in_tx)
-        LOG_WARN("Historify", "transaction begin failed; storing without batch transaction");
+        LOG_WARN("Historify", logf("Batch transaction could not be started, storing candles without it",
+                                   {{"symbol", symbol},
+                                    {"exchange", exchange},
+                                    {"interval", interval},
+                                    {"error", QString::fromStdString(begin.error())}}));
 
     const QString sql = QStringLiteral("INSERT OR REPLACE INTO market_data "
                                        "(symbol, exchange, interval, timestamp_ms, open, high, low, close, volume, oi) "
@@ -137,7 +142,7 @@ bool HistoricalDataStore::store_candles(const QString& symbol, const QString& ex
             return false;
         }
     }
-    LOG_INFO("Historify", QString("Stored %1 candles for %2:%3:%4").arg(candles.size()).arg(sym, exc, interval));
+    LOG_DEBUG("Historify", QString("Stored %1 candles for %2:%3:%4").arg(candles.size()).arg(sym, exc, interval));
     return true;
 }
 
@@ -175,7 +180,7 @@ QVector<trading::BrokerCandle> HistoricalDataStore::get_resampled(const QString&
                                                                   qint64 to_ms) const {
     auto plan = plan_for(target_interval);
     if (!plan) {
-        LOG_WARN("Historify", QString("get_resampled: unsupported target interval '%1'").arg(target_interval));
+        LOG_WARN("Historify", logf("Resample refused, unsupported target interval", {{"interval", target_interval}}));
         return {};
     }
 
@@ -298,7 +303,8 @@ bool HistoricalDataStore::export_csv(const QString& symbol, const QString& excha
 
     QFile f(file_path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-        LOG_ERROR("Historify", QString("export_csv: cannot open %1 — %2").arg(file_path, f.errorString()));
+        LOG_ERROR("Historify", QString("CSV export failed, file could not be opened path=%1 error=\"%2\"")
+                                   .arg(privacy::redact_home(file_path), f.errorString()));
         return false;
     }
     QTextStream ts(&f);
@@ -308,7 +314,7 @@ bool HistoricalDataStore::export_csv(const QString& symbol, const QString& excha
            << ',' << c.volume << ',' << c.oi << '\n';
     }
     f.close();
-    LOG_INFO("Historify", QString("Exported %1 rows to %2").arg(candles.size()).arg(file_path));
+    LOG_INFO("Historify", QString("CSV exported rows=%1 path=%2").arg(candles.size()).arg(privacy::redact_home(file_path)));
     return true;
 }
 
@@ -317,7 +323,7 @@ bool HistoricalDataStore::export_parquet(const QString& symbol, const QString& e
     // TODO(parquet): no Arrow/Parquet library is vendored. Downgrade to CSV and
     // warn so the caller still gets data. Replace with a real Parquet writer
     // once Arrow/Parquet is added to the build.
-    LOG_WARN("Historify", "export_parquet: no Parquet library available — writing CSV instead");
+    LOG_WARN("Historify", logf("Parquet export not available, writing CSV instead", {{"path", log_path(file_path)}}));
     return export_csv(symbol, exchange, interval, file_path, from_ms, to_ms);
 }
 
@@ -352,7 +358,7 @@ int HistoricalDataStore::refresh_watchlist() {
         break;
     }
     if (account_id.isEmpty()) {
-        LOG_INFO(
+        LOG_DEBUG(
             "Historify",
             QString("refresh_watchlist: %1 entries pending, but no connected broker — skipping").arg(entries.size()));
         return 0;
@@ -368,7 +374,7 @@ int HistoricalDataStore::refresh_watchlist() {
     (void)QtConcurrent::run([work, account_id, creds]() {
         auto* broker = trading::AccountManager::instance().broker_for(account_id);
         if (!broker) {
-            LOG_WARN("Historify", "refresh_watchlist: no broker for the connected account");
+            LOG_WARN("Historify", "Watchlist refresh skipped, no broker for the connected account");
             return;
         }
         int ok = 0;
@@ -387,11 +393,13 @@ int HistoricalDataStore::refresh_watchlist() {
                 if (HistoricalDataStore::instance().refresh_now(e.symbol, e.exchange, e.interval, *resp.data))
                     ++ok;
             } else {
-                LOG_WARN("Historify", QString("refresh_watchlist: fetch failed for %1:%2 [%3] — %4")
-                                          .arg(e.exchange, e.symbol, e.interval, resp.error));
+                LOG_WARN("Historify", logf("Watchlist series refresh failed", {{"exchange", e.exchange},
+                                                                              {"symbol", e.symbol},
+                                                                              {"interval", e.interval},
+                                                                              {"error", resp.error}}));
             }
         }
-        LOG_INFO("Historify", QString("refresh_watchlist: refreshed %1/%2 series").arg(ok).arg(work.size()));
+        LOG_DEBUG("Historify", QString("refresh_watchlist: refreshed %1/%2 series").arg(ok).arg(work.size()));
     });
 
     return entries.size();

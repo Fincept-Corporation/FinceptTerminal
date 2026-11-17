@@ -422,7 +422,7 @@ def main():
                     'factor_scores': factor_scores,
                     'overall_score': overall_score,
                     'quality_rating': quality,
-                    'supports_fairness_conclusion': overall_score >= 3.0,
+                    'process_adequate': overall_score >= 3.0,
                 }
                 result = {"success": True, "data": result_data}
                 print(json.dumps(result))
@@ -485,7 +485,7 @@ def main():
                 result_data['factor_scores'] = {
                     k: round(v / 20, 1) for k, v in comp.get('component_scores', {}).items()
                 }
-                result_data['supports_fairness_conclusion'] = comp.get('supports_fairness_conclusion', False)
+                result_data['process_adequate'] = comp.get('supports_fairness_conclusion', False)
 
             result = {"success": True, "data": result_data}
             print(json.dumps(result))

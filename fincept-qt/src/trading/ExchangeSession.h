@@ -66,7 +66,13 @@ class ExchangeSession : public QObject {
     /// SecureStorage and install them on the session. Idempotent — missing
     /// keys leave the current credential fields untouched. Called
     /// automatically from the constructor; exposed for tests.
+    /// A stored field that cannot be read installs NOTHING (no partial key set)
+    /// and sets credentials_read_error(); a temporary failure is retried a few
+    /// times with back-off. Nothing is written or removed on a read failure.
     void load_stored_credentials();
+    /// Plain sentence when the stored keys exist but could not be read (the session
+    /// then has no keys — that is not "no API key"); empty otherwise. Any thread.
+    QString credentials_read_error() const;
 
     // ── WS lifecycle ───────────────────────────────────────────────────────
     /// Returns true if the WS subprocess was spawned; see
@@ -113,16 +119,33 @@ class ExchangeSession : public QObject {
     OrderBookData fetch_orderbook(const QString& symbol, int limit = 20);
     QVector<Candle> fetch_ohlcv(const QString& symbol, const QString& timeframe = "1h", int limit = 100);
     QVector<MarketInfo> fetch_markets(const QString& type = "", const QString& query = "");
+    /// The market an order for `symbol` would be sent to (the daemon resolves the
+    /// app's pair the same way place_order does, e.g. Hyperliquid "BTC/USDT" ->
+    /// "BTC/USDC:USDC"), with its fees and min amount / min cost. Empty `symbol`
+    /// in the result when there is none or the call failed.
+    MarketInfo fetch_market(const QString& symbol);
     QVector<TradeData> fetch_trades(const QString& symbol, int limit = 50);
     FundingRateData fetch_funding_rate(const QString& symbol);
     OpenInterestData fetch_open_interest(const QString& symbol);
     MarkPriceData fetch_mark_price(const QString& symbol);
 
+    // ── Any daemon method on THIS exchange (worker thread only; blocks up to
+    //    timeout_ms). The session is chosen by the caller — never a global
+    //    "current exchange" — so an order goes to the venue it was confirmed for.
+    QJsonObject request(const QString& method, const QJsonObject& args, int timeout_ms = 15000);
+    /// Same, with the credentials captured when the user confirmed (an order /
+    /// cancel / leverage change must go to the account the dialog named, even
+    /// if the keys were edited meanwhile; the daemon refuses an order whose
+    /// confirmed account_id no longer matches).
+    QJsonObject request_as(const QString& method, const QJsonObject& args, const ExchangeCredentials& creds,
+                           int timeout_ms = 15000);
+    /// Identity of the stored credentials (ExchangeDaemonPool::credential_fingerprint).
+    QString account_id() const;
+    /// Non-secret label of the account ("API key ab12…ef90", "wallet 0x1111…1111").
+    QString account_label() const;
+
     // ── Authenticated — need credentials on the daemon.
     QJsonObject fetch_balance();
-    QJsonObject place_exchange_order(const QString& symbol, const QString& side, const QString& type, double amount,
-                                     double price = 0.0, double stop_price = 0.0, double sl = 0.0, double tp = 0.0,
-                                     bool reduce_only = false);
     QJsonObject cancel_exchange_order(const QString& order_id, const QString& symbol);
     QJsonObject fetch_positions_live(const QString& symbol = "");
     QJsonObject fetch_open_orders_live(const QString& symbol = "");
@@ -144,6 +167,11 @@ class ExchangeSession : public QObject {
     /// is_ws_active() / is_ws_connected(). Main thread. Not emitted from the
     /// destructor.
     void ws_state_changed(const QString& exchange_id);
+    /// The WS stream is down and will not come back by itself: the subprocess
+    /// could not be started, exited for a reason a respawn cannot fix (streaming
+    /// library not installed, exchange unknown to it), or used up its respawn
+    /// budget. `message` is plain wording for the user. Main thread.
+    void ws_failed(const QString& exchange_id, const QString& message);
 
   private:
     void handle_ws_line(const QString& line);
@@ -153,11 +181,13 @@ class ExchangeSession : public QObject {
     /// flag (so the polled UI badge drops to OFFLINE) and — if the stream was
     /// still supposed to be up — schedules a bounded, backed-off respawn.
     void handle_ws_finished(int exit_code, QProcess::ExitStatus status);
+    /// User wording for why the stream is down, from the last process-level error.
+    QString ws_failure_text() const;
 
-    /// Apply the exchange→requested symbol remap (e.g. on Hyperliquid,
-    /// `BTC/USDC:USDC` → `BTC/USDT`). Returns the input unchanged when no
-    /// remap is known. Thread-safe — takes the session mutex internally.
-    QString remap_symbol(const QString& exchange_symbol) const;
+    /// Every symbol an update for `exchange_symbol` is published under: the
+    /// requested symbols shown from that market (e.g. on Hyperliquid
+    /// `BTC/USDC:USDC` → `BTC/USDT`) and the market's own symbol. Thread-safe.
+    QStringList publish_symbols(const QString& exchange_symbol) const;
 
     QJsonObject daemon_call(const QString& method, const QJsonObject& args, int timeout_ms = 15000);
 
@@ -170,6 +200,8 @@ class ExchangeSession : public QObject {
     SessionPublisher publisher_;
 
     ExchangeCredentials credentials_;
+    QString credentials_read_error_; // guarded by mutex_
+    int cred_read_retries_ = 0;      // automatic re-reads after a temporary read failure
 
     QProcess* ws_process_ = nullptr;
     std::atomic<bool> ws_connected_{false};
@@ -178,9 +210,11 @@ class ExchangeSession : public QObject {
     bool ws_should_run_ = false;  // true between a successful start_ws() and stop_ws()
     int ws_restart_attempts_ = 0; // consecutive auto-restarts; reset after a healthy run
     QElapsedTimer ws_uptime_;     // since the current ws_process_ was spawned
+    QString ws_last_error_;       // last process-level {"type":"error"} line of the current subprocess
+    bool ws_error_fatal_ = false; // that error cannot be fixed by a respawn (missing library, unknown exchange)
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;
-    QHash<QString, QString> ws_symbol_map_; // exchange_symbol → requested_symbol
+    QHash<QString, QStringList> ws_symbol_map_; // exchange_symbol → requested symbols shown from it
 
     QHash<QString, TickerData> price_cache_;
     QHash<QString, QSet<QString>> watched_; // symbol → set of portfolio_ids

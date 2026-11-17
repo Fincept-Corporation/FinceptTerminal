@@ -5,6 +5,7 @@ Sources: Congress.gov API
 Each endpoint works independently with isolated error handling
 """
 
+import os
 import sys
 import json
 import requests
@@ -16,8 +17,24 @@ from io import BytesIO
 import re
 import math
 
+try:
+    import fincept_connector as fc
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_connector as fc
+
 # Congress.gov API Constants
 BASE_URL = "https://api.congress.gov/v3/"
+SIGNUP_URL = "https://api.congress.gov/sign-up/"
+
+
+def _gateway_code(response) -> str:
+    """The api.data.gov error code of a refused request ("API_KEY_INVALID", "OVER_RATE_LIMIT"), or ""."""
+    try:
+        err = (response.json() or {}).get("error")
+        return str(err.get("code") or "") if isinstance(err, dict) else ""
+    except Exception:
+        return ""
 BILL_TYPES = ["hr", "s", "hjres", "sjres", "hconres", "sconres", "hres", "sres"]
 
 BILL_TYPE_OPTIONS = [
@@ -31,22 +48,40 @@ BILL_TYPE_OPTIONS = [
     {"label": "Senate Simple Resolution", "value": "sres"},
 ]
 
+# What an upstream failure says the user can do about it - "code" (missing_key / auth_failed /
+# rate_limited, see fincept_connector.ERROR_CODES), the key to fix ("env_key"), where to get one
+# ("docs_url") and how long to wait ("retry_after_s"). A wrapped error keeps them: without them a bad
+# key read as a generic failure and the terminal could not offer "add key" or a retry time.
+_ERROR_DETAIL_KEYS = ("code", "env_key", "docs_url", "retry_after_s")
+
+
 class CongressGovError:
     """Error handling wrapper for Congress.gov API responses"""
-    def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
+    def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None,
+                 upstream: Optional[Dict[str, Any]] = None):
         self.endpoint = endpoint
         self.error = error
         self.status_code = status_code
         self.timestamp = int(datetime.now().timestamp())
+        self.details = {k: upstream[k] for k in _ERROR_DETAIL_KEYS
+                        if isinstance(upstream, dict) and upstream.get(k) is not None}
+
+    @classmethod
+    def from_result(cls, endpoint: str, result: Dict[str, Any]) -> "CongressGovError":
+        """Wrap a failed _make_request() / public-method result, keeping its code, env_key, docs_url
+        and retry_after_s."""
+        return cls(endpoint, result.get("error", "Unknown error"), result.get("status_code"), result)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        out = {
             "success": False,
             "error": self.error,
             "endpoint": self.endpoint,
             "status_code": self.status_code,
             "timestamp": self.timestamp
         }
+        out.update(self.details)
+        return out
 
 class CongressGovWrapper:
     """Modular Congress.gov API wrapper with fault tolerance"""
@@ -63,7 +98,9 @@ class CongressGovWrapper:
         """Make HTTP request with comprehensive error handling"""
         try:
             if not self.api_key:
-                return {"error": "Congress.gov API key not configured. Please set CONGRESS_GOV_API_KEY environment variable.", "api_key_required": True}
+                out = fc.missing_key("Congress.gov", SIGNUP_URL, "CONGRESS_GOV_API_KEY")
+                out["api_key_required"] = True
+                return out
 
             # Add API key to URL
             if '?' in url:
@@ -85,10 +122,22 @@ class CongressGovWrapper:
         except requests.exceptions.ConnectionError:
             return {"error": "Connection error", "connection_error": True, "status_code": None}
         except requests.exceptions.HTTPError as e:
-            if response.status_code == 401:
-                return {"error": "Invalid API key", "auth_error": True, "status_code": response.status_code}
+            # api.data.gov (the gateway in front of Congress.gov) answers a wrong, disabled or
+            # missing key with HTTP 403 (body code API_KEY_INVALID / API_KEY_DISABLED ...) and only
+            # the rate limit with 429 (OVER_RATE_LIMIT). 403 used to be reported as "Rate limit
+            # exceeded", so a bad key read as "wait a minute".
+            if response.status_code in (401, 403) and _gateway_code(response) != "OVER_RATE_LIMIT":
+                return {"error": fc.http_error("Congress.gov", response, "CONGRESS_GOV_API_KEY", self.api_key),
+                        "code": "auth_failed", "env_key": "CONGRESS_GOV_API_KEY", "docs_url": SIGNUP_URL,
+                        "auth_error": True, "status_code": response.status_code}
             elif response.status_code in (403, 429):
-                return {"error": "Rate limit exceeded", "rate_limit_error": True, "status_code": response.status_code}
+                out = {"error": "Congress.gov is rate-limiting requests (HTTP %d) - wait a minute and try again"
+                                % response.status_code,
+                       "code": "rate_limited", "rate_limit_error": True, "status_code": response.status_code}
+                retry = response.headers.get("Retry-After", "")
+                if retry.isdigit():
+                    out["retry_after_s"] = int(retry)
+                return out
             elif response.status_code == 404:
                 return {"error": "Resource not found", "not_found": True, "status_code": response.status_code}
             else:
@@ -194,7 +243,7 @@ class CongressGovWrapper:
             result = self._make_request(url)
 
             if "error" in result:
-                return CongressGovError('congress_bills', result['error'], result.get('status_code')).to_dict()
+                return CongressGovError.from_result('congress_bills', result).to_dict()
 
             data = result.get('data', {})
             bills = data.get('bills', [])
@@ -218,7 +267,12 @@ class CongressGovWrapper:
                 }
                 transformed_bills.append(transformed_bill)
 
-            pagination = data.get('pagination', {})
+            pagination = data.get('pagination', {}) or {}
+            # pagination.count is how many bills match; len(transformed_bills) is only this page.
+            try:
+                total_matching = int(pagination.get('count', len(transformed_bills)))
+            except (TypeError, ValueError):
+                total_matching = len(transformed_bills)
 
             return {
                 "success": True,
@@ -233,7 +287,8 @@ class CongressGovWrapper:
                     "sort_by": sort_by,
                     "get_all": get_all
                 },
-                "total_bills": len(transformed_bills),
+                "total_bills": total_matching,
+                "returned_bills": len(transformed_bills),
                 "pagination": pagination,
                 "bills": transformed_bills,
                 "timestamp": int(datetime.now().timestamp())
@@ -274,7 +329,7 @@ class CongressGovWrapper:
 
                 if "error" in result:
                     if total_fetched == 0:
-                        return CongressGovError('congress_bills', result['error'], result.get('status_code')).to_dict()
+                        return CongressGovError.from_result('congress_bills', result).to_dict()
                     break
 
                 data = result.get('data', {})
@@ -351,7 +406,7 @@ class CongressGovWrapper:
             result = self._make_request(url)
 
             if "error" in result:
-                return CongressGovError('bill_info', result['error'], result.get('status_code')).to_dict()
+                return CongressGovError.from_result('bill_info', result).to_dict()
 
             data = result.get('data', {})
             bill_data = data.get('bill', {})
@@ -545,7 +600,7 @@ class CongressGovWrapper:
             result = self._make_request(text_url)
 
             if "error" in result:
-                return CongressGovError('bill_text', result['error'], result.get('status_code')).to_dict()
+                return CongressGovError.from_result('bill_text', result).to_dict()
 
             data = result.get('data', {})
             text_versions = data.get('textVersions', [])
@@ -678,12 +733,25 @@ class CongressGovWrapper:
                 })
 
         result["success"] = overall_success
+        if not overall_success and result["failed_endpoints"]:
+            # Nothing worked: say why at the top, with what the first failure says to do about it.
+            first = result["endpoints"].get(result["failed_endpoints"][0]["endpoint"]) or {}
+            result["error"] = result["failed_endpoints"][0]["error"]
+            result.update(CongressGovError.from_result("comprehensive", first).details)
         return result
 
     def get_bill_summary_by_congress(self, congress: Optional[int] = None,
-                                    limit: int = 50) -> Dict[str, Any]:
-        """Get a summary of bills by type for a given congress"""
+                                    limit: int = 5) -> Dict[str, Any]:
+        """Get a summary of bills by type for a given congress.
+
+        The count per type is the API's pagination count (all matching bills); only the latest
+        `limit` bills are fetched, since only the top 5 are kept.
+        """
         try:
+            if not self.api_key:
+                return CongressGovError.from_result(
+                    'bill_summary', fc.missing_key("Congress.gov", SIGNUP_URL, "CONGRESS_GOV_API_KEY")).to_dict()
+
             if not congress:
                 congress = self._year_to_congress(datetime.now().year)
 
@@ -696,6 +764,7 @@ class CongressGovWrapper:
             }
 
             total_bills = 0
+            first_failure = None  # the first failed type's whole result (code, env_key, retry_after_s)
 
             for bill_type in BILL_TYPES:
                 try:
@@ -714,6 +783,8 @@ class CongressGovWrapper:
                         }
                         total_bills += bills_count
                     else:
+                        if first_failure is None:
+                            first_failure = bills_result
                         result["bill_types"][bill_type] = {
                             "error": bills_result.get("error", "Unknown error"),
                             "count": 0
@@ -724,6 +795,13 @@ class CongressGovWrapper:
                         "error": str(e),
                         "count": 0
                     }
+
+            # Every type failed: that is an error (bad key, outage), not eight counts of 0.
+            per_type = list(result["bill_types"].values())
+            if per_type and all("error" in v for v in per_type):
+                if first_failure is not None:
+                    return CongressGovError.from_result('bill_summary', first_failure).to_dict()
+                return CongressGovError('bill_summary', per_type[0].get("error", "Unknown error")).to_dict()
 
             result["total_bills"] = total_bills
             return result
@@ -828,7 +906,8 @@ def main():
 
         elif command == "summary":
             congress = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else 50
+            # Only the latest 5 bills per type are kept; the counts come from the API's pagination.
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else 5
 
             result = wrapper.get_bill_summary_by_congress(congress=congress, limit=limit)
             print(json.dumps(result, indent=2))
@@ -856,5 +935,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    import os
     main()

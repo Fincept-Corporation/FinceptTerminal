@@ -47,6 +47,8 @@ bool t1c_number(const QJsonValue& v, double* out) {
 
 } // namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_utility_tier1_core(NodeRegistry& registry) {
     // ── DateTime ───────────────────────────────────────────────────
     registry.register_type({

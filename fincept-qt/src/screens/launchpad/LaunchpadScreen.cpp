@@ -48,10 +48,8 @@ namespace fincept::screens {
 namespace {
 constexpr const char* kLaunchpadTag = "Launchpad";
 
-// The Launchpad was styled with a hand-rolled Tailwind-ish palette (#111827,
-// #374151, #e5e7eb, #9ca3af …) that appears nowhere else in the terminal, plus
-// 4px radii that DESIGN_SYSTEM.md forbids outright. Everything below reads the
-// live Obsidian tokens instead so the portal window matches the product.
+// Everything below reads the live theme tokens so the portal window matches the
+// rest of the terminal in both the dark and the light theme.
 QString lp_greeting_ss() {
     return QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;").arg(ui::colors::AMBER());
 }
@@ -66,7 +64,7 @@ QString lp_banner_ss() {
 QString lp_primary_btn_ss() {
     return QString("QPushButton#launchpadContinueBtn{background:%1;color:%2;font-weight:700;border:none;}"
                    "QPushButton#launchpadContinueBtn:hover{background:%3;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM());
 }
 QString lp_input_ss() {
     return QString("QLineEdit{background:%1;border:1px solid %2;color:%3;padding:4px 6px;}"
@@ -149,7 +147,7 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
                 "QPushButton:hover{background:%4;color:%5;}"
                 "QPushButton:disabled{color:%6;border-color:%3;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
-                 ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM());
+                 ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY());
 
     btn_new_window_ = new QPushButton;
     btn_new_window_->setMinimumHeight(36);
@@ -354,7 +352,7 @@ void LaunchpadScreen::surface() {
         filter_edit_->clear();
         filter_edit_->setFocus(Qt::OtherFocusReason);
     }
-    LOG_INFO(kLaunchpadTag, "Surfaced");
+    LOG_DEBUG(kLaunchpadTag, "Surfaced");
 }
 
 bool LaunchpadScreen::eventFilter(QObject* obj, QEvent* event) {
@@ -414,7 +412,7 @@ void LaunchpadScreen::closeEvent(QCloseEvent* event) {
 void LaunchpadScreen::on_new_window() {
     // Spawn a fresh WindowFrame. Reuses WindowCycler's smart-monitor
     // placement so the window lands somewhere visible.
-    LOG_INFO(kLaunchpadTag, "New Window button clicked");
+    LOG_DEBUG(kLaunchpadTag, "New Window button clicked");
     hide();
     WindowCycler::instance().new_window_on_next_monitor();
 }
@@ -423,7 +421,7 @@ void LaunchpadScreen::on_switch_profile() {
     // Show known profiles + a "Create new…" entry. Picking an existing
     // profile relaunches with --profile <name>. Picking the create entry
     // falls through to a text prompt.
-    LOG_INFO(kLaunchpadTag, "Switch Profile button clicked");
+    LOG_DEBUG(kLaunchpadTag, "Switch Profile button clicked");
 
     // "Create new" entry is identified by data role rather than string
     // comparison so the sentinel works regardless of UI language.
@@ -544,7 +542,7 @@ void LaunchpadScreen::refresh_recent_layouts() {
     auto r = LayoutCatalog::instance().recent_layouts(/*limit=*/8, /*include_auto=*/false);
     if (r.is_err() || r.value().isEmpty()) {
         auto* item =
-            new QListWidgetItem(tr("(No saved layouts yet — use 'layout save \"<name>\"' to save the current state)"));
+            new QListWidgetItem(tr("(No saved layouts yet — save one with File ▸ Save Layout As…)"));
         item->setFlags(Qt::NoItemFlags);
         recent_layouts_->addItem(item);
         // Enable the "Open Saved Layout" button if there are any layouts
@@ -574,7 +572,7 @@ void LaunchpadScreen::refresh_recent_layouts() {
 }
 
 void LaunchpadScreen::on_continue() {
-    LOG_INFO(kLaunchpadTag, "Continue from last session clicked");
+    LOG_DEBUG(kLaunchpadTag, "Continue from last session clicked");
     hide();
     // Defer the actual restore so the Launchpad's hide animation completes
     // first and so any frame WorkspaceShell::apply spawns lands cleanly on

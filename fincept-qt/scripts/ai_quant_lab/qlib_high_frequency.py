@@ -11,24 +11,38 @@ Commands (all accept JSON as second argv):
   slippage          {"exchange":"binance","symbol":"BTC/USDT","side":"buy","quantity":1.0}
 
 All commands output a single JSON object to stdout.
+
+Order-book levels are read by position (price = level[0], size = level[1]): ccxt
+returns [price, size] on most venues but [price, size, timestamp] on Kraken and
+[price, size, 0] on OKX.
+
+The quoting model is an inventory-skewed spread (market spread x multiplier,
+shifted against the inventory), not the full Avellaneda-Stoikov solution (no
+volatility, horizon or arrival intensity), and the toxicity score is a fixed-weight
+heuristic, not an estimated PIN. Labels say so.
 """
 
 import json
 import sys
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
 
 # ── Exchange client path ──────────────────────────────────────────────────────
-_EXCHANGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "exchange")
+_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+_EXCHANGE_DIR = os.path.join(_SCRIPTS_DIR, "exchange")
 if _EXCHANGE_DIR not in sys.path:
     sys.path.insert(0, _EXCHANGE_DIR)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
 import warnings
 warnings.filterwarnings("ignore")
+
+import fincept_json
 
 try:
     from exchange_client import make_exchange
@@ -37,14 +51,30 @@ except ImportError as e:
     _CCXT_AVAILABLE = False
     _CCXT_ERROR = str(e)
 
+# Order-book depth requested for a slippage walk. Venues cap it differently
+# (binance 5000, kraken 500, okx 400, bybit spot 200); the first one accepted wins.
+_SLIPPAGE_DEPTHS = (500, 200, 100, 50)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ok(data: dict) -> None:
-    print(json.dumps({"success": True, **data}, default=str))
+    fincept_json.emit({"success": True, **data})
 
 def _err(msg: str) -> None:
-    print(json.dumps({"success": False, "error": msg}))
+    fincept_json.emit({"success": False, "error": msg})
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+
+def _levels(raw: list) -> list:
+    """[[price, size], ...] from ccxt levels that may carry a third element."""
+    out = []
+    for level in raw or []:
+        if level is None or len(level) < 2 or level[0] is None or level[1] is None:
+            continue
+        out.append([float(level[0]), float(level[1])])
+    return out
 
 def _params() -> dict:
     if len(sys.argv) > 2:
@@ -103,14 +133,16 @@ def _compute_book_metrics(bids: list, asks: list, n_levels: int = 10) -> dict:
     }
 
 
-# ── Market making (Avellaneda-Stoikov) ────────────────────────────────────────
+# ── Market making (inventory-skewed quotes) ───────────────────────────────────
 
 def _market_making_quotes(metrics: dict, inventory: float, spread_multiplier: float,
                           risk_aversion: float = 0.01) -> dict:
     """
-    Avellaneda-Stoikov optimal quoting model.
+    Inventory-skewed quotes: the live market spread widened by spread_multiplier,
+    both quotes shifted by risk_aversion x inventory x spread (a reservation-price
+    skew in the spirit of Avellaneda-Stoikov, without its volatility / horizon /
+    arrival-intensity terms). Sizes are relative units (100 = base size).
     inventory: current position in base asset (positive = long, negative = short)
-    spread_multiplier: widens the quoted spread beyond raw market spread
     """
     mid  = metrics["mid_price"]
     sprd = metrics["spread"]
@@ -133,6 +165,7 @@ def _market_making_quotes(metrics: dict, inventory: float, spread_multiplier: fl
     edge_bps      = (edge_per_side / mid) * 10_000
 
     return {
+        "model":           "inventory_skewed_spread",
         "bid_price":       round(bid_price, 8),
         "ask_price":       round(ask_price, 8),
         "bid_size":        bid_size,
@@ -151,11 +184,11 @@ def _market_making_quotes(metrics: dict, inventory: float, spread_multiplier: fl
 
 def _detect_toxic_flow(trades: list, metrics: dict) -> dict:
     """
-    Probability of Informed Trading (PIN) approximation.
-    Combines:
-      - Volume imbalance (buy vs sell pressure in recent trades)
-      - Price impact (did trade flow move the price?)
-      - Order book pressure (OBI)
+    Flow toxicity score (heuristic, 0-100) -- NOT an estimated PIN. Fixed weights:
+      40 x |volume imbalance| of the sampled trades
+      30 x min(|first-to-last price change| / 10 bps, 1)
+      20 x min((max size / mean size - 1) / 9, 1)
+      10 x |order-book imbalance|
     """
     if len(trades) < 10:
         return {"error": f"Need at least 10 trades, got {len(trades)}"}
@@ -199,6 +232,7 @@ def _detect_toxic_flow(trades: list, metrics: dict) -> dict:
     aligns_with_book = (vol_imbalance > 0 and obi > 0) or (vol_imbalance < 0 and obi < 0)
 
     return {
+        "model":             "heuristic_flow_toxicity",
         "toxicity_score":    round(toxicity, 2),       # 0-100
         "is_toxic":          is_toxic,
         "vol_imbalance":     round(vol_imbalance, 4),  # -1 to +1
@@ -225,16 +259,26 @@ def _estimate_slippage(bids: list, asks: list, side: str, quantity: float) -> di
     Walk the order book to estimate real slippage for a given quantity.
     Returns fills, average price, total cost, and slippage vs mid.
     """
+    side = str(side).lower()
+    if side not in ("buy", "sell"):
+        return {"error": f"side must be 'buy' or 'sell', got {side!r}"}
+    if not (quantity > 0):
+        return {"error": "quantity must be greater than 0"}
+    bids = _levels(bids)
+    asks = _levels(asks)
     levels = asks if side == "buy" else bids
     if not levels:
         return {"error": "No liquidity on requested side"}
+    if not bids or not asks:
+        return {"error": "One-sided order book: no mid price to measure slippage against"}
 
-    mid_price = ((bids[0][0] if bids else 0) + (asks[0][0] if asks else 0)) / 2
+    mid_price = (bids[0][0] + asks[0][0]) / 2
     remaining = quantity
     fills     = []
     total_cost = 0.0
 
-    for price, size in levels:
+    for level in levels:
+        price, size = level[0], level[1]
         if remaining <= 0:
             break
         fill_qty   = min(remaining, size)
@@ -244,7 +288,10 @@ def _estimate_slippage(bids: list, asks: list, side: str, quantity: float) -> di
         remaining  -= fill_qty
 
     if remaining > 0:
-        return {"error": f"Insufficient liquidity — {round(remaining, 8)} units unfilled"}
+        # Only the fetched part of the book was walked; the venue may hold more.
+        return {"error": f"Order larger than the {len(levels)} {'ask' if side == 'buy' else 'bid'} levels "
+                         f"fetched — {round(remaining, 8)} of {quantity} units unfilled within them "
+                         f"(the exchange may have more depth beyond the levels fetched)"}
 
     filled_qty   = quantity - remaining
     avg_price    = total_cost / filled_qty if filled_qty > 0 else 0
@@ -260,11 +307,27 @@ def _estimate_slippage(bids: list, asks: list, side: str, quantity: float) -> di
         "mid_price":      round(mid_price, 8),
         "fills":          fills,
         "fill_count":     len(fills),
-        "viable":         slippage_bps < 20,   # <2bps = acceptable for most algos
+        "levels_available": len(levels),
+        "viable":         slippage_bps < 20,   # < 20 bps vs mid
     }
 
 
 # ── Command handlers ──────────────────────────────────────────────────────────
+
+def _book(ob: dict) -> tuple:
+    return _levels(ob.get("bids")), _levels(ob.get("asks"))
+
+
+def _fetch_deep_book(ex, symbol: str) -> dict:
+    """The deepest book the venue accepts from _SLIPPAGE_DEPTHS (first accepted wins)."""
+    last_exc = None
+    for depth in _SLIPPAGE_DEPTHS:
+        try:
+            return ex.fetch_order_book(symbol, limit=depth)
+        except Exception as e:      # a venue rejecting this depth: try a shallower one
+            last_exc = e
+    raise last_exc
+
 
 def cmd_fetch_orderbook(p: dict) -> None:
     if not _CCXT_AVAILABLE:
@@ -281,8 +344,7 @@ def cmd_fetch_orderbook(p: dict) -> None:
         _err(str(e))
         return
     latency_ms = round((time.monotonic() - t0) * 1000, 1)
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
+    bids, asks = _book(ob)
     metrics = _compute_book_metrics(bids, asks)
     if not metrics:
         _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
@@ -290,7 +352,7 @@ def cmd_fetch_orderbook(p: dict) -> None:
     _ok({
         "symbol":     symbol,
         "exchange":   exchange_id,
-        "timestamp":  datetime.utcnow().isoformat() + "Z",
+        "timestamp":  _utc_now(),
         "latency_ms": latency_ms,
         "bids":       bids[:depth],
         "asks":       asks[:depth],
@@ -329,6 +391,8 @@ def cmd_analyze(p: dict) -> None:
     limit            = int(p.get("limit", 100))
     inventory        = float(p.get("inventory", 0.0))
     spread_mult      = float(p.get("spread_multiplier", 1.5))
+    risk_aversion    = float(p.get("risk_aversion", 0.01))
+    side             = p.get("side", "buy")
     t0 = time.monotonic()
     try:
         ex     = make_exchange(exchange_id)
@@ -339,8 +403,7 @@ def cmd_analyze(p: dict) -> None:
         return
     latency_ms = round((time.monotonic() - t0) * 1000, 1)
 
-    bids   = ob.get("bids", [])
-    asks   = ob.get("asks", [])
+    bids, asks = _book(ob)
     trades = [{"side": t.get("side"), "price": t.get("price"),
                "amount": t.get("amount"), "timestamp": t.get("timestamp")} for t in raw]
 
@@ -348,14 +411,17 @@ def cmd_analyze(p: dict) -> None:
     if not metrics:
         _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
         return
-    mm        = _market_making_quotes(metrics, inventory, spread_mult)
+    # Side and risk aversion come from the panel's Slippage / Market-Making inputs
+    # (they were fixed at "buy" and 0.01). The slippage walk here uses the `depth`
+    # levels of this snapshot; the dedicated slippage command fetches a deeper book.
+    mm        = _market_making_quotes(metrics, inventory, spread_mult, risk_aversion)
     toxic     = _detect_toxic_flow(trades, metrics)
-    slippage  = _estimate_slippage(bids, asks, "buy", float(p.get("quantity", 1.0)))
+    slippage  = _estimate_slippage(bids, asks, side, float(p.get("quantity", 1.0)))
 
     _ok({
         "symbol":       symbol,
         "exchange":     exchange_id,
-        "timestamp":    datetime.utcnow().isoformat() + "Z",
+        "timestamp":    _utc_now(),
         "latency_ms":   latency_ms,
         "bids":         bids[:depth],
         "asks":         asks[:depth],
@@ -379,7 +445,7 @@ def cmd_market_making(p: dict) -> None:
     except Exception as e:
         _err(str(e))
         return
-    metrics = _compute_book_metrics(ob.get("bids", []), ob.get("asks", []))
+    metrics = _compute_book_metrics(*_book(ob))
     if not metrics:
         _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
         return
@@ -394,7 +460,7 @@ def cmd_market_making(p: dict) -> None:
         return
     _ok({"symbol": symbol, "exchange": exchange_id,
          "book_metrics": metrics, "market_making": mm,
-         "timestamp": datetime.utcnow().isoformat() + "Z"})
+         "timestamp": _utc_now()})
 
 
 def cmd_toxic_flow(p: dict) -> None:
@@ -411,7 +477,7 @@ def cmd_toxic_flow(p: dict) -> None:
     except Exception as e:
         _err(str(e))
         return
-    metrics = _compute_book_metrics(ob.get("bids", []), ob.get("asks", []))
+    metrics = _compute_book_metrics(*_book(ob))
     trades  = [{"side": t.get("side"), "price": t.get("price"),
                 "amount": t.get("amount")} for t in raw]
     toxic   = _detect_toxic_flow(trades, metrics)
@@ -420,7 +486,7 @@ def cmd_toxic_flow(p: dict) -> None:
         return
     _ok({"symbol": symbol, "exchange": exchange_id,
          "book_metrics": metrics, "toxic_flow": toxic,
-         "timestamp": datetime.utcnow().isoformat() + "Z"})
+         "timestamp": _utc_now()})
 
 
 def cmd_slippage(p: dict) -> None:
@@ -430,16 +496,24 @@ def cmd_slippage(p: dict) -> None:
     exchange_id = p.get("exchange", "binance")
     symbol      = p.get("symbol", "BTC/USDT")
     side        = p.get("side", "buy")
-    quantity    = float(p.get("quantity", 1.0))
+    try:
+        quantity = float(p.get("quantity", 1.0))
+    except (TypeError, ValueError):
+        _err("quantity must be a number")
+        return
     try:
         ex = make_exchange(exchange_id)
-        ob = ex.fetch_order_book(symbol, limit=50)
+        ob = _fetch_deep_book(ex, symbol)
     except Exception as e:
         _err(str(e))
         return
-    result = _estimate_slippage(ob.get("bids", []), ob.get("asks", []), side, quantity)
+    bids, asks = _book(ob)
+    result = _estimate_slippage(bids, asks, side, quantity)
+    if "error" in result:   # unfilled / one-sided: a failure, not a 0-bps estimate
+        _err(result["error"])
+        return
     _ok({"symbol": symbol, "exchange": exchange_id, **result,
-         "timestamp": datetime.utcnow().isoformat() + "Z"})
+         "timestamp": _utc_now()})
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
@@ -469,7 +543,12 @@ def main() -> None:
         _err(f"Unknown command: {command}. Available: {list(dispatch)}")
         return
 
-    handler(p)
+    try:
+        handler(p)
+    except Exception as e:  # one JSON payload even on an unexpected failure
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        _err(f"{command} failed: {e}")
 
 
 if __name__ == "__main__":

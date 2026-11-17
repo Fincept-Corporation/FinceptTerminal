@@ -9,6 +9,10 @@
 
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
+#include "core/process/ProcessTree.h"
+#include "core/privacy/LogRedact.h"
+#include "core/telemetry/UsageReporter.h"
+#include "python/PythonEnvRelocation.h"
 #include "ui/notifications/NotificationService.h" // ToastService
 
 #include <QCoreApplication>
@@ -161,6 +165,21 @@ QString psm_unsupported_platform_reason() {
     // uv 0.7.12's download metadata carries gnu / darwin / windows CPython 3.11.9
     // builds only, and PyPI has no musl torch wheels — fail up front instead of
     // after a 13 MB download.
+    //
+    // Ask the libc this process is actually running on first. The musl loader
+    // file alone proves nothing: glibc distributions carry /lib/ld-musl-*.so.1
+    // whenever the `musl` package is installed (musl-tools, common on Rust / Go
+    // developer machines), and treating that as a musl host refused setup there
+    // permanently. confstr(_CS_GNU_LIBC_VERSION) answers "glibc X.Y" only under
+    // real glibc — musl rejects the name.
+#    ifdef _CS_GNU_LIBC_VERSION
+    {
+        char libc_version[64] = {0};
+        const size_t len = confstr(_CS_GNU_LIBC_VERSION, libc_version, sizeof(libc_version));
+        if (len > 0 && QByteArray(libc_version).startsWith("glibc"))
+            return {};
+    }
+#    endif
     const QDir loader_dir(QStringLiteral("/lib"));
     const QStringList musl = loader_dir.entryList({QStringLiteral("ld-musl-*.so.1")}, QDir::Files | QDir::System);
     if (!musl.isEmpty()) {
@@ -433,65 +452,17 @@ QString psm_pretty_uv_line(const QString& line) {
 }
 
 // ── Process-tree control ─────────────────────────────────────────────────────
-// Windows: each child goes into its own Job Object with KILL_ON_JOB_CLOSE, so
-// terminating / closing the job takes uv's own children (build backends,
-// bytecode workers) with it — and the OS kills them if this process dies.
-// Unix: each child leads its own process group (setpgid in the child), so a
-// group SIGKILL does the same.
-
-void* psm_job_adopt(QProcess* proc) {
-#ifdef Q_OS_WIN
-    HANDLE job = CreateJobObjectW(nullptr, nullptr);
-    if (!job)
-        return nullptr;
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
-    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info, sizeof(info))) {
-        CloseHandle(job);
-        return nullptr;
-    }
-    HANDLE child = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, static_cast<DWORD>(proc->processId()));
-    if (!child) {
-        CloseHandle(job);
-        return nullptr;
-    }
-    const BOOL assigned = AssignProcessToJobObject(job, child);
-    CloseHandle(child);
-    if (!assigned) {
-        LOG_DEBUG(kPsmTag, QString("AssignProcessToJobObject failed (%1) — falling back to QProcess::kill")
-                               .arg(static_cast<qulonglong>(GetLastError())));
-        CloseHandle(job);
-        return nullptr;
-    }
-    return job;
-#else
-    Q_UNUSED(proc);
-    return nullptr;
-#endif
-}
-
-void psm_job_close(void* job) {
-#ifdef Q_OS_WIN
-    if (job)
-        CloseHandle(static_cast<HANDLE>(job));
-#else
-    Q_UNUSED(job);
-#endif
-}
+// core/process/ProcessTree: Windows — each child is created suspended and put
+// into its own Job Object with KILL_ON_JOB_CLOSE before it runs, so
+// terminating the job takes uv's own children (build backends, bytecode
+// workers) with it — and the OS kills them if this process dies. (The job used
+// to be assigned after the child had started, so its first children could
+// escape it.) Unix — each child leads its own process group (new session), so
+// a group SIGKILL does the same.
 
 void psm_kill_tree(QProcess* proc) {
-    if (!proc || proc->state() == QProcess::NotRunning)
-        return;
-#ifdef Q_OS_WIN
-    const auto job = static_cast<quintptr>(proc->property("psm_job").toULongLong());
-    if (job)
-        TerminateJobObject(reinterpret_cast<HANDLE>(job), 1);
-#else
-    const qint64 pid = proc->processId();
-    if (pid > 1) // never 0/1: kill(-0) would signal our own process group
-        ::kill(-static_cast<pid_t>(pid), SIGKILL);
-#endif
-    proc->kill();
+    if (proc)
+        process::kill_tree(proc);
 }
 
 } // namespace
@@ -811,7 +782,7 @@ QString PythonSetupManager::find_requirements_file(const QString& filename) cons
     // walk up the tree for dev builds running out of build/<preset>/.
     const QStringList candidates = {
         exe_dir + "/../Resources/" + filename,                     // macOS .app/Contents/Resources (flattened)
-        exe_dir + "/resources/" + filename,                        // Windows / AppImage / dev POST_BUILD copy
+        exe_dir + "/resources/" + filename,                        // Windows / Linux .deb (bin/resources) / dev copy
         exe_dir + "/../resources/" + filename,                     //
         exe_dir + "/../share/fincept-terminal/resources/" + filename, // Linux FHS / Flatpak (<prefix>/bin/..)
         exe_dir + "/../../resources/" + filename,
@@ -837,9 +808,11 @@ QString PythonSetupManager::find_requirements_file(const QString& filename) cons
     }
 
     if (found.isEmpty()) {
-        LOG_ERROR(kPsmTag, QString("Requirements file %1 not found (exe_dir=%2). Tried: %3 and every parent's "
-                                   "resources/. The resources/ folder must ship beside the executable.")
-                               .arg(filename, exe_dir, candidates.join(", ")));
+        LOG_ERROR(kPsmTag, QString("Requirements file not found file=%1 exe_dir=%2")
+                               .arg(filename, privacy::redact_home(exe_dir)));
+        LOG_DEBUG(kPsmTag, QString("Requirements file search tried=\"%1\" (and every parent's resources/; the "
+                                   "resources/ folder must ship beside the executable)")
+                               .arg(privacy::redact_text(candidates.join(", "))));
         return {};
     }
     QMutexLocker lock(&mutex_);
@@ -923,6 +896,10 @@ QProcessEnvironment PythonSetupManager::uv_environment() const {
 #endif
     if (native_tls_.load())
         env.insert("UV_NATIVE_TLS", "1");
+    // Repairing an adopted environment: everything it needs is in the uv cache
+    // that moved with the data root, so the first attempt works without network.
+    if (!repair_offline_done_.load() && QFileInfo::exists(relocation::repair_flag_path(root)))
+        env.insert("UV_OFFLINE", "1");
 
     QString proxy;
     {
@@ -990,12 +967,28 @@ SetupStatus PythonSetupManager::check_status() const {
     // requested (or an older full install exists) both environments stay complete.
     st.needs_package_sync = st.core_ready && (st.full_requested ? !st.full_ready : !st.core_current);
 
+    // A data root carried over from the folder older releases used
+    // (src/app/LegacyRootAdoption) whose environment could not be relocated as it
+    // was: repaired in the background with the terminal open, never through the
+    // first-time setup screen. Every lane re-syncs; finish_run() drops the flag
+    // once a run succeeds.
+    const bool repair_pending = QFileInfo::exists(relocation::repair_flag_path(root));
+    if (repair_pending) {
+        st.needs_setup = false;
+        st.needs_package_sync = true;
+        st.core_current = false;
+        st.venv_numpy1_ready = false;
+        st.venv_numpy2_ready = false;
+        st.full_ready = false;
+        LOG_INFO(kPsmTag, "Adopted Python environment awaits repair — repairing in the background, no setup screen");
+    }
+
     core_ready_.store(st.core_ready);
     full_installed_.store(st.full_ready);
 
     LOG_INFO(kPsmTag,
-             QString("check_status: uv=%1 python=%2 venv1=%3/%4 venv2=%5/%6 core=%7/%8 legacy=%9 "
-                     "full_requested=%10 -> needs_setup=%11 needs_sync=%12")
+             QString("Python environment status uv=%1 python=%2 venv_numpy1=%3/%4 venv_numpy2=%5/%6 core=%7/%8 "
+                     "legacy=%9 full_requested=%10 needs_setup=%11 needs_sync=%12")
                  .arg(psm_yn(st.uv_installed), psm_yn(st.python_installed), psm_yn(st.venv_numpy1_created),
                       psm_yn(st.venv_numpy1_ready), psm_yn(st.venv_numpy2_created), psm_yn(st.venv_numpy2_ready),
                       psm_yn(st.core_ready), psm_yn(st.core_current), psm_yn(legacy_marker))
@@ -1023,7 +1016,8 @@ void PythonSetupManager::request_full_install() {
     const QString root = install_dir();
     const QString flag = psm_full_flag_path(root);
     if (!QFileInfo::exists(flag) && !(QDir().mkpath(root) && psm_write_atomic(flag, QByteArrayLiteral("requested\n"))))
-        LOG_WARN(kPsmTag, "Could not write the full-install flag — the request applies to this session only");
+        LOG_WARN(kPsmTag, "Could not write the full-install flag, the request applies to this session only path=" +
+                              privacy::redact_home(flag));
     full_requested_session_.store(true);
     LOG_INFO(kPsmTag, "Full library set requested — installing in the background");
     set_background_mode();
@@ -1194,21 +1188,12 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
     proc->setArguments(args);
     if (!opts.working_dir.isEmpty())
         proc->setWorkingDirectory(opts.working_dir);
-#ifdef Q_OS_WIN
-    const bool low_priority = opts.background;
-    proc->setCreateProcessArgumentsModifier([low_priority](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= CREATE_NO_WINDOW;
-        if (low_priority)
-            cpa->flags |= BELOW_NORMAL_PRIORITY_CLASS; // inherited by uv's own workers
-    });
-#else
-    const bool low_priority = opts.background;
-    proc->setChildProcessModifier([low_priority]() {
-        ::setpgid(0, 0); // own process group → cancel() can kill the whole tree
-        if (low_priority)
-            ::setpriority(PRIO_PROCESS, 0, 10);
-    });
-#endif
+    // Own tree (job object / process group) → cancel() and the watchdog kill
+    // uv together with its workers. Background runs at low priority, which
+    // uv's own workers inherit. No console window.
+    process::TreeOptions tree_opt;
+    tree_opt.low_priority = opts.background;
+    process::own_tree(proc, tree_opt);
 
     const auto decode = [local8bit](const QByteArray& bytes) {
         return local8bit ? QString::fromLocal8Bit(bytes) : QString::fromUtf8(bytes);
@@ -1237,11 +1222,6 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
     connect(proc, &QProcess::readyReadStandardError, this,
             [proc, handle_err]() { handle_err(proc->readAllStandardError(), false); });
 
-    connect(proc, &QProcess::started, this, [proc]() {
-        if (void* job = psm_job_adopt(proc))
-            proc->setProperty("psm_job", QVariant::fromValue(static_cast<qulonglong>(reinterpret_cast<quintptr>(job))));
-    });
-
     const auto finish = [this, proc, ctx, done_fn, program, timeout_ms](StepResult r) {
         r.program = program;
         r.timeout_ms = timeout_ms;
@@ -1249,19 +1229,23 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
         r.out_tail = ctx->out_tail;
         r.stdout_data = std::move(ctx->stdout_all);
         live_procs_.removeAll(QPointer<QProcess>(proc));
-        psm_job_close(reinterpret_cast<void*>(static_cast<quintptr>(proc->property("psm_job").toULongLong())));
-        proc->setProperty("psm_job", QVariant());
+        // Nothing a setup step starts is meant to outlive it: reap what is left
+        // of the tree now (Windows), before the next step can trip over a lock.
+        process::kill_tree(proc);
         proc->deleteLater();
         const qint64 ms = psm_now_ms() - ctx->started_ms;
         if (r.ok())
-            LOG_INFO(kPsmTag, QString("%1 finished OK in %2 ms").arg(QFileInfo(program).fileName()).arg(ms));
-        else
-            LOG_WARN(kPsmTag, QString("%1 failed after %2 ms (kind=%3 exit=%4): %5")
+            LOG_DEBUG(kPsmTag, QString("Setup step finished tool=%1 duration_ms=%2").arg(QFileInfo(program).fileName()).arg(ms));
+        else {
+            const QString tail = r.tail_text().trimmed();
+            LOG_WARN(kPsmTag, QString("Setup step failed tool=%1 duration_ms=%2 kind=%3 exit=%4 error=\"%5\"")
                                   .arg(QFileInfo(program).fileName())
                                   .arg(ms)
                                   .arg(static_cast<int>(r.kind))
                                   .arg(r.exit_code)
-                                  .arg(r.tail_text().right(1500)));
+                                  .arg(privacy::redact_text(tail.section(QLatin1Char('\n'), -1).trimmed().left(200))));
+            LOG_DEBUG(kPsmTag, "Setup step output tail: " + privacy::redact_text(tail.right(1500)));
+        }
         const DoneFn cb = std::move(*done_fn);
         if (cb)
             cb(r);
@@ -1314,7 +1298,8 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
     }
 
     live_procs_.append(QPointer<QProcess>(proc));
-    LOG_INFO(kPsmTag, QString("Running: %1 %2").arg(program, args.join(QLatin1Char(' '))));
+    LOG_DEBUG(kPsmTag, QString("Setup step started tool=%1 args=\"%2\"")
+                           .arg(QFileInfo(program).fileName(), privacy::redact_text(args.join(QLatin1Char(' ')))));
     proc->start();
     return proc;
 }
@@ -1392,7 +1377,7 @@ void PythonSetupManager::detect_system_proxy() {
             self,
             [self, gen, found]() {
                 if (!found.isEmpty()) {
-                    LOG_INFO(kPsmTag, "System proxy for uv: " + found);
+                    LOG_INFO(kPsmTag, QStringLiteral("System proxy detected for uv proxy=%1").arg(privacy::url_origin(found)));
                     QMutexLocker lock(&self->mutex_);
                     self->system_proxy_ = found;
                 }
@@ -1522,7 +1507,7 @@ void PythonSetupManager::run_setup(SetupScope scope) {
     set_stage_fraction(SetupStage::Runtime, 0.0); // recompute overall from the skipped stages
     dirty_stages_.fill(true);
 
-    LOG_INFO(kPsmTag, QString("=== run_setup #%1 (%2): trading lane=%3 analytics lane=%4 (core on disk=%5) ===")
+    LOG_INFO(kPsmTag, QString("Python setup started run=%1 kind=%2 trading_lane=%3 analytics_lane=%4 core_on_disk=%5")
                           .arg(run_->generation)
                           .arg(full ? QStringLiteral("full") : QStringLiteral("essentials"))
                           .arg(psm_yn(trading.active), psm_yn(analytics.active), psm_yn(st.core_ready)));
@@ -1543,7 +1528,7 @@ void PythonSetupManager::cancel(bool wait_for_exit) {
         return;
     }
     if (run_ && !run_->finished) {
-        LOG_WARN(kPsmTag, "Cancelling the Python setup pipeline");
+        LOG_INFO(kPsmTag, "Python setup cancelling");
         run_->cancelled = true;
         if (download_reply_)
             download_reply_->abort();
@@ -1573,11 +1558,22 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
     // A Full request that arrived during this (Essentials) run starts right after it.
     const bool start_full_next = pending_full_ && !full && !cancelled;
     pending_full_ = false;
+    const QString repair_flag = relocation::repair_flag_path(install_dir());
+    const bool repairing = QFileInfo::exists(repair_flag);
+    // The first repair run was offline (uv_environment); one that failed is
+    // retried online right away, and only that outcome is reported.
+    const bool retry_repair_online = repairing && !success && !cancelled && !repair_offline_done_.load() &&
+                                     QCoreApplication::instance() && !QCoreApplication::closingDown();
+    if (repairing)
+        repair_offline_done_.store(true);
 
     if (success) {
+        if (repairing && QFile::remove(repair_flag))
+            LOG_INFO(kPsmTag, "Adopted Python environment repaired");
         if (full) {
             if (!psm_write_atomic(psm_sentinel_path(install_dir()), QByteArrayLiteral("ok\n")))
-                LOG_WARN(kPsmTag, "Could not write the .setup_complete sentinel");
+                LOG_WARN(kPsmTag, "Could not write the setup sentinel path=" +
+                                      privacy::redact_home(psm_sentinel_path(install_dir())));
             full_installed_.store(true);
         }
         set_stage_fraction(SetupStage::Runtime, 1.0);
@@ -1602,14 +1598,21 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
         done.state = SetupStageState::Done;
         done.overall = overall_percent_.load();
         emit progress_changed(done);
-        LOG_INFO(kPsmTag, QString("=== run_setup #%1 succeeded in %2 s ===")
+        LOG_INFO(kPsmTag, QString("Python setup finished run=%1 duration_s=%2")
                               .arg(run_->generation)
                               .arg((psm_now_ms() - run_->started_ms) / 1000));
     } else {
-        LOG_ERROR(kPsmTag, QString("=== run_setup #%1 %2: %3 ===")
-                               .arg(run_->generation)
-                               .arg(cancelled ? QStringLiteral("cancelled") : QStringLiteral("failed"))
-                               .arg(error));
+        if (cancelled)
+            LOG_INFO(kPsmTag, QString("Python setup cancelled run=%1").arg(run_->generation));
+        else
+            LOG_ERROR(kPsmTag, QString("Python setup failed run=%1 error=\"%2\"")
+                                   .arg(run_->generation)
+                                   .arg(privacy::redact_text(error.section(QLatin1Char('\n'), 0, 0)).left(300)));
+        // Usage report: only the outcome that is reported (a failed offline repair retries online).
+        if (!cancelled && !retry_repair_online)
+            telemetry::UsageReporter::note_issue(QStringLiteral("setup_error"),
+                                                 full ? QStringLiteral("python_full") : QStringLiteral("python_essentials"),
+                                                 QStringLiteral("failed"), error);
     }
 
     emit setup_complete(success, error);
@@ -1617,8 +1620,24 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
 
     // One notification when the user is no longer looking at the setup screen.
     // An essentials run that succeeds stays silent — the terminal simply works.
-    if (background_mode_.load() && did_work && !cancelled && !start_full_next && QCoreApplication::instance() &&
-        !QCoreApplication::closingDown()) {
+    if (retry_repair_online) {
+        LOG_INFO(kPsmTag, "Offline repair from the uv cache did not complete — retrying with the network");
+        QTimer::singleShot(0, this, [this]() {
+            set_background_mode();
+            run_setup();
+        });
+    } else if (background_mode_.load() && repairing && !success && !cancelled && QCoreApplication::instance() &&
+               !QCoreApplication::closingDown()) {
+        // An adopted environment that could not be relocated: say so without
+        // blocking anything; the repair runs again at the next start.
+        fincept::ui::ToastService::instance().post(
+            fincept::ui::ToastService::Severity::Warning,
+            tr("Repairing the Python environment after the move to the new data folder did not finish (no network?). "
+               "Python-based features may not work until it does; it retries at the next start — click PYTHON ENV "
+               "in the status bar for details."),
+            QStringLiteral("python-setup"));
+    } else if (background_mode_.load() && did_work && !cancelled && !start_full_next && QCoreApplication::instance() &&
+               !QCoreApplication::closingDown()) {
         if (success && full)
             fincept::ui::ToastService::instance().post(
                 fincept::ui::ToastService::Severity::Success,
@@ -1765,7 +1784,7 @@ void PythonSetupManager::runtime_download_uv() {
     req.setHeader(QNetworkRequest::UserAgentHeader,
                   QStringLiteral("FinceptTerminal/%1").arg(QCoreApplication::applicationVersion()));
 
-    LOG_INFO(kPsmTag, "Downloading uv from " + url.toString());
+    LOG_INFO(kPsmTag, "Downloading uv url=" + privacy::redact_url(url));
     update_stage(SetupStage::Runtime, [](SetupStageInfo& s) {
         s.percent = 0;
         s.detail = tr("Downloading uv %1…").arg(QLatin1String(kUvVersion));
@@ -1987,7 +2006,11 @@ void PythonSetupManager::runtime_extract_uv(const QString& archive_path, bool us
         if (!r.ok()) {
 #ifdef Q_OS_WIN
             if (!use_powershell) {
-                LOG_WARN(kPsmTag, "tar.exe could not extract uv — falling back to PowerShell Expand-Archive");
+                LOG_WARN(kPsmTag, QString("tar.exe could not extract uv, falling back to PowerShell Expand-Archive "
+                                          "exit=%1 error=\"%2\"")
+                                      .arg(r.exit_code)
+                                      .arg(privacy::redact_text(r.tail_text().trimmed().section(QLatin1Char('\n'), -1))
+                                               .left(200)));
                 runtime_extract_uv(archive_path, true);
                 return;
             }
@@ -2021,7 +2044,7 @@ void PythonSetupManager::runtime_extract_uv(const QString& archive_path, bool us
             runtime_failed(tr("uv was not found after extracting the archive (%1).").arg(QDir::toNativeSeparators(uv_path())));
             return;
         }
-        LOG_INFO(kPsmTag, "uv installed at " + uv_path());
+        LOG_INFO(kPsmTag, "uv installed path=" + privacy::redact_home(uv_path()));
         runtime_check_uv_version(true);
     });
 }
@@ -2072,7 +2095,7 @@ void PythonSetupManager::runtime_install_python() {
                                    .arg(QLatin1String(kPythonVersion), QDir::toNativeSeparators(install_dir() + "/python")));
                 return;
             }
-            LOG_INFO(kPsmTag, "Python installed at " + base_python_path());
+            LOG_INFO(kPsmTag, "Python installed path=" + privacy::redact_home(base_python_path()));
             runtime_done();
         });
 }
@@ -2174,7 +2197,7 @@ void PythonSetupManager::lane_create_venv(int lane) {
     // not overwrite a non-venv directory). Removing it can touch thousands of
     // files, so it runs on a worker thread.
     if (QFileInfo::exists(path) && !QFileInfo::exists(path + "/pyvenv.cfg")) {
-        LOG_WARN(kPsmTag, "Removing a stale non-venv directory: " + path);
+        LOG_WARN(kPsmTag, "Removing a stale non-venv directory path=" + privacy::redact_home(path));
         PythonSetupManager* self = this; // outlives the global pool (see detect_system_proxy)
         (void)QtConcurrent::run([self, path, create]() {
             QDir(path).removeRecursively();
@@ -2221,7 +2244,10 @@ void PythonSetupManager::lane_seed_preferences(int lane) {
                     pins << line;
             }
         } else {
-            LOG_WARN(kPsmTag, "uv pip freeze failed — resolving without preferences");
+            LOG_WARN(kPsmTag, QString("uv pip freeze failed, resolving without preferences exit=%1 error=\"%2\"")
+                                  .arg(r.exit_code)
+                                  .arg(privacy::redact_text(r.tail_text().trimmed().section(QLatin1Char('\n'), -1))
+                                           .left(200)));
         }
         if (pins.isEmpty())
             QFile::remove(lock);
@@ -2375,7 +2401,8 @@ void PythonSetupManager::lane_install_core(int lane) {
             }
             const QString marker = expected_marker(lr.core_file);
             if (!marker.isEmpty() && !psm_write_atomic(psm_core_marker_path(install_dir()), (marker + "\n").toUtf8()))
-                LOG_WARN(kPsmTag, "Could not write the core marker");
+                LOG_WARN(kPsmTag, "Could not write the core marker path=" +
+                                      privacy::redact_home(psm_core_marker_path(install_dir())));
             lr.core_done = true;
             set_stage_fraction(SetupStage::AnalyticsCore, 1.0);
             const int resolved = lr.progress.resolved;
@@ -2491,7 +2518,8 @@ void PythonSetupManager::lane_install_essentials(int lane) {
             }
             const QString marker = expected_marker(lr.core_file);
             if (!marker.isEmpty() && !psm_write_atomic(psm_core_marker_path(install_dir()), (marker + "\n").toUtf8()))
-                LOG_WARN(kPsmTag, "Could not write the core marker");
+                LOG_WARN(kPsmTag, "Could not write the core marker path=" +
+                                      privacy::redact_home(psm_core_marker_path(install_dir())));
             lr.core_done = true;
             set_stage_fraction(SetupStage::AnalyticsCore, 0.9);
             const int resolved = lr.progress.resolved;
@@ -2520,7 +2548,7 @@ void PythonSetupManager::lane_compile_bytecode(int lane) {
     const quint64 gen = run_->generation;
     const QString site = site_packages_path(L.venv);
     if (!QFileInfo(site).isDir()) {
-        LOG_WARN(kPsmTag, "site-packages not found at " + site + " — skipping bytecode precompilation");
+        LOG_WARN(kPsmTag, "site-packages not found, skipping bytecode precompilation path=" + privacy::redact_home(site));
         lane_succeeded(lane);
         return;
     }
@@ -2705,7 +2733,7 @@ void PythonSetupManager::lane_succeeded(int lane) {
             s.detail = resolved > 0 ? tr("%1 packages ready").arg(resolved) : tr("Up to date");
         },
         true);
-    LOG_INFO(kPsmTag, QString("[%1] lane complete").arg(L.venv));
+    LOG_DEBUG(kPsmTag, QString("Python setup lane complete venv=%1").arg(L.venv));
     maybe_finish_run();
 }
 
@@ -2721,7 +2749,8 @@ void PythonSetupManager::lane_failed(int lane, const QString& error) {
                           : L.core_done ? tr("Analytics libraries")
                                         : tr("Analytics core");
     L.error = label + QStringLiteral(": ") + error;
-    LOG_ERROR(kPsmTag, QString("[%1] %2").arg(L.venv, error));
+    LOG_ERROR(kPsmTag, QString("Python setup lane failed venv=%1 error=\"%2\"")
+                           .arg(L.venv, privacy::redact_text(error.section(QLatin1Char('\n'), 0, 0)).left(300)));
 
     const SetupStage failed_stage = lane == 0                      ? SetupStage::Trading
                                     : (essentials || !L.core_done) ? SetupStage::AnalyticsCore

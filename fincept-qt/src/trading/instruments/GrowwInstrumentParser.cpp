@@ -219,7 +219,7 @@ QVector<Instrument> GrowwInstrumentParser::parse(const QByteArray& csv_data) {
         results.append(inst);
     }
 
-    LOG_INFO("GrowwParser",
+    LOG_DEBUG("GrowwParser",
              QString("Parsed %1 instruments (skipped %2 malformed rows)").arg(results.size()).arg(skipped));
     return results;
 }

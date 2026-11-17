@@ -1,29 +1,13 @@
 #include "ui/widgets/ConfettiOverlay.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QPainterPath>
 #include <QRandomGenerator>
 
 #include <cmath>
 
 namespace fincept::ui {
-
-static const QColor COLORS[] = {
-    QColor(217, 119, 6),   // amber
-    QColor(255, 191, 36),  // gold
-    QColor(22, 163, 74),   // green
-    QColor(52, 211, 153),  // emerald
-    QColor(8, 145, 178),   // cyan
-    QColor(56, 189, 248),  // sky
-    QColor(220, 38, 38),   // red
-    QColor(251, 113, 133), // rose
-    QColor(147, 51, 234),  // purple
-    QColor(192, 132, 252), // violet
-    QColor(234, 179, 8),   // yellow
-    QColor(59, 130, 246),  // blue
-    QColor(236, 72, 153),  // pink
-    QColor(245, 158, 11),  // orange
-};
-static const int NUM_COLORS = sizeof(COLORS) / sizeof(COLORS[0]);
 
 ConfettiOverlay::ConfettiOverlay(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -104,7 +88,8 @@ void ConfettiOverlay::spawn_burst(int count, float origin_x, float spread, float
         p.sway_amplitude = rng->generateDouble() * 2.0f + 0.5f;
         p.shimmer_phase = rng->generateDouble() * 6.28f;
         p.delay_ms = 0;
-        p.base_color = COLORS[rng->bounded(NUM_COLORS)];
+        // The theme's categorical palette: vivid and distinct on either background.
+        p.base_color = colors::chart_color(static_cast<int>(rng->bounded(colors::chart_color_count())));
         p.color = p.base_color;
 
         // Mix of shapes: 40% rect, 25% circle, 20% streamer, 15% star

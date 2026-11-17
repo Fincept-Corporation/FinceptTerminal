@@ -15,6 +15,7 @@
 // combo if the underlying changed. Visibility-driven sub/unsub per D3/D4.
 
 #include "screens/common/IStatefulScreen.h"
+#include "screens/fno/FnoChainState.h"
 #include "services/options/OptionChainTypes.h"
 
 #include <QEvent>
@@ -25,6 +26,7 @@
 
 class QComboBox;
 class QLabel;
+class QStackedWidget;
 
 namespace fincept::screens::fno {
 
@@ -42,6 +44,17 @@ class OISubTab : public QWidget {
     QVariantMap save_state() const;
     void restore_state(const QVariantMap& state);
 
+    /// The Chain tab's state (FnoScreen relays it): drives the skeleton / the "needs
+    /// an option chain" page while this tab holds no chain.
+    void set_chain_status(FnoChainStatus status, const QString& reason);
+    /// A chain that does not travel on DataHub (the free delayed US chain), or an
+    /// empty chain when the Chain tab left it.
+    void set_external_chain(const fincept::services::options::OptionChain& chain);
+
+  signals:
+    /// OPEN CHAIN on this tab's pages.
+    void open_chain_requested();
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -54,6 +67,10 @@ class OISubTab : public QWidget {
     void setup_ui();
     void retranslateUi();
     void on_chain_published(const QString& topic, const QVariant& v);
+    /// Render `chain` (already accepted as the Chain tab's series).
+    void apply_chain(const fincept::services::options::OptionChain& chain);
+    /// Content, skeleton or the no-chain page, from last_chain_ and the chain status.
+    void update_body();
     void rebuild_strike_combo(const fincept::services::options::OptionChain& chain);
     void apply_strike_subscription();
 
@@ -63,6 +80,14 @@ class OISubTab : public QWidget {
     IntradayOIChart* intraday_ = nullptr;
     QComboBox* strike_combo_ = nullptr;
     QLabel* picker_lbl_ = nullptr;
+    QStackedWidget* body_ = nullptr; ///< content / skeleton / no-chain page
+    QWidget* content_ = nullptr;
+    fincept::ui::LoadingSkeleton* skeleton_ = nullptr;
+    fincept::ui::EmptyState* no_chain_ = nullptr;
+    FnoChainStatus chain_status_ = FnoChainStatus::Loading;
+    QString chain_reason_;
+    /// What the intraday page's primary button does (its requirement status).
+    fincept::ui::RequirementStatus intraday_req_;
 
     fincept::services::options::OptionChain last_chain_;
     QString current_underlying_;

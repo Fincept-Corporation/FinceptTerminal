@@ -4,7 +4,9 @@
 // recent N entries.
 //
 // Config (persisted):
-//   { "category": "<category-id>", "max_rows": <int> }
+//   { "category": "<CATEGORY>", "max_rows": <int> }
+// The category is the producer's upper-case key (MARKETS, GEOPOLITICS, CRYPTO,
+// ...); apply_config() upper-cases older lower-case configs.
 
 #include "screens/dashboard/widgets/BaseWidget.h"
 
@@ -36,7 +38,7 @@ class NewsCategoryWidget : public BaseWidget {
     void hub_resubscribe();
     void hub_unsubscribe_all();
 
-    QString category_ = "markets";
+    QString category_ = "MARKETS";
     int max_rows_ = 12;
     QListWidget* list_ = nullptr;
     QLabel* badge_ = nullptr;

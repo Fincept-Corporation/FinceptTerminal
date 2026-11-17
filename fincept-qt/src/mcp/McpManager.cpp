@@ -67,6 +67,8 @@ void McpManager::initialize() {
         }
 
         if (!args_parsed) {
+            if (srv.args.trimmed().startsWith('['))
+                LOG_WARN(TAG, logf("Stored MCP server args are not valid JSON", {{"server", cfg.name}, {"field", "args"}}));
             cfg.args = srv.args.split(' ', Qt::SkipEmptyParts);
         }
 
@@ -83,6 +85,8 @@ void McpManager::initialize() {
             }
         }
 
+        if (!env_parsed && srv.env.trimmed().startsWith('{'))
+            LOG_WARN(TAG, logf("Stored MCP server env is not valid JSON", {{"server", cfg.name}, {"field", "env"}}));
         if (!env_parsed && !srv.env.isEmpty()) {
             for (const auto& pair : srv.env.split(' ', Qt::SkipEmptyParts)) {
                 int eq = pair.indexOf('=');
@@ -94,7 +98,7 @@ void McpManager::initialize() {
         configs_.insert(cfg.id, cfg);
     }
 
-    LOG_INFO(TAG, QString("Loaded %1 MCP server configs").arg(configs_.size()));
+    LOG_DEBUG(TAG, logf("MCP server configs loaded", {{"count", static_cast<qint64>(configs_.size())}}));
     emit servers_changed();
 }
 
@@ -202,6 +206,9 @@ Result<void> McpManager::start_server(const QString& id) {
 
     auto start_result = client->start();
     if (start_result.is_err()) {
+        LOG_ERROR(TAG, logf("MCP server failed to start", {{"server", cfg.name},
+                                                           {"stage", "start"},
+                                                           {"error", QString::fromStdString(start_result.error())}}));
         const QStringList failed_log = client->get_logs(); // read before the client goes out of scope
         QMutexLocker lock(&mutex_);
         last_start_log_.insert(id, failed_log);
@@ -214,6 +221,9 @@ Result<void> McpManager::start_server(const QString& id) {
 
     auto init_result = client->initialize();
     if (init_result.is_err()) {
+        LOG_ERROR(TAG, logf("MCP server failed to start", {{"server", cfg.name},
+                                                           {"stage", "initialize"},
+                                                           {"error", QString::fromStdString(init_result.error())}}));
         client->stop();
         const QStringList failed_log = client->get_logs(); // includes whatever the process printed before dying
         QMutexLocker lock(&mutex_);
@@ -237,7 +247,12 @@ Result<void> McpManager::start_server(const QString& id) {
     refresh_tools_for(id);
 
     emit servers_changed();
-    LOG_INFO(TAG, "MCP server started: " + cfg.name);
+    qint64 tool_count = 0;
+    {
+        QMutexLocker lock(&mutex_);
+        tool_count = static_cast<qint64>(tool_cache_.value(id).size());
+    }
+    LOG_INFO(TAG, logf("MCP server started", {{"server", id}, {"name", cfg.name}, {"tools", tool_count}}));
     return Result<void>::ok();
 }
 
@@ -458,7 +473,7 @@ void McpManager::refresh_tools_for(const QString& id) {
 
     QMutexLocker l2(&mutex_);
     tool_cache_[id] = result.value();
-    LOG_INFO(TAG, QString("Cached %1 tools from server %2").arg(result.value().size()).arg(id));
+    LOG_DEBUG(TAG, logf("MCP server tools cached", {{"server", id}, {"tools", static_cast<qint64>(result.value().size())}}));
 }
 
 } // namespace fincept::mcp

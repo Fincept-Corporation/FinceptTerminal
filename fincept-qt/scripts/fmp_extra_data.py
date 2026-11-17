@@ -8,26 +8,33 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('FMP_API_KEY', '')
 BASE_URL = "https://financialmodelingprep.com/api/v3"
+SERVICE = "Financial Modeling Prep"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every FMP endpoint answers HTTP 401 without apikey: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://site.financialmodelingprep.com/developer/docs",
+                              "FMP_API_KEY", what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "FMP_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # FMP reports plan limits / bad keys as {"Error Message": "..."} (sometimes with HTTP 200).
+    if isinstance(data, dict) and data.get("Error Message"):
+        return {"error": f"{SERVICE}: {fc.scrub(data['Error Message'], API_KEY)}"}
+    return data
 
 def get_dcf_valuation(symbol: str) -> Any:
     return _make_request(f"discounted-cash-flow/{symbol}", {"apikey": API_KEY})
@@ -80,7 +87,7 @@ def main(args=None):
         date = args[1] if len(args) > 1 else None
         exchange = args[2] if len(args) > 2 else "NYSE"
         result = get_sector_pe_ratio(date, exchange)
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 if __name__ == "__main__":
     main()

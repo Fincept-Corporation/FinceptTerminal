@@ -103,91 +103,50 @@ def _should_emit_ticker(symbol, last_price):
 
 def resolve_symbol(exchange, requested, exchange_id):
     """
-    Resolve a requested symbol to the exchange's actual unified symbol.
-
-    Strategy (in order):
-      1. Exact match — already valid.
-      2. Base/quote match on the exchange's default market type.
-      3. Base/quote match on any market type (e.g. BTC/USDT → BTC/USDC:USDC on Hyperliquid).
-      4. Base match only — pick the highest-volume market for that base.
-
-    Returns the resolved symbol string, or the original if nothing matches
-    (ccxt will raise a meaningful error at subscription time).
+    The market streamed for `requested`: exactly the one the exchange daemon
+    shows and the order path trades — both call exchange_client.resolve_market.
+    (This used to be a second resolver that fell back to "any market of the
+    base": on Kraken "UNI/USDT" streamed the UNI/BTC book while an order went to
+    UNI/USD.) A labelled substitute (e.g. "BTC/USD" for "BTC/USDT") is streamed
+    and reported; None — stream nothing — when there is no market.
     """
-    markets = exchange.markets
-    if not markets:
-        return requested
-
-    # 1. Exact match
-    if requested in markets:
-        return requested
-
-    # Parse base/quote from the request (handle "BASE/QUOTE" and "BASE/QUOTE:SETTLE")
-    parts = requested.replace(":USDT", "").replace(":USDC", "").replace(":USD", "").split("/")
-    base  = parts[0].upper() if parts else ""
-    quote = parts[1].upper() if len(parts) > 1 else ""
-
-    default_type = exchange.describe().get("options", {}).get("defaultType", "spot")
-
-    # 2. Exact base/quote on default market type
-    candidates = [
-        m for m in markets.values()
-        if m.get("base", "").upper() == base
-        and m.get("quote", "").upper() == quote
-        and m.get("type") == default_type
-        and m.get("active", True)
-    ]
-    if candidates:
-        # Prefer linear (USDT-margined) perps over inverse
-        candidates.sort(key=lambda m: (not m.get("linear", False), m.get("symbol", "")))
-        return candidates[0]["symbol"]
-
-    # 3. Base/quote match on any type
-    candidates = [
-        m for m in markets.values()
-        if m.get("base", "").upper() == base
-        and m.get("quote", "").upper() == quote
-        and m.get("active", True)
-    ]
-    if candidates:
-        candidates.sort(key=lambda m: (not m.get("linear", False), m.get("symbol", "")))
-        return candidates[0]["symbol"]
-
-    # 4. Base match only — find any active market for this base asset
-    candidates = [
-        m for m in markets.values()
-        if m.get("base", "").upper() == base
-        and m.get("type") == default_type
-        and m.get("active", True)
-    ]
-    if candidates:
-        # Prefer USDT quote, then USDC, then anything
-        def quote_rank(m):
-            q = m.get("quote", "")
-            return (0 if q == "USDT" else 1 if q == "USDC" else 2, m.get("symbol", ""))
-        candidates.sort(key=quote_rank)
-        resolved = candidates[0]["symbol"]
-        emit({"type": "info", "message":
-              f"Symbol '{requested}' not found on {exchange_id}, using '{resolved}'"})
-        return resolved
-
-    # Nothing found — return None so the caller can skip this symbol
-    emit({"type": "info", "message":
-          f"Symbol '{requested}' has no matching market on {exchange_id} — skipping"})
-    return None
+    from exchange_client import resolve_market
+    res = resolve_market(getattr(exchange, "markets", None) or {}, requested, exchange_id)
+    if res["match"] == "substituted":
+        emit({"type": "info", "symbol": requested, "market_symbol": res["symbol"], "message": res["reason"]})
+    elif res["symbol"] is None:
+        emit({"type": "info", "symbol": requested, "message": res["reason"] + " — not streamed"})
+    return res["symbol"]
 
 
 # ── Per-exchange capability detection ────────────────────────────────────────
 
+# Exchanges whose watch_ticker / watch_tickers are broken in the installed
+# ccxt.pro; their tickers are polled over REST instead (poll_tickers below).
+#  - hyperliquid (ccxt 4.5.64): both subscribe to "webData2" with the zero
+#    address, the venue answers "Error parsing JSON into valid websocket
+#    request", and ccxt rejects every pending future on that connection — so
+#    each ticker retry also knocked the order book watcher into back-off (one
+#    book update per ~10 s) and the watchlist got no prices at all.
+#    Re-test when ccxt is upgraded.
+_POLL_TICKERS_EXCHANGES = {"hyperliquid"}
+TICKER_POLL_INTERVAL = 3.0  # seconds
+
+
 def get_exchange_caps(exchange):
     has = exchange.describe().get("has", {})
-    return {
+    caps = {
         "watch_ticker":    bool(has.get("watchTicker")),
         "watch_tickers":   bool(has.get("watchTickers")),
         "watch_ohlcv":     bool(has.get("watchOHLCV")),
         "watch_trades":    bool(has.get("watchTrades")),
         "watch_orderbook": bool(has.get("watchOrderBook")),
+        "poll_tickers":    False,
     }
+    if getattr(exchange, "id", "") in _POLL_TICKERS_EXCHANGES and has.get("fetchTickers"):
+        caps["watch_ticker"] = caps["watch_tickers"] = False
+        caps["poll_tickers"] = True
+    return caps
 
 
 def safe_ob_limit(exchange_id):
@@ -333,6 +292,23 @@ async def watch_ticker_and_cache(exchange, symbol, ticker_cache):
             await asyncio.sleep(min(errors * 2, 30))
 
 
+_malformed_candle_noted = {}
+
+
+def _note_malformed_candle(exchange, symbol):
+    """Debug note on stderr (stdout carries the stream), at most once per symbol every 5 minutes."""
+    now = time.monotonic()
+    if now - _malformed_candle_noted.get(symbol, float("-inf")) < 300:
+        return
+    _malformed_candle_noted[symbol] = now
+    try:
+        sys.stderr.write(f"[ws_stream] DEBUG Malformed candle skipped "
+                         f"exchange={getattr(exchange, 'id', '?')} symbol={symbol}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+
 async def watch_ohlcv(exchange, symbol, timeframe="1m"):
     """Stream OHLCV candle updates — emits only the current (latest) candle."""
     errors = 0
@@ -347,6 +323,7 @@ async def watch_ohlcv(exchange, symbol, timeframe="1m"):
                     o, h, l, cl, v = (float(c[i]) if c[i] is not None else 0.0
                                       for i in range(1, 6))
                 except (TypeError, ValueError, IndexError):
+                    _note_malformed_candle(exchange, symbol)
                     continue
                 if o > 0 and h > 0 and l > 0 and cl > 0 and l <= h:
                     emit({
@@ -442,6 +419,67 @@ async def watch_tickers_batch(exchange, symbols):
                       "message": f"Too many errors, stopping batch ticker watcher"})
                 return
             await asyncio.sleep(min(errors * 2, 30))
+
+
+def _fill_daily_change(t):
+    """Some venues (Hyperliquid) report the previous day's close but no open /
+    change / percentage; derive them so the 24 h change column is not empty."""
+    last = t.get("last")
+    prev = t.get("previousClose")
+    if t.get("percentage") is None and last and prev:
+        try:
+            last_f, prev_f = float(last), float(prev)
+        except (TypeError, ValueError):
+            return t
+        if prev_f > 0:
+            t = dict(t)
+            t["open"] = t.get("open") or prev_f
+            t["change"] = last_f - prev_f
+            t["percentage"] = (last_f - prev_f) / prev_f * 100.0
+    return t
+
+
+async def poll_tickers(exchange, symbols_fn, ticker_cache, interval=TICKER_POLL_INTERVAL):
+    """REST ticker poll for exchanges whose ticker WebSocket is unusable (see
+    _POLL_TICKERS_EXCHANGES). One fetch_tickers per market type every
+    `interval` seconds covers the primary and every watchlist symbol, and keeps
+    ticker_cache filled for the order book's derived mid-price tickers.
+    `symbols_fn` returns the current list (the primary can change in place)."""
+    errors = 0
+    while True:
+        started = time.monotonic()
+        try:
+            by_type = {}
+            for sym in dict.fromkeys(symbols_fn()):  # de-duplicated, order kept
+                if not sym:
+                    continue
+                market = (exchange.markets or {}).get(sym)
+                if market is not None:
+                    by_type.setdefault(market.get("type"), []).append(sym)
+            for mtype, group in by_type.items():
+                # Hyperliquid builds tickers from its market loader; without a
+                # type it loads spot, perps and every HIP-3 dex (~12 s a call),
+                # with one only that list (~1 s).
+                params = {"type": mtype} if exchange.id == "hyperliquid" and mtype in ("spot", "swap") else {}
+                tickers = await exchange.fetch_tickers(group, params)
+                for sym, t in tickers.items():
+                    if not t:
+                        continue
+                    t = _fill_daily_change(t)
+                    ticker_cache[sym] = t
+                    if t.get("last"):
+                        emit(_make_ticker_msg(t))
+            errors = 0
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            errors += 1
+            if errors <= 3:
+                emit({"type": "error", "source": "ticker_poll", "message": str(e)})
+            if errors >= MAX_CONSECUTIVE_ERRORS:
+                return
+        delay = interval if errors == 0 else min(interval * (errors + 1), 30)
+        await asyncio.sleep(max(0.0, delay - (time.monotonic() - started)))
 
 
 async def watch_ticker_individual(exchange, symbol):
@@ -609,10 +647,21 @@ async def stdin_command_loop(exchange, exchange_id, caps, ticker_cache, state):
                 emit({"type": "error", "source": "set_primary", "message": str(e)})
                 continue
             if not resolved:
-                continue  # no matching market — resolve_symbol already emitted info
+                # No market: stop streaming the previous primary too, so nothing
+                # on screen can be mistaken for this symbol's book or prints.
+                old = state["tasks"]
+                state["tasks"] = []
+                state["primary"] = None
+                await _cancel_tasks(old)
+                emit({"type": "error", "source": "set_primary", "symbol": requested,
+                      "message": f"{requested}: no market on {exchange_id}"})
+                continue
             # Emit the same symbol_map shape the startup path uses so C++ remaps.
+            # "aliases" is merged (union) on the C++ side: the new primary's
+            # updates also reach a watchlist row shown from the same market.
             if resolved != requested:
-                emit({"type": "symbol_map", "map": {resolved: requested}})
+                emit({"type": "symbol_map", "map": {resolved: requested},
+                      "aliases": {resolved: [requested]}})
             # Cancel the old primary tasks and spin up fresh ones at current tf.
             old = state["tasks"]
             state["tasks"] = make_primary_tasks(
@@ -627,7 +676,7 @@ async def stdin_command_loop(exchange, exchange_id, caps, ticker_cache, state):
                 continue
             state["timeframe"] = tf
             # Recreate ONLY the ohlcv task; leave orderbook/trades/ticker running.
-            if not caps["watch_ohlcv"]:
+            if not caps["watch_ohlcv"] or not state["primary"]:
                 continue
             old_ohlcv = [t for t in state["tasks"] if getattr(t, "ws_kind", None) == "ohlcv"]
             kept = [t for t in state["tasks"] if getattr(t, "ws_kind", None) != "ohlcv"]
@@ -673,13 +722,15 @@ async def main():
     try:
         import ccxt.pro as ccxtpro
     except ImportError:
-        emit({"type": "error",
+        # "code" lets the host tell a missing library (retrying is pointless until
+        # it is installed) from a dropped connection (worth a respawn).
+        emit({"type": "error", "code": "missing_dependency",
               "message": "ccxt.pro not available — install with: pip install ccxt"})
         sys.exit(1)
 
     exchange_class = getattr(ccxtpro, exchange_id, None)
     if not exchange_class:
-        emit({"type": "error",
+        emit({"type": "error", "code": "unknown_exchange",
               "message": f"Exchange '{exchange_id}' not found in ccxt.pro"})
         sys.exit(1)
 
@@ -767,27 +818,39 @@ async def main():
     # resolve_symbol() returns None when a symbol has no matching market — skip those.
     # Build a reverse map: exchange_symbol → requested_symbol so C++ can remap tickers.
     original_symbols = list(all_symbols)
-    primary_symbol   = resolve_symbol(exchange, primary_symbol, exchange_id) or primary_symbol
+    # None when the primary has no market: its book / prints / candles are not
+    # streamed at all (streaming the raw symbol only produced errors, and any
+    # fallback market would be shown as if it were the requested one).
+    primary_symbol   = resolve_symbol(exchange, primary_symbol, exchange_id)
     resolved         = [resolve_symbol(exchange, s, exchange_id) for s in original_symbols]
 
     # symbol_map: {exchange_symbol: requested_symbol} — only for remapped symbols
+    # aliases: {exchange_symbol: [every requested symbol shown from it]} — two
+    # requested pairs can resolve to one market (Hyperliquid "BTC/USDT" and the
+    # exact "BTC/USDC:USDC"); the app publishes each update under all of them.
     symbol_map = {}
+    aliases = {}
     seen = set()
     all_symbols = []
     for orig, res in zip(original_symbols, resolved):
-        if res and res not in seen:
+        if not res:
+            continue
+        if res != orig:
+            symbol_map.setdefault(res, orig)  # e.g. "BTC/USDC:USDC" → "BTC/USDT"
+            aliases.setdefault(res, [])
+            if orig not in aliases[res]:
+                aliases[res].append(orig)
+        if res not in seen:
             seen.add(res)
             all_symbols.append(res)
-            if res != orig:
-                symbol_map[res] = orig  # e.g. "BTC/USDC:USDC" → "BTC/USDT"
-    if primary_symbol not in seen:
+    if primary_symbol and primary_symbol not in seen:
         all_symbols.insert(0, primary_symbol)
 
     # Emit the symbol map so C++ can remap incoming tickers to the originally
     # requested symbol names (important for exchanges like Hyperliquid where
     # BTC/USDT resolves to BTC/USDC:USDC).
     if symbol_map:
-        emit({"type": "symbol_map", "map": symbol_map})
+        emit({"type": "symbol_map", "map": symbol_map, "aliases": aliases})
 
     # Shared ticker cache — OB watcher reads this to enrich fast mid-price tickers
     ticker_cache = {}
@@ -810,13 +873,22 @@ async def main():
 
         # ── Primary symbol (via the shared factory) ───────────────────────────
         state["tasks"] = make_primary_tasks(
-            exchange, exchange_id, caps, state["primary"], state["timeframe"], ticker_cache)
+            exchange, exchange_id, caps, state["primary"], state["timeframe"], ticker_cache) \
+            if state["primary"] else []
 
         # ── Watchlist symbols (excluding primary) ─────────────────────────────
         # These stay connected for the whole life of the process — set_primary /
         # set_timeframe never touch them.
         other_symbols = [s for s in all_symbols if s != primary_symbol]
-        if other_symbols:
+        if caps["poll_tickers"]:
+            # One REST poll for the primary AND every launch symbol (the first
+            # primary stays a watchlist row after a switch); it follows a
+            # set_primary switch through state["primary"].
+            watchlist_tasks.append(asyncio.create_task(supervise(
+                "ticker_poll",
+                lambda: poll_tickers(exchange, lambda: [state["primary"]] + all_symbols,
+                                     ticker_cache))))
+        elif other_symbols:
             if caps["watch_tickers"]:
                 watchlist_tasks.append(asyncio.create_task(supervise(
                     "tickers_batch",
@@ -828,7 +900,7 @@ async def main():
                         f"ticker_individual:{sym}",
                         lambda s=sym: watch_ticker_individual(exchange, s))))
 
-        if not state["tasks"] and not watchlist_tasks:
+        if not state["tasks"] and not watchlist_tasks and state["primary"]:
             emit({"type": "error",
                   "message": f"Exchange '{exchange_id}' has no usable watch methods"})
             await exchange.close()
@@ -837,11 +909,13 @@ async def main():
         # The stdin loop runs until EOF (parent closes our stdin). Watchlist tasks
         # run forever via supervise(). Primary tasks live in state["tasks"] and are
         # swapped out on commands; they are NOT awaited here so cancelling them does
-        # not tear down the process. We await the stdin loop + watchlist tasks; the
-        # process stays alive as long as any of these is running.
+        # not tear down the process. EOF on stdin means the terminal is gone (it
+        # never closes the pipe of a stream it still reads), so the stream stops
+        # then: gather() waited for the watchlist tasks too, which never end, and
+        # left the process running without a parent.
         stdin_task = asyncio.create_task(
             stdin_command_loop(exchange, exchange_id, caps, ticker_cache, state))
-        await asyncio.gather(stdin_task, *watchlist_tasks)
+        await stdin_task
 
     except asyncio.CancelledError:
         pass

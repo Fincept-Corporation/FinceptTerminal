@@ -6,18 +6,19 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QScrollArea>
 #include <QShowEvent>
 
+#include <algorithm>
+
 namespace fincept::screens::widgets {
 
 using namespace fincept::ui;
 using fincept::services::FileManagerService;
-
-static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
 RecentFilesWidget::RecentFilesWidget(QWidget* parent)
     : BaseWidget(tr("Recent Files"), parent, ui::colors::AMBER.get()) {
@@ -86,7 +87,7 @@ void RecentFilesWidget::refresh_data() {
         auto* empty = new QLabel(tr("No files yet"));
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(
-            QString("color:%1;font-size:11px;background:transparent;padding:16px;%2").arg(colors::TEXT_DIM(), MF));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;background:transparent;padding:16px;").arg(colors::TEXT_DIM()));
         list_layout_->addWidget(empty);
         list_layout_->addStretch();
         return;
@@ -108,16 +109,18 @@ void RecentFilesWidget::refresh_data() {
         QString mime = f["type"].toString();
         QString badge_text = mime.section('/', 1, 1).left(3).toUpper();
         auto* badge = new QLabel(badge_text);
-        badge->setFixedWidth(28);
+        // Three bold characters, 28 px at the default font.
+        badge->setFixedWidth(
+            std::max(28, QFontMetrics(ui::fonts::font(-5, QFont::Bold)).horizontalAdvance(QStringLiteral("MMM")) + 4));
         badge->setAlignment(Qt::AlignCenter);
         badge->setStyleSheet(
-            QString("color:%1;font-size:9px;font-weight:700;background:transparent;%2").arg(ui::colors::AMBER(), MF));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;background:transparent;").arg(ui::colors::AMBER()));
         rl->addWidget(badge);
 
         // Name
         auto* name_lbl = new QLabel(f["originalName"].toString());
         name_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_PRIMARY(), MF));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
         name_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         rl->addWidget(name_lbl, 1);
 
@@ -126,7 +129,7 @@ void RecentFilesWidget::refresh_data() {
             QDateTime::fromString(f["uploadedAt"].toString(), Qt::ISODate).toLocalTime().toString("MM/dd HH:mm");
         auto* date_lbl = new QLabel(date_str);
         date_lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;").arg(colors::TEXT_DIM()));
         rl->addWidget(date_lbl);
 
         // Children are transparent to the mouse so the click lands on the row.
@@ -142,14 +145,14 @@ void RecentFilesWidget::refresh_data() {
 bool RecentFilesWidget::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton &&
         obj->property("recent_file_row").toBool()) {
-        EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", "file_manager"}});
+        EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", "file_manager"}, {"exclusive", true}});
         return true;
     }
     return BaseWidget::eventFilter(obj, event);
 }
 
 void RecentFilesWidget::apply_styles() {
-    scroll_->setStyleSheet("QScrollArea{border:none;background:transparent;}"
+    set_css_cached(scroll_, "QScrollArea{border:none;background:transparent;}"
                            "QScrollBar:vertical{background:transparent;width:4px;}" +
                            QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED()));
 

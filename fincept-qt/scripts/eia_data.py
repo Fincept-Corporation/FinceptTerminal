@@ -461,21 +461,53 @@ def main(args=None):
         fetcher = EIADataFetcher(api_key=api_key)
 
         if command == "get_petroleum":
-            # Usage: get_petroleum <category> [tables_csv] [start_date] [end_date]
+            # Usage: get_petroleum <category> [tables_csv] [start_date] [end_date] [symbol] [latest_weeks]
             if len(args) + 1 < 3:
                 print(json.dumps({
                     "success": False,
-                    "error": "Usage: python eia_data.py get_petroleum <category> [tables_csv] [start_date] [end_date]"
+                    "error": "Usage: python eia_data.py get_petroleum <category> [tables_csv] [start_date] [end_date] [symbol] [latest_weeks]"
                 }))
                 sys.exit(1)
 
             category = args[1]
-            tables = args[2].split(',') if len(args) + 1 > 3 else None
-            start_date = args[3] if len(args) + 1 > 4 else None
-            end_date = args[4] if len(args) + 1 > 5 else None
+            # An empty positional means "not set".
+            tables = ([t for t in args[2].split(',') if t.strip()] or None) if len(args) + 1 > 3 else None
+            start_date = (args[3] or None) if len(args) + 1 > 4 else None
+            end_date = (args[4] or None) if len(args) + 1 > 5 else None
+            symbol = (args[5] or None) if len(args) + 1 > 6 else None
+            # latest_weeks: keep only the last N report weeks of the answer (a panel's default view:
+            # balance_sheet over five years is ~23,500 rows / 7.6 MB, its last 8 weeks ~700 rows).
+            # Blank / absent = every week in the window, as before.
+            latest_weeks = (args[6] or None) if len(args) + 1 > 7 else None
+            if latest_weeks is not None:
+                try:
+                    latest_weeks = int(latest_weeks)
+                except ValueError:
+                    latest_weeks = 0
+                if latest_weeks < 1:
+                    print(json.dumps({"success": False, "code": "bad_args",
+                                      "error": f"latest_weeks must be a whole number of weeks >= 1 (got {args[6]!r})"}))
+                    return
+            # Every symbol's full history since 1982 was one answer of up to 134k rows / 43 MB (the
+            # desktop froze parsing it). Default to the last five years.
+            if not start_date:
+                start_date = date(date.today().year - 5, date.today().month, 1).isoformat()
 
             result = fetcher.get_petroleum_status_report(category, tables, start_date, end_date)
-            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
+            if symbol and isinstance(result, dict) and isinstance(result.get("data"), list):
+                wanted = {s.strip() for s in symbol.split(',') if s.strip()}
+                result["data"] = [r for r in result["data"] if r.get("symbol") in wanted]
+                result["count"] = len(result["data"])
+            if latest_weeks and isinstance(result, dict) and isinstance(result.get("data"), list):
+                weeks = sorted({r["date"] for r in result["data"]})[-latest_weeks:]
+                if weeks:
+                    result["data"] = [r for r in result["data"] if r["date"] >= weeks[0]]
+                    result["count"] = len(result["data"])
+                result["latest_weeks"] = latest_weeks
+            if isinstance(result, dict):
+                result["start_date"] = start_date
+            # One line (indent=2 tripled the size of a multi-MB answer and split the payload).
+            print(fincept_json.dumps(result, ensure_ascii=True))
 
         elif command == "get_steo":
             # Usage: get_steo <table> [symbols_csv] [frequency] [start_date] [end_date]

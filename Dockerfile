@@ -214,7 +214,13 @@ COPY --from=builder /opt/Qt /opt/Qt
 # LD_LIBRARY_PATH / QT_PLUGIN_PATH / QT_QPA_PLATFORM_PLUGIN_PATH are resolved
 # at container start by the ENTRYPOINT wrapper so they pick up the correct
 # per-arch subdirectory (gcc_64 vs gcc_arm64) without needing a shell.
-ENV QT_QPA_PLATFORM=xcb
+#
+# No QT_QPA_PLATFORM pin: the app picks the platform itself (main.cpp,
+# choose_linux_platform). With DISPLAY passed, as in the X11 run above, it uses
+# "xcb;wayland": xcb, exactly as the old `ENV QT_QPA_PLATFORM=xcb` did, with
+# Wayland only as a fallback. With no DISPLAY but a Wayland socket passed in,
+# Qt's default picks wayland (the client libs are installed above) instead of
+# aborting on xcb. `-e QT_QPA_PLATFORM=...` or `-e FINCEPT_WAYLAND=1` override.
 
 WORKDIR /app
 COPY --from=builder /src/fincept-qt/build/FinceptTerminal ./FinceptTerminal

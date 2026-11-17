@@ -17,8 +17,11 @@
 // Every list endpoint is wrapped in {success, message, data}; 401 = not signed in, 402 = out of credits.
 #include "screens/economics/panels/FinceptMacroPanel.h"
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "core/logging/Logger.h"
+#include "services/billing/PlanAccess.h"
 #include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/PlanHint.h"
 
 #include <QCoreApplication>
 #include <QDate>
@@ -160,7 +163,21 @@ QString latest_scrape(const QJsonArray& rows) {
 }
 
 QString credits_text(double c) {
-    return c == std::floor(c) ? QString::number(static_cast<int>(c)) : QString::number(c, 'f', 1);
+    // Up to three significant digits: a plan's share of a list price can be 0.25.
+    return c == std::floor(c) ? QString::number(static_cast<int>(c)) : QString::number(c, 'g', 3);
+}
+
+/// What a request to `endpoint` costs this account (the plan's price; the list price without a plan
+/// table). A plan that claims "included" yet is refused names the list price instead of 0.
+double fm_charged_cost(const QString& endpoint) {
+    const double c = services::FinceptMacroService::effective_credit_cost(endpoint);
+    return c > 0.0 ? c : services::FinceptMacroService::credit_cost(endpoint);
+}
+
+/// The CEIC country / indicator lists are metadata calls (their own, lower list price).
+const QString& fm_ceic_list_endpoint() {
+    static const QString kEndpoint = QStringLiteral("ceic/series/countries");
+    return kEndpoint;
 }
 
 QString duration_text(int seconds) {
@@ -182,19 +199,94 @@ namespace fmpd = fincept_macro_panel_detail;
 FinceptMacroPanel::FinceptMacroPanel(QWidget* parent)
     : EconPanelBase(fmpd::kFinceptMacroSourceId, fmpd::kFinceptMacroColor, parent) {
     build_base_ui(this);
+    fetch_btn_->setProperty("fincept_agent_risk", "spend");                               // billed in Fincept credits
+    load_pane()->preview()->primary_button()->setProperty("fincept_agent_risk", "spend"); // the preview's FETCH
     connect(&services::FinceptMacroService::instance(), &services::FinceptMacroService::result_ready, this,
             &FinceptMacroPanel::on_macro_result);
     update_controls_for_view();
     update_credit_hint();
+    sync_load_view();
+    // The server's plan table arrived or changed: the prices shown, the "included" wording and whether
+    // the views load by themselves (a plan that includes macro data loads them like a free source's;
+    // otherwise, and without a table, nothing runs by itself) follow it. Before the pane is configured
+    // (first show) load_policy() is read instead, which says the same.
+    connect(&billing::PlanAccess::instance(), &billing::PlanAccess::changed, this, [this]() {
+        update_credit_hint();
+        sync_load_view(); // the view's preview text and price first, then the policy presents it
+        if (load_pane())
+            load_pane()->set_policy(services::FinceptMacroService::included_in_plan()
+                                        ? ui::AutoLoadPane::Policy::AutoRun
+                                        : ui::AutoLoadPane::Policy::Manual);
+    });
 }
 
 void FinceptMacroPanel::activate() {
-    if (fmpd::is_ceic_view(current_view()) && ceic_country_combo_ && ceic_country_combo_->count() == 0)
-        load_ceic_countries();
-    show_empty(tr("Fincept Macro — central-bank rates, sovereign CDS, bond spreads, credit ratings,\n"
-                  "inverted curves, yield forecasts, country bond summaries, the macro calendar and CEIC series.\n\n"
-                  "Pick a VIEW (and optional filters), then press FETCH.\n"
-                  "Each request uses Fincept credits (shown next to REFRESH); repeats inside the reuse window are free."));
+    // Nothing billed is fetched by itself unless the account's plan includes macro data (then the
+    // views load like a free source's — load_policy()). The results pane shows the VIEW's remembered
+    // result with its "as of" time, or a preview naming this account's price. The CEIC country list
+    // (a metadata call, FinceptMacroService::credit_cost) loads on the CEIC view's FETCH (its
+    // automatic run on an included plan) — never on picking the view.
+}
+
+EconPanelBase::LoadPolicy FinceptMacroPanel::load_policy() const {
+    LoadPolicy p;
+    // Billed: manual (FETCH) — unless the plan includes macro data at no credit cost (no plan table:
+    // manual, as before). Re-applied on PlanAccess::changed (constructor).
+    p.manual = !services::FinceptMacroService::included_in_plan();
+    p.shape = ui::LoadingSkeleton::Shape::Table;
+    p.max_age_s = 24 * 3600; // older than a day: "may be out of date · REFRESH"
+    p.preview_title = tr("Fincept Macro");
+    p.preview_message = tr("Central-bank rates, sovereign CDS, bond spreads, ratings, forecasts, the macro "
+                           "calendar and CEIC series from the Fincept API.");
+    p.preview_run = tr("FETCH");
+    p.preview_note = tr("Each request uses Fincept credits; repeats inside the reuse window are free");
+    return p;
+}
+
+QList<ui::Requirement> FinceptMacroPanel::load_requirements() const {
+    return {ui::Requirement::signed_in()};
+}
+
+void FinceptMacroPanel::on_query_cancelled() {
+    // FinceptMacroService has no cancel: the answer is ignored when it arrives.
+    pending_request_id_.clear();
+}
+
+void FinceptMacroPanel::sync_load_view() {
+    const QString view = current_view();
+    const fmpd::FmView* def = fmpd::find_view(view);
+    if (!def || !load_pane())
+        return;
+    // The views share the result table: an answer still on its way for the view being left is not
+    // drawn (the request was sent — the service keeps its answer for the reuse window).
+    if (query_running() && load_pane()->running_view() != view)
+        load_pane()->cancel();
+    const QString endpoint = QString::fromLatin1(def->endpoint);
+    // The pane checks a known balance against what this account's plan pays for the view's request
+    // (list price in, PlanAccess decides) and marks its re-run buttons "spend" unless it is included.
+    load_pane()->set_cost_credits(services::FinceptMacroService::credit_cost(endpoint),
+                                  services::FinceptMacroService::plan_category());
+    // This account's price (the plan's; the list price without a plan table).
+    const QString cost = fmpd::credits_text(services::FinceptMacroService::effective_credit_cost(endpoint));
+    // Macro data is included with the plan: no price on the button for such an account.
+    if (services::FinceptMacroService::included_in_plan())
+        load_pane()->set_view_preview(
+            view, ui::EmptyState::preview_spec(tr(def->label), tr(def->tip), tr("FETCH"),
+                                               tr("Included with your Pro plan — no credits used"),
+                                               ui::EmptyState::Tone::Info, ui::LoadingSkeleton::Shape::Table));
+    else
+        load_pane()->set_view_preview(
+            view, ui::EmptyState::preview_spec(tr(def->label), tr(def->tip), tr("FETCH · ≈%1 CREDIT(S)").arg(cost),
+                                               tr("About %1 credit(s) per request · repeats inside the reuse window "
+                                                  "are free")
+                                                   .arg(cost),
+                                               ui::EmptyState::Tone::Warning, ui::LoadingSkeleton::Shape::Table));
+    // The macro calendar is a list of events; every other view is a table. Upcoming events change
+    // within the day (a release moves, an actual comes in): "may be out of date" after 6 h, not 24.
+    const bool events = view == QLatin1String("events");
+    set_view_load_policy(view, events ? ui::LoadingSkeleton::Shape::List : ui::LoadingSkeleton::Shape::Table,
+                         events ? 6 * 3600 : load_policy().max_age_s);
+    set_load_view(view);
 }
 
 void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
@@ -210,29 +302,33 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
         view_combo_->addItem(tr(v.label), QString::fromLatin1(v.id));
         view_combo_->setItemData(view_combo_->count() - 1, tr(v.tip), Qt::ToolTipRole);
     }
-    view_combo_->setFixedHeight(26);
+    view_combo_->setMinimumHeight(26);
     view_combo_->setMinimumWidth(190);
     view_combo_->setAccessibleName(tr("Fincept Macro view"));
     connect(view_combo_, &QComboBox::currentIndexChanged, this, [this]() {
         update_controls_for_view();
         update_credit_hint();
-        if (fmpd::is_ceic_view(current_view()) && ceic_country_combo_->count() == 0)
-            load_ceic_countries();
+        sync_load_view();
+        // A CEIC view's country list is a billed metadata call (list price:
+        // FinceptMacroService::credit_cost, the plan's price applies): it loads on
+        // the view's FETCH (run_query), never on picking the view.
     });
 
     country_lbl_ = make_lbl(tr("COUNTRY"));
     country_edit_ = new QLineEdit;
-    country_edit_->setFixedHeight(26);
-    country_edit_->setFixedWidth(130);
+    country_edit_->setMinimumHeight(26);
+    set_text_width(country_edit_, 130);
     country_edit_->setClearButtonEnabled(true);
     country_edit_->setAccessibleName(tr("Country filter"));
+    // Enter in a toolbar field runs the query (EconPanelBase): a billed request.
+    country_edit_->setProperty(fincept::core::agent::kAgentRiskProperty, "spend");
 
     maturity_lbl_ = make_lbl(tr("MATURITY"));
     maturity_combo_ = new QComboBox;
     maturity_combo_->addItem(tr("All"), QString());
     for (const char* m : {"1Y", "2Y", "5Y", "10Y", "30Y"})
         maturity_combo_->addItem(QString::fromLatin1(m), QString::fromLatin1(m));
-    maturity_combo_->setFixedHeight(26);
+    maturity_combo_->setMinimumHeight(26);
 
     importance_lbl_ = make_lbl(tr("IMPORTANCE"));
     importance_combo_ = new QComboBox;
@@ -240,20 +336,22 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
     importance_combo_->addItem(tr("High"), QStringLiteral("3"));
     importance_combo_->addItem(tr("Medium"), QStringLiteral("2"));
     importance_combo_->addItem(tr("Low"), QStringLiteral("1"));
-    importance_combo_->setFixedHeight(26);
+    importance_combo_->setMinimumHeight(26);
 
     days_lbl_ = make_lbl(tr("DAYS"));
     days_spin_ = new QSpinBox;
     days_spin_->setRange(1, 60);
     days_spin_->setValue(7);
-    days_spin_->setFixedHeight(26);
+    days_spin_->setMinimumHeight(26);
     days_spin_->setToolTip(tr("Look-ahead window from today"));
 
     ceic_country_lbl_ = make_lbl(tr("COUNTRY"));
     ceic_country_combo_ = new QComboBox;
-    ceic_country_combo_->setFixedHeight(26);
+    ceic_country_combo_->setMinimumHeight(26);
     ceic_country_combo_->setMinimumWidth(160);
-    ceic_country_combo_->setPlaceholderText(tr("Loads on first use…"));
+    ceic_country_combo_->setPlaceholderText(tr("Press FETCH to load the list"));
+    // Choosing a country loads its indicator list (a billed metadata call, the plan's price).
+    ceic_country_combo_->setProperty(fincept::core::agent::kAgentRiskProperty, "spend");
     connect(ceic_country_combo_, &QComboBox::currentIndexChanged, this, [this]() {
         if (current_view() == QLatin1String("ceic"))
             load_ceic_indicators();
@@ -261,7 +359,7 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
 
     ceic_indicator_lbl_ = make_lbl(tr("INDICATOR"));
     ceic_indicator_combo_ = new QComboBox;
-    ceic_indicator_combo_->setFixedHeight(26);
+    ceic_indicator_combo_->setMinimumHeight(26);
     ceic_indicator_combo_->setMinimumWidth(240);
     ceic_indicator_combo_->setMaxVisibleItems(25);
     ceic_indicator_combo_->setPlaceholderText(tr("Pick a country first"));
@@ -271,29 +369,29 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
     year_from_spin_ = new QSpinBox;
     year_from_spin_->setRange(1900, this_year + 5);
     year_from_spin_->setValue(this_year - 15);
-    year_from_spin_->setFixedHeight(26);
+    year_from_spin_->setMinimumHeight(26);
     year_from_spin_->setToolTip(tr("First year to fetch"));
     year_to_spin_ = new QSpinBox;
     year_to_spin_->setRange(1900, this_year + 5);
     year_to_spin_->setValue(this_year);
-    year_to_spin_->setFixedHeight(26);
+    year_to_spin_->setMinimumHeight(26);
     year_to_spin_->setToolTip(tr("Last year to fetch"));
 
     category_lbl_ = make_lbl(tr("CATEGORY"));
     category_edit_ = new QLineEdit;
-    category_edit_->setFixedHeight(26);
-    category_edit_->setFixedWidth(130);
+    category_edit_->setMinimumHeight(26);
+    set_text_width(category_edit_, 130);
     category_edit_->setClearButtonEnabled(true);
     category_edit_->setPlaceholderText(tr("e.g. prices"));
+    category_edit_->setProperty(fincept::core::agent::kAgentRiskProperty, "spend"); // Enter runs the billed query
 
     refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setObjectName(QStringLiteral("econCsvBtn"));
+    refresh_btn_->setProperty("fincept_agent_risk", "spend"); // bypasses the cache: billed
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
-        if (fetch_btn_ && !fetch_btn_->isEnabled())
-            return; // a request is already in flight
         emit query_started();
-        run_query(/*force=*/true);
+        run_query(/*force=*/true); // supersedes a request in flight
     });
 
     credit_lbl_ = new QLabel;
@@ -311,6 +409,11 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
     thl->addSpacing(6);
     thl->addWidget(refresh_btn_);
     thl->addWidget(credit_lbl_);
+    // What the plan changes for macro data (included with Pro: no credits used)
+    // — hidden until the server has sent its plan table.
+    auto* plan_hint = new ui::PlanHintLabel(QStringLiteral("macro"), this);
+    plan_hint->set_compact(true);
+    thl->addWidget(plan_hint);
 }
 
 QString FinceptMacroPanel::current_view() const {
@@ -360,18 +463,26 @@ void FinceptMacroPanel::update_credit_hint() {
     if (!view || !credit_lbl_)
         return;
     const QString endpoint = QString::fromLatin1(view->endpoint);
-    const double cost = services::FinceptMacroService::credit_cost(endpoint);
+    // This account's prices (the plan's; the list prices without a plan table).
+    const double cost = services::FinceptMacroService::effective_credit_cost(endpoint);
     const QString reuse = fmpd::duration_text(services::FinceptMacroService::fresh_seconds(endpoint));
     QString text = tr("≈%1 credit/request · reused %2").arg(fmpd::credits_text(cost), reuse);
     if (current_view() == QLatin1String("ceic"))
-        text = tr("≈%1 credit/request (+0.5 per country/indicator list, once a day) · reused %2")
-                   .arg(fmpd::credits_text(cost), reuse);
+        text = tr("≈%1 credit/request (+%2 per country/indicator list, once a day) · reused %3")
+                   .arg(fmpd::credits_text(cost),
+                        fmpd::credits_text(
+                            services::FinceptMacroService::effective_credit_cost(fmpd::fm_ceic_list_endpoint())),
+                        reuse);
+    const bool included = services::FinceptMacroService::included_in_plan();
+    if (included)
+        text = tr("no credits · reused %1").arg(reuse);
     credit_lbl_->setText(text);
     credit_lbl_->setToolTip(tr("Fincept bills each live request in credits. Repeating the same query within %1 is "
                                "answered from the local cache and costs nothing; REFRESH always asks the server.")
                                 .arg(reuse));
-    refresh_btn_->setToolTip(
-        tr("Ask the server again, bypassing the local cache (≈%1 credit)").arg(fmpd::credits_text(cost)));
+    refresh_btn_->setToolTip(included ? tr("Ask the server again, bypassing the local cache (included with Pro)")
+                                      : tr("Ask the server again, bypassing the local cache (≈%1 credit)")
+                                            .arg(fmpd::credits_text(cost)));
 }
 
 // ── CEIC lists ───────────────────────────────────────────────────────────────
@@ -433,9 +544,15 @@ void FinceptMacroPanel::run_query(bool force) {
                << qMakePair(QStringLiteral("limit"), QStringLiteral("500"));
     } else if (fmpd::is_ceic_view(view)) {
         if (ceic_country_combo_->count() == 0) {
+            // The view's first FETCH loads its country list (a metadata call) — never picking the view.
             ceic_countries_requested_ = false; // a failed earlier load must be retryable
             load_ceic_countries();
-            show_empty(tr("Loading the CEIC country list — pick a country, then press FETCH."));
+            const double list_cost =
+                services::FinceptMacroService::effective_credit_cost(fmpd::fm_ceic_list_endpoint());
+            show_empty(list_cost > 0.0
+                           ? tr("Loading the CEIC country list (≈%1 credit) — pick a country, then press FETCH.")
+                                 .arg(fmpd::credits_text(list_cost))
+                           : tr("Loading the CEIC country list — pick a country, then press FETCH."));
             return;
         }
         const QString ceic_country = ceic_country_combo_->currentData().toString();
@@ -469,6 +586,7 @@ void FinceptMacroPanel::run_query(bool force) {
 
     pending_view_ = view;
     pending_request_id_ = QStringLiteral("fm_%1_%2").arg(view).arg(++request_seq_);
+    mark_query_pending(); // answered through FinceptMacroService, not EconomicsService
     show_loading(force ? tr("Refreshing %1 from Fincept…").arg(tr(def->label))
                        : tr("Fetching %1 from Fincept…").arg(tr(def->label)));
     services::FinceptMacroService::instance().fetch(pending_request_id_, QString::fromLatin1(def->endpoint), params,
@@ -572,12 +690,21 @@ void FinceptMacroPanel::show_failure(const services::FinceptMacroResult& r) {
                           "Sign in again (your session may have expired), then retry.")
                            .arg(r.http_status));
             return;
-        case Status::NoCredits:
-            show_error_with_action(tr("Out of Fincept credits — this request costs about %1 credit(s).\n"
-                                      "Recharge or upgrade your plan, then retry.")
-                                       .arg(fmpd::credits_text(services::FinceptMacroService::credit_cost(r.endpoint))),
-                                   tr("VIEW PLANS"), [this]() { ui::billing::open_plans(this); });
+        case Status::NoCredits: {
+            QString text = tr("Out of Fincept credits — this request costs about %1 credit(s).\n"
+                              "Recharge or upgrade your plan, then retry.")
+                               .arg(fmpd::credits_text(fmpd::fm_charged_cost(r.endpoint)));
+            // The server's own sentence (its cost / balance figures) when it sent
+            // one — the service falls back to a bare "HTTP 402" otherwise.
+            if (!r.error.isEmpty() && r.error != QStringLiteral("HTTP %1").arg(r.http_status))
+                text += QLatin1Char('\n') + tr("Server: %1").arg(r.error);
+            // On Free, say what Pro changes for this data (empty on Pro / older servers).
+            const QString pro_note = ui::plan::out_of_credits_note(QStringLiteral("macro"));
+            if (!pro_note.isEmpty())
+                text += QLatin1Char('\n') + pro_note;
+            show_error_with_action(text, tr("VIEW PLANS"), [this]() { ui::billing::open_plans(this); });
             return;
+        }
         case Status::Offline:
             show_error(tr("Cannot reach the Fincept API — %1\nCheck your connection, then retry.").arg(r.error));
             return;
@@ -835,7 +962,7 @@ void FinceptMacroPanel::show_view_result(const services::FinceptMacroResult& r) 
                             : tr("FINCEPT API ERROR — %1. Showing the copy retrieved %2.").arg(r.error, when));
     }
     set_banner(banners.join(QStringLiteral("   ·   ")));
-    LOG_INFO("FinceptMacroPanel", QString("Displayed %1 row(s) for %2%3")
+    LOG_DEBUG("FinceptMacroPanel", QString("Displayed %1 row(s) for %2%3")
                                       .arg(rows.size())
                                       .arg(view, r.stale ? QStringLiteral(" (stale)") : QString()));
 }

@@ -3,6 +3,7 @@
 
 #include "core/symbol/IGroupLinked.h"
 #include "core/symbol/SymbolGroup.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
@@ -10,6 +11,7 @@
 #include <QEvent>
 #include <QHideEvent>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -20,6 +22,14 @@
 #include <QWidget>
 
 #include <atomic>
+
+namespace fincept::trading {
+class ExchangeSession;
+}
+
+namespace fincept::ui {
+class AutoLoadPane;
+}
 
 namespace fincept::screens::crypto {
 class CryptoTickerBar;
@@ -32,7 +42,7 @@ class CryptoBottomPanel;
 
 namespace fincept::screens {
 
-class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
+class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGroupLinked, public ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
@@ -51,6 +61,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void on_group_symbol_changed(const SymbolRef& ref) override;
     SymbolRef current_symbol() const override;
 
+    // ISectionLinked — deep link from the header search box: a bottom tab
+    // (positions | orders | history | my_trades | fees | market | stats | tape | depth)
+    // or "ticket" (focus "buy" / "sell" picks the side; the quantity box gets the
+    // keyboard). focus with section "" = a pair ("ETH/USDT"), as typed in the symbol box.
+    // Navigation only: nothing is placed, cancelled or changed.
+    bool open_section(const QString& section, const QString& focus) override;
+
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
@@ -63,12 +80,16 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void on_api_clicked();
     void on_order_submitted(const QString& side, const QString& order_type, double qty, double price, double stop_price,
                             double sl, double tp);
-    void on_cancel_order(const QString& order_id);
+    void on_cancel_order(const QString& order_id, const QString& order_symbol);
     void on_cancel_all_orders();                   // CANCEL ALL (live + paper)
     void on_close_all_positions();                 // SQUARE OFF ALL (live + paper)
     void on_close_position(const QString& symbol); // close a single position
     void on_ob_price_clicked(double price);
     void on_search_requested(const QString& filter);
+    /// EventBus "crypto.open_order_ticket" (the header search box's "buy 0.5 btc"): in
+    /// the active window only, switch to the pair and prefill the ticket (never submitted),
+    /// then acknowledge synchronously with "crypto.open_order_ticket.ack" {token}.
+    void on_external_order_ticket(const QVariantMap& request);
 
     void refresh_ticker();
     void refresh_orderbook();
@@ -86,6 +107,11 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void init_exchange();
     void load_portfolio();
     void switch_symbol(const QString& symbol);
+    /// Tells the ticker, book, chart, tape and depth chart which market the
+    /// prices come from — the resolved market (a pair may be shown from one
+    /// quoted in another asset), else the selected pair — so each prints the
+    /// right quote asset. Call whenever selected_symbol_ or market_ changes.
+    void apply_price_market();
 
     // Perp detection + futures-control visibility. Leverage / margin-mode /
     // reduce-only controls only make sense on derivatives, so they are shown
@@ -102,14 +128,78 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void async_fetch_my_trades();
     void async_fetch_trading_fees();
     void async_fetch_mark_price();
-    void async_set_leverage(int leverage);
-    void async_set_margin_mode(const QString& mode);
+    // Leverage / margin mode: the ticket's APPLY, confirmed with the scope
+    // (one market, or the whole account on e.g. Bybit), then sent; the
+    // account's current values are read back.
+    void on_apply_leverage(int leverage, const QString& margin_mode);
+    void async_fetch_leverage_info();
+
+    // ── Exchange routing ──────────────────────────────────────────────────
+    // The session of the exchange THIS screen shows. Every call names it (or,
+    // on a worker, the exchange id captured on the UI thread); nothing reads
+    // ExchangeService's process-wide "current exchange", which another window
+    // or a later switch can change under a pending order.
+    trading::ExchangeSession* session() const;
+
+    /// Where a LIVE action goes and as whom, captured when the user acts.
+    struct LiveContext {
+        QString exchange;
+        QString account_id;    // credential fingerprint the daemon re-checks
+        QString account_label; // "API key ab12…ef90"
+        trading::ExchangeCredentials creds;
+        QString selected_symbol;
+    };
+    LiveContext live_context() const;
+    /// False (with why) when the screen moved on since `ctx` was captured:
+    /// another exchange, PAPER, another pair, other API keys.
+    bool live_context_current(const LiveContext& ctx, QString* why) const;
+
+    // ── LIVE orders: prepare (nothing sent) -> confirm exactly that -> place ──
+    void submit_live_order(const LiveContext& ctx, const QJsonObject& args);
+    void confirm_and_place(const LiveContext& ctx, const QJsonObject& args, const QJsonObject& prepared);
+    void report_order_outcome(const LiveContext& ctx, const QJsonObject& args, const QJsonObject& prepared,
+                              const QJsonObject& reply);
+    void look_up_unconfirmed_order(const LiveContext& ctx, const QString& symbol, const QString& token, int attempt);
+    QString order_confirm_text(const LiveContext& ctx, const QJsonObject& prepared) const;
+    // Close / square off: fetch the positions fresh, prepare each reduce-only
+    // close, list them in one confirmation, then place exactly those.
+    void close_live_positions(const QString& only_symbol);
+    void place_prepared_batch(const LiveContext& ctx, const QVector<QJsonObject>& args,
+                              const QVector<QJsonObject>& prepared, const QString& title);
+    void warm_live_session(); // build the authenticated client + markets when LIVE is armed
+    void on_market_choice(const QString& symbol);
+    void connect_session_signals(); // ws_failed / ws_state_changed of this screen's session
+    // Symbol / exchange switch: seed the time & sales tape with the latest REST
+    // prints, and load the market's order minimums into the ticket.
+    void async_seed_trade_tape();
+    void async_fetch_market_limits();
+    // A place / cancel ended without a confirmation (time-out or a dropped
+    // connection): the order may still exist. Refresh the live views now and
+    // again shortly after, so it shows up as soon as the exchange has it. Never
+    // re-sends anything.
+    void reconcile_after_unconfirmed();
 
     // ── DataHub subscription lifecycle (the only data path since Phase 6) ─
     // Only exchanges registered as DataHub producers via
     // ExchangeSessionManager::topic_patterns() can appear in the dropdown.
     void hub_subscribe_topics();
     void hub_unsubscribe_topics();
+
+    // ── Never-blank market panes (chart plot + order book) ──
+    // A visible pane asks for data: fetch the chart history when none is drawn;
+    // on a `retry` (RETRY, Python became ready) also restart a stream that gave up.
+    // Public market data only — nothing is placed, changed or connected.
+    void ensure_market_feed(bool retry);
+    /// Symbol / exchange / timeframe switch: chart and book back to their
+    /// skeletons, captioned with what is loading.
+    void reset_market_panes();
+    /// The live stream is down (`message` = why) or back (""): chart + book states.
+    void report_live_feed(const QString& message);
+    /// The exchange's API-key state (none / stored but unreadable / present) to the bottom panel.
+    void push_key_state();
+    /// The fee schedule of the pair on screen, when FEES / MARKET wants it and it
+    /// is not loaded for this exchange, pair and mode (`force` = RETRY / entering LIVE).
+    void maybe_fetch_fees(bool force);
 
     // ── Command bar widgets ──
     QPushButton* exchange_btn_ = nullptr;
@@ -118,6 +208,8 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     QPushButton* mode_btn_ = nullptr;
     QPushButton* api_btn_ = nullptr;
     QLabel* ws_status_ = nullptr;
+    QLabel* ws_error_label_ = nullptr; // why live prices are down (ws_failed), next to the pill
+    QObject* session_conn_owner_ = nullptr;
     QLabel* ws_transport_ = nullptr; // tiny hint: "NATIVE" for Kraken, "DAEMON" for ccxt
     QLabel* clock_label_ = nullptr;
 
@@ -133,6 +225,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     crypto::CryptoOrderEntry* order_entry_ = nullptr;
     crypto::CryptoOrderBook* orderbook_ = nullptr;
     crypto::CryptoBottomPanel* bottom_panel_ = nullptr;
+    // The order book inside a feed-mode AutoLoadPane: skeleton until the first
+    // snapshot, error page (RETRY) when the stream is down, Python setup page.
+    ui::AutoLoadPane* ob_pane_ = nullptr;
+    bool ob_feed_reported_ = false; // the pane was told a book is on screen (since the last reset / error)
+    bool ob_feed_retry_ = false;    // the pane let go of the feed while visible (RETRY / requirement lost)
+    QString fees_key_;              // "<exchange>|<pair>|<mode>" whose fee schedule was requested
+    QString market_info_key_;       // "<exchange>|<pair>" whose funding / OI was last requested
 
     // ── Timers ──
     QTimer* ticker_timer_ = nullptr;
@@ -159,11 +258,23 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     static constexpr int CANDLE_FETCH_MAX_ATTEMPTS = 3;
     static constexpr int CANDLE_FETCH_RETRY_MS = 2000;
 
+    // The market selected_symbol_ resolves to on exchange_id_ (the daemon's one
+    // resolver) and what may be sent there. UI thread only.
+    crypto::ResolvedMarket market_;
+    // A LIVE cancel-all / close / square-off is running: a second press must
+    // not send a second set of orders (UI thread only).
+    bool account_action_busy_ = false;
+    // Idempotency for a repeated ticket after an unknown outcome: the same
+    // ticket pressed again within 10 minutes reuses the client order id, so an
+    // exchange that enforces unique ids rejects a duplicate.
+    QString last_unknown_token_;
+    QString last_unknown_key_;
+    qint64 last_unknown_at_ = 0;
+
     // Async fetch guards
     std::atomic<bool> candles_fetching_{false};
     std::atomic<int> live_inflight_{0}; // counts async_fetch_live_* tasks still running
     std::atomic<bool> paper_bookkeeping_in_flight_{false};
-    int leverage_seq_ = 0; // debounce token for the leverage spin box (UI thread only)
 
     // Startup gate — ensures daemon-dependent fetches fire exactly once,
     // either via daemon_ready signal or via the 8s safety fallback timeout.

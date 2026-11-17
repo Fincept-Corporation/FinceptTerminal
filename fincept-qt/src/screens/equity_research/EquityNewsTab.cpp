@@ -23,15 +23,16 @@ EquityNewsTab::EquityNewsTab(QWidget* parent) : QWidget(parent) {
     // Dismiss the "LOADING NEWS…" overlay on failure — it's hidden only on success.
     // The overlay hides on failure, but the "Loading news…" status used to stay put —
     // a blank tab claiming to still load. Say what happened and how to retry.
-    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (ctx != "News" || news_loaded_)
+    connect(&svc, &services::equity::EquityResearchService::load_failed, this,
+            [this](const services::equity::LoadFailure& f) {
+                if (f.leg != QLatin1String("News") || f.symbol != current_symbol_ || news_loaded_)
                     return;
                 if (loading_overlay_)
                     loading_overlay_->hide_loading();
                 if (status_label_) {
                     status_label_->setText(tr("Could not load news for %1. Press REFRESH to try again.")
                                                .arg(current_symbol_));
+                    status_label_->setToolTip(f.message); // the real reason
                     status_label_->show();
                 }
             });
@@ -54,8 +55,10 @@ void EquityNewsTab::start_fetch(bool force) {
         return;
     clear_cards();
     news_loaded_ = false; // a REFRESH is a fresh load: its failure must reach the error handler
+    news_fell_back_ = false;
     count_label_->setText("");
     status_label_->setText(tr("Loading news…"));
+    status_label_->setToolTip(QString());
     status_label_->show();
     loading_overlay_->show_loading(tr("LOADING NEWS…"));
     using NP = services::equity::NewsProvider;
@@ -104,17 +107,17 @@ void EquityNewsTab::build_ui() {
         QString("QWidget { background:%1; }"
                 "QFrame#newsCard { background:%2; border:1px solid %3; }"
                 "QFrame#newsCard:hover { border-color:%4; background:%5; }"
-                "QLabel#newsTitle { color:%6; font-size:12px; font-weight:700; background:transparent; border:0; }"
-                "QLabel#newsPublisher { color:%7; font-size:10px; font-weight:700; background:transparent; border:0; }"
-                "QLabel#newsDate { color:%8; font-size:10px; background:transparent; border:0; }"
-                "QLabel#newsDesc { color:%9; font-size:10px; background:transparent; border:0; }"
-                "QLabel#newsRead { color:%4; font-size:10px; font-weight:700; letter-spacing:1px;"
+                "QLabel#newsTitle { color:%6; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; background:transparent; border:0; }"
+                "QLabel#newsPublisher { color:%7; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; background:transparent; border:0; }"
+                "QLabel#newsDate { color:%8; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0; }"
+                "QLabel#newsDesc { color:%9; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0; }"
+                "QLabel#newsRead { color:%4; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1px;"
                 " background:transparent; border:0; }"
-                "QLabel#newsTone { font-size:10px; font-weight:700; padding:1px 6px; border:1px solid %8;"
+                "QLabel#newsTone { font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; padding:1px 6px; border:1px solid %8;"
                 " color:%8; background:transparent; }"
                 "QLabel#newsTone[tone=\"bull\"] { color:%10; border-color:%10; }"
                 "QLabel#newsTone[tone=\"bear\"] { color:%11; border-color:%11; }"
-                "QLabel#newsToneSummary { font-size:10px; font-weight:700; color:%9; background:transparent;"
+                "QLabel#newsToneSummary { font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; color:%9; background:transparent;"
                 " border:0; }")
             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
                  ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::CYAN(), ui::colors::TEXT_TERTIARY(),
@@ -134,19 +137,19 @@ void EquityNewsTab::build_ui() {
     hl->setSpacing(12);
 
     title_lbl_ = new QLabel(tr("LATEST NEWS"));
-    title_lbl_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
+    title_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:2px; "
                                       "background:transparent; border:0;")
                                   .arg(ui::colors::AMBER()));
     hl->addWidget(title_lbl_);
 
     count_label_ = new QLabel("");
     count_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(count_label_);
 
     company_label_ = new QLabel("");
     company_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0;").arg(ui::colors::CYAN()));
     hl->addWidget(company_label_);
 
     // Aggregate tone of the headlines on screen (same model as the Sentiment tab).
@@ -163,7 +166,7 @@ void EquityNewsTab::build_ui() {
     open_news_btn_->setToolTip(tr("Filter the News screen (all feeds) by this symbol"));
     open_news_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
-                "padding:4px 10px; font-size:10px; font-weight:700; }"
+                "padding:4px 10px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QPushButton:hover { border-color:%3; color:%3; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(open_news_btn_, &QPushButton::clicked, this, [this]() {
@@ -182,12 +185,12 @@ void EquityNewsTab::build_ui() {
     provider_combo_->setToolTip(tr("News source"));
     provider_combo_->setStyleSheet(
         QString("QComboBox { background:%1; color:%2; border:1px solid %3; border-radius:3px; "
-                "padding:3px 8px; font-size:10px; font-weight:700; }"
+                "padding:3px 8px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QComboBox::drop-down { border:0; width:14px; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; "
-                "selection-background-color:%4; }")
+                "selection-background-color:%4; selection-color:%5; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
-                 ui::colors::BG_RAISED()));
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY()));
     connect(provider_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (suppress_provider_signal_)
             return;
@@ -198,7 +201,7 @@ void EquityNewsTab::build_ui() {
 
     refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
-                                        "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
+                                        "border-radius:3px; padding:4px 12px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                                         "QPushButton:hover { border-color:%3; color:%3; }")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() { start_fetch(/*force=*/true); });
@@ -211,7 +214,7 @@ void EquityNewsTab::build_ui() {
     status_label_ = new QLabel(tr("Search for a symbol to load news."));
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(status_label_);
 
     // ── Scrollable card list ──────────────────────────────────────────────────
@@ -242,7 +245,9 @@ void EquityNewsTab::clear_cards() {
 void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& articles) {
     clear_cards();
     status_label_->hide();
-    count_label_->setText(tr("%1 articles").arg(articles.size()));
+    count_label_->setText(news_fell_back_
+                              ? tr("%1 articles — NewsAPI unavailable, showing GNews / Yahoo").arg(articles.size())
+                              : tr("%1 articles").arg(articles.size()));
 
     // Aggregate tone: counts and the mean score of the headlines on screen.
     if (tone_label_) {
@@ -380,12 +385,19 @@ bool EquityNewsTab::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-void EquityNewsTab::on_news_loaded(QString symbol, QVector<services::equity::NewsArticle> articles) {
+void EquityNewsTab::on_news_loaded(QString symbol, fincept::services::equity::NewsProvider provider, bool fell_back,
+                                   QVector<services::equity::NewsArticle> articles) {
     if (symbol != current_symbol_)
+        return;
+    // The Sentiment tab fetches the same symbol through the Auto chain; with NewsAPI selected
+    // here its answer used to repaint this list while the picker still said NewsAPI.
+    using NP = services::equity::NewsProvider;
+    if (provider != (use_newsapi_ ? NP::NewsApi : NP::Auto))
         return;
     loading_overlay_->hide_loading();
     cached_articles_ = articles;
     news_loaded_ = true;
+    news_fell_back_ = fell_back;
     populate(articles);
 }
 

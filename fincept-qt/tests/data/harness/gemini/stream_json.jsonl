@@ -1,0 +1,11 @@
+{"type":"init","timestamp":"2026-11-17T10:00:00.000Z","session_id":"c6b5e3a2-1f4d-4b8e-9a0c-2d7e8f9a1b3c","model":"gemini-2.5-pro"}
+{"type":"message","timestamp":"2026-11-17T10:00:00.000Z","role":"user","content":"List the files"}
+{"type":"message","timestamp":"2026-11-17T10:00:00.000Z","role":"assistant","content":"I'll list ","delta":true}
+{"type":"message","timestamp":"2026-11-17T10:00:00.000Z","role":"assistant","content":"the files.","delta":true}
+{"type":"tool_use","timestamp":"2026-11-17T10:00:00.000Z","tool_name":"list_directory","tool_id":"list_directory-1","parameters":{"path":"."}}
+{"type":"tool_result","timestamp":"2026-11-17T10:00:00.000Z","tool_id":"list_directory-1","status":"success","output":"README.md\nsrc"}
+{"type":"tool_use","timestamp":"2026-11-17T10:00:00.000Z","tool_name":"read_file","tool_id":"read_file-2","parameters":{"absolute_path":"/w/missing.txt"}}
+{"type":"tool_result","timestamp":"2026-11-17T10:00:00.000Z","tool_id":"read_file-2","status":"error","error":{"type":"FILE_NOT_FOUND","message":"File not found"}}
+{"type":"error","timestamp":"2026-11-17T10:00:00.000Z","severity":"warning","message":"Loop detection paused"}
+{"type":"message","timestamp":"2026-11-17T10:00:00.000Z","role":"assistant","content":"Two entries: README.md and src.","delta":true}
+{"type":"result","timestamp":"2026-11-17T10:00:00.000Z","status":"success","stats":{"total_tokens":1650,"input_tokens":1500,"output_tokens":150,"cached":1000,"input":500,"duration_ms":4200,"tool_calls":2,"models":{}}}

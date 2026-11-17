@@ -4,6 +4,8 @@
 
 namespace fincept::workflow {
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_file_nodes(NodeRegistry& registry) {
     registry.register_type({
         .type_id = "file.operations",
@@ -54,7 +56,9 @@ void register_file_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "File", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"format", "Format", "select", "json", {"json", "csv", "xlsx", "xml", "pdf"}, ""},
+                // Only JSON and CSV are written (the bridge refuses anything else); xlsx / xml /
+                // pdf were offered here and always failed at run time.
+                {"format", "Format", "select", "json", {"json", "csv"}, ""},
                 {"path", "Output Path", "string", "", {}, "", true},
             },
         .execute = nullptr,
@@ -62,9 +66,11 @@ void register_file_nodes(NodeRegistry& registry) {
 
     registry.register_type({
         .type_id = "file.compress",
-        .display_name = "Compress",
+        .display_name = "Compress (.qz)",
         .category = "Files",
-        .description = "Compress or decompress files",
+        // The file written is Qt's qCompress container (<path>.qz), readable by this node's
+        // Decompress only. The Format select (zip / gzip / tar.gz) was never read and is gone.
+        .description = "Compress a file to <path>.qz (Qt format) or decompress a .qz file",
         .icon_text = "F",
         .accent_color = "#525252",
         .version = 1,
@@ -73,7 +79,6 @@ void register_file_nodes(NodeRegistry& registry) {
         .parameters =
             {
                 {"operation", "Operation", "select", "compress", {"compress", "decompress"}, ""},
-                {"format", "Format", "select", "zip", {"zip", "gzip", "tar.gz"}, ""},
                 {"path", "File Path", "string", "", {}, "", true},
             },
         .execute = nullptr,

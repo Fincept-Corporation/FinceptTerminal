@@ -64,6 +64,10 @@ class SparklineCanvas : public QWidget {
 
 namespace {
 const QStringList kDefaultSymbols = {"AAPL", "MSFT", "GOOGL", "NVDA"};
+
+QString sparkline_strip_topic(const QString& sym) {
+    return QStringLiteral("market:sparkline:") + sym;
+}
 } // namespace
 
 SparklineStripWidget::SparklineStripWidget(const QJsonObject& cfg, QWidget* parent)
@@ -79,7 +83,7 @@ SparklineStripWidget::SparklineStripWidget(const QJsonObject& cfg, QWidget* pare
         QStringList topics;
         topics.reserve(symbols_.size());
         for (const auto& sym : symbols_)
-            topics.append(QStringLiteral("market:sparkline:") + sym);
+            topics.append(sparkline_strip_topic(sym));
         if (!topics.isEmpty())
             datahub::DataHub::instance().request(topics, /*force=*/true);
     });
@@ -111,6 +115,7 @@ void SparklineStripWidget::apply_config(const QJsonObject& cfg) {
 
     symbols_ = next;
     build_rows();
+    untrack_topics(); // fresh "—" rows: forget the old rows' data / error state
 
     if (isVisible())
         hub_resubscribe();
@@ -164,10 +169,16 @@ void SparklineStripWidget::build_rows() {
 void SparklineStripWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    received_.clear();
-    set_loading_progress(received_.size(), symbols_.size());
+    QStringList topics;
+    topics.reserve(symbols_.size());
+    for (const auto& sym : symbols_)
+        topics.append(sparkline_strip_topic(sym));
+    // BaseWidget drives the overlay: it covers the strip only until the first
+    // sparkline lands (a re-show no longer re-covers drawn rows), and a symbol
+    // whose topic errored counts as resolved — its row shows "—" + reason.
+    track_topics(topics, /*drive_loading_overlay=*/true);
     for (const auto& sym : symbols_) {
-        const QString topic = QStringLiteral("market:sparkline:") + sym;
+        const QString topic = sparkline_strip_topic(sym);
         const QString sym_copy = sym;
         hub.subscribe(this, topic, [this, sym_copy](const QVariant& v) {
             if (!v.canConvert<QVector<double>>())
@@ -176,6 +187,23 @@ void SparklineStripWidget::hub_resubscribe() {
         });
     }
     hub_active_ = true;
+}
+
+void SparklineStripWidget::on_topic_errors_changed() {
+    for (const auto& sym : symbols_)
+        apply_row_error(sym);
+}
+
+void SparklineStripWidget::apply_row_error(const QString& sym) {
+    auto it = rows_.find(sym);
+    if (it == rows_.end())
+        return;
+    const QString topic = sparkline_strip_topic(sym);
+    const QString tip = topic_error_tooltip(topic);
+    // No error: back to the row's own link tooltip (set by link_symbol()).
+    it->last->setToolTip(tip.isEmpty() ? it->symbol->toolTip() : tip);
+    if (!tip.isEmpty() && !topic_has_data(topic))
+        it->last->setText(failed_value_text()); // pending shows the same dash; the tooltip says why
 }
 
 void SparklineStripWidget::hub_unsubscribe_all() {
@@ -197,12 +225,21 @@ void SparklineStripWidget::hideEvent(QHideEvent* e) {
 
 void SparklineStripWidget::on_points(const QString& symbol, const QVector<double>& points) {
     auto it = rows_.find(symbol);
-    if (it == rows_.end() || points.isEmpty())
+    if (it == rows_.end())
         return;
+    const QString topic = sparkline_strip_topic(symbol);
+    if (points.isEmpty()) {
+        // An empty series is a failure, not data (it used to be dropped
+        // silently, leaving the row — and the overlay count — waiting forever).
+        note_topic_error(topic, tr("No recent prices for %1.").arg(symbol));
+        return;
+    }
     it->spark->set_points(points);
     it->last->setText(dash_fmt::price(points.last(), symbol));
-    received_.insert(symbol);
-    set_loading_progress(received_.size(), symbols_.size());
+    const bool had_error = !topic_error(topic).isEmpty();
+    note_topic_value(topic);
+    if (had_error)
+        apply_row_error(symbol); // drop the failure tooltip
 }
 
 QDialog* SparklineStripWidget::make_config_dialog(QWidget* parent) {
@@ -244,10 +281,10 @@ void SparklineStripWidget::apply_styles() {
     // One sheet on the rows' parent (object-name selectors) — this used to
     // be two setStyleSheet() calls per row, inside the row loop.
     if (QWidget* host = content_layout() ? content_layout()->parentWidget() : nullptr)
-        host->setStyleSheet(
+        set_css_cached(host, 
             QString("*{background:transparent;}"  // what BaseWidget set on this host
-                    "QLabel#sparkSym{color:%1;font-size:11px;font-weight:700;background:transparent;}"
-                    "QLabel#sparkLast{color:%1;font-size:11px;font-weight:600;background:transparent;}")
+                    "QLabel#sparkSym{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
+                    "QLabel#sparkLast{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}")
                 .arg(ui::colors::TEXT_PRIMARY()));
     for (auto it = rows_.begin(); it != rows_.end(); ++it) {
         if (it->spark)

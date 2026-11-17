@@ -13,6 +13,10 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 class McpServersScreen : public QWidget, public IStatefulScreen {
@@ -88,10 +92,12 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
         nullptr; // category sidebar (display text re-set in retranslateUi, API key in UserRole)
     QWidget* mkt_cards_widget_ = nullptr;
     QVBoxLayout* mkt_cards_layout_ = nullptr;
+    ui::EmptyState* mkt_empty_ = nullptr; ///< nothing matches the category / search (kept across rebuilds)
 
     // Installed
     QWidget* inst_cards_widget_ = nullptr;
     QVBoxLayout* inst_cards_layout_ = nullptr;
+    ui::EmptyState* inst_empty_ = nullptr; ///< nothing installed / nothing matches (kept across rebuilds)
     QPushButton* add_server_btn_ = nullptr;
 
     // Tools

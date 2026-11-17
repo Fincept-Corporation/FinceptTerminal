@@ -4,8 +4,10 @@
 
 #include "core/logging/Logger.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QThread>
 
 #include <algorithm>
 
@@ -68,7 +70,7 @@ QString JobRegistry::create(const QString& tool, int timeout_ms, const QString& 
     job.cancel_flag = std::make_shared<std::atomic<bool>>(false);
     jobs_.emplace(id, std::move(job)); // QHash::insert only copies
 
-    LOG_INFO(kJobRegistryTag, QString("Job %1 started for tool '%2'").arg(id, tool));
+    LOG_DEBUG(kJobRegistryTag, QString("Job %1 started for tool '%2'").arg(id, tool));
     return id;
 }
 
@@ -154,6 +156,15 @@ std::optional<ToolResult> JobRegistry::take_result(const QString& id) {
 }
 
 std::optional<JobSnapshot> JobRegistry::wait_for(const QString& id, int wait_ms) {
+    // Never block a running GUI event loop on a long-poll: that freezes the
+    // whole terminal for up to kMaxWaitMs. (A GUI thread that has not started
+    // its loop yet — the command-line self-tests — may still wait.)
+    if (QCoreApplication* app = QCoreApplication::instance();
+        app && QThread::currentThread() == app->thread() && QThread::currentThread()->loopLevel() > 0 && wait_ms > 0) {
+        LOG_WARN_RL(kJobRegistryTag, QStringLiteral("gui-wait"), 60000,
+                    QStringLiteral("wait_for called on the GUI thread — answering without waiting"));
+        wait_ms = 0;
+    }
     QMutexLocker lock(&mutex_);
     auto it = jobs_.find(id);
     if (it == jobs_.end())

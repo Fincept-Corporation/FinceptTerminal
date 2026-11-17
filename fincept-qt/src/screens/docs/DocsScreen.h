@@ -1,8 +1,11 @@
 #pragma once
+#include "screens/common/ISectionLinked.h"
+
 #include <QEvent>
 #include <QHash>
 #include <QLabel>
 #include <QListWidget>
+#include <QPointer>
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QTreeWidget>
@@ -13,14 +16,23 @@ class QSplitter;
 class QLineEdit;
 class QPushButton;
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 /// Comprehensive in-app documentation browser for all terminal features.
 /// Organized by category with skill-level guidance (Beginner → Pro).
-class DocsScreen : public QWidget {
+class DocsScreen : public QWidget, public ISectionLinked {
     Q_OBJECT
   public:
     explicit DocsScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — a topic / page id ("welcome", "getting_started", "shortcuts", "fno", … — the
+    /// sidebar's ids, build_content_pages()), also "page:<id>" / "topic:<id>": the sidebar click path
+    /// (a topic search that hides it is cleared first). "" + focus = the topic search text.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -34,6 +46,8 @@ class DocsScreen : public QWidget {
     void navigate_to(const QString& section_id);
     /// Filter the sidebar tree by topic/category text (live, from the search box).
     void apply_search(const QString& text);
+    /// The sidebar's "no topic matches" state over the tree (`show` false hides it).
+    void update_search_empty(bool show, const QString& needle);
     /// Recompute the "N TOPICS | M CATEGORIES" chip from the actual tree.
     void update_topic_count();
     /// Show/hide the command-bar "OPEN SCREEN" button for the current topic.
@@ -129,6 +143,9 @@ class DocsScreen : public QWidget {
     // ── Members ──────────────────────────────────────────────────────────────
     QSplitter* splitter_ = nullptr; // owns sidebar_ + pages_; reused on rebuild
     QTreeWidget* sidebar_ = nullptr;
+    /// Over the sidebar's viewport while a search hides every topic; dies with the
+    /// sidebar when a language change rebuilds it (hence QPointer).
+    QPointer<ui::EmptyState> search_empty_;
     QStackedWidget* pages_ = nullptr;
     QLabel* breadcrumb_ = nullptr;
     // Command-bar widgets (cached for retranslateUi)
@@ -138,10 +155,21 @@ class DocsScreen : public QWidget {
     QPushButton* open_btn_ = nullptr; ///< "OPEN SCREEN" — opens the screen the current topic documents
     QString current_topic_;           ///< section id of the page on top of pages_
     QMap<QString, int> page_index_; // section_id → stacked widget index
+    /// Pages are built the first time they are shown (45 pages of hundreds of
+    /// labels took seconds to build up front). Until then the stack holds an
+    /// empty placeholder at the page's index.
+    using PageBuilder = QWidget* (DocsScreen::*)();
+    QHash<QString, PageBuilder> page_builders_; // section_id → builder (not built yet)
+    QWidget* ensure_page(const QString& section_id);
     /// Lower-cased text of every page, so search finds topics by what they say
-    /// ("XIRR", "VaR") and not only by their titles.
+    /// ("XIRR", "VaR") and not only by their titles. Filled as pages are built;
+    /// the first search builds the rest in the background, one page per
+    /// event-loop turn, and re-applies itself as their text arrives.
     QHash<QString, QString> page_text_;
     void index_page_text();
+    void index_page(const QString& section_id, QWidget* page);
+    void index_next_page();
+    bool indexing_ = false;
 };
 
 } // namespace fincept::screens

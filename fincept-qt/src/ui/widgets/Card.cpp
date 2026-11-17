@@ -2,6 +2,7 @@
 
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 namespace fincept::ui {
 
@@ -14,7 +15,7 @@ Card::Card(const QString& title, QWidget* parent) : QFrame(parent) {
 
     // Title bar
     auto* title_bar = new QWidget;
-    title_bar->setFixedHeight(28);
+    metrics::follow_fixed_height(title_bar, 28);
     title_bar->setStyleSheet("background: transparent;");
 
     auto* hl = new QHBoxLayout(title_bar);
@@ -28,7 +29,7 @@ Card::Card(const QString& title, QWidget* parent) : QFrame(parent) {
     hl->addStretch();
 
     auto* close_btn = new QPushButton("x");
-    close_btn->setFixedSize(20, 20);
+    metrics::follow_fixed_size(close_btn, 20, 20);
     close_btn->setStyleSheet(styles::card_close_button());
     connect(close_btn, &QPushButton::clicked, this, &Card::close_requested);
     hl->addWidget(close_btn);

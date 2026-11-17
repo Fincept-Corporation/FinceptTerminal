@@ -23,6 +23,7 @@ NodeScene::NodeScene(QObject* parent) : QGraphicsScene(parent) {
 NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
     auto* item = new NodeItem(def, type_def);
     addItem(item);
+    const bool was_empty = nodes_.isEmpty();
     nodes_.insert(def.id, item);
 
     // Wire signals
@@ -44,7 +45,9 @@ NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
         connect(port, &PortItem::connection_started, this, &NodeScene::start_temp_edge);
     }
 
-    LOG_INFO("NodeEditor", QString("Added node: %1 (%2)").arg(def.name, def.type));
+    LOG_DEBUG("NodeEditor", QString("Added node: %1 (%2)").arg(def.name, def.type));
+    if (was_empty)
+        emit emptiness_changed(false);
     return item;
 }
 
@@ -62,6 +65,7 @@ EdgeItem* NodeScene::add_edge(const EdgeDef& def) {
     auto* edge = new EdgeItem(def.id, src_port, tgt_port);
     addItem(edge);
     edges_.insert(def.id, edge);
+    edge_order_.append(def.id);
 
     connect(edge, &EdgeItem::delete_requested, this, &NodeScene::edge_delete_requested);
     return edge;
@@ -87,7 +91,9 @@ void NodeScene::remove_node(const QString& node_id) {
     nodes_.remove(node_id);
     removeItem(item);
     delete item;
-    LOG_INFO("NodeEditor", QString("Removed node: %1").arg(node_id));
+    LOG_DEBUG("NodeEditor", QString("Removed node: %1").arg(node_id));
+    if (nodes_.isEmpty())
+        emit emptiness_changed(true);
 }
 
 void NodeScene::remove_edge(const QString& edge_id) {
@@ -97,6 +103,7 @@ void NodeScene::remove_edge(const QString& edge_id) {
 
     auto* edge = it.value();
     edges_.erase(it);
+    edge_order_.removeAll(edge_id);
     removeItem(edge);
     delete edge;
 }
@@ -107,6 +114,7 @@ void NodeScene::clear_all() {
         remove_node(id);
     nodes_.clear();
     edges_.clear();
+    edge_order_.clear();
 }
 
 WorkflowDef NodeScene::serialize() const {
@@ -117,13 +125,18 @@ WorkflowDef NodeScene::serialize() const {
         nd.y = it.value()->pos().y();
         wf.nodes.append(nd);
     }
-    for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it) {
+    // Creation order, not id order: the executor keeps this order for inputs that
+    // share a port (and for edges whose port it cannot match), so it must be stable.
+    for (const QString& edge_id : edge_order_) {
+        const EdgeItem* item = edges_.value(edge_id, nullptr);
+        if (!item)
+            continue;
         EdgeDef ed;
-        ed.id = it.value()->edge_id();
-        ed.source_node = it.value()->source_port()->parent_node()->node_def().id;
-        ed.target_node = it.value()->target_port()->parent_node()->node_def().id;
-        ed.source_port = it.value()->source_port()->def().id;
-        ed.target_port = it.value()->target_port()->def().id;
+        ed.id = item->edge_id();
+        ed.source_node = item->source_port()->parent_node()->node_def().id;
+        ed.target_node = item->target_port()->parent_node()->node_def().id;
+        ed.source_port = item->source_port()->def().id;
+        ed.target_port = item->target_port()->def().id;
         wf.edges.append(ed);
     }
     return wf;

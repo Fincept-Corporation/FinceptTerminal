@@ -127,20 +127,20 @@ if _qc_aux:
 
 # Algorithm.CSharp stubs
 _qc_csharp = _sys_boot.modules.get('QuantConnect.Algorithm.CSharp')
+def _csharp_class(name):
+    """A class of LEAN's C# regression suite (QuantConnect.Algorithm.CSharp): its code is not part of
+    this catalogue, so using it is refused with that reason."""
+    def _init(self, *a, **kw):
+        from .errors import not_supported as _ns
+        raise _ns(f"the C# class {name} from LEAN's C# regression algorithms (QuantConnect.Algorithm.CSharp)",
+                  "Its code is not part of this strategy catalogue.")
+    return type(name, (), {'__init__': _init})
+
+
 if _qc_csharp:
-    _qc_csharp.CustomPartialFillModel = type('CustomPartialFillModel', (), {
-        '__init__': lambda self, *a, **kw: None
-    })
-    _qc_csharp.TestOptionAssignmentModel = type('TestOptionAssignmentModel', (), {
-        '__init__': lambda self, *a, **kw: None
-    })
-    _qc_csharp.TestOptionExerciseModel = type('TestOptionExerciseModel', (), {
-        '__init__': lambda self, *a, **kw: None
-    })
-    # OptionAssignmentRegressionAlgorithm stub base class
-    _qc_csharp.OptionAssignmentRegressionAlgorithm = type('OptionAssignmentRegressionAlgorithm', (), {
-        '__init__': lambda self, *a, **kw: None
-    })
+    for _cs in ('CustomPartialFillModel', 'TestOptionAssignmentModel', 'TestOptionExerciseModel'):
+        setattr(_qc_csharp, _cs, _csharp_class(_cs))
+    del _cs
 
 # DataFeeds stubs
 _qc_df = _sys_boot.modules.get('QuantConnect.Lean.Engine.DataFeeds')
@@ -227,83 +227,8 @@ _jc = type('JsonConvert', (), {
 })
 _register_stub_module('Newtonsoft.Json', {'JsonConvert': _jc})
 
-# Pre-register keras/tensorflow stubs if not available
-if 'keras' not in _sys_boot.modules:
-    try:
-        import keras as _keras_test
-    except ImportError:
-        _keras_mod = _register_stub_module('keras')
-        _keras_models = _register_stub_module('keras.models', {
-            'Sequential': type('Sequential', (), {
-                '__init__': lambda self, *a, **kw: setattr(self, '_layers', []),
-                'add': lambda self, *a, **kw: self._layers.append(a[0]) if hasattr(self, '_layers') else None,
-                'compile': lambda self, *a, **kw: None,
-                'fit': lambda self, *a, **kw: type('History', (), {'history': {'loss': [0.1]}})(),
-                'predict': lambda self, *a, **kw: [[0.0]],
-                'save': lambda self, *a, **kw: None,
-                'load_model': staticmethod(lambda *a, **kw: None),
-                'train_on_batch': lambda self, *a, **kw: 0.1,
-                'get_weights': lambda self: [[0.0]],
-                'set_weights': lambda self, *a, **kw: None,
-                '__getitem__': lambda self, idx: type('Layer', (), {
-                    'output': None, 'input': None, 'name': f'layer_{idx}',
-                    'get_weights': lambda self: [[0.0]],
-                })(),
-                '__len__': lambda self: len(getattr(self, '_layers', [])),
-            })
-        })
-        _keras_layers = _register_stub_module('keras.layers', {
-            'Dense': type('Dense', (), {'__init__': lambda self, *a, **kw: None}),
-            'Activation': type('Activation', (), {'__init__': lambda self, *a, **kw: None}),
-            'LSTM': type('LSTM', (), {'__init__': lambda self, *a, **kw: None}),
-            'Dropout': type('Dropout', (), {'__init__': lambda self, *a, **kw: None}),
-        })
-        _keras_optimizers = _register_stub_module('keras.optimizers', {
-            'SGD': type('SGD', (), {'__init__': lambda self, *a, **kw: None}),
-            'Adam': type('Adam', (), {'__init__': lambda self, *a, **kw: None}),
-        })
-        _keras_mod.models = _keras_models
-        _keras_mod.layers = _keras_layers
-        _keras_mod.optimizers = _keras_optimizers
-
-if 'tensorflow' not in _sys_boot.modules:
-    try:
-        import tensorflow as _tf_test
-    except ImportError:
-        _tf_mod = _register_stub_module('tensorflow')
-        _tf_mod.keras = _sys_boot.modules.get('keras', _types_boot.ModuleType('keras'))
-        _register_stub_module('tensorflow.keras', _tf_mod.keras.__dict__ if hasattr(_tf_mod.keras, '__dict__') else {})
-        # tensorflow.compat.v1 stub
-        _tf_compat = _register_stub_module('tensorflow.compat')
-        _tf_v1 = _register_stub_module('tensorflow.compat.v1', {
-            'Session': type('Session', (), {
-                '__init__': lambda self, *a, **kw: None,
-                'run': lambda self, *a, **kw: [],
-                '__enter__': lambda self: self,
-                '__exit__': lambda self, *a: None,
-            }),
-            'placeholder': lambda *a, **kw: None,
-            'Variable': lambda *a, **kw: None,
-            'global_variables_initializer': lambda: None,
-            'train': type('train', (), {
-                'GradientDescentOptimizer': type('GradientDescentOptimizer', (), {
-                    '__init__': lambda self, *a, **kw: None,
-                    'minimize': lambda self, *a, **kw: None,
-                }),
-            })(),
-            'reduce_mean': lambda *a, **kw: None,
-            'square': lambda *a, **kw: None,
-            'matmul': lambda *a, **kw: None,
-            'add': lambda *a, **kw: None,
-            'nn': type('nn', (), {
-                'relu': lambda *a, **kw: None,
-                'sigmoid': lambda *a, **kw: None,
-            })(),
-            'float32': 'float32',
-            'disable_v2_behavior': lambda: None,
-        })
-        _tf_compat.v1 = _tf_v1
-        _tf_mod.compat = _tf_compat
+# keras / tensorflow are NOT stubbed: a strategy that imports them needs the real
+# packages (a stub used to return a fixed fake prediction, i.e. an invented result).
 
 del _sys_boot, _types_boot, _register_stub_module, _should_override
 
@@ -323,7 +248,6 @@ from .algorithm import ConstantAlphaModel, CompositeAlphaModel
 from .algorithm import (
     EqualWeightingPortfolioConstructionModel,
     InsightWeightingPortfolioConstructionModel,
-    MeanVarianceOptimizationPortfolioConstructionModel,
     BlackLittermanOptimizationPortfolioConstructionModel
 )
 
@@ -340,16 +264,16 @@ from .algorithm import (
     MaximumDrawdownPercentPerSecurity,
     MaximumUnrealizedProfitPercentPerSecurity,
     TrailingStopRiskManagementModel,
-    MaximumSectorExposureRiskManagementModel,
     CompositeRiskManagementModel
 )
 
-# --- Framework Models: Universe Selection ---
-from .algorithm import (
-    ManualUniverseSelectionModel,
-    FundamentalUniverseSelectionModel,
-    ScheduledUniverseSelectionModel,
-    CustomUniverseSelectionModel
+# --- Framework Models: Universe Selection (framework/selection.py) ---
+from .framework.selection import (
+    ManualUniverseSelectionModel, FundamentalUniverseSelectionModel, ScheduledUniverseSelectionModel,
+    CustomUniverseSelectionModel, CoarseFundamentalUniverseSelectionModel, FineFundamentalUniverseSelectionModel,
+    EmaCrossUniverseSelectionModel, InceptionDateUniverseSelectionModel, LiquidETFUniverse,
+    EnergyETFUniverse, MetalsETFUniverse, TechnologyETFUniverse, USTreasuriesETFUniverse, VolatilityETFUniverse,
+    SP500SectorsETFUniverse
 )
 
 # --- Data Types ---
@@ -405,15 +329,19 @@ from .consolidators import (
 
 # --- Universe ---
 from .universe import (
-    UniverseSettings, Universe, CoarseFundamental, FineFundamental,
+    UniverseSettings, Universe, CoarseFundamental, FineFundamental, Fundamental,
     ValuationRatios, OperationRatios, AssetClassification,
-    CompanyReference, SecurityReference
+    CompanyReference, SecurityReference, ETFConstituentData, ETFConstituentUniverse, FundamentalUniverse,
+    ConstituentsUniverse, ScheduledUniverse, MorningstarSectorCode, MorningstarIndustryGroupCode,
+    MorningstarIndustryCode, MorningstarEconomySphereCode, UniverseDefinitions, CompanyProfile, EarningReports,
+    EarningRatios, FinancialStatements, MultiPeriodField, FundamentalUniverseFactory, CoarseFundamentalUniverse,
+    FineFundamentalFilteredUniverse, UserDefinedUniverse, ETFConstituentsUniverse
 )
 
 # --- Extensions ---
 from .extensions import (
     Time, TimeZones, Extensions, IndicatorExtensions,
-    BuyingPowerModelExtensions, DefaultBrokerageModel, RateOfChangePercent
+    BuyingPowerModelExtensions, DefaultBrokerageModel, RateOfChangePercent, Expiry, Math
 )
 
 # --- Framework Models: Alpha (from framework/alphas.py) ---
@@ -438,26 +366,32 @@ from .framework.selection import (
 # --- Standard Library (matching LEAN's AlgorithmImports) ---
 from datetime import date, time, datetime, timedelta
 from typing import *
+from enum import Enum, IntEnum
+
+
+def _enum_get_values(enum_type):
+    """System.Enum.GetValues(type) as LEAN strategies call it (Enum.get_values(DataMappingMode))."""
+    try:
+        return [m.value for m in enum_type]
+    except TypeError:                     # a plain constants class
+        vals = [v for k, v in vars(enum_type).items()
+                if not k.startswith('_') and k.isupper() and isinstance(v, int) and not isinstance(v, bool)]
+        return sorted(dict.fromkeys(vals))
+
+
+Enum.get_values = staticmethod(_enum_get_values)
+Enum.GetValues = staticmethod(_enum_get_values)
+from .enums import OrderField, OrderRequestStatus
 import math
 import json
 import random as _random_mod
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-except ImportError:
-    plt = None
+# numpy / pandas are exported (LEAN's AlgorithmImports does) but imported on first use:
+# importing pandas eagerly cost every run ~1-2 s of cold start before any work began.
+# (matplotlib used to be imported here too; no strategy uses it.)
+from ._lazy import LazyModule as _LazyModule
+np = _LazyModule('numpy')
+pd = _LazyModule('pandas')
 
 
 # ============================================================================
@@ -474,8 +408,12 @@ IAlgorithm = QCAlgorithm
 import sys as _sys_fixup
 _qc_csharp_fix = _sys_fixup.modules.get('QuantConnect.Algorithm.CSharp')
 if _qc_csharp_fix:
+    def _csharp_base_initialize(self):
+        from .errors import not_supported as _ns
+        raise _ns("the C# base algorithm OptionAssignmentRegressionAlgorithm from LEAN's C# regression "
+                  "algorithms (QuantConnect.Algorithm.CSharp)", "Its code is not part of this strategy catalogue.")
     _qc_csharp_fix.OptionAssignmentRegressionAlgorithm = type('OptionAssignmentRegressionAlgorithm', (QCAlgorithm,), {
-        '__init__': lambda self, *a, **kw: QCAlgorithm.__init__(self),
+        'initialize': _csharp_base_initialize,
     })
 del _sys_fixup
 
@@ -532,42 +470,11 @@ class OptionPricingModelType:
     BinomialCoxRossRubinstein = 1; CrankNicolsonFD = 3
 
 # --- OptionPriceModels ---
-class OptionPriceModels:
-    @staticmethod
-    def crank_nicolson_fd(): return None
-    @staticmethod
-    def black_scholes(): return None
-    @staticmethod
-    def additive_equiprobabilities(): return None
-    @staticmethod
-    def binomial_cox_ross_rubinstein(): return None
-    @staticmethod
-    def binomial_jarrow_rudd(): return None
-    @staticmethod
-    def barone_adesi_whaley(): return None
-    CrankNicolsonFD = crank_nicolson_fd
-    BlackScholes = black_scholes
-    BaroneAdesiWhaley = barone_adesi_whaley
 
 # --- OptionFilterUniverse ---
-class OptionFilterUniverse:
-    def __init__(self):
-        self._strikes_down = 0
-        self._strikes_up = 0
-    def strikes(self, down, up): self._strikes_down = down; self._strikes_up = up; return self
-    def expiration(self, min_days, max_days): return self
-    def include_weeklys(self): return self
-    def calls_only(self): return self
-    def puts_only(self): return self
 
 # --- Fill & Execution Models ---
-class FillModel:
-    def market_fill(self, security, order): return None
-    def limit_fill(self, security, order): return None
-    def stop_market_fill(self, security, order): return None
 
-class ImmediateFillModel(FillModel):
-    pass
 
 # --- PythonIndicator ---
 class PythonIndicator:
@@ -597,111 +504,246 @@ class PythonIndicator:
             return self.current
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
     def update(self, input_data): self.samples += 1; return False
-    def __float__(self): return self.value
+    def on_updated(self, point):
+        """Publish a new value (custom indicators call this from update)."""
+        v = float(getattr(point, 'value', point) or 0.0)
+        self.samples = getattr(self, 'samples', 0) + 1
+        cur = self.current
+        try:
+            cur.value = v
+            cur.time = getattr(point, 'time', None)
+        except AttributeError:
+            pass
+        self.updated(self, point)
+    def __float__(self): return float(self.value)
 
 # --- Order ---
-class Order:
-    def __init__(self):
-        self.id = 0; self.symbol = None; self.type = OrderType.MARKET
-        self.status = OrderStatus.NEW; self.quantity = 0; self.price = 0
-        self.tag = ""; self.direction = OrderDirection.BUY
 
-# --- MarketOnCloseOrder / MarketOnOpenOrder ---
-class MarketOnCloseOrder:
-    def __init__(self, symbol=None, quantity=0, tag=""):
-        self.symbol = symbol; self.quantity = quantity; self.tag = tag
+# --- Reality models, order classes, statistics, cash book, corporate-action events (real
+# implementations; see models.py / orders.py / statistics.py / cashbook.py / corporate_actions.py) ---
+from .models import (CashAmount, OrderFee, OrderFeeParameters, FeeModel, ConstantFeeModel,
+                     InteractiveBrokersFeeModel, SlippageModel, NullSlippageModel, ConstantSlippageModel,
+                     VolumeShareSlippageModel, MarketImpactSlippageModel, AlphaStreamsSlippageModel,
+                     FillModel, ImmediateFillModel, EquityFillModel, FutureFillModel, FutureOptionFillModel,
+                     Fill, FillModelParameters, BuyingPowerModel, SecurityMarginModel, CashBuyingPowerModel,
+                     ConstantBuyingPowerModel, NullBuyingPowerModel, PatternDayTradingMarginModel,
+                     GetMaximumOrderQuantityForTargetBuyingPowerParameters, GetMaximumOrderQuantityResult,
+                     HasSufficientBuyingPowerForOrderParameters, HasSufficientBuyingPowerForOrderResult,
+                     MaintenanceMargin, InitialMargin, BuyingPower, ReservedBuyingPowerForPosition,
+                     ReservedBuyingPowerForPositionParameters, MarginInterestRateParameters,
+                     MarginInterestRateModel, MarginCallModel, DefaultMarginCallModel,
+                     ImmediateSettlementModel, DelayedSettlementModel, BrokerageMessageType, BrokerageMessageEvent)
+from .orders import (Order, MarketOrder, LimitOrder, StopMarketOrder, StopLimitOrder, LimitIfTouchedOrder,
+                     TrailingStopOrder, ComboMarketOrder, ComboLimitOrder, ComboLegLimitOrder,
+                     OptionExerciseOrder)
+from .statistics import PerformanceMetrics
+from .cashbook import Cash, CashBook
+from .corporate_actions import Split, Dividend, SplitType
+from .types import SymbolDict as _SymbolDict, KeyValuePair
+from .extensions import DefaultBrokerageModel as BrokerageModel
 
-class MarketOnOpenOrder:
-    def __init__(self, symbol=None, quantity=0, tag=""):
-        self.symbol = symbol; self.quantity = quantity; self.tag = tag
+
+class Delistings(_SymbolDict):
+    pass
+
+
+class Dividends(_SymbolDict):
+    pass
+
+
+class Splits(_SymbolDict):
+    pass
+
+
+class SymbolChangedEvents(_SymbolDict):
+    pass
+
+
+class NullShortableProvider:
+    """No shortable-quantity limit (LEAN's null provider): every quantity is shortable."""
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def shortable_quantity(self, symbol, local_time):
+        return None
+
+    def fee_rate(self, symbol, local_time):
+        return 0.0
+
+    def rebate_rate(self, symbol, local_time):
+        return 0.0
+
+# --- Options and futures (model-priced chains: options.py, option_chain.py, option_model.py,
+# option_strategies.py; derived futures contracts: futures.py) ---
+from .option_chain import (OptionFilterUniverse, OptionChain, OptionChains, OptionContract, Greeks)
+from .option_strategies import OptionStrategies, OptionStrategy, Leg
+from .futures import (FutureMarginModel, FuturesChain, FuturesContract, FutureFilterUniverse, Delisting,
+                      SymbolChangedEvent)
+
+
+class DelistingType:
+    WARNING = 0
+    DELISTED = 1
+    Warning = 0
+    Delisted = 1
+
+
+class _PriceModelChoice:
+    """What option.price_model was set to. The engine prices every contract with its own model
+    (Black-Scholes-Merton / Black-76, option_model.py); the choice is recorded and disclosed, and as
+    in LEAN a model that does not support the contract's style (Black-Scholes and the integral
+    engine: European only; Barone-Adesi-Whaley and Bjerksund-Stensland: American only) makes
+    greeks / implied volatility raise ArgumentException."""
+    _STYLES = {'BlackScholes': (1,), 'Integral': (1,), 'BaroneAdesiWhaley': (0,), 'BjerksundStensland': (0,)}
+
+    def __init__(self, name):
+        self.name = name
+        self.allowed_styles = self._STYLES.get(name, (0, 1))      # OptionStyle: AMERICAN 0, EUROPEAN 1
+
+    def __repr__(self):
+        return f"OptionPriceModel({self.name})"
+
+
+class OptionPriceModels:
+    @staticmethod
+    def black_scholes(): return _PriceModelChoice('BlackScholes')
+    @staticmethod
+    def crank_nicolson_fd(): return _PriceModelChoice('CrankNicolsonFD')
+    @staticmethod
+    def barone_adesi_whaley(): return _PriceModelChoice('BaroneAdesiWhaley')
+    @staticmethod
+    def bjerksund_stensland(): return _PriceModelChoice('BjerksundStensland')
+    @staticmethod
+    def binomial_cox_ross_rubinstein(): return _PriceModelChoice('BinomialCoxRossRubinstein')
+    @staticmethod
+    def binomial_jarrow_rudd(): return _PriceModelChoice('BinomialJarrowRudd')
+    @staticmethod
+    def additive_equiprobabilities(): return _PriceModelChoice('AdditiveEquiprobabilities')
+    @staticmethod
+    def binomial_tian(): return _PriceModelChoice('BinomialTian')
+    @staticmethod
+    def binomial_leisen_reimer(): return _PriceModelChoice('BinomialLeisenReimer')
+    @staticmethod
+    def binomial_trigeorgis(): return _PriceModelChoice('BinomialTrigeorgis')
+    @staticmethod
+    def integral(): return _PriceModelChoice('Integral')
+    @staticmethod
+    def black_scholes_merton(): return _PriceModelChoice('BlackScholes')
+    BlackScholes = black_scholes
+    CrankNicolsonFD = crank_nicolson_fd
+    BaroneAdesiWhaley = barone_adesi_whaley
+    BjerksundStensland = bjerksund_stensland
+    BinomialCoxRossRubinstein = binomial_cox_ross_rubinstein
+
+
+def _greek_indicator_class(kind):
+    from .algorithm import _OptionGreekIndicator
+
+    class _G(_OptionGreekIndicator):
+        def __init__(self, name=None, option=None, *args, **kwargs):
+            sym = option if option is not None else (name if not isinstance(name, str) else None)
+            label = name if isinstance(name, str) else f"{kind.upper()}({sym})"
+            super().__init__(label, kind)
+            self.option_symbol = sym
+
+        def update(self, *args, **kwargs):
+            # values come from the option model each close (fed by the option manager when the indicator
+            # is registered with algorithm.iv/d/g/v/t/r); manual feeding uses IndicatorBase.update
+            return super().update(*args, **kwargs)
+    _G.__name__ = {'iv': 'ImpliedVolatility', 'delta': 'Delta', 'gamma': 'Gamma', 'vega': 'Vega',
+                   'theta': 'Theta', 'rho': 'Rho'}[kind]
+    return _G
+
+
+ImpliedVolatility = _greek_indicator_class('iv')
+Delta = _greek_indicator_class('delta')
+Gamma = _greek_indicator_class('gamma')
+Vega = _greek_indicator_class('vega')
+Theta = _greek_indicator_class('theta')
+Rho = _greek_indicator_class('rho')
+CustomImpliedVolatility = ImpliedVolatility
+
+
+class DefaultExerciseModel:
+    """LEAN's default exercise model: in-the-money options are exercised automatically at expiry
+    (options.py implements it)."""
+    def option_exercise(self, option, order):
+        return []
+
+from .custom_data import SubscriptionDataSource, SubscriptionTransportMedium, FileFormat
+
+from .portfolio import OptionStrategyPositionGroupBuyingPowerModel, SecurityPositionGroupBuyingPowerModel
+
+# --- Order requests / responses (fincept_engine.orders) ---
+from .orders import (MarketOnCloseOrder, MarketOnOpenOrder, SubmitOrderRequest, UpdateOrderRequest,
+                     CancelOrderRequest, OrderRequest, OrderResponse, OrderResponseErrorCode)
 
 # --- Brokerage ---
-class BrokerageModelSecurityInitializer:
-    def __init__(self, brokerage_model=None, security_seeder=None):
-        self._model = brokerage_model; self._seeder = security_seeder
-    def initialize(self, security): pass
-
 class SecuritySeeder:
+    """Seeds a new security with its last known price (LEAN ISecuritySeeder)."""
     @staticmethod
     def null(): return SecuritySeeder()
-    def seed_security(self, security): pass
+    def seed_security(self, security):
+        return False
 
 SecuritySeeder.NULL = SecuritySeeder()
 SecuritySeeder.Null = SecuritySeeder.NULL
 
-class FuncSecuritySeeder:
-    def __init__(self, func=None): self._func = func
+class FuncSecuritySeeder(SecuritySeeder):
+    """Seeds with the data a function returns (typically algorithm.get_last_known_prices): the last
+    bar complete at the algorithm's current time."""
+    def __init__(self, func=None):
+        self._func = func
+
+    def seed_security(self, security):
+        if self._func is None:
+            return False
+        data = self._func(security)
+        items = data if isinstance(data, (list, tuple)) else ([data] if data is not None else [])
+        seeded = False
+        for item in items:
+            if item is None:
+                continue
+            security.set_market_price(item)
+            security._last_bar = item
+            seeded = True
+        return seeded
+
+    SeedSecurity = seed_security
+
+class BrokerageModelSecurityInitializer:
+    """Applies the brokerage model's leverage to a new security and seeds its price."""
+    def __init__(self, brokerage_model=None, security_seeder=None):
+        self._model = brokerage_model; self._seeder = security_seeder
+    def initialize(self, security):
+        if self._seeder is not None and hasattr(self._seeder, 'seed_security'):
+            self._seeder.seed_security(security)
+    Initialize = initialize
 
 class DefaultBrokerageMessageHandler:
     def __init__(self, *args, **kwargs): pass
 
-class BrokerageMessageEvent:
-    def __init__(self, type_=0, code=0, message=""):
-        self.type = type_; self.code = code; self.message = message
 
-class BrokerageMessageType:
-    INFORMATION = 0; WARNING = 1; ERROR = 2; DISCONNECT = 3; RECONNECT = 4
-    Information = 0; Warning = 1; Error = 2; Disconnect = 3; Reconnect = 4
 
 # --- Fee Models ---
-class FeeModel:
-    def get_order_fee(self, parameters): return OrderFee(0)
 
-class ConstantFeeModel(FeeModel):
-    def __init__(self, fee=0): self._fee = fee
-    def get_order_fee(self, parameters): return OrderFee(self._fee)
 
-class OrderFee:
-    def __init__(self, value=0, currency="USD"):
-        self.value = CashAmount(value, currency)
-    @staticmethod
-    def zero(currency="USD"): return OrderFee(0, currency)
 
-class CashAmount:
-    def __init__(self, amount=0, currency="USD"):
-        self.amount = amount; self.currency = currency
-    Zero = None
-CashAmount.Zero = CashAmount(0, "USD")
-OrderFee.ZERO = OrderFee(0)
-OrderFee.Zero = OrderFee.ZERO
 
 # --- Slippage Models ---
-class SlippageModel:
-    def get_slippage_approximation(self, asset, order): return 0.0
 
-class ConstantSlippageModel(SlippageModel):
-    def __init__(self, slippage=0): self._slippage = slippage
-    def get_slippage_approximation(self, asset, order): return self._slippage
 
 # --- Volatility Model ---
-class VolatilityModel:
-    def __init__(self): self.volatility = 0.0
-    @staticmethod
-    def null(): return VolatilityModel()
+from .volatility_models import (VolatilityModel, BaseVolatilityModel, NullVolatilityModel,  # noqa: E402
+                                StandardDeviationOfReturnsVolatilityModel,
+                                RelativeStandardDeviationVolatilityModel, IndicatorVolatilityModel)
 
 # --- Buying Power / Margin ---
-class BuyingPowerModel:
-    def get_maximum_order_quantity_for_target_buying_power(self, *args):
-        return type('obj', (object,), {'quantity': 0, 'is_successful': True})()
-    def get_buying_power(self, *args):
-        return type('obj', (object,), {'value': 0})()
 
-class SecurityMarginModel(BuyingPowerModel):
-    def __init__(self, leverage=1.0): self.leverage = leverage
 
 # --- Settlement Models ---
-class ImmediateSettlementModel:
-    pass
 
-class DelayedSettlementModel:
-    def __init__(self, days=0, hours=0):
-        self._days = days; self._hours = hours
 
-# --- Update / Request Types ---
-class UpdateOrderRequest:
-    def __init__(self, *args, **kwargs):
-        self.order_id = 0; self.limit_price = None; self.stop_price = None
-        self.quantity = None; self.tag = None
 
 # --- Currencies ---
 class Currencies:
@@ -709,21 +751,25 @@ class Currencies:
     AUD = "AUD"; CAD = "CAD"; CHF = "CHF"; NullCurrency = ""
 
 # --- Portfolio Construction Extras ---
+from .errors import not_supported as _not_supported
+from .algorithm import EqualWeightingPortfolioConstructionModel as _EqualWeightingPCM
+
+
 class AccumulativeInsightPortfolioConstructionModel(PortfolioConstructionModel):
-    def __init__(self, *args, **kwargs): pass
-    def create_targets(self, algorithm, insights): return []
+    def __init__(self, *args, **kwargs):
+        raise _not_supported("the accumulative-insight portfolio construction model")
 
-class ConfidenceWeightedPortfolioConstructionModel(PortfolioConstructionModel):
-    def __init__(self, *args, **kwargs): pass
-    def create_targets(self, algorithm, insights):
-        if not insights: return []
-        total = sum(abs(i.confidence or 1) for i in insights)
-        if total == 0: total = 1
-        return [PortfolioTarget(i.symbol, (i.confidence or 1)/total * (1 if i.direction == InsightDirection.UP else -1))
-                for i in insights]
+class ConfidenceWeightedPortfolioConstructionModel(_EqualWeightingPCM):
+    """Weight each insight by its confidence (scaled down when the total exceeds 100%)."""
+    def determine_target_percent(self, insights):
+        conf = {i: abs(i.confidence) if i.confidence is not None else 0.0 for i in insights}
+        total = sum(conf.values())
+        scale = 1.0 / total if total > 1.0 else 1.0
+        sign = lambda i: 1 if int(i.direction) > 0 else (-1 if int(i.direction) < 0 else 0)
+        return {i: self._allowed(sign(i)) * c * scale for i, c in conf.items()}
 
-class SectorWeightingPortfolioConstructionModel(PortfolioConstructionModel):
-    def __init__(self, *args, **kwargs): pass
+from .framework.sector import (SectorWeightingPortfolioConstructionModel,  # noqa: E402
+                               MaximumSectorExposureRiskManagementModel)
 
 # --- Security Data Filter ---
 class SecurityDataFilter:
@@ -771,7 +817,14 @@ class PortfolioTargetCollection(dict):
 
 # --- Provider stubs ---
 class LocalDiskShortableProvider:
-    def __init__(self, *args, **kwargs): pass
+    """LEAN reads shortable quantities from its data folder; this engine has no such files."""
+    def __init__(self, brokerage=None, *args, **kwargs):
+        self.brokerage = brokerage
+
+    def shortable_quantity(self, symbol, local_time=None):
+        raise _not_supported("shortable-quantity files from LEAN's data folder (LocalDiskShortableProvider)")
+
+    ShortableQuantity = shortable_quantity
 
 class ContractMultiplierProvider:
     pass
@@ -785,42 +838,18 @@ class ClassicRangeConsolidator:
 ClassicRenkoConsolidator = RenkoConsolidator
 
 # --- Delistings / Dividends / Splits ---
-class Delistings:
-    def __init__(self): self._data = {}
-    def __contains__(self, key): return str(key) in self._data
-    def __getitem__(self, key): return self._data.get(str(key))
-    def contains_key(self, key): return str(key) in self._data
 
-class DelistingType:
-    WARNING = 0; DELISTED = 1; Warning = 0; Delisted = 1
 
-class Dividends(dict):
-    pass
 
-class Splits(dict):
-    pass
 
-class SymbolChangedEvents(dict):
-    pass
 
 # --- Singular data event types (for history() requests) ---
-class Split:
-    def __init__(self):
-        self.symbol = None; self.time = None; self.split_factor = 1.0
-        self.reference_price = 0.0; self.type = 0; self.value = 0.0
 
 class MarginInterestRate:
     def __init__(self):
         self.symbol = None; self.time = None; self.interest_rate = 0.0; self.value = 0.0
 
-class Delisting:
-    def __init__(self):
-        self.symbol = None; self.time = None; self.type = 0; self.value = 0.0
 
-class SymbolChangedEvent:
-    def __init__(self):
-        self.symbol = None; self.time = None; self.old_symbol = ""; self.new_symbol = ""
-        self.type = 0; self.value = 0.0
 
 # --- Algorithm Mode / Deployment Target ---
 class AlgorithmMode:
@@ -838,12 +867,27 @@ class MarketHoursDatabase:
     def get_exchange_hours(self, market, symbol, security_type): return ExchangeHours()
 
 class SymbolCache:
+    """Symbols known to the run (subscribed securities)."""
+    _known = {}
     @staticmethod
-    def get_symbol(ticker): return Symbol(ticker)
+    def get_symbol(ticker):
+        return SymbolCache._known.get(str(ticker).upper()) or Symbol(ticker)
+    @staticmethod
+    def try_get_symbol(ticker, symbol=None):
+        s = SymbolCache._known.get(str(ticker).upper())
+        return (s is not None, s)
+    GetSymbol = get_symbol
+    TryGetSymbol = try_get_symbol
 
-class DataMappingMode:
-    LAST_TRADING_DAY = 0; FIRST_DAY_MONTH = 1; OPEN_INTEREST = 2; OPEN_INTEREST_ANNUAL = 3
-    LastTradingDay = 0; FirstDayMonth = 1; OpenInterest = 2; OpenInterestAnnual = 3
+class DataMappingMode(IntEnum):
+    LAST_TRADING_DAY = 0
+    FIRST_DAY_MONTH = 1
+    OPEN_INTEREST = 2
+    OPEN_INTEREST_ANNUAL = 3
+    LastTradingDay = 0
+    FirstDayMonth = 1
+    OpenInterest = 2
+    OpenInterestAnnual = 3
 
 # --- BaseData ---
 class BaseData:
@@ -851,12 +895,6 @@ class BaseData:
         self.symbol = None; self.time = None; self.end_time = None; self.value = 0.0
 
 # --- Option type ---
-class Option:
-    def __init__(self, symbol=None):
-        self.symbol = symbol; self.underlying = None; self.contract_filter = None
-        self.price_model = None; self.strike_price = 0.0; self.expiry = None; self.right = None
-    def set_filter(self, *args, **kwargs): return self
-    def SetFilter(self, *args, **kwargs): return self.set_filter(*args, **kwargs)
 
 # --- EquityExchange ---
 class EquityExchange:
@@ -868,22 +906,8 @@ class IndiaOrderProperties:
     def __init__(self, exchange=None): self.exchange = exchange or ""
 
 # --- ETFConstituentData ---
-class ETFConstituentData:
-    def __init__(self):
-        self.symbol = None; self.weight = 0.0; self.shares_held = 0; self.market_value = 0.0
 
 # --- Fundamental data class (used by self.history(Fundamental, ...) and type checks) ---
-class Fundamental:
-    """Fundamental data point for a security."""
-    def __init__(self, **kwargs):
-        self.symbol = kwargs.get('symbol', None)
-        self.price = kwargs.get('price', 0.0)
-        self.end_time = kwargs.get('end_time', None)
-        self.dollar_volume = kwargs.get('dollar_volume', 0.0)
-        self.volume = kwargs.get('volume', 0)
-        self.market_cap = kwargs.get('market_cap', 0.0)
-        self.has_fundamental_data = kwargs.get('has_fundamental_data', True)
-        self.valuation_ratios = kwargs.get('valuation_ratios', type('VR', (), {'pe_ratio': 0})())
 
 # --- .NET Object replacement with reference_equals ---
 class Object:
@@ -895,31 +919,31 @@ class Object:
     ReferenceEquals = reference_equals
 
 # --- Fundamental Universe Selection Aliases ---
-CoarseFundamentalUniverseSelectionModel = FundamentalUniverseSelectionModel
-FineFundamentalUniverseSelectionModel = FundamentalUniverseSelectionModel
 
-# --- Random ---
-Random = _random_mod.Random
+# --- Random (C# System.Random API on Python's generator) ---
+class Random(_random_mod.Random):
+    def next(self, a=None, b=None):
+        """next() -> [0, 2^31); next(max) -> [0, max); next(min, max) -> [min, max)."""
+        if a is None:
+            return self.randrange(0, 2 ** 31 - 1)
+        if b is None:
+            return self.randrange(0, int(a)) if int(a) > 0 else 0
+        return self.randrange(int(a), int(b)) if int(b) > int(a) else int(a)
 
-# --- Delay indicator stub ---
-class Delay:
-    def __init__(self, period=1):
-        self._period = period; self.is_ready = False
-        self.current = type('obj', (object,), {'value': 0.0})()
-    def update(self, *args): self.is_ready = True; return True
+    def next_double(self):
+        return self.random()
+
+    Next = next
+    NextDouble = next_double
+
+# --- Delay / Identity / Beta / MassIndex: real indicators (they used to be stubs
+# returning 0 / a constant beta of 1.0) ---
+from .indicators import Delay, Identity, MassIndex
+from .indicators import Beta as _EngineBeta
 
 # --- Margin Call Model ---
-class MarginCallModel:
-    NULL = None  # set after class definition
-    @staticmethod
-    def null(): return MarginCallModel()
-    def get_margin_call_orders(self, *args): return []
 
-class DefaultMarginCallModel(MarginCallModel):
-    def __init__(self, *args, **kwargs): pass
 
-MarginCallModel.NULL = MarginCallModel()
-MarginCallModel.Null = MarginCallModel.NULL
 
 # --- SecurityPositionGroupModel ---
 class SecurityPositionGroupModel:
@@ -932,16 +956,8 @@ SecurityPositionGroupModel.NULL = SecurityPositionGroupModel()
 SecurityPositionGroupModel.Null = SecurityPositionGroupModel.NULL
 
 # --- SubscriptionDataSource ---
-class SubscriptionDataSource:
-    def __init__(self, source="", transport_medium=0, format_type=0):
-        self.source = source; self.transport_medium = transport_medium; self.format = format_type
 
-class SubscriptionTransportMedium:
-    LOCAL_FILE = 0; REMOTE_FILE = 1; REST = 2; OBJECT_STORE = 3
-    LocalFile = 0; RemoteFile = 1; Rest = 2; ObjectStore = 3
 
-class FileFormat:
-    CSV = 0; BINARY = 1; COLLECTION = 2; Csv = 0; UnfoldingBrowser = 3
 
 # --- System.Collections.Generic stub ---
 class List(list):
@@ -1000,12 +1016,7 @@ class _RollingWindowMeta(type):
 RollingWindow = _RollingWindowMeta('RollingWindow', (_RollingWindowBase,), dict(_RollingWindowBase.__dict__))
 
 # --- ConstituentsUniverse ---
-class ConstituentsUniverse:
-    def __init__(self, symbol, universe_filter_func=None):
-        self.symbol = symbol
-        self._filter = universe_filter_func
 
-ETFConstituentUniverse = ConstituentsUniverse
 
 # --- SequentialConsolidator ---
 class SequentialConsolidator:
@@ -1062,11 +1073,6 @@ class IBaseData:
     pass
 
 # --- ScheduledUniverse ---
-class ScheduledUniverse:
-    def __init__(self, date_rule, time_rule, selector, settings=None):
-        self._date_rule = date_rule
-        self._time_rule = time_rule
-        self._selector = selector
 
 # --- OptionChainedUniverseSelectionModel ---
 class OptionChainedUniverseSelectionModel(UniverseSelectionModel):
@@ -1075,14 +1081,6 @@ class OptionChainedUniverseSelectionModel(UniverseSelectionModel):
         self._filter = option_filter
 
 # --- OptionChains ---
-class OptionChains(dict):
-    @property
-    def data_frame(self):
-        try:
-            import pandas as pd
-            return pd.DataFrame()
-        except ImportError:
-            return None
 
 # --- OpenInterestFutureUniverseSelectionModel ---
 class OpenInterestFutureUniverseSelectionModel(UniverseSelectionModel):
@@ -1090,8 +1088,16 @@ class OpenInterestFutureUniverseSelectionModel(UniverseSelectionModel):
 
 # --- GeneratedInsightsCollection ---
 class GeneratedInsightsCollection:
+    """The insights_generated event argument: .insights and .date_time_utc (LEAN)."""
     def __init__(self, *args):
         self._insights = list(args) if args else []
+        self.date_time_utc = getattr(self._insights[0], 'generated_time_utc', None) if self._insights else None
+
+    @property
+    def insights(self):
+        return list(self._insights)
+
+    Insights = insights
     def __iter__(self):
         return iter(self._insights)
     def __len__(self):
@@ -1146,36 +1152,19 @@ class CircularQueue(metaclass=_CircularQueueMeta):
         return len(self._data)
 
 # --- EquityFillModel ---
-class EquityFillModel(FillModel):
-    pass
 
 # --- FuncRiskFreeRateInterestRateModel ---
 class FuncRiskFreeRateInterestRateModel:
     def __init__(self, func=None):
         self._func = func
+    def get_interest_rate(self, date):
+        return self._func(date) if callable(self._func) else 0.0
+    GetInterestRate = get_interest_rate
 
-# --- MassIndex indicator ---
-class MassIndex:
-    def __init__(self, *args, **kwargs):
-        self.name = "MASS"
-        self.is_ready = False
-        self.current = type('obj', (object,), {'value': 0.0})()
-        self.warm_up_period = 25
-    def update(self, *args): return True
-    def __float__(self): return self.current.value
 
 # --- StandardDeviationOfReturnsVolatilityModel ---
-class StandardDeviationOfReturnsVolatilityModel:
-    def __init__(self, *args, **kwargs):
-        self._periods = args[0] if args else kwargs.get('periods', 252)
-        self.volatility = 0.0
 
 # --- MarketImpactSlippageModel ---
-class MarketImpactSlippageModel:
-    def __init__(self, *args, **kwargs):
-        pass
-    def get_slippage_approximation(self, asset, order):
-        return 0.0
 
 # --- Collective2/CrunchDAO/Numerai Signal Export ---
 class Collective2SignalExport:
@@ -1199,13 +1188,16 @@ class NumeraiSignalExport:
         pass
 
 # --- NullShortableProvider ---
-class NullShortableProvider:
-    def __init__(self, *args, **kwargs): pass
-    def shortable_quantity(self, symbol, local_time):
-        return float('inf')
 
 # --- SymbolProperties / MarginInterestRateParameters ---
 class SymbolProperties:
+    @staticmethod
+    def get_default(quote_currency="USD"):
+        """LEAN SymbolProperties.GetDefault(quoteCurrency)."""
+        return SymbolProperties("", quote_currency, 1, 0.01, 1, "")
+
+    GetDefault = get_default
+
     def __init__(self, description="", quote_currency="USD", contract_multiplier=1,
                  minimum_price_variation=0.01, lot_size=1, market_ticker=""):
         self.description = description
@@ -1217,14 +1209,27 @@ class SymbolProperties:
         self.minimum_order_size = 1
         self.priceMagnifier = 1
 
-class MarginInterestRateParameters:
-    def __init__(self, *args):
-        self.security = None
-        self.position_group = None
 
 # --- InvalidOperationException ---
 class InvalidOperationException(Exception):
     pass
+
+
+from .errors import (ArgumentException, ArgumentOutOfRangeException, AggregateException,  # noqa: E402
+                     KeyNotFoundException, NotSupportedException, NullReferenceException)
+
+# Security classes by type (LEAN Equity, Option, Future...): this engine has one Security class;
+# the names exist for type hints and isinstance checks.
+from .securities import Security as _Security  # noqa: E402
+Equity = Option = Future = Forex = Crypto = Index = Cfd = FutureOption = IndexOption = CryptoFuture = _Security
+
+# every indicator class of the engine (StandardDeviation, ...), unless defined above
+from . import indicators as _indicators_module  # noqa: E402
+for _n, _v in list(vars(_indicators_module).items()):
+    if isinstance(_v, type) and not _n.startswith('_') and _v.__module__ == _indicators_module.__name__ \
+            and _n not in globals():
+        globals()[_n] = _v
+del _n, _v
 
 # --- RegressionTestException ---
 class RegressionTestException(Exception):
@@ -1268,12 +1273,6 @@ def AddReference(*args):
     pass
 
 # --- Dividend ---
-class Dividend:
-    def __init__(self):
-        self.symbol = None
-        self.distribution = 0.0
-        self.reference_price = 0.0
-        self.time = None
 
 # --- Orders module stub ---
 class _OrdersModule:
@@ -1311,13 +1310,8 @@ class CompositeSecurityInitializer:
 CrunchDAOSignalExport = CrunchDaoSignalExport
 
 # --- LiquidETFUniverse ---
-class LiquidETFUniverse:
-    SP500 = "SPY"
-    SP500_SECTORS = ["XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY"]
 
 # --- InceptionDateUniverseSelectionModel ---
-class InceptionDateUniverseSelectionModel(UniverseSelectionModel):
-    def __init__(self, *args, **kwargs): pass
 
 # --- SecurityExchangeHours ---
 SecurityExchangeHours = ExchangeHours
@@ -1365,27 +1359,21 @@ class IntrinioConfig:
     SetTimeIntervalBetweenCalls = set_time_interval_between_calls
 
 # --- FillModelParameters ---
-class FillModelParameters:
-    def __init__(self, *args, **kwargs):
-        self.security = None
-        self.order = None
-        self.config_provider = None
 
 # --- EmaCrossUniverseSelectionModel (Selection submodule) ---
-class EmaCrossUniverseSelectionModel(UniverseSelectionModel):
-    def __init__(self, *args, **kwargs): pass
 
 # --- MeanReversionPortfolioConstructionModel ---
 class MeanReversionPortfolioConstructionModel(PortfolioConstructionModel):
-    def __init__(self, *args, **kwargs): pass
+    def __init__(self, *args, **kwargs):
+        raise _not_supported("the mean-reversion portfolio construction model")
 
-# --- RiskParityPortfolioConstructionModel ---
-class RiskParityPortfolioConstructionModel(PortfolioConstructionModel):
-    def __init__(self, *args, **kwargs): pass
+# --- Optimiser-based portfolio construction (framework/portfolio_construction.py) ---
+from .framework.portfolio_construction import (  # noqa: E402
+    MeanVarianceOptimizationPortfolioConstructionModel, RiskParityPortfolioConstructionModel,
+    MinimumVariancePortfolioOptimizer, UnconstrainedMeanVariancePortfolioOptimizer,
+    MaximumSharpeRatioPortfolioOptimizer, RiskParityPortfolioOptimizer)
 
 # --- VolumeShareSlippageModel ---
-class VolumeShareSlippageModel(SlippageModel):
-    def __init__(self, *args, **kwargs): pass
 
 # --- Register additional Selection submodules ---
 import types as _types
@@ -1407,6 +1395,8 @@ for _name, _attrs in _sel_extras.items():
 _port_extras = {
     'MeanReversionPortfolioConstructionModel': {'MeanReversionPortfolioConstructionModel': MeanReversionPortfolioConstructionModel},
     'RiskParityPortfolioConstructionModel': {'RiskParityPortfolioConstructionModel': RiskParityPortfolioConstructionModel},
+    'MeanVarianceOptimizationPortfolioConstructionModel': {
+        'MeanVarianceOptimizationPortfolioConstructionModel': MeanVarianceOptimizationPortfolioConstructionModel},
 }
 for _name, _attrs in _port_extras.items():
     _mod = _types.ModuleType(f'Portfolio.{_name}')
@@ -1457,54 +1447,39 @@ class Calendar:
     YEARLY = yearly
     Yearly = yearly
 
-# --- WilderAccumulativeSwingIndex indicator ---
+# --- Wilder swing indices: not implemented (they used to echo the input) ---
 class WilderAccumulativeSwingIndex(IndicatorBase):
-    def __init__(self, name="WASI", limit_move=0):
-        super().__init__(name, limit_move or 14)
-    def _compute(self, value: float) -> float:
-        return value
-
-# --- Beta indicator ---
-class Beta(IndicatorBase):
     def __init__(self, *args, **kwargs):
-        name = args[0] if args else kwargs.get('name', 'BETA')
-        period = args[1] if len(args) > 1 else kwargs.get('period', 20)
-        if isinstance(name, str):
-            super().__init__(name, period)
-        else:
-            super().__init__('BETA', 20)
-    def _compute(self, value: float) -> float:
-        return 1.0  # Default beta = 1
+        raise _not_supported("the Wilder accumulative swing index indicator")
 
-# --- WilderSwingIndex indicator ---
 class WilderSwingIndex(IndicatorBase):
-    def __init__(self, name="WSI", limit_move=0):
-        super().__init__(name, limit_move or 14)
-    def _compute(self, value: float) -> float:
-        return value
+    def __init__(self, *args, **kwargs):
+        raise _not_supported("the Wilder swing index indicator")
 
-# --- Identity indicator ---
-class Identity(IndicatorBase):
-    def __init__(self, name="ID"):
-        super().__init__(name, 1)
-    def _compute(self, value: float) -> float:
-        return value
+# --- Beta: LEAN's Beta(name, period, target, reference) or the engine's
+# Beta(name, target, reference, period) ---
+class Beta(_EngineBeta):
+    def __init__(self, name="BETA", *args, **kwargs):
+        if args and isinstance(args[0], int):
+            period, target, reference = args[0], args[1] if len(args) > 1 else None, args[2] if len(args) > 2 else None
+        else:
+            target = args[0] if len(args) > 0 else kwargs.get('target')
+            reference = args[1] if len(args) > 1 else kwargs.get('reference')
+            period = args[2] if len(args) > 2 else kwargs.get('period', 20)
+        super().__init__(name, target, reference, int(period))
 
 # --- IntrinioEconomicData ---
 class IntrinioEconomicData(PythonData):
     pass
 
 # --- FundamentalUniverse ---
-class FundamentalUniverse:
-    @staticmethod
-    def usa(*args, **kwargs):
-        return None
-    USA = usa
 
 # --- Futures.Dairy patch ---
 class FuturesDairy:
-    BUTTER = "butter"; CLASS_III_MILK = "class_iii_milk"; CASH_SETTLED_CHEESE = "cash_settled_cheese"
-    Butter = "butter"; ClassIIIMilk = "class_iii_milk"; CashSettledCheese = "cash_settled_cheese"
+    CASH_SETTLED_BUTTER = BUTTER = "CB"; CASH_SETTLED_CHEESE = "CSC"; CLASS_III_MILK = "DC"; DRY_WHEY = "DY"
+    CLASS_IV_MILK = "GDK"; NONFAT_DRY_MILK = "GNF"
+    CashSettledButter = Butter = "CB"; CashSettledCheese = "CSC"; ClassIIIMilk = "DC"; DryWhey = "DY"
+    ClassIVMilk = "GDK"; NonfatDryMilk = "GNF"
 
 if not hasattr(Futures, 'Dairy'):
     Futures.Dairy = FuturesDairy
@@ -1519,13 +1494,6 @@ if not hasattr(SecurityIdentifier, 'generate_constituent_identifier'):
     )
     SecurityIdentifier.GenerateConstituentIdentifier = SecurityIdentifier.generate_constituent_identifier
 
-# --- ImpliedVolatility indicator ---
-class ImpliedVolatility(IndicatorBase):
-    def __init__(self, *args, **kwargs):
-        name = args[0] if args and isinstance(args[0], str) else 'IV'
-        super().__init__(name, 1)
-    def _compute(self, value: float) -> float:
-        return 0.25  # Default IV
 
 # --- Tiingo alias ---
 class Tiingo:
@@ -1590,24 +1558,9 @@ class TiingoPrice(Tiingo):
 SymbolPropertiesDatabase = _SymbolPropertiesDatabase
 
 # --- OptionChain (single underlying chain result type) ---
-OptionChain = type('OptionChain', (), {
-    '__init__': lambda self, *a, **kw: None,
-    'underlying': None,
-    'contracts': {},
-    '__iter__': lambda self: iter([]),
-    '__len__': lambda self: 0,
-})
 
 # --- BrokerageModel ---
-class BrokerageModel:
-    def __init__(self, *args, **kwargs): pass
-    def get_fee_model(self, security): return FeeModel()
-    def get_fill_model(self, security): return FillModel()
-    def get_slippage_model(self, security): return SlippageModel()
-    def can_submit_order(self, security, order, message=None): return True
 
-class DefaultBrokerageModel2(BrokerageModel):
-    pass
 
 # --- CustomData alias (for IndicatorSuiteAlgorithm) ---
 CustomData = type('CustomData', (), {
@@ -1647,43 +1600,27 @@ class BaseVolatilityModel:
         return BaseVolatilityModel()
 
 # --- DefaultOptionAssignmentModel ---
-class DefaultOptionAssignmentModel:
-    """Default option assignment model."""
+class OptionAssignmentModel:
+    """Option assignment models. This engine assigns short options only at expiry (in the money);
+    early assignment before expiry is not simulated, whatever the model (disclosed in the run notes)."""
     def __init__(self, *args, **kwargs): pass
     def get_assignment(self, parameters):
-        return type('AssignmentResult', (), {'is_assigned': False})()
+        return type('OptionAssignmentResult', (), {'is_assigned': False, 'quantity': 0, 'tag': ''})()
+    GetAssignment = get_assignment
+
+
+class DefaultOptionAssignmentModel(OptionAssignmentModel):
+    pass
+
+
+class NullOptionAssignmentModel(OptionAssignmentModel):
+    """LEAN NullOptionAssignmentModel: no early assignment (what this engine does anyway)."""
 
 # --- DefaultExerciseModel ---
-class DefaultExerciseModel:
-    """Default option exercise model."""
-    def __init__(self, *args, **kwargs): pass
-    def get_exercise(self, parameters):
-        return []
 
-# --- ImpliedVolatility with set_smoothing_function ---
-# Override the one defined earlier
-class ImpliedVolatility(IndicatorBase):
-    def __init__(self, *args, **kwargs):
-        name = args[0] if args and isinstance(args[0], str) else 'IV'
-        super().__init__(name, 1)
-        self._smoothing_func = None
-    def _compute(self, value: float) -> float:
-        return 0.25
-    def set_smoothing_function(self, func):
-        self._smoothing_func = func
-    def SetSmoothingFunction(self, func):
-        self._smoothing_func = func
+# --- ImpliedVolatility: needs option prices (it used to return a constant 25%) ---
 
 # --- OptionExerciseOrder ---
-class OptionExerciseOrder:
-    """Represents an option exercise order."""
-    def __init__(self, symbol=None, quantity=0, tag=""):
-        self.symbol = symbol
-        self.quantity = quantity
-        self.tag = tag
-        self.type = 0
-        self.status = 0
-        self.direction = 0
 
 # --- LocalDiskFactorFileProvider ---
 class _FactorFile:
@@ -1700,15 +1637,3 @@ class LocalDiskFactorFileProvider:
     def get(self, *args, **kwargs): return _FactorFile()
 
 # --- CustomImpliedVolatility (for OptionIndicatorsMirror strategies) ---
-class CustomImpliedVolatility(IndicatorBase):
-    """Custom IV indicator that accepts option, mirror, rate model, yield model."""
-    def __init__(self, *args, **kwargs):
-        name = 'CustomIV'
-        super().__init__(name, 1)
-        self._smoothing_func = None
-    def _compute(self, value: float) -> float:
-        return 0.25
-    def set_smoothing_function(self, func):
-        self._smoothing_func = func
-    def SetSmoothingFunction(self, func):
-        self._smoothing_func = func

@@ -51,33 +51,35 @@ CREDIT_CONDITION_SERIES = {
     "prime_rate": "DPRIME",
     "fed_funds_rate": "FEDFUNDS",
     "sofr": "SOFR",
-    "libor_3m": "USD3MTD156N",
+    # libor_3m (USD3MTD156N) removed: USD LIBOR ended in 2023 and FRED no longer serves it.
     "bank_credit": "TOTBKCR",
     "charge_off_rate": "CORCCACBS",
     "delinquency_rate": "DRCCLACBS",
 }
 
+# TEDRATE (discontinued 2022) and MOVEINDEX (not a FRED series) returned no data and were dropped
+# silently by the panel.
 FINANCIAL_STRESS_SERIES = {
     "stlfsi": "STLFSI4",
     "kansas_city_fsi": "KCFSI",
-    "ted_spread": "TEDRATE",
     "vix": "VIXCLS",
-    "move_index": "MOVEINDEX",
     "nfci": "NFCI",
     "anfci": "ANFCI",
 }
 
+# CONCCONF is not a FRED series (it never returned data).
 CONSUMER_SENTIMENT_SERIES = {
     "umich_sentiment": "UMCSENT",
     "conference_board": "CSCICP03USM665S",
-    "consumer_confidence": "CONCCONF",
 }
 
+# Keys say what each series is: PCEPI / PCEPILFE are price-index LEVELS (2017=100), not
+# year-over-year rates, and CPILFESL is core CPI, not core PCE.
 PCE_SERIES = {
     "pce": "PCE",
-    "core_pce": "PCEPILFE",
-    "pce_yoy": "PCEPI",
-    "core_pce_yoy": "CPILFESL",
+    "pce_price_index": "PCEPI",
+    "core_pce_price_index": "PCEPILFE",
+    "core_cpi_index": "CPILFESL",
     "pce_services": "DSERRG3M086SBEA",
     "pce_goods": "DGDSRG3M086SBEA",
     "pce_energy": "DENERRG3M086SBEA",
@@ -95,7 +97,7 @@ def _redact_key(message: Any) -> str:
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     if not API_KEY:
         return {
-            "error": "FRED API key not configured. Set FRED_API_KEY environment variable.",
+            "error": "FRED API key not configured. Save it as FRED_API_KEY in Settings > Credentials.",
             "error_code": "MISSING_API_KEY",
         }
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
@@ -155,7 +157,7 @@ def _get_series_observations(series_id: str, start_date: str = "", end_date: str
 
 def get_yield_curve(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     result = {"yield_curve": {}, "spreads": {}, "start_date": start_date, "end_date": end_date}
     tenor_series = {k: v for k, v in YIELD_CURVE_SERIES.items() if "spread" not in k}
     spread_series = {k: v for k, v in YIELD_CURVE_SERIES.items() if "spread" in k}
@@ -171,7 +173,7 @@ def get_yield_curve(start_date: str = "", end_date: str = "") -> Dict:
 
 def get_money_supply(measure: str = "m2", start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     if measure == "all":
         result = {"money_supply": {}}
         for name, series_id in MONEY_SUPPLY_SERIES.items():
@@ -187,7 +189,7 @@ def get_money_supply(measure: str = "m2", start_date: str = "", end_date: str = 
 
 def get_credit_conditions(series_id: str = "fed_funds_rate", start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     resolved_id = CREDIT_CONDITION_SERIES.get(series_id, series_id)
     data = _get_series_observations(resolved_id, start_date, end_date)
     data["requested_series"] = series_id
@@ -197,7 +199,7 @@ def get_credit_conditions(series_id: str = "fed_funds_rate", start_date: str = "
 
 def get_financial_stress_index(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     result = {"stress_indices": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in FINANCIAL_STRESS_SERIES.items():
         result["stress_indices"][name] = _get_series_observations(series_id, start_date, end_date)
@@ -207,7 +209,7 @@ def get_financial_stress_index(start_date: str = "", end_date: str = "") -> Dict
 
 def get_consumer_sentiment(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     result = {"sentiment": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in CONSUMER_SENTIMENT_SERIES.items():
         result["sentiment"][name] = _get_series_observations(series_id, start_date, end_date)
@@ -217,7 +219,7 @@ def get_consumer_sentiment(start_date: str = "", end_date: str = "") -> Dict:
 
 def get_pce_inflation(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
+        return {"error": "FRED_API_KEY is not set: save it in Settings > Credentials", "error_code": "MISSING_API_KEY"}
     result = {"pce": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in PCE_SERIES.items():
         result["pce"][name] = _get_series_observations(series_id, start_date, end_date)

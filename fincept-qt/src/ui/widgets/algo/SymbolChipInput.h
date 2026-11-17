@@ -9,11 +9,18 @@ class QLineEdit;
 class QCompleter;
 class QStringListModel;
 
+namespace fincept::ui {
+class FlowLayout;
+}
+
 namespace fincept::ui::algo {
 
 /// A bordered box that holds removable symbol "chips" plus an inline search field
 /// with instrument autocomplete. Tab/Enter/click commits a suggestion; the live
 /// price is fetched async and shown on the chip. Reusable across panels.
+/// Styling: object names of the Algo kit root stylesheet (the box #algoPanel, each chip a
+/// QLabel#algoChip + a QPushButton#algoLink "✕", the suggestion list #algoList) — no
+/// setStyleSheet; chips wrap with the shared ui::FlowLayout.
 class SymbolChipInput : public QFrame {
     Q_OBJECT
   public:
@@ -34,11 +41,15 @@ class SymbolChipInput : public QFrame {
     void commit_text(const QString& raw);    // add one-or-many raw (comma/space/newline split)
     void commit_label(const QString& label); // resolve a picked suggestion label → real symbol
     void add_chip(const QString& symbol);
+    /// The chip alone (no focus, no signal, no quote) — add_chip / set_symbols finish the job.
+    bool insert_chip(const QString& symbol);
     void remove_chip(const QString& symbol);
     void on_text_changed(const QString& text);
     void fetch_price(const QString& symbol);
+    /// One quote request for several chips (set_symbols of a whole list).
+    void fetch_prices(const QStringList& symbols);
 
-    class FlowLayout* flow_ = nullptr;
+    fincept::ui::FlowLayout* flow_ = nullptr;
     QLineEdit* edit_ = nullptr;
     QCompleter* completer_ = nullptr;
     QStringListModel* model_ = nullptr;

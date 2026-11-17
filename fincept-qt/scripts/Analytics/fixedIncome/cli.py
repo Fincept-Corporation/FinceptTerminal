@@ -2,788 +2,361 @@
 Fixed Income Analytics CLI
 ==========================
 
-Command-line interface for all fixed income analytics modules.
-Provides unified access to bond pricing, duration, yield curve,
-credit analysis, structured products, and portfolio analytics.
+Single entry point for the fixed income analytics modules in this directory.
 
-Usage:
-    python cli.py <command> [params_json]
+Contract
+--------
+    python Analytics/fixedIncome/cli.py <command> '<json params>'
 
-Commands (an unknown command answers with the full list):
-    pricing / yields  - price, ytm, ytc, ytw, clean_dirty, spot_rate, forward_rate
-    duration          - macaulay_duration, modified_duration, effective_duration, convexity, price_change
-    yield curve       - bootstrap, forward_curve, nelson_siegel, curve_shape, g_spread, z_spread, oas
-    credit            - expected_loss, unexpected_loss, credit_var, pd_from_spread, merton_pd, historical_pd,
-                        rating_transition
-    structured        - mbs_cash_flows, wal, wal_sensitivity, prepayment_schedule, abs_cash_flows,
-                        credit_enhancement, sequential_cmo
-    portfolio         - portfolio_metrics, duration_contribution, key_rate_exposure, immunization_requirements,
-                        immunize_two_bonds, rebalancing_check, contingent_immunization, tracking_error
-    bond features     - describe_bond_type, analyze_covenants, analyze_contingencies, cash_flow_structure
-    market structure  - market_segments, fixed_income_indexes, primary_vs_secondary, repo_mechanics,
-                        short_term_funding, ig_vs_hy_funding
-    floating rate     - frn_price, discount_margin, zero_discount_margin, frn_with_caps_floors,
-                        reference_rate_info, money_market_yield, compare_mm_yields
-    sovereign / muni  - sovereign_rating, sovereign_ability_to_pay, sovereign_willingness, local_vs_foreign_debt,
-                        default_restructuring, municipal_go, municipal_revenue, go_vs_revenue,
-                        govt_vs_corporate, relative_value
+prints exactly ONE JSON payload on stdout (NaN / Infinity never appear; an uncomputable field is null,
+usually with a *_note saying why). Failures are {"error": "<plain message>"} (exit code 0, like the other
+analytics scripts). Diagnostics go to stderr.
+
+    python cli.py list                      every command with its description and parameters
+    python cli.py help '{"command": "ytm"}' one command
+
+Conventions shared by every command (details in fi_common.py)
+-------------------------------------------------------------
+* rates, yields, spreads and probabilities are decimals (0.05 = 5 %); *_bps / *_pct fields say so.
+* bond yields are nominal annual rates compounded `frequency` times a year (frequency 0 = zero-coupon,
+  annual compounding); `price` is the clean price, dirty_price = price + accrued_interest.
+* durations are in years (Macaulay and modified are both reported), convexity in years^2.
+* spot (zero) rates are annually compounded unless a field name says otherwise.
+* if a parameter you passed was not used by the command, the result lists it in `unused_params`.
 """
 
-import sys
+import importlib
 import json
 import logging
-from typing import Dict, Any
+import os
+import sys
+from typing import Any, Dict
 
-# Import all modules
-from bond_pricing import run_bond_pricing_analysis
-from duration_convexity import run_duration_analysis
-from yield_curve import run_yield_curve_analysis
-from credit_analysis import run_credit_analysis
-from structured_products import run_structured_products_analysis
-from bond_portfolio import run_portfolio_analysis
-from bond_features import BondFeaturesAnalyzer
-from market_structure import MarketStructureAnalyzer
-from floating_rate import FloatingRateAnalyzer, MoneyMarketAnalyzer
-from sovereign_credit import SovereignCreditAnalyzer, MunicipalCreditAnalyzer, GovernmentVsCorporateComparison
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+try:
+    import fincept_json
+except ImportError:  # run by path without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(_HERE)))
+    import fincept_json
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+logger = logging.getLogger("fixedIncome.cli")
+
+# module key -> (python module, dispatcher function)
+MODULES = {
+    'bond_pricing': ('bond_pricing', 'run_bond_pricing_analysis'),
+    'duration': ('duration_convexity', 'run_duration_analysis'),
+    'yield_curve': ('yield_curve', 'run_yield_curve_analysis'),
+    'credit': ('credit_analysis', 'run_credit_analysis'),
+    'structured': ('structured_products', 'run_structured_products_analysis'),
+    'portfolio': ('bond_portfolio', 'run_portfolio_analysis'),
+    'bond_features': ('bond_features', 'run_bond_features_analysis'),
+    'market_structure': ('market_structure', 'run_market_structure_analysis'),
+    'floating_rate': ('floating_rate', 'run_floating_rate_analysis'),
+    'sovereign': ('sovereign_credit', 'run_sovereign_analysis'),
+}
+
+_BOND = ['face_value', 'coupon_rate', 'years_to_maturity', 'ytm', 'frequency',
+         'settlement_date', 'maturity_date', 'day_count']
+_EFF = ['price', 'price_up', 'price_down', 'delta_yield']
+_FRN = ['quoted_margin', 'reference_rate', 'periods_remaining', 'years_to_maturity', 'reset_frequency',
+        'face_value']
+_MM = ['price', 'face_value', 'days_to_maturity']
+_HOLD = ['holdings']
 
 
-# Command registry with descriptions
-COMMANDS = {
-    # Bond Pricing Commands
-    'price': {
-        'module': 'bond_pricing',
-        'analysis_type': 'price',
-        'description': 'Calculate bond price from YTM',
-        'params': ['ytm', 'face_value', 'coupon_rate', 'years_to_maturity', 'frequency']
-    },
-    'ytm': {
-        'module': 'bond_pricing',
-        'analysis_type': 'ytm',
-        'description': 'Calculate yield to maturity from price',
-        'params': ['price', 'face_value', 'coupon_rate', 'years_to_maturity', 'frequency']
-    },
-    'ytc': {
-        'module': 'bond_pricing',
-        'analysis_type': 'ytc',
-        'description': 'Calculate yield to call',
-        'params': ['price', 'face_value', 'coupon_rate', 'years_to_call', 'call_price', 'frequency']
-    },
-    'ytw': {
-        'module': 'bond_pricing',
-        'analysis_type': 'ytw',
-        'description': 'Calculate yield to worst',
-        'params': ['price', 'face_value', 'coupon_rate', 'years_to_maturity', 'call_schedule', 'frequency']
-    },
-    'clean_dirty': {
-        'module': 'bond_pricing',
-        'analysis_type': 'clean_dirty',
-        'description': 'Calculate clean and dirty prices',
-        'params': ['ytm', 'face_value', 'coupon_rate', 'years_to_maturity', 'days_since_last_coupon']
-    },
-    'spot_rate': {
-        'module': 'bond_pricing',
-        'analysis_type': 'spot_rate',
-        'description': 'Calculate spot rate from zero-coupon bond',
-        'params': ['price', 'face_value', 'years_to_maturity']
-    },
-    'forward_rate': {
-        'module': 'bond_pricing',
-        'analysis_type': 'forward_rate',
-        'description': 'Calculate implied forward rate',
-        'params': ['spot_rate_1', 'spot_rate_2', 't1', 't2']
-    },
+def _c(module, analysis_type, description, params, aliases=None):
+    return {'module': module, 'analysis_type': analysis_type, 'description': description,
+            'params': params, 'aliases': aliases or {}}
 
-    # Duration & Convexity Commands
-    'macaulay_duration': {
-        'module': 'duration',
-        'analysis_type': 'macaulay_duration',
-        'description': 'Calculate Macaulay duration',
-        'params': ['face_value', 'coupon_rate', 'years_to_maturity', 'ytm', 'frequency']
-    },
-    'modified_duration': {
-        'module': 'duration',
-        'analysis_type': 'modified_duration',
-        'description': 'Calculate modified duration and DV01',
-        'params': ['face_value', 'coupon_rate', 'years_to_maturity', 'ytm', 'frequency']
-    },
-    'effective_duration': {
-        'module': 'duration',
-        'analysis_type': 'effective_duration',
-        'description': 'Calculate effective duration (for bonds with options)',
-        'params': ['price', 'price_up', 'price_down', 'delta_yield']
-    },
-    'convexity': {
-        'module': 'duration',
-        'analysis_type': 'convexity',
-        'description': 'Calculate bond convexity',
-        'params': ['face_value', 'coupon_rate', 'years_to_maturity', 'ytm', 'frequency']
-    },
-    'price_change': {
-        'module': 'duration',
-        'analysis_type': 'price_change',
-        'description': 'Estimate price change using duration and convexity',
-        'params': ['modified_duration', 'convexity', 'price', 'yield_change']
-    },
 
-    # Yield Curve Commands
-    'bootstrap': {
-        'module': 'yield_curve',
-        'analysis_type': 'bootstrap',
-        'description': 'Bootstrap spot curve from bond prices',
-        'params': ['bonds', 'frequency']
-    },
-    'forward_curve': {
-        'module': 'yield_curve',
-        'analysis_type': 'forward_curve',
-        'description': 'Calculate forward rate curve',
-        'params': ['spot_rates', 'forward_periods']
-    },
-    'nelson_siegel': {
-        'module': 'yield_curve',
-        'analysis_type': 'nelson_siegel',
-        'description': 'Fit Nelson-Siegel model to yield curve',
-        'params': ['maturities', 'yields']
-    },
-    'curve_shape': {
-        'module': 'yield_curve',
-        'analysis_type': 'curve_shape',
-        'description': 'Analyze yield curve shape',
-        'params': ['maturities', 'yields']
-    },
-    'g_spread': {
-        'module': 'yield_curve',
-        'analysis_type': 'g_spread',
-        'description': 'Calculate G-spread over Treasury',
-        'params': ['bond_ytm', 'treasury_ytm']
-    },
-    'z_spread': {
-        'module': 'yield_curve',
-        'analysis_type': 'z_spread',
-        'description': 'Calculate Z-spread',
-        'params': ['bond_price', 'cash_flows', 'spot_rates']
-    },
-    'oas': {
-        'module': 'yield_curve',
-        'analysis_type': 'oas',
-        'description': 'Calculate option-adjusted spread',
-        'params': ['bond_price', 'cash_flows', 'spot_rates', 'option_value']
-    },
+COMMANDS: Dict[str, Dict[str, Any]] = {
+    # ---- bond pricing ----------------------------------------------------------------------------
+    'price': _c('bond_pricing', 'price', 'Bond price (clean, dirty, accrued) from YTM; fractional periods and '
+                'settlement/maturity dates supported',
+                ['ytm', 'face_value', 'coupon_rate', 'years_to_maturity', 'frequency',
+                 'settlement_date', 'maturity_date', 'day_count']),
+    'ytm': _c('bond_pricing', 'ytm', 'Yield to maturity from price (clean by default; price_type=dirty)',
+              ['price', 'face_value', 'coupon_rate', 'years_to_maturity', 'frequency', 'price_type',
+               'settlement_date', 'maturity_date', 'day_count']),
+    'ytc': _c('bond_pricing', 'ytc', 'Yield to call (call date treated as a coupon date)',
+              ['price', 'face_value', 'coupon_rate', 'years_to_call', 'call_price', 'frequency', 'price_type']),
+    'ytw': _c('bond_pricing', 'ytw', 'Yield to worst: min of YTM and YTC over call_schedule [[years, price]]',
+              ['price', 'face_value', 'coupon_rate', 'years_to_maturity', 'call_schedule', 'frequency',
+               'price_type']),
+    'clean_dirty': _c('bond_pricing', 'clean_dirty', 'Clean and dirty price between coupon dates '
+                      '(day_count 30/360, 30E/360, ACT/360, ACT/365, ACT/ACT)',
+                      ['ytm', 'face_value', 'coupon_rate', 'years_to_maturity', 'days_since_last_coupon',
+                       'days_in_coupon_period', 'frequency', 'day_count', 'settlement_date', 'maturity_date']),
+    'spot_rate': _c('bond_pricing', 'spot_rate', 'Spot rate (annual compounding) from a zero-coupon price',
+                    ['price', 'face_value', 'years_to_maturity']),
+    'forward_rate': _c('bond_pricing', 'forward_rate', 'Implied forward rate f(t1,t2) from two spot rates',
+                       ['spot_rate_1', 'spot_rate_2', 't1', 't2']),
+    'price_spot_curve': _c('bond_pricing', 'price_spot_curve', 'Price a bond on a spot curve '
+                           '(one annually-compounded spot rate per coupon period)',
+                           ['spot_rates', 'face_value', 'coupon_rate', 'frequency']),
 
-    # Credit Analysis Commands
-    'expected_loss': {
-        'module': 'credit',
-        'analysis_type': 'expected_loss',
-        'description': 'Calculate expected credit loss',
-        'params': ['exposure', 'probability_of_default', 'recovery_rate']
-    },
-    'unexpected_loss': {
-        'module': 'credit',
-        'analysis_type': 'unexpected_loss',
-        'description': 'Calculate unexpected loss',
-        'params': ['exposure', 'probability_of_default', 'recovery_rate', 'lgd_volatility']
-    },
-    'credit_var': {
-        'module': 'credit',
-        'analysis_type': 'credit_var',
-        'description': 'Calculate Credit VaR',
-        'params': ['exposure', 'probability_of_default', 'recovery_rate', 'confidence_level']
-    },
-    'pd_from_spread': {
-        'module': 'credit',
-        'analysis_type': 'pd_from_spread',
-        'description': 'Derive default probability from credit spread',
-        'params': ['credit_spread', 'recovery_rate', 'risk_free_rate']
-    },
-    'merton_pd': {
-        'module': 'credit',
-        'analysis_type': 'merton_pd',
-        'description': 'Calculate PD using Merton model',
-        'params': ['asset_value', 'asset_volatility', 'debt_face_value', 'risk_free_rate']
-    },
-    'historical_pd': {
-        'module': 'credit',
-        'analysis_type': 'historical_pd',
-        'description': 'Get historical default rate by rating',
-        'params': ['rating', 'years']
-    },
-    'rating_transition': {
-        'module': 'credit',
-        'analysis_type': 'rating_transition',
-        'description': 'Analyze rating transition probabilities',
-        'params': ['rating']
-    },
+    # ---- duration & convexity -----------------------------------------------------------------------
+    'macaulay_duration': _c('duration', 'macaulay_duration', 'Macaulay duration (years) with cash-flow table', _BOND),
+    'modified_duration': _c('duration', 'modified_duration', 'Modified duration, dollar duration and DV01', _BOND),
+    'effective_duration': _c('duration', 'effective_duration', 'Effective duration from bumped prices', _EFF),
+    'convexity': _c('duration', 'convexity', 'Convexity (years^2) and dollar convexity', _BOND),
+    'effective_convexity': _c('duration', 'effective_convexity', 'Effective convexity from bumped prices', _EFF),
+    'price_change': _c('duration', 'price_change', 'Price change estimate from duration + convexity',
+                       ['modified_duration', 'convexity', 'price', 'yield_change']),
+    'key_rate_duration': _c('duration', 'key_rate_duration', 'Key rate durations (tent shocks) on a spot curve',
+                            ['spot_rates', 'face_value', 'coupon_rate', 'frequency', 'delta_rate',
+                             'key_rate_maturities']),
+    'portfolio_duration': _c('duration', 'portfolio_duration', 'MV-weighted duration/convexity of bonds',
+                             ['bonds']),
 
-    # Structured Products Commands
-    'mbs_cash_flows': {
-        'module': 'structured',
-        'analysis_type': 'mbs_cash_flows',
-        'description': 'Project MBS cash flows',
-        'params': ['principal_balance', 'wac', 'wam', 'psa_speed', 'wala']
-    },
-    'wal': {
-        'module': 'structured',
-        'analysis_type': 'wal',
-        'description': 'Calculate weighted average life',
-        'params': ['principal_balance', 'wac', 'wam', 'psa_speed']
-    },
-    'wal_sensitivity': {
-        'module': 'structured',
-        'analysis_type': 'wal_sensitivity',
-        'description': 'Analyze WAL sensitivity to prepayment',
-        'params': ['principal_balance', 'wac', 'wam', 'psa_speeds']
-    },
-    'prepayment_schedule': {
-        'module': 'structured',
-        'analysis_type': 'prepayment_schedule',
-        'description': 'Generate PSA prepayment schedule',
-        'params': ['wam', 'wala', 'psa_speed']
-    },
-    'abs_cash_flows': {
-        'module': 'structured',
-        'analysis_type': 'abs_cash_flows',
-        'description': 'Project ABS cash flows with defaults',
-        'params': ['principal_balance', 'coupon_rate', 'term_months', 'default_rate']
-    },
-    'credit_enhancement': {
-        'module': 'structured',
-        'analysis_type': 'credit_enhancement',
-        'description': 'Analyze ABS credit enhancement',
-        'params': ['pool_balance', 'subordination_pct', 'reserve_account', 'expected_loss']
-    },
-    'sequential_cmo': {
-        'module': 'structured',
-        'analysis_type': 'sequential_cmo',
-        'description': 'Analyze sequential pay CMO',
-        'params': ['collateral_balance', 'tranche_sizes', 'wac', 'wam', 'psa_speed']
-    },
+    # ---- yield curve --------------------------------------------------------------------------------
+    'bootstrap': _c('yield_curve', 'bootstrap', 'Bootstrap the spot curve from bond prices or from par yields '
+                    '(maturities + yields); reprices every input exactly',
+                    ['bonds', 'frequency', 'maturities', 'yields']),
+    'forward_curve': _c('yield_curve', 'forward_curve', 'Forward rates between consecutive (or given) maturities '
+                        'from annually-compounded spot rates',
+                        ['spot_rates', 'forward_periods', 'maturities', 'yields']),
+    'nelson_siegel': _c('yield_curve', 'nelson_siegel', 'Fit Nelson-Siegel (>= 4 points)', ['maturities', 'yields']),
+    'svensson': _c('yield_curve', 'svensson', 'Fit Svensson (>= 6 points)', ['maturities', 'yields']),
+    'interpolate': _c('yield_curve', 'interpolate', 'Yields at target maturities (linear, cubic_spline, '
+                      'nelson_siegel, svensson)', ['maturities', 'yields', 'target_maturities', 'method']),
+    'curve_shape': _c('yield_curve', 'curve_shape', 'Curve shape, slope, butterfly, 2s10s and 3m10y spreads',
+                      ['maturities', 'yields']),
+    'g_spread': _c('yield_curve', 'g_spread', 'G-spread over the government yield', ['bond_ytm', 'treasury_ytm']),
+    'z_spread': _c('yield_curve', 'z_spread', 'Z-spread over the spot curve (exact root)',
+                   ['bond_price', 'cash_flows', 'spot_rates', 'maturities', 'yields']),
+    'oas': _c('yield_curve', 'oas', 'Z-spread minus a SUPPLIED option cost (no rate tree; option_value required)',
+              ['bond_price', 'cash_flows', 'spot_rates', 'option_value', 'maturities', 'yields']),
+    'compare_spreads': _c('yield_curve', 'compare_spreads', 'G-, I- and (optionally) Z-spread side by side',
+                          ['bond_ytm', 'treasury_ytm', 'swap_rate', 'bond_price', 'cash_flows', 'spot_rates']),
 
-    # Portfolio Commands
-    'portfolio_metrics': {
-        'module': 'portfolio',
-        'analysis_type': 'portfolio_metrics',
-        'description': 'Calculate portfolio duration, convexity, DV01',
-        'params': ['holdings']
-    },
-    'duration_contribution': {
-        'module': 'portfolio',
-        'analysis_type': 'duration_contribution',
-        'description': 'Calculate duration contribution by holding',
-        'params': ['holdings']
-    },
-    'key_rate_exposure': {
-        'module': 'portfolio',
-        'analysis_type': 'key_rate_exposure',
-        'description': 'Analyze key rate exposures',
-        'params': ['holdings', 'key_rates']
-    },
-    'immunization_requirements': {
-        'module': 'portfolio',
-        'analysis_type': 'immunization_requirements',
-        'description': 'Calculate immunization requirements',
-        'params': ['liability_pv', 'liability_duration', 'current_yield']
-    },
-    'immunize_two_bonds': {
-        'module': 'portfolio',
-        'analysis_type': 'immunize_two_bonds',
-        'description': 'Create immunized portfolio with two bonds',
-        'params': ['liability_duration', 'liability_pv', 'bond1', 'bond2']
-    },
-    'rebalancing_check': {
-        'module': 'portfolio',
-        'analysis_type': 'rebalancing_check',
-        'description': 'Check if rebalancing is needed',
-        'params': ['current_duration', 'target_duration', 'threshold']
-    },
-    'contingent_immunization': {
-        'module': 'portfolio',
-        'analysis_type': 'contingent_immunization',
-        'description': 'Calculate contingent immunization parameters',
-        'params': ['assets', 'liabilities_pv', 'floor_rate', 'current_rate']
-    },
-    'tracking_error': {
-        'module': 'portfolio',
-        'analysis_type': 'tracking_error',
-        'description': 'Calculate tracking error vs benchmark',
-        'params': ['portfolio_returns', 'benchmark_returns']
-    },
+    # ---- credit -------------------------------------------------------------------------------------
+    'expected_loss': _c('credit', 'expected_loss', 'Expected credit loss EAD x PD x LGD',
+                        ['exposure', 'probability_of_default', 'recovery_rate']),
+    'unexpected_loss': _c('credit', 'unexpected_loss', 'Unexpected loss (std. dev. of loss)',
+                          ['exposure', 'probability_of_default', 'recovery_rate', 'lgd_volatility']),
+    'credit_var': _c('credit', 'credit_var', 'Credit VaR, Vasicek single-factor model',
+                     ['exposure', 'probability_of_default', 'recovery_rate', 'confidence_level', 'correlation']),
+    'pd_from_spread': _c('credit', 'pd_from_spread', 'Risk-neutral PD implied by a credit spread',
+                         ['credit_spread', 'recovery_rate', 'risk_free_rate']),
+    'merton_pd': _c('credit', 'merton_pd', 'PD from the Merton structural model',
+                    ['asset_value', 'asset_volatility', 'debt_face_value', 'risk_free_rate', 'time_horizon',
+                     'asset_return']),
+    'historical_pd': _c('credit', 'historical_pd', 'Table default rate by rating (approximate averages)',
+                        ['rating', 'years']),
+    'rating_transition': _c('credit', 'rating_transition', 'One-year rating transition probabilities', ['rating']),
+    'cumulative_pd': _c('credit', 'cumulative_pd', 'Cumulative and marginal PDs for a constant annual PD',
+                        ['annual_pd', 'years', 'method']),
+    'spread_analysis': _c('credit', 'spread_analysis', 'Observed spread vs pure expected-loss spread',
+                          ['observed_spread', 'rating', 'maturity', 'recovery_rate']),
+    'recovery_rate': _c('credit', 'recovery_rate', 'Recovery estimate by seniority (+ collateral)',
+                        ['seniority', 'collateral_value', 'debt_outstanding']),
 
-    # Bond Features Commands
-    'describe_bond_type': {
-        'module': 'bond_features',
-        'analysis_type': 'describe_bond_type',
-        'description': 'Describe bond type characteristics',
-        'params': ['bond_type']
-    },
-    'analyze_covenants': {
-        'module': 'bond_features',
-        'analysis_type': 'analyze_covenants',
-        'description': 'Analyze bond covenants (affirmative/negative)',
-        'params': ['bond_type', 'is_high_yield']
-    },
-    'analyze_contingencies': {
-        'module': 'bond_features',
-        'analysis_type': 'analyze_contingencies',
-        'description': 'Analyze contingency provisions (calls, puts, conversions)',
-        'params': ['provision_type', 'details']
-    },
-    'cash_flow_structure': {
-        'module': 'bond_features',
-        'analysis_type': 'cash_flow_structure',
-        'description': 'Analyze bond cash flow structure',
-        'params': ['structure_type']
-    },
+    # ---- structured products ------------------------------------------------------------------------
+    'mbs_cash_flows': _c('structured', 'mbs_cash_flows', 'MBS pass-through cash flows (PSA or CPR), totals and WAL',
+                         ['principal_balance', 'wac', 'wam', 'psa_speed', 'cpr', 'wala', 'passthrough_rate',
+                          'max_rows']),
+    'wal': _c('structured', 'wal', 'Weighted average life of an MBS pool',
+              ['principal_balance', 'wac', 'wam', 'psa_speed', 'cpr', 'wala']),
+    'wal_sensitivity': _c('structured', 'wal_sensitivity', 'WAL under several PSA speeds vs 100 PSA',
+                          ['principal_balance', 'wac', 'wam', 'psa_speeds', 'wala']),
+    'prepayment_schedule': _c('structured', 'prepayment_schedule', 'PSA prepayment schedule (CPR/SMM by month)',
+                              ['wam', 'wala', 'psa_speed', 'max_rows']),
+    'abs_cash_flows': _c('structured', 'abs_cash_flows', 'ABS cash flows with defaults, recoveries, ABS prepayments',
+                         ['principal_balance', 'coupon_rate', 'term_months', 'default_rate', 'loss_severity',
+                          'abs_speed']),
+    'credit_enhancement': _c('structured', 'credit_enhancement', 'ABS credit enhancement vs expected loss',
+                             ['pool_balance', 'subordination_pct', 'reserve_account', 'expected_loss',
+                              'excess_spread']),
+    'sequential_cmo': _c('structured', 'sequential_cmo', 'Sequential-pay CMO tranche cash flows and WALs',
+                         ['collateral_balance', 'tranche_sizes', 'coupon_rates', 'wac', 'wam', 'psa_speed',
+                          'passthrough_rate', 'z_tranche', 'wala']),
+    'cpr_smm_convert': _c('structured', 'cpr_smm_convert', 'Convert CPR <-> SMM', ['cpr', 'smm']),
 
-    # Market Structure Commands
-    'market_segments': {
-        'module': 'market_structure',
-        'analysis_type': 'market_segments',
-        'description': 'Describe fixed income market segments',
-        'params': ['segment']
-    },
-    'fixed_income_indexes': {
-        'module': 'market_structure',
-        'analysis_type': 'fixed_income_indexes',
-        'description': 'Describe major fixed income indexes',
-        'params': ['index_category']
-    },
-    'primary_vs_secondary': {
-        'module': 'market_structure',
-        'analysis_type': 'primary_vs_secondary',
-        'description': 'Compare primary and secondary markets',
-        'params': []
-    },
-    'repo_mechanics': {
-        'module': 'market_structure',
-        'analysis_type': 'repo_mechanics',
-        'description': 'Analyze repo/reverse repo transactions',
-        'params': ['repo_type', 'details']
-    },
-    'short_term_funding': {
-        'module': 'market_structure',
-        'analysis_type': 'short_term_funding',
-        'description': 'Analyze short-term funding instruments',
-        'params': ['instrument']
-    },
-    'ig_vs_hy_funding': {
-        'module': 'market_structure',
-        'analysis_type': 'ig_vs_hy_funding',
-        'description': 'Compare IG vs HY funding characteristics',
-        'params': []
-    },
+    # ---- portfolio ----------------------------------------------------------------------------------
+    'portfolio_metrics': _c('portfolio', 'portfolio_metrics', 'Portfolio duration, convexity, yield, DV01', _HOLD),
+    'duration_contribution': _c('portfolio', 'duration_contribution', 'Duration contribution by holding', _HOLD),
+    'key_rate_exposure': _c('portfolio', 'key_rate_exposure', 'Maturity-bucket exposure (nearest key tenor)',
+                            ['holdings', 'key_rates']),
+    'immunization_requirements': _c('portfolio', 'immunization_requirements', 'Classical immunization conditions',
+                                    ['liability_pv', 'liability_duration', 'current_yield']),
+    'immunize_two_bonds': _c('portfolio', 'immunize_two_bonds', 'Two-bond duration-matched allocation',
+                             ['liability_duration', 'liability_pv', 'bond1', 'bond2']),
+    'rebalancing_check': _c('portfolio', 'rebalancing_check', 'Duration drift vs target',
+                            ['current_duration', 'target_duration', 'threshold', 'time_elapsed']),
+    'contingent_immunization': _c('portfolio', 'contingent_immunization', 'Contingent immunization cushion and trigger',
+                                  ['assets', 'liabilities_pv', 'floor_rate', 'current_rate', 'duration', 'frequency']),
+    'tracking_error': _c('portfolio', 'tracking_error', 'Tracking error and information ratio',
+                         ['portfolio_returns', 'benchmark_returns', 'periods_per_year']),
+    'cash_flow_matching': _c('portfolio', 'cash_flow_matching', 'Dedicate bonds to a liability schedule',
+                             ['liabilities', 'available_bonds']),
+    'cell_matching': _c('portfolio', 'cell_matching', 'Index vs portfolio cell weights',
+                        ['index_cells', 'portfolio_cells']),
 
-    # Floating Rate Commands
-    'frn_price': {
-        'module': 'floating_rate',
-        'analysis_type': 'frn_price',
-        'description': 'Calculate FRN price with discount margin',
-        'params': ['quoted_margin', 'discount_margin', 'reference_rate', 'years_to_maturity']
-    },
-    'discount_margin': {
-        'module': 'floating_rate',
-        'analysis_type': 'discount_margin',
-        'description': 'Calculate FRN discount margin from price',
-        'params': ['price', 'quoted_margin', 'reference_rate', 'years_to_maturity']
-    },
-    'zero_discount_margin': {
-        'module': 'floating_rate',
-        'analysis_type': 'zero_discount_margin',
-        'description': 'Calculate Z-DM for FRN',
-        'params': ['price', 'quoted_margin', 'forward_rates', 'years_to_maturity']
-    },
-    'frn_with_caps_floors': {
-        'module': 'floating_rate',
-        'analysis_type': 'frn_with_caps_floors',
-        'description': 'Analyze FRN with embedded caps/floors',
-        'params': ['cap_rate', 'floor_rate', 'reference_rate', 'volatility']
-    },
-    'reference_rate_info': {
-        'module': 'floating_rate',
-        'analysis_type': 'reference_rate_info',
-        'description': 'Get reference rate information (SOFR, EURIBOR, etc.)',
-        'params': ['rate_name']
-    },
-    'money_market_yield': {
-        'module': 'floating_rate',
-        'analysis_type': 'money_market_yield',
-        'description': 'Convert between money market yield measures',
-        'params': ['price', 'face_value', 'days_to_maturity', 'yield_type']
-    },
-    'compare_mm_yields': {
-        'module': 'floating_rate',
-        'analysis_type': 'compare_mm_yields',
-        'description': 'Compare all money market yield measures',
-        'params': ['price', 'face_value', 'days_to_maturity']
-    },
+    # ---- bond features (reference text + cash-flow structures) --------------------------------------
+    'describe_bond_type': _c('bond_features', 'describe_bond', 'Describe a bond type', ['bond_type']),
+    'analyze_covenants': _c('bond_features', 'covenants', 'Affirmative / negative covenants (or all)',
+                            ['covenant_type']),
+    'analyze_contingencies': _c('bond_features', 'contingencies', 'Embedded options: call, put, conversion, '
+                                'sinking_fund, cap_floor (or all)', ['contingency_type'],
+                                {'provision_type': 'contingency_type'}),
+    'cash_flow_structure': _c('bond_features', 'cash_flow_structure', 'Cash-flow schedule: bullet, amortizing, '
+                              'sinking_fund, step_up, deferred',
+                              ['structure_type', 'face_value', 'coupon_rate', 'maturity_years', 'frequency',
+                               'sinking_start', 'sinking_amount', 'step_schedule', 'defer_years', 'max_rows']),
+    'legal_tax': _c('bond_features', 'legal_tax', 'Legal, regulatory and tax considerations', ['jurisdiction']),
 
-    # Sovereign Credit Commands
-    'sovereign_rating': {
-        'module': 'sovereign',
-        'analysis_type': 'sovereign_rating',
-        'description': 'Calculate implied sovereign credit rating',
-        'params': ['factors']
-    },
-    'sovereign_ability_to_pay': {
-        'module': 'sovereign',
-        'analysis_type': 'sovereign_ability_to_pay',
-        'description': 'Analyze sovereign ability to pay',
-        'params': ['factors']
-    },
-    'sovereign_willingness': {
-        'module': 'sovereign',
-        'analysis_type': 'sovereign_willingness',
-        'description': 'Analyze sovereign willingness to pay',
-        'params': ['factors']
-    },
-    'local_vs_foreign_debt': {
-        'module': 'sovereign',
-        'analysis_type': 'local_vs_foreign_debt',
-        'description': 'Compare local vs foreign currency sovereign debt',
-        'params': ['factors']
-    },
-    'default_restructuring': {
-        'module': 'sovereign',
-        'analysis_type': 'default_restructuring',
-        'description': 'Analyze default and restructuring factors',
-        'params': ['factors', 'has_imf_program', 'debt_to_exports']
-    },
-    'municipal_go': {
-        'module': 'sovereign',
-        'analysis_type': 'municipal_go',
-        'description': 'Analyze municipal general obligation bonds',
-        'params': ['factors', 'population', 'median_income']
-    },
-    'municipal_revenue': {
-        'module': 'sovereign',
-        'analysis_type': 'municipal_revenue',
-        'description': 'Analyze municipal revenue bonds',
-        'params': ['project_type', 'debt_service_coverage', 'rate_covenant', 'essentiality']
-    },
-    'go_vs_revenue': {
-        'module': 'sovereign',
-        'analysis_type': 'go_vs_revenue',
-        'description': 'Compare GO vs Revenue bonds',
-        'params': []
-    },
-    'govt_vs_corporate': {
-        'module': 'sovereign',
-        'analysis_type': 'govt_vs_corporate',
-        'description': 'Compare government vs corporate bonds',
-        'params': []
-    },
-    'relative_value': {
-        'module': 'sovereign',
-        'analysis_type': 'relative_value',
-        'description': 'Analyze relative value across bond types',
-        'params': ['sovereign_yield', 'corporate_spread', 'muni_yield', 'tax_rate']
-    },
+    # ---- market structure ---------------------------------------------------------------------------
+    'market_segments': _c('market_structure', 'market_segments', 'Fixed income market segments (all or one)',
+                          ['segment']),
+    'fixed_income_indexes': _c('market_structure', 'indexes', 'Fixed income index families (all or one category)',
+                               ['index_category']),
+    'primary_vs_secondary': _c('market_structure', 'primary_secondary', 'Primary vs secondary bond markets', []),
+    'repo_mechanics': _c('market_structure', 'repo_mechanics', 'Repo cash, interest, haircut and leverage',
+                         ['collateral_value', 'haircut', 'repo_rate', 'term_days', 'details']),
+    'short_term_funding': _c('market_structure', 'short_term_funding', 'Short-term funding instruments',
+                             ['funding_type'], {'instrument': 'funding_type'}),
+    'ig_vs_hy_funding': _c('market_structure', 'ig_vs_hy', 'Investment-grade vs high-yield funding', []),
+
+    # ---- floating rate & money market ---------------------------------------------------------------
+    'frn_price': _c('floating_rate', 'frn_price', 'FRN price from discount margin', _FRN + ['discount_margin']),
+    'discount_margin': _c('floating_rate', 'discount_margin', 'FRN discount margin from price', _FRN + ['price']),
+    'zero_discount_margin': _c('floating_rate', 'zero_discount_margin', 'Z-DM over a spot (or forward) curve',
+                               _FRN + ['price', 'spot_rates', 'forward_rates']),
+    'frn_with_caps_floors': _c('floating_rate', 'frn_cap_floor', 'Capped/floored FRN, Black-76 cap and floor values',
+                               _FRN + ['cap_rate', 'floor_rate', 'rate_volatility', 'discount_margin'],
+                               {'volatility': 'rate_volatility'}),
+    'reference_rate_info': _c('floating_rate', 'reference_rates', 'Reference rates (SOFR, EURIBOR, SONIA, LIBOR '
+                              'transition)', ['rate_type'], {'rate_name': 'rate_type'}),
+    'money_market_yield': _c('floating_rate', 'money_market_yield', 'Money market yield; yield_type money_market '
+                             '(default), discount, bond_equivalent, effective_annual or all', _MM + ['yield_type']),
+    'compare_mm_yields': _c('floating_rate', 'compare_yields', 'All money market yield measures', _MM),
+    'discount_yield': _c('floating_rate', 'discount_yield', 'Bank discount yield', _MM),
+    'bond_equivalent_yield': _c('floating_rate', 'bond_equivalent_yield', 'Bond-equivalent (365-day) yield', _MM),
+    'effective_annual_yield': _c('floating_rate', 'effective_annual_yield', 'Effective annual yield', _MM),
+    'price_from_discount': _c('floating_rate', 'price_from_discount', 'Price from a bank discount yield',
+                              ['face_value', 'discount_yield', 'days_to_maturity']),
+
+    # ---- sovereign / municipal (indicative scorecards + reference text) ------------------------------
+    'sovereign_rating': _c('sovereign', 'sovereign_rating', 'Indicative sovereign rating scorecard', ['factors']),
+    'sovereign_ability_to_pay': _c('sovereign', 'sovereign_ability_to_pay', 'Ability-to-pay score', ['factors']),
+    'sovereign_willingness': _c('sovereign', 'sovereign_willingness', 'Willingness-to-pay score', ['factors']),
+    'local_vs_foreign_debt': _c('sovereign', 'local_vs_foreign_debt', 'Local vs foreign currency debt scores',
+                                ['factors']),
+    'default_restructuring': _c('sovereign', 'default_restructuring', 'Default warning signs and restructuring',
+                                ['factors', 'has_imf_program', 'debt_to_exports']),
+    'municipal_go': _c('sovereign', 'municipal_go', 'GO bond scorecard', ['factors', 'population', 'median_income']),
+    'municipal_revenue': _c('sovereign', 'municipal_revenue', 'Revenue bond scorecard',
+                            ['project_type', 'debt_service_coverage', 'rate_covenant', 'additional_bonds_test',
+                             'essentiality']),
+    'go_vs_revenue': _c('sovereign', 'go_vs_revenue', 'GO vs revenue bonds (reference text)', []),
+    'govt_vs_corporate': _c('sovereign', 'govt_vs_corporate', 'Government vs corporate bonds (reference text)', []),
+    'relative_value': _c('sovereign', 'relative_value', 'Sovereign / corporate / tax-equivalent muni yields',
+                         ['sovereign_yield', 'corporate_spread', 'muni_yield', 'tax_rate']),
 }
 
 
-def run_bond_features_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute bond features analysis."""
-    analyzer = BondFeaturesAnalyzer()
-    analysis_type = params.get('analysis_type', '')
-
-    if analysis_type == 'describe_bond_type':
-        return analyzer.describe_bond_type(params.get('bond_type', 'corporate'))
-    elif analysis_type == 'analyze_covenants':
-        return analyzer.analyze_covenants(
-            params.get('bond_type', 'corporate'),
-            params.get('is_high_yield', False)
-        )
-    elif analysis_type == 'analyze_contingencies':
-        return analyzer.analyze_contingency_provisions(
-            params.get('provision_type', 'callable'),
-            params.get('details', {})
-        )
-    elif analysis_type == 'cash_flow_structure':
-        return analyzer.calculate_cash_flow_structure(
-            params.get('structure_type', 'bullet')
-        )
-    else:
-        return {'error': f'Unknown bond_features analysis type: {analysis_type}'}
-
-
-def run_market_structure_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute market structure analysis."""
-    analyzer = MarketStructureAnalyzer()
-    analysis_type = params.get('analysis_type', '')
-
-    if analysis_type == 'market_segments':
-        return analyzer.describe_market_segments(params.get('segment', 'corporate'))
-    elif analysis_type == 'fixed_income_indexes':
-        return analyzer.describe_fixed_income_indexes(params.get('index_category', 'aggregate'))
-    elif analysis_type == 'primary_vs_secondary':
-        return analyzer.compare_primary_secondary_markets()
-    elif analysis_type == 'repo_mechanics':
-        return analyzer.analyze_repo_mechanics(
-            params.get('repo_type', 'overnight'),
-            params.get('details', {})
-        )
-    elif analysis_type == 'short_term_funding':
-        return analyzer.analyze_short_term_funding(params.get('instrument', 'commercial_paper'))
-    elif analysis_type == 'ig_vs_hy_funding':
-        return analyzer.compare_ig_vs_hy_funding()
-    else:
-        return {'error': f'Unknown market_structure analysis type: {analysis_type}'}
-
-
-def run_floating_rate_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute floating rate analysis."""
-    frn_analyzer = FloatingRateAnalyzer()
-    mm_analyzer = MoneyMarketAnalyzer()
-    analysis_type = params.get('analysis_type', '')
-
-    if analysis_type == 'frn_price':
-        return frn_analyzer.calculate_frn_price(
-            quoted_margin=params.get('quoted_margin', 0.01),
-            discount_margin=params.get('discount_margin', 0.01),
-            reference_rate=params.get('reference_rate', 0.05),
-            years_to_maturity=params.get('years_to_maturity', 5)
-        )
-    elif analysis_type == 'discount_margin':
-        return frn_analyzer.calculate_discount_margin(
-            price=params.get('price', 100),
-            quoted_margin=params.get('quoted_margin', 0.01),
-            reference_rate=params.get('reference_rate', 0.05),
-            years_to_maturity=params.get('years_to_maturity', 5)
-        )
-    elif analysis_type == 'zero_discount_margin':
-        return frn_analyzer.calculate_z_dm(
-            price=params.get('price', 100),
-            quoted_margin=params.get('quoted_margin', 0.01),
-            forward_rates=params.get('forward_rates', [0.05] * 10),
-            years_to_maturity=params.get('years_to_maturity', 5)
-        )
-    elif analysis_type == 'frn_with_caps_floors':
-        return frn_analyzer.analyze_frn_with_caps_floors(
-            cap_rate=params.get('cap_rate'),
-            floor_rate=params.get('floor_rate'),
-            reference_rate=params.get('reference_rate', 0.05),
-            volatility=params.get('volatility', 0.01)
-        )
-    elif analysis_type == 'reference_rate_info':
-        return frn_analyzer.describe_reference_rates(params.get('rate_name', 'SOFR'))
-    elif analysis_type == 'money_market_yield':
-        return mm_analyzer.calculate_money_market_yield(
-            price=params.get('price', 98),
-            face_value=params.get('face_value', 100),
-            days_to_maturity=params.get('days_to_maturity', 90)
-        )
-    elif analysis_type == 'compare_mm_yields':
-        return mm_analyzer.compare_yield_measures(
-            price=params.get('price', 98),
-            face_value=params.get('face_value', 100),
-            days_to_maturity=params.get('days_to_maturity', 90)
-        )
-    else:
-        return {'error': f'Unknown floating_rate analysis type: {analysis_type}'}
-
-
-def run_sovereign_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute sovereign credit analysis."""
-    from sovereign_credit import SovereignCreditFactors, MunicipalCreditFactors
-
-    sov_analyzer = SovereignCreditAnalyzer()
-    muni_analyzer = MunicipalCreditAnalyzer()
-    comparison = GovernmentVsCorporateComparison()
-    analysis_type = params.get('analysis_type', '')
-
-    # Helper to build SovereignCreditFactors from params
-    def build_sovereign_factors(f: Dict) -> SovereignCreditFactors:
-        return SovereignCreditFactors(
-            institutional_effectiveness=f.get('institutional_effectiveness', 70),
-            political_stability=f.get('political_stability', 70),
-            rule_of_law=f.get('rule_of_law', 70),
-            corruption_index=f.get('corruption_index', 30),
-            gdp_growth_rate=f.get('gdp_growth_rate', 2.0),
-            gdp_per_capita=f.get('gdp_per_capita', 50000),
-            inflation_rate=f.get('inflation_rate', 2.0),
-            unemployment_rate=f.get('unemployment_rate', 5.0),
-            current_account_balance_gdp=f.get('current_account_balance_gdp', 0),
-            government_debt_gdp=f.get('government_debt_gdp', 60),
-            fiscal_balance_gdp=f.get('fiscal_balance_gdp', -3),
-            interest_expense_revenue=f.get('interest_expense_revenue', 10),
-            foreign_reserves_months_imports=f.get('foreign_reserves_months_imports', 6),
-            external_debt_gdp=f.get('external_debt_gdp', 40),
-            fx_regime=f.get('fx_regime', 'floating'),
-            reserve_currency_issuer=f.get('reserve_currency_issuer', False)
-        )
-
-    def build_municipal_factors(f: Dict) -> MunicipalCreditFactors:
-        return MunicipalCreditFactors(
-            tax_base_diversity=f.get('tax_base_diversity', 70),
-            revenue_volatility=f.get('revenue_volatility', 30),
-            economic_base_strength=f.get('economic_base_strength', 70),
-            debt_per_capita=f.get('debt_per_capita', 2000),
-            debt_service_coverage=f.get('debt_service_coverage', 2.0),
-            unfunded_pension_liability=f.get('unfunded_pension_liability', 3000),
-            budget_management=f.get('budget_management', 75),
-            reserve_levels=f.get('reserve_levels', 15),
-            state_support_level=f.get('state_support_level', 'moderate'),
-            legal_framework=f.get('legal_framework', 'strong')
-        )
-
-    if analysis_type == 'sovereign_rating':
-        factors = build_sovereign_factors(params.get('factors', {}))
-        return sov_analyzer.calculate_sovereign_rating(factors)
-    elif analysis_type == 'sovereign_ability_to_pay':
-        factors = build_sovereign_factors(params.get('factors', {}))
-        return sov_analyzer.analyze_ability_to_pay(factors)
-    elif analysis_type == 'sovereign_willingness':
-        factors = build_sovereign_factors(params.get('factors', {}))
-        return sov_analyzer.analyze_willingness_to_pay(factors)
-    elif analysis_type == 'local_vs_foreign_debt':
-        factors = build_sovereign_factors(params.get('factors', {}))
-        return sov_analyzer.compare_local_vs_foreign_currency_debt(factors)
-    elif analysis_type == 'default_restructuring':
-        factors = build_sovereign_factors(params.get('factors', {}))
-        return sov_analyzer.analyze_default_restructuring_factors(
-            factors,
-            params.get('has_imf_program', False),
-            params.get('debt_to_exports', 100)
-        )
-    elif analysis_type == 'municipal_go':
-        factors = build_municipal_factors(params.get('factors', {}))
-        return muni_analyzer.analyze_general_obligation_bonds(
-            factors,
-            params.get('population', 100000),
-            params.get('median_income', 50000)
-        )
-    elif analysis_type == 'municipal_revenue':
-        return muni_analyzer.analyze_revenue_bonds(
-            project_type=params.get('project_type', 'Water System'),
-            debt_service_coverage=params.get('debt_service_coverage', 1.5),
-            rate_covenant=params.get('rate_covenant', 1.25),
-            additional_bonds_test=params.get('additional_bonds_test', True),
-            essentiality=params.get('essentiality', 'essential')
-        )
-    elif analysis_type == 'go_vs_revenue':
-        return muni_analyzer.compare_go_vs_revenue_bonds()
-    elif analysis_type == 'govt_vs_corporate':
-        return comparison.compare_issuance_characteristics()
-    elif analysis_type == 'relative_value':
-        return comparison.analyze_relative_value(
-            sovereign_yield=params.get('sovereign_yield', 0.04),
-            corporate_spread=params.get('corporate_spread', 0.015),
-            muni_yield=params.get('muni_yield', 0.035),
-            tax_rate=params.get('tax_rate', 0.35)
-        )
-    else:
-        return {'error': f'Unknown sovereign analysis type: {analysis_type}'}
-
-
-def list_commands() -> Dict[str, Any]:
-    """List all available commands grouped by module."""
-    modules = {}
-
+def list_commands(only: Any = None) -> Dict[str, Any]:
+    """Commands grouped by module (or one command when `only` names it)."""
+    if only is not None:
+        if only not in COMMANDS:
+            return {'error': f'Unknown command: {only}', 'available_commands': sorted(COMMANDS)}
+        info = COMMANDS[only]
+        out = {'command': only, 'module': info['module'], 'description': info['description'],
+               'params': info['params']}
+        if info['aliases']:
+            out['param_aliases'] = info['aliases']
+        return out
+    modules: Dict[str, list] = {}
     for cmd, info in COMMANDS.items():
-        module = info['module']
-        if module not in modules:
-            modules[module] = []
-        modules[module].append({
-            'command': cmd,
-            'description': info['description'],
-            'params': info['params']
-        })
-
+        row = {'command': cmd, 'description': info['description'], 'params': info['params']}
+        if info['aliases']:
+            row['param_aliases'] = info['aliases']
+        modules.setdefault(info['module'], []).append(row)
     return {
+        'usage': "python cli.py <command> '<json params>'",
         'modules': modules,
-        'total_commands': len(COMMANDS)
+        'total_commands': len(COMMANDS),
+        'conventions': {
+            'rates': 'decimals (0.05 = 5%)',
+            'bond_yield': 'nominal annual, compounded `frequency` times a year (0 = zero-coupon, annual)',
+            'price': 'clean (quoted) price; dirty_price = price + accrued_interest',
+            'duration': 'years (Macaulay and modified both reported); convexity in years^2',
+            'spot_rate': 'annual compounding unless the field name says otherwise',
+            'errors': '{"error": "<message>"}',
+        },
     }
 
 
-def execute_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Execute a fixed income analytics command.
-
-    Args:
-        command: Command name
-        params: Command parameters
-
-    Returns:
-        Analysis results
-    """
-    if command == 'list':
-        return list_commands()
+def execute_command(command: str, params: Any) -> Dict[str, Any]:
+    """Run one command; always returns a dict (an {'error': ...} dict on failure)."""
+    if command in ('list', 'help', '--help', '-h'):
+        only = params.get('command') if isinstance(params, dict) else None
+        return list_commands(only)
 
     if command not in COMMANDS:
-        return {
-            'error': f'Unknown command: {command}',
-            'available_commands': list(COMMANDS.keys())
-        }
+        return {'error': f'Unknown command: {command}', 'available_commands': sorted(COMMANDS)}
+    if not isinstance(params, dict):
+        return {'error': 'params must be a JSON object'}
 
-    cmd_info = COMMANDS[command]
-    module = cmd_info['module']
-    analysis_type = cmd_info['analysis_type']
+    info = COMMANDS[command]
+    p = dict(params)
+    for old, new in info['aliases'].items():
+        if old in p and new not in p:
+            p[new] = p[old]
+    p['analysis_type'] = info['analysis_type']
 
-    # Add analysis_type to params
-    params['analysis_type'] = analysis_type
-
-    # Route to appropriate module
+    module_name, func_name = MODULES[info['module']]
     try:
-        if module == 'bond_pricing':
-            return run_bond_pricing_analysis(params)
-        elif module == 'duration':
-            return run_duration_analysis(params)
-        elif module == 'yield_curve':
-            return run_yield_curve_analysis(params)
-        elif module == 'credit':
-            return run_credit_analysis(params)
-        elif module == 'structured':
-            return run_structured_products_analysis(params)
-        elif module == 'portfolio':
-            return run_portfolio_analysis(params)
-        elif module == 'bond_features':
-            return run_bond_features_analysis(params)
-        elif module == 'market_structure':
-            return run_market_structure_analysis(params)
-        elif module == 'floating_rate':
-            return run_floating_rate_analysis(params)
-        elif module == 'sovereign':
-            return run_sovereign_analysis(params)
-        else:
-            return {'error': f'Unknown module: {module}'}
-    except Exception as e:
-        logger.error(f"Command execution error: {str(e)}")
-        return {'error': str(e)}
+        module = importlib.import_module(module_name)
+        result = getattr(module, func_name)(p)
+    except Exception as e:  # never a traceback instead of JSON
+        logger.error("%s: %s: %s", command, type(e).__name__, e)
+        result = {'error': str(e) or type(e).__name__}
+    if not isinstance(result, dict):
+        result = {'result': result}
+
+    allowed = set(info['params']) | set(info['aliases']) | {'analysis_type'}
+    unused = sorted(k for k in params if k not in allowed)
+    if unused:
+        result['unused_params'] = unused
+    return result
 
 
-def main():
-    """Main CLI entry point."""
-    if len(sys.argv) < 2:
-        # Show help
-        result = {
-            'usage': 'python cli.py <command> [params_json]',
+def main(argv=None) -> None:
+    """CLI entry point: exactly one JSON payload on stdout."""
+    argv = sys.argv if argv is None else argv
+    if len(argv) < 2:
+        fincept_json.emit({
+            'usage': "python cli.py <command> '<json params>'",
+            'help': "python cli.py list   |   python cli.py help '{\"command\": \"price\"}'",
             'examples': [
-                'python cli.py list',
                 'python cli.py price \'{"ytm": 0.06, "coupon_rate": 0.05, "years_to_maturity": 10}\'',
                 'python cli.py modified_duration \'{"coupon_rate": 0.05, "years_to_maturity": 10, "ytm": 0.06}\'',
+                'python cli.py bootstrap \'{"maturities": [0.5, 1, 2, 5, 10], "yields": [0.05, 0.049, 0.046, 0.043, 0.043]}\'',
                 'python cli.py wal \'{"psa_speed": 150}\'',
             ],
-            'modules': ['bond_pricing', 'duration', 'yield_curve', 'credit', 'structured', 'portfolio', 'bond_features', 'market_structure', 'floating_rate', 'sovereign']
-        }
-        print(json.dumps(result, indent=2))
+            'commands': sorted(COMMANDS),
+            'total_commands': len(COMMANDS),
+        })
         return
 
-    command = sys.argv[1]
-
-    # Parse parameters
-    if len(sys.argv) > 2:
+    command = argv[1]
+    params: Any = {}
+    if len(argv) > 2 and argv[2].strip():
         try:
-            params = json.loads(sys.argv[2])
-        except json.JSONDecodeError as e:
-            print(json.dumps({'error': f'Invalid JSON parameters: {str(e)}'}))
+            params = json.loads(argv[2])
+        except ValueError as e:
+            fincept_json.emit({'error': f'Invalid JSON parameters: {e}'})
             return
-    else:
-        params = {}
+    if not isinstance(params, dict):
+        fincept_json.emit({'error': 'params must be a JSON object'})
+        return
 
-    # Execute command
-    result = execute_command(command, params)
-    print(json.dumps(result, indent=2))
+    fincept_json.emit(execute_command(command, params))
 
 
 if __name__ == "__main__":

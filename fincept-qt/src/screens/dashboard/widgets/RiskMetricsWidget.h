@@ -1,69 +1,63 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
-#include "services/markets/MarketDataService.h"
+#include "services/markets/MarketDataTypes.h"
+#include "services/markets/MarketPerformance.h"
 
 #include <QHash>
-#include <QLabel>
+
+class QLabel;
+
+namespace fincept::ui {
+class KpiStrip;
+class TimeSeriesChart;
+} // namespace fincept::ui
 
 namespace fincept::screens::widgets {
 
-/// Risk Metrics Widget — displays VIX (fear gauge), estimated beta for key stocks,
-/// 52-week range positions, and correlation proxies. All data from yfinance.
+/// Market risk tile (type id "market_risk"; the old "risk_metrics" id now shows
+/// portfolio risk — PortfolioRiskWidget).
 ///
-/// Subscribes to `market:quote:<sym>` on the DataHub for the fixed
-/// risk-symbol set; on every delivery `populate()` is re-invoked with the
-/// aggregated cache.
+/// For the user's MarketProfile region: the region's volatility gauge (level,
+/// regime), the benchmark's realised 20-day volatility and its distance from the
+/// 52-week high, the implied-minus-realised spread where the gauge measures the
+/// same market (VIX / S&P 500, India VIX / Nifty 50), and the VIX term ratio
+/// (VIX / VIX3M) where available. The chart shows the gauge's year of daily
+/// closes with the 20 and 30 regime lines.
 class RiskMetricsWidget : public BaseWidget {
     Q_OBJECT
   public:
-    explicit RiskMetricsWidget(QWidget* parent = nullptr);
+    /// Config: {"market_region": "<id>"} pins the tile to one region (RegionPin.h).
+    explicit RiskMetricsWidget(const QJsonObject& cfg = {}, QWidget* parent = nullptr);
+
+    QJsonObject config() const override;
+    void apply_config(const QJsonObject& cfg) override;
 
   protected:
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;
+    void on_topic_errors_changed() override;
 
   private:
-    void apply_styles();
-    void refresh_data();
-    void populate(const QVector<services::QuoteData>& quotes);
-
     void hub_subscribe_all();
-    void hub_unsubscribe_all();
-    /// Rebuild a QVector<QuoteData> from `row_cache_` and hand to `populate()`.
-    void rebuild_from_cache();
+    void reload_region();
+    void render();
+    void render_chart();
+    QStringList topics() const;
 
-    // VIX section
-    QWidget* vix_card_ = nullptr;
-    QLabel* vix_header_lbl_ = nullptr;
-    QLabel* vix_value_ = nullptr;
-    QLabel* vix_regime_ = nullptr;
-    QLabel* vix_bar_fill_ = nullptr;
-    QVector<QFrame*> vix_bar_segments_; // 5 gradient segments
+    ui::KpiStrip* kpis_ = nullptr;
+    ui::TimeSeriesChart* chart_ = nullptr;
+    QLabel* footer_ = nullptr;
 
-    // Separators and section headers
-    QFrame* sep1_ = nullptr;
-    QFrame* sep2_ = nullptr;
-    QLabel* stocks_hdr_ = nullptr;
-    QLabel* corr_hdr_ = nullptr;
-
-    // Volatility cluster labels [6 stocks]
-    struct StockRisk {
-        QLabel* symbol = nullptr;
-        QLabel* chg_pct = nullptr;
-        QLabel* hi_lo = nullptr;
-    };
-    QVector<StockRisk> stock_rows_;
-
-    // Spread row labels (the left-hand descriptors)
-    QVector<QLabel*> spread_labels_;
-    // Correlation proxies
-    QLabel* spy_qqq_spread_ = nullptr;
-    QLabel* spy_iwm_spread_ = nullptr;
-    QLabel* equity_bond_lbl_ = nullptr; // SPY vs TLT proxy
-
-    QHash<QString, services::QuoteData> row_cache_;
+    QString region_pin_; ///< "" = follow the selector
+    QString bench_;
+    QString gauge_;
+    bool gauge_matches_bench_ = false;
+    bool has_term_ = false;
+    QHash<QString, services::QuoteData> quotes_;
+    QHash<QString, services::PerformanceStats> stats_;
+    QVector<QPointF> gauge_hist_;
     bool hub_active_ = false;
 };
 

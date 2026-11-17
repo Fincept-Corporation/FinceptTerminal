@@ -1,30 +1,59 @@
-// Per-provider model-list discovery. Async GET on the GUI thread; emits models_fetched.
+// Per-provider model-list discovery. Async GET on the GUI thread (the QNAM needs
+// it); the answer — OpenRouter's is over 1 MB — is parsed and shaped on a worker
+// (ModelListParse), and models_fetched is emitted back on the GUI thread for the
+// newest request of that provider only.
 
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/ModelListParse.h"
 #include "services/llm/ProviderCatalog.h"
 #include "storage/repositories/SettingsRepository.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QMetaObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
+#include <QThreadPool>
 #include <QTimer>
 #include <QUrl>
+
+#include <utility>
 
 namespace fincept::ai_chat {
 
 static constexpr const char* TAG = "LlmModelsApi";
+
+namespace {
+/// Newest fetch_models() request per provider (lower-case name). GUI thread only:
+/// fetch_models() and every delivery run there. An answer for an older request
+/// of the same provider is dropped — latest request wins.
+QHash<QString, quint64>& llm_models_latest_request() {
+    static QHash<QString, quint64> latest;
+    return latest;
+}
+
+quint64 llm_models_next_request_id() {
+    static quint64 last = 0;
+    return ++last;
+}
+
+bool llm_models_is_latest(const QString& provider_key, quint64 request_id) {
+    return llm_models_latest_request().value(provider_key) == request_id;
+}
+} // namespace
 
 QString LlmService::get_models_url(const QString& provider, const QString& api_key, const QString& base_url) {
     Q_UNUSED(api_key) // Auth in headers, not URL.
@@ -120,72 +149,20 @@ QMap<QString, QString> LlmService::get_models_headers(const QString& provider, c
 }
 
 QStringList LlmService::parse_models_response(const QString& provider, const QByteArray& body) {
-    QStringList models;
-    auto doc = QJsonDocument::fromJson(body);
-    if (doc.isNull() || !doc.isObject())
-        return models;
-    QJsonObject root = doc.object();
-    const QString p = provider.toLower();
-
-    if (p == "gemini" || p == "google") {
-        QJsonArray arr = root["models"].toArray();
-        for (const auto& v : arr) {
-            QJsonObject m = v.toObject();
-            // Filter to models that support generateContent.
-            QJsonArray methods = m["supportedGenerationMethods"].toArray();
-            bool can_generate = false;
-            for (const auto& method : methods) {
-                if (method.toString() == "generateContent") {
-                    can_generate = true;
-                    break;
-                }
-            }
-            if (!can_generate)
-                continue;
-
-            QString name = m["name"].toString();
-            if (name.startsWith("models/"))
-                name = name.mid(7);
-            if (!name.isEmpty())
-                models.append(name);
-        }
-    } else if (p == "ollama") {
-        QJsonArray arr = root["models"].toArray();
-        for (const auto& v : arr) {
-            QString name = v.toObject()["name"].toString();
-            if (!name.isEmpty())
-                models.append(name);
-        }
-    } else if (p == "fincept") {
-        // data may be either {"models":[...]} or a direct array.
-        QJsonValue data_val = root["data"];
-        QJsonArray arr;
-        if (data_val.isObject())
-            arr = data_val.toObject()["models"].toArray();
-        else if (data_val.isArray())
-            arr = data_val.toArray();
-        for (const auto& v : arr) {
-            QString id = v.isString() ? v.toString() : v.toObject()["id"].toString();
-            if (!id.isEmpty())
-                models.append(id);
-        }
-        if (models.isEmpty())
-            models = {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5"};
-    } else {
-        // OpenAI-compatible: {"data": [{"id": ...}]}.
-        QJsonArray arr = root["data"].toArray();
-        for (const auto& v : arr) {
-            QString id = v.toObject()["id"].toString();
-            if (!id.isEmpty())
-                models.append(id);
-        }
-    }
-
-    models.sort(Qt::CaseInsensitive);
-    return models;
+    // Pure parse + shaping in ModelListParse (any thread; fetch_models runs it on a worker).
+    ParsedModelList parsed = parse_model_list(provider, body);
+    if (!parsed.parsed)
+        LOG_WARN(TAG, logf("Model list response could not be parsed", {{"provider", provider}, {"bytes", body.size()}}));
+    return std::move(parsed.models);
 }
 
 void LlmService::fetch_models(const QString& provider, const QString& api_key, const QString& base_url) {
+    // This call is now the newest for its provider: any answer still on its way for
+    // an earlier call (other key / base URL) is dropped when it arrives.
+    const QString provider_key = provider.toLower();
+    const quint64 request_id = llm_models_next_request_id();
+    llm_models_latest_request().insert(provider_key, request_id);
+
     // No public /models endpoint for fincept — return known list immediately.
     if (provider.toLower() == "fincept") {
         emit models_fetched(provider,
@@ -209,7 +186,7 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
-    LOG_INFO(TAG, QString("fetch_models start: provider=%1 url=%2").arg(provider, url));
+    LOG_DEBUG(TAG, logf("Model list fetch started", {{"provider", provider}, {"url", log_url(url)}}));
 
     QNetworkReply* reply = models_nam_->get(req);
 
@@ -222,15 +199,21 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
     });
     timer->start(15000);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, provider_key, request_id]() {
         reply->deleteLater();
         const QString p = reply->property("_provider").toString();
 
-        QString error;
-        QStringList models;
+        // A newer fetch for this provider was started meanwhile: its answer is
+        // the one the settings page waits for (and this one is never parsed).
+        if (!llm_models_is_latest(provider_key, request_id)) {
+            LOG_DEBUG(TAG, logf("Model list answer dropped, a newer fetch is running", {{"provider", p}}));
+            return;
+        }
+
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
         if (reply->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
+            QString error;
             if (reply->error() == QNetworkReply::OperationCanceledError)
                 error = "Request timed out";
             else {
@@ -239,11 +222,12 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
                     error = QString("HTTP %1").arg(status);
             }
             // Logged before the provider's message is folded in: that text is for the
-            // user (it can echo a masked key fragment), not for the log file.
-            LOG_WARN(TAG, QString("fetch_models %1 failed: %2 (status=%3 qt_error=%4)")
-                              .arg(p, error)
-                              .arg(status)
-                              .arg(static_cast<int>(reply->error())));
+            // user (it can echo a masked key fragment), not for the log file. Qt's
+            // errorString() embeds the request URL: scrubbed for the log.
+            LOG_WARN(TAG, logf("Model list fetch failed", {{"provider", p},
+                                                           {"status", status},
+                                                           {"qt_error", static_cast<int>(reply->error())},
+                                                           {"error", log_scrub(error)}}));
             // Qt's "server replied: Unauthorized" says nothing about WHY — the provider's
             // JSON body usually does ("API key not valid", "model access denied", …).
             if (reply->error() != QNetworkReply::OperationCanceledError) {
@@ -251,14 +235,33 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
                 if (!server_msg.isEmpty())
                     error = status > 0 ? QString("HTTP %1: %2").arg(status).arg(server_msg) : server_msg;
             }
-        } else {
-            models = parse_models_response(p, reply->readAll());
-            if (models.isEmpty())
-                error = "No models found";
-            LOG_INFO(TAG, QString("fetch_models %1 → %2 models").arg(p).arg(models.size()));
+            emit models_fetched(p, {}, error);
+            return;
         }
 
-        emit models_fetched(p, models, error);
+        // Parse and shape on a worker (OpenRouter's list is over 1 MB); the result
+        // comes back to this (GUI) thread and is emitted only while this request
+        // is still the newest for its provider.
+        QPointer<LlmService> self = this;
+        QThreadPool::globalInstance()->start([self, p, provider_key, request_id, body = reply->readAll()]() {
+            QStringList models = parse_models_response(p, body); // pure + one log line
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self.data(),
+                [self, p, provider_key, request_id, models = std::move(models)]() {
+                    if (!self)
+                        return;
+                    if (!llm_models_is_latest(provider_key, request_id)) {
+                        LOG_DEBUG(TAG, logf("Model list answer dropped, a newer fetch is running", {{"provider", p}}));
+                        return;
+                    }
+                    const QString error = models.isEmpty() ? QStringLiteral("No models found") : QString();
+                    LOG_DEBUG(TAG, logf("Model list fetched", {{"provider", p}, {"count", models.size()}}));
+                    emit self->models_fetched(p, models, error);
+                },
+                Qt::QueuedConnection);
+        });
     });
 }
 

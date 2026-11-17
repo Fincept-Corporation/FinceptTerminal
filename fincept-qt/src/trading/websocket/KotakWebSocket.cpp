@@ -20,6 +20,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_KOTAK_WS = "KotakWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_kotak_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_KOTAK_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_KOTAK_WS, key, 1)) {
+        LOG_WARN(TAG_KOTAK_WS, "Kotak WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_KOTAK_WS, "Kotak WS still disconnected");
+    }
+}
+
 // ── HSI protocol constants (from HSWebSocketLib.py) ─────────────────────────
 namespace {
 constexpr quint8 CONNECTION_TYPE = 1;
@@ -121,7 +136,7 @@ KotakWebSocket::KotakWebSocket(const QString& auth_token, const QString& sid, co
 
 void KotakWebSocket::open() {
     auth_ok_ = false;
-    LOG_INFO(TAG_KOTAK_WS, "Connecting to Kotak HSI feed");
+    LOG_DEBUG(TAG_KOTAK_WS, "Connecting to Kotak HSI feed");
     ws_->connect_to(QString::fromLatin1(kWsUrl));
     start_health_check();
 }
@@ -194,14 +209,14 @@ void KotakWebSocket::on_data_stall() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void KotakWebSocket::on_connected() {
-    LOG_INFO(TAG_KOTAK_WS, "Transport open — sending HSI connection request");
+    LOG_DEBUG(TAG_KOTAK_WS, "Transport open — sending HSI connection request");
     // Wait for the connection ack before flushing subscriptions; the cn frame
     // carries the JWT (auth_token) as "Authorization" and sid as "Sid".
     ws_->send_binary(build_connection_request(auth_token_, sid_));
 }
 
 void KotakWebSocket::on_disconnected() {
-    LOG_WARN(TAG_KOTAK_WS, "Disconnected");
+    log_kotak_stream_state(this, false);
     auth_ok_ = false;
     emit disconnected();
 }
@@ -309,8 +324,8 @@ void KotakWebSocket::send_subscribe(const QVector<qint64>& tokens, bool subscrib
         ws_->send_binary(build_subs_request(joined, type, QStringLiteral("sf"), 1));
         ws_->send_binary(build_subs_request(joined, type, QStringLiteral("dp"), 1));
     }
-    LOG_INFO(TAG_KOTAK_WS,
-             QString("%1 %2 scrips").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(scrip_list.size()));
+    LOG_DEBUG(TAG_KOTAK_WS,
+              QString("%1 %2 scrips").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(scrip_list.size()));
 }
 
 void KotakWebSocket::resubscribe_all() {
@@ -387,9 +402,10 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
             }
         }
         if (status == QStringLiteral("K")) {
-            LOG_INFO(TAG_KOTAK_WS, "HSI connection acknowledged — flushing subscriptions");
+            LOG_DEBUG(TAG_KOTAK_WS, "HSI connection acknowledged — flushing subscriptions");
             auth_ok_ = true;
             ack_counter_ = 0;
+            log_kotak_stream_state(this, true);
             emit connected();
             resubscribe_all();
         } else {

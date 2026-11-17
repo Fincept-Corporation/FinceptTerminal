@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/MattermostProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -31,13 +33,12 @@ void MattermostProvider::send(const NotificationRequest& req, std::function<void
     if (!username_.isEmpty())
         body["username"] = username_;
 
-    HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    });
+    // An incoming webhook answers the text "ok": the HTTP status decides.
+    DeliveryRequest request;
+    request.service = DeliveryService::Mattermost;
+    request.url = webhook_url_;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

@@ -1,0 +1,42 @@
+{
+  "parser": "acp",
+  "events": [
+    {
+      "kind": "thinking",
+      "partial": true,
+      "ref": "thought:t1"
+    },
+    {
+      "kind": "thinking",
+      "ref": "thought:t1"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "a1"
+    },
+    {
+      "kind": "text",
+      "ref": "a1"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "error"
+    }
+  ],
+  "session_id": "sess_x",
+  "final_text": "I can't help with that.",
+  "saw_result": true,
+  "result_is_error": true,
+  "stop_reason": "refusal",
+  "tool_calls": 0,
+  "input": "bare_updates_refusal.jsonl"
+}

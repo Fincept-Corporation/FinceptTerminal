@@ -31,6 +31,22 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Union
 from urllib.parse import urlencode
 
+try:
+    import fincept_connector as fc
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_connector as fc
+
+BEA_SIGNUP_URL = "https://apps.bea.gov/API/signup/"
+
+
+def _missing_key(endpoint: str) -> Dict[str, Any]:
+    """{"success": false, "error", "code": "missing_key", "env_key": "BEA_API_KEY", "docs_url", "endpoint"}."""
+    out = {"success": False}
+    out.update(fc.missing_key("BEA", BEA_SIGNUP_URL, "BEA_API_KEY", "a free API key (UserID)"))
+    out["endpoint"] = endpoint
+    return out
+
 
 class BEAError:
     """Error handling wrapper for BEA API responses"""
@@ -63,6 +79,10 @@ class BEAWrapper:
 
     def _make_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Centralized request handler with comprehensive error handling"""
+        if not self.api_key:
+            # Without a key BEA answers HTTP 200 with the error tucked under Results, which used to
+            # come back as {"success": true, "data": []} (and be cached as a valid empty answer).
+            return _missing_key(method)
         try:
             # Add API key to all requests
             params['UserID'] = self.api_key
@@ -89,6 +109,22 @@ class BEAWrapper:
 
                 # Extract actual data
                 results = data['BEAAPI'].get('Results', {})
+
+                # Request errors (invalid UserID, bad parameter, ...) arrive with HTTP 200 under
+                # Results.Error: {"APIErrorCode": "1", "APIErrorDescription": "Invalid Request - ..."}.
+                results_error = results.get('Error') if isinstance(results, dict) else None
+                if results_error:
+                    if isinstance(results_error, list):
+                        results_error = results_error[0] if results_error else {}
+                    if isinstance(results_error, dict):
+                        desc = (results_error.get('APIErrorDescription') or results_error.get('ErrorDesc')
+                                or 'Unknown BEA API error')
+                        detail = results_error.get('ErrorDetail')
+                        if isinstance(detail, dict) and detail.get('Description'):
+                            desc = f"{desc} ({detail['Description']})"
+                    else:
+                        desc = str(results_error)
+                    return BEAError(method, desc).to_dict()
 
                 # Handle different response structures
                 if method == 'GetDatasetList':
@@ -608,6 +644,12 @@ def main(args=None):
 
     command = args[0]
     wrapper = BEAWrapper()
+
+    # Every BEA command calls the API, which needs the UserID: say so before any request, as a
+    # handled outcome (exit 0, one JSON line) the terminal can turn into "add key".
+    if not wrapper.api_key:
+        print(json.dumps(_missing_key(command)))
+        return
 
     try:
         if command == "fetch":

@@ -3,6 +3,7 @@
 Unified command-line interface for alternative investment analytics.
 """
 
+import os
 import sys
 import json
 import math
@@ -10,6 +11,11 @@ import argparse
 from decimal import Decimal
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
+
+# scripts/ (fincept_irr) is on PYTHONPATH when the terminal runs this; also when run by hand.
+_SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.append(_SCRIPTS_DIR)
 
 from config import AssetClass, HedgeFundStrategy, CommoditySector, RealEstateType, AssetParameters, MarketData
 from digital_assets import DigitalAssetAnalyzer
@@ -47,6 +53,81 @@ def decimal_default(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
+# ── Screen entry point ───────────────────────────────────────────────────────
+# The Alternative Investments screen sends its form as-is (display-oriented keys); the names each
+# analyzer reads are filled in here, so the screen and this file cannot drift apart. An alias only
+# applies when the analyzer's own key is absent (a caller may always send the analyzer's names).
+_SCREEN_ALIASES = {
+    'digital-assets': {'volume_24h': 'trading_volume_24h', 'max_supply': 'total_supply'},
+    'real-estate': {'gross_income': 'gross_rental_income'},
+    'tips': {'face_value': 'acquisition_price', 'current_market_value': 'current_price'},
+    'ibonds': {'purchase_price': 'face_value'},
+    'high-yield': {'par_value': 'face_value', 'price': 'current_market_value'},
+    'convertible-bonds': {'par_value': 'face_value', 'current_price': 'current_market_value'},
+    'preferred-stocks': {'par_value': 'acquisition_price', 'current_price': 'current_market_value'},
+    'annuities': {'premium': 'acquisition_price', 'annual_payout_rate': 'annuity_rate'},
+    'stable-value': {'book_value': 'acquisition_price', 'market_value': 'current_market_value'},
+    'covered-calls': {'shares': 'shares_owned', 'premium': 'option_premium'},
+    'sri': {'sri_return': 'fund_return'},
+    'natural-resources': {'sector': 'commodity_sector'},
+    'variable-annuities': {'me_fee': 'mortality_expense_fee', 'investment_fee': 'investment_mgmt_fee',
+                           'surrender_period': 'surrender_years'},
+    'eia': {'premium': 'acquisition_price', 'surrender_period': 'surrender_charge_years'},
+}
+
+# (analyzer, method) pairs whose output is general product commentary that does not depend on any
+# input. They stay available as "product guides", but without the score ("THE UGLY", "1/10") that
+# made them read like an analysis of the user's numbers.
+GUIDE_METHODS = {
+    ('structured-products', 'complexity'), ('structured-products', 'costs'), ('structured-products', 'verdict'),
+    ('covered-calls', 'verdict'),
+    ('leveraged-funds', 'verdict'),
+    ('variable-annuities', 'verdict'),
+    ('sri', 'approaches'), ('sri', 'verdict'),
+    ('ibonds', 'tax_efficiency'),
+    ('preferred-stocks', 'dividend_safety'),
+}
+
+_GUIDE_NOTE = ('General product guide: the same text for every input. It is background reading, '
+               'not an analysis of the numbers you entered.')
+
+
+def _apply_screen_aliases(command: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    data = dict(data)
+    for src, dst in _SCREEN_ALIASES.get(command, {}).items():
+        if src in data and dst not in data:
+            data[dst] = data[src]
+    return data
+
+
+def _as_guide(metrics: Any) -> Any:
+    """Strip the score / verdict label from a fixed-text method and mark it as a guide."""
+    if not isinstance(metrics, dict):
+        return metrics
+    out = {k: v for k, v in metrics.items() if k not in ('rating', 'category')}
+    title = out.pop('product', None) or out.pop('strategy', None)
+    guide = {'guide': True, 'guide_note': _GUIDE_NOTE}
+    if title:
+        guide['guide_title'] = title
+    guide.update(out)
+    return guide
+
+
+def run_command(command: str, data: Dict[str, Any], method: str) -> Dict[str, Any]:
+    """One analyzer call as the screen makes it: alias the form keys, run, mark guides."""
+    fn = _SCREEN_ANALYZERS[command]
+    data = _apply_screen_aliases(command, data)
+    if command == 'asset-location':
+        result = fn(data, method, Decimal(str(data.get('tax_bracket', 0.24))))
+    else:
+        result = fn(data, method)
+    if (command, method) in GUIDE_METHODS and isinstance(result, dict) and result.get('success', True):
+        result = dict(result)
+        result['metrics'] = _as_guide(result.get('metrics'))
+        result['guide'] = True
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description='Alternative Investments Analytics CLI')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -54,7 +135,8 @@ def main():
     # Digital Assets
     digital = subparsers.add_parser('digital-assets', help='Digital asset analytics')
     digital.add_argument('--data', required=True, help='Asset data (JSON)')
-    digital.add_argument('--method', default='fundamental', help='Analysis method: fundamental, volatility, onchain')
+    # volatility / on-chain metrics need a price / chain history this command does not fetch yet.
+    digital.add_argument('--method', default='fundamental', help='Analysis method: fundamental')
 
     # Hedge Funds
     hedge = subparsers.add_parser('hedge-funds', help='Hedge fund analytics')
@@ -69,12 +151,13 @@ def main():
     # Private Capital
     private = subparsers.add_parser('private-capital', help='Private capital analytics')
     private.add_argument('--data', required=True, help='Investment data (JSON)')
-    private.add_argument('--method', default='metrics', help='Analysis method: metrics, irr, moic')
+    private.add_argument('--method', default='metrics', help='Analysis method: metrics')
 
     # Real Estate
     real_estate = subparsers.add_parser('real-estate', help='Real estate analytics')
     real_estate.add_argument('--data', required=True, help='Property data (JSON)')
-    real_estate.add_argument('--method', default='noi', help='Analysis method: noi, caprate, dcf')
+    real_estate.add_argument('--method', default='summary',
+                             help='Analysis method: summary, financing, dcf (noi, caprate kept as single numbers)')
 
     # International REITs
     intl_reit = subparsers.add_parser('intl-reit', help='International REIT analytics')
@@ -187,7 +270,8 @@ def main():
     # Variable Annuities
     var_annuity = subparsers.add_parser('variable-annuities', help='Variable annuities analytics')
     var_annuity.add_argument('--data', required=True, help='Variable annuity data (JSON)')
-    var_annuity.add_argument('--method', default='fees', help='Analysis method: fees, tax, alternatives, verdict')
+    var_annuity.add_argument('--method', default='fees',
+                             help='Analysis method: fees, tax, alternatives, surrender, verdict')
 
     args = parser.parse_args()
 
@@ -198,27 +282,12 @@ def main():
     try:
         result = None
 
-        if args.command == 'digital-assets':
-            data = json.loads(args.data)
-            result = analyze_digital_assets(data, args.method)
+        # `--data -` reads the JSON from stdin: the terminal sends the form that way, so a long
+        # cash-flow or return series never meets the Windows command-line length limit.
+        if getattr(args, 'data', None) == '-':
+            args.data = sys.stdin.read()
 
-        elif args.command == 'hedge-funds':
-            data = json.loads(args.data)
-            result = analyze_hedge_funds(data, args.method)
-
-        elif args.command == 'natural-resources':
-            data = json.loads(args.data)
-            result = analyze_natural_resources(data, args.method)
-
-        elif args.command == 'private-capital':
-            data = json.loads(args.data)
-            result = analyze_private_capital(data, args.method)
-
-        elif args.command == 'real-estate':
-            data = json.loads(args.data)
-            result = analyze_real_estate(data, args.method)
-
-        elif args.command == 'intl-reit':
+        if args.command == 'intl-reit':
             data = json.loads(args.data)
             result = analyze_international_reit(data, args.method)
 
@@ -231,81 +300,17 @@ def main():
             returns = json.loads(args.returns)
             result = analyze_risk(returns, args.method, args.confidence_level)
 
-        elif args.command == 'tips':
-            data = json.loads(args.data)
-            result = analyze_tips(data, args.method)
-
-        elif args.command == 'ibonds':
-            data = json.loads(args.data)
-            result = analyze_ibonds(data, args.method)
-
-        elif args.command == 'high-yield':
-            data = json.loads(args.data)
-            result = analyze_high_yield(data, args.method)
-
-        elif args.command == 'preferred-stocks':
-            data = json.loads(args.data)
-            result = analyze_preferred_stocks(data, args.method)
-
         elif args.command == 'pme':
             data = json.loads(args.data)
             result = analyze_pme(data, args.method)
 
-        elif args.command == 'convertible-bonds':
+        elif args.command in _SCREEN_ANALYZERS:
             data = json.loads(args.data)
-            result = analyze_convertible_bonds(data, args.method)
-
-        elif args.command == 'annuities':
-            data = json.loads(args.data)
-            result = analyze_annuities(data, args.method)
-
-        elif args.command == 'inflation-annuity':
-            data = json.loads(args.data)
-            result = analyze_inflation_annuity(data, args.method)
-
-        elif args.command == 'em-bonds':
-            data = json.loads(args.data)
-            result = analyze_em_bonds(data, args.method)
-
-        elif args.command == 'managed-futures':
-            data = json.loads(args.data)
-            result = analyze_managed_futures(data, args.method)
-
-        elif args.command == 'market-neutral':
-            data = json.loads(args.data)
-            result = analyze_market_neutral(data, args.method)
-
-        elif args.command == 'stable-value':
-            data = json.loads(args.data)
-            result = analyze_stable_value(data, args.method)
-
-        elif args.command == 'eia':
-            data = json.loads(args.data)
-            result = analyze_eia(data, args.method)
-
-        elif args.command == 'asset-location':
-            data = json.loads(args.data)
-            result = analyze_asset_location(data, args.method, Decimal(str(args.tax_bracket)))
-
-        elif args.command == 'covered-calls':
-            data = json.loads(args.data)
-            result = analyze_covered_calls(data, args.method)
-
-        elif args.command == 'sri':
-            data = json.loads(args.data)
-            result = analyze_sri(data, args.method)
-
-        elif args.command == 'leveraged-funds':
-            data = json.loads(args.data)
-            result = analyze_leveraged_funds(data, args.method)
-
-        elif args.command == 'structured-products':
-            data = json.loads(args.data)
-            result = analyze_structured_products(data, args.method)
-
-        elif args.command == 'variable-annuities':
-            data = json.loads(args.data)
-            result = analyze_variable_annuities(data, args.method)
+            if not isinstance(data, dict):
+                raise ValueError('--data must be a JSON object')
+            if args.command == 'asset-location' and 'tax_bracket' not in data:
+                data['tax_bracket'] = args.tax_bracket
+            result = run_command(args.command, data, args.method)
 
         # Output result as JSON
         print(json.dumps(result, default=decimal_default, indent=2))
@@ -345,15 +350,13 @@ def analyze_digital_assets(data: Dict[str, Any], method: str = 'fundamental') ->
             market_data = handler.standardize_price_data(data['market_data'])
             analyzer.add_market_data(market_data)
 
-        # Execute requested analysis
-        if method == 'fundamental':
-            metrics = analyzer.fundamental_metrics()
-        elif method == 'volatility':
-            metrics = analyzer.calculate_volatility_metrics()
-        elif method == 'onchain':
-            metrics = analyzer.onchain_metrics()
-        else:
-            metrics = analyzer.fundamental_metrics()
+        # Execute requested analysis. Volatility and on-chain metrics need a price / chain history that
+        # this command does not fetch (they crashed with a missing-method error); say so plainly.
+        if method in ('volatility', 'onchain'):
+            return {'success': False,
+                    'error': 'Volatility and on-chain metrics need a price history, which this analyzer '
+                             'does not fetch yet. Use the fundamental method.'}
+        metrics = analyzer.fundamental_metrics()
 
         return {
             'success': True,
@@ -456,8 +459,20 @@ def analyze_hedge_funds(data: Dict[str, Any], method: str = 'metrics') -> Dict[s
         drag = (gross_stats['cagr'] - net_stats['cagr']
                 if gross_stats['cagr'] is not None and net_stats['cagr'] is not None else None)
 
+        # Growth of 100, gross and net, month by month (charted against the month number, or the
+        # dates when the series came with them).
+        dates = data.get('dates') if isinstance(data.get('dates'), list) else None
+        if dates is not None and len(dates) != len(returns):
+            dates = None
+        g_val, n_val, path = 100.0, 100.0, []
+        for i, (rg, rn) in enumerate(zip(returns, net)):
+            g_val *= (1.0 + rg)
+            n_val *= (1.0 + rn)
+            point = {'date': str(dates[i])[:10]} if dates else {'months': i + 1}
+            point.update({'gross_value': g_val, 'net_value': n_val})
+            path.append(point)
+
         metrics = {
-            'strategy': data.get('strategy_type', 'unspecified'),
             'gross': gross_stats,
             'net_of_fees': net_stats,
             'fee_drag_annual': drag,
@@ -469,10 +484,47 @@ def analyze_hedge_funds(data: Dict[str, Any], method: str = 'metrics') -> Dict[s
             },
             'fee_model': 'Management fee accrued monthly on NAV; performance fee crystallised '
                          'annually above the high-water mark grown at the hurdle (hard hurdle).',
+            'growth_of_100': path,
         }
         return {'success': True, 'asset_type': 'hedge_funds', 'method': 'metrics', 'metrics': metrics}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+
+
+def _nr_decimal(v):
+    """JSON numbers -> Decimal (the commodity analyzer does Decimal arithmetic)."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return Decimal(str(v))
+    return v
+
+
+def _commodity_term_structure(analyzer) -> Dict[str, Any]:
+    """Basis at every point of the futures curve, the curve's shape, and the roll yield
+    between the first two contracts (built from the analyzer's basis / roll-yield methods)."""
+    if not analyzer.spot_price:
+        return {'error': 'Spot price required'}
+    curve = sorted(analyzer.futures_prices.items())
+    if not curve:
+        return {'error': 'At least one futures price is required'}
+    points = []
+    for months, price in curve:
+        b = analyzer.calculate_futures_basis(price, months)
+        points.append({'expiry_months': months, 'futures_price': price, 'basis': b['basis'],
+                       'basis_percentage': b['basis_percentage'], 'annualized_basis': b['annualized_basis'],
+                       'market_structure': b['market_structure']})
+    structures = {p['market_structure'] for p in points}
+    result = {
+        'spot_price': analyzer.spot_price,
+        'curve_shape': structures.pop() if len(structures) == 1 else 'mixed',
+        'commodity_sector': getattr(analyzer.commodity_sector, 'value', str(analyzer.commodity_sector)),
+        'term_structure': points,
+    }
+    if len(curve) >= 2:
+        (m1, p1), (m2, p2) = curve[0], curve[1]
+        roll = analyzer.roll_yield_analysis(p1, p2, max(1, (m2 - m1) * 30))
+        if 'error' not in roll:
+            result['roll_yield'] = roll
+    return result
 
 
 def analyze_natural_resources(data: Dict[str, Any], method: str = 'basis') -> Dict[str, Any]:
@@ -485,29 +537,54 @@ def analyze_natural_resources(data: Dict[str, Any], method: str = 'basis') -> Di
             currency=data.get('currency', 'USD')
         )
 
-        for key in ['commodity_sector', 'spot_price', 'futures_prices',
-                    'storage_cost', 'convenience_yield', 'contract_size']:
+        # Numbers are converted on the way in: a raw JSON float spot price made every
+        # method fail with "unsupported operand type(s) for -: 'decimal.Decimal' and 'float'".
+        for key in ['spot_price', 'storage_cost', 'convenience_yield', 'contract_size']:
             if key in data:
-                setattr(params, key, data[key])
+                setattr(params, key, _nr_decimal(data[key]))
+
+        # The analyzer reads the sector as a CommoditySector (the form sends "sector").
+        sector = data.get('commodity_sector', data.get('sector'))
+        if sector is not None:
+            try:
+                params.commodity_sector = CommoditySector(str(sector).lower())
+            except ValueError:
+                pass
+
+        # Futures curve {months: price}: an explicit futures_prices map, plus the form's
+        # 3 / 6 / 12-month contracts.
+        curve = {}
+        raw_curve = data.get('futures_prices')
+        if isinstance(raw_curve, dict):
+            for k, v in raw_curve.items():
+                try:
+                    curve[int(float(k))] = _nr_decimal(v)
+                except (TypeError, ValueError):
+                    pass
+        for months, key in ((1, 'one_month_futures'), (3, 'three_month_futures'),
+                            (6, 'six_month_futures'), (12, 'twelve_month_futures')):
+            if months not in curve and isinstance(data.get(key), (int, float)):
+                curve[months] = _nr_decimal(data[key])
+        if curve:
+            params.futures_prices = dict(sorted(curve.items()))
 
         analyzer = CommodityAnalyzer(params)
 
-        if method == 'basis':
-            metrics = analyzer.calculate_futures_basis(
-                Decimal(str(data.get('futures_price', 100))),
-                data.get('expiry_months', 3)
-            )
-        elif method == 'contango':
-            metrics = analyzer.analyze_contango_backwardation()
+        if method == 'contango':
+            metrics = _commodity_term_structure(analyzer)
         elif method == 'futures':
-            metrics = analyzer.calculate_theoretical_futures_price(
-                data.get('time_to_expiry_years', 0.25)
-            )
+            t = _nr_decimal(data.get('time_to_expiry_years', 0.25))
+            metrics = {
+                'theoretical_futures_price': analyzer.theoretical_futures_price(t),
+                'spot_price': analyzer.spot_price,
+                'time_to_expiry_years': t,
+                'storage_cost': analyzer.storage_cost,
+                'convenience_yield': analyzer.convenience_yield,
+            }
         else:
-            metrics = analyzer.calculate_futures_basis(
-                Decimal(str(data.get('futures_price', 100))),
-                data.get('expiry_months', 3)
-            )
+            expiry = int(data.get('expiry_months', 3))
+            futures_price = data.get('futures_price', curve.get(expiry, 100))
+            metrics = analyzer.calculate_futures_basis(_nr_decimal(futures_price), expiry)
 
         return {
             'success': True,
@@ -535,49 +612,80 @@ def analyze_private_capital(data: Dict[str, Any], method: str = 'metrics') -> Di
 
         analyzer = PrivateEquityAnalyzer(params)
 
-        # Cash flows from the LP's side: negative = capital call (paid in),
-        # positive = distribution. Routed through the analyzer's call /
-        # distribution handlers so paid-in and distributed totals are tracked
-        # (add_cash_flows alone left both at 0 in the output).
-        if 'cash_flows' in data:
-            # (DataHandler.standardize_cash_flows rejects negative amounts, i.e. every call.)
-            flows = []
-            for item in data['cash_flows']:
-                date = str(item.get('date', ''))[:10]
-                datetime.strptime(date, '%Y-%m-%d')  # ValueError -> reported as the error
-                flows.append((date, Decimal(str(item.get('amount', 0)))))
-            for date, amount in sorted(flows):
-                if amount < 0:
-                    analyzer.process_capital_call(abs(amount), date)
-                elif amount > 0:
-                    analyzer.process_distribution(amount, date)
+        # Cash flows from the LP's side. Each row is {date, amount} with an optional `type`:
+        #   call         - capital paid in (sign ignored; a bare negative amount is a call too)
+        #   distribution - cash returned (a bare positive amount)
+        #   nav          - the fund's reported value on that date (the latest one is the NAV)
+        # Calls and distributions go through the analyzer's handlers so paid-in and distributed
+        # totals are tracked (add_cash_flows alone left both at 0 in the output).
+        flows = []
+        navs = []
+        for item in data.get('cash_flows') or []:
+            date = str(item.get('date', ''))[:10]
+            try:
+                datetime.strptime(date, '%Y-%m-%d')
+            except ValueError:
+                raise ValueError(f"Cash-flow date '{item.get('date', '')}' is not a date (use YYYY-MM-DD)")
+            amount = Decimal(str(item.get('amount', 0)))
+            kind = str(item.get('type', '') or '').strip().lower()
+            if kind == 'nav':
+                navs.append((date, abs(amount)))
+            elif kind == 'call':
+                flows.append((date, -abs(amount)))
+            elif kind == 'distribution':
+                flows.append((date, abs(amount)))
+            else:
+                flows.append((date, amount))
+        for date, amount in sorted(flows):
+            if amount < 0:
+                analyzer.process_capital_call(abs(amount), date)
+            elif amount > 0:
+                analyzer.process_distribution(amount, date)
+        if not analyzer.cash_flows:
+            return {'success': False,
+                    'error': 'Private-capital metrics need at least one capital call (a dated amount paid in)'}
 
         if data.get('commitment'):
             vintage = data.get('vintage_year') or (int(analyzer.cash_flows[0].date[:4]) if analyzer.cash_flows else
                                                    datetime.now().year)
             analyzer.add_commitment(Decimal(str(data['commitment'])), int(vintage))
 
-        # NAV as of nav_date (default: today). It is the terminal value in IRR /
-        # TVPI, so its date matters - the old default was a fixed 2024-12-31.
-        if 'current_nav' in data:
-            analyzer.update_nav(
-                Decimal(str(data['current_nav'])),
-                data.get('nav_date') or datetime.now().strftime('%Y-%m-%d')
-            )
+        # NAV: the latest NAV row of the ledger, else current_nav. Its date is the terminal date of the
+        # IRR, so it is never silently "today" (the result drifted daily): an explicit nav_date wins,
+        # then the NAV row's date, then the last cash-flow date - and the date used is reported.
+        last_flow_date = max(d for d, _ in flows) if flows else None
+        nav_value, nav_date = None, None
+        if navs:
+            nav_date, nav_value = sorted(navs)[-1]
+        elif 'current_nav' in data:
+            nav_value = Decimal(str(data['current_nav']))
+        if nav_value is not None:
+            nav_date = str(data.get('nav_date') or '')[:10] or nav_date or last_flow_date
+            datetime.strptime(nav_date, '%Y-%m-%d')
+            analyzer.update_nav(nav_value, nav_date)
 
-        if method == 'metrics':
-            metrics = analyzer.calculate_key_metrics()
-        elif method == 'irr':
-            metrics = {'irr': float(analyzer.calculate_irr()) if analyzer.calculate_irr() else None}
-        elif method == 'moic':
-            metrics = analyzer.calculate_moic()
-        else:
-            metrics = analyzer.calculate_key_metrics()
+        # irr / moic used to call methods the analyzer does not have (AttributeError); every figure
+        # is part of the key metrics.
+        metrics = analyzer.calculate_key_metrics()
+        if isinstance(metrics, dict) and 'error' not in metrics:
+            if nav_date:
+                metrics['nav_date'] = nav_date
+            # Cumulative ledger (paid in, distributed, net cash) - the J-curve of the investment.
+            ledger, paid, dist = [], 0.0, 0.0
+            for date, amount in sorted(flows):
+                a = float(amount)
+                if a < 0:
+                    paid += -a
+                else:
+                    dist += a
+                ledger.append({'date': date, 'amount': a, 'cumulative_paid_in': paid,
+                               'cumulative_distributed': dist, 'net_cash_flow': dist - paid})
+            metrics['cash_flow_ledger'] = ledger
 
         return {
             'success': True,
             'asset_type': 'private_capital',
-            'method': method,
+            'method': 'metrics',
             'metrics': metrics
         }
     except Exception as e:
@@ -601,6 +709,13 @@ def analyze_real_estate(data: Dict[str, Any], method: str = 'noi') -> Dict[str, 
 
         analyzer = RealEstateAnalyzer(params)
 
+        # Assumptions that used to be hidden constants (10 years, 6% exit cap, 8% discount, 3% growth)
+        # are inputs now, with the same defaults.
+        hold = int(round(float(data.get('hold_period_years', data.get('projection_years', 10)))))
+        exit_cap = float(data.get('exit_cap_rate', data.get('terminal_cap_rate', 0.06)))
+        discount = float(data.get('discount_rate', 0.08))
+        growth = float(data.get('rent_growth', 0.03))
+
         if method == 'noi':
             noi = analyzer.calculate_noi()
             metrics = {'noi': float(noi)}
@@ -608,14 +723,40 @@ def analyze_real_estate(data: Dict[str, Any], method: str = 'noi') -> Dict[str, 
             cap_rate = analyzer.calculate_cap_rate()
             metrics = {'cap_rate': float(cap_rate) if cap_rate else None}
         elif method == 'dcf':
-            metrics = analyzer.dcf_valuation(
-                data.get('projection_years', 10),
-                Decimal(str(data.get('terminal_cap_rate', 0.06))),
-                Decimal(str(data.get('discount_rate', 0.08)))
-            )
+            metrics = analyzer.dcf_valuation(hold, Decimal(str(exit_cap)), Decimal(str(discount)),
+                                             Decimal(str(growth)), include_schedule=True)
+            if isinstance(metrics, dict) and 'error' not in metrics:
+                metrics = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in metrics.items()}
+                price = float(analyzer.acquisition_price or 0)
+                if price > 0:
+                    from fincept_irr import irr as periodic_irr
+                    flows = [-price] + [row['cash_flow'] for row in metrics['yearly_cash_flows']]
+                    metrics['purchase_price'] = price
+                    metrics['value_minus_price'] = metrics['dcf_value'] - price
+                    metrics['unlevered_irr'] = periodic_irr(flows)
+                metrics['assumptions'] = {'hold_period_years': hold, 'exit_cap_rate': exit_cap,
+                                          'discount_rate': discount, 'rent_growth': growth}
+        elif method == 'financing':
+            metrics = analyzer.financing_analysis(
+                float(data.get('loan_amount', 0)), float(data.get('interest_rate', 0.065)),
+                float(data.get('loan_term', 30)), hold, exit_cap, growth)
         else:
+            # summary: NOI, cap rate and operating ratios of the year-0 (entered) run rate.
+            egi = (analyzer.gross_rental_income or Decimal('0')) * (Decimal('1') - analyzer.vacancy_rate)
             noi = analyzer.calculate_noi()
-            metrics = {'noi': float(noi)}
+            cap_rate = analyzer.calculate_cap_rate()
+            metrics = {
+                'noi': float(noi),
+                'cap_rate': float(cap_rate) if cap_rate else None,
+                'effective_gross_income': float(egi),
+                'vacancy_loss_amount': float((analyzer.gross_rental_income or Decimal('0')) - egi),
+            }
+            for key, value in analyzer.calculate_real_estate_ratios().items():
+                metrics[key] = float(value)
+            price = analyzer.acquisition_price
+            if price and analyzer.gross_rental_income:
+                metrics['gross_rent_multiplier'] = float(price / analyzer.gross_rental_income)
+            method = 'summary'
 
         return {
             'success': True,
@@ -811,6 +952,8 @@ def analyze_ibonds(data: Dict[str, Any], method: str = 'composite_rate') -> Dict
         elif method == 'compare_tips':
             tips_yield = Decimal(str(data.get('tips_yield', 0.02)))
             metrics = analyzer.compare_to_tips(tips_yield)
+            # The margin, not only which one is higher.
+            metrics['rate_difference_vs_tips'] = metrics['i_bond_rate'] - float(tips_yield)
         elif method == 'tax_efficiency':
             metrics = analyzer.tax_efficiency_analysis()
         else:
@@ -834,6 +977,14 @@ def analyze_high_yield(data: Dict[str, Any], method: str = 'credit_analysis') ->
             if key in data:
                 value = data[key]
                 setattr(params, key, Decimal(str(value)) if isinstance(value, (int, float)) else value)
+        # The analyzer reads the par amount as `acquisition_price`; the entered par value never
+        # reached the yield (it was always 1,000).
+        if 'face_value' in data and 'acquisition_price' not in data:
+            params.acquisition_price = Decimal(str(data['face_value']))
+        # Rating tables are keyed by the letter grade: a notched rating (BB+, B-) used to fall
+        # through to a generic 10% default rate and a 200-500 bp "typical" range.
+        if isinstance(getattr(params, 'credit_rating', None), str):
+            params.credit_rating = params.credit_rating.strip().upper().rstrip('+-')
 
         analyzer = HighYieldBondAnalyzer(params)
 
@@ -863,15 +1014,26 @@ def analyze_preferred_stocks(data: Dict[str, Any], method: str = 'yield_analysis
             currency=data.get('currency', 'USD')
         )
 
-        for key in ['par_value', 'dividend_rate', 'current_price', 'call_price', 'years_to_call']:
+        # The analyzer reads par as `acquisition_price` and the price as `current_market_value` (the
+        # screen's aliases); par_value / current_price were set under names it never reads, so the
+        # yield was always the coupon rate on 25 / 25.
+        for key in ['acquisition_price', 'dividend_rate', 'current_market_value', 'call_price']:
             if key in data:
                 setattr(params, key, Decimal(str(data[key])))
+        # First call date: an explicit date, else today + years_to_call (the analyzer only knew dates).
+        call_date = str(data.get('call_date') or '').strip()[:10]
+        years_to_call = data.get('years_to_call')
+        if not call_date and isinstance(years_to_call, (int, float)) and years_to_call > 0:
+            call_date = (datetime.now() + timedelta(days=float(years_to_call) * 365.25)).strftime('%Y-%m-%d')
+        if call_date:
+            params.call_date = call_date
 
         analyzer = PreferredStockAnalyzer(params)
 
         if method == 'yield_analysis':
             metrics = {
                 'current_yield': float(analyzer.calculate_current_yield()),
+                'annual_dividend': float(analyzer.dividend_rate * analyzer.par_value),
                 'yield_to_call': analyzer.calculate_yield_to_call()
             }
         elif method == 'call_risk':
@@ -935,13 +1097,28 @@ def analyze_convertible_bonds(data: Dict[str, Any], method: str = 'conversion_pr
 
         analyzer = ConvertibleBondAnalyzer(params)
 
+        # Yield of the issuer's straight (non-convertible) debt: given directly, or Treasury + the
+        # issuer's credit spread. It prices the bond floor.
+        if 'market_yield' in data:
+            market_yield = Decimal(str(data['market_yield']))
+        else:
+            market_yield = (Decimal(str(data.get('treasury_yield', 0.04))) +
+                            Decimal(str(data.get('credit_spread', 0.02))))
+
         if method == 'conversion_premium':
             metrics = analyzer.calculate_conversion_premium(Decimal(str(data.get('stock_price', 50))))
         elif method == 'bond_floor':
-            metrics = analyzer.calculate_bond_floor(Decimal(str(data.get('market_yield', 0.06))))
+            metrics = analyzer.calculate_bond_floor(market_yield)
+            metrics['market_yield'] = float(market_yield)
         elif method == 'upside_participation':
-            scenarios = [Decimal(str(p)) for p in data.get('stock_price_scenarios', [40, 50, 60, 70])]
-            metrics = analyzer.calculate_upside_participation(scenarios)
+            # Scenarios around the ENTERED stock price (-30% .. +50%); a fixed 40/50/60/70 ladder was
+            # used whatever the price was. The bond floor cushions the downside scenarios.
+            if 'stock_price_scenarios' in data:
+                scenarios = [Decimal(str(p)) for p in data['stock_price_scenarios']]
+            else:
+                s0 = Decimal(str(data.get('stock_price', analyzer.stock_price)))
+                scenarios = [s0 * (Decimal('1') + Decimal(str(m))) for m in (-0.30, -0.15, 0.15, 0.30, 0.50)]
+            metrics = analyzer.calculate_upside_participation(scenarios, market_yield)
         else:
             metrics = analyzer.calculate_key_metrics()
 
@@ -969,6 +1146,13 @@ def analyze_annuities(data: Dict[str, Any], method: str = 'payouts') -> Dict[str
 
         if method == 'payouts':
             metrics = analyzer.calculate_total_payouts()
+            # The payout stream's own return (premium out, level payouts back) - the figure a
+            # "guaranteed rate" field could only have restated.
+            try:
+                irr = analyzer.calculate_internal_rate_return()
+                metrics['internal_rate_of_return'] = float(irr) if irr is not None else None
+            except Exception:
+                metrics['internal_rate_of_return'] = None
         elif method == 'inflation_erosion':
             metrics = analyzer.inflation_erosion_analysis(Decimal(str(data.get('inflation_rate', 0.03))))
         elif method == 'self_insurance':
@@ -1004,6 +1188,16 @@ def analyze_inflation_annuity(data: Dict[str, Any], method: str = 'compare_fixed
         if method == 'compare_fixed':
             fixed_rate = Decimal(str(data.get('fixed_payout_rate', 0.055)))
             metrics = analyzer.compare_to_fixed_annuity(fixed_rate)
+            # Totals over the payout term: the term is what decides which annuity pays more.
+            infl = float(analyzer.inflation_rate)
+            indexed0 = metrics['inflation_indexed_initial']
+            fixed0 = metrics['fixed_annuity_initial']
+            n = int(analyzer.payout_years)
+            total_indexed = sum(indexed0 * (1 + infl) ** (y - 1) for y in range(1, n + 1))
+            metrics['payout_term_years'] = n
+            metrics['total_indexed_payouts'] = total_indexed
+            metrics['total_fixed_payouts'] = fixed0 * n
+            metrics['indexed_minus_fixed_over_term'] = total_indexed - fixed0 * n
         elif method == 'compare_tips':
             tips_yield = Decimal(str(data.get('tips_real_yield', 0.02)))
             metrics = analyzer.compare_to_tips_ladder(tips_yield)
@@ -1034,14 +1228,29 @@ def analyze_em_bonds(data: Dict[str, Any], method: str = 'yield_spread') -> Dict
                 value = data[key]
                 setattr(params, key, Decimal(str(value)) if isinstance(value, (int, float)) else value)
 
+        if method == 'currency_risk' and not data.get('currency'):
+            # The screen offers this method for local-currency bonds (a hard-currency bond has no
+            # FX risk to measure).
+            params.currency = 'LOCAL'
+
         analyzer = EmergingMarketBondAnalyzer(params)
 
         if method == 'yield_spread':
             metrics = analyzer.calculate_yield_metrics(
                 Decimal(str(data['treasury_yield'])) if 'treasury_yield' in data else None)
         elif method == 'default_risk':
+            # Annual default probability: given, else from the sovereign rating (the 5-year cumulative
+            # rates the high-yield analyzer uses, annualised). A fixed 3% was used for every rating.
+            if 'historical_default_rate' in data:
+                pd_annual = Decimal(str(data['historical_default_rate']))
+            else:
+                five_year = {'AAA': 0.0001, 'AA': 0.0005, 'A': 0.0015, 'BBB': 0.005, 'BB': 0.025,
+                             'B': 0.08, 'CCC': 0.25, 'CC': 0.40, 'C': 0.60}
+                grade = str(data.get('sovereign_rating', 'BB')).strip().upper().rstrip('+-')
+                c5 = five_year.get(grade, 0.10)
+                pd_annual = Decimal(str(1.0 - (1.0 - c5) ** (1.0 / 5.0)))
             metrics = analyzer.sovereign_default_risk_analysis(
-                Decimal(str(data.get('historical_default_rate', 0.03))),
+                pd_annual,
                 Decimal(str(data.get('recovery_rate', 0.30)))
             )
         elif method == 'currency_risk':
@@ -1124,7 +1333,7 @@ def analyze_managed_futures(data: Dict[str, Any], method: str = 'trend_following
         elif method == 'fee_impact':
             metrics = analyzer.fee_impact_analysis(
                 Decimal(str(data.get('gross_return', 0.10))),
-                data.get('years', 10)
+                int(round(float(data.get('years', 10))))
             )
         else:
             metrics = analyzer.calculate_key_metrics()
@@ -1146,6 +1355,11 @@ def analyze_market_neutral(data: Dict[str, Any], method: str = 'beta_analysis') 
         for key in ['long_exposure', 'short_exposure', 'management_fee', 'performance_fee']:
             if key in data:
                 setattr(params, key, Decimal(str(data[key])))
+        # GROSS LEVERAGE alone (older callers): a market-neutral book split evenly long / short.
+        if 'gross_leverage' in data and 'long_exposure' not in data and 'short_exposure' not in data:
+            half = Decimal(str(data['gross_leverage'])) / Decimal('2')
+            params.long_exposure = half
+            params.short_exposure = half
 
         analyzer = MarketNeutralAnalyzer(params)
 
@@ -1243,13 +1457,20 @@ def analyze_eia(data: Dict[str, Any], method: str = 'crediting') -> Dict[str, An
             if key in data:
                 value = data[key]
                 setattr(params, key, Decimal(str(value)) if isinstance(value, (int, float)) else value)
+        # Year counts are loop bounds in the analyzer (a Decimal broke range()).
+        for key in ('surrender_charge_years', 'term_years'):
+            if key in data:
+                setattr(params, key, max(1, int(round(float(data[key])))))
 
         analyzer = EquityIndexedAnnuityAnalyzer(params)
 
         if method == 'crediting':
             metrics = analyzer.calculate_credited_return(Decimal(str(data.get('index_return', 0.10))))
         elif method == 'upside_limitation':
-            scenarios = [Decimal(str(s)) for s in data.get('market_scenarios', [0.05, 0.10, 0.15, 0.20, 0.30])]
+            # Down years are included so the floor shows what it protects (only up years were used,
+            # where the floor can never bind).
+            scenarios = [Decimal(str(s)) for s in
+                         data.get('market_scenarios', [-0.20, -0.10, 0.05, 0.10, 0.15, 0.20, 0.30])]
             metrics = analyzer.upside_limitation_analysis(scenarios)
         elif method == 'surrender_charges':
             metrics = analyzer.surrender_charge_schedule()
@@ -1276,7 +1497,7 @@ def analyze_asset_location(data: Dict[str, Any], method: str = 'optimal',
             # Calculate value of optimal location
             asset_class = data.get('asset_class', 'reits')
             asset_value = Decimal(str(data.get('value', 100000)))
-            years = data.get('years', 30)
+            years = int(round(float(data.get('years', 30))))  # an exponent: a float broke Decimal ** years
             metrics = analyzer.location_value_added(asset_value, asset_class, years)
 
         elif method == 'portfolio':
@@ -1360,7 +1581,8 @@ def analyze_sri(data: Dict[str, Any], method: str = 'performance') -> Dict[str, 
         analyzer = SRIFundAnalyzer(params)
 
         if method == 'performance':
-            metrics = analyzer.performance_comparison()
+            # Over the entered period (a fixed 10 years was used whatever TIME PERIOD said).
+            metrics = analyzer.performance_comparison(int(round(float(data.get('time_period_years', 10)))))
         elif method == 'screening':
             metrics = analyzer.screening_impact_analysis()
         elif method == 'expenses':
@@ -1397,10 +1619,33 @@ def analyze_leveraged_funds(data: Dict[str, Any], method: str = 'decay') -> Dict
 
         analyzer = LeveragedFundAnalyzer(params)
 
-        if method == 'decay':
+        if method in ('decay', 'volatility'):
             metrics = analyzer.volatility_decay_example()
-        elif method == 'volatility':
-            metrics = analyzer.volatility_decay_example()
+            # Expected drag for THIS fund from the entered index return / volatility (the two fixed
+            # paths above only illustrate it). Daily-rebalanced L x fund, lognormal index:
+            #   E[log growth] = L*mu - L^2*sigma^2/2 - costs  vs  L * (mu - sigma^2/2) for L x the index,
+            # so the volatility drag is (L^2 - L) * sigma^2 / 2 per year.
+            if 'index_volatility' in data or 'index_return' in data:
+                lev = float(analyzer.leverage_ratio)
+                mu = float(data.get('index_return', 0.08))
+                sigma = float(data.get('index_volatility', 0.18))
+                years = max(1.0, float(data.get('holding_years', 1)))
+                cost = float(data.get('expense_ratio', analyzer.expense_ratio))
+                drift = math.log(1.0 + mu) + sigma ** 2 / 2.0   # arithmetic drift of the index
+                index_log = drift - sigma ** 2 / 2.0
+                fund_log = lev * drift - (lev ** 2) * sigma ** 2 / 2.0 - cost
+                drag = (lev ** 2 - lev) * sigma ** 2 / 2.0
+                metrics['expected_path'] = {
+                    'holding_years': years,
+                    'index_annual_return': mu,
+                    'index_volatility': sigma,
+                    'expense_ratio': cost,
+                    'volatility_drag_annual': drag,
+                    'index_total_return': math.exp(index_log * years) - 1.0,
+                    'leverage_times_index_return': lev * (math.exp(index_log * years) - 1.0),
+                    'expected_fund_total_return': math.exp(fund_log * years) - 1.0,
+                    'expected_fund_annual_return': math.exp(fund_log) - 1.0,
+                }
         elif method == 'verdict':
             metrics = analyzer.analysis_verdict()
         else:
@@ -1449,20 +1694,31 @@ def analyze_variable_annuities(data: Dict[str, Any], method: str = 'fees') -> Di
             currency=data.get('currency', 'USD')
         )
 
-        for key in ['premium', 'me_fee', 'investment_fee', 'admin_fee', 'surrender_period']:
-            if key in data:
-                setattr(params, key, Decimal(str(data[key])) if isinstance(data[key], (int, float)) else data[key])
+        # The analyzer's own attribute names (the screen's me_fee / investment_fee / surrender_period
+        # are aliased to them): under the old names the M&E and fund fees and the surrender period
+        # were never read and 1.25% / 0.75% / 7 years were reported whatever was entered.
+        for key in ['premium', 'mortality_expense_fee', 'investment_mgmt_fee', 'admin_fee',
+                    'guaranteed_withdrawal_benefit', 'death_benefit_rider', 'initial_surrender_charge',
+                    'ordinary_tax_rate', 'ltcg_rate']:
+            if key in data and isinstance(data[key], (int, float)):
+                setattr(params, key, Decimal(str(data[key])))
+        if 'surrender_years' in data:
+            params.surrender_years = max(0, int(round(float(data['surrender_years']))))
 
         analyzer = VariableAnnuityAnalyzer(params)
 
         if method == 'fees':
             metrics = analyzer.total_annual_cost()
         elif method == 'tax':
-            years = int(data.get('years', 20))
+            years = int(round(float(data.get('years', 20))))
             gross_return = Decimal(str(data.get('gross_return', 0.08)))
             metrics = analyzer.tax_deferral_myth(years, gross_return)
         elif method == 'alternatives':
             metrics = analyzer.compare_to_alternatives()
+        elif method == 'surrender':
+            if analyzer.surrender_years < 1:
+                return {'success': False, 'error': 'Enter a surrender period of at least one year'}
+            metrics = analyzer.surrender_charge_schedule()
         elif method == 'verdict':
             metrics = analyzer.analysis_verdict()
         else:
@@ -1471,6 +1727,34 @@ def analyze_variable_annuities(data: Dict[str, Any], method: str = 'fees') -> Di
         return {'success': True, 'product_type': 'variable_annuity', 'method': method, 'metrics': metrics}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+
+
+# Commands that take `--data` and go through run_command (the screen's analyzers).
+_SCREEN_ANALYZERS = {
+    'digital-assets': analyze_digital_assets,
+    'hedge-funds': analyze_hedge_funds,
+    'natural-resources': analyze_natural_resources,
+    'private-capital': analyze_private_capital,
+    'real-estate': analyze_real_estate,
+    'tips': analyze_tips,
+    'ibonds': analyze_ibonds,
+    'high-yield': analyze_high_yield,
+    'preferred-stocks': analyze_preferred_stocks,
+    'convertible-bonds': analyze_convertible_bonds,
+    'annuities': analyze_annuities,
+    'inflation-annuity': analyze_inflation_annuity,
+    'em-bonds': analyze_em_bonds,
+    'managed-futures': analyze_managed_futures,
+    'market-neutral': analyze_market_neutral,
+    'stable-value': analyze_stable_value,
+    'eia': analyze_eia,
+    'asset-location': analyze_asset_location,
+    'covered-calls': analyze_covered_calls,
+    'sri': analyze_sri,
+    'leveraged-funds': analyze_leveraged_funds,
+    'structured-products': analyze_structured_products,
+    'variable-annuities': analyze_variable_annuities,
+}
 
 
 if __name__ == '__main__':

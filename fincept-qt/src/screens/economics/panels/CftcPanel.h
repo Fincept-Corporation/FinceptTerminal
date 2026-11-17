@@ -18,6 +18,9 @@ class CftcPanel : public EconPanelBase {
     void activate() override;
 
   protected:
+    LoadPolicy load_policy() const override;
+    QJsonValue page_payload(int page) const override;
+    bool restore_page(int page, const QJsonValue& payload) override;
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
@@ -25,6 +28,7 @@ class CftcPanel : public EconPanelBase {
 
   private:
     void show_sentiment(const QJsonObject& sentiment);
+    /// Built the first time the sentiment view is shown (or restored), not with the panel.
     void build_sentiment_widget();
     void retranslateUi() override;
 
@@ -46,6 +50,7 @@ class CftcPanel : public EconPanelBase {
     // Index of the sentiment page inside EconPanelBase's shared content stack
     // (-1 until build_sentiment_widget() registers it).
     int sentiment_page_ = -1;
+    QJsonObject last_sentiment_; ///< the answer on the sentiment page (remembered by the results pane)
 
     // Cached for retranslateUi — toolbar labels
     QLabel* market_lbl_ = nullptr;

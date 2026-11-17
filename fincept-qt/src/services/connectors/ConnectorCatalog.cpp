@@ -69,6 +69,13 @@ QString ConnectorInfo::args_hint(const QString& command) const {
     return {};
 }
 
+const ConnectorCommand* ConnectorInfo::command(const QString& name) const {
+    for (const auto& c : commands)
+        if (c.name == name)
+            return &c;
+    return nullptr;
+}
+
 QStringList ConnectorInfo::command_names() const {
     QStringList out;
     out.reserve(commands.size());
@@ -158,6 +165,14 @@ bool ConnectorCatalog::parse_locked(const QByteArray& json, const QString& sourc
             ConnectorCommand cmd;
             cmd.name = co.value("name").toString();
             cmd.args_hint = co.value("args_hint").toString();
+            const QJsonValue pv = co.value("params");
+            const ParamList pl = parse_param_list(pv);
+            cmd.params_known = pl.known;
+            cmd.params = pl.params;
+            cmd.params_json = pv.toArray();
+            if (!pl.error.isEmpty())
+                LOG_WARN(kConnCatalogTag, QStringLiteral("Params of %1 %2 ignored (%3); the form uses the args hint")
+                                              .arg(c.name, cmd.name, pl.error));
             if (!cmd.name.isEmpty())
                 c.commands.append(cmd);
         }
@@ -174,6 +189,14 @@ bool ConnectorCatalog::parse_locked(const QByteArray& json, const QString& sourc
         c.ttl_sec = o.value("ttl_sec").toInt(0);
         c.mcp = o.value("mcp").toBool(true);
         c.broken = o.value("broken").toString();
+        // sample null (or absent) = nothing keyless can show this connector.
+        const QJsonValue sv = o.value("sample");
+        if (sv.isObject() && c.has_command(sv.toObject().value("command").toString())) {
+            c.has_sample = true;
+            c.sample_command = sv.toObject().value("command").toString();
+            for (const QJsonValue& a : sv.toObject().value("args").toArray()) // "" is a real argument here
+                c.sample_args << (a.isString() ? a.toString() : a.toVariant().toString());
+        }
         list.append(std::move(c));
     }
     if (list.isEmpty()) {
@@ -199,7 +222,7 @@ bool ConnectorCatalog::parse_locked(const QByteArray& json, const QString& sourc
     source_path_ = source;
     load_error_.clear();
     loaded_ = true;
-    LOG_INFO(kConnCatalogTag, QString("Loaded %1 data connectors in %2 categories from %3")
+    LOG_DEBUG(kConnCatalogTag, QString("Loaded %1 data connectors in %2 categories from %3")
                                   .arg(connectors_.size())
                                   .arg(categories_.size())
                                   .arg(source));
@@ -251,12 +274,32 @@ bool ConnectorCatalog::key_in_environment(const QString& env_key) {
     return !qEnvironmentVariable(env_key.toUtf8().constData()).trimmed().isEmpty();
 }
 
-bool ConnectorCatalog::key_in_secure_storage(const QString& env_key) {
-    const auto r = SecureStorage::instance().retrieve(env_key);
-    return r.is_ok() && !r.value().trimmed().isEmpty(); // the value goes out of scope here
+KeyPresence ConnectorCatalog::presence_of(bool in_environment, const SecretRead& stored) {
+    if (in_environment)
+        return KeyPresence::Present; // reaches Python whatever the store says
+    if (stored.failed())
+        return KeyPresence::Unreadable; // could not read: unknown, never "absent"
+    return stored.found() && !stored.value.trimmed().isEmpty() ? KeyPresence::Present : KeyPresence::Absent;
+}
+
+KeyPresence ConnectorCatalog::lookup_key(const QString& env_key, QString* reason) {
+    if (key_in_environment(env_key))
+        return KeyPresence::Present;
+    const SecretRead r = SecureStorage::instance().read(env_key); // the value goes out of scope here
+    const KeyPresence p = presence_of(false, r);
+    if (p == KeyPresence::Unreadable && reason)
+        *reason = r.reason();
+    return p;
 }
 
 std::optional<bool> ConnectorCatalog::cached_key_present(const QString& env_key) const {
+    const auto p = cached_key_presence(env_key);
+    if (!p.has_value())
+        return std::nullopt;
+    return *p == KeyPresence::Present;
+}
+
+std::optional<KeyPresence> ConnectorCatalog::cached_key_presence(const QString& env_key) const {
     QMutexLocker lock(&key_mutex_);
     const auto it = key_presence_.constFind(env_key);
     if (it == key_presence_.constEnd())
@@ -264,43 +307,81 @@ std::optional<bool> ConnectorCatalog::cached_key_present(const QString& env_key)
     return it.value();
 }
 
-bool ConnectorCatalog::key_present(const QString& env_key) {
-    if (const auto cached = cached_key_present(env_key))
+KeyPresence ConnectorCatalog::check_key(const QString& env_key, QString* reason) {
+    if (const auto cached = cached_key_presence(env_key); cached && *cached != KeyPresence::Unreadable)
         return *cached;
-    const bool present = key_in_secure_storage(env_key) || key_in_environment(env_key);
-    set_key_present(env_key, present);
-    return present;
+    // Unknown, or unreadable last time (it may have been transient): read again.
+    QString why;
+    const KeyPresence p = lookup_key(env_key, &why);
+    {
+        QMutexLocker lock(&key_mutex_);
+        key_presence_.insert(env_key, p);
+        if (p == KeyPresence::Unreadable)
+            key_read_errors_.insert(env_key, why);
+        else
+            key_read_errors_.remove(env_key);
+    }
+    if (reason)
+        *reason = why;
+    return p;
+}
+
+bool ConnectorCatalog::key_present(const QString& env_key) {
+    return check_key(env_key) == KeyPresence::Present;
 }
 
 void ConnectorCatalog::refresh_key_presence() {
     const QStringList keys = all_env_keys();
-    QHash<QString, bool> fresh;
+    QHash<QString, KeyPresence> fresh;
+    QHash<QString, QString> errors;
     fresh.reserve(keys.size());
-    for (const QString& k : keys)
-        fresh.insert(k, key_in_secure_storage(k) || key_in_environment(k));
+    for (const QString& k : keys) {
+        QString why;
+        const KeyPresence p = lookup_key(k, &why);
+        fresh.insert(k, p);
+        if (p == KeyPresence::Unreadable)
+            errors.insert(k, why);
+    }
     QMutexLocker lock(&key_mutex_);
     key_presence_ = std::move(fresh);
+    key_read_errors_ = std::move(errors);
 }
 
 void ConnectorCatalog::set_key_present(const QString& env_key, bool present) {
     QMutexLocker lock(&key_mutex_);
-    key_presence_.insert(env_key, present);
+    key_presence_.insert(env_key, present ? KeyPresence::Present : KeyPresence::Absent);
+    key_read_errors_.remove(env_key);
 }
 
 KeyState ConnectorCatalog::key_state(const ConnectorInfo& connector) const {
     if (connector.env_keys.isEmpty())
         return KeyState::NotNeeded;
     int present = 0;
+    int unreadable = 0;
     for (const QString& k : connector.env_keys) {
-        const auto p = cached_key_present(k);
+        const auto p = cached_key_presence(k);
         if (!p.has_value())
             return KeyState::Unknown;
-        if (*p)
+        if (*p == KeyPresence::Present)
             ++present;
+        else if (*p == KeyPresence::Unreadable)
+            ++unreadable;
     }
     if (present == connector.env_keys.size())
         return KeyState::Ready;
+    // A key that could not be read may be stored: say so instead of "missing".
+    if (unreadable > 0)
+        return KeyState::Unreadable;
     return present == 0 ? KeyState::Missing : KeyState::Partial;
+}
+
+QString ConnectorCatalog::key_state_reason(const ConnectorInfo& connector) const {
+    QMutexLocker lock(&key_mutex_);
+    for (const QString& k : connector.env_keys) {
+        if (key_presence_.value(k, KeyPresence::Absent) == KeyPresence::Unreadable)
+            return key_read_errors_.value(k);
+    }
+    return {};
 }
 
 QStringList ConnectorCatalog::all_env_keys() const {

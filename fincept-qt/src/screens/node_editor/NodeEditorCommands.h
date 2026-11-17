@@ -16,12 +16,11 @@
 //   • remove edge     (edge context menu, Delete on a selected edge)
 //   • move node(s)    (one command per drag, multi-select aware)
 //   • replace graph   (CLEAR, template load)
-//
-// Deliberately NOT on the stack: per-keystroke parameter and node-name edits
-// from the properties panel. Those fire on every character typed; putting them
-// on the stack would either flood it or require rebuilding the properties
-// editor on each merge, stealing focus mid-typing. Text edits are undone with
-// the field's own Ctrl+Z while it has focus.
+//   • parameter / name edits from the properties panel (SetNodeFieldCommand):
+//     consecutive keystrokes into the same field merge into ONE step, and the
+//     panel is only rebuilt on undo/redo — never on the push that records an
+//     edit, so typing keeps its focus. Without this, Ctrl+Z after editing a
+//     parameter reverted the previous structural change and left the edit.
 //
 // Every command holds value types (NodeDef / EdgeDef / WorkflowDef) plus a bare
 // NodeScene*. The scene outlives the stack: both are children of
@@ -34,12 +33,14 @@
 
 #include <QCoreApplication>
 #include <QHash>
+#include <QJsonValue>
 #include <QPointF>
 #include <QSet>
 #include <QString>
 #include <QUndoCommand>
 #include <QVector>
 
+#include <functional>
 #include <utility>
 
 namespace fincept::workflow {
@@ -215,6 +216,62 @@ class MoveNodesCommand : public QUndoCommand {
     NodeScene* scene_ = nullptr;
     QHash<QString, QPointF> before_;
     QHash<QString, QPointF> after_;
+};
+
+// ── Parameter / name edit ────────────────────────────────────────────────────
+// `key` empty = the node's name. `on_applied(node_id)` runs after an undo / redo
+// (not after the push-time redo: the edit already came from the panel) so the
+// screen can re-show the properties panel with the restored value.
+
+class SetNodeFieldCommand : public QUndoCommand {
+    Q_DECLARE_TR_FUNCTIONS(SetNodeFieldCommand)
+  public:
+    SetNodeFieldCommand(NodeScene* scene, QString node_id, QString key, QJsonValue before, QJsonValue after,
+                        std::function<void(const QString&)> on_applied)
+        : scene_(scene), node_id_(std::move(node_id)), key_(std::move(key)), before_(std::move(before)),
+          after_(std::move(after)), on_applied_(std::move(on_applied)) {
+        setText(key_.isEmpty() ? tr("Rename node") : tr("Edit %1").arg(key_));
+    }
+
+    int id() const override { return 0x4e46; } // mergeable with other field edits
+    bool mergeWith(const QUndoCommand* other) override {
+        const auto* o = dynamic_cast<const SetNodeFieldCommand*>(other);
+        if (!o || o->node_id_ != node_id_ || o->key_ != key_)
+            return false;
+        after_ = o->after_; // keep the oldest "before": one undo step per field edit
+        return true;
+    }
+
+    void redo() override {
+        apply(after_);
+        if (pushed_ && on_applied_)
+            on_applied_(node_id_);
+        pushed_ = true;
+    }
+    void undo() override {
+        apply(before_);
+        if (on_applied_)
+            on_applied_(node_id_);
+    }
+
+  private:
+    void apply(const QJsonValue& v) {
+        auto* item = scene_ ? scene_->find_node(node_id_) : nullptr;
+        if (!item)
+            return;
+        if (key_.isEmpty())
+            item->set_name(v.toString());
+        else
+            item->set_parameter(key_, v);
+    }
+
+    NodeScene* scene_ = nullptr;
+    QString node_id_;
+    QString key_;
+    QJsonValue before_;
+    QJsonValue after_;
+    std::function<void(const QString&)> on_applied_;
+    bool pushed_ = false;
 };
 
 // ── Whole-graph replacement (CLEAR, template load) ───────────────────────────

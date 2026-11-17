@@ -14,6 +14,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace fincept::screens {
 
 struct DetailBtnDef {
@@ -32,9 +34,18 @@ static const DetailBtnDef kDetailButtons[] = {
     {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "REPORTS"), portfolio::DetailView::ReportsPme},
     {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "INDICES"), portfolio::DetailView::Indices},
     {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "RISK"), portfolio::DetailView::RiskMgmt},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "TAX LOTS"), portfolio::DetailView::TaxLots},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "INCOME"), portfolio::DetailView::Income},
     {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "PLANNING"), portfolio::DetailView::Planning},
     {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "ECONOMICS"), portfolio::DetailView::Economics},
 };
+
+// Size of the square glyph buttons (refresh, overflow): 24x22 at the default
+// font size, growing with the user's font size.
+static QSize icon_button_size() {
+    const int fpx = ui::fonts::font_px(-1);
+    return {std::max(24, fpx + 11), std::max(22, fpx + 9)};
+}
 
 PortfolioCommandBar::PortfolioCommandBar(QWidget* parent) : QWidget(parent) {
     build_ui();
@@ -51,7 +62,7 @@ void PortfolioCommandBar::build_ui() {
 
     // ── Row 1: identity + stats + refresh cluster ────────────────────────────
     row1_ = new QWidget(this);
-    row1_->setFixedHeight(32);
+    row1_->setMinimumHeight(32);
     row1_->setObjectName("portfolioCmdRow1");
     row1_->setStyleSheet("#portfolioCmdRow1 { background:transparent; }");
     auto* row1_layout = new QHBoxLayout(row1_);
@@ -68,7 +79,7 @@ void PortfolioCommandBar::build_ui() {
 
     // ── Row 2: trade actions + detail tabs + AI/Agent ────────────────────────
     row2_ = new QWidget(this);
-    row2_->setFixedHeight(32);
+    row2_->setMinimumHeight(32);
     row2_->setObjectName("portfolioCmdRow2");
     row2_->setStyleSheet("#portfolioCmdRow2 { background:transparent; }");
     auto* row2_layout = new QHBoxLayout(row2_);
@@ -96,7 +107,7 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
 
     // Refresh + interval + overflow (right-aligned)
     refresh_btn_ = new QPushButton("\u21BB");
-    refresh_btn_->setFixedSize(24, 22);
+    refresh_btn_->setFixedSize(icon_button_size());
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setToolTip(tr("Refresh portfolio data (F5)"));
     refresh_btn_->setAccessibleName(tr("Refresh portfolio data"));
@@ -106,7 +117,7 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
     layout->addWidget(refresh_btn_);
 
     interval_cb_ = new QComboBox;
-    interval_cb_->setFixedHeight(22);
+    interval_cb_->setMinimumHeight(22);
     interval_cb_->setToolTip(tr("Auto-refresh interval"));
     interval_cb_->addItem("1m", 60000);
     interval_cb_->addItem("5m", 300000);
@@ -128,7 +139,7 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
 
 void PortfolioCommandBar::build_portfolio_selector() {
     selector_btn_ = new QPushButton(tr("SELECT PORTFOLIO \u25BE"));
-    selector_btn_->setFixedHeight(24);
+    selector_btn_->setMinimumHeight(24);
     selector_btn_->setMinimumWidth(180);
     selector_btn_->setMaximumWidth(260);
     selector_btn_->setCursor(Qt::PointingHandCursor);
@@ -147,22 +158,22 @@ void PortfolioCommandBar::build_portfolio_selector() {
 
     search_edit_ = new QLineEdit;
     search_edit_->setPlaceholderText(tr("Search portfolios..."));
-    search_edit_->setFixedHeight(26);
+    search_edit_->setMinimumHeight(26);
     search_edit_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                "  padding:0 8px; font-size:11px; }"
+                "  padding:0 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                 "QLineEdit:focus { border-color:%4; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     dd_layout->addWidget(search_edit_);
 
     portfolio_list_ = new QListWidget;
     portfolio_list_->setFixedHeight(180);
-    portfolio_list_->setStyleSheet(QString("QListWidget { background:%1; color:%2; border:none; font-size:11px; }"
+    portfolio_list_->setStyleSheet(QString("QListWidget { background:%1; color:%2; border:none; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                            "QListWidget::item { padding:5px 8px; }"
                                            "QListWidget::item:selected { background:%3; color:%4; }"
                                            "QListWidget::item:hover { background:%5; }")
                                        .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM(),
-                                            ui::colors::AMBER(), ui::colors::BG_HOVER()));
+                                            ui::colors::TEXT_ON_ACCENT(), ui::colors::BG_HOVER()));
     dd_layout->addWidget(portfolio_list_);
 
     connect(portfolio_list_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
@@ -188,12 +199,12 @@ void PortfolioCommandBar::build_portfolio_selector() {
     btn_row->setSpacing(4);
 
     create_btn_ = new QPushButton(tr("+ CREATE NEW"));
-    create_btn_->setFixedHeight(24);
+    create_btn_->setMinimumHeight(24);
     create_btn_->setCursor(Qt::PointingHandCursor);
     create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
-                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { background:%2; }")
-                                   .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
+                                   .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::TEXT_ON_ACCENT()));
     connect(create_btn_, &QPushButton::clicked, this, [this]() {
         dropdown_->hide();
         dropdown_visible_ = false;
@@ -202,12 +213,12 @@ void PortfolioCommandBar::build_portfolio_selector() {
     btn_row->addWidget(create_btn_);
 
     delete_btn_ = new QPushButton(tr("DELETE"));
-    delete_btn_->setFixedHeight(24);
+    delete_btn_->setMinimumHeight(24);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { background:%1; color:%2; }")
-                                   .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
+                                   .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT()));
     connect(delete_btn_, &QPushButton::clicked, this, [this]() {
         if (!selected_id_.isEmpty()) {
             dropdown_->hide();
@@ -224,7 +235,7 @@ void PortfolioCommandBar::build_portfolio_selector() {
 void PortfolioCommandBar::build_overflow_menu() {
     overflow_btn_ = new QToolButton(this);
     overflow_btn_->setText("\u22EF"); // horizontal ellipsis
-    overflow_btn_->setFixedSize(24, 22);
+    overflow_btn_->setFixedSize(icon_button_size());
     overflow_btn_->setCursor(Qt::PointingHandCursor);
     overflow_btn_->setToolTip(tr("More actions"));
     overflow_btn_->setPopupMode(QToolButton::InstantPopup);
@@ -232,12 +243,13 @@ void PortfolioCommandBar::build_overflow_menu() {
 
     overflow_menu_ = new QMenu(this);
     overflow_menu_->setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3;"
-                                          "  padding:4px; font-size:11px; }"
+                                          "  padding:4px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                           "QMenu::item { padding:6px 16px; }"
                                           "QMenu::item:selected { background:%4; color:%5; }"
                                           "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
                                       .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                                           ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
+                                           ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(),
+                                           ui::colors::TEXT_ON_ACCENT()));
 
     export_csv_action_ = overflow_menu_->addAction(tr("Export CSV"));
     export_json_action_ = overflow_menu_->addAction(tr("Export JSON"));
@@ -254,6 +266,11 @@ void PortfolioCommandBar::build_overflow_menu() {
     overflow_menu_->addSeparator();
     backtest_action_ = overflow_menu_->addAction(tr("Backtest Portfolio"));
     connect(backtest_action_, &QAction::triggered, this, &PortfolioCommandBar::backtest_requested);
+
+    overflow_menu_->addSeparator();
+    settings_action_ = overflow_menu_->addAction(tr("Portfolio Settings…"));
+    settings_action_->setToolTip(tr("Benchmark, risk-free rate, cash tracking, tax-lot method"));
+    connect(settings_action_, &QAction::triggered, this, &PortfolioCommandBar::settings_requested);
 
     overflow_btn_->setMenu(overflow_menu_);
 }
@@ -299,10 +316,17 @@ void PortfolioCommandBar::build_row2(QHBoxLayout* layout) {
     apply_row2_styles();
 }
 
+void PortfolioCommandBar::add_tool(QWidget* tool) {
+    if (!tool || !tools_cluster_ || !tools_cluster_->layout())
+        return;
+    tool->setParent(tools_cluster_);
+    tools_cluster_->layout()->addWidget(tool);
+}
+
 void PortfolioCommandBar::build_trade_cluster(QHBoxLayout* layout) {
     auto make_trade_btn = [&](QPushButton*& out, const QString& text, const char* accent, auto signal) {
         out = new QPushButton(text);
-        out->setFixedHeight(22);
+        out->setMinimumHeight(22);
         out->setMinimumWidth(48);
         out->setCursor(Qt::PointingHandCursor);
         out->setProperty("accent", QString(accent));
@@ -313,6 +337,12 @@ void PortfolioCommandBar::build_trade_cluster(QHBoxLayout* layout) {
     make_trade_btn(buy_btn_, tr("BUY"), ui::colors::POSITIVE(), &PortfolioCommandBar::buy_requested);
     make_trade_btn(sell_btn_, tr("SELL"), ui::colors::NEGATIVE(), &PortfolioCommandBar::sell_requested);
     make_trade_btn(div_btn_, tr("DIV"), ui::colors::CYAN(), &PortfolioCommandBar::dividend_requested);
+    make_trade_btn(cash_btn_, tr("CASH"), ui::colors::INFO(), &PortfolioCommandBar::cash_requested);
+    make_trade_btn(split_btn_, tr("SPLIT"), ui::colors::WARNING(), &PortfolioCommandBar::split_requested);
+    cash_btn_->setToolTip(tr("Record a deposit, withdrawal, fee, tax payment or interest"));
+    cash_btn_->setAccessibleName(cash_btn_->toolTip());
+    split_btn_->setToolTip(tr("Record a stock split or reverse split"));
+    split_btn_->setAccessibleName(split_btn_->toolTip());
 
     // Power-user keys. "DIV" in particular is unguessable from the label alone.
     buy_btn_->setShortcut(QKeySequence(QStringLiteral("Ctrl+B")));
@@ -333,7 +363,7 @@ void PortfolioCommandBar::build_detail_tabs(QHBoxLayout* layout) {
         // wiring (property("detailView") + signal).
         const QString label = tr(def.label);
         auto* btn = new QPushButton(label);
-        btn->setFixedHeight(22);
+        btn->setMinimumHeight(22);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("detailView", static_cast<int>(def.view));
         btn->setObjectName("pfTab");
@@ -346,7 +376,7 @@ void PortfolioCommandBar::build_detail_tabs(QHBoxLayout* layout) {
 void PortfolioCommandBar::build_tools_cluster(QHBoxLayout* layout) {
     auto make_tool_btn = [&](QPushButton*& out, const QString& text, const char* accent, auto signal) {
         out = new QPushButton(text);
-        out->setFixedHeight(22);
+        out->setMinimumHeight(22);
         out->setMinimumWidth(52);
         out->setCursor(Qt::PointingHandCursor);
         out->setProperty("accent", QString(accent));
@@ -370,64 +400,81 @@ void PortfolioCommandBar::build_tools_cluster(QHBoxLayout* layout) {
 // ── Styling ──────────────────────────────────────────────────────────────────
 
 void PortfolioCommandBar::apply_row1_styles() {
-    selector_btn_->setStyleSheet(
+    // Also runs on every appearance change (refresh_theme): set only a changed sheet.
+    const auto set_css = [](QWidget* w, const QString& css) {
+        if (w && w->styleSheet() != css)
+            w->setStyleSheet(css);
+    };
+    set_css(selector_btn_,
         QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                "  padding:0 12px; font-size:11px; font-weight:700; letter-spacing:0.5px; text-align:left; }"
+                "  padding:0 12px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:0.5px; text-align:left; }"
                 "QPushButton:hover { border-color:%4; color:%4; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
 
-    refresh_btn_->setStyleSheet(QString("QPushButton#pfIconBtn { background:transparent; color:%1;"
-                                        "  border:1px solid %2; font-size:13px; }"
+    set_css(refresh_btn_, QString("QPushButton#pfIconBtn { background:transparent; color:%1;"
+                                        "  border:1px solid %2; font-size:" + fincept::ui::fonts::px(-1) + "px; }"
                                         "QPushButton#pfIconBtn:hover { border-color:%1; color:%1; }"
                                         "QPushButton#pfIconBtn:disabled { color:%3; }")
                                     .arg(ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::TEXT_TERTIARY()));
 
-    interval_cb_->setStyleSheet(
+    set_css(interval_cb_,
         QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                "  padding:0 6px; font-size:11px; font-weight:600; min-width:42px; }"
+                "  padding:0 6px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; min-width:42px; }"
                 "QComboBox::drop-down { border:none; width:14px; }"
-                "QComboBox QAbstractItemView { background:%1; color:%2; selection-background-color:%4; }")
+                "QComboBox QAbstractItemView { background:%1; color:%2; selection-background-color:%4;"
+                "  selection-color:%5; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
-                 ui::colors::AMBER_DIM()));
+                 ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT()));
 
-    overflow_btn_->setStyleSheet(
+    set_css(overflow_btn_,
         QString("QToolButton#pfOverflowBtn { background:transparent; color:%1; border:1px solid %2;"
-                "  font-size:14px; font-weight:700; padding-bottom:4px; }"
+                "  font-size:" + fincept::ui::fonts::px(0) + "px; font-weight:700; padding-bottom:4px; }"
                 "QToolButton#pfOverflowBtn:hover { border-color:%3; color:%3; }"
                 "QToolButton#pfOverflowBtn::menu-indicator { image:none; width:0; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
 }
 
 void PortfolioCommandBar::apply_row2_styles() {
-    auto trade_style = [](QPushButton* btn, const char* accent, const char* fg) {
-        btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                   "  padding:0 10px; font-size:11px; font-weight:700; letter-spacing:0.5px; }"
-                                   "QPushButton:hover { background:%1; opacity:0.85; }")
-                               .arg(accent, fg));
+    // Also runs on every appearance change (refresh_theme): set only a changed sheet.
+    const auto set_css = [](QWidget* w, const QString& css) {
+        if (w && w->styleSheet() != css)
+            w->setStyleSheet(css);
     };
-    trade_style(buy_btn_, ui::colors::POSITIVE(), ui::colors::BG_BASE());
-    trade_style(sell_btn_, ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
-    trade_style(div_btn_, ui::colors::CYAN(), ui::colors::BG_BASE());
+    auto trade_style = [&set_css](QPushButton* btn, const QString& accent, const QString& fg) {
+        // :disabled — SELL / DIV are disabled on an empty book (set_has_holdings) and must look it.
+        set_css(btn, QString("QPushButton { background:%1; color:%2; border:none;"
+                                   "  padding:0 10px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:0.5px; }"
+                                   "QPushButton:hover { background:%1; opacity:0.85; }"
+                                   "QPushButton:disabled { background:transparent; color:%3; border:1px solid %4; }")
+                               .arg(accent, fg, ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM()));
+    };
+    trade_style(buy_btn_, ui::colors::POSITIVE(), ui::colors::TEXT_ON_ACCENT());
+    trade_style(sell_btn_, ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT());
+    trade_style(div_btn_, ui::colors::CYAN(), ui::colors::TEXT_ON_ACCENT());
+    trade_style(cash_btn_, ui::colors::INFO(), ui::colors::contrast_text_on(QColor(ui::colors::INFO())).name());
+    trade_style(split_btn_, ui::colors::WARNING(), ui::colors::contrast_text_on(QColor(ui::colors::WARNING())).name());
 
     // Neutral square tabs — color reserved for data, not navigation.
     // DESIGN_SYSTEM rule: no rounded corners on any element.
     const QString tab_qss =
         QString("QPushButton#pfTab { background:transparent; color:%1; border:1px solid transparent;"
-                "  padding:0 10px; font-size:11px; font-weight:600; letter-spacing:0.4px; }"
+                "  padding:0 10px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; letter-spacing:0.4px; }"
                 "QPushButton#pfTab:hover { color:%2; background:%3; }"
                 "QPushButton#pfTab[active=\"true\"] { color:%4; background:%5; border-color:%4; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::AMBER(),
-                 ui::colors::AMBER_DIM());
+                 ui::colors::ACCENT_BG());
     for (auto* btn : detail_btns_) {
-        btn->setStyleSheet(tab_qss);
+        set_css(btn, tab_qss);
     }
 
-    auto tool_style = [](QPushButton* btn, const char* accent) {
-        btn->setStyleSheet(QString("QPushButton#pfToolBtn { background:transparent; color:%1; border:1px solid %1;"
-                                   "  padding:0 10px; font-size:11px; font-weight:700;"
+    auto tool_style = [&set_css](QPushButton* btn, const char* accent) {
+        set_css(btn, QString("QPushButton#pfToolBtn { background:transparent; color:%1; border:1px solid %1;"
+                                   "  padding:0 10px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700;"
                                    "  letter-spacing:0.5px; }"
-                                   "QPushButton#pfToolBtn:hover { background:%1; color:#000; }")
-                               .arg(accent));
+                                   "QPushButton#pfToolBtn:hover { background:%1; color:%4; }"
+                                   "QPushButton#pfToolBtn:disabled { background:transparent; color:%2; border-color:%3; }")
+                               .arg(accent, ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(),
+                                    ui::colors::TEXT_ON_ACCENT()));
     };
     tool_style(ai_btn_, ui::colors::AMBER());
     tool_style(agent_btn_, ui::colors::CYAN());
@@ -483,14 +530,21 @@ void PortfolioCommandBar::set_selected_portfolio(const portfolio::Portfolio& p) 
 
 void PortfolioCommandBar::set_refreshing(bool refreshing) {
     refresh_btn_->setEnabled(!refreshing);
-    refresh_btn_->setText(refreshing ? "\u23F3" : "\u21BB");
+    // "\u2026" while refreshing: the hourglass (U+23F3) is missing from the terminal fonts and
+    // rendered as an empty box.
+    refresh_btn_->setText(refreshing ? QStringLiteral("\u2026") : QStringLiteral("\u21BB"));
 }
 
 void PortfolioCommandBar::set_detail_view(std::optional<portfolio::DetailView> view) {
     active_detail_ = view;
     for (auto* btn : detail_btns_) {
         auto btn_view = static_cast<portfolio::DetailView>(btn->property("detailView").toInt());
-        btn->setProperty("active", view.has_value() && *view == btn_view);
+        const bool active = view.has_value() && *view == btn_view;
+        // Re-polish only the tabs whose state changes: re-polishing all eleven on every
+        // switch (each a style-sheet re-evaluation) stalled the click for ~0.5 s.
+        if (btn->property("active").toBool() == active)
+            continue;
+        btn->setProperty("active", active);
         btn->style()->unpolish(btn);
         btn->style()->polish(btn);
     }
@@ -509,6 +563,33 @@ void PortfolioCommandBar::set_has_portfolios(bool has) {
     tools_cluster_->setVisible(false);
     if (!has) {
         selector_btn_->setText(tr("NO PORTFOLIOS \u2014 CREATE ONE \u25BE"));
+    }
+}
+
+void PortfolioCommandBar::set_has_holdings(bool has) {
+    if (has == has_holdings_)
+        return;
+    has_holdings_ = has;
+    if (has)
+        retranslateUi(); // puts the normal tooltips back, then applies the enabled state
+    else
+        apply_holdings_state();
+}
+
+void PortfolioCommandBar::apply_holdings_state() {
+    const QString why = tr("Add a position first");
+    for (QPushButton* b : {sell_btn_, div_btn_, split_btn_, ai_btn_, agent_btn_}) {
+        if (!b)
+            continue;
+        b->setEnabled(has_holdings_);
+        if (!has_holdings_)
+            b->setToolTip(why);
+    }
+    for (QAction* a : {ffn_action_, backtest_action_}) {
+        if (!a)
+            continue;
+        a->setEnabled(has_holdings_);
+        a->setToolTip(has_holdings_ ? QString() : why);
     }
 }
 
@@ -566,6 +647,16 @@ void PortfolioCommandBar::retranslateUi() {
         ffn_action_->setText(tr("FFN Analysis"));
     if (backtest_action_) // was omitted — stayed English after a language switch
         backtest_action_->setText(tr("Backtest Portfolio"));
+    if (settings_action_)
+        settings_action_->setText(tr("Portfolio Settings…"));
+    if (cash_btn_) {
+        cash_btn_->setText(tr("CASH"));
+        cash_btn_->setToolTip(tr("Record a deposit, withdrawal, fee, tax payment or interest"));
+    }
+    if (split_btn_) {
+        split_btn_->setText(tr("SPLIT"));
+        split_btn_->setToolTip(tr("Record a stock split or reverse split"));
+    }
 
     // Row 2 trade cluster
     if (buy_btn_) {
@@ -599,17 +690,29 @@ void PortfolioCommandBar::retranslateUi() {
     for (int i = 0; i < detail_btns_.size() && i < kDetailCount; ++i) {
         detail_btns_[i]->setText(tr(kDetailButtons[i].label));
     }
+
+    // The tooltips above are the enabled ones; re-apply the empty-book state on top.
+    apply_holdings_state();
 }
 
 void PortfolioCommandBar::refresh_theme() {
-    setStyleSheet(QString("#portfolioCommandBar { background:%1; border-bottom:2px solid %2; }")
-                      .arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
+    // build_ui() sets this exact text before the children exist; PortfolioScreen calls
+    // refresh_theme() right after construction, and re-applying unchanged text re-styled
+    // the whole bar. Only a changed theme needs it.
+    const QString bar_css = QString("#portfolioCommandBar { background:%1; border-bottom:2px solid %2; }")
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::AMBER());
+    if (styleSheet() != bar_css)
+        setStyleSheet(bar_css);
 
     apply_row1_styles();
     apply_row2_styles();
+    refresh_btn_->setFixedSize(icon_button_size());
+    overflow_btn_->setFixedSize(icon_button_size());
 
-    dropdown_->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
+    const QString dropdown_css =
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED());
+    if (dropdown_->styleSheet() != dropdown_css)
+        dropdown_->setStyleSheet(dropdown_css);
 }
 
 } // namespace fincept::screens

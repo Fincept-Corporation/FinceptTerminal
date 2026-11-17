@@ -1,0 +1,32 @@
+{
+  "name": "Fincept US equity universe pool",
+  "as_of": "2026-11-17",
+  "compiled": "S&P 100 constituents plus the next largest S&P 500 members by market capitalisation (about 180 names, including large 2024-2025 index additions such as APP, COIN, DASH, DDOG, HOOD, PLTR), as known to the compiler; tickers that changed (BK -> BNY, MMC -> MRSH, FI -> FISV) use the current Yahoo ticker. Plus 28 major ETFs (broad market, bond, commodity, sector) flagged without fundamental data. Not an official index membership list.",
+  "verified": "Every ticker had Yahoo Finance daily bars up to 2026-11-16 when checked on 2026-11-17; candidates without recent bars were dropped (BK, EA, EQR, AVB, FI, MMC, KVUE).",
+  "bias": "Today's large caps: backtests that select from this pool have survivorship bias (companies that shrank, were acquired or delisted are missing; today's winners are present before they were large).",
+  "equities": [
+    "AAPL", "ABBV", "ABNB", "ABT", "ACN", "ADBE", "ADI", "ADP", "AEP", "AFL", "AIG", "AJG", "ALL", "AMAT", "AMD",
+    "AME", "AMGN", "AMP", "AMT", "AMZN", "ANET", "AON", "APD", "APH", "APO", "APP", "AVGO", "AXON", "AXP", "AZO",
+    "BA", "BAC", "BDX", "BKNG", "BKR", "BLK", "BMY", "BNY", "BRK.B", "BSX", "BX", "C", "CARR", "CAT", "CB", "CCI",
+    "CDNS", "CEG", "CHTR", "CI", "CL", "CMCSA", "CME", "CMG", "CMI", "COF", "COIN", "COP", "COR", "COST", "CPRT",
+    "CRM", "CRWD", "CSCO", "CSX", "CTAS", "CTVA", "CVS", "CVX", "D", "DAL", "DASH", "DD", "DDOG", "DE", "DELL",
+    "DHI", "DHR", "DIS", "DLR", "DUK", "DXCM", "EBAY", "ECL", "ED", "EFX", "EIX", "ELV", "EMR", "EOG", "EQIX",
+    "ETN", "EW", "EXC", "F", "FANG", "FAST", "FCX", "FDX", "FICO", "FIS", "FISV", "FITB", "FTNT", "GD", "GE",
+    "GEV", "GILD", "GIS", "GLW", "GM", "GOOG", "GOOGL", "GRMN", "GS", "GWW", "HCA", "HD", "HIG", "HLT", "HON",
+    "HOOD", "HPQ", "HSY", "HUM", "HWM", "IBM", "ICE", "IDXX", "INTC", "INTU", "IQV", "IR", "ISRG", "IT", "ITW",
+    "JCI", "JNJ", "JPM", "KDP", "KHC", "KKR", "KLAC", "KMB", "KMI", "KO", "KR", "LEN", "LHX", "LIN", "LLY",
+    "LMT", "LOW", "LRCX", "LULU", "LVS", "MA", "MAR", "MCD", "MCHP", "MCK", "MCO", "MDLZ", "MDT", "MET", "META",
+    "MMM", "MNST", "MO", "MPC", "MRK", "MRSH", "MS", "MSCI", "MSFT", "MSI", "MTB", "MU", "NDAQ", "NEE", "NEM",
+    "NFLX", "NKE", "NOC", "NOW", "NSC", "NUE", "NVDA", "NXPI", "O", "ODFL", "OKE", "ON", "ORCL", "ORLY", "OTIS",
+    "OXY", "PANW", "PAYX", "PCAR", "PCG", "PEG", "PEP", "PFE", "PG", "PGR", "PH", "PLD", "PLTR", "PM", "PNC",
+    "PPG", "PRU", "PSA", "PSX", "PWR", "PYPL", "QCOM", "RCL", "REGN", "RMD", "ROK", "ROP", "ROST", "RSG", "RTX",
+    "SBUX", "SCHW", "SHW", "SLB", "SNPS", "SO", "SPG", "SPGI", "SRE", "STT", "STZ", "SYK", "SYY", "T", "TDG",
+    "TEL", "TFC", "TGT", "TJX", "TMO", "TMUS", "TRGP", "TRV", "TSLA", "TT", "TTWO", "TXN", "UAL", "UBER", "UNH",
+    "UNP", "UPS", "URI", "USB", "V", "VICI", "VLO", "VMC", "VRSK", "VRTX", "VST", "VZ", "WAB", "WDAY", "WEC",
+    "WELL", "WFC", "WM", "WMB", "WMT", "WTW", "XEL", "XOM", "XYL", "YUM", "ZTS"
+  ],
+  "etfs": [
+    "SPY", "QQQ", "IWM", "DIA", "VTI", "VOO", "EFA", "EEM", "TLT", "IEF", "SHY", "LQD", "HYG", "AGG", "GLD", "SLV",
+    "USO", "XLK", "XLF", "XLE", "XLV", "XLY", "XLP", "XLI", "XLU", "XLB", "VNQ", "GDX"
+  ]
+}

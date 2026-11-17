@@ -1,7 +1,8 @@
 """
 CryptoCompare Data Fetcher
 OHLCV historical for 5700+ coins, social stats, news, exchange volume.
-Free key optional via CRYPTOCOMPARE_API_KEY.
+Requires a free CoinDesk Data / CryptoCompare API key (CRYPTOCOMPARE_API_KEY): since the move to
+CoinDesk Data, min-api.cryptocompare.com answers every keyless call with HTTP 401 "API key required".
 """
 import sys
 import json
@@ -9,13 +10,15 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('CRYPTOCOMPARE_API_KEY', '')
 BASE_URL = "https://min-api.cryptocompare.com/data"
+SERVICE = "CryptoCompare (CoinDesk Data)"
+KEY_ENV = "CRYPTOCOMPARE_API_KEY"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 if API_KEY:
     session.headers.update({"authorization": f"Apikey {API_KEY}"})
@@ -23,24 +26,31 @@ if API_KEY:
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     """Make HTTP request with error handling."""
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://developers.coindesk.com/", KEY_ENV, "a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=(10, 30))
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    if isinstance(data, dict) and isinstance(data.get("Err"), dict) and data["Err"].get("message"):
+        return {"error": f"{SERVICE}: {fc.scrub(data['Err']['message'], API_KEY)}"}
+    if not isinstance(data, dict):
+        return {"error": f"{SERVICE} returned an unexpected response"}
+    return data
 
 
 def get_price(fsym: str, tsyms: str = "USD,BTC,ETH") -> Any:
     """Get current price of a coin in multiple currencies."""
     params = {"fsym": fsym, "tsyms": tsyms}
     data = _make_request("price", params=params)
-    if "Response" in data and data["Response"] == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     return {"symbol": fsym, "prices": data}
 
@@ -49,7 +59,9 @@ def get_historical_daily(fsym: str, tsym: str = "USD", limit: int = 365) -> Any:
     """Get daily OHLCV historical data for a coin."""
     params = {"fsym": fsym, "tsym": tsym, "limit": min(limit, 2000)}
     data = _make_request("v2/histoday", params=params)
-    if isinstance(data, dict) and data.get("Response") == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     ohlcv = data.get("Data", {}).get("Data", [])
     return {"symbol": fsym, "quote": tsym, "interval": "1d", "ohlcv": ohlcv, "count": len(ohlcv)}
@@ -59,7 +71,9 @@ def get_historical_hourly(fsym: str, tsym: str = "USD", limit: int = 168) -> Any
     """Get hourly OHLCV historical data for a coin."""
     params = {"fsym": fsym, "tsym": tsym, "limit": min(limit, 2000)}
     data = _make_request("v2/histohour", params=params)
-    if isinstance(data, dict) and data.get("Response") == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     ohlcv = data.get("Data", {}).get("Data", [])
     return {"symbol": fsym, "quote": tsym, "interval": "1h", "ohlcv": ohlcv, "count": len(ohlcv)}
@@ -69,7 +83,9 @@ def get_top_by_volume(tsym: str = "USD", limit: int = 50) -> Any:
     """Get top coins by 24h volume."""
     params = {"tsym": tsym, "limit": min(limit, 100)}
     data = _make_request("top/totalvolfull", params=params)
-    if isinstance(data, dict) and data.get("Response") == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     coins = data.get("Data", [])
     result = []
@@ -95,17 +111,21 @@ def get_news(categories: str = "", lang: str = "EN") -> Any:
     if categories:
         params["categories"] = categories
     data = _make_request("v2/news/", params=params)
-    if isinstance(data, dict) and data.get("Type") == 100:
+    if "error" in data:
+        return data
+    if data.get("Type") == 100:
         articles = data.get("Data", [])
         return {"articles": articles, "count": len(articles), "categories": categories}
-    return data
+    return {"error": f"{SERVICE}: {data.get('Message') or 'unexpected news response'}"}
 
 
-def get_exchange_volume(tsym: str = "USD") -> Any:
-    """Get top exchanges by volume with market share."""
-    params = {"tsym": tsym, "limit": 50}
+def get_exchange_volume(tsym: str = "USD", fsym: str = "BTC") -> Any:
+    """Get top exchanges by 24h volume for the fsym/tsym pair (the endpoint requires both)."""
+    params = {"fsym": fsym.upper(), "tsym": tsym, "limit": 50}
     data = _make_request("top/exchanges/full", params=params)
-    if isinstance(data, dict) and data.get("Response") == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     exchanges = data.get("Data", {}).get("Exchanges", [])
     result = []
@@ -124,7 +144,9 @@ def get_exchange_volume(tsym: str = "USD") -> Any:
 def get_coin_list() -> Any:
     """Get full list of coins with metadata."""
     data = _make_request("all/coinlist?summary=true")
-    if isinstance(data, dict) and data.get("Response") == "Error":
+    if "error" in data:
+        return data
+    if data.get("Response") == "Error":
         return {"error": data.get("Message", "Unknown error")}
     coins = data.get("Data", {})
     return {"coins": list(coins.values())[:500], "total_count": len(coins)}
@@ -134,47 +156,51 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     if not args:
-        print(json.dumps({"error": "No command provided. Available: price, daily, hourly, top_volume, news, exchange_volume, coin_list"}))
+        print(fincept_json.dumps({"error": "No command provided. Available: price, daily, hourly, top_volume, news, exchange_volume, coin_list"}))
         return
 
     command = args[0]
 
-    if command == "price":
-        if len(args) < 2:
-            result = {"error": "Usage: price <symbol> [quote_currencies]"}
+    try:
+        if command == "price":
+            if len(args) < 2:
+                result = {"error": "Usage: price <symbol> [quote_currencies]"}
+            else:
+                tsyms = args[2] if len(args) > 2 else "USD,BTC,ETH"
+                result = get_price(args[1], tsyms)
+        elif command == "daily":
+            if len(args) < 2:
+                result = {"error": "Usage: daily <symbol> [quote] [limit]"}
+            else:
+                tsym = args[2] if len(args) > 2 else "USD"
+                limit = int(args[3]) if len(args) > 3 else 365
+                result = get_historical_daily(args[1], tsym, limit)
+        elif command == "hourly":
+            if len(args) < 2:
+                result = {"error": "Usage: hourly <symbol> [quote] [limit]"}
+            else:
+                tsym = args[2] if len(args) > 2 else "USD"
+                limit = int(args[3]) if len(args) > 3 else 168
+                result = get_historical_hourly(args[1], tsym, limit)
+        elif command == "top_volume":
+            tsym = args[1] if len(args) > 1 else "USD"
+            limit = int(args[2]) if len(args) > 2 else 50
+            result = get_top_by_volume(tsym, limit)
+        elif command == "news":
+            categories = args[1] if len(args) > 1 else ""
+            result = get_news(categories)
+        elif command == "exchange_volume":
+            tsym = args[1] if len(args) > 1 else "USD"
+            fsym = args[2] if len(args) > 2 else "BTC"
+            result = get_exchange_volume(tsym, fsym)
+        elif command == "coin_list":
+            result = get_coin_list()
         else:
-            tsyms = args[2] if len(args) > 2 else "USD,BTC,ETH"
-            result = get_price(args[1], tsyms)
-    elif command == "daily":
-        if len(args) < 2:
-            result = {"error": "Usage: daily <symbol> [quote] [limit]"}
-        else:
-            tsym = args[2] if len(args) > 2 else "USD"
-            limit = int(args[3]) if len(args) > 3 else 365
-            result = get_historical_daily(args[1], tsym, limit)
-    elif command == "hourly":
-        if len(args) < 2:
-            result = {"error": "Usage: hourly <symbol> [quote] [limit]"}
-        else:
-            tsym = args[2] if len(args) > 2 else "USD"
-            limit = int(args[3]) if len(args) > 3 else 168
-            result = get_historical_hourly(args[1], tsym, limit)
-    elif command == "top_volume":
-        tsym = args[1] if len(args) > 1 else "USD"
-        limit = int(args[2]) if len(args) > 2 else 50
-        result = get_top_by_volume(tsym, limit)
-    elif command == "news":
-        categories = args[1] if len(args) > 1 else ""
-        result = get_news(categories)
-    elif command == "exchange_volume":
-        tsym = args[1] if len(args) > 1 else "USD"
-        result = get_exchange_volume(tsym)
-    elif command == "coin_list":
-        result = get_coin_list()
-    else:
-        result = {"error": f"Unknown command: {command}. Available: price, daily, hourly, top_volume, news, exchange_volume, coin_list"}
+            result = {"error": f"Unknown command: {command}. Available: price, daily, hourly, top_volume, news, exchange_volume, coin_list"}
+    except ValueError:
+        result = {"error": "limit must be a whole number"}
 
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

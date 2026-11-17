@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "agent -p <prompt> --output-format stream-json --trust --workspace <cwd> --mode ask",
+  "source": "docs",
+  "url": "https://cursor.com/docs/cli/reference/output-format",
+  "note": "Transcribed from the output-format page's event examples; not a recording."
+}

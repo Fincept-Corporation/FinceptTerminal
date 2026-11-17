@@ -137,12 +137,12 @@ void SignTransactionDialog::on_signature_resolved(Result<QString> r) {
 
     if (r.is_ok()) {
         signature_ = r.value();
-        LOG_INFO("SignTxDialog", "signature received");
+        LOG_DEBUG("SignTxDialog", "signature received");
         accept();
         return;
     }
     failure_reason_ = QString::fromStdString(r.error());
-    LOG_WARN("SignTxDialog", "rejected: " + failure_reason_);
+    LOG_WARN("SignTxDialog", logf("Wallet transaction signing failed", {{"reason", failure_reason_}}));
     reject();
 }
 

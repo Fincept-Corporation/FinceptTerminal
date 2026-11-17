@@ -3,12 +3,16 @@
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/fno/FnoFormat.h"
 #include "screens/fno/IntradayOIChart.h"
 #include "screens/fno/MaxPainChart.h"
 #include "screens/fno/MultiStrikeOIChart.h"
 #include "screens/fno/OIBuildupTable.h"
 #include "services/options/OptionChainService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
@@ -19,6 +23,7 @@
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -44,16 +49,16 @@ QString strike_label(const OptionChainRow& row) {
 OISubTab::OISubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoOITab");
     setStyleSheet(QString("#fnoOITab { background:%1; }"
-                          "#fnoOIPickerLabel { color:%2; font-size:9px; font-weight:700; "
+                          "#fnoOIPickerLabel { color:%2; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; "
                           "                     letter-spacing:0.4px; background:transparent; }"
                           "QComboBox { background:%3; color:%4; border:1px solid %5; padding:3px 8px; "
-                          "             font-size:11px; min-width:120px; }"
+                          "             font-size:" + fincept::ui::fonts::px(-3) + "px; min-width:120px; }"
                           "QComboBox:hover { border-color:%6; }"
                           "QComboBox::drop-down { border:none; width:18px; }"
                           "QComboBox QAbstractItemView { background:%1; color:%4; border:1px solid %5; "
-                          "                              selection-background-color:%6; }")
+                          "                              selection-background-color:%6; selection-color:%7; }")
                       .arg(colors::BG_BASE(), colors::TEXT_SECONDARY(), colors::BG_RAISED(), colors::TEXT_PRIMARY(),
-                           colors::BORDER_DIM(), colors::AMBER()));
+                           colors::BORDER_DIM(), colors::AMBER(), colors::TEXT_ON_ACCENT()));
 
     setup_ui();
 
@@ -65,6 +70,7 @@ OISubTab::OISubTab(QWidget* parent) : QWidget(parent) {
     const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
     if (!cached.rows.isEmpty())
         on_chain_published({}, QVariant::fromValue(cached));
+    update_body();
 }
 
 OISubTab::~OISubTab() {
@@ -76,7 +82,15 @@ void OISubTab::setup_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* outer = new QSplitter(Qt::Vertical, this);
+    // Body: the analytics, a chart skeleton while the Chain tab loads, or the
+    // designed "needs an option chain" page — never three empty chart frames.
+    body_ = new QStackedWidget(this);
+    content_ = new QWidget(body_);
+    auto* content_lay = new QVBoxLayout(content_);
+    content_lay->setContentsMargins(0, 0, 0, 0);
+    content_lay->setSpacing(0);
+
+    auto* outer = new QSplitter(Qt::Vertical, content_);
     outer->setHandleWidth(1);
     outer->setChildrenCollapsible(false);
 
@@ -126,7 +140,27 @@ void OISubTab::setup_ui() {
     outer->setStretchFactor(0, 1);
     outer->setStretchFactor(1, 1);
 
-    root->addWidget(outer);
+    content_lay->addWidget(outer);
+    body_->addWidget(content_);
+    skeleton_ = new fincept::ui::LoadingSkeleton(fincept::ui::LoadingSkeleton::Shape::Chart, body_);
+    skeleton_->set_message(fno_chain_loading_caption());
+    body_->addWidget(skeleton_);
+    no_chain_ = new fincept::ui::EmptyState(body_);
+    connect(no_chain_, &fincept::ui::EmptyState::primary_clicked, this, &OISubTab::open_chain_requested);
+    body_->addWidget(no_chain_);
+    root->addWidget(body_);
+
+    // The intraday chart's own page (no broker feed behind the chain): its buttons.
+    connect(intraday_, &IntradayOIChart::page_primary_clicked, this, [this]() {
+        if (intraday_req_.ok) {
+            emit open_chain_requested(); // a broker is connected: switch the Chain tab to it
+        } else if (intraday_req_.retry || !intraday_req_.link.valid()) {
+            apply_strike_subscription(); // check again (secure storage readable now?)
+        } else {
+            fincept::ui::open_setup_link(intraday_req_.link, this);
+        }
+    });
+    connect(intraday_, &IntradayOIChart::page_secondary_clicked, this, &OISubTab::open_chain_requested);
 
     connect(strike_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &OISubTab::on_strike_combo_changed);
@@ -209,7 +243,46 @@ void OISubTab::on_chain_published(const QString& topic, const QVariant& v) {
     Q_UNUSED(topic);
     if (!v.canConvert<OptionChain>())
         return;
-    last_chain_ = v.value<OptionChain>();
+    // The pattern subscription sees every option:chain:* publish — keep only the
+    // series the Chain tab is showing.
+    const OptionChain incoming = v.value<OptionChain>();
+    if (!fincept::services::options::OptionChainService::instance().is_focus_chain(incoming))
+        return;
+    apply_chain(incoming);
+}
+
+void OISubTab::set_external_chain(const OptionChain& chain) {
+    apply_chain(chain);
+}
+
+void OISubTab::set_chain_status(FnoChainStatus status, const QString& reason) {
+    chain_status_ = status;
+    chain_reason_ = reason;
+    update_body();
+}
+
+void OISubTab::update_body() {
+    if (!body_)
+        return;
+    if (!last_chain_.rows.isEmpty()) {
+        body_->setCurrentWidget(content_);
+        return;
+    }
+    // Loading — or the Chain tab already shows a chain this tab is about to receive.
+    if (chain_status_ != FnoChainStatus::Unavailable) {
+        body_->setCurrentWidget(skeleton_);
+        return;
+    }
+    no_chain_->apply(fno_no_chain_spec(
+        tr("Open-interest analytics"),
+        tr("OI by strike, the max-pain profile, the OI build-up table and intraday OI of the chain on the Chain tab."),
+        chain_reason_, fincept::ui::LoadingSkeleton::Shape::Chart));
+    body_->setCurrentWidget(no_chain_);
+}
+
+void OISubTab::apply_chain(const OptionChain& chain) {
+    last_chain_ = chain;
+    update_body();
 
     oi_bars_->set_chain(last_chain_);
     pain_chart_->set_chain(last_chain_);
@@ -275,6 +348,15 @@ void OISubTab::apply_strike_subscription() {
     }
     if (!row) {
         intraday_->clear_subscription();
+        return;
+    }
+    if (last_chain_.broker_id == fno_free_source()) {
+        // The free delayed chain is a snapshot: no per-minute OI is recorded for it.
+        const FnoFeedPage page = fno_broker_feed_page(
+            tr("Intraday OI needs a broker feed"),
+            tr("The delayed US chain is a snapshot, so no minute-by-minute open interest is recorded for it."));
+        intraday_req_ = page.status;
+        intraday_->set_unavailable(page.spec);
         return;
     }
     intraday_->set_subscription(last_chain_.broker_id, row->ce_token, row->pe_token, QStringLiteral("1d"));

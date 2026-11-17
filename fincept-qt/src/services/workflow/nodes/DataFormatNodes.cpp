@@ -102,6 +102,8 @@ void json_value_to_xml(QXmlStreamWriter& w, const QString& name, const QJsonValu
 
 } // anonymous namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_data_format_nodes(NodeRegistry& registry) {
     registry.register_type({
         .type_id = "format.json",
@@ -144,8 +146,24 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 }
 
                 if (op == "parse") {
-                    // If input is already an object/array pass it through;
-                    // if it is a string, parse it as JSON.
+                    // An object carrying JSON text — Stringify's {"json_string": ...}, or a
+                    // "text" field that is JSON (an LLM answer) — is parsed. This check used to
+                    // come after the object pass-through below and never ran, so Parse on the
+                    // output of Stringify returned it unchanged.
+                    if (input.isObject()) {
+                        const QJsonObject obj = input.toObject();
+                        for (const char* key : {"json_string", "text"}) {
+                            const QJsonValue v = obj.value(QLatin1String(key));
+                            if (!v.isString())
+                                continue;
+                            const QJsonDocument inner = QJsonDocument::fromJson(v.toString().trimmed().toUtf8());
+                            if (!inner.isNull()) {
+                                cb(true, inner.isObject() ? QJsonValue(inner.object()) : QJsonValue(inner.array()), {});
+                                return;
+                            }
+                        }
+                    }
+                    // Otherwise an object / array is already parsed: pass it through.
                     if (input.isObject() || input.isArray()) {
                         cb(true, input, {});
                         return;
@@ -290,8 +308,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"selector", "CSS Selector", "string", "", {}, "e.g. div.price > span", true},
-                {"attribute", "Attribute", "string", "text", {}, "text, href, src, etc."},
+                // Simple selectors only: the LAST part of "div.price > span" is matched (tag,
+                // .class, #id); ancestor parts are not checked.
+                {"selector", "Selector", "string", "", {}, "tag, .class, #id or tag.class (e.g. span.price)", true},
+                {"attribute", "Extract", "string", "text", {}, "text, html, or an attribute name (href, src, ...)"},
             },
         .execute = nullptr,
     });
@@ -397,7 +417,7 @@ void register_data_format_nodes(NodeRegistry& registry) {
             {
                 {"delimiter", "Delimiter", "select", ",", {",", ";", "\\t", "|"}, ""},
                 {"has_header", "Has Header Row", "boolean", true, {}, ""},
-                {"encoding", "Encoding", "select", "utf-8", {"utf-8", "ascii", "latin-1"}, ""},
+                // "Encoding" was offered and never read: the input already arrives as text.
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
@@ -537,8 +557,23 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 if (input.isString()) {
                     source_text = input.toString();
                 } else if (input.isObject()) {
-                    QJsonValue fv = input.toObject().value(field);
-                    source_text = fv.isString() ? fv.toString() : QString::number(fv.toDouble());
+                    // A missing Source Field used to run the regex on the text "0". Fall back to
+                    // the usual text keys (an AI Agent answers in "response"), else fail.
+                    const QJsonObject obj = input.toObject();
+                    QJsonValue fv = obj.value(field);
+                    if (fv.isUndefined()) {
+                        for (const char* alt : {"text", "response", "content", "message"}) {
+                            if (obj.value(QLatin1String(alt)).isString()) {
+                                fv = obj.value(QLatin1String(alt));
+                                break;
+                            }
+                        }
+                    }
+                    if (fv.isUndefined()) {
+                        cb(false, {}, QString("format.regex_extract: field '%1' not found in the input").arg(field));
+                        return;
+                    }
+                    source_text = fv.isString() ? fv.toString() : ExpressionEngine::value_to_string(fv);
                 }
 
                 QRegularExpression re(pattern_str);

@@ -1,9 +1,7 @@
 #include "core/actions/ActionRegistry.h"
 
 #include "core/logging/Logger.h"
-#include "core/telemetry/TelemetryProvider.h"
-
-#include <QVariantMap>
+#include "core/telemetry/UsageReporter.h"
 
 #include <algorithm>
 
@@ -145,26 +143,12 @@ Result<void> ActionRegistry::invoke(const QString& id, const CommandContext& ctx
         LOG_DEBUG(kActionRegistryTag, QString("Action %1 has no handler — no-op").arg(id));
     }
 
-    // Phase 10: telemetry. Logs every action invocation (id + outcome) to
-    // whichever provider is installed; no-op if none. Privacy: we record
-    // only the action id and ok/err outcome — the args bag may contain
-    // user-typed text (e.g. ticker symbols) so we deliberately do NOT
-    // include it. Stats-counting telemetry, not behavioural replay.
-    if (telemetry::TelemetrySink::instance().has_provider()) {
-        QVariantMap payload;
-        payload.insert("action_id", id);
-        payload.insert("ok", result.is_ok());
-        if (result.is_err()) {
-            // Truncate the error message to keep payloads cheap. Errors
-            // come from our own code so they don't carry user PII, but
-            // we cap length defensively.
-            QString err = QString::fromStdString(result.error());
-            if (err.size() > 200)
-                err = err.left(200);
-            payload.insert("err", err);
-        }
-        telemetry::TelemetrySink::instance().record("action.invoke", payload);
-    }
+    // Usage report: a failed action is counted under its id. Never the args
+    // bag — it may hold user-typed text (e.g. ticker symbols); the error
+    // message is scrubbed by the reporter.
+    if (result.is_err())
+        telemetry::UsageReporter::note_issue(QStringLiteral("action_error"), id, QString(),
+                                             QString::fromStdString(result.error()));
 
     return result;
 }

@@ -14,6 +14,8 @@ from typing import Dict, Any, Optional, List, Union
 from io import StringIO
 import re
 
+import fincept_connector as fc
+
 try:
     from random_user_agent.user_agent import UserAgent
 
@@ -219,6 +221,17 @@ class GovernmentUSWrapper:
                 if cusip is not None:
                     results = results[results["cusip"] == cusip]
 
+                # FedInvest writes 0 where it has no quote (EOD price is 0 on every row of the
+                # current file, bid on some) — a Treasury never trades at 0, so that is "no price".
+                def _price(v):
+                    if not pd.notna(v):
+                        return None
+                    try:
+                        p = float(v)
+                    except (TypeError, ValueError):
+                        return None
+                    return p if p > 0 else None
+
                 # Convert to list of dictionaries
                 standardized_data = []
                 for _, row in results.iterrows():
@@ -228,9 +241,9 @@ class GovernmentUSWrapper:
                         "rate": float(row.get('rate', 0)) if pd.notna(row.get('rate')) else None,
                         "maturity_date": row.get('maturity_date'),
                         "call_date": row.get('call_date'),
-                        "bid": float(row.get('bid', 0)) if pd.notna(row.get('bid')) else None,
-                        "offer": float(row.get('offer', 0)) if pd.notna(row.get('offer')) else None,
-                        "eod_price": float(row.get('eod_price', 0)) if pd.notna(row.get('eod_price')) else None,
+                        "bid": _price(row.get('bid')),
+                        "offer": _price(row.get('offer')),
+                        "eod_price": _price(row.get('eod_price')),
                         "date": row.get('date', target_date)
                     }
                     standardized_data.append(standardized_row)
@@ -325,10 +338,16 @@ class GovernmentUSWrapper:
             # Map security type
             mapped_security_type = security_mapping.get(security_type.lower(), security_type) if security_type else None
 
-            # Build query parameters
+            # Build query parameters. TA_WS "pagenum" is zero-based (pagenum=1 is the SECOND page and
+            # comes back empty for any range with fewer than page_size auctions); the CLI page_num
+            # stays 1-based.
+            try:
+                api_page = max(int(page_num) - 1, 0)
+            except (TypeError, ValueError):
+                api_page = 0
             params = {
                 "pagesize": min(page_size, 100),  # Max 100 per page
-                "pagenum": page_num,
+                "pagenum": api_page,
                 "format": "json"
             }
 
@@ -395,6 +414,10 @@ class GovernmentUSWrapper:
                             processed_item[k] = v
 
                     processed_data.append(processed_item)
+
+                # The remaining all-numeric text fields (outstanding amounts, accrued interest,
+                # days to maturity, bidder breakdowns) become numbers; the CUSIP stays text.
+                fc.numeric_columns(processed_data, skip=("cusip",))
 
                 return {
                     "success": True,
@@ -494,11 +517,13 @@ class GovernmentUSWrapper:
                 sec_type = item.get('security_type', 'Unknown')
                 security_counts[sec_type] = security_counts.get(sec_type, 0) + 1
 
+                # 'rate' is the coupon column; bills carry none (0), so they would pin MIN at 0%.
                 rate = item.get('rate')
-                if rate is not None:
+                if rate is not None and rate > 0:
                     all_rates.append(rate)
 
-                price = item.get('eod_price')
+                # EOD price when published, else the offer / bid quote; missing quotes are None.
+                price = item.get('eod_price') or item.get('offer') or item.get('bid')
                 if price is not None:
                     all_prices.append(price)
 

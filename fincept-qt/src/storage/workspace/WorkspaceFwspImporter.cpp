@@ -43,6 +43,8 @@ void WorkspaceFwspImporter::run_once_if_needed() {
     for (const auto& fi : files) {
         QFile f(fi.absoluteFilePath());
         if (!f.open(QIODevice::ReadOnly)) {
+            LOG_WARN(kTag, logf("Workspace file could not be read", {{"path", log_path(fi.absoluteFilePath())},
+                                                                     {"error", f.errorString()}}));
             ++skipped;
             continue;
         }
@@ -52,7 +54,8 @@ void WorkspaceFwspImporter::run_once_if_needed() {
         QJsonParseError err{};
         const auto doc = QJsonDocument::fromJson(bytes, &err);
         if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-            LOG_WARN(kTag, QString("Skipping %1: parse error: %2").arg(fi.fileName(), err.errorString()));
+            LOG_WARN(kTag, logf("Workspace file skipped, not valid JSON", {{"file", fi.fileName()},
+                                                                           {"parse_error", err.errorString()}}));
             ++skipped;
             continue;
         }

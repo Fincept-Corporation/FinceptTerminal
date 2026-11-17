@@ -2,7 +2,9 @@
 #include "services/equity/EquityResearchService.h"
 
 #include "core/logging/Logger.h"
+#include "core/market/MarketSessions.h"
 #include "python/PythonRunner.h"
+#include "services/equity/EquityTechnicalMath.h"
 #include "services/equity/TechnicalIndicators.h"
 #include "services/news/NewsNlpEngine.h"
 #include "storage/cache/CacheManager.h"
@@ -28,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace fincept::services::equity {
@@ -147,6 +150,195 @@ bool equity_svc_inflight_busy(const QHash<QString, qint64>& inflight, const QStr
     return it != inflight.constEnd() && (QDateTime::currentMSecsSinceEpoch() - it.value()) < max_age_ms;
 }
 
+// The "code" field a failing yfinance_data.py action prints next to its "error"
+// (not_found | no_data | rate_limited | network | unknown). Empty for an older script.
+QString eqrs_code_from_output(const QString& raw_output) {
+    const QJsonDocument doc = QJsonDocument::fromJson(python::extract_json(raw_output).toUtf8());
+    if (!doc.isObject())
+        return {};
+    return doc.object().value(QStringLiteral("code")).toString().trimmed().toLower();
+}
+
+// Best-effort failure class for a message that came without a code (older script, runner
+// or daemon text). Only the classes a caller acts on are guessed; "" when unclear.
+QString eqrs_classify_message(const QString& message) {
+    const QString m = message.toLower();
+    if (m.contains(QLatin1String("too many requests")) || m.contains(QLatin1String("rate limit")) ||
+        m.contains(QLatin1String("ratelimit")))
+        return QStringLiteral("rate_limited");
+    static const char* const kNetworkMarkers[] = {
+        "failed to connect",        "could not resolve host",    "curl: (",           "connectionerror",
+        "connection refused",       "connection reset",          "connection aborted", "network is unreachable",
+        "name or service not known", "certificate verify failed", "proxyerror",
+    };
+    for (const char* marker : kNetworkMarkers) {
+        if (m.contains(QLatin1String(marker)))
+            return QStringLiteral("network");
+    }
+    if (m.contains(QLatin1String("no data available")) || m.contains(QLatin1String("no data found")) ||
+        m.contains(QLatin1String("no price data")))
+        return QStringLiteral("no_data");
+    return {};
+}
+
+// Reasons can be whole tracebacks; the banner/tooltip needs the gist, not 40 lines.
+QString eqrs_clip_reason(const QString& reason) {
+    constexpr qsizetype kMaxReasonChars = 500;
+    const QString t = reason.trimmed();
+    return t.size() > kMaxReasonChars ? t.left(kMaxReasonChars) + QStringLiteral("…") : t;
+}
+
+// An info payload with no name, price, market cap or 52-week range is what an older
+// yfinance_data.py returns for a symbol Yahoo does not know ("N/A"/null everywhere). It is
+// not data: caching it for 5 minutes showed a page of dashes and hid the real problem.
+bool eqrs_info_is_blank(const QJsonObject& o) {
+    if (o.isEmpty())
+        return true;
+    const auto blank = [](const QJsonValue& v) {
+        if (v.isNull() || v.isUndefined())
+            return true;
+        if (v.isString()) {
+            const QString s = v.toString().trimmed();
+            return s.isEmpty() || s == QLatin1String("N/A");
+        }
+        if (v.isDouble())
+            return v.toDouble() == 0.0;
+        return false;
+    };
+    return blank(o.value(QStringLiteral("company_name"))) && blank(o.value(QStringLiteral("current_price"))) &&
+           blank(o.value(QStringLiteral("market_cap"))) && blank(o.value(QStringLiteral("fifty_two_week_high"))) &&
+           blank(o.value(QStringLiteral("average_volume")));
+}
+
+// A statements payload where all three statements are empty ({"symbol", "timestamp"} plus
+// three {}) is the failure an older script reports as success. It must never be cached,
+// and above all never overwrite the 30-day last-known-good copy.
+bool eqrs_financials_has_statements(const QJsonObject& o) {
+    for (const char* key : {"income_statement", "balance_sheet", "cash_flow"}) {
+        if (!o.value(QLatin1String(key)).toObject().isEmpty())
+            return true;
+    }
+    return false;
+}
+
+// Daily bars (yfinance JSON: timestamp seconds, OHLCV) → tmath::Bars. Thread-safe.
+tmath::Bars eqrs_bars_from_json(const QJsonArray& arr) {
+    QVector<Candle> candles;
+    candles.reserve(arr.size());
+    for (const auto& v : arr) {
+        const QJsonObject o = v.toObject();
+        Candle c;
+        c.timestamp = static_cast<qint64>(o.value(QStringLiteral("timestamp")).toDouble());
+        c.open = o.value(QStringLiteral("open")).toDouble();
+        c.high = o.value(QStringLiteral("high")).toDouble();
+        c.low = o.value(QStringLiteral("low")).toDouble();
+        c.close = o.value(QStringLiteral("close")).toDouble();
+        c.volume = static_cast<qint64>(o.value(QStringLiteral("volume")).toDouble());
+        candles.append(c);
+    }
+    return tmath::bars_from_candles(candles);
+}
+
+QJsonObject eqrs_group_to_json(const RatingGroup& g) {
+    QJsonArray votes;
+    for (const auto& v : g.votes)
+        votes.append(QJsonObject{{QStringLiteral("name"), v.name},
+                                 {QStringLiteral("key"), v.key},
+                                 {QStringLiteral("value"), v.value},
+                                 {QStringLiteral("signal"), static_cast<int>(v.signal)}});
+    return QJsonObject{{QStringLiteral("score"), std::isfinite(g.score) ? QJsonValue(g.score) : QJsonValue()},
+                       {QStringLiteral("buy"), g.buy},
+                       {QStringLiteral("sell"), g.sell},
+                       {QStringLiteral("neutral"), g.neutral},
+                       {QStringLiteral("votes"), votes}};
+}
+
+RatingGroup eqrs_group_from_json(const QJsonObject& o) {
+    RatingGroup g;
+    const QJsonValue score = o.value(QStringLiteral("score"));
+    g.score = score.isDouble() ? score.toDouble() : std::numeric_limits<double>::quiet_NaN();
+    g.signal = tmath::signal_for_score(g.score);
+    g.buy = o.value(QStringLiteral("buy")).toInt();
+    g.sell = o.value(QStringLiteral("sell")).toInt();
+    g.neutral = o.value(QStringLiteral("neutral")).toInt();
+    for (const auto& v : o.value(QStringLiteral("votes")).toArray()) {
+        const QJsonObject vo = v.toObject();
+        RatingVote rv;
+        rv.name = vo.value(QStringLiteral("name")).toString();
+        rv.key = vo.value(QStringLiteral("key")).toString();
+        rv.value = vo.value(QStringLiteral("value")).toDouble(std::numeric_limits<double>::quiet_NaN());
+        rv.signal = static_cast<TechSignal>(std::clamp(vo.value(QStringLiteral("signal")).toInt(2), 0, 4));
+        g.votes.append(rv);
+    }
+    return g;
+}
+
+QJsonObject eqrs_rating_to_json(const tmath::Rating& r) {
+    return QJsonObject{{QStringLiteral("ok"), r.ok},
+                       {QStringLiteral("ma"), eqrs_group_to_json(r.ma)},
+                       {QStringLiteral("osc"), eqrs_group_to_json(r.osc)}};
+}
+
+tmath::Rating eqrs_rating_from_json(const QJsonObject& o) {
+    tmath::Rating r;
+    if (!o.value(QStringLiteral("ok")).toBool())
+        return r;
+    r.ma = eqrs_group_from_json(o.value(QStringLiteral("ma")).toObject());
+    r.osc = eqrs_group_from_json(o.value(QStringLiteral("osc")).toObject());
+    const bool ma_ok = std::isfinite(r.ma.score), osc_ok = std::isfinite(r.osc.score);
+    r.summary = ma_ok && osc_ok ? (r.ma.score + r.osc.score) / 2.0 : ma_ok ? r.ma.score : r.osc.score;
+    r.summary_signal = tmath::signal_for_score(r.summary);
+    r.ok = std::isfinite(r.summary);
+    return r;
+}
+
+// The two-group rating replaces the old all-rows tally: only voting indicators count, and
+// the overall signal is the summary of the moving-average and oscillator groups.
+void eqrs_apply_rating(TechnicalsData& td, const tmath::Rating& r) {
+    if (!r.ok)
+        return;
+    td.ma = r.ma;
+    td.osc = r.osc;
+    td.summary_score = r.summary;
+    td.summary_signal = r.summary_signal;
+    td.rating_ok = true;
+    td.overall_signal = r.summary_signal;
+    td.strong_buy = td.strong_sell = 0;
+    td.buy = r.ma.buy + r.osc.buy;
+    td.sell = r.ma.sell + r.osc.sell;
+    td.neutral = r.ma.neutral + r.osc.neutral;
+}
+
+// Google News / NewsAPI edition for a listing: the home market's country and the language
+// its business press writes in; English where that is the business language (IN, SG, HK,
+// ZA, GB, …) or the market is unknown.
+void eqrs_news_locale(const QString& symbol, QString* country, QString* language) {
+    *country = QStringLiteral("US");
+    *language = QStringLiteral("en");
+    const auto* venue = core::market::venue_for_symbol(symbol);
+    if (!venue || venue->country.isEmpty())
+        return;
+    *country = venue->country.toUpper();
+    static const QHash<QString, QString> kNewsLanguage = {
+        {"JP", "ja"}, {"DE", "de"}, {"AT", "de"}, {"FR", "fr"}, {"IT", "it"}, {"ES", "es"}, {"BR", "pt"},
+        {"PT", "pt"}, {"KR", "ko"}, {"CN", "zh"}, {"TW", "zh"}, {"NL", "nl"}, {"SE", "sv"}, {"NO", "no"},
+        {"DK", "da"}, {"FI", "fi"}, {"MX", "es"}, {"AR", "es"}, {"CL", "es"}, {"PL", "pl"}, {"TR", "tr"},
+        {"ID", "id"}, {"TH", "th"}, {"IL", "he"}, {"SA", "ar"}, {"AE", "ar"}, {"RU", "ru"}, {"CZ", "cs"},
+    };
+    *language = kNewsLanguage.value(*country, QStringLiteral("en"));
+}
+
+// A history payload that is a non-empty JSON array of bars; anything else ("[]", an
+// {"error"} object, garbage) is a failure.
+bool eqrs_history_array(const QString& json, QJsonArray* out) {
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (!doc.isArray() || doc.array().isEmpty())
+        return false;
+    if (out)
+        *out = doc.array();
+    return true;
+}
+
 } // namespace
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -168,6 +360,39 @@ void EquityResearchService::run_python(const QString& script, const QStringList&
     });
 }
 
+void EquityResearchService::run_python_coded(const QString& script, const QStringList& args, PyCodedCallback cb) {
+    QPointer<EquityResearchService> self = this;
+    python::PythonRunner::instance().run(script, args, [self, cb](python::PythonResult result) {
+        if (!self)
+            return;
+        if (result.success) {
+            cb(true, result.output, QString());
+            return;
+        }
+        // On failure the runner keeps the script's JSON in `output` (both the daemon and the
+        // subprocess path) — that is where the "code" lives.
+        cb(false, result.error, eqrs_code_from_output(result.output));
+    });
+}
+
+void EquityResearchService::report_failure(const QString& symbol, const QString& leg, const QString& period,
+                                           const QString& message, const QString& code, const QString& fallback) {
+    LoadFailure f;
+    f.symbol = symbol;
+    f.leg = leg;
+    f.period = period;
+    f.message = eqrs_clip_reason(message);
+    if (f.message.isEmpty())
+        f.message = fallback;
+    f.code = code.trimmed().toLower();
+    if (f.code.isEmpty())
+        f.code = eqrs_classify_message(f.message);
+    LOG_WARN("EquityResearch", QString("%1 load for %2 failed [%3]: %4")
+                                   .arg(leg, symbol, f.code.isEmpty() ? QStringLiteral("?") : f.code, f.message.left(200)));
+    emit error_occurred(leg, f.message);
+    emit load_failed(f);
+}
+
 // ── Load symbol (quote + info + historical in parallel) ───────────────────────
 void EquityResearchService::load_quote_only(const QString& symbol) {
     if (symbol.isEmpty())
@@ -182,15 +407,23 @@ void EquityResearchService::load_quote_only(const QString& symbol) {
     if (equity_svc_inflight_busy(quote_inflight_, symbol, kInflightMaxAgeMs))
         return;
     quote_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
-    run_python("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out) {
+    run_python_coded("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out,
+                                                                           const QString& code) {
         quote_inflight_.remove(symbol);
+        const QString fallback = tr("Failed to fetch the quote for %1").arg(symbol);
         if (!ok) {
-            emit error_occurred("Quote", "Failed to fetch quote for " + symbol);
+            report_failure(symbol, QStringLiteral("Quote"), {}, out, code, fallback);
             return;
         }
         auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
         if (obj.contains("error")) {
-            emit error_occurred("Quote", obj["error"].toString());
+            report_failure(symbol, QStringLiteral("Quote"), {}, obj["error"].toString(), obj["code"].toString(),
+                           fallback);
+            return;
+        }
+        if (obj.isEmpty()) {
+            report_failure(symbol, QStringLiteral("Quote"), {}, tr("The quote reply for %1 was empty").arg(symbol),
+                           QStringLiteral("no_data"), fallback);
             return;
         }
         fincept::CacheManager::instance().put(
@@ -203,23 +436,37 @@ void EquityResearchService::load_quote_only(const QString& symbol) {
 void EquityResearchService::load_info_only(const QString& symbol) {
     if (symbol.isEmpty())
         return;
-    const QVariant icv = fincept::CacheManager::instance().get("equity:info:" + symbol);
+    const QString cache_key = "equity:info:" + symbol;
+    const QVariant icv = fincept::CacheManager::instance().get(cache_key);
     if (!icv.isNull()) {
-        emit info_loaded(parse_info(QJsonDocument::fromJson(icv.toString().toUtf8()).object()));
-        return;
+        const QJsonObject cached = QJsonDocument::fromJson(icv.toString().toUtf8()).object();
+        if (!eqrs_info_is_blank(cached)) {
+            emit info_loaded(parse_info(cached));
+            return;
+        }
+        fincept::CacheManager::instance().remove(cache_key); // a blank copy cached before the check existed
     }
     if (equity_svc_inflight_busy(info_inflight_, symbol, kInflightMaxAgeMs))
         return; // header bar + Overview + Analysis all ask on open — one daemon call serves them
     info_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
-    run_python("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out) {
+    run_python_coded("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out,
+                                                                          const QString& code) {
         info_inflight_.remove(symbol);
+        const QString fallback = tr("Failed to fetch company information for %1").arg(symbol);
         if (!ok) {
-            emit error_occurred("Info", "Failed to fetch info for " + symbol);
+            report_failure(symbol, QStringLiteral("Info"), {}, out, code, fallback);
             return;
         }
         auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
         if (obj.contains("error")) {
-            emit error_occurred("Info", obj["error"].toString());
+            report_failure(symbol, QStringLiteral("Info"), {}, obj["error"].toString(), obj["code"].toString(),
+                           fallback);
+            return;
+        }
+        if (eqrs_info_is_blank(obj)) {
+            report_failure(symbol, QStringLiteral("Info"), {},
+                           tr("Yahoo Finance has no company information for %1").arg(symbol),
+                           QStringLiteral("not_found"), fallback);
             return;
         }
         fincept::CacheManager::instance().put(
@@ -233,32 +480,69 @@ void EquityResearchService::load_historical_only(const QString& symbol, const QS
     if (symbol.isEmpty())
         return;
     const QString cache_key = "equity:candles:" + symbol + ":" + period;
-    const QVariant hcv = fincept::CacheManager::instance().get(cache_key);
-    if (!hcv.isNull()) {
-        auto arr = QJsonDocument::fromJson(hcv.toString().toUtf8()).array();
-        if (!arr.isEmpty()) {
-            emit historical_loaded(symbol, parse_candles(arr));
+    if (equity_svc_inflight_busy(historical_inflight_, cache_key, kInflightMaxAgeMs))
+        return; // the pending load broadcasts historical_loaded to every listener
+    historical_inflight_.insert(cache_key, QDateTime::currentMSecsSinceEpoch());
+
+    // A "max" history is ~11,000 bars (~1 MB of JSON for AAPL). Reading it from the cache,
+    // parsing it, writing it back and turning it into candles all ran in the GUI thread —
+    // inside the click that switched symbols (cache hit) or the daemon's reply — and froze
+    // the UI for 0.3–0.6 s per history (ui_stalls.log). All of it now runs on a worker; only
+    // the emit (or the failure report) comes back to the GUI thread.
+    auto finish = [this, symbol, period, cache_key](QVector<Candle> candles, QString message, QString code) {
+        QMetaObject::invokeMethod(
+            this,
+            [this, symbol, period, cache_key, candles = std::move(candles), message = std::move(message),
+             code = std::move(code)]() {
+                historical_inflight_.remove(cache_key);
+                if (!candles.isEmpty()) {
+                    emit historical_loaded(symbol, period, candles);
+                    return;
+                }
+                report_failure(symbol, QStringLiteral("Historical"), period, message, code,
+                               tr("Failed to fetch price history for %1").arg(symbol));
+            },
+            Qt::QueuedConnection);
+    };
+    auto fetch = [this, symbol, period, cache_key, finish]() {
+        run_python_coded(
+            "yfinance_data.py", {"historical_period", symbol, period, "1d"},
+            [this, symbol, period, cache_key, finish](bool ok, const QString& out, const QString& code) {
+                if (!ok) {
+                    finish({}, out, code);
+                    return;
+                }
+                (void)QtConcurrent::run([this, symbol, period, cache_key, finish, out]() {
+                    const QString json = python::extract_json(out);
+                    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+                    if (doc.isObject() && doc.object().contains(QStringLiteral("error"))) {
+                        finish({}, doc.object()["error"].toString(), doc.object()["code"].toString());
+                        return;
+                    }
+                    // An empty series is how an older script reports "Yahoo returned nothing"
+                    // (rate limit, blocked network, unknown ticker). It is a failure, never a chart.
+                    if (!doc.isArray() || doc.array().isEmpty()) {
+                        finish({}, tr("No price history returned for %1 (%2)").arg(symbol, period),
+                               QStringLiteral("no_data"));
+                        return;
+                    }
+                    const QJsonArray arr = doc.array();
+                    fincept::CacheManager::instance().put(
+                        cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                        kHistoricalTtlSec, "equity");
+                    finish(parse_candles(arr), {}, {});
+                });
+            });
+    };
+    (void)QtConcurrent::run([this, cache_key, finish, fetch]() {
+        const QVariant hcv = fincept::CacheManager::instance().get(cache_key);
+        QJsonArray arr;
+        if (!hcv.isNull() && eqrs_history_array(hcv.toString(), &arr)) {
+            finish(parse_candles(arr), {}, {});
             return;
         }
-    }
-    if (equity_svc_inflight_busy(historical_inflight_, cache_key, kInflightMaxAgeMs))
-        return;
-    historical_inflight_.insert(cache_key, QDateTime::currentMSecsSinceEpoch());
-    run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-               [this, symbol, cache_key](bool ok, const QString& out) {
-                   historical_inflight_.remove(cache_key);
-                   if (!ok) {
-                       emit error_occurred("Historical", "Failed to fetch historical for " + symbol);
-                       return;
-                   }
-                   auto arr = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
-                   if (!arr.isEmpty()) {
-                       fincept::CacheManager::instance().put(
-                           cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-                           kHistoricalTtlSec, "equity");
-                   }
-                   emit historical_loaded(symbol, parse_candles(arr));
-               });
+        QMetaObject::invokeMethod(this, fetch, Qt::QueuedConnection); // the runner lives on the GUI thread
+    });
 }
 
 void EquityResearchService::load_symbol(const QString& symbol, const QString& period) {
@@ -274,61 +558,143 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
     // Statements change quarterly, yet every Financials/Valuation tab visit used to
     // re-run the yfinance statements pull (and the two tabs each started their own).
     // Serve a cached copy, and fold a request that arrives while one is in flight.
-    const QString cache_key = "equity:financials:" + symbol;
-    const QString lkg_key = "equity:lkg:financials:" + symbol;
-    auto& cache = fincept::CacheManager::instance();
-    const QVariant cached = cache.get(cache_key);
-    if (!cached.isNull()) {
-        const auto cached_obj = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
-        if (!cached_obj.isEmpty()) {
-            emit financials_loaded(parse_financials(cached_obj));
-            return;
-        }
-    }
+    //
+    // Reading the cached / last-known-good copies, parsing them, parsing the reply,
+    // re-serialising it for the two cache rows and building the statement model all
+    // ran in the GUI thread (a statements payload is hundreds of KB — 0.1–0.4 s per
+    // visit in ui_stalls.log). All of it now runs on a worker, like
+    // load_historical_only(); the GUI thread only emits the parsed model (or reports
+    // the failure). The in-flight entry now also covers the cache read, so callers
+    // that ask while it runs are folded into the one broadcast financials_loaded.
     if (equity_svc_inflight_busy(financials_inflight_, symbol, kInflightMaxAgeMs))
         return;
     financials_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
+    const QString cache_key = "equity:financials:" + symbol;
+    const QString lkg_key = "equity:lkg:financials:" + symbol;
 
-    // Last-known-good statements: shown at once (flagged stale) while the refresh runs. A
-    // failed refresh then leaves them on screen, still flagged, instead of a blank tab.
-    if (const auto lkg = cache.try_get(lkg_key)) {
+    // Last-known-good statements, flagged stale (FinancialsData::stale → the Financials tab's
+    // "CACHED COPY — REFRESHING" / "— REFRESH FAILED" note, the Valuation tab's statements
+    // note). Shown at once while the refresh runs, and replayed if the refresh fails so a
+    // listener that asked while this request was in flight gets them too. Worker thread.
+    // parse_financials() reads only its argument, so it is safe off the GUI thread.
+    const auto read_lkg = [this, lkg_key]() -> std::optional<FinancialsData> {
+        const auto lkg = fincept::CacheManager::instance().try_get(lkg_key);
+        if (!lkg)
+            return std::nullopt;
         const auto lkg_obj = QJsonDocument::fromJson(lkg->toUtf8()).object();
-        if (!lkg_obj.isEmpty()) {
-            FinancialsData stale = parse_financials(lkg_obj);
-            stale.stale = true;
-            emit financials_loaded(stale);
-        }
-    }
+        if (!eqrs_financials_has_statements(lkg_obj))
+            return std::nullopt;
+        FinancialsData stale = parse_financials(lkg_obj);
+        stale.stale = true;
+        return stale;
+    };
 
-    run_python("yfinance_data.py", {"financials", symbol},
-               [this, symbol, cache_key, lkg_key](bool ok, const QString& out) {
-                   financials_inflight_.remove(symbol);
-                   if (!ok) {
-                       emit error_occurred("Financials", "Failed to fetch financials for " + symbol);
-                       return;
-                   }
-                   auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                   if (obj.contains("error")) {
-                       emit error_occurred("Financials", obj["error"].toString());
-                       return;
-                   }
-                   const QVariant payload(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
-                   auto& c = fincept::CacheManager::instance();
-                   c.put(cache_key, payload, kFinancialsTtlSec, "equity");
-                   c.put(lkg_key, payload, kFinancialsLkgTtlSec, "equity");
-                   emit financials_loaded(parse_financials(obj));
-               });
+    // GUI thread (the runner lives there); the reply is handled on a worker.
+    auto fetch = [this, symbol, cache_key, lkg_key, read_lkg]() {
+        run_python_coded(
+            "yfinance_data.py", {"financials", symbol},
+            [this, symbol, cache_key, lkg_key, read_lkg](bool ok, const QString& out, const QString& code) {
+                (void)QtConcurrent::run([this, symbol, cache_key, lkg_key, read_lkg, ok, out, code]() {
+                    bool failed = false;
+                    QString reason;
+                    QString reason_code;
+                    FinancialsData fresh;
+                    if (!ok) {
+                        failed = true;
+                        reason = out;
+                        reason_code = code;
+                    } else {
+                        const QJsonObject obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                        if (obj.contains(QStringLiteral("error"))) {
+                            failed = true;
+                            reason = obj.value(QStringLiteral("error")).toString();
+                            reason_code = obj.value(QStringLiteral("code")).toString();
+                        } else if (!eqrs_financials_has_statements(obj)) {
+                            // Never cache emptiness, and never let it overwrite the 30-day copy.
+                            failed = true;
+                            reason = tr("No financial statements returned for %1").arg(symbol);
+                            reason_code = QStringLiteral("no_data");
+                        } else {
+                            const QVariant payload(
+                                QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+                            auto& c = fincept::CacheManager::instance();
+                            c.put(cache_key, payload, kFinancialsTtlSec, "equity");
+                            c.put(lkg_key, payload, kFinancialsLkgTtlSec, "equity");
+                            fresh = parse_financials(obj);
+                        }
+                    }
+                    // A failure keeps the last good statements on screen, still flagged stale.
+                    const std::optional<FinancialsData> stale = failed ? read_lkg() : std::nullopt;
+                    QMetaObject::invokeMethod(
+                        this,
+                        [this, symbol, failed, reason, reason_code, fresh = std::move(fresh), stale]() {
+                            financials_inflight_.remove(symbol);
+                            if (!failed) {
+                                emit financials_loaded(fresh);
+                                return;
+                            }
+                            if (stale)
+                                emit financials_loaded(*stale);
+                            report_failure(symbol, QStringLiteral("Financials"), {}, reason, reason_code,
+                                           tr("Failed to fetch financial statements for %1").arg(symbol));
+                        },
+                        Qt::QueuedConnection);
+                });
+            });
+    };
+
+    (void)QtConcurrent::run([this, symbol, cache_key, read_lkg, fetch]() {
+        auto& cache = fincept::CacheManager::instance();
+        const QVariant cached = cache.get(cache_key);
+        if (!cached.isNull()) {
+            const auto cached_obj = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+            // {"symbol","timestamp"} + three empty statements is not "a cached copy" — it is a
+            // failure an older build cached; drop it and fetch.
+            if (eqrs_financials_has_statements(cached_obj)) {
+                FinancialsData fd = parse_financials(cached_obj);
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, symbol, fd = std::move(fd)]() {
+                        financials_inflight_.remove(symbol);
+                        emit financials_loaded(fd);
+                    },
+                    Qt::QueuedConnection);
+                return;
+            }
+            cache.remove(cache_key);
+        }
+        const std::optional<FinancialsData> stale = read_lkg();
+        QMetaObject::invokeMethod(
+            this,
+            [this, stale, fetch]() {
+                if (stale)
+                    emit financials_loaded(*stale);
+                fetch();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ── Technicals ────────────────────────────────────────────────────────────────
-void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period) {
+void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period, bool force) {
     // Indicators off daily bars: serve a recent computation instead of re-fetching the candles
     // and recomputing on every Technicals-tab visit / Sentiment blend.
     const QString result_key = "equity:technicals:" + symbol + ":" + period;
+    if (force) {
+        // User-pressed REFRESH: drop the 5-minute frame and the candles it was computed from,
+        // otherwise the same snapshot comes straight back.
+        fincept::CacheManager::instance().remove(result_key);
+        fincept::CacheManager::instance().remove("equity:candles:" + symbol + ":" + period);
+    }
     if (const auto hit = fincept::CacheManager::instance().try_get(result_key)) {
-        const QJsonArray rows = QJsonDocument::fromJson(hit->toUtf8()).array();
+        // {"rows": frame tail, "rating": two-group rating}. A bare array is a copy cached
+        // before the rating existed — recompute it.
+        const QJsonDocument doc = QJsonDocument::fromJson(hit->toUtf8());
+        const QJsonArray rows = doc.isObject() ? doc.object().value(QStringLiteral("rows")).toArray() : QJsonArray();
         if (!rows.isEmpty()) {
-            emit technicals_loaded(parse_technicals(symbol, rows));
+            TechnicalsData td = parse_technicals(symbol, rows);
+            eqrs_apply_rating(td, eqrs_rating_from_json(doc.object().value(QStringLiteral("rating")).toObject()));
+            emit technicals_loaded(td);
             return;
         }
     }
@@ -345,36 +711,46 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
     // (a 5-year daily series is ~5 ms, a 'max' history ~40 ms). parse_technicals() reads the last
     // row plus the last 50 closes (SMA 50), so only the frame's 60-row tail is built and cached.
     QPointer<EquityResearchService> self = this;
-    ensure_candles(symbol, period, [self, symbol, inflight_key, result_key](bool ok, const QString& hist_json) {
+    ensure_candles(symbol, period, [self, symbol, period, inflight_key, result_key](bool ok, const QString& hist_json) {
         if (!self)
             return;
         if (!ok || hist_json.trimmed().isEmpty()) {
             self->technicals_inflight_.remove(inflight_key);
-            emit self->error_occurred("Technicals", "Failed historical fetch");
+            // On failure ensure_candles hands back the reason instead of the series.
+            self->report_failure(symbol, QStringLiteral("Technicals"), period, ok ? QString() : hist_json, {},
+                                 tr("No price history to compute indicators for %1").arg(symbol));
             return;
         }
-        (void)QtConcurrent::run([self, symbol, inflight_key, result_key, hist_json]() {
-            const technicals::TechnicalsFrame frame =
-                technicals::compute_frame(QJsonDocument::fromJson(hist_json.toUtf8()).array(), 60);
+        (void)QtConcurrent::run([self, symbol, period, inflight_key, result_key, hist_json]() {
+            const QJsonArray bars_json = QJsonDocument::fromJson(hist_json.toUtf8()).array();
+            const technicals::TechnicalsFrame frame = technicals::compute_frame(bars_json, 60);
+            // The rating needs the whole series (SMA 200), not the frame's 60-row tail.
+            const tmath::Rating rating = tmath::technical_rating(eqrs_bars_from_json(bars_json));
             if (!self)
                 return;
             QMetaObject::invokeMethod(
                 self.data(),
-                [self, symbol, inflight_key, result_key, frame]() {
+                [self, symbol, period, inflight_key, result_key, frame, rating]() {
                     if (!self)
                         return;
                     self->technicals_inflight_.remove(inflight_key);
                     if (!frame.ok) {
-                        LOG_WARN("EquityResearch", QString("Technicals for %1 failed: %2").arg(symbol, frame.error));
-                        emit self->error_occurred("Technicals", "Indicator computation failed: " + frame.error);
+                        self->report_failure(symbol, QStringLiteral("Technicals"), period,
+                                             tr("Indicator computation failed: %1").arg(frame.error), QStringLiteral("unknown"),
+                                             tr("Indicator computation failed"));
                         return;
                     }
-                    if (!frame.rows.isEmpty())
+                    if (!frame.rows.isEmpty()) {
+                        const QJsonObject cached{{QStringLiteral("rows"), frame.rows},
+                                                 {QStringLiteral("rating"), eqrs_rating_to_json(rating)}};
                         fincept::CacheManager::instance().put(
                             result_key,
-                            QVariant(QString::fromUtf8(QJsonDocument(frame.rows).toJson(QJsonDocument::Compact))),
+                            QVariant(QString::fromUtf8(QJsonDocument(cached).toJson(QJsonDocument::Compact))),
                             kTechnicalsTtlSec, "equity");
-                    emit self->technicals_loaded(self->parse_technicals(symbol, frame.rows));
+                    }
+                    TechnicalsData td = self->parse_technicals(symbol, frame.rows);
+                    eqrs_apply_rating(td, rating);
+                    emit self->technicals_loaded(td);
                 },
                 Qt::QueuedConnection);
         });
@@ -383,77 +759,87 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
 
 // ── Peers ─────────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_suggested_peers(const QString& symbol, int count) {
-    run_python("fetch_peers.py", {symbol, QString::number(count)}, [this, symbol](bool ok, const QString& out) {
+    // Region-aware discovery (equity_research_data.py peers_suggest): same industry on the
+    // subject's own market first (BT and Airtel Africa for Vodafone, Honda and Suzuki for
+    // Toyota), then the industry's global leaders. Cached: the answer changes rarely.
+    const QString cache_key = QStringLiteral("equity:peers_suggest:%1:%2").arg(symbol).arg(count);
+    auto emit_from = [this, symbol](const QJsonObject& obj) {
         QStringList peers;
-        if (ok) {
-            const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-            for (const auto& v : obj.value("peers").toArray())
-                if (!v.toString().trimmed().isEmpty())
-                    peers.append(v.toString().trimmed().toUpper());
-        }
+        for (const auto& v : obj.value("peers").toArray())
+            if (!v.toString().trimmed().isEmpty())
+                peers.append(v.toString().trimmed().toUpper());
         emit suggested_peers_loaded(symbol, peers);
-    });
+    };
+    if (const auto hit = fincept::CacheManager::instance().try_get(cache_key)) {
+        const QJsonObject obj = QJsonDocument::fromJson(hit->toUtf8()).object();
+        if (!obj.value("peers").toArray().isEmpty()) {
+            emit_from(obj);
+            return;
+        }
+    }
+    run_python("equity_research_data.py", {"peers_suggest", symbol, QString::number(count)},
+               [this, symbol, count, cache_key, emit_from](bool ok, const QString& out) {
+                   const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                   if (ok && !obj.value("peers").toArray().isEmpty()) {
+                       fincept::CacheManager::instance().put(
+                           cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                           kSuggestedPeersTtlSec, "equity");
+                       emit_from(obj);
+                       return;
+                   }
+                   // Older bundle without the new script: Yahoo's (US-centric) industry leaders.
+                   run_python("fetch_peers.py", {symbol, QString::number(count)},
+                              [this, symbol](bool ok2, const QString& out2) {
+                                  QStringList peers;
+                                  if (ok2) {
+                                      const auto o2 = QJsonDocument::fromJson(python::extract_json(out2).toUtf8()).object();
+                                      for (const auto& v : o2.value("peers").toArray())
+                                          if (!v.toString().trimmed().isEmpty())
+                                              peers.append(v.toString().trimmed().toUpper());
+                                  }
+                                  emit suggested_peers_loaded(symbol, peers);
+                              });
+               });
 }
 
 void EquityResearchService::fetch_peers(const QString& symbol, const QStringList& peer_symbols) {
     QStringList all;
     all << symbol;
     all.append(peer_symbols);
-    QString joined = all.join(",");
-
-    // `multiple_ratios` carries the valuation/return ratios only. Price, beta, market
-    // cap, name and sector live in the separate `multiple_profiles` pull — merge it in
-    // so those PeerData fields (and the PRICE / BETA columns that read them) are real
-    // instead of permanently zero. The two runs are independent, so start both and emit
-    // once both are back; a failed profile pull just leaves those fields empty.
-    struct PeersJoin {
-        QJsonArray ratios;
-        QJsonArray profiles;
-        bool ratios_done = false;
-        bool ratios_ok = false;
-        bool profiles_done = false;
-    };
-    auto join = std::make_shared<PeersJoin>();
-
-    auto try_emit = [this, join]() {
-        if (!join->ratios_done || !join->profiles_done)
-            return;
-        if (!join->ratios_ok) {
-            emit error_occurred("Peers", "Failed to fetch peer data");
+    all.removeDuplicates();
+    const QString joined = all.join(",");
+    // One pull per peer list (equity_research_data.py peers_compare): ratios, profile and
+    // listing context — trading / reporting currency and a USD market cap, so caps listed
+    // in pounds, yen and rupees compare.
+    const QString cache_key = QStringLiteral("equity:peers:") + joined;
+    if (const auto hit = fincept::CacheManager::instance().try_get(cache_key)) {
+        const QJsonArray arr = QJsonDocument::fromJson(hit->toUtf8()).object().value("peers").toArray();
+        if (!arr.isEmpty()) {
+            emit peers_loaded(parse_peers(arr));
             return;
         }
-        QVector<PeerData> peers = parse_peers(join->ratios);
-        for (const auto& pv : join->profiles) {
-            const auto po = pv.toObject();
-            const QString psym = po["symbol"].toString();
-            for (auto& peer : peers) {
-                if (peer.symbol.compare(psym, Qt::CaseInsensitive) != 0)
-                    continue;
-                peer.name = po["companyName"].toString();
-                peer.sector = po["sector"].toString();
-                peer.market_cap = po["marketCap"].toDouble();
-                peer.beta = po["beta"].toDouble();
-                peer.price = po["price"].toDouble();
-                peer.change_pct = po["changes"].toDouble();
-                break;
-            }
-        }
-        emit peers_loaded(peers);
-    };
-
-    run_python("yfinance_data.py", {"multiple_ratios", joined}, [join, try_emit](bool ok, const QString& out) {
-        join->ratios_done = true;
-        join->ratios_ok = ok;
-        if (ok)
-            join->ratios = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
-        try_emit();
-    });
-    run_python("yfinance_data.py", {"multiple_profiles", joined}, [join, try_emit](bool ok, const QString& out) {
-        join->profiles_done = true;
-        if (ok)
-            join->profiles = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
-        try_emit();
-    });
+    }
+    run_python_coded("equity_research_data.py", {"peers_compare", joined},
+                     [this, symbol, cache_key](bool ok, const QString& out, const QString& code) {
+                         const QString fallback = tr("Failed to fetch peer data for %1").arg(symbol);
+                         if (!ok) {
+                             report_failure(symbol, QStringLiteral("Peers"), {}, out, code, fallback);
+                             return;
+                         }
+                         const QJsonObject obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                         if (obj.contains("error")) {
+                             report_failure(symbol, QStringLiteral("Peers"), {}, obj["error"].toString(),
+                                            obj["code"].toString(), fallback);
+                             return;
+                         }
+                         const QJsonArray arr = obj.value("peers").toArray();
+                         if (!arr.isEmpty())
+                             fincept::CacheManager::instance().put(
+                                 cache_key,
+                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                                 kPeersTtlSec, "equity");
+                         emit peers_loaded(parse_peers(arr));
+                     });
 }
 
 // ── News ──────────────────────────────────────────────────────────────────────
@@ -522,7 +908,7 @@ static QString newsapi_query_for_symbol(const QString& symbol) {
 }
 
 void EquityResearchService::fetch_news(const QString& symbol, int count, NewsProvider provider, bool force) {
-    // User-pressed REFRESH: the 3-minute cache would otherwise hand back the very
+    // User-pressed REFRESH: the 10-minute cache would otherwise hand back the very
     // same articles the tab is already showing.
     if (force) {
         fincept::CacheManager::instance().remove("equity:news:" + symbol);
@@ -538,20 +924,24 @@ void EquityResearchService::fetch_news(const QString& symbol, int count, NewsPro
             const QVariant ncv = fincept::CacheManager::instance().get("equity:news:newsapi:" + symbol);
             if (!ncv.isNull()) {
                 const QJsonArray arr = QJsonDocument::fromJson(ncv.toString().toUtf8()).array();
-                emit news_loaded(symbol, parse_news(arr));
+                emit news_loaded(symbol, NewsProvider::NewsApi, false, parse_news(arr));
                 return;
             }
             fetch_news_newsapi(symbol, count, key);
             return;
         }
-        // No key configured → fall through to the default Auto chain below.
+        // No key configured → the default Auto chain, tagged as a NewsAPI fallback.
     }
+    fetch_news_auto(symbol, count, provider);
+}
 
+void EquityResearchService::fetch_news_auto(const QString& symbol, int count, NewsProvider requested) {
+    const bool fell_back = requested != NewsProvider::Auto;
     {
         const QVariant ncv = fincept::CacheManager::instance().get("equity:news:" + symbol);
         if (!ncv.isNull()) {
             const QJsonArray arr = QJsonDocument::fromJson(ncv.toString().toUtf8()).array();
-            emit news_loaded(symbol, parse_news(arr));
+            emit news_loaded(symbol, requested, fell_back, parse_news(arr));
             return;
         }
     }
@@ -562,16 +952,18 @@ void EquityResearchService::fetch_news(const QString& symbol, int count, NewsPro
     // "Reliance Industries" returns articles where "RELIANCE" and "Reliance
     // Industries Limited" both return none), so query by the cleaned company_name
     // from the cached info when available, falling back to the bare ticker.
-    const bool indian = symbol.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
-                        symbol.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive);
-    const QString country = indian ? QStringLiteral("IN") : QStringLiteral("US");
+    // Google News edition of the listing's home market (VOD.L → GB, 7203.T → JP, SAP.DE →
+    // DE), in the language its business press writes in; English where that is the
+    // business language (IN, SG, HK, ZA, …) or the market is unknown.
+    QString country, language;
+    eqrs_news_locale(symbol, &country, &language);
     const QString query = news_query_for_symbol(symbol);
 
     run_python("fetch_company_news.py",
                // GNews periods are h/d/m/y with "m" meaning minutes on Google News, so "1M"
                // returned zero articles for every symbol. 30 days gives a month of coverage.
-               {"search", query, QString::number(count), QStringLiteral("30d"), QStringLiteral("en"), country},
-               [this, symbol, count](bool ok, const QString& out) {
+               {"search", query, QString::number(count), QStringLiteral("30d"), language, country},
+               [this, symbol, count, requested, fell_back](bool ok, const QString& out) {
                    if (ok) {
                        const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
                        // GNews returns {"success":true,"data":[...]}. Only accept a
@@ -583,22 +975,24 @@ void EquityResearchService::fetch_news(const QString& symbol, int count, NewsPro
                                    "equity:news:" + symbol,
                                    QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                                    kNewsTtlSec, "equity");
-                               emit news_loaded(symbol, parse_news(arr));
+                               emit news_loaded(symbol, requested, fell_back, parse_news(arr));
                                return;
                            }
                        }
                    }
                    // Google News unavailable (e.g. gnews missing / network) or empty →
                    // fall back to the Yahoo/yfinance feed.
-                   fetch_news_yfinance(symbol, count);
+                   fetch_news_yfinance(symbol, count, requested);
                });
 }
 
-void EquityResearchService::fetch_news_yfinance(const QString& symbol, int count) {
-    run_python(
-        "yfinance_data.py", {"news", symbol, QString::number(count)}, [this, symbol](bool ok, const QString& out) {
+void EquityResearchService::fetch_news_yfinance(const QString& symbol, int count, NewsProvider requested) {
+    run_python_coded(
+        "yfinance_data.py", {"news", symbol, QString::number(count)},
+        [this, symbol, requested](bool ok, const QString& out, const QString& code) {
             if (!ok) {
-                emit error_occurred("News", "Failed to fetch news for " + symbol);
+                report_failure(symbol, QStringLiteral("News"), {}, out, code,
+                               tr("Failed to fetch news for %1").arg(symbol));
                 return;
             }
             auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
@@ -606,7 +1000,7 @@ void EquityResearchService::fetch_news_yfinance(const QString& symbol, int count
             fincept::CacheManager::instance().put(
                 "equity:news:" + symbol, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kNewsTtlSec, "equity");
-            emit news_loaded(symbol, parse_news(arr));
+            emit news_loaded(symbol, requested, requested != NewsProvider::Auto, parse_news(arr));
         });
 }
 
@@ -643,7 +1037,15 @@ void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count,
     // merely mentions the word. This is what makes the feed stock-specific.
     params.addQueryItem(QStringLiteral("q"), newsapi_query_for_symbol(symbol));
     params.addQueryItem(QStringLiteral("searchIn"), QStringLiteral("title,description"));
-    params.addQueryItem(QStringLiteral("language"), QStringLiteral("en"));
+    {
+        // NewsAPI's languages: ar de en es fr he it nl no pt ru sv ud zh.
+        QString country, language;
+        eqrs_news_locale(symbol, &country, &language);
+        static const QStringList kNewsApiLanguages = {"ar", "de", "en", "es", "fr", "he", "it",
+                                                      "nl", "no", "pt", "ru", "sv", "zh"};
+        params.addQueryItem(QStringLiteral("language"),
+                            kNewsApiLanguages.contains(language) ? language : QStringLiteral("en"));
+    }
     params.addQueryItem(QStringLiteral("sortBy"), QStringLiteral("publishedAt"));
     params.addQueryItem(QStringLiteral("pageSize"), QString::number(std::clamp(count, 1, 100)));
     params.addQueryItem(QStringLiteral("from"), QDate::currentDate().addDays(-30).toString(Qt::ISODate));
@@ -656,7 +1058,9 @@ void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count,
     QNetworkReply* reply = news_nam_->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply, symbol, count]() {
         reply->deleteLater();
-        const auto fall_back = [this, symbol, count]() { fetch_news(symbol, count, NewsProvider::Auto); };
+        // Answered as a NewsAPI result flagged fell_back, so the News tab (on NewsAPI) shows it
+        // and can say where the articles came from.
+        const auto fall_back = [this, symbol, count]() { fetch_news_auto(symbol, count, NewsProvider::NewsApi); };
 
         if (reply->error() != QNetworkReply::NoError) {
             LOG_WARN("EquityResearch", QString("NewsAPI request failed (%1) — falling back").arg(reply->errorString()));
@@ -694,7 +1098,7 @@ void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count,
         fincept::CacheManager::instance().put(
             "equity:news:newsapi:" + symbol,
             QVariant(QString::fromUtf8(QJsonDocument(reshaped).toJson(QJsonDocument::Compact))), kNewsTtlSec, "equity");
-        emit news_loaded(symbol, parse_news(reshaped));
+        emit news_loaded(symbol, NewsProvider::NewsApi, false, parse_news(reshaped));
     });
 }
 
@@ -703,20 +1107,19 @@ void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count,
 //   1. cache hit                                 → return immediately
 //   2. region-matched *connected* broker         → broker get_history (live, reliable)
 //   3. yfinance                                  → fallback (no broker, or broker empty/failed)
-// The result is cached under "equity:candles:<symbol>". done(ok, hist_json) is
-// always invoked on the main thread.
+// The result is cached under "equity:candles:<symbol>:<period>" — the key
+// load_historical_only() uses, so the two share one copy per period (it used to be
+// keyed without the period, and Technicals could compute on another period's bars).
+// done(ok, hist_json_or_reason) is always invoked on the main thread.
 void EquityResearchService::ensure_candles(const QString& symbol, const QString& period,
                                            std::function<void(bool, const QString&)> done) {
-    const QString cache_key = "equity:candles:" + symbol;
+    const QString cache_key = "equity:candles:" + symbol + ":" + period;
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
-    if (!cached.isNull()) {
-        // Reject a cached empty payload ("" or "[]") — a stale rate-limited
-        // result would otherwise wedge the tab on "No data returned".
-        const QString c = cached.toString().trimmed();
-        if (!c.isEmpty() && c != QLatin1String("[]")) {
-            done(true, cached.toString());
-            return;
-        }
+    // Reject a cached empty/garbage payload — a stale rate-limited result would otherwise
+    // wedge the tab on "No data returned".
+    if (!cached.isNull() && eqrs_history_array(cached.toString(), nullptr)) {
+        done(true, cached.toString());
+        return;
     }
 
     QPointer<EquityResearchService> self = this;
@@ -726,20 +1129,26 @@ void EquityResearchService::ensure_candles(const QString& symbol, const QString&
             return;
         }
         self->run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-                         [cache_key, done](bool ok, const QString& out) {
+                         [symbol, period, cache_key, done](bool ok, const QString& out) {
                              if (!ok) {
-                                 done(false, {});
+                                 done(false, out); // the runner / script reason
                                  return;
                              }
                              const QString raw = python::extract_json(out);
-                             const QString trimmed = raw.trimmed();
-                             if (trimmed.isEmpty() || trimmed == QLatin1String("[]")) {
-                                 done(false, {}); // yfinance rate-limited / unknown symbol
+                             QJsonArray arr;
+                             if (!eqrs_history_array(raw, &arr)) {
+                                 const QJsonObject err = QJsonDocument::fromJson(raw.toUtf8()).object();
+                                 const QString reason = err.value(QStringLiteral("error")).toString();
+                                 // yfinance rate-limited / unknown symbol / blocked network
+                                 done(false, reason.isEmpty() ? tr("No price history returned for %1 (%2)")
+                                                                    .arg(symbol, period)
+                                                              : reason);
                                  return;
                              }
-                             fincept::CacheManager::instance().put(cache_key, QVariant(raw), kHistoricalTtlSec,
+                             const QString compact = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+                             fincept::CacheManager::instance().put(cache_key, QVariant(compact), kHistoricalTtlSec,
                                                                    "equity");
-                             done(true, raw);
+                             done(true, compact);
                          });
     };
 
@@ -747,7 +1156,7 @@ void EquityResearchService::ensure_candles(const QString& symbol, const QString&
     if (resolve_connected_data_broker(symbol, broker_id, account_id)) {
         const QString bare = candle_bare_symbol(symbol);
         const int lookback = candle_lookback_days(period);
-        LOG_INFO("EquityResearch", QString("Candles for %1 via broker %2").arg(symbol, broker_id));
+        LOG_DEBUG("EquityResearch", QString("Candles for %1 via broker %2").arg(symbol, broker_id));
         fincept::trading::HistoricalDataService::instance().fetch(
             bare, QStringLiteral("1d"), lookback, broker_id, account_id,
             [cache_key, done, run_yfinance](bool ok, const QVector<fincept::trading::BrokerCandle>& candles,
@@ -884,6 +1293,31 @@ FinancialsData EquityResearchService::parse_financials(const QJsonObject& obj) c
     fd.income_statement = parse_stmt(obj["income_statement"].toObject());
     fd.balance_sheet = parse_stmt(obj["balance_sheet"].toObject());
     fd.cash_flow = parse_stmt(obj["cash_flow"].toObject());
+
+    // Statement order of the line items (absent in payloads cached before the script sent it).
+    const QJsonObject order = obj["row_order"].toObject();
+    auto parse_order = [&order](const char* key) {
+        QStringList out;
+        for (const auto& v : order.value(QLatin1String(key)).toArray())
+            out << v.toString();
+        return out;
+    };
+    fd.income_order = parse_order("income_statement");
+    fd.balance_order = parse_order("balance_sheet");
+    fd.cash_flow_order = parse_order("cash_flow");
+
+    // Quarterly statements and Yahoo's TTM columns (absent from payloads cached before the
+    // script sent them, and for listings that file no quarters).
+    const QJsonObject q = obj["quarterly"].toObject();
+    fd.q_income = parse_stmt(q["income_statement"].toObject());
+    fd.q_balance = parse_stmt(q["balance_sheet"].toObject());
+    fd.q_cash_flow = parse_stmt(q["cash_flow"].toObject());
+    fd.q_income_order = parse_order("quarterly_income_statement");
+    fd.q_balance_order = parse_order("quarterly_balance_sheet");
+    fd.q_cash_flow_order = parse_order("quarterly_cash_flow");
+    const QJsonObject ttm = obj["ttm"].toObject();
+    fd.ttm_income = parse_stmt(ttm["income_statement"].toObject());
+    fd.ttm_cash_flow = parse_stmt(ttm["cash_flow"].toObject());
     return fd;
 }
 
@@ -1154,26 +1588,43 @@ TechnicalsData EquityResearchService::parse_technicals(const QString& symbol, co
 
 QVector<PeerData> EquityResearchService::parse_peers(const QJsonArray& arr) const {
     QVector<PeerData> peers;
+    // equity_research_data.py peers_compare rows (snake_case; null = not reported → 0, the
+    // "missing" convention of PeerData).
     for (const auto& v : arr) {
         auto o = v.toObject();
         PeerData p;
         p.symbol = o["symbol"].toString();
-        p.pe_ratio = o["peRatio"].toDouble();
-        p.forward_pe = o["forwardPE"].toDouble();
-        p.price_to_book = o["priceToBook"].toDouble();
-        p.price_to_sales = o["priceToSales"].toDouble();
-        p.peg_ratio = o["pegRatio"].toDouble();
-        p.debt_to_equity = o["debtToEquity"].toDouble();
-        p.roe = o["returnOnEquity"].toDouble();
-        p.roa = o["returnOnAssets"].toDouble();
-        p.profit_margin = o["profitMargin"].toDouble();
-        p.operating_margin = o["operatingMargin"].toDouble();
-        p.gross_margin = o["grossMargin"].toDouble();
-        p.current_ratio = o["currentRatio"].toDouble();
-        p.quick_ratio = o["quickRatio"].toDouble();
-        p.dividend_yield = o["dividendYield"].toDouble();
-        p.revenue_growth = o["revenueGrowth"].toDouble(); // were declared but never filled
-        p.earnings_growth = o["earningsGrowth"].toDouble();
+        p.name = o["name"].toString();
+        p.sector = o["sector"].toString();
+        p.industry = o["industry"].toString();
+        p.country = o["country"].toString();
+        p.exchange = o["exchange"].toString();
+        p.currency = o["currency"].toString();
+        p.financial_currency = o["financial_currency"].toString();
+        p.price = o["price"].toDouble();
+        p.change_pct = o["change_pct"].toDouble();
+        p.market_cap = o["market_cap"].toDouble();
+        p.market_cap_usd = o["market_cap_usd"].toDouble();
+        p.enterprise_value = o["enterprise_value"].toDouble();
+        p.pe_ratio = o["pe"].toDouble();
+        p.forward_pe = o["forward_pe"].toDouble();
+        p.price_to_book = o["pb"].toDouble();
+        p.price_to_sales = o["ps"].toDouble();
+        p.peg_ratio = o["peg"].toDouble();
+        p.ev_to_ebitda = o["ev_ebitda"].toDouble();
+        p.ev_to_revenue = o["ev_revenue"].toDouble();
+        p.debt_to_equity = o["debt_to_equity"].toDouble(); // percent (152 = 1.52x)
+        p.roe = o["roe"].toDouble();
+        p.roa = o["roa"].toDouble();
+        p.profit_margin = o["profit_margin"].toDouble();
+        p.operating_margin = o["operating_margin"].toDouble();
+        p.gross_margin = o["gross_margin"].toDouble();
+        p.current_ratio = o["current_ratio"].toDouble();
+        p.quick_ratio = o["quick_ratio"].toDouble();
+        p.dividend_yield = o["dividend_yield_pct"].toDouble(); // percent
+        p.revenue_growth = o["revenue_growth"].toDouble();
+        p.earnings_growth = o["earnings_growth"].toDouble();
+        p.beta = o["beta"].toDouble();
         peers.append(p);
     }
     return peers;

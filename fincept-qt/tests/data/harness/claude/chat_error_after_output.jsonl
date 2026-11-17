@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"7d1c0b2a-0000-4000-8000-0000000c4a72","model":"claude-sonnet-4-5","cwd":"/scratch/run","tools":[],"mcp_servers":[],"permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY"}
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg_01","role":"assistant"}}}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The first half of an answer"}}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":2100,"num_turns":1,"session_id":"7d1c0b2a-0000-4000-8000-0000000c4a72","total_cost_usd":0.002,"usage":{"input_tokens":300,"output_tokens":6},"errors":["API Error: 529 overloaded"]}

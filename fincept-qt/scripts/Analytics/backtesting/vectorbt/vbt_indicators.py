@@ -1,823 +1,575 @@
 """
-VBT Indicators & Signal Generation Module
+Indicators of the vectorbt engine: ONE id table shared by get_indicators, calculate_indicator,
+indicator_signals, indicator_param_sweep and the strategies (audit T6).
 
-Covers all VectorBT built-in indicators:
-- MA (SMA/EMA with configurable window and ewm flag)
-- MSTD (Moving Standard Deviation)
-- BBANDS (Bollinger Bands: upper, middle, lower, bandwidth, %B)
-- RSI (Relative Strength Index)
-- STOCH (Stochastic Oscillator: %K, %D)
-- MACD (MACD line, Signal line, Histogram)
-- ATR (Average True Range)
-- OBV (On-Balance Volume)
+Every indicator is computed once on a symbol's full history, vectorised, and is causal (the
+value at bar t uses bars <= t only). Warm-up bars are NaN - never a filled-in 0 / 50 that a
+signal rule could trigger on. Definitions (the usual ones, TA-Lib conventions):
+  sma        simple moving average of the close
+  ema        exponential average, alpha 2/(n+1), seeded with the SMA of the first n bars
+  rsi        Wilder RSI (seed = mean of the first n changes, then Wilder smoothing)
+  macd       EMA(fast) - EMA(slow); signal = EMA(macd, signal); histogram = macd - signal
+  stochastic %K = 100 (C - LL_n) / (HH_n - LL_n) on highs / lows; %D = SMA(%K, d)
+  williams_r -100 (HH_n - C) / (HH_n - LL_n)
+  cci        (TP - SMA_n(TP)) / (0.015 x mean absolute deviation_n), TP = (H + L + C) / 3
+  atr        Wilder average of the true range
+  adx        Wilder +DI / -DI / ADX
+  bbands     SMA_n +- k x population standard deviation_n (+ bandwidth, %B)
+  keltner    EMA_n(close) +- k x ATR_m
+  donchian   highest high / lowest low of the last n bars (+ middle)
+  mstd       population standard deviation of the close over n bars
+  zscore     (C - SMA_n) / population std_n
+  momentum   rate of change C_t / C_{t-n} - 1 (fraction)
+  obv        on-balance volume (cumulative signed volume)
+  vwap       volume-weighted average price anchored at the first bar of the period
 
-Signal Generators:
-- RAND (Random entry/exit signals for benchmarking)
-- STX (Stop/take-profit from close-only data)
-- OHLCSTX (Stop/take-profit from OHLC data)
-
-Custom Indicators:
-- ADX (Average Directional Index)
-- Donchian Channels
-- Z-Score
-- Momentum (ROC)
-- Williams %R
-- CCI (Commodity Channel Index)
-- Keltner Channels
-
-IndicatorFactory:
-- from_talib: TA-Lib wrapper
-- from_pandas_ta: pandas-ta wrapper
-- from_ta: ta-lib wrapper
-- run_combs: Combinatorial indicator runs
+TA  - a per-symbol accessor with memoised indicators (each distinct (indicator, parameters)
+      is computed once per symbol; optimisation workers keep one TA per symbol for all trials).
+INDICATORS - the id table: name, category, params (id / name / type / default / min / max /
+      step), outputs, primary output, signal support (threshold levels), sweep parameter.
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import numpy as np
-import pandas as pd
-from typing import Dict, Any, Optional, Tuple, List, Callable
-from itertools import product
-
-
-# ============================================================================
-# VBT Native Indicators
-# ============================================================================
-
-def calculate_ma(
-    vbt, close: np.ndarray, period: int, ewm: bool = False
-) -> np.ndarray:
-    """
-    Calculate Moving Average.
-
-    Args:
-        vbt: vectorbt module (unused, kept for API compatibility)
-        close: Price array
-        period: MA window
-        ewm: If True, use exponential weighting (EMA)
-
-    Returns:
-        MA values array
-    """
-    s = pd.Series(close)
-    if ewm:
-        return s.ewm(span=period, adjust=False).mean().values
-    return s.rolling(window=period).mean().values
-
-
-def calculate_mstd(
-    vbt, close: np.ndarray, period: int, ewm: bool = False
-) -> np.ndarray:
-    """
-    Calculate Moving Standard Deviation.
-
-    Args:
-        vbt: vectorbt module (unused, kept for API compatibility)
-        close: Price array
-        period: Window size
-        ewm: Use exponential weighting
-
-    Returns:
-        MSTD values array
-    """
-    s = pd.Series(close)
-    if ewm:
-        return s.ewm(span=period, adjust=False).std().values
-    return s.rolling(window=period).std().values
-
-
-def calculate_bbands(
-    vbt, close: np.ndarray, period: int = 20, alpha: float = 2.0
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate Bollinger Bands.
-
-    Returns dict with: upper, middle, lower, bandwidth, percent_b
-    """
-    s = pd.Series(close)
-    middle = s.rolling(window=period).mean().values
-    std = s.rolling(window=period).std().values
-    upper = middle + alpha * std
-    lower = middle - alpha * std
-
-    # Bandwidth = (upper - lower) / middle
-    bandwidth = np.where(middle > 0, (upper - lower) / middle, 0)
-
-    # %B = (close - lower) / (upper - lower)
-    band_width = upper - lower
-    percent_b = np.where(band_width > 0, (close - lower) / band_width, 0.5)
-
-    return {
-        'upper': upper,
-        'middle': middle,
-        'lower': lower,
-        'bandwidth': bandwidth,
-        'percent_b': percent_b,
-    }
-
-
-def calculate_rsi(
-    vbt, close: np.ndarray, period: int = 14
-) -> np.ndarray:
-    """Calculate RSI (Relative Strength Index)."""
-    s = pd.Series(close)
-    delta = s.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = (-delta).where(delta < 0, 0.0)
-    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100.0 - (100.0 / (1.0 + rs))
-    return rsi.fillna(50.0).values
-
-
-def calculate_stoch(
-    vbt, high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    k_period: int = 14, d_period: int = 3
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate Stochastic Oscillator.
-
-    Returns dict with: k (fast), d (slow)
-    """
-    h = pd.Series(high)
-    l = pd.Series(low)
-    c = pd.Series(close)
-    lowest_low = l.rolling(window=k_period).min()
-    highest_high = h.rolling(window=k_period).max()
-    denom = highest_high - lowest_low
-    denom = denom.replace(0, np.nan)
-    percent_k = ((c - lowest_low) / denom * 100).fillna(50.0)
-    percent_d = percent_k.rolling(window=d_period).mean().fillna(50.0)
-    return {
-        'k': percent_k.values,
-        'd': percent_d.values,
-    }
-
-
-def calculate_macd(
-    vbt, close: np.ndarray,
-    fast_period: int = 12, slow_period: int = 26, signal_period: int = 9
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate MACD.
-
-    Returns dict with: macd, signal, histogram
-    """
-    s = pd.Series(close)
-    fast_ema = s.ewm(span=fast_period, adjust=False).mean()
-    slow_ema = s.ewm(span=slow_period, adjust=False).mean()
-    macd_line = fast_ema - slow_ema
-    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
-    macd_vals = macd_line.values
-    signal_vals = signal_line.values
-    histogram = macd_vals - signal_vals
-
-    return {
-        'macd': macd_vals,
-        'signal': signal_vals,
-        'histogram': histogram,
-    }
-
-
-def calculate_atr(
-    vbt, high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    period: int = 14
-) -> np.ndarray:
-    """
-    Calculate Average True Range.
-
-    Note: If only close available, caller should approximate high/low from close.
-    """
-    h = pd.Series(high)
-    l = pd.Series(low)
-    c = pd.Series(close)
-    prev_close = c.shift(1)
-    tr = pd.concat([
-        h - l,
-        (h - prev_close).abs(),
-        (l - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    return tr.ewm(span=period, adjust=False).mean().values
-
-
-def calculate_obv(
-    vbt, close: np.ndarray, volume: np.ndarray
-) -> np.ndarray:
-    """
-    Calculate On-Balance Volume.
-
-    Args:
-        vbt: vectorbt module (unused, kept for API compatibility)
-        close: Price array
-        volume: Volume array
-
-    Returns:
-        OBV values array
-    """
-    direction = np.sign(np.diff(close, prepend=close[0]))
-    return np.cumsum(direction * volume)
-
-
-# ============================================================================
-# Custom Indicators (not in VBT natively)
-# ============================================================================
-
-def calculate_adx(
-    close: np.ndarray, high: Optional[np.ndarray] = None,
-    low: Optional[np.ndarray] = None, period: int = 14
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate ADX (Average Directional Index).
-
-    If high/low not available, approximates from close.
-
-    Returns dict with: adx, plus_di, minus_di
-    """
-    n = len(close)
-    if high is None:
-        high = close * 1.005
-    if low is None:
-        low = close * 0.995
-
-    # True Range
-    tr = np.zeros(n)
-    for i in range(1, n):
-        tr[i] = max(
-            high[i] - low[i],
-            abs(high[i] - close[i - 1]),
-            abs(low[i] - close[i - 1])
-        )
-
-    # Directional Movement
-    plus_dm = np.zeros(n)
-    minus_dm = np.zeros(n)
-    for i in range(1, n):
-        up_move = high[i] - high[i - 1]
-        down_move = low[i - 1] - low[i]
-        if up_move > down_move and up_move > 0:
-            plus_dm[i] = up_move
-        if down_move > up_move and down_move > 0:
-            minus_dm[i] = down_move
-
-    # Smooth with EMA
-    atr = pd.Series(tr).ewm(span=period, adjust=False).mean().values
-    plus_di_raw = pd.Series(plus_dm).ewm(span=period, adjust=False).mean().values
-    minus_di_raw = pd.Series(minus_dm).ewm(span=period, adjust=False).mean().values
-
-    # Directional Indicators
-    plus_di = np.where(atr > 0, (plus_di_raw / atr) * 100, 0)
-    minus_di = np.where(atr > 0, (minus_di_raw / atr) * 100, 0)
-
-    # DX and ADX
-    di_sum = plus_di + minus_di
-    dx = np.where(di_sum > 0, np.abs(plus_di - minus_di) / di_sum * 100, 0)
-    adx = pd.Series(dx).ewm(span=period, adjust=False).mean().values
-
-    return {
-        'adx': adx,
-        'plus_di': plus_di,
-        'minus_di': minus_di,
-    }
-
-
-def calculate_donchian(
-    close: np.ndarray, period: int = 20
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate Donchian Channels (breakout indicator).
-
-    Returns dict with: upper, lower, middle
-    """
-    upper = pd.Series(close).rolling(period).max().values
-    lower = pd.Series(close).rolling(period).min().values
-    middle = (upper + lower) / 2
-
-    return {
-        'upper': upper,
-        'lower': lower,
-        'middle': middle,
-    }
-
-
-def calculate_zscore(
-    close: np.ndarray, period: int = 20
-) -> np.ndarray:
-    """
-    Calculate Z-Score (number of standard deviations from mean).
-
-    Z = (close - SMA) / STD
-    """
-    sma = pd.Series(close).rolling(period).mean().values
-    std = pd.Series(close).rolling(period).std().values
-    std = np.where(std < 1e-10, 1.0, std)
-    return (close - sma) / std
-
-
-def calculate_momentum(
-    close: np.ndarray, lookback: int = 20
-) -> np.ndarray:
-    """
-    Calculate Momentum (Rate of Change).
-
-    ROC = (close - close[n]) / close[n]
-    """
-    return pd.Series(close).pct_change(periods=lookback).values
-
-
-def calculate_williams_r(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    period: int = 14
-) -> np.ndarray:
-    """
-    Calculate Williams %R.
-
-    %R = (Highest High - Close) / (Highest High - Lowest Low) * -100
-    """
-    highest = pd.Series(high).rolling(period).max().values
-    lowest = pd.Series(low).rolling(period).min().values
-    denom = highest - lowest
-    denom = np.where(denom < 1e-10, 1.0, denom)
-    return ((highest - close) / denom) * -100
-
-
-def calculate_cci(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    period: int = 20
-) -> np.ndarray:
-    """
-    Calculate Commodity Channel Index.
-
-    CCI = (Typical Price - SMA(TP)) / (0.015 * Mean Deviation)
-    """
-    tp = (high + low + close) / 3
-    sma_tp = pd.Series(tp).rolling(period).mean().values
-    mean_dev = pd.Series(tp).rolling(period).apply(
-        lambda x: np.mean(np.abs(x - x.mean())), raw=True
-    ).values
-    mean_dev = np.where(mean_dev < 1e-10, 1.0, mean_dev)
-    return (tp - sma_tp) / (0.015 * mean_dev)
-
-
-def calculate_keltner(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    ema_period: int = 20, atr_period: int = 10, multiplier: float = 2.0
-) -> Dict[str, np.ndarray]:
-    """
-    Calculate Keltner Channels.
-
-    Middle = EMA(close)
-    Upper = EMA + multiplier * ATR
-    Lower = EMA - multiplier * ATR
-    """
-    ema = pd.Series(close).ewm(span=ema_period, adjust=False).mean().values
-
-    # ATR calculation
-    tr = np.zeros(len(close))
-    for i in range(1, len(close)):
-        tr[i] = max(
-            high[i] - low[i],
-            abs(high[i] - close[i - 1]),
-            abs(low[i] - close[i - 1])
-        )
-    atr = pd.Series(tr).ewm(span=atr_period, adjust=False).mean().values
-
-    return {
-        'upper': ema + multiplier * atr,
-        'middle': ema,
-        'lower': ema - multiplier * atr,
-    }
-
-
-def calculate_vwap(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray,
-    volume: np.ndarray
-) -> np.ndarray:
-    """
-    Calculate Volume Weighted Average Price (VWAP).
-
-    VWAP = cumsum(TP * Volume) / cumsum(Volume)
-    """
-    tp = (high + low + close) / 3
-    cumvol = np.cumsum(volume)
-    cumvol = np.where(cumvol > 0, cumvol, 1)
-    return np.cumsum(tp * volume) / cumvol
-
-
-# ============================================================================
-# Signal Generation Helpers
-# ============================================================================
-
-def generate_crossover_signals(
-    fast: np.ndarray, slow: np.ndarray, index: pd.DatetimeIndex
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Generate entry/exit signals from indicator crossover.
-
-    Entry: fast crosses above slow (was below, now above)
-    Exit: fast crosses below slow (was above, now below)
-    """
-    above = fast > slow
-    # Detect edges: cross-up where previous bar was not above and current is
-    cross_up = np.zeros(len(above), dtype=bool)
-    cross_down = np.zeros(len(above), dtype=bool)
-    for i in range(1, len(above)):
-        if above[i] and not above[i - 1]:
-            cross_up[i] = True
-        elif not above[i] and above[i - 1]:
-            cross_down[i] = True
-    entries = pd.Series(cross_up, index=index)
-    exits = pd.Series(cross_down, index=index)
-    return entries, exits
-
-
-def generate_threshold_signals(
-    indicator: np.ndarray, lower: float, upper: float,
-    index: pd.DatetimeIndex
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Generate entry/exit signals from threshold crossings.
-
-    Entry: indicator crosses below lower threshold
-    Exit: indicator crosses above upper threshold
-    """
-    below_lower = indicator < lower
-    above_upper = indicator > upper
-    cross_below = np.zeros(len(indicator), dtype=bool)
-    cross_above = np.zeros(len(indicator), dtype=bool)
-    for i in range(1, len(indicator)):
-        if below_lower[i] and not below_lower[i - 1]:
-            cross_below[i] = True
-        if above_upper[i] and not above_upper[i - 1]:
-            cross_above[i] = True
-    entries = pd.Series(cross_below, index=index)
-    exits = pd.Series(cross_above, index=index)
-    return entries, exits
-
-
-def generate_breakout_signals(
-    close: np.ndarray, upper: np.ndarray, lower: np.ndarray,
-    index: pd.DatetimeIndex
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Generate breakout signals (Donchian-style).
-
-    Entry: close breaks above upper channel
-    Exit: close breaks below lower channel
-    """
-    entries = pd.Series(close > np.roll(upper, 1), index=index)
-    exits = pd.Series(close < np.roll(lower, 1), index=index)
-    # First bar has no previous channel value
-    entries.iloc[0] = False
-    exits.iloc[0] = False
-    return entries, exits
-
-
-def generate_mean_reversion_signals(
-    zscore: np.ndarray, z_entry: float, z_exit: float,
-    index: pd.DatetimeIndex
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Generate mean-reversion signals from Z-score.
-
-    Entry: Z-score crosses below -z_entry (oversold)
-    Exit: Z-score crosses above z_exit (mean reversion complete)
-    """
-    below_entry = zscore < -z_entry
-    above_exit = zscore > z_exit
-    cross_below = np.zeros(len(zscore), dtype=bool)
-    cross_above = np.zeros(len(zscore), dtype=bool)
-    for i in range(1, len(zscore)):
-        if below_entry[i] and not below_entry[i - 1]:
-            cross_below[i] = True
-        if above_exit[i] and not above_exit[i - 1]:
-            cross_above[i] = True
-    entries = pd.Series(cross_below, index=index)
-    exits = pd.Series(cross_above, index=index)
-    return entries, exits
-
-
-def apply_signal_filter(
-    entries: pd.Series, exits: pd.Series,
-    filter_indicator: np.ndarray, filter_threshold: float,
-    filter_type: str = 'above'
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Apply a filter to entry signals (e.g., only trade when ADX > 25).
-
-    Args:
-        entries: Original entry signals
-        exits: Original exit signals
-        filter_indicator: Filter indicator values
-        filter_threshold: Threshold for filter
-        filter_type: 'above' or 'below'
-
-    Returns:
-        Filtered entries and exits
-    """
-    if filter_type == 'above':
-        mask = pd.Series(filter_indicator > filter_threshold, index=entries.index)
-    else:
-        mask = pd.Series(filter_indicator < filter_threshold, index=entries.index)
-
-    filtered_entries = entries & mask
-    return filtered_entries, exits
-
-
-# ============================================================================
-# Indicator Catalog (for frontend display)
-# ============================================================================
-
-def get_indicator_catalog() -> Dict[str, Any]:
-    """
-    Return the full catalog of available indicators.
-
-    Used by the frontend to populate indicator selection dropdowns.
-    """
-    return {
-        'categories': [
-            {
-                'name': 'Trend',
-                'indicators': [
-                    {'id': 'sma', 'name': 'SMA', 'params': ['period'], 'description': 'Simple Moving Average'},
-                    {'id': 'ema', 'name': 'EMA', 'params': ['period'], 'description': 'Exponential Moving Average'},
-                    {'id': 'macd', 'name': 'MACD', 'params': ['fastPeriod', 'slowPeriod', 'signalPeriod'], 'description': 'MACD Line, Signal, Histogram'},
-                    {'id': 'adx', 'name': 'ADX', 'params': ['period'], 'description': 'Average Directional Index'},
-                    {'id': 'keltner', 'name': 'Keltner', 'params': ['emaPeriod', 'atrPeriod', 'multiplier'], 'description': 'Keltner Channels'},
-                    {'id': 'vwap', 'name': 'VWAP', 'params': [], 'description': 'Volume Weighted Average Price'},
-                ]
-            },
-            {
-                'name': 'Momentum',
-                'indicators': [
-                    {'id': 'rsi', 'name': 'RSI', 'params': ['period'], 'description': 'Relative Strength Index'},
-                    {'id': 'stochastic', 'name': 'Stochastic', 'params': ['kPeriod', 'dPeriod'], 'description': 'Stochastic Oscillator (%K, %D)'},
-                    {'id': 'momentum', 'name': 'Momentum', 'params': ['lookback'], 'description': 'Rate of Change'},
-                    {'id': 'williams_r', 'name': "Williams %R", 'params': ['period'], 'description': 'Williams Percent Range'},
-                    {'id': 'cci', 'name': 'CCI', 'params': ['period'], 'description': 'Commodity Channel Index'},
-                ]
-            },
-            {
-                'name': 'Volatility',
-                'indicators': [
-                    {'id': 'bbands', 'name': 'Bollinger Bands', 'params': ['period', 'stdDev'], 'description': 'Bollinger Bands (Upper, Middle, Lower)'},
-                    {'id': 'atr', 'name': 'ATR', 'params': ['period'], 'description': 'Average True Range'},
-                    {'id': 'mstd', 'name': 'MSTD', 'params': ['period'], 'description': 'Moving Standard Deviation'},
-                    {'id': 'donchian', 'name': 'Donchian', 'params': ['period'], 'description': 'Donchian Channels (Breakout)'},
-                ]
-            },
-            {
-                'name': 'Volume',
-                'indicators': [
-                    {'id': 'obv', 'name': 'OBV', 'params': [], 'description': 'On-Balance Volume'},
-                ]
-            },
-            {
-                'name': 'Statistical',
-                'indicators': [
-                    {'id': 'zscore', 'name': 'Z-Score', 'params': ['period'], 'description': 'Standard deviations from mean'},
-                ]
-            },
-        ]
-    }
-
-
-# ============================================================================
-# Indicator Factory (mimics vbt.IndicatorFactory)
-# ============================================================================
-
-class IndicatorFactory:
-    """
-    Factory for creating custom indicators and wrapping external TA libraries.
-
-    Mimics vectorbt's IndicatorFactory with:
-    - from_custom_func: Create indicator from a custom function
-    - from_apply_func: Create indicator from an apply function
-    - from_talib: Wrap TA-Lib indicators
-    - from_pandas_ta: Wrap pandas-ta indicators
-    - from_ta: Wrap ta library indicators
-    - run_combs: Run combinatorial parameter sweeps
-    """
-
-    def __init__(
-        self,
-        input_names: List[str] = None,
-        param_names: List[str] = None,
-        output_names: List[str] = None,
-        short_name: str = 'custom',
-    ):
-        self._input_names = input_names or ['close']
-        self._param_names = param_names or []
-        self._output_names = output_names or ['output']
-        self._short_name = short_name
-        self._custom_func = None
-        self._apply_func = None
-
-    @property
-    def short_name(self) -> str:
-        return self._short_name
-
-    @property
-    def input_names(self) -> List[str]:
-        return self._input_names
-
-    @property
-    def param_names(self) -> List[str]:
-        return self._param_names
-
-    @property
-    def output_names(self) -> List[str]:
-        return self._output_names
-
-    @classmethod
-    def from_custom_func(
-        cls,
-        custom_func: Callable,
-        input_names: List[str] = None,
-        param_names: List[str] = None,
-        output_names: List[str] = None,
-        short_name: str = 'custom',
-    ) -> 'IndicatorFactory':
-        """
-        Create indicator from a custom function.
-
-        custom_func(*inputs, *params) -> tuple of output arrays
-        """
-        factory = cls(input_names, param_names, output_names, short_name)
-        factory._custom_func = custom_func
-        return factory
-
-    @classmethod
-    def from_apply_func(
-        cls,
-        apply_func: Callable,
-        input_names: List[str] = None,
-        param_names: List[str] = None,
-        output_names: List[str] = None,
-        short_name: str = 'custom',
-    ) -> 'IndicatorFactory':
-        """
-        Create indicator from an apply function.
-
-        apply_func(close, *params) -> output array or tuple
-        """
-        factory = cls(input_names, param_names, output_names, short_name)
-        factory._apply_func = apply_func
-        return factory
-
-    def run(self, *inputs, **params) -> Dict[str, np.ndarray]:
-        """Run indicator with given inputs and parameters."""
-        func = self._custom_func or self._apply_func
-        if func is None:
-            raise ValueError("No function defined. Use from_custom_func or from_apply_func.")
-
-        param_vals = [params.get(p, None) for p in self._param_names]
-        print(f"[IndicatorFactory.run] param_names={self._param_names}, params={params}, param_vals={param_vals}")
-        result = func(*inputs, *param_vals)
-
-        if isinstance(result, tuple):
-            return {name: arr for name, arr in zip(self._output_names, result)}
-        elif isinstance(result, dict):
-            return result
-        else:
-            return {self._output_names[0]: result}
-
-    def run_combs(
-        self,
-        *inputs,
-        param_ranges: Dict[str, List] = None,
-        **kwargs,
-    ) -> List[Dict[str, Any]]:
-        """
-        Run indicator across all parameter combinations.
-
-        Args:
-            *inputs: Input arrays
-            param_ranges: Dict of param_name -> list of values
-                e.g. {'period': [10, 20, 30], 'alpha': [1.5, 2.0, 2.5]}
-
-        Returns:
-            List of dicts with 'params' and 'output' keys
-        """
-        if param_ranges is None:
-            return [{'params': {}, 'output': self.run(*inputs)}]
-
-        names = list(param_ranges.keys())
-        values = list(param_ranges.values())
-        results = []
-
-        for combo in product(*values):
-            params = dict(zip(names, combo))
+
+# ════════════════════════════════════════════════════════════════════════════
+# Array helpers (1-D float arrays; NaN = not yet defined)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def _a(x) -> np.ndarray:
+    if hasattr(x, 'to_numpy'):
+        x = x.to_numpy()
+    return np.asarray(x, dtype=float).reshape(-1)
+
+
+def _first_valid(v: np.ndarray) -> int:
+    ok = np.isfinite(v)
+    return int(np.argmax(ok)) if ok.any() else len(v)
+
+
+def rolling_sum(v: np.ndarray, n: int) -> np.ndarray:
+    v = _a(v)
+    n = int(n)
+    out = np.full(len(v), np.nan)
+    if n <= 0 or len(v) < n:
+        return out
+    bad = ~np.isfinite(v)
+    c = np.concatenate([[0.0], np.cumsum(np.where(bad, 0.0, v))])
+    b = np.concatenate([[0], np.cumsum(bad.astype(np.int64))])
+    s = c[n:] - c[:-n]
+    s[(b[n:] - b[:-n]) > 0] = np.nan
+    out[n - 1:] = s
+    return out
+
+
+def sma(x, n: int) -> np.ndarray:
+    return rolling_sum(x, n) / float(n) if int(n) > 0 else np.full(len(_a(x)), np.nan)
+
+
+def rolling_std(x, n: int, ddof: int = 0) -> np.ndarray:
+    v = _a(x)
+    n = int(n)
+    if n <= ddof:
+        return np.full(len(v), np.nan)
+    m = sma(v, n)
+    m2 = sma(v * v, n)
+    var = np.maximum(m2 - m * m, 0.0) * (n / (n - ddof))
+    return np.sqrt(var)
+
+
+def _windows(v: np.ndarray, n: int):
+    from numpy.lib.stride_tricks import sliding_window_view
+    return sliding_window_view(v, n)
+
+
+def rolling_max(x, n: int) -> np.ndarray:
+    v = _a(x)
+    n = int(n)
+    out = np.full(len(v), np.nan)
+    if n <= 0 or len(v) < n:
+        return out
+    out[n - 1:] = np.max(_windows(v, n), axis=1)   # NaN inside a window -> NaN
+    return out
+
+
+def rolling_min(x, n: int) -> np.ndarray:
+    v = _a(x)
+    n = int(n)
+    out = np.full(len(v), np.nan)
+    if n <= 0 or len(v) < n:
+        return out
+    out[n - 1:] = np.min(_windows(v, n), axis=1)
+    return out
+
+
+def _recursive(v: np.ndarray, n: int, alpha: float) -> np.ndarray:
+    """Exponential smoothing seeded with the SMA of the first n valid values; NaN before."""
+    import pandas as pd
+    v = _a(v)
+    out = np.full(len(v), np.nan)
+    f = _first_valid(v)
+    if n <= 0 or len(v) - f < n:
+        return out
+    seed = float(np.mean(v[f:f + n]))
+    s = pd.Series(np.concatenate([[seed], v[f + n:]]))
+    out[f + n - 1:] = s.ewm(alpha=alpha, adjust=False, ignore_na=True).mean().to_numpy()
+    return out
+
+
+def ema(x, n: int) -> np.ndarray:
+    n = int(n)
+    return _recursive(x, n, 2.0 / (n + 1.0))
+
+
+def wilder(x, n: int) -> np.ndarray:
+    n = int(n)
+    return _recursive(x, n, 1.0 / n)
+
+
+def rsi(close, n: int = 14) -> np.ndarray:
+    """Wilder RSI (identical to base.signals.rsi_wilder)."""
+    from base.signals import rsi_wilder
+    return rsi_wilder(_a(close), int(n))
+
+
+def true_range(high, low, close) -> np.ndarray:
+    h, lo, c = _a(high), _a(low), _a(close)
+    pc = np.concatenate([[np.nan], c[:-1]])
+    tr = np.nanmax(np.vstack([h - lo, np.abs(h - pc), np.abs(lo - pc)]), axis=0)
+    tr[0] = h[0] - lo[0]
+    return tr
+
+
+def atr(high, low, close, n: int = 14) -> np.ndarray:
+    return wilder(true_range(high, low, close), int(n))
+
+
+def macd(close, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict[str, np.ndarray]:
+    fast, slow, signal = int(fast), int(slow), int(signal)
+    if fast >= slow:
+        raise ValueError(f'MACD needs a fast period ({fast}) shorter than the slow period ({slow})')
+    line = ema(close, fast) - ema(close, slow)
+    sig = ema(line, signal)
+    return {'macd': line, 'signal': sig, 'histogram': line - sig}
+
+
+def stochastic(high, low, close, k: int = 14, d: int = 3) -> Dict[str, np.ndarray]:
+    hh, ll = rolling_max(high, k), rolling_min(low, k)
+    den = hh - ll
+    c = _a(close)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        pk = np.where(den > 0, 100.0 * (c - ll) / den, np.where(np.isfinite(den), 50.0, np.nan))
+    return {'k': pk, 'd': sma(pk, d)}
+
+
+def williams_r(high, low, close, n: int = 14) -> np.ndarray:
+    hh, ll = rolling_max(high, n), rolling_min(low, n)
+    den = hh - ll
+    c = _a(close)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(den > 0, -100.0 * (hh - c) / den, np.where(np.isfinite(den), -50.0, np.nan))
+
+
+def cci(high, low, close, n: int = 20) -> np.ndarray:
+    tp = (_a(high) + _a(low) + _a(close)) / 3.0
+    n = int(n)
+    out = np.full(len(tp), np.nan)
+    if n <= 0 or len(tp) < n:
+        return out
+    w = _windows(tp, n)
+    m = w.mean(axis=1)
+    md = np.abs(w - m[:, None]).mean(axis=1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out[n - 1:] = np.where(md > 0, (tp[n - 1:] - m) / (0.015 * md), 0.0)
+    return out
+
+
+def adx(high, low, close, n: int = 14) -> Dict[str, np.ndarray]:
+    h, lo = _a(high), _a(low)
+    up = np.concatenate([[np.nan], np.diff(h)])
+    dn = np.concatenate([[np.nan], -np.diff(lo)])
+    pdm = np.where((up > dn) & (up > 0), up, 0.0)
+    mdm = np.where((dn > up) & (dn > 0), dn, 0.0)
+    pdm[0] = mdm[0] = np.nan
+    tr = true_range(h, lo, close)
+    tr[0] = np.nan
+    a = wilder(tr, n)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        pdi = 100.0 * wilder(pdm, n) / a
+        mdi = 100.0 * wilder(mdm, n) / a
+        s = pdi + mdi
+        dx = np.where(s > 0, 100.0 * np.abs(pdi - mdi) / s, 0.0)
+    dx = np.where(np.isfinite(pdi) & np.isfinite(mdi), dx, np.nan)
+    return {'adx': wilder(dx, n), 'plus_di': pdi, 'minus_di': mdi}
+
+
+def bbands(close, n: int = 20, k: float = 2.0) -> Dict[str, np.ndarray]:
+    c = _a(close)
+    mid = sma(c, n)
+    sd = rolling_std(c, n, ddof=0)
+    up, lo = mid + float(k) * sd, mid - float(k) * sd
+    with np.errstate(divide='ignore', invalid='ignore'):
+        bw = np.where(mid > 0, (up - lo) / mid, np.nan)
+        pb = np.where(up > lo, (c - lo) / (up - lo), 0.5)
+    pb = np.where(np.isfinite(mid), pb, np.nan)
+    return {'upper': up, 'middle': mid, 'lower': lo, 'bandwidth': bw, 'percent_b': pb}
+
+
+def keltner(high, low, close, n: int = 20, atr_n: int = 10, mult: float = 2.0) -> Dict[str, np.ndarray]:
+    mid = ema(close, n)
+    r = atr(high, low, close, atr_n)
+    return {'upper': mid + float(mult) * r, 'middle': mid, 'lower': mid - float(mult) * r}
+
+
+def donchian(high, low, n: int = 20) -> Dict[str, np.ndarray]:
+    up, lo = rolling_max(high, n), rolling_min(low, n)
+    return {'upper': up, 'lower': lo, 'middle': (up + lo) / 2.0}
+
+
+def mstd(close, n: int = 20) -> np.ndarray:
+    return rolling_std(close, n, ddof=0)
+
+
+def zscore(close, n: int = 20) -> np.ndarray:
+    c = _a(close)
+    sd = rolling_std(c, n, ddof=0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(sd > 0, (c - sma(c, n)) / sd, np.where(np.isfinite(sd), 0.0, np.nan))
+
+
+def momentum(close, n: int = 20) -> np.ndarray:
+    c = _a(close)
+    n = int(n)
+    out = np.full(len(c), np.nan)
+    if 0 < n < len(c):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            out[n:] = c[n:] / c[:-n] - 1.0
+    return out
+
+
+def obv(close, volume) -> np.ndarray:
+    c, v = _a(close), np.nan_to_num(_a(volume))
+    d = np.sign(np.concatenate([[0.0], np.diff(c)]))
+    return np.cumsum(np.nan_to_num(d) * v)
+
+
+def vwap(high, low, close, volume) -> np.ndarray:
+    tp = (_a(high) + _a(low) + _a(close)) / 3.0
+    v = np.nan_to_num(_a(volume))
+    cv = np.cumsum(v)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(cv > 0, np.cumsum(tp * v) / cv, np.nan)
+
+
+def realised_vol(close, n: int = 20, ppy: float = 252.0) -> np.ndarray:
+    """Annualised std of the last n close-to-close returns, known at each bar's close."""
+    c = _a(close)
+    r = np.concatenate([[np.nan], c[1:] / c[:-1] - 1.0])
+    return rolling_std(r, n, ddof=1) * np.sqrt(ppy)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Per-symbol memoised accessor
+# ════════════════════════════════════════════════════════════════════════════
+
+class TA:
+    """Indicators of ONE symbol's bars, each (indicator, parameters) computed once."""
+
+    def __init__(self, open_, high, low, close, volume=None):
+        self.c = _a(close)
+        self.o = _a(open_) if open_ is not None else self.c
+        self.h = _a(high) if high is not None else np.maximum(self.o, self.c)
+        self.l = _a(low) if low is not None else np.minimum(self.o, self.c)
+        self.v = _a(volume) if volume is not None else np.zeros(len(self.c))
+        self.n = len(self.c)
+        self._cache: Dict[tuple, Any] = {}
+
+    def memo(self, key: tuple, fn: Callable[[], Any]):
+        """Value of fn() computed once per key (key: a hashable tuple naming indicator + parameters)."""
+        r = self._cache.get(key)
+        if r is None:
+            r = fn()
+            self._cache[key] = r
+        return r
+
+    _m = memo
+
+    def sma(self, n):
+        return self._m(('sma', int(n)), lambda: sma(self.c, n))
+
+    def ema(self, n):
+        return self._m(('ema', int(n)), lambda: ema(self.c, n))
+
+    def rsi(self, n):
+        return self._m(('rsi', int(n)), lambda: rsi(self.c, n))
+
+    def macd(self, f, s, g):
+        return self._m(('macd', int(f), int(s), int(g)), lambda: macd(self.c, f, s, g))
+
+    def stoch(self, k, d):
+        return self._m(('stoch', int(k), int(d)), lambda: stochastic(self.h, self.l, self.c, k, d))
+
+    def williams_r(self, n):
+        return self._m(('wr', int(n)), lambda: williams_r(self.h, self.l, self.c, n))
+
+    def cci(self, n):
+        return self._m(('cci', int(n)), lambda: cci(self.h, self.l, self.c, n))
+
+    def atr(self, n):
+        return self._m(('atr', int(n)), lambda: atr(self.h, self.l, self.c, n))
+
+    def adx(self, n):
+        return self._m(('adx', int(n)), lambda: adx(self.h, self.l, self.c, n))
+
+    def bbands(self, n, k):
+        return self._m(('bb', int(n), float(k)), lambda: bbands(self.c, n, k))
+
+    def keltner(self, n, an, m):
+        return self._m(('kc', int(n), int(an), float(m)), lambda: keltner(self.h, self.l, self.c, n, an, m))
+
+    def donchian(self, n):
+        return self._m(('dc', int(n)), lambda: donchian(self.h, self.l, n))
+
+    def mstd(self, n):
+        return self._m(('mstd', int(n)), lambda: mstd(self.c, n))
+
+    def zscore(self, n):
+        return self._m(('z', int(n)), lambda: zscore(self.c, n))
+
+    def momentum(self, n):
+        return self._m(('mom', int(n)), lambda: momentum(self.c, n))
+
+    def obv(self):
+        return self._m(('obv',), lambda: obv(self.c, self.v))
+
+    def vwap(self):
+        return self._m(('vwap',), lambda: vwap(self.h, self.l, self.c, self.v))
+
+    def vol(self, n, ppy):
+        return self._m(('vol', int(n), float(ppy)), lambda: realised_vol(self.c, n, ppy))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# The id table
+# ════════════════════════════════════════════════════════════════════════════
+
+def _p(pid, name, default, lo, hi, step=1, typ='int'):
+    return {'id': pid, 'name': name, 'type': typ, 'default': default, 'min': lo, 'max': hi, 'step': step}
+
+
+_PERIOD = _p('period', 'Period', 14, 2, 400)
+
+# compute(ta, params) -> 1-D array or {output: array}
+INDICATORS: Dict[str, Dict[str, Any]] = {
+    'sma': {'name': 'SMA', 'category': 'Trend', 'description': 'Simple moving average of the close',
+            'params': [_p('period', 'Period', 20, 2, 400)], 'scale': 'price',
+            'compute': lambda ta, p: ta.sma(p['period'])},
+    'ema': {'name': 'EMA', 'category': 'Trend', 'description': 'Exponential moving average (SMA-seeded)',
+            'params': [_p('period', 'Period', 20, 2, 400)], 'scale': 'price',
+            'compute': lambda ta, p: ta.ema(p['period'])},
+    'macd': {'name': 'MACD', 'category': 'Trend', 'description': 'MACD line, signal line, histogram',
+             'params': [_p('fastPeriod', 'Fast Period', 12, 2, 100), _p('slowPeriod', 'Slow Period', 26, 3, 200),
+                        _p('signalPeriod', 'Signal Period', 9, 2, 50)],
+             'outputs': ['macd', 'signal', 'histogram'], 'primary': 'macd', 'scale': 'oscillator',
+             'levels': (0.0, 0.0), 'periodParam': 'fastPeriod',
+             'compute': lambda ta, p: ta.macd(p['fastPeriod'], p['slowPeriod'], p['signalPeriod'])},
+    'adx': {'name': 'ADX', 'category': 'Trend', 'description': 'Average Directional Index with +DI / -DI (Wilder)',
+            'params': [_p('period', 'Period', 14, 2, 100)], 'outputs': ['adx', 'plus_di', 'minus_di'],
+            'primary': 'adx', 'scale': 'oscillator', 'levels': (20.0, 25.0),
+            'compute': lambda ta, p: ta.adx(p['period'])},
+    'keltner': {'name': 'Keltner', 'category': 'Trend', 'description': 'Keltner channels: EMA +- k x ATR',
+                'params': [_p('period', 'EMA Period', 20, 2, 200), _p('atrPeriod', 'ATR Period', 10, 2, 100),
+                           _p('multiplier', 'Multiplier', 2.0, 0.5, 5.0, 0.1, 'float')],
+                'outputs': ['upper', 'middle', 'lower'], 'primary': 'middle', 'scale': 'price', 'channel': True,
+                'compute': lambda ta, p: ta.keltner(p['period'], p['atrPeriod'], p['multiplier'])},
+    'vwap': {'name': 'VWAP', 'category': 'Trend', 'description': 'Volume-weighted average price, anchored at the '
+                                                                 'first bar of the period',
+             'params': [], 'scale': 'price', 'compute': lambda ta, p: ta.vwap()},
+    'rsi': {'name': 'RSI', 'category': 'Momentum', 'description': 'Relative Strength Index (Wilder)',
+            'params': [_p('period', 'Period', 14, 2, 100)], 'scale': 'oscillator', 'levels': (30.0, 70.0),
+            'compute': lambda ta, p: ta.rsi(p['period'])},
+    'stochastic': {'name': 'Stochastic', 'category': 'Momentum', 'description': 'Stochastic oscillator %K / %D',
+                   'params': [_p('kPeriod', '%K Period', 14, 2, 100), _p('dPeriod', '%D Period', 3, 1, 50)],
+                   'outputs': ['k', 'd'], 'primary': 'k', 'scale': 'oscillator', 'levels': (20.0, 80.0),
+                   'periodParam': 'kPeriod', 'compute': lambda ta, p: ta.stoch(p['kPeriod'], p['dPeriod'])},
+    'momentum': {'name': 'Momentum', 'category': 'Momentum', 'description': 'Rate of change over n bars (fraction)',
+                 'params': [_p('period', 'Lookback', 20, 1, 400)], 'scale': 'oscillator', 'levels': (-0.05, 0.05),
+                 'compute': lambda ta, p: ta.momentum(p['period'])},
+    'williams_r': {'name': 'Williams %R', 'category': 'Momentum', 'description': 'Williams percent range (-100..0)',
+                   'params': [_p('period', 'Period', 14, 2, 100)], 'scale': 'oscillator', 'levels': (-80.0, -20.0),
+                   'compute': lambda ta, p: ta.williams_r(p['period'])},
+    'cci': {'name': 'CCI', 'category': 'Momentum', 'description': 'Commodity Channel Index',
+            'params': [_p('period', 'Period', 20, 2, 200)], 'scale': 'oscillator', 'levels': (-100.0, 100.0),
+            'compute': lambda ta, p: ta.cci(p['period'])},
+    'bbands': {'name': 'Bollinger Bands', 'category': 'Volatility',
+               'description': 'SMA +- k population standard deviations, bandwidth, %B',
+               'params': [_p('period', 'Period', 20, 2, 400), _p('stdDev', 'Std Dev', 2.0, 0.5, 5.0, 0.1, 'float')],
+               'outputs': ['upper', 'middle', 'lower', 'bandwidth', 'percent_b'], 'primary': 'middle',
+               'scale': 'price', 'channel': True,
+               'compute': lambda ta, p: ta.bbands(p['period'], p['stdDev'])},
+    'atr': {'name': 'ATR', 'category': 'Volatility', 'description': 'Average True Range (Wilder)',
+            'params': [_p('period', 'Period', 14, 2, 200)], 'scale': 'volatility',
+            'compute': lambda ta, p: ta.atr(p['period'])},
+    'mstd': {'name': 'MSTD', 'category': 'Volatility', 'description': 'Moving standard deviation of the close',
+             'params': [_p('period', 'Period', 20, 2, 400)], 'scale': 'volatility',
+             'compute': lambda ta, p: ta.mstd(p['period'])},
+    'donchian': {'name': 'Donchian', 'category': 'Volatility', 'description': 'Highest high / lowest low channel',
+                 'params': [_p('period', 'Period', 20, 2, 400)], 'outputs': ['upper', 'lower', 'middle'],
+                 'primary': 'middle', 'scale': 'price', 'channel': True,
+                 'compute': lambda ta, p: ta.donchian(p['period'])},
+    'obv': {'name': 'OBV', 'category': 'Volume', 'description': 'On-balance volume', 'params': [], 'scale': 'volume',
+            'compute': lambda ta, p: ta.obv()},
+    'zscore': {'name': 'Z-Score', 'category': 'Statistical', 'description': 'Standard deviations from the moving mean',
+               'params': [_p('period', 'Period', 20, 2, 400)], 'scale': 'oscillator', 'levels': (-2.0, 2.0),
+               'compute': lambda ta, p: ta.zscore(p['period'])},
+}
+
+# Aliases accepted from callers (the screen, older payloads). Anything else is an error.
+ALIASES = {'ma': 'sma', 'stoch': 'stochastic', 'bb': 'bbands', 'bollinger': 'bbands', 'roc': 'momentum',
+           'willr': 'williams_r', 'williams': 'williams_r', 'z_score': 'zscore', 'std': 'mstd'}
+
+SIGNAL_MODES = ('crossover_signals', 'threshold_signals', 'breakout_signals', 'mean_reversion_signals',
+                'signal_filter')
+_MODE_ALIASES = {'crossover': 'crossover_signals', 'threshold': 'threshold_signals', 'breakout': 'breakout_signals',
+                 'mean_reversion': 'mean_reversion_signals', 'filter': 'signal_filter'}
+FILTER_INDICATORS = ('adx', 'atr', 'mstd', 'zscore', 'rsi', 'cci', 'williams_r', 'stochastic', 'momentum')
+
+
+def resolve_id(indicator: Any) -> str:
+    """Canonical indicator id; ValueError for an unknown id (never a silent substitute)."""
+    key = str(indicator or '').strip().lower()
+    key = ALIASES.get(key, key)
+    if key not in INDICATORS:
+        raise ValueError(f'Unknown indicator {indicator!r}. Available: {", ".join(sorted(INDICATORS))}.')
+    return key
+
+
+def resolve_mode(mode: Any) -> str:
+    m = str(mode or 'crossover_signals').strip().lower()
+    m = _MODE_ALIASES.get(m, m)
+    if m not in SIGNAL_MODES:
+        raise ValueError(f'Unknown indicator signal mode {mode!r}. Available: {", ".join(SIGNAL_MODES)}.')
+    return m
+
+
+def supports_threshold(ind_id: str) -> bool:
+    return INDICATORS[ind_id].get('scale') == 'oscillator'
+
+
+def sweep_param(ind_id: str) -> Optional[str]:
+    spec = INDICATORS[ind_id]
+    if not spec['params']:
+        return None
+    return spec.get('periodParam') or spec['params'][0]['id']
+
+
+def resolve_params(ind_id: str, given: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Defaults + the caller's values (int params rounded). A generic 'period' sets the primary
+    period parameter of indicators whose period has another name (macd fast, stochastic %K)."""
+    spec = INDICATORS[ind_id]
+    out = {p['id']: p['default'] for p in spec['params']}
+    g = dict(given or {})
+    alias = {'k_period': 'kPeriod', 'd_period': 'dPeriod', 'fast_period': 'fastPeriod', 'slow_period': 'slowPeriod',
+             'signal_period': 'signalPeriod', 'fast': 'fastPeriod', 'slow': 'slowPeriod', 'signal': 'signalPeriod',
+             'std_dev': 'stdDev', 'alpha': 'stdDev', 'atr_period': 'atrPeriod', 'lookback': 'period',
+             'ema_period': 'period', 'emaPeriod': 'period'}
+    for k, v in list(g.items()):
+        if k in alias and alias[k] not in g:
+            g[alias[k]] = v
+    if 'period' in g and spec.get('periodParam') and spec['periodParam'] not in g:
+        g[spec['periodParam']] = g['period']
+    for p in spec['params']:
+        if p['id'] in g and g[p['id']] is not None:
             try:
-                output = self.run(*inputs, **params)
-                results.append({'params': params, 'output': output})
-            except Exception as e:
-                print(f"[IndicatorFactory.run_combs] Exception for params {params}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
+                v = float(g[p['id']])
+            except (TypeError, ValueError):
+                raise ValueError(f'{spec["name"]} parameter {p["id"]} must be a number, not {g[p["id"]]!r}')
+            out[p['id']] = int(round(v)) if p['type'] == 'int' else v
+            if p['type'] == 'int' and out[p['id']] < 1:
+                raise ValueError(f'{spec["name"]} parameter {p["id"]} must be at least 1')
+    return out
 
-        return results
 
-    # ------------------------------------------------------------------
-    # TA Library Wrappers
-    # ------------------------------------------------------------------
+def compute(ind_id: str, ta: TA, params: Optional[Dict[str, Any]] = None):
+    """(values, params used): values is an array or {output: array}."""
+    pid = resolve_id(ind_id)
+    p = resolve_params(pid, params)
+    return INDICATORS[pid]['compute'](ta, p), p
 
-    @staticmethod
-    def from_talib(func_name: str, **kwargs) -> 'IndicatorFactory':
-        """
-        Wrap a TA-Lib indicator function.
 
-        Requires talib to be installed.
-        Usage: factory = IndicatorFactory.from_talib('RSI')
-        """
-        try:
-            import talib
-            func = getattr(talib, func_name.upper())
-        except (ImportError, AttributeError) as e:
-            raise ImportError(f"TA-Lib not available or function '{func_name}' not found: {e}")
+def primary_line(ind_id: str, values) -> np.ndarray:
+    if isinstance(values, dict):
+        return values[INDICATORS[ind_id].get('primary') or next(iter(values))]
+    return values
 
-        def wrapper(*inputs, **params):
-            return func(*inputs, **params)
 
-        return IndicatorFactory.from_custom_func(
-            wrapper,
-            short_name=f'talib_{func_name}',
-            output_names=[func_name.lower()],
-            **kwargs,
-        )
+def catalog() -> Dict[str, List[Dict[str, Any]]]:
+    """get_indicators payload: {category: [{id, name, description, params, outputs, signalModes,
+    thresholdSignals, defaultLevels, sweepable, sweepParam}]}."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for iid, s in INDICATORS.items():
+        thr = supports_threshold(iid)
+        modes = ['crossover_signals', 'breakout_signals', 'mean_reversion_signals']
+        if thr:
+            modes += ['threshold_signals', 'signal_filter']
+        out.setdefault(s['category'], []).append({
+            'id': iid, 'name': s['name'], 'description': s['description'],
+            'params': [dict(p) for p in s['params']], 'outputs': list(s.get('outputs') or ['value']),
+            'signalModes': modes, 'thresholdSignals': thr,
+            'defaultLevels': list(s['levels']) if s.get('levels') else None,
+            'filterable': iid in FILTER_INDICATORS,
+            'sweepable': sweep_param(iid) is not None, 'sweepParam': sweep_param(iid),
+        })
+    return out
 
-    @staticmethod
-    def from_pandas_ta(func_name: str, **kwargs) -> 'IndicatorFactory':
-        """
-        Wrap a pandas-ta indicator.
 
-        Requires pandas_ta to be installed.
-        Usage: factory = IndicatorFactory.from_pandas_ta('rsi')
-        """
-        try:
-            import pandas_ta
-        except ImportError:
-            raise ImportError("pandas_ta is not installed")
+# ════════════════════════════════════════════════════════════════════════════
+# Signal helpers (bar t close decisions; warm-up NaN never triggers)
+# ════════════════════════════════════════════════════════════════════════════
 
-        def wrapper(close, **params):
-            s = pd.Series(close) if not isinstance(close, pd.Series) else close
-            result = getattr(pandas_ta, func_name)(s, **params)
-            if isinstance(result, pd.DataFrame):
-                return tuple(result[col].values for col in result.columns)
-            return result.values if isinstance(result, pd.Series) else result
+def _shift(a: np.ndarray, fill) -> np.ndarray:
+    out = np.empty_like(a)
+    out[:1] = fill
+    out[1:] = a[:-1]
+    return out
 
-        return IndicatorFactory.from_apply_func(
-            wrapper,
-            short_name=f'pta_{func_name}',
-            output_names=[func_name],
-            **kwargs,
-        )
 
-    @staticmethod
-    def from_ta(indicator_class, **kwargs) -> 'IndicatorFactory':
-        """
-        Wrap a ta library indicator class.
+def _line(b, n: int) -> np.ndarray:
+    return np.full(n, float(b)) if np.ndim(b) == 0 else _a(b)
 
-        Requires ta to be installed.
-        Usage: factory = IndicatorFactory.from_ta(ta.momentum.RSIIndicator)
-        """
-        def wrapper(close, **params):
-            s = pd.Series(close) if not isinstance(close, pd.Series) else close
-            df = pd.DataFrame({'Close': s})
-            ind = indicator_class(close=s, **params)
-            # Get all public methods that return series
-            outputs = {}
-            for attr in dir(ind):
-                if not attr.startswith('_') and callable(getattr(ind, attr)):
-                    try:
-                        val = getattr(ind, attr)()
-                        if isinstance(val, pd.Series):
-                            outputs[attr] = val.values
-                    except Exception:
-                        pass
-            if outputs:
-                return outputs
-            return np.zeros(len(close))
 
-        return IndicatorFactory.from_apply_func(
-            wrapper,
-            short_name=kwargs.get('short_name', 'ta_indicator'),
-            **kwargs,
-        )
+def cross_above(a, b) -> np.ndarray:
+    """a > b on t and a <= b on t-1, both bars valid (base.signals.crossover, warm-up gated)."""
+    from base.signals import crossover
+    x = _a(a)
+    return crossover(x, _line(b, len(x)))
 
-    @staticmethod
-    def get_talib_indicators() -> List[str]:
-        """List all available TA-Lib functions."""
-        try:
-            import talib
-            return talib.get_function_groups()
-        except ImportError:
-            return []
 
-    @staticmethod
-    def get_pandas_ta_indicators() -> List[str]:
-        """List all available pandas-ta indicators."""
-        try:
-            import pandas_ta
-            return list(pandas_ta.Category.keys()) if hasattr(pandas_ta, 'Category') else []
-        except ImportError:
-            return []
+def cross_below(a, b) -> np.ndarray:
+    from base.signals import crossunder
+    x = _a(a)
+    return crossunder(x, _line(b, len(x)))
+
+
+def edge(state) -> np.ndarray:
+    """True on the first bar of each run of `state` (state turns on)."""
+    s = np.asarray(state, dtype=bool)
+    return s & ~_shift(s, False)
+
+
+def gt(a, b) -> np.ndarray:
+    with np.errstate(invalid='ignore'):
+        return np.asarray(_a(a) > (b if np.isscalar(b) else _a(b)), dtype=bool)
+
+
+def lt(a, b) -> np.ndarray:
+    with np.errstate(invalid='ignore'):
+        return np.asarray(_a(a) < (b if np.isscalar(b) else _a(b)), dtype=bool)
+
+
+def prev(a) -> np.ndarray:
+    return _shift(_a(a), np.nan)

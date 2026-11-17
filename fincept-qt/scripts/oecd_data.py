@@ -208,7 +208,11 @@ class OECDWrapper:
     """Modular OECD API wrapper with fault tolerance"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        self.cache_dir = cache_dir or os.path.join(os.path.expanduser("~"), ".oecd_cache")
+        if not cache_dir:
+            # The edition's cache folder (fincept_paths), never a fixed folder in the home directory.
+            import fincept_paths
+            cache_dir = str(fincept_paths.cache_dir("oecd"))
+        self.cache_dir = cache_dir
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         self.session = self._get_legacy_session()
 
@@ -1123,6 +1127,9 @@ _PANEL_ISO2_TO_ISO3 = {
 _PANEL_AGGREGATES = {"G-7": "G7", "G7": "G7", "OECD": "OECD", "EU": "EU27_2020", "EU27": "EU27_2020",
                      "EA": "EA20", "EA19": "EA19", "EA20": "EA20", "G-20": "G20", "G20": "G20"}
 
+# REF_AREA codes DF_QNA publishes in USD_PPP only (verified against the live API, 2026-11).
+_PANEL_PPP_AGGREGATES = {"G7", "OECD", "G20"}
+
 
 class _PanelError(Exception):
     """A failure that should reach the user as a plain message."""
@@ -1251,11 +1258,32 @@ def _panel_rows(df: pd.DataFrame) -> List[Dict[str, Any]]:
 def _panel_dispatch(command: str, area: str, freq: str, start: Optional[str], end: Optional[str]):
     """Returns (dataframe with `REF_AREA`, `TIME_PERIOD`, `value` [+ extras], unit text)."""
     if command == "gdp_real":
-        df = _panel_fetch(_PANEL_FLOWS["qna"], f"{freq}..{area}.S1.S1.B1GQ._Z._Z._Z.XDC.L.N.T0102", freq, start, end)
+        # Multi-country aggregates have no national currency: DF_QNA publishes G7 / OECD / G20 real
+        # GDP only in US dollars at PPP (chain-linked volume, annualised levels) - the XDC key
+        # answered "no data" for them.
+        tokens = [t for t in area.split("+") if t]
+        ppp_areas = [t for t in tokens if t in _PANEL_PPP_AGGREGATES]
+        xdc_areas = [t for t in tokens if t not in _PANEL_PPP_AGGREGATES]
+        frames = []
+        if xdc_areas:
+            frames.append(_panel_fetch(_PANEL_FLOWS["qna"],
+                                       f"{freq}..{'+'.join(xdc_areas)}.S1.S1.B1GQ._Z._Z._Z.XDC.L.N.T0102",
+                                       freq, start, end))
+        if ppp_areas:
+            frames.append(_panel_fetch(_PANEL_FLOWS["qna"],
+                                       f"{freq}..{'+'.join(ppp_areas)}.S1.S1.B1GQ._Z._Z._Z.USD_PPP.LR.LA.T0102",
+                                       freq, start, end))
+        df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
         df = _panel_prefer_adjusted(df)
         df["value"] = _panel_scaled(df, 1e9)
         ref = df["REF_YEAR_PRICE"].dropna().astype(int).max() if "REF_YEAR_PRICE" in df.columns and df["REF_YEAR_PRICE"].notna().any() else None
-        unit = "Billions of national currency, chain-linked volume" + (f" (reference year {ref})" if ref else "")
+        if ppp_areas and not xdc_areas:
+            unit = "Billions of US dollars at PPP, chain-linked volume, annualised"
+        elif ppp_areas:
+            unit = "Billions - national currency (countries) / US dollars at PPP (aggregates), chain-linked volume"
+        else:
+            unit = "Billions of national currency, chain-linked volume"
+        unit += f" (reference year {ref})" if ref else ""
         return df, unit
 
     if command == "cpi":

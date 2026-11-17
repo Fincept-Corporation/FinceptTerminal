@@ -82,7 +82,9 @@ QString DhanBroker::lookup_security_id(const QString& symbol, const QString& exc
         if (tok.has_value() && tok.value() > 0)
             return QString::number(tok.value());
     }
-    LOG_WARN(TAG, QString("Security ID not found for %1:%2 — instrument DB not loaded?").arg(exchange, symbol));
+    // Quote polls ask again every few seconds: one line per symbol every 5 minutes.
+    LOG_WARN_RL(TAG, exchange + QLatin1Char(':') + symbol, 300000,
+                QString("Security ID not found for %1:%2 — instrument DB not loaded?").arg(exchange, symbol));
     return {};
 }
 
@@ -147,10 +149,10 @@ SessionCheck DhanBroker::validate_session(const BrokerCredentials& creds) {
     auto resp = BrokerHttp::instance().get(BASE + "/v2/profile", auth_headers(creds));
     // Redacted: /v2/profile carries the client id/name and account PII.
     // tokenValidity survives redaction — it is the field expiry bugs need.
-    LOG_INFO(TAG, QString("validate_session GET /v2/profile → status=%1 success=%2 body=%3")
-                      .arg(resp.status_code)
-                      .arg(resp.success)
-                      .arg(redact_body(resp.raw_body, 300)));
+    LOG_DEBUG(TAG, QString("validate_session GET /v2/profile → status=%1 success=%2 body=%3")
+                       .arg(resp.status_code)
+                       .arg(resp.success)
+                       .arg(redact_body(resp.raw_body, 300)));
 
     // A 200 carrying the client id means the token is live. Parse the real
     // tokenValidity ("DD/MM/YYYY HH:mm", IST) so the persisted expiry hint is
@@ -250,12 +252,16 @@ OrderPlaceResponse DhanBroker::place_order(const BrokerCredentials& creds, const
 
     if (!resp.success || resp.json.value("errorType").toString().length() > 0) {
         const QString err = checked_error(resp, "place_order failed");
-        LOG_ERROR(TAG, "place_order: " + err);
+        LOG_ERROR(TAG, logf("Order placement failed", {{"venue", "dhan"},
+                                                       {"symbol", order.symbol},
+                                                       {"status", resp.status_code},
+                                                       {"error", err}}));
         return {false, "", err};
     }
 
     const QString order_id = resp.json.value("orderId").toString();
-    LOG_INFO(TAG, "place_order OK: " + order_id);
+    // The order audit trail is written centrally (UnifiedTrading); adapter detail only.
+    LOG_DEBUG(TAG, logf("Order placed", {{"venue", "dhan"}, {"symbol", order.symbol}, {"order_id", order_id}}));
     return {true, order_id, ""};
 }
 

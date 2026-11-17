@@ -1,21 +1,21 @@
 """
-VectorBT Provider Module
-Ultra-fast vectorized backtesting
+"VectorBT" engine of the Fincept backtesting screen - rebased on the shared core (base/).
+The vectorbt LIBRARY is not used; every result says what ran (engine / engineImplementation).
 
-Modules:
-- vectorbt_provider: Main orchestrator (CLI entry point)
-- vbt_strategies: 20+ strategy implementations
-- vbt_indicators: All VBT indicators + custom indicators + IndicatorFactory
-- vbt_portfolio: Portfolio construction (from_signals, from_order_func, stops, sizing)
-- vbt_metrics: Full metrics extraction (100+ metrics)
-- vbt_optimization: Vectorized parameter optimization + walk-forward
-- vbt_returns: Returns Accessor (30+ rolling/risk-adjusted methods)
-- vbt_signals: Signal factory + random generators + stop/take-profit generators
-- vbt_labels: Label generators (FIXLB, MEANLB, LEXLB, TRENDLB, BOLB)
-- vbt_splitters: Cross-validation splitters (Rolling, Expanding, Range, PurgedKFold)
-- vbt_generic: Drawdowns and Ranges analysis classes
+Modules in use:
+- vectorbt_provider: CLI entry point (<command> --stdin), command dispatch
+- vbt_engine:        run_backtest / optimize / walk_forward on base.price_store + base.simulator +
+                     base.robustness + base.result_normalizer
+- vbt_evaluate:      module-level evaluate() for base.robustness (spawn-pool safe)
+- vbt_strategies:    the 23 catalogue strategies (signal builders + allocation) and their specs
+- vbt_indicators:    the ONE indicator id table and memoised, causal indicators
+- vbt_research:      calculate_indicator, indicator_signals, indicator_param_sweep, generate_signals,
+                     generate_labels, labels_to_signals, generate_splits, analyze_returns
+- vbt_signals, vbt_labels, vbt_splitters, vbt_generic: helpers used by the research commands
 
-The provider class is intentionally not re-exported here. See backtestingpy
-__init__.py for the rationale (avoids RuntimeWarning when vectorbt_provider
-is run via `python -m`).
+No longer used (kept until the owner removes them): vbt_portfolio, vbt_metrics, vbt_optimization,
+vbt_returns - the pre-rebase per-bar simulator, metrics and optimiser.
+
+The provider class is intentionally not re-exported here (avoids RuntimeWarning when
+vectorbt_provider is run via `python -m`).
 """

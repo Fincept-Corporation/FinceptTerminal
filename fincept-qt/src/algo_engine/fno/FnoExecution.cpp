@@ -119,12 +119,31 @@ QString resolve_expiry(const QString& mode, const QString& value, const QStringL
 // ---------------------------------------------------------------------------
 
 QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services::options::OptionChain& chain,
-                                                        const QJsonArray& strategy_legs) {
+                                                        const QJsonArray& strategy_legs, QString* error) {
     using fincept::algo::AlgoOrderLeg;
     using fincept::services::options::OptionChainRow;
 
     const QVector<AlgoFnoLeg> leg_rules = fno_legs_from_json(strategy_legs);
+    if (leg_rules.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("the strategy has no F&O legs");
+        return {};
+    }
     const QVector<ResolvedLeg> resolved = FnoLegResolver::resolve(leg_rules, chain);
+
+    // All-or-nothing: the basket the user defined is traded whole or not at all.
+    // Dropping an unresolvable leg (a FUT leg, a DELTA leg before Greeks land, a
+    // strike missing from the chain) used to send the remaining legs as a partial
+    // basket — e.g. the short leg of a spread without its hedge.
+    auto refuse = [&](int i, const QString& why) -> QVector<AlgoOrderLeg> {
+        if (error) {
+            const AlgoFnoLeg& rule = leg_rules[i];
+            *error = QStringLiteral("leg %1 (%2 %3 %4) cannot be resolved: %5")
+                         .arg(i + 1)
+                         .arg(rule.side, rule.kind, rule.strike_mode, why);
+        }
+        return {};
+    };
 
     QVector<AlgoOrderLeg> out;
     out.reserve(resolved.size());
@@ -132,7 +151,7 @@ QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services:
     for (int i = 0; i < resolved.size(); ++i) {
         const ResolvedLeg& rl = resolved[i];
         if (!rl.valid)
-            continue;
+            return refuse(i, rl.error.isEmpty() ? QStringLiteral("no matching contract") : rl.error);
 
         const bool is_call = (rl.kind == QLatin1String("CE"));
 
@@ -146,7 +165,9 @@ QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services:
             }
         }
         if (!row)
-            continue; // token not found in chain (shouldn't happen after valid resolve)
+            return refuse(i, QStringLiteral("contract not found in the option chain"));
+        if (row->lot_size <= 0)
+            return refuse(i, QStringLiteral("lot size unknown for %1").arg(rl.symbol));
 
         AlgoOrderLeg leg;
         leg.symbol = rl.symbol;
@@ -154,6 +175,8 @@ QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services:
         leg.side = rl.side;
         leg.quantity = static_cast<double>(rl.lots) * row->lot_size;
         leg.price = is_call ? row->ce_quote.ltp : row->pe_quote.ltp;
+        leg.is_call = is_call;
+        leg.strike = rl.strike;
         out.append(leg);
     }
 
@@ -263,10 +286,16 @@ QHash<QString, double> leg_marks_from_chain(const QVector<fincept::algo::AlgoLeg
     QHash<QString, double> marks;
     for (const auto& leg : legs) {
         double ltp = 0;
+        // Match the token on BOTH sides: a leg whose is_call flag was lost (older
+        // persisted baskets defaulted every leg to a call) is still marked from
+        // the side its token actually belongs to.
         for (const auto& r : chain.rows) {
-            const qint64 tok = leg.is_call ? r.ce_token : r.pe_token;
-            if (tok == leg.instrument_token) {
-                ltp = leg.is_call ? r.ce_quote.ltp : r.pe_quote.ltp;
+            if (leg.instrument_token != 0 && r.ce_token == leg.instrument_token) {
+                ltp = r.ce_quote.ltp;
+                break;
+            }
+            if (leg.instrument_token != 0 && r.pe_token == leg.instrument_token) {
+                ltp = r.pe_quote.ltp;
                 break;
             }
         }

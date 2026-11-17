@@ -60,7 +60,16 @@ class MarketPulsePanel : public QWidget {
     /// Re-apply all token-based styles so a theme switch updates every child widget.
     void refresh_theme();
 
-    static QString market_status(const QString& region);
+    /// Session state key ("OPEN", "PRE", "LUNCH", "POST", "CLOSED", "HOLIDAY") of a
+    /// MarketSessions venue id, from the exchange calendar (holidays included).
+    static QString market_status(const QString& venue_id);
+    /// Rebuild the MARKET HOURS rows from the MarketProfile venues + world venues.
+    void rebuild_hours_rows();
+    /// The risk-on / risk-off block from RiskCompositeService.
+    void render_risk();
+    /// Region changed: drop caches and re-subscribe the region's baskets.
+    void on_profile_changed();
+    QWidget* hours_content_ = nullptr;
 
     // ── Header ──
     QWidget* header_bar_ = nullptr;
@@ -169,6 +178,11 @@ class MarketPulsePanel : public QWidget {
     QHash<QString, services::QuoteData> breadth_cache_;
     QHash<QString, services::QuoteData> movers_cache_;
     QHash<QString, services::QuoteData> snapshot_cache_;
+    /// symbol → the hub's reason its quote failed (subscribe_errors), until its
+    /// next value. Failed symbols count as settled for the loading overlay; when
+    /// nothing has loaded at all the overlay shows the reason instead.
+    QHash<QString, QString> pulse_errors_;
+    QString pulse_last_error_; ///< most recent of the above, for the overlay text
     bool hub_active_ = false;
     QTimer* hours_timer_ = nullptr;
 
@@ -192,6 +206,12 @@ class MarketPulsePanel : public QWidget {
     int total_expected_symbols_ = 0;
     widgets::LoadingOverlay* loading_overlay_ = nullptr;
     void update_loading_progress();
+
+    /// Colour the header's live dot from the caches / pulse_errors_ (called with
+    /// every loading-progress update and on theme change).
+    void apply_live_dot();
+    QString live_dot_css_; ///< last stylesheet applied to header_live_dot_
+    QString root_css_;     ///< the panel's own sheet, re-set only when the theme changes it
 };
 
 } // namespace fincept::screens

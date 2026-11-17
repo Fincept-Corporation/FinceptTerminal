@@ -4,6 +4,7 @@
 #include "services/agents/AgentService.h"
 #include "services/agents/AgentTypes.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/ModelRouter.h"
 #include "services/workflow/NodeRegistry.h"
 #include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -31,6 +32,8 @@ static QString json_to_context(const QJsonValue& v) {
     return {};
 }
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_agent_nodes(NodeRegistry& registry) {
 
     // ── Single unified AI Agent node ───────────────────────────────
@@ -267,8 +270,12 @@ void register_agent_nodes(NodeRegistry& registry) {
                     using fincept::ai_chat::LlmService;
                     using fincept::ai_chat::ConversationMessage;
 
-                    // Single non-streaming call using globally active LLM config
-                    auto resp = LlmService::instance().chat(query, {ConversationMessage{"system", system_prompt}});
+                    // Single non-streaming call; the model is ModelRouter's choice for
+                    // the tool-picker feature (explicit pick → harness → API → Fincept).
+                    auto resp = LlmService::instance().chat(
+                        query, {ConversationMessage{"system", system_prompt}}, true,
+                        fincept::ai_chat::ChatRoute{QString::fromLatin1(fincept::ai_chat::kFeatureToolPicker),
+                                                    QString(), QString()});
 
                     if (!resp.success) {
                         cb(false, {}, "Tool Picker LLM call failed: " + resp.error);

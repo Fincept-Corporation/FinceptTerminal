@@ -42,7 +42,6 @@ PARAMETERS:
 from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timedelta
-import pandas as pd
 from .core import EconomicsBase, ValidationError, CalculationError, DataError
 
 
@@ -55,10 +54,14 @@ class ExchangeCalculator(EconomicsBase):
         self.forward_calc = ForwardCalculator(precision, base_currency)
 
     def calculate(self, calculation_type: str, **kwargs) -> Dict[str, Any]:
-        """Route calculation to appropriate calculator"""
+        """Route calculation to appropriate calculator. cross_rate / forward_rate take their own
+        calculation kind as 'sub_type' (cross_rate: single | all_pairs | consistency_check;
+        forward_rate: from_points | to_points | from_percentage | interpret_premium_discount)."""
+        if calculation_type == 'cross_rate':
+            return self.cross_rate.calculate(kwargs.pop('sub_type', 'single'), **kwargs)
+        if calculation_type == 'forward_rate':
+            return self.forward_calc.calculate(kwargs.pop('sub_type', 'from_points'), **kwargs)
         calculators = {
-            'cross_rate': self.cross_rate.calculate,
-            'forward_rate': self.forward_calc.calculate,
             'percentage_change': self.calculate_percentage_change,
             'arbitrage_check': self.check_arbitrage_relationship
         }
@@ -69,53 +72,55 @@ class ExchangeCalculator(EconomicsBase):
         return calculators[calculation_type](**kwargs)
 
     def calculate_percentage_change(self, initial_rate: Decimal, final_rate: Decimal,
-                                    quote_convention: str = 'direct') -> Dict[str, Any]:
-        """Calculate percentage change in currency relative to another"""
+                                    quote_convention: str = 'direct',
+                                    domestic_currency: str = 'domestic currency',
+                                    foreign_currency: str = 'foreign currency') -> Dict[str, Any]:
+        """Percentage change of each currency of a quote, named explicitly.
+        direct quote = domestic currency per 1 unit of foreign; indirect = foreign per 1 domestic.
+        The currency in the denominator (the unit) moves by final/initial - 1; the price currency
+        moves by initial/final - 1 (a 5 % rise of the quote is a 4.76 % fall of the other side)."""
         initial = self.to_decimal(initial_rate)
         final = self.to_decimal(final_rate)
 
         self.validator.validate_exchange_rate(initial)
         self.validator.validate_exchange_rate(final)
+        if quote_convention not in ('direct', 'indirect'):
+            raise ValidationError("quote_convention must be 'direct' or 'indirect'")
 
+        hundred = self.to_decimal(100)
+        quote_change = (final / initial - self.to_decimal(1)) * hundred       # unit currency's move
+        other_change = (initial / final - self.to_decimal(1)) * hundred       # price currency's move
         if quote_convention == 'direct':
-            # Direct quote: domestic currency per unit of foreign currency
-            # Increase means domestic currency weakening
-            percentage_change = ((final - initial) / initial) * self.to_decimal(100)
-            currency_movement = 'weakened' if percentage_change > 0 else 'strengthened'
+            foreign_change, domestic_change = quote_change, other_change
         else:
-            # Indirect quote: foreign currency per unit of domestic currency
-            # Increase means domestic currency strengthening
-            percentage_change = ((final - initial) / initial) * self.to_decimal(100)
-            currency_movement = 'strengthened' if percentage_change > 0 else 'weakened'
+            domestic_change, foreign_change = quote_change, other_change
+
+        def word(change):
+            return 'appreciated' if change > 0 else ('depreciated' if change < 0 else 'unchanged')
 
         return {
             'initial_rate': initial,
             'final_rate': final,
-            'percentage_change': percentage_change,
+            'percentage_change': quote_change,
             'absolute_change': final - initial,
             'quote_convention': quote_convention,
-            'currency_movement': currency_movement,
-            'interpretation': self._interpret_currency_change(percentage_change, quote_convention)
+            'domestic_currency_change_pct': domestic_change,
+            'foreign_currency_change_pct': foreign_change,
+            'currency_movement': f"{domestic_currency} {word(domestic_change)}",
+            'interpretation': (f"{domestic_currency} {word(domestic_change)} {abs(domestic_change):.2f}% "
+                               f"({self._magnitude(domestic_change)}); {foreign_currency} "
+                               f"{word(foreign_change)} {abs(foreign_change):.2f}%")
         }
 
-    def _interpret_currency_change(self, change: Decimal, convention: str) -> str:
-        """Provide interpretation of currency movement"""
+    def _magnitude(self, change: Decimal) -> str:
         abs_change = abs(change)
-
         if abs_change < self.to_decimal(0.5):
-            magnitude = "minimal"
-        elif abs_change < self.to_decimal(2):
-            magnitude = "moderate"
-        elif abs_change < self.to_decimal(5):
-            magnitude = "significant"
-        else:
-            magnitude = "substantial"
-
-        direction = "appreciation" if change > 0 else "depreciation"
-        if convention == 'indirect':
-            direction = "depreciation" if change > 0 else "appreciation"
-
-        return f"{magnitude} {direction} ({abs_change:.2f}%)"
+            return "minimal"
+        if abs_change < self.to_decimal(2):
+            return "moderate"
+        if abs_change < self.to_decimal(5):
+            return "significant"
+        return "substantial"
 
     def check_arbitrage_relationship(self, spot_rate: Decimal, forward_rate: Decimal,
                                      domestic_rate: Decimal, foreign_rate: Decimal,
@@ -306,22 +311,36 @@ class CrossRateCalculator(EconomicsBase):
 class ForwardCalculator(EconomicsBase):
     """Forward rate calculations using points and percentage terms"""
 
+    # Forward points are quoted in pips of the quote currency:
+    #   'standard'        1 pip = 0.0001 (4-decimal pairs: EUR/USD, GBP/USD ...)   x 10,000
+    #   'jpy'             1 pip = 0.01   (pairs quoted in JPY: USD/JPY, EUR/JPY)    x 100
+    #   'fractional_pip'  1 point = 0.00001 (5th decimal, "pipette")              x 100,000
+    # 'big_figure' is accepted as an old alias of 'fractional_pip' (a big figure is really the
+    # leading digits of a quote, i.e. 100 pips, so the old name was a misnomer).
+    _POINT_SCALE = {'standard': 10000, 'jpy': 100, 'fractional_pip': 100000}
+
+    def _point_scale(self, point_convention: Optional[str], currency_pair: Optional[str]):
+        if point_convention is None:
+            quote_ccy = str(currency_pair or '').upper().replace('-', '/').split('/')[-1]
+            point_convention = 'jpy' if quote_ccy.endswith('JPY') else 'standard'
+        if point_convention == 'big_figure':
+            point_convention = 'fractional_pip'
+        if point_convention not in self._POINT_SCALE:
+            raise ValidationError(f"Unknown point convention: {point_convention} "
+                                  f"(standard, jpy, fractional_pip)")
+        return point_convention, self.to_decimal(self._POINT_SCALE[point_convention])
+
     def calculate_forward_rate_from_points(self, spot_rate: Decimal, forward_points: Decimal,
-                                           point_convention: str = 'standard') -> Dict[str, Any]:
-        """Calculate forward rate from forward points"""
+                                           point_convention: Optional[str] = None,
+                                           currency_pair: Optional[str] = None) -> Dict[str, Any]:
+        """Calculate forward rate from forward points (convention picked from the pair when not
+        given: quote currency JPY -> 'jpy', otherwise 'standard')"""
         spot = self.to_decimal(spot_rate)
         points = self.to_decimal(forward_points)
 
         self.validator.validate_exchange_rate(spot)
 
-        if point_convention == 'standard':
-            # Standard: points are in the last decimal place (typically 4th for major pairs)
-            divisor = self.to_decimal(10000)  # Standard 4 decimal places
-        elif point_convention == 'big_figure':
-            # Big figure: points are in pips (5th decimal place)
-            divisor = self.to_decimal(100000)
-        else:
-            raise ValidationError(f"Unknown point convention: {point_convention}")
+        point_convention, divisor = self._point_scale(point_convention, currency_pair)
 
         # Calculate forward rate
         forward_rate = spot + (points / divisor)
@@ -344,20 +363,16 @@ class ForwardCalculator(EconomicsBase):
         }
 
     def calculate_forward_points_from_rate(self, spot_rate: Decimal, forward_rate: Decimal,
-                                           point_convention: str = 'standard') -> Dict[str, Any]:
-        """Calculate forward points from spot and forward rates"""
+                                           point_convention: Optional[str] = None,
+                                           currency_pair: Optional[str] = None) -> Dict[str, Any]:
+        """Calculate forward points from spot and forward rates (convention as above)"""
         spot = self.to_decimal(spot_rate)
         forward = self.to_decimal(forward_rate)
 
         self.validator.validate_exchange_rate(spot)
         self.validator.validate_exchange_rate(forward)
 
-        if point_convention == 'standard':
-            multiplier = self.to_decimal(10000)
-        elif point_convention == 'big_figure':
-            multiplier = self.to_decimal(100000)
-        else:
-            raise ValidationError(f"Unknown point convention: {point_convention}")
+        point_convention, multiplier = self._point_scale(point_convention, currency_pair)
 
         # Calculate forward points
         forward_points = (forward - spot) * multiplier
@@ -423,14 +438,16 @@ class ForwardCalculator(EconomicsBase):
         percentage_difference = (absolute_difference / spot) * self.to_decimal(100)
         annualized_percentage = percentage_difference / time_period
 
-        # Interpretation
+        # Interpretation. Covered parity: a base currency at a forward PREMIUM is the one with the
+        # lower interest rate; if the forward is an unbiased predictor (UIP) it is expected to
+        # STRENGTHEN by about the premium.
         if forward > spot:
             interpretation = f"Forward premium of {percentage_difference:.4f}% ({annualized_percentage:.4f}% annualized)"
-            market_expectation = "Base currency expected to weaken"
+            market_expectation = "Base currency expected to strengthen (if the forward is an unbiased predictor)"
             interest_rate_implication = "Base currency likely has lower interest rates"
         elif forward < spot:
             interpretation = f"Forward discount of {abs(percentage_difference):.4f}% ({abs(annualized_percentage):.4f}% annualized)"
-            market_expectation = "Base currency expected to strengthen"
+            market_expectation = "Base currency expected to weaken (if the forward is an unbiased predictor)"
             interest_rate_implication = "Base currency likely has higher interest rates"
         else:
             interpretation = "Forward rate equals spot rate (no premium or discount)"
@@ -457,12 +474,14 @@ class ForwardCalculator(EconomicsBase):
             'from_points': lambda: self.calculate_forward_rate_from_points(
                 self.to_decimal(kwargs['spot_rate']),
                 self.to_decimal(kwargs['forward_points']),
-                kwargs.get('point_convention', 'standard')
+                kwargs.get('point_convention'),
+                kwargs.get('currency_pair')
             ),
             'to_points': lambda: self.calculate_forward_points_from_rate(
                 self.to_decimal(kwargs['spot_rate']),
                 self.to_decimal(kwargs['forward_rate']),
-                kwargs.get('point_convention', 'standard')
+                kwargs.get('point_convention'),
+                kwargs.get('currency_pair')
             ),
             'from_percentage': lambda: self.calculate_forward_rate_percentage(
                 self.to_decimal(kwargs['spot_rate']),

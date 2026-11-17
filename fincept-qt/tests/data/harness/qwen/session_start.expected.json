@@ -1,0 +1,24 @@
+{
+  "parser": "qwen",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "text"
+    },
+    {
+      "kind": "final"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "qwen-sess-1",
+  "input_tokens": 20,
+  "output_tokens": 5,
+  "final_text": "Hello from Qwen.",
+  "saw_result": true,
+  "result_is_error": false,
+  "input": "session_start.jsonl"
+}

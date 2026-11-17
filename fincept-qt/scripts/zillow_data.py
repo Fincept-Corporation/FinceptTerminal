@@ -9,6 +9,7 @@ import os
 import io
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 BASE_URL = "https://files.zillowstatic.com/research/public_csvs"
 
@@ -77,7 +78,11 @@ def _parse_csv_to_records(csv_text: str, region_filter: str = None,
                         continue
                     date_cols[k] = v
             meta = {k: v for k, v in row.items() if not (len(k) == 10 and k[4] == '-')}
-            meta["time_series"] = date_cols
+            # values arrive as text: index levels as numbers, empty months as null; SizeRank is a
+            # rank (number); RegionID stays text (an identifier)
+            meta["time_series"] = {k: fc.number(v) for k, v in date_cols.items()}
+            if "SizeRank" in meta:
+                meta["SizeRank"] = fc.number(meta["SizeRank"])
             records.append(meta)
         return records
     except Exception as e:

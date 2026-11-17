@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include "core/config/AppSettings.h"
+
 #include <QElapsedTimer>
 #include <QList>
 #include <QObject>
@@ -92,7 +94,8 @@ class SessionManager : public QObject {
     QByteArray build_snapshot_payload_() const;
 
     QElapsedTimer elapsed_;
-    mutable QSettings settings_{"Fincept", "FinceptTerminal"};
+    /// This data folder's own store (core/config/AppSettings.h).
+    mutable QSettings settings_ = app_settings::open();
 };
 
 } // namespace fincept

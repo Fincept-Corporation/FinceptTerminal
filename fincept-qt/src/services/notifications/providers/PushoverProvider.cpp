@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/PushoverProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -46,15 +48,12 @@ void PushoverProvider::send(const NotificationRequest& req, std::function<void(b
         body["expire"] = 3600;
     }
 
-    HttpClient::instance().post("https://api.pushover.net/1/messages.json", body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = obj.value("status").toInt() == 1;
-        cb(ok, ok ? QString{} : obj.value("errors").toArray().first().toString());
-    });
+    // {"status":1} on success; any other status is a failure, explained in "errors".
+    DeliveryRequest request;
+    request.service = DeliveryService::Pushover;
+    request.url = QStringLiteral("https://api.pushover.net/1/messages.json");
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

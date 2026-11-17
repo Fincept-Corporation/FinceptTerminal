@@ -15,6 +15,12 @@
 #include <QTextEdit>
 #include <QWidget>
 
+class QStackedWidget;
+
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 /// PLANNER view — generate and execute multi-step agent plans.
@@ -49,6 +55,14 @@ class PlannerViewPanel : public QWidget {
     void move_step_down();
     void save_plan_to_history();
     void copy_result();
+    /// Plan history survives restarts (CacheManager, steps without results).
+    void load_plan_history();
+    void persist_plan_history() const;
+    void refill_history_list();
+    /// Steps table, or "No plan yet" + GENERATE PLAN while it has no rows.
+    void update_plan_page();
+    /// Fit the Type column once after a fill (no ResizeToContents while rows are written).
+    void fit_step_columns();
 
     // Left
     QLabel* templates_title_ = nullptr;
@@ -60,12 +74,16 @@ class PlannerViewPanel : public QWidget {
     QLabel* custom_query_title_ = nullptr;
     QPlainTextEdit* custom_query_ = nullptr;
     QPushButton* generate_btn_ = nullptr;
+    QStackedWidget* history_stack_ = nullptr; // history_list_ | history_empty_
     QListWidget* history_list_ = nullptr;
+    QLabel* history_empty_ = nullptr;
     QLineEdit* history_search_ = nullptr;
     QLabel* history_header_ = nullptr;
 
     // Center
     QLabel* plan_editor_title_ = nullptr;
+    QStackedWidget* plan_stack_ = nullptr; // plan_empty_ | steps_table_
+    ui::EmptyState* plan_empty_ = nullptr;
     QTableWidget* steps_table_ = nullptr;
     QPushButton* execute_btn_ = nullptr;
     QPushButton* add_step_btn_ = nullptr;

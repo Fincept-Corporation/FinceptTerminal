@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
+#include <QVariant>
 
 #include <functional>
 #include <memory>
@@ -104,6 +105,26 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     /// DELETE /portfolio/orders/batched. Result arrives on orders_batch_cancelled.
     void cancel_orders_batch(const QStringList& order_ids);
 
+    // ── Kalshi-specific account history (signed, Python bridge) ─────────
+    // One page per call; an empty `cursor` asks for the first page. Rows arrive
+    // on account_history_ready, normalised to flat maps (keys listed in the
+    // .cpp); a failure arrives on error_occurred with the ctx returned by
+    // history_ctx(kind).
+
+    /// GET /portfolio/settlements — settlements still in Kalshi's live data set.
+    void fetch_settlements(const QString& cursor = QString(), int limit = 100);
+    /// GET /historical/fills — fills Kalshi has archived out of /portfolio/fills.
+    void fetch_historical_fills(const QString& cursor = QString(), int limit = 200);
+    /// GET /historical/orders — orders Kalshi has archived out of /portfolio/orders.
+    void fetch_historical_orders(const QString& cursor = QString(), int limit = 200);
+
+    /// History kinds, as carried by account_history_ready.
+    static QString history_settlements() { return QStringLiteral("settlements"); }
+    static QString history_fills() { return QStringLiteral("fills"); }
+    static QString history_orders() { return QStringLiteral("orders"); }
+    /// error_occurred ctx used by the fetch for `kind`.
+    static QString history_ctx(const QString& kind);
+
   signals:
     // Kalshi-specific extensions (not on the base adapter interface).
     // Consumers cast to KalshiAdapter* to connect.
@@ -125,7 +146,15 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     void single_order_ready(const QJsonObject& order);
     void orders_batch_cancelled(const QStringList& order_ids, bool ok, const QString& error);
 
+    /// One page of account history. `kind` is history_settlements() /
+    /// history_fills() / history_orders(); `request_cursor` is the cursor the page
+    /// was asked for (empty = first page), so a consumer can tell a fresh load
+    /// from "load more"; an empty `next_cursor` means there are no more pages.
+    void account_history_ready(const QString& kind, const QVariantList& rows, const QString& request_cursor,
+                               const QString& next_cursor);
+
   private:
+    void run_history(const QString& kind, const QString& command, const QString& cursor, int limit);
     void wire();
     void stub_unsupported(const QString& ctx);
 
@@ -145,19 +174,26 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     KalshiCredentials creds_;
     bool hub_registered_ = false;
 
+    /// Harvest the per-market facts later calls need (series ticker, open time)
+    /// from any market the REST client returns.
+    void remember_market(const fincept::services::prediction::PredictionMarket& m);
+
     // Tracks the last-requested price-history asset id so REST callbacks
     // can attach it to the emitted PriceHistory (Kalshi REST only returns
-    // YES-side candles).
+    // YES-side candles; a ":no" request is converted to 1 − YES).
     QString last_history_asset_id_;
 
-    // Set to true while a search() call is in-flight so the markets_ready
-    // handler can emit search_results_ready instead of markets_ready.
-    bool search_pending_ = false;
+    // Sequence number of the latest search(); replies of an older search are
+    // dropped. Searches use callback-style REST calls, never markets_ready.
+    int search_seq_ = 0;
 
     // Market ticker → series_ticker cache populated from markets_ready /
     // events_ready. Used by fetch_price_history to build the
     // /series/{s}/markets/{t}/candlesticks path without string heuristics.
     QHash<QString, QString> series_by_market_;
+
+    // Market ticker → open_time (unix seconds). Start of the ALL chart range.
+    QHash<QString, qint64> open_ts_by_market_;
 
     // Cached /series/{ticker} responses. Keyed by series ticker. Populated
     // via fetch_series_detail; repeat fetches hit the cache.

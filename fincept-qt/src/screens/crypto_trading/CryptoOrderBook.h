@@ -30,6 +30,10 @@ class CryptoOrderBook : public QWidget {
     /// clicked into the order ticket) while the new pair's first snapshot loads.
     void clear();
 
+    /// The market the levels come from: its quote asset is the price unit named
+    /// in the BID / ASK headers, and it decides the price decimals.
+    void set_price_market(const QString& market);
+
   signals:
     void price_clicked(double price);
 
@@ -45,6 +49,9 @@ class CryptoOrderBook : public QWidget {
     void rebuild_cache();
     void set_active_mode(int idx);
     void retranslateUi();
+    void render_spread_label(); // from spread_ / spread_pct_ (format change, market change)
+
+    QString price_market_; // set by the screen (set_price_market); empty = unit not known yet
 
     // Mode buttons
     QPushButton* mode_btns_[4] = {};
@@ -68,7 +75,8 @@ class CryptoOrderBook : public QWidget {
     QMutex mutex_;
     QTimer* repaint_timer_ = nullptr; // 50ms coalesce — max 20fps
 
-    // Layout constants
+    // Layout minimums (the sizes at the default font size; rows, header and
+    // spread line grow with the user's font)
     static constexpr int ROW_H = 20;
     static constexpr int HEADER_H = 30;
     static constexpr int SPREAD_H = 22;

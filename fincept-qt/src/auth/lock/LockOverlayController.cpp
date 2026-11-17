@@ -19,8 +19,10 @@
 //
 //   2. **Lock authority**: `InactivityGuard::terminal_locked_` is the
 //      single source of truth for "is the terminal locked?". This
-//      controller MUST NOT call set_terminal_locked. Verified: only
-//      observes via terminal_locked_changed signal.
+//      controller MUST NOT call set_terminal_locked. Verified: it
+//      observes via terminal_locked_changed, and its only call into the
+//      guard is reassert_lock(), which re-announces a lock that is
+//      already up (no-op while unlocked) — see eventFilter().
 //
 //   3. **Multi-window**: every WindowFrame must apply lock state in
 //      lockstep. Pre-Phase-1c, every frame had its own connect() to
@@ -71,7 +73,7 @@ void LockOverlayController::initialise() {
     connect(&InactivityGuard::instance(), &InactivityGuard::terminal_locked_changed, this,
             &LockOverlayController::on_terminal_locked_changed);
 
-    LOG_INFO(kLockTag, QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
+    LOG_DEBUG(kLockTag, QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
 }
 
 fincept::screens::LockScreen* LockOverlayController::lock_screen_for(fincept::WindowFrame* frame) {
@@ -110,6 +112,29 @@ void LockOverlayController::on_frame_added(fincept::WindowFrame* w) {
     // path just confirms tracking.
     if (!tracked_frames_.contains(w))
         tracked_frames_.insert(w, Tracked{QPointer<fincept::WindowFrame>(w), {}});
+    // Watch for the frame being shown (eventFilter). installEventFilter()
+    // never installs the same filter twice, so re-adding is harmless.
+    w->installEventFilter(this);
+}
+
+bool LockOverlayController::eventFilter(QObject* obj, QEvent* event) {
+    // QEvent::Show reaches a top-level widget from show() before its native
+    // window is mapped, so anything applied here is in place for the first
+    // paint. A frame built while the terminal is locked normally starts on
+    // the lock screen by itself; the exception is a frame built while the
+    // saved session is still being checked, whose constructor shows the
+    // terminal until that check ends. Re-announce the lock so its
+    // apply_lock_state(true) runs now. Frames already on the lock screen and
+    // frames on the sign-in screen ignore it (apply_lock_state is idempotent).
+    if (event->type() == QEvent::Show && InactivityGuard::instance().is_terminal_locked()) {
+        auto* frame = qobject_cast<fincept::WindowFrame*>(obj);
+        if (frame && tracked_frames_.contains(frame) && !frame->is_locked()) {
+            LOG_INFO(kLockTag, QString("Frame %1 shown while the terminal is locked — applying the lock")
+                                   .arg(reinterpret_cast<quintptr>(frame), 0, 16));
+            InactivityGuard::instance().reassert_lock();
+        }
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 void LockOverlayController::on_frame_removing(fincept::WindowFrame* w) {
@@ -120,9 +145,10 @@ void LockOverlayController::on_frame_removing(fincept::WindowFrame* w) {
 }
 
 void LockOverlayController::on_terminal_locked_changed(bool locked) {
-    LOG_INFO(kLockTag, QString("Terminal lock state: %1 (broadcasting to %2 frames)")
-                           .arg(locked ? "locked" : "unlocked")
-                           .arg(tracked_frames_.size()));
+    // The INFO "Terminal locked reason=…" / "Terminal unlocked" line is written by
+    // InactivityGuard::set_terminal_locked (the single lock authority, knows the reason).
+    LOG_DEBUG(kLockTag, logf(locked ? QStringLiteral("Terminal locked") : QStringLiteral("Terminal unlocked"),
+                             {{"frames", tracked_frames_.size()}}));
     // The actual UI flip happens through the frame's own subscription
     // to InactivityGuard::terminal_locked_changed → apply_lock_state.
     // Every tracked frame runs apply_lock_state idempotently.

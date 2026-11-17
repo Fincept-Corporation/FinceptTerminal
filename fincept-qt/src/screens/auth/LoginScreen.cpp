@@ -6,6 +6,7 @@
 #include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LanguageSwitcher.h"
 #include "ui/widgets/VersionLabel.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QEvent>
 #include <QFrame>
@@ -30,44 +31,43 @@ static QString input_style() {
     return QString("QLineEdit {"
                    "  background: %1; color: %2;"
                    "  border: 1px solid %3;"
-                   "  padding: 6px 10px; font-size: 15px;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 6px 10px; font-size: " + fincept::ui::fonts::px(1) + "px;"
                    "  selection-background-color: %4; selection-color: %5;"
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }"
                    "QLineEdit::placeholder { color: %7; }")
         .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-             ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
+             ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
 }
 
 static QString btn_primary() {
     return QString("QPushButton {"
-                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  background: %7; color: %1;"
                    "  border: 1px solid %2;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
-             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::ACCENT_BG());
 }
 
-// White "Continue with Google" button — high contrast against the dark theme,
-// matching Google's own button styling (white surface, dark text, hairline border).
+// White "Continue with Google" button, matching Google's own sign-in button
+// (white surface, dark text, hairline border). Google's brand guidelines fix
+// these colours, so they stay the same in the dark and the light theme.
 static QString btn_google() {
     return QString("QPushButton {"
                    "  background: #ffffff; color: #3c4043;"
                    "  border: 1px solid #dadce0; border-radius: 2px;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: #f5f6f7; border-color: #c6c8ca; }"
                    "QPushButton:disabled { background: %1; color: %2; border-color: %3; }")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM());
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM());
 }
 
 // Render the multi-colour Google "G" with QPainter (no QtSvg / asset dependency).
+// The four colours are Google's brand mark and do not follow the theme.
 // Super-sampled 2× for crisp edges on both retina and non-retina displays.
 static QPixmap google_g_pixmap(int logical_px) {
     constexpr qreal dpr = 2.0;
@@ -111,8 +111,7 @@ static QString btn_standard() {
     return QString("QPushButton {"
                    "  background: %1; color: %2;"
                    "  border: 1px solid %3;"
-                   "  padding: 0 12px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 12px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
@@ -121,37 +120,33 @@ static QString btn_standard() {
 
 static QString btn_danger() {
     return QString("QPushButton {"
-                   "  background: rgba(220,38,38,0.1); color: %1;"
-                   "  border: 1px solid #7f1d1d;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  background: %6; color: %1;"
+                   "  border: 1px solid %7;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %2; }"
                    "QPushButton:disabled { color: %3; background: %4; border-color: %5; }")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::BORDER_DIM());
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(),
+             ui::colors::BORDER_DIM(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM());
 }
 
 static QString link_style() {
     return QString("QPushButton {"
                    "  color: %1; background: transparent; border: none;"
-                   "  font-size: 13px; font-weight: 400;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 400;"
                    "}"
                    "QPushButton:hover { color: %2; }")
         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY());
 }
 
 static QString label_style() {
-    return QString("color: %1; font-size: 13px; font-weight: 700;"
-                   "background: transparent; letter-spacing: 0.5px;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;")
         .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString muted_style() {
-    return QString("color: %1; font-size: 13px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;")
         .arg(ui::colors::TEXT_TERTIARY());
 }
 
@@ -198,12 +193,13 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     auto& auth = auth::AuthManager::instance();
     connect(&auth, &auth::AuthManager::login_succeeded, this, &LoginScreen::on_login_succeeded);
     connect(&auth, &auth::AuthManager::login_failed, this, &LoginScreen::on_login_failed);
+    connect(&auth, &auth::AuthManager::login_unverified, this, &LoginScreen::on_login_unverified);
     connect(&auth, &auth::AuthManager::login_mfa_required, this, &LoginScreen::on_mfa_required);
     connect(&auth, &auth::AuthManager::login_active_session, this, &LoginScreen::on_active_session);
     connect(&auth, &auth::AuthManager::mfa_verified, this, &LoginScreen::on_mfa_verified);
     connect(&auth, &auth::AuthManager::mfa_failed, this, &LoginScreen::on_mfa_failed);
     // AuthManager can end a login attempt without emitting login_succeeded /
-    // login_failed: when the post-login profile fetch is rejected (401/403) it
+    // login_failed: when the post-login profile fetch is rejected (401) it
     // clears the session and only announces auth_state_changed. Without this
     // the form would sit on "SIGNING IN..." with every control disabled.
     connect(&auth, &auth::AuthManager::auth_state_changed, this, [this]() {
@@ -311,19 +307,17 @@ void LoginScreen::build_login_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     login_title_ = new QLabel;
-    login_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                        "background: transparent; letter-spacing: 1px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    login_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 1px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(login_title_);
     hl->addStretch();
 
     // Brand mark — not translated.
     auto* brand = new QLabel(QStringLiteral("FINCEPT"));
-    brand->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 0.5px;"
-                                 "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::TEXT_DIM()));
+    brand->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                 "background: transparent; letter-spacing: 0.5px;")
+                             .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(brand);
     vl->addWidget(header);
 
@@ -339,7 +333,7 @@ void LoginScreen::build_login_page() {
     vl->addWidget(email_lbl_);
 
     email_input_ = new QLineEdit;
-    email_input_->setFixedHeight(34);
+    email_input_->setMinimumHeight(34);
     email_input_->setStyleSheet(input_style());
     vl->addWidget(email_input_);
 
@@ -357,12 +351,14 @@ void LoginScreen::build_login_page() {
     password_input_ = new QLineEdit;
     password_input_->setEchoMode(QLineEdit::Password);
     password_input_->setProperty("fincept_secret", true); // stays unreadable to agents after "SHOW"
-    password_input_->setFixedHeight(34);
+    password_input_->setMinimumHeight(34);
     password_input_->setStyleSheet(input_style());
     prl->addWidget(password_input_);
 
     show_pw_btn_ = new QPushButton;
-    show_pw_btn_->setFixedSize(58, 34);
+    // At least 58x34; wider for a larger font, and as tall as the password field.
+    show_pw_btn_->setMinimumSize(58, 34);
+    show_pw_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     show_pw_btn_->setStyleSheet(btn_standard());
     connect(show_pw_btn_, &QPushButton::clicked, this, [this]() {
         bool hidden = password_input_->echoMode() == QLineEdit::Password;
@@ -375,11 +371,10 @@ void LoginScreen::build_login_page() {
     // Error
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(QString("color: %1; font-size: 13px;"
-                                        "background: rgba(220,38,38,0.08);"
-                                        "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::NEGATIVE()));
+    error_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px;"
+                                        "background: %2;"
+                                        "border: 1px solid %3; padding: 6px 8px;")
+                                    .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -396,7 +391,7 @@ void LoginScreen::build_login_page() {
     brl->addStretch();
 
     login_btn_ = new QPushButton;
-    login_btn_->setFixedHeight(32);
+    login_btn_->setMinimumHeight(32);
     login_btn_->setStyleSheet(btn_primary());
     connect(login_btn_, &QPushButton::clicked, this, &LoginScreen::on_login);
     brl->addWidget(login_btn_);
@@ -409,14 +404,25 @@ void LoginScreen::build_login_page() {
     vl->addWidget(or_lbl_);
 
     google_btn_ = new QPushButton;
-    google_btn_->setFixedHeight(38);
+    google_btn_->setMinimumHeight(38);
     google_btn_->setStyleSheet(btn_google());
     google_btn_->setIcon(QIcon(google_g_pixmap(18)));
     google_btn_->setIconSize(QSize(18, 18));
     google_btn_->setCursor(Qt::PointingHandCursor);
     connect(google_btn_, &QPushButton::clicked, this, [this]() {
+        if (google_waiting_) {
+            // The website never calls the app back when the tab is closed, the
+            // user cancels at Google or the sign-in fails there — without this
+            // the form sat on "waiting" for the full five-minute timeout.
+            if (!auth::AuthManager::instance().cancel_google_login()) {
+                // The code has already arrived and is being redeemed.
+                google_btn_->setEnabled(false);
+                google_btn_->setText(tr("SIGNING IN…"));
+            }
+            return;
+        }
         clear_error();
-        set_loading(true);
+        set_google_waiting(true);
         auth::AuthManager::instance().login_with_google();
     });
     vl->addWidget(google_btn_);
@@ -436,8 +442,8 @@ void LoginScreen::build_login_page() {
 
     signup_btn_ = new QPushButton;
     signup_btn_->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                                       "  font-size: 13px; font-weight: 700;"
-                                       "  font-family: 'Consolas','Courier New',monospace; }"
+                                       "  font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700;"
+                                       "  }"
                                        "QPushButton:hover { color: %2; }")
                                    .arg(ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
     connect(signup_btn_, &QPushButton::clicked, this, &LoginScreen::navigate_register);
@@ -497,17 +503,15 @@ void LoginScreen::build_mfa_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     mfa_title_ = new QLabel;
-    mfa_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                      "background: transparent; letter-spacing: 1px;"
-                                      "font-family: 'Consolas','Courier New',monospace;")
+    mfa_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                      "background: transparent; letter-spacing: 1px;")
                                   .arg(ui::colors::AMBER()));
     hl->addWidget(mfa_title_);
     hl->addStretch();
 
     mfa_indicator_ = new QLabel;
-    mfa_indicator_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                          "background: transparent; letter-spacing: 0.5px;"
-                                          "font-family: 'Consolas','Courier New',monospace;")
+    mfa_indicator_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                          "background: transparent; letter-spacing: 0.5px;")
                                       .arg(ui::colors::POSITIVE()));
     hl->addWidget(mfa_indicator_);
     vl->addWidget(header);
@@ -527,31 +531,29 @@ void LoginScreen::build_mfa_page() {
     mfa_input_->setPlaceholderText(QStringLiteral("000000"));
     mfa_input_->setMaxLength(6);
     mfa_input_->setAlignment(Qt::AlignCenter);
-    mfa_input_->setFixedHeight(40);
+    mfa_input_->setMinimumHeight(40);
     mfa_input_->setStyleSheet(QString("QLineEdit {"
                                       "  background: %1; color: %2;"
                                       "  border: 1px solid %3;"
-                                      "  font-size: 20px; letter-spacing: 10px;"
-                                      "  font-family: 'Consolas','Courier New',monospace;"
+                                      "  font-size: " + fincept::ui::fonts::px(6) + "px; letter-spacing: 10px;"
                                       "  selection-background-color: %4; selection-color: %5;"
                                       "}"
                                       "QLineEdit:focus { border: 1px solid %6; }")
                                   .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                       ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT()));
+                                       ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT()));
     vl->addWidget(mfa_input_);
 
     mfa_error_ = new QLabel;
     mfa_error_->setWordWrap(true);
-    mfa_error_->setStyleSheet(QString("color: %1; font-size: 13px;"
-                                      "background: rgba(220,38,38,0.08);"
-                                      "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                      "font-family: 'Consolas','Courier New',monospace;")
-                                  .arg(ui::colors::NEGATIVE()));
+    mfa_error_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px;"
+                                      "background: %2;"
+                                      "border: 1px solid %3; padding: 6px 8px;")
+                                  .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     mfa_error_->hide();
     vl->addWidget(mfa_error_);
 
     mfa_verify_btn_ = new QPushButton;
-    mfa_verify_btn_->setFixedHeight(32);
+    mfa_verify_btn_->setMinimumHeight(32);
     mfa_verify_btn_->setStyleSheet(btn_primary());
     connect(mfa_verify_btn_, &QPushButton::clicked, this, &LoginScreen::on_mfa_verify);
     vl->addWidget(mfa_verify_btn_);
@@ -595,38 +597,35 @@ void LoginScreen::build_conflict_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     conflict_title_ = new QLabel;
-    conflict_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                           "background: transparent; letter-spacing: 1px;"
-                                           "font-family: 'Consolas','Courier New',monospace;")
+    conflict_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                           "background: transparent; letter-spacing: 1px;")
                                        .arg(ui::colors::WARNING()));
     hl->addWidget(conflict_title_);
     hl->addStretch();
 
     conflict_warning_lbl_ = new QLabel;
-    conflict_warning_lbl_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                                 "background: transparent; letter-spacing: 0.5px;"
-                                                 "font-family: 'Consolas','Courier New',monospace;")
+    conflict_warning_lbl_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                                 "background: transparent; letter-spacing: 0.5px;")
                                              .arg(ui::colors::WARNING()));
     hl->addWidget(conflict_warning_lbl_);
     vl->addWidget(header);
 
     conflict_msg_ = new QLabel;
     conflict_msg_->setWordWrap(true);
-    conflict_msg_->setStyleSheet(QString("color: %1; font-size: 14px; background: transparent;"
-                                         "font-family: 'Consolas','Courier New',monospace;")
+    conflict_msg_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; background: transparent;")
                                      .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(conflict_msg_);
 
     vl->addWidget(make_separator());
 
     force_login_btn_ = new QPushButton;
-    force_login_btn_->setFixedHeight(32);
+    force_login_btn_->setMinimumHeight(32);
     force_login_btn_->setStyleSheet(btn_danger());
     connect(force_login_btn_, &QPushButton::clicked, this, &LoginScreen::on_force_login);
     vl->addWidget(force_login_btn_);
 
     cancel_btn_ = new QPushButton;
-    cancel_btn_->setFixedHeight(32);
+    cancel_btn_->setMinimumHeight(32);
     cancel_btn_->setStyleSheet(btn_standard());
     connect(cancel_btn_, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
     vl->addWidget(cancel_btn_);
@@ -668,7 +667,7 @@ void LoginScreen::retranslateUi() {
     if (or_lbl_)
         or_lbl_->setText(tr("or"));
     if (google_btn_)
-        google_btn_->setText(tr("CONTINUE WITH GOOGLE"));
+        google_btn_->setText(google_waiting_ ? tr("CANCEL GOOGLE SIGN-IN") : tr("CONTINUE WITH GOOGLE"));
     if (no_account_lbl_)
         no_account_lbl_->setText(tr("No account?"));
     if (signup_btn_)
@@ -697,7 +696,7 @@ void LoginScreen::retranslateUi() {
     if (conflict_warning_lbl_)
         conflict_warning_lbl_->setText(tr("WARNING"));
     if (force_login_btn_)
-        force_login_btn_->setText(tr("  LOG OUT OTHER SESSION & CONTINUE  "));
+        force_login_btn_->setText(fincept::ui::literal_ampersands(tr("  LOG OUT OTHER SESSION & CONTINUE  ")));
     if (cancel_btn_)
         cancel_btn_->setText(tr("  CANCEL  "));
 }
@@ -724,6 +723,12 @@ void LoginScreen::on_login() {
         show_error(tr("Please enter your password"));
         return;
     }
+
+    // Falling back to a password while Google sign-in still waits for the
+    // browser: drop that wait first, so only one sign-in is in flight. When its
+    // code is already being redeemed, that sign-in is finishing — let it.
+    if (google_waiting_ && !auth::AuthManager::instance().cancel_google_login())
+        return;
 
     clear_error();
     set_loading(true);
@@ -760,6 +765,7 @@ void LoginScreen::on_force_login() {
 
 void LoginScreen::on_login_succeeded() {
     set_loading(false);
+    set_google_waiting(false);
     if (email_input_)
         email_input_->clear();
     if (password_input_) {
@@ -777,7 +783,9 @@ void LoginScreen::on_login_succeeded() {
 }
 
 void LoginScreen::on_login_failed(const QString& error) {
+    const bool was_google = google_waiting_;
     set_loading(false);
+    set_google_waiting(false);
     for (auto* b : conflict_page_->findChildren<QPushButton*>())
         b->setEnabled(true);
     if (pages_->currentIndex() == 2) {
@@ -785,6 +793,10 @@ void LoginScreen::on_login_failed(const QString& error) {
         conflict_msg_->setText(error);
     } else {
         show_error(error);
+        // A Google sign-in failed (or was cancelled): a password typed
+        // meanwhile was not what got rejected — keep it.
+        if (was_google)
+            return;
         // Don't leave a rejected password sitting in the field.
         password_input_->clear();
         password_input_->setEchoMode(QLineEdit::Password);
@@ -792,6 +804,26 @@ void LoginScreen::on_login_failed(const QString& error) {
             show_pw_btn_->setText(tr("SHOW"));
         password_input_->setFocus();
     }
+}
+
+void LoginScreen::on_login_unverified(const QString& email, const QString& message) {
+    // Every window's login screen hears this; only the one that sent the
+    // sign-in (its form is locked while it waits) acts on it.
+    const bool mine = login_btn_ && !login_btn_->isEnabled();
+    set_loading(false);
+    for (auto* b : conflict_page_->findChildren<QPushButton*>())
+        b->setEnabled(true);
+    if (!mine)
+        return;
+    // Verification is a 6-digit code, entered on the registration screen's
+    // code page — which used to be reachable only by filling in the whole
+    // registration form again. Go there; it mails a fresh code.
+    if (email.isEmpty()) {
+        show_error(message.isEmpty() ? tr("Your account is not verified yet.") : message);
+        return;
+    }
+    clear_error();
+    emit navigate_verify_email(email);
 }
 
 void LoginScreen::on_mfa_required() {
@@ -839,16 +871,32 @@ void LoginScreen::set_loading(bool loading) {
     email_input_->setEnabled(!loading);
     password_input_->setEnabled(!loading);
     // Navigating away mid-request hides this screen, which wipes the fields
-    // (hideEvent) while the reply is still in flight — lock the exits too.
+    // (hideEvent) while the reply is still in flight — lock the exits too
+    // (a Google sign-in waiting for the browser keeps them locked as well).
     if (forgot_btn_)
-        forgot_btn_->setEnabled(!loading);
+        forgot_btn_->setEnabled(!loading && !google_waiting_);
     if (signup_btn_)
-        signup_btn_->setEnabled(!loading);
+        signup_btn_->setEnabled(!loading && !google_waiting_);
     login_btn_->setText(loading ? tr("  SIGNING IN...  ") : tr("  SIGN IN  "));
-    if (google_btn_) {
+    // A password sign-in in flight: no Google sign-in on top of it. (Google
+    // sign-in itself does not use this state — see set_google_waiting().)
+    if (google_btn_ && !google_waiting_)
         google_btn_->setEnabled(!loading);
-        google_btn_->setText(loading ? tr("WAITING FOR BROWSER…") : tr("CONTINUE WITH GOOGLE"));
+}
+
+void LoginScreen::set_google_waiting(bool waiting) {
+    google_waiting_ = waiting;
+    if (google_btn_) {
+        google_btn_->setEnabled(true);
+        google_btn_->setText(waiting ? tr("CANCEL GOOGLE SIGN-IN") : tr("CONTINUE WITH GOOGLE"));
     }
+    // Email / password stay usable as a fallback while the browser is out.
+    // Leaving the screen would wipe the form (hideEvent) with the browser round
+    // trip still open, so those exits wait for the cancel button.
+    if (forgot_btn_)
+        forgot_btn_->setEnabled(!waiting);
+    if (signup_btn_)
+        signup_btn_->setEnabled(!waiting);
 }
 
 } // namespace fincept::screens

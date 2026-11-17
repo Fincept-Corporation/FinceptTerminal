@@ -1,9 +1,13 @@
 #include "screens/fno/OIBuildupTable.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QColor>
+#include <QFontMetrics>
 #include <QHeaderView>
+#include <QSortFilterProxyModel>
 
 #include <cmath>
 
@@ -17,10 +21,11 @@ namespace {
 
 constexpr double kEps = 1e-6;
 
-QString fmt_signed_pct(double v) {
+/// A signed percentage in the user's number locale ("+1.23%"); "—" for no change.
+QString oib_fmt_signed_pct(double v) {
     if (std::abs(v) < kEps)
         return QStringLiteral("—");
-    return (v > 0 ? QStringLiteral("+") : QString()) + QString::number(v, 'f', 2) + QStringLiteral("%");
+    return fincept::ui::formatting::pct(v, 2, true);
 }
 
 QColor color_for_pct(double v) {
@@ -35,7 +40,10 @@ QColor color_for_pct(double v) {
 
 // ── Model ──────────────────────────────────────────────────────────────────
 
-OIBuildupModel::OIBuildupModel(QObject* parent) : QAbstractTableModel(parent) {}
+OIBuildupModel::OIBuildupModel(QObject* parent) : QAbstractTableModel(parent) {
+    // Formats in data(): a number-format change repaints from the chain held.
+    fincept::ui::formatting::refresh_model_on_format_change(this);
+}
 
 int OIBuildupModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid())
@@ -97,6 +105,25 @@ QVariant OIBuildupModel::data(const QModelIndex& index, int role) const {
     const OptionChainRow& r = chain_.rows.at(index.row());
     const int col = index.column();
 
+    if (role == SortRole) {
+        switch (col) {
+            case ColStrike:
+                return r.strike;
+            case ColCeClass:
+                return int(classify(r.ce_quote.change_pct, r.ce_quote.oi_change_pct));
+            case ColCeChgPct:
+                return r.ce_quote.change_pct;
+            case ColCeOiChgPct:
+                return r.ce_quote.oi_change_pct;
+            case ColPeClass:
+                return int(classify(r.pe_quote.change_pct, r.pe_quote.oi_change_pct));
+            case ColPeChgPct:
+                return r.pe_quote.change_pct;
+            case ColPeOiChgPct:
+                return r.pe_quote.oi_change_pct;
+        }
+        return {};
+    }
     if (role == Qt::TextAlignmentRole) {
         if (col == ColStrike)
             return int(Qt::AlignCenter | Qt::AlignVCenter);
@@ -129,15 +156,15 @@ QVariant OIBuildupModel::data(const QModelIndex& index, int role) const {
         case ColCeClass:
             return class_str(classify(r.ce_quote.change_pct, r.ce_quote.oi_change_pct));
         case ColCeChgPct:
-            return fmt_signed_pct(r.ce_quote.change_pct);
+            return oib_fmt_signed_pct(r.ce_quote.change_pct);
         case ColCeOiChgPct:
-            return fmt_signed_pct(r.ce_quote.oi_change_pct);
+            return oib_fmt_signed_pct(r.ce_quote.oi_change_pct);
         case ColPeClass:
             return class_str(classify(r.pe_quote.change_pct, r.pe_quote.oi_change_pct));
         case ColPeChgPct:
-            return fmt_signed_pct(r.pe_quote.change_pct);
+            return oib_fmt_signed_pct(r.pe_quote.change_pct);
         case ColPeOiChgPct:
-            return fmt_signed_pct(r.pe_quote.oi_change_pct);
+            return oib_fmt_signed_pct(r.pe_quote.oi_change_pct);
     }
     return {};
 }
@@ -164,7 +191,13 @@ void OIBuildupModel::set_chain(const OptionChain& chain) {
 
 OIBuildupTable::OIBuildupTable(QWidget* parent) : QTableView(parent) {
     model_ = new OIBuildupModel(this);
-    setModel(model_);
+    // Header-click sorting by the raw numbers (largest OI build-up first, …).
+    proxy_ = new QSortFilterProxyModel(this);
+    proxy_->setSourceModel(model_);
+    proxy_->setSortRole(OIBuildupModel::SortRole);
+    setModel(proxy_);
+    setSortingEnabled(true);
+    sortByColumn(OIBuildupModel::ColStrike, Qt::AscendingOrder);
 
     setShowGrid(false);
     setAlternatingRowColors(false);
@@ -178,14 +211,18 @@ OIBuildupTable::OIBuildupTable(QWidget* parent) : QTableView(parent) {
     horizontalHeader()->setHighlightSections(false);
     horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
     verticalHeader()->setVisible(false);
-    verticalHeader()->setDefaultSectionSize(22);
+    // 22px rows at the default font size, growing with the user's font.
+    const auto row_height = [] { return qMax(22, QFontMetrics(fonts::font()).height() + 6); };
+    verticalHeader()->setDefaultSectionSize(row_height());
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this, row_height](const ThemeTokens&) { verticalHeader()->setDefaultSectionSize(row_height()); });
 
     setStyleSheet(
-        QStringLiteral(
+        QString(
             "QTableView { background:%1; color:%2; border:1px solid %3; gridline-color:%3; "
-            "selection-background-color:%4; }"
+            "selection-background-color:%4; selection-color:%2; }"
             "QHeaderView::section { background:%5; color:%6; border:none; border-bottom:1px solid %3; padding:4px 6px; "
-            "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }"
+            "                       font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; }"
             "QTableView::item { padding:0 6px; }")
             .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
                  colors::BG_RAISED(), colors::TEXT_SECONDARY()));

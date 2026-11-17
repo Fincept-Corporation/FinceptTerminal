@@ -55,6 +55,9 @@ Result<void> apply_v001(QSqlDatabase& db) {
         return r;
 
     // ── Watchlists (parent) ──────────────────────────────────────────────────
+    // The colour columns in this schema (watchlists.color, notes.color_code)
+    // hold user data — identity colours drawn through ui::colors::legible() —
+    // so their defaults are fixed values, not theme colours.
     r = sql(db, "CREATE TABLE IF NOT EXISTS watchlists ("
                 "  id TEXT PRIMARY KEY,"
                 "  name TEXT NOT NULL,"

@@ -9,6 +9,15 @@
 //   2. Type-level default          (context_type="agent_default", context_id=NULL)
 //   3. Global default profile      (is_default = 1)
 //   4. Active provider fallback    (legacy — from llm_configs)
+//
+// Harness profiles (provider "harness:<id>", e.g. "harness:claude"): a CLI agent
+// harness answering terminal AI — model_id is the harness's model, effort in
+// reasoning_effort, never an API key. They are chosen through ModelRouter
+// (AI Chat, Quick Chat, Quick Ask, the tool picker, Chat Mode) and are NOT
+// usable by the Python agent runtime: list_profiles() and resolve_for_context()
+// leave them out, so Agent Studio, teams, workflows, node editors and AI Quant
+// Lab never see one; list_all_profiles() includes them (Settings, ModelRouter).
+// A harness profile cannot be the global default.
 
 #include "storage/repositories/BaseRepository.h"
 
@@ -29,6 +38,19 @@ struct LlmProfile {
     bool is_default = false;
     QString created_at;
     QString updated_at;
+    QString reasoning_effort; // harness profiles: "" = the CLI's default
+
+    /// provider is "harness:<id>".
+    bool is_harness() const { return provider.startsWith(QLatin1String("harness:"), Qt::CaseInsensitive); }
+    /// "claude" for "harness:claude"; empty for other providers.
+    QString harness_id() const { return is_harness() ? provider.mid(8).toLower() : QString(); }
+};
+
+/// One row of llm_profile_assignments (context_id empty = the type-level row).
+struct LlmProfileAssignment {
+    QString context_type;
+    QString context_id;
+    QString profile_id;
 };
 
 /// Convenience struct — everything a caller needs to make an LLM request.
@@ -53,8 +75,15 @@ class LlmProfileRepository : public BaseRepository<LlmProfile> {
 
     // ── Profile CRUD ─────────────────────────────────────────────────────────
 
-    /// All profiles ordered by name.
+    /// All profiles the agent runtime can use, ordered by name — harness
+    /// profiles are left out (see the header comment).
     Result<QVector<LlmProfile>> list_profiles() const;
+
+    /// Every profile including harness profiles, ordered by name.
+    Result<QVector<LlmProfile>> list_all_profiles() const;
+
+    /// Every assignment row (ModelRouter's explicit choices included).
+    Result<QVector<LlmProfileAssignment>> list_assignments() const;
 
     /// Single profile by id.
     Result<LlmProfile> get_profile(const QString& id) const;
@@ -65,7 +94,8 @@ class LlmProfileRepository : public BaseRepository<LlmProfile> {
     /// Delete profile and all its assignments.
     Result<void> delete_profile(const QString& id);
 
-    /// Mark one profile as the global default (clears all others).
+    /// Mark one profile as the global default (clears all others). A harness
+    /// profile is refused (the default also serves the agent runtime).
     Result<void> set_default(const QString& id);
 
     // ── Assignment CRUD ───────────────────────────────────────────────────────
@@ -88,6 +118,8 @@ class LlmProfileRepository : public BaseRepository<LlmProfile> {
     /// context_type examples: "ai_chat", "agent", "team", "team_coordinator"
     /// context_id:  agent/team id, or empty for type-level queries.
     /// Never fails — worst case returns a zero-valued ResolvedLlmProfile.
+    /// For the agent runtime: an assignment to a harness profile is passed over
+    /// (the next level answers). Terminal-AI features resolve through ModelRouter.
     ResolvedLlmProfile resolve_for_context(const QString& context_type, const QString& context_id = {}) const;
 
   private:

@@ -9,9 +9,17 @@
       - Start Menu / Desktop / taskbar shortcuts and the Apps & Features entry
       - all data: every profile, databases (incl. the encrypted API keys), logs,
         layouts, caches, crash dumps, the Python runtime, venvs and uv cache
-      - settings (HKCU\Software\Fincept\FinceptTerminal), legacy Credential
-        Manager entries from versions <= 4.0.2, temp files, and data the bundled
-        Python scripts keep in your profile (.fincept, .oecd_cache, ...)
+      - settings (HKCU\Software\FinceptCommunity\FinceptTerminalCommunity), the
+        boot log, and data the bundled Python scripts keep in your profile
+        (.fincept, .oecd_cache, ...)
+
+    Only this edition's names are touched (CMakeLists.txt "Edition identity").
+    A separate private build of Fincept Terminal also installs a
+    FinceptTerminal.exe, and releases of this terminal shared its names
+    (%LOCALAPPDATA%\com.fincept.terminal, HKCU\Software\Fincept\FinceptTerminal,
+    %APPDATA%\fincept-terminal, FinceptTerminal/* credentials, %TEMP%\fincept_*).
+    Those are never removed here, and an install folder is removed only when it
+    carries this edition's fincept-edition.txt marker.
 
     Per-machine installs (Program Files) are removed in a separate elevated
     process (one UAC prompt); user data is always cleaned for the account that
@@ -71,9 +79,14 @@ param(
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
 
-$AppId = 'com.fincept.terminal'
-$QtOrg = 'Fincept'
-$QtApp = 'FinceptTerminal'
+# This edition's names - keep in step with CMakeLists.txt "Edition identity".
+$EditionId = 'community'
+$AppId = 'com.fincept.terminal.community'      # data root folder
+$QtOrg = 'FinceptCommunity'                     # QSettings organization
+$QtApp = 'FinceptTerminalCommunity'             # QSettings application
+$StartMenuName = 'Fincept Terminal Community'   # IFW Start Menu folder and shortcut name
+$EditionMarker = 'fincept-edition.txt'          # installed beside the exe
+$LegacyAppId = 'com.fincept.terminal'           # shared with the private build: never removed
 $ExeName = 'FinceptTerminal.exe'
 $ToolName = 'FinceptMaintenanceTool.exe'
 
@@ -188,7 +201,8 @@ function Get-FinceptProcesses([string[]]$Roots) {
     $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
     foreach ($proc in @(Get-Process -ErrorAction SilentlyContinue)) {
         if ($proc.Id -eq $PID -or $proc.SessionId -ne $session) { continue }
-        if ($proc.ProcessName -like 'FinceptMaintenanceTool*') { $found += $proc; continue }
+        # By path only: the private build runs a FinceptTerminal.exe and a
+        # FinceptMaintenanceTool.exe of its own.
         $path = $null
         try { $path = $proc.Path } catch { }
         if (-not $path) { continue }
@@ -206,7 +220,7 @@ function Show-OtherAppProcesses([string[]]$Roots) {
         $ours = $false
         foreach ($r in $Roots) { if (Test-Under $path $r) { $ours = $true } }
         if (-not $ours) {
-            Write-Warn "FinceptTerminal.exe is running from $path (pid $($proc.Id)); close it so its data can be removed"
+            Write-Warn "FinceptTerminal.exe is running from $path (pid $($proc.Id)) - not this edition's install, left running"
         }
     }
 }
@@ -261,7 +275,8 @@ function Get-EntryDir($Entry) {
     return ''
 }
 
-function Test-InstallDir([string]$Dir) {
+# A folder that holds a FinceptTerminal.exe or maintenance tool (any build).
+function Test-AnyInstallDir([string]$Dir) {
     if (-not $Dir -or -not (Test-Path -LiteralPath $Dir -PathType Container)) { return $false }
     # A CMake build tree also holds FinceptTerminal.exe; it is not an install.
     foreach ($m in @('CMakeCache.txt', 'build.ninja', 'CMakeFiles')) {
@@ -270,10 +285,25 @@ function Test-InstallDir([string]$Dir) {
     return (Test-Path -LiteralPath (Join-Path $Dir $ExeName)) -or (Test-Path -LiteralPath (Join-Path $Dir $ToolName))
 }
 
+# This edition's install: it carries the edition marker. Installs of the private
+# build (and of releases before the marker) do not, and are never removed here.
+function Test-InstallDir([string]$Dir) {
+    if (-not (Test-AnyInstallDir $Dir)) { return $false }
+    $marker = Join-Path $Dir $EditionMarker
+    if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { return $false }
+    try { return ((Get-Content -LiteralPath $marker -TotalCount 1 -ErrorAction Stop).Trim() -eq $EditionId) } catch { return $false }
+}
+
+function Test-InList([string]$Path, [string[]]$List) {
+    foreach ($l in $List) { if ($l -and [string]::Equals((Get-FullPath $l), (Get-FullPath $Path), [StringComparison]::OrdinalIgnoreCase)) { return $true } }
+    return $false
+}
+
 function Find-InstallDirs {
     $candidates = @()
     foreach ($e in @(Get-UninstallEntries)) { $candidates += (Get-EntryDir $e) }
-    $candidates += @("$env:ProgramFiles\FinceptTerminal", "${env:ProgramFiles(x86)}\FinceptTerminal",
+    $candidates += @("$env:ProgramFiles\FinceptTerminalCommunity", "$env:ProgramFiles\FinceptTerminal",
+        "${env:ProgramFiles(x86)}\FinceptTerminal",
         "$env:ProgramFiles\Fincept Terminal", "$env:LOCALAPPDATA\Programs\FinceptTerminal",
         "$env:LOCALAPPDATA\Programs\Fincept Terminal", "$env:USERPROFILE\FinceptTerminal")
     if ($FromDir) { $candidates += $FromDir }
@@ -285,7 +315,12 @@ function Find-InstallDirs {
     foreach ($c in $candidates) {
         $full = Get-FullPath $c
         if (-not $full -or (Test-Protected $full)) { continue }
-        if (-not (Test-InstallDir $full)) { continue }
+        if (-not (Test-InstallDir $full)) {
+            if (Test-AnyInstallDir $full) {
+                Write-Warn "kept $full - it has no $EditionMarker (another Fincept Terminal build, or a release before 4.5.3); use its own uninstaller"
+            }
+            continue
+        }
         $dup = $false
         foreach ($d in $dirs) { if ([string]::Equals($d, $full, [StringComparison]::OrdinalIgnoreCase)) { $dup = $true } }
         if (-not $dup) { $dirs += $full }
@@ -332,14 +367,16 @@ function Remove-InstallDir([string]$Dir) {
     Remove-Target $Dir
 }
 
-# Apps & Features entries whose install folder is gone (or about to be).
-function Remove-UninstallEntries([bool]$Machine) {
+# Apps & Features entries of the install folders this run removed (both builds
+# are listed as "Fincept Terminal", so an entry is matched by its folder).
+function Remove-UninstallEntries([bool]$Machine, [string[]]$Dirs) {
     foreach ($e in @(Get-UninstallEntries)) {
         $key = [string]$e.PSPath
         $isMachine = $key -match 'HKEY_LOCAL_MACHINE'
         if ($isMachine -ne $Machine) { continue }
         $dir = Get-EntryDir $e
-        if ($dir -and (Test-InstallDir $dir) -and -not $script:DryRunNow) { continue } # still installed
+        if (-not $dir -or -not (Test-InList $dir $Dirs)) { continue }                  # not one of ours
+        if ((Test-InstallDir $dir) -and -not $script:DryRunNow) { continue } # still installed
         $script:Actions++
         $label = $key -replace '^Microsoft\.PowerShell\.Core\\Registry::', ''
         if ($script:DryRunNow) { Write-Plan 'would remove' "registry entry $label (if left behind)"; continue }
@@ -352,8 +389,9 @@ function Get-LinkTarget([string]$Lnk) {
     try { return (New-Object -ComObject WScript.Shell).CreateShortcut($Lnk).TargetPath } catch { return '' }
 }
 
-# Start Menu / Desktop / pinned taskbar shortcuts pointing at the app.
-function Remove-Shortcuts([bool]$Machine) {
+# Start Menu / Desktop / pinned taskbar shortcuts pointing into this edition's
+# install folders ($Dirs). The private build's shortcuts point at its own folder.
+function Remove-Shortcuts([bool]$Machine, [string[]]$Dirs) {
     if ($Machine) {
         $menus = @([Environment]::GetFolderPath('CommonPrograms'))
         $desktops = @([Environment]::GetFolderPath('CommonDesktopDirectory'))
@@ -364,10 +402,17 @@ function Remove-Shortcuts([bool]$Machine) {
             "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch")
     }
     $pattern = '\\(FinceptTerminal|FinceptMaintenanceTool)\.exe$'
+    $isOurs = {
+        param([string]$Lnk)
+        $t = Get-LinkTarget $Lnk
+        if (-not $t -or $t -notmatch $pattern) { return $false }
+        foreach ($d in $Dirs) { if ($d -and (Test-Under $t $d)) { return $true } }
+        return $false
+    }
     foreach ($menu in $menus) {
         if (-not $menu) { continue }
-        # The installer's Start Menu folder is "Fincept"; drop it when it only holds shortcuts.
-        $folder = Join-Path $menu $QtOrg
+        # The installer's Start Menu folder is this edition's; drop it when it only holds shortcuts.
+        $folder = Join-Path $menu $StartMenuName
         if (Test-Path -LiteralPath $folder -PathType Container) {
             $other = @(Get-ChildItem -LiteralPath $folder -Force -ErrorAction SilentlyContinue |
                     Where-Object { $_.PSIsContainer -or ($_.Extension -ne '.lnk' -and $_.Extension -ne '.url') })
@@ -375,7 +420,7 @@ function Remove-Shortcuts([bool]$Machine) {
                 Remove-Target $folder
             } else {
                 foreach ($l in @(Get-ChildItem -LiteralPath $folder -Filter '*.lnk' -ErrorAction SilentlyContinue)) {
-                    if ((Get-LinkTarget $l.FullName) -match $pattern) { Remove-Target $l.FullName }
+                    if (& $isOurs $l.FullName) { Remove-Target $l.FullName }
                 }
             }
         }
@@ -384,9 +429,7 @@ function Remove-Shortcuts([bool]$Machine) {
     foreach ($dir in $desktops) {
         if (-not $dir -or -not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
         foreach ($l in @(Get-ChildItem -LiteralPath $dir -Filter '*.lnk' -ErrorAction SilentlyContinue)) {
-            if ($l.Name -eq 'Fincept Terminal.lnk' -or ((Get-LinkTarget $l.FullName) -match $pattern)) {
-                Remove-Target $l.FullName
-            }
+            if (& $isOurs $l.FullName) { Remove-Target $l.FullName }
         }
     }
 }
@@ -515,26 +558,31 @@ function Remove-RegistrySettings {
 function Remove-TempFiles {
     $t = $env:TEMP
     if (-not $t -or -not (Test-Path -LiteralPath $t)) { return }
-    # fincept_* : Python cell/arg files, report autosave, chart/paste images,
-    # cancel flags, replay files, databento cache folder. Not this script's own
-    # copy (fincept-uninstall*.ps1).
-    foreach ($i in @(Get-ChildItem -LiteralPath $t -Filter 'fincept_*' -Force -ErrorAction SilentlyContinue)) {
-        Remove-Target $i.FullName
-    }
-    Remove-Target (Join-Path $t 'fincept-boot.log')
+    # Only this edition's boot log: %TEMP%\fincept_* files cannot be told apart
+    # from the private build's and are left to the system's temp cleanup.
+    Remove-Target (Join-Path $t "fincept-$EditionId-boot.log")
 }
 
 function Remove-HomeExtras {
-    Remove-Target "$env:USERPROFILE\.fincept"                 # AI Quant Lab: mlruns, models, pipelines
-    Remove-Target "$env:USERPROFILE\.oecd_cache"              # OECD connector cache
-    Remove-Target "$env:USERPROFILE\.cache\fincept-terminal"  # exchange market cache (outside the app)
-    Remove-Target "$env:APPDATA\fincept-terminal"             # agent repository (agents.db)
+    # The bundled scripts keep everything under the data root now
+    # (scripts\fincept_paths.py: script-data\, cache\scripts\). The folders older
+    # releases used - %USERPROFILE%\.fincept, .oecd_cache, .cache\fincept-terminal -
+    # carry no edition name, may hold another Fincept Terminal build's files, and
+    # were copied (never moved) into the data root: reported, never removed.
+    foreach ($legacy in @("$env:USERPROFILE\.fincept", "$env:USERPROFILE\.oecd_cache",
+            "$env:USERPROFILE\.cache\fincept-terminal")) {
+        if (Test-Path -LiteralPath $legacy) {
+            Write-Info "kept $legacy - a folder older releases shared with other Fincept Terminal builds; delete it yourself if nothing else uses it"
+        }
+    }
     Remove-Target "$env:LOCALAPPDATA\fincept-dev"             # corporate-finance scripts run outside the app
+    # %APPDATA%\fincept-terminal\agents.db is the legacy agent repository, read by
+    # the private build too; this edition keeps its own under <data root>\finagent.
     # Claude Code history of the coding-agent runs (cwd <root>\agent-workspace\...).
     $projects = "$env:USERPROFILE\.claude\projects"
     if (Test-Path -LiteralPath $projects) {
         foreach ($d in @(Get-ChildItem -LiteralPath $projects -Directory -Force -ErrorAction SilentlyContinue)) {
-            if ($d.Name -like '*com-fincept-terminal-agent-workspace*') { Remove-Target $d.FullName }
+            if ($d.Name -like '*com-fincept-terminal-community-agent-workspace*') { Remove-Target $d.FullName }
         }
     }
 }
@@ -564,17 +612,20 @@ function Remove-DataEnvVar {
 
 function Remove-Data {
     foreach ($r in @(Get-DataRoots)) { Remove-DataRoot $r }
-    # Legacy data folders (migrated by newer versions) and Qt's shader cache.
+    # Qt's per-application folders (QStandardPaths App*/Cache: shader cache).
     Remove-Target "$env:LOCALAPPDATA\$QtOrg\$QtApp"
     Remove-IfEmpty "$env:LOCALAPPDATA\$QtOrg"
-    Remove-Target "$env:LOCALAPPDATA\$QtApp"
     Remove-Target "$env:APPDATA\$QtOrg\$QtApp"
     Remove-IfEmpty "$env:APPDATA\$QtOrg"
     Remove-RegistrySettings
-    Remove-LegacyCredentials
     Remove-HomeExtras
     Remove-TempFiles
     Remove-DataEnvVar
+    # The data root released versions shared with the private build: reported, never removed.
+    $legacy = "$env:LOCALAPPDATA\$LegacyAppId"
+    if (Test-Path -LiteralPath $legacy -PathType Container) {
+        Write-Info "kept $legacy - the data folder older releases shared with another Fincept Terminal build"
+    }
 }
 
 # MCP client configs are the user's files: report, never edit.
@@ -601,8 +652,8 @@ if ($ElevatedInstallDirs) {
     $dirs = @($ElevatedInstallDirs -split '\|' | Where-Object { $_ })
     Stop-FinceptProcesses $dirs
     foreach ($d in $dirs) { if (Test-InstallDir $d) { Remove-InstallDir $d } }
-    Remove-UninstallEntries $true
-    Remove-Shortcuts $true
+    Remove-UninstallEntries $true $dirs
+    Remove-Shortcuts $true $dirs
     if ($ResultFile) {
         try { [System.IO.File]::WriteAllLines($ResultFile, [string[]]$script:Failures.ToArray()) } catch { }
     }
@@ -633,7 +684,8 @@ function Invoke-All {
                 $elevated += $d
             }
         }
-        $machineEntries = @(Get-UninstallEntries | Where-Object { [string]$_.PSPath -match 'HKEY_LOCAL_MACHINE' })
+        $machineEntries = @(Get-UninstallEntries | Where-Object {
+                ([string]$_.PSPath -match 'HKEY_LOCAL_MACHINE') -and (Test-InList (Get-EntryDir $_) $installDirs) })
         if ($elevated.Count -gt 0 -or ($machineEntries.Count -gt 0 -and -not (Test-IsAdmin))) {
             if ($script:DryRunNow) {
                 foreach ($d in $elevated) {
@@ -673,9 +725,9 @@ function Invoke-All {
                 }
             }
         }
-        Remove-UninstallEntries $false
-        if ((Test-IsAdmin) -and -not $script:DryRunNow) { Remove-UninstallEntries $true; Remove-Shortcuts $true }
-        Remove-Shortcuts $false
+        Remove-UninstallEntries $false $installDirs
+        if ((Test-IsAdmin) -and -not $script:DryRunNow) { Remove-UninstallEntries $true $installDirs; Remove-Shortcuts $true $installDirs }
+        Remove-Shortcuts $false $installDirs
     }
 
     if (-not $KeepData) {

@@ -27,6 +27,8 @@
 #include "ui/charts/layers/PivotLayer.h"
 #include "ui/charts/layers/SupportResistanceLayer.h"
 #include "ui/charts/layers/VwapLayer.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QCandlestickSeries>
@@ -67,6 +69,13 @@ namespace fincept::screens::equity {
 constexpr const char* EquityChart::TF_LABELS[];
 
 namespace {
+
+// A bare chart price (no unit, as quoted — the chart is in the instrument's
+// currency): locale digits / grouping, decimals from the magnitude, so a
+// sub-unit price (0.0345) is not cut to "0.03".
+QString chart_px(double v) {
+    return fincept::ui::formatting::price(v);
+}
 
 // Maps a timeframe label to its slot duration in milliseconds. Used to
 // extend the time axis by one slot when there is only one candle (otherwise
@@ -116,11 +125,14 @@ constexpr double kZoomInFactor = 0.85;
 constexpr double kZoomOutFactor = 1.0 / kZoomInFactor;
 
 QFont scene_font() {
-    QFont f;
-    f.setFamily(QStringLiteral("Consolas"));
-    f.setPointSize(9);
-    f.setWeight(QFont::DemiBold);
-    return f;
+    return fonts::font(-2, QFont::DemiBold);
+}
+
+// EMA overlays take a chart-series colour by period: 9 → accent, 21 → gain
+// green, 50 → info blue, anything else → loss red.
+QColor ema_color(int period) {
+    const int slot = (period == 9) ? 0 : (period == 21) ? 2 : (period == 50) ? 4 : 3;
+    return colors::series(slot);
 }
 
 } // namespace
@@ -350,7 +362,7 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
     };
     build_tag(price_tag_bg_, price_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
     build_tag(time_tag_bg_, time_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
-    build_tag(last_tag_bg_, last_tag_txt_, QColor(colors::AMBER()), QColor(colors::BG_BASE()));
+    build_tag(last_tag_bg_, last_tag_txt_, QColor(colors::AMBER()), QColor(colors::TEXT_ON_ACCENT()));
 
     // -- OHLC tooltip pinned to top-left of the chart widget -----------------
     ohlc_tooltip_ = new QLabel(chart_view_);
@@ -377,9 +389,7 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
             int period = id.mid(4).toInt();
             if (period <= 0)
                 period = 21;
-            const QColor colors[] = {QColor("#d97706"), QColor("#16a34a"), QColor("#2563eb"), QColor("#dc2626")};
-            int idx = (period == 9) ? 0 : (period == 21) ? 1 : (period == 50) ? 2 : 3;
-            layer = new EmaLayer(period, colors[idx]);
+            layer = new EmaLayer(period, ema_color(period));
         } else if (id == "vwap") {
             layer = new VwapLayer(true);
         } else if (id.startsWith("bb_")) {
@@ -395,6 +405,52 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
 
     connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_removed, this,
             [this](const QString& id) { overlay_mgr_->remove_layer(id); });
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+    // Number-format change (digits, grouping): re-label the last-price tag from the
+    // candles held; hover tags / tooltip re-format on the next mouse move.
+    fincept::ui::formatting::on_format_changed(this, [this]() { update_last_price_marker(); });
+}
+
+void EquityChart::refresh_theme() {
+    // The chart, its series and axes, the scene overlays and the EMA layers keep
+    // the colours and fonts they were given; re-apply them in the active
+    // appearance. (The position line is re-drawn by its owner.)
+    chart_->setBackgroundBrush(QBrush(QColor(colors::BG_SURFACE())));
+    chart_->setPlotAreaBackgroundBrush(QBrush(QColor(colors::BG_BASE())));
+    series_->setIncreasingColor(QColor(colors::POSITIVE()));
+    series_->setDecreasingColor(QColor(colors::NEGATIVE()));
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(time_axis_), static_cast<QAbstractAxis*>(price_axis_)}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(scene_font());
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setMinorGridLineColor(QColor(colors::BG_RAISED()));
+        axis->setLinePenColor(QColor(colors::BORDER_DIM()));
+    }
+
+    QPen grid_pen = xhair_v_->pen();
+    grid_pen.setColor(QColor(colors::BORDER_BRIGHT()));
+    xhair_v_->setPen(grid_pen);
+    xhair_h_->setPen(grid_pen);
+    QPen dot_pen = xhair_dot_->pen();
+    dot_pen.setColor(QColor(colors::AMBER()));
+    xhair_dot_->setPen(dot_pen);
+    xhair_dot_->setBrush(QBrush(QColor(colors::BG_BASE())));
+
+    price_tag_bg_->setBrush(QBrush(QColor(colors::BG_RAISED())));
+    time_tag_bg_->setBrush(QBrush(QColor(colors::BG_RAISED())));
+    for (QGraphicsSimpleTextItem* txt : {price_tag_txt_, time_tag_txt_, last_tag_txt_}) {
+        txt->setBrush(QBrush(QColor(txt == last_tag_txt_ ? colors::TEXT_ON_ACCENT() : colors::TEXT_PRIMARY())));
+        txt->setFont(scene_font());
+    }
+
+    for (fincept::ui::OverlayLayer* layer : overlay_mgr_->layers()) {
+        if (auto* ema = qobject_cast<fincept::ui::EmaLayer*>(layer))
+            ema->set_color(ema_color(ema->period()));
+    }
+
+    update_last_price_marker(); // last-price line + tag colours
 }
 
 void EquityChart::changeEvent(QEvent* event) {
@@ -423,6 +479,10 @@ void EquityChart::set_active_tf(int idx) {
 
 QString EquityChart::current_timeframe() const {
     return TF_LABELS[active_tf_];
+}
+
+QWidget* EquityChart::plot_widget() const {
+    return chart_view_;
 }
 
 void EquityChart::set_candles(const QVector<trading::BrokerCandle>& candles) {
@@ -757,7 +817,7 @@ void EquityChart::update_last_price_marker() {
     // Update the always-visible "last price" tag on the right axis.
     if (last_tag_bg_ && last_tag_txt_ && chart_) {
         const QPointF anchor = chart_->mapToPosition(QPointF(last_max_time_, price), series_);
-        const QString text = QString::number(price, 'f', 2);
+        const QString text = chart_px(price);
         last_tag_txt_->setText(text);
         const QRectF tb = last_tag_txt_->boundingRect();
         const qreal pad_x = 6, pad_y = 2;
@@ -811,7 +871,7 @@ void EquityChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     // Clamp Y so the tag never extends past the plot edges into the time tag.
     {
         const double price = chart_value_pos.y();
-        price_tag_txt_->setText(QString::number(price, 'f', 2));
+        price_tag_txt_->setText(chart_px(price));
         const QRectF tb = price_tag_txt_->boundingRect();
         const qreal w = tb.width() + 2 * kPadX;
         const qreal h = tb.height() + 2 * kPadY;
@@ -853,8 +913,7 @@ void EquityChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     if (hit) {
         const bool up = hit->close >= hit->open;
         const double pct = (hit->close - hit->open) / std::max(1e-12, hit->open) * 100.0;
-        const QString chg =
-            QString("%1%2%").arg(pct >= 0 ? QStringLiteral("+") : QString()).arg(QString::number(pct, 'f', 2));
+        const QString chg = fincept::ui::formatting::pct(pct);
         const QString time_str =
             QDateTime::fromMSecsSinceEpoch(hit->timestamp).toString(QStringLiteral("MMM dd  HH:mm"));
         const QString dir_color =
@@ -867,12 +926,12 @@ void EquityChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
         // Vertical layout: header row + four label/value rows + change row.
         // Numeric values use a fixed-width <td> so different price magnitudes
         // (e.g. 79655.40 vs 9.50) don't push the values into different
-        // columns from row to row. font-family:Consolas keeps digits aligned.
+        // columns from row to row. The text uses the terminal font.
         const QString tpl =
-            QStringLiteral("<div style='font-family:Consolas,Courier New,monospace;'>"
-                           "<div style='color:%1;font-size:10px;font-weight:700;letter-spacing:0.8px;"
+            QString("<div>"
+                           "<div style='color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.8px;"
                            "  margin-bottom:6px;'>%2</div>"
-                           "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:12px;'>"
+                           "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:" + fincept::ui::fonts::px(-2) + "px;'>"
                            "<tr>"
                            "  <td style='color:%1;font-weight:700;padding-right:10px;'>O</td>"
                            "  <td style='color:%3;text-align:right;'>%4</td>"
@@ -887,20 +946,20 @@ void EquityChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
                            "  <td style='color:%9;text-align:right;font-weight:700;padding-top:1px;'>%10</td>"
                            "</tr><tr>"
                            "  <td colspan='2' style='padding-top:6px;color:%9;font-weight:700;text-align:right;"
-                           "    border-top:1px solid #1a1a1a;'>%11</td>"
+                           "    border-top:1px solid " + QString::fromLatin1(colors::BORDER_MED()) + ";'>%11</td>"
                            "</tr>"
                            "</table>"
                            "</div>");
         ohlc_tooltip_->setText(tpl.arg(dim)                                  // %1 dim/label colour
                                    .arg(time_str)                            // %2 timestamp
                                    .arg(fg)                                  // %3 open colour
-                                   .arg(QString::number(hit->open, 'f', 2))  // %4
+                                   .arg(chart_px(hit->open))                 // %4
                                    .arg(green)                               // %5 high colour
-                                   .arg(QString::number(hit->high, 'f', 2))  // %6
+                                   .arg(chart_px(hit->high))                 // %6
                                    .arg(red)                                 // %7 low colour
-                                   .arg(QString::number(hit->low, 'f', 2))   // %8
+                                   .arg(chart_px(hit->low))                  // %8
                                    .arg(dir_color)                           // %9 close + delta%
-                                   .arg(QString::number(hit->close, 'f', 2)) // %10
+                                   .arg(chart_px(hit->close))                // %10
                                    .arg(chg));                               // %11
         ohlc_tooltip_->adjustSize();
         ohlc_tooltip_->setVisible(true);
@@ -930,10 +989,12 @@ void EquityChart::on_hover_leave() {
 }
 
 void EquityChart::show_trade_menu(double price, const QPoint& global_pos) {
-    const QString pstr = price > 0 ? QString::number(price, 'f', 2) : QString();
+    const QString pstr = price > 0 ? chart_px(price) : QString();
     QMenu menu(this);
     QAction* buy_act = menu.addAction(price > 0 ? tr("Buy @ %1").arg(pstr) : tr("Buy"));
     QAction* sell_act = menu.addAction(price > 0 ? tr("Sell @ %1").arg(pstr) : tr("Sell"));
+    buy_act->setProperty("fincept_agent_risk", "order");
+    sell_act->setProperty("fincept_agent_risk", "order");
     menu.addSeparator();
     QAction* wl_act = menu.addAction(tr("Add to watchlist"));
 

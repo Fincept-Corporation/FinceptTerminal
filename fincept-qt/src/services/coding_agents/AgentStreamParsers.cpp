@@ -7,11 +7,13 @@
 
 #include "services/coding_agents/AgentStreamParsers.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QRegularExpression>
+#include <QTimeZone>
 
 namespace fincept::services::coding_agents {
 
@@ -148,6 +150,38 @@ const QStringList& bookkeeping_keys() {
     return keys;
 }
 
+/// Streamed text kept per content block (a runaway stream must not exhaust memory).
+constexpr qsizetype kPartialBlockMaxChars = 8 * 1024 * 1024;
+
+/// rate_limit_info.resetsAt → epoch ms. Epoch seconds or milliseconds (a
+/// number, or digits in a string) or an ISO-8601 time; 0 when unreadable.
+qint64 reset_time_ms(const QJsonValue& v) {
+    double n = 0;
+    if (v.isDouble()) {
+        n = v.toDouble();
+    } else if (v.isString()) {
+        const QString s = v.toString().trimmed();
+        bool ok = false;
+        n = s.toDouble(&ok);
+        if (!ok) {
+            QDateTime t = QDateTime::fromString(s, Qt::ISODateWithMs);
+            if (!t.isValid())
+                t = QDateTime::fromString(s, Qt::ISODate);
+            return t.isValid() ? t.toMSecsSinceEpoch() : 0;
+        }
+    }
+    if (!(n > 0) || n > 1e15)
+        return 0;
+    // Epoch seconds stay below 1e11 until the year 5138; anything larger is ms.
+    return n < 1e11 ? static_cast<qint64>(n * 1000.0) : static_cast<qint64>(n);
+}
+
+/// Claude Code's built-in file-editing tools and the input field naming the file.
+bool is_claude_edit_tool(const QString& name) {
+    return name == QLatin1String("Edit") || name == QLatin1String("Write") || name == QLatin1String("MultiEdit") ||
+           name == QLatin1String("NotebookEdit");
+}
+
 } // namespace agent_stream_parsers_detail
 
 using namespace agent_stream_parsers_detail;
@@ -225,8 +259,12 @@ QVector<AgentEvent> ClaudeStreamParser::parse_line(const QString& line) {
         on_user(o, out);
     else if (type == QLatin1String("result"))
         on_result(o, trimmed, out);
-    else if (type == QLatin1String("stream_event") || type == QLatin1String("keep_alive"))
-        return out; // partial deltas (not requested) / heartbeats — nothing to show
+    else if (type == QLatin1String("stream_event"))
+        on_stream_event(o, out);
+    else if (type == QLatin1String("rate_limit_event"))
+        on_rate_limit(o, trimmed, out);
+    else if (type == QLatin1String("keep_alive"))
+        return out; // heartbeat — nothing to show
     else
         out.append(make_event(EventKind::Status, type.isEmpty() ? QStringLiteral("Event") : type,
                               object_summary(o, bookkeeping_keys(), 4096), false, {}, trimmed));
@@ -236,7 +274,7 @@ QVector<AgentEvent> ClaudeStreamParser::parse_line(const QString& line) {
 void ClaudeStreamParser::on_system(const QJsonObject& o, const QString& raw, QVector<AgentEvent>& out) {
     const QString sub = o.value(QStringLiteral("subtype")).toString();
 
-    if (sub == QLatin1String("init")) {
+    if (sub == QLatin1String("init") || sub == QLatin1String("session_start")) { // session_start: Qwen Code
         const QString model = o.value(QStringLiteral("model")).toString();
         if (!model.isEmpty())
             facts_.model = model;
@@ -345,10 +383,19 @@ void ClaudeStreamParser::on_assistant(const QJsonObject& o, QVector<AgentEvent>&
         out.append(make_event(EventKind::Error, QStringLiteral("API error"), e, true));
     }
 
+    // Stream events exist for the main session only: a sub-agent's message
+    // (parent_tool_use_id set) never completes a streamed block.
+    const bool main_session = prefix.isEmpty();
+    const QString message_id = msg.value(QStringLiteral("id")).toString();
+    auto streamed_key = [&](EventKind kind) {
+        return main_session ? take_partial_key(kind, message_id) : QString();
+    };
+
     const QJsonValue content = msg.value(QStringLiteral("content"));
     if (content.isString()) {
         if (!content.toString().trimmed().isEmpty())
-            out.append(make_event(EventKind::Text, prefix + QStringLiteral("Assistant"), content.toString()));
+            out.append(make_event(EventKind::Text, prefix + QStringLiteral("Assistant"), content.toString(), false,
+                                  streamed_key(EventKind::Text)));
         return;
     }
     for (const auto& bv : content.toArray()) {
@@ -357,11 +404,13 @@ void ClaudeStreamParser::on_assistant(const QJsonObject& o, QVector<AgentEvent>&
         if (bt == QLatin1String("text")) {
             const QString t = b.value(QStringLiteral("text")).toString();
             if (!t.trimmed().isEmpty())
-                out.append(make_event(EventKind::Text, prefix + QStringLiteral("Assistant"), t));
+                out.append(make_event(EventKind::Text, prefix + QStringLiteral("Assistant"), t, false,
+                                      streamed_key(EventKind::Text)));
         } else if (bt == QLatin1String("thinking")) {
             const QString t = b.value(QStringLiteral("thinking")).toString();
             if (!t.trimmed().isEmpty())
-                out.append(make_event(EventKind::Thinking, prefix + QStringLiteral("Thinking"), t));
+                out.append(make_event(EventKind::Thinking, prefix + QStringLiteral("Thinking"), t, false,
+                                      streamed_key(EventKind::Thinking)));
         } else if (bt == QLatin1String("redacted_thinking")) {
             out.append(make_event(EventKind::Thinking, prefix + QStringLiteral("Thinking"),
                                   QStringLiteral("[redacted by the provider]")));
@@ -370,6 +419,16 @@ void ClaudeStreamParser::on_assistant(const QJsonObject& o, QVector<AgentEvent>&
             const QString name = b.value(QStringLiteral("name")).toString();
             if (!id.isEmpty())
                 tool_names_.insert(id, name);
+            if (!id.isEmpty() && is_claude_edit_tool(name)) {
+                const QJsonObject input = b.value(QStringLiteral("input")).toObject();
+                QString path = input.value(QStringLiteral("file_path")).toString();
+                if (path.isEmpty())
+                    path = input.value(QStringLiteral("notebook_path")).toString();
+                if (!path.isEmpty())
+                    pending_edits_.insert(
+                        id, PendingEdit{name == QLatin1String("Write") ? QStringLiteral("write") : QStringLiteral("update"),
+                                        path});
+            }
             ++facts_.tool_calls;
             out.append(make_event(EventKind::ToolCall, prefix + display_tool_name(name),
                                   compact(b.value(QStringLiteral("input"))), false, id));
@@ -403,6 +462,15 @@ void ClaudeStreamParser::on_user(const QJsonObject& o, QVector<AgentEvent>& out)
             out.append(make_event(EventKind::ToolResult,
                                   prefix + (name.isEmpty() ? QStringLiteral("Tool result") : display_tool_name(name)),
                                   content_text(b.value(QStringLiteral("content"))), is_err, id));
+            // A successful Edit / Write is the file change (Claude Code has no
+            // dedicated file-change event).
+            const auto edit = pending_edits_.constFind(id);
+            if (!id.isEmpty() && edit != pending_edits_.constEnd()) {
+                if (!is_err)
+                    out.append(make_event(EventKind::FileChange, QStringLiteral("Files changed (1)"),
+                                          file_change_line(edit->kind, edit->path), false, id));
+                pending_edits_.erase(edit);
+            }
         } else if (bt == QLatin1String("text")) {
             const QString t = b.value(QStringLiteral("text")).toString();
             if (!t.trimmed().isEmpty())
@@ -412,8 +480,12 @@ void ClaudeStreamParser::on_user(const QJsonObject& o, QVector<AgentEvent>& out)
 }
 
 void ClaudeStreamParser::on_result(const QJsonObject& o, const QString& raw, QVector<AgentEvent>& out) {
+    flush_partials(out); // the turn is over: nothing streamed may stay half-shown
     facts_.saw_result = true;
     const QString sub = o.value(QStringLiteral("subtype")).toString();
+    const QString stop = o.value(QStringLiteral("stop_reason")).toString();
+    if (!stop.isEmpty())
+        facts_.stop_reason = stop.left(80);
     const bool is_err =
         o.value(QStringLiteral("is_error")).toBool(false) || (!sub.isEmpty() && sub != QLatin1String("success"));
 
@@ -431,6 +503,7 @@ void ClaudeStreamParser::on_result(const QJsonObject& o, const QString& raw, QVe
         facts_.input_tokens = json_int(usage, "input_tokens") + json_int(usage, "cache_creation_input_tokens") +
                               json_int(usage, "cache_read_input_tokens");
         facts_.output_tokens = json_int(usage, "output_tokens");
+        facts_.cached_tokens = json_int(usage, "cache_read_input_tokens");
     }
 
     const QString result_text = o.value(QStringLiteral("result")).toString();
@@ -475,6 +548,8 @@ void ClaudeStreamParser::on_result(const QJsonObject& o, const QString& raw, QVe
     if (facts_.cost_usd.has_value())
         parts << QStringLiteral("cost $%1").arg(*facts_.cost_usd, 0, 'f', 4);
     parts << QStringLiteral("input %1 tok").arg(group_digits(facts_.input_tokens));
+    if (facts_.cached_tokens > 0)
+        parts << QStringLiteral("cached %1").arg(group_digits(facts_.cached_tokens));
     parts << QStringLiteral("output %1 tok").arg(group_digits(facts_.output_tokens));
     if (facts_.num_turns > 0)
         parts << QStringLiteral("%1 turns").arg(facts_.num_turns);
@@ -483,6 +558,141 @@ void ClaudeStreamParser::on_result(const QJsonObject& o, const QString& raw, QVe
         parts << QStringLiteral("%1 s").arg(static_cast<double>(duration_ms) / 1000.0, 0, 'f', 1);
     out.append(make_event(EventKind::Usage, QStringLiteral("Usage"), parts.join(QStringLiteral(" · ")), false, {},
                           object_summary(o, {QStringLiteral("result")}, kAgentEventRawMaxBytes)));
+}
+
+QVector<AgentEvent> ClaudeStreamParser::finish() {
+    QVector<AgentEvent> out;
+    flush_partials(out);
+    return out;
+}
+
+// `--include-partial-messages`: {"type":"stream_event","event":<Anthropic stream
+// event>}. Text and thinking deltas become partial events; every other stream
+// event (tool input deltas, signatures, stops, pings) is covered by the complete
+// `assistant` message that follows, so it shows nothing.
+void ClaudeStreamParser::on_stream_event(const QJsonObject& o, QVector<AgentEvent>& out) {
+    const QJsonObject ev = o.value(QStringLiteral("event")).toObject();
+    const QString et = ev.value(QStringLiteral("type")).toString();
+    if (et == QLatin1String("message_start")) {
+        flush_partials(out); // the previous message's blocks are complete by now
+        partial_blocks_.clear();
+        partial_by_index_.clear();
+        partial_message_id_ = ev.value(QStringLiteral("message")).toObject().value(QStringLiteral("id")).toString().left(200);
+        partial_message_key_ = partial_message_id_.isEmpty() ? QStringLiteral("msg-%1").arg(++partial_messages_)
+                                                             : partial_message_id_;
+        return;
+    }
+    const int index = ev.value(QStringLiteral("index")).toInt(-1);
+    if (et == QLatin1String("content_block_start")) {
+        const QJsonObject block = ev.value(QStringLiteral("content_block")).toObject();
+        const QString bt = block.value(QStringLiteral("type")).toString();
+        if (bt == QLatin1String("text"))
+            append_partial(index, EventKind::Text, block.value(QStringLiteral("text")).toString(), out);
+        else if (bt == QLatin1String("thinking"))
+            append_partial(index, EventKind::Thinking, block.value(QStringLiteral("thinking")).toString(), out);
+        return;
+    }
+    if (et == QLatin1String("content_block_delta")) {
+        const QJsonObject delta = ev.value(QStringLiteral("delta")).toObject();
+        const QString dt = delta.value(QStringLiteral("type")).toString();
+        if (dt == QLatin1String("text_delta"))
+            append_partial(index, EventKind::Text, delta.value(QStringLiteral("text")).toString(), out);
+        else if (dt == QLatin1String("thinking_delta"))
+            append_partial(index, EventKind::Thinking, delta.value(QStringLiteral("thinking")).toString(), out);
+        return;
+    }
+    if (et == QLatin1String("message_delta")) {
+        const QString stop = ev.value(QStringLiteral("delta")).toObject().value(QStringLiteral("stop_reason")).toString();
+        if (!stop.isEmpty())
+            facts_.stop_reason = stop.left(80);
+    }
+}
+
+void ClaudeStreamParser::append_partial(int index, EventKind kind, const QString& delta, QVector<AgentEvent>& out) {
+    if (partial_message_key_.isEmpty()) // deltas without a message_start
+        partial_message_key_ = QStringLiteral("msg-%1").arg(++partial_messages_);
+    int pos = partial_by_index_.value(index, -1);
+    if (pos < 0 || pos >= partial_blocks_.size() || partial_blocks_[pos].kind != kind ||
+        partial_blocks_[pos].consumed) {
+        PartialBlock block;
+        block.kind = kind;
+        const int key_index = index >= 0 ? index : static_cast<int>(partial_blocks_.size());
+        block.key = QStringLiteral("%1:%2").arg(partial_message_key_).arg(key_index);
+        partial_blocks_.append(block);
+        pos = static_cast<int>(partial_blocks_.size() - 1);
+        partial_by_index_.insert(index, pos);
+    }
+    PartialBlock& b = partial_blocks_[pos];
+    if (delta.isEmpty() || b.text.size() + delta.size() > kPartialBlockMaxChars)
+        return;
+    b.text.append(delta);
+    if (b.stopped || b.text.trimmed().isEmpty())
+        return;
+    // One event body holds kAgentEventBodyMaxBytes: past that the live view
+    // keeps its last partial until the complete message arrives.
+    if (b.text.size() > kAgentEventBodyMaxBytes)
+        b.stopped = true;
+    AgentEvent ev = make_event(kind, kind == EventKind::Text ? QStringLiteral("Assistant") : QStringLiteral("Thinking"),
+                               b.stopped ? b.text.left(kAgentEventBodyMaxBytes) : b.text, false, b.key);
+    ev.partial = true;
+    out.append(ev);
+}
+
+QString ClaudeStreamParser::take_partial_key(EventKind kind, const QString& message_id) {
+    if (!message_id.isEmpty() && !partial_message_id_.isEmpty() && message_id != partial_message_id_)
+        return {};
+    for (PartialBlock& b : partial_blocks_) {
+        if (b.kind == kind && !b.consumed) {
+            b.consumed = true;
+            return b.key;
+        }
+    }
+    return {};
+}
+
+void ClaudeStreamParser::flush_partials(QVector<AgentEvent>& out) {
+    for (PartialBlock& b : partial_blocks_) {
+        if (b.consumed)
+            continue;
+        b.consumed = true;
+        if (b.text.trimmed().isEmpty())
+            continue;
+        out.append(make_event(b.kind, b.kind == EventKind::Text ? QStringLiteral("Assistant") : QStringLiteral("Thinking"),
+                              b.text, false, b.key));
+    }
+}
+
+// {"type":"rate_limit_event","rate_limit_info":{"status","resetsAt","utilization"}}
+void ClaudeStreamParser::on_rate_limit(const QJsonObject& o, const QString& raw, QVector<AgentEvent>& out) {
+    QJsonObject info = o.value(QStringLiteral("rate_limit_info")).toObject();
+    if (info.isEmpty())
+        info = o; // tolerate the fields at the top level
+    const QString status = info.value(QStringLiteral("status")).toString().left(40);
+    const qint64 resets_ms = reset_time_ms(info.value(QStringLiteral("resetsAt")));
+    if (!status.isEmpty())
+        facts_.rate_limit_status = status;
+    if (resets_ms > 0)
+        facts_.rate_limit_resets_at_ms = resets_ms;
+    const QString resets =
+        resets_ms > 0 ? QDateTime::fromMSecsSinceEpoch(resets_ms, QTimeZone::UTC).toString(Qt::ISODate) : QString();
+    QStringList parts;
+    if (!status.isEmpty())
+        parts << QStringLiteral("status: ") + status;
+    if (!resets.isEmpty())
+        parts << QStringLiteral("resets: ") + resets;
+    const QJsonValue utilization = info.value(QStringLiteral("utilization"));
+    if (utilization.isDouble())
+        parts << QStringLiteral("utilization: ") + QString::number(utilization.toDouble(), 'g', 4); // unit not documented
+    const QString body = parts.join(QLatin1Char('\n'));
+    if (status == QLatin1String("rejected")) {
+        facts_.last_error = resets.isEmpty() ? QStringLiteral("Rate limit reached (rejected).")
+                                             : QStringLiteral("Rate limit reached (rejected) — resets %1.").arg(resets);
+        out.append(make_event(EventKind::Error, QStringLiteral("Rate limit reached"), body, true, {}, raw));
+        return;
+    }
+    out.append(make_event(EventKind::Status,
+                          status.isEmpty() ? QStringLiteral("Rate limit") : QStringLiteral("Rate limit · ") + status, body,
+                          false, {}, raw));
 }
 
 // ── Codex exec --json ────────────────────────────────────────────────────────
@@ -521,6 +731,7 @@ QVector<AgentEvent> CodexJsonParser::parse_line(const QString& line) {
         const qint64 reasoning = json_int(usage, "reasoning_output_tokens");
         facts_.input_tokens += in;
         facts_.output_tokens += outt;
+        facts_.cached_tokens += cached;
         QStringList parts;
         parts << QStringLiteral("input %1 tok").arg(group_digits(in));
         if (cached > 0)
@@ -644,8 +855,8 @@ void CodexJsonParser::on_item(const QString& phase, const QJsonObject& item, QVe
         QStringList lines;
         for (const auto& cv : item.value(QStringLiteral("changes")).toArray()) {
             const QJsonObject c = cv.toObject();
-            lines << QStringLiteral("%1  %2").arg(c.value(QStringLiteral("kind")).toString(QStringLiteral("update")),
-                                                  c.value(QStringLiteral("path")).toString());
+            lines << file_change_line(c.value(QStringLiteral("kind")).toString(QStringLiteral("update")),
+                                      c.value(QStringLiteral("path")).toString());
         }
         const bool failed = item.value(QStringLiteral("status")).toString() == QLatin1String("failed");
         out.append(make_event(EventKind::FileChange, QStringLiteral("Files changed (%1)").arg(lines.size()),

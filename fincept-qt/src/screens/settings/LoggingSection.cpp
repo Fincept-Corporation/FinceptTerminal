@@ -1,13 +1,20 @@
-// LoggingSection.cpp — global level / JSON mode / log path / per-tag overrides.
+// LoggingSection.cpp — global level / JSON mode / log path / per-tag overrides,
+// the environment override in force, and "Copy diagnostics (redacted)".
 
 #include "screens/settings/LoggingSection.h"
 
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
+#include "core/config/EditionIdentity.h"
+#include "core/logging/LogSettings.h"
 #include "core/logging/Logger.h"
+#include "services/harness/HarnessRegistry.h"
+#include "storage/sqlite/Database.h"
+#include "storage/sqlite/migrations/MigrationRunner.h"
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -22,6 +29,7 @@
 #include <QScrollArea>
 #include <QString>
 #include <QStringList>
+#include <QSysInfo>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -77,10 +85,18 @@ void LoggingSection::build_ui() {
     log_global_level_->setStyleSheet(combo_ss());
     log_global_level_->setFixedWidth(160);
 
-    const QString saved_global = AppConfig::instance().get("log/global_level", "Info").toString();
-    log_global_level_->setCurrentIndex(level_to_idx(saved_global));
+    log_global_level_->setCurrentIndex(level_to_idx(Logger::level_name(saved_log_level())));
 
     vl->addWidget(log_global_level_);
+
+    // An environment variable (FINCEPT_LOG_LEVEL / FINCEPT_LOG_TAGS) wins over
+    // what is saved here; say so instead of letting a saved level look ignored.
+    override_lbl_ = new QLabel(this);
+    override_lbl_->setStyleSheet(QStringLiteral("color:%1; font-size:%2px; background:transparent;")
+                                     .arg(ui::colors::WARNING(), ui::fonts::px(-2)));
+    override_lbl_->setWordWrap(true);
+    override_lbl_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    vl->addWidget(override_lbl_);
     vl->addWidget(make_sep());
 
     // ── Output format ───────────────────────────────────────────────────────
@@ -96,7 +112,7 @@ void LoggingSection::build_ui() {
 
     log_json_mode_ = new QCheckBox(tr("Emit structured JSON lines"));
     log_json_mode_->setStyleSheet(check_ss()); // was the only unstyled control on this page
-    log_json_mode_->setChecked(AppConfig::instance().get("log/json_mode", false).toBool());
+    log_json_mode_->setChecked(saved_log_json_mode());
     vl->addWidget(log_json_mode_);
     vl->addWidget(make_sep());
 
@@ -119,15 +135,15 @@ void LoggingSection::build_ui() {
 
     open_folder_btn_ = new QPushButton(tr("Open Log Folder"));
     open_folder_btn_->setStyleSheet(btn_secondary_ss());
-    open_folder_btn_->setFixedHeight(30);
-    open_folder_btn_->setFixedWidth(160);
+    open_folder_btn_->setMinimumSize(160, 30);
+    open_folder_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(open_folder_btn_, &QPushButton::clicked, this,
             []() { QDesktopServices::openUrl(QUrl::fromLocalFile(AppPaths::logs())); });
 
     copy_path_btn_ = new QPushButton(tr("Copy Path"));
     copy_path_btn_->setStyleSheet(btn_secondary_ss());
-    copy_path_btn_->setFixedHeight(30);
-    copy_path_btn_->setFixedWidth(120);
+    copy_path_btn_->setMinimumSize(120, 30);
+    copy_path_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(copy_path_btn_, &QPushButton::clicked, this, [this]() {
         if (log_path_label_)
             QApplication::clipboard()->setText(log_path_label_->text());
@@ -154,8 +170,6 @@ void LoggingSection::build_ui() {
     log_tag_layout_->setContentsMargins(0, 0, 0, 0);
     log_tag_layout_->setSpacing(6);
 
-    auto& cfg = AppConfig::instance();
-    const int count = cfg.get("log/tag_count", 0).toInt();
     // level_to_idx is captured BY VALUE: add_tag_row is copied into the
     // "+ Add Tag Override" click handler, which runs long after build_ui() has
     // returned. Capturing by reference left that copy holding a dangling
@@ -181,7 +195,7 @@ void LoggingSection::build_ui() {
 
         auto* del_btn = new QPushButton(tr("Remove"));
         del_btn->setStyleSheet(btn_danger_ss());
-        del_btn->setFixedHeight(28);
+        del_btn->setMinimumHeight(28);
         connect(del_btn, &QPushButton::clicked, this, [row]() { row->deleteLater(); });
 
         rl->addWidget(tag_edit);
@@ -191,74 +205,93 @@ void LoggingSection::build_ui() {
         log_tag_layout_->addWidget(row);
     };
 
-    for (int i = 0; i < count; ++i) {
-        const QString tag = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
-        const QString level = cfg.get(QString("log/tag_%1_level").arg(i)).toString();
-        if (!tag.isEmpty())
-            add_tag_row(tag, level);
+    {
+        const QHash<QString, LogLevel> saved_tags = saved_log_tag_levels();
+        QStringList names = saved_tags.keys();
+        names.sort(Qt::CaseInsensitive);
+        for (const QString& tag : std::as_const(names))
+            add_tag_row(tag, Logger::level_name(saved_tags.value(tag)));
     }
 
     vl->addWidget(log_tag_list_);
 
     add_btn_ = new QPushButton(tr("+ Add Tag Override"));
     add_btn_->setStyleSheet(btn_secondary_ss());
-    add_btn_->setFixedHeight(30);
-    add_btn_->setFixedWidth(180);
+    add_btn_->setMinimumSize(180, 30);
+    add_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(add_btn_, &QPushButton::clicked, this, [add_tag_row]() mutable { add_tag_row({}, "Info"); });
     vl->addWidget(add_btn_);
     vl->addWidget(make_sep());
 
     // ── Save ────────────────────────────────────────────────────────────────
-    save_btn_ = new QPushButton(tr("Apply & Save"));
+    save_btn_ = new QPushButton(fincept::ui::literal_ampersands(tr("Apply & Save")));
     save_btn_->setStyleSheet(btn_primary_ss());
-    save_btn_->setFixedHeight(34);
-    save_btn_->setFixedWidth(140);
+    save_btn_->setMinimumSize(140, 34);
+    save_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
-        auto& cfg = AppConfig::instance();
-        auto& log = Logger::instance();
-
         const QString gl = log_global_level_->currentText();
-        cfg.set("log/global_level", gl);
-        const QHash<QString, LogLevel> lvl_map = {{"Trace", LogLevel::Trace}, {"Debug", LogLevel::Debug},
-                                                  {"Info", LogLevel::Info},   {"Warn", LogLevel::Warn},
-                                                  {"Error", LogLevel::Error}, {"Fatal", LogLevel::Fatal}};
-        log.set_level(lvl_map.value(gl, LogLevel::Info));
-
+        const LogLevel global = Logger::parse_level(gl).value_or(LogLevel::Info);
         const bool json_on = log_json_mode_ && log_json_mode_->isChecked();
-        cfg.set("log/json_mode", json_on);
-        log.set_json_mode(json_on);
 
-        log.clear_all_tag_levels();
+        QHash<QString, LogLevel> tags;
         const auto rows = log_tag_list_->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
-        int saved = 0;
         for (auto* row : rows) {
             auto* tag_edit = row->findChild<QLineEdit*>();
             auto* lvl_combo = row->findChild<QComboBox*>();
             if (!tag_edit || !lvl_combo)
                 continue;
             const QString tag = tag_edit->text().trimmed();
-            const QString level = lvl_combo->currentText();
             if (tag.isEmpty())
                 continue;
-            cfg.set(QString("log/tag_%1_name").arg(saved), tag);
-            cfg.set(QString("log/tag_%1_level").arg(saved), level);
-            log.set_tag_level(tag, lvl_map.value(level, LogLevel::Info));
-            ++saved;
+            tags.insert(tag, Logger::parse_level(lvl_combo->currentText()).value_or(LogLevel::Info));
         }
-        cfg.set("log/tag_count", saved);
+        // Saves the log/* keys and applies them (an environment override still wins).
+        save_log_settings(global, tags, json_on);
+        const int saved = static_cast<int>(tags.size());
 
         // Saving previously produced no on-screen acknowledgement at all.
         save_btn_->setText(tr("Saved ✓"));
         QTimer::singleShot(2000, save_btn_, [this]() {
             if (save_btn_)
-                save_btn_->setText(tr("Apply & Save"));
+                save_btn_->setText(fincept::ui::literal_ampersands(tr("Apply & Save")));
         });
 
-        LOG_INFO("Settings", QString("Logging config saved: global=%1, tags=%2").arg(gl).arg(saved));
+        LOG_INFO("Settings", logf("Logging settings saved", {{"global", Logger::level_name(global)},
+                                                              {"tags", saved},
+                                                              {"json", json_on}}));
     });
 
     vl->addWidget(save_btn_);
+    vl->addWidget(make_sep());
+
+    // ── Diagnostics ─────────────────────────────────────────────────────────
+    diag_title_ = new QLabel(tr("Diagnostics"));
+    diag_title_->setStyleSheet(sub_title_ss());
+    vl->addWidget(diag_title_);
+
+    diag_desc_ = new QLabel(tr("Copies a summary of this installation and the last 200 warnings and errors, "
+                               "with file paths, addresses, keys and tokens removed, for a support request."));
+    diag_desc_->setStyleSheet(label_ss());
+    diag_desc_->setWordWrap(true);
+    vl->addWidget(diag_desc_);
+
+    copy_diag_btn_ = new QPushButton(tr("Copy Diagnostics (Redacted)"));
+    copy_diag_btn_->setStyleSheet(btn_secondary_ss());
+    copy_diag_btn_->setMinimumSize(220, 30);
+    copy_diag_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    connect(copy_diag_btn_, &QPushButton::clicked, this, [this]() {
+        QApplication::clipboard()->setText(diagnostics_text());
+        copy_diag_btn_->setText(tr("Copied ✓"));
+        QTimer::singleShot(2000, copy_diag_btn_, [this]() {
+            if (copy_diag_btn_)
+                copy_diag_btn_->setText(tr("Copy Diagnostics (Redacted)"));
+        });
+        LOG_INFO("Settings", "Diagnostics copied to the clipboard");
+    });
+    vl->addWidget(copy_diag_btn_);
+
+    retranslateUi(); // fills the override notice
     vl->addStretch();
     scroll->setWidget(page);
     root->addWidget(scroll);
@@ -297,7 +330,23 @@ void LoggingSection::retranslateUi() {
     if (add_btn_)
         add_btn_->setText(tr("+ Add Tag Override"));
     if (save_btn_)
-        save_btn_->setText(tr("Apply & Save"));
+        save_btn_->setText(fincept::ui::literal_ampersands(tr("Apply & Save")));
+    if (diag_title_)
+        diag_title_->setText(tr("Diagnostics"));
+    if (diag_desc_)
+        diag_desc_->setText(tr("Copies a summary of this installation and the last 200 warnings and errors, "
+                               "with file paths, addresses, keys and tokens removed, for a support request."));
+    if (copy_diag_btn_)
+        copy_diag_btn_->setText(tr("Copy Diagnostics (Redacted)"));
+    if (override_lbl_) {
+        const QString active = Logger::instance().level_overrides();
+        override_lbl_->setText(active.isEmpty()
+                                   ? QString()
+                                   : tr("An environment override is in force and wins over the levels saved "
+                                        "here until it is removed: %1")
+                                         .arg(active));
+        override_lbl_->setVisible(!active.isEmpty());
+    }
 
     // Re-apply text on dynamically-created per-tag rows: the "Tag name"
     // placeholder and the "Remove" button. The tag text and level are user data.
@@ -310,6 +359,61 @@ void LoggingSection::retranslateUi() {
                 del_btn->setText(tr("Remove"));
         }
     }
+}
+
+QString LoggingSection::diagnostics_text() const {
+    auto& log = Logger::instance();
+    QStringList out;
+    out << QStringLiteral("Fincept Terminal diagnostics (redacted)");
+#ifdef NDEBUG
+    const QString build = QStringLiteral("release");
+#else
+    const QString build = QStringLiteral("debug");
+#endif
+    out << logf(QStringLiteral("app"), {{"version", QCoreApplication::applicationVersion()},
+                                        {"build", build},
+                                        {"edition", fincept::edition::kId}});
+    out << logf(QStringLiteral("system"), {{"os", QSysInfo::prettyProductName()},
+                                           {"kernel", QSysInfo::kernelVersion()},
+                                           {"arch", QSysInfo::currentCpuArchitecture()},
+                                           {"qt", qVersion()}});
+    // The KIND of data root, never its path.
+    out << logf(QStringLiteral("data"),
+                {{"data_root", AppPaths::root_override().isEmpty() ? "default" : "custom (FINCEPT_DATA_DIR)"},
+                 {"schema", MigrationRunner::highest_registered_version()},
+                 {"schema_at_open", Database::instance().found_schema_version()},
+                 {"sqlite", Database::instance().sqlite_version()},
+                 {"journal", Database::instance().journal_mode()}});
+    QStringList tag_items;
+    const QHash<QString, LogLevel> tags = log.tag_levels();
+    for (auto it = tags.cbegin(); it != tags.cend(); ++it)
+        tag_items << it.key() + QLatin1Char('=') + Logger::level_name(it.value());
+    tag_items.sort(Qt::CaseInsensitive);
+    const LogStats st = log.stats();
+    out << logf(QStringLiteral("logging"), {{"level", Logger::level_name(log.global_level())},
+                                            {"tags", tag_items.join(QLatin1Char(','))},
+                                            {"override", log.level_overrides()},
+                                            {"dropped", st.dropped_lines},
+                                            {"lost", st.lost_lines}});
+    // Harness CLIs as last detected (no probe is started from here).
+    auto& harnesses = harness::HarnessRegistry::instance();
+    QStringList harness_items;
+    for (const QString& id : harnesses.ids()) {
+        const harness::HarnessStatus s = harnesses.status(id);
+        QString v;
+        if (s.installed())
+            v = s.installation->version.isEmpty() ? QStringLiteral("installed") : s.installation->version;
+        else
+            v = s.detection_complete ? QStringLiteral("not_found") : QStringLiteral("not_checked");
+        harness_items << id + QLatin1Char('=') + v;
+    }
+    out << QStringLiteral("harnesses ") + harness_items.join(QLatin1Char(' '));
+
+    const QStringList problems = log.recent_problems(200); // already scrubbed by the logger
+    out << QString();
+    out << QStringLiteral("Last %1 warnings and errors:").arg(problems.size());
+    out << problems;
+    return out.join(QLatin1Char('\n'));
 }
 
 } // namespace fincept::screens

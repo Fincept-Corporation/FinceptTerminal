@@ -14,7 +14,8 @@ Response contract (all ops):
     data: dict   (when success)
     error: str   (when failure)
     error_kind: str | None    (validation | runtime | unknown_op)
-    traceback: str | None     (only on uncaught exceptions)
+    warning: str              (optional; the panel shows it as a banner)
+Tracebacks go to stderr; values that cannot be computed are null, never 0.0.
 """
 
 import sys
@@ -27,6 +28,12 @@ from typing import Dict, List, Any, Optional
 
 import numpy as np
 import pandas as pd
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    import fincept_json
 
 # Fail loudly only on truly missing essentials.
 try:
@@ -132,7 +139,35 @@ def _stamp(ref, ts, step=None):
         return str(ts)[:10]
 
 
-def _safe_float(v, default=0.0):
+def _adf(x, **kw):
+    """(statistic, pvalue, critical_values) on statsmodels 0.14 (tuple) and >= 0.15
+    (result object read by name; the tuple form is deprecated for 0.16)."""
+    try:
+        r = adfuller(x, result_object=True, **kw)
+        return r.statistic, r.pvalue, dict(r.critical_values)
+    except TypeError as e:
+        if "result_object" not in str(e):
+            raise
+    r = adfuller(x, **kw)
+    return r[0], r[1], dict(r[4])
+
+
+def _kpss(x, **kw):
+    """(statistic, pvalue, critical_values); see _adf."""
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # p-value clipped to the KPSS table range
+        try:
+            r = kpss(x, result_object=True, **kw)
+            return r.statistic, r.pvalue, dict(r.critical_values)
+        except TypeError as e:
+            if "result_object" not in str(e):
+                raise
+        r = kpss(x, **kw)
+        return r[0], r[1], dict(r[3])
+
+
+def _safe_float(v, default=None):
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -209,8 +244,8 @@ def op_forecast(data):
     model_type = str(data.get("model", "linear")).lower()
     horizon = max(1, _safe_int(data.get("horizon", 14)))
     lags = max(1, _safe_int(data.get("lags", 7)))
-    alpha = _safe_float(data.get("alpha", 1.0))
-    l1_ratio = _safe_float(data.get("l1_ratio", 0.5))
+    alpha = _safe_float(data.get("alpha"), 1.0)
+    l1_ratio = _safe_float(data.get("l1_ratio"), 0.5)
     n_neighbors = max(1, _safe_int(data.get("n_neighbors", 5)))
     season = max(0, _safe_int(data.get("season", 0)))
 
@@ -288,6 +323,12 @@ def op_forecast(data):
         except Exception as e:
             raise ValidationError(f"arima fit failed: {e}")
         in_sample[:] = mdl.fittedvalues
+        # With differencing the state-space filter has no history for the first
+        # d + D*s points: their "fitted value" is ~0, so the residual is the price
+        # level, which swamped R^2 / RMSE / residual_std. Not forecasts -> drop them.
+        n_startup = order[1] + seasonal_order[1] * seasonal_order[3]
+        if n_startup > 0:
+            in_sample[:n_startup] = np.nan
         forecast = [float(v) for v in mdl.forecast(horizon)]
     else:
         raise ValidationError(
@@ -304,15 +345,15 @@ def op_forecast(data):
     # In-sample residuals + summary
     fitted = pd.Series(in_sample, index=series.index)
     resid = (series - fitted).dropna()
-    resid_std = float(resid.std()) if len(resid) > 1 else 0.0
+    resid_std = float(resid.std()) if len(resid) > 1 else None
     if len(resid) > 0:
         rss = float((resid ** 2).sum())
         tss = float(((series.loc[resid.index] - series.loc[resid.index].mean()) ** 2).sum())
-        r2 = 1.0 - rss / tss if tss > 0 else 0.0
+        r2 = 1.0 - rss / tss if tss > 0 else None
         mae = float(resid.abs().mean())
         rmse = float(np.sqrt((resid ** 2).mean()))
     else:
-        r2, mae, rmse = 0.0, 0.0, 0.0
+        r2, mae, rmse = None, None, None
 
     history = _sample_curve(series, 250)
     in_sample_curve = []
@@ -340,12 +381,12 @@ def op_forecast(data):
             {"date": _stamp(series, d, step=i + 1), "value": _safe_float(v)}
             for i, (d, v) in enumerate(zip(forecast_dates, forecast))
         ],
-        "forecast_min": _safe_float(min(forecast) if forecast else 0.0),
-        "forecast_max": _safe_float(max(forecast) if forecast else 0.0),
-        "forecast_mean": _safe_float(float(np.mean(forecast)) if forecast else 0.0),
+        "forecast_min": _safe_float(min(forecast)) if forecast else None,
+        "forecast_max": _safe_float(max(forecast)) if forecast else None,
+        "forecast_mean": _safe_float(float(np.mean(forecast))) if forecast else None,
         "last_actual": _safe_float(arr[-1]),
-        "first_forecast": _safe_float(forecast[0] if forecast else 0.0),
-        "last_forecast": _safe_float(forecast[-1] if forecast else 0.0),
+        "first_forecast": _safe_float(forecast[0]) if forecast else None,
+        "last_forecast": _safe_float(forecast[-1]) if forecast else None,
     }
 
 
@@ -370,13 +411,13 @@ def op_anomaly_detection(data):
     scores = np.zeros(n, dtype=float)
 
     if method == "zscore":
-        thr = _safe_float(data.get("threshold", 3.0))
+        thr = _safe_float(data.get("threshold"), 3.0)
         mu = float(arr.mean())
         sd = float(arr.std()) or 1.0
         scores = (arr - mu) / sd
         flags = np.abs(scores) > thr
     elif method == "iqr":
-        k = _safe_float(data.get("iqr_k", 1.5))
+        k = _safe_float(data.get("iqr_k"), 1.5)
         q1, q3 = np.percentile(arr, [25, 75])
         iqr = q3 - q1
         lo, hi = q1 - k * iqr, q3 + k * iqr
@@ -386,7 +427,7 @@ def op_anomaly_detection(data):
     elif method == "isolation_forest":
         if not SKLEARN_OK:
             raise ValidationError("sklearn not installed — cannot run isolation_forest")
-        cont = max(0.001, min(0.5, _safe_float(data.get("contamination", 0.05))))
+        cont = max(0.001, min(0.5, _safe_float(data.get("contamination"), 0.05)))
         clf = IsolationForest(contamination=cont, random_state=42)
         clf.fit(arr.reshape(-1, 1))
         preds = clf.predict(arr.reshape(-1, 1))  # -1 anomaly, 1 normal
@@ -395,7 +436,7 @@ def op_anomaly_detection(data):
         scores = -clf.score_samples(arr.reshape(-1, 1))
     elif method == "residual":
         # Fit a simple linear trend, flag residuals > threshold * std
-        thr = _safe_float(data.get("threshold", 3.0))
+        thr = _safe_float(data.get("threshold"), 3.0)
         x = np.arange(n, dtype=float).reshape(-1, 1)
         if SKLEARN_OK:
             mdl = LinearRegression().fit(x, arr)
@@ -538,8 +579,8 @@ def op_metrics(data):
     smape = float(np.nanmean(2.0 * np.abs(err) / safe_denom) * 100.0)
     # R²
     ss_res = float(np.sum(err ** 2))
-    ss_tot = float(np.sum((a - a.mean()) ** 2)) or 1.0
-    r2 = 1.0 - ss_res / ss_tot
+    ss_tot = float(np.sum((a - a.mean()) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else None  # undefined for a constant actual series
     # Bias / direction accuracy
     bias = float(np.mean(err))
     if len(a) > 1:
@@ -580,7 +621,7 @@ def op_confidence_intervals(data):
     horizon = max(1, _safe_int(data.get("horizon", 14)))
     lags = max(1, _safe_int(data.get("lags", 7)))
     n_boot = max(50, min(1000, _safe_int(data.get("n_boot", 200))))
-    confidence = _safe_float(data.get("confidence", 0.95))
+    confidence = _safe_float(data.get("confidence"), 0.95)
     if not (0.5 < confidence < 1.0):
         raise ValidationError(f"confidence must be in (0.5, 1.0), got {confidence}")
     method = str(data.get("method", "bootstrap")).lower()
@@ -600,7 +641,7 @@ def op_confidence_intervals(data):
     y = np.asarray(y, dtype=float)
     base = LinearRegression().fit(X, y)
     point_resid = y - base.predict(X)
-    resid_std = float(point_resid.std()) or 1.0
+    resid_std = float(point_resid.std())
 
     # Recursive point forecast
     last = list(arr[-lags:])
@@ -696,29 +737,36 @@ def op_stationarity(data):
             s = s.diff().dropna()
         if len(s) < 10:
             continue
+        # A constant (differenced) series has no defined test statistic: report nulls.
+        constant = float(np.ptp(s.to_numpy())) == 0.0
         # ADF: H0 = unit root (non-stationary). Reject (p < .05) -> stationary.
         try:
-            adf_stat, adf_p, _, _, adf_crit, _ = adfuller(s, autolag="AIC")
+            if constant:
+                raise ValueError("constant series")
+            adf_stat, adf_p, adf_crit = _adf(s, autolag="AIC")
             adf_stationary = adf_p < 0.05
-        except Exception as e:
-            adf_stat, adf_p, adf_crit, adf_stationary = float("nan"), 1.0, {}, False
+        except Exception:
+            adf_stat, adf_p, adf_crit, adf_stationary = None, None, {}, False
         # KPSS: H0 = stationary. Reject -> non-stationary.
         try:
-            kpss_stat, kpss_p, _, kpss_crit = kpss(s, regression="c", nlags="auto")
+            if constant:
+                raise ValueError("constant series")
+            kpss_stat, kpss_p, kpss_crit = _kpss(s, regression="c", nlags="auto")
             kpss_stationary = kpss_p >= 0.05
         except Exception:
-            kpss_stat, kpss_p, kpss_crit, kpss_stationary = float("nan"), 0.0, {}, False
+            kpss_stat, kpss_p, kpss_crit, kpss_stationary = None, None, {}, False
         verdict_both = adf_stationary and kpss_stationary
         results.append({
             "differencing_order": d,
             "n_observations": int(len(s)),
             "adf_statistic": _safe_float(adf_stat),
             "adf_p_value": _safe_float(adf_p),
-            "adf_critical_5pct": _safe_float(adf_crit.get("5%")) if isinstance(adf_crit, dict) else 0.0,
+            "adf_critical_5pct": _safe_float(adf_crit.get("5%")) if isinstance(adf_crit, dict) else None,
             "adf_stationary": bool(adf_stationary),
             "kpss_statistic": _safe_float(kpss_stat),
             "kpss_p_value": _safe_float(kpss_p),
-            "kpss_critical_5pct": _safe_float(kpss_crit.get("5%")) if isinstance(kpss_crit, dict) else 0.0,
+            "kpss_critical_5pct": _safe_float(kpss_crit.get("5%")) if isinstance(kpss_crit, dict) else None,
+            "constant_series": bool(constant),
             "kpss_stationary": bool(kpss_stationary),
             "both_stationary": bool(verdict_both),
         })
@@ -764,11 +812,15 @@ def dispatch(operation, data):
         }
     try:
         result = handler(data or {})
-        return {
+        envelope = {
             "success": True,
             "operation": operation,
             "data": result,
         }
+        warning = result.pop("_warning", None) if isinstance(result, dict) else None
+        if warning:
+            envelope["warning"] = warning  # shown by the panel as a banner
+        return envelope
     except ValidationError as e:
         return {
             "success": False,
@@ -777,41 +829,44 @@ def dispatch(operation, data):
             "error_kind": "validation",
         }
     except Exception as e:
+        traceback.print_exc(file=sys.stderr)  # diagnostics to stderr only
         return {
             "success": False,
             "operation": operation,
-            "error": str(e),
+            "error": f"{type(e).__name__}: {e}" if str(e) else type(e).__name__,
             "error_kind": "runtime",
-            "traceback": traceback.format_exc(),
         }
 
 
 def main(args):
     """Entry point: args = [operation, json_data]"""
     if len(args) < 1:
-        print(json.dumps({
+        fincept_json.emit({
             "success": False,
             "error": "Usage: functime_service.py <operation> [json_data]",
             "error_kind": "usage",
-        }))
+        })
         return
 
     operation = args[0]
     data = {}
-    if len(args) > 1:
+    if len(args) > 1 and args[1].strip():
         try:
             data = json.loads(args[1])
         except json.JSONDecodeError as e:
-            print(json.dumps({
+            fincept_json.emit({
                 "success": False,
                 "operation": operation,
                 "error": f"Invalid JSON input: {e}",
                 "error_kind": "validation",
-            }))
+            })
             return
+    if not isinstance(data, dict):
+        fincept_json.emit({"success": False, "operation": operation,
+                           "error": "parameters must be a JSON object", "error_kind": "validation"})
+        return
 
-    result = dispatch(operation, data)
-    print(json.dumps(result, default=str))
+    fincept_json.emit(dispatch(operation, data))
 
 
 if __name__ == "__main__":

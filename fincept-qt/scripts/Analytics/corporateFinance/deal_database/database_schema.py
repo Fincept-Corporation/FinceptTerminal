@@ -33,7 +33,9 @@ class MADatabase:
 
     def _get_connection(self):
         if self.conn is None:
-            self.conn = sqlite3.connect(str(self.db_path))
+            # A scan writes while the Deals screen reads or saves an edit: wait for the other writer's commit
+            # instead of failing with "database is locked".
+            self.conn = sqlite3.connect(str(self.db_path), timeout=15)
             self.conn.row_factory = sqlite3.Row
         return self.conn
 
@@ -267,19 +269,33 @@ class MADatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_filings_type ON sec_filings(filing_type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_filings_date ON sec_filings(filing_date)")
 
-        # Add new XBRL financial columns if they don't exist (safe migration)
-        xbrl_columns = [
+        # Add columns that later versions introduced, if they don't exist (idempotent, keeps every row).
+        #   verified  0 = auto-extracted from a filing and not checked by the user (every row written before this
+        #             column existed is auto-extracted, so it starts unverified), 1 = entered or confirmed by the user
+        #   source    where the row came from ("SEC EDGAR (auto-extracted)", "User")
+        #   ev_revenue / ev_ebitda  transaction multiples the user entered or confirmed (precedent analysis)
+        added_columns = [
             ("target_revenue", "REAL"),
             ("target_ebitda", "REAL"),
             ("target_total_debt", "REAL"),
             ("target_cash", "REAL"),
             ("offer_price_per_share", "REAL"),
+            ("verified", "INTEGER DEFAULT 0"),
+            ("verified_at", "TIMESTAMP"),
+            ("source", "TEXT"),
+            ("ev_revenue", "REAL"),
+            ("ev_ebitda", "REAL"),
         ]
-        for col_name, col_type in xbrl_columns:
+        existing = {row[1] for row in cursor.execute("PRAGMA table_info(ma_deals)").fetchall()}
+        for col_name, col_type in added_columns:
+            if col_name in existing:
+                continue
             try:
                 cursor.execute(f"ALTER TABLE ma_deals ADD COLUMN {col_name} {col_type}")
             except Exception:
-                pass  # Column already exists
+                pass  # added concurrently by another process
+        cursor.execute("UPDATE ma_deals SET source = 'SEC EDGAR (auto-extracted)' "
+                       "WHERE source IS NULL AND data_source = 'SEC EDGAR'")
 
         conn.commit()
 
@@ -505,6 +521,98 @@ class MADatabase:
         """, (industry, min_value, max_value, start_date, end_date, limit))
 
         return [dict(row) for row in cursor.fetchall()]
+
+    # ── User-maintained deals (Deal Database screen) ─────────────────────────────
+
+    # Columns the Deals screen may write. Anything else in a request is ignored (the keys become SQL identifiers).
+    USER_EDITABLE_COLUMNS = (
+        'acquirer_name', 'acquirer_ticker', 'target_name', 'target_ticker', 'announcement_date',
+        'expected_close_date', 'actual_close_date', 'deal_value', 'enterprise_value', 'deal_type', 'deal_status',
+        'payment_method', 'cash_percentage', 'stock_percentage', 'industry', 'premium_1day', 'premium_4week',
+        'ev_revenue', 'ev_ebitda', 'target_revenue', 'target_ebitda', 'offer_price_per_share', 'notes',
+        'filing_url',
+    )
+
+    def deal_exists(self, deal_id: str) -> bool:
+        cur = self._get_connection().cursor()
+        cur.execute("SELECT 1 FROM ma_deals WHERE deal_id = ?", (deal_id,))
+        return cur.fetchone() is not None
+
+    def upsert_user_deal(self, fields: Dict[str, Any], verified: bool = True) -> str:
+        """Insert a deal the user entered, or update one the user edited. Returns the deal_id. Saving through the
+        screen is the user's confirmation, so the row becomes verified unless `verified` is False."""
+        import uuid
+        conn = self._get_connection()
+        cur = conn.cursor()
+        values = {k: fields[k] for k in self.USER_EDITABLE_COLUMNS if k in fields}
+        for k in ('acquirer_name', 'target_name'):
+            if k in values and isinstance(values[k], str):
+                values[k] = values[k].strip()
+        deal_id = str(fields.get('deal_id') or '').strip()
+        now = datetime.now().isoformat(timespec='seconds')
+        values['verified'] = 1 if verified else 0
+        values['verified_at'] = now if verified else None
+        values['updated_at'] = now
+        if deal_id and self.deal_exists(deal_id):
+            sets = ', '.join(f"{k} = ?" for k in values)
+            cur.execute(f"UPDATE ma_deals SET {sets} WHERE deal_id = ?", list(values.values()) + [deal_id])
+        else:
+            deal_id = deal_id or ("USER-" + uuid.uuid4().hex[:12].upper())
+            values.setdefault('announcement_date', datetime.now().strftime('%Y-%m-%d'))
+            values.setdefault('deal_type', 'Acquisition')
+            values.setdefault('deal_status', 'Announced')
+            values['deal_id'] = deal_id
+            values['source'] = fields.get('source') or 'User'
+            values['data_source'] = fields.get('data_source') or 'User'
+            cols = ', '.join(values)
+            cur.execute(f"INSERT INTO ma_deals ({cols}) VALUES ({', '.join('?' for _ in values)})",
+                        list(values.values()))
+            # A deal completed by hand from a filing's draft: tie the filing to it, so the Filings list shows
+            # "Deal extracted" and reading the filing again does not offer the same draft a second time.
+            import re
+            acc = re.search(r'(\d{10}-\d{2}-\d{6})', str(values.get('filing_url') or ''))
+            if acc:
+                cur.execute("UPDATE sec_filings SET deal_id = ?, parsed_flag = 1 "
+                            "WHERE accession_number = ? AND deal_id IS NULL", (deal_id, acc.group(1)))
+        conn.commit()
+        return deal_id
+
+    def set_verified(self, deal_id: str, verified: bool) -> bool:
+        conn = self._get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE ma_deals SET verified = ?, verified_at = ?, updated_at = ? WHERE deal_id = ?",
+                    (1 if verified else 0, datetime.now().isoformat(timespec='seconds') if verified else None,
+                     datetime.now().isoformat(timespec='seconds'), deal_id))
+        conn.commit()
+        return cur.rowcount > 0
+
+    def delete_deal(self, deal_id: str) -> bool:
+        conn = self._get_connection()
+        cur = conn.cursor()
+        for table in ('deal_financials', 'deal_multiples', 'deal_advisors', 'deal_timeline', 'deal_synergies'):
+            cur.execute(f"DELETE FROM {table} WHERE deal_id = ?", (deal_id,))
+        cur.execute("UPDATE sec_filings SET deal_id = NULL WHERE deal_id = ?", (deal_id,))
+        cur.execute("DELETE FROM ma_deals WHERE deal_id = ?", (deal_id,))
+        conn.commit()
+        return cur.rowcount > 0
+
+    def list_filings(self, limit: int = 500) -> List[Dict[str, Any]]:
+        cur = self._get_connection().cursor()
+        cur.execute("""
+            SELECT accession_number, filing_type, filing_date, company_name, cik, items, filing_url,
+                   confidence_score, parsed_flag, deal_id, extracted_data
+            FROM sec_filings ORDER BY filing_date DESC, filing_id DESC LIMIT ?
+        """, (int(limit),))
+        return [dict(row) for row in cur.fetchall()]
+
+    def count_rows(self) -> Dict[str, int]:
+        cur = self._get_connection().cursor()
+        out = {}
+        for key, sql in (('deals', "SELECT COUNT(*) FROM ma_deals"),
+                         ('verified', "SELECT COUNT(*) FROM ma_deals WHERE verified = 1"),
+                         ('filings', "SELECT COUNT(*) FROM sec_filings")):
+            out[key] = int(cur.execute(sql).fetchone()[0])
+        return out
 
     def close(self):
         if self.conn:

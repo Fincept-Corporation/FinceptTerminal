@@ -23,17 +23,19 @@ class SurfaceLineWidget : public QWidget {
 
     // Render a single named curve.
     // Optional categorical x-labels are rendered as tick labels under the axis;
-    // if empty, numeric x_values are formatted directly.
+    // if empty, numeric x_values are formatted directly. An invalid line_color
+    // (the default) draws the curve in the theme's first chart colour.
     void set_curve(const QString& title, const std::vector<float>& x_values, const std::vector<float>& y_values,
                    const QStringList& x_labels = {}, const QString& x_axis_title = QString(),
-                   const QString& y_axis_title = QString(), const QColor& line_color = QColor(88, 166, 255));
+                   const QString& y_axis_title = QString(), const QColor& line_color = QColor());
 
     // Render multiple curves on the same axes (e.g. one per commodity for contango).
     struct Series {
         QString name;
         std::vector<float> x_values;
         std::vector<float> y_values;
-        QColor color;
+        QColor color;  // used when slot < 0 (shown through colors::legible_color)
+        int slot = -1; // >= 0: categorical chart colour ui::colors::chart_color(slot), resolved at paint time
     };
     void set_series(const QString& title, const std::vector<Series>& series, const QString& x_axis_title = QString(),
                     const QString& y_axis_title = QString());

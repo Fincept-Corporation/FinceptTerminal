@@ -7,7 +7,9 @@ namespace fincept::ui {
 class EmaLayer : public SeriesLayer {
     Q_OBJECT
   public:
-    explicit EmaLayer(int period = 21, const QColor& color = QColor("#d97706"), QObject* parent = nullptr);
+    /// `color`: explicit line colour, or invalid (default) for the theme accent.
+    /// `color`: explicit line colour, or invalid (default) for the theme accent.
+    explicit EmaLayer(int period = 21, const QColor& color = QColor(), QObject* parent = nullptr);
 
     void compute(const QVector<CandleData>& candles) override;
 

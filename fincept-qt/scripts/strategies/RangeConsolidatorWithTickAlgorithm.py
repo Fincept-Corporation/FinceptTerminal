@@ -1,45 +1,30 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-0761902F
-# Category: Data Consolidation
-# Description: Bollinger Band mean-reversion strategy adapted from tick-level
-#   range consolidation. Buys when price drops below lower BB (2 stdev), sells
-#   when price rises above upper BB. Uses 20-period bands.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
+from RangeConsolidatorAlgorithm import RangeConsolidatorAlgorithm
 
-class RangeConsolidatorWithTickAlgorithm(QCAlgorithm):
-    """Bollinger Band mean-reversion: buys at lower band, sells at upper."""
+### <summary>
+### Example algorithm of how to use RangeConsolidator with Tick resolution
+### </summary>
+class RangeConsolidatorWithTickAlgorithm(RangeConsolidatorAlgorithm):
+    def get_range(self):
+        return 5
 
-    def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+    def get_resolution(self):
+        return Resolution.TICK
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
-
-        self._bb = self.bb(self.symbol, 20, 2, Resolution.DAILY)
-
-    def on_data(self, data):
-        if not self._bb.is_ready:
-            return
-        if self.symbol not in data:
-            return
-
-        price = data[self.symbol].close
-        upper = self._bb.upper_band.current.value
-        lower = self._bb.lower_band.current.value
-        middle = self._bb.middle_band.current.value
-
-        # Buy when price is below lower Bollinger Band
-        if not self.portfolio.invested and price < lower:
-            self.set_holdings(self.symbol, 1)
-        # Sell when price reaches upper band or middle band on recovery
-        elif self.portfolio.invested and price > upper:
-            self.liquidate()
+    def set_start_and_end_dates(self):
+        self.set_start_date(2013, 10, 7)
+        self.set_end_date(2013, 10, 7)

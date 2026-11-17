@@ -1,0 +1,26 @@
+{
+  "parser": "gemini",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "c6b5e3a2-1f4d-4b8e-9a0c-2d7e8f9a1b3c",
+  "final_text": "",
+  "saw_result": true,
+  "result_is_error": true,
+  "failure": {
+    "exit_code": 1,
+    "kind": "auth"
+  },
+  "input": "error_result.jsonl"
+}

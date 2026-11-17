@@ -88,7 +88,7 @@ void WebSocketClient::connect_to(const QString& url) {
         self->url_ = u;
         self->reconnect_attempts_ = 0;
         self->reconnect_stopped_ = false; // a fresh connect re-enables auto-reconnect
-        LOG_INFO(kTag, QString("[%1] Connecting to %2").arg(thread_label(), redact_url(u)));
+        LOG_DEBUG(kTag, QString("[%1] Connecting to %2").arg(thread_label(), redact_url(u)));
         self->socket_->open(QUrl(u));
     });
 }
@@ -98,7 +98,7 @@ void WebSocketClient::disconnect() {
     run_on_owning_thread(this, [self]() {
         if (!self)
             return;
-        LOG_INFO(kTag, QString("[%1] Disconnect requested for %2").arg(thread_label(), redact_url(self->url_)));
+        LOG_DEBUG(kTag, QString("[%1] Disconnect requested for %2").arg(thread_label(), redact_url(self->url_)));
         // An explicit close is not a dropped connection: without this, the
         // `disconnected` signal that close() produces below scheduled an automatic
         // reconnect and the owner's "disconnect" re-opened the socket behind its back.
@@ -146,8 +146,21 @@ bool WebSocketClient::is_connected() const {
     return socket_ && socket_->state() == QAbstractSocket::ConnectedState;
 }
 
+// Outage state of one client for the log: the first failure of an outage is a WARN,
+// later failed attempts are DEBUG, and the reconnect says how long it was down.
+static QString ws_outage_key(const void* client) {
+    return QStringLiteral("ws|") + QString::number(reinterpret_cast<quintptr>(client), 16);
+}
+
 void WebSocketClient::on_connected() {
-    LOG_INFO(kTag, QString("[%1] Connected to %2").arg(thread_label(), redact_url(url_)));
+    fincept::LogTransition was;
+    auto& logger = fincept::Logger::instance();
+    if (logger.transition_possible(0) && logger.transition(kTag, ws_outage_key(this), 0, &was))
+        LOG_INFO(kTag, fincept::logf("WebSocket reconnected", {{"url", redact_url(url_)},
+                                                               {"failed_attempts", was.observations_in_previous},
+                                                               {"outage_s", was.ms_in_previous / 1000}}));
+    else
+        LOG_INFO(kTag, QString("[%1] Connected to %2").arg(thread_label(), redact_url(url_)));
     reconnect_attempts_ = 0;
     // A reconnect timer armed by an earlier drop (e.g. a stale `disconnected` that
     // arrived after the owner had already re-opened the socket) must not fire into
@@ -157,13 +170,16 @@ void WebSocketClient::on_connected() {
 }
 
 void WebSocketClient::on_disconnected() {
-    LOG_WARN(kTag, QString("[%1] Disconnected from %2 (state=%3)")
-                       .arg(thread_label(), redact_url(url_))
-                       .arg(static_cast<int>(socket_ ? socket_->state() : QAbstractSocket::UnconnectedState)));
+    if (fincept::Logger::instance().transition(kTag, ws_outage_key(this), 1))
+        LOG_WARN(kTag, QString("[%1] Disconnected from %2 (state=%3)")
+                           .arg(thread_label(), redact_url(url_))
+                           .arg(static_cast<int>(socket_ ? socket_->state() : QAbstractSocket::UnconnectedState)));
+    else
+        LOG_DEBUG(kTag, QString("[%1] Still disconnected from %2").arg(thread_label(), redact_url(url_)));
     emit disconnected();
     if (!reconnect_stopped_ && reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
         const int delay = std::min(1000 * (1 << reconnect_attempts_), 30000);
-        LOG_INFO(kTag, QString("[%1] Scheduling reconnect attempt %2/%3 in %4ms")
+        LOG_DEBUG(kTag, QString("[%1] Scheduling reconnect attempt %2/%3 in %4ms")
                            .arg(thread_label())
                            .arg(reconnect_attempts_ + 1)
                            .arg(MAX_RECONNECT_ATTEMPTS)
@@ -191,21 +207,28 @@ void WebSocketClient::on_binary_received(const QByteArray& data) {
 
 void WebSocketClient::on_error(QAbstractSocket::SocketError err) {
     const QString es = socket_ ? socket_->errorString() : QStringLiteral("(no socket)");
-    LOG_ERROR(
-        kTag,
-        QString("[%1] Error on %2: %3 (code=%4)").arg(thread_label(), redact_url(url_), es).arg(static_cast<int>(err)));
+    // A reconnect follows (on_disconnected): the first error of an outage is a WARN
+    // with its reason, the repeats of the retry loop are DEBUG. Giving up is the ERROR.
+    if (fincept::Logger::instance().transition(kTag, ws_outage_key(this), 1))
+        LOG_WARN(kTag, QString("[%1] Error on %2: %3 (code=%4)")
+                           .arg(thread_label(), redact_url(url_), es)
+                           .arg(static_cast<int>(err)));
+    else
+        LOG_DEBUG(kTag, QString("[%1] Error on %2: %3 (code=%4)")
+                            .arg(thread_label(), redact_url(url_), es)
+                            .arg(static_cast<int>(err)));
     emit error_occurred(es);
 }
 
 void WebSocketClient::attempt_reconnect() {
     if (reconnect_stopped_) {
-        LOG_INFO(
+        LOG_DEBUG(
             kTag,
             QString("[%1] attempt_reconnect skipped for %2 (stop_reconnect)").arg(thread_label(), redact_url(url_)));
         return;
     }
     reconnect_attempts_++;
-    LOG_INFO(kTag, QString("[%1] Reconnect attempt %2/%3 to %4")
+    LOG_DEBUG(kTag, QString("[%1] Reconnect attempt %2/%3 to %4")
                        .arg(thread_label())
                        .arg(reconnect_attempts_)
                        .arg(MAX_RECONNECT_ATTEMPTS)

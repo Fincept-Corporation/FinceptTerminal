@@ -51,6 +51,37 @@ class InactivityGuard : public QObject {
     void set_terminal_locked(bool locked);
     bool is_terminal_locked() const { return terminal_locked_; }
 
+    /// Re-send terminal_locked_changed(true) while the terminal is locked, so a
+    /// window built after the lock went up applies it too — e.g. the first
+    /// window at launch, built while the saved session is still being checked
+    /// (its constructor shows the terminal until that check ends). Does not
+    /// change the flag; every receiver is idempotent. No-op while unlocked.
+    void reassert_lock();
+
+    // ── "Is anyone using the terminal?" — for background polling ───────────
+    // Account / session polls must not run for a terminal nobody is using:
+    // most of the API's traffic was idle terminals polling on a timer.
+
+    /// Install the app-wide input filter so input is tracked whether or not
+    /// auto-lock is enabled (the filter otherwise only goes in at the first
+    /// PIN unlock with auto-lock on). Idempotent; call after QApplication exists.
+    void ensure_input_tracking();
+
+    /// Wall-clock ms since the last mouse / keyboard / touch input or the
+    /// application becoming active. 0 until ensure_input_tracking() ran.
+    qint64 ms_since_input() const;
+
+    /// True when a background poll may run: the terminal is not locked, a
+    /// top-level window is visible and not minimised, and there was input in
+    /// the last kUserIdleAfterMs. Without a GUI (tests) only the lock and the
+    /// input checks apply.
+    bool user_active() const;
+
+    /// No input for this long = idle (the default auto-lock delay).
+    static constexpr qint64 kUserIdleAfterMs = 10 * 60 * 1000;
+    /// Override the idle threshold (tests).
+    void set_user_idle_after_ms(qint64 ms) { idle_after_ms_ = ms > 0 ? ms : kUserIdleAfterMs; }
+
   signals:
     /// Emitted when the idle timeout expires — WindowFrame should show lock screen.
     void lock_requested();
@@ -73,6 +104,11 @@ class InactivityGuard : public QObject {
     // check_for_resume_lock() to decide whether the machine slept through
     // the inactivity window (QTimer pauses during OS suspend).
     QDateTime last_activity_;
+    // Same as last_activity_ but updated on every input, enabled or not (ms
+    // since epoch; cheap enough for every mouse move).
+    qint64 last_input_ms_ = 0;
+    bool input_tracking_ = false;
+    qint64 idle_after_ms_ = kUserIdleAfterMs;
 };
 
 } // namespace fincept::auth

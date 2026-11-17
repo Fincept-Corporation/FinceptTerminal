@@ -12,6 +12,9 @@ Advanced portfolio optimization algorithms including:
 
 import json
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 from typing import Dict, List, Any, Optional, Union, Tuple
 import warnings
 warnings.filterwarnings('ignore')
@@ -396,7 +399,8 @@ class PortfolioOptimizationService:
     def efficient_frontier(self,
                           expected_returns: pd.Series,
                           cov_matrix: pd.DataFrame,
-                          num_portfolios: int = 100) -> Dict[str, Any]:
+                          num_portfolios: int = 100,
+                          risk_free_rate: float = 0.02) -> Dict[str, Any]:
         """
         Calculate the efficient frontier.
 
@@ -404,6 +408,7 @@ class PortfolioOptimizationService:
             expected_returns: Expected returns
             cov_matrix: Covariance matrix
             num_portfolios: Number of portfolios to generate
+            risk_free_rate: Risk-free rate used for each frontier point's Sharpe ratio
 
         Returns:
             Efficient frontier portfolios
@@ -453,7 +458,7 @@ class PortfolioOptimizationService:
                     frontier_portfolios.append({
                         "return": float(target_ret),
                         "volatility": float(vol),
-                        "sharpe": float((target_ret - 0.02) / vol),
+                        "sharpe": float((target_ret - risk_free_rate) / vol),
                         "weights": dict(zip(expected_returns.index, weights))
                     })
 
@@ -505,7 +510,7 @@ def _json_safe(obj):
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -585,16 +590,17 @@ def main():
             result = service.efficient_frontier(
                 expected_returns=pd.Series(params.get("expected_returns", []), index=assets),
                 cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
-                num_portfolios=params.get("num_portfolios", 100)
+                num_portfolios=params.get("num_portfolios", 100),
+                risk_free_rate=float(params.get("risk_free_rate", 0.02))
             )
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(_json_safe(result)))
+        fincept_json.emit(_json_safe(result))
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

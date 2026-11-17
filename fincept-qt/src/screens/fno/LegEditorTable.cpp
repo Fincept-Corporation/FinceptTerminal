@@ -1,8 +1,12 @@
 #include "screens/fno/LegEditorTable.h"
 
+#include "screens/fno/FnoFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
+#include <QFontMetrics>
 #include <QHeaderView>
 #include <QMouseEvent>
 
@@ -119,7 +123,7 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
         if (col == ColBuySell)
             return leg.lots >= 0 ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE());
         if (col == ColDelete)
-            return QColor(colors::TEXT_TERTIARY());
+            return QColor(colors::TEXT_SECONDARY());
         if (col == ColLtp)
             return QColor(colors::TEXT_PRIMARY());
         if (col == ColDelta) {
@@ -153,23 +157,27 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
             case ColLots:
                 return leg.lots;
             case ColEntry:
-                return QString::number(leg.entry_price, 'f', 2);
+                // The edit text is parsed back with toDouble(): plain C-locale digits.
+                if (role == Qt::EditRole)
+                    return QString::number(leg.entry_price, 'f', 2);
+                return fno_price(leg.entry_price, ccy()); // the header names the unit
             case ColIv:
-                return leg.iv_at_entry > 0 ? QString::number(leg.iv_at_entry * 100.0, 'f', 2) + "%"
+                return leg.iv_at_entry > 0 ? fincept::ui::formatting::pct(leg.iv_at_entry * 100.0, 2, false)
                                            : QString::fromUtf8("—");
             case ColLtp: {
                 double ltp = resolve_ltp(leg);
-                return ltp > 0 ? QString::number(ltp, 'f', 2) : QString::fromUtf8("—");
+                return ltp > 0 ? fno_price(ltp, ccy()) : QString::fromUtf8("—");
             }
             case ColDelta: {
+                // Position delta (not money); signed so the direction never rests on colour.
                 double delta = resolve_delta(leg);
-                return delta != 0 ? QString::number(delta, 'f', 2) : QString::fromUtf8("—");
+                return delta != 0 ? fincept::ui::formatting::signed_number(delta, 2) : QString::fromUtf8("—");
             }
             case ColPnl: {
                 double pnl = resolve_pnl(leg);
                 if (pnl == 0 && resolve_ltp(leg) <= 0)
                     return QString::fromUtf8("—");
-                return QString::number(pnl, 'f', 2);
+                return fno_signed_money(pnl, ccy()); // the user's decimals setting
             }
             case ColDelete:
                 return QString::fromUtf8("✕");
@@ -276,16 +284,28 @@ QVariant LegEditorModel::headerData(int section, Qt::Orientation orient, int rol
             tr("Implied volatility captured when the leg was added."),
             tr("Live premium per share from the option chain."),
             tr("Position delta = per-share delta × lots × lot size (signed)."),
-            tr("Mark-to-market P&L = (LTP − entry) × lots × lot size."),
+            tr("Mark-to-market P&L = (LTP − entry) × lots × lot size, in %1.")
+                .arg(fincept::ui::formatting::currency_name(ccy())),
             QString(),
         };
         return tips[section];
     }
     if (role != Qt::DisplayRole)
         return {};
-    // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange.
-    const QString headers[ColCount] = {tr("On"), tr("B/S"), tr("Type"),  tr("Strike"), tr("Lots"), tr("Entry"),
-                                       tr("IV"), tr("LTP"), tr("Delta"), tr("P&L"),    QString()};
+    // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange. The
+    // premium columns name the chain's currency unit as the user's settings print it.
+    namespace fmt = fincept::ui::formatting;
+    const QString headers[ColCount] = {tr("On"),
+                                       tr("B/S"),
+                                       tr("Type"),
+                                       tr("Strike"),
+                                       tr("Lots"),
+                                       fmt::header(tr("Entry"), ccy()),
+                                       tr("IV"),
+                                       fmt::header(tr("LTP"), ccy()),
+                                       tr("Delta"),
+                                       tr("P&L"),
+                                       QString()};
     return headers[section];
 }
 
@@ -355,11 +375,18 @@ void LegEditorModel::remove_row(int row) {
     emit legs_changed();
 }
 
+QString LegEditorModel::ccy() const {
+    return fno_chain_ccy(chain_.broker_id);
+}
+
 void LegEditorModel::set_chain(const fincept::services::options::OptionChain& chain) {
+    const bool ccy_changed = fno_chain_ccy(chain.broker_id) != ccy();
     chain_ = chain;
+    if (ccy_changed)
+        emit headerDataChanged(Qt::Horizontal, 0, ColCount - 1); // the premium columns' unit
     if (legs_.isEmpty())
         return;
-    const QModelIndex top_left = index(0, ColLtp);
+    const QModelIndex top_left = index(0, ccy_changed ? ColEntry : ColLtp);
     const QModelIndex bottom_right = index(legs_.size() - 1, ColPnl);
     emit dataChanged(top_left, bottom_right, {Qt::DisplayRole, Qt::ForegroundRole});
 }
@@ -369,6 +396,9 @@ void LegEditorModel::set_chain(const fincept::services::options::OptionChain& ch
 LegEditorTable::LegEditorTable(QWidget* parent) : QTableView(parent) {
     model_ = new LegEditorModel(this);
     setModel(model_);
+    // The model formats in data(): a currency / number-format change repaints its
+    // cells and headers from the legs and chain it holds.
+    fincept::ui::formatting::refresh_model_on_format_change(model_);
 
     setAccessibleName(tr("Strategy legs"));
     setAccessibleDescription(
@@ -386,23 +416,36 @@ LegEditorTable::LegEditorTable(QWidget* parent) : QTableView(parent) {
     horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     horizontalHeader()->setStretchLastSection(true);
     horizontalHeader()->setHighlightSections(false);
-    horizontalHeader()->setMinimumSectionSize(28);
-    horizontalHeader()->resizeSection(LegEditorModel::ColActive, 32);
-    horizontalHeader()->resizeSection(LegEditorModel::ColBuySell, 40);
-    horizontalHeader()->resizeSection(LegEditorModel::ColType, 36);
-    horizontalHeader()->resizeSection(LegEditorModel::ColStrike, 65);
-    horizontalHeader()->resizeSection(LegEditorModel::ColLots, 45);
-    horizontalHeader()->resizeSection(LegEditorModel::ColEntry, 65);
-    horizontalHeader()->resizeSection(LegEditorModel::ColIv, 52);
-    horizontalHeader()->resizeSection(LegEditorModel::ColLtp, 60);
-    horizontalHeader()->resizeSection(LegEditorModel::ColDelta, 52);
-    horizontalHeader()->resizeSection(LegEditorModel::ColPnl, 60);
-    horizontalHeader()->resizeSection(LegEditorModel::ColDelete, 28);
     horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
     verticalHeader()->setVisible(false);
-    verticalHeader()->setDefaultSectionSize(24);
+    apply_metrics();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { apply_metrics(); });
 
     setStyleSheet(styles::fno_dense_table());
+}
+
+void LegEditorTable::apply_metrics() {
+    // The widths below are sized for the table's 11px text at the default font
+    // size; they scale with the user's font so figures are not elided.
+    const int px = fonts::font_px(-3);
+    if (px == metrics_font_px_)
+        return;
+    metrics_font_px_ = px;
+    const auto w = [px](int design) { return qMax(design, qRound(design * px / 11.0)); };
+    horizontalHeader()->setMinimumSectionSize(w(28));
+    horizontalHeader()->resizeSection(LegEditorModel::ColActive, w(32));
+    horizontalHeader()->resizeSection(LegEditorModel::ColBuySell, w(40));
+    horizontalHeader()->resizeSection(LegEditorModel::ColType, w(36));
+    horizontalHeader()->resizeSection(LegEditorModel::ColStrike, w(65));
+    horizontalHeader()->resizeSection(LegEditorModel::ColLots, w(45));
+    horizontalHeader()->resizeSection(LegEditorModel::ColEntry, w(65));
+    horizontalHeader()->resizeSection(LegEditorModel::ColIv, w(52));
+    horizontalHeader()->resizeSection(LegEditorModel::ColLtp, w(60));
+    horizontalHeader()->resizeSection(LegEditorModel::ColDelta, w(52));
+    horizontalHeader()->resizeSection(LegEditorModel::ColPnl, w(78)); // signed amount with its unit
+    horizontalHeader()->resizeSection(LegEditorModel::ColDelete, w(28));
+    verticalHeader()->setDefaultSectionSize(qMax(24, QFontMetrics(fonts::font(-3)).height() + 8));
 }
 
 void LegEditorTable::mousePressEvent(QMouseEvent* event) {

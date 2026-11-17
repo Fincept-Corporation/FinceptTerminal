@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 BASE_URL = "https://nominatim.openstreetmap.org"
 
 session = requests.Session()
@@ -29,7 +31,16 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        body = response.json()
+        # Nominatim sends coordinates as text ("40.7127281"): numbers at the source.
+        for place in (body if isinstance(body, list) else [body] if isinstance(body, dict) else []):
+            if isinstance(place, dict):
+                for k in ("lat", "lon"):
+                    if isinstance(place.get(k), str):
+                        place[k] = fc.number(place[k])
+                if isinstance(place.get("boundingbox"), list):
+                    place["boundingbox"] = [fc.number(x) for x in place["boundingbox"]]
+        return body
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:

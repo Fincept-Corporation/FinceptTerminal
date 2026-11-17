@@ -8,6 +8,7 @@
 #include "screens/settings/SettingsStyles.h"
 #include "storage/repositories/DataSourceRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QCheckBox>
 #include <QFrame>
@@ -56,7 +57,7 @@ QFrame* make_panel(const QString& title) {
     pvl->setSpacing(0);
 
     auto* hdr = new QWidget(nullptr);
-    hdr->setFixedHeight(34);
+    hdr->setMinimumHeight(34);
     hdr->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(hdr);
@@ -128,13 +129,13 @@ QWidget* DataSourcesSection::build_content() {
     trl->addStretch();
 
     auto* open_full = new QPushButton(tr("OPEN FULL SCREEN"));
-    open_full->setFixedHeight(24);
+    open_full->setMinimumHeight(24);
     open_full->setCursor(Qt::PointingHandCursor);
     open_full->setStyleSheet(
         QString(
-            "QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;padding:0 10px;}"
+            "QPushButton{background:%4;color:%1;border:1px solid %2;font-weight:700;padding:0 10px;}"
             "QPushButton:hover{background:%1;color:%3;}")
-            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT(), ui::colors::ACCENT_BG()));
     connect(open_full, &QPushButton::clicked, this,
             []() { EventBus::instance().publish("nav.switch_screen", {{"screen_id", "data_sources"}}); });
     trl->addWidget(open_full);
@@ -181,7 +182,7 @@ QWidget* DataSourcesSection::build_content() {
 
             auto* val = new QLabel(QString::number(value));
             val->setAlignment(Qt::AlignCenter);
-            val->setStyleSheet(QString("color:%1;font-size:18px;font-weight:700;background:transparent;").arg(color));
+            val->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(4) + "px;font-weight:700;background:transparent;").arg(color));
             bx->addWidget(val);
 
             auto* ll = new QLabel(label);
@@ -195,7 +196,7 @@ QWidget* DataSourcesSection::build_content() {
 
         make_stat(tr("TOTAL"), total, ui::colors::CYAN());
         make_stat(tr("ACTIVE"), active, ui::colors::POSITIVE());
-        make_stat(tr("INACTIVE"), total - active, ui::colors::TEXT_DIM());
+        make_stat(tr("INACTIVE"), total - active, ui::colors::TEXT_SECONDARY());
         make_stat(tr("PROVIDERS"), providers.size(), ui::colors::AMBER());
         vl->addWidget(stat_row);
     }
@@ -204,17 +205,17 @@ QWidget* DataSourcesSection::build_content() {
 
     // Connections table
     if (connections.isEmpty()) {
+        // Genuinely nothing here: the shared designed state, with the action that fills it.
         auto* empty_panel = make_panel(tr("CONNECTIONS"));
-        auto* empty_body = new QWidget(this);
-        empty_body->setStyleSheet("background:transparent;");
-        auto* evl = new QVBoxLayout(empty_body);
-        evl->setContentsMargins(12, 16, 12, 16);
-        auto* elbl = new QLabel(
-            tr("No data sources configured. Open the full Data Sources screen to browse and add connectors."));
-        elbl->setWordWrap(true);
-        elbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        evl->addWidget(elbl);
-        static_cast<QVBoxLayout*>(empty_panel->layout())->addWidget(empty_body);
+        auto* es = new ui::EmptyState(empty_panel);
+        es->set_compact(true);
+        es->set_content(QStringLiteral("⇄"), tr("No data sources connected yet"),
+                        tr("Connect databases, brokers, market-data APIs and files; they are listed here with their "
+                           "status and can be switched on and off in bulk."),
+                        tr("BROWSE CONNECTORS"));
+        connect(es, &ui::EmptyState::primary_clicked, this,
+                []() { EventBus::instance().publish("nav.switch_screen", {{"screen_id", "data_sources"}}); });
+        static_cast<QVBoxLayout*>(empty_panel->layout())->addWidget(es);
         vl->addWidget(empty_panel);
     } else {
         QMap<QString, QVector<DataSource>> grouped;
@@ -231,8 +232,13 @@ QWidget* DataSourcesSection::build_content() {
         bvl->setSpacing(0);
 
         // Table header
+        // Column widths are for the default font size and grow with the user's.
+        const auto col_w = [](int w) {
+            return qMax(w, w * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx);
+        };
+
         auto* th = new QWidget(this);
-        th->setFixedHeight(26);
+        th->setMinimumHeight(26);
         th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* thl = new QHBoxLayout(th);
@@ -241,9 +247,10 @@ QWidget* DataSourcesSection::build_content() {
 
         auto add_th = [&](const QString& text, int width = 0) {
             auto* lbl = new QLabel(text);
-            lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+            lbl->setStyleSheet(
+                QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
             if (width > 0) {
-                lbl->setFixedWidth(width);
+                lbl->setFixedWidth(col_w(width));
                 lbl->setAlignment(Qt::AlignCenter);
             }
             thl->addWidget(lbl, width > 0 ? 0 : 1);
@@ -258,7 +265,7 @@ QWidget* DataSourcesSection::build_content() {
         int row_idx = 0;
         for (auto it = grouped.constBegin(); it != grouped.constEnd(); ++it) {
             auto* grp = new QWidget(this);
-            grp->setFixedHeight(24);
+            grp->setMinimumHeight(24);
             grp->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
                                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* ghl = new QHBoxLayout(grp);
@@ -271,7 +278,7 @@ QWidget* DataSourcesSection::build_content() {
 
             for (const auto& ds : it.value()) {
                 auto* row = new QWidget(this);
-                row->setFixedHeight(26);
+                row->setMinimumHeight(26);
                 row->setStyleSheet(
                     QString("background:%1;border-bottom:1px solid %2;")
                         .arg((row_idx % 2) ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
@@ -288,22 +295,22 @@ QWidget* DataSourcesSection::build_content() {
                 rhl->addWidget(name_lbl, 1);
 
                 auto* badge = new QLabel(ds_transport_badge(ds.type));
-                badge->setFixedWidth(44);
+                badge->setFixedWidth(col_w(44));
                 badge->setAlignment(Qt::AlignCenter);
                 badge->setStyleSheet(
                     QString("color:%1;font-weight:700;background:%2;border:1px solid %3;")
-                        .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
                 rhl->addWidget(badge);
 
                 auto* cat_lbl = new QLabel(ds.category.isEmpty() ? "—" : ds.category);
-                cat_lbl->setFixedWidth(80);
+                cat_lbl->setFixedWidth(col_w(80));
                 cat_lbl->setAlignment(Qt::AlignCenter);
                 cat_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
                 rhl->addWidget(cat_lbl);
 
                 auto* toggle = new QCheckBox;
                 toggle->setChecked(ds.enabled);
-                toggle->setFixedWidth(30);
+                toggle->setFixedWidth(col_w(30));
                 toggle->setStyleSheet(check_ss());
                 QString source_id = ds.id;
                 connect(toggle, &QCheckBox::toggled, this, [source_id, name_lbl, toggle](bool checked) {
@@ -324,12 +331,12 @@ QWidget* DataSourcesSection::build_content() {
                 rhl->addWidget(toggle);
 
                 auto* del_btn = new QPushButton("X");
-                del_btn->setFixedSize(22, 18);
+                del_btn->setFixedSize(col_w(30) - 8, qMax(18, ui::fonts::font_px(0) + 4));
                 del_btn->setCursor(Qt::PointingHandCursor);
                 del_btn->setStyleSheet(
                     QString("QPushButton{background:transparent;color:%1;border:none;font-weight:700;}"
                             "QPushButton:hover{color:%2;}")
-                        .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
+                        .arg(ui::colors::ICON_DIM(), ui::colors::NEGATIVE()));
                 connect(del_btn, &QPushButton::clicked, this, [this, source_id, name]() {
                     auto answer =
                         QMessageBox::warning(this, tr("Delete Connection"),
@@ -382,11 +389,11 @@ QWidget* DataSourcesSection::build_content() {
         brhl->setSpacing(8);
 
         auto* enable_all = new QPushButton(tr("ENABLE ALL"));
-        enable_all->setFixedHeight(24);
-        enable_all->setStyleSheet(QString("QPushButton{background:rgba(22,163,74,0.1);color:%1;border:1px solid "
+        enable_all->setMinimumHeight(24);
+        enable_all->setStyleSheet(QString("QPushButton{background:%3;color:%1;border:1px solid "
                                           "%1;font-weight:700;padding:0 10px;}"
                                           "QPushButton:hover{background:%1;color:%2;}")
-                                      .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
+                                      .arg(ui::colors::POSITIVE(), ui::colors::TEXT_ON_ACCENT(), ui::colors::POSITIVE_BG()));
         connect(enable_all, &QPushButton::clicked, this, [this]() {
             auto r = DataSourceRepository::instance().list_all();
             if (!r.is_ok())
@@ -403,12 +410,13 @@ QWidget* DataSourcesSection::build_content() {
         brhl->addWidget(enable_all);
 
         auto* disable_all = new QPushButton(tr("DISABLE ALL"));
-        disable_all->setFixedHeight(24);
+        disable_all->setMinimumHeight(24);
         disable_all->setStyleSheet(
-            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;padding:0 "
+            QString("QPushButton{background:%4;color:%1;border:1px solid %3;font-weight:700;padding:0 "
                     "10px;}"
                     "QPushButton:hover{background:%1;color:%2;}")
-                .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
+                .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT(), ui::colors::NEGATIVE_DIM(),
+                     ui::colors::NEGATIVE_BG()));
         connect(disable_all, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::warning(this, tr("Disable All"), tr("Disable all data source connections?"),
                                                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
@@ -429,11 +437,12 @@ QWidget* DataSourcesSection::build_content() {
         brhl->addWidget(disable_all);
 
         auto* delete_all = new QPushButton(tr("DELETE ALL"));
-        delete_all->setFixedHeight(24);
+        delete_all->setProperty("fincept_agent_risk", "delete"); // agents: deletes every data source
+        delete_all->setMinimumHeight(24);
         delete_all->setStyleSheet(
             QString("QPushButton{background:%1;color:%2;border:2px solid %2;font-weight:700;padding:0 10px;}"
                     "QPushButton:hover{background:%2;color:%3;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+                .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT()));
         connect(delete_all, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::critical(
                 this, tr("Delete All Connections"),

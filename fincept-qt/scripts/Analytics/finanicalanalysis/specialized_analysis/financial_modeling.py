@@ -1,54 +1,54 @@
 """
 Financial Statement Modeling Module
+===================================
 
-CFA Curriculum Alignment: Introduction to Financial Statement Modeling
-Level: CFA Level I & II
+Three-statement pro forma model built from the supplied base-year statements
+(CFA: Introduction to Financial Statement Modeling).
 
-This module provides comprehensive financial statement modeling capabilities including:
-1. Pro Forma Financial Statement Construction
-2. Revenue Forecasting Models
-3. Expense and Cost Modeling
-4. Working Capital Projections
-5. Capital Expenditure Forecasting
-6. Integrated Financial Model Building
-7. Sensitivity and Scenario Analysis
-8. Model Validation and Stress Testing
+What it does
+  * Derives every driver from the base year (margins, DSO/DIO/DPO, capex and
+    depreciation rates, interest rate, payout, tax rate) unless an assumption
+    overrides it; ``assumption_sources`` says where each value came from. The one
+    driver that cannot be derived from a single year - revenue growth - must be
+    supplied or comes from the revenue CAGR of the supplied history.
+  * Projects income statement, balance sheet and cash flow statement year by year.
+    Cash comes out of the cash flow statement; a revolver keeps cash at or above
+    ``min_cash``; the balance sheet balances by construction and the balance and
+    cash checks are computed, not asserted.
+  * Optional DCF (FCFF discounted at ``wacc`` with a Gordon terminal value at
+    ``terminal_growth``) and a sensitivity analysis that rebuilds the model for
+    each tested value.
 
-Key CFA Concepts Covered:
-- Revenue drivers and forecasting methodologies
-- Cost structure analysis (fixed vs variable)
-- Operating leverage and margin analysis
-- Working capital modeling
-- CapEx and depreciation forecasting
-- Debt and interest modeling
-- Tax provision projections
-- Cash flow forecasting
-- Balance sheet balancing
-- Model integrity checks
+Not available
+  * ``FinancialStatementModelingAnalyzer.analyze()`` (the historical "modeling
+    readiness" analysis) - it was written against a different analyzer API, could
+    not run, and duplicated the statement analyzers. Use the ``analyze_*`` commands
+    of Analytics/financial_analysis_cli.py instead.
 
-References:
-- CFA Program Curriculum, Financial Statement Modeling
-- Best Practices in Financial Modeling
-- Investment Banking Valuation Techniques
+Entry point
+  python Analytics/financial_analysis_cli.py build_model '<json>'  (this file run as a
+  script forwards its JSON argument to that command).
 """
 
-from dataclasses import dataclass, field
+if __name__ == "__main__" and not __package__:
+    # Run as a script: import through the package so the core classes are the
+    # package's own (no second top-level copy of `core`, PEP 366).
+    import os as _os
+    import sys as _sys
+    _analytics = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    for _p in (_analytics, _os.path.dirname(_analytics)):
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    import finanicalanalysis.specialized_analysis  # noqa: F401
+    __package__ = "finanicalanalysis.specialized_analysis"
+
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import List, Dict, Optional, Any, Tuple
-from datetime import datetime
 import math
 
-# Import from parent package
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-try:
-    from core.base_analyzer import BaseAnalyzer, AnalysisResult, AnalysisType, RiskLevel, TrendDirection
-    from core.data_processor import FinancialStatements
-except ImportError:
-    from ..core.base_analyzer import BaseAnalyzer, AnalysisResult, AnalysisType, RiskLevel, TrendDirection
-    from ..core.data_processor import FinancialStatements
+from ..core.base_analyzer import BaseAnalyzer, AnalysisResult, AnalysisType, RiskLevel, TrendDirection
+from ..core.data_processor import FinancialStatements
 
 
 # =============================================================================
@@ -268,6 +268,12 @@ class ProFormaBalanceSheet:
     total_liabilities_and_equity: float
     # Check
     balance_check: float  # Should be 0
+    # Lines added for the integrated model (defaults keep the old constructor valid)
+    short_term_investments: float = 0.0
+    goodwill: float = 0.0
+    revolver: float = 0.0
+    minority_interest: float = 0.0
+    unreconciled_base_difference: float = 0.0
 
 
 @dataclass
@@ -359,1008 +365,75 @@ class ModelValidation:
 
 class FinancialStatementModelingAnalyzer(BaseAnalyzer):
     """
-    Financial Statement Modeling Analyzer
+    Three-statement financial model built from supplied statements.
 
-    Provides comprehensive financial statement modeling and forecasting
-    capabilities aligned with CFA curriculum requirements.
-
-    Key Capabilities:
-    1. Revenue forecasting with multiple methodologies
-    2. Expense and cost structure modeling
-    3. Working capital projections
-    4. Capital expenditure forecasting
-    5. Debt and interest modeling
-    6. Integrated three-statement model building
-    7. Sensitivity and scenario analysis
-    8. Model validation and stress testing
-
-    CFA Curriculum Coverage:
-    - Introduction to Financial Statement Modeling
-    - Pro forma financial statement construction
-    - Revenue and expense forecasting
-    - Model integrity and validation
+    build_integrated_model() is the working entry point; analyze() is not
+    available (see the module docstring).
     """
 
-    def __init__(self):
-        super().__init__("Financial Statement Modeling")
+    def __init__(self, enable_logging: bool = False):
+        super().__init__(enable_logging)
 
-        # Default assumptions
+        # Defaults used only by the standalone create_*_forecast helpers.
+        # build_integrated_model() derives its drivers from the statements instead.
         self.default_assumptions = {
             'forecast_years': 5,
             'revenue_growth_rate': 0.05,
-            'gross_margin': 0.40,
-            'operating_margin': 0.15,
-            'tax_rate': 0.25,
             'depreciation_rate': 0.10,
-            'capex_to_revenue': 0.05,
-            'working_capital_to_revenue': 0.15,
-            'interest_rate': 0.06,
-            'dividend_payout': 0.30,
         }
 
-        # Industry benchmarks for validation
+        # Industry ranges used by validate_model() warnings
         self.industry_benchmarks = {
-            'technology': {
-                'gross_margin': (0.50, 0.80),
-                'operating_margin': (0.15, 0.35),
-                'revenue_growth': (0.05, 0.25),
-                'capex_intensity': (0.03, 0.10),
-            },
-            'manufacturing': {
-                'gross_margin': (0.20, 0.40),
-                'operating_margin': (0.05, 0.15),
-                'revenue_growth': (0.02, 0.10),
-                'capex_intensity': (0.05, 0.15),
-            },
-            'retail': {
-                'gross_margin': (0.25, 0.45),
-                'operating_margin': (0.03, 0.10),
-                'revenue_growth': (0.02, 0.08),
-                'capex_intensity': (0.02, 0.06),
-            },
-            'healthcare': {
-                'gross_margin': (0.40, 0.70),
-                'operating_margin': (0.10, 0.25),
-                'revenue_growth': (0.05, 0.15),
-                'capex_intensity': (0.04, 0.10),
-            },
-            'financial_services': {
-                'gross_margin': (0.60, 0.90),
-                'operating_margin': (0.20, 0.40),
-                'revenue_growth': (0.03, 0.12),
-                'capex_intensity': (0.01, 0.05),
-            },
+            'technology': {'gross_margin': (0.50, 0.80), 'operating_margin': (0.15, 0.35),
+                           'revenue_growth': (0.05, 0.25), 'capex_intensity': (0.03, 0.10)},
+            'manufacturing': {'gross_margin': (0.20, 0.40), 'operating_margin': (0.05, 0.15),
+                              'revenue_growth': (0.02, 0.10), 'capex_intensity': (0.05, 0.15)},
+            'retail': {'gross_margin': (0.25, 0.45), 'operating_margin': (0.03, 0.10),
+                       'revenue_growth': (0.02, 0.08), 'capex_intensity': (0.02, 0.06)},
+            'healthcare': {'gross_margin': (0.40, 0.70), 'operating_margin': (0.10, 0.25),
+                           'revenue_growth': (0.05, 0.15), 'capex_intensity': (0.04, 0.10)},
+            'financial_services': {'gross_margin': (0.60, 0.90), 'operating_margin': (0.20, 0.40),
+                                   'revenue_growth': (0.03, 0.12), 'capex_intensity': (0.01, 0.05)},
         }
-
-        # Working capital benchmarks (days)
-        self.working_capital_benchmarks = {
-            'dso': {'min': 30, 'typical': 45, 'max': 75},
-            'dio': {'min': 30, 'typical': 60, 'max': 120},
-            'dpo': {'min': 30, 'typical': 45, 'max': 90},
-        }
-
-        # Register formulas
         self._register_formulas()
 
     def _register_formulas(self):
-        """Register financial modeling formulas"""
+        """Formulas used by the model (documentation strings)"""
         self.formula_registry = {
-            # Revenue formulas
-            'revenue_growth': 'Revenue(t) = Revenue(t-1) × (1 + Growth Rate)',
-            'bottom_up_revenue': 'Revenue = Σ(Units × Price) for each product/segment',
-            'market_share_revenue': 'Revenue = Total Market Size × Market Share × Price',
-
-            # Cost formulas
-            'cogs_percent': 'COGS = Revenue × (1 - Gross Margin)',
-            'variable_cost': 'Variable Cost = Revenue × Variable Rate',
-            'fixed_cost_step': 'Fixed Cost = Base + Step Increment × floor(Revenue / Threshold)',
-
-            # Working capital formulas
-            'accounts_receivable': 'AR = Revenue × (DSO / 365)',
-            'inventory': 'Inventory = COGS × (DIO / 365)',
-            'accounts_payable': 'AP = COGS × (DPO / 365)',
-            'cash_conversion_cycle': 'CCC = DSO + DIO - DPO',
-
-            # CapEx formulas
-            'maintenance_capex': 'Maintenance CapEx = Net PPE × Depreciation Rate',
-            'growth_capex': 'Growth CapEx = ΔRevenue × CapEx Intensity',
-            'depreciation': 'Depreciation = (Gross PPE - Salvage) / Useful Life',
-
-            # Debt formulas
-            'interest_expense': 'Interest = Average Debt Balance × Interest Rate',
-            'debt_service': 'Debt Service = Interest + Principal',
-            'interest_coverage': 'Interest Coverage = EBIT / Interest Expense',
-
-            # Cash flow formulas
-            'fcf': 'FCF = EBIT(1-t) + D&A - CapEx - ΔNWC',
-            'fcfe': 'FCFE = FCF - Interest(1-t) + Net Borrowing',
+            'revenue_growth': 'Revenue(t) = Revenue(t-1) x (1 + g)',
+            'operating_costs': 'COGS, SG&A, R&D, other cash opex = % of revenue (base-year ratios)',
+            'depreciation': 'Depreciation(t) = depreciation rate x Gross PPE(t-1) (Net PPE when gross not reported)',
+            'accounts_receivable': 'AR = Revenue x DSO / 365',
+            'inventory': 'Inventory = COGS x DIO / 365',
+            'accounts_payable': 'AP = COGS x DPO / 365',
+            'interest_expense': 'Interest(t) = rate x debt at the start of year t (no circularity)',
+            'tax': 'Tax = max(0, pre-tax income) x tax rate (no loss carry-forward modelled)',
+            'cash': 'Cash(t) = Cash(t-1) + CFO + CFI + CFF; revolver keeps Cash >= min_cash',
+            'fcff': 'FCFF = EBIT x (1 - t) + D&A - CapEx - change in NWC',
+            'fcfe': 'FCFE = CFO - CapEx + net borrowing',
+            'terminal_value': 'TV = FCFF(N) x (1 + g) / (WACC - g)',
         }
 
-    def analyze(self,
-                statements: FinancialStatements,
-                comparative_data: Optional[Dict[str, Any]] = None,
-                industry_data: Optional[Dict[str, Any]] = None) -> List[AnalysisResult]:
-        """
-        Perform comprehensive financial modeling analysis.
+    def analyze(self, statements: FinancialStatements,
+                comparative_data: Optional[List[FinancialStatements]] = None,
+                industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
+        """Not available: the historical 'modeling readiness' analysis was written against
+        another analyzer API and duplicated the statement analyzers. Use build_integrated_model()
+        for projections and the statement analyzers for historical ratios."""
+        raise NotImplementedError(
+            "FinancialStatementModelingAnalyzer.analyze is not available; use build_integrated_model() "
+            "(CLI: build_model) for projections and analyze_income / analyze_balance / analyze_cashflow "
+            "for historical ratios")
 
-        Args:
-            statements: Current financial statements
-            comparative_data: Historical data for trend analysis
-            industry_data: Industry benchmarks and comparables
-
-        Returns:
-            List of AnalysisResult objects
-        """
-        results = []
-
-        # 1. Analyze historical performance for forecasting base
-        results.extend(self._analyze_historical_performance(statements, comparative_data))
-
-        # 2. Revenue forecasting analysis
-        results.extend(self._analyze_revenue_drivers(statements, comparative_data))
-
-        # 3. Cost structure analysis
-        results.extend(self._analyze_cost_structure(statements, comparative_data))
-
-        # 4. Working capital analysis
-        results.extend(self._analyze_working_capital_patterns(statements, comparative_data))
-
-        # 5. CapEx and depreciation analysis
-        results.extend(self._analyze_capex_patterns(statements, comparative_data))
-
-        # 6. Debt and interest analysis
-        results.extend(self._analyze_debt_structure(statements, comparative_data))
-
-        # 7. Model validation recommendations
-        results.extend(self._analyze_model_requirements(statements, industry_data))
-
-        return results
+    def get_key_metrics(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]] = None,
+                        unavailable: Optional[Dict[str, str]] = None) -> Dict[str, float]:
+        """Model drivers that can be derived from the base year (no defaults)."""
+        drivers, _, _ = self._derive_drivers(statements, comparative_data, {}, strict=False)
+        return {k: v for k, v in drivers.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
 
     # =========================================================================
-    # HISTORICAL ANALYSIS
-    # =========================================================================
-
-    def _analyze_historical_performance(self,
-                                         statements: FinancialStatements,
-                                         comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze historical performance to establish forecasting base"""
-        results = []
-        income = statements.income_statement
-        balance = statements.balance_sheet
-
-        # Calculate historical growth rates
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        prior_revenue = 0
-        if comparative_data and 'prior_period' in comparative_data:
-            prior_income = comparative_data['prior_period'].get('income_statement', {})
-            prior_revenue = prior_income.get('revenue', prior_income.get('total_revenue', 0))
-
-        growth_rate = 0
-        if prior_revenue and prior_revenue != 0:
-            growth_rate = (revenue - prior_revenue) / abs(prior_revenue)
-
-        # Calculate key margins
-        cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-        gross_profit = revenue - cogs if revenue else 0
-        gross_margin = gross_profit / revenue if revenue else 0
-
-        operating_income = income.get('operating_income', 0)
-        operating_margin = operating_income / revenue if revenue else 0
-
-        net_income = income.get('net_income', 0)
-        net_margin = net_income / revenue if revenue else 0
-
-        # EBITDA calculation
-        depreciation = income.get('depreciation_amortization',
-                                  income.get('depreciation', 0))
-        ebitda = operating_income + depreciation
-        ebitda_margin = ebitda / revenue if revenue else 0
-
-        results.append(AnalysisResult(
-            metric_name="Historical Performance Base",
-            value={
-                'revenue': revenue,
-                'revenue_growth': growth_rate,
-                'gross_margin': gross_margin,
-                'operating_margin': operating_margin,
-                'ebitda_margin': ebitda_margin,
-                'net_margin': net_margin,
-            },
-            analysis_type=AnalysisType.PROFITABILITY,
-            interpretation=f"Base period revenue of ${revenue:,.0f} with {growth_rate:.1%} growth. "
-                           f"Gross margin {gross_margin:.1%}, operating margin {operating_margin:.1%}, "
-                           f"EBITDA margin {ebitda_margin:.1%}.",
-            trend=TrendDirection.STABLE if abs(growth_rate) < 0.10 else
-                  (TrendDirection.IMPROVING if growth_rate > 0 else TrendDirection.DECLINING),
-            formula=self.formula_registry['revenue_growth']
-        ))
-
-        # Analyze margin stability
-        if comparative_data and 'historical' in comparative_data:
-            historical = comparative_data['historical']
-            margin_volatility = self._calculate_margin_volatility(historical)
-
-            results.append(AnalysisResult(
-                metric_name="Margin Stability Analysis",
-                value=margin_volatility,
-                analysis_type=AnalysisType.PROFITABILITY,
-                interpretation=f"Gross margin volatility: {margin_volatility.get('gross_margin_std', 0):.2%}. "
-                               f"Operating margin volatility: {margin_volatility.get('operating_margin_std', 0):.2%}. "
-                               f"{'Stable margins support linear forecasting.' if margin_volatility.get('is_stable', False) else 'Volatile margins suggest using range-based forecasts.'}",
-                trend=TrendDirection.STABLE if margin_volatility.get('is_stable', False) else TrendDirection.VOLATILE,
-            ))
-
-        return results
-
-    def _calculate_margin_volatility(self, historical: List[Dict]) -> Dict[str, Any]:
-        """Calculate historical margin volatility"""
-        gross_margins = []
-        operating_margins = []
-
-        for period in historical:
-            income = period.get('income_statement', {})
-            revenue = income.get('revenue', income.get('total_revenue', 0))
-            if revenue:
-                cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-                gross_margins.append((revenue - cogs) / revenue)
-                operating_margins.append(income.get('operating_income', 0) / revenue)
-
-        gross_std = self._calculate_std(gross_margins) if gross_margins else 0
-        operating_std = self._calculate_std(operating_margins) if operating_margins else 0
-
-        return {
-            'gross_margin_std': gross_std,
-            'operating_margin_std': operating_std,
-            'gross_margin_avg': sum(gross_margins) / len(gross_margins) if gross_margins else 0,
-            'operating_margin_avg': sum(operating_margins) / len(operating_margins) if operating_margins else 0,
-            'is_stable': gross_std < 0.03 and operating_std < 0.02,
-        }
-
-    def _calculate_std(self, values: List[float]) -> float:
-        """Calculate standard deviation"""
-        if not values or len(values) < 2:
-            return 0.0
-        mean = sum(values) / len(values)
-        variance = sum((x - mean) ** 2 for x in values) / (len(values) - 1)
-        return math.sqrt(variance)
-
-    # =========================================================================
-    # REVENUE FORECASTING
-    # =========================================================================
-
-    def _analyze_revenue_drivers(self,
-                                  statements: FinancialStatements,
-                                  comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze revenue drivers for forecasting"""
-        results = []
-        income = statements.income_statement
-
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-
-        # Identify revenue driver characteristics
-        segment_data = income.get('segment_revenue', {})
-        has_segments = bool(segment_data)
-
-        # Calculate implied growth drivers
-        drivers = self._identify_revenue_drivers(statements, comparative_data)
-
-        results.append(AnalysisResult(
-            metric_name="Revenue Driver Analysis",
-            value={
-                'current_revenue': revenue,
-                'identified_drivers': drivers,
-                'has_segment_data': has_segments,
-                'recommended_method': self._recommend_forecast_method(drivers, has_segments),
-            },
-            analysis_type=AnalysisType.GROWTH,
-            interpretation=f"Revenue of ${revenue:,.0f}. "
-                           f"{'Segment data available for bottom-up forecasting. ' if has_segments else ''}"
-                           f"Recommended forecasting method: {self._recommend_forecast_method(drivers, has_segments)}.",
-            formula=self.formula_registry['bottom_up_revenue'] if has_segments
-                    else self.formula_registry['revenue_growth']
-        ))
-
-        # Organic vs inorganic growth
-        if comparative_data:
-            growth_decomposition = self._decompose_growth(statements, comparative_data)
-            results.append(AnalysisResult(
-                metric_name="Growth Decomposition",
-                value=growth_decomposition,
-                analysis_type=AnalysisType.GROWTH,
-                interpretation=f"Organic growth: {growth_decomposition.get('organic_growth', 0):.1%}. "
-                               f"Acquisition contribution: {growth_decomposition.get('acquisition_growth', 0):.1%}. "
-                               f"FX impact: {growth_decomposition.get('fx_impact', 0):.1%}.",
-            ))
-
-        return results
-
-    def _identify_revenue_drivers(self,
-                                   statements: FinancialStatements,
-                                   comparative_data: Optional[Dict[str, Any]]) -> List[Dict]:
-        """Identify key revenue drivers"""
-        drivers = []
-        income = statements.income_statement
-
-        # Volume driver
-        units_sold = income.get('units_sold', 0)
-        if units_sold:
-            drivers.append({
-                'name': 'Volume',
-                'type': 'volume',
-                'current_value': units_sold,
-                'importance': 'high',
-            })
-
-        # Price driver
-        avg_price = income.get('average_selling_price', 0)
-        if avg_price:
-            drivers.append({
-                'name': 'Price',
-                'type': 'price',
-                'current_value': avg_price,
-                'importance': 'high',
-            })
-
-        # If no explicit drivers, use implied drivers
-        if not drivers:
-            revenue = income.get('revenue', income.get('total_revenue', 0))
-            prior_revenue = 0
-            if comparative_data and 'prior_period' in comparative_data:
-                prior_income = comparative_data['prior_period'].get('income_statement', {})
-                prior_revenue = prior_income.get('revenue', prior_income.get('total_revenue', 0))
-
-            growth = (revenue - prior_revenue) / prior_revenue if prior_revenue else 0.05
-
-            drivers.append({
-                'name': 'Historical Growth Rate',
-                'type': 'growth_rate',
-                'current_value': growth,
-                'importance': 'primary',
-            })
-
-        return drivers
-
-    def _recommend_forecast_method(self, drivers: List[Dict], has_segments: bool) -> str:
-        """Recommend appropriate forecasting method"""
-        if has_segments:
-            return "Bottom-up by segment"
-        elif any(d['type'] in ['volume', 'price'] for d in drivers):
-            return "Driver-based (volume × price)"
-        else:
-            return "Historical growth rate with adjustment"
-
-    def _decompose_growth(self,
-                          statements: FinancialStatements,
-                          comparative_data: Dict[str, Any]) -> Dict[str, float]:
-        """Decompose revenue growth into components"""
-        income = statements.income_statement
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-
-        prior_income = comparative_data.get('prior_period', {}).get('income_statement', {})
-        prior_revenue = prior_income.get('revenue', prior_income.get('total_revenue', 0))
-
-        if not prior_revenue:
-            return {'organic_growth': 0, 'acquisition_growth': 0, 'fx_impact': 0}
-
-        total_growth = (revenue - prior_revenue) / prior_revenue
-
-        # Check for acquisition impact
-        acquisition_revenue = income.get('acquisition_revenue', 0)
-        acquisition_growth = acquisition_revenue / prior_revenue if prior_revenue else 0
-
-        # Check for FX impact
-        fx_adjustment = income.get('fx_adjustment', 0)
-        fx_impact = fx_adjustment / prior_revenue if prior_revenue else 0
-
-        organic_growth = total_growth - acquisition_growth - fx_impact
-
-        return {
-            'total_growth': total_growth,
-            'organic_growth': organic_growth,
-            'acquisition_growth': acquisition_growth,
-            'fx_impact': fx_impact,
-        }
-
-    # =========================================================================
-    # COST STRUCTURE ANALYSIS
-    # =========================================================================
-
-    def _analyze_cost_structure(self,
-                                 statements: FinancialStatements,
-                                 comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze cost structure for expense forecasting"""
-        results = []
-        income = statements.income_statement
-
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-
-        # Operating expenses breakdown
-        sga = income.get('selling_general_administrative', 0)
-        rd = income.get('research_development', 0)
-        depreciation = income.get('depreciation_amortization', 0)
-        other_opex = income.get('other_operating_expenses', 0)
-
-        total_opex = sga + rd + depreciation + other_opex
-
-        # Calculate cost as % of revenue
-        cost_structure = {
-            'cogs_percent': cogs / revenue if revenue else 0,
-            'sga_percent': sga / revenue if revenue else 0,
-            'rd_percent': rd / revenue if revenue else 0,
-            'depreciation_percent': depreciation / revenue if revenue else 0,
-            'other_opex_percent': other_opex / revenue if revenue else 0,
-            'total_opex_percent': total_opex / revenue if revenue else 0,
-        }
-
-        # Analyze fixed vs variable costs
-        fixed_variable = self._classify_cost_behavior(statements, comparative_data)
-
-        results.append(AnalysisResult(
-            metric_name="Cost Structure Analysis",
-            value={
-                'cost_percentages': cost_structure,
-                'fixed_variable_split': fixed_variable,
-                'operating_leverage': fixed_variable.get('operating_leverage', 0),
-            },
-            analysis_type=AnalysisType.EFFICIENCY,
-            interpretation=f"COGS is {cost_structure['cogs_percent']:.1%} of revenue. "
-                           f"SG&A is {cost_structure['sga_percent']:.1%} of revenue. "
-                           f"Fixed costs represent {fixed_variable.get('fixed_percent', 0):.0%} of total costs, "
-                           f"implying {fixed_variable.get('operating_leverage', 0):.1f}x operating leverage.",
-            formula=self.formula_registry['cogs_percent']
-        ))
-
-        # Cost trend analysis
-        if comparative_data:
-            cost_trends = self._analyze_cost_trends(statements, comparative_data)
-            results.append(AnalysisResult(
-                metric_name="Cost Trend Analysis",
-                value=cost_trends,
-                analysis_type=AnalysisType.EFFICIENCY,
-                interpretation=f"COGS margin change: {cost_trends.get('cogs_margin_change', 0):+.2%}. "
-                               f"SG&A margin change: {cost_trends.get('sga_margin_change', 0):+.2%}. "
-                               f"{'Cost discipline evident.' if cost_trends.get('improving_efficiency', False) else 'Margin pressure observed.'}",
-                trend=TrendDirection.IMPROVING if cost_trends.get('improving_efficiency', False)
-                      else TrendDirection.DECLINING
-            ))
-
-        return results
-
-    def _classify_cost_behavior(self,
-                                 statements: FinancialStatements,
-                                 comparative_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """Classify costs as fixed or variable"""
-        income = statements.income_statement
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-
-        # Default classification
-        cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-        sga = income.get('selling_general_administrative', 0)
-        rd = income.get('research_development', 0)
-        depreciation = income.get('depreciation_amortization', 0)
-
-        # Estimate fixed vs variable (typical assumptions)
-        variable_costs = cogs * 0.70  # 70% of COGS typically variable
-        fixed_costs = (cogs * 0.30) + sga + rd + depreciation
-
-        total_costs = cogs + sga + rd + depreciation
-
-        fixed_percent = fixed_costs / total_costs if total_costs else 0
-        variable_percent = variable_costs / total_costs if total_costs else 0
-
-        # Calculate operating leverage
-        contribution_margin = revenue - variable_costs
-        operating_leverage = contribution_margin / income.get('operating_income', 1) if income.get('operating_income') else 0
-
-        return {
-            'fixed_costs': fixed_costs,
-            'variable_costs': variable_costs,
-            'fixed_percent': fixed_percent,
-            'variable_percent': variable_percent,
-            'contribution_margin': contribution_margin,
-            'operating_leverage': min(operating_leverage, 10),  # Cap at reasonable level
-            'breakeven_revenue': fixed_costs / (contribution_margin / revenue) if contribution_margin else 0,
-        }
-
-    def _analyze_cost_trends(self,
-                              statements: FinancialStatements,
-                              comparative_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze cost trends over time"""
-        income = statements.income_statement
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-        sga = income.get('selling_general_administrative', 0)
-
-        prior = comparative_data.get('prior_period', {}).get('income_statement', {})
-        prior_revenue = prior.get('revenue', prior.get('total_revenue', 0))
-        prior_cogs = prior.get('cost_of_goods_sold', prior.get('cost_of_revenue', 0))
-        prior_sga = prior.get('selling_general_administrative', 0)
-
-        cogs_margin = cogs / revenue if revenue else 0
-        prior_cogs_margin = prior_cogs / prior_revenue if prior_revenue else 0
-        cogs_margin_change = cogs_margin - prior_cogs_margin
-
-        sga_margin = sga / revenue if revenue else 0
-        prior_sga_margin = prior_sga / prior_revenue if prior_revenue else 0
-        sga_margin_change = sga_margin - prior_sga_margin
-
-        return {
-            'cogs_margin': cogs_margin,
-            'prior_cogs_margin': prior_cogs_margin,
-            'cogs_margin_change': cogs_margin_change,
-            'sga_margin': sga_margin,
-            'prior_sga_margin': prior_sga_margin,
-            'sga_margin_change': sga_margin_change,
-            'improving_efficiency': cogs_margin_change < 0 or sga_margin_change < 0,
-        }
-
-    # =========================================================================
-    # WORKING CAPITAL MODELING
-    # =========================================================================
-
-    def _analyze_working_capital_patterns(self,
-                                           statements: FinancialStatements,
-                                           comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze working capital patterns for forecasting"""
-        results = []
-        income = statements.income_statement
-        balance = statements.balance_sheet
-
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
-
-        # Working capital components
-        ar = balance.get('accounts_receivable', 0)
-        inventory = balance.get('inventory', balance.get('inventories', 0))
-        ap = balance.get('accounts_payable', 0)
-
-        # Calculate days metrics
-        daily_revenue = revenue / 365 if revenue else 1
-        daily_cogs = cogs / 365 if cogs else 1
-
-        dso = ar / daily_revenue if daily_revenue else 0
-        dio = inventory / daily_cogs if daily_cogs else 0
-        dpo = ap / daily_cogs if daily_cogs else 0
-        ccc = dso + dio - dpo
-
-        # Working capital as % of revenue
-        nwc = ar + inventory - ap
-        nwc_percent = nwc / revenue if revenue else 0
-
-        results.append(AnalysisResult(
-            metric_name="Working Capital Analysis",
-            value={
-                'accounts_receivable': ar,
-                'inventory': inventory,
-                'accounts_payable': ap,
-                'net_working_capital': nwc,
-                'nwc_percent_revenue': nwc_percent,
-                'dso': dso,
-                'dio': dio,
-                'dpo': dpo,
-                'cash_conversion_cycle': ccc,
-            },
-            analysis_type=AnalysisType.LIQUIDITY,
-            interpretation=f"DSO: {dso:.0f} days, DIO: {dio:.0f} days, DPO: {dpo:.0f} days. "
-                           f"Cash conversion cycle: {ccc:.0f} days. "
-                           f"NWC is {nwc_percent:.1%} of revenue (${nwc:,.0f}).",
-            formula=self.formula_registry['cash_conversion_cycle']
-        ))
-
-        # Working capital efficiency assessment
-        efficiency = self._assess_working_capital_efficiency(dso, dio, dpo)
-        results.append(AnalysisResult(
-            metric_name="Working Capital Efficiency",
-            value=efficiency,
-            analysis_type=AnalysisType.EFFICIENCY,
-            interpretation=f"AR collection: {efficiency['ar_assessment']}. "
-                           f"Inventory management: {efficiency['inventory_assessment']}. "
-                           f"Payables management: {efficiency['payables_assessment']}.",
-            risk_level=efficiency['risk_level']
-        ))
-
-        return results
-
-    def _assess_working_capital_efficiency(self, dso: float, dio: float, dpo: float) -> Dict[str, Any]:
-        """Assess working capital efficiency against benchmarks"""
-        benchmarks = self.working_capital_benchmarks
-
-        # AR assessment
-        if dso <= benchmarks['dso']['typical']:
-            ar_assessment = "Efficient"
-            ar_score = 1
-        elif dso <= benchmarks['dso']['max']:
-            ar_assessment = "Acceptable"
-            ar_score = 0.5
-        else:
-            ar_assessment = "Needs improvement"
-            ar_score = 0
-
-        # Inventory assessment
-        if dio <= benchmarks['dio']['typical']:
-            inventory_assessment = "Efficient"
-            inventory_score = 1
-        elif dio <= benchmarks['dio']['max']:
-            inventory_assessment = "Acceptable"
-            inventory_score = 0.5
-        else:
-            inventory_assessment = "Needs improvement"
-            inventory_score = 0
-
-        # Payables assessment (higher is generally better for working capital)
-        if dpo >= benchmarks['dpo']['typical']:
-            payables_assessment = "Optimized"
-            payables_score = 1
-        elif dpo >= benchmarks['dpo']['min']:
-            payables_assessment = "Acceptable"
-            payables_score = 0.5
-        else:
-            payables_assessment = "Room to improve"
-            payables_score = 0
-
-        overall_score = (ar_score + inventory_score + payables_score) / 3
-
-        return {
-            'ar_assessment': ar_assessment,
-            'inventory_assessment': inventory_assessment,
-            'payables_assessment': payables_assessment,
-            'overall_score': overall_score,
-            'risk_level': RiskLevel.LOW if overall_score >= 0.7 else
-                          (RiskLevel.MEDIUM if overall_score >= 0.4 else RiskLevel.HIGH),
-        }
-
-    # =========================================================================
-    # CAPEX AND DEPRECIATION
-    # =========================================================================
-
-    def _analyze_capex_patterns(self,
-                                 statements: FinancialStatements,
-                                 comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze CapEx patterns for forecasting"""
-        results = []
-        income = statements.income_statement
-        balance = statements.balance_sheet
-        cash_flow = statements.cash_flow_statement
-
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        depreciation = income.get('depreciation_amortization',
-                                  cash_flow.get('depreciation_amortization', 0))
-
-        # CapEx from cash flow
-        capex = abs(cash_flow.get('capital_expenditures',
-                                   cash_flow.get('purchase_of_ppe', 0)))
-
-        # PPE from balance sheet
-        gross_ppe = balance.get('gross_ppe', balance.get('property_plant_equipment_gross', 0))
-        net_ppe = balance.get('net_ppe', balance.get('property_plant_equipment', 0))
-
-        # Calculate ratios
-        capex_to_revenue = capex / revenue if revenue else 0
-        capex_to_depreciation = capex / depreciation if depreciation else 0
-        depreciation_rate = depreciation / gross_ppe if gross_ppe else 0
-
-        # Asset age estimate
-        if gross_ppe and depreciation:
-            accumulated_depreciation = gross_ppe - net_ppe
-            asset_age = accumulated_depreciation / depreciation if depreciation else 0
-            remaining_life = net_ppe / depreciation if depreciation else 0
-        else:
-            asset_age = 0
-            remaining_life = 0
-
-        results.append(AnalysisResult(
-            metric_name="CapEx Analysis",
-            value={
-                'capex': capex,
-                'depreciation': depreciation,
-                'capex_to_revenue': capex_to_revenue,
-                'capex_to_depreciation': capex_to_depreciation,
-                'depreciation_rate': depreciation_rate,
-                'gross_ppe': gross_ppe,
-                'net_ppe': net_ppe,
-                'estimated_asset_age': asset_age,
-                'estimated_remaining_life': remaining_life,
-            },
-            analysis_type=AnalysisType.INVESTMENT,
-            interpretation=f"CapEx of ${capex:,.0f} ({capex_to_revenue:.1%} of revenue). "
-                           f"CapEx/Depreciation ratio: {capex_to_depreciation:.2f}x. "
-                           f"{'Investing for growth' if capex_to_depreciation > 1.2 else 'Maintenance mode' if capex_to_depreciation >= 0.8 else 'Under-investing'}. "
-                           f"Estimated asset age: {asset_age:.1f} years.",
-            formula=self.formula_registry['maintenance_capex']
-        ))
-
-        # CapEx sustainability assessment
-        sustainability = self._assess_capex_sustainability(
-            capex_to_depreciation, capex_to_revenue, asset_age
-        )
-        results.append(AnalysisResult(
-            metric_name="CapEx Sustainability",
-            value=sustainability,
-            analysis_type=AnalysisType.INVESTMENT,
-            interpretation=sustainability['interpretation'],
-            risk_level=sustainability['risk_level']
-        ))
-
-        return results
-
-    def _assess_capex_sustainability(self,
-                                      capex_to_dep: float,
-                                      capex_to_rev: float,
-                                      asset_age: float) -> Dict[str, Any]:
-        """Assess CapEx sustainability"""
-        issues = []
-        risk = RiskLevel.LOW
-
-        if capex_to_dep < 0.8:
-            issues.append("CapEx below depreciation suggests under-investment")
-            risk = RiskLevel.MEDIUM
-
-        if capex_to_dep < 0.5:
-            issues.append("Significant under-investment may impact future capacity")
-            risk = RiskLevel.HIGH
-
-        if asset_age > 7:
-            issues.append(f"Aging asset base ({asset_age:.1f} years) may require major refresh")
-            risk = max(risk, RiskLevel.MEDIUM)
-
-        if capex_to_rev > 0.15:
-            issues.append("High capital intensity may constrain cash flow")
-            risk = max(risk, RiskLevel.MEDIUM)
-
-        if not issues:
-            interpretation = "CapEx levels appear sustainable relative to depreciation and asset age."
-        else:
-            interpretation = " ".join(issues)
-
-        return {
-            'capex_to_depreciation': capex_to_dep,
-            'capex_to_revenue': capex_to_rev,
-            'asset_age': asset_age,
-            'issues': issues,
-            'interpretation': interpretation,
-            'risk_level': risk,
-        }
-
-    # =========================================================================
-    # DEBT STRUCTURE ANALYSIS
-    # =========================================================================
-
-    def _analyze_debt_structure(self,
-                                 statements: FinancialStatements,
-                                 comparative_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze debt structure for interest modeling"""
-        results = []
-        income = statements.income_statement
-        balance = statements.balance_sheet
-
-        # Debt components
-        short_term_debt = balance.get('short_term_debt',
-                                       balance.get('current_portion_long_term_debt', 0))
-        long_term_debt = balance.get('long_term_debt', 0)
-        total_debt = short_term_debt + long_term_debt
-
-        # Interest expense
-        interest_expense = income.get('interest_expense', 0)
-
-        # Calculate implied interest rate
-        avg_debt = total_debt  # Simplified; ideally use average of period
-        implied_rate = interest_expense / avg_debt if avg_debt else 0
-
-        # Coverage ratios
-        operating_income = income.get('operating_income', 0)
-        ebitda = operating_income + income.get('depreciation_amortization', 0)
-
-        interest_coverage = operating_income / interest_expense if interest_expense else float('inf')
-        ebitda_coverage = ebitda / interest_expense if interest_expense else float('inf')
-
-        # Leverage ratios
-        total_equity = balance.get('total_equity', balance.get('total_stockholders_equity', 0))
-        debt_to_equity = total_debt / total_equity if total_equity else 0
-        debt_to_ebitda = total_debt / ebitda if ebitda else 0
-
-        results.append(AnalysisResult(
-            metric_name="Debt Structure Analysis",
-            value={
-                'short_term_debt': short_term_debt,
-                'long_term_debt': long_term_debt,
-                'total_debt': total_debt,
-                'interest_expense': interest_expense,
-                'implied_interest_rate': implied_rate,
-                'interest_coverage': min(interest_coverage, 100),
-                'ebitda_coverage': min(ebitda_coverage, 100),
-                'debt_to_equity': debt_to_equity,
-                'debt_to_ebitda': debt_to_ebitda,
-            },
-            analysis_type=AnalysisType.LEVERAGE,
-            interpretation=f"Total debt: ${total_debt:,.0f} (${short_term_debt:,.0f} short-term, "
-                           f"${long_term_debt:,.0f} long-term). Implied rate: {implied_rate:.2%}. "
-                           f"Interest coverage: {interest_coverage:.1f}x. Debt/EBITDA: {debt_to_ebitda:.1f}x.",
-            formula=self.formula_registry['interest_expense']
-        ))
-
-        # Debt capacity assessment
-        capacity = self._assess_debt_capacity(
-            debt_to_ebitda, interest_coverage, debt_to_equity
-        )
-        results.append(AnalysisResult(
-            metric_name="Debt Capacity Assessment",
-            value=capacity,
-            analysis_type=AnalysisType.LEVERAGE,
-            interpretation=capacity['interpretation'],
-            risk_level=capacity['risk_level']
-        ))
-
-        return results
-
-    def _assess_debt_capacity(self,
-                               debt_to_ebitda: float,
-                               interest_coverage: float,
-                               debt_to_equity: float) -> Dict[str, Any]:
-        """Assess remaining debt capacity"""
-        issues = []
-        risk = RiskLevel.LOW
-
-        # Investment grade thresholds
-        if debt_to_ebitda > 4.0:
-            issues.append("High leverage (Debt/EBITDA > 4x)")
-            risk = RiskLevel.HIGH
-        elif debt_to_ebitda > 3.0:
-            issues.append("Elevated leverage (Debt/EBITDA > 3x)")
-            risk = RiskLevel.MEDIUM
-
-        if interest_coverage < 2.0:
-            issues.append("Low interest coverage (< 2x)")
-            risk = max(risk, RiskLevel.HIGH)
-        elif interest_coverage < 3.0:
-            issues.append("Moderate interest coverage (< 3x)")
-            risk = max(risk, RiskLevel.MEDIUM)
-
-        if debt_to_equity > 2.0:
-            issues.append("High debt-to-equity ratio")
-            risk = max(risk, RiskLevel.MEDIUM)
-
-        # Estimate additional debt capacity
-        if debt_to_ebitda < 3.0:
-            # Could potentially borrow up to 3x EBITDA
-            additional_capacity = "Significant capacity for additional debt"
-        elif debt_to_ebitda < 4.0:
-            additional_capacity = "Limited additional debt capacity"
-        else:
-            additional_capacity = "No additional debt capacity without refinancing"
-
-        if not issues:
-            interpretation = f"Conservative leverage profile. {additional_capacity}."
-        else:
-            interpretation = f"{' '.join(issues)}. {additional_capacity}."
-
-        return {
-            'debt_to_ebitda': debt_to_ebitda,
-            'interest_coverage': interest_coverage,
-            'debt_to_equity': debt_to_equity,
-            'additional_capacity': additional_capacity,
-            'issues': issues,
-            'interpretation': interpretation,
-            'risk_level': risk,
-        }
-
-    # =========================================================================
-    # MODEL REQUIREMENTS
-    # =========================================================================
-
-    def _analyze_model_requirements(self,
-                                     statements: FinancialStatements,
-                                     industry_data: Optional[Dict[str, Any]]) -> List[AnalysisResult]:
-        """Analyze requirements for building integrated financial model"""
-        results = []
-
-        # Identify data availability
-        data_availability = self._check_data_availability(statements)
-
-        results.append(AnalysisResult(
-            metric_name="Data Availability Assessment",
-            value=data_availability,
-            analysis_type=AnalysisType.QUALITY,
-            interpretation=f"Income statement completeness: {data_availability['income_completeness']:.0%}. "
-                           f"Balance sheet completeness: {data_availability['balance_completeness']:.0%}. "
-                           f"Cash flow completeness: {data_availability['cashflow_completeness']:.0%}. "
-                           f"{'Data sufficient for modeling.' if data_availability['model_ready'] else 'Additional data needed.'}",
-        ))
-
-        # Identify model sensitivities
-        key_sensitivities = self._identify_key_sensitivities(statements)
-
-        results.append(AnalysisResult(
-            metric_name="Key Model Sensitivities",
-            value=key_sensitivities,
-            analysis_type=AnalysisType.RISK,
-            interpretation=f"Most sensitive variables: {', '.join(key_sensitivities['top_drivers'])}. "
-                           f"Recommended sensitivity ranges: Revenue ({key_sensitivities['revenue_range']}), "
-                           f"Margins ({key_sensitivities['margin_range']}).",
-        ))
-
-        return results
-
-    def _check_data_availability(self, statements: FinancialStatements) -> Dict[str, Any]:
-        """Check availability of required data for modeling"""
-        # Required income statement fields
-        income_required = ['revenue', 'cost_of_goods_sold', 'operating_income',
-                           'interest_expense', 'tax_expense', 'net_income']
-        income = statements.income_statement
-        income_available = sum(1 for f in income_required
-                               if income.get(f, income.get(f.replace('_', ''), 0)) != 0)
-        income_completeness = income_available / len(income_required)
-
-        # Required balance sheet fields
-        balance_required = ['total_assets', 'total_liabilities', 'total_equity',
-                            'accounts_receivable', 'inventory', 'accounts_payable',
-                            'long_term_debt']
-        balance = statements.balance_sheet
-        balance_available = sum(1 for f in balance_required
-                                if balance.get(f, balance.get(f.replace('_', ''), 0)) != 0)
-        balance_completeness = balance_available / len(balance_required)
-
-        # Required cash flow fields
-        cashflow_required = ['operating_cash_flow', 'capital_expenditures',
-                             'depreciation_amortization']
-        cashflow = statements.cash_flow_statement
-        cashflow_available = sum(1 for f in cashflow_required
-                                 if cashflow.get(f, cashflow.get(f.replace('_', ''), 0)) != 0)
-        cashflow_completeness = cashflow_available / len(cashflow_required)
-
-        overall = (income_completeness + balance_completeness + cashflow_completeness) / 3
-
-        return {
-            'income_completeness': income_completeness,
-            'balance_completeness': balance_completeness,
-            'cashflow_completeness': cashflow_completeness,
-            'overall_completeness': overall,
-            'model_ready': overall >= 0.7,
-            'missing_fields': self._identify_missing_fields(statements),
-        }
-
-    def _identify_missing_fields(self, statements: FinancialStatements) -> List[str]:
-        """Identify critical missing fields"""
-        missing = []
-        income = statements.income_statement
-        balance = statements.balance_sheet
-        cash_flow = statements.cash_flow_statement
-
-        if not income.get('revenue', income.get('total_revenue')):
-            missing.append('revenue')
-        if not balance.get('total_assets'):
-            missing.append('total_assets')
-        if not cash_flow.get('operating_cash_flow', cash_flow.get('cash_from_operations')):
-            missing.append('operating_cash_flow')
-
-        return missing
-
-    def _identify_key_sensitivities(self, statements: FinancialStatements) -> Dict[str, Any]:
-        """Identify key sensitivity drivers"""
-        income = statements.income_statement
-        balance = statements.balance_sheet
-
-        revenue = income.get('revenue', income.get('total_revenue', 0))
-        operating_income = income.get('operating_income', 0)
-        net_income = income.get('net_income', 0)
-
-        operating_margin = operating_income / revenue if revenue else 0
-
-        # Identify operating leverage
-        top_drivers = ['Revenue growth rate', 'Gross margin', 'Operating expenses']
-
-        if balance.get('long_term_debt', 0) > 0:
-            top_drivers.append('Interest rate')
-
-        return {
-            'top_drivers': top_drivers,
-            'revenue_range': '±10-20%',
-            'margin_range': '±100-200 bps',
-            'recommended_scenarios': ['Base', 'Upside (+15% revenue)', 'Downside (-15% revenue)'],
-        }
-
-    # =========================================================================
-    # FORECASTING METHODS
+    # FORECASTING METHODS (standalone helpers, not used by build_integrated_model)
     # =========================================================================
 
     def create_revenue_forecast(self,
@@ -1510,7 +583,8 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
                                          cogs_forecast: List[float],
                                          dso: float = 45,
                                          dio: float = 60,
-                                         dpo: float = 45) -> List[WorkingCapitalForecast]:
+                                         dpo: float = 45,
+                                         base_nwc: Optional[float] = None) -> List[WorkingCapitalForecast]:
         """
         Create working capital forecast based on days metrics.
 
@@ -1525,7 +599,7 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
             List of WorkingCapitalForecast objects
         """
         forecasts = []
-        prior_nwc = 0
+        prior_nwc = base_nwc  # base-year NWC; year-1 change is None without it
 
         for year, (revenue, cogs) in enumerate(zip(revenue_forecast, cogs_forecast), 1):
             period = f"Year {year}"
@@ -1535,7 +609,7 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
             ap = cogs * (dpo / 365)
 
             nwc = ar + inventory - ap
-            change_in_nwc = nwc - prior_nwc
+            change_in_nwc = nwc - prior_nwc if prior_nwc is not None else None
 
             ccc = dso + dio - dpo
 
@@ -1677,269 +751,420 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
     # INTEGRATED MODEL BUILDING
     # =========================================================================
 
-    def build_integrated_model(self,
-                                statements: FinancialStatements,
-                                company_name: str,
-                                forecast_years: int = 5,
-                                assumptions: Optional[Dict[str, Any]] = None) -> IntegratedFinancialModel:
+    ASSUMPTION_KEYS = {
+        'revenue_growth_rate', 'gross_margin', 'cogs_to_revenue', 'sga_to_revenue', 'rd_to_revenue',
+        'other_opex_to_revenue', 'ebitda_margin', 'depreciation_rate', 'capex_to_revenue',
+        'dso', 'dio', 'dpo', 'other_current_assets_to_revenue', 'accrued_to_revenue',
+        'other_current_liabilities_to_revenue', 'tax_rate', 'interest_rate', 'interest_income_rate',
+        'dividend_payout', 'min_cash', 'revolver_rate', 'debt_repayment', 'wacc', 'terminal_growth',
+        'probability',
+    }
+
+    def _derive_drivers(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]],
+                        assumptions: Dict[str, Any], strict: bool = True) -> Tuple[Dict, Dict, Dict]:
+        """Base-year values and model drivers.
+
+        Returns (drivers, sources, base). Every driver is either taken from
+        `assumptions` or derived from the statements; `sources` records which.
+        With strict=True a driver that can be neither raises ValueError.
         """
-        Build complete integrated three-statement financial model.
+        inc, bs, cf = statements.income_statement, statements.balance_sheet, statements.cash_flow
+        unknown = set(assumptions) - self.ASSUMPTION_KEYS
+        if unknown:
+            raise ValueError(f"unknown assumption(s): {', '.join(sorted(unknown))}; "
+                             f"allowed: {', '.join(sorted(self.ASSUMPTION_KEYS - {'probability'}))}")
 
-        Args:
-            statements: Base year financial statements
-            company_name: Company name
-            forecast_years: Number of years to forecast
-            assumptions: Model assumptions (or use defaults)
+        def need(cond, message):
+            if not cond and strict:
+                raise ValueError(message)
+            return cond
 
-        Returns:
-            IntegratedFinancialModel with all projections
-        """
-        # Use provided assumptions or defaults
-        model_assumptions = {**self.default_assumptions}
-        if assumptions:
-            model_assumptions.update(assumptions)
+        drivers: Dict[str, Any] = {}
+        sources: Dict[str, str] = {}
 
-        # Extract base year data
-        income = statements.income_statement
-        balance = statements.balance_sheet
-        cash_flow = statements.cash_flow_statement
+        def put(name, derived_value, derived_source):
+            if name in assumptions and assumptions[name] is not None:
+                drivers[name] = assumptions[name]
+                sources[name] = "assumption"
+            elif derived_value is not None:
+                drivers[name] = derived_value
+                sources[name] = derived_source
 
-        base_revenue = income.get('revenue', income.get('total_revenue', 0))
-        base_cogs = income.get('cost_of_goods_sold', income.get('cost_of_revenue', 0))
+        rev0 = inc.get('revenue')
+        if not need(rev0 is not None and rev0 > 0, "base-year revenue (positive) is required"):
+            return drivers, sources, {}
+        ebit0 = inc.get('operating_income')
+        need(ebit0 is not None, "base-year operating income is required (the model is built for operating "
+                                "companies; banks and insurers do not report operating income)")
+        for k in ('total_assets', 'total_liabilities', 'total_equity'):
+            need(k in bs, f"base-year {k} is required")
+        if not strict and (ebit0 is None or any(k not in bs for k in ('total_assets', 'total_liabilities', 'total_equity'))):
+            return drivers, sources, {}
 
-        # 1. Revenue forecast
-        revenue_forecasts = self.create_revenue_forecast(
-            base_revenue=base_revenue,
-            forecast_years=forecast_years,
-            growth_rates=[model_assumptions['revenue_growth_rate']] * forecast_years
-        )
-        revenue_values = [rf.forecast_revenue for rf in revenue_forecasts]
+        # ---- PPE and depreciation
+        ppe_net0 = bs.get('ppe_net', 0.0)
+        ppe_gross0 = bs.get('ppe_gross')
+        accdep0 = bs.get('accumulated_depreciation')
+        dep0 = inc.get('depreciation', cf.get('depreciation_cf'))
+        dep0 = abs(dep0) if dep0 is not None else None
+        if ppe_gross0 and ppe_gross0 > 0 and accdep0 is not None:
+            dep_basis = 'gross'
+            dep_base_balance = ppe_gross0
+        elif ppe_net0 and ppe_net0 > 0:
+            dep_basis = 'net'
+            dep_base_balance = ppe_net0
+        else:
+            dep_basis = 'revenue'
+            dep_base_balance = rev0
+        put('depreciation_rate', dep0 / dep_base_balance if dep0 is not None else None,
+            f"base-year depreciation / {'gross PPE' if dep_basis == 'gross' else 'net PPE' if dep_basis == 'net' else 'revenue (no PPE reported)'}")
+        need('depreciation_rate' in drivers, "depreciation not reported; supply assumptions.depreciation_rate")
+        if dep0 is None and 'depreciation_rate' in drivers:
+            dep0 = drivers['depreciation_rate'] * dep_base_balance
+        dep0 = dep0 or 0.0
 
-        # 2. Expense forecast
-        base_opex = {
-            'sga': income.get('selling_general_administrative', 0),
-            'rd': income.get('research_development', 0),
+        # ---- operating cost structure (all % of revenue)
+        ebitda0 = (ebit0 or 0.0) + dep0
+        cogs0 = None
+        gp0 = self.gross_profit(inc)
+        if gp0 is not None:
+            cogs0 = rev0 - gp0
+        sga0, rd0 = self.sga(inc), inc.get('rd_expenses')
+        if 'gross_margin' in assumptions and 'cogs_to_revenue' not in assumptions and assumptions['gross_margin'] is not None:
+            drivers['cogs_to_revenue'] = 1.0 - float(assumptions['gross_margin'])
+            sources['cogs_to_revenue'] = "1 - assumptions.gross_margin"
+        else:
+            put('cogs_to_revenue', cogs0 / rev0 if cogs0 is not None else None, "base-year cost of sales / revenue")
+        put('sga_to_revenue', sga0 / rev0 if sga0 is not None else 0.0,
+            "base-year SG&A / revenue" if sga0 is not None else "SG&A not reported (included in other operating costs)")
+        put('rd_to_revenue', rd0 / rev0 if rd0 is not None else 0.0,
+            "base-year R&D / revenue" if rd0 is not None else "R&D not reported (included in other operating costs)")
+        base_cogs_pct = cogs0 / rev0 if cogs0 is not None else 0.0
+        base_other = (1.0 - ebitda0 / rev0 - base_cogs_pct - (sga0 / rev0 if sga0 is not None else 0.0)
+                      - (rd0 / rev0 if rd0 is not None else 0.0))
+        if abs(base_other) < 1e-12:
+            base_other = 0.0  # floating-point noise from the subtraction
+        if 'ebitda_margin' in assumptions and assumptions['ebitda_margin'] is not None \
+                and 'other_opex_to_revenue' not in assumptions:
+            drivers['other_opex_to_revenue'] = (1.0 - float(assumptions['ebitda_margin'])
+                                                - drivers.get('cogs_to_revenue', 0.0)
+                                                - drivers['sga_to_revenue'] - drivers['rd_to_revenue'])
+            sources['other_opex_to_revenue'] = "balancing item so EBITDA margin = assumptions.ebitda_margin"
+        else:
+            put('other_opex_to_revenue', base_other,
+                "balancing item: base-year EBITDA (operating income + D&A) is reproduced exactly")
+
+        # ---- capex
+        capex0 = cf.get('capex')
+        put('capex_to_revenue', capex0 / rev0 if capex0 is not None else None, "base-year capex / revenue")
+        need('capex_to_revenue' in drivers, "capital expenditure not reported; supply assumptions.capex_to_revenue")
+
+        # ---- working capital
+        cogs_for_days = cogs0 if cogs0 and cogs0 > 0 else None
+        days_base = "cost of sales" if cogs_for_days else "revenue (cost of sales not reported)"
+        ar0, inv0, ap0 = bs.get('accounts_receivable', 0.0), bs.get('inventory', 0.0), bs.get('accounts_payable', 0.0)
+        put('dso', ar0 / rev0 * 365, "base-year receivables / revenue x 365")
+        put('dio', inv0 / (cogs_for_days or rev0) * 365, f"base-year inventory / {days_base} x 365")
+        put('dpo', ap0 / (cogs_for_days or rev0) * 365, f"base-year payables / {days_base} x 365")
+
+        cash0 = bs.get('cash_equivalents', 0.0)
+        sti0 = bs.get('short_term_investments', 0.0)
+        ca0 = bs.get('current_assets')
+        oca0 = ca0 - (cash0 + sti0 + ar0 + inv0) if ca0 is not None else 0.0
+        cl0 = bs.get('current_liabilities')
+        accr0 = bs.get('accrued_liabilities', 0.0)
+        std0 = bs.get('short_term_debt', 0.0)
+        ocl0 = cl0 - (ap0 + accr0 + std0) if cl0 is not None else 0.0
+        put('other_current_assets_to_revenue', oca0 / rev0, "base-year other current assets / revenue")
+        put('accrued_to_revenue', accr0 / rev0, "base-year accrued liabilities / revenue")
+        put('other_current_liabilities_to_revenue', ocl0 / rev0, "base-year other current liabilities / revenue")
+
+        # ---- tax
+        pretax0, tax0 = inc.get('pretax_income'), inc.get('tax_expense')
+        etr0 = tax0 / pretax0 if pretax0 and pretax0 > 0 and tax0 is not None else None
+        if etr0 is not None and 0 <= etr0 <= 0.6:
+            put('tax_rate', etr0, "base-year effective tax rate")
+        else:
+            from .tax_analysis import TaxAnalyzer
+            statutory, why = TaxAnalyzer(enable_logging=False)._statutory_rate(statements)
+            put('tax_rate', statutory, f"statutory rate ({why}); base-year effective rate not usable")
+        need('tax_rate' in drivers, "tax rate cannot be derived (pre-tax loss and unknown country); "
+                                    "supply assumptions.tax_rate")
+
+        # ---- financing
+        ltd0 = bs.get('long_term_debt', 0.0)
+        debt0 = std0 + ltd0
+        int0 = inc.get('interest_expense')
+        if debt0 > 0 and int0 is not None:
+            prior_debt = None
+            if comparative_data:
+                pb = comparative_data[-1].balance_sheet
+                if 'short_term_debt' in pb or 'long_term_debt' in pb:
+                    prior_debt = pb.get('short_term_debt', 0.0) + pb.get('long_term_debt', 0.0)
+            avg_debt = (debt0 + prior_debt) / 2 if prior_debt else debt0
+            put('interest_rate', abs(int0) / avg_debt,
+                f"base-year interest expense / {'average' if prior_debt else 'ending'} debt")
+        elif debt0 == 0:
+            put('interest_rate', 0.0, "no debt reported")
+        need('interest_rate' in drivers, "debt is reported but interest expense is not; supply assumptions.interest_rate")
+        put('interest_income_rate', 0.0, "interest on cash not modelled")
+        put('revolver_rate', drivers.get('interest_rate'), "same as interest_rate")
+
+        ni0 = inc.get('net_income')
+        div0 = cf.get('dividends_paid')
+        if div0 is not None and ni0 is not None and ni0 > 0:
+            put('dividend_payout', min(div0 / ni0, 1.0), "base-year dividends / net income (capped at 100%)")
+        else:
+            put('dividend_payout', 0.0, "no dividends reported" if div0 is None
+                else "base-year net loss: payout not defined, no dividends projected")
+        put('min_cash', 0.0, "revolver draws only to prevent negative cash")
+        put('debt_repayment', 0.0, "no repayment schedule supplied: term debt held constant")
+
+        # ---- growth
+        hist_rev = [p.income_statement.get('revenue') for p in (comparative_data or [])]
+        hist_rev = [r for r in hist_rev if r is not None] + [rev0]
+        hist_cagr = self.cagr(hist_rev[0], hist_rev[-1], len(hist_rev) - 1) if len(hist_rev) > 1 else None
+        put('revenue_growth_rate', hist_cagr, f"revenue CAGR over the {len(hist_rev) - 1} supplied prior period(s)")
+        need('revenue_growth_rate' in drivers,
+             "revenue growth cannot be derived from a single year; supply assumptions.revenue_growth_rate "
+             "or history with positive revenue")
+
+        # ---- base balance sheet decomposition (plugs keep base totals exact)
+        ta0, tl0, te0 = bs['total_assets'], bs['total_liabilities'], bs['total_equity']
+        mi0 = bs.get('minority_interest', 0.0)
+        intang0, gw0 = bs.get('intangible_assets', 0.0), bs.get('goodwill', 0.0)
+        other_lta0 = ta0 - (cash0 + sti0 + ar0 + inv0 + oca0 + ppe_net0 + intang0 + gw0)
+        cl_total = cl0 if cl0 is not None else ap0 + accr0 + std0
+        other_ltl0 = tl0 - cl_total - ltd0
+        cs0 = bs.get('common_stock', 0.0)
+        re0 = bs.get('retained_earnings', 0.0)
+        other_eq0 = te0 - cs0 - re0
+        base = {
+            'revenue': rev0, 'cogs': cogs0, 'ebitda': ebitda0, 'operating_income': ebit0, 'depreciation': dep0,
+            'net_income': ni0, 'cash': cash0, 'short_term_investments': sti0, 'accounts_receivable': ar0,
+            'inventory': inv0, 'other_current_assets': oca0, 'ppe_gross': ppe_gross0 if dep_basis == 'gross' else None,
+            'accumulated_depreciation': accdep0 if dep_basis == 'gross' else None, 'ppe_net': ppe_net0,
+            'intangible_assets': intang0, 'goodwill': gw0, 'other_long_term_assets': other_lta0,
+            'total_assets': ta0, 'accounts_payable': ap0, 'accrued_liabilities': accr0, 'short_term_debt': std0,
+            'other_current_liabilities': ocl0, 'long_term_debt': ltd0, 'other_long_term_liabilities': other_ltl0,
+            'total_liabilities': tl0, 'common_stock': cs0, 'retained_earnings': re0, 'other_equity': other_eq0,
+            'total_equity': te0, 'minority_interest': mi0, 'unreconciled_base_difference': ta0 - tl0 - te0 - mi0,
+            'depreciation_basis': dep_basis, 'shares': (bs.get('shares_outstanding')
+                                                        or inc.get('shares_outstanding_diluted')
+                                                        or inc.get('shares_outstanding_basic')),
         }
-        cogs_values = [r * (1 - model_assumptions['gross_margin']) for r in revenue_values]
+        return drivers, sources, base
 
-        # 3. Working capital forecast
-        wc_forecasts = self.create_working_capital_forecast(
-            revenue_forecast=revenue_values,
-            cogs_forecast=cogs_values
-        )
+    @staticmethod
+    def _per_year(value, years: int, name: str) -> List[float]:
+        """Scalar -> repeated; list -> must have one value per forecast year."""
+        if isinstance(value, (list, tuple)):
+            if len(value) != years:
+                raise ValueError(f"assumptions.{name} has {len(value)} values; forecast_years is {years}")
+            return [float(v) for v in value]
+        return [float(value)] * years
 
-        # 4. CapEx forecast
-        base_ppe = balance.get('net_ppe', balance.get('property_plant_equipment', 0))
-        capex_forecasts = self.create_capex_forecast(
-            revenue_forecast=revenue_values,
-            base_ppe=base_ppe,
-            depreciation_rate=model_assumptions['depreciation_rate'],
-        )
+    def build_integrated_model(self,
+                               statements: FinancialStatements,
+                               company_name: str,
+                               forecast_years: int = 5,
+                               assumptions: Optional[Dict[str, Any]] = None,
+                               comparative_data: Optional[List[FinancialStatements]] = None) -> IntegratedFinancialModel:
+        """Build an integrated three-statement projection from the base-year statements.
 
-        # 5. Build pro forma income statements
-        income_statements = []
-        for year, (revenue, cogs, capex_fc) in enumerate(zip(revenue_values, cogs_values, capex_forecasts), 1):
-            gross_profit = revenue - cogs
-            depreciation = capex_fc.depreciation_expense
+        Raises ValueError with a plain message when a required input or assumption
+        is missing or out of range.
+        """
+        assumptions = dict(assumptions or {})
+        drivers, sources, base = self._derive_drivers(statements, comparative_data, assumptions, strict=True)
+        n = int(forecast_years)
+        if n < 1:
+            raise ValueError("forecast_years must be at least 1")
 
-            # Operating expenses (simplified)
-            sga_percent = base_opex['sga'] / base_revenue if base_revenue else 0.15
-            rd_percent = base_opex['rd'] / base_revenue if base_revenue else 0.05
-            sga = revenue * sga_percent
-            rd = revenue * rd_percent
+        growth = self._per_year(drivers['revenue_growth_rate'], n, 'revenue_growth_rate')
+        repay = self._per_year(drivers['debt_repayment'], n, 'debt_repayment')
+        scalar = {}
+        for k in ('cogs_to_revenue', 'sga_to_revenue', 'rd_to_revenue', 'other_opex_to_revenue', 'depreciation_rate',
+                  'capex_to_revenue', 'dso', 'dio', 'dpo', 'other_current_assets_to_revenue', 'accrued_to_revenue',
+                  'other_current_liabilities_to_revenue', 'tax_rate', 'interest_rate', 'interest_income_rate',
+                  'dividend_payout', 'min_cash', 'revolver_rate'):
+            v = drivers.get(k, 0.0)
+            try:
+                scalar[k] = float(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"assumptions.{k} must be a number")
+            if not math.isfinite(scalar[k]):
+                raise ValueError(f"assumptions.{k} must be finite")
+        if any(g <= -1 for g in growth):
+            raise ValueError("revenue_growth_rate must be greater than -100%")
+        if not 0 <= scalar['tax_rate'] < 1:
+            raise ValueError("tax_rate must be between 0 and 1")
+        if not 0 <= scalar['dividend_payout'] <= 1:
+            raise ValueError("dividend_payout must be between 0 and 1")
+        for k in ('dso', 'dio', 'dpo', 'capex_to_revenue', 'depreciation_rate', 'interest_rate', 'revolver_rate',
+                  'min_cash', 'interest_income_rate'):
+            if scalar[k] < 0:
+                raise ValueError(f"{k} must not be negative")
+        if any(r < 0 for r in repay):
+            raise ValueError("debt_repayment must not be negative")
 
-            operating_expenses = {
-                'sga': sga,
-                'rd': rd,
-                'depreciation': depreciation,
-            }
-            total_opex = sum(operating_expenses.values())
+        cogs_pct = scalar['cogs_to_revenue']
+        has_cogs = 'cogs_to_revenue' in drivers
+        dep_basis = base['depreciation_basis']
 
-            operating_income = gross_profit - total_opex
-            ebitda = operating_income + depreciation
+        # Opening balances (end of base year)
+        prev = dict(base)
+        prev['revolver'] = 0.0
+        prev_nwc_assets = base['accounts_receivable'] + base['inventory'] + base['other_current_assets']
+        prev_nwc_liabs = base['accounts_payable'] + base['accrued_liabilities'] + base['other_current_liabilities']
+        revenue = base['revenue']
 
-            # Interest expense (simplified)
-            debt = balance.get('long_term_debt', 0)
-            interest_rate = model_assumptions.get('interest_rate', 0.06)
-            interest_expense = debt * interest_rate
+        income_statements, balance_sheets, cash_flows, fcf_rows = [], [], [], []
+        warnings = []
 
-            pretax_income = operating_income - interest_expense
-            tax_rate = model_assumptions['tax_rate']
-            tax_expense = max(0, pretax_income * tax_rate)
+        for year in range(1, n + 1):
+            period = f"Year {year}"
+            revenue = revenue * (1 + growth[year - 1])
+            cogs = revenue * cogs_pct if has_cogs else 0.0
+            sga = revenue * scalar['sga_to_revenue']
+            rd = revenue * scalar['rd_to_revenue']
+            other_opex = revenue * scalar['other_opex_to_revenue']
+            ebitda = revenue - cogs - sga - rd - other_opex
+
+            if dep_basis == 'gross':
+                depreciation = scalar['depreciation_rate'] * prev['ppe_gross']
+            elif dep_basis == 'net':
+                depreciation = scalar['depreciation_rate'] * prev['ppe_net']
+            else:
+                depreciation = scalar['depreciation_rate'] * revenue
+            operating_income = ebitda - depreciation
+
+            term_debt_open = prev['short_term_debt'] + prev['long_term_debt']
+            interest_expense = scalar['interest_rate'] * term_debt_open + scalar['revolver_rate'] * prev['revolver']
+            interest_income = scalar['interest_income_rate'] * max(prev['cash'], 0.0)
+            pretax_income = operating_income - interest_expense + interest_income
+            tax_expense = max(pretax_income, 0.0) * scalar['tax_rate']
             net_income = pretax_income - tax_expense
+            dividends = scalar['dividend_payout'] * max(net_income, 0.0)
+
+            # Working capital
+            days_base = cogs if has_cogs and cogs > 0 else revenue
+            ar = revenue * scalar['dso'] / 365
+            inventory = days_base * scalar['dio'] / 365
+            ap = days_base * scalar['dpo'] / 365
+            oca = revenue * scalar['other_current_assets_to_revenue']
+            accrued = revenue * scalar['accrued_to_revenue']
+            ocl = revenue * scalar['other_current_liabilities_to_revenue']
+            nwc_assets, nwc_liabs = ar + inventory + oca, ap + accrued + ocl
+            change_nwc = (nwc_assets - nwc_liabs) - (prev_nwc_assets - prev_nwc_liabs)
+
+            # Fixed assets
+            capex = revenue * scalar['capex_to_revenue']
+            ppe_net = prev['ppe_net'] + capex - depreciation
+            ppe_gross = prev['ppe_gross'] + capex if dep_basis == 'gross' else None
+            accdep = prev['accumulated_depreciation'] + depreciation if dep_basis == 'gross' else None
+            if ppe_net < 0:
+                warnings.append(f"{period}: net PPE turns negative - depreciation rate too high for the capex assumption")
+
+            # Cash flow before revolver
+            cfo = net_income + depreciation - change_nwc
+            cfi = -capex
+            repayment = min(repay[year - 1], prev['long_term_debt'] + prev['short_term_debt'])
+            ltd_repay = min(repayment, prev['long_term_debt'])
+            std_repay = repayment - ltd_repay
+            cash_pre = prev['cash'] + cfo + cfi - dividends - repayment
+
+            draw = repay_rev = 0.0
+            if cash_pre < scalar['min_cash']:
+                draw = scalar['min_cash'] - cash_pre
+            elif prev['revolver'] > 0:
+                repay_rev = min(prev['revolver'], cash_pre - scalar['min_cash'])
+            revolver = prev['revolver'] + draw - repay_rev
+            cash = cash_pre + draw - repay_rev
+            if draw > 0:
+                warnings.append(f"{period}: revolver draw of {draw:,.2f} needed to keep cash at min_cash")
+            cff = -dividends - repayment + draw - repay_rev
+
+            # Balance sheet
+            ltd = prev['long_term_debt'] - ltd_repay
+            std = prev['short_term_debt'] - std_repay
+            retained = prev['retained_earnings'] + net_income - dividends
+            total_current_assets = cash + base['short_term_investments'] + ar + inventory + oca
+            total_assets = (total_current_assets + ppe_net + base['intangible_assets'] + base['goodwill']
+                            + base['other_long_term_assets'])
+            total_current_liabilities = ap + accrued + ocl + std
+            total_liabilities = total_current_liabilities + ltd + revolver + base['other_long_term_liabilities']
+            total_equity = base['common_stock'] + retained + base['other_equity']
+            total_le = (total_liabilities + total_equity + base['minority_interest']
+                        + base['unreconciled_base_difference'])
+            if total_equity < 0:
+                warnings.append(f"{period}: shareholders' equity is negative ({total_equity:,.2f})")
 
             income_statements.append(ProFormaIncomeStatement(
-                period=f"Year {year}",
-                revenue=revenue,
-                cost_of_goods_sold=cogs,
-                gross_profit=gross_profit,
-                gross_margin=gross_profit / revenue if revenue else 0,
-                operating_expenses=operating_expenses,
-                total_operating_expenses=total_opex,
-                operating_income=operating_income,
-                operating_margin=operating_income / revenue if revenue else 0,
-                interest_expense=interest_expense,
-                interest_income=0,
-                other_income_expense=0,
-                pretax_income=pretax_income,
-                tax_expense=tax_expense,
-                effective_tax_rate=tax_rate,
-                net_income=net_income,
-                net_margin=net_income / revenue if revenue else 0,
-                ebitda=ebitda,
-                ebitda_margin=ebitda / revenue if revenue else 0,
+                period=period, revenue=revenue, cost_of_goods_sold=cogs if has_cogs else None,
+                gross_profit=revenue - cogs if has_cogs else None,
+                gross_margin=(revenue - cogs) / revenue if has_cogs else None,
+                operating_expenses={'sga': sga, 'rd': rd, 'other_operating_costs': other_opex,
+                                    'depreciation': depreciation},
+                total_operating_expenses=sga + rd + other_opex + depreciation,
+                operating_income=operating_income, operating_margin=operating_income / revenue,
+                interest_expense=interest_expense, interest_income=interest_income, other_income_expense=0.0,
+                pretax_income=pretax_income, tax_expense=tax_expense,
+                effective_tax_rate=tax_expense / pretax_income if pretax_income > 0 else None,
+                net_income=net_income, net_margin=net_income / revenue,
+                ebitda=ebitda, ebitda_margin=ebitda / revenue,
             ))
-
-        # 6. Build pro forma balance sheets
-        balance_sheets = []
-        prior_retained_earnings = balance.get('retained_earnings', 0)
-        prior_cash = balance.get('cash', balance.get('cash_and_equivalents', 0))
-        current_ppe = base_ppe
-
-        for year, (wc_fc, capex_fc, is_) in enumerate(zip(wc_forecasts, capex_forecasts, income_statements), 1):
-            # PPE builds
-            gross_ppe_change = capex_fc.total_capex
-            accumulated_dep_change = capex_fc.depreciation_expense
-            net_ppe = current_ppe + capex_fc.net_ppe_change
-            gross_ppe = balance.get('gross_ppe', base_ppe) + gross_ppe_change * year
-
-            # Current assets
-            ar = wc_fc.accounts_receivable
-            inventory = wc_fc.inventory
-            total_current_assets = prior_cash + ar + inventory
-
-            # Total assets
-            intangibles = balance.get('intangible_assets', 0)
-            other_lt_assets = balance.get('other_long_term_assets', 0)
-            total_assets = total_current_assets + net_ppe + intangibles + other_lt_assets
-
-            # Current liabilities
-            ap = wc_fc.accounts_payable
-            accrued = balance.get('accrued_expenses', 0)
-            current_debt = balance.get('short_term_debt', 0)
-            total_current_liabilities = ap + accrued + current_debt
-
-            # Long-term liabilities
-            lt_debt = balance.get('long_term_debt', 0)
-            deferred_taxes = balance.get('deferred_taxes', 0)
-            other_lt_liabilities = balance.get('other_long_term_liabilities', 0)
-            total_liabilities = total_current_liabilities + lt_debt + deferred_taxes + other_lt_liabilities
-
-            # Equity
-            common_stock = balance.get('common_stock', 0)
-            dividends = is_.net_income * model_assumptions['dividend_payout']
-            retained_earnings = prior_retained_earnings + is_.net_income - dividends
-            other_equity = balance.get('other_equity', 0)
-            total_equity = common_stock + retained_earnings + other_equity
-
-            total_le = total_liabilities + total_equity
-
-            # Plug: adjust cash to balance
-            balance_diff = total_le - total_assets
-            adjusted_cash = prior_cash - balance_diff  # Simplified plug
-
             balance_sheets.append(ProFormaBalanceSheet(
-                period=f"Year {year}",
-                cash=adjusted_cash,
-                accounts_receivable=ar,
-                inventory=inventory,
-                other_current_assets=0,
-                total_current_assets=adjusted_cash + ar + inventory,
-                gross_ppe=gross_ppe,
-                accumulated_depreciation=balance.get('accumulated_depreciation', 0) + accumulated_dep_change * year,
-                net_ppe=net_ppe,
-                intangible_assets=intangibles,
-                other_long_term_assets=other_lt_assets,
-                total_assets=adjusted_cash + ar + inventory + net_ppe + intangibles + other_lt_assets,
-                accounts_payable=ap,
-                accrued_expenses=accrued,
-                current_debt=current_debt,
-                other_current_liabilities=0,
-                total_current_liabilities=total_current_liabilities,
-                long_term_debt=lt_debt,
-                deferred_taxes=deferred_taxes,
-                other_long_term_liabilities=other_lt_liabilities,
-                total_liabilities=total_liabilities,
-                common_stock=common_stock,
-                retained_earnings=retained_earnings,
-                other_equity=other_equity,
-                total_equity=total_equity,
-                total_liabilities_and_equity=total_liabilities + total_equity,
-                balance_check=0,  # Balanced by construction
+                period=period, cash=cash, accounts_receivable=ar, inventory=inventory, other_current_assets=oca,
+                total_current_assets=total_current_assets, gross_ppe=ppe_gross, accumulated_depreciation=accdep,
+                net_ppe=ppe_net, intangible_assets=base['intangible_assets'],
+                other_long_term_assets=base['other_long_term_assets'], total_assets=total_assets,
+                accounts_payable=ap, accrued_expenses=accrued, current_debt=std, other_current_liabilities=ocl,
+                total_current_liabilities=total_current_liabilities, long_term_debt=ltd, deferred_taxes=0.0,
+                other_long_term_liabilities=base['other_long_term_liabilities'], total_liabilities=total_liabilities,
+                common_stock=base['common_stock'], retained_earnings=retained, other_equity=base['other_equity'],
+                total_equity=total_equity, total_liabilities_and_equity=total_le,
+                balance_check=total_assets - total_le,
+                short_term_investments=base['short_term_investments'], goodwill=base['goodwill'],
+                revolver=revolver, minority_interest=base['minority_interest'],
+                unreconciled_base_difference=base['unreconciled_base_difference'],
             ))
-
-            prior_retained_earnings = retained_earnings
-            current_ppe = net_ppe
-
-        # 7. Build pro forma cash flows
-        cash_flows = []
-        beginning_cash = balance.get('cash', balance.get('cash_and_equivalents', 0))
-
-        for year, (is_, wc_fc, capex_fc) in enumerate(zip(income_statements, wc_forecasts, capex_forecasts), 1):
-            # Operating
-            depreciation = capex_fc.depreciation_expense
-            change_nwc = wc_fc.change_in_nwc
-            cfo = is_.net_income + depreciation - change_nwc
-
-            # Investing
-            capex = -capex_fc.total_capex
-            cfi = capex
-
-            # Financing
-            dividends = -is_.net_income * model_assumptions['dividend_payout']
-            cff = dividends
-
-            net_change = cfo + cfi + cff
-            ending_cash = beginning_cash + net_change
-
             cash_flows.append(ProFormaCashFlow(
-                period=f"Year {year}",
-                net_income=is_.net_income,
-                depreciation_amortization=depreciation,
-                change_in_working_capital=-change_nwc,
-                other_operating_adjustments=0,
-                cash_from_operations=cfo,
-                capital_expenditures=capex,
-                acquisitions=0,
-                other_investing=0,
-                cash_from_investing=cfi,
-                debt_issuance=0,
-                debt_repayment=0,
-                equity_issuance=0,
-                dividends_paid=dividends,
-                share_repurchases=0,
-                other_financing=0,
-                cash_from_financing=cff,
-                net_change_in_cash=net_change,
-                beginning_cash=beginning_cash,
-                ending_cash=ending_cash,
+                period=period, net_income=net_income, depreciation_amortization=depreciation,
+                change_in_working_capital=-change_nwc, other_operating_adjustments=0.0, cash_from_operations=cfo,
+                capital_expenditures=-capex, acquisitions=0.0, other_investing=0.0, cash_from_investing=cfi,
+                debt_issuance=draw, debt_repayment=-(repayment + repay_rev), equity_issuance=0.0,
+                dividends_paid=-dividends, share_repurchases=0.0, other_financing=0.0, cash_from_financing=cff,
+                net_change_in_cash=cfo + cfi + cff, beginning_cash=prev['cash'],
+                ending_cash=prev['cash'] + cfo + cfi + cff,
             ))
+            fcff = operating_income * (1 - scalar['tax_rate']) + depreciation - capex - change_nwc
+            fcfe = cfo - capex + (draw - repay_rev - repayment)
+            fcf_rows.append({'period': period, 'fcff': fcff, 'fcfe': fcfe})
 
-            beginning_cash = ending_cash
+            prev.update({
+                'cash': cash, 'ppe_net': ppe_net, 'ppe_gross': ppe_gross, 'accumulated_depreciation': accdep,
+                'long_term_debt': ltd, 'short_term_debt': std, 'revolver': revolver, 'retained_earnings': retained,
+            })
+            prev_nwc_assets, prev_nwc_liabs = nwc_assets, nwc_liabs
 
-        # 8. Debt schedule
-        ebitda_values = [is_.ebitda for is_ in income_statements]
-        debt_schedules = self.create_debt_schedule(
-            beginning_debt=balance.get('long_term_debt', 0),
-            forecast_years=forecast_years,
-            interest_rate=model_assumptions.get('interest_rate', 0.06),
-            ebitda_forecast=ebitda_values
-        )
-
-        # 9. Validation
         validation = self.validate_model(income_statements, balance_sheets, cash_flows)
+        validation.validation_warnings.extend(warnings)
 
-        return IntegratedFinancialModel(
+        dcf = self._dcf(drivers, base, fcf_rows, assumptions)
+
+        model = IntegratedFinancialModel(
             company_name=company_name,
-            base_year="Base Year",
-            forecast_years=[f"Year {i}" for i in range(1, forecast_years + 1)],
+            base_year=str(statements.period_info.period_end) if statements.period_info.period_end else "Base Year",
+            forecast_years=[f"Year {i}" for i in range(1, n + 1)],
             income_statements=income_statements,
             balance_sheets=balance_sheets,
             cash_flows=cash_flows,
-            debt_schedules=debt_schedules,
-            working_capital_forecasts=wc_forecasts,
-            capex_forecasts=capex_forecasts,
-            model_assumptions=model_assumptions,
+            debt_schedules=[],
+            working_capital_forecasts=[],
+            capex_forecasts=[],
+            model_assumptions=drivers,
             validation_results={
                 'balance_sheet_balances': validation.balance_sheet_balances,
                 'cash_flow_reconciles': validation.cash_flow_reconciles,
@@ -1947,161 +1172,233 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
             },
             scenarios={},
         )
+        model.assumption_sources = sources
+        model.base_year_values = base
+        model.validation = validation
+        model.free_cash_flows = fcf_rows
+        model.dcf = dcf
+        model.user_assumptions = assumptions
+        model.base_statements = statements
+        model.comparative_data = comparative_data
+        return model
+
+    def _dcf(self, drivers: Dict, base: Dict, fcf_rows: List[Dict], assumptions: Dict) -> Dict[str, Any]:
+        """FCFF DCF with Gordon terminal value; only when wacc is supplied."""
+        if assumptions.get('wacc') is None:
+            return {'available': False, 'reason': "supply assumptions.wacc and assumptions.terminal_growth for a DCF"}
+        if assumptions.get('terminal_growth') is None:
+            raise ValueError("assumptions.terminal_growth is required with wacc")
+        wacc, g = float(assumptions['wacc']), float(assumptions['terminal_growth'])
+        if not 0 < wacc < 1:
+            raise ValueError("wacc must be between 0 and 1")
+        if g >= wacc:
+            raise ValueError("terminal_growth must be below wacc")
+        pv_fcff = [row['fcff'] / (1 + wacc) ** (i + 1) for i, row in enumerate(fcf_rows)]
+        n = len(fcf_rows)
+        terminal_value = fcf_rows[-1]['fcff'] * (1 + g) / (wacc - g)
+        pv_terminal = terminal_value / (1 + wacc) ** n
+        enterprise_value = sum(pv_fcff) + pv_terminal
+        net_debt = (base['short_term_debt'] + base['long_term_debt'] - base['cash'] - base['short_term_investments'])
+        equity_value = enterprise_value - net_debt - base['minority_interest']
+        shares = base.get('shares')
+        out = {
+            'available': True, 'wacc': wacc, 'terminal_growth': g,
+            'pv_of_forecast_fcff': sum(pv_fcff), 'terminal_value': terminal_value, 'pv_of_terminal_value': pv_terminal,
+            'enterprise_value': enterprise_value, 'net_debt': net_debt,
+            'minority_interest': base['minority_interest'], 'equity_value': equity_value,
+            'terminal_value_share_of_ev': pv_terminal / enterprise_value if enterprise_value else None,
+            'value_per_share': equity_value / shares if shares else None,
+            'method': "FCFF = EBIT(1-t) + D&A - capex - change in NWC, discounted at WACC with end-of-year "
+                      "convention; TV = FCFF(N)(1+g)/(WACC-g); equity = EV - (debt - cash - short-term "
+                      "investments) - minority interest (base-year balances)",
+        }
+        out['limitations'] = [
+            "The terminal value grows the final forecast year's FCFF, which still carries investment sized for "
+            "the forecast growth rate; when forecast growth exceeds terminal growth this understates the TV",
+            "Valuation uses base-year net debt, not the projected balance",
+        ]
+        if terminal_value < 0:
+            out['warning'] = "terminal-year FCFF is negative; the terminal value is negative"
+        return out
+
+    def model_to_dict(self, model: IntegratedFinancialModel) -> Dict[str, Any]:
+        """JSON-ready representation of a model built by build_integrated_model()."""
+        base = {k: v for k, v in getattr(model, 'base_year_values', {}).items() if k != 'depreciation_basis'}
+        years = []
+        for inc, bs, cf, fcf in zip(model.income_statements, model.balance_sheets, model.cash_flows,
+                                    getattr(model, 'free_cash_flows', [{}] * len(model.income_statements))):
+            years.append({
+                'period': inc.period,
+                'income_statement': {k: v for k, v in asdict(inc).items() if k != 'period'},
+                'balance_sheet': {k: v for k, v in asdict(bs).items() if k != 'period'},
+                'cash_flow': {k: v for k, v in asdict(cf).items() if k != 'period'},
+                'free_cash_flow': {'fcff': fcf.get('fcff'), 'fcfe': fcf.get('fcfe')},
+                'checks': {'balance_difference': bs.balance_check,
+                           'cash_difference': cf.ending_cash - bs.cash},
+            })
+        validation = getattr(model, 'validation', None)
+        return {
+            'model': {
+                'company': model.company_name,
+                'base_year': model.base_year,
+                'forecast_years': model.forecast_years,
+                'assumptions': model.model_assumptions,
+                'assumption_sources': getattr(model, 'assumption_sources', {}),
+                'base_year_values': base,
+                'years': years,
+                'validation': {
+                    **model.validation_results,
+                    'errors': validation.validation_errors if validation else [],
+                    'warnings': validation.validation_warnings if validation else [],
+                },
+                'summary': self.get_model_summary(model),
+                'dcf': getattr(model, 'dcf', None),
+                'conventions': [
+                    "Outflows are negative in the projected cash flow statement",
+                    "Interest is charged on debt at the start of each year (no circular reference)",
+                    "Tax = max(0, pre-tax income) x tax rate; loss carry-forwards are not modelled",
+                    "Intangibles, goodwill, other long-term assets/liabilities, share capital and minority "
+                    "interest are held at base-year values; no amortisation or impairment is projected",
+                    "unreconciled_base_difference carries any base-year gap between assets and "
+                    "liabilities + equity (+ minority interest) unchanged",
+                ],
+            }
+        }
 
     # =========================================================================
     # SENSITIVITY AND SCENARIO ANALYSIS
     # =========================================================================
 
+    SENSITIVITY_METRICS = ('terminal_revenue', 'terminal_ebitda', 'terminal_net_income', 'ending_cash',
+                           'enterprise_value')
+
+    def _model_metrics(self, model: IntegratedFinancialModel) -> Dict[str, Optional[float]]:
+        dcf = getattr(model, 'dcf', None) or {}
+        return {
+            'terminal_revenue': model.income_statements[-1].revenue,
+            'terminal_ebitda': model.income_statements[-1].ebitda,
+            'terminal_net_income': model.income_statements[-1].net_income,
+            'ending_cash': model.cash_flows[-1].ending_cash,
+            'enterprise_value': dcf.get('enterprise_value') if dcf.get('available') else None,
+        }
+
     def perform_sensitivity_analysis(self,
-                                      model: IntegratedFinancialModel,
-                                      variable: str,
-                                      range_percent: float = 0.20,
-                                      num_steps: int = 5,
-                                      output_metrics: List[str] = None) -> SensitivityAnalysis:
+                                     model: IntegratedFinancialModel,
+                                     variable: str,
+                                     range_percent: float = 0.20,
+                                     num_steps: int = 5,
+                                     output_metrics: List[str] = None) -> SensitivityAnalysis:
+        """Rebuild the model for each tested value of one assumption.
+
+        Test values are base x (1 - r ... 1 + r) in `num_steps` steps, or base +- r
+        (absolute) when the base value is 0. Impact metrics are elasticities:
+        (% change in metric) / (% change in the variable) across the tested range.
         """
-        Perform sensitivity analysis on key variable.
+        if not hasattr(model, 'base_statements'):
+            raise ValueError("sensitivity needs a model built by build_integrated_model()")
+        if variable not in model.model_assumptions or variable in ('probability',):
+            raise ValueError(f"unknown sensitivity variable '{variable}'; use one of: "
+                             f"{', '.join(sorted(k for k in model.model_assumptions if k != 'debt_repayment'))}")
+        if num_steps < 3 or num_steps > 21:
+            raise ValueError("num_steps must be between 3 and 21")
+        if not 0 < range_percent <= 1:
+            raise ValueError("range_percent must be in (0, 1]")
+        output_metrics = list(output_metrics or self.SENSITIVITY_METRICS)
 
-        Args:
-            model: Base integrated financial model
-            variable: Variable to sensitize (e.g., 'revenue_growth_rate')
-            range_percent: Range to test (±%)
-            num_steps: Number of steps in the range
-            output_metrics: Metrics to track (default: net_income, fcf)
+        base_value = model.model_assumptions[variable]
+        if isinstance(base_value, (list, tuple)):
+            raise ValueError(f"'{variable}' is a per-year list; sensitivity needs a single value")
+        base_value = float(base_value)
+        span = [(-range_percent + 2 * range_percent * i / (num_steps - 1)) for i in range(num_steps)]
+        test_values = [base_value * (1 + s) if base_value != 0 else s for s in span]
 
-        Returns:
-            SensitivityAnalysis results
-        """
-        if output_metrics is None:
-            output_metrics = ['net_income', 'ebitda', 'ending_cash']
+        rows = []
+        for v in test_values:
+            assumptions = {**model.user_assumptions, variable: v}
+            try:
+                m = self.build_integrated_model(model.base_statements, model.company_name, len(model.forecast_years),
+                                                assumptions, model.comparative_data)
+                metrics = self._model_metrics(m)
+                rows.append({'test_value': v, **{k: metrics.get(k) for k in output_metrics}})
+            except ValueError as e:
+                rows.append({'test_value': v, 'error': str(e)})
 
-        base_value = model.model_assumptions.get(variable, 0)
+        base_metrics = self._model_metrics(model)
+        impact_metrics = {}
+        lo, hi = rows[0], rows[-1]
+        dv = (test_values[-1] - test_values[0]) / base_value if base_value else None
+        for k in output_metrics:
+            b = base_metrics.get(k)
+            if dv and b and lo.get(k) is not None and hi.get(k) is not None:
+                impact_metrics[f'{k}_elasticity'] = ((hi[k] - lo[k]) / abs(b)) / dv
+            else:
+                impact_metrics[f'{k}_elasticity'] = None
 
-        # Generate range
-        step_size = (2 * range_percent) / (num_steps - 1)
-        test_values = [base_value * (1 - range_percent + step_size * i) for i in range(num_steps)]
-
-        results = []
-        for test_value in test_values:
-            # Create modified assumptions
-            modified_assumptions = {**model.model_assumptions}
-            modified_assumptions[variable] = test_value
-
-            # Calculate impact (simplified - would re-run model in full implementation)
-            impact_factor = test_value / base_value if base_value else 1
-
-            result = {
-                'test_value': test_value,
-                'impact_factor': impact_factor,
-            }
-
-            # Estimate impacts on metrics
-            if model.income_statements:
-                base_year = model.income_statements[-1]
-                result['net_income'] = base_year.net_income * (0.5 + 0.5 * impact_factor)
-                result['ebitda'] = base_year.ebitda * (0.7 + 0.3 * impact_factor)
-
-            if model.cash_flows:
-                base_cf = model.cash_flows[-1]
-                result['ending_cash'] = base_cf.ending_cash * impact_factor
-
-            results.append(result)
-
-        # Calculate impact metrics
-        if results:
-            base_result = results[num_steps // 2]  # Middle is base case
-            impact_metrics = {}
-            for metric in output_metrics:
-                if metric in results[0] and metric in results[-1]:
-                    impact_metrics[f'{metric}_sensitivity'] = (
-                        (results[-1][metric] - results[0][metric]) /
-                        (2 * range_percent * base_result.get(metric, 1))
-                    )
-
-        # Find breakeven (where metric crosses zero)
-        breakeven = None
-        for metric in output_metrics:
-            for i in range(len(results) - 1):
-                if results[i].get(metric, 0) * results[i + 1].get(metric, 0) < 0:
-                    # Linear interpolation
-                    breakeven = test_values[i] + (
-                        (test_values[i + 1] - test_values[i]) *
-                        abs(results[i][metric]) /
-                        (abs(results[i][metric]) + abs(results[i + 1][metric]))
-                    )
+        breakeven = {}
+        for k in output_metrics:
+            for a, b2 in zip(rows, rows[1:]):
+                ya, yb = a.get(k), b2.get(k)
+                if ya is not None and yb is not None and ya * yb < 0:
+                    breakeven[k] = a['test_value'] + (b2['test_value'] - a['test_value']) * abs(ya) / (abs(ya) + abs(yb))
                     break
 
         return SensitivityAnalysis(
-            base_case={metric: base_result.get(metric, 0) for metric in output_metrics},
+            base_case={k: base_metrics.get(k) for k in output_metrics},
             variable_tested=variable,
             range_tested=test_values,
-            results=results,
+            results=rows,
             impact_metrics=impact_metrics,
-            breakeven_point=breakeven,
+            breakeven_point=breakeven or None,
         )
 
+    @staticmethod
+    def sensitivity_to_dict(s: SensitivityAnalysis) -> Dict[str, Any]:
+        return {
+            'variable': s.variable_tested, 'tested_values': s.range_tested, 'base_case': s.base_case,
+            'results': s.results, 'elasticities': s.impact_metrics, 'breakeven': s.breakeven_point,
+            'method': "model rebuilt for each tested value; elasticity = (% change in metric across the range) / "
+                      "(% change in the variable)",
+        }
+
     def perform_scenario_analysis(self,
-                                   statements: FinancialStatements,
-                                   company_name: str,
-                                   scenarios: Dict[str, Dict[str, Any]]) -> List[ScenarioAnalysis]:
-        """
-        Perform scenario analysis with multiple assumption sets.
+                                  statements: FinancialStatements,
+                                  company_name: str,
+                                  scenarios: Dict[str, Dict[str, Any]],
+                                  forecast_years: int = 5,
+                                  comparative_data: Optional[List[FinancialStatements]] = None) -> List[ScenarioAnalysis]:
+        """Build one model per scenario (assumption set). Probabilities default to equal
+        weights; expected-value contributions are only filled when they sum to 1."""
+        if not scenarios:
+            return []
+        probs = {name: a.get('probability') for name, a in scenarios.items()}
+        if all(p is None for p in probs.values()):
+            probs = {name: 1.0 / len(scenarios) for name in scenarios}
+        weights_ok = all(p is not None for p in probs.values()) and abs(sum(probs.values()) - 1.0) < 1e-6
 
-        Args:
-            statements: Base financial statements
-            company_name: Company name
-            scenarios: Dict of scenario name -> assumptions
-
-        Returns:
-            List of ScenarioAnalysis results
-        """
         results = []
-
         for scenario_name, assumptions in scenarios.items():
-            # Determine scenario type
-            growth = assumptions.get('revenue_growth_rate', 0.05)
-            if growth > 0.10:
-                scenario_type = ScenarioType.OPTIMISTIC
-            elif growth < 0:
-                scenario_type = ScenarioType.PESSIMISTIC
-            else:
-                scenario_type = ScenarioType.BASE
-
-            # Build model for scenario
-            model = self.build_integrated_model(
-                statements=statements,
-                company_name=company_name,
-                forecast_years=5,
-                assumptions=assumptions
-            )
-
-            # Get terminal year income statement
-            if model.income_statements:
-                is_ = model.income_statements[-1]
-
-                key_metrics = {
-                    'revenue': is_.revenue,
-                    'gross_margin': is_.gross_margin,
-                    'operating_margin': is_.operating_margin,
-                    'net_income': is_.net_income,
-                    'ebitda': is_.ebitda,
-                }
-
-                # Calculate probability-weighted values
-                probability = assumptions.get('probability', 0.33)
-                expected_contribution = {
-                    k: v * probability for k, v in key_metrics.items()
-                }
-
-                results.append(ScenarioAnalysis(
-                    scenario_name=scenario_name,
-                    scenario_type=scenario_type,
-                    assumptions=assumptions,
-                    income_statement=is_,
-                    key_metrics=key_metrics,
-                    probability_weight=probability,
-                    expected_value_contribution=expected_contribution,
-                ))
-
+            model_assumptions = {k: v for k, v in assumptions.items() if k != 'probability'}
+            model = self.build_integrated_model(statements, company_name, forecast_years, model_assumptions,
+                                                comparative_data)
+            is_ = model.income_statements[-1]
+            key_metrics = {'revenue': is_.revenue, 'gross_margin': is_.gross_margin,
+                           'operating_margin': is_.operating_margin, 'net_income': is_.net_income,
+                           'ebitda': is_.ebitda}
+            growth = model.model_assumptions['revenue_growth_rate']
+            growth = growth[0] if isinstance(growth, (list, tuple)) else growth
+            scenario_type = (ScenarioType.OPTIMISTIC if growth > 0.10 else
+                             ScenarioType.PESSIMISTIC if growth < 0 else ScenarioType.BASE)
+            p = probs.get(scenario_name)
+            results.append(ScenarioAnalysis(
+                scenario_name=scenario_name,
+                scenario_type=scenario_type,
+                assumptions=model_assumptions,
+                income_statement=is_,
+                key_metrics=key_metrics,
+                probability_weight=p,
+                expected_value_contribution=({k: (v * p if v is not None else None) for k, v in key_metrics.items()}
+                                             if weights_ok else {}),
+            ))
         return results
 
     # =========================================================================
@@ -2109,84 +1406,56 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
     # =========================================================================
 
     def validate_model(self,
-                        income_statements: List[ProFormaIncomeStatement],
-                        balance_sheets: List[ProFormaBalanceSheet],
-                        cash_flows: List[ProFormaCashFlow]) -> ModelValidation:
-        """
-        Validate integrated financial model for consistency.
-
-        Args:
-            income_statements: Projected income statements
-            balance_sheets: Projected balance sheets
-            cash_flows: Projected cash flows
-
-        Returns:
-            ModelValidation results
-        """
+                       income_statements: List[ProFormaIncomeStatement],
+                       balance_sheets: List[ProFormaBalanceSheet],
+                       cash_flows: List[ProFormaCashFlow]) -> ModelValidation:
+        """Checks computed from the projected statements (nothing is assumed balanced)."""
         errors = []
         warnings = []
 
-        # 1. Balance sheet balances
         balance_sheet_balances = True
         for bs in balance_sheets:
-            diff = abs(bs.total_assets - bs.total_liabilities_and_equity)
-            if diff > 1:  # Allow $1 rounding
+            diff = bs.total_assets - bs.total_liabilities_and_equity
+            if abs(diff) > max(1e-6, abs(bs.total_assets) * 1e-9):
                 balance_sheet_balances = False
-                errors.append(f"{bs.period}: Balance sheet out of balance by ${diff:,.0f}")
+                errors.append(f"{bs.period}: balance sheet out of balance by {diff:,.6f}")
 
-        # 2. Cash flow reconciles to balance sheet
         cash_flow_reconciles = True
-        for i, cf in enumerate(cash_flows):
-            if i < len(balance_sheets):
-                bs_cash = balance_sheets[i].cash
-                if abs(cf.ending_cash - bs_cash) > 1:
-                    cash_flow_reconciles = False
-                    errors.append(f"{cf.period}: Cash doesn't reconcile (CF: ${cf.ending_cash:,.0f}, BS: ${bs_cash:,.0f})")
+        for cf, bs in zip(cash_flows, balance_sheets):
+            if abs(cf.ending_cash - bs.cash) > max(1e-6, abs(bs.cash) * 1e-9):
+                cash_flow_reconciles = False
+                errors.append(f"{cf.period}: cash does not reconcile (CF {cf.ending_cash:,.2f}, BS {bs.cash:,.2f})")
 
-        # 3. Check for circular references (simplified check)
-        circular_reference_check = True  # Would need more sophisticated check
-
-        # 4. Growth rates reasonable
         growth_rates_reasonable = True
-        for i in range(1, len(income_statements)):
-            prior = income_statements[i - 1]
-            current = income_statements[i]
-            if prior.revenue > 0:
-                growth = (current.revenue - prior.revenue) / prior.revenue
-                if abs(growth) > 0.50:  # >50% growth is suspicious
-                    warnings.append(f"{current.period}: High revenue growth ({growth:.1%})")
-                    growth_rates_reasonable = False
+        for prior, current in zip(income_statements, income_statements[1:]):
+            if prior.revenue > 0 and abs(current.revenue / prior.revenue - 1) > 0.50:
+                warnings.append(f"{current.period}: revenue growth above 50%")
+                growth_rates_reasonable = False
 
-        # 5. Margins within bounds
         margins_within_bounds = True
         for is_ in income_statements:
-            if is_.gross_margin < 0 or is_.gross_margin > 1:
+            if is_.gross_margin is not None and not 0 <= is_.gross_margin <= 1:
                 margins_within_bounds = False
-                errors.append(f"{is_.period}: Invalid gross margin ({is_.gross_margin:.1%})")
+                warnings.append(f"{is_.period}: gross margin outside 0-100% ({is_.gross_margin:.1%})")
             if is_.operating_margin < -0.5 or is_.operating_margin > 0.6:
-                warnings.append(f"{is_.period}: Unusual operating margin ({is_.operating_margin:.1%})")
+                warnings.append(f"{is_.period}: unusual operating margin ({is_.operating_margin:.1%})")
 
-        # 6. Debt covenants (simplified)
         debt_covenants_met = True
         for is_ in income_statements:
-            if is_.interest_expense > 0:
-                coverage = is_.operating_income / is_.interest_expense
-                if coverage < 1.5:
-                    warnings.append(f"{is_.period}: Low interest coverage ({coverage:.1f}x)")
-                    debt_covenants_met = False
+            if is_.interest_expense > 0 and is_.operating_income / is_.interest_expense < 1.5:
+                warnings.append(f"{is_.period}: interest coverage {is_.operating_income / is_.interest_expense:.1f}x")
+                debt_covenants_met = False
 
-        # 7. Liquidity adequate
         liquidity_adequate = True
         for bs in balance_sheets:
-            current_ratio = bs.total_current_assets / bs.total_current_liabilities if bs.total_current_liabilities else float('inf')
-            if current_ratio < 1.0:
-                warnings.append(f"{bs.period}: Low current ratio ({current_ratio:.2f}x)")
+            if bs.total_current_liabilities > 0 and bs.total_current_assets / bs.total_current_liabilities < 1.0:
+                warnings.append(f"{bs.period}: current ratio {bs.total_current_assets / bs.total_current_liabilities:.2f}x")
                 liquidity_adequate = False
 
         return ModelValidation(
             balance_sheet_balances=balance_sheet_balances,
             cash_flow_reconciles=cash_flow_reconciles,
-            circular_reference_check=circular_reference_check,
+            circular_reference_check=True,  # interest uses opening balances, so there is no circularity
             growth_rates_reasonable=growth_rates_reasonable,
             margins_within_bounds=margins_within_bounds,
             debt_covenants_met=debt_covenants_met,
@@ -2208,125 +1477,52 @@ class FinancialStatementModelingAnalyzer(BaseAnalyzer):
         return self.industry_benchmarks.get(industry.lower(), self.industry_benchmarks['manufacturing'])
 
     def get_model_summary(self, model: IntegratedFinancialModel) -> Dict[str, Any]:
-        """Generate summary of integrated model"""
+        """Summary of the projection; CAGR is measured from the base year over N years."""
         if not model.income_statements:
             return {}
-
         terminal_year = model.income_statements[-1]
-        base_year = model.income_statements[0] if model.income_statements else terminal_year
-
-        cagr = 0
-        if base_year.revenue and terminal_year.revenue and len(model.income_statements) > 1:
-            years = len(model.income_statements)
-            cagr = (terminal_year.revenue / base_year.revenue) ** (1 / years) - 1
-
+        base = getattr(model, 'base_year_values', {})
+        base_revenue = base.get('revenue')
+        n = len(model.income_statements)
+        cagr = self.cagr(base_revenue, terminal_year.revenue, n) if base_revenue else None
         return {
             'company': model.company_name,
             'forecast_period': f"{model.forecast_years[0]} to {model.forecast_years[-1]}",
-            'base_revenue': base_year.revenue,
+            'base_revenue': base_revenue,
             'terminal_revenue': terminal_year.revenue,
             'revenue_cagr': cagr,
             'terminal_ebitda': terminal_year.ebitda,
             'terminal_ebitda_margin': terminal_year.ebitda_margin,
             'terminal_net_income': terminal_year.net_income,
             'terminal_net_margin': terminal_year.net_margin,
+            'ending_cash': model.cash_flows[-1].ending_cash if model.cash_flows else None,
+            'ending_revolver': model.balance_sheets[-1].revolver if model.balance_sheets else None,
             'model_valid': model.validation_results.get('model_valid', False),
-            'key_assumptions': model.model_assumptions,
         }
 
 
 # =============================================================================
-# CLI SUPPORT
+# SCRIPT ENTRY POINT
 # =============================================================================
 
-def main():
-    """CLI entry point for financial modeling"""
-    import json
-
-    # Example usage
-    example_statements = FinancialStatements(
-        income_statement={
-            'revenue': 1000000000,
-            'cost_of_goods_sold': 600000000,
-            'selling_general_administrative': 150000000,
-            'research_development': 50000000,
-            'depreciation_amortization': 40000000,
-            'operating_income': 160000000,
-            'interest_expense': 20000000,
-            'tax_expense': 35000000,
-            'net_income': 105000000,
-        },
-        balance_sheet={
-            'cash': 100000000,
-            'accounts_receivable': 120000000,
-            'inventory': 150000000,
-            'net_ppe': 400000000,
-            'gross_ppe': 600000000,
-            'intangible_assets': 50000000,
-            'total_assets': 820000000,
-            'accounts_payable': 80000000,
-            'short_term_debt': 30000000,
-            'long_term_debt': 200000000,
-            'total_liabilities': 350000000,
-            'common_stock': 200000000,
-            'retained_earnings': 270000000,
-            'total_equity': 470000000,
-        },
-        cash_flow_statement={
-            'operating_cash_flow': 180000000,
-            'capital_expenditures': -60000000,
-            'depreciation_amortization': 40000000,
-        }
-    )
-
-    analyzer = FinancialStatementModelingAnalyzer()
-
-    # Analyze base statements
-    print("=" * 60)
-    print("Financial Statement Modeling Analysis")
-    print("=" * 60)
-
-    results = analyzer.analyze(example_statements)
-    for result in results:
-        print(f"\n{result.metric_name}")
-        print("-" * 40)
-        print(f"Value: {result.value}")
-        print(f"Interpretation: {result.interpretation}")
-
-    # Build integrated model
-    print("\n" + "=" * 60)
-    print("Building Integrated Financial Model")
-    print("=" * 60)
-
-    model = analyzer.build_integrated_model(
-        statements=example_statements,
-        company_name="Example Corp",
-        forecast_years=5,
-        assumptions={
-            'revenue_growth_rate': 0.08,
-            'gross_margin': 0.40,
-            'tax_rate': 0.25,
-        }
-    )
-
-    summary = analyzer.get_model_summary(model)
-    print(f"\nModel Summary:")
-    print(json.dumps(summary, indent=2, default=str))
-
-    # Sensitivity analysis
-    print("\n" + "=" * 60)
-    print("Sensitivity Analysis")
-    print("=" * 60)
-
-    sensitivity = analyzer.perform_sensitivity_analysis(
-        model=model,
-        variable='revenue_growth_rate',
-        range_percent=0.25,
-    )
-
-    print(f"\nVariable: {sensitivity.variable_tested}")
-    print(f"Range tested: {[f'{v:.1%}' for v in sensitivity.range_tested]}")
-    print(f"Impact metrics: {sensitivity.impact_metrics}")
+def main(argv: Optional[List[str]] = None):
+    """`python financial_modeling.py '<json>'` == `financial_analysis_cli.py build_model '<json>'`."""
+    import os
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
+    analytics = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    for p in (analytics, os.path.dirname(analytics)):
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    import fincept_json
+    import financial_analysis_cli as cli
+    if not argv:
+        payload = {"success": False,
+                   "error": "usage: financial_modeling.py '<json params>' - same params as "
+                            "Analytics/financial_analysis_cli.py build_model (run its 'list' command)"}
+    else:
+        payload = cli.main(["build_model", argv[-1]])
+    fincept_json.emit(payload)
 
 
 if __name__ == "__main__":

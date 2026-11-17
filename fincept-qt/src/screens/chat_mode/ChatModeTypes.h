@@ -1,14 +1,59 @@
 #pragma once
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QLocale>
+#include <QRegularExpression>
 #include <QString>
+#include <QTimeZone>
 #include <QVector>
 
 namespace fincept::chat_mode {
 
 // ── Stream mode ───────────────────────────────────────────────────────────────
 enum class StreamMode { Lite, Deep };
+
+// ── Default session title ─────────────────────────────────────────────────────
+// The title a new conversation is created with. Sent untranslated: the backend
+// auto-titles a conversation from its first message only while the stored title
+// contains this exact English text (apiback chat.py _persist_user_message), so a
+// translated title ("Neue Unterhaltung") kept the placeholder forever. Translate
+// it only for display — see chat_display_session_title().
+inline constexpr const char* kChatDefaultSessionTitle = "New Conversation";
+
+/// A session title as shown to the user: the canonical default title in the UI
+/// language (the ChatMessagePanel translation is reused), anything else on one line
+/// (a title the server cut from a message of several lines must not grow the header).
+inline QString chat_display_session_title(const QString& title) {
+    if (title == QLatin1String(kChatDefaultSessionTitle))
+        return QCoreApplication::translate("fincept::chat_mode::ChatMessagePanel", "New Conversation");
+    return title.simplified();
+}
+
+/// A server timestamp (ISO 8601, UTC; with or without fraction / offset) in the
+/// user's local time and short locale format, or "-" when empty / unparseable.
+/// The raw text used to be shown ("2026-11-16T09:41", UTC, with the literal T).
+inline QString chat_local_time(const QString& iso) {
+    const QString s = iso.trimmed();
+    if (s.isEmpty())
+        return QStringLiteral("-");
+    QDateTime dt = QDateTime::fromString(s, Qt::ISODateWithMs);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(s, Qt::ISODate);
+    if (!dt.isValid()) {
+        // Python isoformat() writes microseconds (6 digits); keep milliseconds.
+        static const QRegularExpression kMicros(QStringLiteral("(\\.\\d{3})\\d+"));
+        QString trimmed = s;
+        trimmed.replace(kMicros, QStringLiteral("\\1"));
+        dt = QDateTime::fromString(trimmed, Qt::ISODateWithMs);
+    }
+    if (!dt.isValid())
+        return QStringLiteral("-");
+    if (dt.timeSpec() == Qt::LocalTime) // no offset in the text: the server writes UTC
+        dt.setTimeZone(QTimeZone::utc());
+    return QLocale().toString(dt.toLocalTime(), QLocale::ShortFormat);
+}
 
 // ── Session ───────────────────────────────────────────────────────────────────
 struct ChatSession {
@@ -33,6 +78,14 @@ struct ChatSession {
     }
 };
 
+/// One page of GET /chat/sessions. `has_more_known` is false on servers that do
+/// not page (no `has_more` in the reply): the caller then grows `limit` instead.
+struct ChatSessionsPage {
+    QVector<ChatSession> sessions;
+    bool has_more_known = false;
+    bool has_more = false;
+};
+
 // ── Message ───────────────────────────────────────────────────────────────────
 struct ChatMessage {
     QString uuid;
@@ -44,6 +97,17 @@ struct ChatMessage {
     QString provider;
     QString model;
     QString session_uuid; // owning session — present on /chat/search hits
+    /// metadata_json of an assistant message (apiback chat.py): what the user saw
+    /// besides text — {"interrupt": {"question"}}, {"proposals": [{…, "status"}]},
+    /// {"proposal_decision": {…}}. Empty for plain answers and on older servers.
+    QJsonObject metadata;
+
+    /// The question the agent paused on in this turn, or empty.
+    QString interrupt_question() const {
+        return metadata.value(QLatin1String("interrupt")).toObject().value(QLatin1String("question")).toString().trimmed();
+    }
+    /// Trade proposals shown in this turn, each with its "status" (pending until decided).
+    QJsonArray proposals() const { return metadata.value(QLatin1String("proposals")).toArray(); }
 
     static ChatMessage from_json(const QJsonObject& o) {
         ChatMessage m;
@@ -55,8 +119,124 @@ struct ChatMessage {
         m.response_time_ms = o["response_time_ms"].toInt();
         m.provider = o["provider"].toString();
         m.model = o["model"].toString();
+        m.metadata = o["metadata_json"].toObject(); // null / absent -> empty
         return m;
     }
+};
+
+// ── Trade proposal decision (POST /chat/agent/proposals/{id}) ─────────────────
+// Also the payload of the "proposal-decided" stream event (a decision made during
+// a run, e.g. the agent's portfolio_confirm after an "Approved: …" message):
+// {proposal_id, status, approved, message, decided_by, decided_at}.
+// Card statuses in history (metadata_json.proposals[].status):
+// pending | executed | rejected | failed | expired | unavailable.
+struct ProposalDecision {
+    QString proposal_id;
+    QString status; // "executed" | "rejected" | "failed"
+    bool approved = false;
+    QString message; // one readable line written by the server
+    QJsonObject proposal;
+    QString decided_at;
+    QString decided_by;
+    bool replayed = false; // an earlier decision's outcome (never executed twice)
+    QString session_id;
+
+    static ProposalDecision from_json(const QJsonObject& o) {
+        ProposalDecision d;
+        d.proposal_id = o["proposal_id"].toString();
+        d.status = o["status"].toString();
+        d.approved = o["approved"].toBool();
+        d.message = o["message"].toString().trimmed();
+        d.proposal = o["proposal"].toObject();
+        d.decided_at = o["decided_at"].toString();
+        d.decided_by = o["decided_by"].toString();
+        d.replayed = o["replayed"].toBool();
+        d.session_id = o["session_id"].toString();
+        return d;
+    }
+};
+
+/// How a decision request ended. RouteMissing = the server has no proposals
+/// route yet (an older deployment): the caller falls back to the text approval.
+enum class ProposalOutcome { Decided, Gone, Expired, InProgress, RouteMissing, Failed };
+
+// ── Terminal tool bridge ──────────────────────────────────────────────────────
+struct RejectedTool {
+    QString name;
+    QString reason;
+};
+
+/// Reply of POST /chat/agent/terminal-tools/register.
+struct ToolRegistration {
+    int registered = 0;           // tools the server accepted
+    bool visibility_known = false; // the reply carries agent_visible (newer servers)
+    bool agent_visible = false;   // stored AND the agent process is alive
+    QVector<RejectedTool> rejected;
+    int ttl_seconds = 0; // 0 = not reported
+
+    static ToolRegistration from_json(const QJsonObject& o) {
+        ToolRegistration r;
+        r.registered = o["registered"].toInt();
+        r.visibility_known = o.contains(QLatin1String("agent_visible"));
+        r.agent_visible = o["agent_visible"].toBool();
+        for (const auto& v : o["rejected"].toArray()) {
+            const QJsonObject e = v.toObject();
+            r.rejected.append({e["name"].toString(), e["reason"].toString()});
+        }
+        r.ttl_seconds = o["ttl_seconds"].toInt();
+        return r;
+    }
+};
+
+/// Reply of GET /chat/agent/terminal-tools/pending.
+///   available: false                   -> the server's bridge is down: do not re-register
+///   available: true, registered: false -> the registration lapsed: register again
+/// Older servers send neither `available` nor `registered`.
+struct PendingToolCalls {
+    QJsonArray calls;
+    bool registered_known = false; // the reply carries `registered` (newer servers)
+    bool registered = true;
+    bool visibility_known = false;
+    bool agent_visible = false;
+    bool available_known = false; // the reply carries `available` (newest servers)
+    bool available = true;
+
+    static PendingToolCalls from_json(const QJsonObject& o) {
+        PendingToolCalls p;
+        p.calls = o["calls"].toArray();
+        p.registered_known = o.contains(QLatin1String("registered"));
+        p.registered = o["registered"].toBool(true);
+        p.visibility_known = o.contains(QLatin1String("agent_visible"));
+        p.agent_visible = o["agent_visible"].toBool();
+        p.available_known = o.contains(QLatin1String("available"));
+        p.available = o["available"].toBool(true);
+        return p;
+    }
+};
+
+/// Outcome of POST /chat/agent/terminal-tools/result.
+enum class ToolResultDelivery {
+    Delivered,
+    AlreadyDelivered, // 409: a result for this call is already in
+    Expired,          // 404: the call is unknown / expired — the agent stopped waiting
+    Failed
+};
+
+/// What the chat header shows about the terminal tools offered to the cloud agent.
+struct ToolBridgeStatus {
+    enum class State {
+        Off,              // nothing registered (yet) — no label
+        Unconfirmed,      // older server: accepted, but it cannot say whether the agent sees them
+        Usable,           // the agent can call them
+        AgentUnreachable, // registered, but the agent service is not running
+        NotRegistered,    // the registration failed, lapsed, or no tool was accepted
+        Unavailable       // the server's tool bridge is temporarily down (pending available:false,
+                          // 503 terminal_bridge_unavailable): nothing to do but wait
+    };
+    State state = State::Off;
+    int offered = 0; // tools in the last accepted registration
+    QVector<RejectedTool> rejected;
+    QString detail; // why NotRegistered (server text), may be empty
 };
 
 // ── Agent memory entry ────────────────────────────────────────────────────────
@@ -76,90 +256,18 @@ struct AgentMemory {
     }
 };
 
-// ── Agent schedule ────────────────────────────────────────────────────────────
-struct AgentSchedule {
-    QString schedule_id;
-    QString query;
-    QString cron_expression;
-    QString status; // "active" | "paused"
-    QString session_id;
-    QString created_at;
-    QString last_run_at;
-    QString next_run_at;
-
-    static AgentSchedule from_json(const QJsonObject& o) {
-        AgentSchedule s;
-        s.schedule_id = o["schedule_id"].toString();
-        s.query = o["query"].toString();
-        s.cron_expression = o["cron_expression"].toString();
-        s.status = o["status"].toString();
-        s.session_id = o["session_id"].toString();
-        s.created_at = o["created_at"].toString();
-        s.last_run_at = o["last_run_at"].toString();
-        s.next_run_at = o["next_run_at"].toString();
-        return s;
-    }
-};
-
-// ── Background agent task ─────────────────────────────────────────────────────
-struct AgentTask {
-    QString task_id;
-    QString query;
-    QString status; // "queued" | "running" | "completed" | "error" | "cancelled"
-    QString session_id;
-    QString result;
-    QString created_at;
-    QString updated_at;
-    QString started_at;
-    QString completed_at;
-
-    static AgentTask from_json(const QJsonObject& o) {
-        AgentTask t;
-        t.task_id = o["task_id"].toString();
-        t.query = o["query"].toString();
-        t.status = o["status"].toString();
-        t.session_id = o["session_id"].toString();
-        t.result = o["result"].toString();
-        t.created_at = o["created_at"].toString();
-        t.updated_at = o["updated_at"].toString();
-        t.started_at = o["started_at"].toString();
-        t.completed_at = o["completed_at"].toString();
-        return t;
-    }
-};
-
-// ── Task history step ─────────────────────────────────────────────────────────
-struct TaskHistoryStep {
-    int step = 0;
-    QString timestamp;
-    QStringList next;
-
-    static TaskHistoryStep from_json(const QJsonObject& o) {
-        TaskHistoryStep h;
-        h.step = o["step"].toInt();
-        h.timestamp = o["timestamp"].toString();
-        for (const auto& v : o["next"].toArray())
-            h.next.append(v.toString());
-        return h;
-    }
-};
-
-// ── Task activity event ───────────────────────────────────────────────────────
-struct TaskActivity {
+// ── Agent investment profile (GET /profile/profiles) ──────────────────────────
+struct AgentProfile {
     int id = 0;
-    QString event_type;
-    QString timestamp;
-    QJsonObject details;
-    QJsonObject data;
+    QString name;
+    bool is_default = false;
 
-    static TaskActivity from_json(const QJsonObject& o) {
-        TaskActivity a;
-        a.id = o["id"].toInt();
-        a.event_type = o["event_type"].toString();
-        a.timestamp = o["timestamp"].toString();
-        a.details = o["details"].toObject();
-        a.data = o["data"].toObject();
-        return a;
+    static AgentProfile from_json(const QJsonObject& o) {
+        AgentProfile p;
+        p.id = o["id"].toInt();
+        p.name = o["name"].toString();
+        p.is_default = o["is_default"].toBool();
+        return p;
     }
 };
 
@@ -203,6 +311,9 @@ struct McpServer {
     QStringList tool_names;
     QVector<McpTool> tools;
     QJsonObject config;
+    QString scope; // "global" (shared, admin-managed — the user cannot remove it) | "private"
+
+    bool is_shared() const { return scope == QLatin1String("global"); }
 
     static McpServer from_json(const QJsonObject& o) {
         McpServer s;
@@ -210,6 +321,7 @@ struct McpServer {
         s.transport = o["transport"].toString();
         s.status = o["status"].toString();
         s.error = o["error"].toString();
+        s.scope = o["scope"].toString();
         s.tools_count = o["tools_count"].toInt();
         s.config = o["config"].toObject();
         for (const auto& v : o["tool_names"].toArray())
@@ -217,37 +329,6 @@ struct McpServer {
         for (const auto& v : o["tools"].toArray())
             s.tools.append(McpTool::from_json(v.toObject()));
         return s;
-    }
-};
-
-// ── Agent monitor ─────────────────────────────────────────────────────────────
-struct AgentMonitor {
-    QString monitor_id;
-    QString name;
-    QString source_type; // "equity" | "macro" | "news"
-    QJsonObject source_config;
-    QJsonObject trigger_config;
-    QString analysis_query;
-    int check_interval_seconds = 300;
-    QString status; // "active" | "paused"
-    QString created_at;
-    QString last_check_at;
-    QString last_triggered_at;
-
-    static AgentMonitor from_json(const QJsonObject& o) {
-        AgentMonitor m;
-        m.monitor_id = o["monitor_id"].toString();
-        m.name = o["name"].toString();
-        m.source_type = o["source_type"].toString();
-        m.source_config = o["source_config"].toObject();
-        m.trigger_config = o["trigger_config"].toObject();
-        m.analysis_query = o["analysis_query"].toString();
-        m.check_interval_seconds = o["check_interval_seconds"].toInt(300);
-        m.status = o["status"].toString();
-        m.created_at = o["created_at"].toString();
-        m.last_check_at = o["last_check_at"].toString();
-        m.last_triggered_at = o["last_triggered_at"].toString();
-        return m;
     }
 };
 

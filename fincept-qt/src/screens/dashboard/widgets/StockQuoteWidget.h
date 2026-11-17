@@ -6,14 +6,22 @@
 #include <QLabel>
 #include <QStringList>
 
+namespace fincept::ui {
+class RangeBar;
+class TimeSeriesChart;
+} // namespace fincept::ui
+
 namespace fincept::screens::widgets {
 
-/// Single stock quote card — fetches real-time data via yfinance.
-/// Shows price, change, high/low/open/volume in a detail layout.
+/// Single instrument quote card: price and change in the instrument's own
+/// decimals and currency, session state and "as of" time, open / previous
+/// close / volume vs average, day and 52-week range bars, and a daily price
+/// chart (1M–1Y presets) with the previous close marked.
 ///
-/// Subscribes to `market:quote:<symbol_>` on the DataHub. `set_symbol()`
-/// re-subscribes to the new topic. Visibility-driven subscribe/unsubscribe
-/// per CLAUDE.md P3 / D3.
+/// Subscribes to `market:quote:<symbol_>` (tracked) and the shared daily
+/// history `MarketDataService::performance_history_topic(symbol_)` on the
+/// DataHub. `set_symbol()` re-subscribes. Visibility-driven subscribe /
+/// unsubscribe per CLAUDE.md P3 / D3. The gear opens a symbol search.
 class StockQuoteWidget : public BaseWidget {
     Q_OBJECT
   public:
@@ -60,6 +68,15 @@ class StockQuoteWidget : public BaseWidget {
     QLabel* low_val_ = nullptr;
     QLabel* volume_val_ = nullptr;
     QLabel* prev_val_ = nullptr;
+    QLabel* avgvol_val_ = nullptr;
+    QLabel* status_label_ = nullptr; ///< session state · as of · delay
+    QLabel* day_lbl_ = nullptr;
+    QLabel* wk_lbl_ = nullptr;
+    ui::RangeBar* day_range_ = nullptr;
+    ui::RangeBar* wk_range_ = nullptr;
+    ui::TimeSeriesChart* chart_ = nullptr;
+    double last_prev_close_ = 0;
+    void render_chart(const QVector<services::HistoryPoint>& bars);
 
     // Stat cells and their title labels for theme refresh
     QVector<QWidget*> stat_cells_;

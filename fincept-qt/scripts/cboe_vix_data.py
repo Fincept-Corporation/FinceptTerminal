@@ -11,6 +11,8 @@ import csv
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('CBOE_API_KEY', '')
 BASE_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices"
 
@@ -52,15 +54,21 @@ def _parse_csv(csv_text: str, start_date: str = None, end_date: str = None) -> A
         reader = csv.DictReader(io.StringIO(csv_text))
         rows = []
         for row in reader:
-            clean = {k.strip(): v.strip() for k, v in row.items() if k}
+            clean = {k.strip(): (v or "").strip() for k, v in row.items() if k}
             if not any(clean.values()):
                 continue
-            date_val = clean.get("DATE", clean.get("Date", ""))
+            # Cboe writes MM/DD/YYYY; rows carry ISO dates, which also makes the range filter
+            # below compare like with like (it used to compare "01/02/1990" with "2024-01-01").
+            date_key = "DATE" if "DATE" in clean else ("Date" if "Date" in clean else None)
+            if date_key:
+                clean[date_key] = fc.iso_date(clean[date_key], "%m/%d/%Y")
+            date_val = clean.get(date_key, "") if date_key else ""
             if start_date and date_val and date_val < start_date:
                 continue
             if end_date and date_val and date_val > end_date:
                 continue
             rows.append(clean)
+        fc.numeric_columns(rows)
         return {"data": rows, "count": len(rows)}
     except Exception as e:
         return {"error": f"CSV parse error: {str(e)}"}

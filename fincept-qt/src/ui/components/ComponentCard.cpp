@@ -1,6 +1,7 @@
 #include "ui/components/ComponentCard.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -16,26 +17,18 @@ namespace {
 
 constexpr const char* kScreenIdMime = "application/x-fincept-screen-id";
 
+/// Category accent: a fixed slot of the theme's categorical palette per
+/// category (never a price-direction hue), legible on either theme.
 QString category_color(const QString& category) {
-    if (category == "Core")
-        return "#d97706"; // amber
-    if (category == "Trading")
-        return "#16a34a"; // green
-    if (category == "Research")
-        return "#0891b2"; // cyan
-    if (category == "QuantLib")
-        return "#7c3aed"; // purple
-    if (category == "AI")
-        return "#c026d3"; // magenta
-    if (category == "Economics")
-        return "#2563eb"; // blue
-    if (category == "Geopolitics")
-        return "#dc2626"; // red
-    if (category == "Tools")
-        return "#64748b"; // slate
-    if (category == "Community")
-        return "#059669"; // emerald
-    return "#4b5563";
+    static const QStringList kCategories = {"Core",      "Trading",     "QuantLib", "Tools",    "Economics",
+                                            "Community", "Geopolitics", "AI",       "Research"};
+    const int slot = kCategories.indexOf(category);
+    if (slot < 0)
+        return colors::TEXT_SECONDARY();
+    // Core amber, Trading sky, QuantLib purple, Tools periwinkle, Economics
+    // blue, Community tan, Geopolitics orange, AI magenta, Research cyan.
+    static const int kSlots[] = {0, 1, 2, 6, 4, 5, 9, 7, 8};
+    return colors::chart_color(kSlots[slot]).name();
 }
 
 /// Logarithmic thresholds: one star after a couple visits, five at 150+.
@@ -61,12 +54,22 @@ QString popularity_stars(int count) {
 } // namespace
 
 ComponentCard::ComponentCard(ComponentMeta meta, QWidget* parent) : QFrame(parent), meta_(std::move(meta)) {
-    setFixedSize(260, 120);
     setCursor(Qt::PointingHandCursor);
     setObjectName("componentCard");
     setAttribute(Qt::WA_Hover, true);
     build_ui();
     restyle();
+    apply_metrics();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { apply_metrics(); });
+}
+
+void ComponentCard::apply_metrics() {
+    // 260 x 120 at the default font size, scaled with the user's font; the
+    // description keeps room for two lines of its text.
+    setFixedSize(metrics::width(260), metrics::width(120));
+    if (auto* desc = findChild<QLabel*>(QStringLiteral("componentCardDesc")))
+        desc->setMaximumHeight(QFontMetrics(fonts::font(-3)).lineSpacing() * 2 + 4);
 }
 
 void ComponentCard::build_ui() {
@@ -89,25 +92,25 @@ void ComponentCard::build_ui() {
     cat_row->setSpacing(0);
     auto* cat = new QLabel(meta_.category.toUpper(), body);
     cat->setStyleSheet(
-        QString("color:%1;font-size:10px;letter-spacing:1.5px;font-weight:700;").arg(category_color(meta_.category)));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;letter-spacing:1.5px;font-weight:700;").arg(category_color(meta_.category)));
     cat_row->addWidget(cat);
     cat_row->addStretch(1);
     auto* stars = new QLabel(popularity_stars(meta_.popularity), body);
-    stars->setStyleSheet(QString("color:%1;font-size:12px;").arg(colors::AMBER()));
+    stars->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;").arg(colors::AMBER()));
     stars->setToolTip(QString("Use count: %1").arg(meta_.popularity));
     cat_row->addWidget(stars);
     bl->addLayout(cat_row);
 
     auto* title = new QLabel(meta_.title, body);
-    title->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;").arg(colors::TEXT_PRIMARY()));
+    title->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(0) + "px;font-weight:700;").arg(colors::TEXT_PRIMARY()));
     bl->addWidget(title);
 
     auto* desc = new QLabel(body);
+    desc->setObjectName(QStringLiteral("componentCardDesc"));
     desc->setWordWrap(true);
-    desc->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+    desc->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
     const QString text = meta_.description.isEmpty() ? QStringLiteral(" ") : meta_.description;
     desc->setText(text);
-    desc->setMaximumHeight(36);
     bl->addWidget(desc);
     bl->addStretch(1);
 

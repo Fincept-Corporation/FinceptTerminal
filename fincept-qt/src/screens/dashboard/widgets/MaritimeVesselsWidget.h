@@ -28,6 +28,8 @@ class MaritimeVesselsWidget : public BaseWidget {
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;
     QDialog* make_config_dialog(QWidget* parent) override;
+    /// A vessel lookup failed: mark the rows that have nothing to show.
+    void on_topic_errors_changed() override;
 
   private:
     struct Row {
@@ -42,7 +44,12 @@ class MaritimeVesselsWidget : public BaseWidget {
     void build_rows();
     void clear_rows();
     void on_vessel(const QString& imo, const QVariant& v);
+    /// "—" + the producer's reason on a row whose lookup failed with no data.
+    void apply_row_error(const QString& imo);
     void hub_resubscribe();
+    /// Billing rule: the positions the hub already holds, else the LOAD offer
+    /// (never a request). LOAD = the title-bar refresh (one-shot subscriptions).
+    void show_remembered_or_offer();
     void hub_unsubscribe_all();
 
     QStringList imos_;

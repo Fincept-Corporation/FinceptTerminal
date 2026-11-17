@@ -2,6 +2,7 @@
 #include "services/news/NewsService.h"
 #include "services/news/NewsSignalDetector.h"
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -20,6 +21,9 @@ struct PredictionMarket {
     double yes_price = 0;
     double no_price = 0;
     double volume = 0;
+    /// The feed topic (ticker / entity) this market was found for; empty for
+    /// the unfiltered list.
+    QString matched_term;
 };
 
 // ── Service ─────────────────────────────────────────────────────────────────
@@ -45,11 +49,26 @@ class NewsCorrelationService : public QObject {
     /// Prediction-market odds (Manifold, play money). Served from cache when fresh.
     void fetch_predictions(PredictionCallback cb);
 
+    /// Open binary markets about what the feed is discussing: one Manifold
+    /// search per term (the first kMaxPredictionTerms, each cached
+    /// kPredictionsTtlSec), keeping only markets whose question names the term.
+    /// Each result carries the term it matched; the callback gets an empty list
+    /// (ok) when nothing matches — unrelated markets are never shown.
+    void fetch_predictions_for(const QStringList& terms, PredictionCallback cb);
+    static constexpr int kMaxPredictionTerms = 3;
+
     /// Human label of where fetch_predictions() data comes from.
     static QString predictions_source_label();
 
   private:
     NewsCorrelationService();
+    struct TermCache {
+        QVector<PredictionMarket> markets;
+        qint64 fetched_at = 0;
+        qint64 failed_at = 0;
+        bool inflight = false;
+    };
+    QHash<QString, TermCache> term_cache_; // lower-cased term -> search result
 
     static constexpr int kPredictionsTtlSec = 10 * 60;
     static constexpr int kPredictionsRetrySec = 2 * 60;

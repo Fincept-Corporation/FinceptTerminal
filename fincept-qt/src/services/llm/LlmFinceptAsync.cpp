@@ -26,20 +26,20 @@
 //   {"type":"error","error":{"type":"invalid_request_error",
 //    "message":"invalid params, function name is empty (2013)"}}
 //
-// That `(2013)` + request_id envelope is MiniMax's, and the array we send is
-// well-formed OpenAI ({"type":"function","function":{"name",...}}) — the exact
-// shape that works when talking to the minimax provider directly. So the
-// backend re-wraps or flattens `tools` on the way through and loses
-// function.name. The endpoint's own documented client contract is
-// `{ prompt, temperature, max_tokens }`, its `tools` field has no item schema
-// published, and its documented response is a plain `data.response` string with
-// no tool_calls — i.e. the field is not a supported surface here.
+// That `(2013)` + request_id envelope is MiniMax's. The cause is a FORMAT
+// mismatch, not a flattening: the backend forwards `tools` untouched to an
+// Anthropic-format Messages API (apiback research.py _run_llm_task), which
+// expects {"name","description","input_schema"} items — the array we sent was
+// OpenAI-shaped ({"type":"function","function":{"name",...}}), which has no
+// top-level `name`. Tool-use blocks of the answer come back as OpenAI-style
+// data.tool_calls (research.py _llm_output). finagent_core's FinceptChat uses
+// the Anthropic shape on this same endpoint.
 //
-// Tools on this path therefore travel ONE way: injected into the prompt as a
-// text catalog, invoked back as <tool_call> markup, executed here, and spliced
-// into the transcript for the next round. Do not re-add `tools` to the submit
-// body without first probing the endpoint for an item shape it actually
-// accepts — it breaks every Fincept chat, not just tool-using ones.
+// Tools on this path still travel ONE way: injected into the prompt as a text
+// catalog, invoked back as <tool_call> markup, executed here, and spliced into
+// the transcript for the next round. Switching to structured `tools` (Anthropic
+// shape) must be verified against the deployed endpoint first — a shape it
+// rejects fails every Fincept chat, not just tool-using ones.
 //
 // Response-side structured tool_calls are still parsed if they ever appear;
 // that costs nothing and is how we'd notice the backend gaining support.
@@ -158,9 +158,31 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
     QString catalog;
     catalog += "You have access to tools. To use one, emit a <tool_call> block:\n";
     catalog += "<tool_call>{\"name\": \"TOOL_NAME\", \"arguments\": {\"param\": \"value\"}}</tool_call>\n";
-    catalog += "Emit the block ALONE, with no commentary around it — you will be called again with the "
-               "result and can then continue. Only call a tool when the request needs live data or an "
-               "action in the terminal; answer greetings and general questions directly in plain text.\n"
+    catalog += "Emit tool_call blocks ALONE, with no commentary around them — you will be called again with the "
+               "results and can then continue. You may emit SEVERAL blocks in one turn when the calls are "
+               "independent (it is faster). Never announce what you are about to do (\"I'll look for…\", \"Let me "
+               "check…\"): a reply without a tool_call block is your FINAL answer to the user, so either act or "
+               "answer. Only call a tool when the request needs live data or an action in the terminal; answer "
+               "greetings and general questions directly in plain text.\n"
+               "Arguments are JSON: a parameter marked \"list\" is a JSON array (\"args\": [\"quote\", \"AAPL\"]), "
+               "never one string; parameters marked * are required; leave out the ones you do not need.\n"
+               "Data recipe: python(action=\"search\", query=\"…\") finds a script, python(action=\"info\", "
+               "script=\"…\") shows its commands, python(action=\"run\", script=\"…\", args=[…]) runs it. If a call "
+               "FAILS, read the reason, fix the arguments and call again; if a script has nothing, try another "
+               "script or read the open screen — do not stop at the first obstacle.\n"
+               "Shortcuts that need no search (script, args): quotes for several symbols — yfinance_data "
+               "[\"batch_quotes\", \"^GSPC\", \"^DJI\", \"^IXIC\", \"AAPL\"]; one quote — yfinance_data [\"quote\", "
+               "\"AAPL\"]; price history — yfinance_data [\"historical_period\", \"AAPL\", \"6mo\", \"1d\"]; company "
+               "news — yfinance_data [\"news\", \"AAPL\", \"10\"]; today's US movers — screener_data [\"predefined\", "
+               "\"day_gainers\", \"15\"] (also day_losers, most_actives); company profile / fundamentals — "
+               "yfinance_data [\"info\", \"AAPL\"]. Index symbols: ^GSPC (S&P 500), ^DJI (Dow), ^IXIC (Nasdaq), "
+               "^RUT (Russell 2000), ^VIX. Use these first for market questions; search only for anything else.\n"
+               "Work on the screen that owns the task. Decide the screen first (ui_open's description maps "
+               "every kind of task to its screen; ui_open() with no arguments lists them all), open it with the "
+               "symbol when there is one, then read or operate that screen — do not do a portfolio task in "
+               "Markets or a screening task in Equity Research. A request to open, show or pull up a stock, "
+               "company or ticker is ui_open(screen=\"equity_research\", symbol=\"AAPL\"): one call, then say it "
+               "is open. A question that only needs figures needs no screen: use the data shortcuts.\n"
                "You operate Fincept Terminal like a person: ui_overview shows what is open, ui_open opens a "
                "screen (optionally on a symbol), ui_snapshot lists a panel's controls with refs, ui_act works "
                "them, ui_read reads tables and texts in full, ui_wait waits for data to load. The server "
@@ -171,9 +193,31 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
         catalog += "- " + mcp::McpProvider::encode_tool_name_for_wire(tool.name) + ": " + tool.description;
         QJsonObject props = tool.input_schema["properties"].toObject();
         if (!props.isEmpty()) {
+            // name:type, "*" = required, choices for enums, element type for lists. Names
+            // alone made the model guess shapes (`args` sent as a string, not a list).
+            QStringList required;
+            for (const auto& rv : tool.input_schema["required"].toArray())
+                required.append(rv.toString());
             QStringList params;
-            for (auto it = props.constBegin(); it != props.constEnd(); ++it)
-                params.append(it.key());
+            for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
+                const QJsonObject spec = it.value().toObject();
+                QString type = spec.value(QStringLiteral("type")).toString();
+                if (type == QLatin1String("array")) {
+                    const QString item = spec.value(QStringLiteral("items")).toObject().value(QStringLiteral("type")).toString();
+                    type = QStringLiteral("list of ") + (item.isEmpty() ? QStringLiteral("values") : item + QLatin1Char('s'));
+                }
+                QString one = it.key() + (required.contains(it.key()) ? QStringLiteral("*") : QString());
+                if (!type.isEmpty())
+                    one += QLatin1Char(':') + type;
+                const QJsonArray choices = spec.value(QStringLiteral("enum")).toArray();
+                if (!choices.isEmpty() && choices.size() <= 8) {
+                    QStringList names;
+                    for (const auto& c : choices)
+                        names.append(c.toString());
+                    one += QLatin1Char('[') + names.join(QLatin1Char('|')) + QLatin1Char(']');
+                }
+                params.append(one);
+            }
             catalog += " (params: " + params.join(", ") + ")";
         }
         catalog += "\n";
@@ -265,6 +309,57 @@ static QString fincept_humanize_error(const QString& raw) {
     return s;
 }
 
+// This endpoint is submit-and-poll: nothing arrives until a round is complete, so
+// without help the chat shows a silent block for the whole turn and then the full
+// answer at once. Two things make the turn readable while it runs:
+//
+//  - what the model wrote around its tool calls ("Checking the index constituents
+//    first…") and the loop's own status go to the Thinking channel as they happen;
+//  - the final answer is handed to the chat in small pieces over a fraction of a
+//    second, so it reads as a stream like every other provider's. The service still
+//    returns the complete text; the chat replaces the streamed copy with it.
+static void fincept_emit_thinking(const QString& text) {
+    const QString t = text.trimmed();
+    if (!t.isEmpty())
+        detail::emit_progress(think_stream_prefix() + t + QStringLiteral("\n\n"));
+}
+
+static QString fincept_strip_tool_markup(QString content) {
+    static const QRegularExpression rx_block(
+        QStringLiteral("<\\s*(?:\\w+\\s*:\\s*)?tool_call\\s*>[\\s\\S]*?(?:<\\s*/\\s*(?:\\w+\\s*:\\s*)?tool_call\\s*>|$)"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx_invoke(QStringLiteral("<\\s*invoke\\b[\\s\\S]*?(?:<\\s*/\\s*invoke\\s*>|$)"),
+                                              QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx_fence(QStringLiteral("```tool_call[\\s\\S]*?(?:```|$)"));
+    content.remove(rx_block);
+    content.remove(rx_invoke);
+    content.remove(rx_fence);
+    return content.trimmed();
+}
+
+static void fincept_stream_answer(const QString& answer) {
+    const QString text = answer.trimmed();
+    if (text.isEmpty())
+        return;
+    // Word-sized pieces; the whole reveal is capped near 0.9 s however long the answer is.
+    constexpr int kPiece = 28;
+    const int pieces = std::max<int>(1, static_cast<int>((text.size() + kPiece - 1) / kPiece));
+    const int delay_ms = std::clamp(900 / pieces, 0, 14);
+    qsizetype pos = 0;
+    while (pos < text.size()) {
+        if (detail::cancel_requested())
+            return;
+        qsizetype end = std::min<qsizetype>(text.size(), pos + kPiece);
+        // Do not cut inside a word (or a surrogate pair): extend to the next space.
+        while (end < text.size() && !text.at(end).isSpace() && end - pos < kPiece * 2)
+            ++end;
+        detail::emit_progress(text.mid(pos, end - pos));
+        pos = end;
+        if (delay_ms > 0 && pos < text.size())
+            QThread::msleep(static_cast<unsigned long>(delay_ms));
+    }
+}
+
 // Render one tool result for splicing back into the prompt transcript.
 static QString fincept_render_tool_result(const mcp::ToolResult& tr) {
     // Failures are marked unmissably. A model that skims a JSON envelope for
@@ -287,6 +382,8 @@ static QString fincept_render_tool_result(const mcp::ToolResult& tr) {
     return payload.toVariant().toString();
 }
 
+static void fincept_emit_thinking(const QString& text);
+
 LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* out_tool_calls) {
     LlmResponse resp;
     if (out_tool_calls)
@@ -297,17 +394,21 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
     QJsonObject submit_body;
     submit_body["prompt"] = prompt;
     submit_body["max_tokens"] = resolved_max_tokens();
+    // Reasoning effort chosen in the chat (default medium). A server that predates the
+    // field ignores it.
+    if (!detail::t_reasoning_effort.isEmpty())
+        submit_body["effort"] = detail::t_reasoning_effort;
+    // The server adds its fixed description of the terminal as the model's system prompt.
+    submit_body["context"] = QStringLiteral("terminal");
 
     auto hdr = get_headers();
     const QString fincept_base = fincept::AppConfig::instance().api_base_url();
     const QString async_url = fincept_base + "/research/llm/async";
     const QString status_base = fincept_base + "/research/llm/status/";
 
-    LOG_INFO(kLlmFinceptTag, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
-                                 .arg(async_url)
-                                 .arg(api_key_.isEmpty() ? QStringLiteral("EMPTY")
-                                                         : QStringLiteral("len=%1").arg(api_key_.size()))
-                                 .arg(prompt.length()));
+    LOG_DEBUG(kLlmFinceptTag, logf("Fincept async submit", {{"url", log_url(async_url)},
+                                                            {"api_key_set", !api_key_.isEmpty()},
+                                                            {"prompt_chars", prompt.length()}}));
 
     QByteArray json_data = QJsonDocument(submit_body).toJson(QJsonDocument::Compact);
     auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
@@ -327,9 +428,27 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
             resp.error = "Request cancelled";
             return resp;
         }
-        LOG_ERROR(kLlmFinceptTag, QString("Fincept async submit failed (HTTP %1): %2 | body: %3")
-                                      .arg(submit.status)
-                                      .arg(submit.error, QString::fromUtf8(submit.body.left(600))));
+        // A refused key/session or an empty credit balance is an expected answer (policy B.1):
+        // INFO; anything else failed the user's request: ERROR. The body only at DEBUG.
+        if (classify_fincept_failure(submit.status, submit.error + QLatin1Char(' ') +
+                                                        QString::fromUtf8(submit.body)) != LlmErrorKind::Other)
+            LOG_INFO(kLlmFinceptTag, logf("LLM submit refused", {{"provider", "fincept"},
+                                                                 {"status", submit.status},
+                                                                 {"body_bytes", submit.body.size()},
+                                                                 {"error", submit.error}}));
+        else
+            LOG_ERROR(kLlmFinceptTag, logf("LLM submit failed", {{"provider", "fincept"},
+                                                                 {"status", submit.status},
+                                                                 {"body_bytes", submit.body.size()},
+                                                                 {"error", submit.error}}));
+        LOG_DEBUG(kLlmFinceptTag, logf("LLM submit failure body", {{"body", QString::fromUtf8(submit.body.left(200))}}));
+        if (submit.status == 401 || submit.status == 403) {
+            // This client's QNAM bypasses HttpClient: report the refusal so a
+            // stale session recovers (or an IP block pauses polling), and show
+            // the server's reason. Not retryable — the same request would fail.
+            resp.error = handle_fincept_refusal(submit, hdr.value(QStringLiteral("X-Session-Token")));
+            return resp;
+        }
         const LlmErrorKind kind =
             classify_fincept_failure(submit.status, submit.error + QLatin1Char(' ') + QString::fromUtf8(submit.body));
         if (kind != LlmErrorKind::Other) {
@@ -346,8 +465,10 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
     auto submit_doc = QJsonDocument::fromJson(submit.body);
     if (submit_doc.isNull()) {
         resp.error = QStringLiteral("The Fincept server sent an unreadable reply (details in the log).");
-        LOG_ERROR(kLlmFinceptTag, "Fincept async: failed to parse submit response: " +
-                                      QString::fromUtf8(submit.body.left(600)));
+        LOG_ERROR(kLlmFinceptTag, logf("LLM submit answer is not valid JSON", {{"provider", "fincept"},
+                                                                                {"status", submit.status},
+                                                                                {"body_bytes", submit.body.size()}}));
+        LOG_DEBUG(kLlmFinceptTag, logf("LLM submit answer body", {{"body", QString::fromUtf8(submit.body.left(200))}}));
         return resp;
     }
 
@@ -358,11 +479,13 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         task_id = sj["data"].toObject()["task_id"].toString();
     if (task_id.isEmpty()) {
         resp.error = QStringLiteral("The Fincept server did not accept the request (no task id; details in the log).");
-        LOG_ERROR(kLlmFinceptTag, "Fincept async: no task_id in submit response: " +
-                                      QString::fromUtf8(submit.body.left(600)));
+        LOG_ERROR(kLlmFinceptTag, logf("LLM submit answer has no task id", {{"provider", "fincept"},
+                                                                             {"status", submit.status},
+                                                                             {"body_bytes", submit.body.size()}}));
+        LOG_DEBUG(kLlmFinceptTag, logf("LLM submit answer body", {{"body", QString::fromUtf8(submit.body.left(200))}}));
         return resp;
     }
-    LOG_INFO(kLlmFinceptTag, "Fincept async task_id: " + task_id);
+    LOG_DEBUG(kLlmFinceptTag, logf("Fincept async task submitted", {{"run", task_id}}));
 
     const QString poll_url = status_base + task_id;
     QElapsedTimer clock;
@@ -386,6 +509,10 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
             LOG_WARN(kLlmFinceptTag, QString("Fincept async poll failed (HTTP %1): %2").arg(poll.status).arg(poll.error));
             // A rejected key/session cannot recover by polling again (the old loop
             // kept polling for the full two minutes and then reported a timeout).
+            if (poll.status == 401 || poll.status == 403) {
+                resp.error = handle_fincept_refusal(poll, hdr.value(QStringLiteral("X-Session-Token")));
+                return resp;
+            }
             const LlmErrorKind kind = classify_fincept_failure(poll.status, QString());
             if (kind != LlmErrorKind::Other) {
                 resp.error = make_fincept_error(kind, QString::fromUtf8(poll.body));
@@ -409,8 +536,13 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         poll_failures = 0;
 
         auto poll_doc = QJsonDocument::fromJson(poll.body);
-        if (poll_doc.isNull())
+        if (poll_doc.isNull()) {
+            LOG_WARN_RL(kLlmFinceptTag, QStringLiteral("fincept-poll-json"), 60000,
+                        logf("Research poll answer is not valid JSON", {{"run", task_id},
+                                                                        {"attempt", i + 1},
+                                                                        {"bytes", poll.body.size()}}));
             continue;
+        }
 
         QJsonObject pj = poll_doc.object();
         QString status = pj["status"].toString();
@@ -418,8 +550,10 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         if (status.isEmpty())
             status = data_obj["status"].toString();
 
-        LOG_INFO(kLlmFinceptTag, QString("Fincept async poll %1 status=%2 (%3 ms)").arg(i + 1).arg(status).arg(
-                                     clock.elapsed()));
+        LOG_DEBUG(kLlmFinceptTag, logf("Fincept async poll", {{"run", task_id},
+                                                              {"attempt", i + 1},
+                                                              {"status", status},
+                                                              {"duration_ms", clock.elapsed()}}));
 
         if (status == "failed") {
             const QString err = fincept_extract_error(pj);
@@ -427,11 +561,20 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
             // it "unknown error" is a dead end — there is no way to tell a
             // silent backend from a reason we simply failed to look for.
             if (err.isEmpty()) {
-                LOG_ERROR(kLlmFinceptTag, QStringLiteral("Fincept async task failed with no reason field. Raw "
-                                                         "status body: ") +
-                                              QString::fromUtf8(poll.body.left(1200)));
+                LOG_ERROR(kLlmFinceptTag, logf("LLM task failed", {{"provider", "fincept"},
+                                                                   {"run", task_id},
+                                                                   {"reason", "no_reason_field"},
+                                                                   {"body_bytes", poll.body.size()}}));
+                LOG_DEBUG(kLlmFinceptTag, logf("LLM task failure body", {{"body", QString::fromUtf8(poll.body.left(200))}}));
+            } else if (classify_fincept_failure(0, err) != LlmErrorKind::Other) {
+                // Out of credits / key refused: an expected answer, not a fault (policy B.1).
+                LOG_INFO(kLlmFinceptTag, logf("LLM task refused", {{"provider", "fincept"},
+                                                                   {"run", task_id},
+                                                                   {"error", err.left(200)}}));
             } else {
-                LOG_ERROR(kLlmFinceptTag, "Fincept async task failed: " + err.left(1200));
+                LOG_ERROR(kLlmFinceptTag, logf("LLM task failed", {{"provider", "fincept"},
+                                                                   {"run", task_id},
+                                                                   {"error", err.left(200)}}));
             }
             // The worker reports a failed credit check as text ("402: {...}").
             // Classify it before anything else: it is final, and resubmitting
@@ -479,7 +622,21 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         resp.content = strip_think_blocks(response);
         resp.success = true;
 
-        const QJsonObject usage = inner["usage"].toObject();
+        // The model's reasoning for this call, when the server returns it: shown live in
+        // the chat's Thinking section.
+        {
+            QString thinking = inner["thinking"].toString();
+            if (thinking.isEmpty())
+                thinking = data_obj["thinking"].toString();
+            fincept_emit_thinking(thinking);
+        }
+
+        // GET /research/llm/status returns {status, data: {response, usage, ...}}:
+        // usage sits beside response in data_obj. The nested shape is kept as a
+        // fallback, matching the response lookup above.
+        QJsonObject usage = data_obj["usage"].toObject();
+        if (usage.isEmpty())
+            usage = inner["usage"].toObject();
         if (!usage.isEmpty()) {
             resp.prompt_tokens = usage["input_tokens"].toInt();
             resp.completion_tokens = usage["output_tokens"].toInt();
@@ -644,6 +801,10 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     int real_failures = 0;
     bool challenged_fabrication = false;
 
+    // Replies that only announced a next step ("I'll look for…") and were sent back.
+    int intent_nudges = 0;
+    constexpr int kMaxIntentNudges = 3;
+
     // Token usage summed over every successful round (see fincept_add_usage).
     LlmResponse usage;
     const auto with_turn_usage = [&usage](LlmResponse r) {
@@ -680,13 +841,19 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         }
         QJsonArray structured_calls;
         const QString prompt = compose_prompt(round_blocks.isEmpty() ? QString() : kContinueHint);
+        // Said before the model is called, so the turn shows life the instant it is sent
+        // (and again at every step) instead of a silent block until the first reply lands.
+        fincept_emit_thinking(round == 0 ? QStringLiteral("Request sent. Working out how to answer…")
+                                         : QStringLiteral("Step %1: reading the results and deciding what comes next…")
+                                               .arg(round + 1));
         resp = fincept_submit_poll(prompt, &structured_calls);
         // One retry on a transient upstream failure. An observed task ran 62 s
         // and then reported failure with no reason on a 5 KB prompt — nothing
         // about the request to fix, so resubmitting is the only useful response.
         // The endpoint documents that failed tasks are not charged.
         if (!resp.success && resp.retryable) {
-            LOG_WARN(kLlmFinceptTag, "Fincept: task failed upstream — resubmitting once");
+            LOG_WARN(kLlmFinceptTag, logf("LLM task failed upstream, resubmitting once",
+                                          {{"provider", "fincept"}, {"round", round}, {"error", resp.error}}));
             resp = fincept_submit_poll(prompt, &structured_calls);
         }
         if (!resp.success)
@@ -768,13 +935,32 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                 continue;
             }
 
+            // "I'll look for a script that…" and nothing else: the model narrated its next
+            // step instead of taking it. Returned as the answer, the user gets a promise and
+            // a dead chat (the very first run of the redesigned tab did exactly this). Send
+            // it back — bounded, so a model that cannot act still ends with its own words.
+            if (intent_nudges < kMaxIntentNudges && looks_like_unfinished_intent(resp.content) &&
+                (tool_deadline_ms <= 0 || turn_clock.elapsed() < tool_deadline_ms)) {
+                ++intent_nudges;
+                LOG_INFO(kLlmFinceptTag, logf("Model announced a step without taking it, asking it to act",
+                                              {{"provider", "fincept"}, {"round", round}, {"attempt", intent_nudges}}));
+                fincept_emit_thinking(resp.content);
+                round_blocks.append("\n\nAssistant: " + resp.content.trimmed() +
+                                    "\n\nSystem: That was an announcement, not an answer, and nothing was done. Do it "
+                                    "now: emit the <tool_call> block(s) for that step immediately, with no other text. "
+                                    "If you already have everything you need, write the complete final answer for the "
+                                    "user instead (with the actual figures). Do not describe what you will do.\n");
+                continue;
+            }
+
             // Plain text — the answer.
-            LOG_INFO(kLlmFinceptTag, QString("Fincept: finished after %1 round(s), %2 chars (%3/%4 real tool calls "
-                                             "failed)")
+            LOG_DEBUG(kLlmFinceptTag, QString("Fincept: finished after %1 round(s), %2 chars (%3/%4 real tool calls "
+                                              "failed)")
                                          .arg(round + 1)
                                          .arg(resp.content.length())
                                          .arg(real_failures)
                                          .arg(real_calls));
+            fincept_stream_answer(resp.content);
             return with_turn_usage(resp);
         }
 
@@ -783,6 +969,10 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                                          .arg(kFinceptHardStop));
             break;
         }
+
+        // What the model wrote around its tool calls is its reasoning for this step: shown
+        // live in the chat's Thinking section instead of being dropped.
+        fincept_emit_thinking(fincept_strip_tool_markup(resp.content));
 
         // ── Execute and splice the results back into the transcript ──
         QString block = "\n\nAssistant: " + resp.content.trimmed() + "\n\nTool results:\n";
@@ -823,17 +1013,13 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
             }
             ++fresh_calls;
 
-            LOG_INFO(kLlmFinceptTag, QString("Fincept tool round %1: executing %2 args=%3")
-                                         .arg(round)
-                                         .arg(display, args_json.left(200)));
+            LOG_DEBUG(kLlmFinceptTag, logf("LLM tool call started",
+                                           {{"tool", display}, {"round", round}, {"args_bytes", args_json.size()}}));
 
             QElapsedTimer call_clock;
             call_clock.start();
             auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
-            emit_tool_done(display, tc.args, tr, call_clock.elapsed());
-            LOG_INFO(kLlmFinceptTag, QString("Fincept tool round %1: %2 -> %3 (err=%4)")
-                                         .arg(round)
-                                         .arg(display, tr.success ? "OK" : "FAIL", tr.error.left(120)));
+            emit_tool_done(display, tc.args, tr, call_clock.elapsed()); // logs "LLM tool call finished"
             const QString rendered = fincept_render_tool_result(tr);
             if (cacheable) {
                 call_cache.insert(cache_key, rendered);
@@ -862,7 +1048,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         }
     }
 
-    LOG_INFO(kLlmFinceptTag, QString("Fincept: tool phase ended after %1 round block(s), %2 ms — requesting close-out")
+    LOG_DEBUG(kLlmFinceptTag, QString("Fincept: tool phase ended after %1 round block(s), %2 ms — requesting close-out")
                                  .arg(round_blocks.size())
                                  .arg(turn_clock.elapsed()));
 
@@ -874,11 +1060,13 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         "and anything still incomplete.\n\nAssistant:"));
     LlmResponse final_turn = fincept_submit_poll(final_prompt, nullptr);
     if (!final_turn.success && final_turn.retryable) {
-        LOG_WARN(kLlmFinceptTag, "Fincept: close-out turn failed upstream — resubmitting once");
+        LOG_WARN(kLlmFinceptTag, logf("LLM close-out turn failed upstream, resubmitting once",
+                                      {{"provider", "fincept"}, {"error", final_turn.error}}));
         final_turn = fincept_submit_poll(final_prompt, nullptr);
     }
     if (final_turn.success && !final_turn.content.isEmpty()) {
         fincept_add_usage(usage, final_turn);
+        fincept_stream_answer(final_turn.content);
         return with_turn_usage(final_turn);
     }
     if (final_turn.cancelled)

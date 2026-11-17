@@ -1,6 +1,8 @@
 #include "screens/node_editor/toolbar/NodeEditorToolbar.h"
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QCoreApplication>
 #include <QFrame>
@@ -14,7 +16,7 @@ namespace fincept::workflow {
 static QString btn_style() {
     return QString("QPushButton {"
                    "  background: %1; color: %2; border: 1px solid %3;"
-                   "  font-family: Consolas; font-size: 11px; font-weight: bold;"
+                   "  font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold;"
                    "  padding: 0 10px; min-height: 22px;"
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }"
@@ -39,26 +41,27 @@ static QString redo_tooltip() {
 static QString accent_btn_style() {
     return QString("QPushButton {"
                    "  background: %1; color: %2;"
-                   "  border: 1px solid %3; font-family: Consolas;"
-                   "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                   "  border: 1px solid %3;"
+                   "  font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; padding: 0 12px; min-height: 22px;"
                    "}"
                    "QPushButton:hover { background: %2; color: %4; }")
-        .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE());
+        .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT());
 }
 
 NodeEditorToolbar::NodeEditorToolbar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(34);
+    setMinimumHeight(34);
     setObjectName("nodeEditorToolbar");
     setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, QColor(ui::colors::BG_HOVER()));
-    setPalette(pal);
+    apply_background();
     build_ui();
+    // The fill is a widget palette, which the stylesheet re-style pass does not reach.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { apply_background(); });
 }
 
 void NodeEditorToolbar::apply_background() {
     QPalette pal = palette();
-    pal.setColor(QPalette::Window, QColor(ui::colors::BG_HOVER()));
+    pal.setColor(QPalette::Window, QColor(ui::colors::BG_RAISED()));
     setPalette(pal);
 }
 
@@ -104,13 +107,19 @@ void NodeEditorToolbar::set_can_redo(bool can) {
 void NodeEditorToolbar::set_executing(bool running) {
     QString stop_style = QString("QPushButton {"
                                  "  background: %1; color: %2;"
-                                 "  border: 1px solid rgba(220,38,38,0.4); font-family: Consolas;"
-                                 "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                                 "  border: 1px solid %4;"
+                                 "  font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; padding: 0 12px; min-height: 22px;"
                                  "}"
                                  "QPushButton:hover { background: %2; color: %3; }")
-                             .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
+                             .arg(ui::colors::tint(ui::colors::DANGER(), 0.14), ui::colors::DANGER(),
+                                  ui::colors::TEXT_ON_ACCENT(), ui::colors::alpha(ui::colors::DANGER, 0.4));
 
     running_ = running;
+    // Only the starting state commits something: STOP carries no agent marker, EXECUTE `order`.
+    if (running)
+        execute_btn_->setProperty(fincept::core::agent::kAgentRiskProperty, QVariant());
+    else
+        execute_btn_->setProperty("fincept_agent_risk", "order");
     execute_btn_->setText(running ? tr("STOP") : tr("EXECUTE"));
     execute_btn_->setToolTip(running ? tr("Stop the run (press again to abandon nodes that do not report back)")
                                      : tr("Run this workflow once now in its current mode (Ctrl+Enter)."));
@@ -153,7 +162,7 @@ void NodeEditorToolbar::retranslateUi() {
     if (templates_btn_)
         templates_btn_->setText(tr("TEMPLATES"));
     if (deploy_btn_)
-        deploy_btn_->setText(tr("SAVE & RUN"));
+        deploy_btn_->setText(fincept::ui::literal_ampersands(tr("SAVE & RUN")));
     if (execute_btn_)
         execute_btn_->setText(running_ ? tr("STOP") : tr("EXECUTE"));
     set_live_mode(live_mode_);
@@ -161,12 +170,12 @@ void NodeEditorToolbar::retranslateUi() {
 
 void NodeEditorToolbar::build_ui() {
     setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }"
-                          "QLabel#nodeEditorModeBadge { font-family: Consolas; font-size: 10px; font-weight: bold;"
+                          "QLabel#nodeEditorModeBadge { font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold;"
                           "  letter-spacing: 0.5px; padding: 1px 6px; color: %2; border: 1px solid %3; }"
                           "QLabel#nodeEditorModeBadge[live=\"true\"] { color: %4; border: 1px solid %4;"
                           "  background: %5; }")
-                      .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
-                           ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG()));
+                      .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
+                           ui::colors::DANGER(), ui::colors::tint(ui::colors::DANGER(), 0.14)));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
@@ -177,8 +186,8 @@ void NodeEditorToolbar::build_ui() {
     name_edit_->setFixedWidth(200);
     name_edit_->setStyleSheet(QString("QLineEdit {"
                                       "  background: transparent; color: %1; border: none;"
-                                      "  border-bottom: 1px solid %2; font-family: Consolas;"
-                                      "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
+                                      "  border-bottom: 1px solid %2;"
+                                      "  font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: bold; padding: 2px 4px;"
                                       "}"
                                       "QLineEdit:focus { border-bottom: 1px solid %3; }")
                                   .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::AMBER()));
@@ -188,9 +197,9 @@ void NodeEditorToolbar::build_ui() {
 
     // ── Status badge ───────────────────────────────────────────────
     status_badge_ = new QLabel(tr("DRAFT"));
-    status_badge_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+    status_badge_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;"
                                          "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
-                                     .arg(ui::colors::TEXT_TERTIARY()));
+                                     .arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(status_badge_);
 
     // ── Execution mode badge (PAPER / LIVE) ────────────────────────
@@ -221,7 +230,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep1 = new QFrame;
     sep1->setFixedSize(1, 18);
-    sep1->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
+    sep1->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     layout->addWidget(sep1);
 
     // ── Save / Load / Clear ────────────────────────────────────────
@@ -238,6 +247,7 @@ void NodeEditorToolbar::build_ui() {
     connect(load_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::load_clicked);
 
     clear_btn_ = new QPushButton(tr("CLEAR"));
+    clear_btn_->setProperty("fincept_agent_risk", "destructive");
     clear_btn_->setStyleSheet(btn_style());
     clear_btn_->setToolTip(tr("Remove every node and connection (undoable)"));
     clear_btn_->setAccessibleName(tr("Clear the whole workflow"));
@@ -247,11 +257,12 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep2 = new QFrame;
     sep2->setFixedSize(1, 18);
-    sep2->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
+    sep2->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     layout->addWidget(sep2);
 
     // ── Import / Export ────────────────────────────────────────────
     import_btn_ = new QPushButton(tr("IMPORT"));
+    import_btn_->setProperty("fincept_agent_risk", "destructive"); // replaces the canvas
     import_btn_->setStyleSheet(btn_style());
     layout->addWidget(import_btn_);
     connect(import_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::import_clicked);
@@ -264,7 +275,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep3 = new QFrame;
     sep3->setFixedSize(1, 18);
-    sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
+    sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     layout->addWidget(sep3);
 
     // ── Templates ──────────────────────────────────────────────────
@@ -274,7 +285,7 @@ void NodeEditorToolbar::build_ui() {
     connect(templates_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::templates_clicked);
 
     // ── Deploy ─────────────────────────────────────────────────────
-    deploy_btn_ = new QPushButton(tr("SAVE & RUN"));
+    deploy_btn_ = new QPushButton(fincept::ui::literal_ampersands(tr("SAVE & RUN")));
     deploy_btn_->setStyleSheet(btn_style());
     layout->addWidget(deploy_btn_);
     connect(deploy_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::deploy_clicked);
@@ -282,11 +293,12 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep4 = new QFrame;
     sep4->setFixedSize(1, 18);
-    sep4->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
+    sep4->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     layout->addWidget(sep4);
 
     // ── Execute ────────────────────────────────────────────────────
     execute_btn_ = new QPushButton(tr("EXECUTE"));
+    execute_btn_->setProperty("fincept_agent_risk", "order"); // a run can place (paper) orders unprompted
     execute_btn_->setStyleSheet(accent_btn_style());
     execute_btn_->setToolTip(tr("Run this workflow once now in its current mode (Ctrl+Enter)."));
     execute_btn_->setAccessibleName(tr("Run the workflow"));

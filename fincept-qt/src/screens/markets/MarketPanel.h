@@ -1,123 +1,136 @@
 #pragma once
 #include "screens/markets/MarketPanelConfig.h"
-#include "services/markets/MarketDataService.h"
 
-#include <QEvent>
 #include <QHash>
-#include <QHideEvent>
-#include <QLabel>
-#include <QPushButton>
-#include <QSet>
-#include <QShowEvent>
-#include <QTableWidget>
-#include <QTimer>
+#include <QPointer>
+#include <QString>
 #include <QWidget>
+
+class QLabel;
+class QToolButton;
+class QStackedWidget;
+class QEvent;
 
 namespace fincept::screens {
 
-/// Single market category panel — resizable workstation tile.
-/// Fills all height given by parent QSplitter.
-/// Dynamic row count: recalculated on resizeEvent().
-/// Per-panel column configuration via [COLS] inline dropdown.
-/// Always-visible [EDIT] [DEL] text buttons.
-/// Inline error/retry state.
-///
-/// `refresh()` re-subscribes the panel to `market:quote:<sym>` on the
-/// DataHub for each configured symbol, then force-kicks the hub. Each
-/// delivery updates `row_cache_` and re-renders.
-/// `refresh_finished` is emitted once the initial set of quotes has arrived
-/// (or on timeout) so the parent `MarketsScreen::refresh_all()` counter drains.
+class MarketsQuoteStore;
+class MarketPanelModel;
+class MarketPanelProxy;
+class MarketPanelView;
+
+/// One Markets panel: the shared panel header (3x14 accent tick, title, count badge,
+/// add / menu icons) over a MarketPanelView of the panel's symbols. Every configured
+/// symbol is a row and carries its own state (spec 3.6); there is no per-panel loading
+/// or error page. Data comes from the screen's MarketsQuoteStore; the panel never talks
+/// to the DataHub.
 class MarketPanel : public QWidget {
     Q_OBJECT
   public:
-    explicit MarketPanel(const MarketPanelConfig& config, QWidget* parent = nullptr);
+    MarketPanel(const MarketPanelConfig& config, MarketsQuoteStore* store, QWidget* parent = nullptr);
 
-    void refresh();
     const QString& panel_id() const { return config_.id; }
+    const MarketPanelConfig& config() const { return config_; }
     void update_config(const MarketPanelConfig& cfg);
+    MarketPanelView* view() const { return view_; }
+    MarketPanelModel* model() const { return model_; }
 
-    QSize sizeHint() const override;
-    QSize minimumSizeHint() const override;
+    void set_maximised(bool on);
+    bool is_maximised() const { return maximised_; }
+    /// Colours are read live; repaint every cell (theme_changed / format settings).
+    void refresh_theme();
+    /// Font-derived sizes (ThemeManager::appearance_settled).
+    void refresh_metrics();
+    void set_link_group(int group);
+
+    /// Add / remove / move a symbol in this panel (keeps the model, the view's
+    /// selection and config_ in step); each emits config_changed.
+    bool insert_symbol(const QString& symbol, int at = -1);
+    bool remove_symbol(const QString& symbol);
+    void move_symbol(const QString& symbol, int delta);
+    void move_symbol_to_end(const QString& symbol, bool top);
+
+    /// Visible columns in display order and rows in display order, for CSV export.
+    void export_table(bool with_panel_column, QStringList* headers, QVector<QStringList>* rows) const;
+    void export_csv();
+    /// Header columns menu entries (shared with "Columns for all panels").
+    void set_columns(const QStringList& ids);
+
+    /// Show / focus the inline add row (the shared symbol box, multi entry).
+    void open_add_row();
+    void close_add_row();
+    /// Resolver findings for saved symbols: notes ("TATAMOTORS is now TMPV") shown on the
+    /// row with a ">" marker, and successors offered as "Replace with ..." in the row menu.
+    void set_resolver_findings(const QHash<QString, QString>& notes, const QHash<QString, QString>& successors);
 
   signals:
-    void refresh_finished();
     void edit_requested(const QString& panel_id);
     void delete_requested(const QString& panel_id);
-    void config_changed(const MarketPanelConfig& cfg); // emitted when columns change
+    void config_changed(const fincept::screens::MarketPanelConfig& cfg);
+    void symbol_selected(const QString& panel_id, const QString& symbol);
+    void symbol_activated(const QString& symbol);
+    void maximise_requested(const QString& panel_id);
+    void move_requested(const QString& panel_id, Qt::ArrowType direction);
+    void export_requested(const QString& panel_id);
+    void detail_requested(const QString& symbol);
+    void detail_toggle_requested(const QString& symbol);
+    void remove_symbol_requested(const QString& panel_id, const QString& symbol);
+    void add_symbol_requested(const QString& panel_id, const QString& symbol);
+    void focus_panel_requested(const QString& panel_id, int delta);
+    void escape_pressed();
+    void viewport_rows_changed();
+    void replace_symbol_requested(const QString& panel_id, const QString& from, const QString& to);
+    /// Text the add row could not resolve (status-bar notice).
+    void unresolved_entry(const QString& message);
+    /// Drag-to-reorder by the header (left button held past the start-drag distance;
+    /// never while maximised): the pointer moved to `global_pos` …
+    void header_drag_moved(const QString& panel_id, const QPoint& global_pos);
+    /// … and the drag ended: released at `global_pos` (`drop` true) or cancelled (Esc,
+    /// another button, the button lost; `drop` false). The screen picks the slot.
+    void header_drag_finished(const QString& panel_id, const QPoint& global_pos, bool drop);
 
   protected:
-    void resizeEvent(QResizeEvent* event) override;
     void changeEvent(QEvent* event) override;
-    /// Visibility-driven hub lifecycle (CLAUDE.md P3 / D3). Without these the
-    /// panel stayed subscribed — and kept its loading spinner ticking — for as
-    /// long as the app ran, even with the Markets tab closed.
-    void showEvent(QShowEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
-
-  private slots:
-    void show_row_context_menu(const QPoint& pos);
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     void build_ui();
-    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
-    /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
-    /// Maps an internal column code to its user-facing translatable label.
-    QString column_label(const QString& code) const;
-    void setup_table_columns();
-    void populate(const QVector<services::QuoteData>& quotes);
-    void update_visible_rows();
-    void show_error(const QString& msg);
-    void show_data();
-    void show_loading();
-    void hide_loading();
-    void tick_loading_anim();
-    void refresh_theme();
-    void open_cols_dropdown();
-
-    void hub_resubscribe();
-    void hub_unsubscribe_all();
-    void rebuild_from_cache();
+    void update_badge();
+    void update_empty_state();
+    void show_panel_menu(const QPoint& global_pos);
+    void show_row_menu(const QString& symbol, const QPoint& global_pos);
+    void capture_and_emit();
+    /// Header mouse / key events of a drag-to-reorder; true when consumed.
+    bool handle_header_drag(QEvent* event);
+    /// End a header drag in progress (cursor, keyboard grab) and report it.
+    void end_header_drag(const QPoint& global_pos, bool drop);
 
     MarketPanelConfig config_;
-    QVector<services::QuoteData> cached_quotes_; // all fetched data; display subset shown
-    bool has_data_ = false;
-    /// Coalesces the per-symbol re-render burst into a single populate().
-    bool populate_scheduled_ = false;
-    /// Row count the table was last laid out for — lets resizeEvent skip a
-    /// full repopulate when the visible row count hasn't actually changed.
-    int last_populated_rows_ = -1;
-    void schedule_populate();
+    QPointer<MarketsQuoteStore> store_;
+    MarketPanelModel* model_ = nullptr;
+    MarketPanelProxy* proxy_ = nullptr;
+    MarketPanelView* view_ = nullptr;
 
-    QHash<QString, services::QuoteData> row_cache_;
-    QHash<QString, QString> names_; // symbol → human-readable display name (yfinance, cached)
-    QSet<QString> pending_initial_; // symbols awaiting first delivery for refresh_finished
-    bool refresh_inflight_ = false;
-    bool hub_active_ = false;
-
-    // Header widgets (28px)
     QWidget* header_ = nullptr;
     QLabel* title_label_ = nullptr;
-    QPushButton* cols_btn_ = nullptr;
-    QPushButton* edit_btn_ = nullptr;
-    QPushButton* delete_btn_ = nullptr;
-
-    // Body: data table or error state
-    QWidget* body_ = nullptr;
-    QTableWidget* table_ = nullptr;
-    QWidget* error_widget_ = nullptr;
-    QLabel* error_label_ = nullptr;
-    QPushButton* retry_btn_ = nullptr;
-
-    // Loading overlay (shown until first data arrives)
-    QWidget* loading_widget_ = nullptr;
-    QLabel* loading_label_ = nullptr;
-    QTimer* loading_timer_ = nullptr;
-    int loading_frame_ = 0;
-
-    static constexpr int kHeaderH = 28;
-    static constexpr int kColHeaderH = 22;
-    static constexpr int kRowH = 22;
+    QLabel* badge_ = nullptr;
+    QToolButton* add_btn_ = nullptr;
+    QToolButton* menu_btn_ = nullptr;
+    QWidget* add_row_ = nullptr;
+    QWidget* add_entry_ = nullptr;
+    QStackedWidget* body_ = nullptr;
+    QLabel* empty_label_ = nullptr;
+    QHash<QString, QString> successors_;
+    QString badge_text_;
+    QString badge_tip_;
+    bool badge_warn_ = false;
+    bool maximised_ = false;
+    // Header drag-to-reorder: armed by a left press on the header, dragging once the
+    // pointer moved past QApplication::startDragDistance().
+    QPoint drag_press_global_;
+    bool drag_armed_ = false;
+    bool dragging_ = false;
+    QObject* drag_key_filter_ = nullptr; ///< app-wide while dragging: Esc cancels
 };
 
 } // namespace fincept::screens

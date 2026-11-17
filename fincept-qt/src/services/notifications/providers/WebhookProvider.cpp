@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/WebhookProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -30,18 +32,17 @@ void WebhookProvider::send(const NotificationRequest& req, std::function<void(bo
     body["level"] = static_cast<int>(req.level);
     body["timestamp"] = req.timestamp.toUTC().toString(Qt::ISODate);
 
-    auto handler = [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    };
-
-    if (method_.toUpper() == "PUT")
-        HttpClient::instance().put(url_, body, handler);
-    else
-        HttpClient::instance().post(url_, body, handler);
+    // POST or PUT only — Settings rejects anything else (it used to be sent as
+    // POST without a word). The user's own endpoint may answer with any body —
+    // empty, text, JSON, large — and any 2xx is a delivery: send_delivery() takes
+    // the answer unparsed (post_raw / put_raw), so nothing is parsed on the GUI thread.
+    DeliveryRequest request;
+    request.service = DeliveryService::Generic;
+    request.verb = method_.trimmed().toUpper() == "PUT" ? DeliveryRequest::Verb::PutJson
+                                                         : DeliveryRequest::Verb::PostJson;
+    request.url = url_;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

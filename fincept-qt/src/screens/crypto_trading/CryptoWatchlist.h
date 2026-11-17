@@ -4,6 +4,7 @@
 #include "trading/TradingTypes.h"
 
 #include <QEvent>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMutex>
@@ -30,6 +31,11 @@ class CryptoWatchlist : public QWidget {
     void update_prices(const QVector<trading::TickerData>& tickers);
     void set_search_results(const QVector<trading::MarketInfo>& markets);
     void set_active_symbol(const QString& symbol);
+    /// How each watchlist pair resolves on the current exchange: a pair shown
+    /// from a related market gets "≈" before its price and a tooltip naming that
+    /// market; a pair with no market shows "n/a". `shown_from`: requested ->
+    /// market symbol (only substitutes); `missing`: pairs with no market.
+    void set_market_notes(const QHash<QString, QString>& shown_from, const QHash<QString, QString>& missing);
 
   signals:
     void symbol_selected(const QString& symbol);
@@ -61,6 +67,8 @@ class CryptoWatchlist : public QWidget {
     QVector<WatchlistEntry> entries_;
     QVector<trading::MarketInfo> search_results_;
     QString active_symbol_;
+    QHash<QString, QString> shown_from_; // pair -> market it is shown from (substitutes only)
+    QHash<QString, QString> missing_;    // pair -> why it has no market here
     bool showing_search_ = false;
     QMutex mutex_;
 };

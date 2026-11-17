@@ -3,17 +3,24 @@
 #include "auth/PinManager.h"
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LanguageSwitcher.h"
+#include "ui/widgets/ThemeHelpers.h"
 #include "ui/widgets/VersionLabel.h"
 
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIntValidator>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QResizeEvent>
 #include <QStackedWidget>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::screens {
 
@@ -28,60 +35,54 @@ static QString pin_input_style() {
     return QString("QLineEdit {"
                    "  background: %1; color: %2;"
                    "  border: 1px solid %3;"
-                   "  font-size: 24px; letter-spacing: 12px;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  font-size: " + fincept::ui::fonts::px(10) + "px; letter-spacing: 12px;"
                    "  selection-background-color: %4; selection-color: %5;"
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }")
         .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-             ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT());
+             ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT());
 }
 
 static QString btn_primary() {
     return QString("QPushButton {"
-                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  background: %7; color: %1;"
                    "  border: 1px solid %2;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
-             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::ACCENT_BG());
 }
 
 static QString btn_danger() {
     return QString("QPushButton {"
-                   "  background: rgba(220,38,38,0.1); color: %1;"
-                   "  border: 1px solid #7f1d1d;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  background: %6; color: %1;"
+                   "  border: 1px solid %7;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %2; }"
                    "QPushButton:disabled { color: %3; background: %4; border-color: %5; }")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::BORDER_DIM());
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(),
+             ui::colors::BORDER_DIM(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM());
 }
 
 static QString label_style() {
-    return QString("color: %1; font-size: 13px; font-weight: 700;"
-                   "background: transparent; letter-spacing: 0.5px;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;")
         .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString muted_style() {
-    return QString("color: %1; font-size: 13px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;")
         .arg(ui::colors::TEXT_TERTIARY());
 }
 
 static QString error_style() {
-    return QString("color: %1; font-size: 13px;"
-                   "background: rgba(220,38,38,0.08);"
-                   "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                   "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::NEGATIVE());
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px;"
+                   "background: %2;"
+                   "border: 1px solid %3; padding: 6px 8px;")
+        .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM());
 }
 
 // Hardens a PIN QLineEdit against input-method leakage, predictive text, and
@@ -122,6 +123,29 @@ static QFrame* make_separator() {
     return sep;
 }
 
+// Minimum height of a text-bearing control: one line of its font (`font_offset`
+// px from the base size) plus `padding`, never below `min_px` — re-applied when
+// the appearance (font size) changes. Fixed pixel heights cramped the card at
+// large font sizes.
+static void follow_text_min_height(QWidget* w, int font_offset, int padding, int min_px) {
+    if (!w)
+        return;
+    auto apply = [w, font_offset, padding, min_px]() {
+        w->setMinimumHeight(std::max(min_px, QFontMetrics(ui::fonts::font(font_offset)).height() + padding));
+    };
+    apply();
+    QObject::connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, w,
+                     [apply](const ui::ThemeTokens&) { apply(); });
+}
+
+// Card header strip: tall enough for its title at the current font size.
+static QWidget* make_card_header(QWidget* parent) {
+    auto* header = new QWidget(parent);
+    ui::metrics::follow_fixed_height(header, 38);
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
+    return header;
+}
+
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 LockScreen::LockScreen(QWidget* parent) : QWidget(parent) {
@@ -136,21 +160,64 @@ LockScreen::LockScreen(QWidget* parent) : QWidget(parent) {
     top_row->addStretch();
     top_row->addWidget(new ui::LanguageSwitcher(this));
     root->addLayout(top_row);
+    top_row_ = top_row;
 
-    auto* overlay = new QVBoxLayout;
-    overlay->setAlignment(Qt::AlignCenter);
-    root->addLayout(overlay, 1);
+    // Body: [stretch] [column: PIN card, Enterprise strip] [Enterprise panel] [stretch].
+    // Box-layout spacing only falls between visible widgets, so the gap before
+    // the panel disappears with it. fit_layout() picks what is shown.
+    auto* body = new QHBoxLayout;
+    body->setContentsMargins(20, 0, 20, 0);
+    body->setSpacing(ui::metrics::width(36));
+    body_ = body;
+    root->addLayout(body, 1);
 
     pages_ = new QStackedWidget;
-    pages_->setMinimumWidth(420);
-    pages_->setMaximumWidth(520);
     pages_->setStyleSheet("background: transparent;");
 
     build_setup_page();
     build_unlock_page();
     build_lockout_page();
 
-    overlay->addWidget(pages_, 0, Qt::AlignCenter);
+    // The card is as tall as the page it shows. A stacked widget takes the
+    // height of its tallest page (PIN set-up, two inputs and the rules), which
+    // left the lower half of the unlock card empty.
+    const auto fit_card_to_page = [this]() {
+        for (int i = 0; i < pages_->count(); ++i) {
+            pages_->widget(i)->setSizePolicy(QSizePolicy::Preferred, i == pages_->currentIndex()
+                                                                         ? QSizePolicy::Preferred
+                                                                         : QSizePolicy::Ignored);
+        }
+        pages_->updateGeometry();
+    };
+    connect(pages_, &QStackedWidget::currentChanged, this, fit_card_to_page);
+    fit_card_to_page();
+
+    // Enterprise promotion — static copy, no network, no account data; nothing
+    // in it can take focus, so the PIN field keeps the keyboard. Both start
+    // hidden; fit_layout() shows the one that fits once the screen is laid out.
+    promo_panel_ = new ui::EnterpriseLockPromo(ui::EnterpriseLockPromo::Form::Panel, this);
+    promo_panel_->hide();
+    promo_strip_ = new ui::EnterpriseLockPromo(ui::EnterpriseLockPromo::Form::Strip, this);
+    promo_strip_->hide();
+
+    auto* pin_col = new QVBoxLayout;
+    pin_col->setContentsMargins(0, 0, 0, 0);
+    pin_col->setSpacing(10);
+    pin_col->addStretch(1);
+    pin_col->addWidget(pages_, 0, Qt::AlignHCenter);
+    pin_col->addWidget(promo_strip_); // no alignment: exactly the card's width
+    pin_col->addStretch(1);
+
+    body->addStretch(1);
+    body->addLayout(pin_col);
+    body->addWidget(promo_panel_, 0, Qt::AlignVCenter);
+    body->addStretch(1);
+
+    fit_layout(); // 420-520 px card at the default font size, wider with larger fonts
+    // Re-fit after every appearance change has settled — it asks for size
+    // hints and shows / hides widgets, which a theme_changed handler must not.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { fit_layout(); });
+    connect(pages_, &QStackedWidget::currentChanged, this, [this](int) { fit_layout(); });
 
     retranslateUi();
 
@@ -187,14 +254,114 @@ void LockScreen::paintEvent(QPaintEvent* /*event*/) {
     p.drawLine(cx, cy - 60, cx, cy + 60);
 }
 
+void LockScreen::fit_layout() {
+    if (!pages_)
+        return;
+    // Size hints asked for while the theme handlers run would style the window
+    // widget by widget; appearance_settled re-runs this afterwards.
+    if (ui::ThemeManager::instance().notifying())
+        return;
+
+    // Card: 420-520 px at the default font size, growing with the font so the
+    // text in the card is not squeezed into extra lines; never wider than the
+    // screen leaves room for (20 px margin each side once it is laid out).
+    const bool laid_out = width() > 0 && isVisible();
+    const int room = laid_out ? std::max(0, width() - 40) : 0;
+    const int card_min = ui::metrics::width(420);
+    const int card_max = ui::metrics::width(520);
+    const int gap = ui::metrics::width(36);
+
+    // Enterprise promotion: never on the lockout page (its security message
+    // stands alone), never before the screen is laid out, and not for an
+    // account whose in-memory plan is already Enterprise (nothing is fetched,
+    // nothing about the account is shown).
+    const int page = pages_->currentIndex();
+    const bool promo_allowed = laid_out && page != 2 && promo_panel_ && promo_strip_ &&
+                               !ui::enterprise::session_has_enterprise_plan();
+
+    bool wide = false;
+    bool strip = false;
+    int panel_w = 0;
+    if (promo_allowed) {
+        // Height left under the top row, with a little air above and below.
+        const int top_h = top_row_ ? top_row_->sizeHint().height() : 0;
+        const int avail_h = height() - top_h - 24;
+        // The card as tall as its page is now, plus room for an error and an
+        // attempts line appearing after a wrong PIN.
+        const QFontMetrics msg_fm(ui::fonts::font(-1));
+        const int slack = 2 * msg_fm.height() + 34;
+        const int card_h = pages_->sizeHint().height() + slack;
+
+        // Wide: the panel beside the card. The breakpoint is font metrics —
+        // the card's minimum, the gap and the panel's minimum must all fit.
+        const int panel_min = ui::EnterpriseLockPromo::panel_min_width();
+        if (room >= card_min + gap + panel_min) {
+            const int panel_max = ui::EnterpriseLockPromo::panel_max_width();
+            // The card keeps its full width first; the panel takes what is left.
+            panel_w = std::clamp(room - gap - card_max, panel_min, panel_max);
+            promo_panel_->ensurePolished(); // stylesheet font sizes decide the wrapping
+            const int panel_h = promo_panel_->hasHeightForWidth() ? promo_panel_->heightForWidth(panel_w)
+                                                                  : promo_panel_->sizeHint().height();
+            wide = std::max(card_h, panel_h) <= avail_h;
+        }
+        // Narrow: one slim line under the unlock card — never under the PIN
+        // set-up card (its instructions come first), and only when the card
+        // still fits above it.
+        if (!wide && page == 1) {
+            promo_strip_->ensurePolished();
+            strip = card_h + 10 + promo_strip_->sizeHint().height() <= avail_h;
+        }
+    }
+
+    int min_w = card_min;
+    int max_w = card_max;
+    if (room > 0) {
+        const int card_room = wide ? room - gap - panel_w : room;
+        min_w = std::min(min_w, card_room);
+        max_w = std::max(min_w, std::min(max_w, card_room));
+    }
+    pages_->setMinimumWidth(min_w);
+    pages_->setMaximumWidth(max_w);
+    if (body_ && body_->spacing() != gap)
+        body_->setSpacing(gap);
+
+    if (promo_panel_) {
+        if (wide && (promo_panel_->minimumWidth() != panel_w || promo_panel_->maximumWidth() != panel_w))
+            promo_panel_->setFixedWidth(panel_w);
+        if (promo_panel_->isVisibleTo(this) != wide)
+            promo_panel_->setVisible(wide);
+    }
+    if (promo_strip_) {
+        promo_strip_->setMaximumWidth(max_w);
+        if (promo_strip_->isVisibleTo(this) != strip)
+            promo_strip_->setVisible(strip);
+    }
+}
+
+void LockScreen::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    fit_layout();
+}
+
 void LockScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    fit_layout();
     if (lockout_timer_ && auth::PinManager::instance().is_locked_out())
         lockout_timer_->start();
 }
 
 void LockScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // Taken off screen by the app (a sibling window unlocked, sign-out, window
+    // closing) — not a minimise, which is spontaneous. Drop the PIN checks this
+    // screen still has queued (nothing counted) and abandon the running one: it
+    // is accounted by PinManager, but its result must not unlock from here.
+    if (e && !e->spontaneous() && (unlock_busy_ || setup_busy_)) {
+        auth::PinManager::instance().cancel_pending(this);
+        ++attempt_serial_;
+        set_unlock_busy(false);
+        set_setup_busy(false);
+    }
     if (lockout_timer_)
         lockout_timer_->stop();
     if (setup_pin_input_)
@@ -212,6 +379,8 @@ void LockScreen::changeEvent(QEvent* event) {
         if (unlock_lockout_label_ && unlock_lockout_label_->isVisible())
             update_lockout_display();
         refresh_attempts_label();
+        // New texts, new heights: re-fit once every widget has re-translated.
+        QTimer::singleShot(0, this, [this]() { fit_layout(); });
     }
     QWidget::changeEvent(event);
 }
@@ -226,24 +395,20 @@ void LockScreen::build_setup_page() {
     vl->setContentsMargins(28, 22, 28, 22);
     vl->setSpacing(10);
 
-    auto* header = new QWidget(this);
-    header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
+    auto* header = make_card_header(this);
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     setup_title_ = new QLabel;
-    setup_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                        "background: transparent; letter-spacing: 1px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    setup_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 1px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(setup_title_);
     hl->addStretch();
 
     setup_badge_ = new QLabel;
-    setup_badge_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                        "background: transparent; letter-spacing: 0.5px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    setup_badge_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 0.5px;")
                                     .arg(ui::colors::NEGATIVE()));
     hl->addWidget(setup_badge_);
     vl->addWidget(header);
@@ -255,8 +420,7 @@ void LockScreen::build_setup_page() {
 
     setup_info_ = new QLabel;
     setup_info_->setWordWrap(true);
-    setup_info_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;"
-                                       "font-family: 'Consolas','Courier New',monospace;")
+    setup_info_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;")
                                    .arg(ui::colors::TEXT_DIM()));
     vl->addWidget(setup_info_);
 
@@ -271,7 +435,7 @@ void LockScreen::build_setup_page() {
     setup_pin_input_->setMaxLength(6);
     setup_pin_input_->setAlignment(Qt::AlignCenter);
     setup_pin_input_->setEchoMode(QLineEdit::Password);
-    setup_pin_input_->setFixedHeight(44);
+    follow_text_min_height(setup_pin_input_, 10, 16, 44); // the PIN digits are px(10)
     setup_pin_input_->setStyleSheet(pin_input_style());
     harden_pin_input(setup_pin_input_);
     vl->addWidget(setup_pin_input_);
@@ -285,7 +449,7 @@ void LockScreen::build_setup_page() {
     setup_confirm_input_->setMaxLength(6);
     setup_confirm_input_->setAlignment(Qt::AlignCenter);
     setup_confirm_input_->setEchoMode(QLineEdit::Password);
-    setup_confirm_input_->setFixedHeight(44);
+    follow_text_min_height(setup_confirm_input_, 10, 16, 44);
     setup_confirm_input_->setStyleSheet(pin_input_style());
     harden_pin_input(setup_confirm_input_);
     vl->addWidget(setup_confirm_input_);
@@ -299,15 +463,14 @@ void LockScreen::build_setup_page() {
     vl->addWidget(make_separator());
 
     setup_btn_ = new QPushButton;
-    setup_btn_->setFixedHeight(34);
+    follow_text_min_height(setup_btn_, 0, 14, 34);
     setup_btn_->setStyleSheet(btn_primary());
     connect(setup_btn_, &QPushButton::clicked, this, &LockScreen::on_setup_submit);
     vl->addWidget(setup_btn_);
 
     setup_note_ = new QLabel;
     setup_note_->setWordWrap(true);
-    setup_note_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
-                                       "font-family: 'Consolas','Courier New',monospace;")
+    setup_note_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;")
                                    .arg(ui::colors::TEXT_DIM()));
     setup_note_->setAlignment(Qt::AlignCenter);
     vl->addWidget(setup_note_);
@@ -338,24 +501,20 @@ void LockScreen::build_unlock_page() {
     vl->setContentsMargins(28, 22, 28, 22);
     vl->setSpacing(10);
 
-    auto* header = new QWidget(this);
-    header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
+    auto* header = make_card_header(this);
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     unlock_title_ = new QLabel;
-    unlock_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                         "background: transparent; letter-spacing: 1px;"
-                                         "font-family: 'Consolas','Courier New',monospace;")
+    unlock_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                         "background: transparent; letter-spacing: 1px;")
                                      .arg(ui::colors::AMBER()));
     hl->addWidget(unlock_title_);
     hl->addStretch();
 
     unlock_badge_ = new QLabel;
-    unlock_badge_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                         "background: transparent; letter-spacing: 0.5px;"
-                                         "font-family: 'Consolas','Courier New',monospace;")
+    unlock_badge_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                         "background: transparent; letter-spacing: 0.5px;")
                                      .arg(ui::colors::POSITIVE()));
     hl->addWidget(unlock_badge_);
     vl->addWidget(header);
@@ -375,18 +534,19 @@ void LockScreen::build_unlock_page() {
     unlock_pin_input_->setMaxLength(6);
     unlock_pin_input_->setAlignment(Qt::AlignCenter);
     unlock_pin_input_->setEchoMode(QLineEdit::Password);
-    unlock_pin_input_->setFixedHeight(48);
+    follow_text_min_height(unlock_pin_input_, 10, 20, 48); // the PIN digits are px(10)
     unlock_pin_input_->setStyleSheet(pin_input_style());
     harden_pin_input(unlock_pin_input_);
     vl->addWidget(unlock_pin_input_);
 
     unlock_lockout_label_ = new QLabel;
     unlock_lockout_label_->setWordWrap(true);
-    unlock_lockout_label_->setStyleSheet(QString("color: %1; font-size: 12px;"
-                                                 "background: rgba(202,138,4,0.08);"
-                                                 "border: 1px solid #713f12; padding: 6px 8px;"
-                                                 "font-family: 'Consolas','Courier New',monospace;")
-                                             .arg(ui::colors::WARNING()));
+    // Warning-tinted panel: a faint wash of WARNING behind it, a deeper one as the border.
+    unlock_lockout_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;"
+                                                 "background: %2;"
+                                                 "border: 1px solid %3; padding: 6px 8px;")
+                                             .arg(ui::colors::WARNING(), ui::colors::tint(QColor(ui::colors::WARNING()), 0.10),
+                                                  ui::colors::tint(QColor(ui::colors::WARNING()), 0.45)));
     unlock_lockout_label_->hide();
     vl->addWidget(unlock_lockout_label_);
 
@@ -397,8 +557,7 @@ void LockScreen::build_unlock_page() {
     vl->addWidget(unlock_error_);
 
     unlock_attempts_ = new QLabel;
-    unlock_attempts_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;"
-                                            "font-family: 'Consolas','Courier New',monospace;")
+    unlock_attempts_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;")
                                         .arg(ui::colors::TEXT_DIM()));
     unlock_attempts_->setAlignment(Qt::AlignCenter);
     unlock_attempts_->hide();
@@ -407,7 +566,7 @@ void LockScreen::build_unlock_page() {
     vl->addWidget(make_separator());
 
     unlock_btn_ = new QPushButton;
-    unlock_btn_->setFixedHeight(34);
+    follow_text_min_height(unlock_btn_, 0, 14, 34);
     unlock_btn_->setStyleSheet(btn_primary());
     connect(unlock_btn_, &QPushButton::clicked, this, &LockScreen::on_unlock_submit);
     vl->addWidget(unlock_btn_);
@@ -418,10 +577,10 @@ void LockScreen::build_unlock_page() {
     unlock_forgot_btn_ = new QPushButton(tr("Forgot PIN?  Sign in again"));
     unlock_forgot_btn_->setCursor(Qt::PointingHandCursor);
     unlock_forgot_btn_->setStyleSheet(QString("QPushButton{color:%1; background:transparent; border:none;"
-                                              "font-size:12px; text-decoration:underline;"
-                                              "font-family:'Consolas','Courier New',monospace;}"
+                                              "font-size:" + fincept::ui::fonts::px(-2) + "px; text-decoration:underline;"
+                                              "}"
                                               "QPushButton:hover{color:%2;}")
-                                          .arg(ui::colors::TEXT_DIM(), ui::colors::AMBER()));
+                                          .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     connect(unlock_forgot_btn_, &QPushButton::clicked, this, [this]() { emit reauth_requested(); });
     vl->addWidget(unlock_forgot_btn_, 0, Qt::AlignHCenter);
 
@@ -451,39 +610,34 @@ void LockScreen::build_lockout_page() {
     vl->setContentsMargins(28, 22, 28, 22);
     vl->setSpacing(10);
 
-    auto* header = new QWidget(this);
-    header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
+    auto* header = make_card_header(this);
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     lockout_title_ = new QLabel;
-    lockout_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                          "background: transparent; letter-spacing: 1px;"
-                                          "font-family: 'Consolas','Courier New',monospace;")
+    lockout_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                          "background: transparent; letter-spacing: 1px;")
                                       .arg(ui::colors::NEGATIVE()));
     hl->addWidget(lockout_title_);
     hl->addStretch();
 
     lockout_badge_ = new QLabel;
-    lockout_badge_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                          "background: transparent; letter-spacing: 0.5px;"
-                                          "font-family: 'Consolas','Courier New',monospace;")
+    lockout_badge_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                          "background: transparent; letter-spacing: 0.5px;")
                                       .arg(ui::colors::NEGATIVE()));
     hl->addWidget(lockout_badge_);
     vl->addWidget(header);
 
     lockout_msg_ = new QLabel;
     lockout_msg_->setWordWrap(true);
-    lockout_msg_->setStyleSheet(QString("color: %1; font-size: 14px; background: transparent;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    lockout_msg_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; background: transparent;")
                                     .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(lockout_msg_);
 
     vl->addWidget(make_separator());
 
     lockout_reauth_btn_ = new QPushButton;
-    lockout_reauth_btn_->setFixedHeight(34);
+    follow_text_min_height(lockout_reauth_btn_, 0, 14, 34);
     lockout_reauth_btn_->setStyleSheet(btn_danger());
     connect(lockout_reauth_btn_, &QPushButton::clicked, this, [this]() { emit reauth_requested(); });
     vl->addWidget(lockout_reauth_btn_);
@@ -513,7 +667,7 @@ void LockScreen::retranslateUi() {
     if (setup_confirm_lbl_)
         setup_confirm_lbl_->setText(tr("CONFIRM PIN"));
     if (setup_btn_)
-        setup_btn_->setText(tr("  SET PIN  "));
+        setup_btn_->setText(setup_busy_ ? tr("  SAVING…  ") : tr("  SET PIN  "));
     if (setup_note_)
         setup_note_->setText(
             tr("PIN is encrypted and stored locally on this device.\nIt cannot be recovered if forgotten."));
@@ -527,7 +681,7 @@ void LockScreen::retranslateUi() {
     if (unlock_pin_lbl_)
         unlock_pin_lbl_->setText(tr("PIN"));
     if (unlock_btn_)
-        unlock_btn_->setText(tr("  UNLOCK  "));
+        unlock_btn_->setText(unlock_busy_ ? tr("  VERIFYING…  ") : tr("  UNLOCK  "));
     if (unlock_forgot_btn_)
         unlock_forgot_btn_->setText(tr("Forgot PIN?  Sign in again"));
 
@@ -601,6 +755,8 @@ void LockScreen::show_lockout() {
 // ── Actions ─────────────────────────────────────────────────────────────────
 
 void LockScreen::on_setup_submit() {
+    if (setup_busy_)
+        return; // Enter / click while the PIN is being saved
     const QString pin = setup_pin_input_->text();
     const QString confirm = setup_confirm_input_->text();
 
@@ -624,19 +780,72 @@ void LockScreen::on_setup_submit() {
         return;
     }
 
-    auto result = auth::PinManager::instance().set_pin(pin);
-    if (result.is_err()) {
-        setup_error_->setText(QString::fromStdString(result.error()));
-        setup_error_->show();
-        return;
-    }
+    // Hashing the PIN takes a deliberately slow key derivation; it runs off the
+    // UI thread and the page shows a busy state until the PIN is stored.
+    set_setup_busy(true);
+    const quint64 serial = attempt_serial_;
+    auth::PinManager::instance().set_pin_async(pin, this, [this, serial](const auto& result) {
+        if (serial != attempt_serial_)
+            return; // the app took this screen away meanwhile
+        set_setup_busy(false);
+        if (result.is_err()) {
+            setup_error_->setText(QString::fromStdString(result.error()));
+            setup_error_->show();
+            return;
+        }
 
-    setup_error_->hide();
-    LOG_INFO("Auth", "PIN setup complete — unlocking terminal");
-    emit unlocked();
+        setup_error_->hide();
+        LOG_INFO("Auth", "PIN setup complete — unlocking terminal");
+        emit unlocked();
+    });
+}
+
+void LockScreen::set_setup_busy(bool busy) {
+    setup_busy_ = busy;
+    if (setup_btn_) {
+        setup_btn_->setText(busy ? tr("  SAVING…  ") : tr("  SET PIN  "));
+        setup_btn_->setEnabled(!busy);
+    }
+    if (setup_pin_input_)
+        setup_pin_input_->setEnabled(!busy);
+    if (setup_confirm_input_)
+        setup_confirm_input_->setEnabled(!busy);
+    if (busy && setup_error_)
+        setup_error_->hide();
+    if (unlock_busy_ || setup_busy_)
+        setCursor(Qt::BusyCursor);
+    else
+        unsetCursor();
+}
+
+void LockScreen::set_unlock_busy(bool busy) {
+    unlock_busy_ = busy;
+    // While busy the button reads VERIFYING… in its (theme) disabled style;
+    // afterwards the lockout state decides whether input is accepted.
+    const bool locked = auth::PinManager::instance().lockout_remaining_seconds() > 0;
+    if (unlock_btn_) {
+        unlock_btn_->setText(busy ? tr("  VERIFYING…  ") : tr("  UNLOCK  "));
+        unlock_btn_->setEnabled(!busy && !locked);
+    }
+    if (unlock_pin_input_)
+        unlock_pin_input_->setEnabled(!busy && !locked);
+    // "Forgot PIN" signs out; it waits for the running check so a late success
+    // can never unlock a session that is being torn down.
+    if (unlock_forgot_btn_)
+        unlock_forgot_btn_->setEnabled(!busy);
+    if (busy && unlock_error_)
+        unlock_error_->hide();
+    if (unlock_busy_ || setup_busy_)
+        setCursor(Qt::BusyCursor);
+    else
+        unsetCursor();
 }
 
 void LockScreen::on_unlock_submit() {
+    // Enter / click while a check is running: that PIN is already being
+    // verified, and a second submission would be a second counted attempt.
+    if (unlock_busy_)
+        return;
     auto& pm = auth::PinManager::instance();
 
     if (pm.is_locked_out()) {
@@ -651,7 +860,19 @@ void LockScreen::on_unlock_submit() {
         return;
     }
 
-    if (pm.verify_pin(pin)) {
+    set_unlock_busy(true);
+    const quint64 serial = attempt_serial_;
+    pm.verify_pin_async(pin, this, [this, serial](bool ok) {
+        if (serial != attempt_serial_)
+            return; // abandoned — PinManager has accounted the attempt
+        set_unlock_busy(false);
+        on_unlock_result(ok);
+    });
+}
+
+void LockScreen::on_unlock_result(bool ok) {
+    auto& pm = auth::PinManager::instance();
+    if (ok) {
         unlock_error_->hide();
         unlock_lockout_label_->hide();
         unlock_attempts_->hide();
@@ -688,9 +909,11 @@ void LockScreen::update_lockout_display() {
 
     if (secs <= 0) {
         unlock_lockout_label_->hide();
-        unlock_btn_->setEnabled(true);
-        unlock_pin_input_->setEnabled(true);
-        unlock_pin_input_->setFocus();
+        // A check still running keeps the page disabled until its result is in.
+        unlock_btn_->setEnabled(!unlock_busy_);
+        unlock_pin_input_->setEnabled(!unlock_busy_);
+        if (!unlock_busy_)
+            unlock_pin_input_->setFocus();
         lockout_timer_->stop();
         return;
     }

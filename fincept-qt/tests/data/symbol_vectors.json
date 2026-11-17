@@ -1,0 +1,5502 @@
+{
+ "meta": {
+  "schema": 1,
+  "about": "Shared symbol-normalisation vectors. The terminal (src/core/instrument: tests/tst_symbol_input.cpp, tst_venue_symbols.cpp, tst_instrument_rank.cpp) and the backend's Python port of the normaliser run this same file. Every field present in a vector is compared exactly (lists in order); 'notes_include' entries must all appear in the parser's notes. Slugs: kind = empty | invalid | isin | contract | yahoo_symbol | fx_pair | crypto_pair | alias | ticker | name; asset_class = '' | equity | etf | fund | index | fx | crypto | future | option | bond | commodity; match = exact_symbol | exact_listing_code | exact_alias | exact_isin | prefix | name_contains | fuzzy.",
+  "sections": {
+   "parse": "parse_symbol_input(input, venue_hint, home): kind, asset_class, venue, candidates (ordered), canonical; plus canonical_symbol(input, venue_hint). source D = audit table D, plan = WP1 test plan.",
+   "canonical_symbol": "canonical_symbol(input, venue_hint) == expected, and canonical_symbol is idempotent.",
+   "to_yahoo": "to_yahoo(code, venue, class, country) == expected ('' = no Yahoo symbol).",
+   "to_yahoo_tv": "to_yahoo_tv(symbol, exchange, country) == expected (TradingView code space).",
+   "from_yahoo": "from_yahoo(symbol): valid, canonical, code, market, venue, class; instrument_id_for; display_symbol.",
+   "asset_class_of": "asset_class_of(symbol, quote_type) == expected.",
+   "broker": "to_broker_symbol(instrument_skeleton(symbol) [+ venue, + provider 'broker:<id>'], broker) == expected, exchange.",
+   "crypto_pair": "crypto_pair(instrument_skeleton(symbol), exchange, style) == expected.",
+   "round_trip": "for each Yahoo symbol s: p = from_yahoo(s) is valid and to_yahoo(p.code, p.market, p.class) == s.",
+   "currency": "instrument_skeleton(symbol).currency == expected (minor units kept: GBp, ZAc, ILA, KWF, USX).",
+   "rank": "rank_instruments(instruments, query, {home, class_priority, allowed_classes, include_inactive}) returns exactly 'expected' (symbols, in order); 'match' gives the tier of named rows; 'former' the rows matched through a former symbol."
+  },
+  "live_check": {
+   "date": "2026-11-16",
+   "tool": "yfinance 0.2.66 in the terminal's Python environment (ft-dev); 'quotes' = Yahoo returned recent daily bars",
+   "quotes": [
+    "AAPL",
+    "BRK-B",
+    "BF-B",
+    "HEI-A",
+    "MOG-A",
+    "INFY",
+    "SAP",
+    "SPY",
+    "BTC",
+    "GOLD",
+    "DOW",
+    "DAX",
+    "ETH",
+    "LTC",
+    "RELIANCE.NS",
+    "RELIANCE.BO",
+    "TCS.NS",
+    "INFY.NS",
+    "TMPV.NS",
+    "TMCV.NS",
+    "BAJAJ-AUTO.NS",
+    "UNITDSPR.NS",
+    "M&M.NS",
+    "NIFTYBEES.NS",
+    "VOD.L",
+    "BT-A.L",
+    "0R2V.IL",
+    "SAP.DE",
+    "APC.DE",
+    "SAP.F",
+    "SAP.DU",
+    "SAP.HM",
+    "SAP.HA",
+    "SAP.MU",
+    "SAP.SG",
+    "OMV.VI",
+    "AIR.PA",
+    "ASML.AS",
+    "ABI.BR",
+    "EDP.LS",
+    "RYA.IR",
+    "EQNR.OL",
+    "ENI.MI",
+    "NESN.SW",
+    "SAN.MC",
+    "VOLV-B.ST",
+    "NOKIA.HE",
+    "NOVO-B.CO",
+    "ISB.IC",
+    "PKO.WA",
+    "THYAO.IS",
+    "ETE.AT",
+    "CEZ.PR",
+    "OTP.BD",
+    "TLV.RO",
+    "LHV1T.TL",
+    "SAF1R.RG",
+    "APG1L.VS",
+    "NPN.JO",
+    "2222.SR",
+    "EMAAR.AE",
+    "TEVA.TA",
+    "QNBK.QA",
+    "NBK.KW",
+    "NBB.BH",
+    "COMI.CA",
+    "GGAL.BA",
+    "SQM-B.SN",
+    "ECOPETROL.CL",
+    "BAP.LM",
+    "SHOP.TO",
+    "CNC.V",
+    "DOO.NE",
+    "BBD-B.TO",
+    "RCI-B.TO",
+    "PETR4.SA",
+    "WALMEX.MX",
+    "AAPL.MX",
+    "D05.SI",
+    "0700.HK",
+    "9988.HK",
+    "0005.HK",
+    "600519.SS",
+    "000001.SZ",
+    "7203.T",
+    "130A.T",
+    "005930.KS",
+    "247540.KQ",
+    "2330.TW",
+    "6488.TWO",
+    "BHP.AX",
+    "FPH.NZ",
+    "BBCA.JK",
+    "PTT.BK",
+    "1155.KL",
+    "VNM.VN",
+    "OGDC.KA",
+    "JKH-N0000.CM",
+    "EURUSD=X",
+    "GBPUSD=X",
+    "INR=X",
+    "USDINR=X",
+    "JPY=X",
+    "USDJPY=X",
+    "EUR=X",
+    "BTC-USD",
+    "BTC-EUR",
+    "BTC-GBP",
+    "BTC-JPY",
+    "BTC-INR",
+    "ETH-USD",
+    "ETH-BTC",
+    "BNB-BTC",
+    "SOL-BTC",
+    "USDT-USD",
+    "USDC-USD",
+    "BNB-USD",
+    "SOL-USD",
+    "XRP-USD",
+    "DOGE-USD",
+    "ADA-USD",
+    "TRX-USD",
+    "TON11419-USD",
+    "AVAX-USD",
+    "SHIB-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "BCH-USD",
+    "LTC-USD",
+    "POL28321-USD",
+    "NEAR-USD",
+    "UNI7083-USD",
+    "ICP-USD",
+    "APT21794-USD",
+    "XLM-USD",
+    "ETC-USD",
+    "FIL-USD",
+    "HBAR-USD",
+    "ATOM-USD",
+    "ARB11841-USD",
+    "OP-USD",
+    "INJ-USD",
+    "SUI20947-USD",
+    "XMR-USD",
+    "AAVE-USD",
+    "MKR-USD",
+    "PEPE24478-USD",
+    "WIF-USD",
+    "ALGO-USD",
+    "VET-USD",
+    "SAND-USD",
+    "MANA-USD",
+    "GRT6719-USD",
+    "RENDER-USD",
+    "IMX10603-USD",
+    "STX4847-USD",
+    "TAO22974-USD",
+    "KAS-USD",
+    "FET-USD",
+    "CRO-USD",
+    "GC=F",
+    "SI=F",
+    "PL=F",
+    "PA=F",
+    "HG=F",
+    "CL=F",
+    "BZ=F",
+    "NG=F",
+    "RB=F",
+    "HO=F",
+    "ZC=F",
+    "ZW=F",
+    "ZS=F",
+    "KC=F",
+    "SB=F",
+    "CC=F",
+    "CT=F",
+    "LE=F",
+    "HE=F",
+    "ES=F",
+    "NQ=F",
+    "YM=F",
+    "RTY=F",
+    "ZN=F",
+    "ZB=F",
+    "ZF=F",
+    "ZT=F",
+    "6E=F",
+    "DX-Y.NYB",
+    "CLF27.NYM",
+    "GCZ26.CMX",
+    "ESZ26.CME",
+    "ZCZ26.CBT",
+    "^GSPC",
+    "^SPX",
+    "^DJI",
+    "^IXIC",
+    "^NDX",
+    "^RUT",
+    "^VIX",
+    "^NYA",
+    "^OEX",
+    "^MID",
+    "^SP600",
+    "^RUA",
+    "^W5000",
+    "^SOX",
+    "^NBI",
+    "^TNX",
+    "^IRX",
+    "^FVX",
+    "^TYX",
+    "^DJT",
+    "^DJU",
+    "^GSPTSE",
+    "^BVSP",
+    "^MXX",
+    "^MERV",
+    "^FTSE",
+    "^FTMC",
+    "^FTAS",
+    "^GDAXI",
+    "^MDAXI",
+    "^TECDAX",
+    "^SDAXI",
+    "^STOXX50E",
+    "^STOXX",
+    "^FCHI",
+    "^SBF120",
+    "^AEX",
+    "^AMX",
+    "^BFX",
+    "PSI20.LS",
+    "^ISEQ",
+    "OBX.OL",
+    "FTSEMIB.MI",
+    "^SSMI",
+    "^IBEX",
+    "^OMX",
+    "^OMXSPI",
+    "^OMXH25",
+    "^OMXC25",
+    "^ATX",
+    "WIG20.WA",
+    "XU100.IS",
+    "^TA125.TA",
+    "^TASI.SR",
+    "^J203.JO",
+    "^CASE30",
+    "^N225",
+    "^HSI",
+    "^HSCE",
+    "HSTECH.HK",
+    "000001.SS",
+    "399001.SZ",
+    "000300.SS",
+    "^KS11",
+    "^KQ11",
+    "^KS200",
+    "^TWII",
+    "^AXJO",
+    "^AORD",
+    "^NZ50",
+    "^STI",
+    "^JKSE",
+    "^KLSE",
+    "^SET.BK",
+    "^NSEI",
+    "^NSEBANK",
+    "NIFTY_FIN_SERVICE.NS",
+    "NIFTY_MID_SELECT.NS",
+    "^NSMIDCP",
+    "^CNXIT",
+    "^INDIAVIX",
+    "^CNXAUTO",
+    "^CNXFMCG",
+    "^CNXPHARMA",
+    "^CNXMETAL",
+    "^CNXREALTY",
+    "^CNXENERGY",
+    "^CNXINFRA",
+    "^CNXPSUBANK",
+    "^CRSLDX",
+    "^NSEMDCP50",
+    "^CNX100",
+    "^CNX200",
+    "^BSESN",
+    "BSE-500.BO",
+    "BSE-BANK.BO",
+    "^DJUSRE",
+    "^SPXEW"
+   ],
+   "no_data": [
+    "TATAMOTORS.NS",
+    "TATAMOTORS.BO",
+    "MCDOWELL-N.NS",
+    "RDS-A",
+    "TCS",
+    "SPX",
+    "NIFTY",
+    "CRUDE",
+    "SOL",
+    "BT-A",
+    "NIFTY.NS",
+    "BAJAJ_AUTO.NS",
+    "005930.SZ",
+    "AAPL.CL",
+    "BTC-USDT",
+    "ETH-USDT",
+    "XAUUSD=X",
+    "XAGUSD=X",
+    "XAU=X",
+    "DX=F",
+    "MATIC-USD",
+    "POL-USD",
+    "UNI-USD",
+    "APT-USD",
+    "SUI-USD",
+    "PEPE-USD",
+    "GRT-USD",
+    "IMX-USD",
+    "STX-USD",
+    "TAO-USD",
+    "NESN.VX",
+    "SAP.BE",
+    "BMW.BE",
+    "VOW3.BE",
+    "ALV.BE",
+    "ALDAR.AE",
+    "FAB.AE",
+    "ALDAR.AD",
+    "BDO.PS",
+    "TEL.PS",
+    "SM.PS",
+    "JFC.PS",
+    "430047.BJ",
+    "920002.BJ",
+    "830799.BJ",
+    "920819.BJ",
+    "SCOM.NR",
+    "EQTY.NR",
+    "SBER.ME",
+    "BIAT.TU",
+    "SHOP.V",
+    "TRUL.CN",
+    "^FTSEMIB",
+    "^OSEAX",
+    "^OBX",
+    "^PSI20",
+    "^WIG20",
+    "^XU100",
+    "^TOPX",
+    "^SLI",
+    "^SSEC",
+    "^BSE500"
+   ],
+   "different_instrument": {
+    "TON-USD": "TON Token, not Toncoin (Toncoin is TON11419-USD)",
+    "ARB-USD": "ARbit, not Arbitrum (ARB11841-USD)",
+    "XBT-USD": "XBIT, not Bitcoin (Kraken's XBT is BTC-USD)",
+    "247540.KS": "a Morningstar proxy row (quoteType MUTUALFUND) for the KOSDAQ listing 247540.KQ"
+   },
+   "unverified": "Casablanca (.CS) was rate-limited; marked as no Yahoo coverage until verified."
+  }
+ },
+ "parse": [
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p001",
+   "input": "AAPL",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p002",
+   "input": "aapl",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p003",
+   "input": " aapl ",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p004",
+   "input": "\tAAPL\t",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p005",
+   "input": " AAPL ",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p006",
+   "input": "AAPL​",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p007",
+   "input": "ＡＡＰＬ",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p008",
+   "input": "$AAPL",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p009",
+   "input": "'AAPL",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL",
+    "AAPL.NS",
+    "AAPL.BO",
+    "AAPL.L",
+    "AAPL.TO",
+    "AAPL.AX",
+    "AAPL.DE",
+    "AAPL.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "AAPL",
+   "id": "p010",
+   "input": "“AAPL”",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B",
+    "BRK-B.TO",
+    "BRK-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRK-B",
+   "id": "p011",
+   "input": "BRK.B",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B",
+    "BRK-B.TO",
+    "BRK-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRK-B",
+   "id": "p012",
+   "input": "BRK-B",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B",
+    "BRK-B.TO",
+    "BRK-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRK-B",
+   "id": "p013",
+   "input": "BRK/B",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B",
+    "BRK-B.TO",
+    "BRK-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRK-B",
+   "id": "p014",
+   "input": "BRK B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B",
+    "BRK-B.TO",
+    "BRK-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRK-B",
+   "id": "p015",
+   "input": "brk.b",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BRK-B"
+   ],
+   "canonical": "BRK-B",
+   "canonical_symbol": "BRK-B",
+   "id": "p016",
+   "input": "BRK.B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NYSE",
+   "venue_hint": "NYSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BF-B",
+    "BF-B.TO",
+    "BF-B.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BF-B",
+   "id": "p017",
+   "input": "BF.B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "HEI-A",
+    "HEI-A.TO",
+    "HEI-A.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "HEI-A",
+   "id": "p018",
+   "input": "HEI.A",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "VOD.L"
+   ],
+   "canonical": "VOD.L",
+   "canonical_symbol": "VOD.L",
+   "id": "p019",
+   "input": "VOD.L",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "LSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "VOD.L"
+   ],
+   "canonical": "VOD.L",
+   "canonical_symbol": "VOD.L",
+   "id": "p020",
+   "input": "VOD L",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "LSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BT-A.L"
+   ],
+   "canonical": "BT-A.L",
+   "canonical_symbol": "BT-A.L",
+   "id": "p021",
+   "input": "BT.A",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "LSE",
+   "venue_hint": "LSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BT-A",
+    "BT-A.TO",
+    "BT-A.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BT-A",
+   "id": "p022",
+   "input": "BT.A",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BBD-B.TO"
+   ],
+   "canonical": "BBD-B.TO",
+   "canonical_symbol": "BBD-B.TO",
+   "id": "p023",
+   "input": "BBD.B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "TSX",
+   "venue_hint": "TSX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RCI-B.TO"
+   ],
+   "canonical": "RCI-B.TO",
+   "canonical_symbol": "RCI-B.TO",
+   "id": "p024",
+   "input": "RCI.B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "TSX",
+   "venue_hint": "TSX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "VOLV-B.ST"
+   ],
+   "canonical": "VOLV-B.ST",
+   "canonical_symbol": "VOLV-B.ST",
+   "id": "p025",
+   "input": "VOLV B",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "STOCKHOLM",
+   "venue_hint": "STOCKHOLM"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RDS-A",
+    "RDS-A.TO",
+    "RDS-A.L"
+   ],
+   "canonical": "",
+   "canonical_symbol": "RDS-A",
+   "id": "p026",
+   "input": "RDS-A",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE",
+    "RELIANCE.NS",
+    "RELIANCE.BO",
+    "RELIANCE.L",
+    "RELIANCE.TO",
+    "RELIANCE.AX",
+    "RELIANCE.DE",
+    "RELIANCE.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "RELIANCE",
+   "id": "p027",
+   "input": "RELIANCE",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS",
+    "RELIANCE.BO",
+    "RELIANCE",
+    "RELIANCE.L",
+    "RELIANCE.TO",
+    "RELIANCE.AX",
+    "RELIANCE.DE",
+    "RELIANCE.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "RELIANCE",
+   "home": "IN",
+   "id": "p028",
+   "input": "RELIANCE",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS"
+   ],
+   "canonical": "RELIANCE.NS",
+   "canonical_symbol": "RELIANCE.NS",
+   "id": "p029",
+   "input": "RELIANCE",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS"
+   ],
+   "canonical": "RELIANCE.NS",
+   "canonical_symbol": "RELIANCE.NS",
+   "id": "p030",
+   "input": "RELIANCE.NS",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "7203.T"
+   ],
+   "canonical": "7203.T",
+   "canonical_symbol": "7203.T",
+   "id": "p031",
+   "input": "7203.T",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "TSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0700.HK"
+   ],
+   "canonical": "0700.HK",
+   "canonical_symbol": "0700.HK",
+   "id": "p032",
+   "input": "0700.HK",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "HKEX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SAP.DE"
+   ],
+   "canonical": "SAP.DE",
+   "canonical_symbol": "SAP.DE",
+   "id": "p033",
+   "input": "SAP.DE",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "XETRA"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "NESN.SW"
+   ],
+   "canonical": "NESN.SW",
+   "canonical_symbol": "NESN.SW",
+   "id": "p034",
+   "input": "NESN.SW",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "SIX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SHOP.TO"
+   ],
+   "canonical": "SHOP.TO",
+   "canonical_symbol": "SHOP.TO",
+   "id": "p035",
+   "input": "SHOP.TO",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "TSX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BHP.AX"
+   ],
+   "canonical": "BHP.AX",
+   "canonical_symbol": "BHP.AX",
+   "id": "p036",
+   "input": "BHP.AX",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "ASX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "TCS",
+    "TCS.NS",
+    "TCS.BO",
+    "TCS.L",
+    "TCS.TO",
+    "TCS.AX",
+    "TCS.DE",
+    "TCS.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "TCS",
+   "id": "p037",
+   "input": "TCS",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "TMPV",
+    "TMPV.NS",
+    "TMPV.BO",
+    "TMPV.L",
+    "TMPV.TO",
+    "TMPV.AX",
+    "TMPV.DE",
+    "TMPV.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "TMPV",
+   "id": "p038",
+   "input": "TMPV",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "TATAMOTORS",
+    "TATAMOTORS.NS",
+    "TATAMOTORS.BO",
+    "TATAMOTORS.L",
+    "TATAMOTORS.TO",
+    "TATAMOTORS.AX",
+    "TATAMOTORS.DE",
+    "TATAMOTORS.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "TATAMOTORS",
+   "id": "p039",
+   "input": "TATAMOTORS",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "INFY",
+    "INFY.NS",
+    "INFY.BO",
+    "INFY.L",
+    "INFY.TO",
+    "INFY.AX",
+    "INFY.DE",
+    "INFY.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "INFY",
+   "id": "p040",
+   "input": "INFY",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "INFY.NS",
+    "INFY.BO",
+    "INFY",
+    "INFY.L",
+    "INFY.TO",
+    "INFY.AX",
+    "INFY.DE",
+    "INFY.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "INFY",
+   "home": "IN",
+   "id": "p041",
+   "input": "INFY",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SAP",
+    "SAP.NS",
+    "SAP.BO",
+    "SAP.L",
+    "SAP.TO",
+    "SAP.AX",
+    "SAP.DE",
+    "SAP.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SAP",
+   "id": "p042",
+   "input": "SAP",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SAP.DE",
+    "SAP",
+    "SAP.NS",
+    "SAP.BO",
+    "SAP.L",
+    "SAP.TO",
+    "SAP.AX",
+    "SAP.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SAP",
+   "home": "DE",
+   "id": "p043",
+   "input": "SAP",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "VOLV.ST",
+    "VOLV",
+    "VOLV.NS",
+    "VOLV.BO",
+    "VOLV.L",
+    "VOLV.TO",
+    "VOLV.AX",
+    "VOLV.DE",
+    "VOLV.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "VOLV",
+   "home": "SE",
+   "id": "p044",
+   "input": "VOLV",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "^NSEI",
+   "canonical_symbol": "^NSEI",
+   "id": "p045",
+   "input": "^NSEI",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^GSPC"
+   ],
+   "canonical": "^GSPC",
+   "canonical_symbol": "^GSPC",
+   "id": "p046",
+   "input": "^GSPC",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "GC=F",
+   "canonical_symbol": "GC=F",
+   "id": "p047",
+   "input": "GC=F",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "CL=F"
+   ],
+   "canonical": "CL=F",
+   "canonical_symbol": "CL=F",
+   "id": "p048",
+   "input": "CL=F",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "^NSEI",
+   "canonical_symbol": "^NSEI",
+   "id": "p049",
+   "input": "^nsei",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "CLF27.NYM"
+   ],
+   "canonical": "CLF27.NYM",
+   "canonical_symbol": "CLF27.NYM",
+   "id": "p050",
+   "input": "CLF27.NYM",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "NIFTY_FIN_SERVICE.NS"
+   ],
+   "canonical": "NIFTY_FIN_SERVICE.NS",
+   "canonical_symbol": "NIFTY_FIN_SERVICE.NS",
+   "id": "p051",
+   "input": "NIFTY_FIN_SERVICE.NS",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "000001.SS"
+   ],
+   "canonical": "000001.SS",
+   "canonical_symbol": "000001.SS",
+   "id": "p052",
+   "input": "000001.SS",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "SSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "HSTECH.HK"
+   ],
+   "canonical": "HSTECH.HK",
+   "canonical_symbol": "HSTECH.HK",
+   "id": "p053",
+   "input": "HSTECH.HK",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "HKEX"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p054",
+   "input": "NIFTY 50",
+   "kind": "alias",
+   "source": "D",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI",
+    "NIFTY"
+   ],
+   "canonical": "",
+   "canonical_symbol": "NIFTY",
+   "id": "p055",
+   "input": "NIFTY",
+   "kind": "alias",
+   "source": "D",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^NSEI",
+   "id": "p056",
+   "input": "NIFTY",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^NSEI",
+   "id": "p057",
+   "input": "NSE:NIFTY",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "NIFTY50",
+   "id": "p058",
+   "input": "NIFTY50",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEBANK"
+   ],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p059",
+   "input": "Nifty Bank",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^NSEI",
+   "id": "p060",
+   "input": "NIFTY 50",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE_INDEX"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEI"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^NSEI",
+   "id": "p061",
+   "input": "NSE:NIFTY50-INDEX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^BSESN",
+    "SENSEX"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SENSEX",
+   "id": "p062",
+   "input": "SENSEX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "BSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSEBANK"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BANKNIFTY",
+   "id": "p063",
+   "input": "BANKNIFTY",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^NSMIDCP"
+   ],
+   "canonical": "",
+   "canonical_symbol": "NIFTYNXT50",
+   "id": "p064",
+   "input": "NIFTYNXT50",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "NIFTY_FIN_SERVICE.NS"
+   ],
+   "canonical": "",
+   "canonical_symbol": "FINNIFTY",
+   "id": "p065",
+   "input": "FINNIFTY",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "BSE-BANK.BO"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BSE-BANK.BO",
+   "id": "p066",
+   "input": "BANKEX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "BSE",
+   "venue_hint": "BSE_INDEX"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^GSPC",
+    "SPX"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SPX",
+   "id": "p067",
+   "input": "SPX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^GSPC"
+   ],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p068",
+   "input": "S&P 500",
+   "kind": "alias",
+   "source": "D",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^GSPC"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^GSPC",
+   "id": "p069",
+   "input": "SP:SPX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^GSPC"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^GSPC",
+   "id": "p070",
+   "input": "SPX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NYSE",
+   "venue_hint": "CBOE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^DJI",
+    "DOW"
+   ],
+   "canonical": "",
+   "canonical_symbol": "DOW",
+   "id": "p071",
+   "input": "DOW",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "DOW"
+   ],
+   "canonical": "DOW",
+   "canonical_symbol": "DOW",
+   "id": "p072",
+   "input": "DOW",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NYSE",
+   "venue_hint": "NYSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^N225"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^N225",
+   "id": "p073",
+   "input": "TVC:NI225",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "TSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "DX-Y.NYB"
+   ],
+   "canonical": "",
+   "canonical_symbol": "DX-Y.NYB",
+   "id": "p074",
+   "input": "TVC:DXY",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD",
+   "id": "p075",
+   "input": "EURUSD",
+   "kind": "fx_pair",
+   "source": "D",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD=X",
+   "id": "p076",
+   "input": "EUR/USD",
+   "kind": "fx_pair",
+   "source": "D",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD=X",
+   "id": "p077",
+   "input": "eurusd=x",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD=X",
+   "id": "p078",
+   "input": "EUR-USD",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "INR=X"
+   ],
+   "canonical": "INR=X",
+   "canonical_symbol": "USDINR",
+   "id": "p079",
+   "input": "USDINR",
+   "kind": "fx_pair",
+   "source": "D",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "INR=X"
+   ],
+   "canonical": "INR=X",
+   "canonical_symbol": "INR=X",
+   "id": "p080",
+   "input": "USD/INR",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "INR=X"
+   ],
+   "canonical": "INR=X",
+   "canonical_symbol": "INR=X",
+   "id": "p081",
+   "input": "INR=X",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "INR=X"
+   ],
+   "canonical": "INR=X",
+   "canonical_symbol": "INR=X",
+   "id": "p082",
+   "input": "USDINR=X",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "JPY=X"
+   ],
+   "canonical": "JPY=X",
+   "canonical_symbol": "JPY=X",
+   "id": "p083",
+   "input": "JPY=X",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD=X",
+   "id": "p084",
+   "input": "OANDA:EURUSD",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX"
+  },
+  {
+   "asset_class": "fx",
+   "candidates": [
+    "EURUSD=X"
+   ],
+   "canonical": "EURUSD=X",
+   "canonical_symbol": "EURUSD=X",
+   "id": "p085",
+   "input": "EURUSD",
+   "kind": "fx_pair",
+   "source": "plan",
+   "venue": "FX",
+   "venue_hint": "FOREX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p086",
+   "input": "EURO",
+   "kind": "invalid",
+   "source": "plan",
+   "venue": "",
+   "venue_hint": "FOREX"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD",
+    "BTC"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BTC",
+   "id": "p087",
+   "input": "BTC",
+   "kind": "crypto_pair",
+   "source": "D",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTCUSD",
+   "id": "p088",
+   "input": "BTCUSD",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTC-USD",
+   "id": "p089",
+   "input": "BTC-USD",
+   "kind": "crypto_pair",
+   "source": "D",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTC-USD",
+   "id": "p090",
+   "input": "BTC/USDT",
+   "kind": "crypto_pair",
+   "notes_include": [
+    "stablecoin_as_usd"
+   ],
+   "source": "D",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTCUSDT",
+   "id": "p091",
+   "input": "BTCUSDT",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTCUSDT.P",
+   "id": "p092",
+   "input": "BTCUSDT.P",
+   "kind": "crypto_pair",
+   "notes_include": [
+    "perpetual"
+   ],
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTC-USD",
+   "id": "p093",
+   "input": "BTC/USDT:USDT",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTC-USD",
+   "id": "p094",
+   "input": "XBT/USD",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "ETH-BTC"
+   ],
+   "canonical": "ETH-BTC",
+   "canonical_symbol": "ETHBTC",
+   "id": "p095",
+   "input": "ETHBTC",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "ETH-USD"
+   ],
+   "canonical": "ETH-USD",
+   "canonical_symbol": "ETHUSD",
+   "id": "p096",
+   "input": "ETHUSD",
+   "kind": "crypto_pair",
+   "source": "D",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "BTC-USD",
+   "canonical_symbol": "BTC-USD",
+   "id": "p097",
+   "input": "BINANCE:BTCUSDT",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p098",
+   "input": "BINANCE:FOOUSDT",
+   "kind": "crypto_pair",
+   "notes_include": [
+    "unknown_crypto_base"
+   ],
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "TON11419-USD",
+    "TON-USD"
+   ],
+   "canonical": "TON11419-USD",
+   "canonical_symbol": "TON-USD",
+   "id": "p099",
+   "input": "TON-USD",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "TON11419-USD"
+   ],
+   "canonical": "TON11419-USD",
+   "canonical_symbol": "TON11419-USD",
+   "id": "p100",
+   "input": "TON/USDT",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "SOL-USD",
+    "SOL"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SOL",
+   "id": "p101",
+   "input": "SOL",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "POL28321-USD",
+    "MATIC"
+   ],
+   "canonical": "",
+   "canonical_symbol": "MATIC",
+   "id": "p102",
+   "input": "MATIC",
+   "kind": "crypto_pair",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "STX",
+    "STX.NS",
+    "STX.BO",
+    "STX.L",
+    "STX.TO",
+    "STX.AX",
+    "STX.DE",
+    "STX.PA",
+    "STX4847-USD"
+   ],
+   "canonical": "",
+   "canonical_symbol": "STX",
+   "id": "p103",
+   "input": "STX",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [
+    "BTC-USD"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BITCOIN",
+   "id": "p104",
+   "input": "bitcoin",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CRYPTO"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BTC"
+   ],
+   "canonical": "BTC",
+   "canonical_symbol": "BTC",
+   "id": "p105",
+   "input": "BTC",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NYSE",
+   "venue_hint": "NYSE"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F",
+    "GOLD"
+   ],
+   "canonical": "",
+   "canonical_symbol": "GOLD",
+   "id": "p106",
+   "input": "gold",
+   "kind": "alias",
+   "source": "D",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "",
+   "canonical_symbol": "XAUUSD",
+   "id": "p107",
+   "input": "XAUUSD",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p108",
+   "input": "XAU/USD",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "",
+   "canonical_symbol": "GC=F",
+   "id": "p109",
+   "input": "OANDA:XAUUSD",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "",
+   "canonical_symbol": "GC=F",
+   "id": "p110",
+   "input": "TVC:GOLD",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "GOLD"
+   ],
+   "canonical": "GOLD",
+   "canonical_symbol": "GOLD",
+   "id": "p111",
+   "input": "GOLD",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NYSE",
+   "venue_hint": "NYSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p112",
+   "input": "GOLD",
+   "kind": "contract",
+   "notes_include": [
+    "no_yahoo_venue"
+   ],
+   "source": "plan",
+   "venue": "MCX",
+   "venue_hint": "MCX"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "CL=F",
+    "BZ=F",
+    "CRUDE"
+   ],
+   "canonical": "",
+   "canonical_symbol": "CRUDE",
+   "id": "p113",
+   "input": "crude",
+   "kind": "alias",
+   "source": "D",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "BZ=F",
+    "BRENT"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BRENT",
+   "id": "p114",
+   "input": "brent",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SPY",
+    "SPY.NS",
+    "SPY.BO",
+    "SPY.L",
+    "SPY.TO",
+    "SPY.AX",
+    "SPY.DE",
+    "SPY.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "SPY",
+   "id": "p115",
+   "input": "SPY",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "NIFTYBEES",
+    "NIFTYBEES.NS",
+    "NIFTYBEES.BO",
+    "NIFTYBEES.L",
+    "NIFTYBEES.TO",
+    "NIFTYBEES.AX",
+    "NIFTYBEES.DE",
+    "NIFTYBEES.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "NIFTYBEES",
+   "id": "p116",
+   "input": "NIFTYBEES",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p117",
+   "input": "tata motors",
+   "kind": "name",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "APPLE",
+    "APPLE.NS",
+    "APPLE.BO",
+    "APPLE.L",
+    "APPLE.TO",
+    "APPLE.AX",
+    "APPLE.DE",
+    "APPLE.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "APPLE",
+   "id": "p118",
+   "input": "apple",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p119",
+   "input": "US0378331005",
+   "kind": "isin",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p120",
+   "input": "INE002A01018",
+   "kind": "isin",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p121",
+   "input": "us0378331005",
+   "kind": "isin",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p122",
+   "input": "US0378331006",
+   "kind": "invalid",
+   "notes_include": [
+    "isin_check_digit"
+   ],
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p123",
+   "input": "INE002A01019",
+   "kind": "invalid",
+   "notes_include": [
+    "isin_check_digit"
+   ],
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELAINCE",
+    "RELAINCE.NS",
+    "RELAINCE.BO",
+    "RELAINCE.L",
+    "RELAINCE.TO",
+    "RELAINCE.AX",
+    "RELAINCE.DE",
+    "RELAINCE.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "RELAINCE",
+   "id": "p124",
+   "input": "relaince",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "MICROSFT",
+    "MICROSFT.NS",
+    "MICROSFT.BO",
+    "MICROSFT.L",
+    "MICROSFT.TO",
+    "MICROSFT.AX",
+    "MICROSFT.DE",
+    "MICROSFT.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "MICROSFT",
+   "id": "p125",
+   "input": "microsft",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "M&M",
+    "M&M.NS",
+    "M&M.BO",
+    "M&M.L",
+    "M&M.TO",
+    "M&M.AX",
+    "M&M.DE",
+    "M&M.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "M&M",
+   "id": "p126",
+   "input": "M&M",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "M&M.NS"
+   ],
+   "canonical": "M&M.NS",
+   "canonical_symbol": "M&M.NS",
+   "id": "p127",
+   "input": "M&M",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BAJAJ-AUTO",
+    "BAJAJ-AUTO.NS",
+    "BAJAJ-AUTO.BO",
+    "BAJAJ-AUTO.L",
+    "BAJAJ-AUTO.TO",
+    "BAJAJ-AUTO.AX",
+    "BAJAJ-AUTO.DE",
+    "BAJAJ-AUTO.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BAJAJ-AUTO",
+   "id": "p128",
+   "input": "BAJAJ-AUTO",
+   "kind": "ticker",
+   "source": "D",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BAJAJ-AUTO",
+    "BAJAJ-AUTO.NS",
+    "BAJAJ-AUTO.BO",
+    "BAJAJ-AUTO.L",
+    "BAJAJ-AUTO.TO",
+    "BAJAJ-AUTO.AX",
+    "BAJAJ-AUTO.DE",
+    "BAJAJ-AUTO.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BAJAJ-AUTO",
+   "id": "p129",
+   "input": "BAJAJ_AUTO",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BAJAJ-AUTO.NS"
+   ],
+   "canonical": "BAJAJ-AUTO.NS",
+   "canonical_symbol": "BAJAJ-AUTO.NS",
+   "id": "p130",
+   "input": "NSE:BAJAJ_AUTO",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BAJAJ-AUTO.NS"
+   ],
+   "canonical": "BAJAJ-AUTO.NS",
+   "canonical_symbol": "BAJAJ-AUTO.NS",
+   "id": "p131",
+   "input": "BAJAJ-AUTO-EQ",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "MCDOWELL-N",
+    "MCDOWELL-N.NS",
+    "MCDOWELL-N.BO",
+    "MCDOWELL-N.L",
+    "MCDOWELL-N.TO",
+    "MCDOWELL-N.AX",
+    "MCDOWELL-N.DE",
+    "MCDOWELL-N.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "MCDOWELL-N",
+   "id": "p132",
+   "input": "MCDOWELL-N",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS"
+   ],
+   "canonical": "RELIANCE.NS",
+   "canonical_symbol": "RELIANCE.NS",
+   "id": "p133",
+   "input": "NSE:RELIANCE-EQ",
+   "kind": "ticker",
+   "notes_include": [
+    "series_stripped"
+   ],
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE-BE",
+    "RELIANCE.NS",
+    "RELIANCE.BO",
+    "RELIANCE-BE.L",
+    "RELIANCE-BE.TO",
+    "RELIANCE-BE.AX",
+    "RELIANCE-BE.DE",
+    "RELIANCE-BE.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "RELIANCE-BE",
+   "id": "p134",
+   "input": "RELIANCE-BE",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS"
+   ],
+   "canonical": "RELIANCE.NS",
+   "canonical_symbol": "RELIANCE.NS",
+   "id": "p135",
+   "input": "RELIANCE-BE",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SBIN.BO"
+   ],
+   "canonical": "SBIN.BO",
+   "canonical_symbol": "SBIN.BO",
+   "id": "p136",
+   "input": "SBIN-BL",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "BSE",
+   "venue_hint": "BSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0700.HK"
+   ],
+   "canonical": "",
+   "canonical_symbol": "700",
+   "id": "p137",
+   "input": "700",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0700.HK"
+   ],
+   "canonical": "0700.HK",
+   "canonical_symbol": "0700.HK",
+   "id": "p138",
+   "input": "700.HK",
+   "kind": "yahoo_symbol",
+   "source": "D",
+   "venue": "HKEX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0700.HK"
+   ],
+   "canonical": "0700.HK",
+   "canonical_symbol": "0700.HK",
+   "id": "p139",
+   "input": "00700.HK",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "HKEX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0700.HK"
+   ],
+   "canonical": "0700.HK",
+   "canonical_symbol": "0700.HK",
+   "id": "p140",
+   "input": "700",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "HKEX",
+   "venue_hint": "HKEX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "7203.T",
+    "7203.HK",
+    "7203.TW",
+    "7203.SR",
+    "7203.KL",
+    "7203.TWO"
+   ],
+   "canonical": "",
+   "canonical_symbol": "7203",
+   "id": "p141",
+   "input": "7203",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "7203.T"
+   ],
+   "canonical": "7203.T",
+   "canonical_symbol": "7203.T",
+   "id": "p142",
+   "input": "7203",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "TSE",
+   "venue_hint": "JP"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "7203.T"
+   ],
+   "canonical": "7203.T",
+   "canonical_symbol": "7203.T",
+   "id": "p143",
+   "input": "7203",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "TSE",
+   "venue_hint": "TSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "130A.T"
+   ],
+   "canonical": "",
+   "canonical_symbol": "130A",
+   "id": "p144",
+   "input": "130A",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "005930.KS"
+   ],
+   "canonical": "005930.KS",
+   "canonical_symbol": "005930.KS",
+   "id": "p145",
+   "input": "005930.KS",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "KRX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "005930.SZ",
+    "005930.KS",
+    "005930.KQ"
+   ],
+   "canonical": "",
+   "canonical_symbol": "005930",
+   "id": "p146",
+   "input": "005930",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "005930.KS"
+   ],
+   "canonical": "005930.KS",
+   "canonical_symbol": "005930.KS",
+   "id": "p147",
+   "input": "005930",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "KRX",
+   "venue_hint": "KOSPI"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "247540.KS",
+    "247540.KQ"
+   ],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p148",
+   "input": "KRX:247540",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "KRX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "247540.KQ"
+   ],
+   "canonical": "247540.KQ",
+   "canonical_symbol": "247540.KQ",
+   "id": "p149",
+   "input": "247540.KQ",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "KRX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "600519.SS"
+   ],
+   "canonical": "600519.SS",
+   "canonical_symbol": "600519.SS",
+   "id": "p150",
+   "input": "600519.SS",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "SSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "600519.SS",
+    "600519.KS",
+    "600519.KQ"
+   ],
+   "canonical": "",
+   "canonical_symbol": "600519",
+   "id": "p151",
+   "input": "600519",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "500325.SS",
+    "500325.BO",
+    "500325.KS",
+    "500325.KQ"
+   ],
+   "canonical": "",
+   "canonical_symbol": "500325",
+   "id": "p152",
+   "input": "500325",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BDO.PS"
+   ],
+   "canonical": "BDO.PS",
+   "canonical_symbol": "BDO.PS",
+   "id": "p153",
+   "input": "BDO.PS",
+   "kind": "yahoo_symbol",
+   "notes_include": [
+    "no_yahoo_venue"
+   ],
+   "source": "plan",
+   "venue": "PSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p154",
+   "input": "BDO",
+   "kind": "ticker",
+   "notes_include": [
+    "no_yahoo_venue"
+   ],
+   "source": "plan",
+   "venue": "PSE",
+   "venue_hint": "PSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p155",
+   "input": "FAB",
+   "kind": "ticker",
+   "notes_include": [
+    "no_yahoo_venue"
+   ],
+   "source": "plan",
+   "venue": "ADX",
+   "venue_hint": "ADX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p156",
+   "input": "AIR",
+   "kind": "ticker",
+   "notes_include": [
+    "euronext_needs_market"
+   ],
+   "source": "plan",
+   "venue": "",
+   "venue_hint": "EURONEXT"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AIR.PA"
+   ],
+   "canonical": "AIR.PA",
+   "canonical_symbol": "AIR.PA",
+   "id": "p157",
+   "input": "AIR.PA",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "PARIS",
+   "venue_hint": "EURONEXT"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL.MX"
+   ],
+   "canonical": "AAPL.MX",
+   "canonical_symbol": "AAPL.MX",
+   "id": "p158",
+   "input": "AAPL",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "BMV",
+   "venue_hint": "BIVA"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "SAP.DE"
+   ],
+   "canonical": "SAP.DE",
+   "canonical_symbol": "SAP.DE",
+   "id": "p159",
+   "input": "SAP",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "XETRA",
+   "venue_hint": "GETTEX"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "TEVA.TA"
+   ],
+   "canonical": "TEVA.TA",
+   "canonical_symbol": "TEVA.TA",
+   "id": "p160",
+   "input": "TEVA.TA",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "TASE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "0R2V.IL"
+   ],
+   "canonical": "0R2V.IL",
+   "canonical_symbol": "0R2V.IL",
+   "id": "p161",
+   "input": "0R2V.IL",
+   "kind": "yahoo_symbol",
+   "source": "plan",
+   "venue": "LSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "AAPL"
+   ],
+   "canonical": "AAPL",
+   "canonical_symbol": "AAPL",
+   "id": "p162",
+   "input": "AAPL.US",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "RELIANCE.NS"
+   ],
+   "canonical": "RELIANCE.NS",
+   "canonical_symbol": "RELIANCE.NS",
+   "id": "p163",
+   "input": "RELIANCE NSE",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BP",
+    "BP.NS",
+    "BP.BO",
+    "BP.L",
+    "BP.TO",
+    "BP.AX",
+    "BP.DE",
+    "BP.PA"
+   ],
+   "canonical": "",
+   "canonical_symbol": "BP",
+   "id": "p164",
+   "input": "BP.",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [
+    "BP.L"
+   ],
+   "canonical": "BP.L",
+   "canonical_symbol": "BP.L",
+   "id": "p165",
+   "input": "BP.",
+   "kind": "ticker",
+   "source": "plan",
+   "venue": "LSE",
+   "venue_hint": "LSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p166",
+   "input": "Nestlé",
+   "kind": "name",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p167",
+   "input": "腾讯",
+   "kind": "name",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p168",
+   "input": "Tencent Holdings",
+   "kind": "name",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "option",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p169",
+   "input": "NIFTY2660923200CE",
+   "kind": "contract",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "future",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p170",
+   "input": "RELIANCE26JULFUT",
+   "kind": "contract",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p171",
+   "input": "RELIANCE",
+   "kind": "contract",
+   "notes_include": [
+    "no_yahoo_venue"
+   ],
+   "source": "plan",
+   "venue": "NSE",
+   "venue_hint": "NFO"
+  },
+  {
+   "asset_class": "option",
+   "candidates": [
+    "AAPL250117C00150000"
+   ],
+   "canonical": "AAPL250117C00150000",
+   "canonical_symbol": "AAPL250117C00150000",
+   "id": "p172",
+   "input": "AAPL250117C00150000",
+   "kind": "contract",
+   "source": "plan",
+   "venue": "NYSE"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "GC=F",
+   "canonical_symbol": "GC=F",
+   "id": "p173",
+   "input": "GC1!",
+   "kind": "contract",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [
+    "GC=F"
+   ],
+   "canonical": "GC=F",
+   "canonical_symbol": "GC=F",
+   "id": "p174",
+   "input": "COMEX:GC1!",
+   "kind": "contract",
+   "source": "plan",
+   "venue": "CME"
+  },
+  {
+   "asset_class": "future",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p175",
+   "input": "NSE:NIFTY1!",
+   "kind": "contract",
+   "notes_include": [
+    "no_yahoo_symbol"
+   ],
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p176",
+   "input": "ASDFGHJKLQWERTYUIOPZXCVBNMQ",
+   "kind": "invalid",
+   "notes_include": [
+    "too_long"
+   ],
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p177",
+   "input": "AAPL@#",
+   "kind": "invalid",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p178",
+   "input": "",
+   "kind": "empty",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p179",
+   "input": "   ",
+   "kind": "empty",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p180",
+   "input": "$",
+   "kind": "empty",
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p181",
+   "input": "FOO:BAR",
+   "kind": "ticker",
+   "notes_include": [
+    "unknown_venue"
+   ],
+   "source": "plan",
+   "venue": ""
+  },
+  {
+   "asset_class": "",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p182",
+   "input": "AAPL",
+   "kind": "ticker",
+   "notes_include": [
+    "unknown_venue"
+   ],
+   "source": "plan",
+   "venue": "",
+   "venue_hint": "FOOBAR"
+  },
+  {
+   "asset_class": "crypto",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p183",
+   "input": "BTC",
+   "kind": "crypto_pair",
+   "notes_include": [
+    "unknown_venue"
+   ],
+   "source": "plan",
+   "venue": "CRYPTO",
+   "venue_hint": "FOOBAR"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^CNXAUTO"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^CNXAUTO",
+   "id": "p184",
+   "input": "NSE:NIFTYAUTO-INDEX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "NSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [
+    "^BSESN"
+   ],
+   "canonical": "",
+   "canonical_symbol": "^BSESN",
+   "id": "p185",
+   "input": "BSE:SENSEX-INDEX",
+   "kind": "alias",
+   "source": "plan",
+   "venue": "BSE"
+  },
+  {
+   "asset_class": "index",
+   "candidates": [],
+   "canonical": "",
+   "canonical_symbol": "",
+   "id": "p186",
+   "input": "NSE:FOOBAR-INDEX",
+   "kind": "ticker",
+   "notes_include": [
+    "no_yahoo_symbol"
+   ],
+   "source": "plan",
+   "venue": "NSE"
+  }
+ ],
+ "canonical_symbol": [
+  {
+   "expected": "EURUSD=X",
+   "input": "  eurusd=x "
+  },
+  {
+   "expected": "BRK-B",
+   "input": "BRK/B"
+  },
+  {
+   "expected": "0700.HK",
+   "input": "700.HK"
+  },
+  {
+   "expected": "0700.HK",
+   "input": "00700.HK"
+  },
+  {
+   "expected": "BAJAJ-AUTO.NS",
+   "input": "BAJAJ_AUTO.NS"
+  },
+  {
+   "expected": "NIFTY_FIN_SERVICE.NS",
+   "input": "NIFTY_FIN_SERVICE.NS"
+  },
+  {
+   "expected": "RELIANCE.NS",
+   "input": "RELIANCE-EQ.NS"
+  },
+  {
+   "expected": "INR=X",
+   "input": "USDINR=X"
+  },
+  {
+   "expected": "RELIANCE.NS",
+   "input": "NSE:RELIANCE-EQ"
+  },
+  {
+   "expected": "BTC-USD",
+   "input": "BTC/USDT"
+  },
+  {
+   "expected": "EURUSD=X",
+   "input": "EUR/USD"
+  },
+  {
+   "expected": "RELIANCE.NS",
+   "input": "RELIANCE",
+   "venue_hint": "NSE"
+  },
+  {
+   "expected": "RELIANCE.NS",
+   "input": "RELIANCE.NS",
+   "venue_hint": "NSE"
+  },
+  {
+   "expected": "RELIANCE.BO",
+   "input": "RELIANCE.BO",
+   "venue_hint": "NSE"
+  },
+  {
+   "expected": "^NSEI",
+   "input": "NIFTY 50",
+   "venue_hint": "NSE_INDEX"
+  },
+  {
+   "expected": "^BSESN",
+   "input": "SENSEX",
+   "venue_hint": "BSE_INDEX"
+  },
+  {
+   "expected": "RELIANCE",
+   "input": "RELIANCE"
+  },
+  {
+   "expected": "EURUSD",
+   "input": "EURUSD"
+  },
+  {
+   "expected": "BTC",
+   "input": "BTC"
+  },
+  {
+   "expected": "7203",
+   "input": "7203"
+  },
+  {
+   "expected": "SPX",
+   "input": "SPX"
+  },
+  {
+   "expected": "TON-USD",
+   "input": "TON-USD"
+  },
+  {
+   "expected": "XBT-USD",
+   "input": "xbt-usd"
+  },
+  {
+   "expected": "",
+   "input": "US0378331005"
+  },
+  {
+   "expected": "",
+   "input": "tata motors"
+  },
+  {
+   "expected": "",
+   "input": "NIFTY 50"
+  },
+  {
+   "expected": "",
+   "input": ""
+  },
+  {
+   "expected": "",
+   "input": "AAPL",
+   "venue_hint": "FOOBAR"
+  },
+  {
+   "expected": "",
+   "input": "XYZ",
+   "venue_hint": "PSE"
+  },
+  {
+   "expected": "",
+   "input": "RELIANCE26JULFUT"
+  },
+  {
+   "expected": "^SET.BK",
+   "input": "^SET.BK"
+  },
+  {
+   "expected": "BT-A.L",
+   "input": "BT.A",
+   "venue_hint": "LSE"
+  }
+ ],
+ "to_yahoo": [
+  {
+   "code": "RELIANCE",
+   "expected": "RELIANCE.NS",
+   "venue": "NSE"
+  },
+  {
+   "code": "RELIANCE-EQ",
+   "expected": "RELIANCE.NS",
+   "venue": "NSE"
+  },
+  {
+   "code": "TCS",
+   "expected": "TCS.BO",
+   "venue": "BSE"
+  },
+  {
+   "code": "BAJAJ_AUTO",
+   "expected": "BAJAJ-AUTO.NS",
+   "venue": "NSE"
+  },
+  {
+   "code": "NIFTY",
+   "expected": "^NSEI",
+   "venue": "NSE"
+  },
+  {
+   "code": "NIFTY 50",
+   "expected": "^NSEI",
+   "venue": "NSE"
+  },
+  {
+   "code": "NIFTYBEES",
+   "expected": "NIFTYBEES.NS",
+   "venue": "NSE"
+  },
+  {
+   "class": "equity",
+   "code": "NIFTY",
+   "expected": "NIFTY.NS",
+   "venue": "NSE"
+  },
+  {
+   "code": "NIFTY 50",
+   "expected": "^NSEI",
+   "venue": "NSE_INDEX"
+  },
+  {
+   "code": "Nifty Bank",
+   "expected": "^NSEBANK",
+   "venue": "NSE_INDEX"
+  },
+  {
+   "code": "NIFTYNXT50",
+   "expected": "^NSMIDCP",
+   "venue": "NSE_INDEX"
+  },
+  {
+   "code": "NIFTY NEXT 50",
+   "expected": "^NSMIDCP",
+   "venue": "NSE_INDEX"
+  },
+  {
+   "code": "NIFTY AUTO",
+   "expected": "^CNXAUTO",
+   "venue": "NSE_INDEX"
+  },
+  {
+   "code": "BANKEX",
+   "expected": "BSE-BANK.BO",
+   "venue": "BSE_INDEX"
+  },
+  {
+   "code": "SENSEX",
+   "expected": "^BSESN",
+   "venue": "BSE"
+  },
+  {
+   "code": "NIFTY2660923200CE",
+   "expected": "",
+   "venue": "NSE"
+  },
+  {
+   "code": "RELIANCE26JULFUT",
+   "expected": "",
+   "venue": "NFO"
+  },
+  {
+   "code": "CRUDEOIL26JULFUT",
+   "expected": "",
+   "venue": "MCX"
+  },
+  {
+   "code": "AAPL",
+   "expected": "AAPL",
+   "venue": "NASDAQ"
+  },
+  {
+   "code": "nvda",
+   "expected": "NVDA",
+   "venue": "nasdaq"
+  },
+  {
+   "code": "BRK.B",
+   "expected": "BRK-B",
+   "venue": "NYSE"
+  },
+  {
+   "code": "BRK/B",
+   "expected": "BRK-B",
+   "venue": "NYSE"
+  },
+  {
+   "code": "BRK B",
+   "expected": "BRK-B",
+   "venue": "NYSE"
+  },
+  {
+   "code": "ABC.WS",
+   "expected": "ABC-WS",
+   "venue": "NYSE"
+  },
+  {
+   "code": "SPX",
+   "expected": "^GSPC",
+   "venue": "CBOE"
+  },
+  {
+   "code": "VIX",
+   "expected": "^VIX",
+   "venue": "CBOE"
+  },
+  {
+   "code": "DOW",
+   "expected": "DOW",
+   "venue": "NYSE"
+  },
+  {
+   "code": "DJT",
+   "expected": "DJT",
+   "venue": "NASDAQ"
+  },
+  {
+   "code": "SPY",
+   "expected": "SPY",
+   "venue": "ARCA"
+  },
+  {
+   "code": "VOD",
+   "expected": "VOD.L",
+   "venue": "LSE"
+  },
+  {
+   "code": "BT.A",
+   "expected": "BT-A.L",
+   "venue": "LSE"
+  },
+  {
+   "code": "BP.",
+   "expected": "BP.L",
+   "venue": "LSE"
+  },
+  {
+   "code": "0R2V",
+   "expected": "0R2V.IL",
+   "venue": "LSIN"
+  },
+  {
+   "code": "SHOP",
+   "expected": "SHOP.TO",
+   "venue": "TSX"
+  },
+  {
+   "code": "BBD.B",
+   "expected": "BBD-B.TO",
+   "venue": "TSX"
+  },
+  {
+   "code": "SAP",
+   "expected": "SAP.DE",
+   "venue": "XETRA"
+  },
+  {
+   "code": "SAP",
+   "expected": "SAP.DE",
+   "venue": "XETR"
+  },
+  {
+   "code": "SAP",
+   "expected": "SAP.F",
+   "venue": "FWB"
+  },
+  {
+   "code": "SAP",
+   "expected": "SAP.DE",
+   "venue": "GETTEX"
+  },
+  {
+   "code": "SAP",
+   "expected": "SAP.SG",
+   "venue": "SWB"
+  },
+  {
+   "code": "700",
+   "expected": "0700.HK",
+   "venue": "HKEX"
+  },
+  {
+   "code": "00700",
+   "expected": "0700.HK",
+   "venue": "HKEX"
+  },
+  {
+   "code": "9988",
+   "expected": "9988.HK",
+   "venue": "HKEX"
+  },
+  {
+   "code": "BHP",
+   "expected": "BHP.AX",
+   "venue": "ASX"
+  },
+  {
+   "code": "7203",
+   "expected": "7203.T",
+   "venue": "TSE"
+  },
+  {
+   "code": "5930",
+   "expected": "005930.KS",
+   "venue": "KOSPI"
+  },
+  {
+   "code": "247540",
+   "expected": "247540.KQ",
+   "venue": "KOSDAQ"
+  },
+  {
+   "code": "1",
+   "expected": "000001.SZ",
+   "venue": "SZSE"
+  },
+  {
+   "code": "AIR",
+   "expected": "",
+   "venue": "EURONEXT"
+  },
+  {
+   "code": "AIR",
+   "country": "FR",
+   "expected": "AIR.PA",
+   "venue": "EURONEXT"
+  },
+  {
+   "code": "ASML",
+   "country": "NL",
+   "expected": "ASML.AS",
+   "venue": "EURONEXT"
+  },
+  {
+   "code": "EQNR",
+   "country": "NO",
+   "expected": "EQNR.OL",
+   "venue": "EURONEXT"
+  },
+  {
+   "code": "AIR.PA",
+   "expected": "AIR.PA",
+   "venue": "EURONEXT"
+  },
+  {
+   "code": "AAPL",
+   "expected": "AAPL.MX",
+   "venue": "BIVA"
+  },
+  {
+   "code": "XYZ",
+   "expected": "",
+   "venue": "PSE"
+  },
+  {
+   "code": "XYZ",
+   "expected": "",
+   "venue": "ADX"
+  },
+  {
+   "code": "XYZ",
+   "expected": "",
+   "venue": "MOEX"
+  },
+  {
+   "code": "XYZ",
+   "expected": "",
+   "venue": "NOSUCHEXCHANGE"
+  },
+  {
+   "code": "JKH.N0000",
+   "expected": "JKH-N0000.CM",
+   "venue": "CSELK"
+  },
+  {
+   "code": "EURUSD",
+   "expected": "EURUSD=X",
+   "venue": "OANDA"
+  },
+  {
+   "code": "EUR/USD",
+   "expected": "EURUSD=X",
+   "venue": "FOREX"
+  },
+  {
+   "code": "USDINR",
+   "expected": "INR=X",
+   "venue": "FX_IDC"
+  },
+  {
+   "code": "XAUUSD",
+   "expected": "GC=F",
+   "venue": "OANDA"
+  },
+  {
+   "code": "EURO",
+   "expected": "",
+   "venue": "FOREX"
+  },
+  {
+   "code": "BTCUSDT",
+   "expected": "BTC-USD",
+   "venue": "BINANCE"
+  },
+  {
+   "code": "BTC/USDT",
+   "expected": "BTC-USD",
+   "venue": "KRAKEN"
+  },
+  {
+   "code": "XBT/USD",
+   "expected": "BTC-USD",
+   "venue": "KRAKEN"
+  },
+  {
+   "code": "ETHBTC",
+   "expected": "ETH-BTC",
+   "venue": "BINANCE"
+  },
+  {
+   "code": "TONUSDT",
+   "expected": "TON11419-USD",
+   "venue": "BINANCE"
+  },
+  {
+   "code": "BTCEUR",
+   "expected": "BTC-EUR",
+   "venue": "COINBASE"
+  },
+  {
+   "code": "FOOUSDT",
+   "expected": "",
+   "venue": "BINANCE"
+  },
+  {
+   "code": "BNBBTC",
+   "expected": "BNB-BTC",
+   "venue": "BINANCE"
+  },
+  {
+   "code": "SPX",
+   "expected": "^GSPC",
+   "venue": "SP"
+  },
+  {
+   "code": "DJI",
+   "expected": "^DJI",
+   "venue": "DJ"
+  },
+  {
+   "code": "NI225",
+   "expected": "^N225",
+   "venue": "TVC"
+  },
+  {
+   "code": "UKX",
+   "expected": "^FTSE",
+   "venue": "TVC"
+  },
+  {
+   "code": "GOLD",
+   "expected": "GC=F",
+   "venue": "TVC"
+  },
+  {
+   "code": "USOIL",
+   "expected": "CL=F",
+   "venue": "TVC"
+  },
+  {
+   "code": "US10Y",
+   "expected": "^TNX",
+   "venue": "TVC"
+  },
+  {
+   "code": "GC",
+   "expected": "GC=F",
+   "venue": "COMEX"
+  },
+  {
+   "code": "GC1!",
+   "expected": "GC=F",
+   "venue": "COMEX"
+  },
+  {
+   "code": "GCZ2026",
+   "expected": "GCZ26.CMX",
+   "venue": "COMEX"
+  },
+  {
+   "code": "CLF27",
+   "expected": "CLF27.NYM",
+   "venue": "NYMEX"
+  },
+  {
+   "code": "ES1!",
+   "expected": "ES=F",
+   "venue": "CME_MINI"
+  },
+  {
+   "class": "index",
+   "code": "NSEI",
+   "expected": "^NSEI",
+   "venue": "NSE"
+  },
+  {
+   "class": "index",
+   "code": "DJT",
+   "expected": "^DJT",
+   "venue": "NYSE"
+  },
+  {
+   "class": "index",
+   "code": "NIFTY_FIN_SERVICE",
+   "expected": "NIFTY_FIN_SERVICE.NS",
+   "venue": "NSE"
+  },
+  {
+   "class": "index",
+   "code": "FOOINDEX",
+   "expected": "",
+   "venue": "NSE"
+  },
+  {
+   "class": "crypto",
+   "code": "AAPL",
+   "expected": "",
+   "venue": "NASDAQ"
+  },
+  {
+   "code": "US0378331005",
+   "expected": "",
+   "venue": "NASDAQ"
+  },
+  {
+   "code": "",
+   "expected": "",
+   "venue": "NSE"
+  },
+  {
+   "code": "^NSEI",
+   "expected": "^NSEI",
+   "venue": ""
+  },
+  {
+   "code": "brk.b",
+   "expected": "BRK-B",
+   "venue": ""
+  },
+  {
+   "code": "NIFTY50-INDEX",
+   "expected": "^NSEI",
+   "venue": "NSE"
+  },
+  {
+   "code": "NIFTYAUTO-INDEX",
+   "expected": "^CNXAUTO",
+   "venue": "NSE"
+  },
+  {
+   "code": "FOO-INDEX",
+   "expected": "",
+   "venue": "NSE"
+  },
+  {
+   "class": "index",
+   "code": "DX-Y",
+   "expected": "DX-Y.NYB",
+   "venue": "CME"
+  },
+  {
+   "code": "SENSEX50",
+   "expected": "",
+   "venue": "BSE_INDEX"
+  }
+ ],
+ "to_yahoo_tv": [
+  {
+   "expected": "RELIANCE.NS",
+   "symbol": "NSE:RELIANCE"
+  },
+  {
+   "expected": "^NSEI",
+   "symbol": "NSE:NIFTY"
+  },
+  {
+   "expected": "BAJAJ-AUTO.NS",
+   "symbol": "NSE:BAJAJ_AUTO"
+  },
+  {
+   "expected": "",
+   "symbol": "NSE:RELIANCE1!"
+  },
+  {
+   "expected": "^GSPC",
+   "symbol": "SP:SPX"
+  },
+  {
+   "expected": "EURUSD=X",
+   "symbol": "OANDA:EURUSD"
+  },
+  {
+   "expected": "BTC-USD",
+   "symbol": "BINANCE:BTCUSDT"
+  },
+  {
+   "expected": "BRK-B",
+   "symbol": "NYSE:BRK.B"
+  },
+  {
+   "expected": "0700.HK",
+   "symbol": "HKEX:700"
+  },
+  {
+   "expected": "SAP.DE",
+   "symbol": "XETR:SAP"
+  },
+  {
+   "expected": "PETR4.SA",
+   "symbol": "BMFBOVESPA:PETR4"
+  },
+  {
+   "expected": "BBD-B.TO",
+   "symbol": "TSX:BBD.B"
+  },
+  {
+   "expected": "BT-A.L",
+   "symbol": "LSE:BT.A"
+  },
+  {
+   "expected": "VOLV-B.ST",
+   "symbol": "OMXSTO:VOLV_B"
+  },
+  {
+   "expected": "005930.KS",
+   "symbol": "KRX:005930"
+  },
+  {
+   "expected": "2330.TW",
+   "symbol": "TWSE:2330"
+  },
+  {
+   "expected": "7203.T",
+   "symbol": "TSE:7203"
+  },
+  {
+   "expected": "AAPL.MX",
+   "symbol": "BIVA:AAPL"
+  },
+  {
+   "expected": "AAPL.CL",
+   "symbol": "BVC:AAPL"
+  },
+  {
+   "expected": "SAP.DE",
+   "symbol": "GETTEX:SAP"
+  },
+  {
+   "expected": "",
+   "symbol": "NGM:XYZ"
+  },
+  {
+   "expected": "",
+   "symbol": "PSE:BDO"
+  },
+  {
+   "expected": "GC=F",
+   "symbol": "TVC:GOLD"
+  },
+  {
+   "expected": "GC=F",
+   "symbol": "COMEX:GC1!"
+  },
+  {
+   "expected": "",
+   "symbol": "MCX:CRUDEOIL1!"
+  },
+  {
+   "country": "FR",
+   "exchange": "EURONEXT",
+   "expected": "AIR.PA",
+   "symbol": "AIR"
+  },
+  {
+   "exchange": "EURONEXT",
+   "expected": "",
+   "symbol": "AIR"
+  },
+  {
+   "exchange": "NOSUCH",
+   "expected": "",
+   "symbol": "XYZ"
+  }
+ ],
+ "from_yahoo": [
+  {
+   "canonical": "RELIANCE.NS",
+   "class": "equity",
+   "code": "RELIANCE",
+   "display": "RELIANCE",
+   "id": "XNSE:RELIANCE",
+   "market": "NSE",
+   "symbol": "RELIANCE.NS",
+   "valid": true,
+   "venue": "NSE"
+  },
+  {
+   "canonical": "BRK-B",
+   "class": "equity",
+   "code": "BRK-B",
+   "display": "BRK.B",
+   "id": "US:BRK-B",
+   "market": "NYSE",
+   "symbol": "BRK-B",
+   "valid": true,
+   "venue": "NYSE"
+  },
+  {
+   "canonical": "^NSEI",
+   "class": "index",
+   "code": "NSEI",
+   "display": "NIFTY 50",
+   "id": "IDX:NSEI",
+   "market": "NSE",
+   "symbol": "^NSEI",
+   "valid": true,
+   "venue": "NSE"
+  },
+  {
+   "canonical": "EURUSD=X",
+   "class": "fx",
+   "code": "EURUSD",
+   "display": "EUR/USD",
+   "id": "FX:EURUSD",
+   "market": "FX",
+   "symbol": "EURUSD=X",
+   "valid": true,
+   "venue": "FX"
+  },
+  {
+   "canonical": "INR=X",
+   "class": "fx",
+   "code": "USDINR",
+   "display": "USD/INR",
+   "id": "FX:USDINR",
+   "market": "FX",
+   "symbol": "INR=X",
+   "valid": true,
+   "venue": "FX"
+  },
+  {
+   "canonical": "BTC-USD",
+   "class": "crypto",
+   "code": "BTC-USD",
+   "display": "BTC/USD",
+   "id": "CRYPTO:BTC-USD",
+   "market": "CRYPTO",
+   "symbol": "BTC-USD",
+   "valid": true,
+   "venue": "CRYPTO"
+  },
+  {
+   "canonical": "TON11419-USD",
+   "class": "crypto",
+   "code": "TON-USD",
+   "display": "TON/USD",
+   "id": "CRYPTO:TON11419-USD",
+   "market": "CRYPTO",
+   "symbol": "TON11419-USD",
+   "valid": true,
+   "venue": "CRYPTO"
+  },
+  {
+   "canonical": "GC=F",
+   "class": "future",
+   "code": "GC",
+   "display": "GC",
+   "id": "FUT:GC",
+   "market": "CME",
+   "symbol": "GC=F",
+   "valid": true,
+   "venue": "CME"
+  },
+  {
+   "canonical": "CLF27.NYM",
+   "class": "future",
+   "code": "CLF27",
+   "display": "CLF27",
+   "id": "FUT:CLF27.NYM",
+   "market": "CME",
+   "symbol": "CLF27.NYM",
+   "valid": true,
+   "venue": "CME"
+  },
+  {
+   "canonical": "0700.HK",
+   "class": "equity",
+   "code": "0700",
+   "display": "0700",
+   "id": "XHKG:0700",
+   "market": "HKEX",
+   "symbol": "0700.HK",
+   "valid": true,
+   "venue": "HKEX"
+  },
+  {
+   "canonical": "247540.KQ",
+   "class": "equity",
+   "code": "247540",
+   "display": "247540",
+   "id": "XKOS:247540",
+   "market": "KOSDAQ",
+   "symbol": "247540.KQ",
+   "valid": true,
+   "venue": "KRX"
+  },
+  {
+   "canonical": "005930.KS",
+   "class": "equity",
+   "code": "005930",
+   "display": "005930",
+   "id": "XKRX:005930",
+   "market": "KOSPI",
+   "symbol": "005930.KS",
+   "valid": true,
+   "venue": "KRX"
+  },
+  {
+   "canonical": "VOD.L",
+   "class": "equity",
+   "code": "VOD",
+   "display": "VOD",
+   "id": "XLON:VOD",
+   "market": "LSE",
+   "symbol": "VOD.L",
+   "valid": true,
+   "venue": "LSE"
+  },
+  {
+   "canonical": "0R2V.IL",
+   "class": "equity",
+   "code": "0R2V",
+   "display": "0R2V",
+   "id": "XLON:0R2V",
+   "market": "LSE_IOB",
+   "symbol": "0R2V.IL",
+   "valid": true,
+   "venue": "LSE"
+  },
+  {
+   "canonical": "NIFTY_FIN_SERVICE.NS",
+   "class": "index",
+   "code": "NIFTY_FIN_SERVICE",
+   "display": "NIFTY FIN SERVICE",
+   "id": "IDX:NIFTY_FIN_SERVICE.NS",
+   "market": "NSE",
+   "symbol": "NIFTY_FIN_SERVICE.NS",
+   "valid": true,
+   "venue": "NSE"
+  },
+  {
+   "canonical": "000001.SS",
+   "class": "index",
+   "code": "000001",
+   "display": "SSE Composite",
+   "id": "IDX:000001.SS",
+   "market": "SSE",
+   "symbol": "000001.SS",
+   "valid": true,
+   "venue": "SSE"
+  },
+  {
+   "canonical": "000001.SZ",
+   "class": "equity",
+   "code": "000001",
+   "display": "000001",
+   "id": "XSHE:000001",
+   "market": "SZSE",
+   "symbol": "000001.SZ",
+   "valid": true,
+   "venue": "SZSE"
+  },
+  {
+   "canonical": "^SET.BK",
+   "class": "index",
+   "code": "SET",
+   "display": "SET Index",
+   "id": "IDX:SET.BK",
+   "market": "SET",
+   "symbol": "^SET.BK",
+   "valid": true,
+   "venue": "SET"
+  },
+  {
+   "canonical": "ETE.AT",
+   "class": "equity",
+   "code": "ETE",
+   "display": "ETE",
+   "id": "XATH:ETE",
+   "market": "ATHEX",
+   "symbol": "ETE.AT",
+   "valid": true,
+   "venue": "ATHEX"
+  },
+  {
+   "canonical": "BDO.PS",
+   "class": "equity",
+   "code": "BDO",
+   "display": "BDO",
+   "id": "XPHS:BDO",
+   "market": "PSE",
+   "symbol": "BDO.PS",
+   "valid": true,
+   "venue": "PSE"
+  },
+  {
+   "canonical": "AAPL250117C00150000",
+   "class": "option",
+   "code": "AAPL250117C00150000",
+   "display": "AAPL250117C00150000",
+   "id": "OPT:AAPL250117C00150000",
+   "market": "NYSE",
+   "symbol": "AAPL250117C00150000",
+   "valid": true,
+   "venue": "NYSE"
+  },
+  {
+   "canonical": "BRK-B",
+   "class": "equity",
+   "code": "BRK-B",
+   "display": "BRK.B",
+   "id": "US:BRK-B",
+   "market": "NYSE",
+   "symbol": "brk.b",
+   "valid": true,
+   "venue": "NYSE"
+  },
+  {
+   "canonical": "",
+   "class": "",
+   "code": "",
+   "display": "",
+   "id": "",
+   "market": "",
+   "symbol": "US0378331005",
+   "valid": false,
+   "venue": ""
+  },
+  {
+   "canonical": "",
+   "class": "",
+   "code": "",
+   "display": "",
+   "id": "",
+   "market": "",
+   "symbol": "tata motors",
+   "valid": false,
+   "venue": ""
+  },
+  {
+   "canonical": "",
+   "class": "",
+   "code": "",
+   "display": "",
+   "id": "",
+   "market": "",
+   "symbol": "",
+   "valid": false,
+   "venue": ""
+  }
+ ],
+ "asset_class_of": [
+  {
+   "expected": "equity",
+   "symbol": "AAPL"
+  },
+  {
+   "expected": "etf",
+   "quote_type": "ETF",
+   "symbol": "SPY"
+  },
+  {
+   "expected": "fund",
+   "quote_type": "MUTUALFUND",
+   "symbol": "VFIAX"
+  },
+  {
+   "expected": "equity",
+   "symbol": "RELIANCE.NS"
+  },
+  {
+   "expected": "index",
+   "symbol": "^NSEI"
+  },
+  {
+   "expected": "index",
+   "symbol": "NIFTY_FIN_SERVICE.NS"
+  },
+  {
+   "expected": "index",
+   "symbol": "000001.SS"
+  },
+  {
+   "expected": "index",
+   "symbol": "DX-Y.NYB"
+  },
+  {
+   "expected": "fx",
+   "symbol": "EURUSD=X"
+  },
+  {
+   "expected": "fx",
+   "symbol": "EUR/USD"
+  },
+  {
+   "expected": "crypto",
+   "symbol": "BTC-USD"
+  },
+  {
+   "expected": "crypto",
+   "symbol": "ETH-EUR"
+  },
+  {
+   "expected": "crypto",
+   "symbol": "BTC/USDT"
+  },
+  {
+   "expected": "equity",
+   "symbol": "BRK-B"
+  },
+  {
+   "expected": "equity",
+   "symbol": "BF-B"
+  },
+  {
+   "expected": "future",
+   "symbol": "GC=F"
+  },
+  {
+   "expected": "future",
+   "symbol": "CLF27.NYM"
+  },
+  {
+   "expected": "option",
+   "symbol": "NIFTY2660923200CE"
+  },
+  {
+   "expected": "future",
+   "symbol": "RELIANCE26JULFUT"
+  },
+  {
+   "expected": "option",
+   "symbol": "AAPL250117C00150000"
+  },
+  {
+   "expected": "",
+   "symbol": "US0378331005"
+  },
+  {
+   "expected": "",
+   "symbol": ""
+  },
+  {
+   "expected": "",
+   "symbol": "tata motors"
+  },
+  {
+   "expected": "crypto",
+   "quote_type": "CRYPTOCURRENCY",
+   "symbol": "BTC-USD"
+  },
+  {
+   "expected": "equity",
+   "quote_type": "stock",
+   "symbol": "XYZ"
+  },
+  {
+   "expected": "fund",
+   "quote_type": "fund",
+   "symbol": "XYZ"
+  },
+  {
+   "expected": "fx",
+   "quote_type": "forex",
+   "symbol": "EURUSD"
+  },
+  {
+   "expected": "crypto",
+   "quote_type": "spot",
+   "symbol": "BTCUSDT"
+  },
+  {
+   "expected": "future",
+   "quote_type": "ALTSYMBOL",
+   "symbol": "CT=F"
+  }
+ ],
+ "broker": [
+  {
+   "broker": "zerodha",
+   "exchange": "NSE",
+   "expected": "RELIANCE",
+   "symbol": "RELIANCE.NS"
+  },
+  {
+   "broker": "angelone",
+   "exchange": "BSE",
+   "expected": "TCS",
+   "symbol": "TCS.BO"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "NSE_INDEX",
+   "expected": "NIFTY",
+   "symbol": "^NSEI"
+  },
+  {
+   "broker": "fyers",
+   "exchange": "NSE_INDEX",
+   "expected": "BANKNIFTY",
+   "symbol": "^NSEBANK"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "NSE_INDEX",
+   "expected": "FINNIFTY",
+   "symbol": "NIFTY_FIN_SERVICE.NS"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "NSE_INDEX",
+   "expected": "NIFTYNXT50",
+   "symbol": "^NSMIDCP"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "BSE_INDEX",
+   "expected": "SENSEX",
+   "symbol": "^BSESN"
+  },
+  {
+   "broker": "alpaca",
+   "exchange": "NYSE",
+   "expected": "BRK.B",
+   "symbol": "BRK-B",
+   "venue": "NYSE"
+  },
+  {
+   "broker": "ibkr",
+   "exchange": "",
+   "expected": "BRK B",
+   "symbol": "BRK-B"
+  },
+  {
+   "broker": "alpaca",
+   "exchange": "NASDAQ",
+   "expected": "AAPL",
+   "symbol": "AAPL",
+   "venue": "NASDAQ"
+  },
+  {
+   "broker": "saxo",
+   "exchange": "LSE",
+   "expected": "VOD",
+   "symbol": "VOD.L"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "",
+   "expected": "",
+   "symbol": "EURUSD=X"
+  },
+  {
+   "broker": "zerodha",
+   "exchange": "",
+   "expected": "",
+   "symbol": "BTC-USD"
+  },
+  {
+   "broker": "alpaca",
+   "exchange": "",
+   "expected": "",
+   "symbol": "^GSPC"
+  },
+  {
+   "broker": "upstox",
+   "exchange": "NSE",
+   "expected": "RELIANCE",
+   "provider": "NSE|RELIANCE|2885|NSE_EQ|INE002A01018",
+   "symbol": "RELIANCE.NS"
+  }
+ ],
+ "crypto_pair": [
+  {
+   "exchange": "binance",
+   "expected": "BTC/USDT",
+   "style": "unified",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "kraken",
+   "expected": "BTC/USD",
+   "style": "unified",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "coinbase",
+   "expected": "BTC/USD",
+   "style": "unified",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "hyperliquid",
+   "expected": "BTC/USDC:USDC",
+   "style": "unified",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "binance",
+   "expected": "BTCUSDT",
+   "style": "native",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "kraken",
+   "expected": "XBT/USD",
+   "style": "native",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "okx",
+   "expected": "BTC-USDT",
+   "style": "native",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "coinbase",
+   "expected": "BTC-USD",
+   "style": "native",
+   "symbol": "BTC-USD"
+  },
+  {
+   "exchange": "binance",
+   "expected": "ETHBTC",
+   "style": "native",
+   "symbol": "ETH-BTC"
+  },
+  {
+   "exchange": "binance",
+   "expected": "TON/USDT",
+   "style": "unified",
+   "symbol": "TON11419-USD"
+  },
+  {
+   "exchange": "kraken",
+   "expected": "BTC/EUR",
+   "style": "unified",
+   "symbol": "BTC-EUR"
+  },
+  {
+   "exchange": "binance",
+   "expected": "",
+   "style": "unified",
+   "symbol": "AAPL"
+  }
+ ],
+ "round_trip": [
+  "AAPL",
+  "BRK-B",
+  "SHOP.TO",
+  "CNC.V",
+  "DOO.NE",
+  "PETR4.SA",
+  "WALMEX.MX",
+  "GGAL.BA",
+  "SQM-B.SN",
+  "ECOPETROL.CL",
+  "BAP.LM",
+  "VOD.L",
+  "BT-A.L",
+  "0R2V.IL",
+  "SAP.DE",
+  "SAP.F",
+  "SAP.DU",
+  "SAP.HM",
+  "SAP.HA",
+  "SAP.MU",
+  "SAP.SG",
+  "OMV.VI",
+  "AIR.PA",
+  "ASML.AS",
+  "ABI.BR",
+  "EDP.LS",
+  "RYA.IR",
+  "EQNR.OL",
+  "ENI.MI",
+  "NESN.SW",
+  "SAN.MC",
+  "VOLV-B.ST",
+  "NOKIA.HE",
+  "NOVO-B.CO",
+  "ISB.IC",
+  "PKO.WA",
+  "THYAO.IS",
+  "ETE.AT",
+  "CEZ.PR",
+  "OTP.BD",
+  "TLV.RO",
+  "LHV1T.TL",
+  "SAF1R.RG",
+  "APG1L.VS",
+  "NPN.JO",
+  "2222.SR",
+  "EMAAR.AE",
+  "TEVA.TA",
+  "QNBK.QA",
+  "NBK.KW",
+  "NBB.BH",
+  "COMI.CA",
+  "RELIANCE.NS",
+  "BAJAJ-AUTO.NS",
+  "M&M.NS",
+  "RELIANCE.BO",
+  "D05.SI",
+  "0700.HK",
+  "9988.HK",
+  "600519.SS",
+  "000001.SZ",
+  "7203.T",
+  "130A.T",
+  "005930.KS",
+  "247540.KQ",
+  "2330.TW",
+  "6488.TWO",
+  "BHP.AX",
+  "FPH.NZ",
+  "BBCA.JK",
+  "PTT.BK",
+  "1155.KL",
+  "VNM.VN",
+  "OGDC.KA",
+  "JKH-N0000.CM",
+  "EURUSD=X",
+  "INR=X",
+  "JPY=X",
+  "GBPUSD=X",
+  "BTC-USD",
+  "ETH-BTC",
+  "BTC-EUR",
+  "TON11419-USD",
+  "GC=F",
+  "CL=F",
+  "CLF27.NYM",
+  "GCZ26.CMX",
+  "ESZ26.CME",
+  "ZCZ26.CBT",
+  "^NSEI",
+  "^GSPC",
+  "^DJUSRE",
+  "NIFTY_FIN_SERVICE.NS",
+  "000001.SS",
+  "HSTECH.HK",
+  "OBX.OL",
+  "^SET.BK",
+  "DX-Y.NYB",
+  "AAPL250117C00150000",
+  "BSE-BANK.BO",
+  "BSE-500.BO"
+ ],
+ "currency": [
+  {
+   "expected": "GBp",
+   "symbol": "VOD.L"
+  },
+  {
+   "expected": "GBp",
+   "symbol": "BT-A.L"
+  },
+  {
+   "expected": "USD",
+   "symbol": "0R2V.IL"
+  },
+  {
+   "expected": "ZAc",
+   "symbol": "NPN.JO"
+  },
+  {
+   "expected": "ILA",
+   "symbol": "TEVA.TA"
+  },
+  {
+   "expected": "KWF",
+   "symbol": "NBK.KW"
+  },
+  {
+   "expected": "EUR",
+   "symbol": "SAP.DE"
+  },
+  {
+   "expected": "INR",
+   "symbol": "RELIANCE.NS"
+  },
+  {
+   "expected": "USD",
+   "symbol": "AAPL"
+  },
+  {
+   "expected": "USD",
+   "symbol": "EURUSD=X"
+  },
+  {
+   "expected": "INR",
+   "symbol": "INR=X"
+  },
+  {
+   "expected": "BTC",
+   "symbol": "ETH-BTC"
+  },
+  {
+   "expected": "USX",
+   "symbol": "ZC=F"
+  },
+  {
+   "expected": "USD",
+   "symbol": "GC=F"
+  },
+  {
+   "expected": "",
+   "symbol": "^NSEI"
+  }
+ ],
+ "rank": [
+  {
+   "expected": [
+    "SAP",
+    "SAP.DE",
+    "SAP.TO"
+   ],
+   "home": "US",
+   "id": "sap_home_us",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "DE",
+     "id": "XETR:SAP",
+     "isin": "DE0007164600",
+     "name": "SAP SE",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "symbol": "SAP.DE"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "id": "US:SAP",
+     "name": "SAP SE ADR",
+     "rank_weight": 9,
+     "symbol": "SAP"
+    },
+    {
+     "asset_class": "equity",
+     "country": "CA",
+     "id": "XTSE:SAP",
+     "name": "Saputo Inc.",
+     "primary_listing": true,
+     "rank_weight": 6,
+     "symbol": "SAP.TO"
+    }
+   ],
+   "query": "SAP",
+   "why": "home region first (owner decision), then primary listing, then weight: SAP SE before Saputo"
+  },
+  {
+   "expected": [
+    "SAP.DE",
+    "SAP.TO",
+    "SAP"
+   ],
+   "home": "DE",
+   "id": "sap_home_de",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "DE",
+     "id": "XETR:SAP",
+     "isin": "DE0007164600",
+     "name": "SAP SE",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "symbol": "SAP.DE"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "id": "US:SAP",
+     "name": "SAP SE ADR",
+     "rank_weight": 9,
+     "symbol": "SAP"
+    },
+    {
+     "asset_class": "equity",
+     "country": "CA",
+     "id": "XTSE:SAP",
+     "name": "Saputo Inc.",
+     "primary_listing": true,
+     "rank_weight": 6,
+     "symbol": "SAP.TO"
+    }
+   ],
+   "query": "SAP"
+  },
+  {
+   "expected": [
+    "SAP.DE",
+    "SAP.TO",
+    "SAP"
+   ],
+   "id": "sap_no_home",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "DE",
+     "id": "XETR:SAP",
+     "isin": "DE0007164600",
+     "name": "SAP SE",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "symbol": "SAP.DE"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "id": "US:SAP",
+     "name": "SAP SE ADR",
+     "rank_weight": 9,
+     "symbol": "SAP"
+    },
+    {
+     "asset_class": "equity",
+     "country": "CA",
+     "id": "XTSE:SAP",
+     "name": "Saputo Inc.",
+     "primary_listing": true,
+     "rank_weight": 6,
+     "symbol": "SAP.TO"
+    }
+   ],
+   "query": "SAP"
+  },
+  {
+   "expected": [
+    "^NSEI",
+    "NIFTYBEES.NS",
+    "NIFTY1.NS"
+   ],
+   "home": "IN",
+   "id": "nifty_index_before_etfs",
+   "instruments": [
+    {
+     "asset_class": "etf",
+     "country": "IN",
+     "name": "Kotak Nifty 50 ETF",
+     "primary_listing": true,
+     "rank_weight": 2,
+     "symbol": "NIFTY1.NS"
+    },
+    {
+     "asset_class": "etf",
+     "country": "IN",
+     "name": "Nippon India ETF Nifty 50 BeES",
+     "primary_listing": true,
+     "rank_weight": 5,
+     "symbol": "NIFTYBEES.NS"
+    },
+    {
+     "aliases": [
+      "NIFTY",
+      "NIFTY 50"
+     ],
+     "asset_class": "index",
+     "country": "IN",
+     "name": "NIFTY 50",
+     "rank_weight": 10,
+     "symbol": "^NSEI"
+    }
+   ],
+   "match": {
+    "NIFTYBEES.NS": "prefix",
+    "^NSEI": "exact_alias"
+   },
+   "query": "NIFTY"
+  },
+  {
+   "expected": [
+    "^NSEI",
+    "NIFTYBEES.NS"
+   ],
+   "id": "nifty50_name_contains",
+   "instruments": [
+    {
+     "asset_class": "etf",
+     "country": "IN",
+     "name": "Nippon India ETF Nifty 50 BeES",
+     "primary_listing": true,
+     "rank_weight": 5,
+     "symbol": "NIFTYBEES.NS"
+    },
+    {
+     "asset_class": "index",
+     "country": "IN",
+     "name": "NIFTY 50",
+     "rank_weight": 10,
+     "symbol": "^NSEI"
+    }
+   ],
+   "match": {
+    "NIFTYBEES.NS": "name_contains",
+    "^NSEI": "exact_alias"
+   },
+   "query": "NIFTY 50"
+  },
+  {
+   "expected": [
+    "BTC-USD",
+    "BTC",
+    "BTC.BK"
+   ],
+   "home": "US",
+   "id": "btc_crypto_first",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "TH",
+     "name": "Brooker Group PCL",
+     "primary_listing": true,
+     "rank_weight": 1,
+     "symbol": "BTC.BK"
+    },
+    {
+     "asset_class": "etf",
+     "country": "US",
+     "name": "Grayscale Bitcoin Mini Trust ETF",
+     "primary_listing": true,
+     "rank_weight": 5,
+     "symbol": "BTC"
+    },
+    {
+     "asset_class": "crypto",
+     "name": "Bitcoin",
+     "rank_weight": 10,
+     "symbol": "BTC-USD"
+    }
+   ],
+   "query": "BTC"
+  },
+  {
+   "allowed_classes": [
+    "equity",
+    "etf"
+   ],
+   "expected": [
+    "BTC",
+    "BTC.BK"
+   ],
+   "home": "US",
+   "id": "btc_equity_only",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "TH",
+     "name": "Brooker Group PCL",
+     "primary_listing": true,
+     "rank_weight": 1,
+     "symbol": "BTC.BK"
+    },
+    {
+     "asset_class": "etf",
+     "country": "US",
+     "name": "Grayscale Bitcoin Mini Trust ETF",
+     "primary_listing": true,
+     "rank_weight": 5,
+     "symbol": "BTC"
+    },
+    {
+     "asset_class": "crypto",
+     "name": "Bitcoin",
+     "rank_weight": 10,
+     "symbol": "BTC-USD"
+    }
+   ],
+   "query": "BTC"
+  },
+  {
+   "expected": [
+    "GC=F",
+    "GOLD",
+    "GLD"
+   ],
+   "home": "US",
+   "id": "gold_commodity_first",
+   "instruments": [
+    {
+     "asset_class": "etf",
+     "country": "US",
+     "name": "SPDR Gold Shares",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "symbol": "GLD"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Gold.com Inc",
+     "primary_listing": true,
+     "rank_weight": 3,
+     "symbol": "GOLD"
+    },
+    {
+     "asset_class": "future",
+     "country": "US",
+     "name": "Gold",
+     "rank_weight": 10,
+     "symbol": "GC=F"
+    }
+   ],
+   "match": {
+    "GC=F": "exact_alias",
+    "GLD": "name_contains",
+    "GOLD": "exact_listing_code"
+   },
+   "query": "gold"
+  },
+  {
+   "expected": [
+    "RELIANCE.NS"
+   ],
+   "home": "IN",
+   "id": "relaince_fuzzy",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Relaxo Footwears Ltd",
+     "primary_listing": true,
+     "rank_weight": 3,
+     "symbol": "RELAXO.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries Limited",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "RELIANCE.NS"
+    }
+   ],
+   "match": {
+    "RELIANCE.NS": "fuzzy"
+   },
+   "query": "relaince"
+  },
+  {
+   "expected": [
+    "MSFT"
+   ],
+   "home": "US",
+   "id": "microsft_fuzzy_name",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Microsoft Corporation",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "MSFT"
+    }
+   ],
+   "match": {
+    "MSFT": "fuzzy"
+   },
+   "query": "microsft"
+  },
+  {
+   "expected": [
+    "TMPV.NS",
+    "TATAMOTORS.NS"
+   ],
+   "former": [
+    "TMPV.NS"
+   ],
+   "home": "IN",
+   "id": "tatamotors_renamed",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "id": "XNSE:TATAMOTORS",
+     "name": "Tata Motors Ltd (old)",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "status": "renamed",
+     "successor_id": "XNSE:TMPV",
+     "symbol": "TATAMOTORS.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "id": "XNSE:TMCV",
+     "name": "Tata Motors Limited",
+     "primary_listing": true,
+     "rank_weight": 7,
+     "symbol": "TMCV.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "former_symbols": [
+      "TATAMOTORS"
+     ],
+     "id": "XNSE:TMPV",
+     "name": "Tata Motors Passenger Vehicles Ltd",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "symbol": "TMPV.NS"
+    }
+   ],
+   "match": {
+    "TATAMOTORS.NS": "exact_listing_code",
+    "TMPV.NS": "exact_alias"
+   },
+   "query": "TATAMOTORS"
+  },
+  {
+   "expected": [
+    "SHEL",
+    "RDS-A"
+   ],
+   "former": [
+    "SHEL"
+   ],
+   "home": "US",
+   "id": "delisted_after_active",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Royal Dutch Shell plc Class A",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "status": "delisted",
+     "symbol": "RDS-A"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "former_symbols": [
+      "RDS-A",
+      "RDS-B"
+     ],
+     "name": "Shell plc ADR",
+     "rank_weight": 9,
+     "symbol": "SHEL"
+    }
+   ],
+   "query": "RDS-A"
+  },
+  {
+   "expected": [
+    "SHEL"
+   ],
+   "home": "US",
+   "id": "delisted_dropped",
+   "include_inactive": false,
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Royal Dutch Shell plc Class A",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "status": "delisted",
+     "symbol": "RDS-A"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "former_symbols": [
+      "RDS-A",
+      "RDS-B"
+     ],
+     "name": "Shell plc ADR",
+     "rank_weight": 9,
+     "symbol": "SHEL"
+    }
+   ],
+   "query": "RDS-A"
+  },
+  {
+   "expected": [
+    "INFY.NS",
+    "INFY.BO",
+    "INFY"
+   ],
+   "home": "IN",
+   "id": "infy_home_in",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Infosys Limited ADR",
+     "rank_weight": 8,
+     "symbol": "INFY"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Infosys Limited",
+     "rank_weight": 8,
+     "symbol": "INFY.BO"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Infosys Limited",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "symbol": "INFY.NS"
+    }
+   ],
+   "query": "INFY"
+  },
+  {
+   "expected": [
+    "INFY",
+    "INFY.NS",
+    "INFY.BO"
+   ],
+   "home": "US",
+   "id": "infy_home_us",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Infosys Limited ADR",
+     "rank_weight": 8,
+     "symbol": "INFY"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Infosys Limited",
+     "rank_weight": 8,
+     "symbol": "INFY.BO"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Infosys Limited",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "symbol": "INFY.NS"
+    }
+   ],
+   "query": "INFY"
+  },
+  {
+   "expected": [
+    "RELIANCE.NS",
+    "RELIANCE.BO",
+    "RELINFRA.NS"
+   ],
+   "home": "IN",
+   "id": "reliance_nse_before_bse",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries Limited",
+     "rank_weight": 10,
+     "symbol": "RELIANCE.BO"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries Limited",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "RELIANCE.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Infrastructure Ltd",
+     "primary_listing": true,
+     "rank_weight": 4,
+     "symbol": "RELINFRA.NS"
+    }
+   ],
+   "match": {
+    "RELINFRA.NS": "prefix"
+   },
+   "query": "RELIANCE"
+  },
+  {
+   "expected": [
+    "ITC.NS",
+    "ITCHOTELS.NS"
+   ],
+   "home": "IN",
+   "id": "exact_beats_bigger_prefix",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "ITC Hotels Ltd",
+     "primary_listing": true,
+     "rank_weight": 9,
+     "symbol": "ITCHOTELS.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "ITC Limited",
+     "primary_listing": true,
+     "rank_weight": 8,
+     "symbol": "ITC.NS"
+    }
+   ],
+   "match": {
+    "ITC.NS": "exact_listing_code",
+    "ITCHOTELS.NS": "prefix"
+   },
+   "query": "ITC"
+  },
+  {
+   "expected": [
+    "AAPL",
+    "APLE",
+    "APPLESOL-USD"
+   ],
+   "home": "US",
+   "id": "apple_weight_in_prefix",
+   "instruments": [
+    {
+     "asset_class": "crypto",
+     "name": "Apple Sol",
+     "symbol": "APPLESOL-USD"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Apple Hospitality REIT Inc",
+     "primary_listing": true,
+     "rank_weight": 4,
+     "symbol": "APLE"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "name": "Apple Inc.",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "AAPL"
+    }
+   ],
+   "query": "apple"
+  },
+  {
+   "expected": [
+    "AAPL",
+    "AAPL.MX"
+   ],
+   "home": "US",
+   "id": "isin_lookup",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "MX",
+     "isin": "US0378331005",
+     "name": "Apple Inc.",
+     "rank_weight": 10,
+     "symbol": "AAPL.MX"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "isin": "US0378331005",
+     "name": "Apple Inc.",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "AAPL"
+    },
+    {
+     "asset_class": "equity",
+     "country": "US",
+     "isin": "US5949181045",
+     "name": "Microsoft Corporation",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "MSFT"
+    }
+   ],
+   "match": {
+    "AAPL": "exact_isin"
+   },
+   "query": "US0378331005"
+  },
+  {
+   "expected": [
+    "RELIANCE.BO",
+    "RELIANCE.NS"
+   ],
+   "home": "IN",
+   "id": "exact_symbol_tier",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries Limited",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "RELIANCE.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries Limited",
+     "rank_weight": 10,
+     "symbol": "RELIANCE.BO"
+    }
+   ],
+   "match": {
+    "RELIANCE.BO": "exact_symbol",
+    "RELIANCE.NS": "exact_listing_code"
+   },
+   "query": "RELIANCE.BO"
+  },
+  {
+   "expected": [
+    "EURUSD=X"
+   ],
+   "id": "fx_exact_and_cfd_dropped",
+   "instruments": [
+    {
+     "asset_class": "fx",
+     "name": "EUR/GBP",
+     "symbol": "EURGBP=X"
+    },
+    {
+     "asset_class": "fx",
+     "name": "EUR/USD",
+     "symbol": "EURUSD=X"
+    },
+    {
+     "asset_class": "fx",
+     "name": "EURUSD CFD",
+     "quote_type": "cfd",
+     "symbol": "EURUSD"
+    }
+   ],
+   "match": {
+    "EURUSD=X": "exact_symbol"
+   },
+   "query": "EUR/USD"
+  },
+  {
+   "expected": [
+    "RELIANCE.NS"
+   ],
+   "home": "IN",
+   "id": "dedupe_same_instrument",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "id": "XNSE:RELIANCE",
+     "name": "Reliance Industries Limited",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "RELIANCE.NS"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Reliance Industries",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "RELIANCE.NS"
+    }
+   ],
+   "query": "RELIANCE"
+  },
+  {
+   "expected": [
+    "^NSEI"
+   ],
+   "home": "IN",
+   "id": "derivatives_excluded",
+   "instruments": [
+    {
+     "aliases": [
+      "NIFTY"
+     ],
+     "asset_class": "index",
+     "country": "IN",
+     "name": "NIFTY 50",
+     "rank_weight": 10,
+     "symbol": "^NSEI"
+    },
+    {
+     "asset_class": "future",
+     "country": "IN",
+     "name": "NIFTY JUL FUT",
+     "symbol": "NIFTY26JULFUT"
+    },
+    {
+     "asset_class": "option",
+     "country": "IN",
+     "name": "NIFTY 23200 CE",
+     "symbol": "NIFTY2660923200CE"
+    }
+   ],
+   "query": "NIFTY"
+  },
+  {
+   "class_priority": [
+    "etf",
+    "equity"
+   ],
+   "expected": [
+    "SPY",
+    "SPY.L"
+   ],
+   "home": "US",
+   "id": "class_priority_after_home",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "GB",
+     "name": "Spyder Holdings (fictional)",
+     "primary_listing": true,
+     "rank_weight": 1,
+     "symbol": "SPY.L"
+    },
+    {
+     "asset_class": "etf",
+     "country": "US",
+     "name": "SPDR S&P 500 ETF Trust",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "SPY"
+    }
+   ],
+   "query": "SPY"
+  },
+  {
+   "expected": [
+    "0700.HK"
+   ],
+   "id": "hk_code_without_zero",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "HK",
+     "name": "Tencent Holdings Ltd",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "0700.HK"
+    }
+   ],
+   "match": {
+    "0700.HK": "exact_listing_code"
+   },
+   "query": "700"
+  },
+  {
+   "expected": [
+    "NESN.SW",
+    "NESTLEIND.NS"
+   ],
+   "id": "name_unicode",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "CH",
+     "name": "Nestlé S.A.",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "NESN.SW"
+    },
+    {
+     "asset_class": "equity",
+     "country": "IN",
+     "name": "Nestle India Ltd",
+     "primary_listing": true,
+     "rank_weight": 7,
+     "symbol": "NESTLEIND.NS"
+    }
+   ],
+   "match": {
+    "NESN.SW": "prefix",
+    "NESTLEIND.NS": "prefix"
+   },
+   "query": "Nestlé"
+  },
+  {
+   "expected": [
+    "0700.HK"
+   ],
+   "id": "name_cjk",
+   "instruments": [
+    {
+     "asset_class": "equity",
+     "country": "HK",
+     "name": "腾讯控股",
+     "primary_listing": true,
+     "rank_weight": 10,
+     "symbol": "0700.HK"
+    }
+   ],
+   "match": {
+    "0700.HK": "prefix"
+   },
+   "query": "腾讯"
+  }
+ ]
+}

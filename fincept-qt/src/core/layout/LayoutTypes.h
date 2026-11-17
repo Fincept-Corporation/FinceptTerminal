@@ -65,6 +65,7 @@ struct PanelState {
     QByteArray state_blob;       ///< Opaque IStatefulScreen state (CBOR/JSON).
     int state_version = 0;       ///< IStatefulScreen::state_version() at save time.
     int schema_version = kPanelStateVersion;
+    QString dock_id;             ///< Router/ADS id, e.g. "watchlist#dup3". Empty in older layouts.
 
     QJsonObject to_json() const;
     static PanelState from_json(const QJsonObject& obj);

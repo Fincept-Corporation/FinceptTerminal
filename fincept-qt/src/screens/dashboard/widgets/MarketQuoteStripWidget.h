@@ -35,6 +35,8 @@ class MarketQuoteStripWidget : public BaseWidget {
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;
     QDialog* make_config_dialog(QWidget* parent) override;
+    /// A symbol's quote failed: mark its row ("—" + reason on hover).
+    void on_topic_errors_changed() override;
 
   private:
     struct Row {
@@ -45,14 +47,16 @@ class MarketQuoteStripWidget : public BaseWidget {
 
     void build_rows();
     void apply_styles();
-    void on_quote(const fincept::services::QuoteData& q);
+    void on_quote(const QString& sym, const fincept::services::QuoteData& q);
+    /// Tooltip / failed marker for `sym`'s row from its topic's error state.
+    void apply_row_error(const QString& sym);
     void hub_resubscribe();
     void hub_unsubscribe_all();
 
     QStringList symbols_;
     QWidget* rows_host_ = nullptr; // owns the rows + the one stylesheet styling them
     QHash<QString, Row> rows_;     // symbol → widgets
-    QSet<QString> received_;   // symbols that have published at least once — used to drive the loading overlay
+    // Loading progress / received tracking now lives in BaseWidget::track_topics().
     bool hub_active_ = false;
 };
 

@@ -294,13 +294,14 @@ def adx(high: pd.Series, low: pd.Series, close: pd.Series,
 
 def ichimoku(high: pd.Series, low: pd.Series,
              tenkan: int = 9, kijun: int = 26,
-             senkou_b: int = 52) -> Dict[str, pd.Series]:
+             senkou_b: int = 52, close: Optional[pd.Series] = None) -> Dict[str, pd.Series]:
     """Ichimoku Cloud - returns tenkan_sen, kijun_sen, senkou_a, senkou_b, chikou"""
     tenkan_sen = (high.rolling(tenkan).max() + low.rolling(tenkan).min()) / 2
     kijun_sen = (high.rolling(kijun).max() + low.rolling(kijun).min()) / 2
     senkou_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun)
     senkou_b_val = ((high.rolling(senkou_b).max() + low.rolling(senkou_b).min()) / 2).shift(kijun)
-    chikou = high.shift(-kijun)
+    # The lagging span is the CLOSE plotted `kijun` bars back (it used the high).
+    chikou = (close if close is not None else high).shift(-kijun)
     return {
         'tenkan_sen': tenkan_sen, 'kijun_sen': kijun_sen,
         'senkou_a': senkou_a, 'senkou_b': senkou_b_val, 'chikou': chikou
@@ -396,18 +397,19 @@ INDICATOR_CATALOG = {
 }
 
 
-def calculate(indicator_type: str, data: pd.DataFrame,
-              params: Dict[str, Any] = None) -> Dict[str, Any]:
+def compute(indicator_type: str, data: pd.DataFrame,
+            params: Dict[str, Any] = None):
     """
-    Universal indicator calculator.
+    Raw indicator values for one INDICATOR_CATALOG id.
 
     Args:
-        indicator_type: Indicator key from INDICATOR_CATALOG
+        indicator_type: Indicator key from INDICATOR_CATALOG (a few aliases accepted)
         data: DataFrame with Open, High, Low, Close, Volume columns
         params: Indicator parameters
 
     Returns:
-        Dict with 'values' (list of {date, value} or {date, ...multi-values})
+        A pd.Series (single output), a dict of named pd.Series (multi-output),
+        or None when the id is unknown.
     """
     params = params or {}
     close = data['Close']
@@ -445,7 +447,8 @@ def calculate(indicator_type: str, data: pd.DataFrame,
         result_multi = ichimoku(high, low,
                                 params.get('tenkan', 9),
                                 params.get('kijun', 26),
-                                params.get('senkou_b', 52))
+                                params.get('senkou_b', 52),
+                                close=close)
     elif ind == 'psar':
         result_series = psar(high, low, params.get('af_step', 0.02), params.get('af_max', 0.2))
 
@@ -500,7 +503,29 @@ def calculate(indicator_type: str, data: pd.DataFrame,
         result_multi = adx(high, low, close, params.get('period', 14))
 
     else:
+        return None
+
+    return result_multi if result_multi is not None else result_series
+
+
+def calculate(indicator_type: str, data: pd.DataFrame,
+              params: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    Universal indicator calculator.
+
+    Args:
+        indicator_type: Indicator key from INDICATOR_CATALOG
+        data: DataFrame with Open, High, Low, Close, Volume columns
+        params: Indicator parameters
+
+    Returns:
+        Dict with 'values' (list of {date, value} or {date, ...multi-values})
+    """
+    out = compute(indicator_type, data, params)
+    if out is None:
         return {'success': False, 'error': f'Unknown indicator: {indicator_type}'}
+    result_series = out if not isinstance(out, dict) else None
+    result_multi = out if isinstance(out, dict) else None
 
     # Format output
     values = []

@@ -1,34 +1,44 @@
 // src/screens/algo_trading/AlertsPanel.h
 #pragma once
-#include "algo_engine/ScanMonitor.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
+#include "storage/repositories/ScanEventRepository.h"
 #include "storage/repositories/ScanWatchRepository.h"
-#include "ui/widgets/algo/ConditionSection.h"
-#include "ui/widgets/algo/SymbolChipInput.h"
 
-#include <QCheckBox>
-#include <QComboBox>
 #include <QEvent>
+#include <QHash>
 #include <QJsonArray>
-#include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
 #include <QShowEvent>
-#include <QSpinBox>
-#include <QTableWidget>
+#include <QStringList>
+#include <QVector>
 #include <QWidget>
+
+#include <functional>
+
+class QTimer;
+
+namespace fincept::ui::algo {
+class SymbolChipInput;
+}
 
 namespace fincept::screens {
 
-/// Alert/watch manager — build a condition, save it as a background watch, and
-/// manage running watches. Reuses ScanWatchRepository + ScanMonitor.
+class AlertsView;
+
+/// ALERTS sub-tab controller — background watches (ScanWatchRepository + ScanMonitor) and the
+/// alerts they fired (ScanEventRepository). The layout is AlertsView; this class reads / writes
+/// the repositories on a worker thread, drives ScanMonitor on the GUI thread and confirms deletes.
 class AlertsPanel : public QWidget {
     Q_OBJECT
   public:
     explicit AlertsPanel(QWidget* parent = nullptr);
 
+    /// The Scanner's "+ CREATE ALERT": the composer takes its rules, symbols and feed.
     void prefill(const QJsonArray& conditions, const QString& logic, const QStringList& symbols,
                  const QString& timeframe, const QString& data_source, const QString& account_id);
+
+  signals:
+    /// "OPEN SCANNER" (the screen switches tabs).
+    void open_scanner_requested();
 
   private slots:
     void on_save_watch();
@@ -39,38 +49,32 @@ class AlertsPanel : public QWidget {
     void showEvent(QShowEvent* event) override;
 
   private:
-    void build_ui();
-    void retranslateUi();
-
-    fincept::ui::algo::ConditionSection* section_ = nullptr;
-    fincept::ui::algo::SymbolChipInput* symbols_input_ = nullptr;
-    QComboBox* timeframe_combo_ = nullptr;
-    QComboBox* data_source_combo_ = nullptr;
-    QComboBox* account_combo_ = nullptr;
-    QSpinBox* interval_spin_ = nullptr;
-    QSpinBox* cooldown_spin_ = nullptr;
-    QCheckBox* providers_chk_ = nullptr;
-    QLineEdit* name_edit_ = nullptr;
-    QPushButton* save_btn_ = nullptr;
-    QTableWidget* watches_table_ = nullptr;
-    QTableWidget* history_table_ = nullptr;
-    QLabel* status_label_ = nullptr;
-    QString editing_id_; // non-empty when editing an existing watch
-
-    QLabel* cond_title_ = nullptr;
-    QLabel* sym_title_ = nullptr;
-    QLabel* tf_lbl_ = nullptr;
-    QLabel* ds_lbl_ = nullptr;
-    QLabel* acct_lbl_ = nullptr;
-    QLabel* iv_lbl_ = nullptr;
-    QLabel* cd_lbl_ = nullptr;
-    QLabel* name_lbl_ = nullptr;
-    QLabel* watches_title_ = nullptr;
-    QLabel* history_title_ = nullptr;
-
-    void prefill_close_from_price(const QString& symbol, double price);
+    // (Re)fills the broker-account combo, keeping the current selection.
+    void populate_accounts();
     void refresh_history();
-    void load_watch(const fincept::ScanWatch& w); // load an existing watch into the form for editing
+    /// Coalesces ScanMonitor status / fire notifications into one read (and none while hidden).
+    void schedule_refresh(bool history_only);
+    void apply_watches(const QVector<fincept::ScanWatch>& watches, const QString& error);
+    void apply_history(const QVector<fincept::ScanWatchEvent>& events, const QString& error);
+    void prefill_close_from_price(const QString& symbol, double price);
+    void load_watch(const fincept::ScanWatch& w); // an existing watch into the composer for editing
+    void new_watch();
+    void request_delete(const QString& id);
+    void set_active(const QString& id, bool on);
+    /// Runs `work` (a repository write; returns an error text, empty = ok) on a worker, then
+    /// `done(error)` on the GUI thread while this panel lives.
+    void run_write(std::function<QString()> work, std::function<void(const QString&)> done);
+    fincept::ScanWatch watch_from_form(const QString& name) const;
+
+    AlertsView* view_ = nullptr;
+    fincept::ui::algo::SymbolChipInput* symbols_input_ = nullptr;
+    QString editing_id_; // non-empty when editing an existing watch
+    QHash<QString, fincept::ScanWatch> watches_; ///< last read, by id (edit / names / toggles)
+    quint64 watches_seq_ = 0;
+    quint64 history_seq_ = 0;
+    QTimer* refresh_timer_ = nullptr;
+    bool refresh_history_only_ = true;
+    bool dirty_ = true; ///< a refresh was asked while hidden: read on the next show
 };
 
 } // namespace fincept::screens

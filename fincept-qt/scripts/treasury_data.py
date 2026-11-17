@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('TREASURY_API_KEY', '')
 BASE_URL = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
 
@@ -26,7 +28,16 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        body = response.json()
+        # FiscalData sends every value as text and nulls as "null": numbers and null at the source.
+        if isinstance(body, dict) and isinstance(body.get("data"), list):
+            for r in body["data"]:
+                if isinstance(r, dict):
+                    for k, v in r.items():
+                        if v == "null":
+                            r[k] = None
+            fc.numeric_columns(body["data"])
+        return body
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:

@@ -1,4 +1,11 @@
 // src/screens/equity_research/EquityPeersTab.h
+//
+// Equity Research → Peers. Same-industry companies on the subject's own market (found by
+// the region-aware discovery in the service), compared on valuation, returns, margins,
+// growth, leverage and liquidity. Market caps listed in different currencies compare in
+// USD; every price keeps its own currency (pence, yen). Columns carry percentile bars
+// (rank within the group, no absolute "good / bad" thresholds) and a scatter plots any two
+// metrics against each other.
 #pragma once
 #include "services/equity/EquityResearchModels.h"
 #include "ui/widgets/LoadingOverlay.h"
@@ -11,7 +18,15 @@
 #include <QVector>
 #include <QWidget>
 
+class QComboBox;
+
+namespace fincept::ui {
+class BarCellDelegate;
+}
+
 namespace fincept::screens {
+
+class PeerScatterChart;
 
 class EquityPeersTab : public QWidget {
     Q_OBJECT
@@ -38,29 +53,31 @@ class EquityPeersTab : public QWidget {
     void build_ui();
     void retranslateUi();
     void populate_table(const QVector<services::equity::PeerData>& peers);
-    /// Subject vs the peer median (premium / discount per metric) and the price the
-    /// subject would trade at on the peers' median multiples.
     void update_relative_summary(const QVector<services::equity::PeerData>& peers);
+    void update_scatter();
     void show_row_menu(const QPoint& pos);
     QString symbol_at_row(int row) const;
-    QStringList default_peers(const QString& symbol) const;
+    void find_peers();
 
     QString current_symbol_;
-    /// Anchor + peers of the request in flight — peers_loaded() carries no symbol, so a
-    /// response is matched against this to drop one that belongs to an older request.
     QStringList requested_symbols_;
     QLineEdit* peers_edit_ = nullptr;
-    QLabel* peers_caption_ = nullptr; ///< "PEERS (comma-separated):"
+    QLabel* peers_caption_ = nullptr;
     QLabel* status_label_ = nullptr;
     QTableWidget* peer_table_ = nullptr;
-    QLabel* relative_lbl_ = nullptr; ///< "vs peer median" summary under the table
+    QLabel* relative_lbl_ = nullptr;
     QPushButton* load_btn_ = nullptr;
-    QList<QLabel*> legend_text_lbls_; ///< Legend captions for retranslate
+    QPushButton* find_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
     QLabel* units_lbl_ = nullptr;
-    QString pending_peers_; ///< restored peer list, applied on the first set_symbol()
+    QComboBox* scatter_x_ = nullptr;
+    QComboBox* scatter_y_ = nullptr;
+    PeerScatterChart* scatter_ = nullptr;
+    QList<ui::BarCellDelegate*> bar_delegates_;
+    QString pending_peers_;
     QVector<services::equity::PeerData> cached_peers_;
     bool peers_loaded_ = false;
-    bool awaiting_suggested_peers_ = false; ///< industry-peer lookup in flight for current_symbol_
+    bool awaiting_suggested_peers_ = false;
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;
 };

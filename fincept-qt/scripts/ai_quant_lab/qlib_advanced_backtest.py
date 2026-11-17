@@ -10,11 +10,15 @@ Realistic backtesting with market microstructure:
 """
 
 import json
+import os
 import sys
 from typing import Dict, List, Any, Optional, Union, Tuple
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 
 try:
     import pandas as pd
@@ -653,195 +657,268 @@ class AdvancedBacktestEngine:
         }
 
 
+_STRATEGY_LABELS = {
+    "topk_dropout": "Top-K dropout (20-day momentum)",
+    "weight_based": "Momentum-weighted top-K (positive momentum only)",
+    "enhanced_indexing": "Equal weight (all names)",
+}
+
+
+def _topk_dropout_targets(score: "pd.Series", held: List[str], topk: int, n_drop: int) -> List[str]:
+    """Qlib TopkDropoutStrategy book update (method_sell='bottom', method_buy='top').
+
+    Keeps the current book and only swaps out up to ``n_drop`` names per rebalance:
+    the held names ranked worst among (held + the best non-held candidates) are sold
+    and replaced by the best-ranked names not held.
+    """
+    score = score.dropna()
+    held = [h for h in held if h in score.index]
+    last = score.loc[held].sort_values(ascending=False).index.tolist() if held else []
+    candidates = score.drop(index=last, errors="ignore").sort_values(ascending=False)
+    today = candidates.index[:max(0, n_drop + topk - len(last))].tolist()
+    comb = score.loc[last + today].sort_values(ascending=False).index.tolist()
+    sell = [n for n in last if n in comb[-n_drop:]] if n_drop > 0 else []
+    buy = today[:len(sell) + topk - len(last)]
+    return [n for n in last if n not in sell] + buy
+
+
 def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Run a multi-strategy backtest using market data fetched via yfinance.
+    Long-only daily backtest on Yahoo Finance prices, signal = trailing 20-day return.
 
-    Expected params keys (all optional with defaults):
-        dataset_config.instruments  : comma-separated tickers, e.g. "AAPL,MSFT"
-        dataset_config.start_date   : "YYYY-MM-DD"
-        dataset_config.end_date     : "YYYY-MM-DD"
+    params:
+        dataset_config.instruments  : "AAPL,MSFT,..." (required)
+        dataset_config.start_date / end_date : "YYYY-MM-DD" (default: the last 3 years)
         strategy_config.type        : "topk_dropout" | "weight_based" | "enhanced_indexing"
-        strategy_config.topk        : int (default 10)
-        portfolio_config.initial_capital : float (default 1_000_000)
-        portfolio_config.benchmark  : str ticker (default "SPY")
+            topk_dropout       hold `topk` names equally weighted; each rebalance replaces at
+                               most `n_drop` of them (Qlib TopK-Dropout) on the momentum ranking
+            weight_based       the top `topk` names with positive momentum, weighted by their
+                               momentum score (cash when none is positive)
+            enhanced_indexing  equal weight of every instrument (an equal-weight benchmark; the
+                               name is kept for compatibility -- there is no tracking-error model)
+        strategy_config.topk / n_drop / rebalance_days (default 10 / 1 / 5)
+        portfolio_config.initial_capital (default 1e6), benchmark (default "SPY"),
+            commission_bps / slippage_bps charged per unit of one-way turnover (default 5 / 5),
+            risk_free_rate (annual, default 0.02)
+
+    Positions are chosen from the momentum as of the previous close and earn the next
+    day's return (no look-ahead); weights drift with prices between rebalances; costs
+    are turnover x (commission + slippage) and are deducted from the day's return, so
+    every metric is NET of costs (gross figures are reported next to them).
     """
     if not PANDAS_AVAILABLE:
         return {"success": False, "error": "pandas/numpy not available"}
 
     try:
-        import yfinance as yf
+        import fincept_yahoo as fy  # the shared Yahoo layer: bar cache, limiter, back-off
+        fy.yf()
     except ImportError:
-        return {"success": False, "error": "yfinance not installed. Run: pip install yfinance"}
+        return {"success": False, "error": "yfinance is not installed"}
 
     # ── Parse params ────────────────────────────────────────────────────────
-    dataset_cfg   = params.get("dataset_config", {})
-    strategy_cfg  = params.get("strategy_config", {})
-    portfolio_cfg = params.get("portfolio_config", {})
+    dataset_cfg   = params.get("dataset_config") or {}
+    strategy_cfg  = params.get("strategy_config") or {}
+    portfolio_cfg = params.get("portfolio_config") or {}
 
-    raw_instruments = dataset_cfg.get("instruments", "AAPL,MSFT,GOOG,AMZN")
-    tickers    = [t.strip().upper() for t in raw_instruments.split(",") if t.strip()]
-    start_date = dataset_cfg.get("start_date", "2020-01-01")
-    end_date   = dataset_cfg.get("end_date",   "2024-01-01")
+    raw_instruments = dataset_cfg.get("instruments") or ""
+    if isinstance(raw_instruments, (list, tuple)):
+        raw_instruments = ",".join(str(t) for t in raw_instruments)
+    tickers = list(dict.fromkeys(t.strip().upper() for t in str(raw_instruments).split(",") if t.strip()))
+    if not tickers:
+        return {"success": False, "error": "dataset_config.instruments is empty -- give at least one ticker"}
 
-    strategy_type = strategy_cfg.get("type", "topk_dropout")
-    topk          = int(strategy_cfg.get("topk", min(10, len(tickers))))
+    today = datetime.now().date()
+    end_date = str(dataset_cfg.get("end_date") or today.isoformat())
+    start_date = str(dataset_cfg.get("start_date") or (today - timedelta(days=3 * 365)).isoformat())
+
+    strategy_type = str(strategy_cfg.get("type") or "topk_dropout")
+    if strategy_type not in _STRATEGY_LABELS:
+        return {"success": False,
+                "error": f"Unknown strategy '{strategy_type}'. Use one of: {', '.join(_STRATEGY_LABELS)}"}
+    topk = int(strategy_cfg.get("topk", 10))
+    n_drop = int(strategy_cfg.get("n_drop", 1))
+    rebalance_days = int(strategy_cfg.get("rebalance_days", 5))
+    if topk < 1 or n_drop < 0 or rebalance_days < 1:
+        return {"success": False, "error": "topk and rebalance_days must be >= 1 and n_drop >= 0"}
 
     initial_capital = float(portfolio_cfg.get("initial_capital", 1_000_000))
-    benchmark_ticker = portfolio_cfg.get("benchmark", "SPY") or "SPY"
+    benchmark_ticker = (str(portfolio_cfg.get("benchmark") or "SPY")).strip().upper()
+    commission_bps = float(portfolio_cfg.get("commission_bps", 5.0))
+    slippage_bps = float(portfolio_cfg.get("slippage_bps", 5.0))
+    rf_annual = float(portfolio_cfg.get("risk_free_rate", 0.02))
+    if initial_capital <= 0 or commission_bps < 0 or slippage_bps < 0:
+        return {"success": False, "error": "initial_capital must be > 0 and costs >= 0"}
+    cost_rate = (commission_bps + slippage_bps) / 10_000.0
 
     # ── Fetch price data ─────────────────────────────────────────────────────
-    all_tickers = list(set(tickers + [benchmark_ticker]))
-    raw = yf.download(all_tickers, start=start_date, end=end_date,
-                      auto_adjust=True, progress=False)
+    all_tickers = list(dict.fromkeys(tickers + [benchmark_ticker]))
+    # One long download per symbol shared by every script; later runs slice it locally.
+    raw = fy.download(all_tickers, start=start_date, end=end_date, auto_adjust=True)
 
-    if raw.empty:
-        return {"success": False, "error": "No data returned from yfinance. Check tickers and date range."}
+    if raw is None or raw.empty:
+        return {"success": False, "error": "No data returned from Yahoo Finance. Check tickers and date range."}
 
-    # Handle single vs multi ticker response
     if isinstance(raw.columns, pd.MultiIndex):
         close = raw["Close"].dropna(how="all")
-        volume = raw["Volume"].dropna(how="all")
     else:
-        close = raw[["Close"]].rename(columns={"Close": tickers[0]}).dropna()
-        volume = raw[["Volume"]].rename(columns={"Volume": tickers[0]}).dropna()
+        close = raw[["Close"]].rename(columns={"Close": all_tickers[0]}).dropna()
 
-    # Drop benchmark from strategy tickers
-    strat_tickers = [t for t in tickers if t in close.columns]
+    strat_tickers = [t for t in tickers if t in close.columns and close[t].notna().sum() > 25]
+    missing = [t for t in tickers if t not in strat_tickers]
     if not strat_tickers:
-        return {"success": False, "error": f"None of the requested tickers had data: {tickers}"}
+        return {"success": False, "error": f"None of the requested tickers had enough price data: {tickers}"}
 
     topk = min(topk, len(strat_tickers))
+    n_drop = min(n_drop, topk)
 
-    # ── Simple momentum strategy signal ──────────────────────────────────────
-    # Rank tickers by trailing 20-day return, hold top-K equally weighted
-    returns       = close[strat_tickers].pct_change()
-    # The signal is shifted one day: positions chosen from the trailing return AS OF
-    # yesterday's close earn today's return. Using today's trailing return (which
-    # contains today's move) to pick the names that earn today's move is look-ahead
-    # bias and inflated every strategy's Sharpe / return.
-    momentum_20d  = close[strat_tickers].pct_change(20).shift(1)
+    prices = close[strat_tickers]
+    returns = prices.pct_change()
+    # Momentum as of the PREVIOUS close: positions chosen on it earn today's return.
+    momentum = prices.pct_change(20).shift(1)
+    dates = returns.index[21:]
+    if len(dates) < 20:
+        return {"success": False,
+                "error": f"Only {len(dates)} trading days after the 20-day warm-up; widen the date range"}
 
-    portfolio_returns = []
-    dates = returns.index[20:]  # skip warmup
+    # ── Simulate ─────────────────────────────────────────────────────────────
+    weights = pd.Series(0.0, index=strat_tickers)    # drifted weights going into the day
+    held: List[str] = []
+    gross_rets, net_rets, turnovers = [], [], []
+    n_rebalances = 0
+    for i, dt in enumerate(dates):
+        cost = 0.0
+        if i % rebalance_days == 0:
+            score = momentum.loc[dt].dropna()
+            target = pd.Series(0.0, index=strat_tickers)
+            if not score.empty:
+                if strategy_type == "topk_dropout":
+                    held = _topk_dropout_targets(score, held, topk, n_drop)
+                    if held:
+                        target.loc[held] = 1.0 / len(held)
+                elif strategy_type == "weight_based":
+                    pos = score[score > 0].nlargest(topk)
+                    if not pos.empty:
+                        target.loc[pos.index] = pos / pos.sum()
+                else:
+                    avail = score.index.tolist()
+                    target.loc[avail] = 1.0 / len(avail)
+            turnover = float((target - weights).abs().sum())
+            cost = turnover * cost_rate
+            turnovers.append(turnover)
+            weights = target
+            n_rebalances += 1
+        day = returns.loc[dt, strat_tickers].fillna(0.0)
+        gross = float((weights * day).sum())
+        gross_rets.append(gross)
+        net_rets.append(gross - cost)
+        # Drift: each holding grows with its own return; cash (1 - sum w) earns nothing.
+        grown = weights * (1.0 + day)
+        total = float(grown.sum() + (1.0 - weights.sum()))
+        weights = grown / total if total > 0 else grown
 
-    for dt in dates:
-        row_mom = momentum_20d.loc[dt].dropna()
-        if row_mom.empty:
-            portfolio_returns.append(0.0)
-            continue
-
-        if strategy_type == "topk_dropout":
-            selected = row_mom.nlargest(topk).index.tolist()
-        elif strategy_type == "weight_based":
-            # weight proportional to momentum score (long only)
-            pos = row_mom[row_mom > 0]
-            selected = pos.nlargest(topk).index.tolist()
-        else:  # enhanced_indexing — equal weight all
-            selected = row_mom.index.tolist()
-
-        if not selected:
-            portfolio_returns.append(0.0)
-            continue
-
-        day_ret = returns.loc[dt, selected].mean()
-        portfolio_returns.append(float(day_ret) if not pd.isna(day_ret) else 0.0)
-
-    # ── Benchmark returns ────────────────────────────────────────────────────
-    # yf.download keeps a column (all NaN) for a symbol it could not resolve, so
-    # "in close.columns" is not enough -- require real prices.
+    # ── Benchmark ────────────────────────────────────────────────────────────
+    # yf.download keeps an all-NaN column for a symbol it could not resolve.
     bm_col = (benchmark_ticker
               if benchmark_ticker in close.columns and close[benchmark_ticker].notna().sum() > 1
               else None)
-    if bm_col:
-        bm_returns = close[bm_col].pct_change().loc[dates].fillna(0.0).tolist()
-    else:
-        bm_returns = [0.0] * len(dates)
+    bm_series = (close[bm_col].pct_change().reindex(dates).fillna(0.0) if bm_col
+                 else pd.Series(np.nan, index=dates))
 
-    # ── Compute equity curve & metrics ───────────────────────────────────────
-    port_series = pd.Series(portfolio_returns, index=dates)
-    bm_series   = pd.Series(bm_returns,        index=dates)
-
+    port_series = pd.Series(net_rets, index=dates)
+    gross_series = pd.Series(gross_rets, index=dates)
     port_cum = (1 + port_series).cumprod() * initial_capital
-    bm_cum   = (1 + bm_series).cumprod()   * initial_capital
+    bm_cum = (1 + bm_series).cumprod() * initial_capital if bm_col else None
 
-    # Annualised return
-    n_years = len(dates) / 252
-    final_val   = float(port_cum.iloc[-1]) if not port_cum.empty else initial_capital
-    total_ret   = (final_val - initial_capital) / initial_capital
-    ann_ret     = (1 + total_ret) ** (1 / n_years) - 1 if n_years > 0 else 0.0
+    def stats(r: pd.Series) -> Dict[str, Any]:
+        n_years = len(r) / 252.0
+        total = float((1 + r).prod() - 1)
+        ann = (1 + total) ** (1 / n_years) - 1 if n_years > 0 and total > -1 else None
+        vol = float(r.std(ddof=1) * np.sqrt(252)) if len(r) > 1 else None
+        excess = r - rf_annual / 252.0
+        sd = float(excess.std(ddof=1))
+        sharpe = float(excess.mean() / sd * np.sqrt(252)) if sd > 0 else None
+        cum = (1 + r).cumprod()
+        peak = cum.cummax().clip(lower=1.0)
+        mdd = float((cum / peak - 1).min())
+        calmar = (ann / abs(mdd)) if ann is not None and mdd < 0 else None
+        return {"total": total, "ann": ann, "vol": vol, "sharpe": sharpe, "mdd": mdd, "calmar": calmar}
 
-    # Volatility & Sharpe
-    ann_vol = float(port_series.std() * np.sqrt(252))
-    sharpe  = ann_ret / ann_vol if ann_vol > 0 else 0.0
+    def pct(v, nd=2):
+        return None if v is None else round(v * 100, nd)
 
-    # Max drawdown
-    running_max = port_cum.cummax()
-    drawdown    = (port_cum - running_max) / running_max
-    max_dd      = float(drawdown.min())
+    def rnd(v, nd=3):
+        return None if v is None else round(v, nd)
 
-    # Calmar
-    calmar = ann_ret / abs(max_dd) if max_dd != 0 else 0.0
+    net = stats(port_series)
+    gross = stats(gross_series)
+    bm = stats(bm_series) if bm_col else None
+    final_val = float(port_cum.iloc[-1])
+    n_years = len(dates) / 252.0
+    total_turnover = float(sum(turnovers))
+    total_cost_pct = float(sum(t * cost_rate for t in turnovers))
 
-    # Win rate
-    win_rate = float((port_series > 0).mean())
-
-    # Transaction cost estimate (using AdvancedBacktestEngine)
-    engine = AdvancedBacktestEngine(initial_capital=initial_capital)
-    avg_price   = float(close[strat_tickers].iloc[-1].mean())
-    avg_vol_val = float(volume[strat_tickers].iloc[-20:].mean().mean()) if strat_tickers[0] in volume.columns else 1e6
-    sample_execution = engine.simulate_order(
-        strat_tickers[0], "buy", 1000, avg_price, avg_vol_val,
-        float(port_series.std()), "market"
-    )
-
-    # Equity curve (downsample to ~100 points for display)
+    # Equity curve (downsampled to ~100 points for display, always ending on the last day)
     step = max(1, len(port_cum) // 100)
+    idx = list(range(0, len(port_cum), step))
+    if idx[-1] != len(port_cum) - 1:
+        idx.append(len(port_cum) - 1)
     equity_curve = [
-        {"date": str(d.date()), "portfolio": round(float(v), 2),
-         "benchmark": round(float(b), 2)}
-        for d, v, b in zip(port_cum.index[::step],
-                           port_cum.values[::step],
-                           bm_cum.values[::step])
+        {"date": str(port_cum.index[k].date()),
+         "portfolio": round(float(port_cum.iloc[k]), 2),
+         "benchmark": round(float(bm_cum.iloc[k]), 2) if bm_cum is not None else None}
+        for k in idx
     ]
 
-    result_warning = None
+    warnings_out = []
     if bm_col is None:
-        # A benchmark yfinance could not resolve (e.g. the old "SH000300" Qlib/CSI placeholder)
-        # used to become a silent flat line at initial capital.
-        result_warning = (f"Benchmark '{benchmark_ticker}' returned no price data, so the benchmark line "
-                          "is flat and carries no information. Use a Yahoo Finance symbol such as SPY.")
+        warnings_out.append(f"Benchmark '{benchmark_ticker}' returned no price data from Yahoo Finance, so there "
+                            "is no benchmark line. Use a Yahoo symbol such as SPY.")
+    if missing:
+        warnings_out.append(f"No usable price data for: {', '.join(missing)} (left out).")
+    if strategy_type != "enhanced_indexing" and topk >= len(strat_tickers):
+        warnings_out.append(f"Top-K ({topk}) covers the whole universe of {len(strat_tickers)} names, so the "
+                            "ranking selects nothing -- this is an equal-weight portfolio.")
+
     return {
         "success": True,
         "strategy": strategy_type,
+        "strategy_label": _STRATEGY_LABELS[strategy_type],
         "tickers": strat_tickers,
-        "benchmark": benchmark_ticker,
-        **({"warning": result_warning} if result_warning else {}),
-        "start_date": start_date,
-        "end_date": end_date,
+        "benchmark": benchmark_ticker if bm_col else None,
+        **({"warning": " ".join(warnings_out)} if warnings_out else {}),
+        "start_date": str(dates[0].date()),
+        "end_date": str(dates[-1].date()),
+        "parameters": {
+            "topk": topk, "n_drop": n_drop if strategy_type == "topk_dropout" else None,
+            "rebalance_days": rebalance_days, "signal": "20-day trailing return (as of the previous close)",
+            "risk_free_rate": rf_annual,
+        },
         "metrics": {
+            "net_of_costs":       True,
             "initial_capital":    round(initial_capital, 2),
             "final_value":        round(final_val, 2),
-            "total_return_pct":   round(total_ret * 100, 2),
-            "annualised_return":  round(ann_ret * 100, 2),
-            "annualised_vol":     round(ann_vol * 100, 2),
-            "sharpe_ratio":       round(sharpe, 3),
-            "max_drawdown_pct":   round(max_dd * 100, 2),
-            "calmar_ratio":       round(calmar, 3),
-            "win_rate_pct":       round(win_rate * 100, 2),
+            "total_return_pct":   pct(net["total"]),
+            "annualised_return":  pct(net["ann"]),
+            "annualised_vol":     pct(net["vol"]),
+            "sharpe_ratio":       rnd(net["sharpe"]),
+            "max_drawdown_pct":   pct(net["mdd"]),
+            "calmar_ratio":       rnd(net["calmar"]),
+            "win_rate_pct":       round(float((port_series > 0).mean()) * 100, 2),
             "trading_days":       len(dates),
+            "gross_total_return_pct": pct(gross["total"]),
+            "gross_sharpe_ratio": rnd(gross["sharpe"]),
+            "benchmark_total_return_pct": pct(bm["total"]) if bm else None,
+            "benchmark_sharpe_ratio": rnd(bm["sharpe"]) if bm else None,
         },
-        # commission_bps used to carry the MARKET IMPACT estimate, so the panel's
-        # "Commission" line showed impact and the real commission was never reported.
-        # Each cost now has its own field; commission is the effective rate the sample
-        # order paid (includes the minimum ticket charge).
-        "execution_cost_estimate": {
-            "commission_bps": round(
-                (sample_execution.get("commission", 0.0) / sample_execution["total_cost"] * 10000)
-                if sample_execution.get("total_cost") else engine.commission_bps, 2),
-            "market_impact_bps":     round(sample_execution.get("market_impact_bps", 0), 2),
-            "expected_slippage_bps": round(sample_execution.get("expected_slippage_bps", 0), 2),
-            "sample_order_shares":   1000,
+        # What the costs actually were in this run (they used to be one hypothetical
+        # 1000-share order with a volatility term that put AAPL at ~100 bps).
+        "costs": {
+            "commission_bps": commission_bps,
+            "slippage_bps": slippage_bps,
+            "rebalances": n_rebalances,
+            "avg_turnover_per_rebalance_pct": round(total_turnover / n_rebalances * 100, 2) if n_rebalances else None,
+            "annual_turnover_pct": round(total_turnover / n_years * 100, 1) if n_years > 0 else None,
+            "total_cost_drag_pct": round(total_cost_pct * 100, 3),
         },
         "equity_curve": equity_curve,
     }
@@ -866,7 +943,7 @@ def _json_safe(obj):
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -888,26 +965,26 @@ def main():
                     "run_backtest (yfinance momentum strategy)",
                 ]
             }
-            print(json.dumps(result))
+            fincept_json.emit(result)
 
         elif command == "run_backtest":
             raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
             params = json.loads(raw)
             result = run_backtest(params)
-            print(json.dumps(_json_safe(result)))
+            fincept_json.emit(_json_safe(result))
 
         elif command == "optimize_portfolio":
             raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
             params = json.loads(raw)
             result = optimize_portfolio(params)
-            print(json.dumps(result))
+            fincept_json.emit(result)
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
-            print(json.dumps(result))
+            fincept_json.emit(result)
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

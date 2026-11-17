@@ -63,8 +63,7 @@ EcbPanel::EcbPanel(QWidget* parent) : EconPanelBase(kEcbSourceId, kEcbColor, par
 }
 
 void EcbPanel::activate() {
-    show_empty(tr("Select a series and click FETCH\n"
-                  "Source: European Central Bank SDMX 2.1 API"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void EcbPanel::build_controls(QHBoxLayout* thl) {
@@ -77,7 +76,7 @@ void EcbPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kEcbSeries)
         series_combo_->addItem(s.label, s.command + "|" + s.arg);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(220);
 
     thl->addWidget(series_lbl_ = lbl(tr("SERIES")));
@@ -101,7 +100,7 @@ void EcbPanel::on_fetch() {
 
     const QString req_id = "ecb_" + series.command + (series.arg.isEmpty() ? "" : "_" + series.arg);
 
-    services::EconomicsService::instance().execute(kEcbSourceId, kEcbScript, series.command, args, req_id);
+    execute_query(kEcbSourceId, kEcbScript, series.command, args, req_id);
 }
 
 // ECB response: {<result_key>: [{dimensions:{}, observations:[{period,value}], obs_count}], ...}
@@ -161,7 +160,7 @@ void EcbPanel::on_result(const QString& request_id, const services::EconomicsRes
     meta.percent = series.percent;
     set_series_meta(meta);
     display(obs, "ECB: " + series.label);
-    LOG_INFO("EcbPanel", QString("Displayed %1 observations for %2").arg(obs.size()).arg(series.label));
+    LOG_DEBUG("EcbPanel", QString("Displayed %1 observations for %2").arg(obs.size()).arg(series.label));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

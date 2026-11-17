@@ -7,14 +7,17 @@
 #
 # Removes, for the current user:
 #   - the application, however it was installed
-#       macOS : FinceptTerminal.app (DMG) or the IFW wizard install
-#       Linux : .deb / .rpm package, Flatpak, AppImage, IFW .run install,
+#       macOS : Fincept Terminal Community.app (DMG; FinceptTerminal.app when
+#               its bundle id is this edition's) or the IFW wizard install
+#       Linux : .deb package or Flatpak; from older releases also an .rpm,
+#               an AppImage or an IFW .run install (no longer published);
 #               or a `cmake --install` prefix (/usr/local, ~/.local)
 #   - all data: every profile, databases (incl. saved API keys), logs,
 #     layouts, caches, crash dumps, the Python runtime, venvs and uv cache
 #   - settings (plist / .conf), legacy Keychain / libsecret items from
-#     versions <= 4.0.2, temp files, the single-instance socket, and data the
-#     bundled Python scripts keep in your home folder (~/.fincept, ...)
+#     versions <= 4.0.2, this edition's boot log. The bundled Python scripts
+#     keep their files in the data root; the home folders older releases used
+#     (~/.fincept, ...) may hold another build's files and are only reported.
 #
 # Options
 #   -y, --yes            do not ask for confirmation
@@ -43,11 +46,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -u
 
-APP_ID="com.fincept.terminal"          # data folder name, macOS bundle id, legacy secret service
-PKG_NAME="fincept-terminal"            # .deb / .rpm package, desktop file id, icon name
+# This edition's names — keep in step with CMakeLists.txt "Edition identity".
+# A separate private build of Fincept Terminal uses com.fincept.terminal,
+# Fincept/FinceptTerminal, fincept-terminal.desktop, /Applications/FinceptTerminal
+# and /opt/FinceptTerminal, and releases of this terminal shared them; none of
+# those is removed here (they may hold the private build's data).
+APP_ID="com.fincept.terminal.community"      # data folder name, macOS bundle id
+LEGACY_APP_ID="com.fincept.terminal"         # shared with the private build: reported, never removed
+# .deb (and older releases' .rpm) package name, prefix and /usr/bin launcher. "fincept-terminal"
+# in /opt/fincept-terminal is the private build's package AND this terminal's
+# releases up to 4.5.2: removed only when its Homepage/URL is this project's.
+PKG_NAME="fincept-terminal-community"
+PKG_PREFIX="/opt/$PKG_NAME"
+LEGACY_PKG_NAME="fincept-terminal"
+LEGACY_PKG_URL="https://github.com/Fincept-Corporation/FinceptTerminal"  # Homepage/URL of this terminal's legacy packages
+MAC_APP_NAME="Fincept Terminal Community.app"  # the .app in this edition's DMG
+DESKTOP_ID="fincept-terminal-community"      # desktop file id, icon name, AppStream file
 FLATPAK_ID="in.fincept.FinceptTerminal"
-QT_ORG="Fincept"                       # QCoreApplication organization / application name
-QT_APP="FinceptTerminal"
+QT_ORG="FinceptCommunity"                    # QCoreApplication organization / application name
+QT_APP="FinceptTerminalCommunity"            # (also the IFW install folder name)
+QT_PLIST_DOMAIN="com.finceptcommunity.$QT_APP"   # QSettings on macOS (org has no domain)
+EDITION_ID="community"
 
 YES=0
 DRY_RUN=0
@@ -298,7 +317,9 @@ owner_of() {
 # QtWebEngineProcess, the Flatpak sandbox) started from the install or data
 # folders — never this script or its sudo parent.
 find_pids() {
-    local pat="FinceptTerminal|FinceptMaintenanceTool|com\\.fincept\\.terminal/|/opt/fincept-terminal/|in\\.fincept\\.FinceptTerminal"
+    # Only this edition's: a bare FinceptTerminal / FinceptMaintenanceTool may be
+    # the private build's (an AppImage of this edition is closed by the user).
+    local pat="FinceptTerminalCommunity|Fincept Terminal Community\\.app/|com\\.fincept\\.terminal\\.community|/opt/fincept-terminal-community/|in\\.fincept\\.FinceptTerminal"
     local pid cmd
     for pid in $(pgrep -u "$TARGET_USER" -f "$pat" 2>/dev/null); do
         [ "$pid" = "$$" ] && continue
@@ -361,11 +382,14 @@ bundle_id_of() {
 remove_app_mac() {
     local app lsreg
     lsreg="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-    for app in "/Applications/FinceptTerminal.app" "/Applications/Fincept Terminal.app" \
+    for app in "/Applications/$MAC_APP_NAME" "$TARGET_HOME/Applications/$MAC_APP_NAME" \
+        "/Applications/FinceptTerminal.app" "/Applications/Fincept Terminal.app" \
         "$TARGET_HOME/Applications/FinceptTerminal.app" "$TARGET_HOME/Applications/Fincept Terminal.app"; do
         [ -d "$app" ] || continue
         if [ "$(bundle_id_of "$app")" != "$APP_ID" ]; then
-            warn "skipping $app: its bundle id is not $APP_ID"
+            # com.fincept.terminal: the private build, or a release before the
+            # edition split — the two cannot be told apart.
+            warn "skipping $app: its bundle id is not $APP_ID (another Fincept Terminal build, or an older release)"
             continue
         fi
         # Forget it in Launch Services so Spotlight / Open With drop it now.
@@ -374,8 +398,8 @@ remove_app_mac() {
         fi
         remove "$app" root
     done
-    remove_ifw_dir "/Applications/FinceptTerminal"
-    remove_ifw_dir "$TARGET_HOME/Applications/FinceptTerminal"
+    remove_ifw_dir "/Applications/$QT_APP"
+    remove_ifw_dir "$TARGET_HOME/Applications/$QT_APP"
 }
 
 deb_installed() {
@@ -417,18 +441,54 @@ remove_packages_linux() {
         fi
     fi
 
+    # The legacy package name "fincept-terminal" is ALSO the private build's
+    # package. This terminal's releases up to 4.5.2 carry the project's GitHub URL
+    # as Homepage (deb) / URL (rpm); the private build's carry https://fincept.in.
+    # Only a package with this edition's URL is removed; any other is reported.
+    local legacy_url=""
+    if command -v dpkg-query >/dev/null 2>&1 &&
+        dpkg-query -W -f='${Status}' "$LEGACY_PKG_NAME" 2>/dev/null | grep -q 'ok installed'; then
+        legacy_url="$(dpkg-query -W -f='${Homepage}' "$LEGACY_PKG_NAME" 2>/dev/null)"
+        if [ "${legacy_url%/}" = "$LEGACY_PKG_URL" ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+                run "removing the $LEGACY_PKG_NAME .deb package (this terminal's release up to 4.5.2)" as_root apt-get purge -y "$LEGACY_PKG_NAME"
+            else
+                run "removing the $LEGACY_PKG_NAME .deb package (this terminal's release up to 4.5.2)" as_root dpkg --purge "$LEGACY_PKG_NAME"
+            fi
+        else
+            warn "kept the $LEGACY_PKG_NAME package (Homepage ${legacy_url:-none}): it is another Fincept Terminal build's"
+        fi
+    elif command -v rpm >/dev/null 2>&1 && rpm -q "$LEGACY_PKG_NAME" >/dev/null 2>&1; then
+        legacy_url="$(rpm -q --qf '%{URL}' "$LEGACY_PKG_NAME" 2>/dev/null)"
+        if [ "${legacy_url%/}" = "$LEGACY_PKG_URL" ]; then
+            if command -v dnf >/dev/null 2>&1; then
+                run "removing the $LEGACY_PKG_NAME .rpm package (this terminal's release up to 4.5.2)" as_root dnf remove -y "$LEGACY_PKG_NAME"
+            else
+                run "removing the $LEGACY_PKG_NAME .rpm package (this terminal's release up to 4.5.2)" as_root rpm -e "$LEGACY_PKG_NAME"
+            fi
+        else
+            warn "kept the $LEGACY_PKG_NAME package (URL ${legacy_url:-none}): it is another Fincept Terminal build's"
+        fi
+    fi
+
     # Files the package manager leaves behind (anything created at run time),
     # and `cmake --install` prefixes. While a package still owns a path (dry
     # run), the package removal above already covers it.
     local p prefix
-    if [ -d /opt/fincept-terminal ] && ! owned_by_package /opt/fincept-terminal; then
-        remove /opt/fincept-terminal root
+    if [ -d "$PKG_PREFIX" ] && ! owned_by_package "$PKG_PREFIX"; then
+        remove "$PKG_PREFIX" root
     fi
     for prefix in /usr/local /usr "$TARGET_HOME/.local"; do
         exists "$prefix/bin/FinceptTerminal" || [ -d "$prefix/share/fincept-terminal" ] || continue
+        # The private build's `cmake --install` lays out the same bin/ and
+        # share/fincept-terminal; only a prefix with this edition's desktop entry is ours.
+        if [ ! -f "$prefix/share/applications/$DESKTOP_ID.desktop" ]; then
+            warn "skipping the install in $prefix: it has no $DESKTOP_ID.desktop (another Fincept Terminal build, or an older release)"
+            continue
+        fi
         for p in "$prefix/bin/FinceptTerminal" "$prefix/share/fincept-terminal" "$prefix/libexec/fincept-terminal" \
-            "$prefix/share/applications/$PKG_NAME.desktop" "$prefix/share/metainfo/$PKG_NAME.appdata.xml" \
-            "$prefix/share/icons/hicolor/256x256/apps/$PKG_NAME.png"; do
+            "$prefix/share/applications/$DESKTOP_ID.desktop" "$prefix/share/metainfo/$DESKTOP_ID.appdata.xml" \
+            "$prefix/share/icons/hicolor/256x256/apps/$DESKTOP_ID.png"; do
             exists "$p" || continue
             owned_by_package "$p" && continue
             remove "$p" root
@@ -446,10 +506,37 @@ remove_flatpak() {
     fi
 }
 
-# Downloaded AppImages in the usual places (the release asset is named
-# FinceptTerminal-<version>-linux-x64-setup.run).
+# This edition's AppImages (releases up to 4.5.3; no longer published): the
+# files those releases recorded running from (<data root>/appimage-paths). A
+# recorded path is removed only when its name is a Fincept Terminal AppImage's:
+# $APPIMAGE is inherited by programs started from any AppImage, so a list
+# could also name another application's image. The private build's AppImage
+# carries the SAME file name (FinceptTerminal-<v>-linux-x64-setup.run), so a
+# file found by name alone is only reported, never removed.
 remove_appimages() {
-    local dir f name
+    local dir f name root recorded="" old_ifs="$IFS"
+    IFS='
+'
+    for root in $(data_roots); do
+        IFS="$old_ifs"
+        [ -f "$root/appimage-paths" ] || continue
+        while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in /*) ;; *) continue ;; esac
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+                FinceptTerminal*.run | FinceptTerminal*.AppImage | FinceptTerminal*.appimage) ;;
+                *)
+                    warn "kept $f: listed in $root/appimage-paths but not named like a Fincept Terminal AppImage"
+                    continue
+                    ;;
+            esac
+            remove "$f" root
+            recorded="$recorded
+$f"
+        done < "$root/appimage-paths"
+    done
+    IFS="$old_ifs"
     shopt -s nocasematch
     for dir in "$TARGET_HOME/Applications" "$TARGET_HOME/AppImages" "$TARGET_HOME/.local/bin" "$TARGET_HOME/bin" \
         "$TARGET_HOME/Downloads" "$TARGET_HOME/Desktop" "$TARGET_HOME/.local/share/AppImage" /opt /opt/appimages; do
@@ -458,9 +545,10 @@ remove_appimages() {
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             case "$name" in
-                FinceptTerminal*.AppImage | Fincept_Terminal*.AppImage | fincept-terminal*.AppImage | \
-                    FinceptTerminal-*-linux-*.run)
-                    remove "$f" root
+                FinceptTerminal-*-linux-*.run | FinceptTerminal-*-linux-*.AppImage | FinceptTerminal-*.AppImage)
+                    case "$recorded" in *"
+$f"*) continue ;; esac
+                    warn "kept $f: an AppImage this edition never ran from (it may be the private build's) — delete it yourself if it is this edition's"
                     ;;
             esac
         done
@@ -472,13 +560,21 @@ remove_appimages() {
 # (AppImageLauncher, appimaged, Gear Lever), plus any autostart entry.
 remove_desktop_integration() {
     local dir f
-    remove "$XDG_DATA_T/applications/$PKG_NAME.desktop"
+    remove "$XDG_DATA_T/applications/$DESKTOP_ID.desktop"
     for dir in "$XDG_DATA_T/applications" "$XDG_CONFIG_T/autostart"; do
         [ -d "$dir" ] || continue
         for f in "$dir"/*.desktop; do
             [ -f "$f" ] || continue
-            [ "$f" = "$XDG_DATA_T/applications/$PKG_NAME.desktop" ] && continue
-            if grep -qiE '^(Exec|TryExec)=.*(FinceptTerminal|fincept-terminal|in\.fincept\.FinceptTerminal)' "$f" 2>/dev/null; then
+            [ "$f" = "$XDG_DATA_T/applications/$DESKTOP_ID.desktop" ] && continue
+            # This edition's entries only: its desktop id in the file name (the
+            # AppImage integrators keep it), its WM class, or an Exec into one of
+            # its install locations. The private build's entries also run a
+            # FinceptTerminal binary, from /opt/fincept-terminal or an AppImage
+            # with the same file name as this edition's.
+            case "$(basename "$f")" in
+                *"$DESKTOP_ID"*) remove "$f"; continue ;;
+            esac
+            if grep -qE "^StartupWMClass=$QT_APP\$|^(Exec|TryExec)=.*($QT_APP/|$PKG_PREFIX/)" "$f" 2>/dev/null; then
                 remove "$f"
             fi
         done
@@ -486,7 +582,7 @@ remove_desktop_integration() {
     if [ -d "$XDG_DATA_T/icons" ]; then
         while IFS= read -r f; do
             remove "$f"
-        done < <(find "$XDG_DATA_T/icons" -type f \( -iname "*$PKG_NAME*" -o -iname '*finceptterminal*' \) 2>/dev/null)
+        done < <(find "$XDG_DATA_T/icons" -type f -iname "*$DESKTOP_ID*" 2>/dev/null)
     fi
     if [ "$DRY_RUN" -eq 0 ]; then
         command -v update-desktop-database >/dev/null 2>&1 &&
@@ -501,8 +597,8 @@ remove_app_linux() {
     remove_packages_linux
     remove_flatpak
     remove_appimages
-    remove_ifw_dir "$TARGET_HOME/FinceptTerminal"
-    remove_ifw_dir /opt/FinceptTerminal
+    remove_ifw_dir "$TARGET_HOME/$QT_APP"
+    remove_ifw_dir "/opt/$QT_APP"
     remove_desktop_integration
 }
 
@@ -544,11 +640,10 @@ data_roots() {
 }
 
 remove_data_mac() {
-    local L="$TARGET_HOME/Library" dom f n
-    # Legacy data folders (renamed/migrated by newer versions).
+    local L="$TARGET_HOME/Library" dom f
+    # Qt's per-application folder (QStandardPaths App*).
     remove "$L/Application Support/$QT_ORG/$QT_APP"
     rmdir_if_empty "$L/Application Support/$QT_ORG"
-    remove "$L/Application Support/$QT_APP"
     remove "$L/Application Support/fincept-dev"
     # Caches, saved window state, URL-session storage.
     remove "$L/Caches/$APP_ID"
@@ -558,46 +653,33 @@ remove_data_mac() {
     remove "$L/HTTPStorages/$APP_ID"
     remove "$L/HTTPStorages/$APP_ID.binarycookies"
     remove "$L/WebKit/$APP_ID"
-    # QSettings (com.fincept.FinceptTerminal) and the bundle-id domain. cfprefsd
-    # caches preferences, so drop the domain before the file.
-    for dom in "com.fincept.$QT_APP" "$APP_ID" "$QT_ORG.$QT_APP"; do
+    # QSettings ($QT_PLIST_DOMAIN) and the bundle-id domain. cfprefsd caches
+    # preferences, so drop the domain before the file. com.fincept.FinceptTerminal
+    # and the com.fincept.terminal Keychain service are shared with the private
+    # build and left alone.
+    for dom in "$QT_PLIST_DOMAIN" "$APP_ID"; do
         if as_user defaults read "$dom" >/dev/null 2>&1; then
             run "deleting preferences $dom" as_user defaults delete "$dom"
         fi
     done
-    for f in "com.fincept.$QT_APP.plist" "$APP_ID.plist" "$QT_ORG.$QT_APP.plist" "$QT_ORG.$QT_APP-Secure.plist"; do
+    for f in "$QT_PLIST_DOMAIN.plist" "$APP_ID.plist"; do
         remove "$L/Preferences/$f"
     done
-    # Keychain items written by versions <= 4.0.2 (service com.fincept.terminal).
-    if as_user security find-generic-password -s "$APP_ID" >/dev/null 2>&1; then
-        ACTIONS=$((ACTIONS + 1))
-        if [ "$DRY_RUN" -eq 1 ]; then
-            info "${C_D}would delete${C_N} legacy Keychain items (service $APP_ID)"
-        else
-            n=0
-            while [ "$n" -lt 1000 ] && as_user security delete-generic-password -s "$APP_ID" >/dev/null 2>&1; do
-                n=$((n + 1))
-            done
-            info "${C_G}deleted${C_N} $n legacy Keychain item(s) (service $APP_ID)"
-        fi
-    fi
 }
 
 remove_data_linux() {
-    # Legacy data folders (renamed/migrated by newer versions).
+    # Qt's per-application folder (QStandardPaths App*).
     remove "$XDG_DATA_T/$QT_ORG/$QT_APP"
     rmdir_if_empty "$XDG_DATA_T/$QT_ORG"
-    remove "$XDG_DATA_T/$QT_APP"
     remove "$XDG_DATA_T/fincept-dev"
     if [ "$XDG_DATA_T" != "$TARGET_HOME/.local/share" ]; then
         remove "$TARGET_HOME/.local/share/$QT_ORG/$QT_APP"
         rmdir_if_empty "$TARGET_HOME/.local/share/$QT_ORG"
-        remove "$TARGET_HOME/.local/share/$QT_APP"
         remove "$TARGET_HOME/.local/share/fincept-dev"
     fi
-    # QSettings, including the file fallback of the <= 4.0.2 secure storage.
+    # QSettings. ~/.config/Fincept/FinceptTerminal.conf and the libsecret schema
+    # com.fincept.terminal are shared with the private build and left alone.
     remove "$XDG_CONFIG_T/$QT_ORG/$QT_APP.conf"
-    remove "$XDG_CONFIG_T/$QT_ORG/$QT_APP-Secure.conf"
     rmdir_if_empty "$XDG_CONFIG_T/$QT_ORG"
     # Qt / app caches.
     remove "$XDG_CACHE_T/$QT_ORG/$QT_APP"
@@ -605,36 +687,32 @@ remove_data_linux() {
     remove "$XDG_CACHE_T/$APP_ID"
     # Flatpak sandbox data, if `flatpak uninstall --delete-data` did not run.
     remove "$TARGET_HOME/.var/app/$FLATPAK_ID"
-    # libsecret items written by versions <= 4.0.2 (schema com.fincept.terminal).
-    if command -v secret-tool >/dev/null 2>&1; then
-        if as_user secret-tool search --all xdg:schema "$APP_ID" 2>&1 | grep -q '^\['; then
-            run "deleting legacy libsecret items (schema $APP_ID)" as_user secret-tool clear xdg:schema "$APP_ID"
-        elif [ "$SUDO_TARGET" -eq 1 ]; then
-            warn "under sudo the keyring of $TARGET_USER is not reachable; run without sudo to clear legacy libsecret items"
-        fi
-    fi
 }
 
-# Folders the bundled Python scripts and external tools create in $HOME.
+# Folders external tools create in $HOME. The bundled Python scripts keep their
+# files in the data root (scripts/fincept_paths.py); the home folders older
+# releases used carry no edition name, may hold another Fincept Terminal build's
+# files, and were copied (never moved) into the data root: reported, kept.
 remove_home_extras() {
     local d
-    remove "$TARGET_HOME/.fincept"                     # AI Quant Lab: mlruns, models, pipelines
-    remove "$TARGET_HOME/.oecd_cache"                  # OECD connector cache
-    remove "$XDG_CACHE_T/fincept-terminal"             # exchange market cache (outside the app)
-    [ "$XDG_CACHE_T" != "$TARGET_HOME/.cache" ] && remove "$TARGET_HOME/.cache/fincept-terminal"
-    remove "$TARGET_HOME/fincept-terminal/agents.db"   # agent repository fallback (no APPDATA on Unix)
-    rmdir_if_empty "$TARGET_HOME/fincept-terminal"
+    for d in "$TARGET_HOME/.fincept" "$TARGET_HOME/.oecd_cache" "$XDG_CACHE_T/fincept-terminal" \
+        "$TARGET_HOME/.cache/fincept-terminal"; do
+        [ -e "$d" ] && info "kept $d — a folder older releases shared with other Fincept Terminal builds; delete it yourself if nothing else uses it"
+    done
+    # ~/fincept-terminal/agents.db is the legacy agent repository, which the
+    # private build imports from; this edition keeps its own in <data root>/finagent.
     # Claude Code history of the coding-agent runs (cwd <root>/agent-workspace/...).
-    for d in "$TARGET_HOME/.claude/projects/"*com-fincept-terminal-agent-workspace*; do
+    for d in "$TARGET_HOME/.claude/projects/"*com-fincept-terminal-community-agent-workspace*; do
         [ -d "$d" ] && remove "$d"
     done
     return 0
 }
 
-# Temp files, the Python cancel/arg files, and the single-instance socket
-# fincept-<16 hex> (left behind when the app crashes).
+# This edition's boot log only. fincept_* temp files and the fincept-<16 hex>
+# single-instance sockets look the same for the private build, so they are left
+# to the system's temp cleanup (a stale socket is cleared by the next start).
 remove_temp() {
-    local dirs t f name seen=":" udt re='^fincept-[0-9a-f]{16}$'
+    local dirs t f seen=":" udt
     dirs="/tmp /var/tmp"
     [ "$SUDO_TARGET" -eq 0 ] && [ -n "${TMPDIR:-}" ] && dirs="${TMPDIR%/} $dirs"
     if [ "$OS" = "mac" ]; then
@@ -645,16 +723,10 @@ remove_temp() {
         case "$seen" in *":$t:"*) continue ;; esac
         seen="$seen$t:"
         [ -d "$t" ] || continue
-        for f in "$t"/fincept_* "$t"/fincept-*; do
-            exists "$f" || continue
-            name="$(basename "$f")"
-            case "$name" in
-                fincept_* | fincept-boot.log) ;;
-                *) [[ "$name" =~ $re ]] || continue ;;
-            esac
-            [ "$(owner_of "$f")" = "$TARGET_USER" ] || continue
-            remove "$f"
-        done
+        f="$t/fincept-$EDITION_ID-boot.log"
+        exists "$f" || continue
+        [ "$(owner_of "$f")" = "$TARGET_USER" ] || continue
+        remove "$f"
     done
 }
 
@@ -704,6 +776,10 @@ $d
     fi
     remove_home_extras
     remove_temp
+    # The data root releases shared with the private build: reported, never removed.
+    if [ "$OS" = "mac" ]; then d="$TARGET_HOME/Library/Application Support/$LEGACY_APP_ID"; else d="$TARGET_HOME/.local/share/$LEGACY_APP_ID"; fi
+    [ -d "$d" ] && info "kept $d — the data folder older releases shared with another Fincept Terminal build"
+    return 0
 }
 
 # MCP client configs are the user's files: report, never edit.

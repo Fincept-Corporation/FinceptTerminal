@@ -27,6 +27,7 @@ import asyncio
 import inspect
 import json
 import logging
+import math
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -37,8 +38,11 @@ logger = logging.getLogger(__name__)
 Emit = Callable[[Dict[str, Any]], None]
 
 
-def run_loop_sync(task_id: str, rd_loop: Any, loop_n: int, workspace: Path, emit: Emit) -> Dict[str, Any]:
-    """Drive `rd_loop` for `loop_n` iterations, emitting progress; returns the result event."""
+def run_loop_sync(task_id: str, rd_loop: Any, loop_n: int, workspace: Path, emit: Emit,
+                  extra: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Drive `rd_loop` for `loop_n` iterations, emitting progress; returns the result event.
+
+    `extra` is merged into the result event (e.g. ignored_params)."""
     workspace.mkdir(parents=True, exist_ok=True)
     checkpoint_path = str(workspace / "checkpoint.pkl")
     state: Dict[str, Any] = {"completed": 0, "best_ic": None, "best_sharpe": None}
@@ -62,21 +66,7 @@ def run_loop_sync(task_id: str, rd_loop: Any, loop_n: int, workspace: Path, emit
             "best_sharpe": state["best_sharpe"],
         })
 
-    # Hook the loop's per-iteration entry point so progress is reported as it
-    # happens (rdagent's LoopBase exposes execute_loop; sync or async).
-    original = getattr(rd_loop, "execute_loop", None)
-    if original is not None:
-        if inspect.iscoroutinefunction(original):
-            async def hooked(*args: Any, **kwargs: Any) -> Any:
-                result = await original(*args, **kwargs)
-                after_iteration()
-                return result
-        else:
-            def hooked(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
-                result = original(*args, **kwargs)
-                after_iteration()
-                return result
-        rd_loop.execute_loop = hooked  # type: ignore[method-assign]
+    _hook_iteration_end(rd_loop, after_iteration)
 
     run = rd_loop.run(loop_n=loop_n)
     if inspect.isawaitable(run):
@@ -85,9 +75,10 @@ def run_loop_sync(task_id: str, rd_loop: Any, loop_n: int, workspace: Path, emit
     raw = _extract_results(rd_loop, workspace)
     factors = extract_factors_from_result(raw)
     models = extract_models_from_result(raw)
-    best_ic = max((f["ic"] for f in factors if f.get("ic") is not None), default=state["best_ic"])
-    best_sharpe = max((f["sharpe"] for f in factors if f.get("sharpe") is not None), default=state["best_sharpe"])
-    return {
+    scored = factors + models
+    best_ic = max((f["ic"] for f in scored if f.get("ic") is not None), default=state["best_ic"])
+    best_sharpe = max((f["sharpe"] for f in scored if f.get("sharpe") is not None), default=state["best_sharpe"])
+    result = {
         "event": "result",
         "success": True,
         "task_id": task_id,
@@ -98,59 +89,145 @@ def run_loop_sync(task_id: str, rd_loop: Any, loop_n: int, workspace: Path, emit
         "iterations_completed": state["completed"],
         "workspace": str(workspace),
     }
+    if extra:
+        result.update(extra)
+    return result
+
+
+def _hook_iteration_end(rd_loop: Any, callback: Callable[[], None]) -> None:
+    """
+    Call `callback` once per finished iteration.
+
+    rdagent 0.8.0's LoopBase runs steps (direct_exp_gen, coding, running,
+    feedback) and dumps itself after each finished step as
+    <session>/<loop>/<step>_<name>; the dump of the last step marks the end of
+    an iteration (with step_idx already advanced, so a checkpoint written then
+    resumes at the next iteration). The hook wraps `dump` on the loop's CLASS:
+    an instance attribute holding a closure would make every one of those
+    pickle dumps fail ("Can't pickle local object"). This process runs one
+    loop, so patching its class is contained.
+    """
+    cls = type(rd_loop)
+    steps = list(getattr(cls, "steps", []) or [])
+    last_step = steps[-1] if steps else "feedback"
+    original = cls.dump
+    if getattr(original, "_fincept_hooked", False):
+        return
+
+    def dump(self: Any, path: Any) -> None:
+        original(self, path)
+        if self is rd_loop and Path(path).name.endswith("_" + last_step):
+            try:
+                callback()
+            except Exception as exc:  # progress reporting must never break the loop
+                logger.warning("progress hook failed: %s", exc)
+
+    dump._fincept_hooked = True  # type: ignore[attr-defined]
+    cls.dump = dump  # type: ignore[method-assign]
 
 
 async def _await(awaitable: Any) -> Any:
     return await awaitable
 
 
+def _hist_entries(rd_loop: Any) -> List[tuple]:
+    """(experiment, feedback) pairs from the loop trace (rdagent 0.8.0 stores tuples)."""
+    hist = getattr(getattr(rd_loop, "trace", None), "hist", None) or []
+    out = []
+    for entry in hist:
+        if isinstance(entry, (tuple, list)) and len(entry) >= 2:
+            out.append((entry[0], entry[1]))
+        else:  # older rdagent: objects with attributes
+            out.append((getattr(entry, "experiment", None), getattr(entry, "feedback", None)))
+    return out
+
+
+# Qlib backtest metric names (rdagent.scenarios.qlib.developer.feedback IMPORTANT_METRICS + IR).
+_METRIC_KEYS = {
+    "ic": "IC",
+    "sharpe": "1day.excess_return_with_cost.information_ratio",
+    "annualized_return": "1day.excess_return_with_cost.annualized_return",
+    "max_drawdown": "1day.excess_return_with_cost.max_drawdown",
+}
+
+
+def _exp_metrics(exp: Any) -> Dict[str, Any]:
+    """Backtest metrics of one experiment (exp.result is a pandas Series indexed by metric name)."""
+    out: Dict[str, Any] = {k: None for k in _METRIC_KEYS}
+    res = getattr(exp, "result", None)
+    if res is None:
+        return out
+    for key, name in _METRIC_KEYS.items():
+        try:
+            v = res.get(name) if hasattr(res, "get") else None
+            if v is not None:
+                v = float(v)
+                out[key] = v if math.isfinite(v) else None
+        except Exception:
+            pass
+    return out
+
+
 def _latest_metrics(rd_loop: Any):
     """(ic, sharpe) of the newest trace entry, best effort."""
     try:
-        hist = getattr(getattr(rd_loop, "trace", None), "hist", None) or []
-        if hist:
-            feedback = getattr(hist[-1], "feedback", None)
-            if feedback is not None:
-                return getattr(feedback, "ic", None), getattr(feedback, "sharpe", None)
+        entries = _hist_entries(rd_loop)
+        if entries:
+            m = _exp_metrics(entries[-1][0])
+            return m["ic"], m["sharpe"]
     except Exception:
         pass
     return None, None
+
+
+def _workspace_code(ws_obj: Any) -> str:
+    """Main source file of a sub-workspace (FBWorkspace.file_dict in 0.8.0)."""
+    try:
+        files = getattr(ws_obj, "file_dict", None) or getattr(ws_obj, "code_dict", None) or {}
+        for name, code in files.items():
+            if str(name).endswith(".py"):
+                return code
+        return next(iter(files.values()), "")
+    except Exception:
+        return ""
 
 
 def _extract_results(rd_loop: Any, workspace: Path) -> Dict[str, Any]:
     """Factors/models from the loop trace; falls back to generated files in the workspace."""
     results: Dict[str, Any] = {"workspace": str(workspace), "factors": [], "models": []}
     try:
-        hist = getattr(getattr(rd_loop, "trace", None), "hist", None) or []
-        for i, entry in enumerate(hist):
-            exp = getattr(entry, "experiment", None)
-            feedback = getattr(entry, "feedback", None)
-            if not exp or not feedback:
+        for i, (exp, feedback) in enumerate(_hist_entries(rd_loop)):
+            if exp is None:
                 continue
+            metrics = _exp_metrics(exp)
+            accepted = bool(getattr(feedback, "decision", False)) if feedback is not None else None
             sub_tasks = getattr(exp, "sub_tasks", []) or []
             sub_ws = getattr(exp, "sub_workspace_list", []) or []
-            for j, (task_obj, ws_obj) in enumerate(zip(sub_tasks, sub_ws)):
-                code = ""
-                try:
-                    if ws_obj:
-                        code_dict = getattr(ws_obj, "code", {}) or {}
-                        code = next(iter(code_dict.values()), "")
-                except Exception:
-                    pass
-                results["factors"].append({
-                    "factor_id": f"factor_{i}_{j}",
-                    "name": getattr(task_obj, "factor_name", getattr(task_obj, "model_type", f"Factor_{i}_{j}")),
-                    "description": getattr(task_obj, "factor_description", getattr(task_obj, "description", "")),
-                    "code": code,
+            for j, task_obj in enumerate(sub_tasks):
+                ws_obj = sub_ws[j] if j < len(sub_ws) else None
+                is_model = hasattr(task_obj, "model_type") and not hasattr(task_obj, "factor_name")
+                name = (getattr(task_obj, "factor_name", None) or getattr(task_obj, "name", None)
+                        or f"{'Model' if is_model else 'Factor'}_{i}_{j}")
+                entry = {
+                    "name": name,
+                    "description": str(getattr(task_obj, "description", "") or ""),
+                    "code": _workspace_code(ws_obj) if ws_obj is not None else "",
                     "iteration": i,
-                    "ic": getattr(feedback, "ic", None),
-                    "sharpe": getattr(feedback, "sharpe", None),
-                })
+                    "accepted": accepted,
+                    **metrics,
+                }
+                if is_model:
+                    entry["model_id"] = f"model_{i}_{j}"
+                    entry["model_type"] = getattr(task_obj, "model_type", None)
+                    results["models"].append(entry)
+                else:
+                    entry["factor_id"] = f"factor_{i}_{j}"
+                    results["factors"].append(entry)
     except Exception as exc:
-        logger.warning("Could not extract factors from trace: %s", exc)
-
-    if not results["factors"]:
-        results["factors"] = _scan_workspace_for_factors(workspace)
+        logger.warning("Could not extract results from trace: %s", exc)
+    # No fallback scan of the workspace: since the run's cwd is the workspace,
+    # it also holds rdagent's templates and every failed attempt, and listing
+    # those .py files as "discovered factors" would be a wrong result.
     return results
 
 

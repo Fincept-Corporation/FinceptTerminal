@@ -124,12 +124,13 @@ ApiResponse<SmartOrderResult> SmartOrderEngine::execute(IBroker* broker, const B
         return {true, SmartOrderResult{false, {}, {}, 0, "No action needed. Position already at target."}, {}};
     }
 
-    LOG_INFO("SmartOrder", QString("Adjusting %1:%2 from %3 to %4 → %5 %6")
-                               .arg(order.symbol, order.exchange)
-                               .arg(current)
-                               .arg(target)
-                               .arg(action == OrderSide::Buy ? "BUY" : "SELL")
-                               .arg(quantity));
+    // The order itself is audited by UnifiedTrading (Smart order submitted / accepted).
+    LOG_DEBUG("SmartOrder", logf("Smart order adjusting position", {{"symbol", order.symbol},
+                                                                    {"exchange", order.exchange},
+                                                                    {"current", current},
+                                                                    {"target", target},
+                                                                    {"side", action == OrderSide::Buy ? "buy" : "sell"},
+                                                                    {"qty", quantity}}));
 
     UnifiedOrder unified;
     unified.symbol = order.symbol;

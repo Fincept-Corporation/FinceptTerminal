@@ -42,6 +42,8 @@ class RssFeedManagerDialog : public QDialog {
   private:
     void build_ui();
     void reload_table();
+    /// Re-applies the theme colours of the table items.
+    void refresh_theme();
     int selected_row() const;
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.

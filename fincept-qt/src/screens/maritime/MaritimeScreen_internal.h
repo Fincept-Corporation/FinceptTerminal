@@ -16,6 +16,8 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QColor>
+#include <QFontMetrics>
 #include <QString>
 #include <QStyle>
 #include <QWidget>
@@ -27,7 +29,29 @@ inline QString C(const fincept::ui::ColorToken& t) {
     return QString::fromLatin1(t.get());
 }
 inline QString F(const fincept::ui::fonts::FontFamilyToken& t) {
-    return QString::fromLatin1(t.get());
+    return QString::fromUtf8(t.get()); // the user's font family may be any Unicode name
+}
+
+/// Map markers sit on the basemap imagery (satellite / dark tiles), not on a
+/// theme surface, so they take the bright colour of the dark preset whatever
+/// the active theme: e.g. mt_marker_color(&ui::ThemeTokens::accent).
+inline QColor mt_marker_color(const char* fincept::ui::ThemeTokens::*field) {
+    return QColor(fincept::ui::THEME_OBSIDIAN.*field);
+}
+
+/// Width of `chars` characters in the user's font at `offset` px from the base
+/// size — for panel and control widths that must grow with the font.
+inline int mt_text_width(int chars, int offset, int weight = QFont::Normal) {
+    return QFontMetrics(fincept::ui::fonts::font(offset, weight)).horizontalAdvance(QString(chars, QLatin1Char('M')));
+}
+
+/// Item-data role on a vessel-table name cell: true when its position fix is
+/// stale (drawn in the accent colour; re-applied on theme change).
+inline constexpr int kMtStaleRole = Qt::UserRole + 1;
+
+/// Text colour of a vessel-table name cell.
+inline QColor mt_name_color(bool stale) {
+    return QColor(stale ? fincept::ui::colors::AMBER() : fincept::ui::colors::TEXT_PRIMARY());
 }
 
 /// Set a dynamic style property and re-polish so the root sheet's selector applies.
@@ -105,44 +129,46 @@ inline QString maritime_root_ss() {
                   "QPushButton[mtRole=\"toolbar\"] { background:transparent; color:%6; border:none;"
                   " font-family:%3; font-size:%4px; font-weight:700; padding:3px 8px; }"
                   "QPushButton[mtRole=\"toolbar\"]:hover, QPushButton[mtRole=\"toolbar\"]:checked { color:%1; }")
-              .arg(C(colors::AMBER), C(colors::BG_BASE), f)
+              .arg(C(colors::AMBER), C(colors::TEXT_ON_ACCENT), f)
               .arg(fonts::SMALL)
               .arg(C(colors::AMBER_DIM), C(colors::TEXT_SECONDARY), C(colors::BORDER_BRIGHT), C(colors::BG_HOVER));
     // ── Labels by role / name ───────────────────────────────────────────────
     ss += QString("QLabel#mtBrand { color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:2px; }"
                   "QLabel#mtCenterTitle { color:%1; font-size:%4px; font-weight:700; font-family:%3; letter-spacing:1px; }"
-                  "QLabel#mtCredits, QLabel#mtVesselCount { color:%5; font-size:11px; font-weight:700; font-family:%3;"
+                  "QLabel#mtCredits, QLabel#mtVesselCount { color:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; font-family:%3;"
                   " padding:4px 10px; background:%6; border:1px solid %7; border-radius:2px; }"
                   "QLabel#mtVesselCount { color:%1; }"
-                  "QLabel[mtRole=\"section\"] { color:%1; font-size:12px; font-weight:700; font-family:%3;"
+                  "QLabel[mtRole=\"section\"] { color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; font-family:%3;"
                   " letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %8; }"
-                  "QLabel[mtRole=\"tiny\"], QLabel[mtRole=\"statCap\"] { color:%5; font-size:10px; font-weight:700;"
+                  "QLabel[mtRole=\"tiny\"], QLabel[mtRole=\"statCap\"] { color:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700;"
                   " font-family:%3; letter-spacing:1px; }"
-                  "QLabel[mtRole=\"statVal\"] { color:%9; font-size:18px; font-weight:700; font-family:%3; }"
-                  "QLabel[mtRole=\"detail\"] { color:%5; font-size:12px; font-family:%3; }"
-                  "QLabel[mtRole=\"hint\"] { color:%10; font-size:9px; font-family:%3; }"
-                  "QLabel[mtRole=\"cardTitle\"] { color:%1; font-size:13px; font-weight:700; font-family:%3; }"
-                  "QLabel[mtRole=\"cardCaption\"] { color:%1; font-size:9px; font-weight:700; font-family:%3;"
+                  "QLabel[mtRole=\"statVal\"] { color:%9; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:700; font-family:%3; }"
+                  "QLabel[mtRole=\"detail\"] { color:%5; font-size:" + fincept::ui::fonts::px(-2) + "px; font-family:%3; }"
+                  "QLabel[mtRole=\"hint\"] { color:%10; font-size:" + fincept::ui::fonts::px(-5) + "px; font-family:%3; }"
+                  "QLabel[mtRole=\"cardTitle\"] { color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; font-family:%3; }"
+                  "QLabel[mtRole=\"cardCaption\"] { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; font-family:%3;"
                   " letter-spacing:1px; }"
-                  "QLabel[mtRole=\"sbCap\"] { color:%10; font-size:10px; font-family:%3; }"
-                  "QLabel[mtRole=\"sbVal\"] { color:%9; font-size:10px; font-weight:700; font-family:%3; }"
-                  "QLabel#mtStatus { font-size:8px; font-weight:700; font-family:%3; }"
-                  "QLabel#mtSearchError { color:%11; font-size:9px; font-family:%3; }"
-                  "QLabel#mtNotFound { color:%1; font-size:11px; font-family:%3; padding:6px; border:1px solid %7;"
+                  "QLabel[mtRole=\"sbCap\"] { color:%10; font-size:" + fincept::ui::fonts::px(-4) + "px; font-family:%3; }"
+                  "QLabel[mtRole=\"sbVal\"] { color:%9; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; font-family:%3; }"
+                  "QLabel#mtStatus { font-size:" + fincept::ui::fonts::px(-6) + "px; font-weight:700; font-family:%3; }"
+                  "QLabel#mtSearchError { color:%11; font-size:" + fincept::ui::fonts::px(-5) + "px; font-family:%3; }"
+                  "QLabel#mtNotFound { color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-family:%3; padding:6px; border:1px solid %7;"
                   " background:%6; border-radius:2px; }")
               .arg(C(colors::AMBER))
               .arg(fonts::DATA)
               .arg(f)
               .arg(fonts::TINY)
               .arg(C(colors::TEXT_SECONDARY), C(colors::BG_SURFACE), C(colors::BORDER_MED), C(colors::BORDER_DIM),
-                   C(colors::TEXT_PRIMARY), C(colors::TEXT_TERTIARY), C(colors::NEGATIVE));
+                   C(colors::TEXT_PRIMARY), C(colors::TEXT_TERTIARY), C(colors::DANGER));
     // ── State tones (last, so they win over the role colours above) ─────────
+    // Tones are states (service health, credit balance, route status), not
+    // price direction: green / red stay green / red under every direction palette.
     ss += QString("QLabel[tone=\"positive\"] { color:%1; } QLabel[tone=\"amber\"] { color:%2; }"
                   "QLabel[tone=\"negative\"] { color:%3; } QLabel[tone=\"muted\"] { color:%4; }"
                   "QLabel#mtCredits[tone=\"positive\"] { border-color:%1; }"
                   "QLabel#mtCredits[tone=\"amber\"] { border-color:%2; }"
                   "QLabel#mtCredits[tone=\"negative\"] { border-color:%3; }")
-              .arg(C(colors::POSITIVE), C(colors::AMBER), C(colors::NEGATIVE), C(colors::TEXT_TERTIARY));
+              .arg(C(colors::SUCCESS), C(colors::AMBER), C(colors::DANGER), C(colors::TEXT_TERTIARY));
     return ss;
 }
 

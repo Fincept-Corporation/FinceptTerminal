@@ -1,54 +1,118 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-0D7003A5
-# Category: Custom Data
-# Description: Dual-momentum strategy inspired by Bitcoin/crypto trading. Uses
-#   EMA 12/26 crossover combined with volume confirmation. Buys on bullish
-#   crossover with above-average volume, exits on bearish crossover.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+### <summary>
+### Demonstration of using an external custom datasource. LEAN Engine is incredibly flexible and allows you to define your own data source.
+### This includes any data source which has a TIME and VALUE. These are the *only* requirements. To demonstrate this we're loading in "Bitcoin" data.
+### </summary>
+### <meta name="tag" content="using data" />
+### <meta name="tag" content="custom data" />
+### <meta name="tag" content="crypto" />
 class CustomDataBitcoinAlgorithm(QCAlgorithm):
-    """EMA crossover with volume confirmation (inspired by crypto strategies)."""
 
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
+        self.set_start_date(2011, 9, 13)
+        self.set_end_date(datetime.now().date() - timedelta(1))
         self.set_cash(100000)
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+        # Define the symbol and "type" of our generic data:
+        self.add_data(Bitcoin, "BTC")
 
-        self._fast_ema = self.ema(self.symbol, 12, Resolution.DAILY)
-        self._slow_ema = self.ema(self.symbol, 26, Resolution.DAILY)
-        self._vol_sma = self.sma(self.symbol, 20, Resolution.DAILY)
-
-        self._prev_fast = 0
-        self._prev_slow = 0
 
     def on_data(self, data):
-        if not self._fast_ema.is_ready or not self._slow_ema.is_ready:
-            return
-        if self.symbol not in data:
-            return
+        if not data.contains_key("BTC"): return
 
-        fast = self._fast_ema.current.value
-        slow = self._slow_ema.current.value
-        price = data[self.symbol].close
+        close = data["BTC"].close
 
-        # Detect crossover
-        bullish_cross = self._prev_fast <= self._prev_slow and fast > slow
-        bearish_cross = self._prev_fast >= self._prev_slow and fast < slow
+        # If we don't have any weather "SHARES" -- invest"
+        if not self.portfolio.invested:
+            # Weather used as a tradable asset, like stocks, futures etc.
+            # It's only OK to use SetHoldings with crypto when using custom data. When trading with built-in crypto data, 
+            # use the cashbook. Reference https://github.com/QuantConnect/Lean/blob/master/Algorithm.python/BasicTemplateCryptoAlgorithm.py 
+            self.set_holdings("BTC", 1) 
+            self.debug("Buying BTC 'Shares': BTC: {0}".format(close))
 
-        self._prev_fast = fast
-        self._prev_slow = slow
+        self.debug("Time: {0} {1}".format(datetime.now(), close))
 
-        if not self.portfolio.invested and bullish_cross:
-            self.set_holdings(self.symbol, 1)
-        elif self.portfolio.invested and bearish_cross:
-            self.liquidate()
+
+class Bitcoin(PythonData):
+    '''Custom Data Type: Bitcoin data from Quandl - http://www.quandl.com/help/api-for-bitcoin-data'''
+
+    def get_source(self, config, date, is_live_mode):
+        if is_live_mode:
+            return SubscriptionDataSource("https://www.bitstamp.net/api/ticker/", SubscriptionTransportMedium.REST)
+
+        #return "http://my-ftp-server.com/futures-data-" + date.to_string("Ymd") + ".zip"
+        # OR simply return a fixed small data file. Large files will slow down your backtest
+        return SubscriptionDataSource("https://www.quantconnect.com/api/v2/proxy/quandl/api/v3/datasets/BCHARTS/BITSTAMPUSD.csv?order=asc&api_key=WyAazVXnq7ATy_fefTqm", SubscriptionTransportMedium.REMOTE_FILE)
+
+
+    def reader(self, config, line, date, is_live_mode):
+        coin = Bitcoin()
+        coin.symbol = config.symbol
+
+        if is_live_mode:
+            # Example Line Format:
+            # {"high": "441.00", "last": "421.86", "timestamp": "1411606877", "bid": "421.96", "vwap": "428.58", "volume": "14120.40683975", "low": "418.83", "ask": "421.99"}
+            try:
+                live_btc = json.loads(line)
+
+                # If value is zero, return None
+                value = live_btc["last"]
+                if value == 0: return None
+
+                coin.end_time =  datetime.utcnow().astimezone(timezone(str(config.exchange_time_zone))).replace(tzinfo=None)
+                coin.value = value
+                coin["Open"] = float(live_btc["open"])
+                coin["High"] = float(live_btc["high"])
+                coin["Low"] = float(live_btc["low"])
+                coin["Close"] = float(live_btc["last"])
+                coin["Ask"] = float(live_btc["ask"])
+                coin["Bid"] = float(live_btc["bid"])
+                coin["VolumeBTC"] = float(live_btc["volume"])
+                coin["WeightedPrice"] = float(live_btc["vwap"])
+                return coin
+            except ValueError:
+                # Do nothing, possible error in json decoding
+                return None
+
+        # Example Line Format:
+        # Date      Open   High    Low     Close   Volume (BTC)    Volume (Currency)   Weighted Price
+        # 2011-09-13 5.8    6.0     5.65    5.97    58.37138238,    346.0973893944      5.929230648356
+        if not (line.strip() and line[0].isdigit()): return None
+
+        try:
+            data = line.split(',')
+
+            # If value is zero, return None
+            value = data[4]
+            if value == 0: return None
+
+            coin.time = datetime.strptime(data[0], "%Y-%m-%d")
+            coin.end_time = coin.time + timedelta(days=1)
+            coin.value = value
+            coin["Open"] = float(data[1])
+            coin["High"] = float(data[2])
+            coin["Low"] = float(data[3])
+            coin["Close"] = float(data[4])
+            coin["VolumeBTC"] = float(data[5])
+            coin["VolumeUSD"] = float(data[6])
+            coin["WeightedPrice"] = float(data[7])
+            return coin
+
+        except ValueError:
+            # Do nothing, possible error in json decoding
+            return None

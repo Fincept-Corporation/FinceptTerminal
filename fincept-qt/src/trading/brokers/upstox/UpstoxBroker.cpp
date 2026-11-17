@@ -185,7 +185,7 @@ TokenExchangeResponse UpstoxBroker::exchange_token(const QString& api_key, const
         // Upstox tokens expire daily at 03:30 IST regardless of when issued.
         // There is no OAuth refresh token, so on expiry the user must re-auth.
         const QString extra = with_token_expiry({}, next_ist_flush_epoch(3, 30));
-        LOG_INFO("Upstox", "Token exchange OK, user=" + user);
+        LOG_INFO("Upstox", logf("Broker sign-in succeeded", {{"broker", "upstox"}, {"account", log_mask(user)}}));
         return {.success = true, .access_token = access, .user_id = user, .additional_data = extra};
     }
 
@@ -220,12 +220,16 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
 
     if (!resp.success || resp.json.value("status").toString() != "success") {
         const QString err = checked_error(resp, "place_order failed");
-        LOG_ERROR("Upstox", "place_order: " + err);
+        LOG_ERROR("Upstox", logf("Order placement failed", {{"venue", "upstox"},
+                                                            {"symbol", order.symbol},
+                                                            {"status", resp.status_code},
+                                                            {"error", err}}));
         return {false, "", err};
     }
 
     const QString order_id = resp.json.value("data").toObject().value("order_id").toString();
-    LOG_INFO("Upstox", "place_order OK: " + order_id);
+    // The order audit trail is written centrally (UnifiedTrading); adapter detail only.
+    LOG_DEBUG("Upstox", logf("Order placed", {{"venue", "upstox"}, {"symbol", order.symbol}, {"order_id", order_id}}));
     return {true, order_id, ""};
 }
 
@@ -515,11 +519,8 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
             chunk_start = from;
 
         const QString url = QString("https://api.upstox.com/v3/historical-candle/%1/%2/%3/%4/%5")
-                                .arg(QString(QUrl::toPercentEncoding(ikey)))
-                                .arg(iv.unit)
-                                .arg(iv.interval)
-                                .arg(chunk_end.toString("yyyy-MM-dd"))
-                                .arg(chunk_start.toString("yyyy-MM-dd"));
+                                .arg(QString(QUrl::toPercentEncoding(ikey)), iv.unit, iv.interval,
+                                     chunk_end.toString("yyyy-MM-dd"), chunk_start.toString("yyyy-MM-dd"));
 
         auto resp = http.get(url, auth_headers(creds));
         if (!resp.success || resp.json.value("status").toString() != "success") {

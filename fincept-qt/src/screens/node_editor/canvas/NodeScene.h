@@ -4,6 +4,7 @@
 
 #include <QGraphicsScene>
 #include <QMap>
+#include <QStringList>
 #include <QTimer>
 
 namespace fincept::workflow {
@@ -89,6 +90,9 @@ class NodeScene : public QGraphicsScene {
     /// the cursor only — the screen diffs a whole-scene position snapshot).
     void node_move_started();
     void node_move_finished();
+    /// The canvas went from no nodes to some (`empty` false) or back (`empty`
+    /// true). Emitted on the transition only — a load (clear + add) emits both.
+    void emptiness_changed(bool empty);
 
   public:
     /// Animate edges connected to a node (during execution).
@@ -111,6 +115,10 @@ class NodeScene : public QGraphicsScene {
 
     QMap<QString, NodeItem*> nodes_;
     QMap<QString, EdgeItem*> edges_;
+    /// Edge ids in the order they were added. serialize() emits edges in this order
+    /// (not edges_' id order) so several inputs wired into one port reach the
+    /// executor in the order they were connected, stably across save / reload.
+    QStringList edge_order_;
     TempEdge* temp_edge_ = nullptr;
     QTimer anim_timer_;
     int animated_edge_count_ = 0;

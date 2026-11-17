@@ -122,7 +122,7 @@ void register_metatypes() {
     qRegisterMetaType<fincept::wallet::TreasuryRevenue>("fincept::wallet::TreasuryRevenue");
     qRegisterMetaType<fincept::wallet::TierStatus>("fincept::wallet::TierStatus");
 
-    LOG_INFO("DataHub", "Registered 83 payload meta-types");
+    LOG_DEBUG("DataHub", "Registered 83 payload meta-types");
 }
 
 } // namespace fincept::datahub

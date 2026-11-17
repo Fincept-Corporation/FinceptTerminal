@@ -6,7 +6,6 @@ import sys
 import json
 import os
 import time
-import tempfile
 import requests
 from urllib3.util.retry import Retry
 from typing import Dict, Any, List
@@ -16,7 +15,12 @@ API_KEY = os.environ.get('USDA_FAS_API_KEY', '')
 BASE_URL = "https://api.fas.usda.gov/api/psd"
 # api.data.gov's documented public demo key (30 requests/hour per IP) - used only when no key is set.
 PUBLIC_DEMO_KEY = "DEMO_KEY"
-LOOKUP_CACHE = os.path.join(tempfile.gettempdir(), "fincept_usda_psd_lookups.json")
+
+
+def _lookup_cache() -> str:
+    """The lookup cache file, in the edition's cache folder (fincept_paths)."""
+    import fincept_paths
+    return str(fincept_paths.cache_file("usda", "psd_lookups.json"))
 
 COMMODITIES = {"corn": "0440000", "wheat": "0410000", "soybeans": "2222000", "cotton": "2631000",
                "rice": "0422110", "barley": "0430000", "sorghum": "0459200", "soybean_meal": "0813100",
@@ -54,8 +58,9 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 def _lookups() -> Dict[str, Dict]:
     """Attribute / unit / country names (cached for a week - they rarely change)."""
     try:
-        if time.time() - os.path.getmtime(LOOKUP_CACHE) < 7 * 86400:
-            with open(LOOKUP_CACHE, encoding="utf-8") as f:
+        lookup_cache = _lookup_cache()
+        if time.time() - os.path.getmtime(lookup_cache) < 7 * 86400:
+            with open(lookup_cache, encoding="utf-8") as f:
                 return json.load(f)
     except (OSError, ValueError):
         pass
@@ -68,8 +73,8 @@ def _lookups() -> Dict[str, Dict]:
         out["units"] = {str(x["unitId"]): x["unitDescription"].strip() for x in u}
     if out["attributes"] and out["units"]:
         try:
-            with open(LOOKUP_CACHE, "w", encoding="utf-8") as f:
-                json.dump(out, f)
+            import fincept_paths
+            fincept_paths.atomic_write_text(_lookup_cache(), json.dumps(out))
         except OSError:
             pass
     return out

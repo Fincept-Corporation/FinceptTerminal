@@ -15,6 +15,19 @@ try:
 except ImportError:
     yf = None
 
+try:
+    import fincept_json
+except ImportError:  # pragma: no cover - run from an unusual folder
+    fincept_json = None
+
+
+def _quiet_stdout():
+    """yfinance (and the per-ticker error line below) print; stdout carries exactly one JSON reply."""
+    if fincept_json is not None:
+        return fincept_json.stdout_to_stderr()
+    import contextlib
+    return contextlib.redirect_stdout(sys.stderr)  # pragma: no cover
+
 @dataclass
 class TradingComp:
     ticker: str
@@ -59,6 +72,10 @@ class TradingCompsAnalyzer:
 
     def fetch_comp_data(self, ticker: str) -> Optional[TradingComp]:
         """Fetch comprehensive financial data for single company"""
+        with _quiet_stdout():
+            return self._fetch_comp_data(ticker)
+
+    def _fetch_comp_data(self, ticker: str) -> Optional[TradingComp]:
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
@@ -148,7 +165,8 @@ class TradingCompsAnalyzer:
             clean_vals = [v for v in values if v > 0 and not np.isnan(v) and not np.isinf(v)]
             if not clean_vals:
                 return {f'{name}_mean': 0, f'{name}_median': 0, f'{name}_min': 0,
-                       f'{name}_max': 0, f'{name}_std': 0, f'{name}_count': 0}
+                       f'{name}_max': 0, f'{name}_std': 0, f'{name}_count': 0,
+                       f'{name}_q1': 0, f'{name}_q3': 0}  # same keys as the filled case
 
             return {
                 f'{name}_mean': mean(clean_vals),

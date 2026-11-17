@@ -2,6 +2,7 @@
 """Polymarket trading bridge for Fincept Terminal.
 
 Invocation:
+    python prediction_polymarket.py <command> --stdin      (payload JSON on stdin — what the terminal uses)
     python prediction_polymarket.py <command> <json_payload>
 
 Commands:
@@ -410,12 +411,16 @@ def cmd_cancel_order(payload: dict) -> None:
 
     client = _build_client(payload)
     oid = str(payload["order_id"])
-    result = client.cancel_order(OrderPayload(orderID=oid))
-    _emit({
-        "ok": bool(result.get("canceled")),
-        "order_id": oid,
-        "raw": result,
-    })
+    result = client.cancel_order(OrderPayload(orderID=oid)) or {}
+    ok = bool(result.get("canceled"))
+    out = {"ok": ok, "order_id": oid, "raw": result}
+    if not ok:
+        # The CLOB explains a refusal in not_canceled ({order_id: reason}). Without an
+        # "error" key the terminal could only say "Python command failed".
+        not_canceled = result.get("not_canceled") or {}
+        reason = not_canceled.get(oid) if isinstance(not_canceled, dict) else None
+        out["error"] = str(reason or not_canceled or "order was not cancelled")
+    _emit(out)
 
 
 def cmd_cancel_market(payload: dict) -> None:
@@ -445,11 +450,21 @@ def main() -> int:
         _fail("usage: prediction_polymarket.py <command> [<json_payload>]")
         return 2
     command = sys.argv[1]
-    payload_str = sys.argv[2] if len(sys.argv) > 2 else "{}"
+    # The payload carries the Polygon wallet private key, so the terminal sends it
+    # on stdin ("--stdin") — argv is readable by any same-user process and lands in
+    # crash dumps. A literal JSON argv[2] is still accepted for manual / scripted use.
+    if len(sys.argv) > 2 and sys.argv[2] == "--stdin":
+        payload_str = sys.stdin.read()
+    else:
+        payload_str = sys.argv[2] if len(sys.argv) > 2 else "{}"
     try:
-        payload = json.loads(payload_str)
+        payload = json.loads(payload_str or "{}")
     except json.JSONDecodeError as exc:
-        _fail(f"invalid JSON payload: {exc}")
+        # The message carries only a position, never the payload text.
+        _fail(f"invalid JSON payload: {exc.msg} (line {exc.lineno}, column {exc.colno})")
+        return 2
+    if not isinstance(payload, dict):
+        _fail("invalid JSON payload: expected an object")
         return 2
 
     handler = COMMANDS.get(command)

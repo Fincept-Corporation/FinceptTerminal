@@ -84,11 +84,11 @@ def _extract_workflow_response(result: Any) -> str:
     import json as _json
     if result is None:
         return "Workflow completed with no output."
-    # Agno RunResponse object
-    if hasattr(result, "content"):
+    # Agno RunResponse object. No content is an empty answer — not str(result),
+    # which returned the object's repr as the "response".
+    if hasattr(result, "content") and not isinstance(result, dict):
         content = result.content
-        if content:
-            return str(content)
+        return str(content) if content else ""
     # FinancialWorkflowTemplates workflows return {"success": True, "response": "<text>"}.
     # That text is the answer — without this it fell through to the JSON dump below,
     # so the UI showed the whole envelope (escaped newlines and all) as the "response".
@@ -125,14 +125,32 @@ def _run_error_text(response: Any):
     Agno reports a failed run (missing/invalid API key, provider error, ...) as an
     ordinary RunOutput with status ERROR whose `content` is the error message. It
     used to be wrapped as {"success": True, "response": "<error message>"}, so the
-    UI showed an API-key error as a successful answer.
+    UI showed an API-key error as a successful answer. A "no usable model" error
+    is prefixed with the Settings > LLM Configuration hint (run_errors).
     """
-    status = getattr(response, "status", None)
-    value = getattr(status, "value", status)
-    if isinstance(value, str) and value.upper() == "ERROR":
-        content = getattr(response, "content", None)
-        return str(content) if content else "Agent run failed"
-    return None
+    from finagent_core.run_errors import run_error_text
+    return run_error_text(response)
+
+
+def _with_warnings(result: Dict[str, Any], agent: Any) -> Dict[str, Any]:
+    """Add the run's `warnings` (requested tools/features that are not in
+    effect, e.g. a tool whose package is not installed) to a result dict."""
+    notes = list(getattr(agent, "last_warnings", None) or [])
+    if notes:
+        result["warnings"] = notes
+    return result
+
+
+def _workflow_result(result: Any, extra: Dict[str, Any]) -> Dict[str, Any]:
+    """Envelope for the FinancialWorkflowTemplates workflows, honouring their own
+    success/error (they used to be wrapped as success: true whatever happened)."""
+    if isinstance(result, dict) and result.get("success") is False:
+        return {"success": False, **extra, "error": result.get("error") or "Workflow failed"}
+    run_err = _run_error_text(result)
+    if run_err:
+        return {"success": False, **extra, "error": run_err}
+    return {"success": True, **extra, "response": _extract_workflow_response(result),
+            "result": result if isinstance(result, dict) else None}
 
 
 def _ui_guardrails_config(ui_cfg: Any):
@@ -176,8 +194,11 @@ def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
         cfg = tracing_cfg if isinstance(tracing_cfg, dict) else None
         agent.setup_tracing(cfg)
 
-    # Agentic Memory
-    agentic_memory_cfg = config.get("agentic_memory") or params.get("agentic_memory")
+    # Agentic Memory. normalize_ui_config turns the CREATE tab's
+    # `agentic_memory: true` + `agentic_memory_user_id` into {"user_id": ...};
+    # the user id field used to be saved and never read.
+    from finagent_core.core_agent import normalize_ui_config
+    agentic_memory_cfg = normalize_ui_config(config).get("agentic_memory") or params.get("agentic_memory")
     if agentic_memory_cfg:
         cfg = agentic_memory_cfg if isinstance(agentic_memory_cfg, dict) else {"user_id": params.get("user_id", "default")}
         cfg.setdefault("agent_id", config.get("id") or config.get("agent_id") or "unnamed")
@@ -219,7 +240,14 @@ def _apply_agent_card(config: Dict[str, Any]):
         return config, None
     try:
         from finagent_core.agent_loader import get_loader
-        card = get_loader().registry.get(agent_id)
+        loader = get_loader()
+        card = loader.registry.get(agent_id)
+        if card is None:
+            # The registry is filled only by discovery, and every run is a fresh
+            # process — so the lookup always missed and an agent_id-only config
+            # ran as a generic assistant with no tools. Discover once, retry.
+            loader.discover_agents()
+            card = loader.registry.get(agent_id)
     except Exception as e:
         logger.warning(f"Could not load agent card '{agent_id}': {e}")
         return config, None
@@ -335,6 +363,10 @@ def main(args=None):
             config["model"]["base_url"]    = raw_base_url
             config["model"]["temperature"] = active_llm.get("temperature", config["model"].get("temperature", 0.7))
             config["model"]["max_tokens"]  = active_llm.get("max_tokens",  config["model"].get("max_tokens", 4096))
+            # 0 / negative means "no limit set" on the host side — never a valid
+            # request value (providers reject or truncate max_tokens: 0).
+            if not isinstance(config["model"]["max_tokens"], (int, float)) or config["model"]["max_tokens"] <= 0:
+                config["model"]["max_tokens"] = 4096
 
         # Enable streaming in params if flag is set
         if streaming:
@@ -437,8 +469,8 @@ def dispatch_action(
             if run_err:
                 if agent._tracing:
                     agent.end_trace()
-                return {"success": False, "error": run_err}
-            result = {"success": True, "response": agent.get_response_content(response)}
+                return _with_warnings({"success": False, "error": run_err}, agent)
+            result = _with_warnings({"success": True, "response": agent.get_response_content(response)}, agent)
 
             # Check guardrails on output if enabled
             if agent._guardrails:
@@ -707,8 +739,7 @@ def dispatch_action(
         if not symbol:
             return {"success": False, "error": "Missing 'symbol' in params"}
         result = agent.run_stock_analysis(symbol, config)
-        response_text = _extract_workflow_response(result)
-        return {"success": True, "symbol": symbol, "response": response_text, "result": result if isinstance(result, dict) else None}
+        return _workflow_result(result, {"symbol": symbol})
 
     if action == "portfolio_rebal":
         from finagent_core.core_agent import CoreAgent
@@ -716,8 +747,7 @@ def dispatch_action(
         _setup_agent_modules(agent, config, params)
         portfolio_data = params.get("portfolio_data") or _portfolio_params(params)
         result = agent.run_portfolio_rebalancing(portfolio_data, config)
-        response_text = _extract_workflow_response(result)
-        return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
+        return _workflow_result(result, {})
 
     if action == "risk_assessment":
         from finagent_core.core_agent import CoreAgent
@@ -725,8 +755,7 @@ def dispatch_action(
         _setup_agent_modules(agent, config, params)
         portfolio_data = params.get("portfolio_data") or _portfolio_params(params)
         result = agent.run_risk_assessment(portfolio_data, config)
-        response_text = _extract_workflow_response(result)
-        return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
+        return _workflow_result(result, {})
 
     if action == "macro_scan":
         from finagent_core.core_agent import CoreAgent
@@ -740,7 +769,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "response": response_text}
+        return _with_warnings({"success": True, "response": response_text}, agent)
 
     if action == "earnings_brief":
         from finagent_core.core_agent import CoreAgent
@@ -757,7 +786,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "symbol": symbol, "response": response_text}
+        return _with_warnings({"success": True, "symbol": symbol, "response": response_text}, agent)
 
     if action == "sector_rotation":
         from finagent_core.core_agent import CoreAgent
@@ -772,7 +801,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "response": response_text}
+        return _with_warnings({"success": True, "response": response_text}, agent)
 
     if action == "options_scan":
         from finagent_core.core_agent import CoreAgent
@@ -789,7 +818,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "symbol": symbol, "response": response_text}
+        return _with_warnings({"success": True, "symbol": symbol, "response": response_text}, agent)
 
     if action == "sentiment_scan":
         from finagent_core.core_agent import CoreAgent
@@ -807,7 +836,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "symbol": symbol, "response": response_text}
+        return _with_warnings({"success": True, "symbol": symbol, "response": response_text}, agent)
 
     if action == "custom_query":
         from finagent_core.core_agent import CoreAgent
@@ -821,7 +850,7 @@ def dispatch_action(
         if run_err:
             return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
-        return {"success": True, "response": response_text}
+        return _with_warnings({"success": True, "response": response_text}, agent)
 
     # =========================================================================
     # Agent Memory (via CoreAgent module)
@@ -876,9 +905,11 @@ def dispatch_action(
 
     if action == "list_tools":
         from finagent_core.core_agent import CoreAgent
+        from finagent_core.registries import ToolsRegistry
         agent = CoreAgent(api_keys=api_keys)
         tools = agent.list_available_tools()
         total = sum(len(v) for v in tools.values())
+        unavailable = ToolsRegistry.unavailable_tools()
         return {
             "success": True,
             "tools": tools,
@@ -886,14 +917,22 @@ def dispatch_action(
             "total": total,
             # The C++ AgentToolsInfo parser reads `total_count`; `total` is kept
             # for existing consumers (additive — never rename an output key).
-            "total_count": total
+            "total_count": total,
+            # Additive: every listed tool that cannot load on this install,
+            # mapped to the reason (usually the package to install), so the UI
+            # can grey it out instead of letting the agent drop it at run time.
+            "unavailable": unavailable,
+            "available_count": total - len(unavailable),
         }
 
     if action == "list_models":
         from finagent_core.core_agent import CoreAgent
+        from finagent_core.registries import ModelsRegistry
         agent = CoreAgent(api_keys=api_keys)
         providers = agent.list_available_models()
-        return {"success": True, "providers": providers, "count": len(providers)}
+        unavailable = ModelsRegistry.unavailable_providers()
+        return {"success": True, "providers": providers, "count": len(providers),
+                "unavailable": unavailable, "available_count": len(providers) - len(unavailable)}
 
     # =========================================================================
     # Resumable Multi-Step Agentic Tasks
@@ -1148,6 +1187,8 @@ def dispatch_action_streaming(
             session_id = params.get("session_id")
 
             # Use StreamingCoreAgent for real streaming
+            stream_error = None
+            notes = []
             try:
                 streaming_agent = StreamingCoreAgent(
                     api_keys=api_keys,
@@ -1158,13 +1199,23 @@ def dispatch_action_streaming(
                 # the stream_callback and emit TOKEN lines to stdout.
                 resp_content = ""
                 for chunk in streaming_agent.run_streaming(query, full_config, session_id):
-                    if isinstance(chunk, dict) and chunk.get("type") == "token":
+                    if not isinstance(chunk, dict):
+                        continue
+                    if chunk.get("type") == "token":
                         resp_content += chunk.get("content", "")
+                    elif chunk.get("type") == "error":
+                        # The ERROR line is already on stdout (stream_callback);
+                        # remember it so the final JSON does not claim success.
+                        stream_error = chunk.get("content") or "Agent run failed"
+                    elif chunk.get("type") == "warning":
+                        notes.append(chunk.get("content", ""))
             except Exception:
                 # Fallback to regular run with simulated streaming
                 resp_content = ""
+                stream_error = None
                 try:
                     response = core_agent.run(query, full_config, session_id, stream=False)
+                    notes = list(core_agent.last_warnings)
                     fallback_run_err = _run_error_text(response)
                     if fallback_run_err:
                         raise RuntimeError(fallback_run_err)
@@ -1178,13 +1229,22 @@ def dispatch_action_streaming(
                             # space of a token) so concatenated tokens read as words.
                             stream_print("token", (" " if i else "") + chunk)
                 except Exception as fallback_err:
-                    stream_print("error", str(fallback_err))
+                    stream_error = str(fallback_err)
+                    stream_print("error", stream_error)
 
             if core_agent._tracing:
                 core_agent.end_trace()
 
-            stream_print("done", "completed")
-            return {"success": True, "response": resp_content}
+            if stream_error:
+                # No DONE line after an ERROR, and no success: true with an
+                # empty response for consumers of the final JSON.
+                result = {"success": False, "error": stream_error}
+            else:
+                stream_print("done", "completed")
+                result = {"success": True, "response": resp_content}
+            if notes:
+                result["warnings"] = notes
+            return result
 
         except Exception as e:
             if core_agent._tracing:

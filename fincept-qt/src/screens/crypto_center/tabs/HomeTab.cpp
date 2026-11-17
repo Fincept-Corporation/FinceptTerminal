@@ -1,4 +1,5 @@
 #include "screens/crypto_center/tabs/HomeTab.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -27,7 +28,7 @@ namespace fincept::screens {
 namespace {
 
 QString home_font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QString(ui::fonts::DATA_FAMILY);
 }
 
 QString shorten_pubkey(const QString& pk) {
@@ -43,9 +44,15 @@ QString shorten_pubkey(const QString& pk) {
 /// labelled MAINNET — exactly the testnet/mainnet confusion that turns a
 /// "harmless" test into a real transfer (or the reverse). Derive it.
 QString cluster_label() {
-    auto r = SecureStorage::instance().retrieve(QStringLiteral("solana.rpc_url"));
-    if (r.is_ok()) {
-        const QString url = r.value().toLower();
+    const SecretRead r = SecureStorage::instance().read(QStringLiteral("solana.rpc_url"));
+    if (r.failed()) {
+        // Unknown, not MAINNET: the override may point anywhere. SolanaRpcClient sends
+        // nothing meanwhile and the balance error strip carries the reason; this is
+        // re-derived on every show.
+        return QCoreApplication::translate("HomeTab", "RPC SETTING UNREADABLE");
+    }
+    if (r.found()) {
+        const QString url = r.value.toLower();
         if (!url.isEmpty()) {
             if (url.contains(QStringLiteral("devnet")))
                 return QStringLiteral("DEVNET");
@@ -63,21 +70,7 @@ QString cluster_label() {
     return QStringLiteral("MAINNET");
 }
 
-QString relative_time(qint64 ts_ms) {
-    if (ts_ms == 0)
-        return QStringLiteral("never");
-    const auto delta = QDateTime::currentMSecsSinceEpoch() - ts_ms;
-    if (delta < 0)
-        return QStringLiteral("just now");
-    const auto seconds = delta / 1000;
-    if (seconds < 60)
-        return QStringLiteral("%1s ago").arg(seconds);
-    if (seconds < 3600)
-        return QStringLiteral("%1m ago").arg(seconds / 60);
-    if (seconds < 86400)
-        return QStringLiteral("%1h ago").arg(seconds / 3600);
-    return QStringLiteral("%1d ago").arg(seconds / 86400);
-}
+using fincept::screens::crypto_center_text::relative_time; // CryptoCenterText.h (one definition)
 
 } // namespace
 
@@ -172,17 +165,18 @@ void HomeTab::build_ui() {
 
         auto* btn_row = new QWidget(wallet_panel_);
         btn_row->setObjectName(QStringLiteral("homeTabPanelFoot"));
-        btn_row->setFixedHeight(40);
+        btn_row->setMinimumHeight(40);
         auto* br_l = new QHBoxLayout(btn_row);
         br_l->setContentsMargins(10, 6, 10, 6);
         br_l->setSpacing(6);
         copy_button_ = new QPushButton(tr("COPY ADDRESS"), btn_row);
         copy_button_->setObjectName(QStringLiteral("homeTabButton"));
-        copy_button_->setFixedHeight(26);
+        copy_button_->setMinimumHeight(26);
         copy_button_->setCursor(Qt::PointingHandCursor);
         disconnect_button_ = new QPushButton(tr("DISCONNECT"), btn_row);
         disconnect_button_->setObjectName(QStringLiteral("homeTabDangerButton"));
-        disconnect_button_->setFixedHeight(26);
+        disconnect_button_->setProperty("fincept_agent_risk", "account");
+        disconnect_button_->setMinimumHeight(26);
         disconnect_button_->setCursor(Qt::PointingHandCursor);
         br_l->addWidget(copy_button_);
         br_l->addStretch(1);
@@ -213,12 +207,12 @@ void HomeTab::build_ui() {
         mode_poll_button_ = new QPushButton(tr("POLL"), head);
         mode_poll_button_->setObjectName(QStringLiteral("homeTabToggle"));
         mode_poll_button_->setCheckable(true);
-        mode_poll_button_->setFixedHeight(22);
+        mode_poll_button_->setMinimumHeight(22);
         mode_poll_button_->setCursor(Qt::PointingHandCursor);
         mode_stream_button_ = new QPushButton(tr("STREAM"), head);
         mode_stream_button_->setObjectName(QStringLiteral("homeTabToggle"));
         mode_stream_button_->setCheckable(true);
-        mode_stream_button_->setFixedHeight(22);
+        mode_stream_button_->setMinimumHeight(22);
         mode_stream_button_->setCursor(Qt::PointingHandCursor);
         mode_group_ = new QButtonGroup(this);
         mode_group_->setExclusive(true);
@@ -270,14 +264,14 @@ void HomeTab::build_ui() {
         // Foot: REFRESH button.
         auto* foot = new QWidget(balance_panel_);
         foot->setObjectName(QStringLiteral("homeTabPanelFoot"));
-        foot->setFixedHeight(40);
+        foot->setMinimumHeight(40);
         auto* fl = new QHBoxLayout(foot);
         fl->setContentsMargins(10, 6, 10, 6);
         fl->setSpacing(6);
         fl->addStretch(1);
         refresh_button_ = new QPushButton(tr("REFRESH"), foot);
         refresh_button_->setObjectName(QStringLiteral("homeTabButton"));
-        refresh_button_->setFixedHeight(26);
+        refresh_button_->setMinimumHeight(26);
         refresh_button_->setCursor(Qt::PointingHandCursor);
         fl->addWidget(refresh_button_);
         outer->addWidget(foot);
@@ -370,46 +364,46 @@ void HomeTab::apply_theme() {
     const QString font = home_font_stack();
 
     const QString ss =
-        QStringLiteral("QWidget#homeTab { background:%1; }"
+        QString("QWidget#homeTab { background:%1; }"
                        "QFrame#homeTabPanel { background:%2; border:1px solid %3; }"
                        "QWidget#homeTabPanelHead { background:%10; border-bottom:1px solid %3; }"
                        "QWidget#homeTabPanelFoot { background:%10; border-top:1px solid %3; }"
-                       "QLabel#homeTabPanelTitle { color:%4; font-family:%5; font-size:11px;"
+                       "QLabel#homeTabPanelTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                       "QLabel#homeTabPanelStatus { color:%6; font-family:%5; font-size:10px;"
+                       "QLabel#homeTabPanelStatus { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                       "QLabel#homeTabPanelStatusOk { color:%9; font-family:%5; font-size:10px;"
+                       "QLabel#homeTabPanelStatusOk { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
                        "QWidget#homeTabRow { background:transparent; border-bottom:1px solid %3; }"
                        "QWidget#homeTabRow[isLast=\"true\"] { border-bottom:none; }"
-                       "QLabel#homeTabCaption { color:%7; font-family:%5; font-size:10px;"
+                       "QLabel#homeTabCaption { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                       "QLabel#homeTabRowValue { color:%8; font-family:%5; font-size:12px;"
+                       "QLabel#homeTabRowValue { color:%8; font-family:%5; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                        "  background:transparent; }"
-                       "QFrame#homeTabErrorStrip { background:rgba(220,38,38,0.10);"
+                       "QFrame#homeTabErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                        "  border:1px solid %11; }"
-                       "QLabel#homeTabErrorIcon { color:%11; font-family:%5; font-size:13px;"
+                       "QLabel#homeTabErrorIcon { color:%11; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                        "  font-weight:700; background:transparent; }"
-                       "QLabel#homeTabErrorText { color:%11; font-family:%5; font-size:11px;"
+                       "QLabel#homeTabErrorText { color:%11; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }"
                        "QPushButton#homeTabButton { background:%10; color:%7; border:1px solid %3;"
-                       "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 12px; }"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px; padding:0 12px; }"
                        "QPushButton#homeTabButton:hover { background:%12; color:%8; border-color:%13; }"
-                       "QPushButton#homeTabDangerButton { background:rgba(220,38,38,0.10); color:%11;"
-                       "  border:1px solid %14; font-family:%5; font-size:11px; font-weight:700;"
+                       "QPushButton#homeTabDangerButton { background:" + ui::colors::alpha(DANGER, 0.10) + "; color:%11;"
+                       "  border:1px solid %14; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700;"
                        "  letter-spacing:1px; padding:0 12px; }"
-                       "QPushButton#homeTabDangerButton:hover { background:%11; color:%8; }"
+                       "QPushButton#homeTabDangerButton:hover { background:%11; color:" + QString(TEXT_ON_ACCENT()) + "; }"
                        "QPushButton#homeTabToggle { background:transparent; color:%6; border:1px solid %3;"
-                       "  font-family:%5; font-size:10px; font-weight:700; letter-spacing:1.2px;"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1.2px;"
                        "  padding:0 10px; }"
                        "QPushButton#homeTabToggle:hover { color:%8; border-color:%13; }"
-                       "QPushButton#homeTabToggle:checked { background:rgba(217,119,6,0.12); color:%4;"
+                       "QPushButton#homeTabToggle:checked { background:" + ui::colors::alpha(AMBER, 0.12) + "; color:%4;"
                        "  border-color:%4; }"
-                       "QLabel#homeTabRoadmapBody { color:%7; font-family:%5; font-size:11px;"
+                       "QLabel#homeTabRoadmapBody { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }")
             .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), font, TEXT_TERTIARY(), TEXT_SECONDARY(),
-                 TEXT_PRIMARY(), POSITIVE())
-            .arg(BG_RAISED(), NEGATIVE(), BG_HOVER(), BORDER_BRIGHT(), QStringLiteral("#7f1d1d"));
+                 TEXT_PRIMARY(), SUCCESS())
+            .arg(BG_RAISED(), DANGER(), BG_HOVER(), BORDER_BRIGHT(), ui::colors::tint(DANGER, 0.45));
 
     setStyleSheet(ss);
 }

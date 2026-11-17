@@ -53,17 +53,46 @@ QString agent_exec_explain_missing(const QString& error) {
     return agent_exec_explain_missing(error, error);
 }
 
+/// Agentic event kinds after which the runner subprocess exits on its own:
+/// the terminal ones plus paused / question / budget_stop, which end this
+/// process but not the task. Exiting after any of them is not a failure.
+bool agent_exec_run_ending_kind(const QString& kind) {
+    return kind == QLatin1String("done") || kind == QLatin1String("error") || kind == QLatin1String("cancelled") ||
+           kind == QLatin1String("paused") || kind == QLatin1String("question") ||
+           kind == QLatin1String("budget_stop");
+}
+
+/// The run's model as build_payload() resolved it ("" when no LLM is configured).
+QString agent_exec_payload_model(const QJsonObject& payload) {
+    return payload.value(QStringLiteral("active_llm")).toObject().value(QStringLiteral("model_id")).toString();
+}
+
+/// "Agent run finished" (policy B.4) — never the query or the answer; for a failure only
+/// the first line of the error (a structured run appends the model's raw answer below it).
+void agent_exec_log_run_finished(const QString& run, const char* kind, bool ok, qint64 duration_ms,
+                                 const QString& error) {
+    if (!Logger::instance().should_log(LogLevel::Info, "AgentService"))
+        return;
+    QList<LogField> fields{{"run", run.left(8)}, {"kind", kind}, {"ok", ok}, {"duration_ms", duration_ms}};
+    if (!ok)
+        fields.append(LogField("error", error.section(QLatin1Char('\n'), 0, 0)));
+    LOG_INFO("AgentService", logf("Agent run finished", fields));
+}
+
 } // namespace
 
 QString AgentService::run_agent(const QString& query, const QJsonObject& config) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService", QString("Running agent query [%1]: %2").arg(req_id.left(8), query.left(80)));
+    LOG_INFO("AgentService", logf("Agent run started",
+                                  {{"run", req_id.left(8)}, {"kind", "agent"}, {"query_chars", query.size()}}));
 
     QJsonObject params;
     params["query"] = query;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("run", params, config, [self, req_id](bool ok, QJsonObject result) {
+    QElapsedTimer run_clock;
+    run_clock.start();
+    run_python_stdin("run", params, config, [self, req_id, run_clock](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
@@ -77,13 +106,20 @@ QString AgentService::run_agent(const QString& query, const QJsonObject& config)
             else if (result.contains("result"))
                 r.response = result["result"].toString();
             else if (result.contains("data"))
-                r.response = QJsonDocument(result["data"].toObject()).toJson(QJsonDocument::Indented);
-            else
-                r.response = QJsonDocument(result).toJson(QJsonDocument::Indented);
+                // Intentional data: a fenced block the markdown views render as code.
+                r.response = QStringLiteral("```json\n") +
+                             QString::fromUtf8(QJsonDocument(result["data"].toObject()).toJson(QJsonDocument::Indented)) +
+                             QStringLiteral("```");
+            else {
+                // No answer at all: say so instead of dumping the reply envelope as the "answer".
+                r.success = false;
+                r.error = QCoreApplication::translate("AgentService", "The agent returned no answer text.");
+            }
         } else {
             r.error = agent_exec_explain_missing(result["error"].toString("Agent execution failed"));
         }
 
+        agent_exec_log_run_finished(req_id, "agent", r.success, run_clock.elapsed(), r.error);
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
@@ -94,7 +130,6 @@ QString AgentService::run_agent(const QString& query, const QJsonObject& config)
 
 QString AgentService::run_agent_streaming(const QString& query, const QJsonObject& config) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService", QString("Streaming agent query [%1]: %2").arg(req_id.left(8), query.left(80)));
 
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
@@ -122,6 +157,10 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
 
     QJsonObject payload = build_payload("run", params, config);
     QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    LOG_INFO("AgentService", logf("Agent run started", {{"run", req_id.left(8)},
+                                                        {"kind", "stream"},
+                                                        {"model", agent_exec_payload_model(payload)},
+                                                        {"query_chars", query.size()}}));
     // Run-scoped bridge token minted by build_payload — retired when the process
     // exits (the non-streaming path already does this in run_python_stdin).
     const QString run_token =
@@ -130,17 +169,9 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
-    auto* proc = new QProcess(this);
-    // Share the standard Python env + cwd + Windows console suppression with
-    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
-    proc->setProcessEnvironment(agent_process_env());
-    proc->setWorkingDirectory(py.scripts_dir());
-#ifdef _WIN32
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // The standard agent env + cwd, no console window, one process tree (cancel /
+    // quit kill what the runtime started too) — see new_agent_process().
+    auto* proc = new_agent_process();
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     auto accumulated = std::make_shared<QString>();
@@ -215,7 +246,8 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
     connect(
         proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
         [self, proc, accumulated, final_json_line, done_emitted, timer, req_id, run_token](int exit_code,
-                                                                                           QProcess::ExitStatus) {
+                                                                                           QProcess::ExitStatus status) {
+            release_agent_tree(proc, status);
             mcp::TerminalMcpBridge::instance().end_run(run_token);
             int elapsed = timer->elapsed();
 
@@ -254,9 +286,15 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                 r.success = false;
                 r.error = exit_code != 0 ? agent_exec_explain_missing(stderr_str.left(500), stderr_str)
                                          : QStringLiteral("No response received");
+                if (exit_code != 0)
+                    LOG_ERROR("AgentService", logf("Streaming agent run failed",
+                                                   {{"run", req_id.left(8)},
+                                                    {"exit", exit_code},
+                                                    {"duration_ms", elapsed},
+                                                    {"error", stderr_str.trimmed().section(QLatin1Char('\n'), -1)}}));
             }
 
-            LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
+            agent_exec_log_run_finished(req_id, "stream", r.success, elapsed, r.error);
             emit self->agent_stream_done(r);
             self->publish_agent_result(r, /*final=*/true);
         });
@@ -276,6 +314,8 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                 if (*done_emitted)
                     return;
                 *done_emitted = true;
+                LOG_ERROR("AgentService",
+                          logf("Streaming agent process could not start", {{"run", req_id.left(8)}, {"error", err}}));
                 AgentExecutionResult r;
                 r.request_id = req_id;
                 r.success = false;
@@ -284,7 +324,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                 self->publish_agent_result(r, /*final=*/true);
             });
 
-    LOG_INFO("AgentService", QString("Starting streaming agent (%1 bytes payload)").arg(payload_bytes.size()));
+    LOG_DEBUG("AgentService", QString("Starting streaming agent (%1 bytes payload)").arg(payload_bytes.size()));
     proc->start(python_path, {script_path, "--stdin", "--stream"});
     proc->write(payload_bytes);
     proc->closeWriteChannel();
@@ -307,10 +347,11 @@ bool AgentService::cancel_run(const QString& request_id) {
     // silent, so the UI gets exactly one terminal event for this request.
     *run.done = true;
     LOG_INFO("AgentService", QString("Cancelling run [%1]").arg(request_id.left(8)));
-    // kill(), not terminate(): the child is a console-less python.exe, which
-    // ignores WM_CLOSE on Windows. The finished() handler still runs and retires
+    // Kill, not terminate: the child is a console-less python.exe, which ignores
+    // WM_CLOSE on Windows — and the whole tree, so tool scripts / MCP stdio servers
+    // the agent started go with it. The finished() handler still runs and retires
     // the bridge token / schedules the QProcess for deletion.
-    proc->kill();
+    kill_agent_tree(proc);
 
     AgentExecutionResult r;
     r.request_id = request_id;
@@ -324,14 +365,16 @@ bool AgentService::cancel_run(const QString& request_id) {
 // ── Query routing ────────────────────────────────────────────────────────────
 
 QString AgentService::route_query(const QString& query) {
-    LOG_INFO("AgentService", QString("Routing query: %1").arg(query.left(80)));
-
     QJsonObject params;
     params["query"] = query;
 
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", logf("Agent run started",
+                                  {{"run", req_id.left(8)}, {"kind", "route"}, {"query_chars", query.size()}}));
     QPointer<AgentService> self = this;
-    run_python_stdin("route_query", params, {}, [self, req_id](bool ok, QJsonObject result) {
+    QElapsedTimer run_clock;
+    run_clock.start();
+    run_python_stdin("route_query", params, {}, [self, req_id, run_clock](bool ok, QJsonObject result) {
         if (!self)
             return;
         RoutingResult r;
@@ -346,6 +389,17 @@ QString AgentService::route_query(const QString& query) {
         for (const auto& k : kw)
             r.matched_keywords.append(k.toString());
 
+        if (r.success)
+            LOG_INFO("AgentService", logf("Agent run finished", {{"run", req_id.left(8)},
+                                                                 {"kind", "route"},
+                                                                 {"ok", true},
+                                                                 {"duration_ms", run_clock.elapsed()},
+                                                                 {"agent", r.agent_id},
+                                                                 {"intent", r.intent}}));
+        else
+            agent_exec_log_run_finished(req_id, "route", false, run_clock.elapsed(),
+                                        result["error"].toString(QStringLiteral("Routing failed")));
+
         emit self->routing_result(r);
         self->publish_routing_result(r);
     });
@@ -356,7 +410,6 @@ QString AgentService::route_query(const QString& query) {
 
 QString AgentService::run_team(const QString& query, const QJsonObject& team_config) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService", QString("Running team query [%1]: %2").arg(req_id.left(8), query.left(80)));
 
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
@@ -390,6 +443,11 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 
     QJsonObject payload = build_payload("run_team", params, coord_config);
     QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    LOG_INFO("AgentService", logf("Agent run started", {{"run", req_id.left(8)},
+                                                        {"kind", "team"},
+                                                        {"model", agent_exec_payload_model(payload)},
+                                                        {"members", team_config["members"].toArray().size()},
+                                                        {"query_chars", query.size()}}));
     // Run-scoped bridge token minted by build_payload — retired on process exit.
     const QString run_token =
         payload.value("config").toObject().value("terminal_mcp_token").toString();
@@ -397,17 +455,9 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
-    auto* proc = new QProcess(this);
-    // Share the standard Python env + cwd + Windows console suppression with
-    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
-    proc->setProcessEnvironment(agent_process_env());
-    proc->setWorkingDirectory(py.scripts_dir());
-#ifdef _WIN32
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // The standard agent env + cwd, no console window, one process tree (cancel /
+    // quit kill what the runtime started too) — see new_agent_process().
+    auto* proc = new_agent_process();
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     auto accumulated = std::make_shared<QString>();
@@ -471,7 +521,8 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [self, proc, accumulated, final_json, done_emitted, timer, req_id, run_token](int exit_code,
-                                                                                           QProcess::ExitStatus) {
+                                                                                           QProcess::ExitStatus status) {
+                release_agent_tree(proc, status);
                 mcp::TerminalMcpBridge::instance().end_run(run_token);
                 int elapsed = timer->elapsed();
                 QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
@@ -507,9 +558,15 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
                     r.success = false;
                     r.error = exit_code != 0 ? agent_exec_explain_missing(stderr_str.left(500), stderr_str)
                                              : QStringLiteral("No response from team");
+                    if (exit_code != 0)
+                        LOG_ERROR("AgentService",
+                                  logf("Team run failed", {{"run", req_id.left(8)},
+                                                           {"exit", exit_code},
+                                                           {"duration_ms", elapsed},
+                                                           {"error", stderr_str.trimmed().section(QLatin1Char('\n'), -1)}}));
                 }
 
-                LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
+                agent_exec_log_run_finished(req_id, "team", r.success, elapsed, r.error);
                 emit self->agent_stream_done(r);
                 self->publish_agent_result(r, /*final=*/true);
             });
@@ -527,6 +584,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
         if (*done_emitted)
             return;
         *done_emitted = true;
+        LOG_ERROR("AgentService", logf("Team process could not start", {{"run", req_id.left(8)}, {"error", err}}));
         AgentExecutionResult r;
         r.request_id = req_id;
         r.success = false;
@@ -535,7 +593,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
         self->publish_agent_result(r, /*final=*/true);
     });
 
-    LOG_INFO("AgentService", QString("Starting team stream (%1 bytes payload, %2 members)")
+    LOG_DEBUG("AgentService", QString("Starting team stream (%1 bytes payload, %2 members)")
                                  .arg(payload_bytes.size())
                                  .arg(team_config["members"].toArray().size()));
     proc->start(python_path, {script_path, "--stdin", "--stream"});
@@ -549,8 +607,9 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 QString AgentService::run_agent_structured(const QString& query, const QJsonObject& config,
                                            const QString& output_model) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService",
-             QString("Running structured agent [%1] (%2): %3").arg(req_id.left(8), output_model, query.left(60)));
+    LOG_DEBUG("AgentService", logf("Running structured agent", {{"run", req_id.left(8)},
+                                                                 {"output_model", output_model},
+                                                                 {"query_chars", query.size()}}));
     QJsonObject params;
     params["query"] = query;
     params["output_model"] = output_model;
@@ -563,9 +622,39 @@ QString AgentService::run_agent_structured(const QString& query, const QJsonObje
         r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
-        r.response = result.contains("response") ? result["response"].toString()
-                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
+        if (result.contains("response")) {
+            r.response = result["response"].toString();
+        } else if (result.contains("data")) {
+            // run_structured answers {"success","model","data","valid"}: show the
+            // structured object itself, not the whole envelope.
+            const QJsonValue data = result["data"];
+            const QByteArray json = data.isArray() ? QJsonDocument(data.toArray()).toJson(QJsonDocument::Indented)
+                                                   : QJsonDocument(data.toObject()).toJson(QJsonDocument::Indented);
+            r.response = QStringLiteral("```json\n") + QString::fromUtf8(json) + QStringLiteral("```");
+            if (data.isObject()) {
+                r.structured_model = result["model"].toString();
+                r.structured_data = data.toObject();
+                r.structured_valid = result["valid"].toBool(true);
+            }
+            if (result.contains("valid") && !result["valid"].toBool(true))
+                r.response += QStringLiteral("\n\n") +
+                              QCoreApplication::translate("AgentService",
+                                                          "Note: the output did not pass validation against the "
+                                                          "%1 model.")
+                                  .arg(result["model"].toString());
+        }
         r.error = agent_exec_explain_missing(result["error"].toString());
+        if (r.success && !result.contains("response") && !result.contains("data")) {
+            // No answer at all: say so instead of dumping the reply envelope as the "answer".
+            r.success = false;
+            r.error = QCoreApplication::translate("AgentService", "The agent returned no answer text.");
+        }
+        // A parse/validation failure carries the model's raw answer — show it
+        // under the error instead of dropping it.
+        const QString raw = result["raw_response"].toString();
+        if (!r.success && !raw.isEmpty())
+            r.error += QStringLiteral("\n\n") + QCoreApplication::translate("AgentService", "Raw response:") +
+                       QStringLiteral("\n") + raw;
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
@@ -574,26 +663,38 @@ QString AgentService::run_agent_structured(const QString& query, const QJsonObje
 
 // ── Routed query execution ───────────────────────────────────────────────────
 
-void AgentService::execute_routed_query(const QString& query, const QJsonObject& config, const QString& session_id) {
-    LOG_INFO("AgentService", QString("Execute routed query: %1").arg(query.left(60)));
+QString AgentService::execute_routed_query(const QString& query, const QJsonObject& config, const QString& session_id) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", logf("Agent run started",
+                                  {{"run", req_id.left(8)}, {"kind", "routed"}, {"query_chars", query.size()}}));
     QJsonObject params;
     params["query"] = query;
     if (!session_id.isEmpty())
         params["session_id"] = session_id;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("execute_query", params, config, [self](bool ok, QJsonObject result) {
+    QElapsedTimer run_clock;
+    run_clock.start();
+    run_python_stdin("execute_query", params, config, [self, req_id, run_clock](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        // Without an id every idle panel (empty pending id) took this result as its own.
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
-        r.response = result.contains("response") ? result["response"].toString()
-                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
+        r.response = result["response"].toString();
         r.error = agent_exec_explain_missing(result["error"].toString());
+        if (r.success && !result.contains("response")) {
+            // No answer at all: say so instead of dumping the reply envelope as the "answer".
+            r.success = false;
+            r.error = QCoreApplication::translate("AgentService", "The agent returned no answer text.");
+        }
+        agent_exec_log_run_finished(req_id, "routed", r.success, run_clock.elapsed(), r.error);
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
+    return req_id;
 }
 
 // ── Agentic Mode ─────────────────────────────────────────────────────────────
@@ -604,8 +705,8 @@ void AgentService::execute_routed_query(const QString& query, const QJsonObject&
 QString AgentService::run_agentic_streaming(const QString& action, const QJsonObject& params, const QJsonObject& config,
                                             const QString& known_task_id) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService",
-             QString("Agentic streaming [%1] action=%2 task=%3").arg(req_id.left(8), action, known_task_id.left(8)));
+    LOG_DEBUG("AgentService",
+              QString("Agentic streaming [%1] action=%2 task=%3").arg(req_id.left(8), action, known_task_id.left(8)));
 
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
@@ -623,14 +724,9 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
-    auto* proc = new QProcess(this);
-    proc->setProcessEnvironment(agent_process_env());
-    proc->setWorkingDirectory(py.scripts_dir());
-#ifdef _WIN32
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // The standard agent env + cwd, no console window, one process tree (cancel /
+    // quit kill what the runtime started too) — see new_agent_process().
+    auto* proc = new_agent_process();
 
     QPointer<AgentService> self = this;
     auto resolved_task_id = std::make_shared<QString>(known_task_id);
@@ -649,8 +745,11 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                 continue;
             QString rest = line.mid(kPrefix.length()).trimmed();
             QJsonDocument doc = QJsonDocument::fromJson(rest.toUtf8());
-            if (!doc.isObject())
+            if (!doc.isObject()) {
+                LOG_DEBUG("AgentService", logf("Unparseable agent task event line dropped",
+                                               {{"task", resolved_task_id->left(8)}, {"bytes", rest.size()}}));
                 continue;
+            }
             QJsonObject evt = doc.object();
             // Adopt the task_id from the first event that carries one
             // (start_task scenario; resume_task already has it).
@@ -662,15 +761,14 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
             // Tag with the C++ correlator so UI panels can match.
             evt["request_id"] = req_id;
             self->publish_task_event(tid, evt);
-            const QString kind = evt.value(QStringLiteral("kind")).toString();
-            if (kind == QLatin1String("done") || kind == QLatin1String("error") || kind == QLatin1String("cancelled")) {
+            if (agent_exec_run_ending_kind(evt.value(QStringLiteral("kind")).toString()))
                 *done_emitted = true;
-            }
         }
     });
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, resolved_task_id, done_emitted, req_id, run_token](int exit_code, QProcess::ExitStatus) {
+            [self, proc, resolved_task_id, done_emitted, req_id, run_token](int exit_code, QProcess::ExitStatus status) {
+                release_agent_tree(proc, status);
                 mcp::TerminalMcpBridge::instance().end_run(run_token);
                 QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
                 // Drain any remaining stdout in case the last events arrived
@@ -683,8 +781,11 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                         continue;
                     QString rest = line.mid(kPrefix.length()).trimmed();
                     QJsonDocument doc = QJsonDocument::fromJson(rest.toUtf8());
-                    if (!doc.isObject())
+                    if (!doc.isObject()) {
+                        LOG_DEBUG("AgentService", logf("Unparseable agent task event line dropped",
+                                                       {{"task", resolved_task_id->left(8)}, {"bytes", rest.size()}}));
                         continue;
+                    }
                     QJsonObject evt = doc.object();
                     QString tid = evt.value(QStringLiteral("task_id")).toString();
                     if (tid.isEmpty())
@@ -694,18 +795,21 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                     evt["request_id"] = req_id;
                     if (self)
                         self->publish_task_event(tid, evt);
-                    const QString kind = evt.value(QStringLiteral("kind")).toString();
-                    if (kind == QLatin1String("done") || kind == QLatin1String("error") ||
-                        kind == QLatin1String("cancelled")) {
+                    if (agent_exec_run_ending_kind(evt.value(QStringLiteral("kind")).toString()))
                         *done_emitted = true;
-                    }
                 }
                 proc->deleteLater();
                 if (!self)
                     return;
-                // If the subprocess died without emitting a terminal event,
-                // synthesise an error event so UI can clean up.
+                // If the subprocess died without emitting a run-ending event
+                // (terminal, or paused / question / budget_stop), synthesise an
+                // error event so UI can clean up.
                 if (!*done_emitted) {
+                    LOG_ERROR("AgentService",
+                              logf("Agent task process exited without a result",
+                                   {{"task", resolved_task_id->left(8)},
+                                    {"exit", exit_code},
+                                    {"error", stderr_str.trimmed().section(QLatin1Char('\n'), -1)}}));
                     QJsonObject evt{{"kind", "error"},
                                     {"task_id", *resolved_task_id},
                                     {"request_id", req_id},
@@ -728,6 +832,8 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                 if (!self || *done_emitted)
                     return;
                 *done_emitted = true;
+                LOG_ERROR("AgentService", logf("Agent task process could not start",
+                                               {{"task", resolved_task_id->left(8)}, {"error", err}}));
                 QJsonObject evt{{"kind", "error"},
                                 {"task_id", *resolved_task_id},
                                 {"request_id", req_id},
@@ -795,7 +901,9 @@ QString AgentService::schedule_create_task(const QString& name, const QString& q
     run_python_stdin(QStringLiteral("agentic_schedule_create"), params, {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (ok) {
+        // A rejected schedule ("Invalid schedule: …") is {"success": false} with
+        // exit 0 — it must not be reported as created.
+        if (ok && result.value("success").toBool(true)) {
             emit self->schedule_created(result.value("schedule_id").toString());
             // Python reports the earliest due time across all schedules, so the
             // new one (start_now included) arms the timer without a re-list.
@@ -954,8 +1062,13 @@ QString AgentService::skills_list() {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_skills_list"), {}, {}, [self](bool ok, QJsonObject result) {
-        if (!self || !ok)
+        if (!self)
             return;
+        if (!ok || !result.value("success").toBool(true)) {
+            // Said, not swallowed: the Libraries dialog shows it with RETRY.
+            emit self->error_occurred("skills_list", result.value("error").toString("Skill listing failed"));
+            return;
+        }
         emit self->skills_listed(result.value("skills").toArray());
     });
     return req_id;
@@ -978,8 +1091,12 @@ QString AgentService::archival_list(const QString& user_id, const QString& type)
         p["type"] = type;
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_memory_list"), p, {}, [self](bool ok, QJsonObject result) {
-        if (!self || !ok)
+        if (!self)
             return;
+        if (!ok || !result.value("success").toBool(true)) {
+            emit self->error_occurred("archival_list", result.value("error").toString("Memory listing failed"));
+            return;
+        }
         emit self->archival_listed(result.value("memories").toArray());
     });
     return req_id;
@@ -997,8 +1114,12 @@ QString AgentService::reflexion_list() {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_reflexion_list"), {}, {}, [self](bool ok, QJsonObject result) {
-        if (!self || !ok)
+        if (!self)
             return;
+        if (!ok || !result.value("success").toBool(true)) {
+            emit self->error_occurred("reflexion_list", result.value("error").toString("Reflexion listing failed"));
+            return;
+        }
         emit self->reflexion_listed(result.value("reflections").toArray());
     });
     return req_id;
@@ -1050,7 +1171,7 @@ QString AgentService::list_tasks(const QString& status_filter, int limit) {
     run_python_stdin(QStringLiteral("list_tasks"), params, {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (ok)
+        if (ok && result.value("success").toBool(true))
             emit self->tasks_listed(result.value("tasks").toArray());
         else
             emit self->error_occurred("list_tasks", result["error"].toString());
@@ -1066,7 +1187,7 @@ QString AgentService::get_task(const QString& task_id) {
     run_python_stdin(QStringLiteral("get_task"), params, {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (ok)
+        if (ok && result.value("success").toBool(true))
             emit self->task_loaded(result.value("task").toObject());
         else
             emit self->error_occurred("get_task", result["error"].toString());

@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "ui/theme/Theme.h"
 
 #include <QCloseEvent>
 #include <QHBoxLayout>
@@ -68,16 +69,9 @@ void OnboardingTour::build_ui() {
     root->setSpacing(16);
 
     heading_ = new QLabel(this);
-    QFont tf = heading_->font();
-    // App font is pixel-sized (pointSizeF() == -1), so scale whichever metric
-    // is actually set — multiplying a -1 point size yields a negative value
-    // that setPointSizeF rejects with a warning.
-    if (tf.pixelSize() > 0)
-        tf.setPixelSize(qRound(tf.pixelSize() * 1.4));
-    else if (tf.pointSizeF() > 0)
-        tf.setPointSizeF(tf.pointSizeF() * 1.4);
-    tf.setBold(true);
-    heading_->setFont(tf);
+    // Sizes relative to the user's base font size (the application stylesheet's
+    // font-size would override a QFont set on the label).
+    heading_->setStyleSheet("font-size:" + ui::fonts::px(6) + "px; font-weight:700;");
     root->addWidget(heading_);
 
     // Build the five steps with empty labels — retranslateUi() fills in the
@@ -116,14 +110,7 @@ QWidget* OnboardingTour::build_step(const QString& title, const QString& body, c
     l->setSpacing(10);
 
     auto* h = new QLabel(title, w);
-    QFont hf = h->font();
-    hf.setBold(true);
-    // See note above — scale the pixel size when the font is pixel-defined.
-    if (hf.pixelSize() > 0)
-        hf.setPixelSize(qRound(hf.pixelSize() * 1.15));
-    else if (hf.pointSizeF() > 0)
-        hf.setPointSizeF(hf.pointSizeF() * 1.15);
-    h->setFont(hf);
+    h->setStyleSheet("font-size:" + ui::fonts::px(2) + "px; font-weight:700;"); // see heading_ above
     l->addWidget(h);
 
     auto* b = new QLabel(body, w);
@@ -157,13 +144,12 @@ void OnboardingTour::retranslateUi() {
 
     // Step text, indexed by step order. Guarded so partial construction is safe.
     if (step_labels_.size() > 0 && step_labels_[0].title) {
-        step_labels_[0].title->setText(tr("Command bar (Ctrl+\\)"));
-        step_labels_[0].body->setText(tr("Type a function code or verb to do anything in the terminal — "
-                                         "e.g. \"AAPL\", \"layout switch \\\"Morning\\\"\", or "
-                                         "\"link panel red\". Press Ctrl+K for a fuzzy palette of every "
-                                         "action."));
-        step_labels_[0].tip->setText(tr("Tip: type \"?\" to list available actions for whatever you "
-                                        "type next."));
+        step_labels_[0].title->setText(tr("Search (Ctrl+K)"));
+        step_labels_[0].body->setText(tr("Press Ctrl+K and type anything — a symbol, a screen, an action: "
+                                         "e.g. \"AAPL\", \"backtest\" or \"theme light\". Enter opens it; "
+                                         "Ctrl+Enter opens it beside the current panel."));
+        step_labels_[0].tip->setText(tr("Tip: the command bar (Ctrl+\\) still takes function codes and "
+                                        "verbs such as \"link panel red\"."));
     }
     if (step_labels_.size() > 1 && step_labels_[1].title) {
         step_labels_[1].title->setText(tr("Link panels with a colour"));
@@ -186,9 +172,9 @@ void OnboardingTour::retranslateUi() {
     }
     if (step_labels_.size() > 3 && step_labels_[3].title) {
         step_labels_[3].title->setText(tr("Settings & shortcuts"));
-        step_labels_[3].body->setText(tr("Open Settings (gear icon) to tune theme, hotkeys, telemetry "
-                                         "opt-in, and broker credentials. Hotkeys are rebindable — "
-                                         "every action in the registry can be assigned a key."));
+        step_labels_[3].body->setText(tr("Open Settings (gear icon) to tune theme, hotkeys and broker "
+                                         "credentials. Hotkeys are rebindable — every action in the "
+                                         "registry can be assigned a key."));
         step_labels_[3].tip->setText(tr("Tip: F11 toggles fullscreen on the focused window."));
     }
     if (step_labels_.size() > 4 && step_labels_[4].title) {

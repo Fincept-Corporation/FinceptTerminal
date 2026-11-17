@@ -40,6 +40,11 @@ class OpenPositionsWidget : public BaseWidget {
     void hub_resubscribe();
     void hub_unsubscribe_all();
     QString resolve_account_id() const; // falls back to first active account
+    QString positions_topic() const;
+    /// Account name in the header, or why the broker session is unusable.
+    void update_session_state();
+    /// No account: "No broker account connected" over the tile (BaseWidget helper).
+    void show_no_account_state();
 
     QString account_id_;
     QString broker_id_;
@@ -49,6 +54,8 @@ class OpenPositionsWidget : public BaseWidget {
 
     bool hub_active_ = false;
     bool showing_empty_ = false; // table currently shows the "No open positions" row
+    /// The rows on screen — re-rendered on a theme change (P&L colours live in the items).
+    QVector<trading::BrokerPosition> positions_;
 };
 
 } // namespace fincept::screens::widgets

@@ -81,6 +81,9 @@ void WatchlistCloudAdapter::push(const OutboxRow& row, PushDone done) {
 void WatchlistCloudAdapter::push_create(const OutboxRow& row, PushDone done) {
     auto wl = WatchlistRepository::instance().get(row.local_id);
     if (wl.is_err()) {
+        if (wl.error() != "Not found")
+            LOG_WARN("CloudSync", logf("Watchlist push skipped, local row could not be read",
+                                       {{"id", row.local_id}, {"error", QString::fromStdString(wl.error())}}));
         done(wl_ok()); // local row already gone — nothing to create
         return;
     }
@@ -113,6 +116,9 @@ void WatchlistCloudAdapter::push_update(const OutboxRow& row, PushDone done) {
     }
     auto wl = WatchlistRepository::instance().get(row.local_id);
     if (wl.is_err()) {
+        if (wl.error() != "Not found")
+            LOG_WARN("CloudSync", logf("Watchlist push skipped, local row could not be read",
+                                       {{"id", row.local_id}, {"error", QString::fromStdString(wl.error())}}));
         done(wl_ok());
         return;
     }
@@ -280,8 +286,11 @@ void WatchlistCloudAdapter::apply_remote_watchlist(const QJsonObject& o) {
         local_id = *existing;
     } else {
         auto cr = repo.create(o.value("name").toString(), o.value("color").toString());
-        if (cr.is_err())
+        if (cr.is_err()) {
+            LOG_ERROR("CloudSync", logf("Pulled watchlist could not be created locally",
+                                        {{"remote_id", rid}, {"error", QString::fromStdString(cr.error())}}));
             return;
+        }
         local_id = cr.value().id;
     }
 
@@ -314,8 +323,11 @@ void WatchlistCloudAdapter::apply_remote_watchlist(const QJsonObject& o) {
 void WatchlistCloudAdapter::reconcile_deletes(const QSet<QString>& remote_ids) {
     SyncOutbox::ApplyGuard guard;
     auto maps = SyncMap::all(wl_entity());
-    if (maps.is_err())
+    if (maps.is_err()) {
+        LOG_WARN("CloudSync", logf("Delete reconcile skipped, sync map unreadable",
+                                   {{"entity", wl_entity()}, {"error", QString::fromStdString(maps.error())}}));
         return;
+    }
     auto& repo = WatchlistRepository::instance();
     for (const SyncMapping& m : maps.value()) {
         if (!remote_ids.contains(m.remote_id)) {

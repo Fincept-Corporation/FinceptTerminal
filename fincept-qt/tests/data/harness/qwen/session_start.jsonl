@@ -1,0 +1,3 @@
+{"type":"system","subtype":"session_start","uuid":"q1","session_id":"qwen-sess-1","model":"qwen3-coder-plus"}
+{"type":"assistant","uuid":"q2","session_id":"qwen-sess-1","message":{"id":"m1","role":"assistant","model":"qwen3-coder-plus","content":[{"type":"text","text":"Hello from Qwen."}]}}
+{"type":"result","subtype":"success","uuid":"q3","session_id":"qwen-sess-1","is_error":false,"duration_ms":800,"result":"Hello from Qwen.","usage":{"input_tokens":20,"output_tokens":5}}

@@ -5,6 +5,8 @@
 // dialog, used only from the portfolio screens.
 #pragma once
 
+#include "ui/formatting/NumberFormat.h"
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileDialog>
@@ -32,9 +34,11 @@ inline QString escape(const QString& field) {
     return f;
 }
 
-/// Plain, locale-independent number for machine-readable output.
+/// Plain, locale-independent number for machine-readable output (C locale, no
+/// grouping, never an exponent; up to `dp` decimals, trailing zeros trimmed).
+/// NaN / inf -> "" (never "nan"). Money columns travel with an ISO code column.
 inline QString num(double v, int dp = 6) {
-    return QString::number(v, 'f', dp);
+    return ui::formatting::export_number(v, dp);
 }
 
 /// Ask for a path and write @p header + @p rows. Returns the written path, or

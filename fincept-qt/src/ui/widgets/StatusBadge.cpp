@@ -14,19 +14,19 @@ void StatusBadge::set_status(Status s) {
     switch (s) {
         case Status::Connected:
             setText(tr("CONNECTED"));
-            setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::GREEN()));
+            setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;").arg(colors::SUCCESS()));
             break;
         case Status::Disconnected:
             setText(tr("OFFLINE"));
-            setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::RED()));
+            setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;").arg(colors::DANGER()));
             break;
         case Status::Loading:
             setText(tr("LOADING..."));
-            setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::GRAY()));
+            setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;").arg(colors::TEXT_SECONDARY()));
             break;
         case Status::Idle:
             setText(tr("READY"));
-            setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::MUTED()));
+            setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;").arg(colors::TEXT_TERTIARY()));
             break;
     }
 }
@@ -34,7 +34,7 @@ void StatusBadge::set_status(Status s) {
 void StatusBadge::set_custom(const QString& text, const QString& color) {
     custom_ = true;
     setText(text);
-    setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(color));
+    setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;").arg(color));
 }
 
 void StatusBadge::changeEvent(QEvent* event) {

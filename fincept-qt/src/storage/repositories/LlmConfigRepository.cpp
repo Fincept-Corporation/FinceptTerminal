@@ -8,8 +8,11 @@ namespace {
 // Encrypt LLM API keys at rest: keep them in SecureStorage (AES-256-GCM,
 // machine-bound key) instead of the plaintext SQL column. Reads fall back to
 // the column so pre-existing plaintext rows keep working and no key is ever
-// lost; writes move the key into SecureStorage and blank the column (only when
-// the encrypted store succeeds — otherwise the plaintext value is kept).
+// lost; writes move the key into SecureStorage and blank the column only when
+// the encrypted copy was written AND read back equal (store_verified) —
+// otherwise the plaintext value is kept and the move is retried on the next save.
+// The column is only ever non-empty when it is the newer copy (legacy row, or a
+// save made while the store failed), so a non-empty column wins on read.
 QString provider_secret_key(const QString& provider) {
     return QStringLiteral("llm:apikey:provider:") + provider;
 }
@@ -20,17 +23,19 @@ QString model_secret_key(const QString& id) {
 void hydrate_provider_key(LlmConfig& c) {
     if (!c.api_key.isEmpty())
         return; // legacy plaintext already present in the column
-    auto sr = SecureStorage::instance().retrieve(provider_secret_key(c.provider));
-    if (sr.is_ok())
-        c.api_key = sr.value();
+    // Error ≠ "nothing stored": the key stays empty for this load only; save()
+    // writes a key only when one is given, so an unread key is never overwritten.
+    const SecretRead sr = SecureStorage::instance().read(provider_secret_key(c.provider));
+    if (sr.found())
+        c.api_key = sr.value;
 }
 
 void hydrate_model_key(LlmModelConfig& m) {
     if (!m.api_key.isEmpty())
         return;
-    auto sr = SecureStorage::instance().retrieve(model_secret_key(m.id));
-    if (sr.is_ok())
-        m.api_key = sr.value();
+    const SecretRead sr = SecureStorage::instance().read(model_secret_key(m.id)); // see hydrate_provider_key
+    if (sr.found())
+        m.api_key = sr.value;
 }
 } // namespace
 
@@ -78,7 +83,8 @@ Result<void> LlmConfigRepository::save_provider(const LlmConfig& c) {
     // Move the API key into SecureStorage; blank the plaintext column only if the
     // encrypted store succeeded, so a SecureStorage failure never loses the key.
     QString column_key = c.api_key;
-    if (!c.api_key.isEmpty() && SecureStorage::instance().store(provider_secret_key(c.provider), c.api_key).is_ok())
+    if (!c.api_key.isEmpty() &&
+        SecureStorage::instance().store_verified(provider_secret_key(c.provider), c.api_key).is_ok())
         column_key.clear();
     return exec_write(
         "INSERT OR REPLACE INTO llm_configs (provider, api_key, base_url, model, is_active, tools_enabled, updated_at) "
@@ -151,8 +157,12 @@ Result<QVector<LlmModelConfig>> LlmConfigRepository::list_models(const QString& 
         return Result<QVector<LlmModelConfig>>::err(r.error());
     QVector<LlmModelConfig> result;
     auto& q = r.value();
-    while (q.next())
-        result.append(map_model(q));
+    while (q.next()) {
+        // Same as the unfiltered list: a key held in SecureStorage is not "no key".
+        LlmModelConfig m = map_model(q);
+        hydrate_model_key(m);
+        result.append(m);
+    }
     return Result<QVector<LlmModelConfig>>::ok(std::move(result));
 }
 
@@ -160,7 +170,7 @@ Result<void> LlmConfigRepository::save_model(const LlmModelConfig& m) {
     // Same as save_provider: encrypt the per-model API key, blank the column
     // only if the encrypted store succeeded.
     QString column_key = m.api_key;
-    if (!m.api_key.isEmpty() && SecureStorage::instance().store(model_secret_key(m.id), m.api_key).is_ok())
+    if (!m.api_key.isEmpty() && SecureStorage::instance().store_verified(model_secret_key(m.id), m.api_key).is_ok())
         column_key.clear();
     return exec_write("INSERT OR REPLACE INTO llm_model_configs "
                       "(id, provider, model_id, display_name, api_key, base_url, is_enabled, is_default, updated_at) "

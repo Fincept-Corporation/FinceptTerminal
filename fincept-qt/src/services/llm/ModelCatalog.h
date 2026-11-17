@@ -30,6 +30,11 @@ namespace fincept::ai_chat {
 
 class ModelCatalog {
   public:
+    /// Hard ceiling the Fincept API validates on /research/llm, /research/llm/async
+    /// (and visual-analysis): anything above is a 422 "max_tokens must be between
+    /// 1 and 8192" — which failed every Fincept chat for that user.
+    static constexpr int kFinceptMaxOutputTokens = 8192;
+
     /// Look up the published max output token cap for a (provider, model)
     /// pair. provider should be lowercase (e.g. "openai", "anthropic",
     /// "kimi", "gemini"). model is matched case-insensitively against

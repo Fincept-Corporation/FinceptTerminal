@@ -5,12 +5,16 @@
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/ProviderCatalog.h"
+#include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmConfigRepository.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QAbstractTextDocumentLayout>
 #include <QCompleter>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -22,7 +26,9 @@
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QSizePolicy>
+#include <QTextDocument>
 #include <QTextOption>
+#include <QtMath>
 
 namespace fincept::screens {
 
@@ -33,8 +39,8 @@ namespace fnt = fincept::ui::fonts;
 
 static QString bubble_style(const QString& role) {
     if (role == "user")
-        return "background:rgba(120,53,15,0.45);border:1px solid rgba(217,119,6,0.28);"
-               "border-radius:6px;padding:10px 14px;";
+        return QString("background:%1;border:1px solid %2;border-radius:6px;padding:10px 14px;")
+            .arg(col::ACCENT_BG(), col::alpha(col::AMBER, 0.35));
     if (role == "system")
         return QString("background:%1;border:1px solid %2;"
                        "border-radius:6px;padding:10px 14px;")
@@ -44,8 +50,6 @@ static QString bubble_style(const QString& role) {
 }
 
 static QString body_color(const QString& role) {
-    if (role == "user")
-        return "#fff7ed";
     if (role == "system")
         return col::TEXT_SECONDARY;
     return col::TEXT_PRIMARY;
@@ -65,6 +69,38 @@ static QString role_label(const QString& role) {
     if (role == "system")
         return QCoreApplication::translate("AgentChatPanel", "System");
     return QCoreApplication::translate("AgentChatPanel", "Agent");
+}
+
+// Keeps a read-only answer bubble exactly as tall as its text wrapped at the
+// width the QTextEdit really has. The old code measured at a fixed 600 px, so in
+// a narrower panel the bottom lines were cut off (both scroll bars are off) and
+// in a wider one the bubble had empty space below the text. QTextEdit re-wraps
+// its document to the viewport width on every resize, and the document layout
+// reports each new size — following it covers streaming, the final markdown
+// re-render and panel resizes alike.
+static void agent_chat_fit_height(QTextEdit* body) {
+    auto apply = [body](const QSizeF& size) {
+        const int h = qMax(qCeil(size.height()) + 8, 28);
+        body->setMinimumHeight(h);
+        body->setMaximumHeight(h);
+    };
+    QObject::connect(body->document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, body,
+                     apply);
+    apply(body->document()->size());
+}
+
+// Property on an answer bubble: the markdown it renders, kept so a theme change
+// can re-render the HTML (its colours are inline).
+static constexpr const char* kAgentChatMarkdownProp = "agent_md";
+
+// Composer height: the text's height, between one line of the input font and
+// about five lines.
+static void agent_chat_fit_input(QTextEdit* edit) {
+    const int line_h = QFontMetrics(fnt::font(-1)).lineSpacing();
+    const int min_h = qMax(44, line_h + 18);
+    const int max_h = qMax(120, line_h * 5 + 18);
+    const int doc_h = static_cast<int>(edit->document()->size().height());
+    edit->setFixedHeight(qBound(min_h, doc_h + 18, max_h));
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -97,8 +133,15 @@ AgentChatPanel::AgentChatPanel(QWidget* parent) : QWidget(parent) {
 
     update_llm_status();
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { update(); });
+    // Answer bubbles are rendered HTML with inline colours: re-render them.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        for (QTextEdit* body : messages_container_->findChildren<QTextEdit*>()) {
+            const QVariant md = body->property(kAgentChatMarkdownProp);
+            if (md.isValid())
+                body->setHtml(ui::MarkdownRenderer::render(md.toString()));
+        }
+        agent_chat_fit_input(input_edit_);
+    });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -111,7 +154,7 @@ void AgentChatPanel::build_ui() {
 
     // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QWidget(this);
-    header->setFixedHeight(52);
+    header->setMinimumHeight(52);
     header->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* hl = new QHBoxLayout(header);
@@ -120,7 +163,7 @@ void AgentChatPanel::build_ui() {
 
     header_title_ = new QLabel(tr("AGENT CHAT"));
     header_title_->setStyleSheet(
-        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1.5px;").arg(col::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;letter-spacing:1.5px;").arg(col::AMBER()));
     hl->addWidget(header_title_);
 
     // Thin divider
@@ -133,7 +176,7 @@ void AgentChatPanel::build_ui() {
     // Agent selector
     agent_caption_ = new QLabel(tr("AGENT:"));
     agent_caption_->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_TERTIARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_SECONDARY()));
     hl->addWidget(agent_caption_);
 
     agent_selector_ = new QComboBox;
@@ -160,25 +203,26 @@ void AgentChatPanel::build_ui() {
         completer->popup()->setStyleSheet(
             QString("QAbstractItemView{"
                     "background:%1;color:%2;border:1px solid %3;"
-                    "selection-background-color:%4;"
-                    "font-size:11px;padding:2px;outline:none;}"
+                    "selection-background-color:%4;selection-color:%5;"
+                    "font-size:" + fincept::ui::fonts::px(-3) + "px;padding:2px;outline:none;}"
                     "QAbstractItemView::item{padding:4px 10px;min-height:22px;}")
-                .arg(col::BG_RAISED(), col::TEXT_PRIMARY(), col::AMBER(), col::AMBER_DIM()));
+                .arg(col::BG_RAISED(), col::TEXT_PRIMARY(), col::AMBER(), col::AMBER_DIM(), col::TEXT_ON_ACCENT()));
         agent_selector_->setCompleter(completer);
     }
 
     agent_selector_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:3px 10px;"
-                "font-size:10px;border-radius:3px;}"
+                "font-size:" + fincept::ui::fonts::px(-4) + "px;border-radius:3px;}"
                 "QComboBox::drop-down{border:none;width:18px;}"
                 "QComboBox:hover{border-color:%4;}"
                 "QComboBox QAbstractItemView{background:%1;color:%2;"
-                "selection-background-color:%5;border:1px solid %3;"
-                "font-size:11px;padding:2px;outline:none;}"
+                "selection-background-color:%5;selection-color:%6;border:1px solid %3;"
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;padding:2px;outline:none;}"
                 "QComboBox QAbstractItemView::item{padding:4px 10px;min-height:22px;}"
                 "QComboBox QLineEdit{background:%1;color:%2;border:none;"
-                "selection-background-color:%5;font-size:10px;padding:0 4px;}")
-            .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER(), col::AMBER_DIM()));
+                "selection-background-color:%5;selection-color:%6;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:0 4px;}")
+            .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER(), col::AMBER_DIM(),
+                 col::TEXT_ON_ACCENT()));
 
     // When user picks an item from popup, clear search text and show the selected name
     connect(agent_selector_, QOverload<int>::of(&QComboBox::activated), agent_selector_, [this](int idx) {
@@ -193,17 +237,17 @@ void AgentChatPanel::build_ui() {
 
     // Active model pill
     hdr_model_lbl_ = new QLabel(tr("No model"));
-    hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
-                                          "border-radius:3px;padding:2px 8px;")
-                                      .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
+    set_model_pill_style(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) +
+                                 "px;background:%2;border:1px solid %3;border-radius:3px;padding:2px 8px;")
+                             .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
     hdr_model_lbl_->setToolTip(tr("Active LLM — configure in Settings > LLM Configuration"));
     hl->addWidget(hdr_model_lbl_);
 
     // Status chip
     hdr_status_lbl_ = new QLabel(tr("Ready"));
-    hdr_status_lbl_->setFixedWidth(72);
+    hdr_status_lbl_->setMinimumWidth(72);
     hdr_status_lbl_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
+    hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::SUCCESS()));
     hl->addWidget(hdr_status_lbl_);
 
     auto* div2 = new QFrame;
@@ -216,14 +260,15 @@ void AgentChatPanel::build_ui() {
     route_toggle_ = new QPushButton(tr("AUTO-ROUTE"));
     route_toggle_->setCheckable(true);
     route_toggle_->setCursor(Qt::PointingHandCursor);
-    route_toggle_->setFixedHeight(28);
+    route_toggle_->setMinimumHeight(28);
     route_toggle_->setToolTip(tr("When ON, the system picks the best agent for each query."));
     route_toggle_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
-                "QPushButton:checked{color:%3;border-color:%3;background:rgba(34,197,94,0.08);}"
+                "padding:3px 10px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;border-radius:3px;}"
+                "QPushButton:checked{color:%3;border-color:%3;background:%5;}"
                 "QPushButton:hover{background:%4;}")
-            .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::POSITIVE(), col::BG_HOVER()));
+            .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::SUCCESS(), col::BG_HOVER(),
+                 col::tint(col::SUCCESS(), 0.1)));
     hl->addWidget(route_toggle_);
 
     // Run-as-task toggle — visible only when Agentic Mode is enabled.
@@ -232,33 +277,33 @@ void AgentChatPanel::build_ui() {
     run_as_task_toggle_ = new QPushButton(tr("RUN AS TASK"));
     run_as_task_toggle_->setCheckable(true);
     run_as_task_toggle_->setCursor(Qt::PointingHandCursor);
-    run_as_task_toggle_->setFixedHeight(28);
+    run_as_task_toggle_->setMinimumHeight(28);
     run_as_task_toggle_->setToolTip(
         tr("When ON, this query runs as a durable background task with per-step progress."));
     run_as_task_toggle_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
-                "QPushButton:checked{color:%3;border-color:%3;background:rgba(245,158,11,0.08);}"
+                "padding:3px 10px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;border-radius:3px;}"
+                "QPushButton:checked{color:%3;border-color:%3;background:%5;}"
                 "QPushButton:hover{background:%4;}")
-            .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::AMBER(), col::BG_HOVER()));
+            .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::AMBER(), col::BG_HOVER(), col::ACCENT_BG()));
     run_as_task_toggle_->setVisible(false); // gated by agentic_mode_enabled
     hl->addWidget(run_as_task_toggle_);
 
     // Clear button
     clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setCursor(Qt::PointingHandCursor);
-    clear_btn_->setFixedHeight(28);
+    clear_btn_->setMinimumHeight(28);
     clear_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
+                "padding:3px 10px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;border-radius:3px;}"
                 "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
-            .arg(col::TEXT_TERTIARY(), col::BORDER_DIM(), col::BG_HOVER(), col::TEXT_SECONDARY()));
+            .arg(col::TEXT_SECONDARY(), col::BORDER_DIM(), col::BG_HOVER(), col::TEXT_PRIMARY()));
     hl->addWidget(clear_btn_);
     root->addWidget(header);
 
     // ── Portfolio context bar ─────────────────────────────────────────────────
     auto* pbar = new QWidget(this);
-    pbar->setFixedHeight(38);
+    pbar->setMinimumHeight(38);
     pbar->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
     auto* pl = new QHBoxLayout(pbar);
     pl->setContentsMargins(14, 0, 14, 0);
@@ -266,33 +311,35 @@ void AgentChatPanel::build_ui() {
 
     portfolio_caption_ = new QLabel(tr("PORTFOLIO:"));
     portfolio_caption_->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_TERTIARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_TERTIARY()));
     pl->addWidget(portfolio_caption_);
 
     portfolio_combo_ = new QComboBox;
     portfolio_combo_->addItem(tr("None"));
     portfolio_combo_->setFixedWidth(160);
     portfolio_combo_->setStyleSheet(QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:2px 8px;"
-                                            "font-size:10px;border-radius:3px;}"
+                                            "font-size:" + fincept::ui::fonts::px(-4) + "px;border-radius:3px;}"
                                             "QComboBox::drop-down{border:none;}"
                                             "QComboBox QAbstractItemView{background:%1;color:%2;"
-                                            "selection-background-color:%4;border:1px solid %3;}")
-                                        .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_DIM(), col::AMBER_DIM()));
+                                            "selection-background-color:%4;selection-color:%5;border:1px solid %3;}")
+                                        .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_DIM(), col::AMBER_DIM(),
+                                             col::TEXT_ON_ACCENT()));
     pl->addWidget(portfolio_combo_);
 
     auto qbtn = [&](const QString& label, const QString& clr) -> QPushButton* {
         auto* b = new QPushButton(label);
         b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(24);
+        b->setMinimumHeight(24);
         b->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                 "font-size:9px;font-weight:600;padding:2px 8px;border-radius:3px;}"
-                                 "QPushButton:hover{background:rgba(255,255,255,0.05);border-color:%1;}")
-                             .arg(clr, col::BORDER_DIM()));
+                                 "font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;padding:2px 8px;border-radius:3px;}"
+                                 "QPushButton:hover{background:%3;border-color:%1;}")
+                             .arg(clr, col::BORDER_DIM(), col::overlay(0.05)));
         return b;
     };
     analyze_btn_ = qbtn(tr("ANALYZE"), col::CYAN);
+    analyze_btn_->setProperty("fincept_agent_risk", "spend"); // agents: a billed model analysis
     rebalance_btn_ = qbtn(tr("REBALANCE"), col::AMBER);
-    risk_btn_ = qbtn(tr("RISK"), col::NEGATIVE);
+    risk_btn_ = qbtn(tr("RISK"), col::DANGER);
     pl->addWidget(analyze_btn_);
     pl->addWidget(rebalance_btn_);
     pl->addWidget(risk_btn_);
@@ -328,7 +375,7 @@ void AgentChatPanel::build_ui() {
     welcome_title_ = new QLabel(tr("How can I help you?"));
     welcome_title_->setAlignment(Qt::AlignCenter);
     welcome_title_->setStyleSheet(
-        QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(8) + "px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY()));
     wvl->addWidget(welcome_title_);
 
     welcome_subtitle_ = new QLabel(tr("Ask about markets, portfolios, or any financial topic.\n"
@@ -336,7 +383,7 @@ void AgentChatPanel::build_ui() {
     welcome_subtitle_->setAlignment(Qt::AlignCenter);
     welcome_subtitle_->setWordWrap(true);
     welcome_subtitle_->setStyleSheet(
-        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;background:transparent;").arg(col::TEXT_SECONDARY()));
     wvl->addWidget(welcome_subtitle_);
 
     // Suggestion chips
@@ -350,15 +397,15 @@ void AgentChatPanel::build_ui() {
     };
     const Chip chips[] = {
         {"Markets", col::CYAN, "Show today's top market movers"},
-        {"Portfolio", col::POSITIVE, "Analyze my portfolio performance"},
+        {"Portfolio", col::SUCCESS, "Analyze my portfolio performance"},
         {"Analytics", col::AMBER, "Calculate valuation for AAPL"},
-        {"Risk", col::NEGATIVE, "Run risk analysis on my portfolio"},
+        {"Risk", col::DANGER, "Run risk analysis on my portfolio"},
     };
     for (const auto& c : chips) {
         auto* btn = new QPushButton(tr(c.label));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
-                                   "padding:6px 14px;font-size:10px;font-weight:600;border-radius:4px;}"
+                                   "padding:6px 14px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;border-radius:4px;}"
                                    "QPushButton:hover{background:%4;}")
                                .arg(col::BG_RAISED(), c.color, col::BORDER_MED(), col::BG_HOVER()));
         const QString q = tr(c.query);
@@ -376,13 +423,13 @@ void AgentChatPanel::build_ui() {
 
     // Typing indicator
     typing_indicator_ = new QWidget(this);
-    typing_indicator_->setFixedHeight(28);
+    typing_indicator_->setMinimumHeight(28);
     typing_indicator_->setStyleSheet("background:transparent;");
     auto* til = new QHBoxLayout(typing_indicator_);
     til->setContentsMargins(4, 0, 0, 0);
     typing_dots_lbl_ = new QLabel(tr("Agent is thinking"));
     typing_dots_lbl_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_DIM()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-style:italic;background:transparent;").arg(col::TEXT_DIM()));
     til->addWidget(typing_dots_lbl_);
     til->addStretch();
     typing_indicator_->hide();
@@ -398,37 +445,36 @@ void AgentChatPanel::build_ui() {
     il->setSpacing(10);
 
     input_edit_ = new QTextEdit;
+    input_edit_->setProperty("fincept_agent_risk", "spend"); // agents: Enter sends a billed model request
     input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
-    input_edit_->setFixedHeight(44);
     input_edit_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     input_edit_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     input_edit_->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     input_edit_->setFrameShape(QFrame::NoFrame);
     input_edit_->setStyleSheet(QString("QTextEdit{background:%1;color:%2;border:1px solid %3;"
-                                       "padding:8px 12px;font-size:13px;border-radius:4px;}"
+                                       "padding:8px 12px;font-size:" + fincept::ui::fonts::px(-1) + "px;border-radius:4px;}"
                                        "QTextEdit:focus{border-color:%4;}")
                                    .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER()));
     input_edit_->installEventFilter(this);
     input_edit_->setAccessibleName(tr("Message the selected agent"));
     input_edit_->setAccessibleDescription(tr("Enter sends, Shift+Enter inserts a new line."));
-    // Grow height as user types (max ~120px / ~5 lines)
-    connect(input_edit_->document(), &QTextDocument::contentsChanged, input_edit_, [this]() {
-        int doc_h = static_cast<int>(input_edit_->document()->size().height());
-        int new_h = qBound(44, doc_h + 18, 120);
-        input_edit_->setFixedHeight(new_h);
-    });
+    // Grow height as user types (up to ~5 lines)
+    agent_chat_fit_input(input_edit_);
+    connect(input_edit_->document(), &QTextDocument::contentsChanged, input_edit_,
+            [this]() { agent_chat_fit_input(input_edit_); });
     il->addWidget(input_edit_, 1);
 
     send_btn_ = new QPushButton(tr("Send"));
+    send_btn_->setProperty("fincept_agent_risk", "spend"); // agents: sends a billed model request
     send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setAccessibleName(tr("Send message to agent"));
     send_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
-                "font-size:12px;font-weight:700;}"
+                "font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;}"
                 "QPushButton:hover:enabled{background:%3;}"
                 "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(col::AMBER(), col::BG_BASE(), col::ORANGE(), col::BG_RAISED(), col::TEXT_TERTIARY()));
+            .arg(col::AMBER(), col::TEXT_ON_ACCENT(), col::AMBER_DIM(), col::BG_RAISED(), col::TEXT_TERTIARY()));
     il->addWidget(send_btn_);
     root->addWidget(ib);
 
@@ -446,9 +492,9 @@ void AgentChatPanel::build_ui() {
 
     // ── Status bar ────────────────────────────────────────────────────────────
     status_label_ = new QLabel;
-    status_label_->setFixedHeight(18);
+    status_label_->setMinimumHeight(18);
     status_label_->setStyleSheet(
-        QString("background:%1;color:%2;font-size:9px;padding:0 14px;").arg(col::BG_SURFACE(), col::TEXT_TERTIARY()));
+        QString("background:%1;color:%2;font-size:" + fincept::ui::fonts::px(-5) + "px;padding:0 14px;").arg(col::BG_SURFACE(), col::TEXT_TERTIARY()));
     root->addWidget(status_label_);
 }
 
@@ -472,10 +518,29 @@ void AgentChatPanel::setup_connections() {
     // While a reply is streaming the button is STOP (see set_executing); Enter in
     // the composer still only sends.
     connect(send_btn_, &QPushButton::clicked, this, [this]() {
-        if (executing_)
-            services::AgentService::instance().cancel_run(pending_request_id_);
-        else
+        if (!executing_) {
             send_message();
+            return;
+        }
+        // A streaming run is killed here; its agent_stream_done(kCancelledError)
+        // closes the bubble.
+        if (services::AgentService::instance().cancel_run(pending_request_id_))
+            return;
+        // Still in the AUTO-ROUTE step: route_query is not a cancellable run, so
+        // STOP did nothing and the agent started anyway. Drop the request here —
+        // routing_result ignores an id that is no longer pending, so no run starts.
+        show_typing(false);
+        set_executing(false);
+        if (streaming_bubble_widget_) {
+            streaming_bubble_widget_->setPlainText(tr("[stopped]"));
+            streaming_bubble_widget_->setReadOnly(true);
+            streaming_bubble_widget_ = nullptr;
+        }
+        streaming_text_.clear();
+        status_label_->setText(tr("Stopped by user"));
+        hdr_status_lbl_->setText(tr("Stopped"));
+        hdr_status_lbl_->setStyleSheet(
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::DANGER()));
     });
     connect(clear_btn_, &QPushButton::clicked, this, &AgentChatPanel::clear_chat);
 
@@ -483,7 +548,11 @@ void AgentChatPanel::setup_connections() {
         auto_routing_ = on;
         route_toggle_->setText(on ? tr("AUTO-ROUTE: ON") : tr("AUTO-ROUTE"));
         agent_selector_->setEnabled(!on);
+        update_llm_status(); // the header names what answers
     });
+    // Another agent may answer with another model: keep the header pill true.
+    connect(agent_selector_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { update_llm_status(); });
 
     connect(run_as_task_toggle_, &QPushButton::toggled, this, [this](bool on) {
         run_as_task_ = on;
@@ -566,7 +635,7 @@ void AgentChatPanel::setup_connections() {
             });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_)
+        if (pending_request_id_.isEmpty() || r.request_id != pending_request_id_)
             return;
         show_typing(false);
         set_executing(false);
@@ -583,12 +652,10 @@ void AgentChatPanel::setup_connections() {
             } else {
                 // Replace streamed plain-text tokens with fully rendered markdown HTML.
                 const QString final_text = r.response.isEmpty() ? streaming_text_ : r.response;
+                // Height follows the re-rendered text (agent_chat_fit_height).
                 if (!final_text.trimmed().isEmpty()) {
+                    streaming_bubble_widget_->setProperty(kAgentChatMarkdownProp, final_text);
                     streaming_bubble_widget_->setHtml(ui::MarkdownRenderer::render(final_text));
-                    streaming_bubble_widget_->document()->setTextWidth(600);
-                    const int h = static_cast<int>(streaming_bubble_widget_->document()->size().height());
-                    streaming_bubble_widget_->setMinimumHeight(qMax(h + 8, 28));
-                    streaming_bubble_widget_->setMaximumHeight(qMax(h + 8, 28));
                 }
             }
             streaming_bubble_widget_->setReadOnly(true);
@@ -603,40 +670,25 @@ void AgentChatPanel::setup_connections() {
         if (r.success) {
             status_label_->setText(tr("Response received (%1ms)").arg(r.execution_time_ms));
             hdr_status_lbl_->setText(tr("Ready"));
-            hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
+            hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::SUCCESS()));
         } else {
             status_label_->setText(stopped ? tr("Stopped by user") : tr("Agent execution failed"));
             hdr_status_lbl_->setText(stopped ? tr("Stopped") : tr("Error"));
-            hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
+            hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::DANGER()));
         }
         scroll_to_bottom();
     });
 
-    // Failure that never produces an agent_result / agent_stream_done (Python
-    // crash, spawn failure, bad config). Without this the send button stayed
-    // disabled and `executing_` stuck true — the panel was dead until restart.
-    // Mirrors the guard TeamsViewPanel / WorkflowsViewPanel already have.
-    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
-        if (!executing_)
-            return;
-        show_typing(false);
-        set_executing(false);
-        if (streaming_bubble_widget_) {
-            streaming_bubble_widget_->setPlainText(tr("Error: %1").arg(msg));
-            streaming_bubble_widget_->setReadOnly(true);
-            streaming_bubble_widget_ = nullptr;
-        } else {
-            add_system_bubble(tr("Error: %1").arg(msg));
-        }
-        streaming_text_.clear();
-        status_label_->setText(tr("Agent execution failed"));
-        hdr_status_lbl_->setText(tr("Error"));
-        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
-    });
+    // No AgentService::error_occurred handler: route_query always answers with
+    // routing_result and run_agent_streaming always ends in agent_stream_done —
+    // crash, spawn failure and missing Python included. error_occurred reports
+    // unrelated discovery / task / schedule / plan / config calls; reacting to
+    // those ended a live reply as "Error" and then dropped the real answer.
 
     // Routing result
     connect(&svc, &services::AgentService::routing_result, this, [this](services::RoutingResult r) {
-        if (r.request_id != pending_request_id_)
+        // An emptied id (STOP / CLEAR during routing) means: do not start the run.
+        if (pending_request_id_.isEmpty() || r.request_id != pending_request_id_)
             return;
         if (r.success) {
             add_system_bubble(tr("Routed to: %1 (intent: %2, confidence: %3%)")
@@ -691,23 +743,99 @@ void AgentChatPanel::showEvent(QShowEvent* event) {
 
 // ── LLM status display ────────────────────────────────────────────────────────
 
-void AgentChatPanel::update_llm_status() {
+AgentChatPanel::AnsweringModel AgentChatPanel::answering_model() const {
+    AnsweringModel m;
     auto& llm = ai_chat::LlmService::instance();
-    if (llm.is_configured()) {
-        const QString label = QString("%1 / %2").arg(llm.active_provider(), llm.active_model());
-        hdr_model_lbl_->setText(label);
-        hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
-                                              "border-radius:3px;padding:2px 8px;")
-                                          .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
-        hdr_status_lbl_->setText(tr("Ready"));
-        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
+    const auto use_global = [&m, &llm]() {
+        if (llm.is_configured()) {
+            m.provider = llm.active_provider();
+            m.model = llm.active_model();
+            m.ok = true;
+        }
+    };
+    if (auto_routing_) {
+        use_global();
+        m.source = tr("Auto-route picks the agent for each message: a saved agent answers with its own LLM profile, "
+                      "a built-in agent with the global LLM shown here.");
+        return m;
+    }
+    const QString agent_id = agent_selector_ ? agent_selector_->currentData().toString() : QString();
+    if (agent_id.isEmpty()) {
+        use_global();
+        m.source = tr("Default: the global LLM (Settings > LLM Configuration).");
+        return m;
+    }
+    // Only agents saved in the CREATE tab carry an LLM profile assignment; the
+    // built-in (Python card) agents run on the global LLM (AgentService).
+    if (AgentConfigRepository::instance().get(agent_id).is_err()) {
+        use_global();
+        m.source = tr("This built-in agent answers with the global LLM (Settings > LLM Configuration).");
+        return m;
+    }
+    auto& repo = LlmProfileRepository::instance();
+    const ResolvedLlmProfile r = repo.resolve_for_context(QStringLiteral("agent"), agent_id);
+    if (r.provider.isEmpty()) {
+        use_global();
+        m.source = tr("No LLM profile applies to this agent: it answers with the global LLM.");
+        return m;
+    }
+    m.provider = r.provider;
+    m.model = r.model_id;
+    m.ok = true;
+    const QString own_id = repo.get_assignment(QStringLiteral("agent"), agent_id);
+    QString own_harness; // the agent's own assignment is a harness profile the runtime passes over
+    if (!own_id.isEmpty() && own_id != r.profile_id) {
+        if (const auto own = repo.get_profile(own_id); own.is_ok() && own.value().is_harness())
+            own_harness = own.value().name;
+    }
+    if (!own_id.isEmpty() && own_id == r.profile_id)
+        m.source = tr("This agent's LLM profile “%1”.").arg(r.profile_name);
+    else if (!r.profile_id.isEmpty() && r.profile_id == repo.get_assignment(QStringLiteral("agent_default"), {}))
+        m.source = tr("The default LLM profile for agents, “%1”.").arg(r.profile_name);
+    else if (!r.profile_id.isEmpty())
+        m.source = tr("The global default LLM profile, “%1”.").arg(r.profile_name);
+    else
+        m.source = tr("The active provider (Settings > LLM Configuration).");
+    if (!own_harness.isEmpty())
+        m.source += QLatin1Char(' ') + tr("Its assigned profile “%1” is an agent harness, which tool-using agents "
+                                          "cannot use yet.")
+                                           .arg(own_harness);
+    return m;
+}
+
+void AgentChatPanel::set_model_pill_style(const QString& css) {
+    if (css == model_pill_css_)
+        return;
+    model_pill_css_ = css;
+    hdr_model_lbl_->setStyleSheet(css);
+}
+
+void AgentChatPanel::update_llm_status() {
+    // The pill names the model that will actually answer the next message for
+    // the current agent selection (it used to show the global provider even when
+    // the selected agent resolves to its own profile).
+    const AnsweringModel m = answering_model();
+    if (m.ok) {
+        const QString provider = ai_chat::ProviderCatalog::display_name(m.provider);
+        hdr_model_lbl_->setText(m.model.isEmpty() ? provider : QStringLiteral("%1 / %2").arg(provider, m.model));
+        hdr_model_lbl_->setToolTip(tr("Answers the next message: %1 / %2\n%3\nConfigure in Settings > LLM Configuration "
+                                      "or the agent's LLM profile (AGENTS view).")
+                                       .arg(m.provider, m.model, m.source));
+        set_model_pill_style(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) +
+                                     "px;background:%2;border:1px solid %3;border-radius:3px;padding:2px 8px;")
+                                 .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
+        if (!executing_) {
+            hdr_status_lbl_->setText(tr("Ready"));
+            hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::SUCCESS()));
+        }
     } else {
         hdr_model_lbl_->setText(tr("No LLM configured"));
-        hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
-                                              "border-radius:3px;padding:2px 8px;")
-                                          .arg(col::NEGATIVE(), col::BG_BASE(), col::NEGATIVE()));
+        hdr_model_lbl_->setToolTip(tr("No LLM answers this selection — configure one in Settings > LLM Configuration."));
+        set_model_pill_style(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) +
+                                     "px;background:%2;border:1px solid %3;border-radius:3px;padding:2px 8px;")
+                                 .arg(col::DANGER(), col::BG_BASE(), col::DANGER()));
         hdr_status_lbl_->setText(tr("Unconfigured"));
-        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
+        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::DANGER()));
         status_label_->setText(tr("No LLM provider configured — go to Settings > LLM Configuration"));
     }
 }
@@ -719,9 +847,11 @@ void AgentChatPanel::send_message() {
     if (text.isEmpty() || executing_)
         return;
 
-    // Guard: require LLM config
+    // Guard: something must answer. A saved agent with its own LLM profile can
+    // answer even when no global provider is set (AgentService embeds its model);
+    // a background task resolves on its own side, so it keeps the global check.
     auto& llm = ai_chat::LlmService::instance();
-    if (!llm.is_configured()) {
+    if (run_as_task_ ? !llm.is_configured() : !answering_model().ok) {
         add_system_bubble(tr("No LLM provider configured. Go to Settings > LLM Configuration to set one up."));
         return;
     }
@@ -732,7 +862,7 @@ void AgentChatPanel::send_message() {
     // Show the raw user text in the bubble (without the injected context blob)
     add_user_bubble(text);
     input_edit_->clear();
-    input_edit_->setFixedHeight(44);
+    agent_chat_fit_input(input_edit_);
 
     // Build enriched query: prepend portfolio context if one is selected
     const QString pf_ctx = build_portfolio_context();
@@ -876,7 +1006,7 @@ void AgentChatPanel::add_user_bubble(const QString& text) {
     auto* role_lbl = new QLabel(role_label(role));
     role_lbl->setAlignment(Qt::AlignRight);
     role_lbl->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(role_color(role)));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;background:transparent;").arg(role_color(role)));
     cvl->addWidget(role_lbl);
 
     auto* bubble = new QFrame;
@@ -887,13 +1017,13 @@ void AgentChatPanel::add_user_bubble(const QString& text) {
     body->setWordWrap(true);
     body->setTextInteractionFlags(Qt::TextSelectableByMouse);
     body->setTextFormat(Qt::PlainText);
-    body->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(body_color(role)));
+    body->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;background:transparent;").arg(body_color(role)));
     bvl->addWidget(body);
     cvl->addWidget(bubble);
 
     auto* ts_lbl = new QLabel(ts);
     ts_lbl->setAlignment(Qt::AlignRight);
-    ts_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;").arg(col::TEXT_DIM()));
+    ts_lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(col::TEXT_DIM()));
     cvl->addWidget(ts_lbl);
 
     rl->addWidget(col_w);
@@ -922,7 +1052,7 @@ void AgentChatPanel::add_assistant_bubble(const QString& text, const QString& ag
     auto* hdr_row = new QHBoxLayout;
     auto* role_lbl = new QLabel(agent_name.isEmpty() ? tr("Agent") : agent_name);
     role_lbl->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(role_color(role)));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;background:transparent;").arg(role_color(role)));
     hdr_row->addWidget(role_lbl);
     hdr_row->addStretch();
     cvl->addLayout(hdr_row);
@@ -943,20 +1073,18 @@ void AgentChatPanel::add_assistant_bubble(const QString& text, const QString& ag
     body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     body->document()->setDocumentMargin(4);
     body->setStyleSheet(
-        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:12px;}").arg(body_color(role)));
+        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:" + fincept::ui::fonts::px(-2) + "px;}").arg(body_color(role)));
+    body->setProperty(kAgentChatMarkdownProp, text);
     body->setHtml(ui::MarkdownRenderer::render(text));
-    // Size to content using same fixed-width approach as streaming bubble
-    body->document()->setTextWidth(600);
-    const int doc_h = static_cast<int>(body->document()->size().height());
-    body->setMinimumHeight(qMax(doc_h + 8, 28));
-    body->setMaximumHeight(qMax(doc_h + 8, 28));
+    // Height follows the text wrapped at the bubble's real width.
+    agent_chat_fit_height(body);
 
     bvl->addWidget(body);
     cvl->addWidget(bubble);
 
     auto* ts_lbl = new QLabel(ts);
     ts_lbl->setAlignment(Qt::AlignLeft);
-    ts_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;").arg(col::TEXT_DIM()));
+    ts_lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(col::TEXT_DIM()));
     cvl->addWidget(ts_lbl);
 
     rl->addWidget(col_w);
@@ -982,7 +1110,7 @@ void AgentChatPanel::add_system_bubble(const QString& text) {
     auto* body = new QLabel(text);
     body->setWordWrap(true);
     body->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    body->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(body_color(role)));
+    body->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;background:transparent;").arg(body_color(role)));
     bvl->addWidget(body);
 
     rl->addWidget(bubble);
@@ -1007,7 +1135,7 @@ QTextEdit* AgentChatPanel::add_streaming_bubble(const QString& agent_name) {
     cvl->setSpacing(4);
 
     auto* role_lbl = new QLabel(agent_name.isEmpty() ? tr("Agent") : agent_name);
-    role_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(col::CYAN()));
+    role_lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;background:transparent;").arg(col::CYAN()));
     cvl->addWidget(role_lbl);
 
     auto* bubble = new QFrame;
@@ -1027,16 +1155,9 @@ QTextEdit* AgentChatPanel::add_streaming_bubble(const QString& agent_name) {
     body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     body->setStyleSheet(
-        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:12px;}").arg(col::TEXT_PRIMARY()));
-    // Reliable auto-grow: recompute at a fixed known width (600px matches col_w maxWidth 680
-    // minus bubble padding). No dependency on viewport()->width() which can be 0 pre-layout.
-    auto recompute_height = [body]() {
-        body->document()->setTextWidth(600);
-        const int doc_h = static_cast<int>(body->document()->size().height());
-        body->setMinimumHeight(qMax(doc_h + 8, 28));
-        body->setMaximumHeight(qMax(doc_h + 8, 28));
-    };
-    connect(body->document(), &QTextDocument::contentsChanged, body, recompute_height);
+        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:" + fincept::ui::fonts::px(-2) + "px;}").arg(col::TEXT_PRIMARY()));
+    // Auto-grow as tokens arrive, at the width the bubble actually has.
+    agent_chat_fit_height(body);
     bvl->addWidget(body);
     cvl->addWidget(bubble);
 
@@ -1060,7 +1181,7 @@ void AgentChatPanel::set_executing(bool on) {
     send_btn_->setText(on ? tr("Stop") : tr("Send"));
     if (on) {
         hdr_status_lbl_->setText(tr("Streaming"));
-        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::AMBER()));
+        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::AMBER()));
         status_label_->setText(tr("Processing..."));
     }
     if (!on) {
@@ -1097,6 +1218,16 @@ void AgentChatPanel::show_typing(bool on) {
 }
 
 void AgentChatPanel::clear_chat() {
+    // CLEAR during a run used to leave the Python agent running (and spending)
+    // with its answer discarded. Release the request id first so this panel's
+    // agent_stream_done handler ignores the cancellation (the transcript is being
+    // wiped), then stop the run. During the AUTO-ROUTE step there is no run yet:
+    // the released id makes routing_result drop it, so none is started.
+    if (executing_ && !pending_request_id_.isEmpty()) {
+        const QString running = pending_request_id_;
+        pending_request_id_.clear();
+        services::AgentService::instance().cancel_run(running);
+    }
     // Null streaming refs before deleting widgets
     streaming_bubble_widget_ = nullptr;
     streaming_text_.clear();
@@ -1122,7 +1253,7 @@ void AgentChatPanel::clear_chat() {
 
     show_welcome(true);
     hdr_status_lbl_->setText(tr("Ready"));
-    hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
+    hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;").arg(col::SUCCESS()));
     status_label_->clear();
     update_llm_status();
 }

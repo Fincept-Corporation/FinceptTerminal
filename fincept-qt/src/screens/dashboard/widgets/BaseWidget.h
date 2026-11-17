@@ -2,15 +2,20 @@
 #include "core/symbol/SymbolGroup.h"
 #include "core/symbol/SymbolRef.h"
 #include "ui/theme/ThemeTokens.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHideEvent>
 #include <QJsonObject>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
+#include <QSet>
 #include <QShowEvent>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -51,6 +56,12 @@ class BaseWidget : public QFrame {
     /// fades out automatically. If `expected <= 0`, falls back to the
     /// indeterminate "LOADING…" animation. The title-bar text indicator is
     /// also toggled in lockstep.
+    ///
+    /// Once something has been delivered (`loaded > 0`) and the overlay is
+    /// down — e.g. the watchdog dismissed it because one item never arrived —
+    /// a partial count no longer re-raises it: every later delivery used to put
+    /// the near-opaque overlay back over good rows for another 20 s. A repeat
+    /// of the same count also no longer restarts the watchdog.
     void set_loading_progress(int loaded, int expected);
 
     /// Show a terminal error over the content area ("what failed / what to
@@ -64,6 +75,8 @@ class BaseWidget : public QFrame {
     bool is_waiting_for_first_data() const;
     /// set_error() is currently on the overlay.
     bool is_showing_error() const { return error_shown_; }
+    /// The designed empty state (show_empty_state()) covers the content.
+    bool is_empty_state_shown() const;
     void set_title(const QString& title);
 
     /// External-trigger entry point — emits `refresh_requested` so the
@@ -122,6 +135,133 @@ class BaseWidget : public QFrame {
     /// so the gear icon appears. Also hides the icon if set to false later.
     void set_configurable(bool configurable);
 
+    /// Push-only tiles with nothing to re-request call set_refreshable(false):
+    /// the title-bar refresh button is hidden instead of sitting there dead.
+    void set_refreshable(bool refreshable);
+
+    /// Agent-approval marker for a tile whose load commits something — billed
+    /// tiles (Fincept credits) call set_agent_risk("spend") from their ctor. The
+    /// "fincept_agent_risk" property of that kind goes on the tile's content area with
+    /// "fincept_agent_risk_inherit" = true (covering every unmarked control inside
+    /// it — not the title bar's close / configure buttons), on the title-bar refresh
+    /// button and on the empty state's primary
+    /// button ("LOAD"), also when the
+    /// empty state is first built later (EmptyState::set_primary_agent_risk_default,
+    /// so a Spec naming its own kind still wins). nullptr / "" removes it.
+    void set_agent_risk(const char* kind);
+
+    /// Open the tile's config dialog — what the gear does. For an empty
+    /// state's "SET …" action. No-op for a tile without a config dialog.
+    void open_config();
+
+    // ── Designed empty state over the content ────────────────────────────────
+    // A tile with nothing to draw for a known reason (no broker account, an
+    // empty list, nothing configured yet, a default that could not be fetched)
+    // covers its content area with a compact ui::EmptyState: what the tile is,
+    // why it is empty and the one action that fixes it. The cover is built on
+    // first use (never for tiles that do not need it), paints the tile surface
+    // from the live theme and follows the content area's size; the tile's own
+    // widgets stay alive underneath. Showing it drops the loading spinner and
+    // its watchdog; a later set_loading(true) (a retry in flight) draws the
+    // spinner on top of it. Call hide_empty_state() as soon as there is
+    // something to show. Repeated calls re-apply the spec (retranslation).
+
+    /// `on_primary` / `on_secondary` run on the EmptyState's buttons (the spec's
+    /// primary / secondary texts); they replace the previous call's handlers.
+    void show_empty_state(const ui::EmptyState::Spec& spec, std::function<void()> on_primary = {},
+                          std::function<void()> on_secondary = {});
+    void hide_empty_state();
+    /// Broker tiles without an account: "No broker account connected", the
+    /// sentence `what_it_shows` (what the tile would show), and OPEN EQUITY
+    /// TRADING. Never connects anything by itself. While it is up, an account
+    /// becoming active (added / activated in Equity Trading) runs
+    /// `on_account_available` once, so the tile can resolve the account again
+    /// (and hide the state). hide_empty_state() also cancels that wait.
+    void show_no_broker_account(const QString& what_it_shows, std::function<void()> on_account_available);
+
+    // ── Non-blocking message boxes ───────────────────────────────────────────
+    // The QMessageBox statics run exec(): a nested event loop around a STACK
+    // box parented to this tile. A tile destroyed while that box is open (layout
+    // reload, MCP remove, another window) deletes the stack object through its
+    // parent, and the code after exec() then runs on a dead `this`. These open a
+    // heap box (window-modal, deleted on close) and return immediately.
+
+    /// Yes / No question, default No. `on_yes` runs only when the user clicks
+    /// Yes while this tile is still alive (this tile is the connection context).
+    void confirm_async(QMessageBox::Icon icon, const QString& title, const QString& text,
+                       std::function<void()> on_yes);
+    /// Informational box with a single OK button.
+    void notify_async(QMessageBox::Icon icon, const QString& title, const QString& text);
+
+    /// Broker tiles: header text for `account_id` — its display name, plus
+    /// "TOKEN EXPIRED / CONNECTION ERROR — reconnect in Equity Trading" while a
+    /// live account's session is unusable. In that case the reason is also
+    /// recorded as an error of `topic` (note_topic_error; ignored unless `topic`
+    /// is tracked), so a tile with no data shows why instead of "No data yet".
+    QString broker_account_hint(const QString& account_id, const QString& topic);
+
+    // ── Producer errors (DataHub error channel) ──────────────────────────────
+    // Producers report a failed fetch with DataHub::publish_error() and a
+    // user-facing reason ("Python is not set up yet…", "Yahoo is rate
+    // limiting…"). A tile that only subscribes to values never hears it and
+    // spins until the 20 s watchdog's generic "No data yet". A tile declares
+    // the topics its content comes from with track_topics(); BaseWidget then
+    // listens to their error channel and:
+    //   * while the tile has no data and EVERY tracked topic has failed, puts
+    //     the reason on the overlay (with "click refresh to retry" — the
+    //     title-bar refresh button), replacing the spinner;
+    //   * once the tile has data, never covers it: a failure only shows the
+    //     title-bar "STALE" / "n/N FAILED" marker, with the reasons in its
+    //     tooltip;
+    //   * on watchdog expiry with no data, shows the recorded reasons instead
+    //     of the generic "No data yet";
+    //   * forgets a topic's error when a value arrives (note_topic_value()).
+    // Errors are kept until a value arrives, also across hide/show.
+
+    /// Declare the hub topics this tile's content comes from and subscribe their
+    /// error channel (owner = this, so hideEvent()'s DataHub::unsubscribe(this)
+    /// and destruction drop it together with the value subscriptions). Replaces
+    /// the previous set: topics no longer listed are unsubscribed and forgotten,
+    /// topics still listed keep their recorded error / has-data state. Safe to
+    /// call repeatedly — it removes this tile's error slot for every listed
+    /// topic before adding it, so re-subscribing never stacks duplicates. Call
+    /// it wherever the tile (re)subscribes its values, before subscribing them.
+    ///
+    /// `drive_loading_overlay`: BaseWidget also owns the loading overlay — a
+    /// topic counts as resolved once it delivered a value OR an error; the
+    /// overlay ("LOADING r / N") covers the content only while no topic has
+    /// delivered data, and goes when the first value lands. Multi-symbol tiles
+    /// pass true and stop calling set_loading_progress() themselves. With false
+    /// the tile keeps driving set_loading() itself (single-topic tiles).
+    void track_topics(const QStringList& topics, bool drive_loading_overlay = false);
+    /// Drop every tracked topic and its recorded state. Call when the tile
+    /// discards the data it was showing (symbol list replaced and rows rebuilt).
+    void untrack_topics();
+    /// A value for `topic` was rendered: clears its error and marks the tile as
+    /// having data. Call from every value slot of a tracked topic.
+    void note_topic_value(const QString& topic);
+    /// Record a failure that did not come through the hub — a delivered but
+    /// unusable payload (empty series). Handled exactly like a hub error.
+    void note_topic_error(const QString& topic, const QString& error);
+    /// Error recorded for `topic` since its last value; empty if none.
+    QString topic_error(const QString& topic) const { return topic_errors_.value(topic); }
+    /// Tooltip text for a row / cell fed by `topic`: the reason, prefixed by
+    /// "No data" or "Last refresh failed — showing the last data received".
+    /// Empty when the topic has no error.
+    QString topic_error_tooltip(const QString& topic) const;
+    /// Tracked topics currently in error.
+    int failed_topic_count() const;
+    /// Some tracked topic has delivered a value.
+    bool has_topic_data() const { return !valued_topics_.isEmpty(); }
+    /// `topic` has delivered a value (since it was first tracked).
+    bool topic_has_data(const QString& topic) const { return valued_topics_.contains(topic); }
+    /// Placeholder text for a cell whose topic failed with no data ("—").
+    static QString failed_value_text() { return QString(QChar(0x2014)); }
+    /// Hook: a tracked topic got a new (or different) error. Multi-symbol tiles
+    /// re-render here to mark the failed rows; the overlay / title marker are
+    /// already handled. Default: nothing.
+    virtual void on_topic_errors_changed() {}
+
     /// Coalesce repeated re-render requests into a single call on the next
     /// event-loop turn.
     ///
@@ -163,6 +303,11 @@ class BaseWidget : public QFrame {
     /// Forget what set_css_cached() applied to `w` (call after restyling `w`
     /// directly, e.g. on a theme change), so the next call re-applies.
     static void reset_css_cache(QWidget* w);
+
+    /// Row height for an item view whose text is `font_offset` px from the
+    /// user's base size: `design_px` at the default size, taller when a larger
+    /// base font needs it. Re-apply it from on_theme_changed().
+    static int text_row_height(int design_px, int font_offset);
 
     /// Right-click menu for a symbol: open in Equity Research / Equity (or
     /// Crypto) Trading / News, backtest it, add it to a saved watchlist, or
@@ -233,12 +378,29 @@ class BaseWidget : public QFrame {
     void on_watchdog_fired();
     void on_badge_group_requested(SymbolGroup g);
     SymbolGroup default_link_group() const;
+    /// show_no_broker_account(): an account was added / changed — run the wait
+    /// once an active account exists.
+    void on_broker_accounts_changed();
+
+    // Producer-error tracking — see track_topics().
+    void on_tracked_topic_error(const QString& topic, const QString& error);
+    /// Re-derive overlay + title marker from the tracked-topic state.
+    void refresh_topic_state();
+    /// drive_loading_overlay mode: overlay from (resolved, expected).
+    void update_topic_loading();
+    /// Put the recorded reasons on the overlay (no data yet).
+    void show_topic_failure();
+    void update_topic_status_label();
+    /// Recorded errors grouped by reason, one line per reason ("AAPL, MSFT: …"),
+    /// at most `max_groups` lines. A single tracked topic gives the bare reason.
+    QString topic_error_lines(int max_groups) const;
 
   private:
     QWidget* title_bar_ = nullptr;
     QLabel* title_label_ = nullptr;
     QLabel* accent_bar_ = nullptr;
     QLabel* loading_label_ = nullptr;
+    QLabel* topic_status_label_ = nullptr; ///< "STALE" / "n/N FAILED" marker (tracked topics)
     QWidget* content_ = nullptr;
     QVBoxLayout* content_layout_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
@@ -247,12 +409,38 @@ class BaseWidget : public QFrame {
     LoadingOverlay* loading_overlay_ = nullptr;
     QTimer* loading_watchdog_ = nullptr;
     int last_progress_loaded_ = 0;
+    int last_progress_expected_ = 0;
     bool error_shown_ = false; ///< set_error() is on the overlay (cleared by the next set_loading*)
     QString accent_color_;
+    /// The theme token the accent was given as (null for a non-token colour):
+    /// the accent is re-read from it on every theme change.
+    const char* ui::ThemeTokens::* accent_field_ = nullptr;
+    QString accent_source_; ///< the accent as passed, for a non-token colour
+
+    // Producer-error tracking — see track_topics().
+    QStringList tracked_topics_;            ///< declared order (used for messages)
+    QSet<QString> tracked_set_;             ///< same, for lookups
+    QHash<QString, QString> topic_errors_;  ///< topic -> reason, until its next value
+    QSet<QString> valued_topics_;           ///< topics that delivered a value
+    bool topic_drive_loading_ = false;      ///< track_topics(…, true)
+    bool topic_error_shown_ = false;        ///< the overlay shows show_topic_failure()
+    bool topic_tracking_quiet_ = false;     ///< inside track_topics(): defer refresh_topic_state()
+    bool topic_retry_pending_ = false;      ///< refresh clicked on a failure: spin until a new outcome
+    int topic_failure_resolved_ = -1;       ///< (resolved, expected) when the failure went up —
+    int topic_failure_expected_ = -1;       ///< an unchanged count keeps it up instead of re-spinning
 
     // Render coalescing — see schedule_render().
     std::function<void()> pending_render_;
     bool render_scheduled_ = false;
+
+    // Designed empty state — see show_empty_state(). Null until first needed.
+    QWidget* empty_cover_ = nullptr;          ///< opaque host over content_
+    ui::EmptyState* empty_state_ = nullptr;   ///< inside empty_cover_
+    std::function<void()> empty_primary_;     ///< current primary action
+    std::function<void()> empty_secondary_;   ///< current secondary action
+    std::function<void()> broker_wait_;       ///< show_no_broker_account(): run once an account is active
+    bool broker_watch_connected_ = false;     ///< AccountManager signals connected (once)
+    QString agent_risk_;                      ///< set_agent_risk(): refresh + empty-state primary
 
     // Symbol linking — see enable_symbol_link().
     ui::GroupBadge* group_badge_ = nullptr;

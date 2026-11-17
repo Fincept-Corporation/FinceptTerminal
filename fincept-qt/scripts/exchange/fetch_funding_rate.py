@@ -1,76 +1,31 @@
 """
-Fetch current funding rate for a perpetual futures symbol.
-Works with both spot symbols (BTC/USDT) and perp symbols (BTC/USDT:USDT).
-For spot symbols on exchanges that use unified format, tries the perp equivalent.
+Fetch the current funding rate (a spot pair uses its linear perpetual when listed) — a one-shot wrapper over the exchange daemon's own `fetch_funding_rate`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
 
 Usage: python fetch_funding_rate.py <exchange_id> <symbol>
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, run_with_error_handling
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
+
+USAGE = "fetch_funding_rate.py <exchange_id> <symbol>"
 
 
-def to_perp_symbol(symbol: str) -> str:
-    """Convert spot symbol to linear perp equivalent if needed.
-    BTC/USDT -> BTC/USDT:USDT (Binance unified format)
-    """
-    if ":" not in symbol and "/" in symbol:
-        quote = symbol.split("/")[1]
-        return f"{symbol}:{quote}"
-    return symbol
-
-
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 3:
-        output_success({
-            "symbol": "",
-            "funding_rate": None,
-            "funding_timestamp": None,
-            "next_funding_timestamp": None,
-            "mark_price": None,
-            "index_price": None,
-        })
-        return
-
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2]
-
-    exchange = make_exchange(exchange_id)
-    exchange.load_markets()
-
-    # Try perp symbol first, fall back to original
-    perp_symbol = to_perp_symbol(symbol)
-    tried = []
-
-    for sym in ([perp_symbol, symbol] if perp_symbol != symbol else [symbol]):
-        tried.append(sym)
-        try:
-            # Use swap market type for perp symbols
-            exchange.options["defaultType"] = "swap"
-            rate = exchange.fetch_funding_rate(sym)
-            output_success({
-                "symbol": sym,
-                "funding_rate": rate.get("fundingRate"),
-                "funding_timestamp": rate.get("fundingTimestamp"),
-                "next_funding_timestamp": rate.get("nextFundingTimestamp"),
-                "mark_price": rate.get("markPrice"),
-                "index_price": rate.get("indexPrice"),
-                "interest_rate": rate.get("interestRate"),
-            })
-            return
-        except Exception:
-            continue
-
-    # Not available for this symbol/exchange (common for spot-only exchanges)
-    output_success({
-        "symbol": symbol,
-        "funding_rate": None,
-        "funding_timestamp": None,
-        "next_funding_timestamp": None,
-        "mark_price": None,
-        "index_price": None,
-    })
+def main(argv):
+    if len(argv) < 3:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2], "derive_perp": True}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_funding_rate", argv[1], args)[0]
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

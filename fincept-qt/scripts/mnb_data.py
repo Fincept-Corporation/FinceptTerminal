@@ -54,6 +54,13 @@ MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
 # Error container
 # ---------------------------------------------------------------------------
 
+def _per_currency(rates, date=""):
+    """{CODE: rate, "date": ...} -> [{date, currency, rate}]: a snapshot as a row per currency."""
+    rates = rates or {}
+    d = rates.get("date", date) or date
+    return [{"date": d, "currency": k, "rate": v} for k, v in rates.items() if k != "date"]
+
+
 class MNBError:
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
         self.endpoint    = endpoint
@@ -165,7 +172,8 @@ class MNBWrapper:
             return {
                 "success":   True,
                 "date":      latest.get("date", ""),
-                "data":      {k: v for k, v in latest.items() if k != "date"},
+                "data":      _per_currency(latest),
+                "rates":     {k: v for k, v in latest.items() if k != "date"},
                 "note":      "HUF per 1 unit of foreign currency (JPY/KRW/IDR normalised from per-100)",
                 "source":    "Magyar Nemzeti Bank",
                 "url":       SOAP_URL,
@@ -271,12 +279,13 @@ class MNBWrapper:
         today = self.get_today()
         if not today.get("success"):
             return today
-        all_rates = today.get("data", {})
+        all_rates = today.get("rates", {})
         snapshot  = {c: all_rates[c] for c in MAJOR_CURRENCIES if c in all_rates}
         return {
             "success":    True,
             "date":       today.get("date"),
-            "data":       snapshot,
+            "data":       _per_currency(snapshot, today.get("date", "")),
+            "rates":      snapshot,
             "all_rates":  all_rates,
             "note":       "HUF per 1 unit of foreign currency",
             "source":     "Magyar Nemzeti Bank",

@@ -234,7 +234,9 @@ QVector<OrderRow> PaperExchange::close_all(const QString& agent_id, int round_se
     for (qsizetype i = book.size() - 1; i >= 0; --i) {
         if (mark(book[i].coin) <= 0) { // no mark → leave the position open, never close at 0
             LOG_WARN("PaperExchange",
-                     QStringLiteral("close_all: no mark for %1, leaving position open").arg(book[i].coin));
+                     QStringLiteral("Position left open while closing all: no mark agent=%1 coin=%2 round=%3")
+                         .arg(agent_id, book[i].coin)
+                         .arg(round_seq));
             continue;
         }
         out.append(close_position(agent_id, book[i], 1.0, round_seq, "filled", QStringLiteral("kill_all")));

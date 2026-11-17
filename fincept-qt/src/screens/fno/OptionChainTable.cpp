@@ -4,6 +4,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QContextMenuEvent>
+#include <QFontMetrics>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMenu>
@@ -16,6 +17,12 @@ namespace fincept::screens::fno {
 using namespace fincept::ui;
 
 namespace {
+
+/// Row height for the chain: 22px at the default font size, growing with the
+/// user's font so the figures never clip.
+int chain_row_height() {
+    return qMax(22, QFontMetrics(fonts::font()).height() + 6);
+}
 
 class ChainCellDelegate : public QStyledItemDelegate {
   public:
@@ -37,10 +44,10 @@ class ChainCellDelegate : public QStyledItemDelegate {
             bg = QColor(colors::AMBER());
             bg.setAlpha(45);
         } else if (is_ce_side && is_call_itm) {
-            bg = QColor(0xfb, 0xc2, 0x4d); // soft amber tint = ITM call
+            bg = QColor(colors::WARNING()); // soft amber tint = ITM call
             bg.setAlpha(30);
         } else if (is_pe_side && is_put_itm) {
-            bg = QColor(0xfb, 0xc2, 0x4d);
+            bg = QColor(colors::WARNING());
             bg.setAlpha(30);
         }
         painter->fillRect(option.rect, bg);
@@ -51,7 +58,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             if (r > 0) {
                 QRect bar = option.rect;
                 bar.setLeft(option.rect.right() - int(option.rect.width() * r));
-                QColor bar_col(0x16, 0xa3, 0x4a); // green for CE OI
+                QColor bar_col(colors::POSITIVE()); // green for CE OI
                 bar_col.setAlpha(70);
                 painter->fillRect(bar, bar_col);
             }
@@ -60,7 +67,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             if (r > 0) {
                 QRect bar = option.rect;
                 bar.setRight(option.rect.left() + int(option.rect.width() * r));
-                QColor bar_col(0xdc, 0x26, 0x26); // red for PE OI
+                QColor bar_col(colors::NEGATIVE()); // red for PE OI
                 bar_col.setAlpha(70);
                 painter->fillRect(bar, bar_col);
             }
@@ -72,7 +79,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             if (!is_atm)
                 strike_bg.setAlpha(220);
             painter->fillRect(option.rect, strike_bg);
-            QColor txt_col = is_atm ? QColor(colors::BG_BASE()) : QColor(colors::TEXT_PRIMARY());
+            QColor txt_col = is_atm ? QColor(colors::TEXT_ON_ACCENT()) : QColor(colors::TEXT_PRIMARY());
             QFont f = option.font;
             f.setBold(true);
             painter->setFont(f);
@@ -95,7 +102,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize s = QStyledItemDelegate::sizeHint(option, index);
-        s.setHeight(22);
+        s.setHeight(chain_row_height());
         return s;
     }
 };
@@ -126,7 +133,10 @@ OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
     horizontalHeader()->setHighlightSections(false);
     horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
     verticalHeader()->setVisible(false);
-    verticalHeader()->setDefaultSectionSize(22);
+    verticalHeader()->setDefaultSectionSize(chain_row_height());
+    // The row height follows the user's font size.
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { verticalHeader()->setDefaultSectionSize(chain_row_height()); });
 
     connect(model_, &QAbstractItemModel::modelReset, this, [this]() {
         for (int row = 0; row < model_->rowCount(); ++row) {
@@ -138,11 +148,11 @@ OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
     });
 
     setStyleSheet(
-        QStringLiteral(
+        QString(
             "QTableView { background:%1; color:%2; border:1px solid %3; gridline-color:%3; "
             "selection-background-color:%4; }"
             "QHeaderView::section { background:%5; color:%6; border:none; border-bottom:1px solid %3; padding:4px 6px; "
-            "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }"
+            "                       font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; }"
             "QTableView::item { padding:0; }")
             .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
                  colors::BG_RAISED(), colors::TEXT_SECONDARY()));
@@ -200,6 +210,11 @@ void OptionChainTable::keyPressEvent(QKeyEvent* e) {
     QTableView::keyPressEvent(e);
 }
 
+void OptionChainTable::set_orders_enabled(bool enabled, const QString& reason) {
+    orders_enabled_ = enabled;
+    orders_off_reason_ = enabled ? QString() : reason;
+}
+
 void OptionChainTable::contextMenuEvent(QContextMenuEvent* e) {
     // A keyboard-triggered context menu carries no meaningful pos(), so resolve
     // from the focused cell instead — otherwise the Menu key would open a
@@ -226,6 +241,16 @@ void OptionChainTable::contextMenuEvent(QContextMenuEvent* e) {
     QMenu menu(this);
     QAction* buy = menu.addAction(tr("Buy %1").arg(label));
     QAction* sell = menu.addAction(tr("Sell %1").arg(label));
+    buy->setProperty("fincept_agent_risk", "order");
+    sell->setProperty("fincept_agent_risk", "order");
+    if (!orders_enabled_) {
+        buy->setEnabled(false);
+        sell->setEnabled(false);
+        if (!orders_off_reason_.isEmpty()) {
+            QAction* why = menu.addAction(orders_off_reason_);
+            why->setEnabled(false);
+        }
+    }
     menu.addSeparator();
     QAction* to_builder = menu.addAction(tr("Add to Builder"));
     // Keyboard invocation has no cursor position — anchor the menu on the cell.

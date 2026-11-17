@@ -1,8 +1,11 @@
 #include "screens/fno/FnoScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "screens/common/PaperBlotterPanel.h"
 #include "screens/fno/BuilderSubTab.h"
+#include "screens/fno/FnoFormat.h"
 #include "screens/fno/ChainSubTab.h"
 #include "screens/fno/FiiDiiSubTab.h"
 #include "screens/fno/LegEditorTable.h"
@@ -13,18 +16,24 @@
 #include "screens/fno/ScreenerSubTab.h"
 #include "services/options/OptionChainService.h"
 #include "trading/instruments/InstrumentService.h"
+#include "ui/notifications/NotificationService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/Requirements.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QDateTime>
 #include <QHash>
 #include <QHideEvent>
 #include <QLabel>
+#include <QLocale>
 #include <QSet>
 #include <QShowEvent>
 #include <QString>
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <iterator>
 
 namespace fincept::screens::fno {
 
@@ -85,7 +94,7 @@ QString FnoScreen::tab_label_for(int index) {
         case TabOI:
             return tr("OI");
         case TabMultiStraddle:
-            return tr("Multi-Stra");
+            return tr("Multi-Straddle");
         case TabFiiDii:
             return tr("FII / DII");
         case TabScreener:
@@ -124,19 +133,24 @@ QString FnoScreen::tab_detail_for(int index) {
 
 FnoScreen::FnoScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoScreen");
-    setStyleSheet(QStringLiteral("#fnoScreen { background:%1; }"
+    setStyleSheet(QString("#fnoScreen { background:%1; }"
                                  "#fnoTabBar { background:%1; border-bottom:1px solid %2; }"
                                  "#fnoTabBtn { background:transparent; color:%3; border:none; padding:8px 18px; "
-                                 "             font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                 "             font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                  "#fnoTabBtn:hover { background:%4; color:%5; }"
                                  "#fnoTabBtn[active=\"true\"] { color:%6; border-bottom:2px solid %6; }"
-                                 "#fnoComingSoon { color:%3; font-size:14px; background:transparent; }"
-                                 "#fnoComingSoonHint { color:%7; font-size:11px; background:transparent; }")
+                                 "#fnoComingSoon { color:%3; font-size:" + fincept::ui::fonts::px(0) + "px; background:transparent; }"
+                                 "#fnoComingSoonHint { color:%7; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent; }"
+                                 "#fnoSourceStrip { background:%1; border-bottom:1px solid %2; }"
+                                 "#fnoSourceStripText { color:%8; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; background:transparent; }"
+                                 "#fnoSourceStripBtn { background:transparent; color:%6; border:1px solid %2; padding:3px 10px; "
+                                 "                     font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; }"
+                                 "#fnoSourceStripBtn:hover { border-color:%6; }")
                       .arg(colors::BG_BASE(), colors::BORDER_DIM(), colors::TEXT_SECONDARY(), colors::BG_HOVER(),
-                           colors::TEXT_PRIMARY(), colors::AMBER(), colors::TEXT_DIM()));
+                           colors::TEXT_PRIMARY(), colors::AMBER(), colors::TEXT_DIM(), colors::WARNING()));
 
     setup_ui();
-    LOG_INFO("FnoScreen", "Constructed");
+    LOG_DEBUG("FnoScreen", "Constructed");
 }
 
 void FnoScreen::setup_ui() {
@@ -145,6 +159,29 @@ void FnoScreen::setup_ui() {
     root->setSpacing(0);
 
     root->addWidget(build_tab_bar());
+
+    // Strip naming the free DELAYED source while its data is on screen (every tab
+    // that reads the chain) — the numbers below are never mistaken for a live feed.
+    source_strip_ = new QWidget(this);
+    source_strip_->setObjectName("fnoSourceStrip");
+    auto* strip_lay = new QHBoxLayout(source_strip_);
+    strip_lay->setContentsMargins(12, 4, 12, 4);
+    strip_lay->setSpacing(8);
+    source_strip_label_ = new QLabel(source_strip_);
+    source_strip_label_->setObjectName("fnoSourceStripText");
+    source_strip_label_->setWordWrap(true);
+    strip_lay->addWidget(source_strip_label_, 1);
+    auto* strip_btn = new QPushButton(tr("OPEN ACCOUNTS"), source_strip_);
+    strip_btn->setObjectName("fnoSourceStripBtn");
+    strip_btn->setCursor(Qt::PointingHandCursor);
+    strip_btn->setToolTip(tr("Connect a broker for its live NSE / BSE chain and orders"));
+    connect(strip_btn, &QPushButton::clicked, this, [this]() {
+        fincept::ui::open_setup_link(
+            fincept::ui::SetupLink{QStringLiteral("equity_trading"), QStringLiteral("accounts"), QString()}, this);
+    });
+    strip_lay->addWidget(strip_btn, 0, Qt::AlignVCenter);
+    source_strip_->setVisible(false);
+    root->addWidget(source_strip_);
 
     stack_ = new QStackedWidget(this);
     // Pre-create all 6 slots with placeholders so QStackedWidget indices map
@@ -160,6 +197,85 @@ void FnoScreen::setup_ui() {
     ensure_tab_built(TabChain);
     stack_->setCurrentIndex(TabChain);
     refresh_tab_button_styles();
+    if (chain_tab_) {
+        connect(chain_tab_, &ChainSubTab::chain_status_changed, this, &FnoScreen::on_chain_status);
+        connect(chain_tab_, &ChainSubTab::free_chain_changed, this, &FnoScreen::on_free_chain);
+        chain_status_ = chain_tab_->chain_status();
+        chain_reason_ = chain_tab_->chain_status_reason();
+    }
+
+    // Connected here (not when the lazy Builder tab is first built): a Chain click
+    // before the Builder was ever opened used to drop the leg silently.
+    if (chain_tab_ && chain_tab_->table())
+        connect(chain_tab_->table(), &OptionChainTable::leg_clicked, this, &FnoScreen::on_chain_leg_clicked);
+}
+
+void FnoScreen::on_chain_leg_clicked(qint64 token, double strike, bool is_call, int lots) {
+    Q_UNUSED(token);
+    // Resolve the leg from the chain the user is CLICKING in, not the service-wide
+    // last_chain(): that is whichever series published last (any underlying/expiry),
+    // so a click could pull another series' token/expiry/premium for the same strike —
+    // and it carries no Greeks/IV, which are only applied to the republished hub snapshot.
+    if (!chain_tab_ || !chain_tab_->table())
+        return;
+    ensure_tab_built(TabBuilder);
+    if (!builder_tab_)
+        return;
+    const auto& chain = chain_tab_->table()->chain_model()->chain();
+    fincept::services::options::StrategyLeg leg;
+    leg.strike = strike;
+    leg.type = is_call ? fincept::trading::InstrumentType::CE : fincept::trading::InstrumentType::PE;
+    leg.lots = lots;
+    leg.expiry = chain.expiry;
+    for (const auto& row : chain.rows) {
+        if (std::abs(row.strike - strike) < 1e-6) {
+            const auto& q = is_call ? row.ce_quote : row.pe_quote;
+            leg.entry_price = q.ltp;
+            leg.iv_at_entry = is_call ? row.ce_iv : row.pe_iv;
+            // ORDER SAFETY: never invent a lot size. This used to fall back to 1 when
+            // the provider omitted it (Fyers' options-chain-v3 always does), which made
+            // "1 lot" dispatch as ONE UNIT and understated every payoff/Greek by the lot
+            // multiplier. Resolve it from the instrument master instead, and leave it at
+            // 0 — which the Builder's pre-flight check refuses to trade — when it
+            // genuinely can't be determined.
+            leg.lot_size = row.lot_size;
+            leg.instrument_token = is_call ? row.ce_token : row.pe_token;
+            leg.symbol = is_call ? row.ce_symbol : row.pe_symbol;
+            break;
+        }
+    }
+    if (leg.lot_size <= 0 && !leg.symbol.isEmpty()) {
+        auto& insts = fincept::trading::InstrumentService::instance();
+        if (auto inst = insts.find(leg.symbol, QStringLiteral("NFO"), chain.broker_id))
+            leg.lot_size = inst->lot_size;
+        if (leg.lot_size <= 0) {
+            // All options on one underlying/expiry share a lot size — borrow it from
+            // any sibling contract.
+            const auto siblings =
+                insts.find_options_for_underlying(chain.broker_id, chain.underlying, chain.expiry, QStringLiteral("NFO"));
+            for (const auto& in : siblings) {
+                if (in.lot_size > 0) {
+                    leg.lot_size = in.lot_size;
+                    break;
+                }
+            }
+        }
+    }
+    if (leg.lot_size <= 0)
+        LOG_WARN("FnoScreen", QString("Leg %1 has no resolvable lot size — it will be blocked "
+                                      "from the Builder's Trade All.")
+                                  .arg(leg.symbol));
+    builder_tab_->append_chain_leg(leg);
+    auto* model = builder_tab_->legs_view()->leg_model();
+    // Visible from the Chain tab too — the Builder may be a page the user never opened.
+    fincept::ui::ToastService::instance().post(
+        fincept::ui::ToastService::Severity::Info,
+        tr("Added %1 to Builder (%2 legs)")
+            .arg(leg.symbol.isEmpty()
+                     ? fincept::services::options::format_strike(strike) + (is_call ? " CE" : " PE")
+                     : leg.symbol)
+            .arg(model->rowCount()),
+        QStringLiteral("fno"));
 }
 
 QWidget* FnoScreen::build_tab_bar() {
@@ -211,72 +327,14 @@ void FnoScreen::ensure_tab_built(SubTab which) {
         BuilderSubTab* p = nullptr;
         replace_placeholder<BuilderSubTab>(stack_, tabs_, TabBuilder, p, this);
         builder_tab_ = p;
-        if (chain_tab_ && chain_tab_->table()) {
-            connect(chain_tab_->table(), &OptionChainTable::leg_clicked, builder_tab_,
-                    [this](qint64 token, double strike, bool is_call, int lots) {
-                        Q_UNUSED(token);
-                        // Resolve the leg from the chain the user is CLICKING in, not the
-                        // service-wide last_chain(): that is whichever series published last
-                        // (any underlying/expiry), so a click could pull another series'
-                        // token/expiry/premium for the same strike — and it carries no
-                        // Greeks/IV, which are only applied to the republished hub snapshot.
-                        if (!chain_tab_ || !chain_tab_->table())
-                            return;
-                        const auto& chain = chain_tab_->table()->chain_model()->chain();
-                        fincept::services::options::StrategyLeg leg;
-                        leg.strike = strike;
-                        leg.type =
-                            is_call ? fincept::trading::InstrumentType::CE : fincept::trading::InstrumentType::PE;
-                        leg.lots = lots;
-                        leg.expiry = chain.expiry;
-                        for (const auto& row : chain.rows) {
-                            if (std::abs(row.strike - strike) < 1e-6) {
-                                const auto& q = is_call ? row.ce_quote : row.pe_quote;
-                                leg.entry_price = q.ltp;
-                                leg.iv_at_entry = is_call ? row.ce_iv : row.pe_iv;
-                                // ORDER SAFETY: never invent a lot size. This used
-                                // to fall back to 1 when the provider omitted it
-                                // (Fyers' options-chain-v3 always does), which made
-                                // "1 lot" dispatch as ONE UNIT and understated every
-                                // payoff/Greek by the lot multiplier. Resolve it from
-                                // the instrument master instead, and leave it at 0 —
-                                // which the Builder's pre-flight check refuses to
-                                // trade — when it genuinely can't be determined.
-                                leg.lot_size = row.lot_size;
-                                leg.instrument_token = is_call ? row.ce_token : row.pe_token;
-                                leg.symbol = is_call ? row.ce_symbol : row.pe_symbol;
-                                break;
-                            }
-                        }
-                        if (leg.lot_size <= 0 && !leg.symbol.isEmpty()) {
-                            auto& insts = fincept::trading::InstrumentService::instance();
-                            if (auto inst = insts.find(leg.symbol, QStringLiteral("NFO"), chain.broker_id))
-                                leg.lot_size = inst->lot_size;
-                            if (leg.lot_size <= 0) {
-                                // All options on one underlying/expiry share a lot
-                                // size — borrow it from any sibling contract.
-                                const auto siblings = insts.find_options_for_underlying(
-                                    chain.broker_id, chain.underlying, chain.expiry, QStringLiteral("NFO"));
-                                for (const auto& in : siblings) {
-                                    if (in.lot_size > 0) {
-                                        leg.lot_size = in.lot_size;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (leg.lot_size <= 0)
-                            LOG_WARN("FnoScreen", QString("Leg %1 has no resolvable lot size — it will be blocked "
-                                                          "from the Builder's Trade All.")
-                                                      .arg(leg.symbol));
-                        builder_tab_->legs_view()->leg_model()->append_leg(leg);
-                    });
-        }
+        attach_chain_reader(p);
+        // Chain → Builder leg clicks are wired once in setup_ui (on_chain_leg_clicked).
     }
     if (which == TabOI && !oi_tab_) {
         OISubTab* p = nullptr;
         replace_placeholder<OISubTab>(stack_, tabs_, TabOI, p, this);
         oi_tab_ = p;
+        attach_chain_reader(p);
     }
     if (which == TabFiiDii && !fii_dii_tab_) {
         FiiDiiSubTab* p = nullptr;
@@ -287,11 +345,13 @@ void FnoScreen::ensure_tab_built(SubTab which) {
         MultiStraddleSubTab* p = nullptr;
         replace_placeholder<MultiStraddleSubTab>(stack_, tabs_, TabMultiStraddle, p, this);
         multi_straddle_tab_ = p;
+        attach_chain_reader(p);
     }
     if (which == TabScreener && !screener_tab_) {
         ScreenerSubTab* p = nullptr;
         replace_placeholder<ScreenerSubTab>(stack_, tabs_, TabScreener, p, this);
         screener_tab_ = p;
+        attach_chain_reader(p);
     }
     if (which == TabPositions && !positions_tab_) {
         // Shared paper blotter: open positions / working orders / trades for every
@@ -304,6 +364,67 @@ void FnoScreen::ensure_tab_built(SubTab which) {
     // Phase 9: all six F&O sub-tabs are real (no more placeholders).
 }
 
+template <typename Sub>
+void FnoScreen::attach_chain_reader(Sub* tab) {
+    if (!tab)
+        return;
+    connect(tab, &Sub::open_chain_requested, this, [this]() { on_tab_clicked(TabChain); });
+    tab->set_chain_status(chain_status_, chain_reason_);
+    if (!free_chain_.rows.isEmpty())
+        tab->set_external_chain(free_chain_);
+}
+
+void FnoScreen::on_chain_status(FnoChainStatus status, const QString& reason) {
+    chain_status_ = status;
+    chain_reason_ = reason;
+    if (builder_tab_)
+        builder_tab_->set_chain_status(status, reason);
+    if (oi_tab_)
+        oi_tab_->set_chain_status(status, reason);
+    if (multi_straddle_tab_)
+        multi_straddle_tab_->set_chain_status(status, reason);
+    if (screener_tab_)
+        screener_tab_->set_chain_status(status, reason);
+}
+
+void FnoScreen::on_free_chain(const fincept::services::options::OptionChain& chain) {
+    free_chain_ = chain;
+    if (builder_tab_)
+        builder_tab_->set_external_chain(chain);
+    if (oi_tab_)
+        oi_tab_->set_external_chain(chain);
+    if (multi_straddle_tab_)
+        multi_straddle_tab_->set_external_chain(chain);
+    if (screener_tab_)
+        screener_tab_->set_external_chain(chain);
+    update_source_strip();
+    // A free chain that loaded is the symbol the screen reopens on (ChainSubTab saves
+    // it as "free_underlying"): store it now, not only when the screen hides.
+    if (!chain.rows.isEmpty())
+        fincept::ScreenStateManager::instance().notify_changed(this);
+}
+
+void FnoScreen::update_source_strip() {
+    if (!source_strip_)
+        return;
+    const bool chain_tab = active_tab_ == TabChain || active_tab_ == TabBuilder || active_tab_ == TabOI ||
+                           active_tab_ == TabMultiStraddle || active_tab_ == TabScreener;
+    const bool show = chain_tab && !free_chain_.rows.isEmpty();
+    if (show) {
+        const QDateTime at = QDateTime::fromMSecsSinceEpoch(free_chain_.timestamp_ms);
+        const QString when = at.date() == QDate::currentDate() ? at.toString(QStringLiteral("HH:mm"))
+                                                                : QLocale().toString(at, QLocale::ShortFormat);
+        const QString text =
+            tr("DELAYED US OPTIONS · %1 %2 · Cboe quotes as of %3 (about 15 min behind) — free source, no broker "
+               "needed; analysis only, no orders.")
+                .arg(free_chain_.underlying, free_chain_.expiry, when);
+        if (source_strip_label_->text() != text)
+            source_strip_label_->setText(text);
+    }
+    if (source_strip_->isVisible() != show)
+        source_strip_->setVisible(show);
+}
+
 void FnoScreen::on_tab_clicked(int index) {
     if (index < 0 || index >= TabCount)
         return;
@@ -311,6 +432,7 @@ void FnoScreen::on_tab_clicked(int index) {
     ensure_tab_built(active_tab_);
     stack_->setCurrentIndex(index);
     refresh_tab_button_styles();
+    update_source_strip();
 }
 
 void FnoScreen::refresh_tab_button_styles() {
@@ -350,6 +472,7 @@ void FnoScreen::restore_state(const QVariantMap& state) {
             if (stack_)
                 stack_->setCurrentIndex(idx);
             refresh_tab_button_styles();
+            update_source_strip();
         }
     }
     if (state.contains("chain")) {
@@ -411,6 +534,15 @@ fincept::SymbolRef FnoScreen::current_symbol() const {
         QStringLiteral("FINNIFTY"),
         QStringLiteral("MIDCPNIFTY"),
     };
+    if (fno_is_us_source(chain_tab_->active_source())) {
+        // An index root ("SPX") is the Yahoo index the other screens read ("^SPX").
+        const bool index = fno_is_us_index_root(underlying);
+        if (index)
+            ref.symbol = fno_us_index_yahoo(underlying);
+        ref.asset_class = index ? QStringLiteral("index") : QStringLiteral("equity");
+        ref.exchange = QStringLiteral("US");
+        return ref;
+    }
     ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index") : QStringLiteral("equity");
     ref.exchange = QStringLiteral("NSE");
     return ref;
@@ -443,5 +575,77 @@ void FnoScreen::retranslateUi() {
         if (tab_btns_.at(i))
             tab_btns_.at(i)->setText(tab_label_for(i).toUpper());
 }
+
+namespace {
+
+// Link ids of the sub-tabs, in SubTab order.
+const char* const kFnoLinkTabs[] = {"chain", "builder", "oi", "multi_straddle", "fii_dii", "screener", "positions"};
+
+} // namespace
+
+bool FnoScreen::open_section(const QString& section, const QString& focus) {
+    QString key = section.trimmed();
+    if (!key.isEmpty()) {
+        QString rest;
+        if (command_rows::split_kind(key, "tab", &rest))
+            key = rest;
+        int index = -1;
+        for (int i = 0; i < int(std::size(kFnoLinkTabs)) && i < TabCount && index < 0; ++i)
+            if (key.compare(QLatin1String(kFnoLinkTabs[i]), Qt::CaseInsensitive) == 0)
+                index = i;
+        if (index < 0)
+            return false;
+        on_tab_clicked(index); // the tab button's click path
+    }
+    const QString underlying = focus.trimmed();
+    if (!underlying.isEmpty())
+        on_group_symbol_changed(fincept::SymbolRef::equity(underlying)); // the linked-symbol path
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> fno_command_rows() {
+    namespace rows = command_rows;
+    const QString screen = QStringLiteral("fno");
+    const QString where = FnoScreen::tr("F&O");
+    auto row = [&](const char* id, const QString& title, const QStringList& keywords) {
+        QStringList words = keywords;
+        words << QStringLiteral("fno") << QStringLiteral("f&o") << QStringLiteral("futures and options");
+        return rows::section(screen, QString::fromLatin1(id), title, words, where);
+    };
+    return {
+        row("chain", FnoScreen::tr("Option chain"),
+            {QStringLiteral("chain"), QStringLiteral("options chain"), QStringLiteral("strikes"),
+             QStringLiteral("calls puts"), QStringLiteral("nifty options"), QStringLiteral("banknifty options")}),
+        row("builder", FnoScreen::tr("Options strategy builder"),
+            {QStringLiteral("strategy builder"), QStringLiteral("payoff"), QStringLiteral("payoff chart"),
+             QStringLiteral("iron condor"), QStringLiteral("straddle"), QStringLiteral("spread"), QStringLiteral("legs")}),
+        row("oi", FnoScreen::tr("Open interest"),
+            {QStringLiteral("oi"), QStringLiteral("open interest"), QStringLiteral("oi buildup"),
+             QStringLiteral("max pain"), QStringLiteral("pcr"), QStringLiteral("put call ratio")}),
+        row("multi_straddle", FnoScreen::tr("Multi-straddle charts"),
+            {QStringLiteral("straddle"), QStringLiteral("strangle"), QStringLiteral("straddle chart"),
+             QStringLiteral("premium chart")}),
+        row("fii_dii", FnoScreen::tr("FII / DII flows"),
+            {QStringLiteral("fii"), QStringLiteral("dii"), QStringLiteral("institutional flows"),
+             QStringLiteral("foreign investors"), QStringLiteral("fpi")}),
+        row("screener", FnoScreen::tr("Option chain screener"),
+            {QStringLiteral("options screener"), QStringLiteral("scan options"), QStringLiteral("unusual oi"),
+             QStringLiteral("iv rank")}),
+        row("positions", FnoScreen::tr("F&O paper positions"),
+            {QStringLiteral("positions"), QStringLiteral("paper trades"), QStringLiteral("orders"),
+             QStringLiteral("square off"), QStringLiteral("blotter")}),
+    };
+}
+
+void fno_install_commands() {
+    command_rows::install(QStringLiteral("fno"), &fno_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(fno_install_commands)
 
 } // namespace fincept::screens::fno

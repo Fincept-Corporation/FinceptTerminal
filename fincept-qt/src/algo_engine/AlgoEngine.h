@@ -4,6 +4,7 @@
 #include "algo_engine/DeploymentRunner.h"
 #include "algo_engine/fno/FnoDataBridge.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
+#include "trading/TradingTypes.h"
 
 #include <QHash>
 #include <QMutex>
@@ -48,7 +49,16 @@ class AlgoEngine : public QObject {
     /// runner) through stop_deployment(). Used by the Action Center kill switch so
     /// an algo cannot re-enter right after the account was squared off. GUI thread.
     QVector<AlgoStopResult> stop_all_live(const QString& reason);
+    /// Close the deployment's open position first — through the runner's normal
+    /// exit path (paper simulation, or the live broker with the Semi-Auto approval
+    /// queue and fill confirmation) — then stop it exactly like stop_deployment().
+    /// The stop follows whatever the outcome; a failed close is reported through
+    /// error_occurred. Without a running runner it is a plain stop. GUI thread.
+    void flatten_and_stop(const QString& deployment_id);
+    /// Pause: the runner stops evaluating rules AND protective exits (quotes are
+    /// dropped) until resume_deployment(). In-process only — a restart resumes.
     void pause_deployment(const QString& deployment_id);
+    /// Resume; also clears a daily-loss or max-drawdown halt (an explicit human decision).
     void resume_deployment(const QString& deployment_id);
     // Permanently delete a deployment and all its rows (deployments, metrics,
     // heartbeat, order signals, trades), stopping the runner first if live. Then
@@ -77,6 +87,8 @@ class AlgoEngine : public QObject {
     void deployment_started(const QString& deployment_id);
     void deployment_stopped(const QString& deployment_id);
     void deployment_crashed(const QString& deployment_id, const QString& reason);
+    /// Runner lifecycle state: running | paused | stopped | error.
+    void deployment_state_changed(const QString& deployment_id, const QString& status);
     void deployments_loaded(QVector<fincept::services::algo::AlgoDeployment> deployments);
     void trade_executed(const fincept::algo::AlgoTradeRecord& trade);
     void metrics_updated(const QString& deployment_id, const fincept::algo::AlgoMetrics& metrics);
@@ -109,6 +121,16 @@ class AlgoEngine : public QObject {
     // on a live account (the safety gate). Live (signal.mode == "live" only) sends
     // a broker basket and rolls back filled legs if any leg fails on entry.
     void execute_basket(const AlgoOrderSignal& signal);
+    // LIVE fill confirmation. Broker ACCEPTANCE is not a fill: these read the
+    // broker's order book (bounded poll on the blocking pool) and only then tell
+    // the runner filled (avg price / filled qty) / rejected / unconfirmed.
+    void confirm_fill(const QString& deployment_id, const QString& account_id, const QString& broker_order_id);
+    // Basket variant: every accepted leg must be confirmed filled for its full
+    // quantity; otherwise an ENTRY is unwound through UnifiedTrading's verified
+    // unwind (reverses only filled quantity) and an unverifiable state latches
+    // the runner (no further orders).
+    void confirm_basket(const QString& deployment_id, const QString& account_id, bool is_entry,
+                        const QVector<AlgoOrderLeg>& legs, const fincept::trading::BasketOrderResult& placed);
     // Resolve the paper portfolio for a basket: the signal's paper_portfolio_id,
     // else the deployment account's, else a reused/created "F&O Paper" portfolio.
     QString resolve_paper_portfolio_id(const AlgoOrderSignal& signal);

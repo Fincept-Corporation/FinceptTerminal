@@ -128,7 +128,8 @@ WalletBalanceProducer::WalletBalanceProducer(QObject* parent) : QObject(parent) 
                     return;
                 const QString pubkey = pubkey_from_topic(topic);
                 if (!pubkey.isEmpty() && streams_.contains(pubkey)) {
-                    LOG_INFO("WalletBalanceProducer", "no subscribers left — closing stream for " + pubkey);
+                    LOG_INFO("WalletBalanceProducer",
+                             logf("Wallet balance stream closed, no subscribers left", {{"wallet", log_mask(pubkey)}}));
                     stop_stream_for(pubkey);
                 }
             });
@@ -184,9 +185,17 @@ void WalletBalanceProducer::force_refresh(const QString& pubkey) {
 // ── Mode switching ─────────────────────────────────────────────────────────
 
 void WalletBalanceProducer::reload_mode() {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kModeSettingsKey));
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kModeSettingsKey));
+    if (r.failed()) {
+        // Not "no preference": keep the mode in use rather than falling back to POLL
+        // (the store logged the key's error; nothing is written).
+        LOG_WARN_RL("WalletBalanceProducer", QStringLiteral("mode_read"), 60000,
+                    QStringLiteral("balance mode setting could not be read (%1) — keeping the current mode")
+                        .arg(QLatin1String(r.error_name())));
+        return;
+    }
     BalanceMode wanted = BalanceMode::Poll;
-    if (r.is_ok() && r.value().compare(QStringLiteral("stream"), Qt::CaseInsensitive) == 0) {
+    if (r.found() && r.value.compare(QStringLiteral("stream"), Qt::CaseInsensitive) == 0) {
         wanted = BalanceMode::Stream;
     }
     if (wanted != mode_) {
@@ -198,8 +207,8 @@ void WalletBalanceProducer::set_mode(BalanceMode mode) {
     if (mode == mode_) {
         return;
     }
-    LOG_INFO("WalletBalanceProducer",
-             QStringLiteral("mode switch: %1").arg(mode == BalanceMode::Stream ? "stream" : "poll"));
+    LOG_DEBUG("WalletBalanceProducer",
+              QStringLiteral("mode switch: %1").arg(mode == BalanceMode::Stream ? "stream" : "poll"));
     mode_ = mode;
 
     // STREAM on an endpoint that cannot serve accountSubscribe (notably the
@@ -450,8 +459,8 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
     // accountSubscribe (today: the public mainnet RPC). Surface the reason
     // through the hub so the screen can show it (bug fix #6).
     if (!endpoint_supports_streaming()) {
-        LOG_WARN("WalletBalanceProducer",
-                 "stream mode unavailable on current RPC — falling back to poll for " + pubkey);
+        LOG_WARN("WalletBalanceProducer", logf("Wallet balance stream unavailable on this RPC endpoint, polling instead",
+                                               {{"wallet", log_mask(pubkey)}}));
         notify_stream_unavailable(pubkey);
         refresh_one_poll(topic_for_pubkey(pubkey));
         return;
@@ -500,7 +509,10 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
                         {QStringLiteral("method"), QStringLiteral("accountSubscribe")},
                         {QStringLiteral("params"), QJsonArray{pubkey, opts}}};
         sess->ws->send(QString::fromUtf8(QJsonDocument(req).toJson(QJsonDocument::Compact)));
-        LOG_INFO("WalletBalanceProducer", "WS connected, subscribed to " + pubkey);
+        // Clear a recorded failure without a line of its own: this INFO line is the recovery.
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition("WalletBalanceProducer", QStringLiteral("ws|") + pubkey, 0);
+        LOG_INFO("WalletBalanceProducer", logf("Wallet balance stream connected", {{"wallet", log_mask(pubkey)}}));
 
         // Bootstrap balances with one REST round-trip.
         self->seed_stream_state(pubkey);
@@ -510,7 +522,9 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
         if (!self) {
             return;
         }
-        LOG_WARN("WalletBalanceProducer", "WS disconnected for " + pubkey);
+        // Auto-reconnect retries: one WARN per outage, not one per attempt.
+        LOG_TRANSITION("WalletBalanceProducer", QStringLiteral("ws|") + pubkey, 1, LogLevel::Warn,
+                       logf("Wallet balance stream disconnected, reconnecting", {{"wallet", log_mask(pubkey)}}));
         // The WebSocketClient auto-reconnects with exponential backoff.
     });
 
@@ -518,7 +532,8 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
         if (!self) {
             return;
         }
-        LOG_WARN("WalletBalanceProducer", QStringLiteral("WS error (%1): %2").arg(pubkey).arg(err));
+        LOG_TRANSITION("WalletBalanceProducer", QStringLiteral("ws|") + pubkey, 1, LogLevel::Warn,
+                       logf("Wallet balance stream failed, reconnecting", {{"wallet", log_mask(pubkey)}, {"error", err}}));
         fincept::datahub::DataHub::instance().publish_error(self->topic_for_pubkey(pubkey), err);
     });
 
@@ -542,8 +557,8 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
             const auto sub_id = root.value(QStringLiteral("result")).toInt();
             if (sub_id > 0 && sess->sol_sub_id == 0) {
                 sess->sol_sub_id = sub_id;
-                LOG_INFO("WalletBalanceProducer",
-                         QStringLiteral("subscription %1 active for %2").arg(sub_id).arg(pubkey));
+                LOG_DEBUG("WalletBalanceProducer",
+                          logf("Wallet balance subscription active", {{"wallet", log_mask(pubkey)}, {"sub_id", sub_id}}));
             }
             return;
         }

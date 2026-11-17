@@ -34,34 +34,13 @@ import sys
 import json
 import pandas as pd
 import akshare as ak
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error;
+# run_wrapper_cli: get_all_endpoints / <endpoint> [field=value ...] -> one JSON line on stdout.
+from akshare_screen_args import run_wrapper_cli, safe_call
 from typing import Dict, Any, List
 from datetime import datetime, timedelta, date
 import time
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class AKShareError:
-    """Custom error class for AKShare API errors"""
-    def __init__(self, endpoint: str, error: str, data_source: str = None):
-        self.endpoint = endpoint
-        self.error = error
-        self.data_source = data_source
-        self.timestamp = int(datetime.now().timestamp())
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "endpoint": self.endpoint,
-            "error": self.error,
-            "data_source": self.data_source,
-            "timestamp": self.timestamp,
-            "type": "AKShareError"
-        }
 
 
 class ChinaEconomicsWrapper:
@@ -71,73 +50,11 @@ class ChinaEconomicsWrapper:
         self.default_timeout = 30
         self.retry_delay = 2
 
-    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Convert DataFrame to JSON-safe format"""
-        df_copy = df.copy()
-        for col in df_copy.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
-                df_copy[col] = df_copy[col].astype(str)
-        return df_copy.to_dict('records')
-
-    def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
-        """Safely call AKShare function with retry logic"""
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                result = func(*args, **kwargs)
-
-                if result is not None and hasattr(result, 'empty') and not result.empty:
-                    return {
-                        "success": True,
-                        "data": self._convert_dataframe_to_json_safe(result),
-                        "columns": (list(result.columns) if hasattr(result, "columns") else []),
-                        "count": len(result),
-                        "timestamp": int(datetime.now().timestamp()),
-                        "source": f"akshare.{func.__name__}"
-                    }
-
-                return {
-                    "success": False,
-                    "error": "No data returned",
-                    "data": [],
-                    "count": 0,
-                    "timestamp": int(datetime.now().timestamp())
-                }
-
-            except ValueError as e:
-                error_msg = str(e)
-                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
-                    return {"success": False, "error": "AKShare API structure changed. Endpoint unavailable.", "data": [], "error_type": "api_mismatch", "timestamp": int(datetime.now().timestamp())}
-                last_error = error_msg
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay)
-                continue
-            except KeyError as e:
-                return {"success": False, "error": f"Missing field: {str(e)}", "data": [], "error_type": "missing_field", "timestamp": int(datetime.now().timestamp())}
-            except (ConnectionError, TimeoutError) as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay * 2)
-                continue
-            except Exception as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay)
-                continue
-
-        error_obj = AKShareError(
-            endpoint=func.__name__,
-            error=last_error or "Unknown error",
-            data_source=getattr(func, '__module__', 'unknown')
-        )
-        return {
-            "success": False,
-            "error": error_obj.to_dict(),
-            "data": [],
-            "count": 0,
-            "timestamp": int(datetime.now().timestamp())
-        }
+    def _safe_call_with_retry(self, func, *args, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
+        """One akshare call -> {success, data, columns, count} or a plain-English error (shared
+        akshare_screen_args.safe_call: only a dropped connection or a timeout is retried, never a
+        rate limit or a refusal)."""
+        return safe_call(func, *args, _retries=max_retries, **kwargs)
 
     # ==================== CORE INDICATORS ====================
 
@@ -388,11 +305,26 @@ class ChinaEconomicsWrapper:
 
     # ==================== NBS DATA ====================
 
-    def get_nbs_nation(self) -> Dict[str, Any]:
-        return self._safe_call_with_retry(ak.macro_china_nbs_nation)
+    # The NBS functions take a table of data.stats.gov.cn by kind and path (catalogue levels joined
+    # with " > "). The screen has no box for those, so each endpoint opens a useful table by default;
+    # a manual run can name another: nbs_nation 月度数据 "能源 > ..." LAST13.
 
-    def get_nbs_region(self) -> Dict[str, Any]:
-        return self._safe_call_with_retry(ak.macro_china_nbs_region)
+    def _nbs_table(self, func, first_column: str, **kwargs) -> Dict[str, Any]:
+        # The row labels (indicators or regions) are the frame's index: keep them as a column.
+        return self._safe_call_with_retry(
+            lambda: func(**kwargs).reset_index().rename(columns={"index": first_column}))
+
+    def get_nbs_nation(self, kind: str = "季度数据", path: str = "国民经济核算 > 国内生产总值 (现价)",
+                       period: str = "LAST10") -> Dict[str, Any]:
+        """NBS national table, default quarterly GDP (current prices), last 10 quarters"""
+        return self._nbs_table(ak.macro_china_nbs_nation, "指标", kind=kind, path=path, period=period)
+
+    def get_nbs_region(self, kind: str = "分省季度数据", path: str = "国民经济核算 > 地区生产总值",
+                       indicator: str = "地区生产总值_累计值(亿元)", region: str = "",
+                       period: str = "LAST5") -> Dict[str, Any]:
+        """NBS provincial table, default year-to-date GDP by province, last 5 quarters"""
+        return self._nbs_table(ak.macro_china_nbs_region, "指标" if region else "地区", kind=kind, path=path,
+                               indicator=indicator or None, region=region or None, period=period)
 
     # ==================== HONG KONG ====================
 
@@ -480,43 +412,12 @@ class ChinaEconomicsWrapper:
 
 
 # ==================== CLI ====================
-if __name__ == "__main__":
-    import sys
-    import json
 
-    # Get wrapper instance
+def main():
     wrapper = ChinaEconomicsWrapper()
+    # One JSON line on stdout (NaN -> null, dates as ISO text); akshare's own prints go to stderr.
+    return run_wrapper_cli(wrapper, wrapper.get_all_available_endpoints, ascii=True, iso_dates=True)
 
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_economics_china.py <endpoint> [args...]"}))
-        sys.exit(1)
 
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    # Handle get_all_endpoints
-    if endpoint == "get_all_endpoints":
-        if hasattr(wrapper, 'get_all_available_endpoints'):
-            result = wrapper.get_all_available_endpoints()
-        elif hasattr(wrapper, 'get_all_endpoints'):
-            result = wrapper.get_all_endpoints()
-        else:
-            result = {"success": False, "error": "Endpoint list not available"}
-        print(json.dumps(result, ensure_ascii=True))
-        sys.exit(0)
-
-    # Dynamic method resolution
-    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
-
-    if hasattr(wrapper, method_name):
-        method = getattr(wrapper, method_name)
-        try:
-            try:
-                result = method(*args)
-            except TypeError:
-                result = method()
-            print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
-        except Exception as e:
-            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
-    else:
-        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+if __name__ == "__main__":
+    sys.exit(main())

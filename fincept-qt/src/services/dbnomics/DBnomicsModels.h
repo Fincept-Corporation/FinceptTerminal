@@ -36,7 +36,7 @@ struct DbnDataPoint {
     QString series_id; // "BLS/ln/LNS14000000"
     QString series_name;
     QVector<DbnObservation> observations; // ascending by period start
-    QColor color = QColor("#ea580c");     // default: orange; caller should override with chart_color(index)
+    QColor color; // series colour: the screen assigns ui::colors::chart_color(index) before drawing
     // What the numbers are, from the series' own metadata (empty when the provider does not say).
     QString frequency;     // "monthly", "quarterly", … (DBnomics @frequency)
     QString unit;          // label of the series' unit dimension, e.g. "Annual rate of change"

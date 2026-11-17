@@ -660,7 +660,9 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"core/legs/fixed",
          R"({"notional":1000000,"rate":0.05,"frequency":"6M","start_date":"2024-01-01","end_date":"2026-01-01"})"},
         {"core/legs/float",
-         R"({"notional":1000000,"spread":0.01,"frequency":"3M","start_date":"2024-01-01","end_date":"2026-01-01"})"},
+         R"({"notional":1000000,"spread":0.01,"frequency":"3M","start_date":"2024-01-01","end_date":"2026-01-01",)"
+         R"("fixings":{"2023-12-30":0.0538,"2024-03-30":0.0534,"2024-06-29":0.0533,"2024-09-29":0.0496,)"
+         R"("2024-12-30":0.0449,"2025-03-30":0.0436,"2025-06-29":0.0439,"2025-09-29":0.0424}})"},
         {"core/legs/zero-coupon",
          R"({"notional":1000000,"rate":0.05,"start_date":"2024-01-01","end_date":"2029-01-01"})"},
         // core/periods
@@ -785,7 +787,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52})"},
         // Estimates E[S_T] of a GBM started at x0.
         {"stochastic/simulation/multilevel-mc",
-         R"({"x0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_levels":4,"n_samples_per_level":1000})"},
+         R"({"x0":1.0,"mu":0.05,"sigma":0.2,"T":1.0,"n_levels":4,"n_samples_per_level":1000})"},
         // stochastic/sampling
         {"stochastic/sampling/sobol", R"({"n":100,"dim":3})"},
         {"stochastic/sampling/antithetic", R"({"n":50,"seed":42})"},
@@ -795,9 +797,8 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         // distribution: exponential (params.rate) | gamma (params.shape, params.scale) | poisson (params.lam)
         {"stochastic/sampling/distribution",
          R"({"distribution":"gamma","params":{"shape":2.0,"scale":1.0},"n":100})"},
-        // distribution: normal | double_exp | uniform
-        {"stochastic/sampling/jump",
-         R"({"n":100,"intensity":0.5,"jump_mean":0.0,"jump_std":0.1,"distribution":"normal"})"},
+        // distribution: normal | double_exp | uniform; jump_mean applies to normal only (0 for the others).
+        {"stochastic/sampling/jump", R"({"n":100,"jump_mean":0.0,"jump_std":0.1,"distribution":"normal"})"},
         // stochastic/theory
         {"stochastic/theory/ito-lemma", R"({"path":[100,101,99,102,103],"times":[0,0.25,0.5,0.75,1.0]})"},
         {"stochastic/theory/ito-product-rule",
@@ -875,8 +876,10 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"reference_date":"2024-01-15","nominal_tenors":[0.25,0.5,1,2,5,10],"nominal_rates":[0.04,0.042,)"
          R"(0.045,0.047,0.05,0.052],"base_cpi":100,"inflation_tenors":[0.25,0.5,1,2,5,10],)"
          R"("inflation_rates":[0.02,0.021,0.022,0.023,0.024,0.025],"query_tenors":[0.75,1.5,3,7]})"},
-        {"curves/monotonicity-check", R"({"x":[1,2,3,4,5],"y":[2.1,3.9,6.2,7.8,10.1],"query_x":[1.5,2.5,3.5]})"},
-        {"curves/smoothness-penalty", R"({"x":[1,2,3,4,5],"y":[2.1,3.9,6.2,7.8,10.1],"query_x":[1.5,2.5,3.5]})"},
+        // x / query_x: required by the live API (its InterpolationRequest), unused by the check itself;
+        // the overhaul API accepts them as inert. Sending them keeps one body valid on both.
+        {"curves/monotonicity-check", R"({"y":[2.1,3.9,6.2,7.8,10.1],"x":[1,2,3,4,5],"query_x":[2.5]})"},
+        {"curves/smoothness-penalty", R"({"x":[1,2,3,4,5],"y":[2.1,3.9,6.2,7.8,10.1],"query_x":[2.5]})"},
         {"curves/constrained-fit", R"({"tenors":[0.25,0.5,1,2,5,10],"rates":[0.04,0.042,0.045,0.047,0.05,0.052]})"},
         {"curves/multicurve/setup",
          R"({"reference_date":"2024-01-15","ois_tenors":[0.25,0.5,1,2,5,10],"ois_rates":[0.04,0.042,0.045,)"
@@ -893,10 +896,11 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"curves/inflation/build",
          R"({"reference_date":"2024-01-15","base_cpi":100,"tenors":[0.25,0.5,1,2,5,10],)"
          R"("inflation_rates":[0.02,0.021,0.022,0.023,0.024,0.025]})"},
+        // nominal_tenors / nominal_rates: required by the live API; the overhaul API accepts them as inert.
         {"curves/inflation/bootstrap",
-         R"({"reference_date":"2024-01-15","base_cpi":100,"swap_tenors":[0.25,0.5,1,2,5,10],)"
-         R"("swap_rates":[0.04,0.042,0.045,0.047,0.05,0.052],"nominal_tenors":[0.25,0.5,1,2,5,10],)"
-         R"("nominal_rates":[0.04,0.042,0.045,0.047,0.05,0.052]})"},
+         R"({"reference_date":"2024-01-15","base_cpi":100,"swap_tenors":[0.25,0.5,1,2,5,10],"swap_rates":[0.028,)"
+         R"(0.027,0.026,0.025,0.0245,0.025],"nominal_tenors":[0.25,0.5,1,2,5,10],"nominal_rates":[0.04,0.042,)"
+         R"(0.045,0.047,0.05,0.052]})"},
         {"curves/inflation/seasonality",
          R"({"monthly_factors":[1.0,1.01,1.02,1.01,0.99,0.98,0.99,1.0,1.01,1.02,1.01,1.0],"cpi_values":[100,)"
          R"(100.2,100.5,100.9,101.2,101.5,101.9,102.2,102.5,102.9,103.2,103.5],"months":[1,2,3,4,5,6,7,8,9,)"
@@ -1010,51 +1014,60 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"(-0.0041,0.0028],[0.0278,0.0072,0.0017],[0.0175,-0.0005,0.0209],[-0.0071,-0.0048,0.0083],[0.0161,)"
          R"(0.0076,0.0037]]})"},
         {"risk/backtest",
-         R"({"actual_returns":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,)"
-         R"(0.0082,0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082],)"
-         R"("var_estimates":[-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,)"
-         R"(-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,)"
-         R"(-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,)"
-         R"(-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02,-0.02]})"},
+         R"({"actual_returns":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
+         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,-0.0003,0.0034,)"
+         R"(0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,0.0367,-0.0001,0.0097,)"
+         R"(-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,-0.0052,0.0079,0.0004,0.0109,)"
+         R"(-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082],"var_estimates":[0.015,0.015,0.015,0.015,0.015,0.015,)"
+         R"(0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,)"
+         R"(0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,)"
+         R"(0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,0.015,)"
+         R"(0.015,0.015,0.015],"confidence":0.95})"},
         {"risk/stress/scenario", R"({"name":"scenario","factor_shocks":{"equity":-0.2,"rates":0.01}})"},
         {"risk/correlation-stress", R"({"correlation_matrix":[[1,0.5,0.3],[0.5,1,0.4],[0.3,0.4,1]]})"},
         {"risk/tail-risk/comprehensive",
-         R"({"returns":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
-         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+         R"({"returns":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,0.0056,)"
+         R"(0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,-0.0003,0.0034,0.008,)"
+         R"(0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,0.0367,-0.0001,0.0097,)"
+         R"(-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,-0.0052,0.0079,0.0004,0.0109,)"
+         R"(-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082],"confidence":0.975,"portfolio_value":1000000})"},
         {"risk/evt/gpd",
-         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
-         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+         R"({"data":[0.0131,-0.0046,-0.0113,0.0052,0.0142,0.0003,-0.0057,-0.0125,0.013,0.0138,-0.0082,-0.0056,)"
+         R"(-0.0173,-0.0112,0.0007,0.0026,-0.0287,0.0028,0.0082,0.0121,-0.0015,-0.002,0.0034,0.0003,-0.0034,-0.008,)"
+         R"(-0.0125,-0.0027,0.0193,-0.0081,0.0152,0.0015,0.0158,-0.0004,0.0082,-0.0028,-0.0367,0.0001,-0.0097,)"
+         R"(0.0142,0.0028,-0.0077,0.0006,-0.0045,-0.0015,0.0107,-0.0066,0.0085,-0.021,0.0052,-0.0079,-0.0004,)"
+         R"(-0.0109,0.0062,-0.0114,0.001,-0.0143,-0.0073,-0.002,0.0082],"quantile":0.8})"},
         {"risk/evt/gev",
          R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
          R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
          R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
          R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
          R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+        // Tail index of the losses (the GPD example's data) from the k largest (default n^0.6).
         {"risk/evt/hill",
-         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
-         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+         R"({"data":[0.0131,-0.0046,-0.0113,0.0052,0.0142,0.0003,-0.0057,-0.0125,0.013,0.0138,-0.0082,-0.0056,)"
+         R"(-0.0173,-0.0112,0.0007,0.0026,-0.0287,0.0028,0.0082,0.0121,-0.0015,-0.002,0.0034,0.0003,-0.0034,-0.008,)"
+         R"(-0.0125,-0.0027,0.0193,-0.0081,0.0152,0.0015,0.0158,-0.0004,0.0082,-0.0028,-0.0367,0.0001,-0.0097,)"
+         R"(0.0142,0.0028,-0.0077,0.0006,-0.0045,-0.0015,0.0107,-0.0066,0.0085,-0.021,0.0052,-0.0079,-0.0004,)"
+         R"(-0.0109,0.0062,-0.0114,0.001,-0.0143,-0.0073,-0.002,0.0082],"k":10})"},
+        // Spreads in BASIS POINTS (100 = 1%); own_spread adds DVA, funding_spread FVA. One exposure path per
+        // row, columns at years 0, 1, 2, ...; the negative path (we owe the counterparty) is what DVA prices.
         {"risk/xva/cva",
-         R"({"exposure_paths":[[0,1,2,1,0],[0,2,3,2,0],[0,0.5,1,0.5,0]],"counterparty_spread":0.01})"},
+         R"({"exposure_paths":[[0,1,2,1,0],[0,2,3,2,0],[0,0.5,1,0.5,0],[0,-1,-1.5,-1,0]],"counterparty_spread":100,)"
+         R"("own_spread":60,"funding_spread":40})"},
+        // counterparty_spread: required by the live API (which also fixes confidence at 0.95); the overhaul API
+        // honours confidence and accepts the spread as inert — a PFE is a percentile of the exposures.
         {"risk/xva/pfe",
-         R"({"exposure_paths":[[0,1,2,1,0],[0,2,3,2,0],[0,0.5,1,0.5,0]],"counterparty_spread":0.01})"},
+         R"({"exposure_paths":[[0,1,2,1,0],[0,2,3,2,0],[0,0.5,1,0.5,0],[0,-1,-1.5,-1,0]],"confidence":0.95,)"
+         R"("counterparty_spread":100})"},
         {"risk/copula/sample", R"({"copula_type":"gaussian"})"},
         {"risk/portfolio-risk/exposure-profile", R"({"paths":[[100,102,101,103],[100,99,101,100]]})"},
         {"risk/portfolio-risk/optimal-hedge", R"({"portfolio_delta":1000,"hedge_delta":0.5})"},
         {"risk/sensitivities/greeks", R"({"S":100.0,"K":100.0,"T":1.0,"r":0.05,"sigma":0.2,"q":0.0})"},
+        // bump_size: a decimal rate bump (0.0001 = 1 bp), as on bucket-delta.
         {"risk/sensitivities/key-rate-duration",
-         R"({"cashflows":[5,5,5,5,105],"times":[1,2,3,4,5],"curve_rates":[0.04,0.042,0.045,0.047,0.05]})"},
+         R"({"cashflows":[5,5,5,5,105],"times":[1,2,3,4,5],"curve_rates":[0.04,0.042,0.045,0.047,0.05],)"
+         R"("bump_size":0.0001})"},
         {"risk/sensitivities/parallel-shift",
          R"({"cashflows":[5,5,5,5,105],"times":[1,2,3,4,5],"curve_rates":[0.04,0.042,0.045,0.047,0.05]})"},
         {"risk/sensitivities/twist",
@@ -1089,9 +1102,11 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"portfolio/risk/cvar",
          R"({"weights":[0.4,0.3,0.3],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
          R"(0.012,0.0625]]})"},
+        // weight_change is an INCREMENT added to weights[asset_index] (then renormalised); incremental_var is
+        // per unit of weight, var_change is the VaR change for the increment sent.
         {"portfolio/risk/incremental-var",
-         R"({"weights":[0.4,0.3,0.3],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
-         R"(0.012,0.0625]]})"},
+         R"({"weights":[0.4,0.3,0.3],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,0.012,)"
+         R"(0.0625]],"asset_index":0,"weight_change":0.05,"confidence":0.95})"},
         {"portfolio/risk/contribution",
          R"({"weights":[0.4,0.3,0.3],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
          R"(0.012,0.0625]]})"},
@@ -1106,7 +1121,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"portfolio/risk/comprehensive",
          R"({"weights":[0.4,0.3,0.3],"returns":[[0.010,-0.020,0.015,0.005],[0.020,0.010,-0.005,0.015],)"
          R"([-0.010,0.005,0.010,-0.010]],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
-         R"(0.012,0.0625]],"confidence":0.95,"risk_free_rate":0.0})"},
+         R"(0.012,0.0625]],"risk_free_rate":0.0})"},
         {"portfolio/risk/portfolio-comprehensive",
          R"({"returns":[[0.0088,0.0055,0.0185],[-0.0037,0.0065,0.006],[0.0035,0.0027,0.0024],[-0.0062,)"
          R"(-0.0108,-0.004],[0.0069,0.017,0.0111],[0.012,0.009,0.0081],[0.0024,0.0089,0.0199],[-0.0032,)"
@@ -1126,8 +1141,8 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"issue_date":"2024-01-15","maturity_date":"2029-01-15","coupon_rate":0.05})"},
         {"instruments/bond/zero-coupon/price", R"({"issue_date":"2024-01-15","maturity_date":"2029-01-15"})"},
         {"instruments/bond/inflation-linked",
-         R"({"issue_date":"2024-01-15","maturity_date":"2029-01-15","coupon_rate":0.05,"base_cpi":100,)"
-         R"("current_cpi":103})"},
+         R"({"issue_date":"2024-01-15","maturity_date":"2029-01-15","coupon_rate":0.02,"base_cpi":100,)"
+         R"("current_cpi":103,"settlement_date":"2025-01-20"})"},
         {"instruments/swap/irs/value",
          R"({"effective_date":"2024-01-15","maturity_date":"2029-01-15","notional":1000000,)"
          R"("fixed_rate":0.045,"curve_tenors":[0.25,0.5,1,2,5,10],"curve_rates":[0.04,0.042,0.045,0.047,)"
@@ -1169,11 +1184,11 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"start_date":"2024-01-15","end_date":"2024-04-15","collateral_value":1000000,"repo_rate":0.04})"},
         {"instruments/money-market/tbill",
          R"({"settlement_date":"2024-01-17","maturity_date":"2024-07-15","discount_rate":0.05})"},
+        // trade_date / reference_date: required by the live API, inert in both (the overhaul API marks them so).
         {"instruments/commodity/future",
          R"({"commodity_type":"oil","spot_price":70,"delivery_date":"2024-12-15","trade_date":"2024-01-15",)"
          R"("futures_price":72})"},
-        {"instruments/futures/stir",
-         R"({"price":95.5,"contract_date":"2024-01-15","reference_date":"2024-01-15"})"},
+        {"instruments/futures/stir", R"({"price":95.5,"contract_date":"2024-01-15","reference_date":"2024-01-02"})"},
         {"instruments/equity/variance-swap",
          R"({"strike_variance":0.04,"realized_returns":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,)"
          R"(0.0057,0.0125,-0.013,-0.0138,0.0082,0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,)"
@@ -1194,8 +1209,11 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"solver/finance/modified-duration", R"({"coupon":0.05,"maturity":5.0,"ytm":0.045})"},
         {"solver/finance/convexity", R"({"coupon":0.05,"maturity":5.0,"ytm":0.045})"},
         {"solver/finance/convexity-adjustment", R"({"forward_rate":0.05,"volatility":0.2,"t1":1.0,"t2":2.0})"},
+        // times: required by the live API; keep them at the regular annuity times (i + 1) / frequency, which is
+        // what the overhaul API always uses — the two then agree.
         {"solver/finance/pv01",
-         R"({"notional":1000000,"discount_factors":[0.9875,0.975,0.9625,0.95,0.9375],"times":[0.5,1,1.5,2,2.5]})"},
+         R"({"notional":1000000,"discount_factors":[0.9875,0.975,0.9625,0.95,0.9375],"times":[0.5,1,1.5,2,2.5],)"
+         R"("frequency":2})"},
         {"solver/finance/implied-vol", R"({"price":10.45,"spot":100,"strike":100,"time":1.0,"rate":0.05})"},
         {"solver/finance/implied-vol-black76",
          R"({"price":7.58,"forward":100,"strike":100,"time":1.0,"rate":0.05})"},
@@ -1203,7 +1221,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"solver/finance/zero-rate", R"({"discount_factor":0.95,"t":1.0})"},
         {"solver/finance/discount-factor", R"({"rate":0.05,"t":1.0})"},
         {"solver/finance/par-rate",
-         R"({"discount_factors":[0.9875,0.975,0.9625,0.95,0.9375],"times":[0.5,1,1.5,2,2.5]})"},
+         R"({"discount_factors":[0.9875,0.975,0.9625,0.95,0.9375],"times":[0.5,1,1.5,2,2.5],"frequency":2})"},
         {"solver/finance/z-spread",
          R"({"price":98,"cashflows":[5,5,5,5,105],"times":[1,2,3,4,5],"base_rates":[0.04,0.042,0.045,0.047,)"
          R"(0.05]})"},
@@ -1220,7 +1238,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"solver/finance/carry", R"({"spot":100,"futures":101.0,"time_to_expiry":1.0})"},
         {"solver/finance/implied-repo-rate", R"({"spot":100,"futures":101.0,"time_to_expiry":1.0})"},
         {"solver/finance/forward-futures-conversion", R"({"rate":0.05,"volatility":0.2,"t1":1.0,"t2":2.0})"},
-        {"solver/finance/irr", R"({"cashflows":[5,5,5,5,105]})"},
+        {"solver/finance/irr", R"({"cashflows":[-95,5,5,5,105]})"},
         {"solver/finance/xirr", R"({"cashflows":[-1000,300,400,500],"dates":[0,0.5,1.0,1.5]})"},
         {"solver/calibration/vasicek",
          R"({"zero_rates":[0.04,0.042,0.045,0.047,0.05,0.052],"times":[0.25,0.5,1,2,5,10]})"},
@@ -1240,24 +1258,25 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"economics/games/eliminate-dominated",
          R"({"payoff_matrix_1":[[3,0],[5,1]],"payoff_matrix_2":[[3,5],[0,1]]})"},
         {"economics/games/fictitious-play", R"({"payoff_matrix_1":[[3,0],[5,1]],"payoff_matrix_2":[[3,5],[0,1]]})"},
-        {"economics/auctions/run", R"({"auction_type":"first_price","n_bidders":5})"},
+        {"economics/auctions/run", R"({"auction_type":"first_price","n_bidders":5,"valuations":[120,105,95,80,60]})"},
         {"economics/auctions/simulate", R"({"auction_type":"first_price","n_bidders":5})"},
-        {"economics/auctions/equilibrium-bid", R"({"auction_type":"first_price","n_bidders":5})"},
+        // One bid per valuation; the equilibrium assumes private values uniform on [0, 1].
+        {"economics/auctions/equilibrium-bid",
+         R"({"auction_type":"first_price","n_bidders":5,"valuations":[0.9,0.75,0.6,0.45,0.3]})"},
         {"economics/auctions/expected-revenue", R"({"auction_type":"first_price","n_bidders":5})"},
         {"economics/utility/cara", R"({"risk_aversion":2.0,"wealth":100})"},
         {"economics/utility/crra", R"({"gamma":2.0,"wealth":100})"},
         {"economics/utility/log", R"({"wealth":100})"},
-        {"economics/utility/quadratic", R"({"wealth":100})"},
+        {"economics/utility/quadratic", R"({"wealth":50})"},
         {"economics/utility/expected-utility",
-         R"({"utility_type":"crra","outcomes":[100,50,0],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
+         R"({"utility_type":"crra","outcomes":[100,50,10],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
         {"economics/utility/certainty-equivalent",
-         R"({"utility_type":"crra","outcomes":[100,50,0],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
+         R"({"utility_type":"crra","outcomes":[100,50,10],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
         {"economics/utility/certainty-equivalent-approximation",
          R"({"mean":0.0,"variance":1.0,"risk_aversion":2.0})"},
         {"economics/utility/risk-premium",
-         R"({"utility_type":"crra","outcomes":[100,50,0],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
-        {"economics/utility/prospect-theory",
-         R"({"alpha":0.88,"beta":0.88,"lambda_param":2.25,"wealth":0.0,"outcome":100.0})"},
+         R"({"utility_type":"crra","outcomes":[100,50,10],"param":2.0,"probabilities":[0.5,0.3,0.2]})"},
+        {"economics/utility/prospect-theory", R"({"alpha":0.88,"beta":0.88,"lambda_param":2.25,"outcome":100.0})"},
         // regulatory
         {"regulatory/basel/capital-ratios",
          R"({"cet1_capital":120,"tier1_capital":140,"total_capital":180,"risk_weighted_assets":1000})"},
@@ -1296,22 +1315,22 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"scheduling/schedule/generate", R"({"effective_date":"2024-01-15","termination_date":"2029-01-15"})"},
         // numerical
         {"numerical/differentiation/derivative", R"({"func_name":"sin","x":1.0})"},
-        {"numerical/differentiation/gradient", R"({"func_name":"sin","x":[1.0,2.0]})"},
-        {"numerical/differentiation/hessian", R"({"func_name":"sin","x":[1.0,2.0]})"},
+        {"numerical/differentiation/gradient", R"({"func_name":"rosenbrock","x":[1.0,2.0]})"},
+        {"numerical/differentiation/hessian", R"({"func_name":"rosenbrock","x":[1.0,2.0]})"},
         {"numerical/fft/forward",
-         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
-         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,0.0056,)"
+         R"(0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,-0.0003,0.0034,0.008,)"
+         R"(0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015]})"},
         {"numerical/fft/inverse",
-         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
-         R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
-         R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
-         R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
-         R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+         R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,0.0056,)"
+         R"(0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,-0.0003,0.0034,0.008,)"
+         R"(0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015]})"},
         {"numerical/fft/convolve", R"({"a":[1,2,3],"b":[0,1,0.5]})"},
-        {"numerical/integration/quadrature", R"({"func_name":"sin","a":0.0,"b":3.14159})"},
+        // method: simpson | trapezoid (use n ≈ 100) | gauss_legendre (n = 2..5) | romberg | adaptive (n unused).
+        // n must be a number: the live API's n is a plain int (null is a 422 there); gauss_legendre takes at
+        // most 5 nodes on the overhaul API, so 5 is valid for every method on both.
+        {"numerical/integration/quadrature",
+         R"({"func_name":"sin","a":0.0,"b":3.14159,"method":"gauss_legendre","n":5})"},
         {"numerical/integration/monte-carlo", R"({"func_name":"sin","bounds":[[0.0,3.14159]]})"},
         {"numerical/integration/stratified", R"({"func_name":"sin","a":0.0,"b":3.14159})"},
         {"numerical/interpolation/evaluate", R"({"x_data":[1,2,3,4,5],"y_data":[2.1,3.9,6.2,7.8,10.1],"xi":2.5})"},
@@ -1331,7 +1350,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"numerical/linalg/lstsq", R"({"A":[[1,1],[1,2],[1,3]],"b":[1.0,2.0,2.0]})"},
         {"numerical/roots/find-1d", R"({"func_name":"sin","a":3.0,"b":4.0})"},
         {"numerical/roots/newton", R"({"func_name":"sin","x0":3.0})"},
-        {"numerical/optimize/minimize", R"({"func_name":"sin","x0":[1.0]})"},
+        {"numerical/optimize/minimize", R"({"func_name":"rosenbrock","x0":[-1.2,1.0]})"},
         // physics
         {"physics/entropy/shannon", R"({"probabilities":[0.3,0.5,0.2]})"},
         {"physics/entropy/renyi", R"({"probabilities":[0.3,0.5,0.2],"alpha":2.0})"},
@@ -1342,7 +1361,9 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"physics/entropy/differential", R"({"distribution":"gaussian","sigma":1.0,"rate":1.0})"},
         {"physics/entropy/mutual-information", R"({"joint_prob":[[0.2,0.3],[0.1,0.4]]})"},
         {"physics/entropy/transfer",
-         R"({"x_history":[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8],"y_history":[0.2,0.1,0.4,0.3,0.6,0.5,0.8,0.7]})"},
+         R"({"x_history":[0.3,0.21,0.52,0.12,0.79,0.41,0.88,0.31,0.62,0.69,0.22,0.48,0.11,0.81,0.39,0.91,0.29,0.61,)"
+         R"(0.72,0.19,0.51,0.12,0.78,0.42],"y_history":[0.2,0.5,0.1,0.8,0.4,0.9,0.3,0.6,0.7,0.2,0.5,0.1,0.8,0.4,0.9,)"
+         R"(0.3,0.6,0.7,0.2,0.5,0.1,0.8,0.4,0.9],"lag":1,"n_bins":3})"},
         {"physics/entropy/fisher-information",
          R"({"distribution":"gaussian","theta":1.0,"h":1e-05,"n_samples":10000})"},
         {"physics/entropy/markov-rate", R"({"transition_matrix":[[0.9,0.1],[0.2,0.8]]})"},
@@ -1351,7 +1372,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"physics/boltzmann", R"({"energies":[0.0,1.0,2.0],"temperature":300.0})"},
         {"physics/ising", R"({"size":10,"J":1.0,"h":0.0,"temperature":2.0,"n_steps":1000})"},
         {"physics/ising/critical-temperature", R"({"J":1.0})"},
-        {"physics/thermodynamics/ideal-gas", R"({"n":1.0,"temperature":300.0,"volume":1.0,"pressure":101325.0})"},
+        {"physics/thermodynamics/ideal-gas", R"({"n":1.0,"temperature":300.0,"volume":1.0})"},
         {"physics/thermodynamics/van-der-waals", R"({"a":1.0,"b":0.1,"temperature":300.0,"volume":1.0})"},
         {"physics/thermodynamics/carnot", R"({"T_hot":500.0,"T_cold":300.0})"},
         {"physics/thermodynamics/free-energy", R"({"internal_energy":100.0,"temperature":300.0,"entropy":10.0})"},
@@ -1467,12 +1488,25 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"ml/credit/discrimination", R"({"y_true":[0,1,0,1,1,0,1,0],"y_score":[0.2,0.8,0.3,0.7,0.6,0.4,0.9,0.1]})"},
         {"ml/credit/performance", R"({"y_true":[0,1,0,1,1,0,1,0],"y_score":[0.2,0.8,0.3,0.7,0.6,0.4,0.9,0.1]})"},
         {"ml/credit/migration", R"({"transitions":[[0.9,0.08,0.02],[0.1,0.8,0.1],[0.0,0.0,1.0]]})"},
+        // LGD examples: 40 defaulted loans, X = [collateral coverage (collateral / EAD), senior secured 1 / 0],
+        // LGD as a fraction of exposure (0 to 1). Two-stage: LGD = 0 marks a full recovery (stage 1).
         {"ml/credit/beta-lgd",
-         R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],)"
-         R"("lgd":[0.4,0.5,0.3,0.6,0.45,0.35,0.5,0.55]})"},
+         R"({"X":[[0.07,0],[0.1,1],[0.1,0],[0.14,1],[0.19,1],[0.21,0],[0.25,1],[0.26,1],[0.32,1],[0.33,1],[0.4,0],)"
+         R"([0.4,1],[0.43,0],[0.45,1],[0.5,1],[0.56,0],[0.58,0],[0.61,1],[0.61,0],[0.66,1],[0.7,1],[0.74,1],[0.77,)"
+         R"(0],[0.78,1],[0.84,1],[0.83,1],[0.87,1],[0.89,1],[0.93,0],[0.97,1],[0.99,1],[1.05,0],[1.06,0],[1.12,1],)"
+         R"([1.14,0],[1.18,1],[1.21,0],[1.25,0],[1.3,0],[1.29,1]],"lgd":[0.625,0.557,0.587,0.534,0.336,0.654,0.646,)"
+         R"(0.178,0.279,0.347,0.552,0.524,0.498,0.259,0.199,0.436,0.368,0.214,0.366,0.183,0.112,0.174,0.146,0.367,)"
+         R"(0.066,0.048,0.258,0.182,0.316,0.109,0.136,0.324,0.356,0.096,0.143,0.064,0.266,0.146,0.343,0.132]})"},
+        // cure_indicator: required by the live API (stage 1 labels); the overhaul API derives cure = (lgd == 0)
+        // itself and accepts the field as inert. It is sent as exactly that, so both fit the same model.
         {"ml/credit/two-stage-lgd",
-         R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],)"
-         R"("lgd":[0.4,0.5,0.3,0.6,0.45,0.35,0.5,0.55],"cure_indicator":[0,1,0,1,0,0,1,0]})"},
+         R"({"X":[[0.07,0],[0.1,1],[0.1,0],[0.14,1],[0.19,1],[0.21,0],[0.25,1],[0.26,1],[0.32,1],[0.33,1],[0.4,0],)"
+         R"([0.4,1],[0.43,0],[0.45,1],[0.5,1],[0.56,0],[0.58,0],[0.61,1],[0.61,0],[0.66,1],[0.7,1],[0.74,1],[0.77,)"
+         R"(0],[0.78,1],[0.84,1],[0.83,1],[0.87,1],[0.89,1],[0.93,0],[0.97,1],[0.99,1],[1.05,0],[1.06,0],[1.12,1],)"
+         R"([1.14,0],[1.18,1],[1.21,0],[1.25,0],[1.3,0],[1.29,1]],"lgd":[0.625,0.557,0.587,0.534,0.336,0.654,0.646,)"
+         R"(0.0,0.279,0.347,0.552,0.524,0.498,0.259,0.199,0.436,0.0,0.0,0.366,0.0,0.112,0.174,0.146,0.0,0.0,0.048,)"
+         R"(0.258,0.0,0.316,0.109,0.136,0.324,0.0,0.0,0.0,0.064,0.266,0.146,0.0,0.0],"cure_indicator":[0,0,0,0,0,)"
+         R"(0,0,1,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,1,1,0,0,1,0,0,0,0,1,1,1,0,0,0,1,1]})"},
         {"ml/regression/fit",
          R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
          R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
@@ -1482,9 +1516,14 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"ml/regression/tree",
          R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
          R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
+        // Same loans as ml/credit/beta-lgd (the same beta-regression fit); y = LGD, 0 to 1.
         {"ml/regression/lgd",
-         R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
-         R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
+         R"({"X":[[0.07,0],[0.1,1],[0.1,0],[0.14,1],[0.19,1],[0.21,0],[0.25,1],[0.26,1],[0.32,1],[0.33,1],[0.4,0],)"
+         R"([0.4,1],[0.43,0],[0.45,1],[0.5,1],[0.56,0],[0.58,0],[0.61,1],[0.61,0],[0.66,1],[0.7,1],[0.74,1],[0.77,)"
+         R"(0],[0.78,1],[0.84,1],[0.83,1],[0.87,1],[0.89,1],[0.93,0],[0.97,1],[0.99,1],[1.05,0],[1.06,0],[1.12,1],)"
+         R"([1.14,0],[1.18,1],[1.21,0],[1.25,0],[1.3,0],[1.29,1]],"y":[0.625,0.557,0.587,0.534,0.336,0.654,0.646,)"
+         R"(0.178,0.279,0.347,0.552,0.524,0.498,0.259,0.199,0.436,0.368,0.214,0.366,0.183,0.112,0.174,0.146,0.367,)"
+         R"(0.066,0.048,0.258,0.182,0.316,0.109,0.136,0.324,0.356,0.096,0.143,0.064,0.266,0.146,0.343,0.132]})"},
         {"ml/regression/ead",
          R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
          R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
@@ -1546,11 +1585,15 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"ml/validation/calibration-report",
          R"({"y_true":[0,1,0,1,1,0,1,0],"y_score":[0.2,0.8,0.3,0.7,0.6,0.4,0.9,0.1]})"},
         {"ml/validation/interpretability",
-         R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
-         R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
+         R"({"model_predict":"linear","X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],)"
+         R"([8.0,7.0]],"y":[2.1,2.4,5.1,5.4,8.1,8.6,11.0,11.4]})"},
         {"ml/timeseries/feature-importance",
-         R"({"X":[[1.0,2.0],[2.0,1.0],[3.0,4.0],[4.0,3.0],[5.0,6.0],[6.0,5.0],[7.0,8.0],[8.0,7.0]],"y":[2.1,)"
-         R"(3.9,6.2,7.8,10.1,2.1,3.9,6.2]})"},
+         R"({"X":[[-0.0026,0.51],[-0.0032,-0.93],[0.0111,0.42],[0.0025,0.39],[-0.0167,0.86],[0.005,-1.69],[-0.0089,)"
+         R"(-0.47],[-0.0005,0.52],[0.0031,0.39],[0.0172,0.56],[-0.0062,-0.74],[-0.0011,0.63],[-0.0045,-0.96],)"
+         R"([0.0122,-0.81],[0.0043,-1.49],[0.0131,-2.01],[-0.0011,-0.82],[-0.0006,-1.46],[0.0067,0.95],[0.0036,)"
+         R"(0.12],[0.0062,-0.61],[-0.0126,-0.97],[0.0129,-2.03],[0.0024,1.44]],"y":[-0.0007,-0.0038,0.0084,0.0023,)"
+         R"(-0.0034,-0.0066,-0.0036,-0.0011,0.0,0.0116,-0.005,0.0016,-0.0053,0.004,-0.0011,0.0003,-0.0006,-0.0007,)"
+         R"(0.0089,-0.0022,-0.0001,-0.0086,-0.0033,0.0056],"n_splits":3})"},
         {"ml/changepoint/detect",
          R"({"data":[-0.0131,0.0046,0.0113,-0.0052,-0.0142,-0.0003,0.0057,0.0125,-0.013,-0.0138,0.0082,)"
          R"(0.0056,0.0173,0.0112,-0.0007,-0.0026,0.0287,-0.0028,-0.0082,-0.0121,0.0015,0.002,-0.0034,)"
@@ -1602,13 +1645,13 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"(-0.0041,0.0028],[0.0278,0.0072,0.0017],[0.0175,-0.0005,0.0209],[-0.0071,-0.0048,0.0083],[0.0161,)"
          R"(0.0076,0.0037]]})"},
         {"ml/factor/cross-sectional",
-         R"({"returns":[[0.0088,0.0055,0.0185],[-0.0037,0.0065,0.006],[0.0035,0.0027,0.0024],[-0.0062,)"
-         R"(-0.0108,-0.004],[0.0069,0.017,0.0111],[0.012,0.009,0.0081],[0.0024,0.0089,0.0199],[-0.0032,)"
-         R"(-0.0072,0.022],[0.0031,0.0111,0.01],[-0.0121,0.0272,0.0199],[0.0023,0.0087,0.0018],[-0.0093,)"
-         R"(-0.0008,0.0045],[0.0127,0.0082,0.0011],[0.0153,-0.008,0.0091],[0.0126,-0.0028,-0.0193],[-0.0096,)"
-         R"(0.003,0.0062],[0.0174,-0.0106,0.0004],[0.0075,-0.0013,-0.0257],[0.0093,0.0258,0.0114],[-0.0097,)"
-         R"(-0.0041,0.0028],[0.0278,0.0072,0.0017],[0.0175,-0.0005,0.0209],[-0.0071,-0.0048,0.0083],[0.0161,)"
-         R"(0.0076,0.0037]],"characteristics":[[0.5,1.2,-0.3],[0.1,0.8,0.6],[-0.2,0.4,1.1]]})"},
+         R"({"returns":[[0.0088,0.0055,0.0185],[-0.0037,0.0065,0.006],[0.0035,0.0027,0.0024],[-0.0062,-0.0108,)"
+         R"(-0.004],[0.0069,0.017,0.0111],[0.012,0.009,0.0081],[0.0024,0.0089,0.0199],[-0.0032,-0.0072,0.022],)"
+         R"([0.0031,0.0111,0.01],[-0.0121,0.0272,0.0199],[0.0023,0.0087,0.0018],[-0.0093,-0.0008,0.0045],[0.0127,)"
+         R"(0.0082,0.0011],[0.0153,-0.008,0.0091],[0.0126,-0.0028,-0.0193],[-0.0096,0.003,0.0062],[0.0174,-0.0106,)"
+         R"(0.0004],[0.0075,-0.0013,-0.0257],[0.0093,0.0258,0.0114],[-0.0097,-0.0041,0.0028],[0.0278,0.0072,0.0017],)"
+         R"([0.0175,-0.0005,0.0209],[-0.0071,-0.0048,0.0083],[0.0161,0.0076,0.0037]],"characteristics":[[0.5,1.2],)"
+         R"([0.1,0.8],[-0.2,0.4]]})"},
         {"ml/covariance/estimate",
          R"({"returns":[[0.0088,0.0055,0.0185],[-0.0037,0.0065,0.006],[0.0035,0.0027,0.0024],[-0.0062,)"
          R"(-0.0108,-0.004],[0.0069,0.017,0.0111],[0.012,0.009,0.0081],[0.0024,0.0089,0.0199],[-0.0032,)"
@@ -1620,91 +1663,206 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         // analysis
         {"analysis/fundamentals/profitability",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"prior_balance":{"cash":140000,"short_term_investments":30000,)"
+         R"("accounts_receivable":140000,"inventory":240000,"other_current_assets":25000,)"
+         R"("total_current_assets":575000,"net_ppe":870000,"goodwill":200000,"intangible_assets":110000,)"
+         R"("other_assets":150000,"total_assets":1905000,"accounts_payable":115000,"short_term_debt":60000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":75000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":460000,"other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,)"
+         R"("retained_earnings":401250}})"},
         {"analysis/fundamentals/liquidity",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_balance":{"cash":140000,)"
+         R"("short_term_investments":30000,"accounts_receivable":140000,"inventory":240000,)"
+         R"("other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,"goodwill":200000,)"
+         R"("intangible_assets":110000,"other_assets":150000,"total_assets":1905000,"accounts_payable":115000,)"
+         R"("short_term_debt":60000,"current_portion_lt_debt":50000,"other_current_liabilities":75000,)"
+         R"("total_current_liabilities":300000,"long_term_debt":460000,"other_liabilities":223750,)"
+         R"("total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
         {"analysis/fundamentals/efficiency",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_balance":{"cash":140000,)"
+         R"("short_term_investments":30000,"accounts_receivable":140000,"inventory":240000,)"
+         R"("other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,"goodwill":200000,)"
+         R"("intangible_assets":110000,"other_assets":150000,"total_assets":1905000,"accounts_payable":115000,)"
+         R"("short_term_debt":60000,"current_portion_lt_debt":50000,"other_current_liabilities":75000,)"
+         R"("total_current_liabilities":300000,"long_term_debt":460000,"other_liabilities":223750,)"
+         R"("total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
         {"analysis/fundamentals/growth",
          R"({"current_income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("prior_income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("current_balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("prior_balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"prior_income":{"revenue":925000,"cost_of_goods_sold":564250,)"
+         R"("gross_profit":360750,"operating_expenses":185750,"sga_expenses":112000,"rd_expenses":27000,)"
+         R"("depreciation":37500,"amortization":9250,"operating_income":175000,"interest_expense":21000,)"
+         R"("interest_income":4000,"pretax_income":158000,"income_tax":39500,"net_income":118500,)"
+         R"("shares_outstanding":100700,"eps":1.1768,"diluted_eps":1.15,"dividends_paid":36000},)"
+         R"("current_balance":{"cash":150000,"short_term_investments":50000,"accounts_receivable":150000,)"
+         R"("inventory":250000,"other_current_assets":30000,"total_current_assets":630000,"net_ppe":900000,)"
+         R"("goodwill":200000,"intangible_assets":100000,"other_assets":170000,"total_assets":2000000,)"
+         R"("accounts_payable":120000,"short_term_debt":50000,"current_portion_lt_debt":50000,)"
+         R"("other_current_liabilities":80000,"total_current_liabilities":300000,"long_term_debt":450000,)"
+         R"("other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"prior_balance":{"cash":140000,"short_term_investments":30000,)"
+         R"("accounts_receivable":140000,"inventory":240000,"other_current_assets":25000,)"
+         R"("total_current_assets":575000,"net_ppe":870000,"goodwill":200000,"intangible_assets":110000,)"
+         R"("other_assets":150000,"total_assets":1905000,"accounts_payable":115000,"short_term_debt":60000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":75000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":460000,"other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,)"
+         R"("retained_earnings":401250},"current_cash_flow":{"operating_cash_flow":180000,)"
+         R"("capital_expenditures":70000,"depreciation":50000,"change_in_working_capital":-15000,)"
+         R"("investing_cash_flow":-90000,"financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,)"
+         R"("debt_repaid":70000,"shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},)"
+         R"("prior_cash_flow":{"operating_cash_flow":160000,"capital_expenditures":65000,"depreciation":46750,)"
+         R"("change_in_working_capital":-10000,"investing_cash_flow":-75000,"financing_cash_flow":-75000,)"
+         R"("dividends_paid":36000,"debt_issued":40000,"debt_repaid":60000,"shares_issued":0,)"
+         R"("shares_repurchased":19000,"net_cash_flow":10000}})"},
         {"analysis/fundamentals/solvency",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000}})"},
         {"analysis/fundamentals/cashflow",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("cash_flow":{"operating_cash_flow":180000,"capital_expenditures":60000,"depreciation":50000,)"
-         R"("investing_cash_flow":-100000,"financing_cash_flow":-50000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_balance":{"cash":140000,)"
+         R"("short_term_investments":30000,"accounts_receivable":140000,"inventory":240000,)"
+         R"("other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,"goodwill":200000,)"
+         R"("intangible_assets":110000,"other_assets":150000,"total_assets":1905000,"accounts_payable":115000,)"
+         R"("short_term_debt":60000,"current_portion_lt_debt":50000,"other_current_liabilities":75000,)"
+         R"("total_current_liabilities":300000,"long_term_debt":460000,"other_liabilities":223750,)"
+         R"("total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
+        // market: share_price + shares_outstanding (or market_cap) enables the valuation section; a
+        // market_cap that disagrees with price x shares is refused.
         {"analysis/fundamentals/comprehensive",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("cash_flow":{"operating_cash_flow":180000,"capital_expenditures":60000,"depreciation":50000,)"
-         R"("investing_cash_flow":-100000,"financing_cash_flow":-50000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_income":{"revenue":925000,)"
+         R"("cost_of_goods_sold":564250,"gross_profit":360750,"operating_expenses":185750,"sga_expenses":112000,)"
+         R"("rd_expenses":27000,"depreciation":37500,"amortization":9250,"operating_income":175000,)"
+         R"("interest_expense":21000,"interest_income":4000,"pretax_income":158000,"income_tax":39500,)"
+         R"("net_income":118500,"shares_outstanding":100700,"eps":1.1768,"diluted_eps":1.15,"dividends_paid":36000},)"
+         R"("prior_balance":{"cash":140000,"short_term_investments":30000,"accounts_receivable":140000,)"
+         R"("inventory":240000,"other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,)"
+         R"("goodwill":200000,"intangible_assets":110000,"other_assets":150000,"total_assets":1905000,)"
+         R"("accounts_payable":115000,"short_term_debt":60000,"current_portion_lt_debt":50000,)"
+         R"("other_current_liabilities":75000,"total_current_liabilities":300000,"long_term_debt":460000,)"
+         R"("other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,"retained_earnings":401250},)"
+         R"("market":{"share_price":30,"shares_outstanding":100000}})"},
         {"analysis/fundamentals/dupont",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"prior_balance":{"cash":140000,"short_term_investments":30000,)"
+         R"("accounts_receivable":140000,"inventory":240000,"other_current_assets":25000,)"
+         R"("total_current_assets":575000,"net_ppe":870000,"goodwill":200000,"intangible_assets":110000,)"
+         R"("other_assets":150000,"total_assets":1905000,"accounts_payable":115000,"short_term_debt":60000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":75000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":460000,"other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,)"
+         R"("retained_earnings":401250}})"},
         {"analysis/fundamentals/quality",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("cash_flow":{"operating_cash_flow":180000,"capital_expenditures":60000,"depreciation":50000,)"
-         R"("investing_cash_flow":-100000,"financing_cash_flow":-50000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_income":{"revenue":925000,)"
+         R"("cost_of_goods_sold":564250,"gross_profit":360750,"operating_expenses":185750,"sga_expenses":112000,)"
+         R"("rd_expenses":27000,"depreciation":37500,"amortization":9250,"operating_income":175000,)"
+         R"("interest_expense":21000,"interest_income":4000,"pretax_income":158000,"income_tax":39500,)"
+         R"("net_income":118500,"shares_outstanding":100700,"eps":1.1768,"diluted_eps":1.15,"dividends_paid":36000},)"
+         R"("prior_balance":{"cash":140000,"short_term_investments":30000,"accounts_receivable":140000,)"
+         R"("inventory":240000,"other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,)"
+         R"("goodwill":200000,"intangible_assets":110000,"other_assets":150000,"total_assets":1905000,)"
+         R"("accounts_payable":115000,"short_term_debt":60000,"current_portion_lt_debt":50000,)"
+         R"("other_current_liabilities":75000,"total_current_liabilities":300000,"long_term_debt":460000,)"
+         R"("other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
         {"analysis/fundamentals/capital-structure/wacc", R"({"debt":600000,"equity":1000000})"},
-        {"analysis/fundamentals/capital-structure/optimal", R"({"debt":600000,"equity":1000000})"},
+        // debt / equity: required by the live API, unused by the WACC-minimising search on both.
+        {"analysis/fundamentals/capital-structure/optimal",
+         R"({"cost_of_equity":0.1,"cost_of_debt":0.05,"tax_rate":0.25,"ebitda":250000,"debt":600000,)"
+         R"("equity":1000000})"},
         {"analysis/ratios/profitability/roa",
          R"({"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,"operating_income":200000,)"
          R"("ebit":200000,"ebitda":250000,"net_income":150000,"total_assets":2000000,"total_equity":1000000,)"
@@ -1914,7 +2072,8 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"("accounts_payable":120000,"total_assets":2000000,"fixed_assets":900000,"total_equity":1000000})"},
         {"analysis/ratios/efficiency/working-capital-turnover",
          R"({"revenue":1000000,"cost_of_goods_sold":600000,"accounts_receivable":150000,"inventory":250000,)"
-         R"("accounts_payable":120000,"total_assets":2000000,"fixed_assets":900000,"total_equity":1000000})"},
+         R"("accounts_payable":120000,"total_assets":2000000,"fixed_assets":900000,"working_capital":330000,)"
+         R"("total_equity":1000000})"},
         {"analysis/ratios/efficiency/equity-turnover",
          R"({"revenue":1000000,"cost_of_goods_sold":600000,"accounts_receivable":150000,"inventory":250000,)"
          R"("accounts_payable":120000,"total_assets":2000000,"fixed_assets":900000,"total_equity":1000000})"},
@@ -1973,22 +2132,32 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"equity_weight":0.6,"debt_weight":0.4,"cost_of_equity":0.1,"cost_of_debt":0.05,"tax_rate":0.25})"},
         {"analysis/valuation/dcf/terminal-value", R"({"fcf":146410,"growth_rate":0.03,"discount_rate":0.1})"},
         {"analysis/valuation/dcf/cost-of-equity", R"({"risk_free_rate":0.04,"beta":0.5,"market_premium":0.055})"},
+        // metrics: pe | ev_ebitda | pb | ps | ev_revenue | pcf. EV multiples take enterprise_value, or
+        // total_debt + cash; a multiple whose inputs a company lacks is listed under missing_inputs.
         {"analysis/valuation/comparable",
-         R"({"target":{"pe":15,"ev_ebitda":10,"pb":2.0},"peers":[{"pe":14,"ev_ebitda":9,"pb":1.8},{"pe":18,)"
-         R"("ev_ebitda":11,"pb":2.4},{"pe":12,"ev_ebitda":8,"pb":1.5}]})"},
+         R"({"target":{"market_cap":3000000,"net_income":138750,"total_debt":550000,"cash":150000,"ebitda":250000,)"
+         R"("book_value":1000000,"revenue":1000000,"operating_cash_flow":180000},"peers":[{"market_cap":2500000,)"
+         R"("net_income":125000,"enterprise_value":2900000,"ebitda":230000,"book_value":950000,"revenue":900000,)"
+         R"("operating_cash_flow":160000},{"market_cap":4200000,"net_income":175000,"enterprise_value":4600000,)"
+         R"("ebitda":330000,"book_value":1300000,"revenue":1350000,"operating_cash_flow":240000},)"
+         R"({"market_cap":1800000,"net_income":110000,"enterprise_value":2300000,"ebitda":200000,)"
+         R"("book_value":800000,"revenue":850000,"operating_cash_flow":150000}],"metrics":["pe","ev_ebitda","pb",)"
+         R"("ps","ev_revenue","pcf"]})"},
+        // screen_type: value (pe, pb, roe, debt_to_equity, current_ratio) | growth (revenue_growth, gross_margin,
+        // roe) | quality (roe, gross_margin, debt_to_equity, current_ratio) — every company needs each tested metric.
         {"analysis/valuation/screen",
-         R"({"companies":[{"name":"A","pe":12,"pb":1.2,"roe":0.15},{"name":"B","pe":25,"pb":4.0,"roe":0.22},)"
-         R"({"name":"C","pe":9,"pb":0.9,"roe":0.08}]})"},
+         R"({"companies":[{"name":"A","pe":12,"pb":1.8,"roe":0.15,"debt_to_equity":0.6,"current_ratio":1.8,)"
+         R"("revenue_growth":0.06,"gross_margin":0.35},{"name":"B","pe":25,"pb":5.5,"roe":0.22,"debt_to_equity":0.4,)"
+         R"("current_ratio":2.2,"revenue_growth":0.28,"gross_margin":0.62},{"name":"C","pe":9,"pb":0.72,"roe":0.08,)"
+         R"("debt_to_equity":1.4,"current_ratio":1.1,"revenue_growth":0.02,"gross_margin":0.22},{"name":"D","pe":14,)"
+         R"("pb":1.82,"roe":0.13,"debt_to_equity":0.45,"current_ratio":2.0,"revenue_growth":0.09,)"
+         R"("gross_margin":0.44},{"name":"E","pe":11,"pb":1.76,"roe":0.16,"debt_to_equity":1.6,"current_ratio":1.3,)"
+         R"("revenue_growth":0.18,"gross_margin":0.31}],"screen_type":"value"})"},
         {"analysis/valuation/factor-models",
-         R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("market":{"market_cap":3000000,"share_price":50,"shares_outstanding":1.0,)"
-         R"("enterprise_value":3600000}})"},
+         R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,"net_income":138750,)"
+         R"("dividends_paid":40000},"balance":{"total_assets":2000000,"total_equity":1000000},)"
+         R"("market":{"market_cap":3000000,"share_price":30},"cash_flow":{"operating_cash_flow":180000},)"
+         R"("prior_balance":{"total_assets":1905000}})"},
         {"analysis/valuation/credit/merton-model",
          R"({"equity_value":5000000,"debt_face":3000000,"risk_free_rate":0.04,"equity_volatility":0.4})"},
         {"analysis/valuation/credit/distance-to-default",
@@ -1997,58 +2166,89 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"analysis/valuation/credit/expected-loss", R"({"pd":0.02,"lgd":0.4,"ead":1000000})"},
         {"analysis/valuation/credit/rating-pd", R"({"rating":"BBB"})"},
         {"analysis/valuation/predictive/altman-z",
-         R"({"working_capital":400000,"total_assets":2000000,"retained_earnings":500000,"ebit":200000,)"
+         R"({"working_capital":330000,"total_assets":2000000,"retained_earnings":500000,"ebit":200000,)"
          R"("market_cap":3000000,"total_liabilities":1000000,"revenue":1000000})"},
         {"analysis/valuation/predictive/piotroski-f",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("cash_flow":{"operating_cash_flow":180000,"capital_expenditures":60000,"depreciation":50000,)"
-         R"("investing_cash_flow":-100000,"financing_cash_flow":-50000},"prior_income":{"revenue":1000000,)"
-         R"("cost_of_goods_sold":600000,"gross_profit":400000,"operating_income":200000,"ebit":200000,)"
-         R"("ebitda":250000,"net_income":150000,"interest_expense":20000,"depreciation":50000,)"
-         R"("tax_expense":40000},"prior_balance":{"total_assets":2000000,"total_equity":1000000,)"
-         R"("total_liabilities":1000000,"current_assets":800000,"current_liabilities":400000,"cash":200000,)"
-         R"("inventory":250000,"accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_income":{"revenue":925000,)"
+         R"("cost_of_goods_sold":564250,"gross_profit":360750,"operating_expenses":185750,"sga_expenses":112000,)"
+         R"("rd_expenses":27000,"depreciation":37500,"amortization":9250,"operating_income":175000,)"
+         R"("interest_expense":21000,"interest_income":4000,"pretax_income":158000,"income_tax":39500,)"
+         R"("net_income":118500,"shares_outstanding":100700,"eps":1.1768,"diluted_eps":1.15,"dividends_paid":36000},)"
+         R"("prior_balance":{"cash":140000,"short_term_investments":30000,"accounts_receivable":140000,)"
+         R"("inventory":240000,"other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,)"
+         R"("goodwill":200000,"intangible_assets":110000,"other_assets":150000,"total_assets":1905000,)"
+         R"("accounts_payable":115000,"short_term_debt":60000,"current_portion_lt_debt":50000,)"
+         R"("other_current_liabilities":75000,"total_current_liabilities":300000,"long_term_debt":460000,)"
+         R"("other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
         {"analysis/valuation/predictive/beneish-m",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000},)"
-         R"("prior_income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("prior_balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000},"cash_flow":{"operating_cash_flow":180000,"capital_expenditures":70000,)"
+         R"("depreciation":50000,"change_in_working_capital":-15000,"investing_cash_flow":-90000,)"
+         R"("financing_cash_flow":-80000,"dividends_paid":40000,"debt_issued":50000,"debt_repaid":70000,)"
+         R"("shares_issued":0,"shares_repurchased":20000,"net_cash_flow":10000},"prior_income":{"revenue":925000,)"
+         R"("cost_of_goods_sold":564250,"gross_profit":360750,"operating_expenses":185750,"sga_expenses":112000,)"
+         R"("rd_expenses":27000,"depreciation":37500,"amortization":9250,"operating_income":175000,)"
+         R"("interest_expense":21000,"interest_income":4000,"pretax_income":158000,"income_tax":39500,)"
+         R"("net_income":118500,"shares_outstanding":100700,"eps":1.1768,"diluted_eps":1.15,"dividends_paid":36000},)"
+         R"("prior_balance":{"cash":140000,"short_term_investments":30000,"accounts_receivable":140000,)"
+         R"("inventory":240000,"other_current_assets":25000,"total_current_assets":575000,"net_ppe":870000,)"
+         R"("goodwill":200000,"intangible_assets":110000,"other_assets":150000,"total_assets":1905000,)"
+         R"("accounts_payable":115000,"short_term_debt":60000,"current_portion_lt_debt":50000,)"
+         R"("other_current_liabilities":75000,"total_current_liabilities":300000,"long_term_debt":460000,)"
+         R"("other_liabilities":223750,"total_liabilities":983750,"total_equity":921250,"retained_earnings":401250}})"},
         {"analysis/valuation/predictive/ohlson-o",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000}})"},
+        // S = 1.03 WC/TA + 3.07 EBIT/TA + 0.66 EBT/CL + 0.4 Sales/TA. The live API still validates Springate with
+        // the Altman Z model (retained_earnings / market_cap / total_liabilities required, EBT and current
+        // liabilities ignored); the overhaul API reads pretax_income / current_liabilities and accepts the Altman
+        // inputs as inert. One body (the Altman Z company) satisfies both.
         {"analysis/valuation/predictive/springate",
-         R"({"working_capital":400000,"total_assets":2000000,"retained_earnings":500000,"ebit":200000,)"
-         R"("market_cap":3000000,"total_liabilities":1000000,"revenue":1000000})"},
+         R"({"working_capital":330000,"total_assets":2000000,"ebit":200000,"revenue":1000000,"pretax_income":185000,)"
+         R"("current_liabilities":300000,"retained_earnings":500000,"market_cap":3000000,"total_liabilities":1000000})"},
         {"analysis/valuation/predictive/zmijewski",
          R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"("operating_expenses":200000,"sga_expenses":120000,"rd_expenses":30000,"depreciation":40000,)"
+         R"("amortization":10000,"operating_income":200000,"interest_expense":20000,"interest_income":5000,)"
+         R"("pretax_income":185000,"income_tax":46250,"net_income":138750,"shares_outstanding":100000,"eps":1.3875,)"
+         R"("diluted_eps":1.36,"dividends_paid":40000},"balance":{"cash":150000,"short_term_investments":50000,)"
+         R"("accounts_receivable":150000,"inventory":250000,"other_current_assets":30000,)"
+         R"("total_current_assets":630000,"net_ppe":900000,"goodwill":200000,"intangible_assets":100000,)"
+         R"("other_assets":170000,"total_assets":2000000,"accounts_payable":120000,"short_term_debt":50000,)"
+         R"("current_portion_lt_debt":50000,"other_current_liabilities":80000,"total_current_liabilities":300000,)"
+         R"("long_term_debt":450000,"other_liabilities":250000,"total_liabilities":1000000,"total_equity":1000000,)"
+         R"("retained_earnings":500000}})"},
         {"analysis/valuation/residual-income/eva", R"({"nopat":150000,"invested_capital":1000000,"wacc":0.09})"},
         {"analysis/valuation/residual-income/ri", R"({"net_income":150000,"equity":1000000,"cost_of_equity":0.1})"},
         {"analysis/valuation/residual-income/valuation",
@@ -2056,45 +2256,57 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"analysis/valuation/startup/vc-method",
          R"({"investment":1000000,"exit_value":10000000,"years":5,"target_return":0.3})"},
         {"analysis/valuation/startup/first-chicago",
-         R"({"scenarios":[{"name":"bull","probability":0.25,"exit_value":20000000},{"name":"base",)"
-         R"("probability":0.5,"exit_value":10000000},{"name":"bear","probability":0.25,)"
-         R"("exit_value":2000000}],"discount_rate":0.1,"years":5})"},
+         R"({"scenarios":[{"name":"bull","probability":0.25,"revenue":20000000,"margin":0.25,"multiple":10},)"
+         R"({"name":"base","probability":0.5,"revenue":10000000,"margin":0.2,"multiple":8},{"name":"bear",)"
+         R"("probability":0.25,"revenue":3000000,"margin":0.1,"multiple":5}],"discount_rate":0.3,"years":5})"},
         {"analysis/valuation/startup/dilution", R"({"pre_money":4000000,"investment":1000000,"option_pool":0.1})"},
+        // Each section runs when its input is sent (empty field / [] skips it): R&D rd_expenses_history; leases
+        // lease_payments; goodwill (goodwill_approach: conservative | moderate | aggressive); pension
+        // pension_obligation + pension_plan_assets (or pension_deficit); stock_compensation (stock_price is
+        // required with diluted_shares; basic shares = income.shares_outstanding).
         {"analysis/valuation/proforma/adjustments",
-         R"({"income":{"revenue":1000000,"cost_of_goods_sold":600000,"gross_profit":400000,)"
-         R"("operating_income":200000,"ebit":200000,"ebitda":250000,"net_income":150000,)"
-         R"("interest_expense":20000,"depreciation":50000,"tax_expense":40000},)"
-         R"("balance":{"total_assets":2000000,"total_equity":1000000,"total_liabilities":1000000,)"
-         R"("current_assets":800000,"current_liabilities":400000,"cash":200000,"inventory":250000,)"
-         R"("accounts_receivable":150000,"accounts_payable":120000,"total_debt":600000,)"
-         R"("long_term_debt":450000,"invested_capital":1500000,"retained_earnings":500000}})"},
+         R"({"income":{"revenue":1000000,"rd_expenses":30000,"net_income":138750,"shares_outstanding":100000},)"
+         R"("balance":{"total_assets":2000000,"intangible_assets":100000,"total_equity":1000000},)"
+         R"("rd_expenses_history":[22000,24000,25500,27000,30000],"useful_life_rd":5,"lease_payments":[24000,24000,)"
+         R"(22000,20000,18000,15000,12000,10000],"discount_rate":0.05,"goodwill":200000,)"
+         R"("goodwill_approach":"conservative","pension_obligation":300000,"pension_plan_assets":255000,)"
+         R"("pension_service_cost":9000,"pension_interest_cost":13500,"pension_expected_return":16500,)"
+         R"("pension_reported_expense":10000,"stock_compensation":25000,"diluted_shares":102000,"stock_price":30,)"
+         R"("tax_rate":0.25})"},
         {"analysis/industry/banking",
          R"({"net_interest_income":80000,"total_interest_income":150000,"total_interest_expense":70000,)"
          R"("earning_assets":1800000,"total_assets":2000000,"total_deposits":1500000,"total_loans":1200000,)"
          R"("non_performing_loans":24000,"loan_loss_provisions":12000,"net_charge_offs":8000,)"
          R"("operating_expenses":70000,"total_revenue":120000,"fee_income":30000,"trading_income":10000,)"
-         R"("net_income":150000,"tier1_capital":160000,"total_capital":190000,)"
-         R"("risk_weighted_assets":1400000,"total_equity":1000000})"},
+         R"("net_income":28500,"tier1_capital":160000,"total_capital":190000,"risk_weighted_assets":1400000})"},
+        // policyholders_surplus (statutory capital = assets - liabilities) drives the surplus and solvency ratios.
         {"analysis/industry/insurance",
          R"({"net_premiums_earned":500000,"losses_incurred":320000,"loss_adjustment_expenses":40000,)"
          R"("underwriting_expenses":110000,"net_investment_income":60000,"total_assets":2000000,)"
-         R"("total_liabilities":1000000,"total_equity":1000000,"net_income":150000,)"
-         R"("policyholders_surplus":300000,"reserves":700000,"reinsurance_recoverables":50000,)"
-         R"("ceded_premiums":80000,"gross_premiums":580000})"},
+         R"("total_liabilities":1700000,"policyholders_surplus":300000,"reserves":700000,)"
+         R"("reinsurance_recoverables":50000,"ceded_premiums":80000,"gross_premiums":580000})"},
+        // noi_margin needs net_operating_income (with total_revenue); implied_cap_rate needs property_value.
         {"analysis/industry/reits",
-         R"({"net_income":150000,"depreciation":50000,"capital_expenditures":60000,"total_revenue":120000,)"
-         R"("total_assets":2000000,"total_debt":600000,"total_equity":1000000,"ebitda":250000,)"
-         R"("interest_expense":20000,"share_price":50,"shares_outstanding":60000,"dividends_per_share":1.0})"},
+         R"({"net_income":90000,"depreciation":110000,"capital_expenditures":30000,"leasing_costs":10000,)"
+         R"("net_operating_income":260000,"total_revenue":400000,"total_debt":1200000,"ebitda":240000,)"
+         R"("interest_expense":40000,"share_price":30,"shares_outstanding":100000,"dividends_per_share":1.4,)"
+         R"("property_value":4000000})"},
+        // kwh_generated in kWh, capacity_mw / peak_demand_mw in MW (capacity and load factors 0-1);
+        // heat_rate_btu = total fuel burned in BTU; rate_base gives the earned return.
         {"analysis/industry/utilities",
-         R"({"total_revenue":120000,"operating_expenses":800000,"depreciation":50000,"net_income":150000,)"
-         R"("interest_expense":20000,"total_assets":2000000,"total_equity":1000000,"total_debt":600000,)"
-         R"("ebitda":250000,"capital_expenditures":60000})"},
+         R"({"total_revenue":240000000,"operating_expenses":192000000,"fuel_costs":70000000,)"
+         R"("fuel_costs_recovered":66500000,"depreciation":30000000,"ebitda":78000000,"interest_expense":16000000,)"
+         R"("rate_base":600000000,"total_debt":330000000,"total_equity":300000000,"capital_expenditures":55000000,)"
+         R"("kwh_generated":2628000000,"capacity_mw":500,"peak_demand_mw":450,"heat_rate_btu":19710000000000})"},
 
         // ── Endpoints that had no example (the body field started empty) ─────
+        // Each segment with ebit also gets a DCF value: NOPAT = ebit x (1 - tax_rate), grown at growth_rate for
+        // forecast_years, discounted at wacc, Gordon terminal value at terminal_growth.
         {"analysis/valuation/segment/sotp",
-         R"({"segments":[{"name":"Cloud","revenue":500,"ebitda":150,"comparable_ev_ebitda":15},)"
-         R"({"name":"Hardware","revenue":800,"ebitda":120,"comparable_ev_ebitda":8}],"total_debt":400,)"
-         R"("cash":150,"shares_outstanding":100,"wacc":0.10,"terminal_growth":0.02})"},
+         R"({"segments":[{"name":"Cloud","revenue":500,"ebitda":150,"ebit":120,"comparable_ev_ebitda":15},)"
+         R"({"name":"Hardware","revenue":800,"ebitda":120,"ebit":80,"comparable_ev_ebitda":8}],"total_debt":400,)"
+         R"("cash":150,"shares_outstanding":100,"wacc":0.1,"terminal_growth":0.02,"growth_rate":0.04,)"
+         R"("tax_rate":0.25,"forecast_years":5})"},
         // Berkus: each factor is a DOLLAR value, max 500,000.
         {"analysis/valuation/startup/berkus",
          R"({"sound_idea":400000,"prototype":300000,"management":500000,"strategic_relationships":200000,)"

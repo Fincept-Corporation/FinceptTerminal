@@ -1,4 +1,5 @@
 #include "screens/common/feeds/FeedConfigDialog.h"
+#include "ui/theme/Theme.h"
 
 #include "services/feeds/FeedMonitor.h"
 
@@ -108,13 +109,14 @@ FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* par
     discoverBtn->setCursor(Qt::PointingHandCursor);
     discRow->addWidget(discoverBtn);
     discover_status_ = new QLabel;
-    discover_status_->setStyleSheet("color:#888;");
+    discover_status_->setStyleSheet(QString("color:%1;").arg(fincept::ui::colors::TEXT_SECONDARY()));
     discRow->addWidget(discover_status_, 1);
     mv->addLayout(discRow);
 
     auto* hint = new QLabel(tr("Pick what each tag is, rename it, or remove it. Add your own with “+ Add field”."));
     hint->setWordWrap(true);
-    hint->setStyleSheet("color:#888;font-size:10px;");
+    hint->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;")
+                            .arg(fincept::ui::colors::TEXT_SECONDARY()));
     mv->addWidget(hint);
 
     auto* scroll = new QScrollArea;
@@ -145,6 +147,7 @@ FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* par
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     if (!initial.id.isEmpty()) { // existing feed -> offer Delete
         auto* del = bb->addButton(tr("Delete"), QDialogButtonBox::DestructiveRole);
+        del->setProperty("fincept_agent_risk", "delete");
         del->setCursor(Qt::PointingHandCursor);
         connect(del, &QPushButton::clicked, this, [this]() {
             const auto r = QMessageBox::question(this, tr("Delete feed"),
@@ -213,7 +216,12 @@ QWidget* FeedConfigDialog::add_field_row(const MappedField& f) {
     role->addItem(tr("Time"), "time");
     const int ri = role->findData(f.role);
     role->setCurrentIndex(ri < 0 ? 0 : ri);
-    role->setFixedWidth(92);
+    // 92 px at the default font size; wide enough for the longest role name at any size.
+    int role_text_w = 0;
+    const QFontMetrics role_fm(fincept::ui::fonts::font());
+    for (int i = 0; i < role->count(); ++i)
+        role_text_w = qMax(role_text_w, role_fm.horizontalAdvance(role->itemText(i)));
+    role->setFixedWidth(qMax(92, role_text_w + 36)); // + padding, arrow and border
     role->setToolTip(tr("Title/Summary/Link/Time feed the card view; Column shows only in the table."));
     hl->addWidget(role);
 

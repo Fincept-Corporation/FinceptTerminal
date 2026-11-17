@@ -1,9 +1,9 @@
 #include "app/InstanceLock.h"
 
+#include "core/config/EditionNames.h"
 #include "core/logging/Logger.h"
 
 #include <QByteArray>
-#include <QCryptographicHash>
 #include <QDataStream>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -72,12 +72,18 @@ void write_framed(QLocalSocket* sock, const QByteArray& payload) {
 } // namespace
 
 QString InstanceLock::socket_name_for(const QString& key) {
-    // SHA-1 of the key in hex, truncated to 16 chars. Stable across runs of
-    // the same key, unique enough that two profile keys won't collide, and
-    // short enough that even on macOS (where local-socket paths are subject
-    // to OS-level length caps via $TMPDIR) we won't trip the cap.
-    const auto hash = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1).toHex();
-    return QStringLiteral("fincept-%1").arg(QString::fromLatin1(hash).left(16));
+    // Edition prefix + 16 hex digits of a hash of the key and the OS user
+    // (EditionNames.h): stable across runs, distinct per edition, profile and
+    // account, and short enough for the macOS sun_path cap under $TMPDIR.
+    // Windows named pipes share ONE machine-wide namespace and the Linux socket
+    // file sits in the shared /tmp, so without the user a second account's launch
+    // could neither connect to nor replace the first account's server and ran
+    // without single-instance protection.
+    return edition::instance_socket_name(key, edition::current_user_scope());
+}
+
+QString InstanceLock::legacy_socket_name_for(const QString& key) {
+    return edition::legacy_instance_socket_name(key);
 }
 
 InstanceLock::InstanceLock(QObject* parent) : QObject(parent) {}
@@ -123,9 +129,11 @@ InstanceLock::Status InstanceLock::acquire(const QString& key, const QStringList
 bool InstanceLock::try_listen(const QString& name) {
     if (!server_) {
         server_ = new QLocalServer(this);
-        // Per docs, WorldAccessOption is the right choice for cross-user-
-        // session apps; for our case (single user, multi-instance) the
-        // default is fine and slightly safer.
+        // Only this OS user may connect: the socket file gets owner-only
+        // permissions (Unix), the named pipe a DACL for the user's SID (Windows;
+        // the default DACL lets every account open it for reading). An elevated
+        // and a normal start of the same user share the SID and still meet.
+        server_->setSocketOptions(QLocalServer::UserAccessOption);
         connect(server_, &QLocalServer::newConnection, this, &InstanceLock::on_new_connection);
     }
     return server_->listen(name);

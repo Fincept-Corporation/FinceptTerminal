@@ -19,6 +19,9 @@ class QuickCommandBar : public QFrame {
 
     /// Show + focus. Used by palette/launchpad "type a command" dispatch.
     void surface();
+    /// Show + focus with `text` already typed (cursor at the end) and a hint — the
+    /// palette hands over an action whose arguments must be typed ("link set_group ").
+    void surface_with(const QString& text, const QString& hint = {});
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -30,6 +33,7 @@ class QuickCommandBar : public QFrame {
 
     QLineEdit* input_ = nullptr;
     QLabel* hint_ = nullptr;
+    quint64 resolve_id_ = 0; ///< InstrumentResolver request of the ticker being looked up (0 = none)
 };
 
 } // namespace fincept::ui

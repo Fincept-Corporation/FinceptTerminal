@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QEvent>
+#include <QHash>
 #include <QLabel>
 #include <QList>
 #include <QMap>
@@ -23,6 +24,7 @@ class EquityBottomPanel : public QWidget {
     Q_OBJECT
   public:
     explicit EquityBottomPanel(QWidget* parent = nullptr);
+    ~EquityBottomPanel() override;
 
     // Paper mode data
     void set_paper_positions(const QVector<trading::PtPosition>& positions);
@@ -56,17 +58,54 @@ class EquityBottomPanel : public QWidget {
 
     void set_account_id(const QString& account_id);
 
-    // Currency symbol (₹/$/…) used to format the positions action-bar P&L totals.
-    void set_currency(const QString& sym);
+    // The account's ISO currency code ("INR", "USD"): every money figure of the
+    // panel (P&L, invested / current, totals, fills' fee and realised P&L) is in it
+    // and formatted by ui/formatting in the user's style. Empty is ignored.
+    void set_currency(const QString& currency_code);
 
     // Show/hide the US-market-only tabs (Time & Sales, Auctions, Calendar). These
     // carry tape/condition/auction data that only US brokers (Alpaca etc.) provide,
     // so they're hidden for Indian and other non-US brokers.
     void set_us_market_tabs_visible(bool visible);
 
+    // Pages owned by the screen (FEEDS, ALL ACCOUNTS), as tabs after the blotter's
+    // own. add_extra_tab() re-parents `page` into the tab stack (a page re-parented
+    // away later — e.g. the monitor floated into its own window — loses its tab).
+    void add_extra_tab(QWidget* page, const QString& title);
+    void set_extra_tab_visible(QWidget* page, bool visible);
+    // Make `page`'s tab current (shown, and the sheet expanded).
+    void show_extra_tab(QWidget* page);
+    // Deep link: make a blotter tab current by its stable id ("positions",
+    // "holdings", "orders", "fills", "funds", "stats"). False when unknown or not
+    // shown for this account (e.g. FILLS outside paper mode).
+    bool show_section(const QString& id);
+
     // Collapse the sheet down to just its tab-bar header (and back).
     void toggle_collapsed();
     bool is_collapsed() const { return collapsed_; }
+
+    // Explanatory empty states. While a table is empty it shows the matching text
+    // centred over it instead of a blank grid: `account_text` for Positions /
+    // Holdings / Orders, `tape_text` for the broker-only Time & Sales / Auctions /
+    // Calendar tabs. Empty strings restore the plain (blank) tables.
+    void set_empty_notice(const QString& account_text, const QString& tape_text);
+
+    // ── Multi-currency paper rows (built-in paper account) ──────────────────
+    // Per symbol: the price currency (as quoted, e.g. "USD", "GBp"), price decimals
+    // and the factor to the account currency. Prices (avg / LTP) are shown in the
+    // instrument's currency; money (P&L, invested, current, totals) in the account
+    // currency (set_currency) after the factor. Symbols without an entry keep the
+    // single-currency behaviour. A non-finite `fx` means "no rate yet": that row's
+    // money shows "—" and the totals leave it out (and say so) — never 1:1.
+    struct SymbolMeta {
+        QString currency;
+        int digits = -1;
+        double fx = 1.0;
+    };
+    void set_symbol_meta(const QHash<QString, SymbolMeta>& meta);
+    // Simulated fills of the paper account (FILLS tab, shown in paper mode).
+    // `note` is shown on every row ("SIMULATED · delayed price").
+    void set_paper_trades(const QVector<trading::PtTrade>& trades, const QString& note);
 
   signals:
     void cancel_order_requested(const QString& order_id);
@@ -79,29 +118,55 @@ class EquityBottomPanel : public QWidget {
     // screen can close each. Positions are NOT affected.
     void square_off_all_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
     // Square off a single holding (per-row SELL) — screen confirms then closes it.
-    void square_off_holding_requested(const QString& symbol, const QString& exchange);
+    // `quantity` is the held quantity shown on the row (what the confirmation names).
+    void square_off_holding_requested(const QString& symbol, const QString& exchange, double quantity);
     // Paper: convert an open position's product in place (MIS -> CNC), identified
     // by its paper position id.
     void convert_position_requested(const QString& position_id, const QString& symbol, const QString& new_product);
     // Orders tab date-selector changed — request that IST day's order book.
     void orders_day_changed(const QDate& day);
     // Square off the subset of open positions by P&L sign (+1 winners, -1 losers).
-    void square_off_group_requested(const QString& account_id, int sign);
+    // `targets` are the rows picked at click time from the same tick-updated P&L the
+    // header chips show (and listed in the confirmation) — exactly what gets closed.
+    void square_off_group_requested(const QString& account_id, int sign,
+                                    const QVector<trading::BrokerPosition>& targets);
     // Buy(add)/Sell(reduce) on a position or holding row — from the right-click
-    // menu or the per-row SELL button. `qty` pre-fills the order ticket (the held
-    // quantity for a reduce/exit; 0 = let the ticket default to 1).
-    void trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy, double qty);
+    // menu or the per-row SELL button. `exchange` and `product` are the row's own
+    // (broker wire spelling for product); `qty` pre-fills the order ticket (the held
+    // quantity for a reduce/exit, unrounded; 0 = let the ticket default to 1).
+    void trade_symbol_requested(const QString& symbol, const QString& exchange, const QString& product, bool is_buy,
+                                double qty);
     // Click a position/holding row → load that symbol's chart (like the watchlist).
     void chart_symbol_requested(const QString& symbol);
 
   protected:
     void changeEvent(QEvent* event) override;
+    // Keeps the empty-state labels sized to their table viewports.
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void retranslateUi();
     void apply_collapsed();
+
+    // Empty-state overlays (set_empty_notice). The label is a child of the TABLE,
+    // laid over its viewport — not a child of the viewport, whose contents scroll.
+    struct EmptyState {
+        QTableWidget* table = nullptr;
+        QLabel* label = nullptr;
+        bool tape = false; // tape_text (true) or account_text (false)
+    };
+    void install_empty_state(QTableWidget* table, bool tape);
+    void refresh_empty_state(const EmptyState& s);
+    QVector<EmptyState> empty_states_;
+    QString account_notice_;
+    QString tape_notice_;
     void setup_positions_tab();
+    // Adds the Holdings page as an empty shell; build_holdings_tab() fills it the
+    // first time the tab is shown (it was the largest cost of opening the screen).
     void setup_holdings_tab();
+    void build_holdings_tab();
+    // Paint last_holdings_ into the holdings table + summary strip (built only).
+    void populate_holdings_view();
     void setup_orders_tab();
     void setup_funds_tab();
     void setup_stats_tab();
@@ -112,6 +177,25 @@ class EquityBottomPanel : public QWidget {
     // Recompute the positions action-bar summary (net P&L + winners/losers chips)
     // from the current backing vectors. Called on every (re)load and quote patch.
     void update_positions_summary();
+
+    void setup_fills_tab();
+    // Price text in the symbol's own currency (SymbolMeta), else the panel currency.
+    QString px_text(const QString& symbol, double v) const;
+    // Factor price currency -> account currency: 1 without an entry, NaN when the
+    // entry has no rate yet.
+    double meta_fx(const QString& symbol) const;
+    // Tooltip of a money cell left blank for want of a rate.
+    QString fx_missing_tip(const QString& symbol) const;
+    // Settings > Currency & Number Format changed: repaint every tab from the
+    // cached payloads below (no fetch, no reset).
+    void rerender_from_cache();
+    // The holdings table's money headers carry the account currency ("Invested (₹)").
+    void apply_money_headers();
+    // The quantity / price edit dialog shared by broker and paper orders.
+    void open_modify_dialog(const QString& order_id, double qty, double price, const QString& price_caption);
+    QHash<QString, SymbolMeta> meta_;
+    QTableWidget* fills_table_ = nullptr;
+    int fills_tab_idx_ = -1;
 
     // Live-quote patch for the Holdings table (CNC delivery): updates LTP / current
     // value / P&L for the symbol's row and the summary strip, in place — same per
@@ -130,8 +214,15 @@ class EquityBottomPanel : public QWidget {
     // Build the Positions "Action" cell: a SELL button (opens an order ticket
     // pre-filled with the held qty) plus, for paper intraday rows, a "→ CNC"
     // convert button. `paper_pid` is empty for live rows (no convert).
-    QWidget* make_positions_action_cell(const QString& symbol, const QString& product, double qty, const QString& side,
-                                        bool show_convert, const QString& paper_pid);
+    QWidget* make_positions_action_cell(const QString& symbol, const QString& exchange, const QString& product,
+                                        double qty, const QString& side, bool show_convert, const QString& paper_pid);
+
+    // Open positions currently in profit (sign > 0) or loss (sign < 0), from the
+    // tick-updated rows the header chips are computed from. Flat (qty 0) rows and
+    // paper delivery rows are excluded. Paper rows carry no exchange.
+    QVector<trading::BrokerPosition> square_off_group_targets(int sign) const;
+    // Confirm + emit square_off_group_requested for the winners / losers group.
+    void request_square_off_group(int sign);
 
     QTabWidget* tabs_ = nullptr;
 
@@ -164,8 +255,22 @@ class EquityBottomPanel : public QWidget {
     QLabel* positions_loss_label_ = nullptr;
     class QPushButton* win_squareoff_btn_ = nullptr;
     class QPushButton* loss_squareoff_btn_ = nullptr;
-    QString currency_sym_ = QStringLiteral("₹"); // for action-bar P&L formatting
-    QTableWidget* holdings_table_ = nullptr;
+    QString currency_; // account ISO code (set_currency); empty = unknown, amounts without a unit
+
+    // Last payloads, kept to re-render on a format change (rerender_from_cache).
+    QVector<trading::BrokerOrderInfo> last_orders_;
+    QVector<trading::PtOrder> last_paper_orders_;
+    bool orders_are_paper_ = false;
+    QVector<trading::PtTrade> last_paper_trades_;
+    QString last_trades_note_;
+    bool have_paper_trades_ = false;
+    EquityFundsView last_funds_view_;
+    bool have_funds_view_ = false;
+    EquityStatsView last_stats_view_;
+    bool have_stats_view_ = false;
+
+    QWidget* holdings_page_ = nullptr;          // tab page; contents built lazily
+    QTableWidget* holdings_table_ = nullptr;    // null until build_holdings_tab()
     QLabel* holdings_invested_label_ = nullptr;
     QLabel* holdings_current_label_ = nullptr;
     QLabel* holdings_pnl_label_ = nullptr;

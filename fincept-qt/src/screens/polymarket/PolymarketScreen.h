@@ -1,5 +1,6 @@
 #pragma once
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/polymarket/ExchangePresentation.h"
 #include "services/polymarket/PolymarketTypes.h"
@@ -41,7 +42,7 @@ namespace fincept::screens {
 /// related markets, open interest) are fetched directly from the
 /// PolymarketService singleton when the active exchange is Polymarket.
 /// On Kalshi, those detail-panel tabs are hidden.
-class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScreen {
+class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit PolymarketScreen(QWidget* parent = nullptr);
@@ -51,6 +52,13 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     QVariantMap save_state() const override;
     QString state_key() const override { return "polymarket"; }
     int state_version() const override { return 1; }
+
+    /// ISectionLinked — a view of the active exchange: trending | markets | events | sports | resolved
+    /// (Polymarket), markets | events | settled | history (Kalshi); "resolved" and "settled" stand in
+    /// for each other; also "view:<id>". A view the active exchange lacks returns false. The view
+    /// pill's click path (it loads that public list, as a click does); the view on screen is left
+    /// alone. focus is unused (a search would query the exchange).
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* e) override;
@@ -112,6 +120,8 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_order_cancel_requested(const QString& order_id);
     void on_orders_cancel_all_requested(const QStringList& order_ids);
     void on_kalshi_single_order(const QJsonObject& order);
+    /// Blotter ACCOUNT HISTORY tab asks for a page (Kalshi settlements / fills / orders).
+    void on_account_history_requested(const QString& kind, const QString& cursor);
 
   private:
     void build_ui();
@@ -119,16 +129,39 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void disconnect_active_adapter();
     void connect_polymarket_extras();
     void install_presentation(const screens::polymarket::ExchangePresentation& p);
+    /// After a theme change: hand every sub-panel a freshly built profile of the
+    /// wired exchange, whose accent / badge colours come from the new theme.
+    void refresh_presentation_colors();
     /// Enable/disable the trade ticket and open-orders blotter to match the active
     /// adapter's credential state, and pull balance / positions / orders if connected.
     void refresh_trading_state();
     void load_current_view();
+    /// Common start of every list load (view / category / sort / search / refresh):
+    /// the list's loading state, the detail panel's placeholder when nothing is
+    /// selected, the "no results" wording and the no-answer watchdog.
+    void begin_list_load(const QString& filter_context);
+    /// Nothing is selected and a list is on screen: select the restored market (or
+    /// the first card) — every detail tab then loads. Deferred while hidden.
+    void auto_select_default();
+    /// The list failed / came back empty and nothing is selected: the detail panel
+    /// says so instead of waiting for a selection.
+    void settle_detail_without_list(const QString& reason);
+    /// Re-read both exchanges' stored credentials (with read errors) and update the
+    /// account chip and the TRADE tab. A read error is shown as "unreadable — RETRY",
+    /// never as "no account".
+    void refresh_account_state();
+    /// RETRY after an unreadable credential: read again, install what is readable
+    /// on the adapters (an unreadable one keeps what its adapter holds).
+    void retry_stored_credentials();
     void select_market(const fincept::services::prediction::PredictionMarket& market);
     void subscribe_to_market(const fincept::services::prediction::PredictionMarket& market);
     void unsubscribe_current();
     /// Fetch the chart's price history for the outcome + interval the chart toolbar is
-    /// currently showing (chart_outcome_idx_ / chart_interval_).
-    void fetch_chart_history();
+    /// currently showing (chart_outcome_idx_ / chart_interval_). `show_loading`: the
+    /// chart shows its skeleton until the reply (off for the quiet periodic re-poll).
+    void fetch_chart_history(bool show_loading = true);
+    /// The account dialog (CONNECT on the chip, CONNECT ACCOUNT on the TRADE tab).
+    void open_account_dialog();
     /// True when `asset_id` is the selected market's primary outcome (the one the
     /// order book panel displays). See on_order_book_ready().
     bool is_primary_asset(const QString& asset_id) const;
@@ -150,6 +183,17 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     QString active_sort_ = "volume";
     fincept::services::prediction::PredictionMarket selected_market_;
     bool has_selection_ = false;
+    // Market selected in the previous session (save_state): preferred by the
+    // automatic selection once, on the exchange it belonged to.
+    QString restored_market_id_;
+    QString restored_market_exchange_;
+    // A list arrived while the screen was hidden: select on the next show.
+    bool auto_select_pending_ = false;
+    // Stored credentials that exist but could not be read ("" = readable / none).
+    QString pm_read_error_;
+    QString ks_read_error_;
+    // A list load that never answers (no reply, no error) ends in the failure page.
+    QTimer* list_watchdog_ = nullptr;
     // What the chart toolbar is showing, so an interval change keeps the chosen outcome
     // and an outcome / market change keeps the chosen interval.
     QString chart_interval_ = QStringLiteral("1d");
@@ -157,6 +201,10 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     int orders_refresh_seq_ = 0; // coalesces the open-orders refresh after a burst of cancels
     bool first_show_ = true;
     std::atomic<int> request_generation_{0};
+    // True while the list reload issued by on_refresh() (60 s timer / ↻) is in
+    // flight: its reply keeps the browse list's page, scroll and highlight.
+    // Cleared by every user-driven load (view / category / sort / search).
+    bool refresh_reload_pending_ = false;
 
     // Timer
     QTimer* refresh_timer_ = nullptr;

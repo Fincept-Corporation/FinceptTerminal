@@ -1,9 +1,11 @@
 #pragma once
 
 #include "screens/polymarket/ExchangePresentation.h"
+#include "screens/polymarket/PolymarketViewState.h"
 #include "services/prediction/PredictionTypes.h"
 
 #include <QEvent>
+#include <QStackedWidget>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -23,9 +25,16 @@ class PolymarketActivityFeed : public QWidget {
     /// briefly in the exchange accent to draw the eye.
     void append_trade(const fincept::services::prediction::PredictionTrade& trade);
     void clear();
+    /// Trades were requested for a newly selected market: a table skeleton until they land.
+    void set_loading();
+    /// The request failed: the reason with RETRY (retry_requested).
+    void set_error(const QString& message);
 
     /// Per-exchange number formatting (decimals on the price column).
     void set_presentation(const ExchangePresentation& p);
+
+  signals:
+    void retry_requested();
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -40,8 +49,12 @@ class PolymarketActivityFeed : public QWidget {
     /// True when a stable sort by the current header indicator would leave the
     /// rows where they are.
     bool rows_sorted_by_indicator() const;
+    /// Remove the "no recent trades" placeholder row, if shown.
+    void drop_empty_state();
 
+    QStackedWidget* stack_ = nullptr;
     QTableWidget* table_ = nullptr;
+    PmViewState state_;
     ExchangePresentation presentation_ = ExchangePresentation::for_polymarket();
 
     // Cached last trades so set_presentation() can re-render with the new

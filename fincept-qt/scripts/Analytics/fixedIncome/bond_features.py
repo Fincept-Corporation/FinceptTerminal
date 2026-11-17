@@ -23,11 +23,17 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 from enum import Enum
 from datetime import date
-import numpy as np
 import logging
+import os
+import sys
 
-logging.basicConfig(level=logging.INFO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fi_common as fc  # noqa: E402
+from fi_common import FIError, num  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
+STRUCTURE_TYPES = ('bullet', 'amortizing', 'sinking_fund', 'step_up', 'deferred')
 
 
 class BondType(Enum):
@@ -585,9 +591,21 @@ class BondFeaturesAnalyzer:
         Returns:
             Dictionary with cash flow schedule
         """
-        periods = maturity_years * frequency
+        if structure_type not in STRUCTURE_TYPES:
+            raise FIError(f'structure_type must be one of: {", ".join(STRUCTURE_TYPES)} (got {structure_type!r})')
+        fc.check_frequency(frequency, allow_zero=False)
+        if face_value <= 0 or coupon_rate < 0 or maturity_years <= 0:
+            raise FIError('face_value and maturity_years must be > 0 and coupon_rate >= 0')
+        periods_f = maturity_years * frequency
+        if abs(periods_f - round(periods_f)) > 1e-9:
+            raise FIError('maturity_years x frequency must be a whole number of periods')
+        periods = int(round(periods_f))
+        if structure_type in ('sinking_fund', 'step_up', 'deferred') and abs(maturity_years - round(maturity_years)) > 1e-9:
+            raise FIError(f'{structure_type} schedules are annual: maturity_years must be a whole number')
+        maturity_years = int(round(maturity_years)) if abs(maturity_years - round(maturity_years)) < 1e-9 else maturity_years
         periodic_rate = coupon_rate / frequency
         periodic_coupon = face_value * periodic_rate
+        max_rows = kwargs.pop('max_rows', 24)
 
         cash_flows = []
 
@@ -628,8 +646,9 @@ class BondFeaturesAnalyzer:
 
         elif structure_type == 'sinking_fund':
             # Sinking fund - retire portion each year
-            sinking_start = kwargs.get('sinking_start', maturity_years // 2)
-            sinking_amount = kwargs.get('sinking_amount', face_value / (maturity_years - sinking_start + 1))
+            sinking_start = num(kwargs, 'sinking_start', maturity_years // 2, integer=True, lo=0)
+            sinking_amount = num(kwargs, 'sinking_amount', face_value / (maturity_years - sinking_start + 1)
+                                 if maturity_years - sinking_start + 1 > 0 else face_value, lo=0)
 
             balance = face_value
             for t in range(1, periods + 1):
@@ -637,8 +656,8 @@ class BondFeaturesAnalyzer:
                 year = (t - 1) // frequency + 1
 
                 # Sinking fund payment at year end
-                if t % frequency == 0 and year >= sinking_start and year < maturity_years:
-                    principal = sinking_amount
+                if t % frequency == 0 and year >= sinking_start and year < maturity_years and t != periods:
+                    principal = min(sinking_amount, balance)
                 elif t == periods:
                     principal = balance
                 else:
@@ -657,7 +676,19 @@ class BondFeaturesAnalyzer:
 
         elif structure_type == 'step_up':
             # Step-up coupon - increases over time
-            step_schedule = kwargs.get('step_schedule', [(5, coupon_rate * 1.2), (8, coupon_rate * 1.4)])
+            raw = kwargs.get('step_schedule')
+            if raw is None:
+                step_schedule = [(5, coupon_rate * 1.2), (8, coupon_rate * 1.4)]
+            else:
+                if not isinstance(raw, list):
+                    raise FIError('step_schedule must be a list of [from_year, coupon_rate]')
+                step_schedule = []
+                for i, item in enumerate(raw):
+                    if not isinstance(item, (list, tuple)) or len(item) != 2:
+                        raise FIError(f'step_schedule[{i}] must be [from_year, coupon_rate]')
+                    step_schedule.append((fc.as_num(item[0], f'step_schedule[{i}] year', lo=0),
+                                          fc.as_num(item[1], f'step_schedule[{i}] rate', lo=0)))
+                step_schedule.sort()
 
             for t in range(1, periods + 1):
                 year = (t - 1) // frequency + 1
@@ -680,7 +711,7 @@ class BondFeaturesAnalyzer:
 
         elif structure_type == 'deferred':
             # Deferred coupon - no interest initially
-            defer_years = kwargs.get('defer_years', 3)
+            defer_years = num(kwargs, 'defer_years', 3, lo=0)
 
             for t in range(1, periods + 1):
                 year = (t - 1) // frequency + 1
@@ -706,13 +737,16 @@ class BondFeaturesAnalyzer:
         total_interest = sum(cf['interest'] for cf in cash_flows)
         total_principal = sum(cf['principal'] for cf in cash_flows)
 
+        shown = cash_flows if not max_rows else cash_flows[:max_rows]
         return {
             'structure_type': structure_type,
             'face_value': face_value,
             'coupon_rate': coupon_rate,
             'maturity_years': maturity_years,
             'frequency': frequency,
-            'cash_flows': cash_flows[:24],  # First 24 periods
+            'cash_flows': shown,
+            'rows_shown': len(shown),
+            'truncated': len(shown) < len(cash_flows),
             'total_periods': len(cash_flows),
             'total_interest': round(total_interest, 2),
             'total_principal': round(total_principal, 2),
@@ -735,64 +769,55 @@ def run_bond_features_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         if analysis_type == 'describe_bond':
-            return analyzer.describe_bond_type(
-                bond_type=params.get('bond_type', 'corporate')
-            )
+            return analyzer.describe_bond_type(bond_type=fc.text(params, 'bond_type', 'corporate'))
 
         elif analysis_type == 'covenants':
-            return analyzer.analyze_covenants(
-                covenant_type=params.get('covenant_type')
-            )
+            ct = fc.text(params, 'covenant_type', None, choices=('affirmative', 'negative', 'all'))
+            return analyzer.analyze_covenants(covenant_type=None if ct in (None, 'all') else ct)
 
         elif analysis_type == 'contingencies':
-            return analyzer.analyze_contingency_provisions(
-                contingency_type=params.get('contingency_type')
-            )
+            ct = fc.text(params, 'contingency_type', None)
+            ct = _CONTINGENCY_ALIASES.get(ct, ct) if ct is not None else None
+            return analyzer.analyze_contingency_provisions(contingency_type=None if ct == 'all' else ct)
 
         elif analysis_type == 'legal_tax':
             return analyzer.analyze_legal_tax_considerations(
-                jurisdiction=params.get('jurisdiction', 'US')
-            )
+                jurisdiction=fc.text(params, 'jurisdiction', 'US', lower=False))
 
         elif analysis_type == 'cash_flow_structure':
+            extras = {k: params[k] for k in ('sinking_start', 'sinking_amount', 'step_schedule', 'defer_years',
+                                             'max_rows') if params.get(k) is not None}
+            if 'max_rows' in extras:
+                extras['max_rows'] = num(params, 'max_rows', integer=True, lo=0)
             return analyzer.calculate_cash_flow_structure(
-                structure_type=params.get('structure_type', 'bullet'),
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                maturity_years=params.get('maturity_years', 10),
-                frequency=params.get('frequency', 2),
-                **{k: v for k, v in params.items() if k not in ['analysis_type', 'structure_type', 'face_value', 'coupon_rate', 'maturity_years', 'frequency']}
-            )
+                structure_type=fc.text(params, 'structure_type', 'bullet', choices=STRUCTURE_TYPES),
+                face_value=num(params, 'face_value', 1000),
+                coupon_rate=num(params, 'coupon_rate', 0.05),
+                maturity_years=num(params, 'maturity_years', 10),
+                frequency=num(params, 'frequency', 2, integer=True),
+                **extras)
 
         else:
-            return {'error': f'Unknown analysis type: {analysis_type}'}
+            return {'error': f'Unknown analysis type: {analysis_type}', 'analysis_types': list(ANALYSIS_TYPES)}
 
-    except Exception as e:
-        logger.error(f"Bond features analysis error: {str(e)}")
+    except FIError as e:
         return {'error': str(e)}
+    except Exception as e:
+        logger.error(f"Bond features analysis error: {e}")
+        return {'error': str(e) or type(e).__name__}
+
+
+ANALYSIS_TYPES = ('describe_bond', 'covenants', 'contingencies', 'legal_tax', 'cash_flow_structure')
+
+_CONTINGENCY_ALIASES = {
+    'callable': 'call', 'call_provision': 'call', 'make_whole_call': 'call', 'make_whole': 'call',
+    'putable': 'put', 'puttable': 'put', 'put_provision': 'put',
+    'convertible': 'conversion', 'convert': 'conversion', 'exchange': 'conversion', 'exchangeable': 'conversion',
+    'sinking': 'sinking_fund', 'sinking fund': 'sinking_fund',
+    'cap': 'cap_floor', 'floor': 'cap_floor', 'collar': 'cap_floor', 'cap/floor': 'cap_floor',
+}
 
 
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) > 1:
-        try:
-            params = json.loads(sys.argv[1])
-            result = run_bond_features_analysis(params)
-            print(json.dumps(result, indent=2))
-        except json.JSONDecodeError as e:
-            print(json.dumps({'error': f'Invalid JSON: {str(e)}'}))
-    else:
-        # Demo
-        print("Bond Features Demo:")
-
-        analyzer = BondFeaturesAnalyzer()
-
-        # Describe callable bond
-        result = analyzer.describe_bond_type('callable')
-        print(f"\nCallable Bond: {result['description']['description']}")
-
-        # Covenant analysis
-        result = analyzer.analyze_covenants('negative')
-        print(f"\nNegative Covenants: {result['negative_covenants']['description']}")
+    fc.import_fincept_json()
+    fc.emit_usage_or_run(sys.argv, run_bond_features_analysis, ANALYSIS_TYPES, 'bond_features')

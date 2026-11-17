@@ -1,14 +1,3 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
-#
-# Strategy ID: FCT-87512128
-# Category: Regression Test
-# Description: This regression algorithm is expected to stop executing after Initialization. Related to GH 6168 issue
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
 # QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
 # Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
@@ -21,6 +10,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
 
 from AlgorithmImports import *
 

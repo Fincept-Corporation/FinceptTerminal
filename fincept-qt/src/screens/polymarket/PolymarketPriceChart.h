@@ -1,12 +1,14 @@
 #pragma once
 
 #include "screens/polymarket/ExchangePresentation.h"
+#include "screens/polymarket/PolymarketViewState.h"
 #include "services/prediction/PredictionTypes.h"
 
 #include <QComboBox>
 #include <QEvent>
 #include <QLabel>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QWidget>
 
 namespace fincept::screens::polymarket {
@@ -19,6 +21,12 @@ class PolymarketPriceChart : public QWidget {
     explicit PolymarketPriceChart(QWidget* parent = nullptr);
 
     void set_price_history(const fincept::services::prediction::PriceHistory& history);
+    /// History was requested (new market, outcome or interval): a chart skeleton until it lands.
+    void set_loading();
+    /// The request failed: the reason with RETRY (re-emits interval_changed for the current interval).
+    void set_error(const QString& message);
+    /// This exchange has no price history for its markets (e.g. a preview): say so plainly.
+    void set_unavailable(const QString& message);
     void set_current_price(double price);
     void set_outcome_labels(const QStringList& labels);
 
@@ -37,7 +45,9 @@ class PolymarketPriceChart : public QWidget {
   private:
     void retranslateUi();
 
+    QStackedWidget* chart_stack_ = nullptr;
     QWidget* chart_container_ = nullptr;
+    PmViewState chart_state_;
     QComboBox* interval_combo_ = nullptr;
     QComboBox* outcome_combo_ = nullptr;
     QLabel* price_label_ = nullptr;

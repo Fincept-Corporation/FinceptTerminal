@@ -25,14 +25,18 @@ from .advanced_objectives import (
     add_sector_constraints,
     add_tracking_error_constraint,
     add_turnover_constraint,
-    optimize_with_custom_constraints
+    optimize_with_custom_constraints,
+    optimize_with_views
 )
 
 from .additional_optimizers import (
+    equal_risk_contribution_weights,
     optimize_minimum_tracking_error,
     optimize_risk_parity,
     optimize_equal_weighting,
-    optimize_market_neutral
+    optimize_inverse_volatility,
+    optimize_market_neutral,
+    optimize_maximum_diversification
 )
 
 __version__ = "1.0.0"
@@ -46,8 +50,12 @@ __all__ = [
     "add_tracking_error_constraint",
     "add_turnover_constraint",
     "optimize_with_custom_constraints",
+    "optimize_with_views",
+    "equal_risk_contribution_weights",
     "optimize_minimum_tracking_error",
     "optimize_risk_parity",
     "optimize_equal_weighting",
-    "optimize_market_neutral"
+    "optimize_inverse_volatility",
+    "optimize_market_neutral",
+    "optimize_maximum_diversification"
 ]

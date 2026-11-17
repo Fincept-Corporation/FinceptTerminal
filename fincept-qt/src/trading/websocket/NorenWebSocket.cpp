@@ -55,6 +55,22 @@ QString field_str(const QJsonObject& o, const char* key) {
     return v.isString() ? v.toString() : QString();
 }
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected"). The host names the
+// broker (Shoonya, AliceBlue, … share this class).
+void log_noren_stream_state(const void* stream, bool up, const QString& ws_url) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition("NorenWS", key, 0);
+    } else if (Logger::instance().transition("NorenWS", key, 1)) {
+        LOG_WARN("NorenWS", logf("Noren WS disconnected", {{"url", log_url(ws_url)}}));
+    } else {
+        LOG_DEBUG("NorenWS", "Noren WS still disconnected");
+    }
+}
+
 } // namespace
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -83,7 +99,7 @@ NorenWebSocket::NorenWebSocket(const QString& ws_url, const QString& user_id, co
 // ────────────────────────────────────────────────────────────────────────────
 
 void NorenWebSocket::open() {
-    LOG_INFO("NorenWS", QString("Connecting to %1").arg(ws_url_));
+    LOG_DEBUG("NorenWS", QString("Connecting to %1").arg(log_url(ws_url_)));
     auth_ok_ = false;
     ws_->connect_to(ws_url_);
 }
@@ -131,7 +147,7 @@ void NorenWebSocket::subscribe(const QStringList& scrips) {
             depth["k"] = key;
             ws_->send(QString::fromUtf8(QJsonDocument(depth).toJson(QJsonDocument::Compact)));
         }
-        LOG_INFO("NorenWS", QString("Subscribed %1 scrips").arg(added.size()));
+        LOG_DEBUG("NorenWS", QString("Subscribed %1 scrips").arg(added.size()));
     }
 }
 
@@ -175,7 +191,7 @@ void NorenWebSocket::unsubscribe(const QStringList& scrips) {
             depth["k"] = key;
             ws_->send(QString::fromUtf8(QJsonDocument(depth).toJson(QJsonDocument::Compact)));
         }
-        LOG_INFO("NorenWS", QString("Unsubscribed %1 scrips").arg(removed.size()));
+        LOG_DEBUG("NorenWS", QString("Unsubscribed %1 scrips").arg(removed.size()));
     }
 }
 
@@ -188,7 +204,7 @@ void NorenWebSocket::set_exchange_for_token(qint64 token, const QString& exchang
 // ────────────────────────────────────────────────────────────────────────────
 
 void NorenWebSocket::on_ws_connected() {
-    LOG_INFO("NorenWS", "Socket open — sending connect frame");
+    LOG_DEBUG("NorenWS", "Socket open — sending connect frame");
     auth_ok_ = false;
     send_connect_frame();
     // Heartbeat + health check are armed on auth ack so we don't ping a socket
@@ -196,7 +212,7 @@ void NorenWebSocket::on_ws_connected() {
 }
 
 void NorenWebSocket::on_ws_disconnected() {
-    LOG_WARN("NorenWS", "Disconnected");
+    log_noren_stream_state(this, false, ws_url_);
     auth_ok_ = false;
     heartbeat_timer_.stop();
     stop_health_check();
@@ -218,16 +234,17 @@ void NorenWebSocket::on_ws_message(const QString& message) {
         // "k" (some Noren docs). Treat "OK" (any case) as success.
         const QString status = obj.contains("s") ? field_str(obj, "s") : field_str(obj, "k");
         if (status.compare("OK", Qt::CaseInsensitive) == 0) {
-            LOG_INFO("NorenWS", "Authenticated");
+            LOG_DEBUG("NorenWS", "Authenticated");
             auth_ok_ = true;
             heartbeat_timer_.start();
             start_health_check(kHeartbeatMs, /*timeout_ms=*/90000);
             resubscribe_all();
+            log_noren_stream_state(this, true, ws_url_);
             emit connected();
         } else {
-            LOG_ERROR(
-                "NorenWS",
-                QString("Auth failed: %1").arg(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))));
+            // Status and server message only — the ack frame echoes the user / account id.
+            LOG_ERROR("NorenWS", logf("Feed authentication failed",
+                                      {{"url", log_url(ws_url_)}, {"status", status}, {"error", field_str(obj, "emsg")}}));
             emit error_occurred(QStringLiteral("Authentication failed"));
         }
         return;
@@ -275,7 +292,7 @@ void NorenWebSocket::resubscribe_all() {
     if (subscribed_scrips_.isEmpty())
         return;
     const QStringList all(subscribed_scrips_.begin(), subscribed_scrips_.end());
-    LOG_INFO("NorenWS", QString("Resubscribing %1 scrips after auth").arg(all.size()));
+    LOG_DEBUG("NorenWS", QString("Resubscribing %1 scrips after auth").arg(all.size()));
     const int count = static_cast<int>(all.size());
     for (int start = 0; start < count; start += kSubscribeBatch) {
         const int end = std::min(start + kSubscribeBatch, count);

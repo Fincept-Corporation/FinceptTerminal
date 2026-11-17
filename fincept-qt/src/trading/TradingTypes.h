@@ -351,7 +351,30 @@ struct UnifiedOrder {
     /// field clamp it with .left(n), which is deterministic and so preserves the
     /// dedup property. See trading/brokers/BrokerClientOrderId.h.
     QString client_order_id;
+
+    /// Who created this order: provenance for the audit trail (field "source",
+    /// omitted when empty) and the approval rule (trading/OrderApprovalRule.h).
+    /// Format: lower-case `<kind>` or `<kind>:<id>` —
+    ///   ticket | basket | split | smart | replication | kill_switch |
+    ///   auto_square_off | session_close |
+    ///   algo:<deployment id> | workflow:<workflow id> |
+    ///   algo_exit:<deployment id> | workflow_exit:<workflow id> |
+    ///   agent:<client id> (core/agent/AgentActionScope.h) | script:<origin>.
+    /// The *_exit kinds mark an automated order that only closes / reduces a position
+    /// (an algo exit, stop-loss or rollback; a workflow close position, trailing stop or
+    /// flatten): placed without approval only when UnifiedTrading verifies it reduce-only
+    /// at submission, otherwise treated like algo / workflow (OrderApprovalRule.h).
+    /// Empty = not stated (today's behaviour). Ids only — never credentials.
+    QString source;
 };
+
+/// The kind of an order source: the part before ':' ("agent:claude_code" -> "agent"),
+/// trimmed and lower-cased; empty for an empty source.
+inline QString order_source_kind(const QString& source) {
+    const QString s = source.trimmed();
+    const auto colon = s.indexOf(QLatin1Char(':'));
+    return (colon < 0 ? s : s.left(colon)).trimmed().toLower();
+}
 
 struct BrokerPosition {
     QString symbol;
@@ -856,6 +879,7 @@ struct SmartOrder {
     double price = 0;
     double trigger_price = 0;
     ProductType product_type = ProductType::Intraday;
+    QString source; ///< as UnifiedOrder::source; carried onto the order it produces
 };
 
 struct SmartOrderResult {

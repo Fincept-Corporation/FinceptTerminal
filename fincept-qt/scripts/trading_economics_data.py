@@ -11,9 +11,18 @@ import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
+try:
+    import fincept_connector as fc
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_connector as fc
+    import fincept_json
+
 # 1. CONFIGURATION
 API_KEY = os.environ.get('TRADING_ECONOMICS_API_KEY')
 BASE_URL = "https://api.tradingeconomics.com"
+SIGNUP_URL = "https://tradingeconomics.com/api/"
 
 def _make_request(endpoint: str, params: Dict[str, Any] = None) -> Any:
     """A private helper function to handle all API requests and errors."""
@@ -22,11 +31,11 @@ def _make_request(endpoint: str, params: Dict[str, Any] = None) -> Any:
     if params is None:
         params = {}
 
-    # Add API key to parameters
+    # Add API key to parameters; without one, say so before any request (code "missing_key").
     if API_KEY:
         params['c'] = API_KEY
     else:
-        return {"error": "Trading Economics API key is required. Set TRADING_ECONOMICS_API_KEY environment variable."}
+        return fc.missing_key("Trading Economics", SIGNUP_URL, "TRADING_ECONOMICS_API_KEY")
 
     try:
         response = requests.get(full_url, params=params, timeout=30)
@@ -423,7 +432,8 @@ def main():
     except Exception as e:
         result = {"error": f"An unexpected error occurred: {str(e)}"}
 
-    print(json.dumps(result, indent=2))
+    # One line: the host reads the last stdout line as the payload (indent=2 split it).
+    print(fincept_json.dumps(result, ensure_ascii=True))
 
 if __name__ == "__main__":
     main()

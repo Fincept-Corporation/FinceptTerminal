@@ -919,7 +919,7 @@ def get_tile(layer_id: str, date: str, zoom: int, lat: float, lon: float,
         # URL encode layer name
         encoded_layer = quote(layer_id)
 
-        tile_url = f"{proj_config['base_url']}/{encoded_layer}/default/{date}/{tile_matrix_set}/{zoom}/{tile_y}/{tile_x}.{format}"
+        tile_url = f"{GIBS_ENDPOINTS['wmts'][projection]}/{encoded_layer}/default/{date}/{tile_matrix_set}/{zoom}/{tile_y}/{tile_x}.{format}"
 
         # Request the tile
         result = _make_request(tile_url, return_bytes=True)
@@ -1062,7 +1062,7 @@ def get_supported_projections() -> Dict[str, Any]:
             projections.append({
                 "code": code,
                 "name": config["name"],
-                "base_url": config["base_url"],
+                "base_url": GIBS_ENDPOINTS["wmts"].get(code),
                 "tile_matrix_sets": config["tile_matrix_sets"]
             })
 

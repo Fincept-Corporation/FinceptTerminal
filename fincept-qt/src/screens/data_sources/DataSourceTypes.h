@@ -104,7 +104,7 @@ struct ConnectorConfig {
     QString type;
     Category category;
     QString icon;  // emoji
-    QString color; // hex
+    QString color; // vendor brand colour (hex, as it reads on the dark theme) — always drawn through ui::colors::legible()
     QString description;
     bool testable = true;
     bool requires_auth = false;

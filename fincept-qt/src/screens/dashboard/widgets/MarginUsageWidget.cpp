@@ -6,6 +6,8 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -23,21 +25,24 @@
 namespace fincept::screens::widgets {
 
 namespace {
-// Lakh / crore only reads right for rupee accounts. Applying it to a USD/EUR/GBP
-// broker (Alpaca, IBKR, Tradier, Saxo) printed 150,000 as "1.50L".
-QString fmt_money(double v, bool inr) {
-    QString s;
-    if (inr && std::abs(v) >= 1.0e7)
-        s = QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    else if (inr && std::abs(v) >= 1.0e5)
-        s = QString::number(v / 1.0e5, 'f', 2) + "L";
-    else if (!inr && std::abs(v) >= 1.0e9)
-        s = QString::number(v / 1.0e9, 'f', 2) + "B";
-    else if (!inr && std::abs(v) >= 1.0e6)
-        s = QString::number(v / 1.0e6, 'f', 2) + "M";
-    else
-        s = QString::number(v, 'f', 2);
-    return s;
+// An amount in the broker account's own currency (empty when the broker is not
+// known: no unit). Full below 1 lakh / 1 million, abbreviated above in the user's
+// scheme (Settings > Currency & Number Format; on Automatic lakh / crore only
+// for rupee-family accounts — a USD broker once printed 150,000 as "1.50L").
+QString mu_money(double v, const QString& ccy) {
+    namespace mu_fmt = fincept::ui::formatting;
+    const bool south_asian = mu_fmt::resolve_compact(mu_fmt::Compact::FromSettings, ccy) == mu_fmt::Compact::LakhCrore;
+    const bool big = std::abs(v) >= (south_asian ? 1.0e5 : 1.0e6);
+    return mu_fmt::money(v, ccy, big ? mu_fmt::Compact::FromSettings : mu_fmt::Compact::None);
+}
+
+// Margin usage is a risk state, not a price direction: the status colours.
+QString margin_usage_color(int pct) {
+    if (pct >= 80)
+        return ui::colors::DANGER();
+    if (pct >= 50)
+        return ui::colors::WARNING();
+    return ui::colors::SUCCESS();
 }
 } // namespace
 
@@ -96,8 +101,26 @@ MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent) : 
         ensure_stream_running();
         if (last_usage_pct_ < 0)
             set_loading(true);
-        datahub::DataHub::instance().request(
-            trading::broker_topic(broker_id_, account_id_, QStringLiteral("balance")), /*force=*/true);
+        datahub::DataHub::instance().request(balance_topic(), /*force=*/true);
+        refresh_header_hint(); // a still-dead session says so again instead of spinning
+    });
+
+    // A dead broker session (expired token, connection error) used to end in the
+    // generic "No data yet": the poll fails silently. Name it in the header and,
+    // with nothing on screen, on the overlay.
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::connection_state_changed, this,
+            [this](const QString& account_id, trading::ConnectionState) {
+                if (account_id == account_id_)
+                    refresh_header_hint();
+            });
+
+    // Settings > Currency & Number Format: re-format the hub's last funds, no fetch.
+    ui::formatting::on_format_changed(this, [this]() {
+        if (!hub_active_ || last_usage_pct_ < 0)
+            return;
+        const QVariant v = datahub::DataHub::instance().peek_raw(balance_topic());
+        if (v.canConvert<trading::BrokerFunds>())
+            populate(v.value<trading::BrokerFunds>());
     });
 
     set_configurable(true);
@@ -119,8 +142,15 @@ void MarginUsageWidget::refresh_header_hint() {
         header_hint_->setText(tr("No active account — click gear to configure"));
         return;
     }
-    const auto acct = trading::AccountManager::instance().get_account(account_id_);
-    header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
+    // Account name, or name + why its broker session is unusable (recorded as
+    // the balance topic's error so an empty tile says so on its overlay).
+    header_hint_->setText(broker_account_hint(account_id_, balance_topic()));
+}
+
+QString MarginUsageWidget::balance_topic() const {
+    if (broker_id_.isEmpty() || account_id_.isEmpty())
+        return {};
+    return trading::broker_topic(broker_id_, account_id_, QStringLiteral("balance"));
 }
 
 void MarginUsageWidget::apply_config(const QJsonObject& cfg) {
@@ -132,11 +162,23 @@ void MarginUsageWidget::apply_config(const QJsonObject& cfg) {
     if (!account_id_.isEmpty())
         broker_id_ = trading::AccountManager::instance().get_account(account_id_).broker_id;
     refresh_header_hint();
+    if (account_id_.isEmpty())
+        show_no_account_state();
+    else
+        hide_empty_state();
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
         ensure_stream_running();
         hub_resubscribe();
     }
+}
+
+void MarginUsageWidget::show_no_account_state() {
+    // Class C (needs a broker login): explain and point to Equity Trading, never
+    // connect anything here. An account that becomes active fills the tile.
+    show_no_broker_account(tr("This tile shows a broker account's funds — available, used margin, total, "
+                              "collateral and how much of it is in use."),
+                           [this]() { apply_config({}); });
 }
 
 QString MarginUsageWidget::resolve_account_id() const {
@@ -155,15 +197,19 @@ void MarginUsageWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
-    const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("balance"));
+    const QString topic = balance_topic();
     if (last_usage_pct_ < 0)
         set_loading(true); // nothing shown yet — see OpenPositionsWidget::hub_resubscribe
-    hub.subscribe(this, topic, [this](const QVariant& v) {
+    // Producer errors on the balance topic replace the spinner / mark the tile STALE.
+    track_topics({topic});
+    hub.subscribe(this, topic, [this, topic](const QVariant& v) {
         if (!v.canConvert<trading::BrokerFunds>())
             return;
+        note_topic_value(topic);
         populate(v.value<trading::BrokerFunds>());
     });
     hub_active_ = true;
+    refresh_header_hint();
 }
 
 void MarginUsageWidget::hub_unsubscribe_all() {
@@ -187,13 +233,13 @@ void MarginUsageWidget::hideEvent(QHideEvent* e) {
 }
 
 void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
-    // Unknown broker -> keep the historical (rupee) notation.
+    // The account's own currency; unknown broker -> no unit (never a guessed one).
     const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
-    const bool inr = !broker || broker->profile().currency == QLatin1String("INR");
-    available_val_->setText(fmt_money(funds.available_balance, inr));
-    used_val_->setText(fmt_money(funds.used_margin, inr));
-    total_val_->setText(fmt_money(funds.total_balance, inr));
-    collateral_val_->setText(fmt_money(funds.collateral, inr));
+    const QString ccy = broker ? broker->profile().currency : QString();
+    available_val_->setText(mu_money(funds.available_balance, ccy));
+    used_val_->setText(mu_money(funds.used_margin, ccy));
+    total_val_->setText(mu_money(funds.total_balance, ccy));
+    collateral_val_->setText(mu_money(funds.collateral, ccy));
 
     const double denom = funds.total_balance > 0 ? funds.total_balance : (funds.available_balance + funds.used_margin);
     // The label shows the real ratio — an account past 100% (margin shortfall)
@@ -206,14 +252,9 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
     usage_pct_label_->setText(tr("Usage: %1%").arg(pct));
     usage_pct_label_->setToolTip(pct > 100 ? tr("Used margin exceeds the account balance") : QString());
 
-    QColor bar_color = ui::colors::POSITIVE();
-    if (pct >= 80)
-        bar_color = ui::colors::NEGATIVE();
-    else if (pct >= 50)
-        bar_color = ui::colors::WARNING();
     set_css_cached(usage_bar_, QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
                                        "QProgressBar::chunk{background:%2;border-radius:2px;}")
-                                   .arg(ui::colors::BG_RAISED(), bar_color.name()));
+                                   .arg(ui::colors::BG_RAISED(), margin_usage_color(pct)));
 
     set_loading(false);
 }
@@ -255,31 +296,31 @@ void MarginUsageWidget::on_theme_changed() {
 }
 
 void MarginUsageWidget::apply_styles() {
-    header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    set_css_cached(header_hint_, 
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
 
     const QString row_label_css =
-        QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
     const QString row_value_css =
-        QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
     for (QLabel* l : {available_val_, used_val_, total_val_, collateral_val_}) {
         if (l)
-            l->setStyleSheet(row_value_css);
+            set_css_cached(l, row_value_css);
     }
     if (auto* parent = available_val_ ? available_val_->parentWidget() : nullptr) {
-        parent->setStyleSheet(
+        set_css_cached(parent, 
             QString("QLabel#marginUsageRowLabel{%1} QLabel#marginUsageRowValue{%2}").arg(row_label_css, row_value_css));
     }
 
     if (usage_pct_label_)
-        usage_pct_label_->setStyleSheet(
-            QString("color:%1;font-size:10px;font-weight:600;background:transparent;padding-top:4px;")
+        set_css_cached(usage_pct_label_, 
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;background:transparent;padding-top:4px;")
                 .arg(ui::colors::TEXT_SECONDARY()));
 
     if (usage_bar_)
         set_css_cached(usage_bar_, QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
                                            "QProgressBar::chunk{background:%2;border-radius:2px;}")
-                                       .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
+                                       .arg(ui::colors::BG_RAISED(), margin_usage_color(std::max(last_usage_pct_, 0))));
 }
 
 void MarginUsageWidget::retranslateUi() {
@@ -295,6 +336,8 @@ void MarginUsageWidget::retranslateUi() {
         usage_pct_label_->setText(last_usage_pct_ >= 0 ? tr("Usage: %1%").arg(last_usage_pct_)
                                                        : tr("Usage: —"));
     refresh_header_hint();
+    if (account_id_.isEmpty())
+        show_no_account_state();
 }
 
 } // namespace fincept::screens::widgets

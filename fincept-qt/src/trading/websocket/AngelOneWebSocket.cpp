@@ -29,6 +29,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_AO_WS = "AngelOneWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_ao_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_AO_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_AO_WS, key, 1)) {
+        LOG_WARN(TAG_AO_WS, "AngelOne WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_AO_WS, "AngelOne WS still disconnected");
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Little-Endian read helpers
 // (Angel One uses LE — opposite of Zerodha which is BE)
@@ -90,7 +105,7 @@ AngelOneWebSocket::AngelOneWebSocket(const QString& api_key, const QString& clie
 // ─────────────────────────────────────────────────────────────────────────────
 
 void AngelOneWebSocket::open() {
-    LOG_INFO(TAG_AO_WS, "Connecting to SmartStream");
+    LOG_DEBUG(TAG_AO_WS, "Connecting to SmartStream");
     ws_->connect_to(QString(kWsUrl));
 }
 
@@ -156,13 +171,13 @@ void AngelOneWebSocket::clear_subscriptions() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void AngelOneWebSocket::on_connected() {
-    LOG_INFO(TAG_AO_WS, "Connected — sending auth");
+    LOG_DEBUG(TAG_AO_WS, "Connected — sending auth");
     send_auth();
     // Subscriptions are sent after auth ACK arrives in on_text_message
 }
 
 void AngelOneWebSocket::on_disconnected() {
-    LOG_WARN(TAG_AO_WS, "Disconnected");
+    log_ao_stream_state(this, false);
     emit disconnected();
 }
 
@@ -170,7 +185,7 @@ void AngelOneWebSocket::on_text_message(const QString& msg) {
     // Angel One sends a JSON text message to acknowledge the auth/connect.
     // We resubscribe when we see any non-error response after connect.
     // Format: { "type": "connected" } or error variants.
-    LOG_DEBUG(TAG_AO_WS, QString("Text msg: %1").arg(msg));
+    LOG_DEBUG(TAG_AO_WS, QString("Text msg: %1").arg(msg.left(200)));
 
     auto doc = QJsonDocument::fromJson(msg.toUtf8());
     if (doc.isObject()) {
@@ -185,9 +200,10 @@ void AngelOneWebSocket::on_text_message(const QString& msg) {
 
     // Auth acknowledged — (re)subscribe all tokens
     if (!subscriptions_.isEmpty()) {
-        LOG_INFO(TAG_AO_WS, "Auth OK — resubscribing all tokens");
+        LOG_DEBUG(TAG_AO_WS, "Auth OK — resubscribing all tokens");
         resubscribe_all();
     }
+    log_ao_stream_state(this, true);
     emit connected();
 }
 
@@ -262,7 +278,7 @@ void AngelOneWebSocket::send_subscribe(const QVector<Subscription>& subs, AoSubM
     msg["params"] = params;
 
     ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
-    LOG_INFO(TAG_AO_WS, QString("Subscribed %1 tokens (mode %2)").arg(subs.size()).arg(static_cast<int>(mode)));
+    LOG_DEBUG(TAG_AO_WS, QString("Subscribed %1 tokens (mode %2)").arg(subs.size()).arg(static_cast<int>(mode)));
 }
 
 void AngelOneWebSocket::send_unsubscribe(const QVector<Subscription>& subs, AoSubMode mode) {

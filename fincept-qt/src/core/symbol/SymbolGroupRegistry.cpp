@@ -62,7 +62,10 @@ QString SymbolGroupRegistry::default_name(SymbolGroup g) {
 
 QColor SymbolGroupRegistry::default_color(SymbolGroup g) {
     // Keep the original A..F palette for backwards compatibility, then add
-    // four new defaults. All chosen for readability against dark backgrounds.
+    // four new defaults. These are identity colours the user can change and
+    // that are saved in QSettings, so they are fixed values written for the
+    // dark theme, not theme colours: draw them through
+    // ui::colors::legible_color() (text, outlines) or tint_color() (fills).
     switch (g) {
         case SymbolGroup::A:
             return QColor("#d97706"); // amber

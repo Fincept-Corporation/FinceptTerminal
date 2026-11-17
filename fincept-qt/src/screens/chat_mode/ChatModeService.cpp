@@ -3,12 +3,18 @@
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "core/privacy/LogRedact.h"
+#include "core/telemetry/ClientInfo.h"
+#include "network/http/HttpClient.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMetaEnum>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -16,6 +22,171 @@
 #include <cmath>
 
 namespace fincept::chat_mode {
+
+namespace {
+
+/// 401 from the backend's require_auth because the X-Session-Token we sent is no
+/// longer the account's (signed in elsewhere, password reset): the response has
+/// `X-Session-Expired: true` and message.error == "session_invalidated"
+/// (apiback auth.py require_auth). Either marker is enough.
+/// One WARN per `key` (path + status) per minute: a server that keeps failing the
+/// same request (every visit, every retry) is reported once, the repeats at Debug.
+/// GUI thread only (handle_reply runs there).
+bool chat_svc_warn_due(const QString& key) {
+    static QHash<QString, qint64> last_warned;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const auto it = last_warned.constFind(key);
+    if (it != last_warned.constEnd() && now - it.value() < 60 * 1000)
+        return false;
+    if (last_warned.size() > 256)
+        last_warned.clear();
+    last_warned.insert(key, now);
+    return true;
+}
+
+bool chat_svc_is_session_expired(const QNetworkReply* reply, const QJsonObject& body) {
+    if (reply->rawHeader("X-Session-Expired").trimmed().toLower() == "true")
+        return true;
+    const QJsonValue m = body.value(QLatin1String("message"));
+    return m.isObject() &&
+           m.toObject().value(QLatin1String("error")).toString() == QLatin1String("session_invalidated");
+}
+
+QString chat_svc_network_error_name(QNetworkReply::NetworkError err) {
+    const QMetaObject& mo = QNetworkReply::staticMetaObject;
+    const char* key = mo.enumerator(mo.indexOfEnumerator("NetworkError")).valueToKey(err);
+    return key ? QString::fromLatin1(key) : QString::number(static_cast<int>(err));
+}
+
+/// Seconds from a Retry-After header (delta-seconds form; an HTTP date is ignored),
+/// 0 when there is none. Capped so a bad value cannot park a caller for hours.
+int chat_svc_retry_after(const QNetworkReply* reply) {
+    bool ok = false;
+    const int s = reply->rawHeader("Retry-After").trimmed().toInt(&ok);
+    return ok && s > 0 ? std::min(s, 3600) : 0;
+}
+
+/// The machine-readable reason of a refusal: the X-Error-Code response header
+/// (apiback finagent_client.coded_http_error; the body's error_code stays
+/// "HTTP_ERROR"). Empty from servers that do not send it.
+QString chat_svc_error_code(const QNetworkReply* reply) {
+    return QString::fromLatin1(reply->rawHeader("X-Error-Code").trimmed()).toLower();
+}
+
+/// The server has no route for this request — an older deployment. Every refusal
+/// of the newer routes carries X-Error-Code, so a coded reply never counts. Without
+/// a code: FastAPI's own answer for an unknown path is 404 {"detail": "Not Found"}
+/// (405 for a known path with another method), while a 404 the API raises itself
+/// goes through main.py's handler and carries the {"success": false, …} envelope.
+/// (Checked against fastapi 0.123 / starlette 0.50, the versions apiback runs.)
+bool chat_svc_route_missing(int status, const QJsonObject& body, const QString& code) {
+    if (!code.isEmpty())
+        return false;
+    return status == 405 || (status == 404 && !body.contains(QLatin1String("success")));
+}
+
+QString chat_svc_sentence(QString text) {
+    text = text.trimmed();
+    if (!text.isEmpty() && !text.endsWith(QLatin1Char('.')) && !text.endsWith(QLatin1Char('!')) &&
+        !text.endsWith(QLatin1Char('?')))
+        text += QLatin1Char('.');
+    return text;
+}
+
+/// What the user is shown for a failed Fincept API reply: the server's own
+/// explanation (same extraction rules as HttpClient), plus what to do about it
+/// where the user can act — instead of "HTTP 402 /chat/…: UnknownContentError".
+/// 429 and 502/503/504 are temporary conditions (busy AI slots — 429
+/// llm_concurrency_limit / concurrent_limit_exceeded —, the agent service down or
+/// slow): they say so and when to try again (`retry_after_s`, 0 = not given).
+/// Nothing here retries on its own.
+QString chat_svc_reply_error_text(int status, const QJsonObject& body, QNetworkReply::NetworkError net_err,
+                                  bool ip_blocked, int retry_after_s = 0) {
+    const QString server = HttpClient::error_text_from_body(body);
+    const auto when = [retry_after_s, &server]() {
+        if (retry_after_s > 0)
+            return ChatModeService::tr("This is temporary: try again in %1 s.").arg(retry_after_s);
+        // "…temporarily unavailable. Please try again shortly." needs no second advice.
+        if (server.contains(QLatin1String("try again"), Qt::CaseInsensitive))
+            return QString();
+        return ChatModeService::tr("This is temporary: try again in a moment.");
+    };
+    switch (status) {
+        case 0:
+            return ChatModeService::tr("Cannot reach the Fincept server (%1).").arg(chat_svc_network_error_name(net_err));
+        case 401:
+            return server.isEmpty() ? ChatModeService::tr("Not signed in to Fincept (HTTP 401). Sign in, then retry.")
+                                    : server;
+        case 402: {
+            // {"message": {"error": "insufficient_credits" | "plan_expired", "message": "…",
+            //              "recharge": {"docs": "Visit https://fincept.in/pricing …"}}}
+            const QString what =
+                server.isEmpty() ? ChatModeService::tr("You do not have enough Fincept credits for this request.") : server;
+            if (what.contains(QLatin1String("http")))
+                return what; // the server already says where to go
+            const QString docs = body.value(QLatin1String("message"))
+                                     .toObject()
+                                     .value(QLatin1String("recharge"))
+                                     .toObject()
+                                     .value(QLatin1String("docs"))
+                                     .toString()
+                                     .trimmed();
+            return what + QLatin1Char(' ') +
+                   (docs.isEmpty() ? ChatModeService::tr("Top up your credits or upgrade your plan, then retry.") : docs);
+        }
+        case 403:
+            if (ip_blocked)
+                return (server.isEmpty()
+                            ? ChatModeService::tr("The Fincept server has temporarily blocked your network address.")
+                            : server) +
+                       QLatin1Char(' ') +
+                       ChatModeService::tr("This is a temporary network block, not a problem with your account: it "
+                                           "usually lifts within 30 minutes (up to 24 hours if it repeats).");
+            return server.isEmpty() ? ChatModeService::tr("The Fincept server refused this request (HTTP 403).") : server;
+        case 429:
+            return (chat_svc_sentence(server.isEmpty() ? ChatModeService::tr("Too many requests at once") : server) +
+                    QLatin1Char(' ') + when())
+                .trimmed();
+        case 502:
+        case 503:
+        case 504:
+            return (chat_svc_sentence(server.isEmpty() ? ChatModeService::tr(
+                                                             "The Fincept AI service is temporarily unavailable (HTTP %1)")
+                                                             .arg(status)
+                                                       : server) +
+                    QLatin1Char(' ') + when())
+                .trimmed();
+        default:
+            return server.isEmpty()
+                       ? ChatModeService::tr("The Fincept server could not complete the request (HTTP %1).").arg(status)
+                       : server;
+    }
+}
+
+} // namespace
+
+// ── Shared reply helpers (also used by agent_tasks::CloudAgentClient) ────────
+
+QString ChatModeService::reply_error_text(int status, const QJsonObject& body, QNetworkReply::NetworkError net_err,
+                                          bool ip_blocked, int retry_after_s) {
+    return chat_svc_reply_error_text(status, body, net_err, ip_blocked, retry_after_s);
+}
+
+int ChatModeService::reply_retry_after(const QNetworkReply* reply) {
+    return chat_svc_retry_after(reply);
+}
+
+QString ChatModeService::reply_error_code(const QNetworkReply* reply) {
+    return chat_svc_error_code(reply);
+}
+
+bool ChatModeService::reply_route_missing(int status, const QJsonObject& body, const QString& code) {
+    return chat_svc_route_missing(status, body, code);
+}
+
+QString ChatModeService::network_error_name(QNetworkReply::NetworkError err) {
+    return chat_svc_network_error_name(err);
+}
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
@@ -46,7 +217,7 @@ QString ChatModeService::session_token() const {
 QNetworkRequest ChatModeService::build_request(const QString& path) const {
     QNetworkRequest req{QUrl(base_url() + path)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+    telemetry::ClientInfo::apply_headers(req);
     const QString key = api_key();
     const QString tok = session_token();
     if (!key.isEmpty())
@@ -56,124 +227,196 @@ QNetworkRequest ChatModeService::build_request(const QString& path) const {
     return req;
 }
 
+// ── Auth failures ─────────────────────────────────────────────────────────────
+
+bool ChatModeService::report_auth_failure(QNetworkReply* reply, int status, const QByteArray& raw_body,
+                                          bool* ip_blocked) {
+    if (ip_blocked)
+        *ip_blocked = false;
+
+    if (status == 403) {
+        // IP_BLOCKED is a network condition (too many failed credentials from this
+        // address), never an account problem: HttpClient keeps that state so pollers
+        // (TerminalToolBridge) pause until it lifts.
+        const bool blocked = HttpClient::instance().report_forbidden_response(raw_body);
+        if (ip_blocked)
+            *ip_blocked = blocked;
+        LOG_WARN("ChatModeService", QString("403 on %1%2").arg(reply->url().path(),
+                                                               blocked ? QStringLiteral(" (IP blocked)") : QString()));
+        return false;
+    }
+    if (status != 401)
+        return false;
+
+    // Every 401 counts toward the server's IP ban, so the first one must stop the
+    // dead session token from being sent again. AuthManager drops it (if it is still
+    // the current one) and re-validates the API key, at most once at a time.
+    const QJsonObject body = QJsonDocument::fromJson(raw_body).object();
+    const QByteArray sent_token = reply->request().rawHeader("X-Session-Token");
+    const QByteArray sent_key = reply->request().rawHeader("X-API-Key");
+    const bool expired = chat_svc_is_session_expired(reply, body);
+    LOG_WARN("ChatModeService", QString("401 on %1%2").arg(reply->url().path(), expired
+                                                                               ? QStringLiteral(" (session token expired)")
+                                                                               : QString()));
+    auth::AuthManager::instance().handle_unauthorized(QString::fromUtf8(sent_token), expired);
+
+    // Re-sending is safe only when the dead token was the sole reason (the server
+    // checks it before the handler runs, so nothing was done or charged), that token
+    // is no longer ours (dropped just now or by an earlier reply) and the key is still
+    // the one this request carried. A replay never replays again, so this cannot loop.
+    const QString key = api_key();
+    return expired && !sent_token.isEmpty() && sent_token != session_token().toUtf8() && !key.isEmpty() &&
+           sent_key == key.toUtf8();
+}
+
 // ── Reply handler ─────────────────────────────────────────────────────────────
 
-void ChatModeService::handle_reply(QNetworkReply* reply,
-                                   std::function<void(bool ok, QJsonDocument doc, QString error)> cb) {
-    // 15-second timeout — abort hanging requests so they don't silently block
+ChatModeService::StatusCallback ChatModeService::adapt(RawCallback cb) {
+    return [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err, ReplyInfo) {
+        cb(ok, std::move(doc), std::move(err));
+    };
+}
+
+void ChatModeService::handle_reply(QNetworkReply* reply, StatusCallback cb, Resend resend, int timeout_ms) {
+    // Watchdog — abort hanging requests so they don't silently block
     auto* timer = new QTimer(reply);
     timer->setSingleShot(true);
-    timer->setInterval(15000);
+    timer->setInterval(timeout_ms);
     connect(timer, &QTimer::timeout, reply, [reply]() {
         LOG_WARN("ChatModeService", QString("Request timed out: %1").arg(reply->url().path()));
         reply->abort();
     });
     timer->start();
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, cb = std::move(cb)]() mutable {
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, cb = std::move(cb), resend = std::move(resend), timeout_ms]() mutable {
         // Read all data BEFORE deleteLater
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QByteArray data = reply->readAll();
         const auto net_err = reply->error();
         const QString url_path = reply->url().path();
+        ReplyInfo info;
+        info.status = status;
+        info.retry_after_s = chat_svc_retry_after(reply);
+        info.code = chat_svc_error_code(reply);
         reply->deleteLater();
 
-        LOG_DEBUG("ChatModeService", QString("%1  HTTP %2  %3 bytes").arg(url_path).arg(status).arg(data.size()));
+        LOG_DEBUG("ChatModeService", QString("%1  HTTP %2  %3 bytes%4")
+                                         .arg(url_path)
+                                         .arg(status)
+                                         .arg(data.size())
+                                         .arg(info.code.isEmpty() ? QString() : QStringLiteral("  ") + info.code));
 
-        if (status == 402) {
-            LOG_WARN("ChatModeService", "Insufficient credits (402)");
-            emit insufficient_credits();
-            cb(false, {}, tr("Insufficient credits"));
-            return;
-        }
-
-        if (status == 401 || status == 403) {
-            LOG_WARN("ChatModeService", QString("Auth error %1 on %2").arg(status).arg(url_path));
-            cb(false, {}, QString("Auth error HTTP_%1").arg(status));
-            return;
-        }
-
-        // The only thing that aborts one of these replies is the 15 s watchdog above.
+        // The only thing that aborts one of these replies is the watchdog above.
         // It used to fall through to the JSON parser and surface as the baffling
         // "JSON parse error on /chat/…: unterminated object" for what is a timeout.
         if (net_err == QNetworkReply::OperationCanceledError) {
             const QString err = tr("Request timed out");
-            LOG_WARN("ChatModeService", QString("%1: %2").arg(url_path, err));
-            cb(false, {}, err);
+            LOG_WARN("ChatModeService",
+                     QString("Chat request timed out path=%1 timeout_ms=%2").arg(url_path).arg(timeout_ms));
+            cb(false, {}, err, ReplyInfo{});
             return;
         }
 
         QJsonParseError pe;
-        QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
+        const QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
 
-        if (net_err != QNetworkReply::NoError) {
-            const QString err =
-                QString("HTTP %1 %2: %3")
-                    .arg(status)
-                    .arg(url_path)
-                    .arg(QNetworkReply::staticMetaObject
-                             .enumerator(QNetworkReply::staticMetaObject.indexOfEnumerator("NetworkError"))
-                             .valueToKey(net_err));
-            LOG_WARN("ChatModeService", err);
-            cb(false, doc, err);
+        if (net_err != QNetworkReply::NoError || status >= 400) {
+            bool ip_blocked = false;
+            if (report_auth_failure(reply, status, data, &ip_blocked) && resend) {
+                if (QNetworkReply* again = resend()) {
+                    LOG_INFO("ChatModeService", "Re-sending " + url_path + " without the expired session token");
+                    handle_reply(again, std::move(cb), {}, timeout_ms);
+                    return;
+                }
+            }
+            const QJsonObject body = doc.isObject() ? doc.object() : QJsonObject{};
+            info.route_missing = chat_svc_route_missing(status, body, info.code);
+            const QString err = chat_svc_reply_error_text(status, body, net_err, ip_blocked, info.retry_after_s);
+            // The one line for a failed chat request (callers log at Debug only).
+            const QString line = QString("Chat request failed path=%1 status=%2 error=\"%3\"")
+                                     .arg(url_path)
+                                     .arg(status)
+                                     .arg(privacy::redact_text(err));
+            if (chat_svc_warn_due(url_path + QLatin1Char('|') + QString::number(status)))
+                LOG_WARN("ChatModeService", line);
+            else
+                LOG_DEBUG("ChatModeService", line);
+            if (status == 402)
+                emit insufficient_credits(err);
+            cb(false, doc, err, info);
             return;
         }
 
         if (pe.error != QJsonParseError::NoError) {
             const QString err = QString("JSON parse error on %1: %2").arg(url_path, pe.errorString());
             LOG_WARN("ChatModeService", err);
-            cb(false, {}, err);
+            cb(false, {}, err, info);
             return;
         }
 
         // Check API-level success flag if present
         const QJsonObject root = doc.object();
         if (root.contains("success") && !root["success"].toBool()) {
-            const QString err = root["message"].toString("API returned success:false");
-            LOG_WARN("ChatModeService", QString("%1: %2").arg(url_path, err));
-            cb(false, doc, err);
+            QString err = HttpClient::error_text_from_body(root);
+            if (err.isEmpty())
+                err = tr("The server reported a failure.");
+            LOG_WARN("ChatModeService", QString("Chat request refused by the server path=%1 error=\"%2\"")
+                                            .arg(url_path, privacy::redact_text(err)));
+            cb(false, doc, err, info);
             return;
         }
 
-        cb(true, doc, {});
+        cb(true, doc, {}, info);
     });
 }
 
 // ── HTTP verbs ────────────────────────────────────────────────────────────────
+// Each verb hands handle_reply() a Resend that rebuilds the request from scratch,
+// so the one permitted replay goes out with the credentials current at that time.
 
-void ChatModeService::get(const QString& path, std::function<void(bool, QJsonDocument, QString)> cb) {
-    auto* reply = nam_->get(build_request(path));
-    handle_reply(reply, std::move(cb));
+void ChatModeService::get(const QString& path, RawCallback cb) {
+    get_status(path, adapt(std::move(cb)));
 }
 
-void ChatModeService::post(const QString& path, const QJsonObject& body,
-                           std::function<void(bool, QJsonDocument, QString)> cb) {
-    auto* reply = nam_->post(build_request(path), QJsonDocument(body).toJson(QJsonDocument::Compact));
-    handle_reply(reply, std::move(cb));
+void ChatModeService::get_status(const QString& path, StatusCallback cb) {
+    Resend send = [this, path]() { return nam_->get(build_request(path)); };
+    QNetworkReply* reply = send();
+    handle_reply(reply, std::move(cb), std::move(send));
 }
 
-void ChatModeService::put(const QString& path, const QJsonObject& body,
-                          std::function<void(bool, QJsonDocument, QString)> cb) {
-    auto* reply = nam_->put(build_request(path), QJsonDocument(body).toJson(QJsonDocument::Compact));
-    handle_reply(reply, std::move(cb));
+void ChatModeService::post(const QString& path, const QJsonObject& body, RawCallback cb) {
+    post_slow(path, body, kDefaultTimeoutMs, std::move(cb));
 }
 
-void ChatModeService::del(const QString& path, std::function<void(bool, QJsonDocument, QString)> cb) {
-    auto* reply = nam_->deleteResource(build_request(path));
-    handle_reply(reply, std::move(cb));
+void ChatModeService::post_slow(const QString& path, const QJsonObject& body, int timeout_ms, RawCallback cb) {
+    post_status(path, body, timeout_ms, adapt(std::move(cb)));
 }
 
-void ChatModeService::del_with_body(const QString& path, const QJsonObject& body,
-                                    std::function<void(bool, QJsonDocument, QString)> cb) {
-    QNetworkRequest req = build_request(path);
-    auto* reply = nam_->sendCustomRequest(req, "DELETE", QJsonDocument(body).toJson(QJsonDocument::Compact));
-    handle_reply(reply, std::move(cb));
+void ChatModeService::post_status(const QString& path, const QJsonObject& body, int timeout_ms, StatusCallback cb) {
+    const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    Resend send = [this, path, payload]() { return nam_->post(build_request(path), payload); };
+    QNetworkReply* reply = send();
+    handle_reply(reply, std::move(cb), std::move(send), timeout_ms);
+}
+
+void ChatModeService::put(const QString& path, const QJsonObject& body, RawCallback cb) {
+    const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    Resend send = [this, path, payload]() { return nam_->put(build_request(path), payload); };
+    QNetworkReply* reply = send();
+    handle_reply(reply, adapt(std::move(cb)), std::move(send));
+}
+
+void ChatModeService::del(const QString& path, RawCallback cb) {
+    Resend send = [this, path]() { return nam_->deleteResource(build_request(path)); };
+    QNetworkReply* reply = send();
+    handle_reply(reply, adapt(std::move(cb)), std::move(send));
 }
 
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
 void ChatModeService::create_session(const QString& title, SessionCallback cb) {
-    LOG_INFO("ChatModeService", QString("Creating session: \"%1\"").arg(title));
+    LOG_DEBUG("ChatModeService", QString("Creating chat session title_chars=%1").arg(title.size()));
     QJsonObject body;
     body["title"] = title;
     post("/chat/sessions", body, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
@@ -190,11 +433,12 @@ void ChatModeService::create_session(const QString& title, SessionCallback cb) {
     });
 }
 
-void ChatModeService::list_sessions(SessionsCallback cb) {
-    LOG_DEBUG("ChatModeService", "Listing sessions");
-    get("/chat/sessions", [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
+void ChatModeService::list_sessions(int limit, SessionsCallback cb) {
+    LOG_DEBUG("ChatModeService", QString("Listing sessions (limit %1)").arg(limit));
+    get(QString("/chat/sessions?limit=%1").arg(std::max(1, limit)),
+        [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
         if (!ok) {
-            LOG_WARN("ChatModeService", "list_sessions failed: " + err);
+            LOG_DEBUG("ChatModeService", "list_sessions failed: " + err);
             cb(false, {}, err);
             return;
         }
@@ -203,24 +447,52 @@ void ChatModeService::list_sessions(SessionsCallback cb) {
         sessions.reserve(arr.size());
         for (const auto& v : arr)
             sessions.append(ChatSession::from_json(v.toObject()));
-        LOG_INFO("ChatModeService", QString("Listed %1 sessions").arg(sessions.size()));
+        LOG_DEBUG("ChatModeService", QString("Listed %1 sessions").arg(sessions.size()));
         cb(true, sessions, {});
     });
 }
 
-void ChatModeService::get_session(const QString& uuid, SessionCallback cb) {
-    LOG_DEBUG("ChatModeService", QString("Getting session: %1").arg(uuid));
-    get("/chat/sessions/" + uuid, [cb = std::move(cb), uuid](bool ok, QJsonDocument doc, QString err) {
+void ChatModeService::list_sessions_page(int limit, int offset, SessionsPageCallback cb) {
+    QString path = QString("/chat/sessions?limit=%1").arg(std::max(1, limit));
+    if (offset > 0)
+        path += QString("&offset=%1").arg(offset);
+    get(path, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
         if (!ok) {
-            LOG_WARN("ChatModeService", "get_session failed: " + err);
+            LOG_DEBUG("ChatModeService", "list_sessions_page failed: " + err);
             cb(false, {}, err);
             return;
         }
+        // {"data": {"sessions": [...], "total", "limit", "offset", "has_more"}} — the
+        // last two only on servers that page (apiback chat.py get_chat_sessions).
         const QJsonObject data = doc.object().value("data").toObject();
-        const QJsonObject session = data.value("session").toObject();
-        const int msg_count = data.value("messages").toArray().size();
-        LOG_INFO("ChatModeService", QString("Got session %1 with %2 messages").arg(uuid).arg(msg_count));
-        cb(true, ChatSession::from_json(session), {});
+        ChatSessionsPage page;
+        const QJsonArray arr = data.value("sessions").toArray();
+        page.sessions.reserve(arr.size());
+        for (const auto& v : arr)
+            page.sessions.append(ChatSession::from_json(v.toObject()));
+        page.has_more_known = data.value("has_more").isBool();
+        page.has_more = data.value("has_more").toBool();
+        cb(true, page, {});
+    });
+}
+
+void ChatModeService::load_session(const QString& uuid, SessionDetailCallback cb) {
+    LOG_DEBUG("ChatModeService", QString("Loading session: %1").arg(uuid));
+    get_status("/chat/sessions/" + QString::fromUtf8(QUrl::toPercentEncoding(uuid)),
+               [cb = std::move(cb), uuid](bool ok, QJsonDocument doc, QString err, ReplyInfo info) {
+        if (!ok) {
+            LOG_WARN("ChatModeService", QString("load_session %1 failed (HTTP %2): %3").arg(uuid).arg(info.status).arg(err));
+            cb(false, {}, {}, err, info.status);
+            return;
+        }
+        // {"data": {"session": {...}, "messages": [...]}} (apiback chat.py get_chat_session)
+        const QJsonObject data = doc.object().value("data").toObject();
+        const QJsonArray arr = data.value("messages").toArray();
+        QVector<ChatMessage> messages;
+        messages.reserve(arr.size());
+        for (const auto& v : arr)
+            messages.append(ChatMessage::from_json(v.toObject()));
+        cb(true, ChatSession::from_json(data.value("session").toObject()), messages, {}, info.status);
     });
 }
 
@@ -238,42 +510,6 @@ void ChatModeService::rename_session(const QString& uuid, const QString& title, 
 void ChatModeService::activate_session(const QString& uuid, VoidCallback cb) {
     put("/chat/sessions/" + uuid + "/activate", {},
         [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-// ── Save message ──────────────────────────────────────────────────────────────
-
-void ChatModeService::save_message(const QString& session_uuid, const QString& role, const QString& content,
-                                   MessageCallback cb, const QString& provider, const QString& model, int tokens_used,
-                                   int response_time_ms) {
-    LOG_INFO("ChatModeService", QString("Saving %1 message to session %2").arg(role, session_uuid));
-    QJsonObject body;
-    body["role"] = role;
-    body["content"] = content;
-    if (!provider.isEmpty())
-        body["provider"] = provider;
-    if (!model.isEmpty())
-        body["model"] = model;
-    if (tokens_used > 0)
-        body["tokens_used"] = tokens_used;
-    if (response_time_ms > 0)
-        body["response_time_ms"] = response_time_ms;
-
-    post("/chat/sessions/" + session_uuid + "/save-message", body,
-         [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-             if (!ok) {
-                 cb(false, {}, {}, err);
-                 return;
-             }
-             const QJsonObject data = doc.object().value("data").toObject();
-             const QJsonObject msg_obj = data.value("message").toObject();
-             ChatMessage msg;
-             msg.uuid = msg_obj["message_uuid"].toString();
-             msg.role = msg_obj["role"].toString();
-             msg.content = msg_obj["content"].toString();
-             msg.created_at = msg_obj["created_at"].toString();
-             const QString new_title = data["new_title"].toString();
-             cb(true, msg, new_title, {});
-         });
 }
 
 // ── Session utilities ─────────────────────────────────────────────────────────
@@ -319,16 +555,6 @@ void ChatModeService::search_messages(const QString& query, SearchCallback cb) {
     });
 }
 
-void ChatModeService::bulk_delete_sessions(const QStringList& uuids, VoidCallback cb) {
-    QJsonObject body;
-    QJsonArray arr;
-    for (const auto& u : uuids)
-        arr.append(u);
-    body["session_uuids"] = arr;
-    del_with_body("/chat/sessions/bulk-delete", body,
-                  [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
 void ChatModeService::export_sessions(const QStringList& uuids, std::function<void(bool, QJsonArray, QString)> cb) {
     QJsonObject body;
     QJsonArray arr;
@@ -349,49 +575,19 @@ void ChatModeService::export_sessions(const QStringList& uuids, std::function<vo
 // ── Optimize prompt ───────────────────────────────────────────────────────────
 
 void ChatModeService::optimize_prompt(const QString& prompt, const QString& mode, OptimizeCallback cb) {
-    LOG_INFO("ChatModeService", QString("Optimizing prompt (%1): \"%2\"").arg(mode, prompt.left(60)));
+    LOG_DEBUG("ChatModeService", QString("Prompt optimisation started mode=%1 prompt_chars=%2").arg(mode).arg(prompt.size()));
     QJsonObject body;
     body["prompt"] = prompt;
     if (!mode.isEmpty())
         body["mode"] = mode;
 
-    // Longer timeout for LLM calls
-    auto* reply =
-        nam_->post(build_request("/chat/optimize-prompt"), QJsonDocument(body).toJson(QJsonDocument::Compact));
-    // Override default 15s timeout — LLM needs more time
-    auto* timer = new QTimer(reply);
-    timer->setSingleShot(true);
-    timer->setInterval(45000);
-    connect(timer, &QTimer::timeout, reply, [reply]() {
-        LOG_WARN("ChatModeService", "optimize-prompt timed out");
-        reply->abort();
-    });
-    timer->start();
-
-    connect(reply, &QNetworkReply::finished, this, [reply, cb = std::move(cb)]() mutable {
-        const QByteArray data = reply->readAll();
-        const auto net_err = reply->error();
-        reply->deleteLater();
-
-        if (net_err != QNetworkReply::NoError && net_err != QNetworkReply::OperationCanceledError) {
-            cb(false, {}, tr("Optimize prompt request failed"));
+    // 45 s instead of the default 15 s watchdog — one LLM call on the server.
+    post_slow("/chat/optimize-prompt", body, 45000, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
+        if (!ok) {
+            cb(false, {}, err);
             return;
         }
-
-        QJsonParseError pe;
-        QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
-        if (pe.error != QJsonParseError::NoError) {
-            cb(false, {}, tr("JSON parse error"));
-            return;
-        }
-
-        const QJsonObject root = doc.object();
-        if (root.contains("success") && !root["success"].toBool()) {
-            cb(false, {}, root["message"].toString("Optimize failed"));
-            return;
-        }
-
-        const QJsonObject res_data = root.value("data").toObject();
+        const QJsonObject res_data = doc.object().value("data").toObject();
         OptimizedPrompt result;
         result.original = res_data["original"].toString();
 
@@ -414,67 +610,6 @@ void ChatModeService::optimize_prompt(const QString& prompt, const QString& mode
                                         .arg(result.original.length())
                                         .arg(result.optimized.length()));
         cb(true, result, {});
-    });
-}
-
-// ── Agent chat (non-streaming) ────────────────────────────────────────────────
-
-void ChatModeService::agent_chat(const QString& query, const QString& session_id, StreamMode mode, AgentChatCallback cb,
-                                 const QString& source, bool auto_approve) {
-    LOG_INFO("ChatModeService",
-             QString("Agent chat [%1]: \"%2\"").arg(mode == StreamMode::Deep ? "deep" : "lite", query.left(60)));
-
-    QJsonObject body;
-    body["query"] = query;
-    body["mode"] = (mode == StreamMode::Deep) ? "deep" : "lite";
-    body["auto_approve"] = auto_approve;
-    if (!session_id.isEmpty())
-        body["session_id"] = session_id;
-    if (!source.isEmpty())
-        body["source"] = source;
-
-    // Longer timeout for agent calls
-    auto* reply = nam_->post(build_request("/chat/agent/chat"), QJsonDocument(body).toJson(QJsonDocument::Compact));
-    auto* timer = new QTimer(reply);
-    timer->setSingleShot(true);
-    timer->setInterval(120000); // 2 min for deep analysis
-    connect(timer, &QTimer::timeout, reply, [reply]() {
-        LOG_WARN("ChatModeService", "agent/chat timed out");
-        reply->abort();
-    });
-    timer->start();
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, cb = std::move(cb)]() mutable {
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QByteArray data = reply->readAll();
-        const auto net_err = reply->error();
-        reply->deleteLater();
-
-        if (status == 402) {
-            emit insufficient_credits();
-            cb(false, {}, tr("Insufficient credits"));
-            return;
-        }
-
-        if (net_err != QNetworkReply::NoError && net_err != QNetworkReply::OperationCanceledError) {
-            cb(false, {}, tr("Agent chat request failed"));
-            return;
-        }
-
-        QJsonParseError pe;
-        QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
-        if (pe.error != QJsonParseError::NoError) {
-            cb(false, {}, tr("JSON parse error"));
-            return;
-        }
-
-        const QJsonObject root = doc.object();
-        if (root.contains("success") && !root["success"].toBool()) {
-            cb(false, {}, root["message"].toString("Agent chat failed"));
-            return;
-        }
-
-        cb(true, AgentChatResponse::from_json(root), {});
     });
 }
 
@@ -514,206 +649,24 @@ void ChatModeService::clear_all_memory(VoidCallback cb) {
     del("/chat/agent/memory", [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
 }
 
-// ── Agent schedules ───────────────────────────────────────────────────────────
+// ── Agent investment profiles ─────────────────────────────────────────────────
 
-void ChatModeService::list_schedules(SchedulesCallback cb) {
-    get("/chat/agent/schedules", [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
+void ChatModeService::list_profiles(ProfilesCallback cb) {
+    // {"success": true, "message": "ok", "data": [{id, name, is_default, profile_data, …}]}
+    // ordered default first (apiback agent_profile.py list_profiles).
+    get("/profile/profiles", [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
         if (!ok) {
             cb(false, {}, err);
             return;
         }
-        QVector<AgentSchedule> schedules;
-        const QJsonArray arr = doc.object().value("schedules").toArray();
-        for (const auto& v : arr)
-            schedules.append(AgentSchedule::from_json(v.toObject()));
-        cb(true, schedules, {});
-    });
-}
-
-void ChatModeService::create_schedule(const QString& query, const QString& cron_expression, const QString& session_id,
-                                      ScheduleCallback cb) {
-    QJsonObject body;
-    body["query"] = query;
-    body["cron_expression"] = cron_expression;
-    if (!session_id.isEmpty())
-        body["session_id"] = session_id;
-    post("/chat/agent/schedules", body, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
+        QVector<AgentProfile> profiles;
+        for (const auto& v : doc.object().value("data").toArray()) {
+            const AgentProfile p = AgentProfile::from_json(v.toObject());
+            if (p.id > 0)
+                profiles.append(p);
         }
-        const QJsonObject data = doc.object().value("data").toObject(doc.object());
-        cb(true, AgentSchedule::from_json(data), {});
+        cb(true, profiles, {});
     });
-}
-
-void ChatModeService::delete_schedule(const QString& schedule_id, VoidCallback cb) {
-    del("/chat/agent/schedules/" + schedule_id,
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::pause_schedule(const QString& schedule_id, VoidCallback cb) {
-    put("/chat/agent/schedules/" + schedule_id + "/pause", {},
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::resume_schedule(const QString& schedule_id, VoidCallback cb) {
-    put("/chat/agent/schedules/" + schedule_id + "/resume", {},
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-// ── Agent tasks ───────────────────────────────────────────────────────────────
-
-void ChatModeService::list_tasks(TasksCallback cb) {
-    get("/chat/agent/tasks?limit=50", [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
-        }
-        QVector<AgentTask> tasks;
-        const QJsonArray arr = doc.object().value("tasks").toArray();
-        for (const auto& v : arr)
-            tasks.append(AgentTask::from_json(v.toObject()));
-        cb(true, tasks, {});
-    });
-}
-
-void ChatModeService::create_task(const QString& query, const QString& session_id, TaskCallback cb) {
-    QJsonObject body;
-    body["query"] = query;
-    if (!session_id.isEmpty())
-        body["session_id"] = session_id;
-    post("/chat/agent/tasks", body, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
-        }
-        const QJsonObject data = doc.object().value("data").toObject(doc.object());
-        cb(true, AgentTask::from_json(data), {});
-    });
-}
-
-void ChatModeService::get_task(const QString& task_id, TaskCallback cb) {
-    get("/chat/agent/tasks/" + task_id, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
-        }
-        const QJsonObject data = doc.object().value("data").toObject(doc.object());
-        cb(true, AgentTask::from_json(data), {});
-    });
-}
-
-void ChatModeService::cancel_task(const QString& task_id, VoidCallback cb) {
-    del("/chat/agent/tasks/" + task_id, [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::send_task_feedback(const QString& task_id, const QString& feedback, VoidCallback cb) {
-    QJsonObject body;
-    body["feedback"] = feedback;
-    post("/chat/agent/tasks/" + task_id + "/feedback", body,
-         [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::get_task_history(const QString& task_id, HistoryCallback cb) {
-    get("/chat/agent/tasks/" + task_id + "/history",
-        [cb = std::move(cb), task_id](bool ok, QJsonDocument doc, QString err) {
-            if (!ok) {
-                cb(false, {}, {}, {}, err);
-                return;
-            }
-            const QJsonObject root = doc.object();
-            const QString tid = root["task_id"].toString();
-            const QString thread = root["thread_id"].toString();
-            QVector<TaskHistoryStep> steps;
-            for (const auto& v : root["history"].toArray())
-                steps.append(TaskHistoryStep::from_json(v.toObject()));
-            cb(true, tid, thread, steps, {});
-        });
-}
-
-void ChatModeService::get_task_activity(const QString& task_id, ActivityCallback cb, int after_id, int limit) {
-    QString path = QString("/chat/agent/tasks/%1/activity?limit=%2").arg(task_id).arg(limit);
-    if (after_id > 0)
-        path += QString("&after_id=%1").arg(after_id);
-
-    get(path, [cb = std::move(cb), task_id](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, {}, 0, err);
-            return;
-        }
-        const QJsonObject root = doc.object();
-        QVector<TaskActivity> events;
-        for (const auto& v : root["events"].toArray())
-            events.append(TaskActivity::from_json(v.toObject()));
-        const int count = root["count"].toInt();
-        cb(true, task_id, events, count, {});
-    });
-}
-
-// ── Task activity SSE stream ──────────────────────────────────────────────────
-
-QNetworkReply* ChatModeService::stream_task_activity(const QString& task_id, int after_id) {
-    abort_task_activity_stream();
-
-    const QString path = QString("/chat/agent/tasks/%1/activity/stream?after_id=%2").arg(task_id).arg(after_id);
-    QNetworkRequest req = build_request(path);
-    req.setRawHeader("Accept", "text/event-stream");
-    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
-
-    task_sse_reply_ = sse_nam_->get(req);
-    task_sse_event_.clear();
-
-    connect(task_sse_reply_, &QNetworkReply::readyRead, this, [this]() {
-        while (task_sse_reply_ && task_sse_reply_->canReadLine()) {
-            const QByteArray line = task_sse_reply_->readLine().trimmed();
-            handle_task_sse_line(line);
-        }
-    });
-
-    connect(task_sse_reply_, &QNetworkReply::finished, this, [this]() {
-        if (!task_sse_reply_)
-            return;
-        task_sse_reply_->deleteLater();
-        task_sse_reply_ = nullptr;
-    });
-
-    return task_sse_reply_;
-}
-
-void ChatModeService::abort_task_activity_stream() {
-    // Same synchronous-finished() hazard as abort_stream() — detach before abort.
-    QNetworkReply* reply = task_sse_reply_;
-    if (!reply)
-        return;
-    task_sse_reply_ = nullptr;
-    disconnect(reply, nullptr, this, nullptr);
-    reply->abort();
-    reply->deleteLater();
-}
-
-void ChatModeService::handle_task_sse_line(const QByteArray& line) {
-    if (line.startsWith("event:")) {
-        task_sse_event_ = QString::fromUtf8(line.mid(6).trimmed());
-        return;
-    }
-
-    if (line.startsWith("data:")) {
-        const QByteArray json_bytes = line.mid(5).trimmed();
-        QJsonParseError pe;
-        const QJsonDocument doc = QJsonDocument::fromJson(json_bytes, &pe);
-        if (pe.error != QJsonParseError::NoError)
-            return;
-
-        const QString& ev = task_sse_event_;
-        if (ev == "activity") {
-            emit task_activity_event(TaskActivity::from_json(doc.object()));
-        } else if (ev == "done") {
-            emit task_activity_done();
-        }
-
-        task_sse_event_.clear();
-    }
 }
 
 // ── Credits ──────────────────────────────────────────────────────────────────
@@ -733,6 +686,24 @@ void ChatModeService::get_credits(CreditsCallback cb) {
     });
 }
 
+void ChatModeService::report_credit_balance(double balance) {
+    const double b = std::max(0.0, balance);
+    auth::AuthManager::instance().report_credit_balance(b); // the header chip
+    emit credit_balance_changed(b);
+}
+
+void ChatModeService::refresh_credit_balance(int delay_ms) {
+    // Chat replies carry no balance header: older servers (and turns whose `finish`
+    // was lost) only reach the header chip through /user/profile, read once the
+    // backend has settled the charge.
+    QTimer::singleShot(std::max(0, delay_ms), this, [this]() {
+        get_credits([this](bool ok, double credits, QString) {
+            if (ok)
+                report_credit_balance(credits);
+        });
+    });
+}
+
 // ── Terminal tool bridge ──────────────────────────────────────────────────────
 
 void ChatModeService::register_terminal_tools(const QJsonArray& tools, const QString& version, int tool_count,
@@ -742,33 +713,92 @@ void ChatModeService::register_terminal_tools(const QJsonArray& tools, const QSt
     body["tools"] = tools;
     body["terminal_version"] = version;
     body["tool_count"] = tool_count;
-    post("/chat/agent/terminal-tools/register", body, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
+    // {"registered": N, "status": "ok"} — newer servers add "agent_visible",
+    // "rejected": [{name, reason}] and "ttl_seconds"; 503 X-Error-Code
+    // terminal_bridge_unavailable (Retry-After 15) = the server's bridge is down.
+    post_status("/chat/agent/terminal-tools/register", body, kDefaultTimeoutMs,
+                [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err, ReplyInfo info) {
         if (!ok) {
-            cb(false, 0, err);
+            cb(false, {}, err, info.code == QLatin1String("terminal_bridge_unavailable"), info.retry_after_s);
             return;
         }
-        const int reg = doc.object()["registered"].toInt();
-        cb(true, reg, {});
+        cb(true, ToolRegistration::from_json(doc.object()), {}, false, 0);
     });
 }
 
 void ChatModeService::poll_pending_calls(PendingCallsCallback cb, int limit) {
     const QString path = QString("/chat/agent/terminal-tools/pending?limit=%1").arg(limit);
-    get(path, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
+    // {"calls": [...]} — newer servers add "registered" (false: register again),
+    // "agent_visible" and "available" (false: the bridge is down, do not register).
+    get_status(path, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err, ReplyInfo info) {
         if (!ok) {
-            cb(false, {}, err);
+            cb(false, {}, err, info.retry_after_s);
             return;
         }
-        cb(true, doc.object()["calls"].toArray(), {});
+        cb(true, PendingToolCalls::from_json(doc.object()), {}, 0);
     });
 }
 
-void ChatModeService::submit_tool_result(const QString& call_id, const QJsonObject& result, VoidCallback cb) {
+void ChatModeService::submit_tool_result(const QString& call_id, const QJsonObject& result, ToolResultCallback cb) {
     QJsonObject body;
     body["call_id"] = call_id;
     body["result"] = result;
-    post("/chat/agent/terminal-tools/result", body,
-         [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
+    // 200 stored; 409 call_already_answered; 404 call_not_found (unknown / expired;
+    // older servers: no code, also "already resolved"); 503 terminal_bridge_unavailable.
+    post_status("/chat/agent/terminal-tools/result", body, kDefaultTimeoutMs,
+                [cb = std::move(cb)](bool ok, QJsonDocument, QString err, ReplyInfo info) {
+        if (ok)
+            cb(ToolResultDelivery::Delivered, {});
+        else if (info.code == QLatin1String("call_already_answered") || (info.code.isEmpty() && info.status == 409))
+            cb(ToolResultDelivery::AlreadyDelivered, err);
+        else if (info.code == QLatin1String("call_not_found") || (info.code.isEmpty() && info.status == 404))
+            cb(ToolResultDelivery::Expired, err);
+        else
+            cb(ToolResultDelivery::Failed, err);
+    });
+}
+
+// ── Trade proposals ───────────────────────────────────────────────────────────
+
+void ChatModeService::decide_proposal(const QString& proposal_id, bool approved, const QString& session_id,
+                                      ProposalCallback cb) {
+    LOG_INFO("ChatModeService", QString("Deciding proposal %1: %2").arg(proposal_id, approved ? "approve" : "reject"));
+    QJsonObject body;
+    body["approved"] = approved;
+    if (!session_id.isEmpty())
+        body["session_id"] = session_id;
+    // The service waits up to 10 s for a concurrent decision before answering 409,
+    // then the trade itself runs: allow well over the default 15 s.
+    post_status("/chat/agent/proposals/" + QString::fromUtf8(QUrl::toPercentEncoding(proposal_id)), body, 45000,
+                [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err, ReplyInfo info) {
+        if (ok) {
+            const ProposalDecision d = ProposalDecision::from_json(doc.object());
+            if (d.status.isEmpty()) {
+                // A 200 without a decision is not this route's answer.
+                cb(ProposalOutcome::Failed, d, tr("The server sent an answer without a decision."), 0);
+                return;
+            }
+            cb(ProposalOutcome::Decided, d, d.message, 0);
+            return;
+        }
+        if (info.route_missing) { // 404/405 without X-Error-Code and without the API envelope
+            LOG_INFO("ChatModeService",
+                     QString("Proposals route not available on this server (HTTP %1)").arg(info.status));
+            cb(ProposalOutcome::RouteMissing, {}, {}, 0);
+            return;
+        }
+        // X-Error-Code first (proposal_not_found / proposal_expired / proposal_in_progress);
+        // the status alone on a server that does not send it.
+        const QString& c = info.code;
+        if (c == QLatin1String("proposal_not_found") || (c.isEmpty() && info.status == 404))
+            cb(ProposalOutcome::Gone, {}, err, 0); // not found, not yours, or no longer pending
+        else if (c == QLatin1String("proposal_expired") || (c.isEmpty() && info.status == 410))
+            cb(ProposalOutcome::Expired, {}, err, 0);
+        else if (c == QLatin1String("proposal_in_progress") || (c.isEmpty() && info.status == 409))
+            cb(ProposalOutcome::InProgress, {}, err, info.retry_after_s); // another decision is running
+        else
+            cb(ProposalOutcome::Failed, {}, err, info.retry_after_s);
+    });
 }
 
 // ── MCP servers ───────────────────────────────────────────────────────────────
@@ -796,19 +826,9 @@ void ChatModeService::add_mcp_server(const QString& name, const QJsonObject& con
     const QString transport = config.value("transport").toString();
     post("/chat/agent/mcp/servers", body, [cb = std::move(cb), name, transport](bool ok, QJsonDocument doc, QString err) {
         if (!ok) {
-            // The backend explains a rejected server (non-https URL, private address,
-            // stdio not allowed, name/limit rules…) in the error body — pass that text
-            // through verbatim instead of the bare "HTTP 400 …" transport error.
-            const QJsonObject eo = doc.object();
-            QString reason;
-            const QJsonValue msg = eo.value("message");
-            if (msg.isString())
-                reason = msg.toString();
-            else if (msg.isObject())
-                reason = msg.toObject().value("message").toString();
-            if (reason.trimmed().isEmpty())
-                reason = eo.value("detail").toString();
-            cb(false, {}, reason.trimmed().isEmpty() ? err : reason.trimmed());
+            // `err` is the backend's own explanation of a rejected server (non-https URL,
+            // private address, stdio not allowed, name/limit rules…) — see handle_reply().
+            cb(false, {}, err);
             return;
         }
         const QJsonObject root = doc.object();
@@ -843,229 +863,6 @@ void ChatModeService::refresh_mcp_servers(McpServersCallback cb) {
         const int total_tools = root["total_tools"].toInt();
         cb(true, servers, total_tools, {});
     });
-}
-
-// ── Agent monitors ────────────────────────────────────────────────────────────
-
-void ChatModeService::list_monitors(MonitorsCallback cb) {
-    get("/chat/agent/monitors", [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
-        }
-        QVector<AgentMonitor> monitors;
-        for (const auto& v : doc.object()["monitors"].toArray())
-            monitors.append(AgentMonitor::from_json(v.toObject()));
-        cb(true, monitors, {});
-    });
-}
-
-void ChatModeService::create_monitor(const QString& name, const QString& source_type, const QJsonObject& source_config,
-                                     const QJsonObject& trigger_config, const QString& analysis_query,
-                                     int check_interval_seconds, const QString& session_id, MonitorCallback cb) {
-    LOG_INFO("ChatModeService", QString("Creating monitor: %1").arg(name));
-    QJsonObject body;
-    body["name"] = name;
-    body["source_type"] = source_type;
-    body["source_config"] = source_config;
-    body["trigger_config"] = trigger_config;
-    body["analysis_query"] = analysis_query;
-    body["check_interval_seconds"] = check_interval_seconds;
-    if (!session_id.isEmpty())
-        body["session_id"] = session_id;
-
-    post("/chat/agent/monitors", body, [cb = std::move(cb)](bool ok, QJsonDocument doc, QString err) {
-        if (!ok) {
-            cb(false, {}, err);
-            return;
-        }
-        const QJsonObject root = doc.object();
-        cb(true, AgentMonitor::from_json(root), {});
-    });
-}
-
-void ChatModeService::delete_monitor(const QString& monitor_id, VoidCallback cb) {
-    del("/chat/agent/monitors/" + monitor_id,
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::pause_monitor(const QString& monitor_id, VoidCallback cb) {
-    put("/chat/agent/monitors/" + monitor_id + "/pause", {},
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-void ChatModeService::resume_monitor(const QString& monitor_id, VoidCallback cb) {
-    put("/chat/agent/monitors/" + monitor_id + "/resume", {},
-        [cb = std::move(cb)](bool ok, QJsonDocument, QString err) { cb(ok, err); });
-}
-
-// ── SSE streaming ─────────────────────────────────────────────────────────────
-
-QNetworkReply* ChatModeService::stream_message(const QString& message, const QString& session_id, StreamMode mode,
-                                               const QString& source, bool auto_approve, int profile_id) {
-    LOG_INFO("ChatModeService", QString("Streaming message to session %1 [%2]: \"%3\"")
-                                    .arg(session_id)
-                                    .arg(mode == StreamMode::Deep ? "deep" : "lite")
-                                    .arg(message.left(60)));
-
-    // Abort any previous stream
-    abort_stream();
-
-    QJsonObject body;
-    body["message"] = message;
-    body["session_id"] = session_id;
-    body["mode"] = (mode == StreamMode::Deep) ? "deep" : "lite";
-    body["auto_approve"] = auto_approve;
-    body["profile_id"] = profile_id;
-    if (!source.isEmpty())
-        body["source"] = source;
-    else
-        body["source"] = QJsonValue::Null;
-
-    QNetworkRequest req = build_request("/chat/agent/stream");
-    // Accept SSE
-    req.setRawHeader("Accept", "text/event-stream");
-    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
-
-    sse_reply_ = sse_nam_->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
-    sse_current_event_.clear();
-    sse_terminal_emitted_ = false; // fresh stream — no terminal signal yet
-
-    connect(sse_reply_, &QNetworkReply::readyRead, this, [this]() {
-        while (sse_reply_ && sse_reply_->canReadLine()) {
-            const QByteArray line = sse_reply_->readLine().trimmed();
-            handle_sse_line(line);
-        }
-    });
-
-    connect(sse_reply_, &QNetworkReply::finished, this, [this]() {
-        if (!sse_reply_)
-            return;
-        const int status = sse_reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const auto net_err = sse_reply_->error();
-        LOG_INFO("ChatModeService", QString("SSE stream finished — HTTP %1, net_err=%2").arg(status).arg(net_err));
-        if (status == 402)
-            emit insufficient_credits();
-        if (net_err != QNetworkReply::NoError && net_err != QNetworkReply::OperationCanceledError) {
-            const QByteArray raw_body = sse_reply_->readAll();
-            LOG_WARN("ChatModeService", QString("SSE error body: %1").arg(QString::fromUtf8(raw_body.left(200))));
-            // The backend explains 4xx/5xx in a JSON body ({"message": …} or FastAPI's
-            // {"detail": …}); show that instead of a bare status code.
-            QString reason;
-            const QJsonDocument err_doc = QJsonDocument::fromJson(raw_body);
-            if (err_doc.isObject()) {
-                const QJsonObject eo = err_doc.object();
-                for (const char* key : {"message", "detail", "error"}) {
-                    if (eo.value(QLatin1String(key)).isString()) {
-                        reason = eo.value(QLatin1String(key)).toString().trimmed();
-                        if (!reason.isEmpty())
-                            break;
-                    }
-                }
-            }
-            sse_terminal_emitted_ = true;
-            // 402 already went out as insufficient_credits() above, and the panel turns that
-            // into the terminal error bubble — a second stream_error would stack another one.
-            if (status != 402)
-                emit stream_error(reason.isEmpty()
-                                      ? QString("Stream failed (HTTP %1)").arg(status)
-                                      : QString("Stream failed (HTTP %1): %2").arg(status).arg(reason.left(300)));
-        }
-        sse_reply_->deleteLater();
-        sse_reply_ = nullptr;
-        // A clean close (or a cancel) that never sent a "finish"/"error" event
-        // still needs a terminal signal, otherwise the chat panel leaves its
-        // input disabled forever.
-        if (!sse_terminal_emitted_) {
-            sse_terminal_emitted_ = true;
-            emit stream_finish(0);
-        }
-    });
-
-    return sse_reply_;
-}
-
-void ChatModeService::abort_stream() {
-    // QNetworkReply::abort() emits finished() SYNCHRONOUSLY, and the finished
-    // handler below nulls sse_reply_ — so the old
-    //     sse_reply_->abort(); sse_reply_->deleteLater();
-    // sequence dereferenced a null member on the second line. Detach the reply
-    // first, drop our connections, then abort + delete it.
-    QNetworkReply* reply = sse_reply_;
-    if (!reply)
-        return; // nothing in flight — do NOT synthesise a terminal signal
-    sse_reply_ = nullptr;
-    disconnect(reply, nullptr, this, nullptr);
-    reply->abort();
-    reply->deleteLater();
-
-    // A user-initiated Stop otherwise emits no terminal signal (the finished
-    // handler skips OperationCanceledError), so the chat panel's input would
-    // stay disabled forever. Emit one if none has gone out for this stream.
-    if (!sse_terminal_emitted_) {
-        sse_terminal_emitted_ = true;
-        emit stream_finish(0);
-    }
-}
-
-void ChatModeService::handle_sse_line(const QByteArray& line) {
-    if (line.startsWith("event:")) {
-        sse_current_event_ = QString::fromUtf8(line.mid(6).trimmed());
-        return;
-    }
-
-    if (line.startsWith("data:")) {
-        const QByteArray json_bytes = line.mid(5).trimmed();
-        QJsonParseError pe;
-        const QJsonDocument doc = QJsonDocument::fromJson(json_bytes, &pe);
-        if (pe.error != QJsonParseError::NoError)
-            return;
-
-        const QJsonObject data = doc.object();
-        const QString& ev = sse_current_event_;
-
-        if (ev == "session-meta") {
-            const QString sid = data["session_id"].toString();
-            const QString title = data["new_title"].toString();
-            LOG_INFO("ChatModeService", QString("SSE session-meta: id=%1 title=%2").arg(sid, title));
-            emit stream_session_meta(sid, title);
-        } else if (ev == "text-delta") {
-            emit stream_text_delta(data["text"].toString());
-        } else if (ev == "tool-end") {
-            const QString tool = data["tool"].toString();
-            const int dur = data["durationMs"].toInt();
-            LOG_DEBUG("ChatModeService", QString("SSE tool-end: %1 (%2ms)").arg(tool).arg(dur));
-            emit stream_tool_end(tool, dur);
-        } else if (ev == "step-start") {
-            const int step = data["stepNumber"].toInt();
-            LOG_DEBUG("ChatModeService", QString("SSE step-start: step %1").arg(step));
-            emit stream_step_start(step);
-        } else if (ev == "step-finish") {
-            LOG_DEBUG("ChatModeService", QString("SSE step-finish: %1 tokens").arg(data["tokensUsed"].toInt()));
-            emit stream_step_finish(data["tokensUsed"].toInt());
-        } else if (ev == "thinking") {
-            const QString content = data["content"].toString();
-            LOG_DEBUG("ChatModeService", QString("SSE thinking: %1 chars").arg(content.length()));
-            emit stream_thinking(content);
-        } else if (ev == "finish") {
-            const int total = data["totalTokens"].toInt();
-            LOG_INFO("ChatModeService", QString("SSE finish: %1 total tokens").arg(total));
-            sse_terminal_emitted_ = true;
-            emit stream_finish(total);
-        } else if (ev == "heartbeat") {
-            LOG_DEBUG("ChatModeService", "SSE heartbeat");
-            emit stream_heartbeat();
-        } else if (ev == "error") {
-            const QString msg = data["message"].toString();
-            LOG_WARN("ChatModeService", "SSE error: " + msg);
-            sse_terminal_emitted_ = true;
-            emit stream_error(msg);
-        } else if (!ev.isEmpty()) {
-            LOG_DEBUG("ChatModeService", "SSE unknown event: " + ev);
-        }
-
-        sse_current_event_.clear();
-    }
 }
 
 } // namespace fincept::chat_mode

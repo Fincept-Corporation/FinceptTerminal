@@ -1,0 +1,51 @@
+#!/bin/sh
+# postinst of the fincept-terminal-community .deb (assembled by
+# .github/workflows/release.yml, job build-linux). POSIX sh.
+set -e
+
+PKG=fincept-terminal-community
+PROFILE_SRC="/opt/$PKG/share/apparmor/$PKG"
+PROFILE="/etc/apparmor.d/$PKG"
+
+in_chroot() {
+    command -v ischroot >/dev/null 2>&1 && ischroot
+}
+
+# Ubuntu 23.10+ restricts unprivileged user namespaces through AppArmor, and
+# QtWebEngine's Chromium sandbox needs one: without a profile that grants
+# "userns" every web view (charts, news, research pages) stays blank on Ubuntu
+# 24.04. The profile is written in AppArmor 4 syntax, so it is installed only
+# where this system's AppArmor compiles it (Ubuntu 24.04+, Debian 13+); older
+# releases do not restrict user namespaces and need nothing. Never fails the
+# installation.
+install_apparmor_profile() {
+    [ -d /etc/apparmor.d ] || return 0
+    command -v apparmor_parser >/dev/null 2>&1 || return 0
+    if ! apparmor_parser --skip-kernel-load --skip-cache --quiet "$PROFILE_SRC" >/dev/null 2>&1; then
+        rm -f "$PROFILE"
+        return 0
+    fi
+    cp -f "$PROFILE_SRC" "$PROFILE"
+    chmod 0644 "$PROFILE"
+    # Load it now; inside a chroot or image build the boot-time AppArmor
+    # service loads it instead.
+    if [ -r /sys/module/apparmor/parameters/enabled ] &&
+        [ "$(cat /sys/module/apparmor/parameters/enabled)" = "Y" ] && ! in_chroot; then
+        apparmor_parser --replace --skip-read-cache "$PROFILE" >/dev/null 2>&1 ||
+            echo "$PKG: the AppArmor profile could not be loaded now; it is loaded at the next boot" >&2
+    fi
+}
+
+case "$1" in
+    configure)
+        install_apparmor_profile
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications || true
+        fi
+        if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -f /usr/share/icons/hicolor/index.theme ]; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+        fi
+        ;;
+esac
+
+exit 0

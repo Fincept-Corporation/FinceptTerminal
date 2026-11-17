@@ -29,8 +29,9 @@ PARAMETERS:
 
 """
 
+import math
 from decimal import Decimal
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 try:
     from .core import EconomicsBase, ValidationError
 except ImportError:
@@ -88,7 +89,14 @@ class TradeAnalyzer(EconomicsBase):
                     'policy_autonomy': 'Constraints on domestic policy flexibility'
                 }
             },
-            'net_welfare_assessment': self._assess_net_welfare_impact(trade_data)
+            'net_welfare_assessment': self._assess_net_welfare_impact(trade_data),
+            # Numbers for the headline view (the sentences above stay for context).
+            'headline': {
+                'efficiency_gain_pct_gdp': self._calculate_trade_gains(trade_data),
+                'consumer_surplus_gain_pct': self._estimate_consumer_surplus_gain(trade_data),
+                'trade_volume_pct_gdp': self._num(trade_data, 'trade_volume_gdp', 0, lo=0, hi=200),
+            },
+            'model': self._benefits_model(trade_data),
         }
 
     def analyze_trade_restrictions(self, restriction_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -96,21 +104,21 @@ class TradeAnalyzer(EconomicsBase):
         return {
             'tariffs': {
                 'mechanism': 'Tax on imports',
-                'economic_effects': self._analyze_tariff_effects(restriction_data.get('tariff_rate', 0)),
+                'economic_effects': self._analyze_tariff_effects(restriction_data),
                 'revenue_generation': 'Provides government revenue',
                 'protection_level': 'Proportional to tariff rate',
                 'welfare_impact': 'Net welfare loss (deadweight loss)'
             },
             'quotas': {
                 'mechanism': 'Quantity limit on imports',
-                'economic_effects': self._analyze_quota_effects(restriction_data.get('quota_volume', 0)),
+                'economic_effects': self._analyze_quota_effects(),
                 'revenue_generation': 'No government revenue (quota rents to importers)',
                 'protection_level': 'Fixed quantity protection',
                 'welfare_impact': 'Similar to tariffs but different rent distribution'
             },
             'export_subsidies': {
                 'mechanism': 'Government payments to exporters',
-                'economic_effects': self._analyze_subsidy_effects(restriction_data.get('subsidy_rate', 0)),
+                'economic_effects': self._analyze_subsidy_effects(restriction_data),
                 'revenue_generation': 'Costs government revenue',
                 'protection_level': 'Supports domestic producers',
                 'welfare_impact': 'Welfare loss in subsidizing country'
@@ -122,7 +130,9 @@ class TradeAnalyzer(EconomicsBase):
                 'welfare_impact': 'Potentially large welfare costs'
             },
             'restriction_comparison': self._compare_trade_restrictions(),
-            'optimal_policy_recommendation': self._recommend_trade_policy(restriction_data)
+            'optimal_policy_recommendation': self._recommend_trade_policy(restriction_data),
+            'headline': self._restriction_headline(restriction_data),
+            'model': self._restriction_model(restriction_data),
         }
 
     def analyze_trading_blocs(self, bloc_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -158,11 +168,28 @@ class TradeAnalyzer(EconomicsBase):
             }
         }
 
+        # The terminal sends its INTEGRATION TYPE choice; answer for that level only.
+        type_keys = {
+            'fta': 'free_trade_area', 'free_trade_area': 'free_trade_area',
+            'customs_union': 'customs_union', 'common_market': 'common_market',
+            'economic_union': 'economic_union',
+        }
+        chosen = type_keys.get(str(bloc_data.get('integration_type', '')).lower())
+        levels = {chosen: integration_types[chosen]} if chosen else integration_types
+
+        creation = self.to_decimal(bloc_data.get('trade_creation', 0))
+        diversion = self.to_decimal(bloc_data.get('trade_diversion', 0))
         return {
-            'integration_levels': integration_types,
+            'integration_type': chosen or 'all',
+            'integration_levels': levels,
             'motivations_for_integration': self._analyze_integration_motivations(),
             'success_factors': self._identify_integration_success_factors(),
-            'trade_creation_vs_diversion': self._analyze_trade_creation_diversion(bloc_data)
+            'trade_creation_vs_diversion': self._analyze_trade_creation_diversion(bloc_data),
+            'headline': {
+                'trade_creation_busd': creation,
+                'trade_diversion_busd': diversion,
+                'net_trade_effect_busd': creation - diversion,
+            }
         }
 
     def assess_trade_barrier_removal(self, liberalization_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -206,33 +233,190 @@ class TradeAnalyzer(EconomicsBase):
                 'sectoral_growth': self._analyze_sectoral_growth_effects(liberalization_data),
                 'regional_effects': self._assess_regional_impact_variation(liberalization_data)
             },
-            'policy_recommendations': self._recommend_liberalization_policies(liberalization_data)
+            'policy_recommendations': self._recommend_liberalization_policies(liberalization_data),
+            'headline': self._barrier_removal_headline(liberalization_data)
         }
 
-    def _calculate_trade_gains(self, data: Dict[str, Any]) -> Decimal:
-        """Calculate quantitative trade gains"""
-        trade_volume = self.to_decimal(data.get('trade_volume_gdp', 0))
-        efficiency_gain = self.to_decimal(0.05)  # Typical 5% efficiency gain
-        return trade_volume * efficiency_gain
+    # ── Input parsing ────────────────────────────────────────────────────────
+    @staticmethod
+    def _num(data: Dict[str, Any], key: str, default: Optional[float],
+             lo: Optional[float] = None, hi: Optional[float] = None,
+             lo_open: bool = False, hi_open: bool = False) -> Optional[float]:
+        """data[key] as a finite float (None/absent -> default), range-checked.
+        Raises ValidationError with a plain message on bad input."""
+        raw = data.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return default
+        if isinstance(raw, bool):
+            raise ValidationError(f"{key} must be a number, got {raw!r}")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            raise ValidationError(f"{key} must be a number, got {raw!r}")
+        if not math.isfinite(value):
+            raise ValidationError(f"{key} must be a finite number")
+        if lo is not None and (value <= lo if lo_open else value < lo):
+            raise ValidationError(f"{key} must be {'>' if lo_open else '>='} {lo:g}, got {value:g}")
+        if hi is not None and (value >= hi if hi_open else value > hi):
+            raise ValidationError(f"{key} must be {'<' if hi_open else '<='} {hi:g}, got {value:g}")
+        return value
 
-    def _estimate_consumer_surplus_gain(self, data: Dict[str, Any]) -> Decimal:
-        """Estimate consumer surplus gains from trade"""
-        price_reduction = self.to_decimal(data.get('price_reduction_percent', 5))
-        consumption_share = self.to_decimal(data.get('traded_goods_consumption', 30))
-        return price_reduction * consumption_share / self.to_decimal(200)  # Simplified calculation
+    # ── benefits_costs model ─────────────────────────────────────────────────
+    # efficiency_gain_pct_gdp = static gains from trade relative to autarky, in % of real
+    #   income (≈ % of GDP), by the Arkolakis-Costinot-Rodriguez-Clare (AER 2012) formula
+    #   1 - lambda^(1/eps): lambda = domestic expenditure share = 1 - imports/GDP, eps = trade
+    #   elasticity (default 5). imports/GDP = 'import_share_gdp' when given, otherwise half of
+    #   'trade_volume_gdp' ((exports + imports)/GDP with balanced trade assumed).
+    # consumer_surplus_gain_pct = first-order consumer gain of a p % price fall on a share s
+    #   of consumption = p*s/100, in % of total consumption. Exact with no demand response,
+    #   a lower bound otherwise (the extra triangle needs a demand elasticity).
+    DEFAULT_TRADE_ELASTICITY = 5.0
 
-    def _analyze_tariff_effects(self, tariff_rate: float) -> Dict[str, Any]:
-        """Analyze economic effects of tariffs"""
-        rate = self.to_decimal(tariff_rate)
+    def _benefits_inputs(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        volume = self._num(data, 'trade_volume_gdp', 0.0, lo=0, hi=200)
+        import_share = self._num(data, 'import_share_gdp', None, lo=0, hi=100, hi_open=True)
+        source = 'input import_share_gdp'
+        if import_share is None:
+            import_share = volume / 2.0
+            source = 'half of trade_volume_gdp (balanced trade assumed)'
+            if import_share >= 100:
+                raise ValidationError("trade_volume_gdp must be below 200 % of GDP")
         return {
-            'price_increase': f"Domestic price rises by approximately {rate}%",
-            'import_reduction': f"Imports fall by {rate * self.to_decimal(1.5)}% (assuming elasticity 1.5)",
-            'domestic_production': f"Domestic production increases by {rate * self.to_decimal(0.8)}%",
-            'welfare_loss': f"Deadweight loss approximately {rate ** 2 / self.to_decimal(200)}% of GDP"
+            'trade_volume_gdp_pct': volume,
+            'import_share_gdp_pct': import_share,
+            'import_share_source': source,
+            'trade_elasticity': self._num(data, 'trade_elasticity', self.DEFAULT_TRADE_ELASTICITY,
+                                          lo=0, lo_open=True),
+            'price_reduction_pct': self._num(data, 'price_reduction_percent', 5.0, lo=0, hi=100),
+            'traded_goods_consumption_pct': self._num(data, 'traded_goods_consumption', 30.0, lo=0, hi=100),
         }
 
-    def _analyze_quota_effects(self, quota_volume: float) -> Dict[str, Any]:
-        """Analyze economic effects of import quotas"""
+    def _calculate_trade_gains(self, data: Dict[str, Any]) -> float:
+        """Gains from trade vs autarky, % of real income (ACR formula, see model note above)."""
+        inp = self._benefits_inputs(data)
+        lam = 1.0 - inp['import_share_gdp_pct'] / 100.0
+        return round((1.0 - lam ** (1.0 / inp['trade_elasticity'])) * 100.0, 4)
+
+    def _estimate_consumer_surplus_gain(self, data: Dict[str, Any]) -> float:
+        """First-order consumer gain, % of total consumption: price fall % x traded share % / 100."""
+        inp = self._benefits_inputs(data)
+        return round(inp['price_reduction_pct'] * inp['traded_goods_consumption_pct'] / 100.0, 4)
+
+    def _benefits_model(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        inp = self._benefits_inputs(data)
+        return {
+            'efficiency_gain': ('Gains from trade vs autarky, % of real income (~% of GDP): '
+                                '1 - (1 - imports/GDP)^(1/trade elasticity) '
+                                '(Arkolakis-Costinot-Rodriguez-Clare 2012)'),
+            'consumer_surplus_gain': ('First-order gain, % of total consumption: '
+                                      'price reduction % x traded-goods share % / 100; a lower bound '
+                                      '(no demand response)'),
+            'imports_pct_gdp_used': round(inp['import_share_gdp_pct'], 4),
+            'imports_pct_gdp_source': inp['import_share_source'],
+            'trade_elasticity': inp['trade_elasticity'],
+        }
+
+    # ── restrictions model ───────────────────────────────────────────────────
+    # Partial equilibrium, small open economy (world price p_w fixed), one tariffed good or
+    # bundle of tariffed imports, constant-elasticity curves:
+    #   import demand    M(p) = M0 (p/p_w)^-em   em = 'import_demand_elasticity'   (default 1.5)
+    #   domestic supply  S(p) = S0 (p/p_w)^es    es = 'domestic_supply_elasticity' (default 0.8)
+    #   export supply    X(p) = X0 (p/p_w)^ex    ex = 'export_supply_elasticity'   (default 1.2)
+    # An ad-valorem tariff t raises the domestic price by the full t; imports change by
+    # (1+t)^-em - 1, domestic output by (1+t)^es - 1. Deadweight loss = the area under M between
+    # p_w and p_w(1+t) minus tariff revenue, as a share of the free-trade import bill:
+    #   [(1+t)^(1-em) - 1]/(1-em) - t(1+t)^-em      (-> em t^2 / 2 for small t: Harberger).
+    # In % of GDP it is that times imports-of-the-tariffed-goods / GDP ('import_share_gdp'), which
+    # the inputs must supply: without it the % of GDP figure is null, not guessed.
+    # An export subsidy s raises the domestic price of the exported good by the full s; exports
+    # change by (1+s)^ex - 1; fiscal cost = s per unit of subsidised export value (world prices);
+    # national deadweight loss, share of pre-subsidy export value:
+    #   s(1+s)^ex - [(1+s)^(1+ex) - 1]/(1+ex)       (-> ex s^2 / 2 for small s).
+    DEFAULT_IMPORT_DEMAND_ELASTICITY = 1.5
+    DEFAULT_DOMESTIC_SUPPLY_ELASTICITY = 0.8
+    DEFAULT_EXPORT_SUPPLY_ELASTICITY = 1.2
+
+    def _restriction_inputs(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            't': self._num(data, 'tariff_rate', 0.0, lo=0, hi=1000) / 100.0,
+            's': self._num(data, 'subsidy_rate', 0.0, lo=0, hi=1000) / 100.0,
+            'em': self._num(data, 'import_demand_elasticity', self.DEFAULT_IMPORT_DEMAND_ELASTICITY,
+                            lo=0, lo_open=True, hi=20),
+            'es': self._num(data, 'domestic_supply_elasticity', self.DEFAULT_DOMESTIC_SUPPLY_ELASTICITY,
+                            lo=0, hi=20),
+            'ex': self._num(data, 'export_supply_elasticity', self.DEFAULT_EXPORT_SUPPLY_ELASTICITY,
+                            lo=0, hi=20),
+            # Imports of the tariffed goods as % of GDP: needed only for DWL in % of GDP.
+            'import_share': self._num(data, 'import_share_gdp', None, lo=0, hi=100),
+        }
+
+    @staticmethod
+    def _tariff_dwl_share(t: float, em: float) -> float:
+        """Exact tariff deadweight loss / free-trade import bill for CE import demand."""
+        if t == 0:
+            return 0.0
+        g = 1.0 + t
+        if abs(em - 1.0) < 1e-12:
+            area = math.log(g)
+        else:
+            area = (g ** (1.0 - em) - 1.0) / (1.0 - em)
+        return area - t * g ** (-em)
+
+    @staticmethod
+    def _subsidy_dwl_share(s: float, ex: float) -> float:
+        """Exact export-subsidy national welfare loss / pre-subsidy export value (CE export supply)."""
+        if s == 0:
+            return 0.0
+        g = 1.0 + s
+        return s * g ** ex - (g ** (1.0 + ex) - 1.0) / (1.0 + ex)
+
+    def _restriction_numbers(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        i = self._restriction_inputs(data)
+        t, s, em, es, ex = i['t'], i['s'], i['em'], i['es'], i['ex']
+        dwl_imports = self._tariff_dwl_share(t, em) * 100.0          # % of free-trade import bill
+        dwl_gdp = (dwl_imports * i['import_share'] / 100.0) if i['import_share'] is not None else None
+        r = lambda v: None if v is None else round(v, 4)
+        return {
+            'tariff_rate_pct': r(t * 100.0),
+            'tariff_price_rise_pct': r(t * 100.0),
+            'tariff_import_fall_pct': r((1.0 - (1.0 + t) ** (-em)) * 100.0),
+            'tariff_domestic_output_pct': r(((1.0 + t) ** es - 1.0) * 100.0),
+            'tariff_revenue_pct_imports': r(t * (1.0 + t) ** (-em) * 100.0),
+            'tariff_deadweight_loss_pct_imports': r(dwl_imports),
+            'tariff_deadweight_loss_pct_gdp': r(dwl_gdp),
+            'import_share_gdp_pct': r(i['import_share']),
+            'subsidy_rate_pct': r(s * 100.0),
+            'subsidy_export_rise_pct': r(((1.0 + s) ** ex - 1.0) * 100.0),
+            'subsidy_domestic_price_rise_pct': r(s * 100.0),
+            'subsidy_fiscal_cost_pct_exports': r(s * 100.0),
+            'subsidy_deadweight_loss_pct_exports': r(self._subsidy_dwl_share(s, ex) * 100.0),
+            '_elasticities': (em, es, ex),
+        }
+
+    def _analyze_tariff_effects(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze economic effects of tariffs (same numbers as the headline)"""
+        n = self._restriction_numbers(data)
+        em, es, _ = n['_elasticities']
+        if n['tariff_deadweight_loss_pct_gdp'] is not None:
+            dwl = (f"Deadweight loss {n['tariff_deadweight_loss_pct_gdp']:.3f}% of GDP "
+                   f"({n['tariff_deadweight_loss_pct_imports']:.2f}% of the pre-tariff import bill)")
+        else:
+            dwl = (f"Deadweight loss {n['tariff_deadweight_loss_pct_imports']:.2f}% of the pre-tariff "
+                   f"import bill (needs imports of the tariffed goods as % of GDP to express in % of GDP)")
+        return {
+            'price_increase': (f"Domestic price rises by {n['tariff_price_rise_pct']:.2f}% "
+                               f"(small open economy: full pass-through)"),
+            'import_reduction': (f"Imports fall by {n['tariff_import_fall_pct']:.2f}% "
+                                 f"(import demand elasticity {em:g}, constant-elasticity curve)"),
+            'domestic_production': (f"Domestic production increases by {n['tariff_domestic_output_pct']:.2f}% "
+                                    f"(supply elasticity {es:g})"),
+            'tariff_revenue': f"Tariff revenue {n['tariff_revenue_pct_imports']:.2f}% of the pre-tariff import bill",
+            'welfare_loss': dwl,
+        }
+
+    def _analyze_quota_effects(self) -> Dict[str, Any]:
+        """Qualitative effects of import quotas (a volume alone, without demand and
+        world-price data, cannot be turned into a tariff equivalent or quota rent)."""
         return {
             'price_effect': 'Domestic price rises to clear market at quota level',
             'quantity_certainty': 'Import volume fixed regardless of demand changes',
@@ -240,14 +424,67 @@ class TradeAnalyzer(EconomicsBase):
             'supply_response': 'Domestic producers expand to fill demand gap'
         }
 
-    def _analyze_subsidy_effects(self, subsidy_rate: float) -> Dict[str, Any]:
-        """Analyze economic effects of export subsidies"""
-        rate = self.to_decimal(subsidy_rate)
+    def _analyze_subsidy_effects(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze economic effects of export subsidies (same numbers as the headline)"""
+        n = self._restriction_numbers(data)
+        _, _, ex = n['_elasticities']
         return {
-            'export_increase': f"Exports rise by approximately {rate * self.to_decimal(1.2)}%",
-            'domestic_price_rise': f"Domestic price increases by {rate * self.to_decimal(0.5)}%",
-            'fiscal_cost': f"Government cost {rate}% of export value",
+            'export_increase': (f"Exports rise by {n['subsidy_export_rise_pct']:.2f}% "
+                                f"(export supply elasticity {ex:g})"),
+            'domestic_price_rise': (f"Domestic price of the exported good rises by "
+                                    f"{n['subsidy_domestic_price_rise_pct']:.2f}% (small open economy)"),
+            'fiscal_cost': f"Government cost {n['subsidy_fiscal_cost_pct_exports']:.2f}% of subsidised export value",
+            'welfare_loss': (f"National deadweight loss {n['subsidy_deadweight_loss_pct_exports']:.3f}% "
+                             f"of the pre-subsidy export value"),
             'foreign_welfare': 'Foreign consumers benefit from lower prices'
+        }
+
+    def _restriction_headline(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """The tariff and export-subsidy effects as numbers, all in percent; the model and the
+        unit of each field are described above _restriction_inputs and in the 'model' block."""
+        n = self._restriction_numbers(data)
+        n.pop('_elasticities')
+        return n
+
+    def _restriction_model(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        i = self._restriction_inputs(data)
+        model = {
+            'description': ('Partial equilibrium, small open economy (world price fixed, full '
+                            'pass-through), constant-elasticity import demand, domestic supply and '
+                            'export supply'),
+            'import_demand_elasticity': i['em'],
+            'domestic_supply_elasticity': i['es'],
+            'export_supply_elasticity': i['ex'],
+            'units': ('price/import/output/export changes: % change; deadweight loss: % of the '
+                      'pre-tariff import bill and % of GDP; fiscal cost: % of subsidised export '
+                      'value; subsidy deadweight loss: % of pre-subsidy export value'),
+        }
+        if i['import_share'] is None:
+            model['missing_input'] = ('import_share_gdp (imports of the tariffed goods as % of GDP) '
+                                      'is needed for the deadweight loss in % of GDP; without it '
+                                      'tariff_deadweight_loss_pct_gdp is null')
+        return model
+
+    def _barrier_removal_headline(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Scale the textbook bands by the size of the tariff cut and the economy:
+        a full removal is taken as a 1-3 % permanent GDP level gain and a 2-5 %
+        productivity gain; FDI bands follow the liberalization scope."""
+        cut = self.to_decimal(data.get('tariff_reduction', 100)) / self.to_decimal(100)
+        gdp = self.to_decimal(data.get('gdp_size', 0))
+        fdi_bands = {'limited': (20, 40), 'moderate': (50, 100), 'comprehensive': (100, 200)}
+        fdi_low, fdi_high = fdi_bands.get(data.get('liberalization_scope', 'moderate'), (50, 100))
+        gdp_low_pct = self.to_decimal(1) * cut
+        gdp_high_pct = self.to_decimal(3) * cut
+        return {
+            'tariff_reduction_pct': cut * self.to_decimal(100),
+            'gdp_gain_low_pct': gdp_low_pct,
+            'gdp_gain_high_pct': gdp_high_pct,
+            'gdp_gain_low_busd': gdp * gdp_low_pct / self.to_decimal(100),
+            'gdp_gain_high_busd': gdp * gdp_high_pct / self.to_decimal(100),
+            'productivity_gain_low_pct': self.to_decimal(2) * cut,
+            'productivity_gain_high_pct': self.to_decimal(5) * cut,
+            'fdi_increase_low_pct': fdi_low,
+            'fdi_increase_high_pct': fdi_high,
         }
 
     def _compare_trade_restrictions(self) -> Dict[str, str]:
@@ -343,7 +580,9 @@ class TradeAnalyzer(EconomicsBase):
 
     def _estimate_productivity_gains(self, data: Dict[str, Any]) -> str:
         """Estimate productivity gains from liberalization"""
-        return '2-5% productivity gain over 5-10 years'
+        h = self._barrier_removal_headline(data)
+        return (f"{h['productivity_gain_low_pct']:.1f}-{h['productivity_gain_high_pct']:.1f}% "
+                f"productivity gain over 5-10 years")
 
     def _estimate_employment_effects(self, data: Dict[str, Any]) -> str:
         """Estimate employment effects of liberalization"""
@@ -355,7 +594,12 @@ class TradeAnalyzer(EconomicsBase):
 
     def _estimate_gdp_impact(self, data: Dict[str, Any]) -> str:
         """Estimate GDP impact of trade liberalization"""
-        return '1-3% permanent GDP level increase, spread over 10-15 years'
+        h = self._barrier_removal_headline(data)
+        text = (f"{h['gdp_gain_low_pct']:.2f}-{h['gdp_gain_high_pct']:.2f}% permanent GDP level increase, "
+                f"spread over 10-15 years")
+        if h['gdp_gain_high_busd'] > 0:
+            text += f" (about {h['gdp_gain_low_busd']:.1f}-{h['gdp_gain_high_busd']:.1f} B USD)"
+        return text
 
     def _analyze_sectoral_growth_effects(self, data: Dict[str, Any]) -> Dict[str, str]:
         """Analyze sectoral growth effects"""
@@ -803,8 +1047,12 @@ class TradingBlocAnalyzer(EconomicsBase):
 
     def _calculate_intra_bloc_growth(self, data: Dict[str, Any]) -> str:
         """Calculate intra-bloc trade growth"""
-        baseline_trade = self.to_decimal(data.get('baseline_intra_trade', 100))
-        current_trade = self.to_decimal(data.get('current_intra_trade', 120))
+        if 'baseline_intra_trade' not in data or 'current_intra_trade' not in data:
+            return 'N/A (needs baseline_intra_trade and current_intra_trade)'
+        baseline_trade = self.to_decimal(data['baseline_intra_trade'])
+        current_trade = self.to_decimal(data['current_intra_trade'])
+        if baseline_trade <= 0:
+            return 'N/A (baseline_intra_trade must be positive)'
 
         growth_rate = ((current_trade - baseline_trade) / baseline_trade) * self.to_decimal(100)
         return f"Intra-bloc trade grew by {growth_rate:.1f}% since formation"
@@ -854,28 +1102,25 @@ class TradingBlocAnalyzer(EconomicsBase):
 
 
 if __name__ == "__main__":
+    # CLI: python trade_geopolitics.py <benefits_costs|restrictions|trading_blocs|barrier_removal> '<json>'
+    # One JSON object on stdout (fincept_json: Decimal -> float, NaN/Inf -> null, one line).
+    import os
     import sys
     import json
-
-    def to_serializable(obj):
-        """Recursively convert Decimal and other non-serializable types."""
-        from decimal import Decimal
-        if isinstance(obj, Decimal):
-            return float(obj)
-        if isinstance(obj, dict):
-            return {k: to_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
-            return [to_serializable(i) for i in obj]
-        return obj
+    try:
+        import fincept_json
+    except ImportError:  # run by hand without PYTHONPATH=scripts
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        import fincept_json
 
     analysis_type = sys.argv[1] if len(sys.argv) > 1 else "benefits_costs"
     try:
         params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
     except ValueError as exc:
-        print(json.dumps({"error": f"Invalid JSON parameters: {exc}"}))
+        fincept_json.emit({"error": f"Invalid JSON parameters: {exc}"})
         sys.exit(1)
     if not isinstance(params, dict):
-        print(json.dumps({"error": "Parameters must be a JSON object"}))
+        fincept_json.emit({"error": "Parameters must be a JSON object"})
         sys.exit(1)
 
     analyzer = TradeAnalyzer()
@@ -893,6 +1138,6 @@ if __name__ == "__main__":
         else:
             result = {"error": f"Unknown analysis type: {analysis_type}"}
     except Exception as exc:  # bad numeric input etc. -> JSON error, not a traceback
-        result = {"error": str(exc)}
+        result = {"error": str(exc) or type(exc).__name__}
 
-    print(json.dumps(to_serializable(result), indent=2))
+    fincept_json.emit(result)

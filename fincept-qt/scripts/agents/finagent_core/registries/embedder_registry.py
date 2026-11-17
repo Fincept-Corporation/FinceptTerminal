@@ -38,7 +38,7 @@ class EmbedderRegistry:
 
         # Google
         "google": {
-            "class": "agno.knowledge.embedder.google.GoogleEmbedder",
+            "class": "agno.knowledge.embedder.google.GeminiEmbedder",
             "models": ["text-embedding-004", "textembedding-gecko@003"],
             "api_key_env": "GOOGLE_API_KEY",
             "default_model": "text-embedding-004",
@@ -46,7 +46,7 @@ class EmbedderRegistry:
 
         # AWS Bedrock
         "aws_bedrock": {
-            "class": "agno.knowledge.embedder.aws_bedrock.AWSBedrockEmbedder",
+            "class": "agno.knowledge.embedder.aws_bedrock.AwsBedrockEmbedder",
             "models": ["amazon.titan-embed-text-v1", "cohere.embed-english-v3"],
             "api_key_env": "AWS_ACCESS_KEY_ID",
             "default_model": "amazon.titan-embed-text-v1",
@@ -107,11 +107,17 @@ class EmbedderRegistry:
             "api_key_env": None,
             "default_model": "nomic-embed-text",
             "base_url": "http://localhost:11434",
+            # OllamaEmbedder names its endpoint `host`, not `base_url`.
+            "url_kwarg": "host",
+            # OllamaEmbedder defaults to 4096 dimensions whatever the model; vector
+            # stores size their tables from it, so pass the model's real size.
+            "dimensions": {"nomic-embed-text": 768, "mxbai-embed-large": 1024, "all-minilm": 384},
+            "set_dimensions": True,
         },
 
         # HuggingFace
         "huggingface": {
-            "class": "agno.knowledge.embedder.huggingface.HuggingFaceEmbedder",
+            "class": "agno.knowledge.embedder.huggingface.HuggingfaceCustomEmbedder",
             "models": [],
             "api_key_env": "HUGGINGFACE_API_KEY",
             "default_model": None,
@@ -135,7 +141,7 @@ class EmbedderRegistry:
 
         # vLLM
         "vllm": {
-            "class": "agno.knowledge.embedder.vllm.vLLMEmbedder",
+            "class": "agno.knowledge.embedder.vllm.VLLMEmbedder",
             "models": [],
             "api_key_env": None,
             "default_model": None,
@@ -195,33 +201,28 @@ class EmbedderRegistry:
         # Resolve model
         final_model = model or config.get("default_model")
 
-        # Resolve API key
-        final_api_key = api_key
-        if not final_api_key and api_keys:
-            env_key = config.get("api_key_env")
-            if env_key:
-                final_api_key = api_keys.get(env_key)
-
-        if not final_api_key and config.get("api_key_env"):
-            final_api_key = os.environ.get(config["api_key_env"])
+        # Resolve API key (the host sends both "OPENAI_API_KEY" and "openai")
+        final_api_key = api_key or cls.resolve_api_key(provider_lower, api_keys)
 
         try:
-            # Dynamic import
-            import importlib
-            class_path = config["class"]
-            module_path, class_name = class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            embedder_class = getattr(module, class_name)
+            from finagent_core.registries.availability import load_class
+            embedder_class = load_class(config["class"])
 
-            # Build constructor arguments
+            # Build constructor arguments. agno 2.x embedders name the model `id`
+            # (passing `model=` raised "unexpected keyword argument 'model'").
             embedder_kwargs = {}
 
             if final_model:
-                embedder_kwargs["model"] = final_model
+                embedder_kwargs["id"] = final_model
             if final_api_key:
                 embedder_kwargs["api_key"] = final_api_key
             if config.get("base_url"):
-                embedder_kwargs["base_url"] = kwargs.pop("base_url", config["base_url"])
+                url = kwargs.pop("base_url", None) or config["base_url"]
+                embedder_kwargs[config.get("url_kwarg", "base_url")] = url
+            if config.get("set_dimensions"):
+                dims = (config.get("dimensions") or {}).get(final_model)
+                if dims:
+                    embedder_kwargs["dimensions"] = dims
 
             embedder_kwargs.update(kwargs)
 
@@ -236,9 +237,48 @@ class EmbedderRegistry:
             raise RuntimeError(f"Failed to create embedder '{provider}': {e}")
 
     @classmethod
+    def resolve_api_key(cls, provider: str, api_keys: Optional[Dict[str, str]] = None) -> Optional[str]:
+        """API key for an embedder: api_keys by env-var name, then by provider
+        name, then the process environment. None when none is found."""
+        config = cls.EMBEDDER_CATALOG.get(provider.lower(), {})
+        env_key = config.get("api_key_env")
+        keys = api_keys or {}
+        found = (keys.get(env_key) if env_key else None) or keys.get(provider.lower())
+        if not found and env_key:
+            found = os.environ.get(env_key)
+        return found or None
+
+    @classmethod
+    def missing_requirement(cls, provider: str, api_keys: Optional[Dict[str, str]] = None) -> Optional[str]:
+        """Why this embedder cannot be used right now (unknown, package not
+        installed, API key absent), or None when it can be built."""
+        p = (provider or "").lower()
+        if p not in cls.EMBEDDER_CATALOG:
+            return f"unknown embedder '{provider}' (available: {', '.join(cls.EMBEDDER_CATALOG)})"
+        from finagent_core.registries.availability import class_unavailable_reason
+        reason = class_unavailable_reason(cls.EMBEDDER_CATALOG[p]["class"])
+        if reason:
+            return f"embedder '{p}' {reason}"
+        env_key = cls.EMBEDDER_CATALOG[p].get("api_key_env")
+        if env_key and not cls.resolve_api_key(p, api_keys):
+            return f"embedder '{p}' needs an API key ({env_key}) and none is configured"
+        return None
+
+    @classmethod
     def list_providers(cls) -> List[str]:
-        """List all available embedder providers"""
+        """List every catalogued embedder (see unavailable_providers())."""
         return list(cls.EMBEDDER_CATALOG.keys())
+
+    @classmethod
+    def unavailable_providers(cls) -> Dict[str, str]:
+        """{embedder: reason} for every embedder whose class cannot load here."""
+        from finagent_core.registries.availability import class_static_reason
+        out: Dict[str, str] = {}
+        for name, cfg in cls.EMBEDDER_CATALOG.items():
+            reason = class_static_reason(cfg["class"])
+            if reason:
+                out[name] = reason
+        return out
 
     @classmethod
     def list_models(cls, provider: str) -> List[str]:

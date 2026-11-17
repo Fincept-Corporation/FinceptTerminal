@@ -33,6 +33,36 @@ namespace fincept::trading {
 
 namespace {
 constexpr const char* kLog = "ActionCenter";
+constexpr const char* kAcAudit = "Orders"; // audit.log (policy B.7)
+
+// Who created a queued order (UnifiedOrder::source, serialized as "source"; a basket
+// takes its first leg that states one). Empty when not stated.
+QString ac_order_source(const QJsonObject& d) {
+    QString s = d.value(QStringLiteral("source")).toString();
+    if (s.isEmpty()) {
+        const QJsonArray legs = d.value(QStringLiteral("orders")).toArray();
+        for (const auto& leg : legs) {
+            s = leg.toObject().value(QStringLiteral("source")).toString();
+            if (!s.isEmpty())
+                break;
+        }
+    }
+    return s;
+}
+
+// Fields of an audit line about one queued (approval-mode) order.
+QList<LogField> ac_audit_fields(const PendingOrder& po) {
+    QList<LogField> f{{"pending_id", po.id},
+                      {"account", log_mask(po.account_id)},
+                      {"type", po.order_type},
+                      {"symbol", po.symbol},
+                      {"exchange", po.exchange},
+                      {"side", po.action},
+                      {"qty", po.quantity}};
+    if (const QString src = ac_order_source(po.order_data); !src.isEmpty())
+        f.append(LogField("source", src));
+    return f;
+}
 
 // Dedicated single-thread pool for approval execution. One thread keeps approvals
 // strictly FIFO — approve_all_pending() must send the queue in the order it was
@@ -181,8 +211,11 @@ int ActionCenter::expire_stale_orders() {
             continue;
         ++expired;
         touched.insert(po.account_id);
-        LOG_INFO(kLog, QString("Auto-rejected expired pending order %1 (%2 %3 %4)")
-                           .arg(po.id, po.action, po.quantity, po.symbol));
+        {
+            auto f = ac_audit_fields(po);
+            f.append(LogField("reason", reason));
+            LOG_AUDIT(kAcAudit, logf("Queued order expired", f));
+        }
         emit order_rejected(po.id, reason);
     }
     for (const auto& acct : touched)
@@ -234,7 +267,7 @@ void ActionCenter::set_one_click_enabled(const QString& account_id, bool enabled
                             .arg(account_id, QString::fromStdString(r.error())));
         return;
     }
-    LOG_INFO(kLog, QString("One-click trading %1 for account %2").arg(enabled ? "ENABLED" : "disabled", account_id));
+    LOG_AUDIT(kAcAudit, "One-click trading changed", {{"account", log_mask(account_id)}, {"enabled", enabled}});
     emit one_click_changed(account_id, enabled);
 }
 
@@ -256,8 +289,9 @@ bool ActionCenter::run_kill_switch() {
         LOG_WARN(kLog, "Kill switch already running — ignoring a second trigger");
         return false;
     }
-    LOG_WARN(kLog, "KILL SWITCH engaged: rejecting queued orders, cancelling open orders and squaring off "
-                   "positions on every active LIVE account");
+    LOG_AUDIT(kAcAudit, "Kill switch engaged",
+              {{"scope", "every active live account"},
+               {"actions", "reject queued orders, stop live algos, cancel open orders, square off positions"}});
 
     QVector<KillSwitchAccountResult> plan;
 
@@ -330,13 +364,14 @@ bool ActionCenter::run_kill_switch() {
             } catch (...) {
                 r.errors << QStringLiteral("unexpected error — check the broker terminal");
             }
-            LOG_WARN(kLog, QString("Kill switch %1 (%2): cancelled %3 (%4 failed), closed %5 (%6 failed)%7")
-                               .arg(r.display_name, r.broker_id)
-                               .arg(r.orders_cancelled)
-                               .arg(r.orders_cancel_failed)
-                               .arg(r.positions_closed)
-                               .arg(r.positions_close_failed)
-                               .arg(r.errors.isEmpty() ? QString() : " — " + r.errors.join("; ")));
+            LOG_AUDIT(kAcAudit, "Kill switch finished",
+                      {{"venue", r.broker_id},
+                       {"account", log_mask(r.account_id)},
+                       {"cancelled", r.orders_cancelled},
+                       {"cancel_failed", r.orders_cancel_failed},
+                       {"closed", r.positions_closed},
+                       {"close_failed", r.positions_close_failed},
+                       {"error", r.errors.join("; ")}});
         }
         if (!self)
             return;
@@ -376,8 +411,13 @@ bool ActionCenter::should_queue(const QString& account_id, const QString& order_
 
 void ActionCenter::set_order_mode(const QString& account_id, OrderMode mode) {
     const QString key = "action_center.mode." + account_id;
-    SettingsRepository::instance().set(key, order_mode_str(mode), "action_center");
-    LOG_INFO(kLog, QString("Order mode for %1 set to %2").arg(account_id, order_mode_str(mode)));
+    if (auto saved = SettingsRepository::instance().set(key, order_mode_str(mode), "action_center"); saved.is_err())
+        LOG_ERROR(kLog, logf("Order approval mode could not be saved", {{"account", log_mask(account_id)},
+                                                                        {"mode", order_mode_str(mode)},
+                                                                        {"error", QString::fromStdString(saved.error())}}));
+    // Approval mode decides whether orders from agents, algos, workflows and MCP tools
+    // wait for a human: an agent-permission change, so it is audited.
+    LOG_AUDIT(kAcAudit, "Order approval mode changed", {{"account", log_mask(account_id)}, {"mode", order_mode_str(mode)}});
     emit stats_updated(account_id);
 }
 
@@ -431,6 +471,8 @@ QJsonObject ActionCenter::serialize_unified_order(const UnifiedOrder& order) {
     j["take_profit"] = order.take_profit;
     j["amo"] = order.amo;
     j["instrument_token"] = order.instrument_token;
+    if (!order.source.isEmpty())
+        j["source"] = order.source; // provenance rides with the queued order into its execution
     return j;
 }
 
@@ -483,6 +525,7 @@ UnifiedOrder ActionCenter::deserialize_unified_order(const QJsonObject& json) {
     o.take_profit = json.value("take_profit").toDouble();
     o.amo = json.value("amo").toBool();
     o.instrument_token = json.value("instrument_token").toString();
+    o.source = json.value("source").toString();
     return o;
 }
 
@@ -570,12 +613,19 @@ QString ActionCenter::queue_order(const QString& account_id, const QString& orde
         "VALUES (?, ?, ?, ?, ?, ?)",
         {po.id, po.account_id, po.order_type, json_str, po.status, iso(po.created_at)});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("queue_order failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Order could not be queued for approval",
+                             {{"pending_id", po.id}, {"error", QString::fromStdString(r.error())}}));
+        auto f = ac_audit_fields(po);
+        f.append(LogField("reason", "the approval queue could not be written"));
+        LOG_AUDIT(kAcAudit, logf("Order not queued for approval", f));
         return {};
     }
 
-    LOG_INFO(kLog, QString("Queued %1 order %2 for account %3 (approval window ends %4)")
-                       .arg(order_type, po.id, account_id, expiry.toLocalTime().toString("HH:mm:ss")));
+    {
+        auto f = ac_audit_fields(po);
+        f.append(LogField("expires", expiry.toLocalTime().toString("HH:mm:ss")));
+        LOG_AUDIT(kAcAudit, logf("Order queued for approval", f));
+    }
     emit pending_order_created(po);
     emit stats_updated(account_id);
     ensure_expiry_sweep();
@@ -587,7 +637,12 @@ PendingOrder ActionCenter::map_row(QSqlQuery& q) {
     po.id = q.value("id").toString();
     po.account_id = q.value("account_id").toString();
     po.order_type = q.value("order_type").toString();
-    po.order_data = QJsonDocument::fromJson(q.value("order_data").toString().toUtf8()).object();
+    QJsonParseError parse_error;
+    po.order_data = QJsonDocument::fromJson(q.value("order_data").toString().toUtf8(), &parse_error).object();
+    if (parse_error.error != QJsonParseError::NoError)
+        LOG_ERROR_RL(kLog, QStringLiteral("payload|") + po.id, 60000,
+                     logf("Pending order payload is not valid JSON", {{"pending_id", po.id},
+                                                                      {"error", parse_error.errorString()}}));
     po.status = q.value("status").toString();
     po.created_at = from_iso(q.value("created_at").toString());
     po.approved_at = from_iso(q.value("approved_at").toString());
@@ -601,8 +656,11 @@ PendingOrder ActionCenter::map_row(QSqlQuery& q) {
 
 std::optional<PendingOrder> ActionCenter::get_order(const QString& pending_id) const {
     auto r = Database::instance().execute("SELECT * FROM pending_orders WHERE id = ?", {pending_id});
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_ERROR(kLog, logf("Pending order could not be read", {{"pending_id", pending_id},
+                                                                 {"error", QString::fromStdString(r.error())}}));
         return std::nullopt;
+    }
     auto& q = r.value();
     if (!q.next())
         return std::nullopt;
@@ -619,8 +677,12 @@ QVector<PendingOrder> ActionCenter::get_pending_orders(const QString& account_id
     }
     sql += " ORDER BY created_at DESC";
     auto r = Database::instance().execute(sql, params);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_ERROR_RL(kLog, QStringLiteral("list_pending"), 60000,
+                     logf("Pending orders could not be listed", {{"account", log_mask(account_id)},
+                                                                 {"error", QString::fromStdString(r.error())}}));
         return out;
+    }
     auto& q = r.value();
     while (q.next())
         out.append(map_row(q));
@@ -638,8 +700,11 @@ QVector<PendingOrder> ActionCenter::get_all_orders(const QString& account_id, in
     sql += " ORDER BY created_at DESC LIMIT ?";
     params << limit;
     auto r = Database::instance().execute(sql, params);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN_RL(kLog, QStringLiteral("list_history"), 60000,
+                    logf("Pending-order history could not be read", {{"error", QString::fromStdString(r.error())}}));
         return out;
+    }
     auto& q = r.value();
     while (q.next())
         out.append(map_row(q));
@@ -680,6 +745,11 @@ ActionCenter::Stats ActionCenter::get_stats(const QString& account_id) const {
 QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString& err, bool& async) {
     ok = false;
     async = false;
+    // A person approved this entry: UnifiedTrading's approval gate must place it, not
+    // queue it a second time. The scope covers the synchronous entry calls below on
+    // this thread (place_order / place_basket_orders / place_split_orders decide at
+    // their entry); only ActionCenter can open one (see UnifiedTrading.h).
+    const ApprovedOrderScope approved;
     // An approval still waiting on the FIFO executor when the kill switch is hit
     // must not reach the broker in the middle of the flatten.
     if (kill_switch_running_) {
@@ -754,7 +824,27 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
         const auto creds = AccountManager::instance().load_credentials(po.account_id);
         // Brokers without a gtt_place override return the base-class
         // "GTT not supported for this broker" — surfaced as a rejection.
+        const QList<LogField> gtt_fields{{"venue", account.broker_id},
+                                         {"account", log_mask(po.account_id)},
+                                         {"mode", account.trading_mode},
+                                         {"symbol", base.symbol},
+                                         {"exchange", base.exchange},
+                                         {"side", order_side_str(base.side)},
+                                         {"type", "gtt"},
+                                         {"qty", base.quantity},
+                                         {"trigger", base.stop_price},
+                                         {"price", base.price},
+                                         {"pending_id", po.id}};
+        LOG_AUDIT(kAcAudit, logf("Order submitted", gtt_fields));
         const GttPlaceResponse resp = broker->gtt_place(creds, gtt);
+        {
+            auto f = gtt_fields;
+            if (resp.success)
+                f.append(LogField("order_id", resp.gtt_id));
+            else
+                f.append(LogField("reason", resp.error));
+            LOG_AUDIT(kAcAudit, logf(resp.success ? QStringLiteral("Order accepted") : QStringLiteral("Order rejected"), f));
+        }
         ok = resp.success;
         err = resp.error;
         return resp.gtt_id;
@@ -846,12 +936,13 @@ bool ActionCenter::is_expired(const PendingOrder& po) {
 void ActionCenter::approve_order(const QString& pending_id) {
     auto po_opt = get_order(pending_id);
     if (!po_opt) {
-        LOG_WARN(kLog, "approve_order: pending id not found: " + pending_id);
+        LOG_WARN(kLog, logf("Approval refused, queued order not found", {{"pending_id", pending_id}}));
         return;
     }
     PendingOrder po = *po_opt;
     if (po.status != "pending") {
-        LOG_WARN(kLog, QString("approve_order: %1 is not pending (status=%2)").arg(pending_id, po.status));
+        LOG_WARN(kLog, logf("Approval refused, order is no longer pending", {{"pending_id", pending_id},
+                                                                             {"status", po.status}}));
         return;
     }
 
@@ -860,7 +951,12 @@ void ActionCenter::approve_order(const QString& pending_id) {
     // automation path — can execute one by taking a different route.
     if (is_expired(po)) {
         const QString reason = ac_expiry_reason(po);
-        LOG_WARN(kLog, QString("approve_order: refusing expired order %1 (age %2 s)").arg(pending_id).arg(age_secs(po)));
+        {
+            auto f = ac_audit_fields(po);
+            f.append(LogField("age_s", age_secs(po)));
+            f.append(LogField("reason", reason));
+            LOG_AUDIT(kAcAudit, logf("Approval refused, queued order expired", f));
+        }
 
         // Conditional on 'pending' so it can never overwrite a row another path
         // already finalized.
@@ -868,7 +964,8 @@ void ActionCenter::approve_order(const QString& pending_id) {
                                               "rejection_reason = ? WHERE id = ? AND status = 'pending'",
                                               {iso(QDateTime::currentDateTime()), reason, pending_id});
         if (r.is_err())
-            LOG_ERROR(kLog, QString("approve_order expiry update failed: %1").arg(QString::fromStdString(r.error())));
+            LOG_ERROR(kLog, logf("Expired queued order could not be marked rejected",
+                                 {{"pending_id", pending_id}, {"error", QString::fromStdString(r.error())}}));
 
         emit order_rejected(pending_id, reason);
         emit stats_updated(po.account_id);
@@ -885,13 +982,15 @@ void ActionCenter::approve_order(const QString& pending_id) {
     auto claim = Database::instance().execute(
         "UPDATE pending_orders SET status = 'approving' WHERE id = ? AND status = 'pending'", {pending_id});
     if (claim.is_err()) {
-        LOG_ERROR(kLog, QString("approve_order claim failed: %1").arg(QString::fromStdString(claim.error())));
+        LOG_ERROR(kLog, logf("Approval failed, queued order could not be claimed",
+                             {{"pending_id", pending_id}, {"error", QString::fromStdString(claim.error())}}));
         return;
     }
     if (claim.value().numRowsAffected() != 1) {
-        LOG_WARN(kLog, QString("approve_order: %1 was already claimed by another approval — ignoring").arg(pending_id));
+        LOG_WARN(kLog, logf("Approval ignored, order already claimed by another approval", {{"pending_id", pending_id}}));
         return;
     }
+    LOG_AUDIT(kAcAudit, logf("Queued order approved", ac_audit_fields(po)));
     po.status = QStringLiteral("approving");
 
     // placeorder / smartorder (UnifiedTrading::place_order) and placegttorder
@@ -960,13 +1059,20 @@ void ActionCenter::finalize_approval(const PendingOrder& po, bool ok, const QStr
                                           {ok ? "approved" : "rejected", iso(now), broker_order_id,
                                            ok ? QString() : ("Execution failed: " + err), po.id});
     if (r.is_err())
-        LOG_ERROR(kLog, QString("approve_order update failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Approved order outcome could not be saved",
+                             {{"pending_id", po.id}, {"error", QString::fromStdString(r.error())}}));
 
+    {
+        auto f = ac_audit_fields(po);
+        if (ok)
+            f.append(LogField("order_id", broker_order_id));
+        else
+            f.append(LogField("reason", err));
+        LOG_AUDIT(kAcAudit, logf(ok ? QStringLiteral("Approved order executed") : QStringLiteral("Approved order failed"), f));
+    }
     if (ok) {
-        LOG_INFO(kLog, QString("Approved %1 → broker order %2").arg(po.id, broker_order_id));
         emit order_approved(po.id, broker_order_id);
     } else {
-        LOG_WARN(kLog, QString("Approval of %1 executed but broker rejected: %2").arg(po.id, err));
         emit order_rejected(po.id, "Execution failed: " + err);
     }
     emit stats_updated(po.account_id);
@@ -975,7 +1081,7 @@ void ActionCenter::finalize_approval(const PendingOrder& po, bool ok, const QStr
 void ActionCenter::reject_order(const QString& pending_id, const QString& reason) {
     auto po_opt = get_order(pending_id);
     if (!po_opt) {
-        LOG_WARN(kLog, "reject_order: pending id not found: " + pending_id);
+        LOG_WARN(kLog, logf("Rejection skipped, queued order not found", {{"pending_id", pending_id}}));
         return;
     }
     PendingOrder po = *po_opt;
@@ -987,10 +1093,15 @@ void ActionCenter::reject_order(const QString& pending_id, const QString& reason
         "UPDATE pending_orders SET status = 'rejected', rejected_at = ?, rejection_reason = ? WHERE id = ?",
         {iso(now), reason, pending_id});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("reject_order update failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Queued order could not be rejected",
+                             {{"pending_id", pending_id}, {"error", QString::fromStdString(r.error())}}));
         return;
     }
-    LOG_INFO(kLog, QString("Rejected %1: %2").arg(pending_id, reason));
+    {
+        auto f = ac_audit_fields(po);
+        f.append(LogField("reason", reason));
+        LOG_AUDIT(kAcAudit, logf("Queued order rejected", f));
+    }
     emit order_rejected(pending_id, reason);
     emit stats_updated(po.account_id);
 }

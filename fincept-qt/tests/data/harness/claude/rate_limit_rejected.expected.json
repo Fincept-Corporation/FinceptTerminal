@@ -1,0 +1,37 @@
+{
+  "parser": "claude",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "error"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "5c1d2f0e-0000-4000-8000-00000000c1a0",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cached_tokens": 0,
+  "final_text": "",
+  "saw_result": true,
+  "result_is_error": true,
+  "rate_limit_status": "rejected",
+  "rate_limit_resets_at_ms": 1794938400000,
+  "failure": {
+    "exit_code": 1,
+    "kind": "rate_limit"
+  },
+  "input": "rate_limit_rejected.jsonl"
+}

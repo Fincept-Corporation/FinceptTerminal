@@ -1,4 +1,7 @@
-"""Fairness Opinion Valuation Framework"""
+"""Valuation range check (offer price against the valuation range of each method).
+
+This is a valuation range check, NOT a fairness opinion: a fairness opinion is a formal letter from an adviser
+after due diligence. The service output says so in `not_a_fairness_opinion` and the conclusion text."""
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -282,7 +285,7 @@ class FairnessOpinionFramework:
 
     def fairness_determination(self, weighted_valuation: Dict[str, Any],
                               qualitative_factors: List[str]) -> Dict[str, Any]:
-        """Make fairness determination based on quantitative and qualitative analysis"""
+        """Where the offer sits against the weighted valuation range (a range check, not a fairness opinion)."""
 
         offer_price = weighted_valuation['offer_price']
         low = weighted_valuation['weighted_valuation_range']['low']
@@ -312,7 +315,17 @@ class FairnessOpinionFramework:
             else:
                 quantitative_conclusion = "materially_above_range"
 
-        is_fair = quantitative_conclusion in ["fair", "fair_low_end", "fair_high_end", "marginally_below_range", "marginally_above_range"]
+        in_or_near_range = quantitative_conclusion in ["fair", "fair_low_end", "fair_high_end",
+                                                       "marginally_below_range", "marginally_above_range"]
+        range_text = {
+            "fair": "Offer is in the middle of the valuation range",
+            "fair_low_end": "Offer is in the lower part of the valuation range",
+            "fair_high_end": "Offer is in the upper part of the valuation range",
+            "marginally_below_range": "Offer is slightly below the valuation range (under 10%)",
+            "materially_below_range": "Offer is materially below the valuation range (10% or more)",
+            "marginally_above_range": "Offer is slightly above the valuation range (under 10%)",
+            "materially_above_range": "Offer is materially above the valuation range (10% or more)",
+        }[quantitative_conclusion]
 
         return {
             'offer_price': offer_price,
@@ -327,9 +340,9 @@ class FairnessOpinionFramework:
                 'conclusion': quantitative_conclusion
             },
             'qualitative_factors_considered': qualitative_factors,
-            'fairness_conclusion': {
-                'is_fair': is_fair,
-                'conclusion': "fair from a financial point of view" if is_fair else "not fair from a financial point of view"
+            'range_check': {
+                'offer_in_or_near_range': in_or_near_range,
+                'conclusion': range_text,
             }
         }
 
@@ -435,8 +448,9 @@ def main():
                     low = float(method_data['range'].get('min', method_data.get('valuation', 0) * 0.9))
                     high = float(method_data['range'].get('max', method_data.get('valuation', 0) * 1.1))
                 else:
+                    # A single figure is a point estimate: it is shown as such, never widened into an invented range.
                     val = float(method_data.get('valuation', 0))
-                    low, high = val * 0.9, val * 1.1
+                    low, high = val, val
 
                 midpoint = float(method_data.get('midpoint', method_data.get('mid', method_data.get('valuation', (low + high) / 2))))
                 val_range = ValuationRange(
@@ -456,11 +470,14 @@ def main():
 
             analysis = framework.weighted_valuation_summary(valuation_ranges)
 
-            # Also compute fairness determination for the frontend
-            fairness = framework.fairness_determination(analysis, qualitative_factors)
-            analysis['is_fair'] = fairness['fairness_conclusion']['is_fair']
-            analysis['fairness_conclusion'] = fairness['fairness_conclusion']['conclusion']
-            analysis['quantitative_analysis'] = fairness['quantitative_analysis']
+            # Where the offer sits against the range (a range check - not a fairness opinion).
+            check = framework.fairness_determination(analysis, qualitative_factors)
+            analysis['offer_in_or_near_range'] = check['range_check']['offer_in_or_near_range']
+            analysis['range_check_result'] = check['range_check']['conclusion']
+            analysis['quantitative_analysis'] = check['quantitative_analysis']
+            analysis['not_a_fairness_opinion'] = ("This is a valuation range check from the ranges you entered. It is "
+                                                  "not a fairness opinion, which only an adviser can give after due "
+                                                  "diligence.")
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

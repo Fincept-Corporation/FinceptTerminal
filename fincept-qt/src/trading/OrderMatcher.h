@@ -34,6 +34,13 @@ class OrderMatcher {
     QVector<PtOrder> get_pending_orders(const QString& symbol = "", const QString& portfolio_id = "");
 
     void check_orders(const QString& symbol, const PriceData& price, const QString& portfolio_id);
+    // Same rules, restricted (delayed-price simulation): an order is only checked
+    // when it was placed at or before `printed_at_ms` — the exchange time of the
+    // price, so a delayed price that printed before an order existed can never fill
+    // it (0 = no time restriction) — and, when `only_order_id` is set, only that
+    // order is checked.
+    void check_orders(const QString& symbol, const PriceData& price, const QString& portfolio_id,
+                      qint64 printed_at_ms, const QString& only_order_id = QString());
 
     void load_orders(const QVector<PtOrder>& orders);
     void clear_portfolio_orders(const QString& portfolio_id);
@@ -74,6 +81,8 @@ class OrderMatcher {
     QMutex sl_tp_mutex_;
 
     QString scoped_key(const QString& portfolio_id, const QString& symbol) const;
+    void check_orders_impl(const QString& symbol, const PriceData& price, const QString& portfolio_id,
+                           qint64 printed_at_ms, const QString& only_order_id);
     bool should_fill(const PtOrder& order, const PriceData& price) const;
     bool check_limit(const PtOrder& order, const PriceData& price) const;
     bool check_stop(const PtOrder& order, const PriceData& price) const;

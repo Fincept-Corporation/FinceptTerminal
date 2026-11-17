@@ -9,27 +9,36 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('USDA_NASS_API_KEY', '')
 BASE_URL = "https://quickstats.nass.usda.gov/api"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+SERVICE = "USDA NASS Quick Stats"
+KEY_ENV = "USDA_NASS_API_KEY"
+
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://quickstats.nass.usda.gov/api", KEY_ENV)
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
+        if response.status_code == 413:
+            return {"error": f"{SERVICE}: the query matches more than 50,000 rows - narrow it with a year or state"}
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # Quick Stats reports bad parameters / no matches as {"error": ["..."]}.
+    if isinstance(data, dict) and data.get("error"):
+        err = data["error"]
+        return {"error": f"{SERVICE}: {fc.scrub(', '.join(map(str, err)) if isinstance(err, list) else err, API_KEY)}"}
+    return data
 
 
 def get_data(commodity: str, year: str = None, state: str = None) -> Any:

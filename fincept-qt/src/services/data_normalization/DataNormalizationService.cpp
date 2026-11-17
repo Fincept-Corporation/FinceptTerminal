@@ -347,7 +347,7 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
             if (age_s >= 0 && age_s < mapping.cache_ttl && !edited_since && cached->errors.isEmpty()) {
                 NormalizedRecord rec = *cached;
                 rec.from_cache = true;
-                LOG_INFO(kDataNormalizationTag, QString("Mapping '%1' served from cache (%2 s old, TTL %3 s)")
+                LOG_DEBUG(kDataNormalizationTag, QString("Mapping '%1' served from cache (%2 s old, TTL %3 s)")
                                   .arg(mapping.name)
                                   .arg(age_s)
                                   .arg(mapping.cache_ttl));
@@ -361,8 +361,7 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
     // Log the URL WITHOUT its query string: the shipped mapping templates put
     // `&apikey=`/`&token=` there, and this is LOG_INFO — the default level — so
     // the raw URL would write a live third-party credential into fincept.log.
-    LOG_INFO(kDataNormalizationTag, QString("Fetching mapping '%1' from %2")
-                      .arg(mapping.name, QUrl(url).adjusted(QUrl::RemoveQuery).toString()));
+    LOG_DEBUG(kDataNormalizationTag, QString("Fetching mapping '%1' from %2").arg(mapping.name, log_url(url)));
 
     // HttpClient resolves anything that is not http(s) against the Fincept API
     // base URL — and attaches the user's Fincept session headers to it. A
@@ -414,16 +413,21 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
     if (!mapping.body.trimmed().isEmpty())
         body = QJsonDocument::fromJson(substitute_auth(mapping.body, mapping.auth_token, false).toUtf8()).object();
 
+    // The user's URL: the answer can be any size, so GET / POST bodies are parsed
+    // on HttpClient's worker (get_large / post_large, the client-wide timeout).
+    // PUT / PATCH / DELETE have no such form in HttpClient yet and parse here.
     auto& http = HttpClient::instance();
     const QString method = mapping.method.trimmed().toUpper();
     if (method == QLatin1String("POST"))
-        http.post(url, body, on_reply, this, headers);
-    else if (method == QLatin1String("PUT") || method == QLatin1String("PATCH")) // PATCH rides PUT, as in TEST API
+        http.post_large(url, body, /*timeout_ms=*/0, on_reply, this, headers);
+    else if (method == QLatin1String("PUT"))
         http.put(url, body, on_reply, this, headers);
+    else if (method == QLatin1String("PATCH")) // a real PATCH (it used to be sent as a PUT)
+        http.patch(url, body, on_reply, this, headers);
     else if (method == QLatin1String("DELETE"))
         http.del(url, body, on_reply, this, headers);
     else
-        http.get(url, on_reply, this, headers);
+        http.get_large(url, on_reply, this, headers);
 }
 
 // ── Request helpers ────────────────────────────────────────────────────────

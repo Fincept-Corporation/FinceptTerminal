@@ -258,7 +258,11 @@ OrderPlaceResponse SaxoBankBroker::place_order(const BrokerCredentials& creds, c
     if (uic_str.isEmpty())
         uic_str = extract_uic(order.symbol);
     if (uic_str.isEmpty())
-        return {false, "", "Saxo place_order: Uic required (symbol format: EXCHANGE:SYMBOL:UIC)"};
+        return {false, "",
+                QStringLiteral("Saxo needs the instrument's Uic to place an order: enter the symbol as "
+                               "EXCHANGE:SYMBOL:UIC (e.g. NYSE:AAPL:211). Saxo position/holding rows do not carry "
+                               "it, so '%1' cannot be traded from the row.")
+                    .arg(order.symbol)};
 
     QString account_key = creds.user_id;
 
@@ -464,7 +468,12 @@ ApiResponse<QVector<BrokerPosition>> SaxoBankBroker::get_positions(const BrokerC
 
         BrokerPosition pos;
         pos.symbol = disp.value("Symbol").toString();
-        pos.exchange = base.value("AssetType").toString();
+        // No exchange field is parsed from this response. PositionBase.AssetType
+        // ("Stock", "FxSpot", ...) is NOT an exchange — passing it on made every
+        // Buy/Sell from a Saxo row fail validation with "Invalid exchange: Stock".
+        // Left empty, the ticket falls back to the screen's exchange and
+        // place_order explains what a Saxo order needs (the instrument Uic).
+        pos.exchange.clear();
         pos.quantity = qty;
         pos.avg_price = base.value("OpenPrice").toDouble();
         pos.ltp = view.value("CurrentPrice").toDouble();
@@ -511,7 +520,7 @@ ApiResponse<QVector<BrokerHolding>> SaxoBankBroker::get_holdings(const BrokerCre
 
         BrokerHolding h;
         h.symbol = disp.value("Symbol").toString();
-        h.exchange = base.value("AssetType").toString();
+        h.exchange.clear(); // AssetType is not an exchange — see get_positions
         h.quantity = qty;
         h.avg_price = view.value("AverageOpenPrice").toDouble();
         h.ltp = view.value("CurrentPrice").toDouble();

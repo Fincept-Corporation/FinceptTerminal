@@ -15,6 +15,14 @@ struct TabSession {
     QString last_accessed;
 };
 
+/// One screen_state row as read back for a restore decision.
+struct ScreenStateRow {
+    QJsonObject state;   ///< domain keys only (internal markers stripped)
+    QString updated_at;  ///< UTC timestamp SQLite stamped on the last write
+    QString writer_uuid; ///< screen-key rows: panel instance that wrote it (may be empty)
+    bool found = false;  ///< a row exists and its state_version matches
+};
+
 /// Persists per-tab UI state (scroll position, filters, selections) in cache.db.
 class TabSessionStore {
   public:
@@ -28,9 +36,15 @@ class TabSessionStore {
     /// Persist screen UI state keyed by screen_key.
     /// state_version is stored alongside — if the loaded version doesn't match
     /// expected_version, an empty QJsonObject is returned so the screen starts fresh.
+    /// `writer_uuid` (optional) records which panel instance wrote the row, so a
+    /// restore can tell this panel's own newer state from another panel's.
     Result<void> save_screen_state(const QString& key, const QJsonObject& state, int state_version,
-                                   const QString& session_id = {});
+                                   const QString& session_id = {}, const QString& writer_uuid = {});
     Result<QJsonObject> load_screen_state(const QString& key, int expected_version);
+
+    /// Same rows with their updated_at / writer, for newest-wins restores.
+    Result<ScreenStateRow> load_screen_state_row(const QString& key, int expected_version);
+    Result<ScreenStateRow> load_screen_state_row_by_uuid(const QString& instance_uuid, int expected_version);
 
     /// Phase 4b: persist screen UI state keyed by per-instance UUID rather
     /// than by screen type id. Two panels of the same type (e.g. two

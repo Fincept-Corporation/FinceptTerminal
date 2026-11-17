@@ -3,15 +3,17 @@ National Bank of Romania (BNR) Data Wrapper
 Fetches data from the BNR public XML API.
 
 API Reference:
-  Base URL:  https://www.bnr.ro
-  Format:    XML (utf-8)
+  Base URL:  https://curs.bnr.ro  (www.bnr.ro/nbrfxrates.xml now answers 404 and redirects to the
+             HTML home page - checked 2026-11-16)
+  Format:    XML (utf-8); namespace http://www.bnr.ro/xsd in older files, https://www.bnr.ro/xsd in newer
   Auth:      None required — fully public
   Docs:      https://www.bnr.ro/Cursuri-de-schimb-524.aspx
 
 Endpoints:
   GET /nbrfxrates.xml                    — Latest reference rates (today)
-  GET /nbrfxrates.xml?date=YYYYMMDD      — Rates for a specific date
   GET /files/xml/years/nbrfxrates{Y}.xml — All rates for a calendar year
+  (/nbrfxrates.xml?date=YYYYMMDD ignores the date and returns today's rates, so a specific date is
+   looked up in the year file.)
 
 Exchange rates expressed as RON per foreign currency unit.
 Some currencies use a multiplier (e.g. JPY per 100, HUF per 100, KRW per 100).
@@ -32,10 +34,25 @@ import xml.etree.ElementTree as ET
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date, timedelta, timezone
 
+import fincept_connector as fc
+import fincept_json
 
-BASE_URL        = "https://www.bnr.ro"
-XML_NS          = "http://www.bnr.ro/xsd"
-DEFAULT_TIMEOUT = 30
+
+BASE_URL        = "https://curs.bnr.ro"
+DEFAULT_TIMEOUT = (10, 30)
+
+
+def _local(tag: str) -> str:
+    """Element name without its namespace (the feed's namespace URI changed from http:// to https://)."""
+    return tag.rsplit("}", 1)[-1]
+
+
+def _error_text(e: Exception) -> str:
+    if isinstance(e, requests.exceptions.RequestException):
+        return fc.request_error("National Bank of Romania", e)
+    if isinstance(e, ET.ParseError):
+        return f"BNR returned malformed XML: {e}"
+    return str(e)
 
 MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
                     "NOK", "SEK", "DKK", "CNY", "PLN", "HUF", "CZK"]
@@ -44,6 +61,13 @@ MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
 # ---------------------------------------------------------------------------
 # Error container
 # ---------------------------------------------------------------------------
+
+def _per_currency(rates, date=""):
+    """{CODE: rate, "date": ...} -> [{date, currency, rate}]: a snapshot as a row per currency."""
+    rates = rates or {}
+    d = rates.get("date", date) or date
+    return [{"date": d, "currency": k, "rate": v} for k, v in rates.items() if k != "date"]
+
 
 class BNRError:
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
@@ -78,7 +102,7 @@ class BNRWrapper:
     """
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = fc.http_session()
         self.session.headers.update({
             "User-Agent": "Fincept-Terminal/4.0.2",
             "Accept":     "application/xml, text/xml, */*",
@@ -106,13 +130,12 @@ class BNRWrapper:
         RON rates are normalised: value / multiplier.
         """
         root = ET.fromstring(content)
-        ns   = {"b": XML_NS}
         rows: List[Dict[str, Any]] = []
 
-        for cube in root.findall(".//b:Cube", ns):
+        for cube in (el for el in root.iter() if _local(el.tag) == "Cube"):
             d = cube.get("date", "")
             row: Dict[str, Any] = {"date": d}
-            for rate_el in cube.findall("b:Rate", ns):
+            for rate_el in (el for el in cube if _local(el.tag) == "Rate"):
                 ccy  = rate_el.get("currency", "")
                 mult = int(rate_el.get("multiplier", "1"))
                 try:
@@ -127,24 +150,18 @@ class BNRWrapper:
 
     def _parse_header(self, content: bytes) -> Dict[str, str]:
         """Extract header metadata (publisher, publish date, message type)."""
-        root   = ET.fromstring(content)
-        ns     = {"b": XML_NS}
-        header = root.find("b:Header", ns)
-        if header is None:
+        root = ET.fromstring(content)
+        text = {_local(el.tag): (el.text or "").strip() for el in root.iter()}
+        if "Header" not in text:
             return {}
         return {
-            "publisher":      (header.findtext("b:Publisher",  namespaces=ns) or "").strip(),
-            "publish_date":   (header.findtext("b:PublishingDate", namespaces=ns) or "").strip(),
-            "orig_currency":  (header.findtext("b:Body/b:OrigCurrency", namespaces={"b": XML_NS}) or "RON").strip(),
+            "publisher":      text.get("Publisher", ""),
+            "publish_date":   text.get("PublishingDate", ""),
+            "orig_currency":  text.get("OrigCurrency") or "RON",
         }
 
     def _today_url(self) -> str:
         return f"{BASE_URL}/nbrfxrates.xml"
-
-    def _date_url(self, d: str) -> str:
-        # BNR expects YYYYMMDD
-        clean = d.replace("-", "")
-        return f"{BASE_URL}/nbrfxrates.xml?date={clean}"
 
     def _year_url(self, year: int) -> str:
         return f"{BASE_URL}/files/xml/years/nbrfxrates{year}.xml"
@@ -163,7 +180,8 @@ class BNRWrapper:
             return {
                 "success":   True,
                 "date":      latest.get("date", ""),
-                "data":      latest,
+                "data":      _per_currency(latest),
+                "rates":     {k: v for k, v in latest.items() if k != "date"},
                 "note":      "RON per 1 unit of foreign currency (normalised for multiplied currencies)",
                 "source":    "National Bank of Romania",
                 "url":       url,
@@ -171,20 +189,26 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError("today", str(e), sc).to_dict()
+            return BNRError("today", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError("today", str(e)).to_dict()
+            return BNRError("today", _error_text(e)).to_dict()
 
     def get_date(self, rate_date: str) -> Dict[str, Any]:
-        """Reference rates for a specific date (YYYY-MM-DD)."""
-        url = self._date_url(rate_date)
+        """Reference rates for a specific date (YYYY-MM-DD); on a day without a fixing (weekend, holiday)
+        the latest earlier publication of that year is returned."""
         try:
+            wanted = datetime.strptime(rate_date, "%Y-%m-%d").date().isoformat()
+            url = self._year_url(int(wanted[:4]))
             content = self._fetch_xml(url)
-            rows    = self._parse_dataset(content)
-            entry   = rows[-1] if rows else {}
+            rows    = [r for r in self._parse_dataset(content) if r["date"] <= wanted]
+            if not rows:
+                return BNRError(f"date/{rate_date}", f"No BNR reference rates published on or before {wanted} "
+                                                     f"in {wanted[:4]}").to_dict()
+            entry   = rows[-1]
             return {
                 "success":   True,
                 "date":      entry.get("date", rate_date),
+                "requested_date": wanted,
                 "data":      entry,
                 "note":      "RON per 1 unit of foreign currency",
                 "source":    "National Bank of Romania",
@@ -193,9 +217,9 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError(f"date/{rate_date}", str(e), sc).to_dict()
+            return BNRError(f"date/{rate_date}", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError(f"date/{rate_date}", str(e)).to_dict()
+            return BNRError(f"date/{rate_date}", _error_text(e)).to_dict()
 
     def get_year(self, year: Optional[int] = None) -> Dict[str, Any]:
         """All reference rates for a full calendar year."""
@@ -217,9 +241,9 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError(f"year/{year}", str(e), sc).to_dict()
+            return BNRError(f"year/{year}", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError(f"year/{year}", str(e)).to_dict()
+            return BNRError(f"year/{year}", _error_text(e)).to_dict()
 
     def get_range(self, start_date: str, end_date: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -252,9 +276,9 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError("range", str(e), sc).to_dict()
+            return BNRError("range", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError("range", str(e)).to_dict()
+            return BNRError("range", _error_text(e)).to_dict()
 
     def get_currency(self, currency: str,
                      start_date: Optional[str] = None,
@@ -293,9 +317,9 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError(f"currency/{currency}", str(e), sc).to_dict()
+            return BNRError(f"currency/{currency}", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError(f"currency/{currency}", str(e)).to_dict()
+            return BNRError(f"currency/{currency}", _error_text(e)).to_dict()
 
     def get_major_currencies(self, start_date: Optional[str] = None) -> Dict[str, Any]:
         """Major currencies vs RON for current year (or from start_date)."""
@@ -324,21 +348,22 @@ class BNRWrapper:
             }
         except requests.exceptions.HTTPError as e:
             sc = e.response.status_code if e.response is not None else None
-            return BNRError("major_currencies", str(e), sc).to_dict()
+            return BNRError("major_currencies", _error_text(e), sc).to_dict()
         except Exception as e:
-            return BNRError("major_currencies", str(e)).to_dict()
+            return BNRError("major_currencies", _error_text(e)).to_dict()
 
     def get_overview(self) -> Dict[str, Any]:
         """Snapshot: today's rates for major currencies."""
         today = self.get_today()
         if not today.get("success"):
             return today
-        data = today.get("data", {})
+        data = today.get("rates", {})
         snapshot = {c: data[c] for c in MAJOR_CURRENCIES if c in data}
         return {
             "success":   True,
             "date":      today.get("date"),
-            "data":      snapshot,
+            "data":      _per_currency(snapshot, today.get("date", "")),
+            "rates":     snapshot,
             "full_data": data,
             "note":      "RON per 1 unit of foreign currency",
             "source":    "National Bank of Romania",
@@ -385,11 +410,11 @@ def _a(n: int, d: Any = None) -> Any:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print(json.dumps({
+        print(fincept_json.dumps({
             "error":    "No command provided.",
             "usage":    "python bnr_data.py <command> [args...]",
             "commands": COMMANDS,
-        }, indent=2))
+        }))
         sys.exit(1)
 
     cmd     = sys.argv[1].lower()
@@ -425,14 +450,14 @@ def main() -> None:
         else:
             result = {"error": f"Unknown command: {cmd}", "commands": COMMANDS}
 
-        print(json.dumps(result, indent=2, ensure_ascii=True))
+        print(fincept_json.dumps(result))
 
     except Exception as exc:
-        print(json.dumps({
+        print(fincept_json.dumps({
             "success":   False,
-            "error":     str(exc),
+            "error":     _error_text(exc),
             "traceback": traceback.format_exc(),
-        }, indent=2))
+        }))
         sys.exit(1)
 
 

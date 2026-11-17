@@ -53,7 +53,7 @@ void McpService::initialize() {
     QObject::connect(&McpManager::instance(), &McpManager::servers_changed, [this]() {
         QMutexLocker lock(&mutex_);
         cache_time_ = QDateTime(); // force refresh on next get_all_tools()
-        LOG_INFO(TAG, "Tool cache invalidated — external servers changed");
+        LOG_DEBUG(TAG, "Tool cache invalidated — external servers changed");
     });
 
     // Auto-start enabled servers in a background thread so the UI never
@@ -74,7 +74,7 @@ void McpService::initialize() {
                 if (r.is_err())
                     LOG_WARN("McpService", "Auto-start failed for " + id + ": " + QString::fromStdString(r.error()));
             }
-            LOG_INFO("McpService", "All external MCP servers started");
+            LOG_DEBUG("McpService", "All external MCP servers started");
         });
         t->setObjectName("mcp-autostart");
         t->start();
@@ -87,7 +87,7 @@ void McpService::initialize() {
     // is fully registered by now (McpInit calls initialize() last).
     apply_persisted_tool_states();
 
-    LOG_INFO(TAG, QString("McpService initialized — %1 internal tools, %2 external servers queued")
+    LOG_DEBUG(TAG, QString("McpService initialized — %1 internal tools, %2 external servers queued")
                       .arg(McpProvider::instance().tool_count())
                       .arg(to_start.size()));
 }
@@ -101,11 +101,13 @@ constexpr const char* kMcpDisabledToolsKey = "mcp.disabled_tools";
 
 // The persisted disabled set. `ok` is false when the read itself failed — the
 // caller must then not write the set back (SettingsRepository::get contract).
-QStringList mcp_svc_read_disabled_tools(bool* ok) {
+QStringList mcp_svc_read_disabled_tools(bool* ok, QString* error = nullptr) {
     const auto r = SettingsRepository::instance().get(QString::fromLatin1(kMcpDisabledToolsKey), QStringLiteral("[]"));
     if (r.is_err()) {
         if (ok)
             *ok = false;
+        if (error)
+            *error = QString::fromStdString(r.error());
         return {};
     }
     if (ok)
@@ -152,9 +154,11 @@ void McpService::set_tool_enabled_persistent(const QString& tool_name, bool enab
 
 void McpService::apply_persisted_tool_states() {
     bool ok = false;
-    const QStringList disabled = mcp_svc_read_disabled_tools(&ok);
+    QString read_error;
+    const QStringList disabled = mcp_svc_read_disabled_tools(&ok, &read_error);
     if (!ok) {
-        LOG_WARN(TAG, "Could not read saved tool states — every tool starts enabled this session");
+        LOG_WARN(TAG, logf("Could not read saved tool states — every tool starts enabled this session",
+                           {{"key", kMcpDisabledToolsKey}, {"error", read_error.left(200)}}));
         return;
     }
     int applied = 0;
@@ -168,7 +172,7 @@ void McpService::apply_persisted_tool_states() {
         ++applied;
     }
     if (applied > 0)
-        LOG_INFO(TAG, QString("Applied %1 user-disabled tool(s)").arg(applied));
+        LOG_DEBUG(TAG, logf("User-disabled tools applied", {{"count", applied}}));
 }
 
 void McpService::shutdown() {
@@ -316,12 +320,11 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
         kept.resize(effective_cap);
 
     if (effective_cap > 0 && kept_before_cap > effective_cap) {
-        LOG_WARN(TAG, QString("apply_tool_filter: truncated %1 → %2 (cap=%3, configured_cap=%4) — "
-                              "consider tightening categories for this screen/agent")
-                          .arg(kept_before_cap)
-                          .arg(kept.size())
-                          .arg(effective_cap)
-                          .arg(filter.max_tools));
+        LOG_WARN(TAG, logf("Tool list cut to the cap — tighten the categories for this screen or agent",
+                           {{"selected", static_cast<qint64>(kept_before_cap)},
+                            {"kept", static_cast<qint64>(kept.size())},
+                            {"cap", effective_cap},
+                            {"configured_cap", filter.max_tools}}));
     }
     return kept;
 }
@@ -374,11 +377,8 @@ std::vector<UnifiedTool> McpService::select_tools_for_llm_locked(const ToolFilte
 static std::vector<UnifiedTool> cap_tool_list(std::vector<UnifiedTool> tools, int cap, const char* dialect) {
     if (cap <= 0 || static_cast<int>(tools.size()) <= cap)
         return tools;
-    LOG_WARN(TAG, QString("%1: %2 tools selected but the dialect accepts at most %3 — sending the first %3. "
-                          "Pass a narrower ToolFilter.")
-                      .arg(QString::fromUtf8(dialect))
-                      .arg(tools.size())
-                      .arg(cap));
+    LOG_WARN(TAG, logf("Tool list cut to the provider's maximum — pass a narrower ToolFilter",
+                       {{"dialect", dialect}, {"selected", static_cast<qint64>(tools.size())}, {"cap", cap}}));
     tools.resize(static_cast<std::size_t>(cap));
     return tools;
 }
@@ -422,7 +422,7 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     if (openai_format_cache_.size() >= kMaxFormatCacheEntries)
         openai_format_cache_.clear();
     openai_format_cache_.insert(key, result);
-    LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM").arg(result.size()));
+    LOG_DEBUG(TAG, QString("format_tools_for_openai: %1 tools sent to LLM").arg(result.size()));
     return result;
 }
 
@@ -461,7 +461,7 @@ QJsonArray McpService::format_tools_for_anthropic(const ToolFilter& filter) {
         anthropic_format_cache_.clear();
     anthropic_format_cache_.insert(key, result);
 
-    LOG_INFO(TAG, QString("format_tools_for_anthropic: %1 tools sent to LLM").arg(result.size()));
+    LOG_DEBUG(TAG, QString("format_tools_for_anthropic: %1 tools sent to LLM").arg(result.size()));
     return result;
 }
 
@@ -486,9 +486,8 @@ QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter) {
             // One invalid name fails the entire generateContent call, taking
             // every other tool down with it. Drop this one instead.
             ++dropped_names;
-            LOG_WARN(TAG, QString("format_tools_for_gemini: dropping '%1' — not a valid Gemini function name "
-                                  "(must match ^[a-zA-Z_][a-zA-Z0-9_.:-]{0,63}$)")
-                              .arg(fn_name));
+            LOG_WARN(TAG, logf("Tool left out of a Gemini request: name not valid for Gemini",
+                               {{"tool", fn_name}, {"rule", "^[a-zA-Z_][a-zA-Z0-9_.:-]{0,63}$"}}));
             continue;
         }
 
@@ -510,7 +509,7 @@ QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter) {
         gemini_format_cache_.clear();
     gemini_format_cache_.insert(key, result);
 
-    LOG_INFO(TAG, QString("format_tools_for_gemini: %1 function declarations sent to LLM%2")
+    LOG_DEBUG(TAG, QString("format_tools_for_gemini: %1 function declarations sent to LLM%2")
                       .arg(fn_decls.size())
                       .arg(dropped_names > 0 ? QString(", %1 dropped on name").arg(dropped_names) : QString()));
     return result;
@@ -610,8 +609,12 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
         return *denied;
 
     auto result = McpManager::instance().call_external_tool(server_id, tool_name, args);
-    if (result.is_err())
+    if (result.is_err()) {
+        LOG_WARN(TAG, logf("External tool call failed", {{"server", server_id},
+                                                         {"tool", tool_name},
+                                                         {"error", QString::fromStdString(result.error()).left(200)}}));
         return ToolResult::fail(QString::fromStdString(result.error()));
+    }
 
     const QJsonObject& data = result.value();
 
@@ -657,9 +660,9 @@ ToolResult McpService::execute_openai_function(const QString& function_name, con
                                 "' exists. Do not retry this name; use only the tools you were given.");
     }
 
-    LOG_INFO(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
+    LOG_DEBUG(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
     auto result = execute_tool(server_id, tool_name, args);
-    LOG_INFO(TAG, QString("Dispatch result: %1 success=%2").arg(tool_name, result.success ? "true" : "false"));
+    LOG_DEBUG(TAG, QString("Dispatch result: %1 success=%2").arg(tool_name, result.success ? "true" : "false"));
     return result;
 }
 
@@ -680,7 +683,7 @@ QFuture<ToolResult> McpService::execute_openai_function_async(const QString& fun
                         "' exists. Do not retry this name; use only the tools you were given.");
     }
 
-    LOG_INFO(TAG, QString("Async dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
+    LOG_DEBUG(TAG, QString("Async dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
 
     // Internal tools — use the native async path. Validation, timeout, and
     // cancellation are handled by McpProvider::call_tool_async.
@@ -758,7 +761,7 @@ void McpService::refresh_cache() {
     cache_time_ = QDateTime::currentDateTime();
     cached_generation_ = McpProvider::instance().generation();
 
-    LOG_INFO(TAG, QString("Refreshed tool cache: %1 total (%2 internal, %3 external)")
+    LOG_DEBUG(TAG, QString("Refreshed tool cache: %1 total (%2 internal, %3 external)")
                       .arg(cached_tools_.size())
                       .arg(internal.size())
                       .arg(external.size()));

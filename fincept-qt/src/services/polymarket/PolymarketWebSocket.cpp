@@ -77,7 +77,7 @@ bool PolymarketWebSocket::is_connected() const {
 void PolymarketWebSocket::ensure_connected() {
     if (connected_ || connecting_ || ws_->is_connected())
         return;
-    LOG_INFO("Polymarket WS", "Connecting to " + QString(WS_URL));
+    LOG_DEBUG("Polymarket", "Connecting to " + QString(WS_URL));
     connecting_ = true;
     ws_->connect_to(QString(WS_URL));
 }
@@ -153,7 +153,7 @@ void PolymarketWebSocket::send_dynamic(const QString& operation, const QStringLi
     msg["assets_ids"] = assets;
     msg["operation"] = operation;
     ws_->send(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
-    LOG_INFO("Polymarket WS", operation + " " + QString::number(token_ids.size()) + " tokens");
+    LOG_DEBUG("Polymarket", operation + " " + QString::number(token_ids.size()) + " tokens");
 }
 
 void PolymarketWebSocket::send_subscribe(const QStringList& token_ids) {
@@ -165,7 +165,7 @@ void PolymarketWebSocket::send_subscribe(const QStringList& token_ids) {
     msg["assets_ids"] = assets;
     msg["initial_dump"] = true;
     ws_->send(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
-    LOG_INFO("Polymarket WS", "Subscribed to " + QString::number(token_ids.size()) + " tokens");
+    LOG_DEBUG("Polymarket", "Subscribed to " + QString::number(token_ids.size()) + " tokens");
 }
 
 void PolymarketWebSocket::send_ping() {
@@ -177,7 +177,9 @@ void PolymarketWebSocket::on_ws_connected() {
     connected_ = true;
     connecting_ = false;
     ping_timer_->start();
-    LOG_INFO("Polymarket WS", "Connected");
+    if (Logger::instance().transition_possible(0))
+        Logger::instance().transition("Polymarket", QStringLiteral("ws"), 0);
+    LOG_INFO("Polymarket", "Polymarket stream connected");
     emit connection_status_changed(true);
     if (!subscribed_tokens_.isEmpty()) {
         send_subscribe(QStringList(subscribed_tokens_.begin(), subscribed_tokens_.end()));
@@ -189,7 +191,11 @@ void PolymarketWebSocket::on_ws_disconnected() {
     connecting_ = false;
     ping_timer_->stop();
     books_.clear(); // deltas must not patch a pre-disconnect snapshot; the resubscribe dump re-seeds them
-    LOG_WARN("Polymarket WS", "Disconnected");
+    if (closing_)
+        LOG_DEBUG("Polymarket", "Polymarket stream closed (idle)");
+    else
+        LOG_TRANSITION("Polymarket", QStringLiteral("ws"), 1, LogLevel::Warn,
+                       "Polymarket stream disconnected, reconnecting");
     emit connection_status_changed(false);
     // We closed it on purpose (idle / unsubscribe_all) and auto-reconnect is stopped. If a
     // subscribe() landed in the window between the close request and this signal, it was
@@ -311,7 +317,8 @@ void PolymarketWebSocket::apply_price_changes(const QJsonArray& changes) {
 
 void PolymarketWebSocket::on_ws_error(const QString& error) {
     connecting_ = false; // a failed attempt must not block the next ensure_connected()
-    LOG_ERROR("Polymarket WS", "Error: " + error);
+    LOG_TRANSITION("Polymarket", QStringLiteral("ws"), 1, LogLevel::Warn,
+                   logf("Polymarket stream failed, reconnecting", {{"error", error}}));
 }
 
 QStringList PolymarketWebSocket::topic_patterns() const {
@@ -342,8 +349,8 @@ void PolymarketWebSocket::ensure_registered_with_hub() {
     hub.set_policy_pattern("prediction:polymarket:orderbook:*", push_only);
 
     hub_registered_ = true;
-    LOG_INFO("Polymarket WS",
-             "Registered with DataHub (prediction:polymarket:price:*, prediction:polymarket:orderbook:*)");
+    LOG_DEBUG("Polymarket",
+              "Registered with DataHub (prediction:polymarket:price:*, prediction:polymarket:orderbook:*)");
 }
 
 void PolymarketWebSocket::publish_price_to_hub(const QString& asset_id, double price) {

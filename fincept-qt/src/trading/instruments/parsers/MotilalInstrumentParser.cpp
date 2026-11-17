@@ -199,7 +199,7 @@ QVector<Instrument> parse_motilal(const QByteArray& payload) {
             parse_index_row(section_ex, row, idx, out);
     }
 
-    LOG_INFO("MotilalSource", QString("Parsed %1 Motilal instruments").arg(out.size()));
+    LOG_DEBUG("MotilalSource", QString("Parsed %1 Motilal instruments").arg(out.size()));
     return out;
 }
 

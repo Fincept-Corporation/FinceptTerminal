@@ -1,41 +1,67 @@
 // src/screens/portfolio/PortfolioBlotter.h
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
-#include "trading/TradingTypes.h"
+#include "services/markets/MarketDataTypes.h"
+#include "services/portfolio/PortfolioAllocation.h"
 
-#include <QComboBox>
 #include <QHash>
 #include <QHideEvent>
-#include <QLabel>
-#include <QPointer>
-#include <QPushButton>
+#include <QPoint>
 #include <QShowEvent>
 #include <QStringList>
-#include <QTableWidget>
 #include <QWidget>
+
+class QLabel;
+class QTableView;
 
 namespace fincept::screens {
 
-class PortfolioSparkline;
+class PfBlotterModel;
+class PfBlotterProxy;
 
-/// 12-column sortable positions table — blotter style.
+/// Positions blotter — model/view table with a column chooser.
+///
+/// Columns (choose with the header's right-click menu or show_column_menu()):
+/// symbol / name, quantity, last price and average cost in the instrument's own
+/// quote currency at its own precision, currency and spot FX, value in local and
+/// base currency, cost, unrealised P&L split into price and FX, day change, trend
+/// sparkline, weight and risk-share bars, beta, volatility, component VaR,
+/// realised P&L, dividends, yield, sector / industry / asset class / country /
+/// exchange, 52-week range bar, market state / as-of and open lots. A pinned
+/// totals row closes the table. Unpriced / unconverted holdings are marked and
+/// show "—" (never zero). Every column sorts; absent values sort last.
 class PortfolioBlotter : public QWidget {
     Q_OBJECT
   public:
     explicit PortfolioBlotter(QWidget* parent = nullptr);
+    ~PortfolioBlotter() override;
 
+    /// Holdings + base currency + totals.
+    void set_summary(const portfolio::PortfolioSummary& summary);
+    /// Legacy entry point: holdings only (base currency of the last summary).
     void set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings);
+    /// Per-holding beta / volatility / risk share / component VaR.
+    void set_analytics(const portfolio::MarketAnalytics& analytics);
+    /// Sector / industry / asset class / country / exchange per holding.
+    void set_allocation(const portfolio::AllocationReport& report);
+    /// market:info fundamentals per symbol (52-week range, dividend yield).
+    void set_market_info(const QHash<QString, services::InfoData>& info);
+
     void set_selected_symbol(const QString& symbol);
     void set_filter(const QString& text);
     /// Show only rows whose symbol is in @p symbols. Empty list = show all.
     void set_sector_filter(const QStringList& symbols);
     void refresh_theme();
-    /// Save every position in the current (filtered, sorted) view as CSV.
+    /// Save the visible columns of the filtered, sorted view as CSV.
     void export_csv();
+    /// Column chooser at a global position (for a header button).
+    void show_column_menu(const QPoint& global_pos);
     /// Tell the blotter which broker account (if any) backs the portfolio so it
     /// can overlay live broker ticks. Safe to call repeatedly and with an empty
     /// id (= unlinked portfolio); the id is remembered across re-subscriptions.
     void hub_resubscribe_broker_quotes(const QString& broker_account_id);
+
+    int visible_count() const;
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -50,83 +76,43 @@ class PortfolioBlotter : public QWidget {
     void sort_changed(portfolio::SortColumn col, portfolio::SortDirection dir);
     void edit_transaction_requested(QString symbol);
     void delete_position_requested(QString symbol);
+    /// Row menu "Buy more" / "Sell" / "Record dividend" / "Record split" for a symbol.
+    void buy_requested(QString symbol);
+    void sell_requested(QString symbol);
+    void split_requested(QString symbol);
 
   private:
     void build_ui();
-    void build_pagination_footer();
-    void populate_table();
+    void apply_styles();
     void retranslateUi();
-    void apply_filter();
-    void on_header_clicked(int section);
-    void on_row_clicked(int row, int col);
     void on_context_menu(const QPoint& pos);
-    QString format_value(double v, int dp = 2) const;
-
-    // ── Pagination ──────────────────────────────────────────────────────────
-    /// Filtered + sorted view (after filter/sector trim) used as the source
-    /// of truth for pagination math.
-    ///
-    /// Memoised: a single populate_table() used to call this five times (clamp
-    /// → total_pages → paged_view → update_pagination_controls → total_pages),
-    /// each one re-filtering and deep-copying the whole holdings vector, and
-    /// every live broker tick called it again per row.
-    const QVector<portfolio::HoldingWithQuote>& visible_view() const;
-    /// Drop the memoised view. Call whenever holdings/filter/sort change.
-    void invalidate_view_cache();
-    /// Rows for the current page only — what actually goes into table_.
-    QVector<portfolio::HoldingWithQuote> paged_view() const;
-    /// Update footer labels + button enabled-states from current state.
-    void update_pagination_controls();
-    /// Clamp current_page_ to a valid range given the latest filtered count.
-    void clamp_current_page();
-    /// Total pages for current filtered view + page size.
-    int total_pages() const;
-
-    QTableWidget* table_ = nullptr;
-
-    // Pagination footer widgets
-    QWidget* footer_ = nullptr;
-    QLabel* footer_status_ = nullptr; // "Showing 1-10 of 47"
-    QPushButton* btn_first_ = nullptr;
-    QPushButton* btn_prev_ = nullptr;
-    QLabel* footer_page_label_ = nullptr; // "Page 1 of 5"
-    QPushButton* btn_next_ = nullptr;
-    QPushButton* btn_last_ = nullptr;
-    QComboBox* page_size_combo_ = nullptr;
-    QLabel* footer_rows_label_ = nullptr;
-
-    void fetch_sparklines();
+    void save_columns() const;
+    void restore_columns();
+    /// PRICE P&L / FX P&L columns: the user's own choice from the column menu when
+    /// there is one, else shown when the FX split setting is on and the book holds a
+    /// foreign-currency position.
+    void apply_split_columns();
+    void save_split_choice() const;
+    void update_footer();
+    void reselect();
+    QString symbol_at_proxy_row(int row) const;
 
     void hub_resubscribe_sparklines(bool force_refresh);
     void subscribe_broker_quotes();
     void hub_unsubscribe_all();
-    void repaint_sparkline_cells();
-    void update_row_price(const QString& symbol, double ltp, double change_pct);
+    void fetch_sparklines();
+
+    QTableView* view_ = nullptr;
+    PfBlotterModel* model_ = nullptr;
+    PfBlotterProxy* proxy_ = nullptr;
+    QLabel* footer_ = nullptr;
+
     bool hub_active_ = false;
     QStringList sub_symbols_;   // sorted symbol set the hub subscriptions were built for
     QString broker_account_id_; // backing broker account of the current portfolio ("" = none)
-
-    QVector<portfolio::HoldingWithQuote> holdings_;
-    QVector<portfolio::HoldingWithQuote> sorted_;
-    mutable QVector<portfolio::HoldingWithQuote> view_cache_;
-    mutable bool view_cache_valid_ = false;
     QString selected_symbol_;
-    QString filter_text_;
-    QStringList sector_symbols_; // empty = no sector filter
-    portfolio::SortColumn sort_col_ = portfolio::SortColumn::Weight;
-    portfolio::SortDirection sort_dir_ = portfolio::SortDirection::Desc;
-
-    // Pagination state. page_size_ persists via SettingsRepository
-    // ("portfolio.blotter.page_size"). current_page_ is 1-indexed.
-    int page_size_ = 10;
-    int current_page_ = 1;
-
-    // Real sparkline data keyed by symbol — populated async via fetch_sparklines()
-    QHash<QString, QVector<double>> sparkline_cache_;
-
-    // Sparkline fetch state per symbol
-    enum class SparklineState { Pending, Loaded, Failed };
-    QHash<QString, SparklineState> sparkline_state_;
+    bool columns_restored_ = false;
+    QHash<int, bool> split_explicit_; ///< column -> shown, for the split columns the user set by hand
 };
 
 } // namespace fincept::screens

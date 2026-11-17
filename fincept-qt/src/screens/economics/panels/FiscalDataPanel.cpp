@@ -42,9 +42,7 @@ FiscalDataPanel::FiscalDataPanel(QWidget* parent) : EconPanelBase(kFiscalDataSou
 }
 
 void FiscalDataPanel::activate() {
-    show_empty(tr("Select a dataset and click FETCH\n"
-                  "Source: US Treasury FiscalData API (fiscaldata.treasury.gov)\n"
-                  "No API key required"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
@@ -54,7 +52,7 @@ void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kFiscalDataSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(240);
 
     thl->addWidget(dataset_lbl_);
@@ -69,8 +67,8 @@ void FiscalDataPanel::on_fetch() {
 
     // EconomicsService::execute() prepends `command` to the argv — pass only
     // the extra flags here.
-    services::EconomicsService::instance().execute(kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
-                                                   "fiscal_" + QString(series.command).replace('-', '_'));
+    execute_query(kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
+                  "fiscal_" + QString(series.command).replace('-', '_'));
 }
 
 void FiscalDataPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -102,7 +100,7 @@ void FiscalDataPanel::on_result(const QString& request_id, const services::Econo
                                                                                        : request_id.mid(7));
 
     display(rows, title);
-    LOG_INFO("FiscalDataPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("FiscalDataPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

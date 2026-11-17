@@ -9,16 +9,21 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('FINNHUB_API_KEY', '')
 BASE_URL = "https://finnhub.io/api/v1"
+SERVICE = "Finnhub"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every Finnhub endpoint answers HTTP 401 without a token: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://finnhub.io/register", "FINNHUB_API_KEY",
+                              what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
@@ -26,13 +31,14 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "FINNHUB_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    if isinstance(data, dict) and isinstance(data.get("error"), str):
+        return {"error": f"{SERVICE}: {fc.scrub(data['error'], API_KEY)}"}
+    return data
 
 
 def get_quote(symbol: str) -> Any:
@@ -119,7 +125,7 @@ def main(args=None):
         to_ts = args[4] if len(args) > 4 else None
         result = get_crypto_candles(symbol, resolution, from_ts, to_ts)
 
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 #include "Surface3DWidget.h"
 
+#include "ui/theme/Theme.h"
+
+#include <QFontMetrics>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
@@ -70,35 +73,12 @@ QColor Surface3DWidget::lerp_color(const QColor& a, const QColor& b, float t) {
 
 QColor Surface3DWidget::surface_color(float t, bool diverging) const {
     t = std::max(0.0f, std::min(1.0f, t));
-    if (diverging) {
-        // Obsidian diverging: muted crimson → dark base → muted green
-        static const QColor stops[] = {
-            {180, 30, 30}, // deep red
-            {220, 55, 55}, // red
-            {100, 30, 20}, // dark red-brown
-            {14, 14, 14},  // base (near-black neutral)
-            {20, 60, 35},  // dark green
-            {25, 120, 55}, // green
-            {30, 160, 75}, // bright green
-        };
-        float idx = t * 6.0f;
-        int lo = std::max(0, std::min(5, (int)idx));
-        return lerp_color(stops[lo], stops[lo + 1], idx - (float)lo);
-    }
-    // Obsidian sequential: dark base → amber → bright amber-white
-    static const QColor stops[] = {
-        {8, 8, 8},       // BG_BASE
-        {40, 22, 4},     // very dark amber
-        {90, 50, 8},     // dark amber
-        {150, 80, 10},   // amber-brown
-        {200, 110, 15},  // amber
-        {217, 119, 6},   // AMBER brand
-        {240, 175, 80},  // light amber
-        {255, 220, 150}, // near-white amber peak
-    };
-    float idx = t * 7.0f;
-    int lo = std::max(0, std::min(6, (int)idx));
-    return lerp_color(stops[lo], stops[lo + 1], idx - (float)lo);
+    // The theme's data scales: diverging runs negative → neutral → positive
+    // (t = 0.5 is the midpoint), sequential runs from the surface to the
+    // strongest magnitude.
+    if (diverging)
+        return ui::colors::diverging_color(2.0 * t - 1.0);
+    return ui::colors::sequential_color(t);
 }
 
 // ---- 3D projection ----
@@ -121,23 +101,29 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
 
     int W = width(), H = height();
 
-    // Obsidian background — pure dark base
-    painter.fillRect(rect(), QColor(8, 8, 8));
+    // Page background (colours are read from the theme on every paint; theme
+    // and font changes repaint the widget through its palette / font change).
+    const QColor bg(ui::colors::BG_BASE());
+    painter.fillRect(rect(), bg);
 
     if (!supported_) {
-        painter.setPen(QColor(217, 119, 6));
-        painter.setFont(QFont("Consolas", 13, QFont::Bold));
-        painter.drawText(QRect(0, H / 2 - 28, W, 24), Qt::AlignCenter, tr("3D NOT APPLICABLE"));
-        painter.setPen(QColor(140, 140, 140));
-        painter.setFont(QFont("Consolas", 10));
-        painter.drawText(QRect(0, H / 2, W, 22), Qt::AlignCenter, tr("This surface is 1-D or categorical."));
-        painter.drawText(QRect(0, H / 2 + 18, W, 22), Qt::AlignCenter, tr("Switch to TABLE or LINE view."));
+        const QFont title_font = ui::fonts::font(2, QFont::Bold);
+        const QFont body_font = ui::fonts::font(-1);
+        const int title_h = std::max(24, QFontMetrics(title_font).height() + 4);
+        const int line_h = std::max(18, QFontMetrics(body_font).height() + 2);
+        painter.setPen(QColor(ui::colors::AMBER()));
+        painter.setFont(title_font);
+        painter.drawText(QRect(0, H / 2 - title_h - 4, W, title_h), Qt::AlignCenter, tr("3D NOT APPLICABLE"));
+        painter.setPen(QColor(ui::colors::TEXT_SECONDARY()));
+        painter.setFont(body_font);
+        painter.drawText(QRect(0, H / 2, W, line_h), Qt::AlignCenter, tr("This surface is 1-D or categorical."));
+        painter.drawText(QRect(0, H / 2 + line_h, W, line_h), Qt::AlignCenter, tr("Switch to TABLE or LINE view."));
         return;
     }
 
     if (grid_.empty() || grid_[0].empty()) {
-        painter.setPen(QColor(80, 80, 80));
-        painter.setFont(QFont("Consolas", 11));
+        painter.setPen(QColor(ui::colors::TEXT_TERTIARY()));
+        painter.setFont(ui::fonts::font());
         painter.drawText(rect(), Qt::AlignCenter, tr("NO DATA LOADED"));
         return;
     }
@@ -148,9 +134,9 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
     auto v3 = [](float vx, float vy, float vz) -> Vec3 { return {vx, vy, vz}; };
     auto proj = [&](Vec3 p) { return project(p, center, sc); };
 
-    // ---- Wireframe box — Obsidian BORDER_MED/DIM ----
-    QPen axis_pen(QColor(60, 60, 60, 220), 1.2f);
-    QPen axis_dim_pen(QColor(35, 35, 35, 160), 1.0f);
+    // ---- Wireframe box — BORDER_BRIGHT front edges, BORDER_MED back edges ----
+    QPen axis_pen(QColor(ui::colors::BORDER_BRIGHT()), 1.2f);
+    QPen axis_dim_pen(QColor(ui::colors::BORDER_MED()), 1.0f);
     painter.setPen(axis_pen);
     painter.drawLine(proj(v3(-1, -1, -1)), proj(v3(1, -1, -1)));
     painter.drawLine(proj(v3(-1, -1, -1)), proj(v3(-1, -1, 1)));
@@ -167,7 +153,7 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
     painter.drawLine(proj(v3(-1, 1, 1)), proj(v3(1, 1, 1)));
 
     // ---- Grid lines base plane ----
-    QPen grid_pen(QColor(28, 28, 28, 180), 1.0f);
+    QPen grid_pen(QColor(ui::colors::BORDER_DIM()), 1.0f);
     painter.setPen(grid_pen);
     constexpr int n_grid = 8;
     for (int gi = 0; gi <= n_grid; gi++) {
@@ -271,17 +257,20 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
         painter.drawPolygon(poly);
     }
 
-    // ---- Axis labels — Obsidian amber ----
-    QFont label_font("Consolas", 8);
-    label_font.setBold(true);
+    // Label plates: the page background, mostly opaque, so text reads over the surface.
+    QColor plate = bg;
+    plate.setAlpha(200);
+
+    // ---- Axis labels — accent ----
+    QFont label_font = ui::fonts::font(-3, QFont::Bold);
     painter.setFont(label_font);
-    painter.setPen(QColor(217, 119, 6)); // AMBER
+    painter.setPen(QColor(ui::colors::AMBER()));
 
     auto draw_label = [&](Vec3 pos, const QString& text) {
         QPointF tp = proj(pos);
         QFontMetrics fm(painter.font());
         QRectF br = fm.boundingRect(text);
-        painter.fillRect(QRectF(tp.x() - 3, tp.y() - 2, br.width() + 6, br.height() + 4), QColor(8, 8, 8, 200));
+        painter.fillRect(QRectF(tp.x() - 3, tp.y() - 2, br.width() + 6, br.height() + 4), plate);
         painter.drawText(tp + QPointF(0, br.height()), text);
     };
 
@@ -289,10 +278,10 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
     draw_label(v3(-1.55f, 0.0f, -1.0f), QString::fromStdString(y_label_));
     draw_label(v3(-1.0f, -1.45f, 0.0f), QString::fromStdString(z_label_));
 
-    // ---- Tick labels — bright white for visibility ----
-    QFont tick_font("Consolas", 7);
+    // ---- Tick labels — primary text for visibility ----
+    QFont tick_font = ui::fonts::font(-4);
     painter.setFont(tick_font);
-    painter.setPen(QColor(220, 220, 220)); // near-white
+    painter.setPen(QColor(ui::colors::TEXT_PRIMARY()));
 
     constexpr int n_ticks = 5;
     for (int ti = 0; ti <= n_ticks; ti++) {
@@ -302,8 +291,7 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
         QFontMetrics tfm(tick_font);
         auto draw_tick = [&](QPointF tp, const QString& txt) {
             QRectF br = tfm.boundingRect(txt);
-            painter.fillRect(QRectF(tp.x() - 1, tp.y() - br.height() + 2, br.width() + 4, br.height() + 2),
-                             QColor(8, 8, 8, 190));
+            painter.fillRect(QRectF(tp.x() - 1, tp.y() - br.height() + 2, br.width() + 4, br.height() + 2), plate);
             painter.drawText(tp, txt);
         };
 
@@ -331,13 +319,18 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
         painter.setPen(c);
         painter.drawLine(bar_x, bar_y + py, bar_x + bar_w, bar_y + py);
     }
-    painter.setPen(QColor(50, 50, 50));
+    painter.setPen(QColor(ui::colors::BORDER_MED()));
     painter.drawRect(bar_x, bar_y, bar_w, bar_h);
-    QFont tiny_font("Consolas", 7);
+    QFont tiny_font = ui::fonts::font(-4);
     painter.setFont(tiny_font);
-    painter.setPen(QColor(230, 230, 230));
-    painter.drawText(bar_x - 2, bar_y - 4, QString::number((double)max_val_, 'f', 1));
-    painter.drawText(bar_x - 2, bar_y + bar_h + 12, QString::number((double)min_val_, 'f', 1));
+    painter.setPen(QColor(ui::colors::TEXT_PRIMARY()));
+    // Right-aligned to the bar's right edge so a wider font never runs off the widget.
+    const QFontMetrics legend_fm(tiny_font);
+    const QString max_txt = QString::number((double)max_val_, 'f', 1);
+    const QString min_txt = QString::number((double)min_val_, 'f', 1);
+    painter.drawText(std::min(bar_x - 2, W - 2 - legend_fm.horizontalAdvance(max_txt)), bar_y - 4, max_txt);
+    painter.drawText(std::min(bar_x - 2, W - 2 - legend_fm.horizontalAdvance(min_txt)),
+                     bar_y + bar_h + legend_fm.ascent() + 2, min_txt);
 }
 
 // ---- Mouse / wheel ----

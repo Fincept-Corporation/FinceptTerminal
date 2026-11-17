@@ -33,11 +33,18 @@ class NotificationsSection : public QWidget {
         QHash<QString, QLineEdit*> fields;    // field_key → input widget
         QHash<QString, QLabel*> field_labels; // field_key → row label (for retranslateUi)
         QPushButton* test_btn = nullptr;
-        QFrame* body_frame = nullptr; // collapsible config area
-        QLabel* status_lbl = nullptr; // inline test result
+        QFrame* body_frame = nullptr;     // collapsible config area
+        QLabel* status_lbl = nullptr;     // inline test result / read problem
+        QPushButton* retry_btn = nullptr; // shown while its stored settings cannot be read
     };
 
     void build_ui();
+    /// Read one provider's stored settings into its widgets. A value that cannot
+    /// be read (settings row, or a secret in SecureStorage) is never shown as
+    /// "not set": the box stays empty, the status line says why, and saving that
+    /// provider stays off until a read succeeds (RETRY reads again). A damaged
+    /// secret (it can never be read) is kept until the user enters it again.
+    void reload_provider(const QString& provider_id);
     /// Validates then persists one provider. Returns false (and, for invalid input,
     /// fills *error_out) when nothing was written.
     bool save_provider_fields(const QString& provider_id, const ProviderWidgets& pw, QString* error_out = nullptr);

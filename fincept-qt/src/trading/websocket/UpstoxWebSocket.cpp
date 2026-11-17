@@ -36,6 +36,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_UPSTOX_WS = "UpstoxWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_upstox_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_UPSTOX_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_UPSTOX_WS, key, 1)) {
+        LOG_WARN(TAG_UPSTOX_WS, "Upstox WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_UPSTOX_WS, "Upstox WS still disconnected");
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Minimal Protobuf wire-format reader
 //
@@ -457,7 +472,7 @@ void UpstoxWebSocket::open() {
         return;
     }
     connecting_ = true;
-    LOG_INFO(TAG_UPSTOX_WS, "Authorizing market-data feed");
+    LOG_DEBUG(TAG_UPSTOX_WS, "Authorizing market-data feed");
 
     // The authorize REST call (BrokerHttp) is synchronous, so run it on a worker
     // thread and connect on the UI thread (P1 / P8: never block UI, QPointer guard).
@@ -475,12 +490,13 @@ void UpstoxWebSocket::open() {
                     return;
                 self->connecting_ = false;
                 if (url.isEmpty()) {
-                    LOG_ERROR(TAG_UPSTOX_WS, "Failed to obtain WS URL from authorize endpoint");
+                    // fetch_ws_url() already wrote the ERROR line with the cause.
+                    LOG_DEBUG(TAG_UPSTOX_WS, "Failed to obtain WS URL from authorize endpoint");
                     emit self->error_occurred(QStringLiteral("Upstox feed authorize failed"));
                     return;
                 }
                 self->ws_url_ = url;
-                LOG_INFO(TAG_UPSTOX_WS, "Connecting to authorized feed URI");
+                LOG_DEBUG(TAG_UPSTOX_WS, "Connecting to authorized feed URI");
                 self->ws_->connect_to(url);
                 self->start_health_check();
             },
@@ -564,13 +580,14 @@ void UpstoxWebSocket::on_data_stall() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void UpstoxWebSocket::on_connected() {
-    LOG_INFO(TAG_UPSTOX_WS, "Connected — replaying subscriptions");
+    LOG_DEBUG(TAG_UPSTOX_WS, "Connected — replaying subscriptions");
     resubscribe_all();
+    log_upstox_stream_state(this, true);
     emit connected();
 }
 
 void UpstoxWebSocket::on_disconnected() {
-    LOG_WARN(TAG_UPSTOX_WS, "Disconnected");
+    log_upstox_stream_state(this, false);
     emit disconnected();
 }
 
@@ -589,7 +606,7 @@ void UpstoxWebSocket::on_text_message(const QString& msg) {
     if (obj.value("status").toString() == QLatin1String("failed")) {
         const QString method = obj.value("method").toString();
         const QString error = obj.value("error").toString();
-        LOG_ERROR(TAG_UPSTOX_WS, QString("%1 failed: %2").arg(method, error));
+        LOG_ERROR(TAG_UPSTOX_WS, logf("Upstox feed request failed", {{"method", method}, {"error", error}}));
         emit error_occurred(QString("Upstox %1 failed: %2").arg(method, error));
     }
 }
@@ -605,13 +622,15 @@ QString UpstoxWebSocket::fetch_ws_url() const {
 
     BrokerHttpResponse resp = BrokerHttp::instance().get(kAuthEndpoint, headers);
     if (!resp.success) {
-        LOG_ERROR(TAG_UPSTOX_WS, QString("Authorize HTTP %1: %2").arg(resp.status_code).arg(resp.error));
+        LOG_ERROR(TAG_UPSTOX_WS,
+                  logf("Upstox feed authorize failed", {{"status", resp.status_code}, {"error", resp.error}}));
         return QString();
     }
     // { "status":"success", "data": { "authorized_redirect_uri": "wss://..." } }
     const QString uri = resp.json.value("data").toObject().value("authorized_redirect_uri").toString();
     if (uri.isEmpty())
-        LOG_ERROR(TAG_UPSTOX_WS, "authorize response missing authorized_redirect_uri");
+        LOG_ERROR(TAG_UPSTOX_WS, logf("Upstox feed authorize failed",
+                                      {{"status", resp.status_code}, {"reason", "authorized_redirect_uri missing"}}));
     return uri;
 }
 
@@ -645,10 +664,10 @@ void UpstoxWebSocket::send_subscription(const QStringList& instrument_keys, cons
         // Upstox expects the JSON sent as a BINARY frame.
         ws_->send_binary(QJsonDocument(envelope).toJson(QJsonDocument::Compact));
     }
-    LOG_INFO(TAG_UPSTOX_WS, QString("%1 %2 instrument(s)%3")
-                                .arg(method == QLatin1String("sub") ? "Subscribed" : "Unsubscribed")
-                                .arg(instrument_keys.size())
-                                .arg(mode.isEmpty() ? QString() : QString(" (%1)").arg(mode)));
+    LOG_DEBUG(TAG_UPSTOX_WS, QString("%1 %2 instrument(s)%3")
+                                 .arg(method == QLatin1String("sub") ? "Subscribed" : "Unsubscribed")
+                                 .arg(instrument_keys.size())
+                                 .arg(mode.isEmpty() ? QString() : QString(" (%1)").arg(mode)));
 }
 
 void UpstoxWebSocket::resubscribe_all() {

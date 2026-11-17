@@ -1,1187 +1,737 @@
 """
-Zipline Strategy Implementations
+Strategy catalogue of the "zipline" engine: 24 zipline-style algorithms (initialize / handle_data,
+zl_api) - the 23 of v1, each now the rule its name says, plus buy_and_hold.
 
-Each strategy is a pair of (initialize, handle_data) callables that follow
-Zipline's event-driven API. Strategies accept a `params` dict and return
-the two functions.
+    init, handle = build('sma_crossover', {'fastPeriod': 20, 'slowPeriod': 50})
+    decisions = zl_api.run_algorithm(init, handle, bars, params)
 
-Also provides standalone indicator calculation functions used by
-calculate_indicator() in zipline_provider.py.
+Every indicator is a full-history line from zl_api (Fincept indicator table, OHLC where the
+indicator needs it - v1 fed CCI / Williams %R / Keltner / ATR / ADX closes only, audit Z10).
+A rule states the target it wants on each bar (order_target_percent: 1 = long, 0 = flat; no order
+while its inputs are undefined); the executor enters only when flat and exits only when holding,
+which gives each rule its hysteresis. When an exit and an entry condition hold on the same bar the
+exit wins (base.simulator's convention).
 
-Usage:
-    init_fn, handle_fn = get_strategy('sma_crossover', {'fastPeriod': 10, 'slowPeriod': 20})
-    results = zipline.run_algorithm(..., initialize=init_fn, handle_data=handle_fn)
+SIGNAL ALGORITHMS (long / flat per symbol; base.simulator signals mode)
+  sma_crossover       long while SMA(fast) > SMA(slow)                       (state rule)
+  ema_crossover       long while EMA(fast) > EMA(slow)  (EMAs SMA-seeded)     (state rule)
+  macd                long while the MACD line > its signal line            (state rule)
+  macd_zero_cross     enter when the MACD line crosses above 0, exit when it crosses below 0 (the
+                      MACD line is EMA(fast) - EMA(slow), so this is that EMA pair's cross; v1's
+                      "histogram zero cross" was the macd rule again)
+  adx_trend           long while Wilder ADX > threshold and the close > its SMA(adxPeriod)
+  triple_ma           enter when fast > medium > slow, exit when fast < medium
+  keltner_channel     enter on a close above EMA(period) + k x ATR(period), exit below the EMA
+  bollinger_bands     enter on a close below the lower band, exit above the UPPER band (bands =
+                      SMA +- k population std, Bollinger's definition)
+  mean_reversion      z-score of the close (sample std): enter z < -threshold, exit z >= exitZ
+                      (default 0 = back at the mean). v1 exited at +threshold with the same bands
+                      as bollinger_bands, so the two returned identical trades (Z17).
+  rsi                 Wilder RSI: enter below oversold, exit above overbought  (level rule)
+  stochastic          %D (SMA of %K) below oversold -> enter, above overbought -> exit
+  williams_r          %R below oversold (default -80) -> enter, above overbought (-20) -> exit
+  cci                 CCI below -threshold -> enter, above +threshold -> exit
+  momentum            ROC over N bars above +threshold (fraction: 0.02 = 2 %) -> enter, below
+                      -threshold -> exit
+  breakout            close above the PREVIOUS N-bar high -> enter, below the previous N-bar low ->
+                      exit (Donchian)
+  volatility_breakout close above SMA(N) + k x ATR(N) -> enter, below SMA(N) -> exit
+  rsi_macd            enter when RSI < rsiLower while the MACD line > 0 (a dip in an uptrend);
+                      exit when RSI > rsiUpper or the MACD line < 0 (v1 hard-coded 40 / 60)
+  macd_adx            long while the MACD line > 0 and ADX > adxThreshold (v1 hard-coded 25)
+  bollinger_rsi       enter on a close below the lower band with RSI < rsiOversold; exit on a close
+                      above the middle band or RSI > rsiOverbought
+  obv_trend           long while OBV > its N-bar SMA
+  scheduled_rebalance schedule_function(month_start): on the first bar of each month, long if the
+                      return over momentumWindow bars is positive, else flat (per symbol)
+  buy_and_hold        zipline's tutorial algorithm: order_target_percent(asset, 1) once, on the
+                      symbol's first tradable bar
+ALLOCATION ALGORITHMS (target weights; base.simulator weights mode; trades = position episodes)
+  pipeline            a Pipeline-style factor screen: every rebalanceDays bars rank the symbols by
+                      their lookback-bar return, keep the topN with a positive return, equal weight
+                      (cash when none qualifies). v1 used one symbol and never ranked (Z17); with one
+                      symbol the ranking is moot and only the screen applies (stated in a warning).
+  dual_momentum       Antonacci: on each rebalance (monthly by default) pick the topN symbols by
+                      return over relativePeriod bars (relative momentum) and hold those whose return
+                      over absolutePeriod bars is > 0 (absolute momentum), equal weight, else cash.
+                      Lookbacks in BARS (v1 compared a 12-BAR return with itself: a 12-day ROC rule).
+                      With one symbol only absolute momentum applies (stated in a warning).
 """
 
-import sys
-import numpy as np
-from typing import Dict, Any, Callable, Tuple, List, Optional
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from zl_api import date_rules
+
+Builder = Callable[[Dict[str, Any]], Tuple[Optional[Callable], Optional[Callable]]]
 
 
-# ============================================================================
-# Strategy registry
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Parameter helpers
+# ════════════════════════════════════════════════════════════════════════════
 
-_STRATEGY_REGISTRY: Dict[str, Dict[str, Any]] = {}
+def _i(params, key, default) -> int:
+    v = params.get(key, default)
+    if v is None:
+        v = default
+    try:
+        out = int(round(float(v)))
+    except (TypeError, ValueError):
+        raise ValueError(f'parameter {key} must be a number, not {v!r}')
+    if out < 1:
+        raise ValueError(f'parameter {key} must be at least 1 (got {v})')
+    return out
 
 
-def _register(strategy_id: str, category: str, name: str, description: str,
-              params_spec: List[Dict[str, Any]]):
-    """Decorator factory to register a strategy builder function."""
-    def decorator(fn):
-        _STRATEGY_REGISTRY[strategy_id] = {
-            'id': strategy_id,
-            'name': name,
-            'category': category,
-            'description': description,
-            'params': params_spec,
-            'builder': fn,
-        }
+def _f(params, key, default) -> float:
+    v = params.get(key, default)
+    if v is None:
+        v = default
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise ValueError(f'parameter {key} must be a number, not {v!r}')
+
+
+def _p(pid, name, default, lo, hi, step=1, typ='int', desc=None, choices=None) -> Dict[str, Any]:
+    d = {'id': pid, 'name': name, 'label': name, 'type': typ, 'default': default, 'min': lo, 'max': hi, 'step': step}
+    if choices is not None:
+        d['choices'] = list(choices)
+    if desc:
+        d['description'] = desc
+    return d
+
+
+def _lt(a, b, msg) -> Dict[str, Any]:
+    return {'lt': [a, b], 'message': msg}
+
+
+_FS = [_lt('fastPeriod', 'slowPeriod', 'The fast period must be shorter than the slow period.')]
+_MACD_FS = [_lt('macdFast', 'macdSlow', 'The MACD fast period must be shorter than the slow period.')]
+_REBAL = _p('rebalancePeriod', 'Rebalance', 'monthly', None, None, None, 'choice',
+            'First bar of each period (schedule_function date rule); a number = every N bars',
+            ('daily', 'weekly', 'monthly', 'quarterly', 'yearly'))
+
+STRATEGIES: Dict[str, Dict[str, Any]] = {}
+
+
+def _algo(sid: str, name: str, category: str, description: str, params: List[Dict[str, Any]], *,
+          kind: str = 'signals', constraints: Optional[List[Dict[str, Any]]] = None):
+    def deco(fn: Builder) -> Builder:
+        STRATEGIES[sid] = {'type': sid, 'name': name, 'category': category, 'description': description,
+                           'parameters': params, 'kind': kind, 'constraints': list(constraints or []), 'build': fn}
         return fn
-    return decorator
+    return deco
 
 
-def get_strategy(strategy_type: str, params: Dict[str, Any]) -> Tuple[Callable, Callable]:
-    """
-    Look up a strategy by type and return (initialize_fn, handle_data_fn).
-
-    The returned functions use Zipline's API:
-      - initialize(context) — called once at start
-      - handle_data(context, data) — called on every bar
-    """
-    entry = _STRATEGY_REGISTRY.get(strategy_type)
-    if entry is None:
-        raise ValueError(f'Unknown strategy: {strategy_type}. '
-                         f'Available: {sorted(_STRATEGY_REGISTRY.keys())}')
-    return entry['builder'](params)
+def _long_flat(entry: bool, exit_: bool, context, asset) -> None:
+    """Exit wins when both hold (base.simulator's convention); nothing when neither."""
+    if exit_:
+        context.order_target_percent(asset, 0.0)
+    elif entry:
+        context.order_target_percent(asset, 1.0)
 
 
-def get_strategy_catalog() -> Dict[str, Any]:
-    """Return full catalog of strategies grouped by category."""
-    catalog: Dict[str, list] = {}
-    for sid, info in _STRATEGY_REGISTRY.items():
-        cat = info['category']
-        if cat not in catalog:
-            catalog[cat] = []
-        catalog[cat].append({
-            'id': info['id'],
-            'name': info['name'],
-            'description': info['description'],
-            'params': info['params'],
-        })
-    return catalog
+# ════════════════════════════════════════════════════════════════════════════
+# Trend
+# ════════════════════════════════════════════════════════════════════════════
 
-
-# ============================================================================
-# Helper: rolling calculations (numpy-only, no TA-lib dependency)
-# These are also exported for use by calculate_indicator() in the provider.
-# ============================================================================
-
-def _rolling_mean(series, window):
-    """Simple rolling mean using numpy cumsum trick."""
-    arr = np.asarray(series, dtype=float)
-    cumsum = np.cumsum(np.insert(arr, 0, 0))
-    result = np.full_like(arr, np.nan)
-    result[window - 1:] = (cumsum[window:] - cumsum[:-window]) / window
-    return result
-
-
-def _rolling_std(series, window):
-    """Rolling standard deviation."""
-    arr = np.asarray(series, dtype=float)
-    result = np.full_like(arr, np.nan)
-    for i in range(window - 1, len(arr)):
-        result[i] = np.std(arr[i - window + 1:i + 1], ddof=1)
-    return result
-
-
-def _ema(series, span):
-    """Exponential moving average."""
-    arr = np.asarray(series, dtype=float)
-    alpha = 2.0 / (span + 1)
-    result = np.full_like(arr, np.nan)
-    result[0] = arr[0]
-    for i in range(1, len(arr)):
-        result[i] = alpha * arr[i] + (1 - alpha) * result[i - 1]
-    return result
-
-
-def _rsi(series, period=14):
-    """Relative Strength Index."""
-    arr = np.asarray(series, dtype=float)
-    deltas = np.diff(arr)
-    gains = np.where(deltas > 0, deltas, 0.0)
-    losses = np.where(deltas < 0, -deltas, 0.0)
-
-    avg_gain = np.full(len(arr), np.nan)
-    avg_loss = np.full(len(arr), np.nan)
-    rsi_vals = np.full(len(arr), np.nan)
-
-    if len(gains) < period:
-        return rsi_vals
-
-    avg_gain[period] = np.mean(gains[:period])
-    avg_loss[period] = np.mean(losses[:period])
-
-    for i in range(period + 1, len(arr)):
-        avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gains[i - 1]) / period
-        avg_loss[i] = (avg_loss[i - 1] * (period - 1) + losses[i - 1]) / period
-
-    for i in range(period, len(arr)):
-        if avg_loss[i] == 0:
-            rsi_vals[i] = 100.0
-        else:
-            rs = avg_gain[i] / avg_loss[i]
-            rsi_vals[i] = 100.0 - (100.0 / (1.0 + rs))
-
-    return rsi_vals
-
-
-def _atr(high, low, close, period=14):
-    """Average True Range."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    tr = np.maximum(h[1:] - l[1:],
-                    np.maximum(np.abs(h[1:] - c[:-1]),
-                               np.abs(l[1:] - c[:-1])))
-    tr = np.insert(tr, 0, h[0] - l[0])
-    atr_vals = np.full_like(tr, np.nan)
-    atr_vals[period - 1] = np.mean(tr[:period])
-    for i in range(period, len(tr)):
-        atr_vals[i] = (atr_vals[i - 1] * (period - 1) + tr[i]) / period
-    return atr_vals
-
-
-# ============================================================================
-# Standalone indicator functions (used by calculate_indicator)
-# ============================================================================
-
-def _macd_calc(close, fast_period=12, slow_period=26, signal_period=9):
-    """Calculate MACD line, signal line, and histogram."""
-    arr = np.asarray(close, dtype=float)
-    fast_ema = _ema(arr, fast_period)
-    slow_ema = _ema(arr, slow_period)
-    macd_line = fast_ema - slow_ema
-    # Signal line: EMA of MACD (handle NaN)
-    valid_macd = macd_line.copy()
-    valid_macd[np.isnan(valid_macd)] = 0.0
-    signal_line = _ema(valid_macd, signal_period)
-    histogram = macd_line - signal_line
-    return macd_line, signal_line, histogram
-
-
-def _stochastic_calc(high, low, close, k_period=14, d_period=3):
-    """Calculate Stochastic %K and %D."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    k_vals = np.full_like(c, np.nan)
-
-    for i in range(k_period - 1, len(c)):
-        hh = h[i - k_period + 1:i + 1].max()
-        ll = l[i - k_period + 1:i + 1].min()
-        if hh - ll < 1e-8:
-            k_vals[i] = 50.0
-        else:
-            k_vals[i] = 100.0 * (c[i] - ll) / (hh - ll)
-
-    d_vals = _rolling_mean(np.nan_to_num(k_vals, nan=50.0), d_period)
-    return k_vals, d_vals
-
-
-def _williams_r_calc(high, low, close, period=14):
-    """Williams %R."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    result = np.full_like(c, np.nan)
-
-    for i in range(period - 1, len(c)):
-        hh = h[i - period + 1:i + 1].max()
-        ll = l[i - period + 1:i + 1].min()
-        if hh - ll < 1e-8:
-            result[i] = -50.0
-        else:
-            result[i] = -100.0 * (hh - c[i]) / (hh - ll)
-    return result
-
-
-def _cci_calc(high, low, close, period=20):
-    """Commodity Channel Index."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    tp = (h + l + c) / 3.0
-    result = np.full_like(c, np.nan)
-
-    for i in range(period - 1, len(c)):
-        window = tp[i - period + 1:i + 1]
-        mean = window.mean()
-        mad = np.mean(np.abs(window - mean))
-        if mad < 1e-8:
-            result[i] = 0.0
-        else:
-            result[i] = (tp[i] - mean) / (0.015 * mad)
-    return result
-
-
-def _obv_calc(close, volume):
-    """On-Balance Volume."""
-    c = np.asarray(close, dtype=float)
-    v = np.asarray(volume, dtype=float)
-    obv = np.zeros_like(c)
-    obv[0] = v[0]
-    for i in range(1, len(c)):
-        if c[i] > c[i - 1]:
-            obv[i] = obv[i - 1] + v[i]
-        elif c[i] < c[i - 1]:
-            obv[i] = obv[i - 1] - v[i]
-        else:
-            obv[i] = obv[i - 1]
-    return obv
-
-
-def _adx_calc(high, low, close, period=14):
-    """Average Directional Index (simplified)."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    n = len(c)
-
-    # True Range
-    tr = np.zeros(n)
-    tr[0] = h[0] - l[0]
-    for i in range(1, n):
-        tr[i] = max(h[i] - l[i], abs(h[i] - c[i - 1]), abs(l[i] - c[i - 1]))
-
-    # +DM / -DM
-    plus_dm = np.zeros(n)
-    minus_dm = np.zeros(n)
-    for i in range(1, n):
-        up = h[i] - h[i - 1]
-        down = l[i - 1] - l[i]
-        plus_dm[i] = up if (up > down and up > 0) else 0
-        minus_dm[i] = down if (down > up and down > 0) else 0
-
-    # Smoothed TR, +DM, -DM
-    atr_s = np.zeros(n)
-    pdm_s = np.zeros(n)
-    mdm_s = np.zeros(n)
-
-    if n <= period:
-        return np.full(n, np.nan)
-
-    atr_s[period] = np.sum(tr[1:period + 1])
-    pdm_s[period] = np.sum(plus_dm[1:period + 1])
-    mdm_s[period] = np.sum(minus_dm[1:period + 1])
-
-    for i in range(period + 1, n):
-        atr_s[i] = atr_s[i - 1] - atr_s[i - 1] / period + tr[i]
-        pdm_s[i] = pdm_s[i - 1] - pdm_s[i - 1] / period + plus_dm[i]
-        mdm_s[i] = mdm_s[i - 1] - mdm_s[i - 1] / period + minus_dm[i]
-
-    # +DI / -DI
-    plus_di = np.full(n, np.nan)
-    minus_di = np.full(n, np.nan)
-    dx = np.full(n, np.nan)
-
-    for i in range(period, n):
-        if atr_s[i] > 0:
-            plus_di[i] = 100 * pdm_s[i] / atr_s[i]
-            minus_di[i] = 100 * mdm_s[i] / atr_s[i]
-            di_sum = plus_di[i] + minus_di[i]
-            dx[i] = 100 * abs(plus_di[i] - minus_di[i]) / di_sum if di_sum > 0 else 0
-
-    # ADX = smoothed DX
-    adx = np.full(n, np.nan)
-    start_idx = 2 * period
-    if start_idx < n:
-        valid_dx = [d for d in dx[period:start_idx] if not np.isnan(d)]
-        if valid_dx:
-            adx[start_idx - 1] = np.mean(valid_dx)
-            for i in range(start_idx, n):
-                if not np.isnan(dx[i]) and not np.isnan(adx[i - 1]):
-                    adx[i] = (adx[i - 1] * (period - 1) + dx[i]) / period
-
-    return adx
-
-
-def _keltner_calc(high, low, close, period=20, multiplier=2.0):
-    """Keltner Channel (EMA +/- multiplier * ATR)."""
-    c = np.asarray(close, dtype=float)
-    middle = _ema(c, period)
-    atr_vals = _atr(high, low, close, period)
-    upper = middle + multiplier * atr_vals
-    lower = middle - multiplier * atr_vals
-    return upper, middle, lower
-
-
-def _donchian_calc(high, low, period=20):
-    """Donchian Channel (rolling high/low)."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    upper = np.full_like(h, np.nan)
-    lower = np.full_like(l, np.nan)
-    for i in range(period - 1, len(h)):
-        upper[i] = h[i - period + 1:i + 1].max()
-        lower[i] = l[i - period + 1:i + 1].min()
-    return upper, lower
-
-
-def _momentum_calc(close, period=12):
-    """Momentum / Rate of Change."""
-    c = np.asarray(close, dtype=float)
-    result = np.full_like(c, np.nan)
-    for i in range(period, len(c)):
-        if c[i - period] != 0:
-            result[i] = (c[i] / c[i - period]) - 1.0
-    return result
-
-
-def _zscore_calc(close, period=20):
-    """Z-Score of price."""
-    c = np.asarray(close, dtype=float)
-    result = np.full_like(c, np.nan)
-    for i in range(period - 1, len(c)):
-        window = c[i - period + 1:i + 1]
-        mean = window.mean()
-        std = window.std(ddof=1)
-        if std > 1e-8:
-            result[i] = (c[i] - mean) / std
-    return result
-
-
-def _vwap_calc(high, low, close, volume):
-    """Volume Weighted Average Price (cumulative)."""
-    h = np.asarray(high, dtype=float)
-    l = np.asarray(low, dtype=float)
-    c = np.asarray(close, dtype=float)
-    v = np.asarray(volume, dtype=float)
-    tp = (h + l + c) / 3.0
-    cum_tpv = np.cumsum(tp * v)
-    cum_v = np.cumsum(v)
-    vwap = np.where(cum_v > 0, cum_tpv / cum_v, np.nan)
-    return vwap
-
-
-# ============================================================================
-# Trend Following Strategies
-# ============================================================================
-
-@_register('sma_crossover', 'trend', 'SMA Crossover',
-           'Fast SMA crosses Slow SMA',
-           [{'name': 'fastPeriod', 'default': 10}, {'name': 'slowPeriod', 'default': 20}])
-def _sma_crossover(params):
-    fast = int(params.get('fastPeriod', 10))
-    slow = int(params.get('slowPeriod', 20))
+@_algo('sma_crossover', 'SMA Crossover', 'trend', 'Long while the fast SMA is above the slow SMA (state rule)',
+       [_p('fastPeriod', 'Fast Period', 10, 2, 200), _p('slowPeriod', 'Slow Period', 20, 5, 400)], constraints=_FS)
+def _sma_crossover(p):
+    fast, slow = _i(p, 'fastPeriod', 10), _i(p, 'slowPeriod', 20)
 
     def initialize(context):
-        context.fast = fast
-        context.slow = slow
-        context.history_len = slow + 2
-        context.invested = False
+        context.fast = context.indicator('sma', fast)
+        context.slow = context.indicator('sma', slow)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.slow:
-            return
-        fast_ma = prices[-context.fast:].mean()
-        slow_ma = prices[-context.slow:].mean()
-        if fast_ma > slow_ma and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif fast_ma < slow_ma and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            f, s = data.current(a, context.fast), data.current(a, context.slow)
+            if f == f and s == s:
+                context.order_target_percent(a, 1.0 if f > s else 0.0)
     return initialize, handle_data
 
 
-@_register('ema_crossover', 'trend', 'EMA Crossover',
-           'Fast EMA crosses Slow EMA',
-           [{'name': 'fastPeriod', 'default': 10}, {'name': 'slowPeriod', 'default': 20}])
-def _ema_crossover(params):
-    fast = int(params.get('fastPeriod', 10))
-    slow = int(params.get('slowPeriod', 20))
+@_algo('ema_crossover', 'EMA Crossover', 'trend',
+       'Long while the fast EMA is above the slow EMA (EMAs seeded with the SMA of their first bars)',
+       [_p('fastPeriod', 'Fast Period', 10, 2, 200), _p('slowPeriod', 'Slow Period', 20, 5, 400)], constraints=_FS)
+def _ema_crossover(p):
+    fast, slow = _i(p, 'fastPeriod', 10), _i(p, 'slowPeriod', 20)
 
     def initialize(context):
-        context.fast = fast
-        context.slow = slow
-        context.history_len = slow + 10
-        context.invested = False
+        context.fast = context.indicator('ema', fast)
+        context.slow = context.indicator('ema', slow)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.slow:
-            return
-        arr = np.asarray(prices)
-        fast_ema = _ema(arr, context.fast)[-1]
-        slow_ema = _ema(arr, context.slow)[-1]
-        if fast_ema > slow_ema and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif fast_ema < slow_ema and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            f, s = data.current(a, context.fast), data.current(a, context.slow)
+            if f == f and s == s:
+                context.order_target_percent(a, 1.0 if f > s else 0.0)
     return initialize, handle_data
 
 
-@_register('macd', 'trend', 'MACD Crossover',
-           'MACD line crosses Signal line',
-           [{'name': 'fastPeriod', 'default': 12},
-            {'name': 'slowPeriod', 'default': 26},
-            {'name': 'signalPeriod', 'default': 9}])
-def _macd(params):
-    fast_p = int(params.get('fastPeriod', 12))
-    slow_p = int(params.get('slowPeriod', 26))
-    signal_p = int(params.get('signalPeriod', 9))
+@_algo('macd', 'MACD Crossover', 'trend', 'Long while the MACD line is above its signal line',
+       [_p('fastPeriod', 'Fast Period', 12, 2, 100), _p('slowPeriod', 'Slow Period', 26, 5, 200),
+        _p('signalPeriod', 'Signal Period', 9, 2, 50)], constraints=_FS)
+def _macd(p):
+    f, s, g = _i(p, 'fastPeriod', 12), _i(p, 'slowPeriod', 26), _i(p, 'signalPeriod', 9)
 
     def initialize(context):
-        context.history_len = slow_p + signal_p + 10
-        context.invested = False
+        context.line = context.indicator('macd', f, s, g, output='macd')
+        context.signal = context.indicator('macd', f, s, g, output='signal')
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.history_len - 5:
-            return
-        arr = np.asarray(prices)
-        macd_line, signal_line, _ = _macd_calc(arr, fast_p, slow_p, signal_p)
-        if len(signal_line) < 2:
-            return
-        if not np.isnan(signal_line[-1]) and not np.isnan(macd_line[-1]):
-            if macd_line[-1] > signal_line[-1] and not context.invested:
-                context.order_target_percent(context.asset, 1.0)
-                context.invested = True
-            elif macd_line[-1] < signal_line[-1] and context.invested:
-                context.order_target_percent(context.asset, 0.0)
-                context.invested = False
-
+        for a in context.assets:
+            m, sg = data.current(a, context.line), data.current(a, context.signal)
+            if m == m and sg == sg:
+                context.order_target_percent(a, 1.0 if m > sg else 0.0)
     return initialize, handle_data
 
 
-@_register('adx_trend', 'trend', 'ADX Trend Filter',
-           'ADX-based trend following',
-           [{'name': 'adxPeriod', 'default': 14}, {'name': 'adxThreshold', 'default': 25}])
-def _adx_trend(params):
-    period = int(params.get('adxPeriod', 14))
-    threshold = float(params.get('adxThreshold', 25))
+@_algo('adx_trend', 'ADX Trend Filter', 'trend',
+       'Long while Wilder ADX (high / low / close) is above the threshold and the close is above its SMA over the '
+       'ADX period',
+       [_p('adxPeriod', 'ADX Period', 14, 2, 100), _p('adxThreshold', 'ADX Threshold', 25.0, 5.0, 60.0, 1.0, 'float')])
+def _adx_trend(p):
+    n, th = _i(p, 'adxPeriod', 14), _f(p, 'adxThreshold', 25.0)
 
     def initialize(context):
-        context.history_len = period * 3
-        context.invested = False
+        context.adx = context.indicator('adx', n, output='adx')
+        context.ma = context.indicator('sma', n)
 
     def handle_data(context, data):
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        if len(close) < context.history_len - 2:
-            return
-
-        c = np.asarray(close)
-        h = np.asarray(high)
-        l = np.asarray(low)
-
-        adx_vals = _adx_calc(h, l, c, period)
-        sma = _rolling_mean(c, period)
-        if np.isnan(sma[-1]):
-            return
-
-        adx_val = adx_vals[-1] if not np.isnan(adx_vals[-1]) else 0
-        trending = adx_val > threshold
-
-        if trending and c[-1] > sma[-1] and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif (not trending or c[-1] < sma[-1]) and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            x, m = data.current(a, context.adx), data.current(a, context.ma)
+            if x == x and m == m:
+                context.order_target_percent(a, 1.0 if (x > th and data.current(a, 'close') > m) else 0.0)
     return initialize, handle_data
 
 
-@_register('triple_ma', 'trend', 'Triple MA',
-           'Three moving average system',
-           [{'name': 'fastPeriod', 'default': 10},
-            {'name': 'mediumPeriod', 'default': 20},
-            {'name': 'slowPeriod', 'default': 50}])
-def _triple_ma(params):
-    fast = int(params.get('fastPeriod', 10))
-    med = int(params.get('mediumPeriod', 20))
-    slow = int(params.get('slowPeriod', 50))
+@_algo('triple_ma', 'Triple MA', 'trend', 'Enter when fast SMA > medium SMA > slow SMA, exit when fast < medium',
+       [_p('fastPeriod', 'Fast Period', 10, 2, 200), _p('mediumPeriod', 'Medium Period', 20, 3, 300),
+        _p('slowPeriod', 'Slow Period', 50, 5, 400)],
+       constraints=[_lt('fastPeriod', 'mediumPeriod', 'The fast period must be shorter than the medium period.'),
+                    _lt('mediumPeriod', 'slowPeriod', 'The medium period must be shorter than the slow period.')])
+def _triple_ma(p):
+    f, m, s = _i(p, 'fastPeriod', 10), _i(p, 'mediumPeriod', 20), _i(p, 'slowPeriod', 50)
 
     def initialize(context):
-        context.history_len = slow + 2
-        context.invested = False
+        context.f = context.indicator('sma', f)
+        context.m = context.indicator('sma', m)
+        context.s = context.indicator('sma', s)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < slow:
-            return
-        fast_ma = prices[-fast:].mean()
-        med_ma = prices[-med:].mean()
-        slow_ma = prices[-slow:].mean()
-        if fast_ma > med_ma > slow_ma and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif fast_ma < med_ma and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            x, y, z = data.current(a, context.f), data.current(a, context.m), data.current(a, context.s)
+            if x == x and y == y and z == z:
+                _long_flat(x > y > z, x < y, context, a)
     return initialize, handle_data
 
 
-@_register('keltner_channel', 'trend', 'Keltner Channel',
-           'Keltner channel trend system',
-           [{'name': 'period', 'default': 20},
-            {'name': 'atrMultiplier', 'default': 2.0}])
-def _keltner_channel_strategy(params):
-    period = int(params.get('period', 20))
-    multiplier = float(params.get('atrMultiplier', 2.0))
+@_algo('keltner_channel', 'Keltner Channel', 'trend',
+       'Enter on a close above EMA(period) + k x ATR(period) (Wilder ATR on high / low / close), exit on a close '
+       'below the EMA',
+       [_p('period', 'Period', 20, 2, 200), _p('atrMultiplier', 'ATR Multiplier', 2.0, 0.5, 5.0, 0.1, 'float')])
+def _keltner(p):
+    n, k = _i(p, 'period', 20), _f(p, 'atrMultiplier', 2.0)
 
     def initialize(context):
-        context.history_len = period + 10
-        context.invested = False
+        context.up = context.indicator('keltner', n, n, k, output='upper')
+        context.mid = context.indicator('keltner', n, n, k, output='middle')
 
     def handle_data(context, data):
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        if len(close) < period + 2:
-            return
-
-        c = np.asarray(close)
-        h = np.asarray(high)
-        l = np.asarray(low)
-        upper, middle, lower = _keltner_calc(h, l, c, period, multiplier)
-        current = c[-1]
-
-        if np.isnan(upper[-1]) or np.isnan(lower[-1]):
-            return
-
-        if current > upper[-1] and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif current < middle[-1] and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            u, m = data.current(a, context.up), data.current(a, context.mid)
+            if u == u and m == m:
+                c = data.current(a, 'close')
+                _long_flat(c > u, c < m, context, a)
     return initialize, handle_data
 
 
-# ============================================================================
-# Mean Reversion Strategies
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Mean reversion
+# ════════════════════════════════════════════════════════════════════════════
 
-@_register('bollinger_bands', 'meanReversion', 'Bollinger Bands',
-           'Bollinger band mean reversion',
-           [{'name': 'period', 'default': 20},
-            {'name': 'stdDev', 'default': 2.0}])
-def _bollinger_bands(params):
-    period = int(params.get('period', 20))
-    num_std = float(params.get('stdDev', 2.0))
+@_algo('bollinger_bands', 'Bollinger Bands', 'meanReversion',
+       'Enter on a close below the lower band, exit on a close above the upper band (SMA +- k population std)',
+       [_p('period', 'Period', 20, 2, 400), _p('stdDev', 'Std Dev', 2.0, 0.5, 5.0, 0.1, 'float')])
+def _bollinger(p):
+    n, k = _i(p, 'period', 20), _f(p, 'stdDev', 2.0)
 
     def initialize(context):
-        context.history_len = period + 2
-        context.invested = False
+        context.lo = context.indicator('bbands', n, k, output='lower')
+        context.up = context.indicator('bbands', n, k, output='upper')
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < period:
-            return
-        window = np.asarray(prices[-period:])
-        mean = window.mean()
-        std = window.std(ddof=1)
-        upper = mean + num_std * std
-        lower = mean - num_std * std
-        current = prices.iloc[-1]
-
-        if current < lower and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif current > upper and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            lo, up = data.current(a, context.lo), data.current(a, context.up)
+            if lo == lo and up == up:
+                c = data.current(a, 'close')
+                _long_flat(c < lo, c > up, context, a)
     return initialize, handle_data
 
 
-@_register('rsi', 'meanReversion', 'RSI Mean Reversion',
-           'RSI oversold/overbought',
-           [{'name': 'period', 'default': 14},
-            {'name': 'oversold', 'default': 30},
-            {'name': 'overbought', 'default': 70}])
-def _rsi_strategy(params):
-    period = int(params.get('period', 14))
-    oversold = float(params.get('oversold', 30))
-    overbought = float(params.get('overbought', 70))
+@_algo('rsi', 'RSI Mean Reversion', 'meanReversion', 'Wilder RSI: enter below oversold, exit above overbought',
+       [_p('period', 'Period', 14, 2, 100), _p('oversold', 'Oversold', 30.0, 1.0, 50.0, 1.0, 'float'),
+        _p('overbought', 'Overbought', 70.0, 50.0, 99.0, 1.0, 'float')],
+       constraints=[_lt('oversold', 'overbought', 'Oversold must be below overbought.')])
+def _rsi(p):
+    n, lo, hi = _i(p, 'period', 14), _f(p, 'oversold', 30.0), _f(p, 'overbought', 70.0)
 
     def initialize(context):
-        context.history_len = period + 10
-        context.invested = False
+        context.rsi = context.indicator('rsi', n)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < period + 2:
-            return
-        rsi_vals = _rsi(np.asarray(prices), period)
-        current_rsi = rsi_vals[-1]
-        if np.isnan(current_rsi):
-            return
-
-        if current_rsi < oversold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif current_rsi > overbought and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            r = data.current(a, context.rsi)
+            if r == r:
+                _long_flat(r < lo, r > hi, context, a)
     return initialize, handle_data
 
 
-@_register('mean_reversion', 'meanReversion', 'Z-Score Reversion',
-           'Z-score mean reversion',
-           [{'name': 'window', 'default': 20},
-            {'name': 'threshold', 'default': 2.0}])
-def _zscore_reversion(params):
-    window = int(params.get('window', 20))
-    threshold = float(params.get('threshold', 2.0))
+@_algo('mean_reversion', 'Z-Score Reversion', 'meanReversion',
+       'Z-score of the close vs its N-bar mean (sample std): enter below -threshold, exit when it is back at exitZ '
+       '(0 = the mean)',
+       [_p('window', 'Window', 20, 3, 400), _p('threshold', 'Z Threshold', 2.0, 0.1, 5.0, 0.1, 'float'),
+        _p('exitZ', 'Exit Z', 0.0, -3.0, 3.0, 0.1, 'float')])
+def _zscore(p):
+    n, th, ex = _i(p, 'window', 20), _f(p, 'threshold', 2.0), _f(p, 'exitZ', 0.0)
 
     def initialize(context):
-        context.history_len = window + 2
-        context.invested = False
+        context.z = context.indicator('zscore_sample', n)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < window:
-            return
-        arr = np.asarray(prices[-window:])
-        mean = arr.mean()
-        std = arr.std(ddof=1)
-        if std < 1e-8:
-            return
-        zscore = (prices.iloc[-1] - mean) / std
-
-        if zscore < -threshold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif zscore > threshold and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            z = data.current(a, context.z)
+            if z == z:
+                _long_flat(z < -th, z >= ex, context, a)
     return initialize, handle_data
 
 
-@_register('stochastic', 'meanReversion', 'Stochastic',
-           'Stochastic oscillator',
-           [{'name': 'kPeriod', 'default': 14},
-            {'name': 'dPeriod', 'default': 3},
-            {'name': 'oversold', 'default': 20},
-            {'name': 'overbought', 'default': 80}])
-def _stochastic(params):
-    k_period = int(params.get('kPeriod', 14))
-    d_period = int(params.get('dPeriod', 3))
-    oversold = float(params.get('oversold', 20))
-    overbought = float(params.get('overbought', 80))
+@_algo('stochastic', 'Stochastic', 'meanReversion',
+       '%D (SMA of %K over high / low) below oversold -> enter, above overbought -> exit',
+       [_p('kPeriod', '%K Period', 14, 2, 100), _p('dPeriod', '%D Period', 3, 1, 50),
+        _p('oversold', 'Oversold', 20.0, 1.0, 50.0, 1.0, 'float'),
+        _p('overbought', 'Overbought', 80.0, 50.0, 99.0, 1.0, 'float')],
+       constraints=[_lt('oversold', 'overbought', 'Oversold must be below overbought.')])
+def _stochastic(p):
+    k, d, lo, hi = _i(p, 'kPeriod', 14), _i(p, 'dPeriod', 3), _f(p, 'oversold', 20.0), _f(p, 'overbought', 80.0)
 
     def initialize(context):
-        context.history_len = k_period + d_period + 5
-        context.invested = False
+        context.d = context.indicator('stochastic', k, d, output='d')
 
     def handle_data(context, data):
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(close) < k_period + d_period:
-            return
-
-        h_arr = np.asarray(high)
-        l_arr = np.asarray(low)
-        c_arr = np.asarray(close)
-        k_vals, d_vals = _stochastic_calc(h_arr, l_arr, c_arr, k_period, d_period)
-        d_val = d_vals[-1] if not np.isnan(d_vals[-1]) else 50.0
-
-        if d_val < oversold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif d_val > overbought and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            v = data.current(a, context.d)
+            if v == v:
+                _long_flat(v < lo, v > hi, context, a)
     return initialize, handle_data
 
 
-@_register('williams_r', 'meanReversion', 'Williams %R',
-           'Williams %R oscillator',
-           [{'name': 'period', 'default': 14},
-            {'name': 'oversold', 'default': -80},
-            {'name': 'overbought', 'default': -20}])
-def _williams_r_strategy(params):
-    period = int(params.get('period', 14))
-    oversold = float(params.get('oversold', -80))
-    overbought = float(params.get('overbought', -20))
+@_algo('williams_r', 'Williams %R', 'meanReversion',
+       'Williams %R (-100..0, high / low): enter below oversold, exit above overbought',
+       [_p('period', 'Period', 14, 2, 100), _p('oversold', 'Oversold', -80.0, -100.0, 0.0, 1.0, 'float'),
+        _p('overbought', 'Overbought', -20.0, -100.0, 0.0, 1.0, 'float')],
+       constraints=[_lt('oversold', 'overbought', 'Oversold must be below overbought.')])
+def _williams(p):
+    n, lo, hi = _i(p, 'period', 14), _f(p, 'oversold', -80.0), _f(p, 'overbought', -20.0)
 
     def initialize(context):
-        context.history_len = period + 5
-        context.invested = False
+        context.wr = context.indicator('williams_r', n)
 
     def handle_data(context, data):
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(close) < period:
-            return
-
-        wr = _williams_r_calc(np.asarray(high), np.asarray(low), np.asarray(close), period)
-        val = wr[-1]
-        if np.isnan(val):
-            return
-
-        if val < oversold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif val > overbought and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            v = data.current(a, context.wr)
+            if v == v:
+                _long_flat(v < lo, v > hi, context, a)
     return initialize, handle_data
 
 
-@_register('cci', 'meanReversion', 'CCI',
-           'Commodity Channel Index',
-           [{'name': 'period', 'default': 20},
-            {'name': 'threshold', 'default': 100}])
-def _cci_strategy(params):
-    period = int(params.get('period', 20))
-    threshold = float(params.get('threshold', 100))
+@_algo('cci', 'CCI', 'meanReversion',
+       'Commodity Channel Index (typical price of high / low / close): enter below -threshold, exit above +threshold',
+       [_p('period', 'Period', 20, 2, 200), _p('threshold', 'Threshold', 100.0, 10.0, 300.0, 5.0, 'float')])
+def _cci(p):
+    n, th = _i(p, 'period', 20), _f(p, 'threshold', 100.0)
 
     def initialize(context):
-        context.history_len = period + 5
-        context.invested = False
+        context.cci = context.indicator('cci', n)
 
     def handle_data(context, data):
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(close) < period:
-            return
-
-        cci_vals = _cci_calc(np.asarray(high), np.asarray(low), np.asarray(close), period)
-        val = cci_vals[-1]
-        if np.isnan(val):
-            return
-
-        if val < -threshold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif val > threshold and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            v = data.current(a, context.cci)
+            if v == v:
+                _long_flat(v < -th, v > th, context, a)
     return initialize, handle_data
 
 
-# ============================================================================
-# Momentum Strategies
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Momentum
+# ════════════════════════════════════════════════════════════════════════════
 
-@_register('momentum', 'momentum', 'Momentum (ROC)',
-           'Rate of change momentum',
-           [{'name': 'period', 'default': 12},
-            {'name': 'threshold', 'default': 0.02}])
-def _momentum(params):
-    period = int(params.get('period', 12))
-    threshold = float(params.get('threshold', 0.02))
+@_algo('momentum', 'Momentum (ROC)', 'momentum',
+       'Rate of change over N bars: enter above +threshold, exit below -threshold (threshold is a fraction: 0.02 = 2 %)',
+       [_p('period', 'Period (bars)', 12, 1, 400),
+        _p('threshold', 'Threshold (fraction)', 0.02, 0.0, 0.5, 0.005, 'float', '0.02 = 2 %')])
+def _momentum(p):
+    n, th = _i(p, 'period', 12), _f(p, 'threshold', 0.02)
 
     def initialize(context):
-        context.history_len = period + 2
-        context.invested = False
+        context.roc = context.indicator('momentum', n)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < period + 1:
-            return
-        roc = (prices.iloc[-1] / prices.iloc[-period - 1]) - 1.0
-
-        if roc > threshold and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif roc < -threshold and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            v = data.current(a, context.roc)
+            if v == v:
+                _long_flat(v > th, v < -th, context, a)
     return initialize, handle_data
 
 
-@_register('dual_momentum', 'momentum', 'Dual Momentum',
-           'Absolute + relative momentum',
-           [{'name': 'absolutePeriod', 'default': 12},
-            {'name': 'relativePeriod', 'default': 12}])
-def _dual_momentum(params):
-    abs_period = int(params.get('absolutePeriod', 12))
-    rel_period = int(params.get('relativePeriod', 12))
-    lookback = max(abs_period, rel_period)
+@_algo('dual_momentum', 'Dual Momentum', 'momentum',
+       'Antonacci dual momentum: on each rebalance pick the top N symbols by return over the relative period, hold '
+       'those whose return over the absolute period is positive (equal weight), else cash. Lookbacks in bars; with '
+       'one symbol only absolute momentum applies',
+       [_p('relativePeriod', 'Relative Period (bars)', 252, 5, 504),
+        _p('absolutePeriod', 'Absolute Period (bars)', 252, 5, 504), _p('topN', 'Top N', 1, 1, 50), _REBAL],
+       kind='allocation')
+def _dual_momentum(p):
+    rel_n, abs_n, top = _i(p, 'relativePeriod', 252), _i(p, 'absolutePeriod', 252), _i(p, 'topN', 1)
+    rule = date_rules.from_period(p.get('rebalancePeriod', 'monthly'))
 
     def initialize(context):
-        context.history_len = lookback * 22 + 5  # ~months to trading days
-        context.invested = False
+        context.rel = context.indicator('momentum', rel_n)
+        context.abs = context.indicator('momentum', abs_n)
+        context.schedule_function(rebalance, rule)
+
+    def rebalance(context, data):
+        ranked = []
+        for a in context.assets:
+            r, b = data.current(a, context.rel), data.current(a, context.abs)
+            if r == r and b == b and data.can_trade(a):
+                ranked.append((r, b, a))
+        if not ranked:
+            return
+        ranked.sort(key=lambda x: -x[0])
+        hold = [a for r, b, a in ranked[:top] if b > 0]
+        w = 1.0 / len(hold) if hold else 0.0
+        for r, b, a in ranked:
+            context.order_target_percent(a, w if a in hold else 0.0)
+    return initialize, None
+
+
+@_algo('macd_zero_cross', 'MACD Zero Cross', 'momentum',
+       'Enter when the MACD line crosses above zero, exit when it crosses below (the MACD line is EMA(fast) - '
+       'EMA(slow), so this is the cross of those two EMAs)',
+       [_p('fastPeriod', 'Fast Period', 12, 2, 100), _p('slowPeriod', 'Slow Period', 26, 5, 200)], constraints=_FS)
+def _macd_zero(p):
+    f, s = _i(p, 'fastPeriod', 12), _i(p, 'slowPeriod', 26)
+
+    def initialize(context):
+        context.line = context.indicator('macd', f, s, 9, output='macd')
+        context.prev = context.indicator('macd', f, s, 9, output='macd', lag=1)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < lookback + 1:
-            return
-        abs_return = (prices.iloc[-1] / prices.iloc[-abs_period - 1]) - 1.0
-        rel_return = (prices.iloc[-1] / prices.iloc[-rel_period - 1]) - 1.0
-
-        if abs_return > 0 and rel_return > 0 and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif (abs_return < 0 or rel_return < 0) and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            m, q = data.current(a, context.line), data.current(a, context.prev)
+            if m == m and q == q:
+                _long_flat(q <= 0.0 < m, q >= 0.0 > m, context, a)
     return initialize, handle_data
 
 
-@_register('macd_zero_cross', 'momentum', 'MACD Zero Cross',
-           'MACD histogram zero-line crossover',
-           [{'name': 'fastPeriod', 'default': 12},
-            {'name': 'slowPeriod', 'default': 26},
-            {'name': 'signalPeriod', 'default': 9}])
-def _macd_zero_cross(params):
-    fast_p = int(params.get('fastPeriod', 12))
-    slow_p = int(params.get('slowPeriod', 26))
-    signal_p = int(params.get('signalPeriod', 9))
+# ════════════════════════════════════════════════════════════════════════════
+# Breakout
+# ════════════════════════════════════════════════════════════════════════════
+
+@_algo('breakout', 'Donchian Breakout', 'breakout',
+       'Enter on a close above the PREVIOUS N-bar high, exit on a close below the previous N-bar low',
+       [_p('period', 'Channel Period', 20, 2, 400)])
+def _breakout(p):
+    n = _i(p, 'period', 20)
 
     def initialize(context):
-        context.history_len = slow_p + signal_p + 10
-        context.invested = False
+        context.up = context.indicator('donchian', n, output='upper', lag=1)
+        context.lo = context.indicator('donchian', n, output='lower', lag=1)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.history_len - 5:
-            return
-        arr = np.asarray(prices)
-        _, _, histogram = _macd_calc(arr, fast_p, slow_p, signal_p)
-        if len(histogram) < 2 or np.isnan(histogram[-1]) or np.isnan(histogram[-2]):
-            return
-
-        # Zero-line crossover on histogram
-        if histogram[-2] <= 0 < histogram[-1] and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif histogram[-2] >= 0 > histogram[-1] and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            u, lo = data.current(a, context.up), data.current(a, context.lo)
+            if u == u and lo == lo:
+                c = data.current(a, 'close')
+                _long_flat(c > u, c < lo, context, a)
     return initialize, handle_data
 
 
-# ============================================================================
-# Breakout Strategies
-# ============================================================================
-
-@_register('breakout', 'breakout', 'Donchian Breakout',
-           'Donchian channel breakout',
-           [{'name': 'period', 'default': 20}])
-def _donchian_breakout(params):
-    period = int(params.get('period', 20))
+@_algo('volatility_breakout', 'Volatility Breakout', 'breakout',
+       'Enter on a close above SMA(N) + k x ATR(N) (Wilder ATR on high / low / close), exit on a close below SMA(N)',
+       [_p('atrPeriod', 'ATR Period', 14, 2, 200), _p('atrMultiplier', 'ATR Multiplier', 2.0, 0.5, 5.0, 0.1, 'float')])
+def _vol_breakout(p):
+    n, k = _i(p, 'atrPeriod', 14), _f(p, 'atrMultiplier', 2.0)
 
     def initialize(context):
-        context.history_len = period + 2
-        context.invested = False
+        context.ma = context.indicator('sma', n)
+        context.atr = context.indicator('atr', n)
 
     def handle_data(context, data):
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(close) < period:
-            return
-
-        upper = np.asarray(high[-period:]).max()
-        lower = np.asarray(low[-period:]).min()
-        current = close.iloc[-1]
-
-        if current >= upper and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif current <= lower and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            m, r = data.current(a, context.ma), data.current(a, context.atr)
+            if m == m and r == r:
+                c = data.current(a, 'close')
+                _long_flat(c > m + k * r, c < m, context, a)
     return initialize, handle_data
 
 
-@_register('volatility_breakout', 'breakout', 'Volatility Breakout',
-           'ATR-based volatility breakout',
-           [{'name': 'atrPeriod', 'default': 14},
-            {'name': 'atrMultiplier', 'default': 2.0}])
-def _volatility_breakout(params):
-    period = int(params.get('atrPeriod', 14))
-    multiplier = float(params.get('atrMultiplier', 2.0))
+# ════════════════════════════════════════════════════════════════════════════
+# Multi-indicator
+# ════════════════════════════════════════════════════════════════════════════
+
+@_algo('rsi_macd', 'RSI + MACD', 'multiIndicator',
+       'Enter when RSI is below the lower level while the MACD line is above 0 (a dip in an uptrend); exit when RSI '
+       'is above the upper level or the MACD line falls below 0',
+       [_p('rsiPeriod', 'RSI Period', 14, 2, 100), _p('macdFast', 'MACD Fast', 12, 2, 100),
+        _p('macdSlow', 'MACD Slow', 26, 5, 200), _p('rsiLower', 'Buy below RSI', 40.0, 1.0, 60.0, 1.0, 'float'),
+        _p('rsiUpper', 'Sell above RSI', 60.0, 40.0, 99.0, 1.0, 'float')],
+       constraints=_MACD_FS + [_lt('rsiLower', 'rsiUpper', 'The buy level must be below the sell level.')])
+def _rsi_macd(p):
+    rn, f, s = _i(p, 'rsiPeriod', 14), _i(p, 'macdFast', 12), _i(p, 'macdSlow', 26)
+    lo, hi = _f(p, 'rsiLower', 40.0), _f(p, 'rsiUpper', 60.0)
 
     def initialize(context):
-        context.history_len = period + 10
-        context.invested = False
+        context.rsi = context.indicator('rsi', rn)
+        context.line = context.indicator('macd', f, s, 9, output='macd')
 
     def handle_data(context, data):
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(close) < period + 2:
-            return
-
-        atr_vals = _atr(np.asarray(high), np.asarray(low), np.asarray(close), period)
-        if np.isnan(atr_vals[-1]):
-            return
-
-        sma = np.asarray(close[-period:]).mean()
-        upper = sma + multiplier * atr_vals[-1]
-        current = close.iloc[-1]
-
-        if current > upper and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif current < sma and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            r, m = data.current(a, context.rsi), data.current(a, context.line)
+            if r == r and m == m:
+                _long_flat(r < lo and m > 0.0, r > hi or m < 0.0, context, a)
     return initialize, handle_data
 
 
-# ============================================================================
-# Multi-Indicator Strategies
-# ============================================================================
-
-@_register('rsi_macd', 'multiIndicator', 'RSI + MACD',
-           'RSI and MACD confluence',
-           [{'name': 'rsiPeriod', 'default': 14},
-            {'name': 'macdFast', 'default': 12},
-            {'name': 'macdSlow', 'default': 26}])
-def _rsi_macd(params):
-    rsi_p = int(params.get('rsiPeriod', 14))
-    macd_fast = int(params.get('macdFast', 12))
-    macd_slow = int(params.get('macdSlow', 26))
+@_algo('macd_adx', 'MACD + ADX Filter', 'multiIndicator',
+       'Long while the MACD line is above 0 and Wilder ADX is above the threshold (a trend strong enough to follow)',
+       [_p('macdFast', 'MACD Fast', 12, 2, 100), _p('macdSlow', 'MACD Slow', 26, 5, 200),
+        _p('adxPeriod', 'ADX Period', 14, 2, 100), _p('adxThreshold', 'ADX Threshold', 25.0, 5.0, 60.0, 1.0, 'float')],
+       constraints=_MACD_FS)
+def _macd_adx(p):
+    f, s, n, th = _i(p, 'macdFast', 12), _i(p, 'macdSlow', 26), _i(p, 'adxPeriod', 14), _f(p, 'adxThreshold', 25.0)
 
     def initialize(context):
-        context.history_len = max(rsi_p, macd_slow) + 20
-        context.invested = False
+        context.line = context.indicator('macd', f, s, 9, output='macd')
+        context.adx = context.indicator('adx', n, output='adx')
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.history_len - 5:
-            return
-
-        arr = np.asarray(prices)
-        rsi_vals = _rsi(arr, rsi_p)
-        macd_line, _, _ = _macd_calc(arr, macd_fast, macd_slow, 9)
-        current_rsi = rsi_vals[-1]
-        macd_val = macd_line[-1]
-
-        if np.isnan(current_rsi) or np.isnan(macd_val):
-            return
-
-        if current_rsi < 40 and macd_val > 0 and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif (current_rsi > 60 or macd_val < 0) and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            m, x = data.current(a, context.line), data.current(a, context.adx)
+            if m == m and x == x:
+                context.order_target_percent(a, 1.0 if (m > 0.0 and x > th) else 0.0)
     return initialize, handle_data
 
 
-@_register('macd_adx', 'multiIndicator', 'MACD + ADX Filter',
-           'MACD with ADX trend filter',
-           [{'name': 'macdFast', 'default': 12},
-            {'name': 'macdSlow', 'default': 26},
-            {'name': 'adxPeriod', 'default': 14}])
-def _macd_adx(params):
-    macd_fast = int(params.get('macdFast', 12))
-    macd_slow = int(params.get('macdSlow', 26))
-    adx_period = int(params.get('adxPeriod', 14))
+@_algo('bollinger_rsi', 'Bollinger + RSI', 'multiIndicator',
+       'Enter on a close below the lower Bollinger band with RSI below oversold; exit on a close above the middle band '
+       'or RSI above overbought',
+       [_p('bbPeriod', 'BB Period', 20, 2, 400), _p('stdDev', 'Std Dev', 2.0, 0.5, 5.0, 0.1, 'float'),
+        _p('rsiPeriod', 'RSI Period', 14, 2, 100), _p('rsiOversold', 'RSI Oversold', 30.0, 1.0, 50.0, 1.0, 'float'),
+        _p('rsiOverbought', 'RSI Overbought', 70.0, 50.0, 99.0, 1.0, 'float')],
+       constraints=[_lt('rsiOversold', 'rsiOverbought', 'Oversold must be below overbought.')])
+def _bollinger_rsi(p):
+    n, k, rn = _i(p, 'bbPeriod', 20), _f(p, 'stdDev', 2.0), _i(p, 'rsiPeriod', 14)
+    lo, hi = _f(p, 'rsiOversold', 30.0), _f(p, 'rsiOverbought', 70.0)
 
     def initialize(context):
-        context.history_len = max(macd_slow, adx_period) + 20
-        context.invested = False
+        context.lower = context.indicator('bbands', n, k, output='lower')
+        context.mid = context.indicator('bbands', n, k, output='middle')
+        context.rsi = context.indicator('rsi', rn)
 
     def handle_data(context, data):
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        high = data.history(context.asset, 'high', context.history_len, '1d')
-        low = data.history(context.asset, 'low', context.history_len, '1d')
-        if len(close) < context.history_len - 5:
-            return
-
-        c = np.asarray(close)
-        macd_line, _, _ = _macd_calc(c, macd_fast, macd_slow, 9)
-        macd_val = macd_line[-1]
-
-        adx_vals = _adx_calc(np.asarray(high), np.asarray(low), c, adx_period)
-        if np.isnan(macd_val):
-            return
-        adx_val = adx_vals[-1] if not np.isnan(adx_vals[-1]) else 0
-        trending = adx_val > 25
-
-        if macd_val > 0 and trending and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif (macd_val < 0 or not trending) and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            b, m, r = data.current(a, context.lower), data.current(a, context.mid), data.current(a, context.rsi)
+            if b == b and m == m and r == r:
+                c = data.current(a, 'close')
+                _long_flat(c < b and r < lo, c > m or r > hi, context, a)
     return initialize, handle_data
 
 
-@_register('bollinger_rsi', 'multiIndicator', 'Bollinger + RSI',
-           'Bollinger bands with RSI',
-           [{'name': 'bbPeriod', 'default': 20},
-            {'name': 'rsiPeriod', 'default': 14}])
-def _bollinger_rsi(params):
-    bb_period = int(params.get('bbPeriod', 20))
-    rsi_period = int(params.get('rsiPeriod', 14))
+# ════════════════════════════════════════════════════════════════════════════
+# Volume / scheduled / pipeline
+# ════════════════════════════════════════════════════════════════════════════
+
+@_algo('obv_trend', 'OBV Trend', 'other', 'Long while on-balance volume is above its N-bar SMA',
+       [_p('maPeriod', 'MA Period', 20, 2, 400)])
+def _obv_trend(p):
+    n = _i(p, 'maPeriod', 20)
 
     def initialize(context):
-        context.history_len = max(bb_period, rsi_period) + 10
-        context.invested = False
+        context.obv = context.indicator('obv')
+        context.ma = context.indicator('obv_sma', n)
 
     def handle_data(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < context.history_len - 5:
-            return
-
-        arr = np.asarray(prices)
-        rsi_vals = _rsi(arr, rsi_period)
-        window = arr[-bb_period:]
-        mean = window.mean()
-        std = window.std(ddof=1)
-        lower = mean - 2 * std
-        current = arr[-1]
-        current_rsi = rsi_vals[-1]
-
-        if np.isnan(current_rsi):
-            return
-
-        if current < lower and current_rsi < 30 and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif (current > mean or current_rsi > 70) and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            o, m = data.current(a, context.obv), data.current(a, context.ma)
+            if o == o and m == m:
+                _long_flat(o > m, o < m, context, a)
     return initialize, handle_data
 
 
-# ============================================================================
-# Volume-Based Strategies
-# ============================================================================
-
-@_register('obv_trend', 'other', 'OBV Trend',
-           'On-Balance Volume trend',
-           [{'name': 'maPeriod', 'default': 20}])
-def _obv_trend_strategy(params):
-    ma_period = int(params.get('maPeriod', 20))
+@_algo('scheduled_rebalance', 'Scheduled Rebalance', 'pipeline',
+       'schedule_function(month_start): on the first bar of each month hold each symbol whose return over the momentum '
+       'window is positive, else stay flat',
+       [_p('momentumWindow', 'Momentum Window (bars)', 63, 2, 504)])
+def _scheduled(p):
+    n = _i(p, 'momentumWindow', 63)
 
     def initialize(context):
-        context.history_len = ma_period + 10
-        context.invested = False
+        context.mom = context.indicator('momentum', n)
+        context.schedule_function(rebalance, date_rules.month_start())
+
+    def rebalance(context, data):
+        for a in context.assets:
+            v = data.current(a, context.mom)
+            if v == v:
+                context.order_target_percent(a, 1.0 if v > 0.0 else 0.0)
+    return initialize, None
+
+
+@_algo('pipeline', 'Custom Pipeline', 'pipeline',
+       'Pipeline-style factor screen: every N bars rank the symbols by their lookback return, keep the top N with a '
+       'positive return, equal weight (cash when none qualifies). Needs 2+ symbols to rank',
+       [_p('topN', 'Top N', 3, 1, 50, desc='v1 default 5 selected every symbol of a typical 1-5 symbol run'),
+        _p('rebalanceDays', 'Rebalance Every (bars)', 21, 1, 252),
+        _p('lookback', 'Factor Lookback (bars)', 21, 2, 504)], kind='allocation')
+def _pipeline(p):
+    top, every, look = _i(p, 'topN', 3), _i(p, 'rebalanceDays', 21), _i(p, 'lookback', 21)
+
+    def initialize(context):
+        context.factor = context.indicator('momentum', look)
+        context.schedule_function(rebalance, date_rules.every_n_bars(every))
+
+    def rebalance(context, data):
+        scores = []
+        for a in context.assets:
+            v = data.current(a, context.factor)
+            if v == v and data.can_trade(a):
+                scores.append((v, a))
+        if not scores:
+            return
+        scores.sort(key=lambda x: -x[0])
+        longs = [a for v, a in scores[:top] if v > 0.0]
+        w = 1.0 / len(longs) if longs else 0.0
+        for v, a in scores:
+            context.order_target_percent(a, w if a in longs else 0.0)
+    return initialize, None
+
+
+@_algo('buy_and_hold', 'Buy & Hold', 'benchmark',
+       'zipline\'s tutorial algorithm: order_target_percent(asset, 1) once on each symbol\'s first tradable bar and '
+       'hold (with several symbols each gets an equal slot)', [])
+def _buy_and_hold(p):
+    def initialize(context):
+        context.ordered = set()
 
     def handle_data(context, data):
-        close = data.history(context.asset, 'close', context.history_len, '1d')
-        volume = data.history(context.asset, 'volume', context.history_len, '1d')
-        if len(close) < ma_period + 2:
+        if len(context.ordered) == len(context.assets):
             return
-
-        obv = _obv_calc(np.asarray(close), np.asarray(volume))
-        obv_ma = _rolling_mean(obv, ma_period)
-
-        if np.isnan(obv_ma[-1]):
-            return
-
-        if obv[-1] > obv_ma[-1] and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif obv[-1] < obv_ma[-1] and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
+        for a in context.assets:
+            if a.sid not in context.ordered and data.can_trade(a):
+                context.order_target_percent(a, 1.0)
+                context.ordered.add(a.sid)
     return initialize, handle_data
 
 
-# ============================================================================
-# Pipeline Strategy (Zipline-unique)
-# ============================================================================
+# ════════════════════════════════════════════════════════════════════════════
+# Catalogue access
+# ════════════════════════════════════════════════════════════════════════════
 
-@_register('pipeline', 'pipeline', 'Custom Pipeline',
-           'Zipline Pipeline API strategy - factor-based screening and ranking',
-           [{'name': 'topN', 'default': 5},
-            {'name': 'rebalanceDays', 'default': 21}])
-def _pipeline_strategy(params):
-    """
-    Uses a simple factor-based approach (mimics Pipeline concepts).
-    Since actual Pipeline requires ingested data bundles, this implements
-    a simplified momentum-ranking approach.
-    """
-    top_n = int(params.get('topN', 5))
-    rebalance_days = int(params.get('rebalanceDays', 21))
-
-    def initialize(context):
-        context.history_len = 63  # ~3 months
-        context.day_count = 0
-        context.invested = False
-
-    def handle_data(context, data):
-        context.day_count += 1
-        if context.day_count % rebalance_days != 0:
-            return
-
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < 21:
-            return
-
-        # Simple momentum factor: 1-month return
-        mom_1m = (prices.iloc[-1] / prices.iloc[-21]) - 1.0
-
-        if mom_1m > 0 and not context.invested:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        elif mom_1m < 0 and context.invested:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
-
-    return initialize, handle_data
+ALIASES = {'sma': 'sma_crossover', 'ema': 'ema_crossover', 'macd_crossover': 'macd', 'bollinger': 'bollinger_bands',
+           'zscore': 'mean_reversion', 'z_score': 'mean_reversion', 'donchian_breakout': 'breakout',
+           'buy_hold': 'buy_and_hold', 'buyandhold': 'buy_and_hold', 'keltner': 'keltner_channel',
+           'williams': 'williams_r', 'roc': 'momentum'}
+# a ranking across symbols needs >= 2 symbols to rank; with one symbol it still runs (stated in a warning)
+RANKS_SYMBOLS = ('pipeline', 'dual_momentum')
 
 
-@_register('scheduled_rebalance', 'pipeline', 'Scheduled Rebalance',
-           'Monthly rebalance using schedule_function',
-           [{'name': 'momentumWindow', 'default': 63}])
-def _scheduled_rebalance(params):
-    """Strategy that demonstrates schedule_function usage."""
-    window = int(params.get('momentumWindow', 63))
+def resolve(strategy_type: Any) -> str:
+    s = str(strategy_type or 'sma_crossover').strip().lower()
+    s = ALIASES.get(s, s)
+    if s not in STRATEGIES:
+        raise ValueError(f'Unknown strategy {strategy_type!r}. Available: {", ".join(sorted(STRATEGIES))}.')
+    return s
 
-    def initialize(context):
-        context.history_len = window + 5
-        context.invested = False
-        # Schedule monthly rebalance
-        context.schedule_function(
-            _rebalance,
-            date_rule={'type': 'month_start', 'days_offset': 0},
-            time_rule={'type': 'market_open', 'minutes': 30},
-        )
 
-    def _rebalance(context, data):
-        prices = data.history(context.asset, 'close', context.history_len, '1d')
-        if len(prices) < window:
-            return
-        ret = (prices.iloc[-1] / prices.iloc[-window]) - 1.0
-        if ret > 0:
-            context.order_target_percent(context.asset, 1.0)
-            context.invested = True
-        else:
-            context.order_target_percent(context.asset, 0.0)
-            context.invested = False
+def kind_of(sid: str) -> str:
+    return STRATEGIES[sid]['kind']
 
-    def handle_data(context, data):
-        pass  # All logic in scheduled function
 
-    return initialize, handle_data
+def catalog_entry(sid: str) -> Optional[Dict[str, Any]]:
+    return STRATEGIES.get(sid)
+
+
+def defaults(sid: str) -> Dict[str, Any]:
+    return {p['id']: p['default'] for p in STRATEGIES[sid]['parameters']}
+
+
+def build(sid: str, params: Dict[str, Any]):
+    """(initialize, handle_data) of a catalogue algorithm (ValueError for a bad parameter)."""
+    return STRATEGIES[sid]['build'](params or {})
+
+
+def check_constraints(sid: str, params: Dict[str, Any]) -> Optional[str]:
+    """The message of the first catalogue constraint the parameters break, else None."""
+    for c in STRATEGIES[sid]['constraints']:
+        a, b = c['lt']
+        try:
+            if not float(params[a]) < float(params[b]):
+                return f"{c['message']} ({a} {params[a]} / {b} {params[b]})"
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def default_warmup(sid: str, params: Dict[str, Any]) -> int:
+    """Bars an algorithm's indicators need before its first possible decision (provenance, walk-forward
+    warm-up)."""
+    p = params or {}
+
+    def g(k, d):
+        try:
+            return int(round(float(p.get(k, d))))
+        except (TypeError, ValueError):
+            return int(d)
+    if sid == 'macd':
+        return g('slowPeriod', 26) + g('signalPeriod', 9)
+    if sid in ('adx_trend',):
+        return 2 * g('adxPeriod', 14)
+    if sid == 'macd_adx':
+        return max(g('macdSlow', 26), 2 * g('adxPeriod', 14))
+    if sid == 'stochastic':
+        return g('kPeriod', 14) + g('dPeriod', 3)
+    if sid == 'breakout':
+        return g('period', 20) + 1
+    if sid == 'macd_zero_cross':
+        return g('slowPeriod', 26) + 1
+    look = [int(round(float(v))) for k, v in p.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
+            and any(w in k.lower() for w in ('period', 'lookback', 'window', 'slow')) and float(v) >= 1]
+    return int(max(look)) if look else 0
+
+
+_IMPL = {'signals': 'zipline-style algorithm (initialize / handle_data on full-history indicators) decides; '
+                    'base.simulator executes (signals mode) - zipline-reloaded is not used',
+         'allocation': 'zipline-style algorithm (schedule_function + order_target_percent weights) decides; '
+                       'base.simulator executes (weights mode) - zipline-reloaded is not used'}
+
+
+def get_strategy_catalog() -> List[Dict[str, Any]]:
+    out = []
+    for sid, s in STRATEGIES.items():
+        d = {k: v for k, v in s.items() if k != 'build'}
+        d['id'] = sid
+        d['implementation'] = _IMPL[s['kind']]
+        d['minSymbols'] = 1
+        d['parameters'] = [dict(x) for x in s['parameters']]
+        d['params'] = d['parameters']
+        d['constraints'] = [dict(c) for c in s['constraints']]
+        if sid in RANKS_SYMBOLS:
+            d['ranksSymbols'] = True
+        out.append(d)
+    return out

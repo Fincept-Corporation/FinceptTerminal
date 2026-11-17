@@ -95,6 +95,14 @@ struct BrokerProfile {
     bool supports_intraday = true;
     bool supports_bracket_order = false;
     bool supports_cover_order = false;
+    // True only when place_order() transmits UnifiedOrder::stop_loss / take_profit with
+    // the entry order for every product (MetaAPI, TickerAll). Elsewhere they would be
+    // dropped silently, so the ticket disables SL/TP and UnifiedTrading refuses an order
+    // that carries them. (Angel One sends neither on a NORMAL order; Fyers only for BO/CO.)
+    bool supports_bracket_sl_tp = false;
+    // SL / TP are honoured only on the bracket products: BracketOrder carries both,
+    // CoverOrder carries the stop-loss only (Fyers). See entry_sl_tp_honoured().
+    bool sl_tp_on_bracket_products = false;
 
     // Paper trading
     bool has_native_paper = false; // broker provides its own paper trading (Alpaca)
@@ -108,6 +116,24 @@ struct BrokerProfile {
     // Brokerage info (for display only)
     QString brokerage_info; // e.g. "₹20/order or 0.03%"
 };
+
+/// Can SL / TP (UnifiedOrder::stop_loss / take_profit) be honoured on an entry order of
+/// `product` at this broker? `has_sl` / `has_tp` say which of the two the order carries.
+/// An order carrying a protective leg that this answers false for must be refused, never
+/// sent with the leg silently dropped.
+inline bool entry_sl_tp_honoured(const BrokerProfile& profile, ProductType product, bool has_sl, bool has_tp) {
+    if (!has_sl && !has_tp)
+        return true;
+    if (profile.supports_bracket_sl_tp)
+        return true;
+    if (profile.sl_tp_on_bracket_products) {
+        if (product == ProductType::BracketOrder)
+            return true;
+        if (product == ProductType::CoverOrder && !has_tp)
+            return true;
+    }
+    return false;
+}
 
 // ============================================================================
 // SessionCheck — result of a live token health-check (IBroker::validate_session)
@@ -531,8 +557,12 @@ class IBroker {
     virtual const char* ws_adapter_name() const { return ""; }
 
     // --- Credential helpers ---
-    BrokerCredentials load_credentials() const;
-    BrokerCredentials load_credentials_for_env(const QString& env) const; // env="live"/"paper"/""
+    // A stored field that cannot be read (secure storage busy, damaged row, key
+    // unavailable) is not "not set": `read_error` (when given) gets a plain sentence
+    // and the credentials come back empty — never the other environment's set.
+    BrokerCredentials load_credentials(QString* read_error = nullptr) const;
+    BrokerCredentials load_credentials_for_env(const QString& env, // env="live"/"paper"/""
+                                               QString* read_error = nullptr) const;
     void save_credentials(const BrokerCredentials& creds) const;
 
   protected:

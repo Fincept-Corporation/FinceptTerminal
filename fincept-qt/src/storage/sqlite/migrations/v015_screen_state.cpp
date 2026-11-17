@@ -1,40 +1,23 @@
-// v015_screen_state — Add screen_state table to cache.db (via CacheDatabase).
-// This is NOT a fincept.db migration — it runs against cache.db directly.
-// The MigrationRunner here only creates the table once in the main DB's
-// schema_version tracking, but the actual DDL executes on CacheDatabase.
-// See ScreenStateManager::ensure_table() which calls this at init time.
+// v015_screen_state — historical slot, now a deliberate no-op.
+//
+// The screen_state table lives in cache.db, not fincept.db, and
+// CacheDatabase::create_tables() creates it whenever cache.db is opened. This
+// migration used to issue the same DDL through CacheDatabase::instance() from
+// inside a fincept.db migration transaction, which (a) wrote to a second file
+// that the transaction could not roll back, (b) recorded success even when
+// cache.db was closed, and (c) made the migration depend on global state, so it
+// could not run on the throwaway in-memory database that
+// MigrationRunner::inspect() builds its reference schema on.
+//
+// The version number stays registered so the sequence has no gap and existing
+// databases (which already recorded v15) are unaffected.
 
-#include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
-
-#include <QSqlError>
-#include <QSqlQuery>
 
 namespace fincept {
 namespace {
 
 Result<void> apply_v015(QSqlDatabase& /*db*/) {
-    // This migration runs its DDL on cache.db, not fincept.db.
-    // The version record is still tracked in fincept.db schema_version
-    // so we don't re-run it. The actual table creation is idempotent
-    // (CREATE TABLE IF NOT EXISTS) and also happens in CacheDatabase::create_tables().
-    auto& cdb = CacheDatabase::instance();
-    if (!cdb.is_open())
-        return Result<void>::ok(); // cache.db not open yet — table created on open
-
-    auto r = cdb.exec("CREATE TABLE IF NOT EXISTS screen_state ("
-                      "  screen_key    TEXT PRIMARY KEY,"
-                      "  state_version INTEGER NOT NULL DEFAULT 1,"
-                      "  state_json    TEXT    NOT NULL DEFAULT '{}',"
-                      "  updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
-                      "  session_id    TEXT    NOT NULL DEFAULT ''"
-                      ")");
-    if (r.is_err())
-        return r;
-
-    cdb.exec("CREATE INDEX IF NOT EXISTS idx_screen_state_updated "
-             "ON screen_state(updated_at)");
-
     return Result<void>::ok();
 }
 

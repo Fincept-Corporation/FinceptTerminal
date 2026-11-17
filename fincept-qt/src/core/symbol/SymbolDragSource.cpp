@@ -1,6 +1,7 @@
 #include "core/symbol/SymbolDragSource.h"
 
 #include "core/symbol/SymbolMime.h"
+#include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -18,10 +19,9 @@
 namespace fincept::symbol_dnd {
 
 static QPixmap make_drag_pixmap(const SymbolRef& ref) {
-    // Amber pill with the ticker. Small enough not to block the drop target.
-    QFont font;
-    font.setBold(true);
-    font.setPointSize(10);
+    // Accent pill with the ticker. Small enough not to block the drop target.
+    // Built per drag, so it always has the current theme's colours and font.
+    const QFont font = ui::fonts::font(-1, QFont::Bold);
     QFontMetrics fm(font);
     const QString text = ref.symbol;
     const int text_w = fm.horizontalAdvance(text);
@@ -39,8 +39,8 @@ static QPixmap make_drag_pixmap(const SymbolRef& ref) {
     p.setRenderHint(QPainter::Antialiasing, true);
     QPainterPath path;
     path.addRoundedRect(QRectF(0, 0, w, h), h / 2.0, h / 2.0);
-    p.fillPath(path, QColor("#d97706")); // amber
-    p.setPen(Qt::white);
+    p.fillPath(path, QColor(ui::colors::AMBER()));
+    p.setPen(QColor(ui::colors::TEXT_ON_ACCENT()));
     p.setFont(font);
     p.drawText(QRectF(0, 0, w, h), Qt::AlignCenter, text);
     p.end();

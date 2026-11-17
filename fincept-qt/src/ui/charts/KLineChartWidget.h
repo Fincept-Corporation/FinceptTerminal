@@ -27,6 +27,24 @@ class KLineChartWidget : public QWidget {
     void clear_position_line();
     void clear();
 
+    // Push the active theme to the page: surfaces, text, grid, crosshair,
+    // the up/down colours of the user's direction palette, the categorical
+    // indicator-line colours and the user's font. Runs automatically when the
+    // page loads and on every ThemeManager::theme_changed; call it only after
+    // changing something the theme reads outside ThemeManager.
+    void apply_theme();
+    // Time axis zone as an IANA id ("America/New_York", "Asia/Kolkata").
+    // Empty = the system time zone (the default).
+    void set_timezone(const QString& iana);
+    QString timezone() const { return timezone_; }
+    // Decimal places for prices and volumes (e.g. 5/0 for FX, 2/0 for equities,
+    // 8/4 for crypto). Negative values are clamped to 0.
+    void set_price_precision(int price, int volume = 0);
+
+    // All three setters above may be called before the page has loaded: the
+    // latest value of each is kept and pushed once the page is ready (before
+    // any queued candle data), and again if the page is ever reloaded.
+
     // True when the WebEngine runtime is deployed AND no chart in this process
     // has seen it fail to start (see runtime_failed()). Hosts check this once at
     // construction to pick KLineChart vs. their native fallback chart.
@@ -67,8 +85,17 @@ class KLineChartWidget : public QWidget {
     void emit_trade(bool is_buy, double price);
     void run_js(const QString& js);
     void flush_pending();
+    // Sends the theme / time zone / precision state (only when the page is ready).
+    void push_page_state();
+    QString theme_js() const;
     void on_load_finished(bool ok);
     void fail_runtime(const QString& reason);
+    // Load watchdog: if the page has neither finished nor failed kLoadWatchdogMs after the
+    // load started (a renderer that hangs without dying never reports loadFinished),
+    // fail_runtime() so the host swaps in its native chart instead of an empty area forever.
+    // Re-arms while the widget is hidden — only a visible chart is judged.
+    void arm_load_watchdog();
+    static constexpr int kLoadWatchdogMs = 10'000;
 
 #ifdef HAS_QT_WEBENGINE
     QWebEngineView* web_view_ = nullptr;
@@ -83,6 +110,10 @@ class KLineChartWidget : public QWidget {
     [[maybe_unused]] bool proxy_retry_pending_ = false;
     QPointer<QWidget> filtered_proxy_; // the render widget we've filtered
     QQueue<QString> pending_js_;
+    // Page state, re-sent on load (see push_page_state()).
+    QString timezone_;           // IANA id; resolved to the system zone in the constructor
+    int price_precision_ = -1;   // -1 = not set (klinecharts default)
+    int volume_precision_ = -1;
 };
 
 } // namespace fincept::ui

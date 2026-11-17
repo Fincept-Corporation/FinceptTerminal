@@ -8,27 +8,55 @@
 <title>KLineChart</title>
 <script src="vendor/klinecharts.min.js"></script>
 <style>
+  /* Theme variables. The values here are only the first-paint defaults; the
+     host (KLineChartWidget::apply_theme) replaces them with the terminal's
+     active theme tokens on load and on every theme change. */
+  :root {
+    --bg: #0a0c10;
+    --surface: #10131a;
+    --raised: #171b24;
+    --hover: #1f2430;
+    --border-dim: #272d3b;
+    --border-med: #394155;
+    --text-primary: #eef0f5;
+    --text-secondary: #aab1c2;
+    --text-tertiary: #868ea2;
+    --text-dim: #727a8e;
+    --accent: #f5a623;
+    --text-on-accent: #1a1003;
+    --up: #2fd07a;
+    --down: #ff5d5d;
+    --flat: #868ea2;
+    --on-direction: #131722;
+    --on-palette: #131722;
+    --palette: #f5ae39,#3fb1ea,#9c51cc,#ffb8df,#4680f1;
+    --font-family: Consolas, 'Courier New', monospace;
+    --font-px: 14;
+    --fs-xs: 9px;
+    --fs-sm: 10px;
+    --fs-md: 13px;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #080808; font-family: Consolas, 'Courier New', monospace; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--font-family); }
   #app { display: flex; flex-direction: column; height: 100%; }
-  #toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 6px; background: #0a0a0a; border-bottom: 1px solid #1a1a1a; flex-shrink: 0; flex-wrap: wrap; }
+  #toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 6px; background: var(--surface); border-bottom: 1px solid var(--border-dim); flex-shrink: 0; flex-wrap: wrap; }
   #chart { flex: 1; min-height: 0; }
   .tb-group { display: flex; align-items: center; gap: 1px; margin-right: 6px; }
-  .tb-sep { width: 1px; height: 18px; background: #222; margin: 0 4px; }
-  .tb-btn { background: transparent; border: 1px solid transparent; color: #808080; font: 10px Consolas; padding: 2px 6px; cursor: pointer; border-radius: 2px; white-space: nowrap; }
-  .tb-btn:hover { background: #161616; color: #e5e5e5; border-color: #333; }
-  .tb-btn.active { background: #1a1a1a; color: #d97706; border-color: #d97706; }
+  .tb-sep { width: 1px; height: 18px; background: var(--border-med); margin: 0 4px; }
+  .tb-btn { background: transparent; border: 1px solid transparent; color: var(--text-secondary); font-family: var(--font-family); font-size: var(--fs-sm); padding: 2px 6px; cursor: pointer; border-radius: 2px; white-space: nowrap; }
+  .tb-btn:hover { background: var(--hover); color: var(--text-primary); border-color: var(--border-med); }
+  .tb-btn.active { background: var(--raised); color: var(--accent); border-color: var(--accent); }
   #activeInds { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
-  .ind-chip { display: inline-flex; align-items: center; background: #1a1a1a; color: #d97706; border: 1px solid #d97706; border-radius: 2px; font: 10px Consolas; padding: 1px 2px 1px 7px; }
-  .ind-x { background: transparent; border: none; color: #d97706; font: 13px Consolas; line-height: 1; cursor: pointer; padding: 0 4px; }
-  .ind-x:hover { color: #fff; }
+  .ind-chip { display: inline-flex; align-items: center; background: var(--raised); color: var(--accent); border: 1px solid var(--accent); border-radius: 2px; font-family: var(--font-family); font-size: var(--fs-sm); padding: 1px 2px 1px 7px; }
+  .ind-x { background: transparent; border: none; color: var(--accent); font-family: var(--font-family); font-size: var(--fs-md); line-height: 1; cursor: pointer; padding: 0 4px; }
+  .ind-x:hover { color: var(--text-primary); }
   .tb-dropdown { position: relative; display: inline-block; }
-  .tb-dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #111; border: 1px solid #222; min-width: 140px; z-index: 100; max-height: 300px; overflow-y: auto; }
+  .tb-dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: var(--surface); border: 1px solid var(--border-med); min-width: 140px; z-index: 100; max-height: 300px; overflow-y: auto; }
   .tb-dropdown:hover .tb-dropdown-content { display: block; }
   .tb-dropdown-content .tb-btn { display: block; width: 100%; text-align: left; border: none; padding: 4px 10px; border-radius: 0; }
-  .tb-dropdown-content .tb-btn:hover { background: #1a1a1a; }
-  .tb-dropdown-content .section { color: #d97706; font-size: 9px; padding: 6px 10px 2px; font-weight: 700; letter-spacing: 0.5px; }
-  #debug { position: fixed; bottom: 2px; left: 4px; color: #525252; font: 9px Consolas; z-index: 999; pointer-events: none; }
+  .tb-dropdown-content .tb-btn:hover { background: var(--hover); }
+  .tb-dropdown-content .section { color: var(--accent); font-size: var(--fs-xs); padding: 6px 10px 2px; font-weight: 700; letter-spacing: 0.5px; }
+  #debug { position: fixed; bottom: 2px; left: 4px; color: var(--text-dim); font-family: var(--font-family); font-size: var(--fs-xs); z-index: 999; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -166,87 +194,175 @@
   var dbg = document.getElementById('debug');
   function log(msg) { dbg.textContent = msg; }
 
+  // ── Theme ────────────────────────────────────────────────────────────────
+  // Every colour, font and text size the chart draws with comes from one theme
+  // object. Its first-paint values are read back from the :root CSS variables;
+  // the host replaces them through window.applyTheme() with the terminal's
+  // active theme tokens (including the user's up/down direction colours).
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function themeFromCss() {
+    return {
+      bg: cssVar('--bg'), surface: cssVar('--surface'), raised: cssVar('--raised'), hover: cssVar('--hover'),
+      borderDim: cssVar('--border-dim'), borderMed: cssVar('--border-med'),
+      textPrimary: cssVar('--text-primary'), textSecondary: cssVar('--text-secondary'),
+      textTertiary: cssVar('--text-tertiary'), textDim: cssVar('--text-dim'),
+      accent: cssVar('--accent'), textOnAccent: cssVar('--text-on-accent'),
+      up: cssVar('--up'), down: cssVar('--down'), flat: cssVar('--flat'),
+      onDirection: cssVar('--on-direction'), onPalette: cssVar('--on-palette'),
+      palette: cssVar('--palette').split(',').map(function(s) { return s.trim(); }).filter(Boolean),
+      fontFamily: cssVar('--font-family'), fontPx: parseInt(cssVar('--font-px'), 10) || 14
+    };
+  }
+
+  // '#rrggbb' at alpha `a` as rgba(); anything else is returned unchanged.
+  function withAlpha(hex, a) {
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+    if (!m) return hex;
+    return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
+  }
+
+  function textSizes(t) {
+    var base = t.fontPx || 14;
+    return { xs: Math.max(8, base - 5), sm: Math.max(9, base - 4), md: Math.max(10, base - 3) };
+  }
+
+  function buildStyles(t) {
+    var fs = textSizes(t), fam = t.fontFamily;
+    var palette = (t.palette && t.palette.length) ? t.palette : [t.accent];
+    var lines = [];
+    for (var i = 0; i < 5; i++) {
+      // Full objects: klinecharts merges arrays element by element.
+      lines.push({ style: 'solid', smooth: false, size: 1, dashedValue: [2, 2], color: palette[i % palette.length] });
+    }
+    var axisText = { show: true, color: t.textSecondary, size: fs.sm, family: fam, weight: 'normal' };
+    var crossText = { show: true, color: t.textOnAccent, size: fs.sm, family: fam, weight: 'normal',
+                      backgroundColor: t.accent, borderColor: t.accent,
+                      paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 };
+    var accentFill = withAlpha(t.accent, 0.10);
+    var accentRing = withAlpha(t.accent, 0.35);
+    return {
+      grid: {
+        show: true,
+        horizontal: { show: true, size: 1, color: t.borderDim, style: 'dashed', dashedValue: [2, 2] },
+        vertical:   { show: true, size: 1, color: t.borderDim, style: 'dashed', dashedValue: [2, 2] }
+      },
+      candle: {
+        bar: {
+          upColor: t.up, downColor: t.down, noChangeColor: t.flat,
+          upBorderColor: t.up, downBorderColor: t.down, noChangeBorderColor: t.flat,
+          upWickColor: t.up, downWickColor: t.down, noChangeWickColor: t.flat
+        },
+        area: {
+          lineSize: 2, lineColor: t.accent,
+          backgroundColor: [{ offset: 0, color: withAlpha(t.accent, 0.02) }, { offset: 1, color: withAlpha(t.accent, 0.22) }]
+        },
+        priceMark: {
+          show: true,
+          high: { show: true, color: t.textSecondary, textSize: fs.sm, textFamily: fam },
+          low:  { show: true, color: t.textSecondary, textSize: fs.sm, textFamily: fam },
+          last: {
+            show: true, upColor: t.up, downColor: t.down, noChangeColor: t.flat,
+            line: { show: true, style: 'dashed', size: 1 },
+            text: { show: true, size: fs.sm, family: fam, color: t.onDirection,
+                    paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
+          }
+        },
+        tooltip: {
+          showRule: 'always', showType: 'standard',
+          text: { size: fs.md, color: t.textPrimary, family: fam, weight: 'normal' }
+        }
+      },
+      indicator: {
+        ohlc: { upColor: t.up, downColor: t.down, noChangeColor: t.flat },
+        bars: [{ style: 'fill', borderStyle: 'solid', borderSize: 1, borderDashedValue: [2, 2],
+                 upColor: withAlpha(t.up, 0.7), downColor: withAlpha(t.down, 0.7), noChangeColor: t.flat }],
+        circles: [{ style: 'fill', borderStyle: 'solid', borderSize: 1, borderDashedValue: [2, 2],
+                    upColor: withAlpha(t.up, 0.7), downColor: withAlpha(t.down, 0.7), noChangeColor: t.flat }],
+        lines: lines,
+        lastValueMark: { show: true, text: { show: true, color: t.onPalette, size: fs.sm, family: fam } },
+        tooltip: { showRule: 'always', text: { size: fs.md, color: t.textPrimary, family: fam, weight: 'normal' } }
+      },
+      xAxis: {
+        show: true,
+        axisLine: { show: true, color: t.borderDim, size: 1 },
+        tickLine: { show: true, color: t.borderDim, size: 1 },
+        tickText: axisText
+      },
+      yAxis: {
+        show: true, position: 'right',
+        axisLine: { show: true, color: t.borderDim, size: 1 },
+        tickLine: { show: true, color: t.borderDim, size: 1 },
+        tickText: axisText
+      },
+      separator: { size: 2, color: t.borderDim, fill: true, activeBackgroundColor: withAlpha(t.accent, 0.15) },
+      crosshair: {
+        show: true,
+        horizontal: { show: true, line: { show: true, style: 'dashed', size: 1, color: t.accent }, text: crossText },
+        vertical:   { show: true, line: { show: true, style: 'dashed', size: 1, color: t.accent }, text: crossText }
+      },
+      overlay: {
+        point: { color: t.accent, borderColor: accentRing, activeColor: t.accent, activeBorderColor: accentRing },
+        line: { color: t.accent, size: 1 },
+        rect: { color: accentFill, borderColor: t.accent, borderSize: 1 },
+        polygon: { color: accentFill, borderColor: t.accent, borderSize: 1 },
+        circle: { color: accentFill, borderColor: t.accent, borderSize: 1 },
+        arc: { color: t.accent, size: 1 },
+        text: { color: t.textPrimary, size: fs.md, family: fam },
+        rectText: { color: t.textOnAccent, size: fs.sm, family: fam, backgroundColor: t.accent, borderColor: t.accent }
+      }
+    };
+  }
+
+  function applyCssVars(t) {
+    var fs = textSizes(t), root = document.documentElement.style;
+    var map = {
+      '--bg': t.bg, '--surface': t.surface, '--raised': t.raised, '--hover': t.hover,
+      '--border-dim': t.borderDim, '--border-med': t.borderMed,
+      '--text-primary': t.textPrimary, '--text-secondary': t.textSecondary,
+      '--text-tertiary': t.textTertiary, '--text-dim': t.textDim,
+      '--accent': t.accent, '--text-on-accent': t.textOnAccent,
+      '--up': t.up, '--down': t.down, '--flat': t.flat,
+      '--on-direction': t.onDirection, '--on-palette': t.onPalette,
+      '--font-family': t.fontFamily
+    };
+    Object.keys(map).forEach(function(k) { if (map[k]) root.setProperty(k, map[k]); });
+    if (t.palette && t.palette.length) root.setProperty('--palette', t.palette.join(','));
+    root.setProperty('--font-px', String(t.fontPx || 14));
+    root.setProperty('--fs-xs', fs.xs + 'px');
+    root.setProperty('--fs-sm', fs.sm + 'px');
+    root.setProperty('--fs-md', Math.max(11, (t.fontPx || 14) - 1) + 'px');
+  }
+
   var chart;
   try {
-    chart = klinecharts.init('chart', {
-      styles: {
-        grid: {
-          show: true,
-          horizontal: { show: true, size: 1, color: '#1a1a1a', style: 'dashed' },
-          vertical:   { show: true, size: 1, color: '#1a1a1a', style: 'dashed' }
-        },
-        candle: {
-          type: 'candle_solid',
-          bar: {
-            upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888',
-            upBorderColor: '#16a34a', downBorderColor: '#dc2626', noChangeBorderColor: '#888888',
-            upWickColor: '#16a34a', downWickColor: '#dc2626', noChangeWickColor: '#888888'
-          },
-          priceMark: {
-            show: true,
-            high: { show: true, color: '#e5e5e5', textSize: 10 },
-            low:  { show: true, color: '#e5e5e5', textSize: 10 },
-            last: {
-              show: true, upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888',
-              line: { show: true, style: 'dashed', size: 1 },
-              text: { show: true, size: 10, paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, color: '#fff' }
-            }
-          },
-          tooltip: {
-            showRule: 'always', showType: 'standard',
-            text: { size: 11, color: '#e5e5e5', family: 'Consolas, Courier New, monospace', weight: 'normal' }
-          }
-        },
-        indicator: {
-          ohlc: { upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888' },
-          lastValueMark: { show: true, text: { color: '#fff', size: 10 } },
-          tooltip: { showRule: 'always', text: { size: 11, color: '#e5e5e5', family: 'Consolas, monospace' } }
-        },
-        xAxis: {
-          show: true,
-          axisLine: { show: true, color: '#1a1a1a', size: 1 },
-          tickLine: { show: true, color: '#1a1a1a', size: 1 },
-          tickText: { show: true, color: '#808080', size: 10, family: 'Consolas, Courier New, monospace' }
-        },
-        yAxis: {
-          show: true, position: 'right',
-          axisLine: { show: true, color: '#1a1a1a', size: 1 },
-          tickLine: { show: true, color: '#1a1a1a', size: 1 },
-          tickText: { show: true, color: '#808080', size: 10, family: 'Consolas, Courier New, monospace' }
-        },
-        separator: { size: 2, color: '#1a1a1a', activeBackgroundColor: '#333' },
-        crosshair: {
-          show: true,
-          horizontal: {
-            show: true,
-            line: { show: true, style: 'dashed', size: 1, color: '#d97706' },
-            text: { show: true, color: '#080808', size: 10, family: 'Consolas, monospace',
-                    backgroundColor: '#d97706', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
-          },
-          vertical: {
-            show: true,
-            line: { show: true, style: 'dashed', size: 1, color: '#d97706' },
-            text: { show: true, color: '#080808', size: 10, family: 'Consolas, monospace',
-                    backgroundColor: '#d97706', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
-          }
-        },
-        overlay: {
-          point: { color: '#d97706', borderColor: '#d97706', activeColor: '#d97706', activeBorderColor: '#d97706' },
-          line: { color: '#d97706', size: 1 },
-          rect: { color: 'rgba(217,119,6,0.1)', borderColor: '#d97706', borderSize: 1 },
-          text: { color: '#e5e5e5', size: 11, family: 'Consolas, monospace' }
-        }
-      }
-    });
+    chart = klinecharts.init('chart', { styles: buildStyles(themeFromCss()) });
+    chart.setStyles({ candle: { type: 'candle_solid' } });
     window.chart = chart;
-    // India-first defaults: IST time axis + 2dp prices, whole-number volume.
-    try { chart.setTimezone('Asia/Kolkata'); } catch (e) {}
-    try { chart.setPriceVolumePrecision(2, 0); } catch (e) {}
+    // The time zone and price precision are set by the host (system time zone
+    // and the instrument's tick size); klinecharts' own defaults apply until then.
     log('ready');
   } catch (e) {
     log('INIT ERROR: ' + e.message);
     return;
   }
+
+  // Host API: the active theme (see KLineChartWidget::apply_theme for the keys).
+  window.applyTheme = function(t) {
+    try {
+      var merged = themeFromCss();
+      Object.keys(t || {}).forEach(function(k) { if (t[k] !== undefined && t[k] !== null && t[k] !== '') merged[k] = t[k]; });
+      applyCssVars(merged);
+      chart.setStyles(buildStyles(merged));
+    } catch (e) { log('theme err: ' + e.message); }
+  };
+
+  // Host API: price / volume decimal places.
+  window.setPrecision = function(price, volume) {
+    try { chart.setPriceVolumePrecision(price, volume); } catch (e) { log('precision err: ' + e.message); }
+  };
 
   // VWAP — volume-weighted average price, intraday (resets each session/day).
   // A staple for execution desks/PMS; KLineChart has no built-in VWAP, so we

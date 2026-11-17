@@ -1,5 +1,6 @@
 #include "screens/dashboard/TickerBar.h"
 
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
@@ -17,6 +18,7 @@
 #include <QTextOption>
 #include <QtConcurrent>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -63,23 +65,29 @@ static QList<QGlyphRun> ticker_bar_layout_runs(const QString& text, const QFont&
 // ─────────────────────────────────────────────────────────────────────────────
 
 TickerBar::TickerBar(QWidget* parent)
-    : QWidget(parent), ticker_font_(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2)), ticker_fm_(ticker_font_) {
-    setFixedHeight(kEditBarHeight);
+    : QWidget(parent), ticker_font_(ui::fonts::font(1)), ticker_fm_(ticker_font_) {
+    setFixedHeight(kEditBarHeight); // fit_height() grows it for a large font
     setContextMenuPolicy(Qt::DefaultContextMenu);
     setAccessibleName(tr("Market ticker"));
     setAccessibleDescription(tr("Scrolling price ticker. Right-click to edit the symbol list."));
     setToolTip(tr("Double-click a symbol to open it; right-click to edit ticker symbols"));
 
-    auto apply_bg = [this]() { setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE())); };
+    auto apply_bg = [this]() {
+        const QString sheet = QString("background-color: %1;").arg(ui::colors::BG_BASE());
+        if (styleSheet() != sheet) // only on change: it re-styles the bar
+            setStyleSheet(sheet);
+    };
     apply_bg();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this, apply_bg](const ui::ThemeTokens&) {
-                apply_bg();
-                // Font family/size and every colour are theme tokens, so the
-                // cached measurements go stale with the theme.
-                rebuild_entry_cache();
-                update();
-            });
+    // Once the appearance has settled — never inside theme_changed, where the
+    // height change (fit_height) activates the layouts mid-restyle.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this, apply_bg]() {
+        apply_bg();
+        // Font family/size and every colour are theme tokens, so the
+        // cached measurements go stale with the theme.
+        rebuild_entry_cache();
+        fit_height();
+        update();
+    });
 
     connect(&scroll_timer_, &QTimer::timeout, this, [this]() {
         offset_ += 1.0;
@@ -100,7 +108,7 @@ TickerBar::TickerBar(QWidget* parent)
 
     edit_label_ = new QLabel(tr("SYMBOLS:"), edit_bar_);
     edit_label_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:bold; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(edit_label_);
 
     edit_input_ = new QLineEdit(edit_bar_);
@@ -108,7 +116,7 @@ TickerBar::TickerBar(QWidget* parent)
     edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
     edit_input_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                " font-size:10px; padding:1px 6px; font-family:Consolas; }"
+                " font-size:" + fincept::ui::fonts::px(-4) + "px; padding:1px 6px; }"
                 "QLineEdit:focus { border-color:%4; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(edit_input_, &QLineEdit::returnPressed, this, &TickerBar::commit_edit);
@@ -117,9 +125,9 @@ TickerBar::TickerBar(QWidget* parent)
     edit_ok_ = new QPushButton(tr("OK"), edit_bar_);
     edit_ok_->setFixedWidth(32);
     edit_ok_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                    " font-size:9px; font-weight:bold; padding:2px; }"
+                                    " font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; padding:2px; }"
                                     "QPushButton:hover { background:%3; }")
-                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER()));
+                                .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER()));
     connect(edit_ok_, &QPushButton::clicked, this, &TickerBar::commit_edit);
     hl->addWidget(edit_ok_);
 
@@ -130,14 +138,26 @@ TickerBar::TickerBar(QWidget* parent)
     setTabOrder(edit_input_, edit_ok_);
     setTabOrder(edit_ok_, edit_cancel_);
     edit_cancel_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
-                                        " font-size:11px; padding:2px; }"
+                                        " font-size:" + fincept::ui::fonts::px(-3) + "px; padding:2px; }"
                                         "QPushButton:hover { color:%2; }")
-                                    .arg(ui::colors::TEXT_TERTIARY(), ui::colors::RED()));
+                                    .arg(ui::colors::ICON_DIM(), ui::colors::DANGER()));
     connect(edit_cancel_, &QPushButton::clicked, this, &TickerBar::hide_edit_bar);
     hl->addWidget(edit_cancel_);
+    fit_height();
 
     // Load persisted symbols (falls back to defaults if nothing saved yet).
     load_symbols();
+}
+
+void TickerBar::fit_height() {
+    // The strip and its edit overlay are one ticker line tall, kEditBarHeight
+    // at the default font size, taller for a large one so neither clips.
+    const int h = std::max(kEditBarHeight, ticker_fm_.height() + 6);
+    setFixedHeight(h);
+    if (edit_bar_) {
+        edit_bar_->setFixedHeight(h);
+        edit_bar_->setGeometry(0, 0, width(), h);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,7 +239,7 @@ QList<QGlyphRun> TickerBar::runs_for(const QString& text, QHash<QString, QList<Q
 }
 
 void TickerBar::rebuild_entry_cache() {
-    ticker_font_ = QFont(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
+    ticker_font_ = ui::fonts::font(1);
     ticker_fm_ = QFontMetrics(ticker_font_);
     symbol_color_ = QColor(ui::colors::WHITE());
     price_color_ = QColor(ui::colors::GRAY());
@@ -236,7 +256,9 @@ void TickerBar::rebuild_entry_cache() {
 
     total_width_ = 0;
     for (auto& e : entries_) {
-        e.price_text = QString::number(e.price, 'f', 2);
+        // Shared dashboard price format (pips kept, 4-6 decimals below 1,
+        // grouping): EURUSD=X printed "1.08", DOGE-USD "0.12", the Dow "42512.34".
+        e.price_text = widgets::dash_fmt::price(e.price, e.symbol);
         e.change_text = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
         e.change_col = QColor(ui::change_color(e.change));
 
@@ -318,7 +340,7 @@ void TickerBar::mouseDoubleClickEvent(QMouseEvent* event) {
 void TickerBar::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     if (edit_bar_)
-        edit_bar_->setGeometry(0, 0, width(), kEditBarHeight);
+        edit_bar_->setGeometry(0, 0, width(), height());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,10 +349,10 @@ void TickerBar::resizeEvent(QResizeEvent* event) {
 
 void TickerBar::contextMenuEvent(QContextMenuEvent* event) {
     QMenu menu(this);
-    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; font-size:11px; }"
+    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                "QMenu::item:selected { background:%4; color:%5; }")
                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                ui::colors::AMBER(), ui::colors::BG_BASE()));
+                                ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT()));
 
     auto* edit_action = menu.addAction(tr("Edit Symbols..."));
     connect(edit_action, &QAction::triggered, this, &TickerBar::show_edit_bar);
@@ -360,7 +382,7 @@ void TickerBar::retranslateUi() {
 void TickerBar::show_edit_bar() {
     scroll_timer_.stop();
     edit_input_->setText(symbols_.join(", "));
-    edit_bar_->setGeometry(0, 0, width(), kEditBarHeight);
+    edit_bar_->setGeometry(0, 0, width(), height());
     edit_bar_->raise();
     edit_bar_->show();
     edit_input_->setFocus();

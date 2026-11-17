@@ -73,6 +73,14 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
     // ~60 mints in one call; nothing in this codebase ever asks for that
     // many at once.
     QStringList ids(mints.constBegin(), mints.constEnd());
+    // Always price wSOL in the same call: every TokenPrice carries a `sol`
+    // cross-rate computed from this response, so a batch that holds only the
+    // FNCPT topic would otherwise publish sol = 0 (and the swap ticket would
+    // fall back to "Waiting for spot prices…"). wSOL is only published below
+    // when a topic actually asked for it (topic_by_mint has no entry otherwise).
+    if (!mints.contains(QString::fromLatin1(kWrappedSolMint))) {
+        ids.append(QString::fromLatin1(kWrappedSolMint));
+    }
     const QString url = QString::fromLatin1(kJupiterPriceBase) + ids.join(QLatin1Char(','));
 
     QNetworkRequest req{QUrl(url)};

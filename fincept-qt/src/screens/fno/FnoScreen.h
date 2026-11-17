@@ -12,7 +12,10 @@
 // for the real widget before it can ever be shown.
 
 #include "core/symbol/IGroupLinked.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
+#include "screens/fno/FnoChainState.h"
+#include "services/options/OptionChainTypes.h"
 
 #include <QEvent>
 #include <QHash>
@@ -25,6 +28,8 @@
 
 #include <functional>
 
+class QLabel;
+
 namespace fincept::screens::common {
 class PaperBlotterPanel;
 }
@@ -34,11 +39,20 @@ namespace fincept::screens::fno {
 class BuilderSubTab;
 class ChainSubTab;
 
-class FnoScreen : public QWidget, public fincept::screens::IStatefulScreen, public fincept::IGroupLinked {
+class FnoScreen : public QWidget,
+                  public fincept::screens::IStatefulScreen,
+                  public fincept::IGroupLinked,
+                  public fincept::screens::ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit FnoScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — chain | builder | oi | multi_straddle | fii_dii | screener | positions (also
+    /// "tab:<id>"): the tab bar's click path (on_tab_clicked). focus = underlying ("NIFTY",
+    /// "RELIANCE.NS", "SPX"): applied as a linked symbol (the Chain's underlying, validated by its
+    /// picker). Nothing is placed or squared off.
+    bool open_section(const QString& section, const QString& focus) override;
 
     // ── IStatefulScreen ────────────────────────────────────────────────────
     QVariantMap save_state() const override;
@@ -71,6 +85,10 @@ class FnoScreen : public QWidget, public fincept::screens::IStatefulScreen, publ
 
   private slots:
     void on_tab_clicked(int index);
+    /// Chain LTP click / Enter / "Add to Builder": builds the Builder tab on demand
+    /// (it is lazy) and appends the leg. Connected at setup, so a click works even
+    /// when the Builder tab has never been opened.
+    void on_chain_leg_clicked(qint64 token, double strike, bool is_call, int lots);
 
   private:
     void setup_ui();
@@ -87,6 +105,17 @@ class FnoScreen : public QWidget, public fincept::screens::IStatefulScreen, publ
     /// Lazy-construct the requested sub-tab and insert it into the stack at
     /// its slot index. No-op if already present.
     void ensure_tab_built(SubTab which);
+
+    /// The Chain tab's state / free delayed chain, relayed to every built sub-tab
+    /// that reads the chain (a sub-tab built later gets them at construction).
+    void on_chain_status(FnoChainStatus status, const QString& reason);
+    void on_free_chain(const fincept::services::options::OptionChain& chain);
+    /// Wire a chain-reading sub-tab: OPEN CHAIN + the current status / free chain.
+    template <typename Sub>
+    void attach_chain_reader(Sub* tab);
+    /// "DELAYED US OPTIONS · as of …" strip under the tab bar, on the tabs that show
+    /// the free chain's data.
+    void update_source_strip();
 
     /// Apply pressed/normal styling to tab buttons based on `active_tab_`.
     void refresh_tab_button_styles();
@@ -105,6 +134,12 @@ class FnoScreen : public QWidget, public fincept::screens::IStatefulScreen, publ
     QPointer<class MultiStraddleSubTab> multi_straddle_tab_;
     QPointer<class ScreenerSubTab> screener_tab_;
     QPointer<fincept::screens::common::PaperBlotterPanel> positions_tab_;
+
+    FnoChainStatus chain_status_ = FnoChainStatus::Loading;
+    QString chain_reason_;
+    fincept::services::options::OptionChain free_chain_; ///< empty unless the free source is on screen
+    QWidget* source_strip_ = nullptr;
+    QLabel* source_strip_label_ = nullptr;
 
     // Group G is the "yellow" slot in the default palette (per SymbolGroup.h
     // line 16). Plan called for Yellow as the F&O default — that's slot G.

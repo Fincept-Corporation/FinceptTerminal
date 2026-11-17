@@ -4,7 +4,8 @@
 
 namespace fincept::ui {
 
-/// Small colored status label (e.g., "CONNECTED" in green, "OFFLINE" in red).
+/// Small colored status label (e.g., "CONNECTED" in the success colour, "OFFLINE" in the danger colour).
+/// set_custom() takes a colour the caller resolved from the theme.
 class StatusBadge : public QLabel {
     Q_OBJECT
   public:

@@ -19,7 +19,7 @@
 #include "screens/portfolio/PortfolioHeatmap.h"
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioOrderPanel.h"
-#include "screens/portfolio/PortfolioPanelHeader.h"
+#include "ui/widgets/PanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
 #include "screens/portfolio/PortfolioScreen.h"
 #include "screens/portfolio/PortfolioSectorPanel.h"
@@ -27,6 +27,8 @@
 #include "screens/portfolio/PortfolioStatusBar.h"
 #include "screens/portfolio/PortfolioTxnPanel.h"
 #include "services/file_manager/FileManagerService.h"
+#include "screens/portfolio/PortfolioFormat.h"
+#include "services/portfolio/PortfolioPerformance.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
@@ -53,6 +55,8 @@
 namespace fincept::screens {
 
 void PortfolioScreen::on_portfolios_loaded(QVector<portfolio::Portfolio> portfolios) {
+    if (!storage_error_message_.isEmpty())
+        set_storage_failure({}, {}); // readable again
     portfolios_ = portfolios;
     command_bar_->set_portfolios(portfolios);
 
@@ -92,14 +96,16 @@ void PortfolioScreen::on_portfolio_selected(const QString& id) {
     if (loading_label_) {
         loading_label_->setText(tr("Loading portfolio data…"));
         loading_label_->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::AMBER()));
+            QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::AMBER()));
     }
     active_detail_ = std::nullopt;
     command_bar_->set_detail_view(std::nullopt);
     status_bar_->set_analytics_note({}, {}, false); // belonged to the previous portfolio
     if (txn_panel_)
         txn_panel_->clear();
-    if (blotter_)
+    if (sector_panel_)
+        sector_panel_->select_sector({}); // clears the donut highlight, blotter filter and header chip together
+    else if (blotter_)
         blotter_->set_sector_filter({});
 
     // Find portfolio and update UI
@@ -123,6 +129,7 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     summary_loaded_ = true;
 
     command_bar_->set_refreshing(false);
+    command_bar_->set_has_holdings(!summary.holdings.isEmpty());
     stats_ribbon_->set_summary(summary);
     status_bar_->set_summary(summary);
     status_bar_->set_feed_state(true);
@@ -158,22 +165,37 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     // synchronously and recomputes the metrics through on_market_analytics().
     if (!summary.holdings.isEmpty())
         svc.fetch_market_analytics(summary);
+    if (sector_panel_) {
+        // The correlation matrix shows "loading" only while that run is in flight; a
+        // failure offers RETRY (forced re-download) instead of waiting forever.
+        sector_panel_->set_correlation_retry([this]() {
+            if (!summary_loaded_ || current_summary_.holdings.isEmpty())
+                return;
+            auto& s = services::PortfolioService::instance();
+            s.fetch_market_analytics(current_summary_, /*force=*/true);
+            if (sector_panel_)
+                sector_panel_->set_correlation_pending(s.market_analytics_pending(current_summary_.portfolio.id));
+        });
+        sector_panel_->set_correlation_pending(svc.market_analytics_pending(summary.portfolio.id));
+    }
 
-    // Metrics from what is known right now (realised TWR + last analytics).
-    svc.compute_metrics(summary);
+    // Metrics from what is known right now (realised TWR + last analytics): the whole
+    // history for the charts / detail views and the stats ribbon's period.
+    request_metrics();
 
     // Load performance history for the chart
     svc.load_snapshots(summary.portfolio.id, kSnapshotHistoryDays);
 
-    // Load recent transactions for the history panel
-    if (txn_panel_)
-        svc.load_transactions(summary.portfolio.id, PortfolioTxnPanel::kRecentRows);
+    // The whole ledger for the history panel (local read, no row cap).
+    reload_transactions();
 }
 
 void PortfolioScreen::on_market_analytics(bool ok, const QString& error) {
     auto& svc = services::PortfolioService::instance();
     const auto a = svc.last_market_analytics(selected_id_);
     if (!ok && a.portfolio_id.isEmpty()) {
+        if (sector_panel_)
+            sector_panel_->set_correlation_error(error.isEmpty() ? tr("the download failed") : error.left(300));
         status_bar_->set_analytics_note(tr("RISK DATA UNAVAILABLE"),
                                         tr("Price history for the risk figures could not be downloaded:\n%1\n"
                                            "Volatility, beta and VaR fall back to the portfolio's own history. "
@@ -182,34 +204,51 @@ void PortfolioScreen::on_market_analytics(bool ok, const QString& error) {
                                         true);
         return;
     }
-    if (a.portfolio_id.isEmpty())
+    if (a.portfolio_id.isEmpty()) {
+        if (sector_panel_)
+            sector_panel_->set_correlation_pending(false);
         return;
+    }
 
     if (sector_panel_)
         sector_panel_->set_correlation(a.correlation);
+    if (blotter_)
+        blotter_->set_analytics(a);
     if (detail_wrapper_)
         detail_wrapper_->update_analytics(a);
     if (perf_chart_)
         perf_chart_->set_benchmark_history(a.benchmark, a.benchmark_dates, a.benchmark_closes);
-    if (ffn_view_)
-        ffn_view_->set_benchmark(a.benchmark, a.benchmark_closes, svc.risk_free_rate());
+    if (ffn_view_) {
+        // The analytics download can span several years (it covers the book's whole history for
+        // the chart overlay); FFN compares against its own one-year portfolio download, so hand
+        // it the trailing year of benchmark closes only.
+        const QString cut = QDate::currentDate().addYears(-1).toString(Qt::ISODate);
+        QVector<double> bench_1y;
+        for (qsizetype i = 0; i < a.benchmark_dates.size() && i < a.benchmark_closes.size(); ++i) {
+            if (a.benchmark_dates.at(i) >= cut)
+                bench_1y.append(a.benchmark_closes.at(i));
+        }
+        ffn_view_->set_benchmark(a.benchmark, bench_1y, svc.risk_free_rate());
+    }
 
-    QString tip = tr("Risk figures use daily closes up to %1 (%2 observations, %3% of the book by weight).\n"
-                     "Benchmark: %4. Risk-free rate: %5% — %6.")
-                      .arg(a.as_of)
+    const auto rf = svc.risk_free_for(current_summary_.portfolio);
+    QString tip = tr("Risk figures use daily closes up to %1 (%2 observations, %3 of the book by weight), in %4.\n"
+                     "Benchmark: %5. Risk-free rate: %6.")
+                      .arg(pfmt::date(a.as_of))
                       .arg(a.observations)
-                      .arg(QString::number(a.coverage * 100.0, 'f', 0))
-                      .arg(a.benchmark)
-                      .arg(QString::number(svc.risk_free_rate() * 100.0, 'f', 2))
-                      .arg(svc.risk_free_source());
+                      .arg(pfmt::fpct(a.coverage, 0, false), pfmt::base_ccy(current_summary_), a.benchmark,
+                           rf.known ? tr("%1 — %2").arg(pfmt::fpct(rf.rate, 2, false), rf.source)
+                                    : tr("unknown for this currency — 0 % used"));
     if (!a.missing.isEmpty())
         tip += tr("\nNo price history (excluded): %1").arg(a.missing.join(QStringLiteral(", ")));
+    if (!a.warnings.isEmpty())
+        tip += QLatin1Char('\n') + a.warnings.join(QLatin1Char('\n'));
     if (!ok)
         tip += tr("\nLatest refresh failed — showing the previous result: %1").arg(error);
-    status_bar_->set_analytics_note(tr("RISK DATA %1").arg(a.as_of), tip, !ok || !a.missing.isEmpty());
+    status_bar_->set_analytics_note(tr("RISK DATA %1").arg(pfmt::date(a.as_of, ui::formatting::DateStyle::Short)), tip,
+                                    !ok || !a.missing.isEmpty());
 
-    if (summary_loaded_)
-        svc.compute_metrics(current_summary_);
+    request_metrics();
 }
 
 void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
@@ -241,14 +280,20 @@ void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
                                     ? tr("Could not load this portfolio. Press ↻ (F5) to retry.")
                                     : tr("Could not load this portfolio: %1\nPress ↻ (F5) to retry.").arg(error));
         loading_label_->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::NEGATIVE()));
+            QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::NEGATIVE()));
     }
     update_content_state();
 }
 
 void PortfolioScreen::on_metrics_computed(portfolio::ComputedMetrics metrics) {
+    if (!metrics.portfolio_id.isEmpty() && metrics.portfolio_id != selected_id_)
+        return; // a late result for a portfolio the user has left
+    stats_ribbon_->set_metrics(metrics); // takes only its own period
+    // Everything below shows the whole history; other windows belong to the ribbon /
+    // the detail views that requested them (they listen to the service directly).
+    if (portfolio::perf_window_from_key(metrics.window) != portfolio::PerfWindow::All)
+        return;
     current_metrics_ = metrics;
-    stats_ribbon_->set_metrics(metrics);
     if (perf_chart_)
         perf_chart_->set_twr_series(metrics.twr_series);
     if (heatmap_)
@@ -462,7 +507,10 @@ void PortfolioScreen::load_demo_portfolio() {
         // stamped "today", the demo never had any performance history.
         const QString buy_date = QDate::currentDate().addYears(-1).toString(Qt::ISODate);
         for (const auto& h : demo) {
-            svc.add_asset(p.id, h.symbol, h.qty, h.price, buy_date);
+            // The first refusal has already been reported; eleven more identical
+            // warnings would follow if the loop went on.
+            if (!svc.add_asset(p.id, h.symbol, h.qty, h.price, buy_date))
+                break;
         }
 
         // portfolios_ may not yet contain the new portfolio since load_portfolios()
@@ -476,8 +524,10 @@ void PortfolioScreen::load_demo_portfolio() {
         on_portfolio_selected(p.id);
     });
 
-    // Create the demo portfolio (emits portfolio_created synchronously)
-    svc.create_portfolio(tr("Demo Portfolio"), tr("Fincept User"), "USD", tr("Sample portfolio for demonstration"));
+    // Create the demo portfolio (emits portfolio_created synchronously). It reports in the
+    // user's display currency; the demo holdings are US listings priced in USD and convert.
+    svc.create_portfolio(tr("Demo Portfolio"), tr("Fincept User"), pfmt::uf::display_currency(),
+                         tr("Sample portfolio for demonstration"));
 
     // If creation failed nothing was emitted and the one-shot is still armed -
     // it would then fire for the NEXT portfolio the user creates and stuff twelve

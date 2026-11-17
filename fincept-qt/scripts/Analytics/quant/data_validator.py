@@ -225,19 +225,25 @@ class DataValidator:
         else:
             numeric_data = data
 
+        def check_extreme(series: pd.Series, name: str = ''):
+            clean = series.dropna()
+            extreme_returns = clean.abs() > 1.0  # >100% returns
+            if extreme_returns.any():
+                count = int(extreme_returns.sum())
+                report.add_warning('extreme_returns', f"{name}{count} returns > 100% found")
+                # Mostly |x| > 100 %: these are not returns at all (typically a price series) and
+                # every return-based statistic computed from them is meaningless.
+                if count > 0.5 * len(clean):
+                    report.add_issue('not_returns',
+                                     f"{name}{count} of {len(clean)} values exceed 100% in absolute value - "
+                                     f"this looks like a price or level series, not returns", 'high')
+
         # Check for extreme returns (potential data errors)
         if isinstance(numeric_data, pd.DataFrame):
             for col in numeric_data.columns:
-                extreme_returns = numeric_data[col].abs() > 1.0  # >100% returns
-                if extreme_returns.any():
-                    count = extreme_returns.sum()
-                    report.add_warning('extreme_returns',
-                                       f"Column {col}: {count} returns > 100% found")
+                check_extreme(numeric_data[col], f"Column {col}: ")
         else:
-            extreme_returns = numeric_data.abs() > 1.0
-            if extreme_returns.any():
-                count = extreme_returns.sum()
-                report.add_warning('extreme_returns', f"{count} returns > 100% found")
+            check_extreme(numeric_data)
 
         # Check for return patterns that might indicate data issues
         self._check_return_patterns(numeric_data, report)
@@ -281,19 +287,24 @@ class DataValidator:
         else:
             numeric_data = data
 
+        def check_high(series: pd.Series, name: str = ''):
+            clean = series.dropna()
+            high_rates = clean > 1.0  # >100% rates
+            if high_rates.any():
+                count = int(high_rates.sum())
+                report.add_warning('high_rates', f"{name}{count} rates > 100% found")
+                if count > 0.5 * len(clean):
+                    report.add_issue('rates_not_decimal',
+                                     f"{name}{count} of {len(clean)} values exceed 100% - rates are expected as "
+                                     f"decimals (0.05 = 5%); this looks like percentages or a non-rate series",
+                                     'medium')
+
         # Check for unrealistic rates
         if isinstance(numeric_data, pd.DataFrame):
             for col in numeric_data.columns:
-                high_rates = numeric_data[col] > 1.0  # >100% rates
-                if high_rates.any():
-                    count = high_rates.sum()
-                    report.add_warning('high_rates',
-                                       f"Column {col}: {count} rates > 100% found")
+                check_high(numeric_data[col], f"Column {col}: ")
         else:
-            high_rates = numeric_data > 1.0
-            if high_rates.any():
-                count = high_rates.sum()
-                report.add_warning('high_rates', f"{count} rates > 100% found")
+            check_high(numeric_data)
 
         return data
 

@@ -1,5 +1,6 @@
 #include "services/cloud/NotesCloudAdapter.h"
 
+#include "core/logging/Logger.h"
 #include "network/cloud/CloudClient.h"
 #include "storage/repositories/NotesRepository.h"
 #include "storage/sync/SyncMap.h"
@@ -114,6 +115,9 @@ void NotesCloudAdapter::push(const OutboxRow& row, PushDone done) {
 void NotesCloudAdapter::push_create(const OutboxRow& row, PushDone done) {
     auto note = NotesRepository::instance().get(row.local_id.toInt());
     if (note.is_err()) {
+        if (note.error() != "Not found")
+            LOG_WARN("CloudSync", logf("Note push skipped, local row could not be read",
+                                       {{"id", row.local_id}, {"error", QString::fromStdString(note.error())}}));
         done(note_ok()); // local row already gone
         return;
     }
@@ -140,6 +144,9 @@ void NotesCloudAdapter::push_update(const OutboxRow& row, PushDone done) {
     }
     auto note = NotesRepository::instance().get(row.local_id.toInt());
     if (note.is_err()) {
+        if (note.error() != "Not found")
+            LOG_WARN("CloudSync", logf("Note push skipped, local row could not be read",
+                                       {{"id", row.local_id}, {"error", QString::fromStdString(note.error())}}));
         done(note_ok());
         return;
     }
@@ -279,8 +286,11 @@ void NotesCloudAdapter::apply_remote_note(const QJsonObject& o) {
         local_id = *existing;
     } else {
         auto cr = repo.create(n);
-        if (cr.is_err())
+        if (cr.is_err()) {
+            LOG_ERROR("CloudSync", logf("Pulled note could not be created locally",
+                                        {{"remote_id", rid}, {"error", QString::fromStdString(cr.error())}}));
             return;
+        }
         local_id = QString::number(cr.value());
     }
     SyncMap::put(note_entity(), local_id, rid, updated);
@@ -288,8 +298,11 @@ void NotesCloudAdapter::apply_remote_note(const QJsonObject& o) {
 
 void NotesCloudAdapter::reconcile_deletes(const QSet<QString>& remote_ids) {
     auto maps = SyncMap::all(note_entity());
-    if (maps.is_err())
+    if (maps.is_err()) {
+        LOG_WARN("CloudSync", logf("Delete reconcile skipped, sync map unreadable",
+                                   {{"entity", note_entity()}, {"error", QString::fromStdString(maps.error())}}));
         return;
+    }
     auto& repo = NotesRepository::instance();
     for (const SyncMapping& m : maps.value()) {
         if (!remote_ids.contains(m.remote_id)) {

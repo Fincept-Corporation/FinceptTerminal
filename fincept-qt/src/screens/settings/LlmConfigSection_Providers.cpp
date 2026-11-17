@@ -10,11 +10,13 @@
 #include "core/logging/Logger.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/ModelCatalog.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QHash>
 
@@ -25,7 +27,10 @@
 // AiChatScreen_Sessions.cpp after a real-world collision surfaced.
 namespace {
 constexpr const char* TAG_PROVIDERS = "LlmConfigSection";
-}
+// Global Max Tokens ceiling for providers that publish a higher cap. Fincept's
+// own API ceiling is lower (ModelCatalog::kFinceptMaxOutputTokens).
+constexpr int kLlmProvidersTokensMax = 32000;
+} // namespace
 
 #include <QFormLayout>
 #include <QFrame>
@@ -59,7 +64,7 @@ QWidget* LlmConfigSection::build_providers_tab() {
 
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background:" + QString(ui::colors::BORDER_DIM()) + ";");
+    sep->setStyleSheet("background:" + QString(ui::colors::BORDER_MED()) + ";");
     vl->addWidget(sep);
     vl->addWidget(build_global_panel());
     return w;
@@ -147,6 +152,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     });
 
     delete_btn_ = new QPushButton(tr("Remove"));
+    delete_btn_->setProperty("fincept_agent_risk", "account"); // agents: removes a provider and its stored API key
     delete_btn_->setEnabled(false);
     delete_btn_->setStyleSheet(
         "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) +
@@ -157,7 +163,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
         QString(ui::colors::BG_RAISED()) +
         ";}"
         "QPushButton:disabled{color:" +
-        QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
+        QString(ui::colors::TEXT_TERTIARY()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(delete_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_delete_provider);
 
     btn_row->addWidget(add_btn_);
@@ -263,8 +269,8 @@ QWidget* LlmConfigSection::build_form_panel() {
     model_row->addWidget(model_combo_, 1);
 
     fetch_btn_ = new QPushButton(tr("Fetch"));
-    fetch_btn_->setFixedHeight(30);
-    fetch_btn_->setFixedWidth(60);
+    fetch_btn_->setMinimumSize(60, 30);
+    fetch_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     fetch_btn_->setStyleSheet(
         "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) +
         ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) +
@@ -306,21 +312,23 @@ QWidget* LlmConfigSection::build_form_panel() {
 
     // Buttons
     auto* btn_row = new QHBoxLayout;
-    save_btn_ = new QPushButton(tr("Save & Set Active"));
-    save_btn_->setFixedHeight(34);
+    save_btn_ = new QPushButton(fincept::ui::literal_ampersands(tr("Save & Set Active")));
+    save_btn_->setProperty("fincept_agent_risk", "account"); // agents: stores the API key and switches the active model
+    save_btn_->setMinimumHeight(34);
     save_btn_->setStyleSheet(
-        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) +
+        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::TEXT_ON_ACCENT()) +
         ";border:none;border-radius:4px;"
         "font-weight:700;padding:0 16px;}"
         "QPushButton:hover{background:" +
         QString(ui::colors::AMBER_DIM()) +
         ";}"
         "QPushButton:disabled{background:" +
-        QString(ui::colors::BORDER_BRIGHT()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
+        QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
     connect(save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_provider);
 
     test_btn_ = new QPushButton(tr("Test Connection"));
-    test_btn_->setFixedHeight(34);
+    test_btn_->setProperty("fincept_agent_risk", "spend"); // agents: sends a test request to a paid model API
+    test_btn_->setMinimumHeight(34);
     test_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) +
                              ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
                              QString(ui::colors::BORDER_BRIGHT()) +
@@ -384,7 +392,11 @@ QWidget* LlmConfigSection::build_global_panel() {
     tokens_lbl_ = new QLabel(tr("Max Tokens"));
     tokens_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
     tokens_spin_ = new QSpinBox;
-    tokens_spin_->setRange(100, 32000);
+    // 0 = Auto (the model's own output cap — the stored default since v021).
+    // The floor used to be 100, so merely saving this panel turned Auto into a
+    // 100-token limit. The ceiling follows the active provider (load_providers).
+    tokens_spin_->setRange(0, kLlmProvidersTokensMax);
+    tokens_spin_->setSpecialValueText(tr("Auto"));
     tokens_spin_->setSingleStep(100);
     tokens_spin_->setValue(4096);
     tokens_spin_->setFixedWidth(100);
@@ -440,8 +452,8 @@ QWidget* LlmConfigSection::build_global_panel() {
     vl->addLayout(row);
 
     save_global_btn_ = new QPushButton(tr("Save Global Settings"));
-    save_global_btn_->setFixedHeight(30);
-    save_global_btn_->setFixedWidth(180);
+    save_global_btn_->setMinimumSize(180, 30);
+    save_global_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     save_global_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
                                     QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
                                     ";"
@@ -484,6 +496,7 @@ void LlmConfigSection::load_providers() {
                 display += "  [" + p.model + "]";
             auto* item = new QListWidgetItem(display);
             item->setData(Qt::UserRole, p.provider);
+            item->setData(Qt::UserRole + 1, p.is_active); // read by the theme_changed recolour
             // Only the active provider gets amber color
             if (p.is_active)
                 item->setForeground(QColor(ui::colors::AMBER()));
@@ -495,9 +508,38 @@ void LlmConfigSection::load_providers() {
 
     provider_list_->blockSignals(false);
 
+    // Max Tokens applies to the provider LlmService actually uses: the active
+    // row, else the first row, else the built-in Fincept default.
+    QString effective_provider = active_provider;
+    if (effective_provider.isEmpty())
+        effective_provider = (result.is_ok() && !result.value().isEmpty()) ? result.value().first().provider
+                                                                          : QStringLiteral("fincept");
+    const bool fincept_active = effective_provider.compare(QLatin1String("fincept"), Qt::CaseInsensitive) == 0;
+    const int tokens_max = fincept_active ? ai_chat::ModelCatalog::kFinceptMaxOutputTokens : kLlmProvidersTokensMax;
+    tokens_spin_->setMaximum(tokens_max);
+    tokens_spin_->setToolTip(fincept_active ? tr("Maximum output tokens per reply. Auto = %1. The Fincept AI "
+                                                 "service accepts at most %1.")
+                                                  .arg(tokens_max)
+                                            : tr("Maximum output tokens per reply. Auto = the model's own "
+                                                 "limit; larger values are capped to it."));
+
     // Load global settings
     auto gs = LlmConfigRepository::instance().get_global_settings();
     if (gs.is_ok()) {
+        if (fincept_active && gs.value().max_tokens > tokens_max) {
+            // Saved before this ceiling existed (the control allowed 32000):
+            // the Fincept API answered every chat with a 422. Store the
+            // ceiling so the panel shows what is actually sent.
+            LlmGlobalSettings fixed = gs.value();
+            LOG_INFO(TAG_PROVIDERS, QString("Max Tokens %1 exceeds the Fincept limit — lowered to %2")
+                                        .arg(fixed.max_tokens)
+                                        .arg(tokens_max));
+            fixed.max_tokens = tokens_max;
+            if (LlmConfigRepository::instance().save_global_settings(fixed).is_ok()) {
+                gs = LlmConfigRepository::instance().get_global_settings();
+                emit config_changed();
+            }
+        }
         temp_spin_->setValue(gs.value().temperature);
         tokens_spin_->setValue(gs.value().max_tokens);
         system_prompt_->setPlainText(gs.value().system_prompt);
@@ -887,7 +929,7 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
         model_combo_->setCurrentIndex(0);
 
     show_status(tr("%1 models loaded for %2").arg(models.size()).arg(provider), false);
-    LOG_INFO(TAG_PROVIDERS, QString("Fetched %1 models for %2").arg(models.size()).arg(provider));
+    LOG_DEBUG(TAG_PROVIDERS, QString("Fetched %1 models for %2").arg(models.size()).arg(provider));
 }
 
 } // namespace fincept::screens

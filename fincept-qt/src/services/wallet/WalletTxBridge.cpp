@@ -100,7 +100,7 @@ Result<QString> WalletTxBridge::request_signature(const QString& tx_base64, Sign
     const QString url = QStringLiteral("http://127.0.0.1:%1/swap?req=%2&token=%3")
                             .arg(port)
                             .arg(req_id, QString::fromLatin1(session_token_));
-    LOG_INFO("WalletTxBridge", QStringLiteral("registered sign request %1 (expires %2s)").arg(req_id).arg(timeout_s));
+    LOG_DEBUG("WalletTxBridge", QStringLiteral("registered sign request %1 (expires %2s)").arg(req_id).arg(timeout_s));
     return Result<QString>::ok(url);
 }
 
@@ -108,7 +108,7 @@ void WalletTxBridge::cancel(const QString& request_id) {
     if (!requests_.contains(request_id)) {
         return;
     }
-    LOG_INFO("WalletTxBridge", "cancel request " + request_id);
+    LOG_DEBUG("WalletTxBridge", "cancel request " + request_id);
     resolve_request(request_id, Result<QString>::err("user_cancelled"));
 }
 
@@ -126,7 +126,7 @@ bool WalletTxBridge::ensure_server_started() {
 
     if (!server_->listen(QHostAddress::LocalHost, 0)) {
         const QString err = server_->errorString();
-        LOG_ERROR("WalletTxBridge", "listen() failed: " + err);
+        LOG_ERROR("WalletTxBridge", logf("Wallet signing bridge could not listen on 127.0.0.1", {{"error", err}}));
         emit bridge_error(err);
         stop_server();
         return false;
@@ -248,9 +248,10 @@ void WalletTxBridge::on_new_connection() {
 
 void WalletTxBridge::handle_request(QTcpSocket* socket, const QByteArray& body, const QByteArray& path,
                                     const QByteArray& method) {
-    LOG_INFO("WalletTxBridge", QStringLiteral("request %1 %2 (body=%3)")
-                                   .arg(QString::fromLatin1(method), QString::fromLatin1(path))
-                                   .arg(body.size()));
+    // The query carries the one-time loopback token: log the route only.
+    LOG_DEBUG("WalletTxBridge", logf("Wallet bridge request", {{"method", QString::fromLatin1(method)},
+                                                               {"route", QString::fromLatin1(path).section(QLatin1Char('?'), 0, 0)},
+                                                               {"bytes", body.size()}}));
 
     if (method == "OPTIONS") {
         write_response(socket, 204, "text/plain", QByteArray());
@@ -308,7 +309,8 @@ void WalletTxBridge::handle_request(QTcpSocket* socket, const QByteArray& body, 
             } else if (level == QStringLiteral("warn")) {
                 LOG_WARN("WalletPage", msg);
             } else {
-                LOG_INFO("WalletPage", msg);
+                // The page's step trace: DEBUG, never Info.
+                LOG_DEBUG("WalletPage", msg);
             }
         }
         write_response(socket, 200, "application/json", QByteArrayLiteral("{\"ok\":true}"));
@@ -382,6 +384,8 @@ QByteArray WalletTxBridge::render_swap_page() const {
         // beside the executable, so this is only reached by a damaged or
         // partial install. Say so plainly — the old text blamed unfinished
         // development work, which sent users hunting for a fix that isn't theirs.
+        // The page is shown in the user's web browser, so its colours are fixed
+        // and do not follow the terminal's theme.
         return QByteArrayLiteral("<!doctype html><meta charset='utf-8'><title>Sign</title>"
                                  "<body style='background:#0a0a0a;color:#d97706;font-family:monospace;"
                                  "padding:20px'>The wallet signing page (resources/wallet/swap.html) was not "

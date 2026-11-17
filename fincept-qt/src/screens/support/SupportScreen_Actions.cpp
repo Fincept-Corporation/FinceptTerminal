@@ -10,6 +10,8 @@
 #include "screens/support/SupportScreen.h"
 #include "screens/support/SupportScreen_internal.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -77,14 +79,29 @@ QWidget* support_message_bubble(QWidget* parent, const QString& sender, const QS
 } // namespace
 
 void SupportScreen::load_tickets() {
+    // Never asked while signed out (the requirement page shows instead).
+    if (account_key_.isEmpty())
+        return;
     last_load_ms_ = QDateTime::currentMSecsSinceEpoch();
+    list_in_flight_ = true;
     set_busy(true);
+    if (all_tickets_.isEmpty()) {
+        // Nothing on screen yet (first load, or RETRY after a failure): skeletons
+        // in the list and the content pane instead of the old error text.
+        load_failed_ = false;
+        rebuild_ticket_rows();
+        update_home_page();
+    }
 
     QPointer<SupportScreen> self(this);
+    const quint64 generation = account_generation_;
     auth::UserApi::instance().get_tickets(
-        [self](auth::ApiResponse r) {
+        [self, generation](auth::ApiResponse r) {
             if (!self)
                 return; // screen closed while the request was in flight
+            if (self->account_generation_ != generation)
+                return; // signed out / another account meanwhile: not this list
+            self->list_in_flight_ = false;
             self->set_busy(false);
 
             if (!r.success) {
@@ -92,13 +109,20 @@ void SupportScreen::load_tickets() {
                 // old code replaced the list with a canned demo ticket, which also
                 // hid the "could not load" state entirely.
                 self->load_failed_ = true;
+                self->last_error_ = r.error;
+                self->open_after_load_id_ = -1;
                 self->status_lbl_->setText(self->all_tickets_.isEmpty() ? tr("Offline")
                                                                          : tr("Offline — showing last loaded"));
                 self->status_lbl_->setToolTip(r.error);
+                support_set_tone(self->status_lbl_, "bad");
+                support_set_tone(self->status_dot_, "bad");
                 self->rebuild_ticket_rows();
+                self->update_home_page();
                 return;
             }
             self->load_failed_ = false;
+            self->last_error_.clear();
+            self->tickets_loaded_ = true;
             self->status_lbl_->setToolTip(QString());
 
             const QJsonArray tickets = support_array(r.data, {"tickets", "items", "results"});
@@ -115,13 +139,81 @@ void SupportScreen::load_tickets() {
             self->stat_resolved_->setText(QString::number(done_c));
 
             self->all_tickets_ = tickets;
-            self->rebuild_ticket_rows();
+
+            // Never leave "pick a ticket" on the right when there is one to show:
+            // the ticket just created, else (nothing open, not composing) the first
+            // open / in-progress ticket, else the newest. One extra GET (its thread).
+            bool opened = false;
+            const int created_id = self->open_after_load_id_;
+            self->open_after_load_id_ = -1;
+            if (self->content_stack_ && self->content_stack_->currentIndex() != 1) {
+                if (created_id > 0) {
+                    for (const auto& v : tickets) {
+                        if (v.toObject()["id"].toVariant().toInt() == created_id) {
+                            self->open_ticket(v.toObject());
+                            opened = true;
+                            break;
+                        }
+                    }
+                }
+                if (!opened && self->content_stack_->currentIndex() == 0)
+                    opened = self->open_default_ticket();
+            }
+            self->rebuild_ticket_rows(); // after open_ticket(): highlights its row
 
             // ↻ also refreshes the conversation that is open.
-            if (self->content_stack_ && self->content_stack_->currentIndex() == 2 && self->selected_ticket_id_ > 0)
+            if (!opened && self->content_stack_ && self->content_stack_->currentIndex() == 2 &&
+                self->selected_ticket_id_ > 0)
                 self->load_ticket_details(self->selected_ticket_id_);
+            self->update_home_page();
         },
         this);
+}
+
+bool SupportScreen::open_default_ticket() {
+    if (all_tickets_.isEmpty() || !content_stack_)
+        return false;
+    QJsonObject pick;
+    for (const auto& v : all_tickets_) {
+        const QJsonObject o = v.toObject();
+        const QString st = o["status"].toString().toLower();
+        if (st == QLatin1String("open") || st == QLatin1String("in_progress")) {
+            pick = o;
+            break;
+        }
+    }
+    if (pick.isEmpty()) {
+        QDateTime newest;
+        for (const auto& v : all_tickets_) {
+            const QJsonObject o = v.toObject();
+            const QDateTime dt = support_parse_utc(o["created_at"].toString());
+            if (pick.isEmpty() || (dt.isValid() && (!newest.isValid() || dt > newest))) {
+                pick = o;
+                newest = dt;
+            }
+        }
+    }
+    if (pick.isEmpty())
+        return false;
+    open_ticket(pick);
+    return true;
+}
+
+void SupportScreen::on_list_state_action() {
+    switch (list_action_) {
+        case ListAction::Retry:
+            load_tickets();
+            break;
+        case ListAction::ClearFilters:
+            // Both setters re-render the rows through their change signals.
+            if (search_input_)
+                search_input_->clear();
+            if (filter_combo_)
+                filter_combo_->setCurrentIndex(0);
+            break;
+        case ListAction::None:
+            break;
+    }
 }
 
 // ── rebuild_ticket_rows ───────────────────────────────────────────────────────
@@ -158,20 +250,49 @@ void SupportScreen::rebuild_ticket_rows() {
         shown.append(v);
     }
 
-    if (shown.isEmpty()) {
-        QString msg;
-        if (load_failed_ && all_tickets_.isEmpty())
-            msg = tr("Could not load tickets.\nCheck your connection and press ↻ to retry.");
-        else if (!needle.isEmpty() || !want_status.isEmpty())
-            msg = tr("No tickets match this search or filter.");
-        else
-            msg = tr("No tickets yet.\nUse “New Ticket” to contact the Fincept team.");
-        auto* empty = lbl(msg, ui::colors::TEXT_TERTIARY(), 12, false, true);
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setContentsMargins(0, 40, 0, 0);
-        lay->insertWidget(0, empty);
+    // Nothing to list: the first list is on its way (skeleton), or a designed
+    // state says why and offers the way on — never a blank strip.
+    if (shown.isEmpty() && list_stack_) {
+        if (!tickets_loaded_ && !load_failed_ && all_tickets_.isEmpty()) {
+            if (!list_skeleton_) {
+                list_skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Table, list_stack_);
+                list_skeleton_->set_row_count(7);
+                list_skeleton_->set_opaque(false);
+                list_stack_->addWidget(list_skeleton_);
+            }
+            list_skeleton_->set_message(tr("Loading your tickets…"));
+            list_stack_->setCurrentWidget(list_skeleton_);
+            return;
+        }
+        if (!list_state_) {
+            list_state_ = new ui::EmptyState(list_stack_);
+            list_state_->set_compact(true);
+            list_state_->set_alignment(Qt::AlignTop);
+            connect(list_state_, &ui::EmptyState::primary_clicked, this, &SupportScreen::on_list_state_action);
+            list_stack_->addWidget(list_state_);
+        }
+        ui::EmptyState::Spec spec;
+        if (load_failed_ && all_tickets_.isEmpty()) {
+            spec = ui::EmptyState::error_spec(tr("Check your connection, then retry."), tr("Could not load tickets"),
+                                              tr("RETRY"), last_error_);
+            list_action_ = ListAction::Retry;
+        } else if (!needle.isEmpty() || !want_status.isEmpty()) {
+            spec = ui::EmptyState::no_data_spec(tr("No matching tickets"),
+                                                tr("Nothing matches this search or status filter."),
+                                                tr("CLEAR FILTERS"));
+            list_action_ = ListAction::ClearFilters;
+        } else {
+            // The "New Ticket" button sits right above: no second button here.
+            spec = ui::EmptyState::no_data_spec(tr("No tickets yet"),
+                                                tr("Use New Ticket above to contact the Fincept team."));
+            list_action_ = ListAction::None;
+        }
+        list_state_->apply(spec);
+        list_stack_->setCurrentWidget(list_state_);
         return;
     }
+    if (list_stack_)
+        list_stack_->setCurrentWidget(list_scroll_);
 
     for (const auto& v : shown) {
         const QJsonObject obj = v.toObject();
@@ -192,12 +313,16 @@ void SupportScreen::rebuild_ticket_rows() {
 
         auto* top = new QHBoxLayout;
         auto* sdot = lbl("●", status_color(status), 9);
-        sdot->setFixedWidth(14);
+        sdot->setFixedWidth(qMax(14, ui::fonts::font_px(-5) + 5));
         top->addWidget(sdot);
         auto* subj = lbl(obj["subject"].toString(), ui::colors::TEXT_PRIMARY(), 12, true);
         subj->setTextFormat(Qt::PlainText); // user-authored
-        subj->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        subj->setMaximumWidth(220);
+        // The row's whole width at any font size (a fixed 220 px held a dozen
+        // characters at font 24); a longer subject is cut at the row's edge
+        // instead of widening the sidebar, and is in full in the tooltip.
+        subj->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        subj->setMinimumWidth(1);
+        subj->setToolTip(obj["subject"].toString());
         top->addWidget(subj, 1);
         rl->addLayout(top);
 
@@ -212,7 +337,9 @@ void SupportScreen::rebuild_ticket_rows() {
         rl->addLayout(meta);
 
         auto* btn = new QPushButton;
-        btn->setFixedHeight(66);
+        // Two text lines plus margins: 66px at the default font size, more for a larger one.
+        btn->setFixedHeight(qMax(66, QFontMetrics(ui::fonts::font(-2)).height() +
+                                         QFontMetrics(ui::fonts::font(-4)).height() + 25));
         btn->setStyleSheet(QString("QPushButton { background:transparent; border:none;"
                                    " border-bottom:1px solid %1; padding:0; text-align:left; }"
                                    "QPushButton:hover { background:%2; }")
@@ -246,9 +373,9 @@ void SupportScreen::apply_detail_status(const QString& status) {
     selected_is_closed_ = (st == QLatin1String("closed"));
     if (detail_status_lbl_) {
         detail_status_lbl_->setText(" " + status_label(st) + " ");
-        detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:10px;font-weight:700;"
+        detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                                                   "padding:0 10px;letter-spacing:0.5px;%3")
-                                              .arg(status_color(st), ui::colors::BG_BASE(), MF));
+                                              .arg(status_color(st), ui::colors::TEXT_ON_ACCENT(), MF()));
     }
     if (closed_box_)
         closed_box_->setVisible(selected_is_closed_);
@@ -271,10 +398,20 @@ void SupportScreen::open_ticket(const QJsonObject& ticket) {
                                        ticket["priority"].toString().toLower(),
                                        opened.isValid() ? opened.toString("d MMM yyyy  hh:mm") : QString()));
     // The list endpoint carries no description; it arrives with the details.
-    detail_body_lbl_->setText(tr("Loading…"));
+    // Until then the description line is hidden and the conversation area shows
+    // a skeleton (the reply replaces it).
+    detail_body_lbl_->clear();
+    detail_body_lbl_->hide();
     apply_detail_status(ticket["status"].toString());
 
-    clear_layout_keep_stretch(qobject_cast<QVBoxLayout*>(messages_container_->layout()));
+    auto* mcl = qobject_cast<QVBoxLayout*>(messages_container_->layout());
+    clear_layout_keep_stretch(mcl);
+    if (mcl) {
+        auto* sk = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Text, messages_container_);
+        sk->set_opaque(false);
+        sk->set_message(tr("Loading the conversation…"));
+        mcl->insertWidget(0, sk);
+    }
     content_stack_->setCurrentIndex(2);
     load_ticket_details(selected_ticket_id_);
 }
@@ -301,25 +438,25 @@ void SupportScreen::load_ticket_details(int ticket_id) {
 
             if (!dr.success) {
                 clear_layout_keep_stretch(mcl);
-                auto* err_row = new QWidget(self);
-                auto* erl = new QHBoxLayout(err_row);
-                erl->setContentsMargins(0, 0, 0, 0);
-                auto* err_lbl = lbl(dr.error.isEmpty() ? tr("Could not load this conversation.")
-                                                       : tr("Could not load this conversation: %1").arg(dr.error),
-                                    ui::colors::NEGATIVE(), 11, false, true);
-                err_lbl->setTextFormat(Qt::PlainText);
-                erl->addWidget(err_lbl, 1);
-                auto* retry = new QPushButton(tr("Retry"));
-                retry->setStyleSheet(SS_BTN_GHOST());
+                // A designed failure state (plain sentence, the raw text behind
+                // DETAILS) with RETRY, in place of a red one-liner.
+                auto* err = ui::EmptyState::create(
+                    ui::EmptyState::error_spec(tr("The conversation could not be loaded. Check your connection, "
+                                                  "then retry."),
+                                               tr("Could not load this conversation"), tr("RETRY"), dr.error),
+                    self->messages_container_);
+                err->set_compact(true);
+                err->set_alignment(Qt::AlignTop);
                 QPointer<SupportScreen> guard(self);
-                connect(retry, &QPushButton::clicked, self, [guard, ticket_id]() {
+                connect(err, &ui::EmptyState::primary_clicked, self, [guard, ticket_id]() {
                     if (guard)
                         guard->load_ticket_details(ticket_id);
                 });
-                erl->addWidget(retry);
-                mcl->insertWidget(0, err_row);
-                if (self->detail_body_lbl_ && self->detail_body_lbl_->text() == tr("Loading…"))
+                mcl->insertWidget(0, err);
+                if (self->detail_body_lbl_ && self->detail_body_lbl_->text().isEmpty()) {
                     self->detail_body_lbl_->setText(tr("Description unavailable."));
+                    self->detail_body_lbl_->show();
+                }
                 return;
             }
 
@@ -330,9 +467,10 @@ void SupportScreen::load_ticket_details(int ticket_id) {
                 self->detail_body_lbl_->setText(desc.isEmpty() ? tr("No description provided.") : desc);
                 // Fresh status — the list row may be minutes old.
                 self->apply_detail_status(ticket["status"].toString());
-            } else if (self->detail_body_lbl_->text() == tr("Loading…")) {
+            } else if (self->detail_body_lbl_->text().isEmpty()) {
                 self->detail_body_lbl_->setText(tr("No description provided."));
             }
+            self->detail_body_lbl_->show();
 
             const QJsonArray msgs = support_array(dr.data, {"messages", "replies", "comments", "items"});
             clear_layout_keep_stretch(mcl);
@@ -345,14 +483,21 @@ void SupportScreen::load_ticket_details(int ticket_id) {
                 const QDateTime mdt = support_parse_utc(mo["created_at"].toString());
                 mcl->insertWidget(mcl->count() - 1,
                                   support_message_bubble(self, is_user ? tr("You") : tr("Support Team"),
-                                                         is_user ? QString(ui::colors::CYAN()) : QStringLiteral("#9333ea"),
+                                                         // Staff replies in the palette's purple slot.
+                                                         is_user ? QString(ui::colors::CYAN())
+                                                                 : ui::colors::chart_color(2).name(),
                                                          mdt.isValid() ? mdt.toString("d MMM yyyy  hh:mm") : QString(),
                                                          mo["message"].toString()));
             }
-            if (msgs.isEmpty())
-                mcl->insertWidget(0, lbl(tr("No replies yet. The support team answers here; you will also get an "
-                                            "email."),
-                                         ui::colors::TEXT_TERTIARY(), 11, false, true));
+            if (msgs.isEmpty()) {
+                ui::EmptyState::Spec none = ui::EmptyState::no_data_spec(
+                    tr("No replies yet"), tr("The support team answers here; you will also get an e-mail."));
+                none.glyph = QStringLiteral("✉");
+                auto* es = ui::EmptyState::create(none, self->messages_container_);
+                es->set_compact(true);
+                es->set_alignment(Qt::AlignTop);
+                mcl->insertWidget(0, es);
+            }
 
             QPointer<SupportScreen> scroll_guard(self);
             QTimer::singleShot(50, self.data(), [scroll_guard]() {
@@ -411,9 +556,17 @@ void SupportScreen::on_create_ticket() {
                     self->subject_input_->clear();
                 if (self->desc_input_)
                     self->desc_input_->clear();
+                // Open the new ticket as soon as the refreshed list has it (page 0
+                // shows a skeleton until then); without an id, the default ticket.
+                int new_id = d["id"].toVariant().toInt();
+                if (new_id <= 0)
+                    new_id = d["ticket_id"].toVariant().toInt();
+                self->open_after_load_id_ = new_id > 0 ? new_id : -1;
+                self->selected_ticket_id_ = -1;
                 self->content_stack_->setCurrentIndex(0);
                 const QString number = d["ticket_number"].toString();
                 self->load_tickets();
+                self->update_home_page();
                 // set_busy() resets the status line; show the receipt after it.
                 QPointer<SupportScreen> guard(self);
                 QTimer::singleShot(0, self.data(), [guard, number]() {
@@ -475,6 +628,13 @@ void SupportScreen::on_send_message() {
             auto* mcl = qobject_cast<QVBoxLayout*>(self->messages_container_->layout());
             if (!mcl)
                 return;
+            // The thread is no longer empty: drop the "No replies yet" state.
+            for (auto* es : self->messages_container_->findChildren<ui::EmptyState*>(QString(),
+                                                                                     Qt::FindDirectChildrenOnly)) {
+                mcl->removeWidget(es);
+                es->hide();
+                es->deleteLater();
+            }
             mcl->insertWidget(mcl->count() - 1,
                               support_message_bubble(self, tr("You"), ui::colors::CYAN(),
                                                      QDateTime::currentDateTime().toString("d MMM yyyy  hh:mm"), msg));

@@ -8,6 +8,7 @@
 #include "datahub/TopicPolicy.h"
 #include "python/PythonRunner.h"
 #include "services/connectors/ConnectorCatalog.h"
+#include "services/connectors/ConnectorEnvelope.h"
 #include "storage/secure/SecureStorage.h"
 
 #include <QCryptographicHash>
@@ -360,9 +361,10 @@ QString conn_svc_embedded_error(const QJsonValue& v, int depth) {
     return {};
 }
 
-/// Parse + normalise one script result. Runs on a QtConcurrent worker thread.
+/// Parse + normalise one envelope (fincept_connector.py run ...). Runs on a QtConcurrent worker thread.
 ConnectorResult conn_svc_build_result(const QString& name, const QString& command, const QStringList& args,
                                       const python::PythonResult& pr, const QStringList& secrets, qint64 duration_ms) {
+    namespace ds = fincept::services::datasources;
     ConnectorResult r;
     r.connector = name;
     r.command = command;
@@ -370,30 +372,53 @@ ConnectorResult conn_svc_build_result(const QString& name, const QString& comman
     r.duration_ms = duration_ms;
     r.fetched_at_ms = conn_svc_now_ms();
 
-    if (!pr.success) {
-        QString err = pr.error.trimmed();
-        if (err.isEmpty())
-            err = pr.exit_code == 0 ? QStringLiteral("The connector returned no data")
-                                    : QStringLiteral("The connector exited with code %1").arg(pr.exit_code);
-        r.error = conn_svc_trim_error(conn_svc_redact(err, secrets));
-        return r;
-    }
-
     QString text = pr.output;
     for (const QString& s : secrets)
         text.replace(s, QStringLiteral("***"));
     const QByteArray utf8 = text.toUtf8();
     r.payload_bytes = utf8.size();
 
-    QJsonParseError pe{};
-    const QJsonDocument doc = QJsonDocument::fromJson(utf8, &pe);
-    if (pe.error != QJsonParseError::NoError || doc.isNull()) {
-        r.error = QStringLiteral("The connector printed malformed JSON (%1)").arg(pe.errorString());
+    // PythonRunner marks an {"ok": false, "error": ...} envelope as a failure but keeps the JSON in
+    // `output`; the envelope's code is what the UI acts on, so read it in both cases.
+    const bool is_envelope = utf8.contains("\"ok\"");
+    const EnvelopeResult env = is_envelope ? parse_connector_envelope(utf8) : EnvelopeResult{};
+    if (!is_envelope || !env.ok) {
+        if (is_envelope) {
+            r.failure = env.error;
+        } else {
+            QString err = pr.error.trimmed();
+            if (err.isEmpty())
+                err = pr.exit_code == 0 ? QStringLiteral("The connector returned no data")
+                                        : QStringLiteral("The connector exited with code %1").arg(pr.exit_code);
+            r.failure = ds::SourceError::make(ds::ErrorCode::Unknown, err);
+            if (err.contains(QLatin1String("Cancelled")))
+                r.failure.cancelled = true;
+            else if (err.contains(QLatin1String("Python is not set up")) || err.contains(QLatin1String("still installing")))
+                r.failure.code = ds::ErrorCode::NotSupported;
+            else if (err.contains(QLatin1String("timed out"), Qt::CaseInsensitive))
+                r.failure.code = ds::ErrorCode::UpstreamDown;
+        }
+        r.failure.message = conn_svc_trim_error(conn_svc_redact(r.failure.message, secrets));
+        r.error = r.failure.message;
         return r;
     }
-    r.data = doc.isArray() ? QJsonValue(doc.array()) : QJsonValue(doc.object());
-    conn_svc_project(r.data, r);
+
+    r.tabular = env.data;
+    r.data = env.payload;
+    if (!r.tabular.tables.isEmpty()) {
+        const ds::DataTable& first = r.tabular.tables.first();
+        r.table = ds::table_to_records(first);
+        r.columns = first.columns;
+        r.table_path = !first.name.isEmpty()
+                           ? first.name
+                           : r.tabular.meta.value(QStringLiteral("extra")).toObject().value(QStringLiteral("rows_key")).toString(
+                                 QStringLiteral("data"));
+        r.table_kind = env.shape.isEmpty() ? QStringLiteral("records") : env.shape;
+    } else {
+        conn_svc_project(r.data, r);
+    }
     r.warning = conn_svc_redact(conn_svc_embedded_error(r.data, 0), secrets);
+    const QJsonDocument doc = r.data.isArray() ? QJsonDocument(r.data.toArray()) : QJsonDocument(r.data.toObject());
 
     r.raw_text = conn_svc_cap(text, r.payload_bytes);
     if (r.payload_bytes <= kConnSvcPrettyLimitBytes) {
@@ -454,9 +479,11 @@ QStringList ConnectorService::secret_values_for(const QString& name) const {
     if (!info)
         return out;
     for (const QString& k : info->env_keys) {
-        const auto r = SecureStorage::instance().retrieve(k);
-        if (r.is_ok() && r.value().trimmed().size() >= 6)
-            out << r.value().trimmed();
+        // A read error leaves nothing to mask; the query-string rule in conn_svc_redact
+        // still applies (and the child's environment comes from the same store).
+        const SecretRead r = SecureStorage::instance().read(k);
+        if (r.found() && r.value.trimmed().size() >= 6)
+            out << r.value.trimmed();
         const QString env = qEnvironmentVariable(k.toUtf8().constData()).trimmed();
         if (env.size() >= 6)
             out << env;
@@ -470,18 +497,58 @@ QStringList ConnectorService::secret_values_for(const QString& name) const {
 
 QString ConnectorService::run(const QString& name, const QString& command, const QStringList& args, bool force,
                               Callback cb) {
+    RunOptions opts;
+    opts.force = force;
+    return run_with(name, command, args, opts, std::move(cb));
+}
+
+QString ConnectorService::run_with(const QString& name, const QString& command, const QStringList& args,
+                                   const RunOptions& options, Callback cb) {
     const QString rid = QStringLiteral("conn-%1").arg(next_id_.fetch_add(1));
     // Always queued — even on our own thread — so a cache hit can never be delivered before the
     // caller has stored the request id it is about to filter result_ready by.
     QPointer<ConnectorService> self(this);
     QMetaObject::invokeMethod(
         this,
-        [self, rid, name, command, args, force, cb = std::move(cb)]() {
+        [self, rid, name, command, args, options, cb = std::move(cb)]() {
             if (self)
-                self->start_on_service_thread(rid, name, command, args, force, cb);
+                self->start_on_service_thread(rid, name, command, args, options, cb);
         },
         Qt::QueuedConnection);
     return rid;
+}
+
+void ConnectorService::cancel(const QString& request_id) {
+    QPointer<ConnectorService> self(this);
+    QMetaObject::invokeMethod(
+        this,
+        [self, request_id]() {
+            if (self)
+                self->cancel_on_service_thread(request_id);
+        },
+        Qt::QueuedConnection);
+}
+
+void ConnectorService::cancel_on_service_thread(const QString& request_id) {
+    for (auto it = in_flight_.begin(); it != in_flight_.end(); ++it) {
+        for (int i = 0; i < it->waiters.size(); ++i) {
+            if (it->waiters[i].request_id != request_id)
+                continue;
+            const Waiter w = it->waiters.takeAt(i);
+            if (it->waiters.isEmpty()) {
+                if (it->cancel_token)
+                    it->cancel_token->store(true); // kills the Python process within ~250 ms
+                in_flight_.erase(it);
+            }
+            ConnectorResult r;
+            r.request_id = w.request_id;
+            r.failure = fincept::services::datasources::SourceError::cancel();
+            r.error = r.failure.message;
+            r.fetched_at_ms = conn_svc_now_ms();
+            deliver(r, w.cb);
+            return;
+        }
+    }
 }
 
 void ConnectorService::deliver(const ConnectorResult& result, const Callback& cb) {
@@ -494,22 +561,26 @@ void ConnectorService::deliver(const ConnectorResult& result, const Callback& cb
 }
 
 void ConnectorService::start_on_service_thread(const QString& request_id, const QString& name, const QString& command,
-                                               const QStringList& args, bool force, Callback cb) {
+                                               const QStringList& args, const RunOptions& options, Callback cb) {
+    namespace ds = fincept::services::datasources;
+    const bool force = options.force;
     ConnectorResult base;
     base.request_id = request_id;
     base.connector = name;
     base.command = command;
     base.args = args;
     base.fetched_at_ms = conn_svc_now_ms();
-    auto fail = [&](const QString& message) {
+    auto fail = [&](const QString& message, ds::ErrorCode code = ds::ErrorCode::BadArgs) {
         base.success = false;
         base.error = message;
+        base.failure = ds::SourceError::make(code, message);
         deliver(base, cb);
     };
 
     auto& catalog = ConnectorCatalog::instance();
     if (!catalog.ensure_loaded())
-        return fail(QStringLiteral("Connector catalogue unavailable: %1").arg(catalog.load_error()));
+        return fail(QStringLiteral("Connector catalogue unavailable: %1").arg(catalog.load_error()),
+                    ds::ErrorCode::NotSupported);
     const ConnectorInfo* info = catalog.find(name);
     if (!info)
         return fail(QStringLiteral("Unknown data connector '%1'").arg(name));
@@ -525,12 +596,40 @@ void ConnectorService::start_on_service_thread(const QString& request_id, const 
     }
     if (info->key_required) {
         bool any = false;
-        for (const QString& k : info->env_keys)
-            any = any || catalog.key_present(k);
-        if (!any)
-            return fail(QStringLiteral("%1 needs an API key (%2). Add it in Data Sources › Catalog or Settings › "
-                                       "Credentials, then run again.")
-                            .arg(info->title, info->env_keys.join(QStringLiteral(" / "))));
+        QString unreadable_reason;
+        for (const QString& k : info->env_keys) {
+            QString why;
+            const KeyPresence p = catalog.check_key(k, &why);
+            if (p == KeyPresence::Present)
+                any = true;
+            else if (p == KeyPresence::Unreadable && unreadable_reason.isEmpty())
+                unreadable_reason = why.isEmpty() ? QStringLiteral("unknown error") : why;
+        }
+        if (!any && !unreadable_reason.isEmpty()) {
+            // The key may well be stored: a retryable failure with the reason, never
+            // "add a key" (which would invite the user to overwrite it).
+            base.success = false;
+            base.failure = ds::SourceError::make(
+                ds::ErrorCode::Unknown,
+                QStringLiteral("Could not read secure storage: %1. The %2 key may already be saved — press RETRY.")
+                    .arg(unreadable_reason, info->env_keys.join(QStringLiteral(" / "))));
+            base.failure.env_keys = info->env_keys;
+            base.error = base.failure.message;
+            deliver(base, cb);
+            return;
+        }
+        if (!any) {
+            base.success = false;
+            base.failure = ds::SourceError::make(
+                ds::ErrorCode::MissingKey,
+                QStringLiteral("%1 needs an API key (%2). Add it in Settings > Credentials, then run again.")
+                    .arg(info->title, info->env_keys.join(QStringLiteral(" / "))));
+            base.failure.env_keys = info->env_keys;
+            base.failure.docs_url = info->docs_url;
+            base.error = base.failure.message;
+            deliver(base, cb);
+            return;
+        }
     }
 
     const QString key = request_key(name, command, args);
@@ -568,19 +667,33 @@ void ConnectorService::start_on_service_thread(const QString& request_id, const 
     f.started_ms = now;
     f.ttl_sec = info->ttl_sec > 0 ? info->ttl_sec : kDefaultTtlSec;
     f.waiters.append(Waiter{request_id, std::move(cb)});
+    f.cancel_token = std::make_shared<std::atomic<bool>>(false);
+    const auto cancel_token = f.cancel_token;
     in_flight_.insert(key, f);
     topics_.insert(topic_for(name, command, args), TopicRecord{name, command, args});
 
+    // The connector contract wrapper: one JSON envelope with a failure code or typed tables.
+    // FINCEPT_CONNECTOR_CATALOG / FINCEPT_CONNECTOR_TIMEOUT_S are process-wide facts, set once
+    // (here, on the service thread, before the first spawn) and inherited by every Python child.
+    static const bool env_ready = [&catalog]() {
+        if (!catalog.source_path().isEmpty())
+            qputenv("FINCEPT_CONNECTOR_CATALOG", catalog.source_path().toUtf8());
+        if (qEnvironmentVariableIsEmpty("FINCEPT_CONNECTOR_TIMEOUT_S"))
+            qputenv("FINCEPT_CONNECTOR_TIMEOUT_S", QByteArray::number(kRunTimeoutMs / 1000 - 10));
+        return true;
+    }();
+    Q_UNUSED(env_ready);
     QStringList argv;
-    argv << command << args;
+    argv << QStringLiteral("run") << info->script << command << args;
     python::PythonRunner::RunOptions opts;
-    opts.timeout_ms = kRunTimeoutMs;
+    opts.timeout_ms = options.timeout_ms > 0 ? options.timeout_ms : kRunTimeoutMs;
+    opts.cancel_token = cancel_token;
     const QStringList secrets = secret_values_for(name);
-    LOG_INFO(kConnSvcTag, QString("Run %1 %2 (%3 arg(s))").arg(info->script, command).arg(args.size()));
+    LOG_DEBUG(kConnSvcTag, QString("Run %1 %2 (%3 arg(s))").arg(info->script, command).arg(args.size()));
 
     QPointer<ConnectorService> self(this);
     python::PythonRunner::instance().run_with_options(
-        info->script, argv, opts, [self, key, name, command, args, secrets, now](python::PythonResult pr) {
+        QStringLiteral("fincept_connector.py"), argv, opts, [self, key, name, command, args, secrets, now](python::PythonResult pr) {
             if (!self)
                 return;
             const qint64 duration = conn_svc_now_ms() - now;
@@ -610,7 +723,7 @@ void ConnectorService::finish(const QString& key, ConnectorResult result) {
 
     const QString topic = topic_for(f.connector, f.command, f.args);
     if (result.success) {
-        LOG_INFO(kConnSvcTag, QString("%1 %2: %3 row(s), %4, %5 ms")
+        LOG_DEBUG(kConnSvcTag, QString("%1 %2: %3 row(s), %4, %5 ms")
                                   .arg(f.connector, f.command)
                                   .arg(result.table.size())
                                   .arg(conn_svc_human_bytes(result.payload_bytes))
@@ -629,7 +742,10 @@ void ConnectorService::finish(const QString& key, ConnectorResult result) {
             fincept::datahub::DataHub::instance().publish(topic, QVariant(envelope));
         }
     } else {
-        LOG_WARN(kConnSvcTag, QString("%1 %2 failed: %3").arg(f.connector, f.command, result.error.left(300)));
+        // Per-request failure: one line a minute per connector command (policy B.8).
+        LOG_WARN_RL(kConnSvcTag, f.connector + QLatin1Char('|') + f.command, 60000,
+                    logf("Connector request failed",
+                         {{"connector", f.connector}, {"command", f.command}, {"error", result.error}}));
         if (hub_registered_)
             fincept::datahub::DataHub::instance().publish_error(topic, result.error);
     }
@@ -800,7 +916,7 @@ void ConnectorService::ensure_registered_with_hub() {
     }
     hub.set_policy_pattern(QStringLiteral("connector:*"), policy_for(kDefaultTtlSec));
     hub_registered_ = true;
-    LOG_INFO(kConnSvcTag, "Registered with DataHub (connector:*)");
+    LOG_DEBUG(kConnSvcTag, "Registered with DataHub (connector:*)");
 }
 
 } // namespace fincept::services::connectors

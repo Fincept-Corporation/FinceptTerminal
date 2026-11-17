@@ -15,6 +15,8 @@
 namespace fincept::trading::auth {
 
 namespace {
+// Served to the user's web browser, not drawn by the terminal: the page keeps
+// its own fixed colours and sizes and does not follow the terminal's theme.
 constexpr const char* kResponseHtml =
     "<!doctype html><html><head><meta charset='utf-8'>"
     "<title>Fincept - Broker login</title>"
@@ -59,14 +61,44 @@ RedirectServer::~RedirectServer() {
     stop();
 }
 
-bool RedirectServer::start(quint16 preferred_port, int timeout_seconds) {
+bool RedirectServer::start(quint16 preferred_port, int timeout_seconds, bool fixed_port_only) {
+    timeout_timer_->stop();
     if (server_->isListening())
         server_->close();
+    port_ = 0;
+    failed_port_ = 0;
+    bind_error_ = BindError::None;
+
+    const auto record_failure = [this, preferred_port]() {
+        failed_port_ = preferred_port;
+        switch (server_->serverError()) {
+            case QAbstractSocket::AddressInUseError:
+                bind_error_ = BindError::PortInUse;
+                break;
+            case QAbstractSocket::SocketAccessError:
+                bind_error_ = BindError::PortBlocked;
+                break;
+            default:
+                bind_error_ = BindError::Other;
+                break;
+        }
+    };
 
     // Loopback only — never QHostAddress::Any. Do not change this.
     if (!server_->listen(QHostAddress::LocalHost, preferred_port)) {
+        if (fixed_port_only) {
+            // Fail now: an ephemeral port can never receive a redirect registered
+            // on the fixed one, so falling back would only leave the caller
+            // waiting for the timeout.
+            record_failure();
+            LOG_WARN("RedirectServer", QString("Cannot bind callback port port=%1 reason=%2")
+                                           .arg(preferred_port)
+                                           .arg(server_->errorString()));
+            return false;
+        }
         LOG_WARN("RedirectServer", QString("Port %1 busy - falling back to ephemeral").arg(preferred_port));
         if (!server_->listen(QHostAddress::LocalHost, 0)) {
+            record_failure();
             LOG_ERROR("RedirectServer", QString("Failed to bind loopback: %1").arg(server_->errorString()));
             return false;
         }
@@ -82,6 +114,25 @@ void RedirectServer::stop() {
     timeout_timer_->stop();
     if (server_->isListening())
         server_->close();
+}
+
+QString RedirectServer::bind_error_text() const {
+    switch (bind_error_) {
+        case BindError::None:
+            return {};
+        case BindError::PortInUse:
+            return tr("Port %1 is in use — close the other Fincept Terminal's broker login (or the program using "
+                      "the port) and retry, or use the manual paste option")
+                .arg(failed_port_);
+        case BindError::PortBlocked:
+            return tr("Port %1 is blocked (reserved by the system or by security software) — free the port and "
+                      "retry, or use the manual paste option")
+                .arg(failed_port_);
+        case BindError::Other:
+            break;
+    }
+    return tr("Port %1 could not be opened for the browser login — retry, or use the manual paste option")
+        .arg(failed_port_);
 }
 
 void RedirectServer::handle_new_connection() {

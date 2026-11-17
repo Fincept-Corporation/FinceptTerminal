@@ -26,7 +26,7 @@ void PredictionExchangeRegistry::register_adapter(std::unique_ptr<PredictionExch
     if (active_id_.isEmpty())
         active_id_ = id;
     entries_.push_back({id, std::move(adapter)});
-    LOG_INFO("PredictionRegistry", "Registered adapter: " + id);
+    LOG_DEBUG("PredictionRegistry", "Registered adapter: " + id);
 }
 
 QStringList PredictionExchangeRegistry::available_ids() const {
@@ -61,7 +61,7 @@ void PredictionExchangeRegistry::set_active(const QString& id) {
         return;
     }
     active_id_ = id;
-    LOG_INFO("PredictionRegistry", "Active exchange: " + id);
+    LOG_DEBUG("PredictionRegistry", "Active exchange: " + id);
     emit active_changed(id);
 }
 

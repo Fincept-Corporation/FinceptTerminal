@@ -45,9 +45,12 @@ enum class QuantLibFailureKind {
     AuthRequired, ///< 401 — no / expired session
     RateLimited,  ///< 429 — hourly or concurrency budget exhausted
     InvalidInput, ///< 400 / 422 — the request body failed validation
-    Network,      ///< no HTTP answer (DNS, TLS, timeout, connection reset)
-    Server,       ///< 5xx or an unreadable response
+    Network,      ///< no HTTP answer (DNS, TLS, connection reset)
+    Timeout,      ///< no answer within the client's limit, or 504 — the server's calculation limit
+    Blocked,      ///< 403 IP_BLOCKED — the network is paused after repeated invalid requests
+    Server,       ///< 5xx, 404 or an unreadable response
     Computation,  ///< HTTP 200 {"success": false, ...} — the computation itself failed
+    Cancelled,    ///< the caller aborted the call (QuantLibClient::cancel)
 };
 
 struct QuantLibFailure {

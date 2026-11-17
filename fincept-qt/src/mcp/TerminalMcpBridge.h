@@ -43,6 +43,7 @@
 class QTcpServer;
 class QTcpSocket;
 class QThreadPool;
+class QTimer;
 
 namespace fincept::mcp {
 
@@ -161,6 +162,11 @@ class TerminalMcpBridge : public QObject {
     struct RequestState {
         QByteArray buffer;
         bool headers_parsed = false;
+        /// The request was answered or handed to a tool: one request per
+        /// connection, so anything that arrives later is ignored (a trailing
+        /// segment used to dispatch the same tool call a second time).
+        bool dispatched = false;
+        qint64 last_activity_ms = 0;
         QString method;
         QString path;
         int content_length = 0;
@@ -169,6 +175,9 @@ class TerminalMcpBridge : public QObject {
         /// try_dispatch() so the handlers don't re-walk the token map.
         QString run_token;
     };
+
+    /// Close connections that never completed a request (slow / stuck peers).
+    void sweep_connections();
 
     /// One live agent run: the tool policy its calls are held to.
     struct RunScope {
@@ -199,6 +208,7 @@ class TerminalMcpBridge : public QObject {
     void write_error(QTcpSocket* sock, int status, const QString& message);
 
     QTcpServer* server_ = nullptr;
+    QTimer* sweeper_ = nullptr;
     bool active_ = false;
     QString destructive_token_;
     QHash<QTcpSocket*, RequestState> states_;

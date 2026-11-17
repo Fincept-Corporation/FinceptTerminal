@@ -57,6 +57,22 @@ class KalshiRestClient : public QObject {
     /// previous_price_dollars / previous_yes_bid_dollars / previous_yes_ask_dollars (24 h ago) and
     /// result ("yes" / "no" once determined). Called on this object's thread; the callbacks run there.
     void fetch_markets_by_tickers(const QStringList& tickers, MarketsCallback on_ok, ErrorCallback on_error);
+    /// GET /markets?status=open&series_ticker=S — answered through the callbacks only (no
+    /// markets_ready / request_error), so a search in flight can never be mistaken for, or
+    /// swallow, an ordinary list load. Each market's extras carry series_ticker = S.
+    void fetch_open_series_markets(const QString& series_ticker, int limit, MarketsCallback on_ok,
+                                   ErrorCallback on_error);
+
+    /// One /series row reduced to what the free-text search matches on. All text is
+    /// lower-case; `updated` is the series' last_updated_ts (ISO, sorts as text).
+    struct SeriesSearchEntry {
+        QString title;
+        QString haystack; // ticker + title + category + tags
+        QString updated;
+    };
+    /// Series ticker (upper-case) → search entry, rebuilt on every fetch_series() reply.
+    /// Empty until the first series list has arrived.
+    const QHash<QString, SeriesSearchEntry>& series_search_index() const { return series_index_; }
     /// GET /events — paginated; event_list with optional status filter.
     void fetch_events(const QString& status = QStringLiteral("open"), const QString& series_ticker = QString(),
                       bool with_nested_markets = true, int limit = 100, const QString& cursor = QString());
@@ -152,6 +168,7 @@ class KalshiRestClient : public QObject {
 
     QNetworkAccessManager* nam_ = nullptr;
     bool demo_ = false;
+    QHash<QString, SeriesSearchEntry> series_index_;
 };
 
 } // namespace fincept::services::prediction::kalshi_ns

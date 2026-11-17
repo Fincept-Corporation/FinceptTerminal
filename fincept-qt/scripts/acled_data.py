@@ -2,45 +2,81 @@
 ACLED (Armed Conflict Location & Event Data) Fetcher
 Provides political violence events, protest data, conflict fatalities,
 actor information, and trend analysis for countries globally.
+Needs a free myACLED account (ACLED_EMAIL + ACLED_PASSWORD; ACLED no longer issues API keys).
 """
 import sys
 import json
 import os
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
-API_KEY = os.environ.get('ACLED_API_KEY', '')
+# ACLED retired its key+email API (api.acleddata.com no longer resolves) in 2025. The current API
+# authenticates with the myACLED account itself: an OAuth password grant at /oauth/token returns
+# a bearer token (valid 24 h) for https://acleddata.com/api/acled/read.
 ACLED_EMAIL = os.environ.get('ACLED_EMAIL', '')
-BASE_URL = "https://api.acleddata.com/acled/read"
+ACLED_PASSWORD = os.environ.get('ACLED_PASSWORD', '')
+TOKEN_URL = "https://acleddata.com/oauth/token"
+BASE_URL = "https://acleddata.com/api/acled/read"
+SERVICE = "ACLED"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
+_token: Optional[str] = None
+
+
+def _get_token() -> Any:
+    """Bearer token for this process, or {"error": ...}."""
+    global _token
+    if _token:
+        return _token
+    form = {"username": ACLED_EMAIL, "password": ACLED_PASSWORD, "grant_type": "password", "client_id": "acled"}
+    try:
+        response = session.post(TOKEN_URL, data=form, timeout=30)
+        if response.status_code in (400, 401):
+            return {"error": "ACLED rejected the account email/password (ACLED_EMAIL / ACLED_PASSWORD) - "
+                             "check them in Settings > Credentials"}
+        response.raise_for_status()
+        _token = response.json().get("access_token")
+    except requests.exceptions.RequestException as e:
+        return {"error": fc.request_error(SERVICE, e, secret=ACLED_PASSWORD)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    return _token or {"error": "ACLED did not return an access token"}
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
+    token = _get_token()
+    if isinstance(token, dict):
+        return token
+    params = dict(params or {}, _format="json")
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, headers={"Authorization": f"Bearer {token}"}, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, secret=token)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    if not isinstance(data, dict):
+        return {"error": f"Unexpected {SERVICE} response"}
+    if data.get("success") is False or (data.get("error") and not data.get("data")):
+        err = data.get("error")
+        msg = err.get("message") if isinstance(err, dict) else err
+        return {"error": f"{SERVICE}: {fc.scrub(msg or data.get('message') or 'request failed', token)}"}
+    return data
 
 
 def _check_credentials() -> Optional[Dict]:
-    if not API_KEY or not ACLED_EMAIL:
-        return {"error": "ACLED_API_KEY and ACLED_EMAIL environment variables required"}
+    if not ACLED_EMAIL or not ACLED_PASSWORD:
+        return {"error": "ACLED needs a free myACLED account: register at https://acleddata.com/register/ "
+                         "and save its email as ACLED_EMAIL and its password as ACLED_PASSWORD in "
+                         "Settings > Credentials (ACLED no longer issues API keys)"}
     return None
 
 
 def _base_params() -> Dict:
-    return {"key": API_KEY, "email": ACLED_EMAIL}
+    return {}
 
 
 def get_events(country: str, event_type: str = None, start_date: str = None, end_date: str = None, limit: int = 100) -> Any:
@@ -53,11 +89,16 @@ def get_events(country: str, event_type: str = None, start_date: str = None, end
     params["limit"] = limit
     if event_type:
         params["event_type"] = event_type
-    if start_date:
-        params["event_date"] = start_date
+    # ACLED filter syntax: event_date=<from>|<to> with event_date_where=BETWEEN.
+    if start_date and end_date:
+        params["event_date"] = f"{start_date}|{end_date}"
         params["event_date_where"] = "BETWEEN"
-    if end_date:
-        params["event_date2"] = end_date
+    elif start_date:
+        params["event_date"] = start_date
+        params["event_date_where"] = ">="
+    elif end_date:
+        params["event_date"] = end_date
+        params["event_date_where"] = "<="
     data = _make_request(BASE_URL, params=params)
     if isinstance(data, dict) and "error" in data:
         return data
@@ -73,7 +114,7 @@ def get_fatalities(country: str, year: int) -> Any:
     params = _base_params()
     params["country"] = country
     params["year"] = year
-    params["fields"] = "fatalities,event_date,event_type"
+    params["fields"] = "fatalities|event_date|event_type"
     params["limit"] = 500
     data = _make_request(BASE_URL, params=params)
     if isinstance(data, dict) and "error" in data:
@@ -92,7 +133,7 @@ def get_trends(country: str, year: int) -> Any:
     params = _base_params()
     params["country"] = country
     params["year"] = year
-    params["fields"] = "event_date,event_type,fatalities"
+    params["fields"] = "event_date|event_type|fatalities"
     params["limit"] = 1000
     data = _make_request(BASE_URL, params=params)
     if isinstance(data, dict) and "error" in data:
@@ -127,7 +168,7 @@ def get_actors(country: str, year: int) -> Any:
     params = _base_params()
     params["country"] = country
     params["year"] = year
-    params["fields"] = "actor1,actor2,inter1,inter2"
+    params["fields"] = "actor1|actor2|inter1|inter2"
     params["limit"] = 500
     data = _make_request(BASE_URL, params=params)
     if isinstance(data, dict) and "error" in data:
@@ -162,6 +203,11 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
+    numeric = {"events": 5, "fatalities": 2, "trends": 2, "actors": 2}.get(command)
+    if numeric and len(args) > numeric and not args[numeric].isdigit():
+        print(json.dumps({"error": f"{'limit' if command == 'events' else 'year'} must be a number, "
+                                   f"got '{args[numeric]}'"}))
+        return
     if command == "events":
         country = args[1] if len(args) > 1 else ""
         if not country:

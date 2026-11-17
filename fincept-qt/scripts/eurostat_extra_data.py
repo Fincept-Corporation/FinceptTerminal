@@ -27,7 +27,7 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        return _with_rows(response.json())
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
@@ -36,13 +36,63 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
+def _with_rows(doc: Any) -> Any:
+    """Add the observations of a JSON-stat answer as a table ("data": [{period, <dimension>...,
+    value}], a column for every dimension with more than one category) next to the JSON-stat keys
+    (id / size / dimension / value), which the Economics Eurostat panel decodes itself."""
+    if not isinstance(doc, dict) or "error" in doc:
+        return doc
+    ids, sizes, dims, values = doc.get("id"), doc.get("size"), doc.get("dimension"), doc.get("value")
+    if not (isinstance(ids, list) and isinstance(sizes, list) and isinstance(dims, dict) and len(ids) == len(sizes)):
+        return doc
+    if isinstance(values, list):
+        values = {str(i): v for i, v in enumerate(values) if v is not None}
+    if not isinstance(values, dict):
+        return doc
+    labels = []
+    for dim_id, size in zip(ids, sizes):
+        cat = (dims.get(dim_id) or {}).get("category") or {}
+        index, label = cat.get("index") or {}, cat.get("label") or {}
+        if isinstance(index, list):
+            index = {code: i for i, code in enumerate(index)}
+        by_pos = [None] * max(1, int(size or 1))
+        for code, pos in index.items():
+            if isinstance(pos, int) and 0 <= pos < len(by_pos):
+                by_pos[pos] = code if dim_id == "time" else label.get(code, code)
+        labels.append((dim_id, by_pos))
+    rows = []
+    for flat_key, value in values.items():
+        try:
+            flat = int(flat_key)
+        except (TypeError, ValueError):
+            continue
+        row = {}
+        for dim_id, by_pos in reversed(labels):
+            pos = flat % len(by_pos)
+            flat //= len(by_pos)
+            if dim_id == "time":
+                row["period"] = by_pos[pos]
+            elif len(by_pos) > 1:
+                row[dim_id] = by_pos[pos]
+        row["value"] = value
+        rows.append(row)
+    rows.sort(key=lambda r: str(r.get("period") or ""))
+    doc["data"] = rows
+    return doc
+
+
+# Short-term business statistics moved to base year 2021: the 2015=100 index ("I15") is still
+# served but stops at 2023-12, while "I21" (2021=100) runs to the latest month.
+STS_INDEX_UNIT = "I21"
+
+
 def get_industrial_production(country: str = "DE", nace: str = "B-D", freq: str = "M") -> Any:
-    params = {"geo": country.upper(), "nace_r2": nace, "s_adj": "SCA", "unit": "I15"}
+    params = {"geo": country.upper(), "nace_r2": nace, "s_adj": "SCA", "unit": STS_INDEX_UNIT}
     return _make_request("STS_INPR_M" if freq == "M" else "STS_INPR_Q", params)
 
 
 def get_retail_trade(country: str = "DE", freq: str = "M") -> Any:
-    params = {"geo": country.upper(), "s_adj": "SCA", "unit": "I15", "nace_r2": "G47"}
+    params = {"geo": country.upper(), "s_adj": "SCA", "unit": STS_INDEX_UNIT, "nace_r2": "G47"}
     return _make_request("STS_TRTU_M" if freq == "M" else "STS_TRTU_Q", params)
 
 
@@ -74,7 +124,7 @@ def get_trade_in_goods(country: str = "DE", partner: str = "US", product: str = 
 
 
 def get_construction_output(country: str = "DE", freq: str = "M") -> Any:
-    params = {"geo": country.upper(), "s_adj": "SCA", "unit": "I15"}
+    params = {"geo": country.upper(), "s_adj": "SCA", "unit": STS_INDEX_UNIT}
     return _make_request("STS_COPR_M" if freq == "M" else "STS_COPR_Q", params)
 
 

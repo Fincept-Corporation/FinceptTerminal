@@ -64,20 +64,32 @@ static QString parse_422_detail(const QJsonDocument& doc) {
 }
 
 void AuthApi::request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb,
-                      const QObject* context) {
+                      const QObject* context, const QMap<QByteArray, QByteArray>& extra_headers) {
     auto& http = fincept::HttpClient::instance();
 
-    auto handle = [cb, endpoint](fincept::Result<QJsonDocument> result) {
+    auto handle = [cb_in = std::move(cb), endpoint](fincept::Result<QJsonDocument> result) {
+        // Response metadata, read while HttpClient's reply is current (it is only
+        // valid inside this callback): stamped on every answer handed on.
+        const QString etag = QString::fromUtf8(fincept::HttpClient::response_header("ETag"));
+        const qint64 poll_ms =
+            fincept::HttpClient::poll_interval_ms(fincept::HttpClient::response_header("X-Poll-Interval"));
+        auto cb = [&cb_in, &etag, poll_ms](ApiResponse r) {
+            r.etag = etag;
+            r.poll_interval_ms = poll_ms;
+            cb_in(std::move(r));
+        };
+
         // ── HTTP error / transport error path ────────────────────────────────
         // Any non-2xx is err(). HttpClient carries the server's own wording in
         // the error string ("HTTP_<status>: <message>") — prefer it, since that
-        // is where the specific registration/verification failures live. Fall
-        // back to a friendly status-specific message when the body had none.
+        // is where the specific failures live, 401/403/429 included: "Incorrect
+        // password. You have 2 attempt(s) remaining…", "No account found with
+        // this email address…", "Your account is not verified yet…" (403), "Too
+        // many failed attempts. Please try again in 1 minute(s)…" (429), and an
+        // IP block (403 IP_BLOCKED, with how long it lasts). The switch below is
+        // only the fallback for a response that carried no text.
         if (result.is_err()) {
             const int status = fincept::HttpClient::status_from_error(result.error());
-            // 401/403 are deliberately message-free (HttpClient keeps them a
-            // bare "HTTP_<status>" for session-expiry detection), so they land
-            // in the switch below and get our own wording.
             QString msg = status > 0 ? fincept::HttpClient::message_from_error(result.error()) : QString{};
             if (!msg.isEmpty()) {
                 cb({false, {}, msg, status});
@@ -92,7 +104,10 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
                     msg = tr("Incorrect email or password.");
                     break;
                 case 403:
-                    msg = tr("Access denied. Your account may be suspended.");
+                    // Not "your account may be suspended": the API never answers
+                    // 403 for an account state on these routes (unverified is
+                    // reported with its own message; a suspended key is a 401).
+                    msg = tr("The server refused the request. Please try again later.");
                     break;
                 case 404:
                     msg = tr("Account not found. Please check your email.");
@@ -120,6 +135,13 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
             return;
         }
 
+        // ── 304: a conditional GET whose resource is unchanged ───────────────
+        // Success with no body — the caller keeps its copy. Never an empty profile.
+        if (fincept::HttpClient::response_status() == 304) {
+            cb({true, {}, {}, 304});
+            return;
+        }
+
         // ── 2xx body path ────────────────────────────────────────────────────
         // The backend reports most business-logic failures with HTTP 200 and a
         // {"success": false, ...} envelope, so the checks below still matter.
@@ -135,21 +157,12 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
             }
         }
 
-        // 2. Server business-logic errors: {"success": false, "message": "..."}
-        //    This is the primary path for ALL the specific messages:
-        //    - "Incorrect password. You have 2 attempt(s) remaining."
-        //    - "Too many failed attempts — please try again in 2 minutes."
-        //    - "Your account is not verified yet."
-        //    - "This username is already taken."
-        //    - "An account with this email already exists."
-        //    - "Your verification code has expired."
-        //    - "Incorrect verification code. You have X attempt(s) remaining."
-        //    etc. — the server sends these verbatim and we display them as-is.
+        // 2. A 2xx {"success": false, "message": ...} envelope. The current API
+        //    reports login/registration/verification failures with a real 4xx
+        //    status (handled above), not this way — but keep honouring it, and
+        //    read "message" whether it is a string or a {"message": ...} object.
         if (obj.contains("success") && !obj["success"].toBool()) {
-            // Prefer "message", fall back to "detail" string, then generic
-            QString msg = obj.value("message").toString();
-            if (msg.isEmpty())
-                msg = obj.value("detail").toString();
+            QString msg = fincept::HttpClient::error_text_from_body(obj);
             if (msg.isEmpty())
                 msg = tr("Request failed. Please try again.");
             cb({false, obj, msg, 200});
@@ -174,13 +187,13 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
     // call, which spans a payment-provider round trip (the longest-latency call
     // in the app, and exactly when a user is likely to close the window).
     if (method == "GET")
-        http.get(endpoint, handle, context);
+        http.get(endpoint, handle, context, extra_headers);
     else if (method == "POST")
-        http.post(endpoint, body, handle, context);
+        http.post(endpoint, body, handle, context, extra_headers);
     else if (method == "PUT")
-        http.put(endpoint, body, handle, context);
+        http.put(endpoint, body, handle, context, extra_headers);
     else if (method == "DELETE")
-        http.del(endpoint, handle, context);
+        http.del(endpoint, handle, context, extra_headers);
 }
 
 // ── Unauthenticated auth endpoints ───────────────────────────────────────────
@@ -195,6 +208,12 @@ void AuthApi::register_user(const RegisterRequest& req, Callback cb, const QObje
 
 void AuthApi::verify_otp(const VerifyOtpRequest& req, Callback cb, const QObject* context) {
     request("POST", "/user/verify-otp", req.to_json(), cb, context);
+}
+
+void AuthApi::resend_otp(const QString& email, Callback cb, const QObject* context) {
+    QJsonObject body;
+    body["email"] = email;
+    request("POST", "/user/resend-otp", body, cb, context);
 }
 
 void AuthApi::forgot_password(const ForgotPasswordRequest& req, Callback cb, const QObject* context) {
@@ -228,8 +247,21 @@ void AuthApi::session_pulse(Callback cb, const QObject* context) {
     request("GET", "/user/session-pulse", {}, cb, context);
 }
 
-void AuthApi::get_user_profile(Callback cb, const QObject* context) {
-    request("GET", "/user/profile", {}, cb, context);
+void AuthApi::get_user_profile(Callback cb, const QObject* context, const QString& if_none_match) {
+    QMap<QByteArray, QByteArray> headers;
+    if (!if_none_match.isEmpty())
+        headers.insert(QByteArrayLiteral("If-None-Match"), if_none_match.toUtf8());
+    request("GET", "/user/profile", {}, cb, context, headers);
+}
+
+void AuthApi::validate_api_key(Callback cb, const QObject* context) {
+    // Empty value = HttpClient omits the header (see HttpClient::Headers).
+    request("GET", "/user/profile", {}, cb, context, {{QByteArrayLiteral("X-Session-Token"), QByteArray()}});
+}
+
+void AuthApi::check_session_token(const QString& session_token, Callback cb, const QObject* context) {
+    request("GET", "/user/session-pulse", {}, cb, context,
+            {{QByteArrayLiteral("X-Session-Token"), session_token.toUtf8()}});
 }
 
 // ── Subscription / payment ────────────────────────────────────────────────────

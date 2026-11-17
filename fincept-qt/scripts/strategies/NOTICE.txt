@@ -1,0 +1,39 @@
+Fincept Terminal - fincept-qt/scripts/strategies
+Notice of third-party code in this directory
+================================================
+
+QuantConnect LEAN
+-----------------
+Most of the algorithm files in this directory are copies of, or are derived from, the
+Python example algorithms of QuantConnect LEAN:
+
+    QuantConnect LEAN Algorithmic Trading Engine
+    https://github.com/QuantConnect/Lean
+    Copyright QuantConnect Corporation
+    Licensed under the Apache License, Version 2.0
+    (full licence text: LICENSE-APACHE-2.0.txt in this directory)
+
+They come from LEAN's Algorithm.Python directory (Algorithm.Python/Alphas for alphas/,
+Algorithm.Python/Benchmarks for benchmarks/) as of LEAN commit
+a8592e08b569246c59ecf5d84321f2c34a50a1f8 (2024-12-13).
+
+Each of these files starts with QuantConnect's copyright and licence notice exactly as
+LEAN has it for that file, followed by one line from Fincept Corporation that says whether
+the file was changed and how.
+
+Files derived from QuantConnect LEAN (418 files, Apache License 2.0):
+  - every .py file directly in this directory except AlgorithmImports.py, _loader.py,
+    _registry.py and __init__.py
+  - every .py file in alphas/ except alphas/__init__.py
+  - every .py file in benchmarks/ except benchmarks/__init__.py
+
+LEAN has no NOTICE file (checked at LEAN commit 2c9491abdb8031d653eba1c89465ec417ddce44b,
+2026-11-16), so there is no upstream NOTICE text to reproduce here.
+
+The rest of this directory
+--------------------------
+Everything else here is the Fincept Terminal project's own code: AlgorithmImports.py,
+_loader.py, _registry.py, the __init__.py files, the import shims in Execution/,
+Portfolio/, Risk/ and Selection/, and the strategy engine in fincept_engine/. The engine
+provides a Python API with the same names as LEAN's algorithm API (QCAlgorithm and the
+framework model classes) so that the files above can run on it.

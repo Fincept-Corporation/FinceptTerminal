@@ -63,15 +63,24 @@ QStringList BuybackBurnService::topic_patterns() const {
     };
 }
 
-QString BuybackBurnService::resolve_endpoint() const {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyEndpoint));
-    if (r.is_ok())
-        return trim_trailing_slash(r.value().trimmed());
-    return {};
-}
-
 void BuybackBurnService::refresh(const QStringList& topics) {
-    const auto endpoint = resolve_endpoint();
+    // An endpoint that is stored but cannot be read is not "not configured": serving
+    // the DEMO data then would pass for the real figures being unavailable. Report it
+    // on the requested topics (the hub retries on its own schedule); nothing written.
+    const SecretRead stored = SecureStorage::instance().read(QString::fromLatin1(kKeyEndpoint));
+    const bool unreadable = stored.failed();
+    LOG_TRANSITION("BuybackBurn", QStringLiteral("endpoint_read"), unreadable,
+                   unreadable ? LogLevel::Warn : LogLevel::Info,
+                   unreadable ? logf("Stored treasury endpoint could not be read; no data served",
+                                     {{"key", kKeyEndpoint}, {"kind", stored.error_name()}})
+                              : QStringLiteral("Stored treasury endpoint readable again"));
+    if (unreadable) {
+        const QString err = tr("Could not read the stored treasury endpoint: %1.").arg(stored.reason());
+        for (const auto& topic : topics)
+            fincept::datahub::DataHub::instance().publish_error(topic, err);
+        return;
+    }
+    const auto endpoint = stored.found() ? trim_trailing_slash(stored.value.trimmed()) : QString();
     const bool mock = endpoint.isEmpty();
     if (mock) {
         // Log once per process — refresh fires every 30 s in mock mode and
@@ -79,7 +88,7 @@ void BuybackBurnService::refresh(const QStringList& topics) {
         // un-deployed. Subsequent refreshes use LOG_DEBUG.
         static std::atomic<bool> once{false};
         if (!once.exchange(true)) {
-            LOG_INFO("BuybackBurn", "no fincept.treasury_endpoint configured — serving mock data");
+            LOG_DEBUG("BuybackBurn", "no fincept.treasury_endpoint configured — serving mock data");
         } else {
             LOG_DEBUG("BuybackBurn", "mock-mode refresh");
         }

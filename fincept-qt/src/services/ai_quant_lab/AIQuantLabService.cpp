@@ -1,7 +1,9 @@
 // src/services/ai_quant_lab/AIQuantLabService.cpp
 #include "services/ai_quant_lab/AIQuantLabService.h"
 
+#include "auth/AuthManager.h"
 #include "core/config/AppPaths.h"
+#include "core/process/ProcessTree.h"
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
@@ -19,6 +21,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 namespace fincept::services::quant {
 
@@ -48,31 +51,96 @@ AIQuantLabService::AIQuantLabService(QObject* parent) : QObject(parent) {
             for (auto it = rd_tasks_.begin(); it != rd_tasks_.end(); ++it) {
                 if (it->proc && it->proc->state() != QProcess::NotRunning) {
                     it->stop_requested = true;
-                    it->proc->kill();
+                    process::kill_tree(it->proc); // the loop and everything it started
                 }
             }
         });
     }
 }
 
+// ── Request scopes ───────────────────────────────────────────────────────────
+quint64 AIQuantLabService::next_request_id() {
+    static quint64 next = 0; // GUI thread only
+    return ++next;
+}
+
+AIQuantLabService::RequestScope::RequestScope(quint64 request_id, std::shared_ptr<std::atomic<bool>> cancel) {
+    auto& svc = AIQuantLabService::instance();
+    prev_id_ = svc.scope_id_;
+    prev_cancel_ = svc.scope_cancel_;
+    prev_dispatched_ = svc.scope_dispatched_;
+    svc.scope_id_ = request_id;
+    svc.scope_cancel_ = std::move(cancel);
+    svc.scope_dispatched_ = 0;
+}
+
+AIQuantLabService::RequestScope::~RequestScope() {
+    auto& svc = AIQuantLabService::instance();
+    svc.scope_id_ = prev_id_;
+    svc.scope_cancel_ = prev_cancel_;
+    svc.scope_dispatched_ = prev_dispatched_;
+}
+
+int AIQuantLabService::RequestScope::dispatched() const {
+    return AIQuantLabService::instance().scope_dispatched_;
+}
+
+AIQuantLabService::Tag AIQuantLabService::take_tag() {
+    Tag t;
+    t.id = scope_id_;
+    t.cancel = scope_cancel_;
+    if (t.id != 0)
+        ++scope_dispatched_;
+    return t;
+}
+
+void AIQuantLabService::emit_done(const Tag& tag, const QString& module_id, const QString& command,
+                                  const QJsonObject& data) {
+    const bool dataset_changed = (command == QLatin1String("build_dataset") ||
+                                  command == QLatin1String("update_dataset") ||
+                                  command == QLatin1String("download_data")) &&
+                                 data.value(QStringLiteral("success")).toBool();
+    if (tag.id != 0)
+        emit request_finished(tag.id, module_id, command, data);
+    else
+        emit result_ready(module_id, command, data);
+    if (dataset_changed)
+        emit datasets_changed(module_id, command, data);
+}
+
+void AIQuantLabService::emit_failed(const Tag& tag, const QString& module_id, const QString& message) {
+    if (tag.id != 0)
+        emit request_failed(tag.id, module_id, message);
+    else
+        emit error_occurred(module_id, message);
+}
+
 // ── Python helper ────────────────────────────────────────────────────────────
 void AIQuantLabService::run_python(const QString& script, const QStringList& args, const QString& module_id,
                                    const QString& command, const python::PythonRunner::RunOptions& opts) {
     QPointer<AIQuantLabService> self = this;
+    const Tag tag = take_tag();
+    python::PythonRunner::RunOptions run_opts = opts;
+    if (tag.cancel && !run_opts.cancel_token)
+        run_opts.cancel_token = tag.cancel;
     python::PythonRunner::instance().run_with_options(
-        script, args, opts, [self, module_id, command](python::PythonResult result) {
+        script, args, run_opts, [self, tag, module_id, command](python::PythonResult result) {
             if (!self)
                 return;
             if (!result.success) {
-                LOG_ERROR("AIQuantLab", QString("[%1/%2] Failed: %3").arg(module_id, command, result.error));
-                emit self->error_occurred(module_id, result.error);
+                // A run its view gave up on (left the tab, superseded, timed out) is not a failure.
+                if (tag.cancel && tag.cancel->load())
+                    LOG_DEBUG("AIQuantLab", QString("[%1/%2] Cancelled").arg(module_id, command));
+                else
+                    LOG_ERROR("AIQuantLab", QString("[%1/%2] Failed: %3").arg(module_id, command, result.error));
+                self->emit_failed(tag, module_id, result.error);
                 return;
             }
             auto json_str = python::extract_json(result.output);
             auto doc = QJsonDocument::fromJson(json_str.toUtf8());
             if (doc.isNull()) {
                 LOG_ERROR("AIQuantLab", QString("[%1/%2] Invalid JSON").arg(module_id, command));
-                emit self->error_occurred(module_id, "Invalid JSON response");
+                self->emit_failed(tag, module_id, "Invalid JSON response");
                 return;
             }
             // A successful command may have created / deleted / trained something that a
@@ -80,46 +148,52 @@ void AIQuantLabService::run_python(const QString& script, const QStringList& arg
             // those entries so the next LIST reflects it instead of serving up to
             // kListTtlSec-old data (a deleted schedule kept showing for five minutes).
             fincept::CacheManager::instance().remove_prefix(aiq_cache_prefix(module_id));
-            LOG_INFO("AIQuantLab", QString("[%1/%2] Result ready").arg(module_id, command));
-            emit self->result_ready(module_id, command, doc.object());
+            LOG_DEBUG("AIQuantLab", QString("[%1/%2] Result ready").arg(module_id, command));
+            self->emit_done(tag, module_id, command, doc.object());
         });
 }
 
 void AIQuantLabService::run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
                                           const QString& command, int ttl_sec) {
+    const Tag tag = take_tag();
     const QString cache_key = "aiquant:" + module_id + ":" + command;
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!doc.isNull()) {
             LOG_DEBUG("AIQuantLab", QString("[%1/%2] Cache hit").arg(module_id, command));
-            emit result_ready(module_id, command, doc.object());
+            emit_done(tag, module_id, command, doc.object());
             return;
         }
     }
 
     QPointer<AIQuantLabService> self = this;
-    python::PythonRunner::instance().run(
-        script, args, [self, module_id, command, cache_key, ttl_sec](python::PythonResult result) {
+    python::PythonRunner::RunOptions run_opts;
+    run_opts.cancel_token = tag.cancel;
+    python::PythonRunner::instance().run_with_options(
+        script, args, run_opts, [self, tag, module_id, command, cache_key, ttl_sec](python::PythonResult result) {
             if (!self)
                 return;
             if (!result.success) {
-                LOG_ERROR("AIQuantLab", QString("[%1/%2] Failed: %3").arg(module_id, command, result.error));
-                emit self->error_occurred(module_id, result.error);
+                if (tag.cancel && tag.cancel->load())
+                    LOG_DEBUG("AIQuantLab", QString("[%1/%2] Cancelled").arg(module_id, command));
+                else
+                    LOG_ERROR("AIQuantLab", QString("[%1/%2] Failed: %3").arg(module_id, command, result.error));
+                self->emit_failed(tag, module_id, result.error);
                 return;
             }
             auto json_str = python::extract_json(result.output);
             auto doc = QJsonDocument::fromJson(json_str.toUtf8());
             if (doc.isNull()) {
                 LOG_ERROR("AIQuantLab", QString("[%1/%2] Invalid JSON").arg(module_id, command));
-                emit self->error_occurred(module_id, "Invalid JSON response");
+                self->emit_failed(tag, module_id, "Invalid JSON response");
                 return;
             }
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(doc.object()).toJson(QJsonDocument::Compact))),
                 ttl_sec, "ai_quant_lab");
-            LOG_INFO("AIQuantLab", QString("[%1/%2] Result ready").arg(module_id, command));
-            emit self->result_ready(module_id, command, doc.object());
+            LOG_DEBUG("AIQuantLab", QString("[%1/%2] Result ready").arg(module_id, command));
+            self->emit_done(tag, module_id, command, doc.object());
         });
 }
 
@@ -170,8 +244,11 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
                 auto obj = doc.object();
                 const auto event = obj.value("event").toString();
                 if (event == "progress") {
+                    // reward_mean / loss are null until the first episode ends / the first
+                    // update runs: pass NaN (shown as "—"), not a made-up 0.
                     emit self->training_progress("rl_trading", obj.value("step").toInt(), obj.value("total").toInt(),
-                                                 obj.value("reward_mean").toDouble(), obj.value("loss").toDouble());
+                                                 obj.value("reward_mean").toDouble(qQNaN()),
+                                                 obj.value("loss").toDouble(qQNaN()));
                     return;
                 }
                 if (event == "log") {
@@ -188,9 +265,15 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
     };
 
     // Called once when the process ends — authoritative parse for the final result.
-    auto on_finished = [self](python::PythonResult result) {
+    const Tag tag = take_tag();
+    auto on_finished = [self, tag](python::PythonResult result) {
         if (!self)
             return;
+        if (tag.cancel && tag.cancel->load()) {
+            LOG_DEBUG("AIQuantLab", "[rl_trading/train] Cancelled");
+            self->emit_failed(tag, "rl_trading", QStringLiteral("Cancelled"));
+            return;
+        }
         QJsonObject final_result;
         bool found_result = false;
         const auto lines = result.output.split('\n', Qt::SkipEmptyParts);
@@ -212,8 +295,8 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
         // after the script emitted a result line would otherwise surface stale
         // data as success — unsafe for a finance-critical training path.
         if (found_result && result.success) {
-            LOG_INFO("AIQuantLab", "[rl_trading/train] Result ready");
-            emit self->result_ready("rl_trading", "train", final_result);
+            LOG_DEBUG("AIQuantLab", "[rl_trading/train] Result ready");
+            self->emit_done(tag, "rl_trading", "train", final_result);
         } else {
             QString msg;
             // The script itself reported the failure ({"event":"result","success":false,
@@ -232,11 +315,14 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
                 msg = QStringLiteral("Training ended without result");
             }
             LOG_ERROR("AIQuantLab", QString("[rl_trading/train] Failed: %1").arg(msg));
-            emit self->error_occurred("rl_trading", msg);
+            self->emit_failed(tag, "rl_trading", msg);
         }
     };
 
-    python::PythonRunner::instance().run("ai_quant_lab/qlib_rl.py", {"train", json}, on_finished, on_line);
+    python::PythonRunner::RunOptions opts;
+    opts.cancel_token = tag.cancel;
+    python::PythonRunner::instance().run_with_options("ai_quant_lab/qlib_rl.py", {"train", json}, opts, on_finished,
+                                                      on_line);
 }
 
 // ── GS Quant ─────────────────────────────────────────────────────────────────
@@ -274,6 +360,12 @@ void AIQuantLabService::gs_backtest(const QJsonObject& params) {
 void AIQuantLabService::gs_statistics(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     run_python("Analytics/gs_quant_wrapper/gs_quant_service.py", {"statistics", json}, "gs_quant", "statistics");
+}
+
+void AIQuantLabService::gs_component_var(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python("Analytics/gs_quant_wrapper/gs_quant_service.py", {"component_var", json}, "gs_quant",
+               "component_var");
 }
 
 // ── Functime ─────────────────────────────────────────────────────────────────
@@ -344,6 +436,31 @@ void AIQuantLabService::sm_granger_causality(const QJsonObject& params) {
 void AIQuantLabService::sm_descriptive(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     run_python(kStatsmodelsScript, {"descriptive", json}, "statsmodels", "descriptive");
+}
+
+void AIQuantLabService::sm_cointegration(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"cointegration", json}, "statsmodels", "cointegration");
+}
+
+void AIQuantLabService::sm_rolling_ols(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"rolling_ols", json}, "statsmodels", "rolling_ols");
+}
+
+void AIQuantLabService::sm_regime_switching(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"regime_switching", json}, "statsmodels", "regime_switching");
+}
+
+void AIQuantLabService::sm_pca(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"pca", json}, "statsmodels", "pca");
+}
+
+void AIQuantLabService::sm_decompose(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"decompose", json}, "statsmodels", "decompose");
 }
 
 // ── Fortitudo ────────────────────────────────────────────────────────────────
@@ -465,10 +582,10 @@ void AIQuantLabService::hft_snapshot(const QJsonObject& params) {
     run_module("hft", "analyze", params); // full analysis: book + trades + all metrics
 }
 void AIQuantLabService::hft_market_making_quotes(const QJsonObject& params) {
-    run_module("hft", "market_making", params); // live book → A-S quotes
+    run_module("hft", "market_making", params); // live book → inventory-skewed quotes
 }
 void AIQuantLabService::hft_detect_toxic(const QJsonObject& params) {
-    run_module("hft", "toxic_flow", params); // live trades → PIN score
+    run_module("hft", "toxic_flow", params); // live trades → heuristic toxicity score
 }
 void AIQuantLabService::hft_execute_order(const QJsonObject& params) {
     run_module("hft", "slippage", params); // order book walk → slippage estimate
@@ -527,8 +644,12 @@ void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
     };
     auto state = std::make_shared<RetrainState>();
     QPointer<AIQuantLabService> self = this;
+    // A tagged retrain (the panel's Execute Retrain view) still streams every event on
+    // result_ready for the live progress bar and log; its terminal event (or the failure)
+    // also completes the request.
+    const Tag tag = take_tag();
 
-    auto forward = [self, state](const QString& line) {
+    auto forward = [self, state, tag](const QString& line) {
         const auto trimmed = line.trimmed();
         if (!self || !trimmed.startsWith('{'))
             return;
@@ -538,15 +659,26 @@ void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
         const auto obj = doc.object();
         const auto event = obj.value("event").toString();
         state->saw_event = true;
-        if (event == "done" || event == "error" || (event.isEmpty() && !obj.value("success").toBool(true)))
+        const bool terminal =
+            event == "done" || event == "error" || (event.isEmpty() && !obj.value("success").toBool(true));
+        if (terminal)
             state->terminal = true;
         emit self->result_ready("rolling_retraining", "retrain", obj);
+        if (terminal && tag.id != 0) {
+            if (event == "done")
+                emit self->request_finished(tag.id, "rolling_retraining", "retrain", obj);
+            else
+                emit self->request_failed(tag.id, "rolling_retraining",
+                                          obj.value("error").toString(QStringLiteral("Retrain failed")));
+        }
     };
 
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
-    python::PythonRunner::instance().run(
-        "ai_quant_lab/qlib_rolling_retraining.py", {"retrain", json},
-        [self, state, forward](python::PythonResult result) {
+    python::PythonRunner::RunOptions opts;
+    opts.cancel_token = tag.cancel;
+    python::PythonRunner::instance().run_with_options(
+        "ai_quant_lab/qlib_rolling_retraining.py", {"retrain", json}, opts,
+        [self, state, forward, tag](python::PythonResult result) {
             if (!self)
                 return;
             // A retrain updates the schedule's last_run / last_status.
@@ -562,7 +694,10 @@ void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
                                         ? QStringLiteral("Retrain ended without a result")
                                         : result.error.trimmed();
                 LOG_ERROR("AIQuantLab", QString("[rolling_retraining/retrain] Failed: %1").arg(msg));
+                // The progress bar / log listen on error_occurred; the request (if any) fails too.
                 emit self->error_occurred("rolling_retraining", msg);
+                if (tag.id != 0)
+                    emit self->request_failed(tag.id, "rolling_retraining", msg);
             }
         },
         [forward](QString line, bool is_stderr) {
@@ -593,7 +728,20 @@ void AIQuantLabService::run_deep_agent(const QJsonObject& params) {
         payload["thread_id"] = params["thread_id"];
     // deepagents/cli.py hands `config` to create_model(); an empty block means
     // "no provider" — resolve it here for a caller that sent none.
-    payload["config"] = agent_llm_config(params);
+    QJsonObject llm = agent_llm_config(params);
+    // The Fincept LLM authenticates with the signed-in Fincept API key. A
+    // profile's stored key is usually empty for this provider (it inherits),
+    // and the script then refused to run ("No Fincept API key"). Only this
+    // provider gets the account key; any other provider keeps its own (the
+    // script never sends a non-Fincept key to api.fincept.in). Signed out: the
+    // profile's key, if it holds one, is all there is.
+    if (llm.value(QStringLiteral("llm_provider")).toString().trimmed().compare(QLatin1String("fincept"),
+                                                                               Qt::CaseInsensitive) == 0) {
+        const QString account_key = fincept::auth::AuthManager::instance().fincept_api_key();
+        if (!account_key.isEmpty())
+            llm[QStringLiteral("llm_api_key")] = account_key;
+    }
+    payload["config"] = llm;
 
     // SECURITY: the payload carries the LLM API key. It used to be an argv JSON
     // argument — readable by any same-user process (Win32_Process.CommandLine,
@@ -602,6 +750,39 @@ void AIQuantLabService::run_deep_agent(const QJsonObject& params) {
     opts.timeout_ms = kAiqDeepAgentTimeoutMs;
     opts.stdin_data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     run_python("agents/deepagents/cli.py", {"execute_task", "--stdin"}, "deep_agent", "execute_task", opts);
+}
+
+void AIQuantLabService::deep_agent_check_status(QObject* context, std::function<void(const QJsonObject&)> on_done) {
+    deep_agent_query(QStringLiteral("check_status"), context, std::move(on_done));
+}
+
+void AIQuantLabService::deep_agent_list_capabilities(QObject* context,
+                                                     std::function<void(const QJsonObject&)> on_done) {
+    deep_agent_query(QStringLiteral("list_capabilities"), context, std::move(on_done));
+}
+
+void AIQuantLabService::deep_agent_query(const QString& command, QObject* context,
+                                         std::function<void(const QJsonObject&)> on_done) {
+    QPointer<QObject> guard = context;
+    python::PythonRunner::instance().run(
+        "agents/deepagents/cli.py", {command}, [guard, command, on_done](python::PythonResult result) {
+            if (!guard)
+                return;
+            // check_status names the import error of a missing library in "error" next to
+            // "available": false. The runner reads that as a failed run, but the JSON it
+            // printed is the answer — keep it.
+            const QJsonObject reply =
+                QJsonDocument::fromJson(python::extract_json(result.output).toUtf8()).object();
+            if (result.success || (command == QLatin1String("check_status") &&
+                                   reply.value(QStringLiteral("available")).isBool())) {
+                on_done(reply);
+                return;
+            }
+            LOG_WARN("AIQuantLab", QString("[deep_agent/%1] probe failed: %2").arg(command, result.error.left(200)));
+            on_done(QJsonObject{{"success", false},
+                                {"error", result.error.trimmed().isEmpty() ? QStringLiteral("no diagnostic output")
+                                                                           : result.error.trimmed()}});
+        });
 }
 
 // ── RD-Agent (autonomous factor/model research) ──────────────────────────────
@@ -748,11 +929,10 @@ bool AIQuantLabService::rd_spawn(const QString& task_id, const QJsonObject& llm_
     auto* proc = new QProcess(this);
     proc->setProcessEnvironment(py.build_python_env());
     proc->setWorkingDirectory(py.scripts_dir());
-#ifdef _WIN32
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // The loop and everything it starts form one tree (Windows: a kill-on-close job the child
+    // joins before it runs, no console window; POSIX: its own process group). STOP and quit
+    // kill the whole tree; a crash of the terminal takes it down too (Windows).
+    process::own_tree(proc);
     it->proc = proc;
     it->status = QStringLiteral("running");
     it->stop_requested = false;
@@ -783,7 +963,13 @@ bool AIQuantLabService::rd_spawn(const QString& task_id, const QJsonObject& llm_
             stderr_tail->remove(0, stderr_tail->size() - 8192);
     });
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, task_id, stdout_buf, stderr_tail](int exit_code, QProcess::ExitStatus) {
+            [self, proc, task_id, stdout_buf, stderr_tail](int exit_code, QProcess::ExitStatus status) {
+                // Ended by itself: what it started on purpose (the RD-Agent log viewer) keeps
+                // running. A stop or a crash leaves the rest of the tree to the job's
+                // kill-on-close, which reaps it when `proc` is deleted.
+                const bool stopped = self && self->rd_tasks_.value(task_id).stop_requested;
+                if (status == QProcess::NormalExit && !stopped)
+                    process::release_tree(proc);
                 proc->deleteLater();
                 if (!self)
                     return;
@@ -964,7 +1150,7 @@ void AIQuantLabService::rd_agent_stop_task(const QString& task_id) {
     // the LLM spend and the slot. The checkpoint from the last finished
     // iteration stays in the workspace for RESUME.
     it->stop_requested = true;
-    it->proc->kill();
+    process::kill_tree(it->proc);
     rd_emit(QStringLiteral("stop_task"),
             {{"success", true}, {"task_id", task_id}, {"message", QStringLiteral("Task %1 stopped").arg(task_id)}});
 }

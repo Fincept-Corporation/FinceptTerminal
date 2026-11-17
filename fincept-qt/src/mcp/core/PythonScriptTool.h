@@ -16,12 +16,15 @@
 //   sensitive  — asks the user first (ToolApprovalDialog): anything under
 //                exchange/ (exchange credentials, orders), LLM agent runners,
 //                live strategy runners, voice I/O, and any script called with an
-//                order / transfer / delete style command
+//                order / transfer / delete style command. Each run is approved
+//                on its own (kind order — LIVE, straight to the venue — or code);
+//                a PAPER run is refused outright
 //   normal     — runs straight away
 // Scripts run through PythonRunner (P4: concurrency cap, venv routing, per-tree
 // watchdog), never a raw QProcess.
 
 #include "mcp/McpTypes.h"
+#include "mcp/core/PythonScriptPolicy.h"
 
 #include <QString>
 #include <QStringList>
@@ -31,25 +34,7 @@ namespace fincept::mcp::core {
 /// The `python` ToolDef.
 ToolDef make_python_tool();
 
-namespace python_scripts {
-
-enum class ScriptRisk { Normal, Sensitive, Blocked };
-
-/// Canonical catalogue key for a user-supplied script reference: forward
-/// slashes, no "scripts/" prefix, no ".py" suffix ("Analytics/corporateFinance/
-/// lbo/lbo_model"). Empty + `*error` set for anything that is not a plain
-/// relative path inside the scripts tree (absolute paths, "..", drive letters,
-/// odd characters).
-QString normalize_script_key(const QString& raw, QString* error);
-
-/// Risk of running `key` with `args`. The command is read from the first
-/// argument, an --action / --command / --operation flag, or the action /
-/// command / operation key of a JSON-object argument. `runs_code`: the script
-/// exec()s / eval()s its input (Sensitive). `moves_money` (optional) is set when
-/// the call places / changes / cancels orders or moves money — the approval
-/// dialog then offers no blanket grant.
-ScriptRisk classify(const QString& key, const QStringList& args, bool runs_code = false, bool* moves_money = nullptr);
-
-} // namespace python_scripts
+// The policy (blocked / sensitive / normal, approval kinds, PAPER refusal) is
+// mcp/core/PythonScriptPolicy.h: python_scripts::classify, gate_run, ….
 
 } // namespace fincept::mcp::core

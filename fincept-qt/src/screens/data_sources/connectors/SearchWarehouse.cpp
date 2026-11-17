@@ -32,7 +32,8 @@ static QVector<ConnectorConfig> search_warehouse_configs() {
          false,
          {{"node", "Node URL", FieldType::Url, "https://localhost:9200", true, "", {}},
           {"username", "Username", FieldType::Text, "admin", false, "", {}},
-          {"password", "Password", FieldType::Password, "", false, "", {}}}},
+          {"password", "Password", FieldType::Password, "", false, "", {}},
+          {"index", "Default Index", FieldType::Text, "market-data", false, "", {}}}},
 
         {"solr",
          "Apache Solr",

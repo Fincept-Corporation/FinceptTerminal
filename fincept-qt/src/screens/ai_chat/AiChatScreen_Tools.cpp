@@ -1,238 +1,90 @@
 // src/screens/ai_chat/AiChatScreen_Tools.cpp
 //
-// The two per-turn side cards of the AI Chat tab:
-//   • Thinking — chain-of-thought streamed on think_stream_prefix(); collapsed.
-//   • Tools    — tool activity streamed on tool_stream_prefix(): a start line
-//                per call plus a completion record (LlmToolActivity.h) with the
-//                outcome and duration. Background jobs (a slow tool handed to
-//                JobRegistry) get a live status line until they finish.
-// Plus the tool "trailer" persisted with each answer, so a reloaded
-// conversation still shows which tools produced it.
+// Tool activity of the answer being written (streamed on tool_stream_prefix(): a start line
+// per call plus a completion record — LlmToolActivity.h — with outcome and duration), live
+// status lines of background jobs (JobRegistry), the tool catalogue for the context rail
+// (read off the GUI thread), and the context items the next message carries (linked symbol,
+// mentions, portfolio / watchlist references, files) and saved prompts.
 //
 // Part of the partial-class split of AiChatScreen.cpp.
 
+#include "core/instrument/Instrument.h"
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "mcp/JobRegistry.h"
+#include "mcp/McpService.h"
+#include "screens/ai_chat/AiChatComposer.h"
+#include "screens/ai_chat/AiChatContextRail.h"
 #include "screens/ai_chat/AiChatScreen.h"
+#include "screens/ai_chat/AiChatStyle.h"
+#include "screens/ai_chat/AiChatTranscript.h"
 #include "services/llm/LlmToolActivity.h"
-#include "ui/theme/Theme.h"
+#include "ui/widgets/ScreenStatusBar.h"
+#include "ui/widgets/symbol/SymbolSearchBox.h"
 
+#include <QApplication>
 #include <QDateTime>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QInputDialog>
+#include <QLabel>
+#include <QMap>
+#include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
-#include <QRegularExpression>
-#include <QTimer>
+#include <QShortcut>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
 
 namespace fincept::screens {
 
-namespace fnt = fincept::ui::fonts;
-namespace col = fincept::ui::colors;
+namespace st = aichat::style;
 
 namespace {
 
-constexpr int kAiChatToolsCardMaxWidth = 680;
-constexpr int kAiChatThinkFlushMs = 66;            // ≤ ~15 repaints / s, like the answer bubble
-constexpr qsizetype kAiChatThinkMaxChars = 200000; // keep the tail of runaway reasoning
-constexpr int kAiChatMaxPersistedSteps = 300;
-
-const QString& ai_chat_trailer_prefix() {
-    static const QString p = QStringLiteral("<!--fincept-tools:");
-    return p;
+/// `w` is `root` or inside it.
+bool tls_inside(const QWidget* root, const QWidget* w) {
+    for (; w; w = w->parentWidget())
+        if (w == root)
+            return true;
+    return false;
 }
 
-QString ai_chat_fmt_ms(qint64 ms) {
-    if (ms < 0)
-        return {};
-    if (ms < 1000)
-        return QStringLiteral("%1 ms").arg(ms);
-    if (ms < 60000)
-        return QStringLiteral("%1 s").arg(ms / 1000.0, 0, 'f', 1);
-    return QStringLiteral("%1m %2s").arg(ms / 60000).arg((ms % 60000) / 1000);
-}
-
-// One card frame (Thinking or Tools) with a toggle header and a body label.
-// One stylesheet per card, scoped by object name, so the frame's border does
-// not cascade onto the header and body (it used to draw a box inside the box).
-QFrame* ai_chat_make_card(QPushButton** header_out, QLabel** body_out, const QString& header_text, bool expanded,
-                          bool italic_body) {
-    auto* card = new QFrame;
-    card->setObjectName(QStringLiteral("aiCard"));
-    card->setMaximumWidth(kAiChatToolsCardMaxWidth);
-    card->setStyleSheet(QString("QFrame#aiCard{background:%1;border:1px solid %2;}"
-                                "QPushButton#aiCardHdr{background:transparent;color:%3;border:none;font-size:%4px;"
-                                "font-weight:600;text-align:left;padding:0;}"
-                                "QPushButton#aiCardHdr:hover{color:%5;}"
-                                "QLabel{background:transparent;border:none;color:%6;font-size:%4px;}"
-                                "QLabel#aiCardBody[italic=\"true\"]{font-style:italic;}"
-                                "QLabel#aiCardJob{color:%5;}")
-                            .arg(col::BG_SURFACE(), col::BORDER_DIM(), col::TEXT_TERTIARY())
-                            .arg(fnt::SMALL)
-                            .arg(col::TEXT_SECONDARY(), col::TEXT_DIM()));
-    auto* vl = new QVBoxLayout(card);
-    vl->setContentsMargins(10, 6, 10, 6);
-    vl->setSpacing(4);
-
-    auto* header = new QPushButton(header_text);
-    header->setObjectName(QStringLiteral("aiCardHdr"));
-    header->setCursor(Qt::PointingHandCursor);
-    vl->addWidget(header);
-
-    auto* body = new QLabel;
-    body->setObjectName(QStringLiteral("aiCardBody"));
-    body->setProperty("italic", italic_body);
-    body->setWordWrap(true);
-    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    body->setVisible(expanded);
-    vl->addWidget(body);
-
-    // The body text is kept on the label as "full_text" and painted only while
-    // expanded — a collapsed card never pays for re-laying out long text.
-    QObject::connect(header, &QPushButton::clicked, card, [header, body]() {
-        const bool show = !body->isVisible();
-        if (show)
-            body->setText(body->property("full_text").toString());
-        body->setVisible(show);
-        QString t = header->text();
-        if (!t.isEmpty())
-            t.replace(0, 1, show ? QChar(0x25BE) : QChar(0x25B8));
-        header->setText(t);
-    });
-    *header_out = header;
-    *body_out = body;
-    return card;
-}
-
-void ai_chat_set_card_body(QLabel* body, const QString& text) {
-    if (!body)
-        return;
-    body->setProperty("full_text", text);
-    if (body->isVisible())
-        body->setText(text);
-}
-
-QString ai_chat_header(bool expanded, const QString& icon, const QString& text) {
-    return QChar(expanded ? 0x25BE : 0x25B8) + QStringLiteral("  ") + icon + QStringLiteral(" ") + text;
-}
-
-QString ai_chat_tool_icon() {
-    return QString::fromUtf8("\xF0\x9F\x94\xA7");
-}
-
-QString ai_chat_think_icon() {
-    return QString::fromUtf8("\xF0\x9F\x92\xAD");
+bool tls_is_image(const QFileInfo& fi) {
+    static const QStringList kImages = {"png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "tif", "tiff", "heic", "ico"};
+    return kImages.contains(fi.suffix().toLower());
 }
 
 } // namespace
 
-// ── Thinking (chain-of-thought) card ────────────────────────────────────────────
-
-void AiChatScreen::create_thinking_card() {
-    if (thinking_card_)
-        return;
-    QPushButton* header = nullptr;
-    QLabel* body = nullptr;
-    auto* card = ai_chat_make_card(&header, &body, ai_chat_header(false, ai_chat_think_icon(), tr("Thinking…")),
-                                   /*expanded=*/false, /*italic_body=*/true);
-    // Inserted before the trailing stretch so it sits above the answer bubble
-    // (which is created lazily on the first answer chunk and lands below it).
-    insert_row(card, Qt::AlignLeft);
-    thinking_card_ = card;
-    thinking_header_ = header;
-    thinking_body_ = body;
-}
-
-void AiChatScreen::append_thinking_chunk(const QString& text) {
-    if (text.isEmpty())
-        return;
-    show_typing(false); // the card now signals activity
-    if (!thinking_card_)
-        create_thinking_card();
-    thinking_text_ += text;
-    if (thinking_text_.size() > kAiChatThinkMaxChars)
-        thinking_text_ = QStringLiteral("…") + thinking_text_.right(kAiChatThinkMaxChars);
-    // Coalesced like the answer bubble: reasoning models stream thousands of
-    // tiny deltas, and a setText per delta re-laid out the whole card each time.
-    if (thinking_flush_armed_)
-        return;
-    thinking_flush_armed_ = true;
-    QTimer::singleShot(kAiChatThinkFlushMs, this, [this]() { flush_thinking(); });
-}
-
-void AiChatScreen::flush_thinking() {
-    thinking_flush_armed_ = false;
-    ai_chat_set_card_body(thinking_body_, thinking_text_);
-    if (thinking_body_ && thinking_body_->isVisible())
-        scroll_to_bottom();
-}
-
-void AiChatScreen::finalize_thinking_card() {
-    flush_thinking();
-    if (thinking_header_) {
-        const bool expanded = thinking_body_ && thinking_body_->isVisible();
-        thinking_header_->setText(ai_chat_header(expanded, ai_chat_think_icon(), tr("Thoughts")));
-    }
-    reset_thinking_state();
-}
-
-void AiChatScreen::reset_thinking_state() {
-    // Stops tracking the current card (the widget itself remains in the
-    // transcript); the next message creates a fresh one.
-    thinking_card_ = nullptr;
-    thinking_header_ = nullptr;
-    thinking_body_ = nullptr;
-    thinking_text_.clear();
-}
-
-// ── Tools card ──────────────────────────────────────────────────────────────────
-
-void AiChatScreen::create_tools_card() {
-    if (tools_card_)
-        return;
-    QPushButton* header = nullptr;
-    QLabel* body = nullptr;
-    // Expanded while the turn runs — tool progress is the only sign a long
-    // multi-round turn is advancing — and collapsed into a summary on finish.
-    auto* card = ai_chat_make_card(&header, &body, ai_chat_header(true, ai_chat_tool_icon(), tr("Using tools…")),
-                                   /*expanded=*/true, /*italic_body=*/false);
-    body->setTextFormat(Qt::RichText);
-    insert_row(card, Qt::AlignLeft);
-    tools_card_ = card;
-    tools_header_ = header;
-    tools_body_ = body;
-}
+// ── Tool activity ────────────────────────────────────────────────────────────
 
 void AiChatScreen::append_tool_chunk(const QString& text) {
-    if (text.isEmpty())
+    if (text.isEmpty() || streaming_turn_ == 0)
         return;
-    show_typing(false); // the card now signals activity
-    if (!tools_card_)
-        create_tools_card();
-
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (const QString& raw : text.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        // Completion record → close the oldest open step with the same label
-        // (records follow the start lines in the model's order).
+        // Completion record → close the oldest open step with the same label (records
+        // follow the start lines in the model's order).
         if (const auto rec = ai_chat::decode_tool_done(raw)) {
             for (auto& s : tool_steps_) {
-                if (s.state != ToolStep::State::Running || s.label != rec->label)
+                if (s.state != aichat::ToolStep::State::Running || s.label != rec->label)
                     continue;
                 s.elapsed_ms = rec->elapsed_ms;
                 s.parallel = rec->parallel;
                 s.detail = rec->detail;
                 switch (rec->outcome) {
                     case ai_chat::ToolDoneRecord::Outcome::Ok:
-                        s.state = ToolStep::State::Ok;
+                        s.state = aichat::ToolStep::State::Ok;
                         break;
                     case ai_chat::ToolDoneRecord::Outcome::Failed:
-                        s.state = ToolStep::State::Failed;
+                        s.state = aichat::ToolStep::State::Failed;
                         break;
                     case ai_chat::ToolDoneRecord::Outcome::Backgrounded:
-                        s.state = ToolStep::State::Job;
+                        s.state = aichat::ToolStep::State::Job;
                         track_job(rec->detail);
                         break;
                 }
@@ -244,7 +96,7 @@ void AiChatScreen::append_tool_chunk(const QString& text) {
         const QString line = raw.simplified();
         if (line.isEmpty())
             continue;
-        ToolStep s;
+        aichat::ToolStep s;
         s.label = line;
         s.base = line.section(QStringLiteral(" · "), 0, 0);
         s.started_ms = now;
@@ -257,182 +109,47 @@ void AiChatScreen::append_tool_chunk(const QString& text) {
         }
         tool_steps_.append(s);
     }
-    render_tools_card();
+    // A parallel round arrives as a burst of lines: one repaint per burst.
+    if (!tool_render_timer_->isActive())
+        tool_render_timer_->start();
 }
 
-// One line per step, consecutive steps of the same tool collapsed into a run:
-//   ✓ get_quote · AAPL — 1.2 s
-//   ✓ set_excel_cell ×45 — 3.4 s
-//   ✗ create_portfolio — 0.3 s — failed: Not signed in
-//   ⧗ run_backtest · SPY — background job job_00002a
-QString AiChatScreen::render_tool_lines(const QVector<ToolStep>& steps) {
-    QStringList lines;
-    int i = 0;
-    while (i < steps.size()) {
-        int j = i + 1;
-        while (j < steps.size() && steps[j].base == steps[i].base)
-            ++j;
-        const int n = j - i;
-        int failed = 0, running = 0, jobs = 0, unknown = 0;
-        qint64 total_ms = 0;
-        bool any_parallel = false, any_ms = false;
-        QString first_failure, job_id, note;
-        for (int k = i; k < j; ++k) {
-            const auto& s = steps[k];
-            if (s.state == ToolStep::State::Failed) {
-                ++failed;
-                if (first_failure.isEmpty())
-                    first_failure = s.detail;
-            } else if (s.state == ToolStep::State::Running) {
-                ++running;
-            } else if (s.state == ToolStep::State::Job) {
-                ++jobs;
-                job_id = s.detail;
-            } else if (s.elapsed_ms < 0) {
-                ++unknown;
-            }
-            if (s.state == ToolStep::State::Ok && !s.detail.isEmpty() && note.isEmpty())
-                note = s.detail;
-            if (s.elapsed_ms >= 0) {
-                any_ms = true;
-                any_parallel = any_parallel || s.parallel;
-                // Calls in one parallel round each report the round's wall
-                // time; summing them would multiply it.
-                total_ms = s.parallel ? std::max(total_ms, s.elapsed_ms) : total_ms + s.elapsed_ms;
-            }
-        }
-        QString glyph, color;
-        if (running > 0) {
-            glyph = QStringLiteral("…");
-            color = col::AMBER();
-        } else if (failed > 0) {
-            glyph = QStringLiteral("✗");
-            color = col::NEGATIVE();
-        } else if (jobs > 0) {
-            glyph = QStringLiteral("⧗");
-            color = col::WARNING();
-        } else if (unknown == n) {
-            glyph = QStringLiteral("•"); // no completion record from this provider's loop
-            color = col::TEXT_DIM();
-        } else {
-            glyph = QStringLiteral("✓");
-            color = col::POSITIVE();
-        }
-        QString line = QStringLiteral("<span style='color:%1'>%2</span> ").arg(color, glyph);
-        line += n == 1 ? steps[i].label.toHtmlEscaped()
-                       : steps[i].base.toHtmlEscaped() + QStringLiteral(" ×") + QString::number(n);
-        if (any_ms && running == 0)
-            line += QStringLiteral(" <span style='color:%1'>— %2%3</span>")
-                        .arg(col::TEXT_TERTIARY(), ai_chat_fmt_ms(total_ms),
-                             any_parallel ? AiChatScreen::tr(" (parallel round)") : QString());
-        if (failed > 0) {
-            const QString why = first_failure.isEmpty() ? AiChatScreen::tr("no reason given") : first_failure;
-            line += QStringLiteral(" <span style='color:%1'>— %2</span>")
-                        .arg(col::NEGATIVE(),
-                             (n > 1 ? AiChatScreen::tr("%1 of %2 failed: %3").arg(failed).arg(n).arg(why)
-                                    : AiChatScreen::tr("failed: %1").arg(why))
-                                 .toHtmlEscaped());
-        }
-        if (jobs > 0)
-            line += QStringLiteral(" <span style='color:%1'>— %2</span>")
-                        .arg(col::WARNING(), AiChatScreen::tr("background job %1").arg(job_id).toHtmlEscaped());
-        if (failed == 0 && jobs == 0 && !note.isEmpty())
-            line += QStringLiteral(" <span style='color:%1'>— %2</span>").arg(col::TEXT_TERTIARY(), note.toHtmlEscaped());
-        lines << line;
-        i = j;
-    }
-    return lines.join(QStringLiteral("<br>"));
+void AiChatScreen::finalize_tool_steps() {
+    tool_render_timer_->stop();
+    // Steps that never got a completion record (a provider loop that does not emit them)
+    // are finished now — shown neutral, not spinning.
+    for (auto& s : tool_steps_)
+        if (s.state == aichat::ToolStep::State::Running)
+            s.state = aichat::ToolStep::State::Ok;
+    if (streaming_turn_ != 0 && !tool_steps_.isEmpty())
+        transcript_->set_tool_steps(streaming_turn_, tool_steps_);
 }
 
-QString AiChatScreen::tools_summary(const QVector<ToolStep>& steps, bool finished) {
-    int failed = 0, jobs = 0;
-    qint64 total_ms = 0, round_max = 0;
-    bool any_ms = false;
-    for (const auto& s : steps) {
-        if (s.state == ToolStep::State::Failed)
-            ++failed;
-        if (s.state == ToolStep::State::Job)
-            ++jobs;
-        if (s.elapsed_ms >= 0) {
-            any_ms = true;
-            if (s.parallel) {
-                round_max = std::max(round_max, s.elapsed_ms);
-            } else {
-                total_ms += round_max + s.elapsed_ms;
-                round_max = 0;
-            }
+void AiChatScreen::note_symbols_from_tools() {
+    if (streaming_turn_ != 0)
+        transcript_->set_tool_steps(streaming_turn_, tool_steps_);
+    bool added = false;
+    for (const auto& s : std::as_const(tool_steps_)) {
+        const QString arg = s.label.section(QStringLiteral(" · "), 1, 1).trimmed().toUpper();
+        if (aichat::looks_like_ticker(arg) && !known_symbols_.contains(arg)) {
+            known_symbols_.insert(arg);
+            added = true;
         }
     }
-    total_ms += round_max;
-    QString out = finished ? AiChatScreen::tr("%n tool call(s)", "", int(steps.size()))
-                           : AiChatScreen::tr("Using tools… (%1)").arg(steps.size());
-    if (failed > 0)
-        out += QStringLiteral(" · ") + AiChatScreen::tr("%n failed", "", failed);
-    if (jobs > 0)
-        out += QStringLiteral(" · ") + AiChatScreen::tr("%n in background", "", jobs);
-    if (finished && any_ms)
-        out += QStringLiteral(" · ") + ai_chat_fmt_ms(total_ms);
-    return out;
+    if (added)
+        transcript_->set_known_symbols(known_symbols_);
 }
 
-void AiChatScreen::render_tools_card() {
-    if (!tools_body_)
-        return;
-    ai_chat_set_card_body(tools_body_, render_tool_lines(tool_steps_));
-    if (tools_header_) {
-        const bool expanded = tools_body_->isVisible();
-        tools_header_->setText(ai_chat_header(expanded, ai_chat_tool_icon(), tools_summary(tool_steps_, false)));
-    }
-}
-
-void AiChatScreen::finalize_tools_card() {
-    if (tools_header_) {
-        // Steps that never got a completion record (a provider loop that does
-        // not emit them) are finished now — show them neutral, not spinning.
-        for (auto& s : tool_steps_)
-            if (s.state == ToolStep::State::Running)
-                s.state = ToolStep::State::Ok;
-        ai_chat_set_card_body(tools_body_, render_tool_lines(tool_steps_));
-        // Collapse once the answer is in — the detail stays one click away —
-        // unless something failed: then the reason stays in view.
-        int failed = 0;
-        for (const auto& s : tool_steps_)
-            failed += s.state == ToolStep::State::Failed ? 1 : 0;
-        const bool keep_open = failed > 0 && tools_body_ && tools_body_->isVisible();
-        if (tools_body_ && !keep_open)
-            tools_body_->setVisible(false);
-        tools_header_->setText(ai_chat_header(keep_open, ai_chat_tool_icon(), tools_summary(tool_steps_, true)));
-    }
-    reset_tools_state();
-}
-
-void AiChatScreen::reset_tools_state() {
-    tools_card_ = nullptr;
-    tools_header_ = nullptr;
-    tools_body_ = nullptr;
-    tool_steps_.clear();
-    tool_job_ids_.clear();
-}
-
-// ── Background jobs ─────────────────────────────────────────────────────────────
-// A slow tool handed to JobRegistry returns a receipt; the work continues after
-// the turn may have ended. Each such job gets a line in the card that started it,
-// refreshed every second from the registry (in-memory, thread-safe) while the
-// screen is visible, until the job reaches a terminal state.
+// ── Background jobs ──────────────────────────────────────────────────────────
+// A slow tool handed to JobRegistry returns a receipt; the work continues after the turn
+// may have ended. Each such job gets a status line under the activity row that started it,
+// refreshed every second from the registry (in-memory, thread-safe) while the tab is
+// visible, until the job reaches a terminal state.
 
 void AiChatScreen::track_job(const QString& job_id) {
     if (job_id.isEmpty() || tool_job_ids_.contains(job_id))
         return;
     tool_job_ids_.append(job_id);
-    if (job_labels_.contains(job_id) || !tools_card_)
-        return;
-    auto* lbl = new QLabel;
-    lbl->setObjectName(QStringLiteral("aiCardJob"));
-    lbl->setTextFormat(Qt::RichText);
-    lbl->setWordWrap(true);
-    if (auto* vl = qobject_cast<QVBoxLayout*>(tools_card_->layout()))
-        vl->addWidget(lbl);
-    job_labels_.insert(job_id, lbl);
     if (!tracked_job_ids_.contains(job_id))
         tracked_job_ids_.append(job_id);
     refresh_job_lines();
@@ -441,133 +158,320 @@ void AiChatScreen::track_job(const QString& job_id) {
 }
 
 void AiChatScreen::refresh_job_lines() {
-    for (auto it = job_labels_.begin(); it != job_labels_.end();) {
-        const QString id = it.key();
-        QLabel* lbl = it.value();
-        if (!lbl) { // its card was cleared (session switch / trim)
-            tracked_job_ids_.removeAll(id);
-            it = job_labels_.erase(it);
-            continue;
-        }
+    for (int i = int(tracked_job_ids_.size()) - 1; i >= 0; --i) {
+        const QString id = tracked_job_ids_[i];
         const auto snap = mcp::JobRegistry::instance().status(id);
         bool finished = true;
         QString text;
+        int tone = 3;
         if (!snap) {
-            text = QStringLiteral("<span style='color:%1'>⧗</span> %2 — %3")
-                       .arg(col::TEXT_DIM(), id.toHtmlEscaped(), tr("no longer tracked (jobs expire after 15 minutes)"));
+            text = tr("%1 — no longer tracked (jobs expire after 15 minutes)").arg(id);
         } else {
-            const QString head = id.toHtmlEscaped() + QStringLiteral(" · ") + snap->tool.toHtmlEscaped();
-            const QString elapsed = ai_chat_fmt_ms(snap->elapsed_ms());
+            const QString head = id + QStringLiteral(" · ") + snap->tool;
+            const QString elapsed = aichat::format_ms(snap->elapsed_ms());
             switch (snap->state) {
                 case mcp::JobState::Running: {
                     finished = false;
+                    tone = 0;
                     QString status = snap->timeout_ms > 0
-                                         ? tr("running %1 of %2").arg(elapsed, ai_chat_fmt_ms(snap->timeout_ms))
+                                         ? tr("running %1 of %2").arg(elapsed, aichat::format_ms(snap->timeout_ms))
                                          : tr("running %1").arg(elapsed);
                     if (snap->progress > 0.0)
                         status += QStringLiteral(" · %1%").arg(int(snap->progress * 100.0));
-                    text = QStringLiteral("<span style='color:%1'>⏳</span> %2 — %3")
-                               .arg(col::AMBER(), head, status.toHtmlEscaped());
+                    text = head + QStringLiteral(" — ") + status;
                     break;
                 }
                 case mcp::JobState::Succeeded:
-                    text = QStringLiteral("<span style='color:%1'>✓</span> %2 — %3")
-                               .arg(col::POSITIVE(), head, tr("finished in %1").arg(elapsed).toHtmlEscaped());
+                    tone = 1;
+                    text = head + QStringLiteral(" — ") + tr("finished in %1").arg(elapsed);
                     break;
                 case mcp::JobState::Failed:
-                    text = QStringLiteral("<span style='color:%1'>✗</span> %2 — %3")
-                               .arg(col::NEGATIVE(), head, tr("failed after %1").arg(elapsed).toHtmlEscaped());
+                    tone = 2;
+                    text = head + QStringLiteral(" — ") + tr("failed after %1").arg(elapsed);
                     break;
                 case mcp::JobState::Cancelled:
-                    text = QStringLiteral("<span style='color:%1'>⊘</span> %2 — %3")
-                               .arg(col::TEXT_DIM(), head, tr("cancelled after %1").arg(elapsed).toHtmlEscaped());
+                    tone = 3;
+                    text = head + QStringLiteral(" — ") + tr("cancelled after %1").arg(elapsed);
                     break;
             }
             if (!snap->message.isEmpty())
-                text += QStringLiteral("<br><span style='color:%1'>&nbsp;&nbsp;%2</span>")
-                            .arg(col::TEXT_TERTIARY(), snap->message.left(200).toHtmlEscaped());
+                text += QStringLiteral(" — ") + snap->message.left(200);
         }
-        lbl->setText(text);
-        if (finished) {
-            tracked_job_ids_.removeAll(id);
-            it = job_labels_.erase(it);
-        } else {
-            ++it;
-        }
+        transcript_->set_job_status(id, text, tone);
+        if (finished)
+            tracked_job_ids_.removeAt(i);
     }
     if (tracked_job_ids_.isEmpty())
         job_timer_->stop();
 }
 
-// ── Persisted tool activity ─────────────────────────────────────────────────────
-// chat_messages has no tool column and its role CHECK admits only
-// user/assistant/system, so a turn's tool steps travel with the answer as an
-// HTML-comment trailer (base64 JSON). It is stripped before the answer is shown
-// or sent back to the model, and rendered as a collapsed Tools card on reload.
+// ── Tool catalogue (context rail) ────────────────────────────────────────────
 
-QString AiChatScreen::tool_trailer() const {
-    if (tool_steps_.isEmpty())
-        return {};
-    QJsonArray arr;
-    const int start = std::max(0, int(tool_steps_.size()) - kAiChatMaxPersistedSteps);
-    for (int i = start; i < tool_steps_.size(); ++i) {
-        const auto& s = tool_steps_[i];
-        QString state = QStringLiteral("done");
-        if (s.state == ToolStep::State::Ok)
-            state = s.elapsed_ms >= 0 ? QStringLiteral("ok") : QStringLiteral("done");
-        else if (s.state == ToolStep::State::Failed)
-            state = QStringLiteral("fail");
-        else if (s.state == ToolStep::State::Job)
-            state = QStringLiteral("job");
-        QJsonObject o{{"l", s.label}, {"s", state}};
-        if (s.elapsed_ms >= 0)
-            o["ms"] = double(s.elapsed_ms);
-        if (s.parallel)
-            o["p"] = true;
-        if (!s.detail.isEmpty())
-            o["d"] = s.detail;
-        arr.append(o);
-    }
-    return QStringLiteral("\n\n") + ai_chat_trailer_prefix() +
-           QString::fromLatin1(QJsonDocument(arr).toJson(QJsonDocument::Compact).toBase64()) + QStringLiteral("-->");
-}
-
-QString AiChatScreen::strip_tool_trailer(const QString& content, QJsonArray* steps) {
-    static const QRegularExpression rx(QStringLiteral("\\s*<!--fincept-tools:([A-Za-z0-9+/=]*)-->\\s*$"));
-    const auto m = rx.match(content);
-    if (!m.hasMatch())
-        return content;
-    if (steps)
-        *steps = QJsonDocument::fromJson(QByteArray::fromBase64(m.captured(1).toLatin1())).array();
-    return content.left(m.capturedStart());
-}
-
-void AiChatScreen::add_static_tools_card(const QJsonArray& steps) {
-    if (steps.isEmpty())
+void AiChatScreen::load_tool_catalogue() {
+    if (tool_catalogue_loading_ || !context_rail_)
         return;
-    QVector<ToolStep> list;
-    list.reserve(steps.size());
-    for (const auto& v : steps) {
-        const QJsonObject o = v.toObject();
-        ToolStep s;
-        s.label = o.value("l").toString();
-        s.base = s.label.section(QStringLiteral(" · "), 0, 0);
-        const QString st = o.value("s").toString();
-        s.state = st == QLatin1String("fail")  ? ToolStep::State::Failed
-                  : st == QLatin1String("job") ? ToolStep::State::Job
-                                               : ToolStep::State::Ok;
-        s.elapsed_ms = o.contains("ms") ? qint64(o.value("ms").toDouble()) : -1;
-        s.parallel = o.value("p").toBool();
-        s.detail = o.value("d").toString();
-        list.append(s);
+    tool_catalogue_loading_ = true;
+    if (!tool_catalogue_loaded_)
+        context_rail_->set_tool_groups({}, true); // "loading…" until the first catalogue arrives
+    QPointer<AiChatScreen> self = this;
+    // McpService's catalogue is shared with the request threads (mutex-guarded): read it on
+    // a worker so a slow external server listing never stalls the GUI thread.
+    (void)QtConcurrent::run([self]() {
+        const std::vector<mcp::UnifiedTool> tools = mcp::McpService::instance().get_all_tools();
+        QMap<QString, QStringList> by_category;
+        for (const auto& t : tools) {
+            const QString cat = !t.category.isEmpty() ? t.category
+                                : t.is_internal       ? QStringLiteral("terminal")
+                                                      : QStringLiteral("external · ") + t.server_name;
+            by_category[cat].append(t.name);
+        }
+        QVector<aichat::ToolGroup> groups;
+        for (auto it = by_category.constBegin(); it != by_category.constEnd(); ++it) {
+            QStringList names = it.value();
+            names.sort(Qt::CaseInsensitive);
+            groups.append({it.key(), names});
+        }
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, groups]() {
+                if (!self)
+                    return;
+                self->tool_catalogue_loading_ = false;
+                self->tool_catalogue_loaded_ = true;
+                if (self->context_rail_)
+                    self->context_rail_->set_tool_groups(groups, false);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+// ── Context the next message carries ─────────────────────────────────────────
+
+QVector<aichat::Attachment> AiChatScreen::outgoing_context() const {
+    QVector<aichat::Attachment> out;
+    if (linked_context_pending_ && linked_symbol_.is_valid()) {
+        aichat::Attachment a;
+        a.kind = aichat::Attachment::Kind::Symbol;
+        a.name = linked_symbol_.symbol;
+        a.ref = linked_symbol_.symbol;
+        a.detail = linked_symbol_.asset_class.isEmpty() ? QStringLiteral("equity") : linked_symbol_.asset_class;
+        a.linked = true;
+        out.append(a);
     }
-    QPushButton* header = nullptr;
-    QLabel* body = nullptr;
-    auto* card = ai_chat_make_card(&header, &body, ai_chat_header(false, ai_chat_tool_icon(), tools_summary(list, true)),
-                                   /*expanded=*/false, /*italic_body=*/false);
-    body->setTextFormat(Qt::RichText);
-    ai_chat_set_card_body(body, render_tool_lines(list));
-    insert_row(card, Qt::AlignLeft);
+    for (const auto& c : context_) {
+        bool dup = false;
+        for (const auto& o : std::as_const(out))
+            dup = dup || (o.kind == c.kind && o.ref.compare(c.ref, Qt::CaseInsensitive) == 0);
+        if (!dup)
+            out.append(c);
+    }
+    return out;
+}
+
+void AiChatScreen::refresh_context_ui() {
+    if (!composer_ || !context_rail_)
+        return;
+    const QVector<aichat::Attachment> ctx = outgoing_context();
+    composer_->set_chips(ctx, files_);
+    context_rail_->set_linked_symbol(linked_symbol_.is_valid() ? linked_symbol_.symbol : QString(),
+                                     linked_symbol_.asset_class, linked_context_pending_ && linked_symbol_.is_valid());
+    context_rail_->set_context(context_, files_);
+
+    // The exact lines the context adds — files by their header line (contents are read on Send).
+    QStringList preview;
+    const QString lines = aichat::context_lines(ctx);
+    if (!lines.isEmpty())
+        preview << lines;
+    qint64 file_tokens = 0;
+    for (const auto& f : std::as_const(files_)) {
+        const bool cut = f.bytes > aichat::kAttachMaxChars;
+        preview << (cut ? QStringLiteral("[Attached file: %1 — truncated to the first %2 characters]")
+                              .arg(f.name, QString::number(aichat::kAttachMaxChars))
+                        : QStringLiteral("[Attached file: ") + f.name + QStringLiteral("]"));
+        if (f.bytes > 0)
+            file_tokens += std::min<qint64>(f.bytes, aichat::kAttachMaxChars) / 4;
+    }
+    context_rail_->set_wire_preview(preview.join(QLatin1Char('\n')));
+    composer_->set_attachment_tokens(int(std::min<qint64>(file_tokens, 1000000)));
+    QString hint;
+    if (linked_symbol_.is_valid())
+        hint = linked_symbol_.symbol;
+    for (const auto& c : std::as_const(context_))
+        if (hint.isEmpty() && c.kind == aichat::Attachment::Kind::Symbol)
+            hint = c.ref;
+    composer_->set_symbol_hint(hint);
+}
+
+void AiChatScreen::add_files(const QStringList& paths) {
+    QStringList refused;
+    for (const QString& p : paths) {
+        const QFileInfo fi(p);
+        if (!fi.exists() || !fi.isFile())
+            continue;
+        if (tls_is_image(fi)) {
+            refused << fi.fileName();
+            continue;
+        }
+        const QString abs = fi.absoluteFilePath();
+        bool dup = false;
+        for (const auto& f : std::as_const(files_))
+            dup = dup || f.ref == abs;
+        if (dup)
+            continue;
+        aichat::Attachment a;
+        a.kind = aichat::Attachment::Kind::File;
+        a.name = fi.fileName();
+        a.ref = abs;
+        a.bytes = fi.size(); // metadata only — the contents are read on Send
+        files_.append(a);
+    }
+    if (!refused.isEmpty() && status_)
+        status_->show_notice(tr("Not attached: %1 — images can't be sent; this chat sends text only.")
+                                 .arg(refused.join(QStringLiteral(", "))),
+                             QString(), {}, 6000, ui::ScreenStatusBar::Tone::Warn);
+    refresh_context_ui();
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+void AiChatScreen::pick_files() {
+    const QStringList paths = QFileDialog::getOpenFileNames(
+        this, tr("Attach Files to Message"), QString(),
+        tr("Text files (*.txt *.md *.csv *.json *.ipynb *.py *.sql *.log *.xml *.yaml *.yml);;All Files (*)"));
+    if (!paths.isEmpty())
+        add_files(paths);
+}
+
+void AiChatScreen::pick_symbol() {
+    // A small window with the terminal's symbol search (its resolver): the picked instrument
+    // becomes a context item — never typed text taken as a symbol. Not a Qt::Popup: the search
+    // box shows its result list in a window of its own, and a click there would first close
+    // a pop-up. It closes on Esc, when the focus moves outside it, or when the app goes inactive.
+    auto* popup = new QFrame(this, Qt::Tool | Qt::FramelessWindowHint);
+    popup->setObjectName(QString::fromLatin1(st::kDrawer));
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->setAttribute(Qt::WA_StyledBackground, true);
+    st::apply_sheet(popup);
+    auto* esc = new QShortcut(QKeySequence(Qt::Key_Escape), popup);
+    esc->setContext(Qt::WindowShortcut);
+    connect(esc, &QShortcut::activated, popup, &QWidget::close);
+    QPointer<QFrame> guard(popup);
+    connect(qApp, &QApplication::focusChanged, popup, [guard](QWidget*, QWidget* now) {
+        if (guard && now && !tls_inside(guard, now))
+            guard->close();
+    });
+    connect(qApp, &QGuiApplication::applicationStateChanged, popup, [guard](Qt::ApplicationState state) {
+        if (guard && state != Qt::ApplicationActive)
+            guard->close();
+    });
+    auto* vl = new QVBoxLayout(popup);
+    vl->setContentsMargins(st::u(2), st::u(2), st::u(2), st::u(2));
+    vl->setSpacing(st::u(1));
+    auto* title = new QLabel(tr("ATTACH A SYMBOL"), popup);
+    title->setObjectName(QString::fromLatin1(st::kSectionTitle));
+    vl->addWidget(title);
+    auto* box = new ui::SymbolSearchBox(popup);
+    box->set_placeholder(tr("Symbol or company…"));
+    box->setAccessibleName(tr("Symbol to attach"));
+    vl->addWidget(box);
+    auto* note = new QLabel(tr("Sent with your next message as a context line."), popup);
+    note->setObjectName(QString::fromLatin1(st::kDim));
+    vl->addWidget(note);
+    connect(box, &ui::SymbolSearchBox::instrument_picked, this,
+            [this, popup](const core::instrument::Instrument& inst) {
+                aichat::Attachment a;
+                a.kind = aichat::Attachment::Kind::Symbol;
+                a.ref = inst.symbol.isEmpty() ? inst.display : inst.symbol;
+                a.name = inst.display.isEmpty() ? a.ref : inst.display;
+                a.detail = core::instrument::asset_class_slug(inst.asset_class);
+                add_context(a);
+                popup->close();
+            });
+    popup->setFixedWidth(std::max(st::avg_char(0) * 40, 320));
+    popup->adjustSize();
+    const QWidget* anchor = context_rail_ && context_rail_->isVisible() ? static_cast<QWidget*>(context_rail_)
+                                                                         : static_cast<QWidget*>(composer_);
+    QPoint at = anchor->mapToGlobal(QPoint(0, 0));
+    if (anchor == context_rail_)
+        at.rx() -= popup->width() - anchor->width();
+    else
+        at.ry() -= popup->height();
+    popup->move(at);
+    popup->show();
+    popup->raise();
+    popup->activateWindow();
+    box->focus_and_select();
+}
+
+void AiChatScreen::add_context(const aichat::Attachment& item) {
+    if (item.kind == aichat::Attachment::Kind::File) {
+        add_files({item.ref});
+        return;
+    }
+    if (item.ref.isEmpty() && item.name.isEmpty())
+        return;
+    for (const auto& c : std::as_const(context_))
+        if (c.kind == item.kind && c.ref.compare(item.ref, Qt::CaseInsensitive) == 0)
+            return;
+    context_.append(item);
+    if (item.kind == aichat::Attachment::Kind::Symbol && !item.ref.isEmpty()) {
+        known_symbols_.insert(item.ref.toUpper());
+        transcript_->set_known_symbols(known_symbols_);
+    }
+    refresh_context_ui();
+}
+
+void AiChatScreen::remove_context(const aichat::Attachment& item) {
+    if (item.kind == aichat::Attachment::Kind::Symbol && item.linked) {
+        linked_context_pending_ = false;
+    } else if (item.kind == aichat::Attachment::Kind::File || item.kind == aichat::Attachment::Kind::Image) {
+        files_.removeIf([&item](const aichat::Attachment& f) { return f.ref == item.ref; });
+        ScreenStateManager::instance().notify_changed(this);
+    } else {
+        context_.removeIf([&item](const aichat::Attachment& c) {
+            return c.kind == item.kind && c.ref.compare(item.ref, Qt::CaseInsensitive) == 0;
+        });
+    }
+    refresh_context_ui();
+}
+
+// ── Saved prompts ────────────────────────────────────────────────────────────
+
+void AiChatScreen::save_draft_prompt() {
+    const QString body = composer_->text().trimmed();
+    if (body.isEmpty()) {
+        status_->show_notice(tr("Type a prompt in the composer first, then SAVE DRAFT keeps it here."), QString(), {},
+                             5000);
+        return;
+    }
+    bool ok = false;
+    const QString title = QInputDialog::getText(this, tr("Save Prompt"), tr("Name:"), QLineEdit::Normal,
+                                                body.simplified().left(40), &ok);
+    if (!ok)
+        return;
+    aichat::PromptTemplate p;
+    p.title = title.trimmed().isEmpty() ? body.simplified().left(40) : title.trimmed().left(80);
+    p.body = body;
+    p.saved = true;
+    saved_prompts_.append(p);
+    if (!aichat::store_saved_prompts(saved_prompts_)) {
+        status_->show_notice(tr("Could not save the prompt."), QString(), {}, 5000, ui::ScreenStatusBar::Tone::Danger);
+        saved_prompts_ = aichat::load_saved_prompts();
+        return;
+    }
+    saved_prompts_ = aichat::load_saved_prompts();
+    context_rail_->set_saved_prompts(saved_prompts_);
+    composer_->set_saved_prompts(saved_prompts_);
+    status_->show_notice(tr("Prompt saved — type / in the composer to use it."), QString(), {}, 4000);
+}
+
+void AiChatScreen::delete_saved_prompt(int index) {
+    if (index < 0 || index >= saved_prompts_.size())
+        return;
+    saved_prompts_.removeAt(index);
+    aichat::store_saved_prompts(saved_prompts_);
+    saved_prompts_ = aichat::load_saved_prompts();
+    context_rail_->set_saved_prompts(saved_prompts_);
+    composer_->set_saved_prompts(saved_prompts_);
 }
 
 } // namespace fincept::screens

@@ -110,7 +110,8 @@ class PrecedentTransactionAnalyzer:
             clean_vals = [v for v in values if v > 0 and not np.isnan(v) and not np.isinf(v)]
             if not clean_vals:
                 return {f'{name}_mean': 0, f'{name}_median': 0, f'{name}_min': 0,
-                       f'{name}_max': 0, f'{name}_std': 0, f'{name}_count': 0}
+                       f'{name}_max': 0, f'{name}_std': 0, f'{name}_count': 0,
+                       f'{name}_q1': 0, f'{name}_q3': 0}  # same keys as the filled case (KeyError otherwise)
 
             return {
                 f'{name}_mean': mean(clean_vals),
@@ -335,16 +336,28 @@ class PrecedentTransactionAnalyzer:
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----
 # The Qt MAAnalyticsService calls `precedent_transactions.py calculate <flat-params-json>` (argv length 3), with only
 # the target's financials. The native `precedent <target> <comps>` form needs the comparable deals up front, so a
-# service-style call resolves them itself: explicit `comparables` if given, otherwise the completed deals already in
-# the local deal database. Any other argv shape is untouched.
+# service-style call resolves them itself: explicit `comparables` if given, otherwise the deals in the local deal
+# database that the USER verified and that carry a transaction multiple (EV/Revenue or EV/EBITDA, entered or derived
+# from deal value and target revenue / EBITDA). Auto-extracted, unverified rows are never used as precedents.
+# With no usable comparables the answer is a "needs_data" empty state (success, nothing computed) that says what to
+# add - not an error. Any other argv shape is untouched.
 _SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_num(v) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if f == f else 0.0
 
 
 def _svc_comp_from_deal(deal):
     """Map a MADeal-shaped dict to a TransactionComp (same mapping as the native `precedent` command)."""
-    ev = deal.get('deal_value', 0) or 0
-    revenue = deal.get('revenue', 0) or 0
-    ebitda = deal.get('ebitda', 0) or 0
+    deal = {k: v for k, v in deal.items() if v is not None}
+    ev = _svc_num(deal.get('enterprise_value') or deal.get('deal_value'))
+    revenue = _svc_num(deal.get('revenue') or deal.get('target_revenue'))
+    ebitda = _svc_num(deal.get('ebitda') or deal.get('target_ebitda'))
     return TransactionComp(
         deal_id=deal.get('deal_id', ''),
         announcement_date=deal.get('announcement_date', deal.get('announced_date', '')),
@@ -354,15 +367,40 @@ def _svc_comp_from_deal(deal):
         enterprise_value=deal.get('enterprise_value', ev),
         revenue=revenue,
         ebitda=ebitda,
-        ev_revenue=deal.get('ev_revenue', 0) or (ev / revenue if revenue else 0),
-        ev_ebitda=deal.get('ev_ebitda', 0) or (ev / ebitda if ebitda else 0),
-        ev_ebit=deal.get('ev_ebit', 0),
-        price_earnings=deal.get('price_earnings', deal.get('pe', 0)) or 0,
-        premium_1day=deal.get('premium_1day', deal.get('premium', 0)),
-        premium_4week=deal.get('premium_4week', 0),
-        payment_method=deal.get('payment_method', deal.get('payment', '')),
-        deal_status=deal.get('deal_status', deal.get('status', '')),
+        ev_revenue=_svc_num(deal.get('ev_revenue')) or (ev / revenue if revenue else 0),
+        ev_ebitda=_svc_num(deal.get('ev_ebitda')) or (ev / ebitda if ebitda else 0),
+        ev_ebit=_svc_num(deal.get('ev_ebit')),
+        price_earnings=_svc_num(deal.get('price_earnings', deal.get('pe', 0))),
+        premium_1day=_svc_num(deal.get('premium_1day', deal.get('premium', 0))),
+        premium_4week=_svc_num(deal.get('premium_4week', 0)),
+        payment_method=deal.get('payment_method', deal.get('payment', '')) or '',
+        deal_status=deal.get('deal_status', deal.get('status', '')) or '',
     )
+
+
+def _svc_db_comparables(db, industry=None):
+    """(comps, counts) from the deals the user verified that carry a usable multiple."""
+    counts = {'deals': 0, 'verified': 0, 'with_multiple': 0}
+    comps = []
+    try:
+        deals = db.get_all_deals()
+    except Exception:
+        return comps, counts
+    counts['deals'] = len(deals)
+    for deal in deals:
+        if int(deal.get('verified') or 0) != 1:
+            continue
+        counts['verified'] += 1
+        if str(deal.get('deal_status') or '') in ('Terminated', 'Withdrawn'):
+            continue
+        if industry and str(deal.get('industry') or '').lower() != str(industry).lower():
+            continue
+        comp = _svc_comp_from_deal(deal)
+        if comp.ev_revenue > 0 or comp.ev_ebitda > 0:
+            counts['with_multiple'] += 1
+            comps.append(comp)
+    comps.sort(key=lambda c: c.announcement_date or '', reverse=True)
+    return comps, counts
 
 
 def _service_dispatch(argv):
@@ -387,17 +425,30 @@ def _service_dispatch(argv):
         given = p.get("comparables", p.get("comps"))
         if isinstance(given, list) and given:
             comps = [_svc_comp_from_deal(d) if isinstance(d, dict) else d for d in given]
+            source = "comparables entered"
         else:
-            # find_comparables() filters `industry = <target industry>` even when it is None (matches nothing);
-            # drop unset filters so a target with no industry searches every completed deal.
-            original_search = analyzer.db.search_deals
-            analyzer.db.search_deals = lambda filters: original_search({k: v for k, v in filters.items() if v is not None})
-            criteria = {"years_back": int(p.get("years_back", 5)), "status": p.get("status", "Completed")}
-            comps = analyzer.find_comparables(target, criteria)
-        if not comps:
-            raise ValueError("No comparable completed deals found in the local deal database. Run SCAN SEC FILINGS "
-                             "in the Deal Database tab (or add deals) first, or supply `comparables`.")
+            comps, counts = _svc_db_comparables(analyzer.db, p.get("industry"))
+            source = "verified deals in the Deal Database"
+            if not comps:
+                print(json.dumps({
+                    "success": True,
+                    "needs_data": {
+                        "title": "No precedent transactions to compare with yet",
+                        "message": ("Precedent analysis needs comparable deals with a known EV/Revenue or EV/EBITDA "
+                                    "multiple that you have checked. Your deal database has %d deal(s), %d verified, "
+                                    "%d verified with a multiple." % (counts['deals'], counts['verified'],
+                                                                     counts['with_multiple'])),
+                        "steps": ["Open Deal Database > Deals, edit a deal, enter its EV/Revenue or EV/EBITDA "
+                                  "(or deal value and target revenue / EBITDA) and save - saving marks it verified.",
+                                  "Or add comparable deals in the grid above: type them, paste rows from a spreadsheet or import "
+                                  "a CSV file."],
+                        "have": counts['with_multiple'], "need": 1,
+                    },
+                    "data": {"comp_count": 0, "comparables": []},
+                }))
+                return True
         table = analyzer.build_comp_table(comps, target)
+        table["comparables_source"] = source
         print(json.dumps({"success": True, "data": table}, default=str))
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))

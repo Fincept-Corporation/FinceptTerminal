@@ -1,5 +1,6 @@
 // src/screens/dbnomics/DBnomicsScreen.h
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/dbnomics/DBnomicsModels.h"
 
@@ -12,7 +13,13 @@
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QVariantMap>
 #include <QWidget>
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
@@ -20,7 +27,16 @@ class DBnomicsSelectionPanel;
 class DBnomicsChartWidget;
 class DBnomicsDataTable;
 
-class DBnomicsScreen : public QWidget, public IStatefulScreen {
+/// DBnomics explorer: providers → datasets → series on the left, the SINGLE chart + observation
+/// table or the COMPARE grid on the right.
+///
+/// Never blank: a first-ever open loads an example (IMF World Economic Outlook, US real GDP growth)
+/// through the same provider → dataset → series path a click takes; a remembered state brings its
+/// selection and charts back. A clicked series is shown at once as the chart's "preview" (ADD TO
+/// SINGLE VIEW keeps it on the chart and the next click previews beside it); while nothing is on the
+/// chart the SINGLE view shows a chart skeleton, the failure page (RETRY) or a designed empty state
+/// (LOAD EXAMPLE SERIES). COMPARE opened with no slot starts slot 1 from the SINGLE view's series.
+class DBnomicsScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit DBnomicsScreen(QWidget* parent = nullptr);
@@ -29,6 +45,11 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "dbnomics"; }
     int state_version() const override { return 1; }
+
+    /// ISectionLinked — "single" | "compare" (also "view:<id>"; "comparison" too): the SINGLE /
+    /// COMPARE toggle (set_view_mode, its click path). Before the first show the choice replaces the
+    /// remembered view mode. Nothing is fetched; focus is unused.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -69,6 +90,21 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     void assign_series_colors();
     void rebuild_comparison_view();
     void retranslateUi();
+    /// Series colours and everything drawn with them (charts, tables, slot legends), once the new
+    /// appearance has settled.
+    void apply_appearance();
+
+    /// First show (one event-loop turn later, after restore_state()): the remembered state, else
+    /// the example series.
+    void first_show();
+    void apply_restored_state(const QVariantMap& state);
+    /// IMF / WEO:latest / USA.NGDP_RPCH.pcent_change through provider → dataset → series.
+    void load_example_series();
+    void set_view_mode(services::DbnViewMode mode);
+    /// The SINGLE view's series: the ones kept (ADD TO SINGLE VIEW) and the clicked preview.
+    QVector<services::DbnDataPoint> single_view_series() const;
+    /// Chart + table, the skeleton, the failure page or the empty state.
+    void update_single_page();
 
     // DataHub (CLAUDE.md D4): observations are read from `dbnomics:<provider>:<dataset>:<series>`
     // topics, not from the service's fetch_observations() signal. Catalogue browsing (providers /
@@ -93,18 +129,35 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     QPushButton* single_btn_ = nullptr;
     QPushButton* compare_btn_ = nullptr;
 
+    // SINGLE page: content (chart + table) | skeleton | designed state (empty / failed)
+    QStackedWidget* single_stack_ = nullptr;
+    QWidget* single_content_ = nullptr;
+    ui::LoadingSkeleton* single_skeleton_ = nullptr;
+    ui::EmptyState* single_state_ = nullptr;
+    bool single_failed_ = false;    // the pending selection failed with nothing else on the chart
+    QString single_error_;
+    QString failed_series_id_;
+    bool failed_was_restore_ = false;
+    bool selection_loading_ = false; // pending_series_id_ requested, not arrived yet
+
+    // COMPARE page: slot grid | designed state (no slot and nothing to seed one with)
+    QStackedWidget* compare_stack_ = nullptr;
+    QWidget* compare_grid_page_ = nullptr;
+    ui::EmptyState* compare_empty_ = nullptr;
+
     // Toolbar + toggle chrome (cached for retranslateUi)
     QLabel* toolbar_title_ = nullptr;
     QPushButton* fetch_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* export_btn_ = nullptr;
     QLabel* chart_type_label_ = nullptr;
-    QLabel* comparison_placeholder_ = nullptr;
     QLabel* attribution_label_ = nullptr;
 
     services::DbnViewMode view_mode_ = services::DbnViewMode::Single;
     services::DbnChartType single_chart_type_ = services::DbnChartType::Line;
-    QVector<services::DbnDataPoint> single_series_;
+    QVector<services::DbnDataPoint> single_series_; // kept on the chart (ADD TO SINGLE VIEW)
+    services::DbnDataPoint preview_;                 // the last clicked series, until kept or replaced
+    bool has_preview_ = false;
     QVector<services::DbnSlot> slots_;
     services::DbnDataPoint last_loaded_data_;
     bool has_pending_data_ = false;
@@ -115,6 +168,9 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     // Series ids saved with the views (restore_state) that have not arrived yet; re-added on arrival.
     QStringList restore_single_;
     QVector<QStringList> restore_slots_; // parallel to slots_
+
+    bool first_show_done_ = false;
+    QVariantMap pending_state_; // restore_state() before the first show: applied by first_show()
 
     QWidget* comparison_content_ = nullptr;
     QVBoxLayout* comparison_layout_ = nullptr;

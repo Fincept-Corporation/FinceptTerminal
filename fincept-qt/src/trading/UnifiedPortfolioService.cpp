@@ -3,12 +3,15 @@
 
 #include "trading/UnifiedPortfolioService.h"
 
+#include "core/logging/Logger.h"
+
 #include "trading/AccountDataStream.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/OrderThreadPool.h"
+#include "trading/PaperMarkService.h"
 #include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
 
@@ -76,8 +79,8 @@ void UnifiedPortfolioService::activate() {
         if (!broker)
             continue;
         const auto profile = broker->profile();
-        if (QString(profile.currency) != QLatin1String("INR"))
-            continue; // user-confirmed scope: ₹ brokers only for now
+        if (QString(profile.currency) != aggregate_currency())
+            continue; // user-confirmed scope: INR brokers only for now (no FX in this merge)
 
         Acct& a = accts_[acct.account_id];
         seen.insert(acct.account_id);
@@ -495,12 +498,24 @@ bool close_paper_position(const QString& portfolio_id, const QString& symbol, co
         }
         const QString side =
             p.side.startsWith(QLatin1Char('s'), Qt::CaseInsensitive) ? QStringLiteral("buy") : QStringLiteral("sell");
+        // Realized P&L is booked at the symbol's FX factor: the exit rule, never 1:1
+        // (main thread: no wait — a missing rate refuses with the reason).
+        if (QString fx_why; !PaperMarkService::prepare_close_fx(portfolio_id, p.symbol, QString(), 0, &fx_why)) {
+            if (err)
+                *err = fx_why;
+            return false;
+        }
         try {
             auto order = pt_place_order(portfolio_id, p.symbol, side, QStringLiteral("market"), p.quantity, px,
                                         std::nullopt, /*reduce_only=*/true, QString(), p.product);
             pt_fill_order(order.id, px);
             return true;
         } catch (const std::exception& e) {
+            // An engine refusal is in the audit trail; this line says which exit failed.
+            LOG_WARN("UnifiedPortfolioService", logf("Paper position close failed", {{"portfolio", log_mask(portfolio_id)},
+                                                                                     {"symbol", p.symbol},
+                                                                                     {"qty", p.quantity},
+                                                                                     {"error", e.what()}}));
             if (err)
                 *err = QString("%1: %2").arg(symbol, QString::fromUtf8(e.what()));
             return false;
@@ -660,6 +675,9 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
     if (mode_ == Mode::Paper) {
         const QString pid = accts_.value(account_id).paper_portfolio_id;
         if (pid.isEmpty()) {
+            LOG_AUDIT("Orders", "Order rejected",
+                      {{"venue", "paper"}, {"account", log_mask(account_id)}, {"mode", "paper"}, {"symbol", order.symbol},
+                       {"qty", order.quantity}, {"reason", "no paper portfolio for this account"}});
             emit action_finished(false, QString("No paper portfolio for this account"));
             return;
         }
@@ -672,6 +690,10 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
             if (auto* stream = DataStreamManager::instance().stream_for(account_id))
                 px = stream->cached_quote(order.symbol).ltp;
             if (px <= 0.0) {
+                LOG_AUDIT("Orders", "Order rejected",
+                          {{"venue", "paper"}, {"account", log_mask(account_id)}, {"mode", "paper"},
+                           {"symbol", order.symbol}, {"side", side}, {"qty", order.quantity},
+                           {"reason", "no live price for a market fill"}});
                 emit action_finished(false, QString("No live price for %1 yet — wait for quotes").arg(order.symbol));
                 return;
             }
@@ -679,6 +701,12 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
         const QString product = order.product_type == ProductType::Delivery ? QStringLiteral("CNC")
                                 : order.product_type == ProductType::Margin ? QStringLiteral("NRML")
                                                                             : QStringLiteral("MIS");
+        // Cash is booked in the paper book's currency at the symbol's FX factor: a
+        // symbol priced in another currency needs a real rate first — never 1:1.
+        if (QString fx_why; !PaperMarkService::prepare_symbol_fx(pid, order.symbol, order.exchange, &fx_why)) {
+            emit action_finished(false, fx_why);
+            return;
+        }
         try {
             auto pt_order =
                 pt_place_order(pid, order.symbol, side, is_market ? QStringLiteral("market") : QStringLiteral("limit"),
@@ -691,6 +719,11 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
                 emit action_finished(true, QString("Paper order queued: %1").arg(order.symbol));
             }
         } catch (const std::exception& e) {
+            LOG_WARN("UnifiedPortfolioService", logf("Paper order failed", {{"account", log_mask(account_id)},
+                                                                            {"symbol", order.symbol},
+                                                                            {"side", side},
+                                                                            {"qty", order.quantity},
+                                                                            {"error", e.what()}}));
             emit action_finished(false, QString("Paper order failed: %1").arg(QString::fromUtf8(e.what())));
         }
         refresh_all();
@@ -719,7 +752,7 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
 
 void UnifiedPortfolioService::test_register_account(const QString& account_id, const QString& label,
                                                     const QString& currency) {
-    if (currency != QLatin1String("INR"))
+    if (currency != aggregate_currency())
         return; // mirrors the activate() filter — non-INR accounts are excluded
     Acct& a = accts_[account_id];
     a.label = label;

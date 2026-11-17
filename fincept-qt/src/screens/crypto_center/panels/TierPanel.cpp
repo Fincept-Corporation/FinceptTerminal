@@ -1,45 +1,40 @@
 #include "screens/crypto_center/panels/TierPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "datahub/DataHub.h"
 #include "services/billing/TierConfig.h"
 #include "services/wallet/StakingService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QShowEvent>
 #include <QStyle>
 #include <QVBoxLayout>
 
 #include <cmath>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-double atomic_to_ui(const QString& raw, int decimals) {
-    if (raw.isEmpty())
-        return 0.0;
-    bool ok = false;
-    const auto u = raw.toULongLong(&ok);
-    if (!ok)
-        return 0.0;
-    return static_cast<double>(u) / std::pow(10.0, std::max(0, decimals));
-}
+using fincept::screens::crypto_center_text::atomic_to_ui; // CryptoCenterText.h (one definition)
 
-QString format_token(double v, int dp = 0) {
+/// A veFNCPT weight: a quantity of the token, never money.
+QString tip_format_token(double v, int dp = 0) {
     if (v <= 0.0)
         return QStringLiteral("0");
-    return QLocale::system().toString(v, 'f', dp);
+    return cc_fmt::quantity(v, dp);
 }
 
 bool staking_is_live() {
@@ -67,6 +62,14 @@ TierPanel::TierPanel(QWidget* parent) : QWidget(parent) {
     } else {
         on_wallet_disconnected();
     }
+
+    // A number-format change re-renders the tier on screen (the hub's last value; no new request).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (current_topic_.isEmpty())
+            return;
+        if (const QVariant v = fincept::datahub::DataHub::instance().peek_raw(current_topic_); v.isValid())
+            on_tier_update(v);
+    });
 }
 
 TierPanel::~TierPanel() = default;
@@ -155,35 +158,35 @@ void TierPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#tierPanel { background:%1; }"
+    const QString ss = QString("QWidget#tierPanel { background:%1; }"
                                       "QWidget#tierHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#tierTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#tierTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#tierHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#tierHeadCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:600; letter-spacing:1.2px; background:transparent; }"
                                       "QWidget#tierBody { background:%1; }"
                                       "QFrame#tierRow { background:%8; border:1px solid %3; }"
-                                      "QFrame#tierRowCurrent { background:rgba(217,119,6,0.10); border:1px solid %9; }"
-                                      "QLabel#tierRowLabel { color:%4; font-family:%5; font-size:11px;"
+                                      "QFrame#tierRowCurrent { background:" + ui::colors::alpha(AMBER, 0.10) + "; border:1px solid %9; }"
+                                      "QLabel#tierRowLabel { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#tierRowThreshold { color:%7; font-family:%5; font-size:11px;"
+                                      "QLabel#tierRowThreshold { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#tierRowUnlocks { color:%6; font-family:%5; font-size:11px;"
+                                      "QLabel#tierRowUnlocks { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#tierRowChipAchieved { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %9; font-family:%5; font-size:9px; font-weight:700;"
+                                      "QLabel#tierRowChipAchieved { color:%4; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
+                                      "  border:1px solid %9; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 6px; }"
                                       "QLabel#tierRowChipLocked { color:%6; background:transparent;"
-                                      "  border:1px solid %3; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  border:1px solid %3; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 6px; }"
-                                      "QLabel#tierFooter { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#tierFooter { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  background:transparent; padding-top:6px; }")
                            // One arg per marker, in ascending marker order.
                            // QString::arg fills the LOWEST marker present, so a
                            // gap in the numbering silently shifts every later
                            // colour by one and warns "Argument missing" for the
                            // overflow — that is how %12 used to be painted with
-                           // NEGATIVE (#dc2626) instead of the dark amber.
+                           // NEGATIVE instead of the dark amber.
                            .arg(BG_BASE(),                  // %1
                                 BG_SURFACE(),               // %2
                                 BORDER_DIM(),               // %3
@@ -192,7 +195,7 @@ void TierPanel::apply_theme() {
                                 TEXT_TERTIARY(),            // %6
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
-                                QStringLiteral("#78350f")); // %9 darker amber
+                                AMBER_DIM());               // %9 darker amber
     setStyleSheet(ss);
 }
 
@@ -276,8 +279,8 @@ void TierPanel::on_tier_update(const QVariant& v) {
     // not what is still missing — show the remainder.
     const double next_ui = atomic_to_ui(s.next_threshold_raw, s.decimals);
     const double remaining_ui = std::ceil(std::max(0.0, next_ui - weight_ui));
-    render_state(s.tier, QStringLiteral("%1 veFNCPT").arg(format_token(weight_ui, 1)),
-                 (next_ui > 0.0 && remaining_ui > 0.0) ? format_token(remaining_ui, 0) : QString());
+    render_state(s.tier, QStringLiteral("%1 veFNCPT").arg(tip_format_token(weight_ui, 1)),
+                 (next_ui > 0.0 && remaining_ui > 0.0) ? tip_format_token(remaining_ui, 0) : QString());
 }
 
 void TierPanel::render_planned() {

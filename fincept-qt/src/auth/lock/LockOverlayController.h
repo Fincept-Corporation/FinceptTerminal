@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QHash>
 #include <QObject>
 #include <QPointer>
@@ -36,13 +37,21 @@ namespace fincept::auth {
 ///     subscription as a belt-and-braces since `apply_lock_state` is
 ///     idempotent — running twice is safe.
 ///
+///   - Every tracked frame is watched for its Show event. A frame shown
+///     while the terminal is locked but not itself on the lock screen
+///     (built while the saved session was still being checked — its
+///     constructor shows the terminal "temporarily" in that state) gets
+///     the lock re-announced (`InactivityGuard::reassert_lock`) before
+///     its first paint. That covers every way a frame is created: the
+///     launch window, a crash-recovery RESTORE, the Launchpad.
+///
 /// PIN security audit invariants preserved:
 ///   1. **PIN lifecycle**: PinManager untouched. The controller doesn't
 ///      create / change / clear PIN state — only LockScreen does that
 ///      via its existing wiring.
 ///   2. **Lock authority**: `InactivityGuard::terminal_locked_` remains
 ///      the single source of truth. The controller observes; doesn't
-///      mutate.
+///      mutate (reassert_lock re-announces the current state only).
 ///   3. **Multi-window**: every tracked frame's apply_lock_state runs
 ///      from the controller's broadcast. Frame-removing cleanup
 ///      ensures stale frames don't get stale signals.
@@ -75,6 +84,10 @@ class LockOverlayController : public QObject {
 
     /// Test/debug accessor.
     int tracked_frame_count() const { return tracked_frames_.size(); }
+
+  protected:
+    /// Show events of tracked frames — see the class comment.
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private slots:
     void on_frame_added(fincept::WindowFrame* w);

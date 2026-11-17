@@ -383,7 +383,7 @@ ApiResponse<QVector<BrokerPosition>> FyersBroker::get_positions(const BrokerCred
             static QSet<QString> s_seen_pos;
             if (!s_seen_pos.contains(raw_pos_sym)) {
                 s_seen_pos.insert(raw_pos_sym);
-                LOG_INFO(
+                LOG_DEBUG(
                     "FyersBroker",
                     QString("[posdiag] raw='%1' → norm='%2' exch='%3'").arg(raw_pos_sym, pos.symbol, pos.exchange));
             }
@@ -470,7 +470,7 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredential
     // Fyers limits quote requests — batch in chunks of 50 to avoid URL length issues
     static constexpr int kBatchSize = 50;
     int64_t ts = now_ts();
-    LOG_INFO("FyersBroker", QString("get_quotes: %1 symbols requested").arg(symbols.size()));
+    LOG_DEBUG("FyersBroker", QString("get_quotes: %1 symbols requested").arg(symbols.size()));
 
     QVector<BrokerQuote> all_quotes;
     for (int batch_start = 0; batch_start < symbols.size(); batch_start += kBatchSize) {
@@ -502,8 +502,10 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredential
             auto item = val.toObject();
             if (item.value("s").toString() != "ok") {
                 auto v = item.value("v").toObject();
-                LOG_WARN("FyersBroker", QString("get_quotes: symbol '%1' error: %2")
-                                            .arg(item.value("n").toString(), v.value("errmsg").toString()));
+                // Per symbol and poll: one line per symbol every 5 minutes.
+                LOG_WARN_RL("FyersBroker", item.value("n").toString(), 300000,
+                            logf("Quote unavailable for symbol", {{"symbol", item.value("n").toString()},
+                                                                  {"error", v.value("errmsg").toString()}}));
                 continue;
             }
             auto v = item.value("v").toObject();
@@ -526,8 +528,8 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredential
             all_quotes.append(q);
         }
     } // end batch loop
-    LOG_INFO("FyersBroker",
-             QString("get_quotes: returning %1 quotes (requested %2)").arg(all_quotes.size()).arg(symbols.size()));
+    LOG_DEBUG("FyersBroker",
+              QString("get_quotes: returning %1 quotes (requested %2)").arg(all_quotes.size()).arg(symbols.size()));
     return {true, all_quotes, "", ts};
 }
 
@@ -622,10 +624,8 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
             // after we already collected data returns the partial result.
             if (first_window)
                 return {false, std::nullopt, err, ts};
-            LOG_WARN("FyersBroker",
-                     QString("get_history: window fetch failed after partial data (%1); returning %2 candles")
-                         .arg(err)
-                         .arg(candles.size()));
+            LOG_WARN("FyersBroker", logf("History window fetch failed, returning partial data",
+                                         {{"symbol", symbol}, {"count", candles.size()}, {"error", err}}));
             break;
         }
         first_window = false;
@@ -675,8 +675,8 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_historical_quotes_single(cons
     const auto asks_arr = sym_data.value("ask").toArray();
 
     const QString norm_sym = from_fyers_sym(d.begin().key());
-    LOG_INFO("FyersBroker",
-             QString("depth: %1 bids, %2 asks for %3").arg(bids_arr.size()).arg(asks_arr.size()).arg(norm_sym));
+    LOG_DEBUG("FyersBroker",
+              QString("depth: %1 bids, %2 asks for %3").arg(bids_arr.size()).arg(asks_arr.size()).arg(norm_sym));
 
     QVector<BrokerQuote> quotes;
     for (const auto& v : bids_arr) {

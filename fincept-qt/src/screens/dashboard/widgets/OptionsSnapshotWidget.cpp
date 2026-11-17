@@ -331,6 +331,9 @@ void OptionsSnapshotWidget::resolve_and_subscribe() {
         return;
 
     const QString broker = broker_cfg_.isEmpty() ? pick_auto_broker() : broker_cfg_;
+    // Agents operating the UI: a Databento chain is billed to the user's own Databento key, so the
+    // tile's refresh / reload spends money; a broker's chain does not. Re-decided on every resolution.
+    set_agent_risk(broker == kOptSnapDatabento ? "spend" : nullptr);
     if (broker.isEmpty()) {
         awaiting_broker_ = true;
         broker_.clear();
@@ -507,7 +510,7 @@ void OptionsSnapshotWidget::subscribe_series(const QString& broker, const QStrin
             self->on_chain_error(chain, error);
     });
     subscribed_ = true;
-    LOG_INFO(kOptSnapTag, QString("Subscribed to %1").arg(chain));
+    LOG_DEBUG(kOptSnapTag, QString("Subscribed to %1").arg(chain));
 }
 
 void OptionsSnapshotWidget::drop_series() {
@@ -656,17 +659,17 @@ void OptionsSnapshotWidget::apply_texts() {
 
 void OptionsSnapshotWidget::apply_styles() {
     // One stylesheet for the whole tile; children are styled by objectName.
-    root_->setStyleSheet(
+    set_css_cached(root_, 
         QString("#optSnapRoot{background:transparent;}"
-                "QLabel#optSnapSeries{color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;"
+                "QLabel#optSnapSeries{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:0.5px;"
                 "background:transparent;}"
-                "QLabel#optSnapBroker{color:%2;font-size:9px;font-weight:700;letter-spacing:0.5px;"
+                "QLabel#optSnapBroker{color:%2;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;letter-spacing:0.5px;"
                 "background:transparent;}"
                 "QFrame#optSnapStat{background:%3;border:1px solid %4;}"
-                "QLabel#optSnapValue{color:%5;font-size:16px;font-weight:700;background:transparent;border:none;}"
-                "QLabel#optSnapCaption{color:%2;font-size:9px;font-weight:700;letter-spacing:0.5px;"
+                "QLabel#optSnapValue{color:%5;font-size:" + fincept::ui::fonts::px(2) + "px;font-weight:700;background:transparent;border:none;}"
+                "QLabel#optSnapCaption{color:%6;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;letter-spacing:0.5px;"
                 "background:transparent;border:none;}"
-                "QLabel#optSnapFooter{color:%6;font-size:9px;background:transparent;}"
+                "QLabel#optSnapFooter{color:%6;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
                 "QLabel#optSnapFooter[optSnapStale=\"true\"]{color:%7;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(),
                  ui::colors::BORDER_DIM(), ui::colors::CYAN(), ui::colors::TEXT_SECONDARY(), ui::colors::WARNING()));

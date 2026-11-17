@@ -31,8 +31,11 @@ class ConditionEvaluator {
     static ConditionResult evaluate_single(const fincept::services::algo::ConditionDef& condition,
                                            const QVector<OhlcvCandle>& candles);
 
+    /// `full_details` = evaluate EVERY condition (no AND/OR short-circuit) so
+    /// `details` lists all of them with their `met` flag — for status displays.
+    /// `triggered` is identical either way.
     static GroupEvalResult evaluate_group(const QJsonArray& children, const QString& logic,
-                                          const QVector<OhlcvCandle>& candles);
+                                          const QVector<OhlcvCandle>& candles, bool full_details = false);
 
   private:
     static fincept::services::algo::ConditionDef parse_condition(const QJsonObject& obj);

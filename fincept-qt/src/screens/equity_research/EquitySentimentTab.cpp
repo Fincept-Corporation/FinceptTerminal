@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -26,7 +27,7 @@ QFrame* sentiment_make_panel(const QString& title, QVBoxLayout** body_out, QLabe
 
     auto* label = new QLabel(title);
     label->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px; background:transparent; border:0;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px; background:transparent; border:0;")
             .arg(ui::colors::AMBER()));
     layout->addWidget(label);
     if (title_out)
@@ -55,6 +56,12 @@ EquitySentimentTab::EquitySentimentTab(QWidget* parent) : QWidget(parent) {
     connect(&services::equity::EquitySentimentService::instance(),
             &services::equity::EquitySentimentService::sentiment_loaded, this,
             &EquitySentimentTab::on_sentiment_loaded);
+    // Headline links are rich text with an inline colour; rebuild them for a new theme once
+    // the change has settled (never inside theme_changed).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        if (snapshot_loaded_ && cached_snapshot_.available)
+            populate(cached_snapshot_);
+    });
 }
 
 void EquitySentimentTab::set_symbol(const QString& symbol) {
@@ -66,36 +73,45 @@ void EquitySentimentTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    snapshot_loaded_ = false;
     company_label_->setText(symbol);
+    start_fetch(/*force=*/false);
+}
+
+void EquitySentimentTab::start_fetch(bool force) {
+    if (current_symbol_.isEmpty())
+        return;
+    snapshot_loaded_ = false;
     caption_label_->setText("");
     content_widget_->hide();
     status_label_->setText(tr("Loading sentiment…"));
     status_label_->show();
     loading_overlay_->show_loading(tr("LOADING SENTIMENT…"));
-    services::equity::EquitySentimentService::instance().fetch_sentiment(symbol);
+    services::equity::EquitySentimentService::instance().fetch_sentiment(current_symbol_, force);
 }
 
 void EquitySentimentTab::build_ui() {
     // The rows populate() builds (signal sources, headlines, distribution bar) are styled here
     // by objectName / "tone" — they used to get a setStyleSheet() call per row per refresh.
     setStyleSheet(QString("QWidget { background:%1; }"
-                          "QLabel#sentSrcName { color:%2; font-size:11px; font-weight:600; background:transparent; border:0; }"
-                          "QLabel#sentScore { font-size:11px; font-weight:700; background:transparent; border:0; }"
+                          "QLabel#sentSrcName { color:%2; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; background:transparent; border:0; }"
+                          "QLabel#sentScore { font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; background:transparent; border:0; }"
                           "QLabel#sentScore[tone=\"up\"] { color:%3; } QLabel#sentScore[tone=\"down\"] { color:%4; }"
-                          "QLabel#sentMuted { color:%5; font-size:10px; background:transparent; border:0; }"
-                          "QLabel#sentMeta { color:%5; font-size:9px; background:transparent; border:0; }"
-                          "QLabel#sentHeadline { color:%2; font-size:11px; background:transparent; border:0; }"
+                          "QLabel#sentMuted { color:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0; }"
+                          // Headline rows sit on the raised background: their meta line and the
+                          // neutral chip use the secondary text colour.
+                          "QLabel#sentMeta { color:%8; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent; border:0; }"
+                          "QLabel#sentHeadline { color:%2; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent; border:0; }"
                           "QFrame#sentRow { background:%6; border:1px solid %7; }"
-                          "QLabel#sentChip { font-size:9px; font-weight:700; letter-spacing:1px; border:1px solid %5;"
-                          " color:%5; padding:2px 0; background:transparent; }"
+                          "QLabel#sentChip { font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1px; border:1px solid %8;"
+                          " color:%8; padding:2px 0; background:transparent; }"
                           "QLabel#sentChip[tone=\"up\"] { color:%3; border-color:%3; }"
                           "QLabel#sentChip[tone=\"down\"] { color:%4; border-color:%4; }"
                           "QFrame#sentSeg { background:%7; border:0; }"
                           "QFrame#sentSeg[tone=\"up\"] { background:%3; } QFrame#sentSeg[tone=\"down\"] { background:%4; }"
                           "QWidget#sentSrcRow { background:transparent; }")
                       .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE(),
-                           ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                           ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(),
+                           ui::colors::TEXT_SECONDARY()));
     loading_overlay_ = new ui::LoadingOverlay(this);
 
     auto* root = new QVBoxLayout(this);
@@ -112,18 +128,18 @@ void EquitySentimentTab::build_ui() {
 
     title_lbl_ = new QLabel(tr("MARKET SENTIMENT"));
     title_lbl_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; background:transparent; border:0;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:2px; background:transparent; border:0;")
             .arg(ui::colors::AMBER()));
     header_layout->addWidget(title_lbl_);
 
     caption_label_ = new QLabel;
     caption_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     header_layout->addWidget(caption_label_);
 
     company_label_ = new QLabel;
     company_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0;").arg(ui::colors::CYAN()));
     header_layout->addWidget(company_label_);
 
     header_layout->addStretch();
@@ -131,16 +147,12 @@ void EquitySentimentTab::build_ui() {
     refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2; border-radius:3px; "
-                "padding:4px 12px; font-size:10px; font-weight:700; }"
+                "padding:4px 12px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QPushButton:hover { border-color:%3; color:%3; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
-        if (current_symbol_.isEmpty())
-            return;
-        const QString symbol = current_symbol_;
-        current_symbol_.clear(); // defeat the same-symbol short-circuit in set_symbol()
-        set_symbol(symbol);
-    });
+    // REFRESH really re-fetches: it used to re-run the blend on the cached news (3 min) and
+    // indicator frame (5 min) and re-render the identical snapshot.
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() { start_fetch(/*force=*/true); });
     header_layout->addWidget(refresh_btn_);
     root->addWidget(header);
 
@@ -149,7 +161,7 @@ void EquitySentimentTab::build_ui() {
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     root->addWidget(status_label_);
 
     // ── Scrollable content ────────────────────────────────────────────────────
@@ -172,13 +184,13 @@ void EquitySentimentTab::build_ui() {
     badge_row->setSpacing(16);
 
     net_label_ = new QLabel(QStringLiteral("—"));
-    net_label_->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
+    net_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(12) + "px; font-weight:800; background:transparent; border:0;")
                                   .arg(ui::colors::TEXT_PRIMARY()));
     badge_row->addWidget(net_label_);
 
     net_score_label_ = new QLabel;
     net_score_label_->setStyleSheet(
-        QString("color:%1; font-size:22px; font-weight:700; background:transparent; border:0;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(8) + "px; font-weight:700; background:transparent; border:0;")
             .arg(ui::colors::TEXT_SECONDARY()));
     badge_row->addWidget(net_score_label_);
 
@@ -187,7 +199,7 @@ void EquitySentimentTab::build_ui() {
     net_conf_label_ = new QLabel;
     net_conf_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     net_conf_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     badge_row->addWidget(net_conf_label_);
     summary_body->addLayout(badge_row);
 
@@ -202,7 +214,7 @@ void EquitySentimentTab::build_ui() {
 
     dist_counts_label_ = new QLabel;
     dist_counts_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     summary_body->addWidget(dist_counts_label_);
 
     content_layout->addWidget(summary_panel);
@@ -247,7 +259,7 @@ void EquitySentimentTab::clear_layout(QLayout* layout) {
 void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapshot& snapshot) {
     // ── Net badge ──────────────────────────────────────────────────────────────
     net_label_->setText(snapshot.label);
-    net_label_->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
+    net_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(12) + "px; font-weight:800; background:transparent; border:0;")
                                   .arg(sentiment_label_color(snapshot.label)));
     net_score_label_->setText(sentiment_fmt_score(snapshot.overall_score));
     net_conf_label_->setText(tr("Confidence %1%").arg(QString::number(snapshot.confidence * 100.0, 'f', 0)));
@@ -328,7 +340,9 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
                                   : article.label == QLatin1String("BEARISH") ? QStringLiteral("down")
                                                                               : QString());
         chip->setAlignment(Qt::AlignCenter);
-        chip->setFixedWidth(46);
+        // 46px at the default font size; wide enough for the 4-letter label at any size.
+        chip->setFixedWidth(
+            qMax(46, QFontMetrics(ui::fonts::font(-5, QFont::Bold)).horizontalAdvance(QStringLiteral("BEAR")) + 16));
         row_layout->addWidget(chip, 0, Qt::AlignTop);
 
         auto* text_col = new QVBoxLayout;
@@ -370,7 +384,9 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
 
 void EquitySentimentTab::on_sentiment_loaded(QString symbol,
                                              fincept::services::equity::EquitySentimentSnapshot snapshot) {
-    if (symbol != current_symbol_)
+    // The service upper-cases the symbol it emits; a linked panel can hand this tab a
+    // lower-case ticker, and an exact compare then left the overlay up for good.
+    if (symbol.compare(current_symbol_, Qt::CaseInsensitive) != 0)
         return;
 
     loading_overlay_->hide_loading();

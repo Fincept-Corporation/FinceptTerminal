@@ -127,7 +127,7 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
                 ++nfo_with_expiry;
         }
     }
-    LOG_INFO("FyersParser", QString("Parsed %1 instruments (NFO=%2, with_expiry=%3)")
+    LOG_DEBUG("FyersParser", QString("Parsed %1 instruments (NFO=%2, with_expiry=%3)")
                                 .arg(result.size())
                                 .arg(nfo_count)
                                 .arg(nfo_with_expiry));

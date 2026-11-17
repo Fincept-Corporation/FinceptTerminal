@@ -78,19 +78,25 @@ def _fallback_portfolio_var(weights: np.ndarray, returns: np.ndarray,
         else:
             port_returns = port_returns - np.mean(port_returns)
 
-    if probabilities is not None:
-        # Weighted quantile
-        p = probabilities.flatten() if probabilities.ndim == 2 else probabilities
-        sorted_idx = np.argsort(port_returns)
-        sorted_returns = port_returns[sorted_idx]
-        sorted_probs = p[sorted_idx]
-        cumsum = np.cumsum(sorted_probs)
-        var_idx = np.searchsorted(cumsum, alpha)
-        var = -sorted_returns[min(var_idx, len(sorted_returns) - 1)]
-    else:
-        var = -np.percentile(port_returns, alpha * 100)
+    return float(-_ft_quantile(port_returns, probabilities, alpha))
 
-    return float(var)
+
+def _ft_quantile(pnl: np.ndarray, probabilities: Optional[np.ndarray], alpha: float) -> float:
+    """Tail quantile (a RETURN) defined exactly as fortitudo.tech does it.
+
+    Mid-point cumulative probabilities, then the mean of the two scenarios that
+    straddle `alpha` -- so the fallback and the native library give the same VaR.
+    """
+    pnl = np.asarray(pnl, dtype=float).flatten()
+    if probabilities is None:
+        p = np.full(len(pnl), 1.0 / len(pnl))
+    else:
+        p = np.asarray(probabilities, dtype=float).flatten()
+    order = np.argsort(pnl)
+    p_sorted = p[order]
+    idx = int(np.searchsorted(np.cumsum(p_sorted) - p_sorted / 2, alpha))
+    lo, hi = max(idx - 1, 0), min(idx + 1, len(pnl))
+    return float(np.mean(pnl[order[lo:hi]]))
 
 
 def _fallback_portfolio_cvar(weights: np.ndarray, returns: np.ndarray,
@@ -113,25 +119,17 @@ def _fallback_portfolio_cvar(weights: np.ndarray, returns: np.ndarray,
         else:
             port_returns = port_returns - np.mean(port_returns)
 
-    if probabilities is not None:
-        p = probabilities.flatten() if probabilities.ndim == 2 else probabilities
-        sorted_idx = np.argsort(port_returns)
-        sorted_returns = port_returns[sorted_idx]
-        sorted_probs = p[sorted_idx]
-        cumsum = np.cumsum(sorted_probs)
-        tail_mask = cumsum <= alpha
-        if np.any(tail_mask):
-            tail_probs = sorted_probs[tail_mask]
-            tail_returns = sorted_returns[tail_mask]
-            cvar = -np.sum(tail_returns * tail_probs) / np.sum(tail_probs)
-        else:
-            cvar = -sorted_returns[0]
+    # Same construction as fortitudo.tech.portfolio_cvar: probability-weighted mean
+    # of the scenarios at or below the VaR quantile.
+    if probabilities is None:
+        p = np.full(len(port_returns), 1.0 / len(port_returns))
     else:
-        threshold = np.percentile(port_returns, alpha * 100)
-        tail_returns = port_returns[port_returns <= threshold]
-        cvar = -np.mean(tail_returns) if len(tail_returns) > 0 else -threshold
-
-    return float(cvar)
+        p = np.asarray(probabilities, dtype=float).flatten()
+    q = _ft_quantile(port_returns, p, alpha)
+    mask = port_returns <= q
+    if not np.any(mask):
+        return float(-q)
+    return float(-(p[mask] @ port_returns[mask]) / np.sum(p[mask]))
 
 
 def _fallback_covariance_matrix(returns: np.ndarray,
@@ -182,13 +180,16 @@ def _fallback_simulation_moments(returns: np.ndarray,
         var = (centered ** 2).T @ p
         std = np.sqrt(var)
         skew = ((centered ** 3).T @ p) / (std ** 3)
-        kurt = ((centered ** 4).T @ p) / (std ** 4) - 3
+        kurt = ((centered ** 4).T @ p) / (std ** 4)  # raw, like fortitudo.tech
     else:
+        # Same definitions as fortitudo.tech.simulation_moments (population moments,
+        # RAW kurtosis = 3 for a normal), so the 'Kurtosis' column means the same
+        # thing whether or not the native library is installed.
         mean = np.mean(returns_arr, axis=0)
-        std = np.std(returns_arr, axis=0, ddof=1)
+        std = np.std(returns_arr, axis=0, ddof=0)
         from scipy import stats
         skew = stats.skew(returns_arr, axis=0)
-        kurt = stats.kurtosis(returns_arr, axis=0)
+        kurt = stats.kurtosis(returns_arr, axis=0, fisher=False)
 
     moments = pd.DataFrame({
         'Mean': mean,
@@ -260,11 +261,18 @@ def calculate_portfolio_var(
     alpha: float = 0.05,
     demean: bool = False
 ) -> float:
-    """Calculate portfolio Value-at-Risk"""
+    """Calculate portfolio Value-at-Risk as a POSITIVE loss.
+
+    `alpha` here is the TAIL probability (0.05 = 95 % VaR). fortitudo.tech's own
+    `alpha` argument is the CONFIDENCE level (its default is 0.95), so it gets
+    1 - alpha; passing the tail probability straight through returned the 5 %
+    confidence figure (the wrong tail).
+    """
     if FORTITUDO_AVAILABLE:
         if weights.ndim == 1:
             weights = weights.reshape(-1, 1)
-        var = ft.portfolio_var(e=weights, R=returns, p=probabilities, alpha=alpha, demean=demean)
+        var = ft.portfolio_var(e=weights, R=returns, p=probabilities,
+                               alpha=float(1.0 - alpha), demean=bool(demean))
         return float(var)
     else:
         return _fallback_portfolio_var(weights, returns, probabilities, alpha, demean)
@@ -277,11 +285,16 @@ def calculate_portfolio_cvar(
     alpha: float = 0.05,
     demean: bool = False
 ) -> float:
-    """Calculate portfolio Conditional Value-at-Risk"""
+    """Calculate portfolio Conditional Value-at-Risk as a POSITIVE loss.
+
+    `alpha` is the TAIL probability; see calculate_portfolio_var for why the
+    native call gets 1 - alpha.
+    """
     if FORTITUDO_AVAILABLE:
         if weights.ndim == 1:
             weights = weights.reshape(-1, 1)
-        cvar = ft.portfolio_cvar(e=weights, R=returns, p=probabilities, alpha=alpha, demean=demean)
+        cvar = ft.portfolio_cvar(e=weights, R=returns, p=probabilities,
+                                 alpha=float(1.0 - alpha), demean=bool(demean))
         return float(cvar)
     else:
         return _fallback_portfolio_cvar(weights, returns, probabilities, alpha, demean)
@@ -378,7 +391,8 @@ def calculate_all_metrics(
         mean_returns = returns_array.mean(axis=0)
 
     expected_return = float((weights.flatten() @ mean_returns))
-    sharpe = expected_return / vol if vol > 0 else 0.0
+    # Per-period, no risk-free rate; None when undefined (zero volatility).
+    sharpe = expected_return / vol if vol > 0 else None
 
     return {
         'expected_return': expected_return,

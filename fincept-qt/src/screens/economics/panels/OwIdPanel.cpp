@@ -8,6 +8,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -41,9 +42,7 @@ OwIdPanel::OwIdPanel(QWidget* parent) : EconPanelBase(kOwIdSourceId, kOwIdColor,
 }
 
 void OwIdPanel::activate() {
-    show_empty(tr("Select a series, enter a country and year range, then click FETCH\n"
-                  "Source: Our World in Data (ourworldindata.org) — no API key required\n"
-                  "Country examples: United States, China, Germany, India, Japan, World"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void OwIdPanel::build_controls(QHBoxLayout* thl) {
@@ -56,21 +55,22 @@ void OwIdPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kOwIdSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(180);
 
     country_edit_ = new QLineEdit("United States");
-    country_edit_->setFixedHeight(26);
-    country_edit_->setFixedWidth(130);
+    country_edit_->setMinimumHeight(26);
+    set_text_width(country_edit_, 130);
     country_edit_->setPlaceholderText(tr("Country…"));
 
     start_edit_ = new QLineEdit("2000");
-    start_edit_->setFixedHeight(26);
-    start_edit_->setFixedWidth(52);
+    start_edit_->setMinimumHeight(26);
+    set_text_width(start_edit_, 52);
 
-    end_edit_ = new QLineEdit("2023");
-    end_edit_->setFixedHeight(26);
-    end_edit_->setFixedWidth(52);
+    // Current year: a fixed "2023" hid every newer observation from the default query.
+    end_edit_ = new QLineEdit(QString::number(QDate::currentDate().year()));
+    end_edit_->setMinimumHeight(26);
+    set_text_width(end_edit_, 52);
 
     // Update default country when series changes
     connect(series_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
@@ -105,8 +105,8 @@ void OwIdPanel::on_fetch() {
 
     show_loading(tr("Fetching OWID: %1 — %2…").arg(series.label, country));
 
-    services::EconomicsService::instance().execute(kOwIdSourceId, kOwIdScript, series.command, {country, start, end},
-                                                   "owid_" + series.command);
+    execute_query(kOwIdSourceId, kOwIdScript, series.command, {country, start, end},
+                  "owid_" + series.command);
 }
 
 void OwIdPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -142,7 +142,7 @@ void OwIdPanel::on_result(const QString& request_id, const services::EconomicsRe
             : (title + (country.isEmpty() || country == "All" ? "" : " — " + country));
 
     display(rows, display_title);
-    LOG_INFO("OwIdPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(display_title));
+    LOG_DEBUG("OwIdPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(display_title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

@@ -11,10 +11,13 @@
 #include <QJsonObject>
 #include <QStringList>
 #include <QTimeZone>
+#include <QTimer>
 #include <QVector>
 #include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
 
 namespace fincept::workflow {
 
@@ -205,9 +208,193 @@ QString trig_session_state(const TrigMarketSession& s, const QDateTime& local) {
 
 } // namespace trigger_nodes_detail
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_trigger_nodes(NodeRegistry& registry) {
     // ManualTrigger — already registered as builtin in NodeRegistry constructor.
-    // ScheduleTrigger — already registered as builtin.
+
+    // ── Schedule Trigger ───────────────────────────────────────────
+    registry.register_type({
+        .type_id = "trigger.schedule",
+        .display_name = "Schedule Trigger",
+        .category = "Triggers",
+        .description = "Waits until the cron expression is next due (this computer's local time), then starts the "
+                       "workflow. Fires once per EXECUTE; the app must stay open while it waits.",
+        .icon_text = ">>",
+        .accent_color = "#d97706",
+        .version = 1,
+        .inputs = {},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
+        .parameters =
+            {
+                {"cron", "Cron Expression", "string", "*/5 * * * *", {}, "minute hour day month weekday"},
+            },
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                using namespace trigger_nodes_detail;
+                // This used to answer triggered=true at once, whatever the expression said. There is
+                // no background scheduler, but a run can wait (like the Wait node): hold the run until
+                // the expression is next due — now, if it matches the current minute — then fire.
+                const QString cron_text = params.value("cron").toString(QStringLiteral("*/5 * * * *")).trimmed();
+                TrigCronExpr cron;
+                QString parse_err;
+                if (!trig_parse_cron(cron_text, cron, parse_err)) {
+                    cb(false, {}, QString("Invalid cron expression '%1': %2").arg(cron_text, parse_err));
+                    return;
+                }
+
+                constexpr int kHorizonDays = 31;
+                const QDateTime now = QDateTime::currentDateTime();
+                QDateTime due;
+                if (cron.matches(now)) {
+                    due = now;
+                } else {
+                    QDateTime probe =
+                        QDateTime(now.date(), QTime(now.time().hour(), now.time().minute())).addSecs(60);
+                    for (int i = 0; i < kHorizonDays * 24 * 60; ++i, probe = probe.addSecs(60)) {
+                        if (cron.matches(probe)) {
+                            due = probe;
+                            break;
+                        }
+                    }
+                }
+                if (!due.isValid()) {
+                    cb(false, {},
+                       QString("Cron '%1' is not due within the next %2 days").arg(cron_text).arg(kHorizonDays));
+                    return;
+                }
+
+                QJsonObject out;
+                out["cron"] = cron_text;
+                out["scheduled_for"] = due.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+                out["triggered"] = true;
+
+                // Re-check the wall clock at most once a minute: one long timer drifts (coarse
+                // timers allow ~5 %) and does not notice the machine sleeping.
+                const QDateTime due_utc = due.toUTC();
+                auto tick = std::make_shared<std::function<void()>>();
+                std::weak_ptr<std::function<void()>> weak = tick;
+                *tick = [weak, due_utc, out, cb]() mutable {
+                    const qint64 remaining = QDateTime::currentDateTimeUtc().msecsTo(due_utc);
+                    if (remaining <= 0) {
+                        out["fired_at"] = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+                        cb(true, out, {});
+                        return;
+                    }
+                    auto self = weak.lock();
+                    if (!self)
+                        return;
+                    QTimer::singleShot(static_cast<int>(std::min<qint64>(remaining, 60000)), Qt::PreciseTimer,
+                                       [self]() { (*self)(); });
+                };
+                (*tick)();
+            },
+    });
+
+    // ── Market Event Trigger ───────────────────────────────────────
+    registry.register_type({
+        .type_id = "trigger.market_event",
+        .display_name = "Market Event",
+        .category = "Triggers",
+        .description = "Fires when the event holds at run time: exchange in / out of its regular session, or the "
+                       "VIX at or above the threshold",
+        .icon_text = ">>",
+        .accent_color = "#d97706",
+        .version = 1,
+        .inputs = {},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
+        .parameters =
+            {
+                // circuit_breaker / earnings_release were offered but have no data source here.
+                {"event_type", "Event", "select", "volatility_spike", {"volatility_spike", "market_open", "market_close"},
+                 ""},
+                {"threshold", "VIX Threshold", "number", 25.0, {}, "Volatility spike: fires when the VIX is at or above"},
+                {"exchange", "Exchange", "select", "NYSE", {"NYSE", "NASDAQ", "LSE", "TSE", "NSE"},
+                 "Market open / close: exchange to check"},
+            },
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                using namespace trigger_nodes_detail;
+                // This used to answer triggered=true on every run without evaluating either
+                // parameter, so anything behind it (orders included) always ran. A run is a "check
+                // now", like Price Alert: fire only when the event actually holds.
+                const QString event = params.value("event_type").toString(QStringLiteral("volatility_spike"));
+
+                if (event == QLatin1String("market_open") || event == QLatin1String("market_close")) {
+                    const QString exchange = params.value("exchange").toString(QStringLiteral("NYSE"));
+                    const TrigMarketSession session = trig_session_for(exchange);
+                    QTimeZone tz(session.tz_id);
+                    bool tz_fallback = false;
+                    if (!tz.isValid()) {
+                        tz = QTimeZone(session.fallback_utc_offset_min * 60);
+                        tz_fallback = true;
+                    }
+                    const QDateTime now_local = QDateTime::currentDateTimeUtc().toTimeZone(tz);
+                    const QString state = trig_session_state(session, now_local);
+                    const bool open = state == QLatin1String("regular");
+                    const bool fire = (event == QLatin1String("market_open")) ? open : !open;
+
+                    QJsonObject out;
+                    out["event_type"] = event;
+                    out["exchange"] = exchange;
+                    out["timezone"] = QString::fromLatin1(session.tz_id);
+                    out["local_time"] = now_local.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+                    out["session"] = state;
+                    out["holidays_checked"] = false;
+                    out["triggered"] = fire;
+                    if (tz_fallback)
+                        out["timezone_note"] = QStringLiteral("Time-zone database unavailable - standard-time offset "
+                                                              "used, daylight saving not applied");
+                    if (!fire) {
+                        out["_skipped"] = true;
+                        out["reason"] = QString("%1 is %2 at %3 local time")
+                                            .arg(exchange, open ? QStringLiteral("open") : QStringLiteral("closed"),
+                                                 out["local_time"].toString());
+                    }
+                    cb(true, out, {});
+                    return;
+                }
+
+                if (event != QLatin1String("volatility_spike")) {
+                    cb(false, {},
+                       QString("Market Event '%1' cannot be detected in this build (no data source). Use "
+                               "volatility_spike, market_open or market_close.")
+                           .arg(event));
+                    return;
+                }
+
+                const double threshold = params.value("threshold").toDouble(25.0);
+                fincept::python::PythonRunner::instance().run(
+                    "yfinance_data.py", {"quote", "^VIX"}, [cb, event, threshold](const fincept::python::PythonResult& res) {
+                        if (!res.success) {
+                            cb(false, {}, res.error.isEmpty() ? QStringLiteral("VIX quote request failed") : res.error);
+                            return;
+                        }
+                        const auto doc =
+                            QJsonDocument::fromJson(fincept::python::extract_json(res.output).trimmed().toUtf8());
+                        const QJsonObject quote = doc.object();
+                        const double vix = quote.value("price").toDouble(0);
+                        if (!doc.isObject() || vix <= 0) {
+                            cb(false, {}, QStringLiteral("No VIX quote available"));
+                            return;
+                        }
+                        const bool met = vix >= threshold;
+                        QJsonObject out;
+                        out["event_type"] = event;
+                        out["vix"] = vix;
+                        out["vix_change_percent"] = quote.value("change_percent");
+                        out["threshold"] = threshold;
+                        out["triggered"] = met;
+                        if (!met) {
+                            out["_skipped"] = true;
+                            out["reason"] = QString("VIX is %1, below the threshold %2").arg(vix).arg(threshold);
+                        }
+                        cb(true, out, {});
+                    });
+            },
+    });
 
     // ── Price Alert Trigger ────────────────────────────────────────
     registry.register_type({
@@ -412,6 +599,9 @@ void register_trigger_nodes(NodeRegistry& registry) {
                     "Market Hours Cron trigger instead.");
                 cb(true, out, {});
             },
+        // Kept registered so saved workflows still load; the palette shows it disabled.
+        .unavailable_reason = QStringLiteral("no inbound webhook listener exists in this build, so this trigger can "
+                                             "never fire. Use Manual, Schedule, Price Alert or Market Hours Cron."),
     });
 
     // ── Tier 1 additions ───────────────────────────────────────────

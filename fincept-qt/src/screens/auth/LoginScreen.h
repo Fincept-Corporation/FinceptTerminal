@@ -22,6 +22,9 @@ class LoginScreen : public QWidget {
   signals:
     void navigate_register();
     void navigate_forgot_password();
+    /// Sign-in refused because `email` is not verified yet: the window shows the
+    /// registration screen's code page for that address (RegisterScreen::show_otp_for).
+    void navigate_verify_email(const QString& email);
 
   private:
     // ── Login page widgets that need re-translating ─────────────────────────
@@ -73,6 +76,11 @@ class LoginScreen : public QWidget {
     void clear_error();
     void set_loading(bool loading);
 
+    /// Google sign-in is waiting for the browser: the Google button turns into
+    /// CANCEL GOOGLE SIGN-IN and email / password sign-in stays available.
+    bool google_waiting_ = false;
+    void set_google_waiting(bool waiting);
+
   protected:
     void paintEvent(QPaintEvent* event) override;
     void changeEvent(QEvent* event) override;
@@ -86,6 +94,7 @@ class LoginScreen : public QWidget {
     void on_force_login();
     void on_login_succeeded();
     void on_login_failed(const QString& error);
+    void on_login_unverified(const QString& email, const QString& message);
     void on_mfa_required();
     void on_active_session(const QString& msg);
     void on_mfa_verified();

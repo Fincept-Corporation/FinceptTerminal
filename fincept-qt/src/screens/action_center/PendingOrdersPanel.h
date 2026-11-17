@@ -26,7 +26,12 @@
 
 class QPushButton;
 class QSpinBox;
+class QStackedWidget;
 class QTimer;
+
+namespace fincept::ui {
+class EmptyState;
+}
 
 namespace fincept::screens {
 
@@ -54,6 +59,8 @@ class PendingOrdersPanel : public QWidget {
     void reload_accounts(); // refresh the account selector from AccountManager
     void refresh();         // reload table + stats for the active filter
     void refresh_stats();
+    /// No rows for the filter: a designed state instead of a bare header row.
+    void update_empty_state(int rows, const QString& status);
     QString selected_account() const; // empty == all accounts
 
     // Slots wired to ActionCenter signals.
@@ -97,6 +104,8 @@ class PendingOrdersPanel : public QWidget {
     QLabel* stat_sell_ = nullptr;
 
     QTableWidget* table_ = nullptr;
+    QStackedWidget* table_stack_ = nullptr; ///< table_ | empty_state_
+    ui::EmptyState* empty_state_ = nullptr;
 
     QPushButton* approve_all_btn_ = nullptr;
     QPushButton* reject_all_btn_ = nullptr;

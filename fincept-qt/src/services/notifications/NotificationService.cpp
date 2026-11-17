@@ -59,7 +59,7 @@ void NotificationService::register_providers() {
     for (auto& p : providers_)
         p->load_config();
 
-    LOG_INFO("NotificationService", "Registered 15 notification providers");
+    LOG_DEBUG("NotificationService", "Registered 15 notification providers");
 }
 
 // ── Send ──────────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ void NotificationService::send(const NotificationRequest& req) {
         const QString pid = p->provider_id();
         p->send(req, [pid](bool ok, const QString& err) {
             if (ok) {
-                LOG_INFO("NotificationService", QString("Delivered via %1").arg(pid).toStdString().c_str());
+                LOG_DEBUG("NotificationService", QString("Delivered via %1").arg(pid));
             } else {
                 LOG_WARN("NotificationService",
                          QString("Delivery failed via %1: %2").arg(pid, err).toStdString().c_str());

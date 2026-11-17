@@ -15,6 +15,7 @@
 // (a Python dict repr from the backend worker) and was retried once for good
 // measure, doubling the wait for an answer that could never come.
 
+#include <QByteArray>
 #include <QRegularExpression>
 #include <QString>
 
@@ -68,8 +69,10 @@ inline LlmErrorKind classify_fincept_failure(int http_status, const QString& tex
 
 /// The user-facing error for a classified Fincept failure. `raw` is mined for
 /// the "Required: X, Available: Y" figures the backend's credit message carries,
-/// so the user sees what the call costs against what is left.
-inline QString make_fincept_error(LlmErrorKind kind, const QString& raw = {}) {
+/// so the user sees what the call costs against what is left. `server_message`
+/// (FinceptAuth only) is the server's own sentence ("Session expired. You have
+/// been logged in from another device."), placed after the fixed lead.
+inline QString make_fincept_error(LlmErrorKind kind, const QString& raw = {}, const QString& server_message = {}) {
     if (kind == LlmErrorKind::FinceptOutOfCredits) {
         QString figures;
         static const QRegularExpression rx_text(
@@ -86,11 +89,30 @@ inline QString make_fincept_error(LlmErrorKind kind, const QString& raw = {}) {
                               "Settings → LLM Configuration.");
     }
     if (kind == LlmErrorKind::FinceptAuth) {
-        return fincept_auth_error_lead() +
+        QString said = server_message.trimmed();
+        if (!said.isEmpty() && !said.endsWith(QLatin1Char('.')) && !said.endsWith(QLatin1Char('!')) &&
+            !said.endsWith(QLatin1Char('?')))
+            said += QLatin1Char('.');
+        return fincept_auth_error_lead() + (said.isEmpty() ? QString() : QLatin1Char(' ') + said) +
                QStringLiteral(" Sign in again (or check your Fincept API key), or add your own provider API key in "
                               "Settings → LLM Configuration.");
     }
     return raw;
 }
+
+/// A request to the Fincept API (api.fincept.in — NEVER a third-party provider:
+/// an OpenAI 401 is about the user's OpenAI key) was refused, by a client with
+/// its own QNetworkAccessManager, so HttpClient never saw the reply. Reports it:
+///   401 → AuthManager::handle_unauthorized(sent_session_token, session_expired)
+///         (a replaced session token is dropped, a revoked key signs out);
+///   403 → HttpClient::report_forbidden_response(body) (an IP block pauses pollers).
+/// `sent_session_token` is the X-Session-Token the request carried (empty if
+/// none); `session_expired` is the reply's `X-Session-Expired: true`.
+/// Returns the error to show: the server's own sentence — behind
+/// fincept_auth_error_lead() unless it is an IP block, which is never an account
+/// problem — or an empty string for any other status. Any thread.
+/// Implemented in LlmHttpHelpers.cpp.
+QString report_fincept_refusal(int http_status, const QByteArray& body, const QString& sent_session_token,
+                               bool session_expired);
 
 } // namespace fincept::ai_chat

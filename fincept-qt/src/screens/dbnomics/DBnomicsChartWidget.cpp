@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QAreaSeries>
 #include <QBarCategoryAxis>
@@ -12,12 +13,13 @@
 #include <QChartView>
 #include <QDateTime>
 #include <QDateTimeAxis>
-#include <QLabel>
+#include <QHash>
 #include <QLegend>
 #include <QLineSeries>
 #include <QMap>
 #include <QResizeEvent>
 #include <QScatterSeries>
+#include <QSet>
 #include <QStackedWidget>
 #include <QTimeZone>
 #include <QTimer>
@@ -32,13 +34,21 @@ namespace fincept::screens {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+/// Theme colours and the user's font for an axis — applied when it is built and again on a theme change.
+static void style_axis(QAbstractAxis* ax) {
+    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    ax->setLabelsFont(ui::fonts::font(-3));
+    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED())));
+    ax->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    ax->setTitleFont(ui::fonts::font(-3));
+}
+
 static QValueAxis* make_y_axis(double y_min, double y_max, int tick_count, const QString& format) {
     auto* ax = new QValueAxis();
     ax->setRange(y_min, y_max);
     ax->setTickCount(tick_count);
-    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED())));
+    style_axis(ax);
     ax->setLabelFormat(format);
     ax->setMinorTickCount(0);
     return ax;
@@ -88,8 +98,11 @@ static DbnYScale dbn_y_scale(double y_min, double y_max) {
     return sc;
 }
 
+/// Midnight UTC of `d` in ms since the epoch — arithmetic on the Julian day (a QDateTime per
+/// observation cost more than the rest of the chart for a long daily series).
 static qint64 dbn_msecs(const QDate& d) {
-    return QDateTime(d, QTime(0, 0), QTimeZone::UTC).toMSecsSinceEpoch();
+    constexpr qint64 kUnixEpochJulianDay = 2440588; // 1970-01-01
+    return (d.toJulianDay() - kUnixEpochJulianDay) * 86400000LL;
 }
 
 /// Date-axis label format from the finest frequency on the chart.
@@ -119,9 +132,7 @@ static QDateTimeAxis* make_time_axis(qint64 min_ms, qint64 max_ms, int tick_coun
                  QDateTime::fromMSecsSinceEpoch(max_ms, QTimeZone::UTC));
     ax->setFormat(format);
     ax->setTickCount(std::max(2, tick_count));
-    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED())));
+    style_axis(ax);
     return ax;
 }
 
@@ -135,15 +146,37 @@ static void style_chart(QChart* chart, bool compact) {
     if (!compact) {
         chart->legend()->setAlignment(Qt::AlignBottom);
         chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
+        chart->legend()->setFont(ui::fonts::font(-3));
     }
-    chart->setTitleFont(QFont("Consolas", compact ? 9 : 11, QFont::Bold));
+    chart->setTitleFont(ui::fonts::font(compact ? -2 : 0, QFont::Bold));
     chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER())));
 }
 
 // ── DBnomicsChartWidget ───────────────────────────────────────────────────────
 
 DBnomicsChartWidget::DBnomicsChartWidget(QWidget* parent) : QWidget(parent) {
+    // A resize changes the plot width step by step: the series are sampled again once it settles.
+    resample_timer_ = new QTimer(this);
+    resample_timer_->setSingleShot(true);
+    resample_timer_->setInterval(60);
+    connect(resample_timer_, &QTimer::timeout, this, &DBnomicsChartWidget::resample);
     build_ui();
+    // Chart, axis and legend colours / fonts live in QtCharts objects, which no stylesheet reaches:
+    // re-applied once the new appearance has settled. Series colours are re-assigned (and the data
+    // re-rendered) by the owning screen.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this,
+            &DBnomicsChartWidget::refresh_theme);
+}
+
+void DBnomicsChartWidget::refresh_theme() {
+    QChart* chart = chart_view_ ? chart_view_->chart() : nullptr;
+    if (!chart)
+        return;
+    style_chart(chart, compact_);
+    chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
+    const auto axes = chart->axes();
+    for (auto* axis : axes)
+        style_axis(axis);
 }
 
 void DBnomicsChartWidget::build_ui() {
@@ -153,17 +186,9 @@ void DBnomicsChartWidget::build_ui() {
 
     stack_ = new QStackedWidget(this);
 
-    // ── Page 0: loading spinner ───────────────────────────────────────────────
-    auto* loading_page = new QWidget(stack_);
-    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    auto* loading_vl = new QVBoxLayout(loading_page);
-    spin_label_ = new QLabel(loading_page);
-    spin_label_->setAlignment(Qt::AlignCenter);
-    spin_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:16px; background:transparent;")
-                                   .arg(ui::colors::AMBER())
-                                   .arg(ui::fonts::DATA_FAMILY));
-    loading_vl->addWidget(spin_label_);
-    stack_->addWidget(loading_page); // index 0
+    // ── Page 0: loading — a chart-shaped skeleton (custom-painted from the live theme) ──
+    skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Chart, stack_);
+    stack_->addWidget(skeleton_); // index 0
 
     // ── Page 1: chart view ────────────────────────────────────────────────────
     chart_view_ = new QChartView(stack_);
@@ -172,37 +197,26 @@ void DBnomicsChartWidget::build_ui() {
 
     auto* chart = new QChart();
     style_chart(chart, false);
-    chart->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
     chart_view_->setChart(chart);
+    // The plot area is known (and changes) only after QtCharts lays the chart out: sample the series
+    // again for the width it really has.
+    connect(chart, &QChart::plotAreaChanged, this, [this](const QRectF&) {
+        if (!plotted_.isEmpty())
+            resample_timer_->start();
+    });
     chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     stack_->addWidget(chart_view_); // index 1
 
     stack_->setCurrentIndex(1);
     root->addWidget(stack_, 1);
-
-    // ── Animation timer (runs only while loading) ─────────────────────────────
-    spin_timer_ = new QTimer(this);
-    spin_timer_->setInterval(120);
-    connect(spin_timer_, &QTimer::timeout, this, [this]() {
-        static const QString frames[] = {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
-        spin_label_->setText(tr("%1  FETCHING DATA...").arg(frames[frame_ % 8]));
-        ++frame_;
-    });
 }
 
 // ── Live language switch ─────────────────────────────────────────────────────
 
 void DBnomicsChartWidget::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
+    if (event->type() == QEvent::LanguageChange && skeleton_ && !skeleton_->message().isEmpty())
+        skeleton_->set_message(tr("Loading observations…"));
     QWidget::changeEvent(event);
-}
-
-void DBnomicsChartWidget::retranslateUi() {
-    // Only the empty-state title is translatable chrome; rendered series titles
-    // carry data names and are rebuilt by set_data().
-    if (showing_placeholder_ && chart_view_ && chart_view_->chart())
-        chart_view_->chart()->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
 }
 
 void DBnomicsChartWidget::set_compact(bool compact) {
@@ -214,17 +228,16 @@ void DBnomicsChartWidget::set_compact(bool compact) {
 
 void DBnomicsChartWidget::set_loading(bool on) {
     if (on) {
-        frame_ = 0;
-        spin_label_->setText(tr("%1  FETCHING DATA...").arg(QStringLiteral("⣾")));
+        skeleton_->set_message(tr("Loading observations…"));
         stack_->setCurrentIndex(0);
-        spin_timer_->start();
     } else {
-        spin_timer_->stop();
         stack_->setCurrentIndex(1);
     }
 }
 
 void DBnomicsChartWidget::clear() {
+    plotted_.clear();
+    resample_timer_->stop();
     QChart* chart = chart_view_->chart();
     chart->removeAllSeries();
     const auto axes = chart->axes();
@@ -235,16 +248,14 @@ void DBnomicsChartWidget::clear() {
         chart->removeAxis(axis);
         axis->deleteLater();
     }
-    chart->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
-    showing_placeholder_ = true;
+    // No placeholder title: an empty chart is never on screen on its own (the screen shows a
+    // designed empty state instead).
+    chart->setTitle(QString());
 }
 
 void DBnomicsChartWidget::set_data(const QVector<services::DbnDataPoint>& series, services::DbnChartType chart_type) {
     clear();
-    chart_view_->chart()->setTitle({});
-    // Past this point the chart shows either real data or a blank title — never
-    // the translatable placeholder — so retranslateUi must not re-apply it.
-    showing_placeholder_ = false;
+    stack_->setCurrentIndex(1);
     if (series.isEmpty())
         return;
 
@@ -295,9 +306,40 @@ void DBnomicsChartWidget::resizeEvent(QResizeEvent* event) {
     }
 }
 
+// ── Down-sampling to the plot width ──────────────────────────────────────────
+int DBnomicsChartWidget::plot_pixel_width() const {
+    qreal w = chart_view_->chart() ? chart_view_->chart()->plotArea().width() : 0.0;
+    if (w < 50.0)
+        w = chart_view_->width() - 80; // not laid out yet: the view less the axis labels
+    if (w < 50.0)
+        w = width() - 80;
+    if (w < 50.0)
+        w = 800.0; // hidden and never shown: a typical plot width; sampled again once it is shown
+    return std::clamp(static_cast<int>(std::ceil(w)), 50, 8192);
+}
+
+void DBnomicsChartWidget::resample() {
+    if (plotted_.isEmpty())
+        return;
+    const int buckets = plot_pixel_width();
+    if (buckets == sampled_buckets_)
+        return;
+    sampled_buckets_ = buckets;
+    for (PlottedSeries& p : plotted_) {
+        if (!p.series)
+            continue;
+        const bool sample = p.full.size() > 2 * qsizetype(buckets) + 2;
+        if (!sample && !p.sampled)
+            continue; // every point is on the chart already
+        p.series->replace(dbn_downsample(p.full, plot_x_min_, plot_x_max_, buckets));
+        p.sampled = sample;
+    }
+}
+
 // ── Line / area / scatter on a time axis ─────────────────────────────────────
 // Each series' points are handed over in ONE replace() call — per-point append() emitted a signal and
-// scheduled a repaint for every observation.
+// scheduled a repaint for every observation — and only as many as the plot is wide (dbn_downsample);
+// the full points are kept for resizes.
 void DBnomicsChartWidget::render_time_series(const QVector<services::DbnDataPoint>& series, bool area, bool scatter) {
     QChart* chart = chart_view_->chart();
     double y_min = std::numeric_limits<double>::max();
@@ -329,15 +371,21 @@ void DBnomicsChartWidget::render_time_series(const QVector<services::DbnDataPoin
     chart->addAxis(x_axis, Qt::AlignBottom);
     auto* y_axis = make_y_axis(lo - margin, hi + margin, y_tick_count(), sc.format);
     y_axis->setTitleText(sc.title);
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     chart->addAxis(y_axis, Qt::AlignLeft);
 
+    plot_x_min_ = static_cast<double>(x_min);
+    plot_x_max_ = static_cast<double>(std::max(x_max, x_min + 86400000LL)); // the axis' range
+    const int buckets = plot_pixel_width();
+    sampled_buckets_ = buckets;
+
     for (const auto& dp : series) {
-        QList<QPointF> points;
-        points.reserve(dp.observations.size());
+        QList<QPointF> full;
+        full.reserve(dp.observations.size());
         for (const auto& obs : dp.observations)
             if (obs.valid && obs.start.isValid())
-                points.append(QPointF(static_cast<qreal>(dbn_msecs(obs.start)), obs.value / sc.divisor));
+                full.append(QPointF(static_cast<qreal>(dbn_msecs(obs.start)), obs.value / sc.divisor));
+        const bool sampled = full.size() > 2 * qsizetype(buckets) + 2;
+        const QList<QPointF> points = sampled ? dbn_downsample(full, plot_x_min_, plot_x_max_, buckets) : full;
 
         if (scatter) {
             auto* dots = new QScatterSeries();
@@ -348,6 +396,7 @@ void DBnomicsChartWidget::render_time_series(const QVector<services::DbnDataPoin
             chart->addSeries(dots);
             dots->attachAxis(x_axis);
             dots->attachAxis(y_axis);
+            plotted_.append({QPointer<QXYSeries>(dots), std::move(full), sampled});
             continue;
         }
 
@@ -358,6 +407,7 @@ void DBnomicsChartWidget::render_time_series(const QVector<services::DbnDataPoin
         pen.setWidth(2);
         line->setPen(pen);
         line->replace(points);
+        plotted_.append({QPointer<QXYSeries>(line), std::move(full), sampled});
 
         if (area && !points.isEmpty()) {
             // Fill down to zero, or to the axis floor when the whole series sits away from zero.
@@ -386,11 +436,21 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
     QChart* chart = chart_view_->chart();
 
     // Last 20 periods, ordered by period START (period strings of mixed frequency do not sort lexically).
+    // Observations are ascending by period start, so the newest 20 periods of the chart are among each
+    // series' last 20 valid observations: only those are collected (a long daily series used to put
+    // every observation through a map and a linear contains()).
+    constexpr int kBars = 20;
     QMap<QString, QDate> period_start;
-    for (const auto& dp : series)
-        for (const auto& obs : dp.observations)
-            if (obs.valid && !period_start.contains(obs.period))
-                period_start.insert(obs.period, obs.start);
+    for (const auto& dp : series) {
+        int taken = 0;
+        for (auto it = dp.observations.crbegin(); it != dp.observations.crend() && taken < kBars; ++it) {
+            if (!it->valid)
+                continue;
+            ++taken;
+            if (!period_start.contains(it->period))
+                period_start.insert(it->period, it->start);
+        }
+    }
     QVector<QString> periods(period_start.keyBegin(), period_start.keyEnd());
     std::sort(periods.begin(), periods.end(), [&period_start](const QString& a, const QString& b) {
         const QDate da = period_start.value(a);
@@ -399,10 +459,25 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
             return da < db;
         return a < b;
     });
-    if (periods.size() > 20)
-        periods = periods.mid(periods.size() - 20);
+    if (periods.size() > kBars)
+        periods = periods.mid(periods.size() - kBars);
     if (periods.isEmpty())
         return;
+    const QSet<QString> shown(periods.cbegin(), periods.cend());
+    // The shown periods are the newest: a series is scanned from its end, and the scan stops at the
+    // first observation older than all of them (when every shown period has a start day).
+    QDate earliest;
+    bool all_dated = true;
+    for (const QString& p : std::as_const(periods)) {
+        const QDate d = period_start.value(p);
+        if (!d.isValid())
+            all_dated = false;
+        else if (!earliest.isValid() || d < earliest)
+            earliest = d;
+    }
+    const auto before_shown = [all_dated, earliest](const services::DbnObservation& o) {
+        return all_dated && o.start.isValid() && o.start < earliest;
+    };
 
     // Explicit Y range computed from the *valid* observations only, so the NaN
     // gap markers below can never poison the auto-domain.
@@ -410,8 +485,11 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
     double y_max = 0.0;
     bool any = false;
     for (const auto& dp : series) {
-        for (const auto& obs : dp.observations) {
-            if (!obs.valid || !periods.contains(obs.period))
+        for (auto it = dp.observations.crbegin(); it != dp.observations.crend(); ++it) {
+            const services::DbnObservation& obs = *it;
+            if (before_shown(obs))
+                break;
+            if (!obs.valid || !shown.contains(obs.period))
                 continue;
             y_min = any ? std::min(y_min, obs.value) : std::min(0.0, obs.value);
             y_max = any ? std::max(y_max, obs.value) : std::max(0.0, obs.value);
@@ -433,16 +511,21 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
     for (const auto& dp : series) {
         auto* bar_set = new QBarSet(dp.series_name);
         bar_set->setColor(dp.color);
-        QMap<QString, double> pv;
-        for (const auto& obs : dp.observations)
-            if (obs.valid)
-                pv[obs.period] = obs.value;
+        QHash<QString, double> pv; // only the periods on the chart; the latest observation of a period wins
+        for (auto it = dp.observations.crbegin(); it != dp.observations.crend(); ++it) {
+            if (before_shown(*it))
+                break;
+            if (it->valid && shown.contains(it->period) && !pv.contains(it->period))
+                pv.insert(it->period, it->value);
+        }
         QList<qreal> values;
         values.reserve(periods.size());
         // A period this series does not report is a GAP (NaN), not a zero — zero-filling made every
         // missing observation look like a real "0" reading.
-        for (const auto& p : periods)
-            values.append(pv.contains(p) ? pv[p] / sc.divisor : std::numeric_limits<double>::quiet_NaN());
+        for (const auto& p : periods) {
+            const auto v = pv.constFind(p);
+            values.append(v != pv.cend() ? v.value() / sc.divisor : std::numeric_limits<double>::quiet_NaN());
+        }
         bar_set->append(values); // one call, not one signal per bar
         bar_series->append(bar_set);
     }
@@ -450,8 +533,7 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
 
     auto* x_axis = new QBarCategoryAxis();
     x_axis->append(QList<QString>(periods.begin(), periods.end()));
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    style_axis(x_axis);
     // Rotate labels if many periods to avoid overlap
     if (periods.size() > 10)
         x_axis->setLabelsAngle(-45);
@@ -461,7 +543,6 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
     auto* y_axis =
         make_y_axis(y_min - (y_min < 0.0 ? bar_margin : 0.0), y_max + bar_margin, y_tick_count(), sc.format);
     y_axis->setTitleText(sc.title);
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     chart->addAxis(y_axis, Qt::AlignLeft);
     bar_series->attachAxis(y_axis);
 }

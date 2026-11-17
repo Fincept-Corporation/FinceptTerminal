@@ -55,10 +55,18 @@ QStringList RealYieldService::topic_patterns() const {
     };
 }
 
-QString RealYieldService::resolve_endpoint() const {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyEndpoint_yield));
-    if (r.is_ok())
-        return trim_trailing_slash_yield(r.value().trimmed());
+QString RealYieldService::resolve_endpoint(QString* read_error) const {
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyEndpoint_yield));
+    const bool unreadable = r.failed();
+    LOG_TRANSITION("RealYield", QStringLiteral("endpoint_read"), unreadable,
+                   unreadable ? LogLevel::Warn : LogLevel::Info,
+                   unreadable ? logf("Stored yield endpoint could not be read; no data served",
+                                     {{"key", kKeyEndpoint_yield}, {"kind", r.error_name()}})
+                              : QStringLiteral("Stored yield endpoint readable again"));
+    if (read_error)
+        *read_error = unreadable ? tr("Could not read the stored yield endpoint: %1.").arg(r.reason()) : QString();
+    if (r.found())
+        return trim_trailing_slash_yield(r.value.trimmed());
     return {};
 }
 
@@ -67,12 +75,20 @@ QString RealYieldService::pubkey_from_yield_topic(const QString& topic) {
 }
 
 void RealYieldService::refresh(const QStringList& topics) {
-    const auto endpoint = resolve_endpoint();
+    QString read_error;
+    const auto endpoint = resolve_endpoint(&read_error);
+    if (!read_error.isEmpty()) {
+        // Stored but unreadable is not "not configured": no mock figures in its place.
+        // The hub retries on its own schedule; nothing is written.
+        for (const auto& topic : topics)
+            fincept::datahub::DataHub::instance().publish_error(topic, read_error);
+        return;
+    }
     const bool mock = endpoint.isEmpty();
     if (mock) {
         static std::atomic<bool> once{false};
         if (!once.exchange(true)) {
-            LOG_INFO("RealYield", "no fincept.yield_endpoint configured — serving mock yield");
+            LOG_DEBUG("RealYield", "no fincept.yield_endpoint configured — serving mock yield");
         } else {
             LOG_DEBUG("RealYield", "mock-mode refresh");
         }

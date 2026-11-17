@@ -31,7 +31,10 @@ Result<void> OISnapshotsRepository::upsert_batch(qint64 token, const QVector<OIS
     auto begin = db().begin_transaction();
     const bool in_tx = begin.is_ok();
     if (!in_tx) {
-        LOG_WARN("OISnapshotsRepo", "transaction begin failed; using individual statements");
+        LOG_WARN("OISnapshotsRepo", logf("Batch transaction could not be started, writing snapshots one by one",
+                                         {{"token", token},
+                                          {"samples", samples.size()},
+                                          {"error", QString::fromStdString(begin.error())}}));
     }
 
     const QString sql = QStringLiteral("INSERT OR REPLACE INTO oi_snapshots (token, ts_minute, oi, ltp, vol, iv) "

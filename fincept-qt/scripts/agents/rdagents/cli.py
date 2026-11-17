@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -59,6 +60,16 @@ def _err(msg: str, code: int = 1) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_check_status(_params: dict[str, Any]) -> dict[str, Any]:
+    """
+    rdagent version, importable loops, and what each task kind still needs on
+    this machine. Shape (additive to the original {success, rdagent_version,
+    availability}):
+      availability: {factor_loop, model_loop, quant_loop, conda, docker: bool, mcp: {...}}
+      requirements: {platform, platform_supported, conda, conda_default_env, docker,
+                     docker_detail, model_env_type, factor_data_ready, factor_data_folder}
+      ready:   {factor_mining|model_optimization|quant_research: bool}
+      missing: {<kind>: [human-readable lines]}   (the LLM key is checked per run)
+    """
     try:
         import importlib.metadata
         rdagent_version = importlib.metadata.version("rdagent")
@@ -66,90 +77,122 @@ def cmd_check_status(_params: dict[str, Any]) -> dict[str, Any]:
         rdagent_version = "unknown"
 
     try:
-        from loops import loop_availability
+        from loops import loop_availability, preflight, runtime_requirements
         avail = loop_availability()
+        req = runtime_requirements()
+        # The factor data folder is per profile (next to the task workspaces),
+        # which this call does not know; run_task checks it for real.
+        req["factor_data_ready"] = None
+        req["factor_data_folder"] = None
+        avail["conda"] = req["conda"]
+        avail["docker"] = req["docker"]
+        missing = {k: preflight(k, None, req) for k in _KINDS}
     except Exception as e:
-        avail = {"error": str(e)}
+        return {"success": True, "rdagent_version": rdagent_version,
+                "availability": {"error": str(e)},
+                "ready": {k: False for k in _KINDS},
+                "missing": {k: [f"rdagent failed to import: {e}"] for k in _KINDS}}
 
     return {
         "success": True,
         "rdagent_version": rdagent_version,
         "availability": avail,
+        "requirements": req,
+        "ready": {k: not v for k, v in missing.items()},
+        "missing": missing,
     }
+
+
+def _prepare_process_env(workspace: Path) -> None:
+    """
+    rdagent derives its workspace, log, prompt-cache and data folders from the
+    current directory when it is IMPORTED. The terminal starts this process in
+    the scripts directory (read-only in installs), so move into the task
+    workspace first. The factor source data (generated once with Docker) is
+    shared by all tasks: <...>/rdagents/factor_data when the workspace sits in
+    <...>/rdagents/workspaces/<id> (AIQuantLabService layout).
+    """
+    workspace.mkdir(parents=True, exist_ok=True)
+    os.chdir(workspace)
+    shared = workspace.parent.parent if workspace.parent.name == "workspaces" else workspace
+    data_root = shared / "factor_data"
+    os.environ.setdefault("FACTOR_CoSTEER_DATA_FOLDER", str(data_root / "full"))
+    os.environ.setdefault("FACTOR_CoSTEER_DATA_FOLDER_DEBUG", str(data_root / "debug"))
 
 
 def cmd_run_task(params: dict[str, Any]) -> None:
     """Run one RD loop synchronously; emits JSON lines (progress, then result/error)."""
     kind = params.get("kind", "")
     task_id = params.get("task_id") or f"{kind or 'task'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    if kind not in _KINDS:
-        _out({"event": "error", "task_id": task_id,
-              "error": f"Unknown task kind {kind!r}; expected one of {list(_KINDS)}"})
-        sys.exit(1)
-    workspace = params.get("workspace")
-    if not workspace:
-        _out({"event": "error", "task_id": task_id, "error": "workspace is required"})
+
+    def fail(msg: str, **extra: Any) -> None:
+        _out({"event": "error", "task_id": task_id, "error": msg, **extra})
         sys.exit(1)
 
+    if kind not in _KINDS:
+        fail(f"Unknown task kind {kind!r}; expected one of {list(_KINDS)}")
+    workspace = params.get("workspace")
+    if not workspace:
+        fail("workspace is required")
+    workspace_path = Path(workspace).resolve()
+
+    llm_config = params.get("config") or {}
     try:
+        _prepare_process_env(workspace_path)
+        # Must precede the rdagent import: rdagent's LLM settings (CHAT_MODEL ...)
+        # are read once, when rdagent.oai.backend.litellm is imported.
         from config import apply_llm_config
+        apply_llm_config(llm_config)
         from loops import (
-            FACTOR_LOOP_AVAILABLE, MODEL_LOOP_AVAILABLE, QUANT_LOOP_AVAILABLE,
-            build_factor_loop, build_model_loop, build_quant_loop, load_checkpoint,
+            build_factor_loop, build_model_loop, build_quant_loop, load_loop_checkpoint, preflight,
         )
         from task_runner import run_loop_sync
     except Exception as e:
-        _out({"event": "error", "task_id": task_id, "error": f"RD-Agent is not installed or failed to import: {e}"})
-        sys.exit(1)
+        fail(f"RD-Agent is not installed or failed to import: {e}")
 
-    available = {"factor_mining": FACTOR_LOOP_AVAILABLE, "model_optimization": MODEL_LOOP_AVAILABLE,
-                 "quant_research": QUANT_LOOP_AVAILABLE}[kind]
-    if not available:
-        _out({"event": "error", "task_id": task_id,
-              "error": f"The RD-Agent {kind} loop is not available - install rdagent with qlib extras."})
-        sys.exit(1)
+    # Preflight before constructing anything: building a Qlib scenario already
+    # shells out to conda / Docker and fails deep inside rdagent otherwise.
+    missing = preflight(kind, llm_config)
+    if missing:
+        fail("RD-Agent cannot run on this machine yet. Missing: " + "; ".join(missing), missing=missing)
 
-    apply_llm_config(params.get("config", {}))
     max_iterations = max(1, int(params.get("max_iterations", params.get("iterations", 10))))
     enable_mcp = bool(params.get("enable_mcp", False))
     mcp_port = int(params.get("mcp_port", 18765))
 
     try:
-        if kind == "factor_mining":
-            rd_loop = build_factor_loop(
-                workspace,
-                params.get("task_description", "Discover alpha factors for equity trading"),
-                params.get("target_market", "US"),
-                float(params.get("target_ic", 0.05)),
+        resume_from = params.get("resume_from")
+        ignored: list[str] = []
+        if resume_from:
+            rd_loop = load_loop_checkpoint(kind, resume_from)
+        elif kind == "factor_mining":
+            target_ic = params.get("target_ic")
+            rd_loop, ignored = build_factor_loop(
+                params.get("task_description", ""),
+                params.get("target_market", ""),
+                float(target_ic) if target_ic is not None else None,
                 enable_mcp=enable_mcp, mcp_port=mcp_port)
         elif kind == "model_optimization":
-            rd_loop = build_model_loop(
-                workspace,
-                params.get("model_type", "lightgbm"),
-                params.get("optimization_target", "sharpe"),
+            rd_loop, ignored = build_model_loop(
+                params.get("model_type", ""),
+                params.get("optimization_target", ""),
                 enable_mcp=enable_mcp, mcp_port=mcp_port)
         else:
-            rd_loop = build_quant_loop(
-                workspace,
-                params.get("research_goal", params.get("task_description", "Quantitative research")),
-                params.get("target_market", "US"),
+            rd_loop, ignored = build_quant_loop(
+                params.get("research_goal", params.get("task_description", "")),
+                params.get("target_market", ""),
                 enable_mcp=enable_mcp, mcp_port=mcp_port)
+        if ignored:
+            logger.warning("RD-Agent task %s: parameters not applied: %s", task_id, "; ".join(ignored))
 
-        resume_from = params.get("resume_from")
-        if resume_from:
-            if not load_checkpoint(rd_loop, resume_from):
-                _out({"event": "error", "task_id": task_id,
-                      "error": f"Could not load checkpoint {resume_from}"})
-                sys.exit(1)
-
-        result = run_loop_sync(task_id, rd_loop, max_iterations, Path(workspace), _out)
+        result = run_loop_sync(task_id, rd_loop, max_iterations, workspace_path, _out,
+                               extra={"ignored_params": ignored} if ignored else None)
         _out(result)
     except SystemExit:
         raise
     except Exception as exc:
         logger.exception("RD-Agent task %s failed", task_id)
-        _out({"event": "error", "task_id": task_id, "error": str(exc)})
-        sys.exit(1)
+        fail(str(exc))
 
 
 def cmd_start_mcp_server(params: dict[str, Any]) -> dict[str, Any]:
@@ -169,11 +212,19 @@ def cmd_start_mcp_server(params: dict[str, Any]) -> dict[str, Any]:
     port = int(params.get("port", 18765))
     proc, toolset = start_mcp_server_process(port=port)
     avail = mcp_availability()
+    # The port the server was actually started on (start_mcp_server_process moves to
+    # the next free port when the requested one is taken); the first open port in
+    # the range may belong to something else.
+    if proc is not None:
+        try:
+            port = int(proc.args[-1])
+        except (TypeError, ValueError, IndexError):
+            pass
 
     return {
         "success": toolset is not None,
-        "url": f"http://127.0.0.1:{avail['running_ports'][0] if avail['running_ports'] else port}/mcp",
-        "port": avail["running_ports"][0] if avail["running_ports"] else port,
+        "url": f"http://127.0.0.1:{port}/mcp",
+        "port": port,
         "pid": proc.pid if proc else None,
         "tools": avail["tools"],
         "message": "Fincept MCP server started" if toolset else "MCP server failed to start",
@@ -212,13 +263,19 @@ def cmd_start_ui(params: dict[str, Any]) -> dict[str, Any]:
     else:
         return {"success": False, "error": "No free port found in range 19999-20009"}
 
+    # Loopback only: Streamlit listens on every network interface by default, which
+    # put the agent logs on the LAN. The variable reaches both launch forms below.
+    import os
+    ui_env = dict(os.environ, STREAMLIT_SERVER_ADDRESS="127.0.0.1")
+
     try:
         proc = subprocess.Popen(
             [sys.executable, "-m", "rdagent.app.streamlit", "--server.port", str(port),
-             "--server.headless", "true"],
+             "--server.headless", "true", "--server.address", "127.0.0.1"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
+            env=ui_env,
         )
         url = f"http://localhost:{port}"
         logger.info("RD-Agent Streamlit UI started at %s (pid=%s)", url, proc.pid)
@@ -232,6 +289,7 @@ def cmd_start_ui(params: dict[str, Any]) -> dict[str, Any]:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
+                env=ui_env,
             )
             url = f"http://localhost:{port}"
             return {"success": True, "url": url, "port": port, "pid": proc.pid,

@@ -10,32 +10,239 @@
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/quantlib/QuantLibGuide.h"
 #include "screens/quantlib/QuantLibParamForm.h"
 #include "screens/quantlib/QuantLibResultView.h"
 #include "services/quantlib/QuantLibClient.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/EnterprisePromo.h"
 
+#include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QHideEvent>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeySequence>
+#include <QLocale>
 #include <QPointer>
 #include <QScrollArea>
 #include <QShortcut>
+#include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QStyle>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrentRun>
 
+#include <cmath>
 #include <utility>
 
 namespace {
 using namespace fincept::ui;
 
 constexpr int kQlRememberedBodies = 40; // per-endpoint last inputs kept in the screen state
+
+// Remembered results: kept in memory per endpoint (LRU), and the small ones also
+// with the screen state so they are back instantly after a restart. The state
+// is written on a debounce from the GUI thread: keep it to a few hundred KB.
+constexpr int kQlCachedResults = 24;
+constexpr int kQlPersistedResults = 10;
+constexpr int kQlPersistBytes = 24 * 1024;
+// Default runs start this long after the endpoint settles (arrowing through the
+// endpoint list must not fire a request per row), and pause after a service /
+// network error so a down service is not hammered.
+constexpr int kQlAutoRunDelayMs = 350;
+constexpr qint64 kQlAutoPauseMs = 60'000;
+constexpr int kQlPreviewInputs = 8;
+
+// The Pro plan price: a Fincept plan price is always USD and never converted
+// (fmt::plan_price places the unit per the user's settings).
+QString ql_pro_price() {
+    return fincept::ui::formatting::plan_price(10);
+}
+
+// One request-body field as preview text: numbers in full, short arrays inline,
+// longer arrays / objects by size.
+QString ql_preview_value(const QJsonValue& v) {
+    if (v.isDouble()) {
+        const double d = v.toDouble();
+        if (std::floor(d) == d && std::fabs(d) < 1e15)
+            return QLocale().toString(static_cast<qlonglong>(d));
+        return QString::number(d, 'g', 8);
+    }
+    if (v.isBool())
+        return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    if (v.isString()) {
+        const QString s = v.toString();
+        return s.size() > 32 ? s.left(31) + QStringLiteral("…") : s;
+    }
+    if (v.isArray()) {
+        const QJsonArray a = v.toArray();
+        bool scalars = a.size() <= 4;
+        for (const QJsonValue& e : a)
+            scalars = scalars && (e.isDouble() || e.isString());
+        if (scalars && !a.isEmpty()) {
+            QStringList parts;
+            for (const QJsonValue& e : a)
+                parts << (e.isDouble() ? QString::number(e.toDouble(), 'g', 6) : e.toString());
+            const QString joined = QStringLiteral("[") + parts.join(QStringLiteral(", ")) + QStringLiteral("]");
+            if (joined.size() <= 34)
+                return joined;
+        }
+        return QCoreApplication::translate("QuantLibScreen", "%n value(s)", nullptr, int(a.size()));
+    }
+    if (v.isObject())
+        return QCoreApplication::translate("QuantLibScreen", "%n field(s)", nullptr, int(v.toObject().size()));
+    return QStringLiteral("null");
+}
+
+QList<QPair<QString, QString>> ql_preview_inputs(const QJsonObject& body) {
+    QList<QPair<QString, QString>> rows;
+    for (auto it = body.constBegin(); it != body.constEnd() && rows.size() < kQlPreviewInputs; ++it) {
+        QString key = it.key();
+        key.replace(QLatin1Char('_'), QLatin1Char(' '));
+        rows.append({key, ql_preview_value(it.value())});
+    }
+    return rows;
+}
+
+// Revision of endpoint_examples(). Saved with the remembered bodies: a body
+// remembered under an older revision is dropped for the endpoints whose example
+// was corrected since, so the form re-seeds from the fixed example instead of
+// re-sending field names the server silently ignores (or a default it rejects).
+// Bump it and list the endpoints whenever examples are corrected again.
+constexpr int kQlExamplesRevision = 6;
+
+// Rev 2: statement inputs renamed to the server's IncomeStatementInput /
+// BalanceSheetInput / CashFlowInput fields, plus defaults the server rejected.
+// Rev 3: the server's handler fixes. Bodies it now refuses with 422 (Beneish M
+// without cash_flow, Springate without pretax_income / current_liabilities, a
+// screen whose companies lack a tested metric, equilibrium bids without
+// valuations, LGD targets outside [0, 1]); inputs it honours again (pro-forma
+// lease / goodwill / pension / stock-comp sections, all six comparable
+// multiples, the comprehensive market block, quadrature method and n); Altman Z
+// on the same company as Springate.
+// Rev 4: the server's second round. Units (XVA spreads in basis points,
+// utility generation in kWh against MW), inputs that now reach the result (SOTP
+// segment DCF, REIT NOI, utility capital / fuel recovery, insurance surplus,
+// incremental-VaR weight_change, PFE / tail-risk confidence, Hill k, inflation
+// bond coupons, debt capacity at the request's cost of debt), maximum-likelihood
+// LGD fits, and inputs the server marks as having no effect, removed from the
+// examples (a remembered body would keep showing them).
+// Rev 5: utility examples whose default result was not finite (CRRA over an
+// outcome of 0 = -inf; quadratic utility at its satiation point).
+// Rev 6: fields the LIVE API still requires (its request models predate the
+// overhaul ones the earlier revisions followed, which made them optional): each
+// of these bodies was a 422 on api.fincept.in. Quadrature n is a number again.
+bool ql_example_revised_since(const QString& endpoint, int saved_revision) {
+    static const QSet<QString> kQlRevisedInRev2 = {
+        "analysis/fundamentals/profitability",
+        "analysis/fundamentals/liquidity",
+        "analysis/fundamentals/efficiency",
+        "analysis/fundamentals/growth",
+        "analysis/fundamentals/solvency",
+        "analysis/fundamentals/cashflow",
+        "analysis/fundamentals/comprehensive",
+        "analysis/fundamentals/dupont",
+        "analysis/fundamentals/quality",
+        "analysis/valuation/factor-models",
+        "analysis/valuation/comparable",
+        "analysis/valuation/predictive/piotroski-f",
+        "analysis/valuation/predictive/beneish-m",
+        "analysis/valuation/predictive/ohlson-o",
+        "analysis/valuation/predictive/zmijewski",
+        "analysis/valuation/proforma/adjustments",
+        "analysis/valuation/startup/first-chicago",
+        "analysis/ratios/efficiency/working-capital-turnover",
+        "core/legs/float",
+        "economics/auctions/run",
+        "ml/factor/cross-sectional",
+        "ml/timeseries/feature-importance",
+        "ml/validation/interpretability",
+        "numerical/differentiation/gradient",
+        "numerical/differentiation/hessian",
+        "numerical/fft/forward",
+        "numerical/fft/inverse",
+        "numerical/optimize/minimize",
+        "physics/entropy/transfer",
+        "portfolio/risk/comprehensive",
+        "risk/backtest",
+        "risk/evt/gpd",
+        "solver/finance/irr",
+        "stochastic/simulation/multilevel-mc",
+    };
+    static const QSet<QString> kQlRevisedInRev3 = {
+        "analysis/fundamentals/comprehensive",
+        "analysis/valuation/comparable",
+        "analysis/valuation/screen",
+        "analysis/valuation/predictive/altman-z",
+        "analysis/valuation/predictive/beneish-m",
+        "analysis/valuation/predictive/springate",
+        "analysis/valuation/proforma/adjustments",
+        "economics/auctions/equilibrium-bid",
+        "ml/regression/lgd",
+        "numerical/integration/quadrature",
+    };
+    static const QSet<QString> kQlRevisedInRev4 = {
+        "analysis/fundamentals/capital-structure/optimal",
+        "analysis/industry/banking",
+        "analysis/industry/insurance",
+        "analysis/industry/reits",
+        "analysis/industry/utilities",
+        "analysis/valuation/predictive/springate",
+        "analysis/valuation/segment/sotp",
+        "curves/inflation/bootstrap",
+        "curves/monotonicity-check",
+        "curves/smoothness-penalty",
+        "economics/utility/prospect-theory",
+        "instruments/bond/inflation-linked",
+        "instruments/commodity/future",
+        "instruments/futures/stir",
+        "ml/credit/beta-lgd",
+        "ml/credit/two-stage-lgd",
+        "ml/regression/lgd",
+        "physics/thermodynamics/ideal-gas",
+        "portfolio/risk/incremental-var",
+        "risk/evt/hill",
+        "risk/sensitivities/key-rate-duration",
+        "risk/tail-risk/comprehensive",
+        "risk/xva/cva",
+        "risk/xva/pfe",
+        "solver/finance/par-rate",
+        "solver/finance/pv01",
+        "stochastic/sampling/jump",
+    };
+    static const QSet<QString> kQlRevisedInRev5 = {
+        "economics/utility/quadratic",
+        "economics/utility/expected-utility",
+        "economics/utility/certainty-equivalent",
+        "economics/utility/risk-premium",
+    };
+    static const QSet<QString> kQlRevisedInRev6 = {
+        "curves/monotonicity-check",
+        "curves/smoothness-penalty",
+        "curves/inflation/bootstrap",
+        "risk/xva/pfe",
+        "instruments/commodity/future",
+        "instruments/futures/stir",
+        "solver/finance/pv01",
+        "solver/finance/par-rate",
+        "numerical/integration/quadrature",
+        "ml/credit/two-stage-lgd",
+        "analysis/fundamentals/capital-structure/optimal",
+        "analysis/valuation/predictive/springate",
+    };
+    return (saved_revision < 2 && kQlRevisedInRev2.contains(endpoint)) ||
+           (saved_revision < 3 && kQlRevisedInRev3.contains(endpoint)) ||
+           (saved_revision < 4 && kQlRevisedInRev4.contains(endpoint)) ||
+           (saved_revision < 5 && kQlRevisedInRev5.contains(endpoint)) ||
+           (saved_revision < 6 && kQlRevisedInRev6.contains(endpoint));
+}
 
 inline QString kStyle() {
     return QStringLiteral("#qlScreen { background: %1; }"
@@ -47,17 +254,17 @@ inline QString kStyle() {
                           "  border: 1px solid %8; background: transparent; }"
                           "#qlPlanBadge[plan=\"pro\"] { color: %6; border-color: %6; }"
                           "#qlPlanNote { color: %5; background: transparent; }"
-                          "#qlUpgradeBtn { background: %3; color: %1; border: none; padding: 4px 12px; "
+                          "#qlUpgradeBtn { background: %3; color: %16; border: none; padding: 4px 12px; "
                           "  font-weight: 700; }"
                           "#qlUpgradeBtn:hover { background: %10; }"
 
-                          "#qlSidebar { background: %7; border-right: 1px solid %8; }"
+                          "#qlSidebar { background: %7; border-right: 1px solid %18; }"
                           "#qlSidebarTitle { color: %5; font-weight: 700; letter-spacing: 0.5px; "
-                          "  background: transparent; padding: 8px 12px; border-bottom: 1px solid %8; }"
+                          "  background: transparent; padding: 8px 12px; border-bottom: 1px solid %18; }"
                           "QTreeWidget { background: %1; color: %5; border: none; }"
                           "QTreeWidget::item { padding: 4px 8px; border-bottom: 1px solid %8; }"
                           "QTreeWidget::item:hover { color: %4; background: %12; }"
-                          "QTreeWidget::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
+                          "QTreeWidget::item:selected { color: %3; background: %17; }"
 
                           "#qlCenterPanel { background: %1; }"
                           "#qlCenterTitle { color: %4; font-weight: 700; background: transparent; }"
@@ -73,7 +280,7 @@ inline QString kStyle() {
                           "QComboBox { background: %1; color: %4; border: 1px solid %8; padding: 4px 8px; }"
                           "QComboBox::drop-down { border: none; width: 16px; }"
                           "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-                          "  selection-background-color: %3; }"
+                          "  selection-background-color: %3; selection-color: %16; }"
                           "QCheckBox { color: %4; background: transparent; }"
 
                           "#qlAccess { color: %5; background: transparent; }"
@@ -90,19 +297,19 @@ inline QString kStyle() {
                           "#qlFormBtn:disabled { color: %11; }"
                           "#qlJsonEdit, #qlJsonView { background: %1; color: %13; border: 1px solid %8; }"
 
-                          "#qlExecBtn { background: %3; color: %1; border: none; padding: 6px 20px; "
+                          "#qlExecBtn { background: %3; color: %16; border: 1px solid %3; padding: 6px 20px; "
                           "  font-weight: 700; }"
-                          "#qlExecBtn:hover { background: %10; }"
-                          "#qlExecBtn:disabled { background: %10; color: %11; }"
+                          "#qlExecBtn:hover { background: %10; border-color: %10; }"
+                          "#qlExecBtn:disabled { background: %7; color: %11; border-color: %18; }"
 
-                          "#qlResultPanel { background: %7; border-left: 1px solid %8; }"
-                          "#qlResultBar { background: %2; border-bottom: 1px solid %8; }"
+                          "#qlResultPanel { background: %7; border-left: 1px solid %18; }"
+                          "#qlResultBar { background: %2; border-bottom: 1px solid %18; }"
                           "#qlSectionBar { background: %7; border-bottom: 1px solid %8; }"
                           "#qlResultEndpoint { color: %13; background: transparent; }"
                           "#qlResultStatus { color: %5; background: transparent; }"
                           "#qlViewBtn { background: transparent; color: %5; border: 1px solid %8; "
                           "  padding: 2px 8px; font-weight: 700; }"
-                          "#qlViewBtn:checked { background: %3; color: %1; border-color: %3; }"
+                          "#qlViewBtn:checked { background: %3; color: %16; border-color: %3; }"
                           "#qlViewBtn:disabled { color: %11; border-color: %8; }"
                           "#qlResultMessage { color: %5; background: %1; padding: 24px; }"
                           "#qlErrorPage { background: %1; }"
@@ -112,17 +319,17 @@ inline QString kStyle() {
                           "#qlErrorTitle[tone=\"warn\"] { color: %15; }"
                           "#qlErrorText { color: %4; background: transparent; }"
                           "#qlErrorHint { color: %5; background: transparent; }"
-                          "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; }"
-                          "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                          "QTableView { background: %1; color: %4; border: none; gridline-color: %8; }"
+                          "QTableView::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
                           "QHeaderView::section { background: %2; color: %5; border: none; "
                           "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
                           "  padding: 4px 6px; font-weight: 700; }"
 
-                          "#qlStatusBar { background: %2; border-top: 1px solid %8; }"
+                          "#qlStatusBar { background: %2; border-top: 1px solid %18; }"
                           "#qlStatusText { color: %5; background: transparent; }"
                           "#qlStatusHighlight { color: %13; background: transparent; }"
 
-                          "QSplitter::handle { background: %8; }"
+                          "QSplitter::handle { background: %18; }"
                           "QScrollBar:vertical { background: %1; width: 6px; }"
                           "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
@@ -131,7 +338,7 @@ inline QString kStyle() {
         .arg(colors::AMBER())          // %3
         .arg(colors::TEXT_PRIMARY())   // %4
         .arg(colors::TEXT_SECONDARY()) // %5
-        .arg(colors::POSITIVE())       // %6
+        .arg(colors::SUCCESS())        // %6  state (plan / access), not price direction
         .arg(colors::BG_SURFACE())     // %7
         .arg(colors::BORDER_DIM())     // %8
         .arg(colors::BORDER_BRIGHT())  // %9
@@ -139,8 +346,11 @@ inline QString kStyle() {
         .arg(colors::TEXT_DIM())       // %11
         .arg(colors::BG_HOVER())       // %12
         .arg(colors::CYAN())           // %13
-        .arg(colors::NEGATIVE())       // %14
+        .arg(colors::DANGER())         // %14 state (invalid field / error title)
         .arg(colors::WARNING())        // %15
+        .arg(colors::TEXT_ON_ACCENT()) // %16
+        .arg(colors::ACCENT_BG())      // %17
+        .arg(colors::BORDER_MED())     // %18
         ;
 }
 
@@ -316,7 +526,7 @@ static QString ql_cost_badge(QuantLibCost cost) {
 static QColor ql_cost_color(QuantLibCost cost) {
     switch (cost) {
         case QuantLibCost::Included:
-            return QColor(colors::POSITIVE());
+            return QColor(colors::SUCCESS());
         case QuantLibCost::OneCredit:
             return QColor(colors::WARNING());
         case QuantLibCost::NeedsPro:
@@ -332,9 +542,23 @@ QuantLibScreen::QuantLibScreen(QWidget* parent) : QWidget(parent) {
     setStyleSheet(kStyle());
     modules_ = build_modules();
     paid_plan_ = services::quantlib_paid_plan();
+
+    // The default run of the endpoint on screen starts once the selection has
+    // settled (created before the UI: building it already selects an endpoint).
+    auto_timer_ = new QTimer(this);
+    auto_timer_->setSingleShot(true);
+    auto_timer_->setInterval(kQlAutoRunDelayMs);
+    connect(auto_timer_, &QTimer::timeout, this, &QuantLibScreen::start_default_run);
+
     setup_ui();
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
-            [this](const ThemeTokens&) { setStyleSheet(kStyle()); });
+    // The screen stylesheet is built from theme tokens, so the theme manager's
+    // re-style pass translates it; setting it again in a theme_changed handler
+    // would force Qt's full re-style (seconds). Tree and combo items keep the
+    // badge colours they were given: re-colour them once the change settled.
+    connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, this, [this]() {
+        refresh_tree_badges();
+        decorate_endpoint_items();
+    });
 
     // Plan changes (sign-in, purchase, pass expiry) re-badge the catalog live.
     auto& auth = auth::AuthManager::instance();
@@ -344,7 +568,7 @@ QuantLibScreen::QuantLibScreen(QWidget* parent) : QWidget(parent) {
     int total_endpoints = 0;
     for (const auto& m : modules_)
         total_endpoints += m.endpoint_count;
-    LOG_INFO("QuantLib", QString("Screen constructed — %1 modules, %2 endpoints, %3 plan")
+    LOG_DEBUG("QuantLib", QString("Screen constructed — %1 modules, %2 endpoints, %3 plan")
                              .arg(modules_.size())
                              .arg(total_endpoints)
                              .arg(paid_plan_ ? "paid" : "free"));
@@ -391,6 +615,7 @@ void QuantLibScreen::setup_ui() {
 
     refresh_tree_badges();
     on_module_changed(0);
+    select_landing_endpoint();
 
     // Populates the data-derived chrome (header module/endpoint counts, plan
     // note). Must run after the widgets exist.
@@ -400,7 +625,7 @@ void QuantLibScreen::setup_ui() {
 QWidget* QuantLibScreen::create_header() {
     auto* bar = new QWidget(this);
     bar->setObjectName("qlHeader");
-    bar->setFixedHeight(42);
+    bar->setMinimumHeight(42); // two text lines: grows with the font
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
@@ -473,36 +698,94 @@ QWidget* QuantLibScreen::create_sidebar() {
         }
     }
 
-    connect(module_tree_, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item) {
-        if (!item)
-            return;
-        // A module/panel click is a browse action: drop any search filter.
-        if (filter_edit_ && !filter_edit_->text().isEmpty()) {
-            const QSignalBlocker block(filter_edit_);
-            filter_edit_->clear();
-        }
-        if (!item->parent()) {
-            // Module header — clear any sub-panel filter carried over from the
-            // previously selected module.
-            active_panel_.clear();
-            status_panel_->clear();
-            on_module_changed(item->data(0, Qt::UserRole).toInt());
-        } else {
-            const int mod_idx = item->parent()->data(0, Qt::UserRole).toInt();
-            if (mod_idx < 0 || mod_idx >= modules_.size())
-                return;
-            // Set the panel BEFORE on_module_changed() so populate_panels()
-            // applies the filter — previously the panel was only a label and the
-            // endpoint list never narrowed.
-            active_panel_ = item->data(0, Qt::UserRole + 1).toString();
-            on_module_changed(mod_idx);
-            status_panel_->setText(active_panel_);
-            center_title_->setText(modules_[mod_idx].name.toUpper() + " / " + active_panel_.toUpper());
-        }
-    });
+    connect(module_tree_, &QTreeWidget::itemClicked, this,
+            [this](QTreeWidgetItem* item) { on_tree_item_clicked(item); });
 
     vl->addWidget(module_tree_, 1);
     return panel;
+}
+
+void QuantLibScreen::on_tree_item_clicked(QTreeWidgetItem* item) {
+    if (!item)
+        return;
+    // A module/panel click is a browse action: drop any search filter.
+    if (filter_edit_ && !filter_edit_->text().isEmpty()) {
+        const QSignalBlocker block(filter_edit_);
+        filter_edit_->clear();
+    }
+    if (!item->parent()) {
+        // Module header — clear any sub-panel filter carried over from the
+        // previously selected module.
+        active_panel_.clear();
+        status_panel_->clear();
+        on_module_changed(item->data(0, Qt::UserRole).toInt());
+    } else {
+        const int mod_idx = item->parent()->data(0, Qt::UserRole).toInt();
+        if (mod_idx < 0 || mod_idx >= modules_.size())
+            return;
+        // Set the panel BEFORE on_module_changed() so populate_panels()
+        // applies the filter — previously the panel was only a label and the
+        // endpoint list never narrowed.
+        active_panel_ = item->data(0, Qt::UserRole + 1).toString();
+        on_module_changed(mod_idx);
+        status_panel_->setText(active_panel_);
+        center_title_->setText(modules_[mod_idx].name.toUpper() + " / " + active_panel_.toUpper());
+    }
+}
+
+bool QuantLibScreen::open_section(const QString& section, const QString& focus) {
+    // A click on the module in the tree (on_tree_item_clicked), then the endpoint picker's own
+    // selection (endpoint_combo_ → on_endpoint_changed). Validated before anything changes.
+    QString raw = section.trimmed();
+    if (raw.startsWith(QLatin1String("module:"), Qt::CaseInsensitive))
+        raw = raw.mid(7).trimmed();
+    QString key = raw.toLower();
+    QString endpoint = focus.trimmed();
+    if (key.contains(QLatin1Char('/'))) { // the section is an endpoint itself
+        if (endpoint.isEmpty())
+            endpoint = raw;
+        key = key.section(QLatin1Char('/'), 0, 0);
+    }
+    auto module_of = [this](const QString& id) {
+        for (int i = 0; i < modules_.size(); ++i)
+            if (modules_[i].id == id)
+                return i;
+        return -1;
+    };
+    int mod = -1;
+    if (!key.isEmpty()) {
+        mod = module_of(key);
+        if (mod < 0)
+            return false;
+    }
+    if (!endpoint.isEmpty()) {
+        // Relative to the module named, else a full path whose first segment is its module.
+        const int ep_mod = module_of(endpoint.section(QLatin1Char('/'), 0, 0));
+        if (mod >= 0 && ep_mod != mod)
+            endpoint = modules_[mod].id + QLatin1Char('/') + endpoint;
+        else if (mod < 0)
+            mod = ep_mod; // -1: not an endpoint of any module, ignored below
+    }
+    if (mod >= 0 && module_tree_) {
+        for (int t = 0; t < module_tree_->topLevelItemCount(); ++t) {
+            QTreeWidgetItem* item = module_tree_->topLevelItem(t);
+            if (item->data(0, Qt::UserRole).toInt() != mod)
+                continue;
+            item->setExpanded(true);
+            module_tree_->setCurrentItem(item);
+            on_tree_item_clicked(item);
+            break;
+        }
+    }
+    if (!endpoint.isEmpty() && endpoint_combo_) {
+        // No module named: relative to the module in view.
+        if (mod < 0 && active_module_ >= 0 && active_module_ < modules_.size())
+            endpoint = modules_[active_module_].id + QLatin1Char('/') + endpoint;
+        const int idx = endpoint_combo_->findData(endpoint);
+        if (idx >= 0)
+            endpoint_combo_->setCurrentIndex(idx); // emits → on_endpoint_changed
+    }
+    return true;
 }
 
 QWidget* QuantLibScreen::create_center_panel() {
@@ -528,7 +811,7 @@ QWidget* QuantLibScreen::create_center_panel() {
         pvl->setSpacing(0);
         auto* hdr = new QWidget(panel);
         hdr->setObjectName("qlPanelHeader");
-        hdr->setFixedHeight(34);
+        hdr->setMinimumHeight(34);
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
         *title_out = new QLabel(title, hdr);
@@ -572,13 +855,19 @@ QWidget* QuantLibScreen::create_center_panel() {
     pbl->addWidget(param_form_);
 
     exec_btn_ = new QPushButton(tr("EXECUTE"));
+    exec_btn_->setProperty("fincept_agent_risk", "spend"); // agents: a QuantLib API call uses Fincept API credits
     exec_btn_->setObjectName("qlExecBtn");
     exec_btn_->setCursor(Qt::PointingHandCursor);
-    exec_btn_->setFixedHeight(34);
+    exec_btn_->setMinimumHeight(34);
     exec_btn_->setAccessibleName(tr("Execute computation"));
-    connect(exec_btn_, &QPushButton::clicked, this, &QuantLibScreen::on_execute);
+    connect(exec_btn_, &QPushButton::clicked, this, &QuantLibScreen::on_exec_clicked);
     pbl->addWidget(exec_btn_);
     vl->addWidget(param_panel);
+
+    // Esc cancels the call in flight (combo pop-ups and dialogs consume their own Esc first).
+    auto* cancel_sc = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    cancel_sc->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(cancel_sc, &QShortcut::activated, this, &QuantLibScreen::cancel_request);
 
     // Ctrl+Enter executes from anywhere in the screen (Enter alone runs from a
     // parameter field; in the raw-JSON editor Enter inserts a newline).
@@ -604,7 +893,7 @@ QWidget* QuantLibScreen::create_center_panel() {
 QWidget* QuantLibScreen::create_status_bar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("qlStatusBar");
-    bar->setFixedHeight(26);
+    bar->setMinimumHeight(26);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
@@ -662,15 +951,17 @@ void QuantLibScreen::retranslateUi() {
         params_title_->setText(tr("REQUEST"));
     if (param_form_)
         param_form_->retranslate();
-    if (result_view_)
+    if (result_view_) {
         result_view_->retranslate();
+        if (!result_view_->has_result()) {
+            view_endpoint_.clear(); // previews / captions in the new language
+            show_default_view();
+        }
+    }
     if (status_left_)
         status_left_->setText(tr("QUANTLIB SUITE"));
-    if (exec_btn_) {
-        exec_btn_->setToolTip(tr("Run the selected endpoint (Enter in a field, or Ctrl+Enter)"));
-        if (!loading_)
-            exec_btn_->setText(tr("EXECUTE"));
-    }
+    if (exec_btn_)
+        set_loading(loading_); // EXECUTE / CANCEL text and tooltip
     // endpoint_panel_title_ carries the live "(n of m)" counts and the combo
     // items carry translated badges — repopulating rebuilds both and keeps the
     // current selection (and the form's unsent edits).
@@ -706,7 +997,7 @@ void QuantLibScreen::refresh_plan_ui() {
     }
     if (plan_note_) {
         plan_note_->setText(paid_plan_ ? tr("All %1 endpoints included · 0 credits per call").arg(total)
-                                       : signed_in ? tr("Unlock every module with Pro — $10/month")
+                                       : signed_in ? tr("Unlock every module with Pro — %1/month").arg(ql_pro_price())
                                                    : tr("Sign in to run QuantLib computations"));
     }
     if (upgrade_btn_)
@@ -715,6 +1006,15 @@ void QuantLibScreen::refresh_plan_ui() {
     refresh_tree_badges();
     decorate_endpoint_items();
     update_access_label();
+
+    // What runs on its own depends on the plan: re-evaluate the results pane
+    // when sign-in or the plan actually changed (not on every subscription poll).
+    const QString key = QStringLiteral("%1/%2").arg(signed_in ? 1 : 0).arg(paid_plan_ ? 1 : 0);
+    if (key != plan_key_) {
+        plan_key_ = key;
+        if (result_view_)
+            show_default_view(true);
+    }
 }
 
 QStringList QuantLibScreen::endpoints_for(int module_index, const QString& panel, bool* filtered) const {
@@ -801,7 +1101,7 @@ void QuantLibScreen::decorate_endpoint_items() {
         endpoint_combo_->setItemData(i,
                                      cost == QuantLibCost::Included    ? tr("Free on your plan")
                                      : cost == QuantLibCost::OneCredit ? tr("1 credit per call on the Free plan")
-                                                                       : tr("Needs Pro ($10/month)"),
+                                                                       : tr("Needs Pro (%1/month)").arg(ql_pro_price()),
                                      Qt::ToolTipRole);
     }
 }
@@ -830,8 +1130,9 @@ void QuantLibScreen::update_access_label() {
                 tier = QStringLiteral("credit");
                 break;
             case QuantLibCost::NeedsPro:
-                text = tr("PRO · this endpoint needs Pro ($10/month) — on the Free plan the server answers with an "
-                          "upgrade notice");
+                text = tr("PRO · this endpoint needs Pro (%1/month) — on the Free plan the server answers with an "
+                          "upgrade notice")
+                           .arg(ql_pro_price());
                 tier = QStringLiteral("pro");
                 break;
         }
@@ -861,7 +1162,7 @@ void QuantLibScreen::on_module_changed(int index) {
     center_title_->setText(m.name.toUpper());
 
     populate_panels(index);
-    LOG_INFO("QuantLib", "Module: " + m.name);
+    LOG_DEBUG("QuantLib", "Module: " + m.name);
     ScreenStateManager::instance().notify_changed(this);
 }
 
@@ -897,16 +1198,25 @@ void QuantLibScreen::on_endpoint_changed(int index) {
                                   !services::QuantLibClient::is_get_endpoint(ep));
     }
     update_access_label();
+
+    // Leaving a view cancels its default run (a run the user started keeps
+    // going: its answer is remembered for when they come back).
+    if (loading_ && loading_auto_ && loading_endpoint_ != ep) {
+        auto_ran_.remove(loading_endpoint_);
+        abandon_request();
+    }
+    update_exec_button();
+    show_default_view();
     ScreenStateManager::instance().notify_changed(this);
 }
 
 void QuantLibScreen::on_execute() {
-    if (loading_)
-        return;
-
+    // A run while another is in flight supersedes it: the user asked for these
+    // inputs now, so the older call is aborted and its answer never shown.
     const QString endpoint = current_endpoint();
     if (endpoint.isEmpty()) {
         // Used to return silently — the button appeared dead.
+        abandon_request();
         result_view_->show_input_error(tr("Select an endpoint first."));
         return;
     }
@@ -914,12 +1224,57 @@ void QuantLibScreen::on_execute() {
     QJsonObject params;
     QString error;
     if (!param_form_->body(&params, &error)) {
+        abandon_request();
         result_view_->show_input_error(error);
         return;
     }
 
+    if (!auth::AuthManager::instance().is_authenticated()) {
+        // Every QuantLib route needs an API key: say so instead of sending a call bound to fail.
+        abandon_request();
+        services::QuantLibFailure failure;
+        failure.kind = services::QuantLibFailureKind::AuthRequired;
+        failure.message = tr("Sign in to run QuantLib computations.");
+        result_view_->show_failure(endpoint, failure);
+        return;
+    }
+
     remember_body(endpoint, params);
+    abandon_request();
+    auto_timer_->stop();
     execute_api(endpoint, params);
+}
+
+void QuantLibScreen::on_exec_clicked() {
+    // CANCEL only stops the call of the endpoint on screen; with another
+    // endpoint's run in the background the button runs this one.
+    if (loading_ && loading_endpoint_ == current_endpoint())
+        cancel_request();
+    else
+        on_execute();
+}
+
+void QuantLibScreen::abandon_request() {
+    if (!loading_)
+        return;
+    ++request_seq_; // first: cancel() may run the stale callback synchronously
+    const quint64 id = std::exchange(request_id_, 0);
+    loading_auto_ = false;
+    set_loading(false);
+    if (id != 0)
+        services::QuantLibClient::instance().cancel(id);
+}
+
+void QuantLibScreen::cancel_request() {
+    if (!loading_)
+        return;
+    const QString endpoint = loading_endpoint_;
+    // A cancelled default run stays cancelled for this session (auto_ran_ keeps
+    // it): the user said no.
+    abandon_request();
+    if (endpoint == current_endpoint() && !result_view_->show_cancelled(endpoint))
+        show_preview_for(endpoint, tr("Cancelled — nothing was computed"));
+    LOG_INFO("QuantLib", "Cancelled " + endpoint);
 }
 
 // ── Data ────────────────────────────────────────────────────────────────────
@@ -996,23 +1351,55 @@ void QuantLibScreen::remember_body(const QString& endpoint, const QJsonObject& b
     ScreenStateManager::instance().notify_changed(this);
 }
 
-void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& params) {
+void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& params, bool automatic) {
+    const quint64 seq = ++request_seq_;
+    loading_endpoint_ = endpoint;
+    loading_auto_ = automatic;
+    if (automatic)
+        auto_ran_.insert(endpoint);
     set_loading(true);
     const QuantLibCost cost = cost_of(endpoint);
-    result_view_->show_loading(endpoint, cost == QuantLibCost::OneCredit ? tr("1 credit") : QString());
+    // A remembered result being refreshed stays fully visible ("as of … · refreshing").
+    if (automatic && result_view_->has_result() && result_view_->shown_endpoint() == endpoint)
+        result_view_->set_refreshing(true);
+    else
+        result_view_->show_loading(endpoint, cost == QuantLibCost::OneCredit ? tr("1 credit") : QString());
+    view_endpoint_ = endpoint;
 
     QElapsedTimer timer;
     timer.start();
     QPointer<QuantLibScreen> self = this;
-    services::QuantLibClient::instance().call(endpoint, params, [self, endpoint, params,
-                                                                 timer](mcp::ToolResult result) {
-        if (!self)
+    const quint64 id = services::QuantLibClient::instance().call(endpoint, params, [self, seq, endpoint, params,
+                                                                                    timer](mcp::ToolResult result) {
+        // Gone, cancelled or superseded by a newer run: this answer is not wanted.
+        if (!self || seq != self->request_seq_)
             return;
+        self->request_id_ = 0;
+        const bool was_auto = std::exchange(self->loading_auto_, false);
         self->set_loading(false);
         const qint64 elapsed = timer.elapsed();
+        // The answer only draws under its own endpoint; otherwise it is kept for
+        // when the user comes back to it.
+        const bool on_screen = self->current_endpoint() == endpoint;
 
-        if (!result.success) {
-            const services::QuantLibFailure failure = services::classify_quantlib_failure(result);
+        // A success envelope can still carry the handler's own error text.
+        services::QuantLibFailure failure;
+        bool failed = !result.success;
+        if (failed) {
+            failure = services::classify_quantlib_failure(result);
+        } else {
+            const QString inline_error = services::quantlib_inline_error(result.data);
+            if (!inline_error.isEmpty()) {
+                failed = true;
+                failure.kind = services::QuantLibFailureKind::Computation;
+                failure.http_status = 200;
+                failure.message = inline_error;
+            }
+        }
+
+        if (failed) {
+            if (failure.kind == services::QuantLibFailureKind::Cancelled)
+                return;
             if (failure.kind == services::QuantLibFailureKind::NeedsPro && !self->pro_overrides_.contains(endpoint)) {
                 // The server is authoritative: badge it PRO even if the local table disagreed.
                 self->pro_overrides_.insert(endpoint);
@@ -1024,30 +1411,299 @@ void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& par
                                      .arg(endpoint)
                                      .arg(failure.http_status)
                                      .arg(failure.message.left(300)));
-            self->result_view_->show_failure(endpoint, failure);
+            if (was_auto && failure.retryable) // service / network trouble: stop running defaults for a while
+                self->auto_paused_until_ms_ = QDateTime::currentMSecsSinceEpoch() + kQlAutoPauseMs;
+            if (was_auto && self->results_.contains(endpoint)) {
+                // Refreshing a remembered result failed: keep showing it.
+                if (on_screen)
+                    self->result_view_->set_refreshing(false);
+                return;
+            }
+            self->failures_.insert(endpoint, failure);
+            if (on_screen)
+                self->result_view_->show_failure(endpoint, failure);
+            else
+                self->flash_status(tr("%1 failed — open it to see why").arg(endpoint));
             return;
         }
 
-        // A success envelope can still carry the handler's own error text.
-        const QString inline_error = services::quantlib_inline_error(result.data);
-        if (!inline_error.isEmpty()) {
-            services::QuantLibFailure failure;
-            failure.kind = services::QuantLibFailureKind::Computation;
-            failure.http_status = 200;
-            failure.message = inline_error;
-            self->result_view_->show_failure(endpoint, failure);
-            return;
+        self->failures_.remove(endpoint);
+        self->store_result(endpoint, params, result.data, elapsed);
+        if (on_screen) {
+            self->view_endpoint_ = endpoint;
+            self->result_view_->show_result(endpoint, params, result.data, elapsed);
+        } else {
+            self->flash_status(tr("%1 finished in %2 ms — open it to see the result").arg(endpoint).arg(elapsed));
         }
-
-        self->result_view_->show_result(endpoint, params, result.data, elapsed);
-        LOG_INFO("QuantLib", QString("Executed %1 in %2 ms").arg(endpoint).arg(elapsed));
+        LOG_INFO("QuantLib", QString("Executed %1 in %2 ms%3").arg(endpoint).arg(elapsed).arg(was_auto ? " (default view)" : ""));
     });
+    // A cached answer was delivered inside call() (id 0, no longer loading).
+    if (seq == request_seq_ && loading_)
+        request_id_ = id;
 }
 
 void QuantLibScreen::set_loading(bool loading) {
     loading_ = loading;
-    exec_btn_->setEnabled(!loading);
-    exec_btn_->setText(loading ? tr("COMPUTING...") : tr("EXECUTE"));
+    update_exec_button();
+}
+
+void QuantLibScreen::update_exec_button() {
+    if (!exec_btn_)
+        return;
+    // While this endpoint's call is in flight the button cancels it (Enter /
+    // Ctrl+Enter re-run with the current inputs).
+    const bool cancels = loading_ && loading_endpoint_ == current_endpoint();
+    exec_btn_->setText(cancels ? tr("CANCEL") : tr("EXECUTE"));
+    exec_btn_->setToolTip(cancels ? tr("Cancel the running computation (Esc). Enter or Ctrl+Enter re-runs it with "
+                                       "the current inputs.")
+                                  : tr("Run the selected endpoint (Enter in a field, or Ctrl+Enter)"));
+    exec_btn_->setAccessibleName(cancels ? tr("Cancel computation") : tr("Execute computation"));
+}
+
+void QuantLibScreen::flash_status(const QString& text) {
+    if (!status_left_)
+        return;
+    status_left_->setText(text);
+    QPointer<QLabel> label = status_left_;
+    QTimer::singleShot(8000, this, [this, label, text]() {
+        if (label && label->text() == text)
+            label->setText(tr("QUANTLIB SUITE"));
+    });
+}
+
+// ── Default view ─────────────────────────────────────────────────────────────
+
+void QuantLibScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Out of the show event: restore_state may still be selecting the endpoint.
+    QTimer::singleShot(0, this, [this]() { show_default_view(); });
+}
+
+void QuantLibScreen::hideEvent(QHideEvent* event) {
+    // Leaving the screen cancels a default run (never one the user started).
+    if (auto_timer_->isActive()) {
+        auto_timer_->stop();
+        view_endpoint_.clear(); // re-evaluated on the next show
+    }
+    if (loading_ && loading_auto_) {
+        auto_ran_.remove(loading_endpoint_);
+        abandon_request();
+        view_endpoint_.clear();
+    }
+    QWidget::hideEvent(event);
+}
+
+bool QuantLibScreen::can_auto_run(const QString& endpoint) const {
+    return auth::AuthManager::instance().is_authenticated() && cost_of(endpoint) == QuantLibCost::Included &&
+           QDateTime::currentMSecsSinceEpoch() >= auto_paused_until_ms_;
+}
+
+void QuantLibScreen::show_default_view(bool force) {
+    if (!result_view_ || !param_form_)
+        return;
+    const QString ep = current_endpoint();
+    if (ep.isEmpty()) {
+        view_endpoint_.clear();
+        result_view_->show_idle();
+        return;
+    }
+    if (!isVisible()) {
+        view_endpoint_.clear(); // built when the screen is shown
+        return;
+    }
+    if (!force && view_endpoint_ == ep)
+        return;
+    view_endpoint_ = ep;
+    auto_timer_->stop();
+
+    // 1. This endpoint's run is in flight (the user's, started earlier).
+    if (loading_ && loading_endpoint_ == ep) {
+        result_view_->show_loading(ep, cost_of(ep) == QuantLibCost::OneCredit ? tr("1 credit") : QString());
+        return;
+    }
+    // 2. A remembered result, at once. One from an earlier session is refreshed
+    //    in the background when that is free; one from this session is current
+    //    (the calculation is deterministic).
+    if (show_cached(ep)) {
+        if (results_.value(ep).restored && !auto_ran_.contains(ep) && !loading_ && can_auto_run(ep)) {
+            result_view_->set_refreshing(true);
+            auto_endpoint_ = ep;
+            auto_timer_->start();
+        }
+        return;
+    }
+    // 3. Its last failure, with the action that fixes it.
+    const auto failed = failures_.constFind(ep);
+    if (failed != failures_.constEnd()) {
+        result_view_->show_failure(ep, failed.value());
+        return;
+    }
+    // 4. Free on this plan: a skeleton now, the default run once the selection settles.
+    if (!auto_ran_.contains(ep) && !loading_ && can_auto_run(ep)) {
+        result_view_->show_loading(ep, QString());
+        auto_endpoint_ = ep;
+        auto_timer_->start();
+        return;
+    }
+    // 5. Costs a credit / needs Pro / signed out / paused: the preview.
+    show_preview_for(ep);
+}
+
+void QuantLibScreen::start_default_run() {
+    const QString ep = current_endpoint();
+    if (ep.isEmpty() || ep != auto_endpoint_ || !isVisible())
+        return;
+    if (loading_) {
+        // The user's run of another endpoint keeps the single slot.
+        if (loading_endpoint_ != ep) {
+            if (results_.contains(ep))
+                result_view_->set_refreshing(false);
+            else
+                show_preview_for(ep);
+        }
+        return;
+    }
+    QJsonObject params;
+    if (!can_auto_run(ep) || !param_form_->peek_body(&params)) {
+        if (!results_.contains(ep))
+            show_preview_for(ep);
+        else
+            result_view_->set_refreshing(false);
+        return;
+    }
+    execute_api(ep, params, true);
+}
+
+void QuantLibScreen::show_preview_for(const QString& endpoint, const QString& status_note) {
+    QuantLibResultView::Preview pv;
+    pv.endpoint = endpoint;
+    pv.glyph = ql_module_glyph(endpoint.section(QLatin1Char('/'), 0, 0));
+    pv.title = ql_endpoint_title(endpoint);
+    pv.summary = ql_endpoint_summary(endpoint);
+
+    QJsonObject body;
+    if (endpoint == current_endpoint())
+        param_form_->peek_body(&body);
+    if (body.isEmpty())
+        body = last_bodies_.value(endpoint);
+    if (body.isEmpty())
+        body = QJsonDocument::fromJson(endpoint_examples().value(endpoint).toUtf8()).object();
+    pv.inputs = ql_preview_inputs(body);
+    pv.inputs_heading = last_bodies_.contains(endpoint) ? tr("YOUR LAST INPUTS — EDIT THEM ON THE LEFT")
+                                                        : tr("SAMPLE INPUTS — EDIT THEM ON THE LEFT");
+
+    const bool signed_in = auth::AuthManager::instance().is_authenticated();
+    QString status;
+    if (!signed_in) {
+        pv.note = tr("Sign in to run QuantLib computations — every route needs your account's API key.");
+        pv.note_tone = ui::EmptyState::Tone::Warning;
+        pv.run_text = tr("RUN");
+        status = tr("Signed out");
+    } else {
+        switch (cost_of(endpoint)) {
+            case QuantLibCost::Included:
+                pv.note = paid_plan_ ? tr("Included in your Pro plan · 0 credits per run")
+                                     : tr("Free on your plan · 0 credits per run");
+                pv.note_tone = ui::EmptyState::Tone::Success;
+                pv.run_text = tr("RUN");
+                status = QDateTime::currentMSecsSinceEpoch() < auto_paused_until_ms_
+                             ? tr("Not run · automatic runs pause for a minute after a service error")
+                             : tr("Not run yet");
+                break;
+            case QuantLibCost::OneCredit:
+                pv.note = tr("1 credit per run on the Free plan · Pro includes every endpoint at 0 credits");
+                pv.note_tone = ui::EmptyState::Tone::Warning;
+                pv.run_text = tr("RUN · 1 CREDIT");
+                pv.plans_secondary = true;
+                status = tr("Not run · 1 credit per run");
+                break;
+            case QuantLibCost::NeedsPro:
+                pv.note = tr("Needs Pro (%1/month) — on the Free plan the server answers with an upgrade notice "
+                             "instead of a result")
+                              .arg(ql_pro_price());
+                pv.note_tone = ui::EmptyState::Tone::Accent;
+                pv.run_text = tr("RUN");
+                pv.upgrade_primary = true;
+                status = tr("Not run · needs Pro");
+                break;
+        }
+    }
+    pv.status = status_note.isEmpty() ? status : status_note;
+    result_view_->show_preview(pv);
+}
+
+bool QuantLibScreen::show_cached(const QString& endpoint) {
+    auto it = results_.find(endpoint);
+    if (it == results_.end())
+        return false;
+    if (it->payload.isUndefined()) {
+        // Restored from the screen state: parsed on first use (≤ kQlPersistBytes).
+        const QJsonDocument doc = QJsonDocument::fromJson(it->stored);
+        if (!doc.isObject() || !doc.object().contains(QStringLiteral("p"))) {
+            results_.erase(it);
+            result_order_.removeAll(endpoint);
+            return false;
+        }
+        it->payload = doc.object().value(QStringLiteral("p"));
+    }
+    result_view_->show_result(endpoint, it->request, it->payload, it->elapsed_ms, it->at);
+    return true;
+}
+
+void QuantLibScreen::store_result(const QString& endpoint, const QJsonObject& request, const QJsonValue& payload,
+                                  qint64 elapsed_ms) {
+    CachedResult entry;
+    entry.request = request;
+    entry.payload = payload;
+    entry.at = QDateTime::currentDateTimeUtc();
+    entry.elapsed_ms = elapsed_ms;
+    results_.insert(endpoint, entry);
+    result_order_.removeAll(endpoint);
+    result_order_.append(endpoint);
+    while (result_order_.size() > kQlCachedResults)
+        results_.remove(result_order_.takeFirst());
+
+    // Small answers also go into the screen state. Serialised off the GUI
+    // thread: a simulation answer can be several MB (and is then not kept).
+    const QDateTime at = entry.at;
+    auto* watcher = new QFutureWatcher<QByteArray>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, endpoint, at]() {
+        QByteArray text = watcher->result();
+        watcher->deleteLater();
+        auto it = results_.find(endpoint);
+        if (it == results_.end() || it->at != at || text.size() > kQlPersistBytes)
+            return;
+        it->stored = std::move(text);
+        ScreenStateManager::instance().notify_changed(this);
+    });
+    watcher->setFuture(QtConcurrent::run([payload]() {
+        return QJsonDocument(QJsonObject{{QStringLiteral("p"), payload}}).toJson(QJsonDocument::Compact);
+    }));
+}
+
+void QuantLibScreen::select_landing_endpoint() {
+    // A fresh screen opens on something instructive that runs on its own:
+    // option Greeks on Pro (every route is included), a payment schedule on the
+    // Free plan (scheduling is free). restore_state() overrides this.
+    const QString landing = paid_plan_ ? QStringLiteral("pricing/bs/greeks-full")
+                                       : QStringLiteral("scheduling/schedule/generate");
+    const QString module_id = landing.section(QLatin1Char('/'), 0, 0);
+    for (int i = 0; i < modules_.size(); ++i) {
+        if (modules_[i].id != module_id)
+            continue;
+        on_module_changed(i);
+        const int idx = endpoint_combo_->findData(landing);
+        if (idx >= 0)
+            endpoint_combo_->setCurrentIndex(idx); // emits → on_endpoint_changed
+        for (int t = 0; module_tree_ && t < module_tree_->topLevelItemCount(); ++t) {
+            QTreeWidgetItem* item = module_tree_->topLevelItem(t);
+            if (item->data(0, Qt::UserRole).toInt() == i) {
+                item->setExpanded(true);
+                module_tree_->setCurrentItem(item);
+            }
+        }
+        break;
+    }
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -1059,20 +1715,71 @@ QVariantMap QuantLibScreen::save_state() const {
         if (it != last_bodies_.constEnd())
             bodies.insert(ep, QString::fromUtf8(QJsonDocument(it.value()).toJson(QJsonDocument::Compact)));
     }
+    // Remembered results small enough to keep (most recent last).
+    QVariantMap results;
+    QStringList result_order;
+    for (auto it = result_order_.crbegin(); it != result_order_.crend() && result_order.size() < kQlPersistedResults;
+         ++it) {
+        const auto r = results_.constFind(*it);
+        if (r == results_.constEnd() || r->stored.isEmpty())
+            continue;
+        results.insert(*it, QVariantMap{
+                                {"req", QString::fromUtf8(QJsonDocument(r->request).toJson(QJsonDocument::Compact))},
+                                {"res", QString::fromUtf8(r->stored)},
+                                {"at", r->at.toString(Qt::ISODate)},
+                                {"ms", r->elapsed_ms},
+                            });
+        result_order.prepend(*it);
+    }
     return {
         {"module", active_module_},
         {"panel", active_panel_},
         {"endpoint", current_endpoint()},
         {"bodies", bodies},
         {"body_order", body_order_},
+        {"examples_rev", kQlExamplesRevision},
+        {"results", results},
+        {"result_order", result_order},
     };
 }
 
 void QuantLibScreen::restore_state(const QVariantMap& state) {
+    if (state.isEmpty())
+        return; // nothing saved yet: keep the landing endpoint
+    // Remembered results (parsed lazily when first shown), dropped for endpoints
+    // whose example was corrected since they were computed.
+    {
+        const QVariantMap results = state.value("results").toMap();
+        const int rev = state.value("examples_rev", 1).toInt();
+        for (const QString& ep : state.value("result_order").toStringList()) {
+            if (ql_example_revised_since(ep, rev) || results_.contains(ep))
+                continue;
+            const QVariantMap r = results.value(ep).toMap();
+            const QByteArray stored = r.value("res").toString().toUtf8();
+            const QDateTime at = QDateTime::fromString(r.value("at").toString(), Qt::ISODate);
+            if (stored.isEmpty() || stored.size() > kQlPersistBytes || !at.isValid())
+                continue;
+            CachedResult entry;
+            entry.request = QJsonDocument::fromJson(r.value("req").toString().toUtf8()).object();
+            entry.payload = QJsonValue(QJsonValue::Undefined);
+            entry.stored = stored;
+            entry.at = at;
+            entry.elapsed_ms = r.value("ms").toLongLong();
+            entry.restored = true;
+            results_.insert(ep, entry);
+            result_order_.removeAll(ep);
+            result_order_.append(ep);
+        }
+    }
+    view_endpoint_.clear();
+
     // Remembered inputs first, so the form shows them for the restored endpoint.
     const QVariantMap bodies = state.value("bodies").toMap();
     const QStringList order = state.value("body_order").toStringList();
+    const int examples_rev = state.value("examples_rev", 1).toInt();
     for (const QString& ep : order) {
+        if (ql_example_revised_since(ep, examples_rev))
+            continue; // remembered against an example that has since been corrected
         const QJsonDocument doc = QJsonDocument::fromJson(bodies.value(ep).toString().toUtf8());
         if (doc.isObject() && body_order_.size() < kQlRememberedBodies) {
             last_bodies_.insert(ep, doc.object());

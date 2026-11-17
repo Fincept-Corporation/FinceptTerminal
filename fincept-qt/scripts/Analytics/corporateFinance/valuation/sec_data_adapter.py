@@ -26,6 +26,23 @@ try:
 except ImportError:
     FRED_AVAILABLE = False
 
+import os as _os
+_SCRIPTS_DIR = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", ".."))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.append(_SCRIPTS_DIR)
+try:
+    import fincept_json
+except ImportError:  # pragma: no cover - run from an unusual folder
+    fincept_json = None
+
+
+def _quiet_stdout():
+    """edgartools / yfinance / fredapi and the fallback notes below print; stdout carries one JSON reply."""
+    if fincept_json is not None:
+        return fincept_json.stdout_to_stderr()
+    import contextlib
+    return contextlib.redirect_stdout(sys.stderr)  # pragma: no cover
+
 
 class SECDataAdapter:
     """Adapter to extract DCF inputs from SEC filings using edgartools"""
@@ -576,8 +593,9 @@ def main():
     overrides = json.loads(sys.argv[3]) if len(sys.argv) > 3 else None
 
     try:
-        adapter = SECDataAdapter(ticker, fred_api_key)
-        dcf_inputs = adapter.build_dcf_inputs(fred_api_key, overrides)
+        with _quiet_stdout():
+            adapter = SECDataAdapter(ticker, fred_api_key)
+            dcf_inputs = adapter.build_dcf_inputs(fred_api_key, overrides)
 
         result = {
             "success": True,

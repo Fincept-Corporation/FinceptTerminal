@@ -27,7 +27,9 @@ class TradejiniBroker : public IBroker {
     BrokerId id() const override { return BrokerId::Tradejini; }
     const char* name() const override { return "Tradejini"; }
     const char* base_url() const override { return "https://api.tradejini.com/v2"; }
-    const char* ws_adapter_name() const override { return "tradejini"; }
+    // No Tradejini streaming adapter exists in this build (AccountDataStream::ws_init
+    // has no branch for it), so do not advertise one — see get_quotes().
+    const char* ws_adapter_name() const override { return ""; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{

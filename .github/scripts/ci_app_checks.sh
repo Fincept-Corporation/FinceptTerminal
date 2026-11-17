@@ -26,6 +26,12 @@
 #   --selftest-fno-algo drive the paper-trading and F&O engines against
 #   whatever profile they are given; without this they would mutate a real
 #   user profile's database. Never remove it.
+#
+# CHECK_SEVERITY
+#   Honoured by the `smoke` mode (default "error", so existing
+#   callers are unchanged). A non-blocking step sets CHECK_SEVERITY=warning and
+#   gets ::warning:: annotations for failures and hangs; the exit status is the
+#   same either way. `selftests` always reports errors.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -61,7 +67,8 @@ run_with_timeout() {
     local pid=$! waited=0
     while kill -0 "$pid" 2>/dev/null; do
         if [ "$waited" -ge "$secs" ]; then
-            echo "::error::timed out after ${secs}s: $*" >&2
+            # SEV is set only by modes that honour CHECK_SEVERITY (smoke).
+            echo "::${SEV:-error}::timed out after ${secs}s: $*" >&2
             kill -9 "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
             return 124
@@ -98,6 +105,7 @@ discover_selftests() {
     printf '%s\n' "$FALLBACK_SELFTESTS" | sed '/^[[:space:]]*$/d'
 }
 
+SEV=""   # annotation level; set below only by the modes that honour CHECK_SEVERITY
 MODE="${1:-}"; BINARY="${2:-}"
 [ -n "$MODE" ] && [ -n "$BINARY" ] || usage
 if [ ! -f "$BINARY" ]; then
@@ -150,6 +158,7 @@ EOF
     smoke)
         PROFILE="${3:-ci-smoke}"
         TIMEOUT="${4:-600}"
+        SEV="${CHECK_SEVERITY:-error}"
         echo "Smoke test: binary=$BINARY profile=$PROFILE platform=${QT_QPA_PLATFORM:-<native>}"
         echo "Walks every registered screen; the last '[Smoke] >>> constructing <id>'"
         echo "line names the screen if the process dies."
@@ -158,9 +167,9 @@ EOF
         else
             status=$?
             if [ "$status" -eq 124 ]; then
-                echo "::error::Smoke test hung (>${TIMEOUT}s) — likely a blocking dialog or a stalled screen"
+                echo "::${SEV}::Smoke test hung (>${TIMEOUT}s) — likely a blocking dialog or a stalled screen"
             else
-                echo "::error::Smoke test failed (exit $status) — see the last '[Smoke] >>> constructing <id>' line above"
+                echo "::${SEV}::Smoke test failed (exit $status) — see the last '[Smoke] >>> constructing <id>' line above"
             fi
             exit 1
         fi

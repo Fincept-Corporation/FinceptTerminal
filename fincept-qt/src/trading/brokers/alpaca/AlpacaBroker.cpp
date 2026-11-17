@@ -208,7 +208,10 @@ OrderPlaceResponse AlpacaBroker::place_order(const BrokerCredentials& creds, con
     result.order_id = resp.json.value("id").toString();
     if (result.order_id.isEmpty()) {
         result.error = "place_order: broker returned no order id — order not confirmed placed";
-        LOG_ERROR("AlpacaBroker", QString("place_order: %1 | body: %2").arg(result.error, redact_body(resp.raw_body)));
+        LOG_ERROR("AlpacaBroker", logf("Order placement not confirmed, the answer carries no order id",
+                                       {{"venue", "alpaca"},
+                                        {"status", resp.status_code},
+                                        {"body", redact_body(resp.raw_body)}}));
         return result;
     }
     result.success = true;
@@ -242,6 +245,11 @@ ApiResponse<QVector<BrokerOrderInfo>> AlpacaBroker::get_orders(const BrokerCrede
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     auto jdo = [](const QJsonValue& v) -> double { return v.isDouble() ? v.toDouble() : v.toString().toDouble(); };
+    if (!doc.isArray())
+        LOG_WARN("AlpacaBroker", logf("Orders response could not be parsed, order list left empty",
+                                      {{"bytes", resp.raw_body.size()},
+                                       {"error", err.error != QJsonParseError::NoError ? err.errorString()
+                                                                                       : QStringLiteral("not an array")}}));
     if (doc.isArray()) {
         for (const auto& v : doc.array()) {
             auto o = v.toObject();
@@ -282,6 +290,11 @@ ApiResponse<QVector<BrokerPosition>> AlpacaBroker::get_positions(const BrokerCre
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     auto jd = [](const QJsonValue& v) -> double { return v.isDouble() ? v.toDouble() : v.toString().toDouble(); };
+    if (!doc.isArray())
+        LOG_WARN("AlpacaBroker", logf("Positions response could not be parsed, position list left empty",
+                                      {{"bytes", resp.raw_body.size()},
+                                       {"error", err.error != QJsonParseError::NoError ? err.errorString()
+                                                                                       : QStringLiteral("not an array")}}));
     if (doc.isArray()) {
         for (const auto& v : doc.array()) {
             auto p = v.toObject();
@@ -296,7 +309,7 @@ ApiResponse<QVector<BrokerPosition>> AlpacaBroker::get_positions(const BrokerCre
             positions.append(pos);
         }
     }
-    LOG_INFO("AlpacaBroker", QString("get_positions: %1 positions").arg(positions.size()));
+    LOG_DEBUG("AlpacaBroker", QString("get_positions: %1 positions").arg(positions.size()));
     return {true, positions, "", ts};
 }
 
@@ -313,6 +326,11 @@ ApiResponse<QVector<BrokerHolding>> AlpacaBroker::get_holdings(const BrokerCrede
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     auto jd2 = [](const QJsonValue& v) -> double { return v.isDouble() ? v.toDouble() : v.toString().toDouble(); };
+    if (!doc.isArray())
+        LOG_WARN("AlpacaBroker", logf("Holdings response could not be parsed, holding list left empty",
+                                      {{"bytes", resp.raw_body.size()},
+                                       {"error", err.error != QJsonParseError::NoError ? err.errorString()
+                                                                                       : QStringLiteral("not an array")}}));
     if (doc.isArray()) {
         for (const auto& v : doc.array()) {
             auto p = v.toObject();
@@ -328,7 +346,7 @@ ApiResponse<QVector<BrokerHolding>> AlpacaBroker::get_holdings(const BrokerCrede
             holdings.append(h);
         }
     }
-    LOG_INFO("AlpacaBroker", QString("get_holdings: %1 holdings").arg(holdings.size()));
+    LOG_DEBUG("AlpacaBroker", QString("get_holdings: %1 holdings").arg(holdings.size()));
     return {true, holdings, "", ts};
 }
 
@@ -353,8 +371,8 @@ ApiResponse<BrokerFunds> AlpacaBroker::get_funds(const BrokerCredentials& creds)
     funds.used_margin = jval(j.value("initial_margin"));
     funds.collateral = jval(j.value("long_market_value"));
     funds.raw_data = j;
-    LOG_INFO("AlpacaBroker",
-             QString("get_funds: equity=%1 buying_power=%2").arg(funds.total_balance).arg(funds.available_balance));
+    LOG_DEBUG("AlpacaBroker",
+              QString("get_funds: equity=%1 buying_power=%2").arg(funds.total_balance).arg(funds.available_balance));
     return {true, funds, "", ts};
 }
 
@@ -1099,10 +1117,11 @@ ApiResponse<CancelAllResult> AlpacaBroker::cancel_all_orders(const BrokerCredent
         }
     }
     // An empty array is valid — means there were no open orders.
-    LOG_INFO("AlpacaBroker", QString("cancel_all_orders: %1 attempted, %2 canceled, %3 failed")
-                                 .arg(result.total_attempted)
-                                 .arg(result.canceled_order_ids.size())
-                                 .arg(result.failed.size()));
+    // Not an audit line here: the order audit trail is written centrally (UnifiedTrading).
+    LOG_INFO("AlpacaBroker", logf("Cancel-all finished", {{"venue", "alpaca"},
+                                                          {"attempted", result.total_attempted},
+                                                          {"cancelled", result.canceled_order_ids.size()},
+                                                          {"failed", result.failed.size()}}));
     return {true, result, "", ts};
 }
 
@@ -1139,10 +1158,11 @@ ApiResponse<CloseAllResult> AlpacaBroker::close_all_positions(const BrokerCreden
             }
         }
     }
-    LOG_INFO("AlpacaBroker", QString("close_all_positions: %1 positions, %2 closed, %3 failed")
-                                 .arg(result.total_positions)
-                                 .arg(result.closed_symbols.size())
-                                 .arg(result.failed.size()));
+    // Not an audit line here: the order audit trail is written centrally (UnifiedTrading).
+    LOG_INFO("AlpacaBroker", logf("Close-all-positions finished", {{"venue", "alpaca"},
+                                                                   {"positions", result.total_positions},
+                                                                   {"closed", result.closed_symbols.size()},
+                                                                   {"failed", result.failed.size()}}));
     return {true, result, "", ts};
 }
 

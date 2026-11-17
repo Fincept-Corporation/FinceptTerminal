@@ -1,23 +1,30 @@
 #include "screens/crypto_center/HoldingsBar.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
+#include "services/markets/FxRateService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
 #include "storage/secure/SecureStorage.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QSet>
 #include <QShowEvent>
+#include <QStringList>
 #include <QStyle>
 #include <QTimer>
 
 #include <cmath>
+
+namespace cc_fmt = fincept::ui::formatting;
+namespace cc_fx = fincept::services::fx;
 
 namespace fincept::screens {
 
@@ -26,57 +33,43 @@ namespace {
 constexpr qint64 kStaleThresholdMs = 90 * 1000;
 constexpr int kStalenessTickMs = 5 * 1000;
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
+/// A token amount: a quantity of that token (SOL, $FNCPT), never money.
 QString format_token(double v, int max_dp = 4) {
     if (v <= 0.0)
         return QStringLiteral("0");
-    return QLocale::system().toString(v, 'f', max_dp);
+    return cc_fmt::quantity(v, max_dp);
 }
 
-QString format_usd(double v) {
-    if (v < 0.0)
-        return QStringLiteral("—");
-    if (v >= 1.0 || v == 0.0) {
-        return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 2));
-    }
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 6));
-}
-
+/// A token's spot price: the price feed quotes USD — a price, never converted.
 QString format_price(double v) {
     if (v <= 0.0)
         return QStringLiteral("—");
-    if (v >= 1.0) {
-        return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 4));
+    return cc_fmt::price_with_symbol(v, cc_fmt::InstrumentFmt{QStringLiteral("USD")});
+}
+
+using fincept::screens::crypto_center_text::relative_time; // CryptoCenterText.h (one definition)
+
+/// "CUSTOM" / "HELIUS" / "PUBLIC" — or empty when the stored setting that decides
+/// it cannot be read (`error` then gets the reason): that is not PUBLIC.
+QString rpc_provider_label(QString* error = nullptr) {
+    const SecretRead override_res = SecureStorage::instance().read(QStringLiteral("solana.rpc_url"));
+    if (override_res.failed()) {
+        if (error)
+            *error = override_res.reason();
+        return {};
     }
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 8));
-}
-
-QString relative_time(qint64 ts_ms) {
-    if (ts_ms == 0)
-        return QStringLiteral("never");
-    const auto delta = QDateTime::currentMSecsSinceEpoch() - ts_ms;
-    if (delta < 0)
-        return QStringLiteral("just now");
-    const auto seconds = delta / 1000;
-    if (seconds < 60)
-        return QStringLiteral("%1s ago").arg(seconds);
-    if (seconds < 3600)
-        return QStringLiteral("%1m ago").arg(seconds / 60);
-    if (seconds < 86400)
-        return QStringLiteral("%1h ago").arg(seconds / 3600);
-    return QStringLiteral("%1d ago").arg(seconds / 86400);
-}
-
-QString rpc_provider_label() {
-    auto override_res = SecureStorage::instance().retrieve(QStringLiteral("solana.rpc_url"));
-    if (override_res.is_ok() && !override_res.value().isEmpty()) {
+    if (override_res.found() && !override_res.value.isEmpty()) {
         return QStringLiteral("CUSTOM");
     }
-    auto helius_res = SecureStorage::instance().retrieve(QStringLiteral("solana.helius_api_key"));
-    if (helius_res.is_ok() && !helius_res.value().isEmpty()) {
+    const SecretRead helius_res = SecureStorage::instance().read(QStringLiteral("solana.helius_api_key"));
+    if (helius_res.failed()) {
+        if (error)
+            *error = helius_res.reason();
+        return {};
+    }
+    if (helius_res.found() && !helius_res.value.isEmpty()) {
         return QStringLiteral("HELIUS");
     }
     return QStringLiteral("PUBLIC");
@@ -86,7 +79,9 @@ QString rpc_provider_label() {
 
 HoldingsBar::HoldingsBar(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("holdingsBar"));
-    setFixedHeight(56);
+    // At least 56px; taller when the user's font size needs it.
+    setMinimumHeight(56);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     build_ui();
     apply_theme();
@@ -102,6 +97,24 @@ HoldingsBar::HoldingsBar(QWidget* parent) : QWidget(parent) {
     staleness_timer_ = new QTimer(this);
     staleness_timer_->setInterval(kStalenessTickMs);
     connect(staleness_timer_, &QTimer::timeout, this, &HoldingsBar::update_staleness);
+
+    // TOTAL is shown in the display currency: redraw it when an FX rate lands.
+    connect(&fincept::services::FxRateService::instance(), &fincept::services::FxRateService::rates_changed, this,
+            [this]() {
+                if (first_publish_received_)
+                    recompute_total();
+            });
+    // A number / currency format change re-renders the figures already held (no re-fetch).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!first_publish_received_)
+            return;
+        sol_value_->setText(format_token(latest_balance_.sol(), 4));
+        fncpt_value_->setText(format_token(latest_balance_.fncpt_ui(), 2));
+        const QString fncpt_mint = QString::fromLatin1(fincept::wallet::kFncptMint);
+        if (price_usd_.contains(fncpt_mint))
+            fncpt_price_value_->setText(format_price(price_usd_.value(fncpt_mint)));
+        recompute_total();
+    });
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -159,43 +172,43 @@ void HoldingsBar::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#holdingsBar { background:%1; border-bottom:1px solid %2; }"
+    const QString ss = QString("QWidget#holdingsBar { background:%1; border-bottom:1px solid %2; }"
 
                                       // Metric labels
-                                      "QLabel#holdingsBarLabel { color:%3; font-family:%4; font-size:9px;"
+                                      "QLabel#holdingsBarLabel { color:%3; font-family:%4; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                                       "  font-weight:700; letter-spacing:1.5px; background:transparent; }"
-                                      "QLabel#holdingsBarValue { color:%5; font-family:%4; font-size:14px;"
+                                      "QLabel#holdingsBarValue { color:%5; font-family:%4; font-size:" + fincept::ui::fonts::px(0) + "px;"
                                       "  font-weight:600; background:transparent; }"
-                                      "QLabel#holdingsBarValueAccent { color:%6; font-family:%4; font-size:14px;"
+                                      "QLabel#holdingsBarValueAccent { color:%6; font-family:%4; font-size:" + fincept::ui::fonts::px(0) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#holdingsBarValueDim { color:%7; font-family:%4; font-size:12px;"
+                                      "QLabel#holdingsBarValueDim { color:%7; font-family:%4; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                                       "  background:transparent; }"
 
                                       // Discount chip — amber/neutral, not "money saved" green:
                                       // the discount is planned, not applied.
-                                      "QLabel#holdingsBarDiscountChip { color:%6; font-family:%4; font-size:10px;"
-                                      "  font-weight:700; letter-spacing:1.2px; background:rgba(217,119,6,0.08);"
+                                      "QLabel#holdingsBarDiscountChip { color:%6; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:" + ui::colors::alpha(AMBER, 0.08) + ";"
                                       "  border:1px solid %2; padding:2px 8px; }"
 
                                       // Feed status (5 variants)
-                                      "QLabel#holdingsBarFeedIdle { color:%3; font-family:%4; font-size:10px;"
+                                      "QLabel#holdingsBarFeedIdle { color:%3; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent;"
                                       "  padding:2px 6px; }"
-                                      "QLabel#holdingsBarFeedConnecting { color:%6; font-family:%4; font-size:10px;"
+                                      "QLabel#holdingsBarFeedConnecting { color:%6; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent;"
                                       "  padding:2px 6px; }"
-                                      "QLabel#holdingsBarFeedLive { color:%8; font-family:%4; font-size:10px;"
+                                      "QLabel#holdingsBarFeedLive { color:%8; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent;"
                                       "  padding:2px 6px; }"
-                                      "QLabel#holdingsBarFeedStale { color:%6; font-family:%4; font-size:10px;"
+                                      "QLabel#holdingsBarFeedStale { color:%6; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent;"
                                       "  padding:2px 6px; }"
-                                      "QLabel#holdingsBarFeedError { color:%9; font-family:%4; font-size:10px;"
+                                      "QLabel#holdingsBarFeedError { color:%9; font-family:%4; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent;"
                                       "  padding:2px 6px; }"
 
                                       // RPC chip
-                                      "QLabel#holdingsBarRpcChip { color:%3; font-family:%4; font-size:9px;"
+                                      "QLabel#holdingsBarRpcChip { color:%3; font-family:%4; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:%10;"
                                       "  border:1px solid %2; padding:2px 6px; }")
                            .arg(BG_SURFACE(),     // %1
@@ -205,8 +218,8 @@ void HoldingsBar::apply_theme() {
                                 TEXT_PRIMARY(),   // %5
                                 AMBER(),          // %6
                                 TEXT_SECONDARY(), // %7
-                                POSITIVE())       // %8
-                           .arg(NEGATIVE(),       // %9
+                                SUCCESS())        // %8
+                           .arg(DANGER(),         // %9
                                 BG_RAISED());     // %10
 
     setStyleSheet(ss);
@@ -291,7 +304,7 @@ void HoldingsBar::on_discount_update(const QVariant& v) {
         discount_chip_->setText(tr("%1% OFF · PLANNED").arg(d.discount_pct));
         discount_chip_->setToolTip(tr("Holding ≥ %1 $FNCPT qualifies for the planned fee discount. "
                                       "Not active yet — no purchase in the terminal is discounted.")
-                                       .arg(d.threshold_raw / std::pow(10.0, d.threshold_decimals), 0, 'f', 0));
+                                       .arg(cc_fmt::quantity(d.threshold_raw / std::pow(10.0, d.threshold_decimals), 0)));
         discount_chip_->show();
     } else {
         discount_chip_->hide();
@@ -392,12 +405,26 @@ void HoldingsBar::recompute_total() {
         }
     }
 
-    total_value_->setText(any_known ? format_usd(total) : QStringLiteral("—"));
-    if (unpriced > 0) {
-        total_value_->setToolTip(tr("%1 holding(s) excluded — no live price.").arg(unpriced));
+    QStringList tip;
+    if (!any_known) {
+        total_value_->setText(QStringLiteral("—"));
     } else {
-        total_value_->setToolTip(QString());
+        // The wallet total is an aggregate: shown in the display currency chosen in
+        // Settings. Token prices — and so this sum — are USD; "≈" marks a stale rate,
+        // "—" a missing one (never a 1:1 guess). The USD figure and the rate are in
+        // the tooltip.
+        const QString usd = QStringLiteral("USD");
+        const cc_fmt::ConvertedMoney c = cc_fx::convert_for_display(total, usd);
+        total_value_->setText(cc_fmt::converted_money(c));
+        if (!c.ok()) {
+            tip << tr("%1 in USD — no exchange rate to %2 yet.").arg(cc_fmt::money_precise(total, usd), c.currency);
+        } else if (c.converted) {
+            tip << tr("%1 in USD").arg(cc_fmt::money_precise(total, usd)) << cc_fmt::fx_note(c);
+        }
     }
+    if (unpriced > 0)
+        tip << tr("%1 holding(s) excluded — no live price.").arg(unpriced);
+    total_value_->setToolTip(tip.join(QLatin1Char('\n')));
 }
 
 void HoldingsBar::on_topic_error(const QString& topic, const QString& error) {
@@ -446,7 +473,16 @@ void HoldingsBar::set_feed_status(FeedStatus s) {
 void HoldingsBar::update_rpc_indicator() {
     if (!rpc_indicator_)
         return;
-    const auto label = rpc_provider_label();
+    QString read_error;
+    const auto label = rpc_provider_label(&read_error);
+    if (!read_error.isEmpty()) {
+        // Re-read on every show / connect / tab change, so it clears by itself.
+        rpc_indicator_->setText(tr("RPC UNREADABLE"));
+        rpc_indicator_->setToolTip(tr("Could not read the stored RPC setting: %1. No RPC request is sent until it "
+                                      "can be read again.")
+                                       .arg(read_error));
+        return;
+    }
     rpc_indicator_->setText(label);
     if (label == QStringLiteral("PUBLIC")) {
         rpc_indicator_->setToolTip(tr("Public Solana RPC. STREAM may degrade — add a Helius API key "

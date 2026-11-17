@@ -1,124 +1,87 @@
 #pragma once
 #include "screens/chat_mode/ChatModeTypes.h"
 
-#include <QEvent>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QTabBar>
+#include <QString>
 #include <QWidget>
+
+#include <memory>
+
+class QEvent;
+class QShowEvent;
 
 namespace fincept::chat_mode {
 
-/// Right panel — tabs for Memory, Schedules, Tasks, MCP Servers, Monitors.
+class ComposerContextBar;
+
+/// Which pages a ChatAgentPanel carries (2026-11-17 revamp: one class, two places).
+enum class AgentPanelPages {
+    Inspector, ///< right rail: CONTEXT | PLAN | ACTIVITY | FILES (the run's artefacts)
+    Agent,     ///< left rail: MEMORY | MCP (the cloud agent's memory, remote MCP servers)
+};
+
+/// Chat Mode's run inspector (WP2) and agent panel.
+///
+/// Inspector pages CONTEXT (what the run can see and use: context chips with
+/// detach / attach, tools and MCP servers, the run's files, budget and limits, run
+/// stats) | PLAN (RunPlanPanel) | ACTIVITY (RunActivityView) | FILES
+/// (RunArtefactsPanel). Agent pages MEMORY | MCP. The run pages show the window's
+/// current run (set_current_run: the selected conversation's latest run, or the run
+/// picked in RUNS). Pages are built when first shown; the last page picked is
+/// remembered per panel kind. Nothing here blocks: no exec() dialogs — forms and
+/// confirmations are inline.
 class ChatAgentPanel : public QWidget {
     Q_OBJECT
   public:
-    explicit ChatAgentPanel(QWidget* parent = nullptr);
+    explicit ChatAgentPanel(QWidget* parent = nullptr, AgentPanelPages pages = AgentPanelPages::Inspector);
+    ~ChatAgentPanel() override;
+
+    AgentPanelPages pages() const;
 
     void refresh_memory();
-    void refresh_schedules();
-    void refresh_tasks();
     void refresh_mcp_servers();
-    void refresh_monitors();
+
+    /// The run this window shows (ChatModeScreen; empty: none). The CONTEXT, PLAN,
+    /// ACTIVITY and FILES pages follow it.
+    void set_current_run(const QString& run_id);
+    QString current_run() const;
+
+    /// The composer's context bar: the CONTEXT page lists its chips (detach) and
+    /// adds to them (attach). Not owned.
+    void set_context_bar(ComposerContextBar* bar);
+
+    /// Page ids: "context", "plan", "activity", "files" (Inspector); "memory",
+    /// "mcp" (Agent). Builds the page on first use. False for an id this panel
+    /// does not carry.
+    bool show_page(const QString& id);
+    QString current_page() const;
+    /// The panel's own tab strip (the left rail hides it: its switch picks the page).
+    void set_tabs_visible(bool visible);
+    /// Keyboard focus into the shown page (its list / first control).
+    void focus_page();
+
+  signals:
+    /// The inspector wants the window to show `run_id` (e.g. a retry it started).
+    void run_selection_requested(const QString& run_id);
+    /// WP2: the user wants the conversation of `run_id` (to answer the question
+    /// it waits on / review its approval card).
+    void run_open_requested(const QString& run_id);
+    /// WP5: an empty FILES page's action — start a task (NEW RUN).
+    void new_run_requested();
+    /// WP5: open another screen after a hand-off ("report_builder", "notes").
+    void open_screen_requested(const QString& screen_id);
+    /// The shown page changed (user or show_page()).
+    void page_changed(const QString& id);
+    /// The cloud agent's MCP servers were read (CONTEXT or MCP page): connected /
+    /// total, (-1, -1) when they could not be read — for the status bar.
+    void mcp_state_changed(int connected, int total);
 
   protected:
     void changeEvent(QEvent* event) override;
-
-  private slots:
-    void on_tab_changed(int index);
-
-    // Memory
-    void on_add_memory();
-    void on_delete_memory();
-    void on_clear_all_memory();
-
-    // Schedules
-    void on_add_schedule();
-    void on_delete_schedule();
-    void on_toggle_schedule();
-
-    // Tasks
-    void on_add_task();
-    void on_refresh_tasks();
-    void on_cancel_task();
-    void on_view_task_detail();
-    void on_send_feedback();
-
-    // MCP Servers
-    void on_add_mcp_server();
-    void on_delete_mcp_server();
-    void on_refresh_mcp_servers();
-
-    // Monitors
-    void on_add_monitor();
-    void on_delete_monitor();
-    void on_toggle_monitor();
+    void showEvent(QShowEvent* event) override;
 
   private:
-    QTabBar* tab_bar_ = nullptr;
-    QStackedWidget* stack_ = nullptr;
-
-    // Memory tab
-    QListWidget* memory_list_ = nullptr;
-    QPushButton* mem_add_btn_ = nullptr;
-    QPushButton* mem_del_btn_ = nullptr;
-    QPushButton* mem_clear_btn_ = nullptr;
-
-    // Schedules tab
-    QListWidget* sched_list_ = nullptr;
-    QPushButton* sched_add_btn_ = nullptr;
-    QPushButton* sched_del_btn_ = nullptr;
-    QPushButton* sched_toggle_btn_ = nullptr;
-
-    // Tasks tab
-    QListWidget* task_list_ = nullptr;
-    QPushButton* task_add_btn_ = nullptr;
-    QPushButton* task_refresh_btn_ = nullptr;
-    QPushButton* task_cancel_btn_ = nullptr;
-    QPushButton* task_detail_btn_ = nullptr;
-    QPushButton* task_feedback_btn_ = nullptr;
-    QLabel* task_status_lbl_ = nullptr;
-
-    // MCP Servers tab
-    QListWidget* mcp_list_ = nullptr;
-    QPushButton* mcp_add_btn_ = nullptr;
-    QPushButton* mcp_del_btn_ = nullptr;
-    QPushButton* mcp_refresh_btn_ = nullptr;
-    QLabel* mcp_tools_lbl_ = nullptr;
-
-    // Monitors tab
-    QListWidget* monitor_list_ = nullptr;
-    QPushButton* mon_add_btn_ = nullptr;
-    QPushButton* mon_del_btn_ = nullptr;
-    QPushButton* mon_toggle_btn_ = nullptr;
-
-    QVector<AgentMemory> memories_;
-    QVector<AgentSchedule> schedules_;
-    QVector<AgentTask> tasks_;
-    QVector<McpServer> mcp_servers_;
-    QVector<AgentMonitor> monitors_;
-
-    void build_ui();
-    QWidget* build_memory_tab();
-    QWidget* build_schedules_tab();
-    QWidget* build_tasks_tab();
-    QWidget* build_mcp_tab();
-    QWidget* build_monitors_tab();
-    void retranslateUi();
-
-    static QPushButton* make_btn(const QString& text, const QString& tooltip);
-
-    // Section titles + hints (cached for retranslateUi)
-    QLabel* mem_title_ = nullptr;
-    QLabel* sched_title_ = nullptr;
-    QLabel* sched_hint_ = nullptr;
-    QLabel* tasks_title_ = nullptr;
-    QLabel* mcp_title_ = nullptr;
-    QLabel* mon_title_ = nullptr;
-    QLabel* mon_hint_ = nullptr;
+    struct Impl;
+    std::unique_ptr<Impl> d_;
 };
 
 } // namespace fincept::chat_mode

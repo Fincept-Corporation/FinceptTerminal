@@ -25,13 +25,17 @@ class MarketSearchService : public QObject {
         QString exchange; ///< Optional — empty when not provided by the source.
         QString type;     ///< Optional — e.g. "stock", "etf", "index". Empty when not provided.
         QString country;  ///< Optional — ISO/short country code. Empty when not provided.
+        /// Yahoo Finance form of the listing (RELIANCE.NS, 0700.HK, BRK-B) — what a yfinance quote
+        /// needs; `symbol` is the bare listing code. Taken from the backend's `yf_symbol`, else
+        /// derived from `exchange`/`country`; equals `symbol` when the venue has no Yahoo suffix.
+        QString yf_symbol;
     };
 
     static MarketSearchService& instance();
 
     /// Fire a search. `type` is optional (e.g. "stock"); pass empty to omit.
     /// `request_id` is echoed back in `results_ready` so the caller can
-    /// discard out-of-order responses. Limit is clamped to [1, 100].
+    /// discard out-of-order responses. Limit is clamped to [1, 50] (the API's maximum).
     void search(const QString& query, const QString& type, int limit, const QString& request_id);
 
   signals:

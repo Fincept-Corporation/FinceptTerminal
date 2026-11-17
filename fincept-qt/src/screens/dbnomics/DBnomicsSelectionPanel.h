@@ -7,9 +7,12 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+
+namespace fincept::ui {
+class LoadingSkeleton;
+}
 
 namespace fincept::screens {
 
@@ -27,6 +30,10 @@ class DBnomicsSelectionPanel : public QWidget {
                                  bool append);
     void set_status(const QString& message);
     void update_slot_series(int slot_index, const QVector<services::DbnDataPoint>& series);
+
+    /// A list that has nothing to list shows one greyed, unselectable line saying why / what to do.
+    enum class ListKind { Providers, Datasets, Series };
+    void show_list_hint(ListKind list, const QString& text);
 
     QString selected_provider() const { return selected_provider_; }
     QString selected_dataset() const { return selected_dataset_; }
@@ -77,7 +84,9 @@ class DBnomicsSelectionPanel : public QWidget {
     void build_ui();
     void retranslateUi();
     void renumber_slots();
-    void tick_anim();
+    /// The hint lines of the dataset / series lists before anything is picked.
+    void reset_dataset_hint();
+    void reset_series_hint();
     QWidget* build_search_section();
     QWidget* build_provider_section();
     QWidget* build_dataset_section();
@@ -127,12 +136,10 @@ class DBnomicsSelectionPanel : public QWidget {
     QWidget* ds_content_ = nullptr;
     QWidget* series_content_ = nullptr;
     QWidget* search_content_ = nullptr;
-    QLabel* prov_spin_ = nullptr;
-    QLabel* ds_spin_ = nullptr;
-    QLabel* series_spin_ = nullptr;
-    QLabel* search_spin_ = nullptr;
-    QTimer* anim_timer_ = nullptr;
-    int anim_frame_ = 0;
+    ui::LoadingSkeleton* prov_spin_ = nullptr; // list-shaped skeletons shown while a list loads
+    ui::LoadingSkeleton* ds_spin_ = nullptr;
+    ui::LoadingSkeleton* series_spin_ = nullptr;
+    ui::LoadingSkeleton* search_spin_ = nullptr;
     bool prov_loading_ = false;
     bool ds_loading_ = false;
     bool series_loading_ = false;

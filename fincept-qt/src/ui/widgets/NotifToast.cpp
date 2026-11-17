@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QHBoxLayout>
 #include <QPainter>
@@ -16,7 +17,7 @@ using namespace fincept::notifications;
 NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::FramelessWindowHint) {
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_ShowWithoutActivating);
-    setFixedSize(TOAST_W, TOAST_H);
+    setFixedSize(metrics::width(TOAST_W), metrics::width(TOAST_H));
     hide();
 
     // ── Layout ────────────────────────────────────────────────────────────────
@@ -25,8 +26,8 @@ NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::Fram
     outer->setSpacing(10);
 
     level_dot_ = new QLabel("●");
-    level_dot_->setFixedSize(10, 10);
-    level_dot_->setStyleSheet("background: transparent; font-size: 10px;");
+    level_dot_->setFixedSize(metrics::width(10), metrics::width(10));
+    level_dot_->setStyleSheet("background: transparent; font-size: " + fincept::ui::fonts::px(-4) + "px;");
     outer->addWidget(level_dot_, 0, Qt::AlignTop | Qt::AlignHCenter);
 
     auto* text_col = new QWidget;
@@ -36,14 +37,14 @@ NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::Fram
     tvl->setSpacing(2);
 
     title_lbl_ = new QLabel;
-    title_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
+    title_lbl_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: bold; background: transparent;")
                                   .arg(colors::TEXT_PRIMARY.get()));
     title_lbl_->setWordWrap(false);
     tvl->addWidget(title_lbl_);
 
     msg_lbl_ = new QLabel;
     msg_lbl_->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_SECONDARY.get()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;").arg(colors::TEXT_SECONDARY.get()));
     msg_lbl_->setWordWrap(true);
     tvl->addWidget(msg_lbl_);
 
@@ -51,7 +52,7 @@ NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::Fram
 
     time_lbl_ = new QLabel;
     time_lbl_->setStyleSheet(
-        QString("color: %1; font-size: 10px; background: transparent;").arg(colors::TEXT_TERTIARY.get()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; background: transparent;").arg(colors::TEXT_TERTIARY.get()));
     time_lbl_->setAlignment(Qt::AlignTop | Qt::AlignRight);
     outer->addWidget(time_lbl_, 0, Qt::AlignTop);
 
@@ -70,6 +71,7 @@ NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::Fram
 
 void NotifToast::show_notification(const NotificationRecord& record) {
     current_level_ = record.request.level;
+    apply_size(); // the font may have changed since the last toast
 
     const QString dot_color = [&]() -> QString {
         switch (current_level_) {
@@ -78,13 +80,13 @@ void NotifToast::show_notification(const NotificationRecord& record) {
             case NotifLevel::Alert:
                 return colors::AMBER.get();
             case NotifLevel::Critical:
-                return colors::NEGATIVE.get();
+                return colors::DANGER.get();
             default:
                 return colors::CYAN.get();
         }
     }();
 
-    level_dot_->setStyleSheet(QString("color: %1; background: transparent; font-size: 10px;").arg(dot_color));
+    level_dot_->setStyleSheet(QString("color: %1; background: transparent; font-size: " + fincept::ui::fonts::px(-4) + "px;").arg(dot_color));
 
     title_lbl_->setText(record.request.title.left(50));
     msg_lbl_->setText(record.request.message.left(80));
@@ -102,7 +104,7 @@ void NotifToast::showEvent(QShowEvent* e) {
     // Slide in from right
     if (parentWidget()) {
         const QPoint hidden_pos(parentWidget()->width(), y());
-        const QPoint shown_pos(parentWidget()->width() - TOAST_W - MARGIN, y());
+        const QPoint shown_pos(parentWidget()->width() - width() - MARGIN, y());
         slide_anim_->setStartValue(hidden_pos);
         slide_anim_->setEndValue(shown_pos);
         slide_anim_->start();
@@ -132,7 +134,7 @@ void NotifToast::paintEvent(QPaintEvent*) {
             case NotifLevel::Alert:
                 return colors::AMBER.get();
             case NotifLevel::Critical:
-                return colors::NEGATIVE.get();
+                return colors::DANGER.get();
             default:
                 return colors::CYAN.get();
         }
@@ -155,10 +157,16 @@ void NotifToast::paintEvent(QPaintEvent*) {
 
 // ── Private ───────────────────────────────────────────────────────────────────
 
+void NotifToast::apply_size() {
+    setFixedSize(metrics::width(TOAST_W), metrics::width(TOAST_H));
+    if (level_dot_)
+        level_dot_->setFixedSize(metrics::width(10), metrics::width(10));
+}
+
 void NotifToast::reposition() {
     if (!parentWidget())
         return;
-    const int x = parentWidget()->width() - TOAST_W - MARGIN;
+    const int x = parentWidget()->width() - width() - MARGIN;
     const int y = MARGIN;
     move(x, y);
 }
@@ -169,7 +177,7 @@ void NotifToast::dismiss() {
         return;
     }
     // Slide back out to the right
-    const QPoint shown_pos(parentWidget()->width() - TOAST_W - MARGIN, y());
+    const QPoint shown_pos(parentWidget()->width() - width() - MARGIN, y());
     const QPoint hidden_pos(parentWidget()->width() + 10, y());
     slide_anim_->setStartValue(shown_pos);
     slide_anim_->setEndValue(hidden_pos);

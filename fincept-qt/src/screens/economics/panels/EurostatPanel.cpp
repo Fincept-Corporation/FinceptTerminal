@@ -117,7 +117,7 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
     // Sort by period string — copy to QList to avoid QJsonValueRef swap issue on MSVC
     QList<QJsonValue> sorted(rows.begin(), rows.end());
     std::sort(sorted.begin(), sorted.end(), [](const QJsonValue& a, const QJsonValue& b) {
-        return a.toObject()["period"].toString() < b.toObject()["period"].toString();
+        return a.toObject()["period"].toVariant().toString() < b.toObject()["period"].toVariant().toString();
     });
     rows = QJsonArray();
     for (const auto& v : sorted)
@@ -135,8 +135,7 @@ EurostatPanel::EurostatPanel(QWidget* parent) : EconPanelBase(kEurostatSourceId,
 }
 
 void EurostatPanel::activate() {
-    show_empty(tr("Select a dataset and country, then click FETCH\n"
-                  "Source: Eurostat — EU statistical office"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void EurostatPanel::build_controls(QHBoxLayout* thl) {
@@ -149,13 +148,13 @@ void EurostatPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_ = new QComboBox;
     for (const auto& d : kEurostatDatasets)
         dataset_combo_->addItem(d.label, d.command);
-    dataset_combo_->setFixedHeight(26);
+    dataset_combo_->setMinimumHeight(26);
     dataset_combo_->setMinimumWidth(180);
 
     country_combo_ = new QComboBox;
     for (const auto& c : kEurostatCountries)
         country_combo_->addItem(c.first, c.second);
-    country_combo_->setFixedHeight(26);
+    country_combo_->setMinimumHeight(26);
 
     thl->addWidget(dataset_lbl_ = lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
@@ -180,7 +179,7 @@ void EurostatPanel::on_fetch() {
 
     const QString req_id = "eurostat_" + dataset.command + "_" + country;
 
-    services::EconomicsService::instance().execute(kEurostatSourceId, kEurostatScript, dataset.command, args, req_id);
+    execute_query(kEurostatSourceId, kEurostatScript, dataset.command, args, req_id);
 }
 
 void EurostatPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -234,7 +233,7 @@ void EurostatPanel::on_result(const QString& request_id, const services::Economi
     const QString title = "Eurostat: " + (ds_label.isEmpty() ? dataset.label : ds_label) + " — " +
                           (geo.isEmpty() ? country_combo_->currentText() : geo);
     display(rows, title);
-    LOG_INFO("EurostatPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("EurostatPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

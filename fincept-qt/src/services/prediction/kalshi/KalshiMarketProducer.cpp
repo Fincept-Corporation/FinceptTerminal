@@ -108,7 +108,7 @@ void KalshiMarketProducer::ensure_registered_with_hub() {
     hub.set_policy_pattern(QString::fromLatin1(kalshi_mkt_detail::kKalshiMarketTopicPrefix) + QLatin1Char('*'), policy);
 
     hub_registered_ = true;
-    LOG_INFO(kalshi_mkt_detail::kKalshiMarketTag, "Registered with DataHub (prediction:kalshi:market:*)");
+    LOG_DEBUG(kalshi_mkt_detail::kKalshiMarketTag, "Registered with DataHub (prediction:kalshi:market:*)");
 }
 
 } // namespace fincept::services::prediction::kalshi_ns

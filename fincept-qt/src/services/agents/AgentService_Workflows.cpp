@@ -49,6 +49,18 @@ QString agent_wf_value_text(const QJsonValue& v) {
         return QString::number(v.toDouble(), 'g', 12);
     return {};
 }
+
+/// "Agent run finished" (policy B.4) — never the query or the answer; for a failure only
+/// the first line of the error.
+void agent_wf_log_run_finished(const QString& run, const char* kind, bool ok, qint64 duration_ms,
+                               const QString& error) {
+    if (!Logger::instance().should_log(LogLevel::Info, "AgentService"))
+        return;
+    QList<LogField> fields{{"run", run.left(8)}, {"kind", kind}, {"ok", ok}, {"duration_ms", duration_ms}};
+    if (!ok)
+        fields.append(LogField("error", error.section(QLatin1Char('\n'), 0, 0)));
+    LOG_INFO("AgentService", logf("Agent run finished", fields));
+}
 } // namespace
 
 QStringList AgentService::workflow_types() {
@@ -62,7 +74,7 @@ QStringList AgentService::workflow_types() {
 
 QString AgentService::run_workflow(const QString& workflow_type, const QJsonObject& params) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService", QString("Running workflow [%1]: %2").arg(req_id.left(8), workflow_type));
+    LOG_INFO("AgentService", logf("Agent workflow started", {{"run", req_id.left(8)}, {"type", workflow_type}}));
 
     // The type becomes the Python action name, so an unchecked string reached
     // EVERY main.py action (task deletion, memory writes, …) — run_agent_workflow
@@ -104,7 +116,9 @@ QString AgentService::run_workflow(const QString& workflow_type, const QJsonObje
     }
 
     QPointer<AgentService> self = this;
-    run_python_stdin(workflow_type, p, wf_config, [self, req_id](bool ok, QJsonObject result) {
+    QElapsedTimer run_clock;
+    run_clock.start();
+    run_python_stdin(workflow_type, p, wf_config, [self, req_id, run_clock](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
@@ -114,6 +128,7 @@ QString AgentService::run_workflow(const QString& workflow_type, const QJsonObje
         r.response = result.contains("response") ? result["response"].toString()
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
+        agent_wf_log_run_finished(req_id, "workflow", r.success, run_clock.elapsed(), r.error);
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
@@ -123,9 +138,8 @@ QString AgentService::run_workflow(const QString& workflow_type, const QJsonObje
 // ── Planner ──────────────────────────────────────────────────────────────────
 
 QString AgentService::create_plan(const QString& query, const QJsonObject& config) {
-    LOG_INFO("AgentService", QString("Creating plan for: %1").arg(query.left(80)));
-
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", logf("Agent plan requested", {{"run", req_id.left(8)}, {"query_chars", query.size()}}));
     QJsonObject params;
     params["query"] = query;
     if (!config.isEmpty())
@@ -151,6 +165,9 @@ QString AgentService::create_plan(const QString& query, const QJsonObject& confi
         // {"success": false, "error": ...} (e.g. missing query) is a clean failure
         // exit 0 — without this the UI got an empty "READY" plan.
         if (result.contains("success") && !result["success"].toBool()) {
+            LOG_WARN("AgentService", logf("Agent plan could not be created",
+                                          {{"run", req_id.left(8)},
+                                           {"error", result["error"].toString().section(QLatin1Char('\n'), 0, 0)}}));
             emit self->error_occurred("create_plan", result["error"].toString("Plan generation failed"));
             return;
         }
@@ -187,7 +204,7 @@ QString AgentService::create_plan(const QString& query, const QJsonObject& confi
 }
 
 QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& config) {
-    LOG_INFO("AgentService", "Executing plan");
+    LOG_DEBUG("AgentService", "Executing plan");
 
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
@@ -215,6 +232,9 @@ QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& c
         // {"success": false, "error": ...} with exit 0. Without this check it was
         // parsed as an empty plan and the UI reported COMPLETED.
         if (result.contains("success") && !result["success"].toBool()) {
+            LOG_WARN("AgentService", logf("Agent plan was rejected",
+                                          {{"run", req_id.left(8)},
+                                           {"error", result["error"].toString().section(QLatin1Char('\n'), 0, 0)}}));
             emit self->error_occurred("execute_plan", result["error"].toString("Plan execution failed"));
             return;
         }
@@ -254,8 +274,9 @@ QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& c
 
 // ── Portfolio analysis ───────────────────────────────────────────────────────
 
-void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary) {
-    LOG_INFO("AgentService", QString("Portfolio analysis: %1").arg(analysis_type));
+QString AgentService::run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", logf("Portfolio analysis started", {{"run", req_id.left(8)}, {"type", analysis_type}}));
     QJsonObject params;
     params["analysis_type"] = analysis_type;
     if (!portfolio_summary.isEmpty())
@@ -284,10 +305,14 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
     params["query"] = query;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("run", params, {}, [self](bool ok, QJsonObject result) {
+    QElapsedTimer run_clock;
+    run_clock.start();
+    run_python_stdin("run", params, {}, [self, req_id, run_clock](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        // Callers (PortfolioInsightsPanel) match on this; agent_result is shared by every agent path.
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         // finagent_core emits the response under one of several keys depending
@@ -302,9 +327,11 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
         else
             r.response = QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
+        agent_wf_log_run_finished(req_id, "portfolio_analysis", r.success, run_clock.elapsed(), r.error);
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
+    return req_id;
 }
 
 } // namespace fincept::services

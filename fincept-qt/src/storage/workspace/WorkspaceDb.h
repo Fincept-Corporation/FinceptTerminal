@@ -27,8 +27,8 @@ namespace fincept {
 ///     after releasing the lock, so a caller stepped a statement on a connection
 ///     another thread could already be preparing on. `connection()` now hands
 ///     out a per-thread cloned connection; under WAL those need no
-///     serialisation. This matters because LocalTelemetrySink::record() writes
-///     here from arbitrary threads. The remaining mutex guards only the owning
+///     serialisation. This matters because callers on worker threads (MCP tool
+///     handlers, pool tasks) write here. The remaining mutex guards only the owning
 ///     connection's identity (open/close/profile swap), never a live statement.
 ///   - Consequence for callers: the `QSqlQuery` returned by `execute()` belongs
 ///     to the CALLING thread's connection and must be stepped on that same
@@ -74,11 +74,27 @@ class WorkspaceDb {
     static WorkspaceDb& instance();
 
     /// Open the db at `path`. Creates schema + applies pragmas. Idempotent
-    /// for the same path. Returns err if SQLite refuses to open (disk full,
-    /// permissions, corruption past recovery).
+    /// for the same path.
+    ///
+    /// Schema gate: `PRAGMA user_version` must be 0 (new file, or one from before
+    /// versioning — then `_meta.schema_version` must be absent or a version this
+    /// build knows), kSchemaVersion, or lower (upgraded in place in one
+    /// transaction); the expected columns are then verified. A newer/unknown
+    /// version or a failed column check means the file belongs to another build:
+    /// it is QUARANTINED — renamed with its -wal to
+    /// `workspace.db.incompatible-<yyyyMMdd-hhmmss>` — and a fresh file is created.
+    /// A damaged file ("not a database", "malformed", failed quick_check) is
+    /// quarantined the same way as `workspace.db.corrupt-<…>`. Nothing is deleted.
+    /// Returns err only for what a new file cannot fix (busy, read-only, disk
+    /// full, no permission); the wrapper is then fully closed, never half-open.
     Result<void> open(const QString& path);
 
+    /// Orderly close: PRAGMA optimize, wal_checkpoint(TRUNCATE), close the owning
+    /// connection and remove it from Qt's registry. Per-thread clones are retired
+    /// (generation bump) and refuse from now on. Idempotent. Main thread only for
+    /// the database work; from another thread it only marks the wrapper closed.
     void close();
+    /// Thread-safe (atomic flag).
     bool is_open() const;
 
     /// Returns a `QSqlDatabase` handle valid for the current thread.
@@ -94,6 +110,9 @@ class WorkspaceDb {
     /// The result is a plain value type, so it is safe to move across threads.
     Result<QVector<QVariantList>> query_rows(const QString& sql, const QVariantList& params = {});
 
+    /// `BEGIN IMMEDIATE` — takes the write lock up front so a read-then-write
+    /// transaction waits on busy_timeout instead of failing with SQLITE_BUSY at
+    /// its first write.
     Result<void> begin_transaction();
     Result<void> commit();
     Result<void> rollback();
@@ -105,26 +124,32 @@ class WorkspaceDb {
 
     QString path() const;
 
-    /// Schema version stored in `_meta.schema_version`. Bumped only when
-    /// the loader needs migrations beyond what the CREATE-IF-NOT-EXISTS
-    /// statements cover.
+    /// Schema version, written to `PRAGMA user_version` (authoritative) and
+    /// mirrored in `_meta.schema_version` (what builds before user_version read).
+    /// Bump it together with a new `if (from_version < N)` upgrade step in
+    /// create_tables() and the expected columns in WorkspaceDb.cpp.
     static constexpr int kSchemaVersion = 1;
 
   private:
     WorkspaceDb() = default;
-    Result<void> apply_pragmas(QSqlDatabase& conn, bool include_database_wide);
-    Result<void> create_tables();
+    /// CREATE … IF NOT EXISTS plus in-file upgrade steps for files older than
+    /// kSchemaVersion. Runs inside open()'s schema transaction.
+    Result<void> create_tables(int from_version);
+    /// Close the owning connection and drop it from Qt's registry. Main thread,
+    /// mutex held.
+    void release_connection_locked();
 
     QSqlDatabase db_;                // main-thread (owning) connection
     QString connection_name_;        // registry name of the owning connection
-    QString db_path_;                // for cloning per-thread connections
+    QString db_path_;                // path of the open file (empty when closed)
+    QString journal_mode_;           // journal mode SQLite actually chose ("wal", "truncate")
     QThread* main_thread_ = nullptr; // captured at open()
 
     // Bumped on every open()/close(). A per-thread clone stamps the generation
     // it was made under and is discarded when it no longer matches, so a
     // profile switch cannot leave a worker writing into the previous profile.
     std::atomic<quint64> generation_{0};
-    // is_open() is called from arbitrary threads (LocalTelemetrySink::record).
+    // is_open() is called from arbitrary threads.
     // Reading db_.isOpen() there would touch the main thread's driver, so track
     // the state in an atomic instead.
     std::atomic<bool> open_{false};

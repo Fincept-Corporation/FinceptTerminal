@@ -56,6 +56,19 @@ class AgentChatPanel : public QWidget {
     void show_typing(bool on);
     void update_llm_status();
 
+    /// What answers the next message for the current selection — the same
+    /// resolution AgentService applies: a saved agent answers with its LLM
+    /// profile chain (agent → agent default → global default profile → active
+    /// provider; harness profiles are passed over), a built-in agent, Default
+    /// and auto-routing with the global LLM. Small DB reads, GUI thread.
+    struct AnsweringModel {
+        QString provider;
+        QString model;
+        QString source; ///< one sentence for the tooltip: where this model comes from
+        bool ok = false;
+    };
+    AnsweringModel answering_model() const;
+    void set_model_pill_style(const QString& css); ///< applies only when the text changes
     void send_message();
 
     // ── UI ─────────────────────────────────────────────────────────────────────
@@ -103,6 +116,7 @@ class AgentChatPanel : public QWidget {
     QString last_query_;
     QString pending_request_id_;
     QString streaming_text_;
+    QString model_pill_css_; ///< last stylesheet set on hdr_model_lbl_
     QPointer<QTextEdit> streaming_bubble_widget_;
 
     QTimer* typing_timer_ = nullptr;

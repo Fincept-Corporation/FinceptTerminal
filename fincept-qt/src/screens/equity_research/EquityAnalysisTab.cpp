@@ -17,6 +17,7 @@
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QEvent>
 #include <QFontMetrics>
 #include <QFrame>
@@ -99,22 +100,20 @@ class AnalysisPriceTargetGauge : public QWidget {
             p.drawRoundedRect(fill, 3, 3);
         }
 
-        QFont small = font();
-        small.setPointSizeF(std::max(10.0, small.pointSizeF() + 1.0));
+        const QFont small = ui::fonts::font(-1);
         p.setFont(small);
         const QFontMetrics fm(small);
+        // Baseline of the labels under the track, clear of it at any font size.
+        const double y_below = y_track + std::max(20, 8 + fm.ascent());
 
-        auto money = [&](double v) -> QString {
-            const int dec = v >= 1000.0 ? 0 : 2;
-            return cur_ + QString::number(v, 'f', dec);
-        };
+        auto money = [&](double v) -> QString { return equity_fmt::price(v, cur_); };
 
         // Mean tick + label (above the track).
         if (mean_ > 0.0) {
             double xm = x_for(mean_);
             p.setPen(QPen(QColor(ui::colors::AMBER()), 1.5));
             p.drawLine(QPointF(xm, y_track - 9), QPointF(xm, y_track + 9));
-            const QString t = QStringLiteral("mean ") + money(mean_);
+            const QString t = QCoreApplication::translate("EquityAnalysisTab", "mean %1").arg(money(mean_));
             double tx = std::clamp(xm - (fm.horizontalAdvance(t) / 2.0), x_left, x_right - fm.horizontalAdvance(t));
             p.setPen(QColor(ui::colors::AMBER()));
             p.drawText(QPointF(tx, y_track - 12), t);
@@ -123,10 +122,10 @@ class AnalysisPriceTargetGauge : public QWidget {
         // Low / high labels (below the track ends).
         p.setPen(QColor(ui::colors::TEXT_TERTIARY()));
         if (low_ > 0.0)
-            p.drawText(QPointF(x_left, y_track + 20), QStringLiteral("low ") + money(low_));
+            p.drawText(QPointF(x_left, y_below), QCoreApplication::translate("EquityAnalysisTab", "low %1").arg(money(low_)));
         if (high_ > 0.0) {
-            const QString t = QStringLiteral("high ") + money(high_);
-            p.drawText(QPointF(x_right - fm.horizontalAdvance(t), y_track + 20), t);
+            const QString t = QCoreApplication::translate("EquityAnalysisTab", "high %1").arg(money(high_));
+            p.drawText(QPointF(x_right - fm.horizontalAdvance(t), y_below), t);
         }
 
         // "Now" marker: downward triangle sitting on the track.
@@ -151,7 +150,7 @@ class AnalysisPriceTargetGauge : public QWidget {
     double mean_ = 0.0;
     double high_ = 0.0;
     double price_ = 0.0;
-    QString cur_ = QStringLiteral("$");
+    QString cur_; ///< quote currency code as quoted ("GBp")
     bool has_data_ = false;
 };
 
@@ -179,7 +178,7 @@ QFrame* EquityAnalysisTab::make_panel_(const char* title_key, const QString& acc
     hl->addWidget(bar);
 
     auto* lbl = new QLabel(tr(title_key));
-    lbl->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px; "
+    lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; letter-spacing:1px; "
                                "background:transparent; border:0;")
                            .arg(accent_color));
     hl->addWidget(lbl);
@@ -198,9 +197,10 @@ EquityAnalysisTab::EquityAnalysisTab(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::equity::EquityResearchService::info_loaded, this, &EquityAnalysisTab::on_info_loaded);
     // The overlay was only ever hidden on the success path, so a failed "Info"
     // fetch left "LOADING ANALYSIS…" spinning over the tab forever.
-    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (ctx != QLatin1String("Info"))
+    // Symbol-attributed: a late info failure for the previous symbol must not touch this one.
+    connect(&svc, &services::equity::EquityResearchService::load_failed, this,
+            [this](const services::equity::LoadFailure& f) {
+                if (f.leg != QLatin1String("Info") || f.symbol != current_symbol_)
                     return;
                 if (loading_overlay_)
                     loading_overlay_->hide_loading();
@@ -257,8 +257,8 @@ void EquityAnalysisTab::build_ui() {
         {kValuation, QT_TR_NOOP("VALUATION"), ui::colors::CYAN()},
         {kHealth, QT_TR_NOOP("FINANCIAL HEALTH"), ui::colors::AMBER()},
         {kCashFlow, QT_TR_NOOP("CASH FLOW"), ui::colors::INFO()},
-        {kProfitability, QT_TR_NOOP("PROFITABILITY"), ui::colors::POSITIVE()},
-        {kGrowth, QT_TR_NOOP("GROWTH"), QStringLiteral("#a855f7")},
+        {kProfitability, QT_TR_NOOP("PROFITABILITY"), ui::colors::SUCCESS()},
+        {kGrowth, QT_TR_NOOP("GROWTH"), ui::colors::legible("#a855f7")},
         {kRisk, QT_TR_NOOP("RISK / SENTIMENT"), ui::colors::WARNING()},
     };
 
@@ -295,11 +295,11 @@ QFrame* EquityAnalysisTab::build_hero_() {
     auto* left = new QVBoxLayout;
     left->setSpacing(2);
     hero_price_ = new QLabel(QStringLiteral("—"));
-    hero_price_->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; font-family:monospace; "
+    hero_price_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(12) + "px; font-weight:800; "
                                        "background:transparent; border:0;")
                                    .arg(ui::colors::TEXT_PRIMARY()));
     hero_upside_ = new QLabel(QStringLiteral("—"));
-    hero_upside_->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700;"
+    hero_upside_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(1) + "px; font-weight:700;"
                                         "background:transparent; border:0;")
                                     .arg(ui::colors::TEXT_TERTIARY()));
     left->addWidget(hero_price_);
@@ -311,12 +311,12 @@ QFrame* EquityAnalysisTab::build_hero_() {
     right->setSpacing(2);
     hero_reco_ = new QLabel(QStringLiteral("—"));
     hero_reco_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    hero_reco_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:800; letter-spacing:1px; "
+    hero_reco_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:800; letter-spacing:1px; "
                                       "background:transparent; border:0;")
                                   .arg(ui::colors::TEXT_PRIMARY()));
     hero_count_ = new QLabel(QString());
     hero_count_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    hero_count_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:600; "
+    hero_count_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:600; "
                                        "background:transparent; border:0;")
                                    .arg(ui::colors::TEXT_TERTIARY()));
     right->addWidget(hero_reco_);
@@ -330,7 +330,7 @@ QFrame* EquityAnalysisTab::build_hero_() {
 
     // No-coverage fallback (hidden unless there is no analyst data).
     hero_empty_ = new QLabel(tr("No analyst coverage available."));
-    hero_empty_->setStyleSheet(QString("color:%1; font-size:13px; font-style:italic; "
+    hero_empty_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-style:italic; "
                                        "background:transparent; border:0;")
                                    .arg(ui::colors::TEXT_TERTIARY()));
     hero_empty_->setVisible(false);
@@ -347,7 +347,7 @@ EquityAnalysisTab::VerdictCard EquityAnalysisTab::build_verdict_card_(QWidget* p
     auto* vl = static_cast<QVBoxLayout*>(panel->layout());
 
     card.rating = new QLabel(QStringLiteral("—"));
-    card.rating->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; letter-spacing:1px; "
+    card.rating->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(12) + "px; font-weight:800; letter-spacing:1px; "
                                        "background:transparent; border:0; padding:2px 0 6px 0;")
                                    .arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(card.rating);
@@ -361,7 +361,7 @@ EquityAnalysisTab::VerdictCard EquityAnalysisTab::build_verdict_card_(QWidget* p
     lines_vl->setSpacing(6);
     for (auto& line : card.lines) {
         line = new QLabel(QString());
-        line->setStyleSheet(QString("color:%1; font-size:15px; font-weight:600; font-family:monospace; "
+        line->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(1) + "px; font-weight:600; "
                                     "background:transparent; border:0;")
                                 .arg(ui::colors::TEXT_PRIMARY()));
         lines_vl->addWidget(line);
@@ -370,7 +370,7 @@ EquityAnalysisTab::VerdictCard EquityAnalysisTab::build_verdict_card_(QWidget* p
 
     card.rationale = new QLabel(QString());
     card.rationale->setWordWrap(true);
-    card.rationale->setStyleSheet(QString("color:%1; font-size:13px; font-weight:500; line-height:140%; "
+    card.rationale->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:500; line-height:140%; "
                                           "background:transparent; border:0; padding-top:4px;")
                                       .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(card.rationale);
@@ -407,7 +407,7 @@ void EquityAnalysisTab::populate_hero_(const services::equity::StockInfo& info) 
         hero_price_->setText(info.current_price > 0.0 ? fmt_money(info.current_price) : QStringLiteral("—"));
         hero_upside_->setVisible(false);
         hero_reco_->setText(QStringLiteral("—"));
-        hero_reco_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:800; letter-spacing:1px; "
+        hero_reco_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:800; letter-spacing:1px; "
                                           "background:transparent; border:0;")
                                       .arg(ui::colors::TEXT_TERTIARY()));
         hero_count_->setText(QString());
@@ -418,49 +418,29 @@ void EquityAnalysisTab::populate_hero_(const services::equity::StockInfo& info) 
     hero_empty_->setVisible(false);
     hero_upside_->setVisible(true);
     gauge_->setVisible(true);
-    gauge_->set_data(info.target_low, info.target_mean, info.target_high, info.current_price, cur_symbol_());
+    gauge_->set_data(info.target_low, info.target_mean, info.target_high, info.current_price, info.currency);
 
     hero_price_->setText(info.current_price > 0.0 ? fmt_money(info.current_price) + tr(" now") : QStringLiteral("—"));
 
     if (info.current_price > 0.0 && info.target_mean > 0.0) {
-        const double up = (info.target_mean - info.current_price) / info.current_price * 100.0;
-        const QString sign = up >= 0.0 ? QStringLiteral("+") : QStringLiteral("-");
-        hero_upside_->setText(QString("%1%2%  ").arg(sign).arg(std::abs(up), 0, 'f', 1) + tr("to mean target"));
-        hero_upside_->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700;"
+        const double up = (info.target_mean - info.current_price) / info.current_price;
+        hero_upside_->setText(tr("%1 to mean target").arg(equity_fmt::pct(up, 1, true)));
+        hero_upside_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(1) + "px; font-weight:700;"
                                             "background:transparent; border:0;")
                                         .arg(up >= 0.0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     } else {
         hero_upside_->setText(tr("target range shown"));
-        hero_upside_->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700;"
+        hero_upside_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(1) + "px; font-weight:700;"
                                             "background:transparent; border:0;")
                                         .arg(ui::colors::TEXT_TERTIARY()));
     }
 
-    // Recommendation badge.
-    const QString key = info.recommendation_key.toLower();
-    QString label;
-    Tone tone = Tone::Neutral;
-    if (key == "strong_buy") {
-        label = tr("STRONG BUY");
-        tone = Tone::Good;
-    } else if (key == "buy") {
-        label = tr("BUY");
-        tone = Tone::Good;
-    } else if (key == "hold" || key == "neutral") {
-        label = tr("HOLD");
-        tone = Tone::Caution;
-    } else if (key == "underperform" || key == "sell") {
-        label = tr("SELL");
-        tone = Tone::Bad;
-    } else if (key == "strong_sell") {
-        label = tr("STRONG SELL");
-        tone = Tone::Bad;
-    } else {
-        label = key.isEmpty() ? QStringLiteral("—") : info.recommendation_key.toUpper();
-        tone = Tone::Neutral;
-    }
+    // Recommendation badge — the mapping the header bar and the Overview share.
+    const equity_fmt::Recommendation rec = equity_fmt::recommendation(info.recommendation_key);
+    const QString label = rec.text.isEmpty() ? equity_fmt::dash() : rec.text;
+    const Tone tone = rec.text.isEmpty() ? Tone::Neutral : rec.tone > 0 ? Tone::Good : rec.tone < 0 ? Tone::Bad : Tone::Caution;
     hero_reco_->setText(label);
-    hero_reco_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:800; letter-spacing:1px; "
+    hero_reco_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:800; letter-spacing:1px; "
                                       "background:transparent; border:0;")
                                   .arg(color_for_(tone)));
 
@@ -472,7 +452,7 @@ void EquityAnalysisTab::populate_hero_(const services::equity::StockInfo& info) 
 
 void EquityAnalysisTab::apply_verdict_(const VerdictCard& card, const Verdict& v) {
     card.rating->setText(tr(v.rating_key));
-    card.rating->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; letter-spacing:1px; "
+    card.rating->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(12) + "px; font-weight:800; letter-spacing:1px; "
                                        "background:transparent; border:0; padding:2px 0 6px 0;")
                                    .arg(color_for_(v.tone)));
 
@@ -486,11 +466,53 @@ void EquityAnalysisTab::apply_verdict_(const VerdictCard& card, const Verdict& v
 }
 
 // ── Assessment ────────────────────────────────────────────────────────────────
-// Pure functions of StockInfo. Thresholds are deliberately simple, transparent,
-// and market-cap/sector-agnostic — screening signals, not investment advice.
+// Pure functions of StockInfo, judged against what is NORMAL FOR THE SECTOR: a bank or a
+// utility carries debt by design, a refiner trades on a lower multiple than a software
+// house. The bands are conventional screening ranges, shown in the rationale.
+
+namespace analysis_tab_detail {
+
+struct SectorNorm {
+    const char* label;
+    double pe_lo, pe_hi;           ///< "fair" trailing P/E band
+    double nd_ok, nd_high;         ///< net debt / EBITDA: comfortable / stretched above
+    double margin_good, margin_thin;
+    double roe_good, roe_ok;
+    double growth_high, growth_mod;
+    bool financial;                ///< banks, insurers: leverage is the business model
+};
+
+const SectorNorm& sector_norm(const QString& sector, const QString& industry) {
+    static const SectorNorm kNorms[] = {
+        {"Technology", 18, 35, 1.5, 3.0, 0.20, 0.05, 0.20, 0.10, 0.20, 0.07, false},
+        {"Communication Services", 14, 28, 2.5, 4.0, 0.15, 0.04, 0.15, 0.08, 0.15, 0.05, false},
+        {"Consumer Cyclical", 12, 25, 2.0, 3.5, 0.08, 0.02, 0.18, 0.08, 0.15, 0.04, false},
+        {"Consumer Defensive", 15, 25, 2.5, 4.0, 0.08, 0.02, 0.18, 0.08, 0.08, 0.02, false},
+        {"Healthcare", 15, 30, 2.0, 3.5, 0.15, 0.03, 0.15, 0.07, 0.15, 0.05, false},
+        {"Industrials", 14, 25, 2.0, 3.5, 0.10, 0.03, 0.15, 0.08, 0.12, 0.04, false},
+        {"Basic Materials", 10, 20, 1.5, 3.0, 0.10, 0.03, 0.12, 0.06, 0.12, 0.03, false},
+        {"Energy", 8, 16, 1.5, 3.0, 0.10, 0.03, 0.12, 0.06, 0.12, 0.03, false},
+        {"Utilities", 13, 22, 4.5, 6.0, 0.12, 0.05, 0.10, 0.06, 0.07, 0.02, false},
+        {"Real Estate", 15, 40, 6.0, 8.0, 0.20, 0.05, 0.08, 0.04, 0.08, 0.02, false},
+        {"Financial Services", 8, 16, 0.0, 0.0, 0.20, 0.08, 0.12, 0.08, 0.10, 0.03, true},
+    };
+    static const SectorNorm kDefault = {"", 12, 25, 2.0, 3.5, 0.12, 0.04, 0.15, 0.08, 0.15, 0.05, false};
+    for (const auto& n : kNorms)
+        if (sector.compare(QLatin1String(n.label), Qt::CaseInsensitive) == 0)
+            return n;
+    // Yahoo files some insurers / exchanges under other sectors.
+    if (industry.contains(QLatin1String("Bank"), Qt::CaseInsensitive) ||
+        industry.contains(QLatin1String("Insurance"), Qt::CaseInsensitive))
+        return kNorms[10];
+    return kDefault;
+}
+
+} // namespace analysis_tab_detail
 
 EquityAnalysisTab::Verdict EquityAnalysisTab::assess_valuation_(const services::equity::StockInfo& s) const {
+    using analysis_tab_detail::sector_norm;
     Verdict v;
+    const auto& n = sector_norm(s.sector, s.industry);
     const bool has_pe = s.pe_ratio > 0.0;
     const bool has_peg = s.peg_ratio > 0.0;
     if (!has_pe && !has_peg && s.forward_pe <= 0.0) {
@@ -499,25 +521,11 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_valuation_(const services::
         v.rationale = tr("No earnings-based valuation available (may be unprofitable).");
         return v;
     }
-
-    // Prefer PEG (growth-adjusted); fall back to raw P/E.
-    int score = 0; // -1 expensive, 0 fair, +1 cheap
-    if (has_peg) {
-        if (s.peg_ratio < 1.0)
-            score = 1;
-        else if (s.peg_ratio <= 2.0)
-            score = 0;
-        else
-            score = -1;
-    } else if (has_pe) {
-        if (s.pe_ratio < 15.0)
-            score = 1;
-        else if (s.pe_ratio <= 30.0)
-            score = 0;
-        else
-            score = -1;
-    }
-
+    // P/E against the sector's usual band; PEG (growth-adjusted) breaks a tie.
+    const double pe = has_pe ? s.pe_ratio : s.forward_pe;
+    int score = pe < n.pe_lo ? 1 : pe > n.pe_hi ? -1 : 0;
+    if (score == 0 && has_peg)
+        score = s.peg_ratio < 1.0 ? 1 : s.peg_ratio > 2.5 ? -1 : 0;
     if (score > 0) {
         v.rating_key = QT_TR_NOOP("UNDERVALUED");
         v.tone = Tone::Good;
@@ -528,59 +536,75 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_valuation_(const services::
         v.rating_key = QT_TR_NOOP("EXPENSIVE");
         v.tone = Tone::Bad;
     }
-
-    QString pe_line = QStringLiteral("P/E ") + (has_pe ? fmt(s.pe_ratio, 1) : QStringLiteral("—"));
-    if (s.forward_pe > 0.0) {
-        const QString arrow = (has_pe && s.forward_pe < s.pe_ratio) ? QStringLiteral(" ↓") : QString();
-        pe_line += QString("  fwd %1%2").arg(fmt(s.forward_pe, 1), arrow);
-    }
+    QString pe_line = tr("P/E %1").arg(has_pe ? fmt(s.pe_ratio, 1) : equity_fmt::dash());
+    if (s.forward_pe > 0.0)
+        pe_line += tr("  fwd %1").arg(fmt(s.forward_pe, 1));
     v.line1 = pe_line;
-    v.line2 = QStringLiteral("PEG ") + (has_peg ? fmt(s.peg_ratio, 2) : QStringLiteral("—"));
+    v.line2 = tr("PEG %1").arg(has_peg ? fmt(s.peg_ratio, 2) : equity_fmt::dash());
     if (s.price_to_book > 0.0)
-        v.line2 += QString("  ·  P/B %1").arg(fmt(s.price_to_book, 1));
+        v.line2 += tr("  ·  P/B %1").arg(fmt(s.price_to_book, 1));
     if (s.ev_to_ebitda > 0.0)
-        v.line3 = QString("EV/EBITDA %1").arg(fmt(s.ev_to_ebitda, 1));
-
+        v.line3 = tr("EV/EBITDA %1").arg(fmt(s.ev_to_ebitda, 1));
+    const QString sector = s.sector.isEmpty() || s.sector == QLatin1String("N/A") ? tr("the market") : s.sector;
+    v.rationale = tr("P/E %1 vs a usual %2–%3 for %4.")
+                      .arg(fmt(pe, 1), QString::number(n.pe_lo, 'f', 0), QString::number(n.pe_hi, 'f', 0), sector);
     if (has_pe && s.forward_pe > 0.0 && s.forward_pe < s.pe_ratio)
-        v.rationale = tr("Forward P/E below trailing — earnings expected to grow.");
-    else if (score < 0)
-        v.rationale = tr("Trades at a premium; priced for growth or quality.");
-    else if (score > 0)
-        v.rationale = tr("Low multiple relative to earnings/growth.");
-    else
-        v.rationale = tr("Valuation in line with broad-market norms.");
+        v.rationale += QLatin1Char(' ') + tr("Forward P/E below trailing — earnings expected to grow.");
     return v;
 }
 
 EquityAnalysisTab::Verdict EquityAnalysisTab::assess_health_(const services::equity::StockInfo& s) const {
+    using analysis_tab_detail::sector_norm;
     Verdict v;
+    const auto& n = sector_norm(s.sector, s.industry);
+    const QString rep = s.financial_currency.isEmpty() ? s.currency : s.financial_currency;
+    if (n.financial) {
+        // A bank's "debt" is its funding; cash-vs-debt says nothing about its health.
+        v.rating_key = QT_TR_NOOP("SEE CAPITAL");
+        v.tone = Tone::Neutral;
+        v.line1 = tr("P/B %1").arg(s.price_to_book > 0 ? fmt(s.price_to_book, 2) : equity_fmt::dash());
+        v.line2 = tr("ROE %1").arg(fmt_pct(s.roe));
+        v.rationale = tr("Banks and insurers fund themselves with deposits and policy reserves, so debt-to-cash does not "
+                         "apply — see Financials → Ratios for equity / assets and returns on equity.");
+        return v;
+    }
     if (s.total_cash <= 0.0 && s.total_debt <= 0.0) {
         v.rating_key = QT_TR_NOOP("N/A");
         v.tone = Tone::NA;
         v.rationale = tr("Balance-sheet cash/debt not reported.");
         return v;
     }
-
     const double net = s.total_cash - s.total_debt;
-    v.line1 = tr("Cash %1").arg(fmt_large(s.total_cash));
-    v.line2 = tr("Debt %1").arg(fmt_large(s.total_debt));
-    v.line3 = tr("Net %1%2").arg(net >= 0.0 ? QStringLiteral("+") : QStringLiteral("")).arg(fmt_large(net));
-
+    v.line1 = tr("Cash %1").arg(equity_fmt::money(s.total_cash, rep));
+    v.line2 = tr("Debt %1").arg(equity_fmt::money(s.total_debt, rep));
+    const double ebitda = s.ebitda_margins > 0 && s.total_revenue > 0 ? s.ebitda_margins * s.total_revenue : std::nan("");
+    const double nd_ebitda = std::isfinite(ebitda) && ebitda > 0 ? -net / ebitda : std::nan("");
+    v.line3 = std::isfinite(nd_ebitda) ? tr("Net debt / EBITDA %1x").arg(QString::number(nd_ebitda, 'f', 1))
+                                       : tr("Net %1").arg(equity_fmt::signed_money(net, rep));
     if (net > 0.0) {
         v.rating_key = QT_TR_NOOP("STRONG");
         v.tone = Tone::Good;
         v.rationale = tr("Net cash position — more cash than total debt.");
-    } else {
-        const double ratio = s.total_cash > 0.0 ? s.total_debt / s.total_cash : 999.0;
-        if (ratio < 2.0) {
+    } else if (std::isfinite(nd_ebitda)) {
+        const QString sector = s.sector.isEmpty() ? tr("this sector") : s.sector;
+        if (nd_ebitda <= n.nd_ok) {
             v.rating_key = QT_TR_NOOP("STABLE");
+            v.tone = Tone::Good;
+        } else if (nd_ebitda <= n.nd_high) {
+            v.rating_key = QT_TR_NOOP("MODERATE");
             v.tone = Tone::Caution;
-            v.rationale = tr("Manageable leverage relative to cash on hand.");
         } else {
             v.rating_key = QT_TR_NOOP("STRETCHED");
             v.tone = Tone::Bad;
-            v.rationale = tr("Debt is high relative to available cash.");
         }
+        v.rationale = tr("Net debt %1x EBITDA; for %2 up to %3x is comfortable and above %4x stretched.")
+                          .arg(QString::number(nd_ebitda, 'f', 1), sector, QString::number(n.nd_ok, 'f', 1),
+                               QString::number(n.nd_high, 'f', 1));
+    } else {
+        const double ratio = s.total_cash > 0.0 ? s.total_debt / s.total_cash : 999.0;
+        v.rating_key = ratio < 2.0 ? QT_TR_NOOP("STABLE") : QT_TR_NOOP("LEVERAGED");
+        v.tone = Tone::Caution;
+        v.rationale = tr("Debt vs cash only — no EBITDA reported to judge leverage against earnings.");
     }
     return v;
 }
@@ -594,8 +618,9 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_cashflow_(const services::e
         return v;
     }
 
-    v.line1 = tr("FCF %1").arg(fmt_large(s.free_cashflow));
-    v.line2 = tr("Op CF %1").arg(fmt_large(s.operating_cashflow));
+    const QString rep = s.financial_currency.isEmpty() ? s.currency : s.financial_currency;
+    v.line1 = tr("FCF %1").arg(equity_fmt::money(s.free_cashflow, rep));
+    v.line2 = tr("Op CF %1").arg(equity_fmt::money(s.operating_cashflow, rep));
     if (s.total_revenue > 0.0)
         v.line3 = tr("FCF margin %1").arg(fmt_pct(s.free_cashflow / s.total_revenue));
 
@@ -616,7 +641,9 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_cashflow_(const services::e
 }
 
 EquityAnalysisTab::Verdict EquityAnalysisTab::assess_profitability_(const services::equity::StockInfo& s) const {
+    using analysis_tab_detail::sector_norm;
     Verdict v;
+    const auto& n = sector_norm(s.sector, s.industry);
     const bool any = s.roe != 0.0 || s.roa != 0.0 || s.profit_margins != 0.0;
     if (!any) {
         v.rating_key = QT_TR_NOOP("N/A");
@@ -624,55 +651,56 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_profitability_(const servic
         v.rationale = tr("Profitability ratios not reported.");
         return v;
     }
-
-    v.line1 = QString("ROE %1   ROA %2").arg(fmt_pct(s.roe), fmt_pct(s.roa));
+    v.line1 = tr("ROE %1   ROA %2").arg(fmt_pct(s.roe), fmt_pct(s.roa));
     v.line2 = tr("Net margin %1").arg(fmt_pct(s.profit_margins));
     if (s.operating_margins != 0.0)
         v.line3 = tr("Oper. margin %1").arg(fmt_pct(s.operating_margins));
-
+    const QString sector = s.sector.isEmpty() ? tr("the sector") : s.sector;
     if (s.profit_margins < 0.0) {
         v.rating_key = QT_TR_NOOP("LOSS-MAKING");
         v.tone = Tone::Bad;
         v.rationale = tr("Currently unprofitable on a net basis.");
-    } else if (s.roe > 0.20 && s.profit_margins > 0.15) {
+    } else if (s.roe >= n.roe_good && s.profit_margins >= n.margin_good) {
         v.rating_key = QT_TR_NOOP("EXCELLENT");
         v.tone = Tone::Good;
-        v.rationale = tr("High returns on equity and strong net margins.");
-    } else if (s.roe > 0.10 || s.profit_margins > 0.08) {
+        v.rationale = tr("ROE and net margin above what is typical for %1 (%2 / %3).")
+                          .arg(sector, equity_fmt::pct(n.roe_good, 0), equity_fmt::pct(n.margin_good, 0));
+    } else if (s.roe >= n.roe_ok || s.profit_margins >= n.margin_thin * 2.0) {
         v.rating_key = QT_TR_NOOP("SOLID");
         v.tone = Tone::Good;
-        v.rationale = tr("Healthy, consistent profitability.");
+        v.rationale = tr("Profitability in line with %1.").arg(sector);
     } else {
         v.rating_key = QT_TR_NOOP("THIN");
         v.tone = Tone::Caution;
-        v.rationale = tr("Profitable, but margins and returns are slim.");
+        v.rationale = tr("Returns below what is typical for %1 (ROE under %2).").arg(sector, equity_fmt::pct(n.roe_ok, 0));
     }
     return v;
 }
 
 EquityAnalysisTab::Verdict EquityAnalysisTab::assess_growth_(const services::equity::StockInfo& s) const {
+    using analysis_tab_detail::sector_norm;
     Verdict v;
+    const auto& n = sector_norm(s.sector, s.industry);
     if (s.revenue_growth == 0.0 && s.earnings_growth == 0.0) {
         v.rating_key = QT_TR_NOOP("N/A");
         v.tone = Tone::NA;
         v.rationale = tr("Growth rates not reported.");
         return v;
     }
-
-    v.line1 = tr("Revenue %1").arg(fmt_pct(s.revenue_growth));
-    v.line2 = tr("Earnings %1").arg(fmt_pct(s.earnings_growth));
+    v.line1 = tr("Revenue %1").arg(s.revenue_growth != 0.0 ? equity_fmt::pct(s.revenue_growth, 1, true) : equity_fmt::dash());
+    v.line2 = tr("Earnings %1").arg(s.earnings_growth != 0.0 ? equity_fmt::pct(s.earnings_growth, 1, true) : equity_fmt::dash());
     // yfinance growth fields compare the latest quarter with the year-ago quarter.
     v.line3 = tr("latest quarter, YoY");
-
     const double g = s.revenue_growth != 0.0 ? s.revenue_growth : s.earnings_growth;
-    if (g > 0.20) {
+    const QString sector = s.sector.isEmpty() ? tr("the sector") : s.sector;
+    if (g > n.growth_high) {
         v.rating_key = QT_TR_NOOP("HIGH GROWTH");
         v.tone = Tone::Good;
-        v.rationale = tr("Top line expanding rapidly.");
-    } else if (g >= 0.05) {
+        v.rationale = tr("Faster than the %1 a %2 company typically grows.").arg(equity_fmt::pct(n.growth_high, 0), sector);
+    } else if (g >= n.growth_mod) {
         v.rating_key = QT_TR_NOOP("MODERATE");
         v.tone = Tone::Caution;
-        v.rationale = tr("Steady single-to-double-digit growth.");
+        v.rationale = tr("Growth in the usual range for %1.").arg(sector);
     } else if (g >= -0.02) {
         v.rating_key = QT_TR_NOOP("FLAT");
         v.tone = Tone::Neutral;
@@ -730,28 +758,15 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_risk_(const services::equit
 // ── Formatting ────────────────────────────────────────────────────────────────
 
 QString EquityAnalysisTab::fmt(double v, int decimals) const {
-    return v != 0.0 ? QString::number(v, 'f', decimals) : QStringLiteral("—");
+    return v != 0.0 ? equity_fmt::grouped(v, decimals) : equity_fmt::dash();
 }
 
 QString EquityAnalysisTab::fmt_large(double v) {
-    if (v == 0.0)
-        return QStringLiteral("—");
-    const bool neg = v < 0;
-    const double a = std::abs(v);
-    QString s;
-    if (a >= 1e12)
-        s = QString("%1T").arg(a / 1e12, 0, 'f', 2);
-    else if (a >= 1e9)
-        s = QString("%1B").arg(a / 1e9, 0, 'f', 2);
-    else if (a >= 1e6)
-        s = QString("%1M").arg(a / 1e6, 0, 'f', 1);
-    else
-        s = QString::number(a, 'f', 0);
-    return neg ? "-" + s : s;
+    return v != 0.0 ? equity_fmt::large(v) : equity_fmt::dash();
 }
 
 QString EquityAnalysisTab::fmt_pct(double v) const {
-    return v != 0.0 ? QString("%1%").arg(v * 100.0, 0, 'f', 2) : QStringLiteral("—");
+    return v != 0.0 ? equity_fmt::pct(v, 1) : equity_fmt::dash();
 }
 
 QString EquityAnalysisTab::cur_symbol_() const {
@@ -760,20 +775,19 @@ QString EquityAnalysisTab::cur_symbol_() const {
 }
 
 QString EquityAnalysisTab::fmt_money(double v) const {
-    if (v == 0.0)
-        return QStringLiteral("—");
-    const int dec = std::abs(v) >= 1000.0 ? 0 : 2;
-    return cur_symbol_() + QString::number(v, 'f', dec);
+    // A per-share price in the quote currency as quoted (116.95p, ¥3,418, $182.40).
+    return v != 0.0 ? equity_fmt::price(v, cached_info_.currency) : equity_fmt::dash();
 }
 
 QString EquityAnalysisTab::color_for_(Tone t) const {
     switch (t) {
+        // Verdicts are states (healthy / stretched), not price moves: status colours.
         case Tone::Good:
-            return ui::colors::POSITIVE();
+            return ui::colors::SUCCESS();
         case Tone::Caution:
-            return ui::colors::AMBER();
+            return ui::colors::WARNING();
         case Tone::Bad:
-            return ui::colors::NEGATIVE();
+            return ui::colors::DANGER();
         case Tone::Neutral:
             return ui::colors::TEXT_SECONDARY();
         case Tone::NA:

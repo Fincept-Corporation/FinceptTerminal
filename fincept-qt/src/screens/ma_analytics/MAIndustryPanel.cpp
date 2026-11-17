@@ -1,5 +1,12 @@
 // MAIndustryPanel.cpp — industry-metric snapshot sub-tab builder for MAModulePanel.
 // Method definition split from MAModulePanel.cpp.
+//
+// Each tab's Sector combo switches the input rows to that sector's own inputs
+// (the analyzers of technology.py / healthcare.py / financial_services.py take
+// different fields per sector), and the run sends exactly those keys. The
+// scripts no longer fill a missing sector input with an assumption — that used
+// to come back looking like a result (a GMV of ARR / 15%, a combined ratio that
+// was the Efficiency Ratio field).
 
 #include "screens/ma_analytics/MAModulePanel.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
@@ -11,15 +18,142 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <algorithm>
+#include <functional>
 
 using namespace fincept::services::ma;
 
 namespace fincept::screens {
 
 using namespace fincept::services::ma;
+
+namespace {
+
+#define MA_IND_TR(text) QT_TRANSLATE_NOOP("fincept::screens::MAModulePanel", text)
+
+/// One input of a sector's analyzer.
+struct MaSectorField {
+    enum Kind { Number, Integer, YesNo };
+    const char* label;   ///< translated at build time (MAModulePanel context)
+    const char* key;     ///< JSON key sent to the script
+    double value;        ///< default
+    double min;
+    double max;
+    int decimals;
+    const char* suffix;
+    double send_scale;   ///< multiplied into the sent value (0.01: a percent input sent as a fraction)
+    bool money;          ///< label gets the live currency hint
+    Kind kind;
+};
+
+struct MaSector {
+    const char* id; ///< the script's sector name
+    QVector<MaSectorField> fields;
+};
+
+using F = MaSectorField;
+
+const QVector<MaSector>& ma_tech_sectors() {
+    static const QVector<MaSector> s = {
+        {"saas",
+         {{MA_IND_TR("ARR"), "arr", 100e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Growth Rate"), "growth", 40, -100, 500, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Gross Margin"), "gross_margin", 75, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Net Revenue Retention"), "nrr", 115, 50, 200, 0, "%", 0.01, false, F::Number},
+          {MA_IND_TR("CAC Payback (months)"), "cac_payback", 18, 0, 120, 0, " mo", 1, false, F::Number},
+          {MA_IND_TR("LTV/CAC Ratio"), "ltv_cac", 3.5, 0, 20, 1, "x", 1, false, F::Number},
+          {MA_IND_TR("Rule of 40 Score"), "rule_of_40", 55, -50, 200, 0, "", 1, false, F::Number}}},
+        {"marketplace",
+         {{MA_IND_TR("Gross Merchandise Value"), "gmv", 800e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Take Rate"), "take_rate", 15, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Net Revenue"), "revenue", 120e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Liquidity Score (0-100)"), "liquidity_score", 70, 0, 100, 0, "", 1, false, F::Number},
+          {MA_IND_TR("Supply-side Retention"), "supply_side_retention", 80, 0, 100, 0, "%", 1, false, F::Number},
+          {MA_IND_TR("Demand-side Retention (repeat rate)"), "demand_side_retention", 75, 0, 100, 0, "%", 1, false,
+           F::Number}}},
+        {"semiconductor",
+         {{MA_IND_TR("Revenue"), "revenue", 500e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Gross Margin"), "gross_margin", 55, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("R&D Intensity"), "r_and_d_pct", 18, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Design-win Backlog"), "design_win_backlog", 750e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Process Node (nm)"), "process_node", 7, 1, 250, 0, "", 1, false, F::Integer},
+          {MA_IND_TR("Fabless"), "fabless", 1, 0, 1, 0, "", 1, false, F::YesNo}}},
+    };
+    return s;
+}
+
+const QVector<MaSector>& ma_healthcare_sectors() {
+    static const QVector<MaSector> s = {
+        {"pharma",
+         {{MA_IND_TR("Revenue"), "revenue", 5e9, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("EBITDA Margin"), "ebitda_margin", 35, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Pipeline NPV"), "pipeline_npv", 3e9, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Phase 3 Candidates"), "phase3_candidates", 5, 0, 50, 0, "", 1, false, F::Integer},
+          {MA_IND_TR("Patent Expiry Rev %"), "patent_expiry_revenue", 25, 0, 100, 0, "%", 0.01, false, F::Number},
+          {MA_IND_TR("R&D Spend"), "rd_spend", 800e6, 0, 1e15, 0, "", 1, true, F::Number}}},
+        {"biotech",
+         {{MA_IND_TR("Cash Position"), "cash_position", 350e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Monthly Burn"), "burn_rate", 15e6, 0, 1e13, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Pipeline Value"), "pipeline_value", 900e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Lead Program Phase (1-3)"), "lead_program_phase", 2, 1, 3, 0, "", 1, false, F::Integer},
+          {MA_IND_TR("Platform Value"), "platform_value", 0, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Partnership Revenue"), "partnership_revenue", 0, 0, 1e15, 0, "", 1, true, F::Number}}},
+        {"devices",
+         {{MA_IND_TR("Revenue"), "revenue", 400e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Gross Margin"), "gross_margin", 65, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Clinical Evidence (0-100)"), "clinical_evidence_strength", 60, 0, 100, 0, "", 1, false,
+           F::Integer},
+          {MA_IND_TR("Regulatory Clearances (FDA, CE)"), "fda_clearances", 1, 0, 2, 0, "", 1, false, F::Integer},
+          {MA_IND_TR("Reimbursement Coverage"), "reimbursement_coverage", 70, 0, 100, 0, "%", 1, false, F::Number},
+          {MA_IND_TR("Installed Base (units)"), "installed_base", 5000, 0, 1e9, 0, "", 1, false, F::Integer},
+          {MA_IND_TR("Recurring Revenue"), "recurring_revenue_pct", 35, 0, 100, 0, "%", 1, false, F::Number}}},
+        {"services",
+         {{MA_IND_TR("Revenue"), "revenue", 700e6, 0, 1e15, 0, "", 1, true, F::Number},
+          {MA_IND_TR("EBITDA Margin"), "ebitda_margin", 16, 0, 100, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Same-store Growth"), "same_store_growth", 4, -50, 100, 1, "%", 1, false, F::Number},
+          {MA_IND_TR("Commercial Payor Mix"), "payor_mix_commercial", 55, 0, 100, 0, "%", 1, false, F::Number}}},
+    };
+    return s;
+}
+
+const QVector<MaSector>& ma_finserv_sectors() {
+    static const QVector<MaSector> s = {
+        {"banking",
+         {{MA_IND_TR("Total Assets"), "total_assets", 50e9, 0, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Deposits"), "deposits", 40e9, 0, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Loans"), "loans", 30e9, 0, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("ROE"), "roe", 12, -100, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Net Interest Margin"), "nim", 3.2, 0, 20, 2, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Efficiency Ratio"), "efficiency_ratio", 58, 0, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("CET1 Ratio"), "cet1_ratio", 12.5, 0, 30, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("NPL Ratio"), "npl_ratio", 0.8, 0, 30, 2, "%", 0.01, false, F::Number}}},
+        {"insurance",
+         {{MA_IND_TR("Gross Written Premium"), "gross_written_premium", 5e9, 0, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Combined Ratio"), "combined_ratio", 95, 0, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Loss Ratio"), "loss_ratio", 65, 0, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Expense Ratio"), "expense_ratio", 30, 0, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Investment Yield"), "investment_yield", 4.2, 0, 30, 2, "%", 0.01, false, F::Number},
+          {MA_IND_TR("ROE"), "roe", 12, -100, 200, 1, "%", 0.01, false, F::Number},
+          {MA_IND_TR("Book Value"), "book_value", 6e9, 0, 1e18, 0, "", 1, true, F::Number}}},
+        {"asset_management",
+         {{MA_IND_TR("Assets Under Management"), "aum", 80e9, 0, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Net Flows"), "net_flows", 2e9, -1e18, 1e18, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Fee Rate (bps)"), "fee_rate", 45, 0, 500, 1, " bps", 1, false, F::Number},
+          {MA_IND_TR("Client Retention"), "client_retention", 92, 0, 100, 1, "%", 1, false, F::Number},
+          {MA_IND_TR("Revenue per Advisor"), "advisor_productivity", 1.5e6, 0, 1e12, 0, "", 1, true, F::Number},
+          {MA_IND_TR("Operating Margin"), "operating_margin", 32, -100, 100, 1, "%", 0.01, false, F::Number}}},
+    };
+    return s;
+}
+
+#undef MA_IND_TR
+
+} // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE 6: INDUSTRY METRICS
@@ -34,178 +168,103 @@ QWidget* MAModulePanel::build_industry_panel() {
     sub_tabs_ = new QTabWidget(w);
     apply_tab_stylesheet();
 
-    // ── Technology ──
-    auto* tech = new QWidget(this);
-    auto* tech_vl = new QVBoxLayout(tech);
-    tech_vl->setContentsMargins(12, 12, 12, 12);
-    tech_vl->setSpacing(8);
+    const QString combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                        "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::fonts::SMALL);
 
-    auto* tech_sector = new QComboBox(tech);
-    tech_sector->addItems({"saas", "marketplace", "semiconductor"});
-    tech_sector->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                       "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
-                                   .arg(ui::fonts::DATA_FAMILY)
-                                   .arg(ui::fonts::SMALL));
-    combo_inputs_["tech_sector"] = tech_sector;
-    tech_vl->addWidget(build_input_row(tr("Sector"), tech_sector, tech));
+    // One tab: Sector combo + one page of input rows per sector + a run button
+    // that sends the selected sector's own keys.
+    auto build_tab = [this, &combo_style](const QString& prefix, const QVector<MaSector>& sectors,
+                                          const QString& run_text, const QString& running_text,
+                                          std::function<void(const QJsonObject&)> run) {
+        auto* tab = new QWidget(this);
+        auto* tvl = new QVBoxLayout(tab);
+        tvl->setContentsMargins(12, 12, 12, 12);
+        tvl->setSpacing(8);
 
-    auto* tech_arr = make_double_spin(0, 1e15, 100e6, 0, "", tech);
-    double_inputs_["tech_arr"] = tech_arr;
-    tech_vl->addWidget(build_input_row(tr("ARR/Revenue") + " ($)", tech_arr, tech));
+        auto* sector_combo = new QComboBox(tab);
+        for (const MaSector& s : sectors)
+            sector_combo->addItem(QString::fromLatin1(s.id));
+        sector_combo->setStyleSheet(combo_style);
+        combo_inputs_[prefix + "_sector"] = sector_combo;
+        tvl->addWidget(build_input_row(tr("Sector"), sector_combo, tab));
 
-    auto* tech_growth = make_double_spin(-100, 500, 40, 1, "%", tech);
-    double_inputs_["tech_growth"] = tech_growth;
-    tech_vl->addWidget(build_input_row(tr("Growth Rate"), tech_growth, tech));
+        auto* pages = new QStackedWidget(tab);
+        for (const MaSector& s : sectors) {
+            auto* page = new QWidget(pages);
+            auto* pvl = new QVBoxLayout(page);
+            pvl->setContentsMargins(0, 0, 0, 0);
+            pvl->setSpacing(8);
+            const QString base = prefix + "_" + QString::fromLatin1(s.id) + "_";
+            for (const MaSectorField& f : s.fields) {
+                const QString label = tr(f.label) + (f.money ? QStringLiteral(" ($)") : QString());
+                const QString id = base + QString::fromLatin1(f.key);
+                if (f.kind == MaSectorField::YesNo) {
+                    auto* cb = new QComboBox(page);
+                    cb->addItem(tr("Yes"), true);
+                    cb->addItem(tr("No"), false);
+                    cb->setCurrentIndex(f.value != 0 ? 0 : 1);
+                    cb->setStyleSheet(combo_style);
+                    combo_inputs_[id] = cb;
+                    pvl->addWidget(build_input_row(label, cb, page));
+                } else if (f.kind == MaSectorField::Integer) {
+                    auto* sp = make_int_spin(int(f.min), int(f.max), int(f.value), page);
+                    int_inputs_[id] = sp;
+                    pvl->addWidget(build_input_row(label, sp, page));
+                } else {
+                    auto* sp = make_double_spin(f.min, f.max, f.value, f.decimals, QString::fromLatin1(f.suffix), page);
+                    double_inputs_[id] = sp;
+                    pvl->addWidget(build_input_row(label, sp, page));
+                }
+            }
+            pvl->addStretch();
+            pages->addWidget(page);
+        }
+        connect(sector_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), pages,
+                &QStackedWidget::setCurrentIndex);
+        tvl->addWidget(pages);
 
-    auto* tech_gm = make_double_spin(0, 100, 75, 1, "%", tech);
-    double_inputs_["tech_gross_margin"] = tech_gm;
-    tech_vl->addWidget(build_input_row(tr("Gross Margin"), tech_gm, tech));
+        auto* run_btn = make_run_button(run_text, tab);
+        connect(run_btn, &QPushButton::clicked, this, [this, prefix, sectors, running_text, run]() {
+            status_label_->setText(running_text);
+            const int idx = std::clamp(combo_inputs_[prefix + "_sector"]->currentIndex(), 0, int(sectors.size()) - 1);
+            const MaSector& s = sectors.at(idx);
+            const QString base = prefix + "_" + QString::fromLatin1(s.id) + "_";
+            QJsonObject params;
+            params["sector"] = QString::fromLatin1(s.id);
+            for (const MaSectorField& f : s.fields) {
+                const QString id = base + QString::fromLatin1(f.key);
+                const QString key = QString::fromLatin1(f.key);
+                if (f.kind == MaSectorField::YesNo)
+                    params[key] = combo_inputs_[id]->currentData().toBool();
+                else if (f.kind == MaSectorField::Integer)
+                    params[key] = int_inputs_[id]->value();
+                else
+                    params[key] = double_inputs_[id]->value() * f.send_scale;
+            }
+            run(params);
+        });
+        tvl->addWidget(run_btn);
+        tvl->addStretch();
+        return tab;
+    };
 
-    auto* tech_nrr = make_double_spin(50, 200, 115, 0, "%", tech);
-    double_inputs_["tech_nrr"] = tech_nrr;
-    tech_vl->addWidget(build_input_row(tr("Net Revenue Retention"), tech_nrr, tech));
-
-    auto* tech_cac = make_double_spin(0, 120, 18, 0, " mo", tech);
-    double_inputs_["tech_cac_payback"] = tech_cac;
-    tech_vl->addWidget(build_input_row(tr("CAC Payback (months)"), tech_cac, tech));
-
-    auto* tech_ltv = make_double_spin(0, 20, 3.5, 1, "x", tech);
-    double_inputs_["tech_ltv_cac"] = tech_ltv;
-    tech_vl->addWidget(build_input_row(tr("LTV/CAC Ratio"), tech_ltv, tech));
-
-    auto* tech_r40 = make_double_spin(-50, 200, 55, 0, "", tech);
-    double_inputs_["tech_rule_of_40"] = tech_r40;
-    tech_vl->addWidget(build_input_row(tr("Rule of 40 Score"), tech_r40, tech));
-
-    auto* tech_run = make_run_button(tr("CALCULATE TECH METRICS"), tech);
-    connect(tech_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating Tech Metrics..."));
-        QJsonObject params;
-        params["sector"] = combo_inputs_["tech_sector"]->currentText();
-        params["arr"] = double_inputs_["tech_arr"]->value();
-        params["growth"] = double_inputs_["tech_growth"]->value() / 100.0;
-        params["gross_margin"] = double_inputs_["tech_gross_margin"]->value() / 100.0;
-        params["nrr"] = double_inputs_["tech_nrr"]->value() / 100.0;
-        params["cac_payback"] = double_inputs_["tech_cac_payback"]->value();
-        params["ltv_cac"] = double_inputs_["tech_ltv_cac"]->value();
-        params["rule_of_40"] = double_inputs_["tech_rule_of_40"]->value();
-        MAAnalyticsService::instance().calculate_tech_metrics(params);
-    });
-    tech_vl->addWidget(tech_run);
-    tech_vl->addStretch();
-    add_sub_tab(tech, QT_TR_NOOP("Technology"));
-
-    // ── Healthcare ──
-    auto* hc = new QWidget(this);
-    auto* hc_vl = new QVBoxLayout(hc);
-    hc_vl->setContentsMargins(12, 12, 12, 12);
-    hc_vl->setSpacing(8);
-
-    auto* hc_sector = new QComboBox(hc);
-    hc_sector->addItems({"pharma", "biotech", "devices", "services"});
-    hc_sector->setStyleSheet(tech_sector->styleSheet());
-    combo_inputs_["hc_sector"] = hc_sector;
-    hc_vl->addWidget(build_input_row(tr("Sector"), hc_sector, hc));
-
-    auto* hc_rev = make_double_spin(0, 1e15, 5e9, 0, "", hc);
-    double_inputs_["hc_revenue"] = hc_rev;
-    hc_vl->addWidget(build_input_row(tr("Revenue") + " ($)", hc_rev, hc));
-
-    auto* hc_margin = make_double_spin(0, 100, 35, 1, "%", hc);
-    double_inputs_["hc_ebitda_margin"] = hc_margin;
-    hc_vl->addWidget(build_input_row(tr("EBITDA Margin"), hc_margin, hc));
-
-    auto* hc_pipeline = make_double_spin(0, 1e15, 3e9, 0, "", hc);
-    double_inputs_["hc_pipeline_npv"] = hc_pipeline;
-    hc_vl->addWidget(build_input_row(tr("Pipeline NPV") + " ($)", hc_pipeline, hc));
-
-    auto* hc_p3 = make_int_spin(0, 50, 5, hc);
-    int_inputs_["hc_phase3_count"] = hc_p3;
-    hc_vl->addWidget(build_input_row(tr("Phase 3 Candidates"), hc_p3, hc));
-
-    auto* hc_patent = make_double_spin(0, 100, 25, 0, "%", hc);
-    double_inputs_["hc_patent_expiry_rev"] = hc_patent;
-    hc_vl->addWidget(build_input_row(tr("Patent Expiry Rev %"), hc_patent, hc));
-
-    auto* hc_rd = make_double_spin(0, 1e15, 800e6, 0, "", hc);
-    double_inputs_["hc_rd_spend"] = hc_rd;
-    hc_vl->addWidget(build_input_row(tr("R&D Spend") + " ($)", hc_rd, hc));
-
-    auto* hc_run = make_run_button(tr("CALCULATE HC METRICS"), hc);
-    connect(hc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating Healthcare Metrics..."));
-        QJsonObject params;
-        params["sector"] = combo_inputs_["hc_sector"]->currentText();
-        params["revenue"] = double_inputs_["hc_revenue"]->value();
-        params["ebitda_margin"] = double_inputs_["hc_ebitda_margin"]->value() / 100.0;
-        params["pipeline_npv"] = double_inputs_["hc_pipeline_npv"]->value();
-        params["phase3_candidates"] = int_inputs_["hc_phase3_count"]->value();
-        params["patent_expiry_revenue"] = double_inputs_["hc_patent_expiry_rev"]->value() / 100.0;
-        params["rd_spend"] = double_inputs_["hc_rd_spend"]->value();
-        MAAnalyticsService::instance().calculate_healthcare_metrics(params);
-    });
-    hc_vl->addWidget(hc_run);
-    hc_vl->addStretch();
-    add_sub_tab(hc, QT_TR_NOOP("Healthcare"));
-
-    // ── Financial Services ──
-    auto* fs = new QWidget(this);
-    auto* fs_vl = new QVBoxLayout(fs);
-    fs_vl->setContentsMargins(12, 12, 12, 12);
-    fs_vl->setSpacing(8);
-
-    auto* fs_sector = new QComboBox(fs);
-    fs_sector->addItems({"banking", "insurance", "asset_management"});
-    fs_sector->setStyleSheet(tech_sector->styleSheet());
-    combo_inputs_["fs_sector"] = fs_sector;
-    fs_vl->addWidget(build_input_row(tr("Sector"), fs_sector, fs));
-
-    auto* fs_assets = make_double_spin(0, 1e18, 50e9, 0, "", fs);
-    double_inputs_["fs_total_assets"] = fs_assets;
-    fs_vl->addWidget(build_input_row(tr("Total Assets") + " ($)", fs_assets, fs));
-
-    auto* fs_roe = make_double_spin(-100, 200, 12, 1, "%", fs);
-    double_inputs_["fs_roe"] = fs_roe;
-    fs_vl->addWidget(build_input_row(tr("ROE"), fs_roe, fs));
-
-    auto* fs_deposits = make_double_spin(0, 1e18, 40e9, 0, "", fs);
-    double_inputs_["fs_deposits"] = fs_deposits;
-    fs_vl->addWidget(build_input_row(tr("Deposits") + " ($)", fs_deposits, fs));
-
-    auto* fs_nim = make_double_spin(0, 20, 3.2, 2, "%", fs);
-    double_inputs_["fs_nim"] = fs_nim;
-    fs_vl->addWidget(build_input_row(tr("Net Interest Margin"), fs_nim, fs));
-
-    auto* fs_efficiency = make_double_spin(0, 200, 58, 1, "%", fs);
-    double_inputs_["fs_efficiency_ratio"] = fs_efficiency;
-    fs_vl->addWidget(build_input_row(tr("Efficiency Ratio"), fs_efficiency, fs));
-
-    auto* fs_cet1 = make_double_spin(0, 30, 12.5, 1, "%", fs);
-    double_inputs_["fs_cet1"] = fs_cet1;
-    fs_vl->addWidget(build_input_row(tr("CET1 Ratio"), fs_cet1, fs));
-
-    auto* fs_npl = make_double_spin(0, 30, 0.8, 2, "%", fs);
-    double_inputs_["fs_npl_ratio"] = fs_npl;
-    fs_vl->addWidget(build_input_row(tr("NPL Ratio"), fs_npl, fs));
-
-    auto* fs_run = make_run_button(tr("CALCULATE FINSERV METRICS"), fs);
-    connect(fs_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating FinServ Metrics..."));
-        QJsonObject params;
-        params["sector"] = combo_inputs_["fs_sector"]->currentText();
-        params["total_assets"] = double_inputs_["fs_total_assets"]->value();
-        params["roe"] = double_inputs_["fs_roe"]->value() / 100.0;
-        params["deposits"] = double_inputs_["fs_deposits"]->value();
-        params["nim"] = double_inputs_["fs_nim"]->value() / 100.0;
-        params["efficiency_ratio"] = double_inputs_["fs_efficiency_ratio"]->value() / 100.0;
-        params["cet1_ratio"] = double_inputs_["fs_cet1"]->value() / 100.0;
-        params["npl_ratio"] = double_inputs_["fs_npl_ratio"]->value() / 100.0;
-        MAAnalyticsService::instance().calculate_financial_services_metrics(params);
-    });
-    fs_vl->addWidget(fs_run);
-    fs_vl->addStretch();
-    add_sub_tab(fs, QT_TR_NOOP("Financial Services"));
+    add_sub_tab(build_tab(QStringLiteral("tech"), ma_tech_sectors(), tr("CALCULATE TECH METRICS"),
+                          tr("Calculating Tech Metrics..."),
+                          [](const QJsonObject& p) { MAAnalyticsService::instance().calculate_tech_metrics(p); }),
+                QT_TR_NOOP("Technology"));
+    add_sub_tab(build_tab(QStringLiteral("hc"), ma_healthcare_sectors(), tr("CALCULATE HC METRICS"),
+                          tr("Calculating Healthcare Metrics..."),
+                          [](const QJsonObject& p) { MAAnalyticsService::instance().calculate_healthcare_metrics(p); }),
+                QT_TR_NOOP("Healthcare"));
+    add_sub_tab(build_tab(QStringLiteral("fs"), ma_finserv_sectors(), tr("CALCULATE FINSERV METRICS"),
+                          tr("Calculating FinServ Metrics..."),
+                          [](const QJsonObject& p) {
+                              MAAnalyticsService::instance().calculate_financial_services_metrics(p);
+                          }),
+                QT_TR_NOOP("Financial Services"));
 
     vl->addWidget(sub_tabs_);
 

@@ -134,7 +134,10 @@ QString AngelOneBroker::lookup_token(const QString& symbol, const QString& excha
     }
 
     // InstrumentService cache not yet loaded — caller must wait for refresh_done signal
-    LOG_WARN(TAG_AO, QString("Token not found for %1:%2 (instrument cache not loaded yet?)").arg(exchange, symbol));
+    // Quote polls ask again every few seconds: one line per symbol every 5 minutes.
+    LOG_WARN_RL(TAG_AO, exchange + QLatin1Char(':') + symbol, 300000,
+                logf("Instrument token not found, instrument list may not be loaded yet",
+                     {{"exchange", exchange}, {"symbol", symbol}}));
     return {};
 }
 
@@ -254,7 +257,7 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
         result.error = "Failed to generate TOTP. Check your TOTP secret.";
         return result;
     }
-    LOG_INFO(TAG_AO, "Generated TOTP for login, client: " + client_code);
+    LOG_DEBUG(TAG_AO, logf("Generated TOTP for login", {{"account", log_mask(client_code)}}));
 
     // Login headers — X-PrivateKey = API key (from developer console)
     const auto& ctx = client_context();
@@ -307,7 +310,7 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
     };
     result.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
 
-    LOG_INFO(TAG_AO, "Login success, user: " + result.user_id);
+    LOG_INFO(TAG_AO, logf("Broker sign-in succeeded", {{"broker", "angelone"}, {"account", log_mask(result.user_id)}}));
     return result;
 }
 
@@ -370,7 +373,7 @@ TokenExchangeResponse AngelOneBroker::refresh_token(const BrokerCredentials& cre
     result.user_id = creds.user_id;
     // Preserve additional_data (feed_token + client_code + totp_secret).
     result.additional_data = creds.additional_data;
-    LOG_INFO(TAG_AO, "Token refreshed for user " + result.user_id);
+    LOG_INFO(TAG_AO, logf("Broker session refreshed", {{"broker", "angelone"}, {"account", log_mask(result.user_id)}}));
     return result;
 }
 
@@ -821,7 +824,8 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_multi_quotes(const BrokerC
         QString exchange = exch.isEmpty() ? QStringLiteral("NSE") : exch;
         QString token = lookup_token(sym, exchange);
         if (token.isEmpty()) {
-            LOG_WARN(TAG_AO, QString("get_multi_quotes: token not found for %1:%2, skipping").arg(exchange, sym));
+            // lookup_token() already wrote the (rate-limited) WARN for this symbol.
+            LOG_DEBUG(TAG_AO, logf("Quote skipped, no instrument token", {{"exchange", exchange}, {"symbol", sym}}));
             continue;
         }
         entries.append({exchange, token, sym});

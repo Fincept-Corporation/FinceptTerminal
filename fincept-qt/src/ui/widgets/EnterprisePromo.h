@@ -5,16 +5,19 @@
 //    develops daily for funds, family offices and research desks. It is a
 //    separate product with its own accounts and billing. Every in-app mention
 //    (toolbar, status bar, dialog, dashboard strip, setup showcase, pricing
-//    card, About/Help/Contact/Login/Settings/Launchpad, AI chat) reads its copy
-//    and URLs from here.
+//    card, lock screen, About/Help/Contact/Login/Settings/Launchpad, AI chat)
+//    reads its copy and URLs from here.
 //    In-app copy never quotes Enterprise prices: the app ships monthly while
 //    the price list lives on the website, so surfaces link to pricing_url().
+//    The team offers meetings about custom requirements and partnerships, not
+//    product demos: no surface says "demo".
 //  * The Pro plan of this terminal — billing::open_plans() is the one entry
 //    point every "get more credits" surface uses.
 
 #include <QDialog>
 #include <QEvent>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <QWidget>
 
@@ -24,6 +27,7 @@ class QHideEvent;
 class QLabel;
 class QPropertyAnimation;
 class QPushButton;
+class QResizeEvent;
 class QShowEvent;
 class QTimer;
 
@@ -37,18 +41,43 @@ QString site_url();
 QString pricing_url();
 QString comparison_url();
 QString signup_url();
-QString demo_url();
+/// Booking page for a meeting about custom requirements or a partnership.
+/// The team does not give product demos: label it "DISCUSS CUSTOM
+/// REQUIREMENTS" (never "demo") and give it a plain-sentence tooltip, not this
+/// URL (the scheduling page's own slug still reads "demo").
+QString meeting_url();
+/// "mailto:" link to support@fincept.in with the subject
+/// "Fincept Terminal — partnership enquiry" filled in.
+QString partnership_mailto();
 
 /// `base` tagged with `ref=terminal-<placement>` so the website can attribute
 /// visits to an in-app placement (toolbar, statusbar, popup, dashboard,
-/// pricing, about, setup, ai, ...). Only fincept.in URLs are tagged; any other
-/// URL (e.g. the demo booking page) and an empty placement return `base`.
+/// pricing, about, setup, ai, lock, ...). Only fincept.in URLs are tagged; any
+/// other URL (e.g. the meeting booking page, a mailto: link) and an empty
+/// placement return `base`.
 QString url_with_ref(const QString& base, const QString& placement);
 
-/// Opens `url` in the user's browser. Plain and ref-tagged URLs both work.
+/// Opens `url` outside the app: web pages in the user's browser, mailto: links
+/// in their mail client. Plain and ref-tagged URLs both work.
 void open_url(const QString& url);
 
-/// Visual weight of make_cta_button(). Primary is dark text on amber.
+/// Quiet underlined text button "Partnership enquiry" that opens an e-mail to
+/// support@fincept.in (partnership_mailto()). Styled once from the theme
+/// tokens; the central re-style pass carries it through theme / font changes.
+QPushButton* make_partnership_link(QWidget* parent = nullptr);
+
+/// Gives `btn` the text `full`, or `compact` while `full` does not fit the
+/// width the layout gives the button (large fonts in a narrow column). For
+/// buttons that fill their column's width. Re-checked on every resize and
+/// after an appearance change; call it again to re-translate.
+void set_fitting_text(QPushButton* btn, const QString& full, const QString& compact);
+
+/// True when the signed-in account's plan, as the session already held in
+/// memory says (no network call), is Enterprise. Promotions use it only to
+/// stay out of the way; it must never be shown on screen.
+bool session_has_enterprise_plan();
+
+/// Visual weight of make_cta_button(). Primary is a filled accent button.
 enum class CtaStyle { Primary, Outline, Ghost, Link, Quiet };
 
 /// Self-styled call-to-action button that opens `url` (already ref-tagged by
@@ -128,8 +157,9 @@ class UpgradeDialog : public QDialog {
 
 /// Self-contained Enterprise showcase: header, an auto-rotating carousel of
 /// five slides (data, multi-agent research, desks, controls, built for firms)
-/// with dot indicators, and SEE ENTERPRISE / BOOK A DEMO actions. Rotates every
-/// ~7 s only while visible. Designed for ~400×560 (the first-run setup
+/// with dot indicators, SEE ENTERPRISE / DISCUSS CUSTOM REQUIREMENTS actions
+/// (stacked: the meeting label is long) and a partnership e-mail link. Rotates
+/// every ~7 s only while visible. Designed for ~400×600 (the first-run setup
 /// screen's right column) and reusable anywhere.
 class EnterpriseShowcase : public QWidget {
     Q_OBJECT
@@ -165,7 +195,7 @@ class EnterpriseShowcase : public QWidget {
     QLabel* index_ = nullptr;
     QVector<QPushButton*> dots_;
     QPushButton* primary_btn_ = nullptr;
-    QPushButton* demo_btn_ = nullptr;
+    QPushButton* meeting_btn_ = nullptr;
     QLabel* note_ = nullptr;
     QTimer* rotate_timer_ = nullptr;
     QGraphicsOpacityEffect* fade_ = nullptr;
@@ -174,5 +204,61 @@ class EnterpriseShowcase : public QWidget {
 
 /// Factory used by the first-run setup screen (and any other host).
 QWidget* make_enterprise_showcase(QWidget* parent = nullptr);
+
+/// Enterprise promotion for the lock / PIN screen. Generic, compiled-in copy
+/// only: no network call and no account data. Two forms:
+///   Panel — "Fincept Terminal Enterprise", a one-line pitch, five stacked
+///           value points, SEE ENTERPRISE, DISCUSS CUSTOM REQUIREMENTS and a
+///           partnership e-mail link (the second column of a wide lock screen).
+///   Strip — one slim line under the PIN card: a value point that rotates
+///           every ~7 s while the strip is visible, SEE ENTERPRISE and, when it
+///           fits, DISCUSS CUSTOM REQUIREMENTS.
+/// Nothing in it takes keyboard focus (Qt::NoFocus, never a default button),
+/// so typing and Enter always reach the PIN field, and every link opens
+/// outside the app (browser / mail client) — never a screen of the locked app.
+class EnterpriseLockPromo : public QWidget {
+    Q_OBJECT
+  public:
+    enum class Form { Panel, Strip };
+    explicit EnterpriseLockPromo(Form form, QWidget* parent = nullptr);
+
+    Form form() const { return form_; }
+
+    /// Narrowest / widest the Panel reads well at the current font size
+    /// (from font metrics: the meeting button on one line, ~34-54 characters
+    /// of body text per line).
+    static int panel_min_width();
+    static int panel_max_width();
+
+  protected:
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+  private:
+    void build_panel();
+    void build_strip();
+    void retranslateUi();
+    /// Strip: show the meeting link only when it fits, elide the point to the
+    /// room left. No-op for the Panel.
+    void fit_strip();
+    QStringList panel_points() const;
+    QStringList strip_points() const;
+
+    Form form_;
+    int current_ = 0;
+    QString point_text_; ///< Strip: the current point, unelided
+    QLabel* kicker_ = nullptr;
+    QLabel* headline_ = nullptr;
+    QLabel* pitch_ = nullptr;
+    QList<QLabel*> point_labels_;
+    QLabel* point_ = nullptr;
+    QPushButton* primary_btn_ = nullptr;
+    QPushButton* meeting_btn_ = nullptr;
+    QPushButton* partner_btn_ = nullptr;
+    QLabel* note_ = nullptr;
+    QTimer* rotate_timer_ = nullptr;
+};
 
 } // namespace fincept::ui

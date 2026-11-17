@@ -9,10 +9,14 @@ Complete implementation of factor and model evaluation including:
 """
 
 import json
+import os
 import sys
 from typing import Dict, List, Any, Optional, Union, Tuple
 import warnings
 warnings.filterwarnings('ignore')
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 
 try:
     import pandas as pd
@@ -26,14 +30,11 @@ except ImportError:
     np = None
     stats = None
 
-# Qlib imports
-QLIB_AVAILABLE = False
-try:
-    import qlib
-    from qlib.data import D
-    QLIB_AVAILABLE = True
-except ImportError:
-    QLIB_AVAILABLE = False
+# Nothing here uses qlib; it used to be imported (several seconds of cold start on
+# every call) only to report a flag. check_status looks for it without importing it.
+def _qlib_installed() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("qlib") is not None
 
 
 class EvaluationService:
@@ -520,53 +521,130 @@ class EvaluationService:
             return {"success": False, "error": f"Risk metrics calculation failed: {str(e)}"}
 
     def combine_factors(self,
-                       factors: Dict[str, pd.DataFrame],
+                       factors: Dict[str, pd.Series],
                        weights: Optional[Dict[str, float]] = None,
-                       method: str = "equal_weight") -> Dict[str, Any]:
+                       method: str = "equal_weight",
+                       returns: Optional[pd.Series] = None) -> Dict[str, Any]:
         """
-        Combine multiple factors into a composite signal.
+        Combine several factors into one composite signal.
+
+        Every factor is z-scored first (otherwise the factor with the largest scale
+        dominates the sum), then weighted:
+          equal_weight  1/n each
+          custom        the caller's weights (one per factor), scaled to sum(|w|) = 1
+          ic_weight     w_i proportional to factor i's IC with the forward returns
+                        (a negative-IC factor gets a negative weight, i.e. is flipped)
+          max_ic        w = C^-1 . ic (C = factor correlation matrix): the weights that
+                        maximise the composite's IC (Grinold-Kahn); "optimal" is an alias
+        ic_weight / max_ic estimate their weights on the returns supplied and report the
+        composite IC on that same sample, i.e. in-sample.
 
         Args:
-            factors: Dict of factor name -> factor values DataFrame
-            weights: Optional weights for each factor
-            method: Combination method ('equal_weight', 'ic_weight', 'optimal')
-
-        Returns:
-            Combined factor DataFrame and metadata
+            factors: factor name -> values (one value per observation, all the same length)
+            weights: custom weights (method "custom")
+            method:  see above
+            returns: forward returns aligned with the factors (required by ic_weight /
+                     max_ic; optional otherwise -- when given, the IC of every factor and of
+                     the composite is reported)
         """
         if not PANDAS_AVAILABLE:
             return {"success": False, "error": "Pandas not available"}
 
+        method = str(method or "equal_weight").lower()
+        if method == "optimal":
+            method = "max_ic"
+        if method not in ("equal_weight", "custom", "ic_weight", "max_ic"):
+            return {"success": False,
+                    "error": f"Unknown method '{method}' -- use equal_weight, custom, ic_weight or max_ic"}
+        if not isinstance(factors, dict) or len(factors) < 2:
+            return {"success": False, "error": "Combining needs at least two factors"}
+
         try:
-            factor_dfs = list(factors.values())
+            names = list(factors.keys())
+            frame = pd.DataFrame({k: pd.Series(v, dtype=float).reset_index(drop=True)
+                                  for k, v in factors.items()})
+            lengths = {k: len(v) for k, v in factors.items()}
+            if len(set(lengths.values())) != 1:
+                return {"success": False,
+                        "error": "All factors must have the same number of values; got "
+                                 + ", ".join(f"{k}={n}" for k, n in lengths.items())}
+            n_obs = len(frame)
+            if n_obs < 3:
+                return {"success": False, "error": f"Need at least 3 observations per factor; got {n_obs}"}
+
+            std = frame.std(ddof=1)
+            flat = [k for k in names if not np.isfinite(std[k]) or std[k] == 0]
+            if flat:
+                return {"success": False, "error": f"Constant factor(s) cannot be standardised: {', '.join(flat)}"}
+            z = (frame - frame.mean()) / std
+
+            ret = None
+            if returns is not None and len(returns) > 0:
+                ret = pd.Series(returns, dtype=float).reset_index(drop=True)
+                if len(ret) != n_obs:
+                    return {"success": False,
+                            "error": f"returns has {len(ret)} values but each factor has {n_obs}"}
+
+            def ic_of(series: pd.Series) -> Optional[float]:
+                mask = series.notna() & ret.notna()
+                if mask.sum() < 3 or series[mask].std() == 0 or ret[mask].std() == 0:
+                    return None
+                return float(np.corrcoef(series[mask], ret[mask])[0, 1])
+
+            factor_ic = {k: ic_of(z[k]) for k in names} if ret is not None else None
 
             if method == "equal_weight":
-                # Simple average
-                combined = sum(factor_dfs) / len(factor_dfs)
-                weights_used = {name: 1.0/len(factors) for name in factors.keys()}
-
-            elif method == "ic_weight" and weights:
-                # Weight by IC or provided weights
-                combined = sum(df * weights.get(name, 1.0/len(factors))
-                             for name, df in factors.items())
-                weights_used = weights
-
-            elif method == "optimal":
-                # Optimal weights to maximize IC (simplified)
-                combined = sum(factor_dfs) / len(factor_dfs)  # Placeholder
-                weights_used = {name: 1.0/len(factors) for name in factors.keys()}
-
+                w = pd.Series(1.0 / len(names), index=names)
+            elif method == "custom":
+                if not isinstance(weights, dict) or not weights:
+                    return {"success": False, "error": "method 'custom' needs a weight for every factor"}
+                missing = [k for k in names if k not in weights]
+                if missing:
+                    return {"success": False, "error": f"No weight given for: {', '.join(missing)}"}
+                w = pd.Series({k: float(weights[k]) for k in names})
             else:
-                combined = sum(factor_dfs) / len(factor_dfs)
-                weights_used = {name: 1.0/len(factors) for name in factors.keys()}
+                if ret is None:
+                    return {"success": False,
+                            "error": f"method '{method}' estimates its weights from the forward returns -- "
+                                     "supply 'returns' (or use equal_weight / custom)"}
+                if any(v is None for v in factor_ic.values()):
+                    bad = [k for k, v in factor_ic.items() if v is None]
+                    return {"success": False,
+                            "error": f"IC undefined for: {', '.join(bad)} (too few paired values)"}
+                ic_vec = pd.Series(factor_ic)
+                if method == "ic_weight":
+                    w = ic_vec
+                else:
+                    corr = z.corr().loc[names, names].values
+                    w = pd.Series(np.linalg.pinv(corr) @ ic_vec.loc[names].values, index=names)
 
-            return {
+            total = float(w.abs().sum())
+            if not np.isfinite(total) or total == 0:
+                return {"success": False, "error": "All weights are zero -- nothing to combine"}
+            w = w / total
+
+            # Rows where a factor is missing use the factors that are present (re-weighted).
+            weighted = z.mul(w, axis=1)
+            present = z.notna().mul(w.abs(), axis=1).sum(axis=1)
+            combined = weighted.sum(axis=1, min_count=1) / present.where(present > 0)
+
+            result = {
                 "success": True,
-                "combined_factor": combined.to_dict(),
-                "weights": weights_used,
                 "method": method,
-                "num_factors": len(factors)
+                "num_factors": len(names),
+                "observations": int(n_obs),
+                "weights": {k: float(w[k]) for k in names},
+                "combined_factor": combined.tolist(),
+                "standardised": True,
             }
+            if ret is not None:
+                result["factor_ic"] = factor_ic
+                result["combined_ic"] = ic_of(combined)
+                if method in ("ic_weight", "max_ic"):
+                    result["in_sample"] = True
+                    result["note"] = ("Weights were estimated on these returns and the composite IC is measured "
+                                      "on the same sample (in-sample); expect a lower IC out of sample.")
+            return result
 
         except Exception as e:
             return {"success": False, "error": f"Factor combination failed: {str(e)}"}
@@ -751,7 +829,7 @@ def _json_safe(obj):
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -764,7 +842,7 @@ def main():
             result = {
                 "success": True,
                 "pandas_available": PANDAS_AVAILABLE,
-                "qlib_available": QLIB_AVAILABLE
+                "qlib_available": _qlib_installed()
             }
 
         elif command == "calculate_ic":
@@ -796,10 +874,15 @@ def main():
             result = service.calculate_risk_metrics(returns, benchmark_returns, confidence_level)
 
         elif command == "combine_factors":
-            factors = {k: pd.Series(v) for k, v in params.get("factors", {}).items()}
+            raw = params.get("factors", {})
+            if not isinstance(raw, dict):
+                raise ValueError('factors must be an object of name -> [values], e.g. {"mom": [...], "value": [...]}')
+            factors = {k: pd.Series(v, dtype=float) for k, v in raw.items()}
             weights = params.get("weights")
             method = params.get("method", "equal_weight")
-            result = service.combine_factors(factors, weights, method)
+            rets = params.get("returns")
+            returns = pd.Series(rets, dtype=float) if rets else None
+            result = service.combine_factors(factors, weights, method, returns)
 
         elif command == "generate_evaluation_report":
             factor_name = params.get("factor_name", "factor")
@@ -810,10 +893,10 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(_json_safe(result)))
+        fincept_json.emit(_json_safe(result))
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

@@ -4,7 +4,8 @@ Fetches data from the BCB SGS (Sistema Gerenciador de Series Temporais) API.
 
 API Reference:
   Base URL:  https://api.bcb.gov.br/dados/serie/bcdata.sgs.{series_id}/dados
-  Format:    JSON array [{data: "DD/MM/YYYY", valor: "N.NN"}, ...]
+  Format:    JSON array [{data: "DD/MM/YYYY", valor: "N.NN"}, ...] - this wrapper returns ISO
+             dates ("YYYY-MM-DD") and takes start/end dates as YYYY-MM-DD (DD/MM/YYYY also accepted)
   Auth:      None required — fully public
 
 Endpoint patterns:
@@ -101,6 +102,22 @@ GROUPS = {
 }
 
 
+def _iso_date(text: str) -> str:
+    """The API's "DD/MM/YYYY" as ISO "YYYY-MM-DD" (anything else unchanged)."""
+    s = (text or "").strip()
+    if len(s) == 10 and s[2] == "/" and s[5] == "/":
+        return f"{s[6:10]}-{s[3:5]}-{s[0:2]}"
+    return s
+
+
+def _api_date(text: str) -> str:
+    """A date argument for the API: ISO "YYYY-MM-DD" becomes "DD/MM/YYYY"; "DD/MM/YYYY" passes."""
+    s = (text or "").strip()
+    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[0:4]}"
+    return s
+
+
 # ---------------------------------------------------------------------------
 # Error container
 # ---------------------------------------------------------------------------
@@ -151,7 +168,7 @@ class BCBWrapper:
                       last_n: Optional[int] = None) -> List[Dict]:
         """
         Fetch a single SGS series.
-        start_date/end_date: "DD/MM/YYYY" format
+        start_date/end_date: "YYYY-MM-DD" (or the API's own "DD/MM/YYYY")
         last_n: fetch only last N observations
         """
         if last_n:
@@ -161,9 +178,9 @@ class BCBWrapper:
 
         params: Dict[str, str] = {"formato": "json"}
         if start_date and not last_n:
-            params["dataInicial"] = start_date
+            params["dataInicial"] = _api_date(start_date)
         if end_date and not last_n:
-            params["dataFinal"] = end_date
+            params["dataFinal"] = _api_date(end_date)
 
         resp = self.session.get(url, params=params, timeout=DEFAULT_TIMEOUT)
         resp.raise_for_status()
@@ -172,7 +189,7 @@ class BCBWrapper:
     def _parse_rows(self, raw: List[Dict], series_name: str) -> List[Dict]:
         rows = []
         for item in raw:
-            date_str = item.get("data", "")
+            date_str = _iso_date(item.get("data", ""))
             val_str  = item.get("valor", "")
             val      = None
             if val_str not in ("", None):
@@ -280,7 +297,7 @@ class BCBWrapper:
             d = row["date"]
             merged.setdefault(d, {"date": d})
             merged[d]["eur_brl"] = row.get("eur_brl")
-        rows = sorted(merged.values(), key=lambda r: datetime.strptime(r["date"], "%d/%m/%Y"))
+        rows = sorted(merged.values(), key=lambda r: r["date"])  # ISO dates sort as text
         return {
             "success":   True,
             "data":      rows,
@@ -299,7 +316,7 @@ class BCBWrapper:
                 d = row["date"]
                 merged.setdefault(d, {"date": d})
                 merged[d].update({k: v for k, v in row.items() if k != "date"})
-        rows = sorted(merged.values(), key=lambda r: datetime.strptime(r["date"], "%d/%m/%Y"))
+        rows = sorted(merged.values(), key=lambda r: r["date"])  # ISO dates sort as text
         return {
             "success":   True,
             "data":      rows,
@@ -407,7 +424,7 @@ class BCBWrapper:
 # ---------------------------------------------------------------------------
 
 COMMANDS = {
-    "selic":          "[start DD/MM/YYYY] [end DD/MM/YYYY]  — Selic target rate",
+    "selic":          "[start YYYY-MM-DD] [end YYYY-MM-DD]  — Selic target rate",
     "selic_daily":    "[start] [end]                         — Selic daily rate",
     "ipca":           "[start] [end]                         — IPCA monthly inflation",
     "igpm":           "[start] [end]                         — IGP-M inflation",

@@ -6,6 +6,7 @@ import sys
 import json
 import requests
 from typing import Dict, Any, List, Optional
+import fincept_connector as fc
 
 BASE_URL = "https://pxweb.irena.org/api/v1/en/IRENASTAT"
 # Table ids carry the release (e.g. Country_ELECSTAT_2026_H2_PX.px), so they are discovered by prefix.
@@ -108,6 +109,8 @@ def _query(key: str, selections: Dict[str, Any]) -> Any:
     rows = []
     for rec in data.get("data", []):
         row = {d: texts[d].get(k, k) for d, k in zip(dims, rec.get("key", []))}
+        if "Year" in row:  # the year label is text ("2016"): a number
+            row["Year"] = fc.number(row["Year"])
         try:
             row["value"] = float(rec["values"][0])
         except (ValueError, TypeError, IndexError):

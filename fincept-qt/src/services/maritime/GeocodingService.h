@@ -39,6 +39,12 @@ class GeocodingService : public QObject {
     Q_DISABLE_COPY(GeocodingService)
 
     QNetworkAccessManager* nam_ = nullptr;
+    // Nominatim's usage policy: at most one request per second. A search inside
+    // that window waits; a newer one replaces a waiting one.
+    qint64 last_request_ms_ = 0;
+    QString waiting_query_;
+    int waiting_limit_ = 0;
+    bool wait_scheduled_ = false;
 };
 
 } // namespace fincept::services::maritime

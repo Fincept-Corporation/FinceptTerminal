@@ -38,7 +38,7 @@ inline QString input_ss() {
 inline QString btn_primary_ss() {
     return QString("QPushButton{background:%1;color:%2;border:none;font-weight:700;padding:0 16px;height:32px;}"
                    "QPushButton:hover{background:%3;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM());
 }
 
 inline QString btn_secondary_ss() {

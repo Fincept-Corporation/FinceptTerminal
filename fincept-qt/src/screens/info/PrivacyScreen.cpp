@@ -17,13 +17,16 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const char* MF = "font-family:'Consolas','Courier New',monospace;";
+// The user's font as a stylesheet declaration, for labels that set their own size.
+static QString MF() {
+    return QStringLiteral("font-family:%1;").arg(QString(fonts::DATA_FAMILY));
+}
 
 static QLabel* section_heading(const QString& icon, const QString& title) {
     auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
-    lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700; "
+    lbl->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700; "
                                "background: transparent; margin-top: 8px; %2")
-                           .arg(colors::AMBER(), MF));
+                           .arg(colors::AMBER(), MF()));
     return lbl;
 }
 
@@ -31,7 +34,7 @@ static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
     lbl->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_PRIMARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent; %2").arg(colors::TEXT_PRIMARY(), MF()));
     return lbl;
 }
 
@@ -39,7 +42,7 @@ static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
     lbl->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF()));
     return lbl;
 }
 
@@ -53,13 +56,13 @@ static QWidget* info_card(const QString& title, const QString& desc) {
 
     auto* t = new QLabel(title);
     t->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: 700; background: transparent; %2").arg(colors::AMBER(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: 700; background: transparent; %2").arg(colors::AMBER(), MF()));
     vl->addWidget(t);
 
     auto* d = new QLabel(desc);
     d->setWordWrap(true);
     d->setStyleSheet(
-        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF()));
     vl->addWidget(d);
 
     return card;
@@ -117,21 +120,21 @@ QWidget* PrivacyScreen::build_page() {
         auto* back_btn = new QPushButton(tr("< BACK"));
         back_btn->setCursor(Qt::PointingHandCursor);
         back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                        "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
-                                    .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
+                                        "font-size: " + fincept::ui::fonts::px(-2) + "px; %2 } QPushButton:hover { color: %3; }")
+                                    .arg(colors::TEXT_SECONDARY(), MF(), colors::TEXT_PRIMARY()));
         connect(back_btn, &QPushButton::clicked, this, &PrivacyScreen::navigate_back);
         vl->addWidget(back_btn, 0, Qt::AlignLeft);
     }
 
     auto* title = new QLabel(tr("PRIVACY POLICY"));
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; "
+    title->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(6) + "px; font-weight: 700; letter-spacing: 1px; "
                                  "background: transparent; %2")
-                             .arg(colors::AMBER(), MF));
+                             .arg(colors::AMBER(), MF()));
     vl->addWidget(title);
 
     auto* updated = new QLabel(tr("Last updated: January 1, 2026"));
     updated->setStyleSheet(
-        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF()));
     vl->addWidget(updated);
     vl->addSpacing(12);
 
@@ -232,9 +235,9 @@ QWidget* PrivacyScreen::build_page() {
         auto* btn = new QPushButton(text);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                   "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
-                                   "QPushButton:hover { color: #38bdf8; }")
-                               .arg(colors::CYAN()));
+                                   "font-size: " + fincept::ui::fonts::px(-2) + "px; }"
+                                   "QPushButton:hover { color: %2; }")
+                               .arg(colors::CYAN(), colors::TEXT_PRIMARY()));
         return btn;
     };
 

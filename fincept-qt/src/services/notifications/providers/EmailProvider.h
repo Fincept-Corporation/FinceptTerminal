@@ -3,9 +3,15 @@
 
 namespace fincept::notifications {
 
-/// Email provider via SMTP-over-HTTP relay (uses a simple HTTP API endpoint
-/// that wraps SMTP, e.g. a self-hosted relay or a service like MailHog/Mailpit).
-/// For production use, point smtp_host_ at an HTTP-to-SMTP bridge endpoint.
+/// Email provider. Settings > Notifications > EMAIL asks for an SMTP server
+/// (host, port, username, password) and this sends through it: real SMTP via
+/// scripts/notify_smtp.py (Python standard library smtplib) — implicit TLS on
+/// port 465, STARTTLS on any other port. The password reaches the script on
+/// stdin, never on its command line.
+///
+/// A host written as a full http(s):// URL is the older "SMTP-over-HTTP relay"
+/// mode, kept for anyone who set one up: a JSON POST {to, from, subject, body,
+/// auth} to that URL.
 class EmailProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "email"; }
@@ -15,12 +21,15 @@ class EmailProvider final : public BaseProvider {
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;
 
-    /// Resolve smtp_host_ into the relay URL to POST to.
+    /// True when smtp_host_ is an http:// or https:// URL (relay mode).
+    bool uses_http_relay() const;
+
+    /// Relay mode only: the URL to POST to.
     ///
-    /// Defaults the scheme to https — the request body carries the SMTP
-    /// password in cleartext, so it must not travel over plain http. Returns an
-    /// empty string when the configured host would force an unencrypted
-    /// non-loopback connection, and the caller must then refuse to send.
+    /// The request body carries the SMTP password in cleartext, so it must not
+    /// travel over plain http. Returns an empty string when smtp_host_ is not a
+    /// URL, or when it would force an unencrypted non-loopback connection — the
+    /// caller must then refuse to send.
     QString build_endpoint() const;
 
   protected:
@@ -34,6 +43,10 @@ class EmailProvider final : public BaseProvider {
     QString smtp_pass_;
     QString to_addr_;
     QString from_addr_;
+
+  private:
+    void send_smtp(const QString& subject, const QString& text, std::function<void(bool, QString)> cb);
+    void send_relay(const QString& subject, const QString& text, std::function<void(bool, QString)> cb);
 };
 
 } // namespace fincept::notifications

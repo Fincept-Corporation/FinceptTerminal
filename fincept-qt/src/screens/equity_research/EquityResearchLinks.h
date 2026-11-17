@@ -37,4 +37,9 @@ void add_open_in_actions(QMenu* menu, QWidget* context, const QString& symbol);
 /// with a tooltip, a success is announced on `watchlist.updated`.
 void add_watchlist_entries(QMenu* menu, QWidget* context, const QString& symbol);
 
+/// Rich-text links to the home regulator / exchange filing archive of a non-US listing
+/// (RNS and the FCA store for ".L", NSE / BSE for India, EDINET / TDnet for Tokyo, SEDAR+,
+/// HKEXnews, DART, ...). Empty for a US listing or an unknown suffix.
+QString regulator_filings_html(const QString& symbol);
+
 } // namespace fincept::screens::equity_links

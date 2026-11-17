@@ -92,6 +92,8 @@ class BuybackBurnPanel : public QWidget {
     QString current_burn_signature_;
     bool epoch_is_mock_ = false;
     bool burn_total_is_mock_ = false;
+    bool has_data_ = false;    // any update received — pill reads LOADING/OFFLINE until then
+    bool feed_failed_ = false; // a topic error arrived
 };
 
 } // namespace fincept::screens::panels

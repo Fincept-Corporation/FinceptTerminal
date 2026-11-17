@@ -2,41 +2,36 @@
 Duration and Convexity Analytics Module
 =======================================
 
-Interest rate risk measurement implementing CFA Institute standard methodologies
-for duration and convexity calculations.
+Interest rate risk measures (CFA-curriculum methods).
 
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Bond specifications (face value, coupon rate, maturity)
-  - Yield to maturity or spot rate curve
-  - Cash flow schedules
-  - Option-adjusted parameters for callable/putable bonds
-
-OUTPUT:
-  - Macaulay Duration
-  - Modified Duration
-  - Effective Duration (for bonds with embedded options)
-  - Key Rate Duration
-  - Convexity (standard and effective)
-  - Price sensitivity estimates
-  - Dollar duration and DV01
+Conventions
+-----------
+* macaulay_duration: PV-weighted average time to the cash flows, in YEARS.
+* modified_duration = macaulay / (1 + y/f) (y/f -> y for frequency 0): -dP/dy / P, in years.
+* convexity: (1/P) d2P/dy2 in years^2, consistent with
+  %dP ~= -modified * dy + 0.5 * convexity * dy^2.
+* All three are computed on the dirty (full) price; `price` in the output is the clean price.
+* Yield: nominal annual compounded `frequency` times a year (frequency 0: zero-coupon, annual).
+* Fractional periods to maturity use a fractional first period (no truncation); settlement_date +
+  maturity_date (YYYY-MM-DD) + day_count can be given instead of years_to_maturity.
+* dollar_duration = modified * dirty price * 0.01 (price change per 100 bp); dv01 = per 1 bp.
 
 PARAMETERS:
-  - face_value: Par/face value of the bond - default: 1000
-  - coupon_rate: Annual coupon rate as decimal
-  - years_to_maturity: Time to maturity in years
-  - ytm: Yield to maturity as decimal
-  - frequency: Coupon payment frequency per year - default: 2
-  - delta_yield: Yield change for effective duration - default: 0.0001 (1bp)
+  face_value (1000), coupon_rate (0.05), years_to_maturity (10), ytm (0.05), frequency (2),
+  delta_yield (for effective measures)
 """
 
-from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Tuple
-from enum import Enum
-import numpy as np
 import logging
+import os
+import sys
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-logging.basicConfig(level=logging.INFO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fi_common as fc  # noqa: E402
+from fi_common import FIError, num, r  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,12 +55,20 @@ class DurationResult:
     price: float
 
 
-class DurationCalculator:
-    """
-    Duration calculator implementing CFA-standard methodologies.
+def _bond(face_value, coupon_rate, years_to_maturity, ytm, frequency, timing):
+    fc.check_frequency(frequency)
+    if ytm <= -(frequency or 1):
+        raise FIError(f"ytm must be > {-(frequency or 1)} for frequency {frequency}")
+    if timing is None:
+        timing = fc.timing_from_years(years_to_maturity, frequency, coupon_rate)
+    flows = fc.bond_flows(face_value, coupon_rate, timing)
+    m = fc.risk_measures(ytm, flows, frequency)
+    accrued = face_value * timing.accrued_per_face
+    return timing, flows, m, accrued
 
-    Duration measures the sensitivity of bond price to interest rate changes.
-    """
+
+class DurationCalculator:
+    """Duration measures: sensitivity of bond price to interest rate changes."""
 
     def calculate_macaulay_duration(
         self,
@@ -74,66 +77,47 @@ class DurationCalculator:
         years_to_maturity: float = 10.0,
         ytm: float = 0.05,
         frequency: int = 2,
+        timing: Optional[fc.BondTiming] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate Macaulay Duration - weighted average time to receive cash flows.
-
-        MacDur = sum(t * PV(CF_t)) / Price
-
-        Args:
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            ytm: Yield to maturity (decimal)
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with Macaulay duration and details
+        Macaulay duration = sum(t * PV(CF_t)) / dirty price, t in years from settlement.
+        A zero-coupon bond's Macaulay duration equals its time to maturity.
         """
+        timing, flows, m, accrued = _bond(face_value, coupon_rate, years_to_maturity, ytm, frequency, timing)
+        dirty = m['dirty_price']
         if frequency == 0:
-            # Zero coupon bond - duration equals maturity
-            price = face_value / ((1 + ytm) ** years_to_maturity)
+            T = timing.years_from_settlement
             return {
-                'macaulay_duration': years_to_maturity,
-                'price': round(price, 4),
-                'weighted_cash_flows': [{'period': years_to_maturity, 'weight': 1.0}]
+                'macaulay_duration': round(m['macaulay'], 6),
+                'price': round(dirty, 4),
+                'dirty_price': round(dirty, 4),
+                'weighted_cash_flows': [{'period': round(T, 6), 'weight': 1.0}],
+                'conventions': {'compounding': 'annual (zero-coupon)', 'units': 'years'},
             }
-
-        periods = int(years_to_maturity * frequency)
-        periodic_rate = ytm / frequency
-        coupon = (coupon_rate * face_value) / frequency
-
-        weighted_cf_sum = 0
-        price = 0
-        cash_flow_details = []
-
-        for t in range(1, periods + 1):
-            time_in_years = t / frequency
-            cf = coupon if t < periods else coupon + face_value
-            discount_factor = 1 / ((1 + periodic_rate) ** t)
-            pv_cf = cf * discount_factor
-            weighted_cf = time_in_years * pv_cf
-
-            price += pv_cf
-            weighted_cf_sum += weighted_cf
-
-            cash_flow_details.append({
-                'period': t,
-                'time_years': round(time_in_years, 4),
+        f = frequency
+        b = 1 + ytm / f
+        details = []
+        for k, (e, cf) in enumerate(flows, 1):
+            pv = cf * b ** (-e)
+            details.append({
+                'period': k,
+                'time_years': round(e / f, 6),
                 'cash_flow': round(cf, 2),
-                'pv': round(pv_cf, 4),
-                'weighted_pv': round(weighted_cf, 4)
+                'pv': round(pv, 4),
+                'weighted_pv': round(e / f * pv, 4),
             })
-
-        macaulay_duration = weighted_cf_sum / price
-
         return {
-            'macaulay_duration': round(macaulay_duration, 4),
-            'macaulay_duration_periods': round(macaulay_duration * frequency, 4),
-            'price': round(price, 4),
-            'total_pv': round(price, 4),
-            'weighted_sum': round(weighted_cf_sum, 4),
-            'cash_flow_details': cash_flow_details
+            'macaulay_duration': round(m['macaulay'], 6),
+            'macaulay_duration_periods': round(m['macaulay'] * f, 6),
+            'price': round(dirty - accrued, 4),
+            'dirty_price': round(dirty, 4),
+            'accrued_interest': round(accrued, 4),
+            'total_pv': round(dirty, 4),
+            'weighted_sum': round(m['weighted_sum'], 4),
+            'cash_flow_details': details,
+            'conventions': {'units': 'years', 'weights': 'PV at the yield, on the dirty price',
+                            'yield_compounding': f'nominal annual, compounded {f}x per year',
+                            **timing.info},
         }
 
     def calculate_modified_duration(
@@ -143,51 +127,36 @@ class DurationCalculator:
         years_to_maturity: float = 10.0,
         ytm: float = 0.05,
         frequency: int = 2,
+        timing: Optional[fc.BondTiming] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate Modified Duration - price sensitivity measure.
-
-        ModDur = MacDur / (1 + y/n)
-
-        Args:
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            ytm: Yield to maturity (decimal)
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with modified duration
+        Modified duration = Macaulay / (1 + y/f)  (= -dP/dy / P for the periodic-compounding yield).
         """
-        mac_result = self.calculate_macaulay_duration(
-            face_value, coupon_rate, years_to_maturity, ytm, frequency
-        )
-        macaulay_duration = mac_result['macaulay_duration']
-        price = mac_result['price']
-
-        # Modified duration
-        if frequency > 0:
-            modified_duration = macaulay_duration / (1 + ytm / frequency)
-        else:
-            modified_duration = macaulay_duration / (1 + ytm)
-
-        # Dollar duration (DV01 for 1bp change)
-        dollar_duration = modified_duration * price / 100
-        dv01 = modified_duration * price * 0.0001
-
-        # Price change estimates
-        yield_change_1pct = modified_duration * 0.01 * price
-        yield_change_50bp = modified_duration * 0.005 * price
-
+        timing, flows, m, accrued = _bond(face_value, coupon_rate, years_to_maturity, ytm, frequency, timing)
+        dirty = m['dirty_price']
+        mod = m['modified']
+        dollar_duration = mod * dirty / 100
+        dv01 = mod * dirty * 0.0001
+        chg_1pct = mod * 0.01 * dirty
+        chg_50bp = mod * 0.005 * dirty
         return {
-            'modified_duration': round(modified_duration, 4),
-            'macaulay_duration': round(macaulay_duration, 4),
+            'modified_duration': round(mod, 6),
+            'macaulay_duration': round(m['macaulay'], 6),
             'dollar_duration': round(dollar_duration, 4),
             'dv01': round(dv01, 4),
-            'price': round(price, 4),
-            'price_change_1pct_yield': round(yield_change_1pct, 4),
-            'price_change_50bp_yield': round(yield_change_50bp, 4),
-            'interpretation': f"A 1% increase in yield decreases price by approximately {round(yield_change_1pct, 2)}"
+            'price': round(dirty - accrued, 4),
+            'dirty_price': round(dirty, 4),
+            'accrued_interest': round(accrued, 4),
+            'price_change_1pct_yield': round(chg_1pct, 4),
+            'price_change_50bp_yield': round(chg_50bp, 4),
+            'interpretation': f"A 1% increase in yield decreases price by approximately {round(chg_1pct, 2)}",
+            'conventions': {
+                'modified_duration': 'Macaulay / (1 + y/f); y/f -> y for frequency 0',
+                'dollar_duration': 'modified x dirty price x 0.01 (per 100 bp)',
+                'dv01': 'modified x dirty price x 0.0001 (per 1 bp)',
+                'yield_compounding': ('annual (zero-coupon)' if frequency == 0
+                                      else f'nominal annual, compounded {frequency}x per year'),
+            },
         }
 
     def calculate_effective_duration(
@@ -198,27 +167,15 @@ class DurationCalculator:
         delta_yield: float = 0.01,
     ) -> Dict[str, Any]:
         """
-        Calculate Effective Duration for bonds with embedded options.
-
+        Effective duration (bonds with embedded options):
         EffDur = (P_down - P_up) / (2 * P_0 * delta_y)
-
-        Args:
-            price: Current bond price
-            price_up: Price when yield increases by delta_yield
-            price_down: Price when yield decreases by delta_yield
-            delta_yield: Yield change magnitude (decimal)
-
-        Returns:
-            Dictionary with effective duration
         """
-        if price <= 0 or delta_yield <= 0:
-            return {'error': 'Invalid inputs'}
-
+        if price <= 0 or price_up <= 0 or price_down <= 0:
+            raise FIError('price, price_up and price_down must be > 0')
+        if delta_yield <= 0:
+            raise FIError('delta_yield must be > 0')
         effective_duration = (price_down - price_up) / (2 * price * delta_yield)
-
-        # Price sensitivity estimate
         pct_change_estimate = effective_duration * delta_yield * 100
-
         return {
             'effective_duration': round(effective_duration, 4),
             'delta_yield': delta_yield,
@@ -240,76 +197,86 @@ class DurationCalculator:
         key_rate_maturities: List[float] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate Key Rate Durations - sensitivity to specific points on yield curve.
+        Key rate durations: spot_rates[i] is the annually-compounded spot rate for the cash flow at
+        t = (i+1)/frequency (the bond matures at the last one).
 
-        Args:
-            spot_rates: Current spot rate curve
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            frequency: Coupon payments per year
-            delta_rate: Rate change for sensitivity (decimal)
-            key_rate_maturities: Specific maturities to calculate KRD
-
-        Returns:
-            Dictionary with key rate durations
+        Each key rate is shocked with a triangular ("tent") profile that is 1 at its tenor and falls
+        linearly to 0 at the neighbouring key tenors (flat beyond the first and last key used), so the
+        shocks add up to a parallel shift and the KRDs add up to the effective duration.
+        Central differences: KRD_k = (P(-d) - P(+d)) / (2 P d).
         """
+        fc.check_frequency(frequency, allow_zero=False)
+        if not spot_rates:
+            raise FIError('spot_rates must be a non-empty list (one annually-compounded rate per coupon period)')
+        if delta_rate <= 0:
+            raise FIError('delta_rate must be > 0')
         if key_rate_maturities is None:
             key_rate_maturities = [1, 2, 3, 5, 7, 10, 20, 30]
+        keys = sorted(set(float(k) for k in key_rate_maturities))
+        if not keys or keys[0] <= 0:
+            raise FIError('key_rate_maturities must be positive')
 
-        coupon = (coupon_rate * face_value) / frequency
-        periods = len(spot_rates)
+        coupon = coupon_rate * face_value / frequency
+        n = len(spot_rates)
+        times = [(i + 1) / frequency for i in range(n)]
+        cfs = [coupon + (face_value if i == n - 1 else 0.0) for i in range(n)]
+        maturity = times[-1]
+        # keys below maturity plus the first key at/after it (cash flows never extend past it)
+        used = [k for k in keys if k < maturity - 1e-12]
+        nxt = [k for k in keys if k >= maturity - 1e-12]
+        if nxt:
+            used.append(nxt[0])
+        if not used:
+            used = [keys[-1]]
 
-        # Calculate base price
-        base_price = 0
-        for i, spot in enumerate(spot_rates):
-            t = (i + 1) / frequency
-            cf = coupon if i < periods - 1 else coupon + face_value
-            base_price += cf / ((1 + spot) ** t)
+        def tent(j: int, t: float) -> float:
+            k = used[j]
+            left = used[j - 1] if j > 0 else None
+            right = used[j + 1] if j + 1 < len(used) else None
+            if t <= k:
+                if left is None:
+                    return 1.0
+                return 0.0 if t <= left else (t - left) / (k - left)
+            if right is None:
+                return 1.0
+            return 0.0 if t >= right else (right - t) / (right - k)
 
-        key_rate_durations = []
+        def price(shock) -> float:
+            total = 0.0
+            for i, (t, cf) in enumerate(zip(times, cfs)):
+                s = spot_rates[i] + shock(t)
+                if s <= -1:
+                    raise FIError(f'spot_rates[{i}] must be > -1')
+                total += cf / (1 + s) ** t
+            return total
 
-        for key_maturity in key_rate_maturities:
-            if key_maturity > periods / frequency:
-                continue
-
-            # Shift rate at key maturity
-            shocked_rates = spot_rates.copy()
-            key_period = int(key_maturity * frequency) - 1
-
-            if key_period < len(shocked_rates):
-                shocked_rates[key_period] += delta_rate
-
-                # Calculate shocked price
-                shocked_price = 0
-                for i, spot in enumerate(shocked_rates):
-                    t = (i + 1) / frequency
-                    cf = coupon if i < periods - 1 else coupon + face_value
-                    shocked_price += cf / ((1 + spot) ** t)
-
-                krd = -(shocked_price - base_price) / (base_price * delta_rate)
-
-                key_rate_durations.append({
-                    'maturity': key_maturity,
-                    'key_rate_duration': round(krd, 4),
-                    'contribution_pct': round(krd * 100 / sum(k['key_rate_duration'] for k in key_rate_durations) if key_rate_durations else 0, 2)
-                })
-
-        total_krd = sum(k['key_rate_duration'] for k in key_rate_durations)
+        base_price = price(lambda t: 0.0)
+        krds = []
+        for j, k in enumerate(used):
+            p_up = price(lambda t, j=j: delta_rate * tent(j, t))
+            p_dn = price(lambda t, j=j: -delta_rate * tent(j, t))
+            krds.append((k, (p_dn - p_up) / (2 * base_price * delta_rate)))
+        total_krd = sum(v for _, v in krds)
+        p_up = price(lambda t: delta_rate)
+        p_dn = price(lambda t: -delta_rate)
+        parallel = (p_dn - p_up) / (2 * base_price * delta_rate)
 
         return {
-            'key_rate_durations': key_rate_durations,
-            'total_krd': round(total_krd, 4),
+            'key_rate_durations': [
+                {'maturity': k, 'key_rate_duration': round(v, 6),
+                 'contribution_pct': round(v / total_krd * 100, 2) if total_krd else None}
+                for k, v in krds
+            ],
+            'total_krd': round(total_krd, 6),
+            'parallel_shift_duration': round(parallel, 6),
             'base_price': round(base_price, 4),
-            'note': 'KRD shows sensitivity to specific points on the yield curve'
+            'key_rates_used': used,
+            'note': 'Tent-shaped shocks to annually-compounded spot rates; KRDs sum to the parallel-shift duration'
         }
 
 
 class ConvexityCalculator:
-    """
-    Convexity calculator for measuring second-order price sensitivity.
-
-    Convexity captures the curvature in the price-yield relationship.
-    """
+    """Convexity: second-order price sensitivity."""
 
     def calculate_convexity(
         self,
@@ -318,60 +285,34 @@ class ConvexityCalculator:
         years_to_maturity: float = 10.0,
         ytm: float = 0.05,
         frequency: int = 2,
+        timing: Optional[fc.BondTiming] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate bond convexity.
-
-        Convexity = sum(t*(t+1)*PV(CF_t)) / (Price * (1+y/n)^2 * n^2)
-
-        Args:
-            face_value: Face/par value
-            coupon_rate: Annual coupon rate (decimal)
-            years_to_maturity: Years until maturity
-            ytm: Yield to maturity (decimal)
-            frequency: Coupon payments per year
-
-        Returns:
-            Dictionary with convexity measure
+        Convexity = sum(e(e+1) PV(CF)) / (P (1+y/f)^2 f^2), e = periods to the cash flow
+        (zero-coupon, annual: T(T+1)/(1+y)^2). Units: years^2.
         """
+        timing, flows, m, accrued = _bond(face_value, coupon_rate, years_to_maturity, ytm, frequency, timing)
+        dirty = m['dirty_price']
+        conv = m['convexity']
         if frequency == 0:
-            # Zero coupon bond
-            price = face_value / ((1 + ytm) ** years_to_maturity)
-            convexity = years_to_maturity * (years_to_maturity + 1) / ((1 + ytm) ** 2)
             return {
-                'convexity': round(convexity, 4),
-                'price': round(price, 4),
-                'note': 'Zero coupon bond convexity'
+                'convexity': round(conv, 4),
+                'price': round(dirty, 4),
+                'dirty_price': round(dirty, 4),
+                'note': 'Zero coupon bond convexity, annual compounding: T(T+1)/(1+y)^2',
             }
-
-        periods = int(years_to_maturity * frequency)
-        periodic_rate = ytm / frequency
-        coupon = (coupon_rate * face_value) / frequency
-
-        price = 0
-        convexity_sum = 0
-
-        for t in range(1, periods + 1):
-            cf = coupon if t < periods else coupon + face_value
-            discount_factor = 1 / ((1 + periodic_rate) ** t)
-            pv_cf = cf * discount_factor
-
-            price += pv_cf
-            convexity_sum += t * (t + 1) * pv_cf
-
-        # Convexity formula
-        convexity = convexity_sum / (price * ((1 + periodic_rate) ** 2) * (frequency ** 2))
-
-        # Dollar convexity
-        dollar_convexity = convexity * price / 100
-
         return {
-            'convexity': round(convexity, 4),
-            'convexity_years': round(convexity, 4),
-            'dollar_convexity': round(dollar_convexity, 4),
-            'price': round(price, 4),
-            'convexity_adjustment_1pct': round(0.5 * convexity * (0.01 ** 2) * price, 4),
-            'interpretation': 'Higher convexity means bond benefits more from yield changes'
+            'convexity': round(conv, 4),
+            'convexity_years': round(conv, 4),
+            'dollar_convexity': round(conv * dirty / 100, 4),
+            'price': round(dirty - accrued, 4),
+            'dirty_price': round(dirty, 4),
+            'accrued_interest': round(accrued, 4),
+            'convexity_adjustment_1pct': round(0.5 * conv * (0.01 ** 2) * dirty, 4),
+            'interpretation': 'Higher convexity means bond benefits more from yield changes',
+            'conventions': {'units': 'years^2 (annualised)', 'price_basis': 'dirty',
+                            'yield_compounding': f'nominal annual, compounded {frequency}x per year',
+                            'dollar_convexity': 'convexity x dirty price / 100'},
         }
 
     def calculate_effective_convexity(
@@ -382,24 +323,13 @@ class ConvexityCalculator:
         delta_yield: float = 0.01,
     ) -> Dict[str, Any]:
         """
-        Calculate Effective Convexity for bonds with embedded options.
-
-        EffConv = (P_down + P_up - 2*P_0) / (P_0 * delta_y^2)
-
-        Args:
-            price: Current bond price
-            price_up: Price when yield increases
-            price_down: Price when yield decreases
-            delta_yield: Yield change magnitude
-
-        Returns:
-            Dictionary with effective convexity
+        Effective convexity = (P_down + P_up - 2 P_0) / (P_0 * delta_y^2)
         """
-        if price <= 0 or delta_yield <= 0:
-            return {'error': 'Invalid inputs'}
-
+        if price <= 0 or price_up <= 0 or price_down <= 0:
+            raise FIError('price, price_up and price_down must be > 0')
+        if delta_yield <= 0:
+            raise FIError('delta_yield must be > 0')
         effective_convexity = (price_down + price_up - 2 * price) / (price * (delta_yield ** 2))
-
         return {
             'effective_convexity': round(effective_convexity, 4),
             'delta_yield': delta_yield,
@@ -417,46 +347,24 @@ class ConvexityCalculator:
         yield_change: float,
     ) -> Dict[str, Any]:
         """
-        Estimate price change using duration and convexity.
-
-        %dP = -ModDur * dy + 0.5 * Convexity * dy^2
-
-        Args:
-            modified_duration: Modified duration
-            convexity: Convexity measure
-            price: Current price
-            yield_change: Change in yield (decimal)
-
-        Returns:
-            Dictionary with price change estimates
+        %dP = -ModDur * dy + 0.5 * Convexity * dy^2  (convexity in years^2, dy decimal)
         """
-        # Duration effect (first-order)
+        if price <= 0:
+            raise FIError('price must be > 0')
         duration_effect = -modified_duration * yield_change
-
-        # Convexity adjustment (second-order)
         convexity_effect = 0.5 * convexity * (yield_change ** 2)
-
-        # Total percentage change
         total_pct_change = duration_effect + convexity_effect
-
-        # Dollar changes
-        duration_dollar = duration_effect * price
-        convexity_dollar = convexity_effect * price
-        total_dollar = total_pct_change * price
-
-        new_price = price * (1 + total_pct_change)
-
         return {
             'yield_change': yield_change,
             'yield_change_bps': round(yield_change * 10000, 0),
             'duration_effect_pct': round(duration_effect * 100, 4),
             'convexity_effect_pct': round(convexity_effect * 100, 4),
             'total_change_pct': round(total_pct_change * 100, 4),
-            'duration_effect_dollar': round(duration_dollar, 4),
-            'convexity_effect_dollar': round(convexity_dollar, 4),
-            'total_change_dollar': round(total_dollar, 4),
+            'duration_effect_dollar': round(duration_effect * price, 4),
+            'convexity_effect_dollar': round(convexity_effect * price, 4),
+            'total_change_dollar': round(total_pct_change * price, 4),
             'original_price': round(price, 4),
-            'estimated_new_price': round(new_price, 4),
+            'estimated_new_price': round(price * (1 + total_pct_change), 4),
             'convexity_benefit': 'Positive convexity benefits investor in both rising and falling rate environments'
         }
 
@@ -465,157 +373,104 @@ def calculate_portfolio_duration(
     bonds: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Calculate portfolio duration as weighted average.
+    Portfolio duration / convexity as market-value-weighted averages; DV01 summed.
 
-    Args:
-        bonds: List of dicts with 'duration', 'market_value'
-
-    Returns:
-        Portfolio duration metrics
+    bonds: [{market_value, duration, convexity, dv01}]
     """
-    total_mv = sum(b.get('market_value', 0) for b in bonds)
-
-    if total_mv == 0:
-        return {'error': 'Total market value is zero'}
-
-    portfolio_duration = sum(
-        b.get('duration', 0) * b.get('market_value', 0) / total_mv
-        for b in bonds
-    )
-
-    portfolio_convexity = sum(
-        b.get('convexity', 0) * b.get('market_value', 0) / total_mv
-        for b in bonds
-    )
-
-    portfolio_dv01 = sum(b.get('dv01', 0) for b in bonds)
-
+    if not isinstance(bonds, list) or not bonds:
+        raise FIError('bonds must be a non-empty list of {market_value, duration[, convexity, dv01]}')
+    rows = []
+    for i, b in enumerate(bonds):
+        if not isinstance(b, dict):
+            raise FIError(f'bonds[{i}] must be an object')
+        rows.append({'mv': num(b, 'market_value', lo=0), 'dur': num(b, 'duration', 0.0),
+                     'conv': num(b, 'convexity', 0.0), 'dv01': num(b, 'dv01', 0.0)})
+    total_mv = sum(x['mv'] for x in rows)
+    if total_mv <= 0:
+        raise FIError('total market value must be > 0')
     return {
-        'portfolio_duration': round(portfolio_duration, 4),
-        'portfolio_convexity': round(portfolio_convexity, 4),
-        'portfolio_dv01': round(portfolio_dv01, 4),
+        'portfolio_duration': round(sum(x['dur'] * x['mv'] for x in rows) / total_mv, 4),
+        'portfolio_convexity': round(sum(x['conv'] * x['mv'] for x in rows) / total_mv, 4),
+        'portfolio_dv01': round(sum(x['dv01'] for x in rows), 4),
         'total_market_value': round(total_mv, 2),
-        'num_bonds': len(bonds),
+        'num_bonds': len(rows),
         'bond_contributions': [
-            {
-                'weight': round(b.get('market_value', 0) / total_mv, 4),
-                'duration_contribution': round(b.get('duration', 0) * b.get('market_value', 0) / total_mv, 4)
-            }
-            for b in bonds
+            {'weight': round(x['mv'] / total_mv, 4),
+             'duration_contribution': round(x['dur'] * x['mv'] / total_mv, 4)}
+            for x in rows
         ]
     }
 
 
+ANALYSIS_TYPES = ('macaulay_duration', 'modified_duration', 'effective_duration', 'convexity',
+                  'effective_convexity', 'price_change', 'key_rate_duration', 'portfolio_duration')
+
+
+def _bond_params(params):
+    face = num(params, 'face_value', 1000, lo=0, lo_open=True)
+    coupon = num(params, 'coupon_rate', 0.05, lo=0)
+    freq = fc.check_frequency(num(params, 'frequency', 2, integer=True))
+    timing = fc.resolve_timing(params, coupon, freq)
+    return dict(face_value=face, coupon_rate=coupon, ytm=num(params, 'ytm', 0.05), frequency=freq,
+                timing=timing)
+
+
+def _effective_params(params):
+    return dict(price=num(params, 'price', 1000), price_up=num(params, 'price_up', 990),
+                price_down=num(params, 'price_down', 1010), delta_yield=num(params, 'delta_yield', 0.01))
+
+
 def run_duration_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Main entry point for duration/convexity analysis.
-
-    Args:
-        params: Analysis parameters
-
-    Returns:
-        Analysis results
-    """
+    """Main entry point for duration/convexity analysis (params['analysis_type'] in ANALYSIS_TYPES)."""
     analysis_type = params.get('analysis_type', 'modified_duration')
 
     try:
         if analysis_type == 'macaulay_duration':
-            calc = DurationCalculator()
-            return calc.calculate_macaulay_duration(
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                ytm=params.get('ytm', 0.05),
-                frequency=params.get('frequency', 2)
-            )
+            return DurationCalculator().calculate_macaulay_duration(**_bond_params(params))
 
         elif analysis_type == 'modified_duration':
-            calc = DurationCalculator()
-            return calc.calculate_modified_duration(
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                ytm=params.get('ytm', 0.05),
-                frequency=params.get('frequency', 2)
-            )
+            return DurationCalculator().calculate_modified_duration(**_bond_params(params))
 
         elif analysis_type == 'effective_duration':
-            calc = DurationCalculator()
-            return calc.calculate_effective_duration(
-                price=params.get('price', 1000),
-                price_up=params.get('price_up', 990),
-                price_down=params.get('price_down', 1010),
-                delta_yield=params.get('delta_yield', 0.01)
-            )
+            return DurationCalculator().calculate_effective_duration(**_effective_params(params))
 
         elif analysis_type == 'convexity':
-            calc = ConvexityCalculator()
-            return calc.calculate_convexity(
-                face_value=params.get('face_value', 1000),
-                coupon_rate=params.get('coupon_rate', 0.05),
-                years_to_maturity=params.get('years_to_maturity', 10),
-                ytm=params.get('ytm', 0.05),
-                frequency=params.get('frequency', 2)
-            )
+            return ConvexityCalculator().calculate_convexity(**_bond_params(params))
 
         elif analysis_type == 'effective_convexity':
-            calc = ConvexityCalculator()
-            return calc.calculate_effective_convexity(
-                price=params.get('price', 1000),
-                price_up=params.get('price_up', 990),
-                price_down=params.get('price_down', 1010),
-                delta_yield=params.get('delta_yield', 0.01)
-            )
+            return ConvexityCalculator().calculate_effective_convexity(**_effective_params(params))
 
         elif analysis_type == 'price_change':
-            calc = ConvexityCalculator()
-            return calc.price_change_with_convexity(
-                modified_duration=params.get('modified_duration', 7.5),
-                convexity=params.get('convexity', 60),
-                price=params.get('price', 1000),
-                yield_change=params.get('yield_change', 0.01)
-            )
+            return ConvexityCalculator().price_change_with_convexity(
+                modified_duration=num(params, 'modified_duration', 7.5),
+                convexity=num(params, 'convexity', 60),
+                price=num(params, 'price', 1000),
+                yield_change=num(params, 'yield_change', 0.01))
+
+        elif analysis_type == 'key_rate_duration':
+            keys = params.get('key_rate_maturities')
+            return DurationCalculator().calculate_key_rate_duration(
+                spot_rates=fc.num_list(params, 'spot_rates', min_len=1),
+                face_value=num(params, 'face_value', 1000, lo=0, lo_open=True),
+                coupon_rate=num(params, 'coupon_rate', 0.05, lo=0),
+                frequency=num(params, 'frequency', 2, integer=True),
+                delta_rate=num(params, 'delta_rate', 0.0001, lo=0, lo_open=True),
+                key_rate_maturities=fc.num_list(params, 'key_rate_maturities', min_len=1, lo=0, lo_open=True)
+                if keys is not None else None)
 
         elif analysis_type == 'portfolio_duration':
-            return calculate_portfolio_duration(
-                bonds=params.get('bonds', [])
-            )
+            return calculate_portfolio_duration(bonds=params.get('bonds', []))
 
         else:
-            return {'error': f'Unknown analysis type: {analysis_type}'}
+            return {'error': f'Unknown analysis type: {analysis_type}', 'analysis_types': list(ANALYSIS_TYPES)}
 
-    except Exception as e:
-        logger.error(f"Duration analysis error: {str(e)}")
+    except FIError as e:
         return {'error': str(e)}
+    except Exception as e:
+        logger.error(f"Duration analysis error: {e}")
+        return {'error': str(e) or type(e).__name__}
 
 
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) > 1:
-        try:
-            params = json.loads(sys.argv[1])
-            result = run_duration_analysis(params)
-            print(json.dumps(result, indent=2))
-        except json.JSONDecodeError as e:
-            print(json.dumps({'error': f'Invalid JSON: {str(e)}'}))
-    else:
-        # Demo
-        print("Duration & Convexity Demo:")
-
-        dur_calc = DurationCalculator()
-        conv_calc = ConvexityCalculator()
-
-        # Modified duration
-        result = dur_calc.calculate_modified_duration(
-            coupon_rate=0.05, years_to_maturity=10, ytm=0.06
-        )
-        print(f"\nModified Duration: {result['modified_duration']} years")
-        print(f"DV01: ${result['dv01']}")
-
-        # Convexity
-        result = conv_calc.calculate_convexity(
-            coupon_rate=0.05, years_to_maturity=10, ytm=0.06
-        )
-        print(f"Convexity: {result['convexity']}")
+    fc.import_fincept_json()
+    fc.emit_usage_or_run(sys.argv, run_duration_analysis, ANALYSIS_TYPES, 'duration_convexity')

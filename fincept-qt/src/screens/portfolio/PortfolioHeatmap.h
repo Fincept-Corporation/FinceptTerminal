@@ -2,17 +2,23 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
-#include <QLabel>
-#include <QPushButton>
-#include <QScrollArea>
 #include <QVector>
 #include <QWidget>
 
-class QGridLayout;
+class QLabel;
+class QPushButton;
+
+namespace fincept::ui {
+class Treemap;
+}
 
 namespace fincept::screens {
 
-/// 220px left sidebar with color-coded holding blocks, risk gauge, and top movers.
+/// Holdings map (squarified treemap): area = market value in the base currency,
+/// grouped by sector, colour = today's move or the unrealised P&L % on the theme's
+/// diverging scale with a robust clamp (90th percentile of the book's moves, so one
+/// outlier does not wash the rest out). Positions that cannot be valued have no
+/// area and are listed underneath instead of disappearing.
 class PortfolioHeatmap : public QWidget {
     Q_OBJECT
   public:
@@ -33,39 +39,21 @@ class PortfolioHeatmap : public QWidget {
 
   private:
     void build_ui();
-    void rebuild_blocks();
-    QColor block_color(const portfolio::HoldingWithQuote& h) const;
-    void update_top_movers();
+    void rebuild();
+    void apply_styles();
     void retranslateUi();
 
-    // Header
     QLabel* title_label_ = nullptr;
-    QLabel* movers_header_ = nullptr;
-
-    // Mode buttons
+    QPushButton* day_btn_ = nullptr;
     QPushButton* pnl_btn_ = nullptr;
     QPushButton* weight_btn_ = nullptr;
-    QPushButton* day_btn_ = nullptr;
+    ui::Treemap* map_ = nullptr;
+    QLabel* footer_ = nullptr;
 
-    // Blocks container. Blocks are allocated once and reused across refreshes —
-    // rebuilding them (and re-running setStyleSheet on every one) fired on every
-    // 60 s poll AND on every selection change, which is a full CSS reparse per
-    // holding for data that usually has not changed.
-    QWidget* blocks_container_ = nullptr;
-    QGridLayout* blocks_grid_ = nullptr;
-    QVector<QPushButton*> blocks_;
-    int stretch_row_ = -1;
-
-    // Top movers footer
-    QLabel* top_gainer_ = nullptr;
-    QLabel* top_loser_ = nullptr;
-
-    // State
     QVector<portfolio::HoldingWithQuote> holdings_;
-    portfolio::ComputedMetrics metrics_;
-    portfolio::HeatmapMode mode_ = portfolio::HeatmapMode::Pnl;
+    portfolio::HeatmapMode mode_ = portfolio::HeatmapMode::DayChange;
     QString selected_symbol_;
-    QString currency_ = "USD";
+    QString currency_; ///< portfolio base currency; empty (no unit printed) until set_currency()
 };
 
 } // namespace fincept::screens

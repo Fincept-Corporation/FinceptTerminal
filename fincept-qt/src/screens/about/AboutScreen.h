@@ -19,8 +19,8 @@ class AboutScreen : public QWidget {
 
   private:
     void retranslateUi();
-    /// Show the "update available" line when UpdateService has found a newer
-    /// release (its update_available()/latest_version() accessors were unused).
+    /// Show the "update available" link when UpdateService knows a newer
+    /// release (follows check_finished / stage_changed); it opens the update window.
     void refresh_update_status();
 
     // Version panel
@@ -28,8 +28,7 @@ class AboutScreen : public QWidget {
     QLabel* app_name_ = nullptr;
     QLabel* app_subtitle_ = nullptr;
     QPushButton* check_btn_ = nullptr;
-    QLabel* update_status_ = nullptr;
-    bool check_in_progress_ = false;
+    QPushButton* update_status_ = nullptr;
     QLabel* copyright_ = nullptr;
 
     // Edition panels — open-source licence vs the Enterprise product

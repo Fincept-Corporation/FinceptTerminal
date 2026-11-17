@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('MADDISON_API_KEY', '')
 BASE_URL = "https://www.rug.nl/ggdc/historicaldevelopment/maddison"
 
@@ -19,6 +21,7 @@ session.mount('http://', adapter)
 
 MPD_DOWNLOAD_URL = "https://www.rug.nl/ggdc/historicaldevelopment/maddison/data/mpd2020.xlsx"
 MPD_CSV_URL = "https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Maddison%20Project%20Database%202020%20(Bolt%20and%20van%20Zanden%2C%202020)/Maddison%20Project%20Database%202020%20(Bolt%20and%20van%20Zanden%2C%202020).csv"
+MPD_GRAPHER_CSV_URL = "https://ourworldindata.org/grapher/gdp-per-capita-maddison-project-database.csv"
 
 WORLD_REGIONS = {
     "western_europe": ["GBR", "DEU", "FRA", "ITA", "ESP", "NLD", "BEL", "SWE", "NOR", "DNK", "FIN", "AUT", "CHE", "PRT", "IRL", "GRC"],
@@ -81,24 +84,30 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 
 
 def _fetch_owid_csv() -> List[Dict]:
-    try:
-        response = session.get(MPD_CSV_URL, timeout=60)
-        response.raise_for_status()
-        lines = response.text.strip().split("\n")
-        if not lines:
-            return []
-        headers = [h.strip().strip('"') for h in lines[0].split(",")]
+    """Maddison GDP per capita rows as {Entity, Code, Year, GDP per capita}.
+
+    The owid-datasets repository file (MPD_CSV_URL) answers HTTP 404 since OWID archived that
+    repository; the same series is served by OWID's grapher as a CSV (checked 2026-11-17)."""
+    import csv
+    import io
+
+    for url, params in ((MPD_GRAPHER_CSV_URL, {"csvType": "full", "useColumnShortNames": "true"}), (MPD_CSV_URL, None)):
+        try:
+            response = session.get(url, params=params, timeout=60)
+            response.raise_for_status()
+        except Exception:
+            continue
         records = []
-        for line in lines[1:]:
-            values = line.split(",")
-            if len(values) >= len(headers):
-                record = {}
-                for i, h in enumerate(headers):
-                    record[h] = values[i].strip().strip('"')
-                records.append(record)
-        return records
-    except Exception:
-        return []
+        for row in csv.DictReader(io.StringIO(response.text.strip())):
+            records.append({
+                "Entity": row.get("entity", row.get("Entity", "")),
+                "Code": row.get("code", row.get("Code", "")),
+                "Year": row.get("year", row.get("Year", "")),
+                "GDP per capita": fc.number(row.get("gdp_per_capita", row.get("GDP per capita", ""))),
+            })
+        if records:
+            return records
+    return []
 
 
 def get_gdp_per_capita(country: str, start_year: int = 1820, end_year: int = 2018) -> Dict:

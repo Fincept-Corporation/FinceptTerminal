@@ -1,836 +1,1327 @@
-// src/screens/code_editor/CodeEditorScreen_Cells.cpp
-//
-// CodeTextEdit (lightweight QTextEdit subclass) + CellWidget (per-cell view).
-// Both classes are declared in CodeEditorScreen.h and live here as a
-// partial-class split — the file in their own folder grouping by widget
-// responsibility.
+// src/screens/code_editor/CodeEditorScreen_Cells.cpp — CodeTextEdit, its line
+// numbers and syntax highlighter, and CellWidget. See CodeEditorScreen_Cells.h.
+
+#include "screens/code_editor/CodeEditorScreen_Cells.h"
 
 #include "core/keys/KeyConfigManager.h"
-#include "core/logging/Logger.h"
-#include "core/session/ScreenStateManager.h"
-#include "screens/code_editor/CodeEditorScreen.h"
-#include "services/file_manager/FileManagerService.h"
+#include "screens/code_editor/NotebookOutputs.h"
+#include "screens/code_editor/NotebookStyle.h"
 #include "ui/theme/Theme.h"
 
-#include <QAbstractTextDocumentLayout>
-#include <QAction>
-#include <QApplication>
-#include <QFileDialog>
-#include <QFileInfo>
+#include <QAbstractItemView>
+#include <QCompleter>
+#include <QContextMenuEvent>
+#include <QEnterEvent>
+#include <QEvent>
+#include <QMouseEvent>
+#include <QtMath>
+#include <QFontMetrics>
 #include <QHBoxLayout>
-#include <QInputDialog>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
-#include <QLineEdit>
-#include <QMenu>
-#include <QMessageBox>
-#include <QMouseEvent>
+#include <QPainter>
 #include <QPushButton>
-#include <QScrollArea>
+#include <QRegularExpression>
 #include <QScrollBar>
-#include <QSplitter>
+#include <QStringListModel>
+#include <QSyntaxHighlighter>
 #include <QTextBlock>
-#include <QTextCharFormat>
-#include <QTextCursor>
-#include <QTextDocument>
+#include <QTextBrowser>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <QResizeEvent>
+#include <QTextDocument>
+
+#include <algorithm>
+#include <cmath>
+#include <climits>
+
 namespace fincept::screens {
 
-using namespace fincept::ui;
+using notebook::CellOutput;
+using notebook::NotebookCell;
+namespace colors = ui::colors;
+
+namespace {
+
+constexpr int kIndent = 4;
+
+QString format_elapsed(qint64 ms) {
+    if (ms < 0)
+        return {};
+    if (ms < 1000)
+        return CellWidget::tr("%1 ms").arg(ms);
+    if (ms < 60000)
+        return CellWidget::tr("%1 s").arg(ms / 1000.0, 0, 'f', ms < 10000 ? 2 : 1);
+    return CellWidget::tr("%1m %2s").arg(ms / 60000).arg((ms / 1000) % 60, 2, 10, QLatin1Char('0'));
+}
+
+QColor with_alpha(QColor c, double a) {
+    c.setAlphaF(static_cast<float>(a));
+    return c;
+}
+
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
+// Syntax highlighting — formats re-derived from the theme on refresh().
 
-CodeTextEdit::CodeTextEdit(QWidget* parent) : QTextEdit(parent) {}
+class NbHighlighter : public QSyntaxHighlighter {
+  public:
+    explicit NbHighlighter(QTextDocument* doc) : QSyntaxHighlighter(doc) { refresh_formats(); }
 
-void CodeTextEdit::keyPressEvent(QKeyEvent* event) {
+    void set_markdown(bool on) {
+        if (markdown_ == on)
+            return;
+        markdown_ = on;
+        rehighlight();
+    }
+
+    void refresh() {
+        refresh_formats();
+        rehighlight();
+    }
+
+  protected:
+    void highlightBlock(const QString& text) override {
+        if (markdown_)
+            highlight_markdown(text);
+        else
+            highlight_python(text);
+    }
+
+  private:
+    enum BlockState { Normal = 0, InTripleDouble = 1, InTripleSingle = 2, InFence = 3 };
+
+    void refresh_formats() {
+        const NbSyntaxPalette p = nb_syntax_palette();
+        keyword_ = QTextCharFormat();
+        keyword_.setForeground(p.keyword);
+        keyword_.setFontWeight(QFont::DemiBold);
+        builtin_ = QTextCharFormat();
+        builtin_.setForeground(p.builtin);
+        string_ = QTextCharFormat();
+        string_.setForeground(p.string);
+        number_ = QTextCharFormat();
+        number_.setForeground(p.number);
+        comment_ = QTextCharFormat();
+        comment_.setForeground(p.comment);
+        comment_.setFontItalic(true);
+        definition_ = QTextCharFormat();
+        definition_.setForeground(p.definition);
+        definition_.setFontWeight(QFont::DemiBold);
+        decorator_ = QTextCharFormat();
+        decorator_.setForeground(p.decorator);
+        self_ = QTextCharFormat();
+        self_.setForeground(p.self_);
+        self_.setFontItalic(true);
+        heading_ = QTextCharFormat();
+        heading_.setForeground(p.heading);
+        heading_.setFontWeight(QFont::Bold);
+        code_span_ = QTextCharFormat();
+        code_span_.setForeground(p.code_span);
+        link_ = QTextCharFormat();
+        link_.setForeground(p.link);
+        link_.setFontUnderline(true);
+    }
+
+    void apply(const QString& text, const QRegularExpression& re, const QTextCharFormat& fmt, int group = 0) {
+        auto it = re.globalMatch(text);
+        while (it.hasNext()) {
+            const auto m = it.next();
+            setFormat(static_cast<int>(m.capturedStart(group)), static_cast<int>(m.capturedLength(group)), fmt);
+        }
+    }
+
+    void highlight_python(const QString& text) {
+        static const QRegularExpression kw(QStringLiteral(
+            "\\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|"
+            "import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|None|True|False|match|case)\\b"));
+        static const QRegularExpression bi(QStringLiteral(
+            "\\b(print|len|range|enumerate|zip|map|filter|sum|min|max|abs|round|sorted|list|dict|set|tuple|str|int|"
+            "float|bool|type|isinstance|issubclass|open|super|any|all|getattr|setattr|hasattr|repr|format|iter|next|"
+            "reversed|divmod|pow|vars|dir|help|id|hash|object|display|Exception|ValueError|TypeError|KeyError|"
+            "IndexError|RuntimeError|ZeroDivisionError|AttributeError|ImportError|StopIteration|NotImplementedError)\\b"));
+        static const QRegularExpression num(QStringLiteral(
+            "\\b(0[xX][0-9a-fA-F_]+|0[bB][01_]+|\\d[\\d_]*(\\.\\d*)?([eE][-+]?\\d+)?j?)\\b|(?<![\\w.])\\.\\d+([eE][-+]?\\d+)?"));
+        static const QRegularExpression defn(QStringLiteral("\\b(?:def|class)\\s+([A-Za-z_]\\w*)"));
+        static const QRegularExpression deco(QStringLiteral("^\\s*@[\\w.]+"));
+        static const QRegularExpression selfre(QStringLiteral("\\b(self|cls)\\b"));
+        apply(text, num, number_);
+        apply(text, bi, builtin_);
+        apply(text, selfre, self_);
+        apply(text, kw, keyword_);
+        apply(text, defn, definition_, 1);
+        apply(text, deco, decorator_);
+
+        // Strings and comments last: they win over everything inside them.
+        const int len = static_cast<int>(text.size());
+        int i = 0;
+        int state = previousBlockState();
+        setCurrentBlockState(Normal);
+        if (state == InTripleDouble || state == InTripleSingle) {
+            const QString delim = state == InTripleDouble ? QStringLiteral("\"\"\"") : QStringLiteral("'''");
+            const int end = static_cast<int>(text.indexOf(delim));
+            if (end < 0) {
+                setFormat(0, len, string_);
+                setCurrentBlockState(state);
+                return;
+            }
+            setFormat(0, end + 3, string_);
+            i = end + 3;
+        }
+        while (i < len) {
+            const QChar c = text.at(i);
+            if (c == QLatin1Char('#')) {
+                setFormat(i, len - i, comment_);
+                return;
+            }
+            if (c == QLatin1Char('"') || c == QLatin1Char('\'')) {
+                const QString triple(3, c);
+                if (text.mid(i, 3) == triple) {
+                    const int end = static_cast<int>(text.indexOf(triple, i + 3));
+                    if (end < 0) {
+                        setFormat(i, len - i, string_);
+                        setCurrentBlockState(c == QLatin1Char('"') ? InTripleDouble : InTripleSingle);
+                        return;
+                    }
+                    setFormat(i, end + 3 - i, string_);
+                    i = end + 3;
+                    continue;
+                }
+                int j = i + 1;
+                while (j < len && text.at(j) != c) {
+                    if (text.at(j) == QLatin1Char('\\'))
+                        ++j;
+                    ++j;
+                }
+                const int end = std::min(j + 1, len);
+                setFormat(i, end - i, string_);
+                i = end;
+                continue;
+            }
+            ++i;
+        }
+    }
+
+    void highlight_markdown(const QString& text) {
+        const int prev = previousBlockState();
+        const QString trimmed = text.trimmed();
+        const bool fence = trimmed.startsWith(QLatin1String("```")) || trimmed.startsWith(QLatin1String("~~~"));
+        if (prev == InFence) {
+            setFormat(0, static_cast<int>(text.size()), code_span_);
+            setCurrentBlockState(fence ? Normal : InFence);
+            return;
+        }
+        if (fence) {
+            setFormat(0, static_cast<int>(text.size()), code_span_);
+            setCurrentBlockState(InFence);
+            return;
+        }
+        setCurrentBlockState(Normal);
+        static const QRegularExpression heading(QStringLiteral("^\\s{0,3}#{1,6}\\s.*$"));
+        static const QRegularExpression bullet(QStringLiteral("^\\s*([-*+]|\\d+[.)])\\s"));
+        static const QRegularExpression bold(QStringLiteral("\\*\\*[^*]+\\*\\*|__[^_]+__"));
+        static const QRegularExpression code(QStringLiteral("`[^`]+`"));
+        static const QRegularExpression link(QStringLiteral("\\[[^\\]]+\\]\\([^)]+\\)"));
+        apply(text, heading, heading_);
+        apply(text, bullet, keyword_);
+        QTextCharFormat strong;
+        strong.setFontWeight(QFont::Bold);
+        apply(text, bold, strong);
+        apply(text, link, link_);
+        apply(text, code, code_span_);
+    }
+
+    bool markdown_ = false;
+    QTextCharFormat keyword_, builtin_, string_, number_, comment_, definition_, decorator_, self_, heading_,
+        code_span_, link_;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Line numbers
+
+class NbLineNumberArea : public QWidget {
+  public:
+    explicit NbLineNumberArea(CodeTextEdit* editor) : QWidget(editor), editor_(editor) {}
+    QSize sizeHint() const override { return {editor_->line_number_area_width(), 0}; }
+
+  protected:
+    void paintEvent(QPaintEvent* e) override { editor_->paint_line_numbers(e); }
+
+  private:
+    CodeTextEdit* editor_;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CodeTextEdit
+
+CodeTextEdit::CodeTextEdit(QWidget* parent) : QPlainTextEdit(parent) {
+    setObjectName(QStringLiteral("nbCode"));
+    setLineWrapMode(QPlainTextEdit::NoWrap);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // the notebook scrolls, not the cell
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setTabChangesFocus(false);
+    setCenterOnScroll(false);
+    document()->setDocumentMargin(4);
+    setAccessibleName(tr("Cell source"));
+    setAccessibleDescription(tr("Python source. Ctrl+Enter runs the cell, Shift+Enter runs it and moves to the next, "
+                                "Esc leaves the editor."));
+
+    line_area_ = new NbLineNumberArea(this);
+    highlighter_ = new NbHighlighter(document());
+
+    connect(this, &QPlainTextEdit::blockCountChanged, this, [this](int) {
+        update_gutter_width();
+        fit_height();
+    });
+    connect(this, &QPlainTextEdit::updateRequest, this, &CodeTextEdit::update_gutter_area);
+    connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CodeTextEdit::update_extra_selections);
+    connect(horizontalScrollBar(), &QScrollBar::rangeChanged, this, [this](int, int) { fit_height(); });
+    update_gutter_width();
+
+    completion_model_ = new QStringListModel(this);
+    completer_ = new QCompleter(completion_model_, this);
+    completer_->setWidget(this);
+    completer_->setCompletionMode(QCompleter::PopupCompletion);
+    completer_->setCaseSensitivity(Qt::CaseSensitive);
+    completer_->setMaxVisibleItems(12);
+    completer_->popup()->setObjectName(QStringLiteral("nbList"));
+    connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
+            &CodeTextEdit::insert_completion);
+}
+
+void CodeTextEdit::set_markdown_mode(bool markdown) {
+    markdown_ = markdown;
+    highlighter_->set_markdown(markdown);
+    setAccessibleName(markdown ? tr("Markdown source") : tr("Cell source"));
+}
+
+void CodeTextEdit::set_line_numbers_visible(bool on) {
+    if (line_numbers_ == on)
+        return;
+    line_numbers_ = on;
+    line_area_->setVisible(on);
+    update_gutter_width();
+}
+
+void CodeTextEdit::refresh_theme() {
+    highlighter_->refresh();
+    update_extra_selections();
+    line_area_->update();
+}
+
+int CodeTextEdit::line_number_area_width() const {
+    if (!line_numbers_)
+        return 0;
+    int digits = 1;
+    for (int n = std::max(1, blockCount()); n >= 10; n /= 10)
+        ++digits;
+    digits = std::max(digits, 2);
+    return fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits + 14;
+}
+
+void CodeTextEdit::update_gutter_width() {
+    setViewportMargins(line_number_area_width(), 0, 0, 0);
+}
+
+void CodeTextEdit::update_gutter_area(const QRect& rect, int dy) {
+    if (dy)
+        line_area_->scroll(0, dy);
+    else
+        line_area_->update(0, rect.y(), line_area_->width(), rect.height());
+}
+
+void CodeTextEdit::resizeEvent(QResizeEvent* e) {
+    QPlainTextEdit::resizeEvent(e);
+    const QRect cr = contentsRect();
+    line_area_->setGeometry(QRect(cr.left(), cr.top(), line_number_area_width(), cr.height()));
+}
+
+void CodeTextEdit::paint_line_numbers(QPaintEvent* event) {
+    QPainter p(line_area_);
+    p.fillRect(event->rect(), QColor(colors::BG_SURFACE()));
+    p.setPen(QColor(colors::BORDER_DIM()));
+    p.drawLine(line_area_->width() - 1, event->rect().top(), line_area_->width() - 1, event->rect().bottom());
+    p.setFont(font());
+    const int current = textCursor().blockNumber();
+    QTextBlock block = firstVisibleBlock();
+    int number = block.blockNumber();
+    int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int bottom = top + qRound(blockBoundingRect(block).height());
+    const int w = line_area_->width() - 7;
+    while (block.isValid() && top <= event->rect().bottom()) {
+        if (block.isVisible() && bottom >= event->rect().top()) {
+            const bool err = error_line_ == number + 1;
+            QFont f = font();
+            f.setBold(err);
+            p.setFont(f);
+            p.setPen(QColor(err ? colors::DANGER() : number == current && hasFocus() ? colors::TEXT_SECONDARY()
+                                                                                       : colors::TEXT_TERTIARY()));
+            p.drawText(0, top, w, fontMetrics().height(), Qt::AlignRight | Qt::AlignVCenter, QString::number(number + 1));
+        }
+        block = block.next();
+        top = bottom;
+        bottom = top + qRound(blockBoundingRect(block).height());
+        ++number;
+    }
+}
+
+void CodeTextEdit::fit_height() {
+    const int lines = std::max(1, blockCount());
+    qreal per_line = blockBoundingRect(document()->firstBlock()).height();
+    if (per_line <= 0)
+        per_line = fontMetrics().lineSpacing();
+    int h = qCeil(lines * per_line) + 2 * static_cast<int>(document()->documentMargin()) + 2 * frameWidth() + 2;
+    if (horizontalScrollBar()->maximum() > 0)
+        h += horizontalScrollBar()->sizeHint().height();
+    if (height() != h)
+        setFixedHeight(h);
+}
+
+void CodeTextEdit::focusInEvent(QFocusEvent* e) {
+    QPlainTextEdit::focusInEvent(e);
+    update_extra_selections();
+    emit focused();
+}
+
+void CodeTextEdit::focusOutEvent(QFocusEvent* e) {
+    QPlainTextEdit::focusOutEvent(e);
+    update_extra_selections();
+}
+
+void CodeTextEdit::changeEvent(QEvent* e) {
+    QPlainTextEdit::changeEvent(e);
+    // The stylesheet font arrives at polish (and with every font-size change):
+    // the height and the line-number width were measured with the old one.
+    if (e->type() == QEvent::FontChange || e->type() == QEvent::StyleChange) {
+        update_gutter_width();
+        fit_height();
+    }
+}
+
+void CodeTextEdit::set_error_line(int line) {
+    if (error_line_ == line)
+        return;
+    error_line_ = line;
+    update_extra_selections();
+    line_area_->update();
+}
+
+void CodeTextEdit::set_search_ranges(const QVector<QPair<int, int>>& ranges) {
+    if (search_ranges_.isEmpty() && ranges.isEmpty())
+        return;
+    search_ranges_ = ranges;
+    update_extra_selections();
+}
+
+void CodeTextEdit::go_to_line(int line) {
+    const QTextBlock block = document()->findBlockByNumber(std::max(0, line - 1));
+    if (!block.isValid())
+        return;
+    QTextCursor c(block);
+    setTextCursor(c);
+    setFocus(Qt::OtherFocusReason);
+}
+
+void CodeTextEdit::update_extra_selections() {
+    QList<QTextEdit::ExtraSelection> sels;
+    if (hasFocus()) {
+        QTextEdit::ExtraSelection line;
+        line.format.setBackground(colors::overlay_color(kNbCurrentLineAlpha));
+        line.format.setProperty(QTextFormat::FullWidthSelection, true);
+        line.cursor = textCursor();
+        line.cursor.clearSelection();
+        sels << line;
+    }
+    if (error_line_ > 0) {
+        const QTextBlock block = document()->findBlockByNumber(error_line_ - 1);
+        if (block.isValid()) {
+            QTextEdit::ExtraSelection err;
+            err.format.setBackground(with_alpha(QColor(colors::DANGER()), kNbErrorLineAlpha));
+            err.format.setProperty(QTextFormat::FullWidthSelection, true);
+            err.cursor = QTextCursor(block);
+            sels << err;
+        }
+    }
+    for (const auto& [start, length] : search_ranges_) {
+        QTextEdit::ExtraSelection m;
+        m.format.setBackground(with_alpha(QColor(colors::AMBER()), kNbMatchAlpha));
+        m.cursor = QTextCursor(document());
+        m.cursor.setPosition(start);
+        m.cursor.setPosition(start + length, QTextCursor::KeepAnchor);
+        sels << m;
+    }
+    // Bracket matching around the cursor.
+    if (!markdown_) {
+        const QString text = toPlainText();
+        const int pos = textCursor().position();
+        static const QString open = QStringLiteral("([{");
+        static const QString close = QStringLiteral(")]}");
+        int at = -1;
+        if (pos > 0 && (open.contains(text.at(pos - 1)) || close.contains(text.at(pos - 1))))
+            at = pos - 1;
+        else if (pos < text.size() && (open.contains(text.at(pos)) || close.contains(text.at(pos))))
+            at = pos;
+        if (at >= 0) {
+            const QChar ch = text.at(at);
+            const bool forward = open.contains(ch);
+            const QChar mate = forward ? close.at(open.indexOf(ch)) : open.at(close.indexOf(ch));
+            int depth = 0;
+            int match = -1;
+            for (int i = at; forward ? i < text.size() : i >= 0; i += forward ? 1 : -1) {
+                if (text.at(i) == ch)
+                    ++depth;
+                else if (text.at(i) == mate && --depth == 0) {
+                    match = i;
+                    break;
+                }
+            }
+            const QColor tone = match >= 0 ? with_alpha(QColor(colors::AMBER()), 0.35)
+                                           : with_alpha(QColor(colors::DANGER()), 0.35);
+            for (const int p : {at, match}) {
+                if (p < 0)
+                    continue;
+                QTextEdit::ExtraSelection b;
+                b.format.setBackground(tone);
+                b.cursor = QTextCursor(document());
+                b.cursor.setPosition(p);
+                b.cursor.setPosition(p + 1, QTextCursor::KeepAnchor);
+                sels << b;
+            }
+        }
+    }
+    setExtraSelections(sels);
+    line_area_->update();
+}
+
+QString CodeTextEdit::symbol_at_cursor() const {
+    const QTextCursor c = textCursor();
+    const QString line = c.block().text();
+    int pos = c.positionInBlock();
+    auto is_sym = [](QChar ch) { return ch.isLetterOrNumber() || ch == QLatin1Char('_') || ch == QLatin1Char('.'); };
+    int start = pos;
+    while (start > 0 && is_sym(line.at(start - 1)))
+        --start;
+    int end = pos;
+    while (end < line.size() && (line.at(end).isLetterOrNumber() || line.at(end) == QLatin1Char('_')))
+        ++end;
+    QString sym = line.mid(start, end - start);
+    while (sym.startsWith(QLatin1Char('.')))
+        sym.remove(0, 1);
+    while (sym.endsWith(QLatin1Char('.')))
+        sym.chop(1);
+    if (sym.isEmpty() || sym.at(0).isDigit())
+        return {};
+    return sym;
+}
+
+QString CodeTextEdit::completion_prefix() const {
+    const QTextCursor c = textCursor();
+    const QString before = c.block().text().left(c.positionInBlock());
+    static const QRegularExpression re(QStringLiteral("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_]?[A-Za-z0-9_]*)*$"));
+    const auto m = re.match(before);
+    return m.hasMatch() ? m.captured(0) : QString();
+}
+
+bool CodeTextEdit::completion_visible() const {
+    return completer_->popup()->isVisible();
+}
+
+void CodeTextEdit::show_completions(const QString& prefix, const QStringList& matches) {
+    if (prefix != completion_prefix() || matches.isEmpty() || !hasFocus())
+        return;
+    const QString tail = prefix.mid(prefix.lastIndexOf(QLatin1Char('.')) + 1);
+    if (matches.size() == 1) {
+        completion_prefix_ = tail;
+        insert_completion(matches.first());
+        return;
+    }
+    completion_prefix_ = tail;
+    completion_model_->setStringList(matches);
+    completer_->setCompletionPrefix(tail);
+    completer_->popup()->setCurrentIndex(completer_->completionModel()->index(0, 0));
+    QRect r = cursorRect();
+    r.translate(viewportMargins().left(), 0);
+    r.setWidth(completer_->popup()->sizeHintForColumn(0) + completer_->popup()->verticalScrollBar()->sizeHint().width() + 16);
+    completer_->complete(r);
+}
+
+void CodeTextEdit::insert_completion(const QString& completion) {
+    const QString tail = completer_->popup()->isVisible() ? completer_->completionPrefix() : completion_prefix_;
+    if (!completion.startsWith(tail))
+        return;
+    QTextCursor c = textCursor();
+    c.insertText(completion.mid(tail.size()));
+    setTextCursor(c);
+    completer_->popup()->hide();
+}
+
+void CodeTextEdit::indent_selection(bool dedent) {
+    QTextCursor c = textCursor();
+    const int start = c.selectionStart();
+    const int end = c.selectionEnd();
+    QTextBlock first = document()->findBlock(start);
+    QTextBlock last = document()->findBlock(end);
+    if (c.hasSelection() && end == last.position() && last != first)
+        last = last.previous(); // a selection ending at a line start does not include that line
+    c.beginEditBlock();
+    for (QTextBlock b = first; b.isValid(); b = b.next()) {
+        QTextCursor bc(b);
+        if (dedent) {
+            const QString t = b.text();
+            int n = 0;
+            while (n < kIndent && n < t.size() && t.at(n) == QLatin1Char(' '))
+                ++n;
+            if (n == 0 && !t.isEmpty() && t.at(0) == QLatin1Char('\t'))
+                n = 1;
+            bc.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, n);
+            bc.removeSelectedText();
+        } else if (!(b.text().isEmpty() && first != last)) {
+            bc.insertText(QString(kIndent, QLatin1Char(' ')));
+        }
+        if (b == last)
+            break;
+    }
+    c.endEditBlock();
+}
+
+void CodeTextEdit::toggle_comment() {
+    if (markdown_)
+        return;
+    QTextCursor c = textCursor();
+    QTextBlock first = document()->findBlock(c.selectionStart());
+    QTextBlock last = document()->findBlock(c.selectionEnd());
+    if (c.hasSelection() && c.selectionEnd() == last.position() && last != first)
+        last = last.previous();
+    bool all_commented = true;
+    int min_indent = INT_MAX;
+    for (QTextBlock b = first; b.isValid(); b = b.next()) {
+        const QString t = b.text();
+        if (!t.trimmed().isEmpty()) {
+            const int ind = static_cast<int>(t.size() - QString(t).remove(QRegularExpression(QStringLiteral("^\\s+"))).size());
+            min_indent = std::min(min_indent, ind);
+            if (!t.trimmed().startsWith(QLatin1Char('#')))
+                all_commented = false;
+        }
+        if (b == last)
+            break;
+    }
+    if (min_indent == INT_MAX)
+        return;
+    c.beginEditBlock();
+    for (QTextBlock b = first; b.isValid(); b = b.next()) {
+        const QString t = b.text();
+        if (!t.trimmed().isEmpty()) {
+            QTextCursor bc(b);
+            if (all_commented) {
+                const int hash = static_cast<int>(t.indexOf(QLatin1Char('#')));
+                bc.setPosition(b.position() + hash);
+                const int n = (hash + 1 < t.size() && t.at(hash + 1) == QLatin1Char(' ')) ? 2 : 1;
+                bc.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, n);
+                bc.removeSelectedText();
+            } else {
+                bc.setPosition(b.position() + min_indent);
+                bc.insertText(QStringLiteral("# "));
+            }
+        }
+        if (b == last)
+            break;
+    }
+    c.endEditBlock();
+}
+
+void CodeTextEdit::insert_newline_with_indent() {
+    QTextCursor c = textCursor();
+    const QString line = c.block().text();
+    const QString before = line.left(c.positionInBlock());
+    int indent = 0;
+    while (indent < line.size() && line.at(indent) == QLatin1Char(' '))
+        ++indent;
+    indent = std::min(indent, static_cast<int>(before.size()));
+    if (!markdown_) {
+        const QString stripped = before.trimmed();
+        static const QRegularExpression ends_block(QStringLiteral("^(return|pass|break|continue|raise)\\b"));
+        if (stripped.endsWith(QLatin1Char(':')) && !stripped.startsWith(QLatin1Char('#')))
+            indent += kIndent;
+        else if (ends_block.match(stripped).hasMatch())
+            indent = std::max(0, indent - kIndent);
+    }
+    c.insertText(QLatin1Char('\n') + QString(indent, QLatin1Char(' ')));
+    setTextCursor(c);
+    ensureCursorVisible();
+}
+
+bool CodeTextEdit::smart_backspace() {
+    QTextCursor c = textCursor();
+    if (c.hasSelection())
+        return false;
+    const int col = c.positionInBlock();
+    if (col == 0)
+        return false;
+    const QString before = c.block().text().left(col);
+    if (!before.trimmed().isEmpty())
+        return false;
+    const int n = col % kIndent == 0 ? kIndent : col % kIndent;
+    c.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, std::min(n, col));
+    c.removeSelectedText();
+    return true;
+}
+
+void CodeTextEdit::keyPressEvent(QKeyEvent* e) {
+    if (completer_->popup()->isVisible()) {
+        switch (e->key()) {
+            case Qt::Key_Enter:
+            case Qt::Key_Return:
+            case Qt::Key_Escape:
+            case Qt::Key_Tab:
+            case Qt::Key_Backtab:
+                e->ignore(); // the completer takes these
+                return;
+            default:
+                break;
+        }
+    }
     auto& km = KeyConfigManager::instance();
-    const QKeySequence pressed(event->keyCombination());
+    const QKeySequence pressed(e->keyCombination());
+    const Qt::KeyboardModifiers mods = e->modifiers() & ~Qt::KeypadModifier;
+    const bool enter = e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter;
 
     if (pressed == km.key(KeyAction::RunCell)) {
-        emit run_shortcut();
+        emit run_key(RunKey::Run);
         return;
     }
     if (pressed == km.key(KeyAction::RunAndNext)) {
-        emit run_and_next();
+        emit run_key(RunKey::RunAdvance);
         return;
     }
-    // Tab inserts 4 spaces
-    if (event->key() == Qt::Key_Tab && !(event->modifiers() & Qt::ShiftModifier)) {
-        insertPlainText("    ");
+    if (enter && mods == Qt::AltModifier) {
+        emit run_key(RunKey::RunInsert);
         return;
     }
-    QTextEdit::keyPressEvent(event);
+    if (e->key() == Qt::Key_Escape && mods == Qt::NoModifier) {
+        emit escape_pressed();
+        return;
+    }
+    if (e->key() == Qt::Key_Space && mods == Qt::ControlModifier) {
+        const QString prefix = completion_prefix();
+        if (!prefix.isEmpty())
+            emit completion_requested(prefix);
+        return;
+    }
+    if (e->key() == Qt::Key_I && mods == Qt::ControlModifier) {
+        emit inspect_requested(symbol_at_cursor());
+        return;
+    }
+    if (e->key() == Qt::Key_Slash && mods == Qt::ControlModifier) {
+        toggle_comment();
+        return;
+    }
+    if (e->key() == Qt::Key_Tab && mods == Qt::NoModifier) {
+        QTextCursor c = textCursor();
+        if (c.hasSelection() && document()->findBlock(c.selectionStart()) != document()->findBlock(c.selectionEnd())) {
+            indent_selection(false);
+            return;
+        }
+        const QString prefix = markdown_ ? QString() : completion_prefix();
+        if (!prefix.isEmpty()) {
+            emit completion_requested(prefix);
+            return;
+        }
+        const int col = c.positionInBlock();
+        c.insertText(QString(kIndent - col % kIndent, QLatin1Char(' ')));
+        return;
+    }
+    if (e->key() == Qt::Key_Backtab) {
+        indent_selection(true);
+        return;
+    }
+    if (enter && mods == Qt::NoModifier) {
+        insert_newline_with_indent();
+        return;
+    }
+    if (e->key() == Qt::Key_Backspace && mods == Qt::NoModifier && smart_backspace())
+        return;
+    if (e->key() == Qt::Key_Up && mods == Qt::NoModifier && !textCursor().hasSelection() &&
+        textCursor().blockNumber() == 0) {
+        emit leave_edge(-1);
+        return;
+    }
+    if (e->key() == Qt::Key_Down && mods == Qt::NoModifier && !textCursor().hasSelection() &&
+        textCursor().blockNumber() == blockCount() - 1) {
+        emit leave_edge(1);
+        return;
+    }
+    QPlainTextEdit::keyPressEvent(e);
+    if (completer_->popup()->isVisible()) {
+        const QString prefix = completion_prefix();
+        const QString tail = prefix.mid(prefix.lastIndexOf(QLatin1Char('.')) + 1);
+        if (prefix.isEmpty() || prefix.endsWith(QLatin1Char('.'))) {
+            completer_->popup()->hide();
+        } else {
+            completer_->setCompletionPrefix(tail);
+            completer_->popup()->setCurrentIndex(completer_->completionModel()->index(0, 0));
+        }
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CellWidget
-// ═════════════════════════════════════════════════════════════════════════════
 
-CellWidget::CellWidget(const NotebookCell& cell, int index, QWidget* parent)
-    : QWidget(parent),
-      cell_id_(cell.id),
-      cell_type_(cell.cell_type),
-      execution_count_(cell.execution_count),
-      index_(index) {
-    build_ui();
-    set_cell_data(cell);
-}
-
-void CellWidget::build_ui() {
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 2, 0, 2);
-    root->setSpacing(0);
-
-    // ── Main cell row: [gutter] [editor] ──
-    auto* cell_row = new QWidget(this);
-    auto* row_layout = new QHBoxLayout(cell_row);
-    row_layout->setContentsMargins(0, 0, 0, 0);
-    row_layout->setSpacing(0);
-
-    // ── Gutter ──
-    gutter_ = new QWidget(cell_row);
-    gutter_->setFixedWidth(56);
-    gutter_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED()));
-    auto* gutter_layout = new QVBoxLayout(gutter_);
-    gutter_layout->setContentsMargins(0, 4, 6, 2);
-    gutter_layout->setSpacing(2);
-    gutter_layout->setAlignment(Qt::AlignTop | Qt::AlignRight);
-
-    gutter_number_ = new QLabel("[ ]", gutter_);
-    gutter_number_->setAlignment(Qt::AlignRight | Qt::AlignTop);
-    gutter_number_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; background:transparent;")
-            .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY)
-            .arg(fonts::TINY));
-    gutter_layout->addWidget(gutter_number_);
-
-    gutter_type_ = new QLabel("PY", gutter_);
-    gutter_type_->setAlignment(Qt::AlignRight);
-    gutter_type_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                                        " letter-spacing:0.5px; background:transparent;")
-                                    .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
-    gutter_layout->addWidget(gutter_type_);
-    gutter_layout->addStretch();
-
-    row_layout->addWidget(gutter_);
-
-    // ── Editor container ──
-    editor_container_ = new QWidget(cell_row);
-    auto* editor_vbox = new QVBoxLayout(editor_container_);
-    editor_vbox->setContentsMargins(0, 0, 0, 0);
-    editor_vbox->setSpacing(0);
-
-    // Toolbar — always occupies 24px to prevent layout shift; buttons hide/show
-    toolbar_ = new QWidget(editor_container_);
-    toolbar_->setFixedHeight(24);
-    toolbar_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED()));
-    auto* tb_layout = new QHBoxLayout(toolbar_);
-    tb_layout->setContentsMargins(8, 0, 8, 0);
-    tb_layout->setSpacing(2);
-
-    auto make_tool_btn = [&](const QString& text, const QString& fg_color) -> QPushButton* {
-        auto* btn = new QPushButton(text, toolbar_);
-        btn->setFixedHeight(20);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setAccessibleName(text); // two-letter labels are opaque to a screen reader alone
-        btn->setVisible(false);       // hidden until hover
-        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
-                                   " font-family:%2; font-size:%3px; font-weight:600; padding:0 8px;"
-                                   " letter-spacing:0.5px; }"
-                                   "QPushButton:hover { background:%4; color:%5; }")
-                               .arg(fg_color, fonts::DATA_FAMILY)
-                               .arg(fonts::TINY)
-                               .arg(colors::BG_HOVER(), colors::TEXT_PRIMARY()));
-        return btn;
-    };
-
-    run_btn_ = make_tool_btn(tr("RUN"), colors::POSITIVE);
-    run_btn_->setAccessibleName(tr("Run this cell"));
-    connect(run_btn_, &QPushButton::clicked, this, [this]() { emit run_requested(cell_id_); });
-    tb_layout->addWidget(run_btn_);
-
-    type_btn_ = make_tool_btn(tr("TYPE"), colors::CYAN);
-    type_btn_->setAccessibleName(tr("Switch between code and markdown"));
-    type_btn_->setToolTip(tr("Switch between code and markdown (clears this cell's output)"));
-    connect(type_btn_, &QPushButton::clicked, this, [this]() { emit toggle_type_requested(cell_id_); });
-    tb_layout->addWidget(type_btn_);
-
-    up_btn_ = make_tool_btn(tr("UP"), colors::TEXT_SECONDARY);
-    up_btn_->setAccessibleName(tr("Move this cell up"));
-    connect(up_btn_, &QPushButton::clicked, this, [this]() { emit move_up_requested(cell_id_); });
-    tb_layout->addWidget(up_btn_);
-
-    dn_btn_ = make_tool_btn(tr("DN"), colors::TEXT_SECONDARY);
-    dn_btn_->setAccessibleName(tr("Move this cell down"));
-    connect(dn_btn_, &QPushButton::clicked, this, [this]() { emit move_down_requested(cell_id_); });
-    tb_layout->addWidget(dn_btn_);
-
-    tb_layout->addStretch();
-
-    del_btn_ = make_tool_btn(tr("DEL"), colors::NEGATIVE);
-    del_btn_->setAccessibleName(tr("Delete this cell"));
-    connect(del_btn_, &QPushButton::clicked, this, [this]() { emit delete_requested(cell_id_); });
-    tb_layout->addWidget(del_btn_);
-
-    editor_vbox->addWidget(toolbar_);
-
-    // ── Code editor ──
-    editor_ = new CodeTextEdit(editor_container_);
-    editor_->setAcceptRichText(false);
-    editor_->setTabStopDistance(28);
-    editor_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    editor_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    editor_->setLineWrapMode(QTextEdit::NoWrap);
-    editor_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:none;"
-                                   " font-family:%3, 'Menlo', 'SF Mono', 'Courier New', monospace;"
-                                   " font-size:%4px; padding:8px 12px;"
-                                   " selection-background-color:%5; }"
-                                   "QScrollBar:vertical { background:%1; width:5px; }"
-                                   "QScrollBar::handle:vertical { background:%6; min-height:20px; }"
-                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-                                   "QScrollBar:horizontal { background:%1; height:5px; }"
-                                   "QScrollBar::handle:horizontal { background:%6; min-width:20px; }"
-                                   "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }")
-                               .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), fonts::DATA_FAMILY)
-                               .arg(fonts::DATA)
-                               .arg(colors::AMBER_DIM(), colors::BORDER_BRIGHT()));
-    editor_->document()->setDocumentMargin(2);
-    editor_->setAccessibleName(tr("Notebook cell source"));
-    editor_->setAccessibleDescription(
-        tr("Python source. Ctrl+Enter runs this cell, Shift+Enter runs it and moves to the next."));
-
-    // Keyboard shortcuts
-    connect(editor_, &CodeTextEdit::run_shortcut, this, [this]() { emit run_requested(cell_id_); });
-    connect(editor_, &CodeTextEdit::run_and_next, this, [this]() { emit run_and_advance(cell_id_); });
-
-    // Responsive height on every content change
-    connect(editor_->document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this,
-            [this](const QSizeF&) { adjust_editor_height(); });
-
-    editor_vbox->addWidget(editor_);
-
-    // ── Markdown preview (for MD cells, shown when not editing) ──
-    md_preview_ = new QTextBrowser(editor_container_);
-    md_preview_->setOpenExternalLinks(true);
-    md_preview_->setReadOnly(true);
-    md_preview_->setVisible(false);
-    md_preview_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none;"
-                                       " font-family:%3; font-size:%4px; padding:10px 12px; }"
-                                       "QScrollBar:vertical { background:%1; width:5px; }"
-                                       "QScrollBar::handle:vertical { background:%5; min-height:20px; }"
-                                       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                                   .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), fonts::DATA_FAMILY)
-                                   .arg(fonts::DATA)
-                                   .arg(colors::BORDER_BRIGHT()));
-
-    // Click on the rendered preview to drop back into the source editor.
-    // QTextBrowser swallows the press, so CellWidget::mousePressEvent never
-    // fires for it — the filter below (see eventFilter) is what makes this work.
-    md_preview_->installEventFilter(this);
-    md_preview_->setCursor(Qt::IBeamCursor);
-    md_preview_->setToolTip(tr("Click to edit this markdown cell"));
-
-    editor_vbox->addWidget(md_preview_);
-
-    row_layout->addWidget(editor_container_, 1);
-    root->addWidget(cell_row);
-
-    // ── Output area ──
-    auto* output_row = new QWidget(this);
-    auto* output_row_layout = new QHBoxLayout(output_row);
-    output_row_layout->setContentsMargins(0, 0, 0, 0);
-    output_row_layout->setSpacing(0);
-
-    auto* output_gutter = new QWidget(output_row);
-    output_gutter->setFixedWidth(56);
-    output_row_layout->addWidget(output_gutter);
-
-    output_area_ = new QWidget(output_row);
-    auto* output_vbox = new QVBoxLayout(output_area_);
-    output_vbox->setContentsMargins(0, 0, 0, 0);
-    output_vbox->setSpacing(0);
-
-    // Output header with collapse toggle
-    output_toggle_ = new QPushButton(tr("OUTPUT"), output_area_);
-    output_toggle_->setFixedHeight(22);
-    output_toggle_->setCursor(Qt::PointingHandCursor);
-    output_toggle_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none; border-left:3px solid %3;"
-                " font-family:%4; font-size:10px; font-weight:700; letter-spacing:0.5px;"
-                " padding:0 10px; text-align:left; }"
-                "QPushButton:hover { background:%5; }")
-            .arg(colors::BG_RAISED(), colors::POSITIVE(), colors::BORDER_DIM(), fonts::DATA_FAMILY,
-                 colors::BG_HOVER()));
-    output_toggle_->setVisible(false);
-    connect(output_toggle_, &QPushButton::clicked, this, [this]() {
-        output_collapsed_ = !output_collapsed_;
-        output_content_->setVisible(!output_collapsed_);
-        output_toggle_->setText(output_collapsed_ ? tr("OUTPUT [collapsed]") : tr("OUTPUT"));
-    });
-    output_vbox->addWidget(output_toggle_);
-
-    // Scrollable output content
-    output_content_ = new QWidget(output_area_);
-    output_content_layout_ = new QVBoxLayout(output_content_);
-    output_content_layout_->setContentsMargins(12, 6, 12, 8);
-    output_content_layout_->setSpacing(4);
-    output_content_->setStyleSheet(
-        QString("background:%1; border-left:3px solid %2;").arg(colors::BG_BASE(), colors::BORDER_DIM()));
-    output_content_->setVisible(false);
-    output_vbox->addWidget(output_content_);
-
-    output_area_->setVisible(false);
-    output_row_layout->addWidget(output_area_, 1);
-    root->addWidget(output_row);
-
-    // ── Insert-below: always-visible dim "+" centered between cells ──
-    insert_hint_ = new QWidget(this);
-    insert_hint_->setFixedHeight(20);
-    auto* insert_layout = new QHBoxLayout(insert_hint_);
-    insert_layout->setContentsMargins(56, 0, 0, 0);
-    insert_layout->setSpacing(0);
-
-    auto* insert_line = new QWidget(insert_hint_);
-    insert_line->setFixedHeight(1);
-    insert_line->setStyleSheet(QString("background:%1;").arg(colors::BORDER_DIM()));
-    insert_layout->addWidget(insert_line, 1);
-
-    auto* insert_btn = new QPushButton("+", insert_hint_);
-    insert_btn->setFixedSize(32, 18);
-    insert_btn->setCursor(Qt::PointingHandCursor);
-    insert_btn->setObjectName("insertBtn");
-    insert_btn->setStyleSheet(QString("QPushButton { color:%1; font-family:%2; font-size:12px; font-weight:700;"
-                                      " background:%3; border:1px solid %4; }"
-                                      "QPushButton:hover { background:%5; color:%6; border-color:%5; }")
-                                  .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY, colors::BG_SURFACE(),
-                                       colors::BORDER_DIM(), colors::AMBER_DIM(), colors::AMBER()));
-    connect(insert_btn, &QPushButton::clicked, this, [this]() { emit insert_below_requested(cell_id_); });
-    insert_layout->addWidget(insert_btn);
-
-    auto* insert_line2 = new QWidget(insert_hint_);
-    insert_line2->setFixedHeight(1);
-    insert_line2->setStyleSheet(QString("background:%1;").arg(colors::BORDER_DIM()));
-    insert_layout->addWidget(insert_line2, 1);
-
-    root->addWidget(insert_hint_);
-    setMouseTracking(true);
-}
-
-void CellWidget::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
-    QWidget::changeEvent(event);
-}
-
-void CellWidget::retranslateUi() {
-    // Hover toolbar buttons — fixed labels.
-    if (run_btn_)
-        run_btn_->setText(tr("RUN"));
-    if (type_btn_)
-        type_btn_->setText(tr("TYPE"));
-    if (up_btn_)
-        up_btn_->setText(tr("UP"));
-    if (dn_btn_)
-        dn_btn_->setText(tr("DN"));
-    if (del_btn_)
-        del_btn_->setText(tr("DEL"));
-    // output_toggle_ reflects live collapse/execution state ("OUT [n]" /
-    // "OUTPUT [collapsed]") — it is re-applied on the next state change, so we
-    // deliberately don't clobber it with stale text here.
-    // gutter_number_ ([n]/[*]) and gutter_type_ (PY/MD) are state/type codes,
-    // not translatable prose.
-}
-
-void CellWidget::adjust_editor_height() {
-    // Markdown cells showing the rendered preview hide the editor — its height
-    // is irrelevant. For everything else, size to fit even while the cell's
-    // stack page is still hidden (cells are built on the Editor page while the
-    // Library page is showing), so the cell isn't stuck at a tiny default.
-    if (cell_type_ == "markdown" && !md_editing_)
-        return;
-
-    // adjustSize() below re-emits documentSizeChanged (this slot is connected to
-    // it) — guard against the infinite recursion that would otherwise overflow
-    // the stack.
-    if (adjusting_height_)
-        return;
-    adjusting_height_ = true;
-
-    // Grow the editor to fit ALL its lines so the cell expands with the amount
-    // of code it holds — no inner scrollbar for code. The outer notebook scroll
-    // area handles overall scrolling. Height comes from the document layout, so
-    // it is accurate regardless of current visibility.
-    editor_->document()->adjustSize();
-    const int doc_h = static_cast<int>(editor_->document()->size().height());
-    const int target = doc_h + 8; // editor CSS padding (2+2) + breathing room
-    const int min_h = 40;
-    const int max_h = (cell_type_ == "code") ? 100000 : 800; // code grows freely
-    editor_->setFixedHeight(qBound(min_h, target, max_h));
-
-    adjusting_height_ = false;
-}
-
-void CellWidget::showEvent(QShowEvent* event) {
-    QWidget::showEvent(event);
-    // Re-measure now that the stylesheet font has been polished (QSS is applied
-    // on show); construction-time sizing may use the wrong default font metrics.
-    adjust_editor_height();
-}
-
-void CellWidget::set_cell_data(const NotebookCell& cell) {
-    cell_id_ = cell.id;
-    cell_type_ = cell.cell_type;
-    title_ = cell.title;
-    execution_count_ = cell.execution_count;
-    running_ = cell.running;
-
+CellWidget::CellWidget(const NotebookCell& cell, QWidget* parent)
+    : QFrame(parent), id_(cell.id), type_(cell.type), title_(cell.title), exec_count_(cell.execution_count) {
+    build();
     editor_->blockSignals(true);
     editor_->setPlainText(cell.source);
     editor_->blockSignals(false);
-
-    // Force document layout so height measurement is accurate
-    editor_->document()->adjustSize();
-    adjust_editor_height();
+    editor_->document()->setModified(false);
+    set_type(cell.type);
+    if (cell.type != NotebookCell::Type::Code)
+        set_markdown_editing(cell.source.trimmed().isEmpty());
+    output_collapsed_ = cell.output_collapsed;
+    input_collapsed_ = cell.input_collapsed;
+    set_outputs(cell.outputs);
+    for (const CellOutput& o : cell.outputs)
+        if (o.kind == CellOutput::Kind::Error)
+            editor_->set_error_line(o.error_line);
+    update_folds();
     update_gutter();
+    retranslate();
+}
 
-    // For markdown cells, show rendered preview by default
-    if (cell_type_ == "markdown" && !cell.source.trimmed().isEmpty()) {
-        md_editing_ = false;
-        editor_->setVisible(false);
-        md_preview_->setVisible(true);
+void CellWidget::build() {
+    setObjectName(QStringLiteral("nbCell"));
+    setAttribute(Qt::WA_StyledBackground, true);
+    setFrameShape(QFrame::NoFrame);
+    setFocusPolicy(Qt::NoFocus);
+
+    auto* row = new QHBoxLayout(this);
+    row->setContentsMargins(0, 4, 10, 4);
+    row->setSpacing(6);
+
+    gutter_ = new QWidget(this);
+    auto* g = new QVBoxLayout(gutter_);
+    g->setContentsMargins(4, 5, 2, 0);
+    g->setSpacing(3);
+    count_ = new QLabel(gutter_);
+    count_->setObjectName(QStringLiteral("nbCount"));
+    count_->setAlignment(Qt::AlignRight | Qt::AlignTop);
+    g->addWidget(count_);
+    state_ = new QLabel(gutter_);
+    state_->setObjectName(QStringLiteral("nbRunState"));
+    state_->setAlignment(Qt::AlignRight | Qt::AlignTop);
+    g->addWidget(state_);
+    g->addStretch(1);
+    gutter_->installEventFilter(this);
+    row->addWidget(gutter_);
+
+    body_ = new QWidget(this);
+    body_layout_ = new QVBoxLayout(body_);
+    body_layout_->setContentsMargins(0, 0, 0, 0);
+    body_layout_->setSpacing(3);
+
+    input_fold_ = new QPushButton(body_);
+    input_fold_->setObjectName(QStringLiteral("nbFolded"));
+    input_fold_->setCursor(Qt::PointingHandCursor);
+    input_fold_->setVisible(false);
+    connect(input_fold_, &QPushButton::clicked, this, [this]() { emit action(id_, Action::ToggleInput); });
+    body_layout_->addWidget(input_fold_);
+
+    editor_ = new CodeTextEdit(body_);
+    body_layout_->addWidget(editor_);
+
+    markdown_ = new QTextBrowser(body_);
+    markdown_->setObjectName(QStringLiteral("nbMarkdown"));
+    markdown_->setOpenExternalLinks(true);
+    markdown_->setFrameShape(QFrame::NoFrame);
+    markdown_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    markdown_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    markdown_->setVisible(false);
+    markdown_->viewport()->installEventFilter(this);
+    markdown_->setAccessibleName(tr("Rendered markdown — double-click or press Enter to edit"));
+    body_layout_->addWidget(markdown_);
+
+    outputs_ = new QWidget(body_);
+    outputs_->setObjectName(QStringLiteral("nbOutputs"));
+    outputs_layout_ = new QVBoxLayout(outputs_);
+    outputs_layout_->setContentsMargins(0, 2, 0, 0);
+    outputs_layout_->setSpacing(2);
+    outputs_->setVisible(false);
+    outputs_->installEventFilter(this);
+    body_layout_->addWidget(outputs_);
+
+    output_fold_ = new QPushButton(body_);
+    output_fold_->setObjectName(QStringLiteral("nbFolded"));
+    output_fold_->setCursor(Qt::PointingHandCursor);
+    output_fold_->setVisible(false);
+    connect(output_fold_, &QPushButton::clicked, this, [this]() { emit action(id_, Action::ToggleOutput); });
+    body_layout_->addWidget(output_fold_);
+    row->addWidget(body_, 1);
+
+    // Tool bar over the top-right corner (not in the layout: no shift on hover).
+    bar_ = new QFrame(this);
+    bar_->setObjectName(QStringLiteral("nbCellBar"));
+    auto* b = new QHBoxLayout(bar_);
+    b->setContentsMargins(1, 1, 1, 1);
+    b->setSpacing(0);
+    auto make = [&](NbGlyph glyph, Action act, NbTone tone = NbTone::Normal) {
+        auto* btn = new QToolButton(bar_);
+        btn->setObjectName(QStringLiteral("nbBtn"));
+        btn->setIcon(nb_icon(glyph, tone));
+        btn->setIconSize(QSize(13, 13));
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFocusPolicy(Qt::NoFocus);
+        connect(btn, &QToolButton::clicked, this, [this, act, btn]() {
+            if (act == Action::Menu)
+                emit menu_requested(id_, btn->mapToGlobal(QPoint(0, btn->height())));
+            else
+                emit action(id_, act);
+        });
+        b->addWidget(btn);
+        return btn;
+    };
+    bar_run_ = make(NbGlyph::Play, Action::Run, NbTone::Accent);
+    bar_run_->setProperty("fincept_agent_risk", "code");
+    bar_up_ = make(NbGlyph::Up, Action::MoveUp);
+    bar_down_ = make(NbGlyph::Down, Action::MoveDown);
+    bar_type_ = make(NbGlyph::Text, Action::ToggleType);
+    bar_delete_ = make(NbGlyph::Trash, Action::Delete);
+    bar_more_ = make(NbGlyph::Dots, Action::Menu);
+    bar_->setVisible(false);
+
+    connect(editor_, &CodeTextEdit::run_key, this, [this](CodeTextEdit::RunKey k) { emit run_key(id_, k); });
+    connect(editor_, &CodeTextEdit::escape_pressed, this, [this]() { emit escape_pressed(id_); });
+    connect(editor_, &CodeTextEdit::leave_edge, this, [this](int d) { emit leave_edge(id_, d); });
+    connect(editor_, &CodeTextEdit::completion_requested, this,
+            [this](const QString& p) { emit completion_requested(id_, p); });
+    connect(editor_, &CodeTextEdit::inspect_requested, this, [this](const QString& s) { emit inspect_requested(id_, s); });
+    connect(editor_, &CodeTextEdit::focused, this, [this]() { emit activated(id_, true); });
+    connect(editor_, &QPlainTextEdit::textChanged, this, [this]() {
+        editor_->set_error_line(0); // the failing line no longer matches the source
+        emit edited(id_);
+    });
+    connect(editor_, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+        if (editor_->hasFocus()) {
+            const QTextCursor c = editor_->textCursor();
+            emit cursor_moved(id_, c.blockNumber() + 1, c.positionInBlock() + 1);
+        }
+    });
+    apply_metrics();
+}
+
+QString CellWidget::source() const {
+    return editor_->toPlainText();
+}
+
+void CellWidget::set_source(const QString& source) {
+    if (editor_->toPlainText() == source)
+        return;
+    editor_->setPlainText(source);
+    if (type_ != NotebookCell::Type::Code && !md_editing_)
         render_markdown();
-    } else {
-        md_editing_ = true;
-        editor_->setVisible(true);
-        md_preview_->setVisible(false);
-    }
-
-    if (!cell.outputs.isEmpty()) {
-        set_outputs(cell.outputs, cell.execution_count);
-    }
 }
 
-NotebookCell CellWidget::cell_data() const {
-    NotebookCell cell;
-    cell.id = cell_id_;
-    cell.cell_type = cell_type_;
-    cell.title = title_;
-    cell.source = editor_->toPlainText();
-    cell.execution_count = execution_count_;
-    return cell;
-}
-
-void CellWidget::set_running(bool running) {
-    running_ = running;
+void CellWidget::set_title(const QString& title) {
+    title_ = title;
     update_gutter();
 }
 
-void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count) {
-    execution_count_ = exec_count;
-    live_out_ = nullptr; // deleted with the rest of the output widgets below
-    update_gutter();
-
-    // Clear old output content
-    while (output_content_layout_->count() > 0) {
-        auto* item = output_content_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+void CellWidget::set_type(NotebookCell::Type type) {
+    type_ = type;
+    const bool code = type == NotebookCell::Type::Code;
+    editor_->set_markdown_mode(!code);
+    if (code) {
+        md_editing_ = false;
+        markdown_->setVisible(false);
+        editor_->setVisible(!input_collapsed_);
     }
+    bar_run_->setVisible(true);
+    bar_type_->setIcon(nb_icon(code ? NbGlyph::Text : NbGlyph::Code));
+    update_gutter();
+    retranslate();
+}
 
-    if (outputs.isEmpty()) {
-        output_area_->setVisible(false);
-        output_toggle_->setVisible(false);
-        output_content_->setVisible(false);
+void CellWidget::set_selection(Selection s) {
+    if (selection_ == s)
         return;
+    selection_ = s;
+    const QString v = s == Selection::Command ? QStringLiteral("cmd") : s == Selection::Edit ? QStringLiteral("edit")
+                                                                                            : QString();
+    // Rules keyed on the cell's property style its count / editor / markdown too:
+    // re-polish exactly those, not the whole subtree.
+    nb_set_prop(this, "sel", v);
+    for (QWidget* w : {static_cast<QWidget*>(count_), static_cast<QWidget*>(editor_), static_cast<QWidget*>(markdown_)}) {
+        w->style()->unpolish(w);
+        w->style()->polish(w);
     }
+    update_bar_visibility();
+}
 
-    output_area_->setVisible(true);
-    output_toggle_->setVisible(true);
-    output_toggle_->setText(tr("OUT [%1]").arg(exec_count));
-    output_collapsed_ = false;
-    output_content_->setVisible(true);
-
-    for (const auto& out : outputs) {
-        if (out.type == "stream" || out.type == "execute_result") {
-            // Use QTextEdit in read-only mode for proper scrolling of long output
-            auto* output_view = new QTextEdit(output_content_);
-            output_view->setReadOnly(true);
-            output_view->setPlainText(out.text);
-            output_view->setLineWrapMode(QTextEdit::WidgetWidth);
-            output_view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-            output_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-            QString fg = (out.name == "stderr") ? colors::WARNING : colors::TEXT_PRIMARY;
-            output_view->setStyleSheet(
-                QString("QTextEdit { background:transparent; color:%1; border:none;"
-                        " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; padding:2px 0; }"
-                        "QScrollBar:vertical { background:transparent; width:4px; }"
-                        "QScrollBar::handle:vertical { background:%4; }"
-                        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                    .arg(fg, fonts::DATA_FAMILY)
-                    .arg(fonts::DATA)
-                    .arg(colors::BORDER_BRIGHT()));
-
-            // Size to content, max 300px then scroll
-            int lines = out.text.count('\n') + 1;
-            int line_h = QFontMetrics(output_view->font()).lineSpacing();
-            int content_h = lines * line_h + 10;
-            int clamped = qBound(30, content_h, 300);
-            output_view->setFixedHeight(clamped);
-
-            output_content_layout_->addWidget(output_view);
-
-        } else if (out.type == "error") {
-            auto* err_widget = new QWidget(output_content_);
-            err_widget->setStyleSheet(QString("background:#1a0808; border-left:2px solid %1;").arg(colors::NEGATIVE()));
-            auto* err_layout = new QVBoxLayout(err_widget);
-            err_layout->setContentsMargins(10, 6, 10, 6);
-            err_layout->setSpacing(4);
-
-            auto* err_header = new QLabel(QString("%1: %2").arg(out.error_name, out.error_value), err_widget);
-            err_header->setWordWrap(true);
-            err_header->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                                          .arg(colors::NEGATIVE(), fonts::DATA_FAMILY)
-                                          .arg(fonts::DATA));
-            err_layout->addWidget(err_header);
-
-            if (!out.traceback.isEmpty()) {
-                auto* tb_view = new QTextEdit(err_widget);
-                tb_view->setReadOnly(true);
-                tb_view->setPlainText(out.traceback.join("\n"));
-                tb_view->setLineWrapMode(QTextEdit::WidgetWidth);
-                tb_view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-                tb_view->setStyleSheet(
-                    QString("QTextEdit { background:transparent; color:%1; border:none;"
-                            " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; }"
-                            "QScrollBar:vertical { background:transparent; width:4px; }"
-                            "QScrollBar::handle:vertical { background:%4; }"
-                            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                        .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY)
-                        .arg(fonts::TINY)
-                        .arg(colors::BORDER_BRIGHT()));
-
-                int tb_lines = out.traceback.join("\n").count('\n') + 1;
-                int tb_h = qBound(40, tb_lines * 16 + 10, 200);
-                tb_view->setFixedHeight(tb_h);
-                err_layout->addWidget(tb_view);
-            }
-            output_content_layout_->addWidget(err_widget);
-        }
+void CellWidget::focus_editor(bool to_end) {
+    if (input_collapsed_)
+        set_input_collapsed(false);
+    if (type_ != NotebookCell::Type::Code && !md_editing_)
+        set_markdown_editing(true);
+    if (to_end) {
+        QTextCursor c = editor_->textCursor();
+        c.movePosition(QTextCursor::End);
+        editor_->setTextCursor(c);
     }
+    editor_->setFocus(Qt::OtherFocusReason);
 }
 
-void CellWidget::begin_stream() {
-    while (output_content_layout_->count() > 0) {
-        auto* item = output_content_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-    // Styled by the screen stylesheet (#nbLiveOut) — no per-run setStyleSheet.
-    live_out_ = new QPlainTextEdit(output_content_);
-    live_out_->setObjectName("nbLiveOut");
-    live_out_->setReadOnly(true);
-    live_out_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    // Display bound while streaming; the service caps what is kept for saving.
-    live_out_->setMaximumBlockCount(5000);
-    live_out_->setFixedHeight(60);
-    output_content_layout_->addWidget(live_out_);
-    output_area_->setVisible(true);
-    output_toggle_->setVisible(true);
-    output_toggle_->setText(tr("OUTPUT — running…"));
-    output_collapsed_ = false;
-    output_content_->setVisible(true);
-}
-
-void CellWidget::append_stream(const QString& text, bool is_stderr) {
-    if (!live_out_)
-        begin_stream();
-    QTextCursor cur(live_out_->document());
-    cur.movePosition(QTextCursor::End);
-    QTextCharFormat fmt;
-    fmt.setForeground(QColor(is_stderr ? colors::WARNING() : colors::TEXT_PRIMARY()));
-    // The service delivers newline-terminated chunks: write the separator before
-    // a chunk rather than after it, so the pane never ends with an empty line.
-    const QString body = text.endsWith(QLatin1Char('\n')) ? text.chopped(1) : text;
-    cur.insertText(live_out_->document()->isEmpty() ? body : QLatin1Char('\n') + body, fmt);
-    const int lines = live_out_->document()->blockCount();
-    const int line_h = QFontMetrics(live_out_->font()).lineSpacing();
-    live_out_->setFixedHeight(qBound(40, lines * line_h + 12, 300));
-    live_out_->moveCursor(QTextCursor::End);
-    live_out_->ensureCursorVisible();
-}
-
-void CellWidget::set_elapsed(qint64 ms) {
-    if (!output_toggle_->isVisible())
-        return;
-    const QString t = ms < 1000 ? tr("%1 ms").arg(ms) : tr("%1 s").arg(ms / 1000.0, 0, 'f', ms < 10000 ? 2 : 1);
-    output_toggle_->setText(tr("OUT [%1]  ·  %2").arg(execution_count_).arg(t));
-}
-
-void CellWidget::set_selected(bool selected) {
-    selected_ = selected;
-
-    // Selected: amber left accent, brighter surface. Unselected: dim border, standard surface.
-    QString border = selected ? colors::AMBER : colors::BORDER_MED;
-    QString bg = selected ? "#0e0e0e" : colors::BG_SURFACE();
-    editor_container_->setStyleSheet(QString("background:%1; border-left:3px solid %2; border-top:1px solid %3;"
-                                             " border-bottom:1px solid %3; border-right:1px solid %3;")
-                                         .arg(bg, border, colors::BORDER_DIM()));
-
-    // Gutter matches cell background
-    QString gutter_bg = selected ? "#0e0e0e" : colors::BG_RAISED();
-    gutter_->setStyleSheet(QString("background:%1;").arg(gutter_bg));
-
-    QString num_color = selected ? colors::AMBER : colors::TEXT_TERTIARY;
-    gutter_number_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; background:transparent;")
-            .arg(num_color, fonts::DATA_FAMILY)
-            .arg(fonts::TINY));
-
-    // For markdown: if selecting, switch to edit mode; if deselecting, render
-    if (cell_type_ == "markdown") {
-        if (selected && !md_editing_) {
-            md_editing_ = true;
-            md_preview_->setVisible(false);
-            editor_->setVisible(true);
-            editor_->setFocus();
-            adjust_editor_height();
-        } else if (!selected && md_editing_) {
-            md_editing_ = false;
-            editor_->setVisible(false);
-            md_preview_->setVisible(true);
-            render_markdown();
-        }
-    }
-}
-
-void CellWidget::set_index(int index) {
-    index_ = index;
+void CellWidget::set_exec_count(int count) {
+    exec_count_ = count;
     update_gutter();
+}
+
+void CellWidget::set_run_state(RunState state, qint64 elapsed_ms) {
+    run_state_ = state;
+    if (elapsed_ms >= 0)
+        last_elapsed_ms_ = elapsed_ms;
+    if (state == RunState::Idle || state == RunState::Queued)
+        last_elapsed_ms_ = state == RunState::Idle ? last_elapsed_ms_ : -1;
+    update_gutter();
+}
+
+void CellWidget::tick(qint64 elapsed_ms) {
+    if (run_state_ != RunState::Running)
+        return;
+    last_elapsed_ms_ = elapsed_ms;
+    const QString t = QStringLiteral("▶ ") + format_elapsed(elapsed_ms);
+    if (state_->text() != t)
+        state_->setText(t);
 }
 
 void CellWidget::update_gutter() {
-    if (running_) {
-        gutter_number_->setText("[*]");
-        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                                          .arg(colors::WARNING(), fonts::DATA_FAMILY)
-                                          .arg(fonts::TINY));
-    } else if (execution_count_ > 0) {
-        gutter_number_->setText(QString("[%1]").arg(execution_count_));
-        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                                          .arg(selected_ ? colors::AMBER() : colors::POSITIVE(), fonts::DATA_FAMILY)
-                                          .arg(fonts::TINY));
-    } else {
-        gutter_number_->setText(QString("[%1]").arg(index_ + 1));
-        gutter_number_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                .arg(selected_ ? colors::AMBER() : colors::TEXT_TERTIARY(), fonts::DATA_FAMILY)
-                .arg(fonts::TINY));
-    }
+    QString count;
+    if (type_ == NotebookCell::Type::Markdown)
+        count = QStringLiteral("MD");
+    else if (type_ == NotebookCell::Type::Raw)
+        count = QStringLiteral("RAW");
+    else if (run_state_ == RunState::Running)
+        count = QStringLiteral("[*]");
+    else if (exec_count_ > 0)
+        count = QStringLiteral("[%1]").arg(exec_count_);
+    else
+        count = QStringLiteral("[ ]");
+    if (count_->text() != count)
+        count_->setText(count);
+    count_->setToolTip(type_ == NotebookCell::Type::Code
+                           ? (exec_count_ > 0 ? tr("Run #%1 of this kernel session").arg(exec_count_)
+                                              : tr("Not run in this session"))
+                           : tr("Markdown cell"));
 
-    if (cell_type_ == "markdown") {
-        gutter_type_->setText("MD");
-        gutter_type_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; font-weight:600; letter-spacing:0.5px;")
-                .arg(colors::INFO(), fonts::DATA_FAMILY));
-    } else {
-        gutter_type_->setText("PY");
-        gutter_type_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; font-weight:600; letter-spacing:0.5px;")
-                .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
+    QString text;
+    QString tone = QStringLiteral("dim");
+    QString tip;
+    switch (run_state_) {
+        case RunState::Idle:
+            if (last_elapsed_ms_ >= 0 && exec_count_ > 0)
+                text = QStringLiteral("✓ ") + format_elapsed(last_elapsed_ms_);
+            break;
+        case RunState::Queued:
+            text = tr("QUEUED");
+            tone = QStringLiteral("warn");
+            tip = tr("Waiting for the cells before it to finish");
+            break;
+        case RunState::Running:
+            text = QStringLiteral("▶ ") + format_elapsed(std::max<qint64>(0, last_elapsed_ms_));
+            tone = QStringLiteral("warn");
+            tip = tr("Running — Esc then I, I (or the stop button) interrupts it");
+            break;
+        case RunState::Done:
+            text = QStringLiteral("✓ ") + format_elapsed(last_elapsed_ms_);
+            tip = tr("Finished in %1").arg(format_elapsed(last_elapsed_ms_));
+            break;
+        case RunState::Error:
+            text = tr("✕ ERROR");
+            tone = QStringLiteral("danger");
+            tip = tr("Failed after %1").arg(format_elapsed(last_elapsed_ms_));
+            break;
+        case RunState::Cancelled:
+            text = tr("■ STOPPED");
+            tone = QStringLiteral("warn");
+            tip = tr("Interrupted after %1").arg(format_elapsed(last_elapsed_ms_));
+            break;
     }
+    if (state_->text() != text)
+        state_->setText(text);
+    state_->setToolTip(tip);
+    nb_set_prop(state_, "tone", tone);
+    setToolTip(title_.isEmpty() ? QString() : title_);
 }
+
+QWidget* CellWidget::make_output(const CellOutput& out, int index) {
+    NbOutputView* view = make_output_view(out, false, outputs_);
+    connect(view, &NbOutputView::expand_requested, this, [this, index]() { emit output_expand_requested(id_, index); });
+    connect(view, &NbOutputView::jump_to_line, this, [this](int line) {
+        focus_editor();
+        editor_->go_to_line(line);
+    });
+    view->installEventFilter(this);
+    for (QWidget* w : view->findChildren<QWidget*>())
+        w->installEventFilter(this);
+    return view;
+}
+
+void CellWidget::set_outputs(const QVector<CellOutput>& outputs) {
+    for (QWidget* w : output_widgets_) {
+        if (!w)
+            continue;
+        outputs_layout_->removeWidget(w);
+        w->deleteLater();
+    }
+    output_widgets_.clear();
+    output_kinds_.clear();
+    for (int i = 0; i < outputs.size(); ++i) {
+        QWidget* w = make_output(outputs[i], i);
+        outputs_layout_->addWidget(w);
+        output_widgets_.append(w);
+        output_kinds_.append(outputs[i].kind);
+    }
+    output_count_ = static_cast<int>(outputs.size());
+    editor_->set_error_line(0);
+    for (const CellOutput& o : outputs)
+        if (o.kind == CellOutput::Kind::Error && o.error_line > 0)
+            editor_->set_error_line(o.error_line);
+    update_folds();
+}
+
+void CellWidget::apply_output(int index, const CellOutput& output) {
+    if (index < 0)
+        return;
+    if (index < output_widgets_.size()) {
+        if (output_kinds_[index] == output.kind) {
+            if (auto* v = qobject_cast<NbOutputView*>(output_widgets_[index]))
+                v->update_output(output);
+        } else {
+            // A repr that turned into a table: replace the widget in place.
+            QWidget* old = output_widgets_[index];
+            QWidget* w = make_output(output, index);
+            outputs_layout_->replaceWidget(old, w);
+            old->deleteLater();
+            output_widgets_[index] = w;
+            output_kinds_[index] = output.kind;
+        }
+    } else {
+        while (output_widgets_.size() < index) { // never expected: keep indices aligned
+            output_widgets_.append(nullptr);
+            output_kinds_.append(CellOutput::Kind::Stream);
+        }
+        QWidget* w = make_output(output, index);
+        outputs_layout_->addWidget(w);
+        output_widgets_.append(w);
+        output_kinds_.append(output.kind);
+    }
+    output_count_ = static_cast<int>(output_widgets_.size());
+    if (output.kind == CellOutput::Kind::Error && output.error_line > 0)
+        editor_->set_error_line(output.error_line);
+    update_folds();
+}
+
+void CellWidget::set_output_collapsed(bool collapsed) {
+    output_collapsed_ = collapsed;
+    update_folds();
+}
+
+void CellWidget::set_input_collapsed(bool collapsed) {
+    input_collapsed_ = collapsed;
+    update_folds();
+}
+
+void CellWidget::update_folds() {
+    const bool code = type_ == NotebookCell::Type::Code;
+    const bool show_editor = !input_collapsed_ && (code || md_editing_);
+    editor_->setVisible(show_editor);
+    markdown_->setVisible(!input_collapsed_ && !code && !md_editing_);
+    input_fold_->setVisible(input_collapsed_);
+    if (input_collapsed_) {
+        NotebookCell probe;
+        probe.type = type_;
+        probe.source = source();
+        QString first = notebook::cell_display_name(probe);
+        if (first.size() > 80)
+            first = first.left(79) + QStringLiteral("…");
+        input_fold_->setText(tr("▸  %1 hidden — %2").arg(code ? tr("Code") : tr("Text"), first));
+    }
+    outputs_->setVisible(code && output_count_ > 0 && !output_collapsed_);
+    output_fold_->setVisible(code && output_count_ > 0 && output_collapsed_);
+    if (output_fold_->isVisible())
+        output_fold_->setText(tr("▸  Output hidden — %n item(s). Click to show.", "", output_count_));
+}
+
+void CellWidget::set_markdown_editing(bool editing) {
+    if (type_ == NotebookCell::Type::Code)
+        return;
+    md_editing_ = editing;
+    if (!editing)
+        render_markdown();
+    update_folds();
+    if (editing)
+        editor_->fit_height();
+}
+
+namespace {
+/// Rendered text cells are exactly as tall as their text at the width they are shown at.
+/// `width` is the viewport's width once the cell has been laid out; before that (a cell is
+/// rendered when it is created, when the browser still has its default 100 px size) the
+/// caller passes the body's width, and the viewport's Resize event fits it again.
+void nb_fit_markdown_height(QTextBrowser* md, int width) {
+    if (!md || width <= 50)
+        return;
+    QTextDocument* doc = md->document();
+    if (qAbs(doc->textWidth() - width) > 0.5)
+        doc->setTextWidth(width);
+    const int h = std::max(static_cast<int>(std::ceil(doc->size().height())) + 6,
+                           QFontMetrics(ui::fonts::font()).lineSpacing() + 12);
+    if (md->minimumHeight() != h || md->maximumHeight() != h)
+        md->setFixedHeight(h);
+}
+} // namespace
 
 void CellWidget::render_markdown() {
-    QString src = editor_->toPlainText();
-    if (src.trimmed().isEmpty()) {
-        md_preview_->setHtml(
-            QString("<p style='color:%1; font-style:italic;'>%2</p>")
-                .arg(colors::TEXT_TERTIARY(), tr("Empty markdown cell — click to edit").toHtmlEscaped()));
-        md_preview_->setMinimumHeight(48);
-        md_preview_->setMaximumHeight(48);
-        return;
-    }
-
-    // Convert basic markdown to HTML for rendering
-    // Handles: headers, bold, italic, code blocks, inline code, lists, links, horizontal rules
+    const QString src = source();
     QString html;
-    html +=
-        QString("<style>"
-                "body { color:%1; font-family:%2; font-size:%3px; }"
-                "h1 { color:%4; font-size:20px; font-weight:700; margin:8px 0 4px; border-bottom:1px solid %5; "
-                "padding-bottom:4px; }"
-                "h2 { color:%4; font-size:17px; font-weight:700; margin:8px 0 4px; }"
-                "h3 { color:%4; font-size:15px; font-weight:700; margin:6px 0 3px; }"
-                "h4 { color:%6; font-size:14px; font-weight:600; margin:4px 0 2px; }"
-                "code { background:%7; color:%4; padding:2px 4px; font-family:%2; }"
-                "pre { background:%7; color:%1; padding:8px; font-family:%2; font-size:13px;"
-                "      border-left:2px solid %5; margin:6px 0; }"
-                "a { color:%8; }"
-                "strong { color:%1; font-weight:700; }"
-                "em { color:%6; font-style:italic; }"
-                "ul, ol { margin:4px 0; padding-left:20px; }"
-                "li { margin:2px 0; }"
-                "hr { border:none; border-top:1px solid %5; margin:8px 0; }"
-                "blockquote { border-left:3px solid %4; padding-left:10px; color:%6; margin:6px 0; }"
-                "</style>")
-            .arg(colors::TEXT_PRIMARY(), fonts::DATA_FAMILY)
-            .arg(fonts::DATA)
-            .arg(colors::AMBER(), colors::BORDER_MED(), colors::TEXT_SECONDARY(), colors::BG_RAISED(), colors::CYAN());
-
-    bool in_code_block = false;
-    QString code_block;
-    QStringList lines = src.split('\n');
-
-    for (const auto& line : lines) {
-        // Fenced code blocks
-        if (line.trimmed().startsWith("```")) {
-            if (in_code_block) {
-                html += "<pre>" + code_block.toHtmlEscaped() + "</pre>";
-                code_block.clear();
-                in_code_block = false;
-            } else {
-                in_code_block = true;
-            }
-            continue;
-        }
-        if (in_code_block) {
-            if (!code_block.isEmpty())
-                code_block += "\n";
-            code_block += line;
-            continue;
-        }
-
-        QString trimmed = line.trimmed();
-
-        // Horizontal rule
-        if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
-            html += "<hr>";
-            continue;
-        }
-        // Headers
-        if (trimmed.startsWith("#### ")) {
-            html += "<h4>" + trimmed.mid(5).toHtmlEscaped() + "</h4>";
-            continue;
-        }
-        if (trimmed.startsWith("### ")) {
-            html += "<h3>" + trimmed.mid(4).toHtmlEscaped() + "</h3>";
-            continue;
-        }
-        if (trimmed.startsWith("## ")) {
-            html += "<h2>" + trimmed.mid(3).toHtmlEscaped() + "</h2>";
-            continue;
-        }
-        if (trimmed.startsWith("# ")) {
-            html += "<h1>" + trimmed.mid(2).toHtmlEscaped() + "</h1>";
-            continue;
-        }
-        // Blockquote
-        if (trimmed.startsWith("> ")) {
-            html += "<blockquote>" + trimmed.mid(2).toHtmlEscaped() + "</blockquote>";
-            continue;
-        }
-        // Unordered list
-        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-            html += "<ul><li>" + trimmed.mid(2).toHtmlEscaped() + "</li></ul>";
-            continue;
-        }
-        // Ordered list (simple)
-        if (trimmed.length() > 2 && trimmed[0].isDigit() && trimmed[1] == '.') {
-            html += "<ol><li>" + trimmed.mid(3).toHtmlEscaped() + "</li></ol>";
-            continue;
-        }
-        // Empty line = paragraph break
-        if (trimmed.isEmpty()) {
-            html += "<br>";
-            continue;
-        }
-
-        // Inline formatting: **bold**, *italic*, `code`, [link](url)
-        QString escaped = line.toHtmlEscaped();
-        // Inline code first (to avoid nested processing)
-        escaped.replace(QRegularExpression("`([^`]+)`"), "<code>\\1</code>");
-        // Bold
-        escaped.replace(QRegularExpression("\\*\\*([^*]+)\\*\\*"), "<strong>\\1</strong>");
-        // Italic
-        escaped.replace(QRegularExpression("\\*([^*]+)\\*"), "<em>\\1</em>");
-        // Links
-        escaped.replace(QRegularExpression("\\[([^\\]]+)\\]\\(([^)]+)\\)"), "<a href='\\2'>\\1</a>");
-
-        html += "<p style='margin:2px 0;'>" + escaped + "</p>";
-    }
-
-    // Close unclosed code block
-    if (in_code_block && !code_block.isEmpty()) {
-        html += "<pre>" + code_block.toHtmlEscaped() + "</pre>";
-    }
-
-    md_preview_->setHtml(html);
-
-    // Size preview to content
-    QTimer::singleShot(0, this, [this]() {
-        int h = static_cast<int>(md_preview_->document()->size().height()) + 20;
-        int clamped = qBound(48, h, 600);
-        md_preview_->setMinimumHeight(clamped);
-        md_preview_->setMaximumHeight(clamped);
-    });
+    if (src.trimmed().isEmpty())
+        html = QStringLiteral("<p style=\"color:%1;\"><i>%2</i></p>")
+                   .arg(colors::TEXT_TERTIARY(), tr("Empty text cell — double-click or press Enter to write").toHtmlEscaped());
+    else if (type_ == NotebookCell::Type::Raw)
+        html = QStringLiteral("<pre>%1</pre>").arg(src.toHtmlEscaped());
+    else
+        html = notebook::markdown_to_html(src, nb_html_palette());
+    markdown_->setHtml(html);
+    // Not laid out yet (or hidden): the viewport still has a placeholder width, which would
+    // wrap the text into a narrow column and leave a tall blank cell — measure against the
+    // body instead. The viewport's Resize event (eventFilter) fits the final width.
+    const bool laid_out = markdown_->isVisible() && markdown_->viewport()->width() > 50 &&
+                          markdown_->viewport()->width() >= body_->width() / 2;
+    nb_fit_markdown_height(markdown_, laid_out ? markdown_->viewport()->width() : std::max(200, body_->width() - 8));
 }
 
-void CellWidget::enterEvent(QEnterEvent* /*event*/) {
+void CellWidget::set_line_numbers_visible(bool on) {
+    editor_->set_line_numbers_visible(on);
+}
+
+void CellWidget::apply_metrics() {
+    const QFontMetrics count_fm(ui::fonts::font(-3, QFont::Bold));
+    const QFontMetrics state_fm(ui::fonts::font(-4, QFont::DemiBold));
+    const int w = std::max(count_fm.horizontalAdvance(QStringLiteral("[888]")),
+                           state_fm.horizontalAdvance(QStringLiteral("✕ ERROR 88"))) +
+                  10;
+    gutter_->setFixedWidth(w);
+    const int btn = std::max(22, QFontMetrics(ui::fonts::font(-3)).height() + 8);
+    for (QToolButton* b : {bar_run_, bar_up_, bar_down_, bar_type_, bar_delete_, bar_more_})
+        b->setFixedSize(btn, btn);
+}
+
+void CellWidget::refresh_theme() {
+    editor_->refresh_theme();
+    if (type_ != NotebookCell::Type::Code && !md_editing_)
+        render_markdown();
+    for (QWidget* w : output_widgets_)
+        if (auto* v = qobject_cast<NbOutputView*>(w))
+            v->refresh_theme();
+}
+
+void CellWidget::refit() {
+    apply_metrics();
+    editor_->fit_height();
+    if (markdown_->isVisibleTo(this))
+        render_markdown();
+    for (QWidget* w : output_widgets_)
+        if (auto* v = qobject_cast<NbOutputView*>(w))
+            v->refit();
+    place_bar();
+}
+
+void CellWidget::update_bar_visibility() {
+    const bool show = hovered_ || selection_ != Selection::None;
+    if (bar_->isVisible() != show) {
+        bar_->setVisible(show);
+        if (show) {
+            place_bar();
+            bar_->raise();
+        }
+    }
+}
+
+void CellWidget::place_bar() {
+    if (!bar_->isVisible())
+        return;
+    bar_->adjustSize();
+    bar_->move(width() - bar_->width() - 14, 1);
+}
+
+void CellWidget::enterEvent(QEnterEvent* e) {
     hovered_ = true;
-    // Show toolbar buttons
-    for (int i = 0; i < toolbar_->layout()->count(); ++i) {
-        auto* w = toolbar_->layout()->itemAt(i)->widget();
-        if (w)
-            w->setVisible(true);
-    }
-    toolbar_->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
+    update_bar_visibility();
+    QFrame::enterEvent(e);
 }
 
-void CellWidget::leaveEvent(QEvent* /*event*/) {
+void CellWidget::leaveEvent(QEvent* e) {
     hovered_ = false;
-    // Hide toolbar buttons
-    for (int i = 0; i < toolbar_->layout()->count(); ++i) {
-        auto* w = toolbar_->layout()->itemAt(i)->widget();
-        if (w)
-            w->setVisible(false);
-    }
-    toolbar_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED()));
+    update_bar_visibility();
+    QFrame::leaveEvent(e);
 }
 
-void CellWidget::mousePressEvent(QMouseEvent* event) {
-    emit cell_clicked(cell_id_);
-    QWidget::mousePressEvent(event);
+void CellWidget::mousePressEvent(QMouseEvent* e) {
+    emit activated(id_, false);
+    QFrame::mousePressEvent(e);
+}
+
+void CellWidget::mouseDoubleClickEvent(QMouseEvent* e) {
+    if (type_ != NotebookCell::Type::Code)
+        emit activated(id_, true);
+    QFrame::mouseDoubleClickEvent(e);
+}
+
+void CellWidget::resizeEvent(QResizeEvent* e) {
+    QFrame::resizeEvent(e);
+    place_bar();
+    if (markdown_->isVisibleTo(this)) {
+        nb_fit_markdown_height(markdown_, markdown_->viewport()->width());
+    }
+}
+
+void CellWidget::contextMenuEvent(QContextMenuEvent* e) {
+    emit menu_requested(id_, e->globalPos());
 }
 
 bool CellWidget::eventFilter(QObject* watched, QEvent* event) {
-    // The markdown preview is read-only and consumes its own mouse events, so
-    // without this a rendered markdown cell could only be re-opened from the
-    // navigator. installEventFilter() was already in place but no override
-    // existed, so nothing happened.
-    if (watched == md_preview_ && event->type() == QEvent::MouseButtonPress) {
-        emit cell_clicked(cell_id_); // selecting a markdown cell switches it to edit mode
-        if (!md_editing_) {
-            md_editing_ = true;
-            md_preview_->setVisible(false);
-            editor_->setVisible(true);
-            editor_->setFocus(Qt::MouseFocusReason);
-            adjust_editor_height();
-        }
+    const QEvent::Type t = event->type();
+    if (t == QEvent::MouseButtonPress) {
+        emit activated(id_, false); // a click on the outputs / gutter / rendered text selects the cell
+    } else if (t == QEvent::MouseButtonDblClick && watched == markdown_->viewport()) {
+        emit activated(id_, true);
         return true;
+    } else if (t == QEvent::Resize && watched == markdown_->viewport()) {
+        // The layout gives the browser its real width after the cell was rendered: fit the
+        // height to the text at that width (a height-only change leaves the width, so no loop).
+        nb_fit_markdown_height(markdown_, static_cast<QResizeEvent*>(event)->size().width());
     }
-    return QWidget::eventFilter(watched, event);
+    return QFrame::eventFilter(watched, event);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// CellNavigator (sidebar)
-// ═════════════════════════════════════════════════════════════════════════════
+void CellWidget::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange)
+        retranslate();
+    QFrame::changeEvent(e);
+}
+
+void CellWidget::retranslate() {
+    const bool code = type_ == NotebookCell::Type::Code;
+    bar_run_->setToolTip(code ? tr("Run this cell (Ctrl+Enter)") : tr("Render this text cell (Ctrl+Enter)"));
+    bar_up_->setToolTip(tr("Move up (Alt+Up)"));
+    bar_down_->setToolTip(tr("Move down (Alt+Down)"));
+    bar_type_->setToolTip(code ? tr("Turn into a text (markdown) cell (M)") : tr("Turn into a code cell (Y)"));
+    bar_delete_->setToolTip(tr("Delete this cell (D, D) — undo from the status bar"));
+    bar_more_->setToolTip(tr("More: run above / below, insert, collapse, rename, copy…"));
+    for (QToolButton* b : {bar_run_, bar_up_, bar_down_, bar_type_, bar_delete_, bar_more_})
+        b->setAccessibleName(b->toolTip());
+    update_gutter();
+    update_folds();
+}
+
 } // namespace fincept::screens

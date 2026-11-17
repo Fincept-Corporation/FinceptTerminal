@@ -85,6 +85,7 @@ pr::PredictionTrade to_prediction(const pm::Trade& src) {
     out.price = src.price;
     out.size = src.size;
     out.ts_ms = src.timestamp * 1000;
+    out.outcome = src.outcome;
     return out;
 }
 

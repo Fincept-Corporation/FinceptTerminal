@@ -11,6 +11,7 @@
 #include "trading/ExchangeSession.h"
 #include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
+#include "trading/PaperMarkService.h"
 #include "trading/PaperTrading.h"
 
 #include <QMutexLocker>
@@ -75,7 +76,7 @@ void ExchangeService::set_exchange(const QString& exchange_id) {
     }
     // Touch the session so it exists by the time subsequent calls arrive.
     ExchangeSessionManager::instance().session(exchange_id);
-    LOG_INFO(kServiceTag, "Exchange set to: " + exchange_id);
+    LOG_DEBUG(kServiceTag, "Exchange set to: " + exchange_id);
 }
 
 QString ExchangeService::get_exchange() const {
@@ -111,7 +112,7 @@ void ExchangeService::start_price_feed(int interval_seconds) {
     feed_interval_ = interval_seconds;
     feed_running_ = true;
     feed_timer_->start(interval_seconds * 1000);
-    LOG_INFO(kServiceTag, QString("Price feed started (interval=%1s)").arg(interval_seconds));
+    LOG_DEBUG(kServiceTag, QString("Price feed started (interval=%1s)").arg(interval_seconds));
 }
 
 void ExchangeService::stop_price_feed() {
@@ -173,8 +174,14 @@ void ExchangeService::poll_prices() {
             pd.change_percent = ticker.percentage;
             pd.timestamp = ticker.timestamp;
             for (const auto& portfolio_id : *it) {
-                OrderMatcher::instance().check_orders(ticker.symbol, pd, portfolio_id);
-                OrderMatcher::instance().check_sl_tp_triggers(portfolio_id, ticker.symbol, ticker.last);
+                // A fill books cash at the pair's FX factor (quote asset -> the paper
+                // book's currency). Without a real rate (and no factor from one earlier
+                // in this run) the pair is marked but not matched on this poll — never
+                // filled at 1:1; its orders stay armed for the next poll.
+                if (PaperMarkService::fill_fx_ready(portfolio_id, ticker.symbol, QStringLiteral("CRYPTO"))) {
+                    OrderMatcher::instance().check_orders(ticker.symbol, pd, portfolio_id);
+                    OrderMatcher::instance().check_sl_tp_triggers(portfolio_id, ticker.symbol, ticker.last);
+                }
                 pt_update_position_price(portfolio_id, ticker.symbol, ticker.last);
             }
         }
@@ -246,6 +253,9 @@ QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QStrin
 QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type, const QString& query) {
     return active_session()->fetch_markets(type, query);
 }
+MarketInfo ExchangeService::fetch_market(const QString& symbol) {
+    return active_session()->fetch_market(symbol);
+}
 
 QStringList ExchangeService::list_exchange_ids() {
     // Exchange-agnostic daemon call — list_exchange_ids returns the ccxt
@@ -278,14 +288,6 @@ OpenInterestData ExchangeService::fetch_open_interest(const QString& symbol) {
 QJsonObject ExchangeService::fetch_balance() {
     return active_session()->fetch_balance();
 }
-QJsonObject ExchangeService::place_exchange_order(const QString& symbol, const QString& side, const QString& type,
-                                                  double amount, double price, double stop_price, double sl, double tp,
-                                                  bool reduce_only) {
-    return active_session()->place_exchange_order(symbol, side, type, amount, price, stop_price, sl, tp, reduce_only);
-}
-QJsonObject ExchangeService::cancel_exchange_order(const QString& order_id, const QString& symbol) {
-    return active_session()->cancel_exchange_order(order_id, symbol);
-}
 QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
     return active_session()->fetch_positions_live(symbol);
 }
@@ -297,12 +299,6 @@ QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
 }
 QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
     return active_session()->fetch_trading_fees(symbol);
-}
-QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
-    return active_session()->set_leverage(symbol, leverage);
-}
-QJsonObject ExchangeService::set_margin_mode(const QString& symbol, const QString& mode) {
-    return active_session()->set_margin_mode(symbol, mode);
 }
 MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
     return active_session()->fetch_mark_price(symbol);

@@ -43,6 +43,7 @@ class MetaApiBroker : public IBroker {
             .supports_intraday = true,
             .supports_bracket_order = false,
             .supports_cover_order = false,
+            .supports_bracket_sl_tp = true, // place_order sends stopLoss / takeProfit
             .has_native_paper = true,
             .default_paper_balance = 10000.0,
             .default_watchlist = {"EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "US30", "NAS100", "SPX500"},

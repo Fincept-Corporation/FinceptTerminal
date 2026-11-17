@@ -468,7 +468,7 @@ def _build_healthcare_standard_output(analysis: dict, sector: str) -> dict:
             insights.append("Cash runway below 18 months — financing risk is elevated; near-term dilution likely.")
         else:
             insights.append(f"Cash runway of {vm['cash_runway_months']:.0f} months provides adequate operational buffer.")
-        insights.append(f"Risk-adjusted NPV estimate: ${vm['rnpv_estimate']:.0f}M based on lead program phase {analysis.get('lead_program_phase', 1)}.")
+        insights.append(f"Risk-adjusted NPV estimate: ${vm['rnpv_estimate'] / 1e6:,.0f}M based on lead program phase {analysis.get('lead_program_phase', 1)}.")
 
     elif sector == 'devices':
         vm = {
@@ -523,6 +523,18 @@ def _svc_num(p, *keys, default=None):
     return default
 
 
+def _svc_require(data, sector, keys):
+    """A sector's own inputs are required: never stand in an assumption for a missing one
+    (it would come back as if it were a result)."""
+    import json
+    import sys
+    missing = [k for k in keys if _svc_num(data, k) is None]
+    if missing:
+        print(json.dumps({"success": False,
+                          "error": f"{sector}: {', '.join(missing)} required"}))
+        sys.exit(1)
+
+
 def _service_argv(argv):
     import json
     if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
@@ -535,8 +547,6 @@ def _service_argv(argv):
         return argv
     data = dict(p)
     sector = str(data.pop("sector", "pharma"))
-    revenue = _svc_num(data, "revenue", default=0.0)
-    margin = _svc_num(data, "ebitda_margin", default=None)
     # Key names the native helpers read.
     for src, dst in (("pipeline_npv", "pipeline_value"), ("rd_spend", "r_and_d_spend"),
                      ("phase3_candidates", "phase3_count")):
@@ -549,11 +559,13 @@ def _service_argv(argv):
             data[key] = v * 100.0
     low = sector.lower()
     if "biotech" in low:
-        data.setdefault("cash_position", revenue)
-        data.setdefault("burn_rate", _svc_num(data, "r_and_d_spend", default=0.0) / 12.0)
+        # Biotech inputs: cash_position, burn_rate (per month), pipeline_value, lead_program_phase,
+        # platform_value, partnership_revenue.
+        _svc_require(data, sector, ("cash_position", "burn_rate", "pipeline_value"))
     elif "device" in low:
-        # No gross margin field on the panel: assume it sits ~30 points above EBITDA margin.
-        data.setdefault("gross_margin", min((margin if margin is not None else 0.25) + 0.30, 0.90))
+        # Device inputs: revenue, gross_margin (fraction), clinical_evidence_strength, fda_clearances,
+        # reimbursement_coverage, installed_base, recurring_revenue_pct.
+        _svc_require(data, sector, ("revenue", "gross_margin"))
     return [argv[0], "healthcare", sector, json.dumps(data)]
 # ---- service ABI shim (MAAnalyticsService) END ----
 

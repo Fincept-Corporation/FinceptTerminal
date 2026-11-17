@@ -260,27 +260,63 @@ QWidget* DocsScreen::page_node_editor() {
 
 QWidget* DocsScreen::page_code_editor() {
     return make_page(
-        tr("CODE EDITOR"), tr("Fincept Notebook — Jupyter-style Python notebooks inside the terminal"),
+        tr("CODE EDITOR"), tr("Fincept Notebook — Python research notebooks with a live kernel"),
         {
-            {tr("OVERVIEW"), tr("The Code Editor is a notebook: code and markdown cells saved as standard .ipynb "
-                                "files. A LIBRARY of prebuilt finance, economics, trading, portfolio and quant "
-                                "notebooks opens as editable copies.")},
-            {tr("RUNNING CELLS"), tr("■  Ctrl+Enter runs a cell, Shift+Enter runs it and moves on, Ctrl+Shift+Enter "
-                                     "runs the whole notebook top to bottom and stops at the first error\n"
+            {tr("OVERVIEW"), tr("The Code tab is a research notebook: code and text (markdown) cells saved as "
+                                "standard .ipynb files. Each notebook has one persistent Python kernel, so the "
+                                "variables a cell creates are there for the next cell, as in Jupyter. DataFrames "
+                                "show as sortable tables and matplotlib charts appear inline. Opening a notebook "
+                                "shows its saved outputs and never runs anything — running is always your action.")},
+            {tr("START"), tr("■  With no notebook open the editor shows the start page: NEW NOTEBOOK, OPEN…, "
+                             "your recent notebooks and the templates as cards (featured first)\n"
+                             "■  Templates cover finance, economics, trading, portfolio and quant work; opening one "
+                             "makes your own copy and runs nothing. LIVE DATA marks templates that download market "
+                             "data\n"
+                             "■  A notebook you had not saved when the terminal closed is offered back with RESTORE")},
+            {tr("LAYOUT"), tr("■  COMMAND BAR — the notebook name (● when unsaved), NEW / OPEN / SAVE ▾ (save as, "
+                              "export as .py or as an HTML page with outputs, close), RUN, RUN ALL, STOP, RESTART, "
+                              "INSERT ▾, find, and the kernel badge: Python version · environment · state (OFF, "
+                              "STARTING, IDLE, BUSY, or PYTHON NOT SET UP)\n"
+                              "■  RAIL (Ctrl+B) — LIBRARY: recent notebooks, templates by category and your own "
+                              "notebooks, with a preview and OPEN; OUTLINE: text headings and code cells, click to "
+                              "jump; VARIABLES: name, type, shape and value of everything in the kernel, "
+                              "double-click to see it in the inspector\n"
+                              "■  INSPECTOR (Ctrl+Shift+I) — HELP: the signature and docstring of the name under "
+                              "the cursor, from the live kernel (Ctrl+I); OUTPUT: one table, figure or long text "
+                              "shown large; HISTORY: every run of this session with its time, duration and outcome\n"
+                              "■  STATUS BAR — kernel · environment · last run · cells · cursor · save state · "
+                              "file path")},
+            {tr("RUNNING CELLS"), tr("■  Ctrl+Enter runs the cell, Shift+Enter runs it and selects the next, "
+                                     "Alt+Enter runs it and inserts a cell below, Ctrl+Shift+Enter runs every code "
+                                     "cell top to bottom and stops at the first error\n"
+                                     "■  RUN ▾ also runs all above or all below the selected cell, or restarts the "
+                                     "kernel and runs all\n"
                                      "■  Output streams into the cell while it runs; the value of the last line is "
-                                     "shown like in Jupyter; errors show a traceback\n"
-                                     "■  STOP (or Esc) interrupts running cells; a cell that passes the LIMIT is "
-                                     "stopped with TimeoutError\n"
-                                     "■  Each cell runs in its own process — variables do not carry over between "
-                                     "cells, so define what a cell needs inside it")},
-            {tr("ENVIRONMENTS"), tr("■  PY · NUMPY2 — the default analytics environment (pandas, numpy, scipy, "
+                                     "shown as in Jupyter; an error shows its traceback\n"
+                                     "■  STOP (I, I) interrupts the running cell and cancels the queued ones; "
+                                     "RESTART (0, 0) starts a fresh session and clears the variables; a cell that "
+                                     "passes the time limit per cell (kernel menu) is stopped")},
+            {tr("EDITING"), tr("■  Command mode (Esc) / edit mode (Enter), as in Jupyter: Up / Down or K / J select "
+                               "a cell, A / B insert above / below, D, D deletes (Z brings it back), X / C / V cut, "
+                               "copy and paste, M / Y switch text / code, O hides the output, L shows line numbers, "
+                               "Alt+Up / Alt+Down move the cell, F2 renames it\n"
+                               "■  Tab or Ctrl+Space completes names from the live kernel, Ctrl+/ comments lines, "
+                               "Ctrl+F finds in the notebook\n"
+                               "■  INSERT ▾ adds ready-made data snippets: load prices for a symbol, plot the "
+                               "series, a returns & risk table, call a data connector, read a CSV — inserting runs "
+                               "nothing\n"
+                               "■  ⋯ ▾ → Keyboard shortcuts lists every key in the inspector")},
+            {tr("ENVIRONMENTS"), tr("■  NUMPY2 — the default analytics environment (pandas, numpy 2, scipy, "
                                     "statsmodels, yfinance, …)\n"
-                                    "■  PY · NUMPY1 — vectorbt, backtesting.py, zipline, bt, ffn, PyPortfolioOpt, "
-                                    "financepy\n"
-                                    "■  The choice is saved with the notebook; relative file paths resolve against "
-                                    "the notebook's folder")},
-            {tr("FILES"), tr("■  NEW / OPEN / SAVE (Ctrl+N / Ctrl+O / Ctrl+S); outputs are saved in the .ipynb\n"
-                             "■  Saved notebooks appear in the File Manager")},
+                                    "■  NUMPY1 — vectorbt, backtesting.py, bt, ffn, PyPortfolioOpt\n"
+                                    "■  Pick it from the kernel badge; the choice is saved with the notebook and "
+                                    "relative file paths resolve against the notebook's folder")},
+            {tr("FILES"), tr("■  NEW / OPEN / SAVE (Ctrl+N / Ctrl+O / Ctrl+S, Ctrl+Shift+S saves as); outputs "
+                             "are saved in the .ipynb\n"
+                             "■  Autosave (on by default, ⋯ menu) writes a saved notebook back to its file every "
+                             "minute; a notebook not saved yet is kept as a recovery copy\n"
+                             "■  Notebooks saved in the terminal's file storage appear in the File Manager, which "
+                             "opens .ipynb files back in this tab")},
         });
 }
 
@@ -451,17 +487,20 @@ QWidget* DocsScreen::page_relationship_map() {
 
 QWidget* DocsScreen::page_agent_workbench() {
     return make_page(
-        tr("AGENT WORKBENCH"), tr("Run Claude Code and Codex agents locally, wired to the terminal's tools"),
+        tr("AGENT CONFIG › RUNS"), tr("Run Claude Code and Codex agents locally, wired to the terminal's tools"),
         {
-            {tr("OVERVIEW"), tr("The Agent Workbench runs Claude Code or OpenAI Codex CLI agents on this machine as "
-                                "background tasks that use the terminal's own tools over MCP. Runs keep going "
-                                "when the screen is closed.")},
-            {tr("TABS"), tr("■  RUN — write a task and follow the live transcript\n"
-                            "■  RUNS — history of every run, sortable and filterable\n"
+            {tr("OVERVIEW"), tr("The Runs area of Agent Config (formerly the Agent Workbench) runs Claude Code or "
+                                "OpenAI Codex CLI agents on this machine as background tasks that use the "
+                                "terminal's own tools over MCP. Runs keep going when the screen is closed. Find it "
+                                "in Agent Config under RUN (Alt+2) and CONNECT (Alt+3).")},
+            {tr("TABS"), tr("■  RUNS — every run of every engine (coding agents, agentic tasks, chat) in one list\n"
+                            "■  NEW RUN — write a task and follow the live transcript\n"
                             "■  SCHEDULES — recurring runs (e.g. a morning brief)\n"
-                            "■  CONNECT — the terminal's MCP server and setup for standalone agents (Claude Code, "
-                            "Codex, Cursor, Claude Desktop), with an activity log")},
-            {tr("SETUP"), tr("■  Install the Claude Code or Codex CLI; set its path and the workspace under SETTINGS\n"
+                            "■  HARNESSES — the coding agents the terminal supports: paths, default models, "
+                            "sign-in\n"
+                            "■  CONNECT — the terminal's MCP server for standalone agents")},
+            {tr("SETUP"), tr("■  Install the Claude Code or Codex CLI; set its path on HARNESSES and the workspace "
+                             "folder under SETTINGS\n"
                              "■  Agents call the same tools AI Chat uses; actions that change data ask first")},
         });
 }
@@ -471,14 +510,19 @@ QWidget* DocsScreen::page_file_manager() {
         tr("FILE MANAGER"), tr("Everything the terminal has saved for you, in one place"),
         {
             {tr("OVERVIEW"), tr("The File Manager lists the files the terminal tracks — exports, backtest results, "
-                                "notebooks, connector configurations and files you imported — with a quota bar "
-                                "showing how much storage they use.")},
-            {tr("KEY FEATURES"), tr("■  Filter chips by the tool that created a file, and sort by date\n"
-                                    "■  Click a file card for an inline preview\n"
-                                    "■  Import copies your own files into terminal storage; SAVE exports one back out\n"
-                                    "■  Select several files for bulk delete (you are asked to confirm)\n"
-                                    "■  Open a file in the screen that understands it — for example a notebook in "
-                                    "the Code Editor")},
+                                "notebooks, connector configurations and files you uploaded — in one sortable "
+                                "table, with a storage bar showing how much space they use (a guideline only: the "
+                                "terminal never deletes your files).")},
+            {tr("KEY FEATURES"), tr("■  Search by name, type or source, filter chips by the tool that created a "
+                                    "file, sort by any column (newest first by default)\n"
+                                    "■  The newest file is previewed when the screen opens; click any file for an "
+                                    "inline preview — text and JSON as text, CSV as a table; other files offer "
+                                    "the app that opens them\n"
+                                    "■  UPLOAD FILES copies your own files into terminal storage; right-click → "
+                                    "Save a Copy exports one back out\n"
+                                    "■  Select several files for bulk delete (you are asked to confirm); F2 renames\n"
+                                    "■  Open a file in the screen that understands it — a notebook in the Code "
+                                    "Editor, a spreadsheet in Excel, a .fincept report in the Report Builder")},
         });
 }
 

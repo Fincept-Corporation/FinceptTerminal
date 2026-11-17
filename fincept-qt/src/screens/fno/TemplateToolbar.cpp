@@ -17,7 +17,9 @@ using namespace fincept::ui;
 
 TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoTemplateToolbar");
-    setFixedHeight(28);
+    // 28px tall at the default font size; grows with larger fonts instead of clipping.
+    setMinimumHeight(28);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     auto* lay = new QHBoxLayout(this);
     lay->setContentsMargins(8, 0, 8, 0);
@@ -50,7 +52,8 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     width_spin_->setObjectName("fnoToolbarSpin");
     width_spin_->setRange(1, 10);
     width_spin_->setValue(1);
-    width_spin_->setFixedWidth(50);
+    width_spin_->setMinimumWidth(50);
+    width_spin_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     lay->addWidget(width_spin_);
 
     shift_label_ = new QLabel(tr("S:"), this);
@@ -60,7 +63,8 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     shift_spin_->setObjectName("fnoToolbarSpin");
     shift_spin_->setRange(-20, 20);
     shift_spin_->setValue(0);
-    shift_spin_->setFixedWidth(50);
+    shift_spin_->setMinimumWidth(50);
+    shift_spin_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     lay->addWidget(shift_spin_);
 
     lots_label_ = new QLabel(tr("L:"), this);
@@ -70,7 +74,8 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     lots_spin_->setObjectName("fnoToolbarSpin");
     lots_spin_->setRange(1, 100);
     lots_spin_->setValue(1);
-    lots_spin_->setFixedWidth(50);
+    lots_spin_->setMinimumWidth(50);
+    lots_spin_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     lay->addWidget(lots_spin_);
 
     lay->addStretch(1);
@@ -88,16 +93,16 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     lay->addWidget(use_btn_);
 
     setStyleSheet(QString("#fnoTemplateToolbar { background:%1; border-bottom:1px solid %2; }"
-                          "#fnoToolbarLabel { color:%3; font-size:9px; font-weight:700; "
+                          "#fnoToolbarLabel { color:%3; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; "
                           "  letter-spacing:0.6px; background:transparent; }"
                           "#fnoToolbarCombo { background:%4; color:%5; border:1px solid %2; "
-                          "  padding:1px 4px; font-size:11px; min-width:200px; }"
+                          "  padding:1px 4px; font-size:" + fincept::ui::fonts::px(-3) + "px; min-width:200px; }"
                           "#fnoToolbarCombo QAbstractItemView { background:%4; color:%5; "
-                          "  border:1px solid %2; selection-background-color:%6; }"
+                          "  border:1px solid %2; selection-background-color:%6; selection-color:%5; }"
                           "#fnoToolbarSpin { background:%4; color:%5; border:1px solid %2; "
-                          "  padding:1px 4px; font-size:11px; }"
+                          "  padding:1px 4px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                           "#fnoToolbarAccentBtn { background:%1; color:%7; border:1px solid %2; "
-                          "  padding:2px 10px; font-size:10px; font-weight:700; }"
+                          "  padding:2px 10px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                           "#fnoToolbarAccentBtn:hover { background:%6; color:%5; }")
                       .arg(colors::BG_RAISED(),      // %1
                            colors::BORDER_DIM(),     // %2

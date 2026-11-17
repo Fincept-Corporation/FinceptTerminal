@@ -31,7 +31,10 @@ def calculate_black_greeks(S: float, K: float, t: float, r: float, sigma: float,
     }
 
 def calculate_black_iv(price: float, S: float, K: float, t: float, r: float, flag: str) -> Dict:
-    iv = implied_volatility(price, S, K, t, r, flag)
+    # py_vollib.black.implied_volatility takes (discounted_option_price, F, K, r, t, flag):
+    # r BEFORE t, unlike black() and the black_scholes / bsm solvers. Passing (t, r)
+    # solved for the wrong rate and maturity (0.7848 instead of 0.25 on a 0.25-vol price).
+    iv = implied_volatility(price, S, K, r, t, flag)
     return {
         'implied_volatility': float(iv),
         'price': price,

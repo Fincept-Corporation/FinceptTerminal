@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "(any ACP agent: session/update notifications + the session/prompt response)",
+  "source": "docs",
+  "url": "https://agentclientprotocol.com/protocol/schema",
+  "note": "Transcribed from the ACP schema (SessionNotification, SessionUpdate variants, ToolCallContent diff, PromptResponse, Usage); not a recording."
+}

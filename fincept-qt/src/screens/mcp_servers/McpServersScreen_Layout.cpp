@@ -10,6 +10,7 @@
 #include "screens/mcp_servers/McpServersScreen.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -31,6 +32,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
@@ -60,7 +62,7 @@ using namespace fincept::ui;
 QWidget* McpServersScreen::create_header() {
     auto* bar = new QWidget(this);
     bar->setObjectName("mcpHeader");
-    bar->setFixedHeight(44);
+    bar->setMinimumHeight(44);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
@@ -118,7 +120,19 @@ QWidget* McpServersScreen::create_marketplace_view() {
 
     // Category sidebar
     auto* sidebar = new QWidget(this);
-    sidebar->setFixedWidth(130);
+    // Wide enough for the longest category name in bold at the user's font size.
+    const QStringList cat_names = {tr("  CATEGORY"), tr("ALL"), tr("UTILITIES"), tr("DEVELOPER"), tr("DATABASE")};
+    const auto fit_sidebar = [sidebar, cat_names]() {
+        const QFontMetrics fm(ui::fonts::font(0, QFont::Bold));
+        int w = 0;
+        for (const QString& n : cat_names)
+            w = qMax(w, fm.horizontalAdvance(n));
+        sidebar->setFixedWidth(qMax(130, w + 32));
+    };
+    fit_sidebar();
+    // A size from font metrics: re-fitted once the appearance has settled (never
+    // inside theme_changed, where a geometry change activates layouts mid-restyle).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, sidebar, fit_sidebar);
     auto* svl = new QVBoxLayout(sidebar);
     svl->setContentsMargins(0, 0, 0, 0);
     svl->setSpacing(0);
@@ -126,7 +140,7 @@ QWidget* McpServersScreen::create_marketplace_view() {
     // Category sidebar header (text set in retranslateUi)
     cat_header_lbl_ = new QLabel;
     cat_header_lbl_->setObjectName("mcpStatusText");
-    cat_header_lbl_->setFixedHeight(32);
+    cat_header_lbl_->setMinimumHeight(32);
     cat_header_lbl_->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
     svl->addWidget(cat_header_lbl_);
 
@@ -153,7 +167,7 @@ QWidget* McpServersScreen::create_marketplace_view() {
     // Vertical separator
     auto* vsep = new QFrame;
     vsep->setFrameShape(QFrame::VLine);
-    vsep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM()));
+    vsep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_MED()));
     hl->addWidget(vsep);
 
     // Card scroll area
@@ -198,7 +212,7 @@ QWidget* McpServersScreen::create_installed_view() {
     add_server_btn_ = new QPushButton;
     add_server_btn_->setObjectName("addSrvBtn");
     add_server_btn_->setCursor(Qt::PointingHandCursor);
-    add_server_btn_->setFixedHeight(38);
+    add_server_btn_->setMinimumHeight(38);
     add_server_btn_->setAccessibleName(tr("Add a custom MCP server"));
     connect(add_server_btn_, &QPushButton::clicked, this, &McpServersScreen::on_add_server);
     vl->addWidget(add_server_btn_);
@@ -215,7 +229,7 @@ QWidget* McpServersScreen::create_tools_view() {
     vl->setSpacing(0);
 
     auto* toolbar = new QWidget(this);
-    toolbar->setFixedHeight(32);
+    toolbar->setMinimumHeight(32);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(12, 0, 12, 0);
     // Toolbar label (text set in retranslateUi)
@@ -246,7 +260,7 @@ QWidget* McpServersScreen::create_tools_view() {
 QWidget* McpServersScreen::create_status_bar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("mcpStatusBar");
-    bar->setFixedHeight(26);
+    bar->setMinimumHeight(26);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
     // Screen label + active-view label (text set in retranslateUi)
@@ -286,11 +300,15 @@ void McpServersScreen::populate_marketplace() {
     for (const auto& s : McpManager::instance().get_servers())
         installed_ids.insert(s.id);
 
-    // Clear old content (keep stretch at end)
+    // Clear old content (keep stretch at end; the empty state is reused, not deleted)
     while (mkt_cards_layout_->count() > 1) {
         auto* item = mkt_cards_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
+        if (QWidget* w = item->widget()) {
+            if (w == mkt_empty_)
+                w->hide();
+            else
+                w->deleteLater();
+        }
         delete item;
     }
 
@@ -307,10 +325,32 @@ void McpServersScreen::populate_marketplace() {
     }
 
     if (matched.isEmpty()) {
-        auto* empty = new QLabel(tr("No servers match the current filter."));
-        empty->setObjectName("mktCardDesc");
-        empty->setAlignment(Qt::AlignCenter);
-        mkt_cards_layout_->insertWidget(0, empty);
+        if (!mkt_empty_) {
+            mkt_empty_ = new ui::EmptyState(mkt_cards_widget_);
+            connect(mkt_empty_, &ui::EmptyState::primary_clicked, this, [this]() {
+                // Back to the whole catalogue.
+                if (mkt_cat_list_ && mkt_cat_list_->currentRow() != 0) {
+                    const QSignalBlocker block(mkt_cat_list_);
+                    mkt_cat_list_->setCurrentRow(0);
+                }
+                if (search_input_ && !search_input_->text().isEmpty())
+                    search_input_->clear(); // textChanged -> on_search_changed -> populate
+                else
+                    populate_marketplace();
+            });
+        }
+        const QString where = mkt_cat_list_ && mkt_cat_list_->currentItem() && !filter.isEmpty()
+                                  ? mkt_cat_list_->currentItem()->text().trimmed()
+                                  : tr("the marketplace");
+        ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+            tr("No servers match"),
+            search.isEmpty() ? tr("Nothing is listed under %1 yet.").arg(where)
+                             : tr("Nothing in %1 matches \"%2\".").arg(where, search),
+            tr("SHOW ALL SERVERS"));
+        spec.glyph = QStringLiteral("⌕");
+        mkt_empty_->apply(spec);
+        mkt_cards_layout_->insertWidget(0, mkt_empty_);
+        mkt_empty_->show();
         return;
     }
 
@@ -352,7 +392,7 @@ void McpServersScreen::populate_marketplace() {
             auto* desc_lbl = new QLabel(e.description);
             desc_lbl->setObjectName("mktCardDesc");
             desc_lbl->setWordWrap(true);
-            desc_lbl->setMaximumHeight(42); // ~2 lines
+            desc_lbl->setMaximumHeight(2 * QFontMetrics(ui::fonts::font()).lineSpacing() + 8); // ~2 lines
             vl->addWidget(desc_lbl);
 
             vl->addStretch(1);
@@ -400,7 +440,7 @@ void McpServersScreen::populate_marketplace() {
                 auto* add_btn = new QPushButton(tr("ADD"));
                 add_btn->setObjectName("mktAddBtn");
                 add_btn->setCursor(Qt::PointingHandCursor);
-                add_btn->setFixedWidth(56);
+                add_btn->setMinimumWidth(56);
                 add_btn->setAccessibleName(tr("Add %1").arg(e.name));
                 connect(add_btn, &QPushButton::clicked, this, [this, i]() { on_install_server(i); });
                 bottom->addWidget(add_btn);
@@ -490,7 +530,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     auto* toggle_btn = new QPushButton(running ? tr("● ENABLED") : (starting ? tr("⟳ STARTING...") : tr("○ DISABLED")));
     toggle_btn->setObjectName(running ? "cardToggleOn" : "cardToggleOff");
     toggle_btn->setCursor(Qt::PointingHandCursor);
-    toggle_btn->setFixedWidth(110);
+    toggle_btn->setMinimumWidth(110);
     toggle_btn->setAccessibleName(running ? tr("Stop %1").arg(s.name) : tr("Start %1").arg(s.name));
     if (starting)
         toggle_btn->setEnabled(false);

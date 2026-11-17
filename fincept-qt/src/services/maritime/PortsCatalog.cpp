@@ -261,14 +261,14 @@ void PortsCatalog::fetch_wikidata_by_name(const QString& query, int limit, const
         }
         auto rows = parse_wikidata_response(reply->readAll());
         if (rows.isEmpty()) {
-            LOG_INFO("PortsCatalog", QString("Wikidata empty for '%1' — trying Marine Regions").arg(query));
+            LOG_DEBUG("PortsCatalog", QString("Wikidata empty for '%1' — trying Marine Regions").arg(query));
             self->fetch_marineregions_by_name(query, limit, context);
             return;
         }
         const QString cache_key = cache_key_for("name", query.toLower() + ":" + QString::number(limit));
         fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
                                               kCacheTtlSec, "maritime");
-        LOG_INFO("PortsCatalog", QString("Wikidata: %1 ports for '%2'").arg(rows.size()).arg(query));
+        LOG_DEBUG("PortsCatalog", QString("Wikidata: %1 ports for '%2'").arg(rows.size()).arg(query));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)
             publish_ports_to_hub(QStringLiteral("maritime:ports:") + context, QVariant::fromValue(rows));
@@ -324,7 +324,7 @@ void PortsCatalog::fetch_wikidata_by_bbox(double min_lat, double max_lat, double
         // OSM. The two sources are merged client-side; dedup is done by
         // (rounded-coord, lower-name) below.
         if (rows.size() < 3) {
-            LOG_INFO("PortsCatalog", QString("Wikidata bbox sparse (%1) — supplementing with OSM").arg(rows.size()));
+            LOG_DEBUG("PortsCatalog", QString("Wikidata bbox sparse (%1) — supplementing with OSM").arg(rows.size()));
             // The Wikidata rows ride along as the seed: the Overpass callback merges
             // them with the OSM hits (dedup by name / proximity) and writes the merged
             // blob. They used to be discarded, so a bbox with 2 Wikidata ports and an
@@ -336,7 +336,7 @@ void PortsCatalog::fetch_wikidata_by_bbox(double min_lat, double max_lat, double
             "bbox", QStringLiteral("%1,%2,%3,%4,%5").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng).arg(limit));
         fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
                                               kCacheTtlSec, "maritime");
-        LOG_INFO("PortsCatalog", QString("Wikidata: %1 ports in bbox").arg(rows.size()));
+        LOG_DEBUG("PortsCatalog", QString("Wikidata: %1 ports in bbox").arg(rows.size()));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)
             publish_ports_to_hub(QStringLiteral("maritime:ports:") + context, QVariant::fromValue(rows));
@@ -403,7 +403,7 @@ void PortsCatalog::fetch_marineregions_by_name(const QString& query, int limit, 
             fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
                                                   kCacheTtlSec, "maritime");
         }
-        LOG_INFO("PortsCatalog", QString("MarineRegions: %1 ports for '%2'").arg(rows.size()).arg(query));
+        LOG_DEBUG("PortsCatalog", QString("MarineRegions: %1 ports for '%2'").arg(rows.size()).arg(query));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)
             publish_ports_to_hub(QStringLiteral("maritime:ports:") + context, QVariant::fromValue(rows));
@@ -528,7 +528,7 @@ void PortsCatalog::fetch_overpass_by_bbox(double min_lat, double max_lat, double
             fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
                                                   kCacheTtlSec, "maritime");
         }
-        LOG_INFO("PortsCatalog", QString("Overpass: %1 ports in bbox").arg(rows.size()));
+        LOG_DEBUG("PortsCatalog", QString("Overpass: %1 ports in bbox").arg(rows.size()));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)
             publish_ports_to_hub(QStringLiteral("maritime:ports:") + context, QVariant::fromValue(rows));
@@ -566,7 +566,7 @@ void PortsCatalog::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("maritime:ports:*"), policy);
 
     hub_registered_ = true;
-    LOG_INFO("PortsCatalog", "Registered with DataHub (maritime:ports:*)");
+    LOG_DEBUG("PortsCatalog", "Registered with DataHub (maritime:ports:*)");
 }
 
 } // namespace fincept::services::maritime

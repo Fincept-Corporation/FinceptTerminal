@@ -6,6 +6,7 @@
 #include "SurfaceDemoData.h"
 #include "SurfaceTypes.h"
 #include "core/symbol/IGroupLinked.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/databento/DatabentoService.h"
 
@@ -21,6 +22,16 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <memory>
+
+namespace fincept::services::options::market {
+struct FreeChain;
+}
+
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::surface {
 
 class Surface3DWidget;
@@ -29,7 +40,10 @@ class SurfaceLineWidget;
 class SurfaceControlPanel;
 class SurfaceDataInspector;
 
-class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefulScreen, public fincept::IGroupLinked {
+class SurfaceAnalyticsScreen : public QWidget,
+                               public fincept::screens::IStatefulScreen,
+                               public fincept::IGroupLinked,
+                               public fincept::screens::ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
@@ -39,6 +53,13 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     QVariantMap save_state() const override;
     QString state_key() const override { return "surface_analytics"; }
     int state_version() const override { return 1; }
+
+    /// ISectionLinked — a category: equity_deriv fixed_income fx credit commodities risk macro (also
+    /// "category:<id>"); a surface: "surface:<id>" (vol delta gamma vega theta skew local_vol
+    /// yield_curve … policy_path, see the table in SurfaceAnalyticsScreen.cpp; "<category>/<id>" too).
+    /// The category / surface buttons' click path. focus = underlying symbol, applied as a linked
+    /// symbol (no Databento FETCH; an option surface loads its free delayed chain as on a click).
+    bool open_section(const QString& section, const QString& focus) override;
 
     // IGroupLinked — subscribe-only. Equity group changes are forwarded to
     // the SurfaceControlPanel which becomes the new symbol of record; demo data
@@ -108,6 +129,30 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     /// to put DEMO back.
     void sync_synthetic_badge();
 
+    // ── Free delayed option chain (class B: public Cboe quotes, Yahoo fallback) ──
+    // The six option surfaces (Volatility, Delta, Gamma, Vega, Theta, Skew) open on
+    // the underlying's delayed listed chain instead of the synthetic sample:
+    // FreeOptionChainService (cached in memory and on disk, "as of" = the quote
+    // time) through the app-wide AutoLoadGate, visible screen only, cancelled on
+    // hide. The banner says DELAYED with the source and time. Databento (FETCH)
+    // stays the paid, fuller source.
+    /// Next turn: maybe_load_free_chain() (after the surface / symbol settles).
+    void schedule_free_chain();
+    void maybe_load_free_chain();
+    /// `user_run` (REFRESH) bypasses the gate and the 5-minute memory copy.
+    void start_free_chain(bool user_run);
+    void apply_free_chain(const std::shared_ptr<const fincept::services::options::market::FreeChain>& chain);
+    void release_free_gate();
+    /// The strip above the chart: DELAYED (free chain) / loading / SAMPLE (+ why and
+    /// where real data comes from) / hidden (Databento or CSV data on screen).
+    void update_source_banner();
+    /// True when the option surface on screen is still sample data because the free
+    /// delayed feed has no chain for the current underlying (free_failed_symbol_).
+    bool free_failure_applies() const;
+    /// The designed page in place of the chart for that case ("No listed options for
+    /// X", BACK TO the last underlying whose chain loaded, RETRY). True when shown.
+    bool show_free_failure_page();
+
     QString current_symbol_or_default() const;
     float spot_for(const QString& sym) const;
     /// True when `sym` has a REAL quote (subscribed cache or hub) - i.e. spot_for()
@@ -137,6 +182,10 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     SurfaceTableWidget* surface_table_ = nullptr;
     SurfaceLineWidget* surface_line_ = nullptr;
     QStackedWidget* view_stack_ = nullptr;
+    /// Page 3 of view_stack_: no free delayed chain for the underlying (show_free_failure_page).
+    fincept::ui::EmptyState* chain_state_ = nullptr;
+    /// Underlying its primary button opens (BACK TO / OPEN); empty = the button retries.
+    QString chain_state_back_;
     /// Always-visible banner directly above the chart, shown whenever the
     /// surface on screen is SurfaceDemoData's rand() output. The control
     /// panel's DEMO badge lives inside the ASSET group box, which
@@ -188,6 +237,18 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     /// data rather than SurfaceDemoData's rand() output. Everything not in here
     /// is synthetic and must be badged DEMO. Cleared by load_demo_data().
     QSet<int> real_data_charts_;
+    /// The subset of real_data_charts_ filled from the free delayed chain (free_chain_).
+    QSet<int> free_charts_;
+    std::shared_ptr<const fincept::services::options::market::FreeChain> free_chain_;
+    quint64 free_req_ = 0;          ///< FreeOptionChainService request in flight (0 = none)
+    quint64 free_ticket_ = 0;       ///< AutoLoadGate ticket of the automatic load (0 = none)
+    bool free_queued_ = false;      ///< waiting for a gate slot
+    bool free_scheduled_ = false;
+    QString free_loading_symbol_;   ///< symbol being loaded ("" = none)
+    QString free_failed_symbol_;    ///< not retried automatically this session (REFRESH retries)
+    QString free_failed_message_;
+    QString free_failed_status_;    ///< no_options / bad_symbol / feed_unavailable / thin
+    QString free_good_symbol_;      ///< last underlying whose delayed chain loaded (BACK TO)
 
     // Symbol group link — SymbolGroup::None when unlinked.
     fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;

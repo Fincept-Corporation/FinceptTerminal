@@ -3,10 +3,13 @@
 #include "SurfaceDefaults.h"
 #include "services/databento/DatabentoService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/FlowLayout.h"
+#include "ui/widgets/symbol/SymbolSearchBox.h"
 
 #include <QComboBox>
 #include <QCompleter>
 #include <QDateEdit>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -33,7 +36,7 @@ namespace {
 
 QString section_title_qss() {
     return QString("QGroupBox { background:%1; border:1px solid %2; border-radius:3px; "
-                   "margin-top:10px; padding:10px 8px 8px 8px; color:%3; font-size:9px; "
+                   "margin-top:10px; padding:10px 8px 8px 8px; color:%3; font-size:" + fincept::ui::fonts::px(-5) + "px; "
                    "font-weight:bold; }"
                    "QGroupBox::title { subcontrol-origin:margin; subcontrol-position:top left; "
                    "left:10px; padding:0 4px; color:%4; }")
@@ -45,7 +48,7 @@ QString section_title_qss() {
 
 QString line_edit_qss() {
     return QString("QLineEdit { background:%1; color:%2; border:1px solid %3; "
-                   "padding:4px 6px; font-size:10px; border-radius:2px; }"
+                   "padding:4px 6px; font-size:" + fincept::ui::fonts::px(-4) + "px; border-radius:2px; }"
                    "QLineEdit:focus { border-color:%4; }")
         .arg(colors::BG_HOVER())
         .arg(colors::TEXT_PRIMARY())
@@ -55,7 +58,7 @@ QString line_edit_qss() {
 
 QString combo_qss() {
     return QString("QComboBox { background:%1; color:%2; border:1px solid %3; "
-                   "padding:3px 6px; font-size:10px; border-radius:2px; }"
+                   "padding:3px 6px; font-size:" + fincept::ui::fonts::px(-4) + "px; border-radius:2px; }"
                    "QComboBox::drop-down { border:none; width:18px; }"
                    "QComboBox QAbstractItemView { background:%1; color:%2; "
                    "selection-background-color:%4; }")
@@ -67,48 +70,64 @@ QString combo_qss() {
 
 QString small_btn_qss() {
     return QString("QToolButton, QPushButton { background:%1; color:%2; border:1px solid %3; "
-                   "padding:3px 8px; font-size:9px; border-radius:2px; }"
-                   "QToolButton:hover, QPushButton:hover { background:%3; color:%4; }"
+                   "padding:3px 8px; font-size:" + fincept::ui::fonts::px(-5) + "px; border-radius:2px; }"
+                   "QToolButton:hover, QPushButton:hover { background:%6; color:%4; }"
                    "QPushButton:disabled { background:%1; color:%5; border-color:%1; }")
         .arg(colors::BG_RAISED())
         .arg(colors::TEXT_SECONDARY())
         .arg(colors::BORDER_MED())
         .arg(colors::TEXT_PRIMARY())
-        .arg(colors::TEXT_DIM());
+        .arg(colors::TEXT_TERTIARY())
+        .arg(colors::BG_HOVER());
 }
 
 QString fetch_btn_qss(bool enabled) {
     if (!enabled) {
         return QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
-                       "padding:8px 12px; font-size:10px; font-weight:bold; border-radius:2px; }")
-            .arg(colors::BG_HOVER())
-            .arg(colors::TEXT_DIM())
+                       "padding:8px 12px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:bold; border-radius:2px; }")
+            .arg(colors::BG_SURFACE())
+            .arg(colors::TEXT_TERTIARY())
             .arg(colors::BORDER_DIM());
     }
-    return QString("QPushButton { background:rgba(31,77,153,255); color:%1; "
-                   "border:1px solid rgba(64,140,255,140); padding:8px 12px; "
-                   "font-size:10px; font-weight:bold; border-radius:2px; }"
-                   "QPushButton:hover { background:rgba(46,102,191,255); }")
-        .arg(colors::INFO());
+    return QString("QPushButton { background:%1; color:%2; "
+                   "border:1px solid %1; padding:8px 12px; "
+                   "font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:bold; border-radius:2px; }"
+                   "QPushButton:hover { background:%3; }")
+        .arg(colors::INFO())
+        .arg(colors::TEXT_ON_ACCENT())
+        .arg(colors::alpha(colors::INFO, 0.85));
 }
 
+/// Data-tier badge fill: live = good state, computed = informational,
+/// equities-derived = caution, demo = muted. Text on it is TEXT_ON_ACCENT.
 QColor tier_color(SurfaceTier t) {
     switch (t) {
         case SurfaceTier::LIVE:
-            return QColor(63, 185, 80);
+            return QColor(colors::SUCCESS());
         case SurfaceTier::COMPUTED:
-            return QColor(88, 166, 255);
+            return QColor(colors::INFO());
         case SurfaceTier::EQUITIES:
-            return QColor(217, 164, 6);
+            return QColor(colors::WARNING());
         case SurfaceTier::DEMO:
-            return QColor(140, 140, 140);
+            return QColor(colors::TEXT_TERTIARY());
     }
-    return QColor(140, 140, 140);
+    return QColor(colors::TEXT_TERTIARY());
 }
 
 void set_metric(QLabel* lbl, const QString& v) {
     if (lbl)
         lbl->setText(v);
+}
+
+/// Quick-pick underlying chip: the small button look, the picked one framed.
+QString sacp_chip_qss() {
+    return QString("QToolButton { background:%1; color:%2; border:1px solid %3; padding:2px 7px; "
+                   "font-size:%7px; border-radius:2px; }"
+                   "QToolButton:hover { background:%4; color:%5; }"
+                   "QToolButton:checked { background:%4; color:%5; border-color:%6; font-weight:bold; }")
+        .arg(colors::BG_RAISED(), colors::TEXT_SECONDARY(), colors::BORDER_MED(), colors::BG_HOVER(),
+             colors::TEXT_PRIMARY(), colors::INFO())
+        .arg(fincept::ui::fonts::px(-5));
 }
 
 } // anonymous namespace
@@ -132,8 +151,10 @@ SurfaceControlPanel::SurfaceControlPanel(QWidget* parent) : QWidget(parent) {
 
 void SurfaceControlPanel::setup_ui() {
     setStyleSheet(QString("background:%1; color:%2;").arg(colors::BG_BASE()).arg(colors::TEXT_PRIMARY()));
-    setMinimumWidth(300);
-    setMaximumWidth(360);
+    // 300..360px at the default font size, wider when the user's font needs it.
+    const int char_w = QFontMetrics(fonts::font(-4)).averageCharWidth();
+    setMinimumWidth(std::max(300, char_w * 54));
+    setMaximumWidth(std::max(360, char_w * 65));
 
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -141,7 +162,7 @@ void SurfaceControlPanel::setup_ui() {
 
     // ── Header ─────────────────────────────────────────────────────────────
     header_label_ = new QLabel(tr("CONTROL PANEL"), this);
-    header_label_->setStyleSheet(QString("background:%1; color:%2; font-size:10px; font-weight:bold; "
+    header_label_->setStyleSheet(QString("background:%1; color:%2; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:bold; "
                                          "padding:8px 10px; border-bottom:1px solid %3;")
                                      .arg(colors::BG_SURFACE())
                                      .arg(colors::TEXT_PRIMARY())
@@ -158,25 +179,25 @@ void SurfaceControlPanel::setup_ui() {
 
     providers_title_ = new QLabel(tr("DATA PROVIDERS"), providers_box_);
     providers_title_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:bold; letter-spacing:0.5px;").arg(colors::TEXT_DIM()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; letter-spacing:0.5px;").arg(colors::TEXT_DIM()));
     prov_layout->addWidget(providers_title_);
 
     auto add_provider_row = [&](const QString& key, const QString& label) {
         auto* row = new QHBoxLayout();
         row->setSpacing(5);
         auto* dot = new QLabel("●", providers_box_);
-        dot->setStyleSheet(QString("color:%1; font-size:11px;").arg(colors::TEXT_DIM()));
-        dot->setFixedWidth(10);
+        dot->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_DIM()));
+        dot->setFixedWidth(std::max(10, QFontMetrics(fonts::font(-3)).horizontalAdvance(QStringLiteral("●")) + 2));
         row->addWidget(dot);
         auto* name_lbl = new QLabel(label, providers_box_);
-        name_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:Consolas;").arg(colors::TEXT_PRIMARY()));
+        name_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(colors::TEXT_PRIMARY()));
         name_lbl->setMinimumWidth(80);
         row->addWidget(name_lbl);
         auto* state_lbl = new QLabel(tr("not configured"), providers_box_);
-        state_lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_DIM()));
+        state_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_DIM()));
         row->addWidget(state_lbl, 1);
         auto* detail_lbl = new QLabel("", providers_box_);
-        detail_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:Consolas;").arg(colors::TEXT_DIM()));
+        detail_lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_DIM()));
         row->addWidget(detail_lbl);
         prov_layout->addLayout(row);
         provider_dot_[key] = dot;
@@ -217,6 +238,7 @@ void SurfaceControlPanel::setup_ui() {
     auto* footer_layout = new QVBoxLayout(footer);
     footer_layout->setContentsMargins(8, 8, 8, 8);
     fetch_btn_ = new QPushButton(tr("FETCH"), footer);
+    fetch_btn_->setProperty("fincept_agent_risk", "spend"); // paid Databento request
     fetch_btn_->setStyleSheet(fetch_btn_qss(true));
     fetch_btn_->setMinimumHeight(34);
     fetch_btn_->setAccessibleName(tr("Fetch this surface from Databento"));
@@ -241,6 +263,9 @@ QGroupBox* SurfaceControlPanel::build_asset_section() {
     connect(symbol_edit_, &QLineEdit::editingFinished, this, &SurfaceControlPanel::on_symbol_edited);
     connect(symbol_edit_, &QLineEdit::textEdited, this, &SurfaceControlPanel::on_symbol_text_changed);
     l->addWidget(symbol_edit_);
+    // Option surfaces swap the plain field for the symbol picker + quick picks
+    // (apply_capability_visibility).
+    build_option_symbol_picker(gb, l);
 
     // ── Autocomplete model + completer (populated by Databento symbol_search) ─
     symbol_completer_model_ = new QStringListModel(this);
@@ -260,17 +285,21 @@ QGroupBox* SurfaceControlPanel::build_asset_section() {
     auto* row = new QHBoxLayout();
     row->setSpacing(6);
     dataset_lbl_ = new QLabel(tr("Dataset:"), gb);
-    dataset_lbl_->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_SECONDARY()));
+    dataset_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
     row->addWidget(dataset_lbl_);
     dataset_combo_ = new QComboBox(gb);
     dataset_combo_->setStyleSheet(combo_qss());
     connect(dataset_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &SurfaceControlPanel::on_dataset_changed);
+    // Each surface reads exactly one Databento dataset (SurfaceCapabilities.h) and the
+    // provider takes no dataset argument: shown for lineage, not editable.
+    dataset_combo_->setEnabled(false);
+    dataset_combo_->setToolTip(tr("Set by the selected surface — each surface reads one Databento dataset."));
     row->addWidget(dataset_combo_, 1);
     l->addLayout(row);
 
     spot_label_ = new QLabel(tr("Spot: —"), gb);
-    spot_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_DIM()));
+    spot_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_DIM()));
     l->addWidget(spot_label_);
 
     symbol_edit_->setAccessibleName(tr("Underlying symbol"));
@@ -280,12 +309,102 @@ QGroupBox* SurfaceControlPanel::build_asset_section() {
     tier_badge_ = new QLabel("DEMO", gb);
     tier_badge_->setAccessibleName(tr("Data tier"));
     tier_badge_->setAlignment(Qt::AlignCenter);
-    tier_badge_->setStyleSheet(QString("background:%1; color:#000; font-size:9px; font-weight:bold; "
-                                       "padding:2px 6px; border-radius:2px; max-width:80px;")
-                                   .arg(colors::TEXT_DIM()));
+    tier_badge_->setStyleSheet(QString("background:%1; color:%2; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; "
+                                       "padding:2px 6px; border-radius:2px;")
+                                   .arg(colors::TEXT_TERTIARY(), colors::TEXT_ON_ACCENT()));
     l->addWidget(tier_badge_, 0, Qt::AlignLeft);
 
     return gb;
+}
+
+void SurfaceControlPanel::build_option_symbol_picker(QWidget* parent, QVBoxLayout* layout) {
+    // Any US-listed stock / ETF / index through the terminal's symbol picker. The
+    // surfaces take the plain US ticker (an index without Yahoo's caret: ^GSPC -> SPX),
+    // which is also what the free delayed chain and Databento's OPRA feed list.
+    symbol_box_ = new fincept::ui::SymbolSearchBox(parent);
+    symbol_box_->set_compact(true);
+    symbol_box_->set_clear_on_pick(false);
+    symbol_box_->set_raw_text_allowed(true); // index roots the search may not know (XSP, DJX)
+    fincept::services::ResolveOptions ro;
+    ro.home_country = QStringLiteral("US");
+    ro.ctx.allowed_classes = {fincept::core::instrument::AssetClass::Equity,
+                              fincept::core::instrument::AssetClass::Etf,
+                              fincept::core::instrument::AssetClass::Index};
+    symbol_box_->set_options(ro);
+    // Shared with Derivatives and F&O: the same US option underlyings come back.
+    symbol_box_->set_recent_key(QStringLiteral("derivatives.underlying"));
+    symbol_box_->set_row_filter([](const fincept::core::instrument::Instrument& inst) -> SymbolSearchBox::RowCheck {
+        const QString country = inst.country.trimmed().toUpper();
+        const bool suffixed = !inst.symbol.startsWith(QLatin1Char('^')) && inst.symbol.contains(QLatin1Char('.'));
+        if ((!country.isEmpty() && country != QLatin1String("US")) || suffixed)
+            return {SymbolSearchBox::RowState::Disabled, SurfaceControlPanel::tr("no US-listed options")};
+        return SymbolSearchBox::RowState::Pickable;
+    });
+    symbol_box_->set_text(state_.symbol);
+    symbol_box_->set_placeholder(tr("Any US stock, ETF or index"));
+    symbol_box_->setToolTip(tr("Underlying of the option surfaces: any US-listed stock, ETF or index with listed "
+                               "options. Enter also tries a ticker the search does not know, e.g. XSP or DJX."));
+    symbol_box_->setAccessibleName(tr("Option underlying"));
+    connect(symbol_box_, &SymbolSearchBox::instrument_picked, this,
+            [this](const fincept::core::instrument::Instrument& inst) {
+                choose_symbol(surface_us_chain_symbol(inst.symbol.isEmpty() ? inst.display : inst.symbol));
+            });
+    connect(symbol_box_, &SymbolSearchBox::text_committed_raw, this, [this](const QString& text) {
+        // Not in the symbol index: tried as a ticker (the chain source decides).
+        const QString sym = surface_us_chain_symbol(text);
+        if (surface_is_us_ticker_text(sym))
+            choose_symbol(sym);
+    });
+    layout->addWidget(symbol_box_);
+
+    // The starter underlyings, one click each; wrap at narrow widths / large fonts.
+    symbol_chips_ = new QWidget(parent);
+    auto* flow = new fincept::ui::FlowLayout(symbol_chips_);
+    for (const char* s : defaults::EQUITY_UNDERLYINGS) {
+        const QString sym = QString::fromUtf8(s);
+        auto* chip = new QToolButton(symbol_chips_);
+        chip->setText(sym);
+        chip->setCheckable(true);
+        chip->setStyleSheet(sacp_chip_qss());
+        chip->setCursor(Qt::PointingHandCursor);
+        chip->setProperty("sa_symbol", sym);
+        chip->setToolTip(tr("Use %1 as the underlying").arg(sym));
+        chip->setAccessibleName(tr("Underlying %1").arg(sym));
+        connect(chip, &QToolButton::clicked, this, [this, sym]() {
+            choose_symbol(sym);
+            sync_option_symbol_picker(); // a click on the current one must stay checked
+        });
+        flow->addWidget(chip);
+        symbol_chip_btns_.append(chip);
+    }
+    layout->addWidget(symbol_chips_);
+    sync_option_symbol_picker();
+}
+
+void SurfaceControlPanel::sync_option_symbol_picker() {
+    const QString sym = state_.symbol.trimmed().toUpper();
+    if (symbol_box_ && symbol_box_->text() != sym)
+        symbol_box_->set_text(sym);
+    for (QToolButton* chip : symbol_chip_btns_) {
+        const bool on = chip->property("sa_symbol").toString() == sym;
+        if (chip->isChecked() != on)
+            chip->setChecked(on);
+    }
+}
+
+void SurfaceControlPanel::choose_symbol(const QString& symbol) {
+    const QString s = symbol.trimmed().toUpper();
+    if (s.isEmpty())
+        return;
+    if (symbol_edit_ && symbol_edit_->text() != s)
+        symbol_edit_->setText(s);
+    const bool changed = s != state_.symbol;
+    state_.symbol = s;
+    sync_option_symbol_picker();
+    if (!changed)
+        return;
+    emit symbol_changed(s);
+    emit controls_changed();
 }
 
 QGroupBox* SurfaceControlPanel::build_dates_section() {
@@ -305,7 +424,7 @@ QGroupBox* SurfaceControlPanel::build_dates_section() {
         auto* row = new QHBoxLayout();
         row->setSpacing(6);
         auto* lbl = new QLabel(title, gb);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_SECONDARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
         lbl->setMinimumWidth(40);
         label_out = lbl;
         row->addWidget(lbl);
@@ -355,7 +474,7 @@ QGroupBox* SurfaceControlPanel::build_options_section() {
         auto* row = new QHBoxLayout();
         row->setSpacing(6);
         auto* lbl = new QLabel(title, gb);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_SECONDARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
         lbl->setMinimumWidth(110);
         label_out = lbl;
         row->addWidget(lbl);
@@ -378,11 +497,14 @@ QGroupBox* SurfaceControlPanel::build_options_section() {
     build_spin_row(tr("DTE max (days):"), 1, 3650, state_.dte_max, dte_max_spin_, dte_max_lbl_);
     connect(dte_min_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &SurfaceControlPanel::on_dte_changed);
     connect(dte_max_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &SurfaceControlPanel::on_dte_changed);
+    strike_window_spin_->setToolTip(tr("Keeps the strikes within ± this % of spot from the fetched option chain."));
+    dte_min_spin_->setToolTip(tr("Keeps the expiries at least this many days out from the fetched option chain."));
+    dte_max_spin_->setToolTip(tr("Keeps the expiries at most this many days out from the fetched option chain."));
 
     auto* iv_row = new QHBoxLayout();
     iv_row->setSpacing(6);
     iv_method_lbl_ = new QLabel(tr("IV method:"), gb);
-    iv_method_lbl_->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_SECONDARY()));
+    iv_method_lbl_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
     iv_method_lbl_->setMinimumWidth(110);
     iv_row->addWidget(iv_method_lbl_);
     iv_method_combo_ = new QComboBox(gb);
@@ -390,6 +512,10 @@ QGroupBox* SurfaceControlPanel::build_options_section() {
     iv_method_combo_->setStyleSheet(combo_qss());
     connect(iv_method_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &SurfaceControlPanel::on_iv_method_changed);
+    // The Databento provider solves implied vol with its own root finder and takes
+    // no method argument, so a choice here would change nothing.
+    iv_method_combo_->setEnabled(false);
+    iv_method_combo_->setToolTip(tr("Implied vol is solved by the data provider; the solver cannot be chosen."));
     iv_row->addWidget(iv_method_combo_, 1);
     l->addLayout(iv_row);
 
@@ -424,7 +550,7 @@ QGroupBox* SurfaceControlPanel::build_basket_section() {
 
     basket_list_ = new QListWidget(gb);
     basket_list_->setStyleSheet(QString("QListWidget { background:%1; color:%2; "
-                                        "border:1px solid %3; font-size:10px; }"
+                                        "border:1px solid %3; font-size:" + fincept::ui::fonts::px(-4) + "px; }"
                                         "QListWidget::item:selected { background:%4; color:%5; }")
                                     .arg(colors::BG_HOVER())
                                     .arg(colors::TEXT_PRIMARY())
@@ -450,13 +576,13 @@ QGroupBox* SurfaceControlPanel::build_metrics_section() {
         auto* row = new QHBoxLayout();
         row->setSpacing(6);
         auto* lbl = new QLabel(label, gb);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:Consolas;").arg(colors::TEXT_SECONDARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
         lbl->setMinimumWidth(80);
         name_out = lbl;
         row->addWidget(lbl);
         target = new QLabel("—", gb);
         target->setStyleSheet(
-            QString("color:%1; font-size:10px; font-family:Consolas; font-weight:bold;").arg(colors::TEXT_PRIMARY()));
+            QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:bold;").arg(colors::TEXT_PRIMARY()));
         row->addWidget(target, 1, Qt::AlignRight);
         l->addLayout(row);
     };
@@ -481,7 +607,7 @@ QGroupBox* SurfaceControlPanel::build_lineage_section() {
     lineage_label_ = new QLabel("—", gb);
     lineage_label_->setWordWrap(true);
     lineage_label_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-family:Consolas;").arg(colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_SECONDARY()));
     l->addWidget(lineage_label_);
     return gb;
 }
@@ -530,9 +656,9 @@ void SurfaceControlPanel::set_capability(ChartType type) {
     const SurfaceTier shown_tier = synthetic_ ? SurfaceTier::DEMO : cap.tier;
     QColor bg = tier_color(shown_tier);
     tier_badge_->setText(tier_name(shown_tier));
-    tier_badge_->setStyleSheet(QString("background:%1; color:#000; font-size:9px; font-weight:bold; "
-                                       "padding:2px 6px; border-radius:2px; max-width:80px;")
-                                   .arg(bg.name()));
+    tier_badge_->setStyleSheet(QString("background:%1; color:%2; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; "
+                                       "padding:2px 6px; border-radius:2px;")
+                                   .arg(bg.name(), colors::TEXT_ON_ACCENT()));
 
     // Default dataset for this surface
     if (!QString(cap.dataset).isEmpty()) {
@@ -566,6 +692,15 @@ void SurfaceControlPanel::apply_capability_visibility() {
     dates_box_->setVisible(cap.needs_date_range);
     options_box_->setVisible(cap.needs_strike_window || cap.needs_expiry_filter);
     basket_box_->setVisible(cap.needs_correlation_basket);
+    // Option surfaces take a US option underlying: the symbol picker + quick picks.
+    // The others (commodity roots, Databento parent symbols) keep the plain field.
+    const bool option_underlying = QString::fromUtf8(cap.dataset) == QLatin1String("OPRA.PILLAR");
+    if (symbol_edit_)
+        symbol_edit_->setVisible(!option_underlying);
+    if (symbol_box_)
+        symbol_box_->setVisible(option_underlying);
+    if (symbol_chips_)
+        symbol_chips_->setVisible(option_underlying);
 }
 
 void SurfaceControlPanel::update_metrics(const std::vector<std::vector<float>>& z, const QString& units) {
@@ -632,6 +767,7 @@ void SurfaceControlPanel::apply_state(const SurfaceControlsState& s) {
     state_ = s;
     if (symbol_edit_)
         symbol_edit_->setText(s.symbol);
+    sync_option_symbol_picker();
     if (start_edit_ && s.start_date.isValid())
         start_edit_->setDate(s.start_date);
     if (end_edit_ && s.end_date.isValid())
@@ -660,6 +796,7 @@ void SurfaceControlPanel::on_symbol_edited() {
     if (s == state_.symbol)
         return;
     state_.symbol = s;
+    sync_option_symbol_picker();
     emit symbol_changed(s);
     emit controls_changed();
 }
@@ -808,14 +945,14 @@ void SurfaceControlPanel::set_provider_status(const QString& provider_name, cons
     QString color = colors::TEXT_DIM();
     QString text = provider_state;
     if (provider_state == "configured") {
-        color = QString("rgb(217,164,6)"); // amber: a key is set
+        color = colors::WARNING(); // amber: a key is set
         text = tr("configured");
     } else if (provider_state == "not configured") {
         text = tr("not configured");
     }
-    dot->setStyleSheet(QString("color:%1; font-size:11px;").arg(color));
+    dot->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(color));
     lbl->setText(text);
-    lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(color));
+    lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(color));
     if (dt)
         dt->setText(detail);
 }
@@ -850,6 +987,13 @@ void SurfaceControlPanel::retranslateUi() {
     // Asset section
     if (symbol_edit_)
         symbol_edit_->setPlaceholderText(tr("Underlying / parent symbol"));
+    if (symbol_box_) {
+        symbol_box_->set_placeholder(tr("Any US stock, ETF or index"));
+        symbol_box_->setToolTip(tr("Underlying of the option surfaces: any US-listed stock, ETF or index with listed "
+                                   "options. Enter also tries a ticker the search does not know, e.g. XSP or DJX."));
+    }
+    for (QToolButton* chip : symbol_chip_btns_)
+        chip->setToolTip(tr("Use %1 as the underlying").arg(chip->property("sa_symbol").toString()));
     if (dataset_lbl_)
         dataset_lbl_->setText(tr("Dataset:"));
     // Re-render the live value rather than blanking it back to a dash.

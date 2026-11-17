@@ -157,7 +157,7 @@ void LanguageManager::set_language(const QString& code) {
         if (t->load(resource_path)) {
             QCoreApplication::installTranslator(t);
             translator_ = t;
-            LOG_INFO("i18n", QStringLiteral("Installed translator: %1").arg(code));
+            LOG_DEBUG("i18n", QStringLiteral("Installed translator: %1").arg(code));
         } else {
             LOG_WARN("i18n", QStringLiteral("Failed to load translator %1 from %2 — falling back to English")
                                  .arg(code, resource_path));

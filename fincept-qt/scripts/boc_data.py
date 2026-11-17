@@ -25,7 +25,8 @@ Key series IDs:
   V80691344             — 3-month treasury bill yield
   V80691346             — 6-month treasury bill yield
   V80691348             — 1-year treasury bill yield
-  V122530               — Prime rate
+  V80691311             — Prime rate (chartered banks' prime business rate, weekly)
+  V122530               — Bank Rate (overnight target + 0.25; NOT the prime rate)
   A.BCPI                — Bank of Canada commodity price index
   A.ENER                — Energy commodity price sub-index
 
@@ -72,7 +73,8 @@ SERIES = {
     "V80691344":            {"label": "T-bill 3 month",           "category": "interest_rates"},
     "V80691346":            {"label": "T-bill 6 month",           "category": "interest_rates"},
     "V80691348":            {"label": "T-bill 1 year",            "category": "interest_rates"},
-    "V122530":              {"label": "Prime rate",                "category": "interest_rates"},
+    "V80691311":            {"label": "Prime rate",                "category": "interest_rates"},
+    "V122530":              {"label": "Bank Rate",                 "category": "interest_rates"},
     # Commodity prices
     "A.BCPI":               {"label": "Commodity Price Index",     "category": "commodities"},
     "A.ENER":               {"label": "Energy sub-index",          "category": "commodities"},
@@ -230,8 +232,9 @@ class BoCWrapper:
     def get_prime_rate(self, recent: int = 24,
                        start_date: Optional[str] = None,
                        end_date: Optional[str] = None) -> Dict[str, Any]:
-        """Bank prime lending rate history."""
-        return self._obs("V122530",
+        """Chartered banks' prime business rate (Valet V80691311, weekly). V122530 is the Bank Rate
+        (overnight target + 0.25), roughly 2 points below prime, and was mislabelled as prime."""
+        return self._obs("V80691311",
                          recent if not start_date else None, start_date, end_date)
 
     def get_tbill_yields(self, recent: int = 30,
@@ -262,7 +265,7 @@ class BoCWrapper:
         for name, sid in [
             ("policy_rate", "STATIC_ATABLE_V39079"),
             ("corra",       "AVG.INTWO"),
-            ("prime_rate",  "V122530"),
+            ("prime_rate",  "V80691311"),
             ("usd_cad",     "FXUSDCAD"),
             ("eur_cad",     "FXEURCAD"),
             ("gbp_cad",     "FXGBPCAD"),

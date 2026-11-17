@@ -1,5 +1,7 @@
 // src/services/maritime/MaritimeTypes.h
 #pragma once
+#include "ui/theme/Theme.h"
+
 #include <QColor>
 #include <QString>
 #include <QStringList>
@@ -42,15 +44,15 @@ struct TradeRoute {
     double end_lat = 0, end_lng = 0;
 };
 
-// Obsidian palette: negative / warning / positive / secondary text.
+// Status colour of a route, read from the active theme on every call.
 inline QColor route_status_color(const QString& status) {
     if (status == QStringLiteral("critical"))
-        return QColor(0xdc, 0x26, 0x26);
+        return ui::colors::DANGER;
     if (status == QStringLiteral("delayed"))
-        return QColor(0xca, 0x8a, 0x04);
+        return ui::colors::WARNING;
     if (status == QStringLiteral("active"))
-        return QColor(0x16, 0xa3, 0x4a);
-    return QColor(0x80, 0x80, 0x80);
+        return ui::colors::SUCCESS;
+    return ui::colors::TEXT_SECONDARY;
 }
 
 // ── Page envelope for area-search / multi-vessel responses ──────────────────
@@ -68,6 +70,13 @@ struct VesselsPage {
     /// Fractional balance after the call; < 0 = not reported (also for cache hits,
     /// whose stored balance would be stale).
     double remaining_credits = -1;
+    /// Wall-clock ms the server produced this page — a cache hit keeps the
+    /// original time, so screens can show the data's real age. 0 = unknown.
+    qint64 fetched_at_ms = 0;
+    /// Area searches: MaritimeService::area_request_key() of the search this page
+    /// answers (cache hit or not), so a screen can tell its latest search from an
+    /// older one or another caller's. Empty for multi-vessel pages.
+    QString request_key;
 };
 
 struct VesselHistoryPage {

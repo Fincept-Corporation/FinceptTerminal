@@ -1,9 +1,11 @@
 ﻿#include "services/notifications/providers/WhatsAppProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QByteArray>
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -35,26 +37,17 @@ void WhatsAppProvider::send(const NotificationRequest& req, std::function<void(b
 
     const QString msg = QString("[Fincept] %1\n%2").arg(req.title, req.message);
 
-    QMap<QString, QString> form;
-    form["To"] = to_number_.startsWith("whatsapp:") ? to_number_ : "whatsapp:" + to_number_;
-    form["From"] = from_number_.startsWith("whatsapp:") ? from_number_ : "whatsapp:" + from_number_;
-    form["Body"] = msg;
-
-    HttpClient::Headers headers;
-    headers.insert("Authorization", "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
-
-    HttpClient::instance().post_form(
-        url, form,
-        [cb](Result<QJsonDocument> res) {
-            if (res.is_err()) {
-                cb(false, QString::fromStdString(res.error()));
-                return;
-            }
-            const auto obj = res.value().object();
-            const bool ok = !obj.contains("code"); // Twilio errors have a "code" field
-            cb(ok, ok ? QString{} : obj.value("message").toString());
-        },
-        nullptr, headers);
+    // 201 + a message resource on success; an error object carries "code".
+    DeliveryRequest request;
+    request.service = DeliveryService::Twilio;
+    request.verb = DeliveryRequest::Verb::PostForm;
+    request.url = url;
+    request.form["To"] = to_number_.startsWith("whatsapp:") ? to_number_ : "whatsapp:" + to_number_;
+    request.form["From"] = from_number_.startsWith("whatsapp:") ? from_number_ : "whatsapp:" + from_number_;
+    request.form["Body"] = msg;
+    request.headers.insert("Authorization",
+                           "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

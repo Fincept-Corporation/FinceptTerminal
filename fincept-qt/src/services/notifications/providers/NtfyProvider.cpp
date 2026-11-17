@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/NtfyProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -57,20 +59,13 @@ void NtfyProvider::send(const NotificationRequest& req, std::function<void(bool,
     // never the URL). The previous "?auth=" query param carried base64(token) —
     // ntfy expects base64 of the *whole* header value there, so it was rejected
     // as well as being a secret in the URL.
-    HttpClient::Headers headers;
+    DeliveryRequest request;
+    request.service = DeliveryService::Ntfy;
+    request.url = url;
+    request.json = body;
     if (!token_.isEmpty())
-        headers.insert("Authorization", QByteArray("Bearer ") + token_.toUtf8());
-
-    HttpClient::instance().post(
-        url, body,
-        [cb](Result<QJsonDocument> res) {
-            if (res.is_err()) {
-                cb(false, QString::fromStdString(res.error()));
-                return;
-            }
-            cb(true, {});
-        },
-        nullptr, headers);
+        request.headers.insert("Authorization", QByteArray("Bearer ") + token_.toUtf8());
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/OpsgenieProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -35,28 +37,21 @@ void OpsgenieProvider::send(const NotificationRequest& req, std::function<void(b
 
     // Opsgenie v2 authenticates with "Authorization: GenieKey <key>". Sent as a
     // per-request header (HttpClient::Headers) so the key never sits in the URL.
-    const QString url = "https://api.opsgenie.com/v2/alerts";
-    HttpClient::Headers headers;
-    headers.insert("Authorization", QByteArray("GenieKey ") + api_key_.toUtf8());
-
     QJsonObject body;
     body["message"] = req.title;
     body["description"] = req.message;
     body["priority"] = priority;
     body["source"] = "Fincept Terminal";
 
-    HttpClient::instance().post(
-        url, body,
-        [cb](Result<QJsonDocument> res) {
-            if (res.is_err()) {
-                cb(false, QString::fromStdString(res.error()));
-                return;
-            }
-            const auto obj = res.value().object();
-            const bool ok = obj.contains("requestId");
-            cb(ok, ok ? QString{} : obj.value("message").toString());
-        },
-        nullptr, headers);
+    // 202 {"result":"Request will be processed","requestId":…} = accepted. Its
+    // errors are 4xx and carry a requestId as well, so the old "has requestId"
+    // test never told anything apart: the HTTP status decides.
+    DeliveryRequest request;
+    request.service = DeliveryService::Opsgenie;
+    request.url = QStringLiteral("https://api.opsgenie.com/v2/alerts");
+    request.json = body;
+    request.headers.insert("Authorization", QByteArray("GenieKey ") + api_key_.toUtf8());
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

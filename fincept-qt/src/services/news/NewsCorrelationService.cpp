@@ -8,8 +8,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
+#include <QUrl>
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 namespace fincept::services {
@@ -96,6 +100,99 @@ void NewsCorrelationService::detect_signals(const QVector<NewsArticle>& articles
     const auto detected = detect_news_signals(inputs, QDateTime::currentSecsSinceEpoch());
     if (cb)
         cb(true, detected);
+}
+
+void NewsCorrelationService::fetch_predictions_for(const QStringList& terms_in, PredictionCallback cb) {
+    // Normalise: distinct, non-trivial terms, at most kMaxPredictionTerms.
+    QStringList terms;
+    for (const QString& t : terms_in) {
+        const QString term = t.trimmed();
+        if (term.size() < 3 || terms.contains(term, Qt::CaseInsensitive))
+            continue;
+        terms.append(term);
+        if (terms.size() >= kMaxPredictionTerms)
+            break;
+    }
+    if (terms.isEmpty()) {
+        if (cb)
+            cb(true, {});
+        return;
+    }
+
+    // Answer once every term has either a fresh cache entry or a finished request.
+    struct Pending {
+        QStringList terms;
+        int waiting = 0;
+        PredictionCallback cb;
+    };
+    auto pending = std::make_shared<Pending>();
+    pending->terms = terms;
+    pending->cb = std::move(cb);
+    auto finish = [this, pending]() {
+        QVector<PredictionMarket> out;
+        QSet<QString> ids;
+        for (const QString& term : pending->terms) {
+            const auto it = term_cache_.constFind(term.toLower());
+            if (it == term_cache_.constEnd())
+                continue;
+            for (const auto& m : it->markets) {
+                if (ids.contains(m.id))
+                    continue;
+                ids.insert(m.id);
+                out.append(m);
+            }
+        }
+        std::stable_sort(out.begin(), out.end(),
+                         [](const PredictionMarket& a, const PredictionMarket& b) { return a.volume > b.volume; });
+        if (out.size() > 8)
+            out.resize(8);
+        if (pending->cb)
+            pending->cb(true, out);
+    };
+
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const HttpClient::Headers headers{{"Accept", "application/json"}, {"User-Agent", "FinceptTerminal/4.0.2"}};
+    for (const QString& term : terms) {
+        TermCache& tc = term_cache_[term.toLower()];
+        const bool fresh = tc.fetched_at > 0 && now - tc.fetched_at < kPredictionsTtlSec;
+        const bool cooling = tc.failed_at > 0 && now - tc.failed_at < kPredictionsRetrySec;
+        if (fresh || cooling || tc.inflight)
+            continue; // an in-flight request is not awaited: its result shows next time
+        tc.inflight = true;
+        ++pending->waiting;
+        const QString url = QStringLiteral("https://api.manifold.markets/v0/search-markets?term=%1&filter=open"
+                                           "&contractType=BINARY&limit=10&sort=liquidity")
+                                .arg(QString::fromLatin1(QUrl::toPercentEncoding(term)));
+        HttpClient::instance().get(
+            url,
+            [this, term, pending, finish](Result<QJsonDocument> result) {
+                TermCache& c = term_cache_[term.toLower()];
+                c.inflight = false;
+                if (result.is_ok() && result.value().isArray()) {
+                    auto markets = news_correlation_detail::parse_manifold_markets(result.value().array(), 10);
+                    QVector<PredictionMarket> matched;
+                    for (auto& m : markets) {
+                        // The search also matches descriptions; only a question that
+                        // names the topic is shown as related to the headlines.
+                        if (!m.question.contains(term, Qt::CaseInsensitive))
+                            continue;
+                        m.matched_term = term;
+                        matched.append(m);
+                    }
+                    c.markets = matched;
+                    c.fetched_at = QDateTime::currentSecsSinceEpoch();
+                    c.failed_at = 0;
+                } else {
+                    c.failed_at = QDateTime::currentSecsSinceEpoch();
+                    LOG_WARN("NewsCorrelation", QStringLiteral("Prediction search failed for \"%1\"").arg(term));
+                }
+                if (--pending->waiting == 0)
+                    finish();
+            },
+            this, headers);
+    }
+    if (pending->waiting == 0)
+        finish();
 }
 
 QString NewsCorrelationService::predictions_source_label() {

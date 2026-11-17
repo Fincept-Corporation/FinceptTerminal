@@ -10,28 +10,15 @@ import sys
 import json
 import pandas as pd
 import akshare as ak
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error;
+# run_wrapper_cli: get_all_endpoints / <endpoint> [field=value ...] -> one JSON line on stdout.
+from akshare_screen_args import (call_first_with_rows, china_today, recent_period_ends, run_wrapper_cli,
+                                 safe_call)
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta
 import time
 import traceback
-
-
-class AKShareError:
-    """Custom error class for AKShare API errors"""
-    def __init__(self, endpoint: str, error: str, data_source: Optional[str] = None):
-        self.endpoint = endpoint
-        self.error = error
-        self.data_source = data_source
-        self.timestamp = int(datetime.now().timestamp())
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "endpoint": self.endpoint,
-            "error": self.error,
-            "data_source": self.data_source,
-            "timestamp": self.timestamp,
-            "type": "AKShareError"
-        }
 
 
 class ExpandedFundsWrapper:
@@ -46,79 +33,11 @@ class ExpandedFundsWrapper:
         self.default_start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y%m%d')  # 10 years
         self.default_end_date = datetime.now().strftime('%Y%m%d')
 
-    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Convert DataFrame to JSON-safe format, handling dates and other non-serializable types"""
-        df_copy = df.copy()
-        for col in df_copy.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
-                df_copy[col] = df_copy[col].astype(str)
-            elif df_copy[col].dtype == 'object':
-                try:
-                    df_copy[col] = df_copy[col].apply(lambda x: str(x) if hasattr(x, 'strftime') else x)
-                except:
-                    pass
-        return df_copy.to_dict('records')
-
-    def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
-        """Safely call AKShare function with enhanced error handling and retry logic"""
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                result = func(*args, **kwargs)
-
-                # Enhanced data validation
-                if result is not None:
-                    if hasattr(result, 'empty') and not result.empty:
-                        return {
-                            "success": True,
-                            "data": self._convert_dataframe_to_json_safe(result),
-                        "columns": (list(result.columns) if hasattr(result, "columns") else []),
-                            "count": len(result),
-                            "timestamp": int(datetime.now().timestamp()),
-                            "data_quality": "high",
-                            "source": f"akshare.{func.__name__}"
-                        }
-                    elif hasattr(result, '__len__') and len(result) > 0:
-                        # Handle non-DataFrame results
-                        return {
-                            "success": True,
-                            "data": result if isinstance(result, list) else [result],
-                            "count": len(result) if isinstance(result, list) else 1,
-                            "timestamp": int(datetime.now().timestamp()),
-                            "data_quality": "high",
-                            "source": f"akshare.{func.__name__}"
-                        }
-                    else:
-                        return {
-                            "success": False,
-                            "error": "No data returned",
-                            "data": [],
-                            "count": 0,
-                            "timestamp": int(datetime.now().timestamp()),
-                            "data_quality": "low"
-                        }
-
-            except Exception as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(self.retry_delay ** attempt)
-                    continue
-                else:
-                    break
-
-        error_obj = AKShareError(
-            endpoint=func.__name__ if hasattr(func, '__name__') else 'unknown',
-            error=last_error or "Unknown error",
-            data_source=getattr(func, '__module__', 'unknown')
-        )
-        return {
-            "success": False,
-            "error": error_obj.to_dict(),
-            "data": [],
-            "count": 0,
-            "timestamp": int(datetime.now().timestamp())
-        }
+    def _safe_call_with_retry(self, func, *args, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
+        """One akshare call -> {success, data, columns, count} or a plain-English error (shared
+        akshare_screen_args.safe_call: only a dropped connection or a timeout is retried, never a
+        rate limit or a refusal)."""
+        return safe_call(func, *args, _retries=max_retries, **kwargs)
 
     # ==================== FUND OVERVIEW & INFO ====================
 
@@ -140,9 +59,9 @@ class ExpandedFundsWrapper:
 
     # ==================== OPEN FUNDS ====================
 
-    def get_fund_open_fund_daily_em(self, symbol: str = "000001", period: str = "daily") -> Dict[str, Any]:
-        """Get open fund daily data"""
-        return self._safe_call_with_retry(ak.fund_open_fund_daily_em, symbol=symbol, period=period)
+    def get_fund_open_fund_daily_em(self) -> Dict[str, Any]:
+        """Latest NAV of every open-end fund (akshare no longer takes a fund code here)"""
+        return self._safe_call_with_retry(ak.fund_open_fund_daily_em)
 
     def get_fund_open_fund_info_em(self, symbol: str = "000001", indicator: str = "基金档案") -> Dict[str, Any]:
         """Get open fund information"""
@@ -150,13 +69,15 @@ class ExpandedFundsWrapper:
 
     # ==================== ETF FUNDS ====================
 
-    def get_fund_etf_fund_daily_em(self, symbol: str = "512690", period: str = "daily") -> Dict[str, Any]:
-        """Get ETF fund daily data"""
-        return self._safe_call_with_retry(ak.fund_etf_fund_daily_em, symbol=symbol, period=period)
+    def get_fund_etf_fund_daily_em(self) -> Dict[str, Any]:
+        """Latest NAV of every exchange-traded fund (akshare no longer takes a fund code here)"""
+        return self._safe_call_with_retry(ak.fund_etf_fund_daily_em)
 
-    def get_fund_etf_fund_info_em(self, symbol: str = "512690", indicator: str = "基金档案") -> Dict[str, Any]:
-        """Get ETF fund information"""
-        return self._safe_call_with_retry(ak.fund_etf_fund_info_em, symbol=symbol, indicator=indicator)
+    def get_fund_etf_fund_info_em(self, symbol: str = "512690", start_date: str = "20000101",
+                                  end_date: str = "20500101") -> Dict[str, Any]:
+        """NAV history of one exchange-traded fund; START/END narrow the range"""
+        return self._safe_call_with_retry(ak.fund_etf_fund_info_em, fund=symbol, start_date=start_date,
+                                          end_date=end_date)
 
     def get_fund_etf_hist_em(self, symbol: str = "512690", period: str = "daily", start_date: str = "19700101", end_date: str = "20500101", adjust: str = "") -> Dict[str, Any]:
         """Get ETF historical data"""
@@ -197,35 +118,35 @@ class ExpandedFundsWrapper:
     # ==================== FINANCIAL FUNDS ====================
 
 
-    def get_fund_financial_fund_info_em(self, symbol: str = "000647", indicator: str = "基金档案") -> Dict[str, Any]:
-        """Get financial fund information"""
-        return self._safe_call_with_retry(ak.fund_financial_fund_info_em, symbol=symbol, indicator=indicator)
+    def get_fund_financial_fund_info_em(self, symbol: str = "000134") -> Dict[str, Any]:
+        """NAV history of one wealth-management fund"""
+        return self._safe_call_with_retry(ak.fund_financial_fund_info_em, symbol=symbol)
 
     # ==================== GRADED FUNDS ====================
 
-    def get_fund_graded_fund_daily_em(self, symbol: str = "150232", period: str = "daily") -> Dict[str, Any]:
-        """Get graded fund daily data"""
-        return self._safe_call_with_retry(ak.fund_graded_fund_daily_em, symbol=symbol, period=period)
+    def get_fund_graded_fund_daily_em(self) -> Dict[str, Any]:
+        """Latest NAV of every graded (structured) fund"""
+        return self._safe_call_with_retry(ak.fund_graded_fund_daily_em)
 
-    def get_fund_graded_fund_info_em(self, symbol: str = "150232", indicator: str = "基金档案") -> Dict[str, Any]:
-        """Get graded fund information"""
-        return self._safe_call_with_retry(ak.fund_graded_fund_info_em, symbol=symbol, indicator=indicator)
+    def get_fund_graded_fund_info_em(self, symbol: str = "150232") -> Dict[str, Any]:
+        """NAV history of one graded (structured) fund"""
+        return self._safe_call_with_retry(ak.fund_graded_fund_info_em, symbol=symbol)
 
     # ==================== MONEY FUNDS ====================
 
-    def get_fund_money_fund_daily_em(self, symbol: str = "000009", period: str = "daily") -> Dict[str, Any]:
-        """Get money fund daily data"""
-        return self._safe_call_with_retry(ak.fund_money_fund_daily_em, symbol=symbol, period=period)
+    def get_fund_money_fund_daily_em(self) -> Dict[str, Any]:
+        """Latest yields of every money-market fund"""
+        return self._safe_call_with_retry(ak.fund_money_fund_daily_em)
 
-    def get_fund_money_fund_info_em(self, symbol: str = "000009", indicator: str = "基金档案") -> Dict[str, Any]:
-        """Get money fund information"""
-        return self._safe_call_with_retry(ak.fund_money_fund_info_em, symbol=symbol, indicator=indicator)
+    def get_fund_money_fund_info_em(self, symbol: str = "000009") -> Dict[str, Any]:
+        """Yield history of one money-market fund"""
+        return self._safe_call_with_retry(ak.fund_money_fund_info_em, symbol=symbol)
 
     # ==================== HK FUNDS ====================
 
-    def get_fund_hk_fund_hist_em(self, symbol: str = "968001", period: str = "daily") -> Dict[str, Any]:
-        """Get HK fund historical data"""
-        return self._safe_call_with_retry(ak.fund_hk_fund_hist_em, symbol=symbol, period=period)
+    def get_fund_hk_fund_hist_em(self, symbol: str = "1002200683") -> Dict[str, Any]:
+        """NAV history of one Hong Kong fund (EastMoney HK fund code, see fund_hk_rank_em)"""
+        return self._safe_call_with_retry(ak.fund_hk_fund_hist_em, code=symbol, symbol="历史净值明细")
 
     # ==================== LOF FUNDS ====================
 
@@ -291,9 +212,9 @@ class ExpandedFundsWrapper:
         """Get exchange fund rankings"""
         return self._safe_call_with_retry(ak.fund_exchange_rank_em)
 
-    def get_fund_money_rank_em(self, symbol: str = "全部") -> Dict[str, Any]:
-        """Get money fund rankings"""
-        return self._safe_call_with_retry(ak.fund_money_rank_em, symbol=symbol)
+    def get_fund_money_rank_em(self) -> Dict[str, Any]:
+        """Money-market fund ranking"""
+        return self._safe_call_with_retry(ak.fund_money_rank_em)
 
     def get_fund_open_fund_rank_em(self, symbol: str = "全部") -> Dict[str, Any]:
         """Get open fund rankings"""
@@ -313,13 +234,13 @@ class ExpandedFundsWrapper:
         """Get fund scale - Alias for fund_aum_em"""
         return self._safe_call_with_retry(ak.fund_aum_em)
 
-    def get_fund_scale_change_em(self, symbol: str = "000001") -> Dict[str, Any]:
-        """Get fund scale changes"""
-        return self._safe_call_with_retry(ak.fund_scale_change_em, symbol=symbol)
+    def get_fund_scale_change_em(self) -> Dict[str, Any]:
+        """Market-wide fund share changes by report period"""
+        return self._safe_call_with_retry(ak.fund_scale_change_em)
 
-    def get_fund_hold_structure_em(self, symbol: str = "000001") -> Dict[str, Any]:
-        """Get fund holding structure"""
-        return self._safe_call_with_retry(ak.fund_hold_structure_em, symbol=symbol)
+    def get_fund_hold_structure_em(self) -> Dict[str, Any]:
+        """Market-wide fund holder structure (institutional / individual) by report period"""
+        return self._safe_call_with_retry(ak.fund_hold_structure_em)
 
     def get_fund_scale_open_sina(self) -> Dict[str, Any]:
         """Get open fund scale from Sina"""
@@ -333,23 +254,30 @@ class ExpandedFundsWrapper:
         """Get structured fund scale from Sina"""
         return self._safe_call_with_retry(ak.fund_scale_structured_sina)
 
-    def get_fund_scale_trend(self, symbol: str = "000001") -> Dict[str, Any]:
+    def get_fund_scale_trend(self) -> Dict[str, Any]:
         """Get fund scale trend - Alias for fund_scale_change_em"""
-        return self.get_fund_scale_change_em(symbol=symbol)
+        return self.get_fund_scale_change_em()
 
     # ==================== FUND REPORTS ====================
+    # Market-wide tables of one report period (quarter end); START picks it, default the newest
+    # quarter that has been published.
 
-    def get_fund_report_stock_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
-        """Get fund stock report from CNInfo"""
-        return self._safe_call_with_retry(ak.fund_report_stock_cninfo, symbol=symbol, date=date)
+    def _report_period(self, func, date: str) -> Dict[str, Any]:
+        if date:
+            return self._safe_call_with_retry(func, date=date)
+        return call_first_with_rows(func, "date", recent_period_ends(count=4))
 
-    def get_fund_report_industry_allocation_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
-        """Get fund industry allocation report from CNInfo"""
-        return self._safe_call_with_retry(ak.fund_report_industry_allocation_cninfo, symbol=symbol, date=date)
+    def get_fund_report_stock_cninfo(self, date: str = "") -> Dict[str, Any]:
+        """Stocks held by funds, all funds, one report period (CNInfo)"""
+        return self._report_period(ak.fund_report_stock_cninfo, date)
 
-    def get_fund_report_asset_allocation_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
-        """Get fund asset allocation report from CNInfo"""
-        return self._safe_call_with_retry(ak.fund_report_asset_allocation_cninfo, symbol=symbol, date=date)
+    def get_fund_report_industry_allocation_cninfo(self, date: str = "") -> Dict[str, Any]:
+        """Industry allocation of all funds, one report period (CNInfo)"""
+        return self._report_period(ak.fund_report_industry_allocation_cninfo, date)
+
+    def get_fund_report_asset_allocation_cninfo(self) -> Dict[str, Any]:
+        """Asset allocation of all funds by report period (CNInfo)"""
+        return self._safe_call_with_retry(ak.fund_report_asset_allocation_cninfo)
 
     # ==================== FUND AUM ====================
 
@@ -357,9 +285,9 @@ class ExpandedFundsWrapper:
         """Get fund assets under management"""
         return self._safe_call_with_retry(ak.fund_aum_em)
 
-    def get_fund_aum_trend_em(self, symbol: str = "全部") -> Dict[str, Any]:
-        """Get fund AUM trend"""
-        return self._safe_call_with_retry(ak.fund_aum_trend_em, symbol=symbol)
+    def get_fund_aum_trend_em(self) -> Dict[str, Any]:
+        """Market-wide fund AUM trend"""
+        return self._safe_call_with_retry(ak.fund_aum_trend_em)
 
     def get_fund_aum_hist_em(self) -> Dict[str, Any]:
         """Get fund AUM historical data"""
@@ -413,13 +341,15 @@ class ExpandedFundsWrapper:
         """Get fund manager rankings - Uses fund manager endpoint"""
         return self.get_fund_manager_em()
 
-    def get_fund_cf_em(self, symbol: str = "000001") -> Dict[str, Any]:
-        """Get fund cash flow"""
-        return self._safe_call_with_retry(ak.fund_cf_em, symbol=symbol)
+    # `date` so the screen's START box can pick the year (any day of it); default this year.
 
-    def get_fund_fh_em(self, symbol: str = "000001") -> Dict[str, Any]:
-        """Get fund dividend distribution"""
-        return self._safe_call_with_retry(ak.fund_fh_em, symbol=symbol)
+    def get_fund_cf_em(self, date: str = "") -> Dict[str, Any]:
+        """Fund share splits of one year, all funds"""
+        return self._safe_call_with_retry(ak.fund_cf_em, year=(date or str(china_today().year))[:4])
+
+    def get_fund_fh_em(self, date: str = "") -> Dict[str, Any]:
+        """Fund dividend distributions of one year, all funds"""
+        return self._safe_call_with_retry(ak.fund_fh_em, year=(date or str(china_today().year))[:4])
 
     def get_fund_fh_rank_em(self) -> Dict[str, Any]:
         """Get fund dividend rankings"""
@@ -527,69 +457,12 @@ class ExpandedFundsWrapper:
 
 
 # ==================== CLI ====================
+
 def main():
-    import sys
     wrapper = ExpandedFundsWrapper()
+    # One JSON line on stdout (NaN -> null, dates as ISO text); akshare's own prints go to stderr.
+    return run_wrapper_cli(wrapper, wrapper.get_all_available_endpoints, ascii=True, iso_dates=False)
 
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_funds_expanded.py <endpoint>"}))
-        return
 
-    endpoint = sys.argv[1]
-
-    endpoint_map = {
-        "get_all_endpoints": wrapper.get_all_available_endpoints,
-        "get_fund_open_fund_rank_em": wrapper.get_fund_open_fund_rank_em,
-        "get_fund_etf_fund_info_em": wrapper.get_fund_etf_fund_info_em,
-        "get_fund_name_em": wrapper.get_fund_name_em,
-    }
-
-    method = endpoint_map.get(endpoint)
-    if method:
-        result = method()
-        print(json.dumps(result, ensure_ascii=True))
-    else:
-        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
-
-# ==================== CLI ====================
 if __name__ == "__main__":
-    import sys
-    import json
-
-    # Get wrapper instance
-    wrapper = ExpandedFundsWrapper()
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_funds_expanded.py <endpoint> [args...]"}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    # Handle get_all_endpoints
-    if endpoint == "get_all_endpoints":
-        if hasattr(wrapper, 'get_all_available_endpoints'):
-            result = wrapper.get_all_available_endpoints()
-        elif hasattr(wrapper, 'get_all_endpoints'):
-            result = wrapper.get_all_endpoints()
-        else:
-            result = {"success": False, "error": "Endpoint list not available"}
-        print(json.dumps(result, ensure_ascii=True))
-        sys.exit(0)
-
-    # Dynamic method resolution
-    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
-
-    if hasattr(wrapper, method_name):
-        method = getattr(wrapper, method_name)
-        try:
-            try:
-                result = method(*args)
-            except TypeError:
-                result = method()
-            print(json.dumps(result, ensure_ascii=True))
-        except Exception as e:
-            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
-    else:
-        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
-
+    sys.exit(main())

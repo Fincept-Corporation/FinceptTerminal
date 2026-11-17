@@ -10,6 +10,7 @@
 // could be added as a secondary axis in a later phase.
 
 #include "services/options/OptionChainTypes.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QChartView>
 #include <QEvent>
@@ -18,7 +19,12 @@
 
 class QDateTimeAxis;
 class QLineSeries;
+class QTimer;
 class QValueAxis;
+
+namespace fincept::ui {
+class LoadingSkeleton;
+}
 
 namespace fincept::screens::fno {
 
@@ -37,13 +43,30 @@ class IntradayOIChart : public QChartView {
     /// Detach all subscriptions and clear the chart.
     void clear_subscription();
 
+    /// Nothing can be charted for the current chain (e.g. the free delayed chain
+    /// has no intraday history): detach, clear, and show `page` over the chart.
+    /// Its buttons emit page_primary_clicked() / page_secondary_clicked().
+    void set_unavailable(const fincept::ui::EmptyState::Spec& page);
+
+  signals:
+    void page_primary_clicked();
+    void page_secondary_clicked();
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* e) override;
 
   private:
+    enum class Cover { None, Loading, Page };
     void retranslateUi();
+    /// Show the skeleton / a page over the chart, or nothing (built on first use).
+    void set_cover(Cover cover);
+    /// Waiting for history took too long, or it came back empty: say so.
+    void show_no_history();
+    /// Re-apply the theme's colours and font to the chart, series and axes.
+    void refresh_theme();
     void on_history(qint64 token, const QVariant& v);
     void replot();
     /// Subscribe to / drop the current CE+PE history topics on the hub. The pair is
@@ -67,6 +90,15 @@ class IntradayOIChart : public QChartView {
 
     QVector<fincept::services::options::OISample> ce_samples_;
     QVector<fincept::services::options::OISample> pe_samples_;
+
+    // Covers over the chart (loading skeleton / designed page) and the wait timer.
+    fincept::ui::LoadingSkeleton* loading_ = nullptr;
+    fincept::ui::EmptyState* page_ = nullptr;
+    QTimer* wait_timer_ = nullptr;
+    Cover cover_ = Cover::None;
+    bool ce_received_ = false; ///< a history publish arrived for the current target
+    bool pe_received_ = false;
+    bool page_is_no_history_ = false; ///< the page is the "nothing recorded yet" one (REFRESH)
 };
 
 } // namespace fincept::screens::fno

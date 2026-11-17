@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"7d1c0b2a-0000-4000-8000-0000000c4a73","model":"claude-sonnet-4-5","cwd":"/scratch/run","tools":[],"mcp_servers":[],"permissionMode":"dontAsk","apiKeySource":"none"}
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg_01","role":"assistant"}}}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"This must never reach the user."}}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"num_turns":1,"result":"This must never reach the user.","session_id":"7d1c0b2a-0000-4000-8000-0000000c4a73","usage":{"input_tokens":10,"output_tokens":7}}

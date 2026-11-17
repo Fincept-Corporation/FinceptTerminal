@@ -1,24 +1,28 @@
 // src/screens/portfolio/PortfolioStatusBar.cpp
 #include "screens/portfolio/PortfolioStatusBar.h"
 
+#include "screens/portfolio/PortfolioFormat.h"
+#include "ui/formatting/DateFormat.h"
+#include "ui/formatting/FormatWidgets.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
 #include <QEvent>
 #include <QHBoxLayout>
-#include <QLocale>
 #include <QStyle>
 #include <QTimeZone>
+
+#include <algorithm>
 
 namespace fincept::screens {
 
 PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(24);
+    setMinimumHeight(24);
     setObjectName("portfolioStatusBar");
     // The notes label is styled from here (property selector) rather than with
     // a per-update setStyleSheet on the label itself.
     setStyleSheet(QString("#portfolioStatusBar { background:%1; border-top:1px solid %2; }"
-                          "#pfStatusNotes { color:%3; font-size:10px; letter-spacing:0.3px; }"
+                          "#pfStatusNotes { color:%3; font-size:" + fincept::ui::fonts::px(-4) + "px; letter-spacing:0.3px; }"
                           "#pfStatusNotes[warn=\"true\"] { color:%4; font-weight:700; }")
                       .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(),
                            ui::colors::WARNING()));
@@ -29,7 +33,7 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     auto make_label = [&](const char* color, bool bold = false) {
         auto* lbl = new QLabel;
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:%2; letter-spacing:0.3px;")
+        lbl->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:%2; letter-spacing:0.3px;")
                                .arg(color)
                                .arg(bold ? 700 : 400));
         layout->addWidget(lbl);
@@ -38,7 +42,7 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     auto add_divider = [&]() {
         auto* sep = new QLabel(" | ");
-        sep->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::BORDER_MED()));
+        sep->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::BORDER_MED()));
         layout->addWidget(sep);
     };
 
@@ -88,6 +92,9 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
     connect(clock_timer_, &QTimer::timeout, this, &PortfolioStatusBar::update_clock);
+
+    // Currency / number format changed: re-format the last summary's text (no restyle).
+    ui::formatting::on_format_changed(this, [this]() { render_summary_text(); });
 }
 
 void PortfolioStatusBar::start_clock() {
@@ -101,7 +108,7 @@ void PortfolioStatusBar::stop_clock() {
 
 void PortfolioStatusBar::update_clock() {
     auto now = QDateTime::currentDateTime();
-    time_label_->setText(now.toString("hh:mm:ss"));
+    time_label_->setText(ui::formatting::time(now, /*with_seconds=*/true));
     // The timezone abbreviation is an expensive lookup and changes at most
     // twice a year — do not recompute + re-set it every single second.
     const QString abbrev = now.timeZone().abbreviation(now);
@@ -116,7 +123,7 @@ void PortfolioStatusBar::set_feed_state(bool live, const QString& detail) {
     if (!live_label_)
         return;
     live_label_->setText(QString("● ") + (live ? tr("LIVE") : tr("STALE")));
-    live_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.3px;")
+    live_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.3px;")
                                    .arg(live ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     live_label_->setToolTip(detail.isEmpty()
                                 ? (live ? tr("Market data refreshed successfully.")
@@ -130,22 +137,34 @@ void PortfolioStatusBar::set_portfolio_name(const QString& name) {
 
 void PortfolioStatusBar::set_summary(const portfolio::PortfolioSummary& s) {
     last_summary_ = s;
-    // Thousands separators, matching PortfolioStatsRibbon. A bare
-    // QString::number rendered the NAV as "1234567.89" right next to the
-    // ribbon's "1,234,567.89".
-    auto fmt = [](double v) { return QLocale().toString(v, 'f', 2); };
-
     set_portfolio_name(s.portfolio.name);
-    positions_label_->setText(tr("%1 positions").arg(s.total_positions));
+    render_summary_text();
 
-    nav_label_->setText(tr("NAV %1 %2").arg(s.portfolio.currency, fmt(s.total_market_value)));
+    const double pnl = s.total_unrealized_pnl;
+    pnl_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:600;")
+                                  .arg(pfmt::dir_css(pnl)));
+}
+
+void PortfolioStatusBar::render_summary_text() {
+    if (!last_summary_.has_value())
+        return;
+    const auto& s = *last_summary_;
+    const QString ccy = pfmt::base_ccy(s);
+    positions_label_->setText(s.complete ? tr("%1 positions").arg(s.total_positions)
+                                         : tr("%1 of %2 positions valued").arg(s.valued_positions).arg(s.total_positions));
+
+    // "≈" when a conversion used a stale FX rate; "*" when the valuation is incomplete.
+    nav_label_->setText(tr("NAV %1").arg(pfmt::approx_prefix(s) + pfmt::money(s.total_market_value, ccy)) +
+                        (s.complete ? QString() : QStringLiteral(" *")));
+    QString nav_tip = s.complete ? tr("Net asset value in %1, as of %2.").arg(ccy, pfmt::date(s.as_of))
+                                 : pfmt::incomplete_line(s);
+    if (!s.fx_stale.isEmpty())
+        nav_tip += QLatin1Char('\n') + pfmt::fx_stale_line(s);
+    nav_label_->setToolTip(nav_tip);
 
     render_notes();
 
-    double pnl = s.total_unrealized_pnl;
-    pnl_label_->setText(tr("P&L %1%2").arg(pnl >= 0 ? "+" : "").arg(fmt(pnl)));
-    pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;")
-                                  .arg(pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    pnl_label_->setText(tr("P&L %1").arg(pfmt::approx_prefix(s) + pfmt::smoney(s.total_unrealized_pnl, ccy)));
 }
 
 void PortfolioStatusBar::set_analytics_note(const QString& text, const QString& tooltip, bool warn) {
@@ -161,14 +180,25 @@ void PortfolioStatusBar::render_notes() {
     QString text = analytics_note_;
     QString tip = analytics_tip_;
     bool warn = analytics_warn_;
-    if (last_summary_.has_value() && !last_summary_->fx_unconverted.isEmpty()) {
-        const auto& fx = last_summary_->fx_unconverted;
-        text = tr("⚠ %n HOLDING(S) NOT FX-CONVERTED", "", static_cast<int>(fx.size()));
-        tip = tr("These holdings trade in a currency other than the portfolio's %1 and their prices are summed "
-                 "WITHOUT conversion, so NAV, P&L and weights are not in %1:\n%2")
-                  .arg(last_summary_->portfolio.currency, fx.join(QStringLiteral("\n"))) +
+    if (last_summary_.has_value() && !last_summary_->complete) {
+        const auto& s = *last_summary_;
+        const int missing = std::max(0, s.total_positions - s.valued_positions);
+        text = tr("⚠ VALUATION INCOMPLETE — %n POSITION(S) NOT VALUED", "", missing);
+        tip = pfmt::incomplete_line(s) + (s.fx_stale.isEmpty() ? QString() : QLatin1Char('\n') + pfmt::fx_stale_line(s)) +
               (analytics_tip_.isEmpty() ? QString() : QStringLiteral("\n\n") + analytics_tip_);
         warn = true;
+    } else if (last_summary_.has_value() && !last_summary_->fx_stale.isEmpty()) {
+        // A stale rate is still used, never hidden: say so beside the figures it moves.
+        const auto& s = *last_summary_;
+        text = tr("⚠ FX RATE STALE — %1").arg(s.fx_stale.join(QStringLiteral(", ")));
+        tip = pfmt::fx_stale_line(s) + (analytics_tip_.isEmpty() ? QString() : QStringLiteral("\n\n") + analytics_tip_);
+        warn = true;
+    } else if (last_summary_.has_value() && !last_summary_->ledger_warnings.isEmpty()) {
+        // Ledger notes (unmatched sells, missing trade FX) explain why realised figures may be partial.
+        if (text.isEmpty())
+            text = tr("%n LEDGER NOTE(S)", "", static_cast<int>(last_summary_->ledger_warnings.size()));
+        tip = last_summary_->ledger_warnings.mid(0, 12).join(QLatin1Char('\n')) +
+              (analytics_tip_.isEmpty() ? QString() : QStringLiteral("\n\n") + analytics_tip_);
     }
     notes_label_->setText(text);
     notes_label_->setToolTip(tip);

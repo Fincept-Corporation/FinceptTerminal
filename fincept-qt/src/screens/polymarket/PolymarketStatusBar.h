@@ -45,7 +45,7 @@ class PolymarketStatusBar : public QWidget {
     QLabel* next_session_ = nullptr;
     QLabel* ws_label_ = nullptr;
 
-    QColor accent_{0xD97706}; // default amber — Polymarket
+    QColor accent_; // the exchange accent; the theme accent (Polymarket) until set_brand()
     bool ws_connected_ = false;
 };
 

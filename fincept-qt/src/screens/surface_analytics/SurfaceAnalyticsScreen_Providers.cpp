@@ -19,7 +19,12 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "services/markets/MarketDataService.h"
+#include "services/options/DerivMarketData.h"
+#include "services/options/FreeOptionChainService.h"
+#include "services/options/OptionPricing.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadGate.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QFileDialog>
 #include <QFrame>
@@ -37,11 +42,16 @@
 #include <QDate>
 #include <QDateTime>
 #include <QMap>
+#include <QPointer>
+#include <QStyle>
 #include <QTimeZone>
+#include <QTimer>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fincept::surface {
@@ -265,6 +275,64 @@ bool surface_build_risk_inputs(const QHash<QString, QVector<QJsonObject>>& data,
     return true;
 }
 
+// ── Option-chain window ─────────────────────────────────────────────────────
+// The provider returns the whole listed chain; the panel's Strike window (± % of
+// spot) and DTE min / max are applied here so those controls change what is
+// shown. Grids are z[expiry][strike] with expirations in days. Returns false
+// (grid untouched) when the window would leave fewer than two strikes or no
+// expiry — showing nothing would be worse than showing the full chain.
+template <typename Grid>
+bool apply_chain_window(Grid& g, float spot, int window_pct, int dte_min, int dte_max) {
+    if (g.z.empty() || g.z.size() != g.expirations.size())
+        return false;
+    std::vector<size_t> keep_s, keep_e;
+    for (size_t i = 0; i < g.strikes.size(); ++i)
+        if (spot <= 0.0f || window_pct <= 0 || std::fabs(g.strikes[i] / spot - 1.0f) * 100.0f <= float(window_pct) + 1e-4f)
+            keep_s.push_back(i);
+    for (size_t j = 0; j < g.expirations.size(); ++j)
+        if (g.expirations[j] >= dte_min && g.expirations[j] <= dte_max)
+            keep_e.push_back(j);
+    if (keep_s.size() < 2 || keep_e.empty())
+        return false;
+    if (keep_s.size() == g.strikes.size() && keep_e.size() == g.expirations.size())
+        return true;
+    decltype(g.strikes) strikes;
+    decltype(g.expirations) expirations;
+    decltype(g.z) z;
+    for (size_t i : keep_s)
+        strikes.push_back(g.strikes[i]);
+    for (size_t j : keep_e) {
+        expirations.push_back(g.expirations[j]);
+        std::vector<float> row;
+        for (size_t i : keep_s)
+            row.push_back(i < g.z[j].size() ? g.z[j][i] : std::nanf(""));
+        z.push_back(std::move(row));
+    }
+    g.strikes = std::move(strikes);
+    g.expirations = std::move(expirations);
+    g.z = std::move(z);
+    return true;
+}
+
+// DTE only (skew: z[expiry][delta bucket]).
+template <typename Grid>
+bool apply_dte_window(Grid& g, int dte_min, int dte_max) {
+    if (g.z.empty() || g.z.size() != g.expirations.size())
+        return false;
+    decltype(g.expirations) expirations;
+    decltype(g.z) z;
+    for (size_t j = 0; j < g.expirations.size(); ++j)
+        if (g.expirations[j] >= dte_min && g.expirations[j] <= dte_max) {
+            expirations.push_back(g.expirations[j]);
+            z.push_back(g.z[j]);
+        }
+    if (expirations.empty())
+        return false;
+    g.expirations = std::move(expirations);
+    g.z = std::move(z);
+    return true;
+}
+
 } // namespace
 
 // The six EQUITIES-tier surfaces (Correlation, PCA, VaR, Drawdown, Beta, Factor Exposure)
@@ -460,43 +528,61 @@ void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVol
         if (active_chart_ == t)
             replaced_active = true;
     };
+    // The panel's Strike window / DTE range, applied to the fetched chain.
+    const auto& cs = control_panel_->state();
+    bool window_skipped = false;
+    auto window = [&](auto& grid) {
+        if (!apply_chain_window(grid, spot, cs.strike_window_pct, cs.dte_min, cs.dte_max))
+            window_skipped = true;
+    };
 
     if (!r.vol.z.empty()) {
         vol_data_ = r.vol;
         vol_data_.underlying = sym_std;
         vol_data_.spot_price = spot;
+        window(vol_data_);
         note_replaced(ChartType::Volatility);
     }
     if (!r.delta.z.empty()) {
         delta_data_ = r.delta;
         delta_data_.underlying = sym_std;
         delta_data_.spot_price = spot;
+        window(delta_data_);
         note_replaced(ChartType::DeltaSurface);
     }
     if (!r.gamma.z.empty()) {
         gamma_data_ = r.gamma;
         gamma_data_.underlying = sym_std;
         gamma_data_.spot_price = spot;
+        window(gamma_data_);
         note_replaced(ChartType::GammaSurface);
     }
     if (!r.vega.z.empty()) {
         vega_data_ = r.vega;
         vega_data_.underlying = sym_std;
         vega_data_.spot_price = spot;
+        window(vega_data_);
         note_replaced(ChartType::VegaSurface);
     }
     if (!r.theta.z.empty()) {
         theta_data_ = r.theta;
         theta_data_.underlying = sym_std;
         theta_data_.spot_price = spot;
+        window(theta_data_);
         note_replaced(ChartType::ThetaSurface);
     }
     if (!r.skew.z.empty()) {
         skew_data_ = r.skew;
         skew_data_.underlying = sym_std;
+        if (!apply_dte_window(skew_data_, cs.dte_min, cs.dte_max))
+            window_skipped = true;
         note_replaced(ChartType::SkewSurface);
     }
     sync_synthetic_badge();
+    if (window_skipped && data_inspector_)
+        data_inspector_->set_status(
+            tr("Strike window / DTE range matched no listed contract on some surfaces — showing their full chain."),
+            true);
     if (!replaced_active && data_inspector_)
         data_inspector_->set_error(
             tr("The response carried no grid for the surface on screen — it is still showing sample data."));
@@ -504,12 +590,14 @@ void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVol
     if (data_inspector_) {
         QStringList headers = {"strike", "expiration", "iv"};
         QVector<QStringList> rows;
+        // The grid is z[expiry][strike]: indexing it z[strike][expiry] paired each
+        // strike with another strike's vol.
         for (size_t i = 0; i < vol_data_.strikes.size(); ++i) {
             for (size_t j = 0; j < vol_data_.expirations.size(); ++j) {
-                if (i < vol_data_.z.size() && j < vol_data_.z[i].size()) {
+                if (j < vol_data_.z.size() && i < vol_data_.z[j].size()) {
                     rows.push_back({QString::number(vol_data_.strikes[i], 'f', 2),
                                     QString::number(vol_data_.expirations[j]),
-                                    QString::number(vol_data_.z[i][j], 'f', 4)});
+                                    QString::number(vol_data_.z[j][i], 'f', 4)});
                 }
             }
         }
@@ -596,12 +684,20 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
     // nothing on screen changed and the DEMO badge must stay on.
     ChartType replaced = active_chart_;
     bool did_replace = false;
+    // The panel's Strike window / DTE range, applied to option-chain grids.
+    const auto& cs = control_panel_->state();
+    auto window = [&](auto& grid) {
+        if (!apply_chain_window(grid, spot, cs.strike_window_pct, cs.dte_min, cs.dte_max) && data_inspector_)
+            data_inspector_->set_status(
+                tr("Strike window / DTE range matched no listed contract — showing the full chain."), true);
+    };
     if (type == "local_vol" && !r.z.empty()) {
         local_vol_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
         local_vol_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         local_vol_data_.z = r.z;
         local_vol_data_.underlying = sym_std;
         local_vol_data_.spot_price = spot;
+        window(local_vol_data_);
         replaced = ChartType::LocalVolSurface;
         did_replace = true;
     } else if (type == "implied_dividend" && !r.z.empty()) {
@@ -609,6 +705,7 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
         impl_div_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         impl_div_data_.z = r.z;
         impl_div_data_.underlying = sym_std;
+        window(impl_div_data_);
         replaced = ChartType::ImpliedDividend;
         did_replace = true;
     } else if (type == "liquidity" && !r.z.empty()) {
@@ -616,6 +713,7 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
         liquidity_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         liquidity_data_.z = r.z;
         liquidity_data_.underlying = sym_std;
+        window(liquidity_data_);
         replaced = ChartType::LiquidityHeatmap;
         did_replace = true;
     } else if (type == "commodity_vol" && !r.z.empty()) {
@@ -703,6 +801,424 @@ void SurfaceAnalyticsScreen::on_db_raw_response(const QString& cmd, const QStrin
         return;
     QString header = QString("=== %1 ===\n").arg(cmd);
     data_inspector_->set_raw_output(header + raw_stdout);
+}
+
+// ── Free delayed option chain → the six option surfaces ──────────────────────
+
+namespace {
+
+namespace sa_mkt = fincept::services::options::market;
+
+bool sa_free_is_option_chart(ChartType t) {
+    return t == ChartType::Volatility || t == ChartType::DeltaSurface || t == ChartType::GammaSurface ||
+           t == ChartType::VegaSurface || t == ChartType::ThetaSurface || t == ChartType::SkewSurface;
+}
+
+/// The chain's implied-vol grid (moneyness K/F rows × expiries, SVI where it fits,
+/// else the market smile — computed by analyse_chain), restricted to 2..730-day
+/// expiries with at least four points, thinned to ten spread across the term, and
+/// gap-filled per expiry (linear inside, flat at the wings) so every surface view
+/// gets a complete grid. iv[col][row] is decimal.
+struct SaFreeGrid {
+    std::vector<double> moneyness;
+    std::vector<int> cols; ///< expiry indices into chain.expiries
+    std::vector<std::vector<double>> iv;
+};
+
+SaFreeGrid sa_free_build_grid(const sa_mkt::FreeChain& c) {
+    SaFreeGrid g;
+    const int rows = c.surface_moneyness.size();
+    if (rows < 3 || c.surface_iv.size() != rows)
+        return g;
+    std::vector<int> cols;
+    for (int e = 0; e < c.expiries.size(); ++e) {
+        const auto& x = c.expiries[e];
+        if (x.days < 2 || x.days > 730)
+            continue;
+        int valid = 0;
+        for (int r = 0; r < rows; ++r)
+            if (e < c.surface_iv[r].size() && std::isfinite(c.surface_iv[r][e]))
+                ++valid;
+        if (valid >= 4)
+            cols.push_back(e);
+    }
+    constexpr int kMaxCols = 10;
+    if ((int)cols.size() > kMaxCols) {
+        std::vector<int> thin;
+        for (int i = 0; i < kMaxCols; ++i) {
+            const int pick = cols[(size_t)std::lround(double(i) * double(cols.size() - 1) / double(kMaxCols - 1))];
+            if (thin.empty() || thin.back() != pick)
+                thin.push_back(pick);
+        }
+        cols = thin;
+    }
+    for (double m : c.surface_moneyness)
+        g.moneyness.push_back(m);
+    for (int e : cols) {
+        std::vector<double> col(rows, std::numeric_limits<double>::quiet_NaN());
+        for (int r = 0; r < rows; ++r)
+            if (e < c.surface_iv[r].size())
+                col[r] = c.surface_iv[r][e];
+        // Gaps: linear between known points, flat beyond the outermost ones.
+        int prev = -1;
+        for (int r = 0; r < rows; ++r) {
+            if (!std::isfinite(col[r]))
+                continue;
+            if (prev < 0) {
+                for (int k = 0; k < r; ++k)
+                    col[k] = col[r];
+            } else if (r - prev > 1) {
+                for (int k = prev + 1; k < r; ++k)
+                    col[k] = col[prev] + (col[r] - col[prev]) * double(k - prev) / double(r - prev);
+            }
+            prev = r;
+        }
+        if (prev < 0)
+            continue;
+        for (int k = prev + 1; k < rows; ++k)
+            col[k] = col[prev];
+        g.cols.push_back(e);
+        g.iv.push_back(std::move(col));
+    }
+    return g;
+}
+
+} // namespace
+
+void SurfaceAnalyticsScreen::schedule_free_chain() {
+    if (free_scheduled_)
+        return;
+    free_scheduled_ = true;
+    QTimer::singleShot(0, this, [this]() {
+        free_scheduled_ = false;
+        maybe_load_free_chain();
+    });
+}
+
+void SurfaceAnalyticsScreen::maybe_load_free_chain() {
+    // Only the visible screen, only an option surface still on the sample, once per
+    // symbol (a failure is not retried automatically; REFRESH retries).
+    if (!isVisible() || !sa_free_is_option_chart(active_chart_) ||
+        real_data_charts_.contains(static_cast<int>(active_chart_)))
+        return;
+    const QString sym = surface_us_chain_symbol(current_symbol_or_default());
+    if (sym.isEmpty() || sym == free_loading_symbol_ || free_failure_applies())
+        return;
+    start_free_chain(false);
+}
+
+void SurfaceAnalyticsScreen::release_free_gate() {
+    free_queued_ = false;
+    if (free_ticket_ != 0)
+        fincept::ui::AutoLoadGate::instance().leave(std::exchange(free_ticket_, 0));
+}
+
+void SurfaceAnalyticsScreen::start_free_chain(bool user_run) {
+    namespace opt = fincept::services::options;
+    // The plain US ticker the chain lists ("^GSPC" -> "SPX"), as Derivatives and F&O
+    // pass it: one cache entry per symbol across the three.
+    const QString sym = surface_us_chain_symbol(current_symbol_or_default());
+    if (sym.isEmpty())
+        return;
+    if (free_req_ != 0) {
+        opt::FreeOptionChainService::instance().cancel(free_req_);
+        free_req_ = 0;
+    }
+    release_free_gate();
+    free_loading_symbol_ = sym;
+    free_failed_symbol_.clear();
+    free_failed_message_.clear();
+    free_failed_status_.clear();
+    // Leaving the "no listed options" page (RETRY): the sample surface + loading banner.
+    if (chain_state_ && view_stack_ && view_stack_->currentWidget() == chain_state_)
+        update_chart();
+    update_source_banner();
+    if (data_inspector_)
+        data_inspector_->set_status(tr("Loading the delayed %1 option chain…").arg(sym), true);
+
+    QPointer<SurfaceAnalyticsScreen> self(this);
+    auto begin = [self, sym, user_run]() {
+        if (!self)
+            return;
+        self->free_queued_ = false;
+        self->update_source_banner(); // "Queued" -> "Loading"
+        if (self->free_loading_symbol_ != sym || (!user_run && !self->isVisible())) {
+            self->release_free_gate();
+            return;
+        }
+        self->free_req_ = opt::FreeOptionChainService::instance().fetch(
+            sym, QStringLiteral("auto"), user_run, self.data(), [self, sym](const opt::FreeOptionChainService::Reply& r) {
+                if (!self || self->free_loading_symbol_ != sym)
+                    return;
+                using Stage = opt::FreeOptionChainService::Stage;
+                const bool final_reply = r.stage != Stage::Saved;
+                if (r.chain && r.chain->ok()) {
+                    self->apply_free_chain(r.chain);
+                } else if (final_reply && !self->free_charts_.contains(static_cast<int>(self->active_chart_))) {
+                    const QString why = r.chain && !r.chain->message.isEmpty() ? r.chain->message
+                                        : !r.message.isEmpty()                 ? r.message
+                                                                               : tr("the delayed quote feed answered nothing");
+                    self->free_failed_symbol_ = sym;
+                    self->free_failed_message_ = why;
+                    self->free_failed_status_ = r.chain && !r.chain->status.isEmpty() ? r.chain->status : r.status;
+                    LOG_WARN("SurfaceAnalytics",
+                             QString("Delayed option chain unavailable symbol=%1 status=%2 error=\"%3\"")
+                                 .arg(sym, r.status, why));
+                    if (self->data_inspector_) {
+                        self->data_inspector_->set_status(tr("Delayed option chain unavailable"), false);
+                        self->data_inspector_->set_error(why);
+                    }
+                    self->update_chart(); // the "No listed options for X" page
+                } else if (final_reply && r.stage == Stage::Failed && self->data_inspector_) {
+                    // A saved copy is on screen: it stays, the refresh failed.
+                    self->data_inspector_->set_status(tr("Refresh failed — showing the saved chain"), false);
+                }
+                if (final_reply) {
+                    self->free_req_ = 0;
+                    self->free_loading_symbol_.clear();
+                    self->release_free_gate();
+                    self->update_source_banner();
+                }
+            });
+    };
+    if (user_run) {
+        begin(); // REFRESH: the user's run never waits for the gate
+        return;
+    }
+    quint64 ticket = 0;
+    const bool now = fincept::ui::AutoLoadGate::instance().enter(this, begin, 0, &ticket);
+    free_ticket_ = ticket;
+    if (now)
+        begin();
+    else
+        free_queued_ = true;
+}
+
+void SurfaceAnalyticsScreen::apply_free_chain(const std::shared_ptr<const sa_mkt::FreeChain>& chain) {
+    namespace pricing = fincept::services::options::pricing;
+    if (!chain || !chain->ok())
+        return;
+    const SaFreeGrid g = sa_free_build_grid(*chain);
+    const double spot = std::isfinite(chain->spot) && chain->spot > 0 ? chain->spot : 0.0;
+    if (g.cols.empty() || spot <= 0.0) {
+        free_failed_symbol_ = chain->symbol.toUpper();
+        free_failed_message_ = tr("the chain has no expiry with enough quoted strikes to draw a surface");
+        free_failed_status_ = QStringLiteral("thin");
+        if (data_inspector_) {
+            data_inspector_->set_status(tr("Delayed option chain too thin"), false);
+            data_inspector_->set_error(free_failed_message_);
+        }
+        update_chart(); // the designed page instead of the sample surface
+        return;
+    }
+    const std::string sym = chain->symbol.toStdString();
+    const float spot_f = float(spot);
+
+    std::vector<float> strikes;
+    for (double m : g.moneyness)
+        strikes.push_back(float(std::round(m * spot * 100.0) / 100.0));
+    std::vector<int> dtes;
+    for (int e : g.cols)
+        dtes.push_back(std::max(1, chain->expiries[e].days));
+
+    VolatilitySurfaceData vol;
+    GreeksSurfaceData dl, gm, vg, th;
+    SkewSurfaceData sk;
+    vol.strikes = dl.strikes = gm.strikes = vg.strikes = th.strikes = strikes;
+    vol.expirations = dl.expirations = gm.expirations = vg.expirations = th.expirations = sk.expirations = dtes;
+    vol.underlying = dl.underlying = gm.underlying = vg.underlying = th.underlying = sk.underlying = sym;
+    vol.spot_price = dl.spot_price = gm.spot_price = vg.spot_price = th.spot_price = spot_f;
+    dl.greek_name = "Delta";
+    gm.greek_name = "Gamma";
+    vg.greek_name = "Vega";
+    th.greek_name = "Theta";
+    sk.deltas = {10, 25, 50, 75, 90};
+
+    for (size_t c = 0; c < g.cols.size(); ++c) {
+        const auto& x = chain->expiries[g.cols[c]];
+        const double t = x.years > 0 ? x.years : std::max(1, x.days) / 365.0;
+        const double r = std::isfinite(x.rate) ? x.rate : 0.0;
+        const double q = std::isfinite(x.carry_q) ? x.carry_q : 0.0;
+        std::vector<float> v_row, d_row, g_row, vg_row, th_row;
+        std::vector<double> call_delta;
+        for (size_t i = 0; i < strikes.size(); ++i) {
+            const double sigma = std::max(1e-4, g.iv[c][i]);
+            const auto gk = pricing::bsm_greeks(true, spot, double(strikes[i]), t, r, sigma, q);
+            v_row.push_back(float(sigma * 100.0)); // percent, as every surface view expects
+            d_row.push_back(float(gk.delta));
+            g_row.push_back(float(gk.gamma));
+            vg_row.push_back(float(gk.vega / 100.0)); // per vol point
+            th_row.push_back(float(gk.theta));        // per calendar day
+            call_delta.push_back(gk.delta);
+        }
+        // Skew: implied vol at the strike whose call delta is nearest each bucket.
+        std::vector<float> s_row;
+        for (float bucket : sk.deltas) {
+            size_t best = 0;
+            double best_gap = std::numeric_limits<double>::max();
+            for (size_t i = 0; i < call_delta.size(); ++i) {
+                const double gap = std::fabs(call_delta[i] - double(bucket) / 100.0);
+                if (gap < best_gap) {
+                    best_gap = gap;
+                    best = i;
+                }
+            }
+            s_row.push_back(float(g.iv[c][best] * 100.0));
+        }
+        vol.z.push_back(std::move(v_row));
+        dl.z.push_back(std::move(d_row));
+        gm.z.push_back(std::move(g_row));
+        vg.z.push_back(std::move(vg_row));
+        th.z.push_back(std::move(th_row));
+        sk.z.push_back(std::move(s_row));
+    }
+
+    // The panel's DTE range applies as for a Databento chain (the strike axis is
+    // already ±20 % of the forward).
+    if (control_panel_) {
+        const auto& cs = control_panel_->state();
+        apply_chain_window(vol, spot_f, cs.strike_window_pct, cs.dte_min, cs.dte_max);
+        apply_chain_window(dl, spot_f, cs.strike_window_pct, cs.dte_min, cs.dte_max);
+        apply_chain_window(gm, spot_f, cs.strike_window_pct, cs.dte_min, cs.dte_max);
+        apply_chain_window(vg, spot_f, cs.strike_window_pct, cs.dte_min, cs.dte_max);
+        apply_chain_window(th, spot_f, cs.strike_window_pct, cs.dte_min, cs.dte_max);
+        apply_dte_window(sk, cs.dte_min, cs.dte_max);
+    }
+    vol_data_ = std::move(vol);
+    delta_data_ = std::move(dl);
+    gamma_data_ = std::move(gm);
+    vega_data_ = std::move(vg);
+    theta_data_ = std::move(th);
+    skew_data_ = std::move(sk);
+
+    free_chain_ = chain;
+    for (ChartType t : {ChartType::Volatility, ChartType::DeltaSurface, ChartType::GammaSurface,
+                        ChartType::VegaSurface, ChartType::ThetaSurface, ChartType::SkewSurface}) {
+        real_data_charts_.insert(static_cast<int>(t));
+        free_charts_.insert(static_cast<int>(t));
+    }
+    if (control_panel_)
+        control_panel_->set_spot(spot);
+    // The underlying the "no listed options" page offers to go BACK TO.
+    free_good_symbol_ = surface_us_chain_symbol(current_symbol_or_default());
+    sync_synthetic_badge();
+    update_chart();
+    update_metrics();
+    update_inspector_lineage();
+    if (data_inspector_)
+        data_inspector_->set_status(tr("Delayed %1 chain: %2 expiries × %3 strikes from %4")
+                                        .arg(chain->symbol)
+                                        .arg(g.cols.size())
+                                        .arg(strikes.size())
+                                        .arg(chain->source_label),
+                                    true);
+}
+
+void SurfaceAnalyticsScreen::update_source_banner() {
+    if (!demo_banner_)
+        return;
+    const int active = static_cast<int>(active_chart_);
+    QString tone;
+    QString text;
+    if (free_chain_ && free_charts_.contains(active)) {
+        const QDateTime at = free_chain_->quote_time.isValid() ? free_chain_->quote_time : free_chain_->fetched_at;
+        tone = QStringLiteral("delayed");
+        text = tr("DELAYED — %1 option chain from %2, quotes as of %3. Free public data, about 15 minutes behind the "
+                  "market; FETCH loads Databento.")
+                   .arg(free_chain_->symbol,
+                        free_chain_->source_label.isEmpty() ? tr("public delayed quotes") : free_chain_->source_label,
+                        at.toLocalTime().toString(QStringLiteral("d MMM HH:mm")));
+    } else if (real_data_charts_.contains(active)) {
+        demo_banner_->setVisible(false); // fetched (Databento) or imported data: no caveat
+        return;
+    } else if (sa_free_is_option_chart(active_chart_) && !free_loading_symbol_.isEmpty()) {
+        tone = QStringLiteral("loading");
+        text = free_queued_ ? tr("Queued — the delayed %1 option chain loads after the other loads running now; the "
+                                 "sample surface stays until it arrives.")
+                                  .arg(free_loading_symbol_)
+                            : tr("Loading the delayed %1 option chain (free public quotes)… the sample surface stays "
+                                 "until it arrives.")
+                                  .arg(free_loading_symbol_);
+    } else if (free_failure_applies()) {
+        demo_banner_->setVisible(false); // the "no listed options" page says it, in place of the chart
+        return;
+    } else {
+        tone = QStringLiteral("sample");
+        const auto& cap = capability_for(active_chart_);
+        text = tr("SAMPLE DATA — synthetic values, not a live market surface. Do not trade or quote from this.");
+        if (sa_free_is_option_chart(active_chart_) && !free_failed_symbol_.isEmpty())
+            text += QLatin1Char(' ') + tr("No free delayed chain for %1 (%2) — REFRESH retries.")
+                                           .arg(free_failed_symbol_, free_failed_message_);
+        if (cap.tier != SurfaceTier::DEMO && !DatabentoService::instance().has_api_key())
+            text += QLatin1Char(' ') + tr("Real data: add a Databento API key in Settings > Credentials.");
+    }
+    demo_banner_->setText(text);
+    if (demo_banner_->property("tone").toString() != tone) {
+        demo_banner_->setProperty("tone", tone);
+        demo_banner_->style()->unpolish(demo_banner_);
+        demo_banner_->style()->polish(demo_banner_);
+    }
+    demo_banner_->setVisible(true);
+}
+
+bool SurfaceAnalyticsScreen::free_failure_applies() const {
+    namespace opt = fincept::services::options;
+    if (free_failed_symbol_.isEmpty() || !sa_free_is_option_chart(active_chart_) ||
+        real_data_charts_.contains(static_cast<int>(active_chart_)))
+        return false;
+    return opt::FreeOptionChainService::key_of(free_failed_symbol_) ==
+           opt::FreeOptionChainService::key_of(surface_us_chain_symbol(current_symbol_or_default()));
+}
+
+bool SurfaceAnalyticsScreen::show_free_failure_page() {
+    namespace opt = fincept::services::options;
+    if (!chain_state_ || !view_stack_ || !free_failure_applies())
+        return false;
+    const QString sym = surface_us_chain_symbol(current_symbol_or_default());
+    const QString key = opt::FreeOptionChainService::key_of(sym);
+    const bool unlisted = free_failed_status_ == QLatin1String("no_options") ||
+                          free_failed_status_ == QLatin1String("bad_symbol");
+    const bool thin = free_failed_status_ == QLatin1String("thin");
+    // BACK TO the last underlying whose chain loaded (the service still holds it, so it
+    // is back at once); without one, SPY.
+    const bool has_back = !free_good_symbol_.isEmpty() && opt::FreeOptionChainService::key_of(free_good_symbol_) != key;
+    chain_state_back_ = has_back ? free_good_symbol_ : (key != QLatin1String("SPY") ? QStringLiteral("SPY") : QString());
+
+    fincept::ui::EmptyState::Spec s;
+    s.glyph = QStringLiteral("◇");
+    s.glyph_tone = unlisted || thin ? fincept::ui::EmptyState::Tone::Warning : fincept::ui::EmptyState::Tone::Danger;
+    if (unlisted) {
+        s.title = tr("No listed options for %1").arg(sym);
+        s.message = tr("The free delayed feed (Cboe, Yahoo Finance as the fallback) has no option chain for %1, so "
+                       "there is no surface to draw. Options trade on US-listed stocks, ETFs and indices.")
+                        .arg(sym);
+        s.technical = free_failed_message_;
+    } else if (thin) {
+        s.title = tr("Too few quotes for a %1 surface").arg(sym);
+        s.message = tr("The delayed %1 chain has no expiry with enough quoted strikes to draw a surface.").arg(sym);
+    } else {
+        s.title = tr("No option chain for %1").arg(sym);
+        s.message = tr("The free delayed source (Cboe, with Yahoo Finance as the fallback) returned no chain for %1 — "
+                       "it may have no listed options, or the feed did not answer.")
+                        .arg(sym);
+        s.technical = free_failed_message_;
+    }
+    s.note = tr("Pick another underlying in the ASSET box on the left — any US stock, ETF or index.");
+    s.note_tone = fincept::ui::EmptyState::Tone::Info;
+    if (!chain_state_back_.isEmpty()) {
+        s.primary = has_back ? tr("BACK TO %1").arg(chain_state_back_) : tr("OPEN %1").arg(chain_state_back_);
+        s.primary_tooltip = tr("Show the %1 surfaces").arg(chain_state_back_);
+        if (!unlisted)
+            s.secondary = tr("RETRY");
+    } else {
+        s.primary = tr("RETRY"); // primary_clicked retries when there is nothing to go back to
+    }
+    s.illustration = true;
+    s.illustration_shape = fincept::ui::LoadingSkeleton::Shape::Chart;
+    chain_state_->apply(s);
+    if (view_stack_->currentWidget() != chain_state_)
+        view_stack_->setCurrentWidget(chain_state_);
+    return true;
 }
 
 } // namespace fincept::surface

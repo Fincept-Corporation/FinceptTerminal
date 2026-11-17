@@ -281,13 +281,10 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
 
     // ── Error mode ──
     if (error_mode_) {
-        QFont err_font;
-        err_font.setFamily(ui::fonts::DATA_FAMILY);
-        err_font.setPixelSize(11);
-        err_font.setBold(true);
+        QFont err_font = ui::fonts::font(-3, QFont::Bold);
         err_font.setLetterSpacing(QFont::AbsoluteSpacing, 0.6);
         p.setFont(err_font);
-        p.setPen(QColor(ui::colors::NEGATIVE()));
+        p.setPen(QColor(ui::colors::DANGER()));
         const QRect text_rect = r.adjusted(12, 12, -12, -12);
         p.drawText(text_rect, Qt::AlignCenter | Qt::TextWordWrap, error_text_);
         return;
@@ -299,6 +296,9 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
     const QColor skel_bg = with_alpha(ui::colors::BORDER_DIM(), 170);
     const QColor accent = QColor(ui::colors::AMBER());
     const QColor accent_dim = with_alpha(ui::colors::AMBER(), 70);
+    // Gradient ends: the accent fully transparent, so the fade never passes
+    // through a dark fringe on the light theme.
+    const QColor accent_clear = with_alpha(ui::colors::AMBER(), 0);
 
     const int margin_x = 12;
     const int bar_h = 8;
@@ -325,9 +325,9 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
         const qreal sweep_x = row.left() - sweep_w + (row.width() + sweep_w) * phase;
 
         QLinearGradient grad(sweep_x, 0, sweep_x + sweep_w, 0);
-        grad.setColorAt(0.0, QColor(0, 0, 0, 0));
+        grad.setColorAt(0.0, accent_clear);
         grad.setColorAt(0.5, accent_dim);
-        grad.setColorAt(1.0, QColor(0, 0, 0, 0));
+        grad.setColorAt(1.0, accent_clear);
         p.save();
         p.setClipPath(path);
         p.fillRect(row.adjusted(-int(sweep_w), 0, int(sweep_w), 0), grad);
@@ -336,10 +336,7 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
 
     // ── Status text + progress bar ──
     const int text_y = top + 3 * (bar_h + row_gap) + 8;
-    QFont label_font;
-    label_font.setFamily(ui::fonts::DATA_FAMILY);
-    label_font.setPixelSize(11);
-    label_font.setBold(true);
+    QFont label_font = ui::fonts::font(-3, QFont::Bold);
     label_font.setLetterSpacing(QFont::AbsoluteSpacing, 0.8);
     p.setFont(label_font);
 
@@ -381,9 +378,9 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
         const qreal block_w = bar_full_w * 0.30;
         const qreal x = track.left() - block_w + (track.width() + block_w) * shimmer_phase_;
         QLinearGradient grad(x, 0, x + block_w, 0);
-        grad.setColorAt(0.0, QColor(0, 0, 0, 0));
+        grad.setColorAt(0.0, accent_clear);
         grad.setColorAt(0.5, accent);
-        grad.setColorAt(1.0, QColor(0, 0, 0, 0));
+        grad.setColorAt(1.0, accent_clear);
         p.fillRect(QRectF(x, track.top(), block_w, track.height()), grad);
     } else {
         const int fill_w = static_cast<int>(bar_full_w * displayed_progress_);

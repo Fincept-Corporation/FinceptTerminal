@@ -5,7 +5,9 @@
 #include "trading/TradingTypes.h"
 
 #include <QDate>
+#include <QDateTime>
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -71,10 +73,14 @@ bool pt_is_market_open(const QString& exchange);
 // is visible in the order book. Successfully placed orders that increase
 // exposure have their required margin blocked and recorded on the order
 // (order.margin_blocked) and in pt_margin_blocks.
+//
+// `source`: who created the order (UnifiedOrder::source format: ticket, basket,
+// algo:<id>, workflow:<id>, agent:<client>, …) — written as field "source" on the
+// order's audit lines (accepted / rejected), omitted when empty. Not stored.
 PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const QString& side,
                        const QString& order_type, double quantity, std::optional<double> price = std::nullopt,
                        std::optional<double> stop_price = std::nullopt, bool reduce_only = false,
-                       const QString& exchange = "", const QString& product = "");
+                       const QString& exchange = "", const QString& product = "", const QString& source = "");
 void pt_cancel_order(const QString& order_id);
 QVector<PtOrder> pt_get_orders(const QString& portfolio_id, const QString& status = "");
 
@@ -117,5 +123,116 @@ void pt_update_position_price(const QString& portfolio_id, const QString& symbol
 // --- Trades & Stats ---
 QVector<PtTrade> pt_get_trades(const QString& portfolio_id, int64_t limit = 100);
 PtStats pt_get_stats(const QString& portfolio_id);
+
+// ============================================================================
+// Additions for the built-in paper account (no broker, delayed public prices).
+// Everything below is opt-in: a portfolio that never calls these behaves exactly
+// as before (FX factor 1, IST settlement, no delayed-price rules).
+// ============================================================================
+
+// --- Multi-currency (cash in the portfolio currency, prices in the instrument's) ---
+// Units of the PORTFOLIO currency per one PRICE unit of `symbol` (minor units
+// included: a GBp-quoted symbol in an INR portfolio gets INR-per-pence). Every
+// cash amount the engine books for that symbol — margin blocked / held / released,
+// fee, realized P&L (on the trade row and the position) — is multiplied by it,
+// while prices, quantities and position marks stay in the instrument's own
+// currency. In-memory, like the leverage config; unset = 1.0 (single-currency).
+// Realized P&L is converted at the factor current at the closing fill (no FX
+// gain/loss on the principal is simulated).
+void pt_set_symbol_fx(const QString& portfolio_id, const QString& symbol, double fx_to_portfolio_ccy);
+double pt_get_symbol_fx(const QString& portfolio_id, const QString& symbol); // 1.0 when unset
+bool pt_has_symbol_fx(const QString& portfolio_id, const QString& symbol);
+
+// True for portfolios settled per venue (the built-in paper account): the IST
+// 15:30 intraday sweep (pt_settle_intraday) skips them; pt_settle_delayed_sessions
+// settles them at each instrument's own session close instead.
+bool pt_portfolio_settles_by_venue(const PtPortfolio& portfolio);
+
+// --- Delayed-price simulation ---
+// The newest delayed public quote of an instrument, as the simulator sees it.
+struct PtDelayedQuote {
+    double price = 0.0;        // last price, instrument currency
+    qint64 received_ms = 0;    // when this app received it (epoch ms)
+    qint64 printed_ms = 0;     // exchange time of that last trade (epoch ms); 0 = unknown
+    bool session_open = false; // the instrument's venue is in its regular session now
+    bool valid() const;
+};
+
+// A quote received longer ago than this is too old to fill a MARKET order while
+// the market is open (the public feed refreshes every ~30 s; three minutes of
+// silence means it has stalled).
+inline constexpr qint64 kPtDelayedQuoteMaxAgeMs = 3 * 60 * 1000;
+
+struct PtSimRequest {
+    QString portfolio_id;
+    QString symbol;     // canonical (Yahoo-form) symbol
+    QString side;       // "buy" | "sell"
+    QString order_type; // "market" | "limit" | "stop" | "stop_limit" (or "stop_loss" / "stop_loss_limit")
+    double quantity = 0.0;
+    std::optional<double> price;      // limit price
+    std::optional<double> stop_price; // trigger
+    QString exchange;                 // the instrument's venue id (leverage rules)
+    QString product;                  // "MIS" | "CNC"
+    bool reduce_only = false;
+    double fx_to_account = 1.0;       // see pt_set_symbol_fx
+    QString source;                   // see pt_place_order (audit field "source")
+};
+
+enum class PtSimOutcome { Filled, Resting, QueuedForOpen, Rejected };
+
+struct PtSimResult {
+    PtSimOutcome outcome = PtSimOutcome::Rejected;
+    PtOrder order;                // the order as stored (empty id when nothing was stored)
+    std::optional<PtTrade> trade; // the simulated fill, when Filled
+    QString message;              // plain language, says what happened and why
+};
+
+// Place an order on delayed prices. Rules:
+//   MARKET, session open : fills at the latest delayed price — rejected when no
+//                          price has arrived yet, or when it was received more
+//                          than `max_quote_age_ms` ago (the feed has stalled).
+//   MARKET, session not open: queued (pending "market" order in the matcher); it
+//                          fills at the first delayed price printed after the open.
+//                          Rejected when there is no price at all (no margin
+//                          reference).
+//   LIMIT / STOP / STOP-LIMIT: stored and handed to OrderMatcher; while the session
+//                          is open and the latest delayed price is fresh, the
+//                          matcher checks the new order against it at once (a
+//                          marketable limit fills at its limit, a triggered stop at
+//                          the delayed price — OrderMatcher's own rules); else it
+//                          rests until a delayed price printed after it crosses.
+//   Margin / validation failures from pt_place_order come back as Rejected.
+PtSimResult pt_submit_delayed_order(const PtSimRequest& request, const PtDelayedQuote& quote, qint64 now_ms,
+                                    qint64 max_quote_age_ms = kPtDelayedQuoteMaxAgeMs);
+
+// Run the matcher for one symbol of a delayed-price portfolio on a new delayed
+// quote: resting orders (and queued MARKET orders) fill only while the session is
+// open and only on a price printed at or after the order was placed; SL / TP
+// brackets fire on the same prices. Returns the number of orders filled. Does not
+// mark positions (callers coalesce pt_update_position_price).
+int pt_match_delayed_quote(const QString& portfolio_id, const QString& symbol, const PtDelayedQuote& quote);
+
+// Session-close settlement for a venue-settled portfolio. `close_after(symbol, t)`
+// returns the close (UTC) of the first regular session of the symbol's venue that
+// ends after `t`, or an invalid QDateTime for a venue that never closes (crypto).
+//   * an intraday (MIS) position is squared off at its last mark, stamped at the
+//     close of the session it was opened in, once that close has passed;
+//   * a resting DAY order expires (cancelled, margin released) at the close of the
+//     first session ending after it was placed — so an order queued while the market
+//     was closed lives through the next session.
+// Returns the number of positions squared off + orders expired.
+int pt_settle_delayed_sessions(const QString& portfolio_id,
+                               const std::function<QDateTime(const QString& symbol, const QDateTime& after_utc)>& close_after,
+                               const QDateTime& now_utc);
+
+// Change a resting paper order's quantity and/or limit price (and trigger, when
+// > 0): the order is cancelled and re-placed with the new values (paper has no
+// in-place modify), keeping side, type, product, exchange and reduce-only. The new
+// order replaces the old one in the matcher (and, like a real modify, loses its
+// time priority). Throws std::runtime_error when the order is not resting, or when
+// the replacement is refused (e.g. insufficient margin) — the original is then
+// re-placed unchanged and the message says so. For an SL-M ("stop") order
+// `new_price` is its trigger.
+PtOrder pt_modify_order(const QString& order_id, double new_quantity, double new_price, double new_stop_price = 0.0);
 
 } // namespace fincept::trading

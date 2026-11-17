@@ -4,6 +4,7 @@
 #include "ui/charts/layers/BollingerLayer.h"
 #include "ui/charts/layers/EmaLayer.h"
 #include "ui/charts/layers/VwapLayer.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QCoreApplication>
 #include <QHBoxLayout>
@@ -14,7 +15,8 @@ namespace fincept::ui {
 
 IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent) : QWidget(parent), mgr_(mgr) {
     setObjectName("indicatorPicker");
-    setFixedHeight(28);
+    // Heights are for the default font size and grow with the user's font.
+    metrics::follow_fixed_height(this, 28);
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 0, 8, 0);
@@ -22,7 +24,7 @@ IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent) : QW
 
     add_btn_ = new QPushButton(tr("+ Indicator"));
     add_btn_->setObjectName("indicatorAddBtn");
-    add_btn_->setFixedHeight(22);
+    metrics::follow_fixed_height(add_btn_, 22);
     add_btn_->setCursor(Qt::PointingHandCursor);
     connect(add_btn_, &QPushButton::clicked, this, &IndicatorPicker::build_menu);
     layout->addWidget(add_btn_);
@@ -80,7 +82,7 @@ void IndicatorPicker::build_menu() {
 void IndicatorPicker::add_chip(const QString& id, const QString& name) {
     auto* chip = new QPushButton(name + QStringLiteral("  ×"), chip_container_);
     chip->setObjectName("indicatorChip");
-    chip->setFixedHeight(20);
+    metrics::follow_fixed_height(chip, 20);
     chip->setCursor(Qt::PointingHandCursor);
     chip->setProperty("layerId", id);
     connect(chip, &QPushButton::clicked, this, [this, id]() { emit indicator_removed(id); });

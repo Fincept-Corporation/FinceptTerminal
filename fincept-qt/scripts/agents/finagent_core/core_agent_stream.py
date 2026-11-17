@@ -139,6 +139,11 @@ class StreamingCoreAgent:
 
             # Create agent with streaming
             agent = core._create_agent(config)
+            # Requested features that are not in effect (e.g. a tool whose
+            # package is missing): say so in the stream rather than nowhere.
+            for note in core.build_warnings:
+                self.emit("thinking", f"Note: {note}")
+                yield {"type": "warning", "content": note}
 
             # Check guardrails first
             if core._guardrails:
@@ -172,7 +177,8 @@ class StreamingCoreAgent:
                     # emitted as an ordinary TOKEN and the run reported as successful,
                     # so the UI showed the error message as the agent's answer.
                     if getattr(chunk, 'event', None) == 'RunError':
-                        err_text = str(getattr(chunk, 'content', None) or 'Agent run failed')
+                        from finagent_core.run_errors import explain_llm_error
+                        err_text = explain_llm_error(str(getattr(chunk, 'content', None) or 'Agent run failed'))
                         self.emit("error", err_text)
                         yield {"type": "error", "content": err_text}
                         return
@@ -214,6 +220,12 @@ class StreamingCoreAgent:
                         yield {"type": "token", "content": visible}
             else:
                 # Non-streaming response - strip think blocks then chunk-emit
+                from finagent_core.run_errors import run_error_text
+                run_err = run_error_text(response)
+                if run_err:
+                    self.emit("error", run_err)
+                    yield {"type": "error", "content": run_err}
+                    return
                 content = core.get_response_content(response)
                 full_content = content
                 visible_content = _strip_emoji(
@@ -250,6 +262,17 @@ class StreamingCoreAgent:
 
             # Run without streaming
             response = core.run(query, config, session_id)
+            for note in core.last_warnings:
+                self.emit("thinking", f"Note: {note}")
+                yield {"type": "warning", "content": note}
+            from finagent_core.run_errors import run_error_text
+            run_err = run_error_text(response)
+            if run_err:
+                # A failed run's content is the error text — never stream it
+                # as the answer.
+                self.emit("error", run_err)
+                yield {"type": "error", "content": run_err}
+                return
             content = core.get_response_content(response)
 
             # Simulate streaming by chunking output
@@ -291,6 +314,12 @@ class StreamingCoreAgent:
             # run_team returns an Agno TeamRunOutput object (not a dict).
             # Use get_response_content() to safely extract text — same as main.py does.
             team_response = core.run_team(query, team_config, session_id)
+            from finagent_core.run_errors import run_error_text
+            run_err = run_error_text(team_response)
+            if run_err:
+                self.emit("error", run_err)
+                yield {"type": "error", "content": run_err}
+                return
             content = core.get_response_content(team_response)
 
             if content:

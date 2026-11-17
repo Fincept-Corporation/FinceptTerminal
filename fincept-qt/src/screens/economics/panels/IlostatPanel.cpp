@@ -8,6 +8,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -40,11 +41,7 @@ IlostatPanel::IlostatPanel(QWidget* parent) : EconPanelBase(kIlostatSourceId, kI
 }
 
 void IlostatPanel::activate() {
-    show_empty(tr("Select a series, enter a country code, then click FETCH\n"
-                  "Source: ILO ILOSTAT SDMX REST API (sdmx.ilo.org) — no API key required\n"
-                  "Series are ANNUAL, both sexes, age 15+, harmonised (modelled) estimates — percent.\n"
-                  "Country codes (ISO-3): USA, GBR, DEU, FRA, IND, CHN, JPN, BRA, ZAF · "
-                  "G7 = CAN+USA+GBR+DEU+FRA+ITA+JPN"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void IlostatPanel::build_controls(QHBoxLayout* thl) {
@@ -57,15 +54,15 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kIlostatSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(220);
 
     for (int i = 0; i < kIlostatSeries.size(); ++i)
         series_combo_->setItemData(i, kIlostatSeries[i].description, Qt::ToolTipRole);
 
     country_edit_ = new QLineEdit("USA");
-    country_edit_->setFixedHeight(26);
-    country_edit_->setFixedWidth(120);
+    country_edit_->setMinimumHeight(26);
+    set_text_width(country_edit_, 120);
     // ILOSTAT SDMX uses ISO-3166 alpha-3 (USA/GBR/DEU) — the field was
     // mislabelled "ISO-2" while every example it gave was alpha-3.
     country_edit_->setPlaceholderText(tr("ISO-3 code…"));
@@ -75,12 +72,13 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
     country_edit_->setAccessibleName(tr("ILOSTAT country code"));
 
     start_edit_ = new QLineEdit("2010");
-    start_edit_->setFixedHeight(26);
-    start_edit_->setFixedWidth(52);
+    start_edit_->setMinimumHeight(26);
+    set_text_width(start_edit_, 52);
 
-    end_edit_ = new QLineEdit("2023");
-    end_edit_->setFixedHeight(26);
-    end_edit_->setFixedWidth(52);
+    // Current year: a fixed "2023" hid every newer observation from the default query.
+    end_edit_ = new QLineEdit(QString::number(QDate::currentDate().year()));
+    end_edit_->setMinimumHeight(26);
+    set_text_width(end_edit_, 52);
 
     thl->addWidget(series_lbl_ = mk_lbl(tr("SERIES")));
     thl->addWidget(series_combo_);
@@ -109,9 +107,9 @@ void IlostatPanel::on_fetch() {
 
     show_loading(tr("Fetching ILO: %1 — %2…").arg(series.label, country));
 
-    services::EconomicsService::instance().execute(kIlostatSourceId, kIlostatScript, series.command,
-                                                   {country, "A", "SEX_T", "AGE_YTHADULT_YGE15", start, end},
-                                                   "ilostat_" + series.command);
+    execute_query(kIlostatSourceId, kIlostatScript, series.command,
+                  {country, "A", "SEX_T", "AGE_YTHADULT_YGE15", start, end},
+                  "ilostat_" + series.command);
 }
 
 void IlostatPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -157,7 +155,7 @@ void IlostatPanel::on_result(const QString& request_id, const services::Economic
     meta.note = tr("ILO modelled estimates, both sexes, age 15+");
     set_series_meta(meta);
     display(rows, title);
-    LOG_INFO("IlostatPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("IlostatPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

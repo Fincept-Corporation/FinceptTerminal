@@ -90,6 +90,9 @@ class TickerBar : public QWidget {
     /// total_width_ from entries_. Called on new data and on theme change
     /// (both font family/size and colours are theme tokens).
     void rebuild_entry_cache();
+    /// Sizes the strip and its edit overlay to the ticker font (never below
+    /// kEditBarHeight). Called on construction and on theme change.
+    void fit_height();
 
     // ── Scrolling ──
     QVector<Entry> entries_;

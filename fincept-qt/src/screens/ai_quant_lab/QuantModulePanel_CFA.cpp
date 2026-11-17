@@ -66,7 +66,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     auto* data_lbl = new QLabel(tr("DATA INPUT"), w);
     data_lbl->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;"
                                     "letter-spacing:1px;")
-                                .arg(module_.color.name())
+                                .arg(ui::colors::legible(module_.color))
                                 .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(data_lbl);
 
@@ -74,7 +74,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     auto* symbol = new QLineEdit(w);
     symbol->setPlaceholderText(tr("Ticker (AAPL, ^GSPC, BTC-USD) or comma-separated values"));
     symbol->setStyleSheet(input_ss());
-    symbol->setText("AAPL");
+    // The user's context first: their first watchlist symbol (else SPY).
+    symbol->setText(series_default_symbol());
     text_inputs_["cfa_symbol"] = symbol;
     vl->addWidget(build_input_row(tr("Symbol / Data"), symbol, w));
 
@@ -84,23 +85,46 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     period->setCurrentText("1y");
     period->setStyleSheet(combo_ss());
     combo_inputs_["cfa_period"] = period;
-    vl->addWidget(build_input_row(tr("Period (ticker only)"), period, w));
+    auto* period_row = build_input_row(tr("Period (ticker)"), period, w);
+    vl->addWidget(period_row);
 
     auto* interval = new QComboBox(w);
     interval->addItems({"1d", "1wk", "1mo"});
     interval->setStyleSheet(combo_ss());
     combo_inputs_["cfa_interval"] = interval;
-    vl->addWidget(build_input_row(tr("Interval (ticker only)"), interval, w));
+    auto* interval_row = build_input_row(tr("Interval (ticker)"), interval, w);
+    vl->addWidget(interval_row);
+    // Comma-separated values instead of a ticker: period and interval mean nothing then.
+    auto sync_ticker_rows = [period_row, interval_row](const QString& text) {
+        const bool ticker = !text.contains(QLatin1Char(','));
+        period_row->setVisible(ticker);
+        interval_row->setVisible(ticker);
+    };
+    connect(symbol, &QLineEdit::textChanged, period_row, sync_ticker_rows);
+    sync_ticker_rows(symbol->text());
 
     // ── Analysis selector ───────────────────────────────────────────────────
     auto* analysis_type = new QComboBox(w);
-    const QStringList analyses = {
-        "trend_analysis",        "stationarity_test",       "arima_model",
-        "forecasting",           "supervised_learning",     "unsupervised_learning",
-        "model_evaluation",      "resampling_methods",      "sampling_techniques",
-        "central_limit_theorem", "sampling_error_analysis", "validate_data",
+    // Readable names; the script's analysis ids are the item data (what a run sends).
+    const QList<QPair<QString, QString>> analyses = {
+        {QStringLiteral("trend_analysis"), tr("Trend analysis")},
+        {QStringLiteral("stationarity_test"), tr("Stationarity test (ADF / KPSS)")},
+        {QStringLiteral("arima_model"), tr("ARIMA model")},
+        {QStringLiteral("forecasting"), tr("Forecasting")},
+        {QStringLiteral("supervised_learning"), tr("Supervised learning")},
+        {QStringLiteral("unsupervised_learning"), tr("Unsupervised learning (PCA, clustering)")},
+        {QStringLiteral("model_evaluation"), tr("Model evaluation (cross-validation)")},
+        {QStringLiteral("resampling_methods"), tr("Resampling (bootstrap, jackknife)")},
+        {QStringLiteral("sampling_techniques"), tr("Sampling techniques")},
+        {QStringLiteral("central_limit_theorem"), tr("Central limit theorem")},
+        {QStringLiteral("sampling_error_analysis"), tr("Sampling error analysis")},
+        {QStringLiteral("validate_data"), tr("Data validation")},
     };
-    analysis_type->addItems(analyses);
+    QStringList analysis_ids;
+    for (const auto& a : analyses) {
+        analysis_type->addItem(a.second, a.first);
+        analysis_ids.append(a.first);
+    }
     analysis_type->setStyleSheet(combo_ss());
     combo_inputs_["cfa_analysis"] = analysis_type;
     vl->addWidget(build_input_row(tr("Analysis Type"), analysis_type, w));
@@ -109,7 +133,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     auto* params_lbl = new QLabel(tr("ANALYSIS PARAMETERS"), w);
     params_lbl->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;"
                                       "letter-spacing:1px; margin-top:8px;")
-                                  .arg(module_.color.name())
+                                  .arg(ui::colors::legible(module_.color))
                                   .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(params_lbl);
 
@@ -127,6 +151,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         return page;
     };
 
+    begin_view({.key = QStringLiteral("trend_analysis"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and fitting the trend…"), .shape = ui::LoadingSkeleton::Shape::Chart});
     // 0: trend_analysis — trend_type
     {
         auto* t = new QComboBox(stack);
@@ -135,6 +160,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         combo_inputs_["cfa_trend_type"] = t;
         add_page({build_input_row(tr("Trend Type"), t, stack)});
     }
+    end_view();
+    begin_view({.key = QStringLiteral("stationarity_test"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and testing for a unit root…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 1: stationarity_test — test_type
     {
         auto* t = new QComboBox(stack);
@@ -143,6 +170,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         combo_inputs_["cfa_stationarity_test"] = t;
         add_page({build_input_row(tr("Test Type"), t, stack)});
     }
+    end_view();
+    begin_view({.key = QStringLiteral("arima_model"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and fitting the ARIMA model…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 2: arima_model — order p,d,q + optional seasonal
     {
         auto* p = new QSpinBox(stack);
@@ -166,6 +195,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("MA order (q)"), q, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("forecasting"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and forecasting…"), .shape = ui::LoadingSkeleton::Shape::Chart});
     // 3: forecasting — horizon, method, train_size
     {
         auto* h = new QSpinBox(stack);
@@ -174,7 +205,9 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         h->setStyleSheet(spinbox_ss());
         int_inputs_["cfa_forecast_horizon"] = h;
         auto* m = new QComboBox(stack);
-        m->addItems({"simple_exponential", "holt", "holt_winters", "arima", "naive", "drift"});
+        // Exactly the names quant_modules_3042.FORECAST_METHODS accepts.
+        m->addItems({"simple_exponential", "holt", "holt_winters", "arima", "naive", "drift", "linear_trend",
+                     "moving_average"});
         m->setStyleSheet(combo_ss());
         combo_inputs_["cfa_forecast_method"] = m;
         auto* ts = make_double_spin(0.5, 0.95, 0.8, 2, "", stack);
@@ -185,6 +218,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Train Size"), ts, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("supervised_learning"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and fitting the models…"), .shape = ui::LoadingSkeleton::Shape::Table});
     // 4: supervised_learning — n_lags, problem_type, algorithms
     {
         auto* lags = new QSpinBox(stack);
@@ -198,15 +233,36 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         combo_inputs_["cfa_sup_problem"] = pt;
         auto* algos = new QLineEdit(stack);
         algos->setText("ridge,random_forest");
-        algos->setPlaceholderText(tr("comma-separated: ridge,lasso,random_forest,svr,knn"));
         algos->setStyleSheet(input_ss());
         text_inputs_["cfa_sup_algorithms"] = algos;
+        // The valid names differ by problem type (quant_modules_3042 REGRESSION_MODELS /
+        // CLASSIFICATION_MODELS): lasso / elastic_net / svr are regression-only, logistic / svc
+        // classification-only. The hint follows the selected type.
+        auto* algos_hint = new QLabel(stack);
+        algos_hint->setWordWrap(true);
+        algos_hint->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) +
+                                          "px; background:transparent; padding-left:2px;")
+                                      .arg(ui::colors::TEXT_TERTIARY()));
+        auto update_algo_hint = [algos, algos_hint](const QString& problem) {
+            const QString names = problem == QLatin1String("classification")
+                                      ? QStringLiteral("logistic, ridge, svc, knn, decision_tree, random_forest")
+                                      : QStringLiteral("ridge, lasso, elastic_net, svr, knn, decision_tree, "
+                                                       "random_forest");
+            algos->setPlaceholderText(QuantModulePanel::tr("comma-separated: %1").arg(names));
+            algos->setToolTip(QuantModulePanel::tr("Algorithms for %1: %2").arg(problem, names));
+            algos_hint->setText(QuantModulePanel::tr("Valid for %1: %2").arg(problem, names));
+        };
+        update_algo_hint(pt->currentText());
+        connect(pt, &QComboBox::currentTextChanged, algos, update_algo_hint);
         add_page({
             build_input_row(tr("Lag features (n_lags)"), lags, stack),
             build_input_row(tr("Problem Type"), pt, stack),
             build_input_row(tr("Algorithms"), algos, stack),
+            build_input_row(QString(), algos_hint, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("unsupervised_learning"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and clustering…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 5: unsupervised_learning — n_lags, methods
     {
         auto* lags = new QSpinBox(stack);
@@ -224,6 +280,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Methods"), methods, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("model_evaluation"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and cross-validating…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 6: model_evaluation — n_lags, model_type, cv_folds
     {
         auto* lags = new QSpinBox(stack);
@@ -246,6 +304,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("CV Folds"), cv, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("resampling_methods"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and resampling…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 7: resampling_methods — methods, n_resamples
     {
         auto* m = new QLineEdit(stack);
@@ -263,6 +323,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Resamples"), n, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("sampling_techniques"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and drawing the samples…"), .shape = ui::LoadingSkeleton::Shape::Table});
     // 8: sampling_techniques — sample_size, methods (population uses Symbol/Data)
     {
         auto* size = new QSpinBox(stack);
@@ -279,6 +341,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Methods"), m, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("central_limit_theorem"), .cost = ViewCost::Free, .loading = tr("Simulating sample means…"), .shape = ui::LoadingSkeleton::Shape::Chart});
     // 9: central_limit_theorem — distribution, sample_sizes, n_samples
     {
         auto* dist = new QComboBox(stack);
@@ -300,6 +364,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Samples per size"), n, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("sampling_error_analysis"), .cost = ViewCost::Free, .loading = tr("Simulating sampling errors…"), .shape = ui::LoadingSkeleton::Shape::Table});
     // 10: sampling_error_analysis — pop_mean, pop_std, sample_sizes, conf, n_sims
     {
         auto* mean = make_double_spin(-1e6, 1e6, 0.0, 4, "", stack);
@@ -325,6 +391,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Simulations"), sims, stack),
         });
     }
+    end_view();
+    begin_view({.key = QStringLiteral("validate_data"), .cost = ViewCost::Fetch, .loading = tr("Downloading prices and checking the data…"), .shape = ui::LoadingSkeleton::Shape::Result});
     // 11: validate_data — data_type, data_name
     {
         auto* dt = new QComboBox(stack);
@@ -340,16 +408,21 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             build_input_row(tr("Data Name"), dn, stack),
         });
     }
+    end_view();
 
     vl->addWidget(stack);
 
-    // Switch stack page when analysis combo changes
+    // Switch stack page when analysis combo changes; each analysis is its own view (its own
+    // remembered result and default run).
     connect(analysis_type, qOverload<int>(&QComboBox::currentIndexChanged), stack, &QStackedWidget::setCurrentIndex);
+    connect(analysis_type, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, analysis_type](int) {
+        select_view(analysis_type->currentData().toString());
+    });
 
     // ── Run button ──────────────────────────────────────────────────────────
     auto* run = make_run_button(tr("RUN ANALYSIS"), w);
-    connect(run, &QPushButton::clicked, this, [this]() {
-        const QString cmd = combo_inputs_["cfa_analysis"]->currentText();
+    set_shared_action(run, [this]() {
+        const QString cmd = combo_inputs_["cfa_analysis"]->currentData().toString();
         const QString raw = text_inputs_["cfa_symbol"]->text().trimmed();
 
         QJsonObject params;
@@ -432,20 +505,14 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             params["data_name"] = text_inputs_["cfa_validate_name"]->text();
         }
 
-        QString label = cmd;
-        label.replace('_', ' ');
-        show_loading(needs_data ? tr("Running %1 on %2...").arg(label, raw) : tr("Running %1...").arg(label));
+        const QString label = combo_inputs_["cfa_analysis"]->currentText();
+        show_loading(needs_data ? tr("Running %1 on %2…").arg(label, raw) : tr("Running %1…").arg(label));
         AIQuantLabService::instance().run_module("cfa_quant", cmd, params);
-    });
+    }, analysis_ids);
     vl->addWidget(run);
 
-    // ── Results container ───────────────────────────────────────────────────
-    auto* rc = new QWidget(w);
-    results_layout_ = new QVBoxLayout(rc);
-    results_layout_->setContentsMargins(0, 8, 0, 0);
-    results_layout_->setSpacing(8);
-    vl->addWidget(rc);
-    vl->addStretch();
+    // ── Result pane: the selected analysis's result, default run or remembered result ──
+    add_result_pane(vl);
 
     return w;
 }

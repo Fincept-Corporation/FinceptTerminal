@@ -20,6 +20,13 @@
 #include <QTableWidget>
 #include <QWidget>
 
+class QStackedWidget;
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
+
 namespace fincept::screens {
 
 class PythonEnvSection : public QWidget {
@@ -37,6 +44,10 @@ class PythonEnvSection : public QWidget {
   private:
     // ── UI ────────────────────────────────────────────────────────────────────
     QTableWidget* pkg_table_ = nullptr;
+    // pkg_table_ shares this slot with a skeleton (listing) and a designed state.
+    QStackedWidget* pkg_stack_ = nullptr;
+    fincept::ui::LoadingSkeleton* pkg_skeleton_ = nullptr;
+    fincept::ui::EmptyState* pkg_state_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QComboBox* venv_filter_ = nullptr; // All / Trading / Analytics
     QLabel* status_lbl_ = nullptr;
@@ -124,6 +135,16 @@ class PythonEnvSection : public QWidget {
     void apply_filter();
     void on_row_action_clicked(int row);
     QList<ActionBatch> build_batches_for_selected() const;
+
+    // ── Theme ─────────────────────────────────────────────────────────────────
+    /// Column widths, row heights and item text colours — none of which the
+    /// theme's stylesheet pass reaches. Runs on ThemeManager::theme_changed.
+    void refresh_theme();
+    /// Text colours (and the bold venv font) of the package table's row `i` —
+    /// items carry their own brush and font.
+    void color_package_row(int i);
+    /// Package table row height for the user's font size.
+    int package_row_height() const;
 
     // ── Misc ──────────────────────────────────────────────────────────────────
     void set_actions_enabled(bool enabled);

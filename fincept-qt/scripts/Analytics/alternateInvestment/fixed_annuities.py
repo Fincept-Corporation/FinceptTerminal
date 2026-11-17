@@ -690,11 +690,14 @@ class InflationIndexedAnnuityAnalyzer(AlternativeInvestmentBase):
             'analysis_recommendation': 'Only if expect to live past 90 AND no bequest motive'
         }
 
-    def inflation_protection_value(self) -> Dict[str, Any]:
-        """Quantify value of inflation protection"""
-        # 3% inflation over 25 years
-        high_inflation = Decimal('0.04')  # 4% scenario
-        years = 25
+    def inflation_protection_value(self, inflation_rate: Decimal = None, years: int = None) -> Dict[str, Any]:
+        """Quantify value of inflation protection
+
+        Over the annuity's own payout term at its assumed inflation rate (a fixed 4% over 25 years
+        used to be reported whatever was entered).
+        """
+        high_inflation = Decimal(str(inflation_rate)) if inflation_rate is not None else Decimal(str(self.inflation_rate))
+        years = int(years) if years is not None else int(self.payout_years)
 
         # Fixed annuity loses purchasing power
         initial_payout = self.calculate_initial_payout()

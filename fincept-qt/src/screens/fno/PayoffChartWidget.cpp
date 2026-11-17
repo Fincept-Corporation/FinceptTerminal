@@ -1,5 +1,7 @@
 #include "screens/fno/PayoffChartWidget.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -32,6 +34,13 @@ QColor with_alpha(const QString& hex, int alpha) {
     return c;
 }
 
+/// A P/L figure: signed money when the currency is known, else a signed number.
+QString payoffchart_pnl(double v, const QString& ccy) {
+    namespace fmt = fincept::ui::formatting;
+    // Money follows the user's decimals setting (-1); a bare number keeps two.
+    return ccy.isEmpty() ? fmt::signed_number(v, 2) : fmt::signed_money(v, ccy, fmt::Compact::None, -1);
+}
+
 } // namespace
 
 PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
@@ -39,8 +48,6 @@ PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
 
     chart_ = new QChart();
-    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
-    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
     chart_->setContentsMargins(0, 0, 0, 0);
@@ -53,6 +60,77 @@ PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
     profit_curve_ = new QLineSeries();
     loss_curve_ = new QLineSeries();
     zero_baseline_ = new QLineSeries();
+
+    // The profit/loss bounding curves are invisible; they exist only to
+    // anchor the QAreaSeries against the zero baseline.
+    profit_curve_->setPen(Qt::NoPen);
+    loss_curve_->setPen(Qt::NoPen);
+    zero_baseline_->setPen(Qt::NoPen);
+
+    profit_area_ = new QAreaSeries(profit_curve_, zero_baseline_);
+    profit_area_->setPen(Qt::NoPen);
+
+    loss_area_ = new QAreaSeries(loss_curve_, zero_baseline_);
+    loss_area_->setPen(Qt::NoPen);
+
+    chart_->addSeries(profit_area_);
+    chart_->addSeries(loss_area_);
+    chart_->addSeries(target_series_);
+    chart_->addSeries(expiry_series_);
+
+    axis_x_ = new QValueAxis();
+    axis_y_ = new QValueAxis();
+    axis_x_->setLabelFormat("%.0f"); // underlying level, not money
+    apply_axis_unit();
+    chart_->addAxis(axis_x_, Qt::AlignBottom);
+    chart_->addAxis(axis_y_, Qt::AlignLeft);
+    for (auto* s : {static_cast<QAbstractSeries*>(profit_area_), static_cast<QAbstractSeries*>(loss_area_),
+                    static_cast<QAbstractSeries*>(target_series_), static_cast<QAbstractSeries*>(expiry_series_)}) {
+        s->attachAxis(axis_x_);
+        s->attachAxis(axis_y_);
+    }
+
+    // Vertical markers — graphics-scene line items so they live above the
+    // series but inside the chart's plot area.
+    spot_marker_ = new QGraphicsLineItem(chart_);
+    spot_marker_->setVisible(false);
+    spot_marker_->setZValue(8);
+
+    hover_line_ = new QGraphicsLineItem(chart_);
+    hover_line_->setVisible(false);
+    hover_line_->setZValue(10);
+
+    tooltip_ = new QLabel(this);
+    tooltip_->setWindowFlags(Qt::ToolTip);
+    tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
+                                    " font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; padding:4px 8px; }")
+                                .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_MED()));
+    tooltip_->hide();
+
+    refresh_theme();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+    // The P/L axis carries the currency unit; the hover tooltip is built on each move.
+    fincept::ui::formatting::on_format_changed(this, [this]() { apply_axis_unit(); });
+}
+
+void PayoffChartWidget::apply_axis_unit() {
+    if (axis_y_)
+        axis_y_->setLabelFormat(ccy_.isEmpty() ? QStringLiteral("%.0f")
+                                               : fincept::ui::formatting::axis_printf_format(ccy_, 0));
+}
+
+void PayoffChartWidget::set_currency(const QString& ccy) {
+    const QString c = ccy.trimmed();
+    if (c == ccy_)
+        return;
+    ccy_ = c;
+    apply_axis_unit();
+}
+
+void PayoffChartWidget::refresh_theme() {
+    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
 
     // Solid expiry curve in the foreground. Brace-init avoids the vexing-
     // parse: `QPen p(QColor(f()))` parses as a function declaration when
@@ -67,64 +145,23 @@ PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
     target_pen.setStyle(Qt::DashLine);
     target_series_->setPen(target_pen);
 
-    // The profit/loss bounding curves are invisible; they exist only to
-    // anchor the QAreaSeries against the zero baseline.
-    profit_curve_->setPen(Qt::NoPen);
-    loss_curve_->setPen(Qt::NoPen);
-    zero_baseline_->setPen(Qt::NoPen);
-
-    profit_area_ = new QAreaSeries(profit_curve_, zero_baseline_);
-    profit_area_->setPen(Qt::NoPen);
     profit_area_->setBrush(with_alpha(colors::POSITIVE(), kProfitAreaAlpha));
-
-    loss_area_ = new QAreaSeries(loss_curve_, zero_baseline_);
-    loss_area_->setPen(Qt::NoPen);
     loss_area_->setBrush(with_alpha(colors::NEGATIVE(), kLossAreaAlpha));
 
-    chart_->addSeries(profit_area_);
-    chart_->addSeries(loss_area_);
-    chart_->addSeries(target_series_);
-    chart_->addSeries(expiry_series_);
-
-    axis_x_ = new QValueAxis();
-    axis_y_ = new QValueAxis();
-    axis_x_->setLabelFormat("%.0f");
-    axis_y_->setLabelFormat("%.0f");
-    axis_x_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_y_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_x_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_y_->setGridLineColor(QColor(colors::BORDER_DIM()));
+    const QFont label_font = fonts::font(-4);
     QPen axis_pen(QColor(colors::BORDER_DIM()), 1);
-    axis_x_->setLinePen(axis_pen);
-    axis_y_->setLinePen(axis_pen);
-    chart_->addAxis(axis_x_, Qt::AlignBottom);
-    chart_->addAxis(axis_y_, Qt::AlignLeft);
-    for (auto* s : {static_cast<QAbstractSeries*>(profit_area_), static_cast<QAbstractSeries*>(loss_area_),
-                    static_cast<QAbstractSeries*>(target_series_), static_cast<QAbstractSeries*>(expiry_series_)}) {
-        s->attachAxis(axis_x_);
-        s->attachAxis(axis_y_);
+    for (QValueAxis* axis : {axis_x_, axis_y_}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(label_font);
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setLinePen(axis_pen);
     }
 
-    // Vertical markers — graphics-scene line items so they live above the
-    // series but inside the chart's plot area.
-    QPen spot_pen(QColor(colors::AMBER()), 1, Qt::SolidLine);
-    spot_marker_ = new QGraphicsLineItem(chart_);
-    spot_marker_->setPen(spot_pen);
-    spot_marker_->setVisible(false);
-    spot_marker_->setZValue(8);
-
-    QPen hover_pen(QColor(colors::TEXT_TERTIARY()), 1, Qt::DashLine);
-    hover_line_ = new QGraphicsLineItem(chart_);
-    hover_line_->setPen(hover_pen);
-    hover_line_->setVisible(false);
-    hover_line_->setZValue(10);
-
-    tooltip_ = new QLabel(this);
-    tooltip_->setWindowFlags(Qt::ToolTip);
-    tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
-                                    " font-size:11px; font-weight:600; padding:4px 8px; }")
-                                .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_MED()));
-    tooltip_->hide();
+    spot_marker_->setPen(QPen(QColor(colors::AMBER()), 1, Qt::SolidLine));
+    hover_line_->setPen(QPen(QColor(colors::TEXT_TERTIARY()), 1, Qt::DashLine));
+    const QPen be_pen(QColor(colors::TEXT_SECONDARY()), 1, Qt::DotLine);
+    for (auto* m : breakeven_markers_)
+        m->setPen(be_pen);
 }
 
 void PayoffChartWidget::set_payoff(const QVector<PayoffPoint>& curve, double current_spot,
@@ -266,9 +303,8 @@ void PayoffChartWidget::update_crosshair(const QPoint& widget_pos) {
     hover_line_->setVisible(true);
 
     QString text = tr("Spot: %1\nExpiry P/L: %2\nTarget P/L: %3")
-                       .arg(p.spot, 0, 'f', 2)
-                       .arg(p.pnl_expiry, 0, 'f', 2)
-                       .arg(p.pnl_target, 0, 'f', 2);
+                       .arg(fincept::ui::formatting::number(p.spot, 2), payoffchart_pnl(p.pnl_expiry, ccy_),
+                            payoffchart_pnl(p.pnl_target, ccy_));
     tooltip_->setText(text);
     tooltip_->adjustSize();
 

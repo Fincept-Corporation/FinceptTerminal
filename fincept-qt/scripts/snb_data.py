@@ -241,6 +241,43 @@ class SNBWrapper:
             "count":           len(rows),
         }
 
+    @staticmethod
+    def _staleness(rows: List[Dict[str, Any]], freq: str, pub_date: str) -> Dict[str, Any]:
+        """
+        Flag a cube whose newest observation is far older than its frequency allows. The SNB stopped
+        updating some cubes (rendoblid / rendoblim end in July 2025, last published 2025-09-01)
+        while still serving them, so the panel would present year-old yields as current.
+        """
+        latest = ""
+        for row in rows:
+            if any(isinstance(v, (int, float)) for k, v in row.items() if k != "date"):
+                d = str(row.get("date", ""))
+                if d > latest:
+                    latest = d
+        if not latest:
+            return {}
+        try:
+            if len(latest) >= 10:
+                end = datetime.strptime(latest[:10], "%Y-%m-%d")
+            elif len(latest) == 7:
+                y, m = int(latest[:4]), int(latest[5:7])
+                end = datetime(y + (m == 12), 1 if m == 12 else m + 1, 1)  # first day after the month
+            elif len(latest) == 4:
+                end = datetime(int(latest) + 1, 1, 1)
+            else:
+                return {}
+        except ValueError:
+            return {}
+        max_age = {"daily": 30, "monthly": 120, "quarterly": 200, "annual": 550}.get(freq, 120)
+        age_days = (datetime.now() - end).days
+        if age_days <= max_age:
+            return {}
+        notice = f"Latest SNB observation is {latest}"
+        if pub_date:
+            notice += f" (cube last published {pub_date})"
+        notice += "; the SNB no longer updates this series, values are not current."
+        return {"stale": True, "latest_observation": latest, "notice": notice}
+
     def _fetch_cube(self, cube_id: str, start_date: Optional[str] = None,
                     end_date: Optional[str] = None,
                     dim_sel: Optional[str] = None) -> Dict[str, Any]:
@@ -248,7 +285,9 @@ class SNBWrapper:
             text   = self._fetch_csv(cube_id, start_date, end_date, dim_sel)
             parsed = self._parse_csv(text)
             info   = CUBES.get(cube_id, {})
+            stale  = self._staleness(parsed["data"], info.get("freq", ""), parsed["publishing_date"])
             return {
+                **stale,
                 "success":         True,
                 "cube":            cube_id,
                 "cube_name":       info.get("name", cube_id),

@@ -170,7 +170,8 @@ def normalize_country_codes(countries: Union[str, List[str]]) -> str:
     """
     if isinstance(countries, list):
         return ";".join(countries)
-    return countries
+    # "USA,CHN,IND" (the form the CLI documents) - the API separates codes with ";" and rejects ","
+    return countries.replace(",", ";") if isinstance(countries, str) else countries
 
 def get_countries(region: Optional[str] = None, income_level: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -199,19 +200,29 @@ def get_countries(region: Optional[str] = None, income_level: Optional[str] = No
         if result["error"]:
             return result
 
+        def _coord(value):
+            # The API sends coordinates as text ("-70.0167") and "" for aggregates.
+            try:
+                return float(value) if value not in (None, "") else None
+            except (TypeError, ValueError):
+                return None
+
+        def _text(value):
+            return value.strip() if isinstance(value, str) else value
+
         # Enhance country data with additional info
         enhanced_data = []
         for country in result.get("data", []):
             enhanced_country = {
                 "id": country.get("id"),
                 "iso2Code": country.get("iso2Code"),
-                "name": country.get("name"),
-                "region": country.get("region", {}).get("value"),
-                "income_level": country.get("incomeLevel", {}).get("value"),
-                "lending_type": country.get("lendingType", {}).get("value"),
-                "capital_city": country.get("capitalCity"),
-                "longitude": country.get("longitude"),
-                "latitude": country.get("latitude")
+                "name": _text(country.get("name")),
+                "region": _text((country.get("region") or {}).get("value")),
+                "income_level": _text((country.get("incomeLevel") or {}).get("value")),
+                "lending_type": _text((country.get("lendingType") or {}).get("value")),
+                "capital_city": _text(country.get("capitalCity")) or None,
+                "longitude": _coord(country.get("longitude")),
+                "latitude": _coord(country.get("latitude"))
             }
             enhanced_data.append(enhanced_country)
 

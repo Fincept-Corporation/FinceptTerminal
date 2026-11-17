@@ -1,68 +1,176 @@
 #include "screens/dashboard/widgets/SectorHeatmapWidget.h"
 
+#include "core/market/MarketProfile.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/RegionPin.h"
+#include "services/markets/MarketDataService.h"
+#include "ui/charts/Treemap.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
-#include <QFrame>
+#include <QButtonGroup>
+#include <QHBoxLayout>
+#include <QHash>
 #include <QLabel>
+#include <QPushButton>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::widgets {
 
-QStringList SectorHeatmapWidget::sector_symbols() {
-    return {"XLK", "XLV", "XLF", "XLE", "XLY", "XLI", "XLB", "XLU", "XLRE", "XLC", "XLP", "SOXX"};
-}
+namespace {
 
-QMap<QString, QString> SectorHeatmapWidget::sector_labels() {
-    return {
-        {"XLK", tr("Technology")}, {"XLV", tr("Healthcare")},     {"XLF", tr("Financials")},
-        {"XLE", tr("Energy")},     {"XLY", tr("Consumer Disc.")}, {"XLI", tr("Industrials")},
-        {"XLB", tr("Materials")},  {"XLU", tr("Utilities")},      {"XLRE", tr("Real Estate")},
-        {"XLC", tr("Comm. Svc.")}, {"XLP", tr("Consumer Stap.")}, {"SOXX", tr("Semis")},
+namespace sh_fmt = fincept::ui::formatting;
+using fincept::services::MarketDataService;
+
+const char* const kShPeriods[] = {"1D", "1W", "1M", "YTD"};
+constexpr double kShClamp[] = {2.0, 4.0, 8.0, 20.0};
+
+/// Cell label for a sector. The treemap draws nothing when the first line does not
+/// fit even at its smallest font, so "Consumer Discretionary" / "Communication
+/// Services" left large blank cells at the default tile size. Long English names get
+/// a trader's short form; the full name stays in the tooltip.
+QString sh_cell_label(const QString& english) {
+    static const QHash<QString, QString> kShort = {
+        {QStringLiteral("Consumer Discretionary"), QStringLiteral("Cons. Discr.")},
+        {QStringLiteral("Communication Services"), QStringLiteral("Comm. Svcs")},
+        {QStringLiteral("Consumer Staples"), QStringLiteral("Staples")},
+        {QStringLiteral("Financial Services"), QStringLiteral("Fin. Services")},
+        {QStringLiteral("Industrial Goods & Services"), QStringLiteral("Industrials")},
+        {QStringLiteral("Personal & Household Goods"), QStringLiteral("Personal Goods")},
+        {QStringLiteral("Construction & Materials"), QStringLiteral("Construction")},
+        {QStringLiteral("Automobiles & Parts"), QStringLiteral("Autos")},
+        {QStringLiteral("Automobiles & Transport Equipment"), QStringLiteral("Autos & Transport")},
+        {QStringLiteral("Electric Appliances & Precision"), QStringLiteral("Electronics")},
+        {QStringLiteral("Raw Materials & Chemicals"), QStringLiteral("Chemicals")},
+        {QStringLiteral("Steel & Nonferrous Metals"), QStringLiteral("Steel & Metals")},
+        {QStringLiteral("Transportation & Logistics"), QStringLiteral("Transport")},
+        {QStringLiteral("Commercial & Wholesale Trade"), QStringLiteral("Trading Cos.")},
+        {QStringLiteral("Electric Power & Gas"), QStringLiteral("Power & Gas")},
+        {QStringLiteral("Financials (ex Banks)"), QStringLiteral("Fin. ex Banks")},
+        {QStringLiteral("Real Estate (A-REIT)"), QStringLiteral("A-REITs")},
+        {QStringLiteral("Telecommunications"), QStringLiteral("Telecoms")},
+        {QStringLiteral("Energy Resources"), QStringLiteral("Energy")},
+        {QStringLiteral("Basic Resources"), QStringLiteral("Resources")},
+        {QStringLiteral("Food & Beverage"), QStringLiteral("Food & Bev.")},
+        {QStringLiteral("Travel & Leisure"), QStringLiteral("Travel")},
+        {QStringLiteral("Infrastructure"), QStringLiteral("Infra")},
+        {QStringLiteral("Pharmaceutical"), QStringLiteral("Pharma")},
+        {QStringLiteral("Retail Trade"), QStringLiteral("Retail")},
     };
+    const QString translated = core::market::profile_text(english);
+    if (translated != english)
+        return translated; // a translation exists: no English abbreviation
+    return kShort.value(english, english);
 }
 
-SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTOR HEATMAP"), parent) {
-    grid_container_ = new QWidget(this);
-    grid_container_->setObjectName("sectorHeatGrid");
-    grid_ = new QGridLayout(grid_container_);
-    grid_->setContentsMargins(4, 4, 4, 4);
-    grid_->setSpacing(3);
+} // namespace
 
-    content_layout()->addWidget(grid_container_);
-    enable_symbol_link(/*follows=*/false); // clicking a sector cell feeds the link group
-
-    connect(this, &BaseWidget::refresh_requested, this, &SectorHeatmapWidget::refresh_data);
-
-    apply_styles();
-    set_loading(true);
-}
-
-void SectorHeatmapWidget::apply_styles() {
-    if (!grid_container_)
-        return;
-    // Static cell chrome lives in ONE parent stylesheet with object-name
-    // selectors (P7) instead of an inline setStyleSheet per label per refresh.
-    // Only the data-driven bits (tile tint, +/- colour) are still set
-    // per-widget, and only when they actually change.
-    grid_container_->setStyleSheet(
-        QString("#sectorHeatGrid QLabel#sectorName{color:%1;font-size:9px;font-weight:bold;background:transparent;}"
-                "#sectorHeatGrid QLabel#sectorChg{font-size:11px;font-weight:bold;background:transparent;}")
-            .arg(ui::colors::TEXT_PRIMARY()));
-    // Force the data-driven colours to be re-applied against the new tokens.
-    for (auto& c : cells_) {
-        c.last_bg.clear();
-        c.last_sign = 0;
+SectorHeatmapWidget::SectorHeatmapWidget(const QJsonObject& cfg, QWidget* parent)
+    : BaseWidget(tr("SECTOR MAP"), parent, ui::colors::CYAN()) {
+    auto* bar = new QWidget(this);
+    bar->setObjectName("shBar");
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(6, 3, 6, 3);
+    hl->setSpacing(2);
+    periods_ = new QButtonGroup(this);
+    for (int i = 0; i < 4; ++i) {
+        auto* b = new QPushButton(QString::fromLatin1(kShPeriods[i]), bar);
+        b->setObjectName("shPeriod");
+        b->setCheckable(true);
+        b->setCursor(Qt::PointingHandCursor);
+        periods_->addButton(b, i);
+        hl->addWidget(b);
     }
+    hl->addStretch();
+    content_layout()->addWidget(bar);
+    connect(periods_, &QButtonGroup::idClicked, this, [this](int id) {
+        period_ = id;
+        render();
+        emit config_changed(config());
+    });
+
+    map_ = new ui::Treemap(this);
+    map_->set_grouped(false);
+    map_->set_show_legend(true);
+    map_->set_tooltip_provider([this](const ui::TreemapItem& it) {
+        const auto q = quotes_.constFind(it.id);
+        QString name = core::market::profile_label_for(tile_profile(region_pin_), it.id);
+        if (name.isEmpty())
+            name = it.label;
+        QString tip = QStringLiteral("<b>%1</b> (%2)<br>%3 %4")
+                          .arg(name.toHtmlEscaped(), it.id.toHtmlEscaped(),
+                               QString::fromLatin1(kShPeriods[period_]), sh_fmt::pct(it.value));
+        if (q != quotes_.constEnd() && q->price > 0)
+            tip += QStringLiteral("<br>") +
+                   tr("Last %1").arg(sh_fmt::price(q->price, sh_fmt::instrument_for_symbol(it.id, q->currency)));
+        const QString err = topic_error_tooltip(period_ == 0 ? MarketDataService::quote_topic(it.id)
+                                                             : MarketDataService::performance_history_topic(it.id));
+        if (!err.isEmpty())
+            tip += QStringLiteral("<br>") + err.toHtmlEscaped();
+        return tip;
+    });
+    connect(map_, &ui::Treemap::item_double_clicked, this, [this](const QString& id) { open_symbol(id); });
+    content_layout()->addWidget(map_, 1);
+
+    footer_ = new QLabel(this);
+    footer_->setWordWrap(true);
+    content_layout()->addWidget(footer_);
+
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        QStringList t;
+        for (const auto& s : tile_profile(region_pin_).sectors)
+            t << MarketDataService::quote_topic(s.symbol) << MarketDataService::performance_history_topic(s.symbol);
+        datahub::DataHub::instance().request(t, true);
+    });
+    connect(&core::market::MarketProfileStore::instance(), &core::market::MarketProfileStore::profile_changed, this,
+            [this]() {
+                if (region_pin_.isEmpty())
+                    reload_region();
+            });
+
+    on_theme_changed();
+    set_loading(true);
+    apply_config(cfg);
 }
 
-void SectorHeatmapWidget::on_theme_changed() {
-    apply_styles();
-    // Re-render from the cache. This used to call refresh_data(), which fires
-    // a forced network fetch for 12 symbols just because the palette changed.
-    rebuild_from_cache();
+void SectorHeatmapWidget::reload_region() {
+    quotes_.clear();
+    stats_.clear();
+    map_->clear();
+    untrack_topics();
+    update_title();
+    if (isVisible())
+        hub_subscribe_all();
+}
+
+void SectorHeatmapWidget::update_title() {
+    set_title(tr("SECTOR MAP · %1").arg(core::market::market_profile_name(tile_profile(region_pin_)).toUpper()));
+}
+
+QJsonObject SectorHeatmapWidget::config() const {
+    QJsonObject o{{"period", QString::fromLatin1(kShPeriods[period_])}};
+    store_region_pin(o, region_pin_);
+    return o;
+}
+
+void SectorHeatmapWidget::apply_config(const QJsonObject& cfg) {
+    const QString pin = region_pin_from(cfg);
+    const bool region_changed = pin != region_pin_;
+    region_pin_ = pin;
+    const QString p = cfg.value("period").toString(QStringLiteral("1D"));
+    period_ = 0;
+    for (int i = 0; i < 4; ++i)
+        if (p == QLatin1String(kShPeriods[i]))
+            period_ = i;
+    if (auto* b = periods_->button(period_))
+        b->setChecked(true);
+    if (region_changed)
+        reload_region();
+    update_title();
+    render();
 }
 
 void SectorHeatmapWidget::showEvent(QShowEvent* e) {
@@ -73,150 +181,105 @@ void SectorHeatmapWidget::showEvent(QShowEvent* e) {
 
 void SectorHeatmapWidget::hideEvent(QHideEvent* e) {
     BaseWidget::hideEvent(e);
-    if (hub_active_)
-        hub_unsubscribe_all();
-}
-
-void SectorHeatmapWidget::refresh_data() {
-    auto& hub = datahub::DataHub::instance();
-    QStringList topics;
-    for (const auto& sym : sector_symbols())
-        topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
+    hub_active_ = false;
 }
 
 void SectorHeatmapWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
-    const auto syms = sector_symbols();
-    set_loading_progress(row_cache_.size(), syms.size());
-    for (const auto& sym : syms) {
-        const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this, sym, total = syms.size()](const QVariant& v) {
+    hub.unsubscribe(this);
+    const auto& sectors = tile_profile(region_pin_).sectors;
+    QStringList topics;
+    for (const auto& s : sectors)
+        topics << MarketDataService::quote_topic(s.symbol);
+    track_topics(topics, /*drive_loading_overlay=*/true);
+    for (const auto& s : sectors) {
+        const QString sym = s.symbol;
+        const QString qt = MarketDataService::quote_topic(sym);
+        hub.subscribe(this, qt, [this, sym, qt](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
-            row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading_progress(row_cache_.size(), total);
-            // One grid update per delivery burst, not one per sector ETF.
-            schedule_render([this]() { rebuild_from_cache(); });
+            quotes_.insert(sym, v.value<services::QuoteData>());
+            note_topic_value(qt);
+            schedule_render([this]() { render(); });
+        });
+        hub.subscribe(this, MarketDataService::performance_history_topic(sym), [this, sym](const QVariant& v) {
+            if (!v.canConvert<QVector<services::HistoryPoint>>())
+                return;
+            const auto bars = v.value<QVector<services::HistoryPoint>>();
+            if (bars.isEmpty())
+                return;
+            const auto q = quotes_.constFind(sym);
+            stats_.insert(sym, services::compute_performance(bars, q != quotes_.constEnd() && q->price > 0
+                                                                       ? q->price
+                                                                       : services::kMarketDataAbsent));
+            schedule_render([this]() { render(); });
         });
     }
     hub_active_ = true;
 }
 
-void SectorHeatmapWidget::hub_unsubscribe_all() {
-    datahub::DataHub::instance().unsubscribe(this);
-    hub_active_ = false;
+void SectorHeatmapWidget::on_topic_errors_changed() {
+    schedule_render([this]() { render(); });
 }
 
-void SectorHeatmapWidget::rebuild_from_cache() {
-    // One slot per sector in declared order — a sector whose quote has not
-    // arrived keeps its place (shown as "--") instead of the following tiles
-    // sliding into its cell, which made positions jump while data streamed in.
-    QVector<services::QuoteData> quotes;
-    const auto syms = sector_symbols();
-    quotes.reserve(syms.size());
-    bool any = false;
-    for (const auto& sym : syms) {
-        auto it = row_cache_.constFind(sym);
-        if (it != row_cache_.constEnd()) {
-            quotes.append(it.value());
-            any = true;
-        } else {
-            services::QuoteData placeholder;
-            placeholder.symbol = sym;
-            placeholder.price = -1; // marker: no quote yet
-            quotes.append(placeholder);
-        }
+double SectorHeatmapWidget::value_for(const QString& sym) const {
+    if (period_ == 0) {
+        const auto q = quotes_.constFind(sym);
+        return q != quotes_.constEnd() ? q->change_pct : services::kMarketDataAbsent;
     }
-    if (any)
-        populate(quotes);
+    const auto s = stats_.constFind(sym);
+    if (s == stats_.constEnd())
+        return services::kMarketDataAbsent;
+    return period_ == 1 ? s->change_1w_pct : period_ == 2 ? s->change_1m_pct : s->change_ytd_pct;
 }
 
-SectorHeatmapWidget::Cell& SectorHeatmapWidget::cell_at(int index) {
-    while (cells_.size() <= index) {
-        Cell c;
-        c.frame = new QFrame(grid_container_);
-        c.frame->setMinimumSize(80, 40);
-
-        auto* cl = new QVBoxLayout(c.frame);
-        cl->setContentsMargins(4, 2, 4, 2);
-        cl->setSpacing(0);
-
-        c.name = new QLabel(c.frame);
-        c.name->setObjectName("sectorName");
-        c.name->setAlignment(Qt::AlignCenter);
-        cl->addWidget(c.name);
-
-        c.chg = new QLabel(c.frame);
-        c.chg->setObjectName("sectorChg");
-        c.chg->setAlignment(Qt::AlignCenter);
-        cl->addWidget(c.chg);
-
-        const int i = static_cast<int>(cells_.size());
-        grid_->addWidget(c.frame, i / 3, i % 3);
-        cells_.append(c);
+void SectorHeatmapWidget::render() {
+    const auto& p = tile_profile(region_pin_);
+    bool weighted = true;
+    for (const auto& s : p.sectors)
+        weighted = weighted && s.weight > 0;
+    QVector<ui::TreemapItem> items;
+    int with_value = 0;
+    for (const auto& s : p.sectors) {
+        ui::TreemapItem it;
+        it.id = s.symbol;
+        it.label = sh_cell_label(s.label);
+        it.value = value_for(s.symbol);
+        // The treemap already prints the value under the label; the sublabel used to
+        // repeat it ("-1.67%" twice per cell). The ETF / index ticker goes there.
+        it.sublabel = s.symbol;
+        it.weight = weighted ? s.weight : 1.0;
+        with_value += std::isfinite(it.value) ? 1 : 0;
+        items.append(it);
     }
-    return cells_[index];
+    map_->set_color_clamp(kShClamp[period_]);
+    if (with_value > 0)
+        map_->set_items(items);
+    footer_->setText(tr("%1 · area: %2 · colour: %3 return, ±%4 % = full colour")
+                         .arg(core::market::profile_text(p.sector_set_name),
+                              weighted ? tr("approx. index weight") : tr("equal"),
+                              QString::fromLatin1(kShPeriods[period_]),
+                              sh_fmt::number(kShClamp[period_], 0)));
 }
 
-void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
-    const auto labels = sector_labels();
-
-    const int n = static_cast<int>(quotes.size());
-    for (int idx = 0; idx < n; ++idx) {
-        const auto& q = quotes[idx];
-        Cell& c = cell_at(idx);
-        c.frame->setVisible(true);
-        const bool have = q.price >= 0;
-
-        // Tint in 0.25 % steps: a continuous alpha changed the sheet (and paid
-        // a CSS re-parse) on almost every tick for a sub-basis-point move.
-        const double bucketed = std::floor(std::abs(q.change_pct) / 0.25) * 0.25;
-        const int intensity = static_cast<int>(std::min(bucketed * 60.0, 200.0));
-        QColor tint(!have                ? ui::colors::BG_RAISED()
-                    : q.change_pct > 0   ? ui::colors::POSITIVE()
-                    : q.change_pct < 0   ? ui::colors::NEGATIVE()
-                                         : ui::colors::BG_RAISED());
-        if (have && q.change_pct != 0)
-            tint.setAlpha(40 + intensity);
-        const QString bg = QString("background: %1; border: 1px solid %2; border-radius: 2px;")
-                               .arg(tint.name(QColor::HexArgb), ui::colors::BORDER_DIM());
-        // Skip the CSS reparse when the tint is unchanged (the common case
-        // for a quiet sector between two refresh ticks).
-        if (bg != c.last_bg) {
-            c.last_bg = bg;
-            c.frame->setStyleSheet(bg);
-        }
-
-        const QString display = labels.value(q.symbol, q.symbol);
-        if (c.name->text() != display)
-            c.name->setText(display);
-        // Double-click a tile to open the sector ETF in Equity Research.
-        link_symbol(c.frame, q.symbol);
-        c.name->setToolTip(QString("%1  (%2)").arg(display, q.symbol));
-
-        c.chg->setText(!have ? QStringLiteral("--")
-                             : QString("%1%2%").arg(q.change_pct > 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
-        const int sign = !have ? 2 : q.change_pct > 0 ? 1 : q.change_pct < 0 ? -1 : 3; // 2 = none, 3 = flat
-        if (sign != c.last_sign) {
-            c.last_sign = sign;
-            c.chg->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                     .arg(sign == 1    ? ui::colors::POSITIVE()
-                                          : sign == -1 ? ui::colors::NEGATIVE()
-                                                       : ui::colors::TEXT_TERTIARY()));
-        }
-    }
-
-    // Hide (don't destroy) any cells beyond the current data set so a shorter
-    // payload doesn't leave stale tiles on screen.
-    for (int i = n; i < static_cast<int>(cells_.size()); ++i)
-        cells_[i].frame->setVisible(false);
+void SectorHeatmapWidget::on_theme_changed() {
+    if (auto* bar = findChild<QWidget*>(QStringLiteral("shBar")))
+        set_css_cached(bar, QString("QWidget#shBar{background:transparent;}"
+                                   "QPushButton#shPeriod{background:%1;color:%2;border:1px solid %3;padding:1px 8px;"
+                                   "font-size:%4px;font-weight:bold;}"
+                                   "QPushButton#shPeriod:checked{background:%5;color:%6;border-color:%6;}")
+                               .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
+                               .arg(ui::fonts::px(-4))
+                               .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER()));
+    set_css_cached(footer_, QString("color:%1;font-size:%2px;padding:0 6px 2px 6px;background:transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::fonts::px(-4)));
 }
 
 void SectorHeatmapWidget::retranslateUi() {
     BaseWidget::retranslateUi();
-    set_title(tr("SECTOR HEATMAP"));
-    rebuild_from_cache(); // re-renders sector cell labels in the new language
+    update_title();
+    render();
 }
 
 } // namespace fincept::screens::widgets

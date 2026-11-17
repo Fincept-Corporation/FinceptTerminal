@@ -54,7 +54,9 @@ static const QList<WbHealthIndicator> kWbHealthIndicators = {
     // flatten_wb() — which expects World Bank's `records` array — cannot parse.
     // Wiring it needs a second flattener and a key, and is tracked separately.
     {"GNI per Capita (PPP, HDI proxy)", "hdi", "int'l $"},
-    {"Poverty Rate ($2.15/day)", "poverty", "%"},
+    // SI.POV.DDAY was redefined to the $3.00/day (2021 PPP) line; the title follows the World
+    // Bank's own indicator name (see on_result), so a future redefinition shows up there too.
+    {"Poverty Rate ($3.00/day, 2021 PPP)", "poverty", "%"},
 };
 
 static const QList<QPair<QString, QString>> kWbHealthCountries = {
@@ -77,7 +79,7 @@ QJsonArray WorldBankHealthPanel::flatten_wb(const QJsonObject& response) {
             continue;
         const double val = r["value"].toDouble();
         QJsonObject row;
-        row["date"] = r["date"].toString();
+        row["date"] = r["date"].toVariant().toString();
         row["value"] = val;
         rows.append(row);
     }
@@ -85,7 +87,7 @@ QJsonArray WorldBankHealthPanel::flatten_wb(const QJsonObject& response) {
     // Sort oldest→newest — copy to QList to avoid QJsonValueRef swap issue on MSVC
     QList<QJsonValue> sorted(rows.begin(), rows.end());
     std::sort(sorted.begin(), sorted.end(), [](const QJsonValue& a, const QJsonValue& b) {
-        return a.toObject()["date"].toString() < b.toObject()["date"].toString();
+        return a.toObject()["date"].toVariant().toString() < b.toObject()["date"].toVariant().toString();
     });
     rows = QJsonArray();
     for (const auto& v : sorted)
@@ -102,9 +104,7 @@ WorldBankHealthPanel::WorldBankHealthPanel(QWidget* parent)
 }
 
 void WorldBankHealthPanel::activate() {
-    show_empty(tr("Select an indicator and country, then click FETCH\n"
-                  "Source: World Bank Open Data (World Development Indicators) — CC BY-4.0\n"
-                  "Annual observations; years with no survey are omitted, not zero-filled"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {
@@ -117,13 +117,13 @@ void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {
     indicator_combo_ = new QComboBox;
     for (const auto& ind : kWbHealthIndicators)
         indicator_combo_->addItem(ind.label, ind.command);
-    indicator_combo_->setFixedHeight(26);
+    indicator_combo_->setMinimumHeight(26);
     indicator_combo_->setMinimumWidth(200);
 
     country_combo_ = new QComboBox;
     for (const auto& c : kWbHealthCountries)
         country_combo_->addItem(c.first, c.second);
-    country_combo_->setFixedHeight(26);
+    country_combo_->setMinimumHeight(26);
     country_combo_->setMinimumWidth(130);
 
     thl->addWidget(indicator_lbl_ = lbl(tr("INDICATOR")));
@@ -139,8 +139,8 @@ void WorldBankHealthPanel::on_fetch() {
     show_loading(
         tr("Fetching WB Health: %1 — %2…").arg(indicator_combo_->currentText(), country_combo_->currentText()));
 
-    services::EconomicsService::instance().execute(kWorldBankHealthSourceId, kWorldBankHealthScript, command, {country},
-                                                   "wbhealth_" + command + "_" + country);
+    execute_query(kWorldBankHealthSourceId, kWorldBankHealthScript, command, {country},
+                  "wbhealth_" + command + "_" + country);
 }
 
 void WorldBankHealthPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -166,11 +166,16 @@ void WorldBankHealthPanel::on_result(const QString& request_id, const services::
     const int idx = indicator_combo_->currentIndex();
     const QString unit =
         (idx >= 0 && idx < kWbHealthIndicators.size()) ? " (" + kWbHealthIndicators[idx].unit + ")" : "";
-    const QString title =
-        "WB Health: " + indicator_combo_->currentText() + unit + " — " + country_combo_->currentText();
+    // The World Bank's own name for the indicator (it carries the current definition, e.g. the
+    // poverty line in force); the combo label is the fallback.
+    const QJsonArray records = result.data["records"].toArray();
+    const QString wb_name =
+        records.isEmpty() ? QString() : records.first().toObject()["indicator"].toObject()["value"].toString();
+    const QString title = "WB Health: " + (wb_name.isEmpty() ? indicator_combo_->currentText() + unit : wb_name) +
+                          " — " + country_combo_->currentText();
 
     display(rows, title);
-    LOG_INFO("WorldBankHealthPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("WorldBankHealthPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

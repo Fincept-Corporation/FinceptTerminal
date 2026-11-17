@@ -105,7 +105,7 @@ void FeeDiscountService::wire_balance_listener() {
                          publish_for(out_topic, pubkey);
                      });
     listener_wired_ = true;
-    LOG_INFO("FeeDiscount", "balance listener wired");
+    LOG_DEBUG("FeeDiscount", "balance listener wired");
 }
 
 } // namespace fincept::billing

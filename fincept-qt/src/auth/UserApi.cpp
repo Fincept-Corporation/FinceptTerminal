@@ -13,16 +13,29 @@ UserApi& UserApi::instance() {
 }
 
 void UserApi::request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb,
-                      const QObject* context) {
+                      const QObject* context, const QMap<QByteArray, QByteArray>& extra_headers) {
     auto& http = fincept::HttpClient::instance();
 
-    auto handle = [cb](fincept::Result<QJsonDocument> result) {
+    auto handle = [cb_in = std::move(cb)](fincept::Result<QJsonDocument> result) {
+        // Response metadata, read while HttpClient's reply is current (it is only
+        // valid inside this callback): stamped on every answer handed on.
+        const QString etag = QString::fromUtf8(fincept::HttpClient::response_header("ETag"));
+        const qint64 poll_ms =
+            fincept::HttpClient::poll_interval_ms(fincept::HttpClient::response_header("X-Poll-Interval"));
+        auto cb = [&cb_in, &etag, poll_ms](ApiResponse r) {
+            r.etag = etag;
+            r.poll_interval_ms = poll_ms;
+            cb_in(std::move(r));
+        };
+
         if (result.is_err()) {
             const int status = fincept::HttpClient::status_from_error(result.error());
             // Prefer the server's own wording — HttpClient carries it in the
             // error string ("HTTP_<status>: <message>") rather than handing the
-            // error body back as ok(). 401/403 stay message-free by design and
-            // fall through to our own wording below.
+            // error body back as ok(). That includes 401/403: a wrong password
+            // on DELETE /user/account is a 401 "Invalid password", not an
+            // expired session, and an IP block is a 403 with its own text. The
+            // switch is the fallback for a response that carried none.
             QString msg = status > 0 ? fincept::HttpClient::message_from_error(result.error()) : QString{};
             if (!msg.isEmpty()) {
                 cb({false, {}, msg, status});
@@ -52,9 +65,18 @@ void UserApi::request(const QString& method, const QString& endpoint, const QJso
             return;
         }
 
+        // A conditional GET whose resource is unchanged: success with no body —
+        // the caller keeps its copy.
+        if (fincept::HttpClient::response_status() == 304) {
+            cb({true, {}, {}, 304});
+            return;
+        }
+
         auto obj = result.value().object();
         if (obj.contains("success") && !obj["success"].toBool()) {
-            QString msg = obj.value("message").toString(obj.value("detail").toString(tr("Request failed")));
+            QString msg = fincept::HttpClient::error_text_from_body(obj);
+            if (msg.isEmpty())
+                msg = tr("Request failed");
             cb({false, obj, msg, 200});
             return;
         }
@@ -67,16 +89,16 @@ void UserApi::request(const QString& method, const QString& endpoint, const QJso
     // singleton instead, i.e. to the whole app lifetime — which is the opposite
     // of what HttpClient's `context` parameter exists for.
     if (method == "GET")
-        http.get(endpoint, handle, context);
+        http.get(endpoint, handle, context, extra_headers);
     else if (method == "POST")
-        http.post(endpoint, body, handle, context);
+        http.post(endpoint, body, handle, context, extra_headers);
     else if (method == "PUT")
-        http.put(endpoint, body, handle, context);
+        http.put(endpoint, body, handle, context, extra_headers);
     else if (method == "DELETE") {
         if (body.isEmpty())
-            http.del(endpoint, handle, context);
+            http.del(endpoint, handle, context, extra_headers);
         else
-            http.del(endpoint, body, handle, context);
+            http.del(endpoint, body, handle, context, extra_headers);
     }
 }
 
@@ -141,18 +163,25 @@ void UserApi::get_login_history(int limit, int offset, Callback cb, const QObjec
 void UserApi::enable_mfa(Callback cb, const QObject* context) {
     request("POST", "/user/mfa/enable", {}, cb, context);
 }
-void UserApi::disable_mfa(Callback cb, const QObject* context) {
-    request("POST", "/user/mfa/disable", {}, cb, context);
+void UserApi::disable_mfa(const QString& password, Callback cb, const QObject* context) {
+    // The API requires the account password (400 "Password required to disable
+    // MFA" without it, 401 "Invalid password" when wrong).
+    QJsonObject body;
+    body.insert("password", password);
+    request("POST", "/user/mfa/disable", body, cb, context);
 }
 
 // ── Subscriptions ────────────────────────────────────────────────────────────
 
-void UserApi::get_user_subscription(Callback cb, const QObject* context) {
+void UserApi::get_user_subscription(Callback cb, const QObject* context, const QString& if_none_match) {
     // The plan record (account_type, credit_balance, credits_expire_at,
     // support_type — the UserSubscription fields). /user/subscriptions is a
     // different thing: the list of DATABASE subscriptions, which carries none of
     // these, so the Billing tab used to blank its plan and show 0.00 credits.
-    request("GET", "/cashfree/subscription", {}, cb, context);
+    QMap<QByteArray, QByteArray> headers;
+    if (!if_none_match.isEmpty())
+        headers.insert(QByteArrayLiteral("If-None-Match"), if_none_match.toUtf8());
+    request("GET", "/cashfree/subscription", {}, cb, context, headers);
 }
 
 // ── Payment ──────────────────────────────────────────────────────────────────

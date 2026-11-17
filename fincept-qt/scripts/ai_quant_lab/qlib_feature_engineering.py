@@ -11,11 +11,15 @@ Features:
 """
 
 import json
+import os
 import re
 import sys
 from typing import Dict, List, Any, Optional, Union, Callable
 import warnings
 warnings.filterwarnings('ignore')
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 
 try:
     import pandas as pd
@@ -299,6 +303,138 @@ class FeatureEngineer:
         return selected
 
 
+# ── Supervised dataset from market data (Meta Learning / Advanced Models) ─────
+
+# Scale-free feature set built on daily OHLCV; every column is comparable
+# across tickers and price levels (returns, ratios to price, 0..1 oscillators).
+SUPERVISED_FEATURES = [
+    'ret_1', 'ret_5', 'ret_10', 'ret_20', 'ret_60', 'vol_20', 'vol_60', 'rsi_14',
+    'macd_rel', 'macd_signal_rel', 'macd_hist_rel', 'bb_position', 'atr_rel',
+    'volume_ratio_20', 'drawdown_60', 'range_rel',
+]
+
+
+def load_daily_bars(ticker: str, start_date: str, end_date: str, timeout: int = 30) -> 'pd.DataFrame':
+    """Daily OHLCV (split/dividend adjusted) from Yahoo Finance through fincept_yahoo's shared bar
+    cache (its own network timeout applies); raises ValueError when empty."""
+    import fincept_yahoo as fy  # imported here: this module is also used without network access
+
+    raw = fy.download(ticker, start=start_date, end=end_date, auto_adjust=True)
+    if raw is None or raw.empty:
+        raise ValueError(f"No daily price data for '{ticker}' between {start_date} and {end_date} "
+                         "(unknown ticker, or no network access to Yahoo Finance)")
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
+    df = raw.rename(columns=str.lower)
+    missing = [c for c in ('open', 'high', 'low', 'close', 'volume') if c not in df.columns]
+    if missing:
+        raise ValueError(f"Price data for '{ticker}' lacks column(s): {', '.join(missing)}")
+    df = df[['open', 'high', 'low', 'close', 'volume']].astype(float).dropna()
+    return df[df['close'] > 0]
+
+
+def build_supervised_dataset(ticker: str, start_date: Optional[str] = None, end_date: Optional[str] = None,
+                             horizon: int = 5, task_type: str = 'regression', test_fraction: float = 0.2,
+                             min_train_rows: int = 120, min_test_rows: int = 30) -> Dict[str, Any]:
+    """Features and a forward-return target on a ticker's daily bars, split chronologically.
+
+    target = close[t + horizon] / close[t] - 1 (classification: 1 when > 0, else 0).
+    The last ``horizon`` training rows are purged: their labels look into the test
+    window, which would leak hold-out prices into training.
+
+    Returns X_train / y_train / X_test / y_test (numpy), the feature frames (index =
+    dates) and ``info`` describing the data window. Raises ValueError with a plain
+    message when the ticker, window or horizon cannot give a usable dataset.
+    """
+    from datetime import date, timedelta
+
+    ticker = str(ticker or '').strip().upper()
+    if not ticker:
+        raise ValueError("ticker is required (e.g. \"AAPL\")")
+    try:
+        horizon = int(horizon)
+    except (TypeError, ValueError):
+        raise ValueError("horizon must be a whole number of trading days")
+    if not 1 <= horizon <= 60:
+        raise ValueError("horizon must be between 1 and 60 trading days")
+    if task_type not in ('regression', 'classification'):
+        raise ValueError("task_type must be 'regression' or 'classification'")
+    end_date = str(end_date or date.today().isoformat())
+    start_date = str(start_date or (date.fromisoformat(end_date) - timedelta(days=5 * 365)).isoformat())
+    if start_date >= end_date:
+        raise ValueError(f"start_date ({start_date}) must be before end_date ({end_date})")
+
+    bars = load_daily_bars(ticker, start_date, end_date)
+    close, high, low, volume = bars['close'], bars['high'], bars['low'], bars['volume']
+    fe = FeatureEngineer()
+    feats = pd.DataFrame(index=bars.index)
+    for n in (1, 5, 10, 20, 60):
+        feats[f'ret_{n}'] = fe.returns(close, n)
+    daily = close.pct_change()
+    feats['vol_20'] = daily.rolling(20).std()
+    feats['vol_60'] = daily.rolling(60).std()
+    feats['rsi_14'] = fe.rsi(close, 14) / 100.0
+    macd = fe.macd(close)
+    feats['macd_rel'] = macd['macd'] / close
+    feats['macd_signal_rel'] = macd['signal'] / close
+    feats['macd_hist_rel'] = macd['histogram'] / close
+    bb = fe.bollinger_bands(close, 20, 2.0)
+    band = (bb['upper'] - bb['lower']).replace(0.0, np.nan)
+    feats['bb_position'] = (close - bb['middle']) / band
+    feats['atr_rel'] = fe.atr(high, low, close, 14) / close
+    feats['volume_ratio_20'] = fe.volume_ratio(volume, 20)
+    feats['drawdown_60'] = close / close.rolling(60).max() - 1.0
+    feats['range_rel'] = (high - low) / close
+    feats = feats[SUPERVISED_FEATURES].replace([np.inf, -np.inf], np.nan)
+
+    fwd = close.shift(-horizon) / close - 1.0
+    frame = feats.assign(_target=fwd).dropna()
+    n = len(frame)
+    split = int(round(n * (1.0 - test_fraction)))
+    train = frame.iloc[:max(0, split - horizon)]
+    test = frame.iloc[split:]
+    if len(train) < min_train_rows or len(test) < min_test_rows:
+        raise ValueError(f"Only {n} usable rows for {ticker} between {start_date} and {end_date} "
+                         f"({len(train)} train / {len(test)} test after the {horizon}-day purge); need at "
+                         f"least {min_train_rows} / {min_test_rows} -- widen the date range")
+
+    def target(s):
+        return (s > 0).astype(int).to_numpy() if task_type == 'classification' else s.to_numpy(dtype=float)
+
+    info = {
+        'ticker': ticker,
+        'start_date': start_date,
+        'end_date': end_date,
+        'horizon': horizon,
+        'task_type': task_type,
+        'target': (f'{horizon}-day forward return > 0' if task_type == 'classification'
+                   else f'{horizon}-day forward return'),
+        'bars': int(len(bars)),
+        'rows': int(n),
+        'train_rows': int(len(train)),
+        'test_rows': int(len(test)),
+        'purged_rows': int(split - len(train)),
+        'train_period': [str(train.index[0].date()), str(train.index[-1].date())],
+        'test_period': [str(test.index[0].date()), str(test.index[-1].date())],
+        'features': list(SUPERVISED_FEATURES),
+        'source': 'Yahoo Finance daily bars (adjusted)',
+    }
+    return {
+        'X_train': train[SUPERVISED_FEATURES].to_numpy(dtype=float),
+        'y_train': target(train['_target']),
+        'X_test': test[SUPERVISED_FEATURES].to_numpy(dtype=float),
+        'y_test': target(test['_target']),
+        'train_frame': train,
+        'test_frame': test,
+        # Whole usable frame (features + '_target') and the row where the test window
+        # starts: sequence models read the bars before a test row as INPUT history.
+        'frame': frame,
+        'split_index': int(split),
+        'feature_names': list(SUPERVISED_FEATURES),
+        'info': info,
+    }
+
+
 class FeatureExpressionEngine:
     """
     Expression-based feature creation.
@@ -467,10 +603,39 @@ def _json_safe(obj):
     return obj
 
 
+def _aligned(close_values, params: dict, keys: tuple) -> tuple:
+    """(series for each of `keys`..., close) as float Series of one common length.
+
+    ATR / stochastic / VWAP / OBV need high, low and/or volume alongside the close;
+    the C++ panel sends them as extra arrays. Mismatched lengths used to be silently
+    index-aligned by pandas, producing NaN-padded or shifted results.
+    """
+    close = pd.Series(close_values, dtype=float)
+    if close.empty:
+        raise ValueError("Price data (close) is empty")
+    out = []
+    for key in keys:
+        values = params.get(key)
+        if values is None or (hasattr(values, "__len__") and len(values) == 0):
+            raise ValueError(f"'{key}' series is required for this indicator")
+        s = pd.Series(values, dtype=float)
+        if len(s) != len(close):
+            raise ValueError(f"'{key}' has {len(s)} values but the close series has {len(close)}; "
+                             "they must be the same length")
+        out.append(s)
+    if "high" in keys and "low" in keys:
+        hi, lo = out[keys.index("high")], out[keys.index("low")]
+        if bool((hi < lo).any()):
+            raise ValueError("high is below low on at least one bar")
+    if "volume" in keys and bool((out[keys.index("volume")] < 0).any()):
+        raise ValueError("volume cannot be negative")
+    return (*out, close)
+
+
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -526,15 +691,24 @@ def main():
                       "middle": r["middle"].dropna().tolist(), "lower": r["lower"].dropna().tolist()}
 
         elif command == "atr":
-            r = engineer.atr(pd.Series(params.get("high", [])), pd.Series(params.get("low", [])),
-                             pd.Series(data), params.get("window", 14))
-            result = {"success": True, "data": r.dropna().tolist()}
+            high, low, close = _aligned(data, params, ("high", "low"))
+            r = engineer.atr(high, low, close, int(params.get("window", 14)))
+            # The first bar has no previous close, so its true range is only high - low.
+            result = {"success": True, "data": r.iloc[1:].dropna().tolist()}
 
         elif command == "stochastic_oscillator":
-            r = engineer.stochastic_oscillator(pd.Series(params.get("high", [])),
-                                               pd.Series(params.get("low", [])), pd.Series(data),
-                                               params.get("k_window", 14), params.get("d_window", 3))
-            result = {"success": True, "k": r["k"].dropna().tolist(), "d": r["d"].dropna().tolist()}
+            high, low, close = _aligned(data, params, ("high", "low"))
+            k_window = int(params.get("k_window", params.get("window", 14)))
+            d_window = int(params.get("d_window", 3))
+            if len(close) < k_window + d_window - 1:
+                raise ValueError(f"%K over {k_window} bars and %D over {d_window} need at least "
+                                 f"{k_window + d_window - 1} bars; got {len(close)}")
+            r = engineer.stochastic_oscillator(high, low, close, k_window, d_window)
+            # The engine names the lines '%K' / '%D' (reading r["k"] raised KeyError: 'k').
+            k = r["%K"]
+            d = r["%D"]
+            valid = d.notna()
+            result = {"success": True, "k": k[valid].tolist(), "d": d[valid].tolist()}
 
         elif command == "returns":
             r = engineer.returns(pd.Series(data), params.get("periods", 1))
@@ -553,12 +727,17 @@ def main():
             result = {"success": True, "data": r.dropna().tolist()}
 
         elif command == "obv":
-            r = engineer.obv(pd.Series(data), pd.Series(params.get("volume", [])))
+            volume, close = _aligned(data, params, ("volume",))
+            # OBV starts at 0 on the first bar (no prior close to compare with).
+            r = engineer.obv(close, volume).fillna(0.0)
             result = {"success": True, "data": r.tolist()}
 
         elif command == "vwap":
-            r = engineer.vwap(pd.Series(params.get("high", [])), pd.Series(params.get("low", [])),
-                              pd.Series(data), pd.Series(params.get("volume", [])))
+            high, low, volume, close = _aligned(data, params, ("high", "low", "volume"))
+            if float(volume.sum()) <= 0:
+                raise ValueError("VWAP needs a positive total volume")
+            # Cumulative (anchored at the first bar) VWAP; bars before any volume have none.
+            r = engineer.vwap(high, low, close, volume)
             result = {"success": True, "data": r.tolist()}
 
         elif command == "drawdown":
@@ -592,10 +771,10 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(_json_safe(result)))
+        fincept_json.emit(_json_safe(result))
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

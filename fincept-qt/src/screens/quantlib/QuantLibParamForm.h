@@ -36,6 +36,10 @@ class QuantLibParamForm : public QWidget {
     /// `error` and moves focus to the offending field.
     bool body(QJsonObject* out, QString* error);
 
+    /// The body body() would send, without marking fields or moving focus —
+    /// for automatic runs and previews. False when the form does not validate.
+    bool peek_body(QJsonObject* out) const;
+
     void retranslate();
 
   signals:

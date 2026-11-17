@@ -27,13 +27,16 @@ static QString PANEL() {
         .arg(colors::BG_SURFACE(), colors::BORDER_DIM());
 }
 
-static const char* MF = "font-family:'Consolas','Courier New',monospace;";
+// The user's font as a stylesheet declaration, for labels that set their own size.
+static QString MF() {
+    return QStringLiteral("font-family:%1;").arg(QString(fonts::DATA_FAMILY));
+}
 
 static QLabel* make_header(const QString& icon, const QString& title, const QString& icon_color) {
     auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
-    lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
+    lbl->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; letter-spacing: 0.5px; "
                                "background: %2; padding: 10px 14px; border-bottom: 1px solid %3; %4")
-                           .arg(icon_color, colors::BG_RAISED(), colors::BORDER_DIM(), MF));
+                           .arg(icon_color, colors::BG_RAISED(), colors::BORDER_DIM(), MF()));
     return lbl;
 }
 
@@ -47,9 +50,9 @@ static QWidget* make_contact_card(const QString& title, const QString& value, co
     vl->setSpacing(4);
 
     auto* t = new QLabel(title);
-    t->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; "
+    t->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; "
                              "letter-spacing: 0.5px; background: transparent; %2")
-                         .arg(colors::TEXT_SECONDARY(), MF));
+                         .arg(colors::TEXT_SECONDARY(), MF()));
     vl->addWidget(t);
 
     auto* v = new QLabel;
@@ -57,20 +60,22 @@ static QWidget* make_contact_card(const QString& title, const QString& value, co
         v->setText(value);
     } else {
         v->setTextFormat(Qt::RichText);
-        v->setText(QStringLiteral("<a href=\"%1\" style=\"color:%2;text-decoration:none;\">%3</a>")
-                       .arg(url.toHtmlEscaped(), QString(colors::AMBER()), value.toHtmlEscaped()));
+        // Drawn in the palette's link colour (the theme's CYAN), so the link
+        // follows a theme switch without rebuilding the rich text.
+        v->setText(QStringLiteral("<a href=\"%1\" style=\"text-decoration:none;\">%2</a>")
+                       .arg(url.toHtmlEscaped(), value.toHtmlEscaped()));
         v->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
         v->setCursor(Qt::PointingHandCursor);
         v->setToolTip(url);
         QObject::connect(v, &QLabel::linkActivated, v, [](const QString& link) { enterprise::open_url(link); });
     }
-    v->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 600; background: transparent; %2")
-                         .arg(colors::TEXT_PRIMARY(), MF));
+    v->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 600; background: transparent; %2")
+                         .arg(colors::TEXT_PRIMARY(), MF()));
     vl->addWidget(v);
 
     auto* d = new QLabel(detail);
     d->setStyleSheet(
-        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF()));
     d->setWordWrap(true);
     vl->addWidget(d);
 
@@ -137,21 +142,21 @@ QWidget* ContactScreen::build_page() {
         auto* back_btn = new QPushButton(tr("< BACK"));
         back_btn->setCursor(Qt::PointingHandCursor);
         back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                        "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
-                                    .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
+                                        "font-size: " + fincept::ui::fonts::px(-2) + "px; %2 } QPushButton:hover { color: %3; }")
+                                    .arg(colors::TEXT_SECONDARY(), MF(), colors::TEXT_PRIMARY()));
         connect(back_btn, &QPushButton::clicked, this, &ContactScreen::navigate_back);
         vl->addWidget(back_btn, 0, Qt::AlignLeft);
     }
 
     auto* title = new QLabel(tr("CONTACT US"));
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; "
+    title->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(6) + "px; font-weight: 700; letter-spacing: 1px; "
                                  "background: transparent; %2")
-                             .arg(colors::AMBER(), MF));
+                             .arg(colors::AMBER(), MF()));
     vl->addWidget(title);
 
     auto* subtitle = new QLabel(tr("Get in touch with our team"));
     subtitle->setStyleSheet(
-        QString("color: %1; font-size: 13px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF()));
     vl->addWidget(subtitle);
 
     vl->addSpacing(8);
@@ -191,10 +196,11 @@ QWidget* ContactScreen::build_page() {
         grid->addWidget(make_contact_card(tr("IN-APP TICKETS"), tr("Support tab"),
                                           tr("Open a tracked ticket from inside the terminal")),
                         1, 1);
-        grid->addWidget(make_contact_card(tr("ENTERPRISE DEMO"), tr("Book a walkthrough ↗"),
+        grid->addWidget(make_contact_card(tr("ENTERPRISE — CUSTOM REQUIREMENTS"), tr("Discuss custom requirements ↗"),
                                           tr("Fincept Terminal Enterprise — the private edition for funds, family "
-                                             "offices and research desks. Separate product, separate account."),
-                                          enterprise::demo_url()),
+                                             "offices and research desks. Separate product, separate account. "
+                                             "For partnerships write to support@fincept.in."),
+                                          enterprise::meeting_url()),
                         2, 0, 1, 2);
 
         pvl->addWidget(body);
@@ -219,13 +225,14 @@ QWidget* ContactScreen::build_page() {
 
         auto make_action = [](const QString& text) {
             auto* btn = new QPushButton(text);
-            btn->setFixedHeight(36);
+            btn->setMinimumHeight(36);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-                                       "border-radius: 2px; padding: 8px 16px; font-size: 12px; "
-                                       "font-family:'Consolas','Courier New',monospace; }"
-                                       "QPushButton:hover { background: %4; color: #38bdf8; }")
-                                   .arg(colors::BG_RAISED(), colors::CYAN(), colors::BORDER_DIM(), colors::BG_HOVER()));
+                                       "border-radius: 2px; padding: 8px 16px; font-size: " + fincept::ui::fonts::px(-2) + "px; "
+                                       "}"
+                                       "QPushButton:hover { background: %4; color: %5; }")
+                                   .arg(colors::BG_RAISED(), colors::CYAN(), colors::BORDER_DIM(), colors::BG_HOVER(),
+                                        colors::TEXT_PRIMARY()));
             return btn;
         };
 
@@ -298,14 +305,14 @@ QWidget* ContactScreen::build_page() {
 
         for (const auto& issue : issues) {
             auto* q = new QLabel(QString("> %1").arg(issue.q));
-            q->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 600; background: transparent; %2")
-                                 .arg(colors::TEXT_PRIMARY(), MF));
+            q->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 600; background: transparent; %2")
+                                 .arg(colors::TEXT_PRIMARY(), MF()));
             bvl->addWidget(q);
 
             auto* a = new QLabel(QString("  %1").arg(issue.a));
             a->setWordWrap(true);
             a->setStyleSheet(
-                QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF()));
             bvl->addWidget(a);
             bvl->addSpacing(4);
         }

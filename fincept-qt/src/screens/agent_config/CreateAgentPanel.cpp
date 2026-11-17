@@ -8,6 +8,8 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "screens/agent_config/AgentProfileRows.h"
+#include "screens/agent_config/AgentResultFormat.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -32,7 +34,7 @@ namespace {
 // Status-line styling in one place (shared shape with CreateAgentPanel_DataOps.cpp).
 void set_form_status(QLabel* lbl, const QString& text, const QString& color) {
     lbl->setText(text);
-    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(color));
+    lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:3px 0;").arg(color));
 }
 } // namespace
 
@@ -40,8 +42,10 @@ CreateAgentPanel::CreateAgentPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("CreateAgentPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        update();
+        agent_result::rerender(test_result_); // the rendered answer carries the theme's colours
+    });
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -84,7 +88,7 @@ void CreateAgentPanel::setup_connections() {
 
     auto& svc = services::AgentService::instance();
     connect(&svc, &services::AgentService::config_saved, this, [this]() {
-        set_form_status(status_lbl_, tr("Saved successfully"), ui::colors::POSITIVE());
+        set_form_status(status_lbl_, tr("Saved successfully"), ui::colors::SUCCESS());
         load_saved_agents();
     });
     connect(&svc, &services::AgentService::config_deleted, this, [this]() {
@@ -108,58 +112,53 @@ void CreateAgentPanel::setup_connections() {
                 test_result_->insertPlainText(token);
             });
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_)
+        if (pending_request_id_.isEmpty() || r.request_id != pending_request_id_)
             return;
         pending_request_id_.clear();
         test_btn_->setEnabled(true);
         test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
-            test_result_->setPlainText(r.response);
-            test_status_lbl_->setText(tr("Done in %1ms").arg(r.execution_time_ms));
+            // Streamed as plain text; the finished answer is rendered markdown.
+            agent_result::show_markdown(test_result_, r.response);
+            test_status_lbl_->setText(tr("Done in %1").arg(agent_result::duration(r.execution_time_ms)));
             test_status_lbl_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+                QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::SUCCESS()));
         } else {
-            test_result_->setPlainText(tr("Error: %1").arg(r.error));
+            agent_result::show_plain(test_result_, tr("Error: %1").arg(r.error));
             test_status_lbl_->setText(tr("Failed"));
             test_status_lbl_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+                QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::DANGER()));
         }
     });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_)
+        // An idle panel (empty pending id) must not take results of other screens.
+        if (pending_request_id_.isEmpty() || r.request_id != pending_request_id_)
             return;
         pending_request_id_.clear();
         test_btn_->setEnabled(true);
         test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
-            test_result_->setPlainText(r.response);
-            test_status_lbl_->setText(tr("Done in %1ms").arg(r.execution_time_ms));
+            // Streamed as plain text; the finished answer is rendered markdown.
+            agent_result::show_markdown(test_result_, r.response);
+            test_status_lbl_->setText(tr("Done in %1").arg(agent_result::duration(r.execution_time_ms)));
             test_status_lbl_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+                QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::SUCCESS()));
         } else {
-            test_result_->setPlainText(tr("Error: %1").arg(r.error));
+            agent_result::show_plain(test_result_, tr("Error: %1").arg(r.error));
             test_status_lbl_->setText(tr("Failed"));
             test_status_lbl_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+                QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::DANGER()));
         }
     });
-    // A failure that never produces agent_result / agent_stream_done left
-    // RUN TEST disabled and pending_request_id_ set for the rest of the session.
+    // Only the contexts this panel starts. RUN TEST (run_agent_streaming) always
+    // ends in agent_stream_done; reacting to every other error_occurred (agent
+    // discovery, tasks, schedules…) ended a running test as "Failed" and then
+    // dropped its real result.
     connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& ctx, const QString& msg) {
         // A failed save/delete used to show only in the screen-level status bar;
         // say it next to the form too, so "SAVE AGENT" never looks like it worked.
-        if (ctx == QLatin1String("save_config") || ctx == QLatin1String("delete_config")) {
-            set_form_status(status_lbl_, tr("Failed: %1").arg(msg), ui::colors::NEGATIVE());
-            return;
-        }
-        if (pending_request_id_.isEmpty())
-            return;
-        pending_request_id_.clear();
-        test_btn_->setEnabled(true);
-        test_btn_->setText(tr("RUN TEST"));
-        test_result_->setPlainText(tr("Error: %1").arg(msg));
-        test_status_lbl_->setText(tr("Failed"));
-        test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+        if (ctx == QLatin1String("save_config") || ctx == QLatin1String("delete_config"))
+            set_form_status(status_lbl_, tr("Failed: %1").arg(msg), ui::colors::DANGER());
     });
     connect(&svc, &services::AgentService::tools_loaded, this, [this](services::AgentToolsInfo info) {
         available_tools_.clear();
@@ -198,14 +197,8 @@ void CreateAgentPanel::load_profile_combo() {
     llm_profile_combo_->clear();
     llm_profile_combo_->addItem(tr("Default (Global)"), QString{});
 
-    const auto pr = LlmProfileRepository::instance().list_profiles();
-    const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
-    for (const auto& p : profiles) {
-        QString label = p.name;
-        if (p.is_default)
-            label += tr(" [default]");
-        llm_profile_combo_->addItem(label, p.id);
-    }
+    // Usable profiles, then harness profiles as disabled rows (no id: never restored below).
+    agent_profiles::add_profile_rows(llm_profile_combo_, tr(" [default]"), QStringLiteral("agent"));
     int restore = 0;
     if (!prev_id.isEmpty()) {
         for (int i = 1; i < llm_profile_combo_->count(); ++i) {
@@ -252,11 +245,11 @@ void CreateAgentPanel::refresh_llm_pill() {
             text += tr(" (inherited)");
         llm_resolved_lbl_->setText(text);
         llm_resolved_lbl_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:1px 0 4px 0;").arg(ui::colors::TEXT_TERTIARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:1px 0 4px 0;").arg(ui::colors::TEXT_TERTIARY()));
     } else {
         llm_resolved_lbl_->setText(tr("No provider — Settings > LLM Config"));
         llm_resolved_lbl_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:1px 0 4px 0;").arg(ui::colors::NEGATIVE()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:1px 0 4px 0;").arg(ui::colors::DANGER()));
     }
 }
 

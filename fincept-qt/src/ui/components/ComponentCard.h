@@ -40,6 +40,8 @@ class ComponentCard : public QFrame {
   private:
     void build_ui();
     void restyle();
+    /// Card and description sizes for the user's font size.
+    void apply_metrics();
 
     ComponentMeta meta_;
     bool selected_ = false;

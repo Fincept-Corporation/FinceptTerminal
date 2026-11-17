@@ -9,40 +9,38 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://overpass-api.de/api/interpreter"
+import fincept_connector as fc
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+BASE_URL = "https://overpass-api.de/api/interpreter"
+SERVICE = "Overpass API (overpass-api.de)"
+
+session = fc.http_session()
 session.headers.update({"User-Agent": "FinceptTerminal/4.0 (support@fincept.in)"})
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=60)
+        response = session.get(url, params=params, timeout=(10, 60))
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 
 def _run_overpass(query: str) -> Any:
+    # The public instance answers 502/504 "server is currently at capacity" and 429 when its query
+    # workers are busy; fc.request_error turns those into a "down or overloaded / rate-limiting" message.
     try:
-        response = session.post(BASE_URL, data={"data": query}, timeout=60)
+        response = session.post(BASE_URL, data={"data": query}, timeout=(10, 75))
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON (check the Overpass QL query)"}
 
 
 def _around_query(amenity_tag: str, lat: float, lon: float, radius: int = 1000) -> str:
@@ -171,6 +169,14 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
+    try:
+        result = _dispatch(command, args, result)
+    except ValueError:
+        result = {"error": "lat / lon must be numbers and radius a whole number of metres"}
+    print(json.dumps(result))
+
+
+def _dispatch(command: str, args: List[str], result: Dict) -> Any:
     if command == "banks":
         lat = float(args[1]) if len(args) > 1 else 40.7128
         lon = float(args[2]) if len(args) > 2 else -74.0060
@@ -197,7 +203,7 @@ def main(args=None):
     elif command == "query":
         ql = args[1] if len(args) > 1 else '[out:json];node["amenity"="bank"](around:500,51.5,0.1);out;'
         result = run_query(ql)
-    print(json.dumps(result))
+    return result
 
 
 if __name__ == "__main__":

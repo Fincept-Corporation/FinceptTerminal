@@ -1,46 +1,60 @@
 // src/screens/quantlib/QuantLibResultView.cpp
 //
-// Results pane of the QuantLib screen — see the header. Styling comes from the
-// QuantLib screen's root stylesheet (#ql* selectors); the chart is themed
-// through the QtCharts API. Nothing here calls setStyleSheet.
+// Results pane of the QuantLib screen — see the header. The SUMMARY page is the
+// shared ui::ResultView (one renderer for all 590 endpoints: the response's
+// shape decides KPIs / chart / table / sections). Toolbar and TABLE / JSON
+// pages are styled by the QuantLib screen's root stylesheet (#ql* selectors);
+// nothing here calls setStyleSheet. Table colours are read from the theme
+// tokens at paint time, so a theme change only repaints.
+//
+// GUI-thread budget: the TABLE page is a virtual model over the JSON (no item
+// per cell, every row available), built only when shown; the JSON text is
+// formatted on a worker thread when first shown; CSV export writes on a worker
+// thread. A capped simulation answer (several MB) therefore costs the GUI
+// thread only the summary.
 
 #include "screens/quantlib/QuantLibResultView.h"
 
 #include "core/logging/Logger.h"
-#include "ui/tables/NumericTableWidgetItem.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LoadingOverlay.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/ResultLayout.h"
+#include "ui/widgets/ResultView.h"
 
+#include <QAbstractTableModel>
 #include <QApplication>
 #include <QButtonGroup>
-#include <QChart>
-#include <QChartView>
 #include <QClipboard>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
-#include <QHash>
 #include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeySequence>
 #include <QLabel>
-#include <QLegend>
-#include <QLineSeries>
+#include <QLocale>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QShortcut>
 #include <QSignalBlocker>
+#include <QSortFilterProxyModel>
 #include <QStackedWidget>
 #include <QStyle>
-#include <QTableWidget>
+#include <QTableView>
 #include <QTextStream>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 
 namespace fincept::screens {
@@ -49,17 +63,17 @@ using namespace fincept::ui;
 
 namespace {
 
-constexpr int kQlTableRowCap = 5000;      // rows rendered in the widget (CSV/COPY export all)
-constexpr int kQlChartPointCap = 4000;    // points per plotted series (stride-downsampled above)
-constexpr int kQlChartSeriesCap = 25;     // series per chart
-constexpr int kQlJsonCharCap = 2'000'000; // raw JSON view
+constexpr int kQlJsonCharCap = 1'000'000;   // JSON page text (COPY copies all of it)
+constexpr int kQlSectionDepth = 3;          // nested objects listed in the VIEW selector
+constexpr int kQlMaxColumns = 1000;         // widest matrix row shown in the TABLE page
+constexpr int kQlSortableRows = 50'000;     // above this a header click would sort for too long
+constexpr int kQlAutoSizeColumns = 50;      // fit column widths to content up to this many columns
+constexpr int kQlSortRole = Qt::UserRole;
+constexpr int kQlFullTextRole = Qt::UserRole + 1;
 
-QString ql_rv_number(double v) {
-    if (!std::isfinite(v))
-        return QString::number(v);
-    if (std::floor(v) == v && std::fabs(v) < 1e15)
-        return QString::number(static_cast<qlonglong>(v));
-    return QString::number(v, 'g', 10);
+const result::Options& ql_rv_plain_options() {
+    static const result::Options o;
+    return o;
 }
 
 QString ql_rv_number_full(double v) {
@@ -76,14 +90,17 @@ QString ql_rv_compact(const QJsonValue& v) {
     return {};
 }
 
-// Cell text for display (`full` = export precision).
+// Cell text: `full` = export precision; otherwise significant digits by
+// magnitude with group separators, and "not finite" for a null number.
 QString ql_rv_cell(const QJsonValue& v, bool full) {
     if (v.isDouble())
-        return full ? ql_rv_number_full(v.toDouble()) : ql_rv_number(v.toDouble());
+        return full ? ql_rv_number_full(v.toDouble())
+                    : result::format_number(v.toDouble(), result::Unit::Plain, ql_rv_plain_options());
     if (v.isBool())
         return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
     if (v.isNull() || v.isUndefined())
-        return full ? QString() : QStringLiteral("--");
+        return full ? QString() : result::format_value(QJsonValue(QJsonValue::Null), result::Unit::Plain,
+                                                       ql_rv_plain_options());
     if (v.isString())
         return v.toString();
     return ql_rv_compact(v);
@@ -97,50 +114,13 @@ QString ql_rv_csv_escape(QString s) {
     return s;
 }
 
-bool ql_rv_numeric_array(const QJsonValue& v, QList<double>* out) {
-    if (!v.isArray())
-        return false;
-    const QJsonArray a = v.toArray();
-    if (a.size() < 2)
-        return false;
-    out->clear();
-    out->reserve(a.size());
-    for (const auto& e : a) {
-        if (!e.isDouble())
-            return false;
-        out->append(e.toDouble());
-    }
-    return true;
-}
-
-bool ql_rv_numeric_matrix(const QJsonValue& v, QList<QList<double>>* rows) {
-    if (!v.isArray())
-        return false;
-    const QJsonArray a = v.toArray();
-    if (a.isEmpty())
-        return false;
-    rows->clear();
-    for (const auto& r : a) {
-        if (!r.isArray())
-            return false;
-        QList<double> row;
-        for (const auto& e : r.toArray()) {
-            if (!e.isDouble())
-                return false;
-            row.append(e.toDouble());
-        }
-        rows->append(row);
-    }
-    return true;
-}
-
 // Column keys of an array of objects, in first-appearance order.
 QStringList ql_rv_object_columns(const QJsonArray& arr) {
     QStringList cols;
     const int scan = std::min<int>(arr.size(), 500);
     for (int i = 0; i < scan; ++i) {
         const QJsonObject o = arr.at(i).toObject();
-        for (auto it = o.begin(); it != o.end(); ++it) {
+        for (auto it = o.constBegin(); it != o.constEnd(); ++it) {
             if (!cols.contains(it.key()))
                 cols << it.key();
         }
@@ -148,471 +128,50 @@ QStringList ql_rv_object_columns(const QJsonArray& arr) {
     return cols;
 }
 
-QList<QPointF> ql_rv_downsample(const QList<QPointF>& pts, bool* downsampled) {
-    if (pts.size() <= kQlChartPointCap)
-        return pts;
-    *downsampled = true;
-    QList<QPointF> out;
-    const double stride = double(pts.size()) / kQlChartPointCap;
-    out.reserve(kQlChartPointCap + 1);
-    for (int i = 0; i < kQlChartPointCap; ++i)
-        out.append(pts.at(int(i * stride)));
-    out.append(pts.last());
-    return out;
+bool ql_rv_all_objects(const QJsonArray& arr) {
+    return !arr.isEmpty() && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) { return v.isObject(); });
 }
 
-} // namespace
-
-// ── Construction ─────────────────────────────────────────────────────────────
-
-QuantLibResultView::QuantLibResultView(QWidget* parent) : QWidget(parent) {
-    setObjectName("qlResultPanel");
-    auto* vl = new QVBoxLayout(this);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    // Toolbar: RESULTS · endpoint ····· status · TABLE CHART JSON · COPY CSV
-    auto* bar = new QWidget(this);
-    bar->setObjectName("qlResultBar");
-    bar->setFixedHeight(34);
-    auto* bl = new QHBoxLayout(bar);
-    bl->setContentsMargins(12, 0, 8, 0);
-    bl->setSpacing(6);
-    title_ = new QLabel(tr("RESULTS"), bar);
-    title_->setObjectName("qlPanelTitle");
-    bl->addWidget(title_);
-    endpoint_label_ = new QLabel(bar);
-    endpoint_label_->setObjectName("qlResultEndpoint");
-    bl->addWidget(endpoint_label_);
-    bl->addStretch(1);
-    status_ = new QLabel(bar);
-    status_->setObjectName("qlResultStatus");
-    bl->addWidget(status_);
-
-    auto make_btn = [bar](const QString& text, const char* object_name) {
-        auto* b = new QPushButton(text, bar);
-        b->setObjectName(object_name);
-        b->setCursor(Qt::PointingHandCursor);
-        b->setFocusPolicy(Qt::TabFocus);
-        return b;
-    };
-    table_btn_ = make_btn(tr("TABLE"), "qlViewBtn");
-    chart_btn_ = make_btn(tr("CHART"), "qlViewBtn");
-    json_btn_ = make_btn(tr("JSON"), "qlViewBtn");
-    auto* group = new QButtonGroup(this);
-    group->setExclusive(true);
-    for (auto* b : {table_btn_, chart_btn_, json_btn_}) {
-        b->setCheckable(true);
-        group->addButton(b);
-        bl->addWidget(b);
-    }
-    table_btn_->setChecked(true);
-    connect(table_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Table); });
-    connect(chart_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Chart); });
-    connect(json_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Json); });
-
-    copy_btn_ = make_btn(tr("COPY"), "qlFormBtn");
-    copy_btn_->setToolTip(tr("Copy the current view (table as tab-separated text, chart as an image)"));
-    connect(copy_btn_, &QPushButton::clicked, this, &QuantLibResultView::copy_current);
-    bl->addWidget(copy_btn_);
-    csv_btn_ = make_btn(tr("CSV"), "qlFormBtn");
-    csv_btn_->setToolTip(tr("Export the selected section — every row — to a CSV file"));
-    connect(csv_btn_, &QPushButton::clicked, this, &QuantLibResultView::export_csv);
-    bl->addWidget(csv_btn_);
-    vl->addWidget(bar);
-
-    // Section selector (only when an object response carries arrays).
-    auto* section_bar = new QWidget(this);
-    section_bar->setObjectName("qlSectionBar");
-    auto* sl = new QHBoxLayout(section_bar);
-    sl->setContentsMargins(12, 4, 12, 4);
-    sl->setSpacing(6);
-    section_label_ = new QLabel(tr("VIEW"), section_bar);
-    section_label_->setObjectName("qlLabel");
-    section_combo_ = new QComboBox(section_bar);
-    section_combo_->setAccessibleName(tr("Result section"));
-    connect(section_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this](int) { render_current(); });
-    sl->addWidget(section_label_);
-    sl->addWidget(section_combo_, 1);
-    vl->addWidget(section_bar);
-    section_bar->hide();
-
-    stack_ = new QStackedWidget(this);
-
-    message_ = new QLabel(this);
-    message_->setObjectName("qlResultMessage");
-    message_->setAlignment(Qt::AlignCenter);
-    message_->setWordWrap(true);
-    stack_->addWidget(message_); // kMessagePage
-
-    table_ = new QTableWidget(this);
-    table_->verticalHeader()->setVisible(false);
-    table_->horizontalHeader()->setStretchLastSection(true);
-    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table_->setSelectionBehavior(QAbstractItemView::SelectItems);
-    table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    table_->setAccessibleName(tr("QuantLib result table"));
-    stack_->addWidget(table_); // kTablePage
-
-    chart_view_ = new QChartView(this);
-    chart_view_->setRenderHint(QPainter::Antialiasing, true);
-    chart_view_->setChart(new QChart());
-    stack_->addWidget(chart_view_); // kChartPage
-
-    json_ = new QPlainTextEdit(this);
-    json_->setObjectName("qlJsonView");
-    json_->setReadOnly(true);
-    json_->setLineWrapMode(QPlainTextEdit::NoWrap);
-    stack_->addWidget(json_); // kJsonPage
-
-    auto* error_page = new QWidget(this);
-    error_page->setObjectName("qlErrorPage");
-    auto* el = new QVBoxLayout(error_page);
-    el->setContentsMargins(20, 20, 20, 20);
-    el->setSpacing(10);
-    error_title_ = new QLabel(error_page);
-    error_title_->setObjectName("qlErrorTitle");
-    error_text_ = new QLabel(error_page);
-    error_text_->setObjectName("qlErrorText");
-    error_text_->setWordWrap(true);
-    error_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    error_hint_ = new QLabel(error_page);
-    error_hint_->setObjectName("qlErrorHint");
-    error_hint_->setWordWrap(true);
-    auto* actions = new QHBoxLayout;
-    actions->setSpacing(8);
-    error_primary_ = new QPushButton(error_page);
-    error_primary_->setObjectName("qlExecBtn");
-    error_primary_->setCursor(Qt::PointingHandCursor);
-    connect(error_primary_, &QPushButton::clicked, this, &QuantLibResultView::upgrade_requested);
-    error_retry_ = new QPushButton(tr("RETRY"), error_page);
-    error_retry_->setObjectName("qlFormBtn");
-    error_retry_->setCursor(Qt::PointingHandCursor);
-    connect(error_retry_, &QPushButton::clicked, this, &QuantLibResultView::retry_requested);
-    actions->addWidget(error_primary_);
-    actions->addWidget(error_retry_);
-    actions->addStretch(1);
-    el->addWidget(error_title_);
-    el->addWidget(error_text_);
-    el->addWidget(error_hint_);
-    el->addLayout(actions);
-    el->addStretch(1);
-    stack_->addWidget(error_page); // kErrorPage
-
-    vl->addWidget(stack_, 1);
-
-    // Ctrl+C on the table copies the selection (or the whole section).
-    auto* copy_sc = new QShortcut(QKeySequence::Copy, table_);
-    copy_sc->setContext(Qt::WidgetShortcut);
-    connect(copy_sc, &QShortcut::activated, this, &QuantLibResultView::copy_current);
-
-    show_idle();
+bool ql_rv_all_arrays(const QJsonArray& arr) {
+    return !arr.isEmpty() && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) { return v.isArray(); });
 }
 
-void QuantLibResultView::retranslate() {
-    title_->setText(tr("RESULTS"));
-    table_btn_->setText(tr("TABLE"));
-    chart_btn_->setText(tr("CHART"));
-    json_btn_->setText(tr("JSON"));
-    copy_btn_->setText(tr("COPY"));
-    copy_btn_->setToolTip(tr("Copy the current view (table as tab-separated text, chart as an image)"));
-    csv_btn_->setText(tr("CSV"));
-    csv_btn_->setToolTip(tr("Export the selected section — every row — to a CSV file"));
-    section_label_->setText(tr("VIEW"));
-    error_retry_->setText(tr("RETRY"));
-    if (has_failure_)
-        show_failure(endpoint_, failure_);
-    else if (!has_result_)
-        show_idle();
+// "rate" is an interest rate on most endpoints, but an FX rate on money/convert
+// and an event intensity on the exponential / poisson endpoints: never a percent there.
+result::Unit ql_rv_unit(const QString& endpoint, const QString& key) {
+    if (key == QLatin1String("rate") &&
+        (endpoint == QLatin1String("core/types/money/convert") || endpoint.contains(QLatin1String("/exponential/")) ||
+         endpoint.contains(QLatin1String("/poisson/"))))
+        return result::Unit::Plain;
+    return result::Unit::Auto;
 }
 
-// ── States ───────────────────────────────────────────────────────────────────
-
-void QuantLibResultView::set_result_controls_enabled(bool enabled) {
-    for (auto* b : {table_btn_, chart_btn_, json_btn_, copy_btn_, csv_btn_})
-        b->setEnabled(enabled);
-    if (!enabled)
-        section_combo_->parentWidget()->hide();
-}
-
-void QuantLibResultView::show_idle() {
-    has_result_ = false;
-    has_failure_ = false;
-    endpoint_label_->clear();
-    status_->clear();
-    set_result_controls_enabled(false);
-    message_->setText(tr("Pick a module and an endpoint, set the parameters, then press Enter or EXECUTE."));
-    stack_->setCurrentIndex(kMessagePage);
-}
-
-void QuantLibResultView::show_loading(const QString& endpoint, const QString& cost_note) {
-    has_failure_ = false;
-    endpoint_label_->setText(endpoint);
-    status_->setText(cost_note.isEmpty() ? tr("Computing…") : tr("Computing… (%1)").arg(cost_note));
-    set_result_controls_enabled(false);
-    message_->setText(tr("Computing %1 …").arg(endpoint));
-    stack_->setCurrentIndex(kMessagePage);
-}
-
-void QuantLibResultView::show_input_error(const QString& message) {
-    has_failure_ = false;
-    status_->setText(tr("Not sent"));
-    show_error_page(tr("INVALID INPUT"), QStringLiteral("error"), message,
-                    tr("Nothing was sent — fix the highlighted field and run again."), QString(), false);
-}
-
-void QuantLibResultView::show_error_page(const QString& title, const QString& tone, const QString& message,
-                                         const QString& hint, const QString& primary_text, bool show_retry) {
-    set_result_controls_enabled(false);
-    error_title_->setText(title);
-    error_title_->setProperty("tone", tone);
-    error_title_->style()->unpolish(error_title_);
-    error_title_->style()->polish(error_title_);
-    error_text_->setText(message);
-    error_hint_->setText(hint);
-    error_hint_->setVisible(!hint.isEmpty());
-    error_primary_->setText(primary_text);
-    error_primary_->setVisible(!primary_text.isEmpty());
-    error_retry_->setVisible(show_retry);
-    stack_->setCurrentIndex(kErrorPage);
-}
-
-void QuantLibResultView::show_failure(const QString& endpoint, const services::QuantLibFailure& failure) {
-    using Kind = services::QuantLibFailureKind;
-    endpoint_ = endpoint;
-    failure_ = failure;
-    has_failure_ = true;
-    has_result_ = false;
-    endpoint_label_->setText(endpoint);
-    status_->setText(failure.http_status > 0 ? tr("HTTP %1").arg(failure.http_status) : tr("Failed"));
-
-    switch (failure.kind) {
-        case Kind::NeedsPro:
-            show_error_page(tr("THIS MODULE NEEDS PRO"), QStringLiteral("pro"), failure.message,
-                            tr("Pro ($10/month) includes every QuantLib module — all endpoints at 0 credits per "
-                               "call."),
-                            tr("UPGRADE TO PRO"), false);
-            break;
-        case Kind::OutOfCredits:
-            show_error_page(tr("OUT OF CREDITS"), QStringLiteral("warn"), failure.message,
-                            tr("On the Free plan this endpoint costs 1 credit per call. Pro includes every QuantLib "
-                               "endpoint at 0 credits."),
-                            tr("VIEW PLANS"), true);
-            break;
-        case Kind::AuthRequired:
-            show_error_page(tr("SIGN-IN REQUIRED"), QStringLiteral("warn"), failure.message,
-                            tr("Your session is missing or has expired. Sign in again, then retry."), QString(),
-                            true);
-            break;
-        case Kind::RateLimited:
-            show_error_page(tr("RATE LIMITED"), QStringLiteral("warn"), failure.message,
-                            tr("Too many requests right now — wait a moment, then retry."), QString(), true);
-            break;
-        case Kind::InvalidInput:
-            show_error_page(tr("INVALID INPUT"), QStringLiteral("error"), failure.message,
-                            tr("The server rejected the request body. Check the field names and units (decimals: "
-                               "0.05 = 5%)."),
-                            QString(), false);
-            break;
-        case Kind::Network:
-            show_error_page(tr("NETWORK ERROR"), QStringLiteral("error"), failure.message,
-                            tr("The request did not reach the QuantLib service. Check your connection and retry."),
-                            QString(), true);
-            break;
-        case Kind::Server:
-            show_error_page(tr("SERVICE ERROR"), QStringLiteral("error"), failure.message,
-                            tr("The QuantLib service did not return a usable answer. Retry in a moment."), QString(),
-                            true);
-            break;
-        case Kind::Computation:
-            show_error_page(tr("COMPUTATION FAILED"), QStringLiteral("error"), failure.message,
-                            tr("The model could not be evaluated with these inputs. Adjust the parameters and run "
-                               "again."),
-                            QString(), false);
-            break;
-    }
-}
-
-void QuantLibResultView::show_result(const QString& endpoint, const QJsonObject& request, const QJsonValue& payload,
-                                     qint64 elapsed_ms) {
-    endpoint_ = endpoint;
-    request_ = request;
-    payload_ = payload;
-    elapsed_ms_ = elapsed_ms;
-    has_result_ = true;
-    has_failure_ = false;
-    endpoint_label_->setText(endpoint);
-    set_result_controls_enabled(true);
-    build_sections();
-    render_current();
-}
-
-// ── Sections ─────────────────────────────────────────────────────────────────
-
-void QuantLibResultView::build_sections() {
-    sections_.clear();
-    if (payload_.isObject()) {
-        const QJsonObject obj = payload_.toObject();
-        sections_.append({tr("Summary"), payload_});
-        for (auto it = obj.begin(); it != obj.end(); ++it) {
-            if (it.value().isArray() && !it.value().toArray().isEmpty())
-                sections_.append({it.key(), it.value()});
+// Asset names in the request label per-asset arrays (weights, matrices).
+QStringList ql_rv_labels(const QJsonObject& request) {
+    static const QStringList kKeys = {"assets", "tickers", "symbols", "asset_names", "names", "labels"};
+    for (const QString& k : kKeys) {
+        const QJsonArray a = request.value(k).toArray();
+        if (a.isEmpty())
+            continue;
+        QStringList out;
+        for (const QJsonValue& v : a) {
+            if (!v.isString())
+                return {};
+            out << v.toString();
         }
-    } else {
-        sections_.append({tr("Result"), payload_});
+        return out;
     }
-    {
-        const QSignalBlocker block(section_combo_);
-        section_combo_->clear();
-        for (const auto& s : sections_) {
-            const int n = s.second.isArray() ? int(s.second.toArray().size()) : -1;
-            section_combo_->addItem(n >= 0 ? tr("%1  (%2 rows)").arg(s.first).arg(n) : s.first);
-        }
-        section_combo_->setCurrentIndex(0);
-    }
-    section_combo_->parentWidget()->setVisible(sections_.size() > 1);
+    return {};
 }
 
-void QuantLibResultView::render_current() {
-    if (!has_result_ || sections_.isEmpty())
-        return;
-    const int idx = std::clamp(section_combo_->currentIndex(), 0, int(sections_.size()) - 1);
-    const QJsonValue section = sections_.at(idx).second;
-
-    // Status: size of what is shown + round-trip time.
-    QString size_text;
-    if (section.isArray()) {
-        const int n = int(section.toArray().size());
-        size_text = n > kQlTableRowCap ? tr("showing %1 of %2 rows").arg(kQlTableRowCap).arg(n) : tr("%1 rows").arg(n);
-    } else if (section.isObject()) {
-        size_text = tr("%1 fields").arg(section.toObject().size());
-    } else {
-        size_text = tr("1 value");
-    }
-    status_->setText(tr("%1 · %2 ms").arg(size_text).arg(elapsed_ms_));
-
-    render_table(section);
-    QString x_title;
-    const QList<Series> series = chart_series(section, &x_title);
-    chart_btn_->setEnabled(!series.isEmpty());
-    chart_btn_->setToolTip(series.isEmpty() ? tr("No numeric series in this section to chart") : QString());
-    if (!series.isEmpty())
-        render_chart(series, x_title);
-    render_json();
-
-    View v = view_;
-    if (v == View::Chart && series.isEmpty())
-        v = View::Table;
-    set_view(v);
-}
-
-void QuantLibResultView::set_view(View view) {
-    view_ = view;
-    const QSignalBlocker b1(table_btn_), b2(chart_btn_), b3(json_btn_);
-    table_btn_->setChecked(view == View::Table);
-    chart_btn_->setChecked(view == View::Chart);
-    json_btn_->setChecked(view == View::Json);
-    if (!has_result_)
-        return;
-    stack_->setCurrentIndex(view == View::Table ? kTablePage : view == View::Chart ? kChartPage : kJsonPage);
-}
-
-// ── Table ────────────────────────────────────────────────────────────────────
-
-void QuantLibResultView::render_table(const QJsonValue& section) {
-    table_->setSortingEnabled(false);
-    table_->clear();
-
-    auto numeric_item = [](const QJsonValue& v) -> QTableWidgetItem* {
-        const QString text = ql_rv_cell(v, false);
-        QTableWidgetItem* item = v.isDouble() ? new ui::NumericTableWidgetItem(text, v.toDouble())
-                                              : new QTableWidgetItem(text);
-        if (v.isDouble()) {
-            item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            item->setForeground(QColor(v.toDouble() < 0 ? colors::NEGATIVE() : colors::CYAN()));
-        } else if (v.isArray() || v.isObject()) {
-            item->setToolTip(text.left(4000));
-            if (text.size() > 200)
-                item->setText(text.left(200) + QStringLiteral("…"));
-        }
-        return item;
-    };
-
-    if (section.isObject()) {
-        const QJsonObject obj = section.toObject();
-        table_->setColumnCount(2);
-        table_->setHorizontalHeaderLabels({tr("Field"), tr("Value")});
-        table_->setRowCount(int(obj.size()));
-        int r = 0;
-        for (auto it = obj.begin(); it != obj.end(); ++it, ++r) {
-            auto* key_item = new QTableWidgetItem(it.key());
-            key_item->setForeground(QColor(colors::TEXT_SECONDARY()));
-            table_->setItem(r, 0, key_item);
-            table_->setItem(r, 1, numeric_item(it.value()));
-        }
-    } else if (section.isArray()) {
-        const QJsonArray arr = section.toArray();
-        const int rows = std::min<int>(arr.size(), kQlTableRowCap);
-        const bool objects = !arr.isEmpty() && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) {
-            return v.isObject();
-        });
-        const bool matrix = !arr.isEmpty() && !objects && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) {
-            return v.isArray();
-        });
-        if (objects) {
-            const QStringList cols = ql_rv_object_columns(arr);
-            table_->setColumnCount(int(cols.size()));
-            table_->setHorizontalHeaderLabels(cols);
-            table_->setRowCount(rows);
-            for (int r = 0; r < rows; ++r) {
-                const QJsonObject o = arr.at(r).toObject();
-                for (int c = 0; c < cols.size(); ++c)
-                    table_->setItem(r, c, numeric_item(o.value(cols.at(c))));
-            }
-        } else if (matrix) {
-            int width = 0;
-            for (int r = 0; r < rows; ++r)
-                width = std::max(width, int(arr.at(r).toArray().size()));
-            width = std::min(width, 200);
-            QStringList headers{QStringLiteral("#")};
-            for (int c = 0; c < width; ++c)
-                headers << QString::number(c);
-            table_->setColumnCount(width + 1);
-            table_->setHorizontalHeaderLabels(headers);
-            table_->setRowCount(rows);
-            for (int r = 0; r < rows; ++r) {
-                table_->setItem(r, 0, new ui::NumericTableWidgetItem(QString::number(r), r));
-                const QJsonArray row = arr.at(r).toArray();
-                for (int c = 0; c < width && c < row.size(); ++c)
-                    table_->setItem(r, c + 1, numeric_item(row.at(c)));
-            }
-        } else {
-            table_->setColumnCount(2);
-            table_->setHorizontalHeaderLabels({QStringLiteral("#"), tr("Value")});
-            table_->setRowCount(rows);
-            for (int r = 0; r < rows; ++r) {
-                table_->setItem(r, 0, new ui::NumericTableWidgetItem(QString::number(r), r));
-                table_->setItem(r, 1, numeric_item(arr.at(r)));
-            }
-        }
-    } else {
-        table_->setColumnCount(1);
-        table_->setHorizontalHeaderLabels({tr("Value")});
-        table_->setRowCount(1);
-        table_->setItem(0, 0, numeric_item(section));
-    }
-    table_->resizeColumnsToContents();
-    table_->setSortingEnabled(true);
-}
-
-QList<QStringList> QuantLibResultView::section_rows(const QJsonValue& section, QStringList* headers) const {
+// Full rows of `section` as text, with column headers. Pure: runs on the CSV worker.
+QList<QStringList> ql_rv_section_rows(const QJsonValue& section, QStringList* headers) {
     QList<QStringList> rows;
     headers->clear();
     if (section.isObject()) {
         *headers = {QStringLiteral("field"), QStringLiteral("value")};
         const QJsonObject obj = section.toObject();
-        for (auto it = obj.begin(); it != obj.end(); ++it)
+        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it)
             rows.append({it.key(), ql_rv_cell(it.value(), true)});
         return rows;
     }
@@ -622,11 +181,7 @@ QList<QStringList> QuantLibResultView::section_rows(const QJsonValue& section, Q
         return rows;
     }
     const QJsonArray arr = section.toArray();
-    const bool objects =
-        !arr.isEmpty() && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) { return v.isObject(); });
-    const bool matrix =
-        !arr.isEmpty() && !objects && std::all_of(arr.begin(), arr.end(), [](const QJsonValue& v) { return v.isArray(); });
-    if (objects) {
+    if (ql_rv_all_objects(arr)) {
         *headers = ql_rv_object_columns(arr);
         for (const auto& v : arr) {
             const QJsonObject o = v.toObject();
@@ -635,7 +190,7 @@ QList<QStringList> QuantLibResultView::section_rows(const QJsonValue& section, Q
                 row << ql_rv_cell(o.value(c), true);
             rows.append(row);
         }
-    } else if (matrix) {
+    } else if (ql_rv_all_arrays(arr)) {
         int width = 0;
         for (const auto& v : arr)
             width = std::max(width, int(v.toArray().size()));
@@ -658,284 +213,835 @@ QList<QStringList> QuantLibResultView::section_rows(const QJsonValue& section, Q
     return rows;
 }
 
-// ── Chart ────────────────────────────────────────────────────────────────────
-
-QList<QuantLibResultView::Series> QuantLibResultView::chart_series(const QJsonValue& section, QString* x_title) const {
-    QList<Series> out;
-    *x_title = tr("index");
-    auto by_index = [](const QList<double>& ys) {
-        QList<QPointF> pts;
-        pts.reserve(ys.size());
-        for (int i = 0; i < ys.size(); ++i)
-            pts.append(QPointF(i, ys.at(i)));
-        return pts;
-    };
-    auto against = [](const QList<double>& xs, const QList<double>& ys) {
-        QList<QPointF> pts;
-        pts.reserve(ys.size());
-        for (int i = 0; i < ys.size() && i < xs.size(); ++i)
-            pts.append(QPointF(xs.at(i), ys.at(i)));
-        return pts;
-    };
-    static const QStringList kXKeys = {"times",  "time",   "t",       "tenors",     "tenor",      "x",
-                                       "x_data", "query_x", "query_tenors", "strikes", "strike",  "maturities",
-                                       "maturity", "grid", "t_grid",  "year",       "step",       "period",
-                                       "volatility", "risk"};
-
-    QList<double> ys;
-    QList<QList<double>> mat;
-
-    if (ql_rv_numeric_array(section, &ys)) {
-        out.append({tr("value"), by_index(ys)});
-        return out;
-    }
-    if (ql_rv_numeric_matrix(section, &mat)) {
-        const bool pairs = mat.size() >= 2 && std::all_of(mat.begin(), mat.end(), [](const QList<double>& r) {
-            return r.size() == 2;
-        });
-        if (pairs) {
-            QList<QPointF> pts;
-            for (const auto& r : mat)
-                pts.append(QPointF(r.at(0), r.at(1)));
-            *x_title = QStringLiteral("x");
-            out.append({tr("y"), pts});
-            return out;
-        }
-        for (int i = 0; i < mat.size() && out.size() < kQlChartSeriesCap; ++i) {
-            if (mat.at(i).size() >= 2)
-                out.append({tr("row %1").arg(i + 1), by_index(mat.at(i))});
-        }
-        return out;
-    }
-    if (section.isArray()) {
-        // Array of objects: numeric columns.
-        const QJsonArray arr = section.toArray();
-        if (arr.size() < 2 || !arr.at(0).isObject())
-            return out;
-        QStringList numeric;
-        for (const QString& c : ql_rv_object_columns(arr)) {
-            const bool all_num = std::all_of(arr.begin(), arr.end(), [&c](const QJsonValue& v) {
-                return v.toObject().value(c).isDouble();
-            });
-            if (all_num)
-                numeric << c;
-        }
-        if (numeric.isEmpty())
-            return out;
-        QString x_key;
-        for (const QString& k : kXKeys) {
-            if (numeric.contains(k)) {
-                x_key = k;
-                break;
-            }
-        }
-        if (x_key.isEmpty() && numeric.size() >= 2)
-            x_key = numeric.first();
-        QList<double> xs;
-        if (!x_key.isEmpty()) {
-            for (const auto& v : arr)
-                xs.append(v.toObject().value(x_key).toDouble());
-            *x_title = x_key;
-        }
-        for (const QString& k : numeric) {
-            if (k == x_key || out.size() >= 6)
-                continue;
-            QList<double> col;
-            for (const auto& v : arr)
-                col.append(v.toObject().value(k).toDouble());
-            out.append({k, x_key.isEmpty() ? by_index(col) : against(xs, col)});
-        }
-        return out;
-    }
-    if (!section.isObject())
-        return out;
-
-    // Object: numeric arrays plotted against an x-like array of the same length.
-    const QJsonObject obj = section.toObject();
-    QHash<QString, QList<double>> arrays;
-    QHash<QString, QList<QList<double>>> matrices;
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-        if (ql_rv_numeric_array(it.value(), &ys))
-            arrays.insert(it.key(), ys);
-        else if (ql_rv_numeric_matrix(it.value(), &mat))
-            matrices.insert(it.key(), mat);
-    }
-    if (arrays.isEmpty() && matrices.isEmpty())
-        return out;
-
-    QString x_key;
-    for (const QString& k : kXKeys) {
-        if (arrays.contains(k)) {
-            x_key = k;
-            break;
-        }
-    }
-    const QList<double> xs = x_key.isEmpty() ? QList<double>{} : arrays.value(x_key);
-
-    // Without an x array, plot the length group with the most arrays so series
-    // of unrelated lengths (e.g. one path + per-path final values) never share axes.
-    int target_len = int(xs.size());
-    if (x_key.isEmpty()) {
-        QHash<int, int> counts;
-        for (auto it = arrays.begin(); it != arrays.end(); ++it)
-            counts[int(it.value().size())] += 1;
-        int best = -1;
-        for (auto it = counts.begin(); it != counts.end(); ++it) {
-            if (best < 0 || it.value() > counts.value(best) || (it.value() == counts.value(best) && it.key() > best))
-                best = it.key();
-        }
-        target_len = best;
-    } else {
-        *x_title = x_key;
-    }
-
-    QStringList keys = arrays.keys();
-    keys.sort();
-    for (const QString& k : keys) {
-        if (k == x_key || out.size() >= kQlChartSeriesCap)
-            continue;
-        const QList<double>& col = arrays.value(k);
-        if (int(col.size()) != target_len)
-            continue;
-        out.append({k, x_key.isEmpty() ? by_index(col) : against(xs, col)});
-    }
-    QStringList mkeys = matrices.keys();
-    mkeys.sort();
-    for (const QString& k : mkeys) {
-        const auto& rows = matrices.value(k);
-        if (!xs.isEmpty() && !rows.isEmpty() && int(rows.first().size()) == int(xs.size())) {
-            // One row per path, sampled on the x grid.
-            for (int i = 0; i < rows.size() && out.size() < kQlChartSeriesCap; ++i)
-                out.append({rows.size() == 1 ? k : tr("%1 %2").arg(k).arg(i + 1), against(xs, rows.at(i))});
-        } else if (!xs.isEmpty() && int(rows.size()) == int(xs.size()) && !rows.first().isEmpty() &&
-                   rows.first().size() <= 10) {
-            // One row per time step (multi-dimensional path): one series per dimension.
-            const int dims = int(rows.first().size());
-            for (int d = 0; d < dims && out.size() < kQlChartSeriesCap; ++d) {
-                QList<double> col;
-                for (const auto& r : rows)
-                    col.append(d < r.size() ? r.at(d) : std::numeric_limits<double>::quiet_NaN());
-                out.append({tr("%1[%2]").arg(k).arg(d), against(xs, col)});
-            }
-        }
-    }
-    return out;
+// Indented JSON of the payload. Pure: runs on the JSON worker.
+QByteArray ql_rv_json_text(const QJsonValue& payload) {
+    if (payload.isObject())
+        return QJsonDocument(payload.toObject()).toJson(QJsonDocument::Indented);
+    if (payload.isArray())
+        return QJsonDocument(payload.toArray()).toJson(QJsonDocument::Indented);
+    return ql_rv_cell(payload, true).toUtf8();
 }
 
-void QuantLibResultView::render_chart(const QList<Series>& series, const QString& x_title) {
-    auto* chart = new QChart();
-    chart->setBackgroundBrush(QBrush(QColor(colors::BG_BASE())));
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(colors::BG_BASE())));
-    chart->setPlotAreaBackgroundVisible(true);
-    chart->setMargins(QMargins(6, 6, 6, 6));
-    chart->setTitleBrush(QBrush(QColor(colors::AMBER())));
-    QFont title_font(fonts::DATA_FAMILY, 9, QFont::Bold);
-    chart->setTitleFont(title_font);
+struct QlCsvJob {
+    QString path;
+    QString endpoint;
+    QString section_name;
+    QJsonObject request;
+    QJsonValue section;
+};
 
-    const QList<QColor> palette = {QColor(colors::AMBER()),   QColor(colors::CYAN()),     QColor(colors::POSITIVE()),
-                                   QColor(colors::INFO()),    QColor(colors::WARNING()),  QColor(colors::NEGATIVE()),
-                                   QColor(colors::TEXT_SECONDARY())};
+// Writes one section to CSV. Pure apart from the file: runs on the CSV worker.
+// Returns the rows written, or -1 when the file could not be written.
+int ql_rv_write_csv(const QlCsvJob& job) {
+    QFile file(job.path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return -1;
+    QTextStream out(&file);
+    out.setEncoding(QStringConverter::Utf8);
+    // Provenance: an export without its inputs is not reproducible.
+    out << "# endpoint=" << job.endpoint << "  section=" << job.section_name
+        << "  exported=" << QDateTime::currentDateTimeUtc().toString(Qt::ISODate) << "\n";
+    out << "# request=" << QString::fromUtf8(QJsonDocument(job.request).toJson(QJsonDocument::Compact)) << "\n";
+    QStringList headers;
+    const QList<QStringList> rows = ql_rv_section_rows(job.section, &headers);
+    QStringList escaped;
+    for (const QString& h : headers)
+        escaped << ql_rv_csv_escape(h);
+    out << escaped.join(QLatin1Char(',')) << "\n";
+    for (const auto& row : rows) {
+        escaped.clear();
+        for (const QString& c : row)
+            escaped << ql_rv_csv_escape(c);
+        out << escaped.join(QLatin1Char(',')) << "\n";
+    }
+    out.flush();
+    file.close();
+    return file.error() == QFileDevice::NoError ? int(rows.size()) : -1;
+}
 
-    double min_x = std::numeric_limits<double>::max(), max_x = std::numeric_limits<double>::lowest();
-    double min_y = min_x, max_y = max_x;
-    bool downsampled = false;
-    QList<QLineSeries*> lines;
-    for (int i = 0; i < series.size(); ++i) {
-        const QList<QPointF> pts = ql_rv_downsample(series.at(i).points, &downsampled);
-        for (const QPointF& p : pts) {
-            if (!std::isfinite(p.x()) || !std::isfinite(p.y()))
-                continue;
-            min_x = std::min(min_x, p.x());
-            max_x = std::max(max_x, p.x());
-            min_y = std::min(min_y, p.y());
-            max_y = std::max(max_y, p.y());
+} // namespace
+
+// ── Table model ──────────────────────────────────────────────────────────────
+//
+// A read-only grid over one section of the payload. Cells are produced on
+// demand (only the visible ones are ever formatted), so a 100 000-row series
+// costs no more to show than a 10-row one.
+
+class QlJsonTableModel : public QAbstractTableModel {
+  public:
+    using QAbstractTableModel::QAbstractTableModel;
+
+    void set_section(const QJsonValue& section) {
+        beginResetModel();
+        obj_ = QJsonObject();
+        keys_.clear();
+        arr_ = QJsonArray();
+        columns_.clear();
+        scalar_ = QJsonValue();
+        if (section.isObject()) {
+            shape_ = Shape::Object;
+            obj_ = section.toObject();
+            keys_ = obj_.keys();
+            columns_ = {QuantLibResultView::tr("Field"), QuantLibResultView::tr("Value")};
+        } else if (section.isArray()) {
+            arr_ = section.toArray();
+            if (ql_rv_all_objects(arr_)) {
+                shape_ = Shape::Objects;
+                columns_ = ql_rv_object_columns(arr_);
+            } else if (ql_rv_all_arrays(arr_)) {
+                shape_ = Shape::Matrix;
+                int width = 0;
+                for (const auto& v : arr_)
+                    width = std::max(width, int(v.toArray().size()));
+                columns_ << QStringLiteral("#");
+                for (int c = 0; c < std::min(width, kQlMaxColumns); ++c)
+                    columns_ << QString::number(c);
+            } else {
+                shape_ = Shape::List;
+                columns_ = {QStringLiteral("#"), QuantLibResultView::tr("Value")};
+            }
+        } else {
+            shape_ = Shape::Scalar;
+            scalar_ = section;
+            columns_ = {QuantLibResultView::tr("Value")};
         }
-        auto* line = new QLineSeries(chart);
-        line->setName(series.at(i).name);
-        QPen pen(palette.at(i % palette.size()));
-        pen.setWidthF(series.size() > 8 ? 1.0 : 1.6);
-        line->setPen(pen);
-        line->replace(pts); // one call per series — never point-by-point appends
-        chart->addSeries(line);
-        lines.append(line);
-    }
-    if (min_x > max_x) { // nothing finite to plot
-        min_x = 0;
-        max_x = 1;
-        min_y = 0;
-        max_y = 1;
-    }
-    if (min_x == max_x) {
-        min_x -= 0.5;
-        max_x += 0.5;
-    }
-    if (min_y == max_y) {
-        const double pad = std::fabs(min_y) > 0 ? std::fabs(min_y) * 0.05 : 1.0;
-        min_y -= pad;
-        max_y += pad;
-    } else {
-        const double pad = (max_y - min_y) * 0.05;
-        min_y -= pad;
-        max_y += pad;
+        endResetModel();
     }
 
-    auto style_axis = [](QValueAxis* ax) {
-        ax->setLabelsColor(QColor(colors::TEXT_TERTIARY()));
-        ax->setGridLineColor(QColor(colors::BORDER_DIM()));
-        ax->setLinePen(QPen(QColor(colors::BORDER_MED())));
-        ax->setTitleBrush(QBrush(QColor(colors::TEXT_SECONDARY())));
-        ax->setLabelFormat("%.4g");
-        ax->setMinorTickCount(0);
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override {
+        if (parent.isValid())
+            return 0;
+        switch (shape_) {
+            case Shape::Object:
+                return int(keys_.size());
+            case Shape::Objects:
+            case Shape::Matrix:
+            case Shape::List:
+                return int(arr_.size());
+            case Shape::Scalar:
+                return 1;
+        }
+        return 0;
+    }
+
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override {
+        return parent.isValid() ? 0 : int(columns_.size());
+    }
+
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override {
+        if (orientation == Qt::Horizontal && role == Qt::DisplayRole && section >= 0 && section < columns_.size())
+            return columns_.at(section);
+        return {};
+    }
+
+    QVariant data(const QModelIndex& index, int role) const override {
+        if (!index.isValid())
+            return {};
+        const int row = index.row();
+        const int col = index.column();
+
+        // Label cells: the field name (object) or the row number (matrix / list).
+        const bool key_cell = shape_ == Shape::Object && col == 0;
+        const bool index_cell = (shape_ == Shape::Matrix || shape_ == Shape::List) && col == 0;
+        if (key_cell || index_cell) {
+            switch (role) {
+                case Qt::DisplayRole:
+                case kQlFullTextRole:
+                    return key_cell ? keys_.at(row) : QString::number(row);
+                case kQlSortRole:
+                    return key_cell ? QVariant(keys_.at(row)) : QVariant(row);
+                case Qt::ForegroundRole:
+                    return QColor(colors::TEXT_SECONDARY());
+                case Qt::TextAlignmentRole:
+                    return index_cell ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter)) : QVariant();
+                default:
+                    return {};
+            }
+        }
+
+        const QJsonValue v = value_at(row, col);
+        switch (role) {
+            case Qt::DisplayRole: {
+                const QString text = ql_rv_cell(v, false);
+                return (v.isArray() || v.isObject()) && text.size() > 200 ? text.left(200) + QStringLiteral("…")
+                                                                          : text;
+            }
+            case kQlFullTextRole:
+                return ql_rv_cell(v, true);
+            case kQlSortRole:
+                if (v.isDouble())
+                    return v.toDouble();
+                if (v.isNull() || v.isUndefined())
+                    return std::numeric_limits<double>::lowest();
+                return ql_rv_cell(v, false);
+            case Qt::ToolTipRole:
+                if (v.isDouble())
+                    return ql_rv_number_full(v.toDouble());
+                if (v.isNull())
+                    return QuantLibResultView::tr("The server returned null: the value is not a finite number "
+                                                  "(±∞ or NaN) for these inputs.");
+                if (v.isArray() || v.isObject())
+                    return ql_rv_compact(v).left(4000);
+                return {};
+            case Qt::TextAlignmentRole:
+                if (v.isDouble() || v.isNull())
+                    return int(Qt::AlignRight | Qt::AlignVCenter);
+                return {};
+            case Qt::ForegroundRole:
+                return QColor(v.isNull() ? colors::TEXT_TERTIARY() : colors::TEXT_PRIMARY());
+            default:
+                return {};
+        }
+    }
+
+  private:
+    enum class Shape { Object, Objects, Matrix, List, Scalar };
+
+    QJsonValue value_at(int row, int col) const {
+        switch (shape_) {
+            case Shape::Object:
+                return obj_.value(keys_.at(row));
+            case Shape::Objects:
+                return arr_.at(row).toObject().value(columns_.at(col));
+            case Shape::Matrix: {
+                const QJsonArray r = arr_.at(row).toArray();
+                return col - 1 < r.size() ? r.at(col - 1) : QJsonValue(QJsonValue::Undefined);
+            }
+            case Shape::List:
+                return arr_.at(row);
+            case Shape::Scalar:
+                return scalar_;
+        }
+        return {};
+    }
+
+    Shape shape_ = Shape::Scalar;
+    QJsonObject obj_;
+    QStringList keys_;
+    QJsonArray arr_;
+    QStringList columns_;
+    QJsonValue scalar_;
+};
+
+// ── Construction ─────────────────────────────────────────────────────────────
+
+QuantLibResultView::QuantLibResultView(QWidget* parent) : QWidget(parent) {
+    setObjectName("qlResultPanel");
+    auto* vl = new QVBoxLayout(this);
+    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setSpacing(0);
+
+    // Toolbar: RESULTS · endpoint ····· status · SUMMARY TABLE JSON · COPY CSV
+    auto* bar = new QWidget(this);
+    bar->setObjectName("qlResultBar");
+    bar->setMinimumHeight(34);
+    auto* bl = new QHBoxLayout(bar);
+    bl->setContentsMargins(12, 0, 8, 0);
+    bl->setSpacing(6);
+    title_ = new QLabel(tr("RESULTS"), bar);
+    title_->setObjectName("qlPanelTitle");
+    bl->addWidget(title_);
+    endpoint_label_ = new QLabel(bar);
+    endpoint_label_->setObjectName("qlResultEndpoint");
+    bl->addWidget(endpoint_label_);
+    bl->addStretch(1);
+    status_ = new QLabel(bar);
+    status_->setObjectName("qlResultStatus");
+    bl->addWidget(status_);
+
+    auto make_btn = [bar](const QString& text, const char* object_name) {
+        auto* b = new QPushButton(text, bar);
+        b->setObjectName(object_name);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFocusPolicy(Qt::TabFocus);
+        return b;
     };
-    auto* ax_x = new QValueAxis(chart);
-    ax_x->setRange(min_x, max_x);
-    ax_x->setTitleText(x_title);
-    style_axis(ax_x);
-    auto* ax_y = new QValueAxis(chart);
-    ax_y->setRange(min_y, max_y);
-    style_axis(ax_y);
-    chart->addAxis(ax_x, Qt::AlignBottom);
-    chart->addAxis(ax_y, Qt::AlignLeft);
-    for (auto* line : lines) {
-        line->attachAxis(ax_x);
-        line->attachAxis(ax_y);
+    summary_btn_ = make_btn(tr("SUMMARY"), "qlViewBtn");
+    summary_btn_->setToolTip(tr("Headline values, charts and tables built from the response"));
+    table_btn_ = make_btn(tr("TABLE"), "qlViewBtn");
+    table_btn_->setToolTip(tr("Any part of the response as a plain grid"));
+    json_btn_ = make_btn(tr("JSON"), "qlViewBtn");
+    auto* group = new QButtonGroup(this);
+    group->setExclusive(true);
+    for (auto* b : {summary_btn_, table_btn_, json_btn_}) {
+        b->setCheckable(true);
+        group->addButton(b);
+        bl->addWidget(b);
     }
+    summary_btn_->setChecked(true);
+    connect(summary_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Summary); });
+    connect(table_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Table); });
+    connect(json_btn_, &QPushButton::clicked, this, [this]() { set_view(View::Json); });
 
-    const bool legend = series.size() <= 8;
-    chart->legend()->setVisible(legend);
-    if (legend) {
-        chart->legend()->setAlignment(Qt::AlignBottom);
-        chart->legend()->setLabelColor(QColor(colors::TEXT_SECONDARY()));
+    copy_btn_ = make_btn(tr("COPY"), "qlFormBtn");
+    copy_btn_->setToolTip(tr("Copy the current view (summary as an image, table as tab-separated text)"));
+    connect(copy_btn_, &QPushButton::clicked, this, &QuantLibResultView::copy_current);
+    bl->addWidget(copy_btn_);
+    csv_btn_ = make_btn(tr("CSV"), "qlFormBtn");
+    csv_btn_->setToolTip(tr("Export the selected section — every row — to a CSV file"));
+    connect(csv_btn_, &QPushButton::clicked, this, &QuantLibResultView::export_csv);
+    bl->addWidget(csv_btn_);
+    vl->addWidget(bar);
+
+    // Section selector (TABLE view, when the response has arrays / nested objects).
+    auto* section_bar = new QWidget(this);
+    section_bar->setObjectName("qlSectionBar");
+    auto* sl = new QHBoxLayout(section_bar);
+    sl->setContentsMargins(12, 4, 12, 4);
+    sl->setSpacing(6);
+    section_label_ = new QLabel(tr("VIEW"), section_bar);
+    section_label_->setObjectName("qlLabel");
+    section_combo_ = new QComboBox(section_bar);
+    section_combo_->setAccessibleName(tr("Result section"));
+    connect(section_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { render_current(); });
+    sl->addWidget(section_label_);
+    sl->addWidget(section_combo_, 1);
+    vl->addWidget(section_bar);
+    section_bar->hide();
+
+    stack_ = new QStackedWidget(this);
+
+    // Idle / cancelled / preview states: the shared designed empty state, so the
+    // pane is never a blank area with one grey line.
+    empty_ = new ui::EmptyState(stack_);
+    empty_->setAccessibleName(tr("QuantLib endpoint preview"));
+    connect(empty_, &ui::EmptyState::primary_clicked, this, [this]() { dispatch_empty_action(primary_action_); });
+    connect(empty_, &ui::EmptyState::secondary_clicked, this,
+            [this]() { dispatch_empty_action(secondary_action_); });
+    stack_->addWidget(empty_); // kMessagePage
+
+    summary_ = new ui::ResultView(this);
+    summary_->set_raw_toggle_visible(false); // the toolbar has JSON
+    summary_->setAccessibleName(tr("QuantLib result summary"));
+    stack_->addWidget(summary_); // kSummaryPage
+
+    table_model_ = new QlJsonTableModel(this);
+    table_proxy_ = new QSortFilterProxyModel(this);
+    table_proxy_->setSourceModel(table_model_);
+    table_proxy_->setSortRole(kQlSortRole);
+    table_ = new QTableView(this);
+    table_->setModel(table_proxy_);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
+    table_->horizontalHeader()->setResizeContentsPrecision(200);
+    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table_->setSelectionBehavior(QAbstractItemView::SelectItems);
+    table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    table_->setWordWrap(false);
+    table_->setAccessibleName(tr("QuantLib result table"));
+    stack_->addWidget(table_); // kTablePage
+
+    json_ = new QPlainTextEdit(this);
+    json_->setObjectName("qlJsonView");
+    json_->setReadOnly(true);
+    json_->setLineWrapMode(QPlainTextEdit::NoWrap);
+    stack_->addWidget(json_); // kJsonPage
+
+    auto* error_page = new QWidget(this);
+    error_page->setObjectName("qlErrorPage");
+    auto* el = new QVBoxLayout(error_page);
+    el->setContentsMargins(20, 20, 20, 20);
+    el->setSpacing(10);
+    error_title_ = new QLabel(error_page);
+    error_title_->setObjectName("qlErrorTitle");
+    error_text_ = new QLabel(error_page);
+    error_text_->setObjectName("qlErrorText");
+    error_text_->setWordWrap(true);
+    error_text_->setTextFormat(Qt::PlainText);
+    error_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    error_hint_ = new QLabel(error_page);
+    error_hint_->setObjectName("qlErrorHint");
+    error_hint_->setWordWrap(true);
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(8);
+    error_primary_ = new QPushButton(error_page);
+    error_primary_->setObjectName("qlExecBtn");
+    error_primary_->setCursor(Qt::PointingHandCursor);
+    connect(error_primary_, &QPushButton::clicked, this, &QuantLibResultView::upgrade_requested);
+    error_retry_ = new QPushButton(tr("RETRY"), error_page);
+    error_retry_->setProperty("fincept_agent_risk", "spend"); // agents: repeats a billed QuantLib API call
+    error_retry_->setObjectName("qlFormBtn");
+    error_retry_->setCursor(Qt::PointingHandCursor);
+    connect(error_retry_, &QPushButton::clicked, this, &QuantLibResultView::retry_requested);
+    actions->addWidget(error_primary_);
+    actions->addWidget(error_retry_);
+    actions->addStretch(1);
+    el->addWidget(error_title_);
+    el->addWidget(error_text_);
+    el->addWidget(error_hint_);
+    el->addLayout(actions);
+    el->addStretch(1);
+    stack_->addWidget(error_page); // kErrorPage
+
+    // Loading with nothing to keep on screen: a skeleton of the result to come.
+    skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Result, stack_);
+    stack_->addWidget(skeleton_); // kSkeletonPage
+
+    vl->addWidget(stack_, 1);
+
+    // Shared loading overlay over the pages while a call is in flight.
+    overlay_ = new ui::LoadingOverlay(stack_);
+
+    // Ctrl+C on the table copies the selection (or the whole section).
+    auto* copy_sc = new QShortcut(QKeySequence::Copy, table_);
+    copy_sc->setContext(Qt::WidgetShortcut);
+    connect(copy_sc, &QShortcut::activated, this, &QuantLibResultView::copy_current);
+
+    // The summary page re-renders itself; table colours are read at paint time.
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { table_->viewport()->update(); });
+
+    show_idle();
+}
+
+void QuantLibResultView::retranslate() {
+    title_->setText(tr("RESULTS"));
+    summary_btn_->setText(tr("SUMMARY"));
+    summary_btn_->setToolTip(tr("Headline values, charts and tables built from the response"));
+    table_btn_->setText(tr("TABLE"));
+    table_btn_->setToolTip(tr("Any part of the response as a plain grid"));
+    json_btn_->setText(tr("JSON"));
+    copy_btn_->setText(tr("COPY"));
+    copy_btn_->setToolTip(tr("Copy the current view (summary as an image, table as tab-separated text)"));
+    csv_btn_->setText(tr("CSV"));
+    csv_btn_->setToolTip(tr("Export the selected section — every row — to a CSV file"));
+    section_label_->setText(tr("VIEW"));
+    error_retry_->setText(tr("RETRY"));
+    if (has_failure_) {
+        show_failure(endpoint_, failure_);
+    } else if (has_result_) {
+        build_sections();
+        table_gen_ = 0; // translated headers
+        render_current();
+    } else if (has_preview_) {
+        show_preview(preview_); // the screen re-sends it with translated texts
+    } else if (stack_->currentIndex() != kSkeletonPage) {
+        show_idle();
     }
-    QString title = series.size() == 1 ? series.first().name : tr("%1 series").arg(series.size());
-    if (downsampled)
-        title += tr(" · downsampled to %1 points").arg(kQlChartPointCap);
-    chart->setTitle(title);
+}
 
-    QChart* old = chart_view_->chart();
-    chart_view_->setChart(chart);
-    delete old; // QChartView releases (does not delete) the previous chart
+// ── States ───────────────────────────────────────────────────────────────────
+
+void QuantLibResultView::set_result_controls_enabled(bool enabled) {
+    for (auto* b : {summary_btn_, table_btn_, json_btn_, copy_btn_, csv_btn_})
+        b->setEnabled(enabled);
+    if (!enabled)
+        section_combo_->parentWidget()->hide();
+}
+
+void QuantLibResultView::stop_loading() {
+    overlay_->hide_loading();
+}
+
+void QuantLibResultView::show_empty(const QString& glyph, const QString& title, const QString& message,
+                                    const QList<QPair<QString, QString>>& details, const QString& details_heading,
+                                    const QString& note, ui::EmptyState::Tone note_tone, const QString& primary_text,
+                                    EmptyAction primary, const QString& secondary_text, EmptyAction secondary) {
+    stop_loading();
+    set_result_controls_enabled(false);
+    primary_action_ = primary;
+    secondary_action_ = secondary;
+    empty_->set_glyph(glyph, ui::EmptyState::Tone::Accent);
+    empty_->set_title(title);
+    empty_->set_message(message);
+    empty_->set_details(details, details_heading);
+    empty_->set_note(note, note_tone);
+    empty_->set_primary_action(primary == EmptyAction::None ? QString() : primary_text);
+    empty_->set_secondary_action(secondary == EmptyAction::None ? QString() : secondary_text);
+    // A preview carries a faint still sketch of the result it would produce.
+    if (has_preview_)
+        empty_->set_preview_shape(ui::LoadingSkeleton::Shape::Result);
+    else
+        empty_->clear_preview_shape();
+    stack_->setCurrentIndex(kMessagePage);
+}
+
+void QuantLibResultView::dispatch_empty_action(EmptyAction action) {
+    switch (action) {
+        case EmptyAction::Run:
+            emit retry_requested();
+            break;
+        case EmptyAction::Upgrade:
+            emit upgrade_requested();
+            break;
+        case EmptyAction::None:
+            break;
+    }
+}
+
+void QuantLibResultView::show_idle() {
+    has_result_ = false;
+    has_failure_ = false;
+    has_preview_ = false;
+    as_of_ = QDateTime();
+    refreshing_ = false;
+    endpoint_label_->clear();
+    status_->clear();
+    show_empty(QStringLiteral("\u03A3"), tr("QuantLib suite"),
+               tr("Pick a module and an endpoint on the left. Calculations that are free on your plan run on their "
+                  "own with sample inputs; the others show what they return and what a run costs first."),
+               {}, QString(), QString(), ui::EmptyState::Tone::Neutral, QString(), EmptyAction::None, QString(),
+               EmptyAction::None);
+}
+
+void QuantLibResultView::show_preview(const Preview& preview) {
+    has_result_ = false;
+    has_failure_ = false;
+    has_preview_ = true;
+    as_of_ = QDateTime();
+    refreshing_ = false;
+    preview_ = preview;
+    endpoint_ = preview.endpoint;
+    endpoint_label_->setText(preview.endpoint);
+    status_->setText(preview.status);
+    const QString run = preview.run_text.isEmpty() ? tr("RUN") : preview.run_text;
+    if (preview.upgrade_primary) {
+        show_empty(preview.glyph, preview.title, preview.summary, preview.inputs, preview.inputs_heading, preview.note,
+                   preview.note_tone, tr("UPGRADE TO PRO"), EmptyAction::Upgrade, run, EmptyAction::Run);
+    } else {
+        show_empty(preview.glyph, preview.title, preview.summary, preview.inputs, preview.inputs_heading, preview.note,
+                   preview.note_tone, run, EmptyAction::Run, preview.plans_secondary ? tr("VIEW PLANS") : QString(),
+                   preview.plans_secondary ? EmptyAction::Upgrade : EmptyAction::None);
+    }
+}
+
+void QuantLibResultView::show_loading(const QString& endpoint, const QString& cost_note) {
+    has_failure_ = false;
+    has_preview_ = false;
+    refreshing_ = false;
+    endpoint_label_->setText(endpoint);
+    status_->setText(cost_note.isEmpty() ? tr("Computing… (Esc cancels)")
+                                         : tr("Computing… (%1 · Esc cancels)").arg(cost_note));
+    set_result_controls_enabled(false);
+    const QString caption = tr("COMPUTING %1").arg(endpoint.section(QLatin1Char('/'), -1).toUpper());
+    // A previous result of this endpoint stays visible (dimmed) under the
+    // overlay; with nothing to keep, a skeleton of the result to come.
+    const int page = stack_->currentIndex();
+    const bool result_on_screen = has_result_ && endpoint == endpoint_ &&
+                                  (page == kSummaryPage || page == kTablePage || page == kJsonPage);
+    if (result_on_screen) {
+        overlay_->show_loading(caption);
+        return;
+    }
+    has_result_ = false;
+    endpoint_ = endpoint;
+    overlay_->hide_loading();
+    skeleton_->set_message(cost_note.isEmpty() ? caption + QStringLiteral("…")
+                                               : tr("%1… · %2").arg(caption, cost_note));
+    stack_->setCurrentIndex(kSkeletonPage);
+}
+
+void QuantLibResultView::set_refreshing(bool refreshing) {
+    refreshing_ = refreshing;
+    if (has_result_)
+        update_status();
+}
+
+bool QuantLibResultView::show_cancelled(const QString& endpoint) {
+    stop_loading();
+    refreshing_ = false;
+    if (has_result_) {
+        // Back to the previous answer, which never went away.
+        endpoint_label_->setText(endpoint_);
+        set_result_controls_enabled(true);
+        render_current();
+        status_->setText(tr("Cancelled %1 — showing the previous result").arg(endpoint.section(QLatin1Char('/'), -1)));
+        return true;
+    }
+    endpoint_label_->setText(endpoint);
+    status_->setText(tr("Cancelled"));
+    return false;
+}
+
+void QuantLibResultView::show_input_error(const QString& message) {
+    has_failure_ = false;
+    has_preview_ = false;
+    status_->setText(tr("Not sent"));
+    show_error_page(tr("INVALID INPUT"), QStringLiteral("error"), message,
+                    tr("Nothing was sent — fix the highlighted field and run again."), QString(), false);
+}
+
+void QuantLibResultView::show_error_page(const QString& title, const QString& tone, const QString& message,
+                                         const QString& hint, const QString& primary_text, bool show_retry) {
+    stop_loading();
+    set_result_controls_enabled(false);
+    error_title_->setText(title);
+    error_title_->setProperty("tone", tone);
+    error_title_->style()->unpolish(error_title_);
+    error_title_->style()->polish(error_title_);
+    error_text_->setText(message);
+    error_hint_->setText(hint);
+    error_hint_->setVisible(!hint.isEmpty());
+    error_primary_->setText(primary_text);
+    error_primary_->setVisible(!primary_text.isEmpty());
+    error_retry_->setVisible(show_retry);
+    stack_->setCurrentIndex(kErrorPage);
+}
+
+void QuantLibResultView::show_failure(const QString& endpoint, const services::QuantLibFailure& failure) {
+    using Kind = services::QuantLibFailureKind;
+    if (failure.kind == Kind::Cancelled) {
+        show_cancelled(endpoint);
+        return;
+    }
+    endpoint_ = endpoint;
+    failure_ = failure;
+    has_failure_ = true;
+    has_result_ = false;
+    has_preview_ = false;
+    refreshing_ = false;
+    as_of_ = QDateTime();
+    endpoint_label_->setText(endpoint);
+    status_->setText(failure.http_status > 0 ? tr("HTTP %1").arg(failure.http_status) : tr("Failed"));
+
+    switch (failure.kind) {
+        case Kind::NeedsPro:
+            show_error_page(tr("THIS MODULE NEEDS PRO"), QStringLiteral("pro"), failure.message,
+                            // Plan price: always USD, never converted.
+                            tr("Pro (%1/month) includes every QuantLib module — all endpoints at 0 credits per "
+                               "call.")
+                                .arg(fincept::ui::formatting::plan_price(10)),
+                            tr("UPGRADE TO PRO"), false);
+            break;
+        case Kind::OutOfCredits:
+            show_error_page(tr("OUT OF CREDITS"), QStringLiteral("warn"), failure.message,
+                            tr("On the Free plan this endpoint costs 1 credit per call. Pro includes every QuantLib "
+                               "endpoint at 0 credits."),
+                            tr("VIEW PLANS"), true);
+            break;
+        case Kind::AuthRequired:
+            show_error_page(tr("SIGN-IN REQUIRED"), QStringLiteral("warn"), failure.message,
+                            tr("Your session is missing or has expired. Sign in again, then retry."), QString(),
+                            true);
+            break;
+        case Kind::RateLimited:
+            show_error_page(tr("RATE LIMITED"), QStringLiteral("warn"), failure.message,
+                            tr("Too many requests right now — wait a moment, then retry."), QString(), true);
+            break;
+        case Kind::Blocked:
+            show_error_page(tr("ACCESS PAUSED"), QStringLiteral("warn"), failure.message,
+                            tr("Requests from this network are paused after repeated invalid requests. Wait a few "
+                               "minutes, then retry."),
+                            QString(), true);
+            break;
+        case Kind::InvalidInput:
+            show_error_page(tr("INVALID INPUT"), QStringLiteral("error"), failure.message,
+                            tr("The server rejected the request. Check the named fields and their units (decimals: "
+                               "0.05 = 5%)."),
+                            QString(), false);
+            break;
+        case Kind::Network:
+            show_error_page(tr("NETWORK ERROR"), QStringLiteral("error"), failure.message,
+                            tr("The request did not reach the QuantLib service. Check your connection and retry."),
+                            QString(), true);
+            break;
+        case Kind::Timeout:
+            show_error_page(tr("TIMED OUT"), QStringLiteral("warn"), failure.message,
+                            tr("The calculation did not finish in time. Reduce the size of the inputs (paths, steps, "
+                               "points) and run again, or retry."),
+                            QString(), true);
+            break;
+        case Kind::Server:
+            show_error_page(tr("SERVICE ERROR"), QStringLiteral("error"), failure.message,
+                            failure.retryable
+                                ? tr("The QuantLib service did not return a usable answer. Retry in a moment.")
+                                : tr("This terminal and the QuantLib service disagree about this endpoint. Update "
+                                     "the terminal or report it."),
+                            QString(), failure.retryable);
+            break;
+        case Kind::Computation:
+            show_error_page(tr("COMPUTATION FAILED"), QStringLiteral("error"), failure.message,
+                            tr("The model could not be evaluated with these inputs. Adjust the parameters and run "
+                               "again."),
+                            QString(), false);
+            break;
+        case Kind::Cancelled:
+            break; // handled above
+    }
+}
+
+void QuantLibResultView::show_result(const QString& endpoint, const QJsonObject& request, const QJsonValue& payload,
+                                     qint64 elapsed_ms, const QDateTime& as_of) {
+    stop_loading();
+    endpoint_ = endpoint;
+    request_ = request;
+    payload_ = payload;
+    elapsed_ms_ = elapsed_ms;
+    as_of_ = as_of;
+    refreshing_ = false;
+    has_result_ = true;
+    has_failure_ = false;
+    has_preview_ = false;
+    ++result_gen_; // the TABLE / JSON pages are rebuilt when next shown
+    json_full_.clear();
+    endpoint_label_->setText(endpoint);
+    set_result_controls_enabled(true);
+    build_sections();
+    render_summary();
+    // A new result always opens on its summary.
+    view_ = View::Summary;
+    render_current();
+}
+
+// ── Sections ─────────────────────────────────────────────────────────────────
+
+void QuantLibResultView::build_sections() {
+    sections_.clear();
+    if (payload_.isObject()) {
+        sections_.append({tr("Top-level fields"), payload_});
+        // Every array and nested object (recursively, "parent / child") is its own grid.
+        std::function<void(const QJsonObject&, const QString&, int)> add = [&](const QJsonObject& obj,
+                                                                                  const QString& prefix, int depth) {
+            for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+                const QJsonValue v = it.value();
+                const QString name = prefix.isEmpty() ? it.key() : prefix + QStringLiteral(" / ") + it.key();
+                if (v.isArray() && !v.toArray().isEmpty()) {
+                    sections_.append({name, v});
+                } else if (v.isObject() && !v.toObject().isEmpty()) {
+                    sections_.append({name, v});
+                    if (depth < kQlSectionDepth)
+                        add(v.toObject(), name, depth + 1);
+                }
+            }
+        };
+        add(payload_.toObject(), QString(), 1);
+    } else {
+        sections_.append({tr("Result"), payload_});
+    }
+    {
+        const QSignalBlocker block(section_combo_);
+        section_combo_->clear();
+        for (const auto& s : sections_) {
+            const int n = s.second.isArray() ? int(s.second.toArray().size()) : -1;
+            section_combo_->addItem(n >= 0 ? tr("%1  (%2 rows)").arg(s.first).arg(n) : s.first);
+        }
+        section_combo_->setCurrentIndex(0);
+    }
+}
+
+int QuantLibResultView::current_section() const {
+    return std::clamp(section_combo_->currentIndex(), 0, std::max(0, int(sections_.size()) - 1));
+}
+
+void QuantLibResultView::render_summary() {
+    result::Options o;
+    o.request = request_;
+    const QString ep = endpoint_;
+    o.unit_for = [ep](const QString&, const QString& key, double) { return ql_rv_unit(ep, key); };
+    o.series_labels = ql_rv_labels(request_);
+    // Sampling / exact-simulation endpoints return draws: show them as distributions.
+    o.samples_default = ep.contains(QLatin1String("sampling/")) || ep.contains(QLatin1String("/exact/")) ||
+                        ep.contains(QLatin1String("winsor")) || ep.contains(QLatin1String("bootstrap"));
+    summary_->set_options(o);
+    // The raw payload argument only fills ResultView's own RAW page, which is hidden here (the toolbar's JSON
+    // view replaces it, formatted off the GUI thread). Passing the payload would make ResultView indent it and
+    // load it into a text editor on the GUI thread for nothing: ~90 ms plus the editor for a 3.7 MB answer.
+    summary_->show_result(payload_, QJsonValue(QJsonObject{}));
+}
+
+void QuantLibResultView::update_status() {
+    // Status: size of what is shown + round-trip time.
+    const QJsonValue shown = view_ == View::Table ? sections_.at(current_section()).second : payload_;
+    QString size_text;
+    if (shown.isArray()) {
+        const int n = int(shown.toArray().size());
+        size_text = n == 0 ? tr("no rows") : tr("%1 rows").arg(n);
+    } else if (shown.isObject()) {
+        size_text = tr("%1 fields").arg(shown.toObject().size());
+    } else {
+        size_text = tr("1 value");
+    }
+    if (!as_of_.isValid()) {
+        status_->setText(tr("%1 · %2 ms").arg(size_text).arg(elapsed_ms_));
+        return;
+    }
+    // A remembered result: say when it was computed (and that a fresh copy is on its way).
+    const QDateTime local = as_of_.toLocalTime();
+    const QString when = local.date() == QDate::currentDate()
+                             ? QLocale().toString(local.time(), QLocale::ShortFormat)
+                             : QLocale().toString(local, QLocale::ShortFormat);
+    status_->setText(refreshing_ ? tr("%1 · as of %2 · refreshing…").arg(size_text, when)
+                                 : tr("%1 · as of %2").arg(size_text, when));
+}
+
+void QuantLibResultView::render_current() {
+    if (!has_result_ || sections_.isEmpty())
+        return;
+    update_status();
+    set_view(view_);
+}
+
+void QuantLibResultView::set_view(View view) {
+    view_ = view;
+    const QSignalBlocker b1(summary_btn_), b2(table_btn_), b3(json_btn_);
+    summary_btn_->setChecked(view == View::Summary);
+    table_btn_->setChecked(view == View::Table);
+    json_btn_->setChecked(view == View::Json);
+    if (!has_result_)
+        return;
+    section_combo_->parentWidget()->setVisible(view == View::Table && sections_.size() > 1);
+    if (view == View::Table)
+        ensure_table();
+    else if (view == View::Json)
+        ensure_json();
+    update_status();
+    stack_->setCurrentIndex(view == View::Summary ? kSummaryPage : view == View::Table ? kTablePage : kJsonPage);
+}
+
+// ── Table ────────────────────────────────────────────────────────────────────
+
+void QuantLibResultView::ensure_table() {
+    const int idx = current_section();
+    if (table_gen_ == result_gen_ && table_section_ == idx)
+        return;
+    table_gen_ = result_gen_;
+    table_section_ = idx;
+
+    table_->setSortingEnabled(false);
+    table_->horizontalHeader()->setSortIndicator(-1, Qt::AscendingOrder);
+    table_proxy_->sort(-1);
+    table_model_->set_section(sections_.at(idx).second);
+    // Sorting a very long section on a header click would stall the GUI thread.
+    table_->setSortingEnabled(table_model_->rowCount() <= kQlSortableRows);
+    table_->horizontalHeader()->setToolTip(table_model_->rowCount() > kQlSortableRows
+                                               ? tr("Sorting is off above %L1 rows — export to CSV to sort.")
+                                                     .arg(kQlSortableRows)
+                                               : QString());
+    if (table_model_->columnCount() <= kQlAutoSizeColumns)
+        table_->resizeColumnsToContents(); // samples the first rows only (resizeContentsPrecision)
+    table_->scrollToTop();
 }
 
 // ── JSON ─────────────────────────────────────────────────────────────────────
 
-void QuantLibResultView::render_json() {
-    QByteArray text;
-    if (payload_.isObject())
-        text = QJsonDocument(payload_.toObject()).toJson(QJsonDocument::Indented);
-    else if (payload_.isArray())
-        text = QJsonDocument(payload_.toArray()).toJson(QJsonDocument::Indented);
-    else
-        text = ql_rv_cell(payload_, true).toUtf8();
-    if (text.size() > kQlJsonCharCap) {
-        const qsizetype total = text.size();
-        text.truncate(kQlJsonCharCap);
-        text += "\n… " + tr("truncated: %1 of %2 bytes shown — use CSV to export everything")
-                             .arg(kQlJsonCharCap)
-                             .arg(total)
-                             .toUtf8();
-    }
-    json_->setPlainText(QString::fromUtf8(text));
+void QuantLibResultView::ensure_json() {
+    if (json_gen_ == result_gen_)
+        return; // shown, or still formatting
+    json_gen_ = result_gen_;
+    json_full_.clear();
+    json_->setPlainText(tr("Formatting…"));
+
+    const quint64 gen = result_gen_;
+    auto* watcher = new QFutureWatcher<QByteArray>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, gen]() {
+        QByteArray text = watcher->result();
+        watcher->deleteLater();
+        if (gen != result_gen_ || gen != json_gen_)
+            return; // a newer result arrived meanwhile
+        json_full_ = text;
+        if (text.size() > kQlJsonCharCap) {
+            const qsizetype total = text.size();
+            text.truncate(kQlJsonCharCap);
+            text += "\n… " + tr("truncated: %1 of %2 bytes shown — COPY copies all of it, CSV exports a section")
+                                 .arg(kQlJsonCharCap)
+                                 .arg(total)
+                                 .toUtf8();
+        }
+        json_->setPlainText(QString::fromUtf8(text));
+    });
+    const QJsonValue payload = payload_;
+    watcher->setFuture(QtConcurrent::run([payload]() { return ql_rv_json_text(payload); }));
 }
 
 // ── Copy / export ────────────────────────────────────────────────────────────
@@ -944,34 +1050,35 @@ void QuantLibResultView::copy_current() {
     if (!has_result_ || sections_.isEmpty())
         return;
     QClipboard* cb = QApplication::clipboard();
-    if (view_ == View::Chart) {
-        cb->setPixmap(chart_view_->grab());
-        status_->setText(tr("Chart copied as an image"));
+    if (view_ == View::Summary) {
+        cb->setPixmap(summary_->content_widget()->grab());
+        status_->setText(tr("Summary copied as an image"));
         return;
     }
     if (view_ == View::Json) {
-        cb->setText(json_->toPlainText());
+        if (json_full_.isEmpty()) {
+            status_->setText(tr("Still formatting the JSON — copy again in a moment"));
+            return;
+        }
+        cb->setText(QString::fromUtf8(json_full_));
         status_->setText(tr("JSON copied"));
         return;
     }
-    // Table: the selected cells when there is a selection, else the whole section
-    // (from the data, so rows beyond the table's display cap are included).
-    const auto ranges = table_->selectedRanges();
+    // Table: the selected cells when there is a selection, else the whole section.
     QStringList lines;
-    if (!ranges.isEmpty()) {
-        const auto& r = ranges.first();
-        for (int row = r.topRow(); row <= r.bottomRow(); ++row) {
+    const QItemSelection selection = table_->selectionModel() ? table_->selectionModel()->selection()
+                                                              : QItemSelection();
+    if (!selection.isEmpty()) {
+        const QItemSelectionRange& r = selection.first();
+        for (int row = r.top(); row <= r.bottom(); ++row) {
             QStringList cells;
-            for (int col = r.leftColumn(); col <= r.rightColumn(); ++col) {
-                const QTableWidgetItem* it = table_->item(row, col);
-                cells << (it ? (it->toolTip().isEmpty() ? it->text() : it->toolTip()) : QString());
-            }
+            for (int col = r.left(); col <= r.right(); ++col)
+                cells << table_proxy_->index(row, col).data(kQlFullTextRole).toString();
             lines << cells.join(QLatin1Char('\t'));
         }
     } else {
-        const int idx = std::clamp(section_combo_->currentIndex(), 0, int(sections_.size()) - 1);
         QStringList headers;
-        const QList<QStringList> rows = section_rows(sections_.at(idx).second, &headers);
+        const QList<QStringList> rows = ql_rv_section_rows(sections_.at(current_section()).second, &headers);
         lines << headers.join(QLatin1Char('\t'));
         for (const auto& row : rows)
             lines << row.join(QLatin1Char('\t'));
@@ -983,7 +1090,8 @@ void QuantLibResultView::copy_current() {
 void QuantLibResultView::export_csv() {
     if (!has_result_ || sections_.isEmpty())
         return;
-    const int idx = std::clamp(section_combo_->currentIndex(), 0, int(sections_.size()) - 1);
+    // From SUMMARY / JSON the whole top level is exported; from TABLE the selected section.
+    const int idx = view_ == View::Table ? current_section() : 0;
     QString base = endpoint_;
     base.replace(QLatin1Char('/'), QLatin1Char('_'));
     const QString suggested = QStringLiteral("quantlib_%1_%2.csv")
@@ -991,33 +1099,24 @@ void QuantLibResultView::export_csv() {
     const QString path = QFileDialog::getSaveFileName(this, tr("Export CSV"), suggested, tr("CSV Files (*.csv)"));
     if (path.isEmpty())
         return;
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        status_->setText(tr("Could not write %1").arg(path));
-        LOG_ERROR("QuantLib", QString("CSV export failed: cannot open %1").arg(path));
-        return;
-    }
-    QTextStream out(&file);
-    out.setEncoding(QStringConverter::Utf8);
-    // Provenance: an export without its inputs is not reproducible.
-    out << "# endpoint=" << endpoint_ << "  section=" << sections_.at(idx).first
-        << "  exported=" << QDateTime::currentDateTimeUtc().toString(Qt::ISODate) << "\n";
-    out << "# request=" << QString::fromUtf8(QJsonDocument(request_).toJson(QJsonDocument::Compact)) << "\n";
-    QStringList headers;
-    const QList<QStringList> rows = section_rows(sections_.at(idx).second, &headers);
-    QStringList escaped;
-    for (const QString& h : headers)
-        escaped << ql_rv_csv_escape(h);
-    out << escaped.join(QLatin1Char(',')) << "\n";
-    for (const auto& row : rows) {
-        escaped.clear();
-        for (const QString& c : row)
-            escaped << ql_rv_csv_escape(c);
-        out << escaped.join(QLatin1Char(',')) << "\n";
-    }
-    file.close();
-    status_->setText(tr("Exported %1 rows").arg(rows.size()));
-    LOG_INFO("QuantLib", QString("Exported %1 rows of %2 to CSV").arg(rows.size()).arg(endpoint_));
+
+    QlCsvJob job{path, endpoint_, sections_.at(idx).first, request_, sections_.at(idx).second};
+    csv_btn_->setEnabled(false);
+    status_->setText(tr("Exporting…"));
+    auto* watcher = new QFutureWatcher<int>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, path, endpoint = endpoint_]() {
+        const int rows = watcher->result();
+        watcher->deleteLater();
+        csv_btn_->setEnabled(has_result_);
+        if (rows < 0) {
+            status_->setText(tr("Could not write %1").arg(path));
+            LOG_ERROR("QuantLib", QString("CSV export failed: cannot write %1").arg(path));
+            return;
+        }
+        status_->setText(tr("Exported %1 rows").arg(rows));
+        LOG_INFO("QuantLib", QString("Exported %1 rows of %2 to CSV").arg(rows).arg(endpoint));
+    });
+    watcher->setFuture(QtConcurrent::run([job]() { return ql_rv_write_csv(job); }));
 }
 
 } // namespace fincept::screens

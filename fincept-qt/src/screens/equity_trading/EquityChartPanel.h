@@ -10,6 +10,7 @@
 
 #include "trading/TradingTypes.h"
 
+#include <QPointer>
 #include <QString>
 #include <QVector>
 #include <QWidget>
@@ -21,6 +22,7 @@ class QResizeEvent;
 
 namespace fincept::ui {
 class KLineChartWidget;
+class PanelHeader;
 }
 
 namespace fincept::screens::equity {
@@ -46,12 +48,27 @@ class EquityChartPanel : public QWidget {
     // Active timeframe label, one of TF_LABELS ("1m".."1w").
     QString current_timeframe() const;
 
+    // Panel header title ("RELIANCE · NSE"): what the chart shows.
+    void set_title(const QString& title);
+
+    // ── Chart status overlay ─────────────────────────────────────────────────
+    // An empty chart never sits as a bare grid (0–1 price axis, 00:00 labels):
+    // whenever the panel holds no candles an opaque overlay covers the plot and
+    // says why — loading, no data for this symbol/timeframe, or the failure
+    // reason. Loading candles hides it; clearing them shows a default note until
+    // the owner says more. The timeframe buttons stay outside the overlay.
+    enum class StatusKind { Loading, NoData, Error };
+    void show_status(StatusKind kind, const QString& title, const QString& detail = QString());
+    void hide_status();
+    bool has_candles() const { return has_candles_; }
+
     // ── On-chart position overlay (TradingView-style) ────────────────────────
     // Show/refresh the open position for the displayed symbol: a floating P&L
     // card with an EXIT button plus a dashed entry-price line in the chart.
     // `side` is "long"/"short"; `qty` is the absolute size.
-    // `currency_code` (e.g. "INR") pins the P&L symbol to the position's own
-    // currency; empty falls back to the global preference.
+    // `currency_code` = the position's price currency as quoted ("INR", "USD",
+    // "GBp"): entry price in it, P&L in its major unit. Empty = unknown: no unit
+    // is printed (never the display currency).
     void set_position(const QString& symbol, const QString& side, double qty, double entry_price,
                       const QString& exchange, const QString& product_type, const QString& currency_code = QString());
     void clear_position();
@@ -72,6 +89,9 @@ class EquityChartPanel : public QWidget {
 
   protected:
     void resizeEvent(QResizeEvent* e) override;
+    // First show: the KLineChart (WebEngine) view is revealed one event-loop turn
+    // later — see the comment in the .cpp (single screen per panel).
+    void showEvent(QShowEvent* e) override;
     // Drag-to-move the position card (it's mouse-draggable so it never has to
     // sit over the price axis).
     bool eventFilter(QObject* obj, QEvent* ev) override;
@@ -88,10 +108,17 @@ class EquityChartPanel : public QWidget {
     void draw_position_line();
     void set_active_tf(int idx);
     static qint64 interval_ms_for(const QString& tf);
+    void build_status_overlay();
+    // (Re)attach the overlay to the active backend's plot widget (KLine view or
+    // the Qt-Charts plot) — called after each backend is built.
+    void bind_status_body();
+    void layout_status_overlay();
 
     // ── KLine backend (WebEngine available) ──────────────────────────────────
     fincept::ui::KLineChartWidget* kline_ = nullptr;
-    QWidget* tf_bar_ = nullptr; // timeframe button row (KLine backend only)
+    bool kline_reveal_pending_ = false; // kline_ built hidden, shown after the first show
+    fincept::ui::PanelHeader* header_ = nullptr; // "CHART · SYMBOL" + timeframes (KLine backend)
+    QWidget* tf_bar_ = nullptr; // timeframe button row (KLine backend only), in the header
     QPushButton* tf_buttons_[6] = {};
     int active_tf_ = 2; // "15m" — matches EquityChart's default
 
@@ -107,6 +134,14 @@ class EquityChartPanel : public QWidget {
     // ── Fallback backend (no WebEngine) ──────────────────────────────────────
     EquityChart* fallback_ = nullptr;
 
+    // ── Status overlay (see show_status) ─────────────────────────────────────
+    QFrame* status_frame_ = nullptr;
+    QLabel* status_title_ = nullptr;
+    QLabel* status_detail_ = nullptr;
+    QPointer<QWidget> status_body_; // plot widget the overlay covers (geometry source)
+    int status_kind_ = -1;          // last applied StatusKind (restyle only on change)
+    bool has_candles_ = false;
+
     // ── Position overlay (floating card; works over either backend) ───────────
     QFrame* pos_card_ = nullptr;
     QLabel* pos_title_lbl_ = nullptr;
@@ -117,7 +152,7 @@ class EquityChartPanel : public QWidget {
     QString pos_side_; // "long" | "short"
     QString pos_exchange_;
     QString pos_product_;
-    QString pos_currency_; // currency code for P&L (e.g. "INR"); empty = global
+    QString pos_currency_; // price currency as quoted (e.g. "INR", "GBp"); empty = unknown, no unit
     double pos_qty_ = 0.0;
     double pos_entry_ = 0.0;
     double pos_ltp_ = 0.0;

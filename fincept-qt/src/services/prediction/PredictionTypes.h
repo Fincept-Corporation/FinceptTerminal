@@ -108,6 +108,10 @@ struct PredictionTrade {
     double size = 0.0;
     qint64 ts_ms = 0;
     QString maker; // Polymarket address or empty (Kalshi).
+    /// Outcome the trade was in ("Yes", "Saints", …). A binary market's tape
+    /// mixes both outcome tokens, so price/side mean nothing without it. Kalshi
+    /// trades are always quoted in YES terms. Empty when the source omits it.
+    QString outcome;
 };
 
 // ── Account / trading ───────────────────────────────────────────────────────
@@ -148,6 +152,7 @@ struct OrderRequest {
     qint64 expires_ms = 0;   // 0 = GTC
     QString client_order_id; // adapter fills if empty
     QVariantMap extras;      // per-exchange hints, e.g. {"tick_size": 0.01, "neg_risk": false}
+    QString source;          // who placed it (trading::UnifiedOrder::source format) — audit only, never sent
 };
 
 struct OrderResult {

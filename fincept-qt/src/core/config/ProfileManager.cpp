@@ -66,6 +66,15 @@ QString ProfileManager::active() const {
     return active_profile_;
 }
 
+void ProfileManager::reload_after_root_change() {
+    id_cache_.clear();
+    id_cache_loaded_ = false;
+    // Only a profile that was activated explicitly (--profile) wrote anything
+    // before the root changed; "default" is minted lazily like on a first run.
+    if (active_profile_ != QLatin1String("default"))
+        set_active(active_profile_);
+}
+
 ProfileId ProfileManager::active_profile_id() const {
     load_id_cache_locked();
     auto it = id_cache_.constFind(active_profile_);
@@ -196,13 +205,24 @@ void ProfileManager::load_id_cache_locked() const {
         id_cache_.insert("default", ProfileId::generate());
 
     QFile f(manifest_path());
-    if (!f.open(QIODevice::ReadOnly))
+    if (!f.open(QIODevice::ReadOnly)) {
+        // A new UUID orphans everything keyed by the old one — say so when the file exists.
+        if (f.exists())
+            LOG_WARN("ProfileManager", logf("Profiles manifest could not be opened, using a fresh default profile id",
+                                            {{"path", log_path(f.fileName())}, {"error", f.errorString()}}));
         return; // first run — keep the freshly-minted default UUID
+    }
 
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    QJsonParseError perr{};
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &perr);
     f.close();
-    if (!doc.isObject())
+    if (!doc.isObject()) {
+        LOG_ERROR("ProfileManager", logf("Profiles manifest is not valid JSON, using a fresh default profile id",
+                                         {{"path", log_path(f.fileName())},
+                                          {"error", perr.error != QJsonParseError::NoError ? perr.errorString()
+                                                                                           : QStringLiteral("not an object")}}));
         return;
+    }
 
     const QJsonArray arr = doc.object().value("profiles").toArray();
     bool needs_rewrite = false;
@@ -273,9 +293,11 @@ void ProfileManager::save_manifest(const QStringList& profiles) const {
     if (f.open(QIODevice::WriteOnly)) {
         f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
         if (!f.commit())
-            LOG_ERROR("ProfileManager", "Failed to commit profiles manifest: " + manifest_path());
+            LOG_ERROR("ProfileManager", logf("Profiles manifest could not be saved",
+                                             {{"path", log_path(manifest_path())}, {"error", f.errorString()}}));
     } else {
-        LOG_ERROR("ProfileManager", "Failed to write profiles manifest: " + manifest_path());
+        LOG_ERROR("ProfileManager", logf("Profiles manifest could not be opened for writing",
+                                         {{"path", log_path(manifest_path())}, {"error", f.errorString()}}));
     }
 }
 

@@ -1,9 +1,14 @@
 ﻿#include "services/notifications/providers/EmailProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "python/PythonRunner.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 #include <QUrl>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -25,19 +30,19 @@ void EmailProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".from_addr", from_addr_, cat);
 }
 
-QString EmailProvider::build_endpoint() const {
+bool EmailProvider::uses_http_relay() const {
     const QString host = smtp_host_.trimmed();
-    if (host.isEmpty())
-        return {};
+    return host.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive) ||
+           host.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive);
+}
 
-    // A bare host:port (no scheme) gets https, not http. The old code used
-    // `startsWith("http")` — which also matched "https" but forced http:// on
-    // literally every other value, including a hostname beginning with "http".
-    const bool has_scheme = host.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive) ||
-                            host.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive);
-    const QString candidate =
-        has_scheme ? host
-                   : QStringLiteral("https://%1:%2/send").arg(host, smtp_port_.isEmpty() ? "587" : smtp_port_);
+QString EmailProvider::build_endpoint() const {
+    // Relay mode only. A bare host is an SMTP server (send_smtp) — it used to be
+    // turned into "https://<host>:<port>/send", i.e. a TLS handshake against an
+    // SMTP port, so every real mail server failed.
+    if (!uses_http_relay())
+        return {};
+    const QString candidate = smtp_host_.trimmed();
 
     const QUrl url(candidate);
     if (!url.isValid() || url.host().isEmpty())
@@ -62,15 +67,58 @@ void EmailProvider::send(const NotificationRequest& req, std::function<void(bool
         return;
     }
 
-    // POST to the configured SMTP relay HTTP endpoint.
-    // Expected API: POST /send with JSON {to, from, subject, body, auth}
+    const QString subject = QString("[Fincept] %1").arg(req.title);
+    const QString text =
+        QString("%1\n\n%2\n\nSent: %3").arg(req.title, req.message, req.timestamp.toString("yyyy-MM-dd hh:mm:ss"));
+
+    if (uses_http_relay())
+        send_relay(subject, text, std::move(cb));
+    else
+        send_smtp(subject, text, std::move(cb));
+}
+
+void EmailProvider::send_smtp(const QString& subject, const QString& text, std::function<void(bool, QString)> cb) {
+    // Real SMTP through scripts/notify_smtp.py (smtplib: implicit TLS on 465,
+    // STARTTLS otherwise; it refuses to send the password over a connection
+    // that stays unencrypted unless the server is on this machine).
+    QJsonObject job;
+    job["host"] = smtp_host_.trimmed();
+    job["port"] = smtp_port_.trimmed().isEmpty() ? QStringLiteral("587") : smtp_port_.trimmed();
+    job["user"] = smtp_user_.trimmed();
+    job["password"] = smtp_pass_;
+    job["from"] = from_addr_.trimmed().isEmpty() ? smtp_user_.trimmed() : from_addr_.trimmed();
+    job["to"] = to_addr_.trimmed();
+    job["subject"] = subject;
+    job["body"] = text;
+
+    python::PythonRunner::RunOptions opts;
+    // Connect + TLS + login + send, each bounded by the script's own 30 s timeout.
+    opts.timeout_ms = 90 * 1000;
+    // The password goes on stdin — argv is readable by other processes.
+    opts.stdin_data = QJsonDocument(job).toJson(QJsonDocument::Compact);
+    // The script reads no stored credentials: inject none into its environment.
+    opts.credential_allowlist = QStringList{};
+
+    python::PythonRunner::instance().run_with_options(
+        QStringLiteral("notify_smtp.py"), {}, opts, [cb](python::PythonResult r) {
+            if (r.success) {
+                cb(true, {});
+                return;
+            }
+            const QString err = r.error.trimmed();
+            cb(false, err.isEmpty() ? QStringLiteral("The email could not be sent") : err);
+        });
+}
+
+void EmailProvider::send_relay(const QString& subject, const QString& text, std::function<void(bool, QString)> cb) {
+    // POST to the configured SMTP-over-HTTP relay endpoint.
+    // Expected API: POST <url> with JSON {to, from, subject, body, auth}
     //
     // SECURITY: the request body carries the SMTP password in cleartext. It is
     // stored encrypted at rest, so shipping it over plain http would be the one
     // place in the tree where an external credential crosses the network
-    // unprotected. The scheme therefore defaults to https, and an explicit
-    // http:// host is rejected unless it is loopback (a relay running on the
-    // user's own machine, where there is no network to sniff).
+    // unprotected. An http:// relay is therefore rejected unless it is loopback
+    // (a relay running on the user's own machine, where there is no network to sniff).
     const QString url = build_endpoint();
     if (url.isEmpty()) {
         cb(false, "Refusing to send the SMTP password over an unencrypted connection. "
@@ -85,18 +133,16 @@ void EmailProvider::send(const NotificationRequest& req, std::function<void(bool
     QJsonObject body;
     body["to"] = to_addr_;
     body["from"] = from_addr_.isEmpty() ? smtp_user_ : from_addr_;
-    body["subject"] = QString("[Fincept] %1").arg(req.title);
-    body["body"] =
-        QString("%1\n\n%2\n\nSent: %3").arg(req.title, req.message, req.timestamp.toString("yyyy-MM-dd hh:mm:ss"));
+    body["subject"] = subject;
+    body["body"] = text;
     body["auth"] = auth;
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    });
+    // The user's own relay: any 2xx is a delivery, whatever its body.
+    DeliveryRequest request;
+    request.service = DeliveryService::Generic;
+    request.url = url;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

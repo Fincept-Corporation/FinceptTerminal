@@ -37,12 +37,23 @@ class BuilderAnalyticsRibbon : public QWidget {
     /// Reset the margin cell to "—" (e.g. while a fetch is in flight).
     void clear_margin();
 
+    /// The currency of the strategy's premiums, P&L and margin (the chain's:
+    /// rupees for an NSE chain, US dollars for Databento's US options).
+    /// Re-renders what is shown. Default: NSE rupees.
+    void set_currency(const QString& ccy);
+
   protected:
     void changeEvent(QEvent* event) override;
 
   private:
     void setup_ui();
     void retranslateUi();
+    /// Re-renders every value cell from the last analytics / margin pushed in
+    /// (a currency / number-format change; nothing is recomputed or fetched).
+    void render_from_cache();
+    void render_analytics();
+    void render_margin();
+    void apply_unit_tooltips(); // the Greeks' tooltips name the rupee unit as the user's settings print it
 
     QLabel* lbl_premium_ = nullptr;
     QLabel* lbl_max_profit_ = nullptr;
@@ -66,6 +77,14 @@ class BuilderAnalyticsRibbon : public QWidget {
     QLabel* key_theta_ = nullptr;
     QLabel* key_vega_ = nullptr;
     QLabel* key_margin_ = nullptr;
+
+    // Last values shown, re-rendered on a format change.
+    QString ccy_; // set in the constructor (FnoFormat.h fno_ccy()) and by set_currency()
+    fincept::services::options::StrategyAnalytics last_analytics_;
+    bool has_analytics_ = false;
+    double last_margin_ = 0.0;
+    bool margin_estimated_ = false;
+    bool has_margin_ = false;
 };
 
 } // namespace fincept::screens::fno

@@ -110,6 +110,16 @@ def get_mcp_toolset(host: str = "127.0.0.1", port: int = DEFAULT_PORT) -> Any:
 _mcp_processes: dict[int, subprocess.Popen] = {}
 
 
+def _fincept_paths():
+    """scripts/fincept_paths.py (the scripts root is on sys.path whenever the terminal starts a
+    script; added here for a run by hand)."""
+    root = str(_HERE.parents[1])  # rdagents -> agents -> scripts
+    if root not in sys.path:
+        sys.path.append(root)
+    import fincept_paths
+    return fincept_paths
+
+
 def start_mcp_server_process(
     port: int | None = None,
     host: str = "127.0.0.1",
@@ -150,25 +160,45 @@ def start_mcp_server_process(
         return None, None
 
     logger.info("Starting Fincept MCP server on %s:%d", host, port)
+    # The server outlives this (one-shot CLI) process. Pipes to it would be left
+    # with no reader once we exit, and the server's next log write fails (broken
+    # pipe), so its output goes to a log file (the edition's log folder) instead.
+    log_path = None
+    try:
+        log_path = _fincept_paths().log_dir() / f"mcp_server_{port}.log"
+        log_file = open(log_path, "ab")
+    except OSError as e:
+        logger.warning("Cannot open %s (%s) - MCP server output discarded",
+                       log_path or f"the log folder for mcp_server_{port}.log", e)
+        log_file = None
     try:
         proc = subprocess.Popen(
             [sys.executable, server_script, "--host", host, "--port", str(port)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file if log_file else subprocess.DEVNULL,
+            stderr=subprocess.STDOUT if log_file else subprocess.DEVNULL,
             start_new_session=True,
         )
         _mcp_processes[port] = proc
     except Exception as e:
         logger.error("Failed to start MCP server: %s", e)
+        if log_file:
+            log_file.close()
         return None, None
+    if log_file:
+        log_file.close()  # the child holds its own handle
 
     # Wait for server to become ready
     deadline = time.monotonic() + wait_timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            # Process exited early
-            stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-            logger.error("MCP server exited early. stderr: %s", stderr)
+            # Process exited early: report the tail of its log
+            tail = ""
+            try:
+                tail = log_path.read_bytes()[-2000:].decode(errors="replace") if log_path else ""
+            except OSError:
+                pass
+            logger.error("MCP server exited early. Output (%s): %s", log_path, tail)
             return None, None
         if _is_port_open(host, port):
             logger.info("MCP server ready on port %d", port)
@@ -194,8 +224,16 @@ def stop_mcp_server_process(port: int = DEFAULT_PORT) -> bool:
 
 
 def get_running_mcp_ports() -> list[int]:
-    """Return list of ports with active MCP server subprocesses."""
-    return [p for p, proc in list(_mcp_processes.items()) if proc.poll() is None]
+    """Return the ports in the MCP range that something is listening on.
+
+    Every CLI call (start / status / run_task) is a fresh process, so the
+    `_mcp_processes` registry of the process that started the server is gone by
+    the time anyone asks: reading it reported "none" right after a successful
+    start. Probe the ports start_mcp_server_process() can pick instead.
+    """
+    # Loopback connects to a live port answer in well under a millisecond; the short
+    # timeout bounds the cost of closed ports (Windows retries refused connects).
+    return [p for p in range(DEFAULT_PORT, DEFAULT_PORT + 20) if _is_port_open("127.0.0.1", p, timeout=0.1)]
 
 
 # ---------------------------------------------------------------------------

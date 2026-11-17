@@ -40,7 +40,7 @@ PARAMETERS:
 """
 
 from decimal import Decimal
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from .core import EconomicsBase, ValidationError, CalculationError
 
@@ -612,35 +612,36 @@ class FXMarketAnalyzer(EconomicsBase):
         }
 
     def calculate_currency_percentage_change(self, change_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate and interpret currency percentage changes"""
-        initial_rate = self.to_decimal(change_data.get('initial_rate', 1))
-        final_rate = self.to_decimal(change_data.get('final_rate', 1))
-        base_currency = change_data.get('base_currency', 'USD')
-        quote_currency = change_data.get('quote_currency', 'EUR')
+        """Percentage change of both currencies of a quote. base_currency is the DOMESTIC
+        currency, quote_currency the foreign one; quote_convention 'direct' = domestic per 1 unit
+        of foreign, 'indirect' = foreign per 1 unit of domestic. The unit currency of the quote
+        moves by final/initial - 1, the other by initial/final - 1 (a 10 % rise of the quote is a
+        9.09 % fall of the other currency)."""
+        if change_data.get('initial_rate') is None or change_data.get('final_rate') is None:
+            raise ValidationError("initial_rate and final_rate are required")
+        initial_rate = self.to_decimal(change_data['initial_rate'])
+        final_rate = self.to_decimal(change_data['final_rate'])
+        if initial_rate <= 0 or final_rate <= 0:
+            raise ValidationError("initial_rate and final_rate must be positive")
+        domestic = change_data.get('base_currency', 'USD')
+        foreign = change_data.get('quote_currency', 'EUR')
         quote_convention = change_data.get('quote_convention', 'direct')
+        if quote_convention not in ('direct', 'indirect'):
+            raise ValidationError("quote_convention must be 'direct' or 'indirect'")
 
-        # Calculate percentage change
-        percentage_change = ((final_rate - initial_rate) / initial_rate) * self.to_decimal(100)
-
-        # Determine currency movement
+        hundred = self.to_decimal(100)
+        percentage_change = (final_rate / initial_rate - 1) * hundred      # change of the quote itself
+        inverse_change = (initial_rate / final_rate - 1) * hundred
         if quote_convention == 'direct':
-            # Direct quote: domestic currency per unit of foreign currency
-            # Increase means domestic currency weakening
-            if percentage_change > 0:
-                movement = f"{base_currency} weakened by {percentage_change:.2f}%"
-                description = f"{quote_currency} appreciated against {base_currency}"
-            else:
-                movement = f"{base_currency} strengthened by {abs(percentage_change):.2f}%"
-                description = f"{quote_currency} depreciated against {base_currency}"
+            foreign_change, domestic_change = percentage_change, inverse_change
         else:
-            # Indirect quote: foreign currency per unit of domestic currency
-            # Increase means domestic currency strengthening
-            if percentage_change > 0:
-                movement = f"{base_currency} strengthened by {percentage_change:.2f}%"
-                description = f"{base_currency} appreciated against {quote_currency}"
-            else:
-                movement = f"{base_currency} weakened by {abs(percentage_change):.2f}%"
-                description = f"{base_currency} depreciated against {quote_currency}"
+            domestic_change, foreign_change = percentage_change, inverse_change
+
+        def moved(change):
+            return 'strengthened' if change > 0 else ('weakened' if change < 0 else 'was unchanged')
+
+        movement = f"{domestic} {moved(domestic_change)} by {abs(domestic_change):.2f}% against {foreign}"
+        description = f"{foreign} {moved(foreign_change)} by {abs(foreign_change):.2f}% against {domestic}"
 
         return {
             'calculation_details': {
@@ -653,14 +654,19 @@ class FXMarketAnalyzer(EconomicsBase):
             'currency_movement': {
                 'summary': movement,
                 'detailed_description': description,
-                'direction': 'appreciation' if percentage_change > 0 else 'depreciation',
-                'magnitude': self._assess_change_magnitude(abs(percentage_change))
+                'domestic_currency': domestic,
+                'domestic_currency_change_pct': domestic_change,
+                'foreign_currency_change_pct': foreign_change,
+                'direction': ('appreciation' if domestic_change > 0
+                              else 'depreciation' if domestic_change < 0 else 'unchanged'),
+                'direction_of': domestic,
+                'magnitude': self._assess_change_magnitude(abs(domestic_change))
             },
             'economic_implications': self._analyze_currency_change_implications(
-                percentage_change, base_currency, quote_currency
+                domestic_change, domestic, foreign
             ),
             'trade_impact': self._assess_trade_impact(percentage_change, quote_convention),
-            'investment_implications': self._assess_investment_implications(percentage_change)
+            'investment_implications': self._assess_investment_implications(domestic_change)
         }
 
     def _analyze_market_participants(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -780,42 +786,59 @@ class FXMarketAnalyzer(EconomicsBase):
             }
         }
 
+    # Convention for both helpers below: nominal_rate S = domestic currency per 1 unit of foreign
+    # (direct quote); real rate q = S x P_foreign / P_domestic. A HIGHER q means the domestic
+    # currency is WEAKER in real terms (more competitive). Both interpretations name the domestic
+    # currency, so a level reading and a change reading can no longer contradict each other.
     def _calculate_real_exchange_rate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate real exchange rate"""
         nominal_rate = self.to_decimal(data.get('nominal_rate', 1))
         domestic_cpi = self.to_decimal(data.get('domestic_price_level', 100))
         foreign_cpi = self.to_decimal(data.get('foreign_price_level', 100))
+        if nominal_rate <= 0 or domestic_cpi <= 0 or foreign_cpi <= 0:
+            raise ValidationError("nominal_rate, domestic_price_level and foreign_price_level must be positive")
 
         real_rate = nominal_rate * (foreign_cpi / domestic_cpi)
 
         return {
             'real_exchange_rate': real_rate,
+            'convention': ('q = S x P_foreign / P_domestic with S = domestic currency per unit of foreign; '
+                           'higher q = weaker domestic currency in real terms'),
             'calculation': f"{nominal_rate} × ({foreign_cpi}/{domestic_cpi}) = {real_rate}",
-            'interpretation': self._interpret_real_rate_level(real_rate, data.get('historical_average', 1))
+            'interpretation': self._interpret_real_rate_level(real_rate, data.get('historical_average'))
         }
 
     def _interpret_real_rate_changes(self, data: Dict[str, Any]) -> str:
-        """Interpret real exchange rate changes"""
-        real_rate_change = self.to_decimal(data.get('real_rate_change_percent', 0))
+        """Interpret real_rate_change_percent = % change of q (same convention): + = domestic
+        currency's real DEPRECIATION."""
+        if data.get('real_rate_change_percent') is None:
+            return 'No real_rate_change_percent supplied (% change of q over the period)'
+        real_rate_change = self.to_decimal(data['real_rate_change_percent'])
 
         if real_rate_change > self.to_decimal(5):
-            return 'Significant real appreciation - loss of competitiveness'
+            return 'Significant real depreciation of the domestic currency (q up) - gain in competitiveness'
         elif real_rate_change < self.to_decimal(-5):
-            return 'Significant real depreciation - gain in competitiveness'
+            return 'Significant real appreciation of the domestic currency (q down) - loss of competitiveness'
         else:
             return 'Moderate real exchange rate change'
 
-    def _interpret_real_rate_level(self, current_rate: Decimal, historical_avg: float) -> str:
-        """Interpret real exchange rate level"""
+    def _interpret_real_rate_level(self, current_rate: Decimal, historical_avg: Optional[float]) -> str:
+        """Interpret the level of q against its historical average"""
+        if historical_avg is None:
+            return 'No historical_average supplied for a valuation reading'
         historical = self.to_decimal(historical_avg)
+        if historical <= 0:
+            raise ValidationError("historical_average must be positive")
         deviation = ((current_rate - historical) / historical) * self.to_decimal(100)
 
         if deviation > self.to_decimal(10):
-            return 'Real exchange rate appears overvalued'
+            return (f'Domestic currency looks undervalued in real terms (q {deviation:.1f}% above its '
+                    f'historical average)')
         elif deviation < self.to_decimal(-10):
-            return 'Real exchange rate appears undervalued'
+            return (f'Domestic currency looks overvalued in real terms (q {abs(deviation):.1f}% below its '
+                    f'historical average)')
         else:
-            return 'Real exchange rate near historical average'
+            return 'Real exchange rate near its historical average'
 
     def _describe_rate_applications(self) -> Dict[str, str]:
         """Describe practical applications of nominal vs real rates"""

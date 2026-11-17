@@ -16,6 +16,7 @@
 #include "storage/repositories/McpServerRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,6 +37,7 @@
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -48,28 +50,28 @@ using namespace fincept::ui::colors;
 // ── Shared style helpers ─────────────────────────────────────────────────────
 
 static QString input_style() {
-    return QString("background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:12px;")
+    return QString("background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:" + fincept::ui::fonts::px(-2) + "px;")
         .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED());
 }
 
 static QString combo_style() {
-    return QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:12px;}"
+    return QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                    "QComboBox::drop-down{border:none;}"
-                   "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
-        .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED(), AMBER_DIM());
+                   "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;selection-color:%5;}")
+        .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED(), AMBER_DIM(), TEXT_ON_ACCENT());
 }
 
 static QString list_style() {
-    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
+    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                    "QListWidget::item{padding:3px 6px;border-bottom:1px solid %2;}"
-                   "QListWidget::item:selected{background:%4;color:%3;}"
+                   "QListWidget::item:selected{background:%4;color:%6;}"
                    "QListWidget::item:hover{background:%5;}")
-        .arg(BG_BASE(), BORDER_DIM(), TEXT_PRIMARY(), AMBER_DIM(), BG_HOVER());
+        .arg(BG_BASE(), BORDER_DIM(), TEXT_PRIMARY(), AMBER_DIM(), BG_HOVER(), TEXT_ON_ACCENT());
 }
 
 static QLabel* section_label(const QString& text) {
     auto* l = new QLabel(text);
-    l->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
+    l->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;"
                              "padding:8px 0 3px 0;border-bottom:1px solid %2;margin-bottom:2px;")
                          .arg(AMBER(), BORDER_DIM()));
     return l;
@@ -77,7 +79,7 @@ static QLabel* section_label(const QString& text) {
 
 static QLabel* field_lbl(const QString& text) {
     auto* l = new QLabel(text);
-    l->setStyleSheet(QString("color:%1;font-size:10px;min-width:80px;").arg(TEXT_SECONDARY()));
+    l->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;min-width:80px;").arg(TEXT_SECONDARY()));
     return l;
 }
 
@@ -87,37 +89,53 @@ QWidget* CreateAgentPanel::build_saved_panel() {
     auto* p = new QWidget(this);
     p->setMinimumWidth(180);
     p->setMaximumWidth(260);
-    p->setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    // Scoped to the panel: a selector-less sheet drew its border on every child.
+    p->setObjectName(QStringLiteral("createSavedPanel"));
+    p->setAttribute(Qt::WA_StyledBackground, true);
+    p->setStyleSheet(QString("QWidget#createSavedPanel{background:%1;border-right:1px solid %2;}")
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header bar
     auto* hdr = new QWidget(this);
-    hdr->setFixedHeight(34);
+    hdr->setMinimumHeight(34);
     hdr->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
     saved_title_ = new QLabel(tr("SAVED AGENTS"));
     saved_title_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hl->addWidget(saved_title_);
     hl->addStretch();
     saved_count_ = new QLabel("0");
-    saved_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;")
+    saved_count_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;")
                                     .arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
     hl->addWidget(saved_count_);
     vl->addWidget(hdr);
 
-    saved_list_ = new QListWidget;
+    // The saved list, or — with nothing saved yet — what to do about it.
+    saved_stack_ = new QStackedWidget(p);
+    saved_list_ = new QListWidget(saved_stack_);
     saved_list_->setStyleSheet(list_style());
-    vl->addWidget(saved_list_, 1);
+    saved_stack_->addWidget(saved_list_);
+    saved_empty_ = new ui::EmptyState(saved_stack_);
+    saved_empty_->set_compact(true);
+    saved_empty_->set_alignment(Qt::AlignTop);
+    saved_stack_->addWidget(saved_empty_);
+    connect(saved_empty_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (saved_empty_->property("retry").toBool())
+            load_saved_agents(); // RETRY after a read failure
+        else
+            import_json();
+    });
+    vl->addWidget(saved_stack_, 1);
 
     // Action bar
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(36);
+    bar->setMinimumHeight(36);
     bar->setStyleSheet(
         QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* bl = new QHBoxLayout(bar);
@@ -128,9 +146,9 @@ QWidget* CreateAgentPanel::build_saved_panel() {
         auto* b = new QPushButton(text);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                                 "padding:2px 8px;font-size:9px;font-weight:700;}"
+                                 "padding:2px 8px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;}"
                                  "QPushButton:hover{background:%1;color:%2;}")
-                             .arg(col, ui::colors::BG_BASE()));
+                             .arg(col, ui::colors::TEXT_ON_ACCENT()));
         return b;
     };
 
@@ -142,7 +160,7 @@ QWidget* CreateAgentPanel::build_saved_panel() {
     });
     bl->addWidget(load_btn_);
 
-    del_btn_ = make_bar_btn(tr("DEL"), ui::colors::NEGATIVE);
+    del_btn_ = make_bar_btn(tr("DEL"), ui::colors::DANGER);
     connect(del_btn_, &QPushButton::clicked, this, &CreateAgentPanel::delete_agent);
     bl->addWidget(del_btn_);
 
@@ -216,7 +234,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
 
     llm_resolved_lbl_ = new QLabel;
     llm_resolved_lbl_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:1px 0 4px 0;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:1px 0 4px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(llm_resolved_lbl_);
 
     // ── INSTRUCTIONS ─────────────────────────────────────────────────────────
@@ -256,7 +274,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
     terminal_tools_check_ = new QCheckBox(tr("Enable internal terminal tools (markets, portfolio, news, edgar...)"));
     terminal_tools_check_->setChecked(true);
     terminal_tools_check_->setStyleSheet(
-        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+        QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;}"
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
@@ -271,19 +289,21 @@ QWidget* CreateAgentPanel::build_form_panel() {
     // Style helpers — defined locally so we can reuse them across the
     // sub-section without polluting the function scope.
     const QString neutral_check_style =
-        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+        QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;}"
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER());
 
     terminal_destructive_check_ = new QCheckBox(tr("Allow destructive tools (place_order, delete_*, set_*, file ops)"));
+    // agents: grants this agent destructive terminal tools — a permission change
+    terminal_destructive_check_->setProperty("fincept_agent_risk", "account");
     terminal_destructive_check_->setStyleSheet(
-        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+        QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;}"
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
+            .arg(ui::colors::DANGER(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::DANGER()));
     sub_vl->addWidget(terminal_destructive_check_);
 
     terminal_external_check_ =
@@ -299,7 +319,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
     terminal_cat_lbl_ = new QLabel(tr("Category whitelist (none checked = every tool an agent may use: reading the "
                                       "terminal's screens and running the bundled Python analytics)"));
     terminal_cat_lbl_->setWordWrap(true);
-    terminal_cat_lbl_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    terminal_cat_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     sub_vl->addWidget(terminal_cat_lbl_);
 
     terminal_categories_list_ = new QListWidget;
@@ -355,7 +375,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
     // Tag-style checkboxes in a flow grid (2 columns)
     auto make_tag = [](const QString& label) -> QCheckBox* {
         auto* cb = new QCheckBox(label);
-        cb->setStyleSheet(QString("QCheckBox{color:%1;font-size:10px;spacing:5px;padding:3px 6px;"
+        cb->setStyleSheet(QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;padding:3px 6px;"
                                   "border:1px solid %2;background:%3;}"
                                   "QCheckBox:checked{color:%4;border-color:%5;background:%6;}"
                                   "QCheckBox::indicator{width:8px;height:8px;}"
@@ -442,7 +462,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
         auto make_sub_chk = [](const QString& lbl) -> QCheckBox* {
             auto* c = new QCheckBox(lbl);
             c->setStyleSheet(
-                QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
+                QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
             return c;
         };
         guardrails_pii_check_ = make_sub_chk(tr("PII Detection"));
@@ -480,7 +500,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
         auto make_sub_chk = [](const QString& lbl) -> QCheckBox* {
             auto* c = new QCheckBox(lbl);
             c->setStyleSheet(
-                QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
+                QString("QCheckBox{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
             return c;
         };
         memory_user_memories_check_ = make_sub_chk(tr("User Memories"));
@@ -551,15 +571,15 @@ QWidget* CreateAgentPanel::build_form_panel() {
     save_btn_ = new QPushButton(tr("SAVE AGENT"));
     save_btn_->setCursor(Qt::PointingHandCursor);
     save_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px 20px;"
-                                     "font-size:11px;font-weight:700;letter-spacing:1px;}"
+                                     "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}"
                                      "QPushButton:hover{background:%3;}")
-                                 .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE()));
+                                 .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM()));
     act->addWidget(save_btn_);
 
     clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setCursor(Qt::PointingHandCursor);
     clear_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                      "padding:8px 14px;font-size:10px;font-weight:600;}"
+                                      "padding:8px 14px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;}"
                                       "QPushButton:hover{background:%3;}")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
     connect(clear_btn_, &QPushButton::clicked, this, &CreateAgentPanel::clear_form);
@@ -569,7 +589,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
     vl->addLayout(act);
 
     status_lbl_ = new QLabel;
-    status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:3px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(status_lbl_);
     vl->addStretch();
 
@@ -641,22 +661,25 @@ QWidget* CreateAgentPanel::build_test_panel() {
     auto* p = new QWidget(this);
     p->setMinimumWidth(260);
     p->setMaximumWidth(420);
-    p->setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    // Scoped to the panel: a selector-less sheet drew its border on every child.
+    p->setObjectName(QStringLiteral("createTestPanel"));
+    p->setAttribute(Qt::WA_StyledBackground, true);
+    p->setStyleSheet(QString("QWidget#createTestPanel{background:%1;border-left:1px solid %2;}")
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header
     auto* hdr = new QWidget(this);
-    hdr->setFixedHeight(34);
+    hdr->setMinimumHeight(34);
     hdr->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
     test_panel_hdr_ = new QLabel(tr("LIVE TEST"));
     test_panel_hdr_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::CYAN()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::CYAN()));
     hl->addWidget(test_panel_hdr_);
     vl->addWidget(hdr);
 
@@ -668,7 +691,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
 
     test_query_hdr_ = new QLabel(tr("QUERY"));
     test_query_hdr_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(test_query_hdr_);
 
     test_query_edit_ = new QPlainTextEdit;
@@ -676,41 +699,64 @@ QWidget* CreateAgentPanel::build_test_panel() {
     test_query_edit_->setAccessibleName(tr("Test query"));
     test_query_edit_->setFixedHeight(72);
     test_query_edit_->setStyleSheet(
-        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:12px;}")
+        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:" + fincept::ui::fonts::px(-2) + "px;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     bl->addWidget(test_query_edit_);
 
     test_btn_ = new QPushButton(tr("RUN TEST"));
+    test_btn_->setProperty("fincept_agent_risk", "spend"); // agents: test-runs the agent (model quota)
     test_btn_->setCursor(Qt::PointingHandCursor);
     test_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                                     "padding:7px;font-size:10px;font-weight:700;letter-spacing:1px;}"
+                                     "padding:7px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;}"
                                      "QPushButton:hover{background:%1;color:%2;}"
                                      "QPushButton:disabled{color:%3;border-color:%3;}")
-                                 .arg(ui::colors::CYAN(), ui::colors::BG_BASE(), ui::colors::TEXT_TERTIARY()));
+                                 .arg(ui::colors::CYAN(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY()));
     test_btn_->setAccessibleName(tr("Run test query"));
     connect(test_btn_, &QPushButton::clicked, this, &CreateAgentPanel::test_agent);
     bl->addWidget(test_btn_);
 
     test_status_lbl_ = new QLabel;
-    test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    test_status_lbl_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     bl->addWidget(test_status_lbl_);
 
     test_output_hdr_ = new QLabel(tr("OUTPUT"));
     test_output_hdr_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;padding-top:4px;")
             .arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(test_output_hdr_);
 
-    test_result_ = new QTextEdit;
+    // Output, or — before the first test — what a test run does. A run sends the
+    // query to the LLM (tokens on the user's provider): it never starts by itself.
+    test_stack_ = new QStackedWidget(body);
+    test_empty_ = new ui::EmptyState(test_stack_);
+    test_empty_->apply(ui::EmptyState::preview_spec(
+        tr("Try the draft agent"),
+        tr("Runs the query above against the agent as it is in the form — saved or not — and streams the answer "
+           "here."),
+        tr("RUN TEST"), tr("Uses your LLM provider — billed as tokens there"), ui::EmptyState::Tone::Warning,
+        ui::LoadingSkeleton::Shape::Text));
+    test_empty_->set_compact(true);
+    connect(test_empty_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (test_query_edit_->toPlainText().trimmed().isEmpty()) {
+            test_query_edit_->setFocus();
+            test_status_lbl_->setText(tr("Type a test query first"));
+            return;
+        }
+        test_agent();
+    });
+    test_stack_->addWidget(test_empty_);
+    test_result_ = new QTextEdit(test_stack_);
     test_result_->setReadOnly(true);
     test_result_->setStyleSheet(
-        QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
+        QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                 "QScrollBar:vertical{background:%1;width:5px;border:none;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                  ui::colors::BORDER_BRIGHT()));
-    bl->addWidget(test_result_, 1);
+    test_stack_->addWidget(test_result_);
+    test_stack_->setCurrentWidget(test_empty_);
+    bl->addWidget(test_stack_, 1);
 
     vl->addWidget(body, 1);
     setTabOrder(test_query_edit_, test_btn_);

@@ -74,7 +74,7 @@ QString LocalWalletBridge::start(const QByteArray& nonce_hex, int timeout_second
 
     if (!server_->listen(QHostAddress::LocalHost, 0)) {
         const QString err = server_->errorString();
-        LOG_ERROR("WalletBridge", "listen() failed: " + err);
+        LOG_ERROR("WalletBridge", logf("Wallet connect bridge could not listen on 127.0.0.1", {{"error", err}}));
         emit bridge_error(err);
         stop();
         return {};
@@ -191,10 +191,10 @@ void LocalWalletBridge::on_new_connection() {
 
 void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*request_line*/, const QByteArray& body,
                                        const QByteArray& path, const QByteArray& method) {
-    LOG_INFO("WalletBridge", QStringLiteral("request %1 %2 (body=%3 bytes)")
-                                 .arg(QString::fromLatin1(method))
-                                 .arg(QString::fromLatin1(path))
-                                 .arg(body.size()));
+    // The query carries the one-time loopback token: log the route only.
+    LOG_DEBUG("WalletBridge", logf("Wallet bridge request", {{"method", QString::fromLatin1(method)},
+                                                             {"route", QString::fromLatin1(path).section(QLatin1Char('?'), 0, 0)},
+                                                             {"bytes", body.size()}}));
 
     // CORS preflight: respond 204 without checking token (token is in the
     // query string of the actual POST, which the browser hasn't yet sent).
@@ -217,9 +217,8 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*r
     // anything that can hammer this port.
     const auto token_in_query = query_param(path, "token");
     if (!fincept::auth::constant_time_equals(token_in_query, connect_token_)) {
-        LOG_WARN("WalletBridge", QStringLiteral("token mismatch on %1 (got %2 chars)")
-                                     .arg(QString::fromLatin1(path))
-                                     .arg(token_in_query.size()));
+        LOG_WARN("WalletBridge", logf("Wallet bridge request rejected, token mismatch",
+                                      {{"route", QString::fromLatin1(path).section(QLatin1Char('?'), 0, 0)}}));
         write_response(socket, 403, "text/plain", "forbidden");
         socket->disconnectFromHost();
         return;
@@ -227,7 +226,7 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*r
 
     if (method == "GET" && path_starts_with(path, "/connect")) {
         const auto html = render_connect_page();
-        LOG_INFO("WalletBridge", QStringLiteral("served connect.html (%1 bytes)").arg(html.size()));
+        LOG_DEBUG("WalletBridge", QStringLiteral("served connect.html (%1 bytes)").arg(html.size()));
         write_response(socket, 200, "text/html; charset=utf-8", html);
         socket->disconnectFromHost();
         return;
@@ -246,7 +245,8 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*r
             } else if (level == QStringLiteral("warn")) {
                 LOG_WARN("WalletPage", msg);
             } else {
-                LOG_INFO("WalletPage", msg);
+                // The page's step trace ("got pubkey <address>", …): DEBUG, never Info.
+                LOG_DEBUG("WalletPage", msg);
             }
         }
         write_response(socket, 200, "application/json", QByteArrayLiteral("{\"ok\":true}"));
@@ -271,10 +271,8 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*r
             socket->disconnectFromHost();
             return;
         }
-        LOG_INFO("WalletBridge", QStringLiteral("callback received: pubkey=%1 sig_len=%2 label=%3")
-                                     .arg(pubkey.left(8) + QStringLiteral("…"))
-                                     .arg(sig.size())
-                                     .arg(label));
+        LOG_INFO("WalletBridge", logf("Wallet connect callback received",
+                                      {{"wallet", log_mask(pubkey)}, {"label", label}, {"sig_chars", sig.size()}}));
         write_response(socket, 200, "application/json", QByteArrayLiteral("{\"ok\":true}"));
         socket->disconnectFromHost();
 

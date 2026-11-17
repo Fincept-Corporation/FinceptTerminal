@@ -32,6 +32,8 @@ class NotifPanel : public QFrame {
   private:
     /// Re-apply tr() lookups to header + empty-state text after a language switch.
     void retranslateUi();
+    /// PANEL_W x PANEL_H at the default font size, scaled with the user's font.
+    void apply_size();
 
     QLabel* title_lbl_ = nullptr;
     QPushButton* mark_all_btn_ = nullptr;

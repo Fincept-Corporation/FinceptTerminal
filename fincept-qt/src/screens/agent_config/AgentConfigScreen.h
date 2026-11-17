@@ -1,42 +1,81 @@
 // src/screens/agent_config/AgentConfigScreen.h
 #pragma once
-#include "screens/common/IStatefulScreen.h"
-#include "services/agents/AgentTypes.h"
+// AgentConfigScreen — the one AGENTS screen (screen id "agent_config", tab label
+// "Agent Config"; the old "agent_workbench" id is an alias that opens it on RUNS).
+// It merges Agent Studio (agents, builder, teams, workflows, planner, tools,
+// chat, system, agentic tasks) and the Agent Workbench (coding-agent runs,
+// schedules, harnesses, the MCP server for external agents):
+//
+//   ┌ ScreenCommandBar: ▌AGENTS [› find …  /] [BUILD|RUN|CONNECT] NEW AGENT · NEW RUN ·
+//   │                   TEMPLATES ▾ · IMPORT / EXPORT ▾ · INSPECT · SETTINGS · AGENT CONNECT ›
+//   ├ section tabs of the view (stable ids, AgentScreenSections.h)
+//   ├ LEFT rail: agents by category, teams, coding agents (state chips), active runs
+//   ├ CENTRE: the section (lazily built)
+//   ├ RIGHT inspector: the selected run — harness transcript / agentic task detail /
+//   │                  Chat Mode summary — or what to do when none is selected
+//   └ ScreenStatusBar: selection · model · run state · cost · MCP · coding agents
+//
+// Implements IStatefulScreen (one state for both old tabs; restore_state reads the
+// two old shapes too) and ISectionLinked (open_section(section, focus): focus may
+// be an agent id, a team id, a harness id or a run key / id).
 
-#include <QLabel>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QVBoxLayout>
+#include "screens/common/ISectionLinked.h"
+#include "screens/common/IStatefulScreen.h"
+
+#include <QHash>
+#include <QList>
+#include <QMetaObject>
+#include <QPointer>
+#include <QVariantMap>
 #include <QWidget>
 
-// Forward-declare all panels — constructed lazily on first navigation
+class QLabel;
+class QMenu;
+class QPushButton;
+class QScrollArea;
+class QSplitter;
+class QStackedWidget;
+class QTabBar;
+class QTimer;
+
+namespace fincept::ui {
+class EmptyState;
+class ScreenCommandBar;
+class ScreenStatusBar;
+} // namespace fincept::ui
+
 namespace fincept::screens {
+
+class AgentChatPanel;
+class AgentConnectSection;
+class AgentRail;
+class AgentRunComposer;
+class AgentRunPanel;
+class AgentRunsPanel;
+class AgentSchedulesPanel;
+class AgenticTasksPanel;
 class AgentsViewPanel;
 class CreateAgentPanel;
-class TeamsViewPanel;
-class WorkflowsViewPanel;
+class HarnessListWidget;
 class PlannerViewPanel;
-class ToolsViewPanel;
-class AgentChatPanel;
 class SystemViewPanel;
-class AgenticTasksPanel;
-} // namespace fincept::screens
+class TeamsViewPanel;
+class ToolsViewPanel;
+class WorkflowsViewPanel;
 
-namespace fincept::screens {
-
-/// Main Agent Studio screen — 8-view navigation shell.
-/// Panels are constructed lazily on first navigation (P2 compliance).
-class AgentConfigScreen : public QWidget, public IStatefulScreen {
+class AgentConfigScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit AgentConfigScreen(QWidget* parent = nullptr);
     ~AgentConfigScreen() override;
 
-    // IStatefulScreen — persists the currently active sub-view so users
-    // return to the same panel after restart.
+    // IStatefulScreen — section, view, inspector, the panels' drafts and the composer.
     QVariantMap save_state() const override;
     void restore_state(const QVariantMap& state) override;
-    QString state_key() const override { return "agent_config"; }
+    QString state_key() const override { return QStringLiteral("agent_config"); }
+
+    // ISectionLinked
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -44,35 +83,59 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     void changeEvent(QEvent* event) override;
 
   private:
+    // Layout (AgentConfigScreen.cpp)
     void build_ui();
-    void build_nav_bar(QVBoxLayout* root);
-    void build_status_bar(QVBoxLayout* root);
-    void setup_service_connections();
-    void set_view(services::AgentViewMode mode);
-    QPushButton* make_nav_btn(const QString& text, services::AgentViewMode mode);
+    void build_command_bar();
+    void build_status_bar();
+    void install_shortcuts();
+    void retranslate();
+    void rebuild_tabs();
+    QString section_title(const QString& section) const;
 
-    void ensure_panel_built(services::AgentViewMode mode);
-    /// Hand a panel the draft restore_state() stashed for it (panels are built
-    /// lazily, so it may not exist yet when the state is restored).
-    void apply_pending_draft(services::AgentViewMode mode);
-    QWidget* panel_widget(services::AgentViewMode mode) const;
+    // Navigation
+    void set_group(const QString& group);
+    void set_section(const QString& section);
+    QWidget* ensure_section(const QString& section);
+    QWidget* section_widget(const QString& section) const;
     void wire_cross_panel_signals();
+    void apply_pending_drafts();
+    void apply_agentic_visibility();
 
-    QStackedWidget* view_stack_ = nullptr;
-    QVector<QPushButton*> nav_buttons_;
-    QLabel* status_label_ = nullptr;
-    QLabel* agent_count_label_ = nullptr;
-    QLabel* title_label_ = nullptr;
-    QLabel* view_label_ = nullptr;
+    // Inspector (AgentConfigScreen_Inspector.cpp)
+    void ensure_inspector();
+    void set_inspector_visible(bool on);
+    void open_run_key(const QString& key, bool move_focus);
+    void show_chat_run(const QString& run_id);
+    void fit_splitter();
 
-    /// Tracks the last agent count reported by AgentService so retranslateUi()
-    /// can rebuild the "%1 agents" badge in the new locale without waiting
-    /// for the next discovery cycle.
-    int last_agent_count_ = 0;
+    // Actions + status (AgentConfigScreen_Actions.cpp)
+    void setup_service_connections();
+    void on_bar_action(const QString& id);
+    void on_rail_item(const QString& kind, const QString& id);
+    void on_agentic_action(const QString& action);
+    void open_run_settings();
+    void open_agent_connect();
+    void update_status();
+    QMenu* build_templates_menu();
+    QMenu* build_io_menu();
+    void carry_workbench_state_once();
+    static QString screen_qss();
 
-    void retranslateUi();
+    // ── Shell ────────────────────────────────────────────────────────────────
+    ui::ScreenCommandBar* command_bar_ = nullptr;
+    ui::ScreenStatusBar* status_bar_ = nullptr;
+    QTabBar* tab_bar_ = nullptr;
+    QSplitter* splitter_ = nullptr;
+    AgentRail* rail_ = nullptr;
+    QWidget* centre_ = nullptr;
+    QStackedWidget* centre_stack_ = nullptr;
+    QWidget* inspector_host_ = nullptr;
+    QStackedWidget* inspector_ = nullptr;
+    QMenu* templates_menu_ = nullptr;
+    QMenu* io_menu_ = nullptr;
+    QTimer* status_timer_ = nullptr; // coalesces status-bar refreshes (run updates arrive in bursts)
 
-    // Lazily constructed panels (nullptr until first navigation)
+    // ── Sections (built on first use) ───────────────────────────────────────
     AgentsViewPanel* agents_panel_ = nullptr;
     CreateAgentPanel* create_panel_ = nullptr;
     TeamsViewPanel* teams_panel_ = nullptr;
@@ -81,26 +144,39 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     ToolsViewPanel* tools_panel_ = nullptr;
     AgentChatPanel* chat_panel_ = nullptr;
     SystemViewPanel* system_panel_ = nullptr;
-    AgenticTasksPanel* agentic_panel_ = nullptr;
+    AgentRunsPanel* runs_panel_ = nullptr;
+    AgentRunComposer* composer_ = nullptr;
+    AgentSchedulesPanel* schedules_panel_ = nullptr;
+    QScrollArea* harness_scroll_ = nullptr;
+    HarnessListWidget* harness_list_ = nullptr;
+    AgentConnectSection* connect_panel_ = nullptr;
+    QHash<QString, QWidget*> sections_;
 
-    // Drafts from restore_state() whose panel has not been built yet. They are
-    // applied when the panel is built and, until then, written back by save_state()
-    // so an unvisited tab's draft is not lost after one more restart.
-    QVariantMap pending_state_;
+    // ── Inspector pages ──────────────────────────────────────────────────────
+    ui::EmptyState* inspector_empty_ = nullptr;
+    AgentRunPanel* run_view_ = nullptr;
+    AgenticTasksPanel* task_view_ = nullptr;
+    QWidget* chat_card_ = nullptr;
+    QLabel* chat_title_ = nullptr;
+    QLabel* chat_meta_ = nullptr;
+    QLabel* chat_prompt_ = nullptr;
+    QPushButton* chat_open_btn_ = nullptr;
+    QString chat_run_id_;
 
-    // Track which stack slots have been populated (one per AgentViewMode value).
-    bool panel_built_[9] = {};
-    // Nav-button index for the AGENTIC tab — kept so the visibility toggle
-    // (Settings > Developer > Agentic Mode) can show/hide it at runtime.
-    int agentic_nav_idx_ = -1;
-    bool agentic_mode_enabled_ = false;
-    void apply_agentic_visibility();
-
-    services::AgentViewMode current_view_ = services::AgentViewMode::Agents;
+    // ── State ────────────────────────────────────────────────────────────────
+    QString group_;
+    QString section_;
+    QHash<QString, QString> group_section_; // last section of each view group
+    QHash<QString, bool> inspector_pref_;    // inspector shown per view group
+    QString selected_run_key_;
+    QString pending_agent_;       // open_section() focus waiting for the agent list
+    QVariantMap pending_state_;   // drafts of panels not built yet
+    QVariantMap pending_run_;     // composer + inspector state until they exist
+    int last_agent_count_ = 0;
+    bool agentic_mode_enabled_ = true;
     bool first_show_ = true;
-    /// Whether this instance has told AgentService it is visible (keeps the
-    /// service's visible-screen count balanced across show/hide/destroy).
-    bool reported_visible_ = false;
+    bool tools_assign_wired_ = false;
+    bool reported_visible_ = false; // AgentService + CodingAgentService visible-screen counts
 };
 
 } // namespace fincept::screens

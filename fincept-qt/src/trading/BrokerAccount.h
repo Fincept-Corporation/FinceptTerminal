@@ -27,6 +27,27 @@ struct BrokerAccount {
     QString error_message;
 };
 
+// ── Built-in paper account (no broker) ──────────────────────────────────────
+// A local paper account that trades on delayed public prices, for users with no
+// broker. AccountManager synthesises its record on get_account(); it is NEVER
+// stored in broker_accounts, never returned by list_accounts() / active_accounts()
+// and has_account() is false for it — so nothing that enumerates accounts (stream
+// manager, session sweep, broadcast / basket / replication dialogs, dashboards)
+// can see it, and DataStreamManager::start_stream() refuses it. Its broker id is
+// registered with no broker, so every BrokerRegistry::get() lookup for it is null
+// and UnifiedTrading refuses every broker-bound call for it outright. Its trading
+// mode is always "paper". The paper portfolio behind it is the pt_portfolios row
+// whose `exchange` column equals kBuiltinPaperAccountId.
+inline constexpr char kBuiltinPaperAccountId[] = "builtin:paper";
+inline constexpr char kBuiltinPaperBrokerId[] = "builtin-paper";
+
+inline bool is_builtin_paper_account(const QString& account_id) {
+    return account_id == QLatin1String(kBuiltinPaperAccountId);
+}
+inline bool is_builtin_paper_broker(const QString& broker_id) {
+    return broker_id == QLatin1String(kBuiltinPaperBrokerId);
+}
+
 inline const char* connection_state_str(ConnectionState s) {
     switch (s) {
         case ConnectionState::Disconnected:

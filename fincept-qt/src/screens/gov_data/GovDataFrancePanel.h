@@ -5,16 +5,28 @@
 
 #include "services/gov_data/GovDataService.h"
 
-#include <QComboBox>
+#include <QHash>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStackedWidget>
-#include <QTableWidget>
+#include <QTableView>
 #include <QWidget>
 
+#include <atomic>
+#include <memory>
+
+namespace fincept::ui {
+class AutoLoadPane;
+class EmptyState;
+class InputMemory;
+} // namespace fincept::ui
+
 namespace fincept::screens {
+
+class GovTableModel;
 
 class GovDataFrancePanel : public QWidget {
     Q_OBJECT
@@ -22,6 +34,7 @@ class GovDataFrancePanel : public QWidget {
     explicit GovDataFrancePanel(QWidget* parent = nullptr);
 
   public slots:
+    /// Called by the screen when the panel is first opened; the pane loads the tab on show.
     void load_initial_data();
 
   protected:
@@ -36,31 +49,40 @@ class GovDataFrancePanel : public QWidget {
     void on_export_csv();
 
   private:
-    // View indices in content_stack_
-    enum View { Services = 0, Datasets, Geo, Resources, Status };
+    // Tabs; Resources is the drill-down from a dataset (its column schema)
+    enum View { Services = 0, Datasets, Geo, Resources };
 
     void build_ui();
     QWidget* build_toolbar();
+    void build_pane(QWidget* parent);
     void retranslateUi();
+
+    /// "services", "datasets:<term>" (empty term = the catalogue's list), "geo:<term>", "schema:<id>".
+    static QString view_key(View v, const QString& arg = {});
+    static View view_of(const QString& key);
+    static QString arg_of(const QString& key);
+    void go(const QString& key, bool user, bool force = false);
+    /// The search box shows the term of `v` (remembered per tab; Geo starts on "Paris").
+    void load_term(View v);
+    void start_run(quint64 run);
+    /// The payload kind of a view ("services", "datasets", "geo", "schema").
+    static QString payload_kind(View v);
+    /// The payload of view `v` from a script answer. Pure: runs on the shaping thread.
+    static QJsonObject shape(View v, const QJsonObject& data);
+    void render(const QJsonValue& payload);
+    void show_no_data(View v, const QString& arg);
 
     void populate_services(const QJsonArray& data);
     void populate_datasets(const QJsonArray& data);
     void populate_geo(const QJsonArray& data);
     void populate_resources(const QJsonArray& data);
 
-    void show_loading(const QString& message);
-    void show_error(const QString& message);
-    void show_status(const QString& message, bool is_error = false);
-
     void update_toolbar_state();
-    void update_breadcrumb(const QString& text);
-
-    static constexpr const char* kScript = "french_gov_api.py";
-    static constexpr const char* kColor = "#2563EB";
+    void update_breadcrumb();
 
     View current_view_ = Services;
-    QString selected_dataset_id_; // for resources drill-down
-    QString search_query_;        // last geo / dataset search
+    QString last_datasets_view_; // the dataset list a column schema was opened from
+    QHash<QString, QString> labels_;
 
     // Toolbar widgets
     QPushButton* back_btn_ = nullptr;
@@ -75,20 +97,24 @@ class GovDataFrancePanel : public QWidget {
     QWidget* breadcrumb_ = nullptr;
     QLabel* breadcrumb_label_ = nullptr;
     QLabel* row_count_label_ = nullptr;
+    QLabel* as_of_label_ = nullptr;
 
     // Content pages
+    ui::AutoLoadPane* pane_ = nullptr;
     QStackedWidget* content_stack_ = nullptr;
-    QTableWidget* services_table_ = nullptr;  // page 0
-    QTableWidget* datasets_table_ = nullptr;  // page 1
-    QTableWidget* geo_table_ = nullptr;       // page 2
-    QTableWidget* resources_table_ = nullptr; // page 3 (column schema)
-    QLabel* status_label_ = nullptr;          // page 4
+    QTableView* services_table_ = nullptr;
+    QTableView* datasets_table_ = nullptr;
+    QTableView* geo_table_ = nullptr;
+    QTableView* resources_table_ = nullptr; // column schema
+    GovTableModel* services_model_ = nullptr;
+    GovTableModel* datasets_model_ = nullptr;
+    GovTableModel* geo_model_ = nullptr;
+    GovTableModel* resources_model_ = nullptr;
+    ui::EmptyState* no_data_page_ = nullptr;
 
-    // Cached data for CSV export
-    QJsonArray current_services_;
-    QJsonArray current_datasets_;
-    QJsonArray current_geo_;
-    QJsonArray current_resources_;
+    ui::InputMemory* tabs_memory_ = nullptr; // the tab
+    ui::InputMemory* term_memory_ = nullptr; // the search term, per tab
+    QHash<quint64, std::shared_ptr<std::atomic<bool>>> tokens_;
 };
 
 } // namespace fincept::screens

@@ -37,7 +37,12 @@
 #include "ui/charts/layers/PivotLayer.h"
 #include "ui/charts/layers/SupportResistanceLayer.h"
 #include "ui/charts/layers/VwapLayer.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QCandlestickSeries>
 #include <QCandlestickSet>
@@ -54,6 +59,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsSimpleTextItem>
 #include <QHBoxLayout>
+#include <QJsonValue>
 #include <QLabel>
 #include <QLineSeries>
 #include <QMouseEvent>
@@ -67,6 +73,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 using namespace fincept::ui;
 
@@ -112,11 +119,14 @@ QString time_format_for(qint64 span_ms) {
 }
 
 QFont scene_font() {
-    QFont f;
-    f.setFamily(QStringLiteral("Consolas"));
-    f.setPointSize(9);
-    f.setWeight(QFont::DemiBold);
-    return f;
+    return fonts::font(-2, QFont::DemiBold);
+}
+
+// EMA overlays take a chart-series colour by period: 9 → accent, 21 → gain
+// green, 50 → info blue, anything else → loss red.
+QColor ema_color(int period) {
+    const int slot = (period == 9) ? 0 : (period == 21) ? 2 : (period == 50) ? 4 : 3;
+    return colors::series(slot);
 }
 
 // Pixel clamps for the candle body. Qt derives the body width from the candle
@@ -140,7 +150,8 @@ constexpr double kZoomOutFactor = 1.0 / kZoomInFactor;
 // itself. Also enables wheel-zoom on the price axis and drag-pan.
 class HoverChartView : public QChartView {
   public:
-    HoverChartView(QChart* chart, CryptoChart* host) : QChartView(chart), host_(host) {
+    HoverChartView(QChart* chart, CryptoChart* host, QWidget* parent = nullptr)
+        : QChartView(chart, parent), host_(host) {
         setMouseTracking(true);
         setRenderHint(QPainter::Antialiasing, true);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -316,8 +327,22 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     last_price_line_->attachAxis(price_axis_);
 
     // ── Chart view ─────────────────────────────────────────────────────────
-    chart_view_ = new HoverChartView(chart_, this);
-    layout->addWidget(chart_view_, 1);
+    // Hosted by a feed-mode AutoLoadPane: a chart skeleton until the first
+    // candles land, an error page (RETRY) when the history and the stream both
+    // fail, the Python setup page when the environment is not ready. The
+    // timeframe header above stays usable in every state.
+    plot_pane_ = new fincept::ui::AutoLoadPane(this);
+    plot_pane_->set_feed_mode(true);
+    plot_pane_->skeleton()->set_shape(fincept::ui::LoadingSkeleton::Shape::Chart);
+    plot_pane_->set_loading_text(tr("Loading price history…"));
+    plot_pane_->set_requirements({fincept::ui::Requirement::python()});
+    chart_view_ = new HoverChartView(chart_, this, plot_pane_->content_parent()); // built in place
+    plot_pane_->set_content(chart_view_);
+    layout->addWidget(plot_pane_, 1);
+    // Shown (or RETRY / requirement met again) → the screen makes sure data is
+    // coming; the release while still visible marks the next ask as a retry.
+    plot_pane_->set_feed_subscription([this]() { emit feed_wanted(std::exchange(feed_retry_, false)); },
+                                      [this]() { feed_retry_ = plot_pane_->isVisible(); });
 
     // ── Scene overlays (crosshair, price/time tags, last-price tag) ────────
     auto* scene = chart_view_->scene();
@@ -356,7 +381,7 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     };
     build_tag(price_tag_bg_, price_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
     build_tag(time_tag_bg_, time_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
-    build_tag(last_tag_bg_, last_tag_txt_, QColor(colors::AMBER()), QColor(colors::BG_BASE()));
+    build_tag(last_tag_bg_, last_tag_txt_, QColor(colors::AMBER()), QColor(colors::TEXT_ON_ACCENT()));
 
     // ── OHLC tooltip pinned to top-left of the chart widget ────────────────
     ohlc_tooltip_ = new QLabel(chart_view_);
@@ -374,7 +399,7 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     connect(chart_, &QChart::plotAreaChanged, this, [this](const QRectF&) { overlay_mgr_->reposition_all(); });
 
     indicator_picker_ = new fincept::ui::IndicatorPicker(overlay_mgr_, this);
-    layout->insertWidget(layout->indexOf(chart_view_), indicator_picker_);
+    layout->insertWidget(layout->indexOf(plot_pane_), indicator_picker_);
 
     connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_requested, this, [this](const QString& id) {
         using namespace fincept::ui;
@@ -383,9 +408,7 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
             int period = id.mid(4).toInt();
             if (period <= 0)
                 period = 21;
-            const QColor colors[] = {QColor("#d97706"), QColor("#16a34a"), QColor("#2563eb"), QColor("#dc2626")};
-            int idx = (period == 9) ? 0 : (period == 21) ? 1 : (period == 50) ? 2 : 3;
-            layer = new EmaLayer(period, colors[idx]);
+            layer = new EmaLayer(period, ema_color(period));
         } else if (id == "vwap") {
             layer = new VwapLayer(true);
         } else if (id.startsWith("bb_")) {
@@ -401,6 +424,64 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 
     connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_removed, this,
             [this](const QString& id) { overlay_mgr_->remove_layer(id); });
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+
+    // A currency / number-format change re-labels the last-price tag from the
+    // candles already held (the axis uses printf labels, which have no locale).
+    fincept::ui::formatting::on_format_changed(this, [this]() { update_last_price_marker(); });
+}
+
+void CryptoChart::set_price_market(const QString& market) {
+    if (market == price_market_)
+        return;
+    price_market_ = market;
+    // Re-derive the axis decimals and the price tag for the new quote asset.
+    if (price_axis_ && last_max_price_ > 0)
+        price_axis_->setLabelFormat(QStringLiteral("%.%1f").arg(
+            fincept::ui::formatting::price_decimals(last_max_price_, pair_price_fmt(price_market_))));
+    update_last_price_marker();
+}
+
+void CryptoChart::refresh_theme() {
+    // The chart, its series and axes, the scene overlays and the EMA layers keep
+    // the colours and fonts they were given; re-apply them in the active
+    // appearance.
+    chart_->setBackgroundBrush(QBrush(QColor(colors::BG_SURFACE())));
+    chart_->setPlotAreaBackgroundBrush(QBrush(QColor(colors::BG_BASE())));
+    series_->setIncreasingColor(QColor(colors::POSITIVE()));
+    series_->setDecreasingColor(QColor(colors::NEGATIVE()));
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(time_axis_), static_cast<QAbstractAxis*>(price_axis_)}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(scene_font());
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setMinorGridLineColor(QColor(colors::BG_RAISED()));
+        axis->setLinePenColor(QColor(colors::BORDER_DIM()));
+    }
+
+    QPen grid_pen = xhair_v_->pen();
+    grid_pen.setColor(QColor(colors::BORDER_BRIGHT()));
+    xhair_v_->setPen(grid_pen);
+    xhair_h_->setPen(grid_pen);
+    QPen dot_pen = xhair_dot_->pen();
+    dot_pen.setColor(QColor(colors::AMBER()));
+    xhair_dot_->setPen(dot_pen);
+    xhair_dot_->setBrush(QBrush(QColor(colors::BG_BASE())));
+
+    price_tag_bg_->setBrush(QBrush(QColor(colors::BG_RAISED())));
+    time_tag_bg_->setBrush(QBrush(QColor(colors::BG_RAISED())));
+    for (QGraphicsSimpleTextItem* txt : {price_tag_txt_, time_tag_txt_, last_tag_txt_}) {
+        txt->setBrush(QBrush(QColor(txt == last_tag_txt_ ? colors::TEXT_ON_ACCENT() : colors::TEXT_PRIMARY())));
+        txt->setFont(scene_font());
+    }
+
+    for (fincept::ui::OverlayLayer* layer : overlay_mgr_->layers()) {
+        if (auto* ema = qobject_cast<fincept::ui::EmaLayer*>(layer))
+            ema->set_color(ema_color(ema->period()));
+    }
+
+    update_last_price_marker(); // last-price line + tag colours
 }
 
 void CryptoChart::changeEvent(QEvent* event) {
@@ -444,6 +525,50 @@ void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     // fired timeframe_changed twice — once on click and again when the candles
     // landed — doubling the REST fetch and WS re-point and resetting the view.
     // The screen now re-issues a dropped fetch itself, see async_fetch_candles.)
+    if (!candles_.isEmpty()) {
+        feed_reported_ = false; // a new history: show it (and keep a live-error notice)
+        report_feed_data();
+    }
+}
+
+void CryptoChart::report_feed_data() {
+    if (feed_reported_ || !plot_pane_)
+        return;
+    feed_reported_ = true;
+    plot_pane_->feed_data(QJsonValue(static_cast<qint64>(candles_.size())));
+    // History from REST is on screen but the stream is down: say so over it.
+    if (!live_error_.isEmpty())
+        plot_pane_->feed_error(live_error_, QString(), tr("Live prices unavailable"));
+}
+
+void CryptoChart::set_loading_text(const QString& text) {
+    if (plot_pane_)
+        plot_pane_->set_loading_text(text);
+}
+
+void CryptoChart::show_feed_error(const QString& message, const QString& details) {
+    if (!plot_pane_)
+        return;
+    feed_reported_ = false;
+    plot_pane_->feed_error(message, details, tr("No price history"));
+}
+
+void CryptoChart::set_live_error(const QString& message) {
+    if (message == live_error_ || !plot_pane_)
+        return;
+    live_error_ = message;
+    feed_reported_ = false;
+    if (message.isEmpty()) {
+        if (!candles_.isEmpty())
+            report_feed_data(); // clears the "live updates stopped" notice
+        return;
+    }
+    plot_pane_->feed_error(message, QString(), tr("Live prices unavailable"));
+}
+
+void CryptoChart::recheck_requirements() {
+    if (plot_pane_)
+        plot_pane_->recheck_requirements();
 }
 
 void CryptoChart::append_candles(const QVector<trading::Candle>& candles) {
@@ -521,6 +646,13 @@ void CryptoChart::append_candles(const QVector<trading::Candle>& candles) {
     update_last_price_marker();
 
     overlay_mgr_->append_candles(accepted);
+
+    // A streamed candle: live prices flow, so any "live updates stopped" no longer applies.
+    if (!live_error_.isEmpty()) {
+        live_error_.clear();
+        feed_reported_ = false;
+    }
+    report_feed_data();
 }
 
 void CryptoChart::recompute_bounds() {
@@ -554,6 +686,10 @@ void CryptoChart::clear() {
     if (last_tag_txt_)
         last_tag_txt_->setVisible(false);
     on_hover_leave();
+    // Back to the skeleton until the new symbol / timeframe / venue has candles.
+    feed_reported_ = false;
+    if (plot_pane_)
+        plot_pane_->clear_result();
 }
 
 void CryptoChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {
@@ -573,7 +709,8 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
     if (p_min != last_min_price_ || p_max != last_max_price_) {
         // Axis tick labels follow the price magnitude too ("%.2f" rendered every
         // tick of a sub-cent pair as 0.00).
-        price_axis_->setLabelFormat(QStringLiteral("%.%1f").arg(price_decimals(p_max)));
+        price_axis_->setLabelFormat(QStringLiteral("%.%1f").arg(
+            fincept::ui::formatting::price_decimals(p_max, pair_price_fmt(price_market_))));
         price_axis_->setRange(p_min, p_max);
         last_min_price_ = p_min;
         last_max_price_ = p_max;
@@ -735,7 +872,7 @@ void CryptoChart::update_last_price_marker() {
     if (last_tag_bg_ && last_tag_txt_ && chart_) {
         const QPointF anchor = chart_->mapToPosition(QPointF(last_max_time_, price), series_);
         // Magnitude-scaled precision — a fixed 2 dp printed every sub-cent pair as 0.00.
-        const QString text = format_price_plain(price);
+        const QString text = pair_price(price, price_market_);
         last_tag_txt_->setText(text);
         const QRectF tb = last_tag_txt_->boundingRect();
         const qreal pad_x = 6, pad_y = 2;
@@ -789,7 +926,7 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     // Clamp Y so the tag never extends past the plot edges into the time tag.
     {
         const double price = chart_value_pos.y();
-        price_tag_txt_->setText(format_price_plain(price));
+        price_tag_txt_->setText(pair_price(price, price_market_));
         const QRectF tb = price_tag_txt_->boundingRect();
         const qreal w = tb.width() + 2 * kPadX;
         const qreal h = tb.height() + 2 * kPadY;
@@ -836,8 +973,7 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     if (hit) {
         const bool up = hit->close >= hit->open;
         const double pct = (hit->close - hit->open) / std::max(1e-12, hit->open) * 100.0;
-        const QString chg =
-            QString("%1%2%").arg(pct >= 0 ? QStringLiteral("+") : QString()).arg(QString::number(pct, 'f', 2));
+        const QString chg = fincept::ui::formatting::pct(pct, 2); // signed: never colour alone
         const QString time_str =
             QDateTime::fromMSecsSinceEpoch(hit->timestamp).toString(QStringLiteral("MMM dd  HH:mm"));
         const QString dir_color =
@@ -850,12 +986,12 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
         // Vertical layout: header row + four label/value rows + change row.
         // Numeric values use a fixed-width <td> so different price magnitudes
         // (e.g. 79655.40 vs 9.50) don't push the values into different
-        // columns from row to row. font-family:Consolas keeps digits aligned.
+        // columns from row to row. The text uses the terminal font.
         const QString tpl =
-            QStringLiteral("<div style='font-family:Consolas,Courier New,monospace;'>"
-                           "<div style='color:%1;font-size:10px;font-weight:700;letter-spacing:0.8px;"
+            QString("<div>"
+                           "<div style='color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.8px;"
                            "  margin-bottom:6px;'>%2</div>"
-                           "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:12px;'>"
+                           "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:" + fincept::ui::fonts::px(-2) + "px;'>"
                            "<tr>"
                            "  <td style='color:%1;font-weight:700;padding-right:10px;'>O</td>"
                            "  <td style='color:%3;text-align:right;'>%4</td>"
@@ -870,20 +1006,20 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
                            "  <td style='color:%9;text-align:right;font-weight:700;padding-top:1px;'>%10</td>"
                            "</tr><tr>"
                            "  <td colspan='2' style='padding-top:6px;color:%9;font-weight:700;text-align:right;"
-                           "    border-top:1px solid #1a1a1a;'>%11</td>"
+                           "    border-top:1px solid " + QString::fromLatin1(colors::BORDER_MED()) + ";'>%11</td>"
                            "</tr>"
                            "</table>"
                            "</div>");
         ohlc_tooltip_->setText(tpl.arg(dim)                                  // %1 dim/label colour
                                    .arg(time_str)                            // %2 timestamp
                                    .arg(fg)                                  // %3 open colour
-                                   .arg(format_price_plain(hit->open))       // %4
-                                   .arg(green)                               // %5 high colour
-                                   .arg(format_price_plain(hit->high))       // %6
-                                   .arg(red)                                 // %7 low colour
-                                   .arg(format_price_plain(hit->low))        // %8
-                                   .arg(dir_color)                           // %9 close + Δ%
-                                   .arg(format_price_plain(hit->close))      // %10
+                                   .arg(pair_price(hit->open, price_market_))  // %4
+                                   .arg(green)                                 // %5 high colour
+                                   .arg(pair_price(hit->high, price_market_))  // %6
+                                   .arg(red)                                   // %7 low colour
+                                   .arg(pair_price(hit->low, price_market_))   // %8
+                                   .arg(dir_color)                             // %9 close + Δ%
+                                   .arg(pair_price(hit->close, price_market_)) // %10
                                    .arg(chg));                               // %11
         ohlc_tooltip_->adjustSize();
         ohlc_tooltip_->setVisible(true);

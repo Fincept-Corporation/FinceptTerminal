@@ -43,6 +43,8 @@ inline QString pretty_category(const QString& cat) {
     return out;
 }
 
+/// Identity colour of an event category, written for the dark theme: draw it
+/// through ui::colors::legible_color() (text, markers) or tint_color() (fills).
 inline QColor category_color(const QString& cat) {
     // API returns *_unclassified variants — map them to the same colour as the
     // base category so the legend / map / table stay coherent.

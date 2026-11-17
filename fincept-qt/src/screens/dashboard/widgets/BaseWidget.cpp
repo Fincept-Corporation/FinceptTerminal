@@ -1,5 +1,6 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "core/events/EventBus.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolGroupRegistry.h"
@@ -7,22 +8,31 @@
 #include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/backtesting/BacktestingService.h"
 #include "storage/repositories/WatchlistRepository.h"
+#include "trading/AccountManager.h"
+#include "ui/widgets/ThemeIcon.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/GroupBadge.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QCursor>
+#include <QFontMetrics>
 #include <QJsonArray>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPaintEvent>
+#include <QPainter>
 #include <QPalette>
 #include <QSize>
 #include <QStyle>
 #include <QTableWidget>
 #include <QToolTip>
+
+#include <algorithm>
+#include <iterator>
 
 namespace fincept::screens::widgets {
 
@@ -42,6 +52,28 @@ bool base_widget_is_tradable_equity(const QString& symbol) {
            !symbol.endsWith(QLatin1String("-USD"));
 }
 
+// Short name for a hub topic in error text: "market:quote:AAPL" -> "AAPL",
+// "market:history:AAPL:1y:1d" -> "AAPL". Other families keep their full name.
+QString base_widget_topic_label(const QString& topic) {
+    static const QString kMarketPrefix = QStringLiteral("market:");
+    if (!topic.startsWith(kMarketPrefix))
+        return topic;
+    const int kind_end = topic.indexOf(QLatin1Char(':'), kMarketPrefix.size());
+    if (kind_end < 0)
+        return topic;
+    const QString rest = topic.mid(kind_end + 1);
+    const int sym_end = rest.indexOf(QLatin1Char(':'));
+    return sym_end < 0 ? rest : rest.left(sym_end);
+}
+
+// Producer reasons are user-facing sentences; only bound their length so a
+// stack-trace-sized message cannot swamp a tile.
+QString base_widget_clip_reason(const QString& error) {
+    constexpr int kMaxReasonChars = 280;
+    const QString e = error.trimmed();
+    return e.size() > kMaxReasonChars ? e.left(kMaxReasonChars) + QChar(0x2026) : e;
+}
+
 // One place for the three title-bar button stylesheets. The constructor used to
 // style config/refresh/close inline and refresh_base_theme() only restyled the
 // refresh button, so after a theme switch the gear and close buttons kept the
@@ -54,18 +86,67 @@ void apply_title_button_styles(QPushButton* config_btn, QPushButton* refresh_btn
                        "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
             .arg(fg, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), hover, ui::colors::BG_HOVER());
     };
-    if (config_btn)
-        config_btn->setStyleSheet(css(accent, ui::colors::TEXT_PRIMARY()));
-    if (refresh_btn)
-        refresh_btn->setStyleSheet(css(accent, ui::colors::TEXT_PRIMARY()));
-    if (close_btn)
-        close_btn->setStyleSheet(css(ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE()));
+    // Only on change: re-applied after every appearance change (refresh_base_theme).
+    const auto put = [](QPushButton* b, const QString& sheet) {
+        if (b && b->styleSheet() != sheet)
+            b->setStyleSheet(sheet);
+    };
+    put(config_btn, css(accent, ui::colors::TEXT_PRIMARY()));
+    put(refresh_btn, css(accent, ui::colors::TEXT_PRIMARY()));
+    put(close_btn, css(ui::colors::TEXT_TERTIARY(), ui::colors::DANGER()));
 }
+
+// The theme token whose current value is `color`, so an accent handed over as
+// a token value (ui::colors::CYAN() …) follows later theme changes. Null when
+// `color` is not one of these tokens.
+const char* ui::ThemeTokens::* base_widget_accent_field(const QString& color) {
+    using Field = const char* ui::ThemeTokens::*;
+    constexpr Field kFields[] = {
+        &ui::ThemeTokens::accent,  &ui::ThemeTokens::cyan,           &ui::ThemeTokens::info,
+        &ui::ThemeTokens::success, &ui::ThemeTokens::danger,         &ui::ThemeTokens::warning,
+        &ui::ThemeTokens::positive, &ui::ThemeTokens::negative,      &ui::ThemeTokens::text_primary,
+        &ui::ThemeTokens::text_secondary,
+    };
+    const auto& t = ui::ThemeManager::instance().tokens();
+    for (Field f : kFields) {
+        if (color.compare(QLatin1String(t.*f), Qt::CaseInsensitive) == 0)
+            return f;
+    }
+    return nullptr;
+}
+
+// Host of a tile's designed empty state (BaseWidget::show_empty_state): covers
+// the content area exactly — it filters its parent's resizes. It paints nothing
+// itself: the EmptyState inside fills it and is opaque (EmptyState::set_opaque,
+// the tile surface token read from the live theme), so nothing of the (empty)
+// table or chart underneath shows through and no stylesheet is needed.
+class BaseWidgetEmptyCover : public QWidget {
+  public:
+    explicit BaseWidgetEmptyCover(QWidget* target) : QWidget(target) {
+        setObjectName(QStringLiteral("dashboardTileEmptyCover"));
+        auto* vl = new QVBoxLayout(this);
+        vl->setContentsMargins(0, 0, 0, 0);
+        vl->setSpacing(0);
+        target->installEventFilter(this);
+        setGeometry(target->rect());
+    }
+
+  protected:
+    bool eventFilter(QObject* obj, QEvent* e) override {
+        if (obj == parentWidget() && e->type() == QEvent::Resize)
+            setGeometry(parentWidget()->rect());
+        return QWidget::eventFilter(obj, e);
+    }
+};
 
 } // namespace
 
 BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& accent_color)
     : QFrame(parent), accent_color_(accent_color.isEmpty() ? ui::colors::AMBER : accent_color) {
+    accent_source_ = accent_color_;
+    accent_field_ = base_widget_accent_field(accent_color_);
+    if (!accent_field_)
+        accent_color_ = ui::colors::legible(QColor(accent_source_));
     setObjectName("dashboardBaseWidget");
     setAttribute(Qt::WA_StyledBackground, true);
     setAutoFillBackground(true);
@@ -74,7 +155,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     pal.setColor(QPalette::Window, QColor(ui::colors::BG_SURFACE()));
     setPalette(pal);
 
-    setStyleSheet(QString("#dashboardBaseWidget { background: %1; border: 1px solid %2; border-radius: 2px; }")
+    setStyleSheet(QString("#dashboardBaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
                       .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
 
     auto* vl = new QVBoxLayout(this);
@@ -98,17 +179,33 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     hl->addWidget(accent_bar_);
 
     title_label_ = new QLabel(title);
-    title_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; "
+    title_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; "
                                         "background: transparent; text-transform: uppercase;")
                                     .arg(accent_color_));
+    // The title is the one part of the header that gives way. A label is never
+    // laid out narrower than its text unless it has a minimum width of its
+    // own, so in a narrow tile at a large font the row was wider than the tile
+    // and the title ran into the "1/11 FAILED" marker beside it. Now the end of
+    // the title is cut instead (the tooltip has all of it) and the marker and
+    // the buttons keep their place.
+    title_label_->setMinimumWidth(1);
+    title_label_->setToolTip(title);
     hl->addWidget(title_label_);
 
     // Loading indicator
     loading_label_ = new QLabel("...");
     loading_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::AMBER()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent;").arg(ui::colors::AMBER()));
     loading_label_->setVisible(false);
     hl->addWidget(loading_label_);
+
+    // Producer-error marker for tracked topics (see track_topics()): shown only
+    // while the tile has data AND some tracked topic's last refresh failed.
+    topic_status_label_ = new QLabel;
+    topic_status_label_->setStyleSheet(
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; background: transparent;").arg(ui::colors::WARNING()));
+    topic_status_label_->setVisible(false);
+    hl->addWidget(topic_status_label_);
 
     hl->addStretch();
 
@@ -116,7 +213,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     config_btn_ = new QPushButton;
     config_btn_->setFixedSize(20, 20);
     config_btn_->setText("");
-    config_btn_->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+    config_btn_->setIcon(ui::theme_icon(ui::ThemeGlyph::Settings));
     config_btn_->setIconSize(QSize(12, 12));
     config_btn_->setToolTip(tr("Configure widget"));
     config_btn_->setAccessibleName(tr("Configure widget"));
@@ -129,7 +226,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     refresh_btn_ = new QPushButton;
     refresh_btn_->setFixedSize(20, 20);
     refresh_btn_->setText("");
-    refresh_btn_->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+    refresh_btn_->setIcon(ui::theme_icon(ui::ThemeGlyph::Refresh));
     refresh_btn_->setIconSize(QSize(12, 12));
     refresh_btn_->setToolTip(tr("Refresh widget data"));
     refresh_btn_->setAccessibleName(tr("Refresh widget data"));
@@ -142,7 +239,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     close_btn_ = close_btn;
     close_btn->setFixedSize(20, 20);
     close_btn->setText("");
-    close_btn->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    close_btn->setIcon(ui::theme_icon(ui::ThemeGlyph::Close));
     close_btn->setIconSize(QSize(11, 11));
     close_btn->setToolTip(tr("Close widget"));
     close_btn->setAccessibleName(tr("Close widget"));
@@ -154,8 +251,12 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     vl->addWidget(title_bar_);
 
-    // Auto-refresh styles on theme/font change — subclasses get this for free
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+    // Auto-refresh styles on theme/font change — subclasses get this for free.
+    // Once the appearance has settled, never inside theme_changed: a dashboard
+    // holds dozens of tiles, and their restyles / re-renders / row-height fits
+    // there stalled every theme switch. Stylesheets go through set_css_cached(),
+    // which skips a sheet the theme manager has already translated.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
         refresh_base_theme();
         on_theme_changed();
     });
@@ -189,27 +290,47 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     loading_watchdog_->setSingleShot(true);
     loading_watchdog_->setInterval(20000);
     connect(loading_watchdog_, &QTimer::timeout, this, &BaseWidget::on_watchdog_fired);
+
+    // Retry from a producer-error overlay: back to the spinner while the
+    // subclass's refresh handler (connected later, so it runs after this)
+    // re-requests. The recorded errors stay — the reason comes back with the
+    // next error report, or at the latest when the watchdog fires (the hub may
+    // rate-limit / back off the retry, so a fresh report is not guaranteed).
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (topic_error_shown_ && isVisible()) {
+            set_loading(true);
+            topic_retry_pending_ = true;
+        }
+    });
 }
 
 void BaseWidget::refresh_base_theme() {
+    // The accent was resolved for the previous theme; re-read it.
+    accent_color_ = accent_field_ ? QString::fromLatin1(ui::ThemeManager::instance().tokens().*accent_field_)
+                                  : ui::colors::legible(QColor(accent_source_));
+
     QPalette pal = palette();
     pal.setColor(QPalette::Window, QColor(ui::colors::BG_SURFACE()));
     setPalette(pal);
 
-    setStyleSheet(QString("#dashboardBaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
-                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
-    if (title_bar_)
-        title_bar_->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                                      .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    if (title_label_)
-        title_label_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;letter-spacing:0.5px;"
-                                            "background:transparent;text-transform:uppercase;")
-                                        .arg(accent_color_));
-    if (accent_bar_)
-        accent_bar_->setStyleSheet(QString("background:%1;border-radius:1px;").arg(accent_color_));
-    if (loading_label_)
-        loading_label_->setStyleSheet(
-            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::AMBER()));
+    // Only when the text differs (set_css_cached): setStyleSheet() re-styles the
+    // whole tile even for an identical sheet, and after a theme or font change the
+    // manager has already rewritten these sheets to the new values (a font step
+    // does not touch them at all).
+    set_css_cached(this, QString("#dashboardBaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
+                             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
+    set_css_cached(title_bar_, QString("background:%1;border-bottom:1px solid %2;")
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    set_css_cached(title_label_,
+                   QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;letter-spacing:0.5px;"
+                           "background:transparent;text-transform:uppercase;")
+                       .arg(accent_color_));
+    set_css_cached(accent_bar_, QString("background:%1;border-radius:1px;").arg(accent_color_));
+    set_css_cached(loading_label_,
+                   QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(ui::colors::AMBER()));
+    set_css_cached(topic_status_label_,
+                   QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;background:transparent;")
+                       .arg(ui::colors::WARNING()));
     apply_title_button_styles(config_btn_, refresh_btn_, close_btn_, accent_color_);
 }
 
@@ -219,9 +340,11 @@ void BaseWidget::set_loading(bool loading) {
     if (!loading_overlay_)
         return;
     error_shown_ = false;
+    topic_error_shown_ = false;
     if (loading) {
         loading_overlay_->start_indeterminate();
         last_progress_loaded_ = 0;
+        last_progress_expected_ = 0;
         arm_watchdog();
     } else {
         loading_overlay_->finish();
@@ -233,15 +356,34 @@ void BaseWidget::set_loading_progress(int loaded, int expected) {
     if (!loading_overlay_)
         return;
     const bool active = (expected > 0) && (loaded < expected);
+
+    // Something was delivered and the overlay is already down (the watchdog
+    // dismissed it, or the subclass called set_loading(false)): a partial
+    // count must not raise it again over the delivered content. This was the
+    // "table hidden two thirds of the time" loop — every delivery re-armed a
+    // near-opaque overlay for one missing symbol until the watchdog fired.
+    if (active && loaded > 0 && !loading_overlay_->is_active()) {
+        last_progress_loaded_ = loaded;
+        last_progress_expected_ = expected;
+        return;
+    }
+
+    const bool progressed = loaded != last_progress_loaded_ || expected != last_progress_expected_;
     error_shown_ = false;
+    topic_error_shown_ = false;
     loading_label_->setVisible(active);
     loading_label_->setText(active ? tr("LOADING...") : QString());
     loading_overlay_->set_progress(loaded, expected);
     last_progress_loaded_ = loaded;
-    if (active)
-        arm_watchdog();
-    else
+    last_progress_expected_ = expected;
+    // The watchdog measures time without progress: a repeat of the same count
+    // (re-delivery of an already-counted item) must not restart it.
+    if (active) {
+        if (progressed || !loading_watchdog_ || !loading_watchdog_->isActive())
+            arm_watchdog();
+    } else {
         disarm_watchdog();
+    }
 }
 
 void BaseWidget::set_error(const QString& error) {
@@ -257,8 +399,248 @@ void BaseWidget::set_error(const QString& error) {
     }
     disarm_watchdog();
     error_shown_ = true;
+    topic_error_shown_ = false; // show_topic_failure() sets it back after this call
     if (loading_overlay_)
         loading_overlay_->set_error(error);
+}
+
+// ── Producer-error tracking ──────────────────────────────────────────────────
+
+void BaseWidget::track_topics(const QStringList& topics, bool drive_loading_overlay) {
+    auto& hub = datahub::DataHub::instance();
+
+    QStringList next;
+    next.reserve(topics.size());
+    QSet<QString> next_set;
+    for (const QString& t : topics) {
+        if (!t.isEmpty() && !next_set.contains(t)) {
+            next.append(t);
+            next_set.insert(t);
+        }
+    }
+
+    // Exactly one error slot per topic, however often this runs: drop ours for
+    // every topic tracked so far and every topic about to be tracked first
+    // (unsubscribe_errors() is a no-op for a missing entry). A subclass's own
+    // DataHub::unsubscribe(this) in between has already removed them — fine.
+    for (const QString& t : std::as_const(tracked_topics_))
+        hub.unsubscribe_errors(this, t);
+    for (const QString& t : std::as_const(next))
+        if (!tracked_set_.contains(t))
+            hub.unsubscribe_errors(this, t);
+
+    // Topics still listed keep their state (an error persists until a value
+    // arrives, also across hide/show); the rest are forgotten.
+    for (auto it = topic_errors_.begin(); it != topic_errors_.end();)
+        it = next_set.contains(it.key()) ? std::next(it) : topic_errors_.erase(it);
+    for (auto it = valued_topics_.begin(); it != valued_topics_.end();)
+        it = next_set.contains(*it) ? std::next(it) : valued_topics_.erase(it);
+
+    tracked_topics_ = next;
+    tracked_set_ = next_set;
+    topic_drive_loading_ = drive_loading_overlay;
+
+    // The hub may hand a late subscriber the topic's current error straight
+    // from subscribe_errors(): record those, evaluate once at the end.
+    topic_tracking_quiet_ = true;
+    for (const QString& t : std::as_const(next))
+        hub.subscribe_errors(this, t, [this, t](const QString& error) { on_tracked_topic_error(t, error); });
+    topic_tracking_quiet_ = false;
+    refresh_topic_state();
+}
+
+void BaseWidget::untrack_topics() {
+    auto& hub = datahub::DataHub::instance();
+    for (const QString& t : std::as_const(tracked_topics_))
+        hub.unsubscribe_errors(this, t);
+    tracked_topics_.clear();
+    tracked_set_.clear();
+    topic_errors_.clear();
+    valued_topics_.clear();
+    topic_failure_resolved_ = topic_failure_expected_ = -1;
+    topic_retry_pending_ = false;
+    update_topic_status_label();
+    // A failure about topics nobody tracks any more must not stay up; the
+    // subclass re-arms its own loading state for whatever comes next.
+    if (topic_error_shown_)
+        set_loading(true);
+}
+
+void BaseWidget::note_topic_value(const QString& topic) {
+    const bool had_error = topic_errors_.remove(topic) > 0;
+    const bool first_value = !valued_topics_.contains(topic);
+    valued_topics_.insert(topic); // pruned to the tracked set by the next track_topics()
+    if (topic_tracking_quiet_)
+        return;
+    topic_retry_pending_ = false;
+    if (had_error || first_value || topic_error_shown_)
+        refresh_topic_state();
+}
+
+void BaseWidget::note_topic_error(const QString& topic, const QString& error) {
+    on_tracked_topic_error(topic, error);
+}
+
+void BaseWidget::on_tracked_topic_error(const QString& topic, const QString& error) {
+    if (!tracked_set_.contains(topic))
+        return;
+    QString reason = base_widget_clip_reason(error);
+    if (reason.isEmpty())
+        reason = tr("The data source reported an error.");
+    const bool changed = topic_errors_.value(topic) != reason;
+    topic_errors_.insert(topic, reason);
+    if (changed)
+        on_topic_errors_changed();
+    // An error handed over while (re)subscribing is the hub's last known one,
+    // not the outcome of a retry; anything after that is.
+    if (!topic_tracking_quiet_) {
+        topic_retry_pending_ = false;
+        refresh_topic_state();
+    }
+}
+
+int BaseWidget::failed_topic_count() const {
+    int n = 0;
+    for (auto it = topic_errors_.constBegin(); it != topic_errors_.constEnd(); ++it)
+        if (tracked_set_.contains(it.key()))
+            ++n;
+    return n;
+}
+
+QString BaseWidget::topic_error_tooltip(const QString& topic) const {
+    const QString err = topic_errors_.value(topic);
+    if (err.isEmpty())
+        return {};
+    return valued_topics_.contains(topic)
+               ? tr("Last refresh failed \xe2\x80\x94 showing the last data received.\n%1").arg(err)
+               : tr("No data: %1").arg(err);
+}
+
+QString BaseWidget::topic_error_lines(int max_groups) const {
+    QStringList reasons; // first-seen order, following the declared topic order
+    QHash<QString, QStringList> labels_by_reason;
+    for (const QString& t : tracked_topics_) {
+        const QString e = topic_errors_.value(t);
+        if (e.isEmpty())
+            continue;
+        if (!labels_by_reason.contains(e))
+            reasons.append(e);
+        labels_by_reason[e].append(base_widget_topic_label(t));
+    }
+    if (reasons.isEmpty())
+        return {};
+    // One tile-wide reason (single topic, or everything failed the same way —
+    // "Python is not set up yet", offline, rate limited): say it once.
+    const int failed = failed_topic_count();
+    if (reasons.size() == 1 && (tracked_topics_.size() == 1 || failed == tracked_topics_.size()))
+        return reasons.first();
+
+    QStringList lines;
+    const int shown = std::min(max_groups, static_cast<int>(reasons.size()));
+    for (int i = 0; i < shown; ++i) {
+        const QStringList& labels = labels_by_reason.value(reasons[i]);
+        QString who = labels.mid(0, 4).join(QStringLiteral(", "));
+        if (labels.size() > 4)
+            who += tr(" +%1").arg(labels.size() - 4);
+        lines.append(who + QStringLiteral(": ") + reasons[i]);
+    }
+    if (reasons.size() > shown)
+        lines.append(tr("\xe2\x80\xa6" "and %1 more").arg(reasons.size() - shown));
+    return lines.join(QLatin1Char('\n'));
+}
+
+void BaseWidget::show_topic_failure() {
+    const int expected = static_cast<int>(tracked_topics_.size());
+    const int failed = failed_topic_count();
+    if (failed == 0 || topic_retry_pending_)
+        return; // retrying: the spinner stays until a new outcome or the watchdog
+    QString msg;
+    if (failed < expected)
+        msg = tr("No data yet \xe2\x80\x94 %1 of %2 failed:").arg(failed).arg(expected) + QLatin1Char('\n');
+    msg += topic_error_lines(3);
+    msg += QStringLiteral("\n\n") + tr("Click refresh to retry.");
+    set_error(msg);
+    topic_error_shown_ = true;
+    topic_failure_resolved_ = static_cast<int>(valued_topics_.size()) + failed;
+    topic_failure_expected_ = expected;
+}
+
+void BaseWidget::update_topic_loading() {
+    const int expected = static_cast<int>(tracked_topics_.size());
+    if (expected == 0) {
+        // Nothing tracked (an empty symbol list, e.g. an empty saved watchlist):
+        // nothing will ever arrive, so nothing may keep spinning — it used to sit
+        // there for 20 s and end in "No data yet", with a refresh that did nothing.
+        // The tile says why it is empty (its own empty state).
+        if (topic_error_shown_ || loading_overlay_->is_active() || !loading_label_->isHidden())
+            set_loading(false);
+        return;
+    }
+    if (has_topic_data()) {
+        // Never cover delivered data: rows that are still pending show their
+        // own placeholder, failed ones their reason, the title its marker.
+        if (topic_error_shown_ || loading_overlay_->is_active() || !loading_label_->isHidden())
+            set_loading(false);
+        return;
+    }
+    const int failed = failed_topic_count(); // no data, so resolved == failed
+    if (failed >= expected) {
+        show_topic_failure();
+        return;
+    }
+    if (topic_error_shown_ && failed == topic_failure_resolved_ && expected == topic_failure_expected_) {
+        show_topic_failure(); // same picture (watchdog put it up): refresh the text, don't re-spin
+        return;
+    }
+    // Nothing to show and nothing covering the tile: raise the spinner first
+    // (set_loading_progress() deliberately never re-raises for a partial count).
+    if (!loading_overlay_->is_active())
+        set_loading(true);
+    if (topic_error_shown_ || failed != last_progress_loaded_ || expected != last_progress_expected_)
+        set_loading_progress(failed, expected);
+}
+
+void BaseWidget::refresh_topic_state() {
+    if (topic_tracking_quiet_)
+        return;
+    if (topic_drive_loading_) {
+        update_topic_loading();
+    } else if (!tracked_topics_.isEmpty()) {
+        const int expected = static_cast<int>(tracked_topics_.size());
+        const int failed = failed_topic_count();
+        if (!has_topic_data()) {
+            if (failed >= expected)
+                show_topic_failure();
+            else if (topic_error_shown_ && !(failed == topic_failure_resolved_ && expected == topic_failure_expected_))
+                set_loading(true); // the tracked set changed under the failure: back to waiting
+        } else if (topic_error_shown_) {
+            set_loading(false);
+        }
+    }
+    update_topic_status_label();
+}
+
+void BaseWidget::update_topic_status_label() {
+    if (!topic_status_label_)
+        return;
+    const int failed = failed_topic_count();
+    if (failed == 0 || !has_topic_data()) {
+        topic_status_label_->setVisible(false);
+        topic_status_label_->setToolTip(QString());
+        return;
+    }
+    int stale = 0; // failed but still showing an older value
+    for (auto it = topic_errors_.constBegin(); it != topic_errors_.constEnd(); ++it)
+        if (tracked_set_.contains(it.key()) && valued_topics_.contains(it.key()))
+            ++stale;
+    const int expected = static_cast<int>(tracked_topics_.size());
+    topic_status_label_->setText(stale == failed ? tr("STALE") : tr("%1/%2 FAILED").arg(failed).arg(expected));
+    const QString header = stale == failed
+                               ? tr("Last refresh failed \xe2\x80\x94 showing the last data received.")
+                               : tr("Some items could not be loaded.");
+    topic_status_label_->setToolTip(header + QLatin1Char('\n') + topic_error_lines(8) + QLatin1Char('\n') +
+                                    tr("Click refresh to retry."));
+    topic_status_label_->setVisible(true);
 }
 
 bool BaseWidget::is_waiting_for_first_data() const {
@@ -267,6 +649,7 @@ bool BaseWidget::is_waiting_for_first_data() const {
 
 void BaseWidget::set_title(const QString& title) {
     title_label_->setText(title);
+    title_label_->setToolTip(title); // the header cuts a long title in a narrow tile
     // Screen readers announce the tile by its title; without this the whole
     // dashboard reads as a wall of unnamed frames.
     setAccessibleName(title);
@@ -276,6 +659,160 @@ void BaseWidget::set_title(const QString& title) {
 void BaseWidget::set_configurable(bool configurable) {
     if (config_btn_)
         config_btn_->setVisible(configurable);
+}
+
+void BaseWidget::set_refreshable(bool refreshable) {
+    if (refresh_btn_)
+        refresh_btn_->setVisible(refreshable);
+}
+
+void BaseWidget::set_agent_risk(const char* kind) {
+    agent_risk_ = kind ? QString::fromLatin1(kind) : QString();
+    // Markers are per control: the tile's CONTENT carries the kind AND inherit=true, so every
+    // unmarked control inside it (row links, filters, LOAD, Enter in its fields) is covered too.
+    // Not the whole tile: the title bar's close / configure buttons spend nothing; its refresh
+    // button is marked on its own.
+    ui::EmptyState::mark_agent_risk(content_, agent_risk_);
+    content_->setProperty(fincept::core::agent::kAgentRiskInheritProperty,
+                          agent_risk_.isEmpty() ? QVariant() : QVariant(true));
+    ui::EmptyState::mark_agent_risk(refresh_btn_, agent_risk_);
+    // The empty state is built on first use: show_empty_state() hands it the kind then.
+    if (empty_state_)
+        empty_state_->set_primary_agent_risk_default(agent_risk_);
+}
+
+void BaseWidget::open_config() {
+    on_config_clicked();
+}
+
+// ── Designed empty state ─────────────────────────────────────────────────────
+
+bool BaseWidget::is_empty_state_shown() const {
+    return empty_cover_ && !empty_cover_->isHidden();
+}
+
+void BaseWidget::show_empty_state(const ui::EmptyState::Spec& spec, std::function<void()> on_primary,
+                                  std::function<void()> on_secondary) {
+    if (!empty_cover_) {
+        empty_cover_ = new BaseWidgetEmptyCover(content_);
+        empty_state_ = new ui::EmptyState(empty_cover_);
+        empty_state_->set_compact(true);
+        // Over the tile's live content: paints the tile surface behind itself.
+        empty_state_->set_opaque(true, ui::EmptyState::Backdrop::Surface);
+        // A billed tile's LOAD spends credits (set_agent_risk); kept across apply().
+        if (!agent_risk_.isEmpty())
+            empty_state_->set_primary_agent_risk_default(agent_risk_);
+        empty_cover_->layout()->addWidget(empty_state_);
+        // Copies: a handler may itself call show_empty_state() / hide_empty_state(),
+        // which replaces the stored function while it runs.
+        connect(empty_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+            const auto fn = empty_primary_;
+            if (fn)
+                fn();
+        });
+        connect(empty_state_, &ui::EmptyState::secondary_clicked, this, [this]() {
+            const auto fn = empty_secondary_;
+            if (fn)
+                fn();
+        });
+    }
+    empty_primary_ = std::move(on_primary);
+    empty_secondary_ = std::move(on_secondary);
+    empty_state_->apply(spec);
+    // Nothing is loading while the tile explains why it is empty: no spinner,
+    // no watchdog turning it into "No data yet" 20 s later.
+    set_loading(false);
+    empty_cover_->setGeometry(content_->rect());
+    empty_cover_->raise();
+    empty_cover_->show();
+}
+
+void BaseWidget::hide_empty_state() {
+    broker_wait_ = nullptr;
+    if (!empty_cover_ || empty_cover_->isHidden())
+        return;
+    empty_cover_->hide();
+}
+
+void BaseWidget::show_no_broker_account(const QString& what_it_shows, std::function<void()> on_account_available) {
+    ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+        tr("No broker account connected"),
+        what_it_shows + QLatin1Char(' ') +
+            tr("Connect an account in Equity Trading — this tile fills in as soon as one is active."),
+        tr("OPEN EQUITY TRADING"));
+    spec.glyph = QStringLiteral("⇄"); // ⇄
+    spec.glyph_tone = ui::EmptyState::Tone::Info;
+    show_empty_state(spec, []() {
+        EventBus::instance().publish("nav.switch_screen",
+                                     QVariantMap{{"screen_id", QStringLiteral("equity_trading")}, {"exclusive", true}});
+    });
+    broker_wait_ = std::move(on_account_available);
+    if (!broker_watch_connected_) {
+        broker_watch_connected_ = true;
+        auto& am = trading::AccountManager::instance();
+        connect(&am, &trading::AccountManager::account_added, this, [this](const QString&) { on_broker_accounts_changed(); });
+        connect(&am, &trading::AccountManager::account_updated, this,
+                [this](const QString&) { on_broker_accounts_changed(); });
+    }
+}
+
+void BaseWidget::on_broker_accounts_changed() {
+    if (!broker_wait_ || !is_empty_state_shown())
+        return;
+    if (trading::AccountManager::instance().active_accounts().isEmpty())
+        return;
+    // Once: the tile re-resolves its account (and hides this state itself).
+    const auto fn = std::move(broker_wait_);
+    broker_wait_ = nullptr;
+    fn();
+}
+
+void BaseWidget::confirm_async(QMessageBox::Icon icon, const QString& title, const QString& text,
+                               std::function<void()> on_yes) {
+    auto* box = new QMessageBox(icon, title, text, QMessageBox::Yes | QMessageBox::No, this);
+    box->setDefaultButton(QMessageBox::No);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    // buttonClicked fires only for a real click / Escape (the No button) — never
+    // while the box is being destroyed with this tile.
+    connect(box, &QMessageBox::buttonClicked, this, [box, on_yes = std::move(on_yes)](QAbstractButton* button) {
+        if (box->standardButton(button) == QMessageBox::Yes && on_yes)
+            on_yes();
+    });
+    box->open();
+}
+
+void BaseWidget::notify_async(QMessageBox::Icon icon, const QString& title, const QString& text) {
+    auto* box = new QMessageBox(icon, title, text, QMessageBox::Ok, this);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+QString BaseWidget::broker_account_hint(const QString& account_id, const QString& topic) {
+    if (account_id.isEmpty())
+        return {};
+    const auto acct = trading::AccountManager::instance().get_account(account_id);
+    const QString name = acct.display_name.isEmpty() ? account_id : acct.display_name;
+    // Paper accounts trade on the local engine whatever the broker session says.
+    if (acct.trading_mode == QLatin1String("paper"))
+        return name;
+    const auto state = trading::AccountManager::instance().connection_state(account_id);
+    QString tag;
+    QString reason;
+    if (state == trading::ConnectionState::TokenExpired) {
+        tag = tr("TOKEN EXPIRED \xe2\x80\x94 reconnect in Equity Trading");
+        reason = tr("The broker session has expired. Reconnect the account in Equity Trading.");
+    } else if (state == trading::ConnectionState::Error) {
+        tag = tr("CONNECTION ERROR \xe2\x80\x94 reconnect in Equity Trading");
+        reason = acct.error_message.trimmed().isEmpty()
+                     ? tr("The broker connection failed. Reconnect the account in Equity Trading.")
+                     : tr("The broker connection failed: %1. Reconnect the account in Equity Trading.")
+                           .arg(acct.error_message.trimmed());
+    }
+    if (tag.isEmpty())
+        return name;
+    if (!topic.isEmpty())
+        note_topic_error(topic, reason);
+    return name + QStringLiteral(" \xc2\xb7 ") + tag;
 }
 
 void BaseWidget::schedule_render(std::function<void()> fn) {
@@ -333,7 +870,10 @@ void BaseWidget::hideEvent(QHideEvent* event) {
 }
 
 void BaseWidget::set_css_cached(QWidget* w, const QString& css) {
-    if (!w || w->property(kBaseWidgetCssProp).toString() == css)
+    // Against the widget's live sheet, not only the last one applied here: after an
+    // appearance change the theme manager has usually rewritten it to exactly this
+    // text already, and a sheet set elsewhere in between is never mistaken for it.
+    if (!w || w->styleSheet() == css)
         return;
     w->setProperty(kBaseWidgetCssProp, css);
     w->setStyleSheet(css);
@@ -344,8 +884,17 @@ void BaseWidget::reset_css_cache(QWidget* w) {
         w->setProperty(kBaseWidgetCssProp, QVariant());
 }
 
+int BaseWidget::text_row_height(int design_px, int font_offset) {
+    // Line height plus the 2px item padding above and below and the row's
+    // bottom border.
+    return std::max(design_px, QFontMetrics(ui::fonts::font(font_offset)).height() + 6);
+}
+
 void BaseWidget::arm_watchdog() {
-    if (!loading_watchdog_)
+    // Hidden tiles don't run the budget (constructor-time set_loading(true),
+    // a config change while off-screen): showEvent() arms it once the spinner
+    // is actually on screen, so it can never fire for a tile nobody sees.
+    if (!loading_watchdog_ || !isVisible())
         return;
     loading_watchdog_->start();
 }
@@ -365,9 +914,16 @@ void BaseWidget::on_watchdog_fired() {
     }
     // If some data trickled in before the timeout, just hide the spinner so
     // the partial content becomes visible. Otherwise surface a soft error so
-    // the user knows the widget hasn't simply hung.
-    if (last_progress_loaded_ > 0) {
+    // the user knows the widget hasn't simply hung — the producer's own reason
+    // when a tracked topic reported one, the generic text only when nothing did.
+    // (For tracked tiles a progress count includes failed topics, so "has
+    // data" comes from the topics that delivered a value.)
+    const bool has_content = tracked_topics_.isEmpty() ? last_progress_loaded_ > 0 : has_topic_data();
+    topic_retry_pending_ = false; // a retry that produced nothing in 20 s: show what we know
+    if (has_content) {
         loading_overlay_->finish();
+    } else if (failed_topic_count() > 0) {
+        show_topic_failure();
     } else {
         loading_overlay_->set_error(tr("No data yet — click refresh to retry"));
     }
@@ -394,6 +950,7 @@ void BaseWidget::retranslateUi() {
     }
     if (loading_label_ && loading_label_->isVisible())
         loading_label_->setText(tr("LOADING..."));
+    update_topic_status_label();
 }
 
 void BaseWidget::open_symbol(const QString& symbol, const QString& screen_id, const QString& asset_class,
@@ -456,7 +1013,7 @@ void BaseWidget::show_symbol_menu(const QString& symbol_in, const QPoint& global
             QJsonObject config;
             config["symbols"] = QJsonArray{symbol};
             services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
-            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", QStringLiteral("backtesting")}});
+            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", QStringLiteral("backtesting")}, {"exclusive", true}});
         });
     }
 
@@ -658,7 +1215,7 @@ bool BaseWidget::eventFilter(QObject* obj, QEvent* event) {
         }
         const QVariant screen = obj->property(kBaseWidgetScreenProp);
         if (screen.isValid() && !screen.toString().isEmpty()) {
-            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", screen.toString()}});
+            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", screen.toString()}, {"exclusive", true}});
             return true;
         }
     }

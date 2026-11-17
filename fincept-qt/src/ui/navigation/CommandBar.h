@@ -1,125 +1,89 @@
 #pragma once
+// CommandBar — the header's universal search box. No syntax: typing goes straight to
+// results (symbols, screens and their tabs, actions, settings, the user's saved items,
+// data sources, help), grouped in a panel under the box; Enter does the obvious thing,
+// Tab / → offers the row's other actions, Ctrl+Enter opens beside the current panel,
+// Esc closes and gives focus back. Ctrl+K (the user's Search key) focuses it from
+// anywhere; "/" too when focus is not in a text field.
+//
+// Pieces (src/ui/navigation/search/): SearchField (the box), SearchPopup + SearchModel +
+// SearchDelegate (the panel), SearchController (query -> rows -> run), SearchActions /
+// SearchInstruments (what a row does), SearchSources (seed, ActionRegistry bridge, saved
+// items, data sources, usage). Rows any screen can add: core/command/CommandRegistry.h.
+//
+// Kept from the old bar: navigate_to / dock_command signals (ToolBar -> WindowFrame), every
+// old alias ("bt", "wl", "mkts" …), "<screen> add|replace|remove <screen>", the /stock …
+// /economic searches (now optional), the symbol hand-off (nav.open_symbol), recent picks.
+
+#include <QPointer>
+#include <QWidget>
+
+// Kept from the old header: files that include ToolBar.h (WindowFrame*) may rely on these.
+#include "services/markets/MarketSearchService.h"
+
 #include <QEvent>
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QTimer>
-#include <QWidget>
+
+class QShortcut;
 
 namespace fincept::ui {
 
-struct ScreenCommand {
-    QString id;
-    QString name;
-    QString description;
-    QStringList aliases;
-    QString shortcut;
-    QStringList keywords;
-};
+namespace search {
+class SearchController;
+class SearchField;
+class SearchModel;
+class SearchPopup;
+struct SearchRow;
+} // namespace search
 
-/// Asset type for slash-command search (maps to /market/search `type` param).
-struct AssetType {
-    QString slash;       // e.g. "/stock"
-    QString api_type;    // e.g. "stock"  — sent as ?type= to API
-    QString label;       // e.g. "Stock"
-    QString description; // e.g. "Search stocks by symbol or name"
-};
-
-/// Command bar with live search and dropdown navigation.
-/// Type a command alias, screen name, or keyword — press Enter or click to navigate.
-/// Supports /type queries (e.g. "/stock AAPL") to search assets via API.
 class CommandBar : public QWidget {
     Q_OBJECT
   public:
     explicit CommandBar(QWidget* parent = nullptr);
+    ~CommandBar() override;
+
+    /// Focus the box and open the results (Ctrl+K, "/", View > Search). Remembers where focus was.
+    void activate();
+    /// activate() on the visible search box of `window`; false when it has none showing (focus mode).
+    static bool activate_in(QWidget* window);
+    /// The Component Browser dialog (every screen by category) of this window.
+    void open_component_browser();
 
   signals:
     void navigate_to(const QString& screen_id);
-
-    // Emitted when the user types a compound command:
-    //   "markets add settings"   → action="add",     primary="markets", secondary="settings"
-    //   "markets replace news"   → action="replace",  primary="markets", secondary="news"
-    //   "markets remove"         → action="remove",   primary="markets", secondary=""
+    /// "markets add news" → ("add", "markets", "news"); "replace"; "remove" (secondary empty).
     void dock_command(const QString& action, const QString& primary, const QString& secondary);
+    /// A shell menu action (ToolBar::action_triggered ids: new_window, layout_save_as, check_updates …).
+    void toolbar_action(const QString& action);
 
   protected:
-    bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;
-
-  private slots:
-    void on_text_changed(const QString& text);
-    void on_return_pressed();
-    void on_item_clicked(QListWidgetItem* item);
-    void on_item_entered(QListWidgetItem* item);
+    void showEvent(QShowEvent* event) override;
 
   private:
-    QLineEdit* input_ = nullptr;
-    QFrame* dropdown_ = nullptr;
-    QListWidget* list_ = nullptr;
+    void on_text_changed(const QString& text);
+    void on_rows(const QList<search::SearchRow>& rows, const QString& preselect);
+    void move_selection(int step);
+    void open_menu_for_current(const QPoint& global_pos = QPoint());
+    void open_menu(int row, const QPoint& global_pos);
+    void close_popup(bool restore_focus);
+    void open_popup();
+    QString current_key() const;
+    void refit();
 
-    // ── Screen command search ──────────────────────────────────────────────────
-    QVector<ScreenCommand> commands_;
-    void build_commands();
-    QVector<ScreenCommand> search(const QString& query) const;
-
-    // ── Slash-command asset search ─────────────────────────────────────────────
-    enum class Mode {
-        Screen,       // normal screen search
-        SlashPicker,  // user typed "/" — picking asset type
-        AssetSearch,  // user picked /type and is typing a symbol
-        DockCommand,  // user typed a valid screen + space — picking add/replace/remove
-        DockSecondary // user picked add/replace — picking the second screen
-    };
-    Mode mode_ = Mode::Screen;
-
-    QVector<AssetType> asset_types_;
-    QString active_asset_type_; // e.g. "stock" — set after user picks /stock
-    QTimer* search_debounce_ = nullptr;
-    QString pending_query_;
-
-    void build_asset_types();
-    void show_slash_suggestions(const QString& partial);
-    void activate_asset_mode(const QString& api_type);
-    void schedule_asset_search(const QString& query);
-    void fire_asset_search(const QString& query);
-    void on_asset_results(const QJsonArray& results);
-    void select_asset(const QString& symbol, const QString& type);
-
-    // ── Compound dock command parser ──────────────────────────────────────────
-    bool try_parse_dock_command(const QString& text);
-    QString resolve_screen_id(const QString& token) const;
-    void show_dock_verb_suggestions(const QString& primary_id);
-    void show_dock_secondary_suggestions(const QString& verb, const QString& partial);
-
-    QString dock_primary_id_; // screen id locked in after user types "<screen> "
-    QString dock_verb_;       // "add" or "replace" — locked in after user picks verb
-
-    // ── Key actions ───────────────────────────────────────────────────────────
-    void setup_key_actions();
-
-    // ── Theme ─────────────────────────────────────────────────────────────────
-    void refresh_theme();
-
-    // ── i18n ──────────────────────────────────────────────────────────────────
-    // Re-apply tr() strings to persistent widgets (the input placeholder). The
-    // dropdown rebuilds on every keystroke, so its rows re-translate naturally.
-    void retranslateUi();
-
-    // ── Draft persistence (cache.db screen_state[key="command_bar"]) ─────────
-    // Persists the in-progress command text and parser mode so a restart
-    // restores exactly what the user had typed before closing.
-    static constexpr int kDraftStateVersion = 1;
-    QTimer* draft_save_timer_ = nullptr;
-    void restore_draft();
-    void save_draft_now();
-    void schedule_draft_save();
-
-    // ── Dropdown helpers ───────────────────────────────────────────────────────
-    void show_dropdown();
-    void hide_dropdown();
-    void update_position();
-    void execute_index(int index);
+    search::SearchField* field_ = nullptr;
+    search::SearchModel* model_ = nullptr;
+    search::SearchPopup* popup_ = nullptr;
+    search::SearchController* controller_ = nullptr;
+    QPointer<QWidget> previous_focus_;
+    QShortcut* slash_ = nullptr;
+    bool user_moved_ = false;
+    bool menu_open_ = false;
+    bool closing_ = false;
 };
 
 } // namespace fincept::ui

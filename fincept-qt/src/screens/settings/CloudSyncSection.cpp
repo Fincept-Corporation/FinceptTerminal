@@ -79,6 +79,8 @@ QString cloud_status_text(CloudSyncEngine::Status s, int pending, const QString&
             return QCoreApplication::translate("CloudSyncSection", "syncing…");
         case CloudSyncEngine::Status::Paused:
             return QCoreApplication::translate("CloudSyncSection", "paused — out of credits");
+        case CloudSyncEngine::Status::Unavailable:
+            return QCoreApplication::translate("CloudSyncSection", "paused — cloud service unavailable");
         case CloudSyncEngine::Status::Error:
             return QCoreApplication::translate("CloudSyncSection", "error: %1").arg(error);
     }
@@ -88,6 +90,12 @@ QString cloud_status_text(CloudSyncEngine::Status s, int pending, const QString&
 
 CloudSyncSection::CloudSyncSection(QWidget* parent) : QWidget(parent) {
     build_ui();
+    // The banner's link colour lives in its rich text, which the theme's
+    // stylesheet pass does not reach.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        if (credits_banner_)
+            credits_banner_->setText(cloud_credits_banner_html());
+    });
 }
 
 void CloudSyncSection::showEvent(QShowEvent* e) {
@@ -135,6 +143,11 @@ void CloudSyncSection::build_ui() {
     sign_in_hint_->setVisible(false);
     vl->addWidget(sign_in_hint_);
 
+    availability_label_ = new QLabel;
+    availability_label_->setWordWrap(true);
+    availability_label_->setVisible(false);
+    vl->addWidget(availability_label_);
+
     vl->addWidget(make_sep());
 
     adv_title_ = new QLabel(tr("ADVANCED — DOMAINS"));
@@ -166,7 +179,8 @@ void CloudSyncSection::build_ui() {
     }
 
     refresh_btn_ = new QPushButton(tr("Refresh now"));
-    refresh_btn_->setFixedWidth(140);
+    refresh_btn_->setMinimumWidth(140);
+    refresh_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     refresh_btn_->setStyleSheet(btn_secondary_ss());
     vl->addWidget(refresh_btn_);
 
@@ -174,10 +188,24 @@ void CloudSyncSection::build_ui() {
 
     auto& engine = CloudSyncEngine::instance();
 
+    // Switching on is asynchronous: the engine first checks that the cloud
+    // service exists and only then enables (enable_finished). The box stays
+    // disabled meanwhile and reverts to off — with the reason — when refused.
     connect(master_toggle_, &QCheckBox::toggled, this, [this](bool on) {
+        show_availability(on ? tr("Checking the Fincept Cloud service…") : QString(), false);
         CloudSyncEngine::instance().set_master_enabled(on);
         update_enabled_state();
     });
+    connect(&engine, &CloudSyncEngine::enable_finished, this, [this](bool enabled, QString message) {
+        if (master_toggle_) {
+            const QSignalBlocker b(master_toggle_);
+            master_toggle_->setChecked(CloudSyncEngine::instance().master_enabled());
+        }
+        show_availability(enabled ? QString() : message, true);
+        update_enabled_state();
+    });
+    connect(&engine, &CloudSyncEngine::service_state_changed, this,
+            [this](bool paused, QString message) { show_availability(paused ? message : QString(), true); });
     connect(refresh_btn_, &QPushButton::clicked, this, []() { CloudSyncEngine::instance().refresh_all(); });
 
     connect(&engine, &CloudSyncEngine::status_changed, this,
@@ -226,11 +254,21 @@ void CloudSyncSection::update_credits_banner() {
 }
 
 void CloudSyncSection::update_enabled_state() {
-    const bool can = CloudSyncEngine::instance().can_enable();
+    auto& engine = CloudSyncEngine::instance();
+    const bool can = engine.can_enable();
     if (master_toggle_)
-        master_toggle_->setEnabled(can);
+        master_toggle_->setEnabled(can && !engine.enable_in_progress());
     if (sign_in_hint_)
         sign_in_hint_->setVisible(!can);
+}
+
+void CloudSyncSection::show_availability(const QString& text, bool warn) {
+    if (!availability_label_)
+        return;
+    availability_label_->setText(text);
+    availability_label_->setStyleSheet(QString("color:%1;background:transparent;")
+                                           .arg(warn ? ui::colors::NEGATIVE() : ui::colors::TEXT_DIM()));
+    availability_label_->setVisible(!text.isEmpty());
 }
 
 void CloudSyncSection::reload() {
@@ -247,6 +285,11 @@ void CloudSyncSection::reload() {
     }
     for (auto it = domain_status_.constBegin(); it != domain_status_.constEnd(); ++it)
         it.value()->setText(cloud_status_text(engine.status(it.key()), engine.pending_count(it.key()), {}));
+    // A pause is live state; a refused enable keeps its message until the next try.
+    if (engine.service_paused())
+        show_availability(engine.service_message(), true);
+    else if (engine.enable_in_progress())
+        show_availability(tr("Checking the Fincept Cloud service…"), false);
     update_enabled_state();
     update_credits_banner();
 }

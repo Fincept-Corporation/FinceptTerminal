@@ -458,8 +458,8 @@ def _build_financial_standard_output(analysis: dict, sector: str) -> dict:
 # The Qt MAAnalyticsService calls `financial_services.py calculate <flat-params-json>` (argv length 3) with the
 # sector inside the JSON and ratios as FRACTIONS (the panel divides percent inputs by 100). The native form is
 # `financial <sector> <data_json>`, written for a front end that sent percentages, so a service-style call is
-# translated here (including defaults for sector-specific inputs the panel has no field for) and then falls
-# through to the native dispatch. Any other argv shape is untouched.
+# translated here (a sector's own inputs are required, never assumed) and then falls through to the native
+# dispatch. Any other argv shape is untouched.
 _SERVICE_COMMANDS = ("calculate",)
 # fraction -> percent for these keys
 _SVC_PERCENT_KEYS = ("roe", "nim", "net_interest_margin", "efficiency_ratio", "cet1_ratio", "tier1_capital_ratio",
@@ -493,22 +493,23 @@ def _service_argv(argv):
             data[key] = v * 100.0
     if "nim" in data and "net_interest_margin" not in data:
         data["net_interest_margin"] = data.pop("nim")
-    assets = _svc_num(data, "total_assets", default=0.0)
     low = sector.lower()
+    # A sector's own inputs are required: an assumption standing in for a missing one would come
+    # back as if it were a result (a "combined ratio" that was the efficiency-ratio field).
     if "insur" in low:
-        combined = _svc_num(data, "combined_ratio", "efficiency_ratio", default=95.0)
-        data.setdefault("combined_ratio", combined)
-        data.setdefault("loss_ratio", combined * 0.65)
-        data.setdefault("expense_ratio", combined * 0.35)
-        data.setdefault("investment_yield", 3.5)
-        data.setdefault("gross_written_premium", assets * 0.10)
-        data.setdefault("book_value", assets * 0.10)
+        required = ("gross_written_premium", "combined_ratio", "loss_ratio", "expense_ratio", "investment_yield",
+                    "roe", "book_value")
     elif "asset" in low or "wealth" in low:
-        data.setdefault("aum", assets)
-        data.setdefault("net_flows", 0.0)
-        data.setdefault("advisory_fee_rate", 0.0045)
-        eff = _svc_num(data, "efficiency_ratio")
-        data.setdefault("operating_margin", (100.0 - eff) if eff is not None else 30.0)
+        required = ("aum", "net_flows", "operating_margin", "client_retention", "advisor_productivity")
+        if _svc_num(data, "fee_rate", "advisory_fee_rate") is None:
+            required = required + ("fee_rate",)
+    else:
+        required = ()
+    missing = [k for k in required if _svc_num(data, k) is None]
+    if missing:
+        import sys
+        print(json.dumps({"success": False, "error": f"{sector}: {', '.join(missing)} required"}))
+        sys.exit(1)
     return [argv[0], "financial", sector, json.dumps(data)]
 # ---- service ABI shim (MAAnalyticsService) END ----
 

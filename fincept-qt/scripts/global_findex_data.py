@@ -7,66 +7,71 @@ import sys
 import json
 import os
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('WORLDBANK_API_KEY', '')
 BASE_URL = "https://api.worldbank.org/v2/en/indicator"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# The World Bank API often takes 10-20 s per uncached query and sometimes stalls for minutes:
+# no read retries (they multiplied the timeout), a bounded timeout, and the indicators of one
+# category are fetched concurrently so a command finishes well inside the runner's limits.
+session = fc.http_session()
+TIMEOUT = (8, 30)
 
+# Global Findex series as published in World Bank API source 28 (Global Financial Inclusion).
+# The ".N" suffixes are breakdowns: .1 women, .2 men, .3 ages 15-24, .6 secondary education or
+# more, .7 poorest 40%, .9 rural.
+FINDEX_SOURCE = 28
 FINDEX_INDICATORS = {
     "account_ownership": {
-        "account_total": "FX.OWN.TOTL.ZS",
-        "account_female": "FX.OWN.TOTL.FE.ZS",
-        "account_male": "FX.OWN.TOTL.MA.ZS",
-        "account_young_adults": "FX.OWN.TOTL.YG.ZS",
-        "account_poorest40": "FX.OWN.TOTL.PL.ZS",
-        "account_rural": "FX.OWN.TOTL.RU.ZS",
-        "account_secondary_edu": "FX.OWN.TOTL.SO.ZS",
+        "account_total": "account.t.d",
+        "account_female": "account.t.d.1",
+        "account_male": "account.t.d.2",
+        "account_young_adults": "account.t.d.3",
+        "account_poorest40": "account.t.d.7",
+        "account_rural": "account.t.d.9",
+        "account_secondary_edu": "account.t.d.6",
     },
     "digital_payments": {
-        "digital_payments_total": "FX.PAY.TOTL.ZS",
-        "digital_payments_female": "FX.PAY.TOTL.FE.ZS",
-        "mobile_internet_payments": "FX.PAY.MINX.ZS",
-        "received_digital_payment": "FX.REG.DIRI.ZS",
-        "govt_transfer_digital": "FX.PAY.GOVX.ZS",
+        "digital_payments_total": "g20.any",
+        "digital_payments_female": "g20.any.1",
+        "mobile_internet_payments": "fin26a",
+        "received_digital_payment": "g20.received",
+        "govt_transfer_digital": "fin37.39.acc",
     },
     "credit_access": {
-        "borrowed_formal": "FX.BRW.FRML.ZS",
-        "borrowed_informal": "FX.BRW.IFRM.ZS",
-        "credit_card": "FX.CRD.CTTL.ZS",
-        "borrowed_employer": "FX.BRW.EMPL.ZS",
-        "borrowed_family": "FX.BRW.FAMF.ZS",
-        "loan_outstanding": "FX.CRD.DSTK.ZS",
+        "borrowed_formal": "fin22a",
+        "borrowed_informal": "fin22c",
+        "credit_card": "fin10",
+        "borrowed_any": "borrow.any.t.d",
+        "borrowed_family": "fin22b",
+        "borrowed_for_business": "fin22e",
     },
     "savings": {
-        "saved_formal": "FX.SAV.FRML.ZS",
-        "saved_informal": "FX.SAV.IFRM.ZS",
-        "saved_pension": "FX.SAV.PENS.ZS",
-        "saved_money_any": "FX.SAV.TOTL.ZS",
-        "saved_for_emergencies": "FX.SAV.EMRG.ZS",
-        "saved_agricultural": "FX.SAV.AGRI.ZS",
+        "saved_formal": "fin17a.17a1.d",
+        "saved_informal": "fin17c",
+        "saved_pension": "fin17f",
+        "saved_money_any": "save.any.t.d",
+        "saved_mobile_money": "fin17b",
+        "emergency_funds_possible": "fin24aP",
     },
     "mobile_money": {
-        "mobile_account": "FX.MOB.TOTL.ZS",
-        "mobile_account_female": "FX.MOB.TOTL.FE.ZS",
-        "mobile_account_male": "FX.MOB.TOTL.MA.ZS",
-        "mobile_account_poorest40": "FX.MOB.TOTL.PL.ZS",
-        "mobile_account_rural": "FX.MOB.TOTL.RU.ZS",
-        "used_mobile_to_pay": "FX.MOB.PAYB.ZS",
+        "mobile_account": "mobileaccount.t.d",
+        "mobile_account_female": "mobileaccount.t.d.1",
+        "mobile_account_male": "mobileaccount.t.d.2",
+        "mobile_account_poorest40": "mobileaccount.t.d.7",
+        "mobile_account_rural": "mobileaccount.t.d.9",
+        "used_mobile_to_pay": "fin26a",
     },
     "financial_inclusion_index": {
-        "debit_card": "FX.CRD.DBIT.ZS",
-        "made_digital_payment_1y": "FX.PAY.MINX.ZS",
-        "paid_digitally_in_store": "FX.PAY.INST.ZS",
-        "no_account_reason_far": "FX.NEA.DIST.ZS",
-        "no_account_reason_cost": "FX.NEA.COST.ZS",
-        "no_account_reason_doc": "FX.NEA.PROC.ZS",
-        "no_account_reason_trust": "FX.NEA.TRST.ZS",
-        "unbanked_adults_pct": "FX.NEA.TOTL.ZS",
+        "debit_card": "fin2.t.d",
+        "made_digital_payment_1y": "g20.made",
+        "paid_digitally_in_store": "fin25e2",
+        "no_account_reason_far": "fin11a",
+        "no_account_reason_cost": "fin11b",
+        "no_account_reason_doc": "fin11c",
+        "no_account_reason_trust": "fin11d",
     },
 }
 
@@ -81,7 +86,7 @@ COUNTRY_CODES = {
     "TZA": "TZ", "ETH": "ET", "GHA": "GH", "MOZ": "MZ", "RWA": "RW",
 }
 
-FINDEX_YEARS = ["2011", "2014", "2017", "2021"]
+FINDEX_YEARS = ["2011", "2014", "2017", "2021", "2024"]
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
@@ -91,30 +96,31 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     params["format"] = "json"
     params["per_page"] = params.get("per_page", 100)
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error("World Bank API", e)}
+    except ValueError:
+        return {"error": "World Bank API returned a response that is not JSON"}
+    # Errors come back as HTTP 200 with [{"message": [{"id", "key", "value"}]}].
+    if isinstance(data, list) and data and isinstance(data[0], dict) and "message" in data[0]:
+        msg = (data[0].get("message") or [{}])[0]
+        return {"error": f"World Bank API: {msg.get('value') or msg.get('key') or 'request rejected'}"}
+    return data
 
 
 def _get_findex_indicator(country: str, indicator_id: str, year: str = "") -> Dict:
     country_code = COUNTRY_CODES.get(country.upper(), country)
     url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_id}"
-    params = {"format": "json", "per_page": 20}
+    params = {"format": "json", "per_page": 100, "source": FINDEX_SOURCE}
     if year:
         params["date"] = year
-    else:
-        params["date"] = "2011:2022"
     data = _make_request(url, params)
     if isinstance(data, list) and len(data) >= 2:
         observations = data[1] or []
         cleaned = [
-            {"year": obs.get("date", ""), "value": obs.get("value", None)}
+            {"year": fc.number(obs.get("date", "")), "value": obs.get("value", None)}
             for obs in observations
             if obs.get("value") is not None
         ]
@@ -127,18 +133,16 @@ def _get_findex_indicator(country: str, indicator_id: str, year: str = "") -> Di
             "data": sorted(cleaned, key=lambda x: x["year"]),
         }
     if isinstance(data, dict) and "error" in data:
-        return data
-    return {"error": "Unexpected response", "country": country, "indicator": indicator_id}
+        return {"error": f"{data['error']} (indicator {indicator_id})"}
+    return {"error": f"Unexpected World Bank API response for indicator {indicator_id}"}
 
 
 def _get_category_indicators(country: str, category: str, year: str = "") -> Dict:
     indicators = FINDEX_INDICATORS.get(category, {})
     if not indicators:
         return {"error": f"Unknown category: {category}", "available": list(FINDEX_INDICATORS.keys())}
-    result = {"country": country, "category": category, "indicators": {}}
-    for name, ind_id in indicators.items():
-        result["indicators"][name] = _get_findex_indicator(country, ind_id, year)
-    return result
+    fetched = fc.parallel_map(lambda ind_id: _get_findex_indicator(country, ind_id, year), indicators)
+    return {"country": country, "category": category, "indicators": fetched}
 
 
 def get_account_ownership(country: str, year: str = "") -> Dict:

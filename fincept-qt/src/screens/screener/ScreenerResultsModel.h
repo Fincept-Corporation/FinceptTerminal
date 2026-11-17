@@ -4,7 +4,7 @@
 // Base columns first (always present), then the run's extra columns (criteria fields, the sort
 // field, "@ screen" snapshot values). Display text is formatted here; SortRole carries the raw
 // number so header-click sorting is numeric, and missing values carry an invalid QVariant that
-// ScreenerSortProxy always places last.
+// the screen's ui::KeySortProxy always places last.
 //
 // No Q_OBJECT (LiveTableModel is a template and declares no signals), so user-visible base header
 // strings are translated by the owning screen and passed in via set_base_headers().
@@ -60,15 +60,8 @@ class ScreenerResultsModel : public ui::LiveTableModel<services::ScreenerRow> {
     QStringList base_tooltips_;
 };
 
-/// Numeric sort on SortRole with missing values last in BOTH directions (a plain QVariant compare
-/// either errors on invalid values or floats every "—" to the top of a descending sort).
-class ScreenerSortProxy : public QSortFilterProxyModel {
-  public:
-    using QSortFilterProxyModel::QSortFilterProxyModel;
-
-  protected:
-    bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
-};
+// Sorting: ui::KeySortProxy on SortRole (numbers numerically, text with a collator, missing values
+// last in BOTH directions) — it replaced the screen's own ScreenerSortProxy.
 
 namespace screener_format {
 /// 1,234.56 — fixed decimals with thousands separators.

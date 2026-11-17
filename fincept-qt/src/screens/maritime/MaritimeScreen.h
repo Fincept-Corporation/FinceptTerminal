@@ -1,5 +1,6 @@
 // src/screens/maritime/MaritimeScreen.h
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/maritime/GeocodingTypes.h"
 #include "services/maritime/MaritimePortTypes.h"
@@ -7,6 +8,8 @@
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QDateTime>
+#include <QJsonValue>
 #include <QCompleter>
 #include <QDoubleSpinBox>
 #include <QEvent>
@@ -23,8 +26,16 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+class QStackedWidget;
+
 namespace fincept::ui {
+class AutoLoadPane;
+class Card;
+class EmptyState;
+class KpiStrip;
 class LoadingOverlay;
+class RangeBar;
+class TimeSeriesChart;
 class WorldMapWidget;
 } // namespace fincept::ui
 
@@ -32,10 +43,15 @@ namespace fincept::screens {
 
 /// Maritime Intelligence screen — vessel tracking, trade routes, search.
 /// Layout: Left stats panel | Center content (tabs) | Right detail panel
-class MaritimeScreen : public QWidget, public IStatefulScreen {
+class MaritimeScreen : public QWidget, public IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit MaritimeScreen(QWidget* parent = nullptr);
+
+    // ISectionLinked — no tabs; the right column's searches: "vessel" (IMO box), "places"
+    // (shipping-area search), "ports" (port search): scrolled into view and focused. `focus` = an
+    // IMO number for "vessel" (or with an empty section): typed into the box, never looked up.
+    bool open_section(const QString& section, const QString& focus) override;
 
     // IStatefulScreen — persists the IMO search text and the area-search
     // bounds (common user inputs for vessel lookup).
@@ -79,13 +95,27 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// Show the API credit balance (fractional); PLANS when low. < 0 = not reported.
     void update_credits(double remaining);
     /// `fit_camera` re-frames the map around the new pins; false keeps the user's pan/zoom.
-    void update_map(const QVector<services::maritime::VesselData>& vessels, bool fit_camera);
+    /// `update_stats` = false leaves the left-panel fleet stats alone (corridor subsets).
+    void update_map(const QVector<services::maritime::VesselData>& vessels, bool fit_camera,
+                    bool update_stats = true);
+    /// Fill vessels_table_ with the first `limit` fleet rows (Progress column).
+    void fill_fleet_table(const QVector<services::maritime::VesselData>& vessels, int limit);
+    /// Switch vessels_table_ between the fleet columns and the voyage-history
+    /// columns (Name / IMO hidden, last column = report time).
+    void set_history_columns(bool history);
+    /// Drop a corridor filter: the whole loaded fleet back in the table and on the map.
+    void clear_route_filter();
     void apply_theme();
+    /// Item-brush colours of the vessel names (the theme_changed part of the theme).
+    void recolor_vessel_names();
+    /// First show: the vessel-list view with a kept result (saved bbox, else
+    /// global), else the saved bbox / global view's preview. Never a request.
+    void open_initial_view();
     /// Fill the right-panel vessel card (name, IMO, fix + its age, speed, route) from a
     /// record and copy its IMO into the search box so VOYAGE HISTORY is one click away.
     void show_vessel_card(const services::maritime::VesselData& v);
-    /// Table row -> vessel card (and fly the map there when `fly`). No-op for rows that
-    /// aren't part of the currently rendered fleet (e.g. voyage-history rows).
+    /// Table row -> vessel card (and fly the map there when `fly`). A voyage-history
+    /// row flies the map to that fix.
     void on_vessel_row_picked(int row, bool fly);
     /// Read + validate the IMO box. Strips an "IMO" prefix; IMO numbers are exactly 7
     /// digits, so anything else is reported instead of burning an API call on it.
@@ -96,15 +126,47 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     void do_refresh();
     /// `tone`: "positive" / "amber" / "negative" / "muted" (root-sheet colour rule).
     void set_status(const QString& text, const char* tone);
-    /// Issue a world-bbox search and flag the result for spatial downsampling
-    /// so the map fans out instead of clustering on whatever bbox the user
-    /// last typed.
+    /// The global view: a world-bbox search whose result is spatially
+    /// downsampled so the map fans out. Selects that pane view and runs it.
     void load_global_sample();
-    /// Fill the area-search spinners from a bbox and issue a vessel
-    /// area-search for it. Shared by the place-search selection, the raw
-    /// bbox button, and (later) the map-draw tool so they all funnel through
-    /// one path.
+    /// Fill the area-search spinners from a bbox, select that pane view and run
+    /// the vessel area-search for it. Shared by the place-search selection, the
+    /// raw bbox button and the map-draw tool so they all funnel through one path.
     void run_area_search(double min_lat, double max_lat, double min_lng, double max_lng, bool filter_to_shapes = false);
+    /// Built-in key shipping areas / major container ports in the place and
+    /// port tables until the user searches (free, no request).
+    void fill_default_places();
+    void fill_default_ports();
+
+    // ── The vessel list: the shared AutoLoadPane (Policy::Manual) ────────────
+    // An area search costs 8 credits (voyage history 5): the pane never runs by
+    // itself. Each view (global / a bbox / drawn shapes / one IMO's history) has
+    // its remembered result; for an area that is the service's own kept copy
+    // (remembered_vessels → MaritimeService::area_cached_at, parsed off-thread on
+    // render) — nothing is duplicated. The map, corridors and fleet figures keep
+    // following the service's vessels_loaded signal (apply_vessels_page).
+    struct MtView {
+        services::maritime::AreaSearchParams params;
+        bool global = false;
+        bool shapes = false;
+        QString imo; // history view
+    };
+    QHash<QString, MtView> views_;
+    /// Register `params` as a view, configure its preview and switch the pane to it.
+    QString select_area_view(const services::maritime::AreaSearchParams& params, bool global, bool shapes);
+    void configure_vessels_preview(const MtView& v);
+    void start_vessels_request(quint64 id);
+    void render_vessels_payload(const QJsonValue& payload, bool from_cache);
+    bool remembered_vessels(const QString& view, QJsonValue* payload, QDateTime* as_of);
+    /// Fill table, map, corridors and fleet figures from an area page.
+    void apply_vessels_page(services::maritime::VesselsPage page, bool global_sample);
+    fincept::ui::AutoLoadPane* vessels_pane_ = nullptr;
+    QLabel* vessels_asof_lbl_ = nullptr; // map toolbar: "as of 14:02" (kept by the pane)
+    quint64 vessels_request_id_ = 0;     // the pane run the outstanding request answers
+    QString expected_area_key_;          // MaritimeService::area_request_key of that request
+    QString applied_view_key_;           // the view whose vessels the table / map show
+    quint64 cached_load_gen_ = 0;        // a kept copy still being parsed lands only if unchanged
+    bool layers_defaulted_ = false;
     /// Called when the user finalizes / clears drawn shapes on the map.
     /// Computes the union bbox of all shapes and loads vessels for it;
     /// on_vessels_loaded then filters the result to vessels actually inside
@@ -140,17 +202,27 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     fincept::ui::LoadingOverlay* map_loader_ = nullptr;
     QTableWidget* vessels_table_ = nullptr;
     QTableWidget* routes_table_ = nullptr;
+    // The corridors table shares its slot with a designed state ("no corridors").
+    QStackedWidget* routes_stack_ = nullptr;
+    fincept::ui::EmptyState* routes_state_ = nullptr;
+    bool restored_map_view_ = false;  // restore_state() brought a saved map view
 
     // Right panel - search
     QLineEdit* imo_edit_ = nullptr;
     QLabel* search_result_label_ = nullptr;
-    QWidget* search_result_card_ = nullptr;
-    QLabel* sr_name_ = nullptr;
+    fincept::ui::Card* search_result_card_ = nullptr; // SELECTED VESSEL card (title = vessel name)
     QLabel* sr_imo_ = nullptr;
     QLabel* sr_position_ = nullptr;
-    QLabel* sr_speed_ = nullptr;
+    fincept::ui::KpiStrip* sr_kpis_ = nullptr;   // speed / heading / draught / progress / fix age
+    fincept::ui::RangeBar* sr_progress_ = nullptr; // route progress, from_port -> to_port
     QLabel* sr_from_ = nullptr;
     QLabel* sr_to_ = nullptr;
+
+    // Voyage-history summary above the vessel table (shown in history mode only).
+    QWidget* history_panel_ = nullptr;
+    fincept::ui::KpiStrip* history_kpis_ = nullptr;
+    fincept::ui::TimeSeriesChart* history_chart_ = nullptr;
+    QLabel* history_empty_ = nullptr; // "No positions recorded for IMO …"
 
     // Right panel - place search (Nominatim geocoder). Primary area-input UX:
     // user types a place name, picks a suggestion, its bbox fills the spinners
@@ -193,9 +265,10 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     // Route detail
     QWidget* route_detail_ = nullptr;
     QLabel* rd_name_ = nullptr;
-    QLabel* rd_value_ = nullptr;
-    QLabel* rd_status_ = nullptr;
+    QLabel* rd_value_ = nullptr;  // under way N of M
+    QLabel* rd_status_ = nullptr; // average speed / route progress
     QLabel* rd_vessels_ = nullptr;
+    QPushButton* rd_clear_btn_ = nullptr; // SHOW ALL VESSELS (drops the corridor filter)
 
     // Status
     QLabel* status_label_ = nullptr;
@@ -215,6 +288,10 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// True while the in-flight load was started by the auto-refresh timer: the map
     /// camera is left alone so a background refresh doesn't undo the user's zoom.
     bool auto_refresh_pending_ = false;
+    /// Set by do_refresh() (REFRESH button / AUTO timer); consumed by the next area
+    /// search so it skips the service's cached copy. Opening the screen and
+    /// repeating a search reuse a copy up to 10 min old for free (8 credits each).
+    bool force_area_fetch_ = false;
 
     // ── Static-text widgets cached for retranslateUi ─────────────────────────
     // Left panel buttons + section titles + stat captions.
@@ -236,6 +313,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* center_title_ = nullptr;
     QLabel* basemap_cap_ = nullptr;       // "BASEMAP" caption in the map toolbar
     QComboBox* map_type_combo_ = nullptr; // basemap selector
+    QPushButton* ports_layer_btn_ = nullptr;       // map layer: Natural Earth major ports
+    QPushButton* chokepoints_layer_btn_ = nullptr; // map layer: straits / canals
     // Right panel buttons + titles + field captions.
     QLabel* search_title_ = nullptr;
     QLabel* imo_cap_ = nullptr;
@@ -261,7 +340,22 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* sb_refresh_cap_ = nullptr;
     QLabel* sb_refresh_val_ = nullptr;
 
+    // Requests this screen issued. MaritimeService's signals are app-wide — the
+    // dashboard tile's hub refreshes emit vessel_found / vessel_history_loaded /
+    // error_occurred too — so only answers to these are acted on.
+    QString pending_track_imo_;   // TRACK
+    QString pending_history_imo_; // VOYAGE HISTORY
+    int area_requests_pending_ = 0;
+
+    // Voyage-history mode: the table lists past fixes of one vessel.
+    bool history_mode_ = false;
+    QVector<services::maritime::VesselData> history_rows_;
+
     // Data
+    /// The loaded fleet the corridors were built from (before the render cap).
+    QVector<services::maritime::VesselData> fleet_vessels_;
+    /// Corridor ("from -> to") the table and map are narrowed to; empty = all.
+    QString route_filter_;
     QVector<services::maritime::TradeRoute> routes_;
     /// Vessels currently rendered as map pins. Indexed by MapPin::id so that
     /// pin_clicked can resolve a click back to the full record for display

@@ -43,11 +43,21 @@ class AiQuickAskWidget : public BaseWidget {
     void render_not_configured();
     void render_failure();
     void render_stream();
+    /// Idle: a designed state in the answer area (what the tile does, the active
+    /// model, three sample questions as its suggestion rows that only FILL the
+    /// input). Not configured:
+    /// the setup state with OPEN SETTINGS > LLM CONFIGURATION. Otherwise the
+    /// answer itself. Built on first need. Never sends anything by itself.
+    void update_answer_view();
+    void build_idle_view();
+    static QStringList sample_questions();
 
     QWidget* root_ = nullptr;
     QLineEdit* input_ = nullptr;
     QPushButton* ask_btn_ = nullptr;
     QTextBrowser* answer_ = nullptr;
+    QWidget* idle_view_ = nullptr;              ///< replaces answer_ while idle / not configured
+    ui::EmptyState* idle_state_ = nullptr;      ///< inside idle_view_ (sample questions = its suggestions)
     QLabel* status_label_ = nullptr;
     QPushButton* settings_btn_ = nullptr;
     QPushButton* continue_btn_ = nullptr;

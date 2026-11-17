@@ -1,6 +1,7 @@
 #pragma once
 #include "datahub/Producer.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -17,6 +18,7 @@ class QWebSocket;
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 
 namespace fincept::services {
@@ -62,6 +64,25 @@ struct NewsArticle {
     ThreatClassification threat;
     SourceFlag source_flag = SourceFlag::NONE;
     QString lang; // ISO language code (e.g., "en", "fr", "ar")
+
+    // ── News analytics (added fields; defaults mean "unknown") ──────────────
+    /// `sentiment_score` is a measured value. False when the article's language
+    /// has no sentiment model ("not scored") or the row predates persisted
+    /// scores (unknown) — such rows must not be averaged as neutral.
+    bool sentiment_scored = false;
+    /// Market-impact event the headline reports: "RATES", "EARNINGS", "M&A",
+    /// "RATING", "MACRO", "POLICY", "CORPORATE", "LEGAL"; empty = none.
+    QString event_type;
+    /// Confidence 0..1 of each `tickers` entry (same order); empty = unknown
+    /// (rows tagged before validated tagging).
+    QVector<double> ticker_confidence;
+    /// Upper-case words that looked like symbols but matched nothing known —
+    /// shown as "unverified", never used as tickers.
+    QStringList unverified_tickers;
+    /// The feed gave no publication time: `sort_ts` is when the item was first
+    /// seen (it only ages the item out of the time window). Undated articles
+    /// sort after dated ones and are shown without an age (NewsFeedParse.h).
+    bool undated = false;
 };
 
 struct SentimentAnalysis {
@@ -85,7 +106,7 @@ struct RiskSignal {
 /// field (ticker for orgs, country_code for locations) when present.
 struct AnalysisEntity {
     QString name;
-    QString detail;       // ticker (orgs) or country code (locations); may be empty
+    QString detail;       // ticker (orgs), role (people) or country code (locations); may be empty
     QString sector;       // orgs only
     double sentiment = 0; // orgs only
 };
@@ -113,6 +134,13 @@ struct NewsAnalysis {
     QVector<AnalysisEntity> people;
     QVector<AnalysisEntity> locations;
     AnalysisContent content;
+    /// What the analysis was based on (`analysis_basis`, newer servers):
+    /// "article_page" = the article itself, "supplied_text" = the headline and feed
+    /// summary sent with the request (the page could not be read). Empty from older
+    /// servers and older cached results.
+    QString basis;
+    /// The page's declared publication time; empty when the server sent null / none.
+    QString published_at;
     /// Fractional (one call can cost 0.35); < 0 = not reported by the server.
     double credits_used = -1;
     double credits_remaining = -1;
@@ -131,6 +159,31 @@ struct RSSFeed {
     QString region;
     QString source;
     int tier = 3;
+    /// Declared language (ISO 639-1) — the prior for language detection. Empty
+    /// for user feeds (detected from the text alone).
+    QString lang;
+    /// Built-in feeds that are off until the user enables them in the source
+    /// manager (non-core regional / local-language outlets).
+    bool default_enabled = true;
+    /// UTC offset (minutes) of item dates that carry no zone at all — e.g. the
+    /// RBI writes Indian wall-clock times with no zone (+330). 0 = read as UTC.
+    int naive_utc_offset_min = 0;
+};
+
+/// Last outcome of one feed, for the source-health display and the per-feed
+/// back-off (a feed that keeps failing is retried less and less often).
+struct FeedHealth {
+    QString feed_id;
+    QString name;
+    QString region;
+    QString lang;
+    qint64 last_ok_at = 0;   ///< unix seconds; 0 = never
+    qint64 last_fail_at = 0; ///< unix seconds; 0 = never
+    int consecutive_failures = 0;
+    QString last_error; ///< e.g. "HTTP 403", "returned an HTML page", "no items"
+    int last_http = 0;
+    int last_count = 0;      ///< articles in the last successful fetch
+    qint64 retry_after = 0;  ///< backing off until (unix seconds); 0 = not backing off
 };
 
 // ── Service ─────────────────────────────────────────────────────────────────
@@ -161,7 +214,41 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     int max_requests_per_sec() const override; // RSS — cap at 2/s
 
     void fetch_all_news(bool force, ArticlesCallback cb);
-    void analyze_article(const QString& url, AnalysisCallback cb);
+    /// POST /news/analyze. `headline` / `text` (the feed item's title and summary) are
+    /// sent when non-empty: newer servers analyse them — and say so — when the
+    /// article page itself cannot be read, instead of answering 422
+    /// article_content_unavailable (nothing charged). Older servers ignore them.
+    void analyze_article(const QString& url, AnalysisCallback cb, const QString& headline = {},
+                         const QString& text = {});
+    /// Transfer timeout of the /news/analyze request (the server may fetch the
+    /// article for up to 15 s and spend up to 60 s in the model call). UI guards
+    /// should wait at least this long before giving up on a result.
+    static constexpr int kAnalyzeTimeoutMs = 90000;
+
+    /// Request body of POST /news/analyze: `url`, plus `headline` / `text` when the
+    /// terminal has them, cut to the server's limits (500 / 20 000 characters — a
+    /// longer value is a 422 validation error). A summary that only repeats the
+    /// headline is not sent as text.
+    static QJsonObject analyze_request_body(const QString& url, const QString& headline, const QString& text) {
+        const auto cut = [](QString s, int max_chars) {
+            s = s.trimmed();
+            if (s.size() > max_chars) {
+                s.truncate(max_chars);
+                if (!s.isEmpty() && s.back().isHighSurrogate())
+                    s.chop(1); // never split a surrogate pair
+            }
+            return s;
+        };
+        QJsonObject body;
+        body["url"] = url;
+        const QString h = cut(headline, 500);
+        const QString t = cut(text, 20000);
+        if (!h.isEmpty())
+            body["headline"] = h;
+        if (!t.isEmpty() && t.compare(h, Qt::CaseInsensitive) != 0)
+            body["text"] = t;
+        return body;
+    }
 
     /// Load a previously-persisted analysis for an article URL, if one exists.
     /// Lets the detail panel re-show a prior ANALYZE result on reopen without
@@ -171,9 +258,40 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     /// Deterministic offline digest of the top N headlines (most important first,
     /// grouped by category). No network, no AI.
     void summarize_headlines(const QVector<NewsArticle>& articles, int count, SummaryCallback cb);
+    /// The articles that digest is made of, as records: the first `count`
+    /// (1..100) with a headline, most important first (priority, impact, source
+    /// tier). The BRIEF view renders these.
+    static QVector<NewsArticle> brief_articles(const QVector<NewsArticle>& articles, int count);
 
     int feed_count() const { return feed_count_; }
     QStringList active_sources() const { return active_sources_; }
+
+    /// Articles stored by earlier fetches (news_articles table) published at or
+    /// after `since_ts`, newest first — read on a worker thread, delivered on the
+    /// GUI thread. Lets a screen show what it already knows at once while the
+    /// feeds are fetched. Also seeds the first-seen times of undated items.
+    void load_recent_from_db(qint64 since_ts, int limit, ArticlesCallback cb);
+
+    /// The enabled feed list as of the last fetch (empty before the first one).
+    /// GUI thread; no database access — for badges and counters.
+    QVector<RSSFeed> effective_feeds_snapshot() const { return effective_feeds_snapshot_; }
+
+    /// Most items one feed contributes per fetch (its newest). Firehose feeds
+    /// carry 100-200 items; without a bound one publisher fills the list.
+    static constexpr int kMaxItemsPerFeed = 40;
+
+    /// Outcome of every enabled feed's most recent fetch (feeds not fetched yet
+    /// are absent). GUI thread.
+    QVector<FeedHealth> feed_health() const;
+    /// Feeds currently skipped because they kept failing (retried later).
+    int feeds_backing_off() const;
+    /// Forget a feed's failures so the next refresh fetches it again.
+    void reset_feed_health(const QString& feed_id);
+
+    /// Market-impact event a headline reports ("RATES", "EARNINGS", "M&A",
+    /// "RATING", "MACRO", "POLICY", "CORPORATE", "LEGAL"), empty when none.
+    /// `text` is the lower-cased headline + summary.
+    static QString classify_event(const QString& text);
 
     // ── Feed catalog (built-ins + user overlay from RssFeedRepository) ────
     //
@@ -193,6 +311,17 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     };
     QVector<RSSFeed> list_effective_feeds() const;
     QVector<EditorFeed> list_all_feeds_for_editor() const;
+
+    /// Earlier URLs of built-in feeds (id -> old URLs). How catalogue updates
+    /// reach existing installs: built-ins live in code (default_feeds()), and
+    /// the rss_feeds table only holds the user's rows — overlays of built-ins
+    /// (written when one is toggled or edited) and the user's own feeds. A
+    /// built-in without a row simply follows the code; an overlay row that
+    /// still holds one of these copied URLs gets the current built-in URL, so
+    /// moved feeds follow without overriding a URL the user typed. Built-ins
+    /// dropped from the catalogue disappear (their overlay rows are ignored);
+    /// user-added feeds and every enable / disable choice are untouched.
+    static const QHash<QString, QStringList>& retired_builtin_urls();
 
     /// Insert/update a user-added feed. Pass is_builtin=false; new IDs
     /// should be prefixed "usr-" by the caller.
@@ -216,8 +345,15 @@ class NewsService : public QObject, public fincept::datahub::Producer {
 
     void fetch_all_news_progressive(bool force, ArticlesCallback final_cb);
 
+    /// Whether a live-feed server exists to connect to. False until the backend
+    /// ships its WebSocket news route; while false connect_live_feed() is a
+    /// no-op and the UI shows the feed as unavailable. Single switch:
+    /// kNewsLiveFeedAvailable in NewsService_LiveFeed.cpp.
+    static bool live_feed_available();
+
     /// Connect to a WebSocket endpoint for live breaking news push.
     /// If url is empty, uses default. Emits articles_partial on new data.
+    /// Gives up (no reconnect loop) when the server refuses the handshake.
     void connect_live_feed(const QString& ws_url = {});
     void disconnect_live_feed();
     bool is_live_connected() const;
@@ -230,6 +366,11 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     static ThreatClassification classify_threat(const NewsArticle& article);
     /// Overload that accepts pre-built lowercased text to avoid redundant allocation.
     static ThreatClassification classify_threat(const NewsArticle& article, const QString& text);
+    /// Priority, market impact, event type and threat of `article` from its
+    /// headline, summary, tier, validated tags and tone (NewsClassify.h). Run on
+    /// fresh articles and again on stored / cached ones, so rows labelled by an
+    /// older rule set follow the current rules.
+    static void classify_article(NewsArticle& article);
 
   signals:
     void articles_updated(QVector<NewsArticle> articles);
@@ -240,12 +381,60 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     /// Emitted when the WebSocket live feed connects or disconnects. UI
     /// consumes this to drive a status badge.
     void live_state_changed(bool connected);
+    /// Feed health changed (a fetch round finished or a feed was reset).
+    void feed_health_changed();
 
   private:
     NewsService();
 
+    /// Start the HTTP requests for `feeds` — at most kMaxConcurrentFeedRequests
+    /// in flight, each next one starting as another finishes, so a refresh of
+    /// ~120 feeds is spread out instead of hitting the network in one burst —
+    /// and call `on_done(feed, articles)` on the GUI thread for each, in
+    /// completion order. Feeds that answered last time go first. Feeds backing
+    /// off after repeated failures are not requested (on_done gets an empty
+    /// list for them).
+    void run_feed_requests(const QVector<RSSFeed>& feeds,
+                           std::function<void(const RSSFeed&, QVector<NewsArticle>)> on_done);
+    struct FetchState; // defined in NewsService.cpp
+    /// Shared body of fetch_all_news / fetch_all_news_progressive: optional
+    /// cache read (worker), feed list (worker), requests, partial snapshots
+    /// (progressive only, at most every kPartialEmitIntervalMs), final list.
+    void run_fetch(bool force, bool progressive, ArticlesCallback cb);
+    void start_network_fetch(bool progressive, ArticlesCallback cb);
+    void emit_partial(const std::shared_ptr<FetchState>& state);
+    void finish_fetch(const std::shared_ptr<FetchState>& state);
+    static constexpr int kPartialEmitIntervalMs = 250;
+    struct FeedQueue; // defined in NewsService.cpp
+    /// Start queued requests until kMaxConcurrentFeedRequests are in flight.
+    void pump_feed_queue(const std::shared_ptr<FeedQueue>& queue);
+    /// Whether `feed_id` is backing off at `now` (repeated failures).
+    bool feed_backing_off(const QString& feed_id, qint64 now) const;
+    /// Record one feed's outcome (GUI thread).
+    void note_feed_result(const RSSFeed& feed, bool ok, int http_code, const QString& error, int article_count);
+    /// Write the health rows touched since the last call to the database (worker).
+    void persist_feed_health();
+    /// Load persisted health once (worker), so back-off survives restarts.
+    void load_feed_health_once();
+    /// Hourly volume rows (category / region / language) for the volume baselines,
+    /// computed from the stored articles and upserted. Worker thread only.
+    static void record_volume_history();
+    /// 10 in flight: a slow publisher (the BoJ answers in ~15 s) no longer holds
+    /// back a sixth of the whole refresh.
+    static constexpr int kMaxConcurrentFeedRequests = 10;
+    QHash<QString, FeedHealth> feed_health_;
+    QVector<RSSFeed> effective_feeds_snapshot_;
+    QSet<QString> feed_health_dirty_;
+    bool feed_health_loaded_ = false;
+    bool feed_health_loading_ = false;
+
     static QVector<RSSFeed> default_feeds();
-    static QVector<NewsArticle> parse_rss_xml(const QByteArray& xml, const RSSFeed& feed);
+    /// Parse one feed payload (RSS / RDF / Atom, see NewsFeedParse.h) into
+    /// enriched articles: time policy applied, newest kMaxItemsPerFeed kept.
+    /// `problem` (optional) receives why nothing came out of a non-empty payload.
+    static QVector<NewsArticle> parse_rss_xml(const QByteArray& xml, const RSSFeed& feed, QString* problem = nullptr);
+    /// Remember when undated articles were first seen (worker-safe).
+    static void remember_first_seen(const QVector<NewsArticle>& articles);
     static void enrich_article(NewsArticle& article);
     static QString strip_html(const QString& html);
 
@@ -276,7 +465,8 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     /// (with enrichment / threat classification) of the reply payload the GUI
     /// thread copied out. Pure — touches no service state.
     static QVector<NewsArticle> parse_feed_payload(const QByteArray& data, int http_code, bool ok,
-                                                   const QString& error, const RSSFeed& feed);
+                                                   const QString& error, const RSSFeed& feed,
+                                                   QString* problem = nullptr);
 
     /// Serialise `articles` into the "news:articles" cache entry on a worker
     /// thread (CacheDatabase gives each thread its own connection). A write that
@@ -317,6 +507,7 @@ class NewsService : public QObject, public fincept::datahub::Producer {
 QString priority_string(Priority p);
 QString sentiment_string(Sentiment s);
 QString impact_string(Impact i);
+// The *_color() helpers return the active theme's colour, read on every call.
 QString priority_color(Priority p);
 QString sentiment_color(Sentiment s);
 QString relative_time(int64_t unix_ts);

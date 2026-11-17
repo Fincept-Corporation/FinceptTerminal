@@ -19,6 +19,7 @@
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QString>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -122,7 +123,7 @@ void CredentialsSection::build_ui() {
                                 "QPushButton#credSave:hover{background:%8;}")
                             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
                                  ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
-                                 ui::colors::BG_BASE(), ui::colors::AMBER_DIM(), ui::colors::TEXT_DIM()));
+                                 ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM(), ui::colors::TEXT_DIM()));
 
     // ~130 provider cards: finding one by scrolling is hopeless, and the Settings
     // nav search only reaches this section, not a card inside it.
@@ -140,146 +141,187 @@ void CredentialsSection::build_ui() {
     no_match_lbl_->hide();
     vl->addWidget(no_match_lbl_);
 
-    for (const auto& def : CRED_KEYS) {
-        const QString& key = def.first;
-        const QString& name = def.second;
-
-        auto* card = new QFrame;
-        card->setObjectName(QStringLiteral("credCard"));
-        auto* cvl = new QVBoxLayout(card);
-        cvl->setContentsMargins(0, 0, 0, 0);
-        cvl->setSpacing(0);
-
-        auto* hdr = new QWidget(this);
-        hdr->setObjectName(QStringLiteral("credHdr"));
-        hdr->setFixedHeight(34);
-        auto* hhl = new QHBoxLayout(hdr);
-        hhl->setContentsMargins(12, 0, 12, 0);
-        auto* name_lbl = new QLabel(name);
-        name_lbl->setObjectName(QStringLiteral("credName"));
-        hhl->addWidget(name_lbl);
-        hhl->addStretch();
-
-        auto* status_lbl = new QLabel;
-        cred_set_status(status_lbl, tr("Not set"), ui::colors::TEXT_SECONDARY());
-        hhl->addWidget(status_lbl);
-        cred_status_[key] = status_lbl;
-
-        cvl->addWidget(hdr);
-
-        auto* body = new QWidget(this);
-        body->setObjectName(QStringLiteral("credBody"));
-        auto* bhl = new QHBoxLayout(body);
-        bhl->setContentsMargins(12, 10, 12, 10);
-        bhl->setSpacing(8);
-
-        auto* field = new QLineEdit;
-        field->setObjectName(QStringLiteral("credField"));
-        field->setEchoMode(QLineEdit::Password);
-        field->setPlaceholderText(tr("Not configured"));
-        // Never let an API key end up in an IME candidate list, a predictive
-        // dictionary, or a drag-and-drop payload.
-        field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
-        field->setDragEnabled(false);
-        field->setAcceptDrops(false);
-        field->setAccessibleName(tr("%1 API key").arg(name));
-        cred_fields_[key] = field;
-        bhl->addWidget(field, 1);
-
-        auto* save_btn = new QPushButton(tr("Save"));
-        save_btn->setObjectName(QStringLiteral("credSave"));
-        save_btn->setFixedHeight(30);
-        save_btn->setFixedWidth(70);
-        save_btn->setAccessibleName(tr("Save %1 API key").arg(name));
-        bhl->addWidget(save_btn);
-        cred_save_btns_[key] = save_btn;
-
-        // Enter in the field is the same as clicking Save.
-        connect(field, &QLineEdit::returnPressed, save_btn, &QPushButton::click);
-        setTabOrder(field, save_btn);
-
-        connect(save_btn, &QPushButton::clicked, this, [this, key, name, field, status_lbl]() {
-            QString val = field->text().trimmed();
-            if (val.isEmpty()) {
-                // Saving an empty field deletes the stored key. That is a
-                // destructive, silent action when a key is already configured —
-                // confirm it rather than shredding a credential on a stray click.
-                const auto existing = SecureStorage::instance().retrieve(key);
-                const bool had_key = existing.is_ok() && !existing.value().isEmpty();
-                if (had_key) {
-                    const auto reply = QMessageBox::question(
-                        this, tr("Remove Credential"),
-                        tr("Remove the stored %1 key from encrypted storage?\n\nYou will need to paste it "
-                           "again to restore access.")
-                            .arg(name),
-                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-                    if (reply != QMessageBox::Yes)
-                        return;
-                }
-                const auto removed = SecureStorage::instance().remove(key);
-                if (removed.is_err()) {
-                    // The result was ignored, so "Cleared" was shown even when the
-                    // key was still stored and still being injected into
-                    // every Python subprocess.
-                    cred_set_status(status_lbl, tr("Clear failed"), ui::colors::NEGATIVE());
-                    LOG_ERROR("Credentials", "Failed to clear " + key);
-                    return;
-                }
-                field->setPlaceholderText(tr("Not configured"));
-                cred_set_status(status_lbl, tr("Cleared"), ui::colors::TEXT_SECONDARY());
-                LOG_INFO("Credentials", "Cleared key: " + key);
-            } else {
-                auto r = SecureStorage::instance().store(key, val);
-                if (r.is_ok()) {
-                    field->clear();
-                    field->setPlaceholderText(tr("•••••••• (saved)"));
-                    cred_set_status(status_lbl, tr("Saved ✓"), ui::colors::POSITIVE());
-                    LOG_INFO("Credentials", "Stored key: " + key);
-                } else {
-                    cred_set_status(status_lbl, tr("Save failed"), ui::colors::NEGATIVE());
-                    LOG_ERROR("Credentials", "Failed to store " + key);
-                }
-            }
-        });
-
-        cvl->addWidget(body);
-
-        // Each card sits in a wrapper that carries the 8px gap, so hiding the
-        // wrapper (see apply_filter) also hides the gap — a bare addSpacing()
-        // would pile up as blank space once most cards are filtered out.
-        auto* wrap = new QWidget(this);
-        auto* wrap_lay = new QVBoxLayout(wrap);
-        wrap_lay->setContentsMargins(0, 0, 0, 8);
-        wrap_lay->setSpacing(0);
-        wrap_lay->addWidget(card);
-        vl->addWidget(wrap);
-        cred_cards_[key] = wrap;
-    }
+    // The cards themselves are built a few at a time (build_more_cards()):
+    // ~130 cards are ~900 widgets, and building them in one go froze the first
+    // visit to this section for 1.5-2.5 s (measured: Qt styles every widget when
+    // the page is put in the scroll area, again when the section enters the
+    // stack, then lays all of them out). The first screenful is built here, so
+    // the section opens complete as far as the eye can tell; the rest follows on
+    // the next turns of the event loop.
+    page_ = page;
+    cards_layout_ = new QVBoxLayout;
+    cards_layout_->setContentsMargins(0, 0, 0, 0);
+    cards_layout_->setSpacing(0);
+    vl->addLayout(cards_layout_);
+    for (int i = 0; i < kFirstCards && next_card_ < CRED_KEYS.size(); ++i)
+        build_card(next_card_++);
 
     vl->addStretch();
     scroll->setWidget(page);
     root->addWidget(scroll);
+
+    if (next_card_ < CRED_KEYS.size())
+        QTimer::singleShot(0, this, &CredentialsSection::build_more_cards);
+}
+
+void CredentialsSection::build_more_cards() {
+    if (!page_ || !cards_layout_)
+        return;
+    for (int i = 0; i < kCardsPerTurn && next_card_ < CRED_KEYS.size(); ++i)
+        build_card(next_card_++);
+    if (next_card_ < CRED_KEYS.size())
+        QTimer::singleShot(0, this, &CredentialsSection::build_more_cards);
+}
+
+void CredentialsSection::build_card(int index) {
+    const auto& def = CRED_KEYS.at(index);
+    const QString& key = def.first;
+    const QString& name = def.second;
+
+    // Each card sits in a wrapper that carries the 8px gap, so hiding the
+    // wrapper (see apply_filter) also hides the gap — a bare addSpacing()
+    // would pile up as blank space once most cards are filtered out.
+    // Every widget is created under its final parent: a widget that is moved
+    // to another parent later is styled a second time.
+    auto* wrap = new QWidget(page_);
+    auto* wrap_lay = new QVBoxLayout(wrap);
+    wrap_lay->setContentsMargins(0, 0, 0, 8);
+    wrap_lay->setSpacing(0);
+
+    auto* card = new QFrame(wrap);
+    card->setObjectName(QStringLiteral("credCard"));
+    auto* cvl = new QVBoxLayout(card);
+    cvl->setContentsMargins(0, 0, 0, 0);
+    cvl->setSpacing(0);
+
+    auto* hdr = new QWidget(card);
+    hdr->setObjectName(QStringLiteral("credHdr"));
+    hdr->setMinimumHeight(34);
+    auto* hhl = new QHBoxLayout(hdr);
+    hhl->setContentsMargins(12, 0, 12, 0);
+    auto* name_lbl = new QLabel(name, hdr);
+    name_lbl->setObjectName(QStringLiteral("credName"));
+    hhl->addWidget(name_lbl);
+    hhl->addStretch();
+
+    auto* status_lbl = new QLabel(hdr);
+    hhl->addWidget(status_lbl);
+    cred_status_[key] = status_lbl;
+
+    cvl->addWidget(hdr);
+
+    auto* body = new QWidget(card);
+    body->setObjectName(QStringLiteral("credBody"));
+    auto* bhl = new QHBoxLayout(body);
+    bhl->setContentsMargins(12, 10, 12, 10);
+    bhl->setSpacing(8);
+
+    auto* field = new QLineEdit(body);
+    field->setObjectName(QStringLiteral("credField"));
+    field->setEchoMode(QLineEdit::Password);
+    // Never let an API key end up in an IME candidate list, a predictive
+    // dictionary, or a drag-and-drop payload.
+    field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+    field->setDragEnabled(false);
+    field->setAcceptDrops(false);
+    field->setAccessibleName(tr("%1 API key").arg(name));
+    cred_fields_[key] = field;
+    bhl->addWidget(field, 1);
+
+    auto* save_btn = new QPushButton(tr("Save"), body);
+    save_btn->setProperty("fincept_agent_risk", "account"); // agents: stores API keys
+    save_btn->setObjectName(QStringLiteral("credSave"));
+    save_btn->setMinimumSize(70, 30);
+    save_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    save_btn->setAccessibleName(tr("Save %1 API key").arg(name));
+    bhl->addWidget(save_btn);
+    cred_save_btns_[key] = save_btn;
+
+    // Stored / not stored, as reload() shows it for the cards already built.
+    load_card_state(key);
+
+    // Enter in the field is the same as clicking Save.
+    connect(field, &QLineEdit::returnPressed, save_btn, &QPushButton::click);
+    setTabOrder(field, save_btn);
+
+    connect(save_btn, &QPushButton::clicked, this, [this, key, name, field, status_lbl]() {
+        QString val = field->text().trimmed();
+        if (val.isEmpty()) {
+            // Saving an empty field deletes the stored key. That is a
+            // destructive, silent action when a key is already configured —
+            // confirm it rather than shredding a credential on a stray click.
+            // A key that could not be read may well exist: confirm then too.
+            const SecretRead existing = SecureStorage::instance().read(key);
+            const bool may_have_key = existing.failed() || (existing.found() && !existing.value.isEmpty());
+            if (may_have_key) {
+                const auto reply = QMessageBox::question(
+                    this, tr("Remove Credential"),
+                    tr("Remove the stored %1 key from encrypted storage?\n\nYou will need to paste it "
+                       "again to restore access.")
+                        .arg(name),
+                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                if (reply != QMessageBox::Yes)
+                    return;
+            }
+            const auto removed = SecureStorage::instance().remove(key);
+            if (removed.is_err()) {
+                // The result was ignored, so "Cleared" was shown even when the
+                // key was still stored and still being injected into
+                // every Python subprocess.
+                cred_set_status(status_lbl, tr("Clear failed"), ui::colors::NEGATIVE());
+                LOG_ERROR("Credentials", "Failed to clear " + key);
+                return;
+            }
+            field->setPlaceholderText(tr("Not configured"));
+            cred_set_status(status_lbl, tr("Cleared"), ui::colors::TEXT_SECONDARY());
+            LOG_AUDIT("Credentials", "Credential removed", {{"name", key}});
+        } else {
+            auto r = SecureStorage::instance().store(key, val);
+            if (r.is_ok()) {
+                field->clear();
+                field->setPlaceholderText(tr("•••••••• (saved)"));
+                cred_set_status(status_lbl, tr("Saved ✓"), ui::colors::POSITIVE());
+                LOG_AUDIT("Credentials", "Credential saved", {{"name", key}});
+            } else {
+                cred_set_status(status_lbl, tr("Save failed"), ui::colors::NEGATIVE());
+                LOG_ERROR("Credentials", "Failed to store " + key);
+            }
+        }
+    });
+
+    cvl->addWidget(body);
+    wrap_lay->addWidget(card);
+
+    // A card built while a filter is typed in follows that filter.
+    if (filter_edit_ && !matches_filter(def, filter_edit_->text().trimmed()))
+        wrap->hide();
+    cards_layout_->addWidget(wrap);
+    cred_cards_[key] = wrap;
+}
+
+void CredentialsSection::load_card_state(const QString& key) {
+    auto* field = cred_fields_.value(key, nullptr);
+    auto* status = cred_status_.value(key, nullptr);
+    if (!field || !status)
+        return;
+    const SecretRead r = SecureStorage::instance().read(key);
+    field->clear();
+    if (r.found() && !r.value.isEmpty()) {
+        field->setPlaceholderText(tr("•••••••• (saved)"));
+        cred_set_status(status, tr("Saved ✓"), ui::colors::POSITIVE());
+    } else if (r.failed()) {
+        // Not "Not set": a key may be stored and simply unreadable right now.
+        field->setPlaceholderText(tr("Stored key could not be read"));
+        cred_set_status(status, tr("Could not read: %1").arg(r.reason()), ui::colors::WARNING());
+    } else {
+        field->setPlaceholderText(tr("Not configured"));
+        cred_set_status(status, tr("Not set"), ui::colors::TEXT_SECONDARY());
+    }
 }
 
 void CredentialsSection::reload() {
-    for (auto it = cred_fields_.constBegin(); it != cred_fields_.constEnd(); ++it) {
-        const QString& key = it.key();
-        auto* field = it.value();
-        auto* status = cred_status_.value(key, nullptr);
-        if (!field || !status)
-            continue;
-
-        auto r = SecureStorage::instance().retrieve(key);
-        if (r.is_ok() && !r.value().isEmpty()) {
-            field->clear();
-            field->setPlaceholderText(tr("•••••••• (saved)"));
-            cred_set_status(status, tr("Saved ✓"), ui::colors::POSITIVE());
-        } else {
-            field->clear();
-            field->setPlaceholderText(tr("Not configured"));
-            cred_set_status(status, tr("Not set"), ui::colors::TEXT_SECONDARY());
-        }
-    }
+    for (auto it = cred_fields_.constBegin(); it != cred_fields_.constEnd(); ++it)
+        load_card_state(it.key());
 }
 
 void CredentialsSection::set_filter(const QString& text) {
@@ -295,21 +337,25 @@ QStringList CredentialsSection::search_terms() {
     return out;
 }
 
+bool CredentialsSection::matches_filter(const QPair<QString, QString>& def, const QString& needle) {
+    return needle.isEmpty() || def.second.contains(needle, Qt::CaseInsensitive) ||
+           def.first.contains(needle, Qt::CaseInsensitive);
+}
+
 void CredentialsSection::apply_filter(const QString& text) {
     const QString needle = text.trimmed();
-    int visible = 0;
+    // Counted over every provider, built or not: a match whose card is still to
+    // be built (build_more_cards) must not flash "No provider matches".
+    int matching = 0;
     for (const auto& def : CRED_KEYS) {
-        auto* card = cred_cards_.value(def.first, nullptr);
-        if (!card)
-            continue;
-        const bool match = needle.isEmpty() || def.second.contains(needle, Qt::CaseInsensitive) ||
-                           def.first.contains(needle, Qt::CaseInsensitive);
-        card->setVisible(match);
+        const bool match = matches_filter(def, needle);
         if (match)
-            ++visible;
+            ++matching;
+        if (auto* card = cred_cards_.value(def.first, nullptr))
+            card->setVisible(match);
     }
     if (no_match_lbl_)
-        no_match_lbl_->setVisible(visible == 0);
+        no_match_lbl_->setVisible(matching == 0);
 }
 
 void CredentialsSection::changeEvent(QEvent* event) {

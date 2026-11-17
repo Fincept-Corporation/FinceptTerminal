@@ -20,6 +20,11 @@ class PolymarketOrderBook : public QWidget {
 
     void set_data(const fincept::services::prediction::PredictionOrderBook& book);
     void clear();
+    /// A book was requested for a newly selected market: placeholder rows and
+    /// "Loading order book…" until set_data() / set_error().
+    void set_loading();
+    /// The request failed: the reason replaces the (empty) book.
+    void set_error(const QString& message);
 
   signals:
     void price_clicked(double price);
@@ -43,13 +48,16 @@ class PolymarketOrderBook : public QWidget {
     QVector<fincept::services::prediction::OrderLevel> asks_;
     double spread_ = 0.0;
     int price_decimals_ = 2; // follows the book's tick size (0.001-tick markets need 3 dp)
+    bool loading_ = false;   // a request is out and no book has arrived yet
+    QString error_;          // the last request failed (shown while the book is empty)
     QMutex mutex_;
     QPixmap cache_;
     bool cache_dirty_ = true;
     QTimer* repaint_timer_ = nullptr;
 
-    static constexpr int ROW_HEIGHT = 20;
-    static constexpr int HEADER_HEIGHT = 28;
+    // Row / header heights follow the user's font size (20 / 28 px at the default).
+    int row_height() const;
+    int header_height() const;
 };
 
 } // namespace fincept::screens::polymarket

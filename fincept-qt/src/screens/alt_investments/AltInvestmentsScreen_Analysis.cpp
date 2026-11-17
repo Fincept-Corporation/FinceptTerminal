@@ -1,776 +1,235 @@
 // src/screens/alt_investments/AltInvestmentsScreen_Analysis.cpp
 //
-// Analysis flow: rebuild_form, on_category/analyzer/analyze, collect_form_data,
-// run_analysis, display_verdict, append_metric_row.
+// Running an analysis and showing it: on_analyze (run / cancel), run_analysis, cancel_analysis,
+// display_result (summary line + the shared ui::ResultView), add_analyzer_widgets, and the result
+// actions (copy, CSV, image).
+//
+// The result area is the shared ui::AutoLoadPane: replies are tied to the pane's request ids, so
+// changing analyzer or method, cancelling, or starting another run makes an earlier reply unwanted,
+// and it is dropped instead of being drawn under whatever is selected by then.
 //
 // Part of the partial-class split of AltInvestmentsScreen.cpp.
 
-#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
-#include "core/session/ScreenStateManager.h"
+#include "ui/formatting/NumberFormat.h"
+#include "core/report/ReportBlocks.h"
 #include "screens/alt_investments/AltInvestmentsScreen.h"
 #include "services/python_cli/PythonCliService.h"
 #include "storage/cache/CacheManager.h"
+#include "ui/charts/ChartExport.h"
+#include "ui/charts/DonutChart.h"
+#include "ui/charts/RangeBar.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/AutoLoadPolicy.h"
+#include "ui/widgets/ResultLayout.h"
+#include "ui/widgets/ResultView.h"
+#include "ui/widgets/report/AddToReportButton.h"
 
-#include <QComboBox>
-#include <QCoreApplication>
-#include <QDoubleSpinBox>
-#include <QFrame>
-#include <QHBoxLayout>
-#include <QHash>
+#include <QApplication>
+#include <QClipboard>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
-#include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
-#include <QScrollArea>
-#include <QShowEvent>
-#include <QSignalBlocker>
-#include <QSpinBox>
-#include <QSplitter>
-#include <QVBoxLayout>
+#include <QTimer>
+
+#include <algorithm>
+#include <cmath>
+#include <memory>
 
 namespace fincept::screens {
 
 using namespace fincept::ui;
 
-// Translation helper for the data-driven analyzer field labels below.
-static QString alt_tr(const char* s) {
-    return QCoreApplication::translate("AltInvestmentsScreen", s);
+namespace {
+// A run is ~3 s (interpreter start + imports); a minute means something is wrong.
+constexpr int kAltRunTimeoutMs = 60'000;
+// The largest analyzer reply is a few tens of KB.
+constexpr qint64 kAltMaxOutputBytes = 8LL * 1024 * 1024;
+const char* const kAltScript = "Analytics/alternateInvestment/cli.py";
+
+// Calculator amounts: the user denominates them in their display currency (no
+// conversion). The code is read at format time so a re-render follows a change, and it is
+// the same setting as the "($)" form labels (fmt::bind_currency_label).
+QString alt_money(double v, fincept::ui::formatting::Compact scheme) {
+    return fincept::ui::formatting::money(v, fincept::ui::formatting::display_currency(), scheme);
 }
+} // namespace
 
-// Currency-aware field helpers: labels ending in "($)" and spin prefixes of "$"
-// track the user's preferred currency live; everything else is left untouched.
-static void set_alt_field_label(QLabel* lbl, const QString& label) {
-    if (label.endsWith("($)")) {
-        QString base = label;
-        base.chop(3); // strip "($)"
-        cur::bindLabel(lbl, base + "(%1)");
-    } else {
-        lbl->setText(label);
-    }
-}
-
-static void apply_alt_field_prefix(QDoubleSpinBox* sp, const QString& prefix) {
-    if (prefix == QLatin1String("$"))
-        cur::bindPrefix(sp);
-    else if (!prefix.isEmpty())
-        sp->setPrefix(prefix);
-}
-
-static AltField text_field(const QString& key, const QString& label, const QString& def = "") {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Text;
-    f.combo_items = def;
-    return f;
-}
-
-static AltField spin_field(const QString& key, const QString& label, double def, double min_v, double max_v,
-                           int dec = 2, const QString& pfx = "", const QString& sfx = "", bool div100 = false) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Spin;
-    f.default_val = def;
-    f.min_val = min_v;
-    f.max_val = max_v;
-    f.decimals = dec;
-    f.prefix = pfx;
-    f.suffix = sfx;
-    f.divide_100 = div100;
-    return f;
-}
-
-// Comma-separated numbers -> JSON array; `div100` converts percent input to decimals.
-static AltField series_field(const QString& key, const QString& label, const QString& def, bool div100) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Series;
-    f.combo_items = def;
-    f.divide_100 = div100;
-    return f;
-}
-
-// "YYYY-MM-DD:amount; ..." -> [{"date", "amount"}].
-static AltField cashflow_field(const QString& key, const QString& label, const QString& def) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::CashFlows;
-    f.combo_items = def;
-    return f;
-}
-
-static AltField combo_field(const QString& key, const QString& label, const QString& items) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Combo;
-    f.combo_items = items;
-    return f;
-}
-
-// ── Per-analyzer form fields ─────────────────────────────────────────────────
-
-static QList<AltField> fields_for(const QString& id) {
-    if (id == "high-yield")
-        return {
-            text_field("name", alt_tr("BOND NAME"), "HY Corp Bond"),
-            spin_field("par_value", alt_tr("PAR VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("price", alt_tr("MARKET PRICE") + " ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 8.5, 0, 30, 2, "", "%", true),
-            spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 0.5, 30, 1),
-            combo_field("credit_rating", alt_tr("CREDIT RATING"), "BB|B|CCC|BB+|BB-|B+|B-|CCC+"),
-            // The spread is measured against this; it used to be a hidden fixed 4%.
-            spin_field("treasury_yield", alt_tr("TREASURY YIELD, SAME TENOR (%)"), 4.0, 0, 20, 2, "", "%", true),
-        };
-    if (id == "em-bonds")
-        return {
-            text_field("name", alt_tr("BOND NAME"), "Brazil 2030"),
-            spin_field("face_value", alt_tr("FACE VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("current_market_value", alt_tr("MARKET PRICE") + " ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 6.0, 0, 25, 2, "", "%", true),
-            spin_field("maturity_years", alt_tr("MATURITY (years)"), 10, 0.5, 30, 1),
-            spin_field("credit_spread", alt_tr("CREDIT SPREAD (%)"), 3.0, 0, 20, 2, "", "%", true),
-            spin_field("treasury_yield", alt_tr("TREASURY YIELD, SAME TENOR (%)"), 4.0, 0, 20, 2, "", "%", true),
-            combo_field("sovereign_rating", alt_tr("SOVEREIGN RATING"), "BB|BBB|B|CCC|BB+|BB-|B+|B-"),
-            // currency_risk only has something to say about local-currency bonds.
-            combo_field("currency", alt_tr("BOND CURRENCY"), "USD|EUR|LOCAL"),
-        };
-    if (id == "convertible-bonds")
-        return {
-            text_field("name", alt_tr("BOND NAME"), "Tesla Conv 2028"),
-            spin_field("par_value", alt_tr("PAR VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("current_price", alt_tr("MARKET PRICE") + " ($)", 1100, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 2.0, 0, 15, 2, "", "%", true),
-            spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 0.5, 30, 1),
-            spin_field("stock_price", alt_tr("STOCK PRICE") + " ($)", 55, 1, 1e6, 2, "$"),
-            spin_field("conversion_ratio", alt_tr("CONVERSION RATIO"), 18, 1, 1e4, 2),
-        };
-    if (id == "preferred-stocks")
-        return {
-            text_field("name", alt_tr("SECURITY NAME"), "JPM Series J Preferred"),
-            spin_field("par_value", alt_tr("PAR VALUE") + " ($)", 25, 1, 1e4, 2, "$"),
-            spin_field("current_price", alt_tr("MARKET PRICE") + " ($)", 24.5, 1, 1e4, 2, "$"),
-            spin_field("dividend_rate", alt_tr("DIVIDEND RATE (%)"), 5.5, 0, 20, 2, "", "%", true),
-        };
-    if (id == "real-estate")
-        return {
-            text_field("name", alt_tr("PROPERTY NAME"), "Class A Office"),
-            spin_field("acquisition_price", alt_tr("PURCHASE PRICE") + " ($)", 1000000, 1000, 1e12, 0, "$"),
-            spin_field("gross_income", alt_tr("GROSS INCOME ($/yr)"), 120000, 0, 1e9, 0, "$"),
-            spin_field("vacancy_rate", alt_tr("VACANCY RATE (%)"), 5.0, 0, 100, 1, "", "%", true),
-            spin_field("operating_expenses", alt_tr("OPER. EXPENSES ($/yr)"), 40000, 0, 1e9, 0, "$"),
-            spin_field("loan_amount", alt_tr("LOAN AMOUNT") + " ($)", 700000, 0, 1e12, 0, "$"),
-            spin_field("interest_rate", alt_tr("MORTGAGE RATE (%)"), 6.5, 0, 30, 2, "", "%", true),
-            spin_field("loan_term", alt_tr("LOAN TERM (years)"), 30, 5, 50, 0),
-        };
-    if (id == "hedge-funds")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "Global Macro Fund"),
-            // The fund's own track record: nothing is computed without it.
-            series_field("monthly_returns", alt_tr("MONTHLY GROSS RETURNS (%, oldest first, 12+)"),
-                         "1.2, -0.4, 1.8, 0.6, -1.1, 0.9, 1.4, -0.2, 0.7, 1.0, -0.6, 1.3", true),
-            spin_field("management_fee", alt_tr("MGMT FEE (%)"), 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", alt_tr("PERF FEE (%)"), 20.0, 0, 50, 1, "", "%", true),
-            spin_field("hurdle_rate", alt_tr("HURDLE RATE (%)"), 0.0, 0, 20, 2, "", "%", true),
-            spin_field("risk_free_rate", alt_tr("RISK-FREE RATE (%)"), 4.0, 0, 20, 2, "", "%", true),
-            combo_field("strategy_type", alt_tr("STRATEGY"),
-                        "equity_long_short|global_macro|event_driven|relative_value|multi_strategy"),
-        };
-    if (id == "managed-futures")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "CTA Trend Fund"),
-            spin_field("management_fee", alt_tr("MGMT FEE (%)"), 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", alt_tr("PERF FEE (%)"), 20.0, 0, 50, 1, "", "%", true),
-            spin_field("gross_return", alt_tr("GROSS RETURN (%)"), 12.0, -50, 100, 2, "", "%", true),
-        };
-    if (id == "market-neutral")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "Market Neutral Fund"),
-            spin_field("gross_leverage", alt_tr("GROSS LEVERAGE"), 2.0, 0.5, 10, 1),
-            spin_field("management_fee", alt_tr("MGMT FEE (%)"), 1.5, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", alt_tr("PERF FEE (%)"), 20.0, 0, 50, 1, "", "%", true),
-        };
-    if (id == "natural-resources")
-        return {
-            text_field("name", alt_tr("COMMODITY NAME"), "WTI Crude Oil"),
-            spin_field("spot_price", alt_tr("SPOT PRICE") + " ($)", 80, 0, 1e6, 0, "$"),
-            spin_field("three_month_futures", alt_tr("3M FUTURES") + " ($)", 82, 0, 1e6, 2, "$"),
-            spin_field("six_month_futures", alt_tr("6M FUTURES") + " ($)", 84, 0, 1e6, 2, "$"),
-            spin_field("twelve_month_futures", alt_tr("12M FUTURES") + " ($)", 87, 0, 1e6, 2, "$"),
-            combo_field("sector", alt_tr("SECTOR"), "energy|metals|agriculture|livestock"),
-        };
-    if (id == "private-capital")
-        return {
-            // The LP's own cash flows drive every metric (the old fee fields were never read).
-            text_field("name", alt_tr("FUND NAME"), "Buyout Fund III"),
-            cashflow_field("cash_flows", alt_tr("CASH FLOWS (date:amount; calls negative)"),
-                           "2020-03-31:-1000000; 2021-06-30:-500000; 2023-12-31:600000"),
-            spin_field("current_nav", alt_tr("CURRENT NAV") + " ($)", 1400000, 0, 1e12, 0, "$"),
-            text_field("nav_date", alt_tr("NAV DATE (YYYY-MM-DD, blank = today)"), ""),
-            spin_field("commitment", alt_tr("COMMITMENT") + " ($)", 2000000, 0, 1e12, 0, "$"),
-        };
-    if (id == "annuities")
-        return {
-            text_field("name", alt_tr("ANNUITY NAME"), "Fixed Annuity"),
-            spin_field("premium", alt_tr("PREMIUM") + " ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("annual_payout_rate", alt_tr("ANNUAL PAYOUT RATE (%)"), 5.0, 0.1, 20, 2, "", "%", true),
-            spin_field("payout_years", alt_tr("PAYOUT TERM (years)"), 20, 5, 50, 0),
-            spin_field("guaranteed_rate", alt_tr("GUARANTEED RATE (%)"), 4.0, 0, 15, 2, "", "%", true),
-        };
-    if (id == "variable-annuities")
-        return {
-            text_field("name", alt_tr("ANNUITY NAME"), "Variable Annuity"),
-            spin_field("premium", alt_tr("PREMIUM") + " ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("me_fee", alt_tr("M&E FEE (%)"), 1.25, 0, 5, 2, "", "%", true),
-            spin_field("investment_fee", alt_tr("INVESTMENT FEE (%)"), 0.75, 0, 5, 2, "", "%", true),
-            spin_field("admin_fee", alt_tr("ADMIN FEE (%)"), 0.15, 0, 3, 2, "", "%", true),
-            spin_field("surrender_period", alt_tr("SURRENDER PERIOD (yrs)"), 7, 0, 20, 0),
-        };
-    if (id == "eia")
-        return {
-            text_field("name", alt_tr("PRODUCT NAME"), "EIA Product"),
-            spin_field("index_return", alt_tr("INDEX RETURN (%)"), 10.0, -50, 100, 2, "", "%", true),
-            spin_field("participation_rate", alt_tr("PARTICIPATION (%)"), 80.0, 10, 100, 1, "", "%", true),
-            spin_field("cap_rate", alt_tr("CAP RATE (%)"), 6.0, 0, 50, 2, "", "%", true),
-            spin_field("floor_rate", alt_tr("FLOOR RATE (%)"), 0.0, -10, 10, 2, "", "%", true),
-        };
-    if (id == "inflation-annuity")
-        return {
-            text_field("name", alt_tr("ANNUITY NAME"), "Inflation-Indexed Annuity"),
-            spin_field("acquisition_price", alt_tr("PREMIUM") + " ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("age", alt_tr("PURCHASE AGE (years)"), 65, 40, 90, 0),
-            spin_field("real_payout_rate", alt_tr("REAL PAYOUT RATE (%)"), 4.0, 0, 15, 2, "", "%", true),
-            spin_field("inflation_rate", alt_tr("ASSUMED INFLATION (%)"), 3.0, 0, 15, 2, "", "%", true),
-            spin_field("payout_years", alt_tr("PAYOUT TERM (years)"), 20, 5, 50, 0),
-            spin_field("fixed_payout_rate", alt_tr("FIXED ALT RATE (%)"), 5.5, 0, 15, 2, "", "%", true),
-        };
-    if (id == "structured-products")
-        return {
-            // The analyzer returns a fixed qualitative verdict; principal / participation / cap
-            // inputs were shown but never read, so they are not offered.
-            text_field("name", alt_tr("PRODUCT NAME"), "Principal Protected Note"),
-        };
-    if (id == "leveraged-funds")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "3x S&P 500 ETF"),
-            spin_field("leverage_ratio", alt_tr("LEVERAGE RATIO"), 3.0, 2.0, 4.0, 1),
-        };
-    if (id == "tips")
-        return {
-            text_field("name", alt_tr("SECURITY NAME"), "TIPS 2031"),
-            spin_field("face_value", alt_tr("FACE VALUE") + " ($)", 10000, 1000, 1e9, 0, "$"),
-            spin_field("current_market_value", alt_tr("MARKET PRICE") + " ($)", 10200, 1000, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("REAL COUPON (%)"), 2.5, 0, 10, 2, "", "%", true),
-            spin_field("maturity_years", alt_tr("MATURITY (years)"), 7, 1, 30, 1),
-        };
-    if (id == "ibonds")
-        return {
-            text_field("name", alt_tr("BOND NAME"), "I-Bond 2025"),
-            spin_field("purchase_price", alt_tr("PURCHASE PRICE") + " ($)", 10000, 25, 10000, 0, "$"),
-            spin_field("fixed_rate", alt_tr("FIXED RATE (%)"), 0.4, 0, 5, 2, "", "%", true),
-            // Treasury's composite formula takes the SEMIANNUAL rate; entering an annual
-            // CPI figure here doubled the inflation component.
-            spin_field("inflation_rate", alt_tr("SEMIANNUAL CPI-U INFLATION (%)"), 1.5, -10, 20, 2, "", "%", true),
-            spin_field("years_held", alt_tr("YEARS HELD"), 1, 0, 30, 0),
-        };
-    if (id == "stable-value")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "Stable Value Fund"),
-            spin_field("book_value", alt_tr("BOOK VALUE") + " ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("market_value", alt_tr("MARKET VALUE") + " ($)", 98000, 1000, 1e9, 0, "$"),
-            spin_field("crediting_rate", alt_tr("CREDITING RATE (%)"), 3.2, 0, 15, 2, "", "%", true),
-            // These drove the analysis as hidden defaults before.
-            spin_field("portfolio_yield", alt_tr("UNDERLYING PORTFOLIO YIELD (%)"), 4.0, 0, 20, 2, "", "%", true),
-            spin_field("wrap_fee", alt_tr("WRAP FEE (%)"), 0.25, 0, 2, 2, "", "%", true),
-            spin_field("treasury_yield", alt_tr("TREASURY YIELD (%)"), 4.0, 0, 20, 2, "", "%", true),
-            spin_field("credit_spread", alt_tr("CREDIT SPREAD (%)"), 1.0, 0, 10, 2, "", "%", true),
-            spin_field("investor_age", alt_tr("INVESTOR AGE"), 50, 18, 100, 0),
-            spin_field("retirement_age", alt_tr("RETIREMENT AGE"), 65, 40, 100, 0),
-            combo_field("risk_tolerance", alt_tr("RISK TOLERANCE"), "moderate|conservative|aggressive"),
-        };
-    if (id == "covered-calls")
-        return {
-            text_field("name", alt_tr("POSITION NAME"), "AAPL Covered Call"),
-            spin_field("stock_price", alt_tr("STOCK PRICE") + " ($)", 150, 1, 1e6, 2, "$"),
-            spin_field("strike_price", alt_tr("STRIKE PRICE") + " ($)", 160, 1, 1e6, 2, "$"),
-            spin_field("premium", alt_tr("PREMIUM / SHARE ($)"), 5, 0, 1e4, 2, "$"),
-            spin_field("shares", alt_tr("SHARES"), 100, 1, 1e6, 0),
-            spin_field("cost_basis", alt_tr("COST BASIS") + " ($)", 125, 1, 1e6, 2, "$"),
-            spin_field("holding_period_days", alt_tr("HOLDING DAYS"), 400, 1, 3650, 0),
-        };
-    if (id == "sri")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "ESG Equity Fund"),
-            spin_field("sri_return", alt_tr("SRI RETURN (%)"), 9.0, -30, 100, 2, "", "%", true),
-            spin_field("benchmark_return", alt_tr("BENCHMARK RETURN (%)"), 10.0, -30, 100, 2, "", "%", true),
-            spin_field("expense_ratio", alt_tr("EXPENSE RATIO (%)"), 0.8, 0, 5, 2, "", "%", true),
-            spin_field("time_period_years", alt_tr("TIME PERIOD (years)"), 10, 1, 50, 0),
-        };
-    if (id == "asset-location")
-        return {
-            text_field("name", alt_tr("ASSET NAME"), "REITs / High-Yield"),
-            combo_field("asset_class", alt_tr("ASSET CLASS"),
-                        "reits|high_yield_bonds|stocks|municipal_bonds|tips|commodities|cash"),
-            spin_field("tax_bracket", alt_tr("TAX BRACKET (%)"), 24.0, 10, 45, 1, "", "%", true),
-        };
-    if (id == "digital-assets")
-        return {
-            // No PRICE field: the analyzer derives price as market cap / circulating supply
-            // and ignored an entered price (two different prices on one screen).
-            text_field("name", alt_tr("ASSET NAME"), "Bitcoin"),
-            spin_field("market_cap", alt_tr("MARKET CAP ($B)"), 850, 0, 1e6, 1, "$", "B"),
-            spin_field("volume_24h", alt_tr("24H VOLUME ($B)"), 25, 0, 1e6, 1, "$", "B"),
-            spin_field("circulating_supply", alt_tr("CIRC. SUPPLY (M)"), 19.5, 0, 1e6, 1, "", "M"),
-            spin_field("max_supply", alt_tr("MAX SUPPLY (M)"), 21.0, 0, 1e6, 1, "", "M"),
-        };
-    return {text_field("name", alt_tr("NAME"), "")};
-}
-
-// ── Analysis methods (cli.py --method) ───────────────────────────────────────
-// Per analyzer: the methods that run end to end in cli.py (checked by running every method of every analyzer),
-// default first. cli.py's argparse also lists methods whose implementation is missing (e.g. hedge-funds
-// `performance`, natural-resources `contango`) or crashes (convertible-bonds `bond_floor`, three annuity methods);
-// those are deliberately not offered. The screen used to pass no --method at all, so only each analyzer's default
-// method was reachable.
-
-struct AltMethod {
-    const char* id;
-    const char* label;
-};
-
-static QList<AltMethod> alt_methods_for(const QString& id) {
-    static const QHash<QString, QList<AltMethod>> kTable = {
-        {"digital-assets", {{"fundamental", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fundamental metrics")}}},
-        {"hedge-funds", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Gross vs net performance")}}},
-        {"natural-resources", {{"basis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Futures basis")}}},
-        {"private-capital", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Key metrics")}}},
-        {"real-estate",
-         {{"noi", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Net operating income")},
-          {"caprate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Cap rate")},
-          {"dcf", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "DCF valuation")}}},
-        {"tips",
-         {{"real_yield", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Real yield")},
-          {"inflation_scenarios", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Inflation scenarios")},
-          {"tax_efficiency", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax efficiency")}}},
-        {"ibonds",
-         {{"composite_rate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Composite rate")},
-          {"penalty", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Early redemption penalty")},
-          {"compare_tips", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to TIPS")},
-          {"tax_efficiency", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax efficiency")}}},
-        {"high-yield",
-         {{"credit_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Credit spread analysis")},
-          {"default_prob", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Default probability")}}},
-        {"preferred-stocks",
-         {{"yield_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield analysis")},
-          {"call_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Call risk")},
-          {"dividend_safety", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Dividend safety")}}},
-        {"convertible-bonds",
-         {{"conversion_premium", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Conversion premium")},
-          {"upside_participation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Upside participation")}}},
-        {"annuities", {{"payouts", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Payout analysis")}}},
-        {"inflation-annuity",
-         {{"compare_fixed", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to fixed annuity")},
-          {"compare_tips", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to TIPS ladder")},
-          {"longevity", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Longevity break-even")},
-          {"inflation_value", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Inflation protection value")}}},
-        {"em-bonds",
-         {{"yield_spread", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield spread")},
-          {"default_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Sovereign default risk")},
-          {"currency_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Currency risk")}}},
-        // trend_following / crisis_alpha / beta_analysis / factor_exposure need price or
-        // return histories this form does not collect: they only ever answered
-        // "Insufficient data", so they are not offered.
-        {"managed-futures", {{"fee_impact", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fee impact")}}},
-        {"market-neutral", {{"leverage_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Leverage risk")}}},
-        {"stable-value",
-         {{"market_to_book", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Market-to-book")},
-          {"crediting_rate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crediting rate")},
-          {"suitability", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Suitability")}}},
-        {"eia",
-         {{"crediting", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Credited return")},
-          {"upside_limitation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Upside limitation")},
-          {"surrender_charges", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Surrender charges")}}},
-        {"asset-location",
-         {{"optimal", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Optimal location")},
-          {"value_added", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Value added")},
-          {"muni_bond", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Municipal bond decision")}}},
-        {"covered-calls",
-         {{"tax", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax consequences")},
-          {"opportunity_cost", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Opportunity cost")},
-          {"alternative", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Better alternative")},
-          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
-        {"sri",
-         {{"performance", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Performance")},
-          {"screening", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Screening impact")},
-          {"expenses", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Expenses")},
-          {"approaches", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "SRI approaches")}}},
-        {"leveraged-funds",
-         {{"decay", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Volatility decay")},
-          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
-        {"structured-products", {{"complexity", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Analysis verdict")}}},
-        {"variable-annuities",
-         {{"fees", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Total annual cost")},
-          {"tax", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax deferral")},
-          {"alternatives", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Alternatives")},
-          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
-    };
-    return kTable.value(id);
-}
-
-// ── Form -> cli.py data adaptation ────────────────────────────────────────────
-// The form's keys are display-oriented; cli.py reads its own names (and only those it lists). Copy each value
-// under the name the backend honours, keeping the original key too. Without this, e.g. the high-yield MARKET PRICE
-// (`price`) and the digital-asset 24H VOLUME (`volume_24h`) never reached the analyzers. Mappings were verified by
-// perturbing each input and checking the result changes.
-static void adapt_form_for_cli(const QString& id, QJsonObject& form) {
-    auto alias = [&form](const char* from, const char* to) {
-        if (form.contains(QLatin1String(from)) && !form.contains(QLatin1String(to)))
-            form.insert(QLatin1String(to), form.value(QLatin1String(from)));
-    };
-    if (id == QLatin1String("digital-assets")) {
-        alias("volume_24h", "trading_volume_24h");
-        alias("max_supply", "total_supply");
-    } else if (id == QLatin1String("real-estate")) {
-        alias("gross_income", "gross_rental_income");
-    } else if (id == QLatin1String("tips")) {
-        alias("face_value", "acquisition_price");
-        alias("current_market_value", "current_price");
-    } else if (id == QLatin1String("ibonds")) {
-        alias("purchase_price", "face_value");
-    } else if (id == QLatin1String("high-yield")) {
-        alias("par_value", "face_value");
-        alias("price", "current_market_value");
-    } else if (id == QLatin1String("convertible-bonds")) {
-        alias("par_value", "face_value");
-        alias("current_price", "current_market_value");
-    } else if (id == QLatin1String("annuities")) {
-        alias("premium", "acquisition_price");
-        alias("annual_payout_rate", "annuity_rate");
-    } else if (id == QLatin1String("stable-value")) {
-        alias("book_value", "acquisition_price");
-        alias("market_value", "current_market_value");
-    } else if (id == QLatin1String("covered-calls")) {
-        alias("shares", "shares_owned");
-        alias("premium", "option_premium");
-    } else if (id == QLatin1String("sri")) {
-        alias("sri_return", "fund_return");
-    } else if (id == QLatin1String("leveraged-funds")) {
-        // cli.py reads leverage_ratio directly now (it used to drop it and analyse every fund as 2x).
-    } else if (id == QLatin1String("natural-resources")) {
-        // The script prices the basis from `futures_price` (3-month contract here) and `expiry_months`.
-        alias("three_month_futures", "futures_price");
-        form.insert(QStringLiteral("expiry_months"), 3);
-    } else if (id == QLatin1String("market-neutral")) {
-        // GROSS LEVERAGE = long + short exposure; a market-neutral book is split evenly.
-        const double gross = form.value(QStringLiteral("gross_leverage")).toDouble(0.0);
-        if (gross > 0.0) {
-            form.insert(QStringLiteral("long_exposure"), gross / 2.0);
-            form.insert(QStringLiteral("short_exposure"), gross / 2.0);
-        }
-    }
-}
-
-void AltInvestmentsScreen::populate_methods(const QString& analyzer_id) {
-    if (!method_combo_)
-        return;
-    const QList<AltMethod> methods = alt_methods_for(analyzer_id);
-    {
-        const QSignalBlocker block(method_combo_);
-        method_combo_->clear();
-        for (const AltMethod& m : methods)
-            method_combo_->addItem(QCoreApplication::translate("AltInvestmentsScreen", m.label), QString::fromLatin1(m.id));
-    }
-    // Nothing to choose between when only one method is available.
-    const bool choosable = methods.size() > 1;
-    method_combo_->setVisible(choosable);
-    if (method_label_)
-        method_label_->setVisible(choosable);
-}
-
-void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
-    for (auto* w : field_widgets_)
-        w->deleteLater();
-    field_widgets_.clear();
-    current_fields_.clear();
-
-    while (form_layout_->count() > 0) {
-        auto* item = form_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
-    const QString ana_id = categories_[cat].analyzers[ana].id;
-    current_fields_ = fields_for(ana_id);
-    populate_methods(ana_id);
-
-    int i = 0;
-    while (i < current_fields_.size()) {
-        const auto& f = current_fields_[i];
-        const bool pair = (f.type == AltField::Spin && i + 1 < current_fields_.size() &&
-                           current_fields_[i + 1].type == AltField::Spin);
-
-        if (pair) {
-            auto* row = new QWidget(this);
-            auto* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0);
-            rl->setSpacing(8);
-
-            auto build_spin_col = [&](const AltField& field) -> QWidget* {
-                auto* col = new QWidget(this);
-                auto* cl = new QVBoxLayout(col);
-                cl->setContentsMargins(0, 0, 0, 0);
-                cl->setSpacing(3);
-                auto* lbl = new QLabel;
-                set_alt_field_label(lbl, field.label);
-                lbl->setObjectName("altFieldLabel");
-                cl->addWidget(lbl);
-                auto* sp = new QDoubleSpinBox;
-                sp->setRange(field.min_val, field.max_val);
-                sp->setValue(field.default_val);
-                sp->setDecimals(field.decimals);
-                sp->setButtonSymbols(QAbstractSpinBox::NoButtons);
-                apply_alt_field_prefix(sp, field.prefix);
-                if (!field.suffix.isEmpty())
-                    sp->setSuffix(field.suffix);
-                cl->addWidget(sp);
-                field_widgets_.append(sp);
-                return col;
-            };
-
-            rl->addWidget(build_spin_col(f), 1);
-            rl->addWidget(build_spin_col(current_fields_[i + 1]), 1);
-            form_layout_->addWidget(row);
-            i += 2;
-        } else {
-            auto* col = new QWidget(this);
-            auto* cl = new QVBoxLayout(col);
-            cl->setContentsMargins(0, 0, 0, 0);
-            cl->setSpacing(3);
-            auto* lbl = new QLabel;
-            set_alt_field_label(lbl, f.label);
-            lbl->setObjectName("altFieldLabel");
-            cl->addWidget(lbl);
-
-            if (f.type == AltField::Text || f.type == AltField::Series || f.type == AltField::CashFlows) {
-                auto* le = new QLineEdit(f.combo_items);
-                connect(le, &QLineEdit::returnPressed, this, &AltInvestmentsScreen::on_analyze);
-                cl->addWidget(le);
-                field_widgets_.append(le);
-            } else if (f.type == AltField::Combo) {
-                auto* cb = new QComboBox;
-                for (const auto& item : f.combo_items.split('|'))
-                    cb->addItem(item.trimmed());
-                cl->addWidget(cb);
-                field_widgets_.append(cb);
-            } else {
-                auto* sp = new QDoubleSpinBox;
-                sp->setRange(f.min_val, f.max_val);
-                sp->setValue(f.default_val);
-                sp->setDecimals(f.decimals);
-                sp->setButtonSymbols(QAbstractSpinBox::NoButtons);
-                apply_alt_field_prefix(sp, f.prefix);
-                if (!f.suffix.isEmpty())
-                    sp->setSuffix(f.suffix);
-                cl->addWidget(sp);
-                field_widgets_.append(sp);
-            }
-            form_layout_->addWidget(col);
-            ++i;
-        }
-    }
-    form_layout_->addStretch(1);
-}
-
-// ── Slots ─────────────────────────────────────────────────────────────────────
-
-void AltInvestmentsScreen::on_category_changed(int index) {
-    if (index < 0 || index >= categories_.size())
-        return;
-    active_category_ = index;
-
-    for (int i = 0; i < cat_btns_.size(); ++i) {
-        cat_btns_[i]->setProperty("active", i == index);
-        cat_btns_[i]->style()->unpolish(cat_btns_[i]);
-        cat_btns_[i]->style()->polish(cat_btns_[i]);
-    }
-
-    const auto& cat = categories_[index];
-    center_title_->setText(cat.name.toUpper());
-    status_category_->setText(tr("CATEGORY: %1").arg(cat.name.toUpper()));
-
-    analyzer_combo_->blockSignals(true);
-    analyzer_combo_->clear();
-    for (const auto& a : cat.analyzers)
-        analyzer_combo_->addItem(a.name);
-    analyzer_combo_->blockSignals(false);
-
-    on_analyzer_changed(0);
-    LOG_INFO("AltInvestments", "Category: " + cat.name);
-}
-
-void AltInvestmentsScreen::on_analyzer_changed(int index) {
-    if (index < 0 || index >= categories_[active_category_].analyzers.size())
-        return;
-    active_analyzer_ = index;
-
-    const auto& ana = categories_[active_category_].analyzers[index];
-    center_desc_->setText(ana.description);
-    status_analyzer_->setText(ana.name.toUpper());
-    analyzer_combo_->setCurrentIndex(index);
-    rebuild_form(active_category_, index);
-
-    fincept::ScreenStateManager::instance().notify_changed(this);
-}
+// ── Run / cancel ─────────────────────────────────────────────────────────────
 
 void AltInvestmentsScreen::on_analyze() {
-    if (loading_)
+    if (!pane_)
         return;
-    const auto& ana = categories_[active_category_].analyzers[active_analyzer_];
-    run_analysis(ana.id, collect_form_data());
-}
-
-// ── Form data collection ─────────────────────────────────────────────────────
-
-QJsonObject AltInvestmentsScreen::collect_form_data() const {
-    QJsonObject form;
-    for (int i = 0; i < current_fields_.size() && i < field_widgets_.size(); ++i) {
-        const auto& f = current_fields_[i];
-        auto* w = field_widgets_[i];
-        if (f.type == AltField::Text) {
-            if (auto* le = qobject_cast<QLineEdit*>(w)) {
-                if (!le->text().trimmed().isEmpty() || f.key == QLatin1String("name"))
-                    form[f.key] = le->text().trimmed();
-            }
-        } else if (f.type == AltField::Series) {
-            // "1.2, -0.4 1.8" -> [0.012, -0.004, 0.018] (percent input when divide_100).
-            QJsonArray arr;
-            if (auto* le = qobject_cast<QLineEdit*>(w)) {
-                for (const QString& tok : le->text().split(QRegularExpression(R"([,;\s]+)"), Qt::SkipEmptyParts)) {
-                    bool ok = false;
-                    const double v = tok.toDouble(&ok);
-                    if (ok)
-                        arr.append(f.divide_100 ? v / 100.0 : v);
-                }
-            }
-            form[f.key] = arr;
-        } else if (f.type == AltField::CashFlows) {
-            // "2020-03-31:-1000000; 2021-06-30:-500000" -> [{date, amount}, ...]
-            QJsonArray arr;
-            if (auto* le = qobject_cast<QLineEdit*>(w)) {
-                for (const QString& item : le->text().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
-                    const QStringList parts = item.trimmed().split(QLatin1Char(':'));
-                    if (parts.size() != 2)
-                        continue;
-                    bool ok = false;
-                    const double amount = QString(parts.at(1)).remove(QLatin1Char(',')).trimmed().toDouble(&ok);
-                    if (ok)
-                        arr.append(QJsonObject{{"date", parts.at(0).trimmed()}, {"amount", amount}});
-                }
-            }
-            form[f.key] = arr;
-        } else if (f.type == AltField::Combo) {
-            if (auto* cb = qobject_cast<QComboBox*>(w))
-                form[f.key] = cb->currentText();
-        } else {
-            if (auto* sp = qobject_cast<QDoubleSpinBox*>(w)) {
-                double val = sp->value();
-                // Scale and percent-conversion are independent concerns: a field
-                // can legitimately be entered in billions *and* be a rate. The
-                // old else-if chain silently dropped divide_100 whenever a
-                // B/M suffix was present.
-                if (f.suffix == "B")
-                    val *= 1e9;
-                else if (f.suffix == "M")
-                    val *= 1e6;
-                if (f.divide_100)
-                    val /= 100.0;
-                form[f.key] = val;
-            }
-        }
+    if (loading_) {
+        pane_->cancel(); // the result on screen stays; with none, the pane offers RUN
+        return;
     }
-    return form;
+    pane_->run();
 }
 
-// ── Python execution ──────────────────────────────────────────────────────────
+void AltInvestmentsScreen::cancel_analysis() {
+    if (pane_ && pane_->is_running())
+        pane_->cancel();
+}
 
-void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& form_in) {
-    QJsonObject form = form_in;
-    adapt_form_for_cli(command, form);
-    const QString data_json = QString::fromUtf8(QJsonDocument(form).toJson(QJsonDocument::Compact));
+QString AltInvestmentsScreen::view_key() const {
+    const QString command = current_analyzer_id();
+    if (command.isEmpty())
+        return {};
+    return command + QLatin1Char('|') + current_method().id;
+}
 
-    QStringList cli_args = {command, QStringLiteral("--data"), data_json};
-    const QString method =
-        (method_combo_ && method_combo_->count() > 0) ? method_combo_->currentData().toString() : QString();
-    if (!method.isEmpty())
-        cli_args << QStringLiteral("--method") << method;
-    // asset-location takes the bracket as a CLI flag (a fraction), not as a data key.
-    if (command == QLatin1String("asset-location") && form.contains(QStringLiteral("tax_bracket")))
-        cli_args << QStringLiteral("--tax-bracket")
-                 << QString::number(form.value(QStringLiteral("tax_bracket")).toDouble(), 'g', 10);
+QString AltInvestmentsScreen::selection_title() const {
+    const AltMethod method = current_method();
+    QStringList parts = {current_analyzer_name(), method.label};
+    if (!method.guide) {
+        const QString name = collect_form_data(nullptr).value(QStringLiteral("name")).toString();
+        if (!name.isEmpty())
+            parts << name;
+    }
+    parts.removeAll(QString());
+    return parts.join(QStringLiteral("  \xB7  "));
+}
 
-    // The cache key must include the method (and flags): the same inputs under another method are another result.
-    const QString cache_key = "alt_screen:" + cli_args.join(QLatin1Char('\x1f'));
+void AltInvestmentsScreen::select_view() {
+    const QString key = view_key();
+    if (!pane_ || key.isEmpty())
+        return;
+    const QString title = selection_title();
+    if (result_title_) {
+        result_title_->setText(title);
+        result_title_->setToolTip(title); // the bar cuts a long title at the action buttons
+    }
+    pane_->set_loading_text(current_method().guide ? tr("Opening the product guide…")
+                                                   : tr("Analyzing %1…").arg(current_analyzer_name()));
+    pane_->set_view(key);
+    update_signature();
+    update_running();
+}
 
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
-    if (!cached.isNull()) {
-        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (doc.isObject()) {
-            display_verdict(doc.object(), command);
+void AltInvestmentsScreen::update_signature() {
+    // Only for the view on screen (a form rebuilt before the pane switched must not re-sign the old view).
+    if (!pane_ || view_key().isEmpty() || pane_->view() != view_key())
+        return;
+    // The same JSON run_analysis sends (a guide has no inputs: one constant signature).
+    const QJsonObject form = current_method().guide ? QJsonObject() : collect_form_data(nullptr);
+    pane_->set_signature(ui::autoload::signature_of(QJsonValue(form)));
+}
+
+void AltInvestmentsScreen::update_running() {
+    const bool running = pane_ && pane_->is_running() && pane_->running_view() == pane_->view();
+    if (running != loading_)
+        set_loading(running);
+}
+
+void AltInvestmentsScreen::run_analysis(quint64 request) {
+    const QString command = current_analyzer_id();
+    const AltMethod method = current_method();
+    if (command.isEmpty()) {
+        pane_->fail(request, tr("Pick an analyzer."));
+        return;
+    }
+
+    QStringList problems;
+    const QJsonObject form = method.guide ? QJsonObject() : collect_form_data(&problems);
+    if (form_problems_) {
+        form_problems_->setText(problems.join(QLatin1Char('\n')));
+        form_problems_->setVisible(!problems.isEmpty());
+    }
+    // A cash-flow / return grid with no usable row: say what to enter instead of running.
+    for (const AltField& f : current_fields_) {
+        if ((f.type == AltField::CashFlows || f.type == AltField::Series) && form.value(f.key).toArray().isEmpty()) {
+            pane_->fail(request,
+                        f.type == AltField::CashFlows
+                                     ? tr("Enter at least one dated capital call (and a later distribution or NAV) "
+                                          "in the cash-flow grid.")
+                                     : tr("Enter the monthly returns in the grid - type them, paste a column from a "
+                                          "spreadsheet or import a CSV."),
+                        tr("Check the inputs"));
             return;
         }
     }
 
-    set_loading(true);
-    verdict_badge_->setText(tr("ANALYZING..."));
-    verdict_badge_->setStyleSheet(QString("color:%1; background:rgba(217,119,6,0.15);"
-                                          " font-size:13px; font-weight:700; padding:4px 14px;")
-                                      .arg(colors::AMBER()));
-    verdict_rating_->clear();
-    verdict_rec_->clear();
+    const QByteArray payload = QJsonDocument(form).toJson(QJsonDocument::Compact);
+    // `--data -`: the form goes through stdin (a long cash-flow or return series must not meet the
+    // command-line length limit).
+    QStringList args = {command, QStringLiteral("--data"), QStringLiteral("-")};
+    if (!method.id.isEmpty())
+        args << QStringLiteral("--method") << method.id;
 
-    while (metrics_layout_->count() > 0) {
-        auto* item = metrics_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+    // The cache key includes the method and the whole form: the same inputs under another method
+    // are another result.
+    const QString cache_key = QStringLiteral("alt_screen:%1:%2:%3").arg(command, method.id, QString::fromUtf8(payload));
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        const auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (doc.isObject()) {
+            pane_->deliver(request, doc.object());
+            return;
+        }
     }
-    metrics_layout_->addStretch(1);
 
+    if (cancel_token_)
+        cancel_token_->store(true); // nothing else may be running for this screen
+    cancel_token_ = std::make_shared<std::atomic<bool>>(false);
+
+    services::python_cli::CliRunOptions opts;
+    opts.timeout_ms = kAltRunTimeoutMs;
+    opts.cancel_token = cancel_token_;
+    opts.stdin_data = payload;
+    opts.max_output_bytes = kAltMaxOutputBytes;
+
+    const QString view = pane_->view();
     QPointer<AltInvestmentsScreen> self = this;
-
     services::python_cli::PythonCliService::instance().run(
-        QStringLiteral("Analytics/alternateInvestment/cli.py"), cli_args,
-        [self, command, cache_key](const services::python_cli::CliResult& r) {
-            if (!self)
+        QString::fromLatin1(kAltScript), args, opts,
+        [self, request, command, method, cache_key, payload, view](const services::python_cli::CliResult& r) {
+            if (!self || !self->pane_)
                 return;
-            self->set_loading(false);
-
+            // Another run superseded it, it was cancelled, or its view was left as a default run:
+            // this reply belongs to nothing on screen any more.
+            if (!self->pane_->is_current(request))
+                return;
+            self->cancel_token_.reset();
             if (!r.success) {
-                self->display_error(r.error.isEmpty() ? AltInvestmentsScreen::tr("Analysis failed") : r.error);
+                self->pane_->fail(request, r.cancelled ? AltInvestmentsScreen::tr("Analysis cancelled.")
+                                                       : AltInvestmentsScreen::plain_error(r.error));
                 return;
             }
-
-            const QJsonObject obj = r.data;
-
+            // Analyzers report "cannot compute" in-band ({"metrics": {"error": "Insufficient data"}}
+            // with success=true): a failure, never cached.
+            const QJsonObject metrics = r.data.contains("metrics") ? r.data["metrics"].toObject() : r.data;
+            const QJsonValue inband = metrics.value("error");
+            if (inband.isString() && !inband.toString().trimmed().isEmpty()) {
+                self->pane_->fail(request, AltInvestmentsScreen::plain_error(inband.toString()),
+                                  AltInvestmentsScreen::tr("Check the inputs"));
+                return;
+            }
             fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
-                "alt_investments");
-
-            self->display_verdict(obj, command);
-            LOG_INFO("AltInvestments", "Analysis complete: " + command);
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact))),
+                10 * 60, "alt_investments");
+            self->pane_->deliver(request, r.data);
+            // Inputs edited while it ran: the pane compares the signature it started with against the
+            // current one and shows its "Inputs changed — RUN AGAIN" notice.
+            Q_UNUSED(view);
+            Q_UNUSED(payload);
+            LOG_DEBUG("AltInvestments", "Analysis complete: " + command + " / " + method.id);
         });
 }
 
-// ── Verdict display ───────────────────────────────────────────────────────────
+void AltInvestmentsScreen::render_result(const QJsonValue& payload) {
+    // The pane draws only the view on screen: the selection is the one the payload belongs to.
+    last_title_ = selection_title();
+    last_inputs_echo_ = input_echo();
+    display_result(payload.toObject(), current_analyzer_id(), current_method());
+}
+
+// ── Result display ───────────────────────────────────────────────────────────
 
 static QString stars_for(const QString& rating_str) {
     const QRegularExpression re(R"((\d+)\s*/\s*10)");
@@ -779,10 +238,52 @@ static QString stars_for(const QString& rating_str) {
         return rating_str;
     const int n = match.captured(1).toInt();
     const int stars = qMax(1, qMin(5, (n + 1) / 2));
-    return QString("\u2605").repeated(stars) + QString("\u2606").repeated(5 - stars) + "  " + rating_str;
+    return QString("★").repeated(stars) + QString("☆").repeated(5 - stars) + "  " + rating_str;
 }
 
-void AltInvestmentsScreen::display_verdict(const QJsonObject& result, const QString& /*command*/) {
+fincept::ui::result::Options AltInvestmentsScreen::result_options(const QString& command) const {
+    ui::result::Options o;
+    o.unit_for = [](const QString&, const QString& key, double v) {
+        return AltInvestmentsScreen::result_unit_for(key, v);
+    };
+    o.money_format = [](double v) {
+        return alt_money(v, std::fabs(v) >= 1e7 ? fincept::ui::formatting::Compact::FromSettings
+                                                : fincept::ui::formatting::Compact::None);
+    };
+    // Shown in the summary line above, or bookkeeping.
+    o.hidden = {"success",     "asset_type",        "method",   "product_type", "fund_type",
+                "strategy",    "analysis_category", "category", "rating",       "analysis_recommendation",
+                "bottom_line", "analysis_summary",  "analysis_type", "guide",   "guide_note",
+                "guide_title"};
+    // Scenario tables are charted against the return that drives them.
+    o.x_keys << QStringLiteral("stock_return") << QStringLiteral("index_return");
+    if (command == QLatin1String("tips"))
+        o.bar_columns.insert(QStringLiteral("scenarios"), QStringLiteral("real_return"));
+    else if (command == QLatin1String("leveraged-funds"))
+        o.bar_columns.insert(QStringLiteral("scenarios"), QStringLiteral("leveraged_final,unleveraged_final"));
+    if (command == QLatin1String("private-capital"))
+        o.kpi_paths = {QStringLiteral("irr"), QStringLiteral("tvpi"), QStringLiteral("dpi"), QStringLiteral("rvpi"),
+                       QStringLiteral("moic")};
+    if (command == QLatin1String("real-estate")) {
+        const QString m = current_method().id;
+        if (m == QLatin1String("financing"))
+            o.kpi_paths = {QStringLiteral("levered_irr"),        QStringLiteral("dscr_year1"),
+                           QStringLiteral("loan_to_value"),      QStringLiteral("cash_on_cash_year1"),
+                           QStringLiteral("debt_yield"),         QStringLiteral("equity_multiple")};
+        else if (m == QLatin1String("dcf"))
+            o.kpi_paths = {QStringLiteral("dcf_value"), QStringLiteral("value_minus_price"),
+                           QStringLiteral("unlevered_irr"), QStringLiteral("implied_cap_rate")};
+        else
+            o.kpi_paths = {QStringLiteral("noi"), QStringLiteral("cap_rate"), QStringLiteral("effective_gross_income"),
+                           QStringLiteral("operating_expense_ratio")};
+    }
+    if (command == QLatin1String("high-yield"))
+        o.consumed.insert(QStringLiteral("typical_spread_range_bps")); // drawn as a range below
+    return o;
+}
+
+void AltInvestmentsScreen::display_result(const QJsonObject& result, const QString& command,
+                                          const AltMethod& method) {
     const auto metrics = result.contains("metrics") ? result["metrics"].toObject() : result;
 
     // Analyzers report "cannot compute" in-band ({"metrics": {"error": "Insufficient
@@ -790,173 +291,292 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result, const QStr
     // row — say it failed instead.
     const QJsonValue inband = metrics.value("error");
     if (inband.isString() && !inband.toString().trimmed().isEmpty()) {
-        display_error(inband.toString());
+        display_error(plain_error(inband.toString()));
         return;
     }
 
-    // ── Badge ─────────────────────────────────────────────────────────────────
-    QString category = metrics.value("analysis_category").toString(metrics.value("category").toString());
-    if (category.isEmpty())
-        category = result.value("asset_type")
-                       .toString(result.value("product_type").toString(result.value("fund_type").toString("RESULT")));
-
-    QString badge_color, badge_bg;
-    const QString lcat = category.toLower();
-    // Short verdict tokens are matched as WHOLE WORDS. Substring matching made
-    // "ok" fire on any category containing those two letters — "token",
-    // "broker", "lookback", "stockholder" — painting an unrated result green as
-    // if the analyzer had approved it. Long unambiguous words stay substring
-    // matches so "flawed"/"cautionary" still hit.
-    const QStringList words = lcat.split(QRegularExpression(R"([^a-z]+)"), Qt::SkipEmptyParts);
-    auto has_word = [&words](const char* w) { return words.contains(QLatin1String(w)); };
-    if (has_word("good") || has_word("ok") || has_word("okay")) {
-        badge_color = colors::POSITIVE();
-        badge_bg = "rgba(22,163,74,0.15)";
-    } else if (has_word("ugly") || has_word("bad") || lcat.contains("avoid")) {
-        badge_color = colors::NEGATIVE();
-        badge_bg = "rgba(220,38,38,0.15)";
-    } else if (lcat.contains("flaw") || lcat.contains("warn") || lcat.contains("caution")) {
-        badge_color = "#FFD700";
-        badge_bg = "rgba(255,215,0,0.15)";
+    const bool guide = method.guide || metrics.value("guide").toBool() || result.value("guide").toBool();
+    QString badge_text, badge_color, badge_bg, rec;
+    if (guide) {
+        // General product text: labelled as such, no score, no approve / reject colour.
+        badge_text = tr("PRODUCT GUIDE");
+        badge_color = colors::TEXT_SECONDARY();
+        badge_bg = colors::BG_RAISED();
+        rec = metrics.value("guide_note").toString(
+            tr("General product guide: the same text for every input, not an analysis of your numbers."));
+        verdict_rating_->clear();
+        verdict_rating_->setVisible(false);
     } else {
+        badge_text = method.label.toUpper();
         badge_color = colors::CYAN();
-        badge_bg = "rgba(8,145,178,0.15)";
+        badge_bg = colors::alpha(colors::CYAN, 0.15);
+        // A computed method may still carry a rating ("x/10"); show it as stars.
+        const QString rating = metrics.value("rating").toString(result.value("rating").toString());
+        verdict_rating_->setText(rating.isEmpty() ? QString() : stars_for(rating));
+        verdict_rating_->setVisible(!rating.isEmpty());
+        rec = metrics.value("analysis_recommendation")
+                  .toString(metrics.value("bottom_line").toString(metrics.value("analysis_summary").toString()));
     }
-
-    verdict_badge_->setText(category.toUpper());
-    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:13px; font-weight:700;"
+    verdict_badge_->setText(badge_text);
+    verdict_badge_->setToolTip(badge_text);
+    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700;"
                                           " padding:4px 14px; letter-spacing:0.5px;")
                                       .arg(badge_color, badge_bg));
+    verdict_rec_->setText(rec);
 
-    // ── Rating ────────────────────────────────────────────────────────────────
-    const QString rating = metrics.value("rating").toString(result.value("rating").toString());
-    if (!rating.isEmpty())
-        verdict_rating_->setText(stars_for(rating));
-
-    // ── Recommendation ────────────────────────────────────────────────────────
-    const QString rec =
-        metrics.value("analysis_recommendation")
-            .toString(metrics.value("bottom_line").toString(metrics.value("analysis_summary").toString()));
-    if (!rec.isEmpty())
-        verdict_rec_->setText(rec);
-
-    // ── Metric rows ───────────────────────────────────────────────────────────
-    while (metrics_layout_->count() > 0) {
-        auto* item = metrics_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+    last_result_ = result;
+    last_command_ = command;
+    last_method_ = method;
+    result_stale_ = false;
+    if (stale_note_)
+        stale_note_->setVisible(false);
+    if (result_title_) {
+        result_title_->setText(last_title_);
+        result_title_->setToolTip(last_title_);
     }
 
-    for (auto it = metrics.begin(); it != metrics.end(); ++it)
-        append_metric_row(metrics_container_, metrics_layout_, it.key(), it.value(), 0);
-
-    metrics_layout_->addStretch(1);
+    if (!result_view_)
+        return;
+    result_view_->set_options(result_options(command));
+    result_view_->show_result(metrics, result);
+    add_analyzer_widgets(command, metrics);
+    update_actions();
 }
 
-// ── Recursive metric renderer ─────────────────────────────────────────────────
-
-void AltInvestmentsScreen::append_metric_row(QWidget* /*parent*/, QVBoxLayout* vl, const QString& key,
-                                             const QJsonValue& val, int depth) {
-    static const QSet<QString> kSkip = {
-        "success",     "asset_type",        "method",   "product_type", "fund_type",
-        "strategy",    "analysis_category", "category", "rating",       "analysis_recommendation",
-        "bottom_line", "analysis_summary"};
-    if (kSkip.contains(key))
+void AltInvestmentsScreen::add_analyzer_widgets(const QString& command, const QJsonObject& metrics) {
+    if (!result_view_)
         return;
-
-    // Object → section header + recurse
-    if (val.isObject()) {
-        QString sec_text = key;
-        sec_text.replace('_', ' ').replace('-', ' ');
-        auto* sec = new QLabel(sec_text.toUpper());
-        sec->setObjectName("altMetricSection");
-        vl->addWidget(sec);
-        for (auto it = val.toObject().begin(); it != val.toObject().end(); ++it)
-            append_metric_row(nullptr, vl, it.key(), it.value(), depth + 1);
+    if (command == QLatin1String("high-yield")) {
+        // The bond's spread against the typical range of its rating.
+        const QJsonArray range = metrics.value(QStringLiteral("typical_spread_range_bps")).toArray();
+        const double spread = metrics.value(QStringLiteral("spread_basis_points")).toDouble(std::nan(""));
+        if (range.size() != 2 || !std::isfinite(spread))
+            return;
+        const double lo = range.at(0).toDouble(), hi = range.at(1).toDouble();
+        if (!(hi > lo))
+            return;
+        const double low = std::min(lo, spread), high = std::max(hi, spread);
+        const double pad = (high - low) * 0.1;
+        ui::RangeBarData d;
+        d.low = low - pad;
+        d.high = high + pad;
+        d.fill_to_current = false;
+        ui::RangeBand band;
+        band.from = lo;
+        band.to = hi;
+        band.tone = ui::RangeBand::Tone::Neutral;
+        band.label = tr("Typical range for the rating");
+        d.bands = {band};
+        ui::RangeMarker mark;
+        mark.value = spread;
+        mark.label = tr("This bond");
+        mark.role = ui::RangeMarker::Role::Current;
+        d.markers = {mark};
+        auto* bar = new ui::RangeBar;
+        bar->set_data(d);
+        bar->set_value_formatter([](double v) { return QString::number(v, 'f', 0) + QStringLiteral(" bp"); });
+        bar->setMinimumHeight(64);
+        result_view_->add_custom_widget(
+            ui::ResultView::make_card(tr("Credit spread"), bar, tr("vs the typical range of its rating")));
         return;
     }
-
-    // Array → section + bullet list
-    if (val.isArray()) {
-        const auto arr = val.toArray();
-        if (arr.isEmpty())
+    if (command == QLatin1String("private-capital")) {
+        const double called = metrics.value(QStringLiteral("called_capital")).toDouble(0.0);
+        const double uncalled = metrics.value(QStringLiteral("uncalled_commitment")).toDouble(0.0);
+        if (called <= 0.0 && uncalled <= 0.0)
             return;
-        QString sec_text = key;
-        sec_text.replace('_', ' ').replace('-', ' ');
-        auto* sec = new QLabel(sec_text.toUpper());
-        sec->setObjectName("altMetricSection");
-        vl->addWidget(sec);
-        for (const auto& elem : arr) {
-            const QString text = "\xB7  " + (elem.isString() ? elem.toString() : format_value(key, elem));
-            auto* row = new QWidget(this);
-            row->setObjectName("altMetricRow");
-            auto* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(12, 4, 12, 4);
-            auto* lbl = new QLabel(text);
-            lbl->setWordWrap(true);
-            const QString lc = text.toLower();
-            if (lc.contains("warn") || lc.contains("risk") || lc.contains("bad") || lc.contains("avoid") ||
-                lc.contains("toxic") || lc.contains("never"))
-                lbl->setObjectName("altMetricBad");
-            else if (lc.contains("good") || lc.contains("accept") || lc.contains("safe") || lc.contains("benefit"))
-                lbl->setObjectName("altMetricGood");
-            else
-                lbl->setObjectName("altMetricBullet");
-            rl->addWidget(lbl, 1);
-            vl->addWidget(row);
+        auto* donut = new ui::DonutChart;
+        ui::DonutSlice c;
+        c.id = QStringLiteral("called");
+        c.label = tr("Called");
+        c.value = called;
+        ui::DonutSlice u;
+        u.id = QStringLiteral("uncalled");
+        u.label = tr("Uncalled");
+        u.value = uncalled;
+        donut->set_slices({c, u});
+        donut->set_value_formatter(
+            [](double v) { return alt_money(v, fincept::ui::formatting::Compact::FromSettings); });
+        donut->setMinimumHeight(200);
+        result_view_->add_custom_widget(ui::ResultView::make_card(tr("Commitment"), donut, tr("called vs uncalled")));
+    }
+}
+
+void AltInvestmentsScreen::update_actions() {
+    const bool has = !last_result_.isEmpty() && !loading_;
+    if (copy_btn_)
+        copy_btn_->setEnabled(has);
+    if (csv_btn_)
+        csv_btn_->setEnabled(has);
+    if (image_btn_)
+        image_btn_->setEnabled(has);
+    if (report_btn_)
+        report_btn_->setEnabled(has);
+}
+
+fincept::report::ReportPayload AltInvestmentsScreen::report_payload() const {
+    fincept::report::ReportPayload p;
+    const QVector<ExportTable> tables = export_tables();
+    if (tables.isEmpty())
+        return p;
+    p.title = last_title_;
+    p.source = QStringLiteral("Alternative Investments");
+    p.as_of = QDateTime::currentDateTime();
+    // Inputs echo and the figures: the summary table holds (section, item, value); inputs go to the
+    // report's "Inputs" block, the rest stays a table.
+    fincept::report::PayloadTable figures;
+    figures.title = tr("Figures");
+    figures.columns = {tr("Section"), tr("Item"), tr("Value")};
+    for (const QStringList& r : tables.first().rows) {
+        if (r.value(0) == tr("Inputs"))
+            p.inputs.append({r.value(1), r.value(2)});
+        else
+            figures.rows << r;
+    }
+    if (!figures.rows.isEmpty())
+        p.tables << figures;
+    for (int i = 1; i < tables.size(); ++i) {
+        fincept::report::PayloadTable t;
+        t.title = tables.at(i).title;
+        t.columns = tables.at(i).headers;
+        t.rows = tables.at(i).rows;
+        p.tables << t;
+    }
+    p.notes = last_method_.guide ? tr("Product guide: general text about this kind of product, the same whatever is "
+                                      "entered - not a rating of any product.")
+                                 : tr("Computed locally from the inputs above (Python analytics on this computer).");
+    return p;
+}
+
+// ── Copy / export ────────────────────────────────────────────────────────────
+
+// Walk the presentation blocks of the shown result: scalar figures become (section, item, value)
+// rows of the summary table, tables are kept as tables. Charts are drawn from the same tables.
+static void alt_walk_blocks(const ui::result::Block& b, const QString& section, const ui::result::Options& o,
+                            QVector<QStringList>& summary, QVector<std::pair<QString, ui::result::Block>>& tables) {
+    using ui::result::Kind;
+    const QString here = b.title.isEmpty() ? section
+                         : section.isEmpty() ? b.title
+                                             : section + QStringLiteral(" / ") + b.title;
+    switch (b.kind) {
+    case Kind::Kpis:
+    case Kind::Fields:
+        for (const auto& f : b.fields)
+            summary << QStringList{section.isEmpty() ? QStringLiteral("Result") : section, f.label,
+                                   ui::result::format_value(f.value, f.unit, o)};
+        break;
+    case Kind::Caption:
+        summary << QStringList{section.isEmpty() ? QStringLiteral("Result") : section, b.title, b.text};
+        break;
+    case Kind::List:
+        for (const QString& item : b.items)
+            summary << QStringList{here.isEmpty() ? QStringLiteral("Result") : here, QString(), item};
+        break;
+    case Kind::Table:
+        tables.append({here.isEmpty() ? QStringLiteral("Table") : here, b});
+        break;
+    case Kind::Section:
+        for (const auto& child : b.children)
+            alt_walk_blocks(child, here, o, summary, tables);
+        break;
+    default:
+        break; // charts: their data is in the tables / figures
+    }
+}
+
+QVector<AltInvestmentsScreen::ExportTable> AltInvestmentsScreen::export_tables() const {
+    QVector<ExportTable> out;
+    if (last_result_.isEmpty())
+        return out;
+    const QJsonObject metrics =
+        last_result_.contains("metrics") ? last_result_["metrics"].toObject() : last_result_;
+    const ui::result::Options o = result_options(last_command_);
+    const ui::result::Block root = ui::result::build(metrics, o);
+
+    ExportTable summary;
+    summary.title = tr("Summary");
+    summary.headers = {tr("Section"), tr("Item"), tr("Value")};
+    // The inputs the result was computed from.
+    for (auto it = last_inputs_echo_.constBegin(); it != last_inputs_echo_.constEnd(); ++it)
+        summary.rows << QStringList{tr("Inputs"), it.key().section(QLatin1Char('\x1f'), 1), it.value().toString()};
+    if (last_method_.guide)
+        summary.rows << QStringList{tr("Note"), QString(),
+                                    tr("Product guide: general text, the same for every input")};
+    QVector<std::pair<QString, ui::result::Block>> tables;
+    alt_walk_blocks(root, QString(), o, summary.rows, tables);
+    out << summary;
+
+    for (const auto& [title, b] : tables) {
+        ExportTable t;
+        t.title = title;
+        t.headers = b.column_labels;
+        for (int r = 0; r < b.rows.size(); ++r) {
+            QStringList row;
+            const auto& cells = b.rows.at(r);
+            for (int c = 0; c < cells.size(); ++c) {
+                ui::result::Unit unit = c < b.column_units.size() ? b.column_units.at(c) : ui::result::Unit::Plain;
+                if (c > 0 && r < b.row_units.size())
+                    unit = b.row_units.at(r);
+                row << ui::result::format_value(cells.at(c), unit, o);
+            }
+            t.rows << row;
         }
+        out << t;
+    }
+    return out;
+}
+
+QString AltInvestmentsScreen::export_base_name() const {
+    QString base = QStringLiteral("alt_%1_%2").arg(last_command_, last_method_.id);
+    base.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]+")), QStringLiteral("_"));
+    return base + QStringLiteral("_") + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmm"));
+}
+
+void AltInvestmentsScreen::copy_result() {
+    const QVector<ExportTable> tables = export_tables();
+    if (tables.isEmpty())
         return;
+    QStringList lines;
+    lines << last_title_;
+    for (const ExportTable& t : tables) {
+        lines << QString();
+        if (t.title != tr("Summary"))
+            lines << t.title;
+        lines << t.headers.join(QLatin1Char('\t'));
+        for (const QStringList& r : t.rows)
+            lines << r.join(QLatin1Char('\t'));
     }
+    QApplication::clipboard()->setText(lines.join(QLatin1Char('\n')));
+    // Brief confirmation on the button itself.
+    copy_btn_->setText(tr("COPIED"));
+    QPointer<QPushButton> btn = copy_btn_;
+    QTimer::singleShot(1500, this, [btn]() {
+        if (btn)
+            btn->setText(AltInvestmentsScreen::tr("COPY"));
+    });
+}
 
-    // Annotation string — full-width coloured row
-    if (val.isString()) {
-        const QString text = val.toString();
-        if (text.isEmpty())
-            return;
-        const bool is_annotation = key.startsWith("analysis_") || key == "note" || key == "interpretation" ||
-                                   key == "situation" || key == "investor_risk" || key == "reason";
-        if (is_annotation) {
-            auto* row = new QWidget(this);
-            row->setObjectName("altMetricRow");
-            auto* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(12, 5, 12, 5);
-            auto* lbl = new QLabel(text);
-            lbl->setWordWrap(true);
-            const QString lc = text.toLower();
-            if (lc.contains("warn") || lc.contains("toxic") || lc.contains("avoid") || lc.contains("bad") ||
-                lc.contains("never"))
-                lbl->setObjectName("altMetricWarn");
-            else if (lc.contains("good") || lc.contains("safe") || lc.contains("acceptable"))
-                lbl->setObjectName("altMetricGood");
-            else
-                lbl->setObjectName("altMetricBulletVal");
-            rl->addWidget(lbl, 1);
-            vl->addWidget(row);
-            return;
-        }
+void AltInvestmentsScreen::export_csv() {
+    const QVector<ExportTable> tables = export_tables();
+    if (tables.isEmpty())
+        return;
+    // One file: the summary (section, item, value), then each table under its title.
+    const ExportTable& summary = tables.first();
+    QVector<QStringList> rows = summary.rows;
+    for (int i = 1; i < tables.size(); ++i) {
+        rows << QStringList{};
+        rows << QStringList{tables[i].title};
+        rows << tables[i].headers;
+        rows += tables[i].rows;
     }
+    ui::ChartExport::save_csv(summary.headers, rows, export_base_name(), this);
+}
 
-    // Normal key = value row
-    QStringList words = key.split('_');
-    for (auto& w : words)
-        if (!w.isEmpty())
-            w[0] = w[0].toUpper();
-
-    auto* row = new QWidget(this);
-    row->setObjectName("altMetricRow");
-    auto* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(12 + depth * 8, 5, 12, 5);
-
-    auto* klbl = new QLabel(words.join(' '));
-    klbl->setObjectName("altMetricKey");
-    auto* vlbl = new QLabel(format_value(key, val));
-    vlbl->setObjectName("altMetricVal");
-    vlbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-    rl->addWidget(klbl, 1);
-    rl->addWidget(vlbl);
-    vl->addWidget(row);
+void AltInvestmentsScreen::export_image() {
+    if (!result_view_ || last_result_.isEmpty())
+        return;
+    QWidget* page = result_view_->content_widget();
+    ui::ChartExport::save_png(page ? page : static_cast<QWidget*>(result_view_), export_base_name());
 }
 
 } // namespace fincept::screens

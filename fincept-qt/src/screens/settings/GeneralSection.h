@@ -3,12 +3,15 @@
 // any of the more specific sections. Houses:
 //   * "On last window close" preference (workspace/launchpad refactor)
 //   * "Language" preference (i18n)
+//   * a pointer to Settings > Currency & Number Format (the display currency
+//     moved there; "general.currency" is no longer read or written)
 
 #include <QComboBox>
 #include <QEvent>
 #include <QWidget>
 
 class QLabel;
+class QPushButton;
 
 namespace fincept::screens {
 
@@ -33,7 +36,7 @@ class GeneralSection : public QWidget {
 
     QComboBox* on_close_combo_ = nullptr;
     QComboBox* language_combo_ = nullptr;
-    QComboBox* currency_combo_ = nullptr;
+    QPushButton* currency_open_btn_ = nullptr; ///< opens Settings > Currency & Number Format
 
     // Section titles + row labels/descriptions (cached for retranslateUi).
     QLabel* window_title_ = nullptr;

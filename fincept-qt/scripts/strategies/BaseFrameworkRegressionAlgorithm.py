@@ -1,59 +1,50 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-0A7F740C
-# Category: Regression Test
-# Description: Multi-stock equal-weight alpha strategy. Allocates equal weight
-#   across AAPL, MSFT, SPY, and GOOGL when any is above its 20-day EMA.
-#   Rebalances daily. Originally a framework regression test for alpha models.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+### <summary>
+### Abstract regression framework algorithm for multiple framework regression tests
+### </summary>
 class BaseFrameworkRegressionAlgorithm(QCAlgorithm):
-    """Equal-weight multi-stock strategy with EMA trend filter."""
 
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+        self.set_start_date(2014, 6, 1)
+        self.set_end_date(2014, 6, 30)
 
-        self.symbols = ["AAPL", "MSFT", "SPY", "GOOGL"]
-        self._emas = {}
+        self.universe_settings.resolution = Resolution.HOUR
+        self.universe_settings.data_normalization_mode = DataNormalizationMode.RAW
 
-        for sym in self.symbols:
-            self.add_equity(sym, Resolution.DAILY)
-            self._emas[sym] = self.ema(sym, 20, Resolution.DAILY)
+        symbols = [Symbol.create(ticker, SecurityType.EQUITY, Market.USA)
+            for ticker in ["AAPL", "AIG", "BAC", "SPY"]]
 
-        self._last_rebalance_month = -1
+        # Manually add AAPL and AIG when the algorithm starts
+        self.set_universe_selection(ManualUniverseSelectionModel(symbols[:2]))
 
-    def on_data(self, data):
-        # Rebalance monthly
-        if self.time.month == self._last_rebalance_month:
-            return
-        self._last_rebalance_month = self.time.month
+        # At midnight, add all securities every day except on the last data
+        # With this procedure, the Alpha Model will experience multiple universe changes
+        self.add_universe_selection(ScheduledUniverseSelectionModel(
+            self.date_rules.every_day(), self.time_rules.midnight,
+            lambda dt: symbols if dt < self.end_date - timedelta(1) else []))
 
-        # Check which symbols are above their EMA (uptrend)
-        longs = []
-        for sym in self.symbols:
-            if sym not in data:
-                continue
-            ema = self._emas[sym]
-            if not ema.is_ready:
-                continue
-            if data[sym].close > ema.current.value:
-                longs.append(sym)
+        self.set_alpha(ConstantAlphaModel(InsightType.PRICE, InsightDirection.UP, timedelta(31), 0.025, None))
+        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
+        self.set_execution(ImmediateExecutionModel())
+        self.set_risk_management(NullRiskManagementModel())
 
-        # Liquidate symbols not in longs
-        for sym in self.symbols:
-            if sym not in longs and self.portfolio[sym].invested:
-                self.liquidate(sym)
-
-        # Equal-weight allocation
-        if longs:
-            weight = 0.95 / len(longs)
-            for sym in longs:
-                self.set_holdings(sym, weight)
+    def on_end_of_algorithm(self):
+        # The base implementation checks for active insights
+        insights_count = len(self.insights.get_insights(lambda insight: insight.is_active(self.utc_time)))
+        if insights_count != 0:
+            raise Exception(f"The number of active insights should be 0. Actual: {insights_count}")

@@ -3,6 +3,7 @@
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
+#include "services/billing/PlanAccess.h"
 #include "storage/cache/CacheManager.h"
 
 #include <QJsonDocument>
@@ -40,9 +41,23 @@ FinceptMacroService& FinceptMacroService::instance() {
 FinceptMacroService::FinceptMacroService(QObject* parent) : QObject(parent) {}
 
 double FinceptMacroService::credit_cost(const QString& endpoint) {
-    // Mirrors the backend defaults (macro.py: METADATA 0.5, everything else 1). Server-side cache hits
-    // on some endpoints are free; this is the worst case for one uncached call.
+    // LIST prices: mirrors the backend defaults (macro.py: METADATA 0.5, everything else 1). Server-side
+    // cache hits on some endpoints are free; this is the worst case for one uncached call. What the
+    // account pays is effective_credit_cost().
     return fincept_macro_svc_detail::is_metadata_endpoint(endpoint) ? 0.5 : 1.0;
+}
+
+QString FinceptMacroService::plan_category() {
+    return QStringLiteral("macro");
+}
+
+double FinceptMacroService::effective_credit_cost(const QString& endpoint) {
+    return billing::PlanAccess::instance().effective_cost(plan_category(), credit_cost(endpoint));
+}
+
+bool FinceptMacroService::included_in_plan() {
+    const auto& access = billing::PlanAccess::instance();
+    return access.has_table() && access.included(plan_category());
 }
 
 int FinceptMacroService::fresh_seconds(const QString& endpoint) {
@@ -126,10 +141,12 @@ void FinceptMacroService::fetch(const QString& request_id, const QString& endpoi
             query.addQueryItem(p.first, p.second);
     url.setQuery(query);
 
-    LOG_INFO(fincept_macro_svc_detail::kFinceptMacroSvcTag, QString("GET /macro/%1 (%2 param(s))").arg(endpoint).arg(params.size()));
+    LOG_DEBUG(fincept_macro_svc_detail::kFinceptMacroSvcTag, QString("GET /macro/%1 (%2 param(s))").arg(endpoint).arg(params.size()));
 
     QPointer<FinceptMacroService> self = this;
-    HttpClient::instance().get(
+    // get_large: a CEIC catalogue (up to 1000 rows) or a country's indicator list (unbounded) runs to
+    // hundreds of KB — parsed on HttpClient's worker, not the GUI thread. Same errors and callback thread.
+    HttpClient::instance().get_large(
         url.toString(QUrl::FullyEncoded),
         [self, request_id, endpoint, key](Result<QJsonDocument> result) {
             if (!self)
@@ -157,8 +174,13 @@ void FinceptMacroService::fetch(const QString& request_id, const QString& endpoi
             if (result.is_err()) {
                 const std::string err = result.error();
                 res.http_status = HttpClient::status_from_error(err);
+                // The server's own explanation — what the panel shows for Status::Error.
                 res.error = HttpClient::message_from_error(err);
-                if (res.http_status == 401 || res.http_status == 403)
+                // Only a 401 is a sign-in problem (the panel says "sign in again"). A 403 is an
+                // IP block (HttpClient's text says it is temporary and not the account), an
+                // unverified account or a forbidden route, so it is reported as Error with the
+                // server's message; 429 likewise.
+                if (res.http_status == 401)
                     res.status = FinceptMacroResult::Status::Unauthorized;
                 else if (res.http_status == 402)
                     res.status = FinceptMacroResult::Status::NoCredits;
@@ -178,8 +200,9 @@ void FinceptMacroService::fetch(const QString& request_id, const QString& endpoi
             // not an empty result.
             if (root.contains(QStringLiteral("success")) && !root.value(QStringLiteral("success")).toBool()) {
                 res.status = FinceptMacroResult::Status::Error;
-                const QJsonValue msg = root.value(QStringLiteral("message"));
-                res.error = msg.isString() ? msg.toString() : QStringLiteral("The server reported a failure");
+                res.error = HttpClient::error_text_from_body(root);
+                if (res.error.isEmpty())
+                    res.error = QStringLiteral("The server reported a failure");
                 LOG_WARN(fincept_macro_svc_detail::kFinceptMacroSvcTag, QString("/macro/%1 returned success=false").arg(endpoint));
                 serve_stale_or();
                 return;
@@ -196,7 +219,7 @@ void FinceptMacroService::fetch(const QString& request_id, const QString& endpoi
             fincept::CacheManager::instance().put(
                 key, QVariant(QString::fromUtf8(QJsonDocument(wrapper).toJson(QJsonDocument::Compact))),
                 fincept_macro_svc_detail::kStaleKeepSec, QString::fromLatin1(fincept_macro_svc_detail::kCacheCategory));
-            LOG_INFO(fincept_macro_svc_detail::kFinceptMacroSvcTag, QString("/macro/%1: %2 row(s)").arg(endpoint).arg(res.rows.size()));
+            LOG_DEBUG(fincept_macro_svc_detail::kFinceptMacroSvcTag, QString("/macro/%1: %2 row(s)").arg(endpoint).arg(res.rows.size()));
             emit self->result_ready(res);
         },
         this);

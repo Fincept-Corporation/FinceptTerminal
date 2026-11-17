@@ -6,6 +6,8 @@
 #include <QVector>
 #include <QWidget>
 
+class QToolButton;
+
 namespace fincept::ui {
 
 /// Scrollable tab bar.
@@ -28,6 +30,7 @@ class TabBar : public QWidget {
 
   protected:
     void changeEvent(QEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
 
   private:
     struct TabDef {
@@ -35,6 +38,11 @@ class TabBar : public QWidget {
         QString source_label; // English source key (used for tr() lookup)
     };
 
+    QScrollArea* scroll_ = nullptr;
+    /// Shown when the tabs are wider than the bar (large fonts, narrow
+    /// windows): its menu lists the tabs scrolled out of view.
+    QToolButton* overflow_btn_ = nullptr;
+    void update_overflow();
     QHBoxLayout* tab_layout_ = nullptr;
     QVector<QPushButton*> tab_buttons_;
     QVector<TabDef> tab_defs_;

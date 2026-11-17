@@ -186,7 +186,7 @@ ConditionResult ConditionEvaluator::evaluate_single(const ConditionDef& conditio
 }
 
 GroupEvalResult ConditionEvaluator::evaluate_group(const QJsonArray& children, const QString& logic,
-                                                   const QVector<OhlcvCandle>& candles) {
+                                                   const QVector<OhlcvCandle>& candles, bool full_details) {
 
     GroupEvalResult group;
     group.logic = logic;
@@ -205,7 +205,8 @@ GroupEvalResult ConditionEvaluator::evaluate_group(const QJsonArray& children, c
         bool met;
         if (is_group_node(node)) {
             auto sub = evaluate_group(node.value("children").toArray(),
-                                      node.value("logic").toString(node.value("op").toString("AND")), candles);
+                                      node.value("logic").toString(node.value("op").toString("AND")), candles,
+                                      full_details);
             met = node.value("negate").toBool(false) ? !sub.triggered : sub.triggered;
             group.details.append(sub.details); // flatten nested detail for reporting
         } else {
@@ -217,11 +218,11 @@ GroupEvalResult ConditionEvaluator::evaluate_group(const QJsonArray& children, c
 
         if (is_and) {
             overall = overall && met;
-            if (!overall)
+            if (!overall && !full_details)
                 break; // short-circuit
         } else {
             overall = overall || met;
-            if (overall)
+            if (overall && !full_details)
                 break; // short-circuit
         }
     }

@@ -3,6 +3,8 @@
 #include "screens/portfolio/PortfolioTypes.h"
 #include "storage/repositories/BaseRepository.h"
 
+#include <optional>
+
 namespace fincept {
 
 class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
@@ -19,6 +21,11 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
                                      const QString& description = {}, const QString& broker_account_id = {});
     Result<void> update_portfolio(const QString& id, const QString& name, const QString& owner, const QString& currency,
                                   const QString& description = {});
+    /// Analytics settings (v055): benchmark spec ('' = default), risk-free override
+    /// (nullopt = automatic), cash tracking, lot method, long-term threshold.
+    Result<void> update_portfolio_settings(const QString& id, const QString& benchmark,
+                                           std::optional<double> risk_free_override, bool track_cash,
+                                           const QString& lot_method, int long_term_days);
     Result<void> delete_portfolio(const QString& id);
 
     // ── Assets CRUD ──────────────────────────────────────────────────────────
@@ -39,13 +46,21 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
     Result<QVector<portfolio::Transaction>> get_symbol_transactions(const QString& portfolio_id, const QString& symbol);
     Result<QString> add_transaction(const QString& portfolio_id, const QString& symbol, const QString& type, double qty,
                                     double price, const QString& date, const QString& notes = {});
+    /// Full row (v055 fields included). `id`, `total_value` and `created_at` are
+    /// assigned here; symbol / type are upper-cased.
+    Result<QString> add_transaction(const portfolio::Transaction& t);
     Result<void> update_transaction(const QString& id, double qty, double price, const QString& date,
                                     const QString& notes = {});
+    /// v055 cost fields of an existing row.
+    Result<void> update_transaction_costs(const QString& id, double fees, double taxes, const QString& currency,
+                                          double fx_rate, const QString& lot_id = {});
     Result<void> delete_transaction(const QString& id);
 
     // ── Snapshots ────────────────────────────────────────────────────────────
+    /// Refuses (error) non-finite values: an unknown NAV is never stored.
     Result<void> save_snapshot(const QString& portfolio_id, double value, double cost_basis, double pnl, double pnl_pct,
                                const QString& date);
+    /// `days` <= 0: the whole history.
     Result<QVector<portfolio::PortfolioSnapshot>> get_snapshots(const QString& portfolio_id, int days = 365);
 
   private:

@@ -2,18 +2,34 @@
 // UiEngine.h — PRIVATE header of the core UI tools (src/mcp/core/Ui*.cpp).
 //
 // The engine sees the terminal the way a person does: top-level windows
-// (WindowFrame), the panels docked in them (ads::CDockWidget, one per screen),
-// dialogs and popup menus, and inside each the ordinary Qt widgets. It turns
-// those into compact "elements" (role, name, value, states) with short refs
-// (w1 window, p3 panel, d1 dialog, m1 menu, e12 element, e12:r5 a row, e12:w3 a
-// control on the web page e12 shows), and
-// operates them by ref or by the words on them.
+// ("frames"), the panels docked in them (one per screen), dialogs and popup
+// menus, and inside each the ordinary Qt widgets. It turns those into compact
+// "elements" (role, name, value, states) with short refs (w1 window, p3 panel,
+// d1 dialog, m1 menu, e12 element, e12:r5 a row, e12:w3 a control on the web
+// page e12 shows), and operates them by ref or by the words on them.
+//
+// What only the terminal knows (which widgets are its windows and panels, the
+// lock, running scripts) is asked through UiHost.h, so the engine itself is
+// plain Qt and unit-testable (tests/tst_mcp_ui_engine.cpp).
+//
+// Files:
+//   UiModel.cpp      element classification, reading-order walks, windows / panels /
+//                    dialogs, search by words, busy state
+//   UiRefs.cpp       the ref registry (stable refs, stale-ref hints)
+//   UiItemViews.cpp  tables / lists / trees through their models; table reads
+//   UiWeb.cpp        web pages (page scripts)
+//   UiObserve.cpp    ui_overview, ui_snapshot (+ incremental), ui_read, ui_wait
+//   UiScreenshot.cpp ui_screenshot (terminal only: uses the theme)
+//   UiAct*.cpp       ui_act: targets, risk + approval, editors, web, change diff, the run
+//   UiNavigate.cpp   ui_open, ui_workspace, ui_invoke (terminal only)
 //
 // GUI THREAD ONLY. Every function here touches widgets. The tool handlers in
 // CoreTools.cpp post onto the GUI thread before calling in, and every entry
 // point answers through a Reply that runs on the GUI thread.
 
+#include "core/agent/AgentActionScope.h"
 #include "mcp/McpTypes.h"
+#include "mcp/core/UiHost.h"
 
 #include <QHash>
 #include <QJsonObject>
@@ -32,14 +48,6 @@
 class QAction;
 class QAbstractItemView;
 class QMenu;
-
-namespace ads {
-class CDockWidget;
-}
-
-namespace fincept {
-class WindowFrame;
-}
 
 namespace fincept::mcp::core::ui {
 
@@ -64,8 +72,19 @@ void ui_screenshot(const QJsonObject& args, Reply reply);
 void ui_workspace(const QJsonObject& args, const QString& origin, Reply reply);
 void ui_invoke(const QJsonObject& args, const QString& origin, Reply reply);
 
+/// The agent behind a call, from its origin label ("claude-code", "codex · terminal
+/// AI", "Fincept agent: <run>", each perhaps with " (paper run)"): the client is
+/// the label up to " · " or ":", the run what follows a ":". Mutating steps run
+/// under this actor (core/agent/AgentActionScope.h).
+::fincept::core::agent::AgentActor agent_actor_for_origin(const QString& origin);
+/// The actor of the call being handled: the transport's stable ids
+/// (ScopedCallClient, mcp/server/CallApproval.h — e.g. "claude_code" + the run)
+/// when the caller set them, else agent_actor_for_origin(origin). Reads a
+/// thread-local: call it at the engine's synchronous entry.
+::fincept::core::agent::AgentActor agent_actor_for_call(const QString& origin);
+
 // ═════════════════════════════════════════════════════════════════════════════
-// Model (UiModel.cpp)
+// Refs (UiRefs.cpp)
 // ═════════════════════════════════════════════════════════════════════════════
 
 enum class RefKind : char { Window = 'w', Panel = 'p', Dialog = 'd', Menu = 'm', Element = 'e' };
@@ -74,27 +93,34 @@ enum class RefKind : char { Window = 'w', Panel = 'p', Dialog = 'd', Menu = 'm',
 struct Resolved {
     QString ref; ///< canonical ("e12", "e12:r5")
     RefKind kind = RefKind::Element;
-    QPointer<QWidget> widget;        ///< the element / panel content / dialog / window
-    QPointer<QAction> action;        ///< menu and toolbar items
-    QPointer<ads::CDockWidget> dock; ///< for panels
-    int sub = -1;                    ///< tab index for tab refs
-    int row = -1;                    ///< ":r<N>" suffix — a row of a table / list / tree (where it is NOW)
-    int listed_row = -1;             ///< the row number the caller used, when the row has moved since
-    int web = -1;                    ///< ":w<N>" suffix — control N of the web page the element shows
-    QString web_key;                 ///< that control as it was listed ("button|Indicators ▾")
+    QPointer<QWidget> widget;  ///< the element / panel content / dialog / window
+    QPointer<QAction> action;  ///< menu and toolbar items
+    QPointer<QWidget> dock;    ///< for panels: the panel itself (host::is_panel)
+    int sub = -1;              ///< tab index for tab refs
+    int row = -1;              ///< ":r<N>" suffix — a row of a table / list / tree (where it is NOW)
+    int listed_row = -1;       ///< the row number the caller used, when the row has moved since
+    int web = -1;              ///< ":w<N>" suffix — control N of the web page the element shows
+    QString web_key;           ///< that control as it was listed ("button|Indicators ▾")
 };
 
 /// Ref registry. Stable: the same object keeps the same ref for as long as it
-/// lives, so refs from an earlier snapshot keep working.
+/// lives, and a ref is never handed to another object (numbers only grow), so a
+/// ref from an earlier snapshot either finds its element or fails clearly.
 class Refs {
   public:
     static Refs& instance();
     QString ref_for(QObject* obj, RefKind kind, int sub = -1);
     /// nullopt when the ref is unknown or its object is gone; `*why` (optional)
-    /// then says which — and, for a row ref, that the row left the list.
+    /// then says which, starting with an error code (stale_ref / not_found) and,
+    /// for a destroyed element, naming the nearest surviving match — never acting
+    /// on it.
     std::optional<Resolved> resolve(const QString& ref, QString* why = nullptr);
     /// True when this ref (without any ":r" suffix) was ever handed out.
     bool was_issued(const QString& ref) const;
+
+    /// Remember what a ref was listed as (role, name and the panel / dialog it
+    /// was in), so a stale ref can name its nearest surviving match.
+    void note(const QString& ref, const QString& role, const QString& name, QWidget* scope);
 
     /// Remember which row "<base_ref>:r<row>" showed when it was listed, so the
     /// ref keeps meaning THAT row after the view re-sorts, inserts above it or
@@ -111,18 +137,30 @@ class Refs {
         RefKind kind = RefKind::Element;
         int sub = -1;
     };
+    struct Listed {
+        QString role;
+        QString name;
+        QPointer<QWidget> scope;
+    };
     struct RowAnchor {
         QPersistentModelIndex idx;
         QString key; // the row's identifying text (see row_key)
     };
     void sweep();
+    QString stale_text(const QString& raw, const QString& base);
     QHash<QString, QHash<int, RowAnchor>> anchors_;   // base ref → row → anchor
     QHash<QString, QHash<int, QString>> web_anchors_; // base ref → web control index → key
     QHash<QString, Entry> by_ref_;
     QHash<QString, QString> by_key_; // "<kind><ptr>:<sub>" → ref
+    QHash<QString, Listed> listed_;  // ref → what it was listed as (also after it died)
+    QList<QString> listed_order_;    // oldest first, to bound listed_
     QHash<char, quint64> next_;
     int allocations_since_sweep_ = 0;
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Model (UiModel.cpp)
+// ═════════════════════════════════════════════════════════════════════════════
 
 enum class Detail { Brief, Normal, Full };
 
@@ -157,15 +195,20 @@ struct WalkOptions {
     Detail detail = Detail::Normal;
     int max_nodes = 250;
     QStringList query;      // lower-case words; empty = everything
-    QSet<QWidget*> exclude; // subtrees not to enter (e.g. a window's dock area)
+    QSet<QWidget*> exclude; // subtrees not to enter (e.g. a window's panel area)
     int base_depth = 0;     // indentation added to every node
     /// Also list the controls inside table / list cells (buttons placed in rows),
     /// named "<name> · r<row>". On for name search and query snapshots.
     bool cell_widgets = false;
+    /// Search walk: every element that can be acted on, no table previews.
+    bool for_search = false;
+    /// Stop walking after this long on the GUI thread (the result then says so).
+    int budget_ms = 60;
 };
 
-/// Elements of `root` in reading order. Sets `*truncated` when max_nodes cut it.
-QList<Node> collect_nodes(QWidget* root, const WalkOptions& opt, bool* truncated);
+/// Elements of `root` in reading order. Sets `*truncated` when max_nodes or the
+/// time budget cut it, `*timed_out` when it was the time budget.
+QList<Node> collect_nodes(QWidget* root, const WalkOptions& opt, bool* truncated, bool* timed_out = nullptr);
 
 /// One element line ("e5 button \"Refresh\" [disabled]") plus its table rows.
 QStringList format_node(const Node& n, Detail detail);
@@ -178,33 +221,41 @@ std::optional<Node> describe_widget(QWidget* w, Detail detail);
 QString widget_text(QWidget* w);
 /// Like widget_text, but a document's whole text — for ui_read's pages.
 QString widget_full_text(QWidget* w);
+/// The first `max_chars` characters of a text edit's document without building
+/// the whole text; `*total` (optional) gets the document's length.
+QString doc_text_prefix(QWidget* text_edit, int max_chars, int* total = nullptr);
 
 /// Password-echo inputs and widgets tagged `fincept_secret`, or inside one.
 bool is_secret(const QWidget* w);
 
 /// Never operated or listed: the approval dialog (an agent must not be able to
-/// approve its own request) and the dock framework's internals.
+/// approve its own request), widgets tagged `fincept_agent_hidden`, and the
+/// dock framework's internals.
 bool is_hidden_from_agents(const QWidget* w);
+
+/// Does `scope` (and the open dialogs / popup) show `needle` (lower case)? Walks
+/// at most `budget_ms`; `*complete` says whether the whole scope was searched.
+bool scope_has_text(QWidget* scope, const QString& needle_lower, int budget_ms, bool* complete);
 
 // ── Windows, panels, dialogs ────────────────────────────────────────────────
 
-QList<WindowFrame*> frames();
-WindowFrame* active_frame();
-WindowFrame* frame_of(QWidget* w);
+QList<QWidget*> frames();
+QWidget* active_frame();
+QWidget* frame_of(QWidget* w);
 
 struct PanelInfo {
-    QPointer<ads::CDockWidget> dock;
-    QString screen_id; ///< dock objectName ("markets", "news#dup2")
+    QPointer<QWidget> dock;
+    QString screen_id; ///< ("markets", "news#dup2")
     QString title;
     bool visible = false; ///< false = a background tab
     bool focused = false;
 };
-QList<PanelInfo> panels_of(WindowFrame* frame);
-ads::CDockWidget* dock_of(QWidget* w);
-/// The panel the user (or agent) is in: focus widget's dock, else the router's current.
-ads::CDockWidget* focused_dock(WindowFrame* frame);
-/// The screen a panel hosts (the dock may wrap it, e.g. with a link-group badge).
-QWidget* screen_widget_of(ads::CDockWidget* dock);
+QList<PanelInfo> panels_of(QWidget* frame);
+QWidget* dock_of(QWidget* w);
+/// The panel the user (or agent) is in: focus widget's panel, else the router's current.
+QWidget* focused_dock(QWidget* frame);
+/// The screen a panel hosts (the panel may wrap it, e.g. with a link-group badge).
+QWidget* screen_widget_of(QWidget* dock);
 
 /// Visible dialogs (QDialog / message boxes / tool windows), topmost first;
 /// excludes the approval dialog.
@@ -218,15 +269,17 @@ QString window_title_of(QWidget* top);
 
 /// Resolve a `target` argument: "" / "window" (active window), "dialog", a ref,
 /// a screen id or title. `*label` describes it ("p3 Markets"). On failure
-/// returns nullptr and sets `*error`.
+/// returns nullptr and sets `*error` (with an error code).
 QWidget* resolve_scope(const QString& target, QString* label, QString* error);
 
-/// Screen id / title / alias → the open panel's dock widget (active window
-/// first). nullptr when that screen is not open.
-ads::CDockWidget* find_open_panel(const QString& screen);
+/// Screen id / title / alias → the open panel (active window first). nullptr
+/// when that screen is not open.
+QWidget* find_open_panel(const QString& screen);
 
 /// Describe where a widget lives: "p3 Markets" / "d1 Confirm order" / "w1".
 QString location_label(QWidget* w);
+/// The panel / dialog / menu / window a widget belongs to (for stale-ref hints).
+QWidget* location_scope(QWidget* w);
 
 // ── Element search by words ─────────────────────────────────────────────────
 
@@ -239,6 +292,7 @@ struct NameMatch {
     QString ref;
     QString role;
     QString name;
+    bool enabled = true;
 };
 /// Interactive elements of `scope` whose words match `name` (exact > prefix >
 /// contains), optionally restricted to `role`. Best first.
@@ -246,10 +300,10 @@ QList<NameMatch> find_by_name(QWidget* scope, const QString& name, const QString
 
 // ── Busy state ──────────────────────────────────────────────────────────────
 
-/// "Still loading?" as a person would judge it: a loading overlay, a busy bar or
-/// a "Loading…" label showing in the scope, or a Python script still running.
-/// (DataHub's app-wide in-flight count is deliberately not used: background
-/// feeds refresh constantly, so it never reads idle.)
+/// "Still loading?" as a person would judge it: a loading overlay / skeleton, a
+/// busy bar or a "Loading…" label showing in the scope, or a Python script
+/// still running. (DataHub's app-wide in-flight count is deliberately not used:
+/// background feeds refresh constantly, so it never reads idle.)
 struct BusyState {
     int python = 0;     ///< running + queued scripts
     int indicators = 0; ///< visible loading overlays / busy bars / "Loading…" labels in scope
@@ -258,10 +312,12 @@ struct BusyState {
 };
 BusyState busy_state(QWidget* scope);
 
-// ── Item views ──────────────────────────────────────────────────────────────
+// ── Item views (UiItemViews.cpp) ────────────────────────────────────────────
 
 /// Rows past this are not counted in a tree (the count is then a lower bound).
 inline constexpr int kMaxTreeRows = 200000;
+/// A snapshot line counts a tree's rows up to this (then "5000+ rows").
+inline constexpr int kPreviewTreeRows = 5000;
 /// Rows a text search scans before it stops and says so.
 inline constexpr int kMaxRowScan = 50000;
 /// Columns shown per row unless the caller asks for others (columns / col_offset).
@@ -273,8 +329,9 @@ QList<int> visible_columns(QAbstractItemView* view);
 /// Header texts for those columns.
 QStringList column_headers(QAbstractItemView* view, const QList<int>& cols);
 /// Number of rows the reader sees: rows hidden by a filter are not counted;
-/// trees count expanded items. `*capped` is set when a tree passed kMaxTreeRows.
-int view_row_count(QAbstractItemView* view, bool* capped = nullptr);
+/// trees count expanded items up to `tree_cap`. `*capped` is set when a tree
+/// passed it.
+int view_row_count(QAbstractItemView* view, bool* capped = nullptr, int tree_cap = kMaxTreeRows);
 /// Rows hidden by a filter (tables / lists; 0 for trees).
 int view_hidden_rows(QAbstractItemView* view);
 /// Visit rows in reading order from row number `from`, ONE pass (trees walk the
@@ -305,8 +362,16 @@ QString view_sort_state(QAbstractItemView* view);
 /// First row whose text holds every word of `text`, from `from`; -1 if none.
 /// Scans at most kMaxRowScan rows; `*scan_capped` says it stopped early.
 int view_find_row(QAbstractItemView* view, const QString& text, int from = 0, bool* scan_capped = nullptr);
+/// A column named by header words (exact first, then contained) or by its
+/// number among the visible columns. -1 when there is no such column.
+int resolve_column(QAbstractItemView* view, const QString& wanted);
+/// ui_read of a table / list / tree: rows paged by offset / limit, `query`
+/// (words; "Header:words" filters one column), `columns` / `col_offset`;
+/// `format` "text" (default, rows with refs) or "json" (header + typed rows,
+/// units stated once). Large json answers are parked in the ResultStore.
+QString read_view(QAbstractItemView* view, const QString& ref, const QJsonObject& args);
 
-// ── Web pages (QWebEngineView) ──────────────────────────────────────────────
+// ── Web pages (UiWeb.cpp) ───────────────────────────────────────────────────
 //
 // A web view's content is HTML in another process, not widgets: it is read and
 // located by page scripts, run asynchronously. Controls on a page get refs
@@ -351,5 +416,6 @@ QStringList query_words(const QString& query);
 bool words_match(const QString& haystack_lower, const QStringList& words);
 QString humanize_object_name(const QString& object_name);
 int clamp_int(const QJsonValue& v, int def, int lo, int hi);
+QString strip_mnemonic(QString s);
 
 } // namespace fincept::mcp::core::ui

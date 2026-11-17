@@ -64,7 +64,7 @@ static QString combo_ss() {
 static QString btn_primary_ss() {
     return QString("QPushButton{background:%1;color:%2;border:none;font-weight:700;padding:0 16px;height:32px;}"
                    "QPushButton:hover{background:%3;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM());
 }
 static QString btn_secondary_ss() {
     return QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 12px;height:32px;}"
@@ -281,8 +281,10 @@ void VoiceConfigSection::build_ui() {
     auto* btn_hl = new QHBoxLayout(btn_row);
     btn_hl->setContentsMargins(0, 8, 0, 0);
     save_btn_ = new QPushButton(tr("Save"));
+    save_btn_->setProperty("fincept_agent_risk", "account"); // agents: stores the voice API key
     save_btn_->setStyleSheet(btn_primary_ss());
     test_btn_ = new QPushButton(tr("Test Deepgram key"));
+    test_btn_->setProperty("fincept_agent_risk", "spend"); // agents: sends a test request to the paid voice API
     test_btn_->setStyleSheet(btn_secondary_ss());
     btn_hl->addWidget(save_btn_);
     btn_hl->addWidget(test_btn_);
@@ -329,8 +331,12 @@ void VoiceConfigSection::reload() {
     tts_provider_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
 
     // Shared credentials
-    auto key_res = SecureStorage::instance().retrieve(kSecureKey);
-    api_key_edit_->setText(key_res.is_ok() ? key_res.value() : QString());
+    const SecretRead key_res = SecureStorage::instance().read(kSecureKey);
+    api_key_edit_->setText(key_res.found() ? key_res.value : QString());
+    // Unreadable is not "no key": an empty field must not delete it on save.
+    api_key_unreadable_ = key_res.failed();
+    api_key_edit_->setPlaceholderText(api_key_unreadable_ ? tr("Stored key could not be read; leave empty to keep it")
+                                                          : QString());
 
     // STT-Deepgram tunables
     const QString stt_model = cfg.get("voice/deepgram/model", "nova-3").toString();
@@ -425,7 +431,9 @@ void VoiceConfigSection::on_save() {
     cfg.set("voice/clap_to_start/mode", clap_mode_combo_->currentData().toString());
 
     const QString api_key = api_key_edit_->text().trimmed();
-    if (api_key.isEmpty()) {
+    if (api_key.isEmpty() && api_key_unreadable_) {
+        LOG_WARN(TAG, "Deepgram key could not be read; left as stored");
+    } else if (api_key.isEmpty()) {
         auto r = SecureStorage::instance().remove(kSecureKey);
         if (r.is_err())
             LOG_WARN(TAG, QString("Failed to clear Deepgram key: %1").arg(QString::fromStdString(r.error())));

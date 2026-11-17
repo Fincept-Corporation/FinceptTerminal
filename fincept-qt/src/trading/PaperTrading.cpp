@@ -8,7 +8,11 @@
 #include "core/logging/Logger.h"
 #include "storage/repositories/PaperTradingRepository.h"
 #include "storage/sqlite/Database.h"
+#include "storage/sqlite/SqliteSupport.h"
+#include "trading/BrokerAccount.h"
+#include "trading/OrderMatcher.h"
 
+#include <QCoreApplication>
 #include <QDate>
 #include <QDateTime>
 #include <QHash>
@@ -40,6 +44,106 @@ static auto& repo() {
 static QMutex s_fill_mutex;
 
 // ============================================================================
+// All-or-nothing writes
+// ============================================================================
+//
+// A fill, an order placement, a cancel and a product conversion are each several
+// repository writes. They run inside one BEGIN IMMEDIATE on this thread's
+// connection (Database hands every thread its own). The first failing write — or
+// a failed BEGIN / COMMIT — throws, and PtWriteTransaction rolls everything back,
+// so the books never hold half an operation (balance moved but no trade row, a
+// position without its margin, a filled order with no position). The repository
+// returns errors instead of throwing, so every write result is checked with
+// pt_require(); the old try/catch rolled back only on C++ exceptions, which the
+// repository never raises. Callers already handle the std::runtime_error contract.
+
+namespace {
+
+// Logs the driver text and throws a plain-language message for the caller.
+[[noreturn]] void pt_storage_failure(const char* step, const std::string& raw) {
+    LOG_ERROR("PaperTrading", logf("Paper trade could not be saved", {{"step", step}, {"error", QString::fromStdString(raw)}}));
+    const QString why = fincept::db::user_message(fincept::db::classify_text(QString::fromStdString(raw)),
+                                                  QStringLiteral("The terminal database"));
+    throw std::runtime_error(QString("The paper trade was not saved and nothing was changed. %1").arg(why).toStdString());
+}
+
+void pt_require(const Result<void>& r, const char* step) {
+    if (r.is_err())
+        pt_storage_failure(step, r.error());
+}
+
+// Rolls back in the destructor unless commit() succeeded.
+class PtWriteTransaction {
+  public:
+    explicit PtWriteTransaction(const char* what) : what_(what) {
+        auto r = Database::instance().begin_transaction();
+        if (r.is_err())
+            pt_storage_failure(what_, "BEGIN: " + r.error()); // nothing started, nothing to undo
+    }
+    ~PtWriteTransaction() {
+        if (!open_)
+            return;
+        auto r = Database::instance().rollback();
+        if (r.is_err())
+            LOG_ERROR("PaperTrading", QString("%1: rollback failed: %2")
+                                          .arg(QLatin1String(what_), QString::fromStdString(r.error())));
+        else
+            LOG_WARN("PaperTrading", QString("%1 rolled back").arg(QLatin1String(what_)));
+    }
+    void commit() {
+        auto r = Database::instance().commit();
+        if (r.is_err())
+            pt_storage_failure(what_, "COMMIT: " + r.error()); // still open: the destructor rolls back
+        open_ = false;
+    }
+    PtWriteTransaction(const PtWriteTransaction&) = delete;
+    PtWriteTransaction& operator=(const PtWriteTransaction&) = delete;
+
+  private:
+    const char* what_;
+    bool open_ = true;
+};
+
+// ── Audit trail (audit.log; policy B.7) ─────────────────────────────────────
+// Every paper order event the engine decides is audited here, whoever called it
+// (order ticket, built-in paper account, workflows, algos, matcher, square-off):
+// Order accepted / rejected / filled / cancelled / modified, venue=paper mode=paper.
+constexpr const char* kPtAudit = "Orders";
+
+QList<LogField> pt_audit_fields(const QString& portfolio_id, const QString& symbol, const QString& exchange,
+                                const QString& side, const QString& type, const QString& product, double qty,
+                                std::optional<double> price, std::optional<double> stop,
+                                const QString& source = QString()) {
+    QList<LogField> f{{"venue", "paper"},
+                      {"mode", "paper"},
+                      {"portfolio", log_mask(portfolio_id)},
+                      {"symbol", symbol},
+                      {"exchange", exchange},
+                      {"side", side},
+                      {"type", type},
+                      {"product", product},
+                      {"qty", qty}};
+    if (price)
+        f.append(LogField("price", *price));
+    if (stop)
+        f.append(LogField("trigger", *stop));
+    if (!source.isEmpty()) // who created the order (UnifiedOrder::source); omitted when not stated
+        f.append(LogField("source", source));
+    return f;
+}
+
+void pt_audit_rejected(const QString& portfolio_id, const QString& symbol, const QString& exchange,
+                       const QString& side, const QString& type, const QString& product, double qty,
+                       std::optional<double> price, std::optional<double> stop, const QString& reason,
+                       const QString& source = QString()) {
+    auto f = pt_audit_fields(portfolio_id, symbol, exchange, side, type, product, qty, price, stop, source);
+    f.append(LogField("reason", reason));
+    LOG_AUDIT(kPtAudit, logf("Order rejected", f));
+}
+
+} // namespace
+
+// ============================================================================
 // Leverage / Market-hours Config (Phase 3 §4)
 // ============================================================================
 //
@@ -54,6 +158,8 @@ namespace {
 struct PtRuntimeConfig {
     PtLeverageConfig leverage;
     bool enforce_market_hours = false;
+    // symbol -> units of the portfolio currency per price unit (pt_set_symbol_fx).
+    QHash<QString, double> symbol_fx;
 };
 
 QMutex s_config_mutex;
@@ -85,6 +191,31 @@ void pt_set_enforce_market_hours(const QString& portfolio_id, bool enforce) {
 
 bool pt_get_enforce_market_hours(const QString& portfolio_id) {
     return config_for(portfolio_id).enforce_market_hours;
+}
+
+void pt_set_symbol_fx(const QString& portfolio_id, const QString& symbol, double fx_to_portfolio_ccy) {
+    if (!std::isfinite(fx_to_portfolio_ccy) || fx_to_portfolio_ccy <= 0.0)
+        return; // never store a factor that would zero or poison cash amounts
+    QMutexLocker lock(&s_config_mutex);
+    config_map()[portfolio_id].symbol_fx.insert(symbol, fx_to_portfolio_ccy);
+}
+
+double pt_get_symbol_fx(const QString& portfolio_id, const QString& symbol) {
+    QMutexLocker lock(&s_config_mutex);
+    const auto it = config_map().constFind(portfolio_id);
+    if (it == config_map().constEnd())
+        return 1.0;
+    return it->symbol_fx.value(symbol, 1.0);
+}
+
+bool pt_has_symbol_fx(const QString& portfolio_id, const QString& symbol) {
+    QMutexLocker lock(&s_config_mutex);
+    const auto it = config_map().constFind(portfolio_id);
+    return it != config_map().constEnd() && it->symbol_fx.contains(symbol);
+}
+
+bool pt_portfolio_settles_by_venue(const PtPortfolio& portfolio) {
+    return portfolio.exchange == QLatin1String(kBuiltinPaperAccountId);
 }
 
 // ============================================================================
@@ -220,6 +351,8 @@ void pt_set_balance(const QString& portfolio_id, double new_balance) {
     auto r = repo().update_balance(portfolio_id, new_balance);
     if (r.is_err())
         throw std::runtime_error(r.error());
+    LOG_AUDIT(kPtAudit, "Paper balance set",
+              {{"venue", "paper"}, {"mode", "paper"}, {"portfolio", log_mask(portfolio_id)}, {"balance", new_balance}});
 }
 
 std::optional<PtPortfolio> pt_find_portfolio(const QString& name, const QString& exchange) {
@@ -228,8 +361,11 @@ std::optional<PtPortfolio> pt_find_portfolio(const QString& name, const QString&
 
 QVector<PtPortfolio> pt_list_portfolios(const QString& exchange) {
     auto r = repo().list_portfolios(exchange);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_ERROR_RL("PaperTrading", QStringLiteral("list_portfolios"), 60000,
+                     logf("Paper portfolios could not be listed", {{"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     return r.value();
 }
 
@@ -262,7 +398,8 @@ PtPortfolio pt_reset_portfolio(const QString& id) {
 [[noreturn]] static void reject_order(const QString& portfolio_id, const QString& symbol, const QString& side,
                                       const QString& order_type, double quantity, std::optional<double> price,
                                       std::optional<double> stop_price, bool reduce_only, const QString& product,
-                                      const QString& exchange, const std::string& reason) {
+                                      const QString& exchange, const std::string& reason,
+                                      const QString& source = QString()) {
     PtOrder rej;
     rej.id = generate_uuid();
     rej.portfolio_id = portfolio_id;
@@ -280,13 +417,15 @@ PtPortfolio pt_reset_portfolio(const QString& id) {
     rej.exchange = exchange;
     rej.created_at = now_rfc3339();
     repo().insert_order(rej); // best-effort; ignore failure
+    pt_audit_rejected(portfolio_id, symbol, exchange, side, order_type, product, quantity, price, stop_price,
+                      QString::fromStdString(reason), source);
     throw std::runtime_error(reason);
 }
 
 PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const QString& side,
                        const QString& order_type, double quantity, std::optional<double> price,
                        std::optional<double> stop_price, bool reduce_only, const QString& exchange,
-                       const QString& product) {
+                       const QString& product, const QString& source) {
     // Normalize order-type vocabulary. UnifiedOrder serializes via order_type_str()
     // as "stop_loss"/"stop_loss_limit", but the paper engine's canonical spellings
     // are "stop"/"stop_limit" (what OrderMatcher matches on). Accept both and store
@@ -298,20 +437,39 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
         type = "stop_limit";
 
     // Validation
-    if (type != "market" && type != "limit" && type != "stop" && type != "stop_limit")
+    // Every refusal below is audited before it is thrown (same text as the exception).
+    const auto audit_refusal = [&](const char* reason) {
+        pt_audit_rejected(portfolio_id, symbol, exchange, side, type, product, quantity, price, stop_price,
+                          QString::fromLatin1(reason), source);
+    };
+    if (type != "market" && type != "limit" && type != "stop" && type != "stop_limit") {
+        audit_refusal("Invalid order type");
         throw std::runtime_error("Invalid order type: " + type.toStdString());
-    if (side != "buy" && side != "sell")
+    }
+    if (side != "buy" && side != "sell") {
+        audit_refusal("Invalid side");
         throw std::runtime_error("Invalid side: " + side.toStdString());
-    if (!std::isfinite(quantity) || quantity <= 0.0)
+    }
+    if (!std::isfinite(quantity) || quantity <= 0.0) {
+        audit_refusal("Invalid quantity");
         throw std::runtime_error("Invalid quantity");
-    if (price && (!std::isfinite(*price) || *price <= 0.0))
+    }
+    if (price && (!std::isfinite(*price) || *price <= 0.0)) {
+        audit_refusal("Invalid price");
         throw std::runtime_error("Invalid price");
-    if (stop_price && (!std::isfinite(*stop_price) || *stop_price <= 0.0))
+    }
+    if (stop_price && (!std::isfinite(*stop_price) || *stop_price <= 0.0)) {
+        audit_refusal("Invalid stop price");
         throw std::runtime_error("Invalid stop price");
-    if (type == "limit" && !price)
+    }
+    if (type == "limit" && !price) {
+        audit_refusal("Limit order requires price");
         throw std::runtime_error("Limit order requires price");
-    if ((type == "stop" || type == "stop_limit") && !stop_price)
+    }
+    if ((type == "stop" || type == "stop_limit") && !stop_price) {
+        audit_refusal("Stop order requires stop_price");
         throw std::runtime_error("Stop order requires stop_price");
+    }
 
     // Serialize the balance read-modify-write against concurrent fills/cancels.
     // pt_fill_order / pt_cancel_order already hold s_fill_mutex while they read
@@ -329,7 +487,7 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
     // existing behavior). Only enforced when an exchange is supplied.
     if (pt_get_enforce_market_hours(portfolio_id) && !exchange.isEmpty() && !pt_is_market_open(exchange)) {
         reject_order(portfolio_id, symbol, side, type, quantity, price, stop_price, reduce_only, product, exchange,
-                     ("Market closed for exchange " + exchange).toStdString());
+                     ("Market closed for exchange " + exchange).toStdString(), source);
     }
 
     // Margin blocking — skip for reduce_only orders and for the portion of an
@@ -347,18 +505,22 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
 
         if (net_new_qty > 0.0) {
             double ref = price.value_or(stop_price.value_or(0.0));
-            if (ref <= 0.0)
+            if (ref <= 0.0) {
+                audit_refusal("Market orders require a reference price for margin calculation");
                 throw std::runtime_error("Market orders require a reference price for margin calculation");
+            }
 
             // Per-product / per-instrument leverage. If exchange/product are not
             // supplied, select_leverage falls back to the equity rules /
             // portfolio default, and for blank exchange the equity CNC path.
-            margin_to_block =
-                pt_calculate_required_margin(portfolio_id, symbol, exchange, product, net_new_qty, ref, side);
+            // Margin is cash: in the portfolio currency (pt_set_symbol_fx; 1.0 unless set).
+            margin_to_block = pt_calculate_required_margin(portfolio_id, symbol, exchange, product, net_new_qty, ref,
+                                                           side) *
+                              pt_get_symbol_fx(portfolio_id, symbol);
 
             if (margin_to_block > portfolio.balance) {
                 reject_order(portfolio_id, symbol, side, type, quantity, price, stop_price, reduce_only, product,
-                             exchange, "Insufficient margin");
+                             exchange, "Insufficient margin", source);
             }
         }
     }
@@ -380,17 +542,30 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
     order.exchange = exchange;
     order.created_at = now_rfc3339();
 
-    auto r = repo().insert_order(order);
-    if (r.is_err())
-        throw std::runtime_error(r.error());
+    // The order row, the balance debit and the margin-block row land together: an
+    // order whose margin was never recorded could not release it on fill/cancel.
+    PtWriteTransaction tx("Paper order placement");
+    pt_require(repo().insert_order(order), "insert order");
 
     // Block the margin from available balance and record it against the order so
     // the exact amount can be released on fill/cancel.
     if (margin_to_block > 0.0) {
-        repo().update_balance(portfolio_id, portfolio.balance - margin_to_block);
-        repo().insert_margin_block(generate_uuid(), portfolio_id, order.id, symbol, margin_to_block);
+        pt_require(repo().update_balance(portfolio_id, portfolio.balance - margin_to_block), "block margin (balance)");
+        pt_require(repo().insert_margin_block(generate_uuid(), portfolio_id, order.id, symbol, margin_to_block),
+                   "block margin (record)");
     }
+    tx.commit();
 
+    {
+        auto f =
+            pt_audit_fields(portfolio_id, symbol, exchange, side, type, product, quantity, price, stop_price, source);
+        f.append(LogField("order_id", order.id));
+        if (reduce_only)
+            f.append(LogField("reduce_only", true));
+        if (margin_to_block > 0.0)
+            f.append(LogField("margin_blocked", margin_to_block));
+        LOG_AUDIT(kPtAudit, logf("Order accepted", f));
+    }
     return order;
 }
 
@@ -407,28 +582,51 @@ void pt_cancel_order(const QString& order_id) {
     // trade it produced stayed on the books. An unknown id stays a silent no-op,
     // exactly as before.
     auto ord = repo().get_order(order_id);
-    if (ord.is_err())
+    if (ord.is_err()) {
+        // Unknown id or unreadable row: nothing is cancelled (the caller still reports success).
+        LOG_WARN("PaperTrading", logf("Paper cancel skipped, order could not be read",
+                                      {{"order_id", order_id}, {"error", QString::fromStdString(ord.error())}}));
         return;
+    }
     if (ord.value().status != "pending" && ord.value().status != "partial") {
         LOG_DEBUG("PaperTrading", QString("pt_cancel_order: order %1 is %2 — nothing to cancel")
                                       .arg(order_id, ord.value().status));
         return;
     }
 
+    // Release + cancel are one unit: a released block on an order that stayed
+    // pending (or a cancelled order whose block was never released) would leave
+    // the cash wrong. A failure now throws instead of passing silently.
     double blocked = repo().get_margin_block(order_id);
+    PtWriteTransaction tx("Paper order cancel");
     if (blocked > 0.0) {
         auto portfolio = pt_get_portfolio(ord.value().portfolio_id);
-        repo().update_balance(portfolio.id, portfolio.balance + blocked);
-        repo().delete_margin_block(order_id);
+        pt_require(repo().update_balance(portfolio.id, portfolio.balance + blocked), "release margin (balance)");
+        pt_require(repo().delete_margin_block(order_id), "release margin (record)");
     }
 
-    repo().cancel_order(order_id);
+    pt_require(repo().cancel_order(order_id), "cancel order");
+    tx.commit();
+    LOG_AUDIT(kPtAudit, "Order cancelled",
+              {{"venue", "paper"},
+               {"mode", "paper"},
+               {"portfolio", log_mask(ord.value().portfolio_id)},
+               {"order_id", order_id},
+               {"symbol", ord.value().symbol},
+               {"side", ord.value().side},
+               {"qty", ord.value().quantity - ord.value().filled_qty},
+               {"margin_released", blocked}});
 }
 
 QVector<PtOrder> pt_get_orders(const QString& portfolio_id, const QString& status) {
     auto r = repo().get_orders(portfolio_id, status);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_ERROR_RL("PaperTrading", QStringLiteral("get_orders|") + portfolio_id, 60000,
+                     logf("Paper orders could not be read", {{"portfolio", log_mask(portfolio_id)},
+                                                             {"status", status},
+                                                             {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     return r.value();
 }
 
@@ -480,6 +678,14 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         const double reducible = reducible_pos ? reducible_pos->quantity : 0.0;
         if (reducible <= 0.0) {
             repo().cancel_order(order_id);
+            LOG_AUDIT(kPtAudit, "Order cancelled",
+                      {{"venue", "paper"},
+                       {"mode", "paper"},
+                       {"portfolio", log_mask(order.portfolio_id)},
+                       {"order_id", order_id},
+                       {"symbol", order.symbol},
+                       {"side", order.side},
+                       {"reason", "reduce-only order has no position to reduce"}});
             throw std::runtime_error("Reduce-only order has no position to reduce");
         }
         if (qty > reducible) {
@@ -488,18 +694,21 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         }
     }
 
-    double fee = qty * fill_price * portfolio.fee_rate;
+    // Cash amounts (fee, margin, realized P&L) are booked in the portfolio currency;
+    // prices stay in the instrument's. 1.0 unless pt_set_symbol_fx was used.
+    const double fx = pt_get_symbol_fx(order.portfolio_id, order.symbol);
+    double fee = qty * fill_price * portfolio.fee_rate * fx;
     QString now = fill_time.isEmpty() ? now_rfc3339() : fill_time;
 
     double pnl = 0.0;
     double new_filled = order.filled_qty + qty;
     bool fully_filled = (new_filled >= order.quantity) || reduce_capped;
 
-    // ── Begin DB transaction for atomicity ──────────────────────────────
-    auto& db = Database::instance();
-    db.begin_transaction();
-
-    try {
+    // ── One transaction: every write below lands, or none does ─────────
+    // A failed BEGIN, any failed write (pt_require) or a failed COMMIT throws and
+    // the guard rolls the whole fill back.
+    PtWriteTransaction tx("Paper fill");
+    {
         // Net change to available cash from this fill. Margin model (v040):
         //   • Opening exposure KEEPS its margin locked on the position (held_margin)
         //     — it is NOT released to cash on fill. This is what finally makes
@@ -518,16 +727,19 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         if (opp) {
             PtPosition pos = *opp;
             close_qty = std::min(qty, pos.quantity);
-            pnl = (pos.side == "long") ? (fill_price - pos.entry_price) * close_qty
-                                       : (pos.entry_price - fill_price) * close_qty;
+            pnl = ((pos.side == "long") ? (fill_price - pos.entry_price) * close_qty
+                                        : (pos.entry_price - fill_price) * close_qty) *
+                  fx;
             const double frac_close = pos.quantity > 0.0 ? (close_qty / pos.quantity) : 1.0;
             const double margin_released = pos.held_margin * frac_close;
             if (close_qty >= pos.quantity) {
-                repo().delete_position(pos.id);
+                pt_require(repo().delete_position(pos.id), "close position");
             } else {
-                repo().update_position(pos.id, pos.quantity - close_qty, pos.entry_price);
-                repo().set_position_margin(pos.id, pos.held_margin - margin_released);
-                repo().add_realized_pnl(pos.id, pnl);
+                pt_require(repo().update_position(pos.id, pos.quantity - close_qty, pos.entry_price),
+                           "reduce position");
+                pt_require(repo().set_position_margin(pos.id, pos.held_margin - margin_released),
+                           "release position margin");
+                pt_require(repo().add_realized_pnl(pos.id, pnl), "record realized P&L");
             }
             balance_delta += margin_released + pnl;
         }
@@ -537,7 +749,8 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         if (open_qty > 0.0) {
             // Margin the new exposure must lock, per product / leverage at fill price.
             double open_margin = pt_calculate_required_margin(order.portfolio_id, order.symbol, order.exchange,
-                                                              order.product, open_qty, fill_price, order.side);
+                                                              order.product, open_qty, fill_price, order.side) *
+                                 fx;
             // That margin was pre-blocked on the order at placement: convert the
             // block into position margin (release the block, re-lock the actual).
             block_consumed = fully_filled ? order_blocked : std::min(order_blocked, open_margin);
@@ -551,8 +764,8 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
                 if (new_qty <= 0.0)
                     throw std::runtime_error("Invalid position quantity after averaging");
                 double new_entry = (pos.entry_price * pos.quantity + fill_price * open_qty) / new_qty;
-                repo().update_position(pos.id, new_qty, new_entry);
-                repo().set_position_margin(pos.id, pos.held_margin + open_margin);
+                pt_require(repo().update_position(pos.id, new_qty, new_entry), "add to position");
+                pt_require(repo().set_position_margin(pos.id, pos.held_margin + open_margin), "lock position margin");
             } else {
                 PtPosition np;
                 np.id = generate_uuid();
@@ -566,7 +779,7 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
                 np.opened_at = now;
                 np.product = product;
                 np.held_margin = open_margin;
-                repo().insert_position(np);
+                pt_require(repo().insert_position(np), "open position");
             }
         }
 
@@ -579,21 +792,23 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
                 // crediting it leaked the whole block out of cash for good.
                 if (open_qty <= 0.0)
                     balance_delta += order_blocked;
-                repo().delete_margin_block(order_id);
+                pt_require(repo().delete_margin_block(order_id), "settle order margin");
             } else {
                 double remaining = std::max(0.0, order_blocked - block_consumed);
-                repo().insert_margin_block(generate_uuid(), order.portfolio_id, order_id, order.symbol, remaining);
+                pt_require(
+                    repo().insert_margin_block(generate_uuid(), order.portfolio_id, order_id, order.symbol, remaining),
+                    "keep remaining order margin");
             }
         }
 
-        repo().update_balance(order.portfolio_id, portfolio.balance + balance_delta);
+        pt_require(repo().update_balance(order.portfolio_id, portfolio.balance + balance_delta), "update balance");
 
         // 8. Update order
         QString new_status = fully_filled ? "filled" : "partial";
         double prev_avg = order.avg_price.value_or(0.0);
         double new_avg =
             (new_filled > 0.0) ? (prev_avg * order.filled_qty + fill_price * qty) / new_filled : fill_price;
-        repo().update_order_fill(order_id, new_filled, new_avg, new_status, now);
+        pt_require(repo().update_order_fill(order_id, new_filled, new_avg, new_status, now), "update order");
 
         // 9. Create trade record
         PtTrade trade;
@@ -607,9 +822,21 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         trade.fee = fee;
         trade.pnl = pnl;
         trade.timestamp = now;
-        repo().insert_trade(trade);
+        pt_require(repo().insert_trade(trade), "record trade");
 
-        db.commit();
+        tx.commit();
+        LOG_AUDIT(kPtAudit, "Order filled",
+                  {{"venue", "paper"},
+                   {"mode", "paper"},
+                   {"portfolio", log_mask(order.portfolio_id)},
+                   {"order_id", order_id},
+                   {"symbol", order.symbol},
+                   {"side", order.side},
+                   {"qty", qty},
+                   {"price", fill_price},
+                   {"status", new_status},
+                   {"fee", fee},
+                   {"pnl", pnl}});
 
         // Emit event (outside transaction — non-critical)
         EventBus::instance().publish("paper_trading.order_filled", {{"trade_id", trade.id},
@@ -622,9 +849,6 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
                                                                     {"fee", trade.fee}});
 
         return trade;
-    } catch (...) {
-        db.rollback();
-        throw;
     }
 }
 
@@ -634,8 +858,12 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
 
 QVector<PtPosition> pt_get_positions(const QString& portfolio_id) {
     auto r = repo().get_positions(portfolio_id);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_ERROR_RL("PaperTrading", QStringLiteral("get_positions|") + portfolio_id, 60000,
+                     logf("Paper positions could not be read", {{"portfolio", log_mask(portfolio_id)},
+                                                                {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     return r.value();
 }
 
@@ -645,15 +873,23 @@ void pt_update_position_price(const QString& portfolio_id, const QString& symbol
 
 QVector<PtTrade> pt_get_trades(const QString& portfolio_id, int64_t limit) {
     auto r = repo().get_trades(portfolio_id, limit);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN_RL("PaperTrading", QStringLiteral("get_trades|") + portfolio_id, 60000,
+                    logf("Paper trades could not be read", {{"portfolio", log_mask(portfolio_id)},
+                                                            {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     return r.value();
 }
 
 PtStats pt_get_stats(const QString& portfolio_id) {
     auto r = repo().get_stats(portfolio_id);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN_RL("PaperTrading", QStringLiteral("get_stats|") + portfolio_id, 60000,
+                    logf("Paper stats could not be read", {{"portfolio", log_mask(portfolio_id)},
+                                                           {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     return r.value();
 }
 
@@ -710,22 +946,17 @@ void pt_convert_position_product(const QString& position_id, const QString& new_
     // (CNC/delivery = full notional at 1x; MIS = notional/leverage.)
     const QString side = (pos.side == "long") ? "buy" : "sell";
     const double new_margin = pt_calculate_required_margin(pos.portfolio_id, pos.symbol, QString(), new_product,
-                                                           pos.quantity, pos.entry_price, side);
+                                                           pos.quantity, pos.entry_price, side) *
+                              pt_get_symbol_fx(pos.portfolio_id, pos.symbol);
     const double extra = new_margin - pos.held_margin; // additional cash to lock (CNC needs more than MIS)
     if (extra > portfolio.balance + 1e-6)
         throw std::runtime_error(("Insufficient balance to convert to " + new_product).toStdString());
 
-    auto& db = Database::instance();
-    db.begin_transaction();
-    try {
-        repo().update_balance(pos.portfolio_id, portfolio.balance - extra);
-        repo().set_position_margin(position_id, new_margin);
-        repo().set_position_product(position_id, new_product);
-        db.commit();
-    } catch (...) {
-        db.rollback();
-        throw;
-    }
+    PtWriteTransaction tx("Paper product conversion");
+    pt_require(repo().update_balance(pos.portfolio_id, portfolio.balance - extra), "update balance");
+    pt_require(repo().set_position_margin(position_id, new_margin), "set position margin");
+    pt_require(repo().set_position_product(position_id, new_product), "set position product");
+    tx.commit();
 }
 
 int pt_settle_intraday(const QString& portfolio_id) {
@@ -737,9 +968,15 @@ int pt_settle_intraday(const QString& portfolio_id) {
     try {
         portfolio = pt_get_portfolio(portfolio_id);
     } catch (...) {
+        LOG_WARN("PaperTrading", logf("Auto-square skipped, portfolio could not be read",
+                                      {{"portfolio", log_mask(portfolio_id)}}));
         return 0;
     }
     if (portfolio.currency.compare("INR", Qt::CaseInsensitive) != 0)
+        return 0;
+    // The built-in paper account trades every venue: an INR account holding AAPL
+    // must not be squared at 15:30 IST. pt_settle_delayed_sessions settles it per venue.
+    if (pt_portfolio_settles_by_venue(portfolio))
         return 0;
 
     const QDateTime ist_now = QDateTime::currentDateTimeUtc().addSecs(330 * 60);
@@ -788,8 +1025,20 @@ int pt_settle_intraday(const QString& portfolio_id) {
             o.product = pos.product;
             o.created_at = close_iso;
             auto ir = repo().insert_order(o);
-            if (ir.is_err())
+            if (ir.is_err()) {
+                LOG_ERROR("PaperTrading", logf("Auto-square order could not be saved",
+                                               {{"portfolio", log_mask(portfolio_id)},
+                                                {"symbol", pos.symbol},
+                                                {"error", QString::fromStdString(ir.error())}}));
                 continue;
+            }
+            {
+                auto f = pt_audit_fields(portfolio_id, o.symbol, QString(), o.side, o.order_type, o.product,
+                                         o.quantity, o.price, std::nullopt);
+                f.append(LogField("order_id", o.id));
+                f.append(LogField("source", "auto_square_off"));
+                LOG_AUDIT(kPtAudit, logf("Order accepted", f));
+            }
             pt_fill_order(o.id, price, std::nullopt, close_iso);
             ++squared;
         } catch (const std::exception& e) {
@@ -805,6 +1054,7 @@ int pt_settle_intraday(const QString& portfolio_id) {
             try {
                 pt_cancel_order(o.id);
             } catch (...) {
+                LOG_WARN("PaperTrading", logf("Stale pending order could not be cancelled", {{"order_id", o.id}}));
             }
         }
     }
@@ -816,6 +1066,326 @@ int pt_settle_intraday_all() {
     for (const auto& p : pt_list_portfolios())
         total += pt_settle_intraday(p.id);
     return total;
+}
+
+// ============================================================================
+// Delayed-price simulation (built-in paper account)
+// ============================================================================
+
+bool PtDelayedQuote::valid() const {
+    return std::isfinite(price) && price > 0.0;
+}
+
+namespace {
+
+QString pt_sim_tr(const char* text) {
+    return QCoreApplication::translate("PaperTrading", text);
+}
+
+QString pt_sim_age(qint64 ms) {
+    const qint64 s = std::max<qint64>(0, ms / 1000);
+    if (s < 120)
+        return pt_sim_tr("%1 s").arg(s);
+    return pt_sim_tr("%1 min").arg(s / 60);
+}
+
+QString pt_sim_normalise_type(const QString& t) {
+    if (t == QLatin1String("stop_loss"))
+        return QStringLiteral("stop");
+    if (t == QLatin1String("stop_loss_limit"))
+        return QStringLiteral("stop_limit");
+    return t;
+}
+
+QDateTime pt_sim_parse_utc(const QString& iso) {
+    QDateTime dt = QDateTime::fromString(iso, Qt::ISODate);
+    if (dt.isValid())
+        dt.setTimeZone(QTimeZone::UTC); // the engine writes UTC; a naive stamp is UTC too
+    return dt;
+}
+
+std::optional<PtTrade> pt_sim_trade_of(const QString& portfolio_id, const QString& order_id) {
+    for (const auto& t : pt_get_trades(portfolio_id, 20))
+        if (t.order_id == order_id)
+            return t;
+    return std::nullopt;
+}
+
+} // namespace
+
+PtSimResult pt_submit_delayed_order(const PtSimRequest& r, const PtDelayedQuote& q, qint64 now_ms,
+                                    qint64 max_quote_age_ms) {
+    PtSimResult res;
+    const QString type = pt_sim_normalise_type(r.order_type);
+    const bool is_market = (type == QLatin1String("market"));
+    const bool fresh = q.valid() && q.received_ms > 0 && (now_ms - q.received_ms) <= max_quote_age_ms;
+
+    if (std::isfinite(r.fx_to_account) && r.fx_to_account > 0.0)
+        pt_set_symbol_fx(r.portfolio_id, r.symbol, r.fx_to_account);
+
+    // Refusals of the delayed-price simulation are audited like the engine's own.
+    const auto audit_sim_refusal = [&](const char* reason) {
+        pt_audit_rejected(r.portfolio_id, r.symbol, r.exchange, r.side, type, r.product, r.quantity, r.price,
+                          r.stop_price, QString::fromLatin1(reason), r.source);
+    };
+    if (is_market) {
+        if (!q.valid()) {
+            audit_sim_refusal("no delayed price has arrived yet for a market order");
+            res.message = pt_sim_tr("No delayed price for %1 has arrived yet, so a MARKET order cannot be filled. Wait "
+                                    "for its quote, or place a LIMIT order.")
+                              .arg(r.symbol);
+            return res;
+        }
+        if (q.session_open && !fresh) {
+            audit_sim_refusal("the delayed price feed is not updating (stale quote) for a market order");
+            res.message = pt_sim_tr("The latest delayed price for %1 was received %2 ago (limit %3) — the price feed "
+                                    "is not updating, so a MARKET order cannot be filled. Use a LIMIT order, or try "
+                                    "again when prices update.")
+                              .arg(r.symbol, pt_sim_age(now_ms - q.received_ms), pt_sim_age(max_quote_age_ms));
+            return res;
+        }
+    }
+
+    // A MARKET order carries the delayed price as its margin reference (and, while
+    // the session is open, its fill price).
+    std::optional<double> price = r.price;
+    if (is_market)
+        price = q.price;
+
+    PtOrder order;
+    try {
+        order = pt_place_order(r.portfolio_id, r.symbol, r.side, type, r.quantity, price, r.stop_price, r.reduce_only,
+                               r.exchange, r.product, r.source);
+    } catch (const std::exception& e) {
+        res.message = pt_sim_tr("Order rejected: %1").arg(QString::fromUtf8(e.what()));
+        return res;
+    }
+    res.order = order;
+
+    if (is_market && q.session_open) {
+        try {
+            res.trade = pt_fill_order(order.id, q.price);
+            res.order.status = QStringLiteral("filled");
+            res.order.filled_qty = order.quantity;
+            res.order.avg_price = q.price;
+            res.outcome = PtSimOutcome::Filled;
+            res.message = pt_sim_tr("Simulated fill: %1 %2 %3 @ %4 — the latest delayed price, not a real execution.")
+                              .arg(r.side.toUpper())
+                              .arg(r.quantity)
+                              .arg(r.symbol)
+                              .arg(q.price, 0, 'f', 4);
+        } catch (const std::exception& e) {
+            LOG_WARN("PaperTrading", logf("Simulated fill failed, order cancelled",
+                                          {{"order_id", order.id}, {"symbol", r.symbol}, {"error", e.what()}}));
+            try {
+                pt_cancel_order(order.id);
+            } catch (...) {
+                LOG_WARN("PaperTrading", logf("Rejected paper order could not be cancelled, margin may stay blocked",
+                                              {{"order_id", order.id}}));
+            }
+            res.outcome = PtSimOutcome::Rejected;
+            res.message = pt_sim_tr("The simulated fill failed and the order was cancelled: %1")
+                              .arg(QString::fromUtf8(e.what()));
+        }
+        return res;
+    }
+
+    OrderMatcher::instance().add_order(order);
+    if (is_market) {
+        res.outcome = PtSimOutcome::QueuedForOpen;
+        res.message = pt_sim_tr("Market closed — %1 order for %2 queued. It fills at the first delayed price printed "
+                                "after the open.")
+                          .arg(r.side.toUpper(), r.symbol);
+        return res;
+    }
+
+    // Resting order: while the session is open on a fresh delayed price, give the
+    // matcher one look at the new order alone — a marketable limit / triggered stop
+    // fills now by OrderMatcher's rules.
+    if (q.session_open && fresh) {
+        PriceData pd;
+        pd.last = q.price;
+        pd.timestamp = q.printed_ms;
+        OrderMatcher::instance().check_orders(r.symbol, pd, r.portfolio_id, /*printed_at_ms=*/0, order.id);
+        auto stored = PaperTradingRepository::instance().get_order(order.id);
+        if (stored.is_ok() && stored.value().status == QLatin1String("filled")) {
+            res.order = stored.value();
+            res.trade = pt_sim_trade_of(r.portfolio_id, order.id);
+            res.outcome = PtSimOutcome::Filled;
+            res.message = pt_sim_tr("Simulated fill: %1 %2 %3 @ %4 on the latest delayed price — not a real execution.")
+                              .arg(r.side.toUpper())
+                              .arg(r.quantity)
+                              .arg(r.symbol)
+                              .arg(res.order.avg_price.value_or(q.price), 0, 'f', 4);
+            return res;
+        }
+    }
+    res.outcome = PtSimOutcome::Resting;
+    res.message = q.session_open
+                      ? pt_sim_tr("%1 %2 order for %3 is resting; it is checked against every new delayed price.")
+                            .arg(type.toUpper(), r.side.toUpper(), r.symbol)
+                      : pt_sim_tr("Market closed — %1 %2 order for %3 is resting and is checked from the open.")
+                            .arg(type.toUpper(), r.side.toUpper(), r.symbol);
+    return res;
+}
+
+int pt_match_delayed_quote(const QString& portfolio_id, const QString& symbol, const PtDelayedQuote& q) {
+    if (!q.valid() || !q.session_open)
+        return 0; // nothing fills outside the regular session
+    auto& matcher = OrderMatcher::instance();
+    const int before = int(matcher.get_pending_orders(symbol, portfolio_id).size());
+    PriceData pd;
+    pd.last = q.price;
+    pd.timestamp = q.printed_ms;
+    matcher.check_orders(symbol, pd, portfolio_id, q.printed_ms);
+    const int after = int(matcher.get_pending_orders(symbol, portfolio_id).size());
+    matcher.check_sl_tp_triggers(portfolio_id, symbol, q.price);
+    return std::max(0, before - after);
+}
+
+int pt_settle_delayed_sessions(const QString& portfolio_id,
+                               const std::function<QDateTime(const QString& symbol, const QDateTime& after_utc)>& close_after,
+                               const QDateTime& now_utc) {
+    if (!close_after)
+        return 0;
+    int settled = 0;
+
+    // Intraday positions: squared at the close of the session they were opened in.
+    for (const auto& pos : pt_get_positions(portfolio_id)) {
+        if (!product_is_intraday(pos.product) || pos.quantity <= 0.0)
+            continue;
+        const QDateTime opened = pt_sim_parse_utc(pos.opened_at);
+        if (!opened.isValid())
+            continue;
+        const QDateTime close = close_after(pos.symbol, opened);
+        if (!close.isValid() || now_utc < close)
+            continue;
+        const double price = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
+        if (price <= 0.0)
+            continue;
+        const QString close_iso = close.toUTC().toString(Qt::ISODate);
+        try {
+            PtOrder o;
+            o.id = generate_uuid();
+            o.portfolio_id = portfolio_id;
+            o.symbol = pos.symbol;
+            o.side = (pos.side == QLatin1String("long")) ? QStringLiteral("sell") : QStringLiteral("buy");
+            o.order_type = QStringLiteral("market");
+            o.quantity = pos.quantity;
+            o.price = price;
+            o.status = QStringLiteral("pending");
+            o.reduce_only = true;
+            o.product = pos.product;
+            o.created_at = close_iso;
+            if (auto ir = repo().insert_order(o); ir.is_err()) {
+                LOG_ERROR("PaperTrading", logf("Session-close settlement order could not be saved",
+                                               {{"portfolio", log_mask(portfolio_id)},
+                                                {"symbol", pos.symbol},
+                                                {"error", QString::fromStdString(ir.error())}}));
+                continue;
+            }
+            {
+                auto f = pt_audit_fields(portfolio_id, o.symbol, QString(), o.side, o.order_type, o.product,
+                                         o.quantity, o.price, std::nullopt);
+                f.append(LogField("order_id", o.id));
+                f.append(LogField("source", "session_close"));
+                LOG_AUDIT(kPtAudit, logf("Order accepted", f));
+            }
+            pt_fill_order(o.id, price, std::nullopt, close_iso);
+            ++settled;
+        } catch (const std::exception& e) {
+            LOG_WARN("PaperTrading", QString("Session-close square-off failed for %1: %2").arg(pos.symbol, e.what()));
+        }
+    }
+
+    // DAY orders: expire at the close of the first session ending after placement.
+    for (const auto& o : pt_get_orders(portfolio_id, QStringLiteral("pending"))) {
+        const QDateTime created = pt_sim_parse_utc(o.created_at);
+        if (!created.isValid())
+            continue;
+        const QDateTime close = close_after(o.symbol, created);
+        if (!close.isValid() || now_utc < close)
+            continue;
+        try {
+            OrderMatcher::instance().remove_order(o.id);
+            pt_cancel_order(o.id);
+            ++settled;
+        } catch (const std::exception& e) {
+            LOG_WARN("PaperTrading", QString("Expiring order %1 failed: %2").arg(o.id, e.what()));
+        }
+    }
+    return settled;
+}
+
+PtOrder pt_modify_order(const QString& order_id, double new_quantity, double new_price, double new_stop_price) {
+    const auto audit_modify_refused = [&](const QString& reason) {
+        LOG_AUDIT(kPtAudit, "Order modify rejected",
+                  {{"venue", "paper"}, {"mode", "paper"}, {"order_id", order_id}, {"qty", new_quantity},
+                   {"price", new_price}, {"trigger", new_stop_price}, {"reason", reason}});
+    };
+    auto got = repo().get_order(order_id);
+    if (got.is_err()) {
+        audit_modify_refused(QStringLiteral("order not found"));
+        throw std::runtime_error("Order not found");
+    }
+    const PtOrder old = got.value();
+    if (old.status != QLatin1String("pending")) {
+        audit_modify_refused(QStringLiteral("order is no longer resting"));
+        throw std::runtime_error("This order is no longer resting (filled, cancelled or partly filled) — it cannot be "
+                                 "modified");
+    }
+    if (!std::isfinite(new_quantity) || !std::isfinite(new_price) || !std::isfinite(new_stop_price)) {
+        audit_modify_refused(QStringLiteral("invalid quantity or price"));
+        throw std::runtime_error("Invalid quantity or price");
+    }
+
+    const double qty = new_quantity > 0.0 ? new_quantity : old.quantity;
+    std::optional<double> price = old.price;
+    std::optional<double> stop = old.stop_price;
+    if (new_price > 0.0) {
+        if (old.order_type == QLatin1String("limit") || old.order_type == QLatin1String("stop_limit"))
+            price = new_price;
+        else if (old.order_type == QLatin1String("stop"))
+            stop = new_price; // an SL-M order's one price is its trigger
+    }
+    if (new_stop_price > 0.0 && (old.order_type == QLatin1String("stop") || old.order_type == QLatin1String("stop_limit")))
+        stop = new_stop_price;
+
+    OrderMatcher::instance().remove_order(order_id);
+    pt_cancel_order(order_id); // releases the old order's margin
+    try {
+        PtOrder repl = pt_place_order(old.portfolio_id, old.symbol, old.side, old.order_type, qty, price, stop,
+                                      old.reduce_only, old.exchange, old.product);
+        OrderMatcher::instance().add_order(repl);
+        {
+            // A modify is a cancel + re-place (both audited above); this line links them.
+            QList<LogField> f{{"venue", "paper"},
+                              {"mode", "paper"},
+                              {"portfolio", log_mask(old.portfolio_id)},
+                              {"order_id", order_id},
+                              {"new_order_id", repl.id},
+                              {"symbol", old.symbol},
+                              {"qty", qty}};
+            if (price)
+                f.append(LogField("price", *price));
+            if (stop)
+                f.append(LogField("trigger", *stop));
+            LOG_AUDIT(kPtAudit, logf("Order modified", f));
+        }
+        return repl;
+    } catch (const std::exception& e) {
+        audit_modify_refused(QString::fromUtf8(e.what()));
+        // Put the original back so a refused change never silently drops the order.
+        try {
+            PtOrder back = pt_place_order(old.portfolio_id, old.symbol, old.side, old.order_type, old.quantity,
+                                          old.price, old.stop_price, old.reduce_only, old.exchange, old.product);
+            OrderMatcher::instance().add_order(back);
+        } catch (...) {
+            throw std::runtime_error(std::string("Modify refused (") + e.what() +
+                                     ") and the original order could not be restored — it is cancelled");
+        }
+        throw std::runtime_error(std::string("Modify refused: ") + e.what() + " — the original order was re-placed");
+    }
 }
 
 } // namespace fincept::trading

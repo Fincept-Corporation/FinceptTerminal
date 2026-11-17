@@ -156,6 +156,11 @@ class Reflector:
             from finagent_core.core_agent import CoreAgent
             agent = CoreAgent(api_keys=self.api_keys)
             response = agent.run(prompt, critic_config)
+            from finagent_core.run_errors import run_error_text
+            if run_error_text(response):
+                # The critic's model failed; its error text is not a verdict.
+                return ReflectorDecision(decision="continue", reason="reflector_error",
+                                         source="reflector_error")
             raw = (agent.get_response_content(response) or "").strip()
             return _parse_decision(raw)  # source="llm-critic" baked in
         except Exception:

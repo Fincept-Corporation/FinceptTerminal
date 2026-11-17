@@ -3,10 +3,13 @@ Inter-American Development Bank (IADB) Data Fetcher
 IDB lending operations in Latin America and the Caribbean - projects, approvals by country/sector/year, sectors and countries - from the IDB Open Data portal's projects dataset (CKAN datastore API, no key).
 """
 import re
+import ssl
 import sys
 import json
 import requests
 from typing import Dict, Any
+
+import fincept_connector as fc
 
 # api.iadb.org no longer exists; the projects list is published on data.iadb.org (CKAN).
 BASE_URL = "https://data.iadb.org/api/3/action"
@@ -14,30 +17,44 @@ PROJECTS_RESOURCE = "814b7b54-477a-4c25-b3bf-6be05412069d"  # "EN - IDB Projects
 FIELDS = ["oper_num", "oper_nm", "apprvl_dt", "sign_dt", "cntry_cd", "cntry_nm", "publc_sts_nm", "sector_cd",
           "sector_nm", "subsector_nm", "opertyp_nm", "orig_apprvd_useq_amnt", "totl_cost_orig", "lending_typ_nm",
           "modality_nm", "envmntl_clssfctn_cd"]
+SERVICE = "IDB Open Data (data.iadb.org)"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.headers.update({"User-Agent": "Mozilla/5.0 (FinceptTerminal/4.5; +https://fincept.in)"})
+
+class _StdlibTLSAdapter(requests.adapters.HTTPAdapter):
+    """data.iadb.org sits behind Cloudflare, which answers urllib3's default TLS handshake with an HTTP 403
+    'Attention Required' HTML page (whatever the headers); Python's standard ssl context gets the JSON."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = ssl.create_default_context()
+        return super().init_poolmanager(*args, **kwargs)
+
+
+session = fc.http_session()
+session.mount('https://', _StdlibTLSAdapter(max_retries=session.get_adapter('https://').max_retries))
+session.headers.update({"User-Agent": "Mozilla/5.0 (FinceptTerminal/4.5; +https://fincept.in)",
+                        "Accept": "application/json"})
 
 
 def _make_request(action: str, params: Dict) -> Any:
     try:
-        response = session.get(f"{BASE_URL}/{action}", params=params, timeout=60)
-        data = response.json()
+        response = session.get(f"{BASE_URL}/{action}", params=params, timeout=(10, 60))
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e)}
+    if "json" not in response.headers.get("content-type", "") and response.status_code in (403, 503):
+        return {"error": f"{SERVICE} blocked the request (HTTP {response.status_code} bot-protection page) - "
+                         "try again later"}
+    try:
+        data = response.json()
+    except ValueError:
+        if not response.ok:
+            return {"error": fc.http_error(SERVICE, response)}
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    if not isinstance(data, dict):
+        return {"error": f"{SERVICE} returned an unexpected response"}
     if not data.get("success"):
         err = data.get("error", {})
         return {"error": f"IDB open data: {err.get('message') or err}"}
     return data["result"]
-
-
-def _sql(sql: str) -> Any:
-    res = _make_request("datastore_search_sql", {"sql": sql})
-    return res if "error" in res else res.get("records", [])
 
 
 def _code(v: str) -> str:
@@ -127,15 +144,28 @@ def get_approvals(country: str = None, start_year: str = None) -> Any:
     return {"country": country, "approvals": [years[y] for y in sorted(years)]}
 
 
+def _count_by(code_field: str, name_field: str) -> Any:
+    """[{code, name, projects}] sorted by project count. Counted client-side: Cloudflare's WAF in front of
+    data.iadb.org rejects every datastore_search_sql request (HTTP 403), so GROUP BY is not available."""
+    res = _make_request("datastore_search", {"resource_id": PROJECTS_RESOURCE, "limit": 32000,
+                                             "fields": f"{code_field},{name_field}"})
+    if "error" in res:
+        return res
+    counts: Dict[tuple, int] = {}
+    for r in res.get("records", []):
+        key = (r.get(code_field), r.get(name_field))
+        counts[key] = counts.get(key, 0) + 1
+    return [{code_field: k[0], name_field: k[1], "projects": n}
+            for k, n in sorted(counts.items(), key=lambda kv: -kv[1])]
+
+
 def get_sectors() -> Any:
-    rows = _sql(f'SELECT sector_cd, sector_nm, COUNT(*) AS projects FROM "{PROJECTS_RESOURCE}" '
-                "GROUP BY sector_cd, sector_nm ORDER BY projects DESC")
+    rows = _count_by("sector_cd", "sector_nm")
     return rows if isinstance(rows, dict) else {"count": len(rows), "sectors": rows}
 
 
 def get_countries() -> Any:
-    rows = _sql(f'SELECT cntry_cd, cntry_nm, COUNT(*) AS projects FROM "{PROJECTS_RESOURCE}" '
-                "GROUP BY cntry_cd, cntry_nm ORDER BY projects DESC")
+    rows = _count_by("cntry_cd", "cntry_nm")
     return rows if isinstance(rows, dict) else {"count": len(rows), "countries": rows}
 
 
@@ -151,8 +181,11 @@ def main(args=None):
         country = args[1] if len(args) > 1 else None
         sector = args[2] if len(args) > 2 else None
         status = args[3] if len(args) > 3 else None
-        limit = int(args[4]) if len(args) > 4 else 50
-        result = get_projects(country, sector, status, limit)
+        try:
+            limit = int(args[4]) if len(args) > 4 else 50
+            result = get_projects(country, sector, status, limit)
+        except ValueError:
+            result = {"error": f"limit must be a number, got '{args[4]}'"}
     elif command == "project":
         if len(args) < 2:
             result = {"error": "project_id required"}

@@ -1,6 +1,7 @@
 // src/screens/agent_config/TeamsViewPanel.h
 #pragma once
 #include "services/agents/AgentTypes.h"
+#include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 
 #include <QCheckBox>
@@ -15,6 +16,12 @@
 #include <QTextEdit>
 #include <QWidget>
 
+class QStackedWidget;
+
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 /// TEAMS view — assemble multi-agent teams and execute queries.
@@ -22,6 +29,10 @@ class TeamsViewPanel : public QWidget {
     Q_OBJECT
   public:
     explicit TeamsViewPanel(QWidget* parent = nullptr);
+
+    /// Load a saved team (an AgentConfig row of category "team") into the builder —
+    /// the agents screen's rail. False for an unknown id.
+    bool open_team(const QString& team_id);
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -33,6 +44,8 @@ class TeamsViewPanel : public QWidget {
 
   private:
     void build_ui();
+    /// Replace the builder's team with a saved one (LOAD TEAM and open_team()).
+    void apply_team_row(const AgentConfig& row);
     QWidget* build_team_panel();
     QWidget* build_agents_panel();
     QWidget* build_execution_panel();
@@ -54,10 +67,14 @@ class TeamsViewPanel : public QWidget {
     void update_leader_combo();
     void load_team_profile_combo();
     void refresh_team_llm_label();
+    /// Members list or "No team members yet" (+ LOAD TEAM); RUN TEAM needs a member.
+    void update_team_state();
 
     // Left: team
     QLabel* team_title_ = nullptr;
     QLabel* mode_caption_ = nullptr;
+    QStackedWidget* team_stack_ = nullptr; // team_list_ | team_empty_
+    ui::EmptyState* team_empty_ = nullptr;
     QListWidget* team_list_ = nullptr;
     QComboBox* mode_combo_ = nullptr;
     QLabel* leader_caption_ = nullptr;
@@ -84,6 +101,8 @@ class TeamsViewPanel : public QWidget {
     QLabel* team_resolved_lbl_ = nullptr;     // shows resolved provider/model
     QPlainTextEdit* query_input_ = nullptr;
     QPushButton* run_btn_ = nullptr;
+    QStackedWidget* result_stack_ = nullptr; // result_empty_ (no run yet) | result_display_
+    ui::EmptyState* result_empty_ = nullptr;
     QTextEdit* result_display_ = nullptr;
     QTextEdit* log_display_ = nullptr;
     QLabel* exec_status_ = nullptr;

@@ -40,7 +40,19 @@ class LayoutCatalog : public QObject {
 
     /// Open the catalogue for the active profile (called from
     /// TerminalShell::initialise after ProfilePaths::ensure_all). Idempotent.
+    ///
+    /// The index carries `PRAGMA user_version`; a newer/unknown version or a
+    /// failed column check (another build's file), or a damaged file, is
+    /// quarantined — renamed to `_index.db.incompatible-<yyyyMMdd-hhmmss>` or
+    /// `_index.db.corrupt-<…>` — and a fresh index is created. The JSON files are
+    /// the source of truth: an empty index next to existing `<uuid>.json` files
+    /// (quarantined, deleted, never written) is rebuilt from them. The
+    /// `last_loaded_uuid` pointer is not recoverable that way and starts unset.
     Result<void> open();
+
+    /// Checkpoint and close the index connection (TerminalShell::shutdown).
+    /// Later save/list/load calls reopen it lazily. Idempotent.
+    void close();
 
     /// Persist a Workspace to disk (file + index row). Replaces any
     /// existing entry with the same UUID. Returns the saved layout's id
@@ -104,7 +116,9 @@ class LayoutCatalog : public QObject {
   private:
     LayoutCatalog() = default;
 
-    Result<void> ensure_index_schema();
+    /// Re-create index rows from `layouts/<uuid>.json` when the index is empty.
+    /// Returns the number of rows added.
+    int rebuild_index_from_files_();
     Result<void> upsert_index_row(const layout::Workspace& w);
 
     QString file_path_for_(const LayoutId& id) const;

@@ -5,15 +5,88 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
+#include "services/dbnomics/DBnomicsDecode.h"
 #include "storage/cache/CacheManager.h"
+#include "ui/theme/Theme.h"
 
+#include <QFuture>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QThreadPool>
 #include <QUrl>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
+#include <optional>
+
+namespace {
+
+/// The decode thread: the cached catalogue lists are read and decoded, fresh answers converted (and
+/// written to the cache), observations turned into a plottable series — never on the GUI thread.
+/// One thread, so answers are handed back (and the signals emitted) in the order they arrived. A
+/// child of the process-lifetime service: its destructor waits for a decode still in flight.
+QThreadPool* dbn_svc_pool() {
+    static QThreadPool* const pool = [] {
+        // The decode thread reads and writes the cache (CacheDatabase gives each thread its own
+        // connection). The cache singleton is made here, on the GUI thread, never first on a worker
+        // (a QObject belongs to the thread that creates it).
+        (void)fincept::CacheManager::instance();
+        auto* p = new QThreadPool(&fincept::services::DBnomicsService::instance());
+        p->setObjectName(QStringLiteral("DBnomicsDecode"));
+        p->setMaxThreadCount(1);
+        return p;
+    }();
+    return pool;
+}
+
+/// A REST answer after the decode thread: the converted value, or the transport / HTTP error.
+template <typename T>
+struct DbnSvcAnswer {
+    bool ok = false;
+    QString error;
+    T value{};
+};
+
+/// A REST answer as it leaves the GUI thread: the 2xx body exactly as received (HttpClient::get_raw —
+/// a dataset list reaches 3 MB, so it is parsed once, on the decode thread, never on the GUI thread),
+/// or the transport / HTTP error.
+struct DbnSvcReply {
+    bool failed = false;
+    QString error;
+    QByteArray body;
+};
+
+DbnSvcReply dbn_svc_reply(const fincept::Result<QByteArray>& result) {
+    DbnSvcReply r;
+    r.failed = result.is_err();
+    if (r.failed)
+        r.error = QString::fromStdString(result.error());
+    else
+        r.body = result.value();
+    return r;
+}
+
+/// On the decode thread: the body as JSON — false with `error` set for a failed request or a body
+/// that is not JSON (the same text HttpClient::get() would have reported).
+bool dbn_svc_json(const DbnSvcReply& reply, QJsonDocument& doc, QString& error) {
+    if (reply.failed) {
+        error = reply.error;
+        return false;
+    }
+    const fincept::Result<QJsonDocument> parsed = fincept::HttpClient::parse_body(reply.body);
+    if (parsed.is_err()) {
+        error = QString::fromStdString(parsed.error());
+        return false;
+    }
+    doc = parsed.value();
+    return true;
+}
+
+} // namespace
 
 namespace fincept::services {
+
+namespace dbn = fincept::services::dbnomics;
 
 DBnomicsService& DBnomicsService::instance() {
     static DBnomicsService inst;
@@ -38,208 +111,189 @@ QString DBnomicsService::build_url(const QString& path) const {
 }
 
 void DBnomicsService::fetch_providers() {
-    {
-        const QVariant cached = fincept::CacheManager::instance().get("dbnomics:providers");
-        if (!cached.isNull()) {
-            LOG_DEBUG("DBnomicsService", "providers: serving from cache");
-            const QJsonArray docs = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
-            QVector<DbnProvider> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                const QJsonObject o = v.toObject();
-                out.push_back({o["code"].toString(), o["name"].toString()});
-            }
-            emit providers_loaded(out);
-            return;
-        }
-    }
-    LOG_INFO("DBnomicsService", "Fetching providers from API");
     const QString url = build_url("/providers");
-    fincept::HttpClient::instance().get(
-        url,
-        [this](fincept::Result<QJsonDocument> result) {
-            if (result.is_err()) {
-                LOG_ERROR("DBnomicsService",
-                          QString("providers fetch failed: %1").arg(QString::fromStdString(result.error())));
-                emit error_occurred("providers", QString::fromStdString(result.error()));
+    const int ttl = kProviderCacheSec;
+    // The cached list is read and decoded on the decode thread; a miss starts the network fetch.
+    (void)QtConcurrent::run(dbn_svc_pool(),
+                            []() -> std::optional<QVector<DbnProvider>> {
+                                const QVariant cached =
+                                    fincept::CacheManager::instance().get(QStringLiteral("dbnomics:providers"));
+                                if (cached.isNull())
+                                    return std::nullopt;
+                                return dbn::decode_providers_cache(cached.toString());
+                            })
+        .then(this, [this, url, ttl](std::optional<QVector<DbnProvider>> cached) {
+            if (cached) {
+                LOG_DEBUG("DBnomicsService", "providers: serving from cache");
+                emit providers_loaded(*cached);
                 return;
             }
-            QJsonObject root = result.value().object();
-            QJsonArray docs = root["providers"].toObject()["docs"].toArray();
-            QVector<DbnProvider> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                QJsonObject o = v.toObject();
-                out.push_back({o["code"].toString(), o["name"].toString()});
-            }
-            QJsonArray arr;
-            for (const auto& p : out) {
-                QJsonObject o;
-                o["code"] = p.code;
-                o["name"] = p.name;
-                arr.append(o);
-            }
-            fincept::CacheManager::instance().put(
-                "dbnomics:providers", QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-                kProviderCacheSec, "dbnomics");
-            LOG_INFO("DBnomicsService", QString("Loaded %1 providers").arg(out.size()));
-            emit providers_loaded(out);
-        },
-        this);
+            LOG_DEBUG("DBnomicsService", "Fetching providers from API");
+            fincept::HttpClient::instance().get_raw(
+                url,
+                [this, ttl](fincept::Result<QByteArray> result) {
+                    (void)QtConcurrent::run(dbn_svc_pool(),
+                                            [reply = dbn_svc_reply(result), ttl]() {
+                                                DbnSvcAnswer<QVector<DbnProvider>> a;
+                                                QJsonDocument doc;
+                                                if (!dbn_svc_json(reply, doc, a.error))
+                                                    return a;
+                                                a.value = dbn::decode_providers(doc);
+                                                fincept::CacheManager::instance().put(
+                                                    QStringLiteral("dbnomics:providers"),
+                                                    QVariant(dbn::encode_providers_cache(a.value)), ttl,
+                                                    QStringLiteral("dbnomics"));
+                                                a.ok = true;
+                                                return a;
+                                            })
+                        .then(this, [this](DbnSvcAnswer<QVector<DbnProvider>> a) {
+                            if (!a.ok) {
+                                LOG_ERROR("DBnomicsService", QString("providers fetch failed: %1").arg(a.error));
+                                emit error_occurred("providers", a.error);
+                                return;
+                            }
+                            LOG_DEBUG("DBnomicsService", QString("Loaded %1 providers").arg(a.value.size()));
+                            emit providers_loaded(a.value);
+                        });
+                },
+                this);
+        });
 }
 
 void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
     const bool first_page = (offset == 0);
-    if (first_page) {
-        const QString ds_key = "dbnomics:datasets:" + provider_code;
-        const QVariant cached = fincept::CacheManager::instance().get(ds_key);
-        if (!cached.isNull()) {
-            LOG_DEBUG("DBnomicsService", "datasets: serving from cache");
-            const QJsonObject root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
-            const QJsonArray docs = root["docs"].toArray();
-            const int total = root["total"].toInt();
-            QVector<DbnDataset> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                const QJsonObject o = v.toObject();
-                out.push_back({o["code"].toString(), o["name"].toString()});
-            }
-            DbnPagination page{0, 50, total};
-            emit datasets_loaded(provider_code, out, page, false);
-            return;
-        }
-    }
+    const QString ds_key = "dbnomics:datasets:" + provider_code;
     const QString url = build_url(QString("/datasets/%1?limit=50&offset=%2").arg(provider_code).arg(offset));
-    LOG_INFO("DBnomicsService", QString("Fetching datasets for %1 offset=%2").arg(provider_code).arg(offset));
-    fincept::HttpClient::instance().get(
-        url,
-        [this, provider_code, offset](fincept::Result<QJsonDocument> result) {
-            if (result.is_err()) {
-                LOG_ERROR("DBnomicsService",
-                          QString("datasets fetch failed: %1").arg(QString::fromStdString(result.error())));
-                emit error_occurred("datasets", QString::fromStdString(result.error()));
+    const int ttl = kDatasetCacheSec;
+    // The first page may be cached: read and decoded on the decode thread; a miss (or a later page)
+    // starts the network fetch.
+    (void)QtConcurrent::run(dbn_svc_pool(),
+                            [first_page, ds_key]() -> std::optional<dbn::DbnDatasetPage> {
+                                if (!first_page)
+                                    return std::nullopt;
+                                const QVariant cached = fincept::CacheManager::instance().get(ds_key);
+                                if (cached.isNull())
+                                    return std::nullopt;
+                                return dbn::decode_datasets_cache(cached.toString());
+                            })
+        .then(this, [this, provider_code, offset, ds_key, url, ttl](std::optional<dbn::DbnDatasetPage> cached) {
+            if (cached) {
+                LOG_DEBUG("DBnomicsService", "datasets: serving from cache");
+                emit datasets_loaded(provider_code, cached->datasets, DbnPagination{0, 50, cached->total}, false);
                 return;
             }
-            QJsonObject root = result.value().object();
-            QJsonObject ds_root = root["datasets"].toObject();
-            QJsonArray docs = ds_root["docs"].toArray();
-            int total = ds_root["num_found"].toInt();
-
-            QVector<DbnDataset> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                QJsonObject o = v.toObject();
-                out.push_back({o["code"].toString(), o["name"].toString()});
-            }
-            DbnPagination page{offset, 50, total};
-            const bool append = (offset > 0);
-
-            if (!append) {
-                QJsonArray arr;
-                for (const auto& d : out) {
-                    QJsonObject o;
-                    o["code"] = d.code;
-                    o["name"] = d.name;
-                    arr.append(o);
-                }
-                QJsonObject cache_root;
-                cache_root["docs"] = arr;
-                cache_root["total"] = total;
-                fincept::CacheManager::instance().put(
-                    "dbnomics:datasets:" + provider_code,
-                    QVariant(QString::fromUtf8(QJsonDocument(cache_root).toJson(QJsonDocument::Compact))),
-                    kDatasetCacheSec, "dbnomics");
-            }
-            LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
-            emit datasets_loaded(provider_code, out, page, append);
-        },
-        this);
+            LOG_DEBUG("DBnomicsService", QString("Fetching datasets for %1 offset=%2").arg(provider_code).arg(offset));
+            fincept::HttpClient::instance().get_raw(
+                url,
+                [this, provider_code, offset, ds_key, ttl](fincept::Result<QByteArray> result) {
+                    const bool append = (offset > 0);
+                    (void)QtConcurrent::run(dbn_svc_pool(),
+                                            [reply = dbn_svc_reply(result), append, ds_key, ttl]() {
+                                                DbnSvcAnswer<dbn::DbnDatasetPage> a;
+                                                QJsonDocument doc;
+                                                if (!dbn_svc_json(reply, doc, a.error))
+                                                    return a;
+                                                a.value = dbn::decode_datasets(doc);
+                                                if (!append)
+                                                    fincept::CacheManager::instance().put(
+                                                        ds_key, QVariant(dbn::encode_datasets_cache(a.value)), ttl,
+                                                        QStringLiteral("dbnomics"));
+                                                a.ok = true;
+                                                return a;
+                                            })
+                        .then(this, [this, provider_code, offset, append](DbnSvcAnswer<dbn::DbnDatasetPage> a) {
+                            if (!a.ok) {
+                                LOG_ERROR("DBnomicsService", QString("datasets fetch failed: %1").arg(a.error));
+                                emit error_occurred("datasets", a.error);
+                                return;
+                            }
+                            LOG_DEBUG("DBnomicsService", QString("Loaded %1 datasets (total=%2)")
+                                                             .arg(a.value.datasets.size())
+                                                             .arg(a.value.total));
+                            emit datasets_loaded(provider_code, a.value.datasets,
+                                                 DbnPagination{offset, 50, a.value.total}, append);
+                        });
+                },
+                this);
+        });
 }
 
 void DBnomicsService::fetch_series(const QString& provider_code, const QString& dataset_code, const QString& query,
                                    int offset) {
     const QString cache_key = QString("%1/%2").arg(provider_code).arg(dataset_code);
+    const QString series_ckey = "dbnomics:series:" + cache_key;
     const bool first_page = (offset == 0);
     const bool no_query = query.isEmpty();
+    const bool cacheable = first_page && no_query;
 
-    if (first_page && no_query) {
-        const QString series_ckey = "dbnomics:series:" + cache_key;
-        const QVariant cv = fincept::CacheManager::instance().get(series_ckey);
-        if (!cv.isNull()) {
-            LOG_DEBUG("DBnomicsService", "series: serving from cache");
-            const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
-            const QJsonArray docs = root["docs"].toArray();
-            const int total = root["total"].toInt();
-            QVector<DbnSeriesInfo> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                const QJsonObject o = v.toObject();
-                out.push_back({o["code"].toString(), o["name"].toString()});
-            }
-            DbnPagination page{0, 50, total};
-            emit series_loaded(provider_code, dataset_code, query, out, page, false);
-            return;
-        }
-    }
     QString path =
         QString("/series/%1/%2?limit=50&offset=%3&observations=false").arg(provider_code).arg(dataset_code).arg(offset);
     if (!query.isEmpty())
         path += "&q=" + QString::fromUtf8(QUrl::toPercentEncoding(query));
+    const QString url = build_url(path);
+    const int ttl = kSeriesCacheSec;
 
-    LOG_INFO("DBnomicsService", QString("Fetching series %1 q='%2' offset=%3").arg(cache_key).arg(query).arg(offset));
-
-    fincept::HttpClient::instance().get(
-        build_url(path),
-        [this, cache_key, provider_code, dataset_code, query, offset, no_query,
-         first_page](fincept::Result<QJsonDocument> result) {
-            if (result.is_err()) {
-                LOG_ERROR("DBnomicsService",
-                          QString("series fetch failed: %1").arg(QString::fromStdString(result.error())));
-                emit error_occurred("series", QString::fromStdString(result.error()));
+    // The unfiltered first page may be cached: read and decoded on the decode thread; a miss (a
+    // search, a later page) starts the network fetch.
+    (void)QtConcurrent::run(dbn_svc_pool(),
+                            [cacheable, series_ckey]() -> std::optional<dbn::DbnSeriesPage> {
+                                if (!cacheable)
+                                    return std::nullopt;
+                                const QVariant cv = fincept::CacheManager::instance().get(series_ckey);
+                                if (cv.isNull())
+                                    return std::nullopt;
+                                return dbn::decode_series_cache(cv.toString());
+                            })
+        .then(this, [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable, url,
+                     ttl](std::optional<dbn::DbnSeriesPage> cached) {
+            if (cached) {
+                LOG_DEBUG("DBnomicsService", "series: serving from cache");
+                emit series_loaded(provider_code, dataset_code, query, cached->series, DbnPagination{0, 50, cached->total},
+                                   false);
                 return;
             }
-            QJsonObject root = result.value().object();
-            // A 2xx without a `series` envelope is a failure, not an empty
-            // result: num_found would default to 0 and the UI would render a
-            // rate-limit or outage as an honest "no series found".
-            if (!root.value(QStringLiteral("series")).isObject()) {
-                LOG_ERROR("DBnomicsService", QString("series fetch: malformed response for %1").arg(cache_key));
-                emit error_occurred("series", QStringLiteral("Malformed response from DBnomics"));
-                return;
-            }
-            QJsonObject s = root["series"].toObject();
-            QJsonArray docs = s["docs"].toArray();
-            int total = s["num_found"].toInt();
-
-            QVector<DbnSeriesInfo> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                QJsonObject o = v.toObject();
-                out.push_back({o["series_code"].toString(), o["series_name"].toString()});
-            }
-            DbnPagination page{offset, 50, total};
-            const bool append = (offset > 0);
-
-            if (first_page && no_query) {
-                QJsonArray arr;
-                for (const auto& si : out) {
-                    QJsonObject o;
-                    o["code"] = si.code;
-                    o["name"] = si.name;
-                    arr.append(o);
-                }
-                QJsonObject cache_root;
-                cache_root["docs"] = arr;
-                cache_root["total"] = total;
-                fincept::CacheManager::instance().put(
-                    "dbnomics:series:" + cache_key,
-                    QVariant(QString::fromUtf8(QJsonDocument(cache_root).toJson(QJsonDocument::Compact))),
-                    kSeriesCacheSec, "dbnomics");
-            }
-            LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));
-            emit series_loaded(provider_code, dataset_code, query, out, page, append);
-        },
-        this);
+            LOG_DEBUG("DBnomicsService",
+                      QString("Fetching series %1 q='%2' offset=%3").arg(cache_key).arg(query).arg(offset));
+            fincept::HttpClient::instance().get_raw(
+                url,
+                [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable,
+                 ttl](fincept::Result<QByteArray> result) {
+                    (void)QtConcurrent::run(dbn_svc_pool(),
+                                            [reply = dbn_svc_reply(result), cacheable, series_ckey, ttl]() {
+                                                DbnSvcAnswer<dbn::DbnSeriesPage> a;
+                                                QJsonDocument doc;
+                                                if (!dbn_svc_json(reply, doc, a.error))
+                                                    return a;
+                                                a.value = dbn::decode_series(doc);
+                                                if (a.value.ok && cacheable)
+                                                    fincept::CacheManager::instance().put(
+                                                        series_ckey, QVariant(dbn::encode_series_cache(a.value)), ttl,
+                                                        QStringLiteral("dbnomics"));
+                                                a.ok = true;
+                                                return a;
+                                            })
+                        .then(this, [this, provider_code, dataset_code, query, offset,
+                                     cache_key](DbnSvcAnswer<dbn::DbnSeriesPage> a) {
+                            if (!a.ok) {
+                                LOG_ERROR("DBnomicsService", QString("series fetch failed: %1").arg(a.error));
+                                emit error_occurred("series", a.error);
+                                return;
+                            }
+                            if (!a.value.ok) {
+                                LOG_ERROR("DBnomicsService",
+                                          QString("series fetch: malformed response for %1").arg(cache_key));
+                                emit error_occurred("series", QStringLiteral("Malformed response from DBnomics"));
+                                return;
+                            }
+                            LOG_DEBUG("DBnomicsService", QString("Loaded %1 series (total=%2)")
+                                                             .arg(a.value.series.size())
+                                                             .arg(a.value.total));
+                            emit series_loaded(provider_code, dataset_code, query, a.value.series,
+                                               DbnPagination{offset, 50, a.value.total}, offset > 0);
+                        });
+                },
+                this);
+        });
 }
 
 void DBnomicsService::fetch_observations(const QString& provider_code, const QString& dataset_code,
@@ -247,94 +301,46 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
     // Series codes may carry characters that are not legal in a URL path segment.
     const auto seg = [](const QString& s) { return QString::fromUtf8(QUrl::toPercentEncoding(s)); };
     // metadata=true (the default) adds the dataset's dimension labels — the source of the unit and
-    // seasonal-adjustment labels below.
+    // seasonal-adjustment labels.
     const QString path = QString("/series/%1/%2/%3?observations=1&format=json")
                              .arg(seg(provider_code), seg(dataset_code), seg(series_code));
     const QString full_id = QString("%1/%2/%3").arg(provider_code).arg(dataset_code).arg(series_code);
-    LOG_INFO("DBnomicsService", QString("Fetching observations for %1").arg(full_id));
+    LOG_DEBUG("DBnomicsService", QString("Fetching observations for %1").arg(full_id));
 
-    fincept::HttpClient::instance().get(
+    fincept::HttpClient::instance().get_raw(
         build_url(path),
-        [this, full_id, provider_code, dataset_code, series_code](fincept::Result<QJsonDocument> result) {
-            // A failed hub refresh must clear the topic's in_flight flag (publish_error), or retries
-            // are refused until the scheduler's refresh_timeout fires. The signal is still emitted
-            // for the screen's spinner and for the MCP tools that wait on it.
-            auto fail = [this, &full_id, &provider_code, &dataset_code, &series_code](const QString& message) {
-                emit observations_failed(full_id, message);
-                emit error_occurred("observations", message);
-                if (hub_registered_)
-                    fincept::datahub::DataHub::instance().publish_error(
-                        hub_topic(provider_code, dataset_code, series_code), message);
-            };
-            if (result.is_err()) {
-                fail(QString::fromStdString(result.error()));
-                return;
-            }
-            QJsonObject root = result.value().object();
-            QJsonArray docs = root["series"].toObject()["docs"].toArray();
-            if (docs.isEmpty()) {
-                fail("No data returned for series");
-                return;
-            }
-            QJsonObject doc = docs[0].toObject();
-            QJsonArray periods = doc["period"].toArray();
-            QJsonArray starts = doc["period_start_day"].toArray();
-            QJsonArray values = doc["value"].toArray();
-            QString name = doc["series_name"].toString(series_code);
-
-            QVector<DbnObservation> obs;
-            obs.reserve(periods.size());
-            for (int i = 0; i < periods.size() && i < values.size(); ++i) {
-                DbnObservation o;
-                o.period = periods[i].toString();
-                o.start = QDate::fromString(starts.at(i).toString(), Qt::ISODate);
-                // DBnomics marks gaps with the string "NA"; anything not numeric is a gap, never a 0.
-                if (values[i].isDouble()) {
-                    o.value = values[i].toDouble();
-                    o.valid = true;
-                } else {
-                    o.value = 0.0;
-                    o.valid = false;
-                }
-                obs.push_back(o);
-            }
-            // Chronological by period start (period strings of mixed frequency do not sort lexically).
-            std::stable_sort(obs.begin(), obs.end(), [](const DbnObservation& a, const DbnObservation& b) {
-                if (a.start.isValid() && b.start.isValid())
-                    return a.start < b.start;
-                return a.period < b.period;
-            });
-            DbnDataPoint dp;
-            dp.series_id = full_id;
-            dp.series_name = name;
-            dp.observations = std::move(obs);
-            dp.frequency = doc["@frequency"].toString();
-            dp.indexed_at = doc["indexed_at"].toString();
-            dp.provider_name = root["provider"].toObject()["name"].toString();
-            // Unit / seasonal adjustment: the label of the series' value in a unit-like / adjustment-like
-            // dimension (names differ per provider: unit, UNIT_MEASURE, s_adj, seasonal, ADJUSTMENT …).
-            const QJsonObject dims = doc["dimensions"].toObject();
-            const QJsonObject value_labels = root["dataset"].toObject()["dimensions_values_labels"].toObject();
-            auto dim_label = [&dims, &value_labels](const QStringList& names) -> QString {
-                for (auto it = dims.constBegin(); it != dims.constEnd(); ++it) {
-                    if (!names.contains(it.key().toLower()))
-                        continue;
-                    const QString code = it.value().toString();
-                    const QString label = value_labels.value(it.key()).toObject().value(code).toString();
-                    return label.isEmpty() ? code : label;
-                }
-                return {};
-            };
-            dp.unit = dim_label({"unit", "units", "unit_measure", "unit_of_measure"});
-            dp.seasonal = dim_label({"s_adj", "seasonal", "seasonal_adjustment", "adjustment", "sa"});
-            // color will be assigned by DBnomicsScreen::assign_series_colors()
-            LOG_INFO("DBnomicsService",
-                     QString("Loaded %1 observations for %2").arg(dp.observations.size()).arg(full_id));
-            emit observations_loaded(dp);
-            if (hub_registered_) {
-                const QString topic = hub_topic(provider_code, dataset_code, series_code);
-                fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(dp));
-            }
+        [this, full_id, provider_code, dataset_code, series_code](fincept::Result<QByteArray> result) {
+            // The body is parsed and the observations (QDate per period, the sort, the unit / seasonal
+            // labels) converted on the decode thread; the signals and the hub publish stay on this
+            // thread, in arrival order.
+            (void)QtConcurrent::run(dbn_svc_pool(),
+                                    [reply = dbn_svc_reply(result), full_id, series_code]() {
+                                        QJsonDocument doc;
+                                        dbn::DbnObservationsResult r;
+                                        if (!dbn_svc_json(reply, doc, r.error))
+                                            return r;
+                                        return dbn::decode_observations(doc, full_id, series_code);
+                                    })
+                .then(this, [this, full_id, provider_code, dataset_code, series_code](dbn::DbnObservationsResult r) {
+                    if (!r.ok) {
+                        // A failed hub refresh must clear the topic's in_flight flag (publish_error), or
+                        // retries are refused until the scheduler's refresh_timeout fires. The signal is
+                        // still emitted for the screen's spinner and for the MCP tools that wait on it.
+                        emit observations_failed(full_id, r.error);
+                        emit error_occurred("observations", r.error);
+                        if (hub_registered_)
+                            fincept::datahub::DataHub::instance().publish_error(
+                                hub_topic(provider_code, dataset_code, series_code), r.error);
+                        return;
+                    }
+                    LOG_DEBUG("DBnomicsService",
+                              QString("Loaded %1 observations for %2").arg(r.point.observations.size()).arg(full_id));
+                    emit observations_loaded(r.point);
+                    if (hub_registered_) {
+                        const QString topic = hub_topic(provider_code, dataset_code, series_code);
+                        fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(r.point));
+                    }
+                });
         },
         this);
 }
@@ -343,31 +349,30 @@ void DBnomicsService::global_search(const QString& query, int offset) {
     if (query.trimmed().isEmpty())
         return;
     const QString path = QString("/search?q=%1&limit=20&offset=%2")
-                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(query.trimmed())))
-                             .arg(offset);
-    LOG_INFO("DBnomicsService", QString("Searching: '%1' offset=%2").arg(query).arg(offset));
+                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(query.trimmed())), QString::number(offset));
+    LOG_DEBUG("DBnomicsService", QString("Searching: '%1' offset=%2").arg(query).arg(offset));
 
-    fincept::HttpClient::instance().get(
+    fincept::HttpClient::instance().get_raw(
         build_url(path),
-        [this, query, offset](fincept::Result<QJsonDocument> result) {
-            if (result.is_err()) {
-                emit error_occurred("search", QString::fromStdString(result.error()));
-                return;
-            }
-            QJsonObject root = result.value().object();
-            QJsonObject res = root["results"].toObject();
-            QJsonArray docs = res["docs"].toArray();
-            int total = res["num_found"].toInt();
-
-            QVector<DbnSearchResult> out;
-            out.reserve(docs.size());
-            for (const auto& v : docs) {
-                QJsonObject o = v.toObject();
-                out.push_back({o["provider_code"].toString(), o["provider_name"].toString(),
-                               o["dataset_code"].toString(), o["dataset_name"].toString(), o["nb_series"].toInt()});
-            }
-            DbnPagination page{offset, 20, total};
-            emit search_results_loaded(query, out, page, offset > 0);
+        [this, query, offset](fincept::Result<QByteArray> result) {
+            (void)QtConcurrent::run(dbn_svc_pool(),
+                                    [reply = dbn_svc_reply(result)]() {
+                                        DbnSvcAnswer<dbn::DbnSearchPage> a;
+                                        QJsonDocument doc;
+                                        if (!dbn_svc_json(reply, doc, a.error))
+                                            return a;
+                                        a.value = dbn::decode_search(doc);
+                                        a.ok = true;
+                                        return a;
+                                    })
+                .then(this, [this, query, offset](DbnSvcAnswer<dbn::DbnSearchPage> a) {
+                    if (!a.ok) {
+                        emit error_occurred("search", a.error);
+                        return;
+                    }
+                    emit search_results_loaded(query, a.value.results, DbnPagination{offset, 20, a.value.total},
+                                               offset > 0);
+                });
         },
         this);
 }
@@ -385,18 +390,27 @@ void DBnomicsService::schedule_global_search(const QString& query) {
 }
 
 QColor DBnomicsService::chart_color(int index) {
-    static const QColor palette[] = {
-        QColor("#ea580c"), QColor("#3b82f6"), QColor("#22c55e"), QColor("#eab308"),
-        QColor("#a855f7"), QColor("#ec4899"), QColor("#06b6d4"), QColor("#f97316"),
-    };
-    static const int n = static_cast<int>(std::size(palette));
-    return palette[index % n];
+    return ui::colors::chart_color(index);
 }
 
 // ── DataHub producer wiring ─────────────────────────────────────────────────
 
+namespace {
+// Topic segments are separated by ':', but dataset codes contain it too (every IMF WEO vintage is
+// "WEO:2024-10"). Escape just '%' and ':' so the split in refresh() is reversible; every other
+// character stays as is, so topics of ordinary codes are unchanged (other subscribers build them
+// as a plain join).
+QString topic_segment(const QString& s) {
+    QString out = s;
+    out.replace(QLatin1Char('%'), QStringLiteral("%25"));
+    out.replace(QLatin1Char(':'), QStringLiteral("%3A"));
+    return out;
+}
+} // namespace
+
 QString DBnomicsService::hub_topic(const QString& provider, const QString& dataset, const QString& series) {
-    return QStringLiteral("dbnomics:") + provider + QLatin1Char(':') + dataset + QLatin1Char(':') + series;
+    return QStringLiteral("dbnomics:") + topic_segment(provider) + QLatin1Char(':') + topic_segment(dataset) +
+           QLatin1Char(':') + topic_segment(series);
 }
 
 QStringList DBnomicsService::topic_patterns() const {
@@ -405,13 +419,14 @@ QStringList DBnomicsService::topic_patterns() const {
 
 void DBnomicsService::refresh(const QStringList& topics) {
     // Split `dbnomics:<provider>:<dataset>:<series>` and dispatch to the
-    // existing observation fetcher. Anything that doesn't match the
-    // 4-segment shape is silently skipped.
+    // existing observation fetcher. Segments are escaped by hub_topic() (':' → %3A), so
+    // decode each one. Anything that doesn't match the 4-segment shape is silently skipped.
     for (const auto& topic : topics) {
         const QStringList parts = topic.split(QLatin1Char(':'));
         if (parts.size() != 4)
             continue;
-        fetch_observations(parts[1], parts[2], parts[3]);
+        const auto dec = [](const QString& s) { return QUrl::fromPercentEncoding(s.toUtf8()); };
+        fetch_observations(dec(parts[1]), dec(parts[2]), dec(parts[3]));
     }
 }
 
@@ -433,7 +448,7 @@ void DBnomicsService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("dbnomics:*"), policy);
 
     hub_registered_ = true;
-    LOG_INFO("DBnomicsService", "Registered with DataHub (dbnomics:*)");
+    LOG_DEBUG("DBnomicsService", "Registered with DataHub (dbnomics:*)");
 }
 
 } // namespace fincept::services

@@ -1,0 +1,22 @@
+{
+  "_note": "Subset of yfinance Ticker('AAPL').info saved on 2026-11-17 (the keys universe_data.INFO_KEYS reads).",
+  "info": {
+    "symbol": "AAPL", "quoteType": "EQUITY", "exchange": "NMS", "currency": "USD", "financialCurrency": "USD",
+    "shortName": "Apple Inc.", "longName": "Apple Inc.", "sector": "Technology", "industry": "Consumer Electronics",
+    "sectorKey": "technology", "industryKey": "consumer-electronics", "country": "United States",
+    "city": "Cupertino", "state": "CA", "zip": "95014", "address1": "One Apple Park Way", "phone": "(408) 996-1010",
+    "website": "https://www.apple.com", "fullTimeEmployees": 167000, "firstTradeDateMilliseconds": 345479400000,
+    "currentPrice": 351.7399, "regularMarketPrice": 351.7399, "previousClose": 356.27,
+    "marketCap": 5111548477440, "enterpriseValue": 5215137300480, "sharesOutstanding": 14532182000,
+    "impliedSharesOutstanding": 14532182000, "trailingPE": 39.169254, "forwardPE": 33.272408,
+    "priceToBook": 45.603516, "trailingPegRatio": 2.877, "pegRatio": 2.88, "enterpriseToEbitda": 30.411,
+    "trailingEps": 8.98, "forwardEps": 10.57152, "bookValue": 7.713, "revenuePerShare": 32.658,
+    "totalCashPerShare": 3.903, "trailingAnnualDividendRate": 1.06, "dividendRate": 1.08, "payoutRatio": 0.118,
+    "returnOnEquity": 1.42257, "returnOnAssets": 0.25868, "grossMargins": 0.48786, "operatingMargins": 0.33009997,
+    "profitMargins": 0.27604, "ebitdaMargins": 0.35813, "revenueGrowth": 0.117, "earningsGrowth": 0.141,
+    "earningsQuarterlyGrowth": 0.118, "currentRatio": 1.023, "debtToEquity": 84.286, "totalRevenue": 478833999872,
+    "grossProfits": 233602007040, "ebitda": 171486003200, "netIncomeToCommon": 132175003648,
+    "totalDebt": 94478999552, "totalCash": 56722001920, "operatingCashflow": 145096998912,
+    "freeCashflow": 105658376192
+  }
+}

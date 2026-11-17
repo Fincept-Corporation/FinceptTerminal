@@ -161,7 +161,8 @@ static QVector<ConnectorConfig> file_configs() {
            "rest",
            {{"REST Catalog", "rest"}, {"Hive Metastore", "hive"}, {"Glue (AWS)", "glue"}, {"JDBC", "jdbc"}}},
           {"namespace", "Namespace / Database", FieldType::Text, "finance", false, "", {}},
-          {"table", "Default Table", FieldType::Text, "daily_prices", false, "", {}}}},
+          {"table", "Default Table", FieldType::Text, "daily_prices", false, "", {}},
+          {"token", "Catalog Token (Bearer)", FieldType::Password, "", false, "", {}}}},
 
         {"delta-lake",
          "Delta Lake",

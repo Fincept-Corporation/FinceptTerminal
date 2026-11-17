@@ -26,34 +26,45 @@ For a daemon/framed protocol use the bytes form::
 
     payload = fincept_json.dumps_bytes(response)
 
+Libraries that print (yfinance's "Failed download" lines, progress bars, parser
+warnings) must not reach stdout, which carries exactly one JSON payload::
+
+    with fincept_json.stdout_to_stderr():
+        data = yf.download(...)            # anything printed goes to stderr
+    fincept_json.emit(result)               # stdout is back for the payload
+
 NOTES
 -----
 * ``allow_nan=False`` alone is a *detector*, not a fix — it raises ``ValueError``.
   These helpers always run :func:`sanitize` first, so the flag only ever fires
   on something the sanitiser genuinely could not reach (which is a bug worth
   hearing about, not something to swallow).
-* numpy/pandas are imported lazily and optionally: this module is imported from
-  both venv-numpy1 and venv-numpy2, and from scripts that have neither.
+* numpy/pandas are never imported here, only looked up in ``sys.modules``: this
+  module is imported from both venv-numpy1 and venv-numpy2, and from scripts
+  that use neither library.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
+import sys
+import threading
 from decimal import Decimal
 
-__all__ = ["sanitize", "dumps", "dumps_bytes", "emit"]
+__all__ = ["sanitize", "dumps", "dumps_bytes", "emit", "stdout_to_stderr"]
 
-# Optional scientific stack. Imported once, tolerated absent.
-try:  # pragma: no cover - trivial
-    import numpy as _np
-except Exception:  # pragma: no cover - numpy is optional
-    _np = None
 
-try:  # pragma: no cover - trivial
-    import pandas as _pd
-except Exception:  # pragma: no cover - pandas is optional
-    _pd = None
+def _loaded(name):
+    """The already-imported module `name`, or None.
+
+    numpy/pandas are never imported from here. A numpy or pandas value can only
+    reach :func:`sanitize` if the calling script has imported that library, so
+    looking it up in ``sys.modules`` is enough — and a script that uses neither
+    (most data connectors) no longer pays ~1 s of pandas import per call.
+    """
+    return sys.modules.get(name)
 
 
 def _finite_or_none(value):
@@ -86,6 +97,7 @@ def sanitize(obj):
     if isinstance(obj, Decimal):
         return None if not obj.is_finite() else float(obj)
 
+    _np = _loaded("numpy")
     if _np is not None:
         if isinstance(obj, _np.ndarray):
             return [sanitize(v) for v in obj.tolist()]
@@ -96,6 +108,7 @@ def sanitize(obj):
         if isinstance(obj, _np.bool_):
             return bool(obj)
 
+    _pd = _loaded("pandas")
     if _pd is not None:
         # NaT and pd.NA are not floats and would otherwise stringify.
         if obj is getattr(_pd, "NaT", None) or obj is getattr(_pd, "NA", None):
@@ -140,3 +153,46 @@ def emit(obj, **kwargs) -> str:
     text = dumps(obj, **kwargs)
     print(text)
     return text
+
+
+_QUIET_LOCK = threading.Lock()
+_QUIET_DEPTH = 0
+_QUIET_SAVED = None
+
+
+@contextlib.contextmanager
+def stdout_to_stderr():
+    """Inside the block, whatever Python code prints to ``sys.stdout`` goes to stderr.
+
+    For library calls that print (yfinance writes failed symbols / parse warnings to
+    stdout in several releases): stdout carries exactly one JSON payload, and a framed
+    daemon protocol is corrupted by a single stray line. Stderr keeps the text for the log.
+
+    Reentrant and thread-safe: ``sys.stdout`` is process-wide, so per-thread
+    ``contextlib.redirect_stdout`` blocks that exit out of order restore it to another
+    thread's sink (the final JSON then vanishes). Here the first block in swaps it and the
+    last one out restores it. Only Python-level writes are redirected (not a C library
+    writing to file descriptor 1). Emit the payload after the block.
+    """
+    global _QUIET_DEPTH, _QUIET_SAVED
+    with _QUIET_LOCK:
+        if _QUIET_DEPTH == 0:
+            _QUIET_SAVED = sys.stdout
+            try:
+                sys.stdout.flush()
+            except Exception:
+                pass
+            sys.stdout = sys.stderr
+        _QUIET_DEPTH += 1
+    try:
+        yield
+    finally:
+        with _QUIET_LOCK:
+            _QUIET_DEPTH -= 1
+            if _QUIET_DEPTH == 0 and _QUIET_SAVED is not None:
+                try:
+                    sys.stderr.flush()
+                except Exception:
+                    pass
+                sys.stdout = _QUIET_SAVED
+                _QUIET_SAVED = None

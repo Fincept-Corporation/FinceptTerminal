@@ -9,6 +9,7 @@
 
 #include <QDateTime>
 #include <QMutexLocker>
+#include <QTimeZone>
 
 #include <algorithm>
 
@@ -48,7 +49,7 @@ void OrderMatcher::add_order(const PtOrder& order) {
         }
     }
     bucket.append(order);
-    LOG_INFO("OrderMatcher", "Added " + order.order_type + " " + order.side + " order for " + order.symbol);
+    LOG_DEBUG("OrderMatcher", "Added " + order.order_type + " " + order.side + " order for " + order.symbol);
 }
 
 void OrderMatcher::remove_order(const QString& order_id) {
@@ -104,7 +105,7 @@ void OrderMatcher::load_orders(const QVector<PtOrder>& orders) {
             ++loaded;
         }
     }
-    LOG_INFO("OrderMatcher", QString("Loaded %1 pending orders").arg(loaded));
+    LOG_DEBUG("OrderMatcher", QString("Loaded %1 pending orders").arg(loaded));
 }
 
 void OrderMatcher::clear_portfolio_orders(const QString& portfolio_id) {
@@ -217,6 +218,27 @@ double OrderMatcher::get_fill_price(const PtOrder& order, const PriceData& price
 // ============================================================================
 
 void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, const QString& portfolio_id) {
+    check_orders_impl(symbol, price, portfolio_id, /*printed_at_ms=*/0, QString());
+}
+
+void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, const QString& portfolio_id,
+                                qint64 printed_at_ms, const QString& only_order_id) {
+    check_orders_impl(symbol, price, portfolio_id, printed_at_ms, only_order_id);
+}
+
+namespace {
+// Placement time of a paper order (stored as ISO UTC), epoch ms; 0 when unparsable.
+qint64 om_order_created_ms(const PtOrder& order) {
+    QDateTime dt = QDateTime::fromString(order.created_at, Qt::ISODate);
+    if (!dt.isValid())
+        return 0;
+    dt.setTimeZone(QTimeZone::UTC); // the engine writes UTC; a naive stamp is UTC too
+    return dt.toMSecsSinceEpoch();
+}
+} // namespace
+
+void OrderMatcher::check_orders_impl(const QString& symbol, const PriceData& price, const QString& portfolio_id,
+                                     qint64 printed_at_ms, const QString& only_order_id) {
     // Collect fills to execute, then release mutex before calling pt_fill_order
     // to avoid deadlock: OrderMatcher::mutex_ -> pt_fill_order -> s_fill_mutex
     struct PendingFill {
@@ -242,6 +264,14 @@ void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, c
         QVector<QString> orders_to_remove;
 
         for (const auto& order : orders) {
+            if (!only_order_id.isEmpty() && order.id != only_order_id)
+                continue;
+            if (printed_at_ms > 0) {
+                // A price that printed before the order existed cannot fill it.
+                const qint64 created_ms = om_order_created_ms(order);
+                if (created_ms > 0 && created_ms > printed_at_ms)
+                    continue;
+            }
             bool fill = false;
 
             if (order.order_type == "market") {

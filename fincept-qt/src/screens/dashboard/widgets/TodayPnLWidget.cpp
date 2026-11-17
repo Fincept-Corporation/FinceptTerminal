@@ -6,6 +6,8 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -19,19 +21,16 @@
 namespace fincept::screens::widgets {
 
 namespace {
-// Lakh / crore only reads right for rupee accounts; a USD/EUR/GBP broker
-// (Alpaca, IBKR, Tradier, Saxo) printed 150,000 as "+1.50L".
-QString fmt_pnl(double v, bool inr) {
-    const QString sign = v >= 0 ? "+" : "";
-    if (inr && std::abs(v) >= 1.0e7)
-        return sign + QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (inr && std::abs(v) >= 1.0e5)
-        return sign + QString::number(v / 1.0e5, 'f', 2) + "L";
-    if (!inr && std::abs(v) >= 1.0e9)
-        return sign + QString::number(v / 1.0e9, 'f', 2) + "B";
-    if (!inr && std::abs(v) >= 1.0e6)
-        return sign + QString::number(v / 1.0e6, 'f', 2) + "M";
-    return sign + QString::number(v, 'f', 2);
+// Signed P&L in the broker account's own currency (empty when the broker is not
+// known: no unit). Full below 1 lakh / 1 million, abbreviated above in the user's
+// scheme (Settings > Currency & Number Format; on Automatic lakh / crore only for
+// rupee-family accounts — a USD broker once printed 150,000 as "+1.50L").
+QString tpl_pnl(double v, const QString& ccy) {
+    namespace tpl_fmt = fincept::ui::formatting;
+    const bool south_asian =
+        tpl_fmt::resolve_compact(tpl_fmt::Compact::FromSettings, ccy) == tpl_fmt::Compact::LakhCrore;
+    const bool big = std::abs(v) >= (south_asian ? 1.0e5 : 1.0e6);
+    return tpl_fmt::signed_money(v, ccy, big ? tpl_fmt::Compact::FromSettings : tpl_fmt::Compact::None);
 }
 } // namespace
 
@@ -88,13 +87,42 @@ TodayPnLWidget::TodayPnLWidget(const QJsonObject& cfg, QWidget* parent) : BaseWi
         ensure_stream_running();
         if (positions_value_ && positions_value_->text() == QStringLiteral("—"))
             set_loading(true);
-        datahub::DataHub::instance().request(
-            trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions")), /*force=*/true);
+        datahub::DataHub::instance().request(positions_topic(), /*force=*/true);
+        update_session_state(); // a still-dead session says so again instead of spinning
+    });
+
+    // A dead broker session (expired token, connection error) used to end in the
+    // generic "No data yet": the poll fails silently. Name it in the header and,
+    // with nothing on screen, on the overlay.
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::connection_state_changed, this,
+            [this](const QString& account_id, trading::ConnectionState) {
+                if (account_id == account_id_)
+                    update_session_state();
+            });
+
+    // Settings > Currency & Number Format: re-format the hub's last positions, no fetch.
+    ui::formatting::on_format_changed(this, [this]() {
+        if (!hub_active_)
+            return;
+        const QVariant v = datahub::DataHub::instance().peek_raw(positions_topic());
+        if (v.canConvert<QVector<trading::BrokerPosition>>())
+            populate(v.value<QVector<trading::BrokerPosition>>());
     });
 
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
+}
+
+QString TodayPnLWidget::positions_topic() const {
+    if (broker_id_.isEmpty() || account_id_.isEmpty())
+        return {};
+    return trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+}
+
+void TodayPnLWidget::update_session_state() {
+    if (header_hint_ && !account_id_.isEmpty())
+        header_hint_->setText(broker_account_hint(account_id_, positions_topic()));
 }
 
 QJsonObject TodayPnLWidget::config() const {
@@ -111,17 +139,26 @@ void TodayPnLWidget::apply_config(const QJsonObject& cfg) {
 
     broker_id_.clear();
     if (!account_id_.isEmpty()) {
-        const auto acct = trading::AccountManager::instance().get_account(account_id_);
-        broker_id_ = acct.broker_id;
-        header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
+        hide_empty_state();
+        broker_id_ = trading::AccountManager::instance().get_account(account_id_).broker_id;
+        update_session_state();
     } else {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
     }
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
         ensure_stream_running();
         hub_resubscribe();
     }
+}
+
+void TodayPnLWidget::show_no_account_state() {
+    // Class C (needs a broker login): explain and point to Equity Trading, never
+    // connect anything here. An account that becomes active fills the tile.
+    show_no_broker_account(tr("This tile sums a broker account's P&L — net, day and realized, with the count of "
+                              "open positions."),
+                           [this]() { apply_config({}); });
 }
 
 QString TodayPnLWidget::resolve_account_id() const {
@@ -140,15 +177,19 @@ void TodayPnLWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
-    const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+    const QString topic = positions_topic();
     if (positions_value_ && positions_value_->text() == QStringLiteral("—"))
         set_loading(true); // nothing shown yet — see OpenPositionsWidget::hub_resubscribe
-    hub.subscribe(this, topic, [this](const QVariant& v) {
+    // Producer errors on the positions topic replace the spinner / mark the tile STALE.
+    track_topics({topic});
+    hub.subscribe(this, topic, [this, topic](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerPosition>>())
             return;
+        note_topic_value(topic);
         populate(v.value<QVector<trading::BrokerPosition>>());
     });
     hub_active_ = true;
+    update_session_state();
 }
 
 void TodayPnLWidget::hub_unsubscribe_all() {
@@ -196,33 +237,33 @@ void TodayPnLWidget::populate(const QVector<trading::BrokerPosition>& rows) {
             realized += p.pnl;
     }
 
-    // Unknown broker -> keep the historical (rupee) notation.
+    // The account's own currency; unknown broker -> no unit (never a guessed one).
     const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
-    const bool inr = !broker || broker->profile().currency == QLatin1String("INR");
+    const QString ccy = broker ? broker->profile().currency : QString();
 
     auto tone = [](double v) {
         return v > 0 ? ui::colors::POSITIVE() : v < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
     };
-    total_pnl_label_->setText(rows.isEmpty() ? QStringLiteral("—") : fmt_pnl(total_pnl, inr));
+    total_pnl_label_->setText(rows.isEmpty() ? QStringLiteral("—") : tpl_pnl(total_pnl, ccy));
     set_css_cached(total_pnl_label_,
-                   QString("color:%1;font-size:24px;font-weight:700;background:transparent;padding:4px 0;")
+                   QString("color:%1;font-size:" + fincept::ui::fonts::px(10) + "px;font-weight:700;background:transparent;padding:4px 0;")
                        .arg(rows.isEmpty() ? ui::colors::TEXT_TERTIARY() : tone(total_pnl)));
 
     if (day_unreported) {
         day_pnl_value_->setText(tr("n/a"));
         day_pnl_value_->setToolTip(tr("This broker's positions feed does not report day (mark-to-market) P&L."));
-        set_css_cached(day_pnl_value_, QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
+        set_css_cached(day_pnl_value_, QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:600;background:transparent;")
                                            .arg(ui::colors::TEXT_TERTIARY()));
     } else {
-        day_pnl_value_->setText(fmt_pnl(day_pnl, inr));
+        day_pnl_value_->setText(tpl_pnl(day_pnl, ccy));
         day_pnl_value_->setToolTip(QString());
-        set_css_cached(day_pnl_value_, QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
+        set_css_cached(day_pnl_value_, QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:600;background:transparent;")
                                            .arg(tone(day_pnl)));
     }
 
-    realized_pnl_value_->setText(fmt_pnl(realized, inr));
+    realized_pnl_value_->setText(tpl_pnl(realized, ccy));
     set_css_cached(realized_pnl_value_,
-                   QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(tone(realized)));
+                   QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:600;background:transparent;").arg(tone(realized)));
 
     positions_value_->setText(QString::number(open_positions));
 
@@ -266,25 +307,25 @@ void TodayPnLWidget::on_theme_changed() {
 }
 
 void TodayPnLWidget::apply_styles() {
-    header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    set_css_cached(header_hint_, 
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
 
     const QString row_label_css =
-        QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
     if (hero_caption_)
-        hero_caption_->setStyleSheet(row_label_css + "letter-spacing:0.5px;");
+        set_css_cached(hero_caption_, row_label_css + "letter-spacing:0.5px;");
     reset_css_cache(total_pnl_label_);
     reset_css_cache(day_pnl_value_);
     reset_css_cache(realized_pnl_value_);
     if (day_pnl_label_)
-        day_pnl_label_->setStyleSheet(row_label_css);
+        set_css_cached(day_pnl_label_, row_label_css);
     if (realized_pnl_label_)
-        realized_pnl_label_->setStyleSheet(row_label_css);
+        set_css_cached(realized_pnl_label_, row_label_css);
     if (positions_label_)
-        positions_label_->setStyleSheet(row_label_css);
+        set_css_cached(positions_label_, row_label_css);
     if (positions_value_)
-        positions_value_->setStyleSheet(
-            QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+        set_css_cached(positions_value_, 
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
 }
 
 void TodayPnLWidget::retranslateUi() {
@@ -301,8 +342,12 @@ void TodayPnLWidget::retranslateUi() {
         hero_caption_->setText(tr("NET P&L · ALL POSITIONS"));
     if (positions_label_)
         positions_label_->setText(tr("Positions"));
-    if (header_hint_ && account_id_.isEmpty())
+    if (header_hint_ && account_id_.isEmpty()) {
         header_hint_->setText(tr("No active account — click gear to configure"));
+        show_no_account_state();
+    } else {
+        update_session_state();
+    }
 }
 
 } // namespace fincept::screens::widgets

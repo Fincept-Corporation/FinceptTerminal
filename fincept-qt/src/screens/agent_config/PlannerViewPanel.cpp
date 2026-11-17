@@ -2,29 +2,45 @@
 #include "screens/agent_config/PlannerViewPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/agent_config/AgentProfileRows.h"
 #include "services/agents/AgentService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "storage/cache/CacheManager.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSignalBlocker>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
-static const QString kIn =
-    QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
+QString in_ss() {
+    return QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:" + fincept::ui::fonts::px(-2) + "px;")
         .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_MED());
+}
+
+// Property on the result view: the markdown it shows, kept so a theme change can
+// re-render the HTML (its colours are inline).
+constexpr const char* kPlannerMarkdownProp = "planner_md";
+
+void show_markdown(QTextEdit* view, const QString& md) {
+    view->setProperty(kPlannerMarkdownProp, md);
+    view->setHtml(fincept::ui::MarkdownRenderer::render(md));
+}
 } // namespace
 
 namespace fincept::screens {
@@ -33,8 +49,16 @@ PlannerViewPanel::PlannerViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("PlannerViewPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { update(); });
+    // Step-status cells carry item brushes and the result view rendered HTML.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        for (int row = 0; row < steps_table_->rowCount(); ++row) {
+            if (auto* item = steps_table_->item(row, 3))
+                update_step_status(row, item->text().toLower());
+        }
+        const QVariant md = result_display_->property(kPlannerMarkdownProp);
+        if (md.isValid())
+            show_markdown(result_display_, md.toString());
+    });
 }
 
 void PlannerViewPanel::build_ui() {
@@ -63,47 +87,46 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     auto* p = new QWidget(this);
     p->setMinimumWidth(200);
     p->setMaximumWidth(300);
-    p->setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    // Scoped to the panel: a selector-less sheet drew its border on every child.
+    p->setObjectName(QStringLiteral("plannerTemplatesPanel"));
+    p->setAttribute(Qt::WA_StyledBackground, true);
+    p->setStyleSheet(QString("QWidget#plannerTemplatesPanel{background:%1;border-right:1px solid %2;}")
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
     templates_title_ = new QLabel(tr("PLAN TEMPLATES"));
     templates_title_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     vl->addWidget(templates_title_);
 
     // ── LLM Profile picker ───────────────────────────────────────────────────
     llm_profile_title_ = new QLabel(tr("LLM PROFILE:"));
     llm_profile_title_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(llm_profile_title_);
 
     llm_profile_combo_ = new QComboBox;
     llm_profile_combo_->setToolTip(tr("LLM profile used for plan generation and execution"));
     llm_profile_combo_->setStyleSheet(
-        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                 "QComboBox::drop-down{border:none;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     llm_profile_combo_->addItem(tr("Default (Global)"), QString{});
-    {
-        const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
-        const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
-        for (const auto& prof : profiles)
-            llm_profile_combo_->addItem(prof.is_default ? prof.name + tr(" [default]") : prof.name, prof.id);
-    }
+    // Usable profiles, then harness profiles as disabled rows (no id: never chosen).
+    agent_profiles::add_profile_rows(llm_profile_combo_, tr(" [default]"), QStringLiteral("workflow"));
     vl->addWidget(llm_profile_combo_);
 
     portfolio_title_ = new QLabel(tr("PORTFOLIO:"));
     portfolio_title_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(portfolio_title_);
 
     portfolio_combo_ = new QComboBox;
     portfolio_combo_->setToolTip(tr("Portfolio to use as context for rebalance / analysis plans"));
     portfolio_combo_->setStyleSheet(
-        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                 "QComboBox::drop-down{border:none;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     portfolio_combo_->addItem(tr("None"), QString{});
@@ -120,56 +143,73 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     template_list_ = new QListWidget;
     template_list_->addItems({tr("Stock Analysis Plan"), tr("Portfolio Rebalance Plan"), tr("Market Overview Plan"),
                               tr("Risk Assessment Plan"), tr("Sector Rotation Plan")});
-    template_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
+    template_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                                           "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
-                                          "QListWidget::item:selected{background:%4;}"
+                                          "QListWidget::item:selected{background:%4;color:%6;}"
                                           "QListWidget::item:hover{background:%5;}")
                                       .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
-                                           ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
+                                           ui::colors::AMBER_DIM(), ui::colors::BG_HOVER(), ui::colors::TEXT_ON_ACCENT()));
+    // Preselected: GENERATE PLAN works at once (the audit found none selected).
+    template_list_->setCurrentRow(0);
     vl->addWidget(template_list_);
 
     custom_query_title_ = new QLabel(tr("CUSTOM PLAN QUERY"));
     custom_query_title_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;padding-top:8px;")
             .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(custom_query_title_);
 
     custom_query_ = new QPlainTextEdit;
     custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
     custom_query_->setMaximumHeight(100);
-    custom_query_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn));
+    custom_query_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(in_ss()));
     vl->addWidget(custom_query_);
 
     generate_btn_ = new QPushButton(tr("GENERATE PLAN"));
     generate_btn_->setCursor(Qt::PointingHandCursor);
+    // Sends a prompt to the user's model (tokens billed there): an agent operating the UI needs the
+    // user's approval to press it (mcp/core/UiRisk.h).
+    generate_btn_->setProperty("fincept_agent_risk", QStringLiteral("spend"));
     generate_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;padding:8px;"
-                "font-size:11px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
                 "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
+            .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM(), ui::colors::BG_RAISED(),
                  ui::colors::TEXT_TERTIARY()));
     vl->addWidget(generate_btn_);
 
     // History section
     history_header_ = new QLabel(tr("PLAN HISTORY"));
     history_header_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:12px;")
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;padding-top:12px;")
             .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(history_header_);
 
     history_search_ = new QLineEdit;
     history_search_->setPlaceholderText(tr("Search history..."));
-    history_search_->setStyleSheet(kIn);
+    history_search_->setStyleSheet(in_ss());
     vl->addWidget(history_search_);
 
-    history_list_ = new QListWidget;
-    history_list_->setMaximumHeight(120);
+    // History (kept across sessions), or one line saying what will appear here.
+    history_stack_ = new QStackedWidget(p);
+    history_stack_->setMaximumHeight(120);
+    history_list_ = new QListWidget(history_stack_);
     history_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
+        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                 "QListWidget::item{padding:4px 6px;border-bottom:1px solid %2;}"
-                "QListWidget::item:selected{background:%4;}")
-            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM()));
-    vl->addWidget(history_list_);
+                "QListWidget::item:selected{background:%4;color:%5;}")
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM(),
+                 ui::colors::TEXT_ON_ACCENT()));
+    history_stack_->addWidget(history_list_);
+    history_empty_ = new QLabel(tr("No plans yet — every plan you generate is kept here, also after a restart."),
+                                history_stack_);
+    history_empty_->setWordWrap(true);
+    history_empty_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    history_empty_->setStyleSheet(
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:4px 2px;").arg(ui::colors::TEXT_TERTIARY()));
+    history_stack_->addWidget(history_empty_);
+    history_stack_->setCurrentWidget(history_empty_);
+    vl->addWidget(history_stack_);
 
     vl->addStretch();
     return p;
@@ -188,15 +228,15 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     auto* hdr = new QHBoxLayout;
     plan_editor_title_ = new QLabel(tr("EXECUTION PLAN"));
     plan_editor_title_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hdr->addWidget(plan_editor_title_);
     plan_status_ = new QLabel;
-    plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+    plan_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED()));
     hdr->addWidget(plan_status_);
     hdr->addStretch();
     progress_label_ = new QLabel;
-    progress_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    progress_label_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     hdr->addWidget(progress_label_);
     vl->addLayout(hdr);
 
@@ -210,27 +250,41 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     progress_bar_->setValue(0);
     vl->addWidget(progress_bar_);
 
-    // Steps table
-    steps_table_ = new QTableWidget;
+    // Steps table — or, while there is no plan, what to do. Generating a plan
+    // calls the LLM: it never starts by itself.
+    plan_stack_ = new QStackedWidget(p);
+    plan_empty_ = new ui::EmptyState(plan_stack_);
+    plan_empty_->apply(ui::EmptyState::preview_spec(
+        tr("No plan yet"),
+        tr("Pick a template or describe a goal, then generate a step-by-step plan you can edit before running it."),
+        tr("GENERATE PLAN"), tr("Uses your LLM provider — billed as tokens there"), ui::EmptyState::Tone::Warning,
+        ui::LoadingSkeleton::Shape::Table));
+    connect(plan_empty_, &ui::EmptyState::primary_clicked, this, &PlannerViewPanel::generate_plan);
+    plan_stack_->addWidget(plan_empty_);
+    steps_table_ = new QTableWidget(plan_stack_);
     steps_table_->setColumnCount(4);
     steps_table_->setHorizontalHeaderLabels({tr("#"), tr("Step"), tr("Type"), tr("Status")});
     steps_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
-    steps_table_->setColumnWidth(0, 40);
+    steps_table_->setColumnWidth(0, QFontMetrics(ui::fonts::font(-2)).horizontalAdvance(QStringLiteral("000")) + 16);
     steps_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    steps_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    // Interactive + one fit after each fill (fit_step_columns): a ResizeToContents
+    // section re-measured every row while populate_plan / add_step wrote them.
+    steps_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Interactive);
     steps_table_->horizontalHeader()->setStretchLastSection(true);
     steps_table_->verticalHeader()->setVisible(false);
     steps_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     steps_table_->setEditTriggers(QAbstractItemView::DoubleClicked);
     steps_table_->setStyleSheet(
-        QString("QTableWidget{background:%1;color:%2;border:1px solid %3;gridline-color:%3;font-size:12px;}"
+        QString("QTableWidget{background:%1;color:%2;border:1px solid %3;gridline-color:%3;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                 "QTableWidget::item{padding:6px;}"
-                "QTableWidget::item:selected{background:%4;}"
+                "QTableWidget::item:selected{background:%4;color:%7;}"
                 "QHeaderView::section{background:%5;color:%6;border:none;padding:6px;"
-                "font-size:10px;font-weight:600;letter-spacing:1px;}")
+                "font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;letter-spacing:1px;}")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(),
-                 ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(steps_table_, 1);
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_ON_ACCENT()));
+    plan_stack_->addWidget(steps_table_);
+    plan_stack_->setCurrentWidget(plan_empty_);
+    vl->addWidget(plan_stack_, 1);
 
     // Step manipulation buttons
     auto* step_btns = new QHBoxLayout;
@@ -238,13 +292,13 @@ QWidget* PlannerViewPanel::build_plan_editor() {
         auto* b = new QPushButton(text);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:4px 8px;"
-                                 "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
+                                 "font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;}QPushButton:hover{background:%3;}")
                              .arg(color, ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
         return b;
     };
 
-    add_step_btn_ = small_btn(tr("+ ADD"), ui::colors::POSITIVE);
-    remove_step_btn_ = small_btn(tr("- REMOVE"), ui::colors::NEGATIVE);
+    add_step_btn_ = small_btn(tr("+ ADD"), ui::colors::SUCCESS);
+    remove_step_btn_ = small_btn(tr("- REMOVE"), ui::colors::DANGER);
     move_up_btn_ = small_btn(tr("UP"), ui::colors::TEXT_SECONDARY);
     move_down_btn_ = small_btn(tr("DOWN"), ui::colors::TEXT_SECONDARY);
     step_btns->addWidget(add_step_btn_);
@@ -258,11 +312,14 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     execute_btn_ = new QPushButton(tr("EXECUTE PLAN"));
     execute_btn_->setCursor(Qt::PointingHandCursor);
     execute_btn_->setEnabled(false);
+    // Starts an agent run (model quota / credits): an agent operating the UI needs the user's approval
+    // to press it (mcp/core/UiRisk.h). Disabled while the run is going, so the marker never covers a stop.
+    execute_btn_->setProperty("fincept_agent_risk", QStringLiteral("spend"));
     execute_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;padding:10px;"
-                "font-size:11px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%1;}"
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%1;}"
                 "QPushButton:disabled{background:%3;color:%4;}")
-            .arg(ui::colors::POSITIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+            .arg(ui::colors::SUCCESS(), ui::colors::TEXT_ON_ACCENT(), ui::colors::BG_RAISED(),
                  ui::colors::TEXT_TERTIARY()));
     vl->addWidget(execute_btn_);
     return p;
@@ -274,8 +331,11 @@ QWidget* PlannerViewPanel::build_results_panel() {
     auto* p = new QWidget(this);
     p->setMinimumWidth(260);
     p->setMaximumWidth(450);
-    p->setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    // Scoped to the panel: a selector-less sheet drew its border on every child.
+    p->setObjectName(QStringLiteral("plannerResultsPanel"));
+    p->setAttribute(Qt::WA_StyledBackground, true);
+    p->setStyleSheet(QString("QWidget#plannerResultsPanel{background:%1;border-left:1px solid %2;}")
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
@@ -283,13 +343,13 @@ QWidget* PlannerViewPanel::build_results_panel() {
     auto* hdr = new QHBoxLayout;
     result_header_ = new QLabel(tr("STEP RESULT"));
     result_header_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr->addWidget(result_header_);
     hdr->addStretch();
     copy_btn_ = new QPushButton(tr("COPY"));
     copy_btn_->setCursor(Qt::PointingHandCursor);
     copy_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:2px 8px;"
-                                     "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
+                                     "font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:600;}QPushButton:hover{background:%3;}")
                                  .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
     hdr->addWidget(copy_btn_);
     vl->addLayout(hdr);
@@ -297,13 +357,96 @@ QWidget* PlannerViewPanel::build_results_panel() {
     result_display_ = new QTextEdit;
     result_display_->setReadOnly(true);
     result_display_->setStyleSheet(
-        QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
+        QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                  ui::colors::BORDER_BRIGHT()));
+    result_display_->setPlaceholderText(
+        tr("Each step's result appears here after EXECUTE PLAN — select a step in the plan to see its own."));
     vl->addWidget(result_display_, 1);
     return p;
+}
+
+// ── Plan page / history ──────────────────────────────────────────────────────
+
+void PlannerViewPanel::update_plan_page() {
+    if (plan_stack_)
+        plan_stack_->setCurrentWidget(steps_table_->rowCount() > 0 ? static_cast<QWidget*>(steps_table_) : plan_empty_);
+}
+
+void PlannerViewPanel::fit_step_columns() {
+    steps_table_->resizeColumnToContents(2);
+}
+
+namespace {
+constexpr const char* kPlannerHistoryKey = "agents/planner/history";
+constexpr int kPlannerHistoryTtlSeconds = 180 * 24 * 3600;
+constexpr int kPlannerHistoryMax = 20;
+} // namespace
+
+void PlannerViewPanel::refill_history_list() {
+    history_list_->clear();
+    for (const auto& p : plan_history_)
+        history_list_->addItem(QString("%1 (%2 steps)").arg(p.name.isEmpty() ? p.id : p.name).arg(p.steps.size()));
+    history_stack_->setCurrentWidget(plan_history_.isEmpty() ? static_cast<QWidget*>(history_empty_) : history_list_);
+}
+
+void PlannerViewPanel::persist_plan_history() const {
+    // The plans as generated (steps and their config), not their results.
+    QJsonArray plans;
+    for (const auto& plan : plan_history_) {
+        QJsonArray steps;
+        for (const auto& s : plan.steps) {
+            QJsonObject so;
+            so["id"] = s.id;
+            so["name"] = s.name;
+            so["step_type"] = s.step_type;
+            so["config"] = s.config;
+            so["dependencies"] = QJsonArray::fromStringList(s.dependencies);
+            steps.append(so);
+        }
+        QJsonObject po;
+        po["id"] = plan.id;
+        po["name"] = plan.name;
+        po["description"] = plan.description;
+        po["steps"] = steps;
+        plans.append(po);
+    }
+    CacheManager::instance().put(QString::fromLatin1(kPlannerHistoryKey),
+                                 QString::fromUtf8(QJsonDocument(plans).toJson(QJsonDocument::Compact)),
+                                 kPlannerHistoryTtlSeconds, QStringLiteral("agent_planner"));
+}
+
+void PlannerViewPanel::load_plan_history() {
+    const QVariant cv = CacheManager::instance().get(QString::fromLatin1(kPlannerHistoryKey));
+    if (!cv.isNull()) {
+        const QJsonArray plans = QJsonDocument::fromJson(cv.toString().toUtf8()).array();
+        for (const auto& pv : plans) {
+            const QJsonObject po = pv.toObject();
+            services::ExecutionPlan plan;
+            plan.id = po.value("id").toString();
+            plan.name = po.value("name").toString();
+            plan.description = po.value("description").toString();
+            for (const auto& sv : po.value("steps").toArray()) {
+                const QJsonObject so = sv.toObject();
+                services::PlanStep s;
+                s.id = so.value("id").toString();
+                s.name = so.value("name").toString();
+                s.step_type = so.value("step_type").toString();
+                s.config = so.value("config").toObject();
+                for (const auto& d : so.value("dependencies").toArray())
+                    s.dependencies << d.toString();
+                s.status = QStringLiteral("pending");
+                plan.steps.append(s);
+            }
+            if (!plan.steps.isEmpty())
+                plan_history_.append(plan);
+            if (plan_history_.size() >= kPlannerHistoryMax)
+                break;
+        }
+    }
+    refill_history_list();
 }
 
 // ── Connections ──────────────────────────────────────────────────────────────
@@ -332,8 +475,8 @@ void PlannerViewPanel::setup_connections() {
         execute_btn_->setEnabled(true);
         save_plan_to_history();
         plan_status_->setText(tr("READY"));
-        plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                        .arg(ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
+        plan_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
+                                        .arg(ui::colors::SUCCESS(), ui::colors::BG_RAISED()));
     });
 
     connect(&svc, &services::AgentService::plan_executed, this, [this](services::ExecutionPlan plan) {
@@ -347,8 +490,8 @@ void PlannerViewPanel::setup_connections() {
         current_plan_ = plan;
         plan_status_->setText(plan.has_failed ? tr("FAILED") : tr("COMPLETED"));
         plan_status_->setStyleSheet(
-            QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                .arg(plan.has_failed ? ui::colors::NEGATIVE() : ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
+                .arg(plan.has_failed ? ui::colors::DANGER() : ui::colors::SUCCESS(), ui::colors::BG_RAISED()));
 
         int completed = 0;
         for (int i = 0; i < plan.steps.size() && i < steps_table_->rowCount(); ++i) {
@@ -357,7 +500,7 @@ void PlannerViewPanel::setup_connections() {
                 ++completed;
             if (!plan.steps[i].result.isEmpty() || !plan.steps[i].error.isEmpty()) {
                 const QString txt = plan.steps[i].result.isEmpty() ? plan.steps[i].error : plan.steps[i].result;
-                result_display_->setHtml(ui::MarkdownRenderer::render(txt));
+                show_markdown(result_display_, txt);
                 result_header_->setText(QString("STEP %1: %2").arg(i + 1).arg(plan.steps[i].name.toUpper()));
             }
         }
@@ -378,8 +521,9 @@ void PlannerViewPanel::setup_connections() {
             progress_bar_->setValue(0);
             plan_status_->setText(tr("ERROR"));
             plan_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                    .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED()));
+                QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
+                    .arg(ui::colors::DANGER(), ui::colors::BG_RAISED()));
+            result_display_->setProperty(kPlannerMarkdownProp, QVariant());
             result_display_->setPlainText("Error: " + msg);
         }
     });
@@ -391,7 +535,7 @@ void PlannerViewPanel::setup_connections() {
             const QString txt = !s.result.isEmpty()  ? s.result
                                 : !s.error.isEmpty() ? "**Error:** " + s.error
                                                      : "*(not yet executed)*";
-            result_display_->setHtml(ui::MarkdownRenderer::render(txt));
+            show_markdown(result_display_, txt);
         }
     });
 
@@ -468,12 +612,13 @@ void PlannerViewPanel::generate_plan() {
     generate_btn_->setEnabled(false);
     generate_btn_->setText(tr("GENERATING..."));
     steps_table_->setRowCount(0);
+    update_plan_page();
     execute_btn_->setEnabled(false);
     result_display_->clear();
     progress_bar_->setValue(0);
     plan_status_->setText(tr("GENERATING"));
     loading_overlay_->show_loading("GENERATING PLAN…");
-    plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+    plan_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
     QJsonObject cfg;
     if (llm_profile_combo_) {
@@ -499,7 +644,7 @@ void PlannerViewPanel::execute_plan() {
     progress_bar_->setValue(0);
     plan_status_->setText(tr("EXECUTING"));
     loading_overlay_->show_loading("EXECUTING PLAN…");
-    plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+    plan_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
 
     QJsonObject pj;
@@ -546,6 +691,8 @@ void PlannerViewPanel::populate_plan(const services::ExecutionPlan& plan) {
     }
     progress_bar_->setValue(0);
     progress_label_->setText(QString("0/%1 steps").arg(plan.steps.size()));
+    fit_step_columns();
+    update_plan_page();
 }
 
 void PlannerViewPanel::update_step_status(int row, const QString& status) {
@@ -555,9 +702,9 @@ void PlannerViewPanel::update_step_status(int row, const QString& status) {
     item->setText(status.toUpper());
     QColor c;
     if (status == "completed")
-        c = QColor(ui::colors::POSITIVE());
+        c = QColor(ui::colors::SUCCESS());
     else if (status == "failed")
-        c = QColor(ui::colors::NEGATIVE());
+        c = QColor(ui::colors::DANGER());
     else if (status == "running")
         c = QColor(ui::colors::AMBER());
     else
@@ -588,6 +735,8 @@ void PlannerViewPanel::add_step() {
     st->setFlags(st->flags() & ~Qt::ItemIsEditable);
     st->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
     steps_table_->setItem(row, 3, st);
+    fit_step_columns();
+    update_plan_page();
 }
 
 void PlannerViewPanel::remove_step() {
@@ -602,6 +751,7 @@ void PlannerViewPanel::remove_step() {
         if (item)
             item->setText(QString::number(i + 1));
     }
+    update_plan_page();
 }
 
 void PlannerViewPanel::move_step_up() {
@@ -624,11 +774,13 @@ void PlannerViewPanel::move_step_down() {
 
 void PlannerViewPanel::save_plan_to_history() {
     plan_history_.prepend(current_plan_);
-    if (plan_history_.size() > 20)
+    if (plan_history_.size() > kPlannerHistoryMax)
         plan_history_.removeLast();
-    history_list_->clear();
-    for (const auto& p : plan_history_)
-        history_list_->addItem(QString("%1 (%2 steps)").arg(p.name.isEmpty() ? p.id : p.name).arg(p.steps.size()));
+    {
+        const QSignalBlocker block(history_list_); // refilling is not a pick
+        refill_history_list();
+    }
+    persist_plan_history();
 }
 
 void PlannerViewPanel::copy_result() {
@@ -646,6 +798,7 @@ void PlannerViewPanel::showEvent(QShowEvent* event) {
     if (!data_loaded_) {
         data_loaded_ = true;
         services::AgentService::instance().discover_agents();
+        load_plan_history(); // local cache read; plans of earlier sessions
     }
 }
 

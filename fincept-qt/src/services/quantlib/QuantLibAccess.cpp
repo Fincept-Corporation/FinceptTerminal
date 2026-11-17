@@ -147,9 +147,33 @@ QuantLibFailure classify_quantlib_failure(const mcp::ToolResult& result) {
         f.message = QStringLiteral("The QuantLib request failed without an error message.");
     const QString lower = f.message.toLower();
 
-    // Preferred signal: the HTTP status, when the client reports it.
-    if (result.data.isObject())
-        f.http_status = result.data.toObject().value(QStringLiteral("http_status")).toInt(0);
+    // Preferred signal: what QuantLibClient reports about the failure.
+    const QJsonObject info = result.data.toObject();
+    f.http_status = info.value(QStringLiteral("http_status")).toInt(0);
+    if (info.value(QStringLiteral("cancelled")).toBool()) {
+        f.kind = QuantLibFailureKind::Cancelled;
+        return f;
+    }
+    if (info.value(QStringLiteral("timed_out")).toBool() || f.http_status == 504) {
+        f.kind = QuantLibFailureKind::Timeout;
+        f.retryable = true;
+        return f;
+    }
+    if (f.http_status == 0 && info.value(QStringLiteral("network_error")).toInt(0) != 0) {
+        f.kind = QuantLibFailureKind::Network;
+        f.retryable = true;
+        return f;
+    }
+    if (f.http_status == 403 && info.value(QStringLiteral("error_code")).toString() == QLatin1String("IP_BLOCKED")) {
+        f.kind = QuantLibFailureKind::Blocked;
+        f.retryable = true;
+        return f;
+    }
+    if (f.http_status == 404 || info.value(QStringLiteral("unreadable")).toBool()) {
+        f.kind = QuantLibFailureKind::Server;
+        f.retryable = f.http_status != 404;
+        return f;
+    }
     if (f.http_status == 0)
         f.http_status = quantlib_access_detail::status_from_reason(lower);
 

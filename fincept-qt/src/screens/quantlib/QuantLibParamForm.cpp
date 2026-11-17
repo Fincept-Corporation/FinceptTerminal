@@ -35,6 +35,7 @@ bool ql_form_is_int_key(const QString& key) {
         "n",          "steps",     "paths",      "seed",       "periods",  "dim",          "order",
         "degree",     "lag",       "lags",       "window",     "levels",   "iterations",   "k",
         "max_depth",  "max_iter",  "max_lag",    "n_states",   "n_levels", "n_estimators", "n_samples_per_level",
+        "useful_life_rd", "asset_index", "forecast_years",
     };
     const QString k = key.toLower();
     return kIntKeys.contains(k) || k.startsWith(QLatin1String("n_")) || k.startsWith(QLatin1String("num_")) ||
@@ -42,7 +43,9 @@ bool ql_form_is_int_key(const QString& key) {
 }
 
 bool ql_form_is_bps_key(const QString& k) {
-    return k == QLatin1String("bps") || k.endsWith(QLatin1String("_bps"));
+    // The XVA spreads (risk/xva/cva) are basis points although their names do not say so.
+    static const QSet<QString> kBpsSpreads = {"counterparty_spread", "own_spread", "funding_spread"};
+    return k == QLatin1String("bps") || k.endsWith(QLatin1String("_bps")) || kBpsSpreads.contains(k);
 }
 
 bool ql_form_is_vol_key(const QString& k) {
@@ -50,7 +53,20 @@ bool ql_form_is_vol_key(const QString& k) {
            k.startsWith(QLatin1String("sigma"));
 }
 
-bool ql_form_is_rate_key(const QString& k) {
+// A field literally named "rate" is an FX rate on money/convert and an event
+// intensity (lambda) on the exponential / poisson endpoints — not an interest rate.
+bool ql_form_rate_is_fx(const QString& endpoint, const QString& k) {
+    return k == QLatin1String("rate") && endpoint == QLatin1String("core/types/money/convert");
+}
+
+bool ql_form_rate_is_intensity(const QString& endpoint, const QString& k) {
+    return k == QLatin1String("rate") &&
+           (endpoint.contains(QLatin1String("/exponential/")) || endpoint.contains(QLatin1String("/poisson/")));
+}
+
+bool ql_form_is_rate_key(const QString& endpoint, const QString& k) {
+    if (ql_form_rate_is_fx(endpoint, k) || ql_form_rate_is_intensity(endpoint, k))
+        return false;
     static const QSet<QString> kRateKeys = {"r",      "q",           "q1",     "q2",        "mu",
                                             "drift",  "yield",       "spread", "wacc",      "terminal_growth",
                                             "growth", "inflation",   "hurdle", "r0",        "dividend_yield",
@@ -77,6 +93,16 @@ QString ql_form_unit_hint(const QString& endpoint, const QString& key) {
     const QString k = key.toLower();
     if (ql_form_is_bps_key(k))
         return QuantLibParamForm::tr("basis points");
+    if (k == QLatin1String("bump_size") && endpoint.startsWith(QLatin1String("risk/sensitivities/")))
+        return QuantLibParamForm::tr("decimal · 0.0001 = 1 bp");
+    if (k == QLatin1String("weight_change"))
+        return QuantLibParamForm::tr("increment to the asset's weight");
+    if (k == QLatin1String("kwh_generated"))
+        return QuantLibParamForm::tr("kWh");
+    if (k.endsWith(QLatin1String("_mw")))
+        return QuantLibParamForm::tr("MW");
+    if (k == QLatin1String("heat_rate_btu"))
+        return QuantLibParamForm::tr("total fuel, BTU");
     if (k == QLatin1String("normal_volatility") || k == QLatin1String("normal_vol"))
         return QuantLibParamForm::tr("absolute, price units");
     if ((k == QLatin1String("v0") || k == QLatin1String("theta")) && endpoint.contains(QLatin1String("heston")))
@@ -85,7 +111,11 @@ QString ql_form_unit_hint(const QString& endpoint, const QString& key) {
         return QuantLibParamForm::tr("decimal · 0.20 = 20% (20% accepted)");
     if (ql_form_is_probability_key(k))
         return QuantLibParamForm::tr("probability 0–1");
-    if (ql_form_is_rate_key(k))
+    if (ql_form_rate_is_fx(endpoint, k))
+        return QuantLibParamForm::tr("FX rate · units of to-currency per from-currency");
+    if (ql_form_rate_is_intensity(endpoint, k))
+        return QuantLibParamForm::tr("events per unit time (λ)");
+    if (ql_form_is_rate_key(endpoint, k))
         return QuantLibParamForm::tr("decimal · 0.05 = 5% (5% accepted)");
     if (ql_form_is_time_key(k))
         return QuantLibParamForm::tr("years");
@@ -130,8 +160,10 @@ QStringList ql_form_choices(const QString& endpoint, const QString& key) {
         return {"decimal", "percent", "bps"};
     if (key == QLatin1String("vol_type"))
         return {"lognormal", "normal"};
+    // The server lists linear_amortizing / mortgage_style / bullet_amortizing too, but its handler calls the
+    // library without the dates those schedules need and answers HTTP 500 (live and overhaul API alike).
     if (key == QLatin1String("schedule_type"))
-        return {"constant", "linear_amortizing", "mortgage_style", "bullet_amortizing"};
+        return {"constant"};
     if (key == QLatin1String("distribution") && endpoint == QLatin1String("stochastic/sampling/distribution"))
         return {"exponential", "gamma", "poisson"};
     if (key == QLatin1String("distribution") && endpoint == QLatin1String("stochastic/sampling/jump"))
@@ -144,16 +176,84 @@ QStringList ql_form_choices(const QString& endpoint, const QString& key) {
         return {"linear_2x2", "nonlinear_2x2"};
     if (key == QLatin1String("model") && endpoint == QLatin1String("numerical/least-squares/fit"))
         return {"exponential_fit", "polynomial_fit"};
+    // Multi-variable test functions (_get_multi_func); a scalar name such as "sin" is a 400 here.
+    if (key == QLatin1String("func_name") && (endpoint == QLatin1String("numerical/differentiation/gradient") ||
+                                              endpoint == QLatin1String("numerical/differentiation/hessian") ||
+                                              endpoint == QLatin1String("numerical/optimize/minimize")))
+        return {"rosenbrock", "sphere", "rastrigin", "quadratic"};
+    if (key == QLatin1String("model_predict") && endpoint == QLatin1String("ml/validation/interpretability"))
+        return {"linear", "logistic"}; // logistic needs a 0/1 y
     if (key == QLatin1String("method") && endpoint == QLatin1String("regulatory/basel/credit-rwa"))
         return {"standardized", "irb"};
     if (key == QLatin1String("interpolation") &&
         (endpoint.startsWith(QLatin1String("curves/")) || endpoint == QLatin1String("solver/bootstrap/curve")))
         return {"linear", "log_linear", "cubic_spline"};
+    if (key == QLatin1String("method") && endpoint == QLatin1String("numerical/integration/quadrature"))
+        return {"simpson", "trapezoid", "gauss_legendre", "romberg", "adaptive"};
+    if (key == QLatin1String("screen_type") && endpoint == QLatin1String("analysis/valuation/screen"))
+        return {"value", "growth", "quality"};
+    if (key == QLatin1String("goodwill_approach") &&
+        endpoint == QLatin1String("analysis/valuation/proforma/adjustments"))
+        return {"conservative", "moderate", "aggressive"};
     return {};
+}
+
+// Numeric fields the server treats as absent when null: an empty editor sends
+// null instead of being refused. On the pro-forma endpoint each of these
+// switches a section on, so clearing it skips that section.
+bool ql_form_is_optional(const QString& endpoint, const QString& key) {
+    if (endpoint == QLatin1String("analysis/valuation/proforma/adjustments")) {
+        static const QSet<QString> kSectionInputs = {"goodwill",           "pension_obligation", "pension_plan_assets",
+                                                     "stock_compensation", "diluted_shares",     "stock_price"};
+        return kSectionInputs.contains(key);
+    }
+    return false;
 }
 
 QString ql_form_number_text(double v) {
     return QString::number(v, 'g', 15);
+}
+
+// Checks across fields that the server does not make itself (it answers them
+// with a bare HTTP 500). Returns the reason a body cannot be sent, naming the
+// field in `*field`, or an empty string.
+QString ql_form_cross_check(const QString& endpoint, const QJsonObject& body, QString* field) {
+    if (endpoint == QLatin1String("numerical/ode/solve")) {
+        // _get_ode_system(): exponential_decay is 1-dimensional, the others 2-dimensional.
+        const QString system = body.value(QStringLiteral("system")).toString();
+        const int dim = system == QLatin1String("exponential_decay") ? 1 : 2;
+        const int got = int(body.value(QStringLiteral("y0")).toArray().size());
+        if (got != dim) {
+            *field = QStringLiteral("y0");
+            return QuantLibParamForm::tr("y0 needs %n initial value(s) for the %1 system (it has %2), e.g. %3.", "",
+                                         dim)
+                .arg(system)
+                .arg(got)
+                .arg(dim == 1 ? QStringLiteral("[1.0]") : QStringLiteral("[1.0, 0.0]"));
+        }
+    }
+    if (endpoint == QLatin1String("ml/validation/interpretability") &&
+        body.value(QStringLiteral("model_predict")).toString() == QLatin1String("logistic")) {
+        // The server refuses it too (HTTP 400); saying so here keeps the inputs and names the fix.
+        for (const QJsonValue& v : body.value(QStringLiteral("y")).toArray()) {
+            if (v.toDouble(-1.0) != 0.0 && v.toDouble(-1.0) != 1.0) {
+                *field = QStringLiteral("y");
+                return QuantLibParamForm::tr("A logistic model needs y as 0/1 labels — y has %1. Use the linear "
+                                             "model for a continuous y.")
+                    .arg(v.isDouble() ? QString::number(v.toDouble()) : v.toVariant().toString());
+            }
+        }
+    }
+    if (endpoint == QLatin1String("core/types/notional-schedule")) {
+        const QString type = body.value(QStringLiteral("schedule_type")).toString();
+        if (type != QLatin1String("constant")) {
+            *field = QStringLiteral("schedule_type");
+            return QuantLibParamForm::tr("schedule_type \"%1\" cannot be computed by the QuantLib service today — "
+                                         "only \"constant\" schedules work.")
+                .arg(type);
+        }
+    }
+    return {};
 }
 
 // Top-level keys of a JSON object in SOURCE order. QJsonObject iterates keys
@@ -381,6 +481,8 @@ void QuantLibParamForm::rebuild(const QJsonObject& values) {
             f.nullable = true;
         } else
             f.kind = Kind::Text;
+        if ((f.kind == Kind::Number || f.kind == Kind::Integer) && ql_form_is_optional(endpoint_, key))
+            f.nullable = true;
 
         auto* label = new QLabel(key, fields_page_);
         label->setObjectName("qlFieldLabel");
@@ -542,6 +644,13 @@ bool QuantLibParamForm::body(QJsonObject* out, QString* error) {
             json_edit_->setFocus();
             return false;
         }
+        QString field;
+        const QString reason = ql_form_cross_check(endpoint_, doc.object(), &field);
+        if (!reason.isEmpty()) {
+            *error = reason;
+            json_edit_->setFocus();
+            return false;
+        }
         *out = doc.object();
         return true;
     }
@@ -552,7 +661,46 @@ bool QuantLibParamForm::body(QJsonObject* out, QString* error) {
             bad->setFocus();
         return false;
     }
+    QString field;
+    const QString reason = ql_form_cross_check(endpoint_, *out, &field);
+    if (!reason.isEmpty()) {
+        *error = reason;
+        for (const Field& f : fields_) {
+            if (f.key == field && f.editor) {
+                mark_invalid(f.editor, true);
+                f.editor->setFocus();
+                break;
+            }
+        }
+        return false;
+    }
     return true;
+}
+
+bool QuantLibParamForm::peek_body(QJsonObject* out) const {
+    if (!takes_body_) {
+        *out = QJsonObject{};
+        return true;
+    }
+    QString field;
+    if (json_mode_) {
+        const QString text = json_edit_->toPlainText().trimmed();
+        if (text.isEmpty()) {
+            *out = QJsonObject{};
+            return true;
+        }
+        QJsonParseError perr{};
+        const QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject())
+            return false;
+        *out = doc.object();
+        return ql_form_cross_check(endpoint_, *out, &field).isEmpty();
+    }
+    QString error;
+    QWidget* bad = nullptr;
+    if (!collect(out, &error, &bad))
+        return false;
+    return ql_form_cross_check(endpoint_, *out, &field).isEmpty();
 }
 
 void QuantLibParamForm::set_json_mode(bool on) {
@@ -628,7 +776,7 @@ void QuantLibParamForm::update_warnings() {
                 warnings << tr("%1 = %2 reads as %3% — this API takes decimals (0.20 = 20%). Type \"%2%\" if you "
                                "meant percent.")
                                 .arg(f.key, text, QString::number(v * 100.0, 'g', 6));
-            else if (!percent_typed && ql_form_is_rate_key(k) && std::fabs(v) > 1.0)
+            else if (!percent_typed && ql_form_is_rate_key(endpoint_, k) && std::fabs(v) > 1.0)
                 warnings << tr("%1 = %2 reads as %3% — this API takes decimals (0.05 = 5%). Type \"%2%\" if you "
                                "meant percent.")
                                 .arg(f.key, text, QString::number(v * 100.0, 'g', 6));

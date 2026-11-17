@@ -60,29 +60,38 @@ double sol_price_usd_from_hub() {
 }
 
 /// Configured monthly opex, or 0 when unset (runway then reports unknown).
-double configured_monthly_opex_usd() {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyMonthlyOpexUsd));
-    if (r.is_ok()) {
+/// `unreadable` (when given) is set to the reason when the stored value exists but
+/// cannot be read — that is not "unset", and the runway is reported as an error.
+double configured_monthly_opex_usd(QString* unreadable = nullptr) {
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyMonthlyOpexUsd));
+    if (unreadable)
+        *unreadable = r.failed() ? r.reason() : QString();
+    if (r.found()) {
         bool ok = false;
-        const double v = r.value().toDouble(&ok);
+        const double v = r.value.toDouble(&ok);
         if (ok && v > 0.0)
             return v;
     }
     return 0.0;
 }
 
-/// Configured multisig label ("3-of-5"), or empty when unset.
+/// Configured multisig label ("3-of-5"), or empty when unset — and when it cannot
+/// be read: the panel shows "—" (unknown), never an invented label.
 QString configured_multisig_label() {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyMultisigLabel));
-    if (r.is_ok() && !r.value().trimmed().isEmpty())
-        return r.value();
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyMultisigLabel));
+    if (r.found() && !r.value.trimmed().isEmpty())
+        return r.value;
     return {};
 }
 
 QString multisig_url_or_default(const QString& pubkey) {
-    auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyMultisigUrl));
-    if (r.is_ok() && !r.value().trimmed().isEmpty())
-        return r.value();
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kKeyMultisigUrl));
+    if (r.found() && !r.value.trimmed().isEmpty())
+        return r.value;
+    // A configured link that cannot be read is not replaced by the default Squads
+    // page (it may not be the vault the user set): no link (the button does nothing).
+    if (r.failed())
+        return {};
     // Default: Squads vault page for the pubkey, when known. Otherwise the
     // generic Squads landing.
     if (!pubkey.isEmpty()) {
@@ -113,17 +122,35 @@ QString TreasuryService::usdc_mint() {
 }
 
 void TreasuryService::refresh(const QStringList& topics) {
-    auto pk = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyTreasuryPubkey));
-    const QString treasury_pubkey = pk.is_ok() ? pk.value().trimmed() : QString();
+    const SecretRead pk = SecureStorage::instance().read(QString::fromLatin1(kKeyTreasuryPubkey));
+    const QString treasury_pubkey = pk.found() ? pk.value.trimmed() : QString();
 
     const bool reserves_requested = topics.contains(QLatin1String(kTopicReserves));
     const bool runway_requested = topics.contains(QLatin1String(kTopicRunway));
+
+    // A treasury address that is stored but cannot be read is not "none configured":
+    // serving the sample figures then would pass them off for the real treasury being
+    // unavailable. Report it on the requested topics (the hub retries on its schedule).
+    const bool unreadable = pk.failed();
+    LOG_TRANSITION("Treasury", QStringLiteral("pubkey_read"), unreadable, unreadable ? LogLevel::Warn : LogLevel::Info,
+                   unreadable ? logf("Stored treasury address could not be read; no data served",
+                                     {{"key", kKeyTreasuryPubkey}, {"kind", pk.error_name()}})
+                              : QStringLiteral("Stored treasury address readable again"));
+    if (unreadable) {
+        const QString err = tr("Could not read the stored treasury address: %1.").arg(pk.reason());
+        auto& hub = fincept::datahub::DataHub::instance();
+        if (reserves_requested)
+            hub.publish_error(QString::fromLatin1(kTopicReserves), err);
+        if (runway_requested)
+            hub.publish_error(QString::fromLatin1(kTopicRunway), err);
+        return;
+    }
 
     if (treasury_pubkey.isEmpty()) {
         // Log once per process — see BuybackBurnService for the rationale.
         static std::atomic<bool> once{false};
         if (!once.exchange(true)) {
-            LOG_INFO("Treasury", "no fincept.treasury_pubkey configured — serving mock data");
+            LOG_DEBUG("Treasury", "no fincept.treasury_pubkey configured — serving mock data");
         } else {
             LOG_DEBUG("Treasury", "mock-mode refresh");
         }
@@ -227,8 +254,15 @@ void TreasuryService::publish_mock_runway(double total_usd_for_runway) {
 
 void TreasuryService::publish_runway(double total_usd, bool is_mock) {
     // months stays 0 (panel: "opex not configured") when a real treasury has
-    // no configured burn rate.
-    const double opex = is_mock ? kSampleMonthlyOpexUsd : configured_monthly_opex_usd();
+    // no configured burn rate. A stored burn rate that cannot be read is an
+    // error on the topic instead — not "not configured".
+    QString opex_unreadable;
+    const double opex = is_mock ? kSampleMonthlyOpexUsd : configured_monthly_opex_usd(&opex_unreadable);
+    if (!opex_unreadable.isEmpty()) {
+        fincept::datahub::DataHub::instance().publish_error(
+            QString::fromLatin1(kTopicRunway), tr("Could not read the stored monthly opex: %1.").arg(opex_unreadable));
+        return;
+    }
     TreasuryRunway w;
     w.total_usd = total_usd;
     w.monthly_opex_usd = opex;

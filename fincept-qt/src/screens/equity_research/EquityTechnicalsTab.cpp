@@ -1,703 +1,667 @@
 // src/screens/equity_research/EquityTechnicalsTab.cpp
 #include "screens/equity_research/EquityTechnicalsTab.h"
 
+#include "screens/equity_research/EquityResearchFormat.h"
+#include "screens/equity_research/EquityResearchUi.h"
 #include "services/equity/EquityResearchService.h"
+#include "ui/charts/Gauge.h"
+#include "ui/charts/RangeBar.h"
+#include "ui/charts/TimeSeriesChart.h"
+#include "ui/formatting/DateFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LoadingOverlay.h"
+#include "ui/widgets/ProAnalytics.h"
+#include "ui/widgets/ThemeHelpers.h"
 
+#include <QCoreApplication>
+#include <QDateTime>
 #include <QEvent>
-#include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QProgressBar>
+#include <QHeaderView>
+#include <QPointer>
 #include <QScrollArea>
-#include <QStyle>
+#include <QTableWidget>
+#include <QTimeZone>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <cmath>
 
 namespace fincept::screens {
 
-// ── Accent colors without a theme token ──────────────────────────────────────
-static constexpr const char* LTGREEN = "#4ade80";
-static constexpr const char* LTRED = "#f87171";
-static constexpr const char* CYAN = "#22d3ee";
-static constexpr const char* YELLOW = "#eab308";
-static constexpr const char* BLUE = "#60a5fa";
-static constexpr const char* GRAY = "#6b7280";
-
-// ── Signal helpers ───────────────────────────────────────────────────────────
-
 namespace technicals_tab_detail {
-void tech_repolish(QWidget* w) {
-    w->style()->unpolish(w);
-    w->style()->polish(w);
+
+namespace tt_uf = fincept::ui::formatting;
+namespace tt_tm = fincept::services::equity::tmath;
+using services::equity::TechSignal;
+
+bool tt_ok(double v) {
+    return std::isfinite(v);
 }
+
+QTableWidget* tt_table(QWidget* parent, int cols) {
+    auto* t = new QTableWidget(0, cols, parent);
+    t->setObjectName(QStringLiteral("erTable"));
+    t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t->setSelectionMode(QAbstractItemView::NoSelection);
+    t->setFocusPolicy(Qt::NoFocus);
+    t->setAlternatingRowColors(true);
+    t->verticalHeader()->hide();
+    t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    t->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    ui::metrics::follow_row_height(t, 22);
+    return t;
+}
+
+QTableWidgetItem* tt_cell(const QString& text, Qt::Alignment a = Qt::AlignRight | Qt::AlignVCenter) {
+    auto* it = new QTableWidgetItem(text);
+    it->setTextAlignment(a);
+    return it;
+}
+
+QVector<ui::GaugeZone> tt_zones() {
+    const char* ctx = "EquityTechnicalsTab";
+    return {
+        {-1.0, -0.5, ui::GaugeZone::Tone::Down, QCoreApplication::translate(ctx, "Strong sell")},
+        {-0.5, -0.1, ui::GaugeZone::Tone::Down, QCoreApplication::translate(ctx, "Sell")},
+        {-0.1, 0.1, ui::GaugeZone::Tone::Neutral, QCoreApplication::translate(ctx, "Neutral")},
+        {0.1, 0.5, ui::GaugeZone::Tone::Up, QCoreApplication::translate(ctx, "Buy")},
+        {0.5, 1.0, ui::GaugeZone::Tone::Up, QCoreApplication::translate(ctx, "Strong buy")},
+    };
+}
+
+double tt_last(const QVector<double>& v) {
+    for (int i = static_cast<int>(v.size()) - 1; i >= 0; --i)
+        if (tt_ok(v[i]))
+            return v[i];
+    return std::nan("");
+}
+
 } // namespace technicals_tab_detail
-using technicals_tab_detail::tech_repolish;
 
-/// Stylesheet property value for a signal (QLabel[sig="buy"] …).
-const char* EquityTechnicalsTab::signal_key(services::equity::TechSignal s) {
-    using S = services::equity::TechSignal;
-    switch (s) {
-        case S::StrongBuy:
-            return "strong_buy";
-        case S::Buy:
-            return "buy";
-        case S::Sell:
-            return "sell";
-        case S::StrongSell:
-            return "strong_sell";
-        default:
-            return "neutral";
-    }
-}
-
-QString EquityTechnicalsTab::signal_text(services::equity::TechSignal s) const {
-    using S = services::equity::TechSignal;
-    switch (s) {
-        case S::StrongBuy:
-            return tr("STRONG BUY");
-        case S::Buy:
-            return tr("BUY");
-        case S::Sell:
-            return tr("SELL");
-        case S::StrongSell:
-            return tr("STRONG SELL");
-        default:
-            return tr("NEUTRAL");
-    }
-}
-
-/// Context-aware interpretation for each indicator
-QString EquityTechnicalsTab::interpretation(const QString& col_key, double value) const {
-    if (col_key == "rsi") {
-        if (value <= 25)
-            return tr("Deeply oversold — potential reversal zone");
-        if (value <= 30)
-            return tr("Oversold — watch for bullish divergence");
-        if (value <= 40)
-            return tr("Below midpoint — bearish bias weakening");
-        if (value <= 60)
-            return tr("Neutral zone — no strong momentum");
-        if (value <= 70)
-            return tr("Above midpoint — bullish bias building");
-        if (value <= 80)
-            return tr("Overbought — watch for bearish divergence");
-        return tr("Deeply overbought — potential reversal zone");
-    }
-    // MACD values are in price units, so only the sign is comparable across stocks.
-    if (col_key == "macd")
-        return value >= 0 ? tr("Above zero — 12-EMA over 26-EMA (uptrend bias)")
-                          : tr("Below zero — 12-EMA under 26-EMA (downtrend bias)");
-    if (col_key == "macd_diff")
-        return value >= 0 ? tr("MACD above its signal line — bullish crossover state")
-                          : tr("MACD below its signal line — bearish crossover state");
-    if (col_key == "stoch_k" || col_key == "stoch_d") {
-        if (value <= 20)
-            return tr("Oversold zone — potential bounce");
-        if (value <= 40)
-            return tr("Below midpoint — watch for crossover");
-        if (value <= 60)
-            return tr("Neutral — consolidation phase");
-        if (value <= 80)
-            return tr("Above midpoint — bullish momentum");
-        return tr("Overbought zone — potential pullback");
-    }
-    if (col_key == "williams_r") {
-        if (value <= -80)
-            return tr("Oversold — potential reversal up");
-        if (value <= -50)
-            return tr("Bearish territory — selling pressure");
-        if (value >= -20)
-            return tr("Overbought — potential reversal down");
-        return tr("Neutral zone");
-    }
-    if (col_key == "cci") {
-        if (value <= -200)
-            return tr("Extreme oversold — deep value territory");
-        if (value <= -100)
-            return tr("Oversold — watch for trend reversal");
-        if (value >= 200)
-            return tr("Extreme overbought — euphoria zone");
-        if (value >= 100)
-            return tr("Overbought — watch for profit taking");
-        return tr("Neutral — no extreme conditions");
-    }
-    if (col_key == "mfi") {
-        if (value <= 20)
-            return tr("Oversold — money flowing out aggressively");
-        if (value <= 40)
-            return tr("Weak inflow — cautious sentiment");
-        if (value >= 80)
-            return tr("Overbought — heavy money inflow");
-        if (value >= 60)
-            return tr("Strong inflow — buying pressure");
-        return tr("Balanced money flow");
-    }
-    if (col_key == "adx") {
-        if (value >= 50)
-            return tr("Very strong trend — trade with the trend");
-        if (value >= 25)
-            return tr("Trending — directional move in play");
-        if (value >= 20)
-            return tr("Weak trend — possible consolidation");
-        return tr("No trend — range-bound market");
-    }
-    if (col_key == "bb_pband") {
-        if (value < 0)
-            return tr("Below lower band — extreme oversold");
-        if (value < 0.2)
-            return tr("Near lower band — oversold zone");
-        if (value > 1.0)
-            return tr("Above upper band — extreme overbought");
-        if (value > 0.8)
-            return tr("Near upper band — overbought zone");
-        return tr("Within bands — normal range");
-    }
-    // bb_wband is (upper − lower) / middle × 100 — already a percentage.
-    if (col_key == "bb_wband") {
-        if (value < 5.0)
-            return tr("Tight squeeze — volatility compressed, watch for a breakout");
-        if (value < 10.0)
-            return tr("Narrowing bands — volatility contracting");
-        if (value > 30.0)
-            return tr("Wide bands — high volatility");
-        return tr("Normal bandwidth");
-    }
-    if (col_key == "atr")
-        return tr("Average true range — use for stop-loss sizing");
-    if (col_key == "roc") {
-        if (value > 5)
-            return tr("Strong upward momentum");
-        if (value < -5)
-            return tr("Strong downward momentum");
-        return tr("Flat momentum — sideways movement");
-    }
-    if (col_key == "cmf") {
-        if (value > 0.1)
-            return tr("Buying pressure — accumulation");
-        if (value < -0.1)
-            return tr("Selling pressure — distribution");
-        return tr("Balanced — no clear accumulation or distribution");
-    }
-    if (col_key == "aroon_up") {
-        if (value >= 70)
-            return tr("Strong uptrend — recent new highs");
-        if (value <= 30)
-            return tr("Weak upside — no recent highs");
-        return tr("Moderate — watching for trend development");
-    }
-    if (col_key == "aroon_down") {
-        if (value >= 70)
-            return tr("Strong downtrend — recent new lows");
-        if (value <= 30)
-            return tr("Weak downside — no recent lows");
-        return tr("Moderate — watching for trend development");
-    }
-    if (col_key == "obv")
-        return tr("On-balance volume — confirms price trend with volume");
-    if (col_key == "vwap")
-        return tr("14-bar rolling volume-weighted price (not the intraday session VWAP)");
-    if (col_key == "adi")
-        return tr("Accumulation/distribution — confirms money flow");
-    if (col_key.startsWith("sma_") || col_key.startsWith("ema_") || col_key.startsWith("wma_") || col_key == "kama")
-        return tr("Moving average — price above = bullish, below = bearish");
-    if (col_key == "macd_signal")
-        return tr("Signal line — crossover with MACD triggers trade");
-    if (col_key == "bb_mavg")
-        return tr("Bollinger midline (20-SMA) — dynamic support/resistance");
-    if (col_key == "bb_hband")
-        return tr("Upper band — resistance level, overbought above");
-    if (col_key == "bb_lband")
-        return tr("Lower band — support level, oversold below");
-    if (col_key == "ao")
-        return value > 0 ? tr("Bullish — momentum above zero line") : tr("Bearish — momentum below zero line");
-    return QString();
-}
-
-// ── Constructor ──────────────────────────────────────────────────────────────
+using namespace technicals_tab_detail;
 
 EquityTechnicalsTab::EquityTechnicalsTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
-    connect(&svc, &services::equity::EquityResearchService::technicals_loaded, this,
-            &EquityTechnicalsTab::on_technicals_loaded);
-    // Without this a failed fetch/compute leaves the overlay spinning "COMPUTING
-    // INDICATORS…" forever (the overlay is hidden only on the success path).
-    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (ctx != "Technicals" && ctx != "Historical")
+    connect(&svc, &services::equity::EquityResearchService::historical_loaded, this,
+            [this](const QString& s, const QString& p, const QVector<services::equity::Candle>& c) { on_history(s, p, c); });
+    connect(&svc, &services::equity::EquityResearchService::info_loaded, this,
+            [this](const services::equity::StockInfo& info) {
+                if (info.symbol != current_symbol_ || info.currency == currency_)
                     return;
-                if (loading_overlay_)
-                    loading_overlay_->hide_loading();
-                // Nothing computed for this symbol: don't leave the previous symbol's rating and
-                // indicator tables on screen under the new symbol's name.
-                if (!data_loaded_) {
-                    populate(services::equity::TechnicalsData{});
-                    rating_label_->setText(QString::fromUtf8("\xe2\x80\x94"));
-                }
+                currency_ = info.currency;
+                if (daily_loaded_)
+                    render();
             });
+    connect(&svc, &services::equity::EquityResearchService::load_failed, this,
+            [this](const services::equity::LoadFailure& f) { on_load_failed(f); });
+    // Re-render what is held once a theme / font change has settled, and for a currency /
+    // number-format change (no new request).
+    const auto rerender = [this]() {
+        if (daily_loaded_)
+            render();
+    };
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, rerender);
+    ui::formatting::on_format_changed(this, rerender);
 }
 
 void EquityTechnicalsTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    data_loaded_ = false; // the figures on screen belong to the previous symbol until new ones land
-    loading_overlay_->show_loading(tr("COMPUTING INDICATORS…"));
-    services::equity::EquityResearchService::instance().fetch_technicals(symbol, "1y");
+    currency_.clear();
+    daily_.clear();
+    hourly_.clear();
+    bench_.clear();
+    daily_loaded_ = false;
+    render();
+    request(false);
 }
 
-// ── build_ui ─────────────────────────────────────────────────────────────────
+void EquityTechnicalsTab::request(bool force) {
+    if (current_symbol_.isEmpty())
+        return;
+    auto& svc = services::equity::EquityResearchService::instance();
+    if (loading_overlay_ && !daily_loaded_)
+        loading_overlay_->show_loading(tr("COMPUTING INDICATORS…"));
+    status_->show_loading(tr("Loading price history for %1…").arg(current_symbol_));
+    Q_UNUSED(force);
+    svc.load_info_only(current_symbol_);
+    svc.load_historical_only(current_symbol_, QStringLiteral("max"));
+    const auto bench = er_ui::benchmark_for(current_symbol_);
+    if (!bench.symbol.isEmpty())
+        svc.load_historical_only(bench.symbol, QStringLiteral("max"));
+    if (frame_ == Frame::Hourly)
+        load_hourly();
+}
+
+void EquityTechnicalsTab::on_history(const QString& symbol, const QString& period,
+                                     const QVector<services::equity::Candle>& candles) {
+    if (period != QLatin1String("max") || candles.isEmpty())
+        return;
+    if (symbol == current_symbol_) {
+        daily_ = tt_tm::normalize_daily(candles);
+        daily_loaded_ = true;
+        if (loading_overlay_)
+            loading_overlay_->hide_loading();
+        status_->clear();
+        render();
+    } else if (symbol == er_ui::benchmark_for(current_symbol_).symbol) {
+        bench_ = tt_tm::normalize_daily(candles);
+        if (daily_loaded_)
+            render_performance();
+    }
+}
+
+void EquityTechnicalsTab::on_load_failed(const services::equity::LoadFailure& f) {
+    if (f.symbol != current_symbol_ || f.leg != QLatin1String("Historical") || f.period != QLatin1String("max") ||
+        daily_loaded_)
+        return;
+    if (loading_overlay_)
+        loading_overlay_->hide_loading();
+    status_->show_error(tr("Price history unavailable for %1: %2").arg(current_symbol_, f.message.left(160)), f.message);
+    if (chart_)
+        chart_->set_state(ui::TimeSeriesChart::State::Error, f.message.left(200));
+}
+
+void EquityTechnicalsTab::load_hourly() {
+    const QString sym = current_symbol_;
+    QPointer<EquityTechnicalsTab> self = this;
+    status_->show_loading(tr("Loading hourly bars…"));
+    services::equity::EquityResearchService::instance().fetch_price_history(
+        sym, QStringLiteral("3mo"), QStringLiteral("1h"),
+        [self, sym](bool ok, QVector<services::equity::Candle> candles, QString error) {
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, sym, ok, candles, error]() {
+                    if (!self || self->current_symbol_ != sym)
+                        return;
+                    if (!ok || candles.isEmpty()) {
+                        self->status_->show_error(tr("No hourly bars: %1").arg(error.left(160)), error);
+                        return;
+                    }
+                    self->status_->clear();
+                    self->hourly_ = candles;
+                    self->render();
+                },
+                Qt::QueuedConnection);
+        });
+}
+
+tt_tm::Bars EquityTechnicalsTab::frame_bars() const {
+    switch (frame_) {
+        case Frame::Hourly:
+            return tt_tm::bars_from_candles(hourly_);
+        case Frame::Weekly:
+            return tt_tm::resample(tt_tm::bars_from_candles(daily_), tt_tm::Resample::Weekly);
+        case Frame::Monthly:
+            return tt_tm::resample(tt_tm::bars_from_candles(daily_), tt_tm::Resample::Monthly);
+        case Frame::Daily:
+        default:
+            return tt_tm::bars_from_candles(daily_);
+    }
+}
+
+QString EquityTechnicalsTab::fmt_price(double v) const {
+    return equity_fmt::price(v, currency_);
+}
+
+QString EquityTechnicalsTab::signal_text(TechSignal s) const {
+    switch (s) {
+        case TechSignal::StrongBuy:
+            return tr("STRONG BUY");
+        case TechSignal::Buy:
+            return tr("BUY");
+        case TechSignal::Sell:
+            return tr("SELL");
+        case TechSignal::StrongSell:
+            return tr("STRONG SELL");
+        default:
+            return tr("NEUTRAL");
+    }
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────────
 
 void EquityTechnicalsTab::build_ui() {
     setObjectName(QStringLiteral("equityTechnicalsTab"));
-    // One stylesheet for every dynamic card / row populate() builds: they are styled by
-    // objectName and a "sig"/"cat"/"alt" property. populate() used to issue ~10 setStyleSheet
-    // calls per indicator — a full CSS re-parse each — on every load.
-    setStyleSheet(
-        QString("QWidget { background:%1; }"
-                "QLabel { background:transparent; border:0; }"
-                "QFrame#techCard { background:%2; border:1px solid %3; border-left:3px solid %4; }"
-                "QFrame#techCard[sig=\"strong_buy\"] { border-left-color:%5; }"
-                "QFrame#techCard[sig=\"buy\"] { border-left-color:%6; }"
-                "QFrame#techCard[sig=\"sell\"] { border-left-color:%7; }"
-                "QFrame#techCard[sig=\"strong_sell\"] { border-left-color:%8; }"
-                "QLabel#techCardName { color:%9; font-size:10px; font-weight:600; letter-spacing:0.5px; }"
-                "QLabel#techCardValue { color:%10; font-size:16px; font-weight:700; font-family:'Consolas',monospace; }"
-                "QLabel#techCardDesc { color:%11; font-size:10px; }"
-                "QLabel#techRowInterp { color:%11; font-size:11px; }"
-                "QLabel[sig=\"strong_buy\"] { color:%5; } QLabel[sig=\"buy\"] { color:%6; }"
-                "QLabel[sig=\"neutral\"] { color:%4; } QLabel[sig=\"sell\"] { color:%7; }"
-                "QLabel[sig=\"strong_sell\"] { color:%8; }"
-                "QLabel#techSig { font-size:10px; font-weight:700; }"
-                "QLabel#techSigPill { font-size:10px; font-weight:700; background:%2; padding:2px 6px; }"
-                "QLabel#techRating { font-size:22px; font-weight:700; letter-spacing:2px; color:%4; }"
-                "QFrame#techSection { background:%12; border:1px solid %3; }"
-                "QWidget#techSectionHdr { background:%2; border:0; border-bottom:1px solid %3; }"
-                "QLabel#techSectionTitle { font-size:12px; font-weight:700; letter-spacing:1px; }"
-                "QLabel#techSectionTitle[cat=\"trend\"] { color:%13; }"
-                "QLabel#techSectionTitle[cat=\"momentum\"] { color:%5; }"
-                "QLabel#techSectionTitle[cat=\"volatility\"] { color:%14; }"
-                "QLabel#techSectionTitle[cat=\"volume\"] { color:%15; }"
-                "QLabel#techMuted { color:%11; font-size:10px; }"
-                "QLabel#techColHdr { color:%11; font-size:10px; font-weight:600; letter-spacing:0.5px; }"
-                "QLabel#techBadge { font-size:10px; font-weight:700; padding:2px 6px; }"
-                "QWidget#techTblHdr { background:%1; border:0; border-bottom:1px solid %3; }"
-                "QWidget#techRow { background:%1; border:0; border-bottom:1px solid %3; }"
-                "QWidget#techRow[alt=\"true\"] { background:%2; }"
-                "QWidget#techSigCell { background:transparent; border:0; }"
-                "QLabel#techRowName { color:%10; font-size:12px; font-weight:600; }"
-                "QLabel#techRowValue { color:%9; font-size:12px; font-family:'Consolas',monospace; }")
-            .arg(ui::colors::BG_BASE(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), QString(GRAY),
-                 ui::colors::POSITIVE(), QString(LTGREEN), QString(LTRED), ui::colors::NEGATIVE(),
-                 ui::colors::TEXT_SECONDARY())
-            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), QString(CYAN),
-                 QString(YELLOW), QString(BLUE)));
-    loading_overlay_ = new ui::LoadingOverlay(this);
-
+    er_ui::apply_style(this, []() {
+        return QStringLiteral("#equityTechnicalsTab, QWidget#techContent { background:%1; }"
+                              "QScrollArea#techScroll { background:transparent; border:0; }")
+                   .arg(ui::colors::BG_BASE()) +
+               er_ui::stylesheet();
+    });
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
-
-    auto* scroll = new QScrollArea;
+    auto* scroll = new QScrollArea(this);
+    scroll->setObjectName(QStringLiteral("techScroll"));
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background:transparent;border:0;");
-
-    auto* content = new QWidget(this);
+    outer->addWidget(scroll);
+    auto* content = new QWidget;
+    content->setObjectName(QStringLiteral("techContent"));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(8);
+    vl->setSpacing(6);
 
-    // ── Top row: RATING + KEY INDICATORS ─────────────────────────────────────
-    auto* top_row = new QHBoxLayout;
-    top_row->setSpacing(8);
+    auto* bar = new QHBoxLayout;
+    frame_seg_ = new er_ui::Segmented(content);
+    frame_seg_->add(QStringLiteral("1h"), QString());
+    frame_seg_->add(QStringLiteral("d"), QString());
+    frame_seg_->add(QStringLiteral("w"), QString());
+    frame_seg_->add(QStringLiteral("m"), QString());
+    frame_seg_->set_current(QStringLiteral("d"));
+    connect(frame_seg_, &er_ui::Segmented::changed, this, [this](const QString& k) {
+        frame_ = k == QLatin1String("1h") ? Frame::Hourly
+                 : k == QLatin1String("w") ? Frame::Weekly
+                 : k == QLatin1String("m") ? Frame::Monthly
+                                           : Frame::Daily;
+        if (frame_ == Frame::Hourly && hourly_.isEmpty())
+            load_hourly();
+        else
+            render();
+    });
+    bar->addWidget(frame_seg_);
+    bar->addStretch();
+    // Pro analytics: the server's technical rating for this symbol, in its own window
+    // (opens on click only; hidden while the server does not offer Pro analytics).
+    bar->addWidget(ui::pro::make_button(ui::pro::Kind::TechnicalRating, [this]() {
+        ui::pro::Request r;
+        r.symbol = current_symbol_;
+        return r;
+    }, content));
+    refresh_btn_ = new QPushButton(content);
+    refresh_btn_->setObjectName(QStringLiteral("erBtn"));
+    refresh_btn_->setCursor(Qt::PointingHandCursor);
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
+        hourly_.clear();
+        request(true);
+    });
+    bar->addWidget(refresh_btn_);
+    vl->addLayout(bar);
 
-    // === RATING PANEL ===
-    auto* rating_panel = new QFrame;
-    rating_panel->setFixedWidth(260);
-    rating_panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                    .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* rp_vl = new QVBoxLayout(rating_panel);
-    rp_vl->setContentsMargins(14, 10, 14, 10);
-    rp_vl->setSpacing(10);
+    status_ = new er_ui::StatusStrip(content);
+    connect(status_, &er_ui::StatusStrip::retry_requested, this, [this]() { request(true); });
+    vl->addWidget(status_);
 
-    rating_title_ = new QLabel(tr("TECHNICAL RATING"));
-    rating_title_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
-            .arg(ui::colors::AMBER()));
-    rp_vl->addWidget(rating_title_);
+    // Chart (rebuilt per render: the pane set is fixed per chart).
+    chart_host_ = new QWidget(content);
+    auto* ch_l = new QVBoxLayout(chart_host_);
+    ch_l->setContentsMargins(0, 0, 0, 0);
+    // Four panes (price, volume, RSI, MACD): at 420 px the RSI pane was ~50 px and its
+    // 70 / 30 tags collided with the axis ticks.
+    chart_host_->setMinimumHeight(ui::metrics::height(520));
+    vl->addWidget(chart_host_);
 
-    auto* sep = new QFrame;
-    sep->setFrameShape(QFrame::HLine);
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM()));
-    rp_vl->addWidget(sep);
+    // Rating gauges.
+    auto* gauges = new QHBoxLayout;
+    gauges->setSpacing(6);
+    ui::Gauge** gs[3] = {&gauge_osc_, &gauge_sum_, &gauge_ma_};
+    for (int i = 0; i < 3; ++i) {
+        QVBoxLayout* body = nullptr;
+        auto* p = er_ui::panel(QString(), &body, &gauge_title_[i], content);
+        *gs[i] = new ui::Gauge(p);
+        (*gs[i])->set_range(-1.0, 1.0);
+        (*gs[i])->set_zones(tt_zones());
+        (*gs[i])->set_show_range_labels(false);
+        (*gs[i])->set_value_formatter([](double v) { return tt_uf::number(v, 2); });
+        (*gs[i])->setMinimumHeight(ui::metrics::height(120));
+        // The dial grows with its width: uncapped, each of the three was ~300 px tall at
+        // 1600 px and pushed the vote tables a screen down.
+        (*gs[i])->setMaximumHeight(ui::metrics::height(170));
+        body->addWidget(*gs[i]);
+        gauge_counts_[i] = new QLabel(p);
+        gauge_counts_[i]->setObjectName(QStringLiteral("erNote"));
+        gauge_counts_[i]->setAlignment(Qt::AlignCenter);
+        body->addWidget(gauge_counts_[i]);
+        gauges->addWidget(p, 1);
+    }
+    vl->addLayout(gauges);
+    method_note_ = new QLabel(content);
+    method_note_->setObjectName(QStringLiteral("erNote"));
+    method_note_->setWordWrap(true);
+    vl->addWidget(method_note_);
 
-    rating_label_ = new QLabel("\xe2\x80\x94");
-    rating_label_->setObjectName(QStringLiteral("techRating"));
-    rating_label_->setAlignment(Qt::AlignCenter);
-    rp_vl->addWidget(rating_label_);
+    // Votes.
+    auto* tables = new QHBoxLayout;
+    tables->setSpacing(6);
+    {
+        QVBoxLayout* body = nullptr;
+        auto* p = er_ui::panel(QString(), &body, &osc_title_, content);
+        osc_table_ = tt_table(p, 3);
+        body->addWidget(osc_table_);
+        tables->addWidget(p, 1);
+    }
+    {
+        QVBoxLayout* body = nullptr;
+        auto* p = er_ui::panel(QString(), &body, &ma_title_, content);
+        ma_table_ = tt_table(p, 3);
+        body->addWidget(ma_table_);
+        tables->addWidget(p, 1);
+    }
+    vl->addLayout(tables);
 
-    // Gauge bar
-    gauge_bar_ = new QProgressBar;
-    gauge_bar_->setRange(0, 100);
-    gauge_bar_->setValue(50);
-    gauge_bar_->setFixedHeight(6);
-    gauge_bar_->setTextVisible(false);
-    gauge_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:1px solid %2;border-radius:0;}"
-                                      "QProgressBar::chunk{background:%3;}")
-                                  .arg(ui::colors::NEGATIVE(), ui::colors::BORDER_DIM(), ui::colors::POSITIVE()));
-    rp_vl->addWidget(gauge_bar_);
-
-    // Signal counts — 5 columns
-    auto* counts = new QHBoxLayout;
-    counts->setSpacing(4);
-
-    auto make_count = [&](const char* color, const QString& label, QLabel*& out, QLabel*& caption_out) {
-        auto* w = new QWidget(this);
-        w->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BG_RAISED()));
-        auto* cvl = new QVBoxLayout(w);
-        cvl->setContentsMargins(4, 4, 4, 4);
-        cvl->setSpacing(1);
-        cvl->setAlignment(Qt::AlignCenter);
-        out = new QLabel("0");
-        out->setAlignment(Qt::AlignCenter);
-        out->setStyleSheet(
-            QString("color:%1;font-size:16px;font-weight:700;background:transparent;border:0;").arg(color));
-        caption_out = new QLabel(label);
-        caption_out->setAlignment(Qt::AlignCenter);
-        caption_out->setStyleSheet(
-            QString("color:%1;font-size:8px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                .arg(ui::colors::TEXT_TERTIARY()));
-        cvl->addWidget(out);
-        cvl->addWidget(caption_out);
-        counts->addWidget(w, 1);
-    };
-
-    make_count(ui::colors::POSITIVE, tr("STR.BUY"), strong_buy_count_, str_buy_caption_);
-    make_count(LTGREEN, tr("BUY"), buy_count_, buy_caption_);
-    make_count(GRAY, tr("NEUTRAL"), neutral_count_, neutral_caption_);
-    make_count(LTRED, tr("SELL"), sell_count_, sell_caption_);
-    make_count(ui::colors::NEGATIVE, tr("STR.SELL"), strong_sell_count_, str_sell_caption_);
-    rp_vl->addLayout(counts);
-
-    total_label_ = new QLabel(tr("0 INDICATORS"));
-    total_label_->setAlignment(Qt::AlignCenter);
-    total_label_->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:1px;background:transparent;border:0;")
-                                    .arg(ui::colors::TEXT_TERTIARY()));
-    rp_vl->addWidget(total_label_);
-    rp_vl->addStretch();
-
-    top_row->addWidget(rating_panel);
-
-    // === KEY INDICATORS PANEL ===
-    auto* key_panel = new QFrame;
-    key_panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* kp_vl = new QVBoxLayout(key_panel);
-    kp_vl->setContentsMargins(10, 10, 10, 10);
-    kp_vl->setSpacing(6);
-
-    key_title_ = new QLabel(tr("KEY INDICATORS"));
-    key_title_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
-            .arg(CYAN));
-    kp_vl->addWidget(key_title_);
-
-    auto* ksep = new QFrame;
-    ksep->setFrameShape(QFrame::HLine);
-    ksep->setFixedHeight(1);
-    ksep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM()));
-    kp_vl->addWidget(ksep);
-
-    key_container_ = new QWidget(this);
-    key_container_->setStyleSheet("background:transparent;border:0;");
-    auto* kc_layout = new QGridLayout(key_container_);
-    kc_layout->setContentsMargins(0, 0, 0, 0);
-    kc_layout->setSpacing(6);
-    kp_vl->addWidget(key_container_, 1);
-
-    top_row->addWidget(key_panel, 1);
-    vl->addLayout(top_row);
-
-    // ── Category sections ────────────────────────────────────────────────────
-    sections_container_ = new QWidget(this);
-    sections_container_->setStyleSheet("background:transparent;border:0;");
-    auto* sc_vl = new QVBoxLayout(sections_container_);
-    sc_vl->setContentsMargins(0, 0, 0, 0);
-    sc_vl->setSpacing(6);
-    vl->addWidget(sections_container_);
+    // Performance & risk.
+    auto* perf = new QHBoxLayout;
+    perf->setSpacing(6);
+    {
+        QVBoxLayout* body = nullptr;
+        auto* p = er_ui::panel(QString(), &body, &perf_title_, content);
+        perf_table_ = tt_table(p, 4);
+        body->addWidget(perf_table_);
+        perf->addWidget(p, 1);
+    }
+    {
+        QVBoxLayout* body = nullptr;
+        auto* p = er_ui::panel(QString(), &body, &risk_title_, content);
+        risk_table_ = tt_table(p, 2);
+        body->addWidget(risk_table_);
+        body->addWidget(range_title_ = new QLabel(p));
+        range_title_->setObjectName(QStringLiteral("erPanelTitle"));
+        range52_ = new ui::RangeBar(p);
+        range52_->setMinimumHeight(ui::metrics::height(46));
+        body->addWidget(range52_);
+        perf->addWidget(p, 1);
+    }
+    vl->addLayout(perf);
     vl->addStretch();
-
     scroll->setWidget(content);
-    outer->addWidget(scroll);
+    loading_overlay_ = new ui::LoadingOverlay(this);
+    retranslateUi();
 }
 
-// ── clear_sections ───────────────────────────────────────────────────────────
+// ── Render ───────────────────────────────────────────────────────────────────
 
-void EquityTechnicalsTab::clear_sections() {
-    // Clear key indicators grid
-    if (auto* gl = qobject_cast<QGridLayout*>(key_container_->layout())) {
-        while (gl->count() > 0) {
-            auto* item = gl->takeAt(0);
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
-        }
-    }
-    // Clear category sections
-    if (auto* vl = qobject_cast<QVBoxLayout*>(sections_container_->layout())) {
-        while (vl->count() > 0) {
-            auto* item = vl->takeAt(0);
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
-        }
-    }
+void EquityTechnicalsTab::render() {
+    const auto b = frame_bars();
+    render_chart(b);
+    render_rating(b);
+    render_performance();
 }
 
-// ── populate ─────────────────────────────────────────────────────────────────
-
-void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& payload) {
-    clear_sections();
-
-    QVector<services::equity::TechIndicator> all;
-    all << payload.trend << payload.momentum << payload.volatility << payload.volume;
-
-    // ── Rating ───────────────────────────────────────────────────────────────
-    const int sb = payload.strong_buy, b = payload.buy, n = payload.neutral, s = payload.sell,
-              ss = payload.strong_sell;
-    const int total = sb + b + n + s + ss;
-    rating_label_->setText(signal_text(payload.overall_signal));
-    rating_label_->setProperty("sig", QString::fromLatin1(signal_key(payload.overall_signal)));
-    tech_repolish(rating_label_);
-    gauge_bar_->setValue(total > 0 ? static_cast<int>(100.0 * (sb + b) / total) : 50);
-    strong_buy_count_->setText(QString::number(sb));
-    buy_count_->setText(QString::number(b));
-    neutral_count_->setText(QString::number(n));
-    sell_count_->setText(QString::number(s));
-    strong_sell_count_->setText(QString::number(ss));
-    total_label_->setText(tr("%1 INDICATORS ANALYZED").arg(total));
-
-    // ── Key indicators — the most decision-relevant ones ─────────────────────
-    static const QStringList key_names = {"RSI", "MACD Hist", "Stoch %K",    "ADX", "CCI",
-                                          "MFI", "BB %B",     "Williams %R", "ATR", "CMF"};
-    QMap<QString, services::equity::TechIndicator> name_map;
-    for (const auto& ti : all)
-        name_map[ti.name] = ti;
-
-    auto* kg = qobject_cast<QGridLayout*>(key_container_->layout());
-    int ki_row = 0, ki_col = 0;
-    for (const auto& key : key_names) {
-        auto it = name_map.find(key);
-        if (it == name_map.end())
-            continue;
-        const auto& ti = it.value();
-        const QString sig = QString::fromLatin1(signal_key(ti.signal));
-
-        auto* card = new QFrame;
-        card->setObjectName(QStringLiteral("techCard"));
-        card->setProperty("sig", sig);
-        auto* cl = new QVBoxLayout(card);
-        cl->setContentsMargins(10, 6, 10, 6);
-        cl->setSpacing(2);
-        auto* nm = new QLabel(ti.name.toUpper());
-        nm->setObjectName(QStringLiteral("techCardName"));
-        cl->addWidget(nm);
-
-        auto* vr = new QHBoxLayout;
-        vr->setSpacing(8);
-        auto* val = new QLabel(QString::number(ti.value, 'f', 2));
-        val->setObjectName(QStringLiteral("techCardValue"));
-        auto* sig_lbl = new QLabel(signal_text(ti.signal));
-        sig_lbl->setObjectName(QStringLiteral("techSig"));
-        sig_lbl->setProperty("sig", sig);
-        sig_lbl->setAlignment(Qt::AlignRight | Qt::AlignBottom);
-        vr->addWidget(val);
-        vr->addStretch();
-        vr->addWidget(sig_lbl);
-        cl->addLayout(vr);
-
-        const QString interp = interpretation(ti.key, ti.value);
-        if (!interp.isEmpty()) {
-            auto* desc = new QLabel(interp);
-            desc->setObjectName(QStringLiteral("techCardDesc"));
-            desc->setWordWrap(true);
-            cl->addWidget(desc);
-        }
-        kg->addWidget(card, ki_row, ki_col);
-        if (++ki_col == 5) {
-            ki_col = 0;
-            ++ki_row;
-        }
+void EquityTechnicalsTab::render_chart(const tt_tm::Bars& b) {
+    if (chart_) {
+        chart_host_->layout()->removeWidget(chart_);
+        chart_->hide();
+        chart_->deleteLater();
+        chart_ = nullptr;
     }
-
-    // ── Category sections ────────────────────────────────────────────────────
-    auto* sc_vl = qobject_cast<QVBoxLayout*>(sections_container_->layout());
-    struct CatDef {
-        QString title;
-        const QVector<services::equity::TechIndicator>* inds;
-        const char* cat;
-    };
-    const QList<CatDef> cats = {
-        {tr("TREND INDICATORS"), &payload.trend, "trend"},
-        {tr("MOMENTUM INDICATORS"), &payload.momentum, "momentum"},
-        {tr("VOLATILITY INDICATORS"), &payload.volatility, "volatility"},
-        {tr("VOLUME INDICATORS"), &payload.volume, "volume"},
-    };
-
-    for (const auto& cat : cats) {
-        if (!cat.inds || cat.inds->isEmpty())
-            continue;
-        int cb = 0, cs = 0, cn = 0;
-        for (const auto& ti : *cat.inds) {
-            using S = services::equity::TechSignal;
-            if (ti.signal == S::StrongBuy || ti.signal == S::Buy)
-                ++cb;
-            else if (ti.signal == S::StrongSell || ti.signal == S::Sell)
-                ++cs;
-            else
-                ++cn;
-        }
-
-        auto* section = new QFrame;
-        section->setObjectName(QStringLiteral("techSection"));
-        auto* svl = new QVBoxLayout(section);
-        svl->setContentsMargins(0, 0, 0, 0);
-        svl->setSpacing(0);
-
-        auto* hdr = new QWidget(this);
-        hdr->setObjectName(QStringLiteral("techSectionHdr"));
-        auto* hl = new QHBoxLayout(hdr);
-        hl->setContentsMargins(12, 8, 12, 8);
-        hl->setSpacing(10);
-        auto* htitle = new QLabel(cat.title);
-        htitle->setObjectName(QStringLiteral("techSectionTitle"));
-        htitle->setProperty("cat", QString::fromLatin1(cat.cat));
-        hl->addWidget(htitle);
-        auto* cnt = new QLabel(tr("%1 indicators").arg(cat.inds->size()));
-        cnt->setObjectName(QStringLiteral("techMuted"));
-        hl->addWidget(cnt);
-        hl->addStretch();
-        auto add_badge = [&](int count, const QString& label, const char* sig) {
-            if (count == 0)
-                return;
-            auto* badge = new QLabel(QString("%1 %2").arg(count).arg(label));
-            badge->setObjectName(QStringLiteral("techBadge"));
-            badge->setProperty("sig", QString::fromLatin1(sig));
-            hl->addWidget(badge);
-        };
-        add_badge(cb, tr("BUY"), "strong_buy");
-        add_badge(cn, tr("HOLD"), "neutral");
-        add_badge(cs, tr("SELL"), "strong_sell");
-        svl->addWidget(hdr);
-
-        auto* tbl_hdr = new QWidget(this);
-        tbl_hdr->setObjectName(QStringLiteral("techTblHdr"));
-        auto* thl = new QHBoxLayout(tbl_hdr);
-        thl->setContentsMargins(12, 4, 12, 4);
-        thl->setSpacing(0);
-        auto hdr_lbl = [&](const QString& text, int stretch, Qt::Alignment align = Qt::AlignLeft) {
-            auto* l = new QLabel(text);
-            l->setObjectName(QStringLiteral("techColHdr"));
-            l->setAlignment(align | Qt::AlignVCenter);
-            thl->addWidget(l, stretch);
-        };
-        hdr_lbl(tr("INDICATOR"), 2);
-        hdr_lbl(tr("VALUE"), 1, Qt::AlignRight);
-        hdr_lbl(tr("SIGNAL"), 1, Qt::AlignCenter);
-        hdr_lbl(tr("INTERPRETATION"), 3);
-        svl->addWidget(tbl_hdr);
-
-        bool alt = false;
-        for (const auto& ti : *cat.inds) {
-            auto* row = new QWidget(this);
-            row->setObjectName(QStringLiteral("techRow"));
-            row->setProperty("alt", alt);
-            auto* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(12, 5, 12, 5);
-            rl->setSpacing(0);
-
-            auto* name_lbl = new QLabel(ti.name);
-            name_lbl->setObjectName(QStringLiteral("techRowName"));
-            rl->addWidget(name_lbl, 2);
-
-            auto* val_lbl = new QLabel(QString::number(ti.value, 'f', 4));
-            val_lbl->setObjectName(QStringLiteral("techRowValue"));
-            val_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            rl->addWidget(val_lbl, 1);
-
-            auto* sig_w = new QWidget(this);
-            sig_w->setObjectName(QStringLiteral("techSigCell"));
-            auto* sig_hl = new QHBoxLayout(sig_w);
-            sig_hl->setContentsMargins(0, 0, 0, 0);
-            sig_hl->setAlignment(Qt::AlignCenter);
-            auto* sig_lbl = new QLabel(signal_text(ti.signal));
-            sig_lbl->setObjectName(QStringLiteral("techSigPill"));
-            sig_lbl->setProperty("sig", QString::fromLatin1(signal_key(ti.signal)));
-            sig_lbl->setAlignment(Qt::AlignCenter);
-            sig_lbl->setFixedWidth(90);
-            sig_hl->addWidget(sig_lbl);
-            rl->addWidget(sig_w, 1);
-
-            const QString interp = interpretation(ti.key, ti.value);
-            auto* interp_lbl = new QLabel(interp.isEmpty() ? QString::fromUtf8("\xe2\x80\x94") : interp);
-            interp_lbl->setObjectName(QStringLiteral("techRowInterp"));
-            interp_lbl->setWordWrap(true);
-            rl->addWidget(interp_lbl, 3);
-
-            svl->addWidget(row);
-            alt = !alt;
-        }
-        sc_vl->addWidget(section);
-    }
-}
-
-// ── on_technicals_loaded ─────────────────────────────────────────────────────
-
-void EquityTechnicalsTab::on_technicals_loaded(services::equity::TechnicalsData payload) {
-    if (payload.symbol != current_symbol_)
+    chart_ = new ui::TimeSeriesChart(chart_host_);
+    chart_host_->layout()->addWidget(chart_);
+    chart_->set_transparent_background(true);
+    chart_->set_show_legend(true);
+    chart_->set_export_name(current_symbol_ + QStringLiteral("_technicals"));
+    const bool hourly = frame_ == Frame::Hourly;
+    chart_->set_utc(!hourly);
+    if (!hourly)
+        chart_->set_time_formatter([](double x) { return tt_uf::bar_date(static_cast<qint64>(x / 1000.0)); });
+    chart_->set_range_presets(hourly ? QStringList{QStringLiteral("5D"), QStringLiteral("1M"), QStringLiteral("ALL")}
+                                     : QStringList{QStringLiteral("3M"), QStringLiteral("6M"), QStringLiteral("1Y"),
+                                                   QStringLiteral("3Y"), QStringLiteral("5Y"), QStringLiteral("MAX")});
+    const QString ccy = currency_;
+    chart_->set_value_formatter(ui::TimeSeriesChart::Axis::Left, [ccy](double v) { return equity_fmt::price(v, ccy); });
+    if (b.size() < 2) {
+        chart_->set_state(daily_loaded_ ? ui::TimeSeriesChart::State::Empty : ui::TimeSeriesChart::State::Loading,
+                          daily_loaded_ ? tr("Not enough bars") : tr("Loading…"));
         return;
-    loading_overlay_->hide_loading();
-    cached_data_ = payload;
-    data_loaded_ = true;
-    populate(payload);
+    }
+    QVector<double> xs(b.size());
+    for (int i = 0; i < b.size(); ++i)
+        xs[i] = static_cast<double>(b.time[i]) * 1000.0;
+    auto line = [&](const QString& name, const QVector<double>& ys, ui::ChartColorRole role, int palette = -1,
+                    int pane = 0, bool dashed = false) {
+        ui::TimeSeriesChart::SeriesSpec s;
+        s.name = name;
+        s.xs = xs;
+        s.ys = ys;
+        s.color = role;
+        s.palette_index = palette;
+        s.pane = pane;
+        s.dashed = dashed;
+        s.rebase = false;
+        s.line_width = pane == 0 && name == current_symbol_ ? 1.6 : 1.1;
+        return chart_->add_series(s);
+    };
+    line(current_symbol_, b.close, ui::ChartColorRole::Accent);
+    line(tr("SMA 20"), tt_tm::sma(b.close, 20), ui::ChartColorRole::Palette, 1);
+    line(tr("SMA 50"), tt_tm::sma(b.close, 50), ui::ChartColorRole::Palette, 2);
+    line(tr("SMA 200"), tt_tm::sma(b.close, 200), ui::ChartColorRole::Palette, 3);
+    const auto bb = tt_tm::bollinger(b.close, 20, 2.0);
+    line(tr("BB upper"), bb.upper, ui::ChartColorRole::Muted, -1, 0, true);
+    line(tr("BB lower"), bb.lower, ui::ChartColorRole::Muted, -1, 0, true);
+
+    const int vol_pane = chart_->add_pane(0.2);
+    chart_->set_pane_title(vol_pane, tr("Volume"));
+    {
+        ui::TimeSeriesChart::SeriesSpec s;
+        s.name = tr("Volume");
+        s.xs = xs;
+        s.ys = b.volume;
+        s.style = ui::TimeSeriesChart::Style::Bars;
+        s.pane = vol_pane;
+        s.color = ui::ChartColorRole::Muted;
+        s.rebase = false;
+        chart_->add_series(s);
+        chart_->set_value_formatter(ui::TimeSeriesChart::Axis::Left, [](double v) { return tt_uf::volume(v); }, vol_pane);
+    }
+    const int rsi_pane = chart_->add_pane(0.25);
+    chart_->set_pane_title(rsi_pane, tr("RSI (14)"));
+    line(tr("RSI (14)"), tt_tm::rsi(b.close, 14), ui::ChartColorRole::Info, -1, rsi_pane);
+    chart_->set_y_range(rsi_pane, ui::TimeSeriesChart::Axis::Left, 0, 100);
+    // RSI is a 0–100 index: whole numbers on the axis and on the 70 / 30 gutter tags
+    // (the default formatter printed "70.00").
+    chart_->set_value_formatter(ui::TimeSeriesChart::Axis::Left, [](double v) { return tt_uf::number(v, 0); },
+                                rsi_pane);
+    chart_->add_hline(70, QString(), ui::ChartColorRole::Muted, rsi_pane);
+    chart_->add_hline(30, QString(), ui::ChartColorRole::Muted, rsi_pane);
+    const int macd_pane = chart_->add_pane(0.28);
+    chart_->set_pane_title(macd_pane, tr("MACD (12, 26, 9)"));
+    const auto m = tt_tm::macd(b.close);
+    {
+        ui::TimeSeriesChart::SeriesSpec h;
+        h.name = tr("Histogram");
+        h.xs = xs;
+        h.ys = m.hist;
+        h.pane = macd_pane;
+        h.style = ui::TimeSeriesChart::Style::Bars;
+        h.color_by_sign = true;
+        h.rebase = false;
+        chart_->add_series(h);
+    }
+    line(tr("MACD"), m.line, ui::ChartColorRole::Info, -1, macd_pane);
+    line(tr("Signal"), m.signal, ui::ChartColorRole::Warning, -1, macd_pane, true);
+    chart_->set_active_preset(hourly ? QStringLiteral("1M") : frame_ == Frame::Daily ? QStringLiteral("1Y")
+                                                                                     : QStringLiteral("5Y"));
 }
 
-// ── Re-translation ───────────────────────────────────────────────────────────
-// populate() rebuilds every dynamic section (key indicator cards, category
-// sections, table rows). Calling it with the cached payload on language
-// change re-renders every signal label and interpretation string in the new
-// locale. Static chrome (panel titles, signal-count captions) is re-set
-// explicitly here.
+void EquityTechnicalsTab::render_rating(const tt_tm::Bars& b) {
+    const tt_tm::Rating r = tt_tm::technical_rating(b);
+    const services::equity::RatingGroup* groups[3] = {&r.osc, nullptr, &r.ma};
+    ui::Gauge* gauges[3] = {gauge_osc_, gauge_sum_, gauge_ma_};
+    for (int i = 0; i < 3; ++i) {
+        const double score = i == 1 ? r.summary : groups[i]->score;
+        const TechSignal sig = i == 1 ? r.summary_signal : groups[i]->signal;
+        gauges[i]->set_value(r.ok ? score : std::nan(""));
+        gauges[i]->set_caption(r.ok ? signal_text(sig) : QString());
+        gauges[i]->set_state(r.ok ? ui::PaintedChart::Ready : ui::PaintedChart::Empty,
+                             b.size() < 30 ? tr("At least 30 bars needed") : QString());
+        if (i == 1) {
+            const int buy = r.ma.buy + r.osc.buy, sell = r.ma.sell + r.osc.sell, neu = r.ma.neutral + r.osc.neutral;
+            gauge_counts_[i]->setText(r.ok ? tr("Buy %1 · Neutral %2 · Sell %3").arg(buy).arg(neu).arg(sell) : QString());
+        } else {
+            gauge_counts_[i]->setText(r.ok ? tr("Buy %1 · Neutral %2 · Sell %3")
+                                                 .arg(groups[i]->buy)
+                                                 .arg(groups[i]->neutral)
+                                                 .arg(groups[i]->sell)
+                                           : QString());
+        }
+    }
+    auto fill = [this](QTableWidget* t, const services::equity::RatingGroup& g, bool price_units) {
+        t->setRowCount(g.votes.size());
+        for (int i = 0; i < g.votes.size(); ++i) {
+            const auto& v = g.votes[i];
+            t->setItem(i, 0, tt_cell(QCoreApplication::translate("EquityTechnicalMath", v.name.toUtf8().constData()),
+                                     Qt::AlignLeft | Qt::AlignVCenter));
+            t->setItem(i, 1, tt_cell(price_units ? fmt_price(v.value) : tt_uf::number(v.value, 2)));
+            auto* a = tt_cell(signal_text(v.signal), Qt::AlignCenter);
+            // A buy / sell vote points the price's way: the direction colours.
+            if (v.signal == TechSignal::Buy || v.signal == TechSignal::StrongBuy)
+                a->setForeground(QColor(ui::colors::POSITIVE()));
+            else if (v.signal == TechSignal::Sell || v.signal == TechSignal::StrongSell)
+                a->setForeground(QColor(ui::colors::NEGATIVE()));
+            else
+                a->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+            t->setItem(i, 2, a);
+        }
+        t->setFixedHeight(t->horizontalHeader()->height() + ui::metrics::height(22) * std::max(1, static_cast<int>(g.votes.size())) + 4);
+    };
+    fill(ma_table_, r.ma, true);
+    fill(osc_table_, r.osc, false);
+    const QString frame = frame_ == Frame::Hourly ? tr("hourly")
+                          : frame_ == Frame::Weekly ? tr("weekly")
+                          : frame_ == Frame::Monthly ? tr("monthly")
+                                                     : tr("daily");
+    method_note_->setText(
+        tr("Rating on %1 bars (last bar %2). Moving averages vote by where the last close sits against each average; "
+           "oscillators vote only in their buy / sell zones and when turning that way. Each group scores "
+           "(buys − sells) ÷ voters, from −1 to +1; the summary is the mean of the two. Indicators without enough "
+           "history do not vote.")
+            .arg(frame, b.size() > 0 ? (frame_ == Frame::Hourly ? tt_uf::date_time(b.time.last())
+                                                                 : tt_uf::bar_date(b.time.last()))
+                                     : equity_fmt::dash()));
+}
+
+void EquityTechnicalsTab::render_performance() {
+    perf_table_->setRowCount(0);
+    risk_table_->setRowCount(0);
+    if (daily_.size() < 2) {
+        range52_->set_data({});
+        range52_->set_state(ui::PaintedChart::Empty);
+        return;
+    }
+    const auto b = tt_tm::bars_from_candles(daily_);
+    const auto bb = tt_tm::bars_from_candles(bench_);
+    const auto bench = er_ui::benchmark_for(current_symbol_);
+    perf_table_->setHorizontalHeaderLabels({tr("PERIOD"), current_symbol_, bench.name.isEmpty() ? tr("BENCHMARK") : bench.name,
+                                            tr("RELATIVE")});
+    const QDate last = QDateTime::fromSecsSinceEpoch(b.time.last(), QTimeZone::UTC).date();
+    struct Win {
+        const char* label;
+        QDate from;
+    };
+    const Win wins[] = {
+        {QT_TR_NOOP("1 week"), last.addDays(-7)},    {QT_TR_NOOP("1 month"), last.addMonths(-1)},
+        {QT_TR_NOOP("3 months"), last.addMonths(-3)}, {QT_TR_NOOP("6 months"), last.addMonths(-6)},
+        {QT_TR_NOOP("Year to date"), QDate(last.year() - 1, 12, 31)}, {QT_TR_NOOP("1 year"), last.addYears(-1)},
+        {QT_TR_NOOP("3 years"), last.addYears(-3)},   {QT_TR_NOOP("5 years"), last.addYears(-5)},
+        {QT_TR_NOOP("10 years"), last.addYears(-10)},
+    };
+    auto signed_cell = [](double v, bool pp) {
+        auto* c = tt_cell(tt_ok(v) ? (pp ? tt_uf::pp(v * 100.0, 1) : tt_uf::fraction_pct(v, 1, true)) : equity_fmt::dash());
+        if (tt_ok(v) && v != 0.0)
+            c->setForeground(QColor(v > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        return c;
+    };
+    for (const auto& w : wins) {
+        const qint64 from = QDateTime(w.from, QTime(23, 59), QTimeZone::UTC).toSecsSinceEpoch();
+        const double r = tt_tm::return_since(b, from);
+        if (!tt_ok(r))
+            continue;
+        const double br = bb.size() > 1 ? tt_tm::return_since(bb, from) : std::nan("");
+        const int row = perf_table_->rowCount();
+        perf_table_->insertRow(row);
+        perf_table_->setItem(row, 0, tt_cell(tr(w.label), Qt::AlignLeft | Qt::AlignVCenter));
+        perf_table_->setItem(row, 1, signed_cell(r, false));
+        perf_table_->setItem(row, 2, signed_cell(br, false));
+        perf_table_->setItem(row, 3, signed_cell(tt_ok(br) ? r - br : std::nan(""), true));
+    }
+    perf_table_->setFixedHeight(perf_table_->horizontalHeader()->height() +
+                                ui::metrics::height(22) * std::max(1, perf_table_->rowCount()) + 4);
+
+    // Risk.
+    risk_table_->setHorizontalHeaderLabels({tr("MEASURE"), tr("VALUE")});
+    auto add = [this](const QString& k, const QString& v, const QString& tip = {}) {
+        const int row = risk_table_->rowCount();
+        risk_table_->insertRow(row);
+        risk_table_->setItem(row, 0, tt_cell(k, Qt::AlignLeft | Qt::AlignVCenter));
+        auto* c = tt_cell(v);
+        c->setToolTip(tip);
+        risk_table_->setItem(row, 1, c);
+    };
+    const qint64 now = b.time.last();
+    add(tr("Realised volatility (20 days)"), tt_uf::fraction_pct(tt_tm::realized_vol(b, 20), 1, false),
+        tr("Annualised standard deviation of daily log returns"));
+    add(tr("Realised volatility (60 days)"), tt_uf::fraction_pct(tt_tm::realized_vol(b, 60), 1, false));
+    add(tr("Realised volatility (1 year)"), tt_uf::fraction_pct(tt_tm::realized_vol(b, 252), 1, false));
+    add(tr("Max drawdown (1 year)"), tt_uf::fraction_pct(tt_tm::max_drawdown_since(b, now - 365LL * 86400), 1, false));
+    add(tr("Max drawdown (3 years)"), tt_uf::fraction_pct(tt_tm::max_drawdown_since(b, now - 3 * 365LL * 86400), 1, false));
+    add(tr("Max drawdown (all history)"), tt_uf::fraction_pct(tt_tm::max_drawdown_since(b, 0), 1, false));
+    const auto dd = tt_tm::drawdown(b.close);
+    add(tr("Below the all-time high"), tt_uf::fraction_pct(tt_last(dd), 1, false));
+    if (bb.size() > 30)
+        add(tr("Beta vs %1 (1 year)").arg(bench.name), tt_uf::number(tt_tm::beta_vs(b, bb, 252), 2),
+            tr("OLS slope of daily log returns against the benchmark"));
+    const double atr = tt_last(tt_tm::atr(b, 14));
+    add(tr("ATR (14) / price"), tt_ok(atr) ? tt_uf::fraction_pct(atr / b.close.last(), 2, false) : equity_fmt::dash(),
+        tr("Average true range as a share of the last close: %1").arg(fmt_price(atr)));
+    risk_table_->setFixedHeight(risk_table_->horizontalHeader()->height() +
+                                ui::metrics::height(22) * std::max(1, risk_table_->rowCount()) + 4);
+
+    // 52-week position.
+    double lo = std::nan(""), hi = std::nan("");
+    for (int i = 0; i < b.size(); ++i)
+        if (b.time[i] >= now - 365LL * 86400) {
+            lo = tt_ok(lo) ? std::min(lo, b.low[i]) : b.low[i];
+            hi = tt_ok(hi) ? std::max(hi, b.high[i]) : b.high[i];
+        }
+    if (tt_ok(lo) && tt_ok(hi) && hi > lo) {
+        ui::RangeBarData d;
+        d.low = lo;
+        d.high = hi;
+        d.markers.append({b.close.last(), tr("Last"), ui::RangeMarker::Role::Current});
+        const double s200 = tt_last(tt_tm::sma(b.close, 200));
+        if (tt_ok(s200))
+            d.markers.append({s200, tr("200-day"), ui::RangeMarker::Role::Mean});
+        range52_->set_value_formatter([this](double v) { return fmt_price(v); });
+        range52_->set_data(d);
+        range52_->set_state(ui::PaintedChart::Ready);
+        range_title_->setText(tr("52-WEEK POSITION — %1 of the range")
+                                  .arg(tt_uf::fraction_pct((b.close.last() - lo) / (hi - lo), 0, false)));
+    }
+}
+
+// ── i18n ─────────────────────────────────────────────────────────────────────
 
 void EquityTechnicalsTab::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange) {
+    if (event->type() == QEvent::LanguageChange)
         retranslateUi();
-    }
     QWidget::changeEvent(event);
 }
 
 void EquityTechnicalsTab::retranslateUi() {
-    if (rating_title_)
-        rating_title_->setText(tr("TECHNICAL RATING"));
-    if (key_title_)
-        key_title_->setText(tr("KEY INDICATORS"));
-    if (str_buy_caption_)
-        str_buy_caption_->setText(tr("STR.BUY"));
-    if (buy_caption_)
-        buy_caption_->setText(tr("BUY"));
-    if (neutral_caption_)
-        neutral_caption_->setText(tr("NEUTRAL"));
-    if (sell_caption_)
-        sell_caption_->setText(tr("SELL"));
-    if (str_sell_caption_)
-        str_sell_caption_->setText(tr("STR.SELL"));
-
-    if (data_loaded_) {
-        populate(cached_data_);
-    } else if (total_label_) {
-        total_label_->setText(tr("0 INDICATORS"));
-    }
+    frame_seg_->set_text(QStringLiteral("1h"), tr("1H"), tr("Hourly bars (last 3 months)"));
+    frame_seg_->set_text(QStringLiteral("d"), tr("D"), tr("Daily bars"));
+    frame_seg_->set_text(QStringLiteral("w"), tr("W"), tr("Weekly bars"));
+    frame_seg_->set_text(QStringLiteral("m"), tr("M"), tr("Monthly bars"));
+    refresh_btn_->setText(tr("REFRESH"));
+    gauge_title_[0]->setText(tr("OSCILLATORS"));
+    gauge_title_[1]->setText(tr("SUMMARY"));
+    gauge_title_[2]->setText(tr("MOVING AVERAGES"));
+    for (auto* g : {gauge_osc_, gauge_sum_, gauge_ma_})
+        g->set_zones(tt_zones());
+    osc_title_->setText(tr("OSCILLATORS"));
+    ma_title_->setText(tr("MOVING AVERAGES — PRICE VS AVERAGE"));
+    perf_title_->setText(tr("PERFORMANCE (PRICE RETURN)"));
+    risk_title_->setText(tr("RISK"));
+    range_title_->setText(tr("52-WEEK POSITION"));
+    for (auto* t : {ma_table_, osc_table_})
+        t->setHorizontalHeaderLabels({tr("INDICATOR"), tr("VALUE"), tr("ACTION")});
+    if (daily_loaded_ || !hourly_.isEmpty())
+        render();
 }
 
 } // namespace fincept::screens

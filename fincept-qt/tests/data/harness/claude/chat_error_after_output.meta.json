@@ -1,0 +1,8 @@
+{
+  "harness_version": "2.1.325",
+  "date": "2026-11-17",
+  "command": "claude -p --output-format stream-json --verbose --include-partial-messages … (terminal-AI call)",
+  "source": "docs",
+  "url": "https://code.claude.com/docs/en/headless",
+  "note": "Synthetic: text streams, then the turn fails (overloaded). A failure after output must never be answered again by another model. Not a recording."
+}

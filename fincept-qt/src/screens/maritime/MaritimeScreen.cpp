@@ -7,6 +7,7 @@
 //   - MaritimeScreen_Handlers.cpp — action + service-event handlers
 #include "screens/maritime/MaritimeScreen.h"
 
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/maritime/MaritimeScreen_internal.h"
@@ -15,6 +16,9 @@
 #include "services/maritime/PortsCatalog.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LoadingOverlay.h"
 #include "ui/widgets/WorldMapWidget.h"
 
@@ -49,10 +53,14 @@ MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
         auto_refresh_pending_ = true; // after do_refresh(), which clears it for manual loads
     });
 
+    // The root sheet is built from theme tokens: the theme manager re-styles it
+    // (and the tone-coloured status label with it) on a theme / font change.
+    // Only the vessel-name item brushes, which no stylesheet reaches, follow here
+    // — no setStyleSheet() and no status reset inside theme_changed.
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { apply_theme(); });
+            [this](const ui::ThemeTokens&) { recolor_vessel_names(); });
 
-    LOG_INFO("Maritime", "Screen constructed");
+    LOG_DEBUG("Maritime", "Screen constructed");
 }
 
 void MaritimeScreen::showEvent(QShowEvent* e) {
@@ -62,25 +70,15 @@ void MaritimeScreen::showEvent(QShowEvent* e) {
         refresh_timer_->start();
     if (first_show_) {
         first_show_ = false;
-        // Default first-show action: globally-spread sample so the map looks
-        // populated instead of empty. If the user previously typed a valid
-        // bbox (restored from ScreenStateManager), honour that instead.
-        bool used_saved_bbox = false;
-        if (area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_) {
-            const bool valid =
-                area_max_lat_->value() > area_min_lat_->value() && area_max_lng_->value() > area_min_lng_->value();
-            if (valid) {
-                on_load_vessels();
-                used_saved_bbox = true;
-            }
-        }
-        if (!used_saved_bbox)
-            load_global_sample();
-        // Pull module status + DB record count for the status bar — replaces
-        // the previously-static "AIS FEED" label with the live API response.
+        // An area search costs 8 credits: opening the screen never buys one (it
+        // used to run the global sample on every first open). The vessel-list
+        // pane opens on the view with a kept result — the saved bbox, else the
+        // global view — and shows it with its "as of"; with none, its preview.
+        open_initial_view();
+        // Pull module status + DB record count for the status bar (free).
         MaritimeService::instance().check_health();
     }
-    LOG_INFO("Maritime", "Screen shown");
+    LOG_DEBUG("Maritime", "Screen shown");
 }
 
 void MaritimeScreen::hideEvent(QHideEvent* e) {
@@ -95,12 +93,18 @@ void MaritimeScreen::hideEvent(QHideEvent* e) {
 }
 
 void MaritimeScreen::connect_service() {
+    // These signals are service-wide (hub refreshes for dashboard tiles emit them
+    // too); the handlers act only on answers to this screen's own requests
+    // (pending_track_imo_ / pending_history_imo_ / area_requests_pending_).
     auto& svc = MaritimeService::instance();
     connect(&svc, &MaritimeService::vessels_loaded, this, &MaritimeScreen::on_vessels_loaded);
     connect(&svc, &MaritimeService::vessel_found, this, &MaritimeScreen::on_vessel_found);
     connect(&svc, &MaritimeService::vessel_history_loaded, this, &MaritimeScreen::on_vessel_history);
     connect(&svc, &MaritimeService::health_loaded, this, &MaritimeScreen::on_health_loaded);
     connect(&svc, &MaritimeService::error_occurred, this, &MaritimeScreen::on_error);
+    // The balance moves with every billed call app-wide (and with purchases).
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::credit_balance_changed, this,
+            [this](double balance) { update_credits(balance); });
 
     auto& ports = PortsCatalog::instance();
     connect(&ports, &PortsCatalog::ports_found, this, &MaritimeScreen::on_ports_found);
@@ -111,21 +115,39 @@ void MaritimeScreen::connect_service() {
     connect(&geo, &GeocodingService::error_occurred, this, &MaritimeScreen::on_places_error);
 }
 
-// ── Theme apply (called on construction + theme_changed) ─────────────────────
+// ── Theme apply (construction only; theme changes: recolor_vessel_names) ─────
 void MaritimeScreen::apply_theme() {
     // ONE stylesheet for the whole screen (see MaritimeScreen_internal.h); widgets
     // select their rules by objectName / "mtRole" / "tone".
     setStyleSheet(maritime_root_ss());
     if (status_label_)
         set_status(tr("READY"), "positive");
+    recolor_vessel_names();
+}
+
+void MaritimeScreen::recolor_vessel_names() {
+    // Vessel-name text colours are item brushes, which no stylesheet reaches.
+    if (vessels_table_) {
+        for (int r = 0; r < vessels_table_->rowCount(); ++r) {
+            if (auto* it = vessels_table_->item(r, 0))
+                it->setForeground(mt_name_color(it->data(kMtStaleRole).toBool()));
+        }
+    }
 }
 
 void MaritimeScreen::do_refresh() {
+    // An explicit refresh fetches, whatever the cache holds.
+    force_area_fetch_ = true;
     // The last load was driven by drawn shapes: re-run it through them so the in-shape
     // filter survives (a plain bbox reload dropped it and showed every vessel in the
     // shapes' bounding box).
     if (filter_to_shapes_ && map_widget_ && !map_widget_->shapes().isEmpty()) {
         on_shapes_changed();
+        return;
+    }
+    // The vessel list's current view (global, an area, a history) re-runs as is.
+    if (vessels_pane_ && views_.contains(vessels_pane_->view())) {
+        vessels_pane_->run();
         return;
     }
     // Re-issue whichever mode produced the most recent set: a bbox load if the
@@ -184,7 +206,7 @@ void MaritimeScreen::retranslateUi() {
     if (routes_title_)
         routes_title_->setText(tr("TRADE CORRIDORS"));
     if (routes_table_)
-        routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels"), tr("Status")});
+        routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels")});
 
     // Center
     if (center_title_)
@@ -195,9 +217,12 @@ void MaritimeScreen::retranslateUi() {
         auto_refresh_btn_->setText(auto_refresh_btn_->isChecked() ? tr("AUTO ⟳ 5m") : tr("AUTO ⟳ OFF"));
     if (basemap_cap_)
         basemap_cap_->setText(tr("BASEMAP"));
+    if (ports_layer_btn_)
+        ports_layer_btn_->setText(tr("PORTS"));
+    if (chokepoints_layer_btn_)
+        chokepoints_layer_btn_->setText(tr("CHOKEPOINTS"));
     if (vessels_table_)
-        vessels_table_->setHorizontalHeaderLabels({tr("Name"), tr("IMO"), tr("Lat"), tr("Lng"), tr("Speed (kn)"),
-                                                   tr("Angle"), tr("From"), tr("To"), tr("Progress")});
+        set_history_columns(history_mode_); // headers depend on fleet / voyage-history mode
 
     // Right panel
     if (search_title_)
@@ -246,6 +271,8 @@ void MaritimeScreen::retranslateUi() {
         ports_table_->setHorizontalHeaderLabels({tr("Name"), tr("Country"), tr("Source")});
     if (rd_title_)
         rd_title_->setText(tr("SELECTED ROUTE"));
+    if (rd_clear_btn_)
+        rd_clear_btn_->setText(tr("SHOW ALL VESSELS"));
 
     // Status bar
     if (sb_source_cap_)
@@ -299,6 +326,8 @@ QVariantMap MaritimeScreen::save_state() const {
         s.insert("min_lng", area_min_lng_->value());
     if (area_max_lng_)
         s.insert("max_lng", area_max_lng_->value());
+    if (map_widget_)
+        s.insert("map", map_widget_->view_state()); // camera, basemap, PORTS / CHOKEPOINTS
     return s;
 }
 
@@ -313,6 +342,56 @@ void MaritimeScreen::restore_state(const QVariantMap& state) {
         area_min_lng_->setValue(state.value("min_lng").toDouble());
     if (area_max_lng_ && state.contains("max_lng"))
         area_max_lng_->setValue(state.value("max_lng").toDouble());
+    const QVariantMap map_state = state.value("map").toMap();
+    restored_map_view_ = !map_state.isEmpty();
+    if (map_widget_ && !map_state.isEmpty()) {
+        map_widget_->restore_view_state(map_state);
+        if (map_type_combo_) {
+            const QSignalBlocker block(map_type_combo_);
+            map_type_combo_->setCurrentIndex(map_widget_->current_basemap_index());
+        }
+        if (ports_layer_btn_) {
+            const QSignalBlocker block(ports_layer_btn_);
+            ports_layer_btn_->setChecked(map_widget_->reference_layer(ui::MapLayer::Ports));
+        }
+        if (chokepoints_layer_btn_) {
+            const QSignalBlocker block(chokepoints_layer_btn_);
+            chokepoints_layer_btn_->setChecked(map_widget_->reference_layer(ui::MapLayer::Chokepoints));
+        }
+    }
+}
+
+// ── ISectionLinked ────────────────────────────────────────────────────────────
+
+bool MaritimeScreen::open_section(const QString& section, const QString& focus) {
+    // No tabs: the right column's three searches. A link only brings the field into view and gives
+    // it the keyboard — TRACK / VOYAGE HISTORY (credits) and the place / port look-ups run when the
+    // user starts them, never from here.
+    const QString key = section.trimmed().toLower();
+    const QString imo = focus.trimmed();
+    QLineEdit* field = nullptr;
+    if (key == QLatin1String("vessel") || (key.isEmpty() && !imo.isEmpty()))
+        field = imo_edit_;
+    else if (key == QLatin1String("places"))
+        field = place_query_edit_;
+    else if (key == QLatin1String("ports"))
+        field = ports_query_edit_;
+    else if (key.isEmpty())
+        return true;
+    else
+        return false;
+    if (!field)
+        return true;
+    if (field == imo_edit_ && !imo.isEmpty())
+        imo_edit_->setText(imo); // the number only; TRACK looks it up
+    for (QWidget* p = field->parentWidget(); p; p = p->parentWidget())
+        if (auto* scroll = qobject_cast<QScrollArea*>(p)) {
+            scroll->ensureWidgetVisible(field);
+            break;
+        }
+    field->setFocus(Qt::OtherFocusReason);
+    field->selectAll();
+    return true;
 }
 
 } // namespace fincept::screens

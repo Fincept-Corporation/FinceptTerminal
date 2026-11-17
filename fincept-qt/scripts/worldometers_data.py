@@ -7,6 +7,7 @@ import json
 import os
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 BASE_URL = "https://disease.sh/v3/covid-19"
 
@@ -21,13 +22,21 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        return _iso_updated(response.json())
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}"}
+
+
+def _iso_updated(body: Any) -> Any:
+    """disease.sh stamps every record with "updated" in Unix milliseconds: ISO UTC instead."""
+    for rec in (body if isinstance(body, list) else [body]):
+        if isinstance(rec, dict) and isinstance(rec.get("updated"), (int, float)):
+            rec["updated"] = fc.epoch_iso(rec["updated"])
+    return body
 
 
 def get_global_covid() -> Any:

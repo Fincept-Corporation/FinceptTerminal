@@ -1,6 +1,7 @@
 #include "ui/charts/layers/VwapLayer.h"
 
 #include "ui/charts/ChartIndicators.h"
+#include "ui/theme/Theme.h"
 
 #include <QChart>
 #include <QGraphicsScene>
@@ -11,7 +12,31 @@
 namespace fincept::ui {
 
 VwapLayer::VwapLayer(bool show_bands, QObject* parent)
-    : SeriesLayer("vwap", "VWAP", QColor("#2563eb"), 2, parent), show_bands_(show_bands) {}
+    : SeriesLayer("vwap", "VWAP", QColor(), 2, parent), show_bands_(show_bands) {}
+
+QColor VwapLayer::default_color() const {
+    return colors::chart_color(4); // a categorical slot, never a direction colour
+}
+
+QColor VwapLayer::band_color(int sigma) const {
+    QColor c = line_color();
+    c.setAlpha(sigma == 1 ? 60 : 30);
+    return c;
+}
+
+void VwapLayer::refresh_theme_colors() {
+    const auto recolor = [this](QLineSeries* s, int sigma) {
+        if (!s)
+            return;
+        QPen pen = s->pen();
+        pen.setColor(band_color(sigma));
+        s->setPen(pen);
+    };
+    recolor(upper_1_, 1);
+    recolor(lower_1_, 1);
+    recolor(upper_2_, 2);
+    recolor(lower_2_, 2);
+}
 
 void VwapLayer::compute(const QVector<CandleData>& candles) {
     QVector<double> highs, lows, closes, volumes;
@@ -47,10 +72,10 @@ void VwapLayer::attach(QGraphicsScene* scene, QChart* chart) {
     chart_ref_ = chart;
     SeriesLayer::attach(scene, chart);
     if (show_bands_) {
-        attach_band(upper_1_, chart, QColor(37, 99, 235, 60), 1);
-        attach_band(lower_1_, chart, QColor(37, 99, 235, 60), 1);
-        attach_band(upper_2_, chart, QColor(37, 99, 235, 30), 1);
-        attach_band(lower_2_, chart, QColor(37, 99, 235, 30), 1);
+        attach_band(upper_1_, chart, band_color(1), 1);
+        attach_band(lower_1_, chart, band_color(1), 1);
+        attach_band(upper_2_, chart, band_color(2), 1);
+        attach_band(lower_2_, chart, band_color(2), 1);
     }
 }
 

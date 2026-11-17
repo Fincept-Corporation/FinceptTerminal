@@ -2,22 +2,34 @@
 
 #include "trading/UnifiedTrading.h"
 
+#include "core/agent/AgentActionScope.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
 #include "services/workflow/RiskManager.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
+#include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
+#include "trading/MarketDataRequests.h"
+#include "trading/OrderApprovalRule.h"
 #include "trading/OrderMatcher.h"
 #include "trading/OrderThreadPool.h"
 #include "trading/OrderValidator.h"
+#include "trading/PaperBookSymbol.h"
+#include "trading/PaperMarkService.h"
 #include "trading/PaperTrading.h"
 #include "trading/RateLimiter.h"
 #include "trading/SmartOrderEngine.h"
 #include "trading/StrategyPortfolio.h"
 #include "trading/TradingEvents.h"
 #include "trading/brokers/BrokerClientOrderId.h"
+#include "core/market/MarketSessions.h"
+#include "ui/formatting/FormatSettings.h"
+#include "ui/formatting/NumberFormat.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QMutexLocker>
@@ -45,16 +57,35 @@ constexpr const char* kUtLog = "UnifiedTrading";
 ///
 /// Fails CLOSED: if the check itself throws, the order is refused. A risk gate
 /// that could not be evaluated must never read as a pass.
-QString risk_block_reason(const QString& symbol, OrderSide side, double quantity, double price, bool paper) {
+QString risk_block_reason(const QString& symbol, OrderSide side, double quantity, double price, bool paper,
+                          const QString& exchange = QString()) {
     try {
+        // The currency `price` is quoted in, so money limits compare in their own
+        // currency: the exchange's venue currency (NSE INR, LSE GBp), a crypto pair's
+        // quote asset; empty when unknown (MCX, CDS, FOREX).
+        namespace mk = fincept::core::market;
+        const QString exch = exchange.trimmed().toUpper();
+        QString price_ccy;
+        if (exch == QLatin1String("CRYPTO"))
+            price_ccy = fincept::ui::formatting::instrument_for_symbol(symbol.trimmed()).currency;
+        else if (const mk::Venue* v = exch.isEmpty() ? nullptr : mk::venue_by_code(exch))
+            price_ccy = v->currency;
         QString reason;
         if (workflow::RiskManager::instance().is_order_allowed(symbol, QString::fromLatin1(order_side_str(side)),
-                                                               quantity, price, paper, &reason))
+                                                               quantity, price, paper, &reason, price_ccy))
             return {};
         return reason.isEmpty() ? QStringLiteral("Blocked by risk limits") : reason;
     } catch (const std::exception& e) {
+        LOG_ERROR(kUtLog, logf("Risk check threw, order blocked", {{"symbol", symbol},
+                                                                   {"side", order_side_str(side)},
+                                                                   {"qty", quantity},
+                                                                   {"error", e.what()}}));
         return QStringLiteral("Risk check failed: ") + QString::fromUtf8(e.what());
     } catch (...) {
+        LOG_ERROR(kUtLog, logf("Risk check threw, order blocked", {{"symbol", symbol},
+                                                                   {"side", order_side_str(side)},
+                                                                   {"qty", quantity},
+                                                                   {"error", "unknown exception"}}));
         return QStringLiteral("Risk check failed (unknown error)");
     }
 }
@@ -183,6 +214,19 @@ QString hydrate_modify_fields(IBroker& broker, const BrokerCredentials& creds, c
     return {};
 }
 
+/// The broker adapter of an account-aware call. Every broker-bound path below
+/// (orders, cancels, modifies, closes, holdings exits, smart / basket / split /
+/// unwind orders, quotes, depth, native-paper detection) resolves its broker HERE.
+/// The built-in paper account (BrokerAccount.h) has no broker: it gets nullptr, so
+/// each of those paths answers "Broker not found" instead of reaching a broker —
+/// and it is local paper anyway (trading mode is always "paper"), so the paper
+/// branches serve it before any broker lookup is made.
+IBroker* ut_broker_for(const BrokerAccount& account) {
+    if (is_builtin_paper_account(account.account_id) || is_builtin_paper_broker(account.broker_id))
+        return nullptr;
+    return BrokerRegistry::instance().get(account.broker_id);
+}
+
 /// True when `account` is in PAPER mode AND that PAPER mode runs on the broker's own paper
 /// venue (Alpaca paper-api) instead of the local pt_* simulator: the broker offers native
 /// paper and the account's stored credentials are positively that venue's paper environment
@@ -196,7 +240,7 @@ QString hydrate_modify_fields(IBroker& broker, const BrokerCredentials& creds, c
 bool native_paper_venue(const BrokerAccount& account) {
     if (account.trading_mode != "paper")
         return false;
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    auto* broker = ut_broker_for(account);
     if (!broker || !broker->profile().has_native_paper)
         return false; // cheap exit before touching secure storage
     const auto creds = AccountManager::instance().load_credentials(account.account_id);
@@ -227,7 +271,393 @@ QString paper_venue_refusal(const BrokerAccount& account, const IBroker& broker,
 QString broker_mode_tag(const BrokerAccount& account) {
     return account.trading_mode == "paper" ? QStringLiteral("paper") : QStringLiteral("live");
 }
+
+/// Live LTP for a LOCAL-paper MARKET fill whose caller supplied no price (basket builders,
+/// the BROKERS multi-select / ALL broadcast, Semi-Auto approvals all leave price = 0).
+/// 0 when no usable quote is known — the caller then keeps its "No live price" refusal.
+/// The account stream's quote cache is GUI-thread-only, so it is read only on the GUI
+/// thread; from a worker (broadcast_order runs on the order pool) the DataHub quote
+/// snapshot for the same account is read instead — DataHub::peek() is mutex-guarded and
+/// TTL-checked, so a stale quote is never used as a fill price.
+double ut_paper_market_ltp(const QString& account_id, const QString& broker_id, const QString& symbol) {
+    if (symbol.isEmpty())
+        return 0.0;
+    auto* app = QCoreApplication::instance();
+    if (app && QThread::currentThread() == app->thread()) {
+        if (auto* stream = DataStreamManager::instance().stream_for(account_id)) {
+            const double ltp = stream->cached_quote(symbol).ltp;
+            if (std::isfinite(ltp) && ltp > 0.0)
+                return ltp;
+        }
+        return 0.0;
+    }
+    if (broker_id.isEmpty())
+        return 0.0;
+    const QVariant v =
+        datahub::DataHub::instance().peek(broker_topic(broker_id, account_id, QStringLiteral("quote"), symbol));
+    if (!v.isValid() || !v.canConvert<BrokerQuote>())
+        return 0.0;
+    const double ltp = v.value<BrokerQuote>().ltp;
+    return (std::isfinite(ltp) && ltp > 0.0) ? ltp : 0.0;
+}
+
+/// Cash currency of a new legacy-session paper book: the broker's account currency
+/// (its profile); for a broker id the registry does not know, the user's display
+/// currency (Settings > Currency & Number Format) — never a hard-coded code.
+QString ut_session_book_currency(const QString& broker_id) {
+    if (IBroker* b = BrokerRegistry::instance().get(broker_id)) {
+        const QString ccy = b->profile().currency.trimmed().toUpper();
+        if (!ccy.isEmpty())
+            return ccy;
+    }
+    const QString ccy = fincept::ui::formatting::FormatSettings::instance().display_currency();
+    LOG_WARN(kUtLog, QString("Paper book for unknown broker '%1': cash currency taken from the display currency (%2)")
+                         .arg(broker_id, ccy));
+    return ccy;
+}
+
+/// Closes / reversals of a batch share one FX wait budget: the first symbol whose
+/// rate is missing may wait (off the GUI thread) up to PaperMarkService::
+/// kCloseFxWaitMs; the rest get what is left, so a book of foreign positions with
+/// no rate is refused within seconds instead of N x the wait.
+class UtCloseFxBudget {
+  public:
+    UtCloseFxBudget() { clock_.start(); }
+    int remaining_ms() const {
+        return static_cast<int>(std::max<qint64>(0, PaperMarkService::kCloseFxWaitMs - clock_.elapsed()));
+    }
+
+  private:
+    QElapsedTimer clock_;
+};
+
+// ── Order audit trail (audit.log; policy B.7) ────────────────────────────────
+// Broker-routed orders: "Order submitted" when the request leaves the terminal and
+// "Order accepted" / "Order rejected" / "Order outcome unknown" when the answer is
+// known, paired by client_id. Orders run by the local paper engine are audited by
+// PaperTrading itself (Order accepted / rejected / filled / cancelled, venue=paper);
+// this file audits the refusals that stop an order before it reaches the engine or a
+// broker.
+constexpr const char* kUtAudit = "Orders";
+
+/// Account field of an audit line: the built-in paper account by name, any other by
+/// its masked id (never the full id).
+QString ut_audit_account(const QString& account_id) {
+    return is_builtin_paper_account(account_id) ? account_id : log_mask(account_id);
+}
+
+QList<LogField> ut_order_fields(const QString& venue, const QString& account_id, const QString& mode,
+                                const UnifiedOrder& o) {
+    QList<LogField> f{{"venue", venue},
+                      {"account", ut_audit_account(account_id)},
+                      {"mode", mode},
+                      {"symbol", o.symbol},
+                      {"exchange", o.exchange},
+                      {"side", order_side_str(o.side)},
+                      {"type", order_type_str(o.order_type)},
+                      {"product", product_to_broker_str(o.product_type)},
+                      {"qty", o.quantity},
+                      {"price", o.price}};
+    if (o.stop_price > 0.0)
+        f.append(LogField("trigger", o.stop_price));
+    if (!o.client_order_id.isEmpty())
+        f.append(LogField("client_id", o.client_order_id));
+    if (!o.source.isEmpty())
+        f.append(LogField("source", o.source));
+    return f;
+}
+
+/// An order refused before it reached a broker or the paper engine (validation,
+/// freeze limit, no price, no FX rate, no broker / credentials, …).
+void ut_audit_rejected(const QString& venue, const QString& account_id, const QString& mode, const UnifiedOrder& o,
+                       const QString& reason) {
+    auto f = ut_order_fields(venue, account_id, mode, o);
+    f.append(LogField("reason", reason));
+    LOG_AUDIT(kUtAudit, logf("Order rejected", f));
+}
+
+/// RiskManager limit (risk_block_reason) refused the order. The settings-driven gate
+/// (OrderValidator::pre_trade_risk) writes its own audit line.
+void ut_audit_risk_rejected(const QString& account_id, const QString& mode, const QString& symbol, OrderSide side,
+                            double qty, const QString& reason) {
+    LOG_AUDIT(kUtAudit, "Risk limit rejected order",
+              {{"account", ut_audit_account(account_id)},
+               {"mode", mode},
+               {"symbol", symbol},
+               {"side", order_side_str(side)},
+               {"qty", qty},
+               {"reason", reason}});
+}
+
+void ut_audit_submitted(const QString& venue, const QString& account_id, const QString& mode, const UnifiedOrder& o) {
+    LOG_AUDIT(kUtAudit, logf("Order submitted", ut_order_fields(venue, account_id, mode, o)));
+}
+
+/// True when a broker error means the request may have reached the broker (client-side
+/// timeout — BrokerHttp says "outcome unknown").
+bool ut_outcome_unknown(const QString& error) {
+    return error.contains(QLatin1String("outcome unknown"), Qt::CaseInsensitive) ||
+           error.contains(QLatin1String("timed out"), Qt::CaseInsensitive);
+}
+
+void ut_audit_outcome(const QString& venue, const QString& account_id, const QString& mode, const UnifiedOrder& o,
+                      bool ok, const QString& order_id, const QString& error, qint64 elapsed_ms) {
+    QList<LogField> f{{"venue", venue},
+                      {"account", ut_audit_account(account_id)},
+                      {"mode", mode},
+                      {"symbol", o.symbol},
+                      {"side", order_side_str(o.side)},
+                      {"qty", o.quantity},
+                      {"client_id", o.client_order_id}};
+    if (!o.source.isEmpty())
+        f.append(LogField("source", o.source));
+    if (ok) {
+        f.append(LogField("order_id", order_id));
+        f.append(LogField("elapsed_ms", elapsed_ms));
+        LOG_AUDIT(kUtAudit, logf("Order accepted", f));
+    } else {
+        f.append(LogField("reason", error));
+        f.append(LogField("elapsed_ms", elapsed_ms));
+        LOG_AUDIT(kUtAudit, logf(ut_outcome_unknown(error) ? QStringLiteral("Order outcome unknown")
+                                                           : QStringLiteral("Order rejected"),
+                                 f));
+    }
+}
+
+/// One live cancel / modify / bulk action: the request line, then its outcome.
+void ut_audit_action(const char* sentence, const QString& venue, const QString& account_id, const QString& mode,
+                     const QList<LogField>& extra) {
+    QList<LogField> f{{"venue", venue}, {"account", ut_audit_account(account_id)}, {"mode", mode}};
+    f.append(extra);
+    LOG_AUDIT(kUtAudit, logf(QLatin1StringView(sentence), f));
+}
+
+/// Quantity / price of a modify request, whichever spelling the caller used.
+QList<LogField> ut_modify_fields(const QString& order_id, const QJsonObject& mods) {
+    QList<LogField> f{{"order_id", order_id}};
+    for (const char* k : {"quantity", "qty", "price", "trigger_price", "stop_price"}) {
+        const QJsonValue v = mods.value(QLatin1String(k));
+        if (!v.isUndefined() && !v.isNull())
+            f.append(LogField(k, v.toVariant().toString()));
+    }
+    return f;
+}
+
+// ── Approval gate (defence in depth; trading/OrderApprovalRule.h) ────────────
+// Callers that know they are automated (algo engine, workflow nodes, broadcast /
+// basket dialogs, the F&O chain) consult ActionCenter::should_queue() and queue
+// themselves. These entry points make the same decision again from
+// UnifiedOrder::source, so an automated order whose caller forgot to route it still
+// goes to the approval queue — the same entry (ActionCenter::queue_order, same
+// payload, same "queued / not queued" audit lines) — and is never placed directly.
+
+/// Depth of ApprovedOrderScope on this thread (only ActionCenter opens one).
+thread_local int ut_approved_depth = 0;
+
+/// The source an order carries from here on: the caller's, or — on the GUI thread,
+/// while an agent step is in progress — the agent's (it overrides an empty or
+/// screen-set source, never an automated / system one).
+QString ut_effective_source(const QString& stated) {
+    return approval_rule::effective_source(stated, core::agent::current_agent_order_source());
+}
+
+/// The gate's own reduce-only check of an exit-kind order (workflow_exit / algo_exit;
+/// approval_rule::ReduceOnly) and why — written to the "Exit order ..." audit line.
+struct UtReduceOnlyCheck {
+    approval_rule::ReduceOnly verdict = approval_rule::ReduceOnly::Unknown;
+    QString reason;
+};
+
+/// Does `order` on `account` only reduce an open position, right now? Yes when a
+/// position in that symbol is open, the order is on the opposite side and its quantity
+/// is at most the position's absolute quantity. The book read is the one the order will
+/// meet:
+///   local paper — the simulator's book (pt_get_positions). The engine nets an order
+///     against the position with the SAME symbol string (the bare symbol this path
+///     sends), long / short by side; a row in the other spelling ("EXCH:SYM",
+///     trading/PaperBookSymbol.h) is named in the reason, never counted;
+///   broker-routed (live, or a verified native paper venue) — the broker's positions,
+///     read fresh (one round trip, like close_holding's re-read of the holdings book):
+///     symbol as market_symbols_match spells it, and the order's exchange / product
+///     where the row carries one. Never on the GUI thread (Unknown): no network wait there.
+/// Unknown also when the broker, its credentials or its positions cannot be had, or
+/// several open rows match. Resting orders are not counted.
+UtReduceOnlyCheck ut_check_reduce_only(const BrokerAccount& account, const UnifiedOrder& order) {
+    using RO = approval_rule::ReduceOnly;
+    if (!std::isfinite(order.quantity) || !(order.quantity > 0.0) || order.symbol.trimmed().isEmpty())
+        return {RO::No, QStringLiteral("the order has no symbol or quantity")};
+    // The position this order would reduce: a short for a BUY, a long for a SELL.
+    const bool closes_short = order.side == OrderSide::Buy;
+    const QString side_txt = QString::fromLatin1(order_side_str(order.side));
+    const QString wanted = closes_short ? QStringLiteral("short") : QStringLiteral("long");
+    const auto against = [&](const QString& pos_side, double pos_qty, const QString& where) -> UtReduceOnlyCheck {
+        const double held = std::abs(pos_qty);
+        if (position_is_short(pos_side, pos_qty) != closes_short)
+            return {RO::No, QStringLiteral("%1: no open %2 position to reduce — this %3 would add to it")
+                                .arg(where, wanted, side_txt)};
+        if (order.quantity > held + 1e-9)
+            return {RO::No, QStringLiteral("%1: quantity %2 is more than the open %3 position (%4)")
+                                .arg(where)
+                                .arg(order.quantity)
+                                .arg(wanted)
+                                .arg(held)};
+        return {RO::Yes, QStringLiteral("%1: %2 %3 against an open %4 position of %5")
+                             .arg(where, side_txt)
+                             .arg(order.quantity)
+                             .arg(wanted)
+                             .arg(held)};
+    };
+
+    if (local_paper(account)) {
+        if (account.paper_portfolio_id.isEmpty())
+            return {RO::Unknown, QStringLiteral("no paper portfolio for this account")};
+        const QString where = QStringLiteral("paper %1").arg(order.symbol);
+        const PtPosition* same_side = nullptr;
+        const PtPosition* other_spelling = nullptr;
+        const auto book = pt_get_positions(account.paper_portfolio_id); // {} when unreadable (logged)
+        for (const auto& p : book) {
+            if (!(std::abs(p.quantity) > 0.0))
+                continue;
+            // This order is booked under exactly its own symbol (place_paper_order_for_account)
+            // and the engine nets it only against the row stored under that symbol. A row the
+            // close / flatten rule reaches in the other spelling ("NSE:X" for an order "X",
+            // paper_book::symbol_matches) is NOT reduced by it — the order would open a second
+            // position — so such a row never verifies; it only says why.
+            if (p.symbol != order.symbol) {
+                if (!other_spelling && paper_book::symbol_matches(p.symbol, order.symbol, order.exchange))
+                    other_spelling = &p;
+                continue;
+            }
+            if (position_is_short(p.side, p.quantity) == closes_short)
+                return against(p.side, p.quantity, where);
+            same_side = &p;
+        }
+        if (same_side)
+            return against(same_side->side, same_side->quantity, where);
+        if (other_spelling)
+            return {RO::No, QStringLiteral("%1: the open position is booked as %2 — an order for %3 does not net "
+                                           "against it")
+                                .arg(where, other_spelling->symbol, order.symbol)};
+        return {RO::No, QStringLiteral("%1: no open position in the paper book").arg(where)};
+    }
+
+    IBroker* broker = ut_broker_for(account);
+    if (!broker)
+        return {RO::Unknown, QStringLiteral("broker not found: %1").arg(account.broker_id)};
+    auto* app = QCoreApplication::instance();
+    if (app && QThread::currentThread() == app->thread())
+        return {RO::Unknown, QStringLiteral("the broker's positions are not read on the GUI thread")};
+    const auto creds = AccountManager::instance().load_credentials(account.account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {RO::Unknown, refusal};
+    const auto pr = broker->get_positions(creds);
+    if (!pr.success || !pr.data.has_value())
+        return {RO::Unknown, QStringLiteral("the broker's positions could not be read (%1)")
+                                 .arg(pr.error.isEmpty() ? QStringLiteral("no detail") : pr.error)};
+    QVector<BrokerPosition> open;
+    for (const auto& p : *pr.data) {
+        if (!std::isfinite(p.quantity) || p.quantity == 0.0 || !market_symbols_match(p.symbol, order.symbol))
+            continue;
+        if (!p.exchange.isEmpty() && !order.exchange.isEmpty() &&
+            p.exchange.compare(order.exchange, Qt::CaseInsensitive) != 0)
+            continue;
+        if (!p.product_type.isEmpty() && broker->product_from_wire(p.product_type) != order.product_type)
+            continue;
+        open.append(p);
+    }
+    const QString where = QStringLiteral("%1 %2").arg(account.broker_id, order.symbol);
+    if (open.isEmpty())
+        return {RO::No, QStringLiteral("%1: no open position at the broker in this symbol / exchange / product")
+                            .arg(where)};
+    if (open.size() > 1)
+        return {RO::Unknown, QStringLiteral("%1: %2 open positions match — cannot tell which one this order reduces")
+                                 .arg(where)
+                                 .arg(open.size())};
+    return against(open.first().side, open.first().quantity, where);
+}
+
+/// nullopt = go on and place the order. Otherwise the answer for the caller: queued
+/// for approval (nothing sent) or refused. `payload` builds the queue entry's
+/// order_data exactly as the explicit callers do. Human / system sources never read
+/// the approval mode (no settings read on the ticket path).
+///
+/// An exit-kind source (workflow_exit / algo_exit) skips approval only when
+/// `reduce_only` — this entry point's own check, run here at submission — answers Yes.
+/// It runs only where the answer can change the route (Semi-Auto, or no account); in
+/// Auto the order is placed either way, so there is no extra position read. Without a
+/// `reduce_only` (basket, split) the answer is Unknown: exits are treated like
+/// workflow / algo. Either answer is written to the audit trail with its reason.
+std::optional<UnifiedOrderResponse> ut_approval_gate(const QString& account_id, const QString& op,
+                                                     const QString& source, const QString& mode_tag,
+                                                     const std::function<QJsonObject()>& payload,
+                                                     const std::function<UtReduceOnlyCheck()>& reduce_only = {}) {
+    const bool from_approval = ut_approved_depth > 0;
+    if (from_approval || !approval_rule::needs_human_approval(source))
+        return std::nullopt;
+    const bool mode_known = !account_id.isEmpty();
+    const bool semi_auto = mode_known && ActionCenter::instance().should_queue(account_id, op);
+    auto verified = approval_rule::ReduceOnly::Unknown;
+    if (approval_rule::is_exit_source(source) && (semi_auto || !mode_known)) {
+        UtReduceOnlyCheck check;
+        if (reduce_only)
+            check = reduce_only();
+        else
+            check.reason = QStringLiteral("this entry point (%1) does not verify reduce-only").arg(op);
+        verified = check.verdict;
+        QList<LogField> f{{"op", op}, {"mode", mode_tag}, {"source", source}};
+        if (mode_known)
+            f.prepend(LogField("account", ut_audit_account(account_id)));
+        f.append(LogField("reduce_only", approval_rule::reduce_only_name(check.verdict)));
+        f.append(LogField("reason", check.reason));
+        LOG_AUDIT(kUtAudit, logf(verified == approval_rule::ReduceOnly::Yes
+                                     ? QStringLiteral("Exit order verified reduce-only; placed without approval")
+                                     : QStringLiteral("Exit order not verified reduce-only; approval rule applies"),
+                                 f));
+    }
+    const auto route = approval_rule::decide(source, semi_auto, from_approval, mode_known, verified);
+    if (route == approval_rule::Route::Place)
+        return std::nullopt;
+    if (route == approval_rule::Route::Refuse) {
+        LOG_AUDIT(kUtAudit, "Order rejected",
+                  {{"op", op},
+                   {"mode", mode_tag},
+                   {"source", source},
+                   {"reason", "automated order without an account: its approval mode cannot be read"}});
+        return UnifiedOrderResponse{false, QString(),
+                                    QStringLiteral("Refused: an automated order (%1) needs an account so its approval "
+                                                   "mode can be checked — nothing was sent")
+                                        .arg(source),
+                                    mode_tag};
+    }
+    // Queue: the caller did not route this automated order itself.
+    LOG_WARN(kUtLog, logf("Automated order reached the order path without its approval routing; queued here",
+                          {{"account", ut_audit_account(account_id)}, {"op", op}, {"source", source}}));
+    const QString pending_id = ActionCenter::instance().queue_order(account_id, op, payload());
+    if (pending_id.isEmpty())
+        return UnifiedOrderResponse{false, QString(),
+                                    QStringLiteral("This account requires approval for %1 orders, and the order could "
+                                                   "not be queued for approval — nothing was sent")
+                                        .arg(order_source_kind(source)),
+                                    mode_tag};
+    return UnifiedOrderResponse{false, QString(),
+                                QStringLiteral("Queued for approval (Semi-Auto) as %1 — nothing was sent; approve it "
+                                               "in the Action Center")
+                                    .arg(pending_id),
+                                mode_tag};
+}
 } // namespace
+
+ApprovedOrderScope::ApprovedOrderScope() {
+    ++ut_approved_depth;
+}
+
+ApprovedOrderScope::~ApprovedOrderScope() {
+    --ut_approved_depth;
+}
+
+bool ApprovedOrderScope::active() {
+    return ut_approved_depth > 0;
+}
 
 UnifiedTrading& UnifiedTrading::instance() {
     static UnifiedTrading ut;
@@ -251,7 +681,8 @@ TradingSession UnifiedTrading::init_session(const QString& broker, const QString
         if (!paper_portfolio_id.isEmpty()) {
             session.paper_portfolio_id = paper_portfolio_id;
         } else {
-            auto portfolio = pt_create_portfolio(broker + " Paper Trading", 1000000.0, "INR", 1.0, "cross", 0.0003);
+            auto portfolio = pt_create_portfolio(broker + " Paper Trading", 1000000.0, ut_session_book_currency(broker),
+                                                 1.0, "cross", 0.0003);
             session.paper_portfolio_id = portfolio.id;
         }
     }
@@ -276,8 +707,8 @@ TradingSession UnifiedTrading::switch_mode(const QString& mode) {
     session_->mode = (mode == "live") ? "live" : "paper";
 
     if (session_->mode == "paper" && session_->paper_portfolio_id.isEmpty()) {
-        auto portfolio =
-            pt_create_portfolio(session_->broker + " Paper Trading", 1000000.0, "INR", 1.0, "cross", 0.0003);
+        auto portfolio = pt_create_portfolio(session_->broker + " Paper Trading", 1000000.0,
+                                             ut_session_book_currency(session_->broker), 1.0, "cross", 0.0003);
         session_->paper_portfolio_id = portfolio.id;
     }
 
@@ -296,6 +727,18 @@ UnifiedOrderResponse UnifiedTrading::place_order(const UnifiedOrder& order) {
     }
 
     UnifiedOrder routed = order;
+    routed.source = ut_effective_source(order.source);
+    // No account on the legacy session path: an automated order cannot have its
+    // approval mode read here and is refused (OrderApprovalRule: REFUSE). An exit-kind
+    // order is not verified reduce-only here either (no account to read positions for).
+    if (auto gated = ut_approval_gate(
+            QString(), QStringLiteral("placeorder"), routed.source, session_->mode,
+            [&routed]() { return ActionCenter::serialize_unified_order(routed); },
+            []() {
+                return UtReduceOnlyCheck{approval_rule::ReduceOnly::Unknown,
+                                         QStringLiteral("no account (legacy session path): positions are not read")};
+            }))
+        return *gated;
     stamp_client_order_id(routed);
 
     if (session_->mode == "paper") {
@@ -306,6 +749,8 @@ UnifiedOrderResponse UnifiedTrading::place_order(const UnifiedOrder& order) {
 
 UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& session, const UnifiedOrder& order) {
     if (session.paper_portfolio_id.isEmpty()) {
+        ut_audit_rejected(QStringLiteral("paper"), QString(), QStringLiteral("paper"), order,
+                          QStringLiteral("No paper portfolio configured"));
         return {false, "", "No paper portfolio configured", "paper"};
     }
 
@@ -325,50 +770,73 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& ses
     if (order.stop_price > 0)
         stop_opt = order.stop_price;
 
-    if (order.order_type == OrderType::Market && !price_opt)
+    if (order.order_type == OrderType::Market && !price_opt) {
+        ut_audit_rejected(QStringLiteral("paper"), QString(), QStringLiteral("paper"), order,
+                          QStringLiteral("no live price for a market fill"));
         return {false, "", "No live price yet for a market fill — wait for quotes to load", "paper"};
+    }
+
+    // Cash is booked in the paper book's currency at the per-symbol factor (1.0 until
+    // set): a symbol quoted in another currency needs a real rate first, never 1:1.
+    QString fx_reason;
+    if (!PaperMarkService::prepare_symbol_fx(session.paper_portfolio_id, symbol, order.exchange, &fx_reason))
+        return {false, "", fx_reason, "paper"}; // audited by PaperMarkService (missing rate)
 
     try {
         auto paper_order = pt_place_order(session.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
-                                          price_opt, stop_opt, false);
+                                          price_opt, stop_opt, false, QString(), QString(), order.source);
 
         if (order.order_type == OrderType::Market)
             pt_fill_order(paper_order.id, *price_opt);
 
         return {true, paper_order.id, "Paper order placed", "paper"};
     } catch (const std::exception& e) {
+        // An engine refusal (margin, market hours) is already in the audit trail; this
+        // line adds where it came from and covers a failed fill.
+        LOG_WARN(kUtLog, logf("Paper order failed", {{"portfolio", log_mask(session.paper_portfolio_id)},
+                                                     {"symbol", symbol},
+                                                     {"side", side_str},
+                                                     {"qty", order.quantity},
+                                                     {"error", e.what()}}));
         return {false, "", QString("Paper order failed: %1").arg(e.what()), "paper"};
     }
 }
 
 UnifiedOrderResponse UnifiedTrading::place_live_order(const TradingSession& session, const UnifiedOrder& order) {
+    const QString live = QStringLiteral("live");
     auto* broker = BrokerRegistry::instance().get(session.broker);
     if (!broker) {
+        ut_audit_rejected(session.broker, QString(), live, order, QStringLiteral("broker not found"));
         return {false, "", "Broker not found: " + session.broker, "live"};
     }
 
     auto creds = broker->load_credentials();
     if (creds.access_token.isEmpty()) {
+        ut_audit_rejected(session.broker, QString(), live, order, QStringLiteral("no access token; not signed in"));
         return {false, "", "No credentials for " + session.broker + ". Please authenticate.", "live"};
     }
 
     // Legacy session path bypasses the account-aware place_order, so it carries
     // its own risk gate — this reaches a real broker.
-    const QString blocked = risk_block_reason(order.symbol, order.side, order.quantity, order.price, /*paper=*/false);
+    const QString blocked = risk_block_reason(order.symbol, order.side, order.quantity, order.price, /*paper=*/false,
+                                              order.exchange);
     if (!blocked.isEmpty()) {
-        LOG_INFO(kUtLog, QString("Risk limit rejected %1 %2 x%3 on %4: %5")
-                             .arg(QString::fromLatin1(order_side_str(order.side)), order.symbol)
-                             .arg(order.quantity)
-                             .arg(session.broker, blocked));
+        ut_audit_risk_rejected(QString(), live, order.symbol, order.side, order.quantity, blocked);
         return {false, "", "Risk check failed: " + blocked, "live"};
     }
     // No account id on the legacy path: user limits + sanity check without the
     // per-account snapshot (unknown P&L fails a configured daily-loss limit closed).
+    // A refusal is audited by pre_trade_risk itself.
     if (const auto gate = OrderValidator::pre_trade_risk(QString(), order, /*broker_routed=*/true); !gate.valid)
         return {false, "", "Risk check failed: " + gate.errors.join("; "), "live"};
 
     rate_limit_broker(session.broker);
+    ut_audit_submitted(session.broker, QString(), live, order);
+    QElapsedTimer sent;
+    sent.start();
     auto result = broker->place_order(creds, order);
+    ut_audit_outcome(session.broker, QString(), live, order, result.success, result.order_id, result.error,
+                     sent.elapsed());
     return {result.success, result.order_id, result.error, "live"};
 }
 
@@ -384,17 +852,28 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& order_id) {
             pt_cancel_order(order_id);
             return {true, order_id, "Paper order cancelled", "paper"};
         } catch (const std::exception& e) {
+            LOG_WARN(kUtLog, logf("Paper order cancel failed", {{"order_id", order_id}, {"error", e.what()}}));
             return {false, "", QString("Cancel failed: %1").arg(e.what()), "paper"};
         }
     }
 
+    const QString live = QStringLiteral("live");
     auto* broker = BrokerRegistry::instance().get(session_->broker);
-    if (!broker)
+    if (!broker) {
+        ut_audit_action("Order cancel rejected", session_->broker, QString(), live,
+                        {{"order_id", order_id}, {"reason", "broker not found"}});
         return {false, "", "Broker not found", "live"};
+    }
 
     auto creds = broker->load_credentials();
     rate_limit_broker(session_->broker);
+    ut_audit_action("Order cancel requested", session_->broker, QString(), live, {{"order_id", order_id}});
     auto result = broker->cancel_order(creds, order_id);
+    if (result.success)
+        ut_audit_action("Order cancelled", session_->broker, QString(), live, {{"order_id", order_id}});
+    else
+        ut_audit_action(ut_outcome_unknown(result.error) ? "Order cancel outcome unknown" : "Order cancel rejected",
+                        session_->broker, QString(), live, {{"order_id", order_id}, {"reason", result.error}});
     return {result.success, order_id, result.error, "live"};
 }
 
@@ -406,15 +885,38 @@ bool UnifiedTrading::uses_native_paper(const QString& account_id) const {
     return native_paper_venue(AccountManager::instance().get_account(account_id));
 }
 
-UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, const UnifiedOrder& order) {
+UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, const UnifiedOrder& order_in) {
+    // Provenance first (every audit line below carries it): the caller's source, or the
+    // agent's while an agent step is in progress on the GUI thread.
+    UnifiedOrder order = order_in;
+    order.source = ut_effective_source(order_in.source);
+
     auto account = AccountManager::instance().get_account(account_id);
-    if (account.account_id.isEmpty())
+    if (account.account_id.isEmpty()) {
+        ut_audit_rejected(QString(), account_id, QString(), order, QStringLiteral("account not found"));
         return {false, "", "Account not found: " + account_id, ""};
+    }
+
+    // Approval gate (live AND paper): an automated order on a Semi-Auto account goes to
+    // the approval queue instead of the broker / simulator — unless it is the execution
+    // of an entry a person already approved (ApprovedOrderScope), or an exit-kind order
+    // this gate verifies reduce-only against the account's positions right now.
+    if (auto gated = ut_approval_gate(
+            account_id, QStringLiteral("placeorder"), order.source, account.trading_mode,
+            [&order]() { return ActionCenter::serialize_unified_order(order); },
+            [&account, &order]() { return ut_check_reduce_only(account, order); }))
+        return *gated;
+    // Venue of the audit lines: the local simulator is "paper", anything else the broker.
+    const auto audit_venue = [&account](bool local) {
+        return local ? QStringLiteral("paper") : account.broker_id;
+    };
 
     // Pre-flight validation (Phase 3 §9).
     auto vr = OrderValidator::validate(order);
     if (!vr.valid) {
         const QString err = vr.errors.join("; ");
+        ut_audit_rejected(audit_venue(account.trading_mode == "paper"), account_id, account.trading_mode, order,
+                          "Validation failed: " + err);
         publish(OrderFailedEvent{account_id, "PLACE", order.symbol, err, account.trading_mode});
         return {false, "", "Validation failed: " + err, account.trading_mode};
     }
@@ -426,12 +928,10 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
     // happens when an operator has actually configured a limit, and is logged so
     // they can see which one bit.
     const QString risk_err =
-        risk_block_reason(order.symbol, order.side, order.quantity, order.price, account.trading_mode == "paper");
+        risk_block_reason(order.symbol, order.side, order.quantity, order.price, account.trading_mode == "paper",
+                          order.exchange);
     if (!risk_err.isEmpty()) {
-        LOG_INFO(kUtLog, QString("Risk limit rejected %1 %2 x%3 on account %4: %5")
-                             .arg(QString::fromLatin1(order_side_str(order.side)), order.symbol)
-                             .arg(order.quantity)
-                             .arg(account_id, risk_err));
+        ut_audit_risk_rejected(account_id, account.trading_mode, order.symbol, order.side, order.quantity, risk_err);
         publish(OrderFailedEvent{account_id, "PLACE", order.symbol, risk_err, account.trading_mode});
         return {false, "", "Risk check failed: " + risk_err, account.trading_mode};
     }
@@ -439,6 +939,7 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
     // Settings-driven pre-trade gate (OrderValidator): user risk limits + the
     // absurd-order sanity check. Same choke point, so it covers the order ticket,
     // broadcasts, approvals, MCP tools, workflows, algos and the F&O screen.
+    // A refusal is audited by pre_trade_risk itself.
     const bool is_local_paper = local_paper(account);
     const auto gate = OrderValidator::pre_trade_risk(account_id, order, /*broker_routed=*/!is_local_paper);
     if (!gate.valid) {
@@ -461,6 +962,8 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
                                 .arg(static_cast<qint64>(order.quantity))
                                 .arg(freeze)
                                 .arg(order.symbol, order.exchange);
+        ut_audit_rejected(audit_venue(is_local_paper), account_id, account.trading_mode, order,
+                          QStringLiteral("quantity above the exchange freeze limit %1").arg(freeze));
         publish(OrderFailedEvent{account_id, "PLACE", order.symbol, err, account.trading_mode});
         return {false, "", err, account.trading_mode};
     }
@@ -471,6 +974,17 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
     // original reference; a freshly built order gets a new one.
     UnifiedOrder routed = order;
     stamp_client_order_id(routed);
+
+    // A local-paper MARKET order fills at a price the caller must supply (order.price =
+    // LTP). The order ticket does; the BROKERS multi-select / ALL broadcast and Semi-Auto
+    // approvals send price 0, so every paper target of those failed with "No live price"
+    // however long the user waited. Backfill from this account's live quote — the same
+    // source the basket path uses. Broker-routed orders are never touched.
+    if (is_local_paper && routed.order_type == OrderType::Market && !(routed.price > 0.0)) {
+        const double ltp = ut_paper_market_ltp(account_id, account.broker_id, routed.symbol);
+        if (ltp > 0.0)
+            routed.price = ltp;
+    }
 
     // PAPER mode normally means the local simulator; for a broker with a verified native
     // paper venue it means that venue, reached through the same adapter as a live order
@@ -497,19 +1011,35 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, con
             pt_cancel_order(order_id);
             return {true, order_id, "Paper order cancelled", "paper"};
         } catch (const std::exception& e) {
+            LOG_WARN(kUtLog, logf("Paper order cancel failed", {{"account", ut_audit_account(account_id)},
+                                                                {"order_id", order_id},
+                                                                {"error", e.what()}}));
             return {false, "", QString("Cancel failed: %1").arg(e.what()), "paper"};
         }
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        ut_audit_action("Order cancel rejected", account.broker_id, account_id, mode,
+                        {{"order_id", order_id}, {"reason", "broker not found"}});
         return {false, "", "Broker not found: " + account.broker_id, broker_mode_tag(account)};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        ut_audit_action("Order cancel rejected", account.broker_id, account_id, mode,
+                        {{"order_id", order_id}, {"reason", refusal}});
         return {false, order_id, refusal, "paper"};
+    }
     rate_limit_broker(account.broker_id);
+    ut_audit_action("Order cancel requested", account.broker_id, account_id, mode, {{"order_id", order_id}});
     auto result = broker->cancel_order(creds, order_id);
+    if (result.success)
+        ut_audit_action("Order cancelled", account.broker_id, account_id, mode, {{"order_id", order_id}});
+    else
+        ut_audit_action(ut_outcome_unknown(result.error) ? "Order cancel outcome unknown" : "Order cancel rejected",
+                        account.broker_id, account_id, mode, {{"order_id", order_id}, {"reason", result.error}});
     return {result.success, order_id, result.error, broker_mode_tag(account)};
 }
 
@@ -519,16 +1049,29 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
     if (account.account_id.isEmpty())
         return {false, "", "Account not found: " + account_id, ""};
 
-    if (local_paper(account))
+    if (local_paper(account)) {
+        auto f = ut_modify_fields(order_id, modifications);
+        f.append(LogField("reason", "modify is not supported for paper orders"));
+        ut_audit_action("Order modify rejected", QStringLiteral("paper"), account_id, QStringLiteral("paper"), f);
         return {false, "", "Modify not supported for paper orders", "paper"};
+    }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        auto f = ut_modify_fields(order_id, modifications);
+        f.append(LogField("reason", "broker not found"));
+        ut_audit_action("Order modify rejected", account.broker_id, account_id, mode, f);
         return {false, "", "Broker not found: " + account.broker_id, broker_mode_tag(account)};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        auto f = ut_modify_fields(order_id, modifications);
+        f.append(LogField("reason", refusal));
+        ut_audit_action("Order modify rejected", account.broker_id, account_id, mode, f);
         return {false, order_id, refusal, "paper"};
+    }
 
     // Hydrate side/symbol/exchange/product/order_type from the resting order
     // before dispatching. Several brokers replace the whole order on modify, so
@@ -542,20 +1085,36 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
     QJsonObject mods = modifications;
     const QString hydrate_err = hydrate_modify_fields(*broker, creds, order_id, mods);
     if (!hydrate_err.isEmpty()) {
-        LOG_ERROR(kUtLog, QString("Modify refused on account %1: %2").arg(account_id, hydrate_err));
+        auto f = ut_modify_fields(order_id, modifications);
+        f.append(LogField("reason", hydrate_err));
+        ut_audit_action("Order modify rejected", account.broker_id, account_id, mode, f);
         return {false, order_id, hydrate_err, broker_mode_tag(account)};
     }
 
     rate_limit_broker(account.broker_id);
+    ut_audit_action("Order modify requested", account.broker_id, account_id, mode,
+                    ut_modify_fields(order_id, modifications));
     auto result = broker->modify_order(creds, order_id, mods);
+    {
+        auto f = ut_modify_fields(order_id, modifications);
+        if (!result.success)
+            f.append(LogField("reason", result.error));
+        ut_audit_action(result.success                        ? "Order modified"
+                        : ut_outcome_unknown(result.error) ? "Order modify outcome unknown"
+                                                           : "Order modify rejected",
+                        account.broker_id, account_id, mode, f);
+    }
     return {result.success, order_id, result.error, broker_mode_tag(account)};
 }
 
 UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString& account_id,
                                                                    const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
-    if (account.paper_portfolio_id.isEmpty())
+    const QString paper = QStringLiteral("paper");
+    if (account.paper_portfolio_id.isEmpty()) {
+        ut_audit_rejected(paper, account_id, paper, order, QStringLiteral("no paper portfolio for this account"));
         return {false, "", "No paper portfolio for this account", "paper"};
+    }
 
     // Store the BARE symbol (no exchange prefix). Positions mark to market against
     // the live quote feed published under the bare symbol (broker:<id>:<acct>:quote:
@@ -588,12 +1147,22 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString
         stop_opt = order.stop_price;
 
     const bool is_market = (order.order_type == OrderType::Market);
-    if (is_market && !price_opt)
+    if (is_market && !price_opt) {
+        ut_audit_rejected(paper, account_id, paper, order, QStringLiteral("no live price for a market fill"));
         return {false, "", "No live price yet for a market fill — wait for quotes to load", "paper"};
+    }
+
+    // Cash is booked in the paper portfolio's currency at the engine's per-symbol
+    // factor, which is 1.0 until set. An instrument quoted in another currency (an
+    // LSE share in pence on a USD book) needs a real rate first — never 1:1.
+    QString fx_reason;
+    if (!PaperMarkService::prepare_symbol_fx(account.paper_portfolio_id, symbol, order.exchange, &fx_reason))
+        return {false, "", fx_reason, "paper"}; // audited by PaperMarkService (missing rate)
 
     try {
         auto paper_order = pt_place_order(account.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
-                                          price_opt, stop_opt, /*reduce_only=*/false, order.exchange, product);
+                                          price_opt, stop_opt, /*reduce_only=*/false, order.exchange, product,
+                                          order.source);
         if (is_market) {
             pt_fill_order(paper_order.id, *price_opt);
         } else {
@@ -604,6 +1173,13 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString
         }
         return {true, paper_order.id, "Paper order placed", "paper"};
     } catch (const std::exception& e) {
+        // An engine refusal (margin, market hours) is already in the audit trail; this
+        // line adds the account and covers a failed fill.
+        LOG_WARN(kUtLog, logf("Paper order failed", {{"account", ut_audit_account(account_id)},
+                                                     {"symbol", symbol},
+                                                     {"side", side_str},
+                                                     {"qty", order.quantity},
+                                                     {"error", e.what()}}));
         return {false, "", QString("Paper order failed: %1").arg(e.what()), "paper"};
     }
 }
@@ -612,26 +1188,53 @@ UnifiedOrderResponse UnifiedTrading::place_live_order_for_account(const QString&
                                                                   const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
     const QString mode = broker_mode_tag(account);
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        ut_audit_rejected(account.broker_id, account_id, mode, order, QStringLiteral("broker not found"));
         return {false, "", "Broker not found: " + account.broker_id, mode};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (creds.access_token.isEmpty())
+    if (creds.access_token.isEmpty()) {
+        ut_audit_rejected(account.broker_id, account_id, mode, order,
+                          QStringLiteral("no access token; the account is not signed in"));
         return {false, "", "No credentials for account " + account.display_name + ". Please authenticate.", mode};
+    }
 
     // The one place a single order reaches a broker. A PAPER-mode account only gets here
     // via a verified native paper venue — re-check on the exact credentials about to be used.
     if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
-        LOG_ERROR(kUtLog, QString("%1 (account %2)").arg(refusal, account_id));
+        ut_audit_rejected(account.broker_id, account_id, mode, order, refusal);
         return {false, "", refusal, mode};
+    }
+
+    // Protective SL / TP ride on the entry order only where the adapter actually sends
+    // them and the broker honours them for this product (entry_sl_tp_honoured). Everywhere
+    // else they used to be dropped silently: the order went out and the trader believed
+    // the position was protected. Refuse instead of sending it stripped.
+    if (order.stop_loss > 0.0 || order.take_profit > 0.0) {
+        const BrokerProfile prof = broker->profile();
+        if (!entry_sl_tp_honoured(prof, order.product_type, order.stop_loss > 0.0, order.take_profit > 0.0)) {
+            const QString err = QString("%1 does not accept this stop-loss / take-profit on a %2 entry order — "
+                                        "nothing was sent. Clear SL/TP and place a separate SL order (or a GTT) to "
+                                        "protect the position.")
+                                    .arg(prof.display_name, QString::fromLatin1(product_to_broker_str(order.product_type)));
+            ut_audit_rejected(account.broker_id, account_id, mode, order,
+                              QStringLiteral("stop-loss / take-profit not honoured by the broker for this product"));
+            return {false, "", err, mode};
+        }
     }
 
     // Space orders out to the broker's published per-second cap. Without this a
     // broadcast / basket / algo loop fires as fast as the network allows and the
     // API key gets throttled or banned mid-batch.
     rate_limit_broker(account.broker_id);
+    ut_audit_submitted(account.broker_id, account_id, mode, order);
+    QElapsedTimer sent;
+    sent.start();
     auto result = broker->place_order(creds, order);
+    ut_audit_outcome(account.broker_id, account_id, mode, order, result.success, result.order_id, result.error,
+                     sent.elapsed());
     return {result.success, result.order_id, result.error, mode};
 }
 
@@ -675,22 +1278,41 @@ ApiResponse<CancelAllResult> UnifiedTrading::cancel_all_orders(const QString& ac
                 result.canceled_order_ids.append(order.id);
             } catch (...) {
                 result.failed.append({order.id, "Cancel failed"});
+                LOG_WARN(kUtLog, logf("Cancel-all could not cancel a paper order",
+                                      {{"account", ut_audit_account(account_id)}, {"order_id", order.id}}));
             }
             result.total_attempted++;
         }
+        // Each cancelled order is in the audit trail (PaperTrading); this is the summary.
+        ut_audit_action("Cancel all orders finished", QStringLiteral("paper"), account_id, QStringLiteral("paper"),
+                        {{"cancelled", static_cast<int>(result.canceled_order_ids.size())},
+                         {"cancel_failed", static_cast<int>(result.failed.size())}});
         publish(AllOrdersCancelledEvent{account_id, (int)result.canceled_order_ids.size(), (int)result.failed.size(),
                                         "paper"});
         return {true, result, {}};
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        ut_audit_action("Cancel all orders rejected", account.broker_id, account_id, mode,
+                        {{"reason", "broker not found"}});
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        ut_audit_action("Cancel all orders rejected", account.broker_id, account_id, mode, {{"reason", refusal}});
         return {false, std::nullopt, refusal};
+    }
+    ut_audit_action("Cancel all orders requested", account.broker_id, account_id, mode, {});
     auto resp = broker->cancel_all_orders(creds);
+    if (resp.success && resp.data.has_value())
+        ut_audit_action("Cancel all orders finished", account.broker_id, account_id, mode,
+                        {{"cancelled", static_cast<int>(resp.data->canceled_order_ids.size())},
+                         {"cancel_failed", static_cast<int>(resp.data->failed.size())}});
+    else
+        ut_audit_action("Cancel all orders failed", account.broker_id, account_id, mode, {{"reason", resp.error}});
     if (resp.success && resp.data.has_value()) {
         publish(AllOrdersCancelledEvent{account_id, (int)resp.data->canceled_order_ids.size(),
                                         (int)resp.data->failed.size(), broker_mode_tag(account)});
@@ -706,6 +1328,7 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
     if (local_paper(account)) {
         CloseAllResult result;
         auto positions = pt_get_positions(account.paper_portfolio_id);
+        const UtCloseFxBudget fx_budget;
         for (const auto& pos : positions) {
             if (pos.quantity == 0)
                 continue;
@@ -717,6 +1340,16 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
             const QString side_str =
                 position_is_short(pos.side, pos.quantity) ? QStringLiteral("buy") : QStringLiteral("sell");
             const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
+            // A foreign-currency position books its P&L at the per-symbol factor, which
+            // is unset after a restart: refresh it from a real rate first (see
+            // PaperMarkService::prepare_close_fx). No rate -> this one is left open and
+            // reported; the others still close.
+            QString fx_reason;
+            if (!PaperMarkService::prepare_close_fx(account.paper_portfolio_id, pos.symbol, QString(),
+                                                    fx_budget.remaining_ms(), &fx_reason)) {
+                result.failed.append({pos.symbol, fx_reason}); // audited by PaperMarkService (missing rate)
+                continue;
+            }
             try {
                 // reduce_only: a close may only shrink the position, never flip it.
                 auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol, side_str, "market",
@@ -724,29 +1357,49 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
                                                   QString(), pos.product);
                 pt_fill_order(paper_order.id, fill);
                 result.closed_symbols.append(pos.symbol);
-                LOG_INFO("UnifiedTrading", QString("close_all paper: %1 %2 x%3 @ %4 (was %5)")
-                                               .arg(side_str, pos.symbol)
-                                               .arg(std::abs(pos.quantity))
-                                               .arg(fill)
-                                               .arg(pos.side));
+                // The order and its fill are in the audit trail (PaperTrading).
+                LOG_DEBUG("UnifiedTrading", QString("close_all paper: %1 %2 x%3 @ %4 (was %5)")
+                                                .arg(side_str, pos.symbol)
+                                                .arg(std::abs(pos.quantity))
+                                                .arg(fill)
+                                                .arg(pos.side));
             } catch (const std::exception& e) {
                 result.failed.append({pos.symbol, e.what()});
-                LOG_WARN("UnifiedTrading", QString("close_all paper failed for %1: %2").arg(pos.symbol, e.what()));
+                LOG_WARN("UnifiedTrading", logf("Paper position close failed", {{"account", ut_audit_account(account_id)},
+                                                                                {"symbol", pos.symbol},
+                                                                                {"qty", std::abs(pos.quantity)},
+                                                                                {"error", e.what()}}));
             }
         }
+        ut_audit_action("Close all positions finished", QStringLiteral("paper"), account_id, QStringLiteral("paper"),
+                        {{"closed", static_cast<int>(result.closed_symbols.size())},
+                         {"close_failed", static_cast<int>(result.failed.size())}});
         publish(
             AllPositionsClosedEvent{account_id, (int)result.closed_symbols.size(), (int)result.failed.size(), "paper"});
         return {true, result, {}};
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        ut_audit_action("Close all positions rejected", account.broker_id, account_id, mode,
+                        {{"reason", "broker not found"}});
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        ut_audit_action("Close all positions rejected", account.broker_id, account_id, mode, {{"reason", refusal}});
         return {false, std::nullopt, refusal};
+    }
+    ut_audit_action("Close all positions requested", account.broker_id, account_id, mode, {});
     auto resp = broker->close_all_positions(creds);
+    if (resp.success && resp.data.has_value())
+        ut_audit_action("Close all positions finished", account.broker_id, account_id, mode,
+                        {{"closed", static_cast<int>(resp.data->closed_symbols.size())},
+                         {"close_failed", static_cast<int>(resp.data->failed.size())}});
+    else
+        ut_audit_action("Close all positions failed", account.broker_id, account_id, mode, {{"reason", resp.error}});
     if (resp.success && resp.data.has_value()) {
         publish(AllPositionsClosedEvent{account_id, (int)resp.data->closed_symbols.size(),
                                         (int)resp.data->failed.size(), broker_mode_tag(account)});
@@ -755,16 +1408,31 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
 }
 
 ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& account_id, const QString& symbol,
-                                                               const QString& exchange, const QString& product_type) {
+                                                               const QString& exchange, const QString& product_type,
+                                                               const QString& source) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
+
+    // No approval gate: this is the engine's own close path — the whole position, on the
+    // opposite side (local paper: a reduce_only order; a broker: IBroker::close_position
+    // reads its book and sends the counter order), so an exit-kind source is reduce-only
+    // by construction (OrderApprovalRule.h) and "closeposition" is an immediate op
+    // (ActionCenter::immediate_ops). `source` is provenance: on every audit line below
+    // and on the paper order's own lines (PaperTrading).
+    const auto close_fields = [&source](QList<LogField> f) {
+        if (!source.isEmpty())
+            f.append(LogField("source", source));
+        return f;
+    };
 
     if (local_paper(account)) {
         auto positions = pt_get_positions(account.paper_portfolio_id);
         for (const auto& pos : positions) {
             QString pos_sym = pos.symbol;
-            if (pos_sym == symbol || pos_sym == exchange + ":" + symbol) {
+            // The bare symbol or "EXCH:SYM" (paper_book::symbol_matches); the close then
+            // goes on the row's own symbol string so it nets against that row.
+            if (paper_book::symbol_matches(pos_sym, symbol, exchange)) {
                 if (pos.quantity == 0)
                     continue;
                 // Close by the OPPOSITE of the position's `side` (quantity is a
@@ -772,14 +1440,26 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& ac
                 const QString side_str =
                     position_is_short(pos.side, pos.quantity) ? QStringLiteral("buy") : QStringLiteral("sell");
                 const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
+                // The cash factor of a foreign-currency position lives in memory only
+                // (unset after a restart). Refresh it from a real rate; with none, the
+                // exit waits briefly off the GUI thread and is otherwise refused with
+                // the reason — never booked at 1:1 (PaperMarkService::prepare_close_fx).
+                QString fx_reason;
+                if (!PaperMarkService::prepare_close_fx(account.paper_portfolio_id, pos.symbol, exchange,
+                                                        PaperMarkService::kCloseFxWaitMs, &fx_reason))
+                    return {false, std::nullopt, fx_reason}; // audited by PaperMarkService (missing rate)
                 try {
                     // reduce_only: a close may only shrink the position, never flip it.
                     auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol, side_str, "market",
                                                       std::abs(pos.quantity), fill, std::nullopt,
-                                                      /*reduce_only=*/true, QString(), pos.product);
+                                                      /*reduce_only=*/true, QString(), pos.product, source);
                     pt_fill_order(paper_order.id, fill);
                     return {true, OrderPlaceResponse{true, paper_order.id, {}}, {}};
                 } catch (const std::exception& e) {
+                    LOG_WARN(kUtLog, logf("Paper position close failed", {{"account", ut_audit_account(account_id)},
+                                                                          {"symbol", pos.symbol},
+                                                                          {"qty", std::abs(pos.quantity)},
+                                                                          {"error", e.what()}}));
                     return {false, std::nullopt, QString("Close failed: %1").arg(e.what())};
                 }
             }
@@ -787,26 +1467,184 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& ac
         return {false, std::nullopt, "Position not found"};
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        ut_audit_action("Position close refused", account.broker_id, account_id, mode,
+                        close_fields({{"symbol", symbol}, {"exchange", exchange}, {"reason", "broker not found"}}));
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        ut_audit_action("Position close refused", account.broker_id, account_id, mode,
+                        close_fields({{"symbol", symbol}, {"exchange", exchange}, {"reason", refusal}}));
         return {false, std::nullopt, refusal};
-    return broker->close_position(creds, symbol, exchange, product_type);
+    }
+    ut_audit_action("Position close submitted", account.broker_id, account_id, mode,
+                    close_fields({{"symbol", symbol}, {"exchange", exchange}, {"product", product_type}}));
+    QElapsedTimer sent;
+    sent.start();
+    auto closed = broker->close_position(creds, symbol, exchange, product_type);
+    if (closed.success && closed.data.has_value())
+        ut_audit_action(
+            "Position close accepted", account.broker_id, account_id, mode,
+            close_fields({{"symbol", symbol}, {"order_id", closed.data->order_id}, {"elapsed_ms", sent.elapsed()}}));
+    else
+        ut_audit_action(ut_outcome_unknown(closed.error) ? "Position close outcome unknown" : "Position close rejected",
+                        account.broker_id, account_id, mode,
+                        close_fields({{"symbol", symbol}, {"reason", closed.error}, {"elapsed_ms", sent.elapsed()}}));
+    return closed;
 }
 
-ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& account_id, const SmartOrder& order) {
+ApiResponse<OrderPlaceResponse> UnifiedTrading::close_holding(const QString& account_id, const QString& symbol,
+                                                              const QString& exchange, double quantity) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
+    // The local simulator keeps delivery exposure as CNC positions — its own close path
+    // already handles them (opposite side, reduce-only, full position).
+    if (local_paper(account))
+        return close_position(account_id, symbol, exchange, QStringLiteral("CNC"));
+
+    // Every refusal below is an exit the user asked for that was not sent: audited with
+    // its reason (the sell itself goes through place_order, which audits it).
+    const auto refused = [&](const QString& reason) -> ApiResponse<OrderPlaceResponse> {
+        ut_audit_action("Holding exit refused", account.broker_id, account_id, broker_mode_tag(account),
+                        {{"symbol", symbol}, {"exchange", exchange}, {"qty", quantity}, {"reason", reason}});
+        return {false, std::nullopt, reason};
+    };
+
+    if (symbol.trimmed().isEmpty() || exchange.trimmed().isEmpty())
+        return refused(QStringLiteral("Holding exit refused: symbol and exchange are required"));
+    if (!std::isfinite(quantity) || quantity <= 0.0)
+        return refused(
+            QString("Holding exit refused for %1: no quantity to sell — refresh holdings and retry").arg(symbol));
+
+    auto* broker = ut_broker_for(account);
+    if (!broker)
+        return refused("Broker not found: " + account.broker_id);
+    auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return refused(refusal);
+
+    // Re-read the broker's holdings book (truth, not the blotter snapshot) so a holding
+    // that was sold elsewhere, or shrank, is never oversold — on a broker that allows it
+    // an oversell opens a short.
+    const auto hr = broker->get_holdings(creds);
+    if (!hr.success || !hr.data.has_value())
+        return refused(QString("Holding exit refused for %1: the broker's holdings could not be read (%2)")
+                           .arg(symbol, hr.error.isEmpty() ? QStringLiteral("no detail") : hr.error));
+    const BrokerHolding* held = nullptr;
+    for (const auto& h : *hr.data) {
+        if (h.symbol != symbol)
+            continue;
+        // Some adapters (Alpaca) report holdings without an exchange; match on symbol then.
+        if (!h.exchange.isEmpty() && h.exchange.compare(exchange, Qt::CaseInsensitive) != 0)
+            continue;
+        held = &h;
+        break;
+    }
+    if (!held)
+        return refused(QString("Holding exit refused: %1 (%2) is no longer in the holdings book — already sold?")
+                           .arg(symbol, exchange));
+    if (!(held->quantity > 0.0))
+        return refused(QString("Holding exit refused: %1 is not a long holding at the broker (qty %2) — exit it from "
+                               "the Positions tab")
+                           .arg(symbol)
+                           .arg(held->quantity));
+    if (quantity > held->quantity + 1e-9)
+        return refused(QString("Holding exit refused: the broker now reports %1 × %2 held, not the %3 you confirmed — "
+                               "refresh holdings and retry")
+                           .arg(held->quantity)
+                           .arg(symbol)
+                           .arg(quantity));
+
+    UnifiedOrder order;
+    order.symbol = symbol;
+    order.exchange = exchange;
+    order.side = OrderSide::Sell;
+    order.order_type = OrderType::Market;
+    order.quantity = quantity;
+    order.product_type = ProductType::Delivery;
+    order.validity = QStringLiteral("DAY");
+    const UnifiedOrderResponse resp = place_order(account_id, order);
+    if (!resp.success)
+        return {false, std::nullopt, resp.message.isEmpty() ? QStringLiteral("Holding exit failed") : resp.message};
+    return {true, OrderPlaceResponse{true, resp.order_id, {}}, {}};
+}
+
+ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& account_id, const SmartOrder& order_in) {
+    SmartOrder order = order_in;
+    order.source = ut_effective_source(order_in.source);
+    auto account = AccountManager::instance().get_account(account_id);
+    if (account.account_id.isEmpty())
+        return {false, std::nullopt, "Account not found: " + account_id};
+
+    // Approval gate (see place_order). A queued smart order is stored the way a
+    // "smartorder" row is executed on approval (ActionCenter::execute_pending).
+    // Reduce-only for an exit-kind source: a flatten (target 0, no explicit quantity) is
+    // the engine's own close path — it sizes the order from the live position below, so
+    // it can only shrink it (with no position it sends nothing). A non-zero target or an
+    // explicit quantity can open exposure: not reduce-only.
+    if (auto gated = ut_approval_gate(
+            account_id, QStringLiteral("smartorder"), order.source, account.trading_mode,
+            [&order]() {
+                UnifiedOrder u;
+                u.symbol = order.symbol;
+                u.exchange = order.exchange;
+                u.side = order.action;
+                u.order_type = order.order_type;
+                u.quantity = order.quantity;
+                u.price = order.price;
+                u.stop_price = order.trigger_price;
+                u.product_type = order.product_type;
+                u.source = order.source;
+                QJsonObject j = ActionCenter::serialize_unified_order(u);
+                j[QStringLiteral("position_size")] = order.position_size;
+                return j;
+            },
+            [&order]() {
+                if (order.position_size == 0.0 && !(order.quantity > 0.0))
+                    return UtReduceOnlyCheck{approval_rule::ReduceOnly::Yes,
+                                             QStringLiteral("%1: flatten to 0 — the engine closes the open position "
+                                                            "from the live book (reduce-only by construction)")
+                                                 .arg(order.symbol)};
+                return UtReduceOnlyCheck{approval_rule::ReduceOnly::No,
+                                         QStringLiteral("%1: a smart order with target %2 / quantity %3 can open "
+                                                        "exposure — only a flatten (target 0, no quantity) is an exit")
+                                             .arg(order.symbol)
+                                             .arg(order.position_size)
+                                             .arg(order.quantity)};
+            }))
+        return {false, std::nullopt, gated->message};
+
     // Pre-flight validation. Smart orders previously reached the broker with no
     // checks at all — only the plain UnifiedOrder overload was wired.
+    // Fields shared by the smart-order audit lines (the engine computes side / qty).
+    const auto smart_fields = [&](const QString& venue, const QString& mode) {
+        QList<LogField> f{{"venue", venue},
+                          {"account", ut_audit_account(account_id)},
+                          {"mode", mode},
+                          {"symbol", order.symbol},
+                          {"exchange", order.exchange},
+                          {"target", order.position_size},
+                          {"qty", order.quantity},
+                          {"price", order.price}};
+        if (!order.source.isEmpty())
+            f.append(LogField("source", order.source));
+        return f;
+    };
+    const QString smart_venue = account.trading_mode == "paper" ? QStringLiteral("paper") : account.broker_id;
+
     auto vr = OrderValidator::validate_smart(order);
-    if (!vr.valid)
+    if (!vr.valid) {
+        auto f = smart_fields(smart_venue, account.trading_mode);
+        f.append(LogField("reason", "Validation failed: " + vr.errors.join("; ")));
+        LOG_AUDIT(kUtAudit, logf("Smart order rejected", f));
         return {false, std::nullopt, "Validation failed: " + vr.errors.join("; ")};
+    }
 
     // Risk gate on the TARGET exposure: the engine computes the delta from the
     // live book, so the size the account will be carrying is the meaningful
@@ -814,12 +1652,9 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
     // a flatten). Defaults are unlimited — see risk_block_reason.
     const double risk_qty = (order.position_size != 0.0) ? std::abs(order.position_size) : order.quantity;
     const QString risk_err = risk_block_reason(order.symbol, order.action, risk_qty, order.price,
-                                               account.trading_mode == "paper");
+                                               account.trading_mode == "paper", order.exchange);
     if (!risk_err.isEmpty()) {
-        LOG_INFO(kUtLog, QString("Risk limit rejected smart order %1 (target %2) on account %3: %4")
-                             .arg(order.symbol)
-                             .arg(order.position_size)
-                             .arg(account_id, risk_err));
+        ut_audit_risk_rejected(account_id, account.trading_mode, order.symbol, order.action, risk_qty, risk_err);
         return {false, std::nullopt, "Risk check failed: " + risk_err};
     }
     {
@@ -844,12 +1679,22 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
         // Paper mode: get paper positions, calculate delta, place paper order
         auto positions = pt_get_positions(account.paper_portfolio_id);
         double current = 0;
+        // With no open position the order is booked as "EXCH:SYM", as before. An open one is
+        // found the way the Equity screen's exit finds it (close_position): under the bare
+        // symbol — how the account path books every order — or "EXCH:SYM"
+        // (paper_book::symbol_matches), and the adjustment then goes on that row's own
+        // symbol so it nets against it. Looking for "EXCH:SYM" alone missed every position
+        // the account path had opened: a workflow flatten answered "Position is zero" with
+        // the position still open.
         QString paper_sym = order.exchange.isEmpty() ? order.symbol : order.exchange + ":" + order.symbol;
         for (const auto& p : positions) {
-            if (p.symbol == paper_sym) {
-                current = p.quantity;
-                break;
-            }
+            if (p.quantity == 0 || !paper_book::symbol_matches(p.symbol, order.symbol, order.exchange))
+                continue;
+            paper_sym = p.symbol;
+            // Paper positions store a positive magnitude with side "long"/"short":
+            // a short is a negative net position here.
+            current = position_is_short(p.side, p.quantity) ? -std::abs(p.quantity) : std::abs(p.quantity);
+            break;
         }
 
         double target = order.position_size;
@@ -885,33 +1730,89 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
         // long booked (1000-250)·qty of phantom profit, and a net-new position
         // opened at 1000). Reject a paper market fill with no usable price, the
         // same way the regular paper place_order path does.
-        if (order.price <= 0.0)
+        if (order.price <= 0.0) {
+            auto f = smart_fields(QStringLiteral("paper"), QStringLiteral("paper"));
+            f.append(LogField("reason", "no live price for a market fill"));
+            LOG_AUDIT(kUtAudit, logf("Smart order rejected", f));
             return {false, std::nullopt,
                     QString("No live price for a paper smart-order fill on %1 (supply SmartOrder.price = LTP)")
                         .arg(paper_sym)};
+        }
         const auto side_str = (action == OrderSide::Buy) ? QString("buy") : QString("sell");
+        // Cash is booked at the per-symbol factor: an adjustment that only shrinks the
+        // position follows the exit rule (prepare_close_fx), anything that adds
+        // exposure the entry rule (prepare_symbol_fx). Neither books at 1:1.
+        const bool only_reduces = current != 0 && quantity <= std::abs(current) + 1e-9 &&
+                                  ((current > 0) == (action == OrderSide::Sell));
+        QString fx_reason;
+        const bool fx_ok = only_reduces
+                               ? PaperMarkService::prepare_close_fx(account.paper_portfolio_id, paper_sym, order.exchange,
+                                                                    PaperMarkService::kCloseFxWaitMs, &fx_reason)
+                               : PaperMarkService::prepare_symbol_fx(account.paper_portfolio_id, paper_sym,
+                                                                     order.exchange, &fx_reason);
+        if (!fx_ok)
+            return {false, std::nullopt, fx_reason}; // audited by PaperMarkService (missing rate)
         try {
             auto paper_order = pt_place_order(account.paper_portfolio_id, paper_sym, side_str, "market", quantity,
-                                              order.price, std::nullopt, false);
+                                              order.price, std::nullopt, false, QString(), QString(), order.source);
             pt_fill_order(paper_order.id, order.price);
             return {true,
                     SmartOrderResult{true, paper_order.id, action, quantity,
                                      QString("Paper: adjusted from %1 to %2").arg(current).arg(target)},
                     {}};
         } catch (const std::exception& e) {
+            LOG_WARN(kUtLog, logf("Paper smart order failed", {{"account", ut_audit_account(account_id)},
+                                                               {"symbol", paper_sym},
+                                                               {"target", target},
+                                                               {"error", e.what()}}));
             return {false, std::nullopt, QString("Paper smart order failed: %1").arg(e.what())};
         }
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    const QString mode = broker_mode_tag(account);
+    auto* broker = ut_broker_for(account);
+    if (!broker) {
+        auto f = smart_fields(account.broker_id, mode);
+        f.append(LogField("reason", "broker not found"));
+        LOG_AUDIT(kUtAudit, logf("Smart order rejected", f));
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
+    }
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        auto f = smart_fields(account.broker_id, mode);
+        f.append(LogField("reason", refusal));
+        LOG_AUDIT(kUtAudit, logf("Smart order rejected", f));
         return {false, std::nullopt, refusal};
+    }
     rate_limit_broker(account.broker_id);
-    return SmartOrderEngine::instance().execute(broker, creds, order);
+    // SmartOrderEngine computes the delta and calls the broker itself: one line before,
+    // one with the outcome (the order it sent, or why not).
+    LOG_AUDIT(kUtAudit, logf("Smart order submitted", smart_fields(account.broker_id, mode)));
+    QElapsedTimer sent;
+    sent.start();
+    auto smart = SmartOrderEngine::instance().execute(broker, creds, order);
+    {
+        auto f = smart_fields(account.broker_id, mode);
+        f.append(LogField("elapsed_ms", sent.elapsed()));
+        if (smart.success && smart.data.has_value()) {
+            f.append(LogField("order_id", smart.data->order_id));
+            if (smart.data->action_taken) {
+                f.append(LogField("side", order_side_str(smart.data->executed_action)));
+                f.append(LogField("order_qty", smart.data->executed_quantity));
+            }
+            f.append(LogField("result", smart.data->message));
+            LOG_AUDIT(kUtAudit, logf(smart.data->action_taken ? QStringLiteral("Smart order accepted")
+                                                              : QStringLiteral("Smart order finished"),
+                                     f));
+        } else {
+            f.append(LogField("reason", smart.error));
+            LOG_AUDIT(kUtAudit, logf(ut_outcome_unknown(smart.error) ? QStringLiteral("Smart order outcome unknown")
+                                                                     : QStringLiteral("Smart order rejected"),
+                                     f));
+        }
+    }
+    return smart;
 }
 
 ApiResponse<QVector<BrokerQuote>> UnifiedTrading::get_multi_quotes(const QString& account_id,
@@ -920,7 +1821,7 @@ ApiResponse<QVector<BrokerQuote>> UnifiedTrading::get_multi_quotes(const QString
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    auto* broker = ut_broker_for(account);
     if (!broker)
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
@@ -934,7 +1835,7 @@ ApiResponse<MarketDepth> UnifiedTrading::get_market_depth(const QString& account
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    auto* broker = ut_broker_for(account);
     if (!broker)
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
@@ -946,8 +1847,13 @@ ApiResponse<MarketDepth> UnifiedTrading::get_market_depth(const QString& account
 // Basket & Split Orders
 // ============================================================================
 
-void UnifiedTrading::place_basket_orders(const QString& account_id, const BasketOrderRequest& basket,
+void UnifiedTrading::place_basket_orders(const QString& account_id, const BasketOrderRequest& basket_in,
                                          std::function<void(const BasketOrderResult&)> callback) {
+    // Each leg keeps its own provenance (an agent step in progress overrides a screen-set one).
+    BasketOrderRequest basket = basket_in;
+    for (auto& leg : basket.orders)
+        leg.source = ut_effective_source(leg.source);
+
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty()) {
         BasketOrderResult result;
@@ -959,6 +1865,29 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
         if (callback)
             callback(result);
         return;
+    }
+
+    // Approval gate (see place_order): a basket with an automated leg is queued whole,
+    // as the "basketorder" entry the basket dialogs queue.
+    QString gate_source;
+    for (const auto& leg : basket.orders)
+        if (approval_rule::needs_human_approval(leg.source)) {
+            gate_source = leg.source;
+            break;
+        }
+    if (!gate_source.isEmpty()) {
+        if (auto gated = ut_approval_gate(account_id, QStringLiteral("basketorder"), gate_source, account.trading_mode,
+                                          [&basket]() { return ActionCenter::serialize_basket_order(basket); })) {
+            BasketOrderResult result;
+            result.total = basket.orders.size();
+            for (const auto& order : basket.orders) {
+                result.results.append({order.symbol, order.exchange, false, {}, gated->message});
+                result.failed++;
+            }
+            if (callback)
+                callback(result);
+            return;
+        }
     }
 
     // Pre-flight validation. validate_basket had zero call sites, so a basket
@@ -974,11 +1903,25 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             result.results.append({order.symbol, order.exchange, false, {}, "Validation failed: " + err});
             result.failed++;
         }
-        LOG_WARN(kUtLog, QString("Basket rejected by validation for %1: %2").arg(account_id, err));
+        LOG_AUDIT(kUtAudit, "Basket rejected",
+                  {{"account", ut_audit_account(account_id)},
+                   {"mode", account.trading_mode},
+                   {"strategy", basket.strategy_name},
+                   {"legs", static_cast<int>(basket.orders.size())},
+                   {"reason", "Validation failed: " + err}});
         if (callback)
             callback(result);
         return;
     }
+    const auto audit_basket_refused = [&](const QString& reason) {
+        LOG_AUDIT(kUtAudit, "Basket rejected",
+                  {{"venue", account.broker_id},
+                   {"account", ut_audit_account(account_id)},
+                   {"mode", account.trading_mode},
+                   {"strategy", basket.strategy_name},
+                   {"legs", static_cast<int>(basket.orders.size())},
+                   {"reason", reason}});
+    };
 
     // is_paper = served by the LOCAL simulator. A PAPER account on a verified native broker
     // paper venue goes through the broker like a live one, yet stays "paper" for the risk
@@ -992,8 +1935,9 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     BrokerCredentials creds;
     QString paper_portfolio_id = account.paper_portfolio_id;
     if (!is_paper) {
-        broker = BrokerRegistry::instance().get(account.broker_id);
+        broker = ut_broker_for(account);
         if (!broker) {
+            audit_basket_refused(QStringLiteral("broker not found"));
             BasketOrderResult result;
             result.total = basket.orders.size();
             for (const auto& order : basket.orders) {
@@ -1007,6 +1951,7 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
         }
         creds = AccountManager::instance().load_credentials(account_id);
         if (creds.access_token.isEmpty()) {
+            audit_basket_refused(QStringLiteral("no access token; the account is not signed in"));
             BasketOrderResult result;
             result.total = basket.orders.size();
             for (const auto& order : basket.orders) {
@@ -1023,6 +1968,7 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             return;
         }
         if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+            audit_basket_refused(refusal);
             BasketOrderResult result;
             result.total = basket.orders.size();
             for (const auto& order : basket.orders) {
@@ -1053,13 +1999,11 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     // live current_price_. Legs with no cached quote keep price 0 and fail with the
     // existing "No live price for market fill" message.
     if (is_paper) {
-        if (auto* stream = DataStreamManager::instance().stream_for(account_id)) {
-            for (auto& o : orders) {
-                if (o.order_type == OrderType::Market && o.price <= 0.0) {
-                    const double ltp = stream->cached_quote(o.symbol).ltp;
-                    if (ltp > 0.0)
-                        o.price = ltp;
-                }
+        for (auto& o : orders) {
+            if (o.order_type == OrderType::Market && o.price <= 0.0) {
+                const double ltp = ut_paper_market_ltp(account_id, account.broker_id, o.symbol);
+                if (ltp > 0.0)
+                    o.price = ltp;
             }
         }
     }
@@ -1067,11 +2011,22 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     QPointer<UnifiedTrading> self = this;
     const QString basket_strategy = basket.strategy_name;
     const QString broker_id = account.broker_id;
+    // Audit: the basket as a whole, then each leg (paper legs by the engine, broker
+    // legs submitted / outcome below), then the summary.
+    const QString audit_venue = is_paper ? QStringLiteral("paper") : broker_id;
+    const QString audit_mode = paper_mode ? QStringLiteral("paper") : QStringLiteral("live");
+    LOG_AUDIT(kUtAudit, "Basket submitted",
+              {{"venue", audit_venue},
+               {"account", ut_audit_account(account_id)},
+               {"mode", audit_mode},
+               {"strategy", basket_strategy},
+               {"legs", static_cast<int>(orders.size())}});
     // The batch sleeps between legs (rate-limit spacing), so it runs on the
     // blocking-jobs pool: never queued behind the global pool, and never holding
     // an order-pool thread a single BUY/CANCEL needs.
     (void)QtConcurrent::run(&blocking_thread_pool(), [self, account_id, basket_strategy, orders, is_paper, paper_mode,
-                                                      broker, broker_id, creds, paper_portfolio_id, callback]() {
+                                                      broker, broker_id, creds, paper_portfolio_id, callback,
+                                                      audit_venue, audit_mode]() {
         BasketOrderResult result;
         result.total = orders.size();
 
@@ -1089,15 +2044,18 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             // Basket legs bypass place_order, so the risk gate is applied per leg
             // here. A blocked leg fails on its own; the rest of the basket still
             // goes out, matching how a broker-rejected leg already behaves.
-            QString leg_risk = risk_block_reason(order.symbol, order.side, order.quantity, order.price, paper_mode);
+            QString leg_risk = risk_block_reason(order.symbol, order.side, order.quantity, order.price, paper_mode,
+                                                 order.exchange);
+            const bool risk_manager_refused = !leg_risk.isEmpty(); // for the audit line only
             if (leg_risk.isEmpty()) {
                 const auto gate = OrderValidator::pre_trade_risk(account_id, order, /*broker_routed=*/!is_paper);
                 if (!gate.valid)
                     leg_risk = gate.errors.join("; ");
             }
             if (!leg_risk.isEmpty()) {
-                LOG_INFO(kUtLog, QString("Risk limit rejected basket leg %1 on account %2: %3")
-                                     .arg(order.symbol, account_id, leg_risk));
+                // A settings-gate refusal was audited by pre_trade_risk; audit RiskManager's here.
+                if (risk_manager_refused)
+                    ut_audit_risk_rejected(account_id, audit_mode, order.symbol, order.side, order.quantity, leg_risk);
                 r.success = false;
                 r.error = "Risk check failed: " + leg_risk;
                 result.failed++;
@@ -1121,14 +2079,22 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                 std::optional<double> stop_opt;
                 if (order.stop_price > 0)
                     stop_opt = order.stop_price;
+                QString fx_reason;
                 if (is_market && !price_opt) {
                     r.success = false;
                     r.error = "No live price for market fill";
+                    ut_audit_rejected(audit_venue, account_id, audit_mode, order, r.error);
+                } else if (!PaperMarkService::prepare_symbol_fx(paper_portfolio_id, order.symbol, order.exchange,
+                                                                &fx_reason)) {
+                    // A leg priced in another currency than the paper book needs a real
+                    // rate before cash is booked (never 1:1); the other legs go on.
+                    r.success = false;
+                    r.error = fx_reason; // audited by PaperMarkService (missing rate)
                 } else {
                     try {
                         auto paper_order =
                             pt_place_order(paper_portfolio_id, order.symbol, side_str, type_str, order.quantity,
-                                           price_opt, stop_opt, false, order.exchange, product);
+                                           price_opt, stop_opt, false, order.exchange, product, order.source);
                         if (is_market)
                             pt_fill_order(paper_order.id, *price_opt);
                         else
@@ -1138,12 +2104,22 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                     } catch (const std::exception& e) {
                         r.success = false;
                         r.error = QString("Paper order failed: %1").arg(e.what());
+                        LOG_WARN(kUtLog, logf("Basket leg failed (paper)", {{"account", ut_audit_account(account_id)},
+                                                                           {"symbol", order.symbol},
+                                                                           {"side", side_str},
+                                                                           {"qty", order.quantity},
+                                                                           {"error", e.what()}}));
                     }
                 }
             } else {
                 // Worker thread — safe to block on the broker's per-second cap.
                 rate_limit_broker(broker_id);
+                ut_audit_submitted(broker_id, account_id, audit_mode, order);
+                QElapsedTimer sent;
+                sent.start();
                 OrderPlaceResponse resp = broker->place_order(creds, order);
+                ut_audit_outcome(broker_id, account_id, audit_mode, order, resp.success, resp.order_id, resp.error,
+                                 sent.elapsed());
                 r.success = resp.success;
                 r.order_id = resp.order_id;
                 r.error = resp.error;
@@ -1155,6 +2131,15 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                 result.failed++;
             result.results.append(r);
         }
+
+        LOG_AUDIT(kUtAudit, "Basket finished",
+                  {{"venue", audit_venue},
+                   {"account", ut_audit_account(account_id)},
+                   {"mode", audit_mode},
+                   {"strategy", basket_strategy},
+                   {"ok", result.successful},
+                   {"failed", result.failed},
+                   {"legs", result.total}});
 
         if (!self)
             return;
@@ -1172,8 +2157,10 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     });
 }
 
-void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOrderRequest& request,
+void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOrderRequest& request_in,
                                         std::function<void(const SplitOrderResult&)> callback) {
+    SplitOrderRequest request = request_in;
+    request.base_order.source = ut_effective_source(request_in.base_order.source); // every chunk carries it
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty()) {
         SplitOrderResult result;
@@ -1185,7 +2172,32 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         return;
     }
 
+    // Approval gate (see place_order): an automated split is queued whole, as the
+    // "splitorder" entry ActionCenter::execute_pending runs on approval.
+    if (auto gated = ut_approval_gate(account_id, QStringLiteral("splitorder"), request.base_order.source,
+                                      account.trading_mode, [&request]() {
+                                          QJsonObject j = ActionCenter::serialize_unified_order(request.base_order);
+                                          j[QStringLiteral("splitsize")] = request.split_size;
+                                          j[QStringLiteral("delay_between_ms")] = request.delay_between_ms;
+                                          return j;
+                                      })) {
+        SplitOrderResult result;
+        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {}, gated->message});
+        result.chunks_failed++;
+        if (callback)
+            callback(result);
+        return;
+    }
+
+    // A split refused before any chunk is sent (audited with its reason).
+    const auto audit_split_refused = [&](const QString& reason) {
+        auto f = ut_order_fields(account.broker_id, account_id, account.trading_mode, request.base_order);
+        f.append(LogField("reason", reason));
+        LOG_AUDIT(kUtAudit, logf("Split order rejected", f));
+    };
+
     if (request.split_size <= 0) {
+        audit_split_refused(QStringLiteral("invalid split size"));
         SplitOrderResult result;
         result.results.append(
             {request.base_order.symbol, request.base_order.exchange, false, {}, "Invalid split size"});
@@ -1205,6 +2217,7 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     const double raw_qty = request.base_order.quantity;
     const long long rounded_qty = std::llround(raw_qty);
     if (raw_qty < 1.0 || std::fabs(raw_qty - static_cast<double>(rounded_qty)) > 1e-6) {
+        audit_split_refused(QStringLiteral("quantity is not a whole number of at least 1"));
         SplitOrderResult result;
         result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
                                QString("Invalid quantity %1 for a split order — it must be a whole number of at "
@@ -1219,7 +2232,9 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     // Risk gate on the FULL quantity (a split is one intent, not N independent
     // orders) — split chunks bypass place_order entirely. Defaults are unlimited.
     QString split_risk = risk_block_reason(request.base_order.symbol, request.base_order.side, raw_qty,
-                                           request.base_order.price, account.trading_mode == "paper");
+                                           request.base_order.price, account.trading_mode == "paper",
+                                           request.base_order.exchange);
+    const bool risk_manager_refused = !split_risk.isEmpty(); // for the audit line only
     if (split_risk.isEmpty()) {
         // Settings-driven gate on the whole split (one intent). Sanity / value
         // checks see the full quantity, not one chunk.
@@ -1228,8 +2243,10 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
             split_risk = gate.errors.join("; ");
     }
     if (!split_risk.isEmpty()) {
-        LOG_INFO(kUtLog, QString("Risk limit rejected split order %1 on account %2: %3")
-                             .arg(request.base_order.symbol, account_id, split_risk));
+        // A settings-gate refusal was audited by pre_trade_risk; audit RiskManager's here.
+        if (risk_manager_refused)
+            ut_audit_risk_rejected(account_id, account.trading_mode, request.base_order.symbol,
+                                   request.base_order.side, raw_qty, split_risk);
         SplitOrderResult result;
         result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
                                "Risk check failed: " + split_risk});
@@ -1246,6 +2263,7 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     const int total_orders = num_full + (remainder > 0 ? 1 : 0);
 
     if (total_orders > 100) {
+        audit_split_refused(QStringLiteral("too many chunks (%1, maximum 100)").arg(total_orders));
         SplitOrderResult result;
         result.results.append({request.base_order.symbol,
                                request.base_order.exchange,
@@ -1267,8 +2285,9 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     BrokerCredentials creds;
     QString paper_portfolio_id = account.paper_portfolio_id;
     if (!is_paper) {
-        broker = BrokerRegistry::instance().get(account.broker_id);
+        broker = ut_broker_for(account);
         if (!broker) {
+            audit_split_refused(QStringLiteral("broker not found"));
             SplitOrderResult result;
             result.results.append({request.base_order.symbol,
                                    request.base_order.exchange,
@@ -1282,6 +2301,7 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         }
         creds = AccountManager::instance().load_credentials(account_id);
         if (creds.access_token.isEmpty()) {
+            audit_split_refused(QStringLiteral("no access token; the account is not signed in"));
             SplitOrderResult result;
             result.results.append({request.base_order.symbol,
                                    request.base_order.exchange,
@@ -1294,6 +2314,7 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
             return;
         }
         if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+            audit_split_refused(refusal);
             SplitOrderResult result;
             result.results.append({request.base_order.symbol, request.base_order.exchange, false, {}, refusal});
             result.chunks_failed++;
@@ -1325,11 +2346,23 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     const int delay_ms = request.delay_between_ms;
     const QString broker_id = account.broker_id;
 
+    // Audit: the split as a whole, each chunk (paper chunks by the engine, broker chunks
+    // submitted / outcome below), then the summary.
+    const QString audit_venue = is_paper ? QStringLiteral("paper") : broker_id;
+    const QString audit_mode = account.trading_mode == "paper" ? QStringLiteral("paper") : QStringLiteral("live");
+    {
+        auto f = ut_order_fields(audit_venue, account_id, audit_mode, base);
+        f.append(LogField("chunks", static_cast<int>(chunk_qtys.size())));
+        f.append(LogField("split_size", split_size));
+        LOG_AUDIT(kUtAudit, logf("Split order submitted", f));
+    }
+
     QPointer<UnifiedTrading> self = this;
     // Sleeps delay_ms between chunks — blocking-jobs pool (see place_basket_orders).
     (void)QtConcurrent::run(
         &blocking_thread_pool(),
-        [self, base, chunk_qtys, delay_ms, is_paper, broker, broker_id, creds, paper_portfolio_id, callback]() {
+        [self, base, chunk_qtys, delay_ms, is_paper, broker, broker_id, creds, paper_portfolio_id, callback,
+         account_id, audit_venue, audit_mode]() {
             SplitOrderResult result;
 
             for (int i = 0; i < chunk_qtys.size(); ++i) {
@@ -1360,14 +2393,22 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
                     std::optional<double> stop_opt;
                     if (chunk.stop_price > 0)
                         stop_opt = chunk.stop_price;
+                    QString fx_reason;
                     if (is_market && !price_opt) {
                         r.success = false;
                         r.error = "No live price for market fill";
+                        ut_audit_rejected(audit_venue, account_id, audit_mode, chunk, r.error);
+                    } else if (!PaperMarkService::prepare_symbol_fx(paper_portfolio_id, chunk.symbol, chunk.exchange,
+                                                                    &fx_reason)) {
+                        // Refreshed per chunk (the delay between chunks can be long);
+                        // no rate -> this chunk is not booked at 1:1.
+                        r.success = false;
+                        r.error = fx_reason; // audited by PaperMarkService (missing rate)
                     } else {
                         try {
                             auto paper_order =
                                 pt_place_order(paper_portfolio_id, chunk.symbol, side_str, type_str, chunk.quantity,
-                                               price_opt, stop_opt, false, chunk.exchange, product);
+                                               price_opt, stop_opt, false, chunk.exchange, product, chunk.source);
                             if (is_market)
                                 pt_fill_order(paper_order.id, *price_opt);
                             else
@@ -1377,12 +2418,22 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
                         } catch (const std::exception& e) {
                             r.success = false;
                             r.error = QString("Paper order failed: %1").arg(e.what());
+                            LOG_WARN(kUtLog,
+                                     logf("Split order chunk failed (paper)", {{"account", ut_audit_account(account_id)},
+                                                                               {"symbol", chunk.symbol},
+                                                                               {"qty", chunk.quantity},
+                                                                               {"error", e.what()}}));
                         }
                     }
                 } else {
                     // Worker thread — safe to block on the broker's per-second cap.
                     rate_limit_broker(broker_id);
+                    ut_audit_submitted(broker_id, account_id, audit_mode, chunk);
+                    QElapsedTimer sent;
+                    sent.start();
                     OrderPlaceResponse resp = broker->place_order(creds, chunk);
+                    ut_audit_outcome(broker_id, account_id, audit_mode, chunk, resp.success, resp.order_id, resp.error,
+                                     sent.elapsed());
                     r.success = resp.success;
                     r.order_id = resp.order_id;
                     r.error = resp.error;
@@ -1396,6 +2447,15 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
                 }
                 result.results.append(r);
             }
+
+            LOG_AUDIT(kUtAudit, "Split order finished",
+                      {{"venue", audit_venue},
+                       {"account", ut_audit_account(account_id)},
+                       {"mode", audit_mode},
+                       {"symbol", base.symbol},
+                       {"ok", result.chunks_successful},
+                       {"failed", result.chunks_failed},
+                       {"qty_placed", result.total_quantity_placed}});
 
             if (!self)
                 return;
@@ -1433,13 +2493,16 @@ const BrokerOrderInfo* ut_find_order(const QVector<BrokerOrderInfo>& book, const
 } // namespace
 
 QVector<UnifiedTrading::UnwindLegResult>
-UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<BasketOrderResult::OrderResult>& legs) {
+UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<BasketOrderResult::OrderResult>& legs,
+                                   const QString& source) {
     QVector<UnwindLegResult> out;
     QVector<BasketOrderResult::OrderResult> placed;
     for (const auto& l : legs)
         if (l.success && !l.order_id.isEmpty())
             placed.append(l);
     auto fail_all = [&](const QString& why) {
+        LOG_AUDIT(kUtAudit, "Basket unwind refused",
+                  {{"account", ut_audit_account(account_id)}, {"legs", static_cast<int>(placed.size())}, {"reason", why}});
         for (const auto& l : placed)
             out.append({l.symbol, l.order_id, false, {}, why});
         return out;
@@ -1453,6 +2516,7 @@ UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<Bask
 
     if (local_paper(account)) {
         const auto book = pt_get_orders(account.paper_portfolio_id);
+        const UtCloseFxBudget fx_budget;
         for (const auto& l : placed) {
             UnwindLegResult r{l.symbol, l.order_id, false, {}, {}};
             const PtOrder* o = nullptr;
@@ -1475,9 +2539,14 @@ UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<Bask
                     const double px = o->avg_price.value_or(o->price.value_or(0.0));
                     if (px <= 0.0)
                         throw std::runtime_error("no fill price to reverse at");
+                    // The reversal is an exit: same FX rule as any close (never 1:1).
+                    QString fx_reason;
+                    if (!PaperMarkService::prepare_close_fx(account.paper_portfolio_id, o->symbol, l.exchange,
+                                                            fx_budget.remaining_ms(), &fx_reason))
+                        throw std::runtime_error(fx_reason.toStdString());
                     const QString opp = (o->side == QLatin1String("buy")) ? QStringLiteral("sell") : QStringLiteral("buy");
                     auto rev = pt_place_order(account.paper_portfolio_id, o->symbol, opp, "market", o->filled_qty, px,
-                                              std::nullopt, /*reduce_only=*/true, l.exchange, QString());
+                                              std::nullopt, /*reduce_only=*/true, l.exchange, QString(), source);
                     pt_fill_order(rev.id, px);
                     did << QString("reversed %1 @ %2 (paper)").arg(o->filled_qty).arg(px);
                 }
@@ -1486,13 +2555,17 @@ UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<Bask
             } catch (const std::exception& e) {
                 r.error = QString::fromUtf8(e.what());
                 r.action = did.join("; ");
+                LOG_WARN(kUtLog, logf("Basket unwind failed (paper)", {{"account", ut_audit_account(account_id)},
+                                                                       {"order_id", o->id},
+                                                                       {"symbol", o->symbol},
+                                                                       {"error", e.what()}}));
             }
             out.append(r);
         }
         return out;
     }
 
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    auto* broker = ut_broker_for(account);
     if (!broker)
         return fail_all("Broker not found: " + account.broker_id);
     const auto creds = AccountManager::instance().load_credentials(account_id);
@@ -1510,7 +2583,17 @@ UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<Bask
         const BrokerOrderInfo* info = ut_find_order(*book_resp.data, l.order_id);
         if (info && ut_status_is_open(info->status)) {
             rate_limit_broker(account.broker_id);
+            const QString unwind_mode = broker_mode_tag(account);
+            ut_audit_action("Order cancel requested", account.broker_id, account_id, unwind_mode,
+                            {{"order_id", info->order_id}, {"source", "basket_unwind"}});
             const auto c = broker->cancel_order(creds, info->order_id);
+            if (c.success)
+                ut_audit_action("Order cancelled", account.broker_id, account_id, unwind_mode,
+                                {{"order_id", info->order_id}, {"source", "basket_unwind"}});
+            else
+                ut_audit_action(ut_outcome_unknown(c.error) ? "Order cancel outcome unknown" : "Order cancel rejected",
+                                account.broker_id, account_id, unwind_mode,
+                                {{"order_id", info->order_id}, {"source", "basket_unwind"}, {"reason", c.error}});
             cancel_note.insert(l.order_id, c.success ? QStringLiteral("cancelled remainder")
                                                      : QStringLiteral("cancel failed: ") + c.error);
             cancelled_any = true;
@@ -1563,6 +2646,7 @@ UnifiedTrading::unwind_basket_legs(const QString& account_id, const QVector<Bask
         rev.quantity = filled;
         rev.order_type = OrderType::Market;
         rev.product_type = broker->product_from_wire(info->product_type);
+        rev.source = source; // an exit kind is verified reduce-only by place_order's gate
         const auto resp = place_order(account_id, rev);
         r.ok = resp.success;
         const QString step = QString("reversed %1 (%2 %3)")

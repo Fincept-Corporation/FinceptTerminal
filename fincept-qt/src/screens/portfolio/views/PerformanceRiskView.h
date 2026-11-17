@@ -2,14 +2,39 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
-#include <QChartView>
-#include <QLabel>
-#include <QPushButton>
+#include <QHash>
 #include <QWidget>
+
+class QButtonGroup;
+class QComboBox;
+class QLabel;
+class QPushButton;
+class QTableWidget;
+class QTabWidget;
+
+namespace fincept::ui {
+class DistributionChart;
+class KpiStrip;
+class MonthlyReturnsHeatmap;
+class TimeSeriesChart;
+} // namespace fincept::ui
+
+namespace fincept::screens::pfmt {
+class PortfolioNoticeBar;
+}
 
 namespace fincept::screens {
 
-/// Performance & Risk detail view with NAV chart, risk metric cards, and period selector.
+/// PERFORMANCE & RISK — realised performance of the book over a selectable
+/// window (MTD … since inception):
+///   * KPI tiles that FOLLOW the window: TWR and MWR side by side, annualised
+///     (windows ≥ 1 year only), benchmark and excess, volatility (realised /
+///     ex-ante), Sharpe, Sortino, drawdowns, beta, alpha, tracking error,
+///     information ratio, up / down capture, Calmar, win rate, VaR / CVaR;
+///   * chart (TimeSeriesChart): TWR index vs benchmark or NAV, underwater pane,
+///     rolling volatility / Sharpe / beta pane;
+///   * period table MTD / QTD / YTD / 1Y / 3Y / 5Y / inception;
+///   * monthly / yearly return heatmap and the return distribution.
 class PerformanceRiskView : public QWidget {
     Q_OBJECT
   public:
@@ -17,87 +42,58 @@ class PerformanceRiskView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
+    /// Metrics of any window for this portfolio (others are ignored).
     void set_metrics(const portfolio::ComputedMetrics& metrics);
-    /// Benchmark closes (ascending dates) for the RETURN chart overlay.
+    /// Benchmark level (base currency, ascending dates).
     void set_benchmark(const QString& symbol, const QStringList& dates, const QVector<double>& closes);
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
   private:
-    /// What the chart plots: NAV in currency (includes deposits/withdrawals), the
-    /// flow-adjusted cumulative return against the benchmark, or the drawdown curve.
-    enum class ChartMode { Nav, Return, Drawdown };
+    enum class ChartMode { Return, Nav };
+    enum class Rolling { Volatility, Sharpe, Beta };
 
     void build_ui();
-    void retranslateUi();
-    void update_chart();
-    void update_nav_chart(const QDate& cutoff);
-    void update_return_chart(const QDate& cutoff);
-    void update_drawdown_chart(const QDate& cutoff);
-    void update_metrics();
-    void set_period(const QString& period);
-    void set_chart_mode(ChartMode mode);
-    QDate period_cutoff() const;
-    /// The TWR points inside the period, with the base point (last one on/before the
-    /// cutoff) first so period returns cover the whole window.
-    QVector<portfolio::TwrPoint> twr_window(const QDate& cutoff) const;
+    void apply_styles();
+    void request_windows(bool all);
+    void render_tiles();
+    void render_chart();
+    void render_periods();
+    void render_calendar();
+    void render_distribution();
+    void render_notice();
+    void export_csv();
+    const portfolio::ComputedMetrics* window_metrics() const;
+    const portfolio::ComputedMetrics* all_metrics() const;
 
-    // Period selector
-    QVector<QPushButton*> period_btns_;
-    QString current_period_ = "1Y";
+    pfmt::PortfolioNoticeBar* notice_ = nullptr;
+    QButtonGroup* window_group_ = nullptr;
+    QPushButton* return_btn_ = nullptr;
+    QPushButton* nav_btn_ = nullptr;
+    QComboBox* rolling_cb_ = nullptr;
+    QComboBox* rolling_len_cb_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
+    QLabel* basis_label_ = nullptr;
+    ui::KpiStrip* kpis_ = nullptr;
+    QTabWidget* tabs_ = nullptr;
+    ui::TimeSeriesChart* chart_ = nullptr;
+    QTableWidget* periods_table_ = nullptr;
+    ui::MonthlyReturnsHeatmap* heatmap_ = nullptr;
+    ui::DistributionChart* dist_ = nullptr;
+    QLabel* dist_note_ = nullptr;
 
-    // Chart-mode selector
-    QVector<QPushButton*> mode_btns_;
-    ChartMode chart_mode_ = ChartMode::Nav;
-
-    // Benchmark history for the RETURN overlay
+    portfolio::PortfolioSummary summary_;
+    QVector<portfolio::PortfolioSnapshot> snapshots_;
+    QHash<int, portfolio::ComputedMetrics> metrics_; // PerfWindow -> metrics
+    QHash<int, bool> pending_;                       // requested, not yet delivered
+    portfolio::PerfWindow window_ = portfolio::PerfWindow::Y1;
+    ChartMode chart_mode_ = ChartMode::Return;
+    QString currency_;
     QString bench_symbol_;
     QStringList bench_dates_;
     QVector<double> bench_closes_;
-
-    // Header labels
-    QLabel* chart_title_ = nullptr;
-    QLabel* metrics_header_ = nullptr;
-    QLabel* rf_hint_ = nullptr; // basis line: TWR window, risk-free rate + source, risk basis
-    QPushButton* export_btn_ = nullptr;
-
-    void update_rf_hint();
-    void export_csv();
-
-    // Chart
-    QChartView* chart_view_ = nullptr;
-
-    // Metric cards
-    struct MetricCard {
-        QLabel* title = nullptr;
-        QLabel* value = nullptr;
-        QLabel* desc = nullptr;
-    };
-    MetricCard sharpe_card_;
-    MetricCard sortino_card_;
-    MetricCard beta_card_;
-    MetricCard alpha_card_;
-    MetricCard vol_card_;
-    MetricCard drawdown_card_;
-    MetricCard var_card_;
-    MetricCard cvar_card_;
-    MetricCard twr_card_;
-    MetricCard cagr_card_;
-    MetricCard calmar_card_;
-    MetricCard cur_dd_card_;
-    MetricCard excess_card_;
-    MetricCard te_card_;
-    MetricCard ir_card_;
-    MetricCard win_card_;
-
-    MetricCard add_metric_card(QLayout* layout, const QString& title, const QString& desc, const char* color);
-
-    // Data
-    portfolio::PortfolioSummary summary_;
-    QVector<portfolio::PortfolioSnapshot> snapshots_;
-    portfolio::ComputedMetrics metrics_;
-    QString currency_;
     bool has_data_ = false;
 };
 

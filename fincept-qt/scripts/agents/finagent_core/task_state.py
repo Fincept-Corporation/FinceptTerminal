@@ -278,12 +278,18 @@ class ResumableTaskRunner:
         by the PLANNER tab and the agentic-mode runner — single source of truth.
         """
         from finagent_core.execution_planner import generate_dynamic_plan
+        from finagent_core.run_errors import RunFailed
 
         result = generate_dynamic_plan(query, api_keys=self.api_keys, caller_config=config)
-        if result.get("success") and result.get("plan", {}).get("steps"):
+        if not result.get("success"):
+            # No usable model (or planning failed outright): the task fails
+            # with that reason. It used to continue on a canned plan and end
+            # "done" with the provider's error text as the answer.
+            raise RunFailed(result.get("error") or "Plan generation failed")
+        if result.get("plan", {}).get("steps"):
             return result["plan"]
 
-        # Last-ditch single-step fallback so callers always have a plan to iterate.
+        # The model answered with an empty plan: run the request as one step.
         import time
         return {
             "id": f"trivial_{int(time.time())}",
@@ -340,7 +346,10 @@ Execute this step thoroughly using available tools."""
 
         agent = CoreAgent(api_keys=self.api_keys)
         response = agent.run(step_prompt, config)
-        content = agent.get_response_content(response)
+        # Raises RunFailed for a failed run instead of recording the
+        # provider's error text as the step's result.
+        from finagent_core.run_errors import content_or_raise
+        content = content_or_raise(response, agent.get_response_content)
 
         return {
             "step": step_index + 1,
@@ -390,7 +399,8 @@ Synthesize all of the above into a single comprehensive, well-structured final a
 
         agent = CoreAgent(api_keys=self.api_keys)
         response = agent.run(prompt, synthesis_config)
-        return agent.get_response_content(response)
+        from finagent_core.run_errors import content_or_raise
+        return content_or_raise(response, agent.get_response_content)
 
 
 # ─── Module-level helpers for main.py dispatch ───────────────────────────────

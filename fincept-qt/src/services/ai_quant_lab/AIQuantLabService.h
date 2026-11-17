@@ -9,15 +9,49 @@
 #include <QPointer>
 #include <QProcess>
 
+#include <atomic>
 #include <functional>
+#include <memory>
 
 namespace fincept::services::quant {
 
 /// Singleton service for AI Quant Lab — dispatches to 18+ Python modules.
+///
+/// Request-scoped runs: while a RequestScope lives, every script the calls
+/// below start is tagged with its request id and cancel token. A tagged run
+/// answers through request_finished / request_failed only (never through
+/// result_ready / error_occurred), so a reply reaches exactly the view that
+/// asked for it, however late it arrives; raising the token stops the script
+/// (queued: never spawned; running: killed). Untagged calls behave as before.
+///
+///   const quint64 id = AIQuantLabService::next_request_id();
+///   auto cancel = std::make_shared<std::atomic<bool>>(false);
+///   { AIQuantLabService::RequestScope scope(id, cancel); svc.gs_greeks(params); }
+///   // later: request_finished(id, "gs_quant", "greeks", data)
 class AIQuantLabService : public QObject {
     Q_OBJECT
   public:
     static AIQuantLabService& instance();
+
+    /// A fresh, app-wide unique request id (never 0).
+    static quint64 next_request_id();
+
+    /// Tags the runs started on the GUI thread while it lives (see above).
+    /// Scopes do not nest: an inner scope replaces the outer one until it ends.
+    class RequestScope {
+      public:
+        RequestScope(quint64 request_id, std::shared_ptr<std::atomic<bool>> cancel);
+        ~RequestScope();
+        RequestScope(const RequestScope&) = delete;
+        RequestScope& operator=(const RequestScope&) = delete;
+        /// Scripts started (or answered from cache) under this scope so far.
+        int dispatched() const;
+
+      private:
+        quint64 prev_id_ = 0;
+        std::shared_ptr<std::atomic<bool>> prev_cancel_;
+        int prev_dispatched_ = 0;
+    };
 
     // ── Generic module execution ────────────────────────────────────────────
     /// Run any quant module by ID with JSON params
@@ -37,6 +71,7 @@ class AIQuantLabService : public QObject {
     void gs_stress_test(const QJsonObject& params);
     void gs_backtest(const QJsonObject& params);
     void gs_statistics(const QJsonObject& params);
+    void gs_component_var(const QJsonObject& params);
 
     // ── Functime ────────────────────────────────────────────────────────────
     void functime_forecast(const QJsonObject& params);
@@ -53,6 +88,11 @@ class AIQuantLabService : public QObject {
     void sm_acf_pacf(const QJsonObject& params);
     void sm_granger_causality(const QJsonObject& params);
     void sm_descriptive(const QJsonObject& params);
+    void sm_cointegration(const QJsonObject& params);
+    void sm_rolling_ols(const QJsonObject& params);
+    void sm_regime_switching(const QJsonObject& params);
+    void sm_pca(const QJsonObject& params);
+    void sm_decompose(const QJsonObject& params);
 
     // ── Fortitudo ───────────────────────────────────────────────────────────
     void fort_portfolio_metrics(const QJsonObject& params);
@@ -74,6 +114,17 @@ class AIQuantLabService : public QObject {
     /// LLM key included — goes to Python on stdin, never argv. Without a
     /// `config` that names a provider the ai_quant_lab LLM profile is used.
     void run_deep_agent(const QJsonObject& params);
+
+    /// Deep Analysis tab probes: deepagents/cli.py check_status (is the library
+    /// importable) and list_capabilities (agent types → subagents). No LLM, no
+    /// key. Answered through `on_done` while `context` lives — never through
+    /// result_ready / error_occurred, whose deep_agent handlers would paint the
+    /// reply into the results pane and re-enable a run. `on_done` receives the
+    /// script's JSON object, or {"success": false, "error": …} when the run
+    /// failed. An unavailable library is a valid check_status answer:
+    /// {"available": false, "error": "<why>"}.
+    void deep_agent_check_status(QObject* context, std::function<void(const QJsonObject&)> on_done);
+    void deep_agent_list_capabilities(QObject* context, std::function<void(const QJsonObject&)> on_done);
 
     // ── RD-Agent (autonomous factor/model research) ──────────────────────────
     // Long tasks (start_* / resume) run as one child process per task, owned by
@@ -173,6 +224,13 @@ class AIQuantLabService : public QObject {
   signals:
     void result_ready(QString module_id, QString command, QJsonObject data);
     void error_occurred(QString module_id, QString message);
+    /// Reply of a tagged run (RequestScope). `data` is the script's JSON object.
+    void request_finished(quint64 request_id, QString module_id, QString command, QJsonObject data);
+    /// A tagged run failed (process error, script error envelope, cancelled, timed out).
+    void request_failed(quint64 request_id, QString module_id, QString message);
+    /// A local qlib dataset was built, updated or downloaded (tagged or not):
+    /// every dataset bar reads the list again.
+    void datasets_changed(QString module_id, QString command, QJsonObject data);
     /// Emitted during a streaming training run (currently: rl_trading/train).
     void training_progress(QString module_id, int step, int total, double reward_mean, double loss);
     void training_log(QString module_id, QString line, bool is_stderr);
@@ -186,9 +244,26 @@ class AIQuantLabService : public QObject {
     void run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
                            const QString& command, int ttl_sec);
 
+    /// The request the next run belongs to (0 = untagged), and its cancel token; counts the dispatch.
+    struct Tag {
+        quint64 id = 0;
+        std::shared_ptr<std::atomic<bool>> cancel;
+    };
+    Tag take_tag();
+    /// Completion of a run: tagged → request_finished / request_failed, else result_ready / error_occurred.
+    void emit_done(const Tag& tag, const QString& module_id, const QString& command, const QJsonObject& data);
+    void emit_failed(const Tag& tag, const QString& module_id, const QString& message);
+
+    quint64 scope_id_ = 0;                          ///< RequestScope in force (GUI thread)
+    std::shared_ptr<std::atomic<bool>> scope_cancel_;
+    int scope_dispatched_ = 0;
+
     /// The LLM block for an agent run: the caller's `config` when it carries a
     /// provider, else the ai_quant_lab profile resolved from LlmProfileRepository.
     QJsonObject agent_llm_config(const QJsonObject& params) const;
+
+    /// One deepagents/cli.py read command for the probes above.
+    void deep_agent_query(const QString& command, QObject* context, std::function<void(const QJsonObject&)> on_done);
 
     // ── RD-Agent task registry ──────────────────────────────────────────────
     struct RdTask {

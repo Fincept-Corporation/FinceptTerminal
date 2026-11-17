@@ -20,11 +20,12 @@ PendingOrdersBadge::PendingOrdersBadge(QWidget* parent) : QLabel(parent) {
     // Two looks from ONE stylesheet: amber pill while orders wait for approval,
     // a muted outline when the queue is empty (the badge stays visible so the
     // Action Center — and its kill switch — is always one click away).
-    setStyleSheet(QString("#pendingOrdersBadge{color:#000;background:%1;font-weight:700;"
+    setStyleSheet(QString("#pendingOrdersBadge{color:%4;background:%1;font-weight:700;"
                           "padding:1px 8px;border-radius:8px;}"
                           "#pendingOrdersBadge[idle=\"true\"]{color:%2;background:transparent;font-weight:400;"
                           "border:1px solid %3;}")
-                      .arg(ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER()));
+                      .arg(ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER(),
+                           ui::colors::TEXT_ON_ACCENT()));
 
     auto& ac = ActionCenter::instance();
     connect(&ac, &ActionCenter::pending_order_created, this, [this](const PendingOrder&) { refresh_count(); });

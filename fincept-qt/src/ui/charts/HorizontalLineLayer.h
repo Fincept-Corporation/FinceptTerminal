@@ -11,11 +11,17 @@ class QGraphicsSimpleTextItem;
 
 namespace fincept::ui {
 
+/// Theme colour role of a level. Anything but Custom is resolved from the
+/// active theme when the level is drawn, and follows theme / direction-palette
+/// changes; Custom draws `color` as given.
+enum class HorizontalLevelTone { Custom, Neutral, Muted, Accent, Up, Down };
+
 struct HorizontalLevel {
     double price = 0;
     QString label;
-    QColor color;
+    QColor color; // used when tone == Custom
     Qt::PenStyle style = Qt::DashLine;
+    HorizontalLevelTone tone = HorizontalLevelTone::Custom;
 };
 
 class HorizontalLineLayer : public OverlayLayer {
@@ -35,9 +41,13 @@ class HorizontalLineLayer : public OverlayLayer {
     void set_levels(const QVector<HorizontalLevel>& levels);
     const QVector<HorizontalLevel>& levels() const { return levels_; }
 
+    /// The colour `level` is drawn with under the active theme.
+    static QColor level_color(const HorizontalLevel& level);
+
   private:
     void rebuild_items();
     void clear_items();
+    void on_theme_changed();
 
     QString id_;
     QString name_;

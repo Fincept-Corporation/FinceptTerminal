@@ -1,9 +1,32 @@
+import math
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Union, Any
 import json
 import statsmodels.api as sm
 from statsmodels.regression.rolling import RollingOLS, RollingWLS
+
+
+def _json_safe(obj):
+    """Plain-Python copy of obj that json.dumps accepts: numpy/pandas values converted, NaN/inf -> None."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, pd.DataFrame):
+        return [_json_safe(row) for row in obj.values.tolist()]
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return [_json_safe(v) for v in obj.tolist()]
+    if isinstance(obj, np.ndarray):
+        return _json_safe(obj.tolist())
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if math.isfinite(obj) else None
+    return obj
+
 
 def fit_ols(
     y: Union[List, np.ndarray, pd.Series],
@@ -20,11 +43,11 @@ def fit_ols(
     model = sm.OLS(y, X)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
-        'bse': results.bse.tolist() if hasattr(results.bse, 'tolist') else list(results.bse),
-        'tvalues': results.tvalues.tolist() if hasattr(results.tvalues, 'tolist') else list(results.tvalues),
-        'pvalues': results.pvalues.tolist() if hasattr(results.pvalues, 'tolist') else list(results.pvalues),
+    return _json_safe({
+        'params': results.params,
+        'bse': results.bse,
+        'tvalues': results.tvalues,
+        'pvalues': results.pvalues,
         'rsquared': float(results.rsquared),
         'rsquared_adj': float(results.rsquared_adj),
         'fvalue': float(results.fvalue),
@@ -32,7 +55,7 @@ def fit_ols(
         'aic': float(results.aic),
         'bic': float(results.bic),
         'nobs': int(results.nobs)
-    }
+    })
 
 def fit_wls(
     y: Union[List, np.ndarray, pd.Series],
@@ -51,16 +74,16 @@ def fit_wls(
     model = sm.WLS(y, X, weights=weights)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
-        'bse': results.bse.tolist() if hasattr(results.bse, 'tolist') else list(results.bse),
-        'tvalues': results.tvalues.tolist() if hasattr(results.tvalues, 'tolist') else list(results.tvalues),
-        'pvalues': results.pvalues.tolist() if hasattr(results.pvalues, 'tolist') else list(results.pvalues),
+    return _json_safe({
+        'params': results.params,
+        'bse': results.bse,
+        'tvalues': results.tvalues,
+        'pvalues': results.pvalues,
         'rsquared': float(results.rsquared),
         'rsquared_adj': float(results.rsquared_adj),
         'aic': float(results.aic),
         'bic': float(results.bic)
-    }
+    })
 
 def fit_gls(
     y: Union[List, np.ndarray, pd.Series],
@@ -78,14 +101,14 @@ def fit_gls(
     model = sm.GLS(y, X, sigma=sigma)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
-        'bse': results.bse.tolist() if hasattr(results.bse, 'tolist') else list(results.bse),
-        'tvalues': results.tvalues.tolist() if hasattr(results.tvalues, 'tolist') else list(results.tvalues),
-        'pvalues': results.pvalues.tolist() if hasattr(results.pvalues, 'tolist') else list(results.pvalues),
+    return _json_safe({
+        'params': results.params,
+        'bse': results.bse,
+        'tvalues': results.tvalues,
+        'pvalues': results.pvalues,
         'aic': float(results.aic),
         'bic': float(results.bic)
-    }
+    })
 
 def fit_glsar(
     y: Union[List, np.ndarray, pd.Series],
@@ -93,7 +116,7 @@ def fit_glsar(
     rho: int = 1,
     add_constant: bool = True
 ) -> Dict[str, Any]:
-    """Fit GLS with AR errors"""
+    """Fit GLS with AR(rho) errors (iterative). 'rho' in the result is the estimated AR coefficients."""
     y = np.array(y) if not isinstance(y, (np.ndarray, pd.Series)) else y
     X = np.array(X) if not isinstance(X, (np.ndarray, pd.DataFrame)) else X
 
@@ -103,13 +126,14 @@ def fit_glsar(
     model = sm.GLSAR(y, X, rho=rho)
     results = model.iterative_fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
-        'bse': results.bse.tolist() if hasattr(results.bse, 'tolist') else list(results.bse),
-        'tvalues': results.tvalues.tolist() if hasattr(results.tvalues, 'tolist') else list(results.tvalues),
-        'pvalues': results.pvalues.tolist() if hasattr(results.pvalues, 'tolist') else list(results.pvalues),
-        'rho': results.rho.tolist() if hasattr(results.rho, 'tolist') else list(results.rho)
-    }
+    return _json_safe({
+        'params': results.params,
+        'bse': results.bse,
+        'tvalues': results.tvalues,
+        'pvalues': results.pvalues,
+        # the AR coefficients live on the model; RegressionResults has no rho
+        'rho': np.atleast_1d(model.rho)
+    })
 
 def fit_recursive_ls(
     y: Union[List, np.ndarray, pd.Series],
@@ -126,13 +150,13 @@ def fit_recursive_ls(
     model = sm.RecursiveLS(y, X)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else [list(p) for p in results.params],
-        'cusum': results.cusum.tolist() if hasattr(results.cusum, 'tolist') else list(results.cusum),
-        'cusum_squares': results.cusum_squares.tolist() if hasattr(results.cusum_squares, 'tolist') else list(results.cusum_squares),
+    return _json_safe({
+        'params': results.params,
+        'cusum': results.cusum,
+        'cusum_squares': results.cusum_squares,
         'aic': float(results.aic),
         'bic': float(results.bic)
-    }
+    })
 
 def predict_ols(
     y: Union[List, np.ndarray, pd.Series],
@@ -153,10 +177,10 @@ def predict_ols(
     results = model.fit()
     predictions = results.predict(X_new)
 
-    return {
-        'predictions': predictions.tolist() if hasattr(predictions, 'tolist') else list(predictions),
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params)
-    }
+    return _json_safe({
+        'predictions': predictions,
+        'params': results.params
+    })
 
 def regression_diagnostics(
     y: Union[List, np.ndarray, pd.Series],
@@ -176,19 +200,20 @@ def regression_diagnostics(
     from statsmodels.stats.stattools import jarque_bera
 
     jb_stat, jb_pval, _, _ = jarque_bera(results.resid)
+    influence = results.get_influence()
 
-    return {
-        'residuals': results.resid.tolist() if hasattr(results.resid, 'tolist') else list(results.resid),
-        'fitted_values': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues),
-        'leverage': results.get_influence().hat_matrix_diag.tolist(),
-        'cooks_d': results.get_influence().cooks_distance[0].tolist(),
+    return _json_safe({
+        'residuals': results.resid,
+        'fitted_values': results.fittedvalues,
+        'leverage': influence.hat_matrix_diag,
+        'cooks_d': influence.cooks_distance[0],
         'condition_number': float(results.condition_number),
         'jarque_bera': {
             'statistic': float(jb_stat),
             'pvalue': float(jb_pval)
         },
         'durbin_watson': float(sm.stats.stattools.durbin_watson(results.resid))
-    }
+    })
 
 def fit_rolling_ols(
     y: Union[pd.Series, pd.DataFrame],
@@ -196,17 +221,20 @@ def fit_rolling_ols(
     window: int = 60,
     min_nobs: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Fit Rolling OLS regression"""
+    """Fit Rolling OLS regression.
+
+    One row per observation; rows before the first full window (warm-up) are null.
+    """
     y = pd.Series(y) if not isinstance(y, pd.Series) else y
     X = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
 
     model = RollingOLS(y, X, window=window, min_nobs=min_nobs)
     results = model.fit()
 
-    return {
-        'params': results.params.values.tolist() if hasattr(results.params, 'values') else [[float(x) for x in row] for row in results.params],
-        'rsquared': results.rsquared.tolist() if hasattr(results.rsquared, 'tolist') else list(results.rsquared)
-    }
+    return _json_safe({
+        'params': np.asarray(results.params),
+        'rsquared': np.asarray(results.rsquared)
+    })
 
 def fit_rolling_wls(
     y: Union[pd.Series, pd.DataFrame],
@@ -215,17 +243,20 @@ def fit_rolling_wls(
     weights: Optional[pd.Series] = None,
     min_nobs: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Fit Rolling WLS regression"""
+    """Fit Rolling WLS regression.
+
+    One row per observation; rows before the first full window (warm-up) are null.
+    """
     y = pd.Series(y) if not isinstance(y, pd.Series) else y
     X = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
 
     model = RollingWLS(y, X, window=window, weights=weights, min_nobs=min_nobs)
     results = model.fit()
 
-    return {
-        'params': results.params.values.tolist() if hasattr(results.params, 'values') else [[float(x) for x in row] for row in results.params],
-        'rsquared': results.rsquared.tolist() if hasattr(results.rsquared, 'tolist') else list(results.rsquared)
-    }
+    return _json_safe({
+        'params': np.asarray(results.params),
+        'rsquared': np.asarray(results.rsquared)
+    })
 
 def main():
     print("Testing statsmodels regression wrapper")

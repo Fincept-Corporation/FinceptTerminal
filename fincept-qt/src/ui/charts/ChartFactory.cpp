@@ -1,11 +1,53 @@
 #include "ui/charts/ChartFactory.h"
 
+#include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ThemeHelpers.h"
 
+#include <QPointer>
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QValueAxis>
 
+#include <memory>
+
 namespace fincept::ui {
+
+namespace {
+
+/// Keeps a chart made by the factory in step with later theme / font changes:
+/// background, axes and fonts from the active tokens (unless `transparent`),
+/// and every series and title colour that was a token value (the defaults
+/// below, or a token a caller passed) translated to the same token of the new
+/// theme. Colours that are not token values are left as the caller set them.
+void follow_theme(QChartView* view, QChart* chart, bool transparent) {
+    auto recolor = std::make_shared<ThemeRecolor>();
+    QPointer<QChart> guard(chart);
+    QObject::connect(&ThemeManager::instance(), &ThemeManager::theme_changed, view,
+                     [recolor, guard, transparent](const ThemeTokens&) {
+                         recolor->advance();
+                         QChart* c = guard.data();
+                         if (!c)
+                             return;
+                         if (!transparent)
+                             ChartFactory::apply_theme(c);
+                         c->setTitleBrush(recolor->map(c->titleBrush()));
+                         c->setTitleFont(fonts::font(-2, QFont::DemiBold));
+                         for (QAbstractSeries* s : c->series()) {
+                             if (auto* line = qobject_cast<QLineSeries*>(s)) {
+                                 QPen pen = line->pen();
+                                 pen.setColor(recolor->map(pen.color()));
+                                 line->setPen(pen);
+                             } else if (auto* bars = qobject_cast<QBarSeries*>(s)) {
+                                 for (QBarSet* set : bars->barSets()) {
+                                     set->setColor(recolor->map(set->color()));
+                                     set->setBorderColor(recolor->map(set->borderColor()));
+                                 }
+                             }
+                         }
+                     });
+}
+
+} // namespace
 
 void ChartFactory::apply_theme(QChart* chart) {
     const auto& t = ThemeManager::instance().tokens();
@@ -13,10 +55,13 @@ void ChartFactory::apply_theme(QChart* chart) {
     chart->setPlotAreaBackgroundBrush(QBrush(QColor(t.bg_surface)));
     chart->setPlotAreaBackgroundVisible(true);
     chart->legend()->setVisible(false);
+    chart->legend()->setLabelColor(QColor(t.text_secondary));
+    chart->legend()->setFont(fonts::font(-3));
     chart->setMargins(QMargins(0, 0, 0, 0));
 
     for (auto* axis : chart->axes()) {
         axis->setLabelsColor(QColor(t.text_secondary));
+        axis->setLabelsFont(fonts::font(-3));
         axis->setGridLineColor(QColor(t.border_dim));
         axis->setLinePenColor(QColor(t.border_med));
     }
@@ -35,12 +80,14 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
     chart->addSeries(series);
     chart->setTitle(title);
     chart->setTitleBrush(QBrush(QColor(t.text_secondary)));
+    chart->setTitleFont(fonts::font(-2, QFont::DemiBold));
     chart->createDefaultAxes();
     apply_theme(chart);
 
     auto* view = new QChartView(chart);
     view->setRenderHint(QPainter::Antialiasing);
     view->setStyleSheet("background: transparent; border: none;");
+    follow_theme(view, chart, false);
     return view;
 }
 
@@ -61,6 +108,7 @@ QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& cat
     chart->addSeries(series);
     chart->setTitle(title);
     chart->setTitleBrush(QBrush(QColor(t.text_secondary)));
+    chart->setTitleFont(fonts::font(-2, QFont::DemiBold));
 
     auto* axisX = new QBarCategoryAxis;
     axisX->append(categories);
@@ -76,6 +124,7 @@ QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& cat
     auto* view = new QChartView(chart);
     view->setRenderHint(QPainter::Antialiasing);
     view->setStyleSheet("background: transparent; border: none;");
+    follow_theme(view, chart, false);
     return view;
 }
 
@@ -104,6 +153,7 @@ QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& 
     view->setRenderHint(QPainter::Antialiasing);
     view->setFixedSize(width, height);
     view->setStyleSheet("background: transparent; border: none;");
+    follow_theme(view, chart, true);
     return view;
 }
 

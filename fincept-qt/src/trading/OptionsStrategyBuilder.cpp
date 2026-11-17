@@ -70,13 +70,13 @@ QString osb_leg_label(const OptionsLeg& leg) {
              strike_str(leg.strike), leg.option_type.toUpper());
 }
 
-// Resolve a leg's real broker tradingsymbol from the instrument master. Returns
-// nullopt (with `why` set) when it cannot — the caller must then REFUSE the whole
-// basket. The human-readable placeholder from build_option_symbol() is never a
-// tradable symbol and must never reach a broker: on a real exchange it is either
-// rejected (after earlier legs have already filled) or, worse, matches a
-// different contract than the one the trader selected.
-std::optional<QString> resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id, QString& why) {
+// Resolve a leg's real broker contract (tradingsymbol + lot size) from the
+// instrument master. Returns nullopt (with `why` set) when it cannot — the caller
+// must then REFUSE the whole basket. The human-readable placeholder from
+// build_option_symbol() is never a tradable symbol and must never reach a broker:
+// on a real exchange it is either rejected (after earlier legs have already
+// filled) or, worse, matches a different contract than the one the trader selected.
+std::optional<Instrument> resolve_leg_contract(const OptionsLeg& leg, const QString& broker_id, QString& why) {
     if (broker_id.isEmpty()) {
         why = QStringLiteral("no broker account is selected");
         return std::nullopt;
@@ -101,7 +101,7 @@ std::optional<QString> resolve_leg_symbol(const OptionsLeg& leg, const QString& 
     const auto candidates = svc.find_options_for_underlying(broker_id, leg.underlying, expiry_disp, leg.exchange);
     for (const auto& inst : candidates) {
         if (inst.instrument_type == want && qFuzzyCompare(inst.strike + 1.0, leg.strike + 1.0))
-            return inst.symbol;
+            return inst;
     }
 
     why = QString("no %1 contract with that expiry and strike exists in the %2 instrument master")
@@ -233,15 +233,33 @@ bool OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy, Pr
     // whole basket, so no leg is ever sent without its hedge.
     QStringList unresolved;
     QVector<QString> symbols;
+    QVector<double> quantities;
     symbols.reserve(sorted.size());
+    quantities.reserve(sorted.size());
     for (const OptionsLeg& leg : sorted) {
         QString why;
-        const auto sym = resolve_leg_symbol(leg, broker_id, why);
-        if (!sym) {
+        const auto inst = resolve_leg_contract(leg, broker_id, why);
+        // leg.quantity is a number of LOTS. The exchange quantity is lots × the
+        // contract's own lot size (NIFTY 75, BANKNIFTY 35, …); sending the lot count
+        // as the quantity was rejected by the broker on every leg, or bought the
+        // wrong size. A fractional lot count or an unknown lot size refuses the leg.
+        const double lots = leg.quantity;
+        if (inst && (!std::isfinite(lots) || lots < 1.0 || std::floor(lots) != lots)) {
+            unresolved << QString("%1 (lots must be a whole number ≥ 1, got %2)").arg(osb_leg_label(leg)).arg(lots);
+            symbols.append(QString());
+            quantities.append(0.0);
+        } else if (inst && inst->lot_size <= 0) {
+            unresolved << QString("%1 (the instrument master has no lot size for %2)")
+                              .arg(osb_leg_label(leg), inst->symbol);
+            symbols.append(QString());
+            quantities.append(0.0);
+        } else if (!inst) {
             unresolved << QString("%1 (%2)").arg(osb_leg_label(leg), why);
             symbols.append(QString());
+            quantities.append(0.0);
         } else {
-            symbols.append(*sym);
+            symbols.append(inst->symbol);
+            quantities.append(lots * static_cast<double>(inst->lot_size));
         }
     }
     if (!unresolved.isEmpty()) {
@@ -258,7 +276,7 @@ bool OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy, Pr
         order.symbol = symbols.at(i);
         order.exchange = leg.exchange;
         order.side = leg.side;
-        order.quantity = leg.quantity;
+        order.quantity = quantities.at(i); // lots × contract lot size
         order.order_type = OrderType::Market;
         order.product_type = product;
         request.orders.append(order);

@@ -1,30 +1,31 @@
 """
-List all ccxt exchange IDs (fast — no instantiation).
+List the exchange ids ccxt supports — a one-shot wrapper over the exchange daemon's own `list_exchange_ids`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
 
 Usage: python list_exchange_ids.py
-
-Output JSON:
-{
-  "success": true,
-  "data": {
-    "ids": ["ace", "alpaca", "ascendex", "bequant", "bigone", "binance", ...],
-    "count": 110
-  }
-}
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
 
-import ccxt
-from exchange_client import output_success, run_with_error_handling
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
+
+USAGE = "list_exchange_ids.py "
 
 
-@run_with_error_handling
-def main():
-    ids = sorted(ccxt.exchanges)
-    output_success({
-        "ids": ids,
-        "count": len(ids),
-    })
+def main(argv):
+    if len(argv) < 1:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("list_exchange_ids", "", args)[0]
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

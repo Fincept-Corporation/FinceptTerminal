@@ -1,4 +1,5 @@
 #pragma once
+#include "algo_engine/fno/FnoAlgoTypes.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
 
 #include <QComboBox>
@@ -8,7 +9,10 @@
 #include <QLabel>
 #include <QLineEdit>
 
+class QCheckBox;
 class QDialogButtonBox;
+class QSpinBox;
+class QTimeEdit;
 
 namespace fincept::screens {
 
@@ -26,7 +30,11 @@ class AlgoDeployDialog : public QDialog {
     void set_symbol(const QString& symbol);
 
     // F&O context for option/future deployments (set by the StrategyBuilder before exec()).
-    void set_fno_context(const QString& instrument_type, const QString& underlying, const QString& expiry_rule);
+    // `legs` are the strategy's leg rules: an F&O deployment trades THEM (each leg's
+    // side and lots × lot size), so the dialog hides Entry Side / Quantity and the
+    // LIVE confirmation lists the legs instead.
+    void set_fno_context(const QString& instrument_type, const QString& underlying, const QString& expiry_rule,
+                         const QVector<fincept::algo::fno::AlgoFnoLeg>& legs = {});
 
     // Seed the risk fields from the caller's risk panel BEFORE exec(), so the
     // numbers the user confirms in this dialog are the numbers that are actually
@@ -47,13 +55,29 @@ class AlgoDeployDialog : public QDialog {
     void populate_accounts();
     void populate_broker_fields(const QString& account_id);
     void retranslateUi();
+    // One-line summary of the strategy's last backtest (or that there is none).
+    QString backtest_summary_text() const;
+    void refresh_backtest_note();
+    // Risk limits as entered (more conservative extras; see algo_engine/RiskLimits.h).
+    QJsonObject risk_limits_json() const;
+    QString risk_limits_text() const;
+    // Currency of the money limits (max order value, max daily loss, max drawdown):
+    // the deployment's quote currency from the symbol / underlying, exchange and the
+    // account's broker; empty when unknown (no unit shown, never a guessed one).
+    QString deploy_currency() const;
+    // Puts deploy_currency()'s unit on the money spin boxes (symbol, exchange, account changes).
+    void refresh_money_units();
 
     QString strategy_id_;
     QString strategy_name_;
+    QJsonObject last_backtest_; // strategy's persisted last-backtest summary
+    QJsonObject cost_model_;    // strategy's cost model (copied into the deployment)
+    QString backtested_side_ = QStringLiteral("BUY");
 
     QString fno_instrument_type_ = "equity";
     QString fno_underlying_;
     QString fno_expiry_rule_;
+    QVector<fincept::algo::fno::AlgoFnoLeg> fno_legs_;
 
     QLineEdit* symbol_edit_ = nullptr;
     QComboBox* mode_combo_ = nullptr;
@@ -65,6 +89,18 @@ class AlgoDeployDialog : public QDialog {
     QDoubleSpinBox* quantity_spin_ = nullptr;
     QDoubleSpinBox* max_order_spin_ = nullptr;
     QDoubleSpinBox* max_loss_spin_ = nullptr;
+    QDoubleSpinBox* max_dd_spin_ = nullptr;
+    QSpinBox* max_trades_spin_ = nullptr;
+    QCheckBox* window_check_ = nullptr;
+    QTimeEdit* window_start_ = nullptr;
+    QTimeEdit* window_end_ = nullptr;
+    QCheckBox* session_only_check_ = nullptr;
+    QCheckBox* flatten_check_ = nullptr;
+    QLabel* max_dd_label_ = nullptr;
+    QLabel* max_trades_label_ = nullptr;
+    QLabel* window_label_ = nullptr;
+    QLabel* backtest_note_ = nullptr;
+    QLabel* side_note_ = nullptr;
 
     QLabel* title_label_ = nullptr;
     // Persistent red banner shown only while Mode == Live. Real money is the

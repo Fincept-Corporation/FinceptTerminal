@@ -13,6 +13,7 @@
 #include <QPen>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
+#include <QScopeGuard>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QShowEvent>
@@ -31,11 +32,14 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
     apply_bg();
     setMinimumHeight(200);
 
+    // Custom paint reads tokens_: refreshed with the theme. The stylesheet and
+    // palette (apply_bg) wait until the appearance has settled — never inside
+    // theme_changed, where they re-style every tile below the canvas mid-switch.
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens& t) {
         tokens_ = t;
-        apply_bg();
         update();
     });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { apply_bg(); });
 
     placeholder_ = new PlaceholderOverlay(this);
 
@@ -55,9 +59,7 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
 
         // Restore to canonical columns if width now permits it — user's layout
         // should snap back when they expand the panel again.
-        const int target_cols = (w >= 1000)  ? canonical_cols_
-                                : (w >= 600) ? std::min(canonical_cols_, 9)
-                                             : std::min(canonical_cols_, 6);
+        const int target_cols = target_cols_for(w);
 
         if (target_cols != layout_.cols) {
             // Leaving the canonical column count: the items are still in the
@@ -67,13 +69,16 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
                 canonical_items_ = layout_.items;
                 canonical_valid_ = true;
             }
+            int from_cols = layout_.cols;
             layout_.cols = target_cols;
             // Fold from the layout as designed (when the user has not edited
             // since), so widening the panel restores it rather than keeping an
             // earlier narrow fold.
-            if (canonical_valid_)
+            if (canonical_valid_) {
                 layout_.items = canonical_items_;
-            fit_items_to_cols();
+                from_cols = canonical_cols_;
+            }
+            fit_items_to_cols(from_cols);
         }
 
         if (!dragging_tile_ && !resizing_tile_)
@@ -91,12 +96,15 @@ DashboardCanvas::~DashboardCanvas() {
 
 // ── Layout management ─────────────────────────────────────────────────────────
 
-void DashboardCanvas::fit_items_to_cols() {
-    for (auto& item : layout_.items) {
-        item.cell.w = std::min(item.cell.w, layout_.cols);
-        item.cell.x = std::max(0, std::min(item.cell.x, layout_.cols - item.cell.w));
-    }
-    layout_.items = compact_vertical(layout_.items);
+void DashboardCanvas::fit_items_to_cols(int from_cols) {
+    // Proportional fold (GridLayout.h): a row of tiles that fills the width at
+    // `from_cols` still fills it at layout_.cols, with no tile stacked on its
+    // neighbour.
+    layout_.items = fold_items_to_cols(layout_.items, from_cols, layout_.cols);
+}
+
+void DashboardCanvas::mark_edited() {
+    layout_.pristine = false;
 }
 
 GridLayout DashboardCanvas::current_layout() const {
@@ -117,8 +125,22 @@ void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
     timer.start();
 
     cancel_pending_build();
-    for (auto* t : tiles_)
+    // A drag / resize in progress (a reload from MCP or another window can land
+    // mid-gesture) refers to a tile deleted below: drop it, or
+    // update_placeholder() / the reflow guards keep using a dangling pointer.
+    if (dragging_tile_ || resizing_tile_) {
+        dragging_tile_ = nullptr;
+        resizing_tile_ = nullptr;
+        scroll_timer_->stop();
+        hide_placeholder();
+    }
+    maximized_id_.clear();
+    // Hidden at once (their hub subscriptions drop in hideEvent and nothing of the
+    // old layout paints under the new skeleton), deleted on the next turn.
+    for (auto* t : tiles_) {
+        t->hide();
         t->deleteLater();
+    }
     tiles_.clear();
     layout_ = layout;
 
@@ -128,8 +150,10 @@ void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
     canonical_cols_ = layout_.cols > 0 ? layout_.cols : 12;
 
     // Apply responsive columns for current width without clamping canonical_cols_
+    // (the same rule as the debounced resize path, so a load and a later resize
+    // never disagree about the column count).
     if (width() > 0)
-        layout_.cols = responsive_cols(width());
+        layout_.cols = target_cols_for(width());
 
     // Unknown widget types are dropped up front (a registry lookup is cheap),
     // so the grid is compacted once, before any tile is placed: tiles that a
@@ -158,8 +182,8 @@ void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
     // to it when the panel widens, instead of staying squashed.
     canonical_items_ = layout_.items;
     canonical_valid_ = true;
-    if (layout_.cols < canonical_cols_)
-        fit_items_to_cols();
+    if (layout_.cols != canonical_cols_)
+        fit_items_to_cols(canonical_cols_);
 
     // Final geometry is known now — size the canvas before any tile exists.
     update_canvas_height();
@@ -199,7 +223,7 @@ void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
         reflow_tiles();
         update_canvas_height();
         emit widget_count_changed(tiles_.size());
-        LOG_INFO("Canvas", QString("Loaded layout with %1 tiles, %2 cols in %3 ms")
+        LOG_DEBUG("Canvas", QString("Loaded layout with %1 tiles, %2 cols in %3 ms")
                                .arg(tiles_.size())
                                .arg(layout_.cols)
                                .arg(timer.elapsed()));
@@ -212,7 +236,7 @@ void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
         update(); // paint the skeleton frames for the queued cells
         const quint64 gen = build_generation_;
         QTimer::singleShot(0, this, [this, gen]() { build_next_pending_tile(gen); });
-        LOG_INFO("Canvas", QString("Loading layout with %1 tiles, %2 cols (progressive)")
+        LOG_DEBUG("Canvas", QString("Loading layout with %1 tiles, %2 cols (progressive)")
                                .arg(pending_build_.size())
                                .arg(layout_.cols));
     }
@@ -225,17 +249,34 @@ bool DashboardCanvas::build_tile(const GridItem& item) {
     const WidgetMeta* meta = WidgetRegistry::instance().find(item.id);
     if (!meta)
         return false;
-    auto* widget = meta->factory(item.config);
+    QElapsedTimer t;
+    t.start();
+    // A slow tile is a UI stall of its own (tiles are built one per event-loop
+    // turn): name it in the log so it can be found.
+    const auto report = qScopeGuard([&t, &item]() {
+        if (t.elapsed() >= 60)
+            LOG_DEBUG("Canvas", QString("Tile '%1' took %2 ms to build and show").arg(item.id).arg(t.elapsed()));
+    });
+    // The tile exists first, under the canvas, and the widget is built with the
+    // tile as its parent: built parentless and re-parented, every tile was
+    // re-styled on the move (~0.4 s each, the bulk of a template switch).
+    auto* tile = new WidgetTile(item.instance_id, this);
+    auto* widget = meta->factory(item.config, tile);
     if (!widget) {
         LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(item.id));
+        delete tile;
         return false;
     }
     widget->restore_link_group(item.config);
-    auto* tile = new WidgetTile(item.instance_id, widget, this);
+    tile->set_content(widget);
     connect_tile(tile);
     tiles_.append(tile);
     if (width() > 0)
         tile->setGeometry(grid_to_rect(item.cell, layout_.cols, width(), layout_.row_h, layout_.margin));
+    // Style-sheet polish of the new subtree now, inside this tile's own build
+    // step: left to the PolishRequest Qt posts, the polish of several tiles
+    // landed in one later event-loop turn (a ~0.5 s stall per template switch).
+    tile->ensurePolished();
     tile->show();
     return true;
 }
@@ -258,7 +299,7 @@ void DashboardCanvas::build_next_pending_tile(quint64 generation) {
         return;
     }
     emit widget_count_changed(tiles_.size());
-    LOG_INFO("Canvas", QString("Progressive layout build finished: %1 tiles").arg(tiles_.size()));
+    LOG_DEBUG("Canvas", QString("Progressive layout build finished: %1 tiles").arg(tiles_.size()));
 }
 
 void DashboardCanvas::flush_pending_tiles() {
@@ -296,32 +337,28 @@ void DashboardCanvas::drop_unbuildable_item(const QString& instance_id) {
     emit layout_changed(layout_);
 }
 
-void DashboardCanvas::apply_template(const QString& template_id, TileBuild mode) {
+bool DashboardCanvas::apply_template(const QString& template_id, TileBuild mode) {
+    QElapsedTimer timer;
+    timer.start();
     const auto tmpls = all_dashboard_templates();
     for (const auto& t : tmpls) {
         if (t.id == template_id) {
-            GridLayout layout;
-            layout.cols = 12; // templates are designed for 12 columns
-            canonical_cols_ = 12;
-            layout.row_h = layout_.row_h;
-            layout.margin = layout_.margin;
-            for (auto item : t.items) {
-                item.instance_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-                // Clamp item to current column count
-                item.cell.x = std::min(item.cell.x, layout.cols - item.cell.w);
-                if (item.cell.x < 0) {
-                    item.cell.x = 0;
-                    item.cell.w = std::min(item.cell.w, layout.cols);
-                }
-                layout.items.append(item);
-            }
-            layout.items = compact_vertical(layout.items);
+            // Every template loads in the compact density, its tiles pre-configured
+            // and its desk note carrying the user's own text when they edited it
+            // before (build_template_layout).
+            const GridLayout layout = build_template_layout(t);
             load_layout(layout, mode);
             emit layout_changed(layout_);
-            return;
+            LOG_INFO("Canvas", QString("Applied template '%1' (%2 tiles, %3 rows) in %4 ms")
+                                   .arg(template_id)
+                                   .arg(layout.items.size())
+                                   .arg(max_row(layout.items))
+                                   .arg(timer.elapsed()));
+            return true;
         }
     }
     LOG_WARN("Canvas", QString("Template not found: %1").arg(template_id));
+    return false;
 }
 
 void DashboardCanvas::add_widget(const QString& widget_type_id) {
@@ -330,6 +367,7 @@ void DashboardCanvas::add_widget(const QString& widget_type_id) {
 
 QString DashboardCanvas::add_widget_with(const QString& widget_type_id, const QJsonObject& config, int x, int y,
                                          int w, int h) {
+    clear_maximized(); // a new tile lands in the grid, so show the grid
     const WidgetMeta* meta = WidgetRegistry::instance().find(widget_type_id);
     if (!meta)
         return {};
@@ -339,8 +377,15 @@ QString DashboardCanvas::add_widget_with(const QString& widget_type_id, const QJ
     item.instance_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     item.config = config;
     const int cols = std::max(1, layout_.cols);
+    // Registry sizes are in comfortable rows (60 px); in a compact layout the
+    // same pixel height takes more rows, so a new tile is not squashed.
+    const auto rows_for = [this](int comfortable_rows) {
+        const double px = comfortable_rows * double(kGridRowComfortable + layout_.margin);
+        return std::max(1, int(std::lround(px / std::max(1, layout_.row_h + layout_.margin))));
+    };
+    const int min_h = rows_for(meta->min_h);
     const int iw = std::clamp(w > 0 ? std::max(w, meta->min_w) : meta->default_w, 1, cols);
-    const int ih = std::max(1, h > 0 ? std::max(h, meta->min_h) : meta->default_h);
+    const int ih = std::max(1, h > 0 ? std::max(h, min_h) : rows_for(meta->default_h));
     if (x < 0 && y < 0) {
         item.cell = find_first_fit(layout_.items, iw, ih, cols);
     } else {
@@ -350,7 +395,7 @@ QString DashboardCanvas::add_widget_with(const QString& widget_type_id, const QJ
         item.cell.y = std::max(0, y < 0 ? max_row(layout_.items) : y);
     }
     item.cell.min_w = std::min(meta->min_w, cols);
-    item.cell.min_h = meta->min_h;
+    item.cell.min_h = std::min(min_h, ih);
 
     // Construct first: never leave a GridItem behind for a widget that failed
     // to construct — that produced an invisible tile that still reserved space.
@@ -364,6 +409,7 @@ QString DashboardCanvas::add_widget_with(const QString& widget_type_id, const QJ
         layout_.items = resolve_collisions(layout_.items, item);
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
+    mark_edited();
 
     reflow_tiles();
     update_canvas_height();
@@ -382,12 +428,20 @@ void DashboardCanvas::remove_widget(const QString& instance_id) {
 
     auto* tile = tile_for_id(instance_id);
     if (tile) {
+        // Removed mid-drag / mid-resize (MCP remove): forget the gesture first.
+        if (tile == dragging_tile_ || tile == resizing_tile_) {
+            dragging_tile_ = nullptr;
+            resizing_tile_ = nullptr;
+            scroll_timer_->stop();
+            hide_placeholder();
+        }
         tiles_.removeOne(tile);
         tile->deleteLater();
     }
 
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
+    mark_edited();
     reflow_tiles(true);
     update_canvas_height();
     emit widget_count_changed(tiles_.size());
@@ -424,6 +478,7 @@ bool DashboardCanvas::set_item_cell(const QString& instance_id, int x, int y, in
     layout_.items = resolve_collisions(layout_.items, moving);
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
+    mark_edited();
 
     reflow_tiles(true);
     update_canvas_height();
@@ -457,6 +512,7 @@ bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObj
         content->apply_config(config);
         content->restore_link_group(config);
     }
+    mark_edited();
     // A still-queued tile is built from item->config, which is already updated.
     emit layout_changed(layout_);
     return true;
@@ -465,6 +521,11 @@ bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObj
 // ── Drag handling (swap on collision) ─────────────────────────────────────────
 
 void DashboardCanvas::on_drag_started(WidgetTile* tile, QPoint canvas_pos) {
+    if (!maximized_id_.isEmpty()) { // dragging returns to the grid first
+        clear_maximized();
+        reflow_tiles();
+        update_canvas_height();
+    }
     dragging_tile_ = tile;
     drag_offset_ = canvas_pos - tile->pos();
     pre_drag_layout_ = layout_;
@@ -546,6 +607,7 @@ void DashboardCanvas::on_drag_released(WidgetTile* tile, QPoint /*canvas_pos*/) 
     }
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
+    mark_edited();
 
     dragging_tile_ = nullptr;
     tile->set_dragging(false);
@@ -558,6 +620,11 @@ void DashboardCanvas::on_drag_released(WidgetTile* tile, QPoint /*canvas_pos*/) 
 // ── Resize handling (push-down, reflows ALL tiles) ────────────────────────────
 
 void DashboardCanvas::on_resize_started(WidgetTile* tile, QPoint /*canvas_pos*/) {
+    if (!maximized_id_.isEmpty()) {
+        clear_maximized();
+        reflow_tiles();
+        update_canvas_height();
+    }
     resizing_tile_ = tile;
     pre_resize_layout_ = layout_;
 
@@ -657,6 +724,7 @@ void DashboardCanvas::on_resize_released(WidgetTile* tile) {
     layout_.items = resolve_collisions(layout_.items, moving);
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
+    mark_edited();
 
     resizing_tile_ = nullptr;
     tile->set_resizing(false);
@@ -669,7 +737,55 @@ void DashboardCanvas::on_resize_released(WidgetTile* tile) {
 // ── Close / scroll ────────────────────────────────────────────────────────────
 
 void DashboardCanvas::on_tile_close(WidgetTile* tile) {
+    if (tile->instance_id() == maximized_id_)
+        clear_maximized();
     remove_widget(tile->instance_id());
+    reflow_tiles();
+    update_canvas_height();
+}
+
+void DashboardCanvas::clear_maximized() {
+    if (maximized_id_.isEmpty())
+        return;
+    maximized_id_.clear();
+    for (auto* t : tiles_) {
+        t->set_maximized(false);
+        t->show();
+    }
+}
+
+void DashboardCanvas::toggle_maximize(WidgetTile* tile) {
+    if (!tile)
+        return;
+    if (maximized_id_ == tile->instance_id()) {
+        clear_maximized();
+    } else {
+        clear_maximized();
+        maximized_id_ = tile->instance_id();
+        tile->set_maximized(true);
+        // Hidden tiles drop their hub subscriptions (BaseWidget::hideEvent), so
+        // nothing polls behind the maximised one.
+        for (auto* t : tiles_)
+            if (t != tile)
+                t->hide();
+        tile->raise();
+        if (auto* scroll = qobject_cast<QScrollArea*>(parent() ? parent()->parent() : nullptr))
+            scroll->verticalScrollBar()->setValue(0);
+    }
+    reflow_tiles();
+    update_canvas_height();
+}
+
+void DashboardCanvas::duplicate_tile(WidgetTile* tile) {
+    const GridItem* item = tile ? item_for_id(tile->instance_id()) : nullptr;
+    if (!item)
+        return;
+    const GridItem copy = *item; // add_widget_with() may reallocate layout_.items
+    if (!maximized_id_.isEmpty()) {
+        clear_maximized();
+        reflow_tiles();
+    }
+    add_widget_with(copy.id, copy.config, -1, -1, copy.cell.w, copy.cell.h);
 }
 
 void DashboardCanvas::on_scroll_tick() {
@@ -695,7 +811,11 @@ void DashboardCanvas::apply_bg() {
     // even during hide/show cycles from tab switching in ADS docking.
     QString bg = QString(tokens_.bg_base);
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString("background:%1;").arg(bg));
+    // Only when it differs: setStyleSheet() re-styles every tile below the canvas
+    // even for the text already in place, and this runs on every show.
+    const QString css = QString("background:%1;").arg(bg);
+    if (styleSheet() != css)
+        setStyleSheet(css);
     QPalette pal = palette();
     pal.setColor(QPalette::Window, QColor(bg));
     pal.setColor(QPalette::Base, QColor(bg));
@@ -787,6 +907,18 @@ void DashboardCanvas::reflow_tiles(bool animate) {
     if (!pending_ids_.isEmpty())
         update(); // skeleton frames follow their (possibly moved) cells
 
+    if (!maximized_id_.isEmpty()) {
+        if (auto* tile = tile_for_id(maximized_id_)) {
+            const QWidget* vp = parentWidget();
+            const int vh = vp ? vp->height() : height();
+            const int m = layout_.margin;
+            tile->setGeometry(QRect(m, m, std::max(1, width() - 2 * m), std::max(1, vh - 2 * m)));
+            tile->raise();
+            return;
+        }
+        maximized_id_.clear(); // the tile went away
+    }
+
     for (const auto& item : layout_.items) {
         auto* tile = tile_for_id(item.instance_id);
         if (!tile)
@@ -811,6 +943,13 @@ void DashboardCanvas::reflow_tiles(bool animate) {
 }
 
 void DashboardCanvas::update_canvas_height() {
+    if (!maximized_id_.isEmpty()) {
+        const QWidget* vp = parentWidget();
+        const int vh = std::max(400, vp ? vp->height() : 400);
+        setMinimumHeight(vh);
+        setFixedHeight(vh);
+        return;
+    }
     int rows = max_row(layout_.items);
     int h = layout_.margin + rows * (layout_.row_h + layout_.margin);
     int min_h = std::max(h, 400);
@@ -834,6 +973,8 @@ void DashboardCanvas::hide_placeholder() {
 }
 
 void DashboardCanvas::connect_tile(WidgetTile* tile) {
+    connect(tile, &WidgetTile::maximize_requested, this, &DashboardCanvas::toggle_maximize);
+    connect(tile, &WidgetTile::duplicate_requested, this, &DashboardCanvas::duplicate_tile);
     connect(tile, &WidgetTile::drag_started, this, &DashboardCanvas::on_drag_started);
     connect(tile, &WidgetTile::drag_moved, this, &DashboardCanvas::on_drag_moved);
     connect(tile, &WidgetTile::drag_released, this, &DashboardCanvas::on_drag_released);
@@ -858,6 +999,11 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
                         break;
                     }
                 }
+                // A template's desk note keeps its text in the template-note store
+                // too (re-applying the template brings it back), so editing it does
+                // not make the layout something only this dashboard holds.
+                if (item->id != QLatin1String("desk_note"))
+                    mark_edited();
                 emit layout_changed(layout_);
             }
         };
@@ -880,6 +1026,7 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
                     break;
                 }
             }
+            mark_edited();
             emit layout_changed(layout_);
         });
     }

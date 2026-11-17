@@ -53,7 +53,7 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dic
                     "endpoint": endpoint,
                     "parameters": params
                 },
-                "error": "e-Stat Application ID (ESTAT_APP_ID) is required. Set environment variable or register at https://www.e-stat.go.jp/api/en/api-info/user-guide"
+                "error": "e-Stat Application ID (ESTAT_APP_ID) is required: save it in Settings > Credentials. Register at https://www.e-stat.go.jp/api/en/api-info/user-guide"
             }
 
         params['appId'] = API_KEY

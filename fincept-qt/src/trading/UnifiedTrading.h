@@ -14,6 +14,29 @@
 
 namespace fincept::trading {
 
+class ActionCenter;
+
+/// "This thread is executing an order a person approved in the Action Center."
+/// UnifiedTrading's approval gate (trading/OrderApprovalRule.h) lets such an order
+/// through instead of queueing it a second time. Only ActionCenter can create one
+/// (private constructor, friend; not copyable), so no screen, service, workflow or
+/// script outside src/trading can claim an approval it does not have. Thread-local:
+/// it covers the synchronous call it wraps on the creating thread — the
+/// place_order / place_basket_orders / place_split_orders ENTRY, where the gate runs —
+/// and nothing that runs later or elsewhere.
+class ApprovedOrderScope {
+  public:
+    ~ApprovedOrderScope();
+    ApprovedOrderScope(const ApprovedOrderScope&) = delete;
+    ApprovedOrderScope& operator=(const ApprovedOrderScope&) = delete;
+    /// True while a scope is open on the calling thread.
+    static bool active();
+
+  private:
+    friend class ActionCenter;
+    ApprovedOrderScope();
+};
+
 class UnifiedTrading : public QObject {
     Q_OBJECT
   public:
@@ -58,8 +81,23 @@ class UnifiedTrading : public QObject {
     // --- Phase 1: Bulk operations (OpenAlgo bridge) ---
     ApiResponse<CancelAllResult> cancel_all_orders(const QString& account_id);
     ApiResponse<CloseAllResult> close_all_positions(const QString& account_id);
+    // Close one whole position (opposite side, reduce-only by construction) — no approval
+    // gate. `source`: who asked (UnifiedOrder::source format, e.g. workflow_exit:<id>),
+    // written to the close's audit lines; empty = not stated.
     ApiResponse<OrderPlaceResponse> close_position(const QString& account_id, const QString& symbol,
-                                                   const QString& exchange, const QString& product_type = {});
+                                                   const QString& exchange, const QString& product_type = {},
+                                                   const QString& source = {});
+    // Exit a DELIVERY holding (demat stock), not a position. close_position() only scans
+    // the broker's positions book, which never contains demat holdings, so it answers
+    // "Position not found" for them on every broker that keeps the two books apart.
+    // Broker-routed accounts: re-reads the broker's holdings book, refuses when the
+    // holding is gone, short, or now smaller than `quantity` (the amount the user saw and
+    // confirmed), then sends exactly one SELL / MARKET / Delivery order for `quantity`
+    // on `exchange` through place_order() (validation, risk gate, idempotency stamp).
+    // `exchange` must be non-empty. Local paper accounts: delegates to the simulator's
+    // close_position(..., "CNC"). BLOCKING (broker round-trips): call from a worker.
+    ApiResponse<OrderPlaceResponse> close_holding(const QString& account_id, const QString& symbol,
+                                                  const QString& exchange, double quantity);
     ApiResponse<SmartOrderResult> place_smart_order(const QString& account_id, const SmartOrder& order);
     ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const QString& account_id,
                                                        const QVector<QPair<QString, QString>>& symbols);
@@ -95,7 +133,9 @@ class UnifiedTrading : public QObject {
     // opposite-side MARKET order for exactly the FILLED quantity in the same
     // product, through place_order() (validation + risk gate + rate limit).
     // Never reverses a leg whose fill it cannot verify — it reports it instead.
-    // BLOCKING (broker round-trips): call from a worker thread.
+    // `source`: provenance of the reversal orders (UnifiedOrder::source format, e.g.
+    // algo_exit:<deployment id> — then the approval rule applies to them as to any exit);
+    // empty = not stated. BLOCKING (broker round-trips): call from a worker thread.
     struct UnwindLegResult {
         QString symbol;
         QString order_id;
@@ -104,7 +144,8 @@ class UnifiedTrading : public QObject {
         QString error;
     };
     QVector<UnwindLegResult> unwind_basket_legs(const QString& account_id,
-                                                const QVector<BasketOrderResult::OrderResult>& legs);
+                                                const QVector<BasketOrderResult::OrderResult>& legs,
+                                                const QString& source = {});
 
     UnifiedTrading(const UnifiedTrading&) = delete;
     UnifiedTrading& operator=(const UnifiedTrading&) = delete;

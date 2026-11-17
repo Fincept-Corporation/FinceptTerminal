@@ -9,7 +9,9 @@
 
 #include "app/DockScreenRouter.h"
 #include "app/WindowFrame.h"
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -19,8 +21,12 @@
 #include "ui/debug/DebugOverlay.h"
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
+#include "ui/notifications/NotificationService.h"
 #include "ui/theme/Theme.h"
 
+#include <QBoxLayout>
+#include <QElapsedTimer>
+#include <QMessageBox>
 #include <QStackedWidget>
 #include <QToolBar>
 
@@ -30,26 +36,53 @@
 
 namespace fincept {
 
+void WindowFrame::ensure_chat_mode_screen() {
+    if (chat_mode_screen_ || !chat_mode_host_)
+        return;
+    QElapsedTimer t;
+    t.start();
+    // Built in its final parent (the stack page), so the finished tree is never
+    // re-parented / re-styled.
+    chat_mode_screen_ = new chat_mode::ChatModeScreen(chat_mode_host_);
+    if (auto* box = qobject_cast<QBoxLayout*>(chat_mode_host_->layout()))
+        box->addWidget(chat_mode_screen_);
+    connect(chat_mode_screen_, &chat_mode::ChatModeScreen::exit_requested, this, &WindowFrame::toggle_chat_mode);
+    // Its draft, conversation and mode are saved on every change (notify_changed)
+    // but were never read back: bring them back now.
+    ScreenStateManager::instance().restore(chat_mode_screen_);
+    LOG_DEBUG("WindowFrame", QString("Chat Mode built on first use in %1 ms").arg(t.elapsed()));
+}
+
+void WindowFrame::confirm_logout() {
+    static bool asking = false; // the modal box runs an event loop: one question at a time
+    if (asking)
+        return;
+    asking = true;
+    const auto answer = QMessageBox::question(
+        this, tr("Log out"), tr("Log out of Fincept Terminal? You will need to sign in again to come back."),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    asking = false;
+    if (answer == QMessageBox::Yes)
+        auth::AuthManager::instance().logout();
+}
+
 void WindowFrame::toggle_chat_mode() {
     if (locked_)
         return;
+    if (!chat_mode_)
+        ensure_chat_mode_screen(); // before it is shown (lazy since the window constructor)
     chat_mode_ = !chat_mode_;
+    // Toolbar + status bar follow "!focus_mode_ && !chat_mode_" — leaving chat
+    // mode must not bring them back while focus mode is still on.
+    set_shell_visible(true);
 
     if (chat_mode_) {
-        if (dock_toolbar_)
-            dock_toolbar_->setVisible(false);
-        if (dock_status_bar_)
-            dock_status_bar_->setVisible(false);
         if (chat_bubble_)
             chat_bubble_->setVisible(false);
         stack_->setCurrentIndex(2);
-        LOG_INFO("WindowFrame", "Entered Chat Mode");
+        LOG_DEBUG("WindowFrame", "Entered Chat Mode");
     } else {
         stack_->setCurrentIndex(1);
-        if (dock_toolbar_)
-            dock_toolbar_->setVisible(true);
-        if (dock_status_bar_)
-            dock_status_bar_->setVisible(true);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
@@ -60,7 +93,7 @@ void WindowFrame::toggle_chat_mode() {
                 chat_bubble_->raise();
             }
         }
-        LOG_INFO("WindowFrame", "Exited Chat Mode");
+        LOG_DEBUG("WindowFrame", "Exited Chat Mode");
     }
 }
 
@@ -71,10 +104,9 @@ void WindowFrame::toggle_focus_mode() {
     if (stack_ && stack_->currentIndex() == 0)
         return;
     focus_mode_ = !focus_mode_;
-    if (dock_toolbar_)
-        dock_toolbar_->setVisible(!focus_mode_);
-    if (dock_status_bar_)
-        dock_status_bar_->setVisible(!focus_mode_);
+    // set_shell_visible applies "!focus_mode_ && !chat_mode_", so toggling
+    // focus mode from chat mode does not show the dock chrome over the chat.
+    set_shell_visible(true);
 }
 
 void WindowFrame::toggle_chat_mode_action() {
@@ -90,7 +122,10 @@ void WindowFrame::refresh_focused_panel() {
     auto* focused = dock_manager_->focusedDockWidget();
     if (!focused || !focused->widget())
         return;
-    QWidget* panel = focused->widget();
+    // The screen itself, not the dock widget's content host around it.
+    QWidget* panel = dock_router_ ? dock_router_->screen_widget(focused->objectName()) : nullptr;
+    if (!panel)
+        panel = focused->widget();
     // No top-level screen defines a plain refresh() slot, so the F5 / View ▸ Refresh
     // path used to be a silent no-op everywhere. Several screens do expose their
     // Refresh-button handler as a (private) slot under a conventional name — try
@@ -106,6 +141,9 @@ void WindowFrame::refresh_focused_panel() {
     }
     LOG_DEBUG("WindowFrame", QString("refresh: '%1' exposes no refresh slot — ignored")
                                  .arg(QString::fromLatin1(mo->className())));
+    // F5 / Refresh used to do nothing visible on most screens; say so instead.
+    ui::ToastService::instance().post(ui::ToastService::Severity::Info,
+                                      tr("This screen has no manual refresh"), "refresh");
 }
 
 void WindowFrame::open_component_browser() {

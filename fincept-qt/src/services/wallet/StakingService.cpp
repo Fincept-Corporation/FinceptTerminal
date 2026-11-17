@@ -102,7 +102,7 @@ void StakingService::refresh(const QStringList& topics) {
     // for "this wallet has no locks".
     static std::atomic<bool> once{false};
     if (!once.exchange(true))
-        LOG_INFO("Staking", "lock topics requested — staking is not live in this build, reporting unavailable");
+        LOG_DEBUG("Staking", "lock topics requested — staking is not live in this build, reporting unavailable");
 
     auto& hub = fincept::datahub::DataHub::instance();
     const QString reason = not_live_reason();

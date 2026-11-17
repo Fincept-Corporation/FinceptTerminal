@@ -1,0 +1,25 @@
+{
+  "parser": "acp",
+  "events": [
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg-1"
+    },
+    {
+      "kind": "text",
+      "ref": "msg-1"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "error"
+    }
+  ],
+  "session_id": "s9",
+  "final_text": "Partial ans",
+  "saw_result": true,
+  "result_is_error": true,
+  "input": "jsonrpc_error.jsonl"
+}

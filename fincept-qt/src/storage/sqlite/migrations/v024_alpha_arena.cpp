@@ -57,6 +57,8 @@ Result<void> apply_v024(QSqlDatabase& db) {
 
     // ── Agents (one row per agent slot in a competition) ────────────────────
     {
+        // aa_agents.color_hex is stored data (the agent's identity colour), so
+        // its default is a fixed value, not a theme colour.
         auto r = v024_sql(db, R"sql(
             CREATE TABLE IF NOT EXISTS aa_agents (
                 id TEXT PRIMARY KEY,

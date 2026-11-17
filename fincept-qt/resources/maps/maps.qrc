@@ -1,0 +1,9 @@
+<!-- Offline base map for WorldMapWidget (src/ui/widgets/map/GeoBaseMap.cpp).
+     natural_earth.bin is generated from Natural Earth GeoJSON by build_natural_earth.py.
+     Natural Earth data is in the public domain — see NATURAL_EARTH.txt. -->
+<RCC>
+    <qresource prefix="/maps">
+        <file>natural_earth.bin</file>
+        <file>NATURAL_EARTH.txt</file>
+    </qresource>
+</RCC>

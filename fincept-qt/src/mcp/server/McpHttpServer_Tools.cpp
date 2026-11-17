@@ -1,25 +1,27 @@
-// McpHttpServer_Tools.cpp — the tool side of the external MCP server: catalogue
-// snapshot (what tools/list advertises), the per-call policy, execution on a
-// pool thread, and result shaping. See McpHttpServer_p.h for the file map.
+// McpHttpServer_Tools.cpp — the terminal's backend for McpServerEngine: the
+// catalogue snapshot (what tools/list advertises), bearer-token checks, the
+// per-call policy, execution and result shaping. See McpHttpServer_p.h.
 //
-// The catalogue is the terminal's ten core tools (src/mcp/core/CoreTools.h) —
-// small enough that every client gets all of it, so there is no toolset choice
-// and no discovery round-trip.
+// The catalogue is the terminal's core tools (src/mcp/core/CoreTools.h) — small
+// enough that every client gets all of it, so there is no toolset choice and no
+// discovery round-trip.
 //
-// Policy for one tools/call:
-//   unknown / disabled                      → JSON-RPC -32602
+// Policy for one tools/call (the engine already resolved the name, applied the
+// run token's scope and the concurrency limits):
 //   ui-control / navigation, look-only mode → isError, denied
 //   python run / status / cancel, scripts off → isError, denied
 //   auth level >= Verified                  → ToolApprovalDialog (≤ 50 s), then run
 //                                             inside a ScopedApprovedCall
 //   everything else                         → run; the core tools themselves ask
 //                                             the user before risky ACTIONS
-// Execution is McpService::execute_tool(INTERNAL_SERVER_ID, …) under the
-// caller's name (ScopedCallOrigin), so approval dialogs say who is asking.
+// Execution: McpProvider::call_tool_async under the caller's name
+// (ScopedCallOrigin) on a pool thread; the pool thread returns as soon as the
+// tool is STARTED and the result is shaped in a continuation, so no thread is
+// parked on a tool and a slow tool cannot starve the others. The client's
+// cancel flag and progress callback travel in the ToolContext.
 
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
-#include "mcp/McpService.h"
 #include "mcp/ResultStore.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "mcp/core/CoreTools.h"
@@ -27,21 +29,31 @@
 #include "mcp/server/McpHttpServer_p.h"
 #include "mcp/server/ToolApprovalDialog.h"
 
+#include "auth/ConstantTime.h"
+
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QFuture>
 #include <QJsonDocument>
 #include <QMutexLocker>
 #include <QRegularExpression>
-#include <QSet>
+#include <QThreadPool>
 
 #include <algorithm>
+#include <exception>
+#include <optional>
 
 namespace fincept::mcp {
 
 namespace mcp_http_detail {
 
 namespace {
+
+using server::AuthInfo;
+using server::CallDone;
+using server::CallOutcome;
+using server::CallRequest;
+using server::CataloguePtr;
 
 bool is_advertised_name_char(QChar c) {
     const char16_t u = c.unicode();
@@ -73,94 +85,118 @@ QJsonObject normalized_schema(QJsonObject schema) {
     return schema;
 }
 
-QJsonObject tool_entry(const CatalogTool& t) {
-    QString description = t.description.trimmed();
-    if (needs_approval(t))
-        description += QStringLiteral(" [Every call needs the user's approval in Fincept Terminal.]");
+/// Tools at AuthLevel >= Verified (ExplicitConfirm in practice) need the user's
+/// per-call approval in ToolApprovalDialog. (The core tools ask per ACTION
+/// themselves; this covers any tool that declares the level.)
+bool needs_approval(AuthLevel auth) {
+    // >= Verified, not just ExplicitConfirm: the AuthChecker AgentService installs
+    // lets every tool at that level run only inside a user-approved call, so
+    // asking is the only way such a tool can run at all.
+    return auth >= AuthLevel::Verified;
+}
 
-    const bool read_only = t.category == QLatin1String(core::kCategoryUiRead);
+/// Operating or rearranging the UI (categories ui-control and navigation) —
+/// refused while allow_ui_control is off.
+bool is_ui_control(const QString& category) {
+    return category == QLatin1String(core::kCategoryUiControl) || category == QLatin1String(core::kCategoryNavigation);
+}
+
+struct ToolPolicyFacts {
+    bool destructive = false;
+    AuthLevel auth = AuthLevel::None;
+    QString description;
+};
+
+QJsonObject tool_entry(const McpProvider::ToolAuditInfo& info, const QString& advertised) {
+    QString description = info.description.trimmed();
+    if (needs_approval(info.auth_required))
+        description += QStringLiteral(" [Every call needs the user's approval in Fincept Terminal.]");
+    const bool read_only = info.category == QLatin1String(core::kCategoryUiRead);
     // destructiveHint is what clients use to decide whether a call may run
-    // without asking their own user. ui_act / ui_invoke can delete or cancel
-    // things, ui_open / ui_workspace close panels and delete layouts, and python
-    // runs scripts — so every non-read tool is honestly "may destroy", whatever
-    // its ToolDef flag says (the core tools gate risk per ACTION, not per tool).
+    // without asking their own user (Codex `default_tools_approval_mode =
+    // "writes"` prompts for every tool not marked read-only). ui_act / ui_invoke
+    // can delete or cancel things, ui_open / ui_workspace close panels and delete
+    // layouts, and python runs scripts — so every non-read tool is honestly "may
+    // destroy", whatever its ToolDef flag says (the core tools gate risk per
+    // ACTION, not per tool).
     const QJsonObject annotations{
         {QStringLiteral("readOnlyHint"), read_only},
-        {QStringLiteral("destructiveHint"), !read_only || t.destructive},
+        {QStringLiteral("destructiveHint"), !read_only || info.is_destructive},
         {QStringLiteral("idempotentHint"), read_only},
         {QStringLiteral("openWorldHint"), true},
     };
     return QJsonObject{
-        {QStringLiteral("name"), t.advertised},
-        {QStringLiteral("title"), make_title(t.name)},
+        {QStringLiteral("name"), advertised},
+        {QStringLiteral("title"), make_title(info.name)},
         {QStringLiteral("description"), description},
-        {QStringLiteral("inputSchema"), t.input_schema},
+        {QStringLiteral("inputSchema"), normalized_schema(info.input_schema)},
         {QStringLiteral("annotations"), annotations},
     };
 }
 
-CataloguePtr build_catalogue() {
-    auto cat = std::make_shared<Catalogue>();
+/// Catalogue + the per-tool policy facts the engine does not carry.
+struct TerminalCatalogue : server::Catalogue {
+    QHash<QString, ToolPolicyFacts> policy; // by internal name
+};
+
+std::shared_ptr<const TerminalCatalogue> build_catalogue() {
+    auto cat = std::make_shared<TerminalCatalogue>();
     auto& provider = McpProvider::instance();
     // Generation BEFORE the audit: a registration racing it leaves this snapshot
     // stale, so the next caller rebuilds instead of trusting a half-picture.
     cat->generation = provider.generation();
     const auto audit = provider.audit_all_tools(); // internal tools only — external servers are not re-exported
+    QHash<QString, McpProvider::ToolAuditInfo> usable;
     for (const auto& info : audit) {
-        if (!info.enabled || !info.has_handler)
-            continue;
-        CatalogTool t;
-        t.name = info.name;
-        t.advertised = make_advertised_name(info.name);
-        t.description = info.description;
-        t.category = info.category;
-        t.input_schema = normalized_schema(info.input_schema);
-        t.destructive = info.is_destructive;
-        t.auth = info.auth_required;
-        if (cat->by_advertised.contains(t.advertised))
-            LOG_WARN(kTag, QStringLiteral("Advertised name '%1' collides — '%2' stays callable by its internal name only")
-                               .arg(t.advertised, t.name));
-        else
-            cat->by_advertised.insert(t.advertised, t.name);
-        cat->tools.insert(t.name, t);
+        if (info.enabled && info.has_handler)
+            usable.insert(info.name, info);
     }
-
     // Core tools first, in their catalogue order; anything else after, sorted.
     QStringList order;
     for (const QString& n : core::core_tool_names()) {
-        if (cat->tools.contains(n))
+        if (usable.contains(n))
             order << n;
     }
     QStringList rest;
-    for (auto it = cat->tools.constBegin(); it != cat->tools.constEnd(); ++it) {
+    for (auto it = usable.cbegin(); it != usable.cend(); ++it) {
         if (!order.contains(it.key()))
             rest << it.key();
     }
     rest.sort();
     order += rest;
-    for (const QString& n : order)
-        cat->entries.append(tool_entry(cat->tools.value(n)));
+    for (const QString& n : order) {
+        const McpProvider::ToolAuditInfo& info = usable[n];
+        const QString advertised = make_advertised_name(info.name);
+        if (cat->tools.contains(advertised)) {
+            LOG_WARN(kTag, logf("Advertised MCP tool name collides; the tool stays callable by its internal name only",
+                                {{"advertised", advertised}, {"tool", info.name}}));
+            continue;
+        }
+        server::ToolMeta meta;
+        meta.internal = info.name;
+        meta.advertised = advertised;
+        meta.category = info.category;
+        meta.timeout_ms = info.default_timeout_ms;
+        meta.input_schema = normalized_schema(info.input_schema);
+        cat->tools.insert(advertised, meta);
+        cat->internal_to_advertised.insert(info.name, advertised);
+        cat->policy.insert(info.name, ToolPolicyFacts{info.is_destructive, info.auth_required, info.description});
+        cat->entries.append(tool_entry(info, advertised));
+    }
     return cat;
 }
 
-QJsonObject text_block(const QString& text) {
-    return QJsonObject{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), text}};
-}
-
 QString json_text(const QJsonValue& v) {
-    if (v.isObject())
-        return QString::fromUtf8(compact_json(v.toObject()));
-    if (v.isArray())
-        return QString::fromUtf8(compact_json(v.toArray()));
-    // QJsonDocument only holds containers: serialise a scalar inside an array and unwrap it.
-    const QByteArray wrapped = compact_json(QJsonArray{v});
-    return QString::fromUtf8(wrapped.mid(1, wrapped.size() - 2));
+    return QString::fromUtf8(wire::compact_json_value(v));
 }
 
 /// MCP CallToolResult for a finished ToolResult. Oversized text is parked in
 /// the ResultStore and replaced by a structure-preserving summary + a result id
 /// readable with ui_read — never truncated silently. Image blocks (screenshots)
 /// are forwarded as they are; they are not counted against the text budget.
+/// No structuredContent: no tool declares an outputSchema, and the text block
+/// already carries the JSON (see McpClientProfile.cpp for what each client does
+/// with a copy).
 QJsonObject shape_tool_result(const QString& tool, const ToolResult& tr, int budget_bytes, bool allow_park) {
     if (!tr.success) {
         QString text = tr.error.trimmed();
@@ -172,7 +208,7 @@ QJsonObject shape_tool_result(const QString& tool, const ToolResult& tr, int bud
         if (text.size() > kMaxErrorTextChars)
             text = text.left(kMaxErrorTextChars) +
                    QStringLiteral("\n… [error text clipped: %1 more characters]").arg(text.size() - kMaxErrorTextChars);
-        return error_call_result(text);
+        return wire::error_call_result(text);
     }
 
     QJsonObject envelope;
@@ -183,95 +219,274 @@ QJsonObject shape_tool_result(const QString& tool, const ToolResult& tr, int bud
         envelope.insert(QStringLiteral("message"), tr.message);
 
     QJsonArray content;
-    QJsonObject result;
-    const QByteArray serialized = compact_json(envelope);
+    const QByteArray serialized = wire::compact_json(envelope);
     if (serialized.size() > budget_bytes && allow_park) {
         const QString result_id = ResultStore::instance().put(tool, envelope);
         QJsonValue shaped(envelope);
         const ShrinkStats st = shrink_json(shaped, std::max(1024, budget_bytes - 800));
         QJsonObject out = shaped.isObject() ? shaped.toObject() : QJsonObject{{QStringLiteral("data"), shaped}};
-        LOG_INFO(kTag, QStringLiteral("Tool '%1' returned %2 KB — shaped for the external client, full payload parked "
-                                      "as %3")
-                           .arg(tool)
-                           .arg(st.original_bytes / 1024)
-                           .arg(result_id));
+        LOG_INFO(kTag, logf("Large tool result shaped for an external client",
+                            {{"tool", tool}, {"kb", st.original_bytes / 1024}, {"result_id", result_id}}));
         const QString note = QStringLiteral("[Result truncated to fit the response budget (%1 → %2 bytes). Read the "
                                             "full payload with ui_read(ref=\"%3\", offset=0).]")
                                  .arg(st.original_bytes)
                                  .arg(st.final_bytes)
                                  .arg(result_id);
         if (out.value(QStringLiteral("message")).isString())
-            content.append(text_block(out.value(QStringLiteral("message")).toString()));
+            content.append(wire::text_block(out.value(QStringLiteral("message")).toString()));
         if (out.contains(QStringLiteral("data")))
-            content.append(text_block(json_text(out.value(QStringLiteral("data")))));
-        content.append(text_block(note));
+            content.append(wire::text_block(json_text(out.value(QStringLiteral("data")))));
+        content.append(wire::text_block(note));
     } else {
         if (!tr.message.isEmpty())
-            content.append(text_block(tr.message));
-        if (has_data) {
-            content.append(text_block(tr.data.isString() ? tr.data.toString() : json_text(tr.data)));
-            if (tr.data.isObject())
-                result.insert(QStringLiteral("structuredContent"), tr.data.toObject());
-        }
+            content.append(wire::text_block(tr.message));
+        if (has_data)
+            content.append(wire::text_block(tr.data.isString() ? tr.data.toString() : json_text(tr.data)));
     }
     for (const QJsonValue& block : tr.content) {
         if (block.isObject())
             content.append(block);
     }
     if (content.isEmpty())
-        content.append(text_block(QStringLiteral("OK")));
-    result.insert(QStringLiteral("content"), content);
-    result.insert(QStringLiteral("isError"), false);
-    return result;
+        content.append(wire::text_block(QStringLiteral("OK")));
+    return QJsonObject{{QStringLiteral("content"), content}, {QStringLiteral("isError"), false}};
 }
 
 CallOutcome refused(const QString& message, const QString& summary, bool denied) {
     CallOutcome out;
-    out.payload = error_call_result(message);
+    out.payload = wire::error_call_result(message);
     out.denied = denied;
     out.summary = summary;
     return out;
 }
 
-bool client_cancelled(const CancelFlag& flag) {
-    return flag && flag->load();
-}
+class TerminalBackend final : public server::McpServerBackend {
+  public:
+    explicit TerminalBackend(std::shared_ptr<BackendShared> shared) : shared_(std::move(shared)) {}
 
-/// Run an internal tool with the client's cancel flag wired into its
-/// ToolContext: McpProvider's cancellation watch then ends the call as soon as
-/// the client gives up, and tools that poll ctx.is_cancelled (ui_wait) stop.
-/// Blocks this pool thread, never the GUI thread. The auth gate inside
-/// call_tool_async runs synchronously here, so the caller's ScopedCallFlags /
-/// ScopedApprovedCall still apply.
-ToolResult call_internal_tool(const QString& name, const QJsonObject& args, const CancelFlag& cancel) {
-    ToolContext ctx; // timeout left at the default → the tool's own budget
-    if (cancel)
-        ctx.is_cancelled = [cancel]() { return cancel->load(); };
-    QFuture<ToolResult> future = McpProvider::instance().call_tool_async(name, args, ctx);
-    future.waitForFinished();
-    if (future.resultCount() == 0)
-        return ToolResult::fail(QStringLiteral("Tool '%1' produced no result").arg(name));
-    ToolResult tr = future.result();
-    if (!tr.success && tr.error == QLatin1String("cancelled"))
-        tr.error = QStringLiteral("Cancelled — the client gave up on this call.");
-    return tr;
-}
+    AuthInfo authenticate(const QByteArray& bearer) const override {
+        AuthInfo a;
+        if (bearer.isEmpty() || bearer.size() > 512)
+            return a;
+        const QString supplied = QString::fromLatin1(bearer);
+        QString expected;
+        QByteArray fingerprint;
+        {
+            QMutexLocker lock(&shared_->auth_mutex);
+            expected = shared_->auth_token;
+            fingerprint = shared_->auth_fingerprint;
+        }
+        if (!expected.isEmpty() && auth::constant_time_equals(supplied, expected)) {
+            a.ok = true;
+            a.fingerprint = fingerprint;
+            return a;
+        }
+        // Or a live run-scoped token of an in-app harness call (its policy is
+        // enforced per message by the engine and per call below).
+        if (const auto policy = run_token_table().check(supplied, QDateTime::currentMSecsSinceEpoch())) {
+            a.ok = true;
+            a.run_token = true;
+            a.policy = *policy;
+            a.fingerprint = QCryptographicHash::hash(bearer, QCryptographicHash::Sha256).toHex().left(16);
+        }
+        return a;
+    }
+
+    CataloguePtr catalogue() override { return current_catalogue(*shared_); }
+
+    QJsonObject server_info() const override {
+        QString version;
+        {
+            QMutexLocker lock(&shared_->facts_mutex);
+            version = shared_->app_version;
+        }
+        // "edition": both Fincept builds answer as "fincept-terminal"; the edition
+        // id says which one this is (also in GET /health, checked by the stdio
+        // bridge and the self-check before they send a token).
+        return QJsonObject{{QStringLiteral("name"), QStringLiteral("fincept-terminal")},
+                           {QStringLiteral("title"), QStringLiteral("Fincept Terminal (%1 edition)")
+                                                         .arg(QString::fromLatin1(edition::kId))},
+                           {QStringLiteral("version"), version},
+                           {QStringLiteral("edition"), QString::fromLatin1(edition::kId)}};
+    }
+
+    QString instructions() const override { return server_instructions(); }
+
+    bool content_request(const QString& method, const QJsonObject& params, QJsonObject* result, int* error_code,
+                         QString* error_message) override {
+        return serve_content(*shared_, method, params, result, error_code, error_message);
+    }
+
+    void call_tool(const CallRequest& request, CallDone done) override {
+        std::shared_ptr<BackendShared> state = shared_;
+        QThreadPool* pool = state->ensure_pool();
+        pool->start([state, request, done]() {
+            try {
+                start_on_pool(state, request, done);
+            } catch (const std::exception& e) {
+                LOG_ERROR(kTag, logf("MCP tool call threw", {{"tool", request.tool.internal},
+                                                             {"client", request.client_label},
+                                                             {"error", QString::fromUtf8(e.what()).left(200)}}));
+                done(refused(QStringLiteral("Internal error while running the tool: %1").arg(QString::fromUtf8(e.what())),
+                             QStringLiteral("internal error"), false));
+            } catch (...) {
+                LOG_ERROR(kTag, logf("MCP tool call threw", {{"tool", request.tool.internal},
+                                                             {"client", request.client_label},
+                                                             {"error", "unknown exception"}}));
+                done(refused(QStringLiteral("Internal error while running the tool."), QStringLiteral("internal error"),
+                             false));
+            }
+        });
+    }
+
+  private:
+    /// Pool thread: policy, approval (the one place a pool thread blocks), then
+    /// START the tool and return; the result arrives through the continuation.
+    static void start_on_pool(const std::shared_ptr<BackendShared>& state, const CallRequest& req, const CallDone& done) {
+        if (!state->accepting.load()) {
+            done(refused(QStringLiteral("Fincept Terminal's MCP server is stopping; the call was not run."),
+                         QStringLiteral("denied — server stopping"), true));
+            return;
+        }
+        if (req.cancel && req.cancel->load()) {
+            done(refused(QStringLiteral("Cancelled by the client before it started; nothing was done."),
+                         QStringLiteral("cancelled before start"), false));
+            return;
+        }
+        const auto base = current_catalogue(*state);
+        const auto* cat = static_cast<const TerminalCatalogue*>(base.get()); // every catalogue here is built by build_catalogue()
+        const QString& internal = req.tool.internal;
+        const ToolPolicyFacts facts = cat ? cat->policy.value(internal) : ToolPolicyFacts{};
+
+        // ── The user's permissions for external agents ──
+        if (is_ui_control(req.tool.category) && !state->allow_ui_control.load()) {
+            done(refused(QStringLiteral("The user has set external agents to look-only in Fincept Terminal (Settings › AI "
+                                        "Agents (MCP)): %1 cannot open, arrange or operate screens. Use ui_overview, "
+                                        "ui_snapshot, ui_read and ui_screenshot, or ask the user to allow UI control.")
+                             .arg(internal),
+                         QStringLiteral("denied — look-only mode"), true));
+            return;
+        }
+        if (internal == QLatin1String("python") && !state->allow_scripts.load()) {
+            const QString action = req.args.value(QStringLiteral("action")).toString();
+            if (action != QLatin1String("search") && action != QLatin1String("info")) {
+                done(refused(QStringLiteral("The user has not allowed external agents to run the terminal's Python "
+                                            "scripts (Settings › AI Agents (MCP)). python(action=\"search\"/\"info\") "
+                                            "still works."),
+                             QStringLiteral("denied — scripts not allowed"), true));
+                return;
+            }
+        }
+        if (facts.destructive && !state->allow_ui_control.load()) {
+            done(refused(QStringLiteral("This tool changes terminal state and external agents are look-only."),
+                         QStringLiteral("denied — look-only mode"), true));
+            return;
+        }
+
+        bool approved = false;
+        if (needs_approval(facts.auth)) {
+            ToolApprovalRequest ar;
+            ar.client = req.client_label;
+            ar.tool = internal;
+            ar.description = facts.description;
+            ar.args = req.args;
+            ar.destructive = facts.destructive;
+            ar.kind = QStringLiteral("generic"); // a tool that declares the confirm level (no finer kind known)
+            ar.client_id = req.client_id;
+            ar.run_id = req.run_id;
+            switch (ToolApprovalDialog::request_approval(ar)) {
+                case ToolApprovalVerdict::Approved:
+                    approved = true;
+                    break;
+                case ToolApprovalVerdict::Denied:
+                    done(refused(QStringLiteral("Denied by the user in Fincept Terminal"),
+                                 QStringLiteral("denied by the user"), true));
+                    return;
+                case ToolApprovalVerdict::TimedOut:
+                    done(refused(QStringLiteral("Approval timed out — ask the user to approve it in Fincept Terminal "
+                                                "and retry"),
+                                 QStringLiteral("approval timed out"), true));
+                    return;
+                case ToolApprovalVerdict::Unavailable:
+                    done(refused(QStringLiteral("Fincept Terminal could not ask the user to approve this call (no "
+                                                "terminal window is open), so it was not run."),
+                                 QStringLiteral("denied — no terminal window to ask"), true));
+                    return;
+            }
+            if (!state->accepting.load() || (req.cancel && req.cancel->load())) {
+                done(refused(QStringLiteral("The call was cancelled while waiting for approval; it was not run."),
+                             QStringLiteral("cancelled"), false));
+                return;
+            }
+        }
+
+        // The client's cancel flag and progress callback reach the tool.
+        ToolContext ctx; // timeout left at the default → the tool's own budget
+        const server::CancelFlag cancel = req.cancel;
+        if (cancel)
+            ctx.is_cancelled = [cancel]() { return cancel->load(); };
+        if (req.progress) {
+            const auto progress = req.progress;
+            ctx.on_progress = [progress](double fraction, const QString& message) {
+                progress(std::clamp(fraction, 0.0, 1.0), 1.0, message);
+            };
+        }
+
+        QFuture<ToolResult> future;
+        {
+            // Agent-call context for McpProvider's gate (auth runs synchronously on
+            // this thread), the caller's name for any approval a tool asks for, and
+            // a paper-only run token's guarantee.
+            TerminalMcpBridge::ScopedCallFlags flags(/*call_in_progress=*/true,
+                                                     /*destructive_allowed=*/approved || facts.destructive);
+            ScopedCallOrigin origin(req.client_label);
+            ScopedCallClient client(req.client_id, req.run_id); // stable ids for agent attribution
+            std::optional<ScopedPaperRun> paper;
+            if (req.paper_only)
+                paper.emplace();
+            std::optional<ScopedApprovedCall> approval_marker; // the user approved exactly this call
+            if (approved)
+                approval_marker.emplace();
+            future = McpProvider::instance().call_tool_async(internal, req.args, ctx);
+        }
+
+        // A stored result is read back page by page; re-parking its page would loop.
+        const bool allow_park = !(internal == QLatin1String("ui_read") &&
+                                  req.args.value(QStringLiteral("ref")).toString().startsWith(QLatin1String("res_")));
+        const int budget = req.result_budget_bytes > 0 ? req.result_budget_bytes : state->result_budget_bytes.load();
+        const QString tool_name = internal;
+        future
+            .then(state->ensure_pool(),
+                  [done, approved, allow_park, budget, tool_name](QFuture<ToolResult> f) {
+                      ToolResult tr = f.resultCount() > 0
+                                          ? f.result()
+                                          : ToolResult::fail(QStringLiteral("Tool '%1' produced no result").arg(tool_name));
+                      if (!tr.success && tr.error == QLatin1String("cancelled"))
+                          tr.error = QStringLiteral("Cancelled — the client gave up on this call.");
+                      CallOutcome out;
+                      out.payload = shape_tool_result(tool_name, tr, budget, allow_park);
+                      out.success = tr.success;
+                      if (tr.success)
+                          out.summary = !approved                            ? QStringLiteral("ok")
+                                        : ToolApprovalDialog::auto_approve() ? QStringLiteral("ok (auto mode — not asked)")
+                                                                             : QStringLiteral("ok (approved by the user)");
+                      else
+                          out.summary = QStringLiteral("error: ") + clip_text(tr.error, kSummaryMaxChars);
+                      done(out);
+                  })
+            .onCanceled([done, tool_name]() {
+                // A handler that dropped its promise without an answer.
+                done(refused(QStringLiteral("Tool '%1' ended without a result.").arg(tool_name),
+                             QStringLiteral("no result"), false));
+            });
+    }
+
+    std::shared_ptr<BackendShared> shared_;
+};
 
 } // namespace
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
-
-qint64 now_ms() {
-    return QDateTime::currentMSecsSinceEpoch();
-}
-
-QByteArray compact_json(const QJsonObject& object) {
-    return QJsonDocument(object).toJson(QJsonDocument::Compact);
-}
-
-QByteArray compact_json(const QJsonArray& array) {
-    return QJsonDocument(array).toJson(QJsonDocument::Compact);
-}
 
 QString clip_text(const QString& text, int max_chars) {
     const QString flat = text.simplified();
@@ -292,34 +507,7 @@ QString make_advertised_name(const QString& internal_name) {
     return clean.left(kAliasPrefixLen) + QLatin1Char('_') + hash;
 }
 
-QJsonObject error_call_result(const QString& message) {
-    return QJsonObject{{QStringLiteral("content"), QJsonArray{text_block(message)}}, {QStringLiteral("isError"), true}};
-}
-
-bool needs_approval(const CatalogTool& tool) {
-    // >= Verified, not just ExplicitConfirm: the AuthChecker AgentService installs
-    // lets every tool at that level run only inside a user-approved call, so
-    // asking is the only way such a tool can run at all.
-    return tool.auth >= AuthLevel::Verified;
-}
-
-bool is_ui_control(const CatalogTool& tool) {
-    return tool.category == QLatin1String(core::kCategoryUiControl) ||
-           tool.category == QLatin1String(core::kCategoryNavigation);
-}
-
-QString resolve_tool_name(const Catalogue& catalogue, const QString& called) {
-    if (called.isEmpty())
-        return {};
-    const auto adv = catalogue.by_advertised.constFind(called);
-    if (adv != catalogue.by_advertised.constEnd())
-        return adv.value();
-    if (catalogue.tools.contains(called))
-        return called;
-    return {};
-}
-
-CataloguePtr current_catalogue(WorkerShared& shared) {
+server::CataloguePtr current_catalogue(BackendShared& shared) {
     const quint64 generation = McpProvider::instance().generation();
     {
         QMutexLocker lock(&shared.catalogue_mutex);
@@ -327,115 +515,15 @@ CataloguePtr current_catalogue(WorkerShared& shared) {
             return shared.catalogue;
     }
     // Built outside the lock: audit_all_tools() takes the provider's own mutex.
-    CataloguePtr fresh = build_catalogue();
+    server::CataloguePtr fresh = build_catalogue();
     QMutexLocker lock(&shared.catalogue_mutex);
     if (!shared.catalogue || shared.catalogue->generation <= fresh->generation)
         shared.catalogue = fresh;
     return shared.catalogue;
 }
 
-// ── One tools/call (pool thread) ─────────────────────────────────────────────
-
-CallOutcome run_tool_call(WorkerShared& shared, const CallJob& job) {
-    const CataloguePtr cat = current_catalogue(shared);
-    const QString internal = resolve_tool_name(*cat, job.called_name);
-    if (internal.isEmpty()) {
-        CallOutcome out;
-        out.rpc_error = true;
-        out.payload = rpc_error_body(
-            -32602,
-            QStringLiteral("Unknown tool: %1. tools/list shows the ten tools this server has.").arg(job.called_name));
-        out.summary = QStringLiteral("unknown tool");
-        return out;
-    }
-    const CatalogTool& gate = cat->tools.constFind(internal).value();
-
-    // Queued behind other calls while the client already gave up (or hung up).
-    if (client_cancelled(job.cancel))
-        return refused(QStringLiteral("Cancelled by the client before it started; nothing was done."),
-                       QStringLiteral("cancelled before start"), false);
-
-    // ── The user's permissions for external agents ──
-    if (is_ui_control(gate) && !shared.allow_ui_control.load())
-        return refused(
-            QStringLiteral("The user has set external agents to look-only in Fincept Terminal (Settings › AI "
-                           "Agents (MCP)): %1 cannot open, arrange or operate screens. Use ui_overview, "
-                           "ui_snapshot, ui_read and ui_screenshot, or ask the user to allow UI control.")
-                .arg(internal),
-            QStringLiteral("denied — look-only mode"), true);
-    if (internal == QLatin1String("python") && !shared.allow_scripts.load()) {
-        const QString action = job.args.value(QStringLiteral("action")).toString();
-        if (action != QLatin1String("search") && action != QLatin1String("info"))
-            return refused(
-                QStringLiteral("The user has not allowed external agents to run the terminal's Python scripts "
-                               "(Settings › AI Agents (MCP)). python(action=\"search\"/\"info\") still "
-                               "works."),
-                QStringLiteral("denied — scripts not allowed"), true);
-    }
-    if (gate.destructive && !shared.allow_ui_control.load())
-        return refused(QStringLiteral("This tool changes terminal state and external agents are look-only."),
-                       QStringLiteral("denied — look-only mode"), true);
-
-    bool approved = false;
-    if (needs_approval(gate)) {
-        if (!shared.accepting.load())
-            return refused(QStringLiteral("Fincept Terminal's MCP server is stopping; the call was not run."),
-                           QStringLiteral("denied — server stopping"), true);
-        ToolApprovalRequest req;
-        req.client = job.client;
-        req.tool = gate.name;
-        req.description = gate.description;
-        req.args = job.args;
-        req.destructive = gate.destructive;
-        switch (ToolApprovalDialog::request_approval(req)) {
-            case ToolApprovalVerdict::Approved:
-                approved = true;
-                break;
-            case ToolApprovalVerdict::Denied:
-                return refused(QStringLiteral("Denied by the user in Fincept Terminal"),
-                               QStringLiteral("denied by the user"), true);
-            case ToolApprovalVerdict::TimedOut:
-                return refused(
-                    QStringLiteral("Approval timed out — ask the user to approve it in Fincept Terminal and retry"),
-                    QStringLiteral("approval timed out"), true);
-            case ToolApprovalVerdict::Unavailable:
-                return refused(QStringLiteral("Fincept Terminal could not ask the user to approve this call (no "
-                                              "terminal window is open), so it was not run."),
-                               QStringLiteral("denied — no terminal window to ask"), true);
-        }
-        if (!shared.accepting.load())
-            return refused(QStringLiteral("Fincept Terminal's MCP server stopped; the call was not run."),
-                           QStringLiteral("denied — server stopped"), true);
-    }
-
-    ToolResult tr;
-    {
-        // Agent-call context for McpProvider's gate (auth runs synchronously on
-        // this thread), and the caller's name for any approval a tool asks for.
-        TerminalMcpBridge::ScopedCallFlags flags(/*call_in_progress=*/true,
-                                                 /*destructive_allowed=*/approved || gate.destructive);
-        ScopedCallOrigin origin(job.client);
-        if (approved) {
-            ScopedApprovedCall approval_marker; // the user approved exactly this call
-            tr = call_internal_tool(internal, job.args, job.cancel);
-        } else {
-            tr = call_internal_tool(internal, job.args, job.cancel);
-        }
-    }
-
-    // A stored result is read back page by page; re-parking its page would loop.
-    const bool allow_park = !(internal == QLatin1String("ui_read") &&
-                              job.args.value(QStringLiteral("ref")).toString().startsWith(QLatin1String("res_")));
-    CallOutcome out;
-    out.payload = shape_tool_result(internal, tr, shared.result_budget_bytes.load(), allow_park);
-    out.success = tr.success;
-    if (tr.success)
-        out.summary = !approved                            ? QStringLiteral("ok")
-                      : ToolApprovalDialog::auto_approve() ? QStringLiteral("ok (auto mode — not asked)")
-                                                           : QStringLiteral("ok (approved by the user)");
-    else
-        out.summary = QStringLiteral("error: ") + clip_text(tr.error, kSummaryMaxChars);
-    return out;
+std::shared_ptr<server::McpServerBackend> make_terminal_backend(std::shared_ptr<BackendShared> shared) {
+    return std::make_shared<TerminalBackend>(std::move(shared));
 }
 
 } // namespace mcp_http_detail

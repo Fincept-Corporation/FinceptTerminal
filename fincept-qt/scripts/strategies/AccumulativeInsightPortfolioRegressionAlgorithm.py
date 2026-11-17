@@ -1,59 +1,44 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-19E8A564
-# Category: Portfolio Management
-# Description: Accumulative position building strategy. Starts with 25%
-#   allocation on initial EMA crossover. Adds 25% on each pullback to EMA
-#   that bounces. Maximum 100% allocation. Exits on bearish EMA cross.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+### <summary>
+### Test algorithm using 'AccumulativeInsightPortfolioConstructionModel.py' and 'ConstantAlphaModel'
+### generating a constant 'Insight'
+### </summary>
 class AccumulativeInsightPortfolioRegressionAlgorithm(QCAlgorithm):
-    """Accumulative position building with EMA trend."""
-
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+        ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+        # Set requested data resolution
+        self.universe_settings.resolution = Resolution.MINUTE
 
-        self._fast_ema = self.ema(self.symbol, 10, Resolution.DAILY)
-        self._slow_ema = self.ema(self.symbol, 30, Resolution.DAILY)
-        self._current_weight = 0
-        self._touched_ema = False
+        self.set_start_date(2013,10,7)   #Set Start Date
+        self.set_end_date(2013,10,11)    #Set End Date
+        self.set_cash(100000)           #Set Strategy Cash
 
-    def on_data(self, data):
-        if not self._slow_ema.is_ready:
-            return
-        if self.symbol not in data:
-            return
+        symbols = [ Symbol.create("SPY", SecurityType.EQUITY, Market.USA) ]
 
-        price = data[self.symbol].close
-        fast = self._fast_ema.current.value
-        slow = self._slow_ema.current.value
+        # set algorithm framework models
+        self.set_universe_selection(ManualUniverseSelectionModel(symbols))
+        self.set_alpha(ConstantAlphaModel(InsightType.PRICE, InsightDirection.UP, timedelta(minutes = 20), 0.025, 0.25))
+        self.set_portfolio_construction(AccumulativeInsightPortfolioConstructionModel())
+        self.set_execution(ImmediateExecutionModel())
 
-        if fast > slow:
-            # Uptrend
-            if self._current_weight == 0:
-                self._current_weight = 0.5
-                self.set_holdings(self.symbol, self._current_weight)
-                self._touched_ema = False
-            elif price <= fast * 1.002:
-                self._touched_ema = True
-            elif self._touched_ema and price > fast and self._current_weight < 1.0:
-                self._current_weight = min(1.0, self._current_weight + 0.25)
-                self.set_holdings(self.symbol, self._current_weight)
-                self._touched_ema = False
-        else:
-            # Downtrend - exit all
-            if self._current_weight > 0:
-                self.liquidate()
-                self._current_weight = 0
-                self._touched_ema = False
+    def on_end_of_algorithm(self):
+        # holdings value should be 0.03 - to avoid price fluctuation issue we compare with 0.06 and 0.01
+        if (self.portfolio.total_holdings_value > self.portfolio.total_portfolio_value * 0.06
+            or self.portfolio.total_holdings_value < self.portfolio.total_portfolio_value * 0.01):
+            raise ValueError("Unexpected Total Holdings Value: " + str(self.portfolio.total_holdings_value))

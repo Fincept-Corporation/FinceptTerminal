@@ -79,20 +79,31 @@ def check_edgar_available():
         raise ImportError(f"edgartools library not available: {IMPORT_ERROR}")
 
 
+# SEC fair-access policy: every request declares "<organisation> <contact e-mail>" as its
+# User-Agent. EDGAR_IDENTITY (edgartools' own setting, and the name the rest of the codebase
+# uses) wins when the host or the user sets it; otherwise the product's role address is
+# declared - the same identity scripts/Analytics/corporateFinance/deal_database/deal_scanner.py
+# sends. Never a person's address.
+DEFAULT_SEC_IDENTITY = "Fincept Terminal support@fincept.in"
+
+
+def resolve_sec_identity(identity: Optional[str] = None) -> str:
+    """The SEC identity to declare: explicit argument > EDGAR_IDENTITY > product default."""
+    for candidate in (identity, os.environ.get("EDGAR_IDENTITY")):
+        if candidate and candidate.strip():
+            return candidate.strip()
+    return DEFAULT_SEC_IDENTITY
+
+
 def initialize_edgar(identity: Optional[str] = None):
     """
-    Initialize EdgarTools with user identity
+    Initialize EdgarTools with the SEC identity (see resolve_sec_identity).
 
     Args:
-        identity: User identity string (name + email)
+        identity: User identity string (name + email); overrides EDGAR_IDENTITY
     """
     check_edgar_available()
-
-    if identity:
-        set_identity(identity)
-    elif 'EDGAR_IDENTITY' not in os.environ:
-        # Default identity for Fincept Terminal
-        set_identity("Fincept Terminal nikultilak@gmail.com")
+    set_identity(resolve_sec_identity(identity))
 
 
 # ============================================================================

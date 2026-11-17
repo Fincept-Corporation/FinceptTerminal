@@ -1,5 +1,6 @@
 #include "services/cloud/PortfolioCloudAdapter.h"
 
+#include "core/logging/Logger.h"
 #include "network/cloud/CloudClient.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/sync/SyncMap.h"
@@ -142,6 +143,9 @@ void PortfolioCloudAdapter::push_sync(const OutboxRow& row, PushDone done) {
     const QString local_pid = row.local_id;
     auto p = PortfolioRepository::instance().get_portfolio(local_pid);
     if (p.is_err()) {
+        if (p.error() != "Not found")
+            LOG_WARN("CloudSync", logf("Portfolio push skipped, local row could not be read",
+                                       {{"id", local_pid}, {"error", QString::fromStdString(p.error())}}));
         done(pf_ok()); // portfolio gone locally — nothing to sync
         return;
     }
@@ -449,8 +453,11 @@ void PortfolioCloudAdapter::apply_remote_portfolio(const QJsonObject& detail, co
         // broker_account_id is device-local — never imported from cloud.
         auto cr = repo.create_portfolio(detail.value("name").toString(), detail.value("owner").toString(),
                                         detail.value("currency").toString(), detail.value("description").toString());
-        if (cr.is_err())
+        if (cr.is_err()) {
+            LOG_ERROR("CloudSync", logf("Pulled portfolio could not be created locally",
+                                        {{"remote_id", pfl}, {"error", QString::fromStdString(cr.error())}}));
             return;
+        }
         local_pid = cr.value();
     }
     SyncMap::put(pf_entity(), local_pid, pfl, updated);
@@ -525,8 +532,11 @@ void PortfolioCloudAdapter::apply_remote_portfolio(const QJsonObject& detail, co
 void PortfolioCloudAdapter::reconcile_portfolio_deletes(const QSet<QString>& remote_ids) {
     SyncOutbox::ApplyGuard guard;
     auto maps = SyncMap::all(pf_entity());
-    if (maps.is_err())
+    if (maps.is_err()) {
+        LOG_WARN("CloudSync", logf("Delete reconcile skipped, sync map unreadable",
+                                   {{"entity", pf_entity()}, {"error", QString::fromStdString(maps.error())}}));
         return;
+    }
     auto& repo = PortfolioRepository::instance();
     for (const SyncMapping& m : maps.value()) {
         if (!remote_ids.contains(m.remote_id)) {

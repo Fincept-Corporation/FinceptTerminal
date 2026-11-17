@@ -17,6 +17,23 @@
 
 namespace fincept::trading {
 
+static constexpr const char* kBrokerHttpTag = "BrokerHttp";
+
+// URL path for a log line: never the query (tokens travel there), and path segments that
+// look like identifiers (account numbers, order ids — they contain digits) cut to their
+// last 4 characters. Host is logged separately.
+static QString broker_http_log_path(const QUrl& url) {
+    QStringList parts = url.path().split(QLatin1Char('/'));
+    for (QString& part : parts) {
+        bool has_digit = false;
+        for (const QChar c : part)
+            has_digit = has_digit || c.isDigit();
+        if (has_digit && part.size() > 4)
+            part = log_mask(part);
+    }
+    return parts.join(QLatin1Char('/'));
+}
+
 BrokerHttp& BrokerHttp::instance() {
     static BrokerHttp s;
     return s;
@@ -158,6 +175,10 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     }
 
     if (!reply) {
+        LOG_ERROR(kBrokerHttpTag, logf("Broker request could not be created",
+                                       {{"method", method},
+                                        {"host", req_url.host()},
+                                        {"path", broker_http_log_path(req_url)}}));
         return {false, 0, {}, "", "Failed to create network request"};
     }
 
@@ -188,9 +209,27 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
                                         "been accepted; verify before retrying")
                                     .arg(timeout_ms_);
 
+    // One line per failed request, written here so every broker adapter is covered. Host and
+    // masked path only — never the query, headers or body. Keyed per endpoint so a poller that
+    // keeps timing out writes one line a minute while an order endpoint keeps its own key
+    // (order outcomes are also in the audit trail written by UnifiedTrading).
+    auto log_timeout = [&]() {
+        LOG_ERROR_RL(kBrokerHttpTag,
+                     method + QLatin1Char(' ') + req_url.host() + broker_http_log_path(req_url) +
+                         QStringLiteral("|timeout"),
+                     60000,
+                     logf("Broker request timed out, outcome unknown",
+                          {{"method", method},
+                           {"host", req_url.host()},
+                           {"path", broker_http_log_path(req_url)},
+                           {"timeout_ms", timeout_ms_},
+                           {"duration_ms", static_cast<qint64>(elapsed_ms)}}));
+    };
+
     if (timer.isActive()) {
         timer.stop();
     } else {
+        log_timeout();
         reply->abort();
         reply->deleteLater();
         BrokerHttpResponse timeout_result;
@@ -213,6 +252,22 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
             result.error = timeout_msg;
         else
             result.error = reply->errorString();
+        if (result.error == timeout_msg) {
+            log_timeout();
+        } else {
+            // Offline: every poll fails the same way — one line a minute per endpoint and error.
+            LOG_ERROR_RL(kBrokerHttpTag,
+                         method + QLatin1Char(' ') + req_url.host() + broker_http_log_path(req_url) +
+                             QLatin1Char('|') + QString::number(static_cast<int>(reply->error())),
+                         60000,
+                         logf("Broker request failed at transport level",
+                              {{"method", method},
+                               {"host", req_url.host()},
+                               {"path", broker_http_log_path(req_url)},
+                               {"qt_error", static_cast<int>(reply->error())},
+                               {"duration_ms", static_cast<qint64>(elapsed_ms)},
+                               {"error", result.error}}));
+        }
         reply->deleteLater();
         return result;
     }
@@ -247,6 +302,18 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
                            .arg(result.status_code)
                            .arg(parseErr.errorString())
                            .arg(parseErr.offset);
+        // Never the body — its size and where parsing stopped.
+        LOG_ERROR_RL(kBrokerHttpTag,
+                     method + QLatin1Char(' ') + req_url.host() + broker_http_log_path(req_url) +
+                         QStringLiteral("|json"),
+                     60000,
+                     logf("Broker returned malformed JSON", {{"method", method},
+                                                             {"host", req_url.host()},
+                                                             {"path", broker_http_log_path(req_url)},
+                                                             {"status", result.status_code},
+                                                             {"offset", parseErr.offset},
+                                                             {"bytes", body_bytes.size()},
+                                                             {"error", parseErr.errorString()}}));
     }
 
     if (!result.success && result.error.isEmpty()) {
@@ -262,6 +329,21 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
         result.error = (numeric && retry_after > 0)
                            ? QString("Rate limited by the broker (HTTP 429) — retry after %1 s").arg(retry_after)
                            : QString("Rate limited by the broker (HTTP 429) — wait a moment and retry");
+    }
+
+    // Non-2xx answer (including 429). Pollers repeat the same refusal (an expired token
+    // answers 401 on every poll): one line a minute per endpoint and status.
+    if (result.status_code < 200 || result.status_code >= 300) {
+        LOG_WARN_RL(kBrokerHttpTag,
+                    method + QLatin1Char(' ') + req_url.host() + broker_http_log_path(req_url) + QLatin1Char('|') +
+                        QString::number(result.status_code),
+                    60000,
+                    logf("Broker request rejected", {{"method", method},
+                                                     {"host", req_url.host()},
+                                                     {"path", broker_http_log_path(req_url)},
+                                                     {"status", result.status_code},
+                                                     {"duration_ms", static_cast<qint64>(elapsed_ms)},
+                                                     {"error", result.error}}));
     }
 
     reply->deleteLater();

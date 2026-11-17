@@ -8,26 +8,33 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('MARKETSTACK_API_KEY', '')
 BASE_URL = "https://api.marketstack.com/v1"
+SERVICE = "Marketstack"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every endpoint needs the key: say so before any network call instead of an upstream 401.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://marketstack.com/signup", "MARKETSTACK_API_KEY", what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "MARKETSTACK_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    # Marketstack reports bad keys / plan limits as {"error": {"code": ..., "message": ...}}.
+    if isinstance(data, dict) and isinstance(data.get("error"), dict):
+        err = data["error"]
+        return {"error": f"{SERVICE}: {fc.scrub(err.get('message') or err.get('code'), API_KEY)}"}
+    return data
 
 def get_eod(symbols: str, date_from: str = None, date_to: str = None, limit: int = 100) -> Any:
     params = {"access_key": API_KEY, "symbols": symbols, "limit": limit}
@@ -114,7 +121,7 @@ def main(args=None):
         date_from = args[2] if len(args) > 2 else None
         date_to = args[3] if len(args) > 3 else None
         result = get_dividends(symbols, date_from, date_to)
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 if __name__ == "__main__":
     main()

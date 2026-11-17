@@ -53,7 +53,7 @@ inline QString kStyle() {
                "#mcpViewBtn { background:transparent; color:%5; border:1px solid %8; "
                "  font-weight:700; padding:4px 14px; }"
                "#mcpViewBtn:hover { color:%4; border-color:%9; }"
-               "#mcpViewBtn[active=\"true\"] { background:%3; color:%1; border-color:%3; }"
+               "#mcpViewBtn[active=\"true\"] { background:%3; color:%15; border-color:%3; }"
 
                // Search / refresh
                "#mcpSearchInput { background:%1; color:%4; border:1px solid %8; "
@@ -68,21 +68,21 @@ inline QString kStyle() {
                "#mktCard:hover { border-color:%9; }"
                "#mktCardName  { color:%4; font-weight:700; background:transparent; }"
                "#mktCardDesc  { color:%5; background:transparent; }"
-               "#mktCardCmd   { color:%13; font-family:monospace; background:transparent; }"
+               "#mktCardCmd   { color:%13; background:transparent; }"
                "#mktCardEnv   { color:%3; background:transparent; }"
                "#mktCatBadge  { color:%3; font-weight:700; "
-               "  background:rgba(217,119,6,0.12); padding:1px 6px; border:1px solid rgba(217,119,6,0.3); }"
-               "#mktAddBtn    { background:%3; color:%1; border:none; padding:5px 16px; "
+               "  background:%16; padding:1px 6px; border:1px solid %17; }"
+               "#mktAddBtn    { background:%3; color:%15; border:none; padding:5px 16px; "
                "  font-weight:700; }"
                "#mktAddBtn:hover { background:%10; }"
                "#mktInstalledBadge { color:%6; font-weight:700; "
-               "  background:rgba(22,163,74,0.12); padding:5px 12px; border:1px solid rgba(22,163,74,0.3); }"
+               "  background:%18; padding:5px 12px; border:1px solid %19; }"
 
                // Category filter sidebar
                "#catList { background:%2; border:none; outline:none; }"
                "#catList::item { color:%5; font-weight:700; padding:6px 12px; }"
                "#catList::item:hover { color:%4; background:%12; }"
-               "#catList::item:selected { color:%3; background:rgba(217,119,6,0.1); "
+               "#catList::item:selected { color:%3; background:%16; "
                "  border-left:2px solid %3; }"
 
                // ── Installed server cards ──
@@ -90,25 +90,25 @@ inline QString kStyle() {
                "#srvCard:hover { border-color:%9; }"
                "#srvCardName  { color:%4; font-weight:700; background:transparent; }"
                "#srvCardDesc  { color:%5; background:transparent; }"
-               "#srvCardCmd   { color:%13; font-family:monospace; background:transparent; }"
+               "#srvCardCmd   { color:%13; background:transparent; }"
                "#srvCardCat   { color:%5; background:transparent; }"
                "#pillRunning  { color:%6; font-weight:700; "
-               "  background:rgba(22,163,74,0.15); padding:2px 10px; "
-               "  border:1px solid rgba(22,163,74,0.4); }"
+               "  background:%18; padding:2px 10px; "
+               "  border:1px solid %19; }"
                "#pillStopped  { color:%14; font-weight:700; "
-               "  background:rgba(220,38,38,0.10); padding:2px 10px; "
-               "  border:1px solid rgba(220,38,38,0.4); }"
+               "  background:%21; padding:2px 10px; "
+               "  border:1px solid %22; }"
                "#pillError    { color:%14; font-weight:700; "
-               "  background:rgba(220,38,38,0.10); padding:2px 10px; "
-               "  border:1px solid rgba(220,38,38,0.4); }"
+               "  background:%21; padding:2px 10px; "
+               "  border:1px solid %22; }"
                "#pillAutoOn   { color:%6; background:transparent; }"
                "#pillAutoOff  { color:%11; background:transparent; }"
 
                // Inline card buttons
-               "#cardToggleOn  { background:rgba(22,163,74,0.15); color:%6; "
-               "  border:1px solid rgba(22,163,74,0.5); "
+               "#cardToggleOn  { background:%18; color:%6; "
+               "  border:1px solid %19; "
                "  padding:4px 12px; font-weight:700; }"
-               "#cardToggleOn:hover  { background:rgba(22,163,74,0.25); }"
+               "#cardToggleOn:hover  { background:%20; }"
                "#cardToggleOff { background:%7; color:%5; border:1px solid %8; "
                "  padding:4px 12px; font-weight:700; }"
                "#cardToggleOff:hover { color:%4; border-color:%9; }"
@@ -117,15 +117,15 @@ inline QString kStyle() {
                "#cardLogsBtn:hover   { color:%4; }"
                "#cardRemoveBtn { background:transparent; color:%14; border:1px solid %14; "
                "  padding:4px 12px; font-weight:700; }"
-               "#cardRemoveBtn:hover { background:rgba(220,38,38,0.12); }"
+               "#cardRemoveBtn:hover { background:%21; }"
 
                // Add server button (full-width sticky)
-               "#addSrvBtn { background:%3; color:%1; border:none; "
+               "#addSrvBtn { background:%3; color:%15; border:none; "
                "  padding:8px; font-weight:700; }"
                "#addSrvBtn:hover { background:%10; }"
 
                // Log expander inside card
-               "QTextEdit { background:%1; color:%13; border:none; font-family:monospace; }"
+               "QTextEdit { background:%1; color:%13; border:none; }"
 
                // Tools table
                "QTableWidget { background:%1; color:%4; border:none; gridline-color:%8; }"
@@ -149,7 +149,7 @@ inline QString kStyle() {
         .arg(colors::AMBER())          // %3
         .arg(colors::TEXT_PRIMARY())   // %4
         .arg(colors::TEXT_SECONDARY()) // %5
-        .arg(colors::POSITIVE())       // %6
+        .arg(colors::SUCCESS())        // %6  running / installed (state, not price direction)
         .arg(colors::BG_SURFACE())     // %7
         .arg(colors::BORDER_DIM())     // %8
         .arg(colors::BORDER_BRIGHT())  // %9
@@ -157,7 +157,15 @@ inline QString kStyle() {
         .arg(colors::TEXT_DIM())       // %11
         .arg(colors::BG_HOVER())       // %12
         .arg(colors::CYAN())           // %13
-        .arg(colors::NEGATIVE())       // %14
+        .arg(colors::DANGER())         // %14 stopped / error / remove
+        .arg(colors::TEXT_ON_ACCENT()) // %15 text on amber fills
+        .arg(colors::ACCENT_BG())      // %16
+        .arg(colors::alpha(colors::AMBER, 0.3))   // %17
+        .arg(colors::tint(colors::SUCCESS(), 0.14)) // %18
+        .arg(colors::alpha(colors::SUCCESS, 0.4)) // %19
+        .arg(colors::tint(colors::SUCCESS(), 0.25)) // %20
+        .arg(colors::tint(colors::DANGER(), 0.12))  // %21
+        .arg(colors::alpha(colors::DANGER, 0.4))  // %22
         ;
 }
 
@@ -173,8 +181,24 @@ using namespace fincept::ui;
 McpServersScreen::McpServersScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("mcpScreen");
     setStyleSheet(kStyle());
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { setStyleSheet(kStyle()); });
+    // Never inside theme_changed (a restyle / rebuild there stalls the switch): once
+    // the appearance has settled, the sheet only when its text changed (the theme
+    // manager has usually translated it already), and the cards — they carry item
+    // colours and font-derived sizes — only while on screen (showEvent rebuilds
+    // the active view on every show).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        const QString sheet = kStyle();
+        if (styleSheet() != sheet)
+            setStyleSheet(sheet);
+        if (!loaded_ || !isVisible())
+            return;
+        if (active_view_ == 0)
+            populate_marketplace();
+        else if (active_view_ == 1)
+            refresh_installed();
+        else if (active_view_ == 2)
+            refresh_tools();
+    });
     setup_ui();
     retranslateUi();
 
@@ -190,7 +214,7 @@ McpServersScreen::McpServersScreen(QWidget* parent) : QWidget(parent) {
         update_status_bar();
     });
 
-    LOG_INFO("McpServers", "Screen constructed");
+    LOG_DEBUG("McpServers", "Screen constructed");
 }
 
 void McpServersScreen::showEvent(QShowEvent* e) {

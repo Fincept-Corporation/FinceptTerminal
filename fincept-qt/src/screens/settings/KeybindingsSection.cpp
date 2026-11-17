@@ -186,7 +186,8 @@ KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current
     : QDialog(parent), action_(action), current_(current) {
     setObjectName(QStringLiteral("kbCaptureDlg"));
     setWindowTitle(tr("Rebind: %1").arg(KeyConfigManager::instance().display_name(action)));
-    setFixedSize(420, 230);
+    // Grows past 420x230 when the user's font size needs more room.
+    setMinimumSize(420, 230);
     setModal(true);
 
     auto* layout = new QVBoxLayout(this);
@@ -343,12 +344,12 @@ void KeybindingsSection::apply_theme() {
                 "min-height:32px;}"
                 "QPushButton#kbResetAllBtn:hover{background:%7;}")
             .arg(TEXT_PRIMARY(), TEXT_SECONDARY(), AMBER(), NEGATIVE(), BG_RAISED(), BORDER_DIM(), BG_HOVER(),
-                 TEXT_DIM(), BORDER_MED()) +
+                 TEXT_TERTIARY(), BORDER_MED()) +
         QString("QDialog#kbCaptureDlg{background:%1;}"
                 "QLabel#kbCaptureCurrent{color:%2;}"
                 "QLabel#kbCaptureScope{color:%3;}"
                 "QLabel#kbCaptureHint{color:%4;font-weight:bold;}"
-                "QLabel#kbCaptured{color:%5;font-size:16px;font-weight:700;}"
+                "QLabel#kbCaptured{color:%5;font-size:" + fincept::ui::fonts::px(2) + "px;font-weight:700;}"
                 "QLabel#kbCaptureProblem{color:%6;}")
             .arg(BG_SURFACE(), TEXT_SECONDARY(), TEXT_TERTIARY(), TEXT_PRIMARY(), AMBER(), NEGATIVE()));
 }
@@ -388,6 +389,7 @@ void KeybindingsSection::build_ui() {
 
     // Reset All button
     reset_all_btn_ = new QPushButton(tr("Reset All to Defaults"));
+    reset_all_btn_->setProperty("fincept_agent_risk", "delete"); // agents: resets every key binding
     reset_all_btn_->setObjectName(QStringLiteral("kbResetAllBtn"));
     reset_all_btn_->setAccessibleName(tr("Reset all keybindings to defaults"));
     connect(reset_all_btn_, &QPushButton::clicked, this, [this]() {
@@ -522,7 +524,8 @@ QWidget* KeybindingsSection::build_group(const QString& group_name, const QList<
 
         auto* reset_btn = new QPushButton(tr("Reset"));
         reset_btn->setObjectName(QStringLiteral("kbResetBtn"));
-        reset_btn->setFixedSize(56, 24);
+        reset_btn->setMinimumSize(56, 24);
+        reset_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         reset_btn->setEnabled(custom);
         reset_btn->setToolTip(custom ? tr("Restore %1").arg(km.default_key(a).toString(QKeySequence::NativeText))
                                      : tr("Already the default"));

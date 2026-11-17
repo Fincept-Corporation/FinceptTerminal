@@ -6,14 +6,16 @@ via the World Bank Worldwide Governance Indicators (WGI) API.
 import sys
 import json
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
 BASE_URL = "https://api.worldbank.org/v2"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# The World Bank API often takes 10-20 s per uncached query and sometimes stalls for minutes:
+# no read retries (they multiplied the timeout), a bounded timeout, and the six indicators of
+# `governance` are fetched concurrently so the command finishes well inside the runner's limits.
+session = fc.http_session()
+TIMEOUT = (8, 30)
 
 WGI_INDICATORS = {
     "voice_accountability": "VA.EST",
@@ -30,15 +32,13 @@ WB_API_BASE = "https://api.worldbank.org/v2"
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error("World Bank API", e)}
+    except ValueError:
+        return {"error": "World Bank API returned a response that is not JSON"}
 
 
 def _fetch_wgi(indicator_code: str, country: str = None, year: str = None) -> Any:
@@ -60,7 +60,7 @@ def _fetch_wgi(indicator_code: str, country: str = None, year: str = None) -> An
         return {"error": f"World Bank API: {msg.get('value') or msg}"}
     if not isinstance(data, list) or len(data) < 2 or not data[1]:
         return {"error": "No data returned"}
-    rows = [{"country": r["country"]["value"], "iso3": r.get("countryiso3code"), "year": r.get("date"),
+    rows = [{"country": r["country"]["value"], "iso3": r.get("countryiso3code"), "year": fc.number(r.get("date")),
              "value": r.get("value")} for r in data[1] if r.get("value") is not None]
     return {"indicator": data[1][0]["indicator"]["value"], "code": f"GOV_WGI_{indicator_code}",
             "scale": "approx. -2.5 (weak) to +2.5 (strong governance)", "count": len(rows), "data": rows}
@@ -69,10 +69,9 @@ def _fetch_wgi(indicator_code: str, country: str = None, year: str = None) -> An
 def get_governance_indicators(country: str = None, indicator: str = None, year: str = None) -> Any:
     if indicator and indicator in WGI_INDICATORS:
         return _fetch_wgi(WGI_INDICATORS[indicator], country, year)
-    results = {}
-    for name, code in WGI_INDICATORS.items():
-        results[name] = _fetch_wgi(code, country, year)
-    return results
+    if indicator and indicator.lower() != "all":
+        return {"error": f"Unknown indicator '{indicator}' - choose one of: {', '.join(WGI_INDICATORS)}"}
+    return fc.parallel_map(lambda code: _fetch_wgi(code, country, year), WGI_INDICATORS)
 
 
 def get_political_stability(country: str = None, year: str = None) -> Any:

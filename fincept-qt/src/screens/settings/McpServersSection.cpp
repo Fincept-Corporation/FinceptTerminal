@@ -92,7 +92,7 @@ void McpServersSection::refresh_theme() {
     using namespace settings_styles;
     // One sheet for the whole section, keyed by objectName (P7). The open
     // button is the section's only QPushButton, so btn_primary_ss()'s type
-    // selector (amber fill, dark label) reaches exactly that button.
+    // selector (accent fill, on-accent label) reaches exactly that button.
     setStyleSheet(QString("QLabel#mcpSectionTitle{%1}"
                           "QLabel#mcpSectionBody{%2}"
                           "QFrame#mcpSectionSep{background:%3;border:none;}")

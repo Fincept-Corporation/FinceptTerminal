@@ -28,7 +28,7 @@ class DataMappingTestClient : public QObject {
   public:
     using Callback = std::function<void(Result<QJsonDocument>)>;
 
-    enum class Method { Get, Post, Put, Delete };
+    enum class Method { Get, Post, Put, Patch, Delete };
 
     static DataMappingTestClient& instance();
 

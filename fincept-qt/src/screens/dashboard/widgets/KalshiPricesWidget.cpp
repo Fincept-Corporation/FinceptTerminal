@@ -155,7 +155,7 @@ QDialog* KalshiPricesWidget::make_config_dialog(QWidget* parent) {
 
     auto* problem = new QLabel(dlg);
     problem->setWordWrap(true);
-    problem->setStyleSheet(QString("color:%1;").arg(ui::colors::NEGATIVE()));
+    problem->setStyleSheet(QString("color:%1;").arg(ui::colors::DANGER()));
     problem->setVisible(false);
     form->addRow(problem);
 
@@ -541,17 +541,17 @@ void KalshiPricesWidget::apply_styles() {
     if (!rows_host_)
         return;
     // Labels with no "lvl"/"dir" state yet keep the base colour of their selector.
-    rows_host_->setStyleSheet(
-        QString("QLabel#kalshiPriceHint{color:%2;font-size:10px;background:transparent;padding:4px 0;}"
-                "QLabel#kalshiPriceLabel{color:%1;font-size:11px;font-weight:600;background:transparent;}"
-                "QLabel#kalshiPriceYes{color:%2;font-size:11px;font-weight:700;background:transparent;}"
+    set_css_cached(rows_host_, 
+        QString("QLabel#kalshiPriceHint{color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;padding:4px 0;}"
+                "QLabel#kalshiPriceLabel{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
+                "QLabel#kalshiPriceYes{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
                 "QLabel#kalshiPriceYes[lvl=\"hi\"]{color:%3;}"
                 "QLabel#kalshiPriceYes[lvl=\"lo\"]{color:%4;}"
                 "QLabel#kalshiPriceYes[lvl=\"mid\"]{color:%1;}"
-                "QLabel#kalshiPriceChange{color:%5;font-size:10px;background:transparent;}"
+                "QLabel#kalshiPriceChange{color:%5;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;}"
                 "QLabel#kalshiPriceChange[dir=\"up\"]{color:%3;}"
                 "QLabel#kalshiPriceChange[dir=\"down\"]{color:%4;}"
-                "QLabel#kalshiPriceStatus{color:%2;font-size:9px;background:transparent;}"
+                "QLabel#kalshiPriceStatus{color:%2;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;}"
                 "QLabel#kalshiPriceStatus[state=\"warn\"]{color:%6;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(),
                  ui::colors::NEGATIVE(), ui::colors::TEXT_SECONDARY(), ui::colors::WARNING()));

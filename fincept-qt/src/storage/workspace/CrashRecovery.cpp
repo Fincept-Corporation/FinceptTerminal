@@ -29,7 +29,7 @@ bool CrashRecovery::needs_recovery() const {
     const qint64 clean_ms = last_clean_shutdown_ms();
     if (clean_ms == 0) {
         // Marker missing entirely — definitive unclean shutdown.
-        LOG_INFO(kCrashRecoveryTag, QString("Recovery needed: no clean-shutdown marker, latest auto=%1")
+        LOG_DEBUG(kCrashRecoveryTag, QString("Recovery needed: no clean-shutdown marker, latest auto=%1")
                                         .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
         return true;
     }
@@ -38,7 +38,7 @@ bool CrashRecovery::needs_recovery() const {
     // means the user was working past the last clean shutdown and then
     // crashed. Recovery is warranted.
     if (clean_ms < latest_auto_ms) {
-        LOG_INFO(kCrashRecoveryTag, QString("Recovery needed: clean=%1 < latest auto=%2")
+        LOG_DEBUG(kCrashRecoveryTag, QString("Recovery needed: clean=%1 < latest auto=%2")
                                         .arg(QDateTime::fromMSecsSinceEpoch(clean_ms).toString(Qt::ISODate))
                                         .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
         return true;
@@ -77,7 +77,7 @@ Result<void> CrashRecovery::mark_clean_shutdown() {
         LOG_WARN(kCrashRecoveryTag,
                  QString("Failed to write clean-shutdown marker: %1").arg(QString::fromStdString(r.error())));
     } else {
-        LOG_INFO(kCrashRecoveryTag, "Clean-shutdown marker written");
+        LOG_DEBUG(kCrashRecoveryTag, "Clean-shutdown marker written");
     }
     return r;
 }

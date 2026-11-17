@@ -53,7 +53,7 @@ int ComponentCatalog::load_from_file(const QString& path) {
             categories_in_order_.append(m.category);
     }
 
-    LOG_INFO("ComponentCatalog", QString("Loaded %1 components from %2").arg(entries_.size()).arg(path));
+    LOG_DEBUG("ComponentCatalog", QString("Loaded %1 components from %2").arg(entries_.size()).arg(log_path(path)));
     emit reloaded();
     return static_cast<int>(entries_.size());
 }

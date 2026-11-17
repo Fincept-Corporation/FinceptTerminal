@@ -11,12 +11,13 @@
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
+#include "app/SecureStoreBlockedView.h"
 #include "core/layout/WorkspaceShell.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "screens/auth/LockScreen.h"
-#include "services/updater/UpdateService.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/secure/SecureStorage.h"
 #include "trading/instruments/InstrumentService.h"
 #include "trading/instruments/SymbolResolver.h"
 #include "ui/navigation/DockStatusBar.h"
@@ -27,7 +28,11 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QMessageBox>
+#include <QPointer>
 #include <QStackedWidget>
+#include <QTimer>
+
+#include <utility>
 
 #include <DockManager.h>
 
@@ -60,6 +65,17 @@ bool& wf_auth_session_started() {
     return started;
 }
 
+/// True until the first sign-in of this process has entered the terminal.
+/// Crash recovery's RESTORE rebuilds the windows from the snapshot the user
+/// picked (WorkspaceShell::apply) before the first window exists, i.e. before
+/// the PIN gate; nothing else applies a workspace that early. So a workspace
+/// that is already current when the first sign-in enters the terminal is that
+/// choice, and the cold-boot restore must not replace it.
+bool& wf_auth_first_session_of_process() {
+    static bool first = true;
+    return first;
+}
+
 QString wf_auth_app_version() {
     const QString v = QCoreApplication::applicationVersion();
 #ifdef FINCEPT_VERSION_STRING
@@ -85,7 +101,91 @@ QString wf_auth_pricing_seen_key(const auth::SessionData& s) {
 }
 } // namespace
 
+bool WindowFrame::route_secure_store_problem() {
+    auto& pm = auth::PinManager::instance();
+    auto& am = auth::AuthManager::instance();
+    SecretRead failure;
+    QString subject;
+    bool pin_problem = false;
+    if (am.saved_session_unreadable()) {
+        failure = am.saved_session_read_failure();
+        subject = tr("your saved sign-in");
+    } else if (pm.pin_state() == auth::PinManager::PinState::Unreadable) {
+        failure = pm.read_failure();
+        subject = tr("your PIN");
+        pin_problem = true;
+    }
+
+    if (!failure.failed()) {
+        // Readable again: leave the blocked page; the caller routes on.
+        if (secure_blocked_ && stack_ && stack_->currentWidget() == secure_blocked_)
+            stack_->setCurrentIndex(0);
+        return false;
+    }
+
+    if (!secure_blocked_ && stack_) {
+        QPointer<WindowFrame> self(this);
+        SecureStoreBlockedView::Actions actions;
+        actions.retry = [self]() {
+            auth::PinManager::instance().reload();
+            auth::AuthManager::instance().retry_saved_session();
+            if (self)
+                self->on_auth_state_changed(); // refresh the page even when nothing changed
+        };
+        // Damaged record: the same explicit, re-authenticated path as "too many
+        // PIN attempts" — the PIN record is cleared only after the user chose
+        // this, and a new PIN can be set only after signing in again.
+        actions.sign_in_again = [pin_problem]() {
+            LOG_INFO("WindowFrame", "Secure storage blocked: user chose to sign in again");
+            if (pin_problem)
+                auth::PinManager::instance().clear_pin();
+            auth::AuthManager::instance().logout();
+        };
+        actions.reset_store = [self]() {
+            if (!self)
+                return;
+            const auto answer = QMessageBox::warning(
+                self, tr("Reset secure storage"),
+                tr("This erases every credential the terminal has saved on this computer: your sign-in, your PIN, "
+                   "API keys and broker logins. You then sign in again and re-enter them.\n\nReset secure storage?"),
+                QMessageBox::Reset | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Reset)
+                return;
+            auto r = SecureStorage::instance().reset_all();
+            if (r.is_err()) {
+                QMessageBox::critical(self, tr("Reset secure storage"),
+                                      tr("Secure storage could not be reset: %1")
+                                          .arg(QString::fromStdString(r.error())));
+                return;
+            }
+            auth::PinManager::instance().clear_pin(); // re-reads: now "no PIN"
+            auth::AuthManager::instance().logout();
+        };
+        actions.quit = []() {
+            QTimer::singleShot(0, qApp, []() { QCoreApplication::quit(); });
+        };
+        secure_blocked_ = new SecureStoreBlockedView(std::move(actions), stack_);
+        stack_->addWidget(secure_blocked_);
+    }
+    if (!secure_blocked_)
+        return false;
+
+    secure_blocked_->show_failure(failure, subject);
+    locked_ = false; // not the PIN screen; on_auth_state_changed must not "stay on lock screen"
+    pin_gate_cleared_ = false;
+    set_shell_visible(false);
+    stack_->setCurrentWidget(secure_blocked_);
+    // After the page switch: apply_lock_state() leaves the blocked page alone.
+    auth::InactivityGuard::instance().set_terminal_locked(true);
+    return true;
+}
+
 void WindowFrame::on_auth_state_changed() {
+    // Before anything else: an unreadable saved sign-in or PIN record is neither
+    // "signed out" nor "no PIN" — show the blocked page, never login / PIN setup.
+    if (route_secure_store_problem())
+        return;
+
     auto& auth = auth::AuthManager::instance();
 
     // If logged out while the lock screen is active (e.g. max PIN attempts → reauth),
@@ -116,7 +216,7 @@ void WindowFrame::on_auth_state_changed() {
         if (stack_->currentIndex() == 1 || stack_->currentIndex() == 2) {
             if (!pin_gate_cleared_) {
                 if (auth.needs_pin_setup()) {
-                    LOG_INFO("WindowFrame", "Authenticated (on app stack) but no PIN — showing PIN setup");
+                    LOG_DEBUG("WindowFrame", "Authenticated (on app stack) but no PIN — showing PIN setup");
                     lock_screen_->show_setup();
                     locked_ = true;
                     set_shell_visible(false);
@@ -130,7 +230,7 @@ void WindowFrame::on_auth_state_changed() {
                     return;
                 }
                 if (auth::PinManager::instance().has_pin()) {
-                    LOG_INFO("WindowFrame", "Authenticated (on app stack) with PIN — showing PIN unlock");
+                    LOG_DEBUG("WindowFrame", "Authenticated (on app stack) with PIN — showing PIN unlock");
                     lock_screen_->show_unlock();
                     locked_ = true;
                     set_shell_visible(false);
@@ -155,7 +255,7 @@ void WindowFrame::on_auth_state_changed() {
         // Skip if user is already on the lock screen (index 3).
         if (stack_->currentIndex() != 3) {
             if (auth.needs_pin_setup()) {
-                LOG_INFO("WindowFrame", "Authenticated but no PIN — showing PIN setup");
+                LOG_DEBUG("WindowFrame", "Authenticated but no PIN — showing PIN setup");
                 lock_screen_->show_setup();
                 locked_ = true;
                 set_shell_visible(false);
@@ -164,7 +264,7 @@ void WindowFrame::on_auth_state_changed() {
                 return;
             }
             if (auth::PinManager::instance().has_pin()) {
-                LOG_INFO("WindowFrame", "Authenticated with PIN — showing PIN unlock");
+                LOG_DEBUG("WindowFrame", "Authenticated with PIN — showing PIN unlock");
                 lock_screen_->show_unlock();
                 locked_ = true;
                 set_shell_visible(false);
@@ -180,8 +280,8 @@ void WindowFrame::on_auth_state_changed() {
         // log a warning so the regression is visible rather than leaking the
         // dashboard for one frame.
         if (locked_ || !pin_gate_cleared_) {
-            LOG_WARN("WindowFrame", QString("on_auth_state_changed: shell would become visible while "
-                                            "locked=%1 gate_cleared=%2 — forcing lock screen")
+            LOG_WARN("WindowFrame", QString("Shell would have become visible while locked, forcing the lock screen "
+                                            "locked=%1 gate_cleared=%2")
                                         .arg(locked_)
                                         .arg(pin_gate_cleared_));
             if (auth::PinManager::instance().has_pin())
@@ -267,6 +367,15 @@ void WindowFrame::enter_terminal_after_auth() {
     if (!chat_mode_)
         wf_auth_apply_chat_bubble_setting(chat_bubble_);
 
+    // Chat Mode is built on first use or a few idle seconds after start-up. The
+    // start-up timer (WindowFrame constructor) finds a PIN profile still locked
+    // and gives up, so F9 then paid for the build; build it a few seconds after
+    // the terminal is entered instead (idempotent: nothing to do if it exists).
+    QTimer::singleShot(4000, this, [this]() {
+        if (!locked_ && stack_ && stack_->currentIndex() != 0)
+            ensure_chat_mode_screen();
+    });
+
     const bool session_start = !wf_auth_session_started();
     if (session_start) {
         wf_auth_session_started() = true;
@@ -274,7 +383,14 @@ void WindowFrame::enter_terminal_after_auth() {
         // snapshot, then nothing (first run). Only at the start of a sign-in —
         // after an inactivity lock the live layout is intact, and re-applying
         // the saved one would discard everything opened since it was saved.
-        const int restored = layout::WorkspaceShell::load_last_or_default();
+        // Skipped after a crash-recovery RESTORE (see
+        // wf_auth_first_session_of_process): those windows already hold the
+        // snapshot the user chose.
+        const bool first_of_process = std::exchange(wf_auth_first_session_of_process(), false);
+        const bool recovered = first_of_process && !layout::WorkspaceShell::current_id().is_null();
+        if (recovered)
+            LOG_INFO("WindowFrame", "Crash-recovery workspace already applied — keeping it (no cold-boot restore)");
+        const int restored = recovered ? 1 : layout::WorkspaceShell::load_last_or_default();
         if (restored == 0) {
             // First run / fresh profile: open the Dashboard. Deferred because
             // DockScreenRouter refuses to navigate until the process-wide lock
@@ -297,12 +413,9 @@ void WindowFrame::enter_terminal_after_auth() {
         });
     }
 
-    // Silent update check once the UI has settled. UpdateService de-dupes
-    // silent checks across the session, so repeat unlocks don't re-request.
-    QTimer::singleShot(3000, this, [this]() {
-        services::UpdateService::instance().set_dialog_parent(this);
-        services::UpdateService::instance().check_for_updates(true);
-    });
+    // (The update check is not scheduled here: it runs once per start, a few
+    // seconds after the first window is up — sign-in and lock screen included —
+    // see wire_updater() in main.cpp.)
 
     // Fincept Terminal Enterprise reminder. maybe_show() applies the cadence
     // (new release, or 72 h since last shown) and refuses to cover another
@@ -377,6 +490,9 @@ void WindowFrame::apply_lock_state(bool locked) {
         // Idempotent — if already on the lock screen, nothing to do.
         if (stack_->currentIndex() == 3)
             return;
+        // The secure-storage blocked page is its own gate (nothing behind it is shown).
+        if (secure_blocked_ && stack_->currentWidget() == secure_blocked_)
+            return;
         // Skip if this window is currently on the auth stack — login screen
         // is its own gate. Spurious lock during auth transition would push
         // a lock screen over the login screen which is meaningless.
@@ -384,7 +500,7 @@ void WindowFrame::apply_lock_state(bool locked) {
             LOG_DEBUG("WindowFrame", "apply_lock_state(true): on auth stack — skipping");
             return;
         }
-        LOG_INFO("WindowFrame", QString("Locking window %1").arg(window_id_));
+        LOG_DEBUG("WindowFrame", QString("Locking window %1").arg(window_id_));
         lock_screen_->activate();
         locked_ = true;
         pin_gate_cleared_ = false;
@@ -411,7 +527,7 @@ void WindowFrame::apply_lock_state(bool locked) {
     // per-window and stays cleared after the originator set it.
     if (stack_->currentIndex() != 3)
         return; // already unlocked
-    LOG_INFO("WindowFrame", QString("Unlocking window %1 (sibling)").arg(window_id_));
+    LOG_DEBUG("WindowFrame", QString("Unlocking window %1 (sibling)").arg(window_id_));
     locked_ = false;
     pin_gate_cleared_ = true;
     if (dock_manager_ && dock_manager_->parentWidget())
@@ -433,7 +549,7 @@ void WindowFrame::apply_lock_state(bool locked) {
 
 void WindowFrame::on_terminal_unlocked() {
     auto& auth = auth::AuthManager::instance();
-    LOG_INFO("WindowFrame", QString("Terminal unlocked via PIN (window %1)").arg(window_id_));
+    LOG_DEBUG("WindowFrame", QString("Terminal unlocked via PIN (window %1)").arg(window_id_));
     locked_ = false;
     pin_gate_cleared_ = true;
 

@@ -73,8 +73,19 @@ CensusPanel::CensusPanel(QWidget* parent) : EconPanelBase(kCensusSourceId, kCens
 }
 
 void CensusPanel::activate() {
-    show_empty(tr("Select a dataset and click FETCH\n"
-                  "Source: US Census Bureau — American Community Survey (ACS 5-year)"));
+    // Nothing to prepare: the results pane runs the query on show — or, without a Census key, shows
+    // the page that names CENSUS_API_KEY (census_data.py requires it) and opens Settings > Credentials.
+}
+
+QList<ui::Requirement> CensusPanel::load_requirements() const {
+    return {ui::Requirement::api_key(QStringLiteral("CENSUS_API_KEY"), QStringLiteral("US Census Bureau"))};
+}
+
+EconPanelBase::LoadPolicy CensusPanel::load_policy() const {
+    LoadPolicy p;
+    p.shape = ui::LoadingSkeleton::Shape::Table; // one row per state / county: a cross-section
+    p.max_age_s = 24 * 3600;                     // ACS 5-year estimates change once a year
+    return p;
 }
 
 void CensusPanel::build_controls(QHBoxLayout* thl) {
@@ -84,7 +95,7 @@ void CensusPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_ = new QComboBox;
     for (const auto& d : kCensusDatasets)
         dataset_combo_->addItem(d.label, d.command);
-    dataset_combo_->setFixedHeight(26);
+    dataset_combo_->setMinimumHeight(26);
     dataset_combo_->setMinimumWidth(220);
     dataset_combo_->setToolTip(tr("ACS 5-year estimates, state level"));
 
@@ -97,8 +108,8 @@ void CensusPanel::on_fetch() {
     const auto& dataset = kCensusDatasets[idx];
 
     show_loading(tr("Fetching Census: %1…").arg(dataset.label));
-    services::EconomicsService::instance().execute(kCensusSourceId, kCensusScript, dataset.command, {},
-                                                   "census_" + dataset.command);
+    execute_query(kCensusSourceId, kCensusScript, dataset.command, {},
+                  "census_" + dataset.command);
 }
 
 void CensusPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -128,7 +139,7 @@ void CensusPanel::on_result(const QString& request_id, const services::Economics
     const QString title =
         "Census: " + (idx >= 0 && idx < kCensusDatasets.size() ? kCensusDatasets[idx].label : request_id.mid(7));
     display(rows, title);
-    LOG_INFO("CensusPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
+    LOG_DEBUG("CensusPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

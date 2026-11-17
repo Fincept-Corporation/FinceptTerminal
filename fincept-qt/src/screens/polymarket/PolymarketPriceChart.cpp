@@ -37,14 +37,14 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     const QString combo_css =
         QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
-                "  padding: 2px 6px; font-size: 9px; font-weight: 600; }"
+                "  padding: 2px 6px; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: 600; }"
                 "QComboBox::drop-down { border: none; width: 12px; }"
                 "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
             .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_MED());
 
     interval_lbl_ = new QLabel(tr("INTERVAL"));
     auto* lbl = interval_lbl_;
-    lbl->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; "
+    lbl->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; letter-spacing: 0.5px; "
                                "background: transparent;")
                            .arg(colors::TEXT_SECONDARY()));
     toolbar->addWidget(lbl);
@@ -52,7 +52,8 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     interval_combo_ = new QComboBox;
     interval_combo_->addItems({tr("1H"), tr("6H"), tr("1D"), tr("1W"), tr("1M"), tr("ALL")});
     interval_combo_->setCurrentIndex(2);
-    interval_combo_->setFixedSize(62, 24);
+    interval_combo_->setFixedWidth(62);
+    interval_combo_->setMinimumHeight(24);
     interval_combo_->setStyleSheet(combo_css);
     connect(interval_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx >= 0 && idx < INTERVAL_VALUES.size())
@@ -68,7 +69,8 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     toolbar->addWidget(olbl);
 
     outcome_combo_ = new QComboBox;
-    outcome_combo_->setFixedSize(100, 24);
+    outcome_combo_->setFixedWidth(100);
+    outcome_combo_->setMinimumHeight(24);
     outcome_combo_->setStyleSheet(combo_css);
     connect(outcome_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PolymarketPriceChart::outcome_changed);
@@ -78,20 +80,48 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     price_label_ = new QLabel;
     price_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
     toolbar->addWidget(price_label_);
 
     vl->addWidget(toolbar_widget);
 
-    chart_container_ = new QWidget(this);
+    // The chart, or its loading / no-history / failure page. Opens on the skeleton:
+    // the screen selects a market (and requests its history) as soon as the list loads.
+    chart_stack_ = new QStackedWidget(this);
+    chart_container_ = new QWidget(chart_stack_);
     chart_container_->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* ccl = new QVBoxLayout(chart_container_);
     ccl->setContentsMargins(8, 8, 8, 8);
-    auto* empty = new QLabel(tr("Select a market to view its price chart"));
-    empty->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
-    empty->setAlignment(Qt::AlignCenter);
-    ccl->addWidget(empty);
-    vl->addWidget(chart_container_, 1);
+    chart_stack_->addWidget(chart_container_);
+    chart_state_ = PmViewState(chart_stack_, chart_container_, ui::LoadingSkeleton::Shape::Chart,
+                               tr("Loading price history…"));
+    chart_state_.show_loading();
+    vl->addWidget(chart_stack_, 1);
+}
+
+void PolymarketPriceChart::set_loading() {
+    // A theme / presentation change must not redraw the previous market's curve
+    // over this request (set_presentation re-renders last_history_).
+    has_last_history_ = false;
+    chart_state_.show_loading();
+}
+
+void PolymarketPriceChart::set_unavailable(const QString& message) {
+    has_last_history_ = false;
+    chart_state_.show_state(ui::EmptyState::no_data_spec(tr("No price history here"), message), {}, {},
+                            /*compact=*/true);
+}
+
+void PolymarketPriceChart::set_error(const QString& message) {
+    // A quiet re-poll that fails keeps the curve on screen (the next one may succeed).
+    if (has_last_history_ && chart_state_.showing_content())
+        return;
+    has_last_history_ = false;
+    chart_state_.show_state(ui::EmptyState::error_spec(message, tr("Could not load the price history")), [this]() {
+        const int idx = interval_combo_ ? interval_combo_->currentIndex() : -1;
+        if (idx >= 0 && idx < INTERVAL_VALUES.size())
+            emit interval_changed(INTERVAL_VALUES[idx]); // the screen re-requests the current outcome + interval
+    });
 }
 
 void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
@@ -107,12 +137,13 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
     }
 
     if (history.points.isEmpty()) {
-        auto* empty = new QLabel(tr("No price history available"));
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
-        empty->setAlignment(Qt::AlignCenter);
-        layout->addWidget(empty);
+        chart_state_.show_state(
+            ui::EmptyState::no_data_spec(tr("No price history for this range"),
+                                         tr("New or quiet markets have few trades — pick a longer interval above.")),
+            {}, {}, /*compact=*/true);
         return;
     }
+    chart_state_.show_content();
 
     QVector<ChartFactory::DataPoint> points;
     points.reserve(history.points.size());
@@ -162,9 +193,13 @@ void PolymarketPriceChart::set_presentation(const ExchangePresentation& p) {
     presentation_ = p;
     // Price readout tracks the exchange accent so the header colour doesn't
     // stay amber after a swap to Kalshi (teal) / vice versa.
+    // Set only when the text changed: re-run on every presentation / appearance change.
     if (price_label_) {
-        price_label_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
-                                        .arg(presentation_.accent.name()));
+        const QString sheet = QStringLiteral("color: %1; font-size: %2px; font-weight: 700; background: transparent;")
+                                  .arg(presentation_.accent.name())
+                                  .arg(fincept::ui::fonts::px(-1));
+        if (price_label_->styleSheet() != sheet)
+            price_label_->setStyleSheet(sheet);
     }
     if (has_last_history_)
         set_price_history(last_history_);

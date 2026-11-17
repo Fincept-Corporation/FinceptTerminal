@@ -1,197 +1,137 @@
 // src/screens/equity_research/EquityOverviewTab.h
+//
+// Equity Research → Overview: company block (sector, industry, country, exchange, quote vs
+// reporting currency, next earnings, ex-dividend), return tiles vs the home benchmark,
+// an interactive price chart (range presets 1D…MAX incl. intraday and YTD, log scale,
+// indicator overlays and panes, rebased comparison against the benchmark or any symbol,
+// earnings / dividend / split markers, line or candles), 52-week and analyst-target range
+// bars, and the key-statistics panels — every amount labelled with its currency.
 #pragma once
-#include "services/equity/EquityResearchModels.h"
-#include "ui/widgets/LoadingOverlay.h"
 
-#ifdef HAS_QT_WEBENGINE
-#    include "ui/charts/KLineChartWidget.h"
-#endif
+#include "services/equity/EquityResearchModels.h"
+#include "services/equity/EquityTechnicalMath.h"
 
 #include <QHash>
 #include <QLabel>
-#include <QPixmap>
+#include <QMap>
 #include <QPushButton>
+#include <QSet>
+#include <QStringList>
 #include <QWidget>
 
-class QFrame;
+class QGridLayout;
+class QStackedWidget;
+class QVBoxLayout;
+
+namespace fincept::ui {
+class CandleChart;
+class KpiStrip;
+class LoadingOverlay;
+class RangeBar;
+class TimeSeriesChart;
+} // namespace fincept::ui
+
+namespace fincept::services::equity {
+struct LoadFailure;
+}
 
 namespace fincept::screens {
 
-// ── Custom QPainter candlestick canvas ───────────────────────────────────────
-class ResearchCandleCanvas : public QWidget {
-    Q_OBJECT
-  public:
-    explicit ResearchCandleCanvas(QWidget* parent = nullptr);
-    void set_candles(const QVector<services::equity::Candle>& candles, const QString& currency_sym);
-    void clear();
+namespace er_ui {
+class StatusStrip;
+class Segmented;
+} // namespace er_ui
 
-  protected:
-    void paintEvent(QPaintEvent*) override;
-    void resizeEvent(QResizeEvent*) override;
-    void changeEvent(QEvent* event) override;
-
-  private:
-    void rebuild_cache();
-
-    QVector<services::equity::Candle> candles_;
-    QPixmap cache_;
-    bool dirty_ = true;
-    QString currency_sym_ = "$";
-
-    static constexpr int MAX_VISIBLE = 260;
-    static constexpr int PRICE_AXIS_W = 80;
-    static constexpr int TIME_AXIS_H = 24;
-    static constexpr int LABEL_STEP = 20;
-};
-
-// ── Overview tab ─────────────────────────────────────────────────────────────
 class EquityOverviewTab : public QWidget {
     Q_OBJECT
   public:
     explicit EquityOverviewTab(QWidget* parent = nullptr);
     void set_symbol(const QString& symbol);
 
-    static QString currency_symbol(const QString& currency_code);
-    // Compact magnitude formatter (1.90T / 890.00B / …). Public so the parent
-    // research screen's title bar formats market cap identically to this tab.
-    static QString fmt_large(double v);
-
   protected:
     void changeEvent(QEvent* event) override;
 
   private slots:
     void on_info_loaded(services::equity::StockInfo info);
-    void on_historical_loaded(QString symbol, QVector<services::equity::Candle> candles);
+    void on_historical_loaded(QString symbol, QString period, QVector<services::equity::Candle> candles);
     void on_quote_loaded(services::equity::QuoteData quote);
+    void on_events_loaded(services::equity::EquityEvents events);
 
   private:
+    // Layout
     void build_ui();
-    void retranslateUi();
-
-    /// Apply cached `info` to the value labels — extracted from on_info_loaded
-    /// so retranslateUi can re-render currency / "N/A" fallbacks / recommendation
-    /// badge in the new locale without going back to the service.
-    void render_info(const services::equity::StockInfo& info);
-
-    /// make_panel / add_row register the title and key labels with the
-    /// translation map so retranslateUi can re-set them in bulk. The map
-    /// keys are stable English source strings (declared via QT_TR_NOOP at
-    /// every call site) so lupdate sees every entry.
-    QFrame* make_panel_(const char* title_key, const char* title_color);
-    QLabel* add_row_(QFrame* panel, const char* key, const char* val_color);
-
-    QHash<QLabel*, const char*> i18n_labels_; ///< label → English source key for tr()
-
-    QWidget* build_col1();
+    QWidget* build_company_block();
     QWidget* build_chart_panel();
-    QWidget* build_col4();
+    QWidget* build_side_panels();
+    void retranslateUi();
+    QLabel* add_stat(QGridLayout* grid, int row, const char* key);
 
-    QWidget* build_trading_panel();
-    QWidget* build_valuation_panel();
-    QWidget* build_share_stats_panel();
-    QWidget* build_analyst_panel();
-    QWidget* build_52w_panel();
-    QWidget* build_profitability_panel();
-    QWidget* build_growth_panel();
-
-    QWidget* build_bottom_row();
-    QWidget* build_company_desc_panel();
-    QWidget* build_company_info_panel();
-    QWidget* build_financial_health_panel();
-
-    void rebuild_chart(const QVector<services::equity::Candle>& candles);
-    /// KLineChart's WebEngine renderer died (#411) — replace it in place with the
-    /// QPainter canvas and replay the cached candles.
-    void swap_kline_for_native_chart();
-    void switch_period(QPushButton* btn, const QString& period);
-
-    static QString fmt_pct(double v);
-    QString fmt_price(double v) const;
-
-    QString current_symbol_;
-    QString current_period_ = "1y";
-    QString current_currency_;
-
-    // Trading panel
-    QLabel* open_val_ = nullptr;
-    QLabel* high_val_ = nullptr;
-    QLabel* low_val_ = nullptr;
-    QLabel* prev_close_val_ = nullptr;
-    QLabel* vol_val_ = nullptr;
-
-    // Valuation panel
-    QLabel* mktcap_val_ = nullptr;
-    QLabel* pe_val_ = nullptr;
-    QLabel* fwd_pe_val_ = nullptr;
-    QLabel* peg_val_ = nullptr;
-    QLabel* pb_val_ = nullptr;
-    QLabel* div_val_ = nullptr;
-    QLabel* beta_val_ = nullptr;
-
-    // Share stats panel
-    QLabel* shares_out_val_ = nullptr;
-    QLabel* float_val_ = nullptr;
-    QLabel* insiders_val_ = nullptr;
-    QLabel* institutions_val_ = nullptr;
-    QLabel* short_pct_val_ = nullptr;
+    // Data
+    void on_load_failed(const services::equity::LoadFailure& f);
+    void request_all();
+    void render_info();
+    void render_quote();
+    void render_company();
+    void render_ranges();
+    void render_returns();
 
     // Chart
-#ifdef HAS_QT_WEBENGINE
-    fincept::ui::KLineChartWidget* kline_chart_ = nullptr;
-#endif
-    ResearchCandleCanvas* candle_canvas_ = nullptr;
-    QPushButton* btn_1m_ = nullptr;
-    QPushButton* btn_3m_ = nullptr;
-    QPushButton* btn_6m_ = nullptr;
-    QPushButton* btn_1y_ = nullptr;
-    QPushButton* btn_5y_ = nullptr;
-    QPushButton* active_period_btn_ = nullptr;
+    void rebuild_chart();
+    /// Coalesce the rebuilds data arrival triggers (info, events, history, benchmark land
+    /// within a few hundred ms of each other): one rebuild + first paint instead of four.
+    void schedule_rebuild();
+    bool rebuild_pending_ = false;
+    void load_intraday(const QString& preset);
+    void on_preset(const QString& preset);
+    void show_indicator_menu();
+    void show_compare_menu();
+    void add_comparison(const QString& symbol);
+    QString fmt_quote_price(double v) const;
 
-    // Analyst panel
-    QLabel* target_high_val_ = nullptr;
-    QLabel* target_mean_val_ = nullptr;
-    QLabel* target_low_val_ = nullptr;
-    QLabel* analyst_count_val_ = nullptr;
-    QLabel* rec_key_label_ = nullptr;
-
-    // 52 Week Range
-    QLabel* w52h_val_ = nullptr;
-    QLabel* w52l_val_ = nullptr;
-    QLabel* avg_vol_val_ = nullptr;
-
-    // Profitability
-    QLabel* gross_margin_val_ = nullptr;
-    QLabel* op_margin_val_ = nullptr;
-    QLabel* profit_margin_val_ = nullptr;
-    QLabel* roa_val_ = nullptr;
-    QLabel* roe_val_ = nullptr;
-
-    // Growth
-    QLabel* rev_growth_val_ = nullptr;
-    QLabel* earnings_growth_val_ = nullptr;
-
-    // Company description
-    QLabel* company_desc_ = nullptr;
-
-    // Company info
-    QLabel* company_emp_ = nullptr;
-    QLabel* company_web_ = nullptr;
-    QLabel* company_currency_ = nullptr;
-
-    // Financial health
-    QLabel* cash_val_ = nullptr;
-    QLabel* debt_val_ = nullptr;
-    QLabel* free_cf_val_ = nullptr;
-
-    // Cached data
-    services::equity::StockInfo cached_info_;
-    services::equity::QuoteData cached_quote_;
-    QVector<services::equity::Candle> cached_candles_;
-
-    ui::LoadingOverlay* loading_overlay_ = nullptr;
+    // State
+    QString current_symbol_;
+    services::equity::StockInfo info_;
+    services::equity::QuoteData quote_;
+    services::equity::EquityEvents events_;
     bool info_loaded_ = false;
     bool quote_loaded_ = false;
-    bool historical_loaded_ = false;
+    bool history_loaded_ = false;
+    bool events_loaded_ = false;
+    QVector<services::equity::Candle> daily_;     ///< full daily history ("max")
+    QVector<services::equity::Candle> intraday_;  ///< 1D / 5D bars while an intraday preset is shown
+    QString intraday_preset_;                     ///< "1D" / "5D" when intraday_ is on the chart
+    QString pending_preset_ = QStringLiteral("1Y");
+    QMap<QString, QVector<services::equity::Candle>> compare_data_; ///< symbol → daily history
+    QStringList compare_symbols_;
+    QSet<QString> indicators_ = {QStringLiteral("sma50"), QStringLiteral("sma200"), QStringLiteral("volume")};
+    bool show_events_ = true;
+    bool candles_mode_ = false;
+    QMap<QString, QString> leg_errors_;
+
+    // Widgets
+    er_ui::StatusStrip* status_ = nullptr;
+    QLabel* name_lbl_ = nullptr;
+    QLabel* meta_lbl_ = nullptr;
+    QLabel* ccy_lbl_ = nullptr;
+    QLabel* dates_lbl_ = nullptr;
+    QLabel* rec_badge_ = nullptr;
+    ui::KpiStrip* returns_ = nullptr;
+    ui::TimeSeriesChart* chart_ = nullptr;
+    ui::CandleChart* candles_ = nullptr;
+    QStackedWidget* chart_stack_ = nullptr;
+    QPushButton* indicators_btn_ = nullptr;
+    QPushButton* compare_btn_ = nullptr;
+    QPushButton* events_btn_ = nullptr;
+    er_ui::Segmented* style_seg_ = nullptr;
+    ui::RangeBar* range52_ = nullptr;
+    ui::RangeBar* targets_ = nullptr;
+    QLabel* range52_title_ = nullptr;
+    QLabel* targets_title_ = nullptr;
+    QLabel* targets_note_ = nullptr;
+    QLabel* desc_lbl_ = nullptr;
+    QHash<QString, QLabel*> stats_; ///< stat key → value label
+    QHash<QLabel*, const char*> i18n_; ///< static label → source text
+    ui::LoadingOverlay* loading_overlay_ = nullptr;
 };
 
 } // namespace fincept::screens

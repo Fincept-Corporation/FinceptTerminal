@@ -1,6 +1,7 @@
 #include "network/cloud/CloudClient.h"
 
 #include "core/logging/Logger.h"
+#include "core/telemetry/ClientInfo.h"
 
 #include <QJsonDocument>
 #include <QNetworkReply>
@@ -41,7 +42,7 @@ QNetworkRequest CloudClient::build_request(const QString& endpoint) const {
     const QString full = endpoint.startsWith("http") ? endpoint : (base_url_ + endpoint);
     QNetworkRequest req{QUrl(full)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+    telemetry::ClientInfo::apply_headers(req); // Fincept cloud: same condition as the credentials below
     if (!api_key_.isEmpty())
         req.setRawHeader("Authorization", QByteArray("Bearer ") + api_key_.toUtf8());
     if (!session_token_.isEmpty())
@@ -82,8 +83,11 @@ void CloudClient::finish(QNetworkReply* reply, Callback cb, const QObject* conte
         }
 
         if (!out.ok && out.error.isEmpty()) {
-            out.error = reply->error() != QNetworkReply::NoError ? QStringLiteral("network_error")
-                                                                 : QStringLiteral("http_%1").arg(status);
+            // Qt flags every HTTP error status as a reply error too (404 ->
+            // ContentNotFoundError), so "network_error" must mean "no HTTP
+            // answer at all" — otherwise a 404 from a server without the route
+            // was indistinguishable from being offline.
+            out.error = status == 0 ? QStringLiteral("network_error") : QStringLiteral("http_%1").arg(status);
         }
 
         if (!out.ok) {

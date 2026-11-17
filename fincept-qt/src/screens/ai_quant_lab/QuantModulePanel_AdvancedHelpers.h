@@ -7,7 +7,10 @@
 
 #pragma once
 
+#include "screens/ai_quant_lab/QuantModulePanel_ResultCharts.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
+#include "ui/tables/BarCellDelegate.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QAbstractItemView>
@@ -31,6 +34,13 @@ inline QString fmt_pct_safe(const QJsonValue& v, int decimals = 2) {
     if (v.isNull() || v.isUndefined())
         return QStringLiteral("—");
     return QString::number(v.toDouble() * 100.0, 'f', decimals) + "%";
+}
+
+/// A value that is already in percent points (12.5 → "12.50%"); null → "—".
+inline QString fmt_pts_safe(const QJsonValue& v, int decimals = 2) {
+    if (v.isNull() || v.isUndefined())
+        return QStringLiteral("—");
+    return QString::number(v.toDouble(), 'f', decimals) + "%";
 }
 
 inline QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
@@ -101,20 +111,44 @@ inline QTableWidget* build_weights_table(const QJsonObject& weights, QWidget* pa
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     table->setStyleSheet(fincept::screens::quant_styles::table_ss());
-    table->setMaximumHeight(qMin(rows.size() * 24 + 32, max_height));
+    table->setMaximumHeight(qMin(rows.size() * fincept::screens::quant_styles::row_px(24) + fincept::screens::quant_styles::row_px(32), max_height));
+    bool any_short = false;
     for (int r = 0; r < rows.size(); ++r) {
         table->setItem(r, 0, new QTableWidgetItem(rows[r].first));
         const double w = rows[r].second;
-        auto* wi = new QTableWidgetItem(QString::number(w * 100.0, 'f', 3) + "%");
-        wi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        if (w > 0.001)
-            wi->setForeground(QColor(fincept::ui::colors::POSITIVE()));
-        else if (w < -0.001)
-            wi->setForeground(QColor(fincept::ui::colors::NEGATIVE()));
-        table->setItem(r, 1, wi);
-        table->setRowHeight(r, 24);
+        any_short = any_short || w < -1e-9;
+        const QString fg = w > 0.001    ? QString(fincept::ui::colors::POSITIVE())
+                           : w < -0.001 ? QString(fincept::ui::colors::NEGATIVE())
+                                        : QString();
+        table->setItem(r, 1, fincept::screens::quant_styles::num_item(QString::number(w * 100.0, 'f', 3) + "%", w, fg));
+        table->setRowHeight(r, fincept::screens::quant_styles::row_px(24));
     }
+    // Relative size at a glance: a bar in the weight cell (from the left for a long-only
+    // book, from a centre line when there are shorts). The delegate reads the "%" text.
+    table->setItemDelegateForColumn(
+        1, new fincept::ui::BarCellDelegate(any_short ? fincept::ui::BarCellDelegate::Mode::SignedBar
+                                                      : fincept::ui::BarCellDelegate::Mode::Bar,
+                                            table));
+    fincept::screens::quant_styles::finish_table(table);
     return table;
+}
+
+// The weights table with, for a long-only book of up to 12 assets, a donut of
+// the allocation beside it (same order as the table: largest first).
+inline QWidget* build_weights_view(const QJsonObject& weights, QWidget* parent, int max_height = 320) {
+    QTableWidget* table = build_weights_table(weights, parent, max_height);
+    QStringList labels;
+    QVector<double> values;
+    for (int r = 0; r < table->rowCount(); ++r) {
+        const auto* name = table->item(r, 0);
+        const auto* num = dynamic_cast<const fincept::ui::NumericTableWidgetItem*>(table->item(r, 1));
+        if (!name || !num)
+            return table;
+        labels << name->text();
+        values << num->numeric_value();
+    }
+    return fincept::screens::quant_charts::qc_side_by_side(
+        table, fincept::screens::quant_charts::qc_weights_donut(labels, values, parent), parent);
 }
 
 } // namespace fincept::screens::quant_advanced_helpers

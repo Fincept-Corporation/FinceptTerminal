@@ -11,14 +11,17 @@
 
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QComboBox>
 #include <QJsonObject>
 #include <QLabel>
+#include <QStandardItemModel>
 #include <QVBoxLayout>
 
 #include <initializer_list>
@@ -91,20 +94,73 @@ static const QList<QPair<QString, QString>> kViews = {
     {"Historical Trend", "trend"},
 };
 
+// Which report carries which market: Legacy covers every market, Disaggregated only physical
+// commodities, Financial (TFF) only currencies / indices / rates / crypto. A mismatch used to end in
+// "No COT data found for identifier: bitcoin".
+static bool cftc_is_financial_market(const QString& code) {
+    static const QStringList kFinancial = {
+        "euro",         "jpy",       "british_pound", "swiss_franc", "canadian_dollar", "australian_dollar",
+        "s&p_500",      "nasdaq_100", "dow_jones",    "nikkei",      "vix",             "treasury_bonds",
+        "treasury_notes_10y", "treasury_notes_5y", "treasury_notes_2y", "fed_funds", "bitcoin", "ether",
+        "us_dollar_index"};
+    return kFinancial.contains(code);
+}
+
+/// Grey out the report type the selected market is not published in, and move off it if selected
+/// (Disaggregated ↔ Financial are each other's detailed counterpart).
+static void cftc_sync_report_types(QComboBox* market_combo, QComboBox* report_combo) {
+    if (!market_combo || !report_combo)
+        return;
+    const bool financial = cftc_is_financial_market(market_combo->currentData().toString());
+    const QString invalid = financial ? QStringLiteral("disaggregated") : QStringLiteral("financial");
+    const QString counterpart = financial ? QStringLiteral("financial") : QStringLiteral("disaggregated");
+    if (auto* model = qobject_cast<QStandardItemModel*>(report_combo->model())) {
+        for (int i = 0; i < report_combo->count(); ++i)
+            if (QStandardItem* item = model->item(i))
+                item->setEnabled(report_combo->itemData(i).toString() != invalid);
+    }
+    if (report_combo->currentData().toString() == invalid) {
+        const int idx = report_combo->findData(counterpart);
+        if (idx >= 0)
+            report_combo->setCurrentIndex(idx);
+    }
+}
+
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 CftcPanel::CftcPanel(QWidget* parent) : EconPanelBase(kCftcSourceId, kCftcColor, parent) {
     build_base_ui(this);
-    build_sentiment_widget();
     // Localize fixed combo item text (report types / views) to the active language.
     retranslateUi();
     connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
             &CftcPanel::on_result);
+    // VIEW switches what is shown for the same market — like a tab, it loads at once.
+    connect(view_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        if (isVisible())
+            run_query();
+    });
 }
 
 void CftcPanel::activate() {
-    show_empty(tr("Select a futures market and view, then click FETCH\n"
-                  "CFTC data is free — no API key required"));
+    // Nothing to prepare: the results pane loads the COT report on show (free, no key).
+}
+
+EconPanelBase::LoadPolicy CftcPanel::load_policy() const {
+    LoadPolicy p;
+    p.max_age_s = 12 * 3600; // weekly report (Tuesday positions, published Friday)
+    return p;
+}
+
+QJsonValue CftcPanel::page_payload(int page) const {
+    return page == sentiment_page_ ? QJsonValue(last_sentiment_) : QJsonValue();
+}
+
+bool CftcPanel::restore_page(int page, const QJsonValue& payload) {
+    build_sentiment_widget();
+    if (page != sentiment_page_ || !payload.isObject() || payload.toObject().isEmpty())
+        return false;
+    show_sentiment(payload.toObject());
+    return true;
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -119,7 +175,7 @@ void CftcPanel::build_controls(QHBoxLayout* thl) {
     market_combo_ = new QComboBox;
     for (const auto& m : kMarkets)
         market_combo_->addItem(m.first, m.second);
-    market_combo_->setFixedHeight(26);
+    market_combo_->setMinimumHeight(26);
     market_combo_->setMinimumWidth(160);
 
     // Report types and views are fixed UI labels — text set in retranslateUi();
@@ -127,14 +183,18 @@ void CftcPanel::build_controls(QHBoxLayout* thl) {
     report_type_combo_ = new QComboBox;
     for (const auto& r : kReportTypes)
         report_type_combo_->addItem(r.first, r.second);
-    report_type_combo_->setFixedHeight(26);
+    report_type_combo_->setMinimumHeight(26);
     report_type_combo_->setMinimumWidth(130);
 
     view_combo_ = new QComboBox;
     for (const auto& v : kViews)
         view_combo_->addItem(v.first, v.second);
-    view_combo_->setFixedHeight(26);
+    view_combo_->setMinimumHeight(26);
     view_combo_->setMinimumWidth(145);
+
+    cftc_sync_report_types(market_combo_, report_type_combo_);
+    connect(market_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { cftc_sync_report_types(market_combo_, report_type_combo_); });
 
     thl->addWidget(market_lbl_ = make_lbl(tr("MARKET")));
     thl->addWidget(market_combo_);
@@ -147,34 +207,46 @@ void CftcPanel::build_controls(QHBoxLayout* thl) {
 // ── Sentiment widget ──────────────────────────────────────────────────────────
 
 void CftcPanel::build_sentiment_widget() {
+    if (sentiment_widget_)
+        return;
     using namespace ui::colors;
 
-    const auto card_bg = QString("background:%1; border:1px solid %2;").arg(BG_RAISED(), BORDER_DIM());
-    const auto lbl_ss = QString("color:%1; font-size:9px; font-weight:700;"
-                                " letter-spacing:1px; background:transparent;")
-                            .arg(TEXT_SECONDARY());
-
-    sentiment_widget_ = new QWidget(this);
-    sentiment_widget_->setStyleSheet(QString("background:%1;").arg(BG_BASE()));
+    // One selector stylesheet, set before the children exist (ThemeManager's re-style pass keeps it
+    // in step with theme and font changes); the bias values use the panel's econStatPos / Neg.
+    sentiment_widget_ = new QWidget(content_host());
+    sentiment_widget_->setObjectName(QStringLiteral("cftcSentiment"));
+    sentiment_widget_->setStyleSheet(
+        QString("QWidget#cftcSentiment { background:%1; }"
+                "QWidget#cftcCard { background:%2; border:1px solid %3; }"
+                "QLabel#cftcCardTitle { color:%4; font-size:%7px; font-weight:700; letter-spacing:1px;"
+                "  background:transparent; border:none; }"
+                "QLabel#cftcTitle { color:%5; font-size:%8px; font-weight:700; background:transparent; border:none; }"
+                "QLabel#cftcMarket { color:%9; font-size:%10px; font-weight:700; background:transparent; border:none; }"
+                "QLabel#cftcMuted { color:%6; font-size:%11px; background:transparent; border:none; }"
+                "QLabel#cftcDesc { color:%6; font-size:%7px; background:transparent; border:none; }"
+                "QLabel#cftcOi { color:%5; font-size:%12px; font-weight:700; background:transparent; border:none; }")
+            .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), TEXT_SECONDARY(), TEXT_PRIMARY(), TEXT_TERTIARY())
+            .arg(ui::fonts::px(-5), ui::fonts::px(-2), legible(QColor(color_)), ui::fonts::px(-3), ui::fonts::px(-4),
+                 ui::fonts::px(-1)));
+    sentiment_widget_->setAttribute(Qt::WA_StyledBackground, true);
     auto* root = new QVBoxLayout(sentiment_widget_);
     root->setContentsMargins(20, 16, 20, 16);
     root->setSpacing(12);
 
     // Header
-    auto* hdr = new QWidget(this);
-    hdr->setStyleSheet(card_bg);
+    auto* hdr = new QWidget(sentiment_widget_);
+    hdr->setObjectName(QStringLiteral("cftcCard"));
+    hdr->setAttribute(Qt::WA_StyledBackground, true);
     auto* hdr_hl = new QHBoxLayout(hdr);
     hdr_hl->setContentsMargins(14, 10, 14, 10);
 
-    sent_title_lbl_ = new QLabel(tr("COT MARKET SENTIMENT"));
-    sent_title_lbl_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; background:transparent;").arg(TEXT_PRIMARY()));
+    sent_title_lbl_ = new QLabel(tr("COT MARKET SENTIMENT"), hdr);
+    sent_title_lbl_->setObjectName(QStringLiteral("cftcTitle"));
 
-    sent_market_lbl_ = new QLabel("—");
-    sent_market_lbl_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; background:transparent;").arg(color_));
-    sent_date_lbl_ = new QLabel("—");
-    sent_date_lbl_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(TEXT_TERTIARY()));
+    sent_market_lbl_ = new QLabel(QStringLiteral("—"), hdr);
+    sent_market_lbl_->setObjectName(QStringLiteral("cftcMarket"));
+    sent_date_lbl_ = new QLabel(QStringLiteral("—"), hdr);
+    sent_date_lbl_->setObjectName(QStringLiteral("cftcMuted"));
 
     hdr_hl->addWidget(sent_title_lbl_);
     hdr_hl->addStretch(1);
@@ -183,32 +255,31 @@ void CftcPanel::build_sentiment_widget() {
     root->addWidget(hdr);
 
     // Bias cards
-    auto* cards = new QWidget(this);
-    auto* cards_hl = new QHBoxLayout(cards);
+    auto* cards_hl = new QHBoxLayout;
     cards_hl->setContentsMargins(0, 0, 0, 0);
     cards_hl->setSpacing(10);
 
     auto make_card = [&](const QString& title_text, QLabel*& bias_out, QLabel*& net_out, const QString& desc,
                          QLabel*& title_out, QLabel*& desc_out) {
-        auto* card = new QWidget(this);
-        card->setStyleSheet(card_bg);
-        card->setMinimumHeight(120);
+        auto* card = new QWidget(sentiment_widget_);
+        card->setObjectName(QStringLiteral("cftcCard"));
+        card->setAttribute(Qt::WA_StyledBackground, true);
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(14, 12, 14, 12);
         cvl->setSpacing(4);
 
-        auto* ttl = new QLabel(title_text);
-        ttl->setStyleSheet(lbl_ss);
+        auto* ttl = new QLabel(title_text, card);
+        ttl->setObjectName(QStringLiteral("cftcCardTitle"));
         title_out = ttl;
 
-        bias_out = new QLabel("—");
+        bias_out = new QLabel(QStringLiteral("—"), card);
         bias_out->setObjectName("econStatVal");
 
-        net_out = new QLabel(tr("Net: —"));
-        net_out->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(TEXT_TERTIARY()));
+        net_out = new QLabel(tr("Net: —"), card);
+        net_out->setObjectName(QStringLiteral("cftcMuted"));
 
-        auto* d = new QLabel(desc);
-        d->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;").arg(TEXT_DIM()));
+        auto* d = new QLabel(desc, card);
+        d->setObjectName(QStringLiteral("cftcDesc"));
         d->setWordWrap(true);
         desc_out = d;
 
@@ -226,21 +297,21 @@ void CftcPanel::build_sentiment_widget() {
               tr("Managed money & funds — trend-following signal"), sent_noncomm_card_lbl_, sent_noncomm_card_desc_);
 
     // OI & trend row
-    auto* oi_row = new QWidget(this);
-    oi_row->setStyleSheet(card_bg);
+    auto* oi_row = new QWidget(sentiment_widget_);
+    oi_row->setObjectName(QStringLiteral("cftcCard"));
+    oi_row->setAttribute(Qt::WA_StyledBackground, true);
     auto* oi_hl = new QHBoxLayout(oi_row);
     oi_hl->setContentsMargins(14, 8, 14, 8);
     oi_hl->setSpacing(20);
 
-    sent_oi_caption_ = new QLabel(tr("OPEN INTEREST"));
-    sent_oi_caption_->setStyleSheet(lbl_ss);
-    sent_oi_lbl_ = new QLabel("—");
-    sent_oi_lbl_->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(TEXT_PRIMARY()));
+    sent_oi_caption_ = new QLabel(tr("OPEN INTEREST"), oi_row);
+    sent_oi_caption_->setObjectName(QStringLiteral("cftcCardTitle"));
+    sent_oi_lbl_ = new QLabel(QStringLiteral("—"), oi_row);
+    sent_oi_lbl_->setObjectName(QStringLiteral("cftcOi"));
 
-    sent_oi_trend_caption_ = new QLabel(tr("OI TREND"));
-    sent_oi_trend_caption_->setStyleSheet(lbl_ss);
-    sent_oi_trend_ = new QLabel("—");
+    sent_oi_trend_caption_ = new QLabel(tr("OI TREND"), oi_row);
+    sent_oi_trend_caption_->setObjectName(QStringLiteral("cftcCardTitle"));
+    sent_oi_trend_ = new QLabel(QStringLiteral("—"), oi_row);
     sent_oi_trend_->setObjectName("econStatVal");
 
     oi_hl->addWidget(sent_oi_caption_);
@@ -263,6 +334,8 @@ void CftcPanel::build_sentiment_widget() {
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
 void CftcPanel::on_fetch() {
+    // A restored session can pair a market with a report it is not published in.
+    cftc_sync_report_types(market_combo_, report_type_combo_);
     const QString market = market_combo_->currentData().toString();
     const QString report_type = report_type_combo_->currentData().toString();
     const QString view = view_combo_->currentData().toString();
@@ -275,14 +348,14 @@ void CftcPanel::on_fetch() {
     show_loading(tr("Fetching CFTC data for %1…").arg(market_combo_->currentText()));
 
     if (view == "cot") {
-        services::EconomicsService::instance().execute(kCftcSourceId, kCftcScript, "cot_data", {market, report_type},
-                                                       "cftc_cot_" + market);
+        execute_query(kCftcSourceId, kCftcScript, "cot_data", {market, report_type},
+                      "cftc_cot_" + market);
     } else if (view == "sentiment") {
-        services::EconomicsService::instance().execute(kCftcSourceId, kCftcScript, "market_sentiment",
-                                                       {market, report_type}, "cftc_sent_" + market);
+        execute_query(kCftcSourceId, kCftcScript, "market_sentiment",
+                      {market, report_type}, "cftc_sent_" + market);
     } else {
-        services::EconomicsService::instance().execute(kCftcSourceId, kCftcScript, "cot_historical_trend",
-                                                       {market, report_type}, "cftc_trend_" + market);
+        execute_query(kCftcSourceId, kCftcScript, "cot_historical_trend",
+                      {market, report_type}, "cftc_trend_" + market);
     }
 }
 
@@ -390,21 +463,21 @@ void CftcPanel::on_result(const QString& request_id, const services::EconomicsRe
         display(rows, "CFTC Historical Trend: " + market_combo_->currentText());
     }
 
-    LOG_INFO("CftcPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("CftcPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── Sentiment display ─────────────────────────────────────────────────────────
 
 void CftcPanel::show_sentiment(const QJsonObject& s) {
-    if (!sentiment_widget_)
-        return;
+    build_sentiment_widget();
+    last_sentiment_ = s;
 
     // Populate labels
     sent_market_lbl_->setText(s["market_name"].toString(market_combo_->currentText()));
     sent_date_lbl_->setText(tr("Report: %1").arg(s["latest_report"].toString("—")));
 
     const double oi = s["open_interest"].toDouble();
-    sent_oi_lbl_->setText(oi > 0 ? QString::number(static_cast<qint64>(oi)) : "—");
+    sent_oi_lbl_->setText(oi > 0 ? ui::formatting::number(oi, 0) : QStringLiteral("—"));
 
     const QString oi_trend = s["overall_sentiment"].toObject()["oi_trend"].toString();
     sent_oi_trend_->setText(oi_trend.isEmpty() ? "—" : oi_trend.toUpper());
@@ -427,17 +500,14 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     // NB: QString::arg(qlonglong, int fieldWidth) — the previous `.arg(v, 'd')`
     // passed the *char literal* 'd' (=100) as the field width, padding every
     // net-position number with 100 leading spaces. Format the number first.
+    // Signed, grouped contract counts in the user's number format.
     const QJsonObject comm = s["commercial_positions"].toObject();
     const double comm_net = comm["net"].toDouble();
-    sent_comm_net_->setText(tr("Net: %1%2")
-                                .arg(comm_net >= 0 ? QStringLiteral("+") : QString())
-                                .arg(QString::number(static_cast<qint64>(comm_net))));
+    sent_comm_net_->setText(tr("Net: %1 contracts").arg(ui::formatting::signed_number(comm_net, 0)));
 
     const QJsonObject noncomm = s["non_commercial_positions"].toObject();
     const double noncomm_net = noncomm["net"].toDouble();
-    sent_noncomm_net_->setText(tr("Net: %1%2")
-                                   .arg(noncomm_net >= 0 ? QStringLiteral("+") : QString())
-                                   .arg(QString::number(static_cast<qint64>(noncomm_net))));
+    sent_noncomm_net_->setText(tr("Net: %1 contracts").arg(ui::formatting::signed_number(noncomm_net, 0)));
 
     // Populate the shared table too (one summary row) so CSV export still has
     // something to write, then switch the stack to the sentiment card view.
@@ -454,10 +524,10 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     rows.append(row);
     // A one-row snapshot has no meaningful LATEST/CHANGE/MIN/MAX/AVG.
     set_stats_visible(false);
-    display(rows, "CFTC Sentiment: " + market_combo_->currentText());
+    display(rows, "CFTC Sentiment: " + s["market_name"].toString(market_combo_->currentText()));
     show_content_page(sentiment_page_);
 
-    LOG_INFO("CftcPanel", "Displayed sentiment for " + market_combo_->currentText());
+    LOG_DEBUG("CftcPanel", "Displayed sentiment for " + market_combo_->currentText());
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

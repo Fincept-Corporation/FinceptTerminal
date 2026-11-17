@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "qwen -p <prompt> -o stream-json --approval-mode plan",
+  "source": "docs",
+  "url": "https://qwenlm.github.io/qwen-code-docs/en/users/features/headless/",
+  "note": "Transcribed from the headless page (system/session_start, assistant, result); not a recording."
+}

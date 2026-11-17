@@ -1,71 +1,83 @@
 // src/ui/widgets/algo/RiskManagementPanel.cpp
 #include "ui/widgets/algo/RiskManagementPanel.h"
 
-#include <QGridLayout>
-#include <QLabel>
+#include "ui/widgets/FlowLayout.h"
+#include "ui/widgets/algo/AlgoCurrency.h"
+
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 
 namespace fincept::ui::algo {
 
+namespace {
+
+QWidget* rmp_group(QWidget* host, QLabel* label, QWidget* field) {
+    auto* g = new QWidget(host);
+    auto* h = new QHBoxLayout(g);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(4);
+    label->setParent(g);
+    field->setParent(g);
+    label->setBuddy(field);
+    h->addWidget(label);
+    h->addWidget(field);
+    return g;
+}
+
+QString rmp_number(double v, int decimals) {
+    QString s = QString::number(v, 'f', decimals);
+    while (s.contains(QLatin1Char('.')) && (s.endsWith(QLatin1Char('0')) || s.endsWith(QLatin1Char('.'))))
+        s.chop(1);
+    return s;
+}
+
+} // namespace
+
 RiskManagementPanel::RiskManagementPanel(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("riskManagementPanel"));
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(4);
 
-    auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(6);
+    auto* host = new QWidget(this);
+    auto* flow = new ui::FlowLayout(host);
+    stop_loss_ = create_field(0, 50, 2.0, 2, 0.5, QStringLiteral(" %"), host);
+    take_profit_ = create_field(0, 100, 5.0, 2, 0.5, QStringLiteral(" %"), host);
+    trailing_stop_ = create_field(0, 50, 0, 2, 0.5, QStringLiteral(" %"), host);
+    capital_pct_ = create_field(1, 100, 100, 0, 5, QStringLiteral(" %"), host);
+    quantity_ = create_field(1, 100000, 1, 0, 1, QString(), host);
+    max_order_ = create_field(0, 10000000, 0, 0, 1000, QString(), host);
+    deploy_caption_ = new QLabel(host);
+    deploy_caption_->setObjectName(QStringLiteral("algoNote"));
+    for (const Field* f : {&stop_loss_, &take_profit_, &trailing_stop_, &capital_pct_})
+        flow->addWidget(rmp_group(host, f->label, f->spin));
+    flow->addWidget(deploy_caption_);
+    for (const Field* f : {&quantity_, &max_order_})
+        flow->addWidget(rmp_group(host, f->label, f->spin));
+    root->addWidget(host);
 
-    header_ = new QLabel(tr("RISK MANAGEMENT"), this);
-    header_->setObjectName(QStringLiteral("riskPanelHeader"));
-    layout->addWidget(header_);
+    retranslateUi();
+}
 
-    auto* grid = new QGridLayout();
-    grid->setSpacing(6);
-
-    stop_loss_ = create_row(tr("Stop Loss %"), 0, 50, 2.0, 1, this);
-    take_profit_ = create_row(tr("Take Profit %"), 0, 100, 5.0, 1, this);
-    trailing_stop_ = create_row(tr("Trailing Stop %"), 0, 50, 0, 1, this);
-    capital_pct_ = create_row(tr("Capital Alloc %"), 1, 100, 100, 0, this);
-
-    grid->addWidget(stop_loss_.label, 0, 0);
-    grid->addWidget(stop_loss_.slider, 0, 1);
-    grid->addWidget(stop_loss_.spin, 0, 2);
-    grid->addWidget(take_profit_.label, 1, 0);
-    grid->addWidget(take_profit_.slider, 1, 1);
-    grid->addWidget(take_profit_.spin, 1, 2);
-    grid->addWidget(trailing_stop_.label, 2, 0);
-    grid->addWidget(trailing_stop_.slider, 2, 1);
-    grid->addWidget(trailing_stop_.spin, 2, 2);
-    grid->addWidget(capital_pct_.label, 3, 0);
-    grid->addWidget(capital_pct_.slider, 3, 1);
-    grid->addWidget(capital_pct_.spin, 3, 2);
-
-    // Quantity
-    quantity_label_ = new QLabel(tr("Quantity"), this);
-    quantity_spin_ = new QDoubleSpinBox(this);
-    quantity_spin_->setObjectName(QStringLiteral("riskQtySpin"));
-    quantity_spin_->setRange(1, 100000);
-    quantity_spin_->setDecimals(0);
-    quantity_spin_->setValue(1);
-    grid->addWidget(quantity_label_, 4, 0);
-    grid->addWidget(quantity_spin_, 4, 1, 1, 2);
-
-    // Max order value
-    max_order_label_ = new QLabel(tr("Max Order Value"), this);
-    max_order_spin_ = new QDoubleSpinBox(this);
-    max_order_spin_->setObjectName(QStringLiteral("riskMaxOrderSpin"));
-    max_order_spin_->setRange(0, 10000000);
-    max_order_spin_->setDecimals(0);
-    max_order_spin_->setValue(0);
-    max_order_spin_->setSpecialValueText(tr("No Limit"));
-    grid->addWidget(max_order_label_, 5, 0);
-    grid->addWidget(max_order_spin_, 5, 1, 1, 2);
-
-    layout->addLayout(grid);
-
-    connect(quantity_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &RiskManagementPanel::values_changed);
-    connect(max_order_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &RiskManagementPanel::values_changed);
+RiskManagementPanel::Field RiskManagementPanel::create_field(double min_val, double max_val, double default_val,
+                                                             int decimals, double step, const QString& suffix,
+                                                             QWidget* host) {
+    Field f;
+    f.label = new QLabel(host);
+    f.label->setObjectName(QStringLiteral("algoFieldLabel"));
+    f.spin = new QDoubleSpinBox(host);
+    f.spin->setObjectName(QStringLiteral("algoField"));
+    f.spin->setRange(min_val, max_val);
+    f.spin->setDecimals(decimals);
+    f.spin->setSingleStep(step);
+    f.spin->setValue(default_val);
+    f.spin->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    f.spin->setKeyboardTracking(false);
+    f.spin->setFocusPolicy(Qt::StrongFocus);
+    if (!suffix.isEmpty())
+        f.spin->setSuffix(suffix);
+    connect(f.spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double) { emit values_changed(); });
+    return f;
 }
 
 void RiskManagementPanel::changeEvent(QEvent* event) {
@@ -75,45 +87,47 @@ void RiskManagementPanel::changeEvent(QEvent* event) {
 }
 
 void RiskManagementPanel::retranslateUi() {
-    if (header_)
-        header_->setText(tr("RISK MANAGEMENT"));
-    if (stop_loss_.label)
-        stop_loss_.label->setText(tr("Stop Loss %"));
-    if (take_profit_.label)
-        take_profit_.label->setText(tr("Take Profit %"));
-    if (trailing_stop_.label)
-        trailing_stop_.label->setText(tr("Trailing Stop %"));
-    if (capital_pct_.label)
-        capital_pct_.label->setText(tr("Capital Alloc %"));
-    if (quantity_label_)
-        quantity_label_->setText(tr("Quantity"));
-    if (max_order_label_)
-        max_order_label_->setText(tr("Max Order Value"));
-    if (max_order_spin_)
-        max_order_spin_->setSpecialValueText(tr("No Limit"));
-}
-
-RiskManagementPanel::SliderRow RiskManagementPanel::create_row(const QString& label_text, double min_val,
-                                                               double max_val, double default_val, int decimals,
-                                                               QWidget* parent) {
-
-    SliderRow row;
-    row.label = new QLabel(label_text, parent);
-    row.slider = new QSlider(Qt::Horizontal, parent);
-    row.slider->setRange(static_cast<int>(min_val * 10), static_cast<int>(max_val * 10));
-    row.slider->setValue(static_cast<int>(default_val * 10));
-
-    row.spin = new QDoubleSpinBox(parent);
-    row.spin->setRange(min_val, max_val);
-    row.spin->setDecimals(decimals);
-    row.spin->setValue(default_val);
-
-    connect(row.slider, &QSlider::valueChanged, parent, [row](int val) { row.spin->setValue(val / 10.0); });
-    connect(row.spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), parent, [row, this](double val) {
-        row.slider->setValue(static_cast<int>(val * 10));
-        emit values_changed();
-    });
-    return row;
+    struct Text {
+        Field* f;
+        QString label;
+        QString name;
+        QString tip;
+        QString special;
+    };
+    const Text texts[] = {
+        {&stop_loss_, tr("STOP"), tr("Stop-loss percent"),
+         tr("Stop-loss: close the position when it loses this much from the entry fill (a resting stop order "
+            "checked against each bar's range; a gap fills at the open). Off = none."),
+         tr("off")},
+        {&take_profit_, tr("TARGET"), tr("Take-profit percent"),
+         tr("Take-profit: close the position at this gain from the entry fill (a limit order, no slippage). "
+            "Off = none."),
+         tr("off")},
+        {&trailing_stop_, tr("TRAIL"), tr("Trailing stop percent"),
+         tr("Trailing stop: follows the best price reached before the bar by this distance; the tighter of the "
+            "stop-loss and the trail applies. Off = none."),
+         tr("off")},
+        {&capital_pct_, tr("ALLOC"), tr("Capital allocated per entry, percent"),
+         tr("Share of the capital (cash at the time) committed to each entry in the backtest; no leverage."),
+         QString()},
+        {&quantity_, tr("QTY"), tr("Deployment quantity"),
+         tr("Units per order when deployed (paper or live). The backtest ignores it: it sizes each entry by ALLOC "
+            "of the capital."),
+         QString()},
+        {&max_order_, tr("MAX ORDER"), tr("Deployment maximum order value"),
+         tr("Largest order value a deployment may send, in the instrument's currency. The backtest ignores it. "
+            "No limit = 0."),
+         tr("no limit")},
+    };
+    for (const Text& t : texts) {
+        t.f->label->setText(t.label);
+        t.f->label->setToolTip(t.tip);
+        t.f->spin->setAccessibleName(t.name);
+        t.f->spin->setToolTip(t.tip);
+        t.f->spin->setSpecialValueText(t.special);
+    }
+    deploy_caption_->setText(tr("DEPLOY ONLY:"));
+    deploy_caption_->setToolTip(tr("Used by paper / live deployments; the backtest sizes positions by ALLOC"));
 }
 
 double RiskManagementPanel::stop_loss() const {
@@ -126,10 +140,10 @@ double RiskManagementPanel::trailing_stop() const {
     return trailing_stop_.spin->value();
 }
 double RiskManagementPanel::quantity() const {
-    return quantity_spin_->value();
+    return quantity_.spin->value();
 }
 double RiskManagementPanel::max_order_value() const {
-    return max_order_spin_->value();
+    return max_order_.spin->value();
 }
 double RiskManagementPanel::capital_pct() const {
     return capital_pct_.spin->value();
@@ -139,9 +153,20 @@ void RiskManagementPanel::set_values(double sl, double tp, double ts, double qty
     stop_loss_.spin->setValue(sl);
     take_profit_.spin->setValue(tp);
     trailing_stop_.spin->setValue(ts);
-    quantity_spin_->setValue(qty);
-    max_order_spin_->setValue(mov);
+    quantity_.spin->setValue(qty);
+    max_order_.spin->setValue(mov);
     capital_pct_.spin->setValue(capital_pct);
+}
+
+void RiskManagementPanel::set_currency(const QString& ccy) {
+    // The order value limit is price x quantity of the instrument: its quote currency.
+    algo_bind_money_spin(max_order_.spin, ccy);
+}
+
+QString RiskManagementPanel::summary_text() const {
+    auto pct = [](double v) { return v > 0 ? rmp_number(v, 2) + QStringLiteral(" %") : tr("off"); };
+    return tr("stop %1 · target %2 · trail %3 · %4 % of capital per entry")
+        .arg(pct(stop_loss()), pct(take_profit()), pct(trailing_stop()), rmp_number(capital_pct(), 0));
 }
 
 } // namespace fincept::ui::algo

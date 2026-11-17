@@ -1,0 +1,8 @@
+{
+  "harness_version": "0.160.0",
+  "date": "2026-11-17",
+  "command": "codex exec --json --skip-git-repo-check -s read-only -c approval_policy=\"never\" -",
+  "source": "docs",
+  "url": "https://learn.chatgpt.com/docs/non-interactive-mode",
+  "note": "Transcribed from the documented exec --json event types (thread/turn/item.*); not a recording."
+}

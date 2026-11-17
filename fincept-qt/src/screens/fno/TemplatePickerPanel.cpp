@@ -52,30 +52,31 @@ QString cat_label(int i) {
 
 TemplatePickerPanel::TemplatePickerPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoPickerPanel");
-    setStyleSheet(QStringLiteral("#fnoPickerPanel { background:%1; }"
+    setStyleSheet(QString("#fnoPickerPanel { background:%1; }"
                                  "#fnoPickerCatBtn { background:%2; color:%3; border:none; padding:5px 12px; "
-                                 "                    font-size:9px; font-weight:700; letter-spacing:0.5px; }"
+                                 "                    font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.5px; }"
                                  "#fnoPickerCatBtn:hover { background:%4; color:%5; }"
-                                 "#fnoPickerCatBtn[active=\"true\"] { background:%6; color:%2; }"
+                                 "#fnoPickerCatBtn[active=\"true\"] { background:%6; color:%8; }"
                                  "#fnoPickerList { background:%1; color:%5; border:1px solid %7; }"
                                  "#fnoPickerList::item { padding:6px 8px; border-bottom:1px solid %7; }"
                                  "#fnoPickerList::item:selected { background:%4; color:%5; }"
                                  "#fnoPickerList::item:hover { background:%4; }"
-                                 "#fnoUseBtn { background:%6; color:%2; border:none; padding:6px 16px; "
-                                 "             font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                 "#fnoUseBtn { background:%6; color:%8; border:none; padding:6px 16px; "
+                                 "             font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:0.5px; }"
                                  "#fnoUseBtn:hover { background:%5; color:%2; }"
                                  "#fnoUseBtn:disabled { background:%7; color:%3; }"
-                                 "#fnoPickerLabel { color:%3; font-size:9px; font-weight:700; "
+                                 "#fnoPickerLabel { color:%3; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; "
                                  "                  letter-spacing:0.4px; background:transparent; }"
                                  "QSpinBox { background:%2; color:%5; border:1px solid %7; padding:2px 4px; "
-                                 "           font-size:11px; min-width:48px; }")
+                                 "           font-size:" + fincept::ui::fonts::px(-3) + "px; min-width:48px; }")
                       .arg(colors::BG_BASE(),        // %1 panel bg
                            colors::BG_RAISED(),      // %2 button bg
                            colors::TEXT_SECONDARY(), // %3 dim text
                            colors::BG_HOVER(),       // %4 hover
                            colors::TEXT_PRIMARY(),   // %5 primary text
                            colors::AMBER(),          // %6 active
-                           colors::BORDER_DIM()));   // %7 border
+                           colors::BORDER_DIM(),     // %7 border
+                           colors::TEXT_ON_ACCENT())); // %8 text on active
 
     setup_ui();
     rebuild_list_for_category(active_category_);

@@ -1,6 +1,8 @@
 // src/algo_engine/PositionManager.cpp
 #include "algo_engine/PositionManager.h"
 
+#include "core/logging/Logger.h"
+
 #include <QDate>
 #include <QDateTime>
 #include <QMutexLocker>
@@ -37,12 +39,36 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
 
         double basket_pnl_pct = basket_entry_value_ > 1e-10 ? basket_pnl / basket_entry_value_ * 100.0 : 0;
 
-        // Daily loss limit
-        if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_)) {
+        // Drawdown tracking includes the open basket's marks.
+        {
+            const double equity = metrics_.total_pnl + basket_pnl;
+            if (equity > risk_.peak_equity)
+                risk_.peak_equity = equity;
+            risk_.max_drawdown = std::max(risk_.max_drawdown, risk_.peak_equity - equity);
+            metrics_.max_drawdown = risk_.max_drawdown;
+        }
+
+        // Daily loss limit — realized today PLUS the open basket's unrealized loss
+        // (it used to wait for the loss to be realized, so an open position could run
+        // far past the limit before anything happened).
+        if (max_daily_loss_ > 0 && risk_.daily_pnl + basket_pnl <= -std::abs(max_daily_loss_)) {
             risk_.paused_by_loss_limit = true;
+            risk_.halt_reason = QStringLiteral("daily_loss_limit");
+            sync_risk_metrics_locked();
             AlgoOrderSignal sig;
             sig.deployment_id = deployment_id_;
             sig.reason = "daily_loss_limit";
+            return sig;
+        }
+
+        // Max drawdown limit (realized + unrealized from the running peak).
+        if (max_drawdown_limit_ > 0 && risk_.peak_equity - (metrics_.total_pnl + basket_pnl) >= max_drawdown_limit_) {
+            risk_.halted_by_drawdown = true;
+            risk_.halt_reason = QStringLiteral("max_drawdown_limit");
+            sync_risk_metrics_locked();
+            AlgoOrderSignal sig;
+            sig.deployment_id = deployment_id_;
+            sig.reason = "max_drawdown_limit";
             return sig;
         }
 
@@ -82,14 +108,32 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
     if (position_.side == PositionSide::None)
         return std::nullopt;
 
-    // Daily loss limit
-    if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_)) {
+    // Daily loss limit — realized today PLUS the open position's unrealized loss
+    // (net of its entry fees). It used to count realized P&L only, so an open
+    // position could lose far beyond the limit before the check could see it.
+    if (max_daily_loss_ > 0 && risk_.daily_pnl + position_.unrealized_pnl <= -std::abs(max_daily_loss_)) {
         risk_.paused_by_loss_limit = true;
+        risk_.halt_reason = QStringLiteral("daily_loss_limit");
+        sync_risk_metrics_locked();
         AlgoOrderSignal sig;
         sig.deployment_id = deployment_id_;
         sig.side = (position_.side == PositionSide::Long) ? "SELL" : "BUY";
         sig.quantity = position_.quantity;
         sig.reason = "daily_loss_limit";
+        return sig;
+    }
+
+    // Max drawdown limit: realized + unrealized P&L this far below its running peak.
+    if (max_drawdown_limit_ > 0 &&
+        risk_.peak_equity - (metrics_.total_pnl + position_.unrealized_pnl) >= max_drawdown_limit_) {
+        risk_.halted_by_drawdown = true;
+        risk_.halt_reason = QStringLiteral("max_drawdown_limit");
+        sync_risk_metrics_locked();
+        AlgoOrderSignal sig;
+        sig.deployment_id = deployment_id_;
+        sig.side = (position_.side == PositionSide::Long) ? "SELL" : "BUY";
+        sig.quantity = position_.quantity;
+        sig.reason = "max_drawdown_limit";
         return sig;
     }
 
@@ -151,28 +195,40 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
     return std::nullopt;
 }
 
-void PositionManager::record_entry(PositionSide side, double qty, double price, int64_t time_ms) {
+void PositionManager::record_entry(PositionSide side, double qty, double price, int64_t time_ms, double fees) {
     QMutexLocker lock(&mutex_);
     Q_ASSERT(!multi_leg_); // invariant: single-leg path must not be called while a basket is active
     position_.side = side;
     position_.quantity = qty;
     position_.entry_price = price;
     position_.entry_time = time_ms;
-    position_.unrealized_pnl = 0;
+    position_.entry_fees = std::max(0.0, fees);
+    // The entry fees are already spent: the position starts that far under water.
+    position_.unrealized_pnl = -position_.entry_fees;
     position_.highest_since_entry = price;
     position_.lowest_since_entry = price;
     metrics_.last_trade_time = time_ms;
+    metrics_.unrealized_pnl = position_.unrealized_pnl;
+    metrics_.total_fees += position_.entry_fees;
+    ++risk_.trades_today;
+    sync_risk_metrics_locked();
 }
 
-double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
+double PositionManager::record_exit(double qty, double price, int64_t time_ms, double fees) {
     QMutexLocker lock(&mutex_);
-    double pnl = 0;
+    double gross = 0;
     if (position_.side == PositionSide::Long)
-        pnl = (price - position_.entry_price) * qty;
+        gross = (price - position_.entry_price) * qty;
     else if (position_.side == PositionSide::Short)
-        pnl = (position_.entry_price - price) * qty;
+        gross = (position_.entry_price - price) * qty;
+    // Entry fees in proportion to the quantity closed (a partial fill closes part).
+    const double share = position_.quantity > 0 ? std::min(1.0, qty / position_.quantity) : 1.0;
+    const double exit_fees = std::max(0.0, fees);
+    const double pnl = gross - position_.entry_fees * share - exit_fees;
+    last_exit_gross_ = gross;
 
     metrics_.total_pnl += pnl;
+    metrics_.total_fees += exit_fees;
     metrics_.total_trades++;
     if (pnl > 0)
         metrics_.winning_trades++;
@@ -183,16 +239,70 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
     metrics_.last_trade_time = time_ms;
 
     risk_.daily_pnl += pnl;
-    update_drawdown();
-    latch_daily_loss_if_breached();
 
     position_.side = PositionSide::None;
     position_.quantity = 0;
     position_.entry_price = 0;
     position_.entry_time = 0;
     position_.unrealized_pnl = 0;
+    position_.entry_fees = 0;
+    metrics_.unrealized_pnl = 0;
 
+    update_drawdown();
+    latch_daily_loss_if_breached();
+    sync_risk_metrics_locked();
     return pnl;
+}
+
+double PositionManager::last_exit_gross() const {
+    QMutexLocker lock(&mutex_);
+    return last_exit_gross_;
+}
+
+void PositionManager::set_max_drawdown_limit(double limit) {
+    QMutexLocker lock(&mutex_);
+    max_drawdown_limit_ = std::max(0.0, limit);
+}
+
+void PositionManager::sync_risk_metrics_locked() {
+    metrics_.daily_pnl = risk_.daily_pnl;
+    metrics_.trades_today = risk_.trades_today;
+    metrics_.risk_halted = risk_.paused_by_loss_limit || risk_.halted_by_drawdown;
+    metrics_.halt_reason = metrics_.risk_halted ? risk_.halt_reason : QString();
+    metrics_.max_drawdown = risk_.max_drawdown;
+}
+
+void PositionManager::restore_risk_state(const RiskState& state, int today_key, double total_fees) {
+    QMutexLocker lock(&mutex_);
+    metrics_.total_fees = std::max(0.0, total_fees);
+    if (state.peak_equity > risk_.peak_equity)
+        risk_.peak_equity = state.peak_equity;
+    risk_.halted_by_drawdown = state.halted_by_drawdown;
+    // The daily figures only carry over within the same exchange trading day; a
+    // restart on a new day starts clean (as the day rollover would have).
+    if (state.day_key > 0 && today_key > 0 && state.day_key == today_key) {
+        risk_.day_key = state.day_key;
+        risk_.daily_pnl = state.daily_pnl;
+        risk_.trades_today = state.trades_today;
+        risk_.paused_by_loss_limit = state.paused_by_loss_limit;
+    } else {
+        risk_.day_key = today_key;
+    }
+    if (risk_.halted_by_drawdown || risk_.paused_by_loss_limit)
+        risk_.halt_reason = state.halt_reason;
+    latch_daily_loss_if_breached();
+    sync_risk_metrics_locked();
+}
+
+void PositionManager::clear_halts() {
+    QMutexLocker lock(&mutex_);
+    reset_daily_locked();
+    risk_.halted_by_drawdown = false;
+    risk_.halt_reason.clear();
+    // Re-base the drawdown peak on where the P&L is now, or the limit trips again
+    // on the next tick.
+    risk_.peak_equity = metrics_.total_pnl + (multi_leg_ ? metrics_.unrealized_pnl : position_.unrealized_pnl);
+    sync_risk_metrics_locked();
 }
 
 // The daily-loss halt used to be raised only from check_risk() while a position was
@@ -202,8 +312,11 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
 // tick tripped the check (an extra round trip beyond the configured loss limit).
 // Latching on the realizing exit itself closes that hole. Caller holds mutex_.
 void PositionManager::latch_daily_loss_if_breached() {
-    if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_))
+    if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_)) {
         risk_.paused_by_loss_limit = true;
+        if (risk_.halt_reason.isEmpty())
+            risk_.halt_reason = QStringLiteral("daily_loss_limit");
+    }
 }
 
 void PositionManager::restore_state(PositionSide side, double qty, double entry_price, double total_pnl,
@@ -234,21 +347,28 @@ void PositionManager::restore_state(PositionSide side, double qty, double entry_
 void PositionManager::update_price(double price) {
     QMutexLocker lock(&mutex_);
     metrics_.current_price = price;
+    // Mark-to-market net of the entry fees already paid.
     if (position_.side == PositionSide::Long)
-        position_.unrealized_pnl = (price - position_.entry_price) * position_.quantity;
+        position_.unrealized_pnl = (price - position_.entry_price) * position_.quantity - position_.entry_fees;
     else if (position_.side == PositionSide::Short)
-        position_.unrealized_pnl = (position_.entry_price - price) * position_.quantity;
+        position_.unrealized_pnl = (position_.entry_price - price) * position_.quantity - position_.entry_fees;
     metrics_.unrealized_pnl = position_.unrealized_pnl;
     metrics_.current_position_qty = position_.quantity;
     metrics_.current_position_side = position_side_to_string(position_.side);
     metrics_.current_position_entry = position_.entry_price;
+    if (position_.side != PositionSide::None)
+        update_drawdown();
 }
 
+// Drawdown of realized + UNREALIZED P&L from its running peak. It used to be
+// measured on realized P&L at exits only, so an open position's slide never
+// showed up until (and unless) it was closed.
 void PositionManager::update_drawdown() {
-    double equity = metrics_.total_pnl;
+    const double unrealized = multi_leg_ ? metrics_.unrealized_pnl : position_.unrealized_pnl;
+    const double equity = metrics_.total_pnl + unrealized;
     if (equity > risk_.peak_equity)
         risk_.peak_equity = equity;
-    double dd = risk_.peak_equity - equity;
+    const double dd = risk_.peak_equity - equity;
     if (dd > risk_.max_drawdown)
         risk_.max_drawdown = dd;
     metrics_.max_drawdown = risk_.max_drawdown;
@@ -261,7 +381,7 @@ bool PositionManager::has_position() const {
 
 bool PositionManager::is_paused() const {
     QMutexLocker lock(&mutex_);
-    return risk_.paused_by_loss_limit;
+    return risk_.paused_by_loss_limit || risk_.halted_by_drawdown;
 }
 
 bool PositionManager::validate_order_value(double qty, double price) const {
@@ -292,7 +412,26 @@ RiskState PositionManager::risk_state() const {
 void PositionManager::reset_daily_locked() {
     risk_.daily_pnl = 0;
     risk_.paused_by_loss_limit = false;
+    risk_.trades_today = 0;
+    if (!risk_.halted_by_drawdown)
+        risk_.halt_reason.clear();
     risk_.day_start_epoch = QDateTime::currentMSecsSinceEpoch();
+    sync_risk_metrics_locked();
+}
+
+bool PositionManager::reset_daily_if_new_day(int exchange_day_key) {
+    QMutexLocker lock(&mutex_);
+    if (exchange_day_key <= 0)
+        return false;
+    if (risk_.day_key <= 0) {
+        risk_.day_key = exchange_day_key; // first stamp: today is day one
+        return false;
+    }
+    if (exchange_day_key == risk_.day_key)
+        return false;
+    risk_.day_key = exchange_day_key;
+    reset_daily_locked();
+    return true;
 }
 
 void PositionManager::reset_daily() {
@@ -339,6 +478,8 @@ void PositionManager::record_entry_legs(const QVector<fincept::algo::AlgoLegPosi
     metrics_.current_position_side = QStringLiteral("BASKET");
     metrics_.current_position_qty = total_qty;
     metrics_.last_trade_time = time_ms;
+    ++risk_.trades_today;
+    sync_risk_metrics_locked();
 }
 
 double PositionManager::record_exit_legs(int64_t time_ms) {
@@ -361,6 +502,7 @@ double PositionManager::record_exit_legs(int64_t time_ms) {
     risk_.daily_pnl += pnl;
     update_drawdown();
     latch_daily_loss_if_breached();
+    sync_risk_metrics_locked();
 
     legs_.clear();
     multi_leg_ = false;
@@ -384,8 +526,9 @@ void PositionManager::update_leg_price(const QString& symbol, double ltp) {
             break;
         }
     }
-    if (!found)
-        qWarning() << "PositionManager::update_leg_price: symbol not in basket:" << symbol;
+    if (!found) // per tick: one line per symbol every 5 minutes
+        LOG_WARN_RL("AlgoEngine", QStringLiteral("leg_price:") + symbol, 300000,
+                    logf("Leg price update ignored, symbol not in basket", {{"symbol", symbol}}));
     // Recompute basket unrealized P&L
     double basket_pnl = 0;
     for (const auto& leg : std::as_const(legs_))

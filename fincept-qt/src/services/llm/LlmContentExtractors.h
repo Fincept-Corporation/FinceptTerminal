@@ -77,4 +77,16 @@ bool has_text_tool_markup(const QString& content);
 /// translation unit free of MCP dependencies.
 std::vector<TextToolCall> extract_text_tool_calls(const QString& content, QStringList* raw_blocks = nullptr);
 
+/// True when a tool-less reply is an announcement of work rather than the work:
+/// "I'll look for a script that surfaces US market movers.", "Let me check the
+/// order book…". A model that ends its turn on such a line has answered nothing —
+/// the user sees a promise and a dead chat. Callers with tools available send it
+/// back once or twice ("act now or answer") instead of returning it as the answer.
+///
+/// Deliberately narrow: short text only, an intent phrase at the start of the reply
+/// or of its last sentence, and never a question to the user (asking for a missing
+/// input is a legitimate end of turn) or a reply that already carries a result
+/// (a table, a list, several figures).
+bool looks_like_unfinished_intent(const QString& content);
+
 } // namespace fincept::ai_chat

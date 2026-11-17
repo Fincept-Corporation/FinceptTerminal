@@ -31,26 +31,50 @@ PARAMETERS:
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from decimal import Decimal
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import json
-import warnings
 from .core import EconomicsBase, ValidationError
 
-warnings.filterwarnings('ignore')
-plt.style.use('seaborn-v0_8')
+# matplotlib / seaborn are imported on first plot, not at module load (they cost ~1-2 s and
+# plt.style.use() changed global rcParams for every importer). No process-wide
+# warnings.filterwarnings('ignore') either.
+_PLT = None
+
+
+def _pyplot():
+    """matplotlib.pyplot with this module's style, imported on first use."""
+    global _PLT
+    if _PLT is None:
+        import matplotlib.pyplot as plt
+        try:
+            plt.style.use('seaborn-v0_8')
+        except (OSError, ValueError):  # style name differs across matplotlib versions
+            pass
+        _PLT = plt
+    return _PLT
 
 
 class VisualizationEngine(EconomicsBase):
-    """Advanced visualization for economic analysis"""
+    """Advanced visualization for economic analysis (returns matplotlib Figures)"""
 
     def __init__(self, precision: int = 8):
         super().__init__(precision)
         self.default_figsize = (12, 8)
         self.color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+
+    def calculate(self, plot_type: str, **kwargs) -> Dict[str, Any]:
+        """Dispatcher (EconomicsBase requires one; without it the class could not be created)."""
+        plots = {
+            'time_series': self.plot_time_series,
+            'correlation_matrix': self.plot_correlation_matrix,
+            'economic_indicators': self.plot_economic_indicators,
+            'forecast': self.plot_forecast,
+        }
+        if plot_type not in plots:
+            raise ValidationError(f"Unknown plot type: {plot_type}")
+        return plots[plot_type](**kwargs)
 
     def plot_time_series(self, data: pd.DataFrame, title: str = "Time Series Analysis",
                          figsize: tuple = None) -> Dict[str, Any]:
@@ -59,6 +83,7 @@ class VisualizationEngine(EconomicsBase):
         if not isinstance(data.index, pd.DatetimeIndex):
             raise ValidationError("Data must have datetime index")
 
+        plt = _pyplot()
         figsize = figsize or self.default_figsize
         fig, axes = plt.subplots(2, 2, figsize=(figsize[0], figsize[1] * 1.2))
         fig.suptitle(title, fontsize=16, fontweight='bold')
@@ -111,11 +136,13 @@ class VisualizationEngine(EconomicsBase):
     def plot_correlation_matrix(self, corr_matrix: pd.DataFrame,
                                 title: str = "Correlation Matrix") -> Dict[str, Any]:
         """Create correlation heatmap"""
+        import seaborn as sns
+        plt = _pyplot()
 
         fig, ax = plt.subplots(figsize=self.default_figsize)
 
         # Create heatmap
-        sns.heatmap(corr_matrix, annot=True, cmap='RdYlBu_r', center=0,
+        sns.heatmap(corr_matrix, annot=True, cmap='RdYlBu_r', center=0, ax=ax,
                     square=True, fmt='.2f', cbar_kws={'label': 'Correlation'})
 
         ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
@@ -130,6 +157,7 @@ class VisualizationEngine(EconomicsBase):
         n_indicators = len(data)
         if n_indicators == 0:
             raise ValidationError("No data provided")
+        plt = _pyplot()
 
         # Determine subplot layout
         if n_indicators <= 2:
@@ -177,6 +205,7 @@ class VisualizationEngine(EconomicsBase):
                       confidence_intervals: Optional[Dict[str, List[float]]] = None,
                       title: str = "Forecast Analysis") -> Dict[str, Any]:
         """Plot forecast with confidence intervals"""
+        plt = _pyplot()
 
         fig, ax = plt.subplots(figsize=self.default_figsize)
 
@@ -184,12 +213,14 @@ class VisualizationEngine(EconomicsBase):
         ax.plot(historical.index, historical.values,
                 label='Historical', color=self.color_palette[0], linewidth=2)
 
-        # Create forecast index
+        # Create forecast index. to_offset handles calendar frequencies ('ME', 'QE', 'B', ...)
+        # that pd.Timedelta cannot parse.
         last_date = historical.index[-1]
         if isinstance(last_date, pd.Timestamp):
             freq = pd.infer_freq(historical.index) or 'D'
-            forecast_index = pd.date_range(start=last_date + pd.Timedelta(freq),
-                                           periods=len(forecast), freq=freq)
+            offset = pd.tseries.frequencies.to_offset(freq)
+            forecast_index = pd.date_range(start=last_date + offset,
+                                           periods=len(forecast), freq=offset)
         else:
             forecast_index = range(len(historical), len(historical) + len(forecast))
 
@@ -219,6 +250,11 @@ class ReportGenerator(EconomicsBase):
     def __init__(self, precision: int = 8):
         super().__init__(precision)
         self.viz_engine = VisualizationEngine(precision)
+
+    def calculate(self, analysis_results: Dict[str, Any],
+                  report_title: str = "Economic Analysis Report") -> Dict[str, Any]:
+        """Dispatcher (EconomicsBase requires one; without it the class could not be created)."""
+        return self.generate_analysis_report(analysis_results, report_title)
 
     def generate_analysis_report(self, analysis_results: Dict[str, Any],
                                  report_title: str = "Economic Analysis Report") -> Dict[str, Any]:
@@ -291,7 +327,8 @@ class ReportGenerator(EconomicsBase):
         }
 
         if 'statistical' in analysis_type:
-            stats = results.get('basic_statistics', {})
+            # skewness / kurtosis live in shape_statistics, not basic_statistics
+            stats = {**results.get('basic_statistics', {}), **results.get('shape_statistics', {})}
             section['key_metrics'] = {
                 'Mean': stats.get('mean'),
                 'Std Dev': stats.get('standard_deviation'),
@@ -325,7 +362,7 @@ class ReportGenerator(EconomicsBase):
         interpretations = []
 
         skewness = stats.get('skewness')
-        if skewness:
+        if skewness is not None:
             skew_val = float(skewness)
             if abs(skew_val) < 0.5:
                 interpretations.append("Distribution is approximately symmetric")
@@ -334,8 +371,8 @@ class ReportGenerator(EconomicsBase):
             else:
                 interpretations.append("Distribution is negatively skewed (left tail)")
 
-        kurtosis = stats.get('kurtosis')
-        if kurtosis:
+        kurtosis = stats.get('kurtosis')  # Pearson kurtosis (normal = 3)
+        if kurtosis is not None:
             kurt_val = float(kurtosis)
             if kurt_val > 3:
                 interpretations.append("Distribution has heavy tails (leptokurtic)")
@@ -452,7 +489,8 @@ class ExportManager(EconomicsBase):
 
     def generate_pdf_summary(self, analysis_report: Dict[str, Any],
                              file_path: str = None) -> str:
-        """Generate PDF summary report"""
+        """Summary report as text; with file_path, written as a real PDF (A4 pages, rendered with
+        matplotlib's PDF backend), or as plain text when the path ends in .txt. Returns the text."""
 
         # Simple text-based summary for PDF generation
         summary_text = f"""
@@ -489,10 +527,30 @@ EXECUTIVE SUMMARY
                 summary_text += f"{i}. {rec}\n"
 
         if file_path:
-            with open(file_path, 'w') as f:
-                f.write(summary_text)
+            if str(file_path).lower().endswith('.txt'):
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(summary_text)
+            else:
+                self._write_text_pdf(summary_text, file_path)
 
         return summary_text
+
+    @staticmethod
+    def _write_text_pdf(text: str, file_path: str, lines_per_page: int = 60) -> None:
+        """Render monospaced text onto A4 pages of a PDF (no GUI backend involved)."""
+        import textwrap
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_pdf import PdfPages
+
+        lines = []
+        for raw in text.strip('\n').split('\n'):
+            lines.extend(textwrap.wrap(raw, 90) or [''])
+        with PdfPages(file_path) as pdf:
+            for start in range(0, max(len(lines), 1), lines_per_page):
+                fig = Figure(figsize=(8.27, 11.69))
+                fig.text(0.07, 0.95, '\n'.join(lines[start:start + lines_per_page]),
+                         va='top', ha='left', family='monospace', fontsize=9)
+                pdf.savefig(fig)
 
     def calculate(self, export_type: str, **kwargs) -> Any:
         """Main export dispatcher"""

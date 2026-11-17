@@ -3,13 +3,16 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "storage/repositories/WatchlistRepository.h"
+#include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QCursor>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QFontMetrics>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
@@ -33,8 +36,14 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     build_breaking_banner();
     root->addWidget(banner_widget_);
 
+    // Symbol context bar (hidden until the feed is narrowed to a symbol or the
+    // link group offers one) — above every page of the stack below.
+    build_context_bar();
+    root->addWidget(context_bar_);
+
     // Use a QStackedWidget so skeleton and list can swap cleanly
     auto* stack = new QStackedWidget(this);
+    stack_ = stack; // pages are created inside it (no re-parenting / re-styling)
 
     // QListView with model/delegate
     model_ = new NewsFeedModel(this);
@@ -49,12 +58,12 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     list_view_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list_view_->setMouseTracking(true);
     list_view_->setFrameShape(QFrame::NoFrame);
-    list_view_->setUniformItemSizes(true); // WIRE mode: all 26px — big perf win
+    list_view_->setUniformItemSizes(true); // WIRE mode: all one height — big perf win (off for cluster cards)
 
     // Skeleton loading widget
     build_skeleton();
 
-    // Empty-state widget — shown when fetch yields zero articles
+    // Empty-state widget — three kinds (no articles / filtered out / error), see EmptyKind.
     empty_state_ = new QWidget(stack);
     empty_state_->setObjectName("newsEmptyState");
     {
@@ -62,16 +71,56 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
         layout->setContentsMargins(24, 24, 24, 24);
         layout->setSpacing(8);
         layout->addStretch();
-        empty_state_title_ = new QLabel(tr("No articles available"), empty_state_);
+        empty_state_title_ = new QLabel(empty_state_);
         empty_state_title_->setObjectName("newsEmptyStateTitle");
         empty_state_title_->setAlignment(Qt::AlignCenter);
-        empty_state_hint_ = new QLabel(tr("Check your network connection and click Refresh to retry."), empty_state_);
+        empty_state_hint_ = new QLabel(empty_state_);
         empty_state_hint_->setObjectName("newsEmptyStateHint");
         empty_state_hint_->setAlignment(Qt::AlignCenter);
         empty_state_hint_->setWordWrap(true);
+        empty_state_detail_ = new QLabel(empty_state_);
+        empty_state_detail_->setObjectName("newsEmptyStateHint");
+        empty_state_detail_->setAlignment(Qt::AlignCenter);
+        empty_state_detail_->setWordWrap(true);
+        empty_state_detail_->setTextFormat(Qt::PlainText); // feed names / server errors
         layout->addWidget(empty_state_title_);
         layout->addWidget(empty_state_hint_);
+        layout->addWidget(empty_state_detail_);
+        auto* buttons = new QWidget(empty_state_);
+        auto* bl = new QHBoxLayout(buttons);
+        bl->setContentsMargins(0, 6, 0, 0);
+        bl->setSpacing(8);
+        bl->addStretch();
+        empty_clear_btn_ = new QPushButton(empty_state_);
+        empty_clear_btn_->setObjectName("newsCommandBarRefresh");
+        empty_clear_btn_->setCursor(Qt::PointingHandCursor);
+        connect(empty_clear_btn_, &QPushButton::clicked, this, &NewsFeedPanel::clear_filters_requested);
+        empty_retry_btn_ = new QPushButton(empty_state_);
+        empty_retry_btn_->setObjectName("newsCommandBarRefresh");
+        empty_retry_btn_->setCursor(Qt::PointingHandCursor);
+        connect(empty_retry_btn_, &QPushButton::clicked, this, &NewsFeedPanel::retry_requested);
+        empty_sources_btn_ = new QPushButton(empty_state_);
+        empty_sources_btn_->setObjectName("newsCommandBarSources");
+        empty_sources_btn_->setCursor(Qt::PointingHandCursor);
+        connect(empty_sources_btn_, &QPushButton::clicked, this, &NewsFeedPanel::manage_sources_requested);
+        empty_show_all_btn_ = new QPushButton(empty_state_);
+        empty_show_all_btn_->setObjectName("newsCommandBarRefresh");
+        empty_show_all_btn_->setCursor(Qt::PointingHandCursor);
+        connect(empty_show_all_btn_, &QPushButton::clicked, this, &NewsFeedPanel::context_clear_requested);
+        empty_search_btn_ = new QPushButton(empty_state_);
+        empty_search_btn_->setObjectName("newsCommandBarRefresh");
+        empty_search_btn_->setCursor(Qt::PointingHandCursor);
+        connect(empty_search_btn_, &QPushButton::clicked, this,
+                [this]() { emit symbol_text_search_requested(empty_symbol_); });
+        bl->addWidget(empty_show_all_btn_);
+        bl->addWidget(empty_search_btn_);
+        bl->addWidget(empty_clear_btn_);
+        bl->addWidget(empty_retry_btn_);
+        bl->addWidget(empty_sources_btn_);
+        bl->addStretch();
+        layout->addWidget(buttons);
         layout->addStretch();
+        apply_empty_texts();
     }
 
     stack->addWidget(list_view_);        // index 0 = feed
@@ -116,7 +165,8 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
 void NewsFeedPanel::build_breaking_banner() {
     banner_widget_ = new QWidget(this);
     banner_widget_->setObjectName("newsBreakingBanner");
-    banner_widget_->setFixedHeight(28);
+    // Minimums, not fixed sizes: the banner and its tag grow with the user's font.
+    banner_widget_->setMinimumHeight(28);
     banner_widget_->hide();
 
     auto* layout = new QHBoxLayout(banner_widget_);
@@ -125,7 +175,7 @@ void NewsFeedPanel::build_breaking_banner() {
 
     banner_tag_ = new QLabel(tr("FLASH"), banner_widget_);
     banner_tag_->setObjectName("newsBreakingTag");
-    banner_tag_->setFixedWidth(48);
+    banner_tag_->setMinimumWidth(48);
     banner_tag_->setAlignment(Qt::AlignCenter);
 
     // Headline and source come straight from the feed: pin them to plain text so
@@ -137,46 +187,109 @@ void NewsFeedPanel::build_breaking_banner() {
     banner_source_ = new QLabel(banner_widget_);
     banner_source_->setObjectName("newsBreakingSource");
     banner_source_->setTextFormat(Qt::PlainText);
-    banner_source_->setFixedWidth(80);
+    banner_source_->setFixedWidth(std::max(80, QFontMetrics(ui::fonts::font(-3)).horizontalAdvance(QString(10, QLatin1Char('M')))));
     banner_source_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     auto* dismiss_btn = new QPushButton("x", banner_widget_);
     dismiss_btn->setObjectName("newsBreakingDismiss");
-    dismiss_btn->setFixedSize(20, 20);
+    dismiss_btn->setMinimumSize(20, 20);
+    dismiss_btn->setToolTip(tr("Dismiss"));
     connect(dismiss_btn, &QPushButton::clicked, this, &NewsFeedPanel::clear_breaking);
+
+    // Pager over several breaking stories (‹ 1/3 ›).
+    banner_prev_ = new QPushButton(QString::fromUtf8("\xe2\x80\xb9"), banner_widget_);
+    banner_prev_->setObjectName("newsBreakingDismiss");
+    banner_prev_->setMinimumSize(20, 20);
+    banner_prev_->setToolTip(tr("Previous breaking story"));
+    connect(banner_prev_, &QPushButton::clicked, this, [this]() { show_banner_item(banner_index_ - 1); });
+    banner_pos_ = new QLabel(banner_widget_);
+    banner_pos_->setObjectName("newsBreakingSource");
+    banner_next_ = new QPushButton(QString::fromUtf8("\xe2\x80\xba"), banner_widget_);
+    banner_next_->setObjectName("newsBreakingDismiss");
+    banner_next_->setMinimumSize(20, 20);
+    banner_next_->setToolTip(tr("Next breaking story"));
+    connect(banner_next_, &QPushButton::clicked, this, [this]() { show_banner_item(banner_index_ + 1); });
 
     layout->addWidget(banner_tag_);
     layout->addWidget(banner_headline_, 1);
     layout->addWidget(banner_source_);
+    layout->addWidget(banner_prev_);
+    layout->addWidget(banner_pos_);
+    layout->addWidget(banner_next_);
     layout->addWidget(dismiss_btn);
+
+    // The whole banner (tag, headline, source) opens the story; the labels do
+    // not take mouse input, so a press anywhere but "x" reaches the banner.
+    banner_widget_->setCursor(Qt::PointingHandCursor);
+    banner_widget_->setToolTip(tr("Open this story"));
+    banner_widget_->installEventFilter(this);
+}
+
+bool NewsFeedPanel::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == banner_widget_ && event->type() == QEvent::MouseButtonRelease) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton && !banner_article_.id.isEmpty()) {
+            const services::NewsArticle article = banner_article_;
+            emit article_clicked(article);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void NewsFeedPanel::show_banner_item(int index) {
+    if (banner_items_.isEmpty())
+        return;
+    const int n = static_cast<int>(banner_items_.size());
+    banner_index_ = ((index % n) + n) % n;
+    const auto& lead = banner_items_[banner_index_];
+    banner_tag_->setText(lead.priority == services::Priority::FLASH ? tr("FLASH") : tr("BREAKING"));
+    banner_headline_->setText(lead.headline);
+    banner_headline_->setToolTip(lead.headline);
+    banner_source_->setText(lead.source.toUpper());
+    banner_article_ = lead;
+    const bool several = n > 1;
+    banner_prev_->setVisible(several);
+    banner_next_->setVisible(several);
+    banner_pos_->setVisible(several);
+    banner_pos_->setText(QStringLiteral("%1/%2").arg(banner_index_ + 1).arg(n));
 }
 
 void NewsFeedPanel::show_breaking(const QVector<services::NewsCluster>& breaking_clusters) {
     if (breaking_clusters.isEmpty())
         return;
 
-    const auto& cluster = breaking_clusters.first();
-    const auto& lead = cluster.lead_article;
     int64_t now = QDateTime::currentSecsSinceEpoch();
 
     // Global cooldown
     if (now < global_cooldown_until_)
         return;
 
-    // Per-event deduplication
-    QString key = lead.headline.left(50).toLower();
-    if (is_banner_duplicate(key))
+    // The freshest breaking stories not shown recently (the clusters arrive
+    // breaking-first, newest first).
+    QVector<services::NewsArticle> items;
+    QStringList keys;
+    for (const auto& cluster : breaking_clusters) {
+        const auto& lead = cluster.lead_article;
+        const QString key = lead.headline.left(50).toLower();
+        if (is_banner_duplicate(key) || keys.contains(key))
+            continue;
+        items.append(lead);
+        keys.append(key);
+        if (items.size() >= kMaxBannerItems)
+            break;
+    }
+    if (items.isEmpty())
         return;
+    const auto lead = items.first();
 
-    // Show banner
-    QString tag = lead.priority == services::Priority::FLASH ? tr("FLASH") : tr("BREAKING");
-    banner_tag_->setText(tag);
-    banner_headline_->setText(lead.headline);
-    banner_source_->setText(lead.source.toUpper());
+    banner_items_ = items;
+    show_banner_item(0);
     banner_widget_->show();
 
     // Record for dedup
-    recent_banners_.append({key, now});
+    for (const auto& key : std::as_const(keys))
+        recent_banners_.append({key, now});
     global_cooldown_until_ = now + BANNER_GLOBAL_COOLDOWN_SEC;
 
     // Cleanup old entries
@@ -201,7 +314,7 @@ void NewsFeedPanel::show_breaking(const QVector<services::NewsCluster>& breaking
 #endif
     }
 
-    LOG_INFO("NewsFeedPanel", QString("Breaking banner: %1").arg(lead.headline.left(60)));
+    LOG_DEBUG("NewsFeedPanel", QString("Breaking banner: %1").arg(lead.headline.left(60)));
 }
 
 void NewsFeedPanel::clear_breaking() {
@@ -219,7 +332,12 @@ bool NewsFeedPanel::is_banner_duplicate(const QString& headline) const {
 }
 
 void NewsFeedPanel::build_skeleton() {
-    skeleton_overlay_ = new QWidget(this);
+    // The loading page. It used to be 20 bare rows whose only colour was a 4-8 %
+    // white veil applied by a timer half a second after it appeared — on the
+    // dark theme an empty black area, often for the whole fetch. Now it says
+    // what is happening from the first frame: a title, live progress, and —
+    // when articles have arrived but the filters hide them all — a way out.
+    skeleton_overlay_ = new QWidget(stack_ ? static_cast<QWidget*>(stack_) : this);
     skeleton_overlay_->setObjectName("newsSkeletonOverlay");
     // No hide() — managed by QStackedWidget
 
@@ -227,50 +345,271 @@ void NewsFeedPanel::build_skeleton() {
     skel_layout->setContentsMargins(0, 0, 0, 0);
     skel_layout->setSpacing(1);
 
-    for (int i = 0; i < 20; ++i) {
+    auto* head = new QWidget(skeleton_overlay_);
+    head->setObjectName("newsLoadingHead");
+    head->setAttribute(Qt::WA_StyledBackground, true);
+    auto* head_layout = new QVBoxLayout(head);
+    head_layout->setContentsMargins(12, 10, 12, 10);
+    head_layout->setSpacing(4);
+    loading_title_ = new QLabel(head);
+    loading_title_->setObjectName("newsLoadingTitle");
+    loading_progress_ = new QLabel(head);
+    loading_progress_->setObjectName("newsLoadingHint");
+    loading_filtered_note_ = new QLabel(head);
+    loading_filtered_note_->setObjectName("newsLoadingHint");
+    loading_filtered_note_->setWordWrap(true);
+    loading_clear_btn_ = new QPushButton(head);
+    loading_clear_btn_->setObjectName("newsCommandBarRefresh");
+    loading_clear_btn_->setCursor(Qt::PointingHandCursor);
+    connect(loading_clear_btn_, &QPushButton::clicked, this, &NewsFeedPanel::clear_filters_requested);
+    auto* note_row = new QHBoxLayout();
+    note_row->setContentsMargins(0, 0, 0, 0);
+    note_row->setSpacing(8);
+    note_row->addWidget(loading_filtered_note_, 1);
+    note_row->addWidget(loading_clear_btn_, 0, Qt::AlignVCenter);
+    head_layout->addWidget(loading_title_);
+    head_layout->addWidget(loading_progress_);
+    head_layout->addLayout(note_row);
+    loading_filtered_note_->hide();
+    loading_clear_btn_->hide();
+    skel_layout->addWidget(head);
+
+    // Placeholder rows, the height of a WIRE row of NewsFeedDelegate.
+    const int row_h = std::max(26, QFontMetrics(ui::fonts::font(-2)).height() + 10);
+    for (int i = 0; i < 12; ++i) {
         auto* row = new QWidget(skeleton_overlay_);
-        row->setFixedHeight(26);
+        row->setFixedHeight(row_h);
         row->setObjectName("newsSkeletonRow");
+        row->setAttribute(Qt::WA_StyledBackground, true);
         skel_layout->addWidget(row);
     }
     skel_layout->addStretch();
+    skeleton_overlay_->setAccessibleName(tr("Loading news"));
+    apply_loading_texts();
+}
 
-    skeleton_anim_timer_ = new QTimer(this);
-    skeleton_anim_timer_->setInterval(500);
-    connect(skeleton_anim_timer_, &QTimer::timeout, this, [this]() {
-        skeleton_phase_ = (skeleton_phase_ + 1) % 2;
-        if (skeleton_overlay_->isVisible()) {
-            // Toggle between two opacity levels via property
-            QString opacity = skeleton_phase_ == 0 ? "0.04" : "0.08";
-            skeleton_overlay_->setStyleSheet(
-                QString("QWidget#newsSkeletonRow { background: rgba(255,255,255,%1); }").arg(opacity));
-        }
-    });
+void NewsFeedPanel::apply_loading_texts() {
+    if (!loading_title_)
+        return;
+    loading_title_->setText(tr("LOADING NEWS"));
+    QString progress;
+    if (loading_total_ > 0)
+        progress = tr("%1 of %2 sources answered").arg(loading_done_).arg(loading_total_);
+    else
+        progress = tr("Contacting news sources…");
+    if (loading_articles_ > 0)
+        progress += QStringLiteral(" · ") + tr("%n article(s) received", "", loading_articles_);
+    loading_progress_->setText(progress);
+    loading_filtered_note_->setText(
+        tr("Articles have arrived, but none match the current filters (time range, category, region, language, "
+           "search). More sources are still loading."));
+    loading_clear_btn_->setText(tr("CLEAR FILTERS"));
 }
 
 void NewsFeedPanel::remove_skeleton() {
     stack_->setCurrentWidget(list_view_);
-    skeleton_anim_timer_->stop();
 }
 
 void NewsFeedPanel::set_loading(bool loading) {
     is_loading_ = loading;
     if (loading) {
         stack_->setCurrentWidget(skeleton_overlay_);
-        skeleton_anim_timer_->start();
     } else {
-        remove_skeleton();
+        loading_done_ = loading_total_ = loading_articles_ = 0;
+        set_loading_filtered_out(false);
+        apply_loading_texts();
+        if (stack_->currentWidget() == skeleton_overlay_)
+            remove_skeleton();
     }
 }
 
-void NewsFeedPanel::set_empty_state(bool empty) {
-    if (is_loading_)
-        return; // skeleton wins until loading completes
+void NewsFeedPanel::set_loading_progress(int sources_done, int sources_total, int articles) {
+    if (loading_done_ == sources_done && loading_total_ == sources_total && loading_articles_ == articles)
+        return;
+    loading_done_ = sources_done;
+    loading_total_ = sources_total;
+    loading_articles_ = articles;
+    apply_loading_texts();
+}
+
+void NewsFeedPanel::set_loading_filtered_out(bool filtered_out) {
+    if (!loading_filtered_note_)
+        return;
+    loading_filtered_note_->setVisible(filtered_out);
+    loading_clear_btn_->setVisible(filtered_out);
+}
+
+void NewsFeedPanel::show_list() {
+    is_loading_ = false;
+    set_loading_filtered_out(false);
+    if (stack_->currentWidget() != list_view_)
+        stack_->setCurrentWidget(list_view_);
+}
+
+void NewsFeedPanel::set_empty_state(bool empty, EmptyKind kind, const QString& detail) {
+    // The screen decides between list / loading / empty; an empty state ends
+    // the loading page.
     if (empty) {
+        is_loading_ = false;
+        empty_kind_ = kind;
+        // The symbol empty state names its symbol in the title, not a detail line.
+        empty_symbol_ = kind == EmptyKind::Symbol ? detail : QString();
+        empty_state_detail_->setText(kind == EmptyKind::Symbol ? QString() : detail);
+        empty_state_detail_->setVisible(kind != EmptyKind::Symbol && !detail.isEmpty());
+        apply_empty_texts();
         stack_->setCurrentWidget(empty_state_);
     } else if (stack_->currentWidget() == empty_state_) {
         stack_->setCurrentWidget(list_view_);
     }
+}
+
+void NewsFeedPanel::apply_empty_texts() {
+    switch (empty_kind_) {
+        case EmptyKind::Filtered:
+            empty_state_title_->setText(tr("No articles match the current filters"));
+            empty_state_hint_->setText(tr("Widen the time range, pick another category, region or language, or "
+                                          "clear the search."));
+            break;
+        case EmptyKind::Error:
+            empty_state_title_->setText(tr("News could not be loaded"));
+            empty_state_hint_->setText(tr("Every enabled feed failed on the last refresh. Check the network, then "
+                                          "retry; failing feeds are listed below."));
+            break;
+        case EmptyKind::NoArticles:
+            empty_state_title_->setText(tr("No articles yet"));
+            empty_state_hint_->setText(tr("The enabled feeds returned no articles. Enable more sources or refresh."));
+            break;
+        case EmptyKind::Symbol:
+            empty_state_title_->setText(tr("No stories tagged %1").arg(empty_symbol_));
+            empty_state_hint_->setText(tr("No article in the current time range and filters names %1 as a security. "
+                                          "Show all news, widen the time range, or search the headlines for it as "
+                                          "text.")
+                                           .arg(empty_symbol_));
+            break;
+    }
+    const bool symbol = empty_kind_ == EmptyKind::Symbol;
+    const bool problem = empty_kind_ == EmptyKind::NoArticles || empty_kind_ == EmptyKind::Error;
+    empty_clear_btn_->setText(tr("CLEAR FILTERS"));
+    empty_retry_btn_->setText(tr("RETRY"));
+    empty_sources_btn_->setText(tr("SOURCES"));
+    empty_show_all_btn_->setText(tr("SHOW ALL NEWS"));
+    empty_search_btn_->setText(tr("SEARCH HEADLINES"));
+    empty_search_btn_->setToolTip(tr("Search the headlines for \"%1\" as text").arg(empty_symbol_));
+    empty_clear_btn_->setVisible(empty_kind_ == EmptyKind::Filtered);
+    empty_retry_btn_->setVisible(problem);
+    empty_sources_btn_->setVisible(problem);
+    empty_show_all_btn_->setVisible(symbol);
+    empty_search_btn_->setVisible(symbol);
+}
+
+// ── Symbol context bar ──────────────────────────────────────────────────────
+
+void NewsFeedPanel::build_context_bar() {
+    context_bar_ = new QWidget(this);
+    context_bar_->setObjectName("newsContextBar");
+    context_bar_->setAttribute(Qt::WA_StyledBackground, true);
+    context_bar_->setMinimumHeight(28);
+    context_bar_->hide();
+
+    auto* layout = new QHBoxLayout(context_bar_);
+    layout->setContentsMargins(8, 2, 6, 2);
+    layout->setSpacing(6);
+
+    context_lead_ = new QLabel(context_bar_);
+    context_lead_->setObjectName("newsContextLead");
+    context_symbol_ = new QLabel(context_bar_);
+    context_symbol_->setObjectName("newsContextSymbol");
+    context_symbol_->setTextFormat(Qt::PlainText);
+    context_note_ = new QLabel(context_bar_);
+    context_note_->setObjectName("newsContextNote");
+    context_note_->setTextFormat(Qt::PlainText);
+    // The note gives way first on a narrow feed; the buttons stay reachable.
+    context_note_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    context_note_->setMinimumWidth(0);
+
+    context_show_btn_ = new QPushButton(context_bar_);
+    context_show_btn_->setObjectName("newsCommandBarRefresh");
+    context_show_btn_->setCursor(Qt::PointingHandCursor);
+    connect(context_show_btn_, &QPushButton::clicked, this, &NewsFeedPanel::context_show_requested);
+
+    context_follow_btn_ = new QPushButton(context_bar_);
+    context_follow_btn_->setObjectName("newsContextFollow");
+    context_follow_btn_->setCheckable(true);
+    context_follow_btn_->setCursor(Qt::PointingHandCursor);
+    connect(context_follow_btn_, &QPushButton::toggled, this, &NewsFeedPanel::follow_link_toggled);
+
+    context_clear_btn_ = new QPushButton(context_bar_);
+    context_clear_btn_->setObjectName("newsCommandBarRefresh");
+    context_clear_btn_->setCursor(Qt::PointingHandCursor);
+    connect(context_clear_btn_, &QPushButton::clicked, this, &NewsFeedPanel::context_clear_requested);
+
+    layout->addWidget(context_lead_);
+    layout->addWidget(context_symbol_);
+    layout->addWidget(context_note_, 1);
+    layout->addWidget(context_show_btn_);
+    layout->addWidget(context_follow_btn_);
+    layout->addWidget(context_clear_btn_);
+    context_bar_->setAccessibleName(tr("Symbol filter"));
+}
+
+void NewsFeedPanel::set_context_bar(const ContextBar& state) {
+    context_ = state;
+    if (state.mode == ContextBar::Mode::Hidden || state.symbol.isEmpty()) {
+        context_bar_->hide();
+        return;
+    }
+    apply_context_texts();
+    context_bar_->show();
+}
+
+void NewsFeedPanel::apply_context_texts() {
+    if (!context_bar_)
+        return;
+    const bool active = context_.mode == ContextBar::Mode::Active;
+    const bool linked = !context_.group.isNull();
+    context_symbol_->setText(context_.symbol);
+    if (active) {
+        context_lead_->setText(tr("NEWS FOR"));
+        QString note;
+        if (context_.from_link && context_.fallback)
+            note = tr("nothing tagged %1 yet — showing all news").arg(context_.symbol);
+        else if (context_.from_link)
+            note = tr("following link group %1").arg(context_.group);
+        else
+            note = tr("stories tagged with this symbol");
+        context_note_->setText(note);
+        context_note_->setToolTip(note);
+        context_clear_btn_->setText(tr("SHOW ALL NEWS"));
+        context_clear_btn_->setToolTip(tr("Remove the symbol filter"));
+    } else {
+        context_lead_->setText(tr("GROUP %1 IS ON").arg(context_.group));
+        const QString note = tr("the feed is not filtered");
+        context_note_->setText(note);
+        context_note_->setToolTip(tr("Another panel in link group %1 selected %2. The news feed only narrows to it "
+                                     "when you ask (SHOW ITS NEWS) or follow the link group.")
+                                      .arg(context_.group)
+                                      .arg(context_.symbol));
+        context_clear_btn_->setText(QString(QChar(0x00D7))); // ×
+        context_clear_btn_->setToolTip(tr("Dismiss"));
+    }
+    context_show_btn_->setText(tr("SHOW ITS NEWS"));
+    context_show_btn_->setToolTip(tr("Show only stories tagged %1").arg(context_.symbol));
+    context_show_btn_->setVisible(!active);
+    // FOLLOW LINK only means something while the screen is in a link group.
+    context_follow_btn_->setText(tr("FOLLOW LINK"));
+    context_follow_btn_->setToolTip(
+        tr("Follow link group %1: when another panel in the group selects a symbol, show that symbol's news here "
+           "(the whole feed stays visible while nothing is tagged with it).")
+            .arg(context_.group));
+    context_follow_btn_->setVisible(linked);
+    {
+        QSignalBlocker block(context_follow_btn_); // reflect state without re-emitting
+        context_follow_btn_->setChecked(context_.follow);
+    }
+}
+
+void NewsFeedPanel::set_view_mode_hint(const QString& mode) {
+    list_view_->setUniformItemSizes(mode != QLatin1String("CLUSTERS"));
 }
 
 void NewsFeedPanel::capture_scroll_anchor() {
@@ -475,9 +814,10 @@ void NewsFeedPanel::changeEvent(QEvent* event) {
 
 void NewsFeedPanel::retranslateUi() {
     if (empty_state_title_)
-        empty_state_title_->setText(tr("No articles available"));
-    if (empty_state_hint_)
-        empty_state_hint_->setText(tr("Check your network connection and click Refresh to retry."));
+        apply_empty_texts();
+    apply_loading_texts();
+    if (context_bar_ && context_bar_->isVisible())
+        apply_context_texts();
     // banner_tag_ reflects the live FLASH/BREAKING priority of the current
     // banner and refreshes on the next show_breaking() — not forced here.
 }

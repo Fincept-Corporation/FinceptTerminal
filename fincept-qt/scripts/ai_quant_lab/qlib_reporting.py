@@ -23,6 +23,8 @@ import os
 import json
 import math
 import traceback
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 from typing import Dict, List, Any
 
 import numpy as np
@@ -258,6 +260,15 @@ def op_cumulative_returns(data):
       returns           : list[float]  (required, >= 5)
       benchmark_returns : list[float]  (optional, must match length if provided)
       title             : str          (optional, label only)
+
+    Annualisation (daily returns, 252 trading days a year), one convention throughout:
+      annualized return   geometric: (1 + total) ** (252 / n) - 1
+      volatility / TE     std of the daily series (population, ddof=0) * sqrt(252)
+      Sharpe              mean(daily) * 252 / (std(daily) * sqrt(252))  (no risk-free rate)
+      active return       mean(daily excess) * 252   (arithmetic: the IR numerator)
+      information ratio   active return / annualised tracking error
+    A ratio whose denominator is zero (a constant series, a portfolio identical to its
+    benchmark) is undefined and reported as null, never 0.
     """
     rets = _coerce_floats(data.get("returns"), "returns")
     _require_min_length(rets, 5, "returns")
@@ -283,7 +294,7 @@ def op_cumulative_returns(data):
     ann_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if cum[-1] > 0 else -1.0
     daily_vol = float(arr.std())
     ann_vol = daily_vol * math.sqrt(252)
-    sharpe = (float(arr.mean()) / daily_vol * math.sqrt(252)) if daily_vol > 0 else 0.0
+    sharpe = (float(arr.mean()) * 252.0 / ann_vol) if ann_vol > 1e-12 else None
     win_rate = float((arr > 0).mean() * 100.0)
     best_day = float(arr.max())
     worst_day = float(arr.min())
@@ -308,7 +319,7 @@ def op_cumulative_returns(data):
         "annualized_return_pct": _safe_float(ann_return * 100.0),
         "annualized_volatility": _safe_float(ann_vol),
         "annualized_volatility_pct": _safe_float(ann_vol * 100.0),
-        "sharpe_ratio": _safe_float(sharpe),
+        "sharpe_ratio": _safe_float(sharpe, None),
         "max_drawdown": _safe_float(max_dd),
         "max_drawdown_pct": _safe_float(max_dd * 100.0),
         "max_drawdown_peak_index": peak_idx,
@@ -326,16 +337,22 @@ def op_cumulative_returns(data):
         bench_total = float(bench_cum[-1] - 1.0)
         bench_ann = (1.0 + bench_total) ** (1.0 / years) - 1.0 if bench_cum[-1] > 0 else -1.0
         excess = arr - bench_arr
-        te = float(excess.std()) * math.sqrt(252)
-        info_ratio = (float(excess.mean()) * math.sqrt(252) / te) if te > 0 else 0.0
+        te = float(excess.std()) * math.sqrt(252)            # annualised tracking error
+        active_return = float(excess.mean()) * 252.0          # annualised mean excess return
+        # Both sides annualised: mean * 252 over std * sqrt(252). (It used to be
+        # mean * sqrt(252) / te, i.e. sqrt(252) times too small.) No tracking error ->
+        # the ratio is undefined: null, not 0.
+        info_ratio = (active_return / te) if te > 1e-12 else None
         payload.update({
             "benchmark_total_return": _safe_float(bench_total),
             "benchmark_total_return_pct": _safe_float(bench_total * 100.0),
             "benchmark_annualized_return_pct": _safe_float(bench_ann * 100.0),
             "benchmark_final_value": _safe_float(bench_cum[-1]),
+            # cumulative excess over the whole period (not annualised)
             "alpha_pct": _safe_float((total_return - bench_total) * 100.0),
+            "active_return_annualized_pct": _safe_float(active_return * 100.0),
             "tracking_error_pct": _safe_float(te * 100.0),
-            "information_ratio": _safe_float(info_ratio),
+            "information_ratio": _safe_float(info_ratio, None),
             "benchmark_curve": _sample_curve(list(zip(range(n), bench_cum.tolist())), 300),
         })
 
@@ -606,17 +623,19 @@ def dispatch(operation, data):
         return {"success": False, "operation": operation, "error": str(e),
                 "error_kind": "validation"}
     except Exception as e:
+        # The traceback is a diagnostic: stderr, not the payload the panel renders.
+        traceback.print_exc(file=sys.stderr)
         return {"success": False, "operation": operation, "error": str(e),
-                "error_kind": "runtime", "traceback": traceback.format_exc()}
+                "error_kind": "runtime"}
 
 
 def main(args):
     if len(args) < 1:
-        print(json.dumps({
+        fincept_json.emit({
             "success": False,
             "error": "Usage: qlib_reporting.py <operation> [json_data]",
             "error_kind": "usage",
-        }))
+        })
         return
     operation = args[0]
     data = {}
@@ -624,13 +643,13 @@ def main(args):
         try:
             data = json.loads(args[1])
         except json.JSONDecodeError as e:
-            print(json.dumps({
+            fincept_json.emit({
                 "success": False, "operation": operation,
                 "error": f"Invalid JSON: {e}", "error_kind": "validation",
-            }))
+            })
             return
     result = dispatch(operation, data)
-    print(json.dumps(result, default=str))
+    fincept_json.emit(result)
 
 
 if __name__ == "__main__":

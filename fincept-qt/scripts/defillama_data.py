@@ -8,6 +8,7 @@ import json
 import os
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 BASE_URL = "https://api.llama.fi"
 COINS_URL = "https://coins.llama.fi"
@@ -40,7 +41,15 @@ def get_protocols() -> Any:
     """Get list of all DeFi protocols with TVL data."""
     data = _make_request("protocols")
     if isinstance(data, list):
-        return {"protocols": data[:200], "total_count": len(data)}
+        protocols = data[:200]
+        for p in protocols:
+            # listedAt is Unix seconds and audits a count sent as text ("2")
+            if isinstance(p, dict):
+                if isinstance(p.get("listedAt"), (int, float)):
+                    p["listedAt"] = fc.epoch_iso(p["listedAt"])
+                if isinstance(p.get("audits"), str):
+                    p["audits"] = fc.number(p["audits"])
+        return {"protocols": protocols, "total_count": len(data)}
     return data
 
 

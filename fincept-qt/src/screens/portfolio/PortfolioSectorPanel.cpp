@@ -1,421 +1,267 @@
 // src/screens/portfolio/PortfolioSectorPanel.cpp
 #include "screens/portfolio/PortfolioSectorPanel.h"
 
-#include "screens/portfolio/PortfolioPanelHeader.h"
+#include "screens/portfolio/PortfolioCorrelation.h"
+#include "screens/portfolio/PortfolioFormat.h"
 #include "services/portfolio/PortfolioService.h"
+#include "ui/charts/DonutChart.h"
+#include "ui/charts/MatrixHeatmap.h"
+#include "ui/formatting/FormatWidgets.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/PanelHeader.h"
+#include "ui/widgets/ThemeHelpers.h"
 
-#include <QChart>
+#include <QComboBox>
 #include <QEvent>
-#include <QGridLayout>
+#include <QLabel>
 #include <QHBoxLayout>
-#include <QMouseEvent>
-#include <QPieSeries>
-#include <QStringList>
+#include <QMap>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSplitter>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
-#include <optional>
 
 namespace fincept::screens {
 
-// 16 sector colors
-static const QColor kSectorColors[] = {
-    QColor("#0891b2"), // Technology
-    QColor("#16a34a"), // Healthcare
-    QColor("#d97706"), // Financial Services
-    QColor("#ca8a04"), // Energy
-    QColor("#9333ea"), // Consumer Cyclical
-    QColor("#84cc16"), // Real Estate
-    QColor("#0d9488"), // Utilities
-    QColor("#f97316"), // Cryptocurrency
-    QColor("#60a5fa"), // Communication
-    QColor("#f43f5e"), // Consumer Defensive
-    QColor("#a78bfa"), // Industrials
-    QColor("#fbbf24"), // Basic Materials
-    QColor("#2dd4bf"), // Bonds / Fixed Income
-    QColor("#fb923c"), // Commodities
-    QColor("#818cf8"), // ETF / Index
-    QColor("#e879f9"), // Unknown
-};
-
-QColor PortfolioSectorPanel::sector_color(int index) {
-    return kSectorColors[index % 16];
-}
-
 PortfolioSectorPanel::PortfolioSectorPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
+    ui::formatting::on_format_changed(this, [this]() { update_donut(); }); // slice values re-format
+}
+
+QColor PortfolioSectorPanel::sector_color(int index) {
+    return ui::colors::chart_color(index);
 }
 
 void PortfolioSectorPanel::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-
+    // One selector stylesheet, before any child exists (the theme manager's
+    // re-style pass keeps it in step with theme / font changes).
+    apply_styles();
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // ── Unified panel header: ▌SECTORS ───────────────────────────────────────
-    // The two inner sub-sections (allocation donut + correlation matrix) sit
-    // beneath this single header, separated by a hairline. The old design
-    // gave each a 9-11px inline title; consolidating them here keeps the
-    // panel header treatment consistent with HOLDINGS / PERFORMANCE / etc.
-    auto panel_hdr = make_panel_header(tr("SECTORS"), this);
-    title_label_ = panel_hdr.title_label;
-    layout->addWidget(panel_hdr.header);
+    auto header = ui::make_panel_header(tr("ALLOCATION"), this);
+    title_label_ = header.title_label;
+    dim_cb_ = new QComboBox(this);
+    using AD = portfolio::AllocationDimension;
+    for (const AD d : {AD::Sector, AD::AssetClass, AD::Region, AD::Currency})
+        dim_cb_->addItem(pfmt::dimension_name(d), static_cast<int>(d));
+    dim_cb_->setToolTip(tr("Group the donut by"));
+    connect(dim_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { update_donut(); });
+    header.controls_slot->layout()->addWidget(dim_cb_);
+    layout->addWidget(header.header);
 
-    // ── Top: Sector Allocation (60%) ──────────────────────────────────────────
-    auto* sector_widget = new QWidget(this);
-    auto* sector_layout = new QVBoxLayout(sector_widget);
-    sector_layout->setContentsMargins(8, 6, 8, 4);
-    sector_layout->setSpacing(4);
+    auto* split = new QSplitter(Qt::Vertical, this);
+    split->setChildrenCollapsible(false);
+    donut_ = new ui::DonutChart(split);
+    donut_->set_max_slices(8);
+    donut_->setMinimumHeight(ui::metrics::height(150));
+    connect(donut_, &ui::DonutChart::slice_clicked, this, [this](const QString& id) {
+        if (static_cast<portfolio::AllocationDimension>(dim_cb_->currentData().toInt()) !=
+                portfolio::AllocationDimension::Sector ||
+            id == QLatin1String("__other__"))
+            return;
+        select_sector(id == selected_sector_ ? QString() : id);
+    });
+    split->addWidget(donut_);
 
-    auto* donut_row = new QHBoxLayout;
+    auto* corr_box = new QWidget(split);
+    auto* cv = new QVBoxLayout(corr_box);
+    cv->setContentsMargins(0, 0, 0, 0);
+    cv->setSpacing(0);
+    corr_title_ = new QLabel(corr_box);
+    corr_title_->setObjectName("pspCorrTitle");
+    corr_title_->setContentsMargins(10, 4, 10, 2);
+    cv->addWidget(corr_title_);
+    auto* scroll = new QScrollArea(corr_box);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    corr_ = new ui::MatrixHeatmap(scroll);
+    corr_->set_min_cell_size(14);
+    scroll->setWidget(corr_);
+    cv->addWidget(scroll, 1);
+    auto* note_row = new QHBoxLayout;
+    note_row->setContentsMargins(0, 0, 8, 0);
+    note_row->setSpacing(6);
+    corr_note_ = new QLabel(corr_box);
+    corr_note_->setObjectName("pspCorrNote");
+    corr_note_->setWordWrap(true);
+    corr_note_->setContentsMargins(10, 2, 10, 4);
+    note_row->addWidget(corr_note_, 1);
+    corr_retry_btn_ = new QPushButton(tr("RETRY"), corr_box);
+    corr_retry_btn_->setObjectName("pspRetry");
+    corr_retry_btn_->setCursor(Qt::PointingHandCursor);
+    corr_retry_btn_->setToolTip(tr("Download the price history again"));
+    corr_retry_btn_->setVisible(false);
+    connect(corr_retry_btn_, &QPushButton::clicked, this, [this]() {
+        if (corr_retry_)
+            corr_retry_();
+    });
+    note_row->addWidget(corr_retry_btn_, 0, Qt::AlignVCenter);
+    cv->addLayout(note_row);
+    split->addWidget(corr_box);
+    split->setStretchFactor(0, 1);
+    split->setStretchFactor(1, 1);
+    layout->addWidget(split, 1);
 
-    auto* chart = new QChart;
-    chart->setBackgroundBrush(Qt::transparent);
-    chart->setMargins(QMargins(0, 0, 0, 0));
-    chart->legend()->setVisible(false);
-    chart->setAnimationOptions(QChart::NoAnimation);
+    retranslateUi();
+}
 
-    donut_view_ = new QChartView(chart);
-    donut_view_->setRenderHint(QPainter::Antialiasing);
-    donut_view_->setFixedSize(130, 130);
-    donut_view_->setStyleSheet("border:none; background:transparent;");
-    donut_row->addWidget(donut_view_);
-
-    legend_widget_ = new QWidget(this);
-    legend_widget_->setStyleSheet("background:transparent;");
-    donut_row->addWidget(legend_widget_, 1);
-
-    sector_layout->addLayout(donut_row, 1);
-    layout->addWidget(sector_widget, 6);
-
-    // Separator
-    auto* sep = new QWidget(this);
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    layout->addWidget(sep);
-
-    // ── Bottom: Correlation (40%) ─────────────────────────────────────────────
-    auto* corr_container = new QWidget(this);
-    auto* corr_layout = new QVBoxLayout(corr_container);
-    corr_layout->setContentsMargins(8, 4, 8, 4);
-    corr_layout->setSpacing(4);
-
-    // Inline sub-section title (smaller weight than the unified panel header
-    // above — this is a sub-block within ▌SECTORS, not a peer panel).
-    auto* corr_header = new QHBoxLayout;
-    corr_title_ = new QLabel(tr("CORRELATION"));
-    corr_title_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
-    corr_header->addWidget(corr_title_);
-
-    // Real Pearson correlation of daily returns (PortfolioService analytics) — the old
-    // "P&L return proxy" caption described a method that no longer exists.
-    corr_note_ = new QLabel(
-        tr("(%1-day daily returns, top 6 by weight)").arg(services::PortfolioService::kCorrelationWindowDays));
-    corr_note_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_DIM()));
-    corr_header->addWidget(corr_note_);
-    corr_header->addStretch();
-    corr_layout->addLayout(corr_header);
-
-    corr_widget_ = new QWidget(this);
-    corr_widget_->setStyleSheet("background:transparent;");
-    corr_layout->addWidget(corr_widget_, 1);
-
-    layout->addWidget(corr_container, 4);
+void PortfolioSectorPanel::apply_styles() {
+    setStyleSheet(QString("#pspCorrTitle { color:%1; font-size:%2px; font-weight:700; letter-spacing:1px; }"
+                          "#pspCorrNote { color:%3; font-size:%4px; }"
+                          "QComboBox { background:%5; color:%6; border:1px solid %7; padding:1px 6px; font-size:%4px; }"
+                          "QPushButton#pspRetry { background:transparent; color:%8; border:1px solid %9;"
+                          "  padding:1px 8px; font-size:%4px; font-weight:700; }"
+                          "QPushButton#pspRetry:hover { border-color:%8; }")
+                      .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::px(-4), ui::colors::TEXT_TERTIARY(),
+                           ui::fonts::px(-4), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                           ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BORDER_MED()));
 }
 
 void PortfolioSectorPanel::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
-
-    // Keep the active sector filter across a refresh as long as that sector
-    // still exists. Clearing it unconditionally desynced this panel from the
-    // blotter: the highlight disappeared here every 60 s while the blotter
-    // stayed filtered, with no visible way to tell why rows were missing.
-    if (!selected_sector_.isEmpty()) {
-        bool still_present = false;
-        for (const auto& h : holdings_) {
-            const QString sec = h.sector.isEmpty() ? tr("Unclassified") : h.sector;
-            if (sec == selected_sector_) {
-                still_present = true;
-                break;
-            }
-        }
-        if (!still_present) {
-            selected_sector_.clear();
-            emit sector_selected({}); // tell the blotter to drop the filter too
-        }
-    }
-
-    // Correlation is deliberately NOT cleared: it is keyed by symbol pair, so
-    // stale entries stay valid and entries for removed symbols are simply never
-    // looked up. Wiping it made the whole matrix flash back to "…" on every
-    // poll while the async refetch was in flight (violates P11).
     update_donut();
     update_correlation();
 }
 
+void PortfolioSectorPanel::set_currency(const QString& currency) {
+    if (!currency.isEmpty())
+        currency_ = currency;
+    update_donut();
+}
+
+void PortfolioSectorPanel::set_allocation(const portfolio::AllocationReport& report) {
+    report_ = report;
+    have_report_ = true;
+    update_donut();
+}
+
 void PortfolioSectorPanel::set_correlation(const QHash<QString, double>& matrix) {
     corr_matrix_ = matrix;
+    corr_pending_ = false;
+    corr_error_.clear();
     update_correlation();
 }
 
-void PortfolioSectorPanel::on_sector_legend_clicked(const QString& sector) {
-    if (selected_sector_ == sector)
-        selected_sector_.clear(); // toggle off
-    else
-        selected_sector_ = sector;
-    emit sector_selected(selected_sector_);
-    update_donut(); // refresh to show highlight
+void PortfolioSectorPanel::set_correlation_pending(bool pending) {
+    if (corr_pending_ == pending)
+        return;
+    corr_pending_ = pending;
+    if (pending)
+        corr_error_.clear(); // a new run replaces the old failure
+    update_correlation();
 }
 
-void PortfolioSectorPanel::set_currency(const QString& currency) {
-    currency_ = currency;
+void PortfolioSectorPanel::set_correlation_error(const QString& message) {
+    if (corr_error_ == message && !corr_pending_)
+        return;
+    corr_error_ = message;
+    if (!message.isEmpty())
+        corr_pending_ = false;
+    update_correlation();
+}
+
+void PortfolioSectorPanel::select_sector(const QString& sector) {
+    selected_sector_ = sector;
+    emit sector_selected(sector);
+    update_donut();
 }
 
 void PortfolioSectorPanel::update_donut() {
-    auto* chart = donut_view_->chart();
-    chart->removeAllSeries();
-
-    // Tear down the legend rows. Hoisted above the empty check so selling the last
-    // position clears them too (they used to outlive the donut they described).
-    auto clear_legend = [this]() {
-        if (auto* old = legend_widget_->layout()) {
-            QLayoutItem* item;
-            while ((item = old->takeAt(0)) != nullptr) {
-                if (item->widget())
-                    item->widget()->deleteLater();
-                delete item;
-            }
-            delete old;
+    using AD = portfolio::AllocationDimension;
+    const auto dim = static_cast<AD>(dim_cb_->currentData().toInt());
+    QVector<ui::DonutSlice> slices;
+    if (dim == AD::Sector || !have_report_) {
+        // Sector straight from the holdings (always available), valued positions only.
+        QMap<QString, double> by;
+        for (const auto& h : holdings_)
+            if (h.valued() && h.market_value > 0)
+                by[h.sector.isEmpty() ? tr("Unclassified") : h.sector] += h.market_value;
+        QVector<QPair<QString, double>> v;
+        for (auto it = by.constBegin(); it != by.constEnd(); ++it)
+            v.append({it.key(), it.value()});
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        for (const auto& [name, value] : v)
+            slices.append({name, name == selected_sector_ ? QStringLiteral("▶ %1").arg(name) : name, value, {}});
+    } else {
+        for (const auto& b : report_.breakdowns) {
+            if (b.dimension != dim)
+                continue;
+            for (const auto& s : b.slices)
+                slices.append({s.key, pfmt::slice_label(dim, s.key), s.value, {}});
         }
-    };
-
-    if (holdings_.isEmpty()) {
-        clear_legend();
-        return;
     }
-
-    // Group by inferred sector using actual portfolio weights
-    QHash<QString, double> sector_weights;
-    QHash<QString, double> sector_pnl;
-    QHash<QString, int> sector_counts;
-
-    for (const auto& h : holdings_) {
-        QString sector = h.sector.isEmpty() ? tr("Unclassified") : h.sector;
-        sector_weights[sector] += h.weight;
-        sector_pnl[sector] += h.unrealized_pnl;
-        sector_counts[sector]++;
-    }
-
-    auto* series = new QPieSeries;
-    series->setHoleSize(0.55);
-
-    QVector<QPair<QString, double>> sorted;
-    for (auto it = sector_weights.begin(); it != sector_weights.end(); ++it)
-        sorted.append({it.key(), it.value()});
-    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
-
-    for (int i = 0; i < sorted.size(); ++i) {
-        const QString& sec = sorted[i].first;
-        auto* slice = series->append(sec, sorted[i].second);
-        slice->setColor(sector_color(i));
-        const bool active = (sec == selected_sector_);
-        slice->setBorderColor(active ? QColor(ui::colors::AMBER()) : QColor(ui::colors::BG_BASE()));
-        slice->setBorderWidth(active ? 2 : 1);
-        if (active)
-            slice->setExploded(true);
-    }
-
-    // Wire slice clicks
-    connect(series, &QPieSeries::clicked, this, [this](QPieSlice* slice) { on_sector_legend_clicked(slice->label()); });
-
-    chart->addSeries(series);
-
-    // Rebuild legend
-    clear_legend();
-
-    auto* legend_layout = new QVBoxLayout(legend_widget_);
-    legend_layout->setContentsMargins(4, 0, 0, 0);
-    legend_layout->setSpacing(2);
-
-    for (int i = 0; i < sorted.size(); ++i) {
-        const QString& sec = sorted[i].first;
-        const bool active = (sec == selected_sector_);
-
-        // Wrap the row in a clickable QWidget for hit-testing
-        auto* row_widget = new QWidget(this);
-        row_widget->setCursor(Qt::PointingHandCursor);
-        // Square corners — DESIGN_SYSTEM forbids border-radius on panel-level UI.
-        row_widget->setStyleSheet(active ? QString("background:%1;").arg(ui::colors::BG_HOVER())
-                                         : "background:transparent;");
-
-        auto* row = new QHBoxLayout(row_widget);
-        row->setContentsMargins(2, 1, 2, 1);
-        row->setSpacing(4);
-
-        auto* swatch = new QWidget(this);
-        swatch->setFixedSize(8, 8);
-        swatch->setStyleSheet(QString("background:%1;").arg(sector_color(i).name()));
-        row->addWidget(swatch);
-
-        // 11px floor (was 9px). Active row uses AMBER text; otherwise TEXT_PRIMARY.
-        auto* name = new QLabel(QString("%1 (%2)").arg(sec).arg(sector_counts[sec]));
-        name->setStyleSheet(active ? QString("color:%1; font-size:11px; font-weight:700;").arg(ui::colors::AMBER())
-                                   : QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_PRIMARY()));
-        row->addWidget(name);
-        row->addStretch();
-
-        double pnl = sector_pnl[sec];
-        auto* pnl_lbl = new QLabel(QString("%1%2").arg(pnl >= 0 ? "+" : "").arg(QString::number(pnl, 'f', 0)));
-        const char* pc = pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        pnl_lbl->setStyleSheet(QString("color:%1; font-size:10px;").arg(pc));
-        row->addWidget(pnl_lbl);
-
-        auto* weight = new QLabel(QString(" %1%").arg(QString::number(sorted[i].second, 'f', 1)));
-        weight->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
-        row->addWidget(weight);
-
-        // Install click via event filter on row_widget
-        row_widget->installEventFilter(this);
-        row_widget->setProperty("sector_name", sec);
-
-        legend_layout->addWidget(row_widget);
-    }
-    legend_layout->addStretch();
+    const QString ccy = currency_;
+    donut_->set_value_formatter([ccy](double v) { return pfmt::money_c(v, ccy); });
+    donut_->set_slices(slices);
+    donut_->set_center_text(pfmt::dimension_name(dim).toUpper());
+    donut_->set_state(slices.isEmpty() ? ui::PaintedChart::Empty : ui::PaintedChart::Ready,
+                      tr("No valued positions yet."));
+    donut_->setToolTip(dim == AD::Sector ? tr("Click a sector to filter the positions table") : QString());
 }
 
 void PortfolioSectorPanel::update_correlation() {
-    // ── Early-out fingerprint ────────────────────────────────────────────────
-    // Rebuilding this grid destroys and recreates one stylesheet-carrying
-    // QLabel per cell. The inputs (top-6 symbols by weight + the matrix) only
-    // change when a new correlation fetch lands, so skip the rebuild when the
-    // rendered content would be byte-identical.
-    {
-        auto probe = holdings_;
-        std::sort(probe.begin(), probe.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
-        const int pn = static_cast<int>(std::min(qsizetype{6}, probe.size()));
-        QStringList parts;
-        parts.reserve(pn * pn + 1);
-        for (int i = 0; i < pn; ++i)
-            parts << probe[i].symbol;
-        for (int i = 0; i < pn; ++i) {
-            for (int j = 0; j < pn; ++j) {
-                const QString ab = probe[i].symbol + "|" + probe[j].symbol;
-                const QString ba = probe[j].symbol + "|" + probe[i].symbol;
-                if (corr_matrix_.contains(ab))
-                    parts << QString::number(corr_matrix_.value(ab), 'f', 2);
-                else if (corr_matrix_.contains(ba))
-                    parts << QString::number(corr_matrix_.value(ba), 'f', 2);
-                else
-                    parts << QStringLiteral("-");
-            }
-        }
-        const QString sig = QString::number(holdings_.size()) + "|" + parts.join(',');
-        if (sig == corr_signature_ && corr_widget_->layout())
-            return;
-        corr_signature_ = sig;
-    }
+    QStringList syms;
+    for (const auto& h : holdings_)
+        syms << h.symbol;
+    // Rebuild only when the matrix, the symbol set or the load state changed (not on
+    // every price poll).
+    QString sig = syms.join(QLatin1Char(','));
+    sig += QString::number(corr_matrix_.size());
+    sig += corr_pending_ ? QStringLiteral("|p|") : QStringLiteral("|-|");
+    sig += corr_error_;
+    for (auto it = corr_matrix_.constBegin(); it != corr_matrix_.constEnd(); ++it)
+        sig += QString::number(it.value(), 'f', 3);
+    if (sig == corr_signature_)
+        return;
+    corr_signature_ = sig;
 
-    if (auto* old = corr_widget_->layout()) {
-        QLayoutItem* item;
-        while ((item = old->takeAt(0)) != nullptr) {
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
+    const auto m = pfcorr::build(corr_matrix_, syms);
+    if (m.labels.size() < 2) {
+        // Loading only while a run is really in flight; a failed run says why (with
+        // RETRY); otherwise there is nothing to correlate.
+        int valued = 0;
+        for (const auto& h : holdings_)
+            if (h.valued())
+                ++valued;
+        corr_->clear();
+        const bool can_load = valued >= 2;
+        if (can_load && !corr_error_.isEmpty()) {
+            corr_->set_state(ui::PaintedChart::Error, tr("Price history could not be downloaded: %1").arg(corr_error_));
+            corr_note_->setText(tr("Correlation needs the daily price history of the holdings."));
+        } else if (can_load && corr_pending_) {
+            corr_->set_state(ui::PaintedChart::Loading, tr("Downloading price history…"));
+            corr_note_->clear();
+        } else {
+            corr_->set_state(ui::PaintedChart::Empty, tr("Needs two or more holdings with price history."));
+            corr_note_->clear();
         }
-        delete old;
-    }
-
-    if (holdings_.size() < 2) {
-        auto* layout = new QVBoxLayout(corr_widget_);
-        auto* msg = new QLabel(tr("Need 2+ holdings for correlation"));
-        msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-        msg->setAlignment(Qt::AlignCenter);
-        layout->addWidget(msg);
+        corr_retry_btn_->setVisible(can_load && !corr_error_.isEmpty());
         return;
     }
-
-    // Top 6 by weight
-    auto sorted = holdings_;
-    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
-    int n = static_cast<int>(std::min(qsizetype{6}, sorted.size()));
-
-    // Use real Pearson matrix if available; otherwise show "--" pending fetch.
-    const bool has_real_corr = !corr_matrix_.isEmpty();
-
-    auto corr_pair = [&](int i, int j) -> std::optional<double> {
-        if (i == j)
-            return 1.0;
-        if (has_real_corr) {
-            const QString key_ab = sorted[i].symbol + "|" + sorted[j].symbol;
-            const QString key_ba = sorted[j].symbol + "|" + sorted[i].symbol;
-            if (corr_matrix_.contains(key_ab))
-                return corr_matrix_[key_ab];
-            if (corr_matrix_.contains(key_ba))
-                return corr_matrix_[key_ba];
-            return std::nullopt; // symbol not in matrix (fetch may be partial)
-        }
-        // No real data yet — return nullopt so cell shows "…"
-        return std::nullopt;
-    };
-
-    auto* grid = new QGridLayout(corr_widget_);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(1);
-
-    // Header row
-    grid->addWidget(new QLabel, 0, 0);
-    for (int i = 0; i < n; ++i) {
-        auto* lbl = new QLabel(sorted[i].symbol.left(4));
-        lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-        grid->addWidget(lbl, 0, i + 1);
-    }
-
-    // Matrix
-    for (int r = 0; r < n; ++r) {
-        auto* row_label = new QLabel(sorted[r].symbol.left(4));
-        row_label->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-        grid->addWidget(row_label, r + 1, 0);
-
-        for (int c = 0; c < n; ++c) {
-            const auto opt_corr = corr_pair(r, c);
-            const bool is_diag = (r == c);
-            const double corr = opt_corr.value_or(0.0);
-            const QString label = is_diag ? "1.00" : opt_corr ? QString::number(corr, 'f', 2) : "\u2026"; // "…" pending
-
-            auto* cell = new QLabel(label);
-            cell->setAlignment(Qt::AlignCenter);
-            cell->setFixedSize(40, 22);
-
-            QColor bg;
-            if (is_diag) {
-                bg = QColor(ui::colors::TEXT_PRIMARY());
-            } else if (!opt_corr) {
-                bg = QColor(ui::colors::BG_RAISED());
-            } else if (corr > 0) {
-                bg = QColor(22, 163, 74, static_cast<int>(std::abs(corr) * 140 + 20));
-            } else {
-                bg = QColor(220, 38, 38, static_cast<int>(std::abs(corr) * 140 + 20));
-            }
-
-            const char* text_color = is_diag ? ui::colors::BG_BASE : ui::colors::TEXT_PRIMARY;
-            cell->setStyleSheet(QString("background:rgba(%1,%2,%3,%4); color:%5;"
-                                        "font-size:10px; font-weight:600;")
-                                    .arg(bg.red())
-                                    .arg(bg.green())
-                                    .arg(bg.blue())
-                                    .arg(bg.alpha())
-                                    .arg(text_color));
-
-            grid->addWidget(cell, r + 1, c + 1);
-        }
-    }
+    corr_retry_btn_->setVisible(false);
+    corr_->set_state(ui::PaintedChart::Ready);
+    pfcorr::show(corr_, m);
+    // The matrix sits in a scroll area that only gave it the height left over: the
+    // rotated column labels took all of it and no cell was visible. Ask for room for
+    // the labels plus a readable row per holding — the area scrolls when short.
+    const QFontMetrics lfm(ui::fonts::font(-3));
+    int label_w = 0;
+    for (const QString& s : m.labels)
+        label_w = std::max(label_w, lfm.horizontalAdvance(s));
+    corr_->setMinimumHeight(std::min(label_w, 120) + 16 + static_cast<int>(m.labels.size()) * ui::metrics::height(16) +
+                            ui::metrics::height(28));
+    // One line under the matrix; the explanation lives in the tooltip (it used to take
+    // four lines of the panel's little height).
+    corr_note_->setText(tr("Avg pair %1 · highest %2 (%3) · lowest %4 (%5)")
+                            .arg(pfmt::num(m.avg_pair, 2), m.max_pair, pfmt::num(m.max_r, 2), m.min_pair,
+                                 pfmt::num(m.min_r, 2)));
+    corr_note_->setToolTip(tr("Red: move together (less diversification) · green: move opposite. Pearson correlation "
+                              "of daily returns in the base currency."));
 }
 
 void PortfolioSectorPanel::changeEvent(QEvent* event) {
@@ -426,31 +272,14 @@ void PortfolioSectorPanel::changeEvent(QEvent* event) {
 
 void PortfolioSectorPanel::retranslateUi() {
     if (title_label_)
-        title_label_->setText(tr("SECTORS"));
-    if (corr_title_)
-        corr_title_->setText(tr("CORRELATION"));
-    if (corr_note_)
-        corr_note_->setText(
-            tr("(%1-day daily returns, top 6 by weight)").arg(services::PortfolioService::kCorrelationWindowDays));
-
-    // Donut legend uses translated "Unclassified" + sector data; matrix shows
-    // "Need 2+ holdings for correlation" or a grid. Re-run both so the strings
-    // pick up the new locale — the fingerprint must be dropped first or the
-    // correlation grid would short-circuit and keep the old language.
+        title_label_->setText(tr("ALLOCATION"));
+    using AD = portfolio::AllocationDimension;
+    for (int i = 0; i < dim_cb_->count(); ++i)
+        dim_cb_->setItemText(i, pfmt::dimension_name(static_cast<AD>(dim_cb_->itemData(i).toInt())));
+    corr_title_->setText(tr("CORRELATION — %1 TRADING DAYS").arg(services::PortfolioService::kCorrelationWindowDays));
     corr_signature_.clear();
     update_donut();
     update_correlation();
-}
-
-bool PortfolioSectorPanel::eventFilter(QObject* obj, QEvent* event) {
-    if (event->type() == QEvent::MouseButtonRelease) {
-        const QString sec = obj->property("sector_name").toString();
-        if (!sec.isEmpty()) {
-            on_sector_legend_clicked(sec);
-            return true;
-        }
-    }
-    return QWidget::eventFilter(obj, event);
 }
 
 } // namespace fincept::screens

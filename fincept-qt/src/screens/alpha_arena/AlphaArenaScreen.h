@@ -4,6 +4,7 @@
 // "alpha_arena" (CommandBar/ToolBar/WindowFrame registrations unchanged).
 // Terminal layout: header + mids ticker/cadence strip, then a splitter body
 // [equity chart | agent board] over the always-visible panel grid.
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/alpha_arena/ArenaTypes.h"
 
@@ -21,13 +22,17 @@ class QSpinBox;
 class QStackedWidget;
 class QTimer;
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens::alpha_arena {
 
 class ArenaPanelGrid;
 class EquityCurveWidget;
 class LeaderboardCards;
 
-class AlphaArenaScreen : public QWidget, public IStatefulScreen {
+class AlphaArenaScreen : public QWidget, public IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit AlphaArenaScreen(QWidget* parent = nullptr);
@@ -38,6 +43,11 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QString state_key() const override { return QStringLiteral("alpha_arena"); }
     int state_version() const override { return 3; }
 
+    // ISectionLinked — no tabs (the panel grid is always visible): "competition:<id>" (picked in
+    // the switcher as a user does), "new" (NEW COMPETITION: the wizard, which asks before anything
+    // runs). `focus` = a competition id (with an empty section).
+    bool open_section(const QString& section, const QString& focus) override;
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -46,6 +56,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QWidget* build_header();
     QWidget* build_ticker_strip(); // mids ticker + cadence editor
     QWidget* build_empty_state();
+    void refresh_start_page(); // start page note: which models are ready (on show, no competition)
     QWidget* build_dashboard();
     void connect_engine();
     void disconnect_engine();
@@ -53,6 +64,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     void show_competition(const QString& id);
     void refresh_dashboard();   // chart + board + panels (full, per round)
     void update_ticker();       // mids ticker (every marks tick)
+    void render_ticker();       // ticker text from last_mids_ / ticker_dir_ (also on theme change)
     void rebuild_board_light(); // board from cached agents + live account_view
     void on_new_competition();
     void on_pause_resume();
@@ -72,6 +84,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QHash<QString, qint64> tokens_cache_;
     QHash<QString, QVector<QPointF>> series_cache_; // agent → equity snapshots (ts, equity)
     QHash<QString, double> last_mids_;              // previously displayed mids (ticker arrows)
+    QHash<QString, int> ticker_dir_;                // per coin: +1 up, -1 down, 0 flat vs the tick before
     double cap_ = 0;
     // live_mode of the competition currently on screen — gates the extra
     // confirmation on header actions that trigger real order flow.
@@ -84,12 +97,15 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QLabel* disclaimer_ = nullptr;
     QLabel* ticker_ = nullptr;
     QSpinBox* cadence_spin_ = nullptr;
+    QPushButton* cadence_apply_btn_ = nullptr; // enabled with PAUSE/FORCE/KILL (update_badges)
     QPushButton* pause_btn_ = nullptr;
     QPushButton* force_btn_ = nullptr;
     QPushButton* kill_btn_ = nullptr;
     QComboBox* switcher_ = nullptr;
     // Body
     QStackedWidget* body_ = nullptr; // 0 = empty state, 1 = dashboard
+    fincept::ui::EmptyState* start_state_ = nullptr; // page 0: no competition yet
+    QString start_note_;                             // its note (set only when it changes)
     EquityCurveWidget* chart_ = nullptr;
     LeaderboardCards* cards_ = nullptr;
     ArenaPanelGrid* grid_ = nullptr;

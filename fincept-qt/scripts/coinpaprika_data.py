@@ -8,6 +8,7 @@ import json
 import os
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 BASE_URL = "https://api.coinpaprika.com/v1"
 
@@ -35,6 +36,9 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 def get_global() -> Any:
     """Get global cryptocurrency market overview."""
     data = _make_request("global")
+    # last_updated is Unix seconds: ISO UTC at the source
+    if isinstance(data, dict) and isinstance(data.get("last_updated"), (int, float)):
+        data["last_updated"] = fc.epoch_iso(data["last_updated"])
     return data
 
 

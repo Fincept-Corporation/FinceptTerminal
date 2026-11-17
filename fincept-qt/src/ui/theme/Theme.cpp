@@ -16,7 +16,7 @@ void set_rtl(bool rtl) {
     s_rtl = rtl;
     qApp->setLayoutDirection(rtl ? Qt::RightToLeft : Qt::LeftToRight);
     // Re-apply current theme so RTL direction change is reflected
-    ThemeManager::instance().apply_theme(ThemeManager::instance().current_theme_name());
+    ThemeManager::instance().apply_theme({});
 }
 
 QString change_color(double value) {
@@ -25,7 +25,7 @@ QString change_color(double value) {
 }
 
 void apply_global_stylesheet() {
-    ThemeManager::instance().apply_theme("Obsidian");
+    ThemeManager::instance().apply_theme({});
 }
 
 } // namespace fincept::ui

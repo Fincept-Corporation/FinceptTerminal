@@ -1,9 +1,11 @@
 #include "screens/alpha_arena/NewCompetitionWizard.h"
+#include "ui/theme/Theme.h"
 
 #include "screens/alpha_arena/panels/Geofence.h"
 #include "screens/alpha_arena/panels/LiveModeGateDialog.h"
 #include "services/llm/ProviderCatalog.h"
 #include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
+#include "ui/widgets/ModelBadge.h"
 
 #include <QColor>
 #include <QDateTime>
@@ -21,6 +23,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSet>
@@ -42,12 +45,12 @@ const QStringList kCoins = {"BTC", "ETH", "SOL", "BNB", "DOGE", "XRP", "AVAX", "
 constexpr int kDefaultChecked = 6;
 
 // Colored "●" for the provider rows (a QListWidgetItem can't color a substring).
-QIcon dot_icon(const QString& hex) {
+QIcon dot_icon(const QColor& color) {
     QPixmap pm(12, 12);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
-    p.setBrush(QColor(hex));
+    p.setBrush(color);
     p.setPen(Qt::NoPen);
     p.drawEllipse(1, 1, 10, 10);
     return QIcon(pm);
@@ -81,37 +84,55 @@ NewCompetitionWizard::NewCompetitionWizard(QWidget* parent) : QDialog(parent) {
     connect(next_, &QPushButton::clicked, this, &NewCompetitionWizard::on_next_or_create);
     connect(&ArenaModelRegistry::instance(), &ArenaModelRegistry::models_changed, this,
             &NewCompetitionWizard::populate_models);
+    // List rows carry item colours and rendered dot icons.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        refresh_provider_decorations();
+        populate_model_pane(current_provider());
+    });
     update_nav();
 }
 
 void NewCompetitionWizard::build_step1() {
     auto* page = new QWidget;
     auto* v = new QVBoxLayout(page);
+    using namespace ui::colors;
     auto* title = new QLabel(tr("1 · Pick the competing models"));
-    title->setStyleSheet("color:#FF8800;font-weight:700;font-size:14px;");
+    title->setStyleSheet(QString("color:%1;font-weight:700;font-size:" + fincept::ui::fonts::px(0) + "px;").arg(AMBER()));
     v->addWidget(title);
     auto* panes = new QHBoxLayout;
+    const QString list_css = QString("background:%1;").arg(BG_SURFACE());
     provider_list_ = new QListWidget;
     provider_list_->setFixedWidth(190);
-    provider_list_->setStyleSheet("background:#111;");
+    provider_list_->setStyleSheet(list_css);
     panes->addWidget(provider_list_);
     model_list_ = new QListWidget;
-    model_list_->setStyleSheet("background:#111;");
+    model_list_->setStyleSheet(list_css);
     panes->addWidget(model_list_, 1);
     v->addLayout(panes, 1);
     selection_summary_ = new QLabel(tr("Selected: none"));
     selection_summary_->setWordWrap(true);
-    selection_summary_->setStyleSheet("color:#BBB;");
+    selection_summary_->setStyleSheet(QString("color:%1;").arg(TEXT_SECONDARY()));
     v->addWidget(selection_summary_);
+    // Harness competitors: the call-volume warning the registry provides (shown
+    // while one is listed or selected).
+    model_warning_ = new QLabel;
+    model_warning_->setWordWrap(true);
+    model_warning_->setStyleSheet(QString("color:%1;").arg(WARNING()));
+    model_warning_->setVisible(false);
+    v->addWidget(model_warning_);
     model_hint_ = new QLabel(tr("Pick a provider on the left, then check its models — selections "
-                                "from several providers combine. Greyed entries need an API key in "
-                                "Settings → LLM Configuration. Ollama and Fincept work without one."));
+                                "from several providers combine. A greyed entry says what it needs (hover for "
+                                "details): an API key in Settings > LLM Configuration, or for an agent harness "
+                                "an API-key sign-in or your OK (click the row). Ollama and Fincept work without "
+                                "a key."));
     model_hint_->setWordWrap(true);
-    model_hint_->setStyleSheet("color:#888;");
+    model_hint_->setStyleSheet(QString("color:%1;").arg(TEXT_TERTIARY()));
     v->addWidget(model_hint_);
     steps_->addWidget(page);
     connect(provider_list_, &QListWidget::currentRowChanged, this, &NewCompetitionWizard::on_provider_row_changed);
     connect(model_list_, &QListWidget::itemChanged, this, &NewCompetitionWizard::on_model_item_changed);
+    connect(model_list_, &QListWidget::itemClicked, this, &NewCompetitionWizard::on_model_item_clicked);
+    connect(model_list_, &QListWidget::itemActivated, this, &NewCompetitionWizard::on_model_item_clicked);
     populate_models();
 }
 
@@ -159,12 +180,38 @@ void NewCompetitionWizard::populate_models() {
     else
         populate_model_pane(QString());
     update_selection_summary();
+    update_model_warning();
 }
 
 void NewCompetitionWizard::on_provider_row_changed() {
     if (repopulating_)
         return;
     populate_model_pane(current_provider());
+    update_model_warning();
+}
+
+void NewCompetitionWizard::update_model_warning() {
+    if (!model_warning_)
+        return;
+    // One line per harness listed in the model pane or selected: the registry's
+    // call-volume warning (each decision is one harness process on the user's key).
+    const QString cur = current_provider();
+    QStringList lines;
+    QSet<QString> seen;
+    for (auto it = options_by_provider_.cbegin(); it != options_by_provider_.cend(); ++it) {
+        for (const auto& o : it.value()) {
+            if (!o.ready || o.warning.isEmpty() || seen.contains(o.source_ref))
+                continue;
+            if (it.key() != cur && !selected_models_.contains(o.provider + "/" + o.model_id))
+                continue;
+            seen.insert(o.source_ref);
+            lines << QStringLiteral("⚠ %1: %2").arg(o.display_name.section(QStringLiteral(" · "), 0, 0), o.warning);
+        }
+    }
+    const QString text = lines.join(QLatin1Char('\n'));
+    if (model_warning_->text() != text)
+        model_warning_->setText(text);
+    model_warning_->setVisible(!text.isEmpty());
 }
 
 QString NewCompetitionWizard::current_provider() const {
@@ -178,15 +225,51 @@ void NewCompetitionWizard::populate_model_pane(const QString& provider) {
     for (const auto& o : options_by_provider_.value(provider)) {
         auto* it = new QListWidgetItem(model_list_);
         const QString key = o.provider + "/" + o.model_id;
-        it->setText(o.ready ? o.display_name : o.display_name + tr("  — needs API key"));
+        // Not ready: the real reason from the registry ("needs API key", "Needs your
+        // OK", "Workbench only — sign in with an API key", "Signed out", "Rate limited
+        // until 14:05"), the full sentence in the tooltip.
+        const QString reason = o.not_ready_reason.isEmpty() ? tr("needs API key") : o.not_ready_reason;
+        it->setText(o.ready ? o.display_name : o.display_name + QStringLiteral("  — ") + reason);
+        QString tip = o.ready ? o.warning : o.detail;
+        if (!o.ready && o.needs_consent)
+            tip += (tip.isEmpty() ? QString() : QStringLiteral("\n")) + tr("Click to review and confirm.");
+        if (o.ready && !o.warning.isEmpty() && !o.detail.isEmpty())
+            tip = o.detail + QStringLiteral("\n") + o.warning;
+        it->setToolTip(tip);
         it->setData(Qt::UserRole, key);
         it->setData(Qt::UserRole + 1, QVariant::fromValue(QStringList{o.provider, o.model_id, o.display_name,
                                                                       o.color_hex, o.source_kind, o.source_ref}));
-        it->setForeground(QColor(o.ready ? "#DDD" : "#555"));
-        it->setFlags(o.ready ? (Qt::ItemIsEnabled | Qt::ItemIsUserCheckable) : Qt::NoItemFlags);
-        it->setCheckState(selected_models_.contains(key) ? Qt::Checked : Qt::Unchecked);
+        it->setData(Qt::UserRole + 2, !o.ready && o.needs_consent);
+        it->setForeground(QColor(o.ready ? ui::colors::TEXT_PRIMARY()
+                                 : o.needs_consent ? ui::colors::WARNING()
+                                                   : ui::colors::TEXT_DIM()));
+        // A consent-only row stays clickable (opens the dialog) but is not checkable.
+        it->setFlags(o.ready           ? (Qt::ItemIsEnabled | Qt::ItemIsUserCheckable)
+                     : o.needs_consent ? Qt::ItemIsEnabled
+                                       : Qt::NoItemFlags);
+        it->setCheckState(o.ready && selected_models_.contains(key) ? Qt::Checked : Qt::Unchecked);
     }
     repopulating_ = false;
+}
+
+void NewCompetitionWizard::on_model_item_clicked(QListWidgetItem* it) {
+    if (!it || consent_open_ || !it->data(Qt::UserRole + 2).toBool())
+        return;
+    const auto f = it->data(Qt::UserRole + 1).value<QStringList>();
+    if (f.size() < 6 || f[4] != QLatin1String("harness") || f[5].isEmpty())
+        return;
+    // The one-time terminal-AI consent naming the vendor. Agreeing changes the
+    // harness state: the registry re-lists (models_changed) and the row becomes
+    // checkable. Not made the automatic default (enable_default = false).
+    consent_open_ = true;
+    QPointer<NewCompetitionWizard> self(this);
+    ui::request_harness_terminal_consent(this, f[5], false, [self](bool agreed) {
+        if (!self)
+            return;
+        self->consent_open_ = false;
+        if (agreed)
+            self->populate_models();
+    });
 }
 
 void NewCompetitionWizard::on_model_item_changed(QListWidgetItem* it) {
@@ -211,6 +294,7 @@ void NewCompetitionWizard::on_model_item_changed(QListWidgetItem* it) {
     }
     refresh_provider_decorations();
     update_selection_summary();
+    update_model_warning();
 }
 
 void NewCompetitionWizard::refresh_provider_decorations() {
@@ -229,11 +313,22 @@ void NewCompetitionWizard::refresh_provider_decorations() {
         QString text = ProviderCatalog::display_name(p);
         if (const int n = counts.value(p); n > 0)
             text += QStringLiteral(" (%1)").arg(n);
-        if (!any_ready)
-            text += tr(" — needs key");
+        if (!any_ready) {
+            // The provider's own reason (a harness: its eligibility; an API provider: the key).
+            const auto& opts = options_by_provider_.value(p);
+            const QString reason = opts.isEmpty() || opts.constFirst().not_ready_reason.isEmpty()
+                                       ? tr("needs key")
+                                       : opts.constFirst().not_ready_reason;
+            text += QStringLiteral(" — ") + reason;
+            it->setToolTip(opts.isEmpty() ? QString() : opts.constFirst().detail);
+        } else {
+            it->setToolTip(QString());
+        }
         it->setText(text);
-        it->setIcon(dot_icon(any_ready ? ProviderCatalog::brand_color(p) : QStringLiteral("#555555")));
-        it->setForeground(QColor(any_ready ? "#DDD" : "#777"));
+        // Provider brand colour (made legible on the theme); dimmed when no model is usable.
+        it->setIcon(dot_icon(any_ready ? ui::colors::legible_color(QColor(ProviderCatalog::brand_color(p)))
+                                       : QColor(ui::colors::TEXT_DIM())));
+        it->setForeground(QColor(any_ready ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
     }
 }
 
@@ -248,7 +343,8 @@ void NewCompetitionWizard::build_step2() {
     auto* page = new QWidget;
     auto* v = new QVBoxLayout(page);
     auto* title = new QLabel(tr("2 · Arena settings"));
-    title->setStyleSheet("color:#FF8800;font-weight:700;font-size:14px;");
+    title->setStyleSheet(
+        QString("color:%1;font-weight:700;font-size:" + fincept::ui::fonts::px(0) + "px;").arg(ui::colors::AMBER()));
     v->addWidget(title);
     auto* grid = new QGridLayout;
     int row = 0;
@@ -326,6 +422,8 @@ void NewCompetitionWizard::update_nav() {
     const bool last = steps_->currentIndex() == 1;
     back_->setVisible(last);
     next_->setText(last ? tr("CREATE && START") : tr("NEXT"));
+    // agents: creating starts the agents trading (and, on a live venue, with real funds)
+    next_->setProperty("fincept_agent_risk", last ? QVariant(QStringLiteral("order")) : QVariant());
 }
 
 void NewCompetitionWizard::on_next_or_create() {

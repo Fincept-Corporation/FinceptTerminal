@@ -46,17 +46,25 @@ class PayoffChartWidget : public QChartView {
     /// Empty state — call when the strategy has no legs.
     void clear_payoff();
 
+    /// The currency of the P/L axis and tooltip (an NSE strategy: "INR"). Empty
+    /// (the default) = unknown: plain numbers, no unit is guessed.
+    void set_currency(const QString& ccy);
+
   protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void leaveEvent(QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
   private:
+    /// Re-apply the theme's colours and font to the chart, series, axes and markers.
+    void refresh_theme();
     void update_crosshair(const QPoint& widget_pos);
     void hide_crosshair();
     void rebuild_breakeven_markers(const QVector<double>& breakevens, double y_min, double y_max);
     void rebuild_spot_marker(double current_spot, double y_min, double y_max);
+    void apply_axis_unit(); // the P/L axis labels carry ccy_'s unit (none while unknown)
 
+    QString ccy_; ///< P/L currency; empty = unknown (no unit shown)
     QChart* chart_ = nullptr;
     QLineSeries* expiry_series_ = nullptr;
     QLineSeries* target_series_ = nullptr;

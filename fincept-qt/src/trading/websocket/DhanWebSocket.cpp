@@ -23,6 +23,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_DHAN_WS = "DhanWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_dhan_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_DHAN_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_DHAN_WS, key, 1)) {
+        LOG_WARN(TAG_DHAN_WS, "Dhan WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_DHAN_WS, "Dhan WS still disconnected");
+    }
+}
+
 static constexpr const char* kFiveDepthUrl = "wss://api-feed.dhan.co";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,11 +132,8 @@ void DhanWebSocket::open() {
     // 5-depth endpoint. authType=2 + token + clientId in the query string.
     QString url =
         QString("%1?version=2&token=%2&clientId=%3&authType=2").arg(QString(kFiveDepthUrl), access_token_, client_id_);
-    // Log the connection params with the token redacted — never log the JWT.
-    const QString tok_tail = access_token_.size() > 6 ? access_token_.right(6) : QStringLiteral("??????");
-    LOG_INFO(TAG_DHAN_WS, QString("Connecting to Dhan 5-depth feed (clientId=%1, token=…%2, len=%3)")
-                              .arg(client_id_, tok_tail)
-                              .arg(access_token_.size()));
+    // Never log the token (no part of it, not its length) or the client id.
+    LOG_DEBUG(TAG_DHAN_WS, "Connecting to the Dhan 5-depth feed");
     ws_->connect_to(url);
     start_health_check();
 }
@@ -228,13 +240,14 @@ void DhanWebSocket::on_data_stall() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void DhanWebSocket::on_connected() {
-    LOG_INFO(TAG_DHAN_WS, "Connected — resubscribing all instruments");
+    LOG_DEBUG(TAG_DHAN_WS, "Connected — resubscribing all instruments");
     resubscribe_all();
+    log_dhan_stream_state(this, true);
     emit connected();
 }
 
 void DhanWebSocket::on_disconnected() {
-    LOG_WARN(TAG_DHAN_WS, "Disconnected");
+    log_dhan_stream_state(this, false);
     emit disconnected();
 }
 
@@ -363,7 +376,7 @@ void DhanWebSocket::send_subscribe(const QVector<Instrument>& instruments, bool 
         msg["InstrumentCount"] = end - start;
         msg["InstrumentList"] = list;
         ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
-        LOG_INFO(TAG_DHAN_WS, QString("Subscribed %1 instruments (FULL)").arg(end - start));
+        LOG_DEBUG(TAG_DHAN_WS, QString("Subscribed %1 instruments (FULL)").arg(end - start));
     }
 }
 

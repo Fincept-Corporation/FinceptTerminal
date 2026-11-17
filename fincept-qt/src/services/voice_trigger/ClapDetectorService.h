@@ -70,6 +70,7 @@ class ClapDetectorService : public QObject {
 
     QPointer<QProcess> process_;
     QByteArray stdout_buffer_;
+    QString last_stderr_; // last stderr line, for the exit line (logging policy B.9)
     std::atomic<bool> active_{false};
     bool script_error_emitted_ = false; // the running script already reported why it failed
 };

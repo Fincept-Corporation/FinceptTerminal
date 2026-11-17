@@ -93,6 +93,18 @@ GROUPS = {
 }
 
 
+def _iso_period(text: str) -> str:
+    """RBA period text as ISO: 04-Jan-2011 -> 2011-01-04, Jan-2011 -> 2011-01, 2011 -> 2011;
+    ISO input (YYYY-MM-DD / YYYY-MM / YYYY) and anything unrecognised pass through."""
+    s = (text or "").strip()
+    for fmt, out in (("%d-%b-%Y", "%Y-%m-%d"), ("%b-%Y", "%Y-%m"), ("%d/%m/%Y", "%Y-%m-%d")):
+        try:
+            return datetime.strptime(s, fmt).strftime(out)
+        except ValueError:
+            continue
+    return s
+
+
 # ---------------------------------------------------------------------------
 # Error container
 # ---------------------------------------------------------------------------
@@ -211,7 +223,9 @@ class RBAWrapper:
             if date_str in ("Series ID", "Title", "Description", "Frequency",
                             "Type", "Units", "Source", "Publication date"):
                 continue
-            entry = {"date": date_str}
+            # RBA writes 04-Jan-2011 / Jan-2011 / 2011: rows carry ISO (2011-01-04 / 2011-01 / 2011),
+            # which also makes the range filter and the merge sort below work on dates.
+            entry = {"date": _iso_period(date_str)}
             for i in range(1, len(series_ids)):
                 if i >= len(row):
                     break
@@ -229,9 +243,11 @@ class RBAWrapper:
             rows.append(entry)
 
         if start_date:
+            start_date = _iso_period(start_date)
             rows = [r for r in rows if r["date"] >= start_date]
         if end_date:
-            rows = [r for r in rows if r["date"] <= end_date]
+            end_date = _iso_period(end_date)
+            rows = [r for r in rows if r["date"][:len(end_date)] <= end_date]
 
         return {
             "series_metadata": meta,

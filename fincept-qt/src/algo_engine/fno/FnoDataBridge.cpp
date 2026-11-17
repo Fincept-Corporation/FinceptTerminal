@@ -3,6 +3,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "datahub/TopicPolicy.h"
 #include "services/options/OptionChainService.h"
 
 #include <QMutexLocker>
@@ -69,6 +70,19 @@ void FnoDataBridge::do_ensure_chain(const QString& topic) {
         return;
     subscribed_[topic] = true;
     auto& hub = fincept::datahub::DataHub::instance();
+    // An F&O algo deployment takes its UNDERLYING price (entry/exit conditions)
+    // and its leg marks (stop-loss / take-profit) from this chain. The screen-
+    // level option:chain:* policy only re-polls every 5 min, far beyond the
+    // runner's 30 s no-data watchdog, so the chain an algo depends on is refreshed
+    // every ~15 s instead (one batched quote call per refresh). WS-streamed
+    // chains (Fyers) are still answered from the live feed without a REST call.
+    fincept::datahub::TopicPolicy algo_pol;
+    algo_pol.ttl_ms = 15'000;
+    algo_pol.min_interval_ms = 15'000;
+    algo_pol.coalesce_within_ms = 250;
+    algo_pol.refresh_timeout_ms = 30'000;
+    algo_pol.pause_when_inactive = true;
+    hub.set_policy(topic, algo_pol);
     // Subscribe with this as owner so the hub can unsubscribe on destruction.
     // Callback is a no-op since ingest_chain (via chain_published signal) already
     // caches the data. The subscribe call is what wakes the producer.

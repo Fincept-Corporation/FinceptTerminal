@@ -1,8 +1,10 @@
 // src/screens/equity_research/EquityFilingsTab.cpp
 #include "screens/equity_research/EquityFilingsTab.h"
+#include "screens/equity_research/EquityResearchLinks.h"
 
 #include "core/events/EventBus.h"
 #include "screens/equity_research/EquityResearchFormat.h"
+#include "ui/formatting/FormatWidgets.h"
 #include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
@@ -12,6 +14,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -65,6 +68,7 @@ double num(const QJsonValue& v) {
 }
 
 /// Value in its XBRL unit: "USD" → $416.16B, "USD/shares" → $7.46, "TWD" → NT$2.89T, "shares" → 14.59B sh.
+/// A currency unit is the filer's reporting currency as filed: formatted in it, never converted.
 QString unit_value(double v, const QString& unit) {
     if (fmt::missing(v))
         return fmt::dash();
@@ -72,8 +76,13 @@ QString unit_value(double v, const QString& unit) {
         return fmt::large(v) + QStringLiteral(" sh");
     const bool per_share = unit.contains(QLatin1Char('/'));
     const QString code = per_share ? unit.section(QLatin1Char('/'), 0, 0) : unit;
-    const QString body = per_share ? fmt::grouped(std::fabs(v), 2) : fmt::large(std::fabs(v));
-    return (v < 0 ? QStringLiteral("-") : QString()) + fmt::currency_symbol(code) + body;
+    return per_share ? ui::formatting::money(v, code, ui::formatting::Compact::None, 2) : fmt::money(v, code);
+}
+
+/// SEC ownership filings (Form 4, 13F-HR) report values in US dollars by definition: a
+/// deliberate intrinsic USD, never converted.
+QString sec_usd(double v) {
+    return fmt::money(v, QStringLiteral("USD"));
 }
 
 QString when(qint64 ms) {
@@ -94,6 +103,11 @@ QTableWidgetItem* num_item(const QString& text, double sort_value) {
     return it;
 }
 
+/// Table row height: 22px at the default font size, growing with the user's font.
+int table_row_height() {
+    return std::max(22, QFontMetrics(ui::fonts::font(-3)).height() + 8);
+}
+
 QTableWidget* make_table(QWidget* parent) {
     auto* t = new QTableWidget(parent);
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -102,7 +116,7 @@ QTableWidget* make_table(QWidget* parent) {
     t->setAlternatingRowColors(true);
     t->setShowGrid(false);
     t->verticalHeader()->hide();
-    t->verticalHeader()->setDefaultSectionSize(22);
+    t->verticalHeader()->setDefaultSectionSize(table_row_height());
     t->horizontalHeader()->setHighlightSections(false);
     t->setWordWrap(false);
     t->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -158,38 +172,59 @@ EquityFilingsTab::EquityFilingsTab(QWidget* parent) : QWidget(parent) {
     auto& svc = services::equity::SecFilingsService::instance();
     connect(&svc, &services::equity::SecFilingsService::section_loaded, this, &EquityFilingsTab::on_section_loaded);
     connect(&svc, &services::equity::SecFilingsService::section_failed, this, &EquityFilingsTab::on_section_failed);
+    // Table cells carry their colours as item brushes and the links are rich text with an
+    // inline colour: re-render the loaded panels for a new theme or font once the change has
+    // settled (re-sizing rows inside theme_changed would lay the screen out mid-restyle), and
+    // re-format them for a currency / number-format change.
+    const auto rerender = [this]() {
+        if (!filings_data_.isEmpty())
+            render_filings(filings_data_);
+        if (!financials_data_.isEmpty())
+            render_financials(financials_data_);
+        if (!insiders_data_.isEmpty())
+            render_insiders(insiders_data_);
+        if (!holders_data_.isEmpty())
+            render_holders(holders_data_);
+    };
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this, rerender]() {
+        const int row_h = table_row_height();
+        for (auto* t : findChildren<QTableWidget*>())
+            t->verticalHeader()->setDefaultSectionSize(row_h);
+        rerender();
+    });
+    ui::formatting::on_format_changed(this, rerender);
 }
 
 void EquityFilingsTab::build_ui() {
     setObjectName(QStringLiteral("equityFilingsTab"));
     // One stylesheet for the tab; every widget below is styled by objectName / "tone".
     setStyleSheet(
-        QStringLiteral(
+        QString(
             "#equityFilingsTab, QWidget#filingsContent { background:%1; }"
             "QFrame#filingsHeader { background:%2; border:0; border-bottom:2px solid %3; }"
             "QLabel { background:transparent; border:0; }"
-            "QLabel#filingsTitle { color:%3; font-size:11px; font-weight:700; letter-spacing:2px; }"
-            "QLabel#filingsCompany { color:%4; font-size:11px; }"
-            "QLabel#filingsLatest { color:%5; font-size:10px; }"
+            "QLabel#filingsTitle { color:%3; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:2px; }"
+            "QLabel#filingsCompany { color:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
+            "QLabel#filingsLatest { color:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; }"
             "QPushButton#filingsBtn { background:transparent; color:%5; border:1px solid %6; padding:3px 10px;"
-            " font-size:10px; font-weight:700; }"
+            " font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
             "QPushButton#filingsBtn:hover { color:%3; border-color:%3; }"
             "QFrame#filingsPanel { background:%2; border:1px solid %6; }"
-            "QLabel#filingsPanelTitle { color:%3; font-size:11px; font-weight:700; letter-spacing:1px; }"
-            "QLabel#filingsMeta { color:%7; font-size:10px; }"
+            "QLabel#filingsPanelTitle { color:%3; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px; }"
+            "QLabel#filingsMeta { color:%7; font-size:" + fincept::ui::fonts::px(-4) + "px; }"
             "QLabel#filingsMeta[tone=\"stale\"] { color:%8; }"
-            "QLabel#filingsStatus { color:%5; font-size:11px; padding:8px 0; }"
+            "QLabel#filingsStatus { color:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; padding:8px 0; }"
             "QLabel#filingsStatus[tone=\"error\"] { color:%9; }"
-            "QLabel#filingsSummary { color:%4; font-size:11px; }"
-            "QLabel#filingsBuy { color:%10; font-size:11px; font-weight:600; }"
-            "QLabel#filingsSell { color:%9; font-size:11px; font-weight:600; }"
-            "QLabel#filingsNote { color:%7; font-size:10px; }"
-            "QLabel#filingsNotice { color:%5; font-size:12px; padding:32px; }"
-            "QComboBox#filingsFilter { background:%11; color:%4; border:1px solid %6; padding:2px 6px; font-size:11px; }"
-            "QTableWidget { background:%2; alternate-background-color:%1; color:%4; border:0; font-size:11px; }"
+            "QLabel#filingsSummary { color:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
+            "QLabel#filingsBuy { color:%10; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; }"
+            "QLabel#filingsSell { color:%9; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:600; }"
+            "QLabel#filingsNote { color:%7; font-size:" + fincept::ui::fonts::px(-4) + "px; }"
+            "QLabel#filingsNotice { color:%5; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:32px; }"
+            "QComboBox#filingsFilter { background:%11; color:%4; border:1px solid %6; padding:2px 6px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
+            "QTableWidget { background:%2; alternate-background-color:%1; color:%4; border:0; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
             "QTableWidget::item { padding:0 6px; }"
             "QTableWidget::item:selected { background:%11; color:%4; }"
-            "QHeaderView::section { background:%11; color:%5; font-size:10px; font-weight:700; padding:4px 6px; border:0;"
+            "QHeaderView::section { background:%11; color:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; padding:4px 6px; border:0;"
             " border-bottom:1px solid %6; }"
             "QSplitter::handle { background:%6; }"
             "QScrollArea#filingsScroll { background:transparent; border:0; }")
@@ -207,6 +242,8 @@ void EquityFilingsTab::build_ui() {
     notice_lbl_->setObjectName(QStringLiteral("filingsNotice"));
     notice_lbl_->setAlignment(Qt::AlignCenter);
     notice_lbl_->setWordWrap(true);
+    notice_lbl_->setTextFormat(Qt::RichText);
+    connect(notice_lbl_, &QLabel::linkActivated, this, &EquityFilingsTab::open_url);
     root->addWidget(notice_lbl_, 1);
 
     body_splitter_ = new QSplitter(Qt::Horizontal, this);
@@ -328,6 +365,10 @@ void EquityFilingsTab::make_section(int slot, SecSection target, const char* tit
     body->setParent(sec.frame);
     body->setVisible(false);
     vl->addWidget(body, 1);
+    // While the body is hidden (loading / error / no data) the panel would otherwise
+    // spread its spare height between the title and the status rows, leaving the title
+    // floating mid-panel. A zero-stretch spacer takes it; a visible body (stretch 1) wins.
+    vl->addStretch(0);
 
     // The 8-K panel's RETRY re-runs the filings call that feeds it.
     connect(sec.retry, &QPushButton::clicked, this, [this, target]() { request(target, /*force=*/true); });
@@ -510,7 +551,13 @@ void EquityFilingsTab::set_symbol(const QString& symbol) {
     refresh_btn_->setEnabled(sec_eligible_);
     if (!sec_eligible_) {
         body_splitter_->setVisible(false);
-        notice_lbl_->setText(reason);
+        // A non-US listing: point at its home regulator and exchange (the links were only
+        // reachable from the error path, which a non-US symbol never takes).
+        const QString links = equity_links::regulator_filings_html(sym);
+        QPalette pal = notice_lbl_->palette(); // link colour readable on the dark surface
+        pal.setColor(QPalette::Link, QColor(ui::colors::AMBER()));
+        notice_lbl_->setPalette(pal);
+        notice_lbl_->setText(links.isEmpty() ? reason.toHtmlEscaped() : links);
         notice_lbl_->setVisible(true);
         return;
     }
@@ -596,7 +643,14 @@ void EquityFilingsTab::on_section_failed(const QString& symbol, SecSection which
             sec->meta->setProperty("tone", QStringLiteral("stale"));
             repolish(sec->meta);
         } else {
-            show_error(*sec, error);
+            // A non-US listing is not an error to retry: point at its home regulator instead.
+            const QString links = equity_links::regulator_filings_html(current_symbol_);
+            show_error(*sec, links.isEmpty() ? error : links);
+            if (!links.isEmpty()) {
+                sec->status->setProperty("tone", QString());
+                repolish(sec->status);
+                sec->retry->setVisible(false);
+            }
         }
     }
 }
@@ -615,6 +669,8 @@ void EquityFilingsTab::show_error(Section& sec, const QString& message) {
     sec.body->setVisible(false);
     sec.status->setProperty("tone", QStringLiteral("error"));
     repolish(sec.status);
+    sec.status->setTextFormat(Qt::AutoText);
+    sec.status->setOpenExternalLinks(true);
     sec.status->setText(message.isEmpty() ? tr("Could not load this panel.") : message);
     sec.status->setVisible(true);
     sec.retry->setVisible(true);
@@ -880,7 +936,7 @@ void EquityFilingsTab::render_insiders(const QJsonObject& d) {
         return n == 0 ? tr("none")
                       : tr("%n trade(s) · %1 shares · %2", "", n)
                             .arg(fmt::large(num(o.value(QStringLiteral("shares")))),
-                                 QStringLiteral("$") + fmt::large(num(o.value(QStringLiteral("value")))));
+                                 sec_usd(num(o.value(QStringLiteral("value")))));
     };
     ins_buys_lbl_->setText(tr("OPEN-MARKET BUYS (P): %1").arg(side(buys)));
     ins_sells_lbl_->setText(tr("OPEN-MARKET SELLS (S): %1").arg(side(sells)));
@@ -933,10 +989,9 @@ void EquityFilingsTab::render_insiders(const QJsonObject& d) {
         const double value = num(t.value(QStringLiteral("value")));
         const double after = num(t.value(QStringLiteral("owned_after")));
         ins_table_->setItem(r, 4, num_item(fmt::grouped(shares, 0), shares));
-        ins_table_->setItem(r, 5, num_item(fmt::missing(price) ? fmt::dash() : fmt::price(price, QStringLiteral("USD")),
-                                           price));
-        ins_table_->setItem(r, 6, num_item(fmt::missing(value) ? fmt::dash() : QStringLiteral("$") + fmt::large(value),
-                                           value));
+        // Form 4 prices and values are in US dollars by definition (a US filing).
+        ins_table_->setItem(r, 5, num_item(fmt::price(price, QStringLiteral("USD")), price));
+        ins_table_->setItem(r, 6, num_item(sec_usd(value), value));
         ins_table_->setItem(r, 7, num_item(fmt::grouped(after, 0), after));
     }
     ins_table_->setSortingEnabled(true);
@@ -972,8 +1027,7 @@ void EquityFilingsTab::render_holders(const QJsonObject& d) {
         const double chg = num(h.value(QStringLiteral("pct_change")));
         hold_table_->setItem(r, 1, num_item(fmt::large(shares), shares));
         hold_table_->setItem(r, 2, num_item(fmt::pct(pct_out, 2), pct_out));
-        hold_table_->setItem(r, 3, num_item(fmt::missing(value) ? fmt::dash() : QStringLiteral("$") + fmt::large(value),
-                                            value));
+        hold_table_->setItem(r, 3, num_item(sec_usd(value), value)); // 13F values: USD
         auto* chg_item = num_item(fmt::pct(chg, 2, true), chg);
         if (!fmt::missing(chg) && chg != 0.0)
             chg_item->setForeground(QColor(chg > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
@@ -993,7 +1047,7 @@ void EquityFilingsTab::render_holders(const QJsonObject& d) {
         own13f_lbl_->setText(tr("THIS COMPANY FILES 13F-HR AS AN INSTITUTIONAL MANAGER — top positions of its %1 report "
                                 "(%2 across %3 positions, filed %4):")
                                  .arg(own.value(QStringLiteral("report_period")).toString(),
-                                      QStringLiteral("$") + fmt::large(num(own.value(QStringLiteral("total_value")))),
+                                      sec_usd(num(own.value(QStringLiteral("total_value")))),
                                       fmt::grouped(num(own.value(QStringLiteral("total_holdings"))), 0),
                                       own.value(QStringLiteral("filed")).toString()));
         own13f_table_->setSortingEnabled(false);
@@ -1011,7 +1065,7 @@ void EquityFilingsTab::render_holders(const QJsonObject& d) {
             const double shares = num(p.value(QStringLiteral("shares")));
             const double value = num(p.value(QStringLiteral("value")));
             own13f_table_->setItem(r, 2, num_item(fmt::large(shares), shares));
-            own13f_table_->setItem(r, 3, num_item(QStringLiteral("$") + fmt::large(value), value));
+            own13f_table_->setItem(r, 3, num_item(sec_usd(value), value));
         }
         own13f_table_->setSortingEnabled(true);
         own13f_table_->resizeColumnsToContents();

@@ -2,57 +2,51 @@
 #include "screens/geopolitics/RelationshipPanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QAction>
 #include <QCursor>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QLocale>
 #include <QMouseEvent>
 #include <QScrollArea>
+
+#include <algorithm>
+#include <utility>
 
 namespace fincept::screens {
 
 using namespace fincept::services::geo;
 
-static QVector<RelationshipNode> build_nodes() {
+/// The humanitarian organisations shown as entry points to their HDX datasets.
+/// `id` is the HDX organisation slug; the pills are their fields of work.
+static QVector<RelationshipNode> organization_nodes() {
     QVector<RelationshipNode> nodes;
-
-    // Illustrative structure only (SAMPLE DATA badge + banner). There are no
-    // per-node figures: the invented "N datasets" counts read like live HDX
-    // numbers. A card's click menu browses the real HDX datasets instead.
-    // Primary conflicts
-    nodes.append({"ukraine", "Ukraine", "conflict", "critical", {"displacement", "humanitarian", "food_security"}});
-    nodes.append({"gaza", "Gaza", "conflict", "critical", {"displacement", "humanitarian", "health"}});
-    nodes.append({"sudan", "Sudan", "conflict", "critical", {"displacement", "food_security", "humanitarian"}});
-    nodes.append({"yemen", "Yemen", "conflict", "high", {"food_security", "humanitarian", "health"}});
-    nodes.append({"syria", "Syria", "conflict", "high", {"displacement", "humanitarian"}});
-    nodes.append({"myanmar", "Myanmar", "conflict", "high", {"displacement", "humanitarian"}});
-
-    // Crisis types
-    nodes.append({"displacement", "Displacement", "crisis", "high", {"unhcr"}});
-    nodes.append({"food_security", "Food Security", "crisis", "high", {"wfp", "fao"}});
-    nodes.append({"humanitarian", "Humanitarian", "crisis", "critical", {"unhcr", "wfp", "who"}});
-    nodes.append({"health", "Health Crisis", "crisis", "medium", {"who"}});
-
-    // Organizations
-    nodes.append({"unhcr", "UNHCR", "organization", "", {"displacement", "humanitarian"}});
-    nodes.append({"wfp", "WFP", "organization", "", {"food_security", "humanitarian"}});
-    nodes.append({"who", "WHO", "organization", "", {"health", "humanitarian"}});
-    nodes.append({"fao", "FAO", "organization", "", {"food_security"}});
-
+    nodes.append({"unhcr", "UNHCR", "organization", "", {"displacement", "refugees"}});
+    nodes.append({"wfp", "WFP", "organization", "", {"food security", "humanitarian"}});
+    nodes.append({"world-health-organization", "WHO", "organization", "", {"health", "humanitarian"}});
+    nodes.append({"fao", "FAO", "organization", "", {"food security", "agriculture"}});
     return nodes;
 }
 
+/// Most active countries shown as conflict cards.
+static constexpr int kRelMaxCountries = 9;
+/// Event categories shown as crisis cards.
+static constexpr int kRelMaxCategories = 9;
+
+// Severity is a state, not a price direction: red → orange → yellow → green.
 static QColor severity_color(const QString& sev) {
     if (sev == "critical")
-        return QColor(ui::colors::NEGATIVE());
+        return QColor(ui::colors::DANGER());
     if (sev == "high")
-        return QColor(ui::colors::WARNING());
+        return QColor(ui::colors::AMBER());
     if (sev == "medium")
-        return QColor(ui::colors::WARNING()).lighter(120);
+        return QColor(ui::colors::WARNING());
     if (sev == "low")
-        return QColor(ui::colors::POSITIVE());
+        return QColor(ui::colors::SUCCESS());
     return QColor(ui::colors::INFO()); // organization
 }
 
@@ -67,7 +61,7 @@ void RelationshipPanel::build_ui() {
 
     // Header
     auto* header = new QWidget(this);
-    header->setFixedHeight(48);
+    header->setMinimumHeight(48);
     header->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
@@ -81,40 +75,45 @@ void RelationshipPanel::build_ui() {
                                   .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
 
-    // The network below is illustrative sample data (see build_nodes), not a live
-    // feed — surface that honestly with a badge so the figures are never mistaken
-    // for real conflict/humanitarian metrics.
-    sample_badge_ = new QLabel(tr("SAMPLE DATA"), header);
-    sample_badge_->setToolTip(tr("Illustrative network — not sourced from a live data feed."));
-    sample_badge_->setStyleSheet(QString("color:#000; background:%1; font-size:%2px; font-weight:700;"
+    // Shown until the live country / category data has arrived.
+    sample_badge_ = new QLabel(tr("LOADING"), header);
+    sample_badge_->setToolTip(tr("Waiting for the live event statistics."));
+    sample_badge_->setStyleSheet(QString("color:%4; background:%1; font-size:%2px; font-weight:700;"
                                          "font-family:%3; padding:2px 6px; border-radius:2px; letter-spacing:1px;")
                                      .arg(ui::colors::WARNING())
                                      .arg(ui::fonts::TINY)
-                                     .arg(ui::fonts::DATA_FAMILY));
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::colors::TEXT_ON_ACCENT()));
     hhl->addWidget(sample_badge_);
 
     hhl->addStretch();
 
-    auto nodes = build_nodes();
-    int conflicts = 0, orgs = 0;
-    for (const auto& n : nodes) {
-        if (n.type == "conflict")
-            conflicts++;
-        if (n.type == "organization")
-            orgs++;
-    }
-    node_count_ = nodes.size();
-    conflict_count_ = conflicts;
-    org_count_ = orgs;
+    // The live statistics are two paid reference lists: fetched only on request.
+    load_stats_btn_ = new QPushButton(header);
+    load_stats_btn_->setProperty("fincept_agent_risk", "spend"); // agents: loads relationship statistics (6 credits)
+    load_stats_btn_->setCursor(Qt::PointingHandCursor);
+    load_stats_btn_->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                                           "font-family:%3; font-size:%4px; font-weight:700; padding:3px 10px; }"
+                                           "QPushButton:hover { background:%5; }"
+                                           "QPushButton:disabled { color:%6; border-color:%7; }")
+                                       .arg(ui::colors::INFO(), ui::colors::alpha(ui::colors::INFO, 0.5))
+                                       .arg(ui::fonts::DATA_FAMILY())
+                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::colors::alpha(ui::colors::INFO, 0.10), ui::colors::TEXT_TERTIARY(),
+                                            ui::colors::BORDER_DIM()));
+    load_stats_btn_->setToolTip(tr("Fetch the live country and category statistics of the news-event feed "
+                                   "(two lists, 3 Fincept credits each)."));
+    connect(load_stats_btn_, &QPushButton::clicked, this, &RelationshipPanel::stats_requested);
+    hhl->addWidget(load_stats_btn_);
 
-    stats_lbl_ = new QLabel(
-        tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3").arg(nodes.size()).arg(conflicts).arg(orgs), header);
+    stats_lbl_ = new QLabel(header);
     stats_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
-                                      "background:rgba(255,255,255,0.04); border:1px solid %4;")
-                                  .arg(ui::colors::TEXT_TERTIARY())
+                                      "background:%5; border:1px solid %4;")
+                                  .arg(ui::colors::TEXT_SECONDARY())
                                   .arg(ui::fonts::TINY)
                                   .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::colors::BORDER_DIM()));
+                                  .arg(ui::colors::BORDER_DIM())
+                                  .arg(ui::colors::overlay(0.04)));
     hhl->addWidget(stats_lbl_);
     root->addWidget(header);
 
@@ -133,99 +132,244 @@ void RelationshipPanel::build_ui() {
     cvl->setContentsMargins(16, 16, 16, 16);
     cvl->setSpacing(16);
 
-    // Honesty banner — the nodes/dataset counts are hardcoded sample data.
+    // How the cards are derived (live event statistics, relative severity bands).
     {
-        QColor warnc(ui::colors::WARNING());
-        const QString warn_rgb = QString("%1,%2,%3").arg(warnc.red()).arg(warnc.green()).arg(warnc.blue());
-        sample_note_ =
-            new QLabel(tr("Sample data — this relationship network is illustrative and is not sourced from a live "
-                          "feed. Severities and connections are placeholders, not real-time conflict metrics. "
-                          "Click a conflict or crisis card for its live events and HDX datasets."),
-                       content);
+        sample_note_ = new QLabel(content);
         sample_note_->setWordWrap(true);
         sample_note_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px;"
-                                            "background:rgba(%4,0.10); border:1px solid %1;")
-                                        .arg(ui::colors::WARNING())
+                                            "background:%4; border:1px solid %5;")
+                                        .arg(ui::colors::TEXT_SECONDARY())
                                         .arg(ui::fonts::SMALL)
                                         .arg(ui::fonts::DATA_FAMILY)
-                                        .arg(warn_rgb));
+                                        .arg(ui::colors::overlay(0.03))
+                                        .arg(ui::colors::BORDER_DIM()));
         cvl->addWidget(sample_note_);
     }
 
-    // Helper: add a titled section with a 3-column card grid
-    auto add_section = [&](const QString& title, const QString& color, const QString& type, QLabel** out) {
-        auto* sec_lbl = new QLabel(title, content);
-        if (out)
-            *out = sec_lbl;
-        sec_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                       "letter-spacing:2px; padding-bottom:4px; border-bottom:1px solid rgba(%4,0.3);")
-                                   .arg(color)
-                                   .arg(ui::fonts::SMALL)
-                                   .arg(ui::fonts::DATA_FAMILY)
-                                   .arg(color.mid(1)));
-        cvl->addWidget(sec_lbl);
-
-        auto* grid_w = new QWidget(content);
-        auto* gl = new QGridLayout(grid_w);
-        gl->setContentsMargins(0, 0, 0, 0);
-        gl->setSpacing(10);
-        // All 3 columns equal width
-        gl->setColumnStretch(0, 1);
-        gl->setColumnStretch(1, 1);
-        gl->setColumnStretch(2, 1);
-
-        int col = 0, row = 0;
-        for (const auto& n : nodes) {
-            if (n.type != type)
-                continue;
-            gl->addWidget(build_node_card(n, grid_w), row, col);
-            if (++col >= 3) {
-                col = 0;
-                row++;
-            }
-        }
-        // Fill remaining cells so columns stay even
-        while (col > 0 && col < 3) {
-            auto* spacer = new QWidget(grid_w);
-            spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-            gl->addWidget(spacer, row, col++);
-        }
-
-        cvl->addWidget(grid_w);
-    };
-
-    add_section(tr("ACTIVE CONFLICTS"), ui::colors::NEGATIVE(), "conflict", &sec_conflicts_);
-    add_section(tr("CRISIS TYPES"), ui::colors::WARNING(), "crisis", &sec_crisis_);
-    add_section(tr("ORGANIZATIONS"), ui::colors::INFO(), "organization", &sec_orgs_);
+    // Card sections — rebuilt whenever live countries / categories arrive.
+    sections_layout_ = new QVBoxLayout;
+    sections_layout_->setContentsMargins(0, 0, 0, 0);
+    sections_layout_->setSpacing(16);
+    cvl->addLayout(sections_layout_);
+    rebuild_sections();
 
     cvl->addStretch();
     scroll->setWidget(content);
     root->addWidget(scroll, 1);
 }
 
-QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidget* parent) {
+void RelationshipPanel::set_countries(const QVector<UniqueCountry>& countries) {
+    countries_ = countries;
+    stats_error_.clear();
+    rebuild_sections();
+}
+
+void RelationshipPanel::set_categories(const QVector<UniqueCategory>& categories) {
+    categories_ = categories;
+    stats_error_.clear();
+    rebuild_sections();
+}
+
+void RelationshipPanel::set_page_statistics(const QVector<UniqueCountry>& countries,
+                                            const QVector<UniqueCategory>& categories, int events) {
+    page_countries_ = countries;
+    page_categories_ = categories;
+    page_events_ = events;
+    // Live statistics win; the page counts only fill in while they are missing.
+    if (countries_.isEmpty() && categories_.isEmpty())
+        rebuild_sections();
+}
+
+void RelationshipPanel::set_stats_loading(bool on) {
+    if (stats_loading_ == on)
+        return;
+    stats_loading_ = on;
+    if (on)
+        stats_error_.clear();
+    rebuild_sections();
+}
+
+void RelationshipPanel::set_stats_error(const QString& error) {
+    stats_loading_ = false;
+    stats_error_ = error;
+    rebuild_sections();
+}
+
+void RelationshipPanel::rebuild_sections() {
+    if (!sections_layout_)
+        return;
+    while (sections_layout_->count() > 0) {
+        auto* item = sections_layout_->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    sec_conflicts_ = sec_crisis_ = sec_orgs_ = nullptr;
+    QWidget* host = sections_layout_->parentWidget();
+
+    // Live inputs, most active first — or, while those are not loaded, the
+    // counts of the events page on the Monitor. The unknown-country
+    // placeholder ("null") is not a place.
+    showing_live_ = !countries_.isEmpty() || !categories_.isEmpty();
+    const QVector<UniqueCountry>& src_countries = showing_live_ ? countries_ : page_countries_;
+    const QVector<UniqueCategory>& src_categories = showing_live_ ? categories_ : page_categories_;
+    QVector<UniqueCountry> countries;
+    for (const auto& c : src_countries)
+        if (!c.country.isEmpty() && c.country.compare(QLatin1String("null"), Qt::CaseInsensitive) != 0 &&
+            c.event_count > 0)
+            countries.append(c);
+    std::sort(countries.begin(), countries.end(),
+              [](const UniqueCountry& a, const UniqueCountry& b) { return a.event_count > b.event_count; });
+    countries.resize(std::min<qsizetype>(countries.size(), kRelMaxCountries));
+    QVector<UniqueCategory> cats;
+    for (const auto& c : src_categories)
+        if (!c.category.isEmpty() && c.event_count > 0)
+            cats.append(c);
+    std::sort(cats.begin(), cats.end(),
+              [](const UniqueCategory& a, const UniqueCategory& b) { return a.event_count > b.event_count; });
+    cats.resize(std::min<qsizetype>(cats.size(), kRelMaxCategories));
+
+    // Severity is relative to the busiest entry of the same list: >= 50 % of its
+    // event count critical, >= 20 % high, otherwise medium.
+    auto band = [](int count, int top) -> QString {
+        if (top <= 0)
+            return QStringLiteral("medium");
+        const double r = static_cast<double>(count) / top;
+        return r >= 0.5 ? QStringLiteral("critical") : (r >= 0.2 ? QStringLiteral("high") : QStringLiteral("medium"));
+    };
+    auto events_text = [](int n) { return tr("%1 events").arg(QLocale().toString(n)); };
+
+    auto add_section = [&](const QString& title, const QString& color, QLabel** out,
+                           const QVector<QPair<RelationshipNode, QString>>& cards, const QString& empty_text) {
+        auto* sec_lbl = new QLabel(title, host);
+        if (out)
+            *out = sec_lbl;
+        sec_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                       "letter-spacing:2px; padding-bottom:4px; border-bottom:1px solid %4;")
+                                   .arg(color)
+                                   .arg(ui::fonts::SMALL)
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(ui::colors::alpha(QColor(color), 0.3)));
+        sections_layout_->addWidget(sec_lbl);
+        if (cards.isEmpty()) {
+            auto* empty = new QLabel(empty_text, host);
+            empty->setWordWrap(true);
+            empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 0;")
+                                     .arg(ui::colors::TEXT_TERTIARY())
+                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::fonts::DATA_FAMILY));
+            sections_layout_->addWidget(empty);
+            return;
+        }
+        auto* grid_w = new QWidget(host);
+        auto* gl = new QGridLayout(grid_w);
+        gl->setContentsMargins(0, 0, 0, 0);
+        gl->setSpacing(10);
+        for (int c = 0; c < 3; ++c)
+            gl->setColumnStretch(c, 1);
+        int col = 0, row = 0;
+        for (const auto& [node, detail] : cards) {
+            gl->addWidget(build_node_card(node, grid_w, detail), row, col);
+            if (++col >= 3) {
+                col = 0;
+                row++;
+            }
+        }
+        while (col > 0 && col < 3) {
+            auto* spacer = new QWidget(grid_w);
+            spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            gl->addWidget(spacer, row, col++);
+        }
+        sections_layout_->addWidget(grid_w);
+    };
+
+    QVector<QPair<RelationshipNode, QString>> conflict_cards;
+    const int top_country = countries.isEmpty() ? 0 : countries.first().event_count;
+    for (const auto& c : std::as_const(countries))
+        conflict_cards.append({RelationshipNode{c.country, c.country, QStringLiteral("conflict"),
+                                                band(c.event_count, top_country), {}},
+                               events_text(c.event_count)});
+    QVector<QPair<RelationshipNode, QString>> crisis_cards;
+    const int top_cat = cats.isEmpty() ? 0 : cats.first().event_count;
+    for (const auto& c : std::as_const(cats))
+        crisis_cards.append({RelationshipNode{c.category, pretty_category(c.category), QStringLiteral("crisis"),
+                                              band(c.event_count, top_cat), {}},
+                             events_text(c.event_count)});
+    QVector<QPair<RelationshipNode, QString>> org_cards;
+    for (const auto& o : organization_nodes())
+        org_cards.append({o, tr("HDX datasets")});
+
+    if (conflict_cards.isEmpty() && crisis_cards.isEmpty()) {
+        // Nothing to draw yet: a skeleton while the lists load, else what LOAD
+        // fetches and what it costs (or why it failed) — never "waiting…".
+        if (stats_loading_) {
+            auto* sk = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Cards, host);
+            sk->set_message(tr("LOADING LIVE EVENT STATISTICS…"));
+            sk->set_opaque(false);
+            sk->setMinimumHeight(260);
+            sections_layout_->addWidget(sk);
+        } else {
+            auto* es = new ui::EmptyState(host);
+            es->set_alignment(Qt::AlignTop);
+            if (!stats_error_.isEmpty()) {
+                es->set_glyph(QStringLiteral("!"), ui::EmptyState::Tone::Danger);
+                es->set_title(tr("Live statistics could not be loaded"));
+                es->set_message(stats_error_.left(160));
+                es->set_note(tr("6 credits per load (countries + categories)"), ui::EmptyState::Tone::Warning);
+                es->set_primary_action(tr("RETRY (6 CREDITS)"));
+            } else {
+                es->set_glyph(QStringLiteral("◎"), ui::EmptyState::Tone::Info);
+                es->set_title(tr("Most active countries and event categories"));
+                es->set_message(tr("Cards for the busiest countries and event categories of the news-event feed, "
+                                   "ranked by event count with a relative severity band. Load events on the "
+                                   "MONITOR tab to see the counts of that page here for free."));
+                es->set_details({{tr("Countries list"), tr("3 credits")},
+                                 {tr("Categories list"), tr("3 credits")},
+                                 {tr("Kept for"), tr("6 hours — reopening is free")}},
+                                tr("WHAT LOAD FETCHES"));
+                es->set_note(tr("Not loaded automatically — 6 credits per load"), ui::EmptyState::Tone::Warning);
+                es->set_primary_action(tr("LOAD LIVE STATISTICS (6 CREDITS)"));
+            }
+            connect(es, &ui::EmptyState::primary_clicked, this, &RelationshipPanel::stats_requested);
+            sections_layout_->addWidget(es);
+        }
+    } else {
+        // Page counts are labelled as such: they describe one page of events,
+        // not the whole feed.
+        const QString scope = showing_live_ ? QString() : tr("  ·  LATEST %1 EVENTS").arg(page_events_);
+        const QString none = tr("No entries in this list.");
+        add_section(tr("MOST ACTIVE COUNTRIES") + scope, ui::colors::DANGER(), &sec_conflicts_, conflict_cards, none);
+        add_section(tr("EVENT CATEGORIES") + scope, ui::colors::WARNING(), &sec_crisis_, crisis_cards, none);
+    }
+    add_section(tr("ORGANIZATIONS"), ui::colors::INFO(), &sec_orgs_, org_cards, QString());
+
+    node_count_ = conflict_cards.size() + crisis_cards.size() + org_cards.size();
+    conflict_count_ = conflict_cards.size();
+    org_count_ = org_cards.size();
+    retranslateUi(); // header badge / button / stats + note text for the new state
+}
+
+QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidget* parent, const QString& detail) {
     auto color = severity_color(node.severity.isEmpty() ? "organization" : node.severity);
     const QString col_hex = color.name();
-    const QString col_rgb = QString("%1,%2,%3").arg(color.red()).arg(color.green()).arg(color.blue());
 
     auto* card = new QWidget(parent);
     card->setObjectName("nodeCard");
     card->setMinimumHeight(110);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    // Conflict and crisis cards open a "show events / browse HDX" menu on click;
-    // organisations have no drill-down so they stay inert.
-    if (node.type == QLatin1String("conflict") || node.type == QLatin1String("crisis")) {
-        card->setProperty("node_id", node.id);
-        card->setProperty("node_type", node.type);
-        card->setProperty("node_label", node.label);
-        card->setCursor(Qt::PointingHandCursor);
-        card->setToolTip(tr("Click for related events and HDX datasets"));
-        card->installEventFilter(this);
-    }
-    card->setStyleSheet(QString("#nodeCard { background:%1; border:1px solid rgba(%2,0.25);"
+    // Every card opens its drill-down menu on click: a country its events and
+    // HDX datasets, a category its HDX topic, an organisation its HDX datasets.
+    card->setProperty("node_id", node.id);
+    card->setProperty("node_type", node.type);
+    card->setProperty("node_label", node.label);
+    card->setCursor(Qt::PointingHandCursor);
+    card->setToolTip(node.type == QLatin1String("organization") ? tr("Click to browse %1 datasets on HDX").arg(node.label)
+                                                                : tr("Click for related events and HDX datasets"));
+    card->installEventFilter(this);
+    card->setStyleSheet(QString("#nodeCard { background:%1; border:1px solid %2;"
                                 "border-left:3px solid %3; }")
                             .arg(ui::colors::BG_RAISED())
-                            .arg(col_rgb)
+                            .arg(ui::colors::alpha(color, 0.25))
                             .arg(col_hex));
 
     auto* vl = new QVBoxLayout(card);
@@ -248,19 +392,20 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     const QString badge_text = node.severity.isEmpty() ? node.type.toUpper() : node.severity.toUpper();
     auto* badge = new QLabel(badge_text, name_row);
     badge->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                 "padding:2px 6px; background:rgba(%4,0.12); border:1px solid rgba(%4,0.3);"
+                                 "padding:2px 6px; background:%4; border:1px solid %5;"
                                  "border-radius:8px; letter-spacing:1px;")
                              .arg(col_hex)
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(col_rgb));
+                             .arg(ui::colors::alpha(color, 0.12))
+                             .arg(ui::colors::alpha(color, 0.3)));
     name_hl->addWidget(badge);
     vl->addWidget(name_row);
 
-    // Type label
-    auto* type_lbl = new QLabel(node.type.toUpper(), card);
+    // Live figure (event count) when there is one, else the node type.
+    auto* type_lbl = new QLabel(detail.isEmpty() ? node.type.toUpper() : detail, card);
     type_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                .arg(ui::colors::TEXT_TERTIARY())
+                                .arg(ui::colors::TEXT_SECONDARY())
                                 .arg(ui::fonts::TINY)
                                 .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(type_lbl);
@@ -277,24 +422,26 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
         for (int i = 0; i < shown; ++i) {
             auto* pill = new QLabel(node.connections[i], pills_row);
             pill->setStyleSheet(QString("color:%1; font-size:%2px; padding:1px 6px;"
-                                        "background:rgba(255,255,255,0.05); border:1px solid %3;"
+                                        "background:%5; border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
                                     .arg(ui::colors::TEXT_SECONDARY())
                                     .arg(ui::fonts::TINY)
                                     .arg(ui::colors::BORDER_DIM())
-                                    .arg(ui::fonts::DATA_FAMILY));
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::colors::overlay(0.05)));
             pills_hl->addWidget(pill);
         }
 
         if (node.connections.size() > max_pills) {
             auto* more = new QLabel(QString("+%1").arg(node.connections.size() - max_pills), pills_row);
             more->setStyleSheet(QString("color:%1; font-size:%2px; padding:1px 6px;"
-                                        "background:rgba(255,255,255,0.05); border:1px solid %3;"
+                                        "background:%5; border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
-                                    .arg(ui::colors::TEXT_TERTIARY())
+                                    .arg(ui::colors::TEXT_SECONDARY())
                                     .arg(ui::fonts::TINY)
                                     .arg(ui::colors::BORDER_DIM())
-                                    .arg(ui::fonts::DATA_FAMILY));
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::colors::overlay(0.05)));
             pills_hl->addWidget(more);
         }
 
@@ -335,6 +482,9 @@ void RelationshipPanel::show_node_menu(QWidget* card) {
         topic.replace(QLatin1Char('_'), QLatin1Char(' '));
         connect(menu.addAction(tr("Browse HDX datasets: %1").arg(label)), &QAction::triggered, this,
                 [this, topic]() { emit hdx_topic_requested(topic); });
+    } else if (type == QLatin1String("organization")) {
+        connect(menu.addAction(tr("Browse %1 datasets on HDX").arg(label)), &QAction::triggered, this,
+                [this, id]() { emit hdx_organization_requested(id); });
     }
     if (!menu.isEmpty())
         menu.exec(QCursor::pos());
@@ -349,24 +499,48 @@ void RelationshipPanel::changeEvent(QEvent* event) {
 void RelationshipPanel::retranslateUi() {
     if (title_lbl_)
         title_lbl_->setText(tr("GEOPOLITICAL RELATIONSHIP NETWORK"));
+    const bool page_counts = !showing_live_ && (!page_countries_.isEmpty() || !page_categories_.isEmpty());
     if (sample_badge_) {
-        sample_badge_->setText(tr("SAMPLE DATA"));
-        sample_badge_->setToolTip(tr("Illustrative network — not sourced from a live data feed."));
+        // What the cards show: live statistics (no badge), the Monitor's page
+        // counts, a load in progress, or nothing loaded yet.
+        sample_badge_->setVisible(!showing_live_);
+        if (stats_loading_) {
+            sample_badge_->setText(tr("LOADING"));
+            sample_badge_->setToolTip(tr("Fetching the live event statistics."));
+        } else if (page_counts) {
+            sample_badge_->setText(tr("LATEST %1 EVENTS").arg(page_events_));
+            sample_badge_->setToolTip(tr("Counts of the events page loaded on the Monitor tab (no credits). "
+                                         "LOAD LIVE STATISTICS ranks the whole feed."));
+        } else {
+            sample_badge_->setText(tr("NOT LOADED"));
+            sample_badge_->setToolTip(tr("The live statistics are loaded on request (6 credits)."));
+        }
+    }
+    if (load_stats_btn_) {
+        load_stats_btn_->setVisible(!showing_live_);
+        load_stats_btn_->setEnabled(!stats_loading_);
+        load_stats_btn_->setText(stats_loading_ ? tr("LOADING…") : tr("LOAD LIVE STATISTICS · 6 CR"));
     }
     if (sample_note_)
         sample_note_->setText(
-            tr("Sample data — this relationship network is illustrative and is not sourced from a live "
-               "feed. Severities and connections are placeholders, not real-time conflict metrics. "
-               "Click a conflict or crisis card for its live events and HDX datasets."));
+            page_counts
+                ? tr("Counts of the %1 events on the Monitor tab, with severity relative to the busiest entry "
+                     "(critical ≥ 50 %, high ≥ 20 % of its events). LOAD LIVE STATISTICS ranks the whole feed. "
+                     "Click a card for its events in the Monitor and its HDX datasets.")
+                      .arg(page_events_)
+                : tr("Live event statistics: the most active countries and event categories of the news-event feed, "
+                     "with severity relative to the busiest entry (critical ≥ 50 %, high ≥ 20 % of its events). "
+                     "Click a card for its events in the Monitor and its HDX datasets."));
     if (stats_lbl_)
-        stats_lbl_->setText(tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3")
-                                .arg(node_count_)
+        stats_lbl_->setText(tr("COUNTRIES: %1  |  CATEGORIES: %2  |  ORGANIZATIONS: %3")
                                 .arg(conflict_count_)
+                                .arg(node_count_ - conflict_count_ - org_count_)
                                 .arg(org_count_));
+    const QString scope = page_counts ? tr("  ·  LATEST %1 EVENTS").arg(page_events_) : QString();
     if (sec_conflicts_)
-        sec_conflicts_->setText(tr("ACTIVE CONFLICTS"));
+        sec_conflicts_->setText(tr("MOST ACTIVE COUNTRIES") + scope);
     if (sec_crisis_)
-        sec_crisis_->setText(tr("CRISIS TYPES"));
+        sec_crisis_->setText(tr("EVENT CATEGORIES") + scope);
     if (sec_orgs_)
         sec_orgs_->setText(tr("ORGANIZATIONS"));
     // Node-card entity names/types/connections are fixed data values (not translated).

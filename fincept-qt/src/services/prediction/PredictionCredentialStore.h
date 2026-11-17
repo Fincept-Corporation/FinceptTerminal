@@ -42,13 +42,18 @@ struct PolymarketCredentials {
 /// store). Keys used:
 ///   prediction/polymarket/credentials  → JSON blob of PolymarketCredentials
 ///   prediction/kalshi/credentials      → JSON blob of KalshiCredentials
+///
+/// load_*() return nullopt both when nothing is stored and when the stored set
+/// cannot be read (secure storage busy, damaged row, key unavailable). Those are
+/// different: `read_error` (when given) gets a plain sentence in the second case,
+/// and a caller must then not report "no account", clear or overwrite anything.
 class PredictionCredentialStore {
   public:
-    static std::optional<PolymarketCredentials> load_polymarket();
+    static std::optional<PolymarketCredentials> load_polymarket(QString* read_error = nullptr);
     static bool save_polymarket(const PolymarketCredentials& creds);
     static bool clear_polymarket();
 
-    static std::optional<kalshi_ns::KalshiCredentials> load_kalshi();
+    static std::optional<kalshi_ns::KalshiCredentials> load_kalshi(QString* read_error = nullptr);
     static bool save_kalshi(const kalshi_ns::KalshiCredentials& creds);
     static bool clear_kalshi();
 };

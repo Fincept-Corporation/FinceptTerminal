@@ -1,40 +1,33 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-03E734EA
-# Category: Options
-# Description: RSI-based overbought/oversold strategy adapted from American
-#   options pricing research. Buys SPY when RSI(14) drops below 30 (oversold),
-#   exits when RSI rises above 70 (overbought).
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
+from OptionPriceModelForOptionStylesBaseRegressionAlgorithm import OptionPriceModelForOptionStylesBaseRegressionAlgorithm
 
-class OptionPriceModelForUnsupportedAmericanOptionRegressionAlgorithm(QCAlgorithm):
-    """RSI overbought/oversold strategy adapted from options pricing models."""
-
+### <summary>
+### Regression algorithm exercising an equity covered American style option, using an option price model
+### that supports American style options and asserting that the option price model is used.
+### </summary>
+class OptionPriceModelForUnsupportedAmericanOptionRegressionAlgorithm(OptionPriceModelForOptionStylesBaseRegressionAlgorithm):
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+        self.set_start_date(2014, 6, 9)
+        self.set_end_date(2014, 6, 9)
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+        option = self.add_option("AAPL", Resolution.MINUTE)
+        # BlackSholes model does not support American style options
+        option.price_model = OptionPriceModels.black_scholes()
 
-        self._rsi = self.rsi(self.symbol, 14, Resolution.DAILY)
+        self.set_warmup(2, Resolution.DAILY)
 
-    def on_data(self, data):
-        if not self._rsi.is_ready:
-            return
-        if self.symbol not in data:
-            return
-
-        rsi_val = self._rsi.current.value
-
-        if not self.portfolio.invested and rsi_val < 30:
-            self.set_holdings(self.symbol, 1)
-        elif self.portfolio.invested and rsi_val > 70:
-            self.liquidate()
+        self.init(option, option_style_is_supported=False)

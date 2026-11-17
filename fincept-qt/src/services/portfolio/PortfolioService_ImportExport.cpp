@@ -5,6 +5,7 @@
 // Part of the partial-class split of PortfolioService.cpp.
 
 #include "core/logging/Logger.h"
+#include "core/market/InstrumentCurrency.h"
 #include "python/PythonRunner.h"
 #include "services/portfolio/PortfolioService.h"
 #include "services/sectors/SectorResolver.h"
@@ -13,6 +14,7 @@
 #include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
+#include "ui/formatting/NumberFormat.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -35,10 +37,13 @@ namespace fincept::services {
 void PortfolioService::export_csv(const QString& portfolio_id, const QString& file_path) {
     auto assets_r = PortfolioRepository::instance().get_assets(portfolio_id);
     auto portfolio_r = PortfolioRepository::instance().get_portfolio(portfolio_id);
-    auto txns_r = PortfolioRepository::instance().get_transactions(portfolio_id, 10000);
+    auto txns_r = PortfolioRepository::instance().get_transactions(portfolio_id, 1000000);
 
     if (assets_r.is_err() || portfolio_r.is_err()) {
-        LOG_ERROR("PortfolioSvc", "Export CSV failed: cannot load data");
+        LOG_ERROR("PortfolioSvc",
+                  logf("Export CSV failed: cannot load data",
+                       {{"portfolio", portfolio_id}, {"path", log_path(file_path)},
+                        {"error", QString::fromStdString(assets_r.is_err() ? assets_r.error() : portfolio_r.error())}}));
         emit export_failed(file_path, tr("Could not read the portfolio from the database."));
         return;
     }
@@ -51,31 +56,37 @@ void PortfolioService::export_csv(const QString& portfolio_id, const QString& fi
     }
 
     QTextStream out(&file);
-    // QTextStream defaults to 6 significant digits, which silently rounded
-    // prices/quantities (1234.5678 -> 1234.57, 1234567 -> 1.23457e+06) in the
-    // exported file. 12 keeps any realistic holding exact without printing
-    // binary-float noise.
-    out.setRealNumberPrecision(12);
+    // Numbers are machine-readable (C locale, no grouping, never an exponent: a
+    // stream's 'g' notation wrote 0.00001 BTC as "1e-05"), each money column
+    // with its ISO code beside it.
+    namespace fmt = ui::formatting;
+    const auto num = [](double v) { return fmt::export_number(v); };
     auto& p = portfolio_r.value();
     out << "# Portfolio: " << p.name << "\n";
     out << "# Owner: " << p.owner << "\n";
     out << "# Currency: " << p.currency << "\n";
     out << "# Exported: " << QDateTime::currentDateTimeUtc().toString(Qt::ISODate) << "\n\n";
 
-    // Holdings section
+    // Holdings section. AvgBuyPrice / CostBasis are in the instrument's quoted
+    // currency (Currency, minor units kept: "GBp"), not the base currency.
     out << "## HOLDINGS\n";
-    out << "Symbol,Quantity,AvgBuyPrice,CostBasis\n";
+    out << "Symbol,Quantity,AvgBuyPrice,CostBasis,Currency\n";
     for (const auto& a : assets_r.value()) {
-        out << a.symbol << "," << a.quantity << "," << a.avg_buy_price << "," << (a.quantity * a.avg_buy_price) << "\n";
+        QString qccy = core::market::currency_for_symbol(a.symbol, a.exchange);
+        if (qccy.isEmpty())
+            qccy = p.currency;
+        out << a.symbol << "," << num(a.quantity) << "," << num(a.avg_buy_price) << ","
+            << num(a.quantity * a.avg_buy_price) << "," << qccy << "\n";
     }
 
     // Transactions section
     if (txns_r.is_ok() && !txns_r.value().isEmpty()) {
         out << "\n## TRANSACTIONS\n";
-        out << "Date,Symbol,Type,Quantity,Price,TotalValue,Notes\n";
+        out << "Date,Symbol,Type,Quantity,Price,TotalValue,Fees,Taxes,Currency,FxRate,Notes\n";
         for (const auto& t : txns_r.value()) {
-            out << t.transaction_date << "," << t.symbol << "," << t.transaction_type << "," << t.quantity << ","
-                << t.price << "," << t.total_value << ",\""
+            out << t.transaction_date << "," << t.symbol << "," << t.transaction_type << "," << num(t.quantity) << ","
+                << num(t.price) << "," << num(t.total_value) << "," << num(t.fees) << "," << num(t.taxes) << ","
+                << t.currency << "," << num(t.fx_rate) << ",\""
                 << QString(t.notes).replace(QLatin1Char('"'), QStringLiteral("\"\"")) << "\"\n";
         }
     }
@@ -87,17 +98,19 @@ void PortfolioService::export_csv(const QString& portfolio_id, const QString& fi
 
 void PortfolioService::export_json(const QString& portfolio_id, const QString& file_path) {
     auto portfolio_r = PortfolioRepository::instance().get_portfolio(portfolio_id);
-    auto txns_r = PortfolioRepository::instance().get_transactions(portfolio_id, 10000);
+    auto txns_r = PortfolioRepository::instance().get_transactions(portfolio_id, 1000000);
 
     if (portfolio_r.is_err()) {
-        LOG_ERROR("PortfolioSvc", "Export JSON failed: cannot load portfolio");
+        LOG_ERROR("PortfolioSvc", logf("Export JSON failed: cannot load portfolio",
+                                       {{"portfolio", portfolio_id}, {"path", log_path(file_path)},
+                                        {"error", QString::fromStdString(portfolio_r.error())}}));
         emit export_failed(file_path, tr("Could not read the portfolio from the database."));
         return;
     }
 
     auto& p = portfolio_r.value();
     QJsonObject root;
-    root["format_version"] = "1.0";
+    root["format_version"] = "1.1"; // 1.1: fees / taxes / currency / fx_rate / lot_id per row, cash row types
     root["portfolio_name"] = p.name;
     root["owner"] = p.owner;
     root["currency"] = p.currency;
@@ -114,6 +127,12 @@ void PortfolioService::export_json(const QString& portfolio_id, const QString& f
             obj["price"] = t.price;
             obj["total_value"] = t.total_value;
             obj["notes"] = t.notes;
+            obj["fees"] = t.fees;
+            obj["taxes"] = t.taxes;
+            obj["currency"] = t.currency;
+            obj["fx_rate"] = t.fx_rate;
+            if (!t.lot_id.isEmpty())
+                obj["lot_id"] = t.lot_id;
             txn_arr.append(obj);
         }
     }
@@ -141,11 +160,15 @@ namespace portfolio_import_detail {
 struct ImportRow {
     QString date; // YYYY-MM-DD
     QString symbol;
-    QString type; // BUY / SELL / DIVIDEND
+    QString type; // any portfolio::txn type
     double quantity = 0;
     double price = 0;
     QString notes;
     QString sector;
+    double fees = 0;
+    double taxes = 0;
+    QString currency;
+    double fx_rate = 0;
 };
 
 /// First present key among @p keys, as a JSON value.
@@ -197,7 +220,7 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     namespace pimp = portfolio_import_detail;
     QFile file(file_path);
     if (!file.open(QIODevice::ReadOnly)) {
-        emit import_complete({"", "", 0, {tr("Cannot open file: %1").arg(file_path)}});
+        emit import_complete({"", "", 0, {tr("Cannot open file: %1").arg(file_path)}, {}});
         return;
     }
     QJsonParseError parse_err;
@@ -205,11 +228,11 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     file.close();
     if (doc.isNull()) {
         emit import_complete(
-            {"", "", 0, {tr("Not valid JSON: %1 (at byte %2)").arg(parse_err.errorString()).arg(parse_err.offset)}});
+            {"", "", 0, {tr("Not valid JSON: %1 (at byte %2)").arg(parse_err.errorString()).arg(parse_err.offset)}, {}});
         return;
     }
     if (!doc.isObject()) {
-        emit import_complete({"", "", 0, {tr("The file must contain a JSON object at the top level, not an array.")}});
+        emit import_complete({"", "", 0, {tr("The file must contain a JSON object at the top level, not an array.")}, {}});
         return;
     }
     const auto root = doc.object();
@@ -225,7 +248,11 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     if (mode == portfolio::ImportMode::New && name.isEmpty())
         problems << tr("'portfolio_name' (or 'name') is missing or empty.");
     const QString owner = root.value("owner").toString();
-    const QString currency = root.value("currency").toString("USD").trimmed().toUpper();
+    // A file that names no currency creates the portfolio in the user's display currency (what
+    // the New Portfolio dialog preselects); a non-string value is refused below.
+    const QJsonValue currency_json = root.value("currency");
+    const QString currency =
+        (currency_json.isUndefined() ? ui::formatting::display_currency() : currency_json.toString()).trimmed().toUpper();
     if (currency.size() != 3 || !std::all_of(currency.begin(), currency.end(), [](QChar c) { return c.isLetter(); }))
         problems << tr("'currency' must be a 3-letter ISO code (got %1).").arg(pimp::describe(root.value("currency")));
 
@@ -268,40 +295,63 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
                                   .arg(arr_name)
                                   .arg(i)
                                   .arg(row.symbol.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(row.symbol));
-        if (row.symbol.isEmpty())
-            problems << tr("%1: 'symbol' is missing.").arg(where);
 
         row.type = has_txns ? o.value("type").toString().trimmed().toUpper() : QStringLiteral("BUY");
-        if (row.type == QLatin1String("SPLIT")) {
-            skipped << tr("%1: SPLIT rows are not supported and were skipped — record the post-split position "
-                          "as BUY/SELL rows.")
-                           .arg(where);
+        if (!portfolio::txn::is_valid_type(row.type)) {
+            problems << tr("%1: 'type' must be one of %2 (got %3).")
+                            .arg(where, portfolio::txn::all_types().join(QStringLiteral(", ")),
+                                 pimp::describe(o.value("type")));
             continue;
         }
-        if (row.type != QLatin1String("BUY") && row.type != QLatin1String("SELL") &&
-            row.type != QLatin1String("DIVIDEND")) {
-            problems << tr("%1: 'type' must be BUY, SELL or DIVIDEND (got %2).")
-                            .arg(where, pimp::describe(o.value("type")));
-            continue;
-        }
+        const bool cash_row = portfolio::txn::is_cash_only(row.type);
+        if (row.symbol.isEmpty() && !cash_row)
+            problems << tr("%1: 'symbol' is missing.").arg(where);
 
-        const QJsonValue qv = pimp::first_of(o, {"quantity", "qty", "shares", "units"});
+        // Cash rows carry an amount; SPLIT a factor (new units per old unit).
+        const QJsonValue qv = cash_row ? pimp::first_of(o, {"amount", "quantity", "total_value", "value"})
+                                       : row.type == QLatin1String("SPLIT")
+                                             ? pimp::first_of(o, {"ratio", "factor", "split_ratio", "quantity"})
+                                             : pimp::first_of(o, {"quantity", "qty", "shares", "units"});
         const auto qty = pimp::to_number(qv);
         if (!qty || *qty <= 0)
-            problems << tr("%1: quantity must be a number > 0 (got %2).").arg(where, pimp::describe(qv));
+            problems << tr("%1: %2 must be a number > 0 (got %3).")
+                            .arg(where,
+                                 cash_row ? QStringLiteral("amount")
+                                          : (row.type == QLatin1String("SPLIT") ? QStringLiteral("ratio")
+                                                                                 : QStringLiteral("quantity")),
+                                 pimp::describe(qv));
         else
             row.quantity = *qty;
 
-        const QJsonValue pv = has_txns ? pimp::first_of(o, {"price", "amount_per_share"})
-                                       : pimp::first_of(o, {"avg_cost", "avg_buy_price", "average_cost", "cost",
-                                                            "price"});
-        const auto price = pimp::to_number(pv);
-        if (!price || *price <= 0)
-            problems << tr("%1: %2 must be a number > 0 (got %3).")
-                            .arg(where, has_txns ? QStringLiteral("price") : QStringLiteral("avg_cost"),
-                                 pimp::describe(pv));
-        else
-            row.price = *price;
+        if (cash_row) {
+            row.price = 1.0;
+        } else if (row.type == QLatin1String("SPLIT")) {
+            row.price = 0.0;
+        } else {
+            const QJsonValue pv = has_txns ? pimp::first_of(o, {"price", "amount_per_share"})
+                                           : pimp::first_of(o, {"avg_cost", "avg_buy_price", "average_cost", "cost",
+                                                                "price"});
+            const auto price = pimp::to_number(pv);
+            if (!price || *price <= 0)
+                problems << tr("%1: %2 must be a number > 0 (got %3).")
+                                .arg(where, has_txns ? QStringLiteral("price") : QStringLiteral("avg_cost"),
+                                     pimp::describe(pv));
+            else
+                row.price = *price;
+        }
+        for (const auto& [key, target] : {std::pair<const char*, double*>{"fees", &row.fees},
+                                          std::pair<const char*, double*>{"taxes", &row.taxes},
+                                          std::pair<const char*, double*>{"fx_rate", &row.fx_rate}}) {
+            const QJsonValue v = o.value(QLatin1String(key));
+            if (v.isUndefined() || v.isNull())
+                continue;
+            const auto n = pimp::to_number(v);
+            if (!n || *n < 0)
+                problems << tr("%1: '%2' must be a number ≥ 0 (got %3).").arg(where, QLatin1String(key), pimp::describe(v));
+            else
+                *target = *n;
+        }
+        row.currency = o.value("currency").toString().trimmed();
 
         const QJsonValue dv = pimp::first_of(o, {"date", "purchase_date", "first_purchase_date", "trade_date"});
         if (dv.isUndefined() || dv.toString().trimmed().isEmpty()) {
@@ -335,10 +385,18 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
 
     // Chronological replay: exports are newest-first, and replaying a SELL
     // before the BUY that funded it would reject it. Ties: BUY first.
+    // A SPLIT is effective at the open of its date; a deposit funds that day's buys.
     std::stable_sort(rows.begin(), rows.end(), [](const pimp::ImportRow& a, const pimp::ImportRow& b) {
         if (a.date != b.date)
             return a.date < b.date;
-        return (a.type == QLatin1String("BUY") ? 0 : 1) < (b.type == QLatin1String("BUY") ? 0 : 1);
+        auto rank = [](const QString& t) {
+            if (t == QLatin1String("SPLIT"))
+                return 0;
+            if (t == QLatin1String("DEPOSIT"))
+                return 1;
+            return t == QLatin1String("BUY") ? 2 : 3;
+        };
+        return rank(a.type) < rank(b.type);
     });
 
     // Simulate the positions so an over-sell is caught before anything is written.
@@ -352,6 +410,11 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         for (const auto& r : rows) {
             if (r.type == QLatin1String("BUY")) {
                 held[r.symbol] += r.quantity;
+            } else if (r.type == QLatin1String("SPLIT")) {
+                if (held.value(r.symbol, 0.0) <= 0)
+                    problems << tr("SPLIT %1 on %2: nothing held at that date.").arg(r.symbol, r.date);
+                else
+                    held[r.symbol] *= r.quantity;
             } else if (r.type == QLatin1String("SELL")) {
                 const double h = held.value(r.symbol, 0.0);
                 if (r.quantity > h + std::max(1e-9, h * 1e-9))
@@ -372,15 +435,17 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         shown.prepend(tr("Nothing was imported — %n problem(s) found:", "", static_cast<int>(problems.size())));
         LOG_ERROR("PortfolioSvc",
                   QString("Import rejected: %1 problem(s), first: %2").arg(problems.size()).arg(problems.first()));
-        emit import_complete({"", name, 0, shown});
+        emit import_complete({"", name, 0, shown, {}});
         return;
     }
 
     if (mode == portfolio::ImportMode::New) {
         auto r = repo.create_portfolio(name, owner, currency);
         if (r.is_err()) {
+            const QString raw = QString::fromStdString(r.error());
+            LOG_ERROR("PortfolioSvc", "Import: create_portfolio failed: " + raw);
             emit import_complete(
-                {"", name, 0, {tr("Failed to create portfolio: %1").arg(QString::fromStdString(r.error()))}});
+                {"", name, 0, {storage_failure_text(tr("Could not create the portfolio \"%1\".").arg(name), raw)}, raw});
             return;
         }
         target_id = r.value();
@@ -388,11 +453,19 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
 
     int replayed = 0;
     QStringList errors = skipped;
+    QStringList raw_errors; // database reasons: details only, never the visible text
+    bool schema_failure = false;
+    const auto db_error = [&](const QString& type, const QString& symbol, const std::string& raw) {
+        const QString reason = QString::fromStdString(raw);
+        schema_failure = schema_failure || is_schema_failure(reason);
+        raw_errors << QStringLiteral("%1 %2: %3").arg(type, symbol, reason);
+        errors << tr("%1 %2: not saved — the database refused the row.").arg(type, symbol);
+    };
     for (const auto& r : rows) {
         if (r.type == QLatin1String("BUY")) {
             auto ar = repo.add_asset(target_id, r.symbol, r.quantity, r.price, r.date, sector_hints.value(r.symbol));
             if (ar.is_err()) {
-                errors << QStringLiteral("BUY %1: %2").arg(r.symbol, QString::fromStdString(ar.error()));
+                db_error(r.type, r.symbol, ar.error());
                 continue;
             }
         } else if (r.type == QLatin1String("SELL")) {
@@ -415,12 +488,44 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
                 errors << QStringLiteral("SELL %1: position not found").arg(r.symbol);
                 continue;
             }
+        } else if (r.type == QLatin1String("SPLIT")) {
+            bool split = false;
+            if (auto assets = repo.get_assets(target_id); assets.is_ok()) {
+                for (const auto& a : assets.value()) {
+                    if (a.symbol != r.symbol)
+                        continue;
+                    repo.update_asset(target_id, r.symbol, a.quantity * r.quantity, a.avg_buy_price / r.quantity);
+                    split = true;
+                    break;
+                }
+            }
+            if (!split) {
+                errors << QStringLiteral("SPLIT %1: position not found").arg(r.symbol);
+                continue;
+            }
         }
-        auto tr_r = repo.add_transaction(target_id, r.symbol, r.type, r.quantity, r.price, r.date, r.notes);
+        portfolio::Transaction row;
+        row.portfolio_id = target_id;
+        row.symbol = r.symbol;
+        row.transaction_type = r.type;
+        row.quantity = r.quantity;
+        row.price = r.price;
+        row.transaction_date = r.date;
+        row.notes = r.notes;
+        row.fees = r.fees;
+        row.taxes = r.taxes;
+        row.currency = r.currency;
+        row.fx_rate = r.fx_rate;
+        auto tr_r = repo.add_transaction(row);
         if (tr_r.is_err())
-            errors << QStringLiteral("%1 %2: %3").arg(r.type, r.symbol, QString::fromStdString(tr_r.error()));
+            db_error(r.type, r.symbol, tr_r.error());
         else
             ++replayed;
+    }
+    if (!raw_errors.isEmpty()) {
+        LOG_ERROR("PortfolioSvc", "Import: " + raw_errors.join(QStringLiteral("; ")));
+        if (schema_failure)
+            errors.prepend(storage_failure_text({}, raw_errors.first()));
     }
 
     // Seed SectorResolver with the file's authoritative sectors and resolve the rest.
@@ -439,7 +544,7 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     analytics_cache_.remove(target_id);
     load_portfolios();
 
-    emit import_complete({target_id, name, replayed, errors});
+    emit import_complete({target_id, name, replayed, errors, raw_errors.join(QLatin1Char('\n'))});
     LOG_INFO("PortfolioSvc", QString("Imported %1 rows (%2) into %3, %4 note(s)")
                                  .arg(replayed)
                                  .arg(has_txns ? "transactions" : "holdings")

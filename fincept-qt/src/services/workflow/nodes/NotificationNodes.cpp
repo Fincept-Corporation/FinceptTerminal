@@ -45,10 +45,14 @@ static auto make_execute(const QString& provider_id) {
     };
 }
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_notification_nodes(NodeRegistry& registry) {
     auto make_notif = [&](const QString& id, const QString& name, const QString& desc, QVector<ParamDef> extra_params) {
         QVector<ParamDef> params = {
-            {"message", "Message", "string", "", {}, "Notification message", true},
+            // Required only when nothing is wired in: blank = forward what the upstream
+            // node produced (WorkflowService::validate exempts it when the node has an input).
+            {"message", "Message", "string", "", {}, "Blank = send what the upstream node produced", true},
             {"title", "Title", "string", "", {}, "Notification title"},
         };
         params.append(extra_params);

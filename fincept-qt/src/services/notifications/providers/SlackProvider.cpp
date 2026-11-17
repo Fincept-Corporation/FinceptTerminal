@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/SlackProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -40,14 +42,13 @@ void SlackProvider::send(const NotificationRequest& req, std::function<void(bool
     if (!channel_.isEmpty())
         body["channel"] = channel_;
 
-    HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        // Slack returns plain text "ok" on success
-        cb(true, {});
-    });
+    // An incoming webhook answers the text "ok" (a Workflow / Web API URL answers
+    // JSON {"ok":…}): send_delivery() decides on the HTTP status and that flag.
+    DeliveryRequest request;
+    request.service = DeliveryService::Slack;
+    request.url = webhook_url_;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

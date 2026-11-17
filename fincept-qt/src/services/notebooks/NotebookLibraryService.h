@@ -10,7 +10,10 @@
 //   - Provide a writable working copy for the Library "OPEN" action so the
 //     bundled originals stay pristine and user edits persist + stay in sync.
 
+#include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
+#include <QList>
 #include <QObject>
 #include <QPair>
 #include <QString>
@@ -27,6 +30,10 @@ namespace fincept::services {
 /// One cell execution request (see NotebookLibraryService::run_cell).
 struct NotebookRunRequest {
     QString code;
+    /// Earlier cells re-run first, in order, in the same process with their output
+    /// discarded: every run is a fresh interpreter, so this is how a cell sees the
+    /// variables / imports of the cells that already ran in the session.
+    QStringList prefix_code;
     QString kernel = QStringLiteral("numpy2"); ///< "numpy2" (default venv) | "numpy1" (vectorbt, bt, ffn, ...)
     int timeout_s = 1800;                      ///< cell time limit; the run is interrupted when it passes
     QString working_dir;                       ///< cwd for the cell (the notebook's folder); empty = scripts dir
@@ -40,6 +47,10 @@ struct NotebookRunResult {
     /// one stream merged. Capped (see output_truncated).
     QVector<QPair<bool, QString>> streams;
     QString result_text; ///< repr() of the cell's last expression, if any
+    /// Rich outputs in arrival order — the runner's "display" events: {"mime": "image/png",
+    /// "data": base64} per open matplotlib figure, {"mime": "application/x-table", "columns",
+    /// "index", "index_name", "rows", "total_rows", "total_columns"} for a DataFrame / Series.
+    QList<QJsonObject> displays;
     QString error_name;  ///< e.g. "ZeroDivisionError", "TimeoutError", "KeyboardInterrupt"
     QString error_value;
     QStringList traceback;
@@ -61,6 +72,17 @@ struct NotebookCatalogEntry {
     QString requirements; // "stdlib" | "pandas + numpy"
     QString summary;
     QString file; // bundled filename, e.g. finance_time_value_of_money.ipynb
+    QStringList tags;      // short lowercase tags ("prices", "backtest")
+    bool featured = false; // shown first on the Code tab's start page
+    bool network = false;  // downloads market data when run
+};
+
+/// A notebook in the terminal's managed file storage (File Manager, source "code_editor").
+struct NotebookFileEntry {
+    QString path;          ///< absolute path
+    QString name;          ///< the name the user knows (original file name)
+    QDateTime modified;    ///< file time
+    bool from_template = false; ///< a working copy of a library template
 };
 
 class NotebookLibraryService : public QObject {
@@ -88,9 +110,22 @@ class NotebookLibraryService : public QObject {
     /// Returns the bundled asset path as a last resort if storage is unavailable.
     QString working_copy_for(const NotebookCatalogEntry& entry);
 
+    /// Notebooks in managed storage (saved with the Code tab, seeded templates),
+    /// newest first. Reads the File Manager index and stats each file.
+    QVector<NotebookFileEntry> saved_notebooks();
+
+    /// The name to show for a notebook file: its original name when the file is
+    /// a managed copy ("1794…_c23e.ipynb" -> "trading_sma_crossover_backtest.ipynb"),
+    /// else the file name.
+    QString display_name_for(const QString& path);
+
+    /// The catalog entry a managed working copy was made from, or nullptr.
+    const NotebookCatalogEntry* template_for(const QString& path);
+
     /// Execute one cell asynchronously through PythonRunner (queued behind its
     /// concurrency limit) via scripts/notebook_cell_runner.py. Each call is its
-    /// own process — cells do not share interpreter state. `on_output` streams
+    /// own process; state carries over only through request.prefix_code (earlier
+    /// cells silently re-run before this one). `on_output` streams
     /// stdout/stderr while it runs; `cb` fires exactly once (UI thread) unless
     /// `context` is destroyed first. Returns the run id for cancel_run().
     /// Screens go through here rather than calling PythonRunner themselves (D1).

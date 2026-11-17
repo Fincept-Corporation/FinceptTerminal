@@ -1,0 +1,10 @@
+{
+  "harness_version": "0.160.0",
+  "date": "2026-11-17",
+  "command": "codex login status",
+  "source": "recorded",
+  "url": "",
+  "exit_code": 0,
+  "stream": "stderr",
+  "note": "Exact stderr bytes; stdout was empty."
+}

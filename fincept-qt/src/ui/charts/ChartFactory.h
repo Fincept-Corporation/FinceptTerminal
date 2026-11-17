@@ -12,7 +12,10 @@
 
 namespace fincept::ui {
 
-/// Factory for creating themed Qt Charts.
+/// Factory for creating themed Qt Charts. Charts it creates follow later theme
+/// and font changes on their own (background, axes, fonts, and series colours
+/// that are theme token values); a series colour the caller set from anything
+/// else is the caller's to refresh.
 class ChartFactory {
   public:
     struct DataPoint {
@@ -31,7 +34,9 @@ class ChartFactory {
     static QChartView* sparkline(const QVector<double>& data, const QString& color = {}, int width = 120,
                                  int height = 30);
 
-    /// Apply active theme tokens to an existing chart (call on theme_changed).
+    /// Apply the active theme tokens and the user's font to a chart's
+    /// background, legend and axes — for charts built or changed outside the
+    /// factory (call again on theme_changed for those).
     static void apply_theme(QChart* chart);
 };
 

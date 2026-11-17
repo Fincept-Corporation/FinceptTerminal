@@ -1,1327 +1,578 @@
 #include "screens/derivatives/DerivativesScreen.h"
 
-#include "core/currency/Currency.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "services/options/DerivativesPricing.h"
-#include "ui/theme/StyleSheets.h"
+#include "core/symbol/SymbolRef.h"
+#include "screens/derivatives/DerivBookPage.h"
+#include "screens/derivatives/DerivChainPage.h"
+#include "screens/derivatives/DerivCommon.h"
+#include "screens/derivatives/DerivContext.h"
+#include "screens/derivatives/DerivCreditPage.h"
+#include "screens/derivatives/DerivCurvesPage.h"
+#include "screens/derivatives/DerivPricerPage.h"
+#include "screens/derivatives/DerivScenarioPage.h"
+#include "screens/derivatives/DerivStrategyPage.h"
+#include "services/options/FreeOptionChainService.h"
+#include "trading/AccountManager.h"
 #include "ui/theme/Theme.h"
-#include "ui/theme/ThemeManager.h"
+#include "ui/widgets/MnemonicText.h"
+#include "ui/widgets/ThemeIcon.h"
 
-#include <QDate>
-#include <QGridLayout>
 #include <QHBoxLayout>
-#include <QJsonArray>
 #include <QKeySequence>
-#include <QLocale>
-#include <QScrollArea>
+#include <QLabel>
+#include <QPushButton>
 #include <QShortcut>
+#include <QStackedWidget>
+#include <QStyle>
+#include <QToolButton>
 #include <QVBoxLayout>
-
-#include <initializer_list>
 
 namespace fincept::screens {
 
-using namespace fincept::ui;
+using namespace fincept::screens::deriv;
+namespace bk = fincept::services::options::book;
 
-// ── Stylesheet (applied once at screen level, re-applied on theme change) ────
-//
-// Built per call: it used to be a static QString evaluated during static
-// initialisation, which froze whatever theme tokens existed before main() and
-// never followed a theme switch.
+namespace {
 
-static QString deriv_screen_style() {
-    return QStringLiteral(
-               "#derivScreen { background: %1; }"
-                   "#derivHeader { background: %2; border-bottom: 2px solid %3; }"
-                   "#derivHeaderIcon { color: %3; font-size: 18px; background: transparent; }"
-                   "#derivHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-                   "#derivHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-                   "#derivHeaderBadge { color: %5; font-size: 8px; font-weight: 700; border: 1px solid %9; "
-                   "  padding: 2px 6px; background: transparent; }"
-                   "#derivInstrBar { background: %1; }"
-                   "#derivInstrBtn { background: transparent; color: %5; border: none; font-size: 9px; "
-                   "  font-weight: 700; letter-spacing: 0.5px; padding: 6px 12px; }"
-                   "#derivInstrBtn:hover { color: %4; background: %7; }"
-                   "#derivInstrBtn[active=\"true\"] { background: %3; color: %1; }"
-                   "#derivPanel { background: %8; border: 1px solid %9; }"
-                   "#derivPanelHeader { background: %2; border-bottom: 1px solid %9; }"
-                   "#derivPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-                   "#derivPanelIcon { color: %3; font-size: 14px; background: transparent; }"
-                   "#derivLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
-                   "  background: transparent; }"
-                   "#derivInput { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-                   "  font-size: 12px; }"
-                   "#derivInput:focus { border-color: %10; }"
-                   "QDoubleSpinBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-                   "  font-size: 12px; }"
-                   "QDoubleSpinBox:focus { border-color: %10; }"
-                   "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }"
-                   "QDateEdit { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-                   "  font-size: 12px; }"
-                   "QDateEdit:focus { border-color: %10; }"
-                   "QDateEdit::drop-down { border: none; width: 20px; }"
-                   "QComboBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-                   "  font-size: 12px; }"
-                   "QComboBox:focus { border-color: %10; }"
-                   "QComboBox::drop-down { border: none; width: 20px; }"
-                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %9; "
-                   "  selection-background-color: %3; }"
-                   "#derivCalcBtn { background: %3; color: %1; border: none; padding: 6px 16px; "
-                   "  font-size: 9px; font-weight: 700; }"
-                   "#derivCalcBtn:hover { background: %11; }"
-                   "#derivCalcBtn:disabled { background: %11; color: %12; }"
-                   "#derivResultsPanel { background: %8; border: 1px solid %9; }"
-                   "#derivResultNote { color: %12; font-size: 9px; background: transparent; }"
-                   "#derivResultBigValue[sign=\"pos\"] { color: %6; }"
-                   "#derivResultBigValue[sign=\"neg\"] { color: %14; }"
-                   "#derivResultSection { color: %3; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
-                   "  background: transparent; }"
-                   "#derivResultsHeader { background: %2; border-bottom: 1px solid %9; }"
-                   "#derivResultsTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-                   "#derivResultLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
-                   "  background: transparent; }"
-                   "#derivResultValue { color: %13; font-size: 13px; font-weight: 700; background: transparent; }"
-                   "#derivResultBigValue { color: %3; font-size: 16px; font-weight: 700; background: transparent; }"
-                   "#derivResultCard { background: %2; padding: 8px; }"
-                   "#derivErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; }"
-                   "#derivErrorText { color: %14; font-size: 10px; background: transparent; }"
-                   "#derivErrorLabel { color: %14; font-size: 9px; font-weight: 700; background: transparent; }"
-                   "#derivStatusBar { background: %2; border-top: 1px solid %9; }"
-                   "#derivStatusText { color: %5; font-size: 9px; background: transparent; }"
-                   "#derivStatusEngine { color: %13; font-size: 9px; background: transparent; }"
-                   "QScrollArea { background: %1; border: none; }"
-                   "QScrollBar:vertical { background: %1; width: 6px; }"
-                   "QScrollBar::handle:vertical { background: %9; min-height: 20px; }"
-                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(colors::BG_BASE())        // %1
-        .arg(colors::BG_RAISED())      // %2
-        .arg(colors::AMBER())          // %3
-        .arg(colors::TEXT_PRIMARY())   // %4
-        .arg(colors::TEXT_SECONDARY()) // %5
-        .arg(colors::POSITIVE())       // %6
-        .arg(colors::BG_HOVER())       // %7
-        .arg(colors::BG_SURFACE())     // %8
-        .arg(colors::BORDER_DIM())     // %9
-        .arg(colors::BORDER_BRIGHT())  // %10
-        .arg(colors::AMBER_DIM())      // %11
-        .arg(colors::TEXT_DIM())       // %12
-        .arg(colors::CYAN())           // %13
-        .arg(colors::NEGATIVE())       // %14
-        ;
+/// Contract size of the futures roots the CURVES page lists (prefills the book's add dialog;
+/// the user can change it there). 0 = unknown.
+double ds_contract_size(const QString& root) {
+    static const QHash<QString, double> kSizes = {
+        {QStringLiteral("CL"), 1000},   {QStringLiteral("BZ"), 1000},  {QStringLiteral("NG"), 10000},
+        {QStringLiteral("RB"), 42000},  {QStringLiteral("HO"), 42000}, {QStringLiteral("GC"), 100},
+        {QStringLiteral("SI"), 5000},   {QStringLiteral("HG"), 25000}, {QStringLiteral("ZC"), 5000},
+        {QStringLiteral("ZS"), 5000},   {QStringLiteral("ZW"), 5000},  {QStringLiteral("ES"), 50},
+        {QStringLiteral("NQ"), 20},     {QStringLiteral("YM"), 5},     {QStringLiteral("RTY"), 50},
+        {QStringLiteral("ZN"), 1000},   {QStringLiteral("ZB"), 1000},  {QStringLiteral("6E"), 125000},
+        {QStringLiteral("6J"), 12500000}, {QStringLiteral("BTC"), 5},
+    };
+    return kSizes.value(root.trimmed().toUpper(), 0.0);
 }
 
-// ── Calculator results → the JSON display_results() renders ─────────────────
-//
-// Keys and rounding are the screen's long-standing result contract (round_half_even:
-// Python round() semantics), so every figure on screen reads as it always has.
+/// Deep-link page ids, in DerivativesScreen::Page order.
+const char* const kDsPageIds[] = {"pricer", "chain", "strategy", "scenarios", "curves", "credit", "book"};
 
-static double deriv_round(double v, int decimals) {
-    return services::options::derivatives::round_half_even(v, decimals);
+/// The pricer calculator a deep link names (DerivPricerPage order: bonds, equity options, FX
+/// options, IR swaps, CDS); -1 = none.
+int ds_pricer_instrument(const QString& sub) {
+    static const QHash<QString, int> kIds = {
+        {QStringLiteral("bond"), 0},          {QStringLiteral("bonds"), 0},
+        {QStringLiteral("equity"), 1},        {QStringLiteral("equity_option"), 1},
+        {QStringLiteral("equity_options"), 1}, {QStringLiteral("fx"), 2},
+        {QStringLiteral("fx_option"), 2},     {QStringLiteral("fx_options"), 2},
+        {QStringLiteral("swap"), 3},          {QStringLiteral("swaps"), 3},
+        {QStringLiteral("ir_swap"), 3},       {QStringLiteral("ir_swaps"), 3},
+        {QStringLiteral("irs"), 3},           {QStringLiteral("cds"), 4},
+        {QStringLiteral("credit"), 4},
+    };
+    return kIds.value(sub, -1);
 }
 
-// Per 1.0 spot (delta, gamma), per calendar day (theta), per vol point (vega), per 1% rate (rho).
-static QJsonObject deriv_greeks_json(const services::options::pricing::BsmGreeks& g) {
-    QJsonObject o;
-    o["delta"] = deriv_round(g.delta, 6);
-    o["gamma"] = deriv_round(g.gamma, 6);
-    o["theta"] = deriv_round(g.theta, 6);
-    o["vega"] = deriv_round(g.vega * 0.01, 6);
-    o["rho"] = deriv_round(g.rho * 0.01, 6);
-    return o;
-}
-
-static QJsonObject deriv_bond_price_json(const services::options::derivatives::BondPrice& b, double ytm_pct) {
-    QJsonObject o;
-    o["clean_price"] = deriv_round(b.clean_price, 4);
-    o["dirty_price"] = deriv_round(b.dirty_price, 4);
-    o["accrued_interest"] = deriv_round(b.accrued_interest, 4);
-    o["duration"] = deriv_round(b.macaulay_duration, 4);
-    o["modified_duration"] = deriv_round(b.modified_duration, 4);
-    o["convexity"] = deriv_round(b.convexity, 4);
-    o["remaining_coupons"] = b.remaining_coupons;
-    o["next_coupon_date"] = b.next_coupon_date.toString(Qt::ISODate);
-    o["ytm"] = deriv_round(ytm_pct, 4);
-    return o;
-}
-
-static QJsonObject deriv_ytm_json(double ytm_pct) {
-    QJsonObject o;
-    o["ytm"] = deriv_round(ytm_pct, 6);
-    return o;
-}
-
-static QJsonObject deriv_option_json(const services::options::derivatives::OptionValue& v) {
-    QJsonObject o;
-    o["price"] = deriv_round(v.price, 6);
-    o["greeks"] = deriv_greeks_json(v.greeks);
-    return o;
-}
-
-static QJsonObject deriv_implied_vol_json(double sigma) {
-    QJsonObject o;
-    o["implied_volatility"] = deriv_round(sigma * 100, 4);
-    return o;
-}
-
-static QJsonObject deriv_fx_option_json(const services::options::derivatives::FxOptionValue& v, double spot,
-                                        double notional) {
-    const auto& g = v.greeks;
-    QJsonObject desk; // whole-notional desk units, from the unrounded per-unit Greeks
-    desk["delta_foreign"] = deriv_round(g.delta * notional, 2);
-    desk["gamma_1pct_foreign"] = deriv_round(g.gamma * spot * 0.01 * notional, 2);
-    desk["vega_domestic"] = deriv_round(g.vega * 0.01 * notional, 2);
-    desk["theta_domestic"] = deriv_round(g.theta * notional, 2);
-    desk["rho_domestic"] = deriv_round(g.rho * 0.01 * notional, 2);
-    QJsonObject o;
-    o["price"] = deriv_round(v.premium, 4);
-    o["price_per_unit"] = deriv_round(v.premium_per_unit, 6);
-    o["premium_pct_foreign"] = deriv_round(v.premium_pct_foreign, 4);
-    o["notional"] = notional;
-    o["greeks"] = deriv_greeks_json(g);
-    o["greeks_notional"] = desk;
-    return o;
-}
-
-static QJsonObject deriv_swap_json(const services::options::derivatives::SwapValue& v, double notional) {
-    QJsonObject o;
-    o["swap_value"] = deriv_round(v.value, 2);
-    o["fixed_leg_pv"] = deriv_round(v.fixed_leg_pv, 2);
-    o["floating_leg_pv"] = deriv_round(v.floating_leg_pv, 2);
-    o["par_swap_rate"] = deriv_round(v.par_rate_pct, 4);
-    o["notional"] = notional;
-    o["tenor_years"] = deriv_round(v.tenor_years, 2);
-    o["payments"] = v.payments;
-    o["position"] = QStringLiteral("payer of fixed / receiver of floating");
-    return o;
-}
-
-static QJsonObject deriv_cds_json(const services::options::derivatives::CdsValue& v, double notional, double coupon_bps,
-                                  double risk_free_pct) {
-    QJsonObject o;
-    o["upfront_value"] = deriv_round(v.upfront, 2);
-    o["upfront_points"] = deriv_round(v.upfront_points, 4);
-    o["premium_leg_pv"] = deriv_round(v.premium_leg_pv, 2);
-    o["protection_leg_pv"] = deriv_round(v.protection_leg_pv, 2);
-    o["breakeven_spread_bps"] = deriv_round(v.breakeven_spread_bps, 2);
-    o["risky_pv01"] = deriv_round(v.risky_pv01, 2);
-    o["hazard_rate"] = deriv_round(v.hazard_rate_pct, 4);
-    o["survival_probability"] = deriv_round(v.survival_pct, 2);
-    o["notional"] = notional;
-    o["coupon_bps"] = deriv_round(coupon_bps, 4);
-    o["risk_free_rate"] = deriv_round(risk_free_pct, 4);
-    o["premium_payments"] = v.premium_payments;
-    o["tenor_years"] = deriv_round(v.tenor_years, 4);
-    o["position"] = QStringLiteral("protection buyer");
-    return o;
-}
-
-// A calculator's Result as (JSON to render, error text to show instead).
-struct DerivOutcome {
-    QJsonObject json;
-    QString error;
-};
-
-template <typename T, typename ToJson>
-static DerivOutcome deriv_outcome(const Result<T>& r, ToJson&& to_json) {
-    if (r.is_err())
-        return {QJsonObject{}, QString::fromStdString(r.error())};
-    return {to_json(r.value()), QString()};
-}
-
-// ── Constructor ─────────────────────────────────────────────────────────────
+} // namespace
 
 DerivativesScreen::DerivativesScreen(QWidget* parent) : QWidget(parent) {
-    setObjectName("derivScreen");
-    setStyleSheet(deriv_screen_style());
+    setObjectName(QStringLiteral("derivScreen"));
+    setStyleSheet(deriv::screen_style()); // once, before any child exists
+    ctx_ = new DerivContext(this);
     setup_ui();
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
-            [this](const ThemeTokens&) { setStyleSheet(deriv_screen_style()); });
-    LOG_INFO("Derivatives", "Screen constructed");
+    LOG_DEBUG("Derivatives", "Screen constructed");
 }
-
-// Enter / Return anywhere inside `card` (spin boxes, dates, combos) runs that
-// card's calculator — the panels hold two calculators each, so the shortcut is
-// scoped to the card rather than the screen.
-static void deriv_bind_enter(QWidget* card, QPushButton* button) {
-    for (const auto key : {Qt::Key_Return, Qt::Key_Enter}) {
-        auto* sc = new QShortcut(QKeySequence(key), card);
-        sc->setContext(Qt::WidgetWithChildrenShortcut);
-        QObject::connect(sc, &QShortcut::activated, button, &QPushButton::click);
-    }
-    button->setToolTip(DerivativesScreen::tr("Calculate (Enter)"));
-}
-
-void DerivativesScreen::track_input(const QString& key, QWidget* input) {
-    persisted_inputs_.append({key, input});
-}
-
-// ── UI Setup ────────────────────────────────────────────────────────────────
 
 void DerivativesScreen::setup_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
+    root->addWidget(create_header_bar()); // one line: title, the page segments, chip / refresh / F&O
 
-    // Header
-    root->addWidget(create_header_bar());
-
-    // Instrument selector bar
-    root->addWidget(create_instrument_bar());
-
-    // Scrollable content area
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-    auto* content = new QWidget(this);
-    auto* content_layout = new QVBoxLayout(content);
-    content_layout->setContentsMargins(16, 16, 16, 16);
-    content_layout->setSpacing(16);
-
-    // Panel stack (one panel per instrument type)
-    panel_stack_ = new QStackedWidget;
-    panel_stack_->addWidget(create_bonds_panel());
-    panel_stack_->addWidget(create_equity_options_panel());
-    panel_stack_->addWidget(create_fx_options_panel());
-    panel_stack_->addWidget(create_swaps_panel());
-    panel_stack_->addWidget(create_credit_panel());
-    content_layout->addWidget(panel_stack_);
-
-    // Results area
-    results_container_ = create_results_panel();
-    results_container_->hide();
-    content_layout->addWidget(results_container_);
-
-    content_layout->addStretch(1);
-    scroll->setWidget(content);
-    root->addWidget(scroll, 1);
-
-    // Status bar
+    // One holder per page; a page is built inside its holder the first time it is shown.
+    pages_ = new QStackedWidget(this);
+    for (int i = 0; i < kPageCount; ++i) {
+        auto* holder = new QWidget(pages_);
+        auto* hl = new QVBoxLayout(holder);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(0);
+        // Only the page in view counts for the stack's size (show_page), so a tall page never
+        // makes the screen's minimum height, or another page's spare height, its own.
+        holder->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+        pages_->addWidget(holder);
+        holders_.append(holder);
+    }
+    root->addWidget(pages_, 1);
     root->addWidget(create_status_bar());
+
+    // Hand-offs between pages.
+    connect(ctx_, &DerivContext::price_contract_requested, this, [this](const ContractRef& c) {
+        show_page(kPricer);
+        pricer_->load_contract(c);
+    });
+    connect(ctx_, &DerivContext::legs_requested, this, [this](const QVector<LegView>& legs) {
+        show_page(kStrategy);
+        strategy_->add_legs(legs);
+    });
+    connect(ctx_, &DerivContext::scenarios_requested, this, [this] {
+        show_page(kScenarios);
+        scenarios_->use_strategy_position();
+    });
+    connect(ctx_, &DerivContext::scenarios_contract_requested, this, [this](const ContractRef& c) {
+        show_page(kScenarios);
+        scenarios_->load_contract(c);
+    });
+    connect(ctx_, &DerivContext::book_scenarios_requested, this, [this] {
+        show_page(kScenarios);
+        scenarios_->use_book_position();
+    });
+    connect(ctx_, &DerivContext::book_add_requested, this, [this](const bk::BookPosition& draft) {
+        show_page(kBook);
+        book_->add_draft(draft);
+    });
+    connect(ctx_, &DerivContext::strategy_load_requested, this,
+            [this](const QString& symbol, const QString& name, const QVector<bk::BookLeg>& legs) {
+                show_page(kStrategy);
+                strategy_->load_legs(symbol, name, legs);
+            });
+
+    // The F&O link follows the broker connections (read-only queries of the account manager).
+    auto& accounts = trading::AccountManager::instance();
+    connect(&accounts, &trading::AccountManager::connection_state_changed, this, [this] { update_fno_link(); });
+    connect(&accounts, &trading::AccountManager::account_added, this, [this] { update_fno_link(); });
+    connect(&accounts, &trading::AccountManager::account_removed, this, [this] { update_fno_link(); });
+    connect(&accounts, &trading::AccountManager::account_updated, this, [this] { update_fno_link(); });
+    update_fno_link();
+
+    // Keyboard: Ctrl+1..4 switch pages, F5 refreshes the page in view.
+    for (int i = 0; i < kPageCount; ++i) {
+        auto* sc = new QShortcut(QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_1 + i)), this);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, [this, i] { show_page(i); });
+    }
+    auto* f5 = new QShortcut(QKeySequence(Qt::Key_F5), this);
+    f5->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(f5, &QShortcut::activated, this, &DerivativesScreen::refresh_current);
+
+    show_page(kPricer, false); // the default page; it holds the persisted state
+
+    // A new font size: the header's items have new widths (after every widget has its style).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this] { fit_header(); });
 }
 
 QWidget* DerivativesScreen::create_header_bar() {
+    // One line instead of a two-line title block over a separate page row: the title, the page
+    // segments (create_page_bar), then the engine chip, refresh and the F&O link on the right.
+    // The sub-page list the title block used to repeat under it is the title's tooltip now.
     auto* bar = new QWidget(this);
-    bar->setObjectName("derivHeader");
-    bar->setFixedHeight(42);
-
+    header_bar_ = bar;
+    bar->setObjectName(QStringLiteral("derivHeader"));
+    bar->setAttribute(Qt::WA_StyledBackground, true);
+    bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(16, 0, 16, 0);
-
-    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x93\x90")); // calculator emoji
-    icon->setObjectName("derivHeaderIcon");
-
-    auto* title_col = new QVBoxLayout;
-    title_col->setSpacing(0);
-    header_title_ = new QLabel(tr("DERIVATIVES PRICING"));
-    header_title_->setObjectName("derivHeaderTitle");
-    header_sub_ = new QLabel(tr("PROFESSIONAL VALUATION ENGINE"));
-    header_sub_->setObjectName("derivHeaderSub");
-    title_col->addWidget(header_title_);
-    title_col->addWidget(header_sub_);
-
-    hl->addWidget(icon);
-    hl->addSpacing(8);
-    hl->addLayout(title_col);
+    hl->setContentsMargins(12, 2, 12, 2);
+    hl->setSpacing(8);
+    header_title_ = new QLabel(bar);
+    header_title_->setObjectName(QStringLiteral("derivHeaderTitle"));
+    hl->addWidget(header_title_, 0, Qt::AlignVCenter);
+    header_sub_ = new QLabel(bar);
+    header_sub_->setObjectName(QStringLiteral("derivHeaderSub"));
+    header_sub_->setVisible(false); // its text is the title's tooltip (built once, never toggled)
+    hl->addWidget(create_page_bar(), 0, Qt::AlignVCenter);
     hl->addStretch(1);
-
-    header_badge_ = new QLabel(tr("LOCAL C++ ENGINE"));
-    header_badge_->setObjectName("derivHeaderBadge");
-    hl->addWidget(header_badge_);
-
+    header_badge_ = new QLabel(bar);
+    header_badge_->setObjectName(QStringLiteral("derivHeaderBadge"));
+    hl->addWidget(header_badge_, 0, Qt::AlignVCenter);
+    refresh_btn_ = new QToolButton(bar);
+    refresh_btn_->setObjectName(QStringLiteral("derivHeaderIcon"));
+    refresh_btn_->setIcon(ui::theme_icon(ui::ThemeGlyph::Refresh)); // follows the theme (no emoji, no font glyph)
+    refresh_btn_->setAutoRaise(true);
+    refresh_btn_->setCursor(Qt::PointingHandCursor);
+    connect(refresh_btn_, &QToolButton::clicked, this, &DerivativesScreen::refresh_current);
+    hl->addWidget(refresh_btn_, 0, Qt::AlignVCenter);
+    fno_btn_ = new QPushButton(bar);
+    fno_btn_->setObjectName(QStringLiteral("derivLinkBtn"));
+    fno_btn_->setCursor(Qt::PointingHandCursor);
+    connect(fno_btn_, &QPushButton::clicked, this, [] {
+        EventBus::instance().publish(QStringLiteral("nav.switch_screen"), {{QStringLiteral("screen_id"), QStringLiteral("fno")}});
+    });
+    hl->addWidget(fno_btn_, 0, Qt::AlignVCenter);
     return bar;
 }
 
-QWidget* DerivativesScreen::create_instrument_bar() {
-    auto* bar = new QWidget(this);
-    bar->setObjectName("derivInstrBar");
-    bar->setFixedHeight(34);
-
+QWidget* DerivativesScreen::create_page_bar() {
+    // The page segments, inside the header line (create_header_bar).
+    auto* bar = new QWidget(header_bar_ ? header_bar_ : this);
+    page_bar_ = bar;
+    bar->setObjectName(QStringLiteral("derivPageBar"));
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(16, 0, 16, 0);
-    hl->setSpacing(4);
-
-    const QStringList names = {tr("BONDS"), tr("EQUITY OPTIONS"), tr("FX OPTIONS"), tr("IR SWAPS"), tr("CREDIT")};
-    for (int i = 0; i < names.size(); ++i) {
-        auto* btn = new QPushButton(names[i]);
-        btn->setObjectName("derivInstrBtn");
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setProperty("active", i == 0);
-        connect(btn, &QPushButton::clicked, this, [this, i]() { on_instrument_changed(i); });
-        hl->addWidget(btn);
-        instrument_btns_.append(btn);
+    hl->setContentsMargins(0, 0, 0, 0);
+    hl->setSpacing(2);
+    for (int i = 0; i < kPageCount; ++i) {
+        auto* b = new QPushButton(bar);
+        b->setObjectName(QStringLiteral("derivPageBtn"));
+        b->setCursor(Qt::PointingHandCursor);
+        b->setProperty("active", i == 0);
+        connect(b, &QPushButton::clicked, this, [this, i] { show_page(i); });
+        hl->addWidget(b);
+        page_btns_.append(b);
     }
-
-    hl->addStretch(1);
     return bar;
 }
 
-// ── Panel builders ──────────────────────────────────────────────────────────
-
-QWidget* DerivativesScreen::create_bonds_panel() {
-    auto* outer = new QWidget(this);
-    auto* grid = new QGridLayout(outer);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(16);
-
-    // ── Left: Bond Price Calculator ──
-    auto* price_panel = new QWidget(this);
-    price_panel->setObjectName("derivPanel");
-    auto* pv = new QVBoxLayout(price_panel);
-    pv->setContentsMargins(0, 0, 0, 0);
-    pv->setSpacing(0);
-
-    // Header
-    auto* ph = new QWidget(this);
-    ph->setObjectName("derivPanelHeader");
-    ph->setFixedHeight(34);
-    auto* phl = new QHBoxLayout(ph);
-    phl->setContentsMargins(12, 0, 12, 0);
-    auto* phi = new QLabel;
-    cur::bindLabel(phi, "%1"); // panel icon reflects the preferred currency, live
-    phi->setObjectName("derivPanelIcon");
-    auto* pht = new QLabel(tr("BOND PRICE CALCULATOR"));
-    pht->setObjectName("derivPanelTitle");
-    phl->addWidget(phi);
-    phl->addSpacing(8);
-    phl->addWidget(pht);
-    phl->addStretch(1);
-    pv->addWidget(ph);
-
-    // Inputs
-    auto* body = new QWidget(this);
-    auto* bl = new QVBoxLayout(body);
-    bl->setContentsMargins(12, 12, 12, 12);
-    bl->setSpacing(10);
-
-    bond_issue_date_ = create_date(QDate(2023, 1, 1));
-    bond_settle_date_ = create_date(QDate::currentDate());
-    bond_maturity_date_ = create_date(QDate(2029, 1, 1));
-    bond_coupon_ = create_spin(5.0, 0, 100, 2, "%");
-    bond_ytm_ = create_spin(4.5, -10, 100, 2, "%");
-    bond_freq_ = create_combo({tr("Annual"), tr("Semi-Annual"), tr("Quarterly")});
-    bond_freq_->setCurrentIndex(1);
-
-    bond_ytm_->setToolTip(tr("Yield to maturity, compounded at the coupon frequency (street convention)."));
-
-    bl->addWidget(create_two_col(create_input_row(tr("ISSUE DATE"), bond_issue_date_),
-                                 create_input_row(tr("SETTLEMENT DATE"), bond_settle_date_)));
-    bl->addWidget(create_input_row(tr("MATURITY DATE"), bond_maturity_date_));
-    bl->addWidget(create_two_col(create_input_row(tr("COUPON RATE (% P.A.)"), bond_coupon_),
-                                 create_input_row(tr("YTM (%, COUPON-FREQ COMPOUNDING)"), bond_ytm_)));
-    bl->addWidget(create_input_row(tr("PAYMENT FREQUENCY"), bond_freq_));
-
-    auto* calc_btn = create_calc_button(tr("CALCULATE BOND PRICE"));
-    connect(calc_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
-    bl->addWidget(calc_btn);
-    deriv_bind_enter(price_panel, calc_btn);
-    // Settlement dates default to today every session and are not restored.
-    track_input("bond.issue", bond_issue_date_);
-    track_input("bond.maturity", bond_maturity_date_);
-    track_input("bond.coupon", bond_coupon_);
-    track_input("bond.ytm", bond_ytm_);
-    track_input("bond.freq", bond_freq_);
-
-    pv->addWidget(body);
-    grid->addWidget(price_panel, 0, 0);
-
-    // ── Right: YTM Calculator ──
-    auto* ytm_panel = new QWidget(this);
-    ytm_panel->setObjectName("derivPanel");
-    auto* yv = new QVBoxLayout(ytm_panel);
-    yv->setContentsMargins(0, 0, 0, 0);
-    yv->setSpacing(0);
-
-    auto* yh = new QWidget(this);
-    yh->setObjectName("derivPanelHeader");
-    yh->setFixedHeight(34);
-    auto* yhl = new QHBoxLayout(yh);
-    yhl->setContentsMargins(12, 0, 12, 0);
-    auto* yhi = new QLabel("%");
-    yhi->setObjectName("derivPanelIcon");
-    auto* yht = new QLabel(tr("YIELD TO MATURITY"));
-    yht->setObjectName("derivPanelTitle");
-    yhl->addWidget(yhi);
-    yhl->addSpacing(8);
-    yhl->addWidget(yht);
-    yhl->addStretch(1);
-    yv->addWidget(yh);
-
-    auto* ybody = new QWidget(this);
-    auto* ybl = new QVBoxLayout(ybody);
-    ybl->setContentsMargins(12, 12, 12, 12);
-    ybl->setSpacing(10);
-
-    bond_clean_price_ = create_spin(102.0, 0, 10000, 2);
-
-    // Held as members - on_calculate_secondary() reads these, not the price card's fields.
-    ytm_issue_date_ = create_date(QDate(2023, 1, 1));
-    ytm_settle_date_ = create_date(QDate::currentDate());
-    ytm_maturity_date_ = create_date(QDate(2029, 1, 1));
-    ytm_coupon_ = create_spin(5.0, 0, 100, 2, "%");
-    ytm_freq_ = create_combo({tr("Annual"), tr("Semi-Annual"), tr("Quarterly")});
-    ytm_freq_->setCurrentIndex(1);
-
-    ybl->addWidget(create_two_col(create_input_row(tr("ISSUE DATE"), ytm_issue_date_),
-                                  create_input_row(tr("SETTLEMENT DATE"), ytm_settle_date_)));
-    ybl->addWidget(create_input_row(tr("MATURITY DATE"), ytm_maturity_date_));
-    ybl->addWidget(create_two_col(create_input_row(tr("COUPON RATE (% P.A.)"), ytm_coupon_),
-                                  create_input_row(tr("CLEAN PRICE (PER 100 FACE)"), bond_clean_price_)));
-    ybl->addWidget(create_input_row(tr("PAYMENT FREQUENCY"), ytm_freq_));
-
-    auto* ytm_btn = create_calc_button(tr("CALCULATE YTM"));
-    connect(ytm_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate_secondary);
-    ybl->addWidget(ytm_btn);
-    deriv_bind_enter(ytm_panel, ytm_btn);
-    track_input("ytm.issue", ytm_issue_date_);
-    track_input("ytm.maturity", ytm_maturity_date_);
-    track_input("ytm.coupon", ytm_coupon_);
-    track_input("ytm.clean_price", bond_clean_price_);
-    track_input("ytm.freq", ytm_freq_);
-
-    yv->addWidget(ybody);
-    grid->addWidget(ytm_panel, 0, 1);
-
-    return outer;
+void DerivativesScreen::fit_header() {
+    // Narrow window or a large font: the engine chip gives way first, then the title; the page
+    // segments, refresh and the F&O link always stay. Widths from the items' own size hints.
+    if (!header_bar_ || !page_bar_)
+        return;
+    const auto* hl = header_bar_->layout();
+    const QMargins m = hl->contentsMargins();
+    const int gap = hl->spacing();
+    const int fixed = m.left() + m.right() + page_bar_->sizeHint().width() + refresh_btn_->sizeHint().width() +
+                      fno_btn_->sizeHint().width() + 3 * gap;
+    const int title = header_title_->sizeHint().width() + gap;
+    const int badge = header_badge_->sizeHint().width() + gap;
+    const int avail = header_bar_->width();
+    const bool show_badge = avail >= fixed + title + badge;
+    const bool show_title = avail >= fixed + title;
+    if (header_badge_->isVisibleTo(header_bar_) != show_badge)
+        header_badge_->setVisible(show_badge);
+    if (header_title_->isVisibleTo(header_bar_) != show_title)
+        header_title_->setVisible(show_title);
 }
 
-QWidget* DerivativesScreen::create_equity_options_panel() {
-    auto* outer = new QWidget(this);
-    auto* grid = new QGridLayout(outer);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(16);
-
-    // ── Left: Black-Scholes Pricing ──
-    auto* bs_panel = new QWidget(this);
-    bs_panel->setObjectName("derivPanel");
-    auto* bv = new QVBoxLayout(bs_panel);
-    bv->setContentsMargins(0, 0, 0, 0);
-    bv->setSpacing(0);
-
-    auto* bh = new QWidget(this);
-    bh->setObjectName("derivPanelHeader");
-    bh->setFixedHeight(34);
-    auto* bhl = new QHBoxLayout(bh);
-    bhl->setContentsMargins(12, 0, 12, 0);
-    auto* bhi = new QLabel(QString::fromUtf8("\xE2\x86\x97")); // arrow
-    bhi->setObjectName("derivPanelIcon");
-    auto* bht = new QLabel(tr("BLACK-SCHOLES PRICING"));
-    bht->setObjectName("derivPanelTitle");
-    bhl->addWidget(bhi);
-    bhl->addSpacing(8);
-    bhl->addWidget(bht);
-    bhl->addStretch(1);
-    bv->addWidget(bh);
-
-    auto* bbody = new QWidget(this);
-    auto* bbl = new QVBoxLayout(bbody);
-    bbl->setContentsMargins(12, 12, 12, 12);
-    bbl->setSpacing(10);
-
-    opt_spot_ = create_spin(105.0, 0, 1e8, 2);
-    opt_strike_ = create_spin(100.0, 0, 1e8, 2);
-    opt_time_ = create_spin(1.0, 0.001, 30, 4);
-    opt_vol_ = create_spin(25.0, 0, 500, 2, "%");
-    opt_rate_ = create_spin(5.0, -20, 100, 2, "%");
-    opt_div_ = create_spin(2.0, 0, 100, 2, "%");
-    opt_type_ = create_combo({tr("Call"), tr("Put")});
-
-    bbl->addWidget(create_two_col(create_input_row(tr("SPOT PRICE"), opt_spot_),
-                                  create_input_row(tr("STRIKE PRICE"), opt_strike_)));
-    bbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (YEARS)"), opt_time_),
-                                  create_input_row(tr("VOLATILITY (% ANNUAL)"), opt_vol_)));
-    bbl->addWidget(create_two_col(create_input_row(tr("RISK-FREE RATE (% CONT.)"), opt_rate_),
-                                  create_input_row(tr("DIVIDEND YIELD (% CONT.)"), opt_div_)));
-    bbl->addWidget(create_input_row(tr("OPTION TYPE (EUROPEAN)"), opt_type_));
-
-    auto* bs_btn = create_calc_button(tr("CALCULATE PRICE & GREEKS"));
-    connect(bs_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
-    bbl->addWidget(bs_btn);
-    deriv_bind_enter(bs_panel, bs_btn);
-    track_input("opt.spot", opt_spot_);
-    track_input("opt.strike", opt_strike_);
-    track_input("opt.time", opt_time_);
-    track_input("opt.vol", opt_vol_);
-    track_input("opt.rate", opt_rate_);
-    track_input("opt.div", opt_div_);
-    track_input("opt.type", opt_type_);
-
-    bv->addWidget(bbody);
-    grid->addWidget(bs_panel, 0, 0);
-
-    // ── Right: Implied Volatility ──
-    auto* iv_panel = new QWidget(this);
-    iv_panel->setObjectName("derivPanel");
-    auto* iv = new QVBoxLayout(iv_panel);
-    iv->setContentsMargins(0, 0, 0, 0);
-    iv->setSpacing(0);
-
-    auto* ivh = new QWidget(this);
-    ivh->setObjectName("derivPanelHeader");
-    ivh->setFixedHeight(34);
-    auto* ivhl = new QHBoxLayout(ivh);
-    ivhl->setContentsMargins(12, 0, 12, 0);
-    auto* ivhi = new QLabel(QString::fromUtf8("\xE2\x9A\xA1")); // lightning
-    ivhi->setObjectName("derivPanelIcon");
-    auto* ivht = new QLabel(tr("IMPLIED VOLATILITY"));
-    ivht->setObjectName("derivPanelTitle");
-    ivhl->addWidget(ivhi);
-    ivhl->addSpacing(8);
-    ivhl->addWidget(ivht);
-    ivhl->addStretch(1);
-    iv->addWidget(ivh);
-
-    auto* ivbody = new QWidget(this);
-    auto* ivbl = new QVBoxLayout(ivbody);
-    ivbl->setContentsMargins(12, 12, 12, 12);
-    ivbl->setSpacing(10);
-
-    opt_market_price_ = create_spin(15.0, 0, 1e8, 4);
-
-    // Held as members — on_calculate_secondary() reads these, not the
-    // Black-Scholes panel's fields.
-    iv_spot_ = create_spin(105.0, 0, 1e8, 2);
-    iv_strike_ = create_spin(100.0, 0, 1e8, 2);
-    iv_time_ = create_spin(1.0, 0.001, 30, 4);
-    iv_rate_ = create_spin(5.0, -20, 100, 2, "%");
-    iv_div_ = create_spin(2.0, 0, 100, 2, "%");
-    iv_type_ = create_combo({tr("Call"), tr("Put")});
-
-    ivbl->addWidget(
-        create_two_col(create_input_row(tr("SPOT PRICE"), iv_spot_), create_input_row(tr("STRIKE PRICE"), iv_strike_)));
-    ivbl->addWidget(create_input_row(tr("MARKET OPTION PRICE"), opt_market_price_));
-    ivbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (YEARS)"), iv_time_),
-                                   create_input_row(tr("RISK-FREE RATE (% CONT.)"), iv_rate_)));
-    ivbl->addWidget(create_two_col(create_input_row(tr("DIVIDEND YIELD (% CONT.)"), iv_div_),
-                                   create_input_row(tr("OPTION TYPE (EUROPEAN)"), iv_type_)));
-
-    auto* iv_btn = create_calc_button(tr("CALCULATE IMPLIED VOL"));
-    connect(iv_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate_secondary);
-    ivbl->addWidget(iv_btn);
-    deriv_bind_enter(iv_panel, iv_btn);
-    track_input("iv.spot", iv_spot_);
-    track_input("iv.strike", iv_strike_);
-    track_input("iv.market_price", opt_market_price_);
-    track_input("iv.time", iv_time_);
-    track_input("iv.rate", iv_rate_);
-    track_input("iv.div", iv_div_);
-    track_input("iv.type", iv_type_);
-
-    iv->addWidget(ivbody);
-    grid->addWidget(iv_panel, 0, 1);
-
-    return outer;
-}
-
-QWidget* DerivativesScreen::create_fx_options_panel() {
-    auto* panel = new QWidget(this);
-    panel->setObjectName("derivPanel");
-    panel->setMaximumWidth(700);
-
-    auto* vl = new QVBoxLayout(panel);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    // Header
-    auto* hdr = new QWidget(this);
-    hdr->setObjectName("derivPanelHeader");
-    hdr->setFixedHeight(34);
-    auto* hl = new QHBoxLayout(hdr);
-    hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x92\xB1")); // currency emoji
-    icon->setObjectName("derivPanelIcon");
-    auto* title = new QLabel(tr("FX VANILLA OPTION PRICING"));
-    title->setObjectName("derivPanelTitle");
-    hl->addWidget(icon);
-    hl->addSpacing(8);
-    hl->addWidget(title);
-    hl->addStretch(1);
-    vl->addWidget(hdr);
-
-    auto* body = new QWidget(this);
-    auto* bl = new QVBoxLayout(body);
-    bl->setContentsMargins(12, 12, 12, 12);
-    bl->setSpacing(10);
-
-    fx_spot_ = create_spin(1.08, 0, 1e6, 4);
-    fx_strike_ = create_spin(1.10, 0, 1e6, 4);
-    fx_time_ = create_spin(1.0, 0.001, 30, 4);
-    fx_vol_ = create_spin(12.0, 0, 500, 2, "%");
-    fx_dom_rate_ = create_spin(2.0, -20, 100, 2, "%");
-    fx_for_rate_ = create_spin(1.5, -20, 100, 2, "%");
-    fx_type_ = create_combo({tr("Call"), tr("Put")});
-    fx_notional_ = create_spin(1000000, 0, 1e12, 0);
-
-    fx_spot_->setToolTip(tr("Domestic currency per 1 unit of foreign currency (e.g. EURUSD: USD per EUR)."));
-    fx_notional_->setToolTip(tr("Foreign-currency notional (units of the base currency)."));
-
-    bl->addWidget(create_two_col(create_input_row(tr("SPOT (DOM PER 1 FOR)"), fx_spot_),
-                                 create_input_row(tr("STRIKE (DOM PER 1 FOR)"), fx_strike_)));
-    bl->addWidget(create_three_col(create_input_row(tr("VOLATILITY (% ANNUAL)"), fx_vol_),
-                                   create_input_row(tr("DOMESTIC RATE (% CONT.)"), fx_dom_rate_),
-                                   create_input_row(tr("FOREIGN RATE (% CONT.)"), fx_for_rate_)));
-    bl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (YEARS)"), fx_time_),
-                                 create_input_row(tr("NOTIONAL (FOREIGN CCY)"), fx_notional_)));
-    bl->addWidget(create_input_row(tr("OPTION TYPE (CALL = BUY FOREIGN)"), fx_type_));
-
-    auto* btn = create_calc_button(tr("CALCULATE FX OPTION PRICE"));
-    connect(btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
-    bl->addWidget(btn);
-    deriv_bind_enter(panel, btn);
-    track_input("fx.spot", fx_spot_);
-    track_input("fx.strike", fx_strike_);
-    track_input("fx.time", fx_time_);
-    track_input("fx.vol", fx_vol_);
-    track_input("fx.dom_rate", fx_dom_rate_);
-    track_input("fx.for_rate", fx_for_rate_);
-    track_input("fx.notional", fx_notional_);
-    track_input("fx.type", fx_type_);
-
-    vl->addWidget(body);
-    return panel;
-}
-
-QWidget* DerivativesScreen::create_swaps_panel() {
-    auto* panel = new QWidget(this);
-    panel->setObjectName("derivPanel");
-    panel->setMaximumWidth(700);
-
-    auto* vl = new QVBoxLayout(panel);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    auto* hdr = new QWidget(this);
-    hdr->setObjectName("derivPanelHeader");
-    hdr->setFixedHeight(34);
-    auto* hl = new QHBoxLayout(hdr);
-    hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x94\x84")); // arrows emoji
-    icon->setObjectName("derivPanelIcon");
-    auto* title = new QLabel(tr("INTEREST RATE SWAP PRICING"));
-    title->setObjectName("derivPanelTitle");
-    hl->addWidget(icon);
-    hl->addSpacing(8);
-    hl->addWidget(title);
-    hl->addStretch(1);
-    vl->addWidget(hdr);
-
-    auto* body = new QWidget(this);
-    auto* bl = new QVBoxLayout(body);
-    bl->setContentsMargins(12, 12, 12, 12);
-    bl->setSpacing(10);
-
-    swap_eff_date_ = create_date(QDate::currentDate());
-    swap_mat_date_ = create_date(QDate::currentDate().addYears(5));
-    swap_fixed_rate_ = create_spin(3.0, -20, 100, 2, "%");
-    swap_freq_ = create_combo({tr("Annual"), tr("Semi-Annual"), tr("Quarterly")});
-    swap_freq_->setCurrentIndex(1);
-    swap_discount_ = create_spin(3.5, -20, 100, 2, "%");
-    swap_notional_ = create_spin(1000000, 0, 1e12, 0);
-
-    swap_eff_date_->setToolTip(tr("Start of the swap. The swap is valued AS OF this date (spot-starting): "
-                                  "the floating leg is worth par minus the discounted notional."));
-    swap_discount_->setToolTip(tr("Flat, continuously-compounded discount rate used for every cash flow."));
-
-    bl->addWidget(create_two_col(create_input_row(tr("EFFECTIVE (VALUATION) DATE"), swap_eff_date_),
-                                 create_input_row(tr("MATURITY DATE"), swap_mat_date_)));
-    bl->addWidget(create_three_col(create_input_row(tr("FIXED RATE (% P.A.)"), swap_fixed_rate_),
-                                   create_input_row(tr("FREQUENCY"), swap_freq_),
-                                   create_input_row(tr("DISCOUNT RATE (% CONT., FLAT)"), swap_discount_)));
-    bl->addWidget(create_input_row(tr("NOTIONAL AMOUNT"), swap_notional_));
-
-    auto* btn = create_calc_button(tr("CALCULATE SWAP VALUE"));
-    connect(btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
-    bl->addWidget(btn);
-    deriv_bind_enter(panel, btn);
-    // The effective (valuation) date defaults to today each session and is not restored.
-    track_input("swap.maturity", swap_mat_date_);
-    track_input("swap.fixed_rate", swap_fixed_rate_);
-    track_input("swap.freq", swap_freq_);
-    track_input("swap.discount", swap_discount_);
-    track_input("swap.notional", swap_notional_);
-
-    vl->addWidget(body);
-    return panel;
-}
-
-QWidget* DerivativesScreen::create_credit_panel() {
-    auto* panel = new QWidget(this);
-    panel->setObjectName("derivPanel");
-    panel->setMaximumWidth(700);
-
-    auto* vl = new QVBoxLayout(panel);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    auto* hdr = new QWidget(this);
-    hdr->setObjectName("derivPanelHeader");
-    hdr->setFixedHeight(34);
-    auto* hl = new QHBoxLayout(hdr);
-    hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x8E\xAF")); // target emoji
-    icon->setObjectName("derivPanelIcon");
-    auto* title = new QLabel(tr("CREDIT DEFAULT SWAP PRICING"));
-    title->setObjectName("derivPanelTitle");
-    hl->addWidget(icon);
-    hl->addSpacing(8);
-    hl->addWidget(title);
-    hl->addStretch(1);
-    vl->addWidget(hdr);
-
-    auto* body = new QWidget(this);
-    auto* bl = new QVBoxLayout(body);
-    bl->setContentsMargins(12, 12, 12, 12);
-    bl->setSpacing(10);
-
-    cds_val_date_ = create_date(QDate::currentDate());
-    cds_mat_date_ = create_date(QDate::currentDate().addYears(5));
-    cds_recovery_ = create_spin(40.0, 0, 100, 2, "%");
-    cds_spread_ = create_spin(150.0, 0, 10000, 1);
-    cds_notional_ = create_spin(10000000, 0, 1e12, 0);
-    cds_coupon_ = create_spin(100.0, 0, 10000, 1);
-    cds_rate_ = create_spin(5.0, -20, 100, 2, "%");
-    cds_spread_->setToolTip(tr("Market (par) CDS spread. The flat hazard rate is calibrated so a CDS paying "
-                               "this spread is worth zero."));
-    cds_coupon_->setToolTip(tr("Premium actually paid under the contract. The value is the protection leg minus "
-                               "the premium leg at THIS coupon; set it equal to the spread and the value is zero."));
-    cds_rate_->setToolTip(tr("Flat continuously-compounded risk-free rate used to discount both legs."));
-
-    bl->addWidget(create_two_col(create_input_row(tr("VALUATION DATE"), cds_val_date_),
-                                 create_input_row(tr("MATURITY DATE"), cds_mat_date_)));
-    bl->addWidget(create_three_col(create_input_row(tr("RECOVERY RATE (%)"), cds_recovery_),
-                                   create_input_row(tr("MARKET SPREAD (BPS)"), cds_spread_),
-                                   create_input_row(tr("NOTIONAL"), cds_notional_)));
-    bl->addWidget(create_two_col(create_input_row(tr("CONTRACT COUPON (BPS)"), cds_coupon_),
-                                 create_input_row(tr("RISK-FREE RATE (% CONT.)"), cds_rate_)));
-
-    auto* btn = create_calc_button(tr("CALCULATE CDS VALUE"));
-    connect(btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
-    bl->addWidget(btn);
-    deriv_bind_enter(panel, btn);
-    // The valuation date defaults to today each session and is not restored.
-    track_input("cds.maturity", cds_mat_date_);
-    track_input("cds.recovery", cds_recovery_);
-    track_input("cds.spread", cds_spread_);
-    track_input("cds.notional", cds_notional_);
-    track_input("cds.coupon", cds_coupon_);
-    track_input("cds.rate", cds_rate_);
-
-    vl->addWidget(body);
-    return panel;
+void DerivativesScreen::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    fit_header();
 }
 
 QWidget* DerivativesScreen::create_status_bar() {
     auto* bar = new QWidget(this);
-    bar->setObjectName("derivStatusBar");
-    bar->setFixedHeight(26);
-
+    bar->setObjectName(QStringLiteral("derivStatusBar"));
+    bar->setAttribute(Qt::WA_StyledBackground, true);
+    bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(16, 0, 16, 0);
-
-    status_left_ = new QLabel(tr("DERIVATIVES"));
-    status_left_->setObjectName("derivStatusText");
+    hl->setContentsMargins(12, 2, 12, 2);
+    status_left_ = new QLabel(bar);
+    status_left_->setObjectName(QStringLiteral("derivStatusText"));
     hl->addWidget(status_left_);
     hl->addStretch(1);
-
-    status_instrument_ = new QLabel(tr("INSTRUMENT: %1").arg(tr("BONDS")));
-    status_instrument_->setObjectName("derivStatusText");
-    hl->addWidget(status_instrument_);
-
+    status_page_ = new QLabel(bar);
+    status_page_->setObjectName(QStringLiteral("derivStatusText"));
+    hl->addWidget(status_page_);
     hl->addSpacing(16);
-    status_engine_ = new QLabel(tr("C++ ENGINE"));
-    status_engine_->setObjectName("derivStatusEngine");
+    status_engine_ = new QLabel(bar);
+    status_engine_->setObjectName(QStringLiteral("derivStatusEngine"));
     hl->addWidget(status_engine_);
-
+    retranslate();
     return bar;
 }
 
-QWidget* DerivativesScreen::create_results_panel() {
-    auto* frame = new QWidget(this);
-    frame->setObjectName("derivResultsPanel");
-
-    auto* vl = new QVBoxLayout(frame);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    // Header
-    auto* hdr = new QWidget(this);
-    hdr->setObjectName("derivResultsHeader");
-    hdr->setFixedHeight(34);
-    auto* hl = new QHBoxLayout(hdr);
-    hl->setContentsMargins(12, 0, 12, 0);
-    results_title_ = new QLabel(tr("RESULTS"));
-    results_title_->setObjectName("derivResultsTitle");
-    hl->addWidget(results_title_);
-    hl->addStretch(1);
-    vl->addWidget(hdr);
-
-    return frame;
+QString DerivativesScreen::page_name(int index) const {
+    switch (index) {
+        case kPricer: return tr("PRICER");
+        case kChain: return tr("CHAIN & VOL");
+        case kStrategy: return tr("STRATEGY");
+        case kScenarios: return tr("SCENARIOS");
+        case kCurves: return tr("CURVES");
+        case kCredit: return tr("CREDIT");
+        case kBook: return tr("BOOK");
+        default: return {};
+    }
 }
 
-// ── Widget factories ────────────────────────────────────────────────────────
-
-QWidget* DerivativesScreen::create_input_row(const QString& label_text, QWidget* input) {
-    auto* w = new QWidget(this);
-    auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(4);
-
-    auto* label = new QLabel(label_text);
-    label->setObjectName("derivLabel");
-    vl->addWidget(label);
-    vl->addWidget(input);
-
-    return w;
+QWidget* DerivativesScreen::ensure_page(int index) {
+    QWidget* holder = holders_.value(index);
+    if (!holder)
+        return nullptr;
+    QWidget* page = nullptr;
+    switch (index) {
+        case kPricer:
+            if (!pricer_) {
+                pricer_ = new DerivPricerPage(ctx_, holder);
+                connect(pricer_, &DerivPricerPage::state_changed, this,
+                        [this] { ScreenStateManager::instance().notify_changed(this); });
+                connect(pricer_, &DerivPricerPage::instrument_changed, this, [this](const QString& name) {
+                    pricer_instrument_ = name;
+                    if (page_ == kPricer)
+                        status_page_->setText(tr("PRICER · %1").arg(name));
+                });
+                pricer_instrument_ = pricer_->instrument_name(pricer_->active_instrument());
+                page = pricer_;
+            }
+            break;
+        case kChain:
+            if (!chain_)
+                page = chain_ = new DerivChainPage(ctx_, holder);
+            break;
+        case kStrategy:
+            if (!strategy_)
+                page = strategy_ = new DerivStrategyPage(ctx_, holder);
+            break;
+        case kScenarios:
+            if (!scenarios_)
+                page = scenarios_ = new DerivScenarioPage(ctx_, holder);
+            break;
+        case kCurves:
+            if (!curves_) {
+                page = curves_ = new DerivCurvesPage(holder);
+                connect(curves_, &DerivCurvesPage::add_swap_to_book, this,
+                        [this](double start, double tenor, double rate, int freq, double notional, bool payer) {
+                            bk::BookPosition p;
+                            p.kind = QStringLiteral("swap");
+                            p.underlying = QStringLiteral("USD rates");
+                            p.multiplier = 1;
+                            p.entry_date = QDate::currentDate();
+                            bk::BookLeg l;
+                            l.type = bk::LegType::Swap;
+                            l.quantity = 1;
+                            l.swap_start = start;
+                            l.swap_tenor = tenor;
+                            l.swap_rate = rate;
+                            l.swap_freq = freq;
+                            l.notional = notional;
+                            l.payer = payer;
+                            p.legs = {l};
+                            emit ctx_->book_add_requested(p);
+                        });
+                connect(curves_, &DerivCurvesPage::add_future_to_book, this,
+                        [this](const QString& contract, const QString& root, double price) {
+                            bk::BookPosition p;
+                            p.kind = QStringLiteral("future");
+                            p.underlying = root;
+                            const double size = ds_contract_size(root);
+                            p.multiplier = size > 0 ? size : 1.0;
+                            p.entry_date = QDate::currentDate();
+                            bk::BookLeg l;
+                            l.type = bk::LegType::Future;
+                            l.quantity = 1;
+                            l.contract = contract;
+                            l.entry_price = price;
+                            p.legs = {l};
+                            emit ctx_->book_add_requested(p);
+                        });
+            }
+            break;
+        case kCredit:
+            if (!credit_)
+                page = credit_ = new DerivCreditPage(holder);
+            break;
+        case kBook:
+            if (!book_)
+                page = book_ = new DerivBookPage(ctx_, holder);
+            break;
+        default:
+            break;
+    }
+    if (page)
+        holder->layout()->addWidget(page);
+    return holder;
 }
 
-QWidget* DerivativesScreen::create_two_col(QWidget* left, QWidget* right) {
-    auto* w = new QWidget(this);
-    auto* hl = new QHBoxLayout(w);
-    hl->setContentsMargins(0, 0, 0, 0);
-    hl->setSpacing(8);
-    hl->addWidget(left, 1);
-    hl->addWidget(right, 1);
-    return w;
+void DerivativesScreen::show_page(int index, bool persist) {
+    if (index < 0 || index >= kPageCount)
+        return;
+    ensure_page(index);
+    page_ = index;
+    for (int i = 0; i < holders_.size(); ++i) {
+        const QSizePolicy::Policy p = i == index ? QSizePolicy::Preferred : QSizePolicy::Ignored;
+        if (holders_[i]->sizePolicy().verticalPolicy() != p)
+            holders_[i]->setSizePolicy(p, p);
+    }
+    pages_->setCurrentIndex(index);
+    for (int i = 0; i < page_btns_.size(); ++i) {
+        page_btns_[i]->setProperty("active", i == index);
+        page_btns_[i]->style()->unpolish(page_btns_[i]);
+        page_btns_[i]->style()->polish(page_btns_[i]);
+    }
+    status_page_->setText(index == kPricer && !pricer_instrument_.isEmpty()
+                              ? tr("PRICER · %1").arg(pricer_instrument_)
+                              : page_name(index));
+    if (persist)
+        ScreenStateManager::instance().notify_changed(this);
 }
 
-QWidget* DerivativesScreen::create_three_col(QWidget* a, QWidget* b, QWidget* c) {
-    auto* w = new QWidget(this);
-    auto* hl = new QHBoxLayout(w);
-    hl->setContentsMargins(0, 0, 0, 0);
-    hl->setSpacing(8);
-    hl->addWidget(a, 1);
-    hl->addWidget(b, 1);
-    hl->addWidget(c, 1);
-    return w;
+void DerivativesScreen::refresh_current() {
+    switch (page_) {
+        case kChain:
+            if (chain_)
+                chain_->refresh();
+            break;
+        case kStrategy:
+            if (strategy_)
+                strategy_->refresh();
+            break;
+        case kScenarios:
+            if (scenarios_)
+                scenarios_->refresh();
+            break;
+        case kCurves:
+            if (curves_)
+                curves_->refresh();
+            break;
+        case kCredit:
+            if (credit_)
+                credit_->refresh();
+            break;
+        case kBook:
+            if (book_)
+                book_->refresh();
+            break;
+        default:
+            if (pricer_)
+                pricer_->refresh();
+            break;
+    }
 }
 
-QDoubleSpinBox* DerivativesScreen::create_spin(double val, double min_val, double max_val, int decimals,
-                                               const QString& suffix) {
-    auto* spin = new QDoubleSpinBox;
-    spin->setRange(min_val, max_val);
-    spin->setDecimals(decimals);
-    spin->setValue(val);
-    spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    if (!suffix.isEmpty())
-        spin->setSuffix(" " + suffix);
-    return spin;
-}
-
-QDateEdit* DerivativesScreen::create_date(const QDate& date) {
-    auto* de = new QDateEdit(date);
-    de->setCalendarPopup(true);
-    de->setDisplayFormat("yyyy-MM-dd");
-    return de;
-}
-
-QComboBox* DerivativesScreen::create_combo(const QStringList& items) {
-    auto* cb = new QComboBox;
-    cb->addItems(items);
-    return cb;
-}
-
-QPushButton* DerivativesScreen::create_calc_button(const QString& text) {
-    auto* btn = new QPushButton(text);
-    btn->setObjectName("derivCalcBtn");
-    btn->setCursor(Qt::PointingHandCursor);
-    btn->setFixedHeight(32);
-    return btn;
-}
-
-// ── Live language switch ─────────────────────────────────────────────────────
+// ── Language ─────────────────────────────────────────────────────────────────
 
 void DerivativesScreen::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
+        retranslate();
     QWidget::changeEvent(event);
 }
 
-void DerivativesScreen::retranslateUi() {
-    // Header
+void DerivativesScreen::retranslate() {
     if (header_title_)
-        header_title_->setText(tr("DERIVATIVES PRICING"));
-    if (header_sub_)
-        header_sub_->setText(tr("PROFESSIONAL VALUATION ENGINE"));
+        header_title_->setText(tr("DERIVATIVES"));
+    if (header_sub_) {
+        header_sub_->setText(tr("PRICING · FREE DELAYED OPTION CHAINS · STRATEGIES · SCENARIOS · CURVES · CREDIT · BOOK"));
+        if (header_title_)
+            header_title_->setToolTip(header_sub_->text());
+    }
     if (header_badge_)
-        header_badge_->setText(tr("LOCAL C++ ENGINE"));
-
-    // Instrument selector + status line (same source strings)
-    const QStringList names = {tr("BONDS"), tr("EQUITY OPTIONS"), tr("FX OPTIONS"), tr("IR SWAPS"), tr("CREDIT")};
-    for (int i = 0; i < instrument_btns_.size() && i < names.size(); ++i)
-        instrument_btns_[i]->setText(names[i]);
-    if (status_instrument_ && active_instrument_ >= 0 && active_instrument_ < names.size())
-        status_instrument_->setText(tr("INSTRUMENT: %1").arg(names[active_instrument_]));
-
-    // Status bar + results header
+        header_badge_->setText(tr("LOCAL ENGINE"));
+    if (refresh_btn_)
+        refresh_btn_->setToolTip(tr("Recalculate or reload the page in view (F5)"));
+    if (fno_btn_) {
+        fno_btn_->setText(tr("TRADE IN F&&O"));
+        update_fno_link(); // its tooltip depends on the broker connection
+    }
+    for (int i = 0; i < page_btns_.size(); ++i) {
+        page_btns_[i]->setText(ui::literal_ampersands(page_name(i))); // "CHAIN & VOL", not a mnemonic
+        page_btns_[i]->setToolTip(tr("Ctrl+%1").arg(i + 1));
+        page_btns_[i]->setAccessibleName(page_name(i));
+    }
+    fit_header();
     if (status_left_)
         status_left_->setText(tr("DERIVATIVES"));
     if (status_engine_)
-        status_engine_->setText(tr("C++ ENGINE"));
-    if (results_title_)
-        results_title_->setText(tr("RESULTS"));
-    // Panel titles / input labels are re-applied when the panel is rebuilt;
-    // their tr() source strings are extracted at construction.
+        status_engine_->setText(tr("C++ ENGINE · FREE DELAYED DATA"));
+    if (status_page_ && !page_btns_.isEmpty())
+        status_page_->setText(page_ == kPricer && !pricer_instrument_.isEmpty() ? tr("PRICER · %1").arg(pricer_instrument_)
+                                                                               : page_name(page_));
 }
 
-// ── Slots ───────────────────────────────────────────────────────────────────
+// ── Broker link / symbols from other tabs ────────────────────────────────────
 
-void DerivativesScreen::on_instrument_changed(int index) {
-    active_instrument_ = index;
-    panel_stack_->setCurrentIndex(index);
-    clear_results();
-
-    // Update button states
-    for (int i = 0; i < instrument_btns_.size(); ++i) {
-        instrument_btns_[i]->setProperty("active", i == index);
-        instrument_btns_[i]->style()->unpolish(instrument_btns_[i]);
-        instrument_btns_[i]->style()->polish(instrument_btns_[i]);
-    }
-
-    const QStringList names = {tr("BONDS"), tr("EQUITY OPTIONS"), tr("FX OPTIONS"), tr("IR SWAPS"), tr("CREDIT")};
-    status_instrument_->setText(tr("INSTRUMENT: %1").arg(names[index]));
-    LOG_INFO("Derivatives", "Switched to: " + names[index]);
-
-    fincept::ScreenStateManager::instance().notify_changed(this);
+void DerivativesScreen::update_fno_link() {
+    if (!fno_btn_)
+        return;
+    // Read-only: is any active broker account connected? (The built-in paper account is not a
+    // broker and is never in active_accounts().)
+    auto& am = trading::AccountManager::instance();
+    bool connected = false;
+    for (const trading::BrokerAccount& a : am.active_accounts())
+        if (am.connection_state(a.account_id) == trading::ConnectionState::Connected) {
+            connected = true;
+            break;
+        }
+    fno_btn_->setEnabled(connected);
+    fno_btn_->setToolTip(connected ? tr("Live trading with your connected broker happens in the F&O tab")
+                                   : tr("Connect a broker in Settings to trade F&O"));
 }
 
-void DerivativesScreen::on_calculate() {
-    namespace deriv = services::options::derivatives;
-    switch (active_instrument_) {
-        case 0: { // Bonds — price from YTM
-            const int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
-            const double ytm = bond_ytm_->value();
-            const DerivOutcome o = deriv_outcome(
-                deriv::bond_price_from_ytm(bond_issue_date_->date(), bond_settle_date_->date(),
-                                           bond_maturity_date_->date(), bond_coupon_->value(), ytm, freq_val),
-                [ytm](const deriv::BondPrice& b) { return deriv_bond_price_json(b, ytm); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        case 1: { // Equity options — price + greeks
-            const DerivOutcome o = deriv_outcome(
-                deriv::equity_option(opt_spot_->value(), opt_strike_->value(), opt_time_->value(), opt_rate_->value(),
-                                     opt_vol_->value(), opt_div_->value(), opt_type_->currentIndex() == 0),
-                [](const deriv::OptionValue& v) { return deriv_option_json(v); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        case 2: { // FX options
-            const double spot = fx_spot_->value();
-            const double notional = fx_notional_->value();
-            const DerivOutcome o = deriv_outcome(
-                deriv::fx_option(spot, fx_strike_->value(), fx_time_->value(), fx_dom_rate_->value(),
-                                 fx_for_rate_->value(), fx_vol_->value(), fx_type_->currentIndex() == 0, notional),
-                [spot, notional](const deriv::FxOptionValue& v) { return deriv_fx_option_json(v, spot, notional); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        case 3: { // Swaps
-            const int freq_val = (swap_freq_->currentIndex() == 0) ? 1 : (swap_freq_->currentIndex() == 1) ? 2 : 4;
-            const double notional = swap_notional_->value();
-            const DerivOutcome o =
-                deriv_outcome(deriv::swap_value(swap_eff_date_->date(), swap_mat_date_->date(),
-                                                swap_fixed_rate_->value(), freq_val, notional, swap_discount_->value()),
-                              [notional](const deriv::SwapValue& v) { return deriv_swap_json(v, notional); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        case 4: { // Credit (CDS)
-            const double notional = cds_notional_->value();
-            const double coupon = cds_coupon_->value();
-            const double rate = cds_rate_->value();
-            const DerivOutcome o =
-                deriv_outcome(deriv::cds_value(cds_val_date_->date(), cds_mat_date_->date(), cds_recovery_->value(),
-                                               notional, cds_spread_->value(), rate, coupon),
-                              [notional, coupon, rate](const deriv::CdsValue& v) {
-                                  return deriv_cds_json(v, notional, coupon, rate);
-                              });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        default: // no such instrument tab
-            break;
-    }
+void DerivativesScreen::open_chain_symbol(const QString& symbol) {
+    last_symbol_ = symbol;
+    ensure_page(kChain);
+    chain_->open_symbol(symbol);
+    if (page_ == kPricer || page_ == kChain)
+        show_page(kChain);
 }
 
-void DerivativesScreen::on_calculate_secondary() {
-    namespace deriv = services::options::derivatives;
-    switch (active_instrument_) {
-        case 0: { // Bond YTM from price - solved from the YTM card's OWN inputs.
-            const int freq_val = (ytm_freq_->currentIndex() == 0) ? 1 : (ytm_freq_->currentIndex() == 1) ? 2 : 4;
-            const DerivOutcome o =
-                deriv_outcome(deriv::bond_ytm_from_clean_price(ytm_issue_date_->date(), ytm_settle_date_->date(),
-                                                               ytm_maturity_date_->date(), ytm_coupon_->value(),
-                                                               bond_clean_price_->value(), freq_val),
-                              [](double ytm) { return deriv_ytm_json(ytm); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        case 1: { // Implied volatility — solved from the IV card's OWN inputs.
-            if (opt_market_price_->value() <= 0) {
-                display_error(tr("Enter the option's market price — implied volatility is solved from it."));
-                return;
-            }
-            const DerivOutcome o = deriv_outcome(
-                deriv::equity_implied_vol(iv_spot_->value(), iv_strike_->value(), iv_time_->value(), iv_rate_->value(),
-                                          opt_market_price_->value(), iv_div_->value(), iv_type_->currentIndex() == 0),
-                [](double sigma) { return deriv_implied_vol_json(sigma); });
-            show_calculation(o.json, o.error);
-            break;
-        }
-        default: // only bonds (YTM) and equity options (IV) have a secondary calculator
-            break;
-    }
-}
-
-// ── Calculation ─────────────────────────────────────────────────────────────
-
-void DerivativesScreen::show_calculation(const QJsonObject& result, const QString& error) {
-    // Persist the inputs that produced this run (debounced by the manager).
-    fincept::ScreenStateManager::instance().notify_changed(this);
-    if (!error.isEmpty()) {
-        display_error(error);
+void DerivativesScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
+    // Options are listed on stocks, ETFs and indices only.
+    if (!ref.is_valid() || (!ref.asset_class.isEmpty() && ref.asset_class != QLatin1String("equity") &&
+                            ref.asset_class != QLatin1String("etf") && ref.asset_class != QLatin1String("index")))
+        return;
+    const QString sym = ref.symbol.trimmed();
+    if (sym.isEmpty())
+        return;
+    if (!isVisible()) {
+        pending_symbol_ = sym; // nothing loads behind the user's back: applied when the tab is shown
         return;
     }
-    display_results(result);
+    pending_symbol_.clear();
+    open_chain_symbol(sym);
 }
 
-// ── Results display ─────────────────────────────────────────────────────────
+fincept::SymbolRef DerivativesScreen::current_symbol() const {
+    QString s = last_symbol_;
+    if (s.isEmpty() && ctx_ && ctx_->chain())
+        s = ctx_->chain()->symbol;
+    return s.isEmpty() ? fincept::SymbolRef{} : fincept::SymbolRef::equity(s);
+}
 
-void DerivativesScreen::clear_results() {
-    results_container_->hide();
-
-    // Remove old result content (keep the header)
-    auto* layout = results_container_->layout();
-    if (layout && layout->count() > 1) {
-        while (layout->count() > 1) {
-            auto* item = layout->takeAt(1);
-            if (item->widget()) {
-                item->widget()->deleteLater();
-            }
-            delete item;
-        }
+void DerivativesScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!pending_symbol_.isEmpty()) {
+        const QString sym = pending_symbol_;
+        pending_symbol_.clear();
+        open_chain_symbol(sym);
     }
 }
 
-void DerivativesScreen::display_error(const QString& error) {
-    clear_results();
+// ── ISectionLinked ───────────────────────────────────────────────────────────
 
-    auto* panel = new QWidget(this);
-    panel->setObjectName("derivErrorPanel");
-    auto* hl = new QHBoxLayout(panel);
-    hl->setContentsMargins(12, 8, 12, 8);
-    hl->setSpacing(8);
-
-    auto* err_label = new QLabel(tr("ERROR"));
-    err_label->setObjectName("derivErrorLabel");
-    auto* err_text = new QLabel(error);
-    err_text->setObjectName("derivErrorText");
-    err_text->setWordWrap(true);
-
-    hl->addWidget(err_label);
-    hl->addWidget(err_text, 1);
-
-    results_container_->layout()->addWidget(panel);
-    results_container_->show();
-
-    LOG_ERROR("Derivatives", "Calculation error: " + error);
-}
-
-void DerivativesScreen::display_results(const QJsonObject& result) {
-    clear_results();
-
-    auto* body = new QWidget(this);
-    auto* vl = new QVBoxLayout(body);
-    vl->setContentsMargins(12, 12, 12, 12);
-    vl->setSpacing(8);
-
-    // A card: LABEL over value. `sign` colours a signed headline value (P&L-like).
-    auto make_card = [](const QString& label, const QString& value, bool big = false, double sign = 0.0) {
-        auto* card = new QWidget(nullptr);
-        card->setObjectName("derivResultCard");
-        auto* cv = new QVBoxLayout(card);
-        cv->setContentsMargins(8, 6, 8, 6);
-        cv->setSpacing(2);
-
-        auto* lbl = new QLabel(label);
-        lbl->setObjectName("derivResultLabel");
-        auto* val = new QLabel(value);
-        val->setObjectName(big ? "derivResultBigValue" : "derivResultValue");
-        if (big && sign != 0.0)
-            val->setProperty("sign", sign > 0 ? "pos" : "neg");
-        val->setTextInteractionFlags(Qt::TextSelectableByMouse);
-
-        cv->addWidget(lbl);
-        cv->addWidget(val);
-        return card;
-    };
-    auto add_row = [this, vl](std::initializer_list<QWidget*> cards) {
-        auto* row = new QWidget(this);
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 0, 0, 0);
-        rl->setSpacing(8);
-        for (QWidget* c : cards)
-            rl->addWidget(c);
-        vl->addWidget(row);
-    };
-    auto add_note = [this, vl](const QString& text) {
-        auto* note = new QLabel(text, this);
-        note->setObjectName("derivResultNote");
-        note->setWordWrap(true);
-        vl->addWidget(note);
-    };
-    auto num = [&result](const char* key, int decimals) {
-        return QLocale().toString(result.value(QLatin1String(key)).toDouble(), 'f', decimals);
-    };
-    auto gnum = [](const QJsonObject& o, const char* key, int decimals) {
-        return QLocale().toString(o.value(QLatin1String(key)).toDouble(), 'f', decimals);
-    };
-
-    // Bond results
-    if (result.contains("clean_price")) {
-        add_row({make_card(tr("CLEAN PRICE (PER 100)"), num("clean_price", 4), true),
-                 make_card(tr("DIRTY PRICE (PER 100)"), num("dirty_price", 4)),
-                 make_card(tr("ACCRUED (PER 100)"), num("accrued_interest", 4))});
-        add_row({make_card(tr("MACAULAY DURATION (YRS)"), num("duration", 4)),
-                 make_card(tr("MODIFIED DURATION (YRS)"), num("modified_duration", 4)),
-                 make_card(tr("CONVEXITY (YRS²)"), num("convexity", 4))});
-        if (result.contains("next_coupon_date"))
-            add_row({make_card(tr("NEXT COUPON"), result.value("next_coupon_date").toString()),
-                     make_card(tr("COUPONS REMAINING"), QString::number(result.value("remaining_coupons").toInt()))});
-        add_note(tr("Price from a yield compounded at the coupon frequency; accrued interest actual/actual within "
-                    "the coupon period. A 1bp yield rise changes the dirty price by about −modified duration × "
-                    "dirty price × 0.0001."));
+bool DerivativesScreen::open_section(const QString& section, const QString& focus) {
+    // The page segments' own path (show_page), the pricer's instrument buttons and the chain's
+    // "open underlying" (open_chain_symbol, as for a linked symbol). Validated before anything moves.
+    QString key = section.trimmed().toLower();
+    QString sub;
+    const qsizetype colon = key.indexOf(QLatin1Char(':'));
+    const qsizetype sep = colon >= 0 ? colon : key.indexOf(QLatin1Char('/'));
+    if (sep >= 0) {
+        sub = key.mid(sep + 1).trimmed();
+        key = key.left(sep).trimmed();
     }
-    // YTM result
-    else if (result.contains("ytm") && !result.contains("clean_price")) {
-        vl->addWidget(make_card(tr("YIELD TO MATURITY"), num("ytm", 6) + "%", true));
-        add_note(tr("Compounded at the coupon frequency, solved from the clean price."));
+    const QString symbol = focus.trimmed();
+    if (key.isEmpty() && sub.isEmpty()) {
+        if (!symbol.isEmpty())
+            open_chain_symbol(symbol); // on the page in view, like a linked symbol
+        return true;
     }
-    // FX option: premium for the notional, greeks scaled to the notional
-    else if (result.contains("price") && result.contains("notional")) {
-        add_row({make_card(tr("PREMIUM (DOMESTIC CCY)"), num("price", 2), true),
-                 make_card(tr("PER 1 FOREIGN UNIT (DOM)"), num("price_per_unit", 6)),
-                 make_card(tr("% OF FOREIGN NOTIONAL"), num("premium_pct_foreign", 4) + "%")});
-        const QJsonObject gn = result.value("greeks_notional").toObject();
-        if (!gn.isEmpty()) {
-            add_row({make_card(tr("DELTA (FOREIGN CCY)"), gnum(gn, "delta_foreign", 0)),
-                     make_card(tr("GAMMA (FOR CCY / 1% SPOT)"), gnum(gn, "gamma_1pct_foreign", 0)),
-                     make_card(tr("VEGA (DOM / 1 VOL PT)"), gnum(gn, "vega_domestic", 2)),
-                     make_card(tr("THETA (DOM / DAY)"), gnum(gn, "theta_domestic", 2)),
-                     make_card(tr("RHO DOM (DOM / 1%)"), gnum(gn, "rho_domestic", 2))});
-        }
-        const QJsonObject g = result.value("greeks").toObject();
-        add_note(tr("Garman-Kohlhagen, continuous rates. Per 1 unit of foreign notional: delta %1, gamma %2 (per 1.0 "
-                    "spot move), vega %3, theta %4, rho %5.")
-                     .arg(gnum(g, "delta", 6), gnum(g, "gamma", 6), gnum(g, "vega", 6), gnum(g, "theta", 6),
-                          gnum(g, "rho", 6)));
+    int page = -1;
+    for (int i = 0; i < kPageCount; ++i)
+        if (key == QLatin1String(kDsPageIds[i]))
+            page = i;
+    if (page < 0)
+        return false;
+    int instrument = -1;
+    if (sep >= 0) {
+        if (page != kPricer || (instrument = ds_pricer_instrument(sub)) < 0)
+            return false;
     }
-    // Equity option results (price + greeks)
-    else if (result.contains("price") && result.contains("greeks")) {
-        vl->addWidget(make_card(tr("OPTION PRICE"), num("price", 6), true));
-        const QJsonObject greeks = result.value("greeks").toObject();
-        add_row({make_card(tr("DELTA"), gnum(greeks, "delta", 6)),
-                 make_card(tr("GAMMA (PER 1.0 SPOT)"), gnum(greeks, "gamma", 6)),
-                 make_card(tr("VEGA (PER 1 VOL PT)"), gnum(greeks, "vega", 6)),
-                 make_card(tr("THETA (PER DAY)"), gnum(greeks, "theta", 6)),
-                 make_card(tr("RHO (PER 1% RATE)"), gnum(greeks, "rho", 6))});
-        add_note(tr("Black-Scholes-Merton, European exercise, continuous rate and dividend yield. Theta is per "
-                    "calendar day (annual theta / 365)."));
-    }
-    // Implied volatility
-    else if (result.contains("implied_volatility")) {
-        vl->addWidget(make_card(tr("IMPLIED VOLATILITY (ANNUAL)"), num("implied_volatility", 4) + "%", true));
-    }
-    // Swap results
-    else if (result.contains("swap_value")) {
-        const double value = result.value("swap_value").toDouble();
-        add_row({make_card(tr("SWAP VALUE (PAY FIXED)"), num("swap_value", 2), true, value),
-                 make_card(tr("PAR SWAP RATE"), num("par_swap_rate", 4) + "%")});
-        add_row({make_card(tr("FIXED LEG PV"), num("fixed_leg_pv", 2)),
-                 make_card(tr("FLOATING LEG PV"), num("floating_leg_pv", 2)),
-                 make_card(tr("TENOR (YRS)"), num("tenor_years", 2)),
-                 make_card(tr("PAYMENTS"), QString::number(result.value("payments").toInt()))});
-        // The sign of SWAP VALUE is meaningless without saying whose side it is.
-        add_note(tr("Valued at the effective date to the PAYER of fixed / receiver of floating, on a flat "
-                    "continuously-compounded curve. Positive = the fixed rate is below the par rate."));
-    }
-    // CDS results
-    else if (result.contains("upfront_value")) {
-        const double value = result.value("upfront_value").toDouble();
-        add_row({make_card(tr("VALUE TO PROTECTION BUYER"), num("upfront_value", 2), true, value),
-                 make_card(tr("UPFRONT (POINTS)"), num("upfront_points", 4)),
-                 make_card(tr("RISKY PV01 (PER 1BP)"), num("risky_pv01", 2))});
-        add_row({make_card(tr("PREMIUM LEG PV"), num("premium_leg_pv", 2)),
-                 make_card(tr("PROTECTION LEG PV"), num("protection_leg_pv", 2)),
-                 make_card(tr("PAR SPREAD"), num("breakeven_spread_bps", 2) + " bps")});
-        add_row({make_card(tr("HAZARD RATE (% / YR)"), num("hazard_rate", 4) + "%"),
-                 make_card(tr("SURVIVAL TO MATURITY"), num("survival_probability", 2) + "%"),
-                 make_card(tr("PREMIUM PAYMENTS"), QString::number(result.value("premium_payments").toInt()))});
-        add_note(tr("Flat hazard rate calibrated to the market spread; quarterly premiums with accrual on default; "
-                    "flat continuously-compounded discounting. Positive value = the protection buyer pays "
-                    "upfront."));
-    }
-    // Generic fallback — display all keys
-    else {
-        for (auto it = result.begin(); it != result.end(); ++it) {
-            QString val_str;
-            if (it.value().isDouble()) {
-                val_str = QString::number(it.value().toDouble(), 'f', 4);
-            } else {
-                val_str = it.value().toVariant().toString();
-            }
-            vl->addWidget(make_card(it.key().toUpper(), val_str));
-        }
-    }
-
-    results_container_->layout()->addWidget(body);
-    results_container_->show();
-
-    LOG_INFO("Derivatives", "Results displayed");
+    show_page(page);
+    if (instrument >= 0 && pricer_)
+        pricer_->select_instrument(instrument);
+    if (page == kChain && !symbol.isEmpty())
+        open_chain_symbol(symbol);
+    return true;
 }
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────
 
 QVariantMap DerivativesScreen::save_state() const {
-    // The last inputs of every calculator, so a desk set-up survives a restart.
-    // As-of dates (settlement / effective / valuation) are deliberately absent:
-    // they default to today each session rather than silently re-pricing a stale date.
-    QVariantMap inputs;
-    for (const auto& [key, widget] : persisted_inputs_) {
-        if (auto* spin = qobject_cast<QDoubleSpinBox*>(widget))
-            inputs.insert(key, spin->value());
-        else if (auto* date = qobject_cast<QDateEdit*>(widget))
-            inputs.insert(key, date->date().toString(Qt::ISODate));
-        else if (auto* combo = qobject_cast<QComboBox*>(widget))
-            inputs.insert(key, combo->currentIndex());
-    }
-    return {{"instrument", active_instrument_}, {"inputs", inputs}};
+    // The pricer's inputs under the long-standing keys, plus the open page.
+    QVariantMap s = pricer_ ? pricer_->save_state() : QVariantMap{};
+    s.insert(QStringLiteral("page"), page_);
+    return s;
 }
 
 void DerivativesScreen::restore_state(const QVariantMap& state) {
-    const QVariantMap inputs = state.value("inputs").toMap();
-    for (const auto& [key, widget] : persisted_inputs_) {
-        const auto it = inputs.constFind(key);
-        if (it == inputs.constEnd())
-            continue;
-        if (auto* spin = qobject_cast<QDoubleSpinBox*>(widget)) {
-            spin->setValue(it.value().toDouble());
-        } else if (auto* date = qobject_cast<QDateEdit*>(widget)) {
-            const QDate d = QDate::fromString(it.value().toString(), Qt::ISODate);
-            if (d.isValid())
-                date->setDate(d);
-        } else if (auto* combo = qobject_cast<QComboBox*>(widget)) {
-            const int i = it.value().toInt();
-            if (i >= 0 && i < combo->count())
-                combo->setCurrentIndex(i);
-        }
-    }
-
-    const int idx = state.value("instrument", -1).toInt();
-    if (idx < 0 || idx >= instrument_btns_.size())
-        return;
-    on_instrument_changed(idx);
+    if (pricer_)
+        pricer_->restore_state(state);
+    const int page = state.value(QStringLiteral("page"), static_cast<int>(kPricer)).toInt();
+    if (page > kPricer && page < kPageCount)
+        show_page(page);
 }
 
 } // namespace fincept::screens

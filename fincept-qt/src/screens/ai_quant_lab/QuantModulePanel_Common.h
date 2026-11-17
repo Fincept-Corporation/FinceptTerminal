@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QDate>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QString>
@@ -84,6 +85,23 @@ inline QString check_numeric_matrix(const QJsonArray& rows, int cols = -1) {
                 return tr_("Row %1 contains a non-numeric value.").arg(r + 1);
     }
     return {};
+}
+
+// The dataset chosen in the panel's dataset bar (QuantModulePanel.cpp), added to a request
+// for a qlib command. False -- with the reason in *why -- while the bar has found no dataset.
+// (One definition for the Misc and LiveLearning builders: unity builds merge their .cpp files.)
+inline bool add_qlib_dataset(const QWidget* panel, QJsonObject& params, QString* why) {
+    if (panel->property("qlibDatasetState").toString() == QLatin1String("none")) {
+        *why = QCoreApplication::translate("QuantModulePanel",
+                                           "There is no market dataset yet. Use BUILD FROM YAHOO in the dataset bar "
+                                           "above, or DOWNLOAD QLIB DATASET (Model Library > Browse) for the public "
+                                           "1999-2020 data.");
+        return false;
+    }
+    const QString id = panel->property("qlibDataset").toString();
+    if (!id.isEmpty())
+        params["dataset"] = id;
+    return true;
 }
 
 // Split a comma-separated string into a JSON array of trimmed, non-empty

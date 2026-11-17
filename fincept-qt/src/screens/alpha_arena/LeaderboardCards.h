@@ -42,6 +42,11 @@ class LeaderboardCards : public QWidget {
     QVector<AgentCardData> cards_;
     QString selected_;
     bool controls_enabled_ = true;
+    /// Columns are fitted to their content after a fill, not while it runs
+    /// (no ResizeToContents header: rebuild() runs on every marks tick). Re-fit
+    /// when the number of rows changes or the font changed.
+    int fitted_rows_ = -1;
+    bool refit_ = true;
     QTableWidget* table_ = nullptr;
 };
 

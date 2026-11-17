@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('WORLDBANK_API_KEY', '')
 BASE_URL = "https://api.worldbank.org/v2"
 
@@ -48,6 +50,11 @@ def _fetch_indicator(indicator: str, country: str, start_year: int = None, end_y
     if isinstance(data, list) and len(data) >= 2:
         meta = data[0]
         records = data[1] or []
+        # The API sends the year as text ("2023"): a number at the source (sub-annual periods
+        # such as "2023Q1" stay text).
+        for r in records:
+            if isinstance(r, dict):
+                r["date"] = fc.number(r.get("date"))
         return {"indicator": indicator, "country": country, "records": records, "total": meta.get("total", 0)}
     return {"error": "Unexpected response format", "raw": data}
 

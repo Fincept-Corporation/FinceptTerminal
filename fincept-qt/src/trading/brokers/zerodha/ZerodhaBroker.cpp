@@ -169,21 +169,16 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
     QByteArray input = (api_key + request_token + api_secret).toUtf8();
     QString checksum = QCryptographicHash::hash(input, QCryptographicHash::Sha256).toHex();
 
-    LOG_INFO("Zerodha", QString("exchange_token: api_key_len=%1 req_token_len=%2 secret_len=%3")
-                            .arg(api_key.length())
-                            .arg(request_token.length())
-                            .arg(api_secret.length()));
-
     QMap<QString, QString> params = {{"api_key", api_key}, {"request_token", request_token}, {"checksum", checksum}};
     QMap<QString, QString> headers = {{"X-Kite-Version", kite_api_version}};
     auto resp = BrokerHttp::instance().post_form(QString(base_url()) + "/session/token", params, headers);
 
     // Redacted: a successful /session/token body carries access_token,
     // public_token and the account email — never log it verbatim.
-    LOG_INFO("Zerodha", QString("exchange_token HTTP %1 success=%2 body=%3")
-                            .arg(resp.status_code)
-                            .arg(resp.success)
-                            .arg(redact_body(resp.raw_body)));
+    LOG_DEBUG("Zerodha", QString("exchange_token HTTP %1 success=%2 body=%3")
+                             .arg(resp.status_code)
+                             .arg(resp.success)
+                             .arg(redact_body(resp.raw_body)));
 
     TokenExchangeResponse result;
     if (!resp.success) {
@@ -204,7 +199,8 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
         result.refresh_token = data.value("refresh_token").toString();
         result.user_id = data.value("user_id").toString();
         result.additional_data = with_token_expiry(result.additional_data, next_ist_flush_epoch(6, 0));
-        LOG_INFO("Zerodha", QString("exchange_token ok: user_id=%1").arg(result.user_id));
+        LOG_INFO("Zerodha",
+                 logf("Broker sign-in succeeded", {{"broker", "zerodha"}, {"account", log_mask(result.user_id)}}));
     } else {
         result.error = resp.json.value("message").toString("Token exchange failed");
         LOG_ERROR("Zerodha", QString("exchange_token status!=success: %1").arg(result.error));

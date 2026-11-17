@@ -7,7 +7,40 @@
 #include <QDateTime>
 #include <QUuid>
 
+#include <cmath>
+
 namespace fincept {
+
+namespace {
+
+// Column lists shared by every SELECT so the mappers can rely on the positions.
+// COALESCE keeps rows written before v055 (or by a sync pull) readable.
+constexpr const char* kPortfolioColumns =
+    "SELECT id, name, owner, currency, description, created_at, updated_at, "
+    "COALESCE(broker_account_id, ''), COALESCE(benchmark, ''), risk_free_override, "
+    "COALESCE(track_cash, 0), COALESCE(lot_method, 'FIFO'), COALESCE(long_term_days, 365) "
+    "FROM portfolios ";
+
+constexpr const char* kTransactionColumns =
+    "SELECT id, portfolio_id, symbol, transaction_type, quantity, price, total_value, "
+    "transaction_date, notes, created_at, COALESCE(fees, 0), COALESCE(taxes, 0), COALESCE(currency, ''), "
+    "COALESCE(fx_rate, 0), COALESCE(lot_id, '') "
+    "FROM portfolio_transactions ";
+
+double portfolio_repo_finite_or_zero(double v) {
+    return std::isfinite(v) ? v : 0.0;
+}
+
+/// Text bound into a NOT NULL ... DEFAULT '' column. The SQLite driver binds a null
+/// QString (QString(), or the .trimmed() of one) as SQL NULL, which the column's
+/// DEFAULT does not cover: every BUY without an explicit currency / lot id failed
+/// with "NOT NULL constraint failed: portfolio_transactions.currency" (LOAD DEMO,
+/// imports, the BUY dialog). An empty value is stored as ''.
+QString portfolio_repo_text(const QString& s) {
+    return s.isNull() ? QStringLiteral("") : s;
+}
+
+} // namespace
 
 PortfolioRepository& PortfolioRepository::instance() {
     static PortfolioRepository s;
@@ -17,16 +50,29 @@ PortfolioRepository& PortfolioRepository::instance() {
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
 portfolio::Portfolio PortfolioRepository::map_portfolio(QSqlQuery& q) {
-    return {
-        q.value(0).toString(), // id
-        q.value(1).toString(), // name
-        q.value(2).toString(), // owner
-        q.value(3).toString(), // currency
-        q.value(4).toString(), // description
-        q.value(5).toString(), // created_at
-        q.value(6).toString(), // updated_at
-        q.value(7).toString(), // broker_account_id (v022)
-    };
+    portfolio::Portfolio p;
+    p.id = q.value(0).toString();
+    p.name = q.value(1).toString();
+    p.owner = q.value(2).toString();
+    p.currency = q.value(3).toString();
+    p.description = q.value(4).toString();
+    p.created_at = q.value(5).toString();
+    p.updated_at = q.value(6).toString();
+    p.broker_account_id = q.value(7).toString(); // v022
+    // v055 analytics settings
+    p.benchmark = q.value(8).toString().trimmed();
+    if (!q.value(9).isNull()) {
+        bool ok = false;
+        const double rf = q.value(9).toDouble(&ok);
+        if (ok && std::isfinite(rf))
+            p.risk_free_override = rf;
+    }
+    p.track_cash = q.value(10).toInt() != 0;
+    const QString lm = q.value(11).toString().trimmed().toUpper();
+    p.lot_method = lm.isEmpty() ? QStringLiteral("FIFO") : lm;
+    const int ltd = q.value(12).toInt();
+    p.long_term_days = ltd > 0 ? ltd : 365;
+    return p;
 }
 
 portfolio::PortfolioAsset PortfolioRepository::map_asset(QSqlQuery& q) {
@@ -45,18 +91,24 @@ portfolio::PortfolioAsset PortfolioRepository::map_asset(QSqlQuery& q) {
 }
 
 portfolio::Transaction PortfolioRepository::map_transaction(QSqlQuery& q) {
-    return {
-        q.value(0).toString(), // id
-        q.value(1).toString(), // portfolio_id
-        q.value(2).toString(), // symbol
-        q.value(3).toString(), // transaction_type
-        q.value(4).toDouble(), // quantity
-        q.value(5).toDouble(), // price
-        q.value(6).toDouble(), // total_value
-        q.value(7).toString(), // transaction_date
-        q.value(8).toString(), // notes
-        q.value(9).toString(), // created_at
-    };
+    portfolio::Transaction t;
+    t.id = q.value(0).toString();
+    t.portfolio_id = q.value(1).toString();
+    t.symbol = q.value(2).toString();
+    t.transaction_type = q.value(3).toString();
+    t.quantity = q.value(4).toDouble();
+    t.price = q.value(5).toDouble();
+    t.total_value = q.value(6).toDouble();
+    t.transaction_date = q.value(7).toString();
+    t.notes = q.value(8).toString();
+    t.created_at = q.value(9).toString();
+    // v055
+    t.fees = q.value(10).toDouble();
+    t.taxes = q.value(11).toDouble();
+    t.currency = q.value(12).toString().trimmed();
+    t.fx_rate = q.value(13).toDouble();
+    t.lot_id = q.value(14).toString();
+    return t;
 }
 
 portfolio::PortfolioSnapshot PortfolioRepository::map_snapshot(QSqlQuery& q) {
@@ -74,17 +126,11 @@ portfolio::PortfolioSnapshot PortfolioRepository::map_snapshot(QSqlQuery& q) {
 // ── Portfolios CRUD ──────────────────────────────────────────────────────────
 
 Result<QVector<portfolio::Portfolio>> PortfolioRepository::list_portfolios() {
-    return query_list("SELECT id, name, owner, currency, description, created_at, updated_at, "
-                      "COALESCE(broker_account_id, '') "
-                      "FROM portfolios ORDER BY name",
-                      {}, map_portfolio);
+    return query_list(QString::fromLatin1(kPortfolioColumns) + "ORDER BY name", {}, map_portfolio);
 }
 
 Result<portfolio::Portfolio> PortfolioRepository::get_portfolio(const QString& id) {
-    return query_one("SELECT id, name, owner, currency, description, created_at, updated_at, "
-                     "COALESCE(broker_account_id, '') "
-                     "FROM portfolios WHERE id = ?",
-                     {id}, map_portfolio);
+    return query_one(QString::fromLatin1(kPortfolioColumns) + "WHERE id = ?", {id}, map_portfolio);
 }
 
 Result<QString> PortfolioRepository::create_portfolio(const QString& name, const QString& owner,
@@ -93,7 +139,8 @@ Result<QString> PortfolioRepository::create_portfolio(const QString& name, const
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     auto r = exec_write("INSERT INTO portfolios (id, name, owner, currency, description, broker_account_id) "
                         "VALUES (?, ?, ?, ?, ?, ?)",
-                        {id, name, owner, currency, description, broker_account_id});
+                        {id, portfolio_repo_text(name), portfolio_repo_text(owner), portfolio_repo_text(currency),
+                         portfolio_repo_text(description), portfolio_repo_text(broker_account_id)});
     if (r.is_err())
         return Result<QString>::err(r.error());
     LOG_INFO(
@@ -108,9 +155,24 @@ Result<void> PortfolioRepository::update_portfolio(const QString& id, const QStr
                                                    const QString& currency, const QString& description) {
     auto r = exec_write("UPDATE portfolios SET name = ?, owner = ?, currency = ?, description = ?, "
                         "updated_at = datetime('now') WHERE id = ?",
-                        {name, owner, currency, description, id});
+                        {portfolio_repo_text(name), portfolio_repo_text(owner), portfolio_repo_text(currency),
+                         portfolio_repo_text(description), id});
     if (r.is_ok())
         SyncOutbox::record_unique("portfolio", id, "sync");
+    return r;
+}
+
+Result<void> PortfolioRepository::update_portfolio_settings(const QString& id, const QString& benchmark,
+                                                            std::optional<double> risk_free_override, bool track_cash,
+                                                            const QString& lot_method, int long_term_days) {
+    const QVariant rf = (risk_free_override && std::isfinite(*risk_free_override)) ? QVariant(*risk_free_override)
+                                                                                   : QVariant(QMetaType(QMetaType::Double));
+    auto r = exec_write("UPDATE portfolios SET benchmark = ?, risk_free_override = ?, track_cash = ?, "
+                        "lot_method = ?, long_term_days = ?, updated_at = datetime('now') WHERE id = ?",
+                        {portfolio_repo_text(benchmark.trimmed()), rf, track_cash ? 1 : 0,
+                         lot_method.trimmed().isEmpty() ? QStringLiteral("FIFO") : lot_method.trimmed().toUpper(),
+                         long_term_days > 0 ? long_term_days : 365, id});
+    // Settings are device-local analytics preferences: not part of the cloud body.
     return r;
 }
 
@@ -208,35 +270,48 @@ Result<void> PortfolioRepository::remove_asset(const QString& portfolio_id, cons
 
 Result<QVector<portfolio::Transaction>> PortfolioRepository::get_transactions(const QString& portfolio_id, int limit) {
     return query_list_as<portfolio::Transaction>(
-        "SELECT id, portfolio_id, symbol, transaction_type, quantity, price, total_value, "
-        "transaction_date, notes, created_at "
-        "FROM portfolio_transactions WHERE portfolio_id = ? "
-        "ORDER BY transaction_date DESC, created_at DESC LIMIT ?",
+        QString::fromLatin1(kTransactionColumns) +
+            "WHERE portfolio_id = ? ORDER BY transaction_date DESC, created_at DESC LIMIT ?",
         {portfolio_id, limit}, map_transaction);
 }
 
 Result<QVector<portfolio::Transaction>> PortfolioRepository::get_symbol_transactions(const QString& portfolio_id,
                                                                                      const QString& symbol) {
-    return query_list_as<portfolio::Transaction>(
-        "SELECT id, portfolio_id, symbol, transaction_type, quantity, price, total_value, "
-        "transaction_date, notes, created_at "
-        "FROM portfolio_transactions WHERE portfolio_id = ? AND symbol = ? "
-        "ORDER BY transaction_date DESC",
-        {portfolio_id, symbol.toUpper()}, map_transaction);
+    return query_list_as<portfolio::Transaction>(QString::fromLatin1(kTransactionColumns) +
+                                                     "WHERE portfolio_id = ? AND symbol = ? "
+                                                     "ORDER BY transaction_date DESC, created_at DESC",
+                                                 {portfolio_id, symbol.toUpper()}, map_transaction);
 }
 
 Result<QString> PortfolioRepository::add_transaction(const QString& portfolio_id, const QString& symbol,
                                                      const QString& type, double qty, double price, const QString& date,
                                                      const QString& notes) {
+    portfolio::Transaction t;
+    t.portfolio_id = portfolio_id;
+    t.symbol = symbol;
+    t.transaction_type = type;
+    t.quantity = qty;
+    t.price = price;
+    t.transaction_date = date;
+    t.notes = notes;
+    return add_transaction(t);
+}
+
+Result<QString> PortfolioRepository::add_transaction(const portfolio::Transaction& t) {
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     auto r = exec_write("INSERT INTO portfolio_transactions "
                         "(id, portfolio_id, symbol, transaction_type, quantity, price, total_value, "
-                        " transaction_date, notes) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        {id, portfolio_id, symbol.toUpper(), type, qty, price, qty * price, date, notes});
+                        " transaction_date, notes, fees, taxes, currency, fx_rate, lot_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        {id, t.portfolio_id, portfolio_repo_text(t.symbol.trimmed().toUpper()),
+                         portfolio_repo_text(t.transaction_type.trimmed().toUpper()), t.quantity, t.price,
+                         t.quantity * t.price, portfolio_repo_text(t.transaction_date), portfolio_repo_text(t.notes),
+                         portfolio_repo_finite_or_zero(t.fees), portfolio_repo_finite_or_zero(t.taxes),
+                         portfolio_repo_text(t.currency.trimmed()), portfolio_repo_finite_or_zero(t.fx_rate),
+                         portfolio_repo_text(t.lot_id)});
     if (r.is_err())
         return Result<QString>::err(r.error());
-    SyncOutbox::record_unique("portfolio", portfolio_id, "sync");
+    SyncOutbox::record_unique("portfolio", t.portfolio_id, "sync");
     return Result<QString>::ok(id);
 }
 
@@ -244,7 +319,23 @@ Result<void> PortfolioRepository::update_transaction(const QString& id, double q
                                                      const QString& notes) {
     auto r = exec_write("UPDATE portfolio_transactions SET quantity = ?, price = ?, total_value = ?, "
                         "transaction_date = ?, notes = ? WHERE id = ?",
-                        {qty, price, qty * price, date, notes, id});
+                        {qty, price, qty * price, portfolio_repo_text(date), portfolio_repo_text(notes), id});
+    if (r.is_ok()) {
+        auto pr = db().execute("SELECT portfolio_id FROM portfolio_transactions WHERE id = ?", {id});
+        if (pr.is_ok() && pr.value().next())
+            SyncOutbox::record_unique("portfolio", pr.value().value(0).toString(), "sync");
+    }
+    return r;
+}
+
+Result<void> PortfolioRepository::update_transaction_costs(const QString& id, double fees, double taxes,
+                                                           const QString& currency, double fx_rate,
+                                                           const QString& lot_id) {
+    auto r = exec_write("UPDATE portfolio_transactions SET fees = ?, taxes = ?, currency = ?, fx_rate = ?, "
+                        "lot_id = ? WHERE id = ?",
+                        {portfolio_repo_finite_or_zero(fees), portfolio_repo_finite_or_zero(taxes),
+                         portfolio_repo_text(currency.trimmed()), portfolio_repo_finite_or_zero(fx_rate),
+                         portfolio_repo_text(lot_id), id});
     if (r.is_ok()) {
         auto pr = db().execute("SELECT portfolio_id FROM portfolio_transactions WHERE id = ?", {id});
         if (pr.is_ok() && pr.value().next())
@@ -270,6 +361,9 @@ Result<void> PortfolioRepository::delete_transaction(const QString& id) {
 
 Result<void> PortfolioRepository::save_snapshot(const QString& portfolio_id, double value, double cost_basis,
                                                 double pnl, double pnl_pct, const QString& date) {
+    // A non-finite value is "not known": never persisted (it would read back as 0).
+    if (!std::isfinite(value) || !std::isfinite(cost_basis) || !std::isfinite(pnl) || !std::isfinite(pnl_pct))
+        return Result<void>::err("snapshot values must be finite");
     auto r = exec_write("INSERT OR REPLACE INTO portfolio_snapshots "
                         "(portfolio_id, total_value, total_cost_basis, total_pnl, total_pnl_percent, snapshot_date) "
                         "VALUES (?, ?, ?, ?, ?, ?)",
@@ -281,6 +375,13 @@ Result<void> PortfolioRepository::save_snapshot(const QString& portfolio_id, dou
 
 Result<QVector<portfolio::PortfolioSnapshot>> PortfolioRepository::get_snapshots(const QString& portfolio_id,
                                                                                  int days) {
+    if (days <= 0) {
+        return query_list_as<portfolio::PortfolioSnapshot>("SELECT id, portfolio_id, total_value, total_cost_basis, "
+                                                           "total_pnl, total_pnl_percent, snapshot_date "
+                                                           "FROM portfolio_snapshots WHERE portfolio_id = ? "
+                                                           "ORDER BY snapshot_date ASC",
+                                                           {portfolio_id}, map_snapshot);
+    }
     return query_list_as<portfolio::PortfolioSnapshot>(
         "SELECT id, portfolio_id, total_value, total_cost_basis, total_pnl, "
         "total_pnl_percent, snapshot_date "

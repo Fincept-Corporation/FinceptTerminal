@@ -1,240 +1,220 @@
 #pragma once
+// DataMappingScreen — the Data Mapping tab: SOURCE → MAPPING GRID → PREVIEW.
+//
+//   Source: a saved Data Sources connection (table / path / query), a catalogue connector
+//     (command + arguments), a local file (CSV / JSON / XML / Excel) or an HTTP request (mappings
+//     made before v062). Rows also arrive from Data Sources through "Send to Data Mapping".
+//   Grid: one row per target field — type, source column, format (dates / periods chosen per
+//     column; an undecidable day/month order is flagged, never guessed), scale (minor units,
+//     thousands), default, required — checked live against the loaded rows.
+//   Preview: the mapped rows, every cell that could not be cast marked with its reason, and a
+//     validation summary. SAVE keeps a new revision; RUN maps every row, stores the output and
+//     publishes it on DataHub "mapping:<id>"; EXPORT writes CSV, JSON or a SQLite table.
+// Auth values of HTTP sources live only in SecureStorage (DataMappingRepository). Built on first
+// show; lists are model/view; loading, mapping, saving and exporting run off the GUI thread.
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
+#include "services/data_mapping/MappingEngine.h"
+#include "services/data_mapping/MappingSpec.h"
+#include "services/data_sources/TabularData.h"
 #include "storage/repositories/DataMappingRepository.h"
 
-#include <QComboBox>
-#include <QEvent>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QPlainTextEdit>
-#include <QPushButton>
-#include <QSpinBox>
-#include <QStackedWidget>
-#include <QTableWidget>
-#include <QTextEdit>
-#include <QTreeWidget>
+#include <QVariantMap>
 #include <QWidget>
+
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QSplitter;
+class QStackedWidget;
+class QTableView;
+class QTimer;
+class QToolButton;
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
+
+namespace fincept::services::datamapping {
+struct MappingHandoff;
+}
 
 namespace fincept::screens {
 
-/// Data Mapping configuration screen.
-/// 5-step wizard: API Config → Schema Select → Field Mapping → Cache → Test & Save.
-/// Supports predefined schemas (OHLCV, QUOTE, TICK, ORDER, POSITION, PORTFOLIO, INSTRUMENT),
-/// custom schemas, multiple parser engines, and Indian broker templates.
-class DataMappingScreen : public QWidget, public IStatefulScreen {
+namespace datasources {
+class TabularTableModel;
+class TabularFilterProxy;
+} // namespace datasources
+
+namespace datamapping {
+class FieldGridModel;
+class MappingListModel;
+} // namespace datamapping
+
+class DataMappingScreen : public QWidget, public IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit DataMappingScreen(QWidget* parent = nullptr);
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
-    QString state_key() const override { return "data_mapping"; }
-    int state_version() const override { return 1; }
+    QString state_key() const override { return QStringLiteral("data_mapping"); }
+    int state_version() const override { return 2; }
 
-  private slots:
-    void on_view_changed(int view); // 0=list, 1=create, 2=templates
-    void on_step_changed(int step); // 0..4
-    void on_next_step();
-    void on_prev_step();
-    void on_test_api();
-    void on_test_mapping();
-    void on_save_mapping();
-    void on_run_mapping();
-    void on_edit_mapping();
-    void on_template_selected(int index);
-    void on_new_mapping();
-    void on_delete_mapping();
-
-  private:
-    void setup_ui();
-
-    // Top-level layout builders
-    QWidget* create_header();
-    QWidget* create_step_bar();
-    QWidget* create_main_area();
-    QWidget* create_nav_footer();
-    QWidget* create_status_bar();
-
-    // Step panels (center content)
-    QWidget* create_api_config_panel();
-    QWidget* create_schema_panel();
-    QWidget* create_field_mapping_panel();
-    QWidget* create_cache_panel();
-    QWidget* create_test_save_panel();
-
-    // Side panels
-    QWidget* create_left_panel();
-    QWidget* create_right_panel();
-
-    // View panels
-    QWidget* create_list_view();
-    QWidget* create_template_view();
-
-    // Helpers
-    QWidget* create_form_row(const QString& label, QWidget* input);
-    QWidget* create_form_two_col(QWidget* left, QWidget* right);
-    void update_step_indicators();
-    void update_right_panel();
-    void populate_json_tree(const QJsonValue& val, QTreeWidgetItem* parent, const QString& key);
-    void populate_mapping_list();
-    void refresh_saved_mappings();
-    void load_mappings_from_db();
-    /// The non-empty rows of the field-mapping table as
-    /// [{target, expression, transform, default_val}] — the shape
-    /// DataNormalizationService reads (and the one persisted).
-    QJsonArray collect_field_mappings() const;
-    /// Snapshot of every wizard field as a DataMapping (id = the mapping being
-    /// edited, or empty for a new one).
-    DataMapping build_mapping_from_form() const;
-    /// Back to a blank wizard: fields, mapping table, sample data, test state,
-    /// and the "editing" marker.
-    void reset_wizard_state();
-    /// Fill the wizard from a saved mapping so it can be changed and re-saved.
-    void load_mapping_into_wizard(const DataMapping& dm);
-    /// Put the JSONPath of a sample-response tree node into the Expression cell of
-    /// the selected (else first empty) field-mapping row.
-    void use_tree_item_as_expression(QTreeWidgetItem* item);
+    // ISectionLinked — no tabs: "new" (+ NEW), "mapping:<id>" (a saved mapping, selected in the
+    // list as a click does; its own unsaved-changes question first). `focus` = a mapping id (with
+    // an empty section). Before the list has loaded the link is kept and applied then.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
-    void showEvent(QShowEvent* e) override;
-    void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
   private:
-    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
-    void retranslateUi();
+    // Build
+    void build_workspace();
+    QWidget* build_list_pane(QWidget* parent);
+    QWidget* build_editor(QWidget* parent);
+    QWidget* build_source_box(QWidget* parent);
+    QWidget* build_grid_box(QWidget* parent);
+    QWidget* build_preview_box(QWidget* parent);
 
-  protected:
-    // State
-    int current_view_ = 0; // 0=list, 1=create, 2=templates
-    int current_step_ = 0; // 0..4
-    bool loading_ = false;
+    // List / open / new
+    void reload_list(const QString& select_id = QString());
+    void load_choices();
+    void open_mapping(const QString& id);
+    void new_mapping(const fincept::services::datamapping::MappingHandoff* from);
+    void take_handoff();
+    bool confirm_discard();
 
-    // Saved mappings (persisted via DataMappingRepository)
-    QVector<DataMapping> saved_mappings_;
-    /// Id of the saved mapping loaded into the wizard (SAVE overwrites it);
-    /// empty when composing a new mapping. editing_source_id_ carries its
-    /// data-source link through the edit unchanged.
-    QString editing_mapping_id_;
-    QString editing_source_id_;
-    /// A RUN is in flight (double-click on the list bypasses the disabled button).
-    bool run_in_flight_ = false;
+    // Editor <-> spec
+    void apply_spec_to_ui();
+    void read_source_from_ui();
+    void read_options_from_ui();
+    void set_dirty(bool dirty);
+    void update_header();
+    void update_kind_page();
+    void update_connector_commands();
+    /// An Excel file in the file source: list its sheets (data_local_file "sheets", off-thread).
+    void refresh_file_sheets();
+    void show_banner(const QString& text, const char* look);
 
-    // View & step buttons
-    QList<QPushButton*> view_btns_;
-    QList<QPushButton*> step_btns_;
+    // Source / preview
+    void on_load_source();
+    void set_source_data(const fincept::services::datasources::TabularResult& data, const QStringList& notes,
+                         const QString& label);
+    void show_source_table(int index);
+    void auto_fields(bool replace);
+    void on_schema_changed();
+    void schedule_preview();
+    void apply_preview(const fincept::services::datamapping::MappingOutput& out, bool full_run);
+    void show_preview_state(const QString& title, const QString& message, const QString& action);
 
-    // Stacked widgets
-    QStackedWidget* view_stack_ = nullptr; // list | create | templates
-    QStackedWidget* step_stack_ = nullptr; // 5 step panels
+    // Actions
+    void on_save(bool then_run);
+    void on_run();
+    void on_delete();
+    void on_export(int kind);
+    void on_revision_chosen(int index);
+    fincept::DataMapping mapping_for_save() const;
 
-    // Navigation footer
-    QPushButton* prev_btn_ = nullptr;
-    QPushButton* next_btn_ = nullptr;
-    QLabel* step_label_ = nullptr;
-    QWidget* nav_footer_ = nullptr;
+    // ── State ──
+    bool built_ = false;
+    bool list_loaded_ = false; ///< the mapping list has been read once
+    QVariantMap pending_restore_;
+    // A deep link (open_section) that arrived before the list.
+    QString pending_link_section_;
+    QString pending_link_focus_;
+    bool has_pending_link_ = false;
+    QString current_id_;   ///< "" = new, not saved yet
+    fincept::DataMapping current_;
+    fincept::services::datamapping::MappingSpec spec_;
+    bool dirty_ = false;
+    bool loading_ui_ = false;
+    bool auth_unreadable_ = false;
+    QString auth_error_;
+    fincept::services::datasources::TabularResult source_data_;
+    int source_table_ = 0;
+    bool has_source_ = false;
+    QString source_label_;
+    fincept::services::datamapping::MappingOutput preview_;
+    bool has_preview_ = false;
+    bool preview_is_run_ = false;
+    quint64 load_job_ = 0;
+    quint64 gen_ = 0;
+    quint64 preview_gen_ = 0;
+    bool busy_ = false;
 
-    // Status bar
-    QLabel* status_view_ = nullptr;
-    QLabel* status_step_ = nullptr;
-    QLabel* status_mappings_ = nullptr;
-
-    // ── Step 0: API Config ──
-    QLineEdit* api_name_ = nullptr;
-    QLineEdit* api_base_url_ = nullptr;
-    QLineEdit* api_endpoint_ = nullptr;
-    QComboBox* api_method_ = nullptr;
-    QComboBox* api_auth_type_ = nullptr;
-    QLineEdit* api_auth_value_ = nullptr;
-    QPlainTextEdit* api_headers_ = nullptr;
-    QPlainTextEdit* api_body_ = nullptr;
-    QPushButton* api_test_btn_ = nullptr;
-    QLabel* api_test_status_ = nullptr;
-
-    // ── Step 1: Schema ──
-    QComboBox* schema_select_ = nullptr; // OHLCV, QUOTE, etc.
-    QLabel* schema_desc_ = nullptr;
-    QTableWidget* schema_fields_table_ = nullptr;
-
-    // ── Step 2: Field Mapping ──
-    QTreeWidget* json_tree_ = nullptr;      // JSON explorer
-    QTableWidget* mapping_table_ = nullptr; // target field → expression
-    QComboBox* parser_engine_ = nullptr;
-
-    // ── Step 3: Cache ──
-    QSpinBox* cache_ttl_ = nullptr;
-    QComboBox* cache_enabled_ = nullptr;
-
-    // ── Step 4: Test & Save ──
-    QPushButton* test_btn_ = nullptr;
-    QTextEdit* test_output_ = nullptr;
-    QLabel* test_status_ = nullptr;
+    // ── Widgets ──
+    QStackedWidget* root_stack_ = nullptr;
+    QSplitter* splitter_ = nullptr;
+    QSplitter* editor_split_ = nullptr;
+    // list
+    QStackedWidget* list_stack_ = nullptr;
+    QTableView* list_view_ = nullptr;
+    datamapping::MappingListModel* list_model_ = nullptr;
+    fincept::ui::EmptyState* list_empty_ = nullptr;
+    // editor shell
+    QStackedWidget* right_stack_ = nullptr;
+    fincept::ui::EmptyState* intro_ = nullptr;
+    QWidget* editor_ = nullptr;
+    QLineEdit* name_ = nullptr;
+    QComboBox* schema_ = nullptr;
+    QComboBox* revision_ = nullptr;
     QPushButton* save_btn_ = nullptr;
-
-    // ── List view ──
-    QListWidget* mapping_list_ = nullptr;
-
-    // ── Template view ──
-    QListWidget* template_list_ = nullptr;
-    QLabel* template_detail_ = nullptr;
-
-    // ── Right panel info ──
-    QLabel* right_engine_status_ = nullptr;
-    QLabel* right_schema_info_ = nullptr;
-    QLabel* right_fields_info_ = nullptr;
-    QLabel* right_test_info_ = nullptr;
-
-    // ── Static chrome cached for retranslateUi ──
-    QLabel* header_title_ = nullptr;
-    QLabel* header_sub_ = nullptr;
-    QLabel* header_badge_ = nullptr;
-    QLabel* left_panel_title_ = nullptr;
-    QList<QPushButton*> left_step_btns_;
-    QLabel* quick_stats_title_ = nullptr;
-    QLabel* schemas_count_lbl_ = nullptr;
-    QLabel* parsers_count_lbl_ = nullptr;
-    QLabel* right_panel_title_ = nullptr;
-    QLabel* mapping_engine_title_ = nullptr;
-    QLabel* parser_engines_title_ = nullptr;
-    QLabel* security_title_ = nullptr;
-    QLabel* current_mapping_title_ = nullptr;
-    QLabel* api_panel_title_ = nullptr;
-    QWidget* api_name_row_ = nullptr;
-    QWidget* api_base_url_row_ = nullptr;
-    QWidget* api_endpoint_row_ = nullptr;
-    QWidget* api_method_row_ = nullptr;
-    QWidget* api_auth_type_row_ = nullptr;
-    QWidget* api_auth_value_row_ = nullptr;
-    QWidget* api_headers_row_ = nullptr;
-    QWidget* api_body_row_ = nullptr;
-    QLabel* schema_panel_title_ = nullptr;
-    QWidget* schema_select_row_ = nullptr;
-    QLabel* field_panel_title_ = nullptr;
-    QLabel* parser_label_ = nullptr;
-    QLabel* cache_panel_title_ = nullptr;
-    QWidget* cache_enabled_row_ = nullptr;
-    QWidget* cache_ttl_row_ = nullptr;
-    QLabel* encryption_title_ = nullptr;
-    QLabel* encryption_detail_ = nullptr;
-    QLabel* test_save_panel_title_ = nullptr;
-    QLabel* list_title_ = nullptr;
-    QPushButton* list_run_btn_ = nullptr;
-    QPushButton* list_edit_btn_ = nullptr;
-    QPushButton* list_del_btn_ = nullptr;
-    QPushButton* list_new_btn_ = nullptr;
-    QLabel* list_empty_ = nullptr;
-    QPushButton* template_use_btn_ = nullptr;
-    QLabel* template_toolbar_title_ = nullptr;
-    QLabel* template_count_lbl_ = nullptr;
-    QLabel* status_version_ = nullptr;
-
-    // Sample data from API test
-    QJsonDocument sample_data_;
-    QJsonObject test_result_;
+    QPushButton* run_btn_ = nullptr;
+    QToolButton* export_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
+    QLabel* status_ = nullptr;
+    QLabel* banner_ = nullptr;
+    QTimer* banner_timer_ = nullptr;
+    // source
+    QComboBox* kind_ = nullptr;
+    QStackedWidget* kind_pages_ = nullptr;
+    QComboBox* conn_pick_ = nullptr;
+    QLineEdit* conn_entity_ = nullptr;
+    QLineEdit* conn_query_ = nullptr;
+    QComboBox* connector_pick_ = nullptr;
+    QComboBox* command_pick_ = nullptr;
+    QLineEdit* args_edit_ = nullptr;
+    QLineEdit* file_path_ = nullptr;
+    QComboBox* file_detail_ = nullptr; ///< Excel: sheet (picker fed by data_local_file "sheets"); JSON / XML: rows path
+    QString sheets_request_;
+    QLineEdit* http_base_ = nullptr;
+    QLineEdit* http_endpoint_ = nullptr;
+    QComboBox* http_method_ = nullptr;
+    QComboBox* http_auth_type_ = nullptr;
+    QLineEdit* http_auth_value_ = nullptr;
+    QLineEdit* http_headers_ = nullptr;
+    QLineEdit* http_rows_path_ = nullptr;
+    QPushButton* load_btn_ = nullptr;
+    QComboBox* table_pick_ = nullptr;
+    QLabel* source_info_ = nullptr;
+    // grid
+    QStackedWidget* grid_stack_ = nullptr;
+    QTableView* grid_view_ = nullptr;
+    datamapping::FieldGridModel* grid_model_ = nullptr;
+    fincept::ui::EmptyState* grid_empty_ = nullptr;
+    QPushButton* add_field_btn_ = nullptr;
+    QPushButton* remove_field_btn_ = nullptr;
+    QPushButton* auto_btn_ = nullptr;
+    QComboBox* decimal_ = nullptr;
+    QComboBox* duplicates_ = nullptr;
+    QLineEdit* key_fields_ = nullptr;
+    QCheckBox* drop_invalid_ = nullptr;
+    // preview
+    QLabel* summary_ = nullptr;
+    QCheckBox* problems_only_ = nullptr;
+    QStackedWidget* preview_stack_ = nullptr;
+    fincept::ui::EmptyState* preview_empty_ = nullptr;
+    fincept::ui::LoadingSkeleton* preview_skeleton_ = nullptr;
+    QTableView* preview_view_ = nullptr;
+    datasources::TabularTableModel* preview_model_ = nullptr;
+    datasources::TabularFilterProxy* preview_proxy_ = nullptr;
+    QTimer* preview_timer_ = nullptr;
 };
 
 } // namespace fincept::screens

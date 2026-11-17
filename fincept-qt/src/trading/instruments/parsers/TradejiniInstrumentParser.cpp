@@ -166,7 +166,7 @@ QVector<Instrument> parse_tradejini(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("TradejiniSource", QString("Parsed %1 Tradejini instruments").arg(out.size()));
+    LOG_DEBUG("TradejiniSource", QString("Parsed %1 Tradejini instruments").arg(out.size()));
     return out;
 }
 

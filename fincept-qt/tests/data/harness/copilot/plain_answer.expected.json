@@ -1,0 +1,32 @@
+{
+  "parser": "copilot",
+  "events": [
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "output"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "output"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "output"
+    },
+    {
+      "kind": "text",
+      "ref": "output"
+    }
+  ],
+  "final_text": "Summary\nAAPL closed at 231.10.\n\nThe trend is up.",
+  "saw_result": false,
+  "result_is_error": false,
+  "failure": {
+    "exit_code": 0,
+    "kind": ""
+  },
+  "input": "plain_answer.txt"
+}

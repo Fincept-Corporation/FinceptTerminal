@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,7 +16,7 @@ namespace fincept::ui {
 using namespace fincept::notifications;
 
 NotifPanel::NotifPanel(QWidget* parent) : QFrame(parent, Qt::Popup | Qt::FramelessWindowHint) {
-    setFixedSize(PANEL_W, PANEL_H);
+    apply_size();
     setStyleSheet(QString("QFrame { background: %1; border: 1px solid %2; border-radius: 4px; }")
                       .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
 
@@ -25,7 +26,7 @@ NotifPanel::NotifPanel(QWidget* parent) : QFrame(parent, Qt::Popup | Qt::Framele
 
     // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QWidget;
-    header->setFixedHeight(36);
+    header->setMinimumHeight(36);
     header->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
 
@@ -34,14 +35,14 @@ NotifPanel::NotifPanel(QWidget* parent) : QFrame(parent, Qt::Popup | Qt::Framele
 
     title_lbl_ = new QLabel(tr("NOTIFICATIONS"));
     title_lbl_->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
     hl->addWidget(title_lbl_);
     hl->addStretch();
 
     mark_all_btn_ = new QPushButton(tr("Mark all read"));
     mark_all_btn_->setFlat(true);
     mark_all_btn_->setStyleSheet(
-        QString("QPushButton { color: %1; background: transparent; border: none; font-size: 11px; }"
+        QString("QPushButton { color: %1; background: transparent; border: none; font-size: " + fincept::ui::fonts::px(-3) + "px; }"
                 "QPushButton:hover { color: %2; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     connect(mark_all_btn_, &QPushButton::clicked, this, [this]() {
@@ -89,7 +90,7 @@ void NotifPanel::refresh() {
     if (hist.isEmpty()) {
         auto* empty = new QLabel(tr("No notifications"));
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; padding: 24px;")
+        empty->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent; padding: 24px;")
                                  .arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->insertWidget(0, empty);
         return;
@@ -103,18 +104,18 @@ void NotifPanel::refresh() {
         const QString dot_color = [&]() -> QString {
             switch (rec.request.level) {
                 case NotifLevel::Warning:
-                    return "#F59E0B";
+                    return ui::colors::WARNING();
                 case NotifLevel::Alert:
-                    return "#F97316";
+                    return ui::colors::AMBER();
                 case NotifLevel::Critical:
-                    return "#EF4444";
+                    return ui::colors::DANGER();
                 default:
-                    return "#06B6D4";
+                    return ui::colors::CYAN();
             }
         }();
 
         auto* row = new QWidget;
-        row->setFixedHeight(52);
+        row->setMinimumHeight(52); // grows with the user's font
         row->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; }"
                                    "QWidget:hover { background: %3; }")
                                .arg(rec.read ? ui::colors::BG_SURFACE() : ui::colors::BG_RAISED(),
@@ -125,8 +126,8 @@ void NotifPanel::refresh() {
         rl->setSpacing(8);
 
         auto* dot = new QLabel("●");
-        dot->setFixedWidth(10);
-        dot->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(dot_color));
+        dot->setFixedWidth(ui::metrics::width(10));
+        dot->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent;").arg(dot_color));
         rl->addWidget(dot, 0, Qt::AlignTop);
 
         auto* text_col = new QWidget;
@@ -136,19 +137,19 @@ void NotifPanel::refresh() {
         tvl->setSpacing(1);
 
         auto* title_lbl = new QLabel(rec.request.title.left(45));
-        title_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: %2; background: transparent;")
+        title_lbl->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: %2; background: transparent;")
                                      .arg(ui::colors::TEXT_PRIMARY(), rec.read ? "normal" : "bold"));
         tvl->addWidget(title_lbl);
 
         auto* msg_lbl = new QLabel(rec.request.message.left(60));
         msg_lbl->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         tvl->addWidget(msg_lbl);
         rl->addWidget(text_col, 1);
 
         auto* time_lbl = new QLabel(rec.received_at.toString("hh:mm:ss"));
         time_lbl->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         time_lbl->setAlignment(Qt::AlignTop | Qt::AlignRight);
         rl->addWidget(time_lbl);
 
@@ -172,12 +173,18 @@ void NotifPanel::retranslateUi() {
     refresh();
 }
 
+void NotifPanel::apply_size() {
+    // Designed at the default font size; widened with the user's font.
+    setFixedSize(ui::metrics::width(PANEL_W), ui::metrics::width(PANEL_H));
+}
+
 void NotifPanel::anchor_to(QWidget* ref_widget) {
     if (!ref_widget || !ref_widget->parentWidget())
         return;
+    apply_size(); // the font may have changed since the last time it was shown
     const QPoint global_pos = ref_widget->mapToGlobal(QPoint(0, 0));
-    const int x = global_pos.x() + ref_widget->width() - PANEL_W;
-    const int y = global_pos.y() - PANEL_H;
+    const int x = global_pos.x() + ref_widget->width() - width();
+    const int y = global_pos.y() - height();
     move(x, y);
 }
 

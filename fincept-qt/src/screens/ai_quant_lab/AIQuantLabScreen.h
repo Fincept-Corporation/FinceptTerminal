@@ -1,5 +1,6 @@
 // src/screens/ai_quant_lab/AIQuantLabScreen.h
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/ai_quant_lab/AIQuantLabTypes.h"
 
@@ -20,7 +21,7 @@ class QuantModulePanel;
 /// AI Quant Lab — 24-module quantitative research platform.
 /// Left: module navigation (4 categories), Center: lazy-constructed module panel,
 /// Right: module info. Panels are built on first activation (P2 compliant).
-class AIQuantLabScreen : public QWidget, public IStatefulScreen {
+class AIQuantLabScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit AIQuantLabScreen(QWidget* parent = nullptr);
@@ -29,6 +30,12 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "ai_quant_lab"; }
     int state_version() const override { return 1; }
+
+    /// ISectionLinked — a module id (all_quant_modules(): factor_discovery … gluonts), also as
+    /// "module:<id>"; "module:<id>/<view>" (or "<id>/<view>") also opens the module's tab view
+    /// (QuantModulePanel::open_view_tab; an unknown view returns false and leaves the module as it
+    /// was). The module button's click path; nothing is run that the click would not run. focus unused.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -47,13 +54,15 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
     void refresh_theme();
     void retranslateUi();
     void update_right_panel();
-    void update_sidebar_selection();
+    /// Restyles the module buttons whose selection changed (`all`: every button — theme / font change).
+    void update_sidebar_selection(bool all = false);
 
     // Lazy panel construction — returns existing or newly built panel
     QuantModulePanel* get_or_create_panel(int index);
 
     QVector<services::quant::QuantModule> modules_;
     int active_index_ = 0;
+    int styled_index_ = -1; ///< the module whose buttons carry the "active" style
 
     // Lazy panel map: module index → panel (nullptr = not yet built)
     QMap<int, QuantModulePanel*> panels_;

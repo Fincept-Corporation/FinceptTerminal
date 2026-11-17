@@ -1,5 +1,7 @@
 // src/ui/widgets/algo/FnoLegRuleEditor.cpp
 #include "ui/widgets/algo/FnoLegRuleEditor.h"
+#include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -23,82 +25,92 @@ constexpr int kColLots = 4;
 constexpr int kColDelete = 5;
 constexpr int kNumCols = 6;
 
-const char* kStyle = R"(
+QString build_style() {
+    using namespace fincept::ui;
+    return QString(R"(
 QWidget#fnoLegRuleEditor {
-    background: #1a1a2e;
-    color: #e0e0e0;
+    background: %1;
+    color: %2;
 }
 QTableWidget {
-    background: #12121f;
-    color: #e0e0e0;
-    gridline-color: #2a2a4a;
-    border: 1px solid #2a2a4a;
-    selection-background-color: #2a2a6a;
-    selection-color: #ffffff;
-    font-size: 12px;
+    background: %3;
+    color: %2;
+    gridline-color: %4;
+    border: 1px solid %5;
+    selection-background-color: %6;
+    selection-color: %2;
+    font-size: )" + fonts::px(-2) + R"(px;
 }
 QTableWidget::item {
     padding: 2px 4px;
 }
 QHeaderView::section {
-    background: #1a1a3a;
-    color: #a0a0c0;
+    background: %7;
+    color: %8;
     border: none;
-    border-bottom: 1px solid #2a2a4a;
+    border-bottom: 1px solid %5;
     padding: 3px 6px;
-    font-size: 11px;
+    font-size: )" + fonts::px(-3) + R"(px;
     font-weight: bold;
 }
 QComboBox {
-    background: #1e1e38;
-    color: #e0e0e0;
-    border: 1px solid #3a3a5a;
+    background: %7;
+    color: %2;
+    border: 1px solid %5;
     border-radius: 3px;
     padding: 1px 4px;
-    font-size: 12px;
+    font-size: )" + fonts::px(-2) + R"(px;
 }
 QComboBox QAbstractItemView {
-    background: #1a1a30;
-    color: #e0e0e0;
-    selection-background-color: #3a3a7a;
+    background: %1;
+    color: %2;
+    selection-background-color: %6;
+    selection-color: %2;
 }
 QDoubleSpinBox, QSpinBox {
-    background: #1e1e38;
-    color: #e0e0e0;
-    border: 1px solid #3a3a5a;
+    background: %7;
+    color: %2;
+    border: 1px solid %5;
     border-radius: 3px;
     padding: 1px 4px;
-    font-size: 12px;
+    font-size: )" + fonts::px(-2) + R"(px;
 }
 QPushButton#addLegBtn {
-    background: #1e3a5a;
-    color: #a0d0ff;
-    border: 1px solid #2a5a8a;
+    background: %9;
+    color: %10;
+    border: 1px solid %11;
     border-radius: 4px;
     padding: 4px 12px;
-    font-size: 12px;
+    font-size: )" + fonts::px(-2) + R"(px;
 }
 QPushButton#addLegBtn:hover {
-    background: #2a4a7a;
+    background: %12;
 }
 QPushButton#deleteLegBtn {
-    background: #3a1a1a;
-    color: #ff8080;
-    border: 1px solid #6a2a2a;
+    background: %13;
+    color: %14;
+    border: 1px solid %15;
     border-radius: 3px;
     padding: 1px 6px;
-    font-size: 11px;
+    font-size: )" + fonts::px(-3) + R"(px;
 }
 QPushButton#deleteLegBtn:hover {
-    background: #5a2a2a;
+    background: %16;
 }
-)";
+)")
+        .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BG_BASE(), colors::BORDER_DIM(),
+             colors::BORDER_MED(), colors::BG_HOVER(), colors::BG_RAISED(), colors::TEXT_SECONDARY(),
+             colors::tint(colors::INFO, 0.16))
+        .arg(colors::INFO(), colors::alpha(colors::INFO, 0.5), colors::tint(colors::INFO, 0.28),
+             colors::tint(colors::DANGER, 0.14), colors::DANGER(), colors::alpha(colors::DANGER, 0.5),
+             colors::tint(colors::DANGER, 0.28));
+}
 
 } // namespace
 
 FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("fnoLegRuleEditor"));
-    setStyleSheet(QString::fromLatin1(kStyle));
+    setStyleSheet(build_style());
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -109,13 +121,21 @@ FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent) : QWidget(parent) {
     table_->setObjectName(QStringLiteral("fnoLegTable"));
     table_->setHorizontalHeaderLabels({tr("B/S"), tr("Type"), tr("Strike"), tr("Value"), tr("Lots"), tr("")});
     table_->horizontalHeader()->setStretchLastSection(false);
-    table_->horizontalHeader()->setDefaultSectionSize(90);
-    table_->setColumnWidth(kColSide, 70);
-    table_->setColumnWidth(kColType, 60);
-    table_->setColumnWidth(kColStrike, 100);
-    table_->setColumnWidth(kColValue, 90);
-    table_->setColumnWidth(kColLots, 70);
-    table_->setColumnWidth(kColDelete, 32);
+    // Column widths hold the cell editors' text: sized for the default font
+    // and widened with the user's font size.
+    const auto apply_column_widths = [this]() {
+        table_->horizontalHeader()->setDefaultSectionSize(ui::metrics::width(90));
+        table_->setColumnWidth(kColSide, ui::metrics::width(70));
+        table_->setColumnWidth(kColType, ui::metrics::width(60));
+        table_->setColumnWidth(kColStrike, ui::metrics::width(100));
+        table_->setColumnWidth(kColValue, ui::metrics::width(90));
+        table_->setColumnWidth(kColLots, ui::metrics::width(70));
+        table_->setColumnWidth(kColDelete, ui::metrics::width(32));
+    };
+    apply_column_widths();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [apply_column_widths](const ui::ThemeTokens&) { apply_column_widths(); });
+    ui::metrics::follow_row_height(table_, 28);
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -128,7 +148,7 @@ FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent) : QWidget(parent) {
     btn_row->setContentsMargins(0, 2, 0, 0);
     auto* add_btn = new QPushButton(tr("Add Leg"), this);
     add_btn->setObjectName(QStringLiteral("addLegBtn"));
-    add_btn->setFixedHeight(26);
+    add_btn->setMinimumHeight(26);
     btn_row->addWidget(add_btn);
     btn_row->addStretch();
     layout->addLayout(btn_row);
@@ -147,8 +167,7 @@ FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent) : QWidget(parent) {
 
 void FnoLegRuleEditor::add_row(const fincept::algo::fno::AlgoFnoLeg& leg) {
     const int row = table_->rowCount();
-    table_->insertRow(row);
-    table_->setRowHeight(row, 28);
+    table_->insertRow(row); // height from metrics::follow_row_height (constructor)
 
     // B/S combo
     auto* side_cb = new QComboBox(this);
@@ -158,7 +177,15 @@ void FnoLegRuleEditor::add_row(const fincept::algo::fno::AlgoFnoLeg& leg) {
 
     // Type combo
     auto* type_cb = new QComboBox(this);
-    type_cb->addItems({QStringLiteral("CE"), QStringLiteral("PE"), QStringLiteral("FUT")});
+    // Only option legs can be resolved from the chain and traded. FUT is listed
+    // solely when a saved rule already uses it, so the rule is shown truthfully
+    // (deploy refuses it) instead of being silently rewritten to CE.
+    type_cb->addItems({QStringLiteral("CE"), QStringLiteral("PE")});
+    if (leg.kind == QLatin1String("FUT")) {
+        type_cb->addItem(QStringLiteral("FUT"));
+        type_cb->setItemData(type_cb->count() - 1, tr("Futures legs are not supported yet — change this leg to CE or PE"),
+                             Qt::ToolTipRole);
+    }
     type_cb->setCurrentText(leg.kind.isEmpty() ? QStringLiteral("CE") : leg.kind);
     table_->setCellWidget(row, kColType, type_cb);
 
@@ -186,7 +213,7 @@ void FnoLegRuleEditor::add_row(const fincept::algo::fno::AlgoFnoLeg& leg) {
     // Delete button
     auto* del_btn = new QPushButton(QStringLiteral("✕"), this);
     del_btn->setObjectName(QStringLiteral("deleteLegBtn"));
-    del_btn->setFixedSize(26, 22);
+    ui::metrics::follow_fixed_size(del_btn, 26, 22);
     table_->setCellWidget(row, kColDelete, del_btn);
 
     // Connect change signals — use this->table_ capture to scan for current row

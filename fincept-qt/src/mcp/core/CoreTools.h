@@ -9,19 +9,26 @@
 //
 //   ui_overview    what is open: windows, panels (with refs), dialogs, sign-in/lock, busy work
 //   ui_open        open any screen (optionally on a symbol); no screen = the screen list
-//   ui_snapshot    a panel / dialog / window as one element per line, each control with a ref
-//   ui_act         click, type, select, check, press keys, scroll … (batched steps)
-//   ui_read        an element's data in full: table/list rows, text, options, chart series, web text
+//   ui_snapshot    a panel / dialog / window as one element per line, each control with a ref;
+//                  since="sN" answers only what changed since snapshot sN
+//   ui_act         click, type, select, check, press keys, scroll, table-cell edits … and batches
+//                  that also wait and read (one call: set fields, run, wait, read the result)
+//   ui_read        an element's data in full: table/list rows (text, or typed json), text, options,
+//                  chart series, web text
 //   ui_wait        wait for text, a state, a dialog, idle (loading done) or a pause
 //   ui_screenshot  a picture of the window / panel / element, optionally with ref labels
 //   ui_workspace   arrange panels and windows; save / load / delete layouts
 //   ui_invoke      run the terminal's own named commands (command bar, menus)
 //   python         search, describe and run the bundled analytics scripts (background jobs)
+//   report         Report Builder reports: list / outline (read); append blocks, edit a
+//                  block's text, refresh data, export (each asks the user first) — ReportTool.h
 //
 // Every caller — the in-app AI chat, the Python agent bridge and external
 // agents over McpHttpServer (Claude Code, Codex, Gemini CLI, Cursor …) — sees
-// the same ten tools. The whole catalogue is ~3 KB of schema, so no tool
-// search / discovery round-trip is needed.
+// the same eleven tools; the ui_* part is ~8.5 KB (budgeted by
+// tests/tst_mcp_ui_catalog.cpp), so no tool search / discovery round-trip is
+// needed. Schemas and descriptions of the ui_* tools: CoreToolCatalog.cpp.
+// Every failure answer starts with an error code (UiErrors.h).
 //
 // Safety is per action, not per tool: ui_act / ui_invoke / python classify
 // each step at run time and ask the user (ToolApprovalDialog) before anything
@@ -53,7 +60,7 @@ inline constexpr const char* kCategoryUiControl = "ui-control";
 inline constexpr const char* kCategoryNavigation = "navigation";
 inline constexpr const char* kCategoryAnalytics = "analytics";
 
-/// The ten core tools, ready for McpProvider::register_tools().
+/// The core tools (the ten above plus `report`), ready for McpProvider::register_tools().
 std::vector<ToolDef> get_core_tools();
 
 /// Names of the core tools, in catalogue order.

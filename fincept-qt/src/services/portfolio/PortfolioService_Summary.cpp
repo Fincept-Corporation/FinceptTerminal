@@ -2,13 +2,18 @@
 //
 // Summary loading: load_summary, refresh_summary, build_summary,
 // try_broker_quotes, finalize_summary. These produce the PortfolioSummary
-// object the UI binds to.
+// object the UI binds to — valued in the portfolio's base currency
+// (PortfolioValuation.h), with an explicit incomplete state.
 //
 // Part of the partial-class split of PortfolioService.cpp.
 
 #include "core/logging/Logger.h"
+#include "core/market/InstrumentCurrency.h"
+#include "core/market/MarketSessions.h"
 #include "python/PythonRunner.h"
+#include "services/markets/FxRateService.h"
 #include "services/portfolio/PortfolioService.h"
+#include "services/portfolio/PortfolioValuation.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/CustomIndexRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
@@ -29,90 +34,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <numeric>
 
 namespace fincept::services {
-
-namespace portfolio_summary_detail {
-
-/// Trading currency implied by a yfinance ticker's exchange suffix. Empty when
-/// it cannot be told (indices, FX pairs, unknown suffixes). Note the sub-units:
-/// London quotes in pence (GBp), Johannesburg in cents (ZAc), Tel Aviv in
-/// agorot (ILA) — a 100x error if read as the major unit.
-QString instrument_currency(const QString& symbol) {
-    const QString s = symbol.trimmed().toUpper();
-    if (s.isEmpty() || s.startsWith(QLatin1Char('^')) || s.endsWith(QLatin1String("=X")) ||
-        s.endsWith(QLatin1String("=F")))
-        return {};
-    const qsizetype dot = s.lastIndexOf(QLatin1Char('.'));
-    if (dot < 0) {
-        // Crypto pairs: BTC-USD, ETH-EUR, SOL-USDT. Share classes (BRK-B) fall
-        // through to a US listing.
-        const qsizetype dash = s.lastIndexOf(QLatin1Char('-'));
-        if (dash > 0) {
-            const QString quote = s.mid(dash + 1);
-            if (quote == QLatin1String("USDT") || quote == QLatin1String("USDC"))
-                return QStringLiteral("USD");
-            if (quote.size() == 3 && quote != QLatin1String("USD") && quote.at(0).isLetter())
-                return quote;
-        }
-        return QStringLiteral("USD"); // bare ticker = US listing
-    }
-    static const QHash<QString, QString> kSuffix = {
-        {"NS", "INR"},  {"BO", "INR"}, {"L", "GBp"},  {"TO", "CAD"}, {"V", "CAD"},  {"CN", "CAD"}, {"NE", "CAD"},
-        {"AX", "AUD"},  {"NZ", "NZD"}, {"HK", "HKD"}, {"T", "JPY"},  {"KS", "KRW"}, {"KQ", "KRW"}, {"TW", "TWD"},
-        {"TWO", "TWD"}, {"SS", "CNY"}, {"SZ", "CNY"}, {"SI", "SGD"}, {"DE", "EUR"}, {"F", "EUR"},  {"BE", "EUR"},
-        {"DU", "EUR"},  {"HM", "EUR"}, {"HA", "EUR"}, {"MU", "EUR"}, {"SG", "EUR"}, {"PA", "EUR"}, {"AS", "EUR"},
-        {"BR", "EUR"},  {"LS", "EUR"}, {"MC", "EUR"}, {"MI", "EUR"}, {"IR", "EUR"}, {"VI", "EUR"}, {"HE", "EUR"},
-        {"AT", "EUR"},  {"SW", "CHF"}, {"ST", "SEK"}, {"OL", "NOK"}, {"CO", "DKK"}, {"SA", "BRL"}, {"MX", "MXN"},
-        {"JO", "ZAc"},  {"TA", "ILA"}, {"KL", "MYR"}, {"BK", "THB"}, {"JK", "IDR"}, {"IS", "TRY"}, {"SR", "SAR"},
-        {"WA", "PLN"},  {"PR", "CZK"}, {"BD", "HUF"}, {"CA", "EGP"}, {"QA", "QAR"},
-    };
-    return kSuffix.value(s.mid(dot + 1));
-}
-
-struct LedgerTotals {
-    double realized = 0;
-    double dividends = 0;
-};
-
-/// Weighted-average-cost replay of the whole ledger (oldest first). A SELL with
-/// no known cost basis (position pre-dates its ledger) contributes nothing
-/// rather than a made-up gain.
-LedgerTotals ledger_totals(const QVector<portfolio::Transaction>& newest_first) {
-    LedgerTotals out;
-    struct Pos {
-        double qty = 0;
-        double avg = 0;
-    };
-    QHash<QString, Pos> book;
-    for (auto it = newest_first.crbegin(); it != newest_first.crend(); ++it) {
-        const auto& t = *it;
-        const QString type = t.transaction_type.toUpper();
-        if (!std::isfinite(t.quantity) || !std::isfinite(t.price) || t.quantity <= 0)
-            continue;
-        if (type == QLatin1String("BUY")) {
-            Pos& p = book[t.symbol];
-            const double nq = p.qty + t.quantity;
-            p.avg = nq > 0 ? (p.qty * p.avg + t.quantity * t.price) / nq : 0.0;
-            p.qty = nq;
-        } else if (type == QLatin1String("SELL")) {
-            Pos& p = book[t.symbol];
-            const double sold = std::min(t.quantity, p.qty);
-            if (sold > 0) {
-                out.realized += (t.price - p.avg) * sold;
-                p.qty -= sold;
-                if (p.qty <= 1e-12)
-                    p = Pos{};
-            }
-        } else if (type == QLatin1String("DIVIDEND")) {
-            out.dividends += t.quantity * t.price;
-        }
-    }
-    return out;
-}
-
-} // namespace portfolio_summary_detail
 
 void PortfolioService::load_summary(const QString& portfolio_id) {
     // Check cache first (P11)
@@ -129,23 +54,27 @@ void PortfolioService::load_summary(const QString& portfolio_id) {
     }
 
     auto portfolio_r = PortfolioRepository::instance().get_portfolio(portfolio_id);
+    // The raw driver message goes to the log; listeners get the translated text.
     if (portfolio_r.is_err()) {
-        emit summary_error(portfolio_id, QString::fromStdString(portfolio_r.error()));
+        const QString raw = QString::fromStdString(portfolio_r.error());
+        LOG_ERROR("PortfolioSvc", logf("Portfolio summary failed: the portfolio could not be read",
+                                       {{"portfolio", portfolio_id}, {"error", raw.left(300)}}));
+        emit summary_error(portfolio_id, storage_failure_text(tr("This portfolio could not be read."), raw));
         return;
     }
 
     auto assets_r = PortfolioRepository::instance().get_assets(portfolio_id);
     if (assets_r.is_err()) {
-        emit summary_error(portfolio_id, QString::fromStdString(assets_r.error()));
+        const QString raw = QString::fromStdString(assets_r.error());
+        LOG_ERROR("PortfolioSvc", logf("Portfolio summary failed: the holdings could not be read",
+                                       {{"portfolio", portfolio_id}, {"error", raw.left(300)}}));
+        emit summary_error(portfolio_id, storage_failure_text(tr("The holdings of this portfolio could not be read."), raw));
         return;
     }
 
     if (assets_r.value().isEmpty()) {
-        // Empty portfolio — emit summary with zero values
-        portfolio::PortfolioSummary empty;
-        empty.portfolio = portfolio_r.value();
-        empty.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-        emit summary_loaded(empty);
+        // No positions: still value the cash / ledger totals (a cash-only book is a book).
+        finalize_summary(portfolio_id, {}, portfolio_r.value(), {});
         return;
     }
 
@@ -216,8 +145,8 @@ bool PortfolioService::try_broker_quotes(const QString& portfolio_id, const QVec
     // Build the broker-native key list. Each asset stores broker_symbol +
     // exchange (populated at import time). Skip assets without a broker
     // pair — those slipped in before the v022 link or are non-broker rows
-    // mixed into a broker-linked portfolio. They get current_price = 0 from
-    // the lookup and the existing fallback (avg_buy_price) kicks in.
+    // mixed into a broker-linked portfolio. They get no quote from the broker,
+    // so they are reported unpriced (summary incomplete) — never valued at cost.
     QVector<QString> broker_keys;
     QHash<QString, QString> key_to_yf; // EXCHANGE:SYMBOL → asset.symbol (yfinance)
     broker_keys.reserve(assets.size());
@@ -276,7 +205,7 @@ bool PortfolioService::try_broker_quotes(const QString& portfolio_id, const QVec
                         q.volume = bq.volume;
                         quote_map.insert(yf_key, q);
                     }
-                    LOG_INFO("PortfolioSvc", QString("Broker quotes: %1 of %2 for portfolio %3")
+                    LOG_DEBUG("PortfolioSvc", QString("Broker quotes: %1 of %2 for portfolio %3")
                                                  .arg(quote_map.size())
                                                  .arg(key_to_yf.size())
                                                  .arg(portfolio_id));
@@ -311,120 +240,210 @@ bool PortfolioService::try_broker_quotes(const QString& portfolio_id, const QVec
     return true; // broker path was taken
 }
 
+// ── FX history for trade-date cost in the base currency ───────────────────────
+
+std::optional<double> PortfolioService::historical_fx(const QString& ccy, const QString& base, const QDate& date) const {
+    const QString c = core::market::major_currency(ccy);
+    const QString b = core::market::major_currency(base);
+    if (c == b)
+        return 1.0;
+    const auto it = fx_history_.constFind(c + QLatin1Char('>') + b);
+    if (it == fx_history_.constEnd() || it->isEmpty())
+        return std::nullopt;
+    auto ub = it->upperBound(date);
+    if (ub == it->constBegin())
+        return std::nullopt;
+    --ub;
+    if (ub.key().daysTo(date) > 5)
+        return std::nullopt;
+    return ub.value();
+}
+
+void PortfolioService::request_fx_history(const QString& portfolio_id, const QStringList& ccys, const QString& base,
+                                          const QDate& from) {
+    Q_UNUSED(portfolio_id)
+    const QDate today = QDate::currentDate();
+    for (const QString& ccy : ccys) {
+        const QString key = ccy + QLatin1Char('>') + base;
+        if (fx_history_.contains(key) || fx_history_requested_.contains(key))
+            continue;
+        fx_history_requested_.insert(key);
+        QPointer<PortfolioService> self = this;
+        FxRateService::instance().historical_rates(
+            ccy, base, from.addDays(-7), today,
+            [self, key](bool ok, const QMap<QDate, double>& rates, const QString& error) {
+                if (!self)
+                    return;
+                self->fx_history_requested_.remove(key);
+                // A failure is cached as "no history" so the lookup stops waiting; the
+                // trade-date FX of those rows stays unknown (fx_pnl absent), never invented.
+                self->fx_history_.insert(key, ok ? rates : QMap<QDate, double>{});
+                if (!ok)
+                    LOG_WARN("PortfolioSvc", QString("FX history %1 unavailable: %2").arg(key, error.left(200)));
+                if (self->fx_pending_.isEmpty())
+                    return;
+                QTimer::singleShot(200, self, [self]() {
+                    if (self)
+                        self->revalue_pending(/*history_arrived=*/true);
+                });
+            });
+    }
+}
+
 void PortfolioService::finalize_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                                         const portfolio::Portfolio& portfolio,
                                         const QHash<QString, QuoteData>& quote_map) {
-    portfolio::PortfolioSummary summary;
-    summary.portfolio = portfolio;
-    summary.holdings.reserve(assets.size());
+    // Quote currencies tell the ledger which currency its legacy (currency-less) rows were in.
+    QHash<QString, QString> quote_ccy;
+    for (auto it = quote_map.constBegin(); it != quote_map.constEnd(); ++it)
+        if (!it->currency.isEmpty())
+            quote_ccy.insert(it.key().toUpper(), it->currency);
+    // Thread-safe snapshot (the FX-history lookup copies the cache).
+    const portfolio::LedgerOptions opt = ledger_options(portfolio, quote_ccy);
 
-    double total_mv = 0;
-    double total_cost = 0;
-    double total_day = 0;
-    double total_prev = 0; // previous-close value of PRICED holdings only (day% base)
-    int priced_count = 0;  // holdings that actually received a quote
+    // Reading the whole ledger and replaying it ran on the GUI thread on every
+    // refresh (each quote tick, FX leg, demo / import burst), stalling the UI for
+    // large books: read + replay on a worker, value and emit back on this thread.
+    // A newer request for the same portfolio supersedes one still running.
+    const quint64 seq = ++summary_seq_[portfolio_id];
+    QPointer<PortfolioService> self = this;
+    (void)QtConcurrent::run([self, portfolio_id, assets, portfolio, quote_map, opt, seq]() {
+        auto txns = std::make_shared<QVector<portfolio::Transaction>>();
+        if (auto r = PortfolioRepository::instance().get_transactions(portfolio_id, /*limit=*/1000000); r.is_ok())
+            *txns = r.value();
+        auto ledger = std::make_shared<portfolio::LedgerResult>(portfolio::replay_ledger(*txns, opt));
+        QMetaObject::invokeMethod(
+            self,
+            [self, portfolio_id, assets, portfolio, quote_map, opt, seq, txns, ledger]() {
+                if (!self || self->summary_seq_.value(portfolio_id) != seq)
+                    return; // superseded by a newer refresh
+                self->finish_summary(portfolio_id, assets, portfolio, quote_map, opt, *txns, *ledger);
+            },
+            Qt::QueuedConnection);
+    });
+}
 
-    for (const auto& asset : assets) {
-        portfolio::HoldingWithQuote h;
-        h.symbol = asset.symbol;
-        h.quantity = asset.quantity;
-        h.avg_buy_price = asset.avg_buy_price;
-        h.cost_basis = asset.quantity * asset.avg_buy_price;
-        // Prefer stored sector; fall back to resolver cache (which may
-        // populate async — see sector_resolved handler in constructor).
-        h.sector = asset.sector.isEmpty() ? SectorResolver::instance().sector_for(asset.symbol) : asset.sector;
+void PortfolioService::finish_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
+                                      const portfolio::Portfolio& portfolio, const QHash<QString, QuoteData>& quote_map,
+                                      const portfolio::LedgerOptions& opt,
+                                      const QVector<portfolio::Transaction>& txns,
+                                      const portfolio::LedgerResult& ledger) {
+    auto& repo = PortfolioRepository::instance();
+    const QString base = portfolio::base_currency_of(portfolio);
 
-        auto it = quote_map.find(asset.symbol);
-        if (it != quote_map.end()) {
-            h.current_price = it->price;
-            h.day_change = it->change;
-            h.day_change_percent = it->change_pct;
-            total_prev += (h.current_price - h.day_change) * h.quantity; // priced holdings only
-            ++priced_count;
-        } else {
-            // Fallback to avg buy price if no quote (broker missed the symbol,
-            // or yfinance returned nothing).
-            h.current_price = asset.avg_buy_price;
-        }
+    // Rows in a foreign currency without their own trade FX need the daily history.
+    QStringList missing_hist;
+    QDate earliest;
+    for (const auto& t : txns) {
+        if (t.fx_rate > 0)
+            continue;
+        const QString type = t.transaction_type.toUpper();
+        const QString quoted = !t.currency.isEmpty() ? t.currency
+                               : (portfolio::txn::is_cash_only(type) || t.symbol.isEmpty())
+                                   ? base
+                                   : opt.instrument_currency(t.symbol);
+        const QString ccy = core::market::major_currency(quoted);
+        if (ccy.isEmpty() || ccy == base)
+            continue;
+        const QDate d = portfolio::ledger_row_date(t);
+        if (d.isValid() && (!earliest.isValid() || d < earliest))
+            earliest = d;
+        if (!fx_history_.contains(ccy + QLatin1Char('>') + base) && !missing_hist.contains(ccy))
+            missing_hist.append(ccy);
+    }
+    if (!missing_hist.isEmpty() && earliest.isValid())
+        request_fx_history(portfolio_id, missing_hist, base, earliest);
 
-        h.market_value = h.quantity * h.current_price;
-        h.unrealized_pnl = h.market_value - h.cost_basis;
-        h.unrealized_pnl_percent = (h.cost_basis > 0) ? (h.unrealized_pnl / h.cost_basis) * 100.0 : 0;
+    portfolio::ValuationInputs in;
+    in.portfolio = portfolio;
+    in.assets = assets;
+    in.quotes = quote_map;
+    in.ledger = &ledger;
+    auto& fx = FxRateService::instance();
+    // The quotes behind each conversion are kept: a rate older than the user's "FX stale
+    // after" setting is still used (never dropped or replaced by 1.0) but named in the
+    // summary, so the views can mark the converted totals approximate and date the rate.
+    QHash<QString, FxQuote> used_fx;
+    in.spot_fx = [&fx, &used_fx, base](const QString& ccy) -> std::optional<double> {
+        const auto q = fx.quote(ccy, base);
+        if (!q)
+            return std::nullopt;
+        used_fx.insert(ccy, *q);
+        return q->rate;
+    };
+    in.sector_for = [](const QString& s) { return SectorResolver::instance().sector_for(s); };
+    portfolio::PortfolioSummary summary = portfolio::value_portfolio(in);
+    in.spot_fx = nullptr; // captured locals end here
+    for (auto it = used_fx.constBegin(); it != used_fx.constEnd(); ++it) {
+        if (!it->stale)
+            continue;
+        summary.fx_stale.append(it.key());
+        if (it->as_of.isValid() && (!summary.fx_stale_as_of.isValid() || it->as_of < summary.fx_stale_as_of))
+            summary.fx_stale_as_of = it->as_of;
+    }
+    summary.fx_stale.sort();
 
-        total_mv += h.market_value;
-        total_cost += h.cost_basis;
-        total_day += h.day_change * h.quantity;
+    // Subscribe every leg this book needs (kept fresh by the hub from then on).
+    const QStringList ccys = portfolio::valuation_currencies(in);
+    if (!ccys.isEmpty())
+        fx.ensure_currencies(ccys, base);
+    bool history_pending = false;
+    for (const QString& c : missing_hist)
+        history_pending = history_pending || fx_history_requested_.contains(c + QLatin1Char('>') + base);
+    QStringList waiting_spot;
+    for (const QString& c : ccys)
+        if (!fx.rate(c, base).has_value())
+            waiting_spot.append(c);
+    if (!waiting_spot.isEmpty() || history_pending)
+        fx_pending_.insert(portfolio_id, {assets, portfolio, quote_map, waiting_spot, history_pending});
+    else
+        fx_pending_.remove(portfolio_id);
 
-        if (h.unrealized_pnl >= 0)
-            summary.gainers++;
-        else
-            summary.losers++;
-
-        summary.holdings.append(h);
+    {
+        const RiskFree rf = risk_free_for(portfolio);
+        rf_rate_ = rf.rate;
+        rf_source_ = rf.source;
     }
 
-    // Compute weights
-    for (auto& h : summary.holdings) {
-        h.weight = (total_mv > 0) ? (h.market_value / total_mv) * 100.0 : 0;
-    }
-
-    summary.total_market_value = total_mv;
-    summary.total_cost_basis = total_cost;
-    summary.total_unrealized_pnl = total_mv - total_cost;
-    summary.total_unrealized_pnl_percent = (total_cost > 0) ? ((total_mv - total_cost) / total_cost) * 100.0 : 0;
-    summary.total_day_change = total_day;
-    // Percent off the previous-close base of PRICED holdings only. Using
-    // (total_mv − total_day) folded unpriced holdings' full stale value into the
-    // denominator, diluting the day % whenever any symbol failed to quote.
-    summary.total_day_change_percent = (total_prev > 0) ? (total_day / total_prev) * 100.0 : 0;
-    summary.total_positions = assets.size();
-    summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-
-    // Realised P&L and dividend income come from the ledger, not the position
-    // rows (which only carry what is still held).
-    if (auto txns = PortfolioRepository::instance().get_transactions(portfolio_id, /*limit=*/1000000); txns.is_ok()) {
-        const auto totals = portfolio_summary_detail::ledger_totals(txns.value());
-        summary.total_realized_pnl = totals.realized;
-        summary.total_dividends = totals.dividends;
-    }
-
-    // Holdings quoted in another currency are summed as-is (no FX conversion).
-    const QString base_ccy = portfolio.currency.trimmed().toUpper();
-    for (const auto& h : summary.holdings) {
-        const QString ccy = portfolio_summary_detail::instrument_currency(h.symbol);
-        if (!ccy.isEmpty() && ccy != base_ccy)
-            summary.fx_unconverted.append(QStringLiteral("%1 (%2)").arg(h.symbol, ccy));
-    }
-
-    // A refresh where NO holding got a quote (network down, provider outage)
-    // values every position at its cost basis. That is fine to display, but it
-    // must not be persisted: save_snapshot() is INSERT OR REPLACE keyed by day,
-    // so it would overwrite today's real NAV with a flat cost-basis value and
-    // feed a fake drop/zero-return into every vol/Sharpe/drawdown figure. Nor
-    // should it sit in the 5-minute summary cache and be served as if fresh.
-    if (!assets.isEmpty() && priced_count == 0) {
-        LOG_WARN("PortfolioSvc",
-                 QString("No quotes returned for %1 (%2 holdings) — showing cost basis, not caching or snapshotting")
-                     .arg(portfolio_id)
-                     .arg(assets.size()));
+    // An incomplete book (a holding without a quote or an FX rate) is shown, but it
+    // is neither cached nor snapshotted: its total is not the book's NAV, and
+    // save_snapshot() is INSERT OR REPLACE keyed by day — a partial total would
+    // overwrite the real NAV and put a fake jump into every return statistic.
+    if (!summary.complete) {
+        LOG_WARN("PortfolioSvc", QString("Summary for %1 incomplete (%2 of %3 valued; unpriced: %4; no FX: %5) — "
+                                         "not cached or snapshotted")
+                                     .arg(portfolio_id)
+                                     .arg(summary.valued_positions)
+                                     .arg(summary.total_positions)
+                                     .arg(summary.unpriced.join(QLatin1Char(',')).left(200),
+                                          summary.fx_missing.join(QLatin1Char(',')).left(200)));
         emit summary_loaded(summary);
         return;
     }
 
-    // Cache the result (P11)
     {
         QMutexLocker lock(&cache_mutex_);
         summary_cache_[portfolio_id] = {summary, QDateTime::currentSecsSinceEpoch()};
     }
 
-    // Save snapshot for performance history
-    QString today = QDate::currentDate().toString(Qt::ISODate);
-    PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value, summary.total_cost_basis,
-                                                  summary.total_unrealized_pnl, summary.total_unrealized_pnl_percent,
-                                                  today);
-
-    // Same cadence for any custom index built on this portfolio.
-    record_custom_index_values(summary);
+    if (!assets.isEmpty() || (portfolio.track_cash && !summary.cash_balances.isEmpty())) {
+        // Snapshot under the session date the prices belong to (the quotes' own
+        // market date) — the NAV replay writes exchange dates too, so a late-evening
+        // refresh no longer files today's prices under tomorrow's local date.
+        QString snap_date = summary.as_of;
+        if (snap_date.isEmpty()) {
+            const auto legs = parse_benchmark(benchmark_for(portfolio));
+            const auto* venue = core::market::venue_for_symbol(legs.isEmpty() ? QStringLiteral("SPY") : legs.first().first);
+            snap_date = venue ? core::market::trading_date(*venue, QDateTime::currentDateTimeUtc()).toString(Qt::ISODate)
+                              : QDate::currentDate().toString(Qt::ISODate);
+        }
+        const double cost = summary.total_cost_basis + (summary.cash_in_nav ? summary.cash_value : 0.0);
+        const double pnl = summary.total_market_value - cost;
+        const double pnl_pct = cost > 0 ? pnl / cost * 100.0 : 0.0;
+        if (repo.save_snapshot(portfolio_id, summary.total_market_value, cost, pnl, pnl_pct, snap_date).is_ok())
+            summary.snapshot_date = snap_date;
+        record_custom_index_values(summary);
+    }
 
     emit summary_loaded(summary);
 }
@@ -436,63 +455,60 @@ double PortfolioService::compute_custom_index_value(const fincept::CustomIndex& 
     if (idx.constituents.isEmpty())
         return idx.base_value;
 
-    // symbol → current price from live holdings
+    // symbol → live price (quoted units, the same units price_at_create was taken in).
     QHash<QString, double> price_map;
     for (const auto& h : summary.holdings)
-        price_map[h.symbol] = h.current_price;
+        if (h.priced && std::isfinite(h.current_price) && h.current_price > 0)
+            price_map.insert(h.symbol, h.current_price);
+
+    // Every constituent needs a live price: a level built from stale creation prices
+    // would be recorded as if it were real.
+    for (const auto& c : idx.constituents)
+        if (!price_map.contains(c.symbol) || !(c.price_at_create > 0.0))
+            return portfolio::kAbsent;
 
     const int n = static_cast<int>(idx.constituents.size());
     const QString& method = idx.method;
 
-    if (method == "Price Weighted") {
-        // Sum of current prices / sum of creation prices * base
-        double sum_cur = 0.0;
-        double sum_base = 0.0;
+    if (method == QLatin1String("Price Weighted")) {
+        // Sum of current prices / sum of creation prices × base (Dow-style divisor).
+        double sum_cur = 0.0, sum_base = 0.0;
         for (const auto& c : idx.constituents) {
-            sum_cur += price_map.value(c.symbol, c.price_at_create);
+            sum_cur += price_map.value(c.symbol);
             sum_base += c.price_at_create;
         }
-        return sum_base > 0.0 ? (sum_cur / sum_base * idx.base_value) : idx.base_value;
+        return sum_base > 0.0 ? sum_cur / sum_base * idx.base_value : portfolio::kAbsent;
     }
-    if (method == "Equal Weighted") {
+    if (method == QLatin1String("Equal Weighted")) {
         double ratio_sum = 0.0;
-        for (const auto& c : idx.constituents) {
-            if (c.price_at_create > 0.0)
-                ratio_sum += price_map.value(c.symbol, c.price_at_create) / c.price_at_create;
-        }
-        return (ratio_sum / n) * idx.base_value;
+        for (const auto& c : idx.constituents)
+            ratio_sum += price_map.value(c.symbol) / c.price_at_create;
+        return ratio_sum / n * idx.base_value;
     }
-    if (method == "Geometric Mean") {
+    if (method == QLatin1String("Geometric Mean")) {
         double log_sum = 0.0;
-        int valid = 0;
-        for (const auto& c : idx.constituents) {
-            if (c.price_at_create > 0.0) {
-                const double cur = price_map.value(c.symbol, c.price_at_create);
-                if (cur > 0.0) {
-                    log_sum += std::log(cur / c.price_at_create);
-                    ++valid;
-                }
-            }
-        }
-        return valid > 0 ? (std::exp(log_sum / valid) * idx.base_value) : idx.base_value;
+        for (const auto& c : idx.constituents)
+            log_sum += std::log(price_map.value(c.symbol) / c.price_at_create);
+        return std::exp(log_sum / n) * idx.base_value;
     }
 
-    // Market Cap Weighted / Float Adjusted / Fundamental / Modified / Factor /
-    // Risk Parity / Capped all fall back to weight-based:
-    // sum(weight_i * price_ratio_i) / sum(weight_i) * base
-    double weighted_ratio = 0.0;
-    double total_weight = 0.0;
+    // "Portfolio Weighted": Σ wᵢ·(Pᵢ/P₀ᵢ) / Σ wᵢ × base, wᵢ = the constituent's weight
+    // when the index was created (a buy-and-hold basket). Indices stored under the
+    // retired names (Market Cap Weighted, Float Adjusted, Fundamental Weighted,
+    // Modified Market Cap, Factor Weighted, Risk Parity, Capped Weighted) were always
+    // this computation; they keep it, and the view labels them as such.
+    double weighted_ratio = 0.0, total_weight = 0.0;
     for (const auto& c : idx.constituents) {
-        if (c.price_at_create > 0.0 && c.weight > 0.0) {
-            weighted_ratio += c.weight * (price_map.value(c.symbol, c.price_at_create) / c.price_at_create);
+        if (c.weight > 0.0) {
+            weighted_ratio += c.weight * (price_map.value(c.symbol) / c.price_at_create);
             total_weight += c.weight;
         }
     }
-    return total_weight > 0.0 ? (weighted_ratio / total_weight * idx.base_value) : idx.base_value;
+    return total_weight > 0.0 ? weighted_ratio / total_weight * idx.base_value : portfolio::kAbsent;
 }
 
 void PortfolioService::record_custom_index_values(const portfolio::PortfolioSummary& summary) {
-    if (summary.holdings.isEmpty())
+    if (summary.holdings.isEmpty() || !summary.complete)
         return;
     auto indices = CustomIndexRepository::instance().list_all();
     if (indices.is_err())
@@ -500,7 +516,8 @@ void PortfolioService::record_custom_index_values(const portfolio::PortfolioSumm
 
     // Prices in `summary` describe THIS portfolio only — an index built on a
     // different one would be scored against the wrong prices.
-    const QString today = QDate::currentDate().toString(Qt::ISODate);
+    const QString day = summary.snapshot_date.isEmpty() ? summary.as_of : summary.snapshot_date;
+    const QString today = day.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : day;
     for (const auto& idx : indices.value()) {
         if (idx.portfolio_id != summary.portfolio.id)
             continue;
@@ -510,7 +527,5 @@ void PortfolioService::record_custom_index_values(const portfolio::PortfolioSumm
         CustomIndexRepository::instance().save_value(idx.id, today, level);
     }
 }
-
-// ── Asset operations ─────────────────────────────────────────────────────────
 
 } // namespace fincept::services

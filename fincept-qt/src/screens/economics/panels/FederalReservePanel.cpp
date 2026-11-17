@@ -62,9 +62,7 @@ FederalReservePanel::FederalReservePanel(QWidget* parent)
 }
 
 void FederalReservePanel::activate() {
-    show_empty(tr("Select a series and click FETCH\n"
-                  "Sources: New York Fed (EFFR, SOFR, SOMA holdings) and Federal Reserve Board releases\n"
-                  "(H.15 Treasury yields, H.6 money stock). Rates are shown in percent. No API key required"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void FederalReservePanel::build_controls(QHBoxLayout* thl) {
@@ -74,7 +72,7 @@ void FederalReservePanel::build_controls(QHBoxLayout* thl) {
     series_combo_ = new QComboBox;
     for (const auto& s : kFedReserveSeries)
         series_combo_->addItem(s.label, s.command);
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(240);
 
     thl->addWidget(series_lbl_);
@@ -86,8 +84,8 @@ void FederalReservePanel::on_fetch() {
     const auto& series = kFedReserveSeries[idx];
 
     show_loading(tr("Fetching Federal Reserve: %1…").arg(series.label));
-    services::EconomicsService::instance().execute(kFederalReserveSourceId, kFederalReserveScript, series.command,
-                                                   series.args, "fed_" + series.command);
+    execute_query(kFederalReserveSourceId, kFederalReserveScript, series.command,
+                  series.args, "fed_" + series.command);
 }
 
 void FederalReservePanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -173,7 +171,7 @@ void FederalReservePanel::on_result(const QString& request_id, const services::E
     }
     set_series_meta(meta);
     display(clean, title);
-    LOG_INFO("FederalReservePanel", QString("Displayed %1 rows: %2").arg(clean.size()).arg(title));
+    LOG_DEBUG("FederalReservePanel", QString("Displayed %1 rows: %2").arg(clean.size()).arg(title));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

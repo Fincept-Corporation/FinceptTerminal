@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "gemini -p <prompt> -o stream-json --approval-mode plan",
+  "source": "docs",
+  "url": "https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/output/types.ts",
+  "note": "Transcribed from gemini-cli's ErrorEvent / ResultEvent types; not a recording."
+}

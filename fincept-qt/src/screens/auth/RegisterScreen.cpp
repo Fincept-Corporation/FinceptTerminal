@@ -27,61 +27,54 @@ static QString input_style() {
     return QString("QLineEdit {"
                    "  background: %1; color: %2;"
                    "  border: 1px solid %3;"
-                   "  padding: 4px 8px; font-size: 14px;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 4px 8px; font-size: " + fincept::ui::fonts::px(0) + "px;"
                    "  selection-background-color: %4; selection-color: %5;"
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }"
                    "QLineEdit::placeholder { color: %7; }")
         .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-             ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
+             ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
 }
 
 static QString btn_primary() {
     return QString("QPushButton {"
-                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  background: %7; color: %1;"
                    "  border: 1px solid %2;"
-                   "  padding: 0 16px; font-size: 13px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
-             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::ACCENT_BG());
 }
 
 static QString link_style() {
     return QString("QPushButton {"
                    "  color: %1; background: transparent; border: none;"
-                   "  font-size: 12px; font-weight: 400;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 400;"
                    "}"
                    "QPushButton:hover { color: %2; }")
         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY());
 }
 
 static QString label_style() {
-    return QString("color: %1; font-size: 12px; font-weight: 700;"
-                   "background: transparent; letter-spacing: 0.5px;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;")
         .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString muted_style() {
-    return QString("color: %1; font-size: 12px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;")
         .arg(ui::colors::TEXT_TERTIARY());
 }
 
 static QString check_off() {
-    return QString("color: %1; font-size: 11px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_DIM());
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;")
+        .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString check_on() {
-    return QString("color: %1; font-size: 11px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent;")
         .arg(ui::colors::POSITIVE());
 }
 
@@ -90,6 +83,46 @@ static QFrame* make_separator() {
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM()));
     return sep;
+}
+
+// Country sent with POST /user/register (shown as Profile > COUNTRY), derived
+// from the calling code the form asks for anyway. Only codes that belong to
+// one country are listed: +1 (US, Canada, Caribbean) and +7 (Russia,
+// Kazakhstan) give an empty string, and the user can set it later in Profile >
+// EDIT PROFILE. Names are stored data, not UI text — not translated.
+static QString register_country_for_code(const QString& cc) {
+    struct Entry {
+        const char* code;
+        const char* country;
+    };
+    static constexpr Entry kCountries[] = {
+        {"+20", "Egypt"},          {"+27", "South Africa"},   {"+30", "Greece"},
+        {"+31", "Netherlands"},    {"+32", "Belgium"},        {"+33", "France"},
+        {"+34", "Spain"},          {"+36", "Hungary"},        {"+39", "Italy"},
+        {"+40", "Romania"},        {"+41", "Switzerland"},    {"+43", "Austria"},
+        {"+44", "United Kingdom"}, {"+45", "Denmark"},        {"+46", "Sweden"},
+        {"+47", "Norway"},         {"+48", "Poland"},         {"+49", "Germany"},
+        {"+51", "Peru"},           {"+52", "Mexico"},         {"+54", "Argentina"},
+        {"+55", "Brazil"},         {"+56", "Chile"},          {"+57", "Colombia"},
+        {"+60", "Malaysia"},       {"+61", "Australia"},      {"+62", "Indonesia"},
+        {"+63", "Philippines"},    {"+64", "New Zealand"},    {"+65", "Singapore"},
+        {"+66", "Thailand"},       {"+81", "Japan"},          {"+82", "South Korea"},
+        {"+84", "Vietnam"},        {"+86", "China"},          {"+90", "Turkey"},
+        {"+91", "India"},          {"+92", "Pakistan"},       {"+94", "Sri Lanka"},
+        {"+212", "Morocco"},       {"+234", "Nigeria"},       {"+254", "Kenya"},
+        {"+351", "Portugal"},      {"+352", "Luxembourg"},    {"+353", "Ireland"},
+        {"+358", "Finland"},       {"+380", "Ukraine"},       {"+420", "Czech Republic"},
+        {"+852", "Hong Kong"},     {"+880", "Bangladesh"},    {"+886", "Taiwan"},
+        {"+961", "Lebanon"},       {"+962", "Jordan"},        {"+965", "Kuwait"},
+        {"+966", "Saudi Arabia"},  {"+971", "United Arab Emirates"},
+        {"+972", "Israel"},        {"+973", "Bahrain"},       {"+974", "Qatar"},
+        {"+977", "Nepal"},
+    };
+    for (const auto& e : kCountries) {
+        if (cc == QLatin1String(e.code))
+            return QString::fromLatin1(e.country);
+    }
+    return {};
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -126,17 +159,18 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::signup_succeeded, this, [this]() {
         register_btn_->setEnabled(true);
         register_btn_->setText(tr("  CREATE ACCOUNT  "));
+        pending_email_ = email_->text().trimmed();
         otp_email_->setText(tr("A verification code was sent to %1. Enter it below to activate your account.")
-                                .arg(email_->text().trimmed()));
+                                .arg(pending_email_));
         otp_input_->clear();
         otp_error_->hide();
         pages_->setCurrentIndex(1);
+        // A code was just mailed: the server would not send another for 60 s.
+        start_resend_cooldown();
     });
     connect(&auth, &auth::AuthManager::signup_failed, this, [this](const QString& err) {
         register_btn_->setEnabled(true);
         register_btn_->setText(tr("  CREATE ACCOUNT  "));
-        // A failed RESEND happens while the OTP page is showing — the form's
-        // error label is on the other page and would swallow the message.
         if (pages_->currentIndex() == 1) {
             otp_error_->setText(err);
             otp_error_->show();
@@ -145,14 +179,29 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
         error_label_->setText(err);
         error_label_->show();
     });
+    // RESEND answers. The server's reply is deliberately neutral (it also
+    // "succeeds" inside its resend cooldown without mailing anything), so show
+    // its own words — and keep whatever code the user has typed.
+    connect(&auth, &auth::AuthManager::otp_resent, this, [this](const QString& msg) {
+        if (!isVisible() || pages_->currentIndex() != 1)
+            return;
+        otp_error_->hide();
+        otp_email_->setText(tr("%1\nAccount: %2").arg(msg, pending_email_));
+    });
+    connect(&auth, &auth::AuthManager::otp_resend_failed, this, [this](const QString& err) {
+        if (!isVisible() || pages_->currentIndex() != 1)
+            return;
+        otp_error_->setText(err);
+        otp_error_->show();
+    });
     connect(&auth, &auth::AuthManager::otp_verified, this, [this]() {
         verify_btn_->setEnabled(true);
         verify_btn_->setText(tr("  VERIFY  ")); // was left on "VERIFYING..." for the next sign-up
-        for (QLineEdit* w : {first_name_, last_name_, username_, email_, phone_, country_code_, password_,
-                             confirm_pw_, otp_input_}) {
+        for (QLineEdit* w : {username_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
             if (w)
                 w->clear();
         }
+        pending_email_.clear();
         if (password_)
             password_->setEchoMode(QLineEdit::Password);
         if (confirm_pw_)
@@ -181,11 +230,11 @@ void RegisterScreen::hideEvent(QHideEvent* event) {
     if (event && event->spontaneous())
         return;
 
-    for (QLineEdit* w :
-         {first_name_, last_name_, username_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
+    for (QLineEdit* w : {username_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
         if (w)
             w->clear();
     }
+    pending_email_.clear();
     if (password_)
         password_->setEchoMode(QLineEdit::Password);
     if (confirm_pw_)
@@ -237,18 +286,18 @@ void RegisterScreen::build_form_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* back = new QPushButton(QStringLiteral("<"));
-    back->setFixedSize(24, 24);
+    back->setMinimumSize(24, 24);
+    back->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                                "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
+                                "  font-size: " + fincept::ui::fonts::px(2) + "px; }"
                                 "QPushButton:hover { color: %2; }")
                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY()));
     connect(back, &QPushButton::clicked, this, &RegisterScreen::navigate_login);
     hl->addWidget(back);
 
     form_title_ = new QLabel;
-    form_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                       "background: transparent; letter-spacing: 1px;"
-                                       "font-family: 'Consolas','Courier New',monospace;")
+    form_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                       "background: transparent; letter-spacing: 1px;")
                                    .arg(ui::colors::AMBER()));
     hl->addWidget(form_title_);
     hl->addStretch();
@@ -262,31 +311,14 @@ void RegisterScreen::build_form_page() {
         label_out->setStyleSheet(label_style());
         static_cast<QBoxLayout*>(parent)->addWidget(label_out);
         field_out = new QLineEdit;
-        field_out->setFixedHeight(30);
+        field_out->setMinimumHeight(30);
         field_out->setStyleSheet(input_style());
         static_cast<QBoxLayout*>(parent)->addWidget(field_out);
     };
 
-    // Name row — side by side
-    auto* name_row = new QWidget(this);
-    name_row->setStyleSheet("background: transparent;");
-    auto* nrl = new QHBoxLayout(name_row);
-    nrl->setContentsMargins(0, 0, 0, 0);
-    nrl->setSpacing(8);
-
-    auto* fn_col = new QVBoxLayout;
-    fn_col->setSpacing(2);
-    add_field(first_name_lbl_, first_name_, fn_col);
-    nrl->addLayout(fn_col);
-
-    auto* ln_col = new QVBoxLayout;
-    ln_col->setSpacing(2);
-    add_field(last_name_lbl_, last_name_, ln_col);
-    nrl->addLayout(ln_col);
-    vl->addWidget(name_row);
-
-    // Username is required by POST /user/register; do not invent it from the
-    // name fields (that hid the control and caused silent collisions — #318).
+    // No first / last name: POST /user/register has no name fields, so the form
+    // used to demand both and then throw them away. Username is required by the
+    // API; it is never invented from anything else (silent collisions — #318).
     add_field(username_lbl_, username_, vl);
 
     add_field(email_lbl_, email_, vl);
@@ -301,7 +333,8 @@ void RegisterScreen::build_form_page() {
     auto* cc_col = new QVBoxLayout;
     cc_col->setSpacing(2);
     add_field(code_lbl_, country_code_, cc_col);
-    country_code_->setFixedWidth(72);
+    // 72px at the default font size, wider for a larger one.
+    country_code_->setFixedWidth(qMax(72, 72 * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx));
     phl->addLayout(cc_col);
 
     auto* ph_col = new QVBoxLayout;
@@ -343,18 +376,17 @@ void RegisterScreen::build_form_page() {
     // Error
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(QString("color: %1; font-size: 12px;"
-                                        "background: rgba(220,38,38,0.08);"
-                                        "border: 1px solid #7f1d1d; padding: 4px 8px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::NEGATIVE()));
+    error_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;"
+                                        "background: %2;"
+                                        "border: 1px solid %3; padding: 4px 8px;")
+                                    .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     error_label_->hide();
     vl->addWidget(error_label_);
 
     vl->addSpacing(2);
 
     register_btn_ = new QPushButton;
-    register_btn_->setFixedHeight(32);
+    register_btn_->setMinimumHeight(32);
     register_btn_->setStyleSheet(btn_primary());
     connect(register_btn_, &QPushButton::clicked, this, &RegisterScreen::on_register);
     vl->addWidget(register_btn_);
@@ -374,8 +406,8 @@ void RegisterScreen::build_form_page() {
 
     signin_btn_ = new QPushButton;
     signin_btn_->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                                       "  font-size: 12px; font-weight: 700;"
-                                       "  font-family: 'Consolas','Courier New',monospace; }"
+                                       "  font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                       "  }"
                                        "QPushButton:hover { color: %2; }")
                                    .arg(ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
     connect(signin_btn_, &QPushButton::clicked, this, &RegisterScreen::navigate_login);
@@ -385,8 +417,6 @@ void RegisterScreen::build_form_page() {
     // ── Input limits ─────────────────────────────────────────────────────────
     // Client-side caps mirroring the register endpoint's constraints, so an
     // over-long value is stopped at the keyboard instead of on a round trip.
-    first_name_->setMaxLength(100);
-    last_name_->setMaxLength(100);
     username_->setMaxLength(50);
     email_->setMaxLength(254); // RFC 5321 maximum
     country_code_->setMaxLength(5);
@@ -395,10 +425,8 @@ void RegisterScreen::build_form_page() {
     confirm_pw_->setMaxLength(128);
 
     // ── Accessibility + keyboard order ───────────────────────────────────────
-    // The form is built from nested column layouts (name row, phone row), so
-    // the natural focus chain jumps sideways. Pin it to reading order.
-    first_name_->setAccessibleName(tr("First name"));
-    last_name_->setAccessibleName(tr("Last name"));
+    // The form is built from nested column layouts (phone row), so the natural
+    // focus chain jumps sideways. Pin it to reading order.
     username_->setAccessibleName(tr("Username"));
     email_->setAccessibleName(tr("Email address"));
     country_code_->setAccessibleName(tr("Country calling code"));
@@ -409,8 +437,6 @@ void RegisterScreen::build_form_page() {
     signin_btn_->setAccessibleName(tr("Go to sign in"));
     error_label_->setAccessibleName(tr("Registration error"));
 
-    setTabOrder(first_name_, last_name_);
-    setTabOrder(last_name_, username_);
     setTabOrder(username_, email_);
     setTabOrder(email_, country_code_);
     setTabOrder(country_code_, phone_);
@@ -420,7 +446,7 @@ void RegisterScreen::build_form_page() {
     setTabOrder(register_btn_, signin_btn_);
 
     // Enter anywhere in the form submits, matching the login screen.
-    for (QLineEdit* w : {first_name_, last_name_, username_, email_, country_code_, phone_, password_, confirm_pw_})
+    for (QLineEdit* w : {username_, email_, country_code_, phone_, password_, confirm_pw_})
         connect(w, &QLineEdit::returnPressed, this, &RegisterScreen::on_register);
 
     pages_->addWidget(page);
@@ -444,9 +470,8 @@ void RegisterScreen::build_otp_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     otp_title_ = new QLabel;
-    otp_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                      "background: transparent; letter-spacing: 1px;"
-                                      "font-family: 'Consolas','Courier New',monospace;")
+    otp_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                      "background: transparent; letter-spacing: 1px;")
                                   .arg(ui::colors::AMBER()));
     hl->addWidget(otp_title_);
     hl->addStretch();
@@ -464,31 +489,29 @@ void RegisterScreen::build_otp_page() {
     vl->addWidget(otp_code_lbl_);
 
     otp_input_ = new QLineEdit;
-    otp_input_->setFixedHeight(34);
+    otp_input_->setMinimumHeight(34);
     otp_input_->setStyleSheet(QString("QLineEdit {"
                                       "  background: %1; color: %2;"
                                       "  border: 1px solid %3;"
-                                      "  padding: 6px 10px; font-size: 15px;"
-                                      "  font-family: 'Consolas','Courier New',monospace;"
+                                      "  padding: 6px 10px; font-size: " + fincept::ui::fonts::px(1) + "px;"
                                       "  selection-background-color: %4; selection-color: %5;"
                                       "}"
                                       "QLineEdit:focus { border: 1px solid %6; }")
                                   .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                       ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT()));
+                                       ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT()));
     vl->addWidget(otp_input_);
 
     otp_error_ = new QLabel;
     otp_error_->setWordWrap(true);
-    otp_error_->setStyleSheet(QString("color: %1; font-size: 12px;"
-                                      "background: rgba(220,38,38,0.08);"
-                                      "border: 1px solid #7f1d1d; padding: 4px 8px;"
-                                      "font-family: 'Consolas','Courier New',monospace;")
-                                  .arg(ui::colors::NEGATIVE()));
+    otp_error_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;"
+                                      "background: %2;"
+                                      "border: 1px solid %3; padding: 4px 8px;")
+                                  .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     otp_error_->hide();
     vl->addWidget(otp_error_);
 
     verify_btn_ = new QPushButton;
-    verify_btn_->setFixedHeight(32);
+    verify_btn_->setMinimumHeight(32);
     verify_btn_->setStyleSheet(btn_primary());
     connect(verify_btn_, &QPushButton::clicked, this, &RegisterScreen::on_verify_otp);
     vl->addWidget(verify_btn_);
@@ -524,10 +547,6 @@ void RegisterScreen::build_otp_page() {
 void RegisterScreen::retranslateUi() {
     if (form_title_)
         form_title_->setText(tr("CREATE ACCOUNT"));
-    if (first_name_lbl_)
-        first_name_lbl_->setText(tr("FIRST NAME"));
-    if (last_name_lbl_)
-        last_name_lbl_->setText(tr("LAST NAME"));
     if (username_lbl_)
         username_lbl_->setText(tr("USERNAME"));
     if (email_lbl_)
@@ -541,10 +560,6 @@ void RegisterScreen::retranslateUi() {
     if (confirm_pw_lbl_)
         confirm_pw_lbl_->setText(tr("CONFIRM PASSWORD"));
 
-    if (first_name_)
-        first_name_->setPlaceholderText(tr("First"));
-    if (last_name_)
-        last_name_->setPlaceholderText(tr("Last"));
     if (username_)
         username_->setPlaceholderText(tr("3-50 chars, letters/numbers/_"));
     if (email_)
@@ -617,8 +632,6 @@ void RegisterScreen::on_register() {
         return;
     error_label_->hide();
 
-    QString fn = first_name_->text().trimmed();
-    QString ln = last_name_->text().trimmed();
     QString username = auth::sanitize_input(username_->text()).toLower();
     QString em = email_->text().trimmed();
     QString ph = phone_->text().trimmed();
@@ -626,8 +639,7 @@ void RegisterScreen::on_register() {
     QString pw = password_->text();
     QString cpw = confirm_pw_->text();
 
-    if (fn.isEmpty() || ln.isEmpty() || username.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() ||
-        cpw.isEmpty()) {
+    if (username.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
         error_label_->setText(tr("All fields are required"));
         error_label_->show();
         return;
@@ -673,7 +685,8 @@ void RegisterScreen::on_register() {
 
     register_btn_->setEnabled(false);
     register_btn_->setText(tr("  CREATING...  "));
-    auth::AuthManager::instance().signup(username, em, pw, ph, {}, cc);
+    // Country comes from the calling code (empty when the code is shared).
+    auth::AuthManager::instance().signup(username, em, pw, ph, register_country_for_code(cc), cc);
 }
 
 void RegisterScreen::on_verify_otp() {
@@ -688,29 +701,46 @@ void RegisterScreen::on_verify_otp() {
     }
     verify_btn_->setEnabled(false);
     verify_btn_->setText(tr("  VERIFYING...  "));
-    auth::AuthManager::instance().verify_otp(email_->text().trimmed(), code);
+    const QString email = pending_email_.isEmpty() ? email_->text().trimmed() : pending_email_;
+    auth::AuthManager::instance().verify_otp(email, code);
 }
 
 void RegisterScreen::on_resend_otp() {
-    // Guard against double-submits: the endpoint re-runs the whole signup, and
-    // hammering it is the fastest way to trip a server-side rate limit with no
-    // way for the user to tell why.
+    // One request per cooldown: the server sends nothing inside its own 60 s
+    // resend window anyway.
     if (resend_btn_ && !resend_btn_->isEnabled())
         return;
-
-    QString username = auth::sanitize_input(username_->text()).toLower();
-    QString cc = country_code_->text().trimmed();
-    if (!cc.isEmpty() && !cc.startsWith('+'))
-        cc = '+' + cc;
-    auth::AuthManager::instance().signup(username, email_->text().trimmed(), password_->text(),
-                                         phone_->text().trimmed(), {}, cc);
+    const QString email = pending_email_.isEmpty() ? email_->text().trimmed() : pending_email_;
+    if (email.isEmpty())
+        return;
+    // POST /user/resend-otp — it used to re-submit the whole registration,
+    // which reported "code sent" inside the cooldown without sending one and
+    // wiped the code already typed. The typed code is left alone here.
+    otp_error_->hide();
+    auth::AuthManager::instance().resend_signup_otp(email);
     start_resend_cooldown();
+}
+
+void RegisterScreen::show_otp_for(const QString& email) {
+    pending_email_ = email.trimmed();
+    if (email_)
+        email_->setText(pending_email_); // BACK TO FORM then shows the same address
+    otp_input_->clear();
+    otp_error_->hide();
+    verify_btn_->setEnabled(true);
+    verify_btn_->setText(tr("  VERIFY  "));
+    otp_email_->setText(tr("%1 is not verified yet. Requesting a new verification code — enter the code from "
+                           "your email below to finish signing in.")
+                            .arg(pending_email_));
+    pages_->setCurrentIndex(1);
+    reset_resend_cooldown(); // a cooldown left from an earlier visit must not block this request
+    on_resend_otp();
 }
 
 void RegisterScreen::start_resend_cooldown() {
     if (!resend_btn_)
         return;
-    resend_cooldown_left_ = 30;
+    resend_cooldown_left_ = kResendCooldownSec;
     if (!resend_timer_) {
         resend_timer_ = new QTimer(this);
         resend_timer_->setInterval(1000);

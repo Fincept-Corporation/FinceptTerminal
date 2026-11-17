@@ -20,7 +20,7 @@ struct OptionsLeg {
     QString symbol;   // e.g. "NIFTY28MAR25500CE" (placeholder — see build_option_symbol)
     QString exchange; // "NFO" (NSE F&O) / "BFO" (BSE F&O)
     OrderSide side = OrderSide::Buy;
-    double quantity = 0; // already multiplied by lot size
+    double quantity = 0; // number of LOTS (whole); to_basket_order multiplies by the contract lot size
     double strike = 0;
     QString option_type; // "CE" (call) or "PE" (put)
     QString expiry;      // "2025-03-28"
@@ -82,6 +82,9 @@ class OptionsStrategyBuilder {
     // broker, master not loaded, contract not found) the whole basket is REFUSED:
     // returns false, `out` is empty and `error` names each unresolved leg. The
     // build_option_symbol() placeholder is never sent to a broker.
+    // The legs' quantity is a whole number of LOTS (the factories' `lot_size`
+    // argument): each order's quantity = lots × the resolved contract's lot_size.
+    // A fractional lot count or a contract without a lot size refuses the basket.
     static bool to_basket_order(const OptionsStrategy& strategy, ProductType product, const QString& broker_id,
                                 BasketOrderRequest& out, QString& error);
 

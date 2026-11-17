@@ -40,6 +40,7 @@ class CustomIndexRepository : public BaseRepository<CustomIndex> {
 
     // ── Index values ──────────────────────────────────────────────────────────
     Result<void> save_value(const QString& index_id, const QString& date, double value);
+    /// The most recent `limit` recorded levels (all when limit <= 0), oldest first.
     Result<QVector<CustomIndexValue>> get_values(const QString& index_id, int limit = 365);
 
     // ── Convenience: latest computed value for an index ───────────────────────

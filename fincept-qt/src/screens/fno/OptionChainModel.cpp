@@ -1,7 +1,11 @@
 #include "screens/fno/OptionChainModel.h"
 
+#include "screens/fno/FnoFormat.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/theme/Theme.h"
+
 #include <QColor>
-#include <QLocale>
 
 #include <cmath>
 
@@ -13,44 +17,41 @@ using fincept::trading::BrokerQuote;
 
 namespace {
 
-QString fmt_int_compact(qint64 v) {
-    // Compact integer formatting: 1.2k, 3.4M, 5.6L (lakhs for IN context).
-    // We avoid lakh/crore in pure code path — the chain values are integers
-    // up to ~10^8 (e.g. NIFTY total OI in lakhs of contracts).
+/// OI / volume (contract counts, not money), abbreviated per the user's compact
+/// scheme — lakh / crore on an NSE chain while it is on Automatic.
+QString ocm_fmt_count(qint64 v, const QString& ccy) {
     if (v == 0)
         return QStringLiteral("--");
-    const double a = std::abs(double(v));
-    if (a >= 1e7)
-        return QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (a >= 1e5)
-        return QString::number(v / 1.0e5, 'f', 2) + "L";
-    if (a >= 1e3)
-        return QString::number(v / 1.0e3, 'f', 1) + "k";
-    return QLocale(QLocale::English).toString(v);
+    return fno_fmt_oi(v, ccy);
 }
 
-QString fmt_price(double v) {
+/// A premium in the chain's currency; the column header names the unit.
+QString ocm_fmt_price(double v, const QString& ccy) {
     if (v <= 0)
         return QStringLiteral("--");
-    return QString::number(v, 'f', 2);
+    return fno_price(v, ccy);
 }
 
-QString fmt_pct(double v) {
-    // v is already a percentage (e.g. 14.2 means 14.2%)
+/// `v` is already a percentage (14.2 means 14.2%).
+QString ocm_fmt_pct(double v) {
     if (std::abs(v) < 1e-6)
         return QStringLiteral("--");
-    return QString::number(v, 'f', 2) + "%";
+    return fincept::ui::formatting::pct(v, 2, false);
 }
 
-QString fmt_signed_pct(double v) {
+QString ocm_fmt_signed_pct(double v) {
     if (std::abs(v) < 1e-6)
         return QStringLiteral("--");
-    return (v > 0 ? "+" : "") + QString::number(v, 'f', 2) + "%";
+    return fincept::ui::formatting::pct(v, 2, true);
 }
 
 } // namespace
 
-OptionChainModel::OptionChainModel(QObject* parent) : QAbstractTableModel(parent) {}
+OptionChainModel::OptionChainModel(QObject* parent) : QAbstractTableModel(parent) {
+    // The model formats in data(): a currency / number-format change repaints the
+    // cells and headers from the chain it holds (no reset, no re-fetch).
+    fincept::ui::formatting::refresh_model_on_format_change(this);
+}
 
 int OptionChainModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid())
@@ -95,38 +96,49 @@ QVariant OptionChainModel::data(const QModelIndex& index, int role) const {
 
     if (role == Qt::ForegroundRole) {
         // Net change colouring for LTP cells uses BrokerQuote.change_pct
+        using namespace fincept::ui;
         if (col == ColCeLtp && r.ce_quote.change_pct != 0)
-            return r.ce_quote.change_pct > 0 ? QColor(0x16, 0xa3, 0x4a) : QColor(0xdc, 0x26, 0x26);
+            return QColor(r.ce_quote.change_pct > 0 ? colors::POSITIVE() : colors::NEGATIVE());
         if (col == ColPeLtp && r.pe_quote.change_pct != 0)
-            return r.pe_quote.change_pct > 0 ? QColor(0x16, 0xa3, 0x4a) : QColor(0xdc, 0x26, 0x26);
+            return QColor(r.pe_quote.change_pct > 0 ? colors::POSITIVE() : colors::NEGATIVE());
+    }
+
+    // The LTP tint is the day's direction: say it in words too, never by colour alone.
+    if (role == Qt::ToolTipRole) {
+        if (col == ColCeLtp && r.ce_quote.change_pct != 0)
+            return tr("Day change %1").arg(ocm_fmt_signed_pct(r.ce_quote.change_pct));
+        if (col == ColPeLtp && r.pe_quote.change_pct != 0)
+            return tr("Day change %1").arg(ocm_fmt_signed_pct(r.pe_quote.change_pct));
+        return {};
     }
 
     if (role != Qt::DisplayRole)
         return {};
 
+    const QString ccy = fno_chain_ccy(chain_.broker_id);
     switch (col) {
         case ColCeOi:
-            return fmt_int_compact(r.ce_quote.oi);
+            return ocm_fmt_count(r.ce_quote.oi, ccy);
         case ColCeOiChange:
-            return fmt_signed_pct(r.ce_quote.oi_change_pct);
+            return ocm_fmt_signed_pct(r.ce_quote.oi_change_pct);
         case ColCeVolume:
-            return fmt_int_compact(qint64(r.ce_quote.volume));
+            return ocm_fmt_count(qint64(r.ce_quote.volume), ccy);
         case ColCeIv:
-            return fmt_pct(r.ce_iv * 100.0);
+            return ocm_fmt_pct(r.ce_iv * 100.0);
         case ColCeLtp:
-            return fmt_price(r.ce_quote.ltp);
+            return ocm_fmt_price(r.ce_quote.ltp, ccy);
         case ColStrike:
             return fincept::services::options::format_strike(r.strike);
         case ColPeLtp:
-            return fmt_price(r.pe_quote.ltp);
+            return ocm_fmt_price(r.pe_quote.ltp, ccy);
         case ColPeIv:
-            return fmt_pct(r.pe_iv * 100.0);
+            return ocm_fmt_pct(r.pe_iv * 100.0);
         case ColPeVolume:
-            return fmt_int_compact(qint64(r.pe_quote.volume));
+            return ocm_fmt_count(qint64(r.pe_quote.volume), ccy);
         case ColPeOiChange:
-            return fmt_signed_pct(r.pe_quote.oi_change_pct);
+            return ocm_fmt_signed_pct(r.pe_quote.oi_change_pct);
         case ColPeOi:
-            return fmt_int_compact(r.pe_quote.oi);
+            return ocm_fmt_count(r.pe_quote.oi, ccy);
     }
     return {};
 }
@@ -136,9 +148,12 @@ QVariant OptionChainModel::headerData(int section, Qt::Orientation orient, int r
         return {};
     // tr() per-call so the live header row reflects the current language.
     // The owning QHeaderView re-polls headerData on QEvent::LanguageChange.
+    // The premium columns name the chain's currency (rupees on NSE, dollars on
+    // Databento's US options) as the user's settings print it.
+    const QString ltp = fincept::ui::formatting::header(tr("LTP"), fno_chain_ccy(chain_.broker_id));
     const QString headers[ColCount] = {
-        tr("OI"),  tr("Chg OI"), tr("Volume"), tr("IV"),     tr("LTP"), tr("Strike"),
-        tr("LTP"), tr("IV"),     tr("Volume"), tr("Chg OI"), tr("OI"),
+        tr("OI"), tr("Chg OI"), tr("Volume"), tr("IV"),     ltp, tr("Strike"),
+        ltp,      tr("IV"),     tr("Volume"), tr("Chg OI"), tr("OI"),
     };
     if (section < 0 || section >= ColCount)
         return {};
@@ -169,9 +184,12 @@ void OptionChainModel::set_chain(const OptionChain& chain) {
         }
     }
     if (same_structure) {
+        const bool ccy_changed = fno_chain_ccy(chain.broker_id) != fno_chain_ccy(chain_.broker_id);
         chain_ = chain;
         recompute_oi_bounds();
         emit dataChanged(index(0, 0), index(chain_.rows.size() - 1, ColCount - 1));
+        if (ccy_changed)
+            emit headerDataChanged(Qt::Horizontal, 0, ColCount - 1); // the LTP columns' unit
         return;
     }
     beginResetModel();

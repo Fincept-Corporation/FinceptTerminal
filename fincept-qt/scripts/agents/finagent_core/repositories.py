@@ -133,10 +133,24 @@ class SQLiteRepository(Repository[T]):
 
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
-            # Default to user data directory
             import os
-            app_data = os.getenv('APPDATA', os.path.expanduser('~'))
-            db_path = Path(app_data) / 'fincept-terminal' / 'agents.db'
+            data_dir = os.getenv('FINCEPT_DATA_DIR', '').strip()
+            if data_dir:
+                # Inside the terminal's own data root (set on every spawn). The
+                # old %APPDATA%/fincept-terminal/agents.db is outside it and is
+                # read by a separate private build of Fincept Terminal too; the
+                # terminal copies it in when it adopts an older install
+                # (src/app/LegacyRootAdoption.cpp).
+                db_path = Path(data_dir) / 'finagent' / 'agents.db'
+            else:
+                # Run by hand outside the terminal: the same file in the edition's
+                # default data root (never the legacy %APPDATA% one, see above).
+                import sys
+                scripts_root = str(Path(__file__).resolve().parents[2])
+                if scripts_root not in sys.path:
+                    sys.path.append(scripts_root)
+                import fincept_paths
+                db_path = fincept_paths.data_root() / 'finagent' / 'agents.db'
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -12,6 +12,9 @@ Features:
 import json
 import sys
 from pathlib import Path
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
 from typing import Dict, List, Any, Optional, Union, Callable
 import warnings
 warnings.filterwarnings('ignore')
@@ -414,7 +417,26 @@ class DataProcessingService:
             'winsorize': WinsorizeProcessor
         }
 
-    PIPELINES_FILE = Path.home() / '.fincept' / 'data_processors' / 'pipelines.json'
+    # {pipeline_id: {"processors": [processor config, ...], "created_at": ISO, "updated_at": ISO}}.
+    # Files written before list/delete existed hold the bare processor list per id; both forms
+    # are read (see _entry), and an entry is rewritten in the new form when it is next saved.
+    @property
+    def PIPELINES_FILE(self) -> Path:
+        """<data root>/script-data/data_processors/pipelines.json (fincept_paths), resolved at
+        use rather than at import; the ~/.fincept copy of releases is copied in once."""
+        import fincept_paths
+        return fincept_paths.user_data_file('data_processors', 'pipelines.json',
+                                            legacy='data_processors/pipelines.json')
+
+    @staticmethod
+    def _entry(value: Any) -> Optional[Dict[str, Any]]:
+        """A stored pipeline as {"processors", "created_at", "updated_at"}; None when unusable."""
+        if isinstance(value, list):
+            return {"processors": value, "created_at": None, "updated_at": None}
+        if isinstance(value, dict) and isinstance(value.get("processors"), list):
+            return {"processors": value["processors"], "created_at": value.get("created_at"),
+                    "updated_at": value.get("updated_at")}
+        return None
 
     def _load_all_pipeline_configs(self) -> Dict[str, Any]:
         try:
@@ -424,29 +446,83 @@ class DataProcessingService:
         except Exception:
             return {}
 
+    def _write_all_pipeline_configs(self, data: Dict[str, Any]) -> None:
+        """Atomic replace: a crash mid-write must not leave a truncated pipelines.json (which
+        would read back as "no pipelines at all")."""
+        import fincept_paths
+        fincept_paths.atomic_write_text(self.PIPELINES_FILE, json.dumps(data, indent=2))
+
     def _load_pipeline_config(self, pipeline_id: str) -> Optional[List[Dict[str, Any]]]:
-        return self._load_all_pipeline_configs().get(pipeline_id)
+        entry = self._entry(self._load_all_pipeline_configs().get(pipeline_id))
+        return entry["processors"] if entry else None
 
     def _save_pipeline_config(self, pipeline_id: str, processor_configs: List[Dict[str, Any]]) -> None:
-        """Best-effort: a read-only home directory must not fail an otherwise valid create."""
+        """Best-effort: a read-only home directory must not fail an otherwise valid create.
+        Re-creating an existing id keeps its created_at and moves updated_at."""
         try:
+            from datetime import datetime
             data = self._load_all_pipeline_configs()
-            data[pipeline_id] = processor_configs
-            self.PIPELINES_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.PIPELINES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+            now = datetime.now().isoformat(timespec='seconds')
+            old = self._entry(data.get(pipeline_id))
+            data[pipeline_id] = {"processors": processor_configs,
+                                 "created_at": (old or {}).get("created_at") or now,
+                                 "updated_at": now}
+            self._write_all_pipeline_configs(data)
         except Exception as e:
             print(f"Warning: could not persist pipeline '{pipeline_id}': {e}", file=sys.stderr)
 
+    def list_pipelines(self) -> Dict[str, Any]:
+        """Every saved pipeline, most recently created / updated first (entries saved before
+        timestamps were recorded come last, by id)."""
+        rows = []
+        for pid, value in self._load_all_pipeline_configs().items():
+            entry = self._entry(value)
+            if entry is None:
+                continue
+            procs = [c for c in entry["processors"] if isinstance(c, dict)]
+            rows.append({
+                "id": pid,
+                "processors": [c.get("type") for c in procs],
+                "num_processors": len(procs),
+                "processor_configs": procs,
+                "created_at": entry["created_at"],
+                "updated_at": entry["updated_at"],
+            })
+        rows.sort(key=lambda r: r["id"])
+        rows.sort(key=lambda r: r["updated_at"] or r["created_at"] or "", reverse=True)
+        return {"success": True, "pipelines": rows, "count": len(rows),
+                "storage": str(self.PIPELINES_FILE)}
+
+    def delete_pipeline(self, pipeline_id: Optional[str]) -> Dict[str, Any]:
+        """Remove one saved pipeline. Unknown id -> a failure naming the saved ones."""
+        if not pipeline_id or not isinstance(pipeline_id, str):
+            return {"success": False, "error": "pipeline_id is required"}
+        data = self._load_all_pipeline_configs()
+        if pipeline_id not in data:
+            known = ", ".join(sorted(data)) or "none saved"
+            return {"success": False, "error": f"Pipeline {pipeline_id} not found (saved: {known})"}
+        removed = self._entry(data.pop(pipeline_id))
+        try:
+            self._write_all_pipeline_configs(data)
+        except Exception as e:
+            return {"success": False, "error": f"Could not delete pipeline {pipeline_id}: {e}"}
+        self.pipelines.pop(pipeline_id, None)
+        return {"success": True, "pipeline_id": pipeline_id, "deleted": True,
+                "processors": [c.get("type") for c in (removed or {}).get("processors", []) if isinstance(c, dict)],
+                "remaining": len(data)}
+
     def create_pipeline(self,
                        pipeline_id: str,
-                       processor_configs: List[Dict[str, Any]]) -> Dict[str, Any]:
+                       processor_configs: List[Dict[str, Any]],
+                       persist: bool = True) -> Dict[str, Any]:
         """
         Create a data processing pipeline.
 
         Args:
             pipeline_id: Unique pipeline identifier
             processor_configs: List of processor configurations
+            persist: save it to PIPELINES_FILE (False: rebuilding a saved one for PROCESS DATA,
+                     which must not rewrite the file or move its updated_at)
 
         Returns:
             Pipeline creation result
@@ -475,7 +551,8 @@ class DataProcessingService:
             self.pipelines[pipeline_id] = pipeline
             # Every CLI call is a fresh process, so an in-memory dict never survives
             # until PROCESS DATA; keep the processor configs on disk and rebuild.
-            self._save_pipeline_config(pipeline_id, processor_configs)
+            if persist:
+                self._save_pipeline_config(pipeline_id, processor_configs)
 
             return {
                 "success": True,
@@ -508,7 +585,7 @@ class DataProcessingService:
         if pipeline_id not in self.pipelines:
             stored = self._load_pipeline_config(pipeline_id)
             if stored is not None:
-                rebuilt = self.create_pipeline(pipeline_id, stored)
+                rebuilt = self.create_pipeline(pipeline_id, stored, persist=False)
                 if not rebuilt.get("success"):
                     return rebuilt
         if pipeline_id not in self.pipelines:
@@ -588,7 +665,7 @@ def _json_safe(obj):
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -604,6 +681,13 @@ def main():
 
         elif command == "list_processors":
             result = service.get_available_processors()
+
+        elif command == "list_pipelines":
+            result = service.list_pipelines()
+
+        elif command == "delete_pipeline":
+            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].strip() else {}
+            result = service.delete_pipeline(params.get("pipeline_id"))
 
         elif command == "create_pipeline":
             params = json.loads(sys.argv[2])
@@ -627,10 +711,10 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(_json_safe(result)))
+        fincept_json.emit(_json_safe(result))
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

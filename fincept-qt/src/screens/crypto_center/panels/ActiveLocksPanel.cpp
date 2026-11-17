@@ -1,11 +1,15 @@
 #include "screens/crypto_center/panels/ActiveLocksPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "services/wallet/StakingService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QAction>
 #include <QDateTime>
@@ -14,7 +18,6 @@
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QMenu>
 #include <QShowEvent>
 #include <QStyle>
@@ -24,34 +27,26 @@
 
 #include <cmath>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-double atomic_to_ui(const QString& raw, int decimals) {
-    if (raw.isEmpty())
-        return 0.0;
-    bool ok = false;
-    const auto u = raw.toULongLong(&ok);
-    if (!ok)
-        return 0.0;
-    return static_cast<double>(u) / std::pow(10.0, std::max(0, decimals));
-}
+using fincept::screens::crypto_center_text::atomic_to_ui; // CryptoCenterText.h (one definition)
 
-QString format_token(double v, int dp = 2) {
+/// A $FNCPT / veFNCPT amount: a quantity of the token, never money.
+QString alp_format_token(double v, int dp = 2) {
     if (v <= 0.0)
         return QStringLiteral("0");
-    return QLocale::system().toString(v, 'f', dp);
+    return cc_fmt::quantity(v, dp);
 }
 
+/// Lock yield is paid in USDC — a stablecoin, its own currency (not "$").
 QString format_usdc(double v) {
-    if (v <= 0.0)
-        return QStringLiteral("$0");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 0));
+    return cc_fmt::money(v > 0.0 ? v : 0.0, QStringLiteral("USDC"));
 }
 
 QString format_unlock_date(qint64 ts_ms) {
@@ -95,6 +90,11 @@ ActiveLocksPanel::ActiveLocksPanel(QWidget* parent) : QWidget(parent) {
 
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this, &ActiveLocksPanel::on_topic_error);
+    // A number / currency format change re-renders the positions already held (no re-fetch).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!latest_.isEmpty())
+            rebuild_table();
+    });
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -156,12 +156,8 @@ void ActiveLocksPanel::build_ui() {
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table_, &QTableWidget::customContextMenuRequested, this, &ActiveLocksPanel::on_row_context_menu);
     bl->addWidget(table_, 1);
-
-    empty_state_ = new QLabel(QStringLiteral("—"), body); // text set by rebuild_table()
-    empty_state_->setObjectName(QStringLiteral("activeLocksEmpty"));
-    empty_state_->setAlignment(Qt::AlignCenter);
-    empty_state_->setMinimumHeight(120);
-    bl->addWidget(empty_state_);
+    // The empty / not-live / error page (ui::EmptyState) is inserted here by
+    // ensure_empty_state() the first time rebuild_table() needs it.
 
     // Error strip
     error_strip_ = new QFrame(body);
@@ -187,33 +183,31 @@ void ActiveLocksPanel::apply_theme() {
     const QString font = font_stack();
 
     const QString ss =
-        QStringLiteral("QWidget#activeLocksPanel { background:%1; }"
+        QString("QWidget#activeLocksPanel { background:%1; }"
                        "QWidget#activeLocksHead { background:%2; border-bottom:1px solid %3; }"
-                       "QLabel#activeLocksTitle { color:%4; font-family:%5; font-size:11px;"
+                       "QLabel#activeLocksTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                       "QLabel#activeLocksHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                       "QLabel#activeLocksHeadCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
                        "QLabel#activeLocksPill { color:%7; background:%8; border:1px solid %3;"
-                       "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.2px;"
                        "  padding:2px 8px; }"
-                       "QLabel#activeLocksPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                       "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
+                       "QLabel#activeLocksPillDemo { color:%4; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
+                       "  border:1px solid %11; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                        "  letter-spacing:1.2px; padding:2px 8px; }"
                        "QWidget#activeLocksBody { background:%1; }"
                        "QTableWidget#activeLocksTable { background:%1; color:%7; gridline-color:%3;"
                        "  border:none; selection-background-color:%10; selection-color:%7;"
-                       "  font-family:%5; font-size:11px; }"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                        "QTableWidget#activeLocksTable::item { padding:6px 10px; border-bottom:1px solid %3; }"
                        "QHeaderView::section { background:%8; color:%6; padding:6px 10px;"
                        "  border:none; border-bottom:1px solid %3; font-family:%5;"
-                       "  font-size:9px; font-weight:700; letter-spacing:1.4px; }"
-                       "QLabel#activeLocksEmpty { color:%6; font-family:%5; font-size:11px;"
-                       "  background:transparent; }"
-                       "QFrame#activeLocksErrorStrip { background:rgba(220,38,38,0.10);"
+                       "  font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.4px; }"
+                       "QFrame#activeLocksErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                        "  border:1px solid %9; }"
-                       "QLabel#activeLocksErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                       "QLabel#activeLocksErrorIcon { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                        "  font-weight:700; background:transparent; }"
-                       "QLabel#activeLocksErrorText { color:%9; font-family:%5; font-size:11px;"
+                       "QLabel#activeLocksErrorText { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }")
             // One arg per marker, in ascending marker order. QString::arg fills
             // the LOWEST marker present, so a gap in the numbering silently
@@ -227,9 +221,9 @@ void ActiveLocksPanel::apply_theme() {
                  TEXT_TERTIARY(),            // %6
                  TEXT_PRIMARY(),             // %7
                  BG_RAISED(),                // %8
-                 NEGATIVE())                 // %9
+                 DANGER())                   // %9
             .arg(BG_HOVER(),                 // %10
-                 QStringLiteral("#78350f")); // %11 darker amber
+                 AMBER_DIM());               // %11 darker amber
     setStyleSheet(ss);
 }
 
@@ -323,32 +317,63 @@ void ActiveLocksPanel::on_topic_error(const QString& topic, const QString& error
     }
 }
 
+fincept::ui::EmptyState* ActiveLocksPanel::ensure_empty_state() {
+    if (empty_state_)
+        return empty_state_;
+    QWidget* body = table_->parentWidget();
+    empty_state_ = new ui::EmptyState(body);
+    empty_state_->set_compact(true);
+    if (auto* bl = qobject_cast<QVBoxLayout*>(body->layout()))
+        bl->insertWidget(bl->indexOf(table_) + 1, empty_state_, 1);
+    // Only the feed-error page has an action: read the locks feed again.
+    connect(empty_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (!feed_error_ || current_topic_.isEmpty())
+            return;
+        clear_error_strip();
+        fincept::datahub::DataHub::instance().request(current_topic_, /*force=*/true);
+    });
+    return empty_state_;
+}
+
 void ActiveLocksPanel::rebuild_table() {
     if (!fincept::wallet::StakingService::instance().staking_live()) {
         // Not live: there are no positions to read, and none were ever shown
-        // as this wallet's. Say what the user can expect instead.
+        // as this wallet's. Say what the user can expect instead — the COMING
+        // SOON pill is the page's note chip (the head pill and the summary
+        // would only repeat it / show a dash).
         latest_.clear();
         table_->setRowCount(0);
         table_->hide();
-        empty_state_->setText(tr("No lock positions — on-chain staking is not live yet.\n"
-                                 "Your locks will appear here once the fincept_lock program launches."));
+        ui::EmptyState::Spec spec = ui::EmptyState::no_data_spec(
+            tr("No lock positions"), tr("On-chain staking is not live yet — your locks will appear here once the "
+                                        "fincept_lock program launches."));
+        spec.note = tr("COMING SOON");
+        spec.note_tone = ui::EmptyState::Tone::Warning;
+        ensure_empty_state()->apply(spec);
         empty_state_->show();
-        summary_label_->setText(QStringLiteral("—"));
-        set_pill(tr("COMING SOON"), true);
+        summary_label_->clear();
+        summary_label_->hide();
+        status_pill_->hide();
         return;
     }
+    summary_label_->show();
+    status_pill_->show();
     if (latest_.isEmpty()) {
         table_->setRowCount(0);
         table_->hide();
-        empty_state_->setText(feed_error_ ? tr("Locks unavailable — the locks feed returned an error.")
-                                          : tr("No active locks."));
+        ensure_empty_state()->apply(
+            feed_error_ ? ui::EmptyState::error_spec(tr("The locks feed returned an error."), tr("Locks unavailable"))
+                        : ui::EmptyState::no_data_spec(tr("No active locks"),
+                                                       tr("Lock $FNCPT above — each lock appears here with its "
+                                                          "unlock date, weight and lifetime yield.")));
         empty_state_->show();
         summary_label_->setText(tr("0 positions · 0 veFNCPT"));
         // Without cached positions an error must not sit next to a LIVE pill.
         set_pill(feed_error_ ? tr("UNAVAILABLE") : tr("LIVE"), feed_error_);
         return;
     }
-    empty_state_->hide();
+    if (empty_state_)
+        empty_state_->hide();
     table_->show();
 
     double total_weight_ui = 0.0;
@@ -362,13 +387,16 @@ void ActiveLocksPanel::rebuild_table() {
         total_weight_ui += weight_ui;
         total_yield_ui += p.lifetime_yield_usdc;
 
-        auto* locked = new QTableWidgetItem(QStringLiteral("%1 $FNCPT").arg(format_token(amount_ui, 0)));
+        auto* locked = new QTableWidgetItem(QStringLiteral("%1 $FNCPT").arg(alp_format_token(amount_ui, 0)));
         locked->setData(Qt::UserRole, p.position_id);
         table_->setItem(i, 0, locked);
         table_->setItem(i, 1, new QTableWidgetItem(format_duration(p.duration_secs)));
         table_->setItem(i, 2, new QTableWidgetItem(format_unlock_date(p.unlock_ts)));
-        table_->setItem(i, 3, new QTableWidgetItem(format_token(weight_ui, 1)));
+        table_->setItem(i, 3, new QTableWidgetItem(alp_format_token(weight_ui, 1)));
         table_->setItem(i, 4, new QTableWidgetItem(format_usdc(p.lifetime_yield_usdc)));
+        // Amounts right-aligned, like every numeric column in this module.
+        for (int c : {0, 3, 4})
+            table_->item(i, c)->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     }
 
     // TOTAL row — visually distinct via item-level styling.
@@ -378,12 +406,14 @@ void ActiveLocksPanel::rebuild_table() {
     table_->setItem(total_row, 0, tot_label);
     table_->setItem(total_row, 1, new QTableWidgetItem(QStringLiteral("—")));
     table_->setItem(total_row, 2, new QTableWidgetItem(QStringLiteral("—")));
-    table_->setItem(total_row, 3, new QTableWidgetItem(format_token(total_weight_ui, 1)));
+    table_->setItem(total_row, 3, new QTableWidgetItem(alp_format_token(total_weight_ui, 1)));
     table_->setItem(total_row, 4, new QTableWidgetItem(format_usdc(total_yield_ui)));
+    for (int c : {3, 4})
+        table_->item(total_row, c)->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     // Plural form is a translator's decision, not an English "s" suffix.
     summary_label_->setText(
-        tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1)));
+        tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(alp_format_token(total_weight_ui, 1)));
     set_pill(tr("LIVE"), false);
     clear_error_strip();
 }

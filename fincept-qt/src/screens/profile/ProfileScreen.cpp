@@ -4,26 +4,44 @@
 #include "auth/UserApi.h"
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
+#include "screens/common/CommandRows.h"
+#include "services/billing/PlanAccess.h"
+#include "ui/charts/BarChart.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 #include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/PlanHint.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPointer>
 #include <QScrollArea>
+#include <QShowEvent>
+#include <QStackedWidget>
 #include <QStyle>
 #include <QTimeZone>
 #include <QTimer>
+
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -41,25 +59,31 @@ static void profile_set_tone(QWidget* w, const char* tone) {
     profile_set_prop(w, "tone", QString::fromLatin1(tone));
 }
 
-// The API serialises its timestamps as naive UTC ("2026-05-01T12:34:56", no
-// offset); QDateTime would read those as LOCAL time. Treat an offset-less value
-// as UTC and show it in the user's zone.
-static QString profile_local_stamp(const QString& iso, bool with_time) {
-    if (iso.isEmpty())
-        return QString::fromUtf8("\xe2\x80\x94");
-    QDateTime dt = QDateTime::fromString(iso, Qt::ISODateWithMs);
-    if (!dt.isValid())
-        dt = QDateTime::fromString(iso, Qt::ISODate);
-    if (!dt.isValid()) {
-        QString v = iso.left(with_time ? 16 : 10);
-        v.replace('T', ' ');
-        return v;
+// The digits of a typed phone number: drops one leading '+' and spaces / dashes /
+// dots / brackets; returns an empty string when anything else is left, or no
+// digit at all (not a phone number). Used to compare numbers; what is SENT keeps
+// the '+' (see the SAVE handler in show_edit_profile_dialog()).
+static QString profile_phone_digits(const QString& raw) {
+    const QString s = raw.trimmed();
+    QString digits;
+    for (qsizetype i = 0; i < s.size(); ++i) {
+        const QChar c = s.at(i);
+        if (c >= QLatin1Char('0') && c <= QLatin1Char('9'))
+            digits += c;
+        else if ((c == QLatin1Char('+') && i == 0) || c.isSpace() || c == QLatin1Char('-') ||
+                 c == QLatin1Char('.') || c == QLatin1Char('(') || c == QLatin1Char(')'))
+            continue;
+        else
+            return {};
     }
-    const QString tail = iso.mid(10);
-    const bool has_offset = tail.contains('Z') || tail.contains('+') || tail.contains('-');
-    if (!has_offset)
-        dt = QDateTime(dt.date(), dt.time(), QTimeZone::utc());
-    return dt.toLocalTime().toString(with_time ? QStringLiteral("yyyy-MM-dd HH:mm") : QStringLiteral("yyyy-MM-dd"));
+    return digits;
+}
+
+// The API serialises its timestamps as naive UTC; shown in the user's zone.
+// Shared with Plans & Pricing (auth::format_local_stamp), so both screens show
+// the same date for the same expiry.
+static QString profile_local_stamp(const QString& iso, bool with_time) {
+    return auth::format_local_stamp(iso, with_time);
 }
 
 // Plan label from an API payload: account_type in caps (FREE when absent), with
@@ -73,28 +97,102 @@ static QString profile_plan_text(const QJsonObject& o) {
     return label;
 }
 
-// Replace a table's contents with one full-width message row. Used for "loading",
-// "failed" and "nothing to show": the Usage / Security / Billing tables used to sit
-// completely blank in all three cases, so a failed fetch looked like an empty account.
-static void profile_table_message(QTableWidget* table, const QString& text) {
-    if (!table)
-        return;
-    table->clearSpans();
-    table->setRowCount(0); // drop old rows' items first so none hide under the span
-    table->setRowCount(1);
-    auto* item = new QTableWidgetItem(text);
-    item->setFlags(Qt::ItemIsEnabled);
-    item->setTextAlignment(Qt::AlignCenter);
-    table->setItem(0, 0, item);
-    table->setSpan(0, 0, 1, table->columnCount());
+namespace {
+
+// The Usage / Security / Billing tables sit in a stack: the table itself (page 0)
+// or — created on first use — a skeleton while the first rows load and a compact
+// designed state (could not load + RETRY / nothing recorded yet). They used to show
+// one grey "Loading..." / message row in the table body.
+QStackedWidget* profile_wrap_table(QTableWidget* table, QWidget* parent) {
+    auto* stack = new QStackedWidget(parent);
+    stack->addWidget(table);
+    stack->setMinimumHeight(table->minimumHeight());
+    return stack;
 }
 
-// Same, but only while the table has nothing yet — a refetch must keep showing the
-// previous rows until the new ones arrive (P11).
-static void profile_table_loading(QTableWidget* table, const QString& text) {
-    if (table && table->rowCount() == 0)
-        profile_table_message(table, text);
+QStackedWidget* profile_table_stack(QTableWidget* table) {
+    return table ? qobject_cast<QStackedWidget*>(table->parentWidget()) : nullptr;
 }
+
+// The rows are in: show the table.
+void profile_table_rows(QTableWidget* table) {
+    if (auto* st = profile_table_stack(table))
+        st->setCurrentWidget(table);
+}
+
+// Skeleton while the table has nothing to show — a refetch keeps the previous
+// rows on screen until the new ones arrive (P11).
+void profile_table_loading(QTableWidget* table, const QString& caption) {
+    auto* st = profile_table_stack(table);
+    if (!st)
+        return;
+    if (st->currentWidget() == table && table->rowCount() > 0)
+        return;
+    auto* sk = st->findChild<ui::LoadingSkeleton*>(QStringLiteral("profTableSkeleton"), Qt::FindDirectChildrenOnly);
+    if (!sk) {
+        sk = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Table, st);
+        sk->setObjectName(QStringLiteral("profTableSkeleton"));
+        sk->set_row_count(5);
+        sk->set_opaque(false);
+        st->addWidget(sk);
+    }
+    sk->set_message(caption);
+    st->setCurrentWidget(sk);
+}
+
+// A designed state in place of the table (its rows are dropped); `primary` runs on
+// the state's primary button (RETRY, VIEW PLANS), none when empty.
+void profile_table_state(QTableWidget* table, const ui::EmptyState::Spec& spec,
+                         std::function<void()> primary = std::function<void()>()) {
+    auto* st = profile_table_stack(table);
+    if (!st)
+        return;
+    table->setSortingEnabled(false);
+    table->clearSpans();
+    table->setRowCount(0);
+    auto* es = st->findChild<ui::EmptyState*>(QStringLiteral("profTableState"), Qt::FindDirectChildrenOnly);
+    if (!es) {
+        es = new ui::EmptyState(st);
+        es->setObjectName(QStringLiteral("profTableState"));
+        es->set_compact(true);
+        st->addWidget(es);
+    }
+    QObject::disconnect(es, &ui::EmptyState::primary_clicked, nullptr, nullptr);
+    if (primary)
+        QObject::connect(es, &ui::EmptyState::primary_clicked, es, std::move(primary));
+    es->apply(spec);
+    st->setCurrentWidget(es);
+}
+
+// A stat box's value while its figure loads: a one-line skeleton in its place
+// (never a bare "—", which reads as "no value"). The box's skeleton is created by
+// make_stat_box(); sized here to the value's line at the current font.
+void profile_stat_loading(QLabel* value, bool loading) {
+    if (!value || !value->parentWidget())
+        return;
+    auto* sk = value->parentWidget()->findChild<ui::LoadingSkeleton*>(QStringLiteral("profStatSkeleton"),
+                                                                     Qt::FindDirectChildrenOnly);
+    if (!sk)
+        return;
+    if (loading) {
+        // QLabel#profStatValue is 14 px over the base size (apply_theme()).
+        sk->setFixedHeight(QFontMetrics(ui::fonts::font(14)).height());
+        sk->setMinimumWidth(ui::fonts::font_px(0) * 3);
+    }
+    value->setVisible(!loading);
+    sk->setVisible(loading);
+}
+
+// Which account the sections show: the e-mail, else the user id, else "~"
+// (signed in, identity not known yet).
+QString profile_account_key(const auth::UserProfile& u) {
+    const QString email = u.email.trimmed().toLower();
+    if (!email.isEmpty())
+        return email;
+    return u.id > 0 ? QStringLiteral("id:%1").arg(u.id) : QStringLiteral("~");
+}
+
+} // namespace
 
 static QTableWidget* profile_make_table(const QStringList& headers, int min_height) {
     auto* t = new QTableWidget;
@@ -109,8 +207,9 @@ static QTableWidget* profile_make_table(const QStringList& headers, int min_heig
     return t;
 }
 
-static QTableWidgetItem* profile_num_item(const QString& text) {
-    auto* it = new QTableWidgetItem(text);
+// Right-aligned number that header-click sorting orders by `value`, not by its text.
+static QTableWidgetItem* profile_num_item(const QString& text, double value) {
+    auto* it = new ui::NumericTableWidgetItem(text, value);
     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     return it;
 }
@@ -122,78 +221,90 @@ void ProfileScreen::apply_theme() {
                 "QLabel{background:transparent;}"
                 "QScrollArea#profScroll{border:none;background:transparent;}"
                 "QWidget#profHeaderBar{background:%2;border-bottom:1px solid %3;}"
-                "QLabel#profHeaderTitle{color:%4;font-size:14px;font-weight:700;}"
-                "QLabel#profHeaderUser{color:%5;font-size:13px;}"
-                "QLabel#profCreditsBadge{color:%6;font-size:12px;font-weight:700;}"
-                "QLabel#profPlanBadge{color:%4;font-size:12px;font-weight:700;}"
+                "QLabel#profHeaderTitle{color:%4;font-size:" + fincept::ui::fonts::px(0) + "px;font-weight:700;}"
+                "QLabel#profHeaderUser{color:%5;font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+                "QLabel#profCreditsBadge{color:%6;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;}"
+                "QLabel#profPlanBadge{color:%4;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;}"
                 "QWidget#profTabNav{background:%7;border-bottom:1px solid %3;}"
                 "QPushButton#profNavBtn{background:transparent;color:%8;border:none;padding:0 14px;"
-                "font-size:12px;font-weight:700;letter-spacing:0.5px;}"
-                "QPushButton#profNavBtn:hover{color:%9;}"
-                "QPushButton#profNavBtn[active=\"true\"]{background:%4;color:%1;}"
+                "font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;letter-spacing:0.5px;}"
+                "QPushButton#profNavBtn:hover{color:%5;}"
+                "QPushButton#profNavBtn[active=\"true\"]{background:%4;color:%10;}"
                 "QWidget#profPanel{background:%1;border:1px solid %3;}"
                 "QWidget#profPanelHdr{background:%7;border:none;border-bottom:1px solid %3;}"
-                "QLabel#profPanelTitle{color:%4;font-size:12px;font-weight:700;letter-spacing:0.5px;}"
+                "QLabel#profPanelTitle{color:%4;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;letter-spacing:0.5px;}"
                 "QWidget#profRow{background:transparent;border:none;border-bottom:1px solid %3;}"
-                "QLabel#profRowLabel{color:%9;font-size:12px;font-weight:700;letter-spacing:0.5px;}"
-                "QLabel#profRowValue{color:%5;font-size:13px;font-weight:700;}")
-            .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), TEXT_PRIMARY(), CYAN(), BG_RAISED(), TEXT_TERTIARY(),
-                 TEXT_SECONDARY()) +
+                "QLabel#profRowLabel{color:%9;font-size:" + fincept::ui::fonts::px(-2) + "px;font-weight:700;letter-spacing:0.5px;}"
+                "QLabel#profRowValue{color:%5;font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;}")
+            .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), TEXT_PRIMARY(), CYAN(), BG_RAISED(), TEXT_SECONDARY(),
+                 TEXT_SECONDARY(), TEXT_ON_ACCENT()) +
         QString("QLabel#profRowValue[tone=\"pos\"]{color:%1;}"
                 "QLabel#profRowValue[tone=\"neg\"]{color:%2;}"
                 "QLabel#profRowValue[tone=\"amber\"]{color:%3;}"
                 "QLabel#profRowValue[tone=\"dim\"]{color:%4;}"
                 "QWidget#profStatBox{background:%5;border:1px solid %6;}"
-                "QLabel#profStatValue{color:%7;font-size:28px;font-weight:700;}"
+                "QLabel#profStatValue{color:%7;font-size:" + fincept::ui::fonts::px(14) + "px;font-weight:700;}"
                 "QLabel#profStatValue[tone=\"cyan\"]{color:%8;}"
                 "QLabel#profStatValue[tone=\"amber\"]{color:%3;}"
                 "QLabel#profStatValue[tone=\"warn\"]{color:%9;}"
-                "QLabel#profStatLabel{color:%4;font-size:10px;font-weight:700;letter-spacing:0.5px;}"
-                "QLabel#profCreditsBig{color:%8;font-size:42px;font-weight:700;padding:20px 0 4px 0;}"
-                "QLabel#profCreditsCaption{color:%4;font-size:10px;font-weight:700;letter-spacing:0.5px;"
+                "QLabel#profStatLabel{color:%4;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.5px;}"
+                "QLabel#profCreditsBig{color:%8;font-size:" + fincept::ui::fonts::px(28) + "px;font-weight:700;padding:20px 0 4px 0;}"
+                "QLabel#profCreditsCaption{color:%4;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.5px;"
                 "padding-bottom:12px;}"
                 "QFrame#profSep{background:%6;border:none;}"
-                "QLabel#profApiKey{color:%7;font-size:13px;}")
+                "QLabel#profApiKey{color:%7;font-size:" + fincept::ui::fonts::px(-1) + "px;}")
             .arg(POSITIVE(), NEGATIVE(), AMBER(), TEXT_SECONDARY(), BG_RAISED(), BORDER_DIM(), TEXT_PRIMARY(), CYAN(),
                  WARNING()) +
-        QString("QLabel#profContactLabel{color:%1;font-size:10px;font-weight:700;letter-spacing:0.5px;}"
-                "QLabel#profContactValue{color:%2;font-size:13px;}"
-                "QPushButton#profBtn{background:%3;color:%4;border:1px solid %5;padding:0 12px;font-size:11px;"
+        QString("QLabel#profContactLabel{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.5px;}"
+                "QLabel#profContactValue{color:%2;font-size:" + fincept::ui::fonts::px(-1) + "px;}"
+                "QPushButton#profBtn{background:%3;color:%4;border:1px solid %5;padding:0 12px;font-size:" + fincept::ui::fonts::px(-3) + "px;"
                 "font-weight:700;}"
                 "QPushButton#profBtn:hover{color:%6;}"
                 "QPushButton#profBtnDanger{background:%7;color:%8;border:1px solid %9;padding:0 12px;"
-                "font-size:11px;font-weight:700;}"
-                "QPushButton#profBtnDanger:hover{background:%8;color:%6;}")
+                "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;}"
+                "QPushButton#profBtnDanger:hover{background:%8;color:%10;}")
             .arg(TEXT_TERTIARY(), CYAN(), BG_RAISED(), TEXT_SECONDARY(), BORDER_DIM(), TEXT_PRIMARY(), NEGATIVE_BG(),
-                 NEGATIVE(), NEGATIVE_DIM()) +
-        QString("QPushButton#profBtnAmber{background:%1;color:%2;border:1px solid %3;padding:0 10px;font-size:10px;"
+                 NEGATIVE(), NEGATIVE_DIM(), TEXT_ON_ACCENT()) +
+        QString("QPushButton#profBtnAmber{background:%1;color:%2;border:1px solid %3;padding:0 10px;font-size:" + fincept::ui::fonts::px(-4) + "px;"
                 "font-weight:700;}"
                 "QPushButton#profBtnAmber:hover{background:%2;color:%4;}"
-                "QPushButton#profBtnPrimary{background:%2;color:%4;border:none;padding:0 16px;font-size:11px;"
+                "QPushButton#profBtnPrimary{background:%2;color:%4;border:none;padding:0 16px;font-size:" + fincept::ui::fonts::px(-3) + "px;"
                 "font-weight:700;}"
                 "QPushButton#profBtnPrimary:hover{background:%3;}"
                 "QPushButton#profBtnPrimary:disabled{background:%5;color:%6;}"
-                "QPushButton#profBtnDangerSolid{background:%7;color:%8;border:none;padding:0 14px;font-size:11px;"
+                "QPushButton#profBtnDangerSolid{background:%7;color:%8;border:none;padding:0 14px;font-size:" + fincept::ui::fonts::px(-3) + "px;"
                 "font-weight:700;}"
                 "QPushButton#profBtnDangerSolid:disabled{background:%9;color:%6;}")
-            .arg(ACCENT_BG(), AMBER(), AMBER_DIM(), BG_BASE(), BORDER_DIM(), TEXT_DIM(), NEGATIVE(), TEXT_PRIMARY(),
-                 NEGATIVE_BG()) +
-        QString("QPushButton#profLinkBtn{background:%1;color:%2;border:1px solid %3;padding:0 12px;font-size:11px;}"
+            .arg(ACCENT_BG(), AMBER(), AMBER_DIM(), TEXT_ON_ACCENT(), BG_RAISED(), TEXT_TERTIARY(), NEGATIVE(),
+                 TEXT_ON_ACCENT(), NEGATIVE_BG()) +
+        QString("QPushButton#profLinkBtn{background:%1;color:%2;border:1px solid %3;padding:0 12px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                 "QPushButton#profLinkBtn:hover{color:%4;background:%5;}"
-                "QPushButton#profInlineLink{background:transparent;border:none;color:%6;font-size:11px;"
+                "QPushButton#profInlineLink{background:transparent;border:none;color:%6;font-size:" + fincept::ui::fonts::px(-3) + "px;"
                 "text-align:left;padding:0;}"
                 "QPushButton#profInlineLink:hover{color:%7;text-decoration:underline;}"
                 "QDialog#profDialog{background:%8;}"
-                "QLabel#profDialogTitle{color:%7;font-size:14px;font-weight:700;}"
-                "QLabel#profFieldLabel{color:%9;font-size:11px;font-weight:700;}")
+                "QLabel#profDialogTitle{color:%7;font-size:" + fincept::ui::fonts::px(0) + "px;font-weight:700;}"
+                "QLabel#profFieldLabel{color:%9;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;}")
             .arg(BG_RAISED(), CYAN(), BORDER_DIM(), TEXT_PRIMARY(), BG_HOVER(), INFO(), AMBER(), BG_SURFACE(),
                  TEXT_SECONDARY()) +
-        QString("QLabel#profDangerLabel{color:%1;font-size:11px;font-weight:700;}"
-                "QLabel#profMutedLabel{color:%2;font-size:11px;}"
+        QString("QLabel#profDangerLabel{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;}"
+                "QLabel#profMutedLabel{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                 "QLabel#profMutedLabel[tone=\"pos\"]{color:%3;}"
                 "QLabel#profMutedLabel[tone=\"neg\"]{color:%1;}")
             .arg(NEGATIVE(), TEXT_SECONDARY(), POSITIVE());
-    setStyleSheet(sheet);
+    // setStyleSheet() re-styles the whole screen even for an identical sheet.
+    if (styleSheet() != sheet)
+        setStyleSheet(sheet);
+
+    // Failed rows of the login history carry an item brush (marked Qt::UserRole),
+    // which the sheet does not reach.
+    if (sec_login_hist_) {
+        for (int r = 0; r < sec_login_hist_->rowCount(); ++r) {
+            auto* item = sec_login_hist_->item(r, 3);
+            if (item && item->data(Qt::UserRole).toBool())
+                item->setForeground(QColor(NEGATIVE()));
+        }
+    }
 }
 
 QWidget* ProfileScreen::make_panel(const QString& title) {
@@ -241,6 +352,13 @@ QWidget* ProfileScreen::make_stat_box(const QString& label, QLabel*& value_out, 
     value_out->setProperty("tone", QString::fromLatin1(tone));
     value_out->setAlignment(Qt::AlignCenter);
     vl->addWidget(value_out);
+    // Stands in for the value while it loads (profile_stat_loading); hidden otherwise.
+    auto* sk = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Text, w);
+    sk->setObjectName(QStringLiteral("profStatSkeleton"));
+    sk->set_row_count(1);
+    sk->setAccessibleName(tr("Loading %1").arg(label));
+    sk->hide();
+    vl->addWidget(sk);
     auto* l = new QLabel(label);
     l->setObjectName(QStringLiteral("profStatLabel"));
     l->setAlignment(Qt::AlignCenter);
@@ -269,7 +387,7 @@ ProfileScreen::ProfileScreen(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
     build_header(root);
-    sections_ = new QStackedWidget;
+    sections_ = new QStackedWidget(this); // in the screen before its pages are added
     sections_->addWidget(build_overview());
     sections_->addWidget(build_usage());
     sections_->addWidget(build_security());
@@ -278,8 +396,15 @@ ProfileScreen::ProfileScreen(QWidget* parent) : QWidget(parent) {
     build_tab_nav(root);
     root->addWidget(sections_, 1);
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this, &ProfileScreen::refresh_all);
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { apply_theme(); });
+    // Balance moved by a billed call elsewhere in the app (no profile re-fetch).
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::credit_balance_changed, this,
+            [this](double) { refresh_all(); });
+    // The saved sign-in being checked → skeleton, not "signed out".
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::loading_changed, this,
+            [this](bool) { apply_auth_gate(); });
+    // Never inside theme_changed (restyling there stalls a theme switch): once the
+    // appearance has settled, and the sheet only when its text changed.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { apply_theme(); });
     refresh_all();
     // Style the first tab as active on load
     on_section_changed(0);
@@ -291,6 +416,91 @@ void ProfileScreen::changeEvent(QEvent* event) {
         rebuild_sections();
     }
     QWidget::changeEvent(event);
+}
+
+void ProfileScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    apply_auth_gate();
+}
+
+void ProfileScreen::apply_auth_gate() {
+    const auto& am = auth::AuthManager::instance();
+    const ui::RequirementStatus st = ui::check_requirements({ui::Requirement::signed_in()});
+    const bool signed_in = st.ok;
+    const QString key = signed_in ? profile_account_key(am.session().user_info) : QString();
+
+    if (key != account_key_) {
+        const QString previous = account_key_;
+        // The identity of the same sign-in arriving later is not a new account.
+        const bool same_sign_in = signed_in && previous == QLatin1String("~");
+        account_key_ = key; // first: rebuild_sections() → refresh_all() comes back here
+        if (!same_sign_in)
+            ++account_generation_; // replies requested for the previous account are dropped
+        if (!previous.isEmpty() && !same_sign_in) {
+            // Signed out, or another account: nothing of the previous one stays on
+            // screen (the tables keep their rows during a refetch, by design).
+            if (username_header_)
+                username_header_->clear();
+            if (credits_badge_)
+                credits_badge_->clear();
+            if (plan_badge_)
+                plan_badge_->clear();
+            api_key_visible_ = false;
+            rebuild_sections(); // fresh, empty pages; fetch stamps reset
+        }
+        // This account's data for the tab that is open (Usage / Security / Billing).
+        if (signed_in && !same_sign_in && sections_)
+            on_section_changed(sections_->currentIndex(), /*force=*/true);
+    }
+
+    if (tab_nav_)
+        tab_nav_->setVisible(signed_in);
+    if (sections_)
+        sections_->setVisible(signed_in);
+    if (header_refresh_btn_)
+        header_refresh_btn_->setVisible(signed_in);
+
+    if (signed_in) {
+        if (signin_state_)
+            signin_state_->hide();
+        if (signin_skeleton_)
+            signin_skeleton_->hide();
+        return;
+    }
+
+    auto* root = qobject_cast<QVBoxLayout*>(layout());
+    if (am.is_loading()) {
+        // A saved sign-in is still being checked: not "signed out" yet.
+        if (!signin_skeleton_) {
+            signin_skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Form, this);
+            signin_skeleton_->set_message(tr("Checking your sign-in…"));
+            if (root)
+                root->addWidget(signin_skeleton_, 1);
+        }
+        if (signin_state_)
+            signin_state_->hide();
+        signin_skeleton_->show();
+        return;
+    }
+    if (!signin_state_) {
+        signin_state_ = new ui::EmptyState(this);
+        // SIGN IN: the sign-in screen (open_setup_link "login"; it does nothing while a
+        // sign-in check is still running).
+        connect(signin_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+            const ui::RequirementStatus now = ui::check_requirements({ui::Requirement::signed_in()});
+            if (!now.ok && now.link.valid())
+                ui::open_setup_link(now.link, this);
+        });
+        if (root)
+            root->addWidget(signin_state_, 1);
+    }
+    ui::EmptyState::Spec spec = ui::EmptyState::needs_setup_spec(st);
+    spec.message += QLatin1Char(' ') + tr("Your profile, usage, sign-in history and payments load from your Fincept "
+                                          "account.");
+    signin_state_->apply(spec);
+    if (signin_skeleton_)
+        signin_skeleton_->hide();
+    signin_state_->show();
 }
 
 void ProfileScreen::retranslateUi() {
@@ -324,6 +534,8 @@ void ProfileScreen::rebuild_sections() {
     }
     if (current >= 0 && current < sections_->count())
         sections_->setCurrentIndex(current);
+    // The new section widgets start empty: their server data must load again.
+    std::fill(std::begin(tab_fetched_ms_), std::end(tab_fetched_ms_), qint64{0});
     // Refresh dynamic fields against the new section widgets (overview, usage etc.)
     refresh_all();
 }
@@ -350,15 +562,15 @@ void ProfileScreen::build_header(QVBoxLayout* root) {
     hl->addWidget(plan_badge_);
     header_refresh_btn_ = new QPushButton(tr("REFRESH"));
     header_refresh_btn_->setObjectName(QStringLiteral("profBtn"));
-    header_refresh_btn_->setFixedHeight(22);
+    header_refresh_btn_->setMinimumHeight(22);
     header_refresh_btn_->setCursor(Qt::PointingHandCursor);
     connect(header_refresh_btn_, &QPushButton::clicked, this, [this]() {
-        auth::AuthManager::instance().refresh_user_data();
+        auth::AuthManager::instance().refresh_user_data(auth::AuthManager::Refresh::Now);
         // Usage / Security / Billing data is fetched only when its tab is opened, so
         // REFRESH has to re-run the fetch for whichever tab is showing — it used to
         // refresh just the account header and leave those tables stale.
         if (sections_)
-            on_section_changed(sections_->currentIndex());
+            on_section_changed(sections_->currentIndex(), /*force=*/true);
     });
     hl->addWidget(header_refresh_btn_);
     root->addWidget(bar);
@@ -366,6 +578,7 @@ void ProfileScreen::build_header(QVBoxLayout* root) {
 
 void ProfileScreen::build_tab_nav(QVBoxLayout* root) {
     auto* nav = new QWidget(this);
+    tab_nav_ = nav;
     nav->setObjectName(QStringLiteral("profTabNav"));
     nav->setFixedHeight(32);
     auto* hl = new QHBoxLayout(nav);
@@ -389,15 +602,22 @@ void ProfileScreen::build_tab_nav(QVBoxLayout* root) {
     root->addWidget(nav);
 }
 
-void ProfileScreen::on_section_changed(int index) {
+void ProfileScreen::on_section_changed(int index, bool force) {
     sections_->setCurrentIndex(index);
     for (int i = 0; i < nav_buttons_.size(); ++i)
         profile_set_prop(nav_buttons_[i], "active", i == index ? QStringLiteral("true") : QStringLiteral("false"));
+    if (index < 1 || index > 3)
+        return; // Overview / Support show session data only
+    // Flicking between tabs used to re-request the tab's tables every time.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (!force && tab_fetched_ms_[index] > 0 && now - tab_fetched_ms_[index] < kTabFreshMs)
+        return;
+    tab_fetched_ms_[index] = now; // a failed fetch clears it, so the next visit retries
     if (index == 1)
         fetch_usage_data();
     else if (index == 2)
         fetch_login_history();
-    else if (index == 3)
+    else
         fetch_billing_data();
 }
 
@@ -424,7 +644,7 @@ QWidget* ProfileScreen::build_overview() {
         erow->setContentsMargins(12, 8, 12, 8);
         auto* eb = new QPushButton(tr("EDIT PROFILE"));
         eb->setObjectName(QStringLiteral("profBtn"));
-        eb->setFixedHeight(26);
+        eb->setMinimumHeight(26);
         eb->setCursor(Qt::PointingHandCursor);
         connect(eb, &QPushButton::clicked, this, &ProfileScreen::show_edit_profile_dialog);
         erow->addWidget(eb);
@@ -458,19 +678,20 @@ QWidget* ProfileScreen::build_overview() {
     arl->setSpacing(10);
     auto* eb2 = new QPushButton(tr("EDIT PROFILE"));
     eb2->setObjectName(QStringLiteral("profBtn"));
-    eb2->setFixedHeight(26);
+    eb2->setMinimumHeight(26);
     eb2->setCursor(Qt::PointingHandCursor);
     connect(eb2, &QPushButton::clicked, this, &ProfileScreen::show_edit_profile_dialog);
     arl->addWidget(eb2);
     auto* lb = new QPushButton(tr("LOGOUT"));
     lb->setObjectName(QStringLiteral("profBtnDanger"));
-    lb->setFixedHeight(26);
+    lb->setProperty("fincept_agent_risk", "account");
+    lb->setMinimumHeight(26);
     lb->setCursor(Qt::PointingHandCursor);
     connect(lb, &QPushButton::clicked, this, &ProfileScreen::show_logout_confirm);
     arl->addWidget(lb);
     auto* dab = new QPushButton(tr("DELETE ACCOUNT"));
     dab->setObjectName(QStringLiteral("profBtnDanger"));
-    dab->setFixedHeight(26);
+    dab->setMinimumHeight(26);
     dab->setCursor(Qt::PointingHandCursor);
     connect(dab, &QPushButton::clicked, this, &ProfileScreen::show_delete_account_dialog);
     arl->addWidget(dab);
@@ -504,12 +725,21 @@ QWidget* ProfileScreen::build_usage() {
     svl->addLayout(smrl);
     vl->addWidget(sp);
     auto* dp = make_panel(tr("DAILY USAGE"));
+    // The 30-day credit burn as bars: a spike or a steady climb shows at a glance.
+    usg_daily_chart_ = new ui::BarChart(dp);
+    usg_daily_chart_->setMinimumHeight(140);
+    usg_daily_chart_->setMaximumHeight(180);
+    usg_daily_chart_->set_value_formatter([](double v) { return auth::format_credits(v); });
+    usg_daily_chart_->set_state(ui::BarChart::Loading);
+    qobject_cast<QVBoxLayout*>(dp->layout())->addWidget(usg_daily_chart_);
     usg_daily_table_ = profile_make_table({tr("DATE"), tr("REQUESTS"), tr("CREDITS")}, 200);
-    qobject_cast<QVBoxLayout*>(dp->layout())->addWidget(usg_daily_table_);
+    qobject_cast<QVBoxLayout*>(dp->layout())->addWidget(profile_wrap_table(usg_daily_table_, dp));
     vl->addWidget(dp);
     auto* ep = make_panel(tr("TOP ENDPOINTS"));
     usg_endpoint_table_ = profile_make_table({tr("ENDPOINT"), tr("REQUESTS"), tr("CREDITS"), tr("AVG MS")}, 200);
-    qobject_cast<QVBoxLayout*>(ep->layout())->addWidget(usg_endpoint_table_);
+    // "Which endpoint costs me most": credits, largest first, until the user picks a column.
+    usg_endpoint_table_->horizontalHeader()->setSortIndicator(2, Qt::DescendingOrder);
+    qobject_cast<QVBoxLayout*>(ep->layout())->addWidget(profile_wrap_table(usg_endpoint_table_, ep));
     vl->addWidget(ep);
     vl->addStretch();
     return scroll;
@@ -528,7 +758,7 @@ QWidget* ProfileScreen::build_security() {
     krl->addWidget(sec_api_key_, 1);
     auto* sb = new QPushButton(tr("SHOW"));
     sb->setObjectName(QStringLiteral("profBtn"));
-    sb->setFixedHeight(22);
+    sb->setMinimumHeight(22);
     sb->setCursor(Qt::PointingHandCursor);
     connect(sb, &QPushButton::clicked, this, [this, sb]() {
         api_key_visible_ = !api_key_visible_;
@@ -554,7 +784,7 @@ QWidget* ProfileScreen::build_security() {
     krl->addWidget(sb);
     auto* cb = new QPushButton(tr("COPY"));
     cb->setObjectName(QStringLiteral("profBtn"));
-    cb->setFixedHeight(22);
+    cb->setMinimumHeight(22);
     cb->setCursor(Qt::PointingHandCursor);
     connect(cb, &QPushButton::clicked, this, [cb]() {
         auto key = auth::AuthManager::instance().session().api_key;
@@ -580,7 +810,8 @@ QWidget* ProfileScreen::build_security() {
     krl->addWidget(cb);
     auto* rg = new QPushButton(tr("REGENERATE"));
     rg->setObjectName(QStringLiteral("profBtnAmber"));
-    rg->setFixedHeight(22);
+    rg->setProperty("fincept_agent_risk", "account"); // invalidates the API key
+    rg->setMinimumHeight(22);
     rg->setCursor(Qt::PointingHandCursor);
     connect(rg, &QPushButton::clicked, this, &ProfileScreen::show_regen_confirm);
     krl->addWidget(rg);
@@ -589,12 +820,27 @@ QWidget* ProfileScreen::build_security() {
     auto* ssp = make_panel(tr("SECURITY STATUS"));
     auto* ssvl = qobject_cast<QVBoxLayout*>(ssp->layout());
     ssvl->addWidget(make_data_row(tr("EMAIL VERIFIED"), sec_verified_));
-    ssvl->addWidget(make_data_row(tr("2FA (MFA)"), sec_mfa_));
+    {
+        // Email 2FA on / off (POST /user/mfa/enable, /user/mfa/disable) — the
+        // status used to be read-only with no way to change it anywhere.
+        auto* mfa_row = make_data_row(tr("2FA (MFA)"), sec_mfa_);
+        sec_mfa_btn_ = new QPushButton;
+        sec_mfa_btn_->setObjectName(QStringLiteral("profBtn"));
+        sec_mfa_btn_->setMinimumHeight(22);
+        sec_mfa_btn_->setCursor(Qt::PointingHandCursor);
+        sec_mfa_btn_->setAccessibleName(tr("Turn two-factor authentication on or off"));
+        connect(sec_mfa_btn_, &QPushButton::clicked, this, &ProfileScreen::toggle_mfa);
+        if (auto* mfa_hl = qobject_cast<QHBoxLayout*>(mfa_row->layout())) {
+            mfa_hl->addSpacing(10);
+            mfa_hl->addWidget(sec_mfa_btn_);
+        }
+        ssvl->addWidget(mfa_row);
+    }
     vl->addWidget(ssp);
     auto* hp = make_panel(tr("LOGIN HISTORY"));
     sec_login_hist_ =
         profile_make_table({tr("TIME (LOCAL)"), tr("IP ADDRESS"), tr("DEVICE"), tr("STATUS")}, 200);
-    qobject_cast<QVBoxLayout*>(hp->layout())->addWidget(sec_login_hist_);
+    qobject_cast<QVBoxLayout*>(hp->layout())->addWidget(profile_wrap_table(sec_login_hist_, hp));
     vl->addWidget(hp);
     vl->addStretch();
     return scroll;
@@ -625,9 +871,26 @@ QWidget* ProfileScreen::build_billing() {
         svl->addLayout(prl);
     }
     vl->addWidget(sp);
+    // What the plan is worth: credits saved (or what Pro would save), a rollover
+    // waiting for a renewal, what Pro adds and the price of every category on
+    // both plans — the server's own table (PlanAccess). The panel is shown only
+    // when the server sent one.
+    {
+        auto* vp = make_panel(tr("PLAN VALUE"));
+        auto* value = new ui::PlanBenefitsView(vp);
+        value->set_show_upgrade_button(false); // SUBSCRIPTION above carries the button
+        qobject_cast<QVBoxLayout*>(vp->layout())->addWidget(value);
+        auto& access = billing::PlanAccess::instance();
+        auto sync = [vp]() { vp->setVisible(billing::PlanAccess::instance().has_table()); };
+        connect(&access, &billing::PlanAccess::changed, vp, sync);
+        sync();
+        access.refresh();
+        vl->addWidget(vp);
+    }
     auto* hp = make_panel(tr("PAYMENT HISTORY"));
     bill_history_ = profile_make_table({tr("DATE"), tr("PLAN"), tr("AMOUNT"), tr("CREDITS"), tr("STATUS")}, 250);
-    qobject_cast<QVBoxLayout*>(hp->layout())->addWidget(bill_history_);
+    bill_history_->horizontalHeader()->setSortIndicator(0, Qt::DescendingOrder); // newest payment first
+    qobject_cast<QVBoxLayout*>(hp->layout())->addWidget(profile_wrap_table(bill_history_, hp));
     vl->addWidget(hp);
     vl->addStretch();
     return scroll;
@@ -668,7 +931,7 @@ QWidget* ProfileScreen::build_support() {
     auto make_link_btn = [&](const QString& label, const QString& url) {
         auto* b = new QPushButton(label);
         b->setObjectName(QStringLiteral("profLinkBtn"));
-        b->setFixedHeight(26);
+        b->setMinimumHeight(26);
         b->setCursor(Qt::PointingHandCursor);
         b->setToolTip(url);
         connect(b, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
@@ -687,6 +950,8 @@ QWidget* ProfileScreen::build_support() {
 }
 
 void ProfileScreen::refresh_all() {
+    // Signed out → the sign-in requirement page instead of "—" everywhere.
+    apply_auth_gate();
     const auto& s = auth::AuthManager::instance().session();
     if (!s.authenticated)
         return;
@@ -714,9 +979,16 @@ void ProfileScreen::refresh_all() {
     profile_set_tone(sec_verified_, s.user_info.is_verified ? "pos" : "neg");
     sec_mfa_->setText(s.user_info.mfa_enabled ? tr("ENABLED") : tr("DISABLED"));
     profile_set_tone(sec_mfa_, s.user_info.mfa_enabled ? "pos" : "dim");
+    if (sec_mfa_btn_) {
+        sec_mfa_btn_->setEnabled(!mfa_request_in_flight_);
+        sec_mfa_btn_->setText(mfa_request_in_flight_ ? tr("SAVING…")
+                                                     : (s.user_info.mfa_enabled ? tr("DISABLE 2FA") : tr("ENABLE 2FA")));
+    }
     bill_plan_->setText(s.plan_label());
     bill_credits_->setText(auth::format_credits(s.user_info.credit_balance));
-    // bill_support_ is populated by fetch_billing_data() from the API; leave it as-is here
+    // Support type: the subscription record AuthManager holds (GET /cashfree/subscription).
+    const QString support = s.subscription.support_type.trimmed();
+    bill_support_->setText(support.isEmpty() ? QString::fromUtf8("\xe2\x80\x94") : support.toUpper());
 
     // Billing → Plans & Pricing. findChildren: rebuild_sections() can leave a
     // superseded Billing page alive until deleteLater runs — update both.
@@ -741,20 +1013,43 @@ void ProfileScreen::fetch_usage_data() {
     const int rl_limit = s.user_info.rate_limit.limit;
     usg_rate_->setText(rl_limit > 0 ? QString::number(rl_limit) : QString::fromUtf8("\xe2\x80\x94"));
 
-    profile_table_loading(usg_daily_table_, tr("Loading..."));
-    profile_table_loading(usg_endpoint_table_, tr("Loading..."));
+    profile_table_loading(usg_daily_table_, tr("Loading daily usage…"));
+    profile_table_loading(usg_endpoint_table_, tr("Loading endpoint activity…"));
+    // Figures not known yet: skeletons, not "—" (a refetch keeps the shown values).
+    const QString dash = QString::fromUtf8("\xe2\x80\x94");
+    for (QLabel* v : {usg_rate_, usg_total_req_, usg_cred_used_, usg_avg_cred_, usg_avg_resp_})
+        if (v && v->text() == dash)
+            profile_stat_loading(v, true);
+    const auto usage_figures_done = [](ProfileScreen* s) {
+        for (QLabel* v : {s->usg_rate_, s->usg_total_req_, s->usg_cred_used_, s->usg_avg_cred_, s->usg_avg_resp_})
+            profile_stat_loading(v, false);
+    };
 
     QPointer<ProfileScreen> self = this;
+    const quint64 generation = account_generation_;
     auth::UserApi::instance().get_user_usage(
         30,
-        [self](auth::ApiResponse r) {
-            if (!self)
-                return;
+        [self, generation, usage_figures_done](auth::ApiResponse r) {
+            if (!self || self->account_generation_ != generation)
+                return; // gone, or asked for an account that is no longer signed in
+            usage_figures_done(self.data()); // filled below, or "—" when the answer has none
             if (!r.success) {
                 LOG_WARN("Profile", "Usage fetch failed: " + r.error);
-                const QString msg = tr("Could not load usage data — press REFRESH to retry.");
-                profile_table_message(self->usg_daily_table_, msg);
-                profile_table_message(self->usg_endpoint_table_, msg);
+                self->tab_fetched_ms_[1] = 0;
+                const QString msg = tr("Usage could not be loaded. Check your connection, then retry.");
+                const auto retry = [self]() {
+                    if (self)
+                        self->on_section_changed(1, /*force=*/true);
+                };
+                profile_table_state(self->usg_daily_table_,
+                                    ui::EmptyState::error_spec(msg, tr("Could not load usage"), tr("RETRY"), r.error),
+                                    retry);
+                profile_table_state(self->usg_endpoint_table_,
+                                    ui::EmptyState::error_spec(msg, tr("Could not load endpoint activity"),
+                                                               tr("RETRY"), r.error),
+                                    retry);
+                if (self->usg_daily_chart_)
+                    self->usg_daily_chart_->set_state(ui::BarChart::Error, msg);
                 return;
             }
             auto payload = r.data.contains("data") ? r.data["data"].toObject() : r.data;
@@ -779,8 +1074,26 @@ void ProfileScreen::fetch_usage_data() {
             }
             {
                 // A payload without the key means "no rows", not "keep whatever was
-                // there" — otherwise the Loading... placeholder never goes away.
+                // there" — otherwise the loading skeleton never goes away.
                 auto d = payload["daily_usage"].toArray();
+                // Chart: every day of the window, oldest to newest ("MMM d").
+                if (self->usg_daily_chart_) {
+                    QStringList cats;
+                    QVector<double> credits;
+                    for (const auto& dv : d) {
+                        const auto e = dv.toObject();
+                        const QDate day = QDate::fromString(e["date"].toString().left(10), Qt::ISODate);
+                        cats << (day.isValid() ? QLocale().toString(day, QStringLiteral("MMM d")) : e["date"].toString());
+                        credits << e["credits_used"].toDouble();
+                    }
+                    if (cats.isEmpty()) {
+                        self->usg_daily_chart_->clear();
+                        self->usg_daily_chart_->set_state(ui::BarChart::Empty, tr("No usage recorded in the last 30 days."));
+                    } else {
+                        self->usg_daily_chart_->set_data(cats, credits, tr("Credits"));
+                        self->usg_daily_chart_->set_state(ui::BarChart::Ready);
+                    }
+                }
                 self->usg_daily_table_->clearSpans();
                 self->usg_daily_table_->setRowCount(0);
                 for (int i = d.size() - 1; i >= 0 && i >= d.size() - 10; i--) {
@@ -789,15 +1102,24 @@ void ProfileScreen::fetch_usage_data() {
                     self->usg_daily_table_->insertRow(row);
                     self->usg_daily_table_->setItem(row, 0, new QTableWidgetItem(e["date"].toString()));
                     self->usg_daily_table_->setItem(row, 1,
-                                                    profile_num_item(QString::number(e["request_count"].toInt())));
+                                                    profile_num_item(QString::number(e["request_count"].toInt()),
+                                                                     e["request_count"].toDouble()));
                     self->usg_daily_table_->setItem(
-                        row, 2, profile_num_item(auth::format_credits(e["credits_used"].toDouble())));
+                        row, 2,
+                        profile_num_item(auth::format_credits(e["credits_used"].toDouble()), e["credits_used"].toDouble()));
                 }
                 if (self->usg_daily_table_->rowCount() == 0)
-                    profile_table_message(self->usg_daily_table_, tr("No usage recorded in the last 30 days."));
+                    profile_table_state(self->usg_daily_table_,
+                                        ui::EmptyState::no_data_spec(
+                                            tr("No usage in the last 30 days"),
+                                            tr("Calls to Fincept data and AI services appear here day by day, with "
+                                               "their credit cost.")));
+                else
+                    profile_table_rows(self->usg_daily_table_);
             }
             {
                 auto eps = payload["endpoint_breakdown"].toArray();
+                self->usg_endpoint_table_->setSortingEnabled(false); // rows are inserted by index
                 self->usg_endpoint_table_->clearSpans();
                 self->usg_endpoint_table_->setRowCount(0);
                 for (const auto& v : eps) {
@@ -806,57 +1128,61 @@ void ProfileScreen::fetch_usage_data() {
                     self->usg_endpoint_table_->insertRow(row);
                     self->usg_endpoint_table_->setItem(row, 0, new QTableWidgetItem(e["endpoint"].toString()));
                     self->usg_endpoint_table_->setItem(row, 1,
-                                                       profile_num_item(QString::number(e["request_count"].toInt())));
+                                                       profile_num_item(QString::number(e["request_count"].toInt()),
+                                                                        e["request_count"].toDouble()));
                     self->usg_endpoint_table_->setItem(
-                        row, 2, profile_num_item(auth::format_credits(e["credits_used"].toDouble())));
+                        row, 2,
+                        profile_num_item(auth::format_credits(e["credits_used"].toDouble()), e["credits_used"].toDouble()));
                     self->usg_endpoint_table_->setItem(
-                        row, 3, profile_num_item(QString::number(e["avg_response_time_ms"].toDouble(), 'f', 0)));
+                        row, 3,
+                        profile_num_item(QString::number(e["avg_response_time_ms"].toDouble(), 'f', 0),
+                                         e["avg_response_time_ms"].toDouble()));
                 }
-                if (self->usg_endpoint_table_->rowCount() == 0)
-                    profile_table_message(self->usg_endpoint_table_, tr("No endpoint activity recorded."));
+                if (self->usg_endpoint_table_->rowCount() == 0) {
+                    profile_table_state(self->usg_endpoint_table_,
+                                        ui::EmptyState::no_data_spec(
+                                            tr("No endpoint activity"),
+                                            tr("The services you call most appear here with their requests, credits "
+                                               "and response time.")));
+                } else {
+                    self->usg_endpoint_table_->setSortingEnabled(true);
+                    profile_table_rows(self->usg_endpoint_table_);
+                }
             }
         },
         this);
 }
 
 void ProfileScreen::fetch_billing_data() {
-    LOG_INFO("Profile", "Fetching billing data...");
-    profile_table_loading(bill_history_, tr("Loading..."));
+    LOG_DEBUG("Profile", "Fetching billing data...");
+    profile_table_loading(bill_history_, tr("Loading payment history…"));
+    // Plan, credits and support type are the subscription record AuthManager
+    // already holds (GET /cashfree/subscription at sign-in, after REFRESH and on
+    // its background refresh); refresh_all() shows them. This tab used to request
+    // that record again on every visit — only the payment list is fetched here.
     QPointer<ProfileScreen> self = this;
-    auth::UserApi::instance().get_user_subscription(
-        [self](auth::ApiResponse r) {
-            if (!self)
-                return;
-            if (!r.success) {
-                // refresh_all() already filled plan / credits from the session;
-                // only the support type is unknown.
-                LOG_WARN("Profile", "Subscription fetch failed: " + r.error);
-                return;
-            }
-            const QJsonObject d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
-            // Never blank a field the payload does not carry: this used to read a
-            // different endpoint and wiped PLAN to "" and CREDIT BALANCE to 0.00.
-            if (d.contains("account_type"))
-                self->bill_plan_->setText(profile_plan_text(d));
-            if (d.contains("credit_balance"))
-                self->bill_credits_->setText(auth::format_credits(d["credit_balance"].toDouble()));
-            const QString support = d["support_type"].toString().trimmed();
-            self->bill_support_->setText(support.isEmpty() ? QString::fromUtf8("\xe2\x80\x94") : support.toUpper());
-        },
-        this);
+    const quint64 generation = account_generation_;
     auth::UserApi::instance().get_payment_history(
         1, 20,
-        [self](auth::ApiResponse r) {
-            if (!self)
-                return;
+        [self, generation](auth::ApiResponse r) {
+            if (!self || self->account_generation_ != generation)
+                return; // gone, or asked for an account that is no longer signed in
             if (!r.success) {
                 LOG_WARN("Profile", "Payment history failed: " + r.error);
-                profile_table_message(self->bill_history_,
-                                      tr("Could not load payment history — press REFRESH to retry."));
+                self->tab_fetched_ms_[3] = 0;
+                profile_table_state(self->bill_history_,
+                                    ui::EmptyState::error_spec(
+                                        tr("Payment history could not be loaded. Check your connection, then retry."),
+                                        tr("Could not load payments"), tr("RETRY"), r.error),
+                                    [self]() {
+                                        if (self)
+                                            self->on_section_changed(3, /*force=*/true);
+                                    });
                 return;
             }
             auto d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
             auto p = d["payments"].toArray();
+            self->bill_history_->setSortingEnabled(false); // rows are inserted by index
             self->bill_history_->clearSpans();
             self->bill_history_->setRowCount(0);
             const QString dash = QString::fromUtf8("\xe2\x80\x94");
@@ -864,24 +1190,44 @@ void ProfileScreen::fetch_billing_data() {
                 auto e = v.toObject();
                 int row = self->bill_history_->rowCount();
                 self->bill_history_->insertRow(row);
-                self->bill_history_->setItem(row, 0,
-                                             new QTableWidgetItem(profile_local_stamp(e["created_at"].toString(), false)));
+                // Local date shown; sorted by the instant itself.
+                const QString created = e["created_at"].toString();
+                const QDateTime created_dt = QDateTime::fromString(created, Qt::ISODate);
+                auto* date_item = new ui::NumericTableWidgetItem(
+                    profile_local_stamp(created, false),
+                    created_dt.isValid() ? double(created_dt.toMSecsSinceEpoch()) : 0.0);
+                self->bill_history_->setItem(row, 0, date_item);
                 const QString plan = e["plan_name"].toString();
                 self->bill_history_->setItem(row, 1, new QTableWidgetItem(plan.isEmpty() ? dash : plan));
                 // The field is amount_USD: it was charged in dollars, so pin the symbol
                 // instead of showing it in whatever display currency is selected (a
                 // $49 payment read "EUR 49.00" for a euro user — no conversion happens).
                 self->bill_history_->setItem(
-                    row, 2, profile_num_item(cur::money(e["amount_usd"].toDouble(), false, QStringLiteral("USD"))));
+                    row, 2,
+                    profile_num_item(cur::money(e["amount_usd"].toDouble(), false, QStringLiteral("USD")),
+                                     e["amount_usd"].toDouble()));
                 const QJsonValue credits = e["credits_purchased"];
+                const bool no_credits = credits.isNull() || credits.isUndefined();
                 self->bill_history_->setItem(
                     row, 3,
-                    profile_num_item(credits.isNull() || credits.isUndefined() ? dash
-                                                                                : auth::format_credits(credits.toDouble())));
+                    profile_num_item(no_credits ? dash : auth::format_credits(credits.toDouble()),
+                                     no_credits ? -1.0 : credits.toDouble()));
                 self->bill_history_->setItem(row, 4, new QTableWidgetItem(e["status"].toString().toUpper()));
             }
-            if (self->bill_history_->rowCount() == 0)
-                profile_table_message(self->bill_history_, tr("No payments yet."));
+            if (self->bill_history_->rowCount() == 0) {
+                profile_table_state(self->bill_history_,
+                                    ui::EmptyState::no_data_spec(tr("No payments yet"),
+                                                                 tr("Plan and credit-pack payments appear here with "
+                                                                    "their amount, credits and status."),
+                                                                 tr("VIEW PLANS")),
+                                    [self]() {
+                                        if (self)
+                                            ui::billing::open_plans(self.data());
+                                    });
+            } else {
+                self->bill_history_->setSortingEnabled(true);
+                profile_table_rows(self->bill_history_);
+            }
             const int total = d["pagination"].toObject()["total_count"].toInt();
             self->bill_history_->setToolTip(total > p.size() ? tr("Showing the latest %1 of %2 payments.")
                                                                     .arg(p.size())
@@ -892,18 +1238,26 @@ void ProfileScreen::fetch_billing_data() {
 }
 
 void ProfileScreen::fetch_login_history() {
-    LOG_INFO("Profile", "Fetching login history...");
-    profile_table_loading(sec_login_hist_, tr("Loading..."));
+    LOG_DEBUG("Profile", "Fetching login history...");
+    profile_table_loading(sec_login_hist_, tr("Loading sign-in history…"));
     QPointer<ProfileScreen> self = this;
+    const quint64 generation = account_generation_;
     auth::UserApi::instance().get_login_history(
         20, 0,
-        [self](auth::ApiResponse r) {
-            if (!self)
-                return;
+        [self, generation](auth::ApiResponse r) {
+            if (!self || self->account_generation_ != generation)
+                return; // gone, or asked for an account that is no longer signed in
             if (!r.success) {
                 LOG_WARN("Profile", "Login history failed: " + r.error);
-                profile_table_message(self->sec_login_hist_,
-                                      tr("Could not load login history — press REFRESH to retry."));
+                self->tab_fetched_ms_[2] = 0;
+                profile_table_state(self->sec_login_hist_,
+                                    ui::EmptyState::error_spec(
+                                        tr("Sign-in history could not be loaded. Check your connection, then retry."),
+                                        tr("Could not load sign-in history"), tr("RETRY"), r.error),
+                                    [self]() {
+                                        if (self)
+                                            self->on_section_changed(2, /*force=*/true);
+                                    });
                 return;
             }
             auto d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
@@ -941,12 +1295,19 @@ void ProfileScreen::fetch_login_history() {
                     status = e["status"].toString().toUpper();
                 }
                 auto* st_item = new QTableWidgetItem(status);
-                if (failed)
+                if (failed) {
                     st_item->setForeground(QColor(ui::colors::NEGATIVE()));
+                    st_item->setData(Qt::UserRole, true); // apply_theme() re-colours it
+                }
                 self->sec_login_hist_->setItem(row, 3, st_item);
             }
             if (self->sec_login_hist_->rowCount() == 0)
-                profile_table_message(self->sec_login_hist_, tr("No login history recorded."));
+                profile_table_state(self->sec_login_hist_,
+                                    ui::EmptyState::no_data_spec(tr("No sign-ins recorded"),
+                                                                 tr("Each sign-in to your account appears here with "
+                                                                    "its time, IP address and device.")));
+            else
+                profile_table_rows(self->sec_login_hist_);
         },
         this);
 }
@@ -955,7 +1316,7 @@ void ProfileScreen::show_edit_profile_dialog() {
     auto* dlg = new QDialog(this);
     dlg->setObjectName(QStringLiteral("profDialog"));
     dlg->setWindowTitle(tr("Edit Profile"));
-    dlg->setFixedSize(420, 300);
+    dlg->setMinimumSize(420, 300);
     auto* vl = new QVBoxLayout(dlg);
     vl->setContentsMargins(20, 16, 20, 16);
     vl->setSpacing(10);
@@ -968,36 +1329,65 @@ void ProfileScreen::show_edit_profile_dialog() {
         lb->setObjectName(QStringLiteral("profFieldLabel"));
         vl->addWidget(lb);
         auto* i = new QLineEdit(v);
-        i->setFixedHeight(28);
+        i->setMinimumHeight(28);
         vl->addWidget(i);
         return i;
     };
     auto* un = add_f(tr("USERNAME"), s.user_info.username);
     auto* ph = add_f(tr("PHONE (with country code)"), s.user_info.phone);
     auto* co = add_f(tr("COUNTRY"), s.user_info.country);
+    // What the dialog opened with: only fields the user actually changed are
+    // sent. Re-sending the pre-filled phone ("+<cc><digits>", as registration
+    // stores it) made every save fail with "Phone must contain only digits".
+    const QString orig_username = s.user_info.username.trimmed();
+    const QString orig_phone_digits = profile_phone_digits(s.user_info.phone);
+    const QString orig_country = s.user_info.country.trimmed();
     auto* brl = new QHBoxLayout;
     brl->setContentsMargins(0, 0, 0, 0);
     brl->setSpacing(8);
     brl->addStretch();
     auto* cn = new QPushButton(tr("CANCEL"));
     cn->setObjectName(QStringLiteral("profBtn"));
-    cn->setFixedHeight(26);
+    cn->setMinimumHeight(26);
     connect(cn, &QPushButton::clicked, dlg, &QDialog::reject);
     brl->addWidget(cn);
     auto* sv = new QPushButton(tr("SAVE"));
     sv->setObjectName(QStringLiteral("profBtnPrimary"));
-    sv->setFixedHeight(26);
+    sv->setMinimumHeight(26);
     sv->setDefault(true);
     QPointer<ProfileScreen> self = this;
     QPointer<QDialog> dlg_ptr = dlg;
     connect(sv, &QPushButton::clicked, this, [=]() {
         QJsonObject data;
-        if (!un->text().trimmed().isEmpty())
-            data["username"] = un->text().trimmed();
-        if (!ph->text().trimmed().isEmpty())
-            data["phone"] = ph->text().trimmed();
-        if (!co->text().trimmed().isEmpty())
-            data["country"] = co->text().trimmed();
+        const QString username = un->text().trimmed();
+        if (!username.isEmpty() && username != orig_username)
+            data["username"] = username;
+        // Compared as digits, so "+91 98765-43210" counts as unchanged when
+        // "+919876543210" is stored. A changed number is sent as PUT
+        // /user/profile reads it: "+<digits>" is a full international number
+        // (stored as is); bare digits are a NATIONAL number the server prefixes
+        // with the account's country code. Sending a typed "+65 9876 5432" as
+        // bare "6598765432" used to store "+656598765432".
+        const QString phone_text = ph->text().trimmed();
+        if (!phone_text.isEmpty()) {
+            const QString phone_digits = profile_phone_digits(phone_text);
+            if (phone_digits.isEmpty()) {
+                QMessageBox::warning(dlg_ptr ? static_cast<QWidget*>(dlg_ptr) : nullptr, tr("Edit Profile"),
+                                     tr("Phone number may contain only digits, spaces, dashes and a leading +. "
+                                        "Start with + and the country code (e.g. +91 98765 43210); a number "
+                                        "without + is taken as a national number in your account's country."));
+                return;
+            }
+            if (phone_digits != orig_phone_digits) {
+                QString phone_out = phone_digits;
+                if (phone_text.startsWith(QLatin1Char('+')))
+                    phone_out.prepend(QLatin1Char('+'));
+                data["phone"] = phone_out;
+            }
+        }
+        const QString country = co->text().trimmed();
+        if (!country.isEmpty() && country != orig_country)
+            data["country"] = country;
         if (data.isEmpty()) {
             QMessageBox::information(dlg_ptr ? static_cast<QWidget*>(dlg_ptr) : nullptr, tr("Edit Profile"),
                                      tr("Nothing to save — change at least one field."));
@@ -1010,7 +1400,7 @@ void ProfileScreen::show_edit_profile_dialog() {
             if (!self)
                 return;
             if (r.success) {
-                auth::AuthManager::instance().refresh_user_data();
+                auth::AuthManager::instance().refresh_user_data(auth::AuthManager::Refresh::Now);
                 if (dlg_ptr)
                     dlg_ptr->accept();
                 return;
@@ -1049,13 +1439,16 @@ void ProfileScreen::show_regen_confirm() {
         return;
 
     QPointer<ProfileScreen> self = this;
-    auth::UserApi::instance().regenerate_api_key([self](auth::ApiResponse r) {
+    // AuthManager adopts the returned key everywhere the old one lived (session,
+    // HttpClient, secure storage) before refreshing — refreshing with the old
+    // key, which the server has already invalidated, 401'd and signed the user
+    // out. It does so even if this screen is gone by the time the reply lands.
+    auth::AuthManager::instance().regenerate_api_key([self](bool ok, const QString& error) {
         // Guarded: regeneration is a network round trip and the screen can be
         // rebuilt (language change) or destroyed while it is in flight.
         if (!self)
             return;
-        if (r.success) {
-            auth::AuthManager::instance().refresh_user_data();
+        if (ok) {
             self->api_key_visible_ = false;
             if (self->sec_api_key_)
                 self->sec_api_key_->setText(QString(20, QChar(0x2022)));
@@ -1064,12 +1457,71 @@ void ProfileScreen::show_regen_confirm() {
         }
         // Previously a silent no-op — the user could not tell whether their
         // key had been rotated or not.
-        LOG_ERROR("Profile", "API key regeneration failed: " + r.error);
+        LOG_ERROR("Profile", "API key regeneration failed: " + error);
         QMessageBox::warning(self, tr("Regeneration Failed"),
-                             r.error.isEmpty() ? tr("Could not regenerate your API key. Your existing key is "
-                                                    "still valid.")
-                                               : r.error);
+                             error.isEmpty() ? tr("Could not regenerate your API key. Your existing key is "
+                                                  "still valid.")
+                                             : error);
     });
+}
+
+void ProfileScreen::toggle_mfa() {
+    if (mfa_request_in_flight_)
+        return;
+    const auto& s = auth::AuthManager::instance().session();
+    const bool enabled = s.user_info.mfa_enabled;
+    QString password;
+    if (!enabled) {
+        if (QMessageBox::question(this, tr("Enable Two-Factor Authentication"),
+                                  tr("Every sign-in will then also ask for a 6-digit code that Fincept emails to "
+                                     "%1.\n\nTurn on two-factor authentication?")
+                                      .arg(s.user_info.email),
+                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+    } else {
+        // The API refuses to turn 2FA off without the account password.
+        bool ok = false;
+        password = QInputDialog::getText(this, tr("Disable Two-Factor Authentication"),
+                                         tr("Enter your account password to turn off two-factor authentication:"),
+                                         QLineEdit::Password, QString(), &ok);
+        if (!ok)
+            return;
+        if (password.isEmpty()) {
+            QMessageBox::warning(this, tr("Disable Two-Factor Authentication"),
+                                 tr("Your password is required to turn off two-factor authentication."));
+            return;
+        }
+    }
+
+    mfa_request_in_flight_ = true;
+    if (sec_mfa_btn_) {
+        sec_mfa_btn_->setEnabled(false);
+        sec_mfa_btn_->setText(tr("SAVING…"));
+    }
+    QPointer<ProfileScreen> self = this;
+    auto done = [self, enabled](auth::ApiResponse r) {
+        if (!self)
+            return;
+        self->mfa_request_in_flight_ = false;
+        if (r.success) {
+            LOG_INFO("Profile", enabled ? "Two-factor authentication turned off" : "Two-factor authentication turned on");
+            // The row and the button follow when the refreshed profile lands
+            // (auth_state_changed → refresh_all()).
+            auth::AuthManager::instance().refresh_user_data(auth::AuthManager::Refresh::Now);
+            return;
+        }
+        self->refresh_all(); // puts the button back
+        LOG_WARN("Profile", "2FA change failed: " + r.error);
+        // The server's own reason — "Invalid password", or for an account that
+        // signed up with Google and never set a password, the same refusal.
+        QMessageBox::warning(self, enabled ? tr("Disable 2FA Failed") : tr("Enable 2FA Failed"),
+                             r.error.isEmpty() ? tr("Could not change two-factor authentication. Please try again.")
+                                               : r.error);
+    };
+    if (enabled)
+        auth::UserApi::instance().disable_mfa(password, done, this);
+    else
+        auth::UserApi::instance().enable_mfa(done, this);
 }
 
 void ProfileScreen::show_delete_account_dialog() {
@@ -1121,7 +1573,7 @@ void ProfileScreen::show_delete_account_dialog() {
     vl->addWidget(hint);
 
     auto* input = new QLineEdit;
-    input->setFixedHeight(28);
+    input->setMinimumHeight(28);
     input->setPlaceholderText(email);
     vl->addWidget(input);
 
@@ -1130,7 +1582,7 @@ void ProfileScreen::show_delete_account_dialog() {
     vl->addWidget(pw_lbl);
 
     auto* pw_input = new QLineEdit;
-    pw_input->setFixedHeight(28);
+    pw_input->setMinimumHeight(28);
     pw_input->setEchoMode(QLineEdit::Password);
     pw_input->setPlaceholderText(tr("Current password"));
     vl->addWidget(pw_input);
@@ -1159,29 +1611,31 @@ void ProfileScreen::show_delete_account_dialog() {
     rl->addWidget(code_lbl);
 
     auto* code_input = new QLineEdit;
-    code_input->setFixedHeight(28);
+    code_input->setMinimumHeight(28);
     code_input->setPlaceholderText(tr("Verification code"));
     rl->addWidget(code_input);
 
-    auto* new_pw_lbl = new QLabel(tr("NEW PASSWORD (MIN 8 CHARACTERS):"));
+    auto* new_pw_lbl = new QLabel(tr("NEW PASSWORD (8+ CHARACTERS WITH UPPER, LOWER CASE AND A DIGIT):"));
+    new_pw_lbl->setWordWrap(true);
     new_pw_lbl->setObjectName(QStringLiteral("profDangerLabel"));
     rl->addWidget(new_pw_lbl);
 
     auto* new_pw = new QLineEdit;
-    new_pw->setFixedHeight(28);
+    new_pw->setMinimumHeight(28);
     new_pw->setEchoMode(QLineEdit::Password);
     new_pw->setPlaceholderText(tr("New password"));
     rl->addWidget(new_pw);
 
     auto* confirm_pw = new QLineEdit;
-    confirm_pw->setFixedHeight(28);
+    confirm_pw->setMinimumHeight(28);
     confirm_pw->setEchoMode(QLineEdit::Password);
     confirm_pw->setPlaceholderText(tr("Confirm new password"));
     rl->addWidget(confirm_pw);
 
     auto* set_pw_btn = new QPushButton(tr("SET PASSWORD"));
     set_pw_btn->setObjectName(QStringLiteral("profBtnPrimary"));
-    set_pw_btn->setFixedHeight(26);
+    set_pw_btn->setProperty("fincept_agent_risk", "account");
+    set_pw_btn->setMinimumHeight(26);
     rl->addWidget(set_pw_btn);
     vl->addWidget(reset_box);
 
@@ -1206,13 +1660,14 @@ void ProfileScreen::show_delete_account_dialog() {
     brl->addStretch();
     auto* cancel = new QPushButton(tr("CANCEL"));
     cancel->setObjectName(QStringLiteral("profBtn"));
-    cancel->setFixedHeight(26);
+    cancel->setMinimumHeight(26);
     connect(cancel, &QPushButton::clicked, dlg, &QDialog::reject);
     brl->addWidget(cancel);
 
     auto* confirm = new QPushButton(tr("DELETE MY ACCOUNT"));
     confirm->setObjectName(QStringLiteral("profBtnDangerSolid"));
-    confirm->setFixedHeight(26);
+    confirm->setProperty("fincept_agent_risk", "account");
+    confirm->setMinimumHeight(26);
     confirm->setEnabled(false);
     auto reeval = [confirm, input, pw_input, email]() {
         const bool email_ok = input->text().trimmed() == email;
@@ -1258,8 +1713,10 @@ void ProfileScreen::show_delete_account_dialog() {
             code_input->setFocus();
             return;
         }
-        if (new_pw->text().length() < 8) {
-            say(tr("Password must be at least 8 characters"), "neg");
+        // The server's rule: 8+ characters with an upper-case letter, a
+        // lower-case letter and a digit (length alone let "password1" through).
+        if (!auth::validate_password(new_pw->text()).valid) {
+            say(tr("Password needs 8+ characters with upper and lower case letters and a digit"), "neg");
             new_pw->setFocus();
             return;
         }
@@ -1310,16 +1767,19 @@ void ProfileScreen::show_delete_account_dialog() {
             // Never log r.error's context alongside the password; the error
             // string itself is server wording and safe.
             LOG_ERROR("Profile", "Account deletion failed: " + r.error);
-            QString detail = r.error;
             if (r.status_code == 401) {
-                // Resetting the password can invalidate the session that was
-                // issued before it, so a 401 here is more likely "your session
-                // is stale" than "wrong password" — say so rather than sending
-                // the user round the password loop again.
-                detail = tr("%1\n\nIf you just set a new password, sign out and back in, then retry.").arg(r.error);
+                // The server's own reason: "Invalid password" or "Email
+                // confirmation does not match this account". A session made
+                // stale by a password reset no longer shows up here —
+                // HttpClient drops the dead token and re-sends the request with
+                // the API key alone — so this is not "session expired".
+                QMessageBox::warning(self, tr("Delete Failed"),
+                                     tr("Account deletion failed: %1\n\nCheck what you entered and try again.")
+                                         .arg(r.error.isEmpty() ? tr("the confirmation was not accepted.") : r.error));
+                return;
             }
             QMessageBox::critical(self, tr("Delete Failed"),
-                                  tr("Account deletion failed: %1\n\nPlease contact support@fincept.in").arg(detail));
+                                  tr("Account deletion failed: %1\n\nPlease contact support@fincept.in").arg(r.error));
         });
     });
     brl->addWidget(confirm);
@@ -1328,5 +1788,66 @@ void ProfileScreen::show_delete_account_dialog() {
     dlg->exec();
     dlg->deleteLater();
 }
+
+namespace {
+/// Section id of each tab button, in nav order.
+const char* const kProfSectionIds[] = {"overview", "usage", "security", "billing", "support"};
+} // namespace
+
+bool ProfileScreen::open_section(const QString& section, const QString& focus) {
+    Q_UNUSED(focus);
+    const QString key = section.trimmed().toLower();
+    if (key.isEmpty())
+        return true;
+    for (int i = 0; i < int(std::size(kProfSectionIds)); ++i) {
+        if (key != QLatin1String(kProfSectionIds[i]))
+            continue;
+        if (!sections_ || i >= sections_->count())
+            return false;
+        if (account_key_.isEmpty())
+            sections_->setCurrentIndex(i); // signed out: the sign-in gate opens this tab (and loads it)
+        else
+            on_section_changed(i); // the tab button's click (loads its data unless fresh)
+        return true;
+    }
+    return false;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> prof_command_rows() {
+    namespace rows = command_rows;
+    const QString where = ProfileScreen::tr("Profile");
+    const QString screen = QStringLiteral("profile");
+    return {
+        rows::section(screen, QStringLiteral("overview"), ProfileScreen::tr("Account overview"),
+                      {QStringLiteral("account"), QStringLiteral("profile"), QStringLiteral("my account"),
+                       QStringLiteral("username"), QStringLiteral("email")},
+                      where),
+        rows::section(screen, QStringLiteral("usage"), ProfileScreen::tr("Usage & credits"),
+                      {QStringLiteral("usage"), QStringLiteral("credits used"), QStringLiteral("api calls"),
+                       QStringLiteral("requests"), QStringLiteral("rate limit")},
+                      where),
+        rows::section(screen, QStringLiteral("security"), ProfileScreen::tr("Account security"),
+                      {QStringLiteral("security"), QStringLiteral("password"), QStringLiteral("2fa"),
+                       QStringLiteral("two factor"), QStringLiteral("api key"), QStringLiteral("login history")},
+                      where),
+        rows::section(screen, QStringLiteral("billing"), ProfileScreen::tr("Billing"),
+                      {QStringLiteral("billing"), QStringLiteral("invoices"), QStringLiteral("plan"),
+                       QStringLiteral("subscription"), QStringLiteral("payments")},
+                      where),
+        rows::section(screen, QStringLiteral("support"), ProfileScreen::tr("Account support"),
+                      {QStringLiteral("help"), QStringLiteral("contact"), QStringLiteral("support")}, where),
+    };
+}
+
+void prof_install_commands() {
+    command_rows::install(QStringLiteral("profile"), &prof_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(prof_install_commands)
 
 } // namespace fincept::screens

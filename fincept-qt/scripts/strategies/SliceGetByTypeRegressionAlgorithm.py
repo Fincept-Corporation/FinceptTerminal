@@ -1,54 +1,51 @@
-# ============================================================================
-# Fincept Terminal - Strategy Engine
-# Copyright (c) 2024-2026 Fincept Corporation. All rights reserved.
-# Licensed under the MIT License.
-# https://github.com/Fincept-Corporation/FinceptTerminal
+# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
 #
-# Strategy ID: FCT-198E83AF
-# Category: Regression Test
-# Description: Volume-weighted trend strategy. Tracks volume relative to its
-#   20-day average. Buys when price is rising and volume is above average
-#   (confirming trend). Sells on volume contraction below average.
-# Compatibility: Backtesting | Paper Trading | Live Deployment
-# ============================================================================
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# Redistributed by Fincept Corporation in the Fincept Terminal with header/format changes only; the code is unchanged.
+
 from AlgorithmImports import *
 
+trade_flag = False
+
+### <summary>
+### Regression algorithm asserting slice.get() works for both the alpha and the algorithm
+### </summary>
 class SliceGetByTypeRegressionAlgorithm(QCAlgorithm):
-    """Volume-confirmed trend following strategy."""
-
     def initialize(self):
-        self.set_start_date(2023, 1, 1)
-        self.set_end_date(2024, 1, 1)
-        self.set_cash(100000)
+        '''Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
 
-        self.symbol = "SPY"
-        self.add_equity(self.symbol, Resolution.DAILY)
+        self.set_start_date(2013,10, 7)
+        self.set_end_date(2013,10,11)
 
-        self._ema = self.ema(self.symbol, 20, Resolution.DAILY)
-        self._volumes = []
+        self.add_equity("SPY", Resolution.MINUTE)
+        self.set_alpha(TestAlphaModel())
 
     def on_data(self, data):
-        if not self._ema.is_ready:
-            return
-        if self.symbol not in data:
-            return
+        if "SPY" in data:
+            tb = data.get(TradeBar)["SPY"]
+            global trade_flag
+            if not self.portfolio.invested and trade_flag:
+                self.set_holdings("SPY", 1)
 
-        price = data[self.symbol].close
-        volume = data[self.symbol].volume
+class TestAlphaModel(AlphaModel):
+    def update(self, algorithm, data):
+        insights = []
 
-        self._volumes.append(volume)
-        if len(self._volumes) > 20:
-            self._volumes = self._volumes[-20:]
+        if "SPY" in data:
+            tb = data.get(TradeBar)["SPY"]
+            global trade_flag
+            trade_flag = True
 
-        if len(self._volumes) < 20:
-            return
+        return insights
 
-        avg_vol = sum(self._volumes) / len(self._volumes)
-        ema_val = self._ema.current.value
-
-        if not self.portfolio.invested:
-            if price > ema_val and volume > avg_vol * 1.1:
-                self.set_holdings(self.symbol, 1)
-        else:
-            if price < ema_val:
-                self.liquidate()
+    def on_securities_changed(self, algorithm, changes):
+        return

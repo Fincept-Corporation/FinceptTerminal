@@ -1,0 +1,55 @@
+# Lintian overrides of the fincept-terminal-community .deb, installed as
+# /usr/share/lintian/overrides/fincept-terminal-community. The package is a
+# self-contained application bundle under /opt (like the vendor packages of
+# Chrome or VS Code), not a Debian archive package. Errors outside this list
+# fail the release (release.yml, job verify-deb, "Lint the package").
+
+# The bundle — Qt 6.8 with its WebEngine runtime, which no supported
+# distribution ships — lives under the package's own /opt prefix.
+fincept-terminal-community: dir-or-file-in-opt
+
+# Bundled libraries and plugins are found through $ORIGIN-relative RUNPATHs,
+# never a system path, so nothing leaks into other programs.
+fincept-terminal-community: custom-library-search-path
+
+# Bundled Qt / Qt WebEngine libraries carry their own copies of third-party
+# code (zlib, libpng, ICU, ...).
+fincept-terminal-community: embedded-library
+
+# Private libraries of the bundle: no SONAME policy, shlibs or symbols file
+# applies to them.
+fincept-terminal-community: package-name-doesnt-match-sonames
+fincept-terminal-community: shlib-without-versioned-soname
+fincept-terminal-community: non-dev-pkg-with-shlib-symlink
+fincept-terminal-community: lacks-unversioned-link-to-shared-library
+fincept-terminal-community: shared-library-lacks-prerequisites
+fincept-terminal-community: library-not-linked-against-libc
+fincept-terminal-community: arch-dependent-file-not-in-arch-specific-directory
+
+# Prebuilt upstream binaries (Qt kit, yt-dlp). Stripping yt-dlp would cut off
+# its PyInstaller payload.
+fincept-terminal-community: unstripped-binary-or-object
+fincept-terminal-community: hardening-no-fortify-functions
+fincept-terminal-community: hardening-no-relro
+fincept-terminal-community: hardening-no-pie
+fincept-terminal-community: statically-linked-binary
+
+# The bundled Python analytics scripts run with the terminal's own managed
+# Python (installed at first start), never the system's.
+fincept-terminal-community: missing-dep-for-interpreter
+fincept-terminal-community: python-script-but-no-python-dep
+fincept-terminal-community: script-not-executable
+fincept-terminal-community: unusual-interpreter
+fincept-terminal-community: wrong-path-for-interpreter
+fincept-terminal-community: executable-not-elf-or-script
+
+# Content the app renders (KLineChart, wallet pages, notebooks) with its own
+# scripts, fonts and licence texts.
+fincept-terminal-community: embedded-javascript-library
+fincept-terminal-community: privacy-breach-generic
+fincept-terminal-community: font-in-non-font-package
+fincept-terminal-community: extra-license-file
+fincept-terminal-community: package-contains-documentation-outside-usr-share-doc
+
+# A desktop application with no command-line interface to document.
+fincept-terminal-community: no-manual-page

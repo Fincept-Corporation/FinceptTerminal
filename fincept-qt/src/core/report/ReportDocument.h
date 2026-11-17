@@ -11,7 +11,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include <QSizeF>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 namespace fincept::report {
@@ -26,16 +28,32 @@ namespace fincept::report {
 struct ReportComponent {
     int id = 0;
     // Types: heading, text, table, image, chart, sparkline, stats_block,
-    //        callout, code, divider, quote, list, market_data, page_break, toc
+    //        callout, code, divider, quote, list, market_data, page_break, toc,
+    //        cover (a title page: config title / subtitle / byline / date / disclaimer,
+    //        logo through the image keys path / asset / image_b64)
     QString type;
     QString content;
     QMap<QString, QString> config;
 };
 
+/// The report typeface a new document starts with: one that exists on this platform.
+/// Empty = the application's default family (resolved by the renderer).
+inline QString platform_default_font_family() {
+#if defined(Q_OS_WIN)
+    return QStringLiteral("Segoe UI");
+#elif defined(Q_OS_MACOS)
+    return QStringLiteral("Helvetica Neue");
+#else
+    return QString();
+#endif
+}
+
 struct ReportMetadata {
     QString title = "Untitled Report";
     QString author = "Analyst";
-    QString company = "Fincept Corporation";
+    // Empty by default: the service fills it from the user's "company for new reports"
+    // setting (Document info); a blank company prints nothing.
+    QString company;
     QString date;
     QString header_left;
     QString header_center;
@@ -44,7 +62,52 @@ struct ReportMetadata {
     QString footer_center = "Page {page}";
     QString footer_right;
     bool show_page_numbers = true;
+    // The report's typeface and body size (pt). Every point size on the page scales
+    // with font_size / 12; text that names no typeface of its own uses font_family.
+    QString font_family = platform_default_font_family();
+    int font_size = 12;
+
+    // Page setup, stored per report. Defaults = the fixed A4 portrait page with
+    // 15 / 18 mm margins every report had before these fields existed.
+    QString page_size = "A4"; ///< "A4" | "Letter" | "Legal"
+    bool landscape = false;
+    double margin_left_mm = 15;
+    double margin_right_mm = 15;
+    double margin_top_mm = 18;
+    double margin_bottom_mm = 18;
+
+    // {{variables}} of the report (core/report/ReportVariables.h): lower-case name -> value.
+    // title / author / company / date are built in (the fields above).
+    QMap<QString, QString> variables;
+    /// Diagonal text across every page of the print ("DRAFT"); empty = none.
+    QString watermark;
+    /// Small line at the foot of every page ("Confidential — for internal use only").
+    QString confidentiality;
+    /// Number the headings "1", "1.1", "1.1.1" (page view, TOC and every export).
+    bool number_headings = false;
 };
+
+/// Revision of a stored report: bumped by every library write, so a save based on an
+/// older revision (another computer saved meanwhile — cloud sync) is detected instead of
+/// silently overwriting it. n = 0: never written by a build that knows revisions.
+struct ReportRevision {
+    int n = 0;
+    QString by; ///< short id of the installation that wrote it
+    bool is_set() const { return n > 0; }
+    bool operator==(const ReportRevision& o) const { return n == o.n && by == o.by; }
+    bool operator!=(const ReportRevision& o) const { return !(*this == o); }
+    QString text() const { return is_set() ? QString::number(n) + QLatin1Char('.') + by : QString(); }
+};
+
+/// Paper size in millimetres for `meta` (orientation applied).
+inline QSizeF page_size_mm(const ReportMetadata& meta) {
+    QSizeF s(210.0, 297.0); // A4
+    if (meta.page_size.compare(QLatin1String("Letter"), Qt::CaseInsensitive) == 0)
+        s = QSizeF(215.9, 279.4);
+    else if (meta.page_size.compare(QLatin1String("Legal"), Qt::CaseInsensitive) == 0)
+        s = QSizeF(215.9, 355.6);
+    return meta.landscape ? s.transposed() : s;
+}
 
 struct ReportTheme {
     QString name;
@@ -60,6 +123,10 @@ struct ReportTheme {
     QString divider_color;
 };
 
+// Report themes style the document itself — the page that is previewed,
+// printed and exported to PDF/HTML — not the terminal. They are the content's
+// own fixed colours (a document chooses its paper and ink) and stay the same
+// whatever the terminal theme; a saved report refers to one by name.
 namespace themes {
 
 inline ReportTheme light_professional() {
@@ -114,6 +181,12 @@ struct ReportDocument {
     ReportMetadata metadata;
     ReportTheme theme = themes::light_professional();
     int next_id = 1;
+    // Blocks other tabs added (services::ReportInbox) that the user has not looked at
+    // yet, and where they came from — the "N new blocks" notice. Not part of undo.
+    QVector<int> unseen_ids;
+    QStringList unseen_sources;
+    /// Library revision this document was loaded at / last written as (not part of undo).
+    ReportRevision revision;
 
     // Find component by stable id. Returns -1 if not found.
     int index_of(int id) const {
@@ -124,7 +197,9 @@ struct ReportDocument {
         return -1;
     }
 
-    QJsonObject to_json_obj() const {
+    /// `with_revision` = false leaves the revision out (the library stamps it when it
+    /// writes; the content hash of a document must not change with it).
+    QJsonObject to_json_obj(bool with_revision = true) const {
         QJsonObject root;
 
         QJsonObject meta;
@@ -139,9 +214,42 @@ struct ReportDocument {
         meta["footer_center"] = metadata.footer_center;
         meta["footer_right"] = metadata.footer_right;
         meta["show_page_numbers"] = metadata.show_page_numbers;
+        meta["font_family"] = metadata.font_family;
+        meta["font_size"] = metadata.font_size;
+        meta["page_size"] = metadata.page_size;
+        meta["landscape"] = metadata.landscape;
+        meta["margin_left_mm"] = metadata.margin_left_mm;
+        meta["margin_right_mm"] = metadata.margin_right_mm;
+        meta["margin_top_mm"] = metadata.margin_top_mm;
+        meta["margin_bottom_mm"] = metadata.margin_bottom_mm;
+        // Written only when used, so a report without them serialises as before.
+        if (!metadata.variables.isEmpty()) {
+            QJsonObject vars;
+            for (auto it = metadata.variables.cbegin(); it != metadata.variables.cend(); ++it)
+                vars[it.key()] = it.value();
+            meta["variables"] = vars;
+        }
+        if (!metadata.watermark.isEmpty())
+            meta["watermark"] = metadata.watermark;
+        if (!metadata.confidentiality.isEmpty())
+            meta["confidentiality"] = metadata.confidentiality;
+        if (metadata.number_headings)
+            meta["number_headings"] = true;
         root["metadata"] = meta;
 
         root["theme"] = theme.name;
+        if (with_revision && revision.is_set())
+            root["revision"] = QJsonObject{{"n", revision.n}, {"by", revision.by}};
+
+        if (!unseen_ids.isEmpty()) {
+            QJsonArray ids;
+            for (int id : unseen_ids)
+                ids.append(id);
+            QJsonObject inbox;
+            inbox["unseen"] = ids;
+            inbox["sources"] = QJsonArray::fromStringList(unseen_sources);
+            root["inbox"] = inbox;
+        }
 
         QJsonArray comps;
         for (const auto& c : components) {
@@ -161,7 +269,18 @@ struct ReportDocument {
         return root;
     }
 
-    QString to_json() const { return QString::fromUtf8(QJsonDocument(to_json_obj()).toJson(QJsonDocument::Indented)); }
+    QString to_json(bool with_revision = true) const {
+        return QString::fromUtf8(QJsonDocument(to_json_obj(with_revision)).toJson(QJsonDocument::Indented));
+    }
+
+    /// The revision stored in a report JSON object (unset when absent).
+    static ReportRevision revision_of(const QJsonObject& root) {
+        ReportRevision r;
+        const QJsonObject o = root.value(QStringLiteral("revision")).toObject();
+        r.n = o.value(QStringLiteral("n")).toInt(0);
+        r.by = o.value(QStringLiteral("by")).toString();
+        return r;
+    }
 
     static Result<ReportDocument> from_json(const QString& json) {
         QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
@@ -177,7 +296,9 @@ struct ReportDocument {
             QJsonObject m = root["metadata"].toObject();
             out.metadata.title = m.value("title").toString("Untitled Report");
             out.metadata.author = m.value("author").toString("Analyst");
-            out.metadata.company = m.value("company").toString("Fincept Corporation");
+            // A stored company (even the old "Fincept Corporation" default) is the report's
+            // own text and loads unchanged; a missing key is blank.
+            out.metadata.company = m.value("company").toString();
             out.metadata.date = m.value("date").toString();
             out.metadata.header_left = m.value("header_left").toString();
             out.metadata.header_center = m.value("header_center").toString();
@@ -186,10 +307,42 @@ struct ReportDocument {
             out.metadata.footer_center = m.value("footer_center").toString("Page {page}");
             out.metadata.footer_right = m.value("footer_right").toString();
             out.metadata.show_page_numbers = m.value("show_page_numbers").toBool(true);
+            out.metadata.font_family = m.value("font_family").toString(platform_default_font_family()).trimmed();
+            out.metadata.font_size = qBound(6, m.value("font_size").toInt(12), 72);
+            // Page setup: absent in files written before it existed -> today's A4 portrait.
+            const QString ps = m.value("page_size").toString(QStringLiteral("A4"));
+            out.metadata.page_size = (ps == QLatin1String("Letter") || ps == QLatin1String("Legal")) ? ps
+                                                                                                     : QStringLiteral("A4");
+            out.metadata.landscape = m.value("landscape").toBool(false);
+            auto margin = [&m](const char* key, double fallback) {
+                return qBound(0.0, m.value(QLatin1String(key)).toDouble(fallback), 60.0);
+            };
+            out.metadata.margin_left_mm = margin("margin_left_mm", 15);
+            out.metadata.margin_right_mm = margin("margin_right_mm", 15);
+            out.metadata.margin_top_mm = margin("margin_top_mm", 18);
+            out.metadata.margin_bottom_mm = margin("margin_bottom_mm", 18);
+            const QJsonObject vars = m.value("variables").toObject();
+            for (auto it = vars.constBegin(); it != vars.constEnd(); ++it) {
+                const QString name = it.key().trimmed().toLower();
+                if (!name.isEmpty())
+                    out.metadata.variables.insert(name, it.value().toString());
+            }
+            out.metadata.watermark = m.value("watermark").toString();
+            out.metadata.confidentiality = m.value("confidentiality").toString();
+            out.metadata.number_headings = m.value("number_headings").toBool(false);
         }
 
         if (root.contains("theme"))
             out.theme = themes::by_name(root["theme"].toString());
+        out.revision = revision_of(root);
+
+        if (root.contains("inbox")) {
+            const QJsonObject inbox = root["inbox"].toObject();
+            for (const auto& v : inbox.value("unseen").toArray())
+                out.unseen_ids.append(v.toInt());
+            for (const auto& v : inbox.value("sources").toArray())
+                out.unseen_sources.append(v.toString());
+        }
 
         out.next_id = 1;
         if (root.contains("components")) {

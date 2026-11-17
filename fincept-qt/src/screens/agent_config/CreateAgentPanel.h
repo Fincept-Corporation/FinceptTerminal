@@ -16,6 +16,12 @@
 #include <QTextEdit>
 #include <QWidget>
 
+class QStackedWidget;
+
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 /// CREATE view — 3-column layout: saved agents | config form | live test panel.
@@ -27,6 +33,12 @@ class CreateAgentPanel : public QWidget {
     // Called by AgentConfigScreen for IStatefulScreen state persistence.
     QVariantMap save_draft() const;
     void restore_draft(const QVariantMap& draft);
+
+    /// The agents screen's command bar: NEW AGENT (an empty form, name focused),
+    /// IMPORT / EXPORT (the same file dialogs as the panel's buttons).
+    void start_new_agent();
+    void import_agent_json() { import_json(); }
+    void export_agent_json() { export_json(); }
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -58,9 +70,15 @@ class CreateAgentPanel : public QWidget {
     void load_profile_combo();
     void refresh_llm_pill();
     QJsonObject build_config_json() const;
+    /// Saved list or its state (none saved yet + IMPORT / could not be read + RETRY).
+    void update_saved_state(const QString& error = QString());
+    /// Live test: the output (true) or the preview of what a run does (false).
+    void set_test_page(bool output);
 
     // ── Left: saved list ─────────────────────────────────────────────────────
     QLabel* saved_title_ = nullptr;
+    QStackedWidget* saved_stack_ = nullptr; // saved_list_ | saved_empty_
+    ui::EmptyState* saved_empty_ = nullptr;
     QListWidget* saved_list_ = nullptr;
     QLabel* saved_count_ = nullptr;
     QPushButton* load_btn_ = nullptr;
@@ -171,6 +189,8 @@ class CreateAgentPanel : public QWidget {
     QPlainTextEdit* test_query_edit_ = nullptr;
     QPushButton* test_btn_ = nullptr;
     QLabel* test_status_lbl_ = nullptr;
+    QStackedWidget* test_stack_ = nullptr; // test_empty_ (no output yet) | test_result_
+    ui::EmptyState* test_empty_ = nullptr;
     QTextEdit* test_result_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────

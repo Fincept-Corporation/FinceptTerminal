@@ -1,0 +1,8 @@
+{
+  "harness_version": "1.0.41",
+  "date": "2026-11-17",
+  "command": "grok -p <prompt> --output-format streaming-json --permission-mode dontAsk --rules <context>",
+  "source": "docs",
+  "url": "https://agentclientprotocol.com/protocol/schema",
+  "note": "grok --help: 'NDJSON: one ACP session update per line'. Lines transcribed from the ACP schema as bare SessionUpdate objects; Grok's actual wrapper and whether it prints a final stopReason line are unverified (no recorded run)."
+}

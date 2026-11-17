@@ -1,8 +1,10 @@
 #include "ui/pushpins/PushpinBar.h"
+#include "ui/theme/Theme.h"
 
 #include "core/symbol/SymbolDragSource.h"
 #include "services/pushpins/PushpinService.h"
 #include "ui/pushpins/SymbolChip.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -12,8 +14,9 @@ namespace fincept::ui {
 
 PushpinBar::PushpinBar(QWidget* parent) : QWidget(parent) {
     setObjectName("pushpinBar");
-    setFixedHeight(30);
-    setStyleSheet("#pushpinBar{background:#111827;border-bottom:1px solid #374151;}");
+    metrics::follow_fixed_height(this, 30); // grows with the user's font
+    setStyleSheet(QString("#pushpinBar{background:%1;border-bottom:1px solid %2;}")
+                      .arg(colors::BG_SURFACE(), colors::BORDER_MED()));
 
     auto* outer = new QHBoxLayout(this);
     outer->setContentsMargins(6, 2, 6, 2);
@@ -38,7 +41,9 @@ PushpinBar::PushpinBar(QWidget* parent) : QWidget(parent) {
     scroll_->setWidget(strip_);
 
     empty_hint_ = new QLabel(tr("Drag any symbol here to pin"), strip_);
-    empty_hint_->setStyleSheet("color:#6b7280;font-size:11px;font-style:italic;");
+    empty_hint_->setStyleSheet(QString("color:%1;font-size:" + fonts::px(-3) + "px;font-style:italic;")
+                                   .arg(colors::TEXT_TERTIARY()));
+    empty_hint_->setToolTip(empty_hint_->text()); // the strip may be narrower than the hint
 
     // Dropping a symbol anywhere on the bar pins it.
     symbol_dnd::installDropFilter(this, [](const SymbolRef& ref, SymbolGroup) { PushpinService::instance().pin(ref); });
@@ -54,8 +59,10 @@ void PushpinBar::changeEvent(QEvent* event) {
 }
 
 void PushpinBar::retranslateUi() {
-    if (empty_hint_)
+    if (empty_hint_) {
         empty_hint_->setText(tr("Drag any symbol here to pin"));
+        empty_hint_->setToolTip(empty_hint_->text()); // the strip may be narrower than the hint
+    }
 }
 
 void PushpinBar::rebuild() {
@@ -70,6 +77,11 @@ void PushpinBar::rebuild() {
     }
 
     const auto pins = PushpinService::instance().pins();
+    // The scrollbar is for pins that do not fit. With none there is only the
+    // hint, and where the top bar leaves the strip less room than the hint
+    // needs (15 px font and up) a scrollbar under a cut sentence is noise:
+    // the hint is simply clipped and its tooltip carries the full text.
+    scroll_->setHorizontalScrollBarPolicy(pins.isEmpty() ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
     if (pins.isEmpty()) {
         strip_layout_->addWidget(empty_hint_);
         empty_hint_->show();

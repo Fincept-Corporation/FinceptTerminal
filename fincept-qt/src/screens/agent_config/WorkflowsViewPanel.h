@@ -13,6 +13,11 @@
 #include <QTextEdit>
 #include <QWidget>
 
+namespace fincept::ui {
+class EmptyState;
+class SymbolSearchBox;
+}
+
 namespace fincept::screens {
 
 /// WORKFLOWS view — 3-column: catalog | params | execution log + result.
@@ -41,6 +46,8 @@ class WorkflowsViewPanel : public QWidget {
     void on_workflow_selected(int row);
     void run_current_workflow();
     void refresh_portfolios();
+    /// The result area's preview for the selected workflow (class C: a run calls the LLM).
+    void update_result_preview(const QString& label, const QString& desc);
 
     // ── Left: catalog ────────────────────────────────────────────────────────
     QLabel* catalog_title_ = nullptr;
@@ -56,7 +63,8 @@ class WorkflowsViewPanel : public QWidget {
     // Symbol input (stock analysis)
     QWidget* symbol_row_ = nullptr;
     QLabel* symbol_label_ = nullptr;
-    QLineEdit* symbol_input_ = nullptr;
+    fincept::ui::SymbolSearchBox* symbol_input_ = nullptr; ///< the shared picker (never typed text as a symbol)
+    quint64 symbol_resolve_id_ = 0;                       ///< InstrumentResolver lookup of typed text before a run
 
     // Portfolio picker (portfolio rebalancing / risk assessment)
     QWidget* portfolio_row_ = nullptr;
@@ -77,6 +85,8 @@ class WorkflowsViewPanel : public QWidget {
     QLabel* output_result_title_ = nullptr;
     QLabel* output_status_ = nullptr;
     QTextEdit* log_display_ = nullptr;
+    QStackedWidget* result_stack_ = nullptr; // result_empty_ (no run yet) | result_display_
+    ui::EmptyState* result_empty_ = nullptr;
     QTextEdit* result_display_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────

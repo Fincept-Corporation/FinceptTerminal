@@ -5,19 +5,61 @@ VisionQuant Utilities - Shared helpers for Pattern Intelligence
 import os
 import sys
 import json
+import threading
 import numpy as np
 import pandas as pd
 from datetime import datetime
 
+# The wall-clock cap on one whole Yahoo call (a call can make several requests: cookie,
+# crumb, data); fincept_yahoo applies its own per-request timeout.
+YF_CALL_DEADLINE = 60
+
+
+def with_deadline(fn, seconds=YF_CALL_DEADLINE, what="request"):
+    """Run fn() and return its result, or raise TimeoutError after `seconds`.
+
+    The call runs on a daemon thread, so a stalled connection cannot keep the
+    process (and the runner slot) busy past the deadline."""
+    result = {}
+
+    def run():
+        try:
+            result["value"] = fn()
+        except BaseException as e:  # re-raised on the caller's thread
+            result["error"] = e
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        raise TimeoutError(f"{what} did not answer within {seconds:.0f} s")
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
+
+
+def fincept_yahoo():
+    """The shared Yahoo layer (bar cache, daily profile cache, limiter / back-off); the scripts
+    folder is one level up."""
+    scripts_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if scripts_root not in sys.path:
+        sys.path.append(scripts_root)
+    import fincept_yahoo as fy
+    return fy
+
 
 def get_data_dir():
-    """Resolve the VisionQuant data directory."""
+    """Resolve the VisionQuant data directory: <FINCEPT_DATA_DIR>/vision_quant (the
+    trained model, the pattern index and its chart images); run by hand, the same
+    folder under the edition's default data root (fincept_paths.data_root())."""
     fincept_dir = os.environ.get("FINCEPT_DATA_DIR", "")
     if fincept_dir:
         return os.path.join(fincept_dir, "vision_quant")
-    # Fallback: ~/.fincept/vision_quant
-    home = os.path.expanduser("~")
-    return os.path.join(home, ".fincept", "vision_quant")
+    scripts_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if scripts_root not in sys.path:
+        sys.path.append(scripts_root)
+    import fincept_paths
+    return os.path.join(str(fincept_paths.data_root()), "vision_quant")
 
 
 def ensure_dirs():
@@ -85,29 +127,39 @@ def normalize_ohlcv(df):
 
 def fetch_ohlcv(symbol, start=None, end=None, period="5y"):
     """
-    Fetch OHLCV data via yfinance.
+    Fetch OHLCV data from Yahoo through fincept_yahoo's shared bar cache (one long download
+    per symbol shared by every script; later calls slice it or fetch only the missing tail).
 
     Args:
         symbol: Ticker string (e.g. 'AAPL', '600519.SS')
-        start: Start date string 'YYYY-MM-DD'
-        end: End date string 'YYYY-MM-DD'
-        period: yfinance period if start/end not given
+        start: Start date string 'YYYY-MM-DD' (without `end`: up to today)
+        end: End date string 'YYYY-MM-DD' (used together with `start`)
+        period: yfinance period if no start is given
 
     Returns:
-        DataFrame with Open, High, Low, Close, Volume columns
+        DataFrame with Open, High, Low, Close, Volume columns and a timezone-naive
+        DatetimeIndex (exchange-local dates), or None
     """
-    import yfinance as yf
+    fy = fincept_yahoo()
 
-    ticker = yf.Ticker(symbol)
-    if start and end:
-        df = ticker.history(start=start, end=end, auto_adjust=True)
+    if start:
+        # `start` alone used to fall through to period="5y", so a build asked
+        # for 2024-01-01 indexed bars from five years back.
+        fetch = lambda: fy.ticker_history(symbol, start=start, end=end, auto_adjust=True, actions=False)
     else:
-        df = ticker.history(period=period, auto_adjust=True)
+        fetch = lambda: fy.ticker_history(symbol, period=period, auto_adjust=True, actions=False)
+    df = with_deadline(fetch, what=f"yfinance history for {symbol}")
 
     if df is None or df.empty:
         return None
 
     df = normalize_ohlcv(df)
+    # yfinance indexes are timezone-aware (e.g. America/New_York). Every caller
+    # compares them with naive datetimes; that raised TypeError ("Invalid
+    # comparison between dtype=datetime64[ns, ...] and datetime"), which the
+    # pattern search swallowed — so no match got a DTW / correlation score.
+    if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
 
     # Keep only OHLCV columns
     keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
@@ -162,7 +214,10 @@ def generate_kline_image(ohlcv_df, save_path, window=60, style="international",
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-    has_volume = "Volume" in df.columns and df["Volume"].sum() > 0
+    # A plain bool: `Series.sum() > 0` is numpy.bool_, which mplfinance's
+    # isinstance(value, bool) validator rejects — the index build crashed at
+    # the first chart.
+    has_volume = bool("Volume" in df.columns and df["Volume"].sum() > 0)
 
     mpf.plot(
         df,
@@ -196,9 +251,20 @@ def json_response(status, data=None, error=None):
     return resp
 
 
+def _finite(obj):
+    """Copy of obj with NaN / +-Infinity (incl. numpy floats) replaced by None."""
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if np.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_finite(v) for v in obj]
+    return obj
+
+
 def output_json(obj):
-    """Print JSON to stdout (Fincept protocol)."""
-    print(json.dumps(obj, default=str, ensure_ascii=False))
+    """Print JSON to stdout (Fincept protocol). Never emits NaN / Infinity."""
+    print(json.dumps(_finite(obj), default=str, ensure_ascii=False, allow_nan=False), flush=True)
 
 
 def output_progress(message, pct=None):

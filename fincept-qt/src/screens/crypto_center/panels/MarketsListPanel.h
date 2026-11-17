@@ -13,6 +13,10 @@ class QPushButton;
 class QShowEvent;
 class QTableWidget;
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens::panels {
 
 /// MarketsListPanel — top section of the MARKETS tab (Phase 4 §4.2).
@@ -31,6 +35,10 @@ namespace fincept::screens::panels {
 /// adapter to `list_markets`; on `hideEvent` it disconnects and clears any
 /// pending state. No `QTimer` for refresh — Phase 4's matching engine will
 /// provide WS push when it ships.
+///
+/// A failed list with no rows on screen shows an error page with RETRY
+/// (lists again); an empty list says "No markets listed yet" — never a bare
+/// table header.
 class MarketsListPanel : public QWidget {
     Q_OBJECT
   public:
@@ -52,15 +60,24 @@ class MarketsListPanel : public QWidget {
     void on_row_double_clicked(int row, int column);
 
     void set_status_demo(bool demo);
-    void set_status_error(const QString& message);
+    /// `operation` names what failed in the log line ("list_markets", "adapter").
+    void set_status_error(const QString& message, const QString& operation = QString());
     void rebuild_table(const QVector<fincept::services::prediction::PredictionMarket>& markets);
+    /// Error / empty page in place of the table (built on first need); hide_state_page() shows the table.
+    void show_state_page(bool error, const QString& message);
+    void hide_state_page();
+    /// RETRY: list the markets again.
+    void request_markets();
 
     QLabel* title_ = nullptr;
     QLabel* status_pill_ = nullptr;
     QLabel* footer_note_ = nullptr;
     QTableWidget* table_ = nullptr;
+    fincept::ui::EmptyState* state_page_ = nullptr;
 
     bool subscribed_ = false;
+    /// The list on screen — a number-format change re-renders it (no new request).
+    QVector<fincept::services::prediction::PredictionMarket> shown_markets_;
 };
 
 } // namespace fincept::screens::panels

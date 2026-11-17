@@ -1,5 +1,7 @@
 #include "ui/charts/HorizontalLineLayer.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QChart>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
@@ -10,7 +12,36 @@
 namespace fincept::ui {
 
 HorizontalLineLayer::HorizontalLineLayer(const QString& id, const QString& name, QObject* parent)
-    : OverlayLayer(parent), id_(id), name_(name) {}
+    : OverlayLayer(parent), id_(id), name_(name) {
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this]() { on_theme_changed(); });
+}
+
+QColor HorizontalLineLayer::level_color(const HorizontalLevel& level) {
+    switch (level.tone) {
+        case HorizontalLevelTone::Neutral:
+            return QColor(colors::TEXT_SECONDARY());
+        case HorizontalLevelTone::Muted:
+            return QColor(colors::TEXT_TERTIARY());
+        case HorizontalLevelTone::Accent:
+            return QColor(colors::AMBER());
+        case HorizontalLevelTone::Up:
+            return QColor(colors::POSITIVE());
+        case HorizontalLevelTone::Down:
+            return QColor(colors::NEGATIVE());
+        case HorizontalLevelTone::Custom:
+            break;
+    }
+    return level.color.isValid() ? level.color : QColor(colors::TEXT_SECONDARY());
+}
+
+void HorizontalLineLayer::on_theme_changed() {
+    // Items hold the colours and font they were built with — rebuild them.
+    if (!scene_ || !chart_)
+        return;
+    clear_items();
+    rebuild_items();
+    reposition(chart_);
+}
 
 void HorizontalLineLayer::compute(const QVector<CandleData>&) {
     // Levels are set externally via set_levels() — nothing to compute.
@@ -74,27 +105,25 @@ void HorizontalLineLayer::rebuild_items() {
     if (!scene_)
         return;
 
-    QFont tag_font;
-    tag_font.setFamily(QStringLiteral("Consolas"));
-    tag_font.setPixelSize(10);
-    tag_font.setWeight(QFont::DemiBold);
+    const QFont tag_font = fonts::font(-4, QFont::DemiBold);
 
     for (const auto& level : levels_) {
         LineItem item;
-        QPen pen(level.color);
+        const QColor color = level_color(level);
+        QPen pen(color);
         pen.setStyle(level.style);
         pen.setWidth(1);
         item.line = scene_->addLine(QLineF(), pen);
         item.line->setZValue(5);
 
         if (!level.label.isEmpty()) {
-            QColor bg_color = level.color;
+            QColor bg_color = color;
             bg_color.setAlpha(200);
             item.tag_bg = scene_->addRect(QRectF(), QPen(Qt::NoPen), QBrush(bg_color));
             item.tag_bg->setZValue(21);
 
             item.tag_txt = scene_->addSimpleText(level.label);
-            item.tag_txt->setBrush(QBrush(QColor("#080808")));
+            item.tag_txt->setBrush(QBrush(colors::contrast_text_on(bg_color)));
             item.tag_txt->setFont(tag_font);
             item.tag_txt->setZValue(22);
         }

@@ -10,7 +10,10 @@ Response contract (all ops):
     data: dict   (when success)
     error: str   (when failure)
     error_kind: str | None    (validation | runtime | unknown_op)
-    traceback: str | None     (only on uncaught exceptions)
+    warning: str              (optional; the panel shows it as a banner)
+Tracebacks go to stderr. Undefined values are null, never 0.0.
+Everything here is plain numpy/pandas/scipy; the gs_quant package is not needed
+for any operation (risk_analytics imports it lazily, only for scenario objects).
 """
 
 import sys
@@ -27,6 +30,12 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 _parent_dir = os.path.dirname(_script_dir)
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(_parent_dir))
+    import fincept_json
 
 
 # ============================================================================
@@ -113,8 +122,11 @@ def _df_from_dict(data_dict, dates=None):
     return df
 
 
-def _safe_float(v, default=0.0):
-    """Convert a value to float, replacing NaN/inf with default."""
+def _safe_float(v, default=None):
+    """Convert a value to float; NaN / inf / non-numeric -> `default` (None = JSON null).
+
+    Undefined results (a Sharpe ratio with zero volatility, an Omega ratio with no
+    losing period) must reach the panel as null, not as a real-looking 0.0."""
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -144,7 +156,7 @@ def op_risk_metrics(data):
 
     returns_list = _coerce_floats(data.get("returns"), "returns")
     _require_min_length(returns_list, 5, "returns")
-    risk_free_rate = _safe_float(data.get("risk_free_rate", 0.0))
+    risk_free_rate = _safe_float(data.get("risk_free_rate"), 0.0)
     dates = data.get("dates")
     ret = _series_from_list(returns_list, dates, "returns")
 
@@ -160,7 +172,7 @@ def op_risk_metrics(data):
     daily_r = risk.daily_risk(ret)
     annual_r = risk.annual_risk(ret)
     dl = risk.drawdown_length(ret)
-    mrp = risk.max_recovery_period(ret)
+    rec = risk.recovery_periods(ret)
 
     def _when(stamp):
         """Drawdown markers as dates when the caller supplied dates, otherwise as
@@ -188,10 +200,15 @@ def op_risk_metrics(data):
         "trough_date": _when(dd.get("trough_date")),
         "recovery_date": _when(dd.get("recovery_date")),
         "max_drawdown_length": _safe_int(dl.max() if hasattr(dl, "max") else dl),
-        "max_recovery_period": _safe_int(mrp),
+        # Trough -> first new high, over drawdowns that recovered; null when none did
+        # (the old value was the drawdown length again).
+        "max_recovery_period": rec["max_recovery_period"],
+        "n_recovered_drawdowns": rec["n_recovered_drawdowns"],
+        "ongoing_drawdown_periods_since_trough": rec["ongoing_drawdown_periods_since_trough"],
         "sharpe_ratio": _safe_float(sharpe),
         "sortino_ratio": _safe_float(sortino_val),
         "calmar_ratio": _safe_float(calmar_val),
+        # Infinite when there is no losing period -> null (undefined), not 0.0.
         "omega_ratio": _safe_float(omega_val),
         "var_95": _safe_float(var_95),
         "var_99": _safe_float(var_99),
@@ -211,7 +228,7 @@ def op_portfolio_analytics(data):
             f"returns ({len(returns_list)}) and benchmark_returns ({len(benchmark_list)}) "
             f"must have the same length")
 
-    risk_free_rate = _safe_float(data.get("risk_free_rate", 0.0))
+    risk_free_rate = _safe_float(data.get("risk_free_rate"), 0.0)
     dates = data.get("dates")
 
     port_ret = _series_from_list(returns_list, dates, "portfolio")
@@ -249,14 +266,15 @@ def op_portfolio_analytics(data):
 
 
 def op_greeks(data):
-    """Calculate Greeks for an option (Black-Scholes)."""
-    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
+    """Calculate Greeks for an option (Black-Scholes-Merton; dividend_yield optional, default 0)."""
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig, GREEK_UNITS
 
-    spot = _safe_float(data.get("spot", 100.0))
-    strike = _safe_float(data.get("strike", 100.0))
-    expiry = _safe_float(data.get("expiry", 0.25))
-    rate = _safe_float(data.get("rate", 0.05))
-    vol = _safe_float(data.get("vol", 0.2))
+    spot = _safe_float(data.get("spot"), 100.0)
+    strike = _safe_float(data.get("strike"), 100.0)
+    expiry = _safe_float(data.get("expiry"), 0.25)
+    rate = _safe_float(data.get("rate"), 0.05)
+    vol = _safe_float(data.get("vol"), 0.2)
+    dividend_yield = _safe_float(data.get("dividend_yield"), 0.0)
     option_type = str(data.get("option_type", "call")).lower()
 
     if spot <= 0:
@@ -271,8 +289,9 @@ def op_greeks(data):
         raise ValidationError(f"option_type must be 'call' or 'put', got {option_type!r}")
 
     risk = RiskAnalytics(RiskConfig())
-    # SIGNATURE: calculate_all_greeks(option_type, spot, strike, time_to_expiry, volatility, risk_free_rate)
-    greeks = risk.calculate_all_greeks(option_type, spot, strike, expiry, vol, rate)
+    # SIGNATURE: calculate_all_greeks(option_type, spot, strike, time_to_expiry, volatility,
+    #                                 risk_free_rate, dividend_yield)
+    greeks = risk.calculate_all_greeks(option_type, spot, strike, expiry, vol, rate, dividend_yield)
 
     raw = greeks.__dict__ if hasattr(greeks, "__dict__") else dict(greeks)
     return {
@@ -281,9 +300,12 @@ def op_greeks(data):
         "expiry_years": expiry,
         "rate": rate,
         "vol": vol,
+        "dividend_yield": dividend_yield,
         "option_type": option_type,
         "moneyness": _safe_float(spot / strike),
+        "model": "black_scholes_merton",
         "greeks": {k: _safe_float(v) for k, v in raw.items()},
+        "units": GREEK_UNITS,
     }
 
 
@@ -293,10 +315,10 @@ def op_var_analysis(data):
 
     returns_list = _coerce_floats(data.get("returns"), "returns")
     _require_min_length(returns_list, 30, "returns")
-    confidence = _safe_float(data.get("confidence", 0.95))
+    confidence = _safe_float(data.get("confidence"), 0.95)
     if not (0.0 < confidence < 1.0):
         raise ValidationError(f"confidence must be in (0, 1), got {confidence}")
-    position_value = _safe_float(data.get("position_value", 1_000_000.0))
+    position_value = _safe_float(data.get("position_value"), 1_000_000.0)
     if position_value <= 0:
         raise ValidationError(f"position_value must be > 0, got {position_value}")
     dates = data.get("dates")
@@ -341,7 +363,7 @@ def op_stress_test(data):
     """Standard market stress scenarios applied to a single position."""
     from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
-    position_value = _safe_float(data.get("position_value", 1_000_000.0))
+    position_value = _safe_float(data.get("position_value"), 1_000_000.0)
     if position_value <= 0:
         raise ValidationError(f"position_value must be > 0, got {position_value}")
 
@@ -398,6 +420,11 @@ def op_stress_test(data):
         "n_scenarios": len(serialized),
         "scenarios": serialized,
         "positions": positions,
+        "assumptions": (
+            "Hard-coded historical-style shocks applied to notional by asset class "
+            "(matched on the position name: equity/stock, bond/fixed/rate, fx, credit, "
+            "commodity, vol/option); bonds assume duration 7, credit assumes spread duration 5. "
+            "Not a model of the actual holdings."),
     }
 
 
@@ -413,38 +440,45 @@ def _bt_buy_and_hold(prices, capital, commission):
 
 
 def _bt_momentum(prices, capital, commission, lookback):
-    """Long top performer in trailing window, equal-weight if multiple. Daily rebalance."""
-    px = prices.copy()
+    """Trailing-return momentum, checked daily, trading only when the signal changes.
+
+    Signal at day i (known at the close of day i-1): trailing `lookback`-day return
+    px[i-1] / px[i-1-lookback] - 1 per asset. Hold the asset with the best trailing
+    return while that return is > 0; otherwise hold cash. With one ticker this is
+    time-series momentum (in the asset when its trailing return is positive, in cash
+    otherwise). Trades execute at day i's close; commission on each side.
+
+    The previous version never exited on a negative signal and, on a positive one,
+    sold and re-bought the same asset every day, paying 2x commission daily.
+    """
+    px = prices
     n = len(px)
-    cash = capital
-    shares = {c: 0.0 for c in px.columns}
+    cols = list(px.columns)
+    cash = float(capital)
+    held = None
+    shares = 0.0
     values = []
     trades = 0
     for i in range(n):
-        date = px.index[i]
-        # Mark-to-market current value
-        mv = sum(shares[c] * px.iloc[i][c] for c in px.columns)
-        values.append((date, cash + mv))
-        if i < lookback:
-            continue
-        # Compute trailing returns; pick top
-        window = px.iloc[i - lookback:i]
-        rets = (window.iloc[-1] / window.iloc[0] - 1.0).dropna()
-        if rets.empty:
-            continue
-        winner = rets.idxmax()
-        if rets[winner] <= 0:
-            continue
-        # Liquidate everything, buy winner
-        for c in px.columns:
-            if shares[c] > 0:
-                cash += shares[c] * px.iloc[i][c] * (1 - commission)
-                shares[c] = 0
-                trades += 1
-        target_cash = cash * (1 - commission)
-        shares[winner] = target_cash / px.iloc[i][winner]
-        cash = 0.0
-        trades += 1
+        row = px.iloc[i]
+        if i >= lookback + 1:
+            past = px.iloc[i - 1 - lookback]
+            prev = px.iloc[i - 1]
+            rets = (prev / past - 1.0).replace([np.inf, -np.inf], np.nan).dropna()
+            target = None
+            if not rets.empty and float(rets.max()) > 0:
+                target = rets.idxmax()
+            if target != held:
+                if held is not None:
+                    cash += shares * float(row[held]) * (1 - commission)
+                    shares, held = 0.0, None
+                    trades += 1
+                if target is not None and float(row[target]) > 0:
+                    shares = cash * (1 - commission) / float(row[target])
+                    cash, held = 0.0, target
+                    trades += 1
+        mv = shares * float(row[held]) if held is not None else 0.0
+        values.append((px.index[i], cash + mv))
     return pd.Series(dict(values), name="portfolio_value"), trades
 
 
@@ -477,12 +511,19 @@ def _bt_mean_reversion(prices, capital, commission, window):
 
 
 def _bt_rebalancing(prices, capital, commission, weights, freq_days=21):
-    """Hold target weights, rebalance every freq_days."""
+    """Hold target weights, rebalance every freq_days by trading only the drift.
+
+    On a rebalance day each position is moved to target_weight x (book value after
+    costs); commission is charged on the traded notional |target - current| only.
+    The previous version sold and re-bought 100 % of the book on every rebalance and
+    paid commission on both legs of the whole notional.
+    """
     cols = list(prices.columns)
     w = {c: float(weights.get(c, 0.0)) for c in cols}
     total = sum(w.values()) or 1.0
     w = {c: v / total for c, v in w.items()}
-    cash = capital
+    freq_days = max(1, int(freq_days or 1))
+    cash = float(capital)
     shares = {c: 0.0 for c in cols}
     values = []
     trades = 0
@@ -490,18 +531,26 @@ def _bt_rebalancing(prices, capital, commission, weights, freq_days=21):
         date = prices.index[i]
         row = prices.iloc[i]
         if i % freq_days == 0:
-            # Liquidate to cash
-            mv = sum(shares[c] * row[c] for c in cols)
-            cash += mv * (1 - commission)
-            shares = {c: 0.0 for c in cols}
-            # Buy targets
-            for c in cols:
-                if w[c] > 0 and not math.isnan(row[c]) and row[c] > 0:
-                    spend = cash * w[c] * (1 - commission)
-                    shares[c] = spend / float(row[c])
+            tradable = [c for c in cols if not math.isnan(row[c]) and row[c] > 0]
+            book = cash + sum(shares[c] * float(row[c]) for c in tradable)
+            current = {c: shares[c] * float(row[c]) for c in tradable}
+            # Fee on traded notional; the targets are set on the post-fee book so the
+            # fee is paid out of the trade itself: book' = book - fee, fee = k * sum|w*book' - cur|.
+            # Solve by fixed point (converges in a few steps since k << 1).
+            book_after = book
+            for _ in range(20):
+                fee = commission * sum(abs(w[c] * book_after - current[c]) for c in tradable)
+                nxt = book - fee
+                if abs(nxt - book_after) < 1e-9:
+                    break
+                book_after = nxt
+            for c in tradable:
+                target_val = w[c] * book_after
+                if abs(target_val - current[c]) > 1e-9 * max(1.0, book):
                     trades += 1
-            cash -= sum(shares[c] * row[c] for c in cols)
-        mv = sum(shares[c] * row[c] for c in cols)
+                shares[c] = target_val / float(row[c])
+            cash = book_after - sum(w[c] * book_after for c in tradable)
+        mv = sum(shares[c] * float(row[c]) for c in cols if not math.isnan(row[c]))
         values.append((date, cash + mv))
     return pd.Series(dict(values), name="portfolio_value"), trades
 
@@ -516,16 +565,17 @@ def _curve_metrics(curve, initial_capital):
     n_days = len(curve)
     years = max(n_days / 252.0, 1e-6)
     annualized_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if final_value > 0 else -1.0
-    vol = float(daily_rets.std() * math.sqrt(252)) if len(daily_rets) > 1 else 0.0
-    sharpe = float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)) if daily_rets.std() > 0 else 0.0
+    vol = float(daily_rets.std() * math.sqrt(252)) if len(daily_rets) > 1 else None
+    sharpe = (float(daily_rets.mean() / daily_rets.std() * math.sqrt(252))
+              if len(daily_rets) > 1 and daily_rets.std() > 0 else None)
     # Drawdown
     peak = curve.cummax()
     dd = (curve - peak) / peak
     max_dd = float(dd.min())
     # Best / worst day
-    best = float(daily_rets.max()) if len(daily_rets) else 0.0
-    worst = float(daily_rets.min()) if len(daily_rets) else 0.0
-    win_rate = float((daily_rets > 0).mean() * 100) if len(daily_rets) else 0.0
+    best = float(daily_rets.max()) if len(daily_rets) else None
+    worst = float(daily_rets.min()) if len(daily_rets) else None
+    win_rate = float((daily_rets > 0).mean() * 100) if len(daily_rets) else None
     return {
         "final_value": _safe_float(final_value),
         "total_return": _safe_float(total_return),
@@ -548,10 +598,10 @@ def op_backtest(data):
                "meanreversion": "mean_reversion", "mean-reversion": "mean_reversion"}
     strategy = aliases.get(strategy, strategy)
 
-    initial_capital = _safe_float(data.get("initial_capital", 100_000.0))
+    initial_capital = _safe_float(data.get("initial_capital"), 100_000.0)
     if initial_capital <= 0:
         raise ValidationError(f"initial_capital must be > 0, got {initial_capital}")
-    commission = _safe_float(data.get("commission", 0.001))
+    commission = _safe_float(data.get("commission"), 0.001)
     lookback = _safe_int(data.get("lookback", 20))
     rebalance_freq = data.get("rebalance_freq", "monthly")
     dates = data.get("dates")
@@ -572,12 +622,12 @@ def op_backtest(data):
     elif ticker:
         # Fetch from yfinance as a convenience for the UI
         try:
-            import yfinance as yf
+            import fincept_yahoo as fy  # shared Yahoo session + on-disk bar cache
         except ImportError:
             raise ValidationError(
                 "ticker provided but neither 'prices' supplied nor yfinance available")
         period = str(data.get("period", "2y"))
-        hist = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        hist = fy.ticker_history(ticker, period=period, auto_adjust=True)
         if hist.empty or "Close" not in hist.columns:
             raise ValidationError(
                 f"yfinance returned no price history for ticker {ticker!r} (period={period})")
@@ -649,13 +699,37 @@ def op_backtest(data):
 
 
 def op_statistics(data):
-    """Descriptive statistics of a single series."""
+    """Descriptive statistics of a single series.
+
+    Optional `series_type`: "auto" (default) | "prices" | "returns". It only decides
+    the basis of `realized_variance`, which is a returns concept: for prices it is the
+    sum of squared log returns of the values, for returns the sum of squared values.
+    "auto" treats a strictly positive series as prices. `semi_variance` is the
+    below-MEAN semivariance of the values (mean of min(x - mean, 0)^2), which is
+    meaningful for any series and sits next to `variance` on the same scale.
+    """
     from gs_quant_wrapper import ts_math_statistics as ms
 
     values = _coerce_floats(data.get("values"), "values")
     _require_min_length(values, 2, "values")
     dates = data.get("dates")
     series = _series_from_list(values, dates, "data")
+    series_type = str(data.get("series_type", "auto")).lower()
+    if series_type not in ("auto", "prices", "returns"):
+        raise ValidationError(f"series_type must be auto, prices or returns, got {series_type!r}")
+
+    arr = series.to_numpy(dtype=float)
+    as_prices = series_type == "prices" or (series_type == "auto" and bool((arr > 0).all()))
+    if as_prices:
+        if not (arr > 0).all():
+            raise ValidationError("series_type 'prices' needs strictly positive values")
+        log_rets = np.diff(np.log(arr))
+        realized_variance = float(np.sum(log_rets ** 2))
+        realized_basis = "sum of squared log returns of the values (series treated as prices)"
+    else:
+        realized_variance = float(np.sum(arr ** 2))
+        realized_basis = "sum of squared values (series treated as returns)"
+    semi_variance = ms.semi_variance(series, threshold=float(series.mean()))
 
     pcts = ms.percentiles(series)
 
@@ -672,10 +746,145 @@ def op_statistics(data):
         "kurtosis": _safe_float(ms.kurtosis(series)),
         "count": _safe_int(ms.count(series)),
         "sum": _safe_float(ms.sum_(series)),
-        "semi_variance": _safe_float(ms.semi_variance(series)),
-        "realized_variance": _safe_float(ms.realized_var(series)),
+        "semi_variance": _safe_float(semi_variance),
+        "semi_variance_threshold": "mean",
+        "realized_variance": _safe_float(realized_variance),
+        "realized_variance_basis": realized_basis,
+        "series_type_used": "prices" if as_prices else "returns",
         "percentiles": {str(_safe_int(k)): _safe_float(v) for k, v in pcts.items()},
     }
+
+
+def _returns_frame(data):
+    """`returns` {asset: [r...]} (same length) or `tickers` CSV + `period` (yfinance
+    daily closes -> simple returns). Returns a DataFrame (rows = periods)."""
+    returns = data.get("returns")
+    tickers = data.get("tickers")
+    if isinstance(returns, dict) and returns:
+        cleaned = {str(k): _coerce_floats(v, f"returns[{k}]") for k, v in returns.items()}
+        lengths = {len(v) for v in cleaned.values()}
+        if len(lengths) != 1:
+            raise ValidationError(
+                f"all return series must have the same length, got {sorted(lengths)}")
+        df = pd.DataFrame(cleaned)
+    elif tickers:
+        try:
+            import fincept_yahoo as fy  # shared Yahoo session + on-disk bar cache
+        except ImportError:
+            raise ValidationError("yfinance is not installed; send `returns` instead of `tickers`")
+        tk = [t.strip().upper() for t in str(tickers).split(",") if t.strip()]
+        if len(tk) < 2:
+            raise ValidationError("component VaR needs at least 2 tickers")
+        period = str(data.get("period", "1y"))
+        raw = fy.download(tk, period=period, auto_adjust=True)
+        if raw is None or raw.empty:
+            raise ValidationError(f"yfinance returned no data for {','.join(tk)} (period={period})")
+        close = raw["Close"] if "Close" in raw.columns.get_level_values(0) else raw
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tk[0])
+        missing = [t for t in tk if t not in close.columns or close[t].dropna().empty]
+        if missing:
+            raise ValidationError(f"no price history for: {', '.join(missing)}")
+        df = close[tk].pct_change(fill_method=None)
+    else:
+        raise ValidationError("component_var needs `returns` ({asset: [returns...]}) or `tickers`")
+    df = df.apply(pd.to_numeric, errors="coerce").dropna(how="any")
+    if df.shape[1] < 2:
+        raise ValidationError(f"component VaR needs at least 2 assets, got {df.shape[1]}")
+    if len(df) < 30:
+        raise ValidationError(f"returns need at least 30 complete observations per asset, got {len(df)}")
+    return df
+
+
+def op_component_var(data):
+    """Parametric (delta-normal) component VaR of a multi-asset portfolio.
+
+    Inputs:
+      returns        : {asset: [daily returns...]} (same length, >= 30)   -- or --
+      tickers/period : "AAPL,MSFT,..." / "1y" (fetched with yfinance)
+      weights        : [w...] in asset order, or {asset: w}; default equal weights.
+                       Normalised to sum to 1 when they do not.
+      position_value : float (default 1e6)
+      confidence     : float in (0, 1) (default 0.95)
+      horizon_days   : int (default 1) -- sqrt-of-time scaling of the per-period covariance
+    Zero-mean delta-normal VaR on the sample covariance of the returns as given
+    (per period); component VaRs sum to the portfolio VaR (Euler allocation).
+    """
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
+
+    df = _returns_frame(data)
+    assets = list(df.columns)
+    n = len(assets)
+
+    raw_w = data.get("weights")
+    if raw_w is None or raw_w == [] or raw_w == {}:
+        w = np.full(n, 1.0 / n)
+    elif isinstance(raw_w, dict):
+        # Tickers are upper-cased when fetched, so match weight keys without case.
+        by_upper = {str(k).strip().upper(): v for k, v in raw_w.items()}
+        known = {str(a).upper() for a in assets}
+        unknown = [k for k in by_upper if k not in known]
+        if unknown:
+            raise ValidationError(f"weights given for unknown assets: {', '.join(unknown)}")
+        w = np.asarray([_safe_float(by_upper.get(str(a).upper()), 0.0) for a in assets], dtype=float)
+    else:
+        w = np.asarray(_coerce_floats(raw_w, "weights"), dtype=float)
+        if len(w) != n:
+            raise ValidationError(f"weights ({len(w)}) must match the number of assets ({n})")
+    total = float(w.sum())
+    if abs(total) < 1e-12:
+        raise ValidationError("weights sum to zero; cannot express positions as fractions of position_value")
+    normalised = abs(total - 1.0) > 1e-9
+    if normalised:
+        w = w / total
+
+    confidence = _safe_float(data.get("confidence"), 0.95)
+    if not (0.0 < confidence < 1.0):
+        raise ValidationError(f"confidence must be in (0, 1), got {confidence}")
+    position_value = _safe_float(data.get("position_value"), 1_000_000.0)
+    if position_value <= 0:
+        raise ValidationError(f"position_value must be > 0, got {position_value}")
+    horizon = max(1, _safe_int(data.get("horizon_days"), 1))
+
+    risk = RiskAnalytics(RiskConfig())
+    try:
+        res = risk.calculate_component_var(position_value, w, df, confidence, horizon)
+    except ValueError as e:
+        raise ValidationError(str(e))
+
+    z = res["z_score"]
+    stdev = np.sqrt(np.diag(np.atleast_2d(df.cov().to_numpy(dtype=float))))
+    standalone = z * stdev * np.sqrt(horizon) * np.abs(w) * position_value
+    rows = []
+    for i, a in enumerate(assets):
+        rows.append({
+            "asset": a,
+            "weight": float(w[i]),
+            "position_value": float(w[i] * position_value),
+            "marginal_var": res["marginal_var"][i],
+            "marginal_var_amount": res["marginal_var"][i] * position_value,
+            "component_var": res["component_var"][i],
+            "pct_contribution": res["percentage_contribution"][i],
+            "standalone_var": float(standalone[i]),
+        })
+    out = {
+        "n_observations": int(len(df)),
+        "n_assets": n,
+        "position_value": position_value,
+        "confidence": confidence,
+        "horizon_days": horizon,
+        "method": "parametric delta-normal, zero mean, sample covariance of the given returns",
+        "portfolio_var": res["portfolio_var"],
+        "portfolio_var_pct": res["portfolio_var"] / position_value * 100.0,
+        "portfolio_volatility": res["portfolio_volatility"],
+        "sum_standalone_var": float(standalone.sum()),
+        "diversification_benefit": float(standalone.sum() - res["portfolio_var"]),
+        "weights_normalised": normalised,
+        "assets": rows,
+    }
+    if normalised:
+        out["_warning"] = f"weights summed to {total:g}; they were rescaled to sum to 1"
+    return out
 
 
 # ============================================================================
@@ -690,6 +899,7 @@ OPERATIONS = {
     "stress_test": op_stress_test,
     "backtest": op_backtest,
     "statistics": op_statistics,
+    "component_var": op_component_var,
 }
 
 
@@ -706,11 +916,16 @@ def dispatch(operation, data):
         }
     try:
         result = handler(data or {})
-        return {
+        envelope = {
             "success": True,
             "operation": operation,
             "data": result,
         }
+        # The panel shows a top-level "warning" as a banner above the results.
+        warning = result.pop("_warning", None) if isinstance(result, dict) else None
+        if warning:
+            envelope["warning"] = warning
+        return envelope
     except ValidationError as e:
         return {
             "success": False,
@@ -719,39 +934,42 @@ def dispatch(operation, data):
             "error_kind": "validation",
         }
     except Exception as e:
+        traceback.print_exc(file=sys.stderr)  # diagnostics to stderr only
         return {
             "success": False,
             "operation": operation,
-            "error": str(e),
+            "error": f"{type(e).__name__}: {e}" if str(e) else type(e).__name__,
             "error_kind": "runtime",
-            "traceback": traceback.format_exc(),
         }
 
 
 def main(args):
     """Entry point: args = [operation, json_data]"""
     if len(args) < 2:
-        print(json.dumps({
+        fincept_json.emit({
             "success": False,
             "error": "Usage: gs_quant_service.py <operation> <json_data>",
             "error_kind": "usage",
-        }))
+        })
         return
 
     operation = args[0]
     try:
-        data = json.loads(args[1])
+        data = json.loads(args[1]) if args[1].strip() else {}
     except json.JSONDecodeError as e:
-        print(json.dumps({
+        fincept_json.emit({
             "success": False,
             "operation": operation,
             "error": f"Invalid JSON input: {e}",
             "error_kind": "validation",
-        }))
+        })
+        return
+    if not isinstance(data, dict):
+        fincept_json.emit({"success": False, "operation": operation,
+                           "error": "parameters must be a JSON object", "error_kind": "validation"})
         return
 
-    result = dispatch(operation, data)
-    print(json.dumps(result, default=str))
+    fincept_json.emit(dispatch(operation, data))
 
 
 if __name__ == "__main__":

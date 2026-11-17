@@ -74,6 +74,11 @@ class UnifiedPortfolioService : public QObject {
 
     static UnifiedPortfolioService& instance();
 
+    /// ISO code every aggregated figure is in: the service merges only accounts
+    /// whose broker currency is this one (no FX conversion happens here), so the
+    /// Portfolio Monitor formats its totals with it instead of a literal.
+    static QString aggregate_currency() { return QStringLiteral("INR"); }
+
     /// Enumerate active INR accounts, ensure their streams run, connect signals.
     /// Idempotent — call on every screen show; new accounts get picked up.
     void activate();

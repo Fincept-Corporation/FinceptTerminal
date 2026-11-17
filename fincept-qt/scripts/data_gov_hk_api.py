@@ -364,12 +364,16 @@ class DataGovHKWrapper:
                 "error": "Both start_date and end_date are required in YYYYMMDD format"
             }
 
+        # ISO dates (YYYY-MM-DD) are accepted too: the archive API itself takes YYYYMMDD
+        start_date, end_date = start_date.strip().replace("-", ""), end_date.strip().replace("-", "")
+
         # Validate date format
-        if len(start_date) != 8 or len(end_date) != 8:
+        if len(start_date) != 8 or len(end_date) != 8 or not (start_date + end_date).isdigit():
             return {
                 "data": [],
                 "metadata": {"source": "Data.gov.hk Historical Archive API"},
-                "error": "Dates must be in YYYYMMDD format"
+                "error": "Dates must be in YYYY-MM-DD (or YYYYMMDD) format",
+                "code": "bad_args"
             }
 
         params = {

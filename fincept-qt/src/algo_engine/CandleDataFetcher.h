@@ -46,11 +46,20 @@ class CandleDataFetcher : public QObject {
   public:
     static CandleDataFetcher& instance();
 
+    /// `exchange_hint` names the listing venue of BARE symbols ("NSE", "NASDAQ",
+    /// "LSE", "XETRA", a broker exchange code such as "NFO"). It picks the Yahoo
+    /// suffix ("RELIANCE" + "NSE" → "RELIANCE.NS") and the exchange calendar the
+    /// bars' session dates are stamped with. Without it a bare symbol is read as
+    /// a US listing (MarketSessions' rule) — there is no NSE default any more.
+    /// "live" is fetched as live_bar_timeframe() bars (what a live runner uses).
+    /// Daily-or-longer Yahoo bars are split/dividend ADJUSTED (adjclose ratio).
     void fetch(const QString& symbol, const QString& timeframe, int lookback_days, DataSource source,
-               const QString& broker_id, const QString& account_id, CandleCallback callback);
+               const QString& broker_id, const QString& account_id, CandleCallback callback,
+               const QString& exchange_hint = {});
 
     void fetch_multi(const QStringList& symbols, const QString& timeframe, int lookback_days, DataSource source,
-                     const QString& broker_id, const QString& account_id, MultiCandleCallback callback);
+                     const QString& broker_id, const QString& account_id, MultiCandleCallback callback,
+                     const QString& exchange_hint = {});
 
   private:
     CandleDataFetcher() = default;
@@ -61,7 +70,7 @@ class CandleDataFetcher : public QObject {
 
     // Native Yahoo Finance fetch (replaces the old Python yfinance fallback).
     void fetch_from_yahoo(const QStringList& symbols, const QString& timeframe, int lookback_days,
-                          MultiCandleCallback callback);
+                          MultiCandleCallback callback, const QString& exchange_hint = {});
 
     // One Yahoo chart request for `sym`. On failure with `bare_fallback_left` set it
     // re-issues once with the bare ticker (see fetch_from_yahoo) instead of reporting.
@@ -69,7 +78,7 @@ class CandleDataFetcher : public QObject {
                          const QString& interval, int aggregate, qint64 period1, qint64 period2, int64_t tf_ms,
                          std::shared_ptr<QHash<QString, QVector<OhlcvCandle>>> results,
                          std::shared_ptr<QStringList> errors, std::shared_ptr<std::atomic<int>> remaining,
-                         MultiCandleCallback callback);
+                         MultiCandleCallback callback, const QString& exchange_hint);
 
     static QVector<OhlcvCandle> broker_candles_to_ohlcv(const QVector<fincept::trading::BrokerCandle>& src,
                                                         const QString& timeframe);

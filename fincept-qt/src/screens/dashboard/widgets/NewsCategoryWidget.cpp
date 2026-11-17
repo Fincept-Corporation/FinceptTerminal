@@ -5,6 +5,7 @@
 #include "services/news/NewsService.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialog>
@@ -13,12 +14,23 @@
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QLabel>
-#include <QLineEdit>
 #include <QListWidget>
 #include <QSpinBox>
 #include <QUrl>
 
 namespace fincept::screens::widgets {
+
+namespace {
+// The keys NewsService publishes `news:category:<CATEGORY>` under: the feed
+// table's categories and the headline classifier's, always UPPER CASE. DataHub
+// topics are case-sensitive, so a lower-case "markets" (the old default and the
+// old placeholder's spelling) subscribed to a topic nobody ever publishes.
+const QStringList kNewsCategories = {QStringLiteral("MARKETS"),  QStringLiteral("GEOPOLITICS"),
+                                     QStringLiteral("CRYPTO"),   QStringLiteral("EARNINGS"),
+                                     QStringLiteral("ECONOMIC"), QStringLiteral("ENERGY"),
+                                     QStringLiteral("TECH"),     QStringLiteral("DEFENSE"),
+                                     QStringLiteral("REGULATORY")};
+} // namespace
 
 NewsCategoryWidget::NewsCategoryWidget(const QJsonObject& cfg, QWidget* parent)
     : BaseWidget(tr("NEWS — CATEGORY"), parent) {
@@ -70,11 +82,13 @@ QJsonObject NewsCategoryWidget::config() const {
 }
 
 void NewsCategoryWidget::apply_config(const QJsonObject& cfg) {
-    category_ = cfg.value("category").toString("markets").trimmed();
+    // Normalised to the producer's upper-case key — this also repairs tiles
+    // saved with the old lower-case default.
+    category_ = cfg.value("category").toString(QStringLiteral("MARKETS")).trimmed().toUpper();
     if (category_.isEmpty())
-        category_ = "markets";
+        category_ = QStringLiteral("MARKETS");
     max_rows_ = qBound(3, cfg.value("max_rows").toInt(12), 50);
-    badge_->setText(category_.toUpper());
+    badge_->setText(category_);
     list_->clear();
     // Show the loading overlay until the first delivery for this category —
     // the list used to sit blank (indistinguishable from "broken") while the
@@ -146,10 +160,14 @@ QDialog* NewsCategoryWidget::make_config_dialog(QWidget* parent) {
     dlg->setWindowTitle(tr("Configure — News Category"));
     auto* form = new QFormLayout(dlg);
 
-    auto* edit = new QLineEdit(dlg);
-    edit->setText(category_);
-    edit->setPlaceholderText(tr("markets | geopolitics | crypto | …"));
-    form->addRow(tr("Category"), edit);
+    // A fixed list of the categories the news service actually publishes — free
+    // text let the user type a key that never matches a topic.
+    auto* combo = new QComboBox(dlg);
+    combo->addItems(kNewsCategories);
+    if (!kNewsCategories.contains(category_))
+        combo->addItem(category_); // keep an unusual saved key selectable
+    combo->setCurrentText(category_);
+    form->addRow(tr("Category"), combo);
 
     auto* spin = new QSpinBox(dlg);
     spin->setRange(3, 50);
@@ -159,9 +177,9 @@ QDialog* NewsCategoryWidget::make_config_dialog(QWidget* parent) {
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);
 
-    connect(buttons, &QDialogButtonBox::accepted, dlg, [this, dlg, edit, spin]() {
+    connect(buttons, &QDialogButtonBox::accepted, dlg, [this, dlg, combo, spin]() {
         QJsonObject cfg;
-        cfg.insert("category", edit->text().trimmed());
+        cfg.insert("category", combo->currentText().trimmed().toUpper());
         cfg.insert("max_rows", spin->value());
         apply_config(cfg);
         emit config_changed(cfg);
@@ -176,10 +194,10 @@ void NewsCategoryWidget::on_theme_changed() {
 }
 
 void NewsCategoryWidget::apply_styles() {
-    badge_->setStyleSheet(QString("color:%1;background:%2;border:1px solid %3;"
-                                  "border-radius:3px;padding:1px 6px;font-size:9px;font-weight:700;")
+    set_css_cached(badge_, QString("color:%1;background:%2;border:1px solid %3;"
+                                  "border-radius:3px;padding:1px 6px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:700;")
                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    list_->setStyleSheet(QString("QListWidget{background:transparent;color:%1;font-size:10px;border:none;}"
+    set_css_cached(list_, QString("QListWidget{background:transparent;color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;border:none;}"
                                  "QListWidget::item{padding:3px 4px;border-bottom:1px solid %2;}")
                              .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
 }

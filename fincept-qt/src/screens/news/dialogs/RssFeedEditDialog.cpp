@@ -23,8 +23,10 @@ QStringList default_categories() {
     return {"MARKETS", "GEOPOLITICS", "REGULATORY", "ECONOMIC", "ENERGY", "CRYPTO", "TECH", "DEFENSE", "EARNINGS"};
 }
 
+// The region codes the News screen's region filter understands.
 QStringList default_regions() {
-    return {"GLOBAL", "US", "EU", "UK", "ASIA", "INDIA", "CHINA", "JAPAN", "ME"};
+    return {"GLOBAL", "US", "UK",    "EU",   "ASIA",   "CHINA", "JAPAN", "KOREA",
+            "INDIA",  "SEA", "ANZ",  "LATAM", "MENA", "AFRICA", "CIS"};
 }
 
 } // anonymous namespace
@@ -180,7 +182,7 @@ void RssFeedEditDialog::build_ui() {
                           "QLabel#rssFeedEditTestStatus[probeState=\"warn\"] { color: %2; }"
                           "QLabel#rssFeedEditTestStatus[probeState=\"err\"] { color: %3; }"
                           "QLabel#rssFeedEditTestStatus[probeState=\"busy\"] { color: %4; }")
-                      .arg(ui::colors::POSITIVE(), ui::colors::WARNING(), ui::colors::NEGATIVE(),
+                      .arg(ui::colors::SUCCESS(), ui::colors::WARNING(), ui::colors::DANGER(),
                            ui::colors::TEXT_SECONDARY()));
     root->addWidget(test_status_);
 
@@ -213,6 +215,9 @@ services::RSSFeed RssFeedEditDialog::feed() const {
     f.category = category_combo_->currentText().trimmed().toUpper();
     f.region = region_combo_->currentText().trimmed().toUpper();
     f.tier = tier_spin_->value();
+    // Not editable here: the catalogue's declared language and default state.
+    f.lang = initial_.lang;
+    f.default_enabled = initial_.default_enabled;
     return f;
 }
 

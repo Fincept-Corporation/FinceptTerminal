@@ -3,6 +3,7 @@
 
 #include "core/result/Result.h"
 #include "mcp/McpTypes.h"
+#include "services/harness/HarnessTypes.h"
 #include "storage/repositories/LlmProfileRepository.h"
 
 #include <QHash>
@@ -14,6 +15,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 #include <QWaitCondition>
 
 #include <functional>
@@ -22,15 +24,24 @@
 
 namespace fincept::ai_chat {
 
+struct ModelChoice; // services/llm/ModelRouter.h
+
+/// An agent harness answering terminal AI ("harness:claude"); see ModelRouter.
+inline bool provider_is_harness(const QString& provider) {
+    return provider.startsWith(QLatin1String("harness:"));
+}
+
 inline bool provider_supports_streaming(const QString& provider) {
     return provider == "openai" || provider == "anthropic" || provider == "gemini" || provider == "google" ||
            provider == "groq" || provider == "deepseek" || provider == "openrouter" || provider == "minimax" ||
            provider == "kimi" || provider == "ollama" || provider == "xai" || provider == "fincept" ||
-           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix";
+           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix" ||
+           provider_is_harness(provider);
 }
 
+/// A harness authenticates with the user's own CLI setup — never a key stored here.
 inline bool provider_requires_api_key(const QString& provider) {
-    return provider != "ollama" && provider != "fincept";
+    return provider != "ollama" && provider != "fincept" && !provider_is_harness(provider);
 }
 
 /// In-band sentinel prefixed onto a streamed chunk to mark it as chain-of-thought
@@ -79,6 +90,45 @@ struct LlmResponse {
     /// finished_streaming() signal is global, so each consumer uses this to tell
     /// its own response from another consumer's (tab vs. floating Quick Chat).
     QString origin_session_id = {};
+
+    // ── Route (ModelRouter) — who answered ──
+    /// "harness:claude", "openai", "fincept": stored with the message.
+    QString provider = {};
+    /// The model that answered — for a harness, the one it reported.
+    QString model = {};
+    /// "Claude Code · sonnet · high", "OpenAI · gpt-5", "Fincept LLM".
+    QString route_label = {};
+    /// The feature's first choice was unavailable before any output and this
+    /// answer comes from the next one: "Claude Code is rate limited — answered
+    /// by Fincept LLM". Always shown to the user.
+    QString fallback_notice = {};
+    /// The first choice was unavailable and nothing answered ("ask" / "fail"
+    /// setting): what happened, for the user.
+    QString unavailable_notice = {};
+    /// "ask": the label of the model that would answer instead, and the
+    /// harness to leave out when the user accepts (ChatRoute::skip_harness).
+    QString fallback_offer = {};
+    QString unavailable_harness = {};
+    /// "0 credits · billed to your Anthropic API key" (empty for Fincept LLM).
+    QString billing_note = {};
+    /// Reported by a harness; < 0 = not reported.
+    double cost_usd = -1.0;
+
+    // ── Harness attempt (internal: the fallback decision) ──
+    harness::FailureKind harness_failure = harness::FailureKind::None;
+    bool harness_output_started = false;
+    bool harness_subscription = false;
+};
+
+/// Which feature asks (ModelRouter feature key) and route overrides.
+struct ChatRoute {
+    QString feature;      ///< ModelRouter feature key; empty = "ai_chat"
+    QString context_id;   ///< explicit-choice scope (e.g. a workflow node id); usually empty
+    QString skip_harness; ///< answer without this harness (the user accepted the fallback offer)
+    /// Reasoning effort for this request: "low" | "medium" | "high" | "xhigh" | "max".
+    /// Empty = the server default (medium). Applies to the Fincept model; high and above
+    /// cost extra credits per model call (the server's price table decides how many).
+    QString effort;
 };
 
 /// (chunk_text, is_done) — invoked on a background thread.
@@ -89,9 +139,10 @@ class LlmService : public QObject {
   public:
     static LlmService& instance();
 
-    /// Blocking — call from a background thread (QtConcurrent::run).
+    /// Blocking — call from a background thread (QtConcurrent::run). The model
+    /// is chosen by ModelRouter for `route.feature` (default "ai_chat").
     LlmResponse chat(const QString& user_message, const std::vector<ConversationMessage>& history,
-                     bool use_tools = true);
+                     bool use_tools = true, const ChatRoute& route = {});
 
     /// Per-request tool scope. NoNavigation lets the floating bubble keep benign tools
     /// without yanking the user away. None drops tools entirely.
@@ -103,6 +154,14 @@ class LlmService : public QObject {
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
                         StreamCallback on_chunk, ToolPolicy policy = ToolPolicy::All,
                         const QString& chat_session_id = {});
+
+    /// Same, for a feature's route (ModelRouter): the first entry of the
+    /// feature's chain answers; when it is a harness that is unavailable BEFORE
+    /// any output, the next entry answers once (setting "When a harness is
+    /// unavailable": fall back | ask | fail) and route_notice() says so.
+    void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
+                        StreamCallback on_chunk, ToolPolicy policy, const QString& chat_session_id,
+                        const ChatRoute& route);
 
     /// Back-compat: false→None, true→All. Prefer the enum overload.
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
@@ -123,6 +182,8 @@ class LlmService : public QObject {
     /// Call after the user changes LLM settings.
     void reload_config();
 
+    /// What answers AI Chat now (ModelRouter's first choice for "ai_chat"):
+    /// "harness:claude" / "openai" / "fincept", and its model.
     QString active_provider() const;
     QString active_model() const;
     QString active_api_key() const;
@@ -151,9 +212,34 @@ class LlmService : public QObject {
     void finished_streaming(LlmResponse response);
     void config_changed();
     void models_fetched(const QString& provider, const QStringList& models, const QString& error);
+    /// A streaming request's harness was unavailable before any output and the
+    /// next model of the route answers instead (GUI thread). `notice` reads
+    /// "Claude Code is rate limited — answered by Fincept LLM".
+    void route_notice(const QString& origin_session_id, const QString& feature, const QString& notice);
+    /// An AI request started, moved to another step, or ended (GUI thread). `running` is the
+    /// number of requests in flight; `what` is the step in progress ("Opening equity_research
+    /// AAPL"), empty while the model is thinking. The window header shows it, so it is always
+    /// clear whether the AI is still working or has finished.
+    void activity_changed(int running, const QString& what);
+    /// The AI Chat tab's request life, for a second view of the same turn (the Quick Chat
+    /// bubble follows a turn that operates the screens). Only requests with a chat session
+    /// id. request_chunk carries the same chunks the caller's callback gets, in order.
+    void request_started(const QString& chat_session_id, const QString& user_message);
+    void request_chunk(const QString& chat_session_id, const QString& chunk);
+    /// That request is about to open a screen / work its controls.
+    void ui_operating(const QString& chat_session_id);
+
+  public:
+    /// Requests in flight / the current step (GUI thread).
+    int active_requests() const { return activity_running_; }
+    QString activity_text() const { return activity_text_; }
+    /// Any thread: count a request in (+1) or out (-1), or name the step in progress (0).
+    void note_activity(int delta, const QString& what);
 
   private:
     LlmService();
+    int activity_running_ = 0;
+    QString activity_text_;
 
     mutable QMutex mutex_;
 
@@ -193,6 +279,10 @@ class LlmService : public QObject {
     mutable QString system_prompt_;
     mutable bool tools_enabled_ = true;
     mutable bool config_loaded_ = false;
+    // Harness route (provider_ "harness:<id>"); per-request instances only.
+    QString harness_effort_;
+    QString route_feature_;
+    bool harness_require_key_source_ = true;
 
     // Empty filter = full catalogue. Read in build_*_request under mutex_.
     mcp::ToolFilter tool_filter_;
@@ -215,9 +305,27 @@ class LlmService : public QObject {
         int max_tool_rounds = 40;
         bool tools_enabled = true;
         mcp::ToolFilter tool_filter;
+        // Harness route
+        QString harness_effort;
+        QString feature;
+        bool harness_require_key_source = true;
     };
     /// Copy of the current config. Caller holds mutex_ and has run ensure_config().
     ConfigSnapshot snapshot_config_locked() const;
+    /// The config one entry of a feature's route runs with (any thread; may read
+    /// the profile's key). Globals (temperature, system prompt, …) come from the
+    /// current config; provider / model / key / endpoint from the choice.
+    ConfigSnapshot snapshot_for(const ModelChoice& choice, const QString& feature);
+    /// The route for `route.feature`, minus `route.skip_harness`.
+    static QVector<ModelChoice> route_chain(const ChatRoute& route);
+    /// Fill the route fields of `resp` (who answered, the notice, the billing note).
+    static void stamp_route(LlmResponse& resp, const ModelChoice& choice, const ConfigSnapshot& cfg,
+                            const QString& fallback_notice);
+    /// A harness route: HarnessChatBackend::complete() with the chat's channels
+    /// (text, thinking, tool cards) mapped onto `on_chunk` (may be empty).
+    /// LlmHarnessBridge.cpp.
+    LlmResponse do_harness_request(const QString& user_message, const std::vector<ConversationMessage>& history,
+                                   const StreamCallback& on_chunk);
     /// Load `snap` into this (private, per-request) instance and mark it loaded so
     /// its ensure_config() never re-reads the database.
     void adopt_config_snapshot(const ConfigSnapshot& snap);
@@ -293,7 +401,24 @@ class LlmService : public QObject {
         QString error;
         bool cancelled = false; // aborted by cancel_active_request()
         int retry_after_s = 0;  // Retry-After header (seconds), 0 when absent
+        bool session_expired = false; // non-2xx carrying `X-Session-Expired: true` (Fincept API)
     };
+
+    /// The Fincept key and X-Session-Token as of AuthManager's (GUI) thread.
+    /// Requests run on worker threads, where reading AuthManager::session()
+    /// races the GUI thread clearing it (handle_unauthorized, logout); this copy
+    /// is written only on that thread and read under its own lock (LlmService.cpp).
+    struct FinceptCredentials {
+        QString api_key;
+        QString session_token;
+    };
+    static FinceptCredentials fincept_credentials();
+
+    /// A Fincept API request (never a third-party provider) was refused with
+    /// 401/403: report it (report_fincept_refusal, LlmErrors.h), stop sending a
+    /// session token the server says is dead, and return the error to show.
+    /// `sent_session_token` is the X-Session-Token the request carried.
+    static QString handle_fincept_refusal(const HttpResult& r, const QString& sent_session_token);
     /// The calling thread's long-lived QNetworkAccessManager (created on first use,
     /// deleted when the thread exits). Requests from the same thread reuse its
     /// keep-alive TCP/TLS connections instead of a fresh handshake per request.

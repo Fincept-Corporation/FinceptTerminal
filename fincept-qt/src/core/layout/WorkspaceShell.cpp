@@ -159,17 +159,17 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind, cons
         }
     }
 
-    LOG_INFO(kShellTag, QString("capture: '%1' (uuid=%2) → %3 frames, %4 variants, topology=%5")
-                            .arg(name, w.id.to_string())
-                            .arg(w.frames.size())
-                            .arg(w.variants.size())
-                            .arg(current.value));
+    LOG_DEBUG(kShellTag, QString("capture: '%1' (uuid=%2) → %3 frames, %4 variants, topology=%5")
+                             .arg(name, w.id.to_string())
+                             .arg(w.frames.size())
+                             .arg(w.variants.size())
+                             .arg(current.value));
     return w;
 }
 
 int WorkspaceShell::apply(const Workspace& workspace) {
     if (workspace.frames.isEmpty()) {
-        LOG_INFO(kShellTag, QString("apply: workspace '%1' has no frames — nothing to do").arg(workspace.name));
+        LOG_DEBUG(kShellTag, QString("apply: workspace '%1' has no frames — nothing to do").arg(workspace.name));
         return 0;
     }
 
@@ -180,10 +180,10 @@ int WorkspaceShell::apply(const Workspace& workspace) {
     const MonitorTopologyKey current = fincept::MonitorTopology::current_key();
     const WorkspaceVariant* variant = WorkspaceMatcher::match(workspace, current);
 
-    LOG_INFO(kShellTag, QString("apply: '%1' (uuid=%2) → %3 frames; matched variant: %4")
-                            .arg(workspace.name, workspace.id.to_string())
-                            .arg(workspace.frames.size())
-                            .arg(variant ? variant->topology.value : QStringLiteral("(none)")));
+    LOG_DEBUG(kShellTag, QString("apply: '%1' (uuid=%2) → %3 frames; matched variant: %4")
+                             .arg(workspace.name, workspace.id.to_string())
+                             .arg(workspace.frames.size())
+                             .arg(variant ? variant->topology.value : QStringLiteral("(none)")));
 
     int applied = 0;
     auto frames_now = fincept::WindowRegistry::instance().frames();
@@ -260,7 +260,10 @@ int WorkspaceShell::apply(const Workspace& workspace) {
             ++applied;
     }
 
-    LOG_INFO(kShellTag, QString("apply: %1/%2 frames restored cleanly").arg(applied).arg(workspace.frames.size()));
+    LOG_INFO(kShellTag, logf("Workspace applied", {{"name", workspace.name},
+                                                   {"kind", workspace.kind},
+                                                   {"frames_restored", applied},
+                                                   {"frames_total", workspace.frames.size()}}));
 
     // Restore SymbolContext if the workspace carried one. Empty / missing
     // is fine (older workspaces saved before Phase 5 shipped).
@@ -271,7 +274,8 @@ int WorkspaceShell::apply(const Workspace& workspace) {
         if (err.error == QJsonParseError::NoError && ctx_doc.isObject())
             SymbolContext::instance().from_json(ctx_doc.object());
         else
-            LOG_WARN(kShellTag, QString("apply: symbol_context parse failed: %1").arg(err.errorString()));
+            LOG_WARN(kShellTag, logf("Workspace symbol context could not be restored",
+                                     {{"name", workspace.name}, {"error", err.errorString()}}));
     }
 
     // Update process-wide state so the title bar + toolbar see the current
@@ -299,11 +303,14 @@ int WorkspaceShell::load_last_or_default() {
         auto wr = LayoutCatalog::instance().load_workspace(last.value());
         if (wr.is_ok()) {
             const int n = apply(wr.value());
-            LOG_INFO(kShellTag, QString("load_last_or_default: restored '%1' (%2 frames)").arg(wr.value().name).arg(n));
+            LOG_INFO(kShellTag,
+                     logf("Workspace restored", {{"source", "last"}, {"name", wr.value().name}, {"frames", n}}));
             return n;
         }
-        LOG_WARN(kShellTag, QString("load_last_or_default: last_loaded_uuid=%1 unreadable: %2")
-                                .arg(last.value().to_string(), QString::fromStdString(wr.error())));
+        // The error text carries the file path: scrubbed (home folder -> ~).
+        LOG_WARN(kShellTag, logf("Last loaded workspace could not be read, trying the auto snapshot",
+                                 {{"layout", last.value().to_string()},
+                                  {"error", log_scrub(QString::fromStdString(wr.error()))}}));
     }
 
     // Step 2: most recent kind='auto' snapshot from the ring buffer. The
@@ -311,7 +318,7 @@ int WorkspaceShell::load_last_or_default() {
     // we can't fall through any further.
     auto* ring = TerminalShell::instance().snapshot_ring();
     if (!ring) {
-        LOG_INFO(kShellTag, "load_last_or_default: snapshot ring unavailable; first run path");
+        LOG_DEBUG(kShellTag, "load_last_or_default: snapshot ring unavailable; first run path");
         return 0;
     }
     auto snaps = ring->latest_auto(/*limit=*/1);
@@ -326,14 +333,15 @@ int WorkspaceShell::load_last_or_default() {
                 // last_loaded_id (the next user save should be the pin).
                 w.kind = QStringLiteral("auto");
                 const int n = apply(w);
-                LOG_INFO(kShellTag, QString("load_last_or_default: restored auto snapshot (%1 frames)").arg(n));
+                LOG_INFO(kShellTag,
+                         logf("Workspace restored", {{"source", "auto_snapshot"}, {"name", w.name}, {"frames", n}}));
                 return n;
             }
-            LOG_WARN(kShellTag, QString("load_last_or_default: snapshot parse failed: %1").arg(err.errorString()));
+            LOG_WARN(kShellTag, logf("Workspace auto snapshot could not be parsed", {{"error", err.errorString()}}));
         }
     }
 
-    LOG_INFO(kShellTag, "load_last_or_default: nothing to restore (first run / fresh profile)");
+    LOG_DEBUG(kShellTag, "load_last_or_default: nothing to restore (first run / fresh profile)");
     return 0;
 }
 

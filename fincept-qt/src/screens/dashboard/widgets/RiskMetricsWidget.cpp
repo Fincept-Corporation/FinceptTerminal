@@ -1,190 +1,114 @@
 #include "screens/dashboard/widgets/RiskMetricsWidget.h"
 
+#include "core/market/MarketProfile.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
-#include "screens/dashboard/widgets/DashboardFormat.h"
+#include "screens/dashboard/widgets/RegionPin.h"
+#include "services/markets/MarketDataService.h"
+#include "ui/charts/TimeSeriesChart.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/KpiStrip.h"
+#include "ui/widgets/StatTile.h"
 
-#include <QFrame>
-#include <QHBoxLayout>
+#include <QLabel>
 
 #include <cmath>
 
 namespace fincept::screens::widgets {
 
-// Symbols: VIX + SPY/QQQ/IWM/TLT for correlation proxies + 6 volatile stocks
-static const QStringList kRiskSymbols = {"^VIX", "SPY", "QQQ",  "IWM",  "TLT", "NVDA",
-                                         "TSLA", "AMD", "META", "PLTR", "COIN"};
+namespace {
 
-RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget(tr("RISK METRICS"), parent, ui::colors::NEGATIVE()) {
-    auto* vl = content_layout();
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(6);
+namespace mr_fmt = fincept::ui::formatting;
+using fincept::services::MarketDataService;
 
-    // ── VIX section ──
-    vix_card_ = new QWidget(this);
-    auto* vcl = new QVBoxLayout(vix_card_);
-    vcl->setContentsMargins(10, 8, 10, 8);
-    vcl->setSpacing(4);
+constexpr const char* kMrVix = "^VIX";
+constexpr const char* kMrVix3m = "^VIX3M";
 
-    auto* vix_header = new QHBoxLayout;
-    vix_header_lbl_ = new QLabel(tr("VIX FEAR GAUGE"));
-    vix_header->addWidget(vix_header_lbl_);
-    vix_header->addStretch();
-
-    vix_regime_ = new QLabel("--");
-    vix_header->addWidget(vix_regime_);
-    vcl->addLayout(vix_header);
-
-    vix_value_ = new QLabel("--");
-    vcl->addWidget(vix_value_);
-
-    // VIX gradient bar (0-40 range, 5 segments) — uses theme tokens
-    auto* bar_row = new QWidget(this);
-    bar_row->setFixedHeight(6);
-    auto* brl = new QHBoxLayout(bar_row);
-    brl->setContentsMargins(0, 0, 0, 0);
-    brl->setSpacing(1);
-    for (int i = 0; i < 5; ++i) {
-        auto* seg = new QFrame;
-        vix_bar_segments_.append(seg);
-        brl->addWidget(seg, 1);
+/// Volatility regime of a 30-day implied-vol gauge (VIX-style levels).
+QString mr_regime(double level, ui::StatTile::Tone* tone) {
+    if (level < 15) {
+        *tone = ui::StatTile::Tone::Neutral;
+        return QCoreApplication::translate("fincept::screens::widgets::RiskMetricsWidget", "Calm (< 15)");
     }
-    vcl->addWidget(bar_row);
-
-    // Bar position indicator
-    vix_bar_fill_ = new QLabel(QString::fromUtf8("\xe2\x96\xb2"));
-    vix_bar_fill_->setAlignment(Qt::AlignLeft);
-    vcl->addWidget(vix_bar_fill_);
-
-    vl->addWidget(vix_card_);
-
-    // ── Section separator ──
-    sep1_ = new QFrame;
-    sep1_->setFixedHeight(1);
-    vl->addWidget(sep1_);
-
-    // ── Volatile stocks section ──
-    stocks_hdr_ = new QLabel(tr("HIGH-BETA STOCKS"));
-    vl->addWidget(stocks_hdr_);
-
-    static const QStringList kVolatile = {"NVDA", "TSLA", "AMD", "META", "PLTR", "COIN"};
-    for (const auto& sym : kVolatile) {
-        auto* row = new QWidget(this);
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 2, 0, 2);
-
-        StockRisk sr;
-        sr.symbol = new QLabel(sym);
-        sr.symbol->setFixedWidth(48);
-        rl->addWidget(sr.symbol);
-
-        sr.chg_pct = new QLabel("--");
-        sr.chg_pct->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rl->addWidget(sr.chg_pct, 1);
-
-        sr.hi_lo = new QLabel("--");
-        sr.hi_lo->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rl->addWidget(sr.hi_lo, 1);
-
-        stock_rows_.append(sr);
-        vl->addWidget(row);
+    if (level < 20) {
+        *tone = ui::StatTile::Tone::Neutral;
+        return QCoreApplication::translate("fincept::screens::widgets::RiskMetricsWidget", "Normal (15–20)");
     }
+    if (level < 30) {
+        *tone = ui::StatTile::Tone::Warning;
+        return QCoreApplication::translate("fincept::screens::widgets::RiskMetricsWidget", "Elevated (20–30)");
+    }
+    *tone = ui::StatTile::Tone::Warning;
+    return QCoreApplication::translate("fincept::screens::widgets::RiskMetricsWidget", "Stress (≥ 30)");
+}
 
-    // ── Correlation proxies ──
-    sep2_ = new QFrame;
-    sep2_->setFixedHeight(1);
-    vl->addWidget(sep2_);
+} // namespace
 
-    corr_hdr_ = new QLabel(tr("SPREAD PROXIES"));
-    vl->addWidget(corr_hdr_);
+RiskMetricsWidget::RiskMetricsWidget(const QJsonObject& cfg, QWidget* parent)
+    : BaseWidget(tr("MARKET RISK"), parent, ui::colors::WARNING()), region_pin_(region_pin_from(cfg)) {
+    kpis_ = new ui::KpiStrip(this);
+    kpis_->set_spacing(4);
+    kpis_->add_tile("gauge", tr("VOL INDEX"))->set_compact(true);
+    kpis_->add_tile("rv", tr("REALISED VOL 20D"))->set_compact(true);
+    kpis_->add_tile("vrp", tr("IMPLIED − REALISED"))->set_compact(true);
+    kpis_->add_tile("dd", tr("FROM 52W HIGH"))->set_compact(true);
+    kpis_->add_tile("term", tr("VIX / VIX3M"))->set_compact(true);
+    content_layout()->addWidget(kpis_);
 
-    auto make_spread_row = [&](const QString& label, QLabel*& out) {
-        auto* row = new QWidget(this);
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 2, 0, 2);
-        auto* lbl = new QLabel(label);
-        spread_labels_.append(lbl);
-        rl->addWidget(lbl);
-        rl->addStretch();
-        out = new QLabel("--");
-        rl->addWidget(out);
-        vl->addWidget(row);
-    };
+    chart_ = new ui::TimeSeriesChart(this);
+    chart_->set_show_mode_buttons(false);
+    chart_->set_range_presets({"3M", "6M", "1Y"});
+    chart_->set_export_name(QStringLiteral("volatility_gauge"));
+    chart_->setMinimumHeight(70);
+    content_layout()->addWidget(chart_, 1);
 
-    // Differences of two daily % returns — percentage points, not percent.
-    make_spread_row(tr("SPY − QQQ day return"), spy_qqq_spread_);
-    make_spread_row(tr("SPY − IWM day return"), spy_iwm_spread_);
-    make_spread_row(tr("SPY − TLT day return"), equity_bond_lbl_);
-    corr_hdr_->setToolTip(tr("Today's return of the first ETF minus the second, in percentage points (pp)."));
+    footer_ = new QLabel(this);
+    footer_->setWordWrap(true);
+    content_layout()->addWidget(footer_);
 
-    vl->addStretch();
-
-    connect(this, &BaseWidget::refresh_requested, this, &RiskMetricsWidget::refresh_data);
-
-    apply_styles();
+    connect(this, &BaseWidget::refresh_requested, this,
+            [this]() { datahub::DataHub::instance().request(topics(), /*force=*/true); });
+    connect(&core::market::MarketProfileStore::instance(), &core::market::MarketProfileStore::profile_changed, this,
+            [this]() {
+                if (region_pin_.isEmpty())
+                    reload_region();
+            });
+    on_theme_changed();
     set_loading(true);
 }
 
-void RiskMetricsWidget::apply_styles() {
-    // Theme change: the data-driven colours below must be re-applied next tick.
-    for (QWidget* w : {static_cast<QWidget*>(vix_value_), static_cast<QWidget*>(vix_regime_),
-                       static_cast<QWidget*>(vix_bar_fill_), static_cast<QWidget*>(spy_qqq_spread_),
-                       static_cast<QWidget*>(spy_iwm_spread_), static_cast<QWidget*>(equity_bond_lbl_)})
-        reset_css_cache(w);
-    for (const auto& sr : stock_rows_)
-        reset_css_cache(sr.chg_pct);
-    vix_card_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
-    vix_header_lbl_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                       .arg(ui::colors::TEXT_TERTIARY()));
-    vix_regime_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY()));
-    vix_value_->setStyleSheet(QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_TERTIARY()));
-    vix_bar_fill_->setStyleSheet(
-        QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-
-    // VIX gradient bar: green → yellow-green → amber → orange → red (theme-aware)
-    if (vix_bar_segments_.size() == 5) {
-        vix_bar_segments_[0]->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
-        vix_bar_segments_[1]->setStyleSheet(
-            QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE_DIM()));
-        vix_bar_segments_[2]->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::WARNING()));
-        vix_bar_segments_[3]->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::AMBER()));
-        vix_bar_segments_[4]->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
-    }
-
-    sep1_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    sep2_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-
-    stocks_hdr_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY()));
-    corr_hdr_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                 .arg(ui::colors::TEXT_TERTIARY()));
-
-    for (const auto& sr : stock_rows_) {
-        sr.symbol->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                     .arg(ui::colors::TEXT_PRIMARY()));
-        sr.chg_pct->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                      .arg(ui::colors::TEXT_TERTIARY()));
-        sr.hi_lo->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    }
-
-    for (auto* lbl : spread_labels_)
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
-
-    spy_qqq_spread_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                       .arg(ui::colors::TEXT_PRIMARY()));
-    spy_iwm_spread_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                       .arg(ui::colors::TEXT_PRIMARY()));
-    equity_bond_lbl_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                        .arg(ui::colors::TEXT_PRIMARY()));
+void RiskMetricsWidget::reload_region() {
+    quotes_.clear();
+    stats_.clear();
+    gauge_hist_.clear();
+    untrack_topics();
+    if (isVisible())
+        hub_subscribe_all();
 }
 
-void RiskMetricsWidget::on_theme_changed() {
-    apply_styles();
+QJsonObject RiskMetricsWidget::config() const {
+    QJsonObject o;
+    store_region_pin(o, region_pin_);
+    return o;
+}
+
+void RiskMetricsWidget::apply_config(const QJsonObject& cfg) {
+    const QString pin = region_pin_from(cfg);
+    if (pin == region_pin_)
+        return;
+    region_pin_ = pin;
+    reload_region();
+}
+
+QStringList RiskMetricsWidget::topics() const {
+    QStringList t{MarketDataService::quote_topic(bench_), MarketDataService::performance_history_topic(bench_),
+                  MarketDataService::quote_topic(gauge_), MarketDataService::performance_history_topic(gauge_)};
+    if (has_term_)
+        t << MarketDataService::quote_topic(QString::fromLatin1(kMrVix))
+          << MarketDataService::quote_topic(QString::fromLatin1(kMrVix3m));
+    t.removeDuplicates();
+    return t;
 }
 
 void RiskMetricsWidget::showEvent(QShowEvent* e) {
@@ -195,145 +119,168 @@ void RiskMetricsWidget::showEvent(QShowEvent* e) {
 
 void RiskMetricsWidget::hideEvent(QHideEvent* e) {
     BaseWidget::hideEvent(e);
-    if (hub_active_)
-        hub_unsubscribe_all();
-}
-
-void RiskMetricsWidget::refresh_data() {
-    auto& hub = datahub::DataHub::instance();
-    QStringList topics;
-    topics.reserve(kRiskSymbols.size());
-    for (const auto& sym : kRiskSymbols)
-        topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
+    hub_active_ = false;
 }
 
 void RiskMetricsWidget::hub_subscribe_all() {
+    const auto& p = tile_profile(region_pin_);
+    bench_ = p.benchmark;
+    gauge_ = p.volatility.value(0, QString::fromLatin1(kMrVix));
+    // Implied vs realised only compares like with like.
+    gauge_matches_bench_ = (gauge_ == QLatin1String("^VIX") && bench_ == QLatin1String("^GSPC")) ||
+                           (gauge_ == QLatin1String("^INDIAVIX") && bench_ == QLatin1String("^NSEI"));
+    has_term_ = p.volatility.contains(QString::fromLatin1(kMrVix3m));
+    set_title(tr("MARKET RISK · %1").arg(core::market::market_profile_name(p).toUpper()));
+
     auto& hub = datahub::DataHub::instance();
-    set_loading_progress(row_cache_.size(), kRiskSymbols.size());
-    for (const auto& sym : kRiskSymbols) {
-        const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+    hub.unsubscribe(this);
+    const QStringList all = topics();
+    track_topics(all, /*drive_loading_overlay=*/true);
+    QStringList quote_syms{bench_, gauge_};
+    if (has_term_)
+        quote_syms << QString::fromLatin1(kMrVix) << QString::fromLatin1(kMrVix3m);
+    quote_syms.removeDuplicates();
+    for (const QString& sym : quote_syms) {
+        const QString t = MarketDataService::quote_topic(sym);
+        hub.subscribe(this, t, [this, sym, t](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
-            row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading_progress(row_cache_.size(), kRiskSymbols.size());
-            // One redraw per delivery burst, not one per symbol.
-            schedule_render([this]() { rebuild_from_cache(); });
+            quotes_.insert(sym, v.value<services::QuoteData>());
+            note_topic_value(t);
+            schedule_render([this]() { render(); });
+        });
+    }
+    for (const QString& sym : QStringList{bench_, gauge_}) {
+        const QString t = MarketDataService::performance_history_topic(sym);
+        hub.subscribe(this, t, [this, sym, t](const QVariant& v) {
+            if (!v.canConvert<QVector<services::HistoryPoint>>())
+                return;
+            const auto bars = v.value<QVector<services::HistoryPoint>>();
+            if (bars.isEmpty()) {
+                note_topic_error(t, tr("No daily history for %1").arg(sym));
+                return;
+            }
+            stats_.insert(sym, services::compute_performance(bars));
+            if (sym == gauge_) {
+                gauge_hist_.clear();
+                for (const auto& b : bars)
+                    if (b.close > 0)
+                        gauge_hist_.append(QPointF(double(b.timestamp) * 1000.0, b.close));
+                render_chart();
+            }
+            note_topic_value(t);
+            schedule_render([this]() { render(); });
         });
     }
     hub_active_ = true;
 }
 
-void RiskMetricsWidget::hub_unsubscribe_all() {
-    datahub::DataHub::instance().unsubscribe(this);
-    hub_active_ = false;
+void RiskMetricsWidget::on_topic_errors_changed() {
+    schedule_render([this]() { render(); });
 }
 
-void RiskMetricsWidget::rebuild_from_cache() {
-    QVector<services::QuoteData> quotes;
-    quotes.reserve(row_cache_.size());
-    for (const auto& sym : kRiskSymbols) {
-        auto it = row_cache_.constFind(sym);
-        if (it != row_cache_.constEnd())
-            quotes.append(it.value());
-    }
-    if (!quotes.isEmpty())
-        populate(quotes);
-}
-
-void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
-    QMap<QString, const services::QuoteData*> map;
-    for (const auto& q : quotes)
-        map[q.symbol] = &q;
-
-    // VIX
-    if (map.contains("^VIX")) {
-        double vix = map["^VIX"]->price;
-        vix_value_->setText(QString::number(vix, 'f', 2));
-        QString regime, color;
-        if (vix < 15) {
-            regime = tr("LOW VOLATILITY");
-            color = ui::colors::POSITIVE();
-        } else if (vix < 20) {
-            regime = tr("NORMAL");
-            color = ui::colors::TEXT_PRIMARY();
-        } else if (vix < 30) {
-            regime = tr("ELEVATED");
-            color = ui::colors::WARNING();
-        } else if (vix < 40) {
-            regime = tr("HIGH STRESS");
-            color = ui::colors::NEGATIVE();
-        } else {
-            regime = tr("EXTREME FEAR");
-            color = ui::colors::NEGATIVE();
+void RiskMetricsWidget::render() {
+    // Gauge level + regime
+    if (auto* t = kpis_->tile("gauge")) {
+        t->set_label(gauge_ == QLatin1String("^INDIAVIX") ? tr("INDIA VIX") : tr("VIX"));
+        const auto q = quotes_.constFind(gauge_);
+        if (q != quotes_.constEnd() && q->price > 0) {
+            ui::StatTile::Tone tone = ui::StatTile::Tone::Neutral;
+            t->set_value(mr_fmt::number(q->price, 2));
+            t->set_sub_label(mr_regime(q->price, &tone));
+            t->set_tone(tone);
+            // A rising fear gauge is bad news: invert the delta colours.
+            t->set_delta_inverted(true);
+            t->set_delta(q->change_pct);
+            t->set_state(ui::StatTile::State::Normal);
+        } else if (!topic_error(MarketDataService::quote_topic(gauge_)).isEmpty()) {
+            t->set_state(ui::StatTile::State::Error, topic_error(MarketDataService::quote_topic(gauge_)));
         }
-        set_css_cached(vix_value_,
-                       QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;").arg(color));
-        vix_regime_->setText(regime);
-        set_css_cached(vix_regime_,
-                       QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(color));
-
-        // Marker on the 5-segment 0-40 bar. Positioned with a contents margin
-        // from the bar's real width (was a hard-coded 140 px inside a
-        // stylesheet, re-parsed on every tick and wrong at any other size).
-        const double pct = qBound(0.0, vix / 40.0, 1.0);
-        const int bar_w = vix_bar_fill_->width() > 12 ? vix_bar_fill_->width() - 8 : 140;
-        vix_bar_fill_->setContentsMargins(static_cast<int>(pct * bar_w), 0, 0, 0);
-        set_css_cached(vix_bar_fill_, QString("color: %1; font-size: 8px; background: transparent;").arg(color));
     }
-
-    // High-beta stocks
-    static const QStringList kVolatile = {"NVDA", "TSLA", "AMD", "META", "PLTR", "COIN"};
-    for (int i = 0; i < kVolatile.size() && i < stock_rows_.size(); ++i) {
-        const QString& sym = kVolatile[i];
-        if (!map.contains(sym))
-            continue;
-        const auto& q = *map[sym];
-
-        double chg = q.change_pct;
-        QString chg_str = QString("%1%2%").arg(chg >= 0 ? "+" : "").arg(chg, 0, 'f', 2);
-        QString chg_col = chg > 0   ? ui::colors::POSITIVE()
-                          : chg < 0 ? ui::colors::NEGATIVE()
-                                    : ui::colors::TEXT_PRIMARY();
-        stock_rows_[i].chg_pct->setText(chg_str);
-        set_css_cached(stock_rows_[i].chg_pct,
-                       QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(chg_col));
-
-        // Day range. Was printed with 0 decimals ("H31 L29" for a $30 stock).
-        if (q.high > 0 && q.low > 0)
-            stock_rows_[i].hi_lo->setText(
-                QString("H %1  L %2").arg(dash_fmt::price(q.high, sym), dash_fmt::price(q.low, sym)));
+    const auto bs = stats_.constFind(bench_);
+    const QString bench_name = core::market::any_profile_label_for(bench_).isEmpty()
+                                   ? bench_
+                                   : core::market::any_profile_label_for(bench_);
+    if (auto* t = kpis_->tile("rv")) {
+        if (bs != stats_.constEnd() && std::isfinite(bs->volatility_20d_pct)) {
+            t->set_value(mr_fmt::pct(bs->volatility_20d_pct, 1, false));
+            t->set_sub_label(bench_name);
+            t->set_tooltip_text(tr("Annualised standard deviation of the last 20 daily log returns of %1").arg(bench_name));
+        } else {
+            t->set_value(mr_fmt::placeholder());
+        }
     }
+    if (auto* t = kpis_->tile("vrp")) {
+        t->setVisible(gauge_matches_bench_);
+        const auto q = quotes_.constFind(gauge_);
+        if (gauge_matches_bench_ && q != quotes_.constEnd() && q->price > 0 && bs != stats_.constEnd() &&
+            std::isfinite(bs->volatility_20d_pct)) {
+            const double spread = q->price - bs->volatility_20d_pct;
+            t->set_value(mr_fmt::pp(spread, 1));
+            t->set_tone(spread < 0 ? ui::StatTile::Tone::Warning : ui::StatTile::Tone::Neutral);
+            t->set_tooltip_text(tr("30-day implied volatility minus 20-day realised volatility of %1. Negative = "
+                                   "the market is realising more volatility than options price in.")
+                                    .arg(bench_name));
+        } else {
+            t->set_value(mr_fmt::placeholder());
+        }
+    }
+    if (auto* t = kpis_->tile("dd")) {
+        if (bs != stats_.constEnd() && std::isfinite(bs->from_52w_high_pct)) {
+            t->set_value(mr_fmt::pct(bs->from_52w_high_pct, 1));
+            t->set_sub_label(bench_name);
+            t->set_tone(bs->from_52w_high_pct <= -10 ? ui::StatTile::Tone::Warning : ui::StatTile::Tone::Neutral);
+            t->set_tooltip_text(tr("%1 vs its 52-week high (%2). −10 % is a correction, −20 % a bear market.")
+                                    .arg(bench_name, mr_fmt::number(bs->high_52w, 2)));
+        } else {
+            t->set_value(mr_fmt::placeholder());
+        }
+    }
+    if (auto* t = kpis_->tile("term")) {
+        t->setVisible(has_term_);
+        const auto a = quotes_.constFind(QString::fromLatin1(kMrVix));
+        const auto b = quotes_.constFind(QString::fromLatin1(kMrVix3m));
+        if (has_term_ && a != quotes_.constEnd() && b != quotes_.constEnd() && a->price > 0 && b->price > 0) {
+            const double ratio = a->price / b->price;
+            t->set_value(mr_fmt::number(ratio, 2));
+            t->set_sub_label(ratio >= 1.0 ? tr("Backwardation") : tr("Contango"));
+            t->set_tone(ratio >= 1.0 ? ui::StatTile::Tone::Warning : ui::StatTile::Tone::Neutral);
+            t->set_tooltip_text(tr("1-month over 3-month implied volatility. Above 1 the curve is inverted — "
+                                   "near-term stress priced above the longer term."));
+        } else {
+            t->set_value(mr_fmt::placeholder());
+        }
+    }
+    footer_->setText(tr("Gauge %1 · benchmark %2 · regime bands are VIX-scale levels").arg(gauge_, bench_));
+}
 
-    // Spread proxies
-    auto spread_str = [](double a, double b) -> QString { return dash_fmt::signed_pp(a - b); };
-    auto spread_color = [](double a, double b) -> QString {
-        double diff = a - b;
-        return diff > 0 ? ui::colors::POSITIVE() : diff < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
-    };
+void RiskMetricsWidget::render_chart() {
+    chart_->clear();
+    chart_->clear_annotations();
+    if (gauge_hist_.size() < 2) {
+        chart_->set_state(ui::TimeSeriesChart::State::Empty, tr("No history"));
+        return;
+    }
+    ui::TimeSeriesChart::SeriesSpec s;
+    s.name = gauge_;
+    s.points = gauge_hist_;
+    s.style = ui::TimeSeriesChart::Style::Line;
+    s.color = ui::ChartColorRole::Warning;
+    chart_->add_series(s);
+    chart_->add_hline(20.0, tr("20"), ui::ChartColorRole::Muted);
+    chart_->add_hline(30.0, tr("30"), ui::ChartColorRole::Warning);
+    chart_->set_state(ui::TimeSeriesChart::State::Ready);
+}
 
-    if (map.contains("SPY") && map.contains("QQQ")) {
-        spy_qqq_spread_->setText(spread_str(map["SPY"]->change_pct, map["QQQ"]->change_pct));
-        set_css_cached(spy_qqq_spread_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                            .arg(spread_color(map["SPY"]->change_pct, map["QQQ"]->change_pct)));
-    }
-    if (map.contains("SPY") && map.contains("IWM")) {
-        spy_iwm_spread_->setText(spread_str(map["SPY"]->change_pct, map["IWM"]->change_pct));
-        set_css_cached(spy_iwm_spread_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                            .arg(spread_color(map["SPY"]->change_pct, map["IWM"]->change_pct)));
-    }
-    if (map.contains("SPY") && map.contains("TLT")) {
-        equity_bond_lbl_->setText(spread_str(map["SPY"]->change_pct, map["TLT"]->change_pct));
-        set_css_cached(equity_bond_lbl_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                             .arg(spread_color(map["SPY"]->change_pct, map["TLT"]->change_pct)));
-    }
+void RiskMetricsWidget::on_theme_changed() {
+    set_css_cached(footer_, QString("color:%1;font-size:%2px;padding:0 6px 2px 6px;background:transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::fonts::px(-4)));
 }
 
 void RiskMetricsWidget::retranslateUi() {
     BaseWidget::retranslateUi();
-    set_title(tr("RISK METRICS"));
-    rebuild_from_cache(); // re-renders header/regime/section labels in the new language
+    render();
 }
 
 } // namespace fincept::screens::widgets

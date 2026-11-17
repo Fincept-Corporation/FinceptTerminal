@@ -184,4 +184,14 @@ QStringList supported_functions();
 /// number that already is a serial. Returns false when `v` is not a date.
 bool date_serial(const Value& v, double* serial);
 
+/// Excel serial of text that is EXACTLY an ISO date, date-time or time — the form
+/// the xlsx import gives date cells ("2024-01-15", "2024-01-15 09:30:00",
+/// "09:30:00"). Arithmetic and aggregates read such a cell as that serial, as
+/// Excel reads its dates. False for any other text.
+bool iso_text_serial(const QString& text, double* serial);
+
+/// ISO text of an Excel serial date ("2024-01-15", with " HH:mm:ss" when it has
+/// a time part) — how a date result is shown.
+QString serial_date_text(double serial);
+
 } // namespace fincept::screens::formula

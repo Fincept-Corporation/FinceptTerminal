@@ -34,6 +34,8 @@ class NotifToast : public QWidget {
   private:
     void reposition();
     void dismiss();
+    /// TOAST_W x TOAST_H at the default font size, scaled with the user's font.
+    void apply_size();
 
     QLabel* level_dot_ = nullptr;
     QLabel* title_lbl_ = nullptr;

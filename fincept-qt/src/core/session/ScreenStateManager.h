@@ -21,6 +21,20 @@ namespace fincept {
 ///
 /// All writes are non-blocking: they are dispatched via QtConcurrent::run()
 /// so the UI thread is never stalled waiting on SQLite.
+///
+/// Ordering / crash safety (see ScreenStatePolicy.h):
+///   * a screen restored or saved under a panel instance id is BOUND to it, and
+///     its notify_changed() saves then go to that panel's own row (plus the
+///     screen-type row, tagged with the writer) — so the row a restore reads
+///     first is always the one every edit updates;
+///   * every write carries a dispatch sequence number and a write is skipped if
+///     a later one already landed on that row, so pool threads finishing out of
+///     order can never put older state on top of newer;
+///   * a restore compares the panel row with the screen-type row and uses the
+///     newer copy (never writes anything itself);
+///   * the debounce restarts on every change but never delays a save by more
+///     than ~2.5 s, bounding what an abnormal exit can lose. Each row write is
+///     a single SQLite statement (atomic).
 class ScreenStateManager : public QObject {
     Q_OBJECT
   public:
@@ -66,10 +80,13 @@ class ScreenStateManager : public QObject {
     // (IWorkspaceParticipant, etc.) and for the migration window where
     // some screens haven't been wired to their PanelHandle yet.
 
-    /// Restore state into `screen` under the given instance UUID. Looks up
-    /// the row in `screen_state` by `instance_uuid`. Falls back to the
-    /// screen_key path if no UUID-keyed row exists yet — handy during the
-    /// migration window so existing screens don't lose their state.
+    /// Restore state into `screen` under the given instance UUID and bind the
+    /// screen to that UUID (its later notify_changed() saves go to this row).
+    /// With `fallback_to_screen_key`, the screen-type row is a candidate too:
+    /// it is used when the panel has no row of its own yet (first open /
+    /// migration) or when it is NEWER than the panel's row and was written by
+    /// this panel or an older build — the newest saved state always wins
+    /// (ScreenStatePolicy.h). Reads only; never writes.
     void restore_by_uuid(screens::IStatefulScreen* screen, const QString& instance_uuid,
                          bool fallback_to_screen_key = true);
 
@@ -97,19 +114,20 @@ class ScreenStateManager : public QObject {
     void save_now_sync(screens::IStatefulScreen* screen);
     void save_now_by_uuid_sync(screens::IStatefulScreen* screen, const QString& instance_uuid);
 
+    /// Write every still-debounced change now, on the calling thread. Shutdown
+    /// paths only (DockScreenRouter::flush_all_screen_states) — covers screens
+    /// that notified a change but are not open dock panels.
+    void flush_pending_sync();
+
   private:
     explicit ScreenStateManager(QObject* parent = nullptr);
 
     /// Flush all screens in pending_saves_ to cache.db.
     void flush_pending();
 
-    /// Perform the actual async SQLite write for one screen.
-    static void write_async(const QString& key, const QVariantMap& state, int version, const QString& session_id);
-
-    /// Phase 4b: UUID-keyed async write. Stores under instance_uuid
-    /// (primary lookup) while also recording screen_key for diagnostics.
-    static void write_async_by_uuid(const QString& instance_uuid, const QString& screen_key, const QVariantMap& state,
-                                    int version, const QString& session_id);
+    /// (Re)start the debounce timer, capped so a stream of changes cannot
+    /// postpone the save indefinitely.
+    void arm_debounce();
 
     QHash<QString, screens::IStatefulScreen*> pending_saves_;      // key → screen ptr
     QHash<QString, screens::IStatefulScreen*> pending_uuid_saves_; // instance_uuid → screen ptr

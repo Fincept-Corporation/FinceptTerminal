@@ -38,6 +38,9 @@ class PortfolioStatusBar : public QWidget {
     void update_clock();
     void retranslateUi();
     void render_notes();
+    /// Text of the positions / NAV / P&L labels and the notes from last_summary_
+    /// (no styling: also the format-change re-render).
+    void render_summary_text();
 
     QLabel* brand_label_ = nullptr;
     /// Data-quality notes: an FX warning (holdings priced in another currency

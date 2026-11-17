@@ -78,14 +78,23 @@ class ConvertibleBondAnalyzer(AlternativeInvestmentBase):
             Straight bond value
         """
         annual_coupon = self.coupon_rate * self.face_value
+        # The maturity arrives as a Decimal from the form (range() needs an int: the old loop failed
+        # with "'decimal.Decimal' object cannot be interpreted as an integer"). Annual coupons are paid
+        # at maturity, maturity - 1, ... (> 0), so a fractional maturity (5.5 years) is valued too.
+        maturity = Decimal(str(self.maturity_years))
+        if maturity <= 0:
+            return self.face_value
+        base = Decimal('1') + Decimal(str(market_yield))
 
         # Present value of coupons
         pv_coupons = Decimal('0')
-        for t in range(1, self.maturity_years + 1):
-            pv_coupons += annual_coupon / ((Decimal('1') + market_yield) ** Decimal(str(t)))
+        t = maturity
+        while t > 0:
+            pv_coupons += annual_coupon / (base ** t)
+            t -= Decimal('1')
 
         # Present value of principal
-        pv_principal = self.face_value / ((Decimal('1') + market_yield) ** Decimal(str(self.maturity_years)))
+        pv_principal = self.face_value / (base ** maturity)
 
         return pv_coupons + pv_principal
 
@@ -165,7 +174,8 @@ class ConvertibleBondAnalyzer(AlternativeInvestmentBase):
             'primary_floor': 'Bond' if straight_bond_value > conversion_value else 'Equity'
         }
 
-    def calculate_upside_participation(self, stock_price_scenarios: List[Decimal]) -> Dict[str, Any]:
+    def calculate_upside_participation(self, stock_price_scenarios: List[Decimal],
+                                       market_yield: Optional[Decimal] = None) -> Dict[str, Any]:
         """
         Calculate upside participation vs direct equity
 
@@ -174,6 +184,9 @@ class ConvertibleBondAnalyzer(AlternativeInvestmentBase):
 
         Args:
             stock_price_scenarios: List of potential stock prices
+            market_yield: Yield of the issuer's straight debt. When given, the convertible is worth at
+                least its straight-bond value (the bond floor) in every scenario, so the downside is
+                cushioned; without it the convertible is valued at conversion value only.
 
         Returns:
             Upside participation analysis
@@ -181,17 +194,18 @@ class ConvertibleBondAnalyzer(AlternativeInvestmentBase):
         results = []
 
         initial_stock_price = self.stock_price
-        initial_conversion_value = self.calculate_conversion_value(initial_stock_price)
+        floor = self.calculate_straight_bond_value(market_yield) if market_yield is not None else None
 
         for future_stock_price in stock_price_scenarios:
             # Stock return
             stock_return = (future_stock_price - initial_stock_price) / initial_stock_price
 
-            # Convertible bond value (assume converts if in-the-money)
+            # Convertible value: converts when the shares are worth more than the bond floor
             future_conversion_value = self.calculate_conversion_value(future_stock_price)
+            future_value = max(future_conversion_value, floor) if floor is not None else future_conversion_value
 
             # Convertible return (from current price, not conversion value)
-            convertible_return = (future_conversion_value - self.current_price) / self.current_price
+            convertible_return = (future_value - self.current_price) / self.current_price
 
             # Participation rate
             participation = convertible_return / stock_return if stock_return != 0 else Decimal('0')
@@ -199,20 +213,30 @@ class ConvertibleBondAnalyzer(AlternativeInvestmentBase):
             results.append({
                 'stock_price': float(future_stock_price),
                 'stock_return': float(stock_return),
+                'convertible_value': float(future_value),
                 'convertible_return': float(convertible_return),
                 'participation_rate': float(participation),
                 'upside_captured': float(convertible_return / stock_return) if stock_return > 0 else 0
             })
 
-        # Calculate average participation
-        avg_participation = sum(r['participation_rate'] for r in results) / len(results) if results else 0
+        up = [r['participation_rate'] for r in results if r['stock_return'] > 0]
+        down = [r['participation_rate'] for r in results if r['stock_return'] < 0]
+        # The headline is the share of equity UPSIDE captured (downside "participation" below 1 is the
+        # cushion, not a shortfall, and used to drag this average down).
+        avg_participation = sum(up) / len(up) if up else (
+            sum(r['participation_rate'] for r in results) / len(results) if results else 0)
 
-        return {
+        result = {
             'scenarios': results,
             'average_participation_rate': avg_participation,
             'analysis_criticism': f'Convertibles capture only {avg_participation:.1%} of equity upside on average',
             'interpretation': self._interpret_upside_participation(avg_participation)
         }
+        if down:
+            result['average_downside_participation'] = sum(down) / len(down)
+        if floor is not None:
+            result['bond_floor'] = float(floor)
+        return result
 
     def _interpret_upside_participation(self, participation: float) -> str:
         """Interpret upside participation rate"""

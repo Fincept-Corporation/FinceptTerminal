@@ -1,0 +1,8 @@
+{
+  "harness_version": "2.1.325",
+  "date": "2026-11-17",
+  "command": "claude -p --output-format stream-json --verbose --include-partial-messages --no-session-persistence --restricted --tools \"\" --mcp-config <scratch>/mcp-<run8>.json --strict-mcp-config --allowedTools mcp__fincept__* --permission-mode dontAsk --permission-prompts none --system-prompt <terminal prompt>",
+  "source": "docs",
+  "url": "https://code.claude.com/docs/en/headless",
+  "note": "Synthetic terminal-AI call (thinking + one terminal MCP tool + the answer) built from the documented stream-json / stream_event shapes; not a recording. Used by tst_harness_chat through the fake CLI."
+}

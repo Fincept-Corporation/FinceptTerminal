@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "copilot -p <prompt> --no-ask-user -C <cwd> --deny-tool=write, shell",
+  "source": "docs",
+  "url": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+  "note": "Plain-text answer with terminal escapes and an unterminated last line; the text is invented, the mode (-p, text output) is documented."
+}

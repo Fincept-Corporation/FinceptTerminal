@@ -9,16 +9,21 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('CMC_API_KEY', '')
 BASE_URL = "https://pro-api.coinmarketcap.com/v1"
+SERVICE = "CoinMarketCap"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every Pro API endpoint answers HTTP 401 without a key: say so before any network call.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://pro.coinmarketcap.com/signup", "CMC_API_KEY",
+                              what="a free API key")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
@@ -26,13 +31,15 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "CMC_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    status = data.get("status") if isinstance(data, dict) else None
+    if isinstance(status, dict) and status.get("error_code") and status.get("error_message"):
+        return {"error": f"{SERVICE}: {fc.scrub(status['error_message'], API_KEY)}"}
+    return data
 
 
 def get_listings_latest(limit: str = "100", convert: str = "USD") -> Any:
@@ -108,7 +115,7 @@ def main(args=None):
         limit = args[1] if len(args) > 1 else "10"
         result = get_trending(limit)
 
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

@@ -8,12 +8,14 @@
 //   - DataHub subscribers of `connector:<name>:<command>:<args-hash>` (see
 //     docs/DATAHUB_TOPICS.md).
 //
-// Every call runs `python <script> <command> [args...]` through PythonRunner (never a raw
-// QProcess). Results are parsed and normalised off the GUI thread into a table projection
-// (array of objects -> rows/columns; object -> its main nested array, a dict-of-records, or
-// key/value pairs) plus capped pretty/raw text for display.
+// Every call runs `python fincept_connector.py run <script> <command> [args...]` (the connector
+// contract: one JSON envelope with typed tables or a classified failure code) through PythonRunner
+// (never a raw QProcess). The envelope is parsed off the GUI thread into a TabularResult (one or
+// several typed tables) plus the legacy projection (records + columns) and capped pretty/raw text.
 
 #include "datahub/Producer.h"
+#include "services/data_sources/SourceError.h"
+#include "services/data_sources/TabularData.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -26,6 +28,7 @@
 
 #include <atomic>
 #include <functional>
+#include <memory>
 
 namespace fincept::services::connectors {
 
@@ -36,6 +39,10 @@ struct ConnectorResult {
     QStringList args;
     bool success = false;
     QString error;   ///< failure text (secrets redacted)
+    /// Classified failure: code (missing_key, rate_limited, …), retry_after_s, env keys, docs url.
+    fincept::services::datasources::SourceError failure;
+    /// Every table of the reply with column types (multi-table payloads keep each table by name).
+    fincept::services::datasources::TabularResult tabular;
     QString warning; ///< upstream error embedded in an otherwise-successful payload, if any
 
     QJsonValue data;     ///< full parsed payload (secrets redacted)
@@ -67,6 +74,11 @@ class ConnectorService : public QObject, public fincept::datahub::Producer {
     /// Watchdog for one connector run.
     static constexpr int kRunTimeoutMs = 120 * 1000;
 
+    struct RunOptions {
+        bool force = false;  ///< skip the cache
+        int timeout_ms = 0;  ///< 0 = kRunTimeoutMs
+    };
+
     /// Runs `command` on connector `name`. Returns a request id immediately; the outcome
     /// arrives asynchronously (never inside this call) as result_ready / error_occurred and,
     /// when given, through `cb` — both on this service's thread. Identical in-flight requests
@@ -74,6 +86,12 @@ class ConnectorService : public QObject, public fincept::datahub::Producer {
     /// Safe to call from any thread.
     QString run(const QString& name, const QString& command, const QStringList& args = {}, bool force = false,
                 Callback cb = {});
+    /// run() with options. Safe to call from any thread.
+    QString run_with(const QString& name, const QString& command, const QStringList& args, const RunOptions& options,
+                     Callback cb = {});
+    /// Stop waiting for `request_id`: its callback gets a cancelled failure at once; the Python
+    /// process is killed when no other identical request still waits for it. Any thread.
+    void cancel(const QString& request_id);
 
     /// Recomputes env-key presence for the whole catalogue off the GUI thread; emits
     /// key_status_changed() when done.
@@ -114,6 +132,7 @@ class ConnectorService : public QObject, public fincept::datahub::Producer {
         QVector<Waiter> waiters;
         qint64 started_ms = 0;
         int ttl_sec = 0;
+        std::shared_ptr<std::atomic<bool>> cancel_token;
     };
     struct CacheEntry {
         ConnectorResult result;
@@ -129,7 +148,8 @@ class ConnectorService : public QObject, public fincept::datahub::Producer {
 
     static QString request_key(const QString& name, const QString& command, const QStringList& args);
     void start_on_service_thread(const QString& request_id, const QString& name, const QString& command,
-                                 const QStringList& args, bool force, Callback cb);
+                                 const QStringList& args, const RunOptions& options, Callback cb);
+    void cancel_on_service_thread(const QString& request_id);
     void deliver(const ConnectorResult& result, const Callback& cb);
     void finish(const QString& key, ConnectorResult result);
     void store_in_cache(const QString& key, const ConnectorResult& result, int ttl_sec);

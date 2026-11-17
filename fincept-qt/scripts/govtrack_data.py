@@ -8,26 +8,34 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://www.govtrack.us/api/v2"
+import fincept_connector as fc
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+BASE_URL = "https://www.govtrack.us/api/v2"
+SERVICE = "GovTrack"
+
+session = fc.http_session()
+session.headers.update({"User-Agent": "Mozilla/5.0 (FinceptTerminal; +https://fincept.in)",
+                        "Accept": "application/json"})
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        response = session.get(url, params=params, timeout=(10, 30))
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e)}
+    if response.headers.get("cf-mitigated") == "challenge" or (
+            response.status_code == 403 and "json" not in response.headers.get("content-type", "")):
+        # Checked 2026-11-16: the whole site, /api/v2 included, sits behind a Cloudflare browser challenge.
+        return {"error": "GovTrack blocks automated requests: www.govtrack.us answers with a Cloudflare browser "
+                         "challenge (HTTP 403) that a script cannot pass - use the Congress.gov connector "
+                         "(congress_gov_data.py) for bills, votes and members"}
+    if not response.ok:
+        return {"error": fc.http_error(SERVICE, response)}
+    try:
+        return response.json()
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 
 def get_person(person_id: int) -> Any:
@@ -70,6 +78,14 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
+    try:
+        result = _dispatch(command, args, result)
+    except ValueError:
+        result = {"error": "ids and congress must be whole numbers"}
+    print(json.dumps(result))
+
+
+def _dispatch(command: str, args: List[str], result: Dict) -> Any:
     if command == "person":
         person_id = int(args[1]) if len(args) > 1 else 400629
         result = get_person(person_id)
@@ -91,7 +107,7 @@ def main(args=None):
     elif command == "role":
         role_id = int(args[1]) if len(args) > 1 else 1
         result = get_role(role_id)
-    print(json.dumps(result))
+    return result
 
 
 if __name__ == "__main__":

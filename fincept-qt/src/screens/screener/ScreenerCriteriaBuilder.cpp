@@ -1,7 +1,11 @@
 #include "screens/screener/ScreenerCriteriaBuilder.h"
 
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
+
 #include <QComboBox>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -64,12 +68,28 @@ void tune_combo(QComboBox* combo) {
     combo->setMinimumContentsLength(8);
 }
 
+/// Width of an operator picker: room for its longest entry ("between") in the
+/// user's font — 84px at the default size.
+int operator_combo_width(const QComboBox* combo) {
+    const QFontMetrics fm(ui::fonts::font());
+    int text = 0;
+    for (int i = 0; i < combo->count(); ++i)
+        text = std::max(text, fm.horizontalAdvance(combo->itemText(i)));
+    return std::max(84, text + 30);
+}
+
 } // namespace
 
 ScreenerCriteriaBuilder::ScreenerCriteriaBuilder(QWidget* parent) : QWidget(parent) {
     setObjectName("screenerBuilder");
     build_ui();
     retranslate();
+    // The operator pickers' widths follow the font size: re-measured once an appearance change
+    // has settled (fixed widths inside theme_changed lay the screen out mid-restyle).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        for (const auto& row : std::as_const(rows_))
+            row.op->setFixedWidth(operator_combo_width(row.op));
+    });
 }
 
 void ScreenerCriteriaBuilder::build_ui() {
@@ -346,7 +366,7 @@ void ScreenerCriteriaBuilder::add_criterion(const QString& field_id, const QStri
     bottom->setSpacing(4);
     row.op = new QComboBox(row.box);
     populate_operator_combo(row.op);
-    row.op->setFixedWidth(84);
+    row.op->setFixedWidth(operator_combo_width(row.op));
     row.lo = new QLineEdit(row.box);
     row.hi = new QLineEdit(row.box);
     row.unit = new QLabel(row.box);

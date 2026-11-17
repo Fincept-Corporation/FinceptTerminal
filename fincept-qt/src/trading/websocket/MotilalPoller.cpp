@@ -33,7 +33,7 @@ MotilalPoller::MotilalPoller(const BrokerCredentials& creds, QObject* parent)
 void MotilalPoller::open() {
     if (poll_timer_.isActive())
         return;
-    LOG_INFO(TAG_MO_POLL, "Starting Motilal quote polling");
+    LOG_DEBUG(TAG_MO_POLL, "Starting Motilal quote polling");
     poll_timer_.start();
     start_health_check();
     emit connected();
@@ -45,7 +45,7 @@ void MotilalPoller::open() {
 void MotilalPoller::close() {
     if (!poll_timer_.isActive())
         return;
-    LOG_INFO(TAG_MO_POLL, "Stopping Motilal quote polling");
+    LOG_DEBUG(TAG_MO_POLL, "Stopping Motilal quote polling");
     poll_timer_.stop();
     stop_health_check();
     emit disconnected();
@@ -72,7 +72,7 @@ void MotilalPoller::subscribe(const QStringList& symbols) {
             set.insert(s);
     }
     symbols_ = QStringList(set.begin(), set.end());
-    LOG_INFO(TAG_MO_POLL, QString("Subscribed %1 symbols").arg(symbols_.size()));
+    LOG_DEBUG(TAG_MO_POLL, QString("Subscribed %1 symbols").arg(symbols_.size()));
 }
 
 void MotilalPoller::unsubscribe() {
@@ -119,11 +119,26 @@ void MotilalPoller::poll_once() {
                     return;
                 self->fetching_.store(false);
 
+                // Polls run every 200 ms: log the state once per change (WARN when polling
+                // starts failing, DEBUG while it keeps failing, INFO when it works again).
+                const QString state_key =
+                    QStringLiteral("poll@") + QString::number(reinterpret_cast<quintptr>(self.data()), 16);
                 if (!resp.success || !resp.data.has_value()) {
-                    if (!resp.error.isEmpty())
-                        LOG_WARN(TAG_MO_POLL, QString("Quote poll failed: %1").arg(resp.error));
+                    if (!resp.error.isEmpty()) {
+                        if (Logger::instance().transition(TAG_MO_POLL, state_key, 1))
+                            LOG_WARN(TAG_MO_POLL, logf("Motilal quote poll failing", {{"error", resp.error}}));
+                        else
+                            LOG_DEBUG_RL(TAG_MO_POLL, state_key, 60000,
+                                         logf("Motilal quote poll still failing", {{"error", resp.error}}));
+                    }
                     return;
                 }
+                LogTransition recovered;
+                if (Logger::instance().transition_possible(0) &&
+                    Logger::instance().transition(TAG_MO_POLL, state_key, 0, &recovered))
+                    LOG_INFO(TAG_MO_POLL, logf("Motilal quote poll recovered",
+                                               {{"failed_polls", recovered.observations_in_previous},
+                                                {"duration_ms", recovered.ms_in_previous}}));
 
                 for (BrokerQuote q : resp.data.value()) {
                     self->note_tick();

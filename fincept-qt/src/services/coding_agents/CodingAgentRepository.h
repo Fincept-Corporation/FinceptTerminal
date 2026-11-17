@@ -1,6 +1,8 @@
 #pragma once
 // CodingAgentRepository.h — SQLite persistence for Agent Workbench runs, their
-// transcripts and recurring schedules (tables created by migration v052).
+// transcripts and recurring schedules (tables created by migration v052,
+// extended by v061: effort, permission mode, limits, harness version, cached
+// tokens, schedule working folder). The harness id is stored and read verbatim.
 //
 // Thread-agnostic: every method goes through Database::execute(), which hands
 // out the CALLING thread's connection. CodingAgentService runs all writes on

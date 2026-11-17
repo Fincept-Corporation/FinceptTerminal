@@ -14,6 +14,7 @@
 #include <QUuid>
 
 #include <cmath>
+#include <memory>
 
 namespace fincept::wallet {
 
@@ -63,17 +64,18 @@ double SplTokenBalance::ui_amount() const noexcept {
 
 SolanaRpcClient::SolanaRpcClient(QObject* parent) : QObject(parent) {
     nam_ = new QNetworkAccessManager(this);
-    endpoint_ = resolve_endpoint();
-    LOG_INFO("SolanaRpc",
-             QStringLiteral("Endpoint configured (%1)")
-                 .arg(endpoint_.startsWith(QStringLiteral("https://api.mainnet-beta")) ? QStringLiteral("public")
-                                                                                       : QStringLiteral("private")));
+    endpoint_ = resolve_endpoint(&endpoint_error_);
+    LOG_DEBUG("SolanaRpc", QStringLiteral("Endpoint configured (%1)")
+                               .arg(!endpoint_error_.isEmpty() ? QStringLiteral("unreadable")
+                                   : endpoint_.startsWith(QStringLiteral("https://api.mainnet-beta"))
+                                       ? QStringLiteral("public")
+                                       : QStringLiteral("private")));
 }
 
 SolanaRpcClient::~SolanaRpcClient() = default;
 
 void SolanaRpcClient::reload_endpoint() {
-    endpoint_ = resolve_endpoint();
+    endpoint_ = resolve_endpoint(&endpoint_error_);
 }
 
 QString SolanaRpcClient::ws_endpoint() const {
@@ -86,20 +88,52 @@ QString SolanaRpcClient::ws_endpoint() const {
     return ws;
 }
 
-QString SolanaRpcClient::resolve_endpoint() const {
-    auto override_res = SecureStorage::instance().retrieve(QString::fromLatin1(kRpcOverrideKey));
-    if (override_res.is_ok() && !override_res.value().isEmpty()) {
-        return override_res.value();
+QString SolanaRpcClient::resolve_endpoint(QString* read_error) const {
+    // A stored setting that cannot be read is not "not set": falling through to the
+    // public mainnet RPC would silently switch cluster (a devnet override becomes
+    // mainnet) and provider. No endpoint then; every request fails with the reason.
+    QString failure;
+    QString failed_key;
+    QString endpoint;
+    const SecretRead override_res = SecureStorage::instance().read(QString::fromLatin1(kRpcOverrideKey));
+    if (override_res.failed()) {
+        failure = override_res.reason();
+        failed_key = QString::fromLatin1(kRpcOverrideKey);
+    } else if (override_res.found() && !override_res.value.isEmpty()) {
+        endpoint = override_res.value;
+    } else {
+        const SecretRead helius_res = SecureStorage::instance().read(QString::fromLatin1(kHeliusKey));
+        if (helius_res.failed()) {
+            failure = helius_res.reason();
+            failed_key = QString::fromLatin1(kHeliusKey);
+        } else if (helius_res.found() && !helius_res.value.isEmpty()) {
+            endpoint = QString::fromLatin1(kHeliusMainnetTpl).arg(helius_res.value);
+        } else {
+            endpoint = QString::fromLatin1(kPublicMainnetRpc);
+        }
     }
-    auto helius_res = SecureStorage::instance().retrieve(QString::fromLatin1(kHeliusKey));
-    if (helius_res.is_ok() && !helius_res.value().isEmpty()) {
-        return QString::fromLatin1(kHeliusMainnetTpl).arg(helius_res.value());
-    }
-    return QString::fromLatin1(kPublicMainnetRpc);
+    const bool failing = !failure.isEmpty();
+    LOG_TRANSITION("SolanaRpc", QStringLiteral("endpoint_read"), failing, failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Stored Solana RPC setting could not be read; no RPC request is sent",
+                                  {{"key", failed_key}})
+                           : QStringLiteral("Stored Solana RPC setting readable again"));
+    if (read_error)
+        *read_error = failing ? tr("Could not read the stored Solana RPC setting: %1. Nothing was sent.").arg(failure)
+                              : QString();
+    return endpoint;
 }
 
 void SolanaRpcClient::post_rpc(const QString& method, const QJsonObject& params_obj,
                                std::function<void(Result<QJsonObject>)> callback) {
+    if (endpoint_.isEmpty()) {
+        // The stored RPC setting could not be read (resolve_endpoint): fail without
+        // sending, asynchronously like every other outcome.
+        const std::string err = (endpoint_error_.isEmpty() ? tr("No Solana RPC endpoint.") : endpoint_error_).toStdString();
+        QMetaObject::invokeMethod(
+            this, [callback = std::move(callback), err]() { callback(Result<QJsonObject>::err(err)); },
+            Qt::QueuedConnection);
+        return;
+    }
     QJsonObject envelope;
     envelope[QStringLiteral("jsonrpc")] = QStringLiteral("2.0");
     envelope[QStringLiteral("id")] = stable_request_id();
@@ -176,10 +210,36 @@ void SolanaRpcClient::get_sol_balance(const QString& pubkey_b58, BalanceCallback
 }
 
 namespace {
-// Standard SPL Token Program. Token-2022 is a separate program (TokenzQ…).
-// We only fetch from the classic program here; token-2022 holdings are rare
-// for retail wallets and can be added in a follow-up if it matters.
+// Token accounts live under one of two owner programs: the classic SPL Token
+// program and Token-2022. $FNCPT (kFncptMint) is a Token-2022 mint, so querying
+// only the classic program always reported a zero FNCPT balance.
 constexpr const char* kSplTokenProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+constexpr const char* kToken2022ProgramId = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+/// Parse a jsonParsed getTokenAccountsByOwner reply into balances, skipping
+/// zero-amount accounts. The shape is the same for both token programs.
+void rpc_client_append_token_accounts(const QJsonObject& root, std::vector<SplTokenBalance>& out) {
+    const auto result = root.value(QStringLiteral("result")).toObject();
+    const auto accounts = result.value(QStringLiteral("value")).toArray();
+    out.reserve(out.size() + static_cast<std::size_t>(accounts.size()));
+    for (const auto& entry : accounts) {
+        const auto acct = entry.toObject().value(QStringLiteral("account")).toObject();
+        const auto data = acct.value(QStringLiteral("data")).toObject();
+        const auto parsed = data.value(QStringLiteral("parsed")).toObject();
+        const auto info = parsed.value(QStringLiteral("info")).toObject();
+        const auto token_amount = info.value(QStringLiteral("tokenAmount")).toObject();
+        SplTokenBalance bal;
+        bal.mint = info.value(QStringLiteral("mint")).toString();
+        bal.amount_raw = token_amount.value(QStringLiteral("amount")).toString();
+        bal.decimals = token_amount.value(QStringLiteral("decimals")).toInt();
+        // Skip zero-amount accounts to keep the list tight; the
+        // wallet may have orphan accounts from past holdings.
+        if (bal.mint.isEmpty() || bal.amount_raw.isEmpty() || bal.amount_raw == QStringLiteral("0")) {
+            continue;
+        }
+        out.push_back(std::move(bal));
+    }
+}
 } // namespace
 
 void SolanaRpcClient::get_token_balance(const QString& owner_b58, const QString& mint_b58,
@@ -218,44 +278,55 @@ void SolanaRpcClient::get_token_balance(const QString& owner_b58, const QString&
 }
 
 void SolanaRpcClient::get_all_token_balances(const QString& owner_b58, TokenBalancesCallback callback) {
-    // Same response shape as `get_token_balance`, just no mint filter:
-    // we filter by programId instead, returning every SPL token account.
-    QJsonObject program_filter;
-    program_filter[QStringLiteral("programId")] = QString::fromLatin1(kSplTokenProgramId);
-    QJsonObject opts;
-    opts[QStringLiteral("encoding")] = QStringLiteral("jsonParsed");
-
-    QJsonObject params;
-    params[QStringLiteral("__array")] = QJsonArray{owner_b58, program_filter, opts};
-
-    post_rpc(QStringLiteral("getTokenAccountsByOwner"), params, [cb = std::move(callback)](Result<QJsonObject> r) {
-        if (r.is_err()) {
-            cb(Result<std::vector<SplTokenBalance>>::err(r.error()));
-            return;
-        }
+    // Same response shape as `get_token_balance`, just no mint filter: we filter
+    // by programId instead. One request per token program (classic SPL and
+    // Token-2022); the lists are concatenated and the caller folds multiple
+    // accounts of one mint into a single holding (wallet_balance_build_holdings).
+    //
+    // If either request fails the whole call fails. A partial list would be
+    // indistinguishable from "this wallet holds none of those tokens" (e.g. FNCPT
+    // vanishing on a transient Token-2022 error), whereas an error makes the
+    // callers keep their last-known-good holdings.
+    struct Merge {
+        int pending = 2;
+        bool failed = false;
+        std::string first_error;
         std::vector<SplTokenBalance> out;
-        const auto result = r.value().value(QStringLiteral("result")).toObject();
-        const auto accounts = result.value(QStringLiteral("value")).toArray();
-        out.reserve(accounts.size());
-        for (const auto& entry : accounts) {
-            const auto acct = entry.toObject().value(QStringLiteral("account")).toObject();
-            const auto data = acct.value(QStringLiteral("data")).toObject();
-            const auto parsed = data.value(QStringLiteral("parsed")).toObject();
-            const auto info = parsed.value(QStringLiteral("info")).toObject();
-            const auto token_amount = info.value(QStringLiteral("tokenAmount")).toObject();
-            SplTokenBalance bal;
-            bal.mint = info.value(QStringLiteral("mint")).toString();
-            bal.amount_raw = token_amount.value(QStringLiteral("amount")).toString();
-            bal.decimals = token_amount.value(QStringLiteral("decimals")).toInt();
-            // Skip zero-amount accounts to keep the list tight; the
-            // wallet may have orphan accounts from past holdings.
-            if (bal.amount_raw.isEmpty() || bal.amount_raw == QStringLiteral("0")) {
-                continue;
+        TokenBalancesCallback cb;
+    };
+    auto merge = std::make_shared<Merge>();
+    merge->cb = std::move(callback);
+
+    const auto request_for = [this, &owner_b58, merge](const char* program_id) {
+        QJsonObject program_filter;
+        program_filter[QStringLiteral("programId")] = QString::fromLatin1(program_id);
+        QJsonObject opts;
+        opts[QStringLiteral("encoding")] = QStringLiteral("jsonParsed");
+
+        QJsonObject params;
+        params[QStringLiteral("__array")] = QJsonArray{owner_b58, program_filter, opts};
+
+        post_rpc(QStringLiteral("getTokenAccountsByOwner"), params, [merge](Result<QJsonObject> r) {
+            if (r.is_err()) {
+                if (!merge->failed) {
+                    merge->failed = true;
+                    merge->first_error = r.error();
+                }
+            } else {
+                rpc_client_append_token_accounts(r.value(), merge->out);
             }
-            out.push_back(std::move(bal));
-        }
-        cb(Result<std::vector<SplTokenBalance>>::ok(std::move(out)));
-    });
+            if (--merge->pending > 0) {
+                return;
+            }
+            if (merge->failed) {
+                merge->cb(Result<std::vector<SplTokenBalance>>::err(merge->first_error));
+                return;
+            }
+            merge->cb(Result<std::vector<SplTokenBalance>>::ok(std::move(merge->out)));
+        });
+    };
+    request_for(kSplTokenProgramId);
+    request_for(kToken2022ProgramId);
 }
 
 // ── Phase 2 RPC additions ──────────────────────────────────────────────────

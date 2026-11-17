@@ -104,6 +104,14 @@ POPULAR_TABLES = {
 }
 
 
+def _period_selection(values, latest_n):
+    """PxWeb selection for the time variable: the periods asked for, else the latest `latest_n`
+    the table holds (filter "top") - never periods SCB has not published yet."""
+    if values:
+        return {"filter": "item", "values": list(values)}
+    return {"filter": "top", "values": [str(latest_n)]}
+
+
 class SCBError:
     """Custom error class for SCB API errors"""
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
@@ -325,10 +333,6 @@ class SCBDataAPI:
     def get_population_data(self, years: Optional[List[str]] = None) -> Dict[str, Any]:
         """Get Swedish population data"""
         try:
-            if not years:
-                # Default to last 5 years
-                current_year = datetime.now().year
-                years = [str(year) for year in range(current_year - 4, current_year + 1)]
 
             query = [
                 {
@@ -338,13 +342,7 @@ class SCBDataAPI:
                         "values": ["BE0101N1"]  # Population
                     }
                 },
-                {
-                    "code": "Tid",
-                    "selection": {
-                        "filter": "item",
-                        "values": years
-                    }
-                }
+                {"code": "Tid", "selection": _period_selection(years, 5)}
             ]
 
             result = self.get_table_data("BE/BE0101/BE0101A/BefolkningNy", query)
@@ -361,12 +359,6 @@ class SCBDataAPI:
     def get_gdp_data(self, quarters: Optional[List[str]] = None) -> Dict[str, Any]:
         """Get Swedish GDP data"""
         try:
-            if not quarters:
-                # Default to last 8 quarters
-                quarters = [
-                    "2023K3", "2023K4", "2024K1", "2024K2",
-                    "2024K3", "2024K4", "2025K1", "2025K2"
-                ]
 
             query = [
                 {
@@ -383,13 +375,7 @@ class SCBDataAPI:
                         "values": ["NR0103BV"]  # Current prices, million SEK
                     }
                 },
-                {
-                    "code": "Tid",
-                    "selection": {
-                        "filter": "item",
-                        "values": quarters
-                    }
-                }
+                {"code": "Tid", "selection": _period_selection(quarters, 8)}
             ]
 
             result = self.get_table_data("NR/NR0103/NR0103A/NR0103ENS2010T01Kv", query)
@@ -406,9 +392,6 @@ class SCBDataAPI:
     def get_employment_data(self, regions: Optional[List[str]] = None, years: Optional[List[str]] = None) -> Dict[str, Any]:
         """Get Swedish employment data"""
         try:
-            if not years:
-                current_year = datetime.now().year
-                years = [str(year) for year in range(current_year - 4, current_year + 1)]
 
             if not regions:
                 regions = ["00"]  # Whole country
@@ -421,13 +404,7 @@ class SCBDataAPI:
                         "values": regions
                     }
                 },
-                {
-                    "code": "Tid",
-                    "selection": {
-                        "filter": "item",
-                        "values": years
-                    }
-                }
+                {"code": "Tid", "selection": _period_selection(years, 5)}
             ]
 
             result = self.get_table_data("AM/AM0201/AntalSysselsatta", query)
@@ -445,13 +422,6 @@ class SCBDataAPI:
     def get_cpi_data(self, months: Optional[List[str]] = None) -> Dict[str, Any]:
         """Get Swedish Consumer Price Index data"""
         try:
-            if not months:
-                # Default to last 24 months
-                current_date = datetime.now()
-                months = []
-                for i in range(24):
-                    month_date = current_date - timedelta(days=30 * i)
-                    months.append(month_date.strftime("%Y%m"))
 
             query = [
                 {
@@ -461,13 +431,7 @@ class SCBDataAPI:
                         "values": ["KPI"]  # CPI
                     }
                 },
-                {
-                    "code": "Tid",
-                    "selection": {
-                        "filter": "item",
-                        "values": months
-                    }
-                }
+                {"code": "Tid", "selection": _period_selection(months, 24)}
             ]
 
             result = self.get_table_data("PR/PR0101/KPIFaststallelse", query)

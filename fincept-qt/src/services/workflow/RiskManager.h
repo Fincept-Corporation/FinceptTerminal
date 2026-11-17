@@ -53,9 +53,18 @@ struct RiskLimits {
     // Time restrictions
     bool trading_hours_only = false;
     bool allow_premarket = true;
+
+    /// Currency of every money limit above (max_position_value, max_single_order_value,
+    /// max_daily_volume, daily / weekly loss) and of the DailyTradingStats amounts
+    /// passed to record_trade(); an ISO code ("USD", "INR", "USDT"). Empty = no
+    /// currency: each order's value is compared in its own price currency, unconverted
+    /// (one number per currency, what the limits meant before they had one). An order
+    /// value in another currency is converted at the FX service's rate; with no rate a
+    /// SET money limit cannot be evaluated and refuses the order (never 1:1).
+    QString limits_currency;
 };
 
-/// Tracks daily P&L and trade counts.
+/// Tracks daily P&L and trade counts. Money amounts are in RiskLimits::limits_currency.
 struct DailyTradingStats {
     double realized_pnl = 0;
     double unrealized_pnl = 0;
@@ -70,9 +79,15 @@ class RiskManager : public QObject {
   public:
     static RiskManager& instance();
 
-    /// Validate an order against all risk limits.
+    /// Validate an order against all risk limits. The price's currency is unknown
+    /// here: money limits compare unconverted (see RiskLimits::limits_currency).
     QVector<RiskCheckResult> validate_order(const QString& symbol, const QString& side, double quantity, double price,
                                             bool paper_trading = true) const;
+    /// Same, knowing the currency `price` is quoted in (minor units allowed: "GBp";
+    /// empty = unknown). The order value is converted into limits_currency before a
+    /// money limit is compared; a needed rate that is missing fails that check.
+    QVector<RiskCheckResult> validate_order(const QString& symbol, const QString& side, double quantity, double price,
+                                            bool paper_trading, const QString& price_currency) const;
 
     /// Check if all validations pass. On failure `reason_out` (optional) receives
     /// the joined messages of the failing Error/Critical checks, so the caller can
@@ -80,6 +95,9 @@ class RiskManager : public QObject {
     /// "rejected".
     bool is_order_allowed(const QString& symbol, const QString& side, double quantity, double price,
                           bool paper_trading = true, QString* reason_out = nullptr) const;
+    /// is_order_allowed() with the price's currency (see validate_order()).
+    bool is_order_allowed(const QString& symbol, const QString& side, double quantity, double price,
+                          bool paper_trading, QString* reason_out, const QString& price_currency) const;
 
     /// Get/set risk limits.
     const RiskLimits& limits() const { return limits_; }

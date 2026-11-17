@@ -26,8 +26,12 @@ FredPanel::FredPanel(QWidget* parent) : EconPanelBase(kFredSourceId, kFredColor,
 }
 
 void FredPanel::activate() {
-    show_empty(tr("Set FRED_API_KEY environment variable, then select a series and click FETCH\n"
-                  "Get a free key at: fred.stlouisfed.org/docs/api/api_key.html"));
+    // Nothing to prepare: the results pane runs the query on show — or, without a FRED key, shows the
+    // page that names FRED_API_KEY and opens Settings > Credentials.
+}
+
+QList<ui::Requirement> FredPanel::load_requirements() const {
+    return {ui::Requirement::api_key(QStringLiteral("FRED_API_KEY"), QStringLiteral("FRED"))};
 }
 
 void FredPanel::build_controls(QHBoxLayout* thl) {
@@ -37,7 +41,7 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
     preset_combo_ = new QComboBox;
     for (const auto& p : fred_presets())
         preset_combo_->addItem(p.label, p.series_id);
-    preset_combo_->setFixedHeight(26);
+    preset_combo_->setMinimumHeight(26);
     preset_combo_->setMinimumWidth(200);
     connect(preset_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
         const QString code = preset_combo_->itemData(idx).toString();
@@ -50,13 +54,18 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText(tr("e.g. GDPC1"));
-    series_input_->setFixedHeight(26);
-    series_input_->setFixedWidth(100);
+    series_input_->setMinimumHeight(26);
+    set_text_width(series_input_, 100);
 
     thl->addWidget(preset_lbl_);
     thl->addWidget(preset_combo_);
     thl->addWidget(series_lbl_);
     thl->addWidget(series_input_);
+    // A real default instead of "-- Custom series ID --" with an empty field (FETCH had nothing to
+    // ask for): Real GDP. Restored inputs replace it.
+    const int gdp = preset_combo_->findData(QStringLiteral("GDPC1"));
+    if (gdp >= 0)
+        preset_combo_->setCurrentIndex(gdp); // fills the series field
 }
 
 void FredPanel::on_fetch() {
@@ -70,18 +79,20 @@ void FredPanel::on_fetch() {
         series = code;
     }
     show_loading(tr("Fetching FRED series %1…").arg(series));
-    services::EconomicsService::instance().execute(kFredSourceId, kFredScript, "series", {series}, "fred_" + series);
+    execute_query(kFredSourceId, kFredScript, "series", {series}, "fred_" + series);
 }
 
 void FredPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
-    if (result.source_id != kFredSourceId)
+    // Portfolio › ECONOMICS asks the same source ("fred", request "portfolio_macro"): only this panel's
+    // own requests count, or its failures would land on this panel's page.
+    if (result.source_id != kFredSourceId || !request_id.startsWith(QLatin1String("fred_")))
         return;
     if (!result.success) {
         // EconomicsService prefixes errors with "[CODE] " when the script
         // returns a structured error_code. Branch on those for friendly UX.
         if (result.error.startsWith("[MISSING_API_KEY]")) {
             show_error(tr("FRED API key not configured.\n"
-                          "Set FRED_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (FRED_API_KEY).\n"
                           "Free key at: fred.stlouisfed.org/docs/api/api_key.html"));
         } else if (result.error.startsWith("[INVALID_API_KEY]")) {
             show_error(tr("FRED rejected your API key.\n"
@@ -95,7 +106,7 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
         } else if (result.error.contains("API key") || result.error.contains("api_key")) {
             // Legacy un-coded message fallback
             show_error(tr("FRED API key not configured.\n"
-                          "Set FRED_API_KEY environment variable.\n"
+                          "Add it in Settings > Credentials (FRED_API_KEY).\n"
                           "Free key at: fred.stlouisfed.org/docs/api/api_key.html"));
         } else {
             show_error(result.error);
@@ -146,7 +157,7 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
         set_series_meta(meta);
         const QString title = meta_text("title");
         display(clean, title.isEmpty() ? "FRED: " + series : QStringLiteral("FRED: %1 (%2)").arg(title, series));
-        LOG_INFO("FredPanel", QString("Displayed %1 observations").arg(clean.size()));
+        LOG_DEBUG("FredPanel", QString("Displayed %1 observations").arg(clean.size()));
     }
 }
 

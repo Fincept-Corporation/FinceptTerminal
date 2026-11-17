@@ -49,7 +49,9 @@ class ModelsRegistry:
             "default_model": "gemini-2.0-flash",
         },
         "vertexai": {
-            "class": "agno.models.vertexai.VertexAI",
+            "class": "agno.models.google.Gemini",
+            # agno 2.x has no VertexAI class: Vertex AI is Gemini(vertexai=True).
+            "init_kwargs": {"vertexai": True},
             "models": ["gemini-1.5-pro", "gemini-1.5-flash"],
             "api_key_env": "GOOGLE_APPLICATION_CREDENTIALS",
             "default_model": "gemini-1.5-pro",
@@ -57,7 +59,7 @@ class ModelsRegistry:
 
         # Meta / Llama
         "meta": {
-            "class": "agno.models.meta.MetaLlama",
+            "class": "agno.models.meta.Llama",
             "models": ["llama-3.3-70b", "llama-3.1-405b", "llama-3.1-70b", "llama-3.1-8b"],
             "api_key_env": "META_API_KEY",
             "default_model": "llama-3.3-70b",
@@ -93,7 +95,7 @@ class ModelsRegistry:
             "default_model": None,
         },
         "vllm": {
-            "class": "agno.models.vllm.vLLM",
+            "class": "agno.models.vllm.VLLM",
             "models": [],
             "api_key_env": None,
             "default_model": None,
@@ -109,7 +111,7 @@ class ModelsRegistry:
 
         # Mistral
         "mistral": {
-            "class": "agno.models.mistral.Mistral",
+            "class": "agno.models.mistral.MistralChat",
             "models": ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"],
             "api_key_env": "MISTRAL_API_KEY",
             "default_model": "mistral-large-latest",
@@ -173,7 +175,7 @@ class ModelsRegistry:
 
         # IBM
         "ibm": {
-            "class": "agno.models.ibm.IBM",
+            "class": "agno.models.ibm.WatsonX",
             "models": ["ibm/granite-13b-chat-v2"],
             "api_key_env": "IBM_API_KEY",
             "default_model": "ibm/granite-13b-chat-v2",
@@ -189,7 +191,7 @@ class ModelsRegistry:
 
         # SambaNova
         "sambanova": {
-            "class": "agno.models.sambanova.SambaNova",
+            "class": "agno.models.sambanova.Sambanova",
             "models": ["Meta-Llama-3.1-405B-Instruct"],
             "api_key_env": "SAMBANOVA_API_KEY",
             "default_model": "Meta-Llama-3.1-405B-Instruct",
@@ -237,7 +239,7 @@ class ModelsRegistry:
 
         # SiliconFlow
         "siliconflow": {
-            "class": "agno.models.siliconflow.SiliconFlow",
+            "class": "agno.models.siliconflow.Siliconflow",
             "models": [],
             "api_key_env": "SILICONFLOW_API_KEY",
             "default_model": None,
@@ -245,7 +247,7 @@ class ModelsRegistry:
 
         # Vercel AI SDK
         "vercel": {
-            "class": "agno.models.vercel.Vercel",
+            "class": "agno.models.vercel.V0",
             "models": [],
             "api_key_env": "VERCEL_API_KEY",
             "default_model": None,
@@ -355,16 +357,15 @@ class ModelsRegistry:
             logger.warning(f"No API key found for {provider}. Expected: {config['api_key_env']}")
 
         try:
-            # Dynamic import
-            import importlib
+            # Dynamic import (the probe turns a missing package into a reason
+            # that names it, instead of a bare AttributeError/ImportError)
+            from finagent_core.registries.availability import load_class
             class_path = config["class"]
-            module_path, class_name = class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            model_class = getattr(module, class_name)
+            model_class = load_class(class_path)
 
             # Build constructor arguments
             # Agno models use 'id' for model identifier
-            model_kwargs = {}
+            model_kwargs = dict(config.get("init_kwargs") or {})
             if final_model_id:
                 model_kwargs["id"] = final_model_id
 
@@ -514,8 +515,20 @@ class ModelsRegistry:
 
     @classmethod
     def list_providers(cls) -> List[str]:
-        """List all available providers"""
+        """List every catalogued provider (see unavailable_providers() for the
+        ones whose package is not installed here)."""
         return list(cls.MODEL_CATALOG.keys())
+
+    @classmethod
+    def unavailable_providers(cls) -> Dict[str, str]:
+        """{provider: reason} for every provider whose model class cannot load."""
+        from finagent_core.registries.availability import class_static_reason
+        out: Dict[str, str] = {}
+        for name, cfg in cls.MODEL_CATALOG.items():
+            reason = class_static_reason(cfg["class"])
+            if reason:
+                out[name] = reason
+        return out
 
     @classmethod
     def list_models(cls, provider: str) -> List[str]:

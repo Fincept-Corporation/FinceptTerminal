@@ -69,6 +69,9 @@ class TokenMetadataService : public QObject {
     qint64 last_refreshed_ms_ = 0;
     QNetworkAccessManager* nam_ = nullptr;
     bool refresh_in_flight_ = false;
+    /// The stored list could not be read at load: persist_to_storage() does not write
+    /// over it while it stays unreadable (only a damaged row is replaced).
+    bool storage_read_failed_ = false;
 };
 
 } // namespace fincept::wallet

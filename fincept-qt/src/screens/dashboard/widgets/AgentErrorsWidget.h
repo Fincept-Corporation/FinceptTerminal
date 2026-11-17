@@ -38,6 +38,8 @@ class AgentErrorsWidget : public BaseWidget {
 
     void apply_styles();
     void render();
+    /// "No agent errors this session" (success tone) while nothing was published.
+    void show_no_errors_state();
     void on_error(const QString& topic, const QVariant& value);
     void hub_resubscribe();
     void hub_unsubscribe_all();

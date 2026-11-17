@@ -1,6 +1,7 @@
 #include "screens/dashboard/widgets/GeopoliticsEventsWidget.h"
 
 #include "datahub/DataHub.h"
+#include "screens/dashboard/widgets/TileBilling.h"
 #include "services/geopolitics/GeopoliticsTypes.h"
 #include "ui/theme/Theme.h"
 
@@ -11,11 +12,12 @@
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QSpinBox>
+#include <QTimer>
 
 namespace fincept::screens::widgets {
 
 namespace {
-QString format_relative(const QString& iso) {
+QString geo_format_relative(const QString& iso) {
     if (iso.isEmpty())
         return QStringLiteral("--");
     const QDateTime dt = QDateTime::fromString(iso, Qt::ISODate);
@@ -33,7 +35,8 @@ QString format_relative(const QString& iso) {
 } // namespace
 
 GeopoliticsEventsWidget::GeopoliticsEventsWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget(tr("GEOPOLITICS EVENTS"), parent, ui::colors::NEGATIVE()) {
+    : BaseWidget(tr("GEOPOLITICS EVENTS"), parent, ui::colors::DANGER()) {
+    set_agent_risk(tile_billing::agent_kind(QStringLiteral("news_events"))); // refresh / LOAD: billed ("news_events" credits)
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -78,10 +81,38 @@ GeopoliticsEventsWidget::GeopoliticsEventsWidget(const QJsonObject& cfg, QWidget
     scroll_area_->setWidget(list_widget);
     vl->addWidget(scroll_area_, 1);
 
+    // Billing rule: every news-events call costs credits, so nothing here loads by
+    // itself (unless the plan includes news events — PlanAccess): the title-bar
+    // refresh and the LOAD offer ask once. The subscription that receives the
+    // answer ends 4 minutes later (the topic's TTL is 30 minutes), so the hub
+    // never re-fetches on its own while the tile is open. A cached value is
+    // delivered first, so the first delivery cannot end it.
     connect(this, &BaseWidget::refresh_requested, this, [this]() {
-        if (is_showing_error())
-            set_loading(true); // retry: back to the loading state
+        hide_empty_state();
+        if (is_showing_error() || last_payload_.isNull())
+            set_loading(true); // retry / first load: the loading state
+        if (!hub_active_)
+            hub_resubscribe();
         datahub::DataHub::instance().request(QStringLiteral("geopolitics:events"), /*force=*/true);
+        auto* window = findChild<QTimer*>(QStringLiteral("geoEventsOneShot"), Qt::FindDirectChildrenOnly);
+        if (!window) {
+            window = new QTimer(this);
+            window->setObjectName(QStringLiteral("geoEventsOneShot"));
+            window->setSingleShot(true);
+            window->setInterval(4 * 60 * 1000);
+            connect(window, &QTimer::timeout, this, [this]() {
+                if (hub_active_ && !tile_billing::plan_includes(QStringLiteral("news_events")))
+                    hub_unsubscribe_all();
+            });
+        }
+        window->start(); // a later LOAD restarts the window
+    });
+    // The plan table arrived / changed: a plan that includes news events loads the
+    // offered events now, as a free tile would.
+    connect(&billing::PlanAccess::instance(), &billing::PlanAccess::changed, this, [this]() {
+        set_agent_risk(tile_billing::agent_kind(QStringLiteral("news_events"))); // agents: an included load is free
+        if (isVisible() && is_empty_state_shown() && tile_billing::plan_includes(QStringLiteral("news_events")))
+            request_refresh();
     });
 
     set_configurable(true);
@@ -111,10 +142,6 @@ void GeopoliticsEventsWidget::hub_resubscribe() {
             set_error(tr("Geopolitics feed failed: %1 — click refresh to retry").arg(error));
     });
 
-    // Seed from cache so the widget never shows blank while waiting.
-    const QVariant cached = hub.peek(QStringLiteral("geopolitics:events"));
-    if (cached.isValid())
-        populate(cached);
     hub_active_ = true;
 }
 
@@ -125,8 +152,34 @@ void GeopoliticsEventsWidget::hub_unsubscribe_all() {
 
 void GeopoliticsEventsWidget::showEvent(QShowEvent* e) {
     BaseWidget::showEvent(e);
-    if (!hub_active_)
-        hub_resubscribe();
+    if (hub_active_)
+        return; // a LOAD / refresh is in flight
+    if (tile_billing::plan_includes(QStringLiteral("news_events"))) {
+        hub_resubscribe(); // included with the plan: kept fresh by the hub, as before
+        if (const QVariant v = datahub::DataHub::instance().peek(QStringLiteral("geopolitics:events")); v.isValid())
+            populate(v);
+        return;
+    }
+    // Billing rule: no request on show. What the hub already holds (this session's
+    // last load, here or in the Geopolitics screen), else the LOAD offer.
+    const QVariant cached = datahub::DataHub::instance().peek_raw(QStringLiteral("geopolitics:events"));
+    if (cached.isValid()) {
+        hide_empty_state();
+        populate(cached);
+        set_loading(false);
+        return;
+    }
+    set_loading(false);
+    if (!last_payload_.isNull())
+        return; // rows on screen already
+    ui::EmptyState::Spec spec = ui::EmptyState::preview_spec(
+        tr("Geopolitical events"),
+        tr("The latest conflict, policy and security events worldwide, newest first, with their location and "
+           "category."),
+        tr("LOAD EVENTS"),
+        tile_billing::cost_note(QStringLiteral("news_events"), 0.0, tr("Each load is billed in Fincept credits")),
+        ui::EmptyState::Tone::Warning, ui::LoadingSkeleton::Shape::List);
+    show_empty_state(spec, [this]() { request_refresh(); });
 }
 
 void GeopoliticsEventsWidget::hideEvent(QHideEvent* e) {
@@ -154,7 +207,7 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         status_label_ = new QLabel(tr("Awaiting events…"));
         status_label_->setAlignment(Qt::AlignCenter);
         status_label_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(status_label_);
         list_layout_->addStretch();
         return;
@@ -167,7 +220,7 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         status_label_ = new QLabel(tr("No events available"));
         status_label_->setAlignment(Qt::AlignCenter);
         status_label_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(status_label_);
         list_layout_->addStretch();
         set_loading(false);
@@ -199,7 +252,7 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         const QString cat_label = fincept::services::geo::pretty_category(ev.event_category);
 
         auto* row = new QWidget(this);
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::ROW_ALT() : "transparent"));
         link_screen(row, QStringLiteral("geopolitics"), tr("Double-click to open the Geopolitics screen"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
@@ -208,7 +261,9 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         auto* cat_lbl = new QLabel(QStringLiteral("●"));
         cat_lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         cat_lbl->setToolTip(cat_label);
-        cat_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(cat_col.name()));
+        // Category colours are written for the dark theme; legible() keeps them readable on the light one.
+        cat_lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;background:transparent;")
+                                   .arg(ui::colors::legible(cat_col)));
         rl->addWidget(cat_lbl, 1);
 
         // Title
@@ -218,12 +273,12 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         auto* title_lbl = new QLabel(display_title);
         title_lbl->setToolTip(title);
         title_lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(title_lbl, 5);
 
         // Location
         auto* loc_lbl = new QLabel(location);
-        loc_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::CYAN()));
+        loc_lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(ui::colors::CYAN()));
         rl->addWidget(loc_lbl, 2);
 
         // Source
@@ -233,16 +288,16 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         auto* src_lbl = new QLabel(src.toUpper());
         src_lbl->setToolTip(ev.source);
         src_lbl->setStyleSheet(
-            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(src_lbl, 1);
 
         // Age
         const QString age =
-            !ev.created_at.isEmpty() ? format_relative(ev.created_at) : format_relative(ev.extracted_date);
+            !ev.created_at.isEmpty() ? geo_format_relative(ev.created_at) : geo_format_relative(ev.extracted_date);
         auto* age_lbl = new QLabel(age);
         age_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         age_lbl->setStyleSheet(
-            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         rl->addWidget(age_lbl, 1);
 
         list_layout_->addWidget(row);
@@ -285,19 +340,19 @@ void GeopoliticsEventsWidget::on_theme_changed() {
 }
 
 void GeopoliticsEventsWidget::apply_styles() {
-    header_widget_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_RAISED()));
+    set_css_cached(header_widget_, QString("background:%1;").arg(ui::colors::BG_RAISED()));
     for (auto* lbl : header_labels_)
-        lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;background:transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-    header_sep_->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    scroll_area_->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+        set_css_cached(lbl, QString("color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;background:transparent;")
+                               .arg(ui::colors::TEXT_SECONDARY()));
+    set_css_cached(header_sep_, QString("background:%1;").arg(ui::colors::BORDER_DIM()));
+    set_css_cached(scroll_area_, QString("QScrollArea{border:none;background:transparent;}"
                                         "QScrollBar:vertical{width:4px;background:transparent;}"
                                         "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
                                         "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
                                     .arg(ui::colors::BORDER_MED()));
     if (status_label_)
-        status_label_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        set_css_cached(status_label_, 
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void GeopoliticsEventsWidget::retranslateUi() {

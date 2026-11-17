@@ -203,7 +203,7 @@ QVector<Instrument> DhanInstrumentParser::parse(const QByteArray& csv_data) {
         results.append(inst);
     }
 
-    LOG_INFO("DhanParser",
+    LOG_DEBUG("DhanParser",
              QString("Parsed %1 instruments (skipped %2 malformed rows)").arg(results.size()).arg(skipped));
     return results;
 }

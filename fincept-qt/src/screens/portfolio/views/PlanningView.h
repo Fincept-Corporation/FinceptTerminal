@@ -10,6 +10,10 @@
 #include <QTableWidget>
 #include <QWidget>
 
+namespace fincept::ui {
+class FanChart;
+}
+
 namespace fincept::screens {
 
 /// Financial Planning view with retirement planning, goal-based allocation,
@@ -37,6 +41,11 @@ class PlanningView : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
+    /// Re-colours the tables and the Monte Carlo lines (not restyled by the theme).
+    void refresh_theme();
+    /// Currency unit of the money spin boxes: currency_ (the display currency until a
+    /// portfolio is loaded), kept in step with the format settings.
+    void bind_money_affixes();
     QWidget* build_retirement_tab();
     QWidget* build_goals_tab();
     QWidget* build_savings_tab();
@@ -54,6 +63,9 @@ class PlanningView : public QWidget {
         double p5 = 0, p50 = 0, p95 = 0; // ending-balance percentiles
         double success_prob = 0;         // fraction of paths reaching `target`
         bool valid = false;
+        int paths = 0;
+        /// Balance percentiles at the end of each year (index 0 = today), for the fan chart.
+        QVector<double> y_p5, y_p25, y_p50, y_p75, y_p95;
     };
     McResult monte_carlo(double start, double monthly, int years, double mean_annual, double vol_annual,
                          double target) const;
@@ -148,6 +160,7 @@ class PlanningView : public QWidget {
     // Retirement: Monte Carlo + stress + assumptions note
     QLabel* retire_assump_note_ = nullptr;
     QLabel* retire_mc_label_ = nullptr;     // "Success: 72% | P5 … P95 …"
+    fincept::ui::FanChart* retire_fan_ = nullptr; // Monte Carlo percentile fan, year by year
     QLabel* retire_stress_label_ = nullptr; // drawdown/VaR stress line
     QPushButton* retire_optimize_btn_ = nullptr;
 

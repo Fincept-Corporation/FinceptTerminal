@@ -37,7 +37,7 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 
 def _check_api_key() -> Optional[Dict]:
     if not API_KEY:
-        return {"error": "NOAA_CDO_TOKEN environment variable not set"}
+        return {"error": "NOAA_CDO_TOKEN is not set: save it in Settings > Credentials"}
     return None
 
 

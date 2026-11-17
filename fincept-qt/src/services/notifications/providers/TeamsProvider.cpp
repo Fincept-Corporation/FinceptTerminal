@@ -1,9 +1,11 @@
 ﻿#include "services/notifications/providers/TeamsProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -21,6 +23,8 @@ void TeamsProvider::send(const NotificationRequest& req, std::function<void(bool
         return;
     }
 
+    // Card accent shown inside Microsoft Teams, not by the terminal: fixed
+    // colours, independent of the terminal theme.
     const QString color = [&]() -> QString {
         switch (req.level) {
             case NotifLevel::Warning:
@@ -60,13 +64,14 @@ void TeamsProvider::send(const NotificationRequest& req, std::function<void(bool
     body["text"] = req.message;
     body["sections"] = sections;
 
-    HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    });
+    // A connector answers the text "1", a Workflows webhook an empty 202: the
+    // HTTP status decides, plus the connector's "Webhook message delivery failed …"
+    // text inside a 200.
+    DeliveryRequest request;
+    request.service = DeliveryService::Teams;
+    request.url = webhook_url_;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

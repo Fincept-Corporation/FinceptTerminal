@@ -16,10 +16,6 @@ CLIs: statsmodels_cli.py (imports this package) and statsmodels_service.py (AI Q
 """
 
 
-# Import stats_extended module (100+ additional statistical functions)
-from . import stats_extended
-
-
 __all__ = [
     # Regression
     'fit_ols', 'fit_wls', 'fit_gls', 'fit_glsar', 'fit_recursive_ls', 'predict_ols',
@@ -52,9 +48,12 @@ __all__ = [
     'perform_pca', 'perform_factor_analysis', 'perform_manova', 'canonical_correlation',
     # Nonparametric
     'kernel_density_estimation', 'kernel_regression', 'lowess_smoothing', 'multivariate_kde',
-    # Extended stats module (100+ functions - access via stats_extended.function_name)
+    # Extended stats module (84 thin statsmodels.stats wrappers - access via stats_extended.function_name)
     'stats_extended'
 ]
+
+# Submodules exposed as package attributes, imported on first access like the functions below.
+_LAZY_SUBMODULES = {"stats_extended"}
 
 
 # ── Lazy attribute resolution (PEP 562) ─────────────────────────────────────
@@ -156,11 +155,13 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
 
 
 def __getattr__(name: str):  # PEP 562
+    import importlib
+    if name in _LAZY_SUBMODULES:
+        return importlib.import_module(f".{name}", __name__)  # import binds it in globals()
     target = _LAZY_ATTRS.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     submodule, original_name = target
-    import importlib
     mod = importlib.import_module(f".{submodule}", __name__)
     value = getattr(mod, original_name)
     globals()[name] = value  # cache for subsequent access
@@ -168,4 +169,4 @@ def __getattr__(name: str):  # PEP 562
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(_LAZY_ATTRS))
+    return sorted(set(globals()) | set(_LAZY_ATTRS) | _LAZY_SUBMODULES)

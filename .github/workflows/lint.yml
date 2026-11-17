@@ -10,15 +10,38 @@ name: Lint
 # (hours). The PR path below is therefore INCREMENTAL: only the .cpp files the
 # PR actually changed, in parallel, with a narrow high-signal check set that is
 # adoptable today. The full-tree sweep stays available via "Run workflow".
+#
+# The triggers below are the UNION of every job's paths. GitHub has no per-job
+# `paths:`, so the `changes` job narrows each job to its own files:
+#   clang-format, clang-tidy, datahub-discipline, cppcheck — pull requests that
+#     touch src/, CMakeLists.txt, the lint configs or this file (as before), and
+#     manual runs. Never on push.
+#   unit-tests — pull requests and pushes that touch src/, tests/ or
+#     CMakeLists.txt.
+#   packaging-metadata — pull requests and pushes that touch packaging/,
+#     CMakeLists.txt or .github/scripts/.
+# A change to this file runs all of them. If `changes` fails, every job runs
+# instead of being skipped (a skipped job reports success to branch protection).
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   pull_request:
     paths:
       - 'fincept-qt/src/**'
+      - 'fincept-qt/tests/**'
       - 'fincept-qt/CMakeLists.txt'
       - 'fincept-qt/.clang-tidy'
       - 'fincept-qt/.clang-format'
       - 'fincept-qt/.cppcheck-suppressions'
+      - 'fincept-qt/packaging/**'
+      - '.github/scripts/**'
+      - '.github/workflows/lint.yml'
+  push:
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/tests/**'
+      - 'fincept-qt/CMakeLists.txt'
+      - 'fincept-qt/packaging/**'
+      - '.github/scripts/**'
       - '.github/workflows/lint.yml'
   workflow_dispatch:
 
@@ -35,9 +58,70 @@ env:
   QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
 
 jobs:
+  # ── changes ──────────────────────────────────────────────────────────────────
+  # Which of the jobs below this event concerns (see the header). Fails open:
+  # with no usable diff base — manual run, new branch, force push — every scope
+  # is "true".
+  changes:
+    name: changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      lint: ${{ steps.scope.outputs.lint }}
+      tests: ${{ steps.scope.outputs.tests }}
+      packaging: ${{ steps.scope.outputs.packaging }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "${EVENT}" in
+            pull_request) BASE="${PR_BASE}" ;;
+            push)         BASE="${PUSH_BEFORE}" ;;
+            *)            BASE="" ;;
+          esac
+          # An all-zero `before` is a newly created branch.
+          if [ -z "${BASE}" ] || [ -z "${BASE//0/}" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "No usable diff base for '${EVENT}' — every scope runs."
+            printf '%s=true\n' lint tests packaging | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED="${RUNNER_TEMP}/changed-paths.txt"
+          git diff --name-only "${BASE}" "${GITHUB_SHA}" > "${CHANGED}"
+          echo "$(wc -l < "${CHANGED}") file(s) changed since ${BASE:0:12}"
+          # scope <name> <glob>... — in a case pattern `*` also matches `/`, so
+          # 'fincept-qt/src/*' is the same set as the trigger's 'fincept-qt/src/**'.
+          scope() {
+            local name="$1" hit=false f p
+            shift
+            while IFS= read -r f; do
+              for p in "$@"; do
+                # shellcheck disable=SC2254  # unquoted on purpose: $p is a glob
+                case "${f}" in ${p}) hit=true; break 2 ;; esac
+              done
+            done < "${CHANGED}"
+            echo "${name}=${hit}" | tee -a "$GITHUB_OUTPUT"
+          }
+          scope lint      'fincept-qt/src/*' 'fincept-qt/CMakeLists.txt' 'fincept-qt/.clang-tidy' \
+                          'fincept-qt/.clang-format' 'fincept-qt/.cppcheck-suppressions' \
+                          '.github/workflows/lint.yml'
+          scope tests     'fincept-qt/src/*' 'fincept-qt/tests/*' 'fincept-qt/CMakeLists.txt' \
+                          '.github/workflows/lint.yml'
+          scope packaging 'fincept-qt/packaging/*' 'fincept-qt/CMakeLists.txt' '.github/scripts/*' \
+                          '.github/workflows/lint.yml'
+
   # ── clang-format ─────────────────────────────────────────────────────────────
   clang-format:
     name: clang-format
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.result != 'success' || needs.changes.outputs.lint == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +170,8 @@ jobs:
   # ── clang-tidy ───────────────────────────────────────────────────────────────
   clang-tidy:
     name: clang-tidy
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.result != 'success' || needs.changes.outputs.lint == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -211,6 +297,8 @@ jobs:
   # producer + topic you should be using instead.
   datahub-discipline:
     name: datahub-discipline
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.result != 'success' || needs.changes.outputs.lint == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -264,6 +352,8 @@ jobs:
   # --error-exitcode=1 and runs the whole tree in a couple of minutes.
   cppcheck:
     name: cppcheck
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.result != 'success' || needs.changes.outputs.lint == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -286,3 +376,95 @@ jobs:
             -j "$(nproc)" \
             src 2>&1
           echo "cppcheck complete."
+
+  # ── unit-tests ───────────────────────────────────────────────────────────────
+  # The Qt Test suites in fincept-qt/tests/. Builds ONLY the aggregate target
+  # fincept_unit_tests: the tst_* executables plus the few app sources each one
+  # lists (tests/CMakeLists.txt), never the app — ~30 build steps after
+  # configure. A new suite is picked up without touching this file. Blocking.
+  #
+  # Setup mirrors clang-tidy: the same system -dev packages (Qt's CMake configs
+  # for Gui/OpenGL/xkb/xcb need them at configure time), the same Qt kit and
+  # cache, and the same SQL driver workaround. Configure processes the whole
+  # top-level CMakeLists.txt, so the FetchContent clones (QXlsx, md4c, QGeoView,
+  # QtADS, ed25519) and the yt-dlp download happen here exactly as they do for
+  # clang-tidy; FINCEPT_BUILD_TESTS=ON adds only Qt6::Test, which ships in Qt's
+  # base module. Built with GCC 14, the compiler the suites were verified with.
+  unit-tests:
+    name: unit-tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tests == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            gcc-14 g++-14 \
+            cmake ninja-build \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb-cursor-dev libxcb-icccm4-dev libxcb-image0-dev \
+            libxcb-keysyms1-dev libxcb-render-util0-dev libxcb-shape0-dev \
+            libxcb-sync-dev libxcb-xfixes0-dev libxcb-xinerama0-dev \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev libssl-dev
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-linux-x64-lint
+
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          fi
+
+      - name: Configure (tests ON)
+        run: |
+          cmake -S fincept-qt -B build-tests -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DFINCEPT_BUILD_TESTS=ON
+
+      - name: Build the test suites only (fincept_unit_tests)
+        run: cmake --build build-tests --target fincept_unit_tests --parallel "$(nproc)"
+
+      - name: Run tests (ctest)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build-tests --output-on-failure
+
+  # ── packaging-metadata ───────────────────────────────────────────────────────
+  # Seconds-long gate on pull requests: CMakeLists.txt version vs the packaging
+  # metadata (newest AppStream <release> included). Blocking. The Flathub
+  # pre-flight and the CI Flatpak manifest derivation have ONE copy, in
+  # release.yml's build-flatpak job (its first steps, seconds into the job; a
+  # manual run with "only: flatpak" runs them on any branch).
+  # Lives here rather than in pr-gate.yml: that workflow is the PR *scope*
+  # policy and runs under pull_request_target with a write token, where
+  # executing scripts from the PR head would be unsafe.
+  packaging-metadata:
+    name: packaging-metadata
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.packaging == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version drift (CMakeLists.txt vs packaging metadata)
+        run: bash .github/scripts/check_version_drift.sh .

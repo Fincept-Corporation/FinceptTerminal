@@ -1,0 +1,12 @@
+<!-- JetBrains Mono 2.304 (https://github.com/JetBrains/JetBrainsMono), unmodified,
+     SIL Open Font License 1.1 in OFL.txt. The terminal's default font;
+     registered by ThemeManager (src/ui/theme/ThemeManager.cpp). -->
+<RCC>
+    <qresource prefix="/fonts">
+        <file>JetBrainsMono-Regular.ttf</file>
+        <file>JetBrainsMono-Medium.ttf</file>
+        <file>JetBrainsMono-SemiBold.ttf</file>
+        <file>JetBrainsMono-Bold.ttf</file>
+        <file>OFL.txt</file>
+    </qresource>
+</RCC>

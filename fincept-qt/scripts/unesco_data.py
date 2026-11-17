@@ -33,6 +33,24 @@ import zipfile
 import io
 
 
+def _iso_update_dates(value: Any) -> Any:
+    """The UIS API writes its update stamps day-first ("24/11/2026" in lastUpdate,
+    lastDataUpdate, ...): ISO dates at the source. Other values are left alone."""
+    if isinstance(value, list):
+        return [_iso_update_dates(v) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if isinstance(v, str) and "update" in str(k).lower():
+                try:
+                    v = datetime.strptime(v.strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+            out[k] = _iso_update_dates(v)
+        return out
+    return value
+
+
 class UISError:
     """Error handling wrapper for UNESCO UIS API responses"""
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
@@ -83,7 +101,7 @@ class UISWrapper:
                 return {
                     "success": True,
                     "endpoint": endpoint,
-                    "data": data,
+                    "data": _iso_update_dates(data),
                     "parameters": params,
                     "timestamp": int(datetime.now().timestamp())
                 }
@@ -603,6 +621,15 @@ def main():
         }))
         sys.exit(1)
 
+    # Options are read as "--name value"; accept the "--name=value" form other connectors use too.
+    expanded = []
+    for tok in sys.argv:
+        if tok.startswith("--") and "=" in tok:
+            expanded.extend(tok.split("=", 1))
+        else:
+            expanded.append(tok)
+    sys.argv[:] = expanded
+
     command = sys.argv[1]
     wrapper = UISWrapper()
 
@@ -915,7 +942,13 @@ def main():
                 sys.exit(1)
 
             indicator_code = sys.argv[2]
-            country_codes = sys.argv[3:] if len(sys.argv) > 3 else []
+            # the country codes are the arguments up to the first option (they used to swallow
+            # "--start-year 2015" as two more "countries")
+            country_codes = []
+            for tok in sys.argv[3:]:
+                if tok.startswith("--"):
+                    break
+                country_codes.append(tok)
             start_year = None
             end_year = None
 
@@ -1035,7 +1068,7 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "export_country_dataset":
-            if len(sys.argv) < 3:
+            if len(sys.argv) < 4:
                 print(json.dumps({"error": "Usage: python unesco_data.py export_country_dataset <country_code> <format> [include_metadata]"}))
                 sys.exit(1)
 

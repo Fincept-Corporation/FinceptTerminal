@@ -45,8 +45,10 @@ class RealYieldService : public QObject, public fincept::datahub::Producer {
     RealYieldService& operator=(const RealYieldService&) = delete;
 
     /// Resolve the configured Fincept yield endpoint, or empty string.
-    /// When empty, the service uses `publish_mock_*` paths instead of HTTP.
-    QString resolve_endpoint() const;
+    /// When empty, the service uses `publish_mock_*` paths instead of HTTP —
+    /// unless `read_error` is set: the endpoint is stored but unreadable, and
+    /// refresh() reports that instead of serving mock data.
+    QString resolve_endpoint(QString* read_error) const;
 
     /// `wallet:yield:<pubkey>` → pubkey.
     static QString pubkey_from_yield_topic(const QString& topic);

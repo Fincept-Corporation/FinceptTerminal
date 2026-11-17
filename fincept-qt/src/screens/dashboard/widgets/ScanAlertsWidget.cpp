@@ -72,7 +72,7 @@ ScanAlertsWidget::ScanAlertsWidget(const QJsonObject& /*cfg*/, QWidget* parent)
     table_ = new QTableWidget(0, 3, body_);
     table_->setObjectName(QStringLiteral("scanAlertsTable"));
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(kScanAlertsRowHeight);
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(kScanAlertsRowHeight, -4));
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
@@ -249,7 +249,7 @@ void ScanAlertsWidget::on_row_double_clicked(int row) {
     const QString symbol = sym->text();
     if (scanalerts_opens_screen(symbol, cond ? cond->text() : QString())) {
         EventBus::instance().publish(QStringLiteral("nav.switch_screen"),
-                                     QVariantMap{{"screen_id", QStringLiteral("algo_trading")}});
+                                     QVariantMap{{"screen_id", QStringLiteral("algo_trading")}, {"exclusive", true}});
         return;
     }
     open_symbol(symbol);
@@ -258,20 +258,21 @@ void ScanAlertsWidget::on_row_double_clicked(int row) {
 // ── Theme / language ────────────────────────────────────────────────────────
 
 void ScanAlertsWidget::apply_styles() {
-    body_->setStyleSheet(
+    set_css_cached(body_, 
         QString("#scanAlertsBody{background:transparent;}"
-                "QTableWidget#scanAlertsTable{background:transparent;color:%1;border:none;font-size:10px;}"
-                "QTableWidget#scanAlertsTable QHeaderView::section{background:%2;color:%3;border:none;"
-                "border-bottom:1px solid %4;padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QTableWidget#scanAlertsTable{background:transparent;color:%1;border:none;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
+                "QTableWidget#scanAlertsTable QHeaderView::section{background:%2;color:%5;border:none;"
+                "border-bottom:1px solid %4;padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QTableWidget#scanAlertsTable::item{padding:0px 4px;border-bottom:1px solid %4;}"
-                "#scanAlertsEmpty{color:%3;font-size:10px;padding:16px;}"
-                "#scanAlertsFooter{color:%3;background:%2;border-top:1px solid %4;padding:3px 8px;font-size:9px;}")
+                "#scanAlertsEmpty{color:%3;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:16px;}"
+                "#scanAlertsFooter{color:%5;background:%2;border-top:1px solid %4;padding:3px 8px;font-size:" + fincept::ui::fonts::px(-5) + "px;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(),
-                 ui::colors::BORDER_DIM()));
+                 ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY()));
 }
 
 void ScanAlertsWidget::on_theme_changed() {
     apply_styles();
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(kScanAlertsRowHeight, -4));
     render(); // row colours come from the theme tokens
 }
 

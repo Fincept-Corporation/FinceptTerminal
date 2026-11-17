@@ -1,9 +1,11 @@
 ﻿#include "services/notifications/providers/DiscordProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -21,6 +23,8 @@ void DiscordProvider::send(const NotificationRequest& req, std::function<void(bo
         return;
     }
 
+    // Embed accent shown inside Discord, not by the terminal: fixed colours,
+    // independent of the terminal theme.
     const int color = [&]() -> int {
         switch (req.level) {
             case NotifLevel::Warning:
@@ -46,21 +50,16 @@ void DiscordProvider::send(const NotificationRequest& req, std::function<void(bo
     QJsonObject body;
     body["embeds"] = embeds;
 
-    HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        // Discord answers a successful webhook post with 204 No Content. That is
-        // not an error path: QNetworkReply reports NoError for 2xx, so a real 204
-        // arrives here as is_ok() with an empty document.
-        //
-        // There used to be a `err.find("204")` substring test here. Once HttpClient
-        // began appending the server's message to the error string, that matched any
-        // 4xx/5xx whose body merely contained "204" — a Retry-After value, a byte
-        // count, a snowflake fragment — and reported a rejected webhook as delivered.
-        // Never infer a status code by substring-searching an error message.
-        if (res.is_err())
-            cb(false, QString::fromStdString(res.error()));
-        else
-            cb(true, {});
-    });
+    // Discord answers a successful webhook post with an empty 204 No Content. The
+    // delivery decision is made on the HTTP status (send_delivery /
+    // classify_delivery), never by searching an error message for "204" (that
+    // once matched any 4xx/5xx whose body merely contained "204" and reported a
+    // rejected webhook as delivered).
+    DeliveryRequest request;
+    request.service = DeliveryService::Discord;
+    request.url = webhook_url_;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

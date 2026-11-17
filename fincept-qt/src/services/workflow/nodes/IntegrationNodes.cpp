@@ -12,6 +12,8 @@ using fincept::python::PythonRunner;
 
 namespace fincept::workflow {
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_integration_nodes(NodeRegistry& registry) {
     // ── MCP Tool Call ──────────────────────────────────────────────
     // Single node that routes to any internal Fincept MCP tool.
@@ -49,9 +51,10 @@ void register_integration_nodes(NodeRegistry& registry) {
         .parameters =
             {
                 {"title", "Report Title", "string", "Report", {}, "", true},
-                {"template", "Template", "select", "default", {"default", "financial", "research", "summary"}, ""},
+                // "summary" had no branch in the bridge and "Include Charts" was never read;
+                // both are gone rather than shown and ignored.
+                {"template", "Template", "select", "default", {"default", "financial", "research"}, ""},
                 {"path", "Output Path", "string", "output/report.pdf", {}, "", true},
-                {"include_charts", "Include Charts", "boolean", true, {}, ""},
             },
         .execute = nullptr,
     });

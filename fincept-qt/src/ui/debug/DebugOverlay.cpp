@@ -1,4 +1,5 @@
 #include "ui/debug/DebugOverlay.h"
+#include "ui/theme/Theme.h"
 
 #include "app/WindowFrame.h"
 #include "core/panel/PanelRegistry.h"
@@ -12,11 +13,12 @@ namespace fincept::ui {
 DebugOverlay::DebugOverlay(QWidget* parent) : QFrame(parent) {
     setObjectName("debugOverlay");
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet("QFrame#debugOverlay {"
-                  "  background: rgba(15, 23, 42, 0.85);"
-                  "  border: 1px solid #374151;"
-                  "  border-radius: 4px;"
-                  "}");
+    setStyleSheet(QString("QFrame#debugOverlay {"
+                          "  background: %1;"
+                          "  border: 1px solid %2;"
+                          "  border-radius: 4px;"
+                          "}")
+                      .arg(colors::alpha(colors::BG_SURFACE, 0.9), colors::BORDER_MED()));
     setAttribute(Qt::WA_TransparentForMouseEvents);
     // Hidden by default — user toggles via debug.overlay action.
     hide();
@@ -26,7 +28,7 @@ DebugOverlay::DebugOverlay(QWidget* parent) : QFrame(parent) {
     hl->setSpacing(0);
 
     label_ = new QLabel(this);
-    label_->setStyleSheet("color: #9ca3af; font-family: 'Consolas', monospace; font-size: 10px;");
+    label_->setStyleSheet(QString("color: %1; font-size: " + fonts::px(-4) + "px;").arg(colors::TEXT_SECONDARY()));
     label_->setTextFormat(Qt::PlainText);
     hl->addWidget(label_);
 

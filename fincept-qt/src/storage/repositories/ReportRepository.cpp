@@ -36,11 +36,37 @@ Result<QVector<Report>> ReportRepository::list_all() {
                       {}, map_report);
 }
 
+Result<QVector<Report>> ReportRepository::search(const QString& query, int limit) {
+    QString sql = QStringLiteral("SELECT id, title, content_json, created_at, updated_at FROM reports");
+    QVariantList params;
+    const QString q = query.trimmed();
+    if (!q.isEmpty()) {
+        // LIKE is case-insensitive for ASCII in SQLite; '%' / '_' typed by the user are
+        // escaped so they match literally.
+        QString pattern = q;
+        pattern.replace(QLatin1Char('\\'), QLatin1String("\\\\"))
+            .replace(QLatin1Char('%'), QLatin1String("\\%"))
+            .replace(QLatin1Char('_'), QLatin1String("\\_"));
+        pattern = QLatin1Char('%') + pattern + QLatin1Char('%');
+        sql += QStringLiteral(" WHERE title LIKE ? ESCAPE '\\' OR content_json LIKE ? ESCAPE '\\'");
+        params << pattern << pattern;
+    }
+    sql += QStringLiteral(" ORDER BY updated_at DESC, id DESC");
+    if (limit > 0) {
+        sql += QStringLiteral(" LIMIT ?");
+        params << limit;
+    }
+    return query_list(sql, params, map_report);
+}
+
 Result<void> ReportRepository::update(int id, const QString& title, const QString& content_json) {
     auto r = exec_write("UPDATE reports SET title = ?, content_json = ?, updated_at = datetime('now') WHERE id = ?",
                         {title, content_json, id});
+    // The Report Builder keeps its library row current while the user edits (a write a
+    // few seconds after typing stops). The push reads the live row, so pending updates of
+    // one report coalesce into a single outbox entry instead of one cloud call per save.
     if (r.is_ok())
-        SyncOutbox::record("report", QString::number(id), "update");
+        SyncOutbox::record_unique("report", QString::number(id), "update");
     return r;
 }
 
@@ -61,6 +87,18 @@ Result<QVector<ReportTemplate>> ReportRepository::list_templates() {
     while (q.next())
         result.append(map_template(q));
     return Result<QVector<ReportTemplate>>::ok(std::move(result));
+}
+
+Result<ReportTemplate> ReportRepository::get_template(const QString& id) {
+    auto r = db().execute("SELECT id, name, description, template_data, created_at, updated_at "
+                          "FROM report_templates WHERE id = ?",
+                          {id});
+    if (r.is_err())
+        return Result<ReportTemplate>::err(r.error());
+    auto& q = r.value();
+    if (!q.next())
+        return Result<ReportTemplate>::err("Template not found");
+    return Result<ReportTemplate>::ok(map_template(q));
 }
 
 Result<void> ReportRepository::save_template(const ReportTemplate& t) {

@@ -8,7 +8,12 @@ Provides access to margin trading, HSGT (Stock Connect), and related data
 import sys
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import china_today, run_endpoint_table, safe_call
 
 try:
     import akshare as ak
@@ -22,40 +27,19 @@ except ImportError as e:
     sys.exit(1)
 
 
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float("inf"), float("-inf")], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
-
-
 # ==================== MARGIN TRADING SSE ====================
 
-def get_stock_margin_sse(date="20240101"):
-    """Get SSE margin trading data"""
-    return safe_call(ak.stock_margin_sse, date=date)
+def _window(start_date, end_date, days):
+    """(start, end) as YYYYMMDD: the dates typed, else the last `days` days up to today."""
+    today = china_today()
+    return (start_date or (today - timedelta(days=days)).strftime("%Y%m%d"),
+            end_date or today.strftime("%Y%m%d"))
+
+
+def get_stock_margin_sse(start_date="", end_date=""):
+    """SSE margin-trading totals per day; default the last 90 days"""
+    start, end = _window(start_date, end_date, 90)
+    return safe_call(ak.stock_margin_sse, start_date=start, end_date=end)
 
 def get_stock_margin_detail_sse(date="20240101"):
     """Get SSE margin trading detail"""
@@ -114,9 +98,11 @@ def get_stock_hsgt_stock_statistics_em(symbol="北向持股", start_date="202401
     """Get HSGT stock statistics (EastMoney)"""
     return safe_call(ak.stock_hsgt_stock_statistics_em, symbol=symbol, start_date=start_date, end_date=end_date)
 
-def get_stock_hsgt_institution_statistics_em(market="北向持股", symbol="全部"):
-    """Get HSGT institution statistics (EastMoney)"""
-    return safe_call(ak.stock_hsgt_institution_statistics_em, market=market, symbol=symbol)
+def get_stock_hsgt_institution_statistics_em(market="北向持股", start_date="", end_date=""):
+    """Stock Connect holdings by institution per day (EastMoney). market: 北向持股/南向持股/沪股通持股/
+    深股通持股; default the last 30 days"""
+    start, end = _window(start_date, end_date, 30)
+    return safe_call(ak.stock_hsgt_institution_statistics_em, market=market, start_date=start, end_date=end)
 
 def get_stock_hsgt_individual_em(symbol="000001"):
     """Get HSGT individual stock (EastMoney)"""
@@ -254,9 +240,10 @@ def get_stock_a_code_to_symbol(symbol="000001"):
     """Get A-share code to symbol"""
     return safe_call(ak.stock_a_code_to_symbol, symbol=symbol)
 
-def get_stock_a_high_low_statistics(market="全部A股"):
-    """Get A-share high-low statistics"""
-    return safe_call(ak.stock_a_high_low_statistics, market=market)
+def get_stock_a_high_low_statistics(market="all"):
+    """Number of stocks at new highs / lows (Legulegu). market: all/sz50/hs300/zz500 (named `market` so
+    a stock code in SYMBOL is not sent)"""
+    return safe_call(ak.stock_a_high_low_statistics, symbol=market)
 
 
 # ==================== MARKET ACTIVITY ====================
@@ -361,56 +348,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

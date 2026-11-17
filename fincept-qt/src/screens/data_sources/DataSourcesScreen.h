@@ -1,215 +1,137 @@
 #pragma once
-// Data Sources Screen — data connector command center.
+// DataSourcesScreen — the Data Sources tab: one three-pane workspace.
+//   SOURCES (left): every connection type and every catalogue connector, searchable and
+//     filterable, each with a health badge for THIS build on THIS machine.
+//   SAVED CONNECTIONS (middle): name, type, status of the last real TEST, when, latency.
+//   DETAIL (right): a type card, a connection (settings form, TEST, schema browser, sample
+//     rows) or a catalogue connector (inputs, run, typed result).
+// Built on first show (a skeleton paints first); every list is model/view; every load, test,
+// save and import runs off the GUI thread. There is no background polling: a status is the
+// result of a real TEST the user ran (or a workflow / AI tool ran through ConnectionService).
 
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
-#include "screens/data_sources/DataSourceTypes.h"
-#include "storage/repositories/DataSourceRepository.h"
+#include "screens/data_sources/DataSourcesModels.h"
 
-#include <QCheckBox>
-#include <QHideEvent>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QPoint>
-#include <QPushButton>
-#include <QResizeEvent>
-#include <QShowEvent>
-#include <QStackedWidget>
-#include <QTableWidget>
-#include <QTimer>
+#include <QVariantMap>
 #include <QWidget>
+
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QSplitter;
+class QStackedWidget;
+class QTableView;
+class QTimer;
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
 
 namespace fincept::screens::datasources {
 
-class ConnectorCatalogPanel;
+class CatalogConnectorView;
+class ConnectionDetailView;
 
-class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScreen {
+class DataSourcesScreen : public QWidget,
+                          public fincept::screens::IStatefulScreen,
+                          public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit DataSourcesScreen(QWidget* parent = nullptr);
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
-    QString state_key() const override { return "data_sources"; }
-    int state_version() const override { return 1; }
+    QString state_key() const override { return QStringLiteral("data_sources"); }
+    int state_version() const override { return 2; }
+
+    // ISectionLinked — "connector:<name>" (a catalogue connector, as the search box's Data rows
+    // send), "type:<id>" (a connection type), "connection:<id>" (a saved connection): selected in
+    // its list as a click does (filters that hide the row are cleared first). "sources" /
+    // "catalog" ("connectors") / "types" focus the SOURCES list (catalog / types set its kind
+    // filter), "connections" the SAVED CONNECTIONS list. `focus` = a connector name (with
+    // "connector", "sources", "catalog" or an empty section), a type id ("types") or a connection
+    // id ("connections"). Before the workspace has loaded the link is kept and applied then.
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
-    void changeEvent(QEvent* event) override;
-    bool eventFilter(QObject* obj, QEvent* event) override;
-
-  private slots:
-    void on_category_filter(int idx);
-    void on_search_changed(const QString& text);
-    void on_connector_clicked(const QString& connector_id);
-    void on_connection_add();
-    void on_connection_edit(const QString& conn_id);
-    void on_connection_delete(const QString& conn_id);
-    void on_connection_duplicate(const QString& conn_id);
-    void on_connection_test(const QString& conn_id);
-    void on_connection_enabled_changed(const QString& conn_id, bool enabled);
-    void on_connector_selection_changed();
-    void on_connection_selection_changed();
-    void on_category_selection_changed(int row);
-    void on_provider_ladder_activated(QListWidgetItem* item);
-    void on_detail_connection_activated(QListWidgetItem* item);
-    void on_bulk_enable_all();
-    void on_bulk_disable_all();
-    void on_bulk_delete_selected();
-    void on_export_connections();
-    void on_import_connections();
-    void on_download_template();
-    void on_stat_box_clicked(int stat_index);
-    void on_connections_search_changed(const QString& text);
-    void on_poll_timer();
-    void refresh_connections();
-    void update_clock();
 
   private:
-    // ── UI build ──────────────────────────────────────────────────────────────
-    void setup_ui();
-    void apply_screen_styles();
-    QWidget* build_screen_header();
-    QWidget* build_stats_strip();
-    QWidget* build_tab_bar();
-    QWidget* build_browse_page();
-    QWidget* build_connections_page();
-    /// Switches the page stack + tab highlight (0 BROWSE, 1 CONNECTIONS, 2 CATALOG).
-    void select_page(int page_idx);
-    QWidget* build_category_panel();
-    QWidget* build_connector_panel();
-    QWidget* build_detail_panel();
+    void build_workspace();
+    QWidget* build_sources_pane(QWidget* parent);
+    QWidget* build_connections_pane(QWidget* parent);
+    QWidget* build_detail_pane(QWidget* parent);
 
-    // ── Data / update ─────────────────────────────────────────────────────────
-    void build_category_ladder();
-    void build_connector_table();
-    void build_connections_table();
-    /// Single entry point for "the filter text changed" — rebuilds every view
-    /// that depends on it. Driven by `search_debounce_`, never called directly
-    /// from a textChanged signal.
-    void rebuild_all_views();
-    void update_stats_strip();
-    void update_provider_ladder();
-    void update_detail_panel();
-    void update_action_states();
-    void retranslateUi();
-    void show_config_dialog(const ConnectorConfig& config, const QString& edit_id = "", bool duplicate = false);
-    void update_connection_status_cell(const QString& conn_id, bool ok, const QString& msg);
-    void apply_stat_filter(int stat_index);
-    /// Right-click menu for one saved connection: edit / duplicate / test / delete.
-    /// These slots existed but nothing in the UI could reach them.
-    void show_connection_menu(const QString& conn_id, const QPoint& global_pos);
+    void reload(bool with_sources);
+    void apply_connections(const QVector<DataSource>& rows);
+    void apply_restore();
+    void update_counts();
+    void show_notice(const QString& text, bool error = false);
 
-    QVector<ConnectorConfig> filtered_connectors() const;
-    QVector<DataSource> filtered_connection_rows() const;
-    void select_connector_by_id(const QString& connector_id);
-    QString effective_detail_connection_id() const;
-    QString preferred_connection_for_connector(const QString& connector_id) const;
+    void on_source_selected();
+    void on_connection_selected();
+    void show_type_card(const QString& type_id);
+    void select_source(SourceKind kind, const QString& id);
+    void select_connection(const QString& id);
+    bool confirm_leave_edits();
+    void show_connection_menu(const QPoint& pos);
 
-    // ── Screen header ─────────────────────────────────────────────────────────
-    QLineEdit* search_edit_ = nullptr;
-    QLabel* clock_label_ = nullptr;
-    QLabel* count_label_ = nullptr;
+    bool built_ = false;
+    bool loaded_sources_ = false;
+    bool loading_ = false;
+    bool reload_again_ = false;
+    QVariantMap pending_restore_;
+    QString pending_select_connection_;
+    // A deep link (open_section) that arrived before the sources loaded.
+    QString pending_link_section_;
+    QString pending_link_focus_;
+    bool has_pending_link_ = false;
+    QString current_type_;        ///< selected connection type (for + NEW / "only this type")
+    QString shown_connection_;    ///< connection shown in the detail pane
+    QString shown_source_;        ///< "t:<type id>" / "c:<connector>" shown in the detail pane
+    qint64 sources_loaded_ms_ = 0; ///< when health badges / key presence were last computed
 
-    // ── Connections toolbar ───────────────────────────────────────────────────
-    QLineEdit* conn_search_edit_ = nullptr;
-    QPushButton* bulk_enable_btn_ = nullptr;
-    QPushButton* bulk_disable_btn_ = nullptr;
-    QPushButton* bulk_delete_btn_ = nullptr;
+    QStackedWidget* root_stack_ = nullptr;
+    fincept::ui::LoadingSkeleton* boot_skeleton_ = nullptr;
+    QLabel* subtitle_ = nullptr;
+    QLabel* notice_ = nullptr;
+    QTimer* notice_timer_ = nullptr;
+    QTimer* health_debounce_ = nullptr;
+    QSplitter* splitter_ = nullptr;
 
-    // ── Left sidebar ──────────────────────────────────────────────────────────
-    QListWidget* category_list_ = nullptr;
-    QListWidget* provider_ladder_ = nullptr;
+    // Sources
+    QLineEdit* source_search_ = nullptr;
+    QComboBox* kind_filter_ = nullptr;
+    QComboBox* category_filter_ = nullptr;
+    QCheckBox* usable_only_ = nullptr;
+    QLabel* sources_count_ = nullptr;
+    QStackedWidget* sources_stack_ = nullptr;
+    QTableView* sources_view_ = nullptr;
+    fincept::ui::EmptyState* sources_empty_ = nullptr;
+    SourceCatalogModel* sources_model_ = nullptr;
+    SourceFilterProxy* sources_proxy_ = nullptr;
 
-    // ── Connector table ───────────────────────────────────────────────────────
-    QTableWidget* connector_table_ = nullptr;
+    // Connections
+    QLineEdit* conn_search_ = nullptr;
+    QCheckBox* only_type_ = nullptr;
+    QPushButton* new_btn_ = nullptr;
+    QLabel* conns_count_ = nullptr;
+    QStackedWidget* conns_stack_ = nullptr;
+    QTableView* conns_view_ = nullptr;
+    fincept::ui::EmptyState* conns_empty_ = nullptr;
+    ConnectionListModel* conns_model_ = nullptr;
+    ConnectionFilterProxy* conns_proxy_ = nullptr;
 
-    // ── Detail inspector ──────────────────────────────────────────────────────
-    QLabel* detail_title_ = nullptr;
-    QLabel* detail_symbol_ = nullptr;
-    QLabel* detail_description_ = nullptr;
-    QLabel* detail_category_value_ = nullptr;
-    QLabel* detail_transport_value_ = nullptr;
-    QLabel* detail_auth_value_ = nullptr;
-    QLabel* detail_test_value_ = nullptr;
-    QLabel* detail_fields_value_ = nullptr;
-    QLabel* detail_configured_value_ = nullptr;
-    QLabel* detail_enabled_value_ = nullptr;
-    QLabel* detail_last_status_value_ = nullptr;
-    QTableWidget* field_table_ = nullptr;
-    QListWidget* detail_connections_list_ = nullptr;
-    QPushButton* new_connection_btn_ = nullptr;
-    QPushButton* edit_connection_btn_ = nullptr;
-    QPushButton* test_connection_btn_ = nullptr;
-
-    // ── Stats strip ───────────────────────────────────────────────────────────
-    QLabel* universe_stat_value_ = nullptr;
-    QLabel* configured_stat_value_ = nullptr;
-    QLabel* active_stat_value_ = nullptr;
-    QLabel* auth_stat_value_ = nullptr;
-
-    // ── Connections table ─────────────────────────────────────────────────────
-    QTableWidget* connections_table_ = nullptr;
-
-    // ── Static chrome cached for retranslateUi ──────────────────────────────────
-    QLabel* header_title_ = nullptr;
-    QLabel* header_subtitle_ = nullptr;
-    QPushButton* import_btn_ = nullptr;
-    QPushButton* export_btn_ = nullptr;
-    QPushButton* tpl_btn_ = nullptr;
-    QLabel* universe_stat_label_ = nullptr;
-    QLabel* configured_stat_label_ = nullptr;
-    QLabel* active_stat_label_ = nullptr;
-    QLabel* auth_stat_label_ = nullptr;
-    QPushButton* browse_tab_ = nullptr;
-    QPushButton* conns_tab_ = nullptr;
-    QPushButton* catalog_tab_ = nullptr;
-    /// Data Sources › CATALOG — every Python data connector (resources/data_connectors.json).
-    ConnectorCatalogPanel* catalog_panel_ = nullptr;
-    QLabel* category_hdr_title_ = nullptr;
-    QLabel* provider_hdr_title_ = nullptr;
-    QLabel* connector_panel_title_ = nullptr;
-    QLabel* inspector_hdr_title_ = nullptr;
-    QLabel* detail_category_label_ = nullptr;
-    QLabel* detail_transport_label_ = nullptr;
-    QLabel* detail_auth_label_ = nullptr;
-    QLabel* detail_test_label_ = nullptr;
-    QLabel* detail_fields_label_ = nullptr;
-    QLabel* detail_configured_label_ = nullptr;
-    QLabel* detail_enabled_label_ = nullptr;
-    QLabel* detail_last_status_label_ = nullptr;
-    QLabel* config_fields_label_ = nullptr;
-    QLabel* detail_saved_conns_label_ = nullptr;
-    QLabel* conns_page_title_ = nullptr;
-    QPushButton* conns_add_btn_ = nullptr;
-
-    // ── Page stack ────────────────────────────────────────────────────────────
-    QStackedWidget* page_stack_ = nullptr;
-
-    // ── Timers ────────────────────────────────────────────────────────────────
-    QTimer* clock_timer_ = nullptr;
-    QTimer* poll_timer_ = nullptr;
-    /// Coalesces keystrokes in either search box into one rebuild. A full
-    /// rebuild walks ~380 connectors and tears down every connection row
-    /// (checkbox + label per row) — doing that per keystroke rebuilt the table
-    /// under the user's cursor mid-word.
-    QTimer* search_debounce_ = nullptr;
-
-    // ── State ─────────────────────────────────────────────────────────────────
-    QVector<DataSource> connections_cache_;
-    QString selected_connector_id_;
-    QString selected_connection_id_;
-    Category active_category_ = Category::Database;
-    bool show_all_categories_ = true;
-    int stat_filter_ = -1; // -1 = none, 0-3 = stat box index
-    QString conn_search_text_;
-    QMap<QString, QPair<bool, QString>> live_status_cache_;
-    // Round-robin cursor into the enabled-connection list so on_poll_timer
-    // probes a bounded slice per tick instead of fanning out one blocking
-    // worker thread per connection.
-    int poll_cursor_ = 0;
+    // Detail
+    QStackedWidget* detail_stack_ = nullptr;
+    fincept::ui::EmptyState* intro_ = nullptr;
+    fincept::ui::EmptyState* type_card_ = nullptr;
+    ConnectionDetailView* conn_view_ = nullptr;
+    CatalogConnectorView* connector_view_ = nullptr;
 };
 
 } // namespace fincept::screens::datasources

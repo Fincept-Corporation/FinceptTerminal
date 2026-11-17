@@ -133,6 +133,10 @@
           <span class="name">Glow</span>
           <span class="status">checking…</span>
         </div>
+        <div class="wallet-row" data-provider="generic">
+          <span class="name">Other (window.solana)</span>
+          <span class="status">checking…</span>
+        </div>
       </div>
 
       <div id="status" class="status-line">Loading transaction body from local bridge…</div>
@@ -167,7 +171,9 @@
     el.className = "status-line" + (kind ? (" " + kind) : "");
   }
 
-  // ── Provider resolution (mirrors connect.html) ─────────────────────────
+  // ── Provider resolution (must stay identical to connect.html) ──────────
+  // A wallet connected through a row that this page cannot resolve can never
+  // sign: keep the same rows and the same lookup as the connect page.
   function resolveProvider(name) {
     switch (name) {
       case "phantom":
@@ -178,7 +184,10 @@
       case "backpack":
         return (window.backpack && window.backpack.isBackpack) ? window.backpack : null;
       case "glow":
-        return (window.glow && window.glow.isGlow) ? window.glow : null;
+        return (window.glowSolana || (window.glow && window.glow.solana)) || null;
+      case "generic":
+        return (window.solana && typeof window.solana.connect === "function")
+          ? window.solana : null;
       default:
         return null;
     }

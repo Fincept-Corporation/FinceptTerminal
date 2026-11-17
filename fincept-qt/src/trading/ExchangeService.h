@@ -76,23 +76,28 @@ class ExchangeService : public QObject {
     OrderBookData fetch_orderbook(const QString& symbol, int limit = 20);
     QVector<Candle> fetch_ohlcv(const QString& symbol, const QString& timeframe = "1h", int limit = 100);
     QVector<MarketInfo> fetch_markets(const QString& type = "", const QString& query = "");
+    /// See ExchangeSession::fetch_market — the market (and its order limits) an
+    /// order for `symbol` would go to on the active exchange.
+    MarketInfo fetch_market(const QString& symbol);
     QStringList list_exchange_ids();
     QVector<TradeData> fetch_trades(const QString& symbol, int limit = 50);
     FundingRateData fetch_funding_rate(const QString& symbol);
     OpenInterestData fetch_open_interest(const QString& symbol);
 
-    // Authenticated operations — current session, worker thread only.
+    // Authenticated reads — current session, worker thread only.
+    //
+    // Nothing that CHANGES an account (order, cancel, leverage, margin mode) is
+    // offered here: this facade routes through one process-wide "current
+    // exchange", which another window or a later switch can change between the
+    // user's confirmation and the request. Account changes go through the
+    // session the caller names — ExchangeSessionManager::instance().session(id)
+    // ->request_as(...) — with the exchange and credentials captured when the
+    // user confirmed.
     QJsonObject fetch_balance();
-    QJsonObject place_exchange_order(const QString& symbol, const QString& side, const QString& type, double amount,
-                                     double price = 0.0, double stop_price = 0.0, double sl = 0.0, double tp = 0.0,
-                                     bool reduce_only = false);
-    QJsonObject cancel_exchange_order(const QString& order_id, const QString& symbol);
     QJsonObject fetch_positions_live(const QString& symbol = "");
     QJsonObject fetch_open_orders_live(const QString& symbol = "");
     QJsonObject fetch_my_trades(const QString& symbol, int limit = 50);
     QJsonObject fetch_trading_fees(const QString& symbol = "");
-    QJsonObject set_leverage(const QString& symbol, int leverage);
-    QJsonObject set_margin_mode(const QString& symbol, const QString& mode);
 
     MarkPriceData fetch_mark_price(const QString& symbol);
 

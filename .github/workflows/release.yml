@@ -3,13 +3,25 @@ name: Release — Build All Installers
 # ─────────────────────────────────────────────────────────────────────────────
 # Triggered on:
 #   • git tag push  (v*)  → builds installers, creates GH Release, updates README
-#   • workflow_dispatch   → manual run (skips release + README update)
+#   • workflow_dispatch   → manual run (skips release + README update);
+#                           "only: flatpak" builds just the Flatpak bundle,
+#                           "only: deb" just the Linux .deb (+ verify-deb)
+# Linux deliverables: the Flatpak (main) and the .deb. No AppImage / .rpm.
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Which installers to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - flatpak
+          - deb
 
 env:
   BUILD_TYPE: Release
@@ -29,11 +41,14 @@ env:
 jobs:
   build-windows:
     name: Windows x64 Installer
+    # A manual run may ask for one Linux package alone; tag pushes carry no
+    # inputs and always build everything.
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all'
     runs-on: windows-2022
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 1
@@ -712,22 +727,31 @@ jobs:
       # would also catch the main FinceptTerminal.exe binary, which we don't
       # want to publish as a release asset (users should run the installer).
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FinceptTerminal-Windows-x64-installer
           path: fincept-qt/build/FinceptTerminal-*-windows-x64-setup.exe
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════
-# JOB 2 — Linux x64 Installer (self-contained AppImage, served as .run)
+# JOB 2 — Linux x64 .deb (bundled Qt under /opt/fincept-terminal-community)
+#
+# Linux ships the Flatpak (JOB 4, the main Linux package) and this .deb. The
+# AppImage, the .rpm and the Linux IFW wizard are no longer built: Fedora,
+# RHEL, Arch, openSUSE and other non-Debian users install the Flatpak. Built
+# on ubuntu-22.04 (glibc 2.35), so the .deb targets Ubuntu 22.04+ / Debian 12+
+# and derivatives; JOB 2b (verify-deb) installs and opens it on each of them.
 # ═════════════════════════════════════════════════════════════════════════════
   build-linux:
-    name: Linux x64 Installer
+    name: Linux x64 .deb
+    # Manual runs: "all" and "deb" build it, "flatpak" does not. Tag pushes
+    # carry no inputs and always build everything.
+    if: github.event_name != 'workflow_dispatch' || inputs.only != 'flatpak'
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 1
@@ -742,13 +766,10 @@ jobs:
           # update is redundant and was observed to hang the runner.
 
       # ── System deps ───────────────────────────────────────────────────────
-      # ubuntu-22.04 ships g++ 11.4 by default, but CMakeLists.txt enforces
-      # GCC 12.3+. Install gcc-12/g++-12 and pin CC/CXX for the rest of the job.
-      # We intentionally do NOT install apt Qt packages — ubuntu-22.04 ships
-      # Qt 6.2 and CMakeLists pins Qt 6.8.3 EXACT. Qt is installed via
-      # jurplel/install-qt-action below, matching the Windows and macOS jobs.
-      # We still need the XCB / GL system libs so Qt's xcb platform plugin
-      # can link at build time and load at runtime.
+      # ubuntu-22.04 ships g++ 11.4, but CMakeLists.txt enforces GCC 12.3+.
+      # No apt Qt: 22.04 ships Qt 6.2 and CMakeLists pins Qt 6.8.3 EXACT, so Qt
+      # comes from install-qt-action below. The XCB / GL / Wayland client libs
+      # let Qt's platform plugins link at build time and linuxdeploy resolve them.
       - name: Install system dependencies
         run: |
           sudo add-apt-repository universe -y
@@ -757,6 +778,7 @@ jobs:
             cmake ninja-build gcc-12 g++-12 \
             libssl-dev \
             libgl1-mesa-dev libglu1-mesa-dev \
+            libwayland-client0 libwayland-cursor0 libwayland-egl1 \
             libxkbcommon-dev libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-cursor-dev \
             libxcb-icccm4 libxcb-icccm4-dev \
@@ -771,7 +793,7 @@ jobs:
             libxcb-xkb1 libxkbcommon-x11-dev \
             libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
             python3 python3-pip pkg-config zip \
-            wget file libfuse2 patchelf
+            wget file imagemagick
           echo "CC=gcc-12"  >> "$GITHUB_ENV"
           echo "CXX=g++-12" >> "$GITHUB_ENV"
 
@@ -789,16 +811,10 @@ jobs:
       - name: Install yt-dlp
         run: pip install yt-dlp
 
-      # ── Generate Linux desktop icon (shared by AppImage/.deb/.rpm) ─────────
-      # CMake's install rule renames resources/fincept.png → fincept-terminal.png
-      # (the name the .desktop `Icon=` key and the .rpm %files manifest expect).
-      # The repo only ships resources/fincept.ico, so derive the PNG here.
-      #
-      # CRITICAL: this MUST run BEFORE `cmake -B build`. CMake evaluates the
-      # install rule's `if(EXISTS resources/fincept.png)` (CMakeLists.txt) at
-      # CONFIGURE time and bakes the decision into cmake_install.cmake. If the
-      # PNG appears only after configure, `cmake --install` never emits it and
-      # the .rpm build fails: File not found: .../fincept-terminal.png.
+      # ── Linux desktop icon ────────────────────────────────────────────────
+      # The repo ships resources/fincept.ico only; the package's hicolor icons
+      # are scaled from this PNG. Runs BEFORE `cmake -B build`: CMake's own
+      # Linux install rule tests for resources/fincept.png at configure time.
       - name: Generate Linux icon PNG
         working-directory: fincept-qt
         run: |
@@ -814,26 +830,19 @@ jobs:
               convert -size 256x256 xc:'#1a1a1a' "png:resources/fincept.png"
             fi
           fi
-          # Fail fast on a missing/empty/corrupt PNG — a bad icon here breaks both
-          # the AppImage (linuxdeploy's libpng pass) and the .rpm %files check.
-          if [ ! -s resources/fincept.png ] || ! file resources/fincept.png | grep -q 'PNG image data'; then
+          if [ ! -s resources/fincept.png ] || ! file resources/fincept.png | grep -q 'PNG image data' \
+             || ! identify resources/fincept.png >/dev/null 2>&1; then
             echo "::error::resources/fincept.png is missing or not a valid PNG"
             file resources/fincept.png 2>&1 || true
             exit 1
           fi
-          echo "Icon ready: resources/fincept.png ($(du -h resources/fincept.png | cut -f1))"
+          echo "Icon ready: resources/fincept.png ($(identify -format '%wx%h' resources/fincept.png))"
 
       # ── Strip dangling Qt SQL driver plugin CMake configs (aqt workaround) ──
       # aqtinstall ships Qt6Sql's MySQL/PSQL/ODBC/Mimer *DriverPlugin CMake
-      # target files but NOT the plugin binaries they reference — the Qt Company
-      # can't redistribute the GPL/commercial DB client libs. find_package(Qt6
-      # ... Sql) (CMakeLists.txt:400+ → Qt6SqlPlugins.cmake) then aborts at
-      # CONFIGURE time: imported target "Qt6::QMYSQLDriverPlugin" references
-      # ".../libqsqlmysql.so" but this file does not exist. We only use SQLite,
-      # so drop the dangling plugin configs. Qt6SqlPlugins.cmake globs the
-      # *DriverPluginConfig.cmake files, so removing them de-registers the
-      # plugins cleanly. MUST run before "Configure CMake". (The linuxdeploy
-      # step still rm's the .so's it would otherwise try to bundle at runtime.)
+      # target files but NOT the plugin binaries they reference, so
+      # find_package(Qt6 ... Sql) aborts at configure time. We only use SQLite.
+      # MUST run before "Configure CMake".
       - name: Remove dangling Qt SQL driver plugin CMake configs
         run: |
           set -euo pipefail
@@ -847,8 +856,8 @@ jobs:
           fi
 
       # ── Configure + Build ─────────────────────────────────────────────────
-      # No FINCEPT_BUILD_INSTALLER / no QtIFW on Linux — we ship an AppImage
-      # instead (see "Build AppImage" step below).
+      # No FINCEPT_BUILD_INSTALLER: there is no CPack/IFW installer on Linux;
+      # the .deb is assembled from the build tree below.
       - name: Configure CMake
         working-directory: fincept-qt
         run: |
@@ -864,7 +873,6 @@ jobs:
         working-directory: fincept-qt
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc)
 
-      # ── Verify ───────────────────────────────────────────────────────────
       - name: Verify binary
         working-directory: fincept-qt
         run: |
@@ -874,10 +882,9 @@ jobs:
           file "$BINARY"
 
       # ── Headless self-tests (build-tree binary) ───────────────────────────
-      # Run before packaging so a logic regression fails the release in ~2
-      # minutes instead of after the 15-minute AppImage/deb/rpm/IFW sequence.
-      # Flags are discovered from the binary; --profile ci keeps the paper and
-      # F&O engines off any real profile. See .github/scripts/ci_app_checks.sh.
+      # Before packaging, so a logic regression fails in minutes. Flags are
+      # discovered from the binary; --profile ci keeps the paper and F&O
+      # engines off any real profile (.github/scripts/ci_app_checks.sh).
       - name: Run self-tests (headless)
         working-directory: fincept-qt
         timeout-minutes: 25
@@ -886,485 +893,694 @@ jobs:
           export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
           bash ../.github/scripts/ci_app_checks.sh selftests "build/${{ env.APP_NAME }}" ci
 
-      # ── Build self-contained AppImage ─────────────────────────────────────
-      # The previous release workflow ran CPack IFW on Linux but didn't bundle
-      # Qt at all — the installer produced a "binary + desktop file" payload
-      # that crashed on every machine missing the matching apt Qt. We now ship
-      # an AppImage instead: linuxdeploy walks the binary's needed-libraries
-      # list, pulls in every transitive .so (Qt + XCB + ICU + OpenSSL + GL),
-      # patchelfs the RPATH, and bakes it all into one executable file the
-      # auto-updater can chmod+launch like a .run.
-      #
-      # Filename keeps the `-linux-x64-setup.run` suffix so it matches the
-      # regex in update-manifest (AppImage is just a self-mounting executable
-      # — the updater's "chmod +x and launch" path works identically).
-      - name: Build AppImage
+      # ── Bundle Qt into build/AppDir/usr (linuxdeploy; no AppImage) ────────
+      # No distribution ships Qt 6.8 and the binary uses Qt private API (no ABI
+      # promise across minor versions), so the .deb carries its own Qt (#415).
+      # linuxdeploy + its Qt plugin are the deploy tool (as windeployqt and
+      # macdeployqt are on the other platforms): they copy the Qt libraries,
+      # plugins and WebEngine runtime the binary needs and give every ELF an
+      # $ORIGIN-relative RUNPATH. No --output, so no AppImage is produced; the
+      # tools are AppImages themselves, so APPIMAGE_EXTRACT_AND_RUN=1 runs them
+      # without FUSE. The next step checks and finishes the tree.
+      - name: Bundle Qt (linuxdeploy, directory output)
         working-directory: fincept-qt
         run: |
           set -euo pipefail
           APPDIR="build/AppDir"
-          mkdir -p "${APPDIR}/usr/bin"
-          mkdir -p "${APPDIR}/usr/share/applications"
-          mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
-
-          # Stage binary + desktop entry + icon
-          cp "build/${{ env.APP_NAME }}" "${APPDIR}/usr/bin/"
-          chmod +x "${APPDIR}/usr/bin/${{ env.APP_NAME }}"
-
-          cat > "${APPDIR}/usr/share/applications/fincept-terminal.desktop" <<'EOF'
-          [Desktop Entry]
-          Name=Fincept Terminal
-          Exec=FinceptTerminal
-          Icon=fincept-terminal
-          Type=Application
-          Categories=Finance;
-          EOF
-
-          # Icon — linuxdeploy requires a valid PNG (it runs libpng/CImg over
-          # the file to generate scaled variants). Convert the repo's .ico to
-          # a 256x256 PNG via ImageMagick (pre-installed on ubuntu-22.04). Fall
-          # back to a generated solid-color PNG only if no source icon exists —
-          # never hand-write PNG bytes inline, ImageMagick's CRC check rejects
-          # anything with a malformed IDAT chunk.
-          ICON_DEST="${APPDIR}/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png"
-          if [ -f "resources/icons/app_icon_256.png" ]; then
-            cp "resources/icons/app_icon_256.png" "${ICON_DEST}"
-          elif [ -f "resources/fincept.png" ]; then
-            cp "resources/fincept.png" "${ICON_DEST}"
-          elif [ -f "resources/fincept.ico" ]; then
-            # .ico may hold multiple frames — "ico:file[0]" selects the first,
-            # which is conventionally the largest/primary. Explicit "ico:" prefix
-            # forces the ICO decoder in case policy.xml has format detection quirks.
-            convert "ico:resources/fincept.ico[0]" -resize 256x256 -background none -flatten "png:${ICON_DEST}"
-          else
-            # Solid-color 256x256 PNG as last resort. ImageMagick writes it
-            # with a valid IDAT + CRC, unlike an inline printf of raw bytes.
-            convert -size 256x256 xc:'#1a1a1a' "png:${ICON_DEST}"
-          fi
-
-          # Sanity check — a broken PNG here will fail the AppImage build
-          # 30 seconds later inside linuxdeploy, so fail fast with a clear error.
-          # Check: file exists, is non-empty, `file` reports PNG, and libpng's
-          # own `pngcheck`-equivalent (imagemagick `identify`) can parse it.
-          if [ ! -s "${ICON_DEST}" ]; then
-            echo "::error::Icon at ${ICON_DEST} is missing or empty"
-            ls -la "${ICON_DEST}" 2>&1 || true
-            exit 1
-          fi
-          if ! file "${ICON_DEST}" | grep -q 'PNG image data'; then
-            echo "::error::Icon at ${ICON_DEST} is not a valid PNG"
-            file "${ICON_DEST}"
-            exit 1
-          fi
-          if ! identify "${ICON_DEST}" >/dev/null 2>&1; then
-            echo "::error::Icon at ${ICON_DEST} failed ImageMagick identify — libpng will reject it"
-            identify "${ICON_DEST}" 2>&1 || true
-            exit 1
-          fi
-          echo "Icon OK: $(identify -format '%wx%h %m' "${ICON_DEST}")"
-
-          # App resources + Python analytics scripts live next to the binary
-          # (matches AppPaths resolution on Linux).
-          cp -r resources "${APPDIR}/usr/bin/resources" 2>/dev/null || true
+          rm -rf "${APPDIR}"
+          mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/share/applications" \
+                   "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+          install -m 755 "build/${{ env.APP_NAME }}" "${APPDIR}/usr/bin/"
+          # App resources + Python scripts beside the binary (AppPaths on Linux).
+          cp -r resources "${APPDIR}/usr/bin/resources"
           bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${APPDIR}/usr/bin/scripts"
+          # linuxdeploy does not finish without a desktop entry and an icon. Only
+          # usr/ goes into the package, which installs its own copies of both.
+          install -m 644 packaging/linux/fincept-terminal.desktop \
+            "${APPDIR}/usr/share/applications/fincept-terminal-community.desktop"
+          install -m 644 resources/fincept.png \
+            "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fincept-terminal-community.png"
 
-          # Requirements files — PythonSetupManager reads these at first run.
-          mkdir -p "${APPDIR}/usr/bin/resources"
-          cp resources/requirements-numpy1.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
-          cp resources/requirements-numpy2.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
-          cp resources/requirements-numpy2-core.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
-
-          # Download linuxdeploy + Qt plugin
-          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
-
-          # linuxdeploy-plugin-qt uses qmake to locate Qt. Point it at the
-          # jurplel-installed Qt 6.8.3 rather than the (absent) apt qmake6.
-          # Without this the plugin either no-ops or picks up system Qt.
-          export PATH="${QT_ROOT_DIR}/bin:${PATH}"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          # linuxdeploy finds its Qt plugin on PATH; the plugin finds Qt through
+          # qmake (the install-qt-action kit).
+          export PATH="${PWD}:${QT_ROOT_DIR}/bin:${PATH}"
           export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
-
-          # ── Strip unused Qt SQL driver plugins ───────────────────────────
-          # We only use SQLite. linuxdeploy-plugin-qt walks every plugin in
-          # Qt's sqldrivers/ folder and tries to resolve its dependencies —
-          # the Mimer plugin pulls in libmimerapi.so, which isn't installed
-          # on the runner and causes the deploy step to fail.
-          if [ -d "${QT_ROOT_DIR}/plugins/sqldrivers" ]; then
-            rm -f "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlmimer.so" \
-                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlodbc.so" \
-                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlpsql.so" \
-                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlmysql.so"
-          fi
-
-          # Filename must match the regex in update-manifest:
-          #   FinceptTerminal-<version>-linux-x64-setup.run
-          # where <version> is CMAKE_PROJECT_VERSION (e.g. 4.0.3), NOT the
-          # tag (v4.0.3). Parse project() VERSION from CMakeLists.txt so we
-          # stay in sync even when triggered via workflow_dispatch (no tag).
-          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          if [ -z "${VERSION}" ]; then
-            echo "::error::Could not parse project VERSION from CMakeLists.txt"
-            exit 1
-          fi
-          echo "Package version: ${VERSION}"
-
-          # Build the AppImage. The qt plugin traces Qt plugin dependencies
-          # (platforms, sqldrivers, imageformats, tls, iconengines, svg, etc.)
-          # in addition to the core Qt libs. UPDATE_INFORMATION embeds the
-          # zsync update URL so AppImageUpdate can fetch deltas later.
           export QMAKE="${QT_ROOT_DIR}/bin/qmake"
-          export OUTPUT="FinceptTerminal-${VERSION}-linux-x64-setup.run"
-          export UPDATE_INFORMATION="gh-releases-zsync|Fincept-Corporation|FinceptTerminal|latest|FinceptTerminal-*-linux-x64-setup.run.zsync"
 
-          # ── OpenSSL must be bundled as a MATCHED PAIR (#352) ───────────────
-          # The app only calls libcrypto APIs (storage/secure/SecureStorage.cpp,
-          # trading/exchanges/hyperliquid/HyperliquidSigner.cpp), so ld's default
-          # --as-needed drops libssl.so.3 from DT_NEEDED even though CMake links
-          # OpenSSL::SSL. linuxdeploy walks DT_NEEDED, so it bundled libcrypto.so.3
-          # ALONE. Qt's TLS backend dlopen()s libssl.so.3 at runtime and picks the
-          # HOST copy (3.3+ on Arch/NixOS/Fedora), which needs OPENSSL_3.3.0 from
-          # libcrypto but finds our stale bundled 3.0.2 first on LD_LIBRARY_PATH:
-          #   qt.tlsbackend.ossl: Failed to load libssl/libcrypto
-          # → every HTTPS request fails and the setup wizard says "no network".
-          # Force-deploy both so the bundled pair is internally consistent.
-          resolve_soname() {
-            local soname="$1" path
-            path=$(ldconfig -p | awk -v s="${soname}" '$1 == s && /x86-64/ { print $NF; exit }')
-            # ldconfig prints the SONAME-named file; fall back to the multiarch
-            # path if the cache is stale or the name doesn't match exactly.
-            if [ -z "${path}" ] || [ "$(basename "${path}")" != "${soname}" ]; then
-              path="/usr/lib/x86_64-linux-gnu/${soname}"
-            fi
-            if [ ! -e "${path}" ]; then
-              echo "::error::${soname} not found on the runner — cannot bundle a consistent OpenSSL pair (#352)" >&2
-              exit 1
-            fi
-            printf '%s' "${path}"
-          }
-          OPENSSL_ARGS=()
-          for _so in libssl.so.3 libcrypto.so.3; do
-            _path=$(resolve_soname "${_so}")
-            echo "Bundling OpenSSL library: ${_path}"
-            OPENSSL_ARGS+=(--library "${_path}")
+          # Only SQLite is used; the other SQL driver plugins need client
+          # libraries the runner lacks (libmimerapi.so) and fail the deploy.
+          rm -f "${QT_ROOT_DIR}/plugins/sqldrivers/"libqsql{mimer,odbc,psql,mysql}.so
+
+          # The Qt plugin deploys only the xcb platform plugin by default; up to
+          # v4.5.2 a Wayland session without XWayland then aborted at start
+          # ("no Qt platform plugin could be initialized"). These add the two
+          # wayland platform plugins and their shell/decoration/graphics plugins.
+          export EXTRA_PLATFORM_PLUGINS="libqwayland-egl.so;libqwayland-generic.so"
+          export EXTRA_QT_MODULES="waylandcompositor"
+
+          ./linuxdeploy-x86_64.AppImage --appdir "${APPDIR}" --plugin qt \
+            --desktop-file "${APPDIR}/usr/share/applications/fincept-terminal-community.desktop" \
+            --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fincept-terminal-community.png"
+
+      # ── Stage and check the package tree (#415) ───────────────────────────
+      #   /opt/fincept-terminal-community/      the bundle (bin/ lib/ plugins/ libexec/ resources/ ...)
+      #   /usr/bin/fincept-terminal-community   symlink to bin/FinceptTerminal — no wrapper, no
+      #       LD_LIBRARY_PATH: libraries resolve through each ELF's $ORIGIN RUNPATH and plugins
+      #       through bin/qt.conf, so nothing leaks into the managed Python, yt-dlp or the other
+      #       programs the terminal starts
+      #   /usr/share/{applications,metainfo,icons/hicolor/<n>x<n>/apps,doc,lintian/overrides}
+      # Not /opt/fincept-terminal, /usr/bin/fincept-terminal or fincept-terminal.desktop: those
+      # are the private build's "fincept-terminal" package, which installs side by side.
+      #
+      # Host-integration libraries — the C++ runtime, OpenSSL, NSS, GLib/GTK, X11/xcb,
+      # Wayland/GL, D-Bus, fontconfig, ALSA/Pulse — come from the system, never the bundle:
+      # a copy from this 22.04 runner breaks newer systems' Mesa / GTK / NSS modules loaded into
+      # the same process, NSS loads libsoftokn3 by path, and the system's OpenSSL pair gets
+      # security updates (#352: a bundled libcrypto next to the system libssl broke all TLS).
+      # Qt's own libraries (and ICU, FFmpeg) stay bundled.
+      #
+      # Fails on: a missing runtime piece, an ELF that does not resolve with LD_LIBRARY_PATH
+      # unset, a Qt library or a RUNPATH from outside the bundle, a host library no distro
+      # package owns, a glibc / libstdc++ floor above Ubuntu 22.04 / Debian 12.
+      # Writes build/pkg-depends.txt from the bundle's DIRECT host needs.
+      - name: Stage package tree
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          PREFIX="/opt/fincept-terminal-community"
+          LAUNCHER="fincept-terminal-community"
+          ROOT="${PWD}/build/pkg-root"
+          DEST="${ROOT}${PREFIX}"
+          die() { echo "::error::$*"; exit 1; }
+          rm -rf "${ROOT}"
+          mkdir -p "${DEST}" "${ROOT}/usr/bin"
+          cp -a build/AppDir/usr/. "${DEST}/"
+          # linuxdeploy's copies; the package installs its own below.
+          rm -rf "${DEST}/share/applications" "${DEST}/share/icons" "${DEST}/share/metainfo"
+
+          # Host-integration libraries back to the system (see above). Only copies
+          # linuxdeploy took from this runner: a name the Qt kit ships stays.
+          for lib in "${DEST}"/lib/*.so*; do
+            name="$(basename "${lib}")"
+            [ -e "${QT_ROOT_DIR}/lib/${name}" ] && continue
+            case "${name}" in
+              libstdc++.so.*|libgcc_s.so.*|libssl.so.*|libcrypto.so.*|\
+              libnss3.so|libnssutil3.so|libsmime3.so|libssl3.so|libnspr4.so|libplc4.so|libplds4.so|\
+              libsoftokn3.so|libfreebl*.so|libnssckbi.so|\
+              libglib-2.0.so.*|libgobject-2.0.so.*|libgio-2.0.so.*|libgmodule-2.0.so.*|libgthread-2.0.so.*|\
+              libgtk-3.so.*|libgdk-3.so.*|libgdk_pixbuf-2.0.so.*|libpango*-1.0.so.*|libcairo*.so.*|\
+              libatk*.so.*|libatspi.so.*|libharfbuzz*.so.*|\
+              libX*.so.*|libxcb*.so.*|libxkbcommon*.so.*|libwayland-*.so.*|libdrm*.so.*|libgbm.so.*|\
+              libEGL*.so.*|libGL*.so.*|libOpenGL.so.*|\
+              libdbus-1.so.*|libsystemd.so.*|libudev.so.*|libfontconfig.so.*|libfreetype.so.*|\
+              libexpat.so.*|libz.so.*|libasound.so.*|libpulse*.so*)
+                echo "from the system, not bundled: ${name}"
+                rm -f "${lib}" ;;
+            esac
+          done
+          # No caches, VCS or OS litter in the package.
+          find "${DEST}" \( -name __pycache__ -o -name .pytest_cache \) -prune -exec rm -rf {} +
+          find "${DEST}" -type f \( -name '*.pyc' -o -name '.git*' -o -name .DS_Store -o -name Thumbs.db \) -delete
+
+          # Qt WebEngine data next to what linuxdeploy copied (resources/*.pak,
+          # icudtl.dat, v8_context_snapshot.bin, locales). Without the V8 snapshot
+          # every renderer aborts and all web views stay blank (#411).
+          if [ -e "${DEST}/lib/libQt6WebEngineCore.so.6" ]; then
+            mkdir -p "${DEST}/resources" "${DEST}/translations/qtwebengine_locales"
+            for f in "${QT_ROOT_DIR}"/resources/*; do
+              [ -e "${DEST}/resources/$(basename "${f}")" ] || cp -a "${f}" "${DEST}/resources/"
+            done
+            [ ! -d "${QT_ROOT_DIR}/translations/qtwebengine_locales" ] \
+              || cp -an "${QT_ROOT_DIR}/translations/qtwebengine_locales/." "${DEST}/translations/qtwebengine_locales/"
+          fi
+
+          install -m 755 build/yt-dlp "${DEST}/bin/yt-dlp"   # private copy, never on $PATH (#415)
+          # Complete uninstaller (package + the user's data, on request).
+          install -m 755 packaging/uninstall/uninstall.sh "${DEST}/uninstall.sh"
+          install -D -m 644 packaging/linux/deb/apparmor-profile "${DEST}/share/apparmor/${LAUNCHER}"
+          # Absolute target: the link crosses top-level directories (Debian policy 10.5).
+          ln -s "${PREFIX}/bin/FinceptTerminal" "${ROOT}/usr/bin/${LAUNCHER}"
+
+          # Desktop entry under the edition's desktop id (the Wayland app_id), Exec
+          # absolute — a bare name would run whatever $PATH finds first.
+          install -d -m 755 "${ROOT}/usr/share/applications" "${ROOT}/usr/share/metainfo"
+          sed "s|^Exec=.*|Exec=${PREFIX}/bin/FinceptTerminal|" packaging/linux/fincept-terminal.desktop \
+            >"${ROOT}/usr/share/applications/${LAUNCHER}.desktop"
+          grep -qx "Exec=${PREFIX}/bin/FinceptTerminal" "${ROOT}/usr/share/applications/${LAUNCHER}.desktop" \
+            || die "the desktop entry's Exec line was not pointed at ${PREFIX}/bin/FinceptTerminal"
+          # AppStream file named after its component id; the command on $PATH is the launcher.
+          sed "s|<binary>FinceptTerminal</binary>|<binary>${LAUNCHER}</binary>|" \
+            packaging/linux/fincept-terminal.appdata.xml \
+            >"${ROOT}/usr/share/metainfo/com.fincept.terminal.community.metainfo.xml"
+          for s in 16 24 32 48 64 128 256; do
+            install -d -m 755 "${ROOT}/usr/share/icons/hicolor/${s}x${s}/apps"
+            convert resources/fincept.png -resize "${s}x${s}" -background none -gravity center \
+              -extent "${s}x${s}" "png:${ROOT}/usr/share/icons/hicolor/${s}x${s}/apps/${LAUNCHER}.png"
           done
 
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir "${APPDIR}" \
-            --plugin qt \
-            --output appimage \
-            "${OPENSSL_ARGS[@]}" \
-            --desktop-file "${APPDIR}/usr/share/applications/fincept-terminal.desktop" \
-            --icon-file "${ICON_DEST}" \
-            2>&1
+          # Docs: copyright (the project's AGPL text) and a changelog (native package).
+          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          [ -n "${VERSION}" ] || die "could not parse project VERSION from CMakeLists.txt"
+          DOC="${ROOT}/usr/share/doc/${LAUNCHER}"
+          install -d -m 755 "${DOC}"
+          {
+            echo "Fincept Terminal Community (${LAUNCHER})"
+            echo "Copyright (C) Fincept Corporation <support@fincept.in>"
+            echo "Source: https://github.com/Fincept-Corporation/FinceptTerminal"
+            echo
+            echo "Licensed under the GNU Affero General Public License, version 3 or later"
+            echo "(full text below). Bundled third-party components keep their own licences:"
+            echo "Qt 6 (LGPL-3, /usr/share/common-licenses/LGPL-3), Chromium via Qt WebEngine"
+            echo "(BSD-style and others, see ${PREFIX}/share/doc) and yt-dlp (Unlicense)."
+            echo
+            cat ../LICENSE
+          } >"${DOC}/copyright"
+          printf '%s (%s) stable; urgency=medium\n\n  * Release %s; notes on the GitHub release page.\n\n -- Fincept Corporation <support@fincept.in>  %s\n' \
+            "${LAUNCHER}" "${VERSION}" "${VERSION}" "$(git log -1 --format=%cD)" | gzip -9n >"${DOC}/changelog.gz"
+          install -D -m 644 packaging/linux/deb/lintian-overrides "${ROOT}/usr/share/lintian/overrides/${LAUNCHER}"
 
-          # ── Guard: never ship a half-bundled OpenSSL again (#352) ──────────
-          SSL_BUNDLED=$(find "${APPDIR}" -name 'libssl.so.3' -print -quit)
-          CRYPTO_BUNDLED=$(find "${APPDIR}" -name 'libcrypto.so.3' -print -quit)
-          if [ -z "${SSL_BUNDLED}" ] || [ -z "${CRYPTO_BUNDLED}" ]; then
-            echo "::error::AppImage must bundle libssl.so.3 AND libcrypto.so.3 (ssl='${SSL_BUNDLED}' crypto='${CRYPTO_BUNDLED}') — a bundled libcrypto next to the host libssl breaks all TLS (#352)"
-            exit 1
+          # Modes: 0755 dirs and executables, 0644 everything else (shared
+          # libraries too); nothing setuid or world-writable. Owner root:root
+          # comes from dpkg-deb --root-owner-group.
+          find "${ROOT}" -type d -exec chmod 755 {} +
+          find "${ROOT}" -type f -perm /111 -exec chmod 755 {} +
+          find "${ROOT}" -type f ! -perm /111 -exec chmod 644 {} +
+          find "${ROOT}" -type f \( -name '*.so' -o -name '*.so.*' \) -exec chmod 644 {} +
+
+          # ── Runtime pieces loaded by path (ldd cannot see them) ────────────
+          REQUIRED="bin/FinceptTerminal bin/qt.conf bin/yt-dlp bin/resources bin/scripts
+                    bin/resources/requirements-numpy2.txt uninstall.sh share/apparmor/${LAUNCHER}
+                    plugins/platforms/libqxcb.so plugins/sqldrivers/libqsqlite.so plugins/tls/libqopensslbackend.so
+                    plugins/platforms/libqwayland-egl.so plugins/platforms/libqwayland-generic.so
+                    plugins/wayland-shell-integration/libxdg-shell.so lib/libQt6WaylandClient.so.6"
+          if [ -e "${DEST}/lib/libQt6WebEngineCore.so.6" ]; then
+            REQUIRED="${REQUIRED} libexec/QtWebEngineProcess resources/icudtl.dat resources/qtwebengine_resources.pak"
+            [ -f "${QT_ROOT_DIR}/resources/v8_context_snapshot.bin" ] && REQUIRED="${REQUIRED} resources/v8_context_snapshot.bin"
           fi
-          if LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" \
-               | grep -q 'libcrypto\.so\.3 => not found'; then
-            echo "::error::Bundled libssl.so.3 cannot resolve the bundled libcrypto.so.3"
-            LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" || true
-            exit 1
-          fi
-          echo "OpenSSL pair OK: ${SSL_BUNDLED} + ${CRYPTO_BUNDLED}"
-
-          # Qt's TLS backend plugin is dlopen()ed too — if the qt plugin didn't
-          # deploy it, HTTPS fails with the same "no network" symptom.
-          TLS_PLUGIN=$(find "${APPDIR}" -name 'libqopensslbackend.so' -print -quit)
-          if [ -z "${TLS_PLUGIN}" ]; then
-            echo "::error::Qt TLS backend plugin (libqopensslbackend.so) missing from AppDir — HTTPS would fail at runtime"
-            exit 1
-          fi
-          echo "Qt TLS plugin OK: ${TLS_PLUGIN}"
-
-          # linuxdeploy names the output after the desktop entry — find it.
-          if [ ! -f "${OUTPUT}" ]; then
-            PRODUCED=$(find . -maxdepth 1 -name "*.AppImage" | head -1)
-            if [ -z "${PRODUCED}" ]; then
-              echo "::error::AppImage build failed — no .AppImage produced"
-              ls -la
-              exit 1
-            fi
-            mv "${PRODUCED}" "${OUTPUT}"
-          fi
-          chmod +x "${OUTPUT}"
-
-          # Sanity check — AppImage must be ≥ 50MB (bare binary is ~20MB, +Qt
-          # libs brings it to 80-150MB). A tiny AppImage means Qt wasn't bundled.
-          SIZE_KB=$(du -k "${OUTPUT}" | cut -f1)
-          if [ "${SIZE_KB}" -lt 51200 ]; then
-            echo "::error::AppImage is only ${SIZE_KB}KB — Qt libs likely not bundled"
-            exit 1
-          fi
-
-          # Stage in build/ where the upload step expects it.
-          mkdir -p build
-          mv "${OUTPUT}" "build/${OUTPUT}"
-          echo "AppImage: build/${OUTPUT} ($(du -sh "build/${OUTPUT}" | cut -f1))"
-
-          # Generate zsync file for delta updates (optional — manifest job
-          # works fine without it).
-          if command -v zsyncmake >/dev/null 2>&1; then
-            zsyncmake "build/${OUTPUT}" -o "build/${OUTPUT}.zsync" || true
-          else
-            sudo apt-get install -y zsync -qq 2>/dev/null || true
-            command -v zsyncmake >/dev/null 2>&1 && \
-              zsyncmake "build/${OUTPUT}" -o "build/${OUTPUT}.zsync" || true
+          for req in ${REQUIRED}; do
+            [ -e "${DEST}/${req}" ] || die "package tree is missing ${PREFIX}/${req}"
+          done
+          for dir in wayland-decoration-client wayland-graphics-integration-client wayland-shell-integration; do
+            [ -n "$(ls -A "${DEST}/plugins/${dir}" 2>/dev/null)" ] || die "${PREFIX}/plugins/${dir}/ is missing or empty — no Wayland without XWayland"
+          done
+          for x in bin/FinceptTerminal bin/yt-dlp libexec/QtWebEngineProcess; do
+            [ ! -e "${DEST}/${x}" ] || [ -x "${DEST}/${x}" ] || die "${PREFIX}/${x} is not executable"
+          done
+          grep -q '^Prefix' "${DEST}/bin/qt.conf" || die "bin/qt.conf has no Prefix: Qt would look for plugins in the build machine's paths"
+          echo "qt.conf: $(tr '\n' ' ' <"${DEST}/bin/qt.conf")"
+          # #352: OpenSSL is one pair, from the system — both or neither bundled.
+          if [ -e "${DEST}/lib/libssl.so.3" ] || [ -e "${DEST}/lib/libcrypto.so.3" ]; then
+            die "a bundled OpenSSL library is left in ${PREFIX}/lib — the TLS pair must come from the system (#352)"
           fi
 
-      # ── Smoke-test the AppImage (the artifact users actually download) ────
-      # Until this step existed, the Linux artifact got ZERO runtime
-      # verification — "Verify binary" above only checks the file exists and
-      # runs `file` on it. The bug class the Windows job's closure walk and
-      # clean-PATH smoke test were built for (v4.1.0's unbundled z.dll, the
-      # WebEngine crash on first screen open) was completely uncaught here.
-      # The AppImage is self-mounting (libfuse2 is installed above), so
-      # executing it exercises the bundled Qt/OpenSSL/plugin payload exactly
-      # as an end user's machine would — including the #352 OpenSSL pairing.
-      # --smoke-test walks every screen; the '[Smoke] >>> constructing <id>'
-      # breadcrumb names the screen if it dies.
-      - name: Smoke-test AppImage
-        working-directory: fincept-qt
-        timeout-minutes: 15
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QTWEBENGINE_DISABLE_SANDBOX: '1'
-        run: |
-          set -euo pipefail
-          APPIMAGE=$(ls build/${{ env.APP_NAME }}-*-linux-x64-setup.run 2>/dev/null | head -1 || true)
-          [ -n "${APPIMAGE}" ] || { echo "::error::AppImage not found for smoke test"; exit 1; }
-          chmod +x "${APPIMAGE}"
-          bash ../.github/scripts/ci_app_checks.sh smoke "${APPIMAGE}" ci-smoke 600
+          # ── Library closure and Depends ────────────────────────────────────
+          WORK="$(mktemp -d)"
+          : >"${WORK}/direct"; : >"${WORK}/missing"; : >"${WORK}/leaks"; : >"${WORK}/glibc"; : >"${WORK}/glibcxx"
+          elf_count=0
+          while IFS= read -r -d '' f; do
+            [ "$(head -c 4 "${f}" | od -An -tx1 | tr -d ' \n')" = "7f454c46" ] || continue
+            elf_count=$((elf_count + 1))
+            rel="${f#"${ROOT}"}"
+            vers="$(readelf -V --wide "${f}" 2>/dev/null || true)"
+            printf '%s\n' "${vers}" | { grep -oE 'Name: GLIBC_[0-9]+(\.[0-9]+)+' || true; } | sed 's/^Name: GLIBC_//' >>"${WORK}/glibc"
+            printf '%s\n' "${vers}" | { grep -oE 'Name: GLIBCXX_[0-9]+(\.[0-9]+)+' || true; } | sed 's/^Name: GLIBCXX_//' >>"${WORK}/glibcxx"
+            dyn="$(readelf -d "${f}" 2>/dev/null || true)"
+            rpath="$(printf '%s\n' "${dyn}" | sed -n 's/.*(\(RPATH\|RUNPATH\)).*\[\(.*\)\]/\1=\2/p')"
+            case "${rpath}" in
+              *"${QT_ROOT_DIR}"*|*/home/*|*/tmp/*) echo "RUNPATH ${rpath} (${rel})" >>"${WORK}/leaks" ;;
+            esac
+            needed="$(printf '%s\n' "${dyn}" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')"
+            ldd_out="$(env -u LD_LIBRARY_PATH ldd "${f}" 2>&1 || true)"
+            printf '%s\n' "${ldd_out}" | { grep 'not found' || true; } | sed "s|^|${rel}: |" >>"${WORK}/missing"
+            while read -r soname arrow path _; do
+              [ "${arrow}" = "=>" ] || continue
+              [ "${path}" != "not" ] || continue
+              real="$(readlink -f "${path}")"
+              case "${real}" in "${DEST}"/*) continue ;; esac
+              case "${soname}" in libQt6*) echo "${soname} -> ${real} (${rel})" >>"${WORK}/leaks" ;; esac
+              # Direct needs only: a system library's own dependencies are its package's business.
+              case $'\n'"${needed}"$'\n' in *$'\n'"${soname}"$'\n'*) echo "${path}" >>"${WORK}/direct" ;; esac
+            done <<<"${ldd_out}"
+          done < <(find "${DEST}" -type f -print0)
+          [ "${elf_count}" -gt 0 ] || die "no ELF files found under ${DEST}"
+          if [ -s "${WORK}/missing" ]; then sort -u "${WORK}/missing"; die "unresolved libraries in the package tree (above)"; fi
+          if [ -s "${WORK}/leaks" ]; then sort -u "${WORK}/leaks"; die "Qt libraries or RUNPATHs point outside the package (above)"; fi
 
-      # ── Stage the .deb/.rpm install tree (#415) ───────────────────────────
-      # Both packages used to be `cmake --install --prefix /usr`: a bare binary
-      # linked against this runner's Qt 6.8.3 with no Qt in the package, so
-      # they failed at exec everywhere ("libQt6Charts.so.6: cannot open shared
-      # object file") — no distro ships Qt 6.8, and the binary uses Qt private
-      # API that is not ABI-stable across minor versions, so depending on the
-      # distro's Qt is not an option either. They now ship the AppDir above
-      # (Qt + plugins + WebEngine bundled) under /opt/fincept-terminal, with
-      # yt-dlp kept private there instead of colliding with the distro's
-      # /usr/bin/yt-dlp. The script fails on any unresolved or out-of-package
-      # Qt library and derives Depends from what the bundle takes from the host.
-      - name: Stage Linux package tree
-        working-directory: fincept-qt
-        run: |
-          set -euo pipefail
-          bash ../.github/scripts/stage_linux_package.sh \
-            build/AppDir build/yt-dlp . build/pkg-root build/pkg-depends.txt
+          # Owning package of a host library; dpkg records /lib and /usr/lib (usrmerge).
+          owner_pkg() {
+            local p c pkg
+            for p in "$1" "$(readlink -f "$1")"; do
+              for c in "${p}" "/usr${p}" "${p#/usr}"; do
+                pkg="$(dpkg-query -S "${c}" 2>/dev/null | awk -F': ' '!/^diversion/ { split($1, a, ":"); print a[1]; exit }')" || true
+                if [ -n "${pkg}" ]; then echo "${pkg}"; return 0; fi
+              done
+            done
+            return 1
+          }
+          : >"${WORK}/pkgs"
+          while read -r lib; do
+            pkg="$(owner_pkg "${lib}")" || die "host library ${lib} belongs to no distro package — users would not have it"
+            echo "${pkg}" >>"${WORK}/pkgs"
+            echo "  host: ${lib} (${pkg})"
+          done < <(sort -u "${WORK}/direct")
 
-      # ── Build .deb package ────────────────────────────────────────────────
+          # Floors: libc6 from the newest GLIBC symbol any shipped ELF needs; the
+          # C++ runtime from GLIBCXX (3.4.30 = GCC 12, Ubuntu 22.04 / Debian 12).
+          GLIBC_MIN="$(sort -V -u "${WORK}/glibc" | tail -n 1)"
+          [ -n "${GLIBC_MIN}" ] || die "could not determine the minimum glibc version"
+          [ "$(printf '2.35\n%s\n' "${GLIBC_MIN}" | sort -V | tail -n 1)" = 2.35 ] \
+            || die "the package needs glibc ${GLIBC_MIN}, above Ubuntu 22.04's 2.35"
+          GLIBCXX_MIN="$(sort -V -u "${WORK}/glibcxx" | tail -n 1)"
+          [ -z "${GLIBCXX_MIN}" ] || [ "$(printf '3.4.30\n%s\n' "${GLIBCXX_MIN}" | sort -V | tail -n 1)" = 3.4.30 ] \
+            || die "the package needs GLIBCXX_${GLIBCXX_MIN}, above GCC 12's 3.4.30 (Ubuntu 22.04 / Debian 12)"
+          # Ubuntu 24.04+ / Debian 13 renamed these for 64-bit time_t (…t64); list both.
+          t64() {
+            case "$1" in
+              libasound2|libatk-bridge2.0-0|libatk1.0-0|libatspi2.0-0|libcups2|libcurl4|libglib2.0-0|\
+              libgnutls30|libgtk-3-0|libpng16-16|libssl3|libnettle8|libhogweed6|libelf1|libevent-2.1-7)
+                echo "$1t64 | $1" ;;
+              libstdc++6) echo "libstdc++6 (>= 12)" ;;
+              *) echo "$1" ;;
+            esac
+          }
+          {
+            echo "libc6 (>= ${GLIBC_MIN})"
+            # Not visible to ldd: the TLS trust store, fonts, opening links / files.
+            printf '%s\n' ca-certificates fontconfig xdg-utils
+            sort -u "${WORK}/pkgs" | { grep -vx 'libc6' || true; } | while read -r p; do t64 "${p}"; done
+          } | awk '!seen[$0]++' | paste -sd ',' - | sed 's/,/, /g' >build/pkg-depends.txt
+          if [ -e "${DEST}/lib/libQt6WebEngineCore.so.6" ]; then
+            grep -q 'libnss3' build/pkg-depends.txt || die "Qt WebEngine is bundled but libnss3 is not in Depends"
+          fi
+          rm -rf "${WORK}"
+          echo "Staged ${PREFIX}: ${elf_count} ELF files, all resolved (Qt from the package only)"
+          echo "Depends: $(cat build/pkg-depends.txt)"
+
+      # ── Build the .deb ────────────────────────────────────────────────────
+      # Package fincept-terminal-community (CMakeLists.txt "Edition identity"):
+      # the private build's package is fincept-terminal, and the two install
+      # side by side (no shared path, no Conflicts/Replaces between them).
       - name: Build .deb package
         working-directory: fincept-qt
         run: |
           set -euo pipefail
           VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          DEB_NAME="fincept-terminal_${VERSION}_amd64"
-          DEB_ROOT="build/${DEB_NAME}"
-
-          rm -rf "${DEB_ROOT}"
-          cp -a build/pkg-root "${DEB_ROOT}"
-          mkdir -p "${DEB_ROOT}/DEBIAN"
-          DEPENDS="$(cat build/pkg-depends.txt)"
-          INSTALLED_SIZE="$(du -sk "${DEB_ROOT}" | cut -f1)"
-
-          cat > "${DEB_ROOT}/DEBIAN/control" <<EOF
-          Package: fincept-terminal
-          Version: ${VERSION}
-          Section: finance
-          Priority: optional
-          Architecture: amd64
-          Installed-Size: ${INSTALLED_SIZE}
-          Depends: ${DEPENDS}
-          Maintainer: Fincept Corporation <support@fincept.in>
-          Homepage: https://github.com/Fincept-Corporation/FinceptTerminal
-          Description: Professional financial intelligence terminal
-           Native C++20 desktop terminal with real-time market data, AI analytics,
-           multi-broker trading, portfolio management, and 1300+ Python scripts.
-          EOF
-          # Remove leading whitespace from control file (YAML heredoc indent)
-          sed -i 's/^          //' "${DEB_ROOT}/DEBIAN/control"
-
-          dpkg-deb --build --root-owner-group "${DEB_ROOT}"
-          mv "build/${DEB_NAME}.deb" "build/FinceptTerminal-${VERSION}-linux-x64.deb"
-          echo "Built: FinceptTerminal-${VERSION}-linux-x64.deb ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.deb" | cut -f1))"
-
-      # ── Install the .deb and run it the way a user would (#415) ────────────
-      # 4.5.1's .deb got no runtime check and shipped unable to start. Install
-      # it through apt, which also proves Depends resolves on the oldest base
-      # we support (22.04), then smoke-test /usr/bin/FinceptTerminal with
-      # install-qt-action's LD_LIBRARY_PATH removed, so every Qt library has to
-      # come from /opt/fincept-terminal. QT_PLUGIN_PATH is kept on purpose: the
-      # bundle carries only the xcb platform plugin, and this headless run needs
-      # offscreen.
-      - name: Verify .deb installs and runs on its bundled Qt
-        working-directory: fincept-qt
-        timeout-minutes: 15
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QTWEBENGINE_DISABLE_SANDBOX: '1'
-        run: |
-          set -euo pipefail
-          DEB=$(ls build/FinceptTerminal-*-linux-x64.deb | head -1)
-          sudo apt-get install -y --no-install-recommends "./${DEB}"
-
-          LAUNCHER_TARGET="$(readlink -f /usr/bin/FinceptTerminal)"
-          if [ "${LAUNCHER_TARGET}" != /opt/fincept-terminal/bin/FinceptTerminal ]; then
-            echo "::error::/usr/bin/FinceptTerminal resolves to ${LAUNCHER_TARGET}, not the bundled binary"
-            exit 1
-          fi
-          # grep without -q: an early exit would SIGPIPE dpkg-query and, under
-          # pipefail, turn a match into a pass.
-          if dpkg-query -L fincept-terminal | grep -x '/usr/bin/yt-dlp' >/dev/null; then
-            echo "::error::package ships /usr/bin/yt-dlp, which collides with the distro yt-dlp package (#415)"
-            exit 1
-          fi
-          /opt/fincept-terminal/bin/yt-dlp --version
-
-          env -u LD_LIBRARY_PATH \
-            bash ../.github/scripts/ci_app_checks.sh smoke /usr/bin/FinceptTerminal ci-deb-smoke 600
-
-      # ── Build .rpm package ────────────────────────────────────────────────
-      # Same staged tree as the .deb. AutoReqProv stays off: the bundled libs
-      # would otherwise become Provides/Requires of the package.
-      - name: Build .rpm package
-        working-directory: fincept-qt
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y rpm -qq
-
-          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          PKG_ROOT="${PWD}/build/pkg-root"
-          [ -x "${PKG_ROOT}/opt/fincept-terminal/bin/FinceptTerminal" ] || {
-            echo "::error::${PKG_ROOT} is not staged — the 'Stage Linux package tree' step must run first"
-            exit 1
-          }
-
-          mkdir -p ~/rpmbuild/{SPECS,BUILDROOT}
-
-          cat > ~/rpmbuild/SPECS/fincept-terminal.spec <<EOF
-          Name:           fincept-terminal
-          Version:        ${VERSION}
-          Release:        1
-          Summary:        Professional financial intelligence terminal
-          License:        AGPL-3.0-or-later
-          URL:            https://github.com/Fincept-Corporation/FinceptTerminal
-          AutoReqProv:    no
-
-          # The tree is final linuxdeploy output: do not strip it (strip drops the
-          # payload appended to the PyInstaller-built yt-dlp), byte-compile the
-          # Python scripts, or add /usr/lib/.build-id links for the bundled libs.
-          %global __os_install_post %{nil}
-          %global debug_package %{nil}
-          %global _build_id_links none
-
-          %description
-          Native C++20 desktop terminal with real-time market data, AI analytics,
-          multi-broker trading, portfolio management, and 1300+ Python scripts.
-
-          %install
-          cp -a ${PKG_ROOT}/. %{buildroot}/
-
-          %files
-          /opt/fincept-terminal/
-          /usr/bin/FinceptTerminal
-          /usr/share/applications/fincept-terminal.desktop
-          /usr/share/metainfo/fincept-terminal.appdata.xml
-          /usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
-          EOF
-          # Remove leading whitespace from spec file
-          sed -i 's/^          //' ~/rpmbuild/SPECS/fincept-terminal.spec
-
-          # --buildroot MUST differ from PKG_ROOT (the staged tree): rpmbuild
-          # wipes %{buildroot} before %install, so reusing PKG_ROOT would delete
-          # the staged files before the spec's `cp -a` could copy them.
-          rpmbuild -bb ~/rpmbuild/SPECS/fincept-terminal.spec \
-            --buildroot "${PWD}/build/rpm-buildroot" \
-            --define "_rpmdir ${PWD}/build"
-
-          mv build/x86_64/fincept-terminal-${VERSION}-1.x86_64.rpm \
-             "build/FinceptTerminal-${VERSION}-linux-x64.rpm" 2>/dev/null || \
-          mv build/*/fincept-terminal-*.rpm \
-             "build/FinceptTerminal-${VERSION}-linux-x64.rpm"
-
-          echo "Built: FinceptTerminal-${VERSION}-linux-x64.rpm ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.rpm" | cut -f1))"
-
-      # ── Optional: QtIFW "wizard" installer with a Target Directory page ─────
-      # Additive to the portable AppImage (which stays the auto-update channel).
-      # Packages the linuxdeploy AppDir (binary + bundled Qt + plugins) so the
-      # install is relocatable to ANY chosen path; the staged qt.conf + rpath
-      # resolve Qt at the install location. Renamed "-wizard.bin" so it never
-      # matches the updater regex (\.run$|linux.*setup).
-      # NOTE: VALIDATE ON A REAL RUNNER — first IFW-on-Linux build with bundled
-      # Qt; confirm the installed app launches (platform plugin loads via qt.conf).
-      - name: Generate IFW wizard installer
-        working-directory: fincept-qt
-        run: |
-          set -euo pipefail
-          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          if [ ! -d build/AppDir/usr ]; then
-            echo "::error::build/AppDir/usr missing — the AppImage step must run first"; exit 1
-          fi
-
-          # QtIFW tool (binarycreator)
-          python3 -m pip install --upgrade aqtinstall
-          aqt install-tool linux desktop ${{ env.QT_IFW_TOOL }} --outputdir "${{ runner.temp }}/qtifw"
-          export QT_IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
-          export PATH="${QT_IFW_DIR}/bin:${PATH}"
-          command -v binarycreator >/dev/null || { echo "::error::binarycreator not on PATH"; exit 1; }
-
-          # Reconfigure with the installer path ON + the linuxdeploy AppDir as the
-          # relocatable payload. deb/rpm already built (FHS), so order is safe.
-          cmake -S . -B build \
-            -DFINCEPT_BUILD_INSTALLER=ON \
-            -DFINCEPT_IFW_PAYLOAD="${PWD}/build/AppDir/usr" >/dev/null
-          BASENAME="FinceptTerminal-${VERSION}-linux-x64-wizard"
-          ( cd build && cpack -G IFW -D CPACK_PACKAGE_FILE_NAME="${BASENAME}" --verbose )
-
-          # IFW emits <name>.run on Linux; rename to .bin so the updater regex
-          # (\.run$|linux.*setup) never selects it over the AppImage. This wizard
-          # is optional/additive (AppImage/.deb/.rpm are the real artifacts) and the
-          # IFW-on-Linux path is unvalidated — if cpack didn't emit a .run, skip
-          # gracefully rather than fail the release.
-          SRC=$(ls build/${BASENAME}.run 2>/dev/null | head -1 || true)
-          if [ -z "${SRC}" ]; then
-            echo "::warning::IFW wizard .run not produced (cpack emitted: $(ls build/${BASENAME}* 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')). Skipping optional Linux wizard installer; AppImage/.deb/.rpm are unaffected."
-            exit 0
-          fi
-          mv "${SRC}" "build/${BASENAME}.bin"
-          chmod +x "build/${BASENAME}.bin"
-          echo "Built: ${BASENAME}.bin ($(du -sh "build/${BASENAME}.bin" | cut -f1))"
+          DEB_ROOT="build/pkg-root"
+          OUT="build/FinceptTerminal-${VERSION}-linux-x64.deb"
+          rm -rf "${DEB_ROOT}/DEBIAN"
+          install -d -m 755 "${DEB_ROOT}/DEBIAN"
+          install -m 755 packaging/linux/deb/postinst packaging/linux/deb/postrm "${DEB_ROOT}/DEBIAN/"
+          ( cd "${DEB_ROOT}" && find . -path ./DEBIAN -prune -o -type f -printf '%P\0' | LC_ALL=C sort -z \
+              | xargs -0 md5sum ) >"${DEB_ROOT}/DEBIAN/md5sums"
+          INSTALLED_SIZE="$(du -sk --apparent-size --exclude=DEBIAN "${DEB_ROOT}" | cut -f1)"
+          {
+            echo "Package: fincept-terminal-community"
+            echo "Version: ${VERSION}"
+            echo "Architecture: amd64"
+            echo "Maintainer: Fincept Corporation <support@fincept.in>"
+            echo "Installed-Size: ${INSTALLED_SIZE}"
+            echo "Depends: $(cat build/pkg-depends.txt)"
+            # PortAudio: voice input (the sounddevice wheel does not bundle it on
+            # Linux). pkexec: the in-app updater asks for the password with it.
+            # curl: the Python setup's fallback download of uv.
+            echo "Recommends: libportaudio2, pkexec | policykit-1, curl"
+            echo "Suggests: espeak-ng"
+            echo "Section: misc"
+            echo "Priority: optional"
+            echo "Homepage: https://github.com/Fincept-Corporation/FinceptTerminal"
+            echo "Description: Professional financial intelligence terminal"
+            echo " Native C++20 desktop terminal with real-time market data, AI analytics,"
+            echo " multi-broker trading, portfolio management and 1300+ Python analytics"
+            echo " scripts. Qt 6.8 is bundled under /opt/fincept-terminal-community."
+          } >"${DEB_ROOT}/DEBIAN/control"
+          chmod 644 "${DEB_ROOT}/DEBIAN/control" "${DEB_ROOT}/DEBIAN/md5sums"
+          cat "${DEB_ROOT}/DEBIAN/control"
+          dpkg-deb --build --root-owner-group -Zxz "${DEB_ROOT}" "${OUT}"
+          dpkg-deb --info "${OUT}" >/dev/null
+          echo "Built: ${OUT} ($(du -sh "${OUT}" | cut -f1))"
 
       # ── Upload ────────────────────────────────────────────────────────────
-      # Version-stamped filename so update-manifest regex picks it up.
+      # Version-stamped name: the update manifest lists it by exact name
+      # (generate_updates_manifest.py, key linux-x64-deb).
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FinceptTerminal-Linux-x64-installer
-          path: |
-            fincept-qt/build/FinceptTerminal-*-linux-x64-setup.run
-            fincept-qt/build/FinceptTerminal-*-linux-x64-setup.run.zsync
-            fincept-qt/build/FinceptTerminal-*-linux-x64.deb
-            fincept-qt/build/FinceptTerminal-*-linux-x64.rpm
-            fincept-qt/build/FinceptTerminal-*-linux-x64-wizard.bin
+          path: fincept-qt/build/FinceptTerminal-*-linux-x64.deb
+          if-no-files-found: error
           retention-days: 30
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 2b — the .deb, installed and opened the way users do
+#
+# Each leg starts from a clean base and, as root: installs the .deb with
+# apt-get --no-install-recommends (proves Depends resolve and suffice), runs
+# ldd over every ELF in the package with LD_LIBRARY_PATH unset, checks
+# ownership / modes / launcher / desktop entry / icons, then — as a
+# non-root user with a fresh HOME — opens it: the first start from the
+# desktop entry's Exec (setup screen), the screen walk (--smoke-test) on
+# X11 (Xvfb, QT_QPA_PLATFORM=xcb) and on Wayland (headless weston,
+# QT_QPA_PLATFORM=wayland, plus a start with no X at all), and scans the
+# output and fincept.log for start-up errors. Finally apt-get remove + purge
+# must leave nothing outside the user's home.
+#
+#   containers  docker on the runner (QtWebEngine's sandbox cannot create user
+#               namespaces in a container, so it is disabled there, explicitly)
+#   host        the ubuntu-24.04 runner itself with AppArmor's unprivileged-
+#               userns restriction ON, as on an Ubuntu 24.04 desktop: proves
+#               the package's AppArmor profile and runs with the sandbox ENABLED
+#
+# Wayland checks are NON-BLOCKING until their first green run on a hosted
+# runner (weston in containers is unvalidated): then set WAYLAND_SEVERITY to
+# error. Everything else is blocking. The Python essentials install needs a
+# click on the setup screen, so it is not exercised here.
+# ═════════════════════════════════════════════════════════════════════════════
+  verify-deb:
+    name: .deb on ${{ matrix.base }}
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - base: ubuntu:22.04
+          - base: debian:12
+          - base: ubuntu:24.04
+            selftests: true
+          - base: debian:13
+            lint: true
+          - base: ubuntu:26.04
+          - base: host
+    env:
+      BASE: ${{ matrix.base }}
+      SELFTESTS: ${{ matrix.selftests && '1' || '0' }}
+      WAYLAND_SEVERITY: warning
+
+    steps:
+      - name: Checkout the shared self-test runner
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts/ci_app_checks.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Download the .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: FinceptTerminal-Linux-x64-installer
+          path: deb
+
+      - name: Install, open and remove the .deb
+        run: |
+          set -euo pipefail
+          DEB_NAME="$(cd deb && ls FinceptTerminal-*-linux-x64.deb)"
+          cat >"${RUNNER_TEMP}/deb-check.sh" <<'CHECK'
+          #!/bin/bash
+          # Runs as root: in a clean container (MODE=container) or on the runner (MODE=host).
+          set -uo pipefail
+          PKG=fincept-terminal-community
+          PREFIX=/opt/fincept-terminal-community
+          BIN=/usr/bin/fincept-terminal-community
+          LOGS=/tmp/deb-check
+          FAIL=0
+          export DEBIAN_FRONTEND=noninteractive
+          fail() { echo "::error title=.deb on ${BASE}::$*"; FAIL=1; }
+          warn() { echo "::warning title=.deb on ${BASE}::$*"; }
+          report() { if [ "$1" = warning ]; then warn "$2"; else fail "$2"; fi; }
+          rm -rf "${LOGS}"; mkdir -p "${LOGS}"
+          # Start-up errors that fail a run: platform plugin, TLS backend, WebEngine
+          # sandbox / zygote / ICU / resources, SQLite driver, format-string bugs,
+          # Python-setup path errors, any FATAL / CRITICAL.
+          BAD_RE='Could not load the Qt platform plugin|no Qt platform plugin could be initialized|Failed to load libssl|Failed to load libcrypto|No functional TLS backend|TLS initialization failed|QSslSocket: cannot resolve|Incompatible version of OpenSSL|No usable sandbox|zygote_host_impl|Failed to move to new namespace|sandbox_linux|Running as root without --no-sandbox|ICU data not found|Invalid file descriptor to ICU data|WebEngine resources not found|Error loading V8 startup snapshot|locales directory not found|Could not find QtWebEngineProcess|QSQLITE driver not loaded|Driver not loaded|QString::arg: Argument missing|Requirements file not found|musl libc detected|\bFATAL\b|\bCRITICAL\b'
+
+          echo "::group::apt-get install ./$(basename "${DEB}") (Depends only, no Recommends)"
+          apt-get update -qq || { fail "apt-get update failed"; exit 1; }
+          if ! apt-get install -y --no-install-recommends "${DEB}"; then
+            fail "apt-get install failed: the package's Depends do not resolve on ${BASE}"; exit 1
+          fi
+          dpkg-query -W -f='${Package} ${Version} ${Installed-Size} KiB\nDepends: ${Depends}\n' "${PKG}"
+          echo "::endgroup::"
+
+          echo "::group::Package contents, ownership and modes"
+          [ "$(readlink -f "${BIN}")" = "${PREFIX}/bin/FinceptTerminal" ] || fail "${BIN} does not resolve to ${PREFIX}/bin/FinceptTerminal"
+          LIST="$(dpkg-query -L "${PKG}")"
+          if printf '%s\n' "${LIST}" | grep -E '^/opt/fincept-terminal(/|$)|^/usr/bin/fincept-terminal$|/fincept-terminal\.(desktop|appdata\.xml|png)$'; then
+            fail "the package ships a path of the private build's fincept-terminal package"
+          fi
+          if printf '%s\n' "${LIST}" | grep -x /usr/bin/yt-dlp; then fail "the package ships /usr/bin/yt-dlp, which collides with the distro's yt-dlp (#415)"; fi
+          bad="$(find "${PREFIX}" /usr/share/applications/${PKG}.desktop /usr/share/icons/hicolor/*/apps/${PKG}.png \
+                   \( ! -type l -perm -0002 \) -o -perm /6000 -o ! -user root -o ! -group root 2>/dev/null | head -n 20)"
+          [ -z "${bad}" ] || fail "world-writable, setuid/setgid or not root:root: ${bad}"
+          for x in bin/FinceptTerminal bin/yt-dlp libexec/QtWebEngineProcess; do
+            [ -x "${PREFIX}/${x}" ] || fail "${PREFIX}/${x} is missing or not executable"
+          done
+          DESKTOP="/usr/share/applications/${PKG}.desktop"
+          EXEC="$(sed -n 's/^Exec=//p' "${DESKTOP}" | head -n 1)"
+          case "${EXEC}" in /*) [ -x "${EXEC%% *}" ] || fail "desktop Exec ${EXEC} is not executable" ;; *) fail "desktop Exec '${EXEC}' is not an absolute path" ;; esac
+          ICON="$(sed -n 's/^Icon=//p' "${DESKTOP}" | head -n 1)"
+          for s in 16 24 32 48 64 128 256; do
+            [ -f "/usr/share/icons/hicolor/${s}x${s}/apps/${ICON}.png" ] || fail "icon ${s}x${s}/apps/${ICON}.png is missing"
+          done
+          [ -f /usr/share/metainfo/com.fincept.terminal.community.metainfo.xml ] || fail "AppStream metainfo is missing"
+          echo "::endgroup::"
+
+          echo "::group::Every ELF resolves on ${BASE} with LD_LIBRARY_PATH unset"
+          n=0
+          while IFS= read -r -d '' f; do
+            [ "$(head -c 4 "${f}" | od -An -tx1 | tr -d ' \n')" = 7f454c46 ] || continue
+            n=$((n + 1))
+            out="$(env -u LD_LIBRARY_PATH ldd "${f}" 2>&1)"
+            printf '%s\n' "${out}" | grep 'not found' | sed "s|^|${f}: |" >>"${LOGS}/ldd-missing"
+            printf '%s\n' "${out}" | grep -E '^[[:space:]]*libQt6[^ ]* => ' | grep -v "=> ${PREFIX}/" | sed "s|^|${f}: |" >>"${LOGS}/qt-leak"
+          done < <(find "${PREFIX}" -type f -print0)
+          echo "${n} ELF files checked"
+          if [ -s "${LOGS}/ldd-missing" ]; then sort -u "${LOGS}/ldd-missing" | head -n 50; fail "unresolved libraries or symbol versions on ${BASE} (above)"; fi
+          if [ -s "${LOGS}/qt-leak" ]; then sort -u "${LOGS}/qt-leak" | head -n 20; fail "Qt libraries resolve from outside ${PREFIX}"; fi
+          echo "::endgroup::"
+
+          echo "::group::Test tools and a fresh non-root user (installed after the checks above)"
+          TOOLS="xvfb weston dbus"
+          # Newer bases split dbus-run-session's session config out of "dbus".
+          for p in dbus-session-bus-common dbus-daemon; do
+            apt-cache show "${p}" >/dev/null 2>&1 && TOOLS="${TOOLS} ${p}"
+          done
+          apt-get install -y -qq --no-install-recommends ${TOOLS} >/dev/null || { fail "could not install the test tools (${TOOLS})"; exit 1; }
+          # A plain X server for every X11 run (owned by root, so kill_tester leaves it up).
+          install -d -m 1777 /tmp/.X11-unix
+          Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -ac >"${LOGS}/xvfb.log" 2>&1 &
+          XVFB_PID=$!
+          for _ in $(seq 1 30); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.5; done
+          [ -S /tmp/.X11-unix/X99 ] || { cat "${LOGS}/xvfb.log"; fail "Xvfb did not start"; exit 1; }
+          dbus-uuidgen --ensure=/etc/machine-id >/dev/null 2>&1 || true
+          dbus-uuidgen --ensure >/dev/null 2>&1 || true
+          id tester >/dev/null 2>&1 || useradd -m -s /bin/bash tester
+          TUID="$(id -u tester)"
+          XRT=/tmp/xdg-tester
+          rm -rf "${XRT}"; install -d -m 700 -o tester -g tester "${XRT}"
+          install -m 644 "${CI_CHECKS}" /tmp/ci_app_checks.sh
+          # GPU-less CI; in a container the Chromium sandbox cannot create user
+          # namespaces, so it is disabled there (the host leg runs it enabled).
+          APP_ENV=(QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu)
+          [ "${MODE}" = host ] || APP_ENV+=(QTWEBENGINE_DISABLE_SANDBOX=1)
+          as_tester() {
+            runuser -u tester -- env -i HOME=/home/tester USER=tester LOGNAME=tester SHELL=/bin/bash \
+              PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 XDG_RUNTIME_DIR="${XRT}" "${APP_ENV[@]}" "$@"
+          }
+          kill_tester() {
+            local d
+            for d in /proc/[0-9]*; do
+              [ "$(stat -c %u "${d}" 2>/dev/null)" = "${TUID}" ] && kill -KILL "${d#/proc/}" 2>/dev/null
+            done
+            sleep 1
+          }
+          app_log() { find /home/tester -path "*/profiles/$1/logs/fincept.log" 2>/dev/null | head -n 1; }
+          # $1 severity, $2 label, $3 profile ("" = the only log), $4 platform, $5 program output.
+          check_run() {
+            local sev="$1" label="$2" log hits
+            if [ -n "$3" ]; then log="$(app_log "$3")"; else log="$(find /home/tester -name fincept.log 2>/dev/null | head -n 1)"; fi
+            if [ -z "${log}" ]; then report "${sev}" "${label}: no fincept.log was written — the terminal did not start"; return; fi
+            grep -aq "Qt platform: $4" "${log}" || report "${sev}" "${label}: fincept.log does not report 'Qt platform: $4'"
+            grep -aq 'Fincept Terminal starting .*tls=openssl' "${log}" \
+              || report "${sev}" "${label}: TLS backend is not OpenSSL ($(grep -a 'Fincept Terminal starting' "${log}" | tail -n 1))"
+            hits="$(grep -ahE "${BAD_RE}" "$5" "${log}" | head -n 20)"
+            if [ -n "${hits}" ]; then printf '%s\n' "${hits}"; report "${sev}" "${label}: start-up errors in the output or fincept.log (above)"; fi
+          }
+          as_tester "${PREFIX}/bin/yt-dlp" --version || fail "the bundled yt-dlp does not run"
+          echo "::endgroup::"
+
+          if [ "${MODE}" = host ]; then
+            echo "::group::AppArmor: unprivileged user namespaces restricted, as on Ubuntu 24.04 desktops"
+            if [ -w /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+              echo 1 >/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+              echo "kernel.apparmor_restrict_unprivileged_userns=1"
+            else
+              warn "this kernel has no userns restriction: the AppArmor profile is not exercised"
+            fi
+            if [ -e /sys/kernel/security/apparmor/profiles ]; then
+              grep "^${PKG}" /sys/kernel/security/apparmor/profiles || fail "the package's AppArmor profile is not loaded after install (postinst)"
+            fi
+            echo "::endgroup::"
+          fi
+
+          echo "::group::First start from the desktop entry (X11, fresh HOME: setup screen expected)"
+          as_tester env DISPLAY=:99 QT_QPA_PLATFORM=xcb dbus-run-session -- \
+            timeout -s TERM -k 10 45 ${EXEC} >"${LOGS}/first.out" 2>&1
+          st=$?
+          tail -n 60 "${LOGS}/first.out"
+          kill_tester
+          [ "${st}" -eq 124 ] || fail "first start: the terminal exited after less than 45 s (status ${st}) instead of showing the setup screen"
+          grep -aq 'showing setup screen' "$(find /home/tester -name fincept.log | head -n 1)" 2>/dev/null \
+            || fail "first start: fincept.log does not say the setup screen was shown"
+          check_run error "first start (X11)" "" xcb "${LOGS}/first.out"
+          echo "::endgroup::"
+
+          echo "::group::Screen walk on X11 (Xvfb, QT_QPA_PLATFORM=xcb)"
+          # Samples the environment of every process the terminal starts: no
+          # library or plugin path may reach them (they would break the managed
+          # Python and other programs), and records the WebEngine processes.
+          ( while :; do
+              for d in /proc/[0-9]*; do
+                [ "$(stat -c %u "${d}" 2>/dev/null)" = "${TUID}" ] || continue
+                cmd="$(tr '\0' ' ' <"${d}/cmdline" 2>/dev/null | cut -c1-160)"
+                case "${cmd}" in *QtWebEngineProcess*) echo "${cmd}" >>"${LOGS}/webengine-procs" ;; esac
+                tr '\0' '\n' <"${d}/environ" 2>/dev/null \
+                  | grep -E '^(LD_LIBRARY_PATH|LD_PRELOAD|QT_PLUGIN_PATH|QT_QPA_PLATFORM_PLUGIN_PATH|QML2_IMPORT_PATH)=' \
+                  | sed "s|^|${cmd%% *}: |" >>"${LOGS}/env-leaks"
+              done
+              sleep 1
+            done ) &
+          SAMPLER=$!
+          as_tester env DISPLAY=:99 QT_QPA_PLATFORM=xcb dbus-run-session -- \
+            timeout -k 10 600 "${BIN}" --smoke-test --profile ci-xcb >"${LOGS}/xcb.out" 2>&1
+          st=$?
+          kill "${SAMPLER}" 2>/dev/null; wait "${SAMPLER}" 2>/dev/null
+          tail -n 120 "${LOGS}/xcb.out"
+          kill_tester
+          [ "${st}" -eq 0 ] || fail "X11 screen walk exited with ${st} (124 = hung); the last '[Smoke] >>> constructing' line names the screen"
+          grep -aq '\[Smoke\] OK:' "${LOGS}/xcb.out" || fail "X11 screen walk printed no '[Smoke] OK:' line"
+          check_run error "X11 screen walk" ci-xcb xcb "${LOGS}/xcb.out"
+          if [ -s "${LOGS}/env-leaks" ]; then sort -u "${LOGS}/env-leaks" | head -n 20; fail "library / plugin path variables reach processes the terminal starts (above)"; fi
+          echo "QtWebEngine processes seen: $(sort -u "${LOGS}/webengine-procs" 2>/dev/null | wc -l)"
+          if [ "${MODE}" = host ] && ! grep -q -- '--type=renderer' "${LOGS}/webengine-procs" 2>/dev/null; then
+            warn "no QtWebEngine renderer started during the walk, so the sandbox was not exercised"
+          fi
+          echo "::endgroup::"
+
+          if [ "${SELFTESTS}" = 1 ]; then
+            echo "::group::Self-tests on the installed package"
+            as_tester env DISPLAY=:99 QT_QPA_PLATFORM=xcb dbus-run-session -- \
+              bash /tmp/ci_app_checks.sh selftests "${BIN}" ci-selftests \
+              || fail "self-tests failed on the installed package"
+            kill_tester
+            echo "::endgroup::"
+          fi
+
+          echo "::group::Wayland (headless weston, no X server)"
+          WSOCK=wl-ci
+          WPID=""
+          for backend in headless-backend.so headless; do
+            as_tester weston --backend="${backend}" --socket="${WSOCK}" --no-config >"${LOGS}/weston-${backend}.log" 2>&1 &
+            WPID=$!
+            for _ in $(seq 1 30); do
+              [ -S "${XRT}/${WSOCK}" ] && break
+              kill -0 "${WPID}" 2>/dev/null || break
+              sleep 0.5
+            done
+            [ -S "${XRT}/${WSOCK}" ] && break
+            kill "${WPID}" 2>/dev/null; wait "${WPID}" 2>/dev/null; WPID=""
+          done
+          if [ -z "${WPID}" ]; then
+            cat "${LOGS}"/weston-*.log 2>/dev/null | tail -n 30
+            report "${WAYLAND_SEVERITY}" "could not start a headless weston: the Wayland checks did not run"
+          else
+            as_tester env WAYLAND_DISPLAY="${WSOCK}" QT_QPA_PLATFORM=wayland dbus-run-session -- \
+              timeout -k 10 600 "${BIN}" --smoke-test --profile ci-wayland >"${LOGS}/wayland.out" 2>&1
+            st=$?
+            tail -n 80 "${LOGS}/wayland.out"
+            [ "${st}" -eq 0 ] && grep -aq '\[Smoke\] OK:' "${LOGS}/wayland.out" \
+              || report "${WAYLAND_SEVERITY}" "Wayland screen walk failed (status ${st}, 124 = hung)"
+            check_run "${WAYLAND_SEVERITY}" "Wayland screen walk" ci-wayland wayland "${LOGS}/wayland.out"
+            # QT_QPA_PLATFORM unset and no DISPLAY: the v4.5.2 abort case.
+            as_tester env WAYLAND_DISPLAY="${WSOCK}" XDG_SESSION_TYPE=wayland dbus-run-session -- \
+              timeout -s TERM -k 10 45 "${BIN}" --profile ci-wayland-start >"${LOGS}/wayland-start.out" 2>&1
+            st=$?
+            tail -n 40 "${LOGS}/wayland-start.out"
+            [ "${st}" -eq 124 ] || report "${WAYLAND_SEVERITY}" "Wayland start without X: exited after less than 45 s (status ${st})"
+            check_run "${WAYLAND_SEVERITY}" "Wayland start without X" ci-wayland-start wayland "${LOGS}/wayland-start.out"
+          fi
+          kill_tester
+          echo "::endgroup::"
+
+          echo "::group::apt-get remove, then purge"
+          apt-get remove -y "${PKG}" || fail "apt-get remove failed"
+          for p in "${PREFIX}" "${BIN}" "/usr/share/applications/${PKG}.desktop" \
+                   /usr/share/metainfo/com.fincept.terminal.community.metainfo.xml "/etc/apparmor.d/${PKG}"; do
+            if [ -e "${p}" ] || [ -L "${p}" ]; then fail "${p} is left after apt-get remove"; fi
+          done
+          if grep -q "^${PKG}" /sys/kernel/security/apparmor/profiles 2>/dev/null; then fail "the AppArmor profile is still loaded after remove"; fi
+          apt-get purge -y "${PKG}" || fail "apt-get purge failed"
+          if dpkg-query -W -f='${db:Status-Abbrev}' "${PKG}" 2>/dev/null | grep -q '^[ir]'; then fail "dpkg still lists ${PKG} after purge"; fi
+          left="$(find /opt /usr/bin /usr/share /etc /var/lib/dpkg/info /var/cache/apparmor -iname '*fincept*' 2>/dev/null)"
+          if [ -n "${left}" ]; then printf '%s\n' "${left}"; fail "files left outside the user's home after purge (above)"; fi
+          [ -d /home/tester/.local/share ] && echo "user data in /home/tester is kept, as it must be"
+          echo "::endgroup::"
+          kill "${XVFB_PID}" 2>/dev/null
+          exit "${FAIL}"
+          CHECK
+          if [ "${BASE}" = host ]; then
+            sudo env BASE="${BASE}" MODE=host SELFTESTS="${SELFTESTS}" WAYLAND_SEVERITY="${WAYLAND_SEVERITY}" \
+              DEB="${GITHUB_WORKSPACE}/deb/${DEB_NAME}" CI_CHECKS="${GITHUB_WORKSPACE}/.github/scripts/ci_app_checks.sh" \
+              bash "${RUNNER_TEMP}/deb-check.sh"
+          else
+            docker run --rm --shm-size=1g \
+              -v "${GITHUB_WORKSPACE}:/w:ro" -v "${RUNNER_TEMP}/deb-check.sh:/deb-check.sh:ro" \
+              -e BASE -e MODE=container -e SELFTESTS -e WAYLAND_SEVERITY \
+              -e DEB="/w/deb/${DEB_NAME}" -e CI_CHECKS=/w/.github/scripts/ci_app_checks.sh \
+              "${BASE}" bash /deb-check.sh
+          fi
+
+      # Newest tools (Debian 13): desktop-file-validate, appstreamcli and
+      # lintian (errors fail; accepted findings are the package's
+      # /usr/share/lintian/overrides file, each with its reason).
+      - name: Lint the package
+        if: matrix.lint
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${GITHUB_WORKSPACE}:/w:ro" debian:13 bash -c '
+            set -uo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends lintian desktop-file-utils appstream >/dev/null
+            DEB="$(ls /w/deb/FinceptTerminal-*-linux-x64.deb)"
+            X="$(mktemp -d)"; dpkg-deb -x "${DEB}" "${X}"
+            rc=0
+            echo "::group::desktop-file-validate"
+            desktop-file-validate "${X}"/usr/share/applications/*.desktop || { echo "::error::desktop-file-validate failed"; rc=1; }
+            echo "::endgroup::"
+            echo "::group::appstreamcli validate --no-net"
+            appstreamcli validate --no-net --explain "${X}"/usr/share/metainfo/*.xml || { echo "::error::appstreamcli validate failed"; rc=1; }
+            echo "::endgroup::"
+            echo "::group::lintian"
+            lintian --fail-on error "${DEB}" || { echo "::error::lintian reported errors"; rc=1; }
+            echo "::endgroup::"
+            exit "${rc}"'
 
 # ═════════════════════════════════════════════════════════════════════════════
 # JOB 3 — macOS arm64 Installer (DMG built with hdiutil)
 # ═════════════════════════════════════════════════════════════════════════════
   build-macos:
     name: macOS arm64 Installer
+    # A manual run may ask for one Linux package alone; tag pushes carry no
+    # inputs and always build everything.
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all'
     runs-on: macos-15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 1
@@ -1528,8 +1744,9 @@ jobs:
             # Version MUST come from CMakeLists.txt, not a literal: this
             # fallback plist used to hardcode 4.3.0, so on the fallback path
             # the bundle advertised a CFBundleVersion that disagreed with the
-            # binary as soon as the project version moved — which breaks the
-            # auto-updater's version comparison. Note the heredoc delimiter is
+            # binary as soon as the project version moved, so macOS showed a
+            # different version than the app reports (and than the update
+            # manifest names). Note the heredoc delimiter is
             # unquoted (<<PLIST, not <<'PLIST') so ${VERSION} interpolates.
             VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | awk '{print $3}')
             [ -n "${VERSION}" ] || { echo "::error::Could not parse VERSION from CMakeLists.txt"; exit 1; }
@@ -1538,7 +1755,7 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>CFBundleExecutable</key><string>FinceptTerminal</string>
-            <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
+            <key>CFBundleIdentifier</key><string>com.fincept.terminal.community</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleShortVersionString</key><string>${VERSION}</string>
@@ -2322,11 +2539,11 @@ jobs:
           echo "Final bundle size: $(du -sh "dist/${{ env.APP_NAME }}.app" | cut -f1)"
 
       # ── Optional: QtIFW "wizard" installer with a Target Directory page ─────
-      # Additive to the DMG (which stays the auto-update channel). The CMake
+      # Additive to the DMG (which stays the in-app update asset). The CMake
       # install rule copies the SIGNED build/FinceptTerminal.app via `ditto`, so
       # code signatures survive (issue #139). Output is named "-wizard.zip" so it
-      # never matches the updater regex (\.dmg$|macos.*setup) — it won't compete
-      # with the DMG for the auto-update asset.
+      # never matches the README table's macOS regex (\.dmg$|macos.*setup); the
+      # update manifest lists only the exact -setup.dmg name.
       # NOTE: VALIDATE ON A REAL RUNNER — this is the first IFW-on-macOS
       # build/sign/notarize path. The bundle is signed + stapled BEFORE this step
       # (the staple step above), satisfying the install-rule contract.
@@ -2402,8 +2619,9 @@ jobs:
         working-directory: fincept-qt
         run: |
           set -euo pipefail
-          # Parse project() VERSION so the DMG filename matches the regex in
-          # update-manifest: FinceptTerminal-<version>-macos-arm64-setup.dmg
+          # Parse project() VERSION so the DMG filename is exactly what the
+          # update manifest lists as macos-arm64-dmg:
+          # FinceptTerminal-<version>-macos-arm64-setup.dmg
           VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | awk '{print $3}')
           [ -n "${VERSION}" ] || { echo "::error::Could not parse VERSION from CMakeLists.txt"; exit 1; }
           DMG_NAME="FinceptTerminal-${VERSION}-macos-arm64-setup.dmg"
@@ -2411,7 +2629,11 @@ jobs:
 
           STAGING="$(mktemp -d)/dmg_staging"
           mkdir -p "${STAGING}"
-          cp -R "dist/${{ env.APP_NAME }}.app" "${STAGING}/"
+          # The edition's .app name (CMakeLists.txt "Edition identity"): the private
+          # build's DMG also holds FinceptTerminal.app, and dragging either into
+          # /Applications replaced the other. Renaming the bundle folder leaves its
+          # signature and stapled ticket valid.
+          cp -R "dist/${{ env.APP_NAME }}.app" "${STAGING}/Fincept Terminal Community.app"
           # Symlink /Applications so users can drag the app across in the DMG.
           ln -s /Applications "${STAGING}/Applications"
           # Complete uninstaller beside the app (outside the signed bundle, so the
@@ -2419,7 +2641,7 @@ jobs:
           install -m 755 packaging/uninstall/uninstall.sh "${STAGING}/Uninstall Fincept Terminal.command"
 
           hdiutil create \
-            -volname "${{ env.APP_NAME }}" \
+            -volname "Fincept Terminal Community" \
             -srcfolder "${STAGING}" \
             -ov -format UDZO \
             "build/${DMG_NAME}"
@@ -2541,7 +2763,7 @@ jobs:
 
       # ── Upload ────────────────────────────────────────────────────────────
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FinceptTerminal-macOS-arm64-installer
           path: |
@@ -2550,18 +2772,446 @@ jobs:
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════
-# JOB 4 — Create GitHub Release and attach all installers
+# JOB 4 — Linux x86_64 Flatpak bundle (single-file .flatpak) — the main Linux
+#          package
+#
+# Built in Flathub's CI image (flatpak-builder, org.kde.Sdk + Platform 6.11
+# preinstalled), calling flatpak-builder directly (the build step says why not
+# the official action), from the commit being released — NOT from the tag the
+# committed manifest pins. The image tag below and the manifest's
+# runtime-version must name the same KDE runtime ("Runtime matches the image"
+# fails the job in seconds if they drift). Flathub publishes images only for
+# supported runtimes (github.com/flathub-infra/actions-images lists the tags):
+# when a runtime goes end-of-life its tag disappears, so move both together
+# to the newest listed kde-6.x. The app then builds against that runtime's Qt
+# (the manifest passes FINCEPT_QT_PIN_MODE=ANY), not the 6.8.3 the other
+# installers pin. The committed manifest stays in Flathub form (git tag +
+# commit) and its pin lags the project by design, so "Derive the CI manifest"
+# writes a copy that builds this checkout, and fails if the main-repository
+# source is not where it expects. All checks of this job live in this file.
+#
+# No `needs`: it runs beside the other build jobs. The release job REQUIRES it.
+#
+# Asset: FinceptTerminal-<version>-linux-x86_64.flatpak; the update manifest
+# lists it by exact name under its own key, linux-x64-flatpak.
+# ═════════════════════════════════════════════════════════════════════════════
+  build-flatpak:
+    name: Linux x86_64 Flatpak
+    # Manual runs: "all" and "flatpak" build it, "deb" does not.
+    if: github.event_name != 'workflow_dispatch' || inputs.only != 'deb'
+    runs-on: ubuntu-24.04
+    # Cold build (see "Build Flatpak bundle" on why there is no cache): ~20 min
+    # on 48 cores locally, so expect a few hours on a 4-vCPU hosted runner.
+    timeout-minutes: 300
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.11
+      # bubblewrap (flatpak-builder's build sandbox, `flatpak run`) needs
+      # namespaces the default container profile does not grant.
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      FLATPAK_APP_ID: in.fincept.FinceptTerminal
+      FLATPAK_MANIFEST: src/fincept-qt/packaging/flatpak/in.fincept.FinceptTerminal.yml
+      # The KDE runtime of the container image above (its tag, without "kde-").
+      FLATPAK_IMAGE_RUNTIME: "6.11"
+      # flatpak-builder-lint (Flathub's linter) as ::warning:: annotations plus a
+      # job-summary table: `python3 -c "$FLATPAK_LINT_PY" manifest|repo PATH`.
+      # Its "errors" block a Flathub submission, not this release, so it never
+      # fails the job. Known findings carry the reason they are there, so a new
+      # one stands out.
+      FLATPAK_LINT_PY: |
+        import json, os, shutil, subprocess, sys
+        kind, path = sys.argv[1], sys.argv[2]
+        title = f"flatpak-builder-lint {kind}"
+        KNOWN = {
+            "finish-args-contains-both-x11-and-wayland":
+                "deliberate: the app prefers X11 while its docking UI is validated only on X11/XWayland "
+                "(see the finish-args comment in the manifest). Flathub needs --socket=fallback-x11 or an exception.",
+            "appstream-external-screenshot-url":
+                "expected outside Flathub: its builder mirrors screenshots to dl.flathub.org; CI does not.",
+            "appstream-screenshots-not-mirrored-in-ostree":
+                "expected outside Flathub, same cause as appstream-external-screenshot-url.",
+            "finish-args-flatpak-spawn-access":
+                "deliberate: coding agents (Claude Code, Codex, Gemini CLI, ...) are CLIs installed on the "
+                "user's system and run there via flatpak-spawn --host (src/core/process/HostExec.cpp); "
+                "optional feature, no filesystem grant added. Flathub review needs this justification "
+                "(see the finish-args comment in the manifest).",
+        }
+        tool = shutil.which("flatpak-builder-lint")
+        if not tool:
+            print(f"::warning title={title}::flatpak-builder-lint is not installed in this image; lint skipped")
+            sys.exit(0)
+        proc = subprocess.run([tool, kind, path], capture_output=True, text=True)
+        try:
+            report = json.loads(proc.stdout)
+        except ValueError:
+            sys.stdout.write(proc.stdout + proc.stderr)
+            print(f"::warning title={title}::the linter produced no JSON report (exit {proc.returncode}); see the log")
+            sys.exit(0)
+        print(json.dumps(report, indent=2))
+        found = [(level, code) for level in ("error", "warning") for code in report.get(level + "s") or []]
+        rows = [f"### {title} `{path}`", ""]
+        rows += ["| Flathub level | Finding | Note |", "|---|---|---|"] if found else ["No findings."]
+        for level, code in found:
+            note = KNOWN.get(code, "new finding, not reviewed yet")
+            print(f"::warning title={title}::[Flathub {level}] {code}: {note}")
+            rows.append(f"| {level} | `{code}` | {note} |")
+        for line in report.get("info") or []:
+            print(f"info: {line}")
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+            fh.write("\n".join(rows) + "\n\n")
+
+    steps:
+      # Into src/ so flatpak-builder's own directories (flatpak_app/, repo/,
+      # .flatpak-builder/, created in the workspace root) are never inside the
+      # directory the build copies in as its source.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          path: src
+          submodules: recursive
+          fetch-depth: 1
+
+      # Seconds, not hours: fail before the build if the metadata a build of
+      # this tree reports disagrees with CMake (check_version_drift.sh: the
+      # newest <release> of every AppStream file equals project VERSION — what
+      # `flatpak list` shows), or if the committed manifest, metainfo or
+      # desktop entry would fail Flathub's rules that need no build. The
+      # [manifest-pin] lag WARNING is expected between a release and the next
+      # Flathub update: the build below does not use the pin.
+      - name: Version + metadata consistency
+        id: meta
+        run: |
+          set -euo pipefail
+          cd src
+          VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' fincept-qt/CMakeLists.txt | awk '{print $3}')
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Could not parse project VERSION from fincept-qt/CMakeLists.txt"
+            exit 1
+          fi
+          echo "Package version: ${VERSION} (commit ${GITHUB_SHA})"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "bundle=${{ env.APP_NAME }}-${VERSION}-linux-x86_64.flatpak" >> "$GITHUB_OUTPUT"
+          bash .github/scripts/check_version_drift.sh .
+          python3 - <<'PY'
+          import io, os, re, subprocess, sys, xml.dom.minidom
+          import yaml
+          D, APPID = "fincept-qt/packaging/flatpak", "in.fincept.FinceptTerminal"
+          fails = []
+          def ck(ok, label, hard=True):
+              print(f"  [{'PASS' if ok else ('FAIL' if hard else 'WARN')}] {label}")
+              if not ok:
+                  print(f"::{'error' if hard else 'warning'} title=Flatpak pre-flight::{label}")
+                  if hard:
+                      fails.append(label)
+          vkey = lambda v: tuple(int(x) for x in re.findall(r"\d+", v or ""))
+
+          man = yaml.safe_load(io.open(f"{D}/{APPID}.yml", encoding="utf-8"))
+          ck(man.get("id") == APPID, f"manifest id is {APPID}")
+          ck(bool(man.get("command") and man.get("runtime") and man.get("sdk")), "command, runtime and sdk declared")
+          # Flathub: every git source pinned by a full commit (a tag alone is mutable).
+          srcs = [s for m in man["modules"] if isinstance(m, dict) for s in m.get("sources", [])
+                  if isinstance(s, dict) and s.get("type") == "git"]
+          for s in srcs:
+              ck(bool(re.fullmatch(r"[0-9a-f]{40}", str(s.get("commit", "")))), f"{s['url']} pinned by a full commit")
+          main = [s for s in srcs if "FinceptTerminal.git" in s["url"]]
+          ck(len(main) == 1 and bool(main and main[0].get("tag")), "exactly one main-repository git source, with tag + commit")
+          if len(main) == 1 and main[0].get("tag"):
+              # The pinned tag exists on the remote (a shallow checkout has no tags) and is that commit.
+              tag, url = main[0]["tag"], main[0]["url"]
+              r = subprocess.run(["git", "ls-remote", "--tags", url, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
+                                 capture_output=True, text=True)
+              refs = {ref.strip(): sha.strip() for sha, ref in
+                      (line.split("\t", 1) for line in r.stdout.splitlines() if "\t" in line)}
+              ck(r.returncode == 0 and f"refs/tags/{tag}" in refs, f"tag {tag} exists on {url}")
+              got = refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}")
+              ck(got == main[0].get("commit"), f"commit matches tag {tag} ({(got or 'not found')[:8]})")
+
+          dom = xml.dom.minidom.parse(f"{D}/{APPID}.metainfo.xml")
+          def text(tag):
+              n = dom.getElementsByTagName(tag)
+              return n[0].firstChild.nodeValue.strip() if n and n[0].firstChild else None
+          ck(text("id") == APPID, "metainfo id is the app id")
+          for t in ("name", "summary", "metadata_license", "project_license"):
+              ck(bool(text(t)), f"<{t}> present")
+          ck(text("launchable") == f"{APPID}.desktop", "launchable is the desktop id")
+          ck(bool(dom.getElementsByTagName("content_rating")), "content_rating (OARS) present")
+          imgs = [n.firstChild.nodeValue.strip() for n in dom.getElementsByTagName("image") if n.firstChild]
+          ck(bool(imgs), f"{len(imgs)} screenshots listed")
+          for u in imgs:
+              ck("/main/" not in u and "/master/" not in u, f"screenshot pinned, not on a branch: {u.rsplit('/', 1)[-1]}")
+              ck(os.path.isfile(os.path.join("images", u.split("/images/")[-1])), f"screenshot source images/{u.split('/images/')[-1]}")
+          # Commented-out <release> drafts are skipped, as AppStream tools do.
+          rels = [r.getAttribute("version") for r in dom.getElementsByTagName("release")]
+          ck(rels == sorted(rels, key=vkey, reverse=True), "releases listed newest first")
+          for r in dom.getElementsByTagName("release"):
+              ck(bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", r.getAttribute("date"))), f"release {r.getAttribute('version')} has an ISO date")
+          if len(main) == 1 and main[0].get("tag") and rels:
+              pin, newest = main[0]["tag"].lstrip("v"), max(rels, key=vkey)
+              ck(pin in rels and vkey(pin) <= vkey(newest), f"[manifest-pin] v{pin} is a listed release, not ahead of {newest}")
+              ck(pin == newest, f"[manifest-pin] the Flathub-form manifest pins v{pin}, the newest release is {newest}: "
+                                f"expected until the Flathub update (CI builds this checkout). Before submitting, move the pin "
+                                f"to v{newest}, only to a tag whose tree builds in the offline sandbox", hard=False)
+
+          kv = dict(l.split("=", 1) for l in io.open(f"{D}/{APPID}.desktop", encoding="utf-8").read().splitlines()
+                    if "=" in l and not l.startswith("["))
+          ck(kv.get("Type") == "Application" and bool(kv.get("Name")), "desktop entry: Type=Application and a Name")
+          ck(kv.get("Icon") == APPID, "desktop entry: Icon is the app id")
+          ck(kv.get("Exec", "").split()[:1] == [man.get("command")], "desktop entry: Exec runs the manifest command")
+          ck("%" not in kv.get("Exec", ""), "desktop entry: Exec has no field code the app cannot honour")
+          ck("MimeType" not in kv, "desktop entry declares no MimeType (no shared-mime-info XML is installed)", hard=False)
+          main_cats = {"AudioVideo", "Audio", "Video", "Development", "Education", "Game", "Graphics",
+                       "Network", "Office", "Science", "Settings", "System", "Utility"}
+          ck(bool(set(kv.get("Categories", "").split(";")) & main_cats), "desktop entry: a main category")
+          ck(os.path.isfile(f"fincept-qt/resources/{APPID}.png"), "256x256 icon present")
+          print(f"{len(fails)} failure(s)")
+          sys.exit(1 if fails else 0)
+          PY
+
+      # The image carries exactly one KDE SDK/runtime. A manifest asking for
+      # another one would make flatpak-builder stop with "runtime not
+      # installed" only after the checkout and metadata steps.
+      - name: Runtime matches the image
+        run: |
+          set -euo pipefail
+          WANT=$(grep -E "^runtime-version:" "${FLATPAK_MANIFEST}" | tr -d "'\"\r" | awk '{print $2}')
+          if [ "${WANT}" != "${FLATPAK_IMAGE_RUNTIME}" ]; then
+            echo "::error::Manifest runtime-version is '${WANT}' but the job's image is kde-${FLATPAK_IMAGE_RUNTIME} — change both together"
+            exit 1
+          fi
+          flatpak info "org.kde.Sdk//${WANT}" >/dev/null 2>&1 \
+            || { echo "::error::org.kde.Sdk//${WANT} is not installed in this image"; flatpak list --runtime || true; exit 1; }
+          echo "KDE runtime ${WANT}: $(flatpak info --show-commit "org.kde.Sdk//${WANT}" 2>/dev/null || echo present)"
+
+      # A copy of the committed manifest in which exactly one source — the git
+      # source of the main repository — is replaced by a `type: dir` source for
+      # this checkout; every other module, command, finish-arg and source is
+      # carried over (relative paths re-anchored to the copy's folder). Fails,
+      # writing nothing, when no source or more than one fetches the main
+      # repository, when it is not `type: git` or has a key a dir source cannot
+      # carry, or when a module / source is an external file it cannot inspect.
+      - name: Derive the CI manifest (build this commit, not the pinned tag)
+        run: |
+          set -euo pipefail
+          python3 - "${FLATPAK_MANIFEST}" "flatpak-ci/${FLATPAK_APP_ID}.yml" src <<'PY'
+          import copy, os, sys, yaml
+          src, out, checkout = sys.argv[1], sys.argv[2], os.path.abspath(sys.argv[3])
+          REPO = "github.com/fincept-corporation/finceptterminal"
+          def die(msg):
+              print(f"::error title=CI Flatpak manifest::{msg}")
+              sys.exit(1)
+          def norm(url):
+              u = url.strip().lower().rstrip("/")
+              u = u[:-4] if u.endswith(".git") else u
+              for prefix in ("https://", "http://", "git://", "ssh://git@", "git@"):
+                  if u.startswith(prefix):
+                      u = u[len(prefix):]
+                      break
+              return u.replace("github.com:", "github.com/", 1)
+          mdir, odir = os.path.dirname(os.path.abspath(src)), os.path.dirname(os.path.abspath(out))
+          def anchor(p):
+              return os.path.relpath(os.path.join(mdir, p), odir) if isinstance(p, str) and not os.path.isabs(p) else p
+          derived = copy.deepcopy(yaml.safe_load(open(src, encoding="utf-8")))
+          hits = []
+          def walk(mods, trail):
+              for i, m in enumerate(mods or []):
+                  if not isinstance(m, dict):
+                      die(f"{trail}[{i}] is an external module file ({m!r}); inline it so CI can see what it builds")
+                  label = f"{trail}[{m.get('name', i)}]"
+                  for j, s in enumerate(m.get("sources") or []):
+                      if not isinstance(s, dict):
+                          die(f"{label}.sources[{j}] is an external source file ({s!r})")
+                      if any(isinstance(u, str) and (norm(u) == REPO or norm(u).startswith(REPO + "/"))
+                             for u in [s.get("url"), *(s.get("mirror-urls") or [])]):
+                          hits.append((m["sources"], j, f"{label}.sources[{j}]"))
+                          continue
+                      for k in ("path", "paths"):
+                          if isinstance(s.get(k), str):
+                              s[k] = anchor(s[k])
+                          elif isinstance(s.get(k), list):
+                              s[k] = [anchor(p) for p in s[k]]
+                  walk(m.get("modules"), label + ".modules")
+          walk(derived.get("modules"), "modules")
+          if len(hits) != 1:
+              die(f"{len(hits)} sources fetch the main repository ({', '.join(h[2] for h in hits) or 'none'}); "
+                  f"expected exactly one `type: git` source with tag + commit")
+          sources, j, where = hits[0]
+          git = sources[j]
+          if git.get("type") != "git":
+              die(f"{where} fetches the main repository as `type: {git.get('type')}`, not `type: git`")
+          carried = ("dest", "only-arches", "skip-arches")
+          unknown = sorted(set(git) - set(carried) - {"type", "url", "tag", "commit", "branch", "disable-shallow-clone",
+                                                       "disable-submodules", "disable-fsckobjects", "x-checker-data"})
+          if unknown:
+              die(f"{where} has keys a dir source cannot carry: {', '.join(unknown)}")
+          sources[j] = {"type": "dir", "path": os.path.relpath(checkout, odir), "skip": [".git"],
+                        **{k: git[k] for k in carried if k in git}}
+          class Dumper(yaml.SafeDumper):
+              pass
+          # Multi-line build commands stay block scalars (PyYAML quotes what a block cannot hold).
+          Dumper.add_representer(str, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", v,
+                                                                      style="|" if "\n" in v else None))
+          text = (f"# GENERATED in CI from {os.path.relpath(src, checkout)} -- do not edit or commit.\n"
+                  f"# {where}: git {git.get('url')} ({git.get('tag', '')} {git.get('commit', '')}) -> dir {checkout}\n"
+                  + yaml.dump(derived, Dumper=Dumper, sort_keys=False, allow_unicode=True,
+                              default_flow_style=False, width=1_000_000))
+          if yaml.safe_load(text) != derived:
+              die("the derived manifest does not read back as written")
+          os.makedirs(odir, exist_ok=True)
+          with open(out, "w", encoding="utf-8", newline="\n") as fh:
+              fh.write(text)
+          print(f"Wrote {out}: {where} -> dir {checkout}")
+          PY
+          cat "flatpak-ci/${FLATPAK_APP_ID}.yml"
+
+      # Flathub's linter on the committed (Flathub-form) manifest.
+      - name: Lint manifest (flatpak-builder-lint, non-blocking)
+        run: python3 -c "$FLATPAK_LINT_PY" manifest "${FLATPAK_MANIFEST}"
+
+      # The invocation validated by hand, called directly rather than through
+      # flatpak/flatpak-github-actions/flatpak-builder (v6): that action always
+      # adds --install-deps-from=flathub and has no input to turn it off. With
+      # the 6.8 image that tried to update the preinstalled SDK, failed on the
+      # container's overlay filesystem ("Invalid cross-device link") and
+      # crashed flatpak-builder. The image already carries the SDK and runtime,
+      # so nothing needs installing, and the bundle name, the checks and the
+      # upload below stay under this job's control.
+      # No cache: release runs are triggered by tags, and an Actions cache saved
+      # under one tag is not visible to the next tag's run, so it would only
+      # consume the repository's cache quota.
+      - name: Build Flatpak bundle (flatpak-builder)
+        run: |
+          set -euo pipefail
+          flatpak-builder --force-clean --disable-rofiles-fuse \
+            --state-dir=.flatpak-builder --repo=repo \
+            flatpak_app "flatpak-ci/${FLATPAK_APP_ID}.yml"
+          flatpak build-bundle repo "${{ steps.meta.outputs.bundle }}" "${FLATPAK_APP_ID}" \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+
+      # Blocking checks on what was exported (flatpak_app/ is the build dir
+      # above): the runtime payload, the cleanup of the non-Flatpak
+      # desktop/AppStream duplicates, and the version Flatpak reports — read
+      # from the composed AppStream data that `flatpak list` uses (it said
+      # 4.4.1 for a 4.5.2 build before the metainfo had a 4.5.2 entry).
+      - name: Verify bundle
+        run: |
+          set -euo pipefail
+          BUNDLE="${{ steps.meta.outputs.bundle }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          FILES=flatpak_app/files
+          [ -s "${BUNDLE}" ] || { echo "::error::${BUNDLE} was not produced"; ls -la; exit 1; }
+          [ -d "${FILES}" ] || { echo "::error::build dir ${FILES} not found"; ls -la; exit 1; }
+          # The first real build was 53 MB, of which yt-dlp alone is ~34 MB:
+          # below 40 MB the app itself is missing or hollow.
+          SIZE_KB=$(du -k "${BUNDLE}" | cut -f1)
+          if [ "${SIZE_KB}" -lt 40960 ]; then
+            echo "::error::${BUNDLE} is only ${SIZE_KB} KB — the app payload is missing"
+            exit 1
+          fi
+
+          MISSING=""
+          for f in bin/FinceptTerminal libexec/fincept-terminal/yt-dlp \
+                   share/fincept-terminal/scripts \
+                   "share/applications/${FLATPAK_APP_ID}.desktop" \
+                   "share/metainfo/${FLATPAK_APP_ID}.metainfo.xml" \
+                   "share/icons/hicolor/256x256/apps/${FLATPAK_APP_ID}.png"; do
+            [ -e "${FILES}/${f}" ] || MISSING="${MISSING} ${f}"
+          done
+          if [ -n "${MISSING}" ]; then
+            echo "::error::Flatpak payload is missing:${MISSING}"
+            exit 1
+          fi
+          for f in share/applications/fincept-terminal-community.desktop share/metainfo/fincept-terminal-community.appdata.xml; do
+            if [ -e "${FILES}/${f}" ]; then
+              echo "::error::${f} is in the package — the manifest's cleanup list no longer removes the non-Flatpak duplicate"
+              exit 1
+            fi
+          done
+
+          APPDATA="${FILES}/share/app-info/xmls/${FLATPAK_APP_ID}.xml.gz"
+          [ -f "${APPDATA}" ] || { echo "::error::${APPDATA} not found — cannot tell which version Flatpak will report"; exit 1; }
+          REPORTED=$(zcat "${APPDATA}" | grep -o '<release [^>]*version="[^"]*"' \
+                       | sed 's/.*version="//; s/"$//' | sort -V | tail -n 1 || true)
+          if [ "${REPORTED}" != "${VERSION}" ]; then
+            echo "::error::Flatpak will report version '${REPORTED}' but CMakeLists.txt says ${VERSION} — add the <release> entry to ${FLATPAK_APP_ID}.metainfo.xml"
+            exit 1
+          fi
+          echo "Bundle OK: ${BUNDLE} ($(du -h "${BUNDLE}" | cut -f1)), reports version ${REPORTED}"
+
+      - name: Lint built repo (flatpak-builder-lint, non-blocking)
+        run: python3 -c "$FLATPAK_LINT_PY" repo repo
+
+      # Installs the bundle per-user (its runtime resolves from the image's
+      # system installation, as it would from Flathub) and walks every screen
+      # through `flatpak run` inside a private session bus and a virtual X
+      # display (QT_QPA_PLATFORM=xcb: the sandbox's real x11 socket path, not
+      # the offscreen plugin). Requires the walk's own "[Smoke] OK:" line, not
+      # only exit status 0.
+      #
+      # NON-BLOCKING FOR NOW: validated locally in this exact image (fresh
+      # container: bundle install, "[Smoke] OK: all 52 screens constructed"),
+      # never yet on a hosted runner. After its first green run, make it
+      # blocking: delete `continue-on-error` and the CHECK_SEVERITY line below.
+      - name: Smoke-test the bundle in its sandbox
+        timeout-minutes: 25
+        continue-on-error: true
+        env:
+          CHECK_SEVERITY: warning
+        run: |
+          set -uo pipefail
+          BUNDLE="${{ steps.meta.outputs.bundle }}"
+          flatpak install --user --noninteractive -y --bundle "${BUNDLE}" \
+            || { echo "::warning::Flatpak smoke test: flatpak install of ${BUNDLE} failed"; exit 1; }
+          # `flatpak run` failed with "Could not connect: No such file or
+          # directory" in a container with no system bus. This image's own
+          # system.conf cannot start (no "messagebus" user), so a bus from the
+          # session configuration answers at the system-bus address.
+          if [ ! -S /run/dbus/system_bus_socket ]; then
+            mkdir -p /run/dbus
+            [ -s /etc/machine-id ] || dbus-uuidgen --ensure=/etc/machine-id || true
+            dbus-daemon --session --fork --nopidfile --address=unix:path=/run/dbus/system_bus_socket || true
+          fi
+          export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+          LAUNCHER="${RUNNER_TEMP}/flatpak-launcher"
+          printf '#!/bin/sh\nexec flatpak run %s "$@"\n' "${FLATPAK_APP_ID}" >"${LAUNCHER}"
+          chmod +x "${LAUNCHER}"
+          QT_QPA_PLATFORM=xcb dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" \
+            bash src/.github/scripts/ci_app_checks.sh smoke "${LAUNCHER}" ci-flatpak-smoke 900 2>&1 | tee smoke.log
+          if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+            echo "::warning::Flatpak smoke test: the screen walk failed; the last '[Smoke] >>> constructing <id>' line above names the screen"
+            exit 1
+          fi
+          grep -a '\[Smoke\] OK:' smoke.log \
+            || { echo "::warning::Flatpak smoke test: exit 0 but no '[Smoke] OK:' line — the walk did not run in the sandbox"; exit 1; }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: FinceptTerminal-Linux-x86_64-flatpak
+          path: ${{ steps.meta.outputs.bundle }}
+          if-no-files-found: error
+          retention-days: 30
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 5 — Create GitHub Release and attach all installers + the signed update
+#          manifest (updates.json, updates.json.sig)
 #          Only runs on tag push after all builds succeed
 # ═════════════════════════════════════════════════════════════════════════════
   release:
     name: Create GitHub Release
-    needs: [build-windows, build-linux, build-macos]
+    # verify-deb: the .deb is published only after it installed, opened and
+    # uninstalled cleanly on every supported base.
+    needs: [build-windows, build-linux, verify-deb, build-macos, build-flatpak]
     runs-on: ubuntu-latest
     if: >-
       !cancelled() &&
       needs.build-windows.result == 'success' &&
       needs.build-linux.result == 'success' &&
+      needs.verify-deb.result == 'success' &&
       needs.build-macos.result == 'success' &&
+      needs.build-flatpak.result == 'success' &&
       startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -2571,26 +3221,88 @@ jobs:
       tag: ${{ github.ref_name }}
 
     steps:
+      # Only what the update-manifest steps read: the two scripts, CMakeLists.txt
+      # (VERSION) and UpdateManifest.h (the public key the client pins). Runs
+      # first so the artifact downloads below land in the finished checkout.
+      - name: Checkout manifest scripts and the pinned update key
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            .github/scripts
+            fincept-qt/CMakeLists.txt
+            fincept-qt/src/services/updater/UpdateManifest.h
+          sparse-checkout-cone-mode: false
+
       - name: Download Windows installer
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: FinceptTerminal-Windows-x64-installer
           path: dist/windows
 
-      - name: Download Linux installer
-        uses: actions/download-artifact@v4
+      - name: Download Linux .deb
+        uses: actions/download-artifact@v8
         with:
           name: FinceptTerminal-Linux-x64-installer
           path: dist/linux
 
       - name: Download macOS installer
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: FinceptTerminal-macOS-arm64-installer
           path: dist/macos
 
+      - name: Download Linux Flatpak
+        uses: actions/download-artifact@v8
+        with:
+          name: FinceptTerminal-Linux-x86_64-flatpak
+          path: dist/flatpak
+
       - name: List release assets
         run: find dist -type f | sort
+
+      # ── Update manifest: updates.json + updates.json.sig ──────────────────
+      # The in-app updater fetches releases/latest/download/updates.json and
+      # updates.json.sig (these two assets of the newest non-prerelease
+      # release) and falls back to the copies on main, which JOB 6 commits
+      # byte for byte. It reads nothing in the manifest before the Ed25519
+      # signature verifies against the public key pinned in
+      # fincept-qt/src/services/updater/UpdateManifest.h, so a release without
+      # a valid pair is invisible to every installed terminal. Either step
+      # failing fails this job BEFORE the release is created.
+      #
+      # VERSION is this commit's CMake project version: the build jobs name the
+      # installers after it and the binaries report it, so the manifest must
+      # say exactly that (anything else would offer the update again after it
+      # is installed). The generator also requires the tag to be v<VERSION>.
+      #
+      # Linux assets are linux-x64-deb and linux-x64-flatpak only. Installed
+      # AppImage / .rpm copies (4.5.3 and older) find no package for their kind
+      # and show the notes below with the release-page link — the one place an
+      # already-shipped build can be told to move to the Flatpak or the .deb.
+      - name: Generate update manifest (updates.json)
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' fincept-qt/CMakeLists.txt | awk '{print $3}' || true)
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Could not parse project VERSION from fincept-qt/CMakeLists.txt"
+            exit 1
+          fi
+          NOTES="Fincept Terminal v${VERSION}. Linux: the AppImage and .rpm builds are discontinued - if you use one, install the Flatpak (recommended) or the .deb from the release page."
+          WORK=dist VERSION="${VERSION}" TAG="${TAG}" REPO="${REPO}" NOTES="${NOTES}" \
+            python3 .github/scripts/generate_updates_manifest.py --output dist/updates.json
+          cat dist/updates.json
+
+      # The private key is the UPDATE_SIGNING_KEY repository secret, visible
+      # to this step only. The script refuses an empty secret or a key that
+      # does not match the pinned public key, and verifies the signature it
+      # wrote against that pinned key before exiting 0.
+      - name: Sign update manifest (updates.json.sig)
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: bash .github/scripts/sign_updates_manifest.sh dist/updates.json dist/updates.json.sig
 
       - name: Create GitHub Release and attach installers
         uses: softprops/action-gh-release@v2
@@ -2607,14 +3319,15 @@ jobs:
             | Platform | File | Install |
             |----------|------|---------|
             | **Windows x64** | `FinceptTerminal-*-setup*.exe` | Run installer |
-            | **Linux (Debian/Ubuntu)** | `FinceptTerminal-*-linux-x64.deb` | `sudo apt install ./FinceptTerminal-*.deb` |
-            | **Linux (Fedora/RHEL)** | `FinceptTerminal-*-linux-x64.rpm` | `sudo dnf install *.rpm` |
-            | **Linux (portable)** | `FinceptTerminal-*-linux-x64-setup.run` | `chmod +x` then run |
+            | **Linux (Flatpak, any distribution)** | `FinceptTerminal-*-linux-x86_64.flatpak` | `flatpak install --user ./FinceptTerminal-*.flatpak`, then `flatpak run in.fincept.FinceptTerminal` |
+            | **Linux (Debian/Ubuntu .deb)** | `FinceptTerminal-*-linux-x64.deb` | `sudo apt install ./FinceptTerminal-*.deb` |
             | **macOS Apple Silicon** | `FinceptTerminal-*.dmg` or setup | Open DMG → drag to Applications |
 
             ### Requirements
             - Windows 10/11 x64
-            - Ubuntu 22.04+ / Debian 12+ / Fedora 36+ / RHEL 9+
+            - Linux Flatpak: any x86_64 Linux with Flatpak; its runtime (org.kde.Platform 6.11) is installed from Flathub on first install
+            - Linux .deb: Ubuntu 22.04+ / Debian 12+ and derivatives (x86_64, glibc 2.35+). Fedora, RHEL, Arch, openSUSE and others: use the Flatpak
+            - The AppImage and .rpm are no longer published
             - macOS 13+ (Apple Silicon)
 
             See the [README](https://github.com/Fincept-Corporation/FinceptTerminal#readme) for full installation instructions.
@@ -2622,30 +3335,47 @@ jobs:
             dist/windows/**
             dist/linux/**
             dist/macos/**
+            dist/flatpak/**
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
 
+      # The manifest goes up LAST, in its own step: the release step above
+      # publishes the release and uploads the installers concurrently, so a
+      # manifest uploaded with them could be live while an installer it points
+      # at is still uploading — a terminal checking in that window would offer
+      # an update whose download fails. Uploaded here, every file the manifest
+      # names is already downloadable. The signature goes first so the
+      # manifest never appears without it.
+      - name: Attach signed update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ github.ref_name }}" dist/updates.json.sig --clobber --repo "${{ github.repository }}"
+          gh release upload "${{ github.ref_name }}" dist/updates.json --clobber --repo "${{ github.repository }}"
+
 # ═════════════════════════════════════════════════════════════════════════════
-# JOB 5 — Update repo metadata on main (README download links + updates.json)
+# JOB 6 — Update repo metadata on main (README download links + the signed
+#          update manifest pair updates.json / updates.json.sig)
 #
 # Previously split into two jobs that both ran `needs: release` and both
 # pushed to main — they raced and the loser died with
-# `! [rejected] main -> main (fetch first)`. Worse, when the loser was the
-# updates.json push, the in-app auto-updater (UpdateService.cpp fetches
-# raw.githubusercontent.com/.../main/updates.json) would never see the new
-# version, silently breaking updates for every existing install.
-#
-# Merged into ONE job with ONE checkout, ONE commit (containing both file
-# changes), and ONE push. No race possible. No retries needed.
+# `! [rejected] main -> main (fetch first)`. Merged into ONE job with ONE
+# checkout, ONE commit (containing all file changes), and ONE push. No race
+# possible. No retries needed.
 #
 # Outputs:
 #  - README.md: download table rewritten with current release asset URLs
-#  - updates.json: manifest consumed by UpdateService.cpp; platform keys must
-#    match UpdateService::current_platform_key()
-#    (windows-x64 / windows-arm64 / linux-x64 / macos-arm64 / macos-x64).
-#    Asset filenames must match CPACK_PACKAGE_FILE_NAME in CMakeLists.txt:
-#    FinceptTerminal-<version>-<platform>-<arch>-setup.<ext>
+#  - updates.json + updates.json.sig: the release's OWN assets (generated and
+#    signed by JOB 5), committed byte for byte. The in-app updater reads the
+#    pair from the latest release and falls back to
+#    raw.githubusercontent.com/.../main/updates.json (+ .sig), so main must
+#    serve the same signed bytes. Nothing in this job may regenerate or
+#    reformat them — the signature covers the exact bytes, and .gitattributes
+#    marks both files -text. Prerelease tags (containing '-') leave them
+#    alone: a prerelease is never "latest", and the fallback must not offer
+#    one either.
 # ═════════════════════════════════════════════════════════════════════════════
   update-repo-metadata:
     name: Update README + updates.json on main
@@ -2660,7 +3390,7 @@ jobs:
 
     steps:
       - name: Checkout repository (main branch, full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Write-scoped token so we can push the merged commit back.
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -2703,30 +3433,24 @@ jobs:
           set -euo pipefail
           echo "Fetching asset URLs for release ${TAG}..."
 
-          # Extract URLs for each platform (first match per pattern)
+          # Extract URLs for each platform (first match per pattern). Linux:
+          # the Flatpak and the .deb — no AppImage / .rpm any more.
           WIN_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .url' \
-            | head -1)
-          LIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .url' \
             | head -1)
           MAC_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .url' \
             | head -1)
-          # Native Linux packages — Fedora/RHEL users have no apt (#192).
           DEB_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.deb$")) | .url' \
             | head -1)
-          RPM_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.rpm$")) | .url' \
+          FLATPAK_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.flatpak$")) | .url' \
             | head -1)
 
           # Fallback: if browser_download_url not available via .url, try .browserDownloadUrl
           [ -z "$WIN_URL" ] && WIN_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .browserDownloadUrl' \
-            | head -1) || true
-          [ -z "$LIN_URL" ] && LIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .browserDownloadUrl' \
             | head -1) || true
           [ -z "$MAC_URL" ] && MAC_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .browserDownloadUrl' \
@@ -2734,31 +3458,28 @@ jobs:
           [ -z "$DEB_URL" ] && DEB_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.deb$")) | .browserDownloadUrl' \
             | head -1) || true
-          [ -z "$RPM_URL" ] && RPM_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.rpm$")) | .browserDownloadUrl' \
+          [ -z "$FLATPAK_URL" ] && FLATPAK_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.flatpak$")) | .browserDownloadUrl' \
             | head -1) || true
 
           # Release page URL as final fallback
           RELEASE_URL="https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/${TAG}"
           WIN_URL="${WIN_URL:-${RELEASE_URL}}"
-          LIN_URL="${LIN_URL:-${RELEASE_URL}}"
           MAC_URL="${MAC_URL:-${RELEASE_URL}}"
           DEB_URL="${DEB_URL:-${RELEASE_URL}}"
-          RPM_URL="${RPM_URL:-${RELEASE_URL}}"
+          FLATPAK_URL="${FLATPAK_URL:-${RELEASE_URL}}"
 
           echo "WIN_URL=${WIN_URL}" >> "$GITHUB_ENV"
-          echo "LIN_URL=${LIN_URL}" >> "$GITHUB_ENV"
           echo "MAC_URL=${MAC_URL}" >> "$GITHUB_ENV"
           echo "DEB_URL=${DEB_URL}" >> "$GITHUB_ENV"
-          echo "RPM_URL=${RPM_URL}" >> "$GITHUB_ENV"
+          echo "FLATPAK_URL=${FLATPAK_URL}" >> "$GITHUB_ENV"
           echo "RELEASE_URL=${RELEASE_URL}" >> "$GITHUB_ENV"
           echo "TAG=${TAG}" >> "$GITHUB_ENV"
 
           echo "Windows  : ${WIN_URL}"
-          echo "Linux    : ${LIN_URL}"
           echo "macOS    : ${MAC_URL}"
           echo "Linux deb: ${DEB_URL}"
-          echo "Linux rpm: ${RPM_URL}"
+          echo "Flatpak  : ${FLATPAK_URL}"
 
       # ── Rewrite README download table ─────────────────────────────────────
       # Strategy: replace a clearly-delimited block between two sentinel
@@ -2778,9 +3499,8 @@ jobs:
           | Platform | Download | Run |
           |----------|----------|-----|
           | **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](${WIN_URL}) | Run installer → launch \`FinceptTerminal.exe\` |
-          | **Linux x64 (AppImage)** | [FinceptTerminal-Linux-x64.run](${LIN_URL}) | \`chmod +x\` → run installer |
-          | **Linux x64 (Debian/Ubuntu)** | [FinceptTerminal-Linux-x64.deb](${DEB_URL}) | \`sudo apt install ./FinceptTerminal-*.deb\` |
-          | **Linux x64 (Fedora/RHEL)** | [FinceptTerminal-Linux-x64.rpm](${RPM_URL}) | \`sudo dnf install ./FinceptTerminal-*.rpm\` |
+          | **Linux x64 (Flatpak, any distribution)** | [FinceptTerminal-Linux-x86_64.flatpak](${FLATPAK_URL}) | \`flatpak install --user ./FinceptTerminal-*.flatpak\` |
+          | **Linux x64 (Ubuntu 22.04+ / Debian 12+)** | [FinceptTerminal-Linux-x64.deb](${DEB_URL}) | \`sudo apt install ./FinceptTerminal-*.deb\` |
           | **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](${MAC_URL}) | Open DMG → drag to Applications |
           ${END_MARKER}"
 
@@ -2794,36 +3514,41 @@ jobs:
           echo "=== README diff preview (first 60 lines) ==="
           git diff README.md | head -60 || true
 
-      # ── Regenerate updates.json (auto-updater manifest) ───────────────────
-      - name: Regenerate updates.json from release assets
+      # ── Copy the release's signed update manifest ─────────────────────────
+      # Downloaded, verified against the public key pinned in this checkout's
+      # UpdateManifest.h (so main never serves a pair clients reject) and
+      # copied with `cp` — never regenerated, never reformatted.
+      - name: Copy updates.json + updates.json.sig from the release
+        if: ${{ !contains(github.ref_name, '-') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-
-          # Strip leading 'v' so "v4.0.3" → "4.0.3" for latest-version
-          VERSION="${TAG#v}"
-
           WORK="$(mktemp -d)"
-          echo "Downloading release assets to ${WORK}..."
-          gh release download "${TAG}" --dir "${WORK}" --pattern "FinceptTerminal-*setup*" || true
-
-          # Export shell-side vars so the embedded python can read them via os.environ
-          export WORK VERSION TAG REPO
-
-          # Delegate manifest generation to a standalone Python script to
-          # keep this step free of YAML/Python indentation conflicts.
-          python3 .github/scripts/generate_updates_manifest.py > updates.json
-
-          echo "=== updates.json diff ==="
-          git diff updates.json | head -80 || true
+          for i in $(seq 1 6); do
+            rm -f "${WORK}/updates.json" "${WORK}/updates.json.sig"
+            gh release download "${TAG}" --dir "${WORK}" \
+              --pattern 'updates.json' --pattern 'updates.json.sig' || true
+            if [ -s "${WORK}/updates.json" ] && [ -s "${WORK}/updates.json.sig" ]; then
+              break
+            fi
+            echo "  attempt ${i}: updates.json / updates.json.sig not downloadable yet"
+            sleep 5
+          done
+          if [ ! -s "${WORK}/updates.json" ] || [ ! -s "${WORK}/updates.json.sig" ]; then
+            echo "::error::Release ${TAG} lacks the updates.json / updates.json.sig assets that the release job attaches — re-run the release job, then this one"
+            exit 1
+          fi
+          bash .github/scripts/sign_updates_manifest.sh --verify "${WORK}/updates.json" "${WORK}/updates.json.sig"
+          cp "${WORK}/updates.json" updates.json
+          cp "${WORK}/updates.json.sig" updates.json.sig
+          git status --short -- updates.json updates.json.sig
 
       # ── Single atomic commit + push ───────────────────────────────────────
-      # Both files in one commit → one push → no race with anything. If
-      # neither file changed (rare but possible, e.g. re-running the same
-      # tag), exit cleanly without an empty commit.
+      # All files in one commit → one push → no race with anything. If
+      # nothing changed (rare but possible, e.g. re-running the same tag),
+      # exit cleanly without an empty commit.
       - name: Commit and push repo metadata
         env:
           TAG: ${{ github.ref_name }}
@@ -2834,25 +3559,34 @@ jobs:
 
           README_CHANGED=0
           MANIFEST_CHANGED=0
-          git diff --quiet README.md    || README_CHANGED=1
-          git diff --quiet updates.json || MANIFEST_CHANGED=1
+          git diff --quiet README.md || README_CHANGED=1
+          # `git status`, not `git diff`: updates.json.sig is untracked until
+          # its first commit, and `git diff` does not see untracked files.
+          [ -z "$(git status --porcelain -- updates.json updates.json.sig)" ] || MANIFEST_CHANGED=1
 
           if [ "${README_CHANGED}" -eq 0 ] && [ "${MANIFEST_CHANGED}" -eq 0 ]; then
-            echo "Neither README.md nor updates.json changed — nothing to commit"
+            echo "Neither README.md nor the update manifest changed — nothing to commit"
             exit 0
           fi
 
           # Stage only what we own. Never `git add -A` in automation: a
-          # stray artefact from an earlier step would sneak into main.
+          # stray artefact from an earlier step would sneak into main. The
+          # manifest and its signature are only ever staged together.
           [ "${README_CHANGED}"   -eq 1 ] && git add README.md
-          [ "${MANIFEST_CHANGED}" -eq 1 ] && git add updates.json
+          [ "${MANIFEST_CHANGED}" -eq 1 ] && git add updates.json updates.json.sig
 
-          git commit -m "chore(release): update README download links and updates.json for ${TAG}
+          case "${README_CHANGED}${MANIFEST_CHANGED}" in
+            11) SUBJECT="update README download links and the update manifest for ${TAG}" ;;
+            10) SUBJECT="update README download links for ${TAG}" ;;
+            *)  SUBJECT="update the update manifest for ${TAG}" ;;
+          esac
+          git commit -m "chore(release): ${SUBJECT}
 
-          Auto-generated by release workflow after successful build:
-            * README.md: download table rewritten with ${TAG} asset URLs
-            * updates.json: manifest consumed by the in-app auto-updater
-              (UpdateService.cpp) — sha256 computed from release assets.
+          Auto-generated by the release workflow after a successful build.
+          README.md carries the download table with the ${TAG} asset URLs;
+          updates.json + updates.json.sig are the ${TAG} release's signed update
+          manifest, copied byte for byte (the in-app updater's fallback when the
+          latest release's own copy cannot be fetched).
 
           Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 

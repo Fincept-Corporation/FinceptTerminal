@@ -20,6 +20,8 @@ import os
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
+import fincept_connector as fc
+
 # Configuration
 BASE_URL = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
 TIMEOUT = 30
@@ -27,6 +29,19 @@ DEFAULT_PAGE_SIZE = 100
 # FiscalData accepts up to 10000 rows per page. "--all" used to walk the full history in
 # 100-row pages (50 round trips, ~75 s for Debt to the Penny); one 10000-row page is a single call.
 MAX_PAGE_SIZE = 10000
+
+
+def _typed(rows: Any) -> Any:
+    """FiscalData sends every value as text and nulls as "null": amounts, rates and calendar
+    fields become numbers, "null" becomes null; dates are already ISO (YYYY-MM-DD)."""
+    if isinstance(rows, list):
+        for r in rows:
+            if isinstance(r, dict):
+                for k, v in r.items():
+                    if v == "null":
+                        r[k] = None
+        fc.numeric_columns(rows)
+    return rows
 
 
 def _make_request(endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -63,7 +78,7 @@ def _make_request(endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any
 
         # Extract data and metadata from the response
         if 'data' in raw_data:
-            data = raw_data['data']
+            data = _typed(raw_data['data'])
             metadata = raw_data.get('meta', {})
 
             return {

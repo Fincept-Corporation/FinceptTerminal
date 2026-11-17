@@ -2,7 +2,8 @@
 // Forex Factory economic calendar — Forex Factory's public weekly JSON export, no browser or API key.
 // It covers the current week only and has forecast / previous values but no actuals.
 //
-// Script: economic_calendar.py <mmmDD.YYYY>  (e.g. "mar28.2026"); day and times in local time
+// Script: economic_calendar.py day <YYYY-MM-DD>  (the connectors' <command> [args] form; the bare
+// "mar28.2026" form still works); day and times in local time
 // Response: { date, url, events_count, week_start, week_end, timezone, events: [
 //   { time, currency, impact:int(0-3), impact_label, event, forecast, previous, datetime }
 // ]}
@@ -26,13 +27,6 @@ static constexpr const char* kEconomicCalendarSourceId = "econ_calendar";
 static constexpr const char* kEconomicCalendarColor = "#D97706"; // amber
 } // namespace
 
-// Convert QDate to Forex Factory date string: "mar28.2026"
-static QString to_ff_date(const QDate& d) {
-    static const char* months[] = {"",    "jan", "feb", "mar", "apr", "may", "jun",
-                                   "jul", "aug", "sep", "oct", "nov", "dec"};
-    return QString("%1%2.%3").arg(months[d.month()]).arg(d.day()).arg(d.year());
-}
-
 EconomicCalendarPanel::EconomicCalendarPanel(QWidget* parent)
     : EconPanelBase(kEconomicCalendarSourceId, kEconomicCalendarColor, parent) {
     build_base_ui(this);
@@ -41,12 +35,26 @@ EconomicCalendarPanel::EconomicCalendarPanel(QWidget* parent)
 }
 
 void EconomicCalendarPanel::activate() {
-    // Default to today on first activation
-    if (date_edit_) {
-        date_edit_->setDate(QDate::currentDate());
+    // The calendar opens on this week: a remembered week that has passed is replaced (the query runs
+    // again on show); a date the user picked inside this week is kept.
+    if (!date_edit_)
+        return;
+    const QDate today = QDate::currentDate();
+    int year_now = 0;
+    int year_shown = 0;
+    const int week_now = today.weekNumber(&year_now);
+    const int week_shown = date_edit_->date().weekNumber(&year_shown);
+    if (week_now != week_shown || year_now != year_shown) {
+        date_edit_->setDate(today);
+        invalidate_result();
     }
-    show_empty(tr("Select a date in the current week and click FETCH to load economic events\n"
-                  "Source: Forex Factory weekly calendar (no API key required)"));
+}
+
+EconPanelBase::LoadPolicy EconomicCalendarPanel::load_policy() const {
+    LoadPolicy p;
+    p.shape = ui::LoadingSkeleton::Shape::List; // a list of the day's events
+    p.max_age_s = 3600; // actual / forecast values are filled in during the week
+    return p;
 }
 
 void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
@@ -59,15 +67,15 @@ void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
     date_edit_ = new QDateEdit(QDate::currentDate());
     date_edit_->setDisplayFormat("MMM dd yyyy");
     date_edit_->setCalendarPopup(true);
-    date_edit_->setFixedHeight(26);
-    date_edit_->setFixedWidth(120);
+    date_edit_->setMinimumHeight(26);
+    set_text_width(date_edit_, 120);
 
     filter_combo_ = new QComboBox;
     filter_combo_->addItem(tr("All Events"), 0);
     filter_combo_->addItem(tr("Medium + High"), 2);
     filter_combo_->addItem(tr("High Only"), 3);
-    filter_combo_->setFixedHeight(26);
-    filter_combo_->setFixedWidth(110);
+    filter_combo_->setMinimumHeight(26);
+    set_text_width(filter_combo_, 110);
 
     thl->addWidget(date_lbl_ = lbl(tr("DATE")));
     thl->addWidget(date_edit_);
@@ -77,12 +85,13 @@ void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
 
 void EconomicCalendarPanel::on_fetch() {
     const QDate date = date_edit_->date();
-    const QString ff_date = to_ff_date(date);
+    const QString iso = date.toString(Qt::ISODate);
 
     show_loading(tr("Fetching economic calendar for %1…").arg(date.toString("MMM d, yyyy")));
 
-    services::EconomicsService::instance().execute(kEconomicCalendarSourceId, kEconomicCalendarScript, ff_date, {},
-                                                   "calendar_" + ff_date);
+    // economic_calendar.py day <date> — the script's <command> [args] form.
+    execute_query(kEconomicCalendarSourceId, kEconomicCalendarScript, QStringLiteral("day"), {iso},
+                  "calendar_" + iso);
 }
 
 void EconomicCalendarPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -135,7 +144,7 @@ void EconomicCalendarPanel::on_result(const QString& request_id, const services:
             {QStringLiteral("time"), QStringLiteral("currency"), QStringLiteral("impact_label"),
              QStringLiteral("event"), QStringLiteral("forecast"), QStringLiteral("previous"), QStringLiteral("impact")},
             /*keep_row_order=*/true);
-    LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
+    LOG_DEBUG("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

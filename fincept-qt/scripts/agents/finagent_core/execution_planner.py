@@ -62,7 +62,8 @@ def _safe_eval_condition(condition: str, context: Dict[str, Any]) -> bool:
     try:
         return bool(eval(compile(tree, "<condition>", "eval"),  # noqa: S307
                          {"__builtins__": {}}, context))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Step condition could not be evaluated, step skipped error=%s", type(exc).__name__)
         return False
 
 
@@ -452,7 +453,10 @@ class ExecutionPlanner:
 
         agent = CoreAgent(api_keys=self.api_keys)
         response = agent.run(query, agent_config)
-        return agent.get_response_content(response)
+        # A failed run's content is the error text; raising marks the step
+        # FAILED with that error instead of COMPLETED with the error as result.
+        from finagent_core.run_errors import content_or_raise
+        return content_or_raise(response, agent.get_response_content)
 
     def _execute_tool_step(self, step: PlanStep, plan: ExecutionPlan) -> Any:
         """Execute a tool step"""
@@ -673,10 +677,18 @@ def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None, caller_co
     """
     Use an LLM to dynamically generate an execution plan from a natural language query.
     Returns an ExecutionPlan dict ready for display and execution.
+
+    When the model cannot be reached (no model configured, bad key, provider
+    down) the result is {"success": False, "error": ...}: it used to be a
+    canned "Stock Analysis: AAPL" plan reported as success, whatever was asked.
+    When the model answers but not with a usable plan, the result is a
+    single-step plan that runs the request as asked, flagged with a `warning`.
     """
     import time, re as _re
+    from finagent_core.run_errors import run_error_text, explain_llm_error
     api_keys = api_keys or {}
     caller_config = caller_config or {}
+    raw = ""
 
     try:
         from finagent_core.core_agent import CoreAgent
@@ -699,8 +711,19 @@ def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None, caller_co
         )
 
         response = agent.run(prompt, config)
-        raw = agent.get_response_content(response) or ""
+    except Exception as e:
+        # Model construction/connection errors are failures, never a
+        # substitute plan.
+        logger.error(f"Dynamic plan generation failed: {type(e).__name__}: {e}")
+        return {"success": False, "error": explain_llm_error(f"Plan generation failed: {e}"),
+                "error_kind": "planning_failed"}
 
+    run_err = run_error_text(response)
+    if run_err:
+        return {"success": False, "error": run_err, "error_kind": "model_unavailable"}
+    raw = agent.get_response_content(response) or ""
+
+    try:
         # Strip markdown fences (```json ... ``` or ``` ... ```)
         raw = raw.strip()
         raw = _re.sub(r"^```(?:json)?\s*", "", raw)
@@ -754,34 +777,38 @@ def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None, caller_co
             step_id_map[logical_id] = real_id
 
         plan = builder.build()
-        return {"success": True, "plan": plan.to_dict(), "generated_by": "llm"}
+    except (ValueError, AttributeError, TypeError, KeyError) as e:
+        # The model answered, but not with a plan we can use (json.JSONDecodeError
+        # is a ValueError; AttributeError/TypeError = wrong JSON shape).
+        logger.error(f"LLM returned an unusable plan: {e}; raw output was: {raw[:300]!r}")
+        return _single_step_plan(query, "The model did not return a valid plan.")
 
-    except json.JSONDecodeError as e:
-        logger.error(f"LLM returned invalid JSON for plan generation: {e}\nRaw output was: {raw[:300]}")
-        return _fallback_plan_from_query(query)
-    except Exception as e:
-        logger.error(f"Dynamic plan generation failed: {type(e).__name__}: {e}")
-        return _fallback_plan_from_query(query)
+    if not plan.steps:
+        return _single_step_plan(query, "The model's plan had no steps.")
+    return {"success": True, "plan": plan.to_dict(), "generated_by": "llm"}
 
 
-def _fallback_plan_from_query(query: str) -> Dict[str, Any]:
-    """Fallback: derive a reasonable plan from keywords in the query."""
+def _single_step_plan(query: str, why: str) -> Dict[str, Any]:
+    """Plan of one agent step that runs the user's request as written.
+
+    Used only when the model is reachable but its plan could not be parsed.
+    (The previous fallback built a canned stock-analysis plan for the first
+    upper-case word in the query — "AAPL" when there was none — and presented
+    it as the plan for whatever was asked.)
+    """
     import time
-    query_lower = query.lower()
-
-    # Detect symbol — first uppercase word-like token
-    import re
-    symbol_match = re.search(r'\b([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b', query)
-    symbol = symbol_match.group(1) if symbol_match else "AAPL"
-
-    if any(w in query_lower for w in ["portfolio", "rebalance", "holdings"]):
-        plan = ExecutionPlanner.portfolio_rebalance_plan(symbol)
-    else:
-        plan = ExecutionPlanner.stock_analysis_plan(symbol)
-
-    result = plan.to_dict()
-    result["id"] = f"fallback_{int(time.time())}"
-    return {"success": True, "plan": result, "generated_by": "fallback"}
+    builder = PlanBuilder(
+        plan_id=f"single_step_{int(time.time())}",
+        name="Answer the request directly",
+        description=query,
+    )
+    builder.add_agent_step(name="Answer the request", query=query)
+    return {
+        "success": True,
+        "plan": builder.build().to_dict(),
+        "generated_by": "single_step_fallback",
+        "warning": f"{why} Running the request as a single step instead.",
+    }
 
 
 # Entry points for C++ commands

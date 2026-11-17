@@ -58,9 +58,9 @@ FeedCardView::FeedCardView(QWidget* parent) : QWidget(parent) {
     // reparsing ~200 stylesheets per tick.
     setStyleSheet(QString("#feedCard { background:%1; border:1px solid %2; border-radius:4px; }"
                           "#feedCard:hover { background:%3; }"
-                          "#feedCardMeta { color:%4; font-size:10px; font-weight:700; }"
-                          "#feedCardTitle { color:%5; font-size:12px; font-weight:600; }"
-                          "#feedCardSummary { color:%6; font-size:11px; }")
+                          "#feedCardMeta { color:%4; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
+                          "#feedCardTitle { color:%5; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:600; }"
+                          "#feedCardSummary { color:%6; font-size:" + fincept::ui::fonts::px(-3) + "px; }")
                       .arg(colors::BG_SURFACE(), colors::BORDER_MED(), colors::BG_HOVER(), colors::TEXT_TERTIARY(),
                            colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY()));
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/file_manager/FileManagerService.h"
 
@@ -19,6 +20,10 @@ class QTextEdit;
 class QTimer;
 class QVBoxLayout;
 
+namespace fincept::ui {
+class EmptyState;
+}
+
 namespace fincept::screens {
 
 class FileManagerFilterProxy;
@@ -27,10 +32,15 @@ class FileManagerFilterProxy;
 /// sortable table (model/view, so thousands of files stay responsive), with
 /// source filter chips, search, inline preview, rename, open / reveal, bulk
 /// delete and a storage summary.
-class FileManagerScreen : public QWidget, public IStatefulScreen {
+class FileManagerScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit FileManagerScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — "all" | "source:<sourceScreen tag>" (the source chips, e.g. "source:code_editor") |
+    /// "upload" (the UPLOAD file picker; nothing is imported without the user's pick).
+    /// focus = search text (typed into the search box); "" + focus searches the current chip.
+    bool open_section(const QString& section, const QString& focus) override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
@@ -62,14 +72,20 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     void show_context_menu(const QPoint& pos);
     void show_preview(const QString& file_id);
     void clear_preview();
+    /// What the preview pane says instead of text: a binary file, an unreadable or empty one.
+    enum class PreviewNote { Binary, Unreadable, EmptyFile };
+    void show_preview_note(PreviewNote note, const QString& route);
+    /// The list's designed state: no files at all, or none matching the search / chip.
+    void update_list_state(bool none, bool filtered_out);
     void update_stats();
     void update_bulk_bar();
     QStringList selected_ids() const;
     QString current_id() const;
 
     static QString format_size(qint64 bytes);
-    static QString open_with_label(const QString& mime);
-    static QString route_for_mime(const QString& mime);
+    /// `name` = the file's display name: some routes go by extension (.fincept reports are JSON).
+    static QString open_with_label(const QString& mime, const QString& name = {});
+    static QString route_for_mime(const QString& mime, const QString& name = {});
 
     // ── Header / filter ──────────────────────────────────────────────────
     QLabel* title_label_ = nullptr;
@@ -90,7 +106,7 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QStandardItemModel* model_ = nullptr;
     FileManagerFilterProxy* proxy_ = nullptr;
     QTableView* table_ = nullptr;
-    QLabel* empty_label_ = nullptr;
+    ui::EmptyState* list_state_ = nullptr; ///< no files / no match (instead of a bare header)
     QWidget* bulk_bar_ = nullptr;
     QLabel* bulk_sel_label_ = nullptr;
     QPushButton* bulk_delete_btn_ = nullptr;
@@ -103,11 +119,14 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QLabel* preview_meta_ = nullptr;
     QTextEdit* preview_text_ = nullptr;
     QTableWidget* preview_table_ = nullptr;
-    QLabel* preview_empty_ = nullptr;
+    ui::EmptyState* preview_state_ = nullptr; ///< binary / unreadable / empty file, with its actions
+    PreviewNote preview_note_ = PreviewNote::Binary;
+    QString preview_route_; ///< screen the previewed file opens in ("" = none)
     QString preview_id_;
 
     QSplitter* splitter_ = nullptr;
     bool loaded_ = false;
+    bool first_fill_done_ = false; ///< the first fill previews the newest file
 };
 
 } // namespace fincept::screens

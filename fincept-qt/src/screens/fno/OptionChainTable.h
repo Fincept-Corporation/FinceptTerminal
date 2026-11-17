@@ -5,6 +5,7 @@
 // behind the OI columns (CE OI bar grows leftward, PE OI bar grows
 // rightward) plus ATM strike highlighting and ITM/OTM background tinting.
 
+#include <QString>
 #include <QStyledItemDelegate>
 #include <QTableView>
 
@@ -18,6 +19,10 @@ class OptionChainTable : public QTableView {
     explicit OptionChainTable(QWidget* parent = nullptr);
 
     OptionChainModel* chain_model() const { return model_; }
+
+    /// Buy / Sell in the leg menu. Off for a chain that is no order source (the
+    /// free delayed US chain): the menu then says why (`reason`) instead.
+    void set_orders_enabled(bool enabled, const QString& reason = QString());
 
   signals:
     /// Emitted when the user left-clicks a CE or PE LTP cell (or picks
@@ -45,6 +50,8 @@ class OptionChainTable : public QTableView {
     bool leg_at(const QModelIndex& idx, qint64& token, double& strike, bool& is_call) const;
 
     OptionChainModel* model_ = nullptr;
+    bool orders_enabled_ = true;
+    QString orders_off_reason_;
 };
 
 } // namespace fincept::screens::fno

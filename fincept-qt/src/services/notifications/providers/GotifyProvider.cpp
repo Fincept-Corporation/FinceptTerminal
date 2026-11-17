@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/GotifyProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -45,18 +47,12 @@ void GotifyProvider::send(const NotificationRequest& req, std::function<void(boo
     body["message"] = req.message;
     body["priority"] = priority;
 
-    HttpClient::Headers headers;
-    headers.insert("X-Gotify-Key", app_token_.toUtf8());
-    HttpClient::instance().post(
-        url, body,
-        [cb](Result<QJsonDocument> res) {
-            if (res.is_err()) {
-                cb(false, QString::fromStdString(res.error()));
-                return;
-            }
-            cb(true, {});
-        },
-        nullptr, headers);
+    DeliveryRequest request;
+    request.service = DeliveryService::Gotify;
+    request.url = url;
+    request.json = body;
+    request.headers.insert("X-Gotify-Key", app_token_.toUtf8());
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

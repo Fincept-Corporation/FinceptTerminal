@@ -1,44 +1,19 @@
 
-"""Portfolio Economics Markets Module
-===============================
+"""Economics for portfolio management: reference text keyed by business-cycle phase, plus a consumption-CAPM
+equity risk premium estimate.
 
-Economic analysis for portfolio management
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Portfolio holdings and transaction history
-  - Asset price data and market returns
-  - Benchmark indices and market data
-  - Investment policy statements and constraints
-  - Risk tolerance and preference parameters
-
-OUTPUT:
-  - Portfolio performance metrics and attribution
-  - Risk analysis and diversification metrics
-  - Rebalancing recommendations and optimization
-  - Portfolio analytics reports and visualizations
-  - Investment strategy recommendations
-
-PARAMETERS:
-  - optimization_method: Portfolio optimization method (default: 'mean_variance')
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
-  - max_weight: Maximum single asset weight (default: 0.10)
-  - benchmark: Portfolio benchmark index (default: 'market_index')
-
-CLI: python economics_markets.py <command> <json>   business_cycle_analysis {cycle_phase_str};
-  comprehensive_analysis {cycle_phase_str, economic_data}; equity_risk_premium {risk_free_rate,
-  market_risk_premium} (currently fails: it calls a method that does not exist).
+CLI (one JSON object on stdout; {"error": ...} and exit 1 on failure). Positional or one JSON object:
+  business_cycle_analysis {"cycle_phase_str": "expansion|peak|contraction|trough"}
+  comprehensive_analysis  {"cycle_phase_str": ..., "economic_data": {...}}   (economic_data is echoed, not used)
+  equity_risk_premium     {"risk_free_rate": 0.03, "market_risk_premium": 0.05, "equity_volatility": 0.16,
+                           "consumption_volatility": 0.02, "correlation": 0.4, "risk_aversion": 3}
+The phase analysis is static textbook content; it does not read market data.
 """
 
-
-
-import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Union, Tuple
 from enum import Enum
 
-from config import MathConstants
+from config import MathConstants, CliError, run_cli
 
 class BusinessCyclePhase(Enum):
     EXPANSION = "expansion"
@@ -547,18 +522,24 @@ class ValuationMultiples:
     def calculate_normalized_multiples(current_earnings: float,
                                      normalized_earnings: float,
                                      current_price: float) -> Dict:
-        """Calculate normalized valuation multiples"""
-        current_pe = current_price / current_earnings if current_earnings > 0 else float('inf')
-        normalized_pe = current_price / normalized_earnings if normalized_earnings > 0 else float('inf')
+        """P/E on current and normalised earnings; None (not infinity) when earnings are not positive"""
+        current_pe = current_price / current_earnings if current_earnings > 0 else None
+        normalized_pe = current_price / normalized_earnings if normalized_earnings > 0 else None
+
+        def grade(pe, high, low):
+            if pe is None:
+                return "Not meaningful (earnings not positive)"
+            return "Expensive" if pe > high else "Fair" if pe > low else "Cheap"
 
         return {
             "current_pe": current_pe,
             "normalized_pe": normalized_pe,
             "valuation_assessment": {
-                "current_basis": "Expensive" if current_pe > 20 else "Fair" if current_pe > 15 else "Cheap",
-                "normalized_basis": "Expensive" if normalized_pe > 18 else "Fair" if normalized_pe > 12 else "Cheap"
+                "current_basis": grade(current_pe, 20, 15),
+                "normalized_basis": grade(normalized_pe, 18, 12)
             },
-            "cycle_adjustment": normalized_pe - current_pe
+            "cycle_adjustment": (normalized_pe - current_pe
+                                 if current_pe is not None and normalized_pe is not None else None)
         }
 
 class RealEstateAnalysis:
@@ -755,87 +736,69 @@ class EconomicsMarkets:
 # CLI Interface
 # ============================================================================
 
+_ARGMAP = {"comprehensive_analysis": ["cycle_phase_str", "economic_data"],
+           "business_cycle_analysis": ["cycle_phase_str"],
+           "equity_risk_premium": ["risk_free_rate", "market_risk_premium", "equity_volatility",
+                                   "consumption_volatility", "correlation", "risk_aversion"]}
+
+_PHASES = {p.value: p for p in BusinessCyclePhase}
+
+
+def _phase(args) -> BusinessCyclePhase:
+    raw = args.get_str(0, "cycle_phase_str")
+    if raw is None:
+        raise CliError("cycle_phase_str is required: one of " + ", ".join(_PHASES))
+    phase = _PHASES.get(raw.strip().lower())
+    if phase is None:  # used to fall back to "expansion" silently
+        raise CliError(f"unknown cycle phase {raw!r}: use one of " + ", ".join(_PHASES))
+    return phase
+
+
+def _cmd_comprehensive_analysis(args):
+    phase = _phase(args)
+    economic_data = args.get_json(1, "economic_data")
+    result = EconomicsMarkets().comprehensive_economics_analysis(phase, economic_data or {})
+    result["economic_data"] = economic_data
+    result["economic_data_used"] = False
+    result["note"] = ("the analysis is keyed only on cycle_phase_str; economic_data is echoed back, not used "
+                      "to infer or adjust the phase")
+    return result
+
+
+def _cmd_equity_risk_premium(args):
+    rf = args.get_float(0, "risk_free_rate", 0.03)
+    mrp = args.get_float(1, "market_risk_premium", 0.05)
+    equity_vol = args.get_float(2, "equity_volatility")
+    consumption_vol = args.get_float(3, "consumption_volatility")
+    correlation = args.get_float(4, "correlation")
+    risk_aversion = args.get_float(5, "risk_aversion", 3.0)
+    if not -0.5 < rf < 1.0 or not -0.5 < mrp < 1.0:
+        raise CliError("risk_free_rate and market_risk_premium are annual fractions (e.g. 0.03, 0.05)")
+
+    erp = EquityRiskPremium()
+    ccapm_inputs = (equity_vol, consumption_vol, correlation)
+    if all(v is not None for v in ccapm_inputs):
+        if equity_vol < 0 or consumption_vol < 0 or not -1.0 <= correlation <= 1.0:
+            raise CliError("volatilities must be >= 0 and correlation between -1 and 1")
+        ccapm = erp.estimate_equity_risk_premium(equity_vol, consumption_vol, correlation, risk_aversion)
+    else:
+        ccapm = None
+
+    return {
+        "risk_free_rate": rf,
+        "market_risk_premium": mrp,
+        "expected_equity_return": rf + mrp,
+        "consumption_capm_estimate": ccapm,
+        "consumption_capm_note": None if ccapm else (
+            "pass equity_volatility, consumption_volatility and correlation (and optionally risk_aversion) "
+            "for the consumption-CAPM premium = risk_aversion x consumption vol x equity vol x correlation"),
+        "consumption_hedging_analysis": erp.consumption_hedging_analysis()
+    }
+
+
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "No command specified"}))
-        sys.exit(1)
-
-    command = sys.argv[1]
-    # ── Qt bridge: accept (command, single JSON object) and expand into the
-    # positional argv the handlers below expect. No effect on the legacy CLI form.
-    _QT_ARGMAP = {"comprehensive_analysis": [["cycle_phase_str", "raw"], ["economic_data", "json"]], "business_cycle_analysis": [["cycle_phase_str", "raw"]], "equity_risk_premium": [["risk_free_rate", "raw"], ["market_risk_premium", "raw"]]}
-    if len(sys.argv) == 3 and command in _QT_ARGMAP:
-        try:
-            _qp = json.loads(sys.argv[2])
-            if isinstance(_qp, dict) and (not _QT_ARGMAP[command] or _QT_ARGMAP[command][0][0] in _qp):
-                _qav = [sys.argv[0], command]
-                for _qn, _qk in _QT_ARGMAP[command]:
-                    if _qn in _qp and _qp[_qn] is not None:
-                        _qav.append(json.dumps(_qp[_qn]) if _qk == 'json' else str(_qp[_qn]))
-                    else:
-                        _qav.append('null')
-                sys.argv = _qav
-        except Exception:
-            pass
-
-    try:
-        if command == "comprehensive_analysis":
-            cycle_phase_str = sys.argv[2]  # e.g., "expansion", "peak", "contraction", "trough"
-            economic_data = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
-            
-            # Map string to enum
-            phase_map = {
-                "expansion": BusinessCyclePhase.EXPANSION,
-                "peak": BusinessCyclePhase.PEAK,
-                "contraction": BusinessCyclePhase.CONTRACTION,
-                "trough": BusinessCyclePhase.TROUGH
-            }
-            
-            cycle_phase = phase_map.get(cycle_phase_str.lower(), BusinessCyclePhase.EXPANSION)
-            
-            econ_markets = EconomicsMarkets()
-            result = econ_markets.comprehensive_economics_analysis(cycle_phase, economic_data)
-            
-            print(json.dumps(result))
-
-        elif command == "business_cycle_analysis":
-            cycle_phase_str = sys.argv[2]
-            
-            phase_map = {
-                "expansion": BusinessCyclePhase.EXPANSION,
-                "peak": BusinessCyclePhase.PEAK,
-                "contraction": BusinessCyclePhase.CONTRACTION,
-                "trough": BusinessCyclePhase.TROUGH
-            }
-            
-            cycle_phase = phase_map.get(cycle_phase_str.lower(), BusinessCyclePhase.EXPANSION)
-            
-            cycle_analysis = BusinessCycleAnalysis()
-            result = cycle_analysis.analyze_cycle_effects(cycle_phase)
-            
-            print(json.dumps(result))
-
-        elif command == "equity_risk_premium":
-            risk_free_rate = float(sys.argv[2]) if len(sys.argv) > 2 else 0.03
-            market_risk_premium = float(sys.argv[3]) if len(sys.argv) > 3 else 0.05
-            
-            erp = EquityRiskPremium()
-            result = {
-                "historical_erp": erp.historical_equity_risk_premium_analysis(),
-                "risk_free_rate": risk_free_rate,
-                "market_risk_premium": market_risk_premium
-            }
-            
-            print(json.dumps(result))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}))
-            sys.exit(1)
-
-    except Exception as e:
-        import traceback
-        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
-        sys.exit(1)
+    run_cli({
+        "comprehensive_analysis": _cmd_comprehensive_analysis,
+        "business_cycle_analysis": lambda a: BusinessCycleAnalysis().analyze_cycle_effects(_phase(a)),
+        "equity_risk_premium": _cmd_equity_risk_premium,
+    }, _ARGMAP)

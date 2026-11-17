@@ -1,47 +1,27 @@
 
-"""Portfolio Risk Management Module
-===============================
+"""Portfolio risk analysis: VaR / ES (historical, normal, Student-t, Cornish-Fisher, Monte Carlo), drawdown,
+Euler risk decomposition and instantaneous scenario shocks.
 
-Portfolio risk management and mitigation
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Portfolio holdings and transaction history
-  - Asset price data and market returns
-  - Benchmark indices and market data
-  - Investment policy statements and constraints
-  - Risk tolerance and preference parameters
-
-OUTPUT:
-  - Portfolio performance metrics and attribution
-  - Risk analysis and diversification metrics
-  - Rebalancing recommendations and optimization
-  - Portfolio analytics reports and visualizations
-  - Investment strategy recommendations
-
-PARAMETERS:
-  - optimization_method: Portfolio optimization method (default: 'mean_variance')
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
-  - max_weight: Maximum single asset weight (default: 0.10)
-  - benchmark: Portfolio benchmark index (default: 'market_index')
-
-CLI: python risk_management.py comprehensive_risk_analysis <json>   {returns_data: {asset: [returns]},
-  weights: [...], portfolio_value}.
+CLI (one JSON object on stdout; {"error": ...} and exit 1 on failure):
+  python risk_management.py comprehensive_risk_analysis <returns_data> [weights] [portfolio_value] [beta]
+  python risk_management.py comprehensive_risk_analysis '{"returns_data": ..., "weights": ..., "portfolio_value": ..., "beta": ...}'
+    returns_data  list of daily returns (fractions) for one portfolio, or {asset: [returns]} for several
+    weights       per-asset weights (normalised to sum 1; default equal), portfolio_value default 1,000,000
+    beta          portfolio beta to the shocked market for the stress scenarios (default 1, stated in notes)
+VaR / ES are positive 1-day loss fractions; confidence 0.95 = the worst 5 % of days.
 """
 
-
-
-import numpy as np
-import pandas as pd
+from datetime import datetime
 from typing import Dict, List, Optional, Union, Tuple, Callable
 from dataclasses import dataclass
+
+import numpy as np
 from scipy import stats
-import warnings
 
 from config import (
     RiskParameters, MathConstants, RiskMetric,
-    DEFAULT_RISK_PARAMS, validate_returns, ERROR_MESSAGES
+    DEFAULT_RISK_PARAMS, validate_returns, ERROR_MESSAGES,
+    CliError, return_series, run_cli
 )
 from math_engine import RiskCalculations, StatisticalCalculations
 
@@ -74,8 +54,8 @@ class RiskGovernance:
 
         self.risk_policies[policy_name] = {
             "policy_details": policy_details,
-            "creation_date": pd.Timestamp.now(),
-            "last_review": pd.Timestamp.now(),
+            "creation_date": datetime.now().isoformat(timespec="seconds"),
+            "last_review": datetime.now().isoformat(timespec="seconds"),
             "status": "active"
         }
 
@@ -150,8 +130,11 @@ class RiskTolerance:
     def assess_risk_capacity(financial_metrics: Dict) -> Dict:
         """Assess quantitative risk capacity"""
         # Financial capacity indicators
-        liquidity_ratio = financial_metrics.get("liquid_assets", 0) / financial_metrics.get("total_assets", 1)
-        debt_ratio = financial_metrics.get("total_debt", 0) / financial_metrics.get("total_assets", 1)
+        total_assets = financial_metrics.get("total_assets", 1)
+        if not total_assets or total_assets <= 0:
+            raise ValueError("total_assets must be a positive number")
+        liquidity_ratio = financial_metrics.get("liquid_assets", 0) / total_assets
+        debt_ratio = financial_metrics.get("total_debt", 0) / total_assets
         income_stability = financial_metrics.get("income_stability_score", 5)  # 1-10 scale
         time_horizon = financial_metrics.get("investment_horizon_years", 10)
 
@@ -294,161 +277,204 @@ class RiskTolerance:
 
 
 class VaRCalculations:
-    """Comprehensive Value at Risk calculations"""
+    """Comprehensive Value at Risk calculations (positive VaR = loss fraction)"""
 
     @staticmethod
     def parametric_var(returns: np.ndarray, confidence_level: float = 0.95,
                        holding_period: int = 1, distribution: str = "normal") -> Dict:
-        """Calculate parametric VaR with multiple distributions"""
+        """Parametric VaR, h-period: mean scaled by h, the dispersion term by sqrt(h).
+
+        normal:          -(mu h + z sigma sqrt(h)),          z = Phi^-1(1 - c)
+        t_distribution:  -(loc h + t_df scale sqrt(h)),       Student-t fitted by maximum likelihood
+        cornish_fisher:  -(mu h + z_cf sigma sqrt(h)),        z_cf = z + (z^2-1)S/6 + (z^3-3z)K/24
+                                                                    - (2z^3-5z)S^2/36
+                         (S = skewness, K = EXCESS kurtosis; the S^2 term was missing)
+        A series with zero variance has no shape: skewness / kurtosis are None and VaR = -mu h.
+        """
         if not validate_returns(returns):
             raise ValueError(ERROR_MESSAGES["insufficient_data"])
+        if not 0.0 < confidence_level < 1.0:
+            raise ValueError(ERROR_MESSAGES["invalid_confidence_level"])
 
-        returns_array = np.array(returns)
+        returns_array = np.array(returns, dtype=float)
+        mean_return = float(np.mean(returns_array))
+        std_return = float(np.std(returns_array, ddof=1))
+        degenerate = std_return == 0.0
+        skewness = None if degenerate or len(returns_array) < 3 else float(stats.skew(returns_array))
+        kurtosis = None if degenerate or len(returns_array) < 4 else float(stats.kurtosis(returns_array, fisher=False))
+        h = holding_period
+        z = stats.norm.ppf(1 - confidence_level)
+        extra = {}
 
-        if distribution == "normal":
-            mean_return = np.mean(returns_array)
-            std_return = np.std(returns_array, ddof=1)
-            z_score = stats.norm.ppf(1 - confidence_level)
-            var = -(mean_return + z_score * std_return) * np.sqrt(holding_period)
+        if degenerate:
+            var = -mean_return * h
+            extra["note"] = "returns have zero variance: VaR is just the (negated) mean"
+        elif distribution == "normal":
+            var = -(mean_return * h + z * std_return * np.sqrt(h))
 
         elif distribution == "t_distribution":
-            # Fit t-distribution
-            params = stats.t.fit(returns_array)
-            df, loc, scale = params
+            df, loc, scale = stats.t.fit(returns_array)
             t_score = stats.t.ppf(1 - confidence_level, df)
-            var = -(loc + t_score * scale) * np.sqrt(holding_period)
+            var = -(loc * h + t_score * scale * np.sqrt(h))
+            extra = {"t_degrees_of_freedom": float(df), "t_loc": float(loc), "t_scale": float(scale)}
 
         elif distribution == "cornish_fisher":
-            # Cornish-Fisher expansion for skewness and kurtosis
-            mean_return = np.mean(returns_array)
-            std_return = np.std(returns_array, ddof=1)
-            skewness = stats.skew(returns_array)
-            kurtosis = stats.kurtosis(returns_array, fisher=False)
-
-            z = stats.norm.ppf(1 - confidence_level)
-            z_cf = z + (z ** 2 - 1) * skewness / 6 + (z ** 3 - 3 * z) * (kurtosis - 3) / 24
-            var = -(mean_return + z_cf * std_return) * np.sqrt(holding_period)
+            s = skewness if skewness is not None else 0.0
+            k = (kurtosis - 3.0) if kurtosis is not None else 0.0
+            z_cf = (z + (z ** 2 - 1) * s / 6 + (z ** 3 - 3 * z) * k / 24
+                    - (2 * z ** 3 - 5 * z) * s ** 2 / 36)
+            var = -(mean_return * h + z_cf * std_return * np.sqrt(h))
+            extra = {"z_normal": float(z), "z_cornish_fisher": float(z_cf)}
 
         else:
             raise ValueError("Distribution must be 'normal', 't_distribution', or 'cornish_fisher'")
 
         return {
-            "var": var,
+            "var": float(var),
             "confidence_level": confidence_level,
             "holding_period": holding_period,
             "distribution": distribution,
-            "mean_return": np.mean(returns_array),
-            "volatility": np.std(returns_array, ddof=1),
-            "skewness": stats.skew(returns_array),
-            "kurtosis": stats.kurtosis(returns_array, fisher=False)
+            "mean_return": mean_return,
+            "volatility": std_return,
+            "skewness": skewness,
+            "kurtosis": kurtosis,
+            **extra
         }
 
     @staticmethod
     def monte_carlo_var(returns: np.ndarray, confidence_level: float = 0.95,
                         holding_period: int = 1, num_simulations: int = 10000,
-                        distribution_params: Optional[Dict] = None) -> Dict:
-        """Calculate Monte Carlo VaR"""
-        returns_array = np.array(returns)
+                        distribution_params: Optional[Dict] = None, seed: int = 42) -> Dict:
+        """Monte Carlo VaR from a normal fitted to the returns (h > 1: compounded daily draws).
 
-        # Fit distribution parameters if not provided
+        Uses its own seeded generator (the global numpy RNG used to be re-seeded on every call).
+        The simulated paths themselves are not returned (they were 10,000 numbers per level).
+        """
+        returns_array = np.array(returns, dtype=float)
+
         if distribution_params is None:
-            mean_return = np.mean(returns_array)
-            std_return = np.std(returns_array, ddof=1)
-            distribution_params = {"mean": mean_return, "std": std_return}
+            distribution_params = {"mean": float(np.mean(returns_array)),
+                                   "std": float(np.std(returns_array, ddof=1))}
 
-        # Generate random scenarios
-        np.random.seed(42)  # For reproducibility
-        simulated_returns = np.random.normal(
+        rng = np.random.default_rng(seed)
+        simulated_returns = rng.normal(
             distribution_params["mean"],
             distribution_params["std"],
             (num_simulations, holding_period)
         )
 
-        # Calculate portfolio returns for each simulation
         if holding_period == 1:
-            scenario_returns = simulated_returns.flatten()
+            scenario_returns = simulated_returns[:, 0]
         else:
-            # Compound returns over holding period
             scenario_returns = np.prod(1 + simulated_returns, axis=1) - 1
 
-        # Calculate VaR
         var = -np.percentile(scenario_returns, (1 - confidence_level) * 100)
+        tail = scenario_returns[scenario_returns <= -var]
 
         return {
-            "var": var,
+            "var": float(var),
+            "cvar": float(-np.mean(tail)) if tail.size else float(var),
             "confidence_level": confidence_level,
             "holding_period": holding_period,
             "num_simulations": num_simulations,
-            "simulated_returns": scenario_returns,
-            "mean_simulated": np.mean(scenario_returns),
-            "std_simulated": np.std(scenario_returns)
+            "seed": seed,
+            "mean_simulated": float(np.mean(scenario_returns)),
+            "std_simulated": float(np.std(scenario_returns, ddof=1))
         }
 
     @staticmethod
     def component_var(portfolio_returns: np.ndarray, asset_returns: np.ndarray,
                       weights: np.ndarray, confidence_level: float = 0.95) -> Dict:
-        """Calculate component VaR contributions"""
-        # Portfolio VaR
-        portfolio_var = RiskCalculations.value_at_risk_historical(portfolio_returns, confidence_level)
+        """Euler decomposition of parametric (normal) 1-day VaR across assets.
 
-        # Calculate marginal VaR for each asset
-        marginal_vars = []
-        component_vars = []
+        VaR(w) = -(w.mu + z sqrt(w' S w)) is homogeneous of degree 1 in w, so
+            marginal_i  = dVaR/dw_i = -(mu_i + z (S w)_i / sigma_p)
+            component_i = w_i x marginal_i,   sum_i component_i = VaR(w)  (exactly)
+        S and mu are the sample covariance (ddof=1) and mean of the asset returns, z = Phi^-1(1 - c).
+        (The old version bumped one weight, RE-NORMALISED all weights and differenced historical
+        VaR, so the components always summed to ~0.)
+        diversification_benefit = sum of each position's stand-alone VaR - portfolio VaR (>= 0).
+        """
+        asset_returns = np.asarray(asset_returns, dtype=float)
+        if asset_returns.ndim == 1:
+            asset_returns = asset_returns.reshape(-1, 1)
+        w = np.asarray(weights, dtype=float)
+        mu = asset_returns.mean(axis=0)
+        cov = np.atleast_2d(np.cov(asset_returns, rowvar=False, ddof=1))
+        z = stats.norm.ppf(1 - confidence_level)
+        sigma_p = float(np.sqrt(max(w @ cov @ w, 0.0)))
+        historical_var = float(RiskCalculations.value_at_risk_historical(portfolio_returns, confidence_level))
 
-        for i in range(len(weights)):
-            # Small perturbation to weight
-            epsilon = 0.001
-            perturbed_weights = weights.copy()
-            perturbed_weights[i] += epsilon
-            perturbed_weights = perturbed_weights / np.sum(perturbed_weights)  # Renormalize
+        if sigma_p == 0.0:
+            return {
+                "method": "parametric normal VaR, Euler allocation",
+                "confidence_level": confidence_level,
+                "portfolio_var": float(-(w @ mu)),
+                "marginal_vars": None, "component_vars": None, "component_percentages": None,
+                "note": "portfolio returns have zero variance: no risk to allocate",
+                "historical_portfolio_var": historical_var,
+            }
 
-            # Calculate perturbed portfolio returns
-            perturbed_portfolio_returns = np.dot(asset_returns, perturbed_weights)
-            perturbed_var = RiskCalculations.value_at_risk_historical(perturbed_portfolio_returns, confidence_level)
-
-            # Marginal VaR
-            marginal_var = (perturbed_var - portfolio_var) / epsilon
-            marginal_vars.append(marginal_var)
-
-            # Component VaR
-            component_var = marginal_var * weights[i]
-            component_vars.append(component_var)
+        marginal = -(mu + z * (cov @ w) / sigma_p)
+        component = w * marginal
+        portfolio_var = float(-(w @ mu + z * sigma_p))
+        standalone = w * -(mu + z * np.sqrt(np.clip(np.diag(cov), 0.0, None)))
 
         return {
+            "method": "parametric normal VaR, Euler allocation (components sum to portfolio_var)",
+            "confidence_level": confidence_level,
             "portfolio_var": portfolio_var,
-            "marginal_vars": np.array(marginal_vars),
-            "component_vars": np.array(component_vars),
-            "component_percentages": np.array(component_vars) / np.sum(np.abs(component_vars)) * 100,
-            "diversification_benefit": portfolio_var - np.sum(component_vars)
+            "marginal_vars": marginal,
+            "component_vars": component,
+            "component_percentages": (component / portfolio_var * 100.0) if portfolio_var != 0 else None,
+            "components_sum": float(component.sum()),
+            "standalone_vars": standalone,
+            "diversification_benefit": float(standalone.sum() - portfolio_var),
+            "historical_portfolio_var": historical_var,
         }
+
+
+def _drawdown_path(returns: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """(wealth incl. the starting 1.0, drawdown from the running peak) - so a loss on the FIRST
+    observation counts (cumprod without the starting 1.0 made it the peak)."""
+    wealth = np.concatenate(([1.0], np.cumprod(1.0 + np.asarray(returns, dtype=float))))
+    return wealth, wealth / np.maximum.accumulate(wealth) - 1.0
 
 
 class ScenarioAnalysis:
     """Scenario-based risk analysis"""
 
     @staticmethod
-    def stress_testing(returns: np.ndarray, stress_scenarios: Dict[str, float]) -> Dict:
-        """Perform stress testing on portfolio"""
+    def stress_testing(returns: np.ndarray, stress_scenarios: Dict[str, float],
+                       beta: Optional[float] = None, portfolio_value: Optional[float] = None) -> Dict:
+        """Instantaneous scenario shocks, each applied ONCE to today's portfolio.
+
+        A scenario is a one-off market move (e.g. -20 %). The portfolio moves shock x beta (beta 1
+        when no beta is given). Reported: that return and its money loss, the drawdown from the
+        running peak if it hit today, and the maximum drawdown of the history with the shock
+        appended. (The old version added the shock to EVERY daily return and reported a -20 %
+        per-day "stressed mean".)
+        """
+        r = np.asarray(returns, dtype=float)
+        b = 1.0 if beta is None or not np.isfinite(beta) else float(beta)
+        wealth, _ = _drawdown_path(r)
+        peak, now = float(wealth.max()), float(wealth[-1])
+        var_99 = float(RiskCalculations.value_at_risk_historical(r, 0.99)) if r.size else float("nan")
         results = {}
 
         for scenario_name, shock in stress_scenarios.items():
-            # Apply shock to returns
-            stressed_returns = returns + shock
-
-            # Calculate metrics under stress
-            stressed_mean = np.mean(stressed_returns)
-            stressed_std = np.std(stressed_returns, ddof=1)
-            stressed_var_95 = RiskCalculations.value_at_risk_historical(stressed_returns, 0.95)
-            stressed_var_99 = RiskCalculations.value_at_risk_historical(stressed_returns, 0.99)
-
+            port_ret = float(shock) * b
+            _, dd_with = _drawdown_path(np.append(r, port_ret))
             results[scenario_name] = {
-                "shock_applied": shock,
-                "stressed_mean_return": stressed_mean,
-                "stressed_volatility": stressed_std,
-                "stressed_var_95": stressed_var_95,
-                "stressed_var_99": stressed_var_99,
-                "return_impact": stressed_mean - np.mean(returns),
-                "volatility_impact": stressed_std - np.std(returns, ddof=1)
+                "shock_applied": float(shock),
+                "assumed_beta": b,
+                "portfolio_return": port_ret,
+                "loss_fraction": -port_ret,
+                "loss_amount": -port_ret * portfolio_value if portfolio_value is not None else None,
+                "value_after_shock": portfolio_value * (1.0 + port_ret) if portfolio_value is not None else None,
+                "drawdown_from_peak_after_shock": now * (1.0 + port_ret) / peak - 1.0,
+                "max_drawdown_including_shock": float(dd_with.min()),
+                "multiple_of_1d_var_99": (-port_ret / var_99) if var_99 > 0 else None,
             }
 
         return results
@@ -457,37 +483,16 @@ class ScenarioAnalysis:
     def historical_scenario_analysis(current_portfolio: np.ndarray,
                                      historical_market_data: Dict[str, np.ndarray],
                                      crisis_periods: Dict[str, Tuple[str, str]]) -> Dict:
-        """Analyze portfolio performance during historical crisis periods"""
-        results = {}
+        """Not available - always returns {"error": ...}.
 
-        for crisis_name, (start_date, end_date) in crisis_periods.items():
-            crisis_results = {}
-
-            for asset, returns in historical_market_data.items():
-                # Filter returns for crisis period (simplified - assumes daily data)
-                # In practice, would need proper date filtering
-                crisis_returns = returns  # Placeholder
-
-                if len(crisis_returns) > 0:
-                    crisis_results[asset] = {
-                        "total_return": np.prod(1 + crisis_returns) - 1,
-                        "volatility": np.std(crisis_returns, ddof=1) * np.sqrt(252),
-                        "max_drawdown": np.min(np.cumsum(crisis_returns)),
-                        "worst_day": np.min(crisis_returns)
-                    }
-
-            # Portfolio-level crisis analysis
-            if crisis_results:
-                portfolio_crisis_returns = np.zeros(len(next(iter(crisis_results.values()))["total_return"]))
-                # This would need proper implementation based on actual data structure
-
-                results[crisis_name] = {
-                    "period": f"{start_date} to {end_date}",
-                    "asset_performance": crisis_results,
-                    "portfolio_impact": "Calculation needed with proper data structure"
-                }
-
-        return results
+        It never worked: the date filter was a placeholder (every crisis used the whole series), it
+        called len() on a float and its portfolio figure was a fixed string. A working version needs
+        dated return series; the live app already has one (scripts/portfolio_metrics.py
+        historical_stress, the Portfolio screen's stress test).
+        """
+        return {"error": "historical_scenario_analysis is not available: it needs dated return series and "
+                         "was never implemented here. Use scripts/portfolio_metrics.py historical_stress "
+                         "(the Portfolio screen's stress test) instead."}
 
 
 class RiskBudgetingSystem:
@@ -597,69 +602,117 @@ class RiskManagement:
 
     def comprehensive_risk_analysis(self, returns_data: Union[np.ndarray, Dict[str, np.ndarray]],
                                     weights: Optional[np.ndarray] = None,
-                                    portfolio_value: float = 1000000) -> Dict:
-        """Perform comprehensive risk analysis"""
+                                    portfolio_value: float = 1000000,
+                                    beta: Optional[float] = None) -> Dict:
+        """Perform comprehensive risk analysis.
+
+        returns_data: one return series, or {asset: series} (weights then combine them; equal by
+        default). Series of different lengths are aligned on their most recent common observations.
+        """
+        notes: List[str] = []
 
         if isinstance(returns_data, dict):
-            # Multiple assets
-            returns_matrix = np.array([returns_data[asset] for asset in returns_data.keys()]).T
-            if weights is None:
-                weights = np.ones(len(returns_data)) / len(returns_data)
-            portfolio_returns = np.dot(returns_matrix, weights)
+            if not returns_data:
+                raise ValueError("returns_data is empty")
             asset_names = list(returns_data.keys())
+            series = [np.asarray(returns_data[a], dtype=float) for a in asset_names]
+            n_common = min(len(s) for s in series)
+            if any(len(s) != n_common for s in series):
+                notes.append(f"series had different lengths; aligned on the most recent {n_common} "
+                             "observations (assumes they all end on the same date)")
+            returns_matrix = np.column_stack([s[len(s) - n_common:] for s in series])
+            if weights is None:
+                weights = np.ones(len(asset_names)) / len(asset_names)
+            weights = np.asarray(weights, dtype=float).reshape(-1)
+            if weights.size != len(asset_names):
+                raise ValueError(f"weights has {weights.size} entries for {len(asset_names)} assets")
+            if not np.all(np.isfinite(weights)) or weights.sum() <= 0:
+                raise ValueError("weights must be finite and sum to a positive number")
+            if abs(weights.sum() - 1.0) > 1e-6:
+                notes.append(f"weights summed to {weights.sum():g}; normalised to 1")
+                weights = weights / weights.sum()
+            portfolio_returns = returns_matrix @ weights
         else:
-            # Single asset or portfolio
-            portfolio_returns = np.array(returns_data)
+            portfolio_returns = np.asarray(returns_data, dtype=float)
             returns_matrix = portfolio_returns.reshape(-1, 1)
             weights = np.array([1.0])
             asset_names = ["Portfolio"]
 
+        n = len(portfolio_returns)
+        if n < 2:
+            raise ValueError(f"At least 2 returns are required (got {n})")
+        if n < 30:
+            notes.append(f"only {n} observations: VaR / ES and the fitted distributions are very uncertain")
+        if np.std(portfolio_returns, ddof=1) == 0:
+            notes.append("portfolio returns have zero variance: skewness, kurtosis and the normality test "
+                         "are undefined (null)")
+        if beta is None:
+            notes.append("stress scenarios assume the portfolio moves one-for-one with the shocked market "
+                         "(beta 1); pass beta to change that")
+
         results = {
+            "observations": n,
             "basic_risk_metrics": self._calculate_basic_risk_metrics(portfolio_returns),
             "var_analysis": self._comprehensive_var_analysis(portfolio_returns),
-            "stress_testing": self._perform_stress_testing(portfolio_returns),
+            "stress_testing": ScenarioAnalysis.stress_testing(
+                portfolio_returns, self.parameters.stress_scenarios, beta, portfolio_value),
             "risk_decomposition": None
         }
 
-        # Component analysis for multi-asset portfolios
         if len(asset_names) > 1:
-            results["risk_decomposition"] = VaRCalculations.component_var(
-                portfolio_returns, returns_matrix, weights
-            )
+            decomposition = VaRCalculations.component_var(portfolio_returns, returns_matrix, weights)
+            decomposition["assets"] = asset_names
+            decomposition["weights"] = weights
+            results["risk_decomposition"] = decomposition
 
-        # Convert to dollar amounts
         results["dollar_metrics"] = self._convert_to_dollar_metrics(results, portfolio_value)
+        results["portfolio_value"] = portfolio_value
+        results["conventions"] = ("VaR / ES: positive 1-day loss fractions of portfolio value; downside "
+                                  "deviation: target semideviation below 0 over all observations x sqrt(252)")
+        results["notes"] = notes
 
         return results
 
     def _calculate_basic_risk_metrics(self, returns: np.ndarray) -> Dict:
         """Calculate basic risk metrics"""
+        n = len(returns)
+        sd = float(np.std(returns, ddof=1))
+        shaped = sd > 0
+        jb = stats.jarque_bera(returns) if shaped and n >= 3 else None
         return {
-            "volatility_daily": np.std(returns, ddof=1),
-            "volatility_annual": np.std(returns, ddof=1) * np.sqrt(MathConstants.TRADING_DAYS_YEAR),
+            "volatility_daily": sd,
+            "volatility_annual": sd * np.sqrt(MathConstants.TRADING_DAYS_YEAR),
             "downside_deviation": StatisticalCalculations.calculate_downside_deviation(returns),
+            "downside_deviation_daily": StatisticalCalculations.calculate_downside_deviation(returns, annualize=False),
             "max_drawdown": self._calculate_max_drawdown(returns),
-            "skewness": stats.skew(returns),
-            "kurtosis": stats.kurtosis(returns, fisher=False),
-            "jarque_bera_test": stats.jarque_bera(returns)
+            "skewness": float(stats.skew(returns)) if shaped and n >= 3 else None,
+            "kurtosis": float(stats.kurtosis(returns, fisher=False)) if shaped and n >= 4 else None,
+            "jarque_bera_test": {"statistic": float(jb[0]), "p_value": float(jb[1])} if jb is not None else None
         }
 
     def _comprehensive_var_analysis(self, returns: np.ndarray) -> Dict:
-        """Comprehensive VaR analysis with multiple methods"""
+        """Comprehensive VaR analysis with multiple methods (1-day)"""
         var_results = {}
+        degenerate = float(np.std(returns, ddof=1)) == 0.0
 
         for confidence_level in self.parameters.var_confidence_levels:
-            var_results[f"var_{int(confidence_level * 100)}"] = {
+            var_results[f"var_{int(round(confidence_level * 100))}"] = {
                 "parametric_normal": VaRCalculations.parametric_var(
                     returns, confidence_level, distribution="normal"
                 ),
-                "parametric_t": VaRCalculations.parametric_var(
+                "parametric_t": None if degenerate else VaRCalculations.parametric_var(
                     returns, confidence_level, distribution="t_distribution"
+                ),
+                "parametric_cornish_fisher": VaRCalculations.parametric_var(
+                    returns, confidence_level, distribution="cornish_fisher"
                 ),
                 "historical": {
                     "var": RiskCalculations.value_at_risk_historical(returns, confidence_level),
                     "cvar": RiskCalculations.conditional_value_at_risk(returns, confidence_level)
                 },
+                "parametric_normal_cvar": RiskCalculations.conditional_value_at_risk(
+                    returns, confidence_level, method="parametric"
+                ),
                 "monte_carlo": VaRCalculations.monte_carlo_var(
                     returns, confidence_level, num_simulations=self.parameters.monte_carlo_simulations
                 )
@@ -672,19 +725,25 @@ class RiskManagement:
         return ScenarioAnalysis.stress_testing(returns, self.parameters.stress_scenarios)
 
     def _calculate_max_drawdown(self, returns: np.ndarray) -> Dict:
-        """Calculate maximum drawdown statistics"""
-        cumulative_returns = np.cumprod(1 + returns)
-        running_max = np.maximum.accumulate(cumulative_returns)
-        drawdown = (cumulative_returns - running_max) / running_max
+        """Maximum drawdown from the running peak of wealth (starting wealth 1.0 included).
 
-        max_dd = np.min(drawdown)
-        max_dd_idx = np.argmin(drawdown)
-        peak_idx = np.argmax(running_max[:max_dd_idx + 1]) if max_dd_idx > 0 else 0
+        Indices count observations: 0 = before the first return, k = after the k-th return.
+        """
+        wealth, drawdown = _drawdown_path(returns)
+
+        trough_idx = int(np.argmin(drawdown))
+        peak_idx = int(np.argmax(wealth[:trough_idx + 1]))
+        recovered = np.nonzero(wealth[trough_idx:] >= wealth[peak_idx])[0]
+        recovery_idx = int(trough_idx + recovered[0]) if trough_idx > peak_idx and recovered.size else None
 
         return {
-            "max_drawdown": max_dd,
-            "peak_to_trough_days": max_dd_idx - peak_idx,
-            "drawdown_series": drawdown
+            "max_drawdown": float(drawdown.min()),
+            "peak_index": peak_idx,
+            "trough_index": trough_idx,
+            "peak_to_trough_days": trough_idx - peak_idx,
+            "recovery_index": recovery_idx,
+            "current_drawdown": float(drawdown[-1]),
+            "drawdown_series": drawdown[1:]
         }
 
     def _convert_to_dollar_metrics(self, results: Dict, portfolio_value: float) -> Dict:
@@ -702,67 +761,39 @@ class RiskManagement:
                 if "parametric_normal" in var_data:
                     dollar_metrics[var_level]["parametric_var"] = var_data["parametric_normal"]["var"] * portfolio_value
 
+        decomposition = results.get("risk_decomposition")
+        if decomposition and decomposition.get("component_vars") is not None:
+            dollar_metrics["component_var_95"] = dict(zip(
+                decomposition["assets"], np.asarray(decomposition["component_vars"]) * portfolio_value))
+
         return dollar_metrics
 
 # ============================================================================
 # CLI Interface
 # ============================================================================
 
+_ARGMAP = {"comprehensive_risk_analysis": ["returns_data", "weights", "portfolio_value", "beta"]}
+
+
+def _cmd_comprehensive_risk_analysis(args) -> Dict:
+    returns_data = args.get_json(0, "returns_data")
+    weights = args.get_json(1, "weights")
+    portfolio_value = args.get_float(2, "portfolio_value", 1000000.0)
+    beta = args.get_float(3, "beta")
+    if returns_data is None:
+        raise CliError("returns_data is required: a list of daily returns or {asset: [returns]}")
+    if isinstance(returns_data, dict):
+        if not returns_data:
+            raise CliError("returns_data is empty")
+        data = {str(k): return_series(v, f"returns_data[{k}]") for k, v in returns_data.items()}
+    else:
+        data = return_series(returns_data, "returns_data")
+    if weights is not None:
+        weights = return_series(weights, "weights", min_len=1)
+    if portfolio_value <= 0:
+        raise CliError("portfolio_value must be positive")
+    return RiskManagement().comprehensive_risk_analysis(data, weights, portfolio_value, beta)
+
+
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "No command specified"}))
-        sys.exit(1)
-
-    command = sys.argv[1]
-    # ── Qt bridge: accept (command, single JSON object) and expand into the
-    # positional argv the handlers below expect. No effect on the legacy CLI form.
-    _QT_ARGMAP = {"comprehensive_risk_analysis": [["returns_data", "json"], ["weights", "json"], ["portfolio_value", "raw"]]}
-    if len(sys.argv) == 3 and command in _QT_ARGMAP:
-        try:
-            _qp = json.loads(sys.argv[2])
-            if isinstance(_qp, dict) and (not _QT_ARGMAP[command] or _QT_ARGMAP[command][0][0] in _qp):
-                _qav = [sys.argv[0], command]
-                for _qn, _qk in _QT_ARGMAP[command]:
-                    if _qn in _qp and _qp[_qn] is not None:
-                        _qav.append(json.dumps(_qp[_qn]) if _qk == 'json' else str(_qp[_qn]))
-                    else:
-                        _qav.append('null')
-                sys.argv = _qav
-        except Exception:
-            pass
-
-    try:
-        if command == "comprehensive_risk_analysis":
-            returns_data = json.loads(sys.argv[2])
-            weights = json.loads(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] != "null" else None
-            portfolio_value = float(sys.argv[4]) if len(sys.argv) > 4 else 1000000.0
-
-            risk_mgmt = RiskManagement()
-            result = risk_mgmt.comprehensive_risk_analysis(returns_data, weights, portfolio_value)
-            
-            # Convert numpy arrays to lists for JSON serialization
-            def convert_numpy(obj):
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                elif isinstance(obj, dict):
-                    return {k: convert_numpy(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    return [convert_numpy(item) for item in obj]
-                elif isinstance(obj, (np.integer, np.floating)):
-                    return float(obj)
-                return obj
-            
-            result = convert_numpy(result)
-            print(json.dumps(result))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}))
-            sys.exit(1)
-
-    except Exception as e:
-        import traceback
-        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
-        sys.exit(1)
+    run_cli({"comprehensive_risk_analysis": _cmd_comprehensive_risk_analysis}, _ARGMAP)

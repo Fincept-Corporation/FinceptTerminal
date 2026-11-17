@@ -25,6 +25,8 @@ class PortfolioDetailWrapper : public QWidget {
     /// Pre-select the Optimization view's "Target Return" method at
     /// @p annual_return (a fraction, e.g. 0.08). Creates the view if needed.
     void set_optimization_target(double annual_return);
+    /// Selects the RISK view's STRESS tab (creates the view if needed).
+    void show_risk_stress();
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -33,6 +35,10 @@ class PortfolioDetailWrapper : public QWidget {
     void back_requested();
     void sector_selected(QString sector);          // forwarded from AnalyticsSectorsView
     void optimize_requested(double target_return); // PlanningView → open Optimization tab
+    /// An empty-book state's BUY action in a detail view → the screen's Add Asset dialog.
+    void buy_requested();
+    /// ECONOMICS › MACRO SHOCKS "OPEN RISK › STRESS".
+    void risk_stress_requested();
 
   private:
     void build_ui();

@@ -67,6 +67,13 @@ UNIT_MAP: Dict[str, int] = {
 # Error container
 # ---------------------------------------------------------------------------
 
+def _per_currency(rates, date=""):
+    """{CODE: rate, "date": ...} -> [{date, currency, rate}]: a snapshot as a row per currency."""
+    rates = rates or {}
+    d = rates.get("date", date) or date
+    return [{"date": d, "currency": k, "rate": v} for k, v in rates.items() if k != "date"]
+
+
 class BNMError:
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
         self.endpoint    = endpoint
@@ -175,7 +182,8 @@ class BNMWrapper:
                 "success":    True,
                 "session":    session,
                 "date":       parsed[0]["date"] if parsed else "",
-                "data":       flat,
+                "data":       _per_currency(flat, parsed[0]["date"] if parsed else ""),
+                "rates":      flat,
                 "full_data":  parsed,
                 "count":      len(parsed),
                 "note":       "MYR per 1 unit of foreign currency (normalised from unit=100 where applicable)",
@@ -313,14 +321,15 @@ class BNMWrapper:
         result = self.get_exchange_rates(session)
         if not result.get("success"):
             return result
-        flat = result.get("data", {})
+        flat = result.get("rates", {})
         major = {c: flat[c] for c in MAJOR_CURRENCIES if c in flat}
         return {
             "success":    True,
             "session":    session,
             "date":       result.get("date", ""),
             "currencies": MAJOR_CURRENCIES,
-            "data":       major,
+            "data":       _per_currency(major, result.get("date", "")),
+            "rates":      major,
             "note":       "MYR per 1 unit of foreign currency",
             "source":     "Bank Negara Malaysia",
             "timestamp":  int(datetime.now(timezone.utc).timestamp()),
@@ -331,14 +340,15 @@ class BNMWrapper:
         result = self.get_exchange_rates(session)
         if not result.get("success"):
             return result
-        flat = result.get("data", {})
+        flat = result.get("rates", {})
         asean = {c: flat[c] for c in ASEAN_CURRENCIES if c in flat}
         return {
             "success":    True,
             "session":    session,
             "date":       result.get("date", ""),
             "currencies": ASEAN_CURRENCIES,
-            "data":       asean,
+            "data":       _per_currency(asean, result.get("date", "")),
+            "rates":      asean,
             "note":       "MYR per 1 unit of foreign currency",
             "source":     "Bank Negara Malaysia",
             "timestamp":  int(datetime.now(timezone.utc).timestamp()),
@@ -353,7 +363,7 @@ class BNMWrapper:
             "success":   True,
             "date":      fx.get("date", ""),
             "data": {
-                "exchange_rates": fx.get("data", {}),
+                "exchange_rates": fx.get("rates", {}),  # the {CODE: rate} map next to OPR and gold
                 "opr":            opr.get("data", {}),
                 "kijang_emas":    gold.get("data", {}),
             },

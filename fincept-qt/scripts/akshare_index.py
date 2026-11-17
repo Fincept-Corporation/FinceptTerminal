@@ -9,6 +9,11 @@ import json
 import time
 from datetime import datetime
 
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import between_dates, run_endpoint_table, safe_call
+
 try:
     import akshare as ak
     import pandas as pd
@@ -19,62 +24,6 @@ except ImportError as e:
         "data": []
     }))
     sys.exit(1)
-
-
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                # Convert timestamps and handle NaN values
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float('inf'), float('-inf')], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except ValueError as e:
-            # Handle common AKShare API bugs (column mismatch, parsing errors)
-            error_msg = str(e)
-            if "Length mismatch" in error_msg or "Expected axis" in error_msg:
-                return {
-                    "success": False,
-                    "error": "AKShare API structure changed (column mismatch). This endpoint may be temporarily unavailable.",
-                    "data": [],
-                    "error_type": "api_mismatch"
-                }
-            elif attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": f"Data validation error: {error_msg}", "data": [], "error_type": "validation"}
-        except KeyError as e:
-            return {
-                "success": False,
-                "error": f"Missing expected data field: {str(e)}. API response format may have changed.",
-                "data": [],
-                "error_type": "missing_field"
-            }
-        except (ConnectionError, TimeoutError) as e:
-            if attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-            return {"success": False, "error": f"Network error: {str(e)}", "data": [], "error_type": "network"}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": [], "error_type": "unknown"}
-    return {"success": False, "error": "Max retries exceeded", "data": [], "error_type": "timeout"}
 
 
 # ==================== CHINESE INDEX DATA ====================
@@ -154,39 +103,9 @@ def get_index_hist_fund_sw(symbol="801010", period="day"):
 # ==================== CNI INDEX ====================
 
 def get_index_all_cni():
-    """Get all CNI indices - Workaround for AKShare bug"""
-    try:
-        # Direct API call bypassing broken AKShare function
-        import requests
-        url = "https://www.csindex.com.cn/csindex-home/indexInfo/index-overview-list"
-        params = {
-            "pageNum": 1,
-            "pageSize": 5000,
-            "indexClassify": ""
-        }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        data = r.json()
-
-        if data.get('data') and data['data'].get('data'):
-            items = data['data']['data']
-            return {"success": True, "data": items, "count": len(items)}
-
-        # Fallback to empty result with helpful message
-        return {
-            "success": True,
-            "data": [],
-            "count": 0,
-            "note": "AKShare index_all_cni has API bug. Use index_hist_cni or index_detail_cni instead."
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"API unavailable. AKShare bug: column count mismatch. Error: {str(e)}",
-            "data": []
-        }
+    """All CNI (国证) indices, latest trading day. akshare 1.20 fixed index_all_cni; the script's own
+    request it replaces went to csindex.com.cn (CSI, a different index family)."""
+    return safe_call(ak.index_all_cni)
 
 def get_index_hist_cni(symbol="399001"):
     """Get CNI index historical data"""
@@ -196,13 +115,13 @@ def get_index_detail_cni(symbol="399001"):
     """Get CNI index details"""
     return safe_call(ak.index_detail_cni, symbol=symbol)
 
-def get_index_detail_hist_cni(symbol="399001", start_date="20200101", end_date="20261231"):
-    """Get CNI index historical details"""
-    return safe_call(ak.index_detail_hist_cni, symbol=symbol, date=start_date)
+def get_index_detail_hist_cni(symbol="399001", start_date="", end_date=""):
+    """Constituent history of one CNI index; START/END narrow it (akshare returns the full history)"""
+    return safe_call(lambda: between_dates(ak.index_detail_hist_cni(symbol=symbol), start_date, end_date))
 
-def get_index_detail_hist_adjust_cni(symbol="399001", start_date="20200101"):
-    """Get CNI index adjusted historical details"""
-    return safe_call(ak.index_detail_hist_adjust_cni, symbol=symbol, date=start_date)
+def get_index_detail_hist_adjust_cni(symbol="399005"):
+    """Constituent adjustment history of one CNI index"""
+    return safe_call(ak.index_detail_hist_adjust_cni, symbol=symbol)
 
 
 # ==================== GLOBAL INDEX ====================
@@ -211,9 +130,10 @@ def get_index_global_spot():
     """Get global index spot data"""
     return safe_call(ak.index_global_spot_em)
 
-def get_index_global_hist(symbol=".DJI", period="daily", start_date="20200101", end_date="20261231"):
-    """Get global index historical data (e.g., .DJI, .IXIC, .INX)"""
-    return safe_call(ak.index_global_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date)
+def get_index_global_hist(symbol="道琼斯", start_date="", end_date=""):
+    """Daily history of one global index, by the Chinese name EastMoney uses (道琼斯, 纳斯达克, 标普500,
+    恒生指数, 日经225, 美元指数 ... see index_global_spot); START/END narrow the range"""
+    return safe_call(lambda: between_dates(ak.index_global_hist_em(symbol=symbol), start_date, end_date))
 
 def get_index_global_name_table():
     """Get global index name table"""
@@ -526,56 +446,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

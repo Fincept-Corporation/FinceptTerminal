@@ -1,4 +1,5 @@
 #include "screens/crypto_center/panels/SupplyChartPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -32,9 +33,7 @@ namespace {
 
 constexpr const char* kTopicSupplyHistory = "treasury:supply_history";
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
 double atomic_to_billions(const QString& raw, int decimals) {
     if (raw.isEmpty())
@@ -52,6 +51,11 @@ SupplyChartPanel::SupplyChartPanel(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("supplyChartPanel"));
     build_ui();
     apply_theme();
+
+    // Series pens, axis colours and label fonts live in the QChart, which the
+    // stylesheet re-style pass does not reach.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { apply_chart_theme(); });
 
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this, &SupplyChartPanel::on_topic_error);
@@ -75,7 +79,7 @@ void SupplyChartPanel::build_ui() {
     title_->setObjectName(QStringLiteral("supplyChartTitle"));
     legend_ = new QLabel(tr("● TOTAL  ● CIRCULATING  ● BURNED"), head);
     legend_->setObjectName(QStringLiteral("supplyChartLegend"));
-    status_pill_ = new QLabel(tr("LIVE"), head);
+    status_pill_ = new QLabel(tr("LOADING"), head); // LIVE/DEMO once a series arrives
     status_pill_->setObjectName(QStringLiteral("supplyChartPill"));
     hl->addWidget(title_);
     hl->addStretch();
@@ -98,18 +102,14 @@ void SupplyChartPanel::build_ui() {
     chart_->legend()->hide(); // we render our own in the head
     chart_->setBackgroundRoundness(0);
 
-    using namespace ui::colors;
     total_series_ = new QLineSeries;
     total_series_->setName(QStringLiteral("Total"));
-    total_series_->setPen(QPen(QColor(QString(BORDER_BRIGHT())), 2));
 
     circulating_series_ = new QLineSeries;
     circulating_series_->setName(QStringLiteral("Circulating"));
-    circulating_series_->setPen(QPen(QColor(QString(TEXT_TERTIARY())), 2));
 
     burned_series_ = new QLineSeries;
     burned_series_->setName(QStringLiteral("Burned"));
-    burned_series_->setPen(QPen(QColor(QString(AMBER())), 2));
 
     chart_->addSeries(total_series_);
     chart_->addSeries(circulating_series_);
@@ -117,19 +117,14 @@ void SupplyChartPanel::build_ui() {
 
     x_axis_ = new QDateTimeAxis;
     x_axis_->setFormat(QStringLiteral("MMM yy"));
-    x_axis_->setLabelsColor(QColor(QString(TEXT_TERTIARY())));
-    x_axis_->setGridLineColor(QColor(QString(BORDER_DIM())));
-    x_axis_->setLinePen(QPen(QColor(QString(BORDER_DIM()))));
     x_axis_->setTickCount(7);
     chart_->addAxis(x_axis_, Qt::AlignBottom);
 
     y_axis_ = new QValueAxis;
     y_axis_->setLabelFormat(QStringLiteral("%.1f B"));
-    y_axis_->setLabelsColor(QColor(QString(TEXT_TERTIARY())));
-    y_axis_->setGridLineColor(QColor(QString(BORDER_DIM())));
-    y_axis_->setLinePen(QPen(QColor(QString(BORDER_DIM()))));
     y_axis_->setRange(0.0, 12.0); // placeholder; update_inputs sets real range
     chart_->addAxis(y_axis_, Qt::AlignLeft);
+    apply_chart_theme();
 
     total_series_->attachAxis(x_axis_);
     total_series_->attachAxis(y_axis_);
@@ -168,25 +163,25 @@ void SupplyChartPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#supplyChartPanel { background:%1; }"
+    const QString ss = QString("QWidget#supplyChartPanel { background:%1; }"
                                       "QWidget#supplyChartHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#supplyChartTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#supplyChartTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#supplyChartLegend { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#supplyChartLegend { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
                                       "QLabel#supplyChartPill { color:%7; background:%8; border:1px solid %3;"
-                                      "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
+                                      "  font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
-                                      "QLabel#supplyChartPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %10; font-family:%5; font-size:9px; font-weight:700;"
+                                      "QLabel#supplyChartPillDemo { color:%4; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
+                                      "  border:1px solid %10; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
                                       "QWidget#supplyChartBody { background:%1; }"
 
-                                      "QFrame#supplyChartErrorStrip { background:rgba(220,38,38,0.10);"
+                                      "QFrame#supplyChartErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                                       "  border:1px solid %9; }"
-                                      "QLabel#supplyChartErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                                      "QLabel#supplyChartErrorIcon { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#supplyChartErrorText { color:%9; font-family:%5; font-size:11px;"
+                                      "QLabel#supplyChartErrorText { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }")
                            .arg(BG_BASE(),                  // %1
                                 BG_SURFACE(),               // %2
@@ -196,14 +191,31 @@ void SupplyChartPanel::apply_theme() {
                                 TEXT_TERTIARY(),            // %6
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
-                                NEGATIVE())                 // %9
+                                DANGER())                   // %9
                            // One arg per marker, in ascending marker order —
                            // QString::arg fills the LOWEST marker present, so a
                            // spare arg shifts every later colour by one and
                            // warns "Argument missing" for the overflow.
-                           .arg(QStringLiteral("#78350f")); // %10 darker amber
+                           .arg(AMBER_DIM());               // %10 darker amber
 
     setStyleSheet(ss);
+}
+
+void SupplyChartPanel::apply_chart_theme() {
+    if (!chart_)
+        return;
+    using namespace ui::colors;
+    total_series_->setPen(QPen(QColor(BORDER_BRIGHT()), 2));
+    circulating_series_->setPen(QPen(QColor(TEXT_TERTIARY()), 2));
+    burned_series_->setPen(QPen(QColor(AMBER()), 2));
+
+    const QFont label_font = ui::fonts::font(-3);
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(x_axis_), static_cast<QAbstractAxis*>(y_axis_)}) {
+        axis->setLabelsColor(QColor(TEXT_TERTIARY()));
+        axis->setLabelsFont(label_font);
+        axis->setGridLineColor(QColor(BORDER_DIM()));
+        axis->setLinePen(QPen(QColor(BORDER_DIM())));
+    }
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -258,6 +270,7 @@ void SupplyChartPanel::on_supply_history_update(const QVariant& v) {
     for (const auto& p : pts)
         is_mock = is_mock || p.is_mock;
     series_is_mock_ = is_mock;
+    has_data_ = true;
     update_demo_chip(is_mock);
 
     total_series_->clear();
@@ -299,6 +312,8 @@ void SupplyChartPanel::on_topic_error(const QString& topic, const QString& error
     if (topic != QLatin1String(kTopicSupplyHistory))
         return;
     show_error_strip(tr("Supply history feed error: %1").arg(error));
+    feed_failed_ = true;
+    update_demo_chip(series_is_mock_); // OFFLINE when nothing has been plotted yet
 }
 
 void SupplyChartPanel::show_error_strip(const QString& msg) {
@@ -316,7 +331,13 @@ void SupplyChartPanel::clear_error_strip() {
 }
 
 void SupplyChartPanel::update_demo_chip(bool is_mock) {
-    if (is_mock) {
+    if (!has_data_) {
+        // Nothing plotted yet: LIVE would vouch for an empty chart.
+        status_pill_->setText(feed_failed_ ? tr("OFFLINE") : tr("LOADING"));
+        status_pill_->setObjectName(QStringLiteral("supplyChartPill"));
+        if (title_)
+            title_->setText(tr("SUPPLY CHART · 12 MONTHS"));
+    } else if (is_mock) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("supplyChartPillDemo"));
         // The chart itself carries no visual mock cue, so name it in the

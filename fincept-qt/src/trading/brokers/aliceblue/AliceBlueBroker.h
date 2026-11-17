@@ -25,8 +25,10 @@ class AliceBlueBroker : public IBroker {
                     {CredentialField::AuthCode, "AUTH CODE", "Enter Auth/Request Token...", false},
                 },
             // AliceBlue ANT supports NSE/BSE equity + NFO/BFO/CDS derivatives +
-            // MCX commodities + INDICES. NCDEX is not on the supported list.
-            .exchanges = {"NSE", "BSE", "NFO", "BFO", "CDS", "MCX", "INDICES"},
+            // MCX commodities. NCDEX is not on the supported list. Its INDICES
+            // master is data-only (index instruments load as NSE_INDEX/BSE_INDEX)
+            // and an index cannot be ordered, so it is not an order exchange.
+            .exchanges = {"NSE", "BSE", "NFO", "BFO", "CDS", "MCX"},
             .product_types =
                 {
                     {"Intraday (INTRADAY)", ProductType::Intraday},

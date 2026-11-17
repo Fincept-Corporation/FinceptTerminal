@@ -3,18 +3,28 @@
 
 #include "screens/equity_research/EquityResearchFormat.h"
 #include "screens/equity_research/EquityResearchLinks.h"
+#include "screens/equity_research/EquityResearchUi.h"
 #include "services/equity/EquityResearchService.h"
+#include "services/markets/FxRateService.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/tables/BarCellDelegate.h"
 #include "ui/tables/NumericTableWidgetItem.h"
+#include "ui/theme/ChartStyle.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
 #include <QApplication>
 #include <QClipboard>
+#include <QComboBox>
 #include <QEvent>
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QPushButton>
+#include <QSplitter>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -24,190 +34,429 @@ namespace fincept::screens {
 
 namespace peers_tab_detail {
 
-constexpr int kSymbolRole = Qt::UserRole + 1;
+namespace pt_uf = fincept::ui::formatting;
+using PD = services::equity::PeerData;
 
-/// "—" when the source sent nothing (yfinance reports a missing ratio as 0).
-QString peers_fmt(double v, int dec, const QString& suffix = {}) {
-    return v != 0.0 && std::isfinite(v) ? QString::number(v, 'f', dec) + suffix : equity_fmt::dash();
+constexpr int kPeerSymbolRole = Qt::UserRole + 1;
+constexpr int kPeerPercentileRole = Qt::UserRole + 2;
+
+/// A metric of the comparison: column header, value accessor, format.
+struct PeerMetric {
+    const char* key;
+    const char* header;
+    double (*get)(const PD&);
+    enum Fmt { Multiple, Percent, PercentOfHundred, Ratio, Beta } fmt;
+    bool scatter;
+};
+
+double pm_pe(const PD& p) { return p.pe_ratio; }
+double pm_fpe(const PD& p) { return p.forward_pe; }
+double pm_pb(const PD& p) { return p.price_to_book; }
+double pm_ps(const PD& p) { return p.price_to_sales; }
+double pm_eve(const PD& p) { return p.ev_to_ebitda; }
+double pm_peg(const PD& p) { return p.peg_ratio; }
+double pm_roe(const PD& p) { return p.roe; }
+double pm_roa(const PD& p) { return p.roa; }
+double pm_gm(const PD& p) { return p.gross_margin; }
+double pm_om(const PD& p) { return p.operating_margin; }
+double pm_nm(const PD& p) { return p.profit_margin; }
+double pm_rg(const PD& p) { return p.revenue_growth; }
+double pm_eg(const PD& p) { return p.earnings_growth; }
+double pm_de(const PD& p) { return p.debt_to_equity / 100.0; } // yfinance: percent (152 = 1.52x)
+double pm_cr(const PD& p) { return p.current_ratio; }
+double pm_qr(const PD& p) { return p.quick_ratio; }
+double pm_dy(const PD& p) { return p.dividend_yield / 100.0; } // yfinance: percent
+double pm_beta(const PD& p) { return p.beta; }
+double pm_mcap(const PD& p) { return p.market_cap_usd; }
+
+const PeerMetric kPeerMetrics[] = {
+    {"pe", QT_TRANSLATE_NOOP("EquityPeersTab", "P/E"), pm_pe, PeerMetric::Multiple, true},
+    {"fpe", QT_TRANSLATE_NOOP("EquityPeersTab", "FWD P/E"), pm_fpe, PeerMetric::Multiple, true},
+    {"pb", QT_TRANSLATE_NOOP("EquityPeersTab", "P/B"), pm_pb, PeerMetric::Multiple, true},
+    {"ps", QT_TRANSLATE_NOOP("EquityPeersTab", "P/S"), pm_ps, PeerMetric::Multiple, true},
+    {"eve", QT_TRANSLATE_NOOP("EquityPeersTab", "EV/EBITDA"), pm_eve, PeerMetric::Multiple, true},
+    {"peg", QT_TRANSLATE_NOOP("EquityPeersTab", "PEG"), pm_peg, PeerMetric::Multiple, false},
+    {"roe", QT_TRANSLATE_NOOP("EquityPeersTab", "ROE"), pm_roe, PeerMetric::Percent, true},
+    {"roa", QT_TRANSLATE_NOOP("EquityPeersTab", "ROA"), pm_roa, PeerMetric::Percent, false},
+    {"gm", QT_TRANSLATE_NOOP("EquityPeersTab", "GROSS MGN"), pm_gm, PeerMetric::Percent, true},
+    {"om", QT_TRANSLATE_NOOP("EquityPeersTab", "OP MGN"), pm_om, PeerMetric::Percent, true},
+    {"nm", QT_TRANSLATE_NOOP("EquityPeersTab", "NET MGN"), pm_nm, PeerMetric::Percent, true},
+    {"rg", QT_TRANSLATE_NOOP("EquityPeersTab", "REV GR"), pm_rg, PeerMetric::Percent, true},
+    {"eg", QT_TRANSLATE_NOOP("EquityPeersTab", "EPS GR"), pm_eg, PeerMetric::Percent, false},
+    {"de", QT_TRANSLATE_NOOP("EquityPeersTab", "D/E"), pm_de, PeerMetric::Ratio, true},
+    {"cr", QT_TRANSLATE_NOOP("EquityPeersTab", "CURRENT"), pm_cr, PeerMetric::Ratio, false},
+    {"qr", QT_TRANSLATE_NOOP("EquityPeersTab", "QUICK"), pm_qr, PeerMetric::Ratio, false},
+    {"dy", QT_TRANSLATE_NOOP("EquityPeersTab", "DIV YIELD"), pm_dy, PeerMetric::Percent, true},
+    {"beta", QT_TRANSLATE_NOOP("EquityPeersTab", "BETA"), pm_beta, PeerMetric::Beta, true},
+};
+constexpr int kPeerFixedCols = 5; // SYMBOL, NAME, MKT CAP (display currency), PRICE, CHG%
+
+/// MKT CAP cell. The service's USD figure makes caps listed in pounds, yen and rupees
+/// comparable; it is shown converted into the user's display currency ("≈" when the rate is
+/// stale, "—" until it is known — never 1:1), the local figure and the rate on hover. The
+/// item's sort key stays the USD figure (same order); CSV export gets the shown amount.
+void pm_fill_cap(QTableWidgetItem* cap, const PD& p) {
+    QStringList tip;
+    if (p.market_cap > 0)
+        tip << QCoreApplication::translate("EquityPeersTab", "%1 in %2")
+                   .arg(equity_fmt::money(p.market_cap, p.currency), equity_fmt::Listing{p.currency, {}}.quote_major());
+    if (!(p.market_cap_usd > 0)) {
+        cap->setText(equity_fmt::dash());
+        cap->setData(er_ui::kRawRole, QString());
+        cap->setToolTip(tip.join(QLatin1Char('\n')));
+        return;
+    }
+    const pt_uf::ConvertedMoney c = services::fx::convert_for_display(p.market_cap_usd, QStringLiteral("USD"));
+    cap->setText(pt_uf::converted_money(c, pt_uf::Compact::FromSettings));
+    cap->setData(er_ui::kRawRole, c.ok() ? QVariant(c.amount) : QVariant(QString()));
+    if (!c.ok())
+        tip << QCoreApplication::translate("EquityPeersTab", "Waiting for the USD/%1 rate").arg(pt_uf::display_currency());
+    else if (c.converted)
+        tip << pt_uf::fx_note(c);
+    cap->setToolTip(tip.join(QLatin1Char('\n')));
+}
+
+/// A ratio yfinance did not report comes as 0; multiples must be positive to compare.
+bool pm_present(double v, PeerMetric::Fmt f) {
+    if (!std::isfinite(v) || v == 0.0)
+        return false;
+    return f == PeerMetric::Multiple ? v > 0.0 : true;
+}
+
+QString pm_text(double v, PeerMetric::Fmt f) {
+    switch (f) {
+        case PeerMetric::Multiple:
+            return equity_fmt::multiple(v, 1);
+        case PeerMetric::Percent:
+            return pt_uf::fraction_pct(v, 1, false);
+        case PeerMetric::Ratio:
+            return pt_uf::ratio(v, 2);
+        default:
+            return pt_uf::number(v, 2);
+    }
+}
+
+double pm_median(QVector<double> v) {
+    if (v.size() < 2)
+        return std::nan("");
+    std::sort(v.begin(), v.end());
+    const qsizetype n = v.size();
+    return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
 }
 
 } // namespace peers_tab_detail
 
 using namespace peers_tab_detail;
 
+// ── Scatter ──────────────────────────────────────────────────────────────────
+
+/// Any two peer metrics against each other, the subject highlighted. No Q_OBJECT (no
+/// signals of its own), so it needs no moc.
+class PeerScatterChart : public ui::PaintedChart {
+  public:
+    struct Point {
+        QString label;
+        double x = 0, y = 0;
+        bool subject = false;
+    };
+    explicit PeerScatterChart(QWidget* parent = nullptr) : ui::PaintedChart(parent) {
+        setMouseTracking(true);
+        setMinimumHeight(ui::metrics::height(220));
+    }
+    void set_points(const QVector<Point>& pts, const QString& x_name, const QString& y_name,
+                    std::function<QString(double)> fx, std::function<QString(double)> fy) {
+        pts_ = pts;
+        x_name_ = x_name;
+        y_name_ = y_name;
+        fx_ = std::move(fx);
+        fy_ = std::move(fy);
+        invalidate();
+    }
+    QSize sizeHint() const override { return {420, 260}; }
+
+  protected:
+    bool has_data() const override { return pts_.size() >= 2; }
+    void paint_chart(QPainter& p, const QRectF& r) override {
+        namespace cs = ui::chart_style;
+        double x0 = pts_.first().x, x1 = x0, y0 = pts_.first().y, y1 = y0;
+        for (const auto& pt : pts_) {
+            x0 = std::min(x0, pt.x);
+            x1 = std::max(x1, pt.x);
+            y0 = std::min(y0, pt.y);
+            y1 = std::max(y1, pt.y);
+        }
+        const double px = (x1 - x0) * 0.08 + 1e-9, py = (y1 - y0) * 0.1 + 1e-9;
+        double xl, xh, yl, yh;
+        const auto xt = cs::nice_ticks(x0 - px, x1 + px, 5, &xl, &xh);
+        const auto yt = cs::nice_ticks(y0 - py, y1 + py, 5, &yl, &yh);
+        const qreal left = cs::axis_label_width(yt, fy_) + 10;
+        const QFontMetrics fm(cs::axis_font());
+        plot_ = QRectF(r.left() + left, r.top() + fm.height(), r.width() - left - 10, r.height() - 2.5 * fm.height() - 8);
+        xl_ = xl;
+        xh_ = xh;
+        yl_ = yl;
+        yh_ = yh;
+        cs::draw_value_axis(p, plot_, yt, yl, yh, Qt::Vertical, fy_);
+        cs::draw_value_axis(p, plot_, xt, xl, xh, Qt::Horizontal, fx_);
+        p.setFont(cs::axis_font());
+        p.setPen(cs::muted_color());
+        p.drawText(QRectF(plot_.left(), r.bottom() - fm.height(), plot_.width(), fm.height()), Qt::AlignCenter, x_name_);
+        p.drawText(QRectF(r.left(), r.top(), r.width(), fm.height()), Qt::AlignLeft | Qt::AlignVCenter, y_name_);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        for (int i = 0; i < pts_.size(); ++i) {
+            const QPointF c = to_px(pts_[i]);
+            const QColor col = pts_[i].subject ? QColor(ui::colors::AMBER()) : ui::colors::chart_color(i);
+            p.setPen(QPen(col, 1.5));
+            p.setBrush(ui::colors::tint_color(col, 0.5));
+            const qreal rad = pts_[i].subject ? 6 : 4.5;
+            p.drawEllipse(c, rad, rad);
+            p.setPen(pts_[i].subject ? QColor(ui::colors::AMBER()) : cs::label_color());
+            p.setFont(cs::font(-3, pts_[i].subject ? QFont::Bold : QFont::Normal));
+            p.drawText(c + QPointF(rad + 3, -rad), pts_[i].label);
+        }
+    }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        ui::PaintedChart::mouseMoveEvent(e);
+        if (!chart_visible())
+            return;
+        for (const auto& pt : pts_) {
+            const QPointF c = to_px(pt);
+            if (QLineF(c, e->position()).length() <= 8) {
+                show_tip(e->position().toPoint(),
+                         ui::chart_style::tooltip_html(pt.label, {{x_name_, fx_(pt.x)}, {y_name_, fy_(pt.y)}}),
+                         QRect(c.toPoint() - QPoint(8, 8), QSize(16, 16)));
+                return;
+            }
+        }
+        hide_tip();
+    }
+
+  private:
+    QPointF to_px(const Point& pt) const {
+        const double tx = xh_ > xl_ ? (pt.x - xl_) / (xh_ - xl_) : 0.5;
+        const double ty = yh_ > yl_ ? (pt.y - yl_) / (yh_ - yl_) : 0.5;
+        return {plot_.left() + tx * plot_.width(), plot_.bottom() - ty * plot_.height()};
+    }
+    QVector<Point> pts_;
+    QString x_name_, y_name_;
+    std::function<QString(double)> fx_, fy_;
+    QRectF plot_;
+    double xl_ = 0, xh_ = 1, yl_ = 0, yh_ = 1;
+};
+
+// ── Tab ──────────────────────────────────────────────────────────────────────
+
 EquityPeersTab::EquityPeersTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::peers_loaded, this, &EquityPeersTab::on_peers_loaded);
-    // Industry peers arrive after the tab opened; apply them only if they are for the
-    // symbol still on screen and the user has not typed their own list meanwhile.
     connect(&svc, &services::equity::EquityResearchService::suggested_peers_loaded, this,
             [this](const QString& symbol, const QStringList& peers) {
                 if (symbol.compare(current_symbol_, Qt::CaseInsensitive) != 0 || !awaiting_suggested_peers_)
                     return;
                 awaiting_suggested_peers_ = false;
-                peers_edit_->setText((peers.isEmpty() ? QStringList{"SPY", "QQQ", "DIA"} : peers).join(", "));
+                if (peers.isEmpty()) {
+                    loading_overlay_->hide_loading();
+                    status_label_->setText(tr("No same-industry peers found for %1 — type tickers and press LOAD.")
+                                               .arg(symbol));
+                    status_label_->show();
+                    return;
+                }
+                peers_edit_->setText(peers.join(QStringLiteral(", ")));
                 on_load_clicked();
             });
     connect(peers_edit_, &QLineEdit::textEdited, this, [this]() { awaiting_suggested_peers_ = false; });
-    // Dismiss the "LOADING PEERS…" overlay on failure — it's hidden only on success.
-    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (ctx != "Peers")
+    connect(&svc, &services::equity::EquityResearchService::load_failed, this,
+            [this](const services::equity::LoadFailure& f) {
+                if (f.leg != QLatin1String("Peers") || f.symbol != current_symbol_)
                     return;
-                if (loading_overlay_)
-                    loading_overlay_->hide_loading();
+                loading_overlay_->hide_loading();
                 status_label_->setText(tr("Could not load peer data — press LOAD to try again."));
+                status_label_->setToolTip(f.message);
                 status_label_->show();
             });
+    // Rebuild the table / summary / scatter from the peers held: after a theme or font change
+    // once it has settled (the table re-sizes), and for a currency / number-format change.
+    const auto rerender = [this]() {
+        if (peers_loaded_) {
+            populate_table(cached_peers_);
+            update_relative_summary(cached_peers_);
+            update_scatter();
+        }
+    };
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, rerender);
+    ui::formatting::on_format_changed(this, rerender);
+    // The MKT CAP column is converted into the display currency: re-fill it as rates land.
+    connect(&services::FxRateService::instance(), &services::FxRateService::rates_changed, this, [this]() {
+        if (!peers_loaded_ || pt_uf::display_currency() == QLatin1String("USD"))
+            return;
+        for (int r = 0; r < peer_table_->rowCount(); ++r) {
+            const QTableWidgetItem* sym = peer_table_->item(r, 0);
+            QTableWidgetItem* cap = peer_table_->item(r, 2);
+            if (!sym || !cap)
+                continue;
+            const QString s = sym->data(kPeerSymbolRole).toString();
+            for (const auto& p : std::as_const(cached_peers_))
+                if (p.symbol == s) {
+                    pm_fill_cap(cap, p);
+                    break;
+                }
+        }
+    });
 }
 
 void EquityPeersTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    // The table still holds the previous symbol's peers; clear it so a failed load leaves
-    // an empty grid + the error line instead of another company's comparison.
     peer_table_->setRowCount(0);
     peers_loaded_ = false;
     cached_peers_.clear();
-    if (relative_lbl_) {
-        relative_lbl_->clear();
-        relative_lbl_->hide();
-    }
-    // A peer list restored from the saved session wins once over the curated defaults.
-    const QStringList curated = default_peers(symbol);
-    if (pending_peers_.isEmpty() && curated.isEmpty()) {
-        // No curated group: look up same-industry companies instead of comparing
-        // against market ETFs. The list fills in (and loads) when the lookup returns.
-        awaiting_suggested_peers_ = true;
-        peers_edit_->clear();
-        loading_overlay_->show_loading(tr("FINDING INDUSTRY PEERS…"));
-        services::equity::EquityResearchService::instance().fetch_suggested_peers(symbol);
+    relative_lbl_->clear();
+    relative_lbl_->hide();
+    update_scatter();
+    if (!pending_peers_.isEmpty()) {
+        // A peer list restored from the saved session wins once over discovery.
+        peers_edit_->setText(pending_peers_);
+        pending_peers_.clear();
+        loading_overlay_->show_loading(tr("LOADING PEERS…"));
+        on_load_clicked();
         return;
     }
-    awaiting_suggested_peers_ = false;
-    peers_edit_->setText(pending_peers_.isEmpty() ? curated.join(", ") : pending_peers_);
-    pending_peers_.clear();
-    loading_overlay_->show_loading(tr("LOADING PEERS…"));
-    on_load_clicked();
+    find_peers();
+}
+
+void EquityPeersTab::find_peers() {
+    if (current_symbol_.isEmpty())
+        return;
+    // Same industry on the subject's own market first (BT for Vodafone, Honda for Toyota),
+    // then the industry's global leaders — no hard-coded lists, no market ETFs.
+    awaiting_suggested_peers_ = true;
+    peers_edit_->clear();
+    loading_overlay_->show_loading(tr("FINDING INDUSTRY PEERS…"));
+    services::equity::EquityResearchService::instance().fetch_suggested_peers(current_symbol_, 7);
 }
 
 void EquityPeersTab::build_ui() {
     setObjectName(QStringLiteral("equityPeersTab"));
-    // One stylesheet for the tab; children are styled by objectName.
-    setStyleSheet(
-        QString("#equityPeersTab { background:%1; }"
-                "QFrame#peersCtrl { background:%2; border:1px solid %3; }"
-                "QLabel { background:transparent; border:0; }"
-                "QLabel#peersCaption { color:%4; font-size:10px; font-weight:700; letter-spacing:1px; }"
-                "QLineEdit#peersEdit { background:%5; color:%6; border:1px solid %3; padding:4px 10px; font-size:11px; }"
-                "QLineEdit#peersEdit:focus { border-color:%7; }"
-                "QPushButton#peersLoad { background:%7; color:%1; border:0; padding:5px 18px; font-size:10px;"
-                " font-weight:700; }"
-                "QPushButton#peersLoad:hover { background:%8; }"
-                "QLabel#peersStatus { color:%4; font-size:11px; padding:4px; }"
-                "QLabel#peersLegend, QLabel#peersUnits { color:%9; font-size:10px; }"
-                "QLabel#peersDotGood { color:%10; font-size:10px; } QLabel#peersDotBad { color:%11; font-size:10px; }"
-                "QLabel#peersDotNeutral { color:%12; font-size:10px; } QLabel#peersDotInfo { color:%13; font-size:10px; }"
-                "QTableWidget { background:%2; alternate-background-color:%1; gridline-color:%3; color:%6; border:0;"
-                " font-size:11px; }"
-                "QHeaderView::section { background:%5; color:%4; font-size:9px; font-weight:700; padding:5px 4px;"
-                " border:0; border-bottom:1px solid %3; letter-spacing:1px; }"
-                "QTableWidget::item { padding:2px 6px; }")
-            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(),
-                 ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(), ui::colors::AMBER_DIM(),
-                 ui::colors::TEXT_TERTIARY())
-            .arg(ui::colors::POSITIVE(), ui::colors::NEGATIVE(), ui::colors::WARNING(), ui::colors::CYAN()));
-
+    er_ui::apply_style(this, []() {
+        return QStringLiteral("#equityPeersTab { background:%1; }"
+                              "QLineEdit#peersEdit { background:%2; color:%3; border:1px solid %4; padding:4px 10px;"
+                              " font-size:%5px; }"
+                              "QComboBox { background:%2; color:%3; border:1px solid %4; padding:2px 6px; font-size:%5px; }")
+                   .arg(ui::colors::BG_BASE(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                        ui::colors::BORDER_DIM(), ui::fonts::px(-3)) +
+               er_ui::stylesheet();
+    });
     loading_overlay_ = new ui::LoadingOverlay(this);
     auto* vl = new QVBoxLayout(this);
-    vl->setContentsMargins(12, 12, 12, 12);
-    vl->setSpacing(10);
+    vl->setContentsMargins(10, 10, 10, 10);
+    vl->setSpacing(8);
 
-    // ── Controls row ──────────────────────────────────────────────────────────
-    auto* ctrl = new QFrame(this);
-    ctrl->setObjectName(QStringLiteral("peersCtrl"));
-    auto* hl = new QHBoxLayout(ctrl);
-    hl->setContentsMargins(12, 8, 12, 8);
-    hl->setSpacing(10);
-
-    peers_caption_ = new QLabel(tr("PEERS (comma-separated):"), ctrl);
-    peers_caption_->setObjectName(QStringLiteral("peersCaption"));
+    auto* hl = new QHBoxLayout;
+    hl->setSpacing(8);
+    peers_caption_ = new QLabel(this);
+    peers_caption_->setObjectName(QStringLiteral("erKey"));
     hl->addWidget(peers_caption_);
-
-    peers_edit_ = new QLineEdit(ctrl);
+    peers_edit_ = new QLineEdit(this);
     peers_edit_->setObjectName(QStringLiteral("peersEdit"));
-    peers_edit_->setPlaceholderText(tr("MSFT, GOOGL, META — then Enter"));
     connect(peers_edit_, &QLineEdit::returnPressed, this, &EquityPeersTab::on_load_clicked);
     hl->addWidget(peers_edit_, 1);
-
-    load_btn_ = new QPushButton(tr("LOAD"), ctrl);
-    load_btn_->setObjectName(QStringLiteral("peersLoad"));
+    load_btn_ = new QPushButton(this);
+    load_btn_->setObjectName(QStringLiteral("erBtn"));
     load_btn_->setCursor(Qt::PointingHandCursor);
     connect(load_btn_, &QPushButton::clicked, this, &EquityPeersTab::on_load_clicked);
     hl->addWidget(load_btn_);
-    vl->addWidget(ctrl);
+    find_btn_ = new QPushButton(this);
+    find_btn_->setObjectName(QStringLiteral("erBtn"));
+    find_btn_->setCursor(Qt::PointingHandCursor);
+    connect(find_btn_, &QPushButton::clicked, this, &EquityPeersTab::find_peers);
+    hl->addWidget(find_btn_);
+    export_btn_ = new QPushButton(this);
+    export_btn_->setObjectName(QStringLiteral("erBtn"));
+    export_btn_->setCursor(Qt::PointingHandCursor);
+    connect(export_btn_, &QPushButton::clicked, this, [this]() {
+        if (peer_table_->rowCount() == 0)
+            return;
+        QStringList headers;
+        for (int c = 0; c < peer_table_->columnCount(); ++c)
+            headers << peer_table_->horizontalHeaderItem(c)->text();
+        QVector<QStringList> rows;
+        for (int r = 0; r < peer_table_->rowCount(); ++r) {
+            QStringList row;
+            for (int c = 0; c < peer_table_->columnCount(); ++c) {
+                auto* it = peer_table_->item(r, c);
+                const QVariant raw = it ? it->data(er_ui::kRawRole) : QVariant();
+                row << (raw.isValid() && raw.metaType().id() == QMetaType::Double ? er_ui::csv_number(raw.toDouble())
+                                                                                   : (it ? it->text() : QString()));
+            }
+            rows << row;
+        }
+        er_ui::export_csv(this, current_symbol_ + QStringLiteral("_peers"), headers, rows);
+    });
+    hl->addWidget(export_btn_);
+    vl->addLayout(hl);
 
-    // ── Status ────────────────────────────────────────────────────────────────
-    status_label_ = new QLabel(tr("Loading peer data…"), this);
-    status_label_->setObjectName(QStringLiteral("peersStatus"));
+    status_label_ = new QLabel(this);
+    status_label_->setObjectName(QStringLiteral("erNote"));
+    status_label_->setWordWrap(true);
     status_label_->hide();
     vl->addWidget(status_label_);
 
-    // ── Table ─────────────────────────────────────────────────────────────────
-    peer_table_ = new QTableWidget(this);
+    auto* split = new QSplitter(Qt::Vertical, this);
+    peer_table_ = new QTableWidget(split);
+    peer_table_->setObjectName(QStringLiteral("erTable"));
     peer_table_->setAlternatingRowColors(true);
     peer_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     peer_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    peer_table_->verticalHeader()->setDefaultSectionSize(26);
     peer_table_->verticalHeader()->hide();
+    ui::metrics::follow_row_height(peer_table_, 26);
     peer_table_->horizontalHeader()->setStretchLastSection(false);
     peer_table_->setSortingEnabled(true);
     peer_table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    peer_table_->setToolTip(tr("Double-click a row to research that company · right-click for more"));
     connect(peer_table_, &QWidget::customContextMenuRequested, this, &EquityPeersTab::show_row_menu);
     connect(peer_table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
         const QString sym = symbol_at_row(row);
         if (!sym.isEmpty() && sym != current_symbol_)
             emit research_requested(sym, false);
     });
-    vl->addWidget(peer_table_, 1);
+    split->addWidget(peer_table_);
 
-    // ── Relative valuation vs the peer median ────────────────────────────────
-    relative_lbl_ = new QLabel(this);
-    relative_lbl_->setObjectName(QStringLiteral("peersStatus"));
+    auto* lower = new QWidget(split);
+    auto* lower_l = new QHBoxLayout(lower);
+    lower_l->setContentsMargins(0, 0, 0, 0);
+    lower_l->setSpacing(8);
+    auto* left = new QVBoxLayout;
+    relative_lbl_ = new QLabel(lower);
+    relative_lbl_->setObjectName(QStringLiteral("erValue"));
     relative_lbl_->setWordWrap(true);
     relative_lbl_->setTextFormat(Qt::RichText);
     relative_lbl_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     relative_lbl_->hide();
-    vl->addWidget(relative_lbl_);
-
-    // ── Legend + units ────────────────────────────────────────────────────────
-    auto* legend = new QWidget(this);
-    auto* leg_hl = new QHBoxLayout(legend);
-    leg_hl->setContentsMargins(0, 4, 0, 0);
-    leg_hl->setSpacing(16);
-    auto make_leg = [&](const char* dot_name, const QString& text) {
-        auto* dot = new QLabel(QStringLiteral("●"), legend);
-        dot->setObjectName(QLatin1String(dot_name));
-        auto* t = new QLabel(text, legend);
-        t->setObjectName(QStringLiteral("peersLegend"));
-        leg_hl->addWidget(dot);
-        leg_hl->addWidget(t);
-        legend_text_lbls_.append(t);
-    };
-    make_leg("peersDotGood", tr("Positive / Good"));
-    make_leg("peersDotBad", tr("Negative / High Risk"));
-    make_leg("peersDotNeutral", tr("Neutral"));
-    make_leg("peersDotInfo", tr("Symbol / Info"));
-    leg_hl->addStretch();
-    vl->addWidget(legend);
-
-    units_lbl_ = new QLabel(this);
-    units_lbl_->setObjectName(QStringLiteral("peersUnits"));
+    left->addWidget(relative_lbl_);
+    units_lbl_ = new QLabel(lower);
+    units_lbl_->setObjectName(QStringLiteral("erNote"));
     units_lbl_->setWordWrap(true);
-    vl->addWidget(units_lbl_);
+    left->addWidget(units_lbl_);
+    left->addStretch();
+    lower_l->addLayout(left, 1);
+    auto* right = new QVBoxLayout;
+    auto* sel = new QHBoxLayout;
+    scatter_x_ = new QComboBox(lower);
+    scatter_y_ = new QComboBox(lower);
+    sel->addWidget(scatter_x_);
+    sel->addWidget(scatter_y_);
+    sel->addStretch();
+    right->addLayout(sel);
+    scatter_ = new PeerScatterChart(lower);
+    right->addWidget(scatter_, 1);
+    lower_l->addLayout(right, 1);
+    connect(scatter_x_, &QComboBox::currentIndexChanged, this, [this]() { update_scatter(); });
+    connect(scatter_y_, &QComboBox::currentIndexChanged, this, [this]() { update_scatter(); });
+    split->addWidget(lower);
+    split->setStretchFactor(0, 3);
+    split->setStretchFactor(1, 2);
+    vl->addWidget(split, 1);
     retranslateUi();
 }
 
@@ -215,7 +464,7 @@ void EquityPeersTab::on_load_clicked() {
     if (current_symbol_.isEmpty())
         return;
     QStringList peers;
-    for (const auto& p : peers_edit_->text().split(','))
+    for (const auto& p : peers_edit_->text().split(QLatin1Char(',')))
         if (!p.trimmed().isEmpty())
             peers.append(p.trimmed().toUpper());
     peers.removeDuplicates();
@@ -227,137 +476,122 @@ void EquityPeersTab::on_load_clicked() {
         return;
     }
     requested_symbols_ = QStringList{current_symbol_} + peers;
+    loading_overlay_->show_loading(tr("LOADING PEERS…"));
     status_label_->setText(tr("Loading peer data…"));
+    status_label_->setToolTip(QString());
     status_label_->show();
     services::equity::EquityResearchService::instance().fetch_peers(current_symbol_, peers);
 }
 
 void EquityPeersTab::on_peers_loaded(QVector<services::equity::PeerData> peers) {
-    // The signal has no symbol/request id: a slow response for the previous symbol (or an MCP
-    // peers call) must not overwrite the table. Every returned row must belong to our request.
-    for (const auto& p : peers) {
+    for (const auto& p : peers)
         if (!requested_symbols_.contains(p.symbol, Qt::CaseInsensitive))
-            return;
-    }
+            return; // another request's answer (Valuation's peer medians, an older list)
     loading_overlay_->hide_loading();
     cached_peers_ = peers;
     peers_loaded_ = true;
     populate_table(peers);
     update_relative_summary(peers);
-    if (peers.isEmpty()) {
-        status_label_->setText(tr("No data came back for %1 — check the tickers (yfinance form, e.g. TCS.NS).")
-                                   .arg(requested_symbols_.join(QStringLiteral(", "))));
-        status_label_->show();
-    } else {
-        QStringList missing;
-        for (const auto& s : requested_symbols_) {
-            bool found = false;
-            for (const auto& p : peers)
-                found = found || p.symbol.compare(s, Qt::CaseInsensitive) == 0;
-            if (!found)
-                missing << s;
-        }
-        status_label_->setText(missing.isEmpty() ? QString() : tr("No data for: %1").arg(missing.join(QStringLiteral(", "))));
-        status_label_->setVisible(!missing.isEmpty());
+    update_scatter();
+    QStringList missing;
+    for (const auto& s : requested_symbols_) {
+        bool found = false;
+        for (const auto& p : peers)
+            found = found || p.symbol.compare(s, Qt::CaseInsensitive) == 0;
+        if (!found)
+            missing << s;
     }
+    status_label_->setText(peers.isEmpty() ? tr("No data came back for %1 — check the tickers (Yahoo form, e.g. TCS.NS).")
+                                                 .arg(requested_symbols_.join(QStringLiteral(", ")))
+                                           : (missing.isEmpty() ? QString() : tr("No data for: %1").arg(missing.join(QStringLiteral(", ")))));
+    status_label_->setVisible(peers.isEmpty() || !missing.isEmpty());
 }
 
 void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& peers) {
-    // CHG% / REV GR / EPS GR were fetched for every peer but never shown — growth is what
-    // justifies a premium multiple, so it belongs next to them.
-    const QStringList headers = {tr("SYMBOL"),  tr("MKT CAP"),   tr("PRICE"),     tr("CHG%"),   tr("P/E"),
-                                 tr("FWD P/E"), tr("P/B"),       tr("P/S"),       tr("PEG"),    tr("ROE"),
-                                 tr("ROA"),     tr("GROSS MGN"), tr("NET MGN"),   tr("OP MGN"), tr("REV GR"),
-                                 tr("EPS GR"),  tr("D/E"),       tr("DIV YIELD"), tr("BETA")};
-
+    QStringList headers = {tr("SYMBOL"), tr("NAME"), pt_uf::header(tr("MKT CAP")), tr("PRICE"), tr("CHG%")};
+    for (const auto& m : kPeerMetrics)
+        headers << QCoreApplication::translate("EquityPeersTab", m.header);
     peer_table_->setSortingEnabled(false);
+    peer_table_->clear();
     peer_table_->setColumnCount(static_cast<int>(headers.size()));
     peer_table_->setRowCount(static_cast<int>(peers.size()));
     peer_table_->setHorizontalHeaderLabels(headers);
 
-    const QColor kGray(ui::colors::TEXT_TERTIARY());
-    // Lower is better: green ≤ good, amber ≤ warn, red above; missing (≤ 0) is grey.
-    auto color_ratio = [&kGray](double v, double good, double warn) -> QColor {
-        if (v <= 0.0)
-            return kGray;
-        if (v <= good)
-            return QColor(ui::colors::POSITIVE());
-        if (v <= warn)
-            return QColor(ui::colors::WARNING());
-        return QColor(ui::colors::NEGATIVE());
+    // Percentile of each value within the group (0 = lowest, 1 = highest) for the bars.
+    auto percentile = [&](double v, double (*get)(const PD&), PeerMetric::Fmt f) {
+        int below = 0, n = 0;
+        for (const auto& q : peers) {
+            const double x = get(q);
+            if (!pm_present(x, f))
+                continue;
+            ++n;
+            if (x < v)
+                ++below;
+        }
+        return n > 1 ? static_cast<double>(below) / (n - 1) : std::nan("");
     };
-    auto color_sign = [&kGray](double v) -> QColor {
-        if (v == 0.0)
-            return kGray;
-        return QColor(v > 0.0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-    };
-    // Sort by the raw figure, never by the formatted text ("3.95T" vs "890.20B").
-    auto set_cell = [&](int row, int col, const QString& text, double sort_value, const QColor& fg) {
-        auto* item = new ui::NumericTableWidgetItem(text, sort_value);
+    auto num_item = [](const QString& text, double sort, double raw) {
+        auto* item = new ui::NumericTableWidgetItem(text, sort);
         item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        if (fg.isValid())
-            item->setForeground(fg);
-        peer_table_->setItem(row, col, item);
+        item->setData(er_ui::kRawRole, std::isfinite(raw) ? QVariant(raw) : QVariant(QString()));
+        return item;
     };
-    auto pct = [](double fraction) {
-        return fraction != 0.0 ? equity_fmt::pct(fraction, 1) : equity_fmt::dash();
-    };
-
-    QFont bold;
+    QFont bold = peer_table_->font();
     bold.setBold(true);
     for (int r = 0; r < peers.size(); ++r) {
         const auto& p = peers[r];
+        const bool subject = p.symbol.compare(current_symbol_, Qt::CaseInsensitive) == 0;
         auto* sym_item = new QTableWidgetItem(p.symbol);
-        sym_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        sym_item->setForeground(p.symbol == current_symbol_ ? QColor(ui::colors::AMBER()) : QColor(ui::colors::CYAN()));
+        sym_item->setForeground(subject ? QColor(ui::colors::AMBER()) : QColor(ui::colors::CYAN()));
         sym_item->setFont(bold);
-        sym_item->setData(kSymbolRole, p.symbol);
-        if (!p.name.isEmpty())
-            sym_item->setToolTip(p.sector.isEmpty() ? p.name : QStringLiteral("%1 · %2").arg(p.name, p.sector));
+        sym_item->setData(kPeerSymbolRole, p.symbol);
+        sym_item->setToolTip(QStringLiteral("%1\n%2 · %3 · %4").arg(p.name, p.industry, p.country, p.exchange));
         peer_table_->setItem(r, 0, sym_item);
-
-        set_cell(r, 1, p.market_cap > 0.0 ? equity_fmt::large(p.market_cap) : equity_fmt::dash(), p.market_cap,
-                 QColor(ui::colors::CYAN()));
-        set_cell(r, 2, peers_fmt(p.price, 2), p.price, QColor(ui::colors::CYAN()));
-        // change_pct arrives in percent (yfinance regularMarketChangePercent).
-        set_cell(r, 3, p.change_pct != 0.0 ? equity_fmt::pct(p.change_pct / 100.0, 2, true) : equity_fmt::dash(),
-                 p.change_pct, color_sign(p.change_pct));
-        set_cell(r, 4, peers_fmt(p.pe_ratio, 1, QStringLiteral("x")), p.pe_ratio, color_ratio(p.pe_ratio, 15, 30));
-        set_cell(r, 5, peers_fmt(p.forward_pe, 1, QStringLiteral("x")), p.forward_pe,
-                 color_ratio(p.forward_pe, 15, 30));
-        set_cell(r, 6, peers_fmt(p.price_to_book, 2, QStringLiteral("x")), p.price_to_book,
-                 color_ratio(p.price_to_book, 2, 5));
-        set_cell(r, 7, peers_fmt(p.price_to_sales, 2, QStringLiteral("x")), p.price_to_sales,
-                 color_ratio(p.price_to_sales, 3, 8));
-        set_cell(r, 8, peers_fmt(p.peg_ratio, 2), p.peg_ratio, color_ratio(p.peg_ratio, 1, 2));
-        set_cell(r, 9, pct(p.roe), p.roe, color_sign(p.roe));
-        set_cell(r, 10, pct(p.roa), p.roa, color_sign(p.roa));
-        set_cell(r, 11, pct(p.gross_margin), p.gross_margin, color_sign(p.gross_margin));
-        set_cell(r, 12, pct(p.profit_margin), p.profit_margin, color_sign(p.profit_margin));
-        set_cell(r, 13, pct(p.operating_margin), p.operating_margin, color_sign(p.operating_margin));
-        set_cell(r, 14, pct(p.revenue_growth), p.revenue_growth, color_sign(p.revenue_growth));
-        set_cell(r, 15, pct(p.earnings_growth), p.earnings_growth, color_sign(p.earnings_growth));
-        // yfinance reports debtToEquity and dividendYield in PERCENT (D/E 152 = 1.52x, yield
-        // 0.33 = 0.33%) — normalise to the ratio / fraction the thresholds and pct() expect.
-        const double de = p.debt_to_equity / 100.0;
-        set_cell(r, 16, peers_fmt(de, 2, QStringLiteral("x")), de, color_ratio(de, 0.5, 2.0));
-        const double dy = p.dividend_yield / 100.0;
-        set_cell(r, 17, pct(dy), dy, dy > 0.0 ? QColor(ui::colors::POSITIVE()) : kGray);
-        set_cell(r, 18, peers_fmt(p.beta, 2), p.beta,
-                 p.beta == 0.0 ? kGray
-                               : (p.beta > 0.0 && p.beta <= 1.5 ? QColor(ui::colors::POSITIVE())
-                                                                : QColor(ui::colors::NEGATIVE())));
+        auto* name = new QTableWidgetItem(p.name);
+        name->setToolTip(p.name);
+        peer_table_->setItem(r, 1, name);
+        // Market caps compare in one currency (pm_fill_cap); the local figure in the tooltip.
+        auto* cap = num_item(QString(), p.market_cap_usd, std::nan(""));
+        pm_fill_cap(cap, p);
+        peer_table_->setItem(r, 2, cap);
+        peer_table_->setItem(r, 3, num_item(p.price > 0 ? equity_fmt::price(p.price, p.currency) : equity_fmt::dash(),
+                                            p.price, p.price > 0 ? p.price : std::nan("")));
+        auto* chg = num_item(p.change_pct != 0.0 ? pt_uf::pct(p.change_pct, 2, true) : equity_fmt::dash(), p.change_pct,
+                             p.change_pct);
+        if (p.change_pct != 0.0)
+            chg->setForeground(QColor(p.change_pct > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        peer_table_->setItem(r, 4, chg);
+        for (int m = 0; m < static_cast<int>(std::size(kPeerMetrics)); ++m) {
+            const auto& mt = kPeerMetrics[m];
+            const double v = mt.get(p);
+            const bool has = pm_present(v, mt.fmt);
+            auto* item = num_item(has ? pm_text(v, mt.fmt) : equity_fmt::dash(), has ? v : -1e300, has ? v : std::nan(""));
+            item->setData(kPeerPercentileRole, has ? percentile(v, mt.get, mt.fmt) : std::nan(""));
+            if (subject)
+                item->setFont(bold);
+            peer_table_->setItem(r, kPeerFixedCols + m, item);
+        }
     }
-
+    // Percentile bars: rank within this peer group, neutral colour (no absolute thresholds).
+    for (int c = 0; c < peer_table_->columnCount(); ++c)
+        peer_table_->setItemDelegateForColumn(c, nullptr);
+    qDeleteAll(bar_delegates_);
+    bar_delegates_.clear();
+    for (int m = 0; m < static_cast<int>(std::size(kPeerMetrics)); ++m) {
+        auto* d = new ui::BarCellDelegate(ui::BarCellDelegate::Mode::Bar, peer_table_);
+        d->set_value_role(kPeerPercentileRole);
+        d->set_range(0.0, 1.0);
+        peer_table_->setItemDelegateForColumn(kPeerFixedCols + m, d);
+        bar_delegates_ << d;
+    }
     peer_table_->resizeColumnsToContents();
+    peer_table_->setColumnWidth(1, std::min(peer_table_->columnWidth(1), ui::metrics::width(200)));
     peer_table_->setSortingEnabled(true);
 }
 
 void EquityPeersTab::update_relative_summary(const QVector<services::equity::PeerData>& peers) {
-    if (!relative_lbl_)
-        return;
-    const services::equity::PeerData* subj = nullptr;
-    QVector<const services::equity::PeerData*> others;
+    const PD* subj = nullptr;
+    QVector<const PD*> others;
     for (const auto& p : peers) {
         if (p.symbol.compare(current_symbol_, Qt::CaseInsensitive) == 0)
             subj = &p;
@@ -369,93 +603,102 @@ void EquityPeersTab::update_relative_summary(const QVector<services::equity::Pee
         relative_lbl_->hide();
         return;
     }
-
-    // Median over the peers that report the figure (yfinance sends a missing ratio as 0;
-    // multiples must also be positive — a negative P/E is "no earnings", not "cheap").
-    auto median_of = [&others](double services::equity::PeerData::*field, bool positive_only, double scale) {
-        QVector<double> v;
-        for (const auto* p : others) {
-            const double x = p->*field * scale;
-            if (std::isfinite(x) && x != 0.0 && (!positive_only || x > 0.0))
-                v.append(x);
-        }
-        if (v.size() < 2)
-            return std::nan("");
-        std::sort(v.begin(), v.end());
-        const qsizetype n = v.size();
-        return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
-    };
-    const QString pos = ui::colors::POSITIVE();
-    const QString neg = ui::colors::NEGATIVE();
+    const QString good = ui::colors::SUCCESS(), bad = ui::colors::DANGER();
     QStringList parts;
-    // Multiple: premium (above median) reads as expensive.
-    auto multiple = [&](const QString& label, double services::equity::PeerData::*field) {
-        const double med = median_of(field, true, 1.0);
-        const double own = subj->*field;
-        if (!std::isfinite(med) || own <= 0.0)
+    auto med = [&](double (*get)(const PD&), PeerMetric::Fmt f) {
+        QVector<double> v;
+        for (const auto* p : others)
+            if (pm_present(get(*p), f))
+                v << get(*p);
+        return pm_median(v);
+    };
+    // Multiples: a premium to the median reads as "dearer".
+    auto multiple = [&](const QString& label, double (*get)(const PD&)) {
+        const double m = med(get, PeerMetric::Multiple), own = get(*subj);
+        if (!std::isfinite(m) || own <= 0.0)
             return;
-        const double prem = own / med - 1.0;
-        parts << QStringLiteral("<b>%1</b> %2x vs %3x <span style='color:%4'>(%5)</span>")
-                     .arg(label, QString::number(own, 'f', 1), QString::number(med, 'f', 1), prem > 0 ? neg : pos,
+        const double prem = own / m - 1.0;
+        parts << tr("<b>%1</b> %2 vs %3 <span style='color:%4'>(%5)</span>")
+                     .arg(label, equity_fmt::multiple(own, 1), equity_fmt::multiple(m, 1), prem > 0 ? bad : good,
                           equity_fmt::pct(prem, 0, true));
     };
-    // Rate: above median reads as better.
-    auto rate = [&](const QString& label, double services::equity::PeerData::*field) {
-        const double med = median_of(field, false, 1.0);
-        const double own = subj->*field;
-        if (!std::isfinite(med) || own == 0.0)
+    auto rate = [&](const QString& label, double (*get)(const PD&)) {
+        const double m = med(get, PeerMetric::Percent), own = get(*subj);
+        if (!std::isfinite(m) || own == 0.0)
             return;
-        const double diff_pp = (own - med) * 100.0;
-        parts << QStringLiteral("<b>%1</b> %2 vs %3 <span style='color:%4'>(%5%6 pp)</span>")
-                     .arg(label, equity_fmt::pct(own, 1), equity_fmt::pct(med, 1), diff_pp >= 0 ? pos : neg,
-                          diff_pp >= 0 ? QStringLiteral("+") : QString(), QString::number(diff_pp, 'f', 1));
+        const double diff = (own - m) * 100.0;
+        parts << tr("<b>%1</b> %2 vs %3 <span style='color:%4'>(%5)</span>")
+                     .arg(label, equity_fmt::pct(own, 1), equity_fmt::pct(m, 1), diff >= 0 ? good : bad, pt_uf::pp(diff, 1));
     };
-    using PD = services::equity::PeerData;
-    multiple(tr("P/E"), &PD::pe_ratio);
-    multiple(tr("Fwd P/E"), &PD::forward_pe);
-    multiple(tr("P/S"), &PD::price_to_sales);
-    multiple(tr("P/B"), &PD::price_to_book);
-    rate(tr("ROE"), &PD::roe);
-    rate(tr("Net margin"), &PD::profit_margin);
-    rate(tr("Rev growth"), &PD::revenue_growth);
+    multiple(tr("P/E"), pm_pe);
+    multiple(tr("Fwd P/E"), pm_fpe);
+    multiple(tr("EV/EBITDA"), pm_eve);
+    multiple(tr("P/B"), pm_pb);
+    rate(tr("ROE"), pm_roe);
+    rate(tr("Net margin"), pm_nm);
+    rate(tr("Rev growth"), pm_rg);
 
-    // Price the subject would trade at on the peers' median multiples (each multiple
-    // scales the price linearly), and their average as a relative-value anchor.
+    // Implied price on the peers' median multiples (each scales the price linearly), in the
+    // subject's own quote currency.
     QStringList implied;
-    double implied_sum = 0.0;
-    int implied_n = 0;
-    auto implied_at = [&](const QString& label, double PD::*field) {
-        const double med = median_of(field, true, 1.0);
-        const double own = subj->*field;
-        if (!std::isfinite(med) || own <= 0.0 || subj->price <= 0.0)
+    double sum = 0.0;
+    int n = 0;
+    auto implied_at = [&](const QString& label, double (*get)(const PD&)) {
+        const double m = med(get, PeerMetric::Multiple), own = get(*subj);
+        if (!std::isfinite(m) || own <= 0.0 || subj->price <= 0.0)
             return;
-        const double px = subj->price * med / own;
-        implied << QStringLiteral("%1 %2").arg(label, QString::number(px, 'f', 2));
-        implied_sum += px;
-        ++implied_n;
+        const double px = subj->price * m / own;
+        implied << QStringLiteral("%1 %2").arg(label, equity_fmt::price(px, subj->currency));
+        sum += px;
+        ++n;
     };
-    implied_at(tr("P/E"), &PD::pe_ratio);
-    implied_at(tr("Fwd P/E"), &PD::forward_pe);
-    implied_at(tr("P/S"), &PD::price_to_sales);
-
+    implied_at(tr("P/E"), pm_pe);
+    implied_at(tr("Fwd P/E"), pm_fpe);
+    implied_at(tr("EV/EBITDA"), pm_eve);
     QString text = tr("<b>%1 vs peer median</b> (%n peer(s)): ", "", static_cast<int>(others.size()))
                        .arg(subj->symbol.toHtmlEscaped()) +
                    parts.join(QStringLiteral(" · "));
-    if (implied_n > 0) {
-        const double avg = implied_sum / implied_n;
-        const double gap = avg / subj->price - 1.0;
+    if (n > 0) {
+        const double avg = sum / n, gap = avg / subj->price - 1.0;
         text += tr("<br><b>Implied price at peer-median multiples:</b> %1 — average <b>%2</b> "
                    "<span style='color:%3'>(%4 vs %5)</span>")
-                    .arg(implied.join(QStringLiteral(" · ")), QString::number(avg, 'f', 2), gap >= 0 ? pos : neg,
-                         equity_fmt::pct(gap, 1, true), QString::number(subj->price, 'f', 2));
+                    .arg(implied.join(QStringLiteral(" · ")), equity_fmt::price(avg, subj->currency), gap >= 0 ? good : bad,
+                         equity_fmt::pct(gap, 1, true), equity_fmt::price(subj->price, subj->currency));
+        text += tr("<br><i>EV/EBITDA scales the price only approximately (net debt is held fixed).</i>");
     }
     relative_lbl_->setText(text);
-    relative_lbl_->setVisible(!parts.isEmpty() || implied_n > 0);
+    relative_lbl_->setVisible(!parts.isEmpty() || n > 0);
+}
+
+void EquityPeersTab::update_scatter() {
+    if (!scatter_ || !scatter_x_ || scatter_x_->count() == 0)
+        return;
+    const int xi = scatter_x_->currentData().toInt(), yi = scatter_y_->currentData().toInt();
+    auto metric = [](int i) -> const PeerMetric* {
+        return i >= 0 && i < static_cast<int>(std::size(kPeerMetrics)) ? &kPeerMetrics[i] : nullptr;
+    };
+    const PeerMetric* mx = metric(xi);
+    const PeerMetric* my = metric(yi);
+    if (!mx || !my)
+        return;
+    QVector<PeerScatterChart::Point> pts;
+    for (const auto& p : cached_peers_) {
+        const double x = mx->get(p), y = my->get(p);
+        if (!pm_present(x, mx->fmt) || !pm_present(y, my->fmt))
+            continue;
+        pts.append({p.symbol, x, y, p.symbol.compare(current_symbol_, Qt::CaseInsensitive) == 0});
+    }
+    const auto fx = mx->fmt, fy = my->fmt;
+    scatter_->set_points(pts, QCoreApplication::translate("EquityPeersTab", mx->header),
+                         QCoreApplication::translate("EquityPeersTab", my->header),
+                         [fx](double v) { return pm_text(v, fx); }, [fy](double v) { return pm_text(v, fy); });
+    scatter_->set_state(pts.size() >= 2 ? ui::PaintedChart::Ready : ui::PaintedChart::Empty,
+                        peers_loaded_ ? tr("Fewer than two peers report both metrics") : QString());
 }
 
 QString EquityPeersTab::symbol_at_row(int row) const {
     auto* it = peer_table_->item(row, 0);
-    return it ? it->data(kSymbolRole).toString() : QString();
+    return it ? it->data(kPeerSymbolRole).toString() : QString();
 }
 
 void EquityPeersTab::show_row_menu(const QPoint& pos) {
@@ -471,46 +714,31 @@ void EquityPeersTab::show_row_menu(const QPoint& pos) {
                 [this, sym]() { emit research_requested(sym, false); });
         connect(menu.addAction(tr("Price chart for %1").arg(sym)), &QAction::triggered, this,
                 [this, sym]() { emit research_requested(sym, true); });
+        connect(menu.addAction(tr("Remove %1 from the list").arg(sym)), &QAction::triggered, this, [this, sym]() {
+            QStringList keep;
+            for (const auto& p : peers_edit_->text().split(QLatin1Char(',')))
+                if (p.trimmed().compare(sym, Qt::CaseInsensitive) != 0 && !p.trimmed().isEmpty())
+                    keep << p.trimmed();
+            peers_edit_->setText(keep.join(QStringLiteral(", ")));
+            on_load_clicked();
+        });
         menu.addSeparator();
     }
     equity_links::add_open_in_actions(&menu, this, sym);
     menu.addSeparator();
-    connect(menu.addAction(tr("Copy symbol")), &QAction::triggered, this,
-            [sym]() { QApplication::clipboard()->setText(sym); });
+    connect(menu.addAction(tr("Copy symbol")), &QAction::triggered, this, [sym]() { QApplication::clipboard()->setText(sym); });
     menu.exec(peer_table_->viewport()->mapToGlobal(pos));
 }
 
 void EquityPeersTab::apply_peers(const QString& text) {
-    awaiting_suggested_peers_ = false; // an explicit list wins over a pending industry lookup
+    awaiting_suggested_peers_ = false;
     peers_edit_->setText(text);
     if (current_symbol_.isEmpty()) {
-        pending_peers_ = text; // set_symbol() applies and loads it once a symbol arrives
+        pending_peers_ = text;
         return;
     }
-    loading_overlay_->show_loading(tr("LOADING PEERS…"));
     on_load_clicked();
 }
-
-QStringList EquityPeersTab::default_peers(const QString& symbol) const {
-    static const QHash<QString, QStringList> kPeers = {
-        {"AAPL", {"MSFT", "GOOGL", "META", "AMZN", "NVDA"}},
-        {"MSFT", {"AAPL", "GOOGL", "AMZN", "ORCL", "CRM"}},
-        {"GOOGL", {"MSFT", "AAPL", "META", "AMZN", "NFLX"}},
-        {"AMZN", {"MSFT", "GOOGL", "AAPL", "WMT", "TGT"}},
-        {"NVDA", {"AMD", "INTC", "QCOM", "TSM", "AVGO"}},
-        {"META", {"GOOGL", "SNAP", "PINS", "MSFT", "AMZN"}},
-        {"TSLA", {"F", "GM", "NIO", "RIVN", "LCID"}},
-        {"JPM", {"BAC", "WFC", "GS", "MS", "C"}},
-        {"JNJ", {"PFE", "ABT", "MRK", "BMY", "ABBV"}},
-        {"XOM", {"CVX", "BP", "SHEL", "COP", "EOG"}},
-        {"RELIANCE.NS", {"TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "HINDUNILVR.NS"}},
-        {"TCS.NS", {"INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS", "RELIANCE.NS"}},
-    };
-    // No curated group: empty, and set_symbol() looks up same-industry peers instead.
-    return kPeers.value(symbol.toUpper());
-}
-
-// ── Re-translation ───────────────────────────────────────────────────────────
 
 void EquityPeersTab::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
@@ -519,24 +747,36 @@ void EquityPeersTab::changeEvent(QEvent* event) {
 }
 
 void EquityPeersTab::retranslateUi() {
-    if (peers_caption_)
-        peers_caption_->setText(tr("PEERS (comma-separated):"));
-    if (load_btn_)
-        load_btn_->setText(tr("LOAD"));
-    if (peers_edit_)
-        peers_edit_->setPlaceholderText(tr("MSFT, GOOGL, META — then Enter"));
-    const QStringList legend = {tr("Positive / Good"), tr("Negative / High Risk"), tr("Neutral"), tr("Symbol / Info")};
-    for (int i = 0; i < legend_text_lbls_.size() && i < legend.size(); ++i)
-        legend_text_lbls_[i]->setText(legend[i]);
-    if (units_lbl_)
-        units_lbl_->setText(tr("Trailing ratios from Yahoo Finance. Multiples in x; margins, returns and dividend "
-                               "yield in %; D/E = total debt ÷ equity (x). Market cap and price are in each "
-                               "listing's own currency."));
-    // Re-render from cached data so headers and dashes pick up the new locale.
+    peers_caption_->setText(tr("PEERS (comma-separated):"));
+    peers_edit_->setPlaceholderText(tr("e.g. BT-A.L, AAF.L — then Enter"));
+    load_btn_->setText(tr("LOAD"));
+    find_btn_->setText(tr("FIND INDUSTRY PEERS"));
+    find_btn_->setToolTip(tr("Same industry on this company's own market first, then the industry's global leaders"));
+    export_btn_->setText(tr("EXPORT CSV"));
+    units_lbl_->setText(tr("Trailing ratios from Yahoo Finance. Market caps compare in your display currency (local "
+                           "figure on hover); "
+                           "prices stay in each listing's own currency. Bars show each company's rank within this group "
+                           "(longest = highest value), not a judgement."));
+    for (QComboBox* box : {scatter_x_, scatter_y_}) {
+        const QSignalBlocker block(box);
+        const int keep = box->currentIndex();
+        box->clear();
+        for (int i = 0; i < static_cast<int>(std::size(kPeerMetrics)); ++i)
+            if (kPeerMetrics[i].scatter)
+                box->addItem(QCoreApplication::translate("EquityPeersTab", kPeerMetrics[i].header), i);
+        box->setCurrentIndex(keep >= 0 ? keep : 0);
+    }
+    if (scatter_x_->currentIndex() < 0 || scatter_x_->currentData().toInt() == scatter_y_->currentData().toInt()) {
+        const QSignalBlocker bx(scatter_x_);
+        const QSignalBlocker by(scatter_y_);
+        scatter_x_->setCurrentIndex(std::max(0, scatter_x_->findData(4))); // EV/EBITDA
+        scatter_y_->setCurrentIndex(std::max(0, scatter_y_->findData(6))); // ROE
+    }
     if (peers_loaded_) {
         populate_table(cached_peers_);
         update_relative_summary(cached_peers_);
     }
+    update_scatter();
 }
 
 QString EquityPeersTab::peers_text() const {
@@ -544,7 +784,6 @@ QString EquityPeersTab::peers_text() const {
 }
 
 void EquityPeersTab::set_peers_text(const QString& text) {
-    // Tabs load lazily: keep the restored list until set_symbol() runs for the first time.
     pending_peers_ = text.trimmed();
     if (peers_edit_)
         peers_edit_->setText(text);

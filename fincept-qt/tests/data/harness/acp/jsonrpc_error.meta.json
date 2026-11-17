@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "(JSON-RPC error response to session/prompt)",
+  "source": "docs",
+  "url": "https://agentclientprotocol.com/protocol/schema",
+  "note": "Transcribed from the ACP / JSON-RPC 2.0 shapes; not a recording."
+}

@@ -8,25 +8,21 @@ Complete implementation of portfolio construction strategies including:
 - Mean-Variance Optimization
 """
 
+import importlib.util
 import json
+import os
 import sys
 from typing import Dict, List, Any, Optional, Union
 import warnings
 warnings.filterwarnings('ignore')
 
-# Check Qlib availability
-QLIB_AVAILABLE = False
-try:
-    import qlib
-    from qlib.contrib.strategy.signal_strategy import (
-        BaseSignalStrategy, TopkDropoutStrategy,
-        WeightStrategyBase, EnhancedIndexingStrategy
-    )
-    from qlib.backtest import executor, exchange
-    from qlib.backtest.position import Position
-    QLIB_AVAILABLE = True
-except ImportError:
-    QLIB_AVAILABLE = False
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
+
+# Nothing below calls into qlib: the strategy configs only NAME qlib classes. Importing
+# it (qlib + its backtest stack, several seconds per call) just to set this flag made
+# every Strategy Builder click pay the cold start; whether it is installed is enough.
+QLIB_AVAILABLE = importlib.util.find_spec("qlib") is not None
 
 try:
     import pandas as pd
@@ -110,6 +106,80 @@ class StrategyService:
             }
         except Exception as e:
             return {"success": False, "error": f"Failed to create TopK strategy: {str(e)}"}
+
+    def build_topk_dropout_book(self,
+                                signal: List[float],
+                                assets: Optional[List[str]] = None,
+                                topk: int = 50,
+                                n_drop: int = 5) -> Dict[str, Any]:
+        """
+        Rank one cross-section of signal values the way Qlib's TopkDropoutStrategy does.
+
+        TopkDropoutStrategy holds the `topk` best-scored names and, on every rebalance,
+        sells the `n_drop` worst-ranked holdings and buys the best-ranked names it does
+        not hold. Starting from cash, the first book is the top-k by signal, equally
+        weighted; the lowest-ranked `n_drop` of it are the first to go if the ranking
+        holds. Pure ranking - no Qlib data is needed.
+
+        Args:
+            signal: One score per asset (higher = more attractive)
+            assets: Optional names, same order and length as `signal`
+            topk: Number of names to hold
+            n_drop: Names replaced per rebalance
+
+        Returns:
+            Selection, equal weights, drop candidates and the full ranking
+        """
+        values = [float(v) for v in (signal or [])]
+        if not values:
+            return {"success": False, "error": "signal is empty"}
+        if any(v != v or v in (float('inf'), float('-inf')) for v in values):
+            return {"success": False, "error": "signal contains NaN or infinite values"}
+        topk = int(topk)
+        n_drop = int(n_drop)
+        if topk < 1:
+            return {"success": False, "error": f"topk must be at least 1 (got {topk})"}
+        if n_drop < 0 or n_drop >= topk:
+            return {"success": False, "error": f"n_drop must be between 0 and topk - 1 (got {n_drop})"}
+
+        names = [str(a) for a in assets] if assets and len(assets) == len(values) else []
+        if not names or len(set(names)) != len(names):
+            names = [f"Asset {i + 1}" for i in range(len(values))]
+
+        order = sorted(range(len(values)), key=lambda i: values[i], reverse=True)
+        k = min(topk, len(values))
+        selected = [names[i] for i in order[:k]]
+        weight = 1.0 / k
+        weights = {name: weight for name in selected}
+        # With no name outside the book there is nothing to rotate into.
+        drop_candidates = selected[-n_drop:] if (n_drop > 0 and len(values) > k) else []
+
+        strategy_id = f"topk_dropout_{topk}_{n_drop}"
+        self.strategies[strategy_id] = {"topk": topk, "n_drop": n_drop, "selected": selected}
+
+        if drop_candidates:
+            rotation = (f"On each rebalance the {n_drop} lowest-ranked holdings are sold and replaced by the "
+                        f"best-ranked names not held; first to go if the ranking holds: "
+                        f"{', '.join(drop_candidates)}.")
+        else:
+            rotation = (f"All {len(values)} names are held, so there is nothing to rotate into "
+                        f"(give more names than Top-K to see the dropout).")
+        return {
+            "success": True,
+            "strategy_id": strategy_id,
+            "strategy_type": "TopK Dropout",
+            "selected": selected,
+            "next_drop_candidates": drop_candidates,
+            "weights": weights,
+            "ranking": [{"rank": r + 1, "asset": names[i], "signal": values[i], "held": r < k}
+                        for r, i in enumerate(order)],
+            "universe_size": len(values),
+            "config": {"topk": topk, "n_drop": n_drop, "method_sell": "bottom", "method_buy": "top"},
+            "expected_turnover": f"{(n_drop / topk) * 100:.1f}% per rebalance",
+            "description": (f"Initial book: top {k} of {len(values)} names by signal, equally weighted "
+                            f"({weight * 100:.2f}% each). " + rotation),
+            "suitable_for": ["Long-only portfolios", "Stock selection", "Momentum strategies"],
+        }
 
     def create_enhanced_indexing_strategy(self,
                                          signal: pd.DataFrame,
@@ -530,7 +600,7 @@ def _json_safe(obj):
 def main():
     """CLI interface for Strategy service"""
     if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No command specified"}))
+        fincept_json.emit({"success": False, "error": "No command specified"})
         sys.exit(1)
 
     command = sys.argv[1]
@@ -550,32 +620,23 @@ def main():
             }
 
         elif command == "create_topk_dropout":
-            params = json.loads(sys.argv[2])
-            # Note: signal would need to be passed differently in real implementation
-            result = service.create_topk_dropout_strategy(
-                signal=None,  # Placeholder
+            # The panel sends one cross-section of signal values; rank it into the book
+            # (it was discarded and only topk / n_drop were echoed back).
+            result = service.build_topk_dropout_book(
+                signal=params.get("signal", []),
+                assets=params.get("assets"),
                 topk=params.get("topk", 50),
-                n_drop=params.get("n_drop", 5),
-                method_sell=params.get("method_sell", "bottom"),
-                method_buy=params.get("method_buy", "top")
+                n_drop=params.get("n_drop", 5)
             )
 
-        elif command == "create_enhanced_indexing":
-            params = json.loads(sys.argv[2])
-            result = service.create_enhanced_indexing_strategy(
-                signal=None,  # Placeholder
-                benchmark=params.get("benchmark", "SH000300"),
-                tracking_error_target=params.get("tracking_error", 0.02),
-                alpha_target=params.get("alpha_target", 0.01)
-            )
-
-        elif command == "create_weight_strategy":
-            params = json.loads(sys.argv[2])
-            result = service.create_weight_strategy(
-                signal=None,  # Placeholder
-                weight_method=params.get("weight_method", "signal_proportional"),
-                constraints=params.get("constraints")
-            )
+        elif command in ("create_enhanced_indexing", "create_weight_strategy"):
+            # These only echoed their inputs back (signal=None, "expected" figures that
+            # were the targets typed in). No caller uses them; refuse instead of returning
+            # a configuration that looks like a constructed portfolio.
+            result = {"success": False,
+                      "error": f"{command} is not implemented: it needs a signal panel (datetime x instrument "
+                               "scores) and computes no portfolio. Use create_topk_dropout, create_risk_parity "
+                               "or create_mean_variance."}
 
         elif command == "list_strategies":
             result = service.list_strategies()
@@ -618,10 +679,10 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(_json_safe(result)))
+        fincept_json.emit(_json_safe(result))
 
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        fincept_json.emit({"success": False, "error": str(e)})
         sys.exit(1)
 
 

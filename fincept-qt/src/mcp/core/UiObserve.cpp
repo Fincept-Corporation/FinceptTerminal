@@ -1,16 +1,11 @@
-// UiObserve.cpp — the observing core tools: ui_overview, ui_snapshot, ui_read,
-// ui_wait, ui_screenshot. Nothing here changes terminal state. See UiEngine.h.
+// UiObserve.cpp — the observing core tools: ui_overview, ui_snapshot (with
+// incremental "since" snapshots), ui_read, ui_wait. Nothing here changes
+// terminal state. See UiEngine.h.
 
-#include "app/DockScreenRouter.h"
-#include "app/WindowFrame.h"
-#include "auth/AuthManager.h"
-#include "auth/InactivityGuard.h"
-#include "core/layout/WorkspaceShell.h"
-#include "core/symbol/IGroupLinked.h"
-#include "core/symbol/SymbolRef.h"
 #include "mcp/ResultStore.h"
 #include "mcp/core/CoreToolsCommon.h"
 #include "mcp/core/UiEngine.h"
+#include "mcp/core/UiErrors.h"
 
 #include <QAbstractBarSeries>
 #include <QAbstractButton>
@@ -18,18 +13,15 @@
 #include <QApplication>
 #include <QBarCategoryAxis>
 #include <QBarSet>
-#include <QBuffer>
 #include <QCandlestickSeries>
 #include <QCandlestickSet>
 #include <QChart>
 #include <QChartView>
-#include <QColor>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDateTimeAxis>
 #include <QDialog>
 #include <QElapsedTimer>
-#include <QFontMetrics>
 #include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -37,18 +29,13 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QPainter>
-#include <QPen>
 #include <QPieSeries>
 #include <QPieSlice>
-#include <QPixmap>
 #include <QTabBar>
 #include <QTreeView>
 #include <QUrl>
 #include <QXYSeries>
 
-#include <DockManager.h>
-#include <DockWidget.h>
 #include <algorithm>
 #include <memory>
 
@@ -62,8 +49,9 @@ constexpr int kTextPageChars = 3000; // default characters per text page (limit 
 constexpr int kMaxTextPageChars = 20000;
 constexpr int kDefaultRows = 20; // rows / points / items per page (limit overrides, ≤ 500)
 constexpr int kMaxRows = 500;
-constexpr int kReadCols = 10;   // columns per table page (col_offset / columns for others)
-constexpr int kSeriesShown = 6; // chart series listed before "query=<name>" is needed
+constexpr int kSeriesShown = 6;  // chart series listed before "query=<name>" is needed
+constexpr int kWaitScanMs = 25;  // one ui_wait text poll searches at most this long
+constexpr int kSnapshotsKept = 16; // snapshots remembered for since=
 
 Detail parse_detail(const QJsonObject& args) {
     const QString d = args.value(QStringLiteral("detail")).toString().toLower();
@@ -84,11 +72,9 @@ QString panel_line(const PanelInfo& p) {
     if (!p.visible)
         states << QStringLiteral("background tab");
     if (p.dock) {
-        if (auto* linked = dynamic_cast<IGroupLinked*>(screen_widget_of(p.dock))) {
-            const SymbolRef ref = linked->current_symbol();
-            if (!ref.symbol.isEmpty())
-                states << QStringLiteral("symbol %1").arg(ref.symbol);
-        }
+        const host::SymbolInfo sym = host::panel_symbol(p.dock);
+        if (!sym.symbol.isEmpty())
+            states << QStringLiteral("symbol %1").arg(sym.symbol);
     }
     if (!states.isEmpty())
         line += QStringLiteral(" [") + states.join(QStringLiteral(", ")) + QLatin1Char(']');
@@ -108,15 +94,24 @@ QString dialog_line(QWidget* d) {
     return line;
 }
 
+/// Walks of the current snapshot that ran out of time (GUI thread only).
+int timed_walks = 0;
+
 /// Window chrome + panels + dialogs of a frame as snapshot lines.
-void snapshot_frame(WindowFrame* f, const WalkOptions& base, QStringList& lines, bool* truncated) {
+void snapshot_frame(QWidget* f, const WalkOptions& base, QStringList& lines, bool* truncated) {
     int budget = base.max_nodes;
+    // One time budget for the whole window, shared by its chrome and panels.
+    QElapsedTimer clock;
+    clock.start();
+    constexpr int kFrameBudgetMs = 150;
     WalkOptions chrome = base;
-    if (f->dock_manager())
-        chrome.exclude.insert(f->dock_manager());
+    if (QWidget* area = host::panel_area(f))
+        chrome.exclude.insert(area);
     chrome.max_nodes = std::max(10, std::min(60, budget / 4));
     bool t = false;
-    const QList<Node> chrome_nodes = collect_nodes(f, chrome, &t);
+    bool timed = false;
+    const QList<Node> chrome_nodes = collect_nodes(f, chrome, &t, &timed);
+    timed_walks += timed ? 1 : 0;
     lines << QStringLiteral("window %1 %2")
                  .arg(Refs::instance().ref_for(f, RefKind::Window), common::quoted(window_title_of(f)));
     for (const Node& n : chrome_nodes) {
@@ -138,8 +133,11 @@ void snapshot_frame(WindowFrame* f, const WalkOptions& base, QStringList& lines,
         WalkOptions po = base;
         po.max_nodes = budget;
         po.base_depth = 1;
+        po.budget_ms = std::max(10, kFrameBudgetMs - static_cast<int>(clock.elapsed()));
         bool pt = false;
-        const QList<Node> nodes = collect_nodes(p.dock, po, &pt);
+        bool ptimed = false;
+        const QList<Node> nodes = collect_nodes(p.dock, po, &pt, &ptimed);
+        timed_walks += ptimed ? 1 : 0;
         for (const Node& n : nodes)
             lines += format_node(n, base.detail);
         budget -= static_cast<int>(nodes.size());
@@ -154,7 +152,9 @@ void snapshot_top(QWidget* top, const QString& header, const WalkOptions& opt, Q
     o.base_depth = 1;
     o.max_nodes = opt.max_nodes + std::max(0, offset);
     bool t = false;
-    const QList<Node> nodes = collect_nodes(top, o, &t);
+    bool timed = false;
+    const QList<Node> nodes = collect_nodes(top, o, &t, &timed);
+    timed_walks += timed ? 1 : 0;
     if (offset > 0)
         lines << QStringLiteral("  (elements from #%1)").arg(offset);
     for (int i = std::max(0, offset); i < nodes.size(); ++i)
@@ -366,146 +366,7 @@ QString read_chart(QChartView* view, const QString& ref, int offset, int limit, 
     return lines.join(QLatin1Char('\n'));
 }
 
-QString read_view(QAbstractItemView* view, const QString& ref, const QJsonObject& args) {
-    const int offset = clamp_int(args.value(QStringLiteral("offset")), 0, 0, 100000000);
-    const int limit = clamp_int(args.value(QStringLiteral("limit")), kDefaultRows, 1, kMaxRows);
-    const QStringList words = query_words(args.value(QStringLiteral("query")).toString());
-    const QList<int> all_cols = visible_columns(view);
-    const QStringList all_headers = column_headers(view, all_cols);
-    const QString base_ref = ref.section(QLatin1Char(':'), 0, 0);
 
-    // Columns: by header (exact, then contained) or by number; else a window.
-    QList<int> cols;
-    QStringList headers;
-    QStringList unknown;
-    const QJsonArray wanted = args.value(QStringLiteral("columns")).toArray();
-    for (const QJsonValue& w : wanted) {
-        int at = -1;
-        if (w.isDouble()) {
-            at = w.toInt(-1);
-        } else {
-            const QString want = w.toString().trimmed().toLower();
-            for (int i = 0; i < all_headers.size() && at < 0; ++i) {
-                if (all_headers[i].toLower() == want)
-                    at = i;
-            }
-            for (int i = 0; i < all_headers.size() && at < 0 && !want.isEmpty(); ++i) {
-                if (all_headers[i].toLower().contains(want))
-                    at = i;
-            }
-        }
-        if (at >= 0 && at < all_cols.size()) {
-            if (!cols.contains(all_cols[at])) {
-                cols << all_cols[at];
-                headers << all_headers[at];
-            }
-        } else {
-            unknown << (w.isDouble() ? QString::number(w.toInt()) : w.toString());
-        }
-    }
-    int col_offset = 0;
-    if (cols.isEmpty()) {
-        col_offset = clamp_int(args.value(QStringLiteral("col_offset")), 0, 0,
-                               std::max(0, static_cast<int>(all_cols.size()) - 1));
-        cols = all_cols.mid(col_offset, kReadCols);
-        headers = all_headers.mid(col_offset, kReadCols);
-    }
-
-    bool capped = false;
-    const int total = view_row_count(view, &capped);
-    QStringList lines;
-    QString name = view->accessibleName().trimmed();
-    if (auto node = describe_widget(view, Detail::Brief); node && !node->name.isEmpty())
-        name = node->name;
-    QString head = QStringLiteral("%1 %2%3 · %4%5 rows")
-                       .arg(base_ref,
-                            view->inherits("QTreeView")    ? QStringLiteral("tree")
-                            : view->inherits("QTableView") ? QStringLiteral("table")
-                                                           : QStringLiteral("list"),
-                            name.isEmpty() ? QString() : QLatin1Char(' ') + common::quoted(name))
-                       .arg(total)
-                       .arg(capped ? QStringLiteral("+") : QString());
-    if (const int hidden = view_hidden_rows(view); hidden > 0)
-        head += QStringLiteral(" (+%1 hidden by a filter)").arg(hidden);
-    if (const QString sort = view_sort_state(view); !sort.isEmpty())
-        head += QStringLiteral(" · ") + sort;
-    if (QItemSelectionModel* sel = view->selectionModel()) {
-        const QModelIndex cur = sel->currentIndex();
-        if (cur.isValid() && sel->isSelected(cur)) {
-            const int row = row_of_index(view, cur);
-            if (row >= 0)
-                head += QStringLiteral(" · selected %1:r%2").arg(base_ref).arg(row);
-        }
-    }
-    lines << head;
-    if (cols.size() > 1 || !headers.value(0).isEmpty()) {
-        QString cl = QStringLiteral("row | ") + headers.join(QStringLiteral(" | "));
-        if (wanted.isEmpty() && all_cols.size() > cols.size())
-            cl += QStringLiteral("   (columns %1–%2 of %3; others: col_offset=%4, or columns=[\"<header>\", …])")
-                      .arg(col_offset + 1)
-                      .arg(col_offset + cols.size())
-                      .arg(all_cols.size())
-                      .arg(col_offset + cols.size() < all_cols.size() ? col_offset + cols.size() : 0);
-        lines << cl;
-    }
-    if (!unknown.isEmpty())
-        lines << QStringLiteral("(no column %1 — columns: %2)")
-                     .arg(unknown.join(QStringLiteral(", ")),
-                          common::clip(all_headers.join(QStringLiteral(" | ")), 600));
-
-    int emitted = 0;
-    int matched = 0;
-    int scanned = 0;
-    bool scan_capped = false;
-    for_each_view_row(view, 0, [&](int r, const QModelIndex& first) {
-        if (!words.isEmpty()) {
-            if (++scanned > kMaxRowScan) {
-                scan_capped = true;
-                return false;
-            }
-            // A query matches against every column, not only the ones shown.
-            if (!words_match(index_row_text(view, first, all_cols, 80).toLower(), words))
-                return true;
-        }
-        const int ordinal = matched++;
-        if (ordinal < offset)
-            return true;
-        if (emitted >= limit)
-            return !words.isEmpty(); // keep counting matches; plain rows: the total is known
-        lines << QStringLiteral("%1:r%2 | %3")
-                     .arg(base_ref)
-                     .arg(r)
-                     .arg(common::clip(index_row_text(view, first, cols, 60, true), 700));
-        Refs::instance().anchor_row(view, base_ref, r, first);
-        ++emitted;
-        return true;
-    });
-    const int found = words.isEmpty() ? total : matched;
-    if (emitted == 0) {
-        lines << (words.isEmpty() ? QStringLiteral("(no rows at offset %1 — the list has %2)").arg(offset).arg(total)
-                                  : QStringLiteral("(no rows hold \"%1\"%2)")
-                                        .arg(words.join(QLatin1Char(' ')),
-                                             offset > 0 ? QStringLiteral(" past offset %1").arg(offset) : QString()));
-    } else {
-        QString next;
-        if (offset + emitted < found)
-            next = QStringLiteral("ui_read(ref=\"%1\", offset=%2%3%4)")
-                       .arg(base_ref)
-                       .arg(offset + emitted)
-                       .arg(words.isEmpty() ? QString()
-                                            : QStringLiteral(", query=\"%1\"").arg(words.join(QLatin1Char(' '))))
-                       .arg(col_offset > 0 ? QStringLiteral(", col_offset=%1").arg(col_offset) : QString());
-        lines << page_footer(words.isEmpty() ? QStringLiteral("rows") : QStringLiteral("matching rows"), offset,
-                             emitted, found, capped || scan_capped, next);
-    }
-    if (scan_capped)
-        lines << QStringLiteral("(searched the first %1 rows only)").arg(kMaxRowScan);
-    lines << QStringLiteral(
-                 "Act on a row: ui_act(action=\"click\", ref=\"%1:r<N>\"[, column=\"<header>\"]); controls in "
-                 "rows show as [e… button \"…\"]. ui_read(ref=\"%1:r<N>\") gives one row in full.")
-                 .arg(base_ref);
-    return lines.join(QLatin1Char('\n'));
-}
 
 /// `more_args` is put into the "more" call after the ref (e.g. `, path="text"`).
 QString page_text(const QString& label, const QString& text, int offset, const QString& ref,
@@ -529,11 +390,25 @@ QString read_result(const QString& id, const QJsonObject& args) {
     if (!raw)
         return {};
     const int offset = clamp_int(args.value(QStringLiteral("offset")), 0, 0, 100000000);
-    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray("[") + *raw + QByteArray("]"));
-    if (!doc.isArray() || doc.array().size() != 1)
+    // Paging one stored result is many reads of the same payload: parse it once.
+    struct Parsed {
+        QString id;
+        qsizetype bytes = -1;
+        bool ok = false;
+        QJsonValue value;
+    };
+    static Parsed last;
+    if (last.id != id || last.bytes != raw->size()) {
+        const QJsonDocument doc = QJsonDocument::fromJson(QByteArray("[") + *raw + QByteArray("]"));
+        last.id = id;
+        last.bytes = raw->size();
+        last.ok = doc.isArray() && doc.array().size() == 1;
+        last.value = last.ok ? doc.array().at(0) : QJsonValue();
+    }
+    if (!last.ok)
         return page_text(QStringLiteral("stored result %1").arg(id), QString::fromUtf8(*raw), offset, id,
                          clamp_int(args.value(QStringLiteral("limit")), kTextPageChars, 200, kMaxTextPageChars));
-    QJsonValue v = doc.array().at(0);
+    QJsonValue v = last.value;
 
     // path: "data", "data.rows", "data.rows.3", "items[2].name"
     const QString path = args.value(QStringLiteral("path")).toString().trimmed();
@@ -629,9 +504,9 @@ QString element_header(const QString& ref, QWidget* w) {
     return line;
 }
 
-QString panel_state(ads::CDockWidget* dock) {
+QString panel_state(QWidget* dock) {
     QStringList lines;
-    WindowFrame* f = frame_of(dock);
+    QWidget* f = frame_of(dock);
     PanelInfo info;
     for (const PanelInfo& p : panels_of(f)) {
         if (p.dock == dock)
@@ -639,17 +514,14 @@ QString panel_state(ads::CDockWidget* dock) {
     }
     if (!info.dock) {
         info.dock = dock;
-        info.screen_id = dock->objectName();
-        info.title = dock->windowTitle();
+        info.screen_id = host::panel_id(dock);
+        info.title = host::panel_title(dock);
     }
     lines << panel_line(info);
-    if (auto* linked = dynamic_cast<IGroupLinked*>(screen_widget_of(dock))) {
-        const SymbolRef ref = linked->current_symbol();
+    if (const host::SymbolInfo ref = host::panel_symbol(dock); !ref.symbol.isEmpty())
         lines << QStringLiteral("symbol: %1%2%3")
-                     .arg(ref.symbol.isEmpty() ? QStringLiteral("(none)") : ref.symbol,
-                          ref.asset_class.isEmpty() ? QString() : QStringLiteral(" · ") + ref.asset_class,
+                     .arg(ref.symbol, ref.asset_class.isEmpty() ? QString() : QStringLiteral(" · ") + ref.asset_class,
                           ref.exchange.isEmpty() ? QString() : QStringLiteral(" · ") + ref.exchange);
-    }
     WalkOptions opt;
     opt.detail = Detail::Brief;
     opt.max_nodes = 150;
@@ -660,54 +532,10 @@ QString panel_state(ads::CDockWidget* dock) {
     if (truncated)
         lines << QStringLiteral("  … more controls — ui_snapshot(target=\"%1\", query=…)")
                      .arg(Refs::instance().ref_for(dock, RefKind::Panel));
-    lines << QStringLiteral("Terminal commands (panels, layouts, windows, lock …): ui_invoke(action=\"list\").");
     return lines.join(QLatin1Char('\n'));
 }
 
 // ── Waits ────────────────────────────────────────────────────────────────────
-
-QString scope_text(QWidget* scope) {
-    QStringList parts;
-    QList<QWidget*> roots;
-    if (scope)
-        roots << scope;
-    for (QWidget* d : open_dialogs()) {
-        if (!roots.contains(d))
-            roots << d;
-    }
-    if (QWidget* p = open_popup())
-        roots << p;
-    for (QWidget* root : roots) {
-        parts << root->windowTitle();
-        QList<QWidget*> all = root->findChildren<QWidget*>();
-        all.prepend(root);
-        for (QWidget* w : all) {
-            if (!w->isVisible() || is_hidden_from_agents(w))
-                continue;
-            if (auto* view = qobject_cast<QAbstractItemView*>(w)) {
-                const QList<int> cols = visible_columns(view);
-                const int n = std::min(view_row_count(view), 400);
-                for (int r = 0; r < n; ++r)
-                    parts << view_row_text(view, r, cols, 200);
-                continue;
-            }
-            if (auto* bar = qobject_cast<QTabBar*>(w)) {
-                for (int i = 0; i < bar->count(); ++i)
-                    parts << bar->tabText(i);
-                continue;
-            }
-            if (auto* menu = qobject_cast<QMenu*>(w)) {
-                for (QAction* a : menu->actions())
-                    parts << a->text();
-                continue;
-            }
-            const QString t = widget_text(w);
-            if (!t.isEmpty())
-                parts << t;
-        }
-    }
-    return parts.join(QLatin1Char('\n')).toLower();
-}
 
 std::optional<QString> state_holds(const QString& ref, const QString& state, const QString& value) {
     // Returns nullopt when the condition holds, else a description of what is there now.
@@ -750,8 +578,22 @@ std::optional<QString> state_holds(const QString& ref, const QString& state, con
     }
     if (state == QLatin1String("value")) {
         const QString now = widget_text(w).trimmed();
-        if (now.compare(value.trimmed(), Qt::CaseInsensitive) == 0 ||
-            (!value.trimmed().isEmpty() && now.contains(value.trimmed(), Qt::CaseInsensitive)))
+        const QString want = value.trimmed();
+        // Equal (case-insensitive), or the same number ("1,250.00" = "1250"); a
+        // longer phrase may also be contained — but "1" never holds for "10".
+        bool holds = now.compare(want, Qt::CaseInsensitive) == 0;
+        if (!holds) {
+            bool a = false, b = false;
+            const double x = QString(now).remove(QLatin1Char(',')).toDouble(&a);
+            const double y = QString(want).remove(QLatin1Char(',')).toDouble(&b);
+            holds = a && b && x == y;
+        }
+        if (!holds && want.size() >= 3) {
+            bool numeric = false;
+            want.toDouble(&numeric);
+            holds = !numeric && now.contains(want, Qt::CaseInsensitive);
+        }
+        if (holds)
             return std::nullopt;
         return QStringLiteral("value is %1").arg(common::quoted(common::clip(now, 80)));
     }
@@ -1062,9 +904,6 @@ void read_web(QWidget* view, QWidget* host, const QString& ref, int web_control,
                     for (const QJsonValue& o : options)
                         lines << QStringLiteral("    ") + o.toString();
                 }
-                lines << QStringLiteral("Act on it: ui_act(action=\"click\" | \"type\" | \"select\" …, "
-                                        "ref=\"%1\").")
-                             .arg(ref);
                 reply(ToolResult::ok(lines.join(QLatin1Char('\n'))));
             });
         return;
@@ -1115,10 +954,6 @@ void read_web(QWidget* view, QWidget* host, const QString& ref, int web_control,
                        }
                        if (path == QLatin1String("controls")) {
                            body += web_controls(base, controls, words, false, offset, limit);
-                           body << QStringLiteral(
-                                       "Act on one: ui_act(action=\"click\", ref=\"%1:w<N>\") — a hidden one is "
-                                       "clicked through the page.")
-                                       .arg(base);
                            reply(ToolResult::ok((head + body).join(QLatin1Char('\n'))));
                            return;
                        }
@@ -1129,10 +964,6 @@ void read_web(QWidget* view, QWidget* host, const QString& ref, int web_control,
                        else
                            body << page_text(QStringLiteral("text"), text, 0, base, kWebOverviewChars,
                                              QStringLiteral(", path=\"text\""));
-                       body << QStringLiteral("Act: ui_act(action=\"click\", ref=\"%1:w<N>\"); type into a field: "
-                                              "ui_act(action=\"type\", ref=\"%1:w<N>\", text=…); anywhere else: "
-                                              "ui_act(action=\"click\", ref=\"%1\", x=…, y=…).")
-                                   .arg(base);
                        if (!vg) {
                            reply(ToolResult::ok((head + body).join(QLatin1Char('\n'))));
                            return;
@@ -1156,26 +987,25 @@ using namespace ui_observe_detail;
 // ui_overview
 // ═════════════════════════════════════════════════════════════════════════════
 
+
 void ui_overview(const QJsonObject& /*args*/, Reply reply) {
     QStringList lines;
-    auto& auth = auth::AuthManager::instance();
-    const bool locked = auth::InactivityGuard::instance().is_terminal_locked();
-    QString header = QStringLiteral("Fincept Terminal %1").arg(QCoreApplication::applicationVersion());
-    header += auth.is_authenticated() ? QStringLiteral(" · signed in (%1)").arg(auth.session().plan_label())
-                                      : QStringLiteral(" · not signed in (the sign-in screen is showing)");
-    const QString layout_name = layout::WorkspaceShell::current_name();
-    if (!layout_name.isEmpty())
-        header += QStringLiteral(" · layout %1").arg(common::quoted(layout_name));
-    if (locked)
+    const host::TerminalStatus st = host::terminal_status();
+    QString header = QStringLiteral("Fincept Terminal %1").arg(st.version);
+    header += st.signed_in ? QStringLiteral(" · signed in (%1)").arg(st.plan)
+                           : QStringLiteral(" · not signed in (the sign-in screen is showing)");
+    if (!st.layout.isEmpty())
+        header += QStringLiteral(" · layout %1").arg(common::quoted(st.layout));
+    if (st.locked)
         header += QStringLiteral(" · LOCKED");
     lines << header;
-    if (locked)
+    if (st.locked)
         lines << QStringLiteral(
             "The terminal is locked (PIN screen). Nothing can be operated until the user unlocks it.");
 
-    WindowFrame* active = active_frame();
-    const QList<WindowFrame*> all = frames();
-    for (WindowFrame* f : all) {
+    QWidget* active = active_frame();
+    const QList<QWidget*> all = frames();
+    for (QWidget* f : all) {
         QList<PanelInfo> panels = panels_of(f);
         std::stable_sort(panels.begin(), panels.end(), [](const PanelInfo& a, const PanelInfo& b) {
             if (a.focused != b.focused)
@@ -1187,11 +1017,11 @@ void ui_overview(const QJsonObject& /*args*/, Reply reply) {
             states << QStringLiteral("active");
         if (f->isMinimized())
             states << QStringLiteral("minimized");
-        if (f->is_locked())
+        if (host::frame_locked(f))
             states << QStringLiteral("locked");
         lines << QStringLiteral("window %1 %2 (id %3)%4 · %5 panel%6")
                      .arg(Refs::instance().ref_for(f, RefKind::Window), common::quoted(window_title_of(f)))
-                     .arg(f->window_id())
+                     .arg(host::window_id(f))
                      .arg(states.isEmpty()
                               ? QString()
                               : QStringLiteral(" [") + states.join(QStringLiteral(", ")) + QLatin1Char(']'))
@@ -1199,7 +1029,8 @@ void ui_overview(const QJsonObject& /*args*/, Reply reply) {
                      .arg(panels.size() == 1 ? QString() : QStringLiteral("s"));
         for (const PanelInfo& p : panels)
             lines << QStringLiteral("  ") + panel_line(p);
-        if (panels.isEmpty() || (f->dock_manager() && !f->dock_manager()->isVisible()))
+        QWidget* area = host::panel_area(f);
+        if (panels.isEmpty() || (area && !area->isVisible()))
             lines << QStringLiteral("  (the panel area is not showing — the window shows a sign-in, lock or chat-mode "
                                     "screen; ui_snapshot(target=\"%1\") shows it)")
                          .arg(Refs::instance().ref_for(f, RefKind::Window));
@@ -1210,14 +1041,11 @@ void ui_overview(const QJsonObject& /*args*/, Reply reply) {
     for (QWidget* d : open_dialogs())
         lines << dialog_line(d);
     if (QWidget* popup = open_popup())
-        lines << QStringLiteral("menu %1 open — ui_snapshot(target=\"menu\") lists its items")
-                     .arg(Refs::instance().ref_for(popup, RefKind::Menu));
+        lines << QStringLiteral("menu %1 open").arg(Refs::instance().ref_for(popup, RefKind::Menu));
 
     const BusyState busy = busy_state(nullptr);
     if (busy.busy())
-        lines << QStringLiteral("busy: ") + busy.describe() + QStringLiteral(" — ui_wait(until=\"idle\") waits for it");
-    lines << QStringLiteral(
-        "Next: ui_snapshot(target=<panel ref>) lists a panel's controls; ui_open() lists every screen.");
+        lines << QStringLiteral("busy: ") + busy.describe();
     reply(ToolResult::ok(lines.join(QLatin1Char('\n'))));
 }
 
@@ -1225,9 +1053,95 @@ void ui_overview(const QJsonObject& /*args*/, Reply reply) {
 // ui_snapshot
 // ═════════════════════════════════════════════════════════════════════════════
 
+namespace ui_observe_detail {
+
+/// Snapshots remembered for `since`: what was listed, per scope.
+struct StoredSnapshot {
+    quint64 id = 0;
+    QString scope_key;
+    QStringList lines;
+};
+
+QList<StoredSnapshot>& stored_snapshots() {
+    static QList<StoredSnapshot> s;
+    return s;
+}
+
+quint64 store_snapshot(const QString& scope_key, const QStringList& lines) {
+    static quint64 next = 0;
+    auto& all = stored_snapshots();
+    StoredSnapshot snap{++next, scope_key, lines};
+    all.append(std::move(snap));
+    while (all.size() > kSnapshotsKept)
+        all.removeFirst();
+    return next;
+}
+
+const StoredSnapshot* find_snapshot(quint64 id) {
+    for (const StoredSnapshot& s : stored_snapshots()) {
+        if (s.id == id)
+            return &s;
+    }
+    return nullptr;
+}
+
+/// What identifies a snapshot line across snapshots: its ref when it starts
+/// with one ("e12", "p3", "e12:r4"), else the line itself under the last ref.
+QList<QPair<QString, QString>> keyed_lines(const QStringList& lines) {
+    static const QRegularExpression ref_rx(QStringLiteral("^([wpdme]\\d+(?::[rw]\\d+)?)\\b"));
+    QList<QPair<QString, QString>> out;
+    QString parent;
+    for (const QString& line : lines) {
+        const QString t = line.trimmed();
+        const auto m = ref_rx.match(t);
+        QString key;
+        if (m.hasMatch()) {
+            key = m.captured(1);
+            parent = key;
+        } else {
+            key = parent + QLatin1Char('|') + t;
+        }
+        out.append({key, line});
+    }
+    return out;
+}
+
+/// The lines that changed since `old`: "+ line" (new or changed), "- key"
+/// (gone), and a count of the unchanged ones.
+QStringList snapshot_changes(const QStringList& old_lines, const QStringList& new_lines) {
+    const auto before = keyed_lines(old_lines);
+    const auto after = keyed_lines(new_lines);
+    QHash<QString, QString> old_by_key;
+    for (const auto& kv : before)
+        old_by_key.insert(kv.first, kv.second);
+    QSet<QString> now_keys;
+    QStringList out;
+    int same = 0;
+    for (const auto& kv : after) {
+        now_keys.insert(kv.first);
+        const auto it = old_by_key.constFind(kv.first);
+        if (it != old_by_key.constEnd() && it.value() == kv.second) {
+            ++same;
+            continue;
+        }
+        out << QStringLiteral("+ ") + kv.second.trimmed();
+    }
+    for (const auto& kv : before) {
+        if (now_keys.contains(kv.first))
+            continue;
+        const QString gone = kv.first.contains(QLatin1Char('|')) ? kv.second.trimmed() : kv.first;
+        out << QStringLiteral("- ") + common::clip(gone, 100);
+    }
+    out << QStringLiteral("(%1 line%2 unchanged)").arg(same).arg(same == 1 ? QString() : QStringLiteral("s"));
+    return out;
+}
+
+} // namespace ui_observe_detail
+
 void ui_snapshot(const QJsonObject& args, Reply reply) {
     QString label, error;
-    QWidget* scope = resolve_scope(args.value(QStringLiteral("target")).toString(), &label, &error);
+    const QString target_arg = args.value(QStringLiteral("target")).toString().trimmed();
+    QWidget* scope = resolve_scope(target_arg, &label, &error);
     if (!scope) {
         reply(ToolResult::fail(error));
         return;
@@ -1238,17 +1152,19 @@ void ui_snapshot(const QJsonObject& args, Reply reply) {
     opt.query = query_words(args.value(QStringLiteral("query")).toString());
     opt.cell_widgets = !opt.query.isEmpty(); // a query also finds the buttons in table rows
     const int offset = clamp_int(args.value(QStringLiteral("offset")), 0, 0, 100000);
+    timed_walks = 0;
 
     QStringList lines;
     bool truncated = false;
-    if (auto* f = qobject_cast<WindowFrame*>(scope)) {
-        snapshot_frame(f, opt, lines, &truncated);
+    if (host::is_frame(scope)) {
+        snapshot_frame(scope, opt, lines, &truncated);
         for (QWidget* d : open_dialogs())
             snapshot_top(d, dialog_line(d), opt, lines, &truncated);
         if (QWidget* popup = open_popup())
             snapshot_top(popup, QStringLiteral("menu %1").arg(Refs::instance().ref_for(popup, RefKind::Menu)), opt,
                          lines, &truncated);
-    } else if (auto* dock = qobject_cast<ads::CDockWidget*>(scope)) {
+    } else if (host::is_panel(scope)) {
+        QWidget* dock = scope;
         PanelInfo info;
         for (const PanelInfo& p : panels_of(frame_of(dock))) {
             if (p.dock == dock)
@@ -1256,13 +1172,13 @@ void ui_snapshot(const QJsonObject& args, Reply reply) {
         }
         if (!info.dock) {
             info.dock = dock;
-            info.screen_id = dock->objectName();
-            info.title = dock->windowTitle();
+            info.screen_id = host::panel_id(dock);
+            info.title = host::panel_title(dock);
         }
         if (!dock->isVisible()) {
-            reply(ToolResult::fail(QStringLiteral("%1 is a background tab — bring it forward with "
-                                                  "ui_workspace(action=\"focus\", panel=\"%2\") first.")
-                                       .arg(label, Refs::instance().ref_for(dock, RefKind::Panel))));
+            reply(ui_fail(Err::Obscured, QStringLiteral("%1 is a background tab.").arg(label),
+                          QStringLiteral("bring it forward: ui_workspace(action=\"focus\", panel=\"%1\").")
+                              .arg(Refs::instance().ref_for(dock, RefKind::Panel))));
             return;
         }
         snapshot_top(dock, panel_line(info), opt, lines, &truncated, offset);
@@ -1278,20 +1194,51 @@ void ui_snapshot(const QJsonObject& args, Reply reply) {
 
     if (!opt.query.isEmpty() && lines.size() <= 1)
         lines << QStringLiteral("(nothing holds \"%1\")").arg(opt.query.join(QLatin1Char(' ')));
-    if (truncated) {
-        if (qobject_cast<WindowFrame*>(scope))
+    if (timed_walks > 0)
+        lines << QStringLiteral("… stopped early (this view has a great many elements) — snapshot one panel or "
+                                "element, or narrow with query=\"words\".");
+    else if (truncated) {
+        if (host::is_frame(scope))
             lines << QStringLiteral("… more elements not listed — snapshot one panel (target=\"p…\") or narrow with "
                                     "query=\"words\".");
         else
             lines << QStringLiteral("… more elements not listed — continue with ui_snapshot(target=\"%1\", offset=%2), "
                                     "or narrow with query=\"words\".")
-                         .arg(args.value(QStringLiteral("target")).toString().trimmed(),
-                              QString::number(offset + opt.max_nodes));
+                         .arg(target_arg, QString::number(offset + opt.max_nodes));
     }
     const BusyState busy = busy_state(scope);
     if (busy.busy())
         lines << QStringLiteral("busy: ") + busy.describe();
-    reply(ToolResult::ok(lines.join(QLatin1Char('\n'))));
+
+    // Remember it; with `since`, answer only what changed.
+    const QString scope_key = QStringLiteral("%1|%2|%3|%4|%5")
+                                  .arg(label, opt.query.join(QLatin1Char(' ')))
+                                  .arg(static_cast<int>(opt.detail))
+                                  .arg(offset)
+                                  .arg(opt.max_nodes);
+    const quint64 id = store_snapshot(scope_key, lines);
+    const QString since_arg = args.value(QStringLiteral("since")).toVariant().toString().trimmed();
+    QStringList out = lines;
+    if (!out.isEmpty())
+        out[0] += QStringLiteral(" · snap s%1").arg(id);
+    if (!since_arg.isEmpty()) {
+        bool ok = false;
+        const quint64 since = QString(since_arg).remove(QLatin1Char('s')).toULongLong(&ok);
+        const StoredSnapshot* old = ok ? find_snapshot(since) : nullptr;
+        if (old && old->scope_key == scope_key) {
+            QStringList changes{out.value(0), QStringLiteral("changes since s%1:").arg(since)};
+            QStringList body = snapshot_changes(old->lines.mid(1), lines.mid(1));
+            if (body.size() == 1)
+                changes << QStringLiteral("(no changes) ") + body.first();
+            else
+                changes += body;
+            reply(ToolResult::ok(changes.join(QLatin1Char('\n'))));
+            return;
+        }
+        out.insert(1, QStringLiteral("(s%1 is not a snapshot of this view any more — full snapshot)")
+                          .arg(ok ? QString::number(since) : since_arg));
+    }
+    reply(ToolResult::ok(out.join(QLatin1Char('\n'))));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1304,22 +1251,23 @@ void ui_read(const QJsonObject& args, Reply reply) {
     const int limit = clamp_int(args.value(QStringLiteral("limit")), kDefaultRows, 1, kMaxRows);
     const int text_chars = clamp_int(args.value(QStringLiteral("limit")), kTextPageChars, 200, kMaxTextPageChars);
     if (ref.isEmpty()) {
-        reply(ToolResult::fail(QStringLiteral("`ref` is required — an element ref, a panel ref / screen, or a stored "
-                                              "result id (res_…).")));
+        reply(ui_fail(Err::InvalidValue, QStringLiteral("`ref` is required — an element ref, a panel ref / screen, or "
+                                                        "a stored result id (res_…).")));
         return;
     }
     if (ref.startsWith(QLatin1String("res_"))) {
         const QString text = read_result(ref, args);
-        reply(text.isEmpty()
-                  ? ToolResult::fail(QStringLiteral("Unknown or expired result %1 (kept 15 minutes).").arg(ref))
-                  : ToolResult::ok(text));
+        reply(text.isEmpty() ? ui_fail(Err::NotFound, QStringLiteral("Unknown or expired result %1 (kept 15 minutes).")
+                                                          .arg(ref))
+                             : ToolResult::ok(text));
         return;
     }
 
     // A PIN-locked terminal shows nothing, so nothing on it is readable — refs
     // taken before the lock included (stored res_… results are already out).
-    if (auth::InactivityGuard::instance().is_terminal_locked()) {
-        reply(ToolResult::fail(QStringLiteral("The terminal is locked — the user must unlock it first.")));
+    if (host::terminal_locked()) {
+        reply(ui_fail(Err::Busy, QStringLiteral("The terminal is locked."),
+                      QStringLiteral("the user must unlock it first.")));
         return;
     }
 
@@ -1327,12 +1275,13 @@ void ui_read(const QJsonObject& args, Reply reply) {
     std::optional<Resolved> r = Refs::instance().resolve(ref, &why);
     if (!r) {
         // A screen id / title reads that panel's state.
-        if (ads::CDockWidget* dock = find_open_panel(ref)) {
+        if (QWidget* dock = find_open_panel(ref)) {
             reply(ToolResult::ok(panel_state(dock)));
             return;
         }
-        reply(ToolResult::fail(
-            why.isEmpty() ? QStringLiteral("%1 is unknown or gone — take a fresh ui_snapshot.").arg(ref) : why));
+        reply(ToolResult::fail(why.isEmpty() ? err_text(Err::StaleRef, QStringLiteral("%1 is unknown or gone.").arg(ref),
+                                                        QStringLiteral("take a fresh ui_snapshot."))
+                                             : why));
         return;
     }
     if (r->dock) {
@@ -1341,15 +1290,14 @@ void ui_read(const QJsonObject& args, Reply reply) {
     }
     if (r->action) {
         QAction* a = r->action;
-        QString text =
-            QStringLiteral("%1 menuitem %2").arg(ref, common::quoted(plain_text(a->text()).remove(QLatin1Char('&'))));
+        QString text = QStringLiteral("%1 menuitem %2").arg(ref, common::quoted(strip_mnemonic(plain_text(a->text()))));
         if (!a->toolTip().isEmpty() && a->toolTip() != a->text())
             text += QStringLiteral(" — ") + a->toolTip();
         if (QMenu* sub = a->menu()) {
             text += QStringLiteral("\nsubmenu:");
             for (QAction* s : sub->actions()) {
                 if (!s->isSeparator() && s->isVisible())
-                    text += QStringLiteral("\n  ") + plain_text(s->text()).remove(QLatin1Char('&'));
+                    text += QStringLiteral("\n  ") + strip_mnemonic(plain_text(s->text()));
             }
         }
         reply(ToolResult::ok(text));
@@ -1357,15 +1305,15 @@ void ui_read(const QJsonObject& args, Reply reply) {
     }
     QWidget* w = r->widget;
     if (!w) {
-        reply(ToolResult::fail(QStringLiteral("%1 is gone — take a fresh ui_snapshot.").arg(ref)));
+        reply(ui_fail(Err::StaleRef, QStringLiteral("%1 is gone.").arg(ref), QStringLiteral("take a fresh ui_snapshot.")));
         return;
     }
     if (is_hidden_from_agents(w)) {
-        reply(ToolResult::fail(QStringLiteral("%1 cannot be read.").arg(ref)));
+        reply(ui_fail(Err::Denied, QStringLiteral("%1 cannot be read.").arg(ref)));
         return;
     }
     if (is_secret(w)) {
-        reply(ToolResult::fail(QStringLiteral("%1 is a secret field — its contents are never read.").arg(ref)));
+        reply(ui_fail(Err::Denied, QStringLiteral("%1 is a secret field — its contents are never read.").arg(ref)));
         return;
     }
     // A web page (a web view, or a chart drawn by one): read through the page.
@@ -1388,10 +1336,11 @@ void ui_read(const QJsonObject& args, Reply reply) {
             const QStringList headers = column_headers(view, cols);
             const QModelIndex first = view_index(view, r->row, cols.value(0, 0));
             if (!first.isValid()) {
-                reply(ToolResult::fail(QStringLiteral("%1: row %2 does not exist (now %3 rows).")
-                                           .arg(ref)
-                                           .arg(r->row)
-                                           .arg(view_row_count(view))));
+                reply(ui_fail(Err::NotFound,
+                              QStringLiteral("%1: row %2 does not exist (now %3 rows).")
+                                  .arg(ref)
+                                  .arg(r->row)
+                                  .arg(view_row_count(view))));
                 return;
             }
             const QString base = ref.section(QLatin1Char(':'), 0, 0);
@@ -1426,18 +1375,19 @@ void ui_read(const QJsonObject& args, Reply reply) {
                     else
                         value = plain_text(idx.data(Qt::ToolTipRole).toString()).simplified();
                 }
-                lines << QStringLiteral("  %1: %2")
-                             .arg(headers.value(i).isEmpty() ? QStringLiteral("value") : headers.value(i),
-                                  common::clip(value, 1000));
+                QString line = QStringLiteral("  %1: %2").arg(headers.value(i).isEmpty() ? QStringLiteral("value")
+                                                                                          : headers.value(i),
+                                                              common::clip(value, 1000));
+                if (view->model()->flags(idx) & Qt::ItemIsEditable &&
+                    view->editTriggers() != QAbstractItemView::NoEditTriggers)
+                    line += QStringLiteral(" [editable]");
+                lines << line;
             }
             if (end < cols.size())
                 lines << QStringLiteral("  … %1 more columns — ui_read(ref=\"%2\", col_offset=%3)")
                              .arg(cols.size() - end)
                              .arg(ref)
                              .arg(end);
-            lines << QStringLiteral("Click one cell: ui_act(action=\"click\", ref=\"%1:r%2\", column=\"<header>\").")
-                         .arg(base)
-                         .arg(r->row);
             reply(ToolResult::ok(lines.join(QLatin1Char('\n'))));
             return;
         }
@@ -1452,8 +1402,9 @@ void ui_read(const QJsonObject& args, Reply reply) {
                      .arg(common::quoted(cb->currentText()));
         const int end = std::min(cb->count(), offset + limit);
         for (int i = std::max(0, offset); i < end; ++i)
-            lines << QStringLiteral("  %1%2").arg(cb->itemText(i),
-                                                  i == cb->currentIndex() ? QStringLiteral("  ← current") : QString());
+            lines << QStringLiteral("  #%1 %2%3").arg(i).arg(cb->itemText(i),
+                                                            i == cb->currentIndex() ? QStringLiteral("  ← current")
+                                                                                    : QString());
         if (end < cb->count())
             lines << QStringLiteral("  … %1 more: ui_read(ref=\"%2\", offset=%3)")
                          .arg(cb->count() - end)
@@ -1478,7 +1429,6 @@ void ui_read(const QJsonObject& args, Reply reply) {
         return;
     }
     if (w->isWindow() && !qobject_cast<QMenu*>(w)) {
-        // A dialog: everything it says, then its controls.
         // A dialog: everything it says, then its controls (paged by offset).
         QStringList lines;
         bool truncated = false;
@@ -1525,7 +1475,7 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
     const QString text = args.value(QStringLiteral("text")).toString().trimmed();
     const QString ref = args.value(QStringLiteral("ref")).toString().trimmed();
     const QString state = args.value(QStringLiteral("state")).toString().trimmed().toLower();
-    const QString value = args.value(QStringLiteral("value")).toString();
+    const QString value = args.value(QStringLiteral("value")).toVariant().toString();
     const QString target = args.value(QStringLiteral("target")).toString();
 
     if (until == QLatin1String("time")) {
@@ -1533,7 +1483,7 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
         common::poll_until(
             250, timeout_ms, [cancelled]() { return cancelled && cancelled(); },
             [reply, timeout_ms](bool was_cancelled) {
-                reply(was_cancelled ? ToolResult::fail(QStringLiteral("cancelled"))
+                reply(was_cancelled ? ui_fail(Err::Cancelled, QStringLiteral("the caller gave up."))
                                     : ToolResult::ok(QStringLiteral("Waited %1 ms.").arg(timeout_ms)));
             });
         return;
@@ -1549,31 +1499,29 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
         }
     }
     if ((until == QLatin1String("text") || until == QLatin1String("gone")) && text.isEmpty()) {
-        reply(ToolResult::fail(QStringLiteral("until=%1 needs `text`.").arg(until)));
+        reply(ui_fail(Err::InvalidValue, QStringLiteral("until=%1 needs `text`.").arg(until)));
         return;
     }
     if (until == QLatin1String("state") && (ref.isEmpty() || state.isEmpty())) {
-        reply(ToolResult::fail(QStringLiteral("until=state needs `ref` and `state`.")));
+        reply(ui_fail(Err::InvalidValue, QStringLiteral("until=state needs `ref` and `state`.")));
         return;
     }
     if (until == QLatin1String("state") && !Refs::instance().was_issued(ref)) {
-        reply(ToolResult::fail(QStringLiteral("%1 was never listed — take a ui_snapshot for refs.").arg(ref)));
+        reply(ui_fail(Err::NotFound, QStringLiteral("%1 was never listed.").arg(ref),
+                      QStringLiteral("take a ui_snapshot for refs.")));
         return;
     }
     if (until == QLatin1String("state") && ref.contains(QStringLiteral(":w"))) {
-        reply(ToolResult::fail(
-            QStringLiteral("A web page's controls are waited on by their text: ui_wait(until=\"text\", "
-                           "text=…, target=\"%1\").")
-                .arg(ref.section(QLatin1Char(':'), 0, 0))));
+        reply(ui_fail(Err::Unsupported, QStringLiteral("A web page's controls are waited on by their text."),
+                      QStringLiteral("ui_wait(until=\"text\", text=…, target=\"%1\").")
+                          .arg(ref.section(QLatin1Char(':'), 0, 0))));
         return;
     }
     static const QStringList kModes = {QStringLiteral("text"),   QStringLiteral("gone"),      QStringLiteral("state"),
                                        QStringLiteral("dialog"), QStringLiteral("no_dialog"), QStringLiteral("idle")};
     if (!kModes.contains(until)) {
-        reply(
-            ToolResult::fail(QStringLiteral("Unknown until=\"%1\" — use text, gone, state, dialog, no_dialog, idle or "
-                                            "time.")
-                                 .arg(until)));
+        reply(ui_fail(Err::InvalidValue, QStringLiteral("Unknown until=\"%1\".").arg(until),
+                      QStringLiteral("use text, gone, state, dialog, no_dialog, idle or time.")));
         return;
     }
 
@@ -1593,14 +1541,12 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
     };
     auto web = std::make_shared<WebWatch>();
     if (until == QLatin1String("text") || until == QLatin1String("gone")) {
-        QList<QWidget*> roots{scope ? scope.data() : static_cast<QWidget*>(active_frame())};
+        QList<QWidget*> roots{scope ? scope.data() : active_frame()};
         roots += open_dialogs();
         for (QWidget* root : roots) {
             if (!root)
                 continue;
-            QList<QWidget*> all = root->findChildren<QWidget*>();
-            all.prepend(root);
-            for (QWidget* w : all) {
+            for (QWidget* w : root->findChildren<QWidget*>()) {
                 if (w->inherits("QWebEngineView") && w->isVisible() && !web->views.contains(w))
                     web->views << w;
             }
@@ -1611,7 +1557,10 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
         if (cancelled && cancelled())
             return true;
         if (until == QLatin1String("text") || until == QLatin1String("gone")) {
-            QString haystack = scope_text(scope ? scope.data() : active_frame());
+            // Bounded per poll: a search that runs out of time this poll simply
+            // has not seen it YET ("gone" then does not hold either).
+            bool complete = false;
+            bool present = scope_has_text(scope ? scope.data() : active_frame(), needle, kWaitScanMs, &complete);
             bool every_page_answered = true;
             for (const QPointer<QWidget>& view : web->views) {
                 if (!view)
@@ -1628,12 +1577,11 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
                                    });
                 }
                 if (web->text.contains(key))
-                    haystack += QLatin1Char('\n') + web->text.value(key);
+                    present = present || web->text.value(key).contains(needle);
                 else
                     every_page_answered = false;
             }
-            const bool present = haystack.contains(needle);
-            return until == QLatin1String("text") ? present : (!present && every_page_answered);
+            return until == QLatin1String("text") ? present : (!present && complete && every_page_answered);
         }
         if (until == QLatin1String("state")) {
             const auto now = state_holds(ref, state, value);
@@ -1653,7 +1601,7 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
     const int interval = (until == QLatin1String("text") || until == QLatin1String("gone")) ? 200 : 150;
     common::poll_until(interval, timeout_ms, check, [=](bool ok) {
         if (cancelled && cancelled()) {
-            reply(ToolResult::fail(QStringLiteral("cancelled")));
+            reply(ui_fail(Err::Cancelled, QStringLiteral("the caller gave up.")));
             return;
         }
         const double secs = clock->elapsed() / 1000.0;
@@ -1677,126 +1625,8 @@ void ui_wait(const QJsonObject& args, CancelCheck cancelled, Reply reply) {
         QString msg = QStringLiteral("Timed out after %1 s waiting for %2").arg(QString::number(secs, 'f', 1), what);
         if (!last_note->isEmpty())
             msg += QStringLiteral(" (now: %1)").arg(*last_note);
-        reply(ToolResult::fail(msg + QLatin1Char('.')));
+        reply(ui_fail(Err::Timeout, msg + QLatin1Char('.')));
     });
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// ui_screenshot
-// ═════════════════════════════════════════════════════════════════════════════
-
-void ui_screenshot(const QJsonObject& args, Reply reply) {
-    QString label, error;
-    QWidget* scope = resolve_scope(args.value(QStringLiteral("target")).toString(), &label, &error);
-    if (!scope) {
-        reply(ToolResult::fail(error));
-        return;
-    }
-    if (!scope->isVisible()) {
-        reply(ToolResult::fail(QStringLiteral("%1 is not visible (a background tab or hidden).").arg(label)));
-        return;
-    }
-    bool png = args.value(QStringLiteral("format")).toString().toLower() == QLatin1String("png");
-    const int max_width = clamp_int(args.value(QStringLiteral("max_width")), 1280, 320, 2560);
-    const bool marks = args.value(QStringLiteral("marks")).toBool(false);
-
-    if (is_secret(scope)) {
-        reply(ToolResult::fail(
-            QStringLiteral("%1 holds a secret (password / API key) and is never captured.").arg(label)));
-        return;
-    }
-    QPixmap pm = scope->grab();
-    if (pm.isNull()) {
-        reply(ToolResult::fail(QStringLiteral("Could not capture %1.").arg(label)));
-        return;
-    }
-    // Pixels must not leak what text never does: black out every visible secret
-    // field (a revealed key, the MCP token with SHOW on) before anything else.
-    int masked = 0;
-    {
-        QPainter p(&pm);
-        for (QWidget* w : scope->findChildren<QWidget*>()) {
-            if (!w->isVisible() || !is_secret(w))
-                continue;
-            if (QWidget* parent = w->parentWidget(); parent && parent != scope && is_secret(parent))
-                continue; // the secret ancestor's box covers it
-            const QRect rect(w->mapTo(scope, QPoint(0, 0)), w->size());
-            if (!rect.intersects(scope->rect()))
-                continue;
-            p.fillRect(rect, QColor(20, 20, 20));
-            p.setPen(QColor(160, 160, 160));
-            p.drawText(rect, Qt::AlignCenter, QStringLiteral("[secret]"));
-            ++masked;
-        }
-    }
-    int marked = 0;
-    if (marks) {
-        WalkOptions opt;
-        opt.detail = Detail::Brief;
-        opt.max_nodes = 300;
-        bool truncated = false;
-        const QList<Node> nodes = collect_nodes(scope, opt, &truncated);
-        QPainter p(&pm);
-        QFont f = p.font();
-        f.setPixelSize(11);
-        f.setBold(true);
-        p.setFont(f);
-        const QFontMetrics fm(f);
-        for (const Node& n : nodes) {
-            if (n.ref.isEmpty() || !n.widget || !n.widget->isVisible())
-                continue;
-            QWidget* w = n.widget;
-            if (w != scope && !scope->isAncestorOf(w))
-                continue;
-            QRect rect(w->mapTo(scope, QPoint(0, 0)), w->size());
-            if (auto* bar = qobject_cast<QTabBar*>(w); bar && n.sub >= 0)
-                rect = QRect(bar->mapTo(scope, bar->tabRect(n.sub).topLeft()), bar->tabRect(n.sub).size());
-            if (!rect.intersects(scope->rect()))
-                continue;
-            p.setPen(QPen(QColor(255, 196, 0), 1));
-            p.drawRect(rect.adjusted(0, 0, -1, -1));
-            const QRect tag(rect.topLeft(), QSize(fm.horizontalAdvance(n.ref) + 6, fm.height() + 2));
-            p.fillRect(tag, QColor(255, 196, 0));
-            p.setPen(Qt::black);
-            p.drawText(tag, Qt::AlignCenter, n.ref);
-            ++marked;
-        }
-    }
-    if (pm.width() > max_width)
-        pm = pm.scaledToWidth(max_width, Qt::SmoothTransformation);
-
-    QByteArray bytes;
-    {
-        QBuffer buf(&bytes);
-        buf.open(QIODevice::WriteOnly);
-        if (!png && !pm.save(&buf, "JPG", 80)) {
-            bytes.clear(); // no JPEG image plugin in this build — fall back to PNG
-            buf.seek(0);
-        }
-        if (bytes.isEmpty()) {
-            png = true;
-            pm.save(&buf, "PNG");
-        }
-    }
-    if (bytes.isEmpty()) {
-        reply(ToolResult::fail(QStringLiteral("Could not encode the screenshot of %1.").arg(label)));
-        return;
-    }
-    const QString mime = png ? QStringLiteral("image/png") : QStringLiteral("image/jpeg");
-
-    ToolResult tr = ToolResult::ok(
-        QStringLiteral("Screenshot of %1 — %2×%3 %4, %5 KB%6.")
-            .arg(label)
-            .arg(pm.width())
-            .arg(pm.height())
-            .arg(png ? QStringLiteral("PNG") : QStringLiteral("JPEG"))
-            .arg(bytes.size() / 1024)
-            .arg((marks ? QStringLiteral("; %1 controls labelled with their refs").arg(marked) : QString()) +
-                 (masked > 0 ? QStringLiteral("; %1 secret field(s) blacked out").arg(masked) : QString())));
-    tr.content.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("image")},
-                                  {QStringLiteral("data"), QString::fromLatin1(bytes.toBase64())},
-                                  {QStringLiteral("mimeType"), mime}});
-    reply(tr);
 }
 
 } // namespace fincept::mcp::core::ui

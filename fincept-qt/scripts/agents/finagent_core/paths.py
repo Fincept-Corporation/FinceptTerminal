@@ -13,26 +13,36 @@ home for it: dev builds prune *.db out of the synced scripts tree, installs keep
 scripts next to the executable (read-only on macOS / Program Files, and shared by
 every OS user and terminal profile).
 
-The fallback (variable unset) is the legacy <scripts>/agent_tasks.db location,
-kept only so the modules still work when run by hand from a CLI.
+The fallback (variable unset: run by hand from a CLI) is the default profile's
+folder in the edition's data root (fincept_paths.data_root()/data/agents) -
+never the read-only, shared scripts folder.
 
 Resolved at call time, never at import time: main.py may set the variable after
 these modules were imported.
 """
 
 import os
+import sys
 from pathlib import Path
 
 AGENT_DATA_DIR_ENV = "FINCEPT_AGENT_DATA_DIR"
 
 # finagent_core/paths.py -> parents[2] is <scripts>
-_LEGACY_DIR = Path(__file__).resolve().parents[2]
+_SCRIPTS_DIR = Path(__file__).resolve().parents[2]
+
+
+def _default_dir() -> Path:
+    if str(_SCRIPTS_DIR) not in sys.path:
+        sys.path.append(str(_SCRIPTS_DIR))
+    import fincept_paths
+
+    return fincept_paths.data_root() / "data" / "agents"
 
 
 def agent_data_dir() -> Path:
     """Directory for durable agent state; created on demand."""
     raw = os.environ.get(AGENT_DATA_DIR_ENV, "").strip()
-    path = Path(raw) if raw else _LEGACY_DIR
+    path = Path(raw) if raw else _default_dir()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

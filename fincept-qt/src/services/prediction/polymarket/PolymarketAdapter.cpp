@@ -8,6 +8,7 @@
 #include "services/prediction/polymarket/PolymarketTypeMap.h"
 
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -19,6 +20,77 @@ namespace fincept::services::prediction::polymarket_ns {
 namespace pm = fincept::services::polymarket;
 namespace pr = fincept::services::prediction;
 namespace pmap = fincept::services::prediction::polymarket_map;
+
+namespace {
+
+// A failed bridge call returns {"ok":false,"error":…} plus, often, "detail" (setup
+// problems) or "raw" (the CLOB's own reply — e.g. a cancel's not_canceled reason).
+// PythonRunner keeps only the "error" text and a reply without one surfaced as
+// "Python command failed"; append the extra context, compacted and capped.
+QString polymarket_error_with_detail(const QString& base, const QJsonObject& obj) {
+    QString msg = base.trimmed();
+    if (msg.isEmpty())
+        msg = obj.value(QStringLiteral("error")).toString().trimmed();
+    QJsonValue d = obj.value(QStringLiteral("detail"));
+    if (d.isUndefined() || d.isNull())
+        d = obj.value(QStringLiteral("raw"));
+    QString detail;
+    if (d.isString())
+        detail = d.toString();
+    else if (d.isObject())
+        detail = QString::fromUtf8(QJsonDocument(d.toObject()).toJson(QJsonDocument::Compact));
+    else if (d.isArray())
+        detail = QString::fromUtf8(QJsonDocument(d.toArray()).toJson(QJsonDocument::Compact));
+    detail = detail.simplified();
+    if (detail.size() > 200)
+        detail = detail.left(200) + QStringLiteral("…");
+    if (!detail.isEmpty() && !msg.contains(detail))
+        msg = msg.isEmpty() ? detail : msg + QStringLiteral(" — ") + detail;
+    return msg;
+}
+
+// Orders audit (policy B.7): one AUDIT line when an order / cancel leaves the terminal and
+// one with its outcome, paired by client_id (a local correlation id — Polymarket has none).
+struct PmOrderAudit {
+    bool active = false; // place_order / cancel_order / cancel_market
+    bool cancel = false;
+    QString client_id;
+    QString account;
+    QString order_id;
+    QString source; // who placed it (OrderRequest::source); empty = not stated
+    QElapsedTimer clock;
+};
+
+// Payload key carrying OrderRequest::source from place_order to run_py's audit lines.
+// run_py takes it OUT of the payload before anything is sent to the bridge.
+constexpr const char* kPmSourceKey = "_fincept_source";
+
+// `answered`: the bridge replied with JSON (a definite refusal); otherwise the outcome is unknown.
+void pm_audit_outcome(const PmOrderAudit& a, bool ok, bool answered, const QString& order_id, const QString& status,
+                      const QString& reason) {
+    if (!a.active)
+        return;
+    const char* sentence = a.cancel ? (ok ? "Order cancel accepted"
+                                          : (answered ? "Order cancel rejected" : "Order cancel outcome unknown"))
+                                    : (ok ? "Order accepted" : (answered ? "Order rejected" : "Order outcome unknown"));
+    QList<LogField> f{{"venue", "polymarket"}, {"account", a.account}, {"client_id", a.client_id}};
+    if (!order_id.isEmpty())
+        f.append(LogField("order_id", order_id));
+    if (!status.isEmpty())
+        f.append(LogField("status", status));
+    if (!ok && answered)
+        f.append(LogField("reason", reason));
+    if (!ok && !answered)
+        f.append(LogField("reason", "no_answer"));
+    f.append(LogField("elapsed_ms", a.clock.elapsed()));
+    if (!ok && !answered)
+        f.append(LogField("error", reason));
+    if (!a.source.isEmpty())
+        f.append(LogField("source", a.source));
+    LOG_AUDIT("Orders", logf(QString::fromLatin1(sentence), f));
+}
+
+} // namespace
 
 PolymarketAdapter::PolymarketAdapter(QObject* parent)
     : fincept::services::prediction::PredictionExchangeAdapter(parent) {
@@ -168,11 +240,19 @@ QString PolymarketAdapter::account_label() const {
 }
 
 void PolymarketAdapter::reload_credentials() {
-    creds_ = pr::PredictionCredentialStore::load_polymarket();
+    QString read_error;
+    auto loaded = pr::PredictionCredentialStore::load_polymarket(&read_error);
+    if (!read_error.isEmpty()) {
+        // Stored but unreadable — not "no credentials": keep whatever this session
+        // already holds (nothing is cleared or written) and say why.
+        emit error_occurred(QStringLiteral("credentials"), read_error);
+        return;
+    }
+    creds_ = std::move(loaded);
     if (creds_) {
-        LOG_INFO("PolymarketAdapter", "Credentials loaded from SecureStorage");
+        LOG_DEBUG("PolymarketAdapter", "Credentials loaded from SecureStorage");
     } else {
-        LOG_INFO("PolymarketAdapter", "No Polymarket credentials in SecureStorage");
+        LOG_DEBUG("PolymarketAdapter", "No Polymarket credentials in SecureStorage");
         cached_wallet_address_.clear();
     }
     emit credentials_changed();
@@ -199,33 +279,101 @@ QJsonObject PolymarketAdapter::creds_to_json(const pr::PolymarketCredentials& c)
     return o;
 }
 
-void PolymarketAdapter::run_py(const QString& command, const QJsonObject& payload,
+void PolymarketAdapter::run_py(const QString& command, const QJsonObject& payload_in,
                                std::function<void(const QJsonObject&)> on_ok, const QString& ctx) {
-    const QString payload_str = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    // The order's provenance rides in the payload only as far as here (audit lines);
+    // it is removed before the payload is sent.
+    QJsonObject payload = payload_in;
+    const QString order_source = payload.take(QLatin1String(kPmSourceKey)).toString();
+    // SECURITY: the payload carries the Polygon wallet private key (and the L2 API
+    // secret). It used to be argv[2] — readable by any same-user process
+    // (Win32_Process.CommandLine, /proc/<pid>/cmdline) and captured in crash dumps,
+    // on every balance / positions / orders refresh. It now goes over the child's
+    // stdin (PythonRunner writes it and closes the channel); "--stdin" tells
+    // prediction_polymarket.py to read it from there. Never log `payload`.
+    const QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    // Orders audit. Only the order fields are read from `payload` — never the
+    // credentials it also carries.
+    PmOrderAudit audit;
+    if (command == QLatin1String("place_order") || command == QLatin1String("cancel_order") ||
+        command == QLatin1String("cancel_market")) {
+        audit.active = true;
+        audit.cancel = command != QLatin1String("place_order");
+        audit.client_id = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+        audit.account = log_mask(cached_wallet_address_);
+        audit.order_id = payload.value(QStringLiteral("order_id")).toString();
+        audit.source = order_source;
+        audit.clock.start();
+        if (!audit.cancel) {
+            QList<LogField> f{{"venue", "polymarket"},
+                              {"account", audit.account},
+                              {"mode", "live"},
+                              {"symbol", payload.value(QStringLiteral("token_id")).toString()},
+                              {"side", payload.value(QStringLiteral("side")).toString()},
+                              {"type", payload.value(QStringLiteral("order_type")).toString()},
+                              {"qty", payload.value(QStringLiteral("size")).toDouble()},
+                              {"price", payload.value(QStringLiteral("price")).toDouble()},
+                              {"client_id", audit.client_id}};
+            if (!order_source.isEmpty())
+                f.append(LogField("source", order_source));
+            LOG_AUDIT("Orders", logf(QStringLiteral("Order submitted"), f));
+        } else {
+            LOG_AUDIT("Orders", logf(QStringLiteral("Order cancel requested"),
+                                     audit.order_id.isEmpty()
+                                         ? QList<LogField>{{"venue", "polymarket"},
+                                                           {"account", audit.account},
+                                                           {"scope", "market"},
+                                                           {"symbol", payload.value(QStringLiteral("asset_id")).toString()},
+                                                           {"client_id", audit.client_id}}
+                                         : QList<LogField>{{"venue", "polymarket"},
+                                                           {"account", audit.account},
+                                                           {"order_id", audit.order_id},
+                                                           {"client_id", audit.client_id}}));
+        }
+    }
+
     QPointer<PolymarketAdapter> self = this;
     fincept::python::PythonRunner::instance().run(
-        QStringLiteral("prediction_polymarket.py"), {command, payload_str},
-        [self, on_ok, ctx](fincept::python::PythonResult r) {
+        QStringLiteral("prediction_polymarket.py"), {command, QStringLiteral("--stdin")},
+        [self, on_ok, ctx, audit](fincept::python::PythonResult r) {
             if (!self)
                 return;
             if (!r.success) {
-                emit self->error_occurred(ctx, r.error.isEmpty() ? r.output : r.error);
+                // r.output holds the script's JSON reply when it produced one; its
+                // "detail" / "raw" says what the CLOB actually objected to.
+                const QJsonObject reply =
+                    QJsonDocument::fromJson(fincept::python::extract_json(r.output).toUtf8()).object();
+                QString msg = polymarket_error_with_detail(r.error, reply);
+                if (msg.isEmpty())
+                    msg = r.output.trimmed().left(300);
+                pm_audit_outcome(audit, false, !reply.isEmpty(), audit.order_id, QString(), msg);
+                emit self->error_occurred(ctx, msg);
                 return;
             }
             const QString json_str = fincept::python::extract_json(r.output);
             QJsonParseError perr;
             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &perr);
             if (doc.isNull() || !doc.isObject()) {
+                pm_audit_outcome(audit, false, false, audit.order_id, QString(),
+                                 QStringLiteral("non-JSON reply: ") + perr.errorString());
                 emit self->error_occurred(ctx, QStringLiteral("Python response is not JSON: ") + perr.errorString());
                 return;
             }
             const auto obj = doc.object();
             if (!obj.value("ok").toBool()) {
-                emit self->error_occurred(ctx, obj.value("error").toString(QStringLiteral("Python command failed")));
+                const QString msg = polymarket_error_with_detail(QString(), obj);
+                pm_audit_outcome(audit, false, true, audit.order_id, QString(),
+                                 msg.isEmpty() ? QStringLiteral("Python command failed") : msg);
+                emit self->error_occurred(ctx, msg.isEmpty() ? QStringLiteral("Python command failed") : msg);
                 return;
             }
+            pm_audit_outcome(audit, true, true,
+                             audit.cancel ? audit.order_id : obj.value(QStringLiteral("order_id")).toString(),
+                             obj.value(QStringLiteral("status")).toString(), QString());
             on_ok(obj);
-        });
+        },
+        {}, payload_bytes);
 }
 
 void PolymarketAdapter::ensure_api_creds(std::function<void(const pr::PolymarketCredentials&)> then,
@@ -388,6 +536,7 @@ void PolymarketAdapter::place_order(const pr::OrderRequest& req) {
         qint64 expires_ms;
         QString tick_size;
         bool neg_risk;
+        QString source;
     };
     Req r{req.asset_id,
           req.side,
@@ -396,7 +545,8 @@ void PolymarketAdapter::place_order(const pr::OrderRequest& req) {
           req.size,
           req.expires_ms,
           req.extras.value(QStringLiteral("tick_size"), QStringLiteral("0.01")).toString(),
-          req.extras.value(QStringLiteral("neg_risk"), false).toBool()};
+          req.extras.value(QStringLiteral("neg_risk"), false).toBool(),
+          req.source};
 
     QPointer<PolymarketAdapter> self = this;
     ensure_api_creds(
@@ -413,6 +563,8 @@ void PolymarketAdapter::place_order(const pr::OrderRequest& req) {
             p.insert("neg_risk", r.neg_risk);
             if (r.expires_ms > 0)
                 p.insert("expiration", qint64(r.expires_ms / 1000));
+            if (!r.source.isEmpty())
+                p.insert(QLatin1String(kPmSourceKey), r.source); // audit only; run_py removes it before sending
 
             self->run_py(
                 QStringLiteral("place_order"), p,

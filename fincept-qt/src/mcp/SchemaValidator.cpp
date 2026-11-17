@@ -2,6 +2,7 @@
 
 #include "mcp/SchemaValidator.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -39,6 +40,19 @@ QString fail_msg(const QString& key, const QString& reason) {
     return "Invalid argument: " + key + ": " + reason;
 }
 
+/// A tool's pattern, compiled once per thread (validation runs on every call,
+/// on whichever worker thread serves it).
+const QRegularExpression& anchored(const QString& pattern) {
+    thread_local QHash<QString, QRegularExpression> cache;
+    auto it = cache.find(pattern);
+    if (it == cache.end()) {
+        if (cache.size() > 256)
+            cache.clear();
+        it = cache.insert(pattern, QRegularExpression(QRegularExpression::anchoredPattern(pattern)));
+    }
+    return it.value();
+}
+
 // ── Validate one param against either the structured ToolParam OR the
 // legacy raw QJsonObject schema fragment. Returns empty string on success,
 // error reason on failure.
@@ -62,8 +76,7 @@ QString validate_typed(const QString& /*key*/, const ToolParam& p, const QJsonVa
             // trailing newline because $ matches before a final \n. Tool
             // patterns are a security control (see run_python_script), so they
             // must be full-string.
-            QRegularExpression rx(QRegularExpression::anchoredPattern(p.pattern));
-            if (!rx.match(s).hasMatch())
+            if (!anchored(p.pattern).match(s).hasMatch())
                 return "does not match pattern " + p.pattern;
         }
     } else if (p.type == "number" || p.type == "integer") {
@@ -99,8 +112,7 @@ QString validate_legacy(const QString& /*key*/, const QJsonObject& spec, const Q
     }
     if (expected == "string" && spec.contains("pattern")) {
         // Full-string match — see the note in validate_typed().
-        QRegularExpression rx(QRegularExpression::anchoredPattern(spec["pattern"].toString()));
-        if (!rx.match(v.toString()).hasMatch())
+        if (!anchored(spec["pattern"].toString()).match(v.toString()).hasMatch())
             return "does not match pattern " + spec["pattern"].toString();
     }
     if ((expected == "number" || expected == "integer")) {
@@ -224,9 +236,116 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
             args[key] = QJsonArray{cur};
             continue;
         }
-        if (!cur.isString())
+        // Shapes a model sends when it has only seen the parameter's NAME:
+        //   - a list given as nothing ("" or {}) is an empty list;
+        //   - a list given as one number / boolean is a list of that one value;
+        //   - an object given as "" is an empty object;
+        //   - a string given as a list of scalars (`query: ["us", "movers"]`) is the words joined.
+        // Each used to fail the call with "expected array" and cost the turn a round — or the
+        // turn itself, when the model gave up (`python` with args: "" did exactly that).
+        if (want == QLatin1String("array")) {
+            if ((cur.isString() && cur.toString().trimmed().isEmpty()) || (cur.isObject() && cur.toObject().isEmpty())) {
+                args[key] = QJsonArray{};
+                continue;
+            }
+            // `args: {"symbol": "AAPL", "period": "1y", "raw": true}` for a list of strings:
+            // the command-line form of it (--symbol=AAPL --period=1y --raw). The bundled
+            // scripts take named options exactly like that.
+            if (cur.isObject() && item_type(key) == QLatin1String("string")) {
+                QJsonArray flat;
+                const QJsonObject o = cur.toObject();
+                for (auto oit = o.constBegin(); oit != o.constEnd(); ++oit) {
+                    const QJsonValue ov = oit.value();
+                    const QString name = QStringLiteral("--") + oit.key();
+                    if (ov.isBool()) {
+                        if (ov.toBool())
+                            flat.append(name);
+                    } else if (ov.isString()) {
+                        flat.append(name + QLatin1Char('=') + ov.toString());
+                    } else if (ov.isDouble()) {
+                        flat.append(name + QLatin1Char('=') + QString::number(ov.toDouble(), 'g', 15));
+                    } else if (ov.isArray() || ov.isObject()) {
+                        flat.append(name + QLatin1Char('=') +
+                                    QString::fromUtf8(ov.isArray()
+                                                          ? QJsonDocument(ov.toArray()).toJson(QJsonDocument::Compact)
+                                                          : QJsonDocument(ov.toObject()).toJson(QJsonDocument::Compact)));
+                    }
+                }
+                args[key] = flat;
+                continue;
+            }
+            if (cur.isDouble() || cur.isBool()) {
+                const QString it_type = item_type(key);
+                if (it_type == QLatin1String("string"))
+                    args[key] = QJsonArray{cur.isBool() ? QString::fromLatin1(cur.toBool() ? "true" : "false")
+                                                        : QString::number(cur.toDouble(), 'g', 15)};
+                else
+                    args[key] = QJsonArray{cur};
+                continue;
+            }
+            // A list of strings whose elements arrived as numbers / booleans (`args: ["quote", 5]`).
+            if (cur.isArray() && item_type(key) == QLatin1String("string")) {
+                QJsonArray fixed;
+                bool changed = false;
+                for (const QJsonValue& e : cur.toArray()) {
+                    if (e.isDouble() || e.isBool()) {
+                        fixed.append(e.isBool() ? QString::fromLatin1(e.toBool() ? "true" : "false")
+                                                : QString::number(e.toDouble(), 'g', 15));
+                        changed = true;
+                    } else {
+                        fixed.append(e);
+                    }
+                }
+                if (changed)
+                    args[key] = fixed;
+                continue;
+            }
+        }
+        if (want == QLatin1String("object") && cur.isString() && cur.toString().trimmed().isEmpty()) {
+            args[key] = QJsonObject{};
             continue;
-        const QString s = cur.toString().trimmed();
+        }
+        if (want == QLatin1String("string") && cur.isArray()) {
+            QStringList words;
+            bool scalars = true;
+            for (const QJsonValue& e : cur.toArray()) {
+                if (e.isString())
+                    words.append(e.toString());
+                else if (e.isDouble())
+                    words.append(QString::number(e.toDouble(), 'g', 15));
+                else if (e.isBool())
+                    words.append(QString::fromLatin1(e.toBool() ? "true" : "false"));
+                else
+                    scalars = false;
+            }
+            if (scalars && !words.isEmpty() && !schema.params.value(key).enum_values.size()) {
+                args[key] = words.join(QLatin1Char(' '));
+                continue;
+            }
+        }
+        // A number or boolean where a string is declared (`value: 5` for a field
+        // that also takes dates): the text of it, not a rejected call.
+        if (want == QLatin1String("string") && (cur.isDouble() || cur.isBool())) {
+            args[key] = cur.isBool() ? QString::fromLatin1(cur.toBool() ? "true" : "false")
+                                     : QString::number(cur.toDouble(), 'g', 15);
+            continue;
+        }
+        // An enum value in another case ("Click", "JSON"): the declared spelling.
+        if (want == QLatin1String("string") && cur.isString() && schema.params.contains(key)) {
+            const QStringList allowed = schema.params.value(key).enum_values;
+            if (!allowed.isEmpty() && !allowed.contains(cur.toString())) {
+                const QString given = cur.toString().trimmed();
+                for (const QString& a : allowed) {
+                    if (a.compare(given, Qt::CaseInsensitive) == 0) {
+                        args[key] = a;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!args.value(key).isString())
+            continue;
+        const QString s = args.value(key).toString().trimmed();
         if (s.isEmpty())
             continue;
 

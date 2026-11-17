@@ -24,8 +24,9 @@ class QGraphicsSimpleTextItem;
 class QLabel;
 
 namespace fincept::ui {
+class AutoLoadPane;
 class IndicatorPicker;
-}
+} // namespace fincept::ui
 
 namespace fincept::screens::crypto {
 
@@ -42,18 +43,41 @@ class CryptoChart : public QWidget {
     /// tag and every indicator overlay are refreshed ONCE per call.
     void append_candles(const QVector<trading::Candle>& candles);
     void clear();
+    /// The market the candles come from: its quote asset decides the price
+    /// decimals of the axis, the price tags and the OHLC read-out.
+    void set_price_market(const QString& market);
 
     QString current_timeframe() const;
     fincept::ui::ChartOverlayManager* overlay_manager() const { return overlay_mgr_; }
 
+    // ── Plot states (the plot sits in a feed-mode ui::AutoLoadPane) ──
+    // No candles yet: a chart skeleton with this caption ("Loading BTC/USDT 1h
+    // candles from KRAKEN…"). clear() returns the plot to that state.
+    void set_loading_text(const QString& text);
+    /// The price history could not be loaded and nothing is drawn: an error
+    /// page (plain `message`, `details` behind DETAILS, RETRY).
+    void show_feed_error(const QString& message, const QString& details = QString());
+    /// Why live candles are not streaming ("" = they are). With candles on
+    /// screen it is a notice over the chart; with none, the error page.
+    void set_live_error(const QString& message);
+    /// Python became ready (or not): re-check the plot's requirement.
+    void recheck_requirements();
+
   signals:
     void timeframe_changed(const QString& tf);
+    /// The plot wants data: it was shown (`retry` false), or RETRY was pressed /
+    /// its requirement is met again (`retry` true). The screen fetches the
+    /// history if none is drawn and, on a retry, restarts a stream that gave up.
+    void feed_wanted(bool retry);
 
   protected:
     void changeEvent(QEvent* event) override;
 
   private:
     void retranslateUi();
+    /// Re-applies the colours and fonts held by the chart, its axes, the scene
+    /// overlays and the EMA layers (on ThemeManager::theme_changed).
+    void refresh_theme();
     void rebuild_chart();
     void update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time);
     void set_active_tf(int idx);
@@ -103,6 +127,7 @@ class CryptoChart : public QWidget {
     static constexpr const char* TF_LABELS[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
 
     QVector<trading::Candle> candles_;
+    QString price_market_; // set_price_market(); empty = quote asset not known yet
     static constexpr int MAX_VISIBLE = 120;
     // Never fit the time axis tighter than this many slots. Qt sizes a candle
     // body from the slot width in DOMAIN units, so a data-fitted axis holding
@@ -126,6 +151,14 @@ class CryptoChart : public QWidget {
 
     fincept::ui::ChartOverlayManager* overlay_mgr_ = nullptr;
     fincept::ui::IndicatorPicker* indicator_picker_ = nullptr;
+
+    // Loading / error / needs-setup states of the plot (header stays usable).
+    fincept::ui::AutoLoadPane* plot_pane_ = nullptr;
+    bool feed_reported_ = false; ///< the pane was told candles are on screen (since the last clear / error)
+    bool feed_retry_ = false;    ///< the pane let go of the feed while visible (RETRY / requirement lost)
+    QString live_error_;         ///< why live candles are not streaming ("" = they are)
+    /// Tell the pane candles are drawn (once per clear / error), keeping a live-error notice.
+    void report_feed_data();
 
     friend class HoverChartView;
 };

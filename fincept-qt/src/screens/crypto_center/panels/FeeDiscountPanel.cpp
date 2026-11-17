@@ -1,16 +1,18 @@
 #include "screens/crypto_center/panels/FeeDiscountPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "services/billing/FeeDiscountConfig.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QProgressBar>
 #include <QShowEvent>
 #include <QVBoxLayout>
@@ -18,24 +20,27 @@
 #include <algorithm>
 #include <cmath>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-QString format_token(double v, int dp = 2) {
+/// A $FNCPT amount: a quantity of the token, never money.
+QString fdp_format_token(double v, int dp = 2) {
     if (v <= 0.0)
         return QStringLiteral("0");
-    return QLocale::system().toString(v, 'f', dp);
+    return cc_fmt::quantity(v, dp);
 }
 
-QString format_usd(double v) {
+/// Fincept SKU prices (the fixed reference price and what the discount takes off
+/// it) are set in USD: shown in USD, never converted.
+QString fdp_format_usd(double v) {
     if (v < 0.0)
         return QStringLiteral("—");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 2));
+    return cc_fmt::plan_price(v);
 }
 
 double threshold_ui(const fincept::wallet::FncptDiscount& d) {
@@ -59,6 +64,9 @@ FeeDiscountPanel::FeeDiscountPanel(QWidget* parent) : QWidget(parent) {
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
     }
+    // A number / currency format change re-renders captions and figures from what
+    // is already held (no re-fetch).
+    cc_fmt::on_format_changed(this, [this]() { retranslateUi(); });
 
     update_view();
 }
@@ -133,8 +141,7 @@ void FeeDiscountPanel::build_ui() {
     bl->addWidget(skus_value_);
 
     savings_caption_ = new QLabel(
-        tr("PROJECTED SAVINGS  ·  reference $%1 SKU")
-            .arg(QLocale::system().toString(fincept::billing::FeeDiscountConfig::kReferencePriceUsd, 'f', 2)),
+        tr("PROJECTED SAVINGS  ·  reference %1 SKU").arg(fdp_format_usd(fincept::billing::FeeDiscountConfig::kReferencePriceUsd)),
         body);
     savings_caption_->setObjectName(QStringLiteral("feeDiscountCaption"));
     bl->addWidget(savings_caption_);
@@ -145,9 +152,9 @@ void FeeDiscountPanel::build_ui() {
     hint_ = new QLabel(
         tr("Planned: holding ≥ %1 $FNCPT will qualify for a discount on premium screens, AI reports and deep "
            "backtests. Not active yet — no purchase in the terminal applies it, so nothing is discounted today.")
-            .arg(QLocale::system().toString(static_cast<double>(fincept::billing::FeeDiscountConfig::kThresholdRaw) /
-                                                std::pow(10.0, fincept::billing::FeeDiscountConfig::kThresholdDecimals),
-                                            'f', 0)),
+            .arg(cc_fmt::quantity(static_cast<double>(fincept::billing::FeeDiscountConfig::kThresholdRaw) /
+                                      std::pow(10.0, fincept::billing::FeeDiscountConfig::kThresholdDecimals),
+                                  0)),
         body);
     hint_->setObjectName(QStringLiteral("feeDiscountHint"));
     hint_->setWordWrap(true);
@@ -161,27 +168,27 @@ void FeeDiscountPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#feeDiscountPanel { background:%1; }"
+    const QString ss = QString("QWidget#feeDiscountPanel { background:%1; }"
                                       "QWidget#feeDiscountHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#feeDiscountTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#feeDiscountTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#feeDiscountHeadStatus { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#feeDiscountHeadStatus { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#feeDiscountHeadStatusOk { color:%7; font-family:%5; font-size:10px;"
+                                      "QLabel#feeDiscountHeadStatusOk { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
                                       "QWidget#feeDiscountBody { background:%1; }"
 
-                                      "QLabel#feeDiscountCaption { color:%6; font-family:%5; font-size:9px;"
+                                      "QLabel#feeDiscountCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                                      "QLabel#feeDiscountValue { color:%8; font-family:%5; font-size:14px;"
+                                      "QLabel#feeDiscountValue { color:%8; font-family:%5; font-size:" + fincept::ui::fonts::px(0) + "px;"
                                       "  font-weight:600; background:transparent; }"
-                                      "QLabel#feeDiscountValueDim { color:%9; font-family:%5; font-size:14px;"
+                                      "QLabel#feeDiscountValueDim { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(0) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#feeDiscountSkus { color:%9; font-family:%5; font-size:12px;"
+                                      "QLabel#feeDiscountSkus { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#feeDiscountSavings { color:%4; font-family:%5; font-size:14px;"
+                                      "QLabel#feeDiscountSavings { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(0) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#feeDiscountHint { color:%6; font-family:%5; font-size:11px;"
+                                      "QLabel#feeDiscountHint { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }"
 
                                       "QProgressBar#feeDiscountProgress { background:%2; border:1px solid %3;"
@@ -193,7 +200,7 @@ void FeeDiscountPanel::apply_theme() {
                                 AMBER(),           // %4
                                 font,              // %5
                                 TEXT_TERTIARY(),   // %6
-                                POSITIVE(),        // %7
+                                SUCCESS(),         // %7
                                 TEXT_PRIMARY(),    // %8
                                 TEXT_SECONDARY()); // %9
 
@@ -266,8 +273,8 @@ void FeeDiscountPanel::update_view() {
     const int discount_pct = have_discount_ ? latest_.discount_pct : FeeDiscountConfig::kDiscountPct;
 
     balance_value_->setText(current_pubkey_.isEmpty() ? QStringLiteral("—")
-                                                      : QStringLiteral("%1 $FNCPT").arg(format_token(fncpt_held_, 2)));
-    threshold_value_->setText(QStringLiteral("%1 $FNCPT").arg(format_token(threshold, 0)));
+                                                      : QStringLiteral("%1 $FNCPT").arg(fdp_format_token(fncpt_held_, 2)));
+    threshold_value_->setText(QStringLiteral("%1 $FNCPT").arg(fdp_format_token(threshold, 0)));
 
     int pct = 0;
     if (threshold > 0.0) {
@@ -293,15 +300,15 @@ void FeeDiscountPanel::update_view() {
         const double save = FeeDiscountConfig::kReferencePriceUsd * discount_pct / 100.0;
         const double net = FeeDiscountConfig::kReferencePriceUsd - save;
         savings_value_->setText(tr("%1 → %2  (would save %3 once live)")
-                                    .arg(format_usd(FeeDiscountConfig::kReferencePriceUsd))
-                                    .arg(format_usd(net))
-                                    .arg(format_usd(save)));
+                                    .arg(fdp_format_usd(FeeDiscountConfig::kReferencePriceUsd))
+                                    .arg(fdp_format_usd(net))
+                                    .arg(fdp_format_usd(save)));
     } else {
         heading_status_->setText(tr("PLANNED · NOT ELIGIBLE"));
         heading_status_->setObjectName(QStringLiteral("feeDiscountHeadStatus"));
         const double need = std::max(0.0, threshold - fncpt_held_);
         savings_value_->setText(tr("%1 more $FNCPT needed to qualify for the planned %2% discount.")
-                                    .arg(format_token(need, 0))
+                                    .arg(fdp_format_token(need, 0))
                                     .arg(discount_pct));
     }
     heading_status_->style()->unpolish(heading_status_);
@@ -338,15 +345,15 @@ void FeeDiscountPanel::retranslateUi() {
     if (skus_caption_)
         skus_caption_->setText(tr("PLANNED FOR"));
     if (savings_caption_)
-        savings_caption_->setText(tr("PROJECTED SAVINGS  ·  reference $%1 SKU")
-                                      .arg(QLocale::system().toString(FeeDiscountConfig::kReferencePriceUsd, 'f', 2)));
+        savings_caption_->setText(
+            tr("PROJECTED SAVINGS  ·  reference %1 SKU").arg(fdp_format_usd(FeeDiscountConfig::kReferencePriceUsd)));
     if (hint_)
         hint_->setText(tr("Planned: holding ≥ %1 $FNCPT will qualify for a discount on premium screens, AI reports "
                           "and deep backtests. Not active yet — no purchase in the terminal applies it, so nothing "
                           "is discounted today.")
-                           .arg(QLocale::system().toString(static_cast<double>(FeeDiscountConfig::kThresholdRaw) /
-                                                               std::pow(10.0, FeeDiscountConfig::kThresholdDecimals),
-                                                           'f', 0)));
+                           .arg(cc_fmt::quantity(static_cast<double>(FeeDiscountConfig::kThresholdRaw) /
+                                                     std::pow(10.0, FeeDiscountConfig::kThresholdDecimals),
+                                                 0)));
     // Re-render state-dependent labels (heading status + savings/balance) in
     // the new locale.
     update_view();

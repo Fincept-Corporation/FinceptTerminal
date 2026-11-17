@@ -18,6 +18,11 @@ class ChatSessionPanel : public QWidget {
     explicit ChatSessionPanel(QWidget* parent = nullptr);
 
     void refresh_sessions();
+    /// Keyboard focus into the conversation list.
+    void focus_list();
+    /// The EXPORT action (every conversation as JSON, non-modal file dialog, written
+    /// on a worker) — also reachable from Chat Mode's command bar.
+    void export_conversations();
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -41,10 +46,12 @@ class ChatSessionPanel : public QWidget {
     void on_export_clicked();
     void on_search_changed(const QString& text);
     void on_search_server();
+    void on_load_more();
 
   private:
     QLineEdit* search_edit_ = nullptr;
     QListWidget* session_list_ = nullptr;
+    QPushButton* more_btn_ = nullptr; // "load older conversations"
     QPushButton* new_btn_ = nullptr;
     QPushButton* delete_btn_ = nullptr;
     QPushButton* rename_btn_ = nullptr;
@@ -62,10 +69,24 @@ class ChatSessionPanel : public QWidget {
     QSet<QString> search_hits_;
     ChatStats last_stats_{};
 
+    // How many of the newest conversations the sidebar shows (grows by a page per
+    // "load older"). A refresh re-reads that window from the top. Servers that page
+    // (`has_more` in the reply) get "load older" as one `offset` request for the next
+    // page; older servers take only `limit`, so there it re-reads the larger window.
+    int session_limit_ = 0;
+    bool server_pages_ = false; // the last list reply carried `has_more`
+    bool has_more_ = false;     // …and it said older conversations exist
+    bool loading_more_ = false;
+    int list_seq_ = 0; // only the newest list request may repopulate the sidebar
+
+    /// Server-side cap on `limit` (apiback chat.py CHAT_SESSIONS_MAX_LIMIT).
+    static constexpr int kMaxWindow = 1000;
+
     void build_ui();
     void retranslateUi();
     void apply_filter(const QString& text);
     void populate_list(const QVector<ChatSession>& sessions);
+    void update_more_button();
 };
 
 } // namespace fincept::chat_mode

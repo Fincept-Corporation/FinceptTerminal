@@ -1,0 +1,116 @@
+{
+  "name": "Fincept static ETF top holdings",
+  "as_of": "2026-11-17",
+  "source": "Yahoo Finance (yfinance Ticker(etf).funds_data.top_holdings) snapshot taken 2026-11-17; weights are fractions of the fund.",
+  "note": "Fallback when the live Yahoo holdings request fails. Only the top 10 holdings; not historical membership, not the full basket.",
+  "holdings": {
+    "SPY": [
+      ["AAPL", "Apple Inc", 0.077007],
+      ["NVDA", "NVIDIA Corp", 0.075823],
+      ["MSFT", "Microsoft Corp", 0.059332],
+      ["AMZN", "Amazon.com Inc", 0.036119],
+      ["GOOGL", "Alphabet Inc Class A", 0.025141],
+      ["AVGO", "Broadcom Inc", 0.023752],
+      ["META", "Meta Platforms Inc Class A", 0.020763],
+      ["GOOG", "Alphabet Inc Class C", 0.020247],
+      ["LLY", "Eli Lilly and Co", 0.017367],
+      ["TSLA", "Tesla Inc", 0.017252]
+    ],
+    "QQQ": [
+      ["AAPL", "Apple Inc", 0.081592],
+      ["NVDA", "NVIDIA Corp", 0.080006],
+      ["MSFT", "Microsoft Corp", 0.062867],
+      ["MU", "Micron Technology Inc", 0.044747],
+      ["AMZN", "Amazon.com Inc", 0.042053],
+      ["AMD", "Advanced Micro Devices Inc", 0.036903],
+      ["TSLA", "Tesla Inc", 0.03407],
+      ["META", "Meta Platforms Inc Class A", 0.029664],
+      ["WMT", "Walmart Inc", 0.026899],
+      ["GOOGL", "Alphabet Inc Class A", 0.026637]
+    ],
+    "VTI": [
+      ["NVDA", "NVIDIA Corp", 0.071343],
+      ["AAPL", "Apple Inc", 0.066314],
+      ["MSFT", "Microsoft Corp", 0.051965],
+      ["AMZN", "Amazon.com Inc", 0.033001],
+      ["GOOGL", "Alphabet Inc Class A", 0.027604],
+      ["AVGO", "Broadcom Inc", 0.022797],
+      ["META", "Meta Platforms Inc Class A", 0.021819],
+      ["GOOG", "Alphabet Inc Class C", 0.021786],
+      ["MU", "Micron Technology Inc", 0.016413],
+      ["TSLA", "Tesla Inc", 0.013655]
+    ],
+    "IWM": [
+      ["GKOS", "Glaukos Corp", 0.004602],
+      ["BTSG", "BrightSpring Health Services Inc", 0.003784],
+      ["FROG", "JFrog Ltd Ordinary Shares", 0.003462],
+      ["TWST", "Twist Bioscience Corp", 0.0034],
+      ["MOG.A", "Moog Inc Class A", 0.003375],
+      ["UMBF", "UMB Financial Corp", 0.003339],
+      ["VSAT", "Viasat Inc", 0.003333],
+      ["SM", "SM Energy Co", 0.003311],
+      ["EAT", "Brinker International Inc", 0.003098],
+      ["RHP", "Ryman Hospitality Properties Inc", 0.003031]
+    ],
+    "DIA": [
+      ["GS", "The Goldman Sachs Group Inc", 0.102627],
+      ["CAT", "Caterpillar Inc", 0.071445],
+      ["MSFT", "Microsoft Corp", 0.059876],
+      ["AMGN", "Amgen Inc", 0.053463],
+      ["V", "Visa Inc Class A", 0.047449],
+      ["UNH", "UnitedHealth Group Inc", 0.046689],
+      ["TRV", "The Travelers Companies Inc", 0.045456],
+      ["AAPL", "Apple Inc", 0.039537],
+      ["JPM", "JPMorgan Chase & Co", 0.038667],
+      ["SHW", "Sherwin-Williams Co", 0.038158]
+    ],
+    "XLK": [
+      ["AAPL", "Apple Inc", 0.153123],
+      ["NVDA", "NVIDIA Corp", 0.150769],
+      ["MSFT", "Microsoft Corp", 0.117986],
+      ["AVGO", "Broadcom Inc", 0.04723],
+      ["AMD", "Advanced Micro Devices Inc", 0.045416],
+      ["MU", "Micron Technology Inc", 0.040358],
+      ["PLTR", "Palantir Technologies Inc Ordinary Shares - Class A", 0.026111],
+      ["CSCO", "Cisco Systems Inc", 0.025392],
+      ["INTC", "Intel Corp", 0.020142],
+      ["AMAT", "Applied Materials Inc", 0.019092]
+    ],
+    "XLF": [
+      ["BRK.B", "Berkshire Hathaway Inc Class B", 0.126763],
+      ["JPM", "JPMorgan Chase & Co", 0.112405],
+      ["V", "Visa Inc Class A", 0.088427],
+      ["MA", "Mastercard Inc Class A", 0.064726],
+      ["BAC", "Bank of America Corp", 0.040805],
+      ["GS", "The Goldman Sachs Group Inc", 0.032677],
+      ["WFC", "Wells Fargo & Co", 0.031642],
+      ["MS", "Morgan Stanley", 0.027601],
+      ["C", "Citigroup Inc", 0.025811],
+      ["AXP", "American Express Co", 0.021089]
+    ],
+    "XLE": [
+      ["XOM", "ExxonMobil Holdings Corp", 0.242925],
+      ["CVX", "Chevron Corp", 0.18293],
+      ["COP", "ConocoPhillips", 0.072743],
+      ["MPC", "Marathon Petroleum Corp", 0.046412],
+      ["PSX", "Phillips 66", 0.045211],
+      ["VLO", "Valero Energy Corp", 0.042834],
+      ["WMB", "Williams Companies Inc", 0.041242],
+      ["EOG", "EOG Resources Inc", 0.040678],
+      ["SLB", "SLB Ltd", 0.037364],
+      ["TRGP", "Targa Resources Corp", 0.031642]
+    ],
+    "XLV": [
+      ["LLY", "Eli Lilly and Co", 0.16881],
+      ["JNJ", "Johnson & Johnson", 0.097988],
+      ["ABBV", "AbbVie Inc", 0.077557],
+      ["MRK", "Merck & Co Inc", 0.054903],
+      ["UNH", "UnitedHealth Group Inc", 0.054367],
+      ["TMO", "Thermo Fisher Scientific Inc", 0.038356],
+      ["AMGN", "Amgen Inc", 0.037497],
+      ["GILD", "Gilead Sciences Inc", 0.031498],
+      ["ABT", "Abbott Laboratories", 0.02735],
+      ["PFE", "Pfizer Inc", 0.02589]
+    ]
+  }
+}

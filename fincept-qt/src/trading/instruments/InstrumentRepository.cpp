@@ -1,6 +1,7 @@
 #include "trading/instruments/InstrumentRepository.h"
 
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentSearchSql.h"
 
 #include <QSqlQuery>
 
@@ -156,40 +157,45 @@ std::optional<Instrument> InstrumentRepository::find_by_brsymbol(const QString& 
 
 QVector<Instrument> InstrumentRepository::search(const QString& query, const QString& exchange,
                                                  const QString& broker_id, int limit) const {
-    QString pattern = "%" + query.toUpper() + "%";
-    // Exchange is stored upper-case; normalise the filter so "nse" matches. Empty = any.
-    const QString exch = exchange.toUpper();
-    QString sql = "SELECT instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
-                  "expiry, strike, lot_size, instrument_type, tick_size, broker_id, broker_token "
-                  "FROM instruments "
-                  "WHERE broker_id = ? "
-                  "AND (exchange = ? OR ? = '') "
-                  "AND (UPPER(symbol) LIKE ? OR UPPER(brsymbol) LIKE ? OR UPPER(name) LIKE ?) "
-                  "ORDER BY CASE instrument_type "
-                  "  WHEN 'EQ' THEN 0 WHEN 'INDEX' THEN 1 WHEN 'FUT' THEN 2 ELSE 3 END, symbol "
-                  "LIMIT ?";
-    auto r = db().execute(sql, {broker_id, exch, exch, pattern, pattern, pattern, limit});
-    if (r.is_err())
-        return {};
-    QVector<Instrument> results;
-    auto& q = r.value();
-    while (q.next())
-        results.append(map_row(q));
-    return results;
+    // One broker is search_all() over a one-element list: same match rules, same
+    // order (the "active broker first" term is constant for a single broker).
+    return search_all(query, exchange, QStringList{broker_id}, limit);
 }
 
 QVector<Instrument> InstrumentRepository::search_all(const QString& query, const QString& exchange,
                                                      const QStringList& broker_ids, int limit) const {
-    const QString pattern = "%" + query.toUpper() + "%";
+    namespace iss = instrument_search_sql;
+    const QString text = query.trimmed();
+    if (text.isEmpty() || limit <= 0)
+        return {};
     // Exchange stored upper-case; normalise the filter. Empty = any exchange.
-    const QString exch = exchange.toUpper();
+    const QString exch = exchange.trimmed().toUpper();
 
     QString sql = "SELECT instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
                   "expiry, strike, lot_size, instrument_type, tick_size, broker_id, broker_token "
                   "FROM instruments "
-                  "WHERE (exchange = ? OR ? = '') "
-                  "AND (UPPER(symbol) LIKE ? OR UPPER(brsymbol) LIKE ? OR UPPER(name) LIKE ?) ";
-    QVariantList params = {exch, exch, pattern, pattern, pattern};
+                  "WHERE (exchange = ? OR ? = '') ";
+    QVariantList params = {exch, exch};
+
+    // User text is bound and its LIKE wildcards are escaped (see InstrumentSearchSql.h).
+    // A short query ("N", "RE") matches symbol prefixes only, as a range on the
+    // symbol index; "%N%" over three columns read every instrument row per keystroke.
+    const bool prefix_only = iss::prefix_only(text);
+    if (prefix_only) {
+        QString lo, hi;
+        if (iss::prefix_range(text.toUpper(), lo, hi)) {
+            sql += "AND symbol >= ? AND symbol < ? ";
+            params << lo << hi;
+        } else {
+            sql += "AND symbol LIKE ? ESCAPE '\\' ";
+            params << iss::starts_with_pattern(text);
+        }
+    } else {
+        const QString pattern = iss::contains_pattern(text);
+        sql += "AND (UPPER(symbol) LIKE ? ESCAPE '\\' OR UPPER(brsymbol) LIKE ? ESCAPE '\\' "
+               "OR UPPER(name) LIKE ? ESCAPE '\\') ";
+        params << pattern << pattern << pattern;
+    }
 
     // Scope to the connected brokers. Empty list = all brokers in the catalog.
     if (!broker_ids.isEmpty()) {
@@ -198,21 +204,31 @@ QVector<Instrument> InstrumentRepository::search_all(const QString& query, const
             placeholders << "?";
             params.append(b);
         }
-        sql += "AND broker_id IN (" + placeholders.join(",") + ") ";
+        // For the prefix range the unary '+' keeps the planner on the symbol index:
+        // an equality on broker_id would otherwise win (idx_instruments_broker_updated)
+        // and read every row of the broker again.
+        sql += QString(prefix_only ? "AND +broker_id IN (%1) " : "AND broker_id IN (%1) ").arg(placeholders.join(","));
     }
 
-    // Active broker (first in the list) sorts first, then by type, symbol, broker.
+    // Active broker (first in the list) first; then symbol-prefix hits before other
+    // hits (the in-memory search's order); then EQ → INDEX → FUT → other; symbol.
     const QString active = broker_ids.isEmpty() ? QString() : broker_ids.first();
     sql += "ORDER BY CASE WHEN broker_id = ? THEN 0 ELSE 1 END, "
+           "CASE WHEN symbol LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
            "CASE instrument_type WHEN 'EQ' THEN 0 WHEN 'INDEX' THEN 1 WHEN 'FUT' THEN 2 ELSE 3 END, "
            "symbol, broker_id "
            "LIMIT ?";
     params.append(active);
+    params.append(iss::starts_with_pattern(text));
     params.append(limit);
 
     auto r = db().execute(sql, params);
-    if (r.is_err())
+    if (r.is_err()) {
+        // Not the typed text (policy B.6): its length.
+        LOG_WARN("InstrumentRepo", logf("Instrument search failed", {{"query_chars", text.size()},
+                                                                     {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     QVector<Instrument> results;
     auto& q = r.value();
     while (q.next())
@@ -232,8 +248,12 @@ QVector<Instrument> InstrumentRepository::list(const QString& exchange, const QS
     }
     sql += " ORDER BY symbol";
     auto r = db().execute(sql, params);
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN("InstrumentRepo", logf("Instrument query failed", {{"broker", broker_id},
+                                                                    {"exchange", exchange},
+                                                                    {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     QVector<Instrument> results;
     auto& q = r.value();
     while (q.next())
@@ -243,16 +263,23 @@ QVector<Instrument> InstrumentRepository::list(const QString& exchange, const QS
 
 int InstrumentRepository::count(const QString& broker_id) const {
     auto r = db().execute("SELECT COUNT(*) FROM instruments WHERE broker_id = ?", {broker_id});
-    if (r.is_err())
+    if (r.is_err()) {
+        // 0 makes the caller download the whole master again.
+        LOG_WARN("InstrumentRepo", logf("Instrument count failed", {{"broker", broker_id},
+                                                                    {"error", QString::fromStdString(r.error())}}));
         return 0;
+    }
     auto& q = r.value();
     return q.next() ? q.value(0).toInt() : 0;
 }
 
 QDateTime InstrumentRepository::last_updated(const QString& broker_id) const {
     auto r = db().execute("SELECT MAX(updated_at) FROM instruments WHERE broker_id = ?", {broker_id});
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN("InstrumentRepo", logf("Instrument last-updated lookup failed",
+                                        {{"broker", broker_id}, {"error", QString::fromStdString(r.error())}}));
         return {};
+    }
     auto& q = r.value();
     if (!q.next() || q.value(0).isNull())
         return {};

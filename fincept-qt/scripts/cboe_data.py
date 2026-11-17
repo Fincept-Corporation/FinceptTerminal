@@ -39,8 +39,45 @@ EU_INDEX_CONSTITUENTS = [
 # VIX Futures Symbols (from OpenBB)
 VIX_SYMBOLS = ["VX_AM", "VX_EOD"]
 
-# Ticker Exceptions (from OpenBB)
-TICKER_EXCEPTIONS = ["VIX", "VX", "SPX", "SPEU", "NDX", "NDXE", "RUT", "RUTE"]
+# Symbols whose Cboe feed files carry a leading underscore ("_SPX.json": indices). Only the
+# order of the first try: a symbol whose plain file the CDN does not have (HTTP 403 / 404)
+# is asked for again as "_<SYMBOL>" (and the other way round), so an index missing here
+# (XSP, DJX, OEX, MXEA ...) still resolves. See CBOEDataAPI._get_symbol_file.
+TICKER_EXCEPTIONS = ["VIX", "VX", "SPX", "SPEU", "NDX", "NDXE", "RUT", "RUTE",
+                     "XSP", "DJX", "OEX", "XEO", "MRUT", "MXEA", "MXEF"]
+
+# ── Option chain rules (get_options_chains) ──────────────────────────────────────────────
+# Standard roots: an underlying's options trade under its own symbol, and Cboe lists the
+# weekly / PM-settled series of an index under the symbol + "W" (SPXW, RUTW, DJXW, VIXW) or
+# + "P" (NDXP). Every other root in the feed is left out: B1SPY for SPY, SPXO for SPX, roots
+# of adjusted contracts ("AAPL1") whose deliverable is not 100 shares.
+STANDARD_ROOT_SUFFIXES = ("", "W", "P")
+# Roots settled at the OPEN of the expiration day (AM settlement; their last trading day is
+# the day before): such a contract has expired from 09:30 New York time on its expiration
+# date. Every other root settles at the close: expired from 16:00 New York time.
+AM_SETTLED_ROOTS = {"SPX", "NDX", "RUT", "VIX", "VIXW", "DJX"}
+AM_EXPIRY_TIME = (9, 30)
+PM_EXPIRY_TIME = (16, 0)
+MARKET_TZ = "America/New_York"
+
+
+def _market_time(utc_text: Optional[str]) -> datetime:
+    """A Cboe feed timestamp ("2026-11-17 04:55:10", UTC) as naive New York wall time; now
+    when it is missing or unreadable."""
+    try:
+        ts = datetime.strptime(str(utc_text)[:19], "%Y-%m-%d %H:%M:%S") if utc_text else None
+    except ValueError:
+        ts = None
+    from datetime import timezone
+    ts = (ts.replace(tzinfo=timezone.utc) if ts else datetime.now(timezone.utc))
+    try:
+        from zoneinfo import ZoneInfo
+        return ts.astimezone(ZoneInfo(MARKET_TZ)).replace(tzinfo=None)
+    except Exception:  # no tz database: pandas' own (pytz), else a fixed UTC-5
+        try:
+            return pd.Timestamp(ts).tz_convert(MARKET_TZ).tz_localize(None).to_pydatetime()
+        except Exception:
+            return (ts - timedelta(hours=5)).replace(tzinfo=None)
 
 
 class CBOEError:
@@ -118,6 +155,26 @@ class CBOEDataAPI:
         except Exception as e:
             return CBOEError(url, f"Unexpected error: {str(e)}").to_dict()
 
+    def _get_symbol_file(self, folder: str, symbol: str) -> Dict[str, Any]:
+        """GET <folder>/<symbol>.json, trying the index form "_<symbol>" as well.
+
+        Cboe files indices under a leading underscore. Known indices (TICKER_EXCEPTIONS) are
+        asked for in that form first; any other symbol plainly first. When the CDN has no such
+        file (HTTP 403 / 404) the other form is tried, so an index missing from the list
+        (XSP, DJX, OEX ...) resolves without a code change. The result carries "file" (the
+        name that answered) on success."""
+        clean = symbol.replace("^", "").upper()
+        names = [f"_{clean}", clean] if clean in TICKER_EXCEPTIONS else [clean, f"_{clean}"]
+        result: Dict[str, Any] = {}
+        for name in names:
+            result = self._make_request(f"{folder}/{name}.json")
+            if "error" not in result:
+                result["file"] = name
+                return result
+            if result.get("status_code") not in (403, 404):
+                return result
+        return result
+
     @staticmethod
     def _payload(result: Dict[str, Any]) -> Any:
         """The endpoint's own records from a _make_request result.
@@ -151,15 +208,10 @@ class CBOEDataAPI:
             Dict containing equity quote data
         """
         try:
-            symbol_clean = symbol.replace("^", "").upper()
-
-            # Determine URL pattern based on ticker exceptions
-            if symbol_clean in TICKER_EXCEPTIONS:
-                url = f"{BASE_URL}/quotes/_{symbol_clean}.json"
-            else:
-                url = f"{BASE_URL}/quotes/{symbol_clean}.json"
-
-            result = self._make_request(url)
+            if not symbol.replace("^", "").strip():
+                return CBOEError("equity_quote", "Symbol is required").to_dict()
+            # Plain file first, the index form "_SYM" when the CDN has no plain one.
+            result = self._get_symbol_file(f"{BASE_URL}/quotes", symbol)
 
             if "error" in result:
                 return result
@@ -217,19 +269,12 @@ class CBOEDataAPI:
             Dict containing historical price data
         """
         try:
-            symbol_clean = symbol.replace("^", "").upper()
             interval_type = "intraday" if interval == "1m" else "historical"
 
-            # Generate URL for historical data
-            if symbol_clean in TICKER_EXCEPTIONS:
-                # For ticker exceptions, use intraday regardless of interval if single symbol
-                if interval_type == "historical":
-                    interval_type = "intraday"
-                url = f"{BASE_URL}/charts/{interval_type}/_{symbol_clean}.json"
-            else:
-                url = f"{BASE_URL}/charts/{interval_type}/{symbol_clean}.json"
-
-            result = self._make_request(url)
+            # Daily bars of an index are in historical/_SYM.json like any other symbol's (the
+            # index form is found by _get_symbol_file). Index symbols used to be sent to the
+            # intraday file even for "1d", whose minute records were then read as daily rows.
+            result = self._get_symbol_file(f"{BASE_URL}/charts/{interval_type}", symbol)
 
             if "error" in result:
                 return result
@@ -360,15 +405,10 @@ class CBOEDataAPI:
             if is_european_index:
                 # European index URL
                 base_url = f"{EU_BASE_URL}/index_history/" if interval_type == "historical" else f"{EU_BASE_URL}/intraday_chart_data/"
-                url = f"{base_url}{symbol_clean}.json"
+                result = self._make_request(f"{base_url}{symbol_clean}.json")
             else:
-                # US index URL
-                if symbol_clean in TICKER_EXCEPTIONS:
-                    url = f"{BASE_URL}/charts/{interval_type}/_{symbol_clean}.json"
-                else:
-                    url = f"{BASE_URL}/charts/{interval_type}/{symbol_clean}.json"
-
-            result = self._make_request(url)
+                # US index: "_SYM" (any index, listed in TICKER_EXCEPTIONS or not), else "SYM".
+                result = self._get_symbol_file(f"{BASE_URL}/charts/{interval_type}", symbol_clean)
 
             if "error" in result:
                 return result
@@ -545,6 +585,19 @@ class CBOEDataAPI:
         Returns:
             Dict containing options chains data with metadata. implied_volatility is a
             fraction (0.25 = 25%); change_percent is in percent points.
+
+        What the chain holds (the feed carries more):
+          * only contracts still alive at the quote time (the feed's timestamp, UTC, read as
+            New York time): AM-settled roots (AM_SETTLED_ROOTS) expire at 09:30 on their
+            expiration date, every other root at 16:00. dte counts from the quote date.
+          * only the standard roots of the underlying: its own symbol, and the symbol + "W" / "P"
+            (STANDARD_ROOT_SUFFIXES: SPXW, NDXP ...). Each row says its "root" and
+            "settlement" ("AM" / "PM").
+          * de-duplication: a weekly (SPXW, PM) and a monthly (SPX, AM) contract with the same
+            strike and date are different contracts and both stay, told apart by root and
+            settlement; the same contract symbol listed twice is kept once (the record with
+            the later last trade).
+          "dropped" counts what was left out and why.
         """
         try:
             import re
@@ -568,17 +621,14 @@ class CBOEDataAPI:
             if type_filter is None:
                 return CBOEError("options_chains", f"Invalid option type '{option_type}': use call, put or both").to_dict()
 
-            # Determine URL pattern
-            if symbol_clean in TICKER_EXCEPTIONS:
-                url = f"{BASE_URL}/options/_{symbol_clean}.json"
-            else:
-                url = f"{BASE_URL}/options/{symbol_clean}.json"
-
-            result = self._make_request(url)
+            # "_SYM" for an index (listed in TICKER_EXCEPTIONS or found on a 403 / 404), else "SYM".
+            result = self._get_symbol_file(f"{BASE_URL}/options", symbol_clean)
 
             if "error" in result:
                 return result
 
+            body = result.get("data")
+            quote_time_utc = body.get("timestamp") if isinstance(body, dict) else None
             data = self._payload(result)
             if not isinstance(data, dict) or not data:
                 return CBOEError("options_chains", "No options data found for symbol").to_dict()
@@ -614,28 +664,49 @@ class CBOEDataAPI:
             # OCC contract symbol: root, YYMMDD expiration, C/P, strike x 1000 in 8 digits.
             # (Roots of adjusted contracts can contain digits, e.g. "AAPL1".)
             occ = re.compile(r"^(?P<root>.+?)(?P<exp>\d{6})(?P<cp>[CP])(?P<strike>\d{8})$")
-            today = datetime.now().date()
+            quote_time = _market_time(quote_time_utc)   # New York wall time of the snapshot
+            quote_date = quote_time.date()
+            standard_roots = {symbol_clean + suffix for suffix in STANDARD_ROOT_SUFFIXES}
 
             def number(value):
                 return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
-            parsed_data = []
+            dropped_roots: Dict[str, int] = {}
+            expired = 0
+            duplicates = 0
+            by_contract: Dict[str, Dict[str, Any]] = {}
             for opt in options:
                 match = occ.match(str(opt.get("option", "")))
                 if not match:
+                    continue
+                root = match.group("root")
+                if root not in standard_roots:
+                    dropped_roots[root] = dropped_roots.get(root, 0) + 1
                     continue
                 try:
                     exp_date = datetime.strptime(match.group("exp"), "%y%m%d").date()
                 except ValueError:
                     continue
+                am = root in AM_SETTLED_ROOTS
+                hh, mm = AM_EXPIRY_TIME if am else PM_EXPIRY_TIME
+                if datetime(exp_date.year, exp_date.month, exp_date.day, hh, mm) <= quote_time:
+                    expired += 1
+                    continue
+                contract = str(opt.get("option"))
+                if contract in by_contract:
+                    duplicates += 1
+                    if str(opt.get("last_trade_time") or "") <= str(by_contract[contract]["last_trade_time"] or ""):
+                        continue
                 bid, ask = number(opt.get("bid")), number(opt.get("ask"))
-                parsed_data.append({
-                    "contract_symbol": opt.get("option"),
-                    "underlying_symbol": match.group("root"),
+                by_contract[contract] = {
+                    "contract_symbol": contract,
+                    "underlying_symbol": symbol_clean,
+                    "root": root,
+                    "settlement": "AM" if am else "PM",
                     "expiration": exp_date.isoformat(),
                     "strike": int(match.group("strike")) / 1000,
                     "option_type": "call" if match.group("cp") == "C" else "put",
-                    "dte": (exp_date - today).days,
+                    "dte": (exp_date - quote_date).days,
                     "last": opt.get("last_trade_price"),
                     "bid": bid,
                     "bid_size": opt.get("bid_size"),
@@ -655,17 +726,20 @@ class CBOEDataAPI:
                     "rho": opt.get("rho"),
                     "prev_close": opt.get("prev_day_close"),
                     "last_trade_time": opt.get("last_trade_time")
-                })
+                }
 
+            parsed_data = list(by_contract.values())
             if not parsed_data:
+                if expired or dropped_roots:
+                    return CBOEError("options_chains",
+                                     f"Cboe lists no live standard {symbol_clean} options at the quote time "
+                                     f"({expired} expired, {sum(dropped_roots.values())} under other roots)").to_dict()
                 return CBOEError("options_chains", "Failed to parse options data").to_dict()
 
+            # Every expiration left is still alive at the quote time: "nearest" is the first.
             expirations = sorted({o["expiration"] for o in parsed_data})
             if exp_filter == "nearest":
-                upcoming = [e for e in expirations if e >= today.isoformat()]
-                if not upcoming:
-                    return CBOEError("options_chains", f"No {symbol_clean} expiration on or after today").to_dict()
-                selected = {upcoming[0]}
+                selected = {expirations[0]}
             elif exp_filter:
                 if exp_filter not in expirations:
                     shown = ", ".join(expirations[:12]) + (" ..." if len(expirations) > 12 else "")
@@ -676,16 +750,21 @@ class CBOEDataAPI:
                 selected = set(expirations)
             rows = [o for o in parsed_data
                     if o["expiration"] in selected and (not type_filter or o["option_type"] == type_filter)]
-            rows.sort(key=lambda o: (o["expiration"], o["strike"], o["option_type"]))
+            rows.sort(key=lambda o: (o["expiration"], o["strike"], o["option_type"], o["root"]))
 
             return {
                 "success": True,
                 "data": {
                     "metadata": {k: v for k, v in metadata.items() if v is not None},
+                    "quote_time": quote_time.isoformat(timespec="seconds"),
+                    "quote_tz": MARKET_TZ,
+                    "roots": sorted({o["root"] for o in parsed_data}),
                     "expirations": expirations,
                     "expiration_filter": exp_filter or "all",
                     "option_type_filter": type_filter or "both",
                     "count": len(rows),
+                    "dropped": {"expired": expired, "non_standard_root": dropped_roots,
+                                "duplicate_contract": duplicates},
                     "units": {"implied_volatility": "fraction (0.25 = 25%)", "change_percent": "percent points"},
                     "options": rows
                 }
@@ -891,10 +970,11 @@ def main(args=None):
     try:
         result = command_map[command]()
         # fincept_json: a missing cell (pandas NaN) prints null instead of the bare NaN
-        # token, which is not JSON and makes the terminal discard the whole payload.
-        print(fincept_json.dumps(result, indent=2, default=str, ensure_ascii=True))
+        # token, which is not JSON and makes the terminal discard the whole payload. One line,
+        # no indent: the host reads the last line of stdout as the payload.
+        print(fincept_json.dumps(result, default=str, ensure_ascii=True))
     except Exception as e:
-        print(json.dumps(CBOEError(command, str(e)).to_dict(), indent=2))
+        print(fincept_json.dumps(CBOEError(command, str(e)).to_dict(), ensure_ascii=True))
         sys.exit(1)
 
 

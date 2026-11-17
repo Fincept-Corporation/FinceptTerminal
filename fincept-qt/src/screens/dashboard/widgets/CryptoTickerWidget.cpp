@@ -2,6 +2,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "trading/TradingTypes.h"
 #include "ui/theme/Theme.h"
 
@@ -41,6 +42,17 @@ CryptoTickerWidget::CryptoTickerWidget(const QJsonObject& cfg, QWidget* parent)
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
+
+    // Title-bar refresh = "retry". It was wired to nothing, yet the watchdog's
+    // "No data yet — click refresh to retry" pointed at it and nothing else could
+    // dismiss that overlay. Unsubscribe + subscribe makes ExchangeSessionManager
+    // re-sync the stream for these pairs (topic_idle / topic_active).
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (!isVisible())
+            return; // showEvent() subscribes; never keep a hidden tile subscribed
+        set_loading(true);
+        hub_resubscribe();
+    });
 
     set_configurable(true);
     apply_styles();
@@ -138,12 +150,21 @@ void CryptoTickerWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     received_.clear();
     set_loading_progress(received_.size(), pairs_.size());
+    // The stream's own error ("kraken: connection refused", "unknown pair") is
+    // published on each topic's error channel: shown in place of the spinner /
+    // the watchdog's generic "No data yet" while no pair has a price. This tile
+    // keeps driving the loading overlay itself (set_loading_progress()).
+    QStringList topics;
+    for (const auto& pair : pairs_)
+        topics.append(QStringLiteral("ws:") + exchange_ + QStringLiteral(":ticker:") + pair);
+    track_topics(topics);
     for (const auto& pair : pairs_) {
         const QString topic = QStringLiteral("ws:") + exchange_ + QStringLiteral(":ticker:") + pair;
         const QString pair_copy = pair;
-        hub.subscribe(this, topic, [this, pair_copy](const QVariant& v) {
+        hub.subscribe(this, topic, [this, pair_copy, topic](const QVariant& v) {
             if (!v.canConvert<fincept::trading::TickerData>())
                 return;
+            note_topic_value(topic);
             on_ticker(pair_copy, v.value<fincept::trading::TickerData>());
         });
     }
@@ -172,7 +193,9 @@ void CryptoTickerWidget::on_ticker(const QString& pair, const fincept::trading::
     if (it == rows_.end())
         return;
     Row& r = it.value();
-    r.price->setText(QString::number(t.last, 'f', t.last < 10 ? 4 : 2));
+    // Shared dashboard price format: grouping, and 4-6 decimals below 1 (a
+    // sub-cent coin printed "0.0000" with the old fixed 4).
+    r.price->setText(dash_fmt::price(t.last, pair));
     const QString sign = t.percentage >= 0 ? "+" : "";
     r.change->setText(QString("%1%2%").arg(sign).arg(t.percentage, 0, 'f', 2));
     crypto_ticker_set_dir(r.change, t.percentage >= 0 ? "up" : "down");
@@ -225,11 +248,11 @@ void CryptoTickerWidget::apply_styles() {
     if (!rows_host_)
         return; // ctor runs this before the first build_rows()
     // A change label with no "dir" yet (still "—") keeps the tertiary colour.
-    rows_host_->setStyleSheet(
-        QString("QLabel#cryptoTickerHdr{color:%1;font-size:9px;background:transparent;padding:2px 0;}"
-                "QLabel#cryptoTickerSym{color:%2;font-size:11px;font-weight:700;background:transparent;}"
-                "QLabel#cryptoTickerPrice{color:%2;font-size:11px;font-weight:600;background:transparent;}"
-                "QLabel#cryptoTickerChg{color:%1;font-size:11px;font-weight:600;background:transparent;}"
+    set_css_cached(rows_host_, 
+        QString("QLabel#cryptoTickerHdr{color:%1;font-size:" + fincept::ui::fonts::px(-5) + "px;background:transparent;padding:2px 0;}"
+                "QLabel#cryptoTickerSym{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
+                "QLabel#cryptoTickerPrice{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
+                "QLabel#cryptoTickerChg{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
                 "QLabel#cryptoTickerChg[dir=\"up\"]{color:%3;}"
                 "QLabel#cryptoTickerChg[dir=\"down\"]{color:%4;}")
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),

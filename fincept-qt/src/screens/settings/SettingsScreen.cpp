@@ -31,11 +31,16 @@
 #include "services/stt/SpeechService.h"
 #include "services/tts/TtsService.h"
 #include "services/voice_trigger/ClapDetectorService.h"
+#include "ui/formatting/FormatSettingsPanel.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/EnterprisePromo.h"
 
 #include <QEvent>
+#include <QFontMetrics>
+#include <QFrame>
+#include <QScrollArea>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPointer>
@@ -43,6 +48,68 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+
+namespace {
+
+/// Deep-link section id (stable, lower_snake) → the nav entry's source key.
+QString settings_scr_source_key(const QString& section_id) {
+    static const QHash<QString, QString> kIds = {
+        {QStringLiteral("general"), QStringLiteral("General")},
+        {QStringLiteral("appearance"), QStringLiteral("Appearance")},
+        {QStringLiteral("currency_format"), QStringLiteral("Currency & Number Format")},
+        {QStringLiteral("notifications"), QStringLiteral("Notifications")},
+        {QStringLiteral("keybindings"), QStringLiteral("Keybindings")},
+        {QStringLiteral("voice"), QStringLiteral("Voice")},
+        {QStringLiteral("logging"), QStringLiteral("Logging")},
+        {QStringLiteral("developer"), QStringLiteral("Developer")},
+        {QStringLiteral("profiles"), QStringLiteral("Profiles")},
+        {QStringLiteral("credentials"), QStringLiteral("Credentials")},
+        {QStringLiteral("security"), QStringLiteral("Security")},
+        {QStringLiteral("data_sources"), QStringLiteral("Data Sources")},
+        {QStringLiteral("llm_config"), QStringLiteral("LLM Config")},
+        {QStringLiteral("ai_agents"), QStringLiteral("AI Agents (MCP)")},
+        {QStringLiteral("mcp_servers"), QStringLiteral("MCP Servers")},
+        {QStringLiteral("python_env"), QStringLiteral("Python Env")},
+        {QStringLiteral("storage"), QStringLiteral("Storage & Cache")},
+        {QStringLiteral("cloud_sync"), QStringLiteral("Cloud Sync")},
+    };
+    return kIds.value(section_id.trimmed().toLower());
+}
+
+/// Settings > Currency & Number Format: the shared formatting panel (src/ui/formatting)
+/// in the settings page frame. Built when the section is first visited; the panel
+/// itself builds its controls on its first show.
+QWidget* settings_scr_make_format_section() {
+    using namespace settings_styles;
+    auto* host = new QWidget;
+    auto* root = new QVBoxLayout(host);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    auto* scroll = new QScrollArea(host);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
+    auto* page = new QWidget;
+    auto* vl = new QVBoxLayout(page);
+    vl->setContentsMargins(24, 24, 24, 24);
+    vl->setSpacing(8);
+    auto* title = new QLabel(ui::formatting::FormatSettingsPanel::section_title().toUpper(), page);
+    title->setTextFormat(Qt::PlainText);
+    title->setStyleSheet(section_title_ss());
+    vl->addWidget(title);
+    vl->addSpacing(8);
+    vl->addWidget(new ui::formatting::FormatSettingsPanel(page));
+    vl->addStretch(1);
+    scroll->setWidget(page);
+    root->addWidget(scroll);
+    return host;
+}
+
+} // namespace
 
 SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     using namespace settings_styles;
@@ -64,7 +131,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     nvl->addSpacing(6);
 
     nav_filter_ = new QLineEdit;
-    nav_filter_->setFixedHeight(26);
+    nav_filter_->setMinimumHeight(26);
     nav_filter_->setClearButtonEnabled(true);
     nav_filter_->setStyleSheet(input_ss());
     nav_filter_->setAccessibleName(tr("Search settings"));
@@ -86,7 +153,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     // One factory per stack index. Used at construction AND by the language-
     // change rebuild path so we don't hardcode the type list twice.
     section_factories_.clear();
-    section_factories_.resize(17);
+    section_factories_.resize(18);
     section_factories_[0] = [] { return new CredentialsSection; };
     section_factories_[1] = [] { return new AppearanceSection; };
     section_factories_[2] = [] { return new NotificationsSection; };
@@ -104,6 +171,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     section_factories_[14] = [] { return new GeneralSection; };
     section_factories_[15] = [] { return new CloudSyncSection; };
     section_factories_[16] = [] { return new AgentConnectSection; };
+    section_factories_[17] = [] { return settings_scr_make_format_section(); };
 
     // Empty placeholders; the real section replaces its placeholder on first
     // visit (ensure_section_built).
@@ -114,7 +182,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
 
     auto make_btn = [&](const QString& source_key, int idx, const QString& keywords = {}) {
         auto* btn = new QPushButton;
-        btn->setFixedHeight(32);
+        btn->setMinimumHeight(32);
         btn->setCheckable(true);
         btn->setStyleSheet(nav_btn_ss());
         btn->setProperty("settingsSectionIndex", idx);
@@ -136,7 +204,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
 
     auto add_scope_header = [&](const QString& key) {
         auto* h = new QLabel;
-        h->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;"
+        h->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                                  "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
                              .arg(ui::colors::TEXT_DIM()));
         nvl->addWidget(h);
@@ -158,11 +226,14 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
 
     add_scope_header(QStringLiteral("SHELL"));
     auto* first = make_btn(QStringLiteral("General"), 14,
-                           QStringLiteral("language locale translation currency symbol window close last window "
-                                          "launchpad quit interface"));
+                           QStringLiteral("language translation window close last window launchpad quit interface"));
     make_btn(QStringLiteral("Appearance"), 1,
              QStringLiteral("theme font size family density spacing padding ticker bar chat bubble animation "
                             "typography interface dashboard"));
+    make_btn(QStringLiteral("Currency & Number Format"), 17,
+             QStringLiteral("currency number format symbol locale decimal decimals lakh crore grouping thousands "
+                            "separator negative parentheses compact pence minor units fx display currency ") +
+                 ui::formatting::FormatSettingsPanel::search_keywords().join(QLatin1Char(' ')));
     make_btn(QStringLiteral("Notifications"), 2,
              QStringLiteral("telegram discord slack email smtp whatsapp twilio pushover ntfy pushbullet gotify "
                             "mattermost teams webhook pagerduty opsgenie sms alerts price news order fill breaking "
@@ -197,7 +268,8 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn(
         QStringLiteral("AI Agents (MCP)"), 16,
         QStringLiteral("mcp server claude code codex gemini cli cursor vs code copilot windsurf claude desktop agent "
-                       "connect external token port permissions automation operate terminal ui tools python"));
+                       "connect external token port permissions automation operate terminal ui tools python "
+                       "harness harnesses grok qwen workbench model effort sign in login api key path detect"));
     make_btn(QStringLiteral("MCP Servers"), 6,
              QStringLiteral("model context protocol tools external server stdio command env"));
     make_btn(QStringLiteral("Python Env"), 11,
@@ -283,6 +355,38 @@ void SettingsScreen::apply_nav_filter(const QString& text) {
     }
 }
 
+void SettingsScreen::open_section(const QString& section_id, const QString& focus) {
+    const QString key = settings_scr_source_key(section_id);
+    QPushButton* target = nullptr;
+    for (const auto& nb : nav_buttons_) {
+        if (nb.btn && nb.source_key == key) {
+            target = nb.btn;
+            break;
+        }
+    }
+    if (key.isEmpty() || !target || !sections_) {
+        LOG_WARN("Settings", QString("open_section: unknown section '%1' — staying on the current one").arg(section_id));
+        return;
+    }
+    // A nav search that hides the target would leave the checked entry off-screen.
+    if (nav_filter_ && !nav_filter_->text().isEmpty() && target->isHidden())
+        nav_filter_->clear();
+    // Exactly what a click on the entry does (its handler also forwards the nav
+    // search into the section; a deep link brings its own focus instead).
+    const int idx = target->property("settingsSectionIndex").toInt();
+    for (const auto& nb : nav_buttons_) {
+        if (nb.btn)
+            nb.btn->setChecked(nb.btn == target);
+    }
+    ensure_section_built(idx);
+    sections_->setCurrentIndex(idx);
+    if (auto* creds = qobject_cast<CredentialsSection*>(sections_->widget(idx)))
+        creds->set_filter(focus.trimmed()); // env-key or provider name; empty shows every card
+    ScreenStateManager::instance().notify_changed(this);
+    LOG_INFO("Settings", QString("Opened section '%1'%2")
+                             .arg(section_id, focus.isEmpty() ? QString() : QStringLiteral(" (focus %1)").arg(focus)));
+}
+
 void SettingsScreen::forward_search_to_section(int idx) {
     // Deep-link the search into sections that have their own filter: "tiingo"
     // opens Credentials already narrowed to the Tiingo card. Only when the query
@@ -316,7 +420,8 @@ void SettingsScreen::retranslateUi() {
         nav_filter_->setPlaceholderText(tr("Search settings…"));
     for (const auto& nb : nav_buttons_) {
         if (nb.btn)
-            nb.btn->setText(tr(nb.source_key.toUtf8().constData()));
+            // "&" would be read as a shortcut marker ("Storage & Cache" showed as "Storage _Cache").
+            nb.btn->setText(tr(nb.source_key.toUtf8().constData()).replace(QLatin1Char('&'), QLatin1String("&&")));
     }
     for (int i = 0; i < scope_headers_.size() && i < scope_header_keys_.size(); ++i) {
         if (scope_headers_[i])
@@ -324,6 +429,25 @@ void SettingsScreen::retranslateUi() {
     }
     if (auto* ent_link = findChild<QPushButton*>(QStringLiteral("settingsEnterpriseLink")))
         ent_link->setText(tr("Fincept Terminal Enterprise ↗"));
+    fit_nav_width(); // the footer link's length depends on the language
+}
+
+void SettingsScreen::fit_nav_width() {
+    if (!nav_)
+        return;
+    // 200px at the default font size; wider for larger fonts so the section
+    // names are not cut off — and never narrower than the footer link, the
+    // longest text in the panel (it lost its arrow at 14 px and read
+    // "Fincept Terminal Enterpris" at 24 px). Measured from font metrics, not
+    // sizeHint(): this also runs inside a theme_changed handler, where asking
+    // a widget for its size hint styles it on the spot.
+    int width = qMax(200, 200 * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx);
+    if (auto* ent_link = findChild<QPushButton*>(QStringLiteral("settingsEnterpriseLink"))) {
+        const int text_w = QFontMetrics(ui::fonts::font(-3)).horizontalAdvance(ent_link->text());
+        width = qMax(width, text_w + 8 + 8 + 6); // panel margins + a little air
+    }
+    if (nav_->minimumWidth() != width || nav_->maximumWidth() != width)
+        nav_->setFixedWidth(width);
 }
 
 void SettingsScreen::rebuild_sections_for_language_change() {
@@ -397,8 +521,14 @@ void SettingsScreen::wire_section_signals(int idx) {
 
 void SettingsScreen::refresh_theme() {
     using namespace settings_styles;
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // Only when the text differs: setStyleSheet() re-styles this whole screen even for the
+    // sheet already in place, and after a theme or font change the theme manager has
+    // already rewritten it (ThemeRestyle.cpp) and styles the screen once itself.
+    const QString root_css = QString("background:%1;").arg(ui::colors::BG_BASE());
+    if (styleSheet() != root_css)
+        setStyleSheet(root_css);
     if (nav_) {
+        fit_nav_width();
         nav_->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         // Walk our own list rather than every QPushButton descendant, so the
@@ -418,7 +548,7 @@ void SettingsScreen::refresh_theme() {
         for (auto* lbl : scope_headers_) {
             if (!lbl)
                 continue;
-            lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;"
+            lbl->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                                        "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
                                    .arg(ui::colors::TEXT_DIM()));
         }

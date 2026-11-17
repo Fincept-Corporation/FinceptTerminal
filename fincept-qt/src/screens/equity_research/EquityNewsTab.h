@@ -1,6 +1,7 @@
 // src/screens/equity_research/EquityNewsTab.h
 #pragma once
 #include "services/equity/EquityResearchModels.h"
+#include "services/equity/EquityResearchService.h"
 #include "ui/widgets/LoadingOverlay.h"
 
 #include <QComboBox>
@@ -30,7 +31,8 @@ class EquityNewsTab : public QWidget {
     void changeEvent(QEvent* event) override;
 
   private slots:
-    void on_news_loaded(QString symbol, QVector<services::equity::NewsArticle> articles);
+    void on_news_loaded(QString symbol, fincept::services::equity::NewsProvider provider, bool fell_back,
+                        QVector<services::equity::NewsArticle> articles);
 
   private:
     void build_ui();
@@ -56,6 +58,7 @@ class EquityNewsTab : public QWidget {
 
     QVector<services::equity::NewsArticle> cached_articles_;
     bool news_loaded_ = false;
+    bool news_fell_back_ = false; ///< NewsAPI was selected but the articles came from the Auto chain
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;
 };

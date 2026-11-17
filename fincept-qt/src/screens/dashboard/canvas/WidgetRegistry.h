@@ -7,15 +7,20 @@
 
 #include <functional>
 
+class QWidget;
+
 namespace fincept::screens::widgets {
 class BaseWidget;
 }
 
 namespace fincept::screens {
 
-/// Factory receives the tile's persisted config (empty object for fresh widgets).
-/// Widgets that don't need per-instance config can ignore it.
-using WidgetFactory = std::function<widgets::BaseWidget*(const QJsonObject&)>;
+/// Factory receives the tile's persisted config (empty object for fresh widgets)
+/// and the tile it lives in. Widgets that don't need per-instance config can
+/// ignore it. The widget MUST be created with `parent` as its parent: a widget
+/// built parentless and re-parented into the dashboard is re-styled on the move
+/// (the dashboard's style sheets cascade into it), which cost ~0.4 s per tile.
+using WidgetFactory = std::function<widgets::BaseWidget*(const QJsonObject&, QWidget* parent)>;
 
 struct WidgetMeta {
     QString type_id;

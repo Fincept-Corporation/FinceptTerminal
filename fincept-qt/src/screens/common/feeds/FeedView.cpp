@@ -17,17 +17,18 @@ namespace fincept::feeds {
 
 namespace {
 
+// Connection state, not price direction: status green / red.
 QString dot_color(FeedStatus s) {
     using namespace fincept::ui;
     switch (s) {
         case FeedStatus::Ok:
-            return colors::GREEN();
+            return colors::SUCCESS();
         case FeedStatus::Fetching:
             return colors::AMBER();
         case FeedStatus::Error:
-            return colors::RED();
+            return colors::DANGER();
         default:
-            return colors::TEXT_TERTIARY();
+            return colors::TEXT_SECONDARY(); // idle; sits on the raised header
     }
 }
 
@@ -55,7 +56,7 @@ FeedView::FeedView(FeedSubscription sub, QWidget* parent) : QWidget(parent), sub
     h->addWidget(status_dot_);
 
     title_ = new QLabel(sub_.name);
-    title_->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;").arg(fincept::ui::colors::TEXT_PRIMARY()));
+    title_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;").arg(fincept::ui::colors::TEXT_PRIMARY()));
     h->addWidget(title_, 1);
 
     auto mkBtn = [&](const QString& glyph, const QString& tip) {

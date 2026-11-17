@@ -42,7 +42,12 @@ class DBnomicsService : public QObject, public fincept::datahub::Producer {
     void schedule_global_search(const QString& query);
 
     // ── Chart color palette ───────────────────────────────────────────────────
+    /// The active theme's categorical chart colour `index` (ui::colors::chart_color).
     static QColor chart_color(int index);
+
+    /// Hub topic of one series. Segments are escaped (':' → %3A) so codes containing ':' — every
+    /// IMF WEO vintage, "WEO:2024-10" — still split back into provider / dataset / series.
+    static QString hub_topic(const QString& provider, const QString& dataset, const QString& series);
 
   signals:
     void providers_loaded(QVector<DbnProvider> providers);
@@ -78,7 +83,6 @@ class DBnomicsService : public QObject, public fincept::datahub::Producer {
 
     QString build_url(const QString& path) const;
 
-    static QString hub_topic(const QString& provider, const QString& dataset, const QString& series);
     bool hub_registered_ = false;
 };
 

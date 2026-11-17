@@ -9,6 +9,8 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 BASE_URL = "https://raw.githubusercontent.com"
 
 session = requests.Session()
@@ -36,33 +38,38 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
-def _fetch_csv_as_records(url: str, limit: int = 500) -> Any:
+def _fetch_csv_as_records(url: str, limit: int = None) -> Any:
+    """Every row of a CSV (quoted fields with commas handled), numeric columns as numbers."""
+    import csv
+    import io
+
     try:
         resp = session.get(url, timeout=30)
         resp.raise_for_status()
-        lines = resp.text.strip().split('\n')
-        if not lines:
-            return {"error": "Empty CSV"}
-        headers = [h.strip().strip('"') for h in lines[0].split(',')]
+        reader = csv.DictReader(io.StringIO(resp.text.strip()))
         records = []
-        for line in lines[1:limit+1]:
-            parts = line.split(',')
-            if len(parts) >= 2:
-                row = {}
-                for i in range(min(len(headers), len(parts))):
-                    row[headers[i]] = parts[i].strip().strip('"')
-                records.append(row)
+        for row in reader:
+            records.append({(k or "").strip(): (v or "").strip() for k, v in row.items() if k})
+            if limit and len(records) >= limit:
+                break
+        if not records:
+            return {"error": "Empty CSV"}
+        fc.numeric_columns(records)
         return records
     except Exception as e:
         return {"error": f"CSV fetch failed: {str(e)}"}
 
 
 def get_big_mac_index(year: int = None) -> Any:
+    """The latest Big Mac release (one row per country), or every release of `year`."""
     records = _fetch_csv_as_records(BIG_MAC_CSV_URL)
     if isinstance(records, dict) and "error" in records:
         return records
     if year:
-        records = [r for r in records if str(year) in r.get("date", "")]
+        records = [r for r in records if str(r.get("date", "")).startswith(str(year))]
+    else:
+        latest = max((str(r.get("date", "")) for r in records), default="")
+        records = [r for r in records if str(r.get("date", "")) == latest]
     return {"index": "Big Mac Index", "source": "The Economist",
             "year_filter": year, "count": len(records), "data": records}
 

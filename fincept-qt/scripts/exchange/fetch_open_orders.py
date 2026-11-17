@@ -1,44 +1,32 @@
 """
-Fetch open orders.
-Usage: python fetch_open_orders.py <exchange_id> [symbol]
-Credentials via stdin JSON.
+Fetch open orders (all markets without a symbol) — a one-shot wrapper over the exchange daemon's own `fetch_open_orders`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
+Credentials come as JSON on stdin, never on the command line.
+
+Usage: echo '{"api_key":"...","secret":"..."}' | python fetch_open_orders.py <exchange_id> [symbol]
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling, parse_credentials_from_stdin
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 2:
-        output_error("Usage: fetch_open_orders.py <exchange_id> [symbol]", "INVALID_ARGS")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
 
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2] if len(sys.argv) > 2 else None
+USAGE = "fetch_open_orders.py <exchange_id> [symbol]"
 
-    creds = parse_credentials_from_stdin()
-    exchange = make_exchange(exchange_id, credentials=creds)
 
-    orders = exchange.fetch_open_orders(symbol)
-    output_success({
-        "orders": [
-            {
-                "id": o.get("id"),
-                "symbol": o.get("symbol"),
-                "type": o.get("type"),
-                "side": o.get("side"),
-                "price": o.get("price"),
-                "amount": o.get("amount"),
-                "filled": o.get("filled"),
-                "remaining": o.get("remaining"),
-                "status": o.get("status"),
-                "timestamp": o.get("timestamp"),
-                "stopPrice": o.get("stopPrice"),
-                "takeProfitPrice": o.get("takeProfitPrice"),
-                "stopLossPrice": o.get("stopLossPrice"),
-            }
-            for o in orders
-        ],
-        "count": len(orders),
-    })
+def main(argv):
+    if len(argv) < 2:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2]} if len(argv) > 2 else {}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_open_orders", argv[1], args, D.cli_credentials())[0]
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

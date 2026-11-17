@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QColor>
+#include <QFontMetrics>
 #include <QHeaderView>
 
 #include <algorithm>
@@ -44,13 +45,12 @@ SurfaceTableWidget::SurfaceTableWidget(QWidget* parent) : QWidget(parent) {
     table_->setStyleSheet(QString("QTableWidget {"
                                   "  background:%1; color:%2;"
                                   "  gridline-color:%3; border:none;"
-                                  "  font-size:11px; font-family:'Consolas','Courier New',monospace; }"
+                                  "  font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                   "QHeaderView::section {"
                                   "  background:%4; color:%5;"
                                   "  border:none; border-right:1px solid %6;"
                                   "  border-bottom:1px solid %6;"
-                                  "  padding:0 6px; font-size:11px; font-weight:bold;"
-                                  "  font-family:'Consolas','Courier New',monospace; }"
+                                  "  padding:0 6px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:bold; }"
                                   "QTableWidget::item {"
                                   "  padding:0 6px; border-bottom:1px solid %3; }"
                                   "QScrollBar:vertical { width:5px; background:transparent; }"
@@ -68,63 +68,61 @@ SurfaceTableWidget::SurfaceTableWidget(QWidget* parent) : QWidget(parent) {
                               .arg(colors::BORDER_MED())
                               .arg(colors::BORDER_BRIGHT()));
     table_->horizontalHeader()->setDefaultSectionSize(72);
-    table_->verticalHeader()->setDefaultSectionSize(22);
     table_->horizontalHeader()->setMinimumSectionSize(48);
-    table_->verticalHeader()->setMinimumSectionSize(22);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
     table_->setShowGrid(true);
     layout->addWidget(table_);
+
+    refresh_theme();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
 }
+
+namespace {
+// Item-data roles of a heat-mapped cell: its position on the scale (0..1) and
+// whether the scale is diverging, so the colours can be recomputed for a theme.
+constexpr int kHeatPosRole = Qt::UserRole + 1;
+constexpr int kHeatDivRole = Qt::UserRole + 2;
+} // namespace
 
 QColor SurfaceTableWidget::heat_color(float t, bool diverging) {
     t = std::max(0.0f, std::min(1.0f, t));
-    auto lerp = [](QColor a, QColor b, float f) -> QColor {
-        return QColor((int)(a.red() + (b.red() - a.red()) * f), (int)(a.green() + (b.green() - a.green()) * f),
-                      (int)(a.blue() + (b.blue() - a.blue()) * f));
-    };
-    if (diverging) {
-        // Obsidian diverging: red → dark base → green (muted, functional)
-        static const QColor stops[] = {
-            {127, 29, 29}, // deep red
-            {153, 27, 27}, // red
-            {14, 14, 14},  // base (neutral)
-            {14, 14, 14},  // base (neutral)
-            {20, 83, 45},  // dark green
-            {22, 101, 52}, // green
-        };
-        float idx = t * 5.0f;
-        int lo = std::max(0, std::min(4, (int)idx));
-        return lerp(stops[lo], stops[lo + 1], idx - (float)lo);
-    }
-    // Sequential: dark base → amber → light (Obsidian brand colors)
-    static const QColor stops[] = {
-        {8, 8, 8},      // BG_BASE
-        {28, 18, 4},    // very dark amber
-        {78, 52, 10},   // dark amber
-        {120, 80, 15},  // amber-brown
-        {180, 110, 20}, // amber
-        {217, 119, 6},  // AMBER
-        {229, 160, 60}, // light amber
-    };
-    float idx = t * 6.0f;
-    int lo = std::max(0, std::min(5, (int)idx));
-    return lerp(stops[lo], stops[lo + 1], idx - (float)lo);
+    // The theme's data scales: diverging negative → neutral → positive (t = 0.5
+    // is the midpoint), sequential from the surface to the strongest magnitude.
+    if (diverging)
+        return colors::diverging_color(2.0 * t - 1.0);
+    return colors::sequential_color(t);
+}
+
+void SurfaceTableWidget::paint_cell(QTableWidgetItem* item) {
+    if (!item || !item->data(kHeatPosRole).isValid())
+        return;
+    const QColor bg = heat_color(item->data(kHeatPosRole).toFloat(), item->data(kHeatDivRole).toBool());
+    item->setBackground(bg);
+    item->setForeground(colors::contrast_text_on(bg)); // ink that reads on this cell's fill
 }
 
 void SurfaceTableWidget::apply_heatmap(float value, float min_val, float max_val, bool diverging, int row, int col) {
     float range = (max_val > min_val) ? (max_val - min_val) : 1.0f;
     float t = (value - min_val) / range;
-    QColor bg = heat_color(t, diverging);
-    // Light text on dark cells; dark text only on bright amber peaks
-    QColor fg = (t > 0.80f) ? QColor(20, 20, 20) : QColor(229, 229, 229);
 
     auto* item = table_->item(row, col);
     if (item) {
-        item->setBackground(bg);
-        item->setForeground(fg);
+        item->setData(kHeatPosRole, t);
+        item->setData(kHeatDivRole, diverging);
+        paint_cell(item);
     }
+}
+
+void SurfaceTableWidget::refresh_theme() {
+    const int row_h = std::max(22, QFontMetrics(fonts::font(-3)).height() + 6);
+    table_->verticalHeader()->setMinimumSectionSize(row_h);
+    table_->verticalHeader()->setDefaultSectionSize(row_h);
+    for (int r = 0; r < table_->rowCount(); ++r)
+        for (int c = 0; c < table_->columnCount(); ++c)
+            paint_cell(table_->item(r, c));
 }
 
 void SurfaceTableWidget::show_generic_matrix(const std::vector<std::string>& row_labels,

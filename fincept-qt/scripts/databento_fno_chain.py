@@ -25,6 +25,13 @@ from typing import Dict, List, Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from databento_provider import DatabentoProvider, DATABENTO_AVAILABLE, DATABENTO_ERROR
+import fincept_json  # NaN/Infinity-safe JSON boundary (scripts/, put on sys.path above)
+
+
+def _diag(message: str) -> None:
+    """One diagnostic line on stderr (stdout is the JSON result channel)."""
+    sys.stderr.write(f"[databento_fno_chain] {message}\n")
+    sys.stderr.flush()
 
 
 def _fail(message: str, **extra: Any) -> Dict[str, Any]:
@@ -175,6 +182,11 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
         # Step 5: Fetch quotes via ohlcv-1d (cheaper and more reliable than cmbp-1)
         option_symbols = [d["raw_symbol"] for d in filtered[:400]]
         quotes = _fetch_option_quotes(provider, option_symbols, date)
+        # Step 5b: open interest from the OPRA statistics schema. ohlcv-1d carries no
+        # OI, so without this every strike reported OI 0 (PCR 0, a meaningless max
+        # pain). Empty when the schema is not licensed / not published yet; then
+        # "oi_available" is false and the terminal shows OI figures as unavailable.
+        open_interest = _fetch_option_oi(provider, option_symbols, date)
 
         # Step 6: Assemble chain rows
         rows = []
@@ -210,6 +222,11 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
                 row["pe_ask"] = q.get("ask", q.get("close", 0))
                 row["pe_volume"] = q.get("volume", 0)
 
+            if ce:
+                row["ce_oi"] = int(open_interest.get(ce["raw_symbol"], 0))
+            if pe:
+                row["pe_oi"] = int(open_interest.get(pe["raw_symbol"], 0))
+
             if row["ce_ltp"] > 0 or row["pe_ltp"] > 0:
                 rows.append(row)
 
@@ -222,11 +239,91 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
             "spot": spot,
             "rows": rows,
             "count": len(rows),
+            "oi_available": bool(open_interest),
             "timestamp": int(datetime.now().timestamp()),
         }
 
     except Exception as e:
         return _fail(f"Failed to fetch chain: {e}", symbol=symbol, expiry=expiry)
+
+
+# Databento StatType.OPEN_INTEREST; the value is carried in the record's `quantity`.
+_STAT_OPEN_INTEREST = 9
+# Databento's "undefined" sentinel for the int32 quantity field.
+_UNDEF_STAT_QUANTITY = 2147483647
+
+
+def _fetch_option_oi(
+    provider: DatabentoProvider,
+    symbols: List[str],
+    date: str = None,
+) -> Dict[str, int]:
+    """Open interest per raw option symbol from OPRA.PILLAR `statistics`.
+
+    Returns {} when the schema is unavailable (not licensed / not yet published)
+    or on any error — callers treat an empty dict as "OI not available".
+    """
+    if not symbols:
+        return {}
+
+    try:
+        if not date:
+            date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+        st_start, st_end = provider._clamp_window(
+            provider.OPRA_DATASET, target_date, target_date + timedelta(days=1),
+            schema="statistics"
+        )
+
+        cache_key = f"fno_oi_{provider.OPRA_DATASET.replace('.', '_')}_{date}"
+        cached = provider._cache_load(cache_key, max_age_seconds=6 * 3600)
+        if cached is not None:
+            return cached
+
+        data = provider.client.timeseries.get_range(
+            dataset=provider.OPRA_DATASET,
+            schema="statistics",
+            symbols=symbols,
+            stype_in="raw_symbol",
+            start=st_start.strftime("%Y-%m-%dT%H:%M:%S"),
+            end=st_end.strftime("%Y-%m-%dT%H:%M:%S"),
+        )
+
+        oi: Dict[str, int] = {}
+        latest_ts: Dict[str, Any] = {}
+        try:
+            import pandas as pd  # noqa: F401
+            df = data.to_df()
+            if not df.empty and "stat_type" in df.columns and "symbol" in df.columns:
+                df = df[df["stat_type"] == _STAT_OPEN_INTEREST]
+                for sym, grp in df.groupby("symbol"):
+                    # Last OI print in the window for this contract.
+                    r = grp.iloc[-1]
+                    q = int(r.get("quantity", 0))
+                    if 0 <= q < _UNDEF_STAT_QUANTITY:
+                        oi[str(sym)] = q
+        except ImportError:
+            for rec in data:
+                if int(getattr(rec, "stat_type", 0)) != _STAT_OPEN_INTEREST:
+                    continue
+                sym = str(getattr(rec, "symbol", ""))
+                q = int(getattr(rec, "quantity", 0))
+                ts = getattr(rec, "ts_event", 0)
+                if not sym or not (0 <= q < _UNDEF_STAT_QUANTITY):
+                    continue
+                if sym not in latest_ts or ts >= latest_ts[sym]:
+                    latest_ts[sym] = ts
+                    oi[sym] = q
+
+        if oi:
+            provider._cache_save(cache_key, oi)
+        return oi
+
+    except Exception as exc:
+        # The chain is still delivered (as success) — without OI.
+        _diag(f"WARNING Open interest fetch failed symbols={len(symbols)} error={type(exc).__name__}")
+        return {}
 
 
 def _fetch_spot(provider: DatabentoProvider, symbol: str, date: str = None) -> float:
@@ -244,7 +341,9 @@ def _fetch_spot(provider: DatabentoProvider, symbol: str, date: str = None) -> f
             return 0.0
         last = bars[-1]
         return float(last.get("close", 0))
-    except Exception:
+    except Exception as exc:
+        # A 0.0 spot feeds ATM selection and the greeks.
+        _diag(f"ERROR Spot price fetch failed symbol={symbol} error={type(exc).__name__}")
         return 0.0
 
 
@@ -313,7 +412,8 @@ def _fetch_option_quotes(
 
         return quotes
 
-    except Exception:
+    except Exception as exc:
+        _diag(f"WARNING Option quotes fetch failed symbols={len(symbols)} error={type(exc).__name__}")
         return {}
 
 
@@ -346,7 +446,8 @@ def main():
     else:
         result = _fail(f"Unknown command: {command}")
 
-    print(json.dumps(result, default=str), flush=True)
+    # NaN/Infinity-safe (a NaN quote or greek made the whole chain invalid JSON).
+    print(fincept_json.dumps(result), flush=True)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,11 @@
 ﻿#include "services/notifications/providers/PagerDutyProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
 #include <QUuid>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -50,15 +52,12 @@ void PagerDutyProvider::send(const NotificationRequest& req, std::function<void(
     body["dedup_key"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
     body["payload"] = payload;
 
-    HttpClient::instance().post("https://events.pagerduty.com/v2/enqueue", body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = obj.value("status").toString() == "success";
-        cb(ok, ok ? QString{} : obj.value("message").toString());
-    });
+    // Events API v2: 202 {"status":"success"}; any other status text is a failure.
+    DeliveryRequest request;
+    request.service = DeliveryService::PagerDuty;
+    request.url = QStringLiteral("https://events.pagerduty.com/v2/enqueue");
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

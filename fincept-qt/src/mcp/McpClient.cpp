@@ -96,7 +96,7 @@ Result<void> McpClient::start() {
             for (auto it = config_.env.constBegin(); it != config_.env.constEnd(); ++it)
                 uv_env.insert(it.key(), it.value());
             process_->setProcessEnvironment(uv_env);
-            LOG_INFO(TAG, "Routing uvx through bundled uv: " + uv);
+            LOG_DEBUG(TAG, logf("Routing uvx through the bundled uv", {{"uv", log_path(uv)}}));
         }
     }
 
@@ -261,7 +261,7 @@ void McpClient::send_notification(const QString& method, const QJsonObject& para
                 process_->write(line);
         },
         Qt::QueuedConnection);
-    LOG_INFO(TAG, "RPC → " + method + " (notification)");
+    LOG_DEBUG(TAG, logf("MCP notification sent", {{"server", config_.name}, {"method", method}}));
 }
 
 Result<std::vector<ExternalTool>> McpClient::list_tools() {
@@ -331,7 +331,7 @@ Result<QJsonObject> McpClient::send_request(const QString& method, const QJsonOb
     if (!params.isEmpty())
         req["params"] = params;
 
-    LOG_INFO(TAG, "RPC → " + method + " (id=" + QString::number(id) + ")");
+    LOG_DEBUG(TAG, logf("MCP request sent", {{"server", config_.name}, {"method", method}, {"id", id}}));
 
     QByteArray line = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
 
@@ -345,9 +345,15 @@ Result<QJsonObject> McpClient::send_request(const QString& method, const QJsonOb
     timer.start();
 
     {
+        // Loop: rpc_cond_ is shared by every request in flight, so a wakeAll()
+        // for ANOTHER request's answer (or a spurious wakeup) must not end this
+        // wait — that used to report "Timeout" for a call answered a moment later.
         QMutexLocker lock(&rpc_mutex_);
-        if (!pending.completed) {
-            rpc_cond_.wait(&rpc_mutex_, static_cast<unsigned long>(timeout_ms));
+        while (!pending.completed) {
+            const qint64 left = timeout_ms - timer.elapsed();
+            if (left <= 0)
+                break;
+            rpc_cond_.wait(&rpc_mutex_, static_cast<unsigned long>(left));
         }
     }
 
@@ -356,12 +362,20 @@ Result<QJsonObject> McpClient::send_request(const QString& method, const QJsonOb
         pending_.remove(id);
     }
 
-    if (!pending.error.isEmpty())
+    if (!pending.error.isEmpty()) {
+        LOG_WARN(TAG, logf("RPC failed", {{"server", config_.name},
+                                          {"method", method},
+                                          {"id", id},
+                                          {"error", pending.error.left(200)},
+                                          {"elapsed_ms", timer.elapsed()}}));
         return Result<QJsonObject>::err(pending.error.toStdString());
-    if (!pending.completed)
+    }
+    if (!pending.completed) {
+        LOG_WARN(TAG, logf("RPC timed out", {{"server", config_.name}, {"method", method}, {"id", id}, {"timeout_ms", timeout_ms}}));
         return Result<QJsonObject>::err("Timeout waiting for: " + method.toStdString());
+    }
 
-    LOG_INFO(TAG, "RPC ← " + method + " OK (" + QString::number(timer.elapsed()) + "ms)");
+    LOG_DEBUG(TAG, logf("RPC answered", {{"server", config_.name}, {"method", method}, {"elapsed_ms", timer.elapsed()}}));
     return Result<QJsonObject>::ok(pending.response);
 }
 
@@ -370,12 +384,30 @@ void McpClient::handle_line(const QByteArray& line) {
         return;
 
     QJsonDocument doc = QJsonDocument::fromJson(line);
-    if (!doc.isObject())
+    if (!doc.isObject()) {
+        LOG_DEBUG(TAG, logf("Non-JSON line from MCP server dropped", {{"server", config_.name}, {"bytes", line.size()}}));
         return;
+    }
 
     QJsonObject obj = doc.object();
     if (!obj.contains("id"))
         return; // Notification — ignored for now
+
+    if (obj.contains("method")) {
+        // A REQUEST from the server (ping, roots/list, sampling…), not an answer
+        // to one of ours: its id is the server's own and may collide with a
+        // pending request id. Answer it — ping with {}, anything else with
+        // "method not found" (this client declares no capabilities) — and never
+        // let it complete one of our requests.
+        QJsonObject reply{{"jsonrpc", "2.0"}, {"id", obj.value("id")}};
+        if (obj.value("method").toString() == QLatin1String("ping"))
+            reply.insert("result", QJsonObject{});
+        else
+            reply.insert("error", QJsonObject{{"code", -32601}, {"message", "Method not supported by this client"}});
+        if (process_)
+            process_->write(QJsonDocument(reply).toJson(QJsonDocument::Compact) + "\n"); // the worker thread owns process_
+        return;
+    }
 
     int id = obj["id"].toInt(-1);
     if (id < 0)

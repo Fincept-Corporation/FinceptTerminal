@@ -13,6 +13,7 @@ import asyncio
 import aiohttp
 import re
 import html
+import fincept_connector as fc
 
 try:
     import fincept_json
@@ -69,7 +70,7 @@ class NASDAQError:
             "endpoint": self.endpoint,
             "message": self.error,
             "status_code": self.status_code,
-            "timestamp": self.timestamp
+            "timestamp": fc.epoch_iso(self.timestamp)
         }
 
 

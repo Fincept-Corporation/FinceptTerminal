@@ -1,4 +1,5 @@
 #pragma once
+#include <QByteArray>
 #include <QHash>
 #include <QObject>
 #include <QProcess>
@@ -81,6 +82,15 @@ class PythonRunner : public QObject {
         /// Stop a run whose stdout grows past this many bytes: the process is
         /// killed and the result fails with "output too large". 0 = no cap.
         qint64 max_output_bytes = 0;
+
+        /// Which lines reach the stream callback (`on_line`). True (default) =
+        /// stdout and stderr lines, as before. False = stderr lines only: stdout
+        /// is still buffered in full for the result (PythonResult::output, JSON
+        /// extraction, max_output_bytes — all unchanged) but is never scanned
+        /// for line ends or decoded to QString for streaming on the GUI thread.
+        /// Use it when the script reports progress on stderr and prints one
+        /// large result on stdout. No effect without a stream callback.
+        bool stream_stdout = true;
     };
 
     /// Sentinel for RunOptions::timeout_ms — resolve the budget from the script
@@ -91,7 +101,8 @@ class PythonRunner : public QObject {
 
     /// Run a script asynchronously. Callback invoked on Qt event loop.
     /// Requests are queued if max concurrency is reached.
-    /// Optional `on_line` delivers each complete stdout/stderr line as it arrives.
+    /// Optional `on_line` delivers each complete stdout/stderr line as it arrives
+    /// (stderr only with RunOptions::stream_stdout = false, via run_with_options).
     ///
     /// `stdin_data` (optional) is written to the child's stdin immediately after
     /// spawn, and the write channel is then closed so the script sees EOF. Use
@@ -133,6 +144,24 @@ class PythonRunner : public QObject {
     /// Check if python is available
     bool is_available() const;
 
+    /// Application quit (aboutToQuit): kill every running script together with
+    /// everything it started (its process tree), drop the queue — no callback
+    /// runs any more — and forget the cached credentials. Idempotent; a no-op
+    /// when the runner was never created. GUI thread.
+    static void shutdown();
+
+    /// Drop the decrypted credentials cached for build_python_env() (terminal
+    /// locked, quit). The next spawn reads them from SecureStorage again.
+    /// Thread-safe.
+    static void forget_credentials();
+
+    /// User-facing reason a Python-backed feature cannot run yet: "Analytics
+    /// libraries are still installing (N%)…" while PythonSetupManager is running,
+    /// "Python is not set up yet — …" otherwise. The exact text run()/run_code()
+    /// return when no interpreter is resolved; PythonWorker reuses it so the
+    /// daemon path and the subprocess path say the same thing. Thread-safe.
+    static QString python_unavailable_message();
+
     /// Set max concurrent Python processes (default: 3)
     void set_max_concurrent(int n) { max_concurrent_ = n; }
 
@@ -153,10 +182,12 @@ class PythonRunner : public QObject {
     void refresh_interpreter();
     QString find_scripts_dir() const;
     void start_next();
+    void shutdown_now();
 
     QString python_path_;
     QString scripts_dir_;
     bool python_init_done_ = false;
+    bool shutting_down_ = false; // shutdown() ran: nothing is spawned any more
 
     // Concurrency limiter
     static constexpr int DEFAULT_MAX_CONCURRENT = 3;
@@ -187,6 +218,8 @@ class PythonRunner : public QObject {
         std::optional<QStringList> credential_allowlist;
         /// See RunOptions::max_output_bytes.
         qint64 max_output_bytes = 0;
+        /// See RunOptions::stream_stdout.
+        bool stream_stdout = true;
     };
     QQueue<QueuedRequest> queue_;
 
@@ -197,12 +230,44 @@ class PythonRunner : public QObject {
         int stdout_streamed = 0; // offset into stdout_buf already streamed
         int stderr_streamed = 0;
         StreamCallback on_line;
-        qint64 start_ms = 0; // spawn timestamp for duration diagnostics
+        qint64 start_ms = 0;       // spawn timestamp for duration diagnostics
+        bool stream_stdout = true; // RunOptions::stream_stdout
     };
     QHash<QProcess*, ProcessBuffers> proc_buffers_;
 };
 
 /// Extract last JSON line/block from Python output
 QString extract_json(const QString& output);
+
+/// Pure pieces of the per-line stream (PythonRunner's stream callback), QtCore
+/// only and tested by tst_python_stream_lines. The runner calls them once per
+/// line, looking its buffers up again between lines (the callback may re-enter
+/// run()).
+namespace stream_detail {
+
+/// Whether lines of one channel go to the stream callback: never without a
+/// callback; stderr always; stdout only while `stream_stdout` (RunOptions).
+/// When false the channel's bytes are not even scanned for line ends.
+inline bool streams_channel(bool has_callback, bool stream_stdout, bool is_stderr) {
+    return has_callback && (is_stderr || stream_stdout);
+}
+
+/// The next complete line of `buf` from `*offset`: true with `*line` = the bytes
+/// up to (not including) the '\n', one trailing '\r' removed (CRLF), and
+/// `*offset` moved past the '\n'. False when no '\n' follows `*offset` — a
+/// partial tail stays in the buffer for the next read (and is not streamed when
+/// the process ends: the full buffer is the result / error text).
+inline bool next_line(const QByteArray& buf, int* offset, QByteArray* line) {
+    const qsizetype nl = buf.indexOf('\n', *offset);
+    if (nl < 0)
+        return false;
+    *line = buf.mid(*offset, nl - *offset);
+    if (line->endsWith('\r'))
+        line->chop(1);
+    *offset = static_cast<int>(nl + 1);
+    return true;
+}
+
+} // namespace stream_detail
 
 } // namespace fincept::python

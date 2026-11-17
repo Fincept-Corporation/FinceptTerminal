@@ -8,6 +8,7 @@ import json
 import os
 import requests
 from typing import Dict, Any, Optional, List
+import fincept_connector as fc
 
 BASE_URL = "https://api.indexmundi.com"
 
@@ -92,7 +93,7 @@ def _wb_request(country: str, indicator: str, start_year: int, end_year: int) ->
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list) and len(data) > 1:
-            return [{"year": r.get("date"), "value": r.get("value")}
+            return [{"year": fc.number(r.get("date")), "value": r.get("value")}
                     for r in (data[1] or []) if r.get("value") is not None]
         return data
     except Exception as e:
@@ -118,7 +119,7 @@ def get_ranking(indicator: str = "gdp", year: int = 2022, limit: int = 50) -> An
         if isinstance(data, list) and len(data) > 1:
             records = [{"country": r.get("country", {}).get("value"),
                         "country_code": r.get("country", {}).get("id"),
-                        "year": r.get("date"),
+                        "year": fc.number(r.get("date")),
                         "value": r.get("value")}
                        for r in (data[1] or []) if r.get("value") is not None]
             records.sort(key=lambda x: float(x["value"] or 0), reverse=True)

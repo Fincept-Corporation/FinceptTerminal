@@ -54,7 +54,7 @@ void ScanMonitor::start() {
             continue; // realtime universe scans are started on demand from the Universe tab
         start_watch(w);
     }
-    LOG_INFO("ScanMonitor", QString("started %1 active watch(es)").arg(r.value().size()));
+    LOG_DEBUG("ScanMonitor", QString("started %1 active watch(es)").arg(r.value().size()));
 }
 
 void ScanMonitor::start_watch(const ScanWatch& w) {
@@ -192,8 +192,10 @@ void ScanMonitor::on_candles(const QString& id, const QHash<QString, QVector<Ohl
 
 QStringList ScanMonitor::resolve_universe(const ScanWatch& w) {
     const QString u = w.universe;
-    if (u == QStringLiteral("NSE_EQ") || u == QStringLiteral("BSE_EQ")) {
-        const QString exch = (u == QStringLiteral("NSE_EQ")) ? QStringLiteral("NSE") : QStringLiteral("BSE");
+    // "<EXCHANGE>_EQ": every equity of that exchange in the broker's instrument
+    // master — any exchange the broker trades (it used to be NSE / BSE only).
+    if (u.endsWith(QStringLiteral("_EQ")) && u.size() > 3) {
+        const QString exch = u.chopped(3);
         const auto rows = fincept::trading::InstrumentRepository::instance().list(exch, w.broker_id,
                                                                                   fincept::trading::InstrumentType::EQ);
         QStringList out;

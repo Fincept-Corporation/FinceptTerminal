@@ -49,21 +49,25 @@ QByteArray run_request(const QString& method, const QString& url, const QByteArr
 
     if (!timer.isActive()) {
         reply->abort();
-        LOG_ERROR("InstrumentDownload", QString("Timeout fetching %1").arg(url));
+        LOG_ERROR("InstrumentDownload", logf("Instrument master download timed out",
+                                             {{"url", log_url(url)}, {"timeout_ms", timeout_ms}}));
         drain();
         return {};
     }
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
-        LOG_ERROR("InstrumentDownload", QString("Failed %1: %2").arg(url, reply->errorString()));
+        LOG_ERROR("InstrumentDownload", logf("Instrument master download failed",
+                                             {{"url", log_url(url)},
+                                              {"status", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()},
+                                              {"error", reply->errorString().replace(url, log_url(url))}}));
         drain();
         return {};
     }
 
     QByteArray data = reply->readAll();
     drain();
-    LOG_INFO("InstrumentDownload", QString("Fetched %1 (%2 bytes)").arg(url).arg(data.size()));
+    LOG_DEBUG("InstrumentDownload", logf("Instrument master downloaded", {{"url", log_url(url)}, {"bytes", data.size()}}));
     return data;
 }
 

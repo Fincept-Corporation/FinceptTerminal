@@ -31,13 +31,16 @@ class NewCompetitionWizard : public QDialog {
   private slots:
     void on_provider_row_changed();
     void on_model_item_changed(QListWidgetItem* it);
+    /// A harness row that only needs the user's one-time OK opens the consent dialog.
+    void on_model_item_clicked(QListWidgetItem* it);
 
   private:
     void build_step1();
     void build_step2();
     void populate_models();                            // both panes, from the registry
     void populate_model_pane(const QString& provider); // right pane only
-    void refresh_provider_decorations();               // dots, counts, needs-key
+    void refresh_provider_decorations();               // dots, counts, not-ready reason
+    void update_model_warning();                       // harness call-volume warning under the lists
     void update_selection_summary();
     QString current_provider() const;
     void update_nav();
@@ -48,6 +51,7 @@ class NewCompetitionWizard : public QDialog {
     QListWidget* provider_list_ = nullptr;
     QListWidget* model_list_ = nullptr;
     QLabel* model_hint_ = nullptr;
+    QLabel* model_warning_ = nullptr; ///< call-volume warning of the harness competitors listed / selected
     QLabel* selection_summary_ = nullptr;
     /// Single source of truth for cross-provider selection, keyed
     /// "provider/model_id" (QMap → deterministic agent order in the config).
@@ -55,6 +59,7 @@ class NewCompetitionWizard : public QDialog {
     /// Registry options grouped by lowercase provider id (rebuilt by populate_models).
     QMap<QString, QVector<fincept::arena::ArenaModelOption>> options_by_provider_;
     bool repopulating_ = false; // guards itemChanged during programmatic rebuilds
+    bool consent_open_ = false; // a consent dialog opened from a row is showing
     QLineEdit* name_ = nullptr;
     QListWidget* instruments_ = nullptr;
     QDoubleSpinBox* capital_ = nullptr;

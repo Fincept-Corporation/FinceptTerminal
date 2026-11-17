@@ -2,10 +2,11 @@
 
 #include "algo_engine/AlgoEngine.h"
 #include "algo_engine/AlgoEngineTypes.h"
-#include "core/currency/Currency.h"
 #include "core/events/EventBus.h"
 #include "datahub/DataHub.h"
 #include "trading/BrokerRegistry.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QColor>
@@ -72,7 +73,7 @@ QString auto_runs_format_time(const QDateTime& local) {
     return local.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
 }
 
-// Deployment P&L is in the broker's own currency; no broker → global currency.
+// Deployment P&L is in the broker's own currency; no broker → the display currency.
 QString auto_runs_broker_currency(const QString& broker_id) {
     if (broker_id.isEmpty())
         return {};
@@ -81,7 +82,8 @@ QString auto_runs_broker_currency(const QString& broker_id) {
 }
 
 QString auto_runs_money(double v, const QString& currency) {
-    return (v > 0 ? QStringLiteral("+") : QString()) + cur::money(v, false, currency);
+    namespace ar_fmt = fincept::ui::formatting;
+    return ar_fmt::signed_money(v, currency.isEmpty() ? ar_fmt::display_currency() : currency);
 }
 
 } // namespace
@@ -110,7 +112,7 @@ AutomationRunsWidget::AutomationRunsWidget(const QJsonObject& /*cfg*/, QWidget* 
     table_ = new QTableWidget(0, 5, root_);
     table_->setObjectName(QStringLiteral("autoRunsTable"));
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(22);
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(22, -4));
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setFocusPolicy(Qt::NoFocus);
@@ -133,7 +135,7 @@ AutomationRunsWidget::AutomationRunsWidget(const QJsonObject& /*cfg*/, QWidget* 
         const auto* it = table_->item(row, kAutoRunsColName);
         const QString screen_id = it ? it->data(Qt::UserRole).toString() : QString();
         if (!screen_id.isEmpty())
-            EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen_id}});
+            EventBus::instance().publish(QStringLiteral("nav.switch_screen"), QVariantMap{{"screen_id", screen_id}, {"exclusive", true}});
     });
 
     // ── Service signals (context `this` → auto-disconnect on destroy) ──
@@ -168,25 +170,32 @@ AutomationRunsWidget::AutomationRunsWidget(const QJsonObject& /*cfg*/, QWidget* 
         request_all();
     });
 
+    // Settings > Currency & Number Format: re-format the rows held, no fetch.
+    ui::formatting::on_format_changed(this, [this]() {
+        if (have_algo_ || have_workflows_)
+            schedule_render([this]() { render(); });
+    });
+
     retranslateUi();
     apply_styles();
     set_loading(true);
 }
 
 void AutomationRunsWidget::apply_styles() {
-    root_->setStyleSheet(
+    set_css_cached(root_, 
         QString("QWidget#autoRunsRoot{background:transparent;}"
-                "QLabel#autoRunsStatus{color:%1;font-size:10px;padding:16px;background:transparent;}"
+                "QLabel#autoRunsStatus{color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:16px;background:transparent;}"
                 "QTableWidget#autoRunsTable{background:transparent;alternate-background-color:%2;color:%3;"
-                "border:none;font-size:10px;}"
+                "border:none;font-size:" + fincept::ui::fonts::px(-4) + "px;}"
                 "QTableWidget#autoRunsTable::item{padding:2px 4px;border-bottom:1px solid %4;}"
-                "QHeaderView::section{background:%5;color:%1;border:none;border-bottom:1px solid %4;"
-                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QHeaderView::section{background:%5;color:%7;border:none;border-bottom:1px solid %4;"
+                "padding:2px 4px;font-size:" + fincept::ui::fonts::px(-5) + "px;font-weight:bold;}"
                 "QScrollBar:vertical{width:5px;background:transparent;}"
                 "QScrollBar::handle:vertical{background:%6;min-height:20px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::ROW_ALT(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
+                 ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
+                 ui::colors::TEXT_SECONDARY()));
 }
 
 void AutomationRunsWidget::showEvent(QShowEvent* e) {
@@ -329,12 +338,13 @@ QString AutomationRunsWidget::state_label(const QString& state) const {
 }
 
 QString AutomationRunsWidget::state_color(const QString& state) const {
+    // Run states, not P&L: the status colours.
     if (state == QLatin1String("running") || state == QLatin1String("succeeded"))
-        return ui::colors::POSITIVE();
+        return ui::colors::SUCCESS();
     if (state == QLatin1String("starting") || state == QLatin1String("paused"))
         return ui::colors::WARNING();
     if (state == QLatin1String("failed"))
-        return ui::colors::NEGATIVE();
+        return ui::colors::DANGER();
     return ui::colors::TEXT_TERTIARY();
 }
 
@@ -376,6 +386,7 @@ void AutomationRunsWidget::render() {
     const QColor warn(ui::colors::WARNING());
     const QColor neg(ui::colors::NEGATIVE());
     const QColor pos(ui::colors::POSITIVE());
+    const QColor failed(ui::colors::DANGER());
 
     table_->setRowCount(static_cast<int>(rows.size()));
     for (int i = 0; i < rows.size(); ++i) {
@@ -445,7 +456,7 @@ void AutomationRunsWidget::render() {
             else
                 text = r.note.isEmpty() ? QStringLiteral("--") : r.note;
             result_it = new QTableWidgetItem(text);
-            result_it->setForeground(r.state == QLatin1String("failed") ? neg : dim);
+            result_it->setForeground(r.state == QLatin1String("failed") ? failed : dim);
         }
 
         QTableWidgetItem* cells[] = {name_it, kind_it, state_it, last_it, result_it};
@@ -458,6 +469,7 @@ void AutomationRunsWidget::render() {
 
 void AutomationRunsWidget::on_theme_changed() {
     apply_styles();
+    table_->verticalHeader()->setDefaultSectionSize(text_row_height(22, -4));
     if (have_algo_ || have_workflows_)
         render(); // per-cell colours come from the theme tokens
 }

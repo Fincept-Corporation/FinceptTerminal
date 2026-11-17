@@ -37,6 +37,12 @@ struct AgentExecutionResult {
     QString error;
     int execution_time_ms = 0;
     QString request_id; // set by AgentService; panels guard on this to avoid cross-contamination
+    // Structured runs (run_structured): the output model ("trade_signal", …) and
+    // the parsed object, for a laid-out view. `response` keeps the JSON text for
+    // copy / export. Empty model = a plain text answer.
+    QString structured_model;
+    QJsonObject structured_data;
+    bool structured_valid = true;
 };
 
 // ── Routing ─────────────────────────────────────────────────────────────────

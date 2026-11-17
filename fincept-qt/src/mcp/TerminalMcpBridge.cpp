@@ -28,6 +28,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QThreadPool>
+#include <QTimer>
 #include <QUuid>
 #include <QtConcurrent/QtConcurrent>
 
@@ -68,6 +69,14 @@ static constexpr int kBridgeResultBudgetBytes = 24 * 1024;
 
 // HTTP timeout hint for external tools (the MCP wire carries no budget).
 static constexpr int kBridgeExternalToolTimeoutMs = 120000;
+
+// Connection bounds. The peer is the local agent subprocess (one request per
+// connection, Connection: close), so a few dozen is ample; anything beyond is a
+// leak or a probe and must not grow memory without bound.
+static constexpr int kBridgeMaxConnections = 48;
+static constexpr qint64 kBridgeRequestTimeoutMs = 60 * 1000;     // a request must arrive within this
+static constexpr qint64 kBridgeStuckAnswerMs = 30LL * 60 * 1000; // a dispatched call never answered
+static constexpr int kBridgeSweepMs = 10 * 1000;
 
 // Per-thread flags: set by the bridge across the synchronous portion of
 // McpProvider::call_tool_async (where auth runs). The McpProvider auth
@@ -257,14 +266,40 @@ bool TerminalMcpBridge::start() {
 
     destructive_token_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
     active_ = true;
+    if (!sweeper_) {
+        sweeper_ = new QTimer(this);
+        sweeper_->setInterval(kBridgeSweepMs);
+        connect(sweeper_, &QTimer::timeout, this, &TerminalMcpBridge::sweep_connections);
+    }
+    sweeper_->start();
     LOG_INFO(kBridgeTag, QString("Listening on %1").arg(endpoint()));
     return true;
+}
+
+void TerminalMcpBridge::sweep_connections() {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    QList<QTcpSocket*> stale;
+    for (auto it = states_.cbegin(); it != states_.cend(); ++it) {
+        const qint64 idle = now - it.value().last_activity_ms;
+        if ((!it.value().dispatched && idle > kBridgeRequestTimeoutMs) ||
+            (it.value().dispatched && idle > kBridgeStuckAnswerMs))
+            stale.append(it.key());
+    }
+    for (QTcpSocket* sock : stale) {
+        states_.remove(sock);
+        sock->abort();
+        sock->deleteLater();
+    }
+    if (!stale.isEmpty())
+        LOG_DEBUG(kBridgeTag, QString("Closed %1 stale agent connection(s)").arg(stale.size()));
 }
 
 void TerminalMcpBridge::stop() {
     if (!active_)
         return;
     active_ = false;
+    if (sweeper_)
+        sweeper_->stop();
 
     for (auto it = states_.constBegin(); it != states_.constEnd(); ++it) {
         if (it.key()) {
@@ -432,7 +467,17 @@ QJsonArray TerminalMcpBridge::tool_definitions(const ToolFilter& filter, bool in
 void TerminalMcpBridge::on_new_connection() {
     while (server_ && server_->hasPendingConnections()) {
         QTcpSocket* sock = server_->nextPendingConnection();
-        states_.insert(sock, RequestState{});
+        if (!sock)
+            break;
+        if (states_.size() >= kBridgeMaxConnections) {
+            LOG_WARN(kBridgeTag, QString("Refusing an agent connection — %1 already open").arg(states_.size()));
+            sock->abort();
+            sock->deleteLater();
+            continue;
+        }
+        RequestState fresh;
+        fresh.last_activity_ms = QDateTime::currentMSecsSinceEpoch();
+        states_.insert(sock, fresh);
         connect(sock, &QTcpSocket::readyRead, this, &TerminalMcpBridge::on_ready_read);
         connect(sock, &QTcpSocket::disconnected, this, &TerminalMcpBridge::on_disconnected);
     }
@@ -455,21 +500,30 @@ void TerminalMcpBridge::on_ready_read() {
         return;
 
     RequestState& st = it.value();
-    st.buffer.append(sock->readAll());
+    const QByteArray data = sock->readAll();
+    // One request per connection: once it is answered or running, later bytes
+    // are ignored — never parsed again (that used to run the same tool twice).
+    if (st.dispatched)
+        return;
+    st.buffer.append(data);
+    st.last_activity_ms = QDateTime::currentMSecsSinceEpoch();
 
     if (!st.headers_parsed) {
         const int header_end = st.buffer.indexOf("\r\n\r\n");
         if (header_end < 0) {
             if (st.buffer.size() > kBridgeMaxHeaderBytes) {
+                st.dispatched = true;
                 write_error(sock, 431, "Request header too large");
             }
             return; // wait for more
         }
-        if (!parse_headers(st)) {
+        if (!parse_headers(st) || st.content_length < 0) {
+            st.dispatched = true;
             write_error(sock, 400, "Malformed request");
             return;
         }
         if (st.content_length > kBridgeMaxBodyBytes) {
+            st.dispatched = true;
             write_error(sock, 413, "Payload too large");
             return;
         }
@@ -525,6 +579,9 @@ void TerminalMcpBridge::try_dispatch(QTcpSocket* sock) {
     if (it == states_.end())
         return;
     RequestState& st = it.value();
+    if (st.dispatched)
+        return;
+    st.dispatched = true; // whatever happens below, this request is answered once
 
     // ── Origin validation — must come before authn, and before any work ──────
     //
@@ -599,7 +656,7 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
         return;
     }
 
-    LOG_INFO(kBridgeTag, QString("Tool call %1: %2 on %3").arg(call_id, tool_name, server_id));
+    LOG_INFO(kBridgeTag, logf("Agent tool call", {{"call", call_id}, {"tool", tool_name}, {"server", server_id}}));
 
     auto it_state = states_.find(sock);
     const RequestState* req = (it_state != states_.end()) ? &it_state.value() : nullptr;
@@ -692,6 +749,7 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
         {
             CallFlagGuard guard(destructive_ok);
             ScopedCallOrigin origin(QStringLiteral("terminal agent")); // named in approval dialogs
+            ScopedCallClient client(QString::fromLatin1(ScopedCallClient::kTerminalAgent), QString());
             if (server_id == QLatin1String(INTERNAL_SERVER_ID)) {
                 f = McpProvider::instance().call_tool_async(tool_name, args);
             } else {

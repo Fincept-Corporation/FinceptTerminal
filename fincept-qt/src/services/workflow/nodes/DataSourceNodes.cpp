@@ -55,6 +55,8 @@ QStringList ds_node_symbols(const QJsonObject& config) {
 
 } // namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_datasource_nodes(NodeRegistry& registry) {
     // Ensure all connection types are registered first.
     fincept::screens::datasources::register_all_connectors();
@@ -200,7 +202,15 @@ void register_datasource_nodes(NodeRegistry& registry) {
                                                             else
                                                                 cb(false, {}, r.error);
                                                         });
-             }});
+             },
+             // No fetch implementation behind it: listed (disabled) in the palette so the
+             // connector is discoverable, but it cannot be placed. Saved workflows that hold
+             // one still load, and the executor above reports the missing connector.
+             .unavailable_reason =
+                 live ? QString()
+                      : QStringLiteral("no live data connector for %1 yet. Use one of the Data Source nodes backed "
+                                       "by the Data Sources › Catalog connectors, or a Code node.")
+                            .arg(c.name)});
     }
 }
 

@@ -6,9 +6,11 @@
 //
 // Config (persisted): { "account_id": "<uuid>" }
 //
-// By default only NON-terminal orders are displayed (status not in
-// {COMPLETE, CANCELLED, REJECTED, FILLED}). Widget does not filter by
-// symbol; users can open a per-symbol view from Equity Trading.
+// Only NON-terminal orders are displayed — the terminal-status list mirrors
+// the Equity Trading blotter's (complete/filled/traded/executed/cancelled/
+// rejected/expired/closed/replaced/done_for_day/stopped/suspended). Widget
+// does not filter by symbol; users can open a per-symbol view from Equity
+// Trading.
 
 #include "screens/dashboard/widgets/BaseWidget.h"
 #include "trading/TradingTypes.h"
@@ -38,6 +40,13 @@ class OrderBookMiniWidget : public BaseWidget {
     void apply_styles();
     void populate(const QVector<trading::BrokerOrderInfo>& rows);
     void cancel_order(const QString& order_id);
+    /// After the user confirmed: cancel off the UI thread, report a refusal.
+    void send_cancel(const QString& acct_id, const QString& order_id);
+    /// Account name in the header, or why the broker session is unusable.
+    void update_session_state();
+    /// No account: "No broker account connected" over the tile (BaseWidget helper).
+    void show_no_account_state();
+    QString orders_topic() const;
     void ensure_stream_running();
     void hub_resubscribe();
     void hub_unsubscribe_all();
@@ -52,6 +61,8 @@ class OrderBookMiniWidget : public BaseWidget {
 
     bool hub_active_ = false;
     bool showing_empty_ = false; // table currently shows the "No working orders" row
+    /// The last order list rendered — re-rendered on a theme change (side colours live in the items).
+    QVector<trading::BrokerOrderInfo> orders_;
 };
 
 } // namespace fincept::screens::widgets

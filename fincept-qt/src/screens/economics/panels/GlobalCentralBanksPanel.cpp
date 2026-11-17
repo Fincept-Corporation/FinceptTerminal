@@ -19,6 +19,11 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QList>
+#include <QPair>
+#include <QRegularExpression>
+
+#include <utility>
 
 namespace fincept::screens {
 namespace {
@@ -249,6 +254,121 @@ static int cb_percent_hint(const QString& command) {
 // A bare .toArray() silently yields an empty array for all of those, so the
 // panel rendered "no data" for a request that actually succeeded. Normalise
 // both into a row list.
+
+// One member of an "object of objects" payload, reduced to the record it describes: overview
+// members wrap their answer as {"success":..,"data":{..}} (cnb), {"latest":{..}} (nbp), or a
+// single-key holder ({"czeoniaDaily": {..}}, {"operations": [..]}).
+static QJsonObject unwrap_cb_member(QJsonObject m) {
+    for (int depth = 0; depth < 4; ++depth) {
+        if (m.value(QStringLiteral("latest")).isObject()) {
+            m = m.value(QStringLiteral("latest")).toObject();
+            continue;
+        }
+        const QJsonValue inner = m.value(QStringLiteral("data"));
+        if (inner.isObject()) {
+            m = inner.toObject();
+            continue;
+        }
+        if (inner.isArray()) {
+            const QJsonArray a = inner.toArray();
+            if (a.isEmpty() || !a.first().isObject())
+                break;
+            m = a.first().toObject();
+            continue;
+        }
+        if (m.size() == 1) {
+            const QJsonValue only = m.begin().value();
+            if (only.isObject()) {
+                m = only.toObject();
+                continue;
+            }
+            if (only.isArray() && !only.toArray().isEmpty() && only.toArray().first().isObject()) {
+                m = only.toArray().first().toObject();
+                continue;
+            }
+        }
+        break;
+    }
+    return m;
+}
+
+static QStringList cb_value_keys(const QJsonObject& m) {
+    QStringList keys;
+    for (auto it = m.begin(); it != m.end(); ++it)
+        if (it.key() != QLatin1String("success") && it.key() != QLatin1String("count"))
+            keys << it.key();
+    keys.sort();
+    return keys;
+}
+
+static QJsonArray cb_rows_from_members(const QJsonObject& obj) {
+    // Keys that are ISO currency codes name a "currency" column; anything else is a sub-series.
+    static const QRegularExpression kCcy(QStringLiteral("^[A-Z]{3}$"));
+    bool all_ccy = true;
+    for (auto it = obj.begin(); it != obj.end(); ++it)
+        all_ccy = all_ccy && kCcy.match(it.key()).hasMatch();
+    const QString key_col = all_ccy ? QStringLiteral("currency") : QStringLiteral("series");
+
+    QList<QPair<QString, QJsonObject>> members;
+    for (auto it = obj.begin(); it != obj.end(); ++it)
+        members.append({it.key(), unwrap_cb_member(it.value().toObject())});
+
+    // Same record shape for every member (one currency per key): one row per member.
+    bool uniform = true;
+    const QStringList first_keys = members.isEmpty() ? QStringList() : cb_value_keys(members.first().second);
+    for (const auto& m : std::as_const(members))
+        uniform = uniform && cb_value_keys(m.second) == first_keys;
+    if (uniform) {
+        QJsonArray rows;
+        for (const auto& m : std::as_const(members)) {
+            QJsonObject row = m.second;
+            row.remove(QStringLiteral("success"));
+            row.remove(QStringLiteral("count"));
+            row.insert(key_col, m.first);
+            rows.append(row);
+        }
+        return rows;
+    }
+
+    // Unrelated records (FX table next to a policy rate): one row per numeric field —
+    // series / field / value, plus the record's own date when it has one. One header over rows of
+    // different shapes rendered as a table of blanks.
+    static const QStringList kDateKeys = {QStringLiteral("date"), QStringLiteral("validFor"),
+                                          QStringLiteral("tradeDate"), QStringLiteral("effective_date")};
+    QJsonArray rows;
+    for (const auto& m : std::as_const(members)) {
+        QString when;
+        for (const auto& dk : kDateKeys) {
+            when = m.second.value(dk).toString();
+            if (!when.isEmpty())
+                break;
+        }
+        auto add = [&rows, &m, &when, &key_col](const QString& field, const QJsonValue& v) {
+            QJsonObject row;
+            row.insert(key_col, m.first);
+            row.insert(QStringLiteral("field"), field);
+            row.insert(QStringLiteral("value"), v);
+            if (!when.isEmpty())
+                row.insert(QStringLiteral("date"), when);
+            rows.append(row);
+        };
+        for (auto f = m.second.begin(); f != m.second.end(); ++f) {
+            if (f.key() == QLatin1String("count") || f.key() == QLatin1String("year"))
+                continue;
+            if (f.value().isDouble()) {
+                add(f.key(), f.value());
+            } else if (f.value().isObject()) {
+                // One nested level, e.g. bnm kijang_emas {"one_oz": {"buying":..,"selling":..}}.
+                const QJsonObject sub = f.value().toObject();
+                for (auto s = sub.begin(); s != sub.end(); ++s)
+                    if (s.value().isDouble())
+                        add(f.key() + QLatin1Char('.') + s.key(), s.value());
+            }
+        }
+    }
+    return rows;
+}
+
 static QJsonArray extract_cb_rows(const QJsonObject& data) {
     const QJsonValue payload = data["data"];
     if (payload.isArray())
@@ -268,21 +388,14 @@ static QJsonArray extract_cb_rows(const QJsonObject& data) {
         // that object is the row.
         if (obj.size() == 1 && obj.begin().value().isObject())
             return QJsonArray{obj.begin().value().toObject()};
-        // Object of objects keyed by currency (tcmb "today" gives {"USD": {...}, "EUR": {...}}): one
-        // row per key, with the key as a "currency" column. As a single row every value was an
-        // object (rendered blank, then dropped as "no numeric value" -> "No data returned").
+        // Object of objects: keyed by currency (tcmb "today" gives {"USD": {...}, "EUR": {...}}) or by
+        // sub-series ("overview" commands: cnb {"pribor": {"success":..,"data":{..}}, ...}, nbp
+        // {"table_a_today": {"latest": {..}}}, bnm {"exchange_rates": {..}, "opr": {..}}).
         bool all_objects = true;
         for (auto it = obj.begin(); it != obj.end(); ++it)
             all_objects = all_objects && it.value().isObject();
-        if (all_objects) {
-            QJsonArray rows;
-            for (auto it = obj.begin(); it != obj.end(); ++it) {
-                QJsonObject row = it.value().toObject();
-                row.insert(QStringLiteral("currency"), it.key());
-                rows.append(row);
-            }
-            return rows;
-        }
+        if (all_objects)
+            return cb_rows_from_members(obj);
         return QJsonArray{obj}; // genuine single row
     }
     return {};
@@ -298,11 +411,7 @@ GlobalCentralBanksPanel::GlobalCentralBanksPanel(QWidget* parent)
 }
 
 void GlobalCentralBanksPanel::activate() {
-    show_empty(tr("Select a central bank and series, then click FETCH\n"
-                  "Sources: BOE, RBA, Bank of Canada, Riksbank, SNB, Norges Bank,\n"
-                  "CNB (Czechia), NBP (Poland), MNB (Hungary), BNR (Romania),\n"
-                  "HNB (Croatia), TCMB (Türkiye), BOI (Israel), BNM (Malaysia)\n"
-                  "No API key required for any source"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
@@ -312,22 +421,22 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     bank_combo_ = new QComboBox;
     for (const auto& b : kBanks)
         bank_combo_->addItem(b.label);
-    bank_combo_->setFixedHeight(26);
+    bank_combo_->setMinimumHeight(26);
     bank_combo_->setMinimumWidth(230);
 
     series_lbl_ = new QLabel(tr("SERIES"));
     series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
-    series_combo_->setFixedHeight(26);
+    series_combo_->setMinimumHeight(26);
     series_combo_->setMinimumWidth(200);
 
     ccy_lbl_ = new QLabel(tr("CCY"));
     ccy_lbl_->setObjectName(QStringLiteral("econCtrlLabel")); // styled by the panel stylesheet (no per-label parse)
     ccy_edit_ = new QLineEdit(QStringLiteral("USD"));
     ccy_edit_->setMaxLength(3);
-    ccy_edit_->setFixedWidth(52);
-    ccy_edit_->setFixedHeight(26);
+    set_text_width(ccy_edit_, 52);
+    ccy_edit_->setMinimumHeight(26);
     ccy_edit_->setToolTip(tr("ISO currency code for the single-currency series (e.g. USD, EUR, GBP)"));
     ccy_edit_->setAccessibleName(tr("Currency code"));
 
@@ -336,7 +445,7 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     days_spin_ = new QSpinBox;
     days_spin_->setRange(1, 365);
     days_spin_->setValue(30);
-    days_spin_->setFixedHeight(26);
+    days_spin_->setMinimumHeight(26);
     days_spin_->setToolTip(tr("Look-back window for date-range series"));
     days_spin_->setAccessibleName(tr("Look-back days"));
 
@@ -420,8 +529,8 @@ void GlobalCentralBanksPanel::on_fetch() {
     }
 
     show_loading(tr("Fetching %1: %2…").arg(bank.label, series.label));
-    services::EconomicsService::instance().execute(kGlobalCentralBanksSourceId, bank.script, series.command, args,
-                                                   bank.req_prefix + "_" + series.command);
+    execute_query(kGlobalCentralBanksSourceId, bank.script, series.command, args,
+                  bank.req_prefix + "_" + series.command);
 }
 
 void GlobalCentralBanksPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -461,51 +570,63 @@ void GlobalCentralBanksPanel::on_result(const QString& request_id, const service
         return;
     }
 
-    QJsonArray raw = extract_cb_rows(result.data);
-
-    // Filter rows: keep only those with at least one numeric value
-    QJsonArray rows;
-    for (const auto& rv : raw) {
-        const QJsonObject r = rv.toObject();
-        bool has_value = false;
-        for (const auto& key : r.keys()) {
-            if (key == "date")
-                continue;
-            if (r[key].isDouble()) {
-                has_value = true;
-                break;
+    // Pulling the rows out of the connector's answer and keeping those with at least one numeric value
+    // walks every row (the BoE bank rate since 1694 is 13,113): on a worker.
+    const QJsonObject data = result.data;
+    offload(
+        [data]() {
+            const QJsonArray raw = extract_cb_rows(data);
+            QJsonArray rows;
+            for (const auto& rv : raw) {
+                const QJsonObject r = rv.toObject();
+                bool has_value = false;
+                for (auto it = r.constBegin(); it != r.constEnd(); ++it) {
+                    if (it.key() == QLatin1String("date"))
+                        continue;
+                    if (it.value().isDouble()) {
+                        has_value = true;
+                        break;
+                    }
+                }
+                if (has_value)
+                    rows.append(r);
             }
-        }
-        if (has_value)
-            rows.append(r);
-    }
+            return rows;
+        },
+        [this, data, matched_bank, matched_series, request_id](const QJsonArray& rows) {
+            if (rows.isEmpty()) {
+                show_error(tr("No data returned"));
+                return;
+            }
 
-    if (rows.isEmpty()) {
-        show_error(tr("No data returned"));
-        return;
-    }
+            const QString bank_name = matched_bank >= 0 ? kBanks[matched_bank].label : "";
+            const QString series_name = (matched_bank >= 0 && matched_series >= 0)
+                                            ? kBanks[matched_bank].series[matched_series].label
+                                            : request_id;
+            const QString title = bank_name + ": " + series_name;
 
-    const QString bank_name = matched_bank >= 0 ? kBanks[matched_bank].label : "";
-    const QString series_name =
-        (matched_bank >= 0 && matched_series >= 0) ? kBanks[matched_bank].series[matched_series].label : request_id;
-    const QString title = bank_name + ": " + series_name;
-
-    SeriesMeta meta;
-    meta.source = bank_name;
-    if (matched_bank >= 0 && matched_series >= 0)
-        meta.percent = cb_percent_hint(kBanks[matched_bank].series[matched_series].command);
-    // Some connectors say what the columns are (BoE source note, RBA per-series units/frequency).
-    const QJsonObject series_meta = result.data["series_metadata"].toObject();
-    if (series_meta.size() == 1) {
-        const QJsonObject m = series_meta.begin().value().toObject();
-        meta.units = m.value("unit").toString();
-        meta.frequency = m.value("frequency").toString();
-    }
-    if (meta.units.isEmpty())
-        meta.units = result.data["unit"].toString();
-    set_series_meta(meta);
-    display(rows, title);
-    LOG_INFO("GlobalCentralBanksPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+            SeriesMeta meta;
+            meta.source = bank_name;
+            if (matched_bank >= 0 && matched_series >= 0)
+                meta.percent = cb_percent_hint(kBanks[matched_bank].series[matched_series].command);
+            // Some connectors say what the columns are (BoE source note, RBA per-series units/frequency).
+            const QJsonObject series_meta = data["series_metadata"].toObject();
+            if (series_meta.size() == 1) {
+                const QJsonObject m = series_meta.begin().value().toObject();
+                meta.units = m.value("unit").toString();
+                meta.frequency = m.value("frequency").toString();
+            }
+            if (meta.units.isEmpty())
+                meta.units = data["unit"].toString();
+            set_series_meta(meta);
+            display(rows, title);
+            // What the connector says about the data's currency: a cube the SNB stopped updating (snb
+            // "stale"), or an earlier bulletin shown because the asked-for one is not published (tcmb "date").
+            const QString notice = data["notice"].toString();
+            if (!notice.isEmpty())
+                set_banner(notice); // after display(), which clears the banner
+            LOG_DEBUG("GlobalCentralBanksPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+        });
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

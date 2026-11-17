@@ -94,7 +94,7 @@ void TierService::wire_vefncpt_listener() {
                          publish_for(out_topic, pubkey);
                      });
     listener_wired_ = true;
-    LOG_INFO("Tier", "veFNCPT listener wired");
+    LOG_DEBUG("Tier", "veFNCPT listener wired");
 }
 
 } // namespace fincept::billing

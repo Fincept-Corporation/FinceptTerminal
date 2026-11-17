@@ -1,11 +1,20 @@
 """
 QuantStats Analysis — quantitative statistics for a portfolio's CURRENT weights
-applied to trailing daily price history (a back-test of today's mix).
+applied to trailing daily price history (a back-test of today's mix — NOT the
+book's realised performance, which PortfolioService::compute_metrics reports).
 
 Input (stdin JSON):
     {"symbols": ["AAPL","MSFT"], "weights": [0.5, 0.5],
-     "risk_free_rate": 0.042,          # optional annual fraction, default 0.04
-     "benchmark": "SPY"}               # optional; same stats computed for it
+     "risk_free_rate": 0.042,          # optional annual fraction; absent = 0 (meta says so)
+     "benchmark": "SPY",               # optional; symbol or blend "SPY:60,AGG:40"
+     "period": "1y",                   # optional: 6mo|1y|2y|3y|5y|10y|ytd|max
+     "base_currency": "USD",           # optional; prices are converted into it (FX legs downloaded)
+     "currencies": {"VOD.L": "GBp"},   # optional quoted currency per symbol (else from the suffix)
+     "periods_per_year": 252}          # optional; else measured from the benchmark's calendar
+Definitions are the shared ones of portfolio_metrics.py: daily base-currency returns
+compounded onto the benchmark's trading days, Sharpe = (mean − rf/period) / stdev ×
+√ppy, annualised return only for windows of at least a year. History starts where
+every holding of ≥ 1 % weight has prices — nothing is back-filled.
 Output (stdout JSON): {performance, risk, ratios, distribution, benchmark?, meta,
     series   {dates, cumulative, drawdown, benchmark_cumulative?}   (<= 300 points),
     rolling? {window, dates, volatility, sharpe, beta?}             (63-observation window),
@@ -198,18 +207,24 @@ def _periods_per_year(index):
     return float(min(366.0, max(50.0, (len(index) - 1) / (days / 365.25))))
 
 
-def series_stats(r, rf_annual):
+def series_stats(r, rf_annual, ppy=None):
     """Statistics for one daily simple-return series (pandas Series)."""
     r = r.dropna()
     n = len(r)
     if n < 2:
         return None
-    ppy = _periods_per_year(r.index)
+    if not ppy:
+        ppy = _periods_per_year(r.index)
     rf_p = (1.0 + rf_annual) ** (1.0 / ppy) - 1.0
     cumulative = (1 + r).cumprod()
     total_return = float(cumulative.iloc[-1] - 1.0)
-    years = max((r.index[-1] - r.index[0]).days / 365.25, 1e-9)
-    ann_return = float((1.0 + total_return) ** (1.0 / years) - 1.0) if total_return > -1 else -1.0
+    span_days = (r.index[-1] - r.index[0]).days
+    years = max(span_days / 365.25, 1e-9)
+    # Annualised only over at least a year (GIPS): annualising weeks gives absurd numbers.
+    # A "1 year" download spans first-to-last TRADING day, i.e. 360-364 calendar days,
+    # so ">= 365" never annualised the default period (Annualized Return / Calmar "--").
+    ann_return = (float((1.0 + total_return) ** (1.0 / years) - 1.0) if total_return > -1 else -1.0) \
+        if span_days >= 358 else None
     sd = float(r.std(ddof=1))
     ann_vol = sd * math.sqrt(ppy)
     excess_mean = float(r.mean()) - rf_p
@@ -226,7 +241,7 @@ def series_stats(r, rf_annual):
     peak = cumulative.cummax()
     drawdown = cumulative / peak - 1.0
     max_dd = float(drawdown.min())
-    calmar = ann_return / abs(max_dd) if max_dd < 0 else None
+    calmar = ann_return / abs(max_dd) if (max_dd < 0 and ann_return is not None) else None
 
     q05 = float(np.percentile(r.values, 5))
     tail = r[r <= q05]
@@ -270,51 +285,68 @@ def series_stats(r, rf_annual):
     }
 
 
-def compute_stats(symbols, weights, rf_annual, benchmark, period="1y"):
-    import yfinance as yf
 
-    tickers = list(dict.fromkeys(symbols + ([benchmark] if benchmark else [])))
-    data = yf.download(tickers, period=period, interval="1d", progress=False, auto_adjust=True)
-    close = _close_frame(data, tickers)
-    if close is None:
-        return {"error": "Could not fetch price data"}
 
-    # A symbol yfinance could not price is an all-NaN column; keep only symbols with data.
-    close = close.dropna(axis=1, how="all")
-    held = [s for s in symbols if s in close.columns]
+ALLOWED_PERIODS = {"6mo", "1y", "2y", "3y", "5y", "10y", "ytd", "max"}
+MAX_RETURN_SAMPLES = 2000  # daily returns for a distribution chart
+
+
+def compute_stats(symbols, weights, rf_annual, benchmark, period="1y", base="USD", currencies=None, ppy=None):
+    import pandas as pd
+    import portfolio_metrics as pm
+
+    yf_period = "5y" if period == "3y" else period  # yfinance has no "3y": download 5y, trim below
+    mk = pm.load_market(symbols, currencies or {}, base, benchmark or pm.GLOBAL_BENCHMARK, yf_period)
+    closes = mk["closes_base"]
+    held = [s for s in symbols if s in closes]
     if not held:
         return {"error": "No price data for any symbol"}
 
-    # Each line's returns on its own calendar; a closed market contributes 0.
-    rets = close[held].pct_change(fill_method=None)
-    rets = rets.iloc[1:]
-    # Map weights by NAME (yfinance sorts columns alphabetically); re-normalise
-    # over the symbols that actually have data.
     wmap = {s: float(wt) for s, wt in zip(symbols, weights)}
-    w = np.array([wmap.get(s, 0.0) for s in held], dtype=float)
-    w = np.ones(len(held)) / len(held) if w.sum() <= 0 else w / w.sum()
-    port = (rets.fillna(0.0) * w).sum(axis=1)
-    port = port[rets.notna().any(axis=1)]
+    w = pd.Series({s: max(0.0, wmap.get(s, 0.0)) for s in held}, dtype=float)
+    w = pd.Series(1.0 / len(held), index=held) if w.sum() <= 0 else w / w.sum()
+
+    rets = pd.DataFrame({s: closes[s].pct_change(fill_method=None) for s in held}).sort_index().iloc[1:]
+    # Start where every holding of >= 1 % weight has prices: earlier days would be
+    # a backtest of a different book (and nothing is back-filled to pretend otherwise).
+    material = [s for s in held if w[s] >= 0.01]
+    start = max(closes[s].index[1] for s in material if len(closes[s]) > 1) if material else rets.index[0]
+    if period == "3y":
+        start = max(start, rets.index[-1] - pd.DateOffset(years=3))
+    rets = rets[rets.index >= start]
+    daily = (rets.fillna(0.0) * w).sum(axis=1)  # a closed market contributes 0 that day
+    daily = daily[rets.notna().any(axis=1)]
+
+    bench_level = mk["bench_level"]
+    cal = bench_level.index[bench_level.index >= daily.index[0]] if bench_level is not None and len(daily) else None
+    port = pm.compound_onto(daily, cal) if cal is not None and len(cal) else daily
+    if not ppy:
+        ppy = pm.calendar_periods_per_year(bench_level.index) if bench_level is not None else _periods_per_year(port.index)
     if len(port) < 2:
         return {"error": "Insufficient price history"}
 
-    out = series_stats(port, rf_annual)
+    out = series_stats(port, rf_annual, ppy)
     if out is None:
         return {"error": "Insufficient price history"}
-    out["meta"]["symbols_used"] = held
-    out["meta"]["symbols_missing"] = [s for s in symbols if s not in held]
+    out["meta"].update({
+        "basis": "current_weights_backtest",
+        "base_currency": base,
+        "calendar": "benchmark" if cal is not None and len(cal) else "union",
+        "symbols_used": held,
+        "symbols_missing": [s for s in symbols if s not in held],
+        "warnings": mk["warnings"],
+        "period": period,
+    })
     bench_r = None
-    if benchmark and benchmark in close.columns:
-        b = close[benchmark].dropna().pct_change(fill_method=None)
-        bs = series_stats(b, rf_annual)
+    if bench_level is not None:
+        b = bench_level[bench_level.index >= port.index[0] - pd.Timedelta(days=7)].pct_change(fill_method=None).dropna()
+        b = b[b.index >= port.index[0]]
+        bs = series_stats(b, rf_annual, ppy)
         if bs is not None:
-            bs["symbol"] = benchmark
+            bs["symbol"] = benchmark or pm.GLOBAL_BENCHMARK
             out["benchmark"] = bs
-            bench_r = b.dropna()
+            bench_r = b
 
-    # Time series for the DRAWDOWN / ROLLING / RETURNS tabs (they used to repeat the
-    # summary table) and the benchmark-relative statistics.
-    ppy = out["meta"]["periods_per_year"]
     port_clean = port.dropna()
     out["series"] = _series_block(port_clean, bench_r)
     rolling = _rolling_block(port_clean, bench_r, rf_annual, ppy)
@@ -322,6 +354,8 @@ def compute_stats(symbols, weights, rf_annual, benchmark, period="1y"):
         out["rolling"] = rolling
     out["monthly"] = _monthly_returns(port_clean)
     out["drawdowns"] = _drawdown_periods(port_clean)
+    # Every observation (most recent MAX_RETURN_SAMPLES) for a return-distribution chart.
+    out["returns"] = [_fin(v) for v in port_clean.values[-MAX_RETURN_SAMPLES:]]
     if bench_r is not None:
         rel = _relative_block(port_clean, bench_r, rf_annual, ppy)
         if rel is not None:
@@ -346,18 +380,29 @@ def main():
         return
     if not weights or len(weights) != len(symbols):
         weights = [1.0 / len(symbols)] * len(symbols)
+    rf_known = True
     try:
-        rf = float(params.get("risk_free_rate", DEFAULT_RF))
-        if not math.isfinite(rf):
-            rf = DEFAULT_RF
+        rf = float(params["risk_free_rate"]) if params.get("risk_free_rate") is not None else float("nan")
     except (TypeError, ValueError):
-        rf = DEFAULT_RF
-    benchmark = str(params.get("benchmark") or "").strip().upper()
+        rf = float("nan")
+    if not math.isfinite(rf):
+        rf, rf_known = 0.0, False
+    benchmark = str(params.get("benchmark") or "").strip()
+    period = str(params.get("period") or "1y").strip().lower()
+    if period not in ALLOWED_PERIODS:
+        period = "1y"
+    base = str(params.get("base_currency") or "USD").strip().upper() or "USD"
+    currencies = {str(k).strip().upper(): str(v) for k, v in (params.get("currencies") or {}).items()}
+    ppy = _fin(params.get("periods_per_year"))
 
     try:
-        result = compute_stats(symbols, weights, rf, benchmark)
+        result = compute_stats(symbols, weights, rf, benchmark, period, base, currencies, ppy)
+    except SystemExit:
+        raise
     except Exception as exc:  # yfinance / pandas failures must come back as JSON
         result = {"error": str(exc)}
+    if "meta" in result:
+        result["meta"]["risk_free_known"] = rf_known
     fincept_json.emit(result)
 
 

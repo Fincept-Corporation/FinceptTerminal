@@ -7,6 +7,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+class QShowEvent;
+
 namespace fincept::workflow {
 
 /// Left panel showing categorized node types that can be dragged onto the canvas.
@@ -20,6 +22,7 @@ class NodePalette : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
   private:
     void build_ui();
@@ -31,6 +34,8 @@ class NodePalette : public QWidget {
     QLineEdit* search_input_ = nullptr;
     QVBoxLayout* categories_layout_ = nullptr;
     QWidget* categories_container_ = nullptr;
+    /// The appearance changed while the palette was hidden: rebuild the rows on the next show.
+    bool rebuild_pending_ = false;
 };
 
 } // namespace fincept::workflow

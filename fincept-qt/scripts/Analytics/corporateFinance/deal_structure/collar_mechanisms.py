@@ -364,7 +364,8 @@ def _service_argv(argv):
         announcement = (floor_price + cap_price) / 2.0 if (floor_price and cap_price) else 50.0
     mapped = {
         "announcement_price": announcement,
-        "target_shares": _svc_num(p, "target_shares", default=1000000.0),
+        # No invented share count: without one the per-scenario deal value / shares issued are left out.
+        "target_shares": _svc_num(p, "target_shares", default=None),
         "base_exchange_ratio": _svc_num(p, "base_ratio", "base_exchange_ratio", "exchange_ratio", default=1.0),
         "floor_price": floor_price if floor_price is not None else announcement * 0.85,
         "cap_price": cap_price if cap_price is not None else announcement * 1.15,
@@ -395,7 +396,8 @@ def main():
             try:
                 params = json.loads(sys.argv[2])
                 announcement_price = float(params.get('announcement_price', params.get('acquirer_price', 50.0)))
-                target_shares = float(params.get('target_shares', 1000000))
+                shares_given = params.get('target_shares') is not None
+                target_shares = float(params['target_shares']) if shares_given else 1.0
                 base_exchange_ratio = float(params.get('base_exchange_ratio', params.get('exchange_ratio', 1.0)))
                 floor_price = float(params.get('floor_price', params.get('collar_low', announcement_price * 0.85)))
                 cap_price = float(params.get('cap_price', params.get('collar_high', announcement_price * 1.15)))
@@ -404,6 +406,7 @@ def main():
                     raise ValueError("Announcement price, target shares, base exchange ratio, floor price, and cap price required")
                 announcement_price = float(sys.argv[2])
                 target_shares = float(sys.argv[3])
+                shares_given = True
                 base_exchange_ratio = float(sys.argv[4])
                 floor_price = float(sys.argv[5])
                 cap_price = float(sys.argv[6])
@@ -418,6 +421,13 @@ def main():
                 floor_price=floor_price,
                 cap_price=cap_price
             )
+            if not shares_given:
+                for sc in analysis.get('scenarios', []):
+                    sc.pop('total_deal_value', None)
+                    sc.pop('total_shares_issued', None)
+                    sc.pop('shares_issued', None)
+                analysis['missing_inputs'] = ['target_shares']
+                analysis['notes'] = ["Total deal value and shares issued need the target's shares outstanding."]
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

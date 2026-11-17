@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.fincept.terminal</id>
+  <id>com.fincept.terminal.community</id>
   <name>Fincept Terminal</name>
   <summary>Professional financial intelligence terminal</summary>
+  <developer id="in.fincept">
+    <name>Fincept Corporation</name>
+  </developer>
   <metadata_license>FSFAP</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
   <description>
@@ -20,20 +23,40 @@
       <li>Geopolitics, prediction markets (Polymarket), maritime tracking</li>
     </ul>
   </description>
-  <launchable type="desktop-id">fincept-terminal.desktop</launchable>
+  <launchable type="desktop-id">fincept-terminal-community.desktop</launchable>
   <url type="homepage">https://github.com/Fincept-Corporation/FinceptTerminal</url>
   <url type="bugtracker">https://github.com/Fincept-Corporation/FinceptTerminal/issues</url>
   <url type="help">https://discord.gg/ae87a8ygbN</url>
+  <url type="vcs-browser">https://github.com/Fincept-Corporation/FinceptTerminal</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Dashboard with customizable widget grid</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/v4.4.1/images/Dashboard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Equity research with comprehensive analysis</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/v4.4.1/images/EquityResearch.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Portfolio management and analytics</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/v4.4.1/images/Portfolio.png</image>
+    </screenshot>
+  </screenshots>
   <provides>
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
-    <release version="4.5.2" date="2026-11-09">
+    <release version="4.5.3" date="2026-11-16">
       <description>
-        <p>Version 4.5.2 — Connect Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop to the terminal from Settings › AI Agents (MCP): a built-in MCP server with ten tools that work the terminal the way you do — open screens, read tables, charts and news, operate controls and run the bundled Python analytics — while orders, money moves, spends and deletions always ask you first. Several analytics that ran as Python scripts now run natively in C++. The version number is now shown on the sign-in and setup screens.</p>
+        <p>Version 4.5.3 — The terminal now updates itself in place on Windows, macOS and Linux (AppImage, .deb and .rpm): each time it starts it checks for a new release and, when you agree, downloads it, replaces the installation and restarts, keeping your settings and data. Light and dark themes, with adjustable font family and size. Market data loads more reliably.</p>
       </description>
     </release>
-    <release version="4.5.1" date="2026-10-31">
+    <release version="4.5.2" date="2026-11-09">
+      <description>
+        <p>Version 4.5.2 — Connect Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop to the terminal from Settings › AI Agents (MCP): a built-in MCP server with ten tools that work the terminal the way you do — open screens, read tables, charts and news, operate controls and run the bundled Python analytics — while orders, money moves, spends and deletions ask you first unless auto mode is on. Several analytics that ran as Python scripts now run natively in C++. The version number is now shown on the sign-in and setup screens.</p>
+      </description>
+    </release>
+    <release version="4.5.1" date="2026-10-13">
       <description>
         <p>Version 4.5.1 — Plans simplified to Free and Pro ($10/month). New Agent Workbench runs Claude Code and OpenAI Codex inside the terminal with live access to its data, and the terminal can now act as an MCP server for external agents. First-run setup installs in parallel and lets you start working once core libraries are in. A new connector catalog makes 240+ Python data sources browsable and runnable. Faster live tables, charts, logging and instrument search; safer trading with confirmations for live orders, pre-trade risk limits, a kill switch and pending-order expiry; many screen-level fixes across portfolio, news, dashboard and analytics.</p>
       </description>
@@ -63,6 +86,11 @@
         <p>Version 4.1.0 — Optional NewsAPI.org news provider, broker-sourced technicals, and fixes.</p>
       </description>
     </release>
+    <release version="4.0.3" date="2026-05-25">
+      <description>
+        <p>Version 4.0.3 — Patch release with bug fixes, new provider integrations, and i18n improvements.</p>
+      </description>
+    </release>
     <release version="4.0.2" date="2026-04-14">
       <description>
         <p>Version 4.0.2 — Patch release.</p>
@@ -74,7 +102,18 @@
       </description>
     </release>
   </releases>
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1">
+    <content_attribute id="money-purchasing">intense</content_attribute>
+    <content_attribute id="social-chat">moderate</content_attribute>
+    <content_attribute id="social-info">moderate</content_attribute>
+  </content_rating>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <categories>
     <category>Finance</category>
     <category>Office</category>

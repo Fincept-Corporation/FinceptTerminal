@@ -9,6 +9,8 @@
 #include "screens/support/SupportScreen.h"
 #include "screens/support/SupportScreen_internal.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -51,7 +53,7 @@ QWidget* SupportScreen::build_sidebar() {
 
         // New ticket button — text set in retranslateUi
         new_ticket_btn_ = new QPushButton;
-        new_ticket_btn_->setFixedHeight(34);
+        new_ticket_btn_->setMinimumHeight(34);
         new_ticket_btn_->setStyleSheet(SS_BTN_PRIMARY());
         connect(new_ticket_btn_, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
         hl->addWidget(new_ticket_btn_);
@@ -60,7 +62,7 @@ QWidget* SupportScreen::build_sidebar() {
         // Previously created but never connected to anything: typing in the box
         // did nothing at all. It now filters the cached ticket list live.
         search_input_ = new QLineEdit;
-        search_input_->setFixedHeight(30);
+        search_input_->setMinimumHeight(30);
         search_input_->setStyleSheet(SS_INPUT());
         search_input_->setClearButtonEnabled(true);
         search_input_->setAccessibleName(tr("Search tickets"));
@@ -69,7 +71,7 @@ QWidget* SupportScreen::build_sidebar() {
 
         // Filter — items populated in retranslateUi. Also previously inert.
         filter_combo_ = new QComboBox;
-        filter_combo_->setFixedHeight(28);
+        filter_combo_->setMinimumHeight(28);
         filter_combo_->setStyleSheet(SS_INPUT());
         filter_combo_->setAccessibleName(tr("Filter tickets by status"));
         connect(filter_combo_, &QComboBox::currentIndexChanged, this, [this]() { rebuild_ticket_rows(); });
@@ -110,7 +112,7 @@ QWidget* SupportScreen::build_sidebar() {
         sl->addStretch();
         sl->addWidget(add_stat(stat_open_caption_, stat_open_, ui::colors::CYAN()));
         sl->addStretch();
-        sl->addWidget(add_stat(stat_resolved_caption_, stat_resolved_, ui::colors::POSITIVE()));
+        sl->addWidget(add_stat(stat_resolved_caption_, stat_resolved_, ui::colors::SUCCESS()));
 
         vl->addWidget(stats);
     }
@@ -119,10 +121,11 @@ QWidget* SupportScreen::build_sidebar() {
     list_scroll_ = new QScrollArea;
     list_scroll_->setWidgetResizable(true);
     list_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    list_scroll_->setStyleSheet("QScrollArea { border:none; background:transparent; }"
+    list_scroll_->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
                                 "QScrollBar:vertical { background:transparent; width:4px; }"
-                                "QScrollBar::handle:vertical { background:#444; border-radius:2px; }"
-                                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }");
+                                "QScrollBar::handle:vertical { background:%1; border-radius:2px; }"
+                                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                                    .arg(ui::colors::BORDER_MED()));
 
     ticket_container_ = new QWidget(this);
     ticket_container_->setStyleSheet("background:transparent;");
@@ -132,37 +135,111 @@ QWidget* SupportScreen::build_sidebar() {
     tcl->addStretch();
 
     list_scroll_->setWidget(ticket_container_);
-    vl->addWidget(list_scroll_, 1);
+    // The list area is a stack: the rows, or (created on first use) a skeleton
+    // while the first list loads and a compact designed state (no tickets / no
+    // match / could not load) — never a blank strip.
+    list_stack_ = new QStackedWidget(sidebar);
+    list_stack_->addWidget(list_scroll_);
+    vl->addWidget(list_stack_, 1);
 
     return sidebar;
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
+// Content page 0: what the right side shows when no ticket is open — a skeleton
+// while the first list loads (a ticket opens by itself when it arrives), else a
+// designed EmptyState (no tickets yet / could not load / pick a ticket).
 
 QWidget* SupportScreen::build_empty_state() {
     auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(w);
-    vl->setAlignment(Qt::AlignCenter);
-    vl->setSpacing(12);
+    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setSpacing(0);
 
-    auto* t = lbl(tr("Select a ticket to view details"), ui::colors::TEXT_SECONDARY(), 13, true);
-    t->setAlignment(Qt::AlignCenter);
-    vl->addWidget(t);
+    home_skeleton_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Text, w);
+    home_skeleton_->set_message(tr("Loading your tickets…"));
+    home_skeleton_->hide();
+    vl->addWidget(home_skeleton_, 1);
 
-    auto* s = lbl(tr("or create a new support request"), ui::colors::TEXT_TERTIARY(), 11, false, true);
-    s->setAlignment(Qt::AlignCenter);
-    vl->addWidget(s);
+    home_state_ = new ui::EmptyState(w);
+    connect(home_state_, &ui::EmptyState::primary_clicked, this, &SupportScreen::on_home_action);
+    connect(home_state_, &ui::EmptyState::secondary_clicked, this,
+            []() { QDesktopServices::openUrl(QUrl(QStringLiteral("mailto:support@fincept.in"))); });
+    vl->addWidget(home_state_, 1);
 
-    vl->addSpacing(16);
-
-    auto* btn = new QPushButton(tr("＋  Create New Ticket"));
-    btn->setFixedSize(200, 36);
-    btn->setStyleSheet(SS_BTN_PRIMARY());
-    connect(btn, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
-    vl->addWidget(btn, 0, Qt::AlignCenter);
-
+    update_home_page();
     return w;
+}
+
+void SupportScreen::update_home_page() {
+    if (!home_state_ || !home_skeleton_)
+        return;
+    // Nothing to show yet: the first list (or the ticket just created) is on its way.
+    const bool waiting = (!tickets_loaded_ && !load_failed_ && all_tickets_.isEmpty()) ||
+                         (list_in_flight_ && open_after_load_id_ > 0);
+    home_skeleton_->setVisible(waiting);
+    home_state_->setVisible(!waiting);
+    if (waiting)
+        return;
+
+    ui::EmptyState::Spec spec;
+    if (load_failed_ && all_tickets_.isEmpty()) {
+        spec = ui::EmptyState::error_spec(tr("Your tickets could not be loaded. Check your connection, then retry — or "
+                                             "e-mail support@fincept.in."),
+                                          tr("Could not load your tickets"), tr("RETRY"), last_error_);
+        home_action_ = HomeAction::Retry;
+    } else if (all_tickets_.isEmpty()) {
+        spec = ui::EmptyState::no_data_spec(
+            tr("No support tickets"),
+            tr("Questions, bugs or billing issues — open a ticket and the Fincept team answers here. You also get "
+               "an e-mail when they reply."),
+            tr("CREATE NEW TICKET"));
+        spec.glyph = QStringLiteral("✉");
+        spec.glyph_tone = ui::EmptyState::Tone::Accent;
+        home_action_ = HomeAction::Create;
+    } else {
+        spec = ui::EmptyState::no_data_spec(tr("Your support tickets"),
+                                            tr("Pick a ticket on the left to read its conversation, or open a new "
+                                               "one."),
+                                            tr("CREATE NEW TICKET"));
+        spec.glyph = QStringLiteral("✉");
+        spec.glyph_tone = ui::EmptyState::Tone::Accent;
+        home_action_ = HomeAction::Create;
+    }
+    spec.secondary = tr("E-MAIL SUPPORT");
+    spec.secondary_tooltip = QStringLiteral("support@fincept.in");
+    home_state_->apply(spec);
+}
+
+void SupportScreen::on_home_action() {
+    switch (home_action_) {
+        case HomeAction::Create:
+            content_stack_->setCurrentIndex(1);
+            break;
+        case HomeAction::Retry:
+            load_tickets();
+            break;
+        case HomeAction::None:
+            break;
+    }
+}
+
+void SupportScreen::show_home() {
+    // The ticket that was open before the create page (its detail page is intact).
+    if (selected_ticket_id_ > 0) {
+        for (const auto& v : all_tickets_) {
+            if (v.toObject()["id"].toVariant().toInt() == selected_ticket_id_) {
+                content_stack_->setCurrentIndex(2);
+                return;
+            }
+        }
+    }
+    content_stack_->setCurrentIndex(0);
+    if (open_default_ticket())
+        rebuild_ticket_rows(); // highlight its row
+    else
+        update_home_page();
 }
 
 // ── Create page ───────────────────────────────────────────────────────────────
@@ -170,10 +247,11 @@ QWidget* SupportScreen::build_empty_state() {
 QWidget* SupportScreen::build_create_page() {
     auto* outer = new QScrollArea;
     outer->setWidgetResizable(true);
-    outer->setStyleSheet("QScrollArea { border:none; background:transparent; }"
+    outer->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
                          "QScrollBar:vertical { background:transparent; width:4px; }"
-                         "QScrollBar::handle:vertical { background:#444; border-radius:2px; }"
-                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }");
+                         "QScrollBar::handle:vertical { background:%1; border-radius:2px; }"
+                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                                    .arg(ui::colors::BORDER_MED()));
 
     auto* page = new QWidget(this);
     page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
@@ -186,10 +264,10 @@ QWidget* SupportScreen::build_create_page() {
         auto* cancel_btn = new QPushButton(tr("← Back"));
         cancel_btn->setFlat(true);
         cancel_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
-                                          "font-size:11px;padding:0;%2}"
+                                          "font-size:" + fincept::ui::fonts::px(-3) + "px;padding:0;%2}"
                                           "QPushButton:hover{color:%3;}")
-                                      .arg(ui::colors::TEXT_TERTIARY(), MF, ui::colors::AMBER()));
-        connect(cancel_btn, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(0); });
+                                      .arg(ui::colors::TEXT_SECONDARY(), MF(), ui::colors::AMBER()));
+        connect(cancel_btn, &QPushButton::clicked, this, &SupportScreen::show_home);
         vl->addWidget(cancel_btn, 0, Qt::AlignLeft);
         vl->addSpacing(16);
 
@@ -230,7 +308,7 @@ QWidget* SupportScreen::build_create_page() {
 
     subject_input_ = new QLineEdit;
     subject_input_->setPlaceholderText(tr("Brief summary of your issue"));
-    subject_input_->setFixedHeight(38);
+    subject_input_->setMinimumHeight(38);
     subject_input_->setMaxLength(200); // the API stores at most 500; long subjects failed server-side
     subject_input_->setStyleSheet(SS_INPUT());
     subject_input_->setAccessibleName(tr("Ticket subject"));
@@ -259,7 +337,7 @@ QWidget* SupportScreen::build_create_page() {
             for (const auto& [disp, key] : items)
                 ref->addItem(disp, key);
             ref->setCurrentIndex(def);
-            ref->setFixedHeight(38);
+            ref->setMinimumHeight(38);
             ref->setStyleSheet(SS_INPUT());
             fvl->addWidget(ref);
             rl->addLayout(fvl);
@@ -312,9 +390,14 @@ QWidget* SupportScreen::build_create_page() {
         connect(desc_input_, &QTextEdit::textChanged, this, [this]() {
             int n = desc_input_->toPlainText().length();
             char_count_lbl_->setText(tr("%1 / 2000").arg(n));
-            char_count_lbl_->setStyleSheet(
-                QString("color:%1;font-size:10px;background:transparent;%2")
-                    .arg(n > 2000 ? ui::colors::NEGATIVE() : ui::colors::TEXT_TERTIARY(), MF));
+            // Restyle only when the limit is crossed, not on every keystroke.
+            const bool over = n > 2000;
+            if (char_count_lbl_->property("over").toBool() != over) {
+                char_count_lbl_->setProperty("over", over);
+                char_count_lbl_->setStyleSheet(
+                    QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;%2")
+                        .arg(over ? ui::colors::DANGER() : ui::colors::TEXT_TERTIARY(), MF()));
+            }
         });
     }
 
@@ -326,14 +409,14 @@ QWidget* SupportScreen::build_create_page() {
         auto* ar = new QHBoxLayout;
 
         auto* cancel2 = new QPushButton(tr("Cancel"));
-        cancel2->setFixedHeight(38);
+        cancel2->setMinimumHeight(38);
         cancel2->setStyleSheet(SS_BTN_GHOST());
-        connect(cancel2, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(0); });
+        connect(cancel2, &QPushButton::clicked, this, &SupportScreen::show_home);
         ar->addWidget(cancel2);
         ar->addStretch();
 
         create_btn_ = new QPushButton(tr("Submit Ticket →"));
-        create_btn_->setFixedHeight(38);
+        create_btn_->setMinimumHeight(38);
         create_btn_->setMinimumWidth(160);
         create_btn_->setStyleSheet(SS_BTN_SUCCESS());
         connect(create_btn_, &QPushButton::clicked, this, &SupportScreen::on_create_ticket);
@@ -404,22 +487,23 @@ QWidget* SupportScreen::build_detail_page() {
         hl->addWidget(detail_subject_lbl_, 1);
 
         detail_status_lbl_ = new QLabel;
-        detail_status_lbl_->setFixedHeight(22);
+        detail_status_lbl_->setFixedHeight(qMax(22, QFontMetrics(ui::fonts::font(-4)).height() + 6));
         detail_status_lbl_->setAlignment(Qt::AlignCenter);
-        detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:10px;font-weight:700;"
+        detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                                                   "padding:0 10px;letter-spacing:0.5px;%3")
-                                              .arg(ui::colors::CYAN(), ui::colors::BG_BASE(), MF));
+                                              .arg(ui::colors::CYAN(), ui::colors::TEXT_ON_ACCENT(), MF()));
         hl->addWidget(detail_status_lbl_);
 
         close_btn_ = new QPushButton(tr("Close Ticket"));
-        close_btn_->setFixedHeight(28);
+        close_btn_->setProperty("fincept_agent_risk", "destructive");
+        close_btn_->setMinimumHeight(28);
         close_btn_->setStyleSheet(SS_BTN_DANGER());
         close_btn_->hide();
         connect(close_btn_, &QPushButton::clicked, this, &SupportScreen::on_close_ticket);
         hl->addWidget(close_btn_);
 
         reopen_btn_ = new QPushButton(tr("Reopen"));
-        reopen_btn_->setFixedHeight(28);
+        reopen_btn_->setMinimumHeight(28);
         reopen_btn_->setStyleSheet(SS_BTN_OUTLINE());
         reopen_btn_->hide();
         connect(reopen_btn_, &QPushButton::clicked, this, &SupportScreen::on_reopen_ticket);
@@ -437,14 +521,14 @@ QWidget* SupportScreen::build_detail_page() {
         il->setContentsMargins(20, 10, 20, 10);
         il->setSpacing(6);
 
-        detail_meta_lbl_ = lbl("", ui::colors::TEXT_TERTIARY(), 10);
+        detail_meta_lbl_ = lbl("", ui::colors::TEXT_SECONDARY(), 10);
         il->addWidget(detail_meta_lbl_);
 
         detail_body_lbl_ = new QLabel;
         detail_body_lbl_->setWordWrap(true);
         detail_body_lbl_->setTextFormat(Qt::PlainText);
         detail_body_lbl_->setStyleSheet(
-            QString("color:%1;font-size:12px;background:transparent;%2").arg(ui::colors::TEXT_SECONDARY(), MF));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;background:transparent;%2").arg(ui::colors::TEXT_SECONDARY(), MF()));
         il->addWidget(detail_body_lbl_);
 
         root_vl->addWidget(info_strip);
@@ -454,10 +538,11 @@ QWidget* SupportScreen::build_detail_page() {
     detail_scroll_ = new QScrollArea;
     detail_scroll_->setWidgetResizable(true);
     detail_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    detail_scroll_->setStyleSheet("QScrollArea { border:none; background:transparent; }"
+    detail_scroll_->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
                                   "QScrollBar:vertical { background:transparent; width:4px; }"
-                                  "QScrollBar::handle:vertical { background:#444; border-radius:2px; }"
-                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }");
+                                  "QScrollBar::handle:vertical { background:%1; border-radius:2px; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                                    .arg(ui::colors::BORDER_MED()));
 
     messages_container_ = new QWidget(this);
     messages_container_->setStyleSheet("background:transparent;");
@@ -477,7 +562,7 @@ QWidget* SupportScreen::build_detail_page() {
             QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cbl = new QHBoxLayout(closed_box_);
         cbl->setContentsMargins(20, 12, 20, 12);
-        cbl->addWidget(lbl(tr("✓  This ticket is closed."), ui::colors::POSITIVE(), 11));
+        cbl->addWidget(lbl(tr("✓  This ticket is closed."), ui::colors::SUCCESS(), 11));
         cbl->addStretch();
         closed_box_->hide();
         root_vl->addWidget(closed_box_);
@@ -485,7 +570,7 @@ QWidget* SupportScreen::build_detail_page() {
         // Reply box
         reply_box_ = new QWidget(this);
         reply_box_->setStyleSheet(
-            QString("background:%1;border-top:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::POSITIVE()));
+            QString("background:%1;border-top:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::SUCCESS()));
         auto* rbl = new QVBoxLayout(reply_box_);
         rbl->setContentsMargins(20, 12, 20, 14);
         rbl->setSpacing(10);
@@ -515,7 +600,7 @@ QWidget* SupportScreen::build_detail_page() {
         auto* send_row = new QHBoxLayout;
         send_row->addStretch();
         send_btn_ = new QPushButton(tr("Send Reply →"));
-        send_btn_->setFixedHeight(34);
+        send_btn_->setMinimumHeight(34);
         send_btn_->setMinimumWidth(140);
         send_btn_->setStyleSheet(SS_BTN_SUCCESS());
         send_btn_->setAccessibleName(tr("Send reply"));
@@ -548,10 +633,10 @@ void SupportScreen::select_ticket_row(QPushButton* btn) {
 // ── set_busy ──────────────────────────────────────────────────────────────────
 
 void SupportScreen::set_busy(bool busy) {
-    QString col = busy ? ui::colors::AMBER() : ui::colors::POSITIVE();
-    status_dot_->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;").arg(col));
-    status_lbl_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;%2").arg(col, MF));
+    // Colour by the "tone" property: the labels' sheets were set once in the
+    // constructor, so a toggle no longer re-parses a stylesheet.
+    support_set_tone(status_dot_, busy ? "busy" : "");
+    support_set_tone(status_lbl_, busy ? "busy" : "");
     status_lbl_->setText(busy ? tr("Updating…") : tr("Ready"));
     refresh_btn_->setEnabled(!busy);
     if (create_btn_)

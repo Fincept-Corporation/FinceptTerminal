@@ -13,8 +13,8 @@
 namespace fincept::services::coding_agents {
 
 struct SystemPromptContext {
-    AgentKind agent = AgentKind::Claude;
-    RunMode mode = RunMode::Analysis;
+    QString harness = QStringLiteral("claude"); // registry id (not used in the text today)
+    PermissionMode permission = PermissionMode::ReadOnly;
     bool tools_enabled = true;
     QString mcp_server_name = QStringLiteral("fincept"); // the name the agent sees the terminal's MCP server under
     QString workdir;
@@ -29,8 +29,9 @@ struct SystemPromptContext {
 /// cmd_safe_text(), it survives a cmd.exe command line unchanged in meaning.
 QString build_agent_system_prompt(const SystemPromptContext& ctx);
 
-/// Codex has no --append-system-prompt: wrap the context and the request in
-/// clearly delimited blocks.
+/// For harnesses without a system-prompt flag (Codex, and the adapters whose
+/// CLI documents none): wrap the context and the request in clearly delimited
+/// blocks.
 QString wrap_codex_prompt(const QString& system_prompt, const QString& user_prompt);
 
 /// Strip the characters cmd.exe interprets (% ^ & | < > ! ") and fold newlines

@@ -7,6 +7,7 @@
 // Part of the partial-class split of DockScreenRouter.cpp.
 
 #include "app/DockScreenRouter.h"
+#include "app/DockStateFilter.h"
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
 #include "core/components/PopularityTracker.h"
@@ -22,6 +23,7 @@
 #include "core/symbol/SymbolRef.h"
 #include "core/window/WindowRegistry.h"
 #include "screens/common/IStatefulScreen.h"
+#include "ui/theme/Theme.h"
 #include "ui/widgets/GroupBadge.h"
 
 #include <QApplication>
@@ -34,16 +36,207 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPoint>
 #include <QVBoxLayout>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
 #include <DockWidget.h>
 #include <DockWidgetTab.h>
 #include <algorithm>
+#include <vector>
 
 namespace fincept {
+
+namespace {
+
+// ── Pruning closed panels out of a saved ADS layout ──────────────────────────
+// The layout XML (CDockManager::saveState) is a tree of
+//   QtAdvancedDockingSystem[Containers] > Container[Floating] > Splitter[Count]
+//     > (Splitter | Area[Tabs, Current] > Widget[Name, Closed]) ... , Sizes
+// read into a small node tree, pruned, and written back.
+
+struct XmlNode {
+    QString name;
+    QXmlStreamAttributes attrs;
+    QString text; // character data (only <Sizes> has any)
+    std::vector<XmlNode> children;
+};
+
+bool read_xml_node(QXmlStreamReader& r, XmlNode& node) {
+    node.name = r.name().toString();
+    node.attrs = r.attributes();
+    while (!r.atEnd()) {
+        const auto token = r.readNext();
+        if (token == QXmlStreamReader::StartElement) {
+            node.children.emplace_back();
+            if (!read_xml_node(r, node.children.back()))
+                return false;
+        } else if (token == QXmlStreamReader::Characters && !r.isWhitespace()) {
+            node.text += r.text();
+        } else if (token == QXmlStreamReader::EndElement) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void write_xml_node(QXmlStreamWriter& w, const XmlNode& node) {
+    w.writeStartElement(node.name);
+    w.writeAttributes(node.attrs);
+    if (!node.text.isEmpty())
+        w.writeCharacters(node.text);
+    for (const XmlNode& c : node.children)
+        write_xml_node(w, c);
+    w.writeEndElement();
+}
+
+QString xml_attr(const XmlNode& node, const char* name) {
+    return node.attrs.value(QLatin1String(name)).toString();
+}
+
+void set_xml_attr(XmlNode& node, const char* name, const QString& value) {
+    QXmlStreamAttributes out;
+    bool replaced = false;
+    for (const QXmlStreamAttribute& a : node.attrs) {
+        if (a.name() == QLatin1String(name)) {
+            out.append(a.qualifiedName().toString(), value);
+            replaced = true;
+        } else {
+            out.append(a);
+        }
+    }
+    if (!replaced)
+        out.append(QString::fromLatin1(name), value);
+    node.attrs = out;
+}
+
+/// Prunes closed widgets below `node`. Returns false when the node is left
+/// empty and should be dropped; sets `*malformed` on anything unexpected.
+bool prune_closed(XmlNode& node, bool* malformed) {
+    if (node.name == QLatin1String("Area")) {
+        const QString current = xml_attr(node, "Current");
+        QString first_open;
+        bool current_open = false;
+        int widgets = 0;
+        std::vector<XmlNode> kept;
+        for (XmlNode& c : node.children) {
+            if (c.name == QLatin1String("Widget")) {
+                if (xml_attr(c, "Closed") == QLatin1String("1"))
+                    continue;
+                const QString name = xml_attr(c, "Name");
+                if (first_open.isEmpty())
+                    first_open = name;
+                current_open = current_open || name == current;
+                ++widgets;
+            }
+            kept.push_back(std::move(c));
+        }
+        node.children = std::move(kept);
+        if (widgets == 0)
+            return false;
+        set_xml_attr(node, "Tabs", QString::number(widgets));
+        if (!current_open)
+            set_xml_attr(node, "Current", first_open);
+        return true;
+    }
+    if (node.name == QLatin1String("Splitter")) {
+        QStringList sizes;
+        for (const XmlNode& c : node.children)
+            if (c.name == QLatin1String("Sizes"))
+                sizes = c.text.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        std::vector<XmlNode> kept;
+        QStringList kept_sizes;
+        int index = 0;
+        for (XmlNode& c : node.children) {
+            if (c.name == QLatin1String("Sizes"))
+                continue; // re-written below
+            if (c.name == QLatin1String("Splitter") || c.name == QLatin1String("Area")) {
+                if (index >= sizes.size()) {
+                    *malformed = true;
+                    return true;
+                }
+                if (prune_closed(c, malformed)) {
+                    kept.push_back(std::move(c));
+                    kept_sizes << sizes.at(index);
+                }
+                ++index;
+            } else {
+                kept.push_back(std::move(c));
+            }
+        }
+        if (index != sizes.size())
+            *malformed = true;
+        XmlNode sizes_node;
+        sizes_node.name = QStringLiteral("Sizes");
+        for (const QString& s : kept_sizes)
+            sizes_node.text += s + QLatin1Char(' ');
+        kept.push_back(std::move(sizes_node));
+        node.children = std::move(kept);
+        set_xml_attr(node, "Count", QString::number(kept_sizes.size()));
+        return !kept_sizes.isEmpty();
+    }
+    return true;
+}
+
+} // namespace
+
+QByteArray DockScreenRouter::save_state_without_closed() {
+    if (!manager_)
+        return {};
+    const QByteArray state = manager_->saveState();
+    const bool compressed = !state.startsWith("<?xml");
+    const QByteArray xml = compressed ? qUncompress(state) : state;
+
+    XmlNode root;
+    bool ok = false;
+    if (!xml.isEmpty()) {
+        QXmlStreamReader reader(xml);
+        while (!reader.atEnd() && reader.readNext() != QXmlStreamReader::StartElement) {
+        }
+        ok = reader.isStartElement() && read_xml_node(reader, root) && !reader.hasError() &&
+             root.name == QLatin1String("QtAdvancedDockingSystem");
+    }
+
+    bool malformed = false;
+    if (ok) {
+        int containers = 0;
+        std::vector<XmlNode> kept;
+        for (XmlNode& c : root.children) {
+            if (c.name != QLatin1String("Container")) {
+                kept.push_back(std::move(c));
+                continue;
+            }
+            bool has_content = false;
+            for (XmlNode& cc : c.children)
+                if (cc.name == QLatin1String("Splitter"))
+                    has_content = prune_closed(cc, &malformed) || has_content;
+            // A floating window left with nothing open is dropped; the main
+            // container is always kept (an empty root splitter is valid).
+            if (!has_content && xml_attr(c, "Floating") == QLatin1String("1"))
+                continue;
+            ++containers;
+            kept.push_back(std::move(c));
+        }
+        root.children = std::move(kept);
+        set_xml_attr(root, "Containers", QString::number(containers));
+    }
+    if (!ok || malformed) {
+        LOG_WARN("DockRouter", "Layout state not in the expected form, pruning the live tree instead");
+        prune_hidden_panels();
+        return manager_->saveState();
+    }
+
+    QByteArray out;
+    QXmlStreamWriter writer(&out);
+    writer.writeStartDocument();
+    write_xml_node(writer, root);
+    writer.writeEndDocument();
+    return compressed ? qCompress(out, 9) : out;
+}
 
 void DockScreenRouter::cycle_focused_panel(bool forward) {
     if (!manager_)
@@ -76,15 +269,29 @@ void DockScreenRouter::cycle_focused_panel(bool forward) {
     ads::CDockWidget* next = visible.at(idx);
     next->raise();
     next->setAsCurrentTab();
-    if (auto* w = next->widget())
+    // The screen itself, not the dock widget's content host around it.
+    if (auto* w = screens_.value(next->objectName(), next->widget()))
         w->setFocus(Qt::ShortcutFocusReason);
     current_id_ = next->objectName();
     emit screen_changed(current_id_);
 }
 
+namespace dock_router_panel_ops_detail {
+/// Screens that open once per window and are never duplicated: every type not
+/// listed as multi-instance in DockInstanceGuard.h — among them the screens that
+/// hold a live order ticket (a second copy would be two tickets for one account).
+bool drp_is_single_instance_screen(const QString& id) {
+    return dock_state::is_single_instance_screen(id); // one list, shared with layout restore
+}
+} // namespace dock_router_panel_ops_detail
+
 ads::CDockWidget* DockScreenRouter::duplicate_panel(const QString& id) {
     if (!manager_)
         return nullptr;
+    if (dock_router_panel_ops_detail::drp_is_single_instance_screen(id)) {
+        LOG_DEBUG("DockRouter", QString("Panel not duplicated, single-instance screen screen=%1").arg(id));
+        return nullptr;
+    }
 
     // Strip any existing #dup<N> suffix so duplicates-of-duplicates all derive
     // from the same original factory — prevents unbounded id drift.
@@ -103,10 +310,7 @@ ads::CDockWidget* DockScreenRouter::duplicate_panel(const QString& id) {
     if (fit == factories_.end()) {
         // Only eager (one-instance) screens reach here. Duplication is not
         // supported for them in this phase.
-        LOG_WARN("DockRouter", QString("duplicate_panel('%1'): factory not available — duplication requires "
-                                       "register_factory() and the original factory is consumed on first materialise. "
-                                       "Re-register a factory before duplication to support this path.")
-                                   .arg(base));
+        LOG_WARN("DockRouter", QString("Panel could not be duplicated, no factory screen=%1").arg(base));
         return nullptr;
     }
 
@@ -136,9 +340,25 @@ ads::CDockWidget* DockScreenRouter::duplicate_panel(const QString& id) {
     // materialises via the factory, and adds the dock widget to the manager.
     auto* dw = create_dock_widget(dup_id);
     if (!dw) {
-        LOG_WARN("DockRouter", QString("duplicate_panel: create_dock_widget failed for %1").arg(dup_id));
+        LOG_WARN("DockRouter", QString("Panel could not be duplicated, dock widget not created screen=%1").arg(dup_id));
         return nullptr;
     }
+
+    // Place the duplicate next to the original as a tabbed sibling so the
+    // user sees it immediately without manually docking. Placed BEFORE the
+    // screen is built, so the built screen is never moved (see navigate()).
+    auto* src_dw = dock_widgets_.value(base, nullptr);
+    {
+        const bool prev_suppress = suppress_visibility_materialize_;
+        suppress_visibility_materialize_ = true;
+        if (src_dw && src_dw->dockAreaWidget())
+            manager_->addDockWidgetTabToArea(dw, src_dw->dockAreaWidget());
+        else
+            manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+        suppress_visibility_materialize_ = prev_suppress;
+    }
+    dw->setAsCurrentTab();
+    dw->raise();
     materialize_screen(dup_id);
 
     // Copy IStatefulScreen state from source → duplicate so the user doesn't
@@ -153,17 +373,6 @@ ads::CDockWidget* DockScreenRouter::duplicate_panel(const QString& id) {
             dup_stateful->restore_state(src_stateful->save_state());
     }
 
-    // Place the duplicate next to the original as a tabbed sibling so the
-    // user sees it immediately without manually docking.
-    auto* src_dw = dock_widgets_.value(base, nullptr);
-    if (src_dw && src_dw->dockAreaWidget()) {
-        manager_->addDockWidgetTabToArea(dw, src_dw->dockAreaWidget());
-    } else {
-        manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
-    }
-    dw->setAsCurrentTab();
-    dw->raise();
-
     LOG_INFO("DockRouter", QString("Duplicated '%1' → '%2'").arg(base, dup_id));
     return dw;
 }
@@ -176,11 +385,13 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
         return;
 
     QMenu menu;
-    menu.setStyleSheet("QMenu{background:#111827;color:#e5e7eb;border:1px solid #374151;padding:4px 0;}"
-                       "QMenu::item{padding:5px 24px 5px 12px;}"
-                       "QMenu::item:selected{background:#1f2937;color:#d97706;}"
-                       "QMenu::item:disabled{color:#6b7280;}"
-                       "QMenu::separator{background:#374151;height:1px;margin:4px 8px;}");
+    menu.setStyleSheet(QString("QMenu{background:%1;color:%2;border:1px solid %3;padding:4px 0;}"
+                               "QMenu::item{padding:5px 24px 5px 12px;}"
+                               "QMenu::item:selected{background:%4;color:%5;}"
+                               "QMenu::item:disabled{color:%6;}"
+                               "QMenu::separator{background:%3;height:1px;margin:4px 8px;}")
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                                ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::TEXT_TERTIARY()));
 
     // Rename — reuses the inline editor code path. Simpler to pop a modal
     // prompt here; the inline editor requires the label's geometry which is
@@ -202,6 +413,13 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
     // unsupported screens.
     auto* act_dup = menu.addAction("Duplicate Panel");
     connect(act_dup, &QAction::triggered, this, [this, id]() { duplicate_panel(id); });
+    if (dock_router_panel_ops_detail::drp_is_single_instance_screen(id)) {
+        act_dup->setEnabled(false);
+        act_dup->setToolTip(dock_instance::holds_order_ticket(id)
+                                ? tr("Trading screens open once: two order tickets for one account would be unsafe.")
+                                : tr("This screen opens once per window."));
+        menu.setToolTipsVisible(true);
+    }
 
     menu.addSeparator();
 
@@ -302,11 +520,14 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
 
     menu.addSeparator();
 
-    // Phase 5: tear off into a new WindowFrame. Always offered; the call
-    // itself logs + no-ops if the panel can't be torn off (eager screen
-    // without a factory).
+    // Phase 5: tear off into a new WindowFrame. Always offered; a refusal is
+    // shown to the user (a cancelled monitor picker is not an error).
     auto* act_tear_off = menu.addAction("Tear off into new window");
-    connect(act_tear_off, &QAction::triggered, this, [this, id]() { tear_off_to_new_frame(id); });
+    connect(act_tear_off, &QAction::triggered, this, [this, id]() {
+        QString error;
+        if (!tear_off_to_new_frame(id, &error) && !error.isEmpty())
+            QMessageBox::warning(qobject_cast<QWidget*>(parent()), "Tear Off Panel", error);
+    });
 
     // Phase 5: move to another open WindowFrame. Submenu lists every
     // other frame by display number; current frame is excluded. Hidden
@@ -333,8 +554,11 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
                 const QString label = QString("Window %1").arg(display_num);
                 auto* a = move_menu->addAction(label);
                 connect(a, &QAction::triggered, this, [this, id, f]() {
-                    if (f && f->dock_router())
-                        move_panel_to_frame(id, f->dock_router());
+                    if (!f || !f->dock_router())
+                        return;
+                    QString error;
+                    if (!move_panel_to_frame(id, f->dock_router(), &error) && !error.isEmpty())
+                        QMessageBox::warning(qobject_cast<QWidget*>(parent()), "Move Panel", error);
                 });
                 ++display_num;
             }
@@ -418,7 +642,7 @@ void DockScreenRouter::retile_grid(ads::CDockWidget* newest) {
         return;
     }
     const int n = open.size();
-    LOG_INFO("DockRouter", QString("retile_grid: arranging %1 panel(s)").arg(n));
+    LOG_DEBUG("DockRouter", QString("retile_grid: arranging %1 panel(s)").arg(n));
 
     for (auto* dw : open)
         manager_->removeDockWidget(dw);
@@ -477,63 +701,76 @@ void DockScreenRouter::adopt_panel_instance(const QString& id, PanelInstanceId i
     }
 }
 
-bool DockScreenRouter::move_panel_to_frame(const QString& id, DockScreenRouter* target) {
+bool DockScreenRouter::move_panel_to_frame(const QString& id, DockScreenRouter* target, QString* error) {
+    auto fail = [error](const QString& message) {
+        if (error)
+            *error = message;
+        return false;
+    };
     if (!target || target == this) {
         LOG_DEBUG("DockRouter", QString("move_panel_to_frame('%1'): target invalid (null=%2 same=%3)")
                                     .arg(id)
                                     .arg(target == nullptr)
                                     .arg(target == this));
-        return false;
+        return fail(target ? QString() : QString("That window is no longer open."));
     }
     auto* dw = dock_widgets_.value(id, nullptr);
     if (!dw) {
-        LOG_WARN("DockRouter", QString("move_panel_to_frame('%1'): no dock widget").arg(id));
-        return false;
+        LOG_WARN("DockRouter", QString("Panel move failed, no dock widget screen=%1").arg(id));
+        return fail(QString("That panel is no longer open."));
     }
-    if (target->dock_widgets_.contains(id)) {
-        // Collision: the target already has a panel under this string id.
-        // We could synthesise <id>#movedN but for v1 we refuse so the user
-        // gets clear feedback. Caller (context menu / action) should
-        // surface a toast / status message.
-        LOG_WARN("DockRouter",
-                 QString("move_panel_to_frame('%1'): target already has this panel id — refusing").arg(id));
-        return false;
+    if (is_busy(id) || target->is_busy(id)) {
+        LOG_DEBUG("DockRouter", QString("Panel move refused, the panel is still opening screen=%1").arg(id));
+        return fail(QString("'%1' is still opening. Try again in a moment.").arg(dw->windowTitle()));
     }
-    if (!factories_.contains(id) && !screens_.contains(id)) {
-        // No factory and no eager screen — can't recreate on the target.
-        LOG_WARN("DockRouter",
-                 QString("move_panel_to_frame('%1'): no factory available, can't recreate on target").arg(id));
-        return false;
+    const QString title = dw->windowTitle();
+    // Only a panel that is OPEN in the target blocks the move. The target
+    // normally also owns a closed shell for every screen — pre-registered by
+    // ensure_all_registered() for layout restore, or opened and closed there
+    // earlier (prune_hidden_panels keeps those) — and that shell is reused.
+    ads::CDockWidget* target_dw = target->dock_widgets_.value(id, nullptr);
+    if (target_dw && !target_dw->isClosed()) {
+        LOG_WARN("DockRouter", QString("Panel move refused, already open in the target window screen=%1").arg(id));
+        return fail(QString("'%1' is already open in that window.").arg(title));
+    }
+    if ((!factories_.contains(id) && !screens_.contains(id)) ||
+        (!factories_.contains(id) && !target->factories_.contains(id) && !target->screens_.contains(id))) {
+        // No way to build the screen on the target.
+        LOG_WARN("DockRouter", QString("Panel move failed, no factory for the target window screen=%1").arg(id));
+        return fail(QString("'%1' cannot be moved to another window.").arg(title));
     }
 
-    LOG_INFO("DockRouter", QString("Moving panel '%1' to another frame").arg(id));
+    LOG_DEBUG("DockRouter", QString("Moving panel '%1' to another frame").arg(id));
 
-    // 1. Flush + sync-save state under the panel's UUID. The save itself
-    //    is async (QtConcurrent), so there's a tight race where the target's
-    //    restore could read a slightly stale row. SQLite WAL writes are
-    //    sub-ms and widget materialise is 10-100ms, so practically the
-    //    race almost never fires. Phase 8 formalises sync flush.
+    // 1. Give the target a dock-widget shell for `id` (reusing its closed
+    //    one when present) so the panel lives on under the TARGET's instance
+    //    id. The target keeps its own factory when it has one — a factory
+    //    may capture its frame (file_manager) — and gets a copy of ours only
+    //    when it has none (e.g. a "#dup" id).
+    if (!target->factories_.contains(id) && !target->screens_.contains(id))
+        target->factories_.insert(id, factories_.value(id));
+    const bool target_had_screen = target->screens_.contains(id);
+    if (!target_dw)
+        target_dw = target->create_dock_widget(id);
+    const PanelInstanceId target_uuid = target->instance_ids_.value(id);
+
+    // 2. Flush the panel's state and write it SYNCHRONOUSLY under the
+    //    target's instance id, so the restore in step 4 reads this row.
     auto* screen = screens_.value(id, nullptr);
     if (auto* stateful = dynamic_cast<screens::IStatefulScreen*>(screen)) {
         stateful->flush_pending_state();
-        const PanelInstanceId uuid = instance_ids_.value(id);
-        if (!uuid.is_null())
-            ScreenStateManager::instance().save_now_by_uuid(stateful, uuid.to_string());
+        if (!target_uuid.is_null())
+            ScreenStateManager::instance().save_now_by_uuid_sync(stateful, target_uuid.to_string());
         else
-            ScreenStateManager::instance().save_now(stateful);
+            ScreenStateManager::instance().save_now_sync(stateful);
     }
-
-    // 2. Capture the UUID + factory so we can transfer them to the target.
-    const PanelInstanceId panel_uuid = instance_ids_.value(id);
-    ScreenFactory factory_copy;
-    if (factories_.contains(id))
-        factory_copy = factories_.value(id);
 
     // 3. Tear down the panel on this router. removeDockWidget unregisters
     //    from the manager; deleteLater destroys the widget. We purposely
     //    skip our own save_screen_state() because we already did the
     //    UUID-keyed save above — the visibility-changed handler would
     //    otherwise try a second save against a half-torn-down widget.
+    const PanelInstanceId panel_uuid = instance_ids_.value(id);
     manager_->removeDockWidget(dw);
     dw->deleteLater();
     dock_widgets_.remove(id);
@@ -544,34 +781,41 @@ bool DockScreenRouter::move_panel_to_frame(const QString& id, DockScreenRouter* 
     group_badges_.remove(id);
     if (auto* sw = screens_.take(id))
         sw->deleteLater();
-    factories_.remove(id);
+    // Keep the factory so the screen can still be opened in this window
+    // (materialize_screen keeps factories for the same reason). Only a
+    // synthetic duplicate id goes away with its panel.
+    if (id.contains(QLatin1String("#dup")))
+        factories_.remove(id);
     instance_ids_.remove(id);
+    // The panel continues under the target's instance id: drop this
+    // window's handle so a later re-open here registers a fresh one.
+    if (!panel_uuid.is_null() && panel_uuid != target_uuid)
+        PanelRegistry::instance().unregister_panel(panel_uuid);
 
-    // 4. Set the target up. Transfer the factory + UUID before navigate()
-    //    so target's create_dock_widget() reuses the existing UUID instead
-    //    of minting a new one (and PanelRegistry's existing handle is
-    //    re-used, frame_id repointed by adopt_panel_instance).
-    if (factory_copy)
-        target->factories_.insert(id, factory_copy);
-    if (!panel_uuid.is_null())
-        target->adopt_panel_instance(id, panel_uuid);
-
-    // 5. Materialise on target. navigate() will create the dock widget,
-    //    materialise the screen, and restore_screen_state will read the
-    //    UUID-keyed row written in step 1.
+    // 4. Show it on the target. navigate() places the shell, materialises
+    //    the screen and restore_screen_state reads the row written in step 2.
+    //    A screen the target had already built (opened and closed there
+    //    earlier) is only re-shown by navigate(), so load the state into it.
     target->navigate(id);
+    if (target_had_screen)
+        target->restore_screen_state(id);
 
-    LOG_INFO("DockRouter", QString("Moved panel '%1' (uuid=%2) to target frame").arg(id, panel_uuid.to_string()));
+    LOG_DEBUG("DockRouter", QString("Moved panel '%1' (uuid=%2) to target frame").arg(id, target_uuid.to_string()));
     return true;
 }
 
-bool DockScreenRouter::tear_off_to_new_frame(const QString& id) {
-    if (!dock_widgets_.contains(id)) {
-        LOG_WARN("DockRouter", QString("tear_off_to_new_frame('%1'): no such panel").arg(id));
+bool DockScreenRouter::tear_off_to_new_frame(const QString& id, QString* error) {
+    auto* dw = dock_widgets_.value(id, nullptr);
+    if (!dw) {
+        LOG_WARN("DockRouter", QString("Panel tear-off failed, no such panel screen=%1").arg(id));
+        if (error)
+            *error = QString("That panel is no longer open.");
         return false;
     }
     if (!factories_.contains(id) && !screens_.contains(id)) {
-        LOG_WARN("DockRouter", QString("tear_off_to_new_frame('%1'): no factory available, can't tear off").arg(id));
+        LOG_WARN("DockRouter", QString("Panel tear-off failed, no factory screen=%1").arg(id));
+        if (error)
+            *error = QString("'%1' cannot be moved to another window.").arg(dw->windowTitle());
         return false;
     }
 
@@ -591,14 +835,16 @@ bool DockScreenRouter::tear_off_to_new_frame(const QString& id) {
             new_frame = f; // frames() is sorted by window_id; keep the highest new one
     }
     if (!new_frame) {
-        LOG_INFO("DockRouter", QString("tear_off_to_new_frame('%1'): no new window was created (cancelled?)").arg(id));
+        LOG_DEBUG("DockRouter", QString("tear_off_to_new_frame('%1'): no new window was created (cancelled?)").arg(id));
         return false;
     }
     if (!new_frame->dock_router()) {
-        LOG_ERROR("DockRouter", "tear_off_to_new_frame: spawned frame has no router");
+        LOG_ERROR("DockRouter", QString("Panel tear-off failed, the new window has no router screen=%1").arg(id));
+        if (error)
+            *error = QString("Could not set up the new window.");
         return false;
     }
 
-    return move_panel_to_frame(id, new_frame->dock_router());
+    return move_panel_to_frame(id, new_frame->dock_router(), error);
 }
 } // namespace fincept

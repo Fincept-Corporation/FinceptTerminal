@@ -36,20 +36,21 @@ PARAMETERS:
   - time_period: Time period in years
 """
 
-import re
 import logging
 from abc import ABC, abstractmethod
 from decimal import Decimal, getcontext, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, date
-import pandas as pd
-import numpy as np
+
+# pandas is imported only inside DataValidator.validate_dataframe: it is the one
+# user of it here, and importing it at module load cost ~2 s on every
+# trade_geopolitics.py call (a Decimal-only calculator).
 
 # Set high precision for financial calculations
 getcontext().prec = 28
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# A library module must not reconfigure the root logger of the process that
+# imports it (no logging.basicConfig here); the host decides where logs go.
 logger = logging.getLogger(__name__)
 
 
@@ -151,9 +152,9 @@ class DataValidator:
             raise ValidationError(f"Interest rate outside reasonable range: {rate}")
         return True
 
-    def validate_time_period(self, period: Union[int, float]) -> bool:
-        """Validate time periods in years"""
-        if not isinstance(period, (int, float)) or period <= 0:
+    def validate_time_period(self, period: Union[int, float, Decimal]) -> bool:
+        """Validate time periods in years (callers pass Decimal from to_decimal)"""
+        if isinstance(period, bool) or not isinstance(period, (int, float, Decimal)) or period <= 0:
             raise ValidationError(f"Time period must be positive: {period}")
         if period > 100:
             raise ValidationError(f"Time period seems unrealistic: {period}")
@@ -197,8 +198,9 @@ class DataValidator:
             raise ValidationError(f"Percentage outside valid range: {value}")
         return True
 
-    def validate_dataframe(self, df: pd.DataFrame, required_columns: List[str]) -> bool:
+    def validate_dataframe(self, df: Any, required_columns: List[str]) -> bool:
         """Validate pandas DataFrame structure"""
+        import pandas as pd
         if not isinstance(df, pd.DataFrame):
             raise ValidationError("Input must be a pandas DataFrame")
 
@@ -359,39 +361,9 @@ class DataContainer:
         }
 
 
-# Global configuration
-class EconomicsConfig:
-    """Global configuration for economics module"""
-
-    def __init__(self):
-        self.precision = 8
-        self.base_currency = 'USD'
-        self.data_validation_enabled = True
-        self.error_tolerance = Decimal('1e-6')
-        self.default_confidence_interval = Decimal('0.95')
-        self.cache_enabled = True
-        self.logging_level = logging.INFO
-
-    def update_config(self, **kwargs):
-        """Update configuration parameters"""
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                logger.warning(f"Unknown configuration parameter: {key}")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary"""
-        return {
-            'precision': self.precision,
-            'base_currency': self.base_currency,
-            'data_validation_enabled': self.data_validation_enabled,
-            'error_tolerance': str(self.error_tolerance),
-            'default_confidence_interval': str(self.default_confidence_interval),
-            'cache_enabled': self.cache_enabled,
-            'logging_level': self.logging_level
-        }
-
+# Configuration lives in config.py (EconomicsConfig dataclass, exported by the
+# package). A second, diverging EconomicsConfig class used to live here; nothing
+# imported it.
 
 # Module constants
 ECONOMIC_CONSTANTS = {
@@ -402,6 +374,3 @@ ECONOMIC_CONSTANTS = {
     'BASIS_POINTS': Decimal('10000'),
     'PERCENTAGE': Decimal('100')
 }
-
-# Export global configuration instance
-config = EconomicsConfig()

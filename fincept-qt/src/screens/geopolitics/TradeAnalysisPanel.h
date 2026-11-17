@@ -14,9 +14,19 @@
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+
+namespace fincept::ui {
+class AutoLoadPane;
+} // namespace fincept::ui
+
 namespace fincept::screens {
 
-/// Trade geopolitics analysis — benefits/costs, restrictions, sanctions impact.
+/// Trade geopolitics analysis — benefits/costs, restrictions, trading blocs,
+/// barrier removal. Inputs on the left, the result on the right in the shared
+/// AutoLoadPane: each analysis (sub-tab) is a pane view that runs its local
+/// Python calculation with the inputs on screen the first time it is shown, and
+/// remembers its last result (with those inputs) across restarts.
 class TradeAnalysisPanel : public QWidget {
     Q_OBJECT
   public:
@@ -32,17 +42,31 @@ class TradeAnalysisPanel : public QWidget {
   private:
     void build_ui();
     void connect_service();
-    void display_result(const QJsonObject& data);
+    /// Designed result view: headline KPIs (+ chart) for the analysis type in
+    /// `context`, the script's qualitative sections as cards, raw JSON behind a
+    /// toggle. Unknown shapes fall back to generic key/value cards.
+    void display_result(const QString& context, const QJsonObject& data);
+    void clear_results();
     void retranslateUi();
-    /// "Analyzing..." state: lock every RUN button until a result / error lands so a
-    /// double-click can't queue two Python runs whose replies overwrite each other.
-    void begin_analysis();
-    void end_analysis();
+    /// Pane start: run analysis `tab` with the inputs on screen.
+    void start_analysis(quint64 id);
+    /// Pane render: `payload` = {"inputs": {...}, "result": {...}}.
+    void render_payload(const QJsonValue& payload, bool from_cache);
 
     QTabWidget* tabs_ = nullptr;
+    fincept::ui::AutoLoadPane* pane_ = nullptr;
     QVBoxLayout* results_layout_ = nullptr;
     QWidget* results_container_ = nullptr;
     QLabel* status_label_ = nullptr;
+
+    // Per analysis (tab index): its inputs as the script's params, and how to put
+    // remembered inputs back into the form.
+    QVector<std::function<QJsonObject()>> params_fns_;
+    QVector<std::function<void(const QJsonObject&)>> apply_fns_;
+    /// Service context ("trade_benefits", ...) -> the pane run waiting for it.
+    QHash<QString, quint64> pending_;
+    /// The inputs each pending run was started with (stored with its result).
+    QHash<QString, QJsonObject> pending_inputs_;
 
     // Static text widgets (cached for retranslateUi).
     QLabel* title_lbl_ = nullptr;

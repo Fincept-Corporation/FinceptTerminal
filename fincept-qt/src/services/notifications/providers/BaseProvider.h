@@ -1,7 +1,10 @@
 #pragma once
+#include "core/logging/Logger.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
+
+#include <QSet>
 
 namespace fincept::notifications {
 
@@ -54,24 +57,85 @@ class BaseProvider : public INotificationProvider {
 
     static QString secret_handle(const QString& key) { return QStringLiteral("notif:secret:") + key; }
 
-    static QString get_secret(SettingsRepository& r, const QString& key) {
-        auto sr = SecureStorage::instance().retrieve(secret_handle(key));
-        if (sr.is_ok() && !sr.value().isEmpty())
-            return sr.value();
-        return get_str(r, key); // legacy plaintext row, migrated on next save
+    // A secret that is stored but cannot be read (store busy / closed, key unavailable
+    // on this account, damaged row) is NOT "not set": the legacy plaintext row is not
+    // used in its place (it is blanked once migrated, or stale), and the field is
+    // remembered so the next save_config() — which writes every field, this one empty
+    // — does not erase the stored secret. Only a damaged row may be erased (it can
+    // never be read again). A value the user enters replaces it as usual.
+    QString get_secret(SettingsRepository& r, const QString& key) {
+        const SecretRead sr = SecureStorage::instance().read(secret_handle(key));
+        const bool failing = sr.failed();
+        LOG_TRANSITION("Notifications", secret_handle(key), failing, failing ? LogLevel::Warn : LogLevel::Info,
+                       failing ? logf("Notification credential could not be read; not replaced by the plaintext row "
+                                      "and not erased",
+                                      {{"provider", provider_id()}, {"field", key}})
+                               : logf("Notification credential readable again",
+                                      {{"provider", provider_id()}, {"field", key}}));
+        if (failing) {
+            if (sr.error != SecretRead::Error::Corrupt)
+                unreadable_secrets_.insert(key);
+            return {};
+        }
+        unreadable_secrets_.remove(key);
+        if (sr.found() && !sr.value.isEmpty())
+            return sr.value;
+        return get_str(r, key); // nothing stored: legacy plaintext row, migrated on next save
     }
 
-    static void set_secret(SettingsRepository& r, const QString& key, const QString& value, const QString& cat) {
+    void set_secret(SettingsRepository& r, const QString& key, const QString& value, const QString& cat) {
         if (value.isEmpty()) {
+            if (unreadable_secrets_.contains(key))
+                return; // empty only because it could not be read: keep the stored secret
             SecureStorage::instance().remove(secret_handle(key));
             r.set(key, QString{}, cat);
             return;
         }
-        if (SecureStorage::instance().store(secret_handle(key), value).is_ok())
+        // The plaintext row is blanked only once the encrypted copy was written AND
+        // read back equal (write -> read back -> compare -> only then delete the old).
+        const auto stored = SecureStorage::instance().store_verified(secret_handle(key), value);
+        LOG_TRANSITION("Notifications", QStringLiteral("secret_store|") + secret_handle(key), stored.is_err(),
+                       stored.is_err() ? LogLevel::Warn : LogLevel::Info,
+                       stored.is_err() ? logf("Notification credential kept in settings, secure storage write not "
+                                              "confirmed",
+                                              {{"provider", provider_id()},
+                                               {"field", key},
+                                               {"error", QString::fromStdString(stored.error())}})
+                                       : logf("Notification credential stored in secure storage again",
+                                              {{"provider", provider_id()}, {"field", key}}));
+        if (stored.is_ok()) {
             r.set(key, QString{}, cat); // encrypted copy is authoritative
-        else
-            r.set(key, value, cat); // keychain unavailable — don't drop the credential
+            unreadable_secrets_.remove(key);
+        } else {
+            // Keychain unavailable — don't drop the credential: it goes to the row instead.
+            // get_secret() prefers a stored copy, so the copy this replaces must not shadow
+            // the row (the user replaced it on purpose) — but it is deleted only once the
+            // row demonstrably holds the new value (write -> read back -> compare). If the
+            // row could not be written either, the stored copy stays: an older credential
+            // beats none.
+            const auto row_written = r.set(key, value, cat);
+            const auto row_back = row_written.is_ok() ? r.get(key) : Result<QString>::err(row_written.error());
+            if (row_back.is_ok() && row_back.value() == value) {
+                SecureStorage::instance().remove(secret_handle(key));
+            } else {
+                LOG_WARN("Notifications", logf("Notification credential could not be saved; the previous one is kept",
+                                               {{"provider", provider_id()},
+                                                {"field", key},
+                                                {"error", row_back.is_err() ? QString::fromStdString(row_back.error())
+                                                                            : QStringLiteral("read_back_mismatch")}}));
+            }
+        }
     }
+
+  public:
+    /// True when a stored secret of this provider could not be read at the last
+    /// load_config(): is_configured() is then false although a secret IS stored —
+    /// a settings UI should say "could not read the stored credential" (and offer
+    /// load_config() again as the retry) instead of "not configured".
+    bool has_unreadable_secret() const { return !unreadable_secrets_.isEmpty(); }
+
+  protected:
+    QSet<QString> unreadable_secrets_; ///< fields whose stored secret could not be read
 
     /// Subclasses load their specific credential fields here.
     virtual void load_fields(SettingsRepository& r, const QString& cat) = 0;

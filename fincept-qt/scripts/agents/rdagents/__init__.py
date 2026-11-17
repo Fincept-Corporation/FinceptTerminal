@@ -15,7 +15,9 @@ from loops import (
     extract_factors_from_result,
     extract_models_from_result,
     save_checkpoint,
-    load_checkpoint,
+    load_loop_checkpoint,
+    preflight,
+    runtime_requirements,
     FACTOR_LOOP_AVAILABLE,
     MODEL_LOOP_AVAILABLE,
     QUANT_LOOP_AVAILABLE,
@@ -48,7 +50,9 @@ __all__ = [
     "extract_factors_from_result",
     "extract_models_from_result",
     "save_checkpoint",
-    "load_checkpoint",
+    "load_loop_checkpoint",
+    "preflight",
+    "runtime_requirements",
     # Task execution
     "run_loop_sync",
     # MCP tool server

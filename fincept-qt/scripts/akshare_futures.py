@@ -9,6 +9,12 @@ import json
 import time
 from datetime import datetime
 
+# safe_call: one akshare call -> {success, data, columns, count} or a plain-English error.
+# run_endpoint_table: the CLI (get_all_endpoints / <endpoint> [field=value ...]) printing one
+# JSON line through fincept_json (NaN -> null) with akshare's own prints kept off stdout.
+from akshare_screen_args import (between_dates, call_first_with_rows, recent_weekdays, run_endpoint_table,
+                                 safe_call)
+
 try:
     import akshare as ak
     import pandas as pd
@@ -19,35 +25,6 @@ except ImportError as e:
         "data": []
     }))
     sys.exit(1)
-
-
-def safe_call(func, *args, **kwargs):
-    """Safely call AKShare function with error handling and retries"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            result = func(*args, **kwargs)
-            if isinstance(result, pd.DataFrame):
-                if result.empty:
-                    return {"success": True, "data": [], "count": 0}
-                for col in result.columns:
-                    if result[col].dtype == 'datetime64[ns]':
-                        result[col] = result[col].astype(str)
-                # Replace NaN/Infinity with None for valid JSON
-                result = result.replace([float("inf"), float("-inf")], None)
-                result = result.where(pd.notna(result), None)
-                data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
-            elif isinstance(result, (list, dict)):
-                return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
-            else:
-                return {"success": True, "data": str(result), "count": 1}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
 
 
 # ==================== CONTRACT INFO ====================
@@ -64,9 +41,10 @@ def get_futures_rule():
     """Get futures trading rules"""
     return safe_call(ak.futures_rule)
 
-def get_futures_contract_detail(symbol="A"):
-    """Get futures contract details"""
-    return safe_call(ak.futures_contract_detail, symbol=symbol)
+def get_futures_contract_detail(symbol):
+    """Contract specification of one listed contract (e.g. RB2701, M2705). A variety code alone ("A",
+    the old default) is not a contract, so SYMBOL is required."""
+    return safe_call(ak.futures_contract_detail, symbol=symbol.strip().upper())
 
 def get_futures_symbol_mark():
     """Get futures symbol marks"""
@@ -103,9 +81,15 @@ def get_futures_zh_realtime():
     """Get Chinese futures realtime data"""
     return safe_call(ak.futures_zh_realtime)
 
-def get_futures_zh_spot():
-    """Get Chinese futures spot data"""
-    return safe_call(ak.futures_zh_spot)
+# Sina's continuous main-contract codes (<variety>0) always point at the current main contract, so
+# this default never expires (akshare's own default, V2309, expired in 2023).
+MAIN_CONTRACTS = "RB0,HC0,I0,CU0,AL0,AU0,AG0,M0,Y0,V0,TA0,MA0,SR0,CF0"
+
+
+def get_futures_zh_spot(symbol=MAIN_CONTRACTS):
+    """Realtime quotes of Chinese commodity futures. SYMBOL: comma-separated contracts (RB2701,
+    M2705) or continuous main contracts (RB0); default the main contract of 14 major varieties."""
+    return safe_call(ak.futures_zh_spot, symbol=symbol.replace(" ", "").upper(), market="CF", adjust="0")
 
 def get_futures_main_sina():
     """Get main futures contracts from Sina"""
@@ -126,9 +110,10 @@ def get_futures_zh_daily_sina(symbol="V0"):
     """Get Chinese futures daily data from Sina"""
     return safe_call(ak.futures_zh_daily_sina, symbol=symbol)
 
-def get_futures_zh_minute_sina(symbol="V2501", period="1"):
-    """Get Chinese futures minute data from Sina"""
-    return safe_call(ak.futures_zh_minute_sina, symbol=symbol, period=period)
+def get_futures_zh_minute_sina(symbol="RB0", period="1"):
+    """Minute bars of one contract from Sina; RB0 = rebar main contract (the old default V2501 has
+    expired). period is the bar length in minutes: 1, 5, 15, 30, 60."""
+    return safe_call(ak.futures_zh_minute_sina, symbol=symbol.strip().upper(), period=period)
 
 def get_futures_hist_em(symbol="豆粕主力"):
     """Get futures historical data from EastMoney"""
@@ -145,13 +130,20 @@ def get_futures_global_spot():
     """Get global futures spot data"""
     return safe_call(ak.futures_global_spot_em)
 
-def get_futures_global_hist(symbol="101", period="daily", start_date="20200101", end_date="20261231"):
-    """Get global futures historical data"""
-    return safe_call(ak.futures_global_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date)
+def get_futures_global_hist(symbol="HG00Y", start_date="", end_date=""):
+    """Daily history of one global futures contract (EastMoney code from futures_global_spot, e.g.
+    HG00Y = COMEX copper main); START/END narrow the range (akshare returns the full history)"""
+    return safe_call(lambda: between_dates(ak.futures_global_hist_em(symbol=symbol), start_date, end_date))
 
-def get_futures_foreign_commodity_realtime():
-    """Get foreign commodity futures realtime"""
-    return safe_call(ak.futures_foreign_commodity_realtime)
+# Sina codes of the most traded overseas contracts (NYMEX crude, COMEX gold/silver/copper, NYMEX gas,
+# Brent); futures_foreign_symbols lists them all.
+FOREIGN_DEFAULT = "CL,GC,SI,HG,NG,OIL"
+
+
+def get_futures_foreign_commodity_realtime(symbol=FOREIGN_DEFAULT):
+    """Realtime quotes of overseas commodity futures. SYMBOL: comma-separated Sina codes."""
+    codes = [s.strip().upper() for s in symbol.split(",") if s.strip()]
+    return safe_call(ak.futures_foreign_commodity_realtime, symbol=codes)
 
 def get_futures_foreign_commodity_subscribe():
     """Get foreign commodity subscription symbols"""
@@ -187,21 +179,36 @@ def get_futures_gfex_warehouse_receipt():
 
 # ==================== POSITION RANK ====================
 
-def get_futures_dce_position_rank(symbol="a", date="20240101"):
-    """Get DCE position rank"""
-    return safe_call(ak.futures_dce_position_rank, symbol=symbol, date=date)
+# Exchange position rankings of one trading day: START picks the day, default the newest weekday
+# with data; SYMBOL narrows to one variety (M, I, SI, LC, ...). The rankings come back per contract
+# and are joined into one table with a "contract" column.
 
-def get_futures_dce_position_rank_other(symbol="a", date="20240101"):
-    """Get DCE position rank (other)"""
-    return safe_call(ak.futures_dce_position_rank_other, symbol=symbol, date=date)
+def _ranking(func, date, **kwargs):
+    if date:
+        return safe_call(func, date=date, _key_column="contract", **kwargs)
+    return call_first_with_rows(func, "date", recent_weekdays(), _key_column="contract", **kwargs)
 
-def get_futures_gfex_position_rank(symbol="si", date="20240101"):
-    """Get GFEX position rank"""
-    return safe_call(ak.futures_gfex_position_rank, symbol=symbol, date=date)
 
-def get_futures_hold_pos_sina(symbol="RB"):
-    """Get futures holding positions from Sina"""
-    return safe_call(ak.futures_hold_pos_sina, symbol=symbol)
+def get_futures_dce_position_rank(symbol="", date=""):
+    """DCE member position ranking"""
+    return _ranking(ak.futures_dce_position_rank, date, **({"vars_list": [symbol.upper()]} if symbol else {}))
+
+def get_futures_dce_position_rank_other(date=""):
+    """DCE member position ranking (options and other products)"""
+    return _ranking(ak.futures_dce_position_rank_other, date)
+
+def get_futures_gfex_position_rank(symbol="", date=""):
+    """GFEX member position ranking"""
+    return _ranking(ak.futures_gfex_position_rank, date, **({"vars_list": [symbol.upper()]} if symbol else {}))
+
+def get_futures_hold_pos_sina(symbol, date=""):
+    """Member volume ranking of one contract (SYMBOL, e.g. RB2701) on one day (Sina); START picks the
+    day, default the newest with data. A contract code cannot be guessed, so SYMBOL is required."""
+    contract = symbol.strip().upper()
+    if date:
+        return safe_call(ak.futures_hold_pos_sina, symbol="成交量", contract=contract, date=date)
+    return call_first_with_rows(ak.futures_hold_pos_sina, "date", recent_weekdays(), symbol="成交量",
+                                contract=contract)
 
 
 # ==================== DELIVERY ====================
@@ -233,9 +240,15 @@ def get_futures_spot_price():
     """Get futures spot prices"""
     return safe_call(ak.futures_spot_price)
 
-def get_futures_spot_price_daily(start_day="20200101", end_day="20261231", vars_list=None):
-    """Get daily spot prices"""
-    return safe_call(ak.futures_spot_price_daily, start_day=start_day, end_day=end_day)
+def get_futures_spot_price_daily(start_day="", end_day=""):
+    """Spot vs futures prices per day; akshare fetches one page per day, so the default is the last 7
+    days (the old 2020-2026 default meant ~1,700 requests and never finished)"""
+    from datetime import timedelta
+    from akshare_screen_args import china_today
+
+    today = china_today()
+    start = start_day or (today - timedelta(days=7)).strftime("%Y%m%d")
+    return safe_call(ak.futures_spot_price_daily, start_day=start, end_day=end_day or today.strftime("%Y%m%d"))
 
 def get_futures_spot_price_previous():
     """Get previous spot prices"""
@@ -407,56 +420,9 @@ ENDPOINTS = {
 }
 
 
-def get_all_endpoints():
-    """Return all available endpoints with descriptions"""
-    endpoints = list(ENDPOINTS.keys())
-    categories = {}
-    for name, info in ENDPOINTS.items():
-        cat = info.get("category", "Other")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(name)
-
-    return {
-        "success": True,
-        "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
-            "categories": categories
-        },
-        "timestamp": int(time.time())
-    }
-
-
 def main():
-    # Set stdout encoding to UTF-8
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"success": False, "error": "No endpoint specified", "data": []}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif endpoint in ENDPOINTS:
-        func = ENDPOINTS[endpoint]["func"]
-        if args:
-            try:
-                result = func(*args)
-            except TypeError:
-                result = func()  # endpoint takes no/fewer args - ignore UI default
-        else:
-            result = func()
-    else:
-        result = {"success": False, "error": f"Unknown endpoint: {endpoint}", "data": []}
-
-    result["timestamp"] = int(time.time())
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    return run_endpoint_table(ENDPOINTS)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

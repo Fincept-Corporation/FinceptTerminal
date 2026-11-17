@@ -11,10 +11,16 @@ Score breakdown:
     Q (Technical):    0-3 points — MA60 + RSI + MACD histogram
 
 Total: 0-10 -> BUY (>=7) / WAIT (>=5) / SELL (<5)
+
+A part that could not be measured (no fundamentals, too little price history)
+has score null and is left out of the total; max_score shrinks with it and the
+action thresholds apply to the total scaled back to 0-10 (normalized_score).
+A missing / null win_rate (engine search with no measured matches) is refused.
 """
 
 import sys
 import json
+import math
 import numpy as np
 import pandas as pd
 
@@ -23,7 +29,25 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from utils import fetch_ohlcv, json_response, output_json, parse_args
+from utils import fetch_ohlcv, json_response, output_json, parse_args, with_deadline
+
+
+def parse_win_rate(value):
+    """The win rate as a float in 0..100, or None when absent / null / not a number."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(rate) or rate < 0 or rate > 100:
+        return None
+    return rate
+
+
+WIN_RATE_REQUIRED = ("win_rate is required: a number 0-100 from engine.py search "
+                     "(data.win_rate_stats.win_rate). It is null when no match could be measured, "
+                     "and there is then no vision score.")
 
 
 # ---------------------------------------------------------------------------
@@ -33,10 +57,14 @@ from utils import fetch_ohlcv, json_response, output_json, parse_args
 def compute_vision_score(win_rate: float, config: dict = None) -> dict:
     """
     Convert pattern match win rate to a 0-3 vision score.
-    win_rate: percentage 0-100
+    win_rate: percentage 0-100. None (nothing measured) is refused with
+    ValueError — it used to arrive as a default 50 and score as if measured.
 
     Config keys: vision_breakpoints (default [70, 55, 40])
     """
+    win_rate = parse_win_rate(win_rate)
+    if win_rate is None:
+        raise ValueError(WIN_RATE_REQUIRED)
     cfg = config or {}
     bp = cfg.get("vision_breakpoints", [70, 55, 40])
     if len(bp) < 3:
@@ -75,24 +103,29 @@ def compute_fundamental_score(symbol: str, config: dict = None) -> dict:
     pe_t = cfg.get("pe_thresholds", [15, 25, 40, 60])
     roe_t = cfg.get("roe_thresholds", [20, 15, 10, 5])
 
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        info = ticker.info or {}
-    except Exception as e:
-        return {
-            "score": 2.0,  # neutral default
-            "max": 4,
-            "pe": None,
-            "roe": None,
-            "pe_score": 1.0,
-            "roe_score": 1.0,
-            "label": "N/A",
-            "error": str(e),
-        }
+    def unavailable(reason):
+        # No made-up "neutral" score: the part is left out of the total.
+        return {"score": None, "max": 4, "pe": None, "roe": None,
+                "pe_score": None, "roe_score": None, "label": "N/A", "error": reason}
 
-    # P/E ratio scoring (lower is better for value)
-    pe = info.get("trailingPE") or info.get("forwardPE")
+    try:
+        from utils import fincept_yahoo
+        fy = fincept_yahoo()  # the day's profile, shared by every script and process
+        info = with_deadline(lambda: fy.info(symbol), what=f"yfinance fundamentals for {symbol}") or {}
+    except Exception as e:
+        return unavailable(f"fundamentals unavailable: {e}")
+
+    def number(v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if math.isfinite(f) else None
+
+    # P/E ratio scoring (lower is better for value). A missing or negative P/E
+    # is not scored (it used to count as a neutral 1.0).
+    pe = number(info.get("trailingPE")) or number(info.get("forwardPE"))
+    pe_score = None
     if pe is not None and pe > 0:
         if pe < pe_t[0]:
             pe_score = 2.0
@@ -104,11 +137,10 @@ def compute_fundamental_score(symbol: str, config: dict = None) -> dict:
             pe_score = 0.5
         else:
             pe_score = 0.0
-    else:
-        pe_score = 1.0  # neutral
 
     # ROE scoring (higher is better)
-    roe = info.get("returnOnEquity")
+    roe = number(info.get("returnOnEquity"))
+    roe_score = None
     if roe is not None:
         roe_pct = roe * 100  # yfinance returns decimal
         if roe_pct >= roe_t[0]:
@@ -121,19 +153,22 @@ def compute_fundamental_score(symbol: str, config: dict = None) -> dict:
             roe_score = 0.5
         else:
             roe_score = 0.0
-    else:
-        roe_score = 1.0
 
-    total = pe_score + roe_score
+    parts = [s for s in (pe_score, roe_score) if s is not None]
+    if not parts:
+        return unavailable(f"no P/E or ROE reported for {symbol}")
+    total = sum(parts)
+    max_score = 2 * len(parts)  # 2 per scored metric
+    ratio = total / max_score
 
     return {
         "score": round(total, 2),
-        "max": 4,
-        "pe": round(pe, 2) if pe else None,
-        "roe": round(roe * 100, 2) if roe else None,
-        "pe_score": round(pe_score, 2),
-        "roe_score": round(roe_score, 2),
-        "label": "Strong" if total >= 3 else ("Moderate" if total >= 2 else "Weak"),
+        "max": max_score,
+        "pe": round(pe, 2) if pe is not None else None,
+        "roe": round(roe * 100, 2) if roe is not None else None,
+        "pe_score": round(pe_score, 2) if pe_score is not None else None,
+        "roe_score": round(roe_score, 2) if roe_score is not None else None,
+        "label": "Strong" if ratio >= 0.75 else ("Moderate" if ratio >= 0.5 else "Weak"),
     }
 
 
@@ -161,16 +196,21 @@ def compute_technical_score(symbol: str, date_str: str = None, config: dict = No
     if len(ma_thresh) < 3:
         ma_thresh = [1.02, 1.00, 0.98]
 
-    df = fetch_ohlcv(symbol, period="1y")
+    try:
+        df = fetch_ohlcv(symbol, period="1y")
+        reason = f"insufficient price history for {symbol}"
+    except Exception as e:
+        df, reason = None, f"price history unavailable: {e}"
     if df is None or len(df) < ma_period:
+        # No made-up mid score (it was 1.5): the part is left out of the total.
         return {
-            "score": 1.5,
+            "score": None,
             "max": 3,
             "ma60_signal": None,
             "rsi": None,
             "macd_hist": None,
             "label": "N/A",
-            "error": "Insufficient data",
+            "error": reason,
         }
 
     close = df["Close"].values
@@ -263,22 +303,35 @@ def compute_scorecard(symbol: str, win_rate: float, date_str: str = None, config
     buy_threshold = float(cfg.get("buy_threshold", 7))
     wait_threshold = float(cfg.get("wait_threshold", 5))
 
-    v = compute_vision_score(win_rate, config=cfg)
+    v = compute_vision_score(win_rate, config=cfg)  # raises on a null win rate
     f = compute_fundamental_score(symbol, config=cfg)
     q = compute_technical_score(symbol, date_str, config=cfg)
 
-    total = v["score"] + f["score"] + q["score"]
+    # Unmeasured parts (score None) are left out; the thresholds (on a 0-10
+    # scale) apply to the measured total scaled to 0-10.
+    parts = {"vision": v, "fundamental": f, "technical": q}
+    scored = [p for p in parts.values() if p.get("score") is not None]
+    excluded = [name for name, p in parts.items() if p.get("score") is None]
+    total = sum(p["score"] for p in scored)
+    max_score = sum(p["max"] for p in scored)
+    normalized = total / max_score * 10 if max_score > 0 else None
 
-    if total >= buy_threshold:
+    if normalized is None or len(scored) < 2:
+        # One measured part (e.g. an unknown symbol: vision only) is not a
+        # basis for BUY / SELL.
+        action = None
+    elif normalized >= buy_threshold:
         action = "BUY"
-    elif total >= wait_threshold:
+    elif normalized >= wait_threshold:
         action = "WAIT"
     else:
         action = "SELL"
 
     return {
         "total_score": round(total, 2),
-        "max_score": 10,
+        "max_score": max_score,
+        "normalized_score": round(normalized, 2) if normalized is not None else None,
+        "excluded": excluded,
         "action": action,
         "vision": v,
         "fundamental": f,
@@ -297,36 +350,50 @@ def main():
 
     if command == "score":
         symbol = params.get("symbol", "")
-        win_rate = float(params.get("win_rate", 50))
+        # No default: a missing or null win rate used to become 50 and was
+        # scored as if measured.
+        win_rate = parse_win_rate(params.get("win_rate"))
         date = params.get("date")
         if not symbol:
             output_json(json_response("error", error="symbol is required"))
+            return
+        if win_rate is None:
+            output_json(json_response("error", error=WIN_RATE_REQUIRED))
             return
         result = compute_scorecard(symbol, win_rate, date, config=params)
         output_json(json_response("success", data=result))
 
     elif command == "vision_score":
-        win_rate = float(params.get("win_rate", 50))
+        win_rate = parse_win_rate(params.get("win_rate"))
+        if win_rate is None:
+            output_json(json_response("error", error=WIN_RATE_REQUIRED))
+            return
         output_json(json_response("success", data=compute_vision_score(win_rate, config=params)))
 
-    elif command == "fundamental_score":
+    elif command in ("fundamental_score", "technical_score"):
         symbol = params.get("symbol", "")
         if not symbol:
             output_json(json_response("error", error="symbol is required"))
             return
-        output_json(json_response("success", data=compute_fundamental_score(symbol, config=params)))
-
-    elif command == "technical_score":
-        symbol = params.get("symbol", "")
-        date = params.get("date")
-        if not symbol:
-            output_json(json_response("error", error="symbol is required"))
+        if command == "fundamental_score":
+            part = compute_fundamental_score(symbol, config=params)
+        else:
+            part = compute_technical_score(symbol, params.get("date"), config=params)
+        # An unmeasurable part is an error, not a "success" carrying a placeholder.
+        if part.get("score") is None:
+            output_json(json_response("error", error=part.get("error") or "no data"))
             return
-        output_json(json_response("success", data=compute_technical_score(symbol, date, config=params)))
+        output_json(json_response("success", data=part))
 
     else:
         output_json(json_response("error", error=f"Unknown command: {command}"))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        output_json(json_response("error", error=f"{type(e).__name__}: {e}"))
+        sys.exit(1)

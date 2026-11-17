@@ -1,372 +1,756 @@
+// DocumentCanvas.cpp — see DocumentCanvas.h.
+//
+// Editor chrome (the desk around the pages, the selection overlay, the status strip)
+// takes terminal tokens; everything ON a page is document content drawn by ReportRenderer.
+
 #include "screens/report_builder/DocumentCanvas.h"
 
-#include "screens/report_builder/ReportBuilderScreen.h"
-#include "screens/report_builder/ReportTableCodec.h"
+#include "core/report/ReportLayoutPlan.h"
+#include "screens/report_builder/ReportChartObject.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
-namespace { // forward-declare default theme for constructor use
-static fincept::screens::ReportTheme default_canvas_theme() {
-    return {"Light Professional",
-            "#1a1a1a",
-            "#d97706",
-            "#ffffff",
-            "#333333",
-            "#f0f0f0",
-            "#1a1a1a",
-            "#f5f5f5",
-            "#f9f9f9",
-            "#666666",
-            "#cccccc"};
-}
-} // namespace
-
-#include <QBarCategoryAxis>
-#include <QBarSeries>
-#include <QBarSet>
-#include <QChart>
-#include <QChartView>
-#include <QCryptographicHash>
-#include <QDateTime>
+#include <QAbstractTextDocumentLayout>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QElapsedTimer>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLineSeries>
+#include <QFontMetrics>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QMimeData>
-#include <QPieSeries>
-#include <QPieSlice>
-#include <QStandardPaths>
-#include <QTextBlockFormat>
-#include <QTextCharFormat>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QTextBlock>
 #include <QTextCursor>
-#include <QTextImageFormat>
-#include <QTextList>
-#include <QTextTable>
+#include <QTextDocument>
+#include <QTextFrame>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
-#include <QValueAxis>
+#include <QWheelEvent>
+
+#include <algorithm>
+#include <cmath>
 
 namespace fincept::screens {
 
-// ── Chart rendering helpers ────────────────────────────────────────────────────
+namespace {
+constexpr int kDcMargin = 24;      // desk margin around the pages (view px)
+constexpr int kDcGap = 20;         // gap between pages
+constexpr int kDcBuildSliceMs = 12; // layout work per event-loop turn during a full build
+} // namespace
 
-// Parse "10,20,15,30" into a list of doubles, skipping non-numeric tokens
-static QVector<double> parse_csv_doubles(const QString& csv) {
-    QVector<double> vals;
-    for (const QString& tok : csv.split(',', Qt::SkipEmptyParts)) {
-        bool ok = false;
-        double v = tok.trimmed().toDouble(&ok);
-        if (ok)
-            vals << v;
-    }
-    return vals;
-}
+// ── The painted page strip ──────────────────────────────────────────────────
 
-// Parse "Jan,Feb,Mar" into a list of labels
-static QStringList parse_csv_labels(const QString& csv) {
-    QStringList out;
-    for (const QString& tok : csv.split(',', Qt::SkipEmptyParts))
-        out << tok.trimmed();
-    return out;
-}
-
-// Background marking the component selected in the editor. A fixed pale yellow was
-// used for every theme, so on the three dark themes (light text) the selected block
-// became pale-on-pale and unreadable.
-static QColor selection_bg(const ReportTheme& theme) {
-    return QColor(theme.page_bg).lightness() < 128 ? QColor("#3d3200") : QColor("#fffbe6");
-}
-
-// Where a rendered chart/sparkline PNG lives, derived from everything that affects the
-// picture.
-//
-// DocumentCanvas::render() runs on EVERY document change — each keystroke in the
-// properties panel, each LLM tool call while a report is being built — and it used to
-// re-render every chart through a QChartView and write a brand-new PNG per chart per
-// call, named by the millisecond. Nothing ever deleted them, so a long editing session
-// filled the temp directory, and two images finished in the same millisecond silently
-// overwrote each other. A content-addressed name makes an unchanged chart a file-exists
-// check, and identical inputs can never collide with different ones.
-static QString chart_cache_path(const QString& kind, const QStringList& inputs) {
-    const QByteArray digest = QCryptographicHash::hash(inputs.join(QChar(0x1F)).toUtf8(), QCryptographicHash::Sha1);
-    return QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-           QString("/fincept_%1_%2.png").arg(kind, QString::fromLatin1(digest.toHex()));
-}
-
-static bool chart_cache_hit(const QString& path) {
-    const QFileInfo fi(path);
-    return fi.exists() && fi.size() > 0;
-}
-
-// Render a QChart to a temp PNG file and return the file path (empty on failure)
-static QString render_chart_to_file(const QString& chart_type, const QString& title, const QString& data_str,
-                                    const QString& labels_str, const ReportTheme& theme, int width = 640,
-                                    int height = 320) {
-    QVector<double> values = parse_csv_doubles(data_str);
-    if (values.isEmpty())
-        return {};
-
-    const QString cache_path =
-        chart_cache_path(QStringLiteral("chart"),
-                         {chart_type, title, data_str, labels_str, QString::number(width), QString::number(height),
-                          theme.page_bg, theme.text_color, theme.accent_color, theme.heading_color,
-                          theme.divider_color});
-    if (chart_cache_hit(cache_path))
-        return cache_path;
-
-    QStringList labels = parse_csv_labels(labels_str);
-
-    // Pad or trim labels to match value count
-    while (labels.size() < values.size())
-        labels << QString::number(labels.size() + 1);
-
-    QChart* chart = new QChart();
-    chart->setTitle(title);
-    chart->setAnimationOptions(QChart::NoAnimation);
-
-    // Theme colours
-    QColor bg_col(theme.page_bg);
-    QColor text_col(theme.text_color);
-    QColor accent(theme.accent_color);
-
-    chart->setBackgroundBrush(QBrush(bg_col));
-    chart->setTitleBrush(QBrush(QColor(theme.heading_color)));
-    QFont title_font;
-    title_font.setPointSize(10);
-    title_font.setBold(true);
-    chart->setTitleFont(title_font);
-
-    if (chart_type == "pie") {
-        auto* series = new QPieSeries();
-        for (int i = 0; i < values.size(); ++i) {
-            auto* slice = series->append(labels.value(i, QString::number(i + 1)), values[i]);
-            slice->setLabelVisible(true);
-            QFont lf;
-            lf.setPointSize(8);
-            slice->setLabelFont(lf);
-        }
-        // Colour slices with accent + variations
-        const QStringList palette = {"#d97706", "#3b82f6", "#16a34a", "#dc2626",
-                                     "#7c3aed", "#0891b2", "#ea580c", "#65a30d"};
-        for (int i = 0; i < series->slices().size(); ++i) {
-            series->slices()[i]->setColor(QColor(palette[i % palette.size()]));
-            series->slices()[i]->setLabelColor(text_col);
-        }
-        chart->addSeries(series);
-        chart->legend()->setVisible(true);
-        chart->legend()->setLabelColor(text_col);
-
-    } else if (chart_type == "bar") {
-        auto* set = new QBarSet("Value");
-        set->setColor(accent);
-        set->setLabelColor(text_col);
-        for (double v : values)
-            *set << v;
-
-        auto* series = new QBarSeries();
-        series->append(set);
-        chart->addSeries(series);
-
-        auto* axisX = new QBarCategoryAxis();
-        axisX->append(labels);
-        axisX->setLabelsColor(text_col);
-        QFont axf;
-        axf.setPointSize(8);
-        axisX->setLabelsFont(axf);
-        chart->addAxis(axisX, Qt::AlignBottom);
-        series->attachAxis(axisX);
-
-        auto* axisY = new QValueAxis();
-        axisY->setLabelsColor(text_col);
-        axisY->setLabelsFont(axf);
-        axisY->setGridLineColor(QColor(theme.divider_color));
-        chart->addAxis(axisY, Qt::AlignLeft);
-        series->attachAxis(axisY);
-        chart->legend()->setVisible(false);
-
-    } else {
-        // Default: line chart
-        auto* series = new QLineSeries();
-        series->setColor(accent);
-        QPen pen(accent);
-        pen.setWidth(2);
-        series->setPen(pen);
-        for (int i = 0; i < values.size(); ++i)
-            series->append(i, values[i]);
-        chart->addSeries(series);
-
-        auto* axisX = new QBarCategoryAxis();
-        axisX->append(labels);
-        axisX->setLabelsColor(text_col);
-        QFont axf;
-        axf.setPointSize(8);
-        axisX->setLabelsFont(axf);
-        axisX->setGridLineColor(QColor(theme.divider_color));
-        chart->addAxis(axisX, Qt::AlignBottom);
-        series->attachAxis(axisX);
-
-        auto* axisY = new QValueAxis();
-        axisY->setLabelsColor(text_col);
-        axisY->setLabelsFont(axf);
-        axisY->setGridLineColor(QColor(theme.divider_color));
-        chart->addAxis(axisY, Qt::AlignLeft);
-        series->attachAxis(axisY);
-        chart->legend()->setVisible(false);
+class RbPageView : public QWidget {
+  public:
+    RbPageView(DocumentCanvas* canvas, QWidget* parent) : QWidget(parent), canvas_(canvas) {
+        setAttribute(Qt::WA_OpaquePaintEvent);
+        setFocusPolicy(Qt::ClickFocus);
     }
 
-    // Style legend
-    QPalette legend_pal;
-    legend_pal.setColor(QPalette::WindowText, text_col);
-    chart->legend()->setPalette(legend_pal);
+    void relayout() {
+        const int pages = std::max(1, canvas_->page_count());
+        const double pw = canvas_->geom_.page.width() * canvas_->zoom_;
+        const double ph = canvas_->geom_.page.height() * canvas_->zoom_;
+        const int w = static_cast<int>(std::ceil(pw)) + 2 * kDcMargin;
+        const int h = static_cast<int>(std::ceil(pages * (ph + kDcGap) - kDcGap)) + 2 * kDcMargin;
+        if (minimumSize() != QSize(w, h))
+            setMinimumSize(w, h);
+        update();
+    }
 
-    // Render to pixmap via QChartView
-    QChartView view(chart);
-    view.setRenderHint(QPainter::Antialiasing);
-    view.resize(width, height);
+  protected:
+    void paintEvent(QPaintEvent* e) override {
+        QPainter p(this);
+        p.fillRect(e->rect(), QColor(ui::colors::BORDER_DIM()));
+        const auto& c = *canvas_;
+        if (c.sections_.isEmpty())
+            return;
+        const int total = c.page_count();
+        int global = 0;
+        for (int s = 0; s < c.sections_.size(); ++s) {
+            const auto& sec = c.sections_[s];
+            for (int pg = 0; pg < sec.pages; ++pg, ++global) {
+                const QRectF pr = c.page_rect(global);
+                if (!pr.toAlignedRect().intersects(e->rect()))
+                    continue;
+                p.save();
+                p.translate(pr.topLeft());
+                p.scale(c.zoom_, c.zoom_);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setRenderHint(QPainter::TextAntialiasing);
+                p.setRenderHint(QPainter::SmoothPixmapTransform);
+                p.fillRect(QRectF(QPointF(0, 0), c.geom_.page), QColor(c.theme_.page_bg));
+                rb::paint_page_content(&p, sec.doc, c.geom_, pg, c.theme_);
+                rb::paint_page_furniture(&p, c.ctx_, c.geom_, global + 1, total);
+                if (global == 0 && c.drawn_.isEmpty() && !c.preview_ && !c.building_) {
+                    // A blank report says what to do next (screen only, never exported).
+                    QFont f;
+                    f.setPixelSize(15);
+                    p.setFont(f);
+                    p.setPen(QColor(c.theme_.meta_color));
+                    p.drawText(c.geom_.content.adjusted(0, c.geom_.content.height() * 0.3, 0, 0),
+                               Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
+                               DocumentCanvas::tr("This report is empty.\nAdd blocks from the left panel, or open the "
+                                                  "Library to start from a template — the live-data templates fill "
+                                                  "themselves."));
+                }
+                p.restore();
+                p.setPen(QPen(QColor(ui::colors::BORDER_MED()), 1));
+                p.setBrush(Qt::NoBrush);
+                p.drawRect(pr.adjusted(-0.5, -0.5, 0.5, 0.5));
+            }
+        }
+        // Selection overlay (editor chrome, never printed).
+        int ss = -1, ri = -1;
+        if (!c.preview_ && c.selected_id_ > 0 && c.locate(c.selected_id_, &ss, &ri)) {
+            const QRectF r = c.component_rect(ss, ri);
+            if (r.isValid()) {
+                const double h = c.geom_.content.height();
+                const int first = std::max(0, static_cast<int>(std::floor(r.top() / h)));
+                const int last = std::max(first, static_cast<int>(std::floor((r.bottom() - 0.5) / h)));
+                const QColor accent(ui::colors::AMBER());
+                QColor wash = accent;
+                wash.setAlphaF(0.07f);
+                for (int pg = first; pg <= last && pg < c.sections_[ss].pages; ++pg) {
+                    const QRectF slice = r.intersected(QRectF(-20, pg * h, c.geom_.content.width() + 40, h));
+                    if (slice.isEmpty())
+                        continue;
+                    const QRectF pr = c.page_rect(c.global_page_of(ss, pg));
+                    const QRectF vr((c.geom_.content.left() + slice.left() - 4) * c.zoom_ + pr.left(),
+                                    (c.geom_.content.top() + slice.top() - pg * h - 2) * c.zoom_ + pr.top(),
+                                    (slice.width() + 8) * c.zoom_, (slice.height() + 4) * c.zoom_);
+                    p.fillRect(vr, wash);
+                    p.fillRect(QRectF(vr.left() - 4, vr.top(), 3, vr.height()), accent);
+                }
+            }
+        }
+    }
 
-    QPixmap pix = view.grab();
-    delete chart; // view took ownership but we grabbed already
+    void mousePressEvent(QMouseEvent* e) override {
+        if (e->button() != Qt::LeftButton)
+            return QWidget::mousePressEvent(e);
+        bool on_page = false;
+        const int id = canvas_->hit_component(e->position(), &on_page);
+        if (id > 0)
+            emit canvas_->component_clicked(id);
+        else
+            emit canvas_->background_clicked();
+    }
 
-    if (pix.save(cache_path, "PNG"))
-        return cache_path;
-    return {};
-}
+    void mouseDoubleClickEvent(QMouseEvent* e) override {
+        bool on_page = false;
+        const int id = canvas_->hit_component(e->position(), &on_page);
+        if (id > 0)
+            emit canvas_->component_activated(id);
+    }
 
-// Render a small sparkline (mini line chart) to a temp PNG
-static QString render_sparkline_to_file(const QString& data_str, const ReportTheme& theme, int width = 200,
-                                        int height = 60) {
-    QVector<double> values = parse_csv_doubles(data_str);
-    if (values.size() < 2)
-        return {};
+    void wheelEvent(QWheelEvent* e) override {
+        if (e->modifiers() & Qt::ControlModifier) {
+            const double step = e->angleDelta().y() > 0 ? 1.1 : 1 / 1.1;
+            canvas_->set_zoom(canvas_->zoom_ * step, false);
+            e->accept();
+            return;
+        }
+        QWidget::wheelEvent(e);
+    }
 
-    const QString cache_path =
-        chart_cache_path(QStringLiteral("spark"), {data_str, QString::number(width), QString::number(height),
-                                                   theme.page_bg, theme.accent_color});
-    if (chart_cache_hit(cache_path))
-        return cache_path;
+  private:
+    DocumentCanvas* canvas_;
+};
 
-    QChart* chart = new QChart();
-    chart->setMargins(QMargins(0, 0, 0, 0));
-    chart->setBackgroundRoundness(0);
-    chart->setBackgroundBrush(QBrush(QColor(theme.page_bg)));
-    chart->legend()->setVisible(false);
-    chart->setTitle("");
-    chart->setAnimationOptions(QChart::NoAnimation);
-
-    auto* series = new QLineSeries();
-    QColor accent(theme.accent_color);
-    QPen pen(accent);
-    pen.setWidth(2);
-    series->setPen(pen);
-    for (int i = 0; i < values.size(); ++i)
-        series->append(i, values[i]);
-    chart->addSeries(series);
-    chart->createDefaultAxes();
-    chart->axes(Qt::Horizontal).first()->setVisible(false);
-    chart->axes(Qt::Vertical).first()->setVisible(false);
-
-    QChartView view(chart);
-    view.setRenderHint(QPainter::Antialiasing);
-    view.resize(width, height);
-    QPixmap pix = view.grab();
-    delete chart;
-
-    if (pix.save(cache_path, "PNG"))
-        return cache_path;
-    return {};
-}
+// ── Canvas ──────────────────────────────────────────────────────────────────
 
 DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
     setAcceptDrops(true);
+    // Stylesheets go on before the children exist (one selector per widget).
+    setObjectName(QStringLiteral("rbCanvas"));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     scroll_ = new QScrollArea(this);
+    scroll_->setObjectName(QStringLiteral("rbCanvasScroll"));
+    scroll_->setFrameShape(QFrame::NoFrame);
     scroll_->setWidgetResizable(true);
-    scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll_->setStyleSheet(
-        QString("QScrollArea { background: %1; border: none; }"
-                "QScrollBar:vertical { background: %2; width: 10px; }"
-                "QScrollBar::handle:vertical { background: %3; border-radius: 5px; min-height: 20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
-                "QScrollBar:horizontal { background: %2; height: 10px; }"
-                "QScrollBar::handle:horizontal { background: %3; border-radius: 5px; min-width: 20px; }"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }")
-            .arg(ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(), ui::colors::BORDER_BRIGHT()));
+    scroll_->setStyleSheet(QStringLiteral("#rbCanvasScroll { background: %1; border: none; }").arg(ui::colors::BORDER_DIM()));
+    view_ = new RbPageView(this, scroll_);
+    scroll_->setWidget(view_);
+    root->addWidget(scroll_, 1);
 
-    container_ = new QWidget(this);
-    container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    pages_layout_ = new QVBoxLayout(container_);
-    pages_layout_->setContentsMargins(40, 40, 40, 40);
-    pages_layout_->setSpacing(24); // gap between pages
-    pages_layout_->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-
-    scroll_->setWidget(container_);
-    root->addWidget(scroll_);
-
-    // Always have at least one page so text_edit() never returns nullptr
-    new_page(default_canvas_theme());
-}
-
-QVector<QTextDocument*> DocumentCanvas::page_documents() const {
-    QVector<QTextDocument*> docs;
-    docs.reserve(pages_.size());
-    for (const QTextEdit* page : pages_)
-        docs.append(page->document());
-    return docs;
-}
-
-void DocumentCanvas::clear_pages() {
-    for (auto* p : pages_) {
-        pages_layout_->removeWidget(p);
-        delete p;
+    status_bar_ = new QWidget(this);
+    status_bar_->setObjectName(QStringLiteral("rbCanvasStatus"));
+    status_bar_->setStyleSheet(QStringLiteral("#rbCanvasStatus { background: %1; border-top: 1px solid %2; }"
+                                              "#rbCanvasStatus QLabel { color: %3; background: transparent; font-size: %4px; }"
+                                              "#rbCanvasStatus QPushButton { background: transparent; color: %3; border: 1px solid %2;"
+                                              " padding: 0 6px; font-size: %4px; }"
+                                              "#rbCanvasStatus QPushButton:hover { color: %5; border-color: %5; }")
+                                   .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(),
+                                        ui::fonts::px(-2), ui::colors::AMBER()));
+    auto* sl = new QHBoxLayout(status_bar_);
+    sl->setContentsMargins(8, 2, 8, 2);
+    sl->setSpacing(4);
+    status_label_ = new QLabel(status_bar_);
+    sl->addWidget(status_label_, 1);
+    zoom_out_btn_ = new QPushButton(QStringLiteral("−"), status_bar_);
+    zoom_fit_btn_ = new QPushButton(tr("Fit width"), status_bar_);
+    zoom_in_btn_ = new QPushButton(QStringLiteral("+"), status_bar_);
+    zoom_out_btn_->setToolTip(tr("Zoom out  (Ctrl+wheel)"));
+    zoom_in_btn_->setToolTip(tr("Zoom in  (Ctrl+wheel)"));
+    zoom_fit_btn_->setToolTip(tr("Fit the page to the width of the view"));
+    for (QPushButton* b : {zoom_out_btn_, zoom_fit_btn_, zoom_in_btn_}) {
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFocusPolicy(Qt::NoFocus);
+        sl->addWidget(b);
     }
-    pages_.clear();
+    root->addWidget(status_bar_);
+    connect(zoom_out_btn_, &QPushButton::clicked, this, [this]() { set_zoom(zoom_ / 1.15, false); });
+    connect(zoom_in_btn_, &QPushButton::clicked, this, [this]() { set_zoom(zoom_ * 1.15, false); });
+    connect(zoom_fit_btn_, &QPushButton::clicked, this, [this]() {
+        fit_ = true;
+        refit_zoom();
+    });
+    connect(scroll_->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { update_status(); });
+
+    build_timer_ = new QTimer(this);
+    build_timer_->setSingleShot(true);
+    build_timer_->setInterval(0);
+    connect(build_timer_, &QTimer::timeout, this, &DocumentCanvas::build_step);
+
+    // A chart image drawn off the GUI thread arrived: its object already has its final
+    // size, so only a repaint is needed (no relayout, the scroll position stays).
+    chart_object_ = new ReportChartObject(ReportChartObject::Mode::Screen, this);
+    connect(chart_object_, &ReportChartObject::chart_ready, view_, [this]() { view_->update(); });
+
+    // The desk and the overlay read tokens when painting; repaint after a theme change
+    // (no stylesheet / geometry work inside theme_changed).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { view_->update(); });
+    // Font size changes re-fit the status strip once the appearance has settled.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        const QFontMetrics fm(status_bar_->font());
+        const int w = fm.horizontalAdvance(QStringLiteral("+")) + 18;
+        zoom_out_btn_->setMinimumWidth(w);
+        zoom_in_btn_->setMinimumWidth(w);
+        update_status();
+    });
+
+    geom_ = rb::page_geometry(meta_);
+    ctx_ = rb::make_context({}, meta_, theme_, false);
+    update_status();
 }
 
-QTextEdit* DocumentCanvas::new_page(const ReportTheme& theme) {
-    auto* page = new QTextEdit(container_);
-    page->setReadOnly(true);
-    page->setFixedWidth(794);     // A4 at 96 dpi
-    page->setMinimumHeight(1123); // A4 height
-    page->setStyleSheet(QString("QTextEdit {"
-                                "  background: %1;"
-                                "  color: %2;"
-                                "  border: none;"
-                                "  padding: 72px 80px 72px 80px;"
-                                "  font-family: 'Segoe UI', 'Arial', sans-serif;"
-                                "  font-size: 12pt;"
-                                "}"
-                                "QScrollBar:vertical { width: 0px; }"
-                                "QScrollBar:horizontal { height: 0px; }")
-                            .arg(theme.page_bg, theme.text_color));
-    // Drop shadow effect via container styling — wrap in a frame
-    page->setFrameShape(QFrame::NoFrame);
-
-    pages_layout_->addWidget(page, 0, Qt::AlignHCenter);
-    pages_.append(page);
-    return page;
+DocumentCanvas::~DocumentCanvas() {
+    build_timer_->stop();
+    clear_sections();
 }
 
-// ── Drag-and-drop ─────────────────────────────────────────────────────────────
+void DocumentCanvas::set_note_provider(std::function<rb::BlockNote(int)> provider) {
+    note_provider_ = std::move(provider);
+    ctx_.note_of = preview_ ? nullptr : note_provider_;
+}
 
-static bool is_image_url(const QUrl& url) {
+int DocumentCanvas::page_count() const {
+    int n = 0;
+    for (const Section& s : sections_)
+        n += std::max(1, s.pages);
+    return std::max(1, n);
+}
+
+int DocumentCanvas::global_page_of(int section, int page) const {
+    int n = 0;
+    for (int s = 0; s < section && s < sections_.size(); ++s)
+        n += std::max(1, sections_[s].pages);
+    return n + page;
+}
+
+QRectF DocumentCanvas::page_rect(int global_page) const {
+    const double pw = geom_.page.width() * zoom_;
+    const double ph = geom_.page.height() * zoom_;
+    const double x = std::max<double>(kDcMargin, (view_->width() - pw) / 2.0);
+    return QRectF(x, kDcMargin + global_page * (ph + kDcGap), pw, ph);
+}
+
+// ── Building ────────────────────────────────────────────────────────────────
+
+void DocumentCanvas::clear_sections() {
+    for (Section& s : sections_)
+        delete s.doc;
+    sections_.clear();
+}
+
+DocumentCanvas::Section* DocumentCanvas::new_section() {
+    Section s;
+    s.doc = rb::new_section_document(ctx_, this);
+    chart_object_->install(s.doc);
+    QTextCursor c(s.doc);
+    if (sections_.isEmpty())
+        rb::write_header(c, ctx_);
+    else
+        rb::write_section_spacer(c);
+    s.lead_end = c.position();
+    sections_.append(s);
+    return &sections_.last();
+}
+
+void DocumentCanvas::rebuild_context() {
+    const QHash<int, int> pages = ctx_.heading_pages;
+    ctx_ = rb::make_context(drawn_, meta_, theme_, preview_);
+    ctx_.heading_pages = pages;
+    ctx_.note_of = preview_ ? nullptr : note_provider_;
+    ctx_.chart_object = chart_object_;
+    ctx_.number_style = rb::terminal_number_style();
+    geom_ = rb::page_geometry(meta_);
+}
+
+void DocumentCanvas::show_document(const QVector<ReportComponent>& components, const ReportMetadata& metadata,
+                                   const ReportTheme& theme) {
+    const bool look_changed = !have_document_ || metadata.title != meta_.title || metadata.author != meta_.author ||
+                              metadata.company != meta_.company || metadata.date != meta_.date ||
+                              metadata.font_family != meta_.font_family || metadata.font_size != meta_.font_size ||
+                              metadata.page_size != meta_.page_size || metadata.landscape != meta_.landscape ||
+                              metadata.margin_left_mm != meta_.margin_left_mm ||
+                              metadata.margin_right_mm != meta_.margin_right_mm ||
+                              metadata.margin_top_mm != meta_.margin_top_mm ||
+                              metadata.margin_bottom_mm != meta_.margin_bottom_mm || theme.name != theme_.name ||
+                              // Variables and heading numbers change printed text everywhere.
+                              metadata.variables != meta_.variables ||
+                              metadata.number_headings != meta_.number_headings;
+    // A cover page in front replaces the title header of the first section.
+    bool cover_now = false;
+    for (const auto& c : components) {
+        if (c.type == QLatin1String("page_break"))
+            continue;
+        cover_now = c.type == QLatin1String("cover");
+        break;
+    }
+    const bool cover_changed = have_document_ && cover_now != ctx_.has_cover;
+    const bool paint_only_changed = metadata.watermark != meta_.watermark ||
+                                    metadata.confidentiality != meta_.confidentiality;
+    const bool bands_changed = paint_only_changed || metadata.header_left != meta_.header_left ||
+                               metadata.header_center != meta_.header_center ||
+                               metadata.header_right != meta_.header_right || metadata.footer_left != meta_.footer_left ||
+                               metadata.footer_center != meta_.footer_center ||
+                               metadata.footer_right != meta_.footer_right ||
+                               metadata.show_page_numbers != meta_.show_page_numbers;
+    const bool geometry_changed =
+        bands_changed && rb::page_geometry(metadata).content != rb::page_geometry(meta_).content;
+    meta_ = metadata;
+    theme_ = theme;
+    have_document_ = true;
+    if (look_changed || geometry_changed || cover_changed || building_ || preview_) {
+        drawn_ = components;
+        start_full_build();
+        return;
+    }
+    if (bands_changed) {
+        // Header / footer text only: painted per page, nothing to re-lay.
+        rebuild_context();
+        view_->update();
+    }
+    if (!apply_incremental(components)) {
+        drawn_ = components;
+        start_full_build();
+        return;
+    }
+    update_pages(true);
+    update_toc_pages();
+    view_->update();
+}
+
+void DocumentCanvas::start_full_build() {
+    build_timer_->stop();
+    rebuild_context();
+    clear_sections();
+    new_section();
+    build_index_ = 0;
+    building_ = true;
+    update_pages(false);
+    update_status();
+    build_step(); // the first slice right away: short reports appear in one go
+}
+
+void DocumentCanvas::build_step() {
+    if (!building_)
+        return;
+    QElapsedTimer t;
+    t.start();
+    while (build_index_ < drawn_.size()) {
+        const ReportComponent& c = drawn_[build_index_++];
+        if (c.type == QLatin1String("page_break")) {
+            new_section();
+            continue;
+        }
+        if (preview_ && rb::is_unfilled(c))
+            continue;
+        Section& s = sections_.last();
+        QTextCursor cur(s.doc);
+        cur.movePosition(QTextCursor::End);
+        const int start = cur.position();
+        rb::write_component(cur, c, ctx_);
+        s.ranges.append({c.id, start, cur.position()});
+        if (t.elapsed() >= kDcBuildSliceMs)
+            break;
+    }
+    if (build_index_ >= drawn_.size()) {
+        finish_build();
+        return;
+    }
+    update_pages(false);
+    build_timer_->start();
+}
+
+void DocumentCanvas::finish_build() {
+    building_ = false;
+    update_pages(true);
+    update_toc_pages();
+    view_->update();
+    update_status();
+}
+
+// ── Incremental updates ─────────────────────────────────────────────────────
+
+bool DocumentCanvas::locate(int id, int* section, int* range_index) const {
+    for (int s = 0; s < sections_.size(); ++s) {
+        const auto& r = sections_[s].ranges;
+        for (int i = 0; i < r.size(); ++i) {
+            if (r[i].id == id) {
+                if (section)
+                    *section = s;
+                if (range_index)
+                    *range_index = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void DocumentCanvas::shift_ranges(int section, int from_range, int delta) {
+    auto& r = sections_[section].ranges;
+    for (int i = from_range; i < r.size(); ++i) {
+        r[i].start += delta;
+        r[i].end += delta;
+    }
+}
+
+void DocumentCanvas::replace_range(int section, int range_index, const ReportComponent& comp) {
+    Section& s = sections_[section];
+    Range& r = s.ranges[range_index];
+    QTextCursor c(s.doc);
+    c.setPosition(r.start);
+    c.setPosition(r.end, QTextCursor::KeepAnchor);
+    c.removeSelectedText();
+    c.setPosition(r.start);
+    rb::write_component(c, comp, ctx_);
+    const int delta = c.position() - r.end;
+    r.end = c.position();
+    shift_ranges(section, range_index + 1, delta);
+}
+
+void DocumentCanvas::insert_component(int section, int range_index, const ReportComponent& comp) {
+    Section& s = sections_[section];
+    const int start = range_index > 0 ? s.ranges[range_index - 1].end : s.lead_end;
+    QTextCursor c(s.doc);
+    c.setPosition(start);
+    rb::write_component(c, comp, ctx_);
+    const int end = c.position();
+    s.ranges.insert(range_index, {comp.id, start, end});
+    shift_ranges(section, range_index + 1, end - start);
+}
+
+void DocumentCanvas::remove_range(int section, int range_index) {
+    Section& s = sections_[section];
+    const Range r = s.ranges[range_index];
+    QTextCursor c(s.doc);
+    c.setPosition(r.start);
+    c.setPosition(r.end, QTextCursor::KeepAnchor);
+    c.removeSelectedText();
+    s.ranges.removeAt(range_index);
+    shift_ranges(section, range_index, -(r.end - r.start));
+}
+
+bool DocumentCanvas::apply_incremental(const QVector<ReportComponent>& comps) {
+    namespace lay = ::fincept::report::layout;
+    if (preview_ || sections_.isEmpty())
+        return false;
+    const lay::UpdatePlan plan = lay::plan_update(drawn_, comps);
+    if (plan.kind == lay::UpdatePlan::Kind::None) {
+        drawn_ = comps;
+        return true;
+    }
+    if (plan.kind == lay::UpdatePlan::Kind::Full)
+        return false;
+    drawn_ = comps;
+    rebuild_context(); // headings (TOC) may have changed
+
+    auto find = [&comps](int id) -> const ReportComponent* {
+        for (const auto& c : comps)
+            if (c.id == id)
+                return &c;
+        return nullptr;
+    };
+    int s = 0, ri = 0;
+    switch (plan.kind) {
+    case lay::UpdatePlan::Kind::Replace:
+        for (int id : plan.replace_ids) {
+            const ReportComponent* c = find(id);
+            if (!c || !locate(id, &s, &ri))
+                return false;
+            replace_range(s, ri, *c);
+        }
+        break;
+    case lay::UpdatePlan::Kind::Insert: {
+        const QVector<lay::Section> secs = lay::split_sections(comps);
+        const int idx = plan.inserted_index;
+        s = lay::section_of(secs, idx);
+        if (s >= sections_.size())
+            return false;
+        ri = idx - secs[s].first;
+        if (ri < 0 || ri > sections_[s].ranges.size())
+            return false;
+        insert_component(s, ri, comps[idx]);
+        break;
+    }
+    case lay::UpdatePlan::Kind::Remove:
+        if (!locate(plan.removed_id, &s, &ri))
+            return false;
+        remove_range(s, ri);
+        break;
+    default:
+        return false;
+    }
+    if (plan.toc) {
+        for (const auto& c : comps)
+            if (c.type == QLatin1String("toc") && locate(c.id, &s, &ri))
+                replace_range(s, ri, c);
+    }
+    return true;
+}
+
+void DocumentCanvas::refresh_component(int id) {
+    int s = 0, ri = 0;
+    if (building_ || !locate(id, &s, &ri))
+        return;
+    for (const auto& c : drawn_) {
+        if (c.id == id) {
+            replace_range(s, ri, c);
+            update_pages(true);
+            view_->update();
+            return;
+        }
+    }
+}
+
+void DocumentCanvas::update_pages(bool notify) {
+    for (Section& s : sections_)
+        s.pages = std::max(1, s.doc->pageCount());
+    view_->relayout();
+    const int total = page_count();
+    if (notify && total != last_pages_) {
+        last_pages_ = total;
+        emit page_count_changed(total);
+    }
+    update_status();
+}
+
+void DocumentCanvas::update_toc_pages() {
+    bool has_toc = false;
+    for (const auto& c : drawn_)
+        has_toc = has_toc || c.type == QLatin1String("toc");
+    if (!has_toc || building_)
+        return;
+    QHash<int, int> pages;
+    const double h = geom_.content.height();
+    for (int id : ctx_.heading_ids) {
+        int s = 0, ri = 0;
+        if (!locate(id, &s, &ri))
+            continue;
+        const QTextBlock b = sections_[s].doc->findBlock(sections_[s].ranges[ri].start + 1);
+        if (!b.isValid())
+            continue;
+        const double y = sections_[s].doc->documentLayout()->blockBoundingRect(b).top();
+        pages.insert(id, global_page_of(s, static_cast<int>(std::floor(y / h))) + 1);
+    }
+    if (pages == ctx_.heading_pages)
+        return;
+    ctx_.heading_pages = pages;
+    // The numbers sit on lines that already exist: re-laying the TOC cannot move a heading.
+    for (const auto& c : drawn_) {
+        int s = 0, ri = 0;
+        if (c.type == QLatin1String("toc") && locate(c.id, &s, &ri))
+            replace_range(s, ri, c);
+    }
+    update_pages(true);
+}
+
+// ── Geometry of a component, hit testing ───────────────────────────────────
+
+QRectF DocumentCanvas::component_rect(int section, int range_index) const {
+    const Section& s = sections_[section];
+    const Range& r = s.ranges[range_index];
+    QAbstractTextDocumentLayout* layout = s.doc->documentLayout();
+    QRectF out;
+    QTextFrame* root = s.doc->rootFrame();
+    for (auto it = root->begin(); !it.atEnd(); ++it) {
+        if (QTextFrame* f = it.currentFrame()) {
+            if (f->firstPosition() > r.start && f->firstPosition() <= r.end)
+                out = out.united(layout->frameBoundingRect(f));
+        } else {
+            const QTextBlock b = it.currentBlock();
+            if (b.position() > r.start && b.position() <= r.end)
+                out = out.united(layout->blockBoundingRect(b));
+            else if (b.position() > r.end)
+                break;
+        }
+    }
+    return out;
+}
+
+int DocumentCanvas::hit_component(const QPointF& pos, bool* on_page) const {
+    if (on_page)
+        *on_page = false;
+    const int total = page_count();
+    for (int g = 0; g < total; ++g) {
+        const QRectF pr = page_rect(g);
+        if (!pr.contains(pos))
+            continue;
+        if (on_page)
+            *on_page = true;
+        // Which section / page is global page g?
+        int s = 0, local = g;
+        while (s < sections_.size() && local >= std::max(1, sections_[s].pages)) {
+            local -= std::max(1, sections_[s].pages);
+            ++s;
+        }
+        if (s >= sections_.size())
+            return 0;
+        const QPointF in_page = (pos - pr.topLeft()) / zoom_;
+        if (!geom_.content.adjusted(-12, -4, 12, 4).contains(in_page))
+            return 0;
+        const QPointF doc_pt(in_page.x() - geom_.content.left(),
+                             in_page.y() - geom_.content.top() + local * geom_.content.height());
+        const int at = sections_[s].doc->documentLayout()->hitTest(doc_pt, Qt::FuzzyHit);
+        if (at < 0)
+            return 0;
+        for (const Range& r : sections_[s].ranges)
+            if (at > r.start && at <= r.end)
+                return r.id;
+        return 0;
+    }
+    return 0;
+}
+
+void DocumentCanvas::set_selected_id(int id, bool scroll_into_view) {
+    if (selected_id_ != id) {
+        selected_id_ = id;
+        view_->update();
+    }
+    if (scroll_into_view)
+        scroll_to_component(id);
+}
+
+void DocumentCanvas::scroll_to_component(int id) {
+    int s = 0, ri = 0;
+    if (id <= 0 || !locate(id, &s, &ri))
+        return;
+    const QRectF r = component_rect(s, ri);
+    if (!r.isValid())
+        return;
+    const double h = geom_.content.height();
+    const int pg = std::max(0, static_cast<int>(std::floor(r.top() / h)));
+    const QRectF pr = page_rect(global_page_of(s, pg));
+    const double y = pr.top() + (geom_.content.top() + r.top() - pg * h) * zoom_;
+    const double bottom = y + std::min(r.height() * zoom_, scroll_->viewport()->height() * 0.6);
+    scroll_->ensureVisible(static_cast<int>(pr.center().x()), static_cast<int>((y + bottom) / 2), 0,
+                           static_cast<int>((bottom - y) / 2 + 40));
+}
+
+void DocumentCanvas::set_preview_mode(bool on) {
+    if (preview_ == on)
+        return;
+    preview_ = on;
+    if (have_document_)
+        start_full_build();
+}
+
+// ── Zoom / status ───────────────────────────────────────────────────────────
+
+void DocumentCanvas::set_zoom(double z, bool fit) {
+    fit_ = fit;
+    z = std::clamp(z, 0.35, 2.5);
+    if (std::abs(z - zoom_) < 0.004)
+        return;
+    // Keep the point at the top of the view where it is.
+    const double rel = view_->height() > 0 ? scroll_->verticalScrollBar()->value() / double(view_->height()) : 0;
+    zoom_ = z;
+    view_->relayout();
+    scroll_->verticalScrollBar()->setValue(static_cast<int>(rel * view_->minimumHeight()));
+    update_status();
+}
+
+void DocumentCanvas::refit_zoom() {
+    if (!fit_)
+        return;
+    const double avail = scroll_->viewport()->width() - 2.0 * kDcMargin;
+    if (avail <= 50 || geom_.page.width() <= 0)
+        return;
+    set_zoom(std::clamp(avail / geom_.page.width(), 0.35, 1.6), true);
+}
+
+void DocumentCanvas::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    refit_zoom();
+}
+
+void DocumentCanvas::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        zoom_fit_btn_->setText(tr("Fit width"));
+        update_status();
+    }
+    QWidget::changeEvent(e);
+}
+
+void DocumentCanvas::update_status() {
+    if (!status_label_)
+        return;
+    const int total = page_count();
+    const double ph = geom_.page.height() * zoom_ + kDcGap;
+    const int center = scroll_->verticalScrollBar()->value() + scroll_->viewport()->height() / 2 - kDcMargin;
+    const int current = std::clamp(ph > 0 ? static_cast<int>(center / ph) + 1 : 1, 1, total);
+    QString text = tr("Page %1 of %2").arg(current).arg(total) + QStringLiteral("  ·  ") +
+                   QStringLiteral("%1%").arg(qRound(zoom_ * 100)) + QStringLiteral("  ·  ") +
+                   QStringLiteral("%1 %2").arg(meta_.page_size, meta_.landscape ? tr("landscape") : tr("portrait"));
+    if (building_)
+        text += QStringLiteral("  ·  ") + tr("laying out pages…");
+    if (preview_)
+        text += QStringLiteral("  ·  ") + tr("print view");
+    status_label_->setText(text);
+}
+
+// ── Drag-and-drop ───────────────────────────────────────────────────────────
+
+namespace {
+bool dc_is_image_url(const QUrl& url) {
     if (!url.isLocalFile())
         return false;
     static const QStringList exts = {"png", "jpg", "jpeg", "bmp", "svg", "gif", "webp"};
     return exts.contains(QFileInfo(url.toLocalFile()).suffix().toLower());
 }
+} // namespace
 
 void DocumentCanvas::dragEnterEvent(QDragEnterEvent* e) {
     if (e->mimeData()->hasUrls()) {
         for (const auto& url : e->mimeData()->urls()) {
-            if (is_image_url(url)) {
+            if (dc_is_image_url(url)) {
                 e->acceptProposedAction();
                 return;
             }
@@ -388,808 +772,13 @@ void DocumentCanvas::dropEvent(QDropEvent* e) {
         return;
     }
     for (const auto& url : e->mimeData()->urls()) {
-        if (is_image_url(url)) {
+        if (dc_is_image_url(url)) {
             emit image_dropped(url.toLocalFile());
             e->acceptProposedAction();
             return;
         }
     }
     e->ignore();
-}
-
-void DocumentCanvas::render(const QVector<ReportComponent>& components, const ReportMetadata& metadata,
-                            const ReportTheme& theme, int selected_index) {
-    clear_pages();
-    QTextEdit* current_page = new_page(theme);
-    QTextCursor cursor = current_page->textCursor();
-
-    // ── Metadata header ───────────────────────────────────────────────────────
-    // Title: large, accent-coloured, with a thicker rule under the meta line
-    // so the cover area reads as a proper report header.
-    QTextBlockFormat title_bf;
-    title_bf.setBottomMargin(2);
-    cursor.setBlockFormat(title_bf);
-    QTextCharFormat title_fmt;
-    title_fmt.setFontPointSize(24);
-    title_fmt.setFontWeight(QFont::Bold);
-    title_fmt.setForeground(QColor(theme.heading_color));
-    cursor.insertText(metadata.title, title_fmt);
-
-    cursor.insertBlock();
-    QTextBlockFormat meta_bf;
-    meta_bf.setTopMargin(2);
-    meta_bf.setBottomMargin(8);
-    cursor.setBlockFormat(meta_bf);
-    QTextCharFormat meta_fmt;
-    meta_fmt.setFontPointSize(10);
-    meta_fmt.setForeground(QColor(theme.meta_color));
-    QStringList meta_parts;
-    if (!metadata.author.trimmed().isEmpty())
-        meta_parts << metadata.author;
-    if (!metadata.company.trimmed().isEmpty())
-        meta_parts << metadata.company;
-    if (!metadata.date.trimmed().isEmpty())
-        meta_parts << metadata.date;
-    cursor.insertText(meta_parts.join("  ·  "), meta_fmt);
-
-    // Accent-coloured rule under the cover meta — visually separates the
-    // report header from the body.
-    cursor.insertBlock();
-    QTextBlockFormat line_block;
-    line_block.setTopMargin(6);
-    line_block.setBottomMargin(16);
-    cursor.setBlockFormat(line_block);
-    QTextCharFormat line_fmt;
-    line_fmt.setForeground(QColor(theme.accent_color));
-    line_fmt.setFontPointSize(8);
-    cursor.insertText(QString(80, QChar(0x2500)), line_fmt);
-
-    // ── Collect headings for TOC ──────────────────────────────────────────────
-    QStringList toc_headings;
-    for (const auto& comp : components) {
-        if (comp.type == "heading") {
-            toc_headings << (comp.content.isEmpty() ? "Heading" : comp.content);
-        }
-    }
-
-    // ── Render each component ─────────────────────────────────────────────────
-    for (int i = 0; i < components.size(); ++i) {
-        const auto& comp = components[i];
-        cursor.insertBlock();
-
-        // Highlight selected
-        QTextBlockFormat sel_bf;
-        if (i == selected_index) {
-            sel_bf.setBackground(selection_bg(theme));
-            sel_bf.setLeftMargin(4);
-            cursor.setBlockFormat(sel_bf);
-        }
-
-        if (comp.type == "heading") {
-            // Visual hierarchy: large size, accent-colour rule before, generous
-            // top margin so sections don't run together.
-            QTextBlockFormat hbf;
-            hbf.setTopMargin(20);
-            hbf.setBottomMargin(8);
-            if (i == selected_index)
-                hbf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(hbf);
-
-            QTextCharFormat fmt;
-            fmt.setFontPointSize(18);
-            fmt.setFontWeight(QFont::Bold);
-            fmt.setForeground(QColor(theme.heading_color));
-            cursor.insertText(comp.content.isEmpty() ? "Heading" : comp.content, fmt);
-
-            // Thin accent rule under the heading for institutional polish.
-            cursor.insertBlock();
-            QTextBlockFormat rule_bf;
-            rule_bf.setTopMargin(2);
-            rule_bf.setBottomMargin(10);
-            cursor.setBlockFormat(rule_bf);
-            QTextCharFormat rule_fmt;
-            rule_fmt.setForeground(QColor(theme.accent_color));
-            rule_fmt.setFontPointSize(8);
-            cursor.insertText(QString(80, QChar(0x2500)), rule_fmt);
-
-        } else if (comp.type == "text") {
-            // Use markdown rendering so **bold**, *italic*, links, etc.
-            // come through. Also gives the LLM a familiar formatting target.
-            QTextBlockFormat bf;
-            bf.setLineHeight(140, QTextBlockFormat::ProportionalHeight);
-            bf.setTopMargin(4);
-            bf.setBottomMargin(8);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-
-            // Set default char format so insertMarkdown picks up the right
-            // body colour. Markdown headers/emphasis override per-run as needed.
-            QTextCharFormat fmt;
-            fmt.setFontPointSize(12);
-            fmt.setForeground(QColor(theme.text_color));
-            cursor.setCharFormat(fmt);
-
-            const QString body = comp.content.isEmpty() ? "Enter text here..." : comp.content;
-            // Heuristic: if content contains common markdown markers, render
-            // as markdown; else fall back to plain text. Avoids spurious
-            // re-interpretation of ad-hoc punctuation in plain copy.
-            const bool looks_markdown = body.contains("**") || body.contains("__") || body.contains("\n- ") ||
-                                        body.contains("\n* ") || body.contains("\n#");
-            if (looks_markdown)
-                cursor.insertMarkdown(body);
-            else
-                cursor.insertText(body, fmt);
-            cursor.insertText("\n");
-
-        } else if (comp.type == "table") {
-            // Cell data sources, in priority order:
-            //   1. config["csv"] — rows separated by `|` OR newline (LLMs
-            //      instinctively use newlines for CSV rows, so we accept
-            //      both). Cells separated by comma. The MCP tool description
-            //      recommends pipe; the parser is lenient.
-            //   2. config["data"] — JSON map {"r_c":"value"} (legacy).
-            //   3. fallback to "Header N" placeholders so the table at least
-            //      shows where data should go rather than empty cells.
-            // Quote-aware: "1,234.5" is one cell (it used to split a financial table's
-            // thousands-separated numbers across columns). See ReportTableCodec.h.
-            QVector<QStringList> rows_data = report_table::parse(comp.config.value("csv"));
-
-            QJsonObject cell_data;
-            if (rows_data.isEmpty() && comp.config.contains("data")) {
-                QJsonDocument doc = QJsonDocument::fromJson(comp.config.value("data").toUtf8());
-                if (doc.isObject())
-                    cell_data = doc.object();
-            }
-
-            // Determine grid dimensions: prefer csv shape, then config rows/cols,
-            // then a 3x3 default. Cap to keep one massive table from blowing the page.
-            int rows;
-            int cols;
-            if (!rows_data.isEmpty()) {
-                rows = rows_data.size();
-                cols = 0;
-                for (const auto& r : rows_data)
-                    cols = qMax(cols, r.size());
-            } else {
-                rows = comp.config.value("rows", "3").toInt();
-                cols = comp.config.value("cols", "3").toInt();
-            }
-            // 20 columns is what the properties panel lets the user create — the canvas cap
-            // used to be 12, so columns 13-20 of a manually built table were never drawn.
-            // Anything beyond the caps is dropped, but not silently: see the note below.
-            constexpr int kMaxTableRows = 200;
-            constexpr int kMaxTableCols = 20;
-            const int wanted_rows = rows;
-            const int wanted_cols = cols;
-            rows = qBound(1, rows, kMaxTableRows);
-            cols = qBound(1, cols, kMaxTableCols);
-
-            QTextTableFormat tf;
-            tf.setBorderBrush(QColor(theme.divider_color));
-            tf.setBorder(1);
-            tf.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
-            tf.setCellPadding(6);
-            tf.setCellSpacing(0);
-            QVector<QTextLength> widths(cols, QTextLength(QTextLength::PercentageLength, 100.0 / cols));
-            tf.setColumnWidthConstraints(widths);
-
-            // Push a top margin block so tables don't touch the prior heading rule.
-            QTextBlockFormat tbf;
-            tbf.setTopMargin(6);
-            tbf.setBottomMargin(6);
-            cursor.setBlockFormat(tbf);
-
-            auto* table = cursor.insertTable(rows, cols, tf);
-
-            for (int r = 0; r < rows; ++r) {
-                for (int c = 0; c < cols; ++c) {
-                    QString cell_text;
-                    if (!rows_data.isEmpty()) {
-                        if (r < rows_data.size() && c < rows_data[r].size())
-                            cell_text = rows_data[r][c];
-                    } else {
-                        QString cell_key = QString("%1_%2").arg(r).arg(c);
-                        if (cell_data.contains(cell_key))
-                            cell_text = cell_data.value(cell_key).toString();
-                        else if (r == 0)
-                            cell_text = QString("Header %1").arg(c + 1);
-                    }
-
-                    QTextCharFormat cell_fmt;
-                    QTextBlockFormat cell_block;
-                    if (r == 0) {
-                        cell_fmt.setFontWeight(QFont::Bold);
-                        cell_fmt.setFontPointSize(11);
-                        cell_fmt.setForeground(QColor(theme.table_header_fg));
-                        cell_block.setBackground(QColor(theme.table_header_bg));
-                        cell_block.setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-                    } else {
-                        cell_fmt.setFontPointSize(11);
-                        cell_fmt.setForeground(QColor(theme.text_color));
-                        // Right-align numeric-looking cells (helps financials read).
-                        bool is_numeric = !cell_text.isEmpty();
-                        for (QChar ch : cell_text) {
-                            if (!ch.isDigit() && ch != QChar('.') && ch != QChar(',') && ch != QChar('-') &&
-                                ch != QChar('+') && ch != QChar('%') && ch != QChar('$') && ch != QChar(' ') &&
-                                ch != QChar('(') && ch != QChar(')') && ch != QChar('B') && ch != QChar('M') &&
-                                ch != QChar('K') && ch != QChar('T') && ch != QChar('x')) {
-                                is_numeric = false;
-                                break;
-                            }
-                        }
-                        if (c > 0 && is_numeric)
-                            cell_block.setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    }
-                    auto cc = table->cellAt(r, c).firstCursorPosition();
-                    cc.setBlockFormat(cell_block);
-                    cc.insertText(cell_text, cell_fmt);
-                }
-            }
-            cursor.movePosition(QTextCursor::End);
-            cursor.insertText("\n");
-            if (wanted_rows > rows || wanted_cols > cols) {
-                // A report that quietly omits rows reads as complete — say what was cut.
-                QTextCharFormat note_fmt;
-                note_fmt.setFontItalic(true);
-                note_fmt.setFontPointSize(10);
-                note_fmt.setForeground(QColor(theme.meta_color));
-                cursor.insertText(QString("(Table truncated: showing %1 of %2 rows and %3 of %4 columns.)")
-                                      .arg(rows)
-                                      .arg(wanted_rows)
-                                      .arg(cols)
-                                      .arg(wanted_cols),
-                                  note_fmt);
-                cursor.insertText("\n");
-            }
-
-        } else if (comp.type == "code") {
-            QTextBlockFormat bf;
-            bf.setBackground(QColor(theme.code_bg));
-            bf.setLeftMargin(16);
-            bf.setRightMargin(16);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-            QTextCharFormat fmt;
-            fmt.setFontFamilies({"Consolas"});
-            fmt.setFontPointSize(11);
-            fmt.setForeground(QColor(theme.text_color));
-            cursor.insertText(comp.content.isEmpty() ? "// code block" : comp.content, fmt);
-            cursor.insertText("\n");
-
-        } else if (comp.type == "divider") {
-            QTextCharFormat fmt;
-            fmt.setForeground(QColor(theme.divider_color));
-            fmt.setFontPointSize(8);
-            cursor.insertText(QString(80, QChar(0x2500)), fmt);
-            cursor.insertText("\n");
-
-        } else if (comp.type == "quote") {
-            QTextBlockFormat bf;
-            bf.setLeftMargin(24);
-            bf.setRightMargin(8);
-            bf.setTopMargin(8);
-            bf.setBottomMargin(8);
-            bf.setBackground(QColor(theme.quote_bg));
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-            QTextCharFormat fmt;
-            fmt.setFontItalic(true);
-            fmt.setForeground(QColor(theme.meta_color));
-            fmt.setFontPointSize(12);
-            cursor.setCharFormat(fmt);
-            const QString body = comp.content.isEmpty() ? "Block quote..." : comp.content;
-            if (body.contains("**") || body.contains("__"))
-                cursor.insertMarkdown(body);
-            else
-                cursor.insertText(body, fmt);
-            cursor.insertText("\n");
-
-        } else if (comp.type == "list") {
-            QStringList items = comp.content.split("\n", Qt::SkipEmptyParts);
-            if (items.isEmpty())
-                items << "Item 1" << "Item 2";
-
-            QTextBlockFormat outer_bf;
-            outer_bf.setTopMargin(4);
-            outer_bf.setBottomMargin(8);
-            if (i == selected_index)
-                outer_bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(outer_bf);
-
-            QTextListFormat lf;
-            lf.setStyle(QTextListFormat::ListDisc);
-            lf.setIndent(1);
-
-            QTextCharFormat item_fmt;
-            item_fmt.setFontPointSize(12);
-            item_fmt.setForeground(QColor(theme.text_color));
-            cursor.setCharFormat(item_fmt);
-
-            QTextList* list = nullptr;
-            for (const auto& item : items) {
-                if (!list) {
-                    list = cursor.insertList(lf);
-                } else {
-                    cursor.insertBlock();
-                    list->add(cursor.block());
-                }
-                // Render each item's content as markdown so **bold** and
-                // emphasis inside list items work.
-                if (item.contains("**") || item.contains("__") || item.contains("*"))
-                    cursor.insertMarkdown(item);
-                else
-                    cursor.insertText(item, item_fmt);
-            }
-
-            // Terminate the list cleanly: open a fresh non-list block so the
-            // next component doesn't accidentally become a list item.
-            cursor.insertBlock();
-            QTextBlockFormat reset_bf;
-            cursor.setBlockFormat(reset_bf);
-
-        } else if (comp.type == "chart") {
-            QString chart_type = comp.config.value("chart_type", "line");
-            QString chart_title = comp.config.value("title", "Chart");
-            QString data_str = comp.config.value("data", "");
-            QString labels_str = comp.config.value("labels", "");
-            int chart_w = comp.config.value("width", "640").toInt();
-
-            QTextBlockFormat bf;
-            bf.setTopMargin(8);
-            bf.setBottomMargin(8);
-            bf.setAlignment(Qt::AlignHCenter);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-
-            if (data_str.isEmpty()) {
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor(theme.meta_color));
-                fmt.setFontPointSize(11);
-                cursor.insertText(QString("[%1 Chart — enter data in Properties panel]").arg(chart_title), fmt);
-            } else {
-                QString img_path =
-                    render_chart_to_file(chart_type, chart_title, data_str, labels_str, theme, chart_w, chart_w / 2);
-                if (!img_path.isEmpty()) {
-                    QTextImageFormat img_fmt;
-                    img_fmt.setName(img_path);
-                    img_fmt.setWidth(chart_w);
-                    cursor.insertImage(img_fmt);
-                    // Template placeholder numbers must never pass for real data in an
-                    // exported report. The flag clears as soon as the data is edited.
-                    if (comp.config.value("sample") == QLatin1String("1")) {
-                        cursor.insertBlock();
-                        QTextCharFormat sample_fmt;
-                        sample_fmt.setFontWeight(QFont::Bold);
-                        sample_fmt.setFontPointSize(10);
-                        sample_fmt.setForeground(QColor("#dc2626"));
-                        cursor.insertText("SAMPLE DATA — placeholder values from the template, replace before "
-                                          "publishing",
-                                          sample_fmt);
-                    }
-                } else {
-                    QTextCharFormat fmt;
-                    fmt.setForeground(QColor(theme.meta_color));
-                    fmt.setFontPointSize(11);
-                    cursor.insertText("[Chart render failed]", fmt);
-                }
-            }
-            cursor.insertText("\n");
-
-        } else if (comp.type == "image") {
-            QString path = comp.config.value("path", "");
-            QString align = comp.config.value("align", "left");
-            QString caption = comp.config.value("caption", "");
-            int width = comp.config.value("width", "400").toInt();
-
-            // Apply alignment to the block
-            QTextBlockFormat img_bf;
-            if (i == selected_index)
-                img_bf.setBackground(selection_bg(theme));
-            if (align == "center")
-                img_bf.setAlignment(Qt::AlignHCenter);
-            else if (align == "right")
-                img_bf.setAlignment(Qt::AlignRight);
-            else
-                img_bf.setAlignment(Qt::AlignLeft);
-            cursor.setBlockFormat(img_bf);
-
-            if (!path.isEmpty()) {
-                QTextImageFormat img_fmt;
-                img_fmt.setName(path);
-                img_fmt.setWidth(width);
-                cursor.insertImage(img_fmt);
-            } else {
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor(theme.meta_color));
-                fmt.setFontPointSize(11);
-                cursor.insertText("[Image — browse or paste in Properties panel]", fmt);
-            }
-            cursor.insertText("\n");
-
-            // Caption
-            if (!caption.isEmpty()) {
-                cursor.insertBlock();
-                QTextBlockFormat cap_bf;
-                cap_bf.setAlignment(align == "center"  ? Qt::AlignHCenter
-                                    : align == "right" ? Qt::AlignRight
-                                                       : Qt::AlignLeft);
-                cap_bf.setTopMargin(2);
-                cap_bf.setBottomMargin(8);
-                cursor.setBlockFormat(cap_bf);
-                QTextCharFormat cap_fmt;
-                cap_fmt.setFontItalic(true);
-                cap_fmt.setFontPointSize(10);
-                cap_fmt.setForeground(QColor(theme.meta_color));
-                cursor.insertText(caption, cap_fmt);
-                cursor.insertText("\n");
-            }
-
-        } else if (comp.type == "market_data") {
-            QString symbol = comp.config.value("symbol", "");
-            QString price = comp.config.value("price", "");
-            QString change = comp.config.value("change", "");
-            QString chg_pct = comp.config.value("change_pct", "");
-            QString name = comp.config.value("name", symbol);
-            QString high = comp.config.value("high", "");
-            QString low = comp.config.value("low", "");
-            QString volume = comp.config.value("volume", "");
-            QString status = comp.config.value("status", "pending");
-
-            QTextBlockFormat bf;
-            bf.setBackground(QColor(theme.quote_bg));
-            bf.setLeftMargin(12);
-            bf.setTopMargin(6);
-            bf.setBottomMargin(6);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-
-            if (status == "loading") {
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor(theme.meta_color));
-                fmt.setFontPointSize(11);
-                cursor.insertText(QString("[Fetching %1...]").arg(symbol.isEmpty() ? "market data" : symbol), fmt);
-            } else if (status == "error") {
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor("#dc2626"));
-                fmt.setFontPointSize(11);
-                cursor.insertText(QString("[%1 — %2]").arg(symbol, comp.config.value("error", "quote unavailable")),
-                                  fmt);
-            } else if (!symbol.isEmpty() && price.isEmpty()) {
-                // Never fetched: say so rather than print a bare ticker that reads as data.
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor(theme.meta_color));
-                fmt.setFontPointSize(11);
-                cursor.insertText(QString("[%1 — no quote yet: press Refresh Data]").arg(symbol), fmt);
-            } else if (symbol.isEmpty()) {
-                QTextCharFormat fmt;
-                fmt.setForeground(QColor(theme.meta_color));
-                fmt.setFontPointSize(11);
-                cursor.insertText("[Market Data — enter ticker in Properties panel]", fmt);
-            } else {
-                // Line 1: SYMBOL  Name  Price  Change%
-                QTextCharFormat sym_fmt;
-                sym_fmt.setFontWeight(QFont::Bold);
-                sym_fmt.setForeground(QColor(theme.accent_color));
-                sym_fmt.setFontPointSize(13);
-                cursor.insertText(symbol + "  ", sym_fmt);
-
-                if (!name.isEmpty() && name != symbol) {
-                    QTextCharFormat name_fmt;
-                    name_fmt.setForeground(QColor(theme.meta_color));
-                    name_fmt.setFontPointSize(11);
-                    cursor.insertText(name + "  ", name_fmt);
-                }
-
-                if (!price.isEmpty()) {
-                    QTextCharFormat price_fmt;
-                    price_fmt.setFontWeight(QFont::Bold);
-                    price_fmt.setForeground(QColor(theme.text_color));
-                    price_fmt.setFontPointSize(13);
-                    cursor.insertText(price + "  ", price_fmt);
-                }
-
-                if (!chg_pct.isEmpty()) {
-                    bool negative = chg_pct.startsWith("-");
-                    QTextCharFormat chg_fmt;
-                    chg_fmt.setFontWeight(QFont::Bold);
-                    chg_fmt.setForeground(QColor(negative ? "#dc2626" : "#16a34a"));
-                    chg_fmt.setFontPointSize(12);
-                    QString sign = (!negative && !chg_pct.startsWith("+")) ? "+" : "";
-                    cursor.insertText(sign + chg_pct + "%", chg_fmt);
-                }
-
-                // Line 2: H/L/Vol secondary info (only if fetched)
-                if (!high.isEmpty() || !low.isEmpty() || !volume.isEmpty()) {
-                    cursor.insertBlock();
-                    cursor.setBlockFormat(bf);
-                    QTextCharFormat detail_fmt;
-                    detail_fmt.setFontPointSize(10);
-                    detail_fmt.setForeground(QColor(theme.meta_color));
-
-                    QString detail;
-                    if (!high.isEmpty() && !low.isEmpty())
-                        detail += "H: " + high + "  L: " + low + "  ";
-                    if (!volume.isEmpty()) {
-                        double vol = volume.toDouble();
-                        QString vol_str;
-                        if (vol >= 1e9)
-                            vol_str = QString::number(vol / 1e9, 'f', 2) + "B";
-                        else if (vol >= 1e6)
-                            vol_str = QString::number(vol / 1e6, 'f', 2) + "M";
-                        else if (vol >= 1e3)
-                            vol_str = QString::number(vol / 1e3, 'f', 1) + "K";
-                        else
-                            vol_str = volume;
-                        detail += "Vol: " + vol_str;
-                    }
-                    cursor.insertText("    " + detail, detail_fmt);
-                }
-
-                // Live data in a document goes stale: print when it was taken.
-                const QString as_of = comp.config.value("as_of");
-                if (!as_of.isEmpty()) {
-                    cursor.insertBlock();
-                    cursor.setBlockFormat(bf);
-                    QTextCharFormat asof_fmt;
-                    asof_fmt.setFontPointSize(9);
-                    asof_fmt.setForeground(QColor(theme.meta_color));
-                    cursor.insertText("    as of " + as_of, asof_fmt);
-                }
-            }
-            cursor.insertText("\n");
-
-        } else if (comp.type == "page_break") {
-            // Start a new physical page
-            current_page = new_page(theme);
-            cursor = current_page->textCursor();
-
-        } else if (comp.type == "toc") {
-            QTextBlockFormat toc_hdr_bf;
-            toc_hdr_bf.setTopMargin(8);
-            toc_hdr_bf.setBottomMargin(6);
-            cursor.setBlockFormat(toc_hdr_bf);
-            QTextCharFormat hdr_fmt;
-            hdr_fmt.setFontPointSize(14);
-            hdr_fmt.setFontWeight(QFont::Bold);
-            hdr_fmt.setForeground(QColor(theme.heading_color));
-            cursor.insertText("Table of Contents", hdr_fmt);
-
-            if (toc_headings.isEmpty()) {
-                cursor.insertBlock();
-                QTextCharFormat empty_fmt;
-                empty_fmt.setForeground(QColor(theme.meta_color));
-                empty_fmt.setFontPointSize(11);
-                cursor.insertText("  (No headings found in document)", empty_fmt);
-                cursor.insertText("\n");
-            } else {
-                int num = 1;
-                for (const auto& heading : toc_headings) {
-                    cursor.insertBlock();
-                    QTextBlockFormat entry_bf;
-                    entry_bf.setLeftMargin(12);
-                    entry_bf.setTopMargin(2);
-                    entry_bf.setBottomMargin(2);
-                    cursor.setBlockFormat(entry_bf);
-
-                    QTextCharFormat num_fmt;
-                    num_fmt.setFontPointSize(11);
-                    num_fmt.setFontWeight(QFont::Bold);
-                    num_fmt.setForeground(QColor(theme.accent_color));
-                    cursor.insertText(QString("%1.  ").arg(num++), num_fmt);
-
-                    QTextCharFormat entry_fmt;
-                    entry_fmt.setFontPointSize(11);
-                    entry_fmt.setForeground(QColor(theme.text_color));
-                    cursor.insertText(heading, entry_fmt);
-                }
-                // Reset block formatting so the next component starts fresh.
-                cursor.insertBlock();
-                cursor.setBlockFormat(QTextBlockFormat{});
-            }
-
-        } else if (comp.type == "stats_block") {
-            // Key-value stats grid rendered as a 2-column table
-            QString block_title = comp.config.value("title", "Key Statistics");
-            QString data_str = comp.config.value("data", "");
-
-            // Title row
-            QTextCharFormat title_cf;
-            title_cf.setFontWeight(QFont::Bold);
-            title_cf.setFontPointSize(12);
-            title_cf.setForeground(QColor(theme.heading_color));
-            cursor.insertText(block_title + "\n", title_cf);
-
-            // Parse "Label:Value\nLabel:Value" lines
-            QStringList lines = data_str.split('\n', Qt::SkipEmptyParts);
-            if (lines.isEmpty()) {
-                QTextCharFormat empty_fmt;
-                empty_fmt.setForeground(QColor(theme.meta_color));
-                empty_fmt.setFontPointSize(11);
-                cursor.insertText("  (Enter key:value pairs in Properties panel)\n", empty_fmt);
-            } else {
-                QTextTableFormat tf;
-                tf.setBorderBrush(QColor(theme.divider_color));
-                tf.setBorder(1);
-                tf.setCellPadding(5);
-                tf.setCellSpacing(0);
-                QVector<QTextLength> widths = {QTextLength(QTextLength::PercentageLength, 50),
-                                               QTextLength(QTextLength::PercentageLength, 50)};
-                tf.setColumnWidthConstraints(widths);
-
-                int rows = (lines.size() + 1) / 2;           // 2 stats per row
-                auto* tbl = cursor.insertTable(rows, 4, tf); // label|value|label|value
-
-                QTextTableFormat tf2 = tf;
-                tf2.setColumnWidthConstraints(
-                    {QTextLength(QTextLength::PercentageLength, 25), QTextLength(QTextLength::PercentageLength, 25),
-                     QTextLength(QTextLength::PercentageLength, 25), QTextLength(QTextLength::PercentageLength, 25)});
-                tbl->setFormat(tf2);
-
-                for (int li = 0; li < lines.size(); ++li) {
-                    int row = li / 2;
-                    int col_offset = (li % 2) * 2;
-
-                    QString label, value;
-                    int colon = lines[li].indexOf(':');
-                    if (colon >= 0) {
-                        label = lines[li].left(colon).trimmed();
-                        value = lines[li].mid(colon + 1).trimmed();
-                    } else {
-                        label = lines[li].trimmed();
-                    }
-
-                    // Label cell
-                    QTextCharFormat lbl_fmt;
-                    lbl_fmt.setForeground(QColor(theme.meta_color));
-                    lbl_fmt.setFontPointSize(10);
-                    tbl->cellAt(row, col_offset).firstCursorPosition().insertText(label, lbl_fmt);
-
-                    // Value cell
-                    QTextCharFormat val_fmt;
-                    val_fmt.setFontWeight(QFont::Bold);
-                    val_fmt.setForeground(QColor(theme.text_color));
-                    val_fmt.setFontPointSize(11);
-                    tbl->cellAt(row, col_offset + 1).firstCursorPosition().insertText(value, val_fmt);
-                }
-                cursor.movePosition(QTextCursor::End);
-                cursor.insertText("\n");
-            }
-
-        } else if (comp.type == "callout") {
-            // Colored callout/alert box: info (blue), success (green), warning (amber), danger (red)
-            QString style = comp.config.value("style", "info");
-            QString heading = comp.config.value("heading", "");
-
-            // Pick colors by style
-            QString bg_col, border_col, icon;
-            if (style == "success") {
-                bg_col = "#f0fdf4";
-                border_col = "#16a34a";
-                icon = "✓";
-            } else if (style == "warning") {
-                bg_col = "#fffbeb";
-                border_col = "#d97706";
-                icon = "⚠";
-            } else if (style == "danger") {
-                bg_col = "#fef2f2";
-                border_col = "#dc2626";
-                icon = "✗";
-            } else { // info
-                bg_col = "#eff6ff";
-                border_col = "#3b82f6";
-                icon = "ℹ";
-            }
-            // For dark themes, darken the box bg
-            bool dark_theme = QColor(theme.page_bg).lightness() < 100;
-            if (dark_theme) {
-                if (style == "success")
-                    bg_col = "#052e16";
-                else if (style == "warning")
-                    bg_col = "#1c1506";
-                else if (style == "danger")
-                    bg_col = "#1f0505";
-                else
-                    bg_col = "#0c1a33";
-            }
-
-            QTextBlockFormat bf;
-            bf.setBackground(QColor(bg_col));
-            bf.setLeftMargin(16);
-            bf.setRightMargin(8);
-            bf.setTopMargin(8);
-            bf.setBottomMargin(8);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-
-            // Icon + optional heading
-            if (!heading.isEmpty()) {
-                QTextCharFormat hdr_fmt;
-                hdr_fmt.setFontWeight(QFont::Bold);
-                hdr_fmt.setFontPointSize(12);
-                hdr_fmt.setForeground(QColor(border_col));
-                cursor.insertText(icon + "  " + heading + "\n", hdr_fmt);
-                cursor.insertBlock();
-                cursor.setBlockFormat(bf);
-            } else {
-                QTextCharFormat icon_fmt;
-                icon_fmt.setFontPointSize(12);
-                icon_fmt.setForeground(QColor(border_col));
-                cursor.insertText(icon + "  ", icon_fmt);
-            }
-
-            QTextCharFormat body_fmt;
-            body_fmt.setFontPointSize(11);
-            body_fmt.setForeground(QColor(theme.text_color));
-            cursor.setCharFormat(body_fmt);
-            const QString cbody = comp.content.isEmpty() ? "Enter callout text..." : comp.content;
-            if (cbody.contains("**") || cbody.contains("__") || cbody.contains("\n- "))
-                cursor.insertMarkdown(cbody);
-            else
-                cursor.insertText(cbody, body_fmt);
-            cursor.insertText("\n");
-
-        } else if (comp.type == "sparkline") {
-            QString spark_title = comp.config.value("title", "");
-            QString data_str = comp.config.value("data", "");
-            QString current_val = comp.config.value("current", "");
-            QString change_pct = comp.config.value("change_pct", "");
-
-            QTextBlockFormat bf;
-            bf.setTopMargin(4);
-            bf.setBottomMargin(4);
-            if (i == selected_index)
-                bf.setBackground(selection_bg(theme));
-            cursor.setBlockFormat(bf);
-
-            // Title + current value inline
-            if (!spark_title.isEmpty()) {
-                QTextCharFormat t_fmt;
-                t_fmt.setFontWeight(QFont::Bold);
-                t_fmt.setFontPointSize(11);
-                t_fmt.setForeground(QColor(theme.text_color));
-                cursor.insertText(spark_title + "  ", t_fmt);
-            }
-            if (!current_val.isEmpty()) {
-                QTextCharFormat v_fmt;
-                v_fmt.setFontPointSize(11);
-                v_fmt.setForeground(QColor(theme.accent_color));
-                cursor.insertText(current_val + "  ", v_fmt);
-            }
-            if (!change_pct.isEmpty()) {
-                bool neg = change_pct.startsWith('-');
-                QTextCharFormat c_fmt;
-                c_fmt.setFontPointSize(10);
-                c_fmt.setForeground(QColor(neg ? "#dc2626" : "#16a34a"));
-                cursor.insertText(change_pct + "%  ", c_fmt);
-            }
-
-            // Render mini sparkline chart
-            if (!data_str.isEmpty()) {
-                QString spark_path = render_sparkline_to_file(data_str, theme);
-                if (!spark_path.isEmpty()) {
-                    QTextImageFormat img_fmt;
-                    img_fmt.setName(spark_path);
-                    img_fmt.setWidth(160);
-                    img_fmt.setHeight(50);
-                    cursor.insertImage(img_fmt);
-                }
-            } else {
-                QTextCharFormat hint_fmt;
-                hint_fmt.setForeground(QColor(theme.meta_color));
-                hint_fmt.setFontPointSize(10);
-                cursor.insertText("[Sparkline — enter CSV data in Properties panel]", hint_fmt);
-            }
-            cursor.insertText("\n");
-        }
-    }
-
-    current_page->setTextCursor(cursor);
 }
 
 } // namespace fincept::screens

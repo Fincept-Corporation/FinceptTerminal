@@ -229,20 +229,46 @@ IndicatorResult IndicatorEngine::compute_stock_attr(const QVector<OhlcvCandle>& 
         cv = curr.volume;
         pv = prev.volume;
     } else if (attr == "VWAP") {
-        // Cumulative VWAP over the provided window: Σ(typical·vol)/Σ(vol).
-        // (Per-bar (H+L+C)/3 was just typical price, not a VWAP.)
+        // SESSION-ANCHORED VWAP: Σ(typical·vol)/Σ(vol) from the first bar of the
+        // bar's own trading session. It used to accumulate over whatever window was
+        // passed (500 bars in a backtest, the live buffer in a deployment, the
+        // fetched history in a scan), so the same rule read a different VWAP in
+        // each. Sessions come from OhlcvCandle::session_date (exchange trading
+        // date, stamped by the data layer); unstamped data falls back to a gap
+        // rule, and daily-or-longer bars are each their own session.
         const int n = candles.size();
-        double num = 0.0, den = 0.0;
-        for (int i = 0; i < n; ++i) {
-            if (i == n - 1) // snapshot the previous-bar VWAP before adding the last bar
-                pv = den > 0.0 ? num / den : prev.close;
-            const auto& c = candles[i];
-            const double tp = (c.high + c.low + c.close) / 3.0;
-            const double v = c.volume > 0.0 ? c.volume : 0.0;
-            num += tp * v;
-            den += v;
+        int64_t min_gap = 0;
+        for (int i = 1; i < n; ++i) {
+            const int64_t g = candles[i].open_time - candles[i - 1].open_time;
+            if (g > 0 && (min_gap == 0 || g < min_gap))
+                min_gap = g;
         }
-        cv = den > 0.0 ? num / den : curr.close;
+        const bool daily_or_longer = min_gap >= 20LL * 3600 * 1000;
+        const int64_t gap_break = std::max<int64_t>(4 * min_gap, 2LL * 3600 * 1000);
+        auto same_session = [&](int a, int b) {
+            const auto& ca = candles[a];
+            const auto& cb = candles[b];
+            if (ca.session_date > 0 && cb.session_date > 0)
+                return ca.session_date == cb.session_date;
+            if (daily_or_longer)
+                return false;
+            return cb.open_time - ca.open_time <= gap_break;
+        };
+        auto vwap_at = [&](int idx) {
+            int s = idx;
+            while (s > 0 && same_session(s - 1, s))
+                --s;
+            double num = 0.0, den = 0.0;
+            for (int i = s; i <= idx; ++i) {
+                const auto& c = candles[i];
+                const double v = c.volume > 0.0 ? c.volume : 0.0;
+                num += (c.high + c.low + c.close) / 3.0 * v;
+                den += v;
+            }
+            return den > 0.0 ? num / den : candles[idx].close;
+        };
+        cv = vwap_at(n - 1);
+        pv = vwap_at(n - 2);
     }
     r.current[QStringLiteral("value")] = cv;
     r.previous[QStringLiteral("value")] = pv;

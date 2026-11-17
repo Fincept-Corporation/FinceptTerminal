@@ -13,6 +13,9 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
+
+#include <algorithm>
 
 namespace fincept::workflow {
 
@@ -20,6 +23,26 @@ NodePalette::NodePalette(QWidget* parent) : QWidget(parent) {
     setFixedWidth(240);
     setObjectName("nodePalette");
     build_ui();
+    // Rows are sized from the font and coloured per node type: rebuild them —
+    // but only while the palette is on screen. The rebuild creates three widgets
+    // per node type (about 780 in all) and Qt styles every new widget on the
+    // next turn of the event loop, shown or not: with the Node Editor merely
+    // open behind another tab that was ~0.3 s of every theme or font change,
+    // measured. A hidden palette rebuilds when it is next shown instead.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        if (isVisible())
+            rebuild_categories(search_input_->text());
+        else
+            rebuild_pending_ = true;
+    });
+}
+
+void NodePalette::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (rebuild_pending_) {
+        rebuild_pending_ = false;
+        rebuild_categories(search_input_ ? search_input_->text() : QString());
+    }
 }
 
 void NodePalette::build_ui() {
@@ -29,12 +52,12 @@ void NodePalette::build_ui() {
 
     // ── Header ─────────────────────────────────────────────────────
     auto* header = new QWidget(this);
-    header->setFixedHeight(34);
-    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
+    header->setMinimumHeight(34);
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     header_title_ = new QLabel(tr("NODES"));
-    header_title_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
+    header_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;"
                                          "font-weight: bold; letter-spacing: 0.5px;")
                                      .arg(ui::colors::AMBER()));
     hl->addWidget(header_title_);
@@ -58,10 +81,10 @@ void NodePalette::build_ui() {
     search_input_->setStyleSheet(
         QString("QLineEdit {"
                 "  background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 12px; padding: 4px 8px;"
+                "  font-size: " + fincept::ui::fonts::px(-2) + "px; padding: 4px 8px;"
                 "}"
                 "QLineEdit:focus { border: 1px solid %4; }")
-            .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
     sl->addWidget(search_input_);
     root->addWidget(search_wrap);
 
@@ -92,14 +115,15 @@ void NodePalette::build_ui() {
     categories_container_->setStyleSheet(
         QString("QPushButton#npNodeBtn {"
                 "  background: %1; color: %2; border: none;"
-                "  border-bottom: 1px solid %3; font-family: Consolas;"
-                "  font-size: 11px; text-align: left; padding: 0 10px;"
+                "  border-bottom: 1px solid %3;"
+                "  font-size: " + fincept::ui::fonts::px(-3) + "px; text-align: left; padding: 0 10px;"
                 "}"
                 "QPushButton#npNodeBtn:hover { background: %3; color: %2; }"
-                "QLabel#npNodeName { color: %2; font-family: Consolas; font-size: 11px; background: transparent; }"
-                "QLabel#npCatCount { color: %4; font-family: Consolas; font-size: 10px; background: transparent; }")
+                "QLabel#npNodeName { color: %2; font-size: " + fincept::ui::fonts::px(-3) + "px; background: transparent; }"
+                "QLabel#npNodeName:disabled { color: %5; }"
+                "QLabel#npCatCount { color: %4; font-size: " + fincept::ui::fonts::px(-4) + "px; background: transparent; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(),
-                 ui::colors::TEXT_TERTIARY()));
+                 ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_DIM()));
     categories_layout_ = new QVBoxLayout(categories_container_);
     categories_layout_->setContentsMargins(0, 0, 0, 0);
     categories_layout_->setSpacing(0);
@@ -140,20 +164,25 @@ void NodePalette::rebuild_categories(const QString& filter) {
         if (filtered.isEmpty())
             continue;
 
+        // Nodes that cannot run in this build go last, shown disabled with the reason.
+        std::stable_partition(filtered.begin(), filtered.end(),
+                              [](const NodeTypeDef& n) { return n.unavailable_reason.isEmpty(); });
+
         // Category header
-        auto* cat_header = new QWidget(this);
-        cat_header->setFixedHeight(26);
-        cat_header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
+        auto* cat_header = new QWidget(categories_container_); // its final parent: no re-style on insert
+        cat_header->setMinimumHeight(26);
+        cat_header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
         auto* chl = new QHBoxLayout(cat_header);
         chl->setContentsMargins(10, 0, 10, 0);
-        auto* cat_label = new QLabel(cat.toUpper());
-        QString accent = filtered.first().accent_color;
-        cat_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+        auto* cat_label = new QLabel(cat.toUpper(), cat_header);
+        // Node-type colours are chosen for the dark theme; legible() keeps them readable on light.
+        const QString accent = ui::colors::legible(QColor(filtered.first().accent_color));
+        cat_label->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px;"
                                          "font-weight: bold; letter-spacing: 0.5px;")
                                      .arg(accent));
         chl->addWidget(cat_label);
 
-        auto* count_label = new QLabel(QString::number(filtered.size()));
+        auto* count_label = new QLabel(QString::number(filtered.size()), cat_header);
         count_label->setObjectName(QStringLiteral("npCatCount"));
         chl->addStretch();
         chl->addWidget(count_label);
@@ -163,9 +192,9 @@ void NodePalette::rebuild_categories(const QString& filter) {
 
         // Node buttons
         for (const auto& n : filtered) {
-            auto* btn = new QPushButton;
+            auto* btn = new QPushButton(categories_container_);
             btn->setObjectName(QStringLiteral("npNodeBtn"));
-            btn->setFixedHeight(32);
+            btn->setFixedHeight(qMax(32, QFontMetrics(ui::fonts::font(-3)).height() + 12));
             btn->setCursor(Qt::OpenHandCursor);
             btn->setToolTip(n.description);
             btn->setAccessibleName(tr("Add %1 node — drag onto the canvas").arg(n.display_name));
@@ -175,18 +204,31 @@ void NodePalette::rebuild_categories(const QString& filter) {
             bl->setContentsMargins(10, 0, 8, 0);
             bl->setSpacing(6);
 
-            auto* icon = new QLabel(n.icon_text);
-            icon->setFixedWidth(20);
-            icon->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+            auto* icon = new QLabel(n.icon_text, btn);
+            icon->setMinimumWidth(20);
+            icon->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;"
                                         "font-weight: bold;")
                                     .arg(accent));
             icon->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(icon);
 
-            auto* name = new QLabel(n.display_name);
+            auto* name = new QLabel(n.display_name, btn);
             name->setObjectName(QStringLiteral("npNodeName"));
             name->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(name, 1);
+
+            if (!n.unavailable_reason.isEmpty()) {
+                // Cannot run in this build: listed so it can be found, but not draggable.
+                btn->setEnabled(false);
+                btn->setCursor(Qt::ForbiddenCursor);
+                btn->setToolTip(tr("Unavailable — %1").arg(n.unavailable_reason));
+                btn->setAccessibleName(tr("%1 node (unavailable)").arg(n.display_name));
+                icon->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;"
+                                            "font-weight: bold;")
+                                        .arg(ui::colors::TEXT_DIM()));
+                categories_layout_->insertWidget(categories_layout_->count() - 1, btn);
+                continue;
+            }
 
             QString type_id = n.type_id;
             connect(btn, &QPushButton::pressed, this, [this, type_id]() { start_drag(type_id); });
@@ -207,11 +249,10 @@ void NodePalette::start_drag(const QString& type_id) {
 
     // Create drag preview pixmap
     QString label = type_def ? type_def->display_name : type_id;
-    QFont font("Consolas", 10);
-    font.setBold(true);
+    const QFont font = ui::fonts::font(-1, QFont::Bold);
     QFontMetrics fm(font);
     int text_w = fm.horizontalAdvance(label) + 20;
-    int h = 24;
+    int h = qMax(24, fm.height() + 8);
 
     QPixmap pixmap(text_w, h);
     pixmap.fill(Qt::transparent);
@@ -222,8 +263,9 @@ void NodePalette::start_drag(const QString& type_id) {
     painter.drawRect(0, 0, text_w, h);
 
     // Accent left bar
-    QString accent = type_def ? type_def->accent_color : QString(ui::colors::AMBER.get());
-    painter.setBrush(QColor(accent));
+    const QColor accent = type_def ? ui::colors::legible_color(QColor(type_def->accent_color))
+                                   : QColor(ui::colors::AMBER.get());
+    painter.setBrush(accent);
     painter.drawRect(0, 0, 3, h);
 
     // Text

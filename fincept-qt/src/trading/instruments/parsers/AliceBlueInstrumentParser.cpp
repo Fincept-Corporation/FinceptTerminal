@@ -129,7 +129,7 @@ QVector<Instrument> parse_aliceblue(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("AliceBlueSource", QString("Parsed %1 AliceBlue instruments").arg(out.size()));
+    LOG_DEBUG("AliceBlueSource", QString("Parsed %1 AliceBlue instruments").arg(out.size()));
     return out;
 }
 

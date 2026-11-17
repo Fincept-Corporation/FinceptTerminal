@@ -3,7 +3,6 @@
 // Backtesting panel — Qlib-style strategy backtester with rich result display
 // (KPI cards, equity curve chart, execution cost strip, JSON export). Extracted
 // from QuantModulePanel.cpp to keep that file maintainable.
-#include "core/currency/Currency.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
@@ -13,6 +12,7 @@
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -69,14 +69,26 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
+    // One view: a complete default (8 large caps, last 3 years, top-4 momentum) runs on first show.
+    begin_view({.key = QStringLiteral("backtest"),
+                .cost = ViewCost::Fetch,
+                .loading = tr("Downloading 3 years of prices and running the backtest…"),
+                .shape = ui::LoadingSkeleton::Shape::Result});
+
+    // Labels say what qlib_advanced_backtest.py computes; the item data is the id it takes.
+    // All three rank on the trailing 20-day return (no Qlib model is involved).
     auto* strat = new QComboBox(w);
-    strat->addItems({"topk_dropout", "weight_based", "enhanced_indexing"});
+    strat->addItem(tr("Top-K dropout (20-day momentum)"), QStringLiteral("topk_dropout"));
+    strat->addItem(tr("Momentum-weighted top-K"), QStringLiteral("weight_based"));
+    strat->addItem(tr("Equal weight (all names)"), QStringLiteral("enhanced_indexing"));
     strat->setStyleSheet(combo_ss());
     combo_inputs_["bt_strategy"] = strat;
     vl->addWidget(build_input_row(tr("Strategy"), strat, w));
 
     auto* instruments = new QLineEdit(w);
-    instruments->setPlaceholderText(tr("AAPL,MSFT,GOOG,AMZN"));
+    instruments->setPlaceholderText(tr("Yahoo symbols, comma-separated (e.g. AAPL,MSFT,GOOG,AMZN)"));
+    // A complete default universe (the field used to be empty, so even a click failed).
+    instruments->setText(QStringLiteral("AAPL,MSFT,GOOG,AMZN,META,NVDA,JPM,XOM"));
     instruments->setStyleSheet(input_ss());
     text_inputs_["bt_instruments"] = instruments;
     vl->addWidget(build_input_row(tr("Instruments"), instruments, w));
@@ -103,10 +115,42 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
 
     auto* topk = new QSpinBox(w);
     topk->setRange(1, 100);
-    topk->setValue(10);
+    topk->setValue(4); // half of the default 8-name universe (10 held everything: no selection at all)
     topk->setStyleSheet(spinbox_ss());
     int_inputs_["bt_topk"] = topk;
     vl->addWidget(build_input_row(tr("Top K Positions"), topk, w));
+
+    // Names replaced per rebalance (Top-K dropout only).
+    auto* ndrop = new QSpinBox(w);
+    ndrop->setRange(1, 100);
+    ndrop->setValue(1);
+    ndrop->setStyleSheet(spinbox_ss());
+    int_inputs_["bt_ndrop"] = ndrop;
+    vl->addWidget(build_input_row(tr("N-Drop per Rebalance"), ndrop, w));
+    auto sync_ndrop = [ndrop, strat]() {
+        ndrop->setEnabled(strat->currentData().toString() == QLatin1String("topk_dropout"));
+    };
+    connect(strat, &QComboBox::currentIndexChanged, ndrop, sync_ndrop);
+    sync_ndrop();
+
+    auto* rebalance = new QSpinBox(w);
+    rebalance->setRange(1, 252);
+    rebalance->setValue(5);
+    rebalance->setSuffix(tr(" days"));
+    rebalance->setStyleSheet(spinbox_ss());
+    int_inputs_["bt_rebalance"] = rebalance;
+    vl->addWidget(build_input_row(tr("Rebalance Every"), rebalance, w));
+
+    // Charged per unit of one-way turnover at every rebalance; every metric is net of it.
+    auto* cost_bps = make_double_spin(0, 500, 10.0, 1, tr(" bps"), w);
+    cost_bps->setToolTip(tr("Commission + slippage charged on each rebalance's turnover, in basis points."));
+    double_inputs_["bt_cost_bps"] = cost_bps;
+    vl->addWidget(build_input_row(tr("Trading Cost"), cost_bps, w));
+
+    auto* rf = make_double_spin(0, 20, 2.0, 2, "%", w);
+    rf->setToolTip(tr("Annual risk-free rate subtracted from returns in the Sharpe ratio."));
+    double_inputs_["bt_rf"] = rf;
+    vl->addWidget(build_input_row(tr("Risk-Free Rate"), rf, w));
 
     auto* benchmark = new QLineEdit(w);
     // The backtest prices come from Yahoo Finance, so the benchmark must be a Yahoo symbol. The
@@ -117,7 +161,7 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->addWidget(build_input_row(tr("Benchmark"), benchmark, w));
 
     auto* run = make_run_button(tr("RUN BACKTEST"), w);
-    connect(run, &QPushButton::clicked, this, [this]() {
+    set_action(run, [this]() {
         const QJsonArray tickers = parse_csv_strings(text_inputs_["bt_instruments"]->text());
         if (tickers.isEmpty()) {
             display_error(tr("Enter at least one instrument, e.g. AAPL,MSFT,GOOG."));
@@ -130,19 +174,25 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
                               .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
             return;
         }
-        // NOTE: top_k > universe size degenerates to "hold everything" and makes
-        // the turnover / win-rate figures meaningless. Not blocked here because
-        // the shipped default (topk = 10) is larger than the 4-name placeholder
-        // universe — flagging it would reject the out-of-box configuration.
+        // NOTE: top_k >= universe size degenerates to "hold everything" (no selection); not blocked
+        // (a small test universe is legitimate), the default is 4 of 8 names.
         const int topk = int_inputs_["bt_topk"]->value();
+        const QString strategy_id = combo_inputs_["bt_strategy"]->currentData().toString();
+        const int ndrop = int_inputs_["bt_ndrop"]->value();
+        if (strategy_id == QLatin1String("topk_dropout") && ndrop > topk) {
+            display_error(tr("N-Drop (%1) cannot exceed Top K (%2).").arg(ndrop).arg(topk));
+            return;
+        }
         show_loading(tr("Backtesting %1 over %2 instrument(s), %3 → %4...")
                          .arg(combo_inputs_["bt_strategy"]->currentText())
                          .arg(tickers.size())
                          .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
         QJsonObject params;
         QJsonObject strategy_config;
-        strategy_config["type"] = combo_inputs_["bt_strategy"]->currentText();
+        strategy_config["type"] = strategy_id;
         strategy_config["topk"] = topk;
+        strategy_config["n_drop"] = ndrop;
+        strategy_config["rebalance_days"] = int_inputs_["bt_rebalance"]->value();
         params["strategy_config"] = strategy_config;
         QJsonObject dataset;
         dataset["instruments"] = text_inputs_["bt_instruments"]->text();
@@ -152,16 +202,21 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
         QJsonObject portfolio;
         portfolio["initial_capital"] = double_inputs_["bt_capital"]->value();
         portfolio["benchmark"] = text_inputs_["bt_benchmark"]->text().trimmed();
+        // One cost figure in the panel; the script splits it into commission + slippage.
+        portfolio["commission_bps"] = double_inputs_["bt_cost_bps"]->value() / 2.0;
+        portfolio["slippage_bps"] = double_inputs_["bt_cost_bps"]->value() / 2.0;
+        portfolio["risk_free_rate"] = double_inputs_["bt_rf"]->value() / 100.0;
         params["portfolio_config"] = portfolio;
         AIQuantLabService::instance().run_backtest(params);
     });
     vl->addWidget(run);
 
     auto* open_terminal = make_run_button(tr("OPEN IN BACKTESTING TERMINAL"), w);
+    open_terminal->setProperty(kAccentShapeProp, QVariant()); // outlined, not module-filled
     open_terminal->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                         "padding:8px 16px; font-size:11px; font-weight:700; }"
+                                         "padding:8px 16px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; }"
                                          "QPushButton:hover { background:%1; color:%3; }")
-                                     .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+                                     .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT()));
     connect(open_terminal, &QPushButton::clicked, this, [this]() {
         auto* instruments_edit = text_inputs_.value("bt_instruments");
         // Used to return silently — the button simply did nothing and the user
@@ -181,13 +236,8 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     });
     vl->addWidget(open_terminal);
 
-    auto* rc = new QWidget(w);
-    results_layout_ = new QVBoxLayout(rc);
-    results_layout_->setContentsMargins(0, 8, 0, 0);
-    results_layout_->setSpacing(8);
-    vl->addWidget(rc);
-    vl->addStretch();
-
+    end_view();
+    add_result_pane(vl);
     return w;
 }
 
@@ -203,7 +253,8 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
 
     const QJsonObject metrics = payload["metrics"].toObject();
     const QJsonArray curve = payload["equity_curve"].toArray();
-    const QJsonObject costs = payload["execution_cost_estimate"].toObject();
+    // Costs the run actually charged (turnover x rate at each rebalance); every metric is net of them.
+    const QJsonObject costs = payload["costs"].toObject();
     const QStringList tickers = [&]() {
         QStringList t;
         for (const auto& v : payload["tickers"].toArray())
@@ -215,7 +266,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     const QString start_date = payload["start_date"].toString();
     const QString end_date = payload["end_date"].toString();
 
-    const QColor accent = module_.color;
+    const QColor accent = ui::colors::legible_color(module_.color);
     const QString accent_hex = accent.name();
     const QString green_hex = ui::colors::POSITIVE();
     const QString red_hex = ui::colors::NEGATIVE();
@@ -255,10 +306,10 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         return c;
     };
 
-    QString strat_display = strategy;
+    QString strat_display = payload["strategy_label"].toString(strategy);
     strat_display.replace('_', ' ');
     strat_display = strat_display.toUpper();
-    header_h->addWidget(make_chip(strat_display, accent_hex, QColor(accent).darker(300).name() + "55"));
+    header_h->addWidget(make_chip(strat_display, accent_hex, ui::colors::tint(module_.color, 0.15)));
 
     header_h->addWidget(make_chip(start_date + "  →  " + end_date, text_s, bg_raised));
 
@@ -278,30 +329,48 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     };
 
     double total_ret = metrics["total_return_pct"].toDouble();
-    double ann_ret = metrics["annualised_return"].toDouble();
-    double ann_vol = metrics["annualised_vol"].toDouble();
-    double sharpe = metrics["sharpe_ratio"].toDouble();
+    const QJsonValue ann_ret_v = metrics["annualised_return"];
+    const QJsonValue ann_vol_v = metrics["annualised_vol"];
+    const QJsonValue sharpe_v = metrics["sharpe_ratio"];
+    const QJsonValue calmar_v = metrics["calmar_ratio"];
+    const QJsonValue bm_ret_v = metrics["benchmark_total_return_pct"];
+    const QJsonValue gross_ret_v = metrics["gross_total_return_pct"];
+    double ann_ret = ann_ret_v.toDouble();
+    double sharpe = sharpe_v.toDouble();
     double max_dd = metrics["max_drawdown_pct"].toDouble();
-    double calmar = metrics["calmar_ratio"].toDouble();
     double win_rate = metrics["win_rate_pct"].toDouble();
     double final_val = metrics["final_value"].toDouble();
     double init_cap = metrics["initial_capital"].toDouble();
     int t_days = metrics["trading_days"].toInt();
 
+    const QString dash = QString::fromUtf8("—");
     auto fmt_pct = [](double v) { return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(v, 0, 'f', 2); };
-    auto fmt_usd = [](double v) -> QString { return cur::money(v, /*compact=*/true); };
+    auto fmt_pct_v = [&](const QJsonValue& v) { return v.isDouble() ? fmt_pct(v.toDouble()) : dash; };
+    auto fmt_num_v = [&](const QJsonValue& v, int dec) {
+        return v.isDouble() ? QString::number(v.toDouble(), 'f', dec) : dash;
+    };
+    // The script compounds returns on the capital the user typed (labelled in the display
+    // currency), so every amount of the result is in that currency.
+    auto fmt_capital = [](double v) -> QString { return gs_fmt_money(v); };
 
     QList<KpiCard> kpis = {
-        {tr("TOTAL RETURN"), fmt_pct(total_ret), tr("%1 final").arg(fmt_usd(final_val)), total_ret >= 0, false},
-        {tr("ANN. RETURN"), fmt_pct(ann_ret), tr("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
-        {tr("SHARPE RATIO"), QString::number(sharpe, 'f', 3),
-         sharpe >= 1     ? tr("Excellent")
-         : sharpe >= 0.5 ? tr("Good")
-                         : tr("Weak"),
-         sharpe >= 0.5, false},
-        {tr("MAX DRAWDOWN"), fmt_pct(max_dd), tr("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
+        {tr("TOTAL RETURN (NET)"), fmt_pct(total_ret),
+         tr("Gross %1 · %2 final").arg(fmt_pct_v(gross_ret_v), fmt_capital(final_val)), total_ret >= 0, false},
+        {tr("ANN. RETURN"), fmt_pct_v(ann_ret_v),
+         ann_vol_v.isDouble() ? tr("Vol: %1%").arg(ann_vol_v.toDouble(), 0, 'f', 1) : tr("Vol: —"), ann_ret >= 0,
+         !ann_ret_v.isDouble()},
+        {tr("SHARPE RATIO"), fmt_num_v(sharpe_v, 3),
+         !sharpe_v.isDouble() ? tr("Undefined (flat returns)")
+         : sharpe >= 1        ? tr("Excellent · excess of risk-free")
+         : sharpe >= 0.5      ? tr("Good · excess of risk-free")
+                              : tr("Weak · excess of risk-free"),
+         sharpe >= 0.5, !sharpe_v.isDouble()},
+        {tr("MAX DRAWDOWN"), fmt_pct(max_dd), tr("Calmar: %1").arg(fmt_num_v(calmar_v, 3)), false, false},
         {tr("WIN RATE"), QString("%1%").arg(win_rate, 0, 'f', 1), tr("%1 days").arg(t_days), win_rate >= 50, false},
-        {tr("CAPITAL"), fmt_usd(init_cap), tr("Initial capital"), true, true},
+        {tr("BENCHMARK"), fmt_pct_v(bm_ret_v),
+         bm_ret_v.isDouble() ? tr("%1 total return · capital %2").arg(payload["benchmark"].toString(), fmt_capital(init_cap))
+                             : tr("No benchmark data · capital %1").arg(fmt_capital(init_cap)),
+         bm_ret_v.toDouble() >= 0, !bm_ret_v.isDouble()},
     };
 
     auto* cards_w = new QWidget;
@@ -359,6 +428,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         QPen port_pen(accent);
         port_pen.setWidth(2);
         port_series->setPen(port_pen);
+        port_series->setProperty(kSeriesColorProp, module_.color); // re-adapted on theme change
 
         {
             QString bm_col_str = QString(text_t);
@@ -376,13 +446,18 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
             QDateTime dt = QDateTime::fromString(pt["date"].toString(), "yyyy-MM-dd");
             qint64 ms = dt.toMSecsSinceEpoch();
             double pv = pt["portfolio"].toDouble();
-            double bv = pt["benchmark"].toDouble();
             port_series->append(ms, pv);
-            bm_series->append(ms, bv);
             port_upper->append(ms, pv);
             port_base->append(ms, init_cap);
-            min_val = std::min({min_val, pv, bv});
-            max_val = std::max({max_val, pv, bv});
+            min_val = std::min(min_val, pv);
+            max_val = std::max(max_val, pv);
+            // No benchmark prices → null points: leave the line out rather than draw it at 0.
+            if (pt["benchmark"].isDouble()) {
+                const double bv = pt["benchmark"].toDouble();
+                bm_series->append(ms, bv);
+                min_val = std::min(min_val, bv);
+                max_val = std::max(max_val, bv);
+            }
         }
 
         // Area series for portfolio fill
@@ -390,17 +465,22 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         QColor fill_color = accent;
         fill_color.setAlpha(30);
         area->setBrush(fill_color);
+        area->setProperty(kSeriesColorProp, module_.color);
         QPen area_pen(Qt::transparent);
         area->setPen(area_pen);
 
         auto* chart = new QChart;
         chart->addSeries(area);
         chart->addSeries(port_series);
-        chart->addSeries(bm_series);
+        if (bm_series->count() > 0)
+            chart->addSeries(bm_series);
+        else
+            delete bm_series;
         chart->setBackgroundBrush(QBrush(QColor(QString(bg_surface))));
         chart->setBackgroundRoundness(0);
         chart->setMargins(QMargins(4, 4, 4, 4));
         chart->legend()->setLabelColor(QColor(QString(text_s)));
+        chart->legend()->setFont(ui::fonts::font(-3));
         chart->legend()->setAlignment(Qt::AlignTop);
         chart->setAnimationOptions(QChart::NoAnimation);
         chart->setTitle("");
@@ -408,6 +488,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         auto* x_axis = new QDateTimeAxis;
         x_axis->setFormat("MMM yy");
         x_axis->setLabelsColor(QColor(QString(text_t)));
+        x_axis->setLabelsFont(ui::fonts::font(-3));
         x_axis->setGridLineColor(QColor(QString(border_dim)));
         x_axis->setLinePen(QPen(QColor(QString(border_med))));
         chart->addAxis(x_axis, Qt::AlignBottom);
@@ -415,8 +496,10 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         auto* y_axis = new QValueAxis;
         double padding = (max_val - min_val) * 0.05;
         y_axis->setRange(min_val - padding, max_val + padding);
-        y_axis->setLabelFormat(cur::symbol() + "%.0f");
+        y_axis->setLabelFormat(
+            ui::formatting::axis_printf_format(ui::formatting::display_currency(), 0)); // capital currency
         y_axis->setLabelsColor(QColor(QString(text_t)));
+        y_axis->setLabelsFont(ui::fonts::font(-3));
         y_axis->setGridLineColor(QColor(QString(border_dim)));
         y_axis->setLinePen(QPen(QColor(QString(border_med))));
         chart->addAxis(y_axis, Qt::AlignLeft);
@@ -433,7 +516,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
             QString("background:%1; border:1px solid %2; border-radius:4px;").arg(bg_surface, border_dim));
 
         // Chart title label above
-        auto* chart_title = new QLabel(tr("EQUITY CURVE"));
+        auto* chart_title = new QLabel(tr("EQUITY CURVE  ·  NET OF TRADING COSTS"));
         chart_title->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
                                            "letter-spacing:1px; padding:8px 0 2px 0;")
                                        .arg(text_s)
@@ -481,23 +564,30 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         return sep;
     }());
 
-    add_cost_item(tr("Commission"), tr("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
-    add_cost_item(tr("Expected Slippage"), tr("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
-    if (costs.contains("market_impact_bps"))
-        add_cost_item(tr("Market Impact"), tr("%1 bps").arg(costs["market_impact_bps"].toDouble(), 0, 'f', 2));
+    auto cost_pct = [&](const char* key, int dec) {
+        const QJsonValue v = costs.value(QLatin1String(key));
+        return v.isDouble() ? QStringLiteral("%1%").arg(v.toDouble(), 0, 'f', dec) : dash;
+    };
+    add_cost_item(tr("Rate"), tr("%1 bps / turnover")
+                                  .arg(costs["commission_bps"].toDouble() + costs["slippage_bps"].toDouble(), 0, 'f', 1));
+    add_cost_item(tr("Rebalances"), QString::number(costs["rebalances"].toInt()));
+    add_cost_item(tr("Avg Turnover"), cost_pct("avg_turnover_per_rebalance_pct", 1));
+    add_cost_item(tr("Annual Turnover"), cost_pct("annual_turnover_pct", 0));
+    add_cost_item(tr("Total Cost Drag"), cost_pct("total_cost_drag_pct", 2));
     cost_h->addStretch();
     results_layout_->addWidget(cost_w);
 
     // ── 5. Export button ───────────────────────────────────────────────────
     auto* export_btn = new QPushButton(tr("EXPORT JSON"));
     export_btn->setCursor(Qt::PointingHandCursor);
-    export_btn->setFixedHeight(28);
+    export_btn->setMinimumHeight(28);
     export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "font-size:%3px; font-family:%4; padding:0 14px; border-radius:3px; }"
-                                      "QPushButton:hover { background:rgba(255,255,255,0.05); }")
+                                      "QPushButton:hover { background:%5; }")
                                   .arg(accent_hex, border_dim)
                                   .arg(fs_sm)
-                                  .arg(font_data));
+                                  .arg(font_data)
+                                  .arg(ui::colors::overlay(0.05)));
 
     QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
@@ -512,6 +602,11 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
             services::FileManagerService::instance().register_file(
                 fname, module_.label + "_backtest.json", QFileInfo(dest).size(), "application/json", "ai_quant_lab");
             LOG_INFO("AIQuantLab", "Backtest exported: " + fname);
+        } else {
+            LOG_WARN("AIQuantLab", fincept::logf("Result export could not be written",
+                                                 {{"path", fincept::log_path(dest)}, {"error", f.errorString()}}));
+            if (status_label_)
+                status_label_->setText(tr("Export failed: %1").arg(f.errorString()));
         }
     });
 

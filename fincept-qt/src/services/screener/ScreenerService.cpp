@@ -234,7 +234,7 @@ QString ScreenerService::run(const ScreenerQuery& q_in, bool force) {
                 emit self->run_failed(key, parse_error);
                 return;
             }
-            LOG_INFO(screener_svc_d::kScreenerServiceTag, QStringLiteral("Screen '%1': %2 rows of %3 matches in %4 ms")
+            LOG_DEBUG(screener_svc_d::kScreenerServiceTag, QStringLiteral("Screen '%1': %2 rows of %3 matches in %4 ms")
                                                    .arg(result.title)
                                                    .arg(result.rows.size())
                                                    .arg(result.total)

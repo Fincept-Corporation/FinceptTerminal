@@ -1,4 +1,5 @@
 #include "screens/crypto_center/panels/LockPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -9,6 +10,10 @@
 #include "services/wallet/StakingService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatSettings.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/formatting/ParseAmount.h"
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
@@ -34,6 +39,8 @@
 #include <cmath>
 #include <memory>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
@@ -41,30 +48,24 @@ namespace {
 constexpr int kLockStatusPollMs = 1500;
 constexpr int kLockStatusPollMaxAttempts = 40; // 60 s of polling
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-QString format_token(double v, int dp = 0) {
+/// A $FNCPT / veFNCPT amount: a quantity of the token, never money.
+QString lkp_format_token(double v, int dp = 0) {
     if (v <= 0.0)
         return QStringLiteral("0");
-    return QLocale::system().toString(v, 'f', dp);
+    return cc_fmt::quantity(v, dp);
 }
 
-QString format_usd(double v, int dp = 0) {
-    if (v <= 0.0)
-        return QStringLiteral("$0");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', dp));
-}
-
-double atomic_to_ui(quint64 raw, int decimals) {
+double lkp_atomic_to_ui(quint64 raw, int decimals) {
     return static_cast<double>(raw) / std::pow(10.0, std::max(0, decimals));
 }
 
 /// Format a token amount for injection into the amount QLineEdit.
 /// Floors (never rounds up past the held balance) and omits group separators
-/// so the value round-trips through `QLocale::toDouble()` unchanged. The old
-/// `format_token(balance, 0)` rounded half-up, so MAX on 12 304.7 $FNCPT
+/// so the value round-trips through `lock_parse_amount()` unchanged (the
+/// user's number locale, as parse_amount() reads it). The old
+/// `lkp_format_token(balance, 0)` rounded half-up, so MAX on 12 304.7 $FNCPT
 /// produced "12305" and `recompute_preview()` then reported
 /// "Amount exceeds available $FNCPT" — the MAX button could not be used.
 QString lock_amount_for_input(double v, int decimals) {
@@ -77,9 +78,19 @@ QString lock_amount_for_input(double v, int decimals) {
         dp = 9;
     const double scale = std::pow(10.0, dp);
     const double floored = std::floor(v * scale) / scale;
-    QLocale loc = QLocale::system();
+    QLocale loc = cc_fmt::FormatSettings::instance().locale();
     loc.setNumberOptions(loc.numberOptions() | QLocale::OmitGroupSeparator);
     return loc.toString(floored, 'f', dp);
+}
+
+/// The typed lock amount, a $FNCPT quantity in the user's number format. A
+/// currency in the text is refused: this is a token amount, not money.
+bool lock_parse_amount(const QString& text, double* out) {
+    const cc_fmt::ParsedAmount a = cc_fmt::parse_amount(text);
+    if (!a.ok() || a.currency_in_text)
+        return false;
+    *out = *a.value;
+    return true;
 }
 
 } // namespace
@@ -92,6 +103,13 @@ LockPanel::LockPanel(QWidget* parent) : QWidget(parent) {
     auto& svc = fincept::wallet::WalletService::instance();
     connect(&svc, &fincept::wallet::WalletService::wallet_connected, this, &LockPanel::on_wallet_connected);
     connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this, &LockPanel::on_wallet_disconnected);
+    // A number / currency format change re-renders the balance line and the preview
+    // from the values already held (no re-fetch).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!current_pubkey_.isEmpty())
+            available_label_->setText(tr("Available: %1 $FNCPT").arg(lkp_format_token(fncpt_balance_ui_, 0)));
+        recompute_preview();
+    });
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -140,10 +158,16 @@ void LockPanel::build_ui() {
         col_l->addWidget(amount_caption_);
         amount_input_ = new QLineEdit(body);
         amount_input_->setObjectName(QStringLiteral("lockPanelInput"));
-        amount_input_->setFixedHeight(34);
+        amount_input_->setMinimumHeight(34);
         amount_input_->setPlaceholderText(QStringLiteral("0"));
         auto* validator = new QDoubleValidator(0.0, 1e12, 6, this);
         validator->setNotation(QDoubleValidator::StandardNotation);
+        // The user's number format (decimal / group marks), as lock_parse_amount() reads it —
+        // not the system locale; it follows a change in Settings.
+        validator->setLocale(cc_fmt::FormatSettings::instance().locale());
+        cc_fmt::on_format_changed(this, [validator]() {
+            validator->setLocale(cc_fmt::FormatSettings::instance().locale());
+        });
         amount_input_->setValidator(validator);
         col_l->addWidget(amount_input_);
         row->addLayout(col_l, 1);
@@ -249,6 +273,7 @@ void LockPanel::build_ui() {
         status_label_->setObjectName(QStringLiteral("lockPanelMeta"));
         lock_button_ = new QPushButton(tr("LOCK"), body);
         lock_button_->setObjectName(QStringLiteral("lockPanelPrimaryButton"));
+        lock_button_->setProperty("fincept_agent_risk", "money");
         lock_button_->setFixedHeight(34);
         lock_button_->setCursor(Qt::PointingHandCursor);
         lock_button_->setEnabled(false);
@@ -300,49 +325,49 @@ void LockPanel::apply_theme() {
     const QString font = font_stack();
 
     const QString ss =
-        QStringLiteral("QWidget#lockPanel { background:%1; }"
+        QString("QWidget#lockPanel { background:%1; }"
                        "QWidget#lockPanelHead { background:%2; border-bottom:1px solid %3; }"
-                       "QLabel#lockPanelTitle { color:%4; font-family:%5; font-size:11px;"
+                       "QLabel#lockPanelTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                       "QLabel#lockPanelHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                       "QLabel#lockPanelHeadCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
                        "QWidget#lockPanelBody { background:%1; }"
-                       "QLabel#lockPanelCaption { color:%6; font-family:%5; font-size:9px;"
+                       "QLabel#lockPanelCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-                       "QLabel#lockPanelMeta { color:%6; font-family:%5; font-size:10px;"
+                       "QLabel#lockPanelMeta { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  background:transparent; }"
                        "QLineEdit#lockPanelInput { background:%2; color:%7; border:1px solid %3;"
-                       "  font-family:%5; font-size:16px; padding:0 8px; }"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(2) + "px; padding:0 8px; }"
                        "QLineEdit#lockPanelInput:focus { border-color:%4; }"
                        "QLabel#lockPanelTokenChip { background:%8; color:%4; border:1px solid %3;"
-                       "  font-family:%5; font-size:13px; font-weight:700; letter-spacing:1.2px; }"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; letter-spacing:1.2px; }"
 
                        "QRadioButton#lockPanelDurationRadio { color:%7; font-family:%5;"
-                       "  font-size:11px; font-weight:700; letter-spacing:1px;"
+                       "  font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;"
                        "  background:transparent; padding:6px 10px; border:1px solid %3; }"
                        "QRadioButton#lockPanelDurationRadio:checked { color:%4; border-color:%12;"
-                       "  background:rgba(217,119,6,0.10); }"
+                       "  background:" + ui::colors::alpha(AMBER, 0.10) + "; }"
                        "QRadioButton#lockPanelDurationRadio::indicator { width:0; height:0; }"
 
                        "QFrame#lockPanelPreviewBlock { background:%8; border:1px solid %3; }"
-                       "QLabel#lockPanelPreviewValue { color:%7; font-family:%5; font-size:11px;"
+                       "QLabel#lockPanelPreviewValue { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }"
 
-                       "QFrame#lockPanelErrorStrip { background:rgba(220,38,38,0.10);"
+                       "QFrame#lockPanelErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                        "  border:1px solid %9; }"
-                       "QLabel#lockPanelErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                       "QLabel#lockPanelErrorIcon { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                        "  font-weight:700; background:transparent; }"
-                       "QLabel#lockPanelErrorText { color:%9; font-family:%5; font-size:11px;"
+                       "QLabel#lockPanelErrorText { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }"
 
                        "QPushButton#lockPanelButton { background:%8; color:%6; border:1px solid %3;"
-                       "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px;"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;"
                        "  padding:0 14px; }"
                        "QPushButton#lockPanelButton:hover { background:%10; color:%7; border-color:%11; }"
-                       "QPushButton#lockPanelPrimaryButton { background:rgba(217,119,6,0.10); color:%4;"
-                       "  border:1px solid %12; font-family:%5; font-size:12px; font-weight:700;"
+                       "QPushButton#lockPanelPrimaryButton { background:" + ui::colors::alpha(AMBER, 0.10) + "; color:%4;"
+                       "  border:1px solid %12; font-family:%5; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700;"
                        "  letter-spacing:1.5px; padding:0 18px; }"
-                       "QPushButton#lockPanelPrimaryButton:hover { background:%4; color:%1; }"
+                       "QPushButton#lockPanelPrimaryButton:hover { background:%4; color:" + QString(TEXT_ON_ACCENT()) + "; }"
                        "QPushButton#lockPanelPrimaryButton:disabled { background:%8; color:%6;"
                        "  border-color:%3; }")
             .arg(BG_BASE(),                  // %1
@@ -353,10 +378,10 @@ void LockPanel::apply_theme() {
                  TEXT_TERTIARY(),            // %6
                  TEXT_PRIMARY(),             // %7
                  BG_RAISED(),                // %8
-                 NEGATIVE())                 // %9
+                 DANGER())                   // %9
             .arg(BG_HOVER(),                 // %10
                  BORDER_BRIGHT(),            // %11
-                 QStringLiteral("#78350f")); // %12 darker amber
+                 AMBER_DIM());               // %12 darker amber
     setStyleSheet(ss);
 }
 
@@ -448,7 +473,7 @@ void LockPanel::retranslateUi() {
         if (current_pubkey_.isEmpty()) {
             available_label_->setText(tr("Available: —"));
         } else {
-            available_label_->setText(tr("Available: %1 $FNCPT").arg(format_token(fncpt_balance_ui_, 0)));
+            available_label_->setText(tr("Available: %1 $FNCPT").arg(lkp_format_token(fncpt_balance_ui_, 0)));
         }
     }
 
@@ -503,7 +528,7 @@ void LockPanel::on_balance_update(const QVariant& v) {
     const auto bal = v.value<fincept::wallet::WalletBalance>();
     fncpt_balance_ui_ = bal.fncpt_ui();
     fncpt_decimals_ = bal.fncpt_decimals();
-    available_label_->setText(tr("Available: %1 $FNCPT").arg(format_token(fncpt_balance_ui_, 0)));
+    available_label_->setText(tr("Available: %1 $FNCPT").arg(lkp_format_token(fncpt_balance_ui_, 0)));
     recompute_preview();
 }
 
@@ -569,8 +594,8 @@ LockPanel::Duration LockPanel::current_duration() const {
 }
 
 void LockPanel::recompute_preview() {
-    bool ok = false;
-    const double amount_ui = QLocale::system().toDouble(amount_input_->text(), &ok);
+    double amount_ui = 0.0;
+    const bool ok = lock_parse_amount(amount_input_->text(), &amount_ui);
     const Duration d = current_duration();
     const double mult = fincept::wallet::StakingService::multiplier_for(d);
     const QString dur_label = fincept::wallet::StakingService::label_for(d);
@@ -600,10 +625,10 @@ void LockPanel::recompute_preview() {
     // WEIGHT line: "1,000 veFNCPT × 0.25 (1 yr) = 250 veFNCPT"
     const double new_weight_ui = amount_ui * mult;
     weight_calc_->setText(QStringLiteral("%1 × %2 (%3) = %4 veFNCPT")
-                              .arg(format_token(amount_ui, 0))
-                              .arg(QString::number(mult, 'f', 4))
+                              .arg(lkp_format_token(amount_ui, 0))
+                              .arg(cc_fmt::number(mult, 4))
                               .arg(dur_label)
-                              .arg(format_token(new_weight_ui, 1)));
+                              .arg(lkp_format_token(new_weight_ui, 1)));
 
     const quint64 new_weight_raw = static_cast<quint64>(new_weight_ui * std::pow(10.0, fncpt_decimals_));
 
@@ -628,7 +653,7 @@ void LockPanel::recompute_preview() {
     // topic from the program), so we model the conservative case
     // "user is the only locker" — projection ≤ this in any real scenario.
     constexpr double kStakerShare = 0.25;
-    const double total_user_weight_after = atomic_to_ui(current_user_weight_raw_, fncpt_decimals_) + new_weight_ui;
+    const double total_user_weight_after = lkp_atomic_to_ui(current_user_weight_raw_, fncpt_decimals_) + new_weight_ui;
     const double distribution = weekly_revenue_usd_ * kStakerShare;
     const double est_weekly = (total_user_weight_after > 0.0) ? distribution : 0.0;
     // Real-yield % expressed against the user's USD stake value at lock time.
@@ -641,11 +666,13 @@ void LockPanel::recompute_preview() {
         // real yield" reads as a forecast and is the kind of number people
         // make irreversible 4-year lock decisions on. Prefix DEMO when the
         // revenue feed is the producer's built-in mock.
-        QString yield_text = tr("≤ %1 / week (USDC) — ≤ %2% weekly at %3 stake "
+        // The yield is paid in USDC (its own currency, named by the amount); the
+        // stake is valued at the $FNCPT spot price, which the feed quotes in USD.
+        QString yield_text = tr("≤ %1 / week — ≤ %2 weekly at %3 stake "
                                 "· upper bound, assumes no other lockers")
-                                 .arg(format_usd(est_weekly, 0))
-                                 .arg(QString::number(pct_weekly, 'f', 2))
-                                 .arg(format_usd(stake_usd, 0));
+                                 .arg(cc_fmt::money(est_weekly, QStringLiteral("USDC"), cc_fmt::Compact::None, 0))
+                                 .arg(cc_fmt::pct(pct_weekly, 2, /*signed_=*/false))
+                                 .arg(cc_fmt::money(stake_usd, QStringLiteral("USD"), cc_fmt::Compact::None, 0));
         if (revenue_is_mock_)
             yield_text = tr("DEMO · ") + yield_text;
         est_yield_->setText(yield_text);
@@ -803,8 +830,8 @@ void LockPanel::on_lock_clicked() {
         show_error_strip(fincept::wallet::StakingService::not_live_reason());
         return;
     }
-    bool ok = false;
-    const double amount_ui = QLocale::system().toDouble(amount_input_->text(), &ok);
+    double amount_ui = 0.0;
+    const bool ok = lock_parse_amount(amount_input_->text(), &amount_ui);
     if (!ok || amount_ui <= 0.0)
         return;
     const Duration d = current_duration();
@@ -847,7 +874,7 @@ void LockPanel::on_lock_clicked() {
                                     "program. The terminal does not hold your funds — the on-chain "
                                     "program does, and only releases them after the unlock date.");
             summary.rows.append(
-                {self->tr("AMOUNT"), QStringLiteral("%1 $FNCPT").arg(format_token(amount_ui, 0)), true});
+                {self->tr("AMOUNT"), QStringLiteral("%1 $FNCPT").arg(lkp_format_token(amount_ui, 0)), true});
             summary.rows.append({self->tr("DURATION"), fincept::wallet::StakingService::label_for(d), true});
             // The exact unlock instant, not just "4 YR". This is the single
             // most consequential fact about an irreversible lock and it was
@@ -860,7 +887,7 @@ void LockPanel::on_lock_clicked() {
             summary.rows.append({self->tr("WALLET"), self->current_pubkey_, true});
             const double mult = fincept::wallet::StakingService::multiplier_for(d);
             summary.rows.append(
-                {self->tr("WEIGHT"), QStringLiteral("%1 veFNCPT").arg(format_token(amount_ui * mult, 1)), true});
+                {self->tr("WEIGHT"), QStringLiteral("%1 veFNCPT").arg(lkp_format_token(amount_ui * mult, 1)), true});
             summary.warnings.append(self->tr("Locked $FNCPT cannot be withdrawn before the unlock date. "
                                              "If you need liquidity sooner, do not lock."));
             summary.primary_button_text = self->tr("LOCK");
@@ -885,7 +912,9 @@ void LockPanel::on_lock_clicked() {
                             return;
                         }
                         const auto sig = sr.value();
-                        LOG_INFO("LockPanel", "submitted: " + sig);
+                        // A money move: audit line (wallet masked; the tx signature is public).
+                        LOG_AUDIT("Orders", "Wallet transaction submitted",
+                                  {{"kind", "lock"}, {"wallet", log_mask(self->current_pubkey_)}, {"signature", sig}});
                         // Stay busy while the signature is polled: the previous
                         // "Sent … (not yet confirmed)" + optimistic refresh could
                         // not tell a landed lock from one reverted on-chain, and

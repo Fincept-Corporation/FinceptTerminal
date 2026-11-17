@@ -40,6 +40,7 @@ class DashboardStatusBar : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -58,6 +59,8 @@ class DashboardStatusBar : public QWidget {
     void update_feed_lamps();
     void on_health(const QVariant& v);
     void set_api_state(int state); // -1 unknown/checking, 0 offline, 1 online
+    /// "● READY / OFFLINE / CHECKING" from api_state_.
+    void update_ready_label();
     void toggle_notif_panel();
     void retranslateUi();
     void hub_subscribe();
@@ -66,6 +69,14 @@ class DashboardStatusBar : public QWidget {
     /// the bar-level stylesheet carries every colour, so no per-label
     /// setStyleSheet (and no CSS re-parse) happens on updates.
     static void set_tone(QWidget* w, const char* prop, const QString& value);
+
+    /// Show as many of the left-hand groups (feed lamps, session, layout, API)
+    /// as fit whole; the rest are hidden rather than cut mid-word.
+    void fit_left_groups();
+    QWidget* left_ = nullptr;
+    /// Left-hand groups in the order they give way (last listed goes first),
+    /// each with the separator in front of it.
+    QVector<QVector<QWidget*>> left_groups_;
 
     QLabel* version_label_ = nullptr;
     QLabel* uptime_label_ = nullptr;

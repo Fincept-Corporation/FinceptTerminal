@@ -4,9 +4,11 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
+#include "screens/common/CommandRows.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -22,9 +24,10 @@ using namespace fincept::services::quant;
 AIQuantLabScreen::AIQuantLabScreen(QWidget* parent) : QWidget(parent) {
     modules_ = all_quant_modules();
     build_ui();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { refresh_theme(); });
-    LOG_INFO("AIQuantLab", "Screen constructed");
+    // Sheets and the sidebar widths are re-derived once a theme / font change has settled (sizes
+    // must not be touched inside theme_changed).
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
+    LOG_DEBUG("AIQuantLab", "Screen constructed");
 }
 
 void AIQuantLabScreen::showEvent(QShowEvent* e) {
@@ -279,7 +282,7 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
 
 QWidget* AIQuantLabScreen::build_status_bar() {
     status_bar_ = new QWidget(this);
-    status_bar_->setFixedHeight(24);
+    status_bar_->setMinimumHeight(24);
 
     auto* hl = new QHBoxLayout(status_bar_);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -310,16 +313,21 @@ void AIQuantLabScreen::refresh_theme() {
     // Root
     setStyleSheet(QString("background:%1;").arg(BG_BASE()));
 
+    // Sidebar widths were chosen for the default font size; scale them with it
+    // so module names are not clipped at a larger one.
+    left_panel_->setFixedWidth(200 * font_px() / ui::ThemeManager::kDefaultFontPx);
+    right_panel_->setFixedWidth(220 * font_px() / ui::ThemeManager::kDefaultFontPx);
+
     // Top bar
-    top_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
+    top_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_RAISED(), BORDER_MED()));
 
     // Brand chip
     // findChild is safe here — it's a named child of top_bar_
     if (auto* brand = top_bar_->findChild<QLabel*>("aqBrand"))
         brand->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px;"
-                                     "padding:3px 10px; background:rgba(157,78,221,0.10);"
-                                     "border:1px solid rgba(157,78,221,0.28); border-radius:2px;")
-                                 .arg(INFO(), TINY));
+                                     "padding:3px 10px; background:%3;"
+                                     "border:1px solid %4; border-radius:2px;")
+                                 .arg(INFO(), px(-2), alpha(INFO, 0.10), alpha(INFO, 0.28)));
 
     if (auto* div = top_bar_->findChild<QWidget*>("aqTopDiv"))
         div->setStyleSheet(QString("background:%1;").arg(BORDER_DIM()));
@@ -332,67 +340,67 @@ void AIQuantLabScreen::refresh_theme() {
 
     if (auto* lbl = top_bar_->findChild<QLabel*>("aqModuleCount"))
         lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
-                                   "padding:3px 8px; background:rgba(22,163,74,0.08);"
-                                   "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
-                               .arg(POSITIVE(), TINY));
+                                   "padding:3px 8px; background:%3;"
+                                   "border:1px solid %4; border-radius:2px;")
+                               .arg(POSITIVE(), px(-2), alpha(POSITIVE, 0.08), alpha(POSITIVE, 0.25)));
 
     // Left sidebar
-    left_panel_->setStyleSheet(QString("background:%1; border-right:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+    left_panel_->setStyleSheet(QString("background:%1; border-right:1px solid %2;").arg(BG_SURFACE(), BORDER_MED()));
 
     if (auto* hdr = left_panel_->findChild<QWidget*>("aqSidebarHeader"))
-        hdr->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+        hdr->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_MED()));
 
     sidebar_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), px(-2)));
 
     // Category labels
     for (auto* lbl : left_panel_->findChildren<QLabel*>("aqCatLabel"))
         lbl->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px;"
                                    "padding:8px 12px 4px 12px; letter-spacing:1px; background:transparent;")
-                               .arg(TEXT_TERTIARY(), TINY));
+                               .arg(TEXT_TERTIARY(), px(-2)));
 
     // Right sidebar
-    right_panel_->setStyleSheet(QString("background:%1; border-left:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+    right_panel_->setStyleSheet(QString("background:%1; border-left:1px solid %2;").arg(BG_SURFACE(), BORDER_MED()));
 
     if (auto* t = right_panel_->findChild<QLabel*>("aqInfoTitle"))
-        t->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), TINY));
+        t->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), px(-2)));
 
     right_category_->setStyleSheet(
-        QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_SECONDARY(), TINY));
+        QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_SECONDARY(), px(-2)));
 
-    right_desc_->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), TINY));
+    right_desc_->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), px(-2)));
 
     right_script_->setStyleSheet(QString("color:%1; font-size:%2px; padding:6px;"
                                          "background:%3; border:1px solid %4; border-radius:2px;")
-                                     .arg(TEXT_TERTIARY(), QString::number(TINY), BG_RAISED(), BORDER_DIM()));
+                                     .arg(TEXT_SECONDARY(), px(-2), BG_RAISED(), BORDER_DIM()));
 
     stats_card_->setStyleSheet(
         QString("background:%1; border:1px solid %2; border-radius:3px;").arg(BG_RAISED(), BORDER_DIM()));
 
     stats_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:0.5px;").arg(CYAN(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:0.5px;").arg(CYAN(), px(-2)));
 
     for (auto* lbl : stats_card_->findChildren<QLabel*>("aqStatLabel"))
-        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_SECONDARY(), px(-2)));
 
     for (auto* val : stats_card_->findChildren<QLabel*>("aqStatValue"))
         val->setStyleSheet(
-            QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), TINY));
+            QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), px(-2)));
 
     // Status bar
-    status_bar_->setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
+    status_bar_->setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(BG_RAISED(), BORDER_MED()));
 
     for (auto* lbl : status_bar_->findChildren<QLabel*>("aqStatusLabel"))
-        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_SECONDARY(), px(-2)));
 
     status_engine_val_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), px(-2)));
 
     status_ready_lbl_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), px(-2)));
 
     // Re-apply selection styles so active module stays highlighted after theme switch
-    update_sidebar_selection();
+    update_sidebar_selection(/*all=*/true);
 }
 
 // ── Lazy panel construction ───────────────────────────────────────────────────
@@ -401,10 +409,12 @@ QuantModulePanel* AIQuantLabScreen::get_or_create_panel(int index) {
     if (panels_.contains(index))
         return panels_[index];
 
-    auto* panel = new QuantModulePanel(modules_[index], nullptr);
+    // Built under its final parent: an unparented panel was polished once alone and again, whole,
+    // when the stack adopted it.
+    auto* panel = new QuantModulePanel(modules_[index], content_stack_);
     panels_[index] = panel;
     content_stack_->addWidget(panel);
-    LOG_INFO("AIQuantLab", "Created panel for: " + modules_[index].id);
+    LOG_DEBUG("AIQuantLab", "Created panel for: " + modules_[index].id);
     return panel;
 }
 
@@ -423,40 +433,53 @@ void AIQuantLabScreen::on_module_selected(int index) {
     ScreenStateManager::instance().notify_changed(this);
 }
 
-void AIQuantLabScreen::update_sidebar_selection() {
+void AIQuantLabScreen::update_sidebar_selection(bool all) {
     using namespace ui::colors;
 
+    // A module click restyles the two buttons whose state changed (it used to restyle all 46 —
+    // 46 stylesheet parses and re-polishes per click); a theme change restyles every one.
+    const int previous = styled_index_;
+    styled_index_ = active_index_;
+    auto needs_style = [&](int i) { return all || i == active_index_ || i == previous; };
+
+    // Module colours are category colours, not tokens: text and borders use them made
+    // legible on the active theme, washes are tints of them into the background.
     for (int i = 0; i < module_buttons_.size(); ++i) {
+        if (!needs_style(i))
+            continue;
         const auto& mod = modules_[i];
         const bool active = (i == active_index_);
-        const QString rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
+        const QString fg = legible(mod.color);
+        const QString wash = tint(mod.color, 0.08);
 
         module_buttons_[i]->setStyleSheet(QString("QPushButton { text-align:left; padding:6px 12px; border:none;"
-                                                  "border-left:2px solid %1; color:%2; font-size:10px;"
+                                                  "border-left:2px solid %1; color:%2; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                                   "font-weight:%3; background:%4; }"
-                                                  "QPushButton:hover { background:rgba(%5,0.08); color:%6; }")
-                                              .arg(active ? mod.color.name() : "transparent")
-                                              .arg(active ? mod.color.name() : QString(TEXT_SECONDARY()))
+                                                  "QPushButton:hover { background:%5; color:%6; }")
+                                              .arg(active ? fg : "transparent")
+                                              .arg(active ? fg : QString(TEXT_SECONDARY()))
                                               .arg(active ? "700" : "400")
-                                              .arg(active ? QString("rgba(%1,0.08)").arg(rgb) : "transparent")
-                                              .arg(rgb, mod.color.name()));
+                                              .arg(active ? wash : "transparent")
+                                              .arg(wash, fg));
     }
 
     for (int i = 0; i < badge_buttons_.size(); ++i) {
+        if (!needs_style(i))
+            continue;
         const auto& mod = modules_[i];
         const bool active = (i == active_index_);
-        const QString rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
+        const QString fg = legible(mod.color);
 
         badge_buttons_[i]->setStyleSheet(
-            QString("QPushButton { color:%1; font-size:9px; font-weight:%2;"
+            QString("QPushButton { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:%2;"
                     "padding:0 8px; border:1px solid %3; border-radius:2px; background:%4; }"
-                    "QPushButton:hover { color:%5; border-color:rgba(%6,0.4);"
-                    "background:rgba(%6,0.08); }")
-                .arg(active ? mod.color.name() : QString(TEXT_TERTIARY()))
+                    "QPushButton:hover { color:%5; border-color:%6;"
+                    "background:%7; }")
+                .arg(active ? fg : QString(TEXT_SECONDARY()))
                 .arg(active ? "700" : "400")
-                .arg(active ? QString("rgba(%1,0.35)").arg(rgb) : "transparent")
-                .arg(active ? QString("rgba(%1,0.12)").arg(rgb) : "transparent")
-                .arg(mod.color.name(), rgb));
+                .arg(active ? tint(mod.color, 0.35) : "transparent")
+                .arg(active ? tint(mod.color, 0.12) : "transparent")
+                .arg(fg, tint(mod.color, 0.40), tint(mod.color, 0.08)));
     }
 }
 
@@ -464,7 +487,8 @@ void AIQuantLabScreen::update_right_panel() {
     const auto& mod = modules_[active_index_];
     right_title_->setText(mod.label.toUpper());
     right_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:11px; background:transparent;").arg(mod.color.name()));
+        QString("color:%1; font-weight:700; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent;")
+            .arg(ui::colors::legible(mod.color)));
     right_category_->setText(tr("%1 module").arg(QString(mod.category).replace('_', '/')));
     right_desc_->setText(mod.description);
     right_script_->setText(tr("Script: %1").arg(mod.script));
@@ -527,5 +551,162 @@ void AIQuantLabScreen::restore_state(const QVariantMap& state) {
         on_module_selected(idx);
     }
 }
+
+bool AIQuantLabScreen::open_section(const QString& section, const QString& focus) {
+    Q_UNUSED(focus); // the module forms take no focus from a link
+    QString key = section.trimmed();
+    if (key.isEmpty())
+        return true;
+    QString rest;
+    if (command_rows::split_kind(key, "module", &rest))
+        key = rest;
+    QString view;
+    const qsizetype slash = key.indexOf(QLatin1Char('/'));
+    if (slash >= 0) {
+        view = key.mid(slash + 1).trimmed();
+        key = key.left(slash).trimmed();
+    }
+    int index = -1;
+    for (int i = 0; i < modules_.size() && index < 0; ++i)
+        if (modules_[i].id == key)
+            index = i;
+    for (int i = 0; i < modules_.size() && index < 0; ++i)
+        if (modules_[i].id.compare(key, Qt::CaseInsensitive) == 0)
+            index = i;
+    if (index < 0)
+        return false;
+    // A view link checks the view first (the panel is built lazily, as a click would; it is not shown),
+    // so an unknown view leaves the module on screen as it was.
+    if (!view.isEmpty() && !get_or_create_panel(index)->open_view_tab(view, /*select=*/false))
+        return false;
+    first_show_ = false; // the first showEvent() must not replace this module with the first one
+    if (index != active_index_ || content_stack_->currentWidget() != panels_.value(index))
+        on_module_selected(index); // the module button's click path
+    if (!view.isEmpty())
+        panels_.value(index)->open_view_tab(view, /*select=*/true);
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+struct AqlLinkRow {
+    const char* section;
+    const char* title;
+    const char* keywords;
+};
+
+// One row per module (ids as all_quant_modules(); the seed's "ai_quant_lab.<id>" rows are replaced).
+const AqlLinkRow kAqlLinkModules[] = {
+    {"factor_discovery", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Factor discovery"),
+     "alpha factors, factor mining, qlib, factor library, alpha158"},
+    {"model_library", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Model library"),
+     "ml models, machine learning, lightgbm, xgboost, lstm, transformer, train model"},
+    {"backtesting", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Quant Lab backtesting"),
+     "backtest, qlib backtest, portfolio backtest, strategy test"},
+    {"live_signals", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Live signals"),
+     "trading signals, predictions, model signals, feature importance"},
+    {"deep_agent", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Deep research agent"),
+     "deep agent, rd-agent, ai research agent, llm agent, autonomous research"},
+    {"rl_trading", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Reinforcement learning trading"),
+     "rl trading, reinforcement learning, ppo, dqn, a2c, sac, td3, trading agent"},
+    {"online_learning", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Online learning"),
+     "incremental learning, concept drift, streaming model"},
+    {"meta_learning", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Meta learning"),
+     "few-shot learning, automl, model selection, ensemble, hyperparameter tuning"},
+    {"hft", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "High-frequency trading"),
+     "hft, order book, market making, microstructure, slippage, latency"},
+    {"rolling_retraining", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Rolling retraining"),
+     "retrain, rolling window, walk forward, model refresh"},
+    {"advanced_models", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Deep learning models"),
+     "advanced models, lstm, gru, transformer, pytorch, neural network, deep learning"},
+    {"feature_engineering", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Feature engineering"),
+     "features, technical indicators, feature selection, expression engine"},
+    {"portfolio_opt", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Portfolio optimization"),
+     "optimization, black-litterman, hrp, min variance, max sharpe, efficient frontier"},
+    {"factor_evaluation", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Factor evaluation"),
+     "ic, information coefficient, factor returns, factor scoring, combine factors"},
+    {"strategy_builder", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Quant strategy builder"),
+     "strategy, topk dropout, enhanced indexing, risk parity, mean variance"},
+    {"data_processors", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Data processors"),
+     "normalize, normalization, zscore, winsorize, cs rank, fillna, preprocessing, pipeline"},
+    {"quant_reporting", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Quant reports"),
+     "reporting, ic report, cumulative returns, risk report, model performance"},
+    {"cfa_quant", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "CFA quant methods"),
+     "cfa, trend analysis, arima, pca, bootstrap, ml prediction"},
+    {"gs_quant", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "GS Quant risk"),
+     "gs quant, goldman sachs, var, greeks, component var, stress test, risk metrics"},
+    {"statsmodels", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Statsmodels"),
+     "statistics, ols, regression, arima, stationarity, adf, granger, cointegration, acf, pacf"},
+    {"functime", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Functime forecasting"),
+     "functime, forecasting, anomaly detection, seasonality, prediction intervals"},
+    {"fortitudo", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Fortitudo portfolio tools"),
+     "fortitudo, entropy pooling, cvar, mean variance, efficient frontier, exponential decay"},
+    {"gluonts", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "GluonTS forecasting"),
+     "gluonts, probabilistic forecast, quantile forecast, distribution fit, forecast evaluation"},
+};
+
+// A few module tab views a beginner looks for by name ("module:<id>/<view key>", the panel's ViewSpec
+// keys). Each opens like a click on the tab; views that train / call an LLM never run by themselves.
+const AqlLinkRow kAqlLinkViews[] = {
+    {"module:statsmodels/ols", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "OLS regression"),
+     "regression, linear regression, ols, beta, statsmodels"},
+    {"module:statsmodels/arima", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "ARIMA forecast"),
+     "arima, time series model, forecast, statsmodels"},
+    {"module:statsmodels/stationarity", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Stationarity test"),
+     "adf, kpss, unit root, stationarity, statsmodels"},
+    {"module:statsmodels/granger", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Granger causality"),
+     "granger, causality, lead lag, statsmodels"},
+    {"module:gs_quant/var", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Value at risk"),
+     "var, cvar, expected shortfall, value at risk, tail risk"},
+    {"module:gs_quant/greeks", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Option Greeks calculator"),
+     "greeks, delta, gamma, vega, theta, black scholes, option pricing"},
+    {"module:gs_quant/stress_test", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Crisis stress test"),
+     "stress test, crisis scenarios, 2008, covid, scenario analysis"},
+    {"module:fortitudo/efficient_frontier", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Efficient frontier"),
+     "efficient frontier, mean variance, markowitz, portfolio"},
+    {"module:fortitudo/cvar_optimize", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "CVaR optimization"),
+     "cvar, tail risk, portfolio optimization, conditional value at risk"},
+    {"module:portfolio_opt/black_litterman", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Black-Litterman"),
+     "black litterman, views, prior, portfolio optimization"},
+    {"module:functime/anomalies", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Anomaly detection"),
+     "anomalies, outliers, anomaly detection, functime"},
+    {"module:functime/seasonality", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Seasonality decomposition"),
+     "seasonality, stl, trend, decomposition, functime"},
+    {"module:gluonts/probabilistic", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Probabilistic forecast"),
+     "probabilistic forecast, forecast paths, uncertainty, gluonts"},
+    {"module:feature_engineering/indicators", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Technical indicator lab"),
+     "indicators, rsi, macd, bollinger, moving average, technical indicators"},
+    {"module:hft/orderbook", QT_TRANSLATE_NOOP("fincept::screens::AIQuantLabScreen", "Order book analytics"),
+     "order book, depth, bid ask, spread, hft"},
+};
+
+QList<command::CommandItem> aql_command_rows() {
+    namespace rows = command_rows;
+    const QString where = AIQuantLabScreen::tr("AI Quant Lab");
+    QList<command::CommandItem> out;
+    auto add = [&](const AqlLinkRow& r) {
+        QStringList keywords;
+        for (const QString& w : QString::fromLatin1(r.keywords).split(QLatin1Char(','), Qt::SkipEmptyParts))
+            keywords.append(w.trimmed());
+        keywords << QStringLiteral("quant lab");
+        out.append(rows::section(QStringLiteral("ai_quant_lab"), QString::fromLatin1(r.section),
+                                 QCoreApplication::translate("fincept::screens::AIQuantLabScreen", r.title), keywords,
+                                 where));
+    };
+    for (const AqlLinkRow& r : kAqlLinkModules)
+        add(r);
+    for (const AqlLinkRow& r : kAqlLinkViews)
+        add(r);
+    return out;
+}
+
+void aql_install_commands() {
+    command_rows::install(QStringLiteral("ai_quant_lab"), &aql_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(aql_install_commands)
 
 } // namespace fincept::screens

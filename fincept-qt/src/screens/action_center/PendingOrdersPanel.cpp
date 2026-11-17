@@ -3,7 +3,9 @@
 
 #include "trading/AccountManager.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -14,6 +16,7 @@
 #include <QScopeGuard>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -33,11 +36,17 @@ constexpr int kColSymbol = 4;
 constexpr int kColSide = 5;
 constexpr int kColQty = 6;
 constexpr int kColPriceType = 7;
-constexpr int kColStatus = 8;
-constexpr int kColActions = 9;
-constexpr int kColCount = 10;
+constexpr int kColPrice = 8; // limit price (or trigger for SL-M) — approved orders must show it
+constexpr int kColStatus = 9;
+constexpr int kColActions = 10;
+constexpr int kColCount = 11;
 // Item data role carrying a pending row's expiry (QDateTime) for the countdown.
 constexpr int kExpiryRole = Qt::UserRole + 1;
+
+// Table row height for the user's font size (28 px at the default).
+int order_row_height() {
+    return qMax(28, QFontMetrics(fincept::ui::fonts::font()).height() + 10);
+}
 } // namespace
 
 PendingOrdersPanel::PendingOrdersPanel(QWidget* parent) : QWidget(parent) {
@@ -66,6 +75,13 @@ PendingOrdersPanel::PendingOrdersPanel(QWidget* parent) : QWidget(parent) {
             [this](const QString&) { reload_accounts(); });
     connect(&trading::AccountManager::instance(), &trading::AccountManager::account_updated, this,
             [this](const QString&) { reload_accounts(); });
+    // Row items carry foreground colours and the row height follows the font size. The
+    // rebuild creates row widgets, so it waits until the new appearance has settled.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() {
+        table_->verticalHeader()->setDefaultSectionSize(order_row_height());
+        if (isVisible())
+            refresh();
+    });
 }
 
 void PendingOrdersPanel::build_ui() {
@@ -73,43 +89,47 @@ void PendingOrdersPanel::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Global stylesheet via descendant selectors (P7) — amber #d97706 accents.
+    // Global stylesheet via descendant selectors (P7) — theme-accent highlights;
+    // approve / reject / kill are state colours (status green / red).
+    namespace colors = fincept::ui::colors;
+    const QString ok_wash = colors::alpha(colors::SUCCESS, 0.14);
+    const QString ok_wash_hover = colors::alpha(colors::SUCCESS, 0.28);
+    const QString no_wash = colors::alpha(colors::DANGER, 0.12);
+    const QString no_wash_hover = colors::alpha(colors::DANGER, 0.25);
     setStyleSheet(QString("#pendingOrdersPanel{background:%1;border:1px solid %3;}"
                           "#acHeader{background:%2;border-bottom:1px solid %3;}"
-                          "#acTitle{color:%4;font-size:14px;font-weight:700;letter-spacing:0.5px;}"
+                          "#acTitle{color:%4;font-size:" + fincept::ui::fonts::px(0) + "px;font-weight:700;letter-spacing:0.5px;}"
                           "#acStatsBar{background:%2;border-bottom:1px solid %3;}"
-                          "#acStatCaption{color:%5;font-size:10px;letter-spacing:0.5px;}"
-                          "#acStatValue{color:%6;font-size:15px;font-weight:700;}"
+                          "#acStatCaption{color:%5;font-size:" + fincept::ui::fonts::px(-4) + "px;letter-spacing:0.5px;}"
+                          "#acStatValue{color:%6;font-size:" + fincept::ui::fonts::px(1) + "px;font-weight:700;}"
                           "#acTable{background:%1;color:%6;gridline-color:%3;border:none;}"
                           "#acTable::item{padding:2px 6px;}"
                           "QHeaderView::section{background:%2;color:%5;border:none;border-bottom:1px solid %3;"
-                          "padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:0.5px;}"
-                          "#acCombo{background:%2;color:%6;border:1px solid %3;padding:3px 8px;font-size:11px;}"
-                          "#acApproveAll{background:rgba(34,197,94,0.14);color:%7;border:1px solid %7;"
-                          "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
-                          "#acApproveAll:hover{background:rgba(34,197,94,0.28);}"
-                          "#acRejectAll{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
-                          "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
-                          "#acRejectAll:hover{background:rgba(220,38,38,0.25);}"
+                          "padding:4px 6px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:0.5px;}"
+                          "#acCombo{background:%2;color:%6;border:1px solid %3;padding:3px 8px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                          "#acApproveAll{background:" + ok_wash + ";color:%7;border:1px solid %7;"
+                          "padding:5px 16px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                          "#acApproveAll:hover{background:" + ok_wash_hover + ";}"
+                          "#acRejectAll{background:" + no_wash + ";color:%8;border:1px solid %8;"
+                          "padding:5px 16px;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                          "#acRejectAll:hover{background:" + no_wash_hover + ";}"
                           // Per-row action buttons: hoisted here (P7) so refresh()
                           // doesn't reparse two stylesheets per row on every update.
-                          "#acRowApprove{background:rgba(34,197,94,0.14);color:%7;border:1px solid %7;"
-                          "padding:2px 10px;font-size:10px;font-weight:700;border-radius:2px;}"
-                          "#acRowApprove:hover{background:rgba(34,197,94,0.28);}"
+                          "#acRowApprove{background:" + ok_wash + ";color:%7;border:1px solid %7;"
+                          "padding:2px 10px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;border-radius:2px;}"
+                          "#acRowApprove:hover{background:" + ok_wash_hover + ";}"
                           "#acRowApprove:disabled{color:%5;border-color:%5;background:transparent;}"
-                          "#acRowReject{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
-                          "padding:2px 10px;font-size:10px;font-weight:700;border-radius:2px;}"
-                          "#acRowReject:hover{background:rgba(220,38,38,0.25);}"
+                          "#acRowReject{background:" + no_wash + ";color:%8;border:1px solid %8;"
+                          "padding:2px 10px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;border-radius:2px;}"
+                          "#acRowReject:hover{background:" + no_wash_hover + ";}"
                           "#acRowReject:disabled{color:%5;border-color:%5;background:transparent;}"
-                          "#acTtlSpin{background:%2;color:%6;border:1px solid %3;padding:2px 4px;font-size:11px;}"
-                          "#acKillSwitch{background:%8;color:#000;border:1px solid %8;padding:4px 12px;"
-                          "font-size:11px;font-weight:700;letter-spacing:1px;border-radius:2px;}"
-                          "#acKillSwitch:hover{background:rgba(220,38,38,0.75);}"
+                          "#acTtlSpin{background:%2;color:%6;border:1px solid %3;padding:2px 4px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
+                          "#acKillSwitch{background:%8;color:" + QString(colors::TEXT_ON_ACCENT()) + ";border:1px solid %8;padding:4px 12px;"
+                          "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;border-radius:2px;}"
+                          "#acKillSwitch:hover{background:" + colors::alpha(colors::DANGER, 0.75) + ";}"
                           "#acKillSwitch:disabled{background:transparent;color:%5;border-color:%5;}")
-                      .arg(fincept::ui::colors::DARK(), fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER(),
-                           fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_SECONDARY(),
-                           fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::POSITIVE(),
-                           fincept::ui::colors::NEGATIVE()));
+                      .arg(colors::DARK(), colors::PANEL(), colors::BORDER(), colors::AMBER(), colors::TEXT_SECONDARY(),
+                           colors::TEXT_PRIMARY(), colors::SUCCESS(), colors::DANGER()));
 
     // ── Header: title + account selector + status filter ──────────────────────
     auto* header = new QWidget;
@@ -159,6 +179,7 @@ void PendingOrdersPanel::build_ui() {
 
     kill_btn_ = new QPushButton(tr("KILL SWITCH"));
     kill_btn_->setObjectName("acKillSwitch");
+    kill_btn_->setProperty("fincept_agent_risk", "order");
     kill_btn_->setCursor(Qt::PointingHandCursor);
     kill_btn_->setToolTip(tr("Cancel every open order and square off every open position on all LIVE accounts"));
     kill_btn_->setAccessibleName(tr("Kill switch: cancel all orders and square off all positions on live accounts"));
@@ -195,11 +216,13 @@ void PendingOrdersPanel::build_ui() {
 
     approve_all_btn_ = new QPushButton(tr("APPROVE ALL"));
     approve_all_btn_->setObjectName("acApproveAll");
+    approve_all_btn_->setProperty("fincept_agent_risk", "order");
     approve_all_btn_->setCursor(Qt::PointingHandCursor);
     slay->addWidget(approve_all_btn_);
 
     reject_all_btn_ = new QPushButton(tr("REJECT ALL"));
     reject_all_btn_->setObjectName("acRejectAll");
+    reject_all_btn_->setProperty("fincept_agent_risk", "order");
     reject_all_btn_->setCursor(Qt::PointingHandCursor);
     slay->addWidget(reject_all_btn_);
 
@@ -210,16 +233,29 @@ void PendingOrdersPanel::build_ui() {
     table_->setObjectName("acTable");
     table_->setColumnCount(kColCount);
     table_->setHorizontalHeaderLabels({tr("Time"), tr("Expires"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
-                                       tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
+                                       tr("Qty"), tr("Price Type"), tr("Price"), tr("Status"), tr("Actions")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setShowGrid(false);
-    table_->verticalHeader()->setDefaultSectionSize(28);
+    table_->verticalHeader()->setDefaultSectionSize(order_row_height());
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(kColSymbol, QHeaderView::Stretch);
     table_->setColumnWidth(kColActions, 170);
-    root->addWidget(table_, 1);
+
+    // Nothing for the filter (the normal case: nothing awaits approval) — say what
+    // lands here and offer the history instead of a bare header row.
+    table_stack_ = new QStackedWidget;
+    table_stack_->addWidget(table_);
+    empty_state_ = new ui::EmptyState(table_stack_);
+    empty_state_->set_compact(true);
+    table_stack_->addWidget(empty_state_);
+    connect(empty_state_, &ui::EmptyState::secondary_clicked, this, [this]() {
+        const int idx = status_filter_->findData(QStringLiteral("all"));
+        if (idx >= 0)
+            status_filter_->setCurrentIndex(idx); // currentIndexChanged -> refresh()
+    });
+    root->addWidget(table_stack_, 1);
 
     // ── Wiring ────────────────────────────────────────────────────────────────
     connect(account_combo_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
@@ -290,10 +326,7 @@ void PendingOrdersPanel::build_ui() {
                           "  Account scope: %2\n"
                           "  %3 BUY  ·  %4 SELL\n\n"
                           "Each order executes immediately. There is no per-order review.")
-                           .arg(pending.size())
-                           .arg(scope)
-                           .arg(buys)
-                           .arg(sells);
+                           .arg(QString::number(pending.size()), scope, QString::number(buys), QString::number(sells));
         if (stale_count > 0)
             body += tr("\n\n⚠  %1 of these are past their approval window and will be REFUSED\n"
                        "as expired rather than executed. Re-place them if you still want the trade.")
@@ -402,7 +435,8 @@ void PendingOrdersPanel::retranslateUi() {
 
     if (table_) {
         table_->setHorizontalHeaderLabels({tr("Time"), tr("Expires"), tr("Account"), tr("Type"), tr("Symbol"),
-                                           tr("Side"), tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
+                                           tr("Side"), tr("Qty"), tr("Price Type"), tr("Price"), tr("Status"),
+                                           tr("Actions")});
     }
     // Per-row Approve/Reject button widgets are rebuilt on the next refresh().
 }
@@ -486,10 +520,19 @@ void PendingOrdersPanel::refresh() {
 
         set(kColQty, o.quantity);
         set(kColPriceType, o.price_type);
+        {
+            // Limit price, else the trigger (SL-M); "—" for MARKET / basket rows.
+            const double px = o.order_data.value(QStringLiteral("price")).toDouble();
+            const double trg = o.order_data.value(QStringLiteral("trigger_price")).toDouble();
+            set(kColPrice, px > 0.0    ? QString::number(px, 'f', 2)
+                           : trg > 0.0 ? tr("trg %1").arg(trg, 0, 'f', 2)
+                                       : QStringLiteral("—"));
+        }
 
         auto* status_item = new QTableWidgetItem(o.status.toUpper());
-        status_item->setForeground(o.status == "approved"   ? QColor(fincept::ui::colors::POSITIVE())
-                                   : o.status == "rejected" ? QColor(fincept::ui::colors::NEGATIVE())
+        // Order state, not price direction.
+        status_item->setForeground(o.status == "approved"   ? QColor(fincept::ui::colors::SUCCESS())
+                                   : o.status == "rejected" ? QColor(fincept::ui::colors::DANGER())
                                                             : QColor(fincept::ui::colors::AMBER()));
         table_->setItem(row, kColStatus, status_item);
 
@@ -501,11 +544,13 @@ void PendingOrdersPanel::refresh() {
             cl->setSpacing(6);
             auto* approve = new QPushButton(tr("Approve"));
             approve->setObjectName(QStringLiteral("acRowApprove"));
+            approve->setProperty("fincept_agent_risk", "order");
             approve->setCursor(Qt::PointingHandCursor);
             approve->setAccessibleName(
                 tr("Approve %1 %2 %3").arg(o.action.toUpper(), o.quantity, o.symbol));
             auto* reject = new QPushButton(tr("Reject"));
             reject->setObjectName(QStringLiteral("acRowReject"));
+            reject->setProperty("fincept_agent_risk", "order");
             reject->setCursor(Qt::PointingHandCursor);
             reject->setAccessibleName(tr("Reject %1 %2 %3").arg(o.action.toUpper(), o.quantity, o.symbol));
             const QString id = o.id;
@@ -550,7 +595,43 @@ void PendingOrdersPanel::refresh() {
         }
     }
 
+    update_empty_state(static_cast<int>(orders.size()), status);
     refresh_stats();
+}
+
+void PendingOrdersPanel::update_empty_state(int rows, const QString& status) {
+    if (rows > 0) {
+        table_stack_->setCurrentWidget(table_);
+        return;
+    }
+    const QString scope = selected_account().isEmpty() ? tr("any account") : account_combo_->currentText();
+    ui::EmptyState::Spec spec;
+    if (status == QLatin1String("pending")) {
+        spec = ui::EmptyState::no_data_spec(
+            tr("No orders awaiting approval"),
+            tr("Orders placed by AI agents, workflows, broadcasts and baskets on a Semi-Auto account wait here for "
+               "your approval before they reach the broker. Nothing is waiting for %1.")
+                .arg(scope));
+        spec.glyph = QStringLiteral("✓");
+        spec.glyph_tone = ui::EmptyState::Tone::Success;
+        spec.secondary = tr("SHOW HISTORY");
+        spec.secondary_tooltip = tr("Approved and rejected orders of this account scope");
+    } else if (status == QLatin1String("all")) {
+        spec = ui::EmptyState::no_data_spec(
+            tr("No queued orders yet"),
+            tr("When an agent, workflow, broadcast or basket places an order on a Semi-Auto account, it is queued "
+               "here for approval. The account mode is set in Account Management."));
+        spec.glyph = QStringLiteral("○");
+    } else {
+        spec = ui::EmptyState::no_data_spec(
+            status == QLatin1String("approved") ? tr("No approved orders") : tr("No rejected orders"),
+            status == QLatin1String("approved") ? tr("No queued order for %1 has been approved yet.").arg(scope)
+                                                : tr("No queued order for %1 has been rejected or expired.").arg(scope));
+        spec.glyph = QStringLiteral("○");
+        spec.secondary = tr("SHOW ALL");
+    }
+    empty_state_->apply(spec);
+    table_stack_->setCurrentWidget(empty_state_);
 }
 
 void PendingOrdersPanel::refresh_stats() {
@@ -662,6 +743,19 @@ bool PendingOrdersPanel::approve_row(const QString& pending_id) {
                       "  Queued:     %9")
                        .arg(o.symbol, o.exchange.isEmpty() ? tr("—") : o.exchange, o.action.toUpper(), o.quantity,
                             o.price_type, o.order_type, acct_label, o.strategy, age);
+    // The price the order executes at, the product (MIS/CNC/NRML decides overnight carry)
+    // and LIVE vs PAPER were missing — a LIMIT order was approved without seeing its price.
+    const double limit_px = o.order_data.value(QStringLiteral("price")).toDouble();
+    const double trigger_px = o.order_data.value(QStringLiteral("trigger_price")).toDouble();
+    const QString product = o.order_data.value(QStringLiteral("product")).toString();
+    if (limit_px > 0.0)
+        body += tr("\n  Limit price: %1").arg(limit_px, 0, 'f', 2);
+    if (trigger_px > 0.0)
+        body += tr("\n  Trigger:    %1").arg(trigger_px, 0, 'f', 2);
+    if (!product.isEmpty())
+        body += tr("\n  Product:    %1").arg(product.toUpper());
+    const bool is_live = acct_meta.trading_mode == QLatin1String("live");
+    body += is_live ? tr("\n  Mode:       LIVE — REAL MONEY") : tr("\n  Mode:       PAPER (simulated)");
     body += tr("\n  Expires in: %1").arg(remaining_text(left));
     if (stale) {
         body += tr("\n\n⚠  This order's approval window is about to close. If it closes while\n"
@@ -670,8 +764,11 @@ bool PendingOrdersPanel::approve_row(const QString& pending_id) {
     body += tr("\n\nA MARKET order fills at the price when you approve, not the price\n"
                "that existed when it was queued.");
 
-    const auto ans = QMessageBox::question(this, tr("Approve Order"), body,
-                                           QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    // LIVE gets the warning icon so real money is flagged before the text is read.
+    const auto ans = is_live ? QMessageBox::warning(this, tr("Approve Order"), body,
+                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel)
+                             : QMessageBox::question(this, tr("Approve Order"), body,
+                                                     QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (ans != QMessageBox::Yes)
         return false;
 

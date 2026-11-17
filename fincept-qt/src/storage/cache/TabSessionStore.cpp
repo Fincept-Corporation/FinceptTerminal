@@ -1,10 +1,27 @@
 #include "storage/cache/TabSessionStore.h"
 
+#include "core/logging/Logger.h"
 #include "storage/sqlite/CacheDatabase.h"
 
 #include <QJsonDocument>
 
 namespace fincept {
+
+namespace {
+/// A stored state blob as an object; damaged JSON is "nothing stored" (the screen
+/// starts fresh) but is noted at DEBUG — never the blob itself.
+QJsonObject tss_parse_object(const QString& json, const QString& key) {
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        if (!json.isEmpty())
+            LOG_DEBUG("TabSessionStore", logf("Persisted screen state is not valid JSON",
+                                              {{"key", key}, {"bytes", json.size()}, {"error", err.errorString()}}));
+        return {};
+    }
+    return doc.object();
+}
+} // namespace
 
 TabSessionStore& TabSessionStore::instance() {
     static TabSessionStore s;
@@ -49,8 +66,8 @@ Result<TabSession> TabSessionStore::load(const QString& tab_id) {
     s.tab_id = q.value(0).toString();
     s.screen_name = q.value(1).toString();
     s.scroll_position = q.value(2).toDouble();
-    s.filters = QJsonDocument::fromJson(q.value(3).toString().toUtf8()).object();
-    s.selections = QJsonDocument::fromJson(q.value(4).toString().toUtf8()).object();
+    s.filters = tss_parse_object(q.value(3).toString(), s.tab_id);
+    s.selections = tss_parse_object(q.value(4).toString(), s.tab_id);
     s.last_accessed = q.value(5).toString();
     return Result<TabSession>::ok(s);
 }
@@ -77,14 +94,26 @@ Result<void> TabSessionStore::clear_all() {
     return Result<void>::ok();
 }
 
+namespace {
+// Internal markers stored inside state_json next to the screen's own keys.
+// Stripped on every read, so restore_state() only ever sees domain keys.
+constexpr const char* kScreenTypeMarker = "__screen_type__"; // UUID rows: the screen's type id
+constexpr const char* kWriterMarker = "__writer_uuid__";     // screen-key rows: panel that wrote it
+} // namespace
+
 Result<void> TabSessionStore::save_screen_state(const QString& key, const QJsonObject& state, int state_version,
-                                                const QString& session_id) {
+                                                const QString& session_id, const QString& writer_uuid) {
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
         return Result<void>::err("Cache database not open");
 
-    const QString json = QString::fromUtf8(QJsonDocument(state).toJson(QJsonDocument::Compact));
+    QJsonObject stored = state;
+    if (!writer_uuid.isEmpty())
+        stored.insert(QLatin1String(kWriterMarker), writer_uuid);
+    const QString json = QString::fromUtf8(QJsonDocument(stored).toJson(QJsonDocument::Compact));
 
+    // One statement = one atomic SQLite transaction: a crash mid-write leaves
+    // either the previous row or the new one, never a torn row.
     auto r = cdb.execute("INSERT OR REPLACE INTO screen_state "
                          "(screen_key, state_version, state_json, updated_at, session_id) "
                          "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?)",
@@ -95,26 +124,33 @@ Result<void> TabSessionStore::save_screen_state(const QString& key, const QJsonO
     return Result<void>::ok();
 }
 
-Result<QJsonObject> TabSessionStore::load_screen_state(const QString& key, int expected_version) {
+Result<ScreenStateRow> TabSessionStore::load_screen_state_row(const QString& key, int expected_version) {
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
-        return Result<QJsonObject>::err("Cache database not open");
+        return Result<ScreenStateRow>::err("Cache database not open");
 
-    auto r = cdb.execute("SELECT state_version, state_json FROM screen_state WHERE screen_key = ?", {key});
+    auto r = cdb.execute("SELECT state_version, state_json, updated_at FROM screen_state WHERE screen_key = ?", {key});
+    if (r.is_err())
+        return Result<ScreenStateRow>::err(r.error());
 
+    ScreenStateRow row;
+    auto& q = r.value();
+    if (!q.next() || q.value(0).toInt() != expected_version)
+        return Result<ScreenStateRow>::ok(row); // nothing stored, or version mismatch — start fresh
+
+    row.state = tss_parse_object(q.value(1).toString(), key);
+    row.updated_at = q.value(2).toString();
+    row.writer_uuid = row.state.value(QLatin1String(kWriterMarker)).toString();
+    row.state.remove(QLatin1String(kWriterMarker));
+    row.found = true;
+    return Result<ScreenStateRow>::ok(row);
+}
+
+Result<QJsonObject> TabSessionStore::load_screen_state(const QString& key, int expected_version) {
+    auto r = load_screen_state_row(key, expected_version);
     if (r.is_err())
         return Result<QJsonObject>::err(r.error());
-
-    auto& q = r.value();
-    if (!q.next())
-        return Result<QJsonObject>::ok(QJsonObject{}); // no saved state yet
-
-    const int saved_version = q.value(0).toInt();
-    if (saved_version != expected_version)
-        return Result<QJsonObject>::ok(QJsonObject{}); // version mismatch — start fresh
-
-    const QJsonObject obj = QJsonDocument::fromJson(q.value(1).toString().toUtf8()).object();
-    return Result<QJsonObject>::ok(obj);
+    return Result<QJsonObject>::ok(r.value().state); // empty when nothing stored / version mismatch
 }
 
 // ── Phase 4b: instance-UUID-keyed screen state ───────────────────────────────
@@ -144,7 +180,7 @@ Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_
     // restore_state() callback ignores unknown keys, so no incompatibility.
     QJsonObject augmented = state;
     if (!screen_key.isEmpty())
-        augmented.insert("__screen_type__", screen_key);
+        augmented.insert(QLatin1String(kScreenTypeMarker), screen_key);
     const QString augmented_json = QString::fromUtf8(QJsonDocument(augmented).toJson(QJsonDocument::Compact));
 
     auto r = cdb.execute("INSERT OR REPLACE INTO screen_state "
@@ -157,32 +193,39 @@ Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_
     return Result<void>::ok();
 }
 
-Result<QJsonObject> TabSessionStore::load_screen_state_by_uuid(const QString& instance_uuid, int expected_version) {
+Result<ScreenStateRow> TabSessionStore::load_screen_state_row_by_uuid(const QString& instance_uuid,
+                                                                     int expected_version) {
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
-        return Result<QJsonObject>::err("Cache database not open");
+        return Result<ScreenStateRow>::err("Cache database not open");
+    ScreenStateRow row;
     if (instance_uuid.isEmpty())
-        return Result<QJsonObject>::ok(QJsonObject{}); // not an error — just no state
+        return Result<ScreenStateRow>::ok(row); // not an error — just no state
 
-    auto r = cdb.execute("SELECT state_version, state_json FROM screen_state WHERE instance_uuid = ?", {instance_uuid});
-
+    auto r = cdb.execute("SELECT state_version, state_json, updated_at FROM screen_state WHERE instance_uuid = ?",
+                         {instance_uuid});
     if (r.is_err())
-        return Result<QJsonObject>::err(r.error());
+        return Result<ScreenStateRow>::err(r.error());
 
     auto& q = r.value();
-    if (!q.next())
-        return Result<QJsonObject>::ok(QJsonObject{}); // no saved state yet
+    if (!q.next() || q.value(0).toInt() != expected_version)
+        return Result<ScreenStateRow>::ok(row); // nothing stored, or version mismatch — start fresh
 
-    const int saved_version = q.value(0).toInt();
-    if (saved_version != expected_version)
-        return Result<QJsonObject>::ok(QJsonObject{}); // version mismatch — start fresh
+    row.state = tss_parse_object(q.value(1).toString(), instance_uuid);
+    // Strip the diagnostic-only markers before handing back to the screen —
+    // its restore_state() implementation expects only domain keys.
+    row.state.remove(QLatin1String(kScreenTypeMarker));
+    row.state.remove(QLatin1String(kWriterMarker));
+    row.updated_at = q.value(2).toString();
+    row.found = true;
+    return Result<ScreenStateRow>::ok(row);
+}
 
-    QJsonObject obj = QJsonDocument::fromJson(q.value(1).toString().toUtf8()).object();
-    // Strip the diagnostic-only __screen_type__ marker before handing back
-    // to the screen — its restore_state() implementation expects only
-    // domain keys.
-    obj.remove("__screen_type__");
-    return Result<QJsonObject>::ok(obj);
+Result<QJsonObject> TabSessionStore::load_screen_state_by_uuid(const QString& instance_uuid, int expected_version) {
+    auto r = load_screen_state_row_by_uuid(instance_uuid, expected_version);
+    if (r.is_err())
+        return Result<QJsonObject>::err(r.error());
+    return Result<QJsonObject>::ok(r.value().state);
 }
 
 Result<void> TabSessionStore::remove_screen_state_by_uuid(const QString& instance_uuid) {

@@ -44,6 +44,54 @@ class ScopedCallOrigin {
     QString prev_;
 };
 
+/// Thread-local STABLE identity of the caller, next to the free-text label of
+/// ScopedCallOrigin: the client profile id the MCP server identified
+/// ("claude_code", "codex", "gemini", "qwen", "cursor", "copilot", "grok",
+/// "claude_desktop", "vscode", or "external" for an unknown client;
+/// McpClientProfile.h actor_id) and the run it belongs to (a run-scoped token's
+/// run id; empty outside a run). Set by the dispatchers around the synchronous
+/// part of a tool call, read on the calling thread at handler entry and carried
+/// to the GUI thread by mcp/core/UiDispatch.h — the order path stamps what an
+/// agent causes as "agent:<client id>" (core/agent/AgentActionScope.h).
+class ScopedCallClient {
+  public:
+    /// The terminal's own agents (not MCP clients): the in-app AI assistant
+    /// (TerminalMcpBridge) and the Fincept cloud agent runs (TerminalToolBridge).
+    static constexpr char kTerminalAgent[] = "terminal_agent";
+    static constexpr char kFinceptAgent[] = "fincept_agent";
+
+
+    ScopedCallClient(const QString& client_id, const QString& run_id)
+        : prev_client_(client_slot()), prev_run_(run_slot()) {
+        client_slot() = client_id;
+        run_slot() = run_id;
+    }
+    ~ScopedCallClient() {
+        client_slot() = prev_client_;
+        run_slot() = prev_run_;
+    }
+
+    ScopedCallClient(const ScopedCallClient&) = delete;
+    ScopedCallClient& operator=(const ScopedCallClient&) = delete;
+
+    /// The current thread's stable client id; "" when none was set.
+    static QString client_id() { return client_slot(); }
+    /// The current thread's run id; "" outside a run.
+    static QString run_id() { return run_slot(); }
+
+  private:
+    static QString& client_slot() {
+        thread_local QString client;
+        return client;
+    }
+    static QString& run_slot() {
+        thread_local QString run;
+        return run;
+    }
+    QString prev_client_;
+    QString prev_run_;
+};
+
 class ScopedApprovedCall {
   public:
     ScopedApprovedCall() : prev_(flag()) { flag() = true; }

@@ -7,6 +7,7 @@ values, not actuals.
 
 Usage:
     python economic_calendar.py [date]
+    python economic_calendar.py day [date]      (the same, in the connectors' <command> [args] form)
         date: Forex Factory day format ("nov9.2026") or ISO ("2026-11-09"); default: today.
         The day and the times are this computer's local time zone.
 
@@ -22,7 +23,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 import time
 from datetime import date, datetime
 
@@ -34,17 +34,23 @@ IMPACT_LEVELS = {"high": 3, "medium": 2, "low": 1}
 MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
 # The export is one file for the whole week, refreshed about hourly, and it answers repeated
-# downloads with HTTP 429 - so every day of the week is served from one cached copy.
-CACHE_PATH = os.path.join(tempfile.gettempdir(), "fincept_ff_calendar_thisweek.json")
+# downloads with HTTP 429 - so every day of the week is served from one cached copy, kept in
+# the edition's cache folder (fincept_paths).
 CACHE_FRESH_SECONDS = 15 * 60
 CACHE_FALLBACK_SECONDS = 6 * 60 * 60  # rate-limited / offline: a few hours old is still this week
 
 
+def _cache_path() -> str:
+    import fincept_paths
+    return str(fincept_paths.cache_file("economic_calendar", "ff_calendar_thisweek.json"))
+
+
 def _read_cache(max_age: float):
     try:
-        age = time.time() - os.path.getmtime(CACHE_PATH)
+        cache_path = _cache_path()
+        age = time.time() - os.path.getmtime(cache_path)
         if age <= max_age:
-            with open(CACHE_PATH, encoding="utf-8") as f:
+            with open(cache_path, encoding="utf-8") as f:
                 return json.load(f), age
     except (OSError, ValueError):
         pass
@@ -66,10 +72,8 @@ def load_feed():
             return feed, age
         raise
     try:
-        tmp = CACHE_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(feed, f)
-        os.replace(tmp, CACHE_PATH)
+        import fincept_paths
+        fincept_paths.atomic_write_text(_cache_path(), json.dumps(feed))
     except OSError:
         pass  # caching is an optimisation only
     return feed, 0.0
@@ -141,8 +145,13 @@ def calendar_for_day(day: date) -> dict:
 
 
 def main(argv) -> dict:
+    # Two spellings: "economic_calendar.py [date]" (the Economics panel) and the data-connector
+    # form "economic_calendar.py day [date]" (<command> [args], the Data Sources catalogue).
+    args = list(argv[1:])
+    if args and args[0] == "day":
+        args = args[1:]
     try:
-        day = parse_day(argv[1]) if len(argv) > 1 else date.today()
+        day = parse_day(args[0]) if args and args[0].strip() else date.today()
         return calendar_for_day(day)
     except requests.exceptions.RequestException as e:
         return {"error": f"Forex Factory calendar feed unavailable: {str(e)[:300]}"}
@@ -151,4 +160,5 @@ def main(argv) -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(main(sys.argv), indent=2))
+    # One line: the host reads the last stdout line as the payload.
+    print(json.dumps(main(sys.argv)))

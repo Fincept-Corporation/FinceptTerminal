@@ -7,9 +7,15 @@
 // per refresh — the hub fans out to the EconomicCalendarWidget and any
 // future consumers (report builder, MCP tools, agents).
 //
-// TTL: 5 min. Min interval: 60 s. Both honour the upstream cache and keep
-// rate-limit pressure low.
+// Every uncached call costs the user a credit, and the default dashboard shows
+// this topic, so the cadence is deliberately slow: TTL 15 min, min interval
+// 5 min (the widget's ⟳ forces a fetch). A refusal the account cannot fix by
+// waiting — 402 no credits, 401/403 not signed in or not allowed — is not
+// retried on a timer: the topic backs off for hours and the backoff is lifted
+// when the balance goes up, the user signs in (or the key changes), or the
+// user presses ⟳. While signed out nothing is requested at all.
 
+#include "auth/AuthTypes.h"
 #include "datahub/Producer.h"
 
 #include <QJsonArray>
@@ -36,7 +42,14 @@ class MacroCalendarService : public QObject, public fincept::datahub::Producer {
     explicit MacroCalendarService(QObject* parent = nullptr);
     Q_DISABLE_COPY(MacroCalendarService)
 
+    /// publish_error with a long retry hint and remember what should lift it.
+    void publish_refused(const QString& message, auth::RefusalLatch::Kind kind);
+    /// Lift a refusal backoff (sign-in, key change, top-up) and, if the widget
+    /// is showing, fetch at once (the topic's min-interval would delay it).
+    void release_refusal(const char* why);
+
     bool hub_registered_ = false;
+    auth::RefusalLatch refusal_;
 };
 
 } // namespace fincept::services

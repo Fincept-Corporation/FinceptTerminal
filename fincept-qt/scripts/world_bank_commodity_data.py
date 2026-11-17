@@ -8,7 +8,6 @@ import os
 import re
 import json
 import time
-import tempfile
 import requests
 from datetime import datetime
 from typing import Dict, Any, List
@@ -18,7 +17,6 @@ COMMODITY_PAGE = "https://www.worldbank.org/en/research/commodity-markets"
 # last-known URL is only the fallback.
 FALLBACK_XLSX = ("https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/"
                  "related/CMO-Historical-Data-Monthly.xlsx")
-CACHE_PATH = os.path.join(tempfile.gettempdir(), "fincept_wb_pink_sheet_monthly.xlsx")
 CACHE_TTL_SEC = 12 * 3600
 HEADERS = {"User-Agent": "Mozilla/5.0 (FinceptTerminal/4.5; +https://fincept.in)"}
 
@@ -62,18 +60,21 @@ def _xlsx_url() -> str:
 
 
 def _workbook_path() -> str:
-    if os.path.exists(CACHE_PATH) and time.time() - os.path.getmtime(CACHE_PATH) < CACHE_TTL_SEC:
-        return CACHE_PATH
+    # The cached workbook, in the edition's cache folder (fincept_paths).
+    import fincept_paths
+    cache_path = str(fincept_paths.cache_file("world_bank", "pink_sheet_monthly.xlsx"))
+    if os.path.exists(cache_path) and time.time() - os.path.getmtime(cache_path) < CACHE_TTL_SEC:
+        return cache_path
     url = _xlsx_url()
     r = requests.get(url, headers=HEADERS, timeout=90)
     r.raise_for_status()
     if not r.content.startswith(b"PK"):
         raise ValueError(f"Pink Sheet download is not an .xlsx workbook ({url})")
-    tmp = CACHE_PATH + ".part"
+    tmp = cache_path + ".part"
     with open(tmp, "wb") as f:
         f.write(r.content)
-    os.replace(tmp, CACHE_PATH)
-    return CACHE_PATH
+    os.replace(tmp, cache_path)
+    return cache_path
 
 
 def _norm(s: Any) -> str:

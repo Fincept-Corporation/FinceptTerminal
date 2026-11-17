@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "screens/gov_data/GovDataAustraliaPanel.h"
 #include "screens/gov_data/GovDataCongressPanel.h"
 #include "screens/gov_data/GovDataFrancePanel.h"
@@ -13,6 +14,7 @@
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -30,8 +32,6 @@ using namespace fincept::ui;
 
 static QString build_screen_style() {
     const auto& t = ThemeManager::instance().tokens();
-    const auto ac = QColor(t.accent);
-    const QString ar = QString("%1,%2,%3").arg(ac.red()).arg(ac.green()).arg(ac.blue());
 
     const QString bg = QString::fromLatin1(t.bg_base);
     const QString text = QString::fromLatin1(t.text_primary);
@@ -41,39 +41,41 @@ static QString build_screen_style() {
     const QString sec = QString::fromLatin1(t.text_secondary);
     const QString hover = QString::fromLatin1(t.bg_hover);
     const QString accent = QString::fromLatin1(t.accent);
-    const QString dim = QString::fromLatin1(t.text_dim);
+    const QString accent_bg = QString::fromLatin1(t.accent_bg);
+    const QString bmed = QString::fromLatin1(t.border_med);
 
     QString s;
     s += QString("#govScreen { background:%1; }").arg(bg);
 
     // Toolbar
     s += QString("#govToolbar { background:%1; border-bottom:1px solid %2; }").arg(raised, bdim);
-    s += QString("#govToolbarTitle { color:%1; font-size:12px; font-weight:700;"
+    s += QString("#govToolbarTitle { color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700;"
                  "  letter-spacing:1px; background:transparent; }")
              .arg(text);
-    s += QString("#govToolbarSub { color:%1; font-size:10px; background:transparent; }").arg(sec);
+    s += QString("#govToolbarSub { color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; }").arg(sec);
 
     // Sidebar
     s += QString("#govSidebar { background:%1; border-right:1px solid %2; }").arg(surface, bdim);
     s += QString("#govSidebarHeader { background:%1; border-bottom:1px solid %2; }").arg(raised, bdim);
-    s += QString("#govSidebarTitle { color:%1; font-size:9px; font-weight:700;"
+    s += QString("#govSidebarTitle { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                  "  letter-spacing:1px; background:transparent; }")
              .arg(sec);
     s += "#govProviderList { background:transparent; border:none; outline:none; }";
     s += QString("#govProviderList::item { color:%1; padding:7px 14px;"
-                 "  border-bottom:1px solid %2; font-size:11px; }")
+                 "  border-bottom:1px solid %2; font-size:" + fincept::ui::fonts::px(-3) + "px; }")
              .arg(sec, bdim);
     s += QString("#govProviderList::item:hover { color:%1; background:%2; }").arg(text, hover);
-    s += QString("#govProviderList::item:selected { color:%1; background:rgba(%2,0.08);"
+    s += QString("#govProviderList::item:selected { color:%1; background:%2;"
                  "  border-left:2px solid %1; padding-left:12px; font-weight:700; }")
-             .arg(accent, ar);
+             .arg(accent, accent_bg);
 
     // Status bar
     s += QString("#govStatusBar { background:%1; border-top:1px solid %2; }").arg(raised, bdim);
-    s += QString("#govStatusText { color:%1; font-size:9px; background:transparent; }").arg(dim);
-    s += QString("#govStatusSep  { color:%1; font-size:9px; background:transparent; }").arg(bdim);
-    s += QString("#govStatusVal  { color:%1; font-size:9px; background:transparent; }").arg(sec);
-    s += QString("#govStatusHigh { color:%1; font-size:9px; font-weight:700; background:transparent; }").arg(accent);
+    // The status bar is a raised surface: labels in secondary text, values in primary.
+    s += QString("#govStatusText { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent; }").arg(sec);
+    s += QString("#govStatusSep  { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent; }").arg(bmed);
+    s += QString("#govStatusVal  { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent; }").arg(text);
+    s += QString("#govStatusHigh { color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; background:transparent; }").arg(accent);
 
     // Scrollbar
     s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(bg);
@@ -88,8 +90,9 @@ GovDataScreen::GovDataScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("govScreen");
     build_ui();
     retranslateUi();
-
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, &GovDataScreen::refresh_theme);
+    // Styled from tokens and recorded derived colours (legible / tint): the central re-style pass
+    // carries them through a theme or font change, so there is no theme_changed handler. The
+    // provider accent is re-applied when another provider is activated.
     refresh_theme();
 }
 
@@ -107,7 +110,7 @@ void GovDataScreen::showEvent(QShowEvent* event) {
             activate_provider(row);
         }
     }
-    LOG_INFO("GovDataScreen", "shown");
+    LOG_DEBUG("GovDataScreen", "shown");
 }
 
 void GovDataScreen::hideEvent(QHideEvent* event) {
@@ -161,25 +164,32 @@ QWidget* GovDataScreen::make_panel(int index) {
     const auto& prov = providers[index];
     QWidget* panel = nullptr;
     {
+        // CKAN portals: the DATASETS tab opens on the portal's recently updated datasets until a
+        // publisher is opened (command names as each script spells them).
+        GovProviderOptions ckan_opts;
+        ckan_opts.source_label = prov.name;
         if (prov.id == "us-treasury") {
             panel = new GovDataTreasuryPanel(panel_stack_);
         } else if (prov.id == "us-congress") {
             panel = new GovDataCongressPanel(panel_stack_);
         } else if (prov.id == "canada-gov") {
-            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", {}, panel_stack_);
+            ckan_opts.recent_command = QStringLiteral("recent-datasets");
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
         } else if (prov.id == "swiss") {
-            GovProviderOptions swiss_opts;
-            swiss_opts.watermark_text = "\xF0\x9F\x87\xA8\xF0\x9F\x87\xAD opendata.swiss";
-            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", swiss_opts, panel_stack_);
+            ckan_opts.watermark_text = "\xF0\x9F\x87\xA8\xF0\x9F\x87\xAD opendata.swiss";
+            ckan_opts.recent_command = QStringLiteral("recent-datasets");
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
         } else if (prov.id == "france") {
             panel = new GovDataFrancePanel(panel_stack_);
         } else if (prov.id == "hk") {
             panel = new GovDataHKPanel(panel_stack_);
         } else if (prov.id == "universal-ckan") {
             // universal_ckan_api.py serves several national CKAN portals: the panel asks it for the
-            // portal list and sends the selected portal code with every request.
-            GovProviderOptions ckan_opts;
+            // portal list and sends the selected portal code with every request; it opens on the
+            // portal's recently updated datasets (`recent <portal> [rows]`).
             ckan_opts.portals_command = QStringLiteral("portals");
+            ckan_opts.recent_command = QStringLiteral("recent");
+            ckan_opts.land_on_recent = true;
             panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
         } else if (prov.id == "uk") {
             // data.gov.uk keeps its dedicated panel (pagination + popular publishers).
@@ -187,14 +197,16 @@ QWidget* GovDataScreen::make_panel(int index) {
         } else if (prov.id == "australia") {
             panel = new GovDataAustraliaPanel(panel_stack_);
         } else {
-            // openafrica, spain — still use generic until dedicated scripts exist
-            panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", {}, panel_stack_);
+            // openafrica: openafrica_api.py maps publishers / datasets / resources onto its own
+            // organizations / org-datasets / dataset-details; `recent` is native.
+            ckan_opts.recent_command = QStringLiteral("recent");
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", ckan_opts, panel_stack_);
         }
     }
     if (panel) {
         panel_stack_->addWidget(panel);
         panels_[index] = panel;
-        LOG_INFO("GovDataScreen", "Created panel for: " + prov.id);
+        LOG_DEBUG("GovDataScreen", "Created panel for: " + prov.id);
     }
     return panel;
 }
@@ -204,7 +216,7 @@ QWidget* GovDataScreen::make_panel(int index) {
 QWidget* GovDataScreen::build_toolbar() {
     header_bar_ = new QWidget(this);
     header_bar_->setObjectName("govToolbar");
-    header_bar_->setFixedHeight(38);
+    header_bar_->setMinimumHeight(38);
 
     auto* hl = new QHBoxLayout(header_bar_);
     hl->setContentsMargins(14, 0, 14, 0);
@@ -230,7 +242,7 @@ QWidget* GovDataScreen::build_toolbar() {
 
     // Source count badge — compact pill, stored as member for refresh_theme()
     provider_badge_ = new QLabel;
-    provider_badge_->setFixedHeight(20);
+    provider_badge_->setMinimumHeight(20);
     provider_badge_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hl->addWidget(provider_badge_);
 
@@ -251,7 +263,7 @@ QWidget* GovDataScreen::build_sidebar() {
     // Section header
     auto* hdr = new QWidget(this);
     hdr->setObjectName("govSidebarHeader");
-    hdr->setFixedHeight(26);
+    hdr->setMinimumHeight(26);
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 0, 8, 0);
     hhl->setSpacing(6);
@@ -259,7 +271,7 @@ QWidget* GovDataScreen::build_sidebar() {
     sidebar_title_->setObjectName("govSidebarTitle");
     const auto& providers = services::GovDataService::providers();
     sidebar_count_ = new QLabel(QString::number(providers.size()));
-    sidebar_count_->setFixedHeight(16);
+    sidebar_count_->setMinimumHeight(16);
     sidebar_count_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hhl->addWidget(sidebar_title_);
     hhl->addStretch(1);
@@ -294,7 +306,7 @@ QWidget* GovDataScreen::build_sidebar() {
 QWidget* GovDataScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("govStatusBar");
-    bar->setFixedHeight(24);
+    bar->setMinimumHeight(24);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(14, 0, 14, 0);
@@ -331,12 +343,12 @@ QWidget* GovDataScreen::build_status_bar() {
     // Ready dot
     auto* dot = new QLabel;
     dot->setFixedSize(6, 6);
-    dot->setStyleSheet(QString("background:%1; border-radius:3px;").arg(colors::POSITIVE()));
+    dot->setStyleSheet(QString("background:%1; border-radius:3px;").arg(colors::SUCCESS()));
     hl->addWidget(dot);
     status_ready_lbl_ = new QLabel;
     status_ready_lbl_->setObjectName("govStatusText");
     status_ready_lbl_->setStyleSheet(
-        QString("color:%1; font-size:9px; background:transparent;").arg(colors::POSITIVE()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; background:transparent;").arg(colors::SUCCESS()));
     hl->addWidget(status_ready_lbl_);
 
     return bar;
@@ -375,38 +387,40 @@ void GovDataScreen::retranslateUi() {
 // ── Theme refresh ────────────────────────────────────────────────────────────
 
 void GovDataScreen::refresh_theme() {
-    setStyleSheet(build_screen_style());
+    // Runs on every provider switch. Re-setting a stylesheet re-computes the
+    // style of every widget under it even when the text is unchanged — on the
+    // screen root that was most of the cost of each click — so only changes
+    // are applied.
+    const auto set_sheet = [](QWidget* w, const QString& sheet) {
+        if (w && w->styleSheet() != sheet)
+            w->setStyleSheet(sheet);
+    };
+    set_sheet(this, build_screen_style());
 
     const auto& t = ThemeManager::instance().tokens();
-    const QString accent_color =
-        active_provider_color_.isEmpty() ? QString::fromLatin1(t.accent) : active_provider_color_;
-    const auto ac = QColor(accent_color);
-    const QString ar = QString("%1,%2,%3").arg(ac.red()).arg(ac.green()).arg(ac.blue());
+    // The active provider's identity colour (picked against the dark theme), made legible on the
+    // active one; the theme accent until a provider is chosen.
+    const QColor accent = active_provider_color_.isEmpty() ? QColor(t.accent)
+                                                           : colors::legible_color(QColor(active_provider_color_));
 
-    // Re-style provider count badge (top-right pill)
-    if (provider_badge_) {
-        provider_badge_->setStyleSheet(
-            QString("color:%1; background:rgba(%2,0.1); border:1px solid rgba(%2,0.3);"
-                    " font-size:9px; font-weight:700; padding:2px 8px; letter-spacing:0.5px;")
-                .arg(accent_color, ar));
-    }
+    // Provider count badge (top-right pill)
+    set_sheet(provider_badge_, QString("color:%1; background:%2; border:1px solid %3; font-weight:700;"
+                                       " padding:2px 8px; letter-spacing:0.5px; font-size:%4px;")
+                                   .arg(accent.name(), colors::tint(accent, 0.1), colors::tint(accent, 0.3))
+                                   .arg(fincept::ui::fonts::px(-5)));
 
-    // Re-style sidebar count pill
-    if (sidebar_count_) {
-        const auto& tk = ThemeManager::instance().tokens();
-        const auto ac2 = QColor(tk.accent);
-        const QString ar2 = QString("%1,%2,%3").arg(ac2.red()).arg(ac2.green()).arg(ac2.blue());
-        sidebar_count_->setStyleSheet(QString("color:%1; background:rgba(%2,0.12); font-size:9px;"
-                                              " font-weight:700; padding:1px 5px;")
-                                          .arg(tk.accent, ar2));
-    }
+    // Sidebar count pill
+    set_sheet(sidebar_count_, QString("color:%1; background:%2; font-weight:700; padding:1px 5px; font-size:%3px;")
+                                  .arg(t.accent, t.accent_bg)
+                                  .arg(fincept::ui::fonts::px(-5)));
 
-    // Re-apply provider-color accent on toolbar border + subtitle
+    // Provider-color accent on toolbar border + subtitle
     if (!active_provider_color_.isEmpty() && header_bar_ && header_subtitle_) {
-        header_bar_->setStyleSheet(QString("#govToolbar { background:%1; border-bottom:2px solid %2; }")
-                                       .arg(t.bg_raised, active_provider_color_));
-        header_subtitle_->setStyleSheet(
-            QString("color:%1; font-size:10px; background:transparent;").arg(active_provider_color_));
+        set_sheet(header_bar_, QString("#govToolbar { background:%1; border-bottom:2px solid %2; }")
+                                   .arg(t.bg_raised, accent.name()));
+        set_sheet(header_subtitle_, QString("color:%1; background:transparent; font-size:%2px;")
+                                        .arg(accent.name())
+                                        .arg(fincept::ui::fonts::px(-4)));
     }
 }
 
@@ -463,7 +477,7 @@ void GovDataScreen::activate_provider(int index) {
     if (panel && first_open)
         QMetaObject::invokeMethod(panel, "load_initial_data");
 
-    LOG_INFO("GovDataScreen", "Activated: " + prov.id);
+    LOG_DEBUG("GovDataScreen", "Activated: " + prov.id);
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -492,5 +506,83 @@ void GovDataScreen::restore_state(const QVariantMap& state) {
     if (idx >= 0)
         activate_provider(idx);
 }
+
+bool GovDataScreen::open_section(const QString& section, const QString& focus) {
+    Q_UNUSED(focus); // the provider panels take no focus from a link
+    QString key = section.trimmed();
+    if (key.isEmpty())
+        return true;
+    QString rest;
+    if (command_rows::split_kind(key, "provider", &rest))
+        key = rest;
+    const auto& providers = services::GovDataService::providers();
+    int index = -1;
+    for (int i = 0; i < providers.size() && index < 0; ++i)
+        if (providers[i].id == key)
+            index = i;
+    for (int i = 0; i < providers.size() && index < 0; ++i)
+        if (providers[i].id.compare(key, Qt::CaseInsensitive) == 0)
+            index = i;
+    if (index < 0 || !provider_list_ || index >= provider_list_->count())
+        return false;
+    // The sidebar click path: currentRowChanged → on_provider_selected (activate + state).
+    if (provider_list_->currentRow() != index)
+        provider_list_->setCurrentRow(index);
+    else if (active_index_ != index)
+        on_provider_selected(index);
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> gov_command_rows() {
+    namespace rows = command_rows;
+    const QString screen = QStringLiteral("gov_data");
+    const QString where = GovDataScreen::tr("Government Data");
+    auto row = [&](const char* id, const QString& title, const QStringList& keywords) {
+        return rows::section(screen, QString::fromLatin1(id), title, keywords, where);
+    };
+    return {
+        row("us-treasury", GovDataScreen::tr("US Treasury"),
+            {QStringLiteral("treasury"), QStringLiteral("bonds"), QStringLiteral("yields"), QStringLiteral("auctions"),
+             QStringLiteral("t-bills"), QStringLiteral("treasury securities"), QStringLiteral("united states")}),
+        row("us-congress", GovDataScreen::tr("US Congress"),
+            {QStringLiteral("congress"), QStringLiteral("bills"), QStringLiteral("legislation"),
+             QStringLiteral("resolutions"), QStringLiteral("senate"), QStringLiteral("house")}),
+        row("canada-gov", GovDataScreen::tr("Canada open data"),
+            {QStringLiteral("canada"), QStringLiteral("canadian government"), QStringLiteral("open data"),
+             QStringLiteral("datasets")}),
+        row("swiss", GovDataScreen::tr("Swiss open data"),
+            {QStringLiteral("switzerland"), QStringLiteral("opendata.swiss"), QStringLiteral("open data"),
+             QStringLiteral("datasets")}),
+        row("france", GovDataScreen::tr("France open data"),
+            {QStringLiteral("france"), QStringLiteral("data.gouv.fr"), QStringLiteral("french government"),
+             QStringLiteral("company registry"), QStringLiteral("open data")}),
+        row("hk", GovDataScreen::tr("Hong Kong open data"),
+            {QStringLiteral("hong kong"), QStringLiteral("data.gov.hk"), QStringLiteral("open data"),
+             QStringLiteral("datasets")}),
+        row("openafrica", GovDataScreen::tr("openAFRICA"),
+            {QStringLiteral("africa"), QStringLiteral("african open data"), QStringLiteral("open data"),
+             QStringLiteral("datasets")}),
+        row("universal-ckan", GovDataScreen::tr("CKAN portals"),
+            {QStringLiteral("ckan"), QStringLiteral("ireland"), QStringLiteral("italy"), QStringLiteral("netherlands"),
+             QStringLiteral("latin america"), QStringLiteral("open data portals")}),
+        row("australia", GovDataScreen::tr("Australia open data"),
+            {QStringLiteral("australia"), QStringLiteral("data.gov.au"), QStringLiteral("open data"),
+             QStringLiteral("datasets")}),
+        row("uk", GovDataScreen::tr("UK open data"),
+            {QStringLiteral("united kingdom"), QStringLiteral("britain"), QStringLiteral("data.gov.uk"),
+             QStringLiteral("open data"), QStringLiteral("publishers")}),
+    };
+}
+
+void gov_install_commands() {
+    command_rows::install(QStringLiteral("gov_data"), &gov_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(gov_install_commands)
 
 } // namespace fincept::screens

@@ -1,6 +1,7 @@
 #include "ui/charts/layers/BollingerLayer.h"
 
 #include "ui/charts/ChartIndicators.h"
+#include "ui/theme/Theme.h"
 
 #include <QChart>
 #include <QLineSeries>
@@ -11,7 +12,7 @@ namespace fincept::ui {
 
 BollingerLayer::BollingerLayer(int period, double num_std, QObject* parent)
     : SeriesLayer(QStringLiteral("bb_%1_%2").arg(period).arg(num_std, 0, 'f', 1),
-                  QStringLiteral("BB (%1, %2)").arg(period).arg(num_std, 0, 'f', 1), QColor("#ca8a04"), 1, parent),
+                  QStringLiteral("BB (%1, %2)").arg(period).arg(num_std, 0, 'f', 1), QColor(), 1, parent),
       period_(period),
       num_std_(num_std) {}
 
@@ -60,16 +61,31 @@ void BollingerLayer::detach(QGraphicsScene* scene, QChart* chart) {
 void BollingerLayer::attach_band(QLineSeries*& s, QChart* chart) {
     if (!s)
         s = new QLineSeries();
-    QPen pen(QColor("#ca8a04"));
-    pen.setWidth(1);
-    pen.setStyle(Qt::DashLine);
-    s->setPen(pen);
+    style_band(s);
     if (!chart->series().contains(s))
         chart->addSeries(s);
     for (auto* axis : chart->axes(Qt::Horizontal))
         s->attachAxis(axis);
     for (auto* axis : chart->axes(Qt::Vertical))
         s->attachAxis(axis);
+}
+
+QColor BollingerLayer::default_color() const {
+    return colors::chart_color(2); // a categorical slot, never a direction colour
+}
+
+void BollingerLayer::style_band(QLineSeries* s) const {
+    if (!s)
+        return;
+    QPen pen(line_color());
+    pen.setWidth(1);
+    pen.setStyle(Qt::DashLine);
+    s->setPen(pen);
+}
+
+void BollingerLayer::refresh_theme_colors() {
+    style_band(upper_);
+    style_band(lower_);
 }
 
 void BollingerLayer::detach_band(QLineSeries*& s, QChart* chart) {

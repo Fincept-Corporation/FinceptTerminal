@@ -1,6 +1,7 @@
 #pragma once
 
 #include "screens/polymarket/ExchangePresentation.h"
+#include "screens/polymarket/PolymarketViewState.h"
 #include "services/polymarket/PolymarketTypes.h"
 #include "services/prediction/PredictionTypes.h"
 
@@ -13,7 +14,12 @@
 #include <QStackedWidget>
 #include <QStringList>
 #include <QTableWidget>
+#include <QTimer>
 #include <QWidget>
+
+namespace fincept::ui {
+class AutoLoadPane;
+} // namespace fincept::ui
 
 namespace fincept::screens::polymarket {
 
@@ -32,6 +38,26 @@ class PolymarketDetailPanel : public QWidget {
     Q_OBJECT
   public:
     explicit PolymarketDetailPanel(QWidget* parent = nullptr);
+
+    /// The per-market feeds, each with its own loading / failure state.
+    enum class Load { Book, Chart, Trades, Holders, Comments, Related };
+    /// `which` was requested for the selected market: its tab shows a skeleton
+    /// in its shape until the data (or set_load_error) arrives.
+    void set_loading(Load which);
+    /// The request for `which` failed: its tab shows the reason with RETRY
+    /// (reload_requested). Data already on screen stays.
+    void set_load_error(Load which, const QString& message);
+    /// The active exchange does not provide `which` (e.g. price history in a
+    /// preview): a plain "not available here" state, no RETRY.
+    void set_load_unavailable(Load which, const QString& message);
+    /// Nothing is selected: a skeleton while the market list loads (the screen
+    /// selects its first market as soon as it arrives), else a designed state
+    /// that says why there is nothing to show.
+    void show_no_market(bool loading, const QString& reason = QString());
+    /// The stored trading credential of the active exchange exists but could
+    /// not be read (empty = readable or none): the TRADE tab says so with RETRY
+    /// instead of "connect an account".
+    void set_account_read_error(const QString& reason);
 
     /// Install a per-exchange presentation profile. Restyles the tab bar
     /// accent, swaps the stats grid layout (hides OPEN INT on Kalshi), and
@@ -56,6 +82,11 @@ class PolymarketDetailPanel : public QWidget {
     /// Restrict the ticket's ORDER TYPE box to the codes the active exchange can place
     /// (from ExchangeCapabilities). The box was a fixed GTC/FOK/FAK list for every venue.
     void set_order_types(const QStringList& types);
+    /// Exchange-wide price tick / minimum size (ExchangeCapabilities). Used to
+    /// validate the ticket whenever the selected market's order book has not
+    /// supplied its own constraints, so an off-tick price is rejected up front
+    /// instead of being silently rounded by the adapter after confirmation.
+    void set_exchange_constraints(double tick_size, double min_order_size);
 
     // Polymarket-only enrichment setters — guarded by active_id at the caller.
     void set_price_summary(const fincept::services::polymarket::PriceSummary& summary);
@@ -85,6 +116,12 @@ class PolymarketDetailPanel : public QWidget {
     void outcome_changed(int index);
     void related_market_clicked(const fincept::services::prediction::PredictionMarket& market);
     void place_order(const fincept::services::prediction::OrderRequest& req);
+    /// RETRY on a failed tab: re-request the selected market's data.
+    void reload_requested();
+    /// CONNECT ACCOUNT on the TRADE tab.
+    void connect_account_requested();
+    /// RETRY on the TRADE tab's "could not read the stored credential" page.
+    void retry_credentials_requested();
 
   private:
     void build_ui();
@@ -101,6 +138,9 @@ class PolymarketDetailPanel : public QWidget {
     void refresh_ticket_side_style();
     void on_submit_clicked();
     void retranslateUi();
+    /// The TRADE tab's page without a usable account: what the active exchange
+    /// needs + CONNECT ACCOUNT, or the unreadable-credential page + RETRY.
+    void refresh_account_page();
 
     /// Recompute the "≈ COST" readout under the ticket from the current
     /// price × size. Shows "—" when either field is blank/invalid.
@@ -114,11 +154,22 @@ class PolymarketDetailPanel : public QWidget {
 
     QList<QPushButton*> tab_btns_;
     QStackedWidget* stack_ = nullptr;
+    // The tabs of the selected market, or (nothing selected) a skeleton / designed state:
+    // an AutoLoadPane in feed mode — the selection is pushed by the screen (set_market →
+    // feed_data, the list loading → feed_waiting, nothing to show → feed_idle).
+    fincept::ui::AutoLoadPane* market_pane_ = nullptr;
+    QWidget* market_view_ = nullptr;
+    // Feeds still loading (bit = 1 << Load). A reply that never comes (no data, no
+    // error) ends in "no answer" + RETRY instead of a skeleton forever.
+    unsigned pending_loads_ = 0;
+    QTimer* load_watchdog_ = nullptr;
+    void settle_load(Load which) { pending_loads_ &= ~(1u << static_cast<unsigned>(which)); }
 
     // Fixed-text captions cached for retranslateUi.
     QLabel* outcomes_header_ = nullptr;
     QList<QLabel*> stat_caption_lbls_;  // VOLUME / LIQUIDITY / OPEN INT / END DATE / MIDPOINT / SPREAD / LAST TRADE
-    QLabel* no_acct_msg_lbl_ = nullptr; // "Connect an account…"
+    fincept::ui::EmptyState* no_acct_state_ = nullptr; // TRADE without a usable account
+    QString account_read_error_;
     QLabel* bal_caption_lbl_ = nullptr; // "AVAILABLE"
     QLabel* pos_caption_lbl_ = nullptr; // "POSITION"
     QList<QLabel*> trade_form_caption_lbls_; // OUTCOME / PRICE (0–1) / SIZE / ORDER TYPE
@@ -169,18 +220,27 @@ class PolymarketDetailPanel : public QWidget {
     /// the exchange doesn't silently reject the order.
     double book_tick_size_ = 0.0;
     double book_min_size_ = 0.0;
+    /// Fallbacks from the active exchange's capabilities (set_exchange_constraints),
+    /// used while book_* are 0 (no book yet, or a book that carries none).
+    double exchange_tick_size_ = 0.0;
+    double exchange_min_size_ = 0.0;
 
     // Holders
     QTableWidget* holders_table_ = nullptr;
+    PmViewState holders_state_;
 
     // Comments
     QWidget* comments_container_ = nullptr;
+    PmViewState comments_state_;
 
     // Related
     QWidget* related_container_ = nullptr;
+    PmViewState related_state_;
 
-    // OPEN INT stat cell — hidden on Kalshi (no OI endpoint).
+    // OPEN INT stat cell — shown when the profile has open interest.
     QWidget* oi_box_ = nullptr;
+    // LIQUIDITY stat cell — hidden on Kalshi (the API has no liquidity figure).
+    QWidget* liquidity_box_ = nullptr;
 
     // Presentation — determines accent color, price formatting, stat
     // visibility, and status-badge wording. Default is the Polymarket
@@ -192,6 +252,12 @@ class PolymarketDetailPanel : public QWidget {
     // can re-render the overview + status badge with new formatters.
     fincept::services::prediction::PredictionMarket last_market_;
     bool has_last_market_ = false;
+
+    // Money on screen that is not kept elsewhere, so a number / currency format
+    // change re-renders it without a fetch (ui::formatting::on_format_changed).
+    fincept::services::prediction::AccountBalance last_balance_;
+    bool has_last_balance_ = false;
+    double last_open_interest_ = -1.0; ///< set_open_interest() figure on screen; < 0 = none
 
     // Tab indices.
     static constexpr int kTabTrade = 3;

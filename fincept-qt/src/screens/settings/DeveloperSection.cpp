@@ -37,11 +37,11 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
                                   "checkpointed per profile, so tasks survive restarts and schedules keep firing. "
                                   "Turn off to hide the tab and stop scheduled tasks."));
     agentic_desc_->setWordWrap(true);
-    agentic_desc_->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+    agentic_desc_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(agentic_desc_);
 
     agentic_toggle_ = new QCheckBox(tr("Enable Agentic Mode"));
-    agentic_toggle_->setStyleSheet(QString("color:%1;font-size:12px;padding:4px 0;").arg(ui::colors::TEXT_PRIMARY()));
+    agentic_toggle_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;padding:4px 0;").arg(ui::colors::TEXT_PRIMARY()));
     sync_agentic_toggle();
     connect(agentic_toggle_, &QCheckBox::toggled, this, [this](bool checked) {
         const QString v = checked ? QStringLiteral("true") : QStringLiteral("false");
@@ -63,7 +63,7 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_DIM()));
+    sep->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED()));
     sep->setFixedHeight(1);
     vl->addWidget(sep);
 
@@ -76,7 +76,7 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
                                     "subscriber count, total publishes, and time since last publish. Refreshes "
                                     "once per second while this tab is visible."));
     inspector_desc_->setWordWrap(true);
-    inspector_desc_->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+    inspector_desc_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(inspector_desc_);
 
     vl->addWidget(new devtools::DataHubInspector(this), 1);

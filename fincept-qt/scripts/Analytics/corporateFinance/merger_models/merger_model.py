@@ -1,8 +1,11 @@
 """Complete Merger Model - Accretion/Dilution Analysis
 
-CLI (python merger_model.py <command> <json>): build | accretion_dilution | pro_forma, keys acquirer {revenue,
-ebitda, net_income, shares}, target {revenue, net_income, ...}, deal_value, cash_pct, synergies,
-integration_costs; pro_forma also takes years (horizon, 1-10) and revenue_growth (fraction a year).
+CLI (python merger_model.py <command> <json>): build | accretion_dilution | sensitivity | pro_forma, keys acquirer
+{revenue, ebitda, net_income, shares, share_price}, target {revenue, net_income, ...}, deal_value, premium, cash_pct,
+synergies, integration_costs; pro_forma also takes years (horizon, 1-10) and revenue_growth (fraction a year).
+accretion_dilution and sensitivity use merger_models/accretion_engine.py (EPS bridge, 3 years, breakeven synergies,
+premium x synergies and premium x cash-mix grids); they also take cash_from_balance_sheet, cost_of_debt, cash_yield,
+tax_rate, synergy_phase [y1, y2, y3], integration_costs_y1..y3, amortization, earnings_growth.
 Native positional forms: build <acq> <tgt> <terms> | accretion_dilution <model_json> | pro_forma <acq> <tgt> <year>.
 """
 import sys
@@ -233,7 +236,7 @@ class MergerModel:
 # `accretion_dilution model_json`, `pro_forma acquirer target year`), so a service-style call is handled here by
 # building the three inputs from the flat panel / MCP params and running the same MergerModel. Any other argv
 # shape is untouched.
-_SERVICE_COMMANDS = ("build", "accretion_dilution", "pro_forma")
+_SERVICE_COMMANDS = ("build", "accretion_dilution", "sensitivity", "pro_forma")
 
 
 def _svc_num(p, *keys, default=None):
@@ -348,18 +351,29 @@ def _service_dispatch(argv):
         return False
     if "acquirer_data" in p or "deal_terms" in p:
         return False  # the native `accretion_dilution <model_data_json>` form (same argv shape) — not a flat call
+    if argv[1] in ("accretion_dilution", "sensitivity"):
+        # One transparent model for the headline, the EPS bridge and the grids (accretion_engine.py): every
+        # figure on the view reconciles, and an input it needs is asked for instead of assumed.
+        from corporateFinance.merger_models.accretion_engine import analyze, AccretionInputError
+        try:
+            result = analyze(p)
+            if argv[1] == "sensitivity":
+                result = dict(result["sensitivity"],
+                              base_accretion_pct=result["accretion_dilution"]["accretion_dilution_pct"])
+            print(json.dumps({"success": True, "data": result}, default=str))
+        except AccretionInputError as e:
+            print(json.dumps({"success": False, "error": str(e), "missing_inputs": e.missing, "command": argv[1]}))
+            sys.exit(1)
+        except Exception as e:
+            print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+            sys.exit(1)
+        return True
     try:
         acquirer, target, terms = _svc_merger_inputs(p)
         model = MergerModel(acquirer, target, terms)
         results = model.build_complete_model()
         if argv[1] == "build":
             data = results
-        elif argv[1] == "accretion_dilution":
-            data = {
-                "accretion_dilution": results.get("accretion_dilution", {}),
-                "breakeven_synergies": results.get("breakeven_synergies", 0),
-                "deal_overview": results.get("deal_overview", {}),
-            }
         else:
             # `years` is the projection horizon; year 1 = the companies' figures as supplied, later years grow
             # revenue (and revenue-driven costs) at `revenue_growth` a year.

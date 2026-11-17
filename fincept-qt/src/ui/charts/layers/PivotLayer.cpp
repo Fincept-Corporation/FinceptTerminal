@@ -31,17 +31,19 @@ void PivotLayer::compute(const QVector<CandleData>& candles) {
     const auto r = indicators::pivot_points(day_high, day_low, day_close, type_);
 
     QVector<HorizontalLevel> levels;
-    auto add = [&](double price, const QString& label, const QColor& color) {
-        levels.append({price, label, color, Qt::DotLine});
+    // Theme tones (resolved at draw time): resistance above in the "up"
+    // colour, support below in the "down" colour of the direction palette.
+    auto add = [&](double price, const QString& label, HorizontalLevelTone tone) {
+        levels.append({price, label, QColor(), Qt::DotLine, tone});
     };
 
-    add(r.pp, "PP", QColor("#e5e5e5"));
-    add(r.r1, "R1", QColor("#16a34a"));
-    add(r.r2, "R2", QColor("#16a34a"));
-    add(r.r3, "R3", QColor("#16a34a"));
-    add(r.s1, "S1", QColor("#dc2626"));
-    add(r.s2, "S2", QColor("#dc2626"));
-    add(r.s3, "S3", QColor("#dc2626"));
+    add(r.pp, "PP", HorizontalLevelTone::Neutral);
+    add(r.r1, "R1", HorizontalLevelTone::Up);
+    add(r.r2, "R2", HorizontalLevelTone::Up);
+    add(r.r3, "R3", HorizontalLevelTone::Up);
+    add(r.s1, "S1", HorizontalLevelTone::Down);
+    add(r.s2, "S2", HorizontalLevelTone::Down);
+    add(r.s3, "S3", HorizontalLevelTone::Down);
 
     set_levels(levels);
 }

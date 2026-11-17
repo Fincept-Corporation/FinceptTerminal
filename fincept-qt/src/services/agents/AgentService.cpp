@@ -12,6 +12,7 @@
 
 #include "auth/AuthManager.h"
 #include "core/config/AppPaths.h"
+#include "core/process/ProcessTree.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -187,7 +188,12 @@ QJsonObject agent_svc_expand_config(const QJsonObject& config) {
     if (!agent_id.isEmpty() && !out.contains(QStringLiteral("instructions"))) {
         const auto saved = AgentConfigRepository::instance().get(agent_id);
         if (saved.is_ok()) {
-            const QJsonObject saved_cfg = QJsonDocument::fromJson(saved.value().config_json.toUtf8()).object();
+            QJsonParseError parse_error{};
+            const QJsonObject saved_cfg =
+                QJsonDocument::fromJson(saved.value().config_json.toUtf8(), &parse_error).object();
+            if (parse_error.error != QJsonParseError::NoError && !saved.value().config_json.isEmpty())
+                LOG_WARN("AgentService", logf("Saved agent config is not valid JSON, running with defaults",
+                                              {{"agent", agent_id}, {"error", parse_error.errorString()}}));
             for (auto it = saved_cfg.constBegin(); it != saved_cfg.constEnd(); ++it) {
                 // `model`: stale snapshot (re-resolved below). terminal_mcp_* /
                 // terminal_tools: run-scoped bridge wiring that build_payload() mints
@@ -255,13 +261,18 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     // checker that gates agent-originated tool calls. Both are idempotent;
     // failure to bind the port is logged but not fatal — agents simply lose
     // terminal-tool access.
-    connect(&mcp::TerminalMcpBridge::instance(), &mcp::TerminalMcpBridge::bridge_error, this,
-            [](const QString& msg) { LOG_ERROR("AgentService", "Terminal MCP bridge error: " + msg); });
+    // The bridge logs its own failure (ERROR); keep the text for the consequence line below.
+    static QString bridge_last_error;
+    connect(&mcp::TerminalMcpBridge::instance(), &mcp::TerminalMcpBridge::bridge_error, this, [](const QString& msg) {
+        bridge_last_error = msg;
+        LOG_DEBUG("AgentService", "Terminal MCP bridge error: " + msg);
+    });
     if (mcp::TerminalMcpBridge::instance().start()) {
-        LOG_INFO("AgentService", "Terminal MCP bridge started: " + mcp::TerminalMcpBridge::instance().endpoint());
+        // DEBUG: the bridge writes its own "Listening on" line at start-up.
+        LOG_DEBUG("AgentService", "Terminal MCP bridge started: " + mcp::TerminalMcpBridge::instance().endpoint());
     } else {
-        LOG_WARN("AgentService", "Terminal MCP bridge failed to start — agents will run "
-                                 "without internal tool access");
+        LOG_WARN("AgentService", logf("Terminal MCP bridge failed to start, agents run without terminal tools",
+                                      {{"error", bridge_last_error}}));
     }
 
     // Auth checker — process-wide. Distinguishes agent-originated calls
@@ -575,7 +586,12 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
                 active_llm["api_key"] = llm.active_api_key();
                 active_llm["base_url"] = llm.active_base_url();
                 active_llm["temperature"] = llm.active_temperature();
-                active_llm["max_tokens"] = llm.active_max_tokens();
+                // 0 = "no user override" (global setting since the v021 migration);
+                // sent as-is it reached the provider as max_tokens: 0. Omit it so
+                // Python applies its own default.
+                const int max_tokens = llm.active_max_tokens();
+                if (max_tokens > 0)
+                    active_llm["max_tokens"] = max_tokens;
                 payload["active_llm"] = active_llm;
             }
         }
@@ -661,6 +677,70 @@ QProcessEnvironment AgentService::agent_process_env() const {
     QProcessEnvironment env = python::PythonRunner::instance().build_python_env();
     env.insert(QStringLiteral("FINCEPT_AGENT_DATA_DIR"), agent_data_dir());
     return env;
+}
+
+namespace {
+/// Set on an agent child this service killed (cancel / quit): its end is not "by itself".
+constexpr const char* kAgentProcKilledProp = "fincept_agent_killed";
+} // namespace
+
+QProcess* AgentService::new_agent_process() {
+    auto* proc = new QProcess(this);
+    // Share the standard Python env + cwd with PythonRunner so every finagent spawn
+    // sees the same FINCEPT_DATA_DIR, FINAGENT_DATA_DIR, PYTHONPATH and
+    // FINCEPT_AGENT_DATA_DIR.
+    proc->setProcessEnvironment(agent_process_env());
+    proc->setWorkingDirectory(python::PythonRunner::instance().scripts_dir());
+    // One tree for the child and everything it starts; also no console window
+    // (replaces the CREATE_NO_WINDOW modifier each spawn used to set itself).
+    process::own_tree(proc);
+    agent_procs_.insert(proc);
+    connect(proc, &QObject::destroyed, this, [this, proc]() { agent_procs_.remove(proc); });
+    if (!quit_hooked_) {
+        quit_hooked_ = true;
+        if (QCoreApplication* app = QCoreApplication::instance())
+            connect(app, &QCoreApplication::aboutToQuit, this, &AgentService::kill_agent_processes_for_quit);
+    }
+    return proc;
+}
+
+void AgentService::kill_agent_tree(QProcess* proc) {
+    if (!proc)
+        return;
+    proc->setProperty(kAgentProcKilledProp, true);
+    process::kill_tree(proc);
+}
+
+void AgentService::release_agent_tree(QProcess* proc, QProcess::ExitStatus status) {
+    if (proc && status == QProcess::NormalExit && !proc->property(kAgentProcKilledProp).toBool())
+        process::release_tree(proc);
+    // Any other end: the tree's job (Windows) reaps what is left when `proc` is deleted.
+}
+
+void AgentService::kill_agent_processes_for_quit() {
+    if (agent_procs_.isEmpty())
+        return;
+    const QList<QProcess*> running = agent_procs_.values();
+    int killed = 0;
+    for (QProcess* p : running) {
+        if (p->state() == QProcess::NotRunning)
+            continue;
+        p->disconnect(this); // no result handling during teardown
+        kill_agent_tree(p);
+        ++killed;
+    }
+    // Bounded: the trees are already being killed; this only lets them go before exit.
+    QElapsedTimer waited;
+    waited.start();
+    for (QProcess* p : running) {
+        const qint64 left = 1500 - waited.elapsed();
+        if (left <= 0)
+            break;
+        if (p->state() != QProcess::NotRunning)
+            p->waitForFinished(static_cast<int>(left));
+    }
+    if (killed > 0)
+        LOG_INFO("AgentService", logf("Agent processes stopped for shutdown", {{"count", killed}}));
 }
 
 QJsonObject AgentService::model_config_for_profile(const QString& profile_id, const QString& context_type) const {
@@ -765,18 +845,9 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
-    // Spawn QProcess directly for stdin writing (P4 exception like ExchangeService)
-    auto* proc = new QProcess(this);
-    // Share the standard Python env + cwd + Windows console suppression with
-    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
-    proc->setProcessEnvironment(agent_process_env());
-    proc->setWorkingDirectory(py.scripts_dir());
-#ifdef _WIN32
-    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // Spawn QProcess directly for stdin writing (P4 exception like ExchangeService),
+    // in its own process tree (new_agent_process).
+    auto* proc = new_agent_process();
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     timer->start();
@@ -786,7 +857,8 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     auto settled = std::make_shared<bool>(false);
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, action, on_result, timer, run_token, settled](int exit_code, QProcess::ExitStatus) {
+            [self, proc, action, on_result, timer, run_token, settled](int exit_code, QProcess::ExitStatus status) {
+                release_agent_tree(proc, status);
                 mcp::TerminalMcpBridge::instance().end_run(run_token);
                 int elapsed = timer->elapsed();
 
@@ -806,11 +878,14 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
                 QJsonDocument doc = QJsonDocument::fromJson(json_str.toUtf8());
                 if (exit_code != 0 || doc.isNull()) {
-                    LOG_ERROR("AgentService", QString("%1 failed (exit=%2, %3ms): %4")
-                                                  .arg(action)
-                                                  .arg(exit_code)
-                                                  .arg(elapsed)
-                                                  .arg(stderr_str.left(200)));
+                    // The script's own error is the last stderr line (a traceback ends with it).
+                    LOG_ERROR("AgentService",
+                              logf("Agent action failed",
+                                   {{"action", action},
+                                    {"exit", exit_code},
+                                    {"reason", exit_code != 0 ? "exit" : "invalid_output"},
+                                    {"duration_ms", elapsed},
+                                    {"error", stderr_str.trimmed().section(QLatin1Char('\n'), -1)}}));
                     QString err = stderr_str.isEmpty() ? "Agent execution failed" : stderr_str.left(500);
                     // Agents need the optional full library set (agno & co.): make a
                     // missing module actionable and offer the install. The traceback's
@@ -826,7 +901,8 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                     return;
                 }
 
-                LOG_INFO("AgentService", QString("%1 completed in %2ms").arg(action).arg(elapsed));
+                // DEBUG: agent runs write their own "Agent run finished" line (AgentService_Execution).
+                LOG_DEBUG("AgentService", logf("Agent action finished", {{"action", action}, {"duration_ms", elapsed}}));
                 QJsonObject result = doc.object();
                 result["execution_time_ms"] = elapsed;
                 on_result(true, result);
@@ -839,8 +915,9 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                 // better message than "Process crashed"); write/read errors mean
                 // the child is already on its way out.
                 if (e != QProcess::FailedToStart) {
-                    LOG_WARN("AgentService",
-                             QString("%1 process error %2: %3").arg(action).arg(int(e)).arg(proc->errorString()));
+                    // DEBUG: finished() follows and writes the failure line with the child's stderr.
+                    LOG_DEBUG("AgentService",
+                              QString("%1 process error %2: %3").arg(action).arg(int(e)).arg(proc->errorString()));
                     return;
                 }
                 mcp::TerminalMcpBridge::instance().end_run(run_token);
@@ -849,11 +926,16 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                 if (!self || *settled)
                     return;
                 *settled = true;
-                LOG_ERROR("AgentService", QString("%1 process error: %2").arg(action, err));
+                LOG_ERROR("AgentService", logf("Agent process could not start", {{"action", action}, {"error", err}}));
                 on_result(false, QJsonObject{{"error", "Process error: " + err}});
             });
 
-    LOG_INFO("AgentService", QString("Running %1 via stdin (%2 bytes)").arg(action).arg(payload_bytes.size()));
+    LOG_DEBUG("AgentService", logf("Agent action started", {{"action", action},
+                                                            {"model", payload.value(QStringLiteral("active_llm"))
+                                                                          .toObject()
+                                                                          .value(QStringLiteral("model_id"))
+                                                                          .toString()},
+                                                            {"bytes", payload_bytes.size()}}));
     proc->start(python_path, {script_path, "--stdin"});
     proc->write(payload_bytes);
     proc->closeWriteChannel();
@@ -960,7 +1042,7 @@ void AgentService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("task:event:*"), task_event_policy);
 
     hub_registered_ = true;
-    LOG_INFO("AgentService", "Registered with DataHub (agent:*)");
+    LOG_DEBUG("AgentService", "Registered with DataHub (agent:*)");
 }
 
 void AgentService::publish_agent_result(const AgentExecutionResult& r, bool final) {

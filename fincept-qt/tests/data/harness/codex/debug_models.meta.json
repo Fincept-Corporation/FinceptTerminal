@@ -1,0 +1,10 @@
+{
+  "harness_version": "0.160.0",
+  "date": "2026-11-17",
+  "command": "codex debug models",
+  "source": "recorded",
+  "url": "",
+  "exit_code": 0,
+  "stream": "stdout",
+  "note": "Trimmed: every model keeps only slug, display_name, description, default_reasoning_level, supported_reasoning_levels, visibility, priority, context_window, max_context_window, input_modalities, supported_in_api (base_instructions, model_messages and other keys removed). No account data in the output."
+}

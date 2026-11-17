@@ -38,6 +38,11 @@ class BrokerHoldingsWidget : public BaseWidget {
     void hub_resubscribe();
     void hub_unsubscribe_all();
     QString resolve_account_id() const;
+    QString holdings_topic() const;
+    /// Account name in the header, or why the broker session is unusable.
+    void update_session_state();
+    /// No account: "No broker account connected" over the tile (BaseWidget helper).
+    void show_no_account_state();
 
     // Square-off: places MARKET SELL / CNC orders for holdings of THIS account
     // only — never touches positions. `square_off_all` exits every holding;
@@ -56,6 +61,7 @@ class BrokerHoldingsWidget : public BaseWidget {
     QVector<trading::BrokerHolding> holdings_;
 
     bool hub_active_ = false;
+    bool showing_empty_ = false; // table currently shows the "No holdings" row
 };
 
 } // namespace fincept::screens::widgets

@@ -7,13 +7,26 @@ Covers:
 - Non-sovereign (municipal) government credit
 - Comparing government vs corporate bond issuance
 - Country risk assessment frameworks
+
+The sovereign / municipal scores are an INDICATIVE linear scorecard built from the CFA factor list
+with hand-chosen weights - not an agency rating model and not calibrated to default data.
+
+Usage: python sovereign_credit.py <command> '<json params>'   (same commands and params as cli.py)
 """
 
 import json
+import os
 import sys
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 from enum import Enum
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fi_common as fc  # noqa: E402
+from fi_common import FIError, num  # noqa: E402
+
+SCORECARD_NOTE = ('Indicative linear scorecard (hand-chosen weights on CFA factors); not an agency rating '
+                  'and not calibrated to default data')
 
 
 class SovereignRating(Enum):
@@ -238,6 +251,7 @@ class SovereignCreditAnalyzer:
 
         return {
             "implied_rating": implied_rating.value,
+            "model": SCORECARD_NOTE,
             "combined_score": round(combined_score, 2),
             "ability_score": ability['overall_ability_score'],
             "willingness_score": willingness['willingness_score'],
@@ -424,8 +438,10 @@ class MunicipalCreditAnalyzer:
         # Debt burden
         debt_burden_score = max(0, 100 - factors.debt_per_capita / 50)  # $5k/capita = 0
 
-        # Management quality
-        management_score = (factors.budget_management + factors.reserve_levels) / 2
+        # Management quality: budget_management is a 0-100 score, reserve_levels is % of budget;
+        # map reserves to 0-100 (25% of budget or more = 100) before averaging
+        reserve_score = min(100.0, max(0.0, factors.reserve_levels * 4))
+        management_score = (factors.budget_management + reserve_score) / 2
 
         # Pension liability impact
         pension_impact = max(0, 100 - factors.unfunded_pension_liability / 1000)  # Per capita
@@ -441,11 +457,14 @@ class MunicipalCreditAnalyzer:
 
         return {
             "go_credit_score": round(go_score, 2),
+            "model": SCORECARD_NOTE,
+            "population": population,
             "components": {
                 "tax_capacity": round(tax_capacity_score, 2),
                 "tax_base_diversity": factors.tax_base_diversity,
                 "debt_burden": round(debt_burden_score, 2),
                 "management_quality": round(management_score, 2),
+                "reserve_score": round(reserve_score, 2),
                 "pension_impact": round(pension_impact, 2)
             },
             "key_strengths": self._identify_go_strengths(factors, tax_capacity_score),
@@ -508,6 +527,7 @@ class MunicipalCreditAnalyzer:
 
         return {
             "revenue_bond_score": round(revenue_score, 2),
+            "model": SCORECARD_NOTE,
             "project_type": project_type,
             "coverage_analysis": {
                 "dsc_ratio": debt_service_coverage,
@@ -790,33 +810,37 @@ class GovernmentVsCorporateComparison:
         Returns:
             Relative value analysis
         """
+        if not 0 <= tax_rate < 1:
+            raise FIError('tax_rate must be >= 0 and < 1 (decimal, e.g. 0.35)')
         corporate_yield = sovereign_yield + corporate_spread
 
         # Tax-equivalent municipal yield
         muni_taxable_equivalent = muni_yield / (1 - tax_rate)
 
         # Muni ratio (muni yield / Treasury yield)
-        muni_ratio = muni_yield / sovereign_yield if sovereign_yield > 0 else 0
+        muni_ratio = muni_yield / sovereign_yield if sovereign_yield > 0 else None
 
         # Breakeven tax rate (where muni = taxable)
-        breakeven_tax_rate = 1 - (muni_yield / corporate_yield) if corporate_yield > 0 else 0
+        breakeven_tax_rate = 1 - (muni_yield / corporate_yield) if corporate_yield > 0 else None
 
         return {
             "yields": {
-                "sovereign": sovereign_yield,
-                "corporate": corporate_yield,
-                "municipal_nominal": muni_yield,
-                "municipal_taxable_equivalent": round(muni_taxable_equivalent, 4)
+                "sovereign": round(sovereign_yield, 6),
+                "corporate": round(corporate_yield, 6),
+                "municipal_nominal": round(muni_yield, 6),
+                "municipal_taxable_equivalent": round(muni_taxable_equivalent, 6)
             },
             "analysis": {
-                "corporate_vs_sovereign_spread": corporate_spread,
-                "muni_ratio": round(muni_ratio * 100, 2),
-                "historical_muni_ratio_avg": 80.0,  # Typical historical average
-                "muni_appears": "Cheap" if muni_ratio > 0.85 else "Fair" if muni_ratio > 0.75 else "Rich"
+                "corporate_vs_sovereign_spread": round(corporate_spread, 6),
+                "muni_ratio": round(muni_ratio * 100, 2) if muni_ratio is not None else None,
+                "historical_muni_ratio_avg": 80.0,
+                "historical_muni_ratio_note": "assumed typical long-run level, not computed from data",
+                "muni_appears": (None if muni_ratio is None else
+                                 "Cheap" if muni_ratio > 0.85 else "Fair" if muni_ratio > 0.75 else "Rich")
             },
             "tax_analysis": {
-                "investor_tax_rate": tax_rate * 100,
-                "breakeven_tax_rate": round(breakeven_tax_rate * 100, 2),
+                "investor_tax_rate": round(tax_rate * 100, 4),
+                "breakeven_tax_rate": round(breakeven_tax_rate * 100, 2) if breakeven_tax_rate is not None else None,
                 "muni_advantaged": muni_taxable_equivalent > corporate_yield
             },
             "recommendation": self._relative_value_recommendation(
@@ -840,128 +864,144 @@ class GovernmentVsCorporateComparison:
             return "Corporate bonds offer better risk-adjusted value"
 
 
-def main():
-    """CLI entry point for sovereign credit analysis."""
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "error": "Command required",
-            "available_commands": [
-                "analyze_sovereign",
-                "compare_local_foreign",
-                "analyze_municipal_go",
-                "analyze_revenue_bond",
-                "compare_go_revenue",
-                "compare_govt_corporate",
-                "relative_value"
-            ]
-        }))
-        return
+_SOVEREIGN_DEFAULTS = {
+    'institutional_effectiveness': 70, 'political_stability': 70, 'rule_of_law': 70, 'corruption_index': 30,
+    'gdp_growth_rate': 2.0, 'gdp_per_capita': 50000, 'inflation_rate': 2.0, 'unemployment_rate': 5.0,
+    'current_account_balance_gdp': 0, 'government_debt_gdp': 60, 'fiscal_balance_gdp': -3,
+    'interest_expense_revenue': 10, 'foreign_reserves_months_imports': 6, 'external_debt_gdp': 40,
+}
+_SCORE_FIELDS = ('institutional_effectiveness', 'political_stability', 'rule_of_law', 'corruption_index')
 
-    command = sys.argv[1]
+_MUNICIPAL_DEFAULTS = {
+    'tax_base_diversity': 70, 'revenue_volatility': 30, 'economic_base_strength': 70, 'debt_per_capita': 2000,
+    'debt_service_coverage': 2.0, 'unfunded_pension_liability': 3000, 'budget_management': 75, 'reserve_levels': 15,
+}
 
+
+def build_sovereign_factors(f: Any) -> SovereignCreditFactors:
+    """SovereignCreditFactors from a JSON object; missing fields take neutral defaults."""
+    f = f if f is not None else {}
+    if not isinstance(f, dict):
+        raise FIError('factors must be a JSON object')
+    values = {}
+    for k, d in _SOVEREIGN_DEFAULTS.items():
+        bounds = dict(lo=0, hi=100) if k in _SCORE_FIELDS else {}
+        values[k] = num(f, k, d, **bounds)
+    values['fx_regime'] = fc.text(f, 'fx_regime', 'floating', choices=('floating', 'managed', 'fixed'))
+    values['reserve_currency_issuer'] = fc.boolean(f, 'reserve_currency_issuer', False)
+    return SovereignCreditFactors(**values)
+
+
+def build_municipal_factors(f: Any) -> MunicipalCreditFactors:
+    """MunicipalCreditFactors from a JSON object; missing fields take neutral defaults."""
+    f = f if f is not None else {}
+    if not isinstance(f, dict):
+        raise FIError('factors must be a JSON object')
+    values = {k: num(f, k, d) for k, d in _MUNICIPAL_DEFAULTS.items()}
+    for k in ('tax_base_diversity', 'budget_management'):
+        if not 0 <= values[k] <= 100:
+            raise FIError(f'{k} must be a 0-100 score')
+    values['state_support_level'] = fc.text(f, 'state_support_level', 'moderate',
+                                            choices=('strong', 'moderate', 'weak', 'none'))
+    values['legal_framework'] = fc.text(f, 'legal_framework', 'strong')
+    return MunicipalCreditFactors(**values)
+
+
+ANALYSIS_TYPES = ('sovereign_rating', 'sovereign_ability_to_pay', 'sovereign_willingness', 'local_vs_foreign_debt',
+                  'default_restructuring', 'municipal_go', 'municipal_revenue', 'go_vs_revenue',
+                  'govt_vs_corporate', 'relative_value')
+
+# command names used by this file's own CLI before it shared cli.py's names
+_LEGACY_COMMANDS = {
+    'analyze_sovereign': 'sovereign_rating', 'compare_local_foreign': 'local_vs_foreign_debt',
+    'analyze_municipal_go': 'municipal_go', 'analyze_revenue_bond': 'municipal_revenue',
+    'compare_go_revenue': 'go_vs_revenue', 'compare_govt_corporate': 'govt_vs_corporate',
+}
+
+
+def run_sovereign_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Sovereign / municipal credit dispatcher (params['analysis_type'] in ANALYSIS_TYPES)."""
+    analysis_type = params.get('analysis_type', '')
+    sov = SovereignCreditAnalyzer()
+    muni = MunicipalCreditAnalyzer()
+    comparison = GovernmentVsCorporateComparison()
     try:
-        if command == "analyze_sovereign":
-            # Example sovereign analysis
-            factors = SovereignCreditFactors(
-                institutional_effectiveness=75,
-                political_stability=70,
-                rule_of_law=80,
-                corruption_index=30,
-                gdp_growth_rate=2.5,
-                gdp_per_capita=65000,
-                inflation_rate=2.1,
-                unemployment_rate=3.8,
-                current_account_balance_gdp=-3.0,
-                government_debt_gdp=95,
-                fiscal_balance_gdp=-4.5,
-                interest_expense_revenue=12,
-                foreign_reserves_months_imports=2,
-                external_debt_gdp=45,
-                fx_regime="floating",
-                reserve_currency_issuer=True
-            )
-            analyzer = SovereignCreditAnalyzer()
-            result = analyzer.calculate_sovereign_rating(factors)
-            print(json.dumps(result, indent=2))
-
-        elif command == "compare_local_foreign":
-            factors = SovereignCreditFactors(
-                institutional_effectiveness=60,
-                political_stability=55,
-                rule_of_law=65,
-                corruption_index=45,
-                gdp_growth_rate=4.0,
-                gdp_per_capita=12000,
-                inflation_rate=5.5,
-                unemployment_rate=7.0,
-                current_account_balance_gdp=-4.0,
-                government_debt_gdp=55,
-                fiscal_balance_gdp=-3.0,
-                interest_expense_revenue=15,
-                foreign_reserves_months_imports=5,
-                external_debt_gdp=35,
-                fx_regime="managed",
-                reserve_currency_issuer=False
-            )
-            analyzer = SovereignCreditAnalyzer()
-            result = analyzer.compare_local_vs_foreign_currency_debt(factors)
-            print(json.dumps(result, indent=2))
-
-        elif command == "analyze_municipal_go":
-            factors = MunicipalCreditFactors(
-                tax_base_diversity=75,
-                revenue_volatility=25,
-                economic_base_strength=70,
-                debt_per_capita=2500,
-                debt_service_coverage=2.2,
-                unfunded_pension_liability=3000,
-                budget_management=80,
-                reserve_levels=18,
-                state_support_level="moderate",
-                legal_framework="strong"
-            )
-            analyzer = MunicipalCreditAnalyzer()
-            result = analyzer.analyze_general_obligation_bonds(
-                factors, population=500000, median_income=55000
-            )
-            print(json.dumps(result, indent=2))
-
-        elif command == "analyze_revenue_bond":
-            analyzer = MunicipalCreditAnalyzer()
-            result = analyzer.analyze_revenue_bonds(
-                project_type="Water and Sewer System",
-                debt_service_coverage=1.75,
-                rate_covenant=1.25,
-                additional_bonds_test=True,
-                essentiality="essential"
-            )
-            print(json.dumps(result, indent=2))
-
-        elif command == "compare_go_revenue":
-            analyzer = MunicipalCreditAnalyzer()
-            result = analyzer.compare_go_vs_revenue_bonds()
-            print(json.dumps(result, indent=2))
-
-        elif command == "compare_govt_corporate":
-            comparison = GovernmentVsCorporateComparison()
-            result = comparison.compare_issuance_characteristics()
-            print(json.dumps(result, indent=2))
-
-        elif command == "relative_value":
-            comparison = GovernmentVsCorporateComparison()
-            result = comparison.analyze_relative_value(
-                sovereign_yield=0.04,  # 4%
-                corporate_spread=0.015,  # 150 bps
-                muni_yield=0.035,  # 3.5%
-                tax_rate=0.37  # 37%
-            )
-            print(json.dumps(result, indent=2))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}))
-
+        if analysis_type == 'sovereign_rating':
+            return sov.calculate_sovereign_rating(build_sovereign_factors(params.get('factors')))
+        if analysis_type == 'sovereign_ability_to_pay':
+            out = sov.analyze_ability_to_pay(build_sovereign_factors(params.get('factors')))
+            out['model'] = SCORECARD_NOTE
+            return out
+        if analysis_type == 'sovereign_willingness':
+            out = sov.analyze_willingness_to_pay(build_sovereign_factors(params.get('factors')))
+            out['model'] = SCORECARD_NOTE
+            return out
+        if analysis_type == 'local_vs_foreign_debt':
+            out = sov.compare_local_vs_foreign_currency_debt(build_sovereign_factors(params.get('factors')))
+            out['model'] = SCORECARD_NOTE
+            return out
+        if analysis_type == 'default_restructuring':
+            return sov.analyze_default_restructuring_factors(
+                build_sovereign_factors(params.get('factors')),
+                fc.boolean(params, 'has_imf_program', False),
+                num(params, 'debt_to_exports', 100, aliases=('debt_to_exports_ratio',), lo=0))
+        if analysis_type == 'municipal_go':
+            return muni.analyze_general_obligation_bonds(
+                build_municipal_factors(params.get('factors')),
+                num(params, 'population', 100000, lo=0, lo_open=True),
+                num(params, 'median_income', 50000, lo=0))
+        if analysis_type == 'municipal_revenue':
+            return muni.analyze_revenue_bonds(
+                project_type=fc.text(params, 'project_type', 'Water System', lower=False),
+                debt_service_coverage=num(params, 'debt_service_coverage', 1.5, lo=0),
+                rate_covenant=num(params, 'rate_covenant', 1.25, lo=0),
+                additional_bonds_test=fc.boolean(params, 'additional_bonds_test', True),
+                essentiality=fc.text(params, 'essentiality', 'essential',
+                                     choices=('essential', 'important', 'discretionary')))
+        if analysis_type == 'go_vs_revenue':
+            return muni.compare_go_vs_revenue_bonds()
+        if analysis_type == 'govt_vs_corporate':
+            return comparison.compare_issuance_characteristics()
+        if analysis_type == 'relative_value':
+            return comparison.analyze_relative_value(
+                sovereign_yield=num(params, 'sovereign_yield', 0.04),
+                corporate_spread=num(params, 'corporate_spread', 0.015),
+                muni_yield=num(params, 'muni_yield', 0.035),
+                tax_rate=num(params, 'tax_rate', 0.35))
+        return {'error': f'Unknown sovereign analysis type: {analysis_type}', 'analysis_types': list(ANALYSIS_TYPES)}
+    except FIError as e:
+        return {'error': str(e)}
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        return {'error': str(e) or type(e).__name__}
+
+
+def main(argv=None):
+    """python sovereign_credit.py <command> '<json params>' -> one JSON payload (inputs are honoured)."""
+    fc.import_fincept_json()
+    import fincept_json
+    argv = sys.argv if argv is None else argv
+    commands = list(ANALYSIS_TYPES) + list(_LEGACY_COMMANDS)
+    if len(argv) < 2:
+        fincept_json.emit({'error': "usage: python sovereign_credit.py <command> '<json params>'",
+                           'available_commands': commands})
+        return
+    command = _LEGACY_COMMANDS.get(argv[1], argv[1])
+    if command not in ANALYSIS_TYPES:
+        fincept_json.emit({'error': f'Unknown command: {argv[1]}', 'available_commands': commands})
+        return
+    params: Any = {}
+    if len(argv) > 2:
+        try:
+            params = json.loads(argv[2])
+        except ValueError as e:
+            fincept_json.emit({'error': f'Invalid JSON parameters: {e}'})
+            return
+    if not isinstance(params, dict):
+        fincept_json.emit({'error': 'params must be a JSON object'})
+        return
+    params = dict(params)
+    params['analysis_type'] = command
+    fincept_json.emit(run_sovereign_analysis(params))
 
 
 if __name__ == "__main__":

@@ -32,8 +32,6 @@ from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
 
-import pandas as pd
-import numpy as np
 from .core import EconomicsBase, ValidationError, CalculationError, DataError
 
 
@@ -44,94 +42,85 @@ class BusinessCycleAnalyzer(EconomicsBase):
         super().__init__(precision, base_currency)
         self.cycle_phases = ['expansion', 'peak', 'contraction', 'trough']
 
+    # Rule set: phase -> [(indicator, test, points)]. Indicators are in percent except
+    # consumer_confidence (index, 100 = long-run average).
+    _PHASE_RULES = {
+        'expansion': [('gdp_growth_rate', lambda v: v > 2, 25),
+                      ('unemployment_rate', lambda v: v < 6, 20),
+                      ('consumer_confidence', lambda v: v > 100, 20),
+                      ('business_investment_growth', lambda v: v > 3, 20),
+                      ('inflation_rate', lambda v: 1 < v < 4, 15)],
+        'peak': [('gdp_growth_rate', lambda v: 1 < v < 3, 15),
+                 ('unemployment_rate', lambda v: v < 4, 25),
+                 ('inflation_rate', lambda v: v > 3, 25),
+                 ('interest_rate', lambda v: v > 4, 20),
+                 ('consumer_confidence', lambda v: v > 110, 15)],
+        'contraction': [('gdp_growth_rate', lambda v: v < 0, 30),
+                        ('unemployment_rate', lambda v: v > 7, 25),
+                        ('consumer_confidence', lambda v: v < 90, 20),
+                        ('business_investment_growth', lambda v: v < 0, 25)],
+        'trough': [('gdp_growth_rate', lambda v: -1 < v < 1, 20),
+                   ('unemployment_rate', lambda v: v > 8, 25),
+                   ('inflation_rate', lambda v: v < 2, 20),
+                   ('interest_rate', lambda v: v < 3, 20),
+                   ('consumer_confidence', lambda v: v < 85, 15)],
+    }
+    _PHASE_TEXT = {
+        'expansion': 'Positive GDP growth, low unemployment, high confidence',
+        'peak': 'Slowing growth, very low unemployment, rising inflation',
+        'contraction': 'Negative GDP growth, rising unemployment, low confidence',
+        'trough': 'Stabilizing negative growth, high unemployment, low rates',
+    }
+    _PHASE_INDICATORS = ('gdp_growth_rate', 'unemployment_rate', 'inflation_rate', 'interest_rate',
+                         'consumer_confidence', 'business_investment_growth')
+
     def detect_cycle_phase(self, economic_indicators: Dict[str, Any]) -> Dict[str, Any]:
-        """Detect current business cycle phase based on economic indicators"""
+        """Rule-based business cycle phase. Only the indicators supplied are scored (a missing one
+        is not read as 0); each phase score is the share (0-100) of the points attainable from the
+        supplied indicators. phase_score is a rule score, not a probability."""
 
-        # Extract key indicators
-        gdp_growth = self.to_decimal(economic_indicators.get('gdp_growth_rate', 0))
-        unemployment_rate = self.to_decimal(economic_indicators.get('unemployment_rate', 0))
-        inflation_rate = self.to_decimal(economic_indicators.get('inflation_rate', 0))
-        interest_rates = self.to_decimal(economic_indicators.get('interest_rate', 0))
-        consumer_confidence = self.to_decimal(economic_indicators.get('consumer_confidence', 0))
-        business_investment = self.to_decimal(economic_indicators.get('business_investment_growth', 0))
+        present = {k: self.to_decimal(economic_indicators[k]) for k in self._PHASE_INDICATORS
+                   if economic_indicators.get(k) is not None}
+        if len(present) < 3:
+            raise ValidationError(
+                "At least 3 of these indicators are needed: " + ", ".join(self._PHASE_INDICATORS))
 
-        # Phase detection scoring
-        phase_scores = self._calculate_phase_scores(
-            gdp_growth, unemployment_rate, inflation_rate,
-            interest_rates, consumer_confidence, business_investment
-        )
-
-        # Determine most likely phase
-        detected_phase = max(phase_scores.items(), key=lambda x: x[1]['score'])[0]
+        phase_scores = self._calculate_phase_scores(present)
+        best = max(s['score'] for s in phase_scores.values())
+        leaders = [p for p in self.cycle_phases if phase_scores[p]['score'] == best]
+        detected_phase = leaders[0] if best > 0 else None
 
         return {
             'detected_phase': detected_phase,
+            'tied_phases': leaders if best > 0 and len(leaders) > 1 else [],
             'phase_scores': phase_scores,
-            'confidence_level': phase_scores[detected_phase]['score'],
+            'phase_score': best,
+            'phase_score_basis': '% of the rule points attainable from the supplied indicators (not a probability)',
+            'indicators_used': sorted(present),
+            'indicators_missing': [k for k in self._PHASE_INDICATORS if k not in present],
             'indicator_analysis': self._analyze_indicators_by_phase(economic_indicators),
             'phase_characteristics': self._get_phase_characteristics(detected_phase),
             'expected_duration': self._estimate_phase_duration(detected_phase, economic_indicators),
             'investment_implications': self._get_investment_implications(detected_phase)
         }
 
-    def _calculate_phase_scores(self, gdp_growth: Decimal, unemployment: Decimal,
-                                inflation: Decimal, interest_rate: Decimal,
-                                consumer_conf: Decimal, investment: Decimal) -> Dict[str, Any]:
-        """Calculate likelihood scores for each business cycle phase"""
-
+    def _calculate_phase_scores(self, present: Dict[str, Decimal]) -> Dict[str, Any]:
+        """Score each phase on the supplied indicators, normalised to 0-100."""
         scores = {}
-
-        # Expansion phase indicators
-        expansion_score = self.to_decimal(0)
-        if gdp_growth > self.to_decimal(2): expansion_score += self.to_decimal(25)
-        if unemployment < self.to_decimal(6): expansion_score += self.to_decimal(20)
-        if consumer_conf > self.to_decimal(100): expansion_score += self.to_decimal(20)
-        if investment > self.to_decimal(3): expansion_score += self.to_decimal(20)
-        if inflation > self.to_decimal(1) and inflation < self.to_decimal(4): expansion_score += self.to_decimal(15)
-
-        scores['expansion'] = {
-            'score': expansion_score,
-            'indicators': 'Positive GDP growth, low unemployment, high confidence'
-        }
-
-        # Peak phase indicators
-        peak_score = self.to_decimal(0)
-        if gdp_growth > self.to_decimal(1) and gdp_growth < self.to_decimal(3): peak_score += self.to_decimal(15)
-        if unemployment < self.to_decimal(4): peak_score += self.to_decimal(25)
-        if inflation > self.to_decimal(3): peak_score += self.to_decimal(25)
-        if interest_rate > self.to_decimal(4): peak_score += self.to_decimal(20)
-        if consumer_conf > self.to_decimal(110): peak_score += self.to_decimal(15)
-
-        scores['peak'] = {
-            'score': peak_score,
-            'indicators': 'Slowing growth, very low unemployment, rising inflation'
-        }
-
-        # Contraction phase indicators
-        contraction_score = self.to_decimal(0)
-        if gdp_growth < self.to_decimal(0): contraction_score += self.to_decimal(30)
-        if unemployment > self.to_decimal(7): contraction_score += self.to_decimal(25)
-        if consumer_conf < self.to_decimal(90): contraction_score += self.to_decimal(20)
-        if investment < self.to_decimal(0): contraction_score += self.to_decimal(25)
-
-        scores['contraction'] = {
-            'score': contraction_score,
-            'indicators': 'Negative GDP growth, rising unemployment, low confidence'
-        }
-
-        # Trough phase indicators
-        trough_score = self.to_decimal(0)
-        if gdp_growth > self.to_decimal(-1) and gdp_growth < self.to_decimal(1): trough_score += self.to_decimal(20)
-        if unemployment > self.to_decimal(8): trough_score += self.to_decimal(25)
-        if inflation < self.to_decimal(2): trough_score += self.to_decimal(20)
-        if interest_rate < self.to_decimal(3): trough_score += self.to_decimal(20)
-        if consumer_conf < self.to_decimal(85): trough_score += self.to_decimal(15)
-
-        scores['trough'] = {
-            'score': trough_score,
-            'indicators': 'Stabilizing negative growth, high unemployment, low rates'
-        }
-
+        for phase, rules in self._PHASE_RULES.items():
+            earned = attainable = 0
+            for indicator, test, points in rules:
+                if indicator not in present:
+                    continue
+                attainable += points
+                if test(present[indicator]):
+                    earned += points
+            scores[phase] = {
+                'score': (self.to_decimal(earned) * 100 / self.to_decimal(attainable)) if attainable else self.to_decimal(0),
+                'points': earned,
+                'attainable_points': attainable,
+                'indicators': self._PHASE_TEXT[phase]
+            }
         return scores
 
     def _analyze_indicators_by_phase(self, indicators: Dict[str, Any]) -> Dict[str, Any]:
@@ -266,17 +255,24 @@ class BusinessCycleAnalyzer(EconomicsBase):
 
         return implications.get(phase, {})
 
-    def analyze_sector_cyclicality(self, sector_data: Dict[str, List[Decimal]]) -> Dict[str, Any]:
-        """Analyze how different sectors vary over business cycle"""
+    def analyze_sector_cyclicality(self, sector_data: Dict[str, List[Decimal]],
+                                   returns_in_percent: Optional[bool] = None) -> Dict[str, Any]:
+        """Classify sectors by the standard deviation of their periodic returns (in percentage
+        points: > 20 highly cyclical, > 12 moderately). Returns may be fractions (0.25) or percent
+        (25); returns_in_percent=None detects the unit (any |r| > 1.5 -> percent)."""
 
         sector_analysis = {}
+        converted = {sector: [self.to_decimal(x) for x in values] for sector, values in sector_data.items()}
+        if returns_in_percent is None:
+            returns_in_percent = any(abs(x) > Decimal('1.5') for v in converted.values() for x in v)
+        scale = self.to_decimal(1) if returns_in_percent else self.to_decimal(100)
 
-        for sector, performance_data in sector_data.items():
+        for sector, performance_data in converted.items():
             if len(performance_data) < 4:
                 continue
 
             # Calculate volatility and correlation with cycle
-            volatility = self._calculate_volatility(performance_data)
+            volatility = self._calculate_volatility(performance_data) * scale
 
             # Classify sector cyclicality
             if volatility > self.to_decimal(20):
@@ -298,17 +294,20 @@ class BusinessCycleAnalyzer(EconomicsBase):
 
         return {
             'sector_analysis': sector_analysis,
+            'returns_unit': 'percent' if returns_in_percent else 'fraction',
+            'volatility_unit': 'percentage points (sample standard deviation of the returns)',
             'summary': self._summarize_sector_cyclicality(sector_analysis)
         }
 
     def _calculate_volatility(self, data: List[Decimal]) -> Decimal:
-        """Calculate volatility of performance data"""
+        """Sample standard deviation of the data, in the data's own unit"""
+        data = [self.to_decimal(x) for x in data]
         if len(data) < 2:
             return self.to_decimal(0)
 
         mean = sum(data) / self.to_decimal(len(data))
         variance = sum((x - mean) ** 2 for x in data) / self.to_decimal(len(data) - 1)
-        return (variance.sqrt() * self.to_decimal(100))  # As percentage
+        return variance.sqrt()
 
     def _get_sector_timing(self, cyclicality: str) -> str:
         """Get optimal timing for sector investment"""
@@ -339,7 +338,7 @@ class BusinessCycleAnalyzer(EconomicsBase):
         if analysis_type == 'phase_detection':
             return self.detect_cycle_phase(kwargs['economic_indicators'])
         elif analysis_type == 'sector_cyclicality':
-            return self.analyze_sector_cyclicality(kwargs['sector_data'])
+            return self.analyze_sector_cyclicality(kwargs['sector_data'], kwargs.get('returns_in_percent'))
         else:
             raise ValidationError(f"Unknown analysis type: {analysis_type}")
 
@@ -366,9 +365,7 @@ class CreditCycleAnalyzer(EconomicsBase):
         return {
             'credit_cycle_phase': cycle_phase,
             'phase_characteristics': self._get_credit_phase_characteristics(cycle_phase),
-            'risk_assessment': self._assess_credit_risks(
-                credit_growth, leverage_ratio, default_rates, asset_prices
-            ),
+            'risk_assessment': self._assess_credit_risks(credit_data),
             'financial_stability_indicators': self._analyze_financial_stability(credit_data),
             'investment_implications': self._credit_cycle_investment_implications(cycle_phase),
             'policy_implications': self._credit_cycle_policy_implications(cycle_phase, credit_data)
@@ -449,35 +446,32 @@ class CreditCycleAnalyzer(EconomicsBase):
 
         return characteristics.get(phase, {})
 
-    def _assess_credit_risks(self, credit_growth: Decimal, leverage: Decimal,
-                             defaults: Decimal, asset_prices: Decimal) -> Dict[str, Any]:
-        """Assess systemic credit risks"""
+    # Build-up (credit boom) and realised-stress rules: (input, test, points, label).
+    _CREDIT_RISK_RULES = [
+        ('credit_growth_rate', lambda v: v > 10, 25, 'Excessive credit growth'),
+        ('leverage_ratio', lambda v: v > 8, 25, 'High leverage ratios'),
+        ('asset_price_growth', lambda v: v > 15, 20, 'Asset price bubbles'),
+        ('default_rate', lambda v: v > 4, 20, 'Elevated default rates'),
+        ('credit_spreads_bps', lambda v: v > 400, 20, 'Wide credit spreads (market stress)'),
+    ]
 
-        risk_score = self.to_decimal(0)
+    def _assess_credit_risks(self, credit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Rule-based credit risk score: points earned / points attainable from the supplied
+        inputs, 0-100. Not a calibrated crisis probability, so none is printed."""
+        earned = attainable = 0
         risk_factors = []
+        for key, test, points, label in self._CREDIT_RISK_RULES:
+            if credit_data.get(key) is None:
+                continue
+            attainable += points
+            if test(self.to_decimal(credit_data[key])):
+                earned += points
+                risk_factors.append(label)
+        risk_score = (self.to_decimal(earned) * 100 / self.to_decimal(attainable)) if attainable else None
 
-        # Credit growth risk
-        if credit_growth > self.to_decimal(10):
-            risk_score += self.to_decimal(25)
-            risk_factors.append('Excessive credit growth')
-
-        # Leverage risk
-        if leverage > self.to_decimal(8):
-            risk_score += self.to_decimal(25)
-            risk_factors.append('High leverage ratios')
-
-        # Default rate risk
-        if defaults > self.to_decimal(4):
-            risk_score += self.to_decimal(20)
-            risk_factors.append('Rising default rates')
-
-        # Asset price risk
-        if asset_prices > self.to_decimal(15):
-            risk_score += self.to_decimal(20)
-            risk_factors.append('Asset price bubbles')
-
-        # Determine risk level
-        if risk_score > self.to_decimal(60):
+        if risk_score is None:
+            risk_level = None
+        elif risk_score > self.to_decimal(60):
             risk_level = 'High'
         elif risk_score > self.to_decimal(30):
             risk_level = 'Moderate'
@@ -486,22 +480,15 @@ class CreditCycleAnalyzer(EconomicsBase):
 
         return {
             'overall_risk_score': risk_score,
+            'risk_score_basis': '% of the rule points attainable from the supplied inputs (not a probability)',
             'risk_level': risk_level,
             'key_risk_factors': risk_factors,
-            'systemic_risk_probability': self._calculate_systemic_risk_probability(risk_score)
+            'inputs_missing': [k for k, *_ in self._CREDIT_RISK_RULES if credit_data.get(k) is None],
+            'systemic_risk_assessment': ({'High': 'Elevated systemic risk signals',
+                                          'Moderate': 'Some systemic risk signals',
+                                          'Low': 'Few systemic risk signals'}.get(risk_level)
+                                         if risk_level else 'No risk inputs supplied')
         }
-
-    def _calculate_systemic_risk_probability(self, risk_score: Decimal) -> str:
-        """Calculate probability of systemic financial crisis"""
-
-        if risk_score > self.to_decimal(70):
-            return 'High (>30% in next 2 years)'
-        elif risk_score > self.to_decimal(50):
-            return 'Moderate (10-30% in next 2 years)'
-        elif risk_score > self.to_decimal(30):
-            return 'Low (5-10% in next 2 years)'
-        else:
-            return 'Very Low (<5% in next 2 years)'
 
     def _analyze_financial_stability(self, credit_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze financial stability indicators"""
@@ -602,7 +589,9 @@ class MarketStructureAnalyzer(EconomicsBase):
 
         # Extract market characteristics
         num_firms = int(market_data.get('number_of_firms', 0))
-        market_concentration = self.to_decimal(market_data.get('herfindahl_index', 0))
+        market_concentration = self._hhi(market_data)
+        if market_data.get('market_shares') and not num_firms:
+            num_firms = len(market_data['market_shares'])
         product_differentiation = market_data.get('product_differentiation', 'low')
         barriers_to_entry = market_data.get('barriers_to_entry', 'low')
         pricing_power = market_data.get('pricing_power', 'low')
@@ -622,9 +611,26 @@ class MarketStructureAnalyzer(EconomicsBase):
             'regulatory_considerations': self._get_regulatory_considerations(structure_type)
         }
 
+    def _hhi(self, market_data: Dict[str, Any]) -> Decimal:
+        """Herfindahl-Hirschman index on the 0-1 scale. From 'market_shares' (fractions summing
+        to ~1 or percents summing to ~100) when given, else 'herfindahl_index' on either the
+        0-1 or the usual 0-10,000 scale (values above 1 are read as 0-10,000)."""
+        shares = market_data.get('market_shares')
+        if shares:
+            s = [self.to_decimal(x) for x in shares]
+            if any(x < 0 for x in s):
+                raise ValidationError("market_shares must be non-negative")
+            if sum(s) > Decimal('1.5'):
+                s = [x / 100 for x in s]
+            return sum(x * x for x in s)
+        hhi = self.to_decimal(market_data.get('herfindahl_index', 0))
+        if hhi < 0 or hhi > 10000:
+            raise ValidationError("herfindahl_index must be within 0-1 or 0-10,000")
+        return hhi / 10000 if hhi > 1 else hhi
+
     def _classify_market_structure(self, num_firms: int, concentration: Decimal,
                                    differentiation: str, barriers: str) -> str:
-        """Classify market structure based on key characteristics"""
+        """Classify market structure (concentration = HHI on the 0-1 scale)"""
 
         # Perfect competition
         if (num_firms > 100 and
@@ -637,9 +643,10 @@ class MarketStructureAnalyzer(EconomicsBase):
         elif num_firms == 1 or concentration > self.to_decimal(0.9):
             return 'monopoly'
 
-        # Oligopoly
+        # Oligopoly: few firms, at least moderately concentrated (HHI >= 0.15, e.g. four equal
+        # firms = 0.25), entry barriers
         elif (num_firms <= 10 and
-              concentration > self.to_decimal(0.6) and
+              concentration >= self.to_decimal(0.15) and
               barriers in ['high', 'moderate']):
             return 'oligopoly'
 
@@ -713,6 +720,8 @@ class MarketStructureAnalyzer(EconomicsBase):
 
         return {
             'herfindahl_index': hhi,
+            'herfindahl_index_points': hhi * 10000,
+            'concentration_thresholds': '0-1 scale: > 0.25 highly, 0.15-0.25 moderately concentrated (US 2010 merger guidelines)',
             'concentration_level': concentration_level,
             'antitrust_concern': antitrust_concern,
             'number_of_firms': num_firms,
@@ -806,7 +815,7 @@ class MarketStructureAnalyzer(EconomicsBase):
             },
             'breakeven_analysis': {
                 'breakeven_quantity': breakeven_quantity,
-                'breakeven_revenue': breakeven_quantity * market_price if breakeven_quantity else None,
+                'breakeven_revenue': breakeven_quantity * market_price if breakeven_quantity is not None else None,
                 'contribution_margin': market_price - variable_cost_per_unit,
                 'contribution_margin_ratio': ((market_price - variable_cost_per_unit) / market_price * self.to_decimal(
                     100)) if market_price > 0 else self.to_decimal(0)
@@ -817,13 +826,17 @@ class MarketStructureAnalyzer(EconomicsBase):
                 'should_shutdown': market_price < shutdown_price,
                 'shutdown_loss': fixed_costs if market_price < shutdown_price else self.to_decimal(0)
             },
-            'optimal_production': {
+            'optimal_production': ({
                 'optimal_quantity': optimal_output,
                 'total_revenue': optimal_output * market_price,
                 'total_costs': total_costs(optimal_output),
                 'economic_profit': optimal_output * market_price - total_costs(optimal_output)
-            },
-            'scale_economies': self._analyze_economies_of_scale(cost_data, optimal_output)
+            } if optimal_output is not None else {
+                'optimal_quantity': None,
+                'reason': 'MR = MC output needs the demand curve (not supplied) for a firm with pricing power'
+            }),
+            'scale_economies': (self._analyze_economies_of_scale(cost_data, optimal_output)
+                                if optimal_output is not None else None)
         }
 
     def _calculate_optimal_output(self, structure_type: str, price: Decimal,
@@ -837,24 +850,9 @@ class MarketStructureAnalyzer(EconomicsBase):
             else:
                 return self.to_decimal(0)  # Shutdown if price < MC
 
-        elif structure_type == 'monopolistic_competition':
-            # MR = MC, but with some pricing power
-            # Simplified: produce where P > MC but not at full capacity
-            if price > marginal_cost:
-                return capacity * self.to_decimal(0.8)  # 80% of capacity
-            else:
-                return self.to_decimal(0)
-
-        elif structure_type in ['oligopoly', 'monopoly']:
-            # More complex optimization considering market power
-            # Simplified: produce where MR = MC
-            if price > marginal_cost * self.to_decimal(1.2):  # Account for markup
-                return capacity * self.to_decimal(0.7)  # 70% of capacity
-            else:
-                return capacity * self.to_decimal(0.5)  # 50% of capacity
-
-        else:
-            return capacity * self.to_decimal(0.75)  # Default assumption
+        # A firm with pricing power produces where MR = MC, which needs its demand curve; none is
+        # supplied, so there is no output figure (it used to be a fixed 50-80 % of capacity).
+        return None
 
     def _analyze_economies_of_scale(self, cost_data: Dict[str, Any],
                                     current_output: Decimal) -> Dict[str, Any]:

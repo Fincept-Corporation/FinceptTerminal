@@ -25,49 +25,44 @@ static QString input_style() {
     return QString("QLineEdit {"
                    "  background: %1; color: %2;"
                    "  border: 1px solid %3;"
-                   "  padding: 6px 10px; font-size: 15px;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 6px 10px; font-size: " + fincept::ui::fonts::px(1) + "px;"
                    "  selection-background-color: %4; selection-color: %5;"
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }"
                    "QLineEdit::placeholder { color: %7; }")
         .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-             ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
+             ui::colors::TEXT_ON_ACCENT(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
 }
 
 static QString btn_primary() {
     return QString("QPushButton {"
-                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  background: %7; color: %1;"
                    "  border: 1px solid %2;"
-                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  padding: 0 16px; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
-             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_TERTIARY(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::ACCENT_BG());
 }
 
 static QString link_style() {
     return QString("QPushButton {"
                    "  color: %1; background: transparent; border: none;"
-                   "  font-size: 13px; font-weight: 400;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 400;"
                    "}"
                    "QPushButton:hover { color: %2; }")
         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY());
 }
 
 static QString label_style() {
-    return QString("color: %1; font-size: 13px; font-weight: 700;"
-                   "background: transparent; letter-spacing: 0.5px;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;")
         .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString muted_style() {
-    return QString("color: %1; font-size: 13px; background: transparent;"
-                   "font-family: 'Consolas','Courier New',monospace;")
+    return QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px; background: transparent;")
         .arg(ui::colors::TEXT_TERTIARY());
 }
 
@@ -133,6 +128,10 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
         send_btn_->setEnabled(true);
         send_btn_->setText(tr("  SEND CODE  "));
         sent_resend_btn_->setEnabled(true);
+        // These signals are global: Profile > DELETE ACCOUNT drives the same
+        // reset flow while this screen is off-stack. Not ours to show.
+        if (!isVisible())
+            return;
         // A failed RESEND happens on the "check your email" page, where the
         // email page's error label is not visible.
         if (pages_->currentIndex() == 1) {
@@ -143,6 +142,13 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
         error_label_->show();
     });
     connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() {
+        if (reset_btn_)
+            reset_btn_->setEnabled(true);
+        // A reset finished from Profile > DELETE ACCOUNT (same global signal)
+        // used to flip this hidden screen to its SUCCESS page, which the next
+        // "Forgot password?" then opened on. Only react while on screen.
+        if (!isVisible())
+            return;
         for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
             if (w)
                 w->clear();
@@ -155,8 +161,6 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
             error_label_->hide();
         if (reset_error_)
             reset_error_->hide();
-        if (reset_btn_)
-            reset_btn_->setEnabled(true);
         pages_->setCurrentIndex(3);
     });
     // password_reset_failed is handled where the reset form is built
@@ -228,18 +232,18 @@ void ForgotPasswordScreen::build_email_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* back = new QPushButton(QStringLiteral("<"));
-    back->setFixedSize(24, 24);
+    back->setMinimumSize(24, 24);
+    back->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                                "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
+                                "  font-size: " + fincept::ui::fonts::px(2) + "px; }"
                                 "QPushButton:hover { color: %2; }")
                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY()));
     connect(back, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     hl->addWidget(back);
 
     email_title_ = new QLabel;
-    email_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                        "background: transparent; letter-spacing: 1px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    email_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 1px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(email_title_);
     hl->addStretch();
@@ -257,22 +261,21 @@ void ForgotPasswordScreen::build_email_page() {
     vl->addWidget(email_lbl_);
 
     email_input_ = new QLineEdit;
-    email_input_->setFixedHeight(34);
+    email_input_->setMinimumHeight(34);
     email_input_->setStyleSheet(input_style());
     vl->addWidget(email_input_);
 
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(QString("color: %1; font-size: 13px;"
-                                        "background: rgba(220,38,38,0.08);"
-                                        "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::NEGATIVE()));
+    error_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px;"
+                                        "background: %2;"
+                                        "border: 1px solid %3; padding: 6px 8px;")
+                                    .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     error_label_->hide();
     vl->addWidget(error_label_);
 
     send_btn_ = new QPushButton;
-    send_btn_->setFixedHeight(32);
+    send_btn_->setMinimumHeight(32);
     send_btn_->setStyleSheet(btn_primary());
     connect(send_btn_, &QPushButton::clicked, this, &ForgotPasswordScreen::on_send_code);
     connect(email_input_, &QLineEdit::returnPressed, this, &ForgotPasswordScreen::on_send_code);
@@ -315,9 +318,8 @@ void ForgotPasswordScreen::build_otp_sent_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     sent_title_ = new QLabel;
-    sent_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                       "background: transparent; letter-spacing: 1px;"
-                                       "font-family: 'Consolas','Courier New',monospace;")
+    sent_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                       "background: transparent; letter-spacing: 1px;")
                                    .arg(ui::colors::AMBER()));
     hl->addWidget(sent_title_);
     hl->addStretch();
@@ -331,7 +333,7 @@ void ForgotPasswordScreen::build_otp_sent_page() {
     vl->addWidget(make_separator());
 
     sent_continue_btn_ = new QPushButton;
-    sent_continue_btn_->setFixedHeight(32);
+    sent_continue_btn_->setMinimumHeight(32);
     sent_continue_btn_->setStyleSheet(btn_primary());
     connect(sent_continue_btn_, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(2); });
     vl->addWidget(sent_continue_btn_);
@@ -346,8 +348,7 @@ void ForgotPasswordScreen::build_otp_sent_page() {
     sent_status_ = new QLabel;
     sent_status_->setWordWrap(true);
     sent_status_->setAlignment(Qt::AlignCenter);
-    sent_status_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    sent_status_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; background: transparent;")
                                     .arg(ui::colors::POSITIVE()));
     vl->addWidget(sent_status_);
 
@@ -377,9 +378,8 @@ void ForgotPasswordScreen::build_reset_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     reset_title_ = new QLabel;
-    reset_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                        "background: transparent; letter-spacing: 1px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
+    reset_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 1px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(reset_title_);
     hl->addStretch();
@@ -392,7 +392,7 @@ void ForgotPasswordScreen::build_reset_page() {
         label_out->setStyleSheet(label_style());
         vl->addWidget(label_out);
         auto* input = new QLineEdit;
-        input->setFixedHeight(34);
+        input->setMinimumHeight(34);
         input->setStyleSheet(input_style());
         if (is_password)
             input->setEchoMode(QLineEdit::Password);
@@ -406,24 +406,23 @@ void ForgotPasswordScreen::build_reset_page() {
 
     reset_error_ = new QLabel;
     reset_error_->setWordWrap(true);
-    reset_error_->setStyleSheet(QString("color: %1; font-size: 13px;"
-                                        "background: rgba(220,38,38,0.08);"
-                                        "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::NEGATIVE()));
+    reset_error_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-1) + "px;"
+                                        "background: %2;"
+                                        "border: 1px solid %3; padding: 6px 8px;")
+                                    .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE_DIM()));
     reset_error_->hide();
     vl->addWidget(reset_error_);
     connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [this](const QString& e) {
-        if (!reset_error_)
-            return;
-        reset_error_->setText(e);
-        reset_error_->show();
         if (reset_btn_)
             reset_btn_->setEnabled(true);
+        if (!reset_error_ || !isVisible())
+            return; // off-stack: a reset run from Profile, not from this screen
+        reset_error_->setText(e);
+        reset_error_->show();
     });
 
     reset_btn_ = new QPushButton;
-    reset_btn_->setFixedHeight(32);
+    reset_btn_->setMinimumHeight(32);
     reset_btn_->setStyleSheet(btn_primary());
     connect(reset_btn_, &QPushButton::clicked, this, &ForgotPasswordScreen::on_reset_password);
     vl->addWidget(reset_btn_);
@@ -469,17 +468,15 @@ void ForgotPasswordScreen::build_success_page() {
     hl->setContentsMargins(14, 0, 14, 0);
 
     success_title_ = new QLabel;
-    success_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                          "background: transparent; letter-spacing: 1px;"
-                                          "font-family: 'Consolas','Courier New',monospace;")
+    success_title_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700;"
+                                          "background: transparent; letter-spacing: 1px;")
                                       .arg(ui::colors::POSITIVE()));
     hl->addWidget(success_title_);
     hl->addStretch();
 
     success_status_ = new QLabel;
-    success_status_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                           "background: transparent; letter-spacing: 0.5px;"
-                                           "font-family: 'Consolas','Courier New',monospace;")
+    success_status_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px; font-weight: 700;"
+                                           "background: transparent; letter-spacing: 0.5px;")
                                        .arg(ui::colors::POSITIVE()));
     hl->addWidget(success_status_);
     vl->addWidget(header);
@@ -493,7 +490,7 @@ void ForgotPasswordScreen::build_success_page() {
     vl->addWidget(make_separator());
 
     success_continue_btn_ = new QPushButton;
-    success_continue_btn_->setFixedHeight(32);
+    success_continue_btn_->setMinimumHeight(32);
     success_continue_btn_->setStyleSheet(btn_primary());
     connect(success_continue_btn_, &QPushButton::clicked, this, [this]() {
         pages_->setCurrentIndex(0);
@@ -540,7 +537,7 @@ void ForgotPasswordScreen::retranslateUi() {
     if (otp_input_)
         otp_input_->setPlaceholderText(tr("enter code from email"));
     if (new_password_)
-        new_password_->setPlaceholderText(tr("min 8 characters"));
+        new_password_->setPlaceholderText(tr("8+ characters with upper, lower case and a digit"));
     if (confirm_password_)
         confirm_password_->setPlaceholderText(tr("re-enter password"));
     if (reset_btn_)
@@ -606,8 +603,11 @@ void ForgotPasswordScreen::on_reset_password() {
         fail(tr("Enter a new password"), new_password_);
         return;
     }
-    if (pw.length() < 8) {
-        fail(tr("Password must be at least 8 characters"), new_password_);
+    // The server's rule (8+ characters with an upper-case letter, a lower-case
+    // letter and a digit) — checking the length alone let "password1" through
+    // to a rejection after the round trip.
+    if (!auth::validate_password(pw).valid) {
+        fail(tr("Password needs 8+ characters with upper and lower case letters and a digit"), new_password_);
         return;
     }
     if (pw != cpw) {

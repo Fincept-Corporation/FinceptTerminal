@@ -29,8 +29,10 @@
 
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QRegularExpression>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -66,6 +68,47 @@ const WtoIndicator* wto_find_indicator(const QString& code) {
     return nullptr;
 }
 
+// What to show for a failed WTO request. wto_data.py reports an HTTP failure of the
+// WTO API (api.wto.org — not Fincept) as
+//   "HTTP <status>: Failed to fetch data from <url>. Error: <response body>"
+// Only a 401 means the subscription key is missing or wrong. The old test matched
+// "401"/"403"/"API key"/"subscription" ANYWHERE in the text, so a 403 (call quota
+// used up, product not subscribed) or a 429 was reported as "key not configured"
+// and the API's own explanation was dropped.
+QString wto_failure_text(const QString& error) {
+    static const QRegularExpression wto_status_re(QStringLiteral("\\bHTTP (\\d{3})\\b"));
+    const QRegularExpressionMatch m = wto_status_re.match(error);
+    const int status = m.hasMatch() ? m.captured(1).toInt() : 0;
+
+    // The WTO gateway answers {"statusCode": 403, "message": "Out of call volume quota…"}.
+    QString detail;
+    const qsizetype at = error.indexOf(QLatin1String("Error: "));
+    if (at >= 0) {
+        const QString body = error.mid(at + 7).trimmed();
+        const QJsonDocument doc = QJsonDocument::fromJson(body.toUtf8());
+        if (doc.isObject()) {
+            for (const char* key : {"message", "error", "detail"}) {
+                const QJsonValue v = doc.object().value(QLatin1String(key));
+                if (v.isString() && !v.toString().trimmed().isEmpty()) {
+                    detail = v.toString().trimmed();
+                    break;
+                }
+            }
+        }
+        if (detail.isEmpty())
+            detail = body.left(300);
+    }
+
+    if (status == 401 || (status == 0 && error.contains(QLatin1String("subscription key"), Qt::CaseInsensitive)))
+        return WtoPanel::tr("The WTO API did not accept the subscription key%1.\n"
+                            "Add it in Settings > Credentials (WTO_API_KEY).\n"
+                            "(Ocp-Apim-Subscription-Key from developer.wto.org).")
+            .arg(detail.isEmpty() ? QString() : QStringLiteral(": ") + detail);
+    if (status > 0)
+        return WtoPanel::tr("WTO API error (HTTP %1): %2").arg(status).arg(detail.isEmpty() ? error : detail);
+    return error;
+}
+
 } // namespace
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -77,9 +120,13 @@ WtoPanel::WtoPanel(QWidget* parent) : EconPanelBase(kWtoSourceId, kWtoColor, par
 }
 
 void WtoPanel::activate() {
-    show_empty(tr("Select a section and click FETCH\n"
-                  "Every WTO API used here requires WTO_API_KEY\n"
-                  "(Ocp-Apim-Subscription-Key from apiportal.wto.org)"));
+    // Nothing to prepare: the results pane runs the query on show — or, without a WTO key, shows the
+    // page that names WTO_API_KEY and opens Settings > Credentials.
+}
+
+QList<ui::Requirement> WtoPanel::load_requirements() const {
+    // Every WTO API used here (Timeseries, QR) needs the Ocp-Apim-Subscription-Key from apiportal.wto.org.
+    return {ui::Requirement::api_key(QStringLiteral("WTO_API_KEY"), QStringLiteral("WTO"))};
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -95,27 +142,27 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
     section_combo_->addItem(tr("Trade Statistics"), "timeseries");
     section_combo_->addItem(tr("QR Members"), "qr_members");
     section_combo_->addItem(tr("QR Notifications"), "qr_notifications");
-    section_combo_->setFixedHeight(26);
+    section_combo_->setMinimumHeight(26);
     section_combo_->setMinimumWidth(200);
     connect(section_combo_, &QComboBox::currentIndexChanged, this, &WtoPanel::on_section_changed);
 
     indicator_combo_ = new QComboBox;
     for (const auto& ind : kWtoIndicators)
         indicator_combo_->addItem(QString::fromLatin1(ind.label), QString::fromLatin1(ind.code));
-    indicator_combo_->setFixedHeight(26);
+    indicator_combo_->setMinimumHeight(26);
     indicator_combo_->setMinimumWidth(270);
 
     reporter_input_ = new QLineEdit;
     reporter_input_->setPlaceholderText(tr("Reporter (e.g. US, CN, DE)"));
     reporter_input_->setText("US");
-    reporter_input_->setFixedHeight(26);
-    reporter_input_->setFixedWidth(130);
+    reporter_input_->setMinimumHeight(26);
+    set_text_width(reporter_input_, 130);
 
     years_input_ = new QLineEdit;
     years_input_->setPlaceholderText(tr("Years (e.g. 2015-2023)"));
     years_input_->setText("2015-2023");
-    years_input_->setFixedHeight(26);
-    years_input_->setFixedWidth(110);
+    years_input_->setMinimumHeight(26);
+    set_text_width(years_input_, 110);
 
     apikey_notice_ = new QLabel(tr("Requires WTO_API_KEY"));
     apikey_notice_->setStyleSheet(notice_style());
@@ -169,16 +216,16 @@ void WtoPanel::on_fetch() {
         if (ind && ind->product)
             args << QStringLiteral("--pc=") + QLatin1String(ind->product) << QStringLiteral("--p=000");
         show_loading(tr("Fetching WTO Trade Statistics: %1 for %2…").arg(indicator_combo_->currentText(), reporter));
-        services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "timeseries_data", args,
-                                                       "wto_ts_" + indicator + "_" + reporter);
+        execute_query(kWtoSourceId, kWtoScript, "timeseries_data", args,
+                      "wto_ts_" + indicator + "_" + reporter);
 
     } else if (section == "qr_members") {
         QStringList args;
         if (!reporter.isEmpty())
             args << "--member_code=" + reporter;
         show_loading(tr("Fetching WTO QR Members…"));
-        services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "qr_members", args,
-                                                       "wto_qrm_" + reporter);
+        execute_query(kWtoSourceId, kWtoScript, "qr_members", args,
+                      "wto_qrm_" + reporter);
 
     } else {
         // qr_notifications
@@ -186,8 +233,8 @@ void WtoPanel::on_fetch() {
         if (!reporter.isEmpty())
             args << "--reporter_member_code=" + reporter;
         show_loading(tr("Fetching WTO QR Notifications for %1…").arg(reporter));
-        services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "qr_notifications", args,
-                                                       "wto_qrn_" + reporter);
+        execute_query(kWtoSourceId, kWtoScript, "qr_notifications", args,
+                      "wto_qrn_" + reporter);
     }
 }
 
@@ -198,14 +245,9 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
         return;
 
     if (!result.success) {
-        if (result.error.contains("subscription") || result.error.contains("API key") || result.error.contains("401") ||
-            result.error.contains("403")) {
-            show_error(tr("WTO API key not configured.\n"
-                          "Set WTO_API_KEY environment variable\n"
-                          "(Ocp-Apim-Subscription-Key from developer.wto.org)"));
-        } else {
-            show_error(result.error);
-        }
+        // A failure the script named ("[missing_key] …" + WTO_API_KEY, "[auth_failed] …", a rate
+        // limit) gets that kind's own page; an unclassified HTTP failure is worded from its status.
+        show_error(result.error_code.isEmpty() ? wto_failure_text(result.error) : result.error);
         return;
     }
 
@@ -276,7 +318,7 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
         display(rows, tr("WTO QR Notifications — %1").arg(reporter_input_->text().toUpper()));
     }
 
-    LOG_INFO("WtoPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("WtoPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

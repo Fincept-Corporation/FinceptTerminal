@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/SMSProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -31,26 +33,17 @@ void SMSProvider::send(const NotificationRequest& req, std::function<void(bool, 
     // Authorization header rather than credentials embedded in the URL.
     const QString url = QString("https://api.twilio.com/2010-04-01/Accounts/%1/Messages.json").arg(account_sid_);
 
-    QMap<QString, QString> form;
-    form["To"] = to_number_;
-    form["From"] = from_number_;
-    form["Body"] = QString("[Fincept] %1: %2").arg(req.title, req.message);
-
-    HttpClient::Headers headers;
-    headers.insert("Authorization", "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
-
-    HttpClient::instance().post_form(
-        url, form,
-        [cb](Result<QJsonDocument> res) {
-            if (res.is_err()) {
-                cb(false, QString::fromStdString(res.error()));
-                return;
-            }
-            const auto obj = res.value().object();
-            const bool ok = !obj.contains("code");
-            cb(ok, ok ? QString{} : obj.value("message").toString());
-        },
-        nullptr, headers);
+    // 201 + a message resource on success; an error object carries "code".
+    DeliveryRequest request;
+    request.service = DeliveryService::Twilio;
+    request.verb = DeliveryRequest::Verb::PostForm;
+    request.url = url;
+    request.form["To"] = to_number_;
+    request.form["From"] = from_number_;
+    request.form["Body"] = QString("[Fincept] %1: %2").arg(req.title, req.message);
+    request.headers.insert("Authorization",
+                           "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

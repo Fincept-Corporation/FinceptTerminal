@@ -1,5 +1,5 @@
 {
- "_doc": "Hand-maintained corrections for .github/scripts/gen_data_connectors.py (see its docstring). Per connector: category / region / title / desc / name, key_required (true ONLY when the connector cannot return data without its key — decided by reading the script and checked with a keyless smoke run), key_note, docs_url, default_command / default_args, args_hints, commands / commands_add / commands_drop, ttl_sec, mcp (false = a dedicated MCP tool already covers it) and broken (why the upstream does not work; the connector stays browsable in the UI but gets no MCP tool). Regenerate after editing: python .github/scripts/gen_data_connectors.py",
+ "_doc": "Hand-maintained corrections for .github/scripts/gen_data_connectors.py (see its docstring). Per connector: category / region / title / desc / name, key_required (true ONLY when the connector cannot return data without its key - decided by reading the script and checked with a keyless smoke run), key_note, docs_url, default_command / default_args, args_hints, commands / commands_add / commands_drop, ttl_sec, mcp (false = a dedicated MCP tool already covers it, or the connector must not be offered to agents) and broken (why the upstream does not work; the connector stays browsable in the UI but gets no MCP tool). params: typed arguments per command - {\"<command>\": [<param>, ...]} replaces the inferred list (null = unknown), {\"<command>\": {\"<param>\": {fields}}} patches inferred params by name ({\"<param>\": null} drops one), {\"*\": {\"<param>\": {fields}}} patches that name in every command; a <param> is {name, required, default, kind (string|int|float|date|enum|symbol|country|bool), choices?, help?, named?, variadic?}. sample: {\"command\", \"args\"} - the keyless call the Data Sources tab runs to show the connector (verified through fincept_connector.py run: ok, rows, under 20 s), or null when every command needs a key; without it the generator uses default_command + default_args for a connector that is not key_required. Regenerate after editing: python .github/scripts/gen_data_connectors.py",
  "include": [
   "boj_fetcher.py",
   "canada_gov_api.py",
@@ -7,6 +7,7 @@
   "data_gov_hk_api.py",
   "datagov_au_api.py",
   "datagovuk_api.py",
+  "economic_calendar.py",
   "estat_japan_api.py",
   "fetch_company_news.py",
   "french_gov_api.py",
@@ -14,11 +15,13 @@
   "nasa_gibs_api.py",
   "openafrica_api.py",
   "pxweb_fetcher.py",
-  "swiss_gov_api.py"
+  "swiss_gov_api.py",
+  "universal_ckan_api.py"
  ],
  "exclude": {
   "akshare_data.py": "Served by the AkShare screen; endpoints resolve dynamically (getattr), not a fixed command list.",
-  "screener_data.py": "Backs the Equity Screener (services/screener/ScreenerService); takes JSON criteria on stdin, not a generic `<command> [args]` connector."
+  "screener_data.py": "Backs the Equity Screener (services/screener/ScreenerService); takes JSON criteria on stdin, not a generic `<command> [args]` connector.",
+  "equity_research_data.py": "Backs the Equity Research screen (the C++ calls it by name); its dispatcher (`cmd == X and len(args) >= N`) is not readable by the generator. Excluded 2026-11-16 to unblock regeneration (it was never catalogued) - its owner may catalogue it instead with explicit `commands`."
  },
  "credential_labels": {
   "ACLED_EMAIL": "ACLED account email",
@@ -39,7 +42,8 @@
   "GFW_API_KEY": "Global Forest Watch",
   "USDA_FAS_API_KEY": "USDA FAS (api.data.gov key)",
   "USDA_ERS_API_KEY": "USDA ERS (api.data.gov key)",
-  "UNDP_API_KEY": "UNDP HDRO Data API"
+  "UNDP_API_KEY": "UNDP HDRO Data API",
+  "ACLED_PASSWORD": "ACLED account password (myACLED)"
  },
  "connectors": {
   "abs_data.py": {
@@ -50,7 +54,11 @@
   "acled_data.py": {
    "category": "Geospatial & Geopolitics",
    "key_required": true,
-   "docs_url": "https://acleddata.com/register/"
+   "docs_url": "https://acleddata.com/register/",
+   "default_args": [
+    "Ukraine"
+   ],
+   "key_note": "ACLED retired API keys in 2025: the connector signs in with a free myACLED account (ACLED_EMAIL + ACLED_PASSWORD) via OAuth."
   },
   "adb_data.py": {
    "category": "China & Asia",
@@ -92,7 +100,29 @@
   "baostock_data.py": {
    "category": "China & Asia",
    "region": "China",
-   "desc": "BaoStock: China A-share daily bars, fundamentals (profit, growth, balance sheet, cash flow, DuPont), index constituents and macro rates."
+   "desc": "BaoStock: China A-share daily bars, fundamentals (profit, growth, balance sheet, cash flow, DuPont), index constituents and macro rates.",
+   "params": {
+    "money_supply_data_month": {
+     "start_date": {
+      "kind": "string",
+      "help": "month, YYYY-MM"
+     },
+     "end_date": {
+      "kind": "string",
+      "help": "month, YYYY-MM"
+     }
+    },
+    "money_supply_data_year": {
+     "start_date": {
+      "kind": "string",
+      "help": "year, YYYY"
+     },
+     "end_date": {
+      "kind": "string",
+      "help": "year, YYYY"
+     }
+    }
+   }
   },
   "bcb_data.py": {
    "category": "Macro & Central Banks",
@@ -110,7 +140,14 @@
   "bis_data.py": {
    "category": "Macro & Central Banks",
    "title": "BIS (Bank for International Settlements)",
-   "desc": "Bank for International Settlements SDMX API: effective exchange rates, central bank policy rates, credit to the non-financial sector, house prices, long/short-term rates and the full SDMX structure catalogue."
+   "desc": "Bank for International Settlements SDMX API: effective exchange rates, central bank policy rates, credit to the non-financial sector, house prices, long/short-term rates and the full SDMX structure catalogue.",
+   "sample": {
+    "command": "fetch",
+    "args": [
+     "WS_CBPOL",
+     "US"
+    ]
+   }
   },
   "bis_stats_data.py": {
    "category": "Macro & Central Banks",
@@ -127,11 +164,23 @@
    "title": "BLS (Bureau of Labor Statistics)",
    "desc": "US labor statistics: CPI, employment, wages, productivity and employment-cost series and overviews.",
    "key_required": true,
-   "docs_url": "https://data.bls.gov/registrationEngine/"
+   "docs_url": "https://data.bls.gov/registrationEngine/",
+   "params": {
+    "get_series": {
+     "series_ids": {
+      "required": true,
+      "help": "comma-separated BLS series IDs, e.g. CUUR0000SA0,LNS14000000"
+     }
+    }
+   }
   },
   "bnm_data.py": {
    "category": "Macro & Central Banks",
-   "region": "Malaysia"
+   "region": "Malaysia",
+   "sample": {
+    "command": "interest_rates",
+    "args": []
+   }
   },
   "bnr_data.py": {
    "category": "Macro & Central Banks",
@@ -139,7 +188,23 @@
   },
   "boc_data.py": {
    "category": "Macro & Central Banks",
-   "region": "Canada"
+   "region": "Canada",
+   "params": {
+    "fx": {
+     "curs": {
+      "name": "currencies"
+     }
+    },
+    "exchange_rates": {
+     "raw": {
+      "name": "currencies",
+      "help": "comma-separated list"
+     },
+     "n": {
+      "name": "recent"
+     }
+    }
+   }
   },
   "boe_data.py": {
    "category": "Macro & Central Banks",
@@ -184,7 +249,46 @@
     "options_chains": "<symbol> [expiration=all|nearest|YYYY-MM-DD] [option_type=both|call|put]"
    },
    "default_command": "index_snapshots",
-   "ttl_sec": 120
+   "ttl_sec": 120,
+   "params": {
+    "equity_quote": {
+     "symbol": {
+      "required": true
+     }
+    },
+    "equity_historical": {
+     "symbol": {
+      "required": true
+     }
+    },
+    "equity_search": {
+     "query": {
+      "required": true
+     }
+    },
+    "index_constituents": {
+     "symbol": {
+      "required": true,
+      "help": "index symbol, e.g. SPX"
+     }
+    },
+    "index_historical": {
+     "symbol": {
+      "required": true,
+      "help": "index symbol, e.g. SPX"
+     }
+    },
+    "index_search": {
+     "query": {
+      "required": true
+     }
+    },
+    "options_chains": {
+     "symbol": {
+      "required": true
+     }
+    }
+   }
   },
   "cboe_vix_data.py": {
    "category": "Markets & Equities",
@@ -274,7 +378,7 @@
   "cryptocompare_data.py": {
    "category": "Crypto & DeFi",
    "key_required": true,
-   "key_note": "Without a key the API returns empty lists.",
+   "key_note": "min-api.cryptocompare.com (now CoinDesk Data) answers every keyless call with HTTP 401 'API key required'.",
    "docs_url": "https://developers.coindesk.com/",
    "ttl_sec": 120
   },
@@ -385,15 +489,14 @@
    "docs_url": "https://ember-energy.org/data/api/"
   },
   "energy_transition_data.py": {
-   "category": "Energy, Commodities & Climate",
-   "key_required": true,
-   "key_note": "Without the key every command returns empty data."
+   "category": "Energy, Commodities & Climate"
   },
   "entso_e_data.py": {
    "category": "Energy, Commodities & Climate",
    "region": "Europe",
    "key_required": true,
-   "docs_url": "https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html"
+   "docs_url": "https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html",
+   "key_note": "The security token is free: register on the Transparency Platform, then request API access from the ENTSO-E helpdesk."
   },
   "eodhd_data.py": {
    "category": "Markets & Equities",
@@ -415,6 +518,31 @@
    "title": "Eurostat",
    "args_hints": {
     "dataset": "<dataset_code> [filters e.g. geo=DE,unit=CP_MEUR] [last_n_periods]"
+   },
+   "params": {
+    "dataset": [
+     {
+      "name": "dataset_code",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "Eurostat dataset code, e.g. nama_10_gdp"
+     },
+     {
+      "name": "filters",
+      "required": false,
+      "default": "",
+      "kind": "string",
+      "help": "comma-separated dimension=value pairs, e.g. geo=DE,unit=CP_MEUR"
+     },
+     {
+      "name": "last_n_periods",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "only the most recent N periods"
+     }
+    ]
    }
   },
   "eurostat_extra_data.py": {
@@ -429,7 +557,8 @@
   },
   "faostat_data.py": {
    "category": "Energy, Commodities & Climate",
-   "title": "FAOSTAT (UN FAO)"
+   "title": "FAOSTAT (UN FAO)",
+   "broken": "FAOSTAT's keyless API host fenixservices.fao.org is offline (Cloudflare 521) and its replacement faostatservices.fao.org/api/v1 answers HTTP 401 'Missing Authorization Header' (the website obtains a token through a browser-only guest handshake); only list_domains / list_datasets, which read the keyless bulk catalogue at bulks-faostat.fao.org, still work (checked 2026-11-16)"
   },
   "fdic_data.py": {
    "category": "Markets & Equities",
@@ -448,6 +577,9 @@
    "default_command": "topic",
    "default_args": [
     "BUSINESS"
+   ],
+   "commands_drop": [
+    "help"
    ]
   },
   "finnhub_data.py": {
@@ -497,7 +629,19 @@
    "default_command": "series",
    "default_args": [
     "GDP"
-   ]
+   ],
+   "params": {
+    "multiple": [
+     {
+      "name": "series_ids",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "FRED series IDs, each its own argument (e.g. GDP UNRATE); up to two YYYY-MM-DD values among them are read as the start and end date",
+      "variadic": true
+     }
+    ]
+   }
   },
   "fred_economic_data.py": {
    "category": "Macro & Central Banks",
@@ -514,7 +658,40 @@
    "desc": "French public APIs: data.gouv.fr datasets and tabular resources, API Géo (municipalities, departments, regions) and, with an API Entreprise key, company lookups by SIREN/SIRET.",
    "key_required": false,
    "key_note": "Only the company command needs ENTREPRISE_API_KEY.",
-   "mcp": false
+   "mcp": false,
+   "params": {
+    "datasets": [
+     {
+      "name": "query",
+      "required": false,
+      "default": "",
+      "kind": "string",
+      "help": "search text; empty lists recent datasets"
+     },
+     {
+      "name": "limit",
+      "required": false,
+      "default": 20,
+      "kind": "int",
+      "help": "results to return"
+     }
+    ],
+    "search": [
+     {
+      "name": "query",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "search text"
+     },
+     {
+      "name": "limit",
+      "required": false,
+      "default": 20,
+      "kind": "int"
+     }
+    ]
+   }
   },
   "gas_infrastructure_data.py": {
    "category": "Energy, Commodities & Climate",
@@ -548,7 +725,10 @@
   "global_fishing_watch_data.py": {
    "category": "Shipping",
    "key_required": true,
-   "docs_url": "https://globalfishingwatch.org/our-apis/"
+   "docs_url": "https://globalfishingwatch.org/our-apis/tokens",
+   "default_args": [
+    "Ocean"
+   ]
   },
   "global_forest_watch_data.py": {
    "category": "Energy, Commodities & Climate",
@@ -598,7 +778,9 @@
   },
   "govtrack_data.py": {
    "category": "Government & Statistics",
-   "region": "United States"
+   "region": "United States",
+   "broken": "www.govtrack.us, including /api/v2, answers every non-browser request with a Cloudflare JavaScript challenge (HTTP 403 'Just a moment...', cf-mitigated: challenge) that a script cannot pass, and the API has no key to authenticate with - use congress_gov_data.py for bills, votes and members (checked 2026-11-16)",
+   "sample": null
   },
   "harvard_dataverse_data.py": {
    "category": "Academic & Research",
@@ -674,6 +856,41 @@
     "Apple"
    ]
   },
+  "local_file_data.py": {
+   "category": "Other",
+   "region": "Local",
+   "title": "Local file (CSV, JSON, Excel, Parquet, Arrow)",
+   "desc": "Reads a data file on this computer as a typed table: CSV/TSV (delimiter, encoding and header sniffed), JSON/NDJSON, Excel (.xlsx/.xlsm/.xls), Parquet and Arrow/Feather. Read-only; URLs and network (UNC) paths are refused.",
+   "mcp": false,
+   "sample": null,
+   "default_command": "read",
+   "params": {
+    "read": {
+     "path": {
+      "help": "absolute path of a .csv/.tsv/.txt/.json/.ndjson/.jsonl/.xlsx/.xlsm/.xls/.parquet/.arrow/.feather file"
+     },
+     "limit": {
+      "help": "rows to return, 1-100000"
+     },
+     "sheet": {
+      "help": "Excel worksheet name or 1-based number; empty = the first sheet"
+     }
+    },
+    "schema": {
+     "path": {
+      "help": "absolute path of the data file"
+     },
+     "sheet": {
+      "help": "Excel worksheet name or 1-based number; empty = the first sheet"
+     }
+    },
+    "sheets": {
+     "path": {
+      "help": "absolute path of the data file"
+     }
+    }
+   }
+  },
   "maddison_project_data.py": {
    "category": "Macro & Central Banks"
   },
@@ -689,9 +906,9 @@
   },
   "messari_data.py": {
    "category": "Crypto & DeFi",
-   "key_required": false,
+   "key_required": true,
    "docs_url": "https://messari.io/api",
-   "key_note": "The asset directory and metrics catalogue are keyless; details, time series and news need a Messari API key."
+   "key_note": "Messari answers every keyless request with HTTP 402 (checked 2026-11-17): the asset list, metrics catalogue and news need MESSARI_API_KEY too."
   },
   "metals_prices_data.py": {
    "category": "Energy, Commodities & Climate",
@@ -736,7 +953,17 @@
    "category": "Macro & Central Banks",
    "region": "United States",
    "key_required": false,
-   "key_note": "FRED_API_KEY is only used by the unemployment command."
+   "key_note": "FRED_API_KEY is only used by the unemployment command.",
+   "params": {
+    "*": {
+     "start_date": {
+      "help": "month, YYYY-MM"
+     },
+     "end_date": {
+      "help": "month, YYYY-MM"
+     }
+    }
+   }
   },
   "nbp_data.py": {
    "category": "Macro & Central Banks",
@@ -773,16 +1000,24 @@
    "category": "Government & Statistics",
    "title": "OECD Health Statistics",
    "args_hints": {
-    "expenditure": "<country> [year] [type_=TOT]",
-    "life_expectancy": "<country> [year] [sex=T]",
-    "disease": "<country> [cause=ALL] [year]",
+    "expenditure": "<country> [year] [type_=TOT|GOV|VOL|OOP]",
+    "life_expectancy": "<country> [year] [sex=T|M|F]",
+    "disease": "<country> [cause=ALL|ISCH|MYOC|PNEU|DMTA|CVID] [year]",
     "pharma": "<country> [year]",
-    "workers": "<country> [type_=PHYS] [year]",
-    "hospitals": "<country> [indicator=HOSPBED] [year]"
+    "workers": "<country> [type_=PHYS|NURS|DENT|PHARM|MIDW|PHYSIO|CARE] [year]",
+    "hospitals": "<country> [indicator=HOSPBED|HOSP|ICU|MRI|CT|PET|MAMM|RT] [year]"
    },
    "default_args": [
     "USA"
-   ]
+   ],
+   "params": {
+    "*": {
+     "country": {
+      "required": true,
+      "help": "ISO3 country code, e.g. USA"
+     }
+    }
+   }
   },
   "ons_data.py": {
    "category": "Government & Statistics",
@@ -795,7 +1030,10 @@
    "title": "OpenCorporates",
    "key_required": true,
    "key_note": "OpenCorporates answers HTTP 401 without an API token.",
-   "docs_url": "https://opencorporates.com/api_accounts/new"
+   "docs_url": "https://opencorporates.com/api_accounts/new",
+   "default_args": [
+    "Apple"
+   ]
   },
   "open_exchange_data.py": {
    "category": "Markets & Equities",
@@ -808,7 +1046,143 @@
    "default_args": [
     "40.71",
     "-74.01"
-   ]
+   ],
+   "params": {
+    "forecast": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     },
+     {
+      "name": "variables",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "comma-separated Open-Meteo hourly variables, e.g. temperature_2m,precipitation"
+     }
+    ],
+    "historical": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     },
+     {
+      "name": "start_date",
+      "required": true,
+      "default": null,
+      "kind": "date"
+     },
+     {
+      "name": "end_date",
+      "required": true,
+      "default": null,
+      "kind": "date"
+     },
+     {
+      "name": "variables",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "comma-separated Open-Meteo daily variables"
+     }
+    ],
+    "air_quality": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     }
+    ],
+    "marine": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     }
+    ],
+    "flood": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     }
+    ],
+    "climate": [
+     {
+      "name": "lat",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "latitude in decimal degrees, e.g. 40.71"
+     },
+     {
+      "name": "lon",
+      "required": true,
+      "default": null,
+      "kind": "float",
+      "help": "longitude in decimal degrees, e.g. -74.01"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": 1950,
+      "kind": "int"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": 2050,
+      "kind": "int"
+     }
+    ]
+   }
   },
   "open_parliament_data.py": {
    "category": "Government & Statistics",
@@ -854,7 +1228,11 @@
   "oscar_data.py": {
    "category": "Geospatial & Geopolitics",
    "title": "WMO OSCAR (Earth observation systems)",
-   "desc": "WMO OSCAR: satellites, instruments and the Earth-observation variables they measure."
+   "desc": "WMO OSCAR: satellites, instruments and the Earth-observation variables they measure.",
+   "sample": {
+    "command": "satellites",
+    "args": []
+   }
   },
   "overpass_api_data.py": {
    "category": "Geospatial & Geopolitics",
@@ -893,12 +1271,205 @@
    "default_command": "co2",
    "default_args": [
     "World"
-   ]
+   ],
+   "params": {
+    "co2": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "World",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "co2_per_capita": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "World",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "energy": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "World",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "life_expectancy": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "all",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "poverty": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "all",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "gdp_per_capita": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "all",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "democracy": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "all",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ],
+    "health": [
+     {
+      "name": "country",
+      "required": false,
+      "default": "all",
+      "kind": "country",
+      "help": "entity name or ISO3 code ('United States', 'USA', 'World'); 'all' = every entity"
+     },
+     {
+      "name": "start_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year (inclusive)"
+     },
+     {
+      "name": "end_year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year (inclusive)"
+     }
+    ]
+   }
   },
   "paris_agreement_data.py": {
    "category": "Energy, Commodities & Climate",
    "title": "Climate Watch (Paris Agreement NDCs)",
-   "key_required": false
+   "key_required": false,
+   "sample": {
+    "command": "emissions",
+    "args": [
+     "USA",
+     "CO2"
+    ]
+   }
   },
   "penn_world_table_data.py": {
    "category": "Macro & Central Banks"
@@ -985,7 +1556,11 @@
    "category": "Government & Statistics",
    "region": "Sweden",
    "title": "Statistics Sweden (SCB)",
-   "desc": "Statistics Sweden PxWeb API: category tree, table metadata, population, GDP, employment and CPI."
+   "desc": "Statistics Sweden PxWeb API: category tree, table metadata, population, GDP, employment and CPI.",
+   "sample": {
+    "command": "get_popular_tables",
+    "args": []
+   }
   },
   "sec_data.py": {
    "category": "Markets & Equities",
@@ -995,7 +1570,55 @@
    "default_command": "cik_map",
    "default_args": [
     "AAPL"
-   ]
+   ],
+   "params": {
+    "company_filings": {
+     "symbol": {
+      "default": "",
+      "help": "ticker, e.g. AAPL - give symbol or cik"
+     },
+     "cik": {
+      "default": "",
+      "help": "SEC CIK number - give symbol or cik"
+     }
+    },
+    "insider_trading": {
+     "symbol": {
+      "default": "",
+      "help": "ticker, e.g. AAPL - give symbol or cik"
+     },
+     "cik": {
+      "default": "",
+      "help": "SEC CIK number - give symbol or cik"
+     }
+    },
+    "institutional_ownership": {
+     "symbol": {
+      "default": "",
+      "help": "ticker, e.g. AAPL - give symbol or cik"
+     },
+     "cik": {
+      "default": "",
+      "help": "SEC CIK number - give symbol or cik"
+     }
+    },
+    "company_overview": {
+     "symbol": {
+      "default": "",
+      "help": "ticker, e.g. AAPL - give symbol or cik"
+     },
+     "cik": {
+      "default": "",
+      "help": "SEC CIK number - give symbol or cik"
+     }
+    },
+    "financial_statements": {
+     "cik": {
+      "required": true,
+      "help": "SEC CIK number, e.g. 320193"
+     }
+    }
+   }
   },
   "sec_xbrl_data.py": {
    "category": "Markets & Equities",
@@ -1065,7 +1688,12 @@
    "title": "TradingView screener"
   },
   "transparency_budget_data.py": {
-   "category": "Geospatial & Geopolitics"
+   "category": "Geospatial & Geopolitics",
+   "broken": "internationalbudget.org/api answers scripts with HTTP 403 and the IBPNetwork/obs-data repository is gone (HTTP 404), so scores, country, rankings, trends and regional come back empty; only the static dimensions list works (checked 2026-11-17)",
+   "sample": {
+    "command": "dimensions",
+    "args": []
+   }
   },
   "treasury_data.py": {
    "category": "Government & Statistics",
@@ -1074,9 +1702,11 @@
   },
   "twelve_data.py": {
    "category": "Markets & Equities",
-   "key_required": true,
+   "key_required": false,
    "docs_url": "https://twelvedata.com/pricing",
-   "ttl_sec": 60
+   "ttl_sec": 60,
+   "default_command": "forex",
+   "key_note": "time_series, quote, price and the other per-symbol endpoints need TWELVE_DATA_API_KEY; the exchange, cryptocurrency and forex-pair lists are keyless."
   },
   "un_comtrade_data.py": {
    "category": "Government & Statistics",
@@ -1101,7 +1731,8 @@
   },
   "unctad_data.py": {
    "category": "Macro & Central Banks",
-   "broken": "UNCTADstat's data API needs per-user ClientId/ClientSecret credentials (unctadstat-user-api.unctad.org answers HTTP 401) and its keyless bulk files are 7z archives; the connector implements neither yet (checked 2026-10-13)"
+   "broken": "UNCTADstat's data API needs per-user ClientId/ClientSecret credentials (unctadstat-user-api.unctad.org answers HTTP 401) and its keyless bulk files are 7z archives; the connector implements neither yet (checked 2026-10-13)",
+   "sample": null
   },
   "undp_data.py": {
    "category": "Macro & Central Banks",
@@ -1111,7 +1742,390 @@
   "unesco_data.py": {
    "category": "Government & Statistics",
    "default_command": "list_versions",
-   "desc": "UNESCO Institute for Statistics: education, science and culture indicators by country and region."
+   "desc": "UNESCO Institute for Statistics: education, science and culture indicators by country and region.",
+   "params": {
+    "indicator_data": [
+     {
+      "name": "codes",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "indicator codes (ROFST..., NERA..., CR..., SE..., UIS....) and ISO3 geo-unit codes in any order, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "geo-unit-type",
+      "required": false,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "NATIONAL",
+       "REGIONAL"
+      ],
+      "named": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     },
+     {
+      "name": "footnotes",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "metadata",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "version",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "data release version (see list_versions)",
+      "named": true
+     }
+    ],
+    "export_indicator_data": [
+     {
+      "name": "format_type",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "csv",
+       "excel"
+      ]
+     },
+     {
+      "name": "codes",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "indicator codes (ROFST..., NERA..., CR..., SE..., UIS....) and ISO3 geo-unit codes in any order, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "geo-unit-type",
+      "required": false,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "NATIONAL",
+       "REGIONAL"
+      ],
+      "named": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     },
+     {
+      "name": "footnotes",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "metadata",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "version",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "data release version (see list_versions)",
+      "named": true
+     }
+    ],
+    "list_indicators": [
+     {
+      "name": "glossary",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "disaggregations",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "version",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "data release version (see list_versions)",
+      "named": true
+     }
+    ],
+    "export_indicators": [
+     {
+      "name": "format_type",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "csv",
+       "excel"
+      ]
+     },
+     {
+      "name": "glossary",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "disaggregations",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     },
+     {
+      "name": "version",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "data release version (see list_versions)",
+      "named": true
+     }
+    ],
+    "education_overview": [
+     {
+      "name": "country_codes",
+      "required": false,
+      "default": null,
+      "kind": "country",
+      "help": "ISO3 country codes, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "global_trends": [
+     {
+      "name": "indicator_code",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "UIS indicator code, e.g. CR.1"
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "country_comparison": [
+     {
+      "name": "indicator_code",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "UIS indicator code, e.g. CR.1"
+     },
+     {
+      "name": "country_codes",
+      "required": true,
+      "default": null,
+      "kind": "country",
+      "help": "ISO3 country codes, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "regional_data": [
+     {
+      "name": "region_id",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "UIS region id (see list_geo_units)"
+     },
+     {
+      "name": "indicator_codes",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "indicator codes, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "sti_data": [
+     {
+      "name": "country_codes",
+      "required": false,
+      "default": null,
+      "kind": "country",
+      "help": "ISO3 country codes, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "culture_data": [
+     {
+      "name": "country_codes",
+      "required": false,
+      "default": null,
+      "kind": "country",
+      "help": "ISO3 country codes, each its own argument",
+      "variadic": true
+     },
+     {
+      "name": "start-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "first year",
+      "named": true
+     },
+     {
+      "name": "end-year",
+      "required": false,
+      "default": null,
+      "kind": "int",
+      "help": "last year",
+      "named": true
+     }
+    ],
+    "export_country_dataset": [
+     {
+      "name": "country_code",
+      "required": true,
+      "default": null,
+      "kind": "country"
+     },
+     {
+      "name": "format_type",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "csv",
+       "excel",
+       "json"
+      ]
+     },
+     {
+      "name": "metadata",
+      "required": false,
+      "default": false,
+      "kind": "bool",
+      "named": true
+     }
+    ]
+   }
   },
   "unhcr_data.py": {
    "category": "Government & Statistics"
@@ -1139,7 +2153,19 @@
    "category": "Energy, Commodities & Climate",
    "region": "United States",
    "key_required": true,
-   "docs_url": "https://quickstats.nass.usda.gov/api"
+   "docs_url": "https://quickstats.nass.usda.gov/api",
+   "params": {
+    "counts": [
+     {
+      "name": "filters",
+      "required": false,
+      "default": null,
+      "kind": "string",
+      "help": "Quick Stats parameter/value pairs, each its own argument: commodity_desc CORN year 2023",
+      "variadic": true
+     }
+    ]
+   }
   },
   "waqi_data.py": {
    "category": "Energy, Commodities & Climate",
@@ -1173,7 +2199,23 @@
   "wits_trade_data.py": {
    "category": "Government & Statistics",
    "title": "World Bank WITS",
-   "desc": "World Bank WITS: trade statistics, tariffs and non-tariff measures by reporter, partner, product and year."
+   "desc": "World Bank WITS: trade statistics, tariffs and non-tariff measures by reporter, partner, product and year.",
+   "params": {
+    "product-tariff": {
+     "reporter": {
+      "required": true
+     },
+     "partner": {
+      "required": true
+     },
+     "product": {
+      "required": true
+     },
+     "year": {
+      "required": true
+     }
+    }
+   }
   },
   "world_bank_climate_data.py": {
    "category": "Energy, Commodities & Climate",
@@ -1192,7 +2234,10 @@
    "default_command": "poverty"
   },
   "world_pop_data.py": {
-   "category": "Geospatial & Geopolitics"
+   "category": "Geospatial & Geopolitics",
+   "default_args": [
+    "USA"
+   ]
   },
   "world_values_survey_data.py": {
    "category": "Academic & Research"
@@ -1213,7 +2258,131 @@
    "title": "WTO (World Trade Organization)",
    "key_required": false,
    "key_note": "The WTO data APIs need WTO_API_KEY; available_apis and overview work without it.",
-   "desc": "WTO APIs: quantitative restrictions, ePing SPS/TBT notifications, trade timeseries indicators and trade-facilitation data."
+   "desc": "WTO APIs: quantitative restrictions, ePing SPS/TBT notifications, trade timeseries indicators and trade-facilitation data.",
+   "params": {
+    "qr_products": {
+     "hs_version": {
+      "required": true,
+      "help": "HS version, see qr_hs_versions"
+     }
+    },
+    "qr_details": {
+     "qr_id": {
+      "required": true
+     }
+    },
+    "timeseries_data": [
+     {
+      "name": "indicator",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "WTO timeseries indicator code, e.g. TP_A_0010",
+      "named": true
+     },
+     {
+      "name": "reporters",
+      "required": false,
+      "default": "all",
+      "kind": "string",
+      "help": "comma-separated reporter codes or all",
+      "named": true
+     },
+     {
+      "name": "partners",
+      "required": false,
+      "default": "default",
+      "kind": "string",
+      "named": true
+     },
+     {
+      "name": "periods",
+      "required": false,
+      "default": "default",
+      "kind": "string",
+      "help": "e.g. 2020-2023 or default",
+      "named": true
+     },
+     {
+      "name": "products",
+      "required": false,
+      "default": "default",
+      "kind": "string",
+      "named": true
+     },
+     {
+      "name": "include_sub_products",
+      "required": false,
+      "default": "false",
+      "kind": "enum",
+      "choices": [
+       "false",
+       "true"
+      ],
+      "named": true
+     },
+     {
+      "name": "mode",
+      "required": false,
+      "default": "full",
+      "kind": "enum",
+      "choices": [
+       "full",
+       "codes"
+      ],
+      "named": true
+     },
+     {
+      "name": "offset",
+      "required": false,
+      "default": 0,
+      "kind": "int",
+      "named": true
+     },
+     {
+      "name": "max_records",
+      "required": false,
+      "default": 500,
+      "kind": "int",
+      "named": true
+     },
+     {
+      "name": "heading_style",
+      "required": false,
+      "default": "H",
+      "kind": "enum",
+      "choices": [
+       "H",
+       "M"
+      ],
+      "named": true
+     },
+     {
+      "name": "language",
+      "required": false,
+      "default": "1",
+      "kind": "enum",
+      "choices": [
+       "1",
+       "2",
+       "3"
+      ],
+      "help": "1 English, 2 French, 3 Spanish",
+      "named": true
+     },
+     {
+      "name": "include_metadata",
+      "required": false,
+      "default": "false",
+      "kind": "enum",
+      "choices": [
+       "false",
+       "true"
+      ],
+      "named": true
+     }
+    ]
+   }
   },
   "yfinance_data.py": {
    "category": "Markets & Equities",
@@ -1247,6 +2416,261 @@
    "category": "Markets & Equities",
    "region": "United States",
    "title": "Zillow Research housing data"
+  },
+  "universal_ckan_api.py": {
+   "category": "Government & Statistics",
+   "title": "CKAN open-data portals",
+   "desc": "National CKAN open-data portals (Argentina, Australia, Chile, Ireland, Italy, Latvia, Mexico, Netherlands, Slovenia, United Kingdom, Uruguay): publishers, datasets, keyword search, resources and dataset details.",
+   "key_required": false,
+   "commands": [
+    "portals",
+    "publishers",
+    "datasets",
+    "search",
+    "resources",
+    "dataset",
+    "recent",
+    "test"
+   ],
+   "params": {
+    "portals": [],
+    "publishers": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "limit",
+      "required": false,
+      "default": 300,
+      "kind": "int"
+     }
+    ],
+    "datasets": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "organization",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "publisher id or name, see publishers"
+     },
+     {
+      "name": "rows",
+      "required": false,
+      "default": 100,
+      "kind": "int"
+     }
+    ],
+    "search": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "query",
+      "required": true,
+      "default": null,
+      "kind": "string",
+      "help": "free text"
+     },
+     {
+      "name": "rows",
+      "required": false,
+      "default": 50,
+      "kind": "int"
+     }
+    ],
+    "resources": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "dataset_id",
+      "required": true,
+      "default": null,
+      "kind": "string"
+     }
+    ],
+    "dataset": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "dataset_id",
+      "required": true,
+      "default": null,
+      "kind": "string"
+     }
+    ],
+    "recent": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     },
+     {
+      "name": "limit",
+      "required": false,
+      "default": 50,
+      "kind": "int"
+     }
+    ],
+    "test": [
+     {
+      "name": "portal",
+      "required": true,
+      "default": null,
+      "kind": "enum",
+      "choices": [
+       "ar",
+       "au",
+       "cl",
+       "ie",
+       "it",
+       "lv",
+       "mx",
+       "nl",
+       "si",
+       "uk",
+       "uy"
+      ],
+      "help": "portal code: ar Argentina, au Australia, cl Chile, ie Ireland, it Italy, lv Latvia, mx Mexico, nl Netherlands, si Slovenia, uk United Kingdom, uy Uruguay"
+     }
+    ]
+   },
+   "sample": {
+    "command": "recent",
+    "args": [
+     "ie",
+     "20"
+    ]
+   }
+  },
+  "economic_calendar.py": {
+   "category": "Macro & Central Banks",
+   "title": "Economic calendar (Forex Factory)",
+   "desc": "Economic calendar of the current week from Forex Factory's public export: release time, currency, impact, forecast and previous value per event (no actuals).",
+   "key_required": false,
+   "commands": [
+    "day"
+   ],
+   "params": {
+    "day": [
+     {
+      "name": "date",
+      "required": false,
+      "default": null,
+      "kind": "date",
+      "help": "a day of the current week, 2026-11-17 or nov17.2026; default today (local time)"
+     }
+    ]
+   },
+   "sample": {
+    "command": "day",
+    "args": []
+   },
+   "ttl_sec": 900
   }
  }
 }

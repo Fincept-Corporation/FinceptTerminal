@@ -17,6 +17,10 @@ class RegisterScreen : public QWidget {
   public:
     explicit RegisterScreen(QWidget* parent = nullptr);
 
+    /// Open the code page for an existing account that is not verified yet
+    /// (sign-in was refused for it) and mail a fresh code; VERIFY then signs in.
+    void show_otp_for(const QString& email);
+
   signals:
     void navigate_login();
 
@@ -32,8 +36,6 @@ class RegisterScreen : public QWidget {
 
     // Form page — text-bearing widgets retained for retranslation
     QLabel* form_title_ = nullptr;
-    QLabel* first_name_lbl_ = nullptr;
-    QLabel* last_name_lbl_ = nullptr;
     QLabel* username_lbl_ = nullptr;
     QLabel* email_lbl_ = nullptr;
     QLabel* code_lbl_ = nullptr;
@@ -41,8 +43,6 @@ class RegisterScreen : public QWidget {
     QLabel* password_lbl_ = nullptr;
     QLabel* confirm_pw_lbl_ = nullptr;
 
-    QLineEdit* first_name_ = nullptr;
-    QLineEdit* last_name_ = nullptr;
     QLineEdit* username_ = nullptr;
     QLineEdit* email_ = nullptr;
     QLineEdit* phone_ = nullptr;
@@ -69,10 +69,16 @@ class RegisterScreen : public QWidget {
     QPushButton* back_to_form_btn_ = nullptr;
     QLabel* otp_error_ = nullptr;
     QLabel* otp_email_ = nullptr;
+    /// Address the code page verifies: the one just registered, or the
+    /// unverified account handed over by show_otp_for().
+    QString pending_email_;
 
     /// Cooldown so the OTP resend link cannot be hammered. Started on every
     /// resend; ticks the remaining seconds into the button label. Stopped in
     /// hideEvent so the timer never runs while the screen is off-stack (P3).
+    /// Matches the server's resend cooldown (60 s) — a resend inside it sends
+    /// nothing.
+    static constexpr int kResendCooldownSec = 60;
     QTimer* resend_timer_ = nullptr;
     int resend_cooldown_left_ = 0;
     void start_resend_cooldown();

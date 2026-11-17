@@ -39,9 +39,16 @@ from .specialized_analysis.inventory_analysis import InventoryAnalyzer
 from .specialized_analysis.asset_analysis import LongTermAssetAnalyzer
 from .specialized_analysis.tax_analysis import TaxAnalyzer
 from .specialized_analysis.quality_analysis import FinancialReportingQualityAnalyzer
-from .specialized_analysis.financial_modeling import FinancialStatementModelingAnalyzer
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
+
+
+def __getattr__(name):  # PEP 562: financial_modeling is runnable as a script, import it lazily
+    if name == "FinancialStatementModelingAnalyzer":
+        from .specialized_analysis.financial_modeling import FinancialStatementModelingAnalyzer
+        globals()[name] = FinancialStatementModelingAnalyzer
+        return FinancialStatementModelingAnalyzer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     # Core - Data Processing

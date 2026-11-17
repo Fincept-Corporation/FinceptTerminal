@@ -15,6 +15,13 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+class QStackedWidget;
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
+
 namespace fincept::screens {
 
 /// TOOLS view — 3-column terminal layout.
@@ -85,6 +92,16 @@ class ToolsViewPanel : public QWidget {
     QLabel* assigned_hint_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QTreeWidget* tool_tree_ = nullptr;
+    // The tree's states: skeleton while the tool list loads, an error page with
+    // RETRY when it failed, "no tools match" for an empty search, else the tree.
+    QStackedWidget* tree_stack_ = nullptr;
+    fincept::ui::LoadingSkeleton* tree_loading_ = nullptr;
+    fincept::ui::EmptyState* tree_state_ = nullptr;
+    bool tools_received_ = false;  ///< a tool list arrived at least once
+    bool tree_state_is_error_ = false; ///< tree_state_ shows a load failure (its action = RETRY)
+    void show_tree_loading();
+    void show_tree_error(const QString& message);
+    void request_tools();
     QLabel* total_count_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* copy_btn_ = nullptr;

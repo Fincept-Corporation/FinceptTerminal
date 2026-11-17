@@ -1,6 +1,7 @@
 // src/storage/repositories/ScanWatchRepository.cpp
 #include "storage/repositories/ScanWatchRepository.h"
 
+#include "core/logging/Logger.h"
 #include "storage/sync/SyncOutbox.h"
 
 #include <QDateTime>
@@ -25,6 +26,19 @@ QString json_obj_to_str(const QJsonObject& o) {
 QString nn(const QString& s) {
     return s.isNull() ? QString::fromLatin1("") : s;
 }
+/// A stored JSON column; invalid JSON reads as empty. Rows are re-read on every
+/// evaluation pass, so one line per watch and column per hour.
+QJsonDocument sw_parse(const QString& json, const QString& watch_id, const char* column) {
+    if (json.trimmed().isEmpty())
+        return {};
+    QJsonParseError err{};
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError)
+        LOG_WARN_RL("ScanWatchRepo", watch_id + QLatin1Char('|') + QLatin1String(column), 3600 * 1000,
+                    logf("Scan watch JSON is invalid",
+                         {{"watch", watch_id}, {"field", column}, {"parse_error", err.errorString()}}));
+    return doc;
+}
 } // namespace
 
 ScanWatchRepository& ScanWatchRepository::instance() {
@@ -36,7 +50,7 @@ ScanWatch ScanWatchRepository::map_row(QSqlQuery& q) {
     ScanWatch w;
     w.id = q.value(0).toString();
     w.name = q.value(1).toString();
-    w.conditions = QJsonDocument::fromJson(q.value(2).toString().toUtf8()).array();
+    w.conditions = sw_parse(q.value(2).toString(), w.id, "conditions_json").array();
     w.logic = q.value(3).toString();
     w.symbols = q.value(4).toString().split('\n', Qt::SkipEmptyParts);
     w.timeframe = q.value(5).toString();
@@ -47,7 +61,7 @@ ScanWatch ScanWatchRepository::map_row(QSqlQuery& q) {
     w.mode = q.value(10).toString();
     w.interval_sec = q.value(11).toInt();
     w.cooldown_min = q.value(12).toInt();
-    w.actions = QJsonDocument::fromJson(q.value(13).toString().toUtf8()).object();
+    w.actions = sw_parse(q.value(13).toString(), w.id, "actions_json").object();
     w.active = q.value(14).toInt() != 0;
     w.status = q.value(15).toString();
     w.last_eval_at = q.value(16).toLongLong();

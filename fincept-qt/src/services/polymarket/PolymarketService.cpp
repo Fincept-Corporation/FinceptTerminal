@@ -52,6 +52,18 @@ static QJsonValue data_payload(const QJsonDocument& doc) {
     return doc.isObject() ? doc.object().value(QStringLiteral("data")) : QJsonValue();
 }
 
+// Gamma's /markets "volume" field is a JSON string and order=volume sorts it
+// lexicographically ("99.99" ranks above "80295753.4"), which filled the
+// default MARKETS view with ~$100 markets. The numeric twins sort correctly.
+// /events sorts "volume" numerically, so fetch_events keeps the plain key.
+static QString gamma_market_order_key(const QString& sort_by) {
+    if (sort_by == QLatin1String("volume"))
+        return QStringLiteral("volumeNum");
+    if (sort_by == QLatin1String("liquidity"))
+        return QStringLiteral("liquidityNum");
+    return sort_by;
+}
+
 // ── Existing type parsing ───────────────────────────────────────────────────
 
 Market Market::from_json(const QJsonObject& obj) {
@@ -205,6 +217,14 @@ Trade Trade::from_json(const QJsonObject& obj) {
     t.size = num_or_str(obj["size"]);
     t.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     t.condition_id = obj["condition_id"].toString();
+    // /v2/trades rows carry the outcome token traded; a binary market's tape
+    // mixes both, so keep it for the TRADES tab.
+    t.outcome = obj["outcome"].toString();
+    const QJsonValue oi = obj["outcome_index"];
+    if (oi.isDouble())
+        t.outcome_index = oi.toInt();
+    else if (oi.isString())
+        t.outcome_index = oi.toString().toInt();
     return t;
 }
 
@@ -224,6 +244,11 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
     h.entry_price = num_or_str(obj["avg_price"]);
     const QJsonValue rv = obj["rank"];
     h.rank = rv.isString() ? rv.toString().toInt() : rv.toInt();
+    const QJsonValue oi = obj["outcome_index"];
+    if (oi.isDouble())
+        h.outcome_index = oi.toInt();
+    else if (oi.isString())
+        h.outcome_index = oi.toString().toInt();
     return h;
 }
 
@@ -394,7 +419,8 @@ void PolymarketService::get_data(const QString& path, JsonCallback on_success, c
 
 // ── Gamma API ────────────────────────────────────────────────────────────────
 
-void PolymarketService::fetch_markets(const QString& sort_by, int limit, int offset, bool closed) {
+void PolymarketService::fetch_markets(const QString& sort_by_in, int limit, int offset, bool closed) {
+    const QString sort_by = gamma_market_order_key(sort_by_in);
     const QString cache_key =
         QString("polymarket:markets:%1:%2:%3:%4").arg(sort_by).arg(limit).arg(offset).arg(closed ? 1 : 0);
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
@@ -425,7 +451,7 @@ void PolymarketService::fetch_markets(const QString& sort_by, int limit, int off
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Market::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " markets");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " markets");
             emit markets_ready(result);
         },
         "FetchMarkets");
@@ -447,7 +473,8 @@ void PolymarketService::remember_tag_ids(const QJsonArray& tags) {
     }
 }
 
-void PolymarketService::fetch_markets_by_tag(const QString& tag, const QString& sort_by, int limit, int offset) {
+void PolymarketService::fetch_markets_by_tag(const QString& tag, const QString& sort_by_in, int limit, int offset) {
+    const QString sort_by = gamma_market_order_key(sort_by_in);
     // Gamma's /markets IGNORES a `tag=<label>` query (it returned the unfiltered list, so
     // every category chip showed the same markets); the only working filter is tag_id.
     // Resolve the label through the id map learned from fetch_tags().
@@ -455,10 +482,7 @@ void PolymarketService::fetch_markets_by_tag(const QString& tag, const QString& 
     const QString tag_param = tag_id.isEmpty() ? QString("tag=%1").arg(QString::fromLatin1(QUrl::toPercentEncoding(tag)))
                                                : QString("tag_id=%1").arg(tag_id);
     QString path = QString("/markets?%1&closed=false&limit=%2&offset=%3&order=%4&ascending=false")
-                       .arg(tag_param)
-                       .arg(limit)
-                       .arg(offset)
-                       .arg(sort_by);
+                       .arg(tag_param, QString::number(limit), QString::number(offset), sort_by);
 
     get_gamma(
         path,
@@ -468,7 +492,7 @@ void PolymarketService::fetch_markets_by_tag(const QString& tag, const QString& 
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Market::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " markets by tag");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " markets by tag");
             emit markets_ready(result);
         },
         "FetchMarketsByTag");
@@ -518,8 +542,8 @@ void PolymarketService::search_markets(const QString& query, int limit) {
                                   [](const Market& m) { return m.active && !m.closed; });
             if (markets.size() > per_type)
                 markets.resize(per_type);
-            LOG_INFO("Polymarket", "Search returned " + QString::number(markets.size()) + " markets / " +
-                                       QString::number(events.size()) + " events");
+            LOG_DEBUG("Polymarket", "Search returned " + QString::number(markets.size()) + " markets / " +
+                                        QString::number(events.size()) + " events");
             emit search_results_ready(markets, events);
         },
         "SearchMarkets");
@@ -561,7 +585,7 @@ void PolymarketService::fetch_events(const QString& sort_by, int limit, int offs
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Event::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " events");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " events");
             emit events_ready(result);
         },
         "FetchEvents");
@@ -588,7 +612,7 @@ void PolymarketService::fetch_events_by_tag(const QString& tag, const QString& s
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Event::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " events by tag");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " events by tag");
             emit events_ready(result);
         },
         "FetchEventsByTag");
@@ -689,7 +713,7 @@ void PolymarketService::fetch_tags() {
                 if (!tag.label.isEmpty())
                     result.append(tag);
             }
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " tags");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " tags");
             emit tags_ready(result);
         },
         "FetchTags");
@@ -708,7 +732,7 @@ void PolymarketService::fetch_comments(int event_id, int limit) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             for (const auto& v : arr)
                 result.append(Comment::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " comments");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " comments");
             emit comments_ready(result);
         },
         "FetchComments");
@@ -726,7 +750,7 @@ void PolymarketService::fetch_teams(const QString& league) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             for (const auto& v : arr)
                 result.append(Team::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " teams");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " teams");
             emit teams_ready_list(result);
         },
         "FetchTeams");
@@ -754,7 +778,7 @@ void PolymarketService::fetch_price_history(const QString& token_id, const QStri
         [this, token_id](const QJsonDocument& doc) {
             if (doc.isObject()) {
                 auto history = PriceHistory::from_json(doc.object());
-                LOG_INFO("Polymarket", "Price history: " + QString::number(history.points.size()) + " points");
+                LOG_DEBUG("Polymarket", "Price history: " + QString::number(history.points.size()) + " points");
                 emit price_history_for_token(token_id, history);
                 emit price_history_ready(history);
             }
@@ -819,7 +843,7 @@ void PolymarketService::fetch_trades(const QString& condition_id, int limit) {
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Trade::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " trades");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " trades");
             emit trades_ready(result);
         },
         "FetchTrades");
@@ -848,7 +872,7 @@ void PolymarketService::fetch_top_holders(const QString& condition_id, int limit
                     result.append(h);
                 }
             }
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " top holders");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " top holders");
             emit top_holders_ready(result);
         },
         "FetchTopHolders");
@@ -890,7 +914,7 @@ void PolymarketService::fetch_leaderboard(int limit) {
                     e.rank = rank++;
                 result.append(e);
             }
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " leaderboard entries");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " leaderboard entries");
             emit leaderboard_ready(result);
         },
         "FetchLeaderboard");
@@ -907,7 +931,7 @@ void PolymarketService::fetch_activity(const QString& user, int limit) {
             const QJsonArray arr = data_payload(doc).toArray();
             for (const auto& v : arr)
                 result.append(Activity::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " activities");
+            LOG_DEBUG("Polymarket", "Fetched " + QString::number(result.size()) + " activities");
             emit activity_ready(result);
         },
         "FetchActivity");

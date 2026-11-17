@@ -1,57 +1,31 @@
 """
-Fetch open interest for a perpetual futures symbol.
-Works with both spot symbols (BTC/USDT) and perp symbols (BTC/USDT:USDT).
+Fetch open interest (a spot pair uses its linear perpetual when listed) — a one-shot wrapper over the exchange daemon's own `fetch_open_interest`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
 
 Usage: python fetch_open_interest.py <exchange_id> <symbol>
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, run_with_error_handling
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
+
+USAGE = "fetch_open_interest.py <exchange_id> <symbol>"
 
 
-def to_perp_symbol(symbol: str) -> str:
-    """Convert spot symbol to linear perp equivalent if needed."""
-    if ":" not in symbol and "/" in symbol:
-        quote = symbol.split("/")[1]
-        return f"{symbol}:{quote}"
-    return symbol
-
-
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 3:
-        output_success({"symbol": "", "open_interest": None, "open_interest_value": None, "timestamp": None})
-        return
-
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2]
-
-    exchange = make_exchange(exchange_id)
-    exchange.load_markets()
-
-    perp_symbol = to_perp_symbol(symbol)
-
-    for sym in ([perp_symbol, symbol] if perp_symbol != symbol else [symbol]):
-        try:
-            exchange.options["defaultType"] = "swap"
-            oi = exchange.fetch_open_interest(sym)
-            output_success({
-                "symbol": sym,
-                "open_interest": oi.get("openInterestAmount"),
-                "open_interest_value": oi.get("openInterestValue"),
-                "timestamp": oi.get("timestamp"),
-            })
-            return
-        except Exception:
-            continue
-
-    # Not available for this symbol/exchange
-    output_success({
-        "symbol": symbol,
-        "open_interest": None,
-        "open_interest_value": None,
-        "timestamp": None,
-    })
+def main(argv):
+    if len(argv) < 3:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2], "derive_perp": True}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_open_interest", argv[1], args)[0]
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

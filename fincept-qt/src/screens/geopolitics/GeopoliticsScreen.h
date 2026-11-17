@@ -1,10 +1,13 @@
 // src/screens/geopolitics/GeopoliticsScreen.h
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/geopolitics/GeopoliticsTypes.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QEvent>
+#include <QJsonValue>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -29,7 +32,7 @@ class TradeAnalysisPanel;
 /// Left: filter controls (country, city, category)
 /// Center: tab-switched content (Conflict Monitor, HDX, Relationships, Trade)
 /// Right: event detail / legend panel
-class GeopoliticsScreen : public QWidget, public IStatefulScreen {
+class GeopoliticsScreen : public QWidget, public IStatefulScreen, public fincept::screens::ISectionLinked {
     Q_OBJECT
   public:
     explicit GeopoliticsScreen(QWidget* parent = nullptr);
@@ -38,6 +41,10 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "geopolitics"; }
     int state_version() const override { return 1; }
+
+    // ISectionLinked — the tabs: "monitor", "hdx", "relations", "trade" (on_tab_changed). `focus`
+    // is not used (the Monitor's events are a billed fetch the user starts with APPLY FILTERS).
+    bool open_section(const QString& section, const QString& focus) override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -61,12 +68,14 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
   private:
     void build_ui();
     QWidget* build_top_bar();
-    QWidget* build_filter_panel();
+    QWidget* build_filter_panel(QWidget* parent);
     QWidget* build_status_bar();
     void connect_service();
     /// Root stylesheet (background + credit / auto-refresh / plans state rules).
-    /// Called at build time and on theme change.
+    /// Build time only: it is token-built, so the theme manager re-styles it.
     void refresh_theme();
+    /// Status-bar control heights from the font size (construction, appearance_settled).
+    void fit_status_controls();
     /// Show the remaining API credit balance (fractional) and, when it is low or
     /// exhausted, the PLANS button. `remaining` < 0 = not reported (label unchanged).
     void update_credits(double remaining, double used);
@@ -75,12 +84,41 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     void rebuild_legend(const QVector<services::geo::UniqueCategory>& cats);
     /// Colour the status-bar label (one stylesheet for every state).
     void set_status_color(const QString& color);
-    /// Fetch one page of events. A fresh apply (`reuse_filters` false) snapshots the
-    /// boxes; paging and the timer reuse that snapshot so a half-typed filter can't
-    /// leak into page 2 or a background refresh.
+    /// Fetch one page of events (3 credits) through the Monitor's AutoLoadPane.
+    /// A fresh apply (`reuse_filters` false) snapshots the boxes; paging and the
+    /// timer reuse that snapshot so a half-typed filter can't leak into page 2 or
+    /// a background refresh. Only explicit actions call this — opening the
+    /// screen never buys a page (the pane shows the remembered one or its preview).
     void request_events(int page, bool reuse_filters);
     /// Sync the PAGE x / y label and the PREV / NEXT buttons with the loaded page.
     void update_pager();
+
+    // ── The Monitor's AutoLoadPane (Policy::Manual: 3 credits per page) ──────
+    /// Pane view key: the applied filters + page (each remembered on its own).
+    QString events_view_key(int page) const;
+    /// Pane start: buy requested_page_ (or take the dashboard's fresh hub copy once).
+    void start_events_request(quint64 id);
+    /// Pane render: a delivered or remembered page onto map, table, sidebar,
+    /// legend, pager and status ("AS OF …" for a remembered one).
+    void render_events_payload(const QJsonValue& payload, const QDateTime& as_of, bool from_cache);
+    void configure_events_preview();
+    void configure_no_match_state();
+    quint64 events_request_id_ = 0; // the pane's run our fetch answers
+    bool use_hub_copy_once_ = false;
+    int requested_page_ = 1;
+    /// Countries / categories / cities of the page on screen feed the legend,
+    /// the filters' autocomplete and the Relations tab (free) while the paid
+    /// reference lists are not loaded.
+    void apply_page_reference(const QVector<services::geo::NewsEvent>& events);
+    void fill_category_combo(const QVector<services::geo::UniqueCategory>& cats);
+    /// Relations tab LOAD LIVE STATISTICS: the countries + categories lists (6 credits).
+    void load_reference_stats();
+    QPushButton* refresh_btn_ = nullptr; // ⟳ REFRESH · 3 CR (status bar, Monitor only)
+    bool stats_inflight_ = false;        // Relations LOAD LIVE STATISTICS running
+    bool have_cities_ = false;
+    QVector<services::geo::UniqueCountry> page_countries_;
+    QVector<services::geo::UniqueCategory> page_categories_;
+    int page_event_count_ = 0;
 
     // Filter inputs
     QLineEdit* country_edit_ = nullptr;
@@ -113,6 +151,16 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     HDXDataPanel* hdx_panel_ = nullptr;
     RelationshipPanel* relationship_panel_ = nullptr;
     TradeAnalysisPanel* trade_panel_ = nullptr;
+    /// The HDX / Relations / Trade panels are built the first time their tab
+    /// is shown — Monitor is the tab on show; building all four made opening
+    /// the screen slow. Until then the stack holds an empty placeholder.
+    void ensure_tab_panel(int index);
+    void wire_relationship_panel(); // its data and drill-down connections
+    // Relations-tab inputs that arrived before that panel was built.
+    QVector<services::geo::UniqueCountry> last_countries_;
+    QVector<services::geo::UniqueCategory> last_categories_;
+    bool have_countries_ = false;
+    bool have_categories_ = false;
 
     // Tab buttons
     QVector<QPushButton*> tab_buttons_;
@@ -129,6 +177,10 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QPushButton* prev_page_btn_ = nullptr;
     QPushButton* next_page_btn_ = nullptr;
     QLabel* page_lbl_ = nullptr;
+    // Monitor-only controls, hidden on the HDX / Relations / Trade tabs where
+    // they would change nothing that is shown.
+    QWidget* filter_panel_ = nullptr;
+    QWidget* pager_ = nullptr;
     int current_page_ = 1;
     int total_pages_ = 0; // 0 = the API did not report pagination
     bool events_inflight_ = false;

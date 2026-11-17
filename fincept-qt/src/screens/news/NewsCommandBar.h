@@ -1,4 +1,6 @@
 #pragma once
+#include "services/news/NewsService.h"
+
 #include <QComboBox>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -11,11 +13,19 @@
 #include <QVector>
 #include <QWidget>
 
+class QMenu;
+class QScrollArea;
+
 namespace fincept::screens {
 
-/// Redesigned two-row news header:
-///   Row 1 (32px): Search, category pills, time pills, sort/view toggles, controls
-///   Row 2 (26px): Intel strip — live stats, sentiment gauge, monitor alerts, deviation badges
+/// Two-row news header:
+///   Row 1: [scrolling filter group: INTEL, search, category / time pills, sort,
+///          view] [fixed control group: counts, UNREAD, MY, language, region,
+///          variant, CHARTS, SAVED, BRIEF, refresh cadence, SRC, REFRESH, ⋯].
+///          The fixed group stays reachable at any width: controls that do not
+///          fit are hidden and every control (pills included) is in the ⋯ menu.
+///   Row 2: Intel strip — live stats, tone gauge, feed health, monitor alerts,
+///          deviation badges.
 class NewsCommandBar : public QWidget {
     Q_OBJECT
   public:
@@ -35,6 +45,14 @@ class NewsCommandBar : public QWidget {
     void set_active_variant(const QString& variant);
     /// Select the language-filter combo ("ALL", "EN", ...) without emitting.
     void set_active_language(const QString& lang);
+    /// Select the region-filter combo ("ALL", "EUROPE", "LATAM", ...) without emitting.
+    void set_active_region(const QString& region);
+    /// MY filter: "ALL", "HOLDINGS", "WATCHLISTS", "MY" (both) or "WL:<id>".
+    void set_active_my(const QString& value);
+    /// Watchlists offered by the MY filter (id, name).
+    void set_watchlists(const QVector<QPair<QString, QString>>& lists);
+    void set_unread_only(bool on);
+    void set_charts_checked(bool on);
     /// Show `text` in the search box without emitting search_changed — used when
     /// the filter is applied from elsewhere (symbol link / drop) so the active
     /// filter is visible and can be cleared with the box's clear button.
@@ -45,15 +63,28 @@ class NewsCommandBar : public QWidget {
     void set_alert_count(int count);
     void set_unseen_count(int count);
 
+    /// Plain-text line in the brief row (e.g. "nothing to brief").
     void show_summary(const QString& summary);
+    /// The headline brief: KPI strip (headlines / categories / urgent) and one
+    /// section per category, each headline a clickable row
+    /// (brief_article_clicked). `items` most important first.
+    void show_brief(const QVector<fincept::services::NewsArticle>& items);
     void hide_summary();
     void set_summarizing(bool busy);
 
     // Intel strip updates (moved from side panel)
     void update_stats(int feeds, int articles, int clusters, int sources);
-    void update_sentiment(int bullish, int bearish, int neutral);
+    /// Tone of the current filter: label counts, articles not scored (non-English),
+    /// and the mean measured tone (NaN when nothing was scored).
+    void update_sentiment(int bullish, int bearish, int neutral, int not_scored, double mean_tone);
     void update_deviations(const QVector<QPair<QString, double>>& deviations);
     void update_monitor_summary(int total_monitors, int active_alerts);
+    /// Feed health badge: feeds that answered on the last refresh / enabled
+    /// feeds, how many are backing off, and a per-feed tooltip.
+    void update_feed_health(int ok, int total, int backing_off, const QString& tooltip);
+    /// Today's key events among the mentioned companies ("EARNINGS TODAY: AAPL ·
+    /// 3 THIS WEEK"); empty text hides it.
+    void update_events(const QString& text, const QString& tooltip);
     /// Drive the LIVE/OFFLINE badge in the intel strip.
     void set_live_state(bool connected);
     /// Select the refresh-interval combo to match `minutes` (0 = manual).
@@ -61,9 +92,14 @@ class NewsCommandBar : public QWidget {
     void set_refresh_interval_minutes(int minutes);
     /// Reflect the intel drawer's state on the INTEL toggle without emitting.
     void set_drawer_checked(bool checked);
+    /// Anchor for the saved-searches menu.
+    QPushButton* saved_button() const { return saved_btn_; }
 
   protected:
     void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   signals:
     void category_changed(const QString& category);
@@ -73,9 +109,18 @@ class NewsCommandBar : public QWidget {
     void search_changed(const QString& query);
     void refresh_clicked();
     void summarize_clicked();
+    /// A headline in the brief was clicked — open that article.
+    void brief_article_clicked(const fincept::services::NewsArticle& article);
     void rtl_toggled();
     void variant_changed(const QString& variant);
     void language_filter_changed(const QString& lang);
+    void region_filter_changed(const QString& region);
+    void my_filter_changed(const QString& value);
+    void unread_only_toggled(bool on);
+    void mark_all_read_clicked();
+    void charts_toggled(bool on);
+    void saved_searches_clicked();
+    void feed_health_clicked();
     void drawer_toggle_requested();
     void manage_sources_clicked();
     /// Emitted when the user clicks the LIVE/OFFLINE badge to toggle
@@ -89,6 +134,16 @@ class NewsCommandBar : public QWidget {
     void update_pill_group(const QVector<QPushButton*>& btns, const QString& active_value);
     void build_command_row(QVBoxLayout* root);
     void build_intel_row(QVBoxLayout* root);
+    /// Sizes the rows and controls for the user's font (the design sizes at the
+    /// default font size, larger when the text needs it).
+    void fit_to_font();
+    /// Hide the least important fixed-group controls that do not fit (they stay
+    /// in the ⋯ menu).
+    void fit_to_width();
+    /// The ⋯ menu: every control of the bar.
+    void show_overflow_menu();
+    void fill_language_combo();
+    void fill_region_combo();
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
@@ -108,12 +163,26 @@ class NewsCommandBar : public QWidget {
     QPushButton* drawer_btn_ = nullptr;
     QPushButton* sources_btn_ = nullptr;
     QPushButton* rtl_btn_ = nullptr;
+    QPushButton* unread_btn_ = nullptr;
+    QPushButton* mark_read_btn_ = nullptr;
+    QPushButton* charts_btn_ = nullptr;
+    QPushButton* saved_btn_ = nullptr;
+    QPushButton* more_btn_ = nullptr;
     // AI-brief row (label + dismiss button) — laid out under the intel strip.
     QWidget* summary_row_ = nullptr;
     QLabel* summary_label_ = nullptr;
     QPushButton* summary_close_btn_ = nullptr;
+    /// Scrollable host of the structured brief (replaces the label while shown).
+    QWidget* brief_scroll_ = nullptr;
     /// Height with the summary row hidden: 32px command row + 28px intel strip.
     static constexpr int kBaseHeight = 60;
+    /// kBaseHeight grown to fit the user's font (see fit_to_font).
+    int base_height_ = kBaseHeight;
+    QScrollArea* command_scroll_ = nullptr;
+    QWidget* command_row_ = nullptr;   // the whole first row
+    QWidget* filter_group_ = nullptr;  // scrolling left part
+    QWidget* control_group_ = nullptr; // fixed right part
+    QWidget* intel_row_ = nullptr;
     QLabel* count_label_ = nullptr;
     QLabel* alert_label_ = nullptr;
     QLabel* unseen_label_ = nullptr;
@@ -121,6 +190,8 @@ class NewsCommandBar : public QWidget {
 
     QComboBox* variant_combo_ = nullptr;
     QComboBox* lang_filter_combo_ = nullptr;
+    QComboBox* region_combo_ = nullptr;
+    QComboBox* my_combo_ = nullptr;
     QComboBox* refresh_combo_ = nullptr;
 
     // Row 2 — intel strip
@@ -137,15 +208,21 @@ class NewsCommandBar : public QWidget {
     QWidget* sentiment_bull_ = nullptr;
     QWidget* sentiment_neut_ = nullptr;
     QWidget* sentiment_bear_ = nullptr;
+    QWidget* sentiment_unscored_ = nullptr;
     QLabel* sentiment_score_ = nullptr;
+    QLabel* sentiment_counts_ = nullptr;
+    QPushButton* feed_health_btn_ = nullptr;
     QLabel* intel_monitors_ = nullptr;
     QLabel* intel_deviations_ = nullptr;
+    QLabel* intel_events_ = nullptr;
     QPushButton* live_badge_ = nullptr;
 
     QString active_category_ = "ALL";
     QString active_time_ = "24H";
-    QString active_sort_ = "RELEVANCE";
+    QString active_sort_ = "NEWEST";
     QString active_view_ = "WIRE";
+    QString active_my_ = "ALL";
+    QVector<QPair<QString, QString>> watchlists_;
 };
 
 } // namespace fincept::screens

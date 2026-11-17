@@ -57,6 +57,11 @@ struct DcfInputs {
     /// holding it flat then dropping to the terminal rate — the standard two-stage
     /// convergence; flat high growth for a decade overstates value.
     bool fade = false;
+    /// Unlevered: `fcf` is free cash flow to the FIRM and `discount` the WACC, so the
+    /// present value is the enterprise value; equity = EV − net debt − minority interest.
+    bool unlevered = false;
+    double net_debt = 0.0; ///< total debt − cash (unlevered only; negative = net cash)
+    double minority = 0.0; ///< minority interest / non-controlling stakes (unlevered only)
 };
 
 struct DcfResult {
@@ -64,15 +69,58 @@ struct DcfResult {
     QString error;
     double pv_fcf = 0.0;            ///< present value of the projected cash flows
     double pv_terminal = 0.0;       ///< present value of the Gordon terminal value
-    double equity_value = 0.0;      ///< pv_fcf + pv_terminal
+    double enterprise_value = 0.0;  ///< unlevered: pv_fcf + pv_terminal; levered: = equity_value
+    double equity_value = 0.0;      ///< levered: pv_fcf + pv_terminal; unlevered: EV − net debt − minority
     double per_share = 0.0;         ///< equity_value / shares
-    double terminal_fraction = 0.0; ///< pv_terminal / equity_value
+    double terminal_fraction = 0.0; ///< pv_terminal / (pv_fcf + pv_terminal)
+    QVector<double> growth;         ///< growth applied in each projection year
+    QVector<double> cash_flow;      ///< projected cash flow of each year
+    QVector<double> discount_factor;
+    QVector<double> present_value;
+    double terminal_value = 0.0;    ///< undiscounted, at the end of the projection
 };
 
-/// Levered-FCF DCF: FCF_t = FCF_{t-1}·(1+g_t) for t = 1..n (g_t = g, or faded towards g_T
-/// when `fade`), terminal value FCF_n·(1+g_T)/(r − g_T), all discounted at r. Equity value
-/// directly (levered FCF is already after interest), so no net-debt bridge.
+/// Two-stage DCF: CF_t = CF_{t-1}·(1+g_t) for t = 1..n (g_t = g, or faded towards g_T when
+/// `fade`), terminal value CF_n·(1+g_T)/(r − g_T), all discounted at r. Levered (FCFE at
+/// the cost of equity) gives equity value directly; unlevered (FCFF at the WACC) gives the
+/// enterprise value, bridged to equity by net debt and minority interest.
 DcfResult dcf(const DcfInputs& in);
+
+// ── Dividend discount / residual income (banks, insurers) ───────────────────────
+struct DdmInputs {
+    double dps = 0.0;             ///< current annual dividend per share
+    double growth = 0.0;          ///< stage-1 dividend growth, fraction
+    double terminal_growth = 0.0;
+    double cost_of_equity = 0.0;
+    int years = 5;
+};
+struct DdmResult {
+    bool ok = false;
+    QString error;
+    double per_share = 0.0;
+    double terminal_fraction = 0.0;
+};
+/// Two-stage dividend discount model (stage-1 growth, then Gordon growth).
+DdmResult ddm(const DdmInputs& in);
+
+struct ResidualIncomeInputs {
+    double book_value_ps = 0.0;  ///< current book value per share
+    double roe = 0.0;            ///< expected return on equity (fraction), faded to `long_run_roe`
+    double long_run_roe = 0.0;   ///< ROE the fade converges to (≈ cost of equity = no excess return)
+    double payout = 0.0;         ///< dividend payout ratio (fraction of earnings)
+    double cost_of_equity = 0.0;
+    int years = 10;
+};
+struct ResidualIncomeResult {
+    bool ok = false;
+    QString error;
+    double per_share = 0.0;      ///< book value + PV of residual income
+    double pv_residual = 0.0;    ///< PV of (ROE − ke) × book value over the horizon
+};
+/// Residual income: value = BV0 + Σ (ROE_t − ke)·BV_{t−1} / (1+ke)^t, ROE fading linearly
+/// to `long_run_roe`, book value growing by retained earnings. No terminal value beyond
+/// the horizon (excess returns are competed away).
+ResidualIncomeResult residual_income(const ResidualIncomeInputs& in);
 
 /// Reverse DCF: the projection growth rate (fraction) at which the DCF's per-share value
 /// equals `price` with every other input unchanged — what the market price assumes.

@@ -19,23 +19,25 @@ static constexpr const char* kImfScript = "imf_datamapper_data.py";
 static constexpr const char* kImfSourceId = "imf";
 static constexpr const char* kImfColor = "#3B82F6"; // blue
 
-// Curated indicator list: display name → IMF DataMapper code
+// Curated indicator list: display name → IMF DataMapper code. Every code is in the live
+// DataMapper /indicators list (checked 2026-11). WEO codes the DataMapper does not serve
+// (PCPIE, GGR_NGDP, NID_NGDP, NGSD_NGDP, TM_RPCH, TX_RPCH, TT) always came back without "values".
 static const QList<QPair<QString, QString>> kImfIndicators = {
     {"Real GDP Growth (%)", "NGDP_RPCH"},
     {"Nominal GDP (USD billions)", "NGDPD"},
     {"GDP per capita (USD)", "NGDPDPC"},
-    {"Inflation, End of Period (%)", "PCPIE"},
+    {"GDP, PPP (intl $ billions)", "PPPGDP"},
+    {"GDP per capita, PPP (intl $)", "PPPPC"},
+    {"Inflation, End of Period (%)", "PCPIEPCH"},
     {"Inflation, Average (%)", "PCPIPCH"},
     {"Unemployment Rate (%)", "LUR"},
+    {"Current Account Balance (USD billions)", "BCA"},
     {"Current Account Balance (% GDP)", "BCA_NGDPD"},
     {"General Gov. Gross Debt (% GDP)", "GGXWDG_NGDP"},
     {"General Gov. Net Lending (% GDP)", "GGXCNL_NGDP"},
-    {"General Gov. Revenue (% GDP)", "GGR_NGDP"},
-    {"Total Investment (% GDP)", "NID_NGDP"},
-    {"Gross National Savings (% GDP)", "NGSD_NGDP"},
-    {"Volume of Imports of Goods (% change)", "TM_RPCH"},
-    {"Volume of Exports of Goods (% change)", "TX_RPCH"},
-    {"Commodity Terms of Trade", "TT"},
+    {"Government Revenue (% GDP)", "rev"},
+    {"Government Expenditure (% GDP)", "exp"},
+    {"Government Primary Balance (% GDP)", "pb"},
     {"Population (millions)", "LP"},
 };
 
@@ -73,6 +75,7 @@ ImfPanel::ImfPanel(QWidget* parent) : EconPanelBase(kImfSourceId, kImfColor, par
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
+    mark_local_input(indicator_search_); // filters the list: not part of the query
     connect(indicator_search_, &QLineEdit::textChanged, this, &ImfPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
@@ -98,7 +101,7 @@ ImfPanel::ImfPanel(QWidget* parent) : EconPanelBase(kImfSourceId, kImfColor, par
 // ── Activate ──────────────────────────────────────────────────────────────────
 
 void ImfPanel::activate() {
-    show_empty(tr("Select an indicator and country, then click FETCH"));
+    // Nothing to prepare: the results pane loads the selected indicator on show.
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -109,8 +112,12 @@ void ImfPanel::build_controls(QHBoxLayout* thl) {
     country_combo_ = new QComboBox;
     for (const auto& pair : kImfCountries)
         country_combo_->addItem(pair.first, pair.second);
-    country_combo_->setFixedHeight(26);
+    country_combo_->setMinimumHeight(26);
     country_combo_->setMinimumWidth(140);
+    // Default: one country — a series with a chart and stat cards; "All Countries" stays available.
+    const int usa = country_combo_->findData(QStringLiteral("USA"));
+    if (usa >= 0)
+        country_combo_->setCurrentIndex(usa);
     thl->addWidget(country_lbl_);
     thl->addWidget(country_combo_);
 }
@@ -128,8 +135,8 @@ void ImfPanel::on_fetch() {
     const QString country = country_combo_->currentData().toString();
 
     show_loading(tr("Fetching IMF DataMapper data…"));
-    services::EconomicsService::instance().execute(kImfSourceId, kImfScript, "data", {code},
-                                                   "imf_data_" + code + "_" + country);
+    execute_query(kImfSourceId, kImfScript, "data", {code},
+                  "imf_data_" + code + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -187,7 +194,7 @@ void ImfPanel::on_result(const QString& request_id, const services::EconomicsRes
             meta.units = indicator_name.mid(open + 1, indicator_name.size() - open - 2);
         set_series_meta(meta);
         display(rows, title);
-        LOG_INFO("ImfPanel", QString("Displayed %1 rows").arg(rows.size()));
+        LOG_DEBUG("ImfPanel", QString("Displayed %1 rows").arg(rows.size()));
     }
 }
 

@@ -1,7 +1,9 @@
 #include "screens/dashboard/widgets/MarketQuoteStripWidget.h"
 
+#include "core/market/MarketProfile.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -18,7 +20,10 @@
 namespace fincept::screens::widgets {
 
 namespace {
-const QStringList kDefaultSymbols = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"};
+// A fresh strip shows the five largest names of the user's market region.
+QStringList quote_strip_default_symbols() {
+    return core::market::MarketProfileStore::instance().current().movers.mid(0, 5);
+}
 
 // Colour of the change label comes from a "dir" property matched in the rows
 // host's stylesheet; re-polish only when the sign flips instead of re-parsing
@@ -30,6 +35,10 @@ void quote_strip_set_dir(QLabel* label, const char* dir) {
     label->style()->unpolish(label);
     label->style()->polish(label);
 }
+
+QString quote_strip_topic(const QString& sym) {
+    return QStringLiteral("market:quote:") + sym;
+}
 } // namespace
 
 MarketQuoteStripWidget::MarketQuoteStripWidget(const QJsonObject& cfg, QWidget* parent)
@@ -38,6 +47,17 @@ MarketQuoteStripWidget::MarketQuoteStripWidget(const QJsonObject& cfg, QWidget* 
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
     enable_symbol_link(/*follows=*/false); // clicking a row feeds the link group
+
+    // Title-bar refresh (the retry the error overlay points at) was not wired
+    // here. Force past min_interval; the producer's rate limit still applies.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        QStringList topics;
+        topics.reserve(symbols_.size());
+        for (const auto& sym : symbols_)
+            topics.append(quote_strip_topic(sym));
+        if (!topics.isEmpty())
+            datahub::DataHub::instance().request(topics, /*force=*/true);
+    });
 
     set_configurable(true);
     apply_styles();
@@ -65,10 +85,11 @@ void MarketQuoteStripWidget::apply_config(const QJsonObject& cfg) {
             next.append(s);
     }
     if (next.isEmpty())
-        next = kDefaultSymbols;
+        next = quote_strip_default_symbols();
 
     symbols_ = next;
     build_rows();
+    untrack_topics(); // fresh "—" rows: forget the old rows' data / error state
 
     if (isVisible())
         hub_resubscribe();
@@ -130,19 +151,48 @@ void MarketQuoteStripWidget::build_rows() {
 void MarketQuoteStripWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    // Drop the cross-config received set so a re-subscribe after a config
-    // change shows the loading overlay until each new symbol publishes once.
-    received_.clear();
-    set_loading_progress(received_.size(), symbols_.size());
+    QStringList topics;
+    topics.reserve(symbols_.size());
+    for (const auto& sym : symbols_)
+        topics.append(quote_strip_topic(sym));
+    // BaseWidget drives the overlay: it covers the strip only until the first
+    // quote lands (rows already showing prices are never covered again on a
+    // re-show), and a symbol whose quote errored counts as resolved — its row
+    // shows "—" with the reason.
+    track_topics(topics, /*drive_loading_overlay=*/true);
     for (const auto& sym : symbols_) {
-        const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this](const QVariant& v) {
+        const QString topic = quote_strip_topic(sym);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<fincept::services::QuoteData>())
                 return;
-            on_quote(v.value<fincept::services::QuoteData>());
+            on_quote(sym, v.value<fincept::services::QuoteData>());
         });
     }
     hub_active_ = true;
+}
+
+void MarketQuoteStripWidget::on_topic_errors_changed() {
+    for (const auto& sym : symbols_)
+        apply_row_error(sym);
+}
+
+void MarketQuoteStripWidget::apply_row_error(const QString& sym) {
+    auto it = rows_.find(sym);
+    if (it == rows_.end())
+        return;
+    Row& r = it.value();
+    const QString topic = quote_strip_topic(sym);
+    const QString tip = topic_error_tooltip(topic);
+    // No error: back to the row's own link tooltip (set by link_symbol()).
+    const QString row_tip = tip.isEmpty() ? r.symbol->toolTip() : tip;
+    r.price->setToolTip(row_tip);
+    r.change->setToolTip(row_tip);
+    if (!tip.isEmpty() && !topic_has_data(topic)) {
+        // Failed with nothing to show: mark it (the pending placeholder is the same dash).
+        r.price->setText(failed_value_text());
+        r.change->setText(failed_value_text());
+        quote_strip_set_dir(r.change, "fail");
+    }
 }
 
 void MarketQuoteStripWidget::hub_unsubscribe_all() {
@@ -162,17 +212,22 @@ void MarketQuoteStripWidget::hideEvent(QHideEvent* e) {
         hub_unsubscribe_all();
 }
 
-void MarketQuoteStripWidget::on_quote(const fincept::services::QuoteData& q) {
-    auto it = rows_.find(q.symbol);
+void MarketQuoteStripWidget::on_quote(const QString& sym, const fincept::services::QuoteData& q) {
+    // Keyed by the subscribed symbol: the feed's echoed q.symbol may differ in
+    // case / normalisation, which left such a row on "—" forever.
+    auto it = rows_.find(sym);
     if (it == rows_.end())
         return;
     Row& r = it.value();
-    r.price->setText(QString::number(q.price, 'f', 2));
+    // Shared dashboard price format (pips kept, 4-6 decimals below 1, grouping).
+    r.price->setText(dash_fmt::price(q.price, sym));
     const QString sign = q.change_pct >= 0 ? "+" : "";
     r.change->setText(QString("%1%2%").arg(sign).arg(q.change_pct, 0, 'f', 2));
     quote_strip_set_dir(r.change, q.change_pct >= 0 ? "up" : "down");
-    received_.insert(q.symbol);
-    set_loading_progress(received_.size(), symbols_.size());
+    const bool had_error = !topic_error(quote_strip_topic(sym)).isEmpty();
+    note_topic_value(quote_strip_topic(sym));
+    if (had_error)
+        apply_row_error(sym); // drop the failure tooltip
 }
 
 QDialog* MarketQuoteStripWidget::make_config_dialog(QWidget* parent) {
@@ -214,14 +269,15 @@ void MarketQuoteStripWidget::apply_styles() {
     if (!rows_host_)
         return; // ctor runs this before the first build_rows()
     // A change label with no "dir" yet (still "—") keeps the tertiary colour.
-    rows_host_->setStyleSheet(
-        QString("QLabel#quoteStripSymbol{color:%1;font-size:11px;font-weight:700;background:transparent;}"
-                "QLabel#quoteStripPrice{color:%1;font-size:11px;font-weight:600;background:transparent;}"
-                "QLabel#quoteStripChange{color:%2;font-size:11px;font-weight:600;background:transparent;}"
+    set_css_cached(rows_host_, 
+        QString("QLabel#quoteStripSymbol{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;background:transparent;}"
+                "QLabel#quoteStripPrice{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
+                "QLabel#quoteStripChange{color:%2;font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:600;background:transparent;}"
                 "QLabel#quoteStripChange[dir=\"up\"]{color:%3;}"
-                "QLabel#quoteStripChange[dir=\"down\"]{color:%4;}")
+                "QLabel#quoteStripChange[dir=\"down\"]{color:%4;}"
+                "QLabel#quoteStripChange[dir=\"fail\"]{color:%5;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(),
-                 ui::colors::NEGATIVE()));
+                 ui::colors::NEGATIVE(), ui::colors::WARNING()));
 }
 
 void MarketQuoteStripWidget::retranslateUi() {

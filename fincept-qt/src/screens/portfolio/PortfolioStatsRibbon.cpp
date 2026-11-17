@@ -1,316 +1,402 @@
 // src/screens/portfolio/PortfolioStatsRibbon.cpp
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 
+#include "screens/portfolio/PortfolioFormat.h"
+#include "services/portfolio/PortfolioPerformance.h"
+#include "storage/repositories/SettingsRepository.h"
+#include "ui/formatting/FormatWidgets.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/KpiStrip.h"
+#include "ui/widgets/StatTile.h"
+#include "ui/widgets/ThemeHelpers.h"
 
+#include <QComboBox>
 #include <QEvent>
-#include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
-#include <QLocale>
+#include <QLabel>
 #include <QVBoxLayout>
 
-#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens {
 
 namespace {
 
-QWidget* make_v_separator(QWidget* parent) {
-    auto* sep = new QWidget(parent);
-    sep->setFixedWidth(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    return sep;
+constexpr const char* kRibbonWindowKey = "portfolio.ribbon.window";
+
+const portfolio::PerfWindow kRibbonWindows[] = {portfolio::PerfWindow::MTD, portfolio::PerfWindow::QTD,
+                                                portfolio::PerfWindow::YTD, portfolio::PerfWindow::Y1,
+                                                portfolio::PerfWindow::Y3,  portfolio::PerfWindow::Y5,
+                                                portfolio::PerfWindow::All};
+
+QString ribbon_window_text(portfolio::PerfWindow w) {
+    switch (w) {
+        case portfolio::PerfWindow::MTD:
+            return PortfolioStatsRibbon::tr("Month to date");
+        case portfolio::PerfWindow::QTD:
+            return PortfolioStatsRibbon::tr("Quarter to date");
+        case portfolio::PerfWindow::YTD:
+            return PortfolioStatsRibbon::tr("Year to date");
+        case portfolio::PerfWindow::Y1:
+            return PortfolioStatsRibbon::tr("1 year");
+        case portfolio::PerfWindow::Y3:
+            return PortfolioStatsRibbon::tr("3 years");
+        case portfolio::PerfWindow::Y5:
+            return PortfolioStatsRibbon::tr("5 years");
+        case portfolio::PerfWindow::All:
+            break;
+    }
+    return PortfolioStatsRibbon::tr("Since inception");
+}
+
+QVector<double> ribbon_nav_spark(const QVector<portfolio::TwrPoint>& series) {
+    QVector<double> v;
+    v.reserve(series.size());
+    for (const auto& p : series)
+        v.append(p.nav > 0 ? p.nav : portfolio::kAbsent);
+    return v;
+}
+
+ui::StatTile::Tone ribbon_tone(double v) {
+    if (!std::isfinite(v) || v == 0)
+        return ui::StatTile::Tone::Neutral;
+    return v > 0 ? ui::StatTile::Tone::Positive : ui::StatTile::Tone::Negative;
+}
+
+QString ribbon_css() {
+    return QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }"
+                   "#portfolioStatsRibbon QLabel { color:%3; font-size:%4px; font-weight:700;"
+                   "  letter-spacing:1px; background:transparent; }"
+                   "#portfolioStatsRibbon QComboBox { background:%5; color:%6; border:1px solid %2;"
+                   "  padding:1px 6px; font-size:%7px; font-weight:700; }")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(), ui::fonts::px(-4),
+             ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::fonts::px(-3));
 }
 
 } // namespace
 
 PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(72);
     setObjectName("portfolioStatsRibbon");
-    setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
-                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    {
+        auto r = SettingsRepository::instance().get(kRibbonWindowKey);
+        if (r.is_ok() && !r.value().isEmpty())
+            window_ = portfolio::perf_window_from_key(r.value());
+    }
+    setStyleSheet(ribbon_css()); // before the children exist: each is styled once, at birth
+    build_ui();
+    refresh_theme();
+    // Currency / number format changed: re-format the figures already held.
+    ui::formatting::on_format_changed(this, [this]() {
+        render_summary();
+        render_metrics();
+    });
+}
 
+void PortfolioStatsRibbon::build_ui() {
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(0);
+    row->setContentsMargins(8, 6, 8, 6);
+    row->setSpacing(8);
 
-    // ── Cell 1: PORTFOLIO VALUE — biggest number on the row (24px hero) ──────
-    row->addWidget(build_hero(value_cell_, tr("PORTFOLIO VALUE"), 24), 28);
-    row->addWidget(make_v_separator(this));
+    auto* period_box = new QWidget(this);
+    auto* pv = new QVBoxLayout(period_box);
+    pv->setContentsMargins(0, 0, 0, 0);
+    pv->setSpacing(2);
+    period_label_ = new QLabel(tr("PERIOD"), period_box);
+    pv->addWidget(period_label_);
+    period_cb_ = new QComboBox(period_box);
+    for (const auto w : kRibbonWindows)
+        period_cb_->addItem(portfolio::perf_window_key(w), static_cast<int>(w));
+    for (int i = 0; i < period_cb_->count(); ++i)
+        if (period_cb_->itemData(i).toInt() == static_cast<int>(window_))
+            period_cb_->setCurrentIndex(i);
+    period_cb_->setAccessibleName(tr("Performance period of the return and risk figures"));
+    connect(period_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        const auto w = static_cast<portfolio::PerfWindow>(period_cb_->itemData(idx).toInt());
+        if (w == window_)
+            return;
+        window_ = w;
+        metrics_.reset();
+        SettingsRepository::instance().set(kRibbonWindowKey, portfolio::perf_window_key(w), "portfolio");
+        set_risk_loading();
+        emit window_changed(w);
+    });
+    pv->addWidget(period_cb_);
+    pv->addStretch(1);
+    row->addWidget(period_box, 0, Qt::AlignTop);
 
-    // ── Cell 2: UNREALIZED P&L — 20px, signed color ──────────────────────────
-    row->addWidget(build_hero(pnl_cell_, tr("UNREALIZED P&L"), 20), 20);
-    row->addWidget(make_v_separator(this));
-
-    // ── Cell 3: TODAY — 20px, signed color ───────────────────────────────────
-    row->addWidget(build_hero(day_cell_, tr("TODAY"), 20), 16);
-    row->addWidget(make_v_separator(this));
-
-    // ── Cell 4: RISK & POSITIONING — 2×3 chip grid ───────────────────────────
-    row->addWidget(build_risk_grid(), 36);
+    strip_ = new ui::KpiStrip(this);
+    strip_->set_spacing(6);
+    strip_->set_min_tile_width(ui::metrics::width(132));
+    nav_ = strip_->add_tile("nav", tr("NAV"));
+    day_ = strip_->add_tile("day", tr("TODAY"));
+    ret_ = strip_->add_tile("ret", tr("RETURN"));
+    upnl_ = strip_->add_tile("upnl", tr("UNREALISED P&L"));
+    real_ = strip_->add_tile("real", tr("REALISED + INCOME"));
+    cash_ = strip_->add_tile("cash", tr("CASH"));
+    vol_ = strip_->add_tile("vol", tr("VOLATILITY"));
+    sharpe_ = strip_->add_tile("sharpe", tr("SHARPE"));
+    beta_ = strip_->add_tile("beta", tr("BETA"));
+    mdd_ = strip_->add_tile("mdd", tr("MAX DRAWDOWN"));
+    for (auto* t : {nav_, day_, ret_, upnl_, real_, cash_, vol_, sharpe_, beta_, mdd_}) {
+        t->set_compact(true);
+        t->set_state(ui::StatTile::State::Loading);
+    }
+    vol_->set_delta_inverted(true);
+    mdd_->set_delta_inverted(true);
+    row->addWidget(strip_, 1);
 }
 
-QWidget* PortfolioStatsRibbon::build_hero(HeroCell& c, const QString& label_text, int value_px) {
-    c.container = new QWidget(this);
-    c.container->setStyleSheet("background:transparent;");
-
-    auto* v = new QVBoxLayout(c.container);
-    v->setContentsMargins(14, 8, 14, 8);
-    v->setSpacing(2);
-
-    c.label = new QLabel(label_text);
-    c.label->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.2px; background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    v->addWidget(c.label);
-
-    c.value = new QLabel("--");
-    c.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
-                                   "  letter-spacing:0.2px; background:transparent;")
-                               .arg(ui::colors::TEXT_PRIMARY())
-                               .arg(value_px));
-    v->addWidget(c.value);
-
-    c.sub = new QLabel;
-    c.sub->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    v->addWidget(c.sub);
-
-    return c.container;
+QString PortfolioStatsRibbon::window_label() const {
+    return portfolio::perf_window_key(window_);
 }
 
-void PortfolioStatsRibbon::apply_hero_value_color(HeroCell& c, const char* color, int value_px) {
-    // Skip the restyle when the colour has not flipped. This runs on every
-    // poll and each setStyleSheet is a CSS reparse + repolish of the label.
-    const QString color_str = QString::fromLatin1(color);
-    if (c.value->property("colorTok").toString() == color_str)
-        return;
-    c.value->setProperty("colorTok", color_str);
-    c.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
-                                   "  letter-spacing:0.2px; background:transparent;")
-                               .arg(color)
-                               .arg(value_px));
+void PortfolioStatsRibbon::set_risk_loading() {
+    for (auto* t : {ret_, vol_, sharpe_, beta_, mdd_})
+        t->set_state(ui::StatTile::State::Loading, tr("Computing %1 figures…").arg(ribbon_window_text(window_)));
+    ret_->set_label(tr("RETURN %1").arg(window_label()));
 }
-
-QWidget* PortfolioStatsRibbon::build_risk_grid() {
-    risk_cell_ = new QWidget(this);
-    risk_cell_->setStyleSheet("background:transparent;");
-
-    auto* outer = new QVBoxLayout(risk_cell_);
-    outer->setContentsMargins(14, 8, 14, 8);
-    outer->setSpacing(2);
-
-    risk_header_ = new QLabel(tr("RISK & POSITIONING"));
-    risk_header_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.2px; background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    outer->addWidget(risk_header_);
-
-    auto* g = new QGridLayout;
-    g->setContentsMargins(0, 0, 0, 0);
-    g->setHorizontalSpacing(20);
-    g->setVerticalSpacing(0);
-
-    // Layout: label TEXT_TERTIARY 10px on left, value 13px / 700 on right.
-    // 2 columns × 3 rows. Left column: SHARPE / BETA / MDD. Right: CONC / VOL30 / RISK.
-    sharpe_ = add_grid_chip(g, 0, 0, tr("SHARPE"));
-    conc_ = add_grid_chip(g, 0, 1, tr("CONC"));
-    beta_ = add_grid_chip(g, 1, 0, tr("BETA"));
-    vol_ = add_grid_chip(g, 1, 1, tr("VOL"));
-    mdd_ = add_grid_chip(g, 2, 0, tr("MDD"));
-    risk_ = add_grid_chip(g, 2, 1, tr("RISK"));
-
-    apply_chip_tooltips();
-
-    outer->addLayout(g, 1);
-
-    return risk_cell_;
-}
-
-void PortfolioStatsRibbon::apply_chip_tooltips() {
-    // Six four-letter labels with no explanation of window, benchmark or
-    // scale. Say what each number actually is.
-    auto set = [](GridChip& c, const QString& text) {
-        if (c.label)
-            c.label->setToolTip(text);
-        if (c.value) {
-            c.value->setToolTip(text);
-            c.value->setAccessibleDescription(text);
-        }
-    };
-    // Say exactly what each figure is: window, basis, benchmark, risk-free.
-    const auto& m = last_metrics_;
-    const QString bench = m.benchmark_symbol.isEmpty() ? tr("the benchmark") : m.benchmark_symbol;
-    const QString window = m.perf_observations > 0 ? tr("%1 periods, %2 \u2192 %3")
-                                                         .arg(m.perf_observations)
-                                                         .arg(m.perf_start, m.perf_end)
-                                                   : tr("no history yet");
-    const QString rf = tr("risk-free %1% (%2)")
-                           .arg(QString::number(m.risk_free_rate * 100.0, 'f', 2), m.risk_free_source);
-    set(sharpe_, tr("Sharpe ratio — annualised excess return per unit of volatility, from the realised "
-                    "time-weighted return series (buys/sells treated as capital flows): %1; %2. "
-                    "Needs 20+ periods.")
-                     .arg(window, rf));
-    set(conc_, tr("Concentration — combined weight of your three largest positions."));
-    set(beta_, m.risk_ex_ante ? tr("Beta vs %1 — current weights regressed on %2 trailing daily returns "
-                                   "(ex-ante). 1.0 moves with the market.")
-                                    .arg(bench)
-                                    .arg(m.risk_observations)
-                              : tr("Beta vs %1 — regression of the realised return series (%2). "
-                                   "1.0 moves with the market.")
-                                    .arg(bench, window));
-    set(vol_, m.risk_ex_ante ? tr("Volatility — annualised standard deviation of daily returns at CURRENT "
-                                  "weights over %1 trailing trading days (ex-ante).")
-                                   .arg(m.risk_observations)
-                             : tr("Volatility — annualised standard deviation of the realised time-weighted "
-                                  "returns (%1).")
-                                   .arg(window));
-    set(mdd_, tr("Maximum drawdown — worst peak-to-trough fall of the time-weighted return index (%1). "
-                 "Deposits and withdrawals do not count as drawdowns.")
-                  .arg(window));
-    set(risk_, tr("Composite risk score, 0–100, from volatility, concentration, drawdown and beta. "
-                  "Lower is calmer; above 60 is aggressive. Blank until volatility is known."));
-}
-
-PortfolioStatsRibbon::GridChip PortfolioStatsRibbon::add_grid_chip(QGridLayout* g, int row, int col,
-                                                                   const QString& label_text) {
-    GridChip c;
-
-    // Each chip occupies 2 grid sub-columns within its parent cell so we can
-    // align label-left + value-right. We use a small inline QHBoxLayout per
-    // chip and place that layout's holder widget at (row, col) of the outer
-    // 2-col grid.
-    auto* holder = new QWidget(risk_cell_);
-    holder->setStyleSheet("background:transparent;");
-    auto* h = new QHBoxLayout(holder);
-    h->setContentsMargins(0, 0, 0, 0);
-    h->setSpacing(8);
-
-    c.label = new QLabel(label_text);
-    c.label->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;"
-                                   "  background:transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-    h->addWidget(c.label);
-
-    c.value = new QLabel("--");
-    c.value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    c.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;"
-                                   "  background:transparent;")
-                               .arg(ui::colors::TEXT_PRIMARY()));
-    h->addWidget(c.value, 1);
-
-    g->addWidget(holder, row, col);
-    return c;
-}
-
-// ── Data setters ─────────────────────────────────────────────────────────────
 
 void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
-    last_summary_ = s;
-    auto fmt = [](double v, int dp = 2) {
-        // Add thousands separator for readability on large NAVs.
-        return QLocale().toString(v, 'f', dp);
-    };
-    auto color_tok = [](double v) -> const char* { return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE; };
-
-    // ── Cell 1: PORTFOLIO VALUE ──────────────────────────────────────────────
-    // Value: amber (brand value, neutral semantics). Sub: position count.
-    value_cell_.value->setText(QString("%1  %2").arg(fmt(s.total_market_value), s.portfolio.currency));
-    apply_hero_value_color(value_cell_, ui::colors::AMBER(), 24);
-    value_cell_.sub->setText(tr("▲ %1 positions").arg(s.total_positions));
-
-    // ── Cell 2: UNREALIZED P&L ───────────────────────────────────────────────
-    pnl_cell_.value->setText(
-        QString("%1%2").arg(s.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(s.total_unrealized_pnl)));
-    apply_hero_value_color(pnl_cell_, color_tok(s.total_unrealized_pnl), 20);
-    QString pnl_sub = QString("%1%2%   ▲ %3   ▼ %4")
-                          .arg(s.total_unrealized_pnl_percent >= 0 ? "+" : "")
-                          .arg(QString::number(s.total_unrealized_pnl_percent, 'f', 2))
-                          .arg(s.gainers)
-                          .arg(s.losers);
-    // Realised P&L and dividend income live in the ledger, not in the open
-    // positions — show them next to the unrealised figure instead of nowhere.
-    if (std::abs(s.total_realized_pnl) > 0.005 || s.total_dividends > 0.005)
-        pnl_sub += tr("   R %1%2   D +%3")
-                       .arg(s.total_realized_pnl >= 0 ? "+" : "")
-                       .arg(fmt(s.total_realized_pnl, 0))
-                       .arg(fmt(s.total_dividends, 0));
-    pnl_cell_.sub->setText(pnl_sub);
-    const QString pnl_tip = tr("Unrealized P&L: market value of open positions minus their average cost.\n"
-                               "Realized P&L (closed lots, average-cost method): %1 %2\n"
-                               "Dividends received: %1 %3\n"
-                               "Total return incl. realized and dividends: %1 %4")
-                                .arg(s.portfolio.currency, fmt(s.total_realized_pnl), fmt(s.total_dividends),
-                                     fmt(s.total_unrealized_pnl + s.total_realized_pnl + s.total_dividends));
-    pnl_cell_.value->setToolTip(pnl_tip);
-    pnl_cell_.sub->setToolTip(pnl_tip);
-    pnl_cell_.sub->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent;")
-                                     .arg(color_tok(s.total_unrealized_pnl)));
-
-    // ── Cell 3: TODAY ────────────────────────────────────────────────────────
-    day_cell_.value->setText(QString("%1%2").arg(s.total_day_change >= 0 ? "+" : "").arg(fmt(s.total_day_change)));
-    apply_hero_value_color(day_cell_, color_tok(s.total_day_change), 20);
-    day_cell_.sub->setText(QString("%1%2%")
-                               .arg(s.total_day_change_percent >= 0 ? "+" : "")
-                               .arg(QString::number(s.total_day_change_percent, 'f', 2)));
-    day_cell_.sub->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent;")
-                                     .arg(color_tok(s.total_day_change)));
-
-    // CONC chip uses summary as a fallback while ComputedMetrics is loading;
-    // ComputedMetrics overrides it below if/when it arrives.
-    if (!s.holdings.isEmpty()) {
-        // simple top-3 fallback (full calc lives in ComputedMetrics.concentration_top3)
-        QVector<double> ws;
-        for (const auto& h : s.holdings)
-            ws.append(h.weight);
-        std::sort(ws.begin(), ws.end(), std::greater<double>());
-        double top3 = 0.0;
-        for (int i = 0; i < std::min<int>(3, ws.size()); ++i)
-            top3 += ws[i];
-        conc_.value->setText(QString("%1%").arg(QString::number(top3, 'f', 1)));
-    } else {
-        conc_.value->setText(QStringLiteral("--")); // sold out: don't keep the old figure
-    }
+    if (summary_ && summary_->portfolio.id != s.portfolio.id)
+        metrics_.reset(); // a different book: the old window figures do not describe it
+    summary_ = s;
+    render_summary();
+    if (!metrics_)
+        set_risk_loading();
 }
 
 void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
-    last_metrics_ = m;
-    apply_chip_tooltips();
-    auto fmt_opt = [](std::optional<double> v, int dp = 2) -> QString {
-        return v.has_value() ? QString::number(*v, 'f', dp) : "--";
-    };
-    auto fmt_pct_opt = [](std::optional<double> v, int dp = 1) -> QString {
-        return v.has_value() ? QString("%1%").arg(QString::number(*v, 'f', dp)) : "--";
-    };
+    if (portfolio::perf_window_from_key(m.window) != window_)
+        return;
+    if (summary_ && !m.portfolio_id.isEmpty() && m.portfolio_id != summary_->portfolio.id)
+        return;
+    metrics_ = m;
+    render_metrics();
+}
 
-    sharpe_.value->setText(fmt_opt(m.sharpe));
-    beta_.value->setText(fmt_opt(m.beta));
-    vol_.value->setText(fmt_pct_opt(m.volatility));
+void PortfolioStatsRibbon::render_summary() {
+    if (!summary_)
+        return;
+    const auto& s = *summary_;
+    const QString ccy = pfmt::base_ccy(s);
+    using State = ui::StatTile::State;
+    using Tone = ui::StatTile::Tone;
 
-    if (m.concentration_top3.has_value())
-        conc_.value->setText(fmt_pct_opt(m.concentration_top3));
-    else
-        conc_.value->setText(QStringLiteral("--"));
-
-    // MDD always negative — semantic NEGATIVE color.
-    mdd_.value->setText(fmt_pct_opt(m.max_drawdown));
-    mdd_.value->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(ui::colors::NEGATIVE()));
-
-    // RISK score: threshold-driven semantic color.
-    if (m.risk_score.has_value()) {
-        const double rs = *m.risk_score;
-        const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
-        risk_.value->setText(QString::number(rs, 'f', 0));
-        risk_.value->setStyleSheet(
-            QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(rs_color));
+    // ── NAV ──────────────────────────────────────────────────────────────────
+    const double navv = s.total_market_value;
+    nav_->set_state(State::Normal);
+    // "≈" when a conversion used a stale FX rate (the rate's age is in the tooltip).
+    nav_->set_value(pfmt::approx_prefix(s) +
+                    (std::abs(navv) >= 1e6 ? ui::formatting::money(navv, ccy, ui::formatting::Compact::None, 0)
+                                           : pfmt::money(navv, ccy)));
+    const QString stale_fx = pfmt::fx_stale_line(s);
+    if (!s.complete) {
+        nav_->set_tone(Tone::Warning);
+        nav_->set_sub_label(tr("INCOMPLETE · %1/%2 valued").arg(s.valued_positions).arg(s.total_positions));
+        nav_->set_tooltip_text(pfmt::incomplete_line(s) + (stale_fx.isEmpty() ? QString() : QLatin1Char('\n') + stale_fx));
     } else {
-        risk_.value->setText("--");
-        risk_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
-                                       .arg(ui::colors::TEXT_PRIMARY()));
+        nav_->set_tone(Tone::Neutral);
+        nav_->set_sub_label(s.as_of.isEmpty() ? tr("%n position(s)", "", s.total_positions)
+                                              : tr("%n position(s) · %1", "", s.total_positions).arg(pfmt::date(s.as_of)));
+        nav_->set_tooltip_text(tr("Net asset value in %1%2. Prices as of %3.")
+                                   .arg(ccy, s.cash_in_nav ? tr(", cash included") : QString(), pfmt::date(s.as_of)) +
+                               (stale_fx.isEmpty() ? QString() : QLatin1Char('\n') + stale_fx));
     }
+
+    // ── TODAY ────────────────────────────────────────────────────────────────
+    day_->set_state(State::Normal);
+    if (s.valued_positions == 0) {
+        day_->set_value(pfmt::dash());
+        day_->clear_delta();
+        day_->set_tone(Tone::Neutral);
+    } else {
+        // The % goes to the sub-label: as a delta beside the value it took the row's
+        // width first and the value itself was elided ("+$13…") in a 10-tile ribbon.
+        day_->set_value(pfmt::smoney(s.total_day_change, ccy));
+        day_->clear_delta();
+        day_->set_sub_label(pfmt::pct(s.total_day_change_percent));
+        day_->set_tone(ribbon_tone(s.total_day_change));
+    }
+    day_->set_tooltip_text(tr("Change since the previous close of each valued holding, in %1.").arg(ccy));
+
+    // ── UNREALISED P&L ──────────────────────────────────────────────────────
+    upnl_->set_state(State::Normal);
+    if (s.valued_positions == 0) {
+        // Nothing open (or nothing priced yet): no P&L to split — "FX split unavailable"
+        // on an empty book read like a fault.
+        upnl_->set_value(pfmt::dash());
+        upnl_->clear_delta();
+        upnl_->set_tone(Tone::Neutral);
+        upnl_->set_sub_label(s.total_positions == 0 ? tr("no open positions") : tr("no position priced yet"));
+        upnl_->set_tooltip_text(tr("Unrealised P&L of open positions in %1.").arg(ccy));
+    } else {
+        upnl_->set_value(pfmt::smoney(s.total_unrealized_pnl, ccy));
+        upnl_->clear_delta(); // the % leads the sub-label (a delta elided the value)
+        upnl_->set_tone(ribbon_tone(s.total_unrealized_pnl));
+    }
+    const QString upnl_pct = pfmt::pct(s.total_unrealized_pnl_percent);
+    if (s.valued_positions == 0) {
+        // sub label / tooltip set above
+    } else if (!pfmt::fx_split_shown(s)) {
+        // Split off in Settings, or nothing held in a foreign currency: one P&L figure.
+        upnl_->set_sub_label(upnl_pct);
+        upnl_->set_tooltip_text(tr("Unrealised P&L of open positions in %1.").arg(ccy));
+    } else if (std::isfinite(s.total_fx_pnl) && std::isfinite(s.total_price_pnl)) {
+        upnl_->set_sub_label(tr("%1 · Price %2 · FX %3")
+                                 .arg(upnl_pct, pfmt::smoney_c(s.total_price_pnl, ccy),
+                                      pfmt::smoney_c(s.total_fx_pnl, ccy)));
+        upnl_->set_tooltip_text(tr("Unrealised P&L of open positions in %1, split into the move of the price in its "
+                                   "own currency and the move of that currency against %1 since purchase.")
+                                    .arg(ccy));
+    } else {
+        upnl_->set_sub_label(tr("%1 · FX split unavailable").arg(upnl_pct));
+        upnl_->set_tooltip_text(tr("Some positions have no trade-date FX rate (cost converted at today's rate), so the "
+                                   "P&L cannot be split into price and currency effects. Record the FX rate on the "
+                                   "BUY rows to enable it."));
+    }
+
+    // ── REALISED + INCOME ───────────────────────────────────────────────────
+    const double realised_income = s.total_realized_pnl + s.total_dividends + s.total_interest;
+    real_->set_state(State::Normal);
+    real_->set_value(pfmt::smoney(realised_income, ccy));
+    real_->set_tone(ribbon_tone(realised_income));
+    real_->set_sub_label(tr("Realised %1 · Income %2")
+                             .arg(pfmt::smoney_c(s.total_realized_pnl, ccy),
+                                  pfmt::money_c(s.total_dividends + s.total_interest, ccy)));
+    real_->set_tooltip_text(tr("Realised P&L (%1 lot relief): short-term %2, long-term %3.\n"
+                               "Dividends (net of withholding): %4. Interest: %5.\n"
+                               "Fees paid: %6. Taxes paid: %7.")
+                                .arg(s.portfolio.lot_method, pfmt::smoney(s.realized_short_term, ccy),
+                                     pfmt::smoney(s.realized_long_term, ccy), pfmt::money(s.total_dividends, ccy),
+                                     pfmt::money(s.total_interest, ccy), pfmt::money(s.total_fees, ccy),
+                                     pfmt::money(s.total_taxes, ccy)));
+
+    // ── CASH ─────────────────────────────────────────────────────────────────
+    cash_->set_state(State::Normal);
+    if (!s.portfolio.track_cash && !(std::isfinite(s.cash_value) && s.cash_value > 0)) {
+        // Untracked: the ledger still nets purchases against sales / income, but without
+        // recorded deposits that figure (a large negative for any bought book) is not a
+        // cash balance — "-$31,096.75" in a warning colour read as an overdraft. A
+        // positive balance (deposits recorded) is still shown below, "not in NAV".
+        cash_->set_value(pfmt::dash());
+        cash_->set_sub_label(tr("not tracked"));
+        cash_->set_tone(Tone::Neutral);
+        cash_->set_tooltip_text(tr("Cash is not tracked for this portfolio. Turn on cash tracking in Portfolio "
+                                   "Settings to record deposits, withdrawals and trade settlement."));
+    } else {
+        cash_->set_value(pfmt::money(s.cash_value, ccy));
+        cash_->set_sub_label(s.cash_in_nav ? tr("in NAV") : tr("not in NAV"));
+        QStringList lines;
+        for (auto it = s.cash_balances.constBegin(); it != s.cash_balances.constEnd(); ++it)
+            lines << pfmt::money(it.value(), it.key());
+        cash_->set_tooltip_text(lines.isEmpty() ? tr("No cash balances.")
+                                                : tr("Cash balances:\n%1").arg(lines.join(QLatin1Char('\n'))));
+        cash_->set_tone(std::isfinite(s.cash_value) && s.cash_value < 0 ? Tone::Warning : Tone::Neutral);
+    }
+}
+
+void PortfolioStatsRibbon::render_metrics() {
+    if (!metrics_)
+        return;
+    const auto& m = *metrics_;
+    using State = ui::StatTile::State;
+    using Tone = ui::StatTile::Tone;
+    const QString bench = m.benchmark_symbol.isEmpty() ? tr("benchmark") : m.benchmark_symbol;
+    const QString span = m.perf_start.isEmpty()
+                             ? tr("no history yet")
+                             : tr("%1 → %2").arg(pfmt::date(m.perf_start), pfmt::date(m.perf_end));
+
+    // ── RETURN (window) vs benchmark ────────────────────────────────────────
+    ret_->set_label(tr("RETURN %1").arg(window_label()));
+    if (m.total_return) {
+        ret_->set_state(State::Normal);
+        ret_->set_value(pfmt::pct(*m.total_return));
+        ret_->set_tone(ribbon_tone(*m.total_return));
+        // Excess return leads the sub-label: as a delta ("▲ +3.62 pp vs SPY") it took the
+        // whole value row and the return itself was not shown at all.
+        ret_->clear_delta();
+        QStringList sub;
+        if (m.excess_return)
+            sub << tr("%1 vs %2").arg(pfmt::pp(*m.excess_return), bench);
+        else if (m.benchmark_return)
+            sub << tr("%1 %2").arg(bench, pfmt::pct(*m.benchmark_return));
+        if (m.mwr)
+            sub << tr("MWR %1 p.a.").arg(pfmt::pct(*m.mwr));
+        else if (m.mwr_period)
+            sub << tr("MWR %1").arg(pfmt::pct(*m.mwr_period));
+        ret_->set_sub_label(sub.join(QStringLiteral(" · ")));
+        QString tip = tr("Time-weighted return over %1 (%2): deposits, withdrawals and trades are treated as flows, "
+                         "not as performance.")
+                          .arg(ribbon_window_text(window_), span);
+        if (m.annualized_return)
+            tip += QLatin1Char('\n') + tr("Annualised: %1.").arg(pfmt::pct(*m.annualized_return));
+        if (m.benchmark_return)
+            tip += QLatin1Char('\n') + tr("%1 over the same period: %2.").arg(bench, pfmt::pct(*m.benchmark_return));
+        if (m.mwr || m.mwr_period)
+            tip += QLatin1Char('\n') + tr("Money-weighted return (IRR of your own flows): %1.")
+                                           .arg(m.mwr ? tr("%1 p.a.").arg(pfmt::pct(*m.mwr)) : pfmt::pct(*m.mwr_period));
+        if (!m.notes.isEmpty())
+            tip += QStringLiteral("\n\n") + m.notes.join(QLatin1Char('\n'));
+        ret_->set_tooltip_text(tip);
+    } else {
+        ret_->set_state(State::Normal);
+        ret_->set_value(pfmt::dash());
+        ret_->clear_delta();
+        ret_->set_tone(Tone::Neutral);
+        ret_->set_sub_label(tr("not enough history"));
+        ret_->set_tooltip_text(m.notes.isEmpty() ? tr("No NAV history covers %1 yet.").arg(ribbon_window_text(window_))
+                                                 : m.notes.join(QLatin1Char('\n')));
+    }
+
+    // NAV sparkline follows the window.
+    const QVector<double> spark = ribbon_nav_spark(m.twr_series);
+    if (spark.size() >= 2)
+        nav_->set_sparkline(spark);
+    else
+        nav_->clear_sparkline();
+
+    // ── VOLATILITY ───────────────────────────────────────────────────────────
+    vol_->set_state(State::Normal);
+    vol_->set_value(pfmt::opt_pct(m.volatility, 1, false));
+    vol_->set_sub_label(!m.volatility ? tr("needs %1+ periods").arg(portfolio::kPerfMinObservations)
+                        : m.volatility_is_ex_ante ? tr("ex-ante")
+                                                  : tr("realised"));
+    vol_->set_tooltip_text(m.volatility_is_ex_ante
+                               ? tr("Annualised volatility of the CURRENT weights over %1 trailing daily returns "
+                                    "(ex-ante) — the realised history is too short.")
+                                     .arg(m.risk_observations)
+                               : tr("Annualised volatility of the realised time-weighted returns, %1.").arg(span));
+
+    // ── SHARPE ───────────────────────────────────────────────────────────────
+    sharpe_->set_state(State::Normal);
+    sharpe_->set_value(pfmt::opt_num(m.sharpe));
+    sharpe_->set_tone(m.sharpe ? ribbon_tone(*m.sharpe) : Tone::Neutral);
+    sharpe_->set_sub_label(m.risk_free_known ? tr("rf %1").arg(pfmt::fpct(m.risk_free_rate, 2, false))
+                                             : tr("rf unknown · 0 %"));
+    sharpe_->set_tooltip_text(
+        tr("Sharpe ratio over %1: annualised excess return per unit of volatility.\nRisk-free rate: %2 (%3).")
+            .arg(span, pfmt::fpct(m.risk_free_rate, 2, false),
+                 m.risk_free_known ? m.risk_free_source
+                                   : tr("no rate known for this currency — 0 % used; set an override in Settings")));
+    if (!m.risk_free_known)
+        sharpe_->set_tone(Tone::Warning);
+
+    // ── BETA ─────────────────────────────────────────────────────────────────
+    beta_->set_state(State::Normal);
+    beta_->set_value(pfmt::opt_num(m.beta));
+    beta_->set_sub_label(tr("vs %1").arg(bench));
+    beta_->set_tooltip_text(m.volatility_is_ex_ante
+                                ? tr("Beta of the current weights vs %1 (ex-ante, trailing daily returns).").arg(bench)
+                                : tr("Beta of the realised returns vs %1, %2.").arg(bench, span));
+
+    // ── MAX DRAWDOWN ─────────────────────────────────────────────────────────
+    mdd_->set_state(State::Normal);
+    mdd_->set_value(pfmt::opt_pct(m.max_drawdown, 1));
+    mdd_->set_tone(m.max_drawdown && *m.max_drawdown < 0 ? Tone::Negative : Tone::Neutral);
+    mdd_->set_sub_label(m.current_drawdown ? tr("now %1").arg(pfmt::pct(*m.current_drawdown, 1)) : QString());
+    mdd_->set_tooltip_text(tr("Worst peak-to-trough fall of the time-weighted return index, %1. Deposits and "
+                              "withdrawals are not drawdowns.")
+                               .arg(span));
 }
 
 void PortfolioStatsRibbon::changeEvent(QEvent* event) {
@@ -320,51 +406,31 @@ void PortfolioStatsRibbon::changeEvent(QEvent* event) {
 }
 
 void PortfolioStatsRibbon::retranslateUi() {
-    if (value_cell_.label)
-        value_cell_.label->setText(tr("PORTFOLIO VALUE"));
-    if (pnl_cell_.label)
-        pnl_cell_.label->setText(tr("UNREALIZED P&L"));
-    if (day_cell_.label)
-        day_cell_.label->setText(tr("TODAY"));
-    if (risk_header_)
-        risk_header_->setText(tr("RISK & POSITIONING"));
-
-    if (sharpe_.label)
-        sharpe_.label->setText(tr("SHARPE"));
-    if (conc_.label)
-        conc_.label->setText(tr("CONC"));
-    if (beta_.label)
-        beta_.label->setText(tr("BETA"));
-    if (vol_.label)
-        vol_.label->setText(tr("VOL"));
-    if (mdd_.label)
-        mdd_.label->setText(tr("MDD"));
-    if (risk_.label)
-        risk_.label->setText(tr("RISK"));
-
-    apply_chip_tooltips();
-
-    if (last_summary_.has_value()) {
-        // Re-render the "▲ %1 positions" sub-line under PORTFOLIO VALUE.
-        if (value_cell_.sub)
-            value_cell_.sub->setText(tr("▲ %1 positions").arg(last_summary_->total_positions));
-    }
+    if (period_label_)
+        period_label_->setText(tr("PERIOD"));
+    nav_->set_label(tr("NAV"));
+    day_->set_label(tr("TODAY"));
+    upnl_->set_label(tr("UNREALISED P&L"));
+    real_->set_label(tr("REALISED + INCOME"));
+    cash_->set_label(tr("CASH"));
+    vol_->set_label(tr("VOLATILITY"));
+    sharpe_->set_label(tr("SHARPE"));
+    beta_->set_label(tr("BETA"));
+    mdd_->set_label(tr("MAX DRAWDOWN"));
+    ret_->set_label(tr("RETURN %1").arg(window_label()));
+    render_summary();
+    render_metrics();
 }
 
 void PortfolioStatsRibbon::refresh_theme() {
-    setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
-                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-
-    // Drop the "already this colour" memo in apply_hero_value_color(), or the
-    // hero values would keep the previous theme's palette.
-    for (HeroCell* c : {&value_cell_, &pnl_cell_, &day_cell_}) {
-        if (c->value)
-            c->value->setProperty("colorTok", QString());
-    }
-    // Hero label/sub colors and chip label colors are static per-style; the
-    // value colors get re-applied on the next set_summary/set_metrics call,
-    // which always fires after a theme switch via PortfolioScreen's
-    // refresh_theme path.
+    // Applied before build_ui() by the constructor; the same text again (the constructor's
+    // own call, then PortfolioScreen's) re-styled the whole ribbon twice for nothing.
+    const QString css = ribbon_css();
+    if (styleSheet() != css)
+        setStyleSheet(css);
+    // Formatting depends on the locale / font; re-render (tiles repaint themselves).
+    render_summary();
+    render_metrics();
 }
 
 } // namespace fincept::screens

@@ -109,8 +109,8 @@ void SectorResolver::load_cache() {
         if (negative)
             ++negatives;
     }
-    LOG_INFO("SectorResolver",
-             QString("Loaded %1 sector cache entries (%2 unresolved placeholders)").arg(loaded).arg(negatives));
+    LOG_DEBUG("SectorResolver",
+              QString("Loaded %1 sector cache entries (%2 unresolved placeholders)").arg(loaded).arg(negatives));
 }
 
 void SectorResolver::persist(const QString& symbol, const QString& sector, const QString& industry,

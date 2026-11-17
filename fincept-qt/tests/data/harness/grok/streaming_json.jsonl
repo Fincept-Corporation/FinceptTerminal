@@ -1,0 +1,6 @@
+{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"init","description":"Create AGENTS.md"}]}
+{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Checking the README."}}
+{"sessionUpdate":"tool_call","toolCallId":"call_1","title":"Read README.md","kind":"read","status":"pending","locations":[{"path":"/work/run/README.md"}],"rawInput":{"path":"/work/run/README.md"}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"# Demo"}}]}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"The README "}}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"has one heading."}}

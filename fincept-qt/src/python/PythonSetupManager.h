@@ -183,7 +183,7 @@ class PythonSetupManager : public QObject {
     /// chip own failure reporting.
     void set_background_mode();
 
-    /// Get the install directory (com.fincept.terminal)
+    /// Get the install directory (AppPaths::root(): com.fincept.terminal.community)
     QString install_dir() const;
     /// uv executable path (may not exist yet)
     QString uv_path() const;
@@ -311,6 +311,10 @@ class PythonSetupManager : public QObject {
     std::atomic<int> overall_percent_{0};
     std::atomic<bool> native_tls_{false};
     std::atomic<bool> background_mode_{false};
+    // Repair of an adopted environment (relocation::repair_flag_path): the first
+    // run of a session is offline, from the uv cache that moved with the data
+    // root; if that fails it is retried once online.
+    std::atomic<bool> repair_offline_done_{false};
 
     std::unique_ptr<Run> run_;
     quint64 generation_ = 0;

@@ -8,6 +8,7 @@
 
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "core/process/ProcessTree.h"
 #include "python/PythonRunner.h"
 #include "python/PythonSetupManager.h"
 
@@ -30,7 +31,7 @@ ClapDetectorService& ClapDetectorService::instance() {
 }
 
 ClapDetectorService::ClapDetectorService(QObject* parent) : QObject(parent) {
-    LOG_INFO(CLAP_TAG, "ClapDetectorService initialised");
+    LOG_DEBUG(CLAP_TAG, "ClapDetectorService initialised");
 }
 
 ClapDetectorService::~ClapDetectorService() {
@@ -47,7 +48,7 @@ bool ClapDetectorService::is_enabled_in_config() {
 
 void ClapDetectorService::start() {
     if (process_) {
-        LOG_INFO(CLAP_TAG, "start: already running — no-op");
+        LOG_DEBUG(CLAP_TAG, "start: already running — no-op");
         return;
     }
 
@@ -55,7 +56,8 @@ void ClapDetectorService::start() {
     if (python_exe.isEmpty() || !QFileInfo::exists(python_exe))
         python_exe = python::PythonRunner::instance().python_path();
     if (python_exe.isEmpty()) {
-        LOG_ERROR(CLAP_TAG, "No Python interpreter — cannot start clap detector");
+        LOG_ERROR(CLAP_TAG, logf("No Python interpreter, clap detector not started",
+                                 {{"error", "no interpreter in venv-numpy2 or the default environment"}}));
         emit error_occurred(QStringLiteral("Python not available — clap-to-start unavailable"));
         return;
     }
@@ -92,8 +94,8 @@ void ClapDetectorService::start() {
     const QString debounce = cfg.get("voice/clap_to_start/debounce_ms", "1500").toString();
     const QString device = cfg.get("voice/deepgram/device", "").toString();
 
-    LOG_INFO(CLAP_TAG, QString("env: mode=%1 peak=%2 ratio=%3 gap=%4 debounce=%5 device='%6'")
-                           .arg(mode, peak, ratio, gap, debounce, device));
+    LOG_DEBUG(CLAP_TAG, QString("env: mode=%1 peak=%2 ratio=%3 gap=%4 debounce=%5 device='%6'")
+                            .arg(mode, peak, ratio, gap, debounce, device));
 
     env.insert("FINCEPT_CLAP_MODE", mode);
     env.insert("FINCEPT_CLAP_PEAK_MIN", peak);
@@ -105,21 +107,23 @@ void ClapDetectorService::start() {
     process_->setProcessEnvironment(env);
     process_->setWorkingDirectory(scripts_dir);
     process_->setProcessChannelMode(QProcess::SeparateChannels);
-
-#ifdef _WIN32
-    process_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
-    });
-#endif
+    // One process tree, no console window: stop() and quit take anything the
+    // detector started (audio helpers) with it (core/process/ProcessTree.h).
+    process::own_tree(process_);
 
     connect(process_, &QProcess::readyReadStandardOutput, this, &ClapDetectorService::on_stdout_ready);
     connect(process_, &QProcess::readyReadStandardError, this, &ClapDetectorService::on_stderr_ready);
     connect(process_, &QProcess::started, this, [this]() {
-        LOG_INFO(CLAP_TAG, QString("QProcess::started — pid=%1").arg(process_ ? process_->processId() : 0));
+        LOG_DEBUG(CLAP_TAG, QString("QProcess::started — pid=%1").arg(process_ ? process_->processId() : 0));
     });
     connect(process_, &QProcess::finished, this, &ClapDetectorService::on_process_finished);
     connect(process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
-        LOG_ERROR(CLAP_TAG, QString("QProcess::errorOccurred err=%1").arg(static_cast<int>(err)));
+        // Only a failed start is its own event; a crash is reported by on_process_finished.
+        if (err == QProcess::FailedToStart)
+            LOG_ERROR(CLAP_TAG, logf("Clap detector process could not start",
+                                     {{"error", process_ ? process_->errorString() : QString()}}));
+        else
+            LOG_DEBUG(CLAP_TAG, QString("QProcess::errorOccurred err=%1").arg(static_cast<int>(err)));
         if (err == QProcess::FailedToStart) {
             emit error_occurred(QStringLiteral("Failed to start clap detector"));
             stop();
@@ -127,8 +131,9 @@ void ClapDetectorService::start() {
     });
 
     stdout_buffer_.clear();
+    last_stderr_.clear();
     script_error_emitted_ = false;
-    LOG_INFO(CLAP_TAG, QString("Launching '%1' '%2'").arg(python_exe, script));
+    LOG_DEBUG(CLAP_TAG, QString("Launching '%1' '%2'").arg(log_path(python_exe), log_path(script)));
     process_->start(python_exe, {script});
 
     active_.store(true, std::memory_order_release);
@@ -154,7 +159,7 @@ void ClapDetectorService::stop() {
     } else {
         connect(dying, &QProcess::finished, dying, &QObject::deleteLater);
         connect(dying, &QProcess::errorOccurred, dying, &QObject::deleteLater);
-        dying->kill();
+        process::kill_tree(dying);
     }
 
     const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
@@ -188,9 +193,10 @@ void ClapDetectorService::on_stderr_ready() {
         return;
     const QString text = QString::fromUtf8(chunk).trimmed();
     if (!text.isEmpty()) {
-        // Stderr is verbose by design (per-candidate logs) — keep at WARN only
-        // for human-friendly visibility. Drop to DEBUG if it gets noisy.
-        LOG_WARN(CLAP_TAG, QString("stderr: %1").arg(text));
+        // Stderr is verbose by design (per-candidate logs): DEBUG only (policy B.9);
+        // its last line goes into the exit line when the detector fails.
+        last_stderr_ = text.section(QLatin1Char('\n'), -1).trimmed();
+        LOG_DEBUG(CLAP_TAG, QString("stderr: %1").arg(text));
     }
 }
 
@@ -198,16 +204,16 @@ void ClapDetectorService::parse_line(const QByteArray& line) {
     QJsonParseError parse_err;
     const QJsonDocument doc = QJsonDocument::fromJson(line, &parse_err);
     if (parse_err.error != QJsonParseError::NoError) {
-        LOG_WARN(CLAP_TAG, QString("non-JSON stdout: %1").arg(QString::fromUtf8(line)));
+        LOG_DEBUG(CLAP_TAG, QString("non-JSON stdout: %1").arg(QString::fromUtf8(line)));
         return;
     }
     const QJsonObject obj = doc.object();
 
     if (obj.contains("event") && obj["event"].toString() == "clap") {
-        LOG_INFO(CLAP_TAG, "Clap event detected — emitting clap_detected()");
+        LOG_DEBUG(CLAP_TAG, "Clap event detected — emitting clap_detected()");
         emit clap_detected();
     } else if (obj.contains("status")) {
-        LOG_INFO(CLAP_TAG, QString("status: %1").arg(obj["status"].toString()));
+        LOG_DEBUG(CLAP_TAG, QString("status: %1").arg(obj["status"].toString()));
     } else if (obj.contains("error")) {
         const QString msg = obj["error"].toString();
         LOG_WARN(CLAP_TAG, QString("script error: %1").arg(msg));
@@ -224,15 +230,28 @@ void ClapDetectorService::parse_line(const QByteArray& line) {
 void ClapDetectorService::on_process_finished(int exit_code, QProcess::ExitStatus status) {
     if (process_) {
         const QByteArray remaining_err = process_->readAllStandardError();
-        if (!remaining_err.isEmpty())
-            LOG_WARN(CLAP_TAG, QString("final stderr: %1").arg(QString::fromUtf8(remaining_err).trimmed()));
+        if (!remaining_err.isEmpty()) {
+            const QString tail = QString::fromUtf8(remaining_err).trimmed();
+            if (!tail.isEmpty())
+                last_stderr_ = tail.section(QLatin1Char('\n'), -1).trimmed();
+            LOG_DEBUG(CLAP_TAG, QString("final stderr: %1").arg(tail));
+        }
     }
 
-    LOG_INFO(CLAP_TAG, QString("process exited (code=%1, status=%2)")
-                           .arg(exit_code)
-                           .arg(status == QProcess::CrashExit ? "crash" : "normal"));
+    // WARN when the detector failed (the user sees "stopped unexpectedly"), INFO otherwise.
+    if (status == QProcess::CrashExit || exit_code != 0)
+        LOG_WARN(CLAP_TAG, logf("Voice process exited abnormally",
+                                {{"provider", "clap_detector"},
+                                 {"exit", exit_code},
+                                 {"status", status == QProcess::CrashExit ? "crash" : "normal"},
+                                 {"error", last_stderr_}}));
+    else
+        LOG_INFO(CLAP_TAG, logf("Voice process exited", {{"provider", "clap_detector"}, {"exit", exit_code}}));
 
     if (process_) {
+        // Ended by itself: what it started on purpose keeps running (ProcessTree.h).
+        if (status == QProcess::NormalExit)
+            process::release_tree(process_);
         process_->deleteLater();
         process_ = nullptr;
     }

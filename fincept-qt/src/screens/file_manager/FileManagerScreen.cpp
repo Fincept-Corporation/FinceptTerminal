@@ -1,11 +1,16 @@
 // src/screens/file_manager/FileManagerScreen.cpp
 #include "screens/file_manager/FileManagerScreen.h"
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/common/CommandRows.h"
 #include "screens/excel/ExcelScreen.h"
+#include "services/report_builder/ReportBuilderService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QButtonGroup>
 #include <QCoreApplication>
@@ -151,53 +156,55 @@ void FileManagerScreen::build_ui() {
     setStyleSheet(
         QString("QWidget#FMRoot { background:%1; }"
                 "#fmHeader { background:%2; border-bottom:1px solid %3; }"
-                "#fmTitle { color:%4; font-size:14px; font-weight:700; letter-spacing:0.5px; background:transparent; }"
-                "#fmSubtitle, #fmMuted { color:%5; font-size:12px; background:transparent; }"
-                "#fmStats, #fmQuotaLabel { color:%6; font-size:11px; background:transparent; }"
-                "#fmBtn { background:transparent; color:%7; border:1px solid %3; padding:4px 12px; font-size:11px; }"
+                "#fmTitle { color:%4; font-size:" + fincept::ui::fonts::px(0) + "px; font-weight:700; letter-spacing:0.5px; background:transparent; }"
+                "#fmSubtitle, #fmMuted { color:%7; font-size:" + fincept::ui::fonts::px(-2) + "px; background:transparent; }"
+                "#fmStats { color:%7; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent; }"
+                "#fmQuotaLabel { color:%6; font-size:" + fincept::ui::fonts::px(-3) + "px; background:transparent; }"
+                "#fmBtn { background:transparent; color:%7; border:1px solid %3; padding:4px 12px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                 "#fmBtn:hover { color:%8; background:%9; }"
-                "#fmPrimaryBtn { background:rgba(217,119,6,0.1); color:%4; border:1px solid %10; padding:4px 12px;"
-                "  font-size:11px; font-weight:700; }"
-                "#fmPrimaryBtn:hover { background:%4; color:%1; }"
-                "#fmDangerBtn { background:transparent; color:%11; border:1px solid #7f1d1d; padding:3px 12px;"
-                "  font-size:11px; font-weight:700; }"
-                "#fmDangerBtn:hover { background:%11; color:%8; }"
+                "#fmPrimaryBtn { background:%13; color:%4; border:1px solid %10; padding:4px 12px;"
+                "  font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; }"
+                "#fmPrimaryBtn:hover { background:%4; color:%14; }"
+                "#fmDangerBtn { background:transparent; color:%11; border:1px solid %15; padding:3px 12px;"
+                "  font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; }"
+                "#fmDangerBtn:hover { background:%11; color:%14; }"
                 "#fmBar { background:%1; border-bottom:1px solid %3; }"
-                "#fmBulkBar { background:#1a0a00; border-bottom:1px solid %10; }"
-                "#fmSearch { background:%12; color:%8; border:1px solid %3; padding:5px 10px; font-size:12px; }"
+                "#fmBulkBar { background:%13; border-bottom:1px solid %10; }"
+                "#fmSearch { background:%12; color:%8; border:1px solid %3; padding:5px 10px; font-size:" + fincept::ui::fonts::px(-2) + "px; }"
                 "#fmSearch:focus { border-color:%4; }"
                 "#fmChip { background:transparent; color:%7; border:1px solid %3; border-radius:10px; padding:2px 10px;"
-                "  font-size:10px; }"
-                "#fmChip:checked { background:%4; color:#000; border-color:%4; }"
+                "  font-size:" + fincept::ui::fonts::px(-4) + "px; }"
+                "#fmChip:checked { background:%4; color:%14; border-color:%4; }"
                 "#fmChip:hover:!checked { border-color:%4; }"
                 "QProgressBar#fmQuota { background:%3; border:none; border-radius:3px; }"
                 "QProgressBar#fmQuota::chunk { background:%4; border-radius:3px; }"
                 "QProgressBar#fmQuota[over=\"true\"]::chunk { background:%11; }"
-                "QTableView#fmTable { background:%1; color:%8; border:none; gridline-color:%3; font-size:12px;"
-                "  selection-background-color:rgba(217,119,6,0.18); selection-color:%8; }"
+                "QTableView#fmTable { background:%1; color:%8; border:none; gridline-color:%3; font-size:" + fincept::ui::fonts::px(-2) + "px;"
+                "  selection-background-color:%16; selection-color:%8; }"
                 "QTableView#fmTable QHeaderView::section { background:%2; color:%7; border:none;"
-                "  border-bottom:1px solid %3; border-right:1px solid %3; padding:4px 6px; font-size:10px;"
+                "  border-bottom:1px solid %3; border-right:1px solid %3; padding:4px 6px; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                 "  font-weight:700; }"
-                "#fmEmpty { color:%6; font-size:13px; background:transparent; padding:40px; }"
-                "#fmPreviewPanel { background:%2; border-left:1px solid %3; }"
+                "#fmEmpty { color:%7; font-size:" + fincept::ui::fonts::px(-1) + "px; background:transparent; padding:40px; }"
+                "#fmPreviewPanel { background:%2; border-left:1px solid %5; }"
                 "#fmPreviewHeader { background:%12; border-bottom:1px solid %3; }"
-                "#fmPreviewTitle { color:%8; font-size:12px; font-weight:600; background:transparent;"
+                "#fmPreviewTitle { color:%8; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:600; background:transparent;"
                 "  padding:10px 12px 2px 12px; }"
-                "#fmPreviewMeta { color:%6; font-size:10px; background:transparent; padding:0 12px 8px 12px; }"
-                "#fmPreviewHeading { color:%4; font-size:11px; font-weight:700; letter-spacing:1px;"
+                "#fmPreviewMeta { color:%7; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; padding:0 12px 8px 12px; }"
+                "#fmPreviewHeading { color:%4; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;"
                 "  background:transparent; }"
-                "#fmClose { background:transparent; color:%6; border:none; font-size:12px; }"
+                "#fmClose { background:transparent; color:%7; border:none; font-size:" + fincept::ui::fonts::px(-2) + "px; }"
                 "#fmClose:hover { color:%11; }"
-                "QTextEdit#fmPreviewText { background:%1; color:%8; border:none; padding:10px; font-size:11px; }"
+                "QTextEdit#fmPreviewText { background:%1; color:%8; border:none; padding:10px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                 "QTableWidget#fmPreviewTable { background:%1; color:%8; border:none; gridline-color:%3;"
-                "  font-size:11px; }"
+                "  font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                 "QTableWidget#fmPreviewTable QHeaderView::section { background:%12; color:%7; border:none;"
-                "  border-bottom:1px solid %3; padding:4px; font-size:10px; font-weight:700; }"
-                "QSplitter::handle { background:%3; width:1px; }")
+                "  border-bottom:1px solid %3; padding:4px; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
+                "QSplitter::handle { background:%5; width:1px; }")
             .arg(colors::BG_BASE(), colors::BG_RAISED(), colors::BORDER_DIM(), colors::AMBER(),
-                 colors::TEXT_TERTIARY(), colors::TEXT_DIM(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
+                 colors::BORDER_MED(), colors::TEXT_TERTIARY(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
                  colors::BG_HOVER())
-            .arg(colors::AMBER_DIM(), colors::NEGATIVE(), colors::BG_SURFACE()));
+            .arg(colors::AMBER_DIM(), colors::DANGER(), colors::BG_SURFACE(), colors::ACCENT_BG(),
+                 colors::TEXT_ON_ACCENT(), colors::alpha(colors::DANGER, 0.45), colors::alpha(colors::AMBER, 0.18)));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -267,6 +274,7 @@ void FileManagerScreen::build_ui() {
     bbl->addWidget(bulk_sel_label_);
     bulk_delete_btn_ = new QPushButton(bulk_bar_);
     bulk_delete_btn_->setObjectName("fmDangerBtn");
+    bulk_delete_btn_->setProperty("fincept_agent_risk", "delete");
     bulk_delete_btn_->setCursor(Qt::PointingHandCursor);
     connect(bulk_delete_btn_, &QPushButton::clicked, this, [this]() { delete_files(selected_ids()); });
     bbl->addWidget(bulk_delete_btn_);
@@ -303,7 +311,6 @@ void FileManagerScreen::build_ui() {
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     table_->verticalHeader()->setVisible(false);
-    table_->verticalHeader()->setDefaultSectionSize(24);
     table_->setShowGrid(false);
     table_->setWordWrap(false);
     table_->horizontalHeader()->setSectionResizeMode(kFmName, QHeaderView::Stretch);
@@ -323,22 +330,40 @@ void FileManagerScreen::build_ui() {
     });
     lvl->addWidget(table_, 1);
 
-    empty_label_ = new QLabel(list_host);
-    empty_label_->setObjectName("fmEmpty");
-    empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setWordWrap(true);
-    empty_label_->setVisible(false);
-    lvl->addWidget(empty_label_, 1);
+    // No files / nothing matching: a designed state with the action that fills the list.
+    list_state_ = new ui::EmptyState(list_host);
+    list_state_->setVisible(false);
+    connect(list_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (model_->rowCount() == 0) {
+            upload_files();
+            return;
+        }
+        // Filtered out: clear the search and go back to every source.
+        search_input_->clear();
+        if (chip_group_)
+            for (auto* b : chip_group_->buttons())
+                if (b->property("screenFilter").toString().isEmpty())
+                    b->setChecked(true); // toggled() re-applies the filter
+        apply_filter();
+    });
+    lvl->addWidget(list_state_, 1);
 
     // Keyboard: Enter opens, Delete deletes the selection, F2 renames.
     auto add_key = [this](const QKeySequence& seq, std::function<void()> fn) {
         auto* sc = new QShortcut(seq, table_);
         sc->setContext(Qt::WidgetShortcut);
         connect(sc, &QShortcut::activated, this, std::move(fn));
+        return sc;
     };
     add_key(QKeySequence(Qt::Key_Return), [this]() { activate(table_->currentIndex()); });
     add_key(QKeySequence(Qt::Key_Enter), [this]() { activate(table_->currentIndex()); });
-    add_key(QKeySequence(QKeySequence::Delete), [this]() { delete_files(selected_ids()); });
+    // Agents: Delete deletes the selected files — on the shortcut itself (judged when it
+    // fires) and as the table's key map (judged for a key press on the focused table).
+    QShortcut* delete_key = add_key(QKeySequence(QKeySequence::Delete), [this]() { delete_files(selected_ids()); });
+    delete_key->setProperty(fincept::core::agent::kAgentRiskProperty, "delete");
+    table_->setProperty(fincept::core::agent::kAgentRiskKeysProperty,
+                        QKeySequence(QKeySequence::Delete).toString(QKeySequence::PortableText) +
+                            QStringLiteral("=delete"));
     add_key(QKeySequence(Qt::Key_F2), [this]() {
         if (!current_id().isEmpty())
             rename_file(current_id());
@@ -348,6 +373,20 @@ void FileManagerScreen::build_ui() {
     splitter_->addWidget(build_preview_panel());
     preview_panel_->setVisible(false);
     root->addWidget(splitter_, 1);
+
+    // Row height (24 px) and the preview close button (20 px) were sized for the
+    // default font; follow the user's font size instead of clipping at large ones.
+    auto apply_metrics = [this]() {
+        const QFontMetrics row_fm(fonts::font(-2));
+        table_->verticalHeader()->setDefaultSectionSize(std::max(24, row_fm.height() + 8));
+        if (auto* close_btn = preview_panel_->findChild<QPushButton*>(QStringLiteral("fmClose"))) {
+            const int side = std::max(20, row_fm.height() + 4);
+            close_btn->setFixedSize(side, side);
+        }
+    };
+    apply_metrics();
+    // Sizes are re-fitted once the new font has settled (never inside theme_changed).
+    connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, this, apply_metrics);
 
     search_debounce_ = new QTimer(this);
     search_debounce_->setSingleShot(true);
@@ -420,8 +459,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
     hhl->addWidget(preview_header_label_);
     hhl->addStretch();
     auto* close_btn = new QPushButton(QStringLiteral("✕"), hdr);
-    close_btn->setObjectName("fmClose");
-    close_btn->setFixedSize(20, 20);
+    close_btn->setObjectName("fmClose"); // sized for the font in build_ui()
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setAccessibleName(tr("Close preview"));
     connect(close_btn, &QPushButton::clicked, this, &FileManagerScreen::clear_preview);
@@ -451,11 +489,27 @@ QWidget* FileManagerScreen::build_preview_panel() {
     preview_table_->setVisible(false);
     vl->addWidget(preview_table_, 1);
 
-    preview_empty_ = new QLabel(preview_panel_);
-    preview_empty_->setObjectName("fmEmpty");
-    preview_empty_->setAlignment(Qt::AlignCenter);
-    preview_empty_->setWordWrap(true);
-    vl->addWidget(preview_empty_, 1);
+    // Binary / unreadable / empty file: say so and offer what does open it.
+    preview_state_ = new ui::EmptyState(preview_panel_);
+    preview_state_->set_compact(true);
+    preview_state_->setVisible(false);
+    connect(preview_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (preview_id_.isEmpty())
+            return;
+        if (preview_note_ == PreviewNote::Unreadable)
+            show_preview(preview_id_); // try again
+        else if (!preview_route_.isEmpty())
+            open_with(preview_id_);
+        else
+            open_external(preview_id_);
+    });
+    connect(preview_state_, &ui::EmptyState::secondary_clicked, this, [this]() {
+        if (preview_note_ == PreviewNote::Unreadable)
+            QDesktopServices::openUrl(QUrl::fromLocalFile(FileManagerService::instance().storage_dir()));
+        else if (!preview_id_.isEmpty())
+            open_external(preview_id_);
+    });
+    vl->addWidget(preview_state_, 1);
     return preview_panel_;
 }
 
@@ -531,19 +585,57 @@ void FileManagerScreen::reload_model() {
     }
     apply_filter();
     update_stats();
+
+    // First fill: preview the newest file (the table is sorted by Added, newest first),
+    // so the right side shows a file rather than nothing until a row is clicked.
+    if (!first_fill_done_) {
+        first_fill_done_ = true;
+        if (proxy_->rowCount() > 0 && selected_ids().isEmpty() && preview_id_.isEmpty())
+            table_->selectRow(0); // selectionChanged -> show_preview
+    }
 }
 
 void FileManagerScreen::apply_filter() {
     proxy_->set_filters(search_input_ ? search_input_->text() : QString(), active_screen_filter_);
     const bool none = model_->rowCount() == 0;
     const bool filtered_out = !none && proxy_->rowCount() == 0;
-    empty_label_->setText(none ? tr("No files yet.\n\nFiles are registered automatically when you export, save or "
-                                    "generate output from a screen (notebooks, spreadsheets, reports, backtests, "
-                                    "connector configs). UPLOAD FILES copies your own files in.")
-                               : tr("No files match your search or filter."));
-    empty_label_->setVisible(none || filtered_out);
+    update_list_state(none, filtered_out);
     table_->setVisible(!(none || filtered_out));
     update_bulk_bar();
+}
+
+void FileManagerScreen::update_list_state(bool none, bool filtered_out) {
+    if (!none && !filtered_out) {
+        list_state_->setVisible(false);
+        return;
+    }
+    ui::EmptyState::Spec spec;
+    if (none) {
+        spec = ui::EmptyState::no_data_spec(
+            tr("No files yet"),
+            tr("Files are registered here when you export, save or generate output in a screen. UPLOAD FILES "
+               "copies your own files in."),
+            tr("UPLOAD FILES"));
+        spec.glyph = QStringLiteral("▤");
+        spec.primary_tooltip = tr("Copy files from your computer into terminal storage");
+        spec.details = ui::EmptyState::bullet_rows({tr("Code: notebooks you save"),
+                                                    tr("Excel: workbooks you save or export"),
+                                                    tr("Report Builder: saved reports"),
+                                                    tr("Backtesting and Data Sources: exported results and configs")});
+        spec.details_heading = tr("WHERE FILES COME FROM");
+    } else {
+        const QString needle = search_input_ ? search_input_->text().trimmed() : QString();
+        const QString source =
+            active_screen_filter_.isEmpty() ? tr("all sources") : fm_screen_label(active_screen_filter_);
+        spec = ui::EmptyState::no_data_spec(
+            tr("No files match"),
+            needle.isEmpty() ? tr("No file from %1 is stored yet.").arg(source)
+                             : tr("Nothing named or typed like \"%1\" in %2.").arg(needle, source),
+            tr("SHOW ALL FILES"));
+        spec.glyph = QStringLiteral("⌕");
+    }
+    list_state_->apply(spec);
+    list_state_->setVisible(true);
 }
 
 QStringList FileManagerScreen::selected_ids() const {
@@ -568,7 +660,7 @@ void FileManagerScreen::activate(const QModelIndex& index) {
     const auto f = FileManagerService::instance().find_by_id(id);
     if (f.id.isEmpty())
         return;
-    if (!route_for_mime(f.mime_type).isEmpty())
+    if (!route_for_mime(f.mime_type, f.original_name).isEmpty())
         open_with(id);
     else
         show_preview(id);
@@ -586,11 +678,12 @@ void FileManagerScreen::show_context_menu(const QPoint& pos) {
 
     QMenu menu(this);
     if (ids.size() <= 1) {
-        const QString route = route_for_mime(f.mime_type);
+        const QString route = route_for_mime(f.mime_type, f.original_name);
         if (!route.isEmpty())
-            menu.addAction(tr("Open in %1").arg(open_with_label(f.mime_type)), this, [this, id]() { open_with(id); });
+            menu.addAction(tr("Open in %1").arg(open_with_label(f.mime_type, f.original_name)), this, [this, id]() { open_with(id); });
         menu.addAction(tr("Preview"), this, [this, id]() { show_preview(id); });
         menu.addAction(tr("Open with Default App"), this, [this, id]() { open_external(id); });
+        menu.actions().constLast()->setProperty("fincept_agent_risk", "code"); // launches an outside program
         menu.addAction(tr("Show in Folder"), this, []() {
             QDesktopServices::openUrl(QUrl::fromLocalFile(FileManagerService::instance().storage_dir()));
         });
@@ -601,6 +694,7 @@ void FileManagerScreen::show_context_menu(const QPoint& pos) {
     }
     menu.addAction(ids.size() > 1 ? tr("Delete %1 Files  (Del)").arg(ids.size()) : tr("Delete  (Del)"), this,
                    [this, ids]() { delete_files(ids); });
+    menu.actions().constLast()->setProperty("fincept_agent_risk", "delete");
     menu.exec(table_->viewport()->mapToGlobal(pos));
 }
 
@@ -714,16 +808,21 @@ void FileManagerScreen::open_with(const QString& file_id) {
     const auto f = FileManagerService::instance().find_by_id(file_id);
     if (f.id.isEmpty())
         return;
-    const QString route = route_for_mime(f.mime_type);
+    const QString route = route_for_mime(f.mime_type, f.original_name);
     if (route.isEmpty())
         return;
     const QString path = FileManagerService::instance().full_path(f.name);
-    emit open_file_in_screen(route, path);
-    // The shell's open_file_in_screen handler only forwards the path for the
-    // notebook editor; hand spreadsheets to the Excel screen directly (it parks
-    // the path if the screen is not built yet).
+    // Park the path BEFORE the shell switches tabs: the target screen takes it when it
+    // shows (it may not exist yet). The shell's open_file_in_screen handler only forwards
+    // the path for the notebook editor.
     if (route == QLatin1String("excel") && !path.isEmpty())
         ExcelScreen::open_when_ready(path);
+    if (route == QLatin1String("report_builder") && !path.isEmpty()) {
+        services::ReportBuilderService::OpenRequest req;
+        req.file_path = path;
+        services::ReportBuilderService::instance().request_open(req);
+    }
+    emit open_file_in_screen(route, path);
 }
 
 void FileManagerScreen::open_external(const QString& file_id) {
@@ -752,20 +851,18 @@ void FileManagerScreen::show_preview(const QString& file_id) {
                            "  |  " + date_str);
     preview_text_->setVisible(false);
     preview_table_->setVisible(false);
-    preview_empty_->setVisible(false);
+    preview_state_->setVisible(false);
 
     if (f.mime_type.contains("image") || f.mime_type.contains("video") || f.mime_type.contains("audio") ||
         f.mime_type.contains("zip") || f.mime_type.contains("spreadsheet") || f.mime_type.contains("excel") ||
         f.mime_type.contains("vnd.openxmlformats") || f.mime_type.contains("pdf")) {
-        preview_empty_->setText(tr("Binary file — no text preview.\nRight-click → Open with Default App."));
-        preview_empty_->setVisible(true);
+        show_preview_note(PreviewNote::Binary, route_for_mime(f.mime_type, f.original_name));
         return;
     }
 
     QFile file(FileManagerService::instance().full_path(f.name));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        preview_empty_->setText(tr("Cannot open file for preview — it may have been moved or deleted."));
-        preview_empty_->setVisible(true);
+        show_preview_note(PreviewNote::Unreadable, QString());
         return;
     }
     constexpr int kMaxChars = 64000;
@@ -779,8 +876,7 @@ void FileManagerScreen::show_preview(const QString& file_id) {
         constexpr int kMaxRows = 201;
         const QVector<QStringList> rows = fm_parse_csv(content, kMaxRows);
         if (rows.isEmpty()) {
-            preview_empty_->setText(tr("Empty file."));
-            preview_empty_->setVisible(true);
+            show_preview_note(PreviewNote::EmptyFile, route_for_mime(f.mime_type, f.original_name));
             return;
         }
         const QStringList& headers = rows.first();
@@ -804,6 +900,44 @@ void FileManagerScreen::show_preview(const QString& file_id) {
     if (truncated)
         preview_text_->append(QStringLiteral("\n\n") + tr("[... preview truncated at 64K characters ...]"));
     preview_text_->setVisible(true);
+}
+
+void FileManagerScreen::show_preview_note(PreviewNote note, const QString& route) {
+    preview_note_ = note;
+    preview_route_ = route;
+    const auto f = FileManagerService::instance().find_by_id(preview_id_);
+    const QString app = open_with_label(f.mime_type, f.original_name);
+    ui::EmptyState::Spec spec;
+    switch (note) {
+    case PreviewNote::Binary:
+        spec = ui::EmptyState::no_data_spec(
+            tr("No text preview"),
+            route.isEmpty() ? tr("This is a binary file (image, PDF, archive or office document). Your default "
+                                 "app for it can open it.")
+                            : tr("This file has no text preview here — it opens in %1.").arg(app),
+            route.isEmpty() ? tr("OPEN WITH DEFAULT APP") : tr("OPEN IN %1").arg(app));
+        // Agents: launching an outside program is "code" (as the menu's Open with Default App).
+        if (route.isEmpty())
+            spec.primary_agent_risk = QStringLiteral("code");
+        if (!route.isEmpty()) {
+            spec.secondary = tr("OPEN WITH DEFAULT APP");
+            spec.secondary_agent_risk = QStringLiteral("code");
+        }
+        spec.glyph = QStringLiteral("◫");
+        break;
+    case PreviewNote::Unreadable:
+        spec = ui::EmptyState::error_spec(tr("The stored file could not be read — it may have been moved or deleted."),
+                                          tr("Cannot preview this file"), tr("TRY AGAIN"));
+        spec.secondary = tr("SHOW IN FOLDER");
+        break;
+    case PreviewNote::EmptyFile:
+        spec = ui::EmptyState::no_data_spec(tr("Empty file"), tr("This file has no rows to show."),
+                                            route.isEmpty() ? QString() : tr("OPEN IN %1").arg(app));
+        spec.glyph = QStringLiteral("○");
+        break;
+    }
+    preview_state_->apply(spec);
+    preview_state_->setVisible(true);
 }
 
 void FileManagerScreen::clear_preview() {
@@ -861,23 +995,26 @@ QString FileManagerScreen::format_size(qint64 bytes) {
     return QString("%1 GB").arg(bytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
 }
 
-QString FileManagerScreen::open_with_label(const QString& mime) {
+QString FileManagerScreen::open_with_label(const QString& mime, const QString& name) {
+    if (name.endsWith(QLatin1String(".fincept"), Qt::CaseInsensitive))
+        return QCoreApplication::translate("FileManagerScreen", "REPORT BUILDER");
     if (mime.contains("ipynb") || mime.contains("python"))
         return QCoreApplication::translate("FileManagerScreen", "NOTEBOOK");
     if (mime.contains("spreadsheet") || mime.contains("csv") || mime.contains("excel"))
         return QCoreApplication::translate("FileManagerScreen", "EXCEL");
-    if (mime.contains("pdf"))
-        return QCoreApplication::translate("FileManagerScreen", "REPORT");
     return QCoreApplication::translate("FileManagerScreen", "OPEN");
 }
 
-QString FileManagerScreen::route_for_mime(const QString& mime) {
+QString FileManagerScreen::route_for_mime(const QString& mime, const QString& name) {
+    // Report Builder documents are JSON (mime application/json or text/plain), so they
+    // are recognised by extension. PDFs are NOT routed there: the Report Builder edits
+    // reports, it cannot open a PDF (they open in Preview / the default app instead).
+    if (name.endsWith(QLatin1String(".fincept"), Qt::CaseInsensitive))
+        return "report_builder";
     if (mime.contains("ipynb") || mime.contains("x-ipynb"))
         return "code_editor";
     if (mime.contains("spreadsheet") || mime.contains("excel") || mime.contains("csv"))
         return "excel";
-    if (mime.contains("pdf"))
-        return "report_builder";
     return {};
 }
 
@@ -930,5 +1067,70 @@ void FileManagerScreen::restore_state(const QVariantMap& state) {
         }
     }
 }
+
+// ── ISectionLinked ────────────────────────────────────────────────────────────
+
+bool FileManagerScreen::open_section(const QString& section, const QString& focus) {
+    const QString key = section.trimmed();
+    const QString lower = key.toLower();
+    const QString text = focus.trimmed();
+    // The source chip whose "screenFilter" is `tag` (exact, then any case); null when there is none.
+    auto chip_for = [this](const QString& tag) -> QAbstractButton* {
+        if (!chip_group_)
+            return nullptr;
+        for (const Qt::CaseSensitivity cs : {Qt::CaseSensitive, Qt::CaseInsensitive})
+            for (QAbstractButton* b : chip_group_->buttons())
+                if (b->property("screenFilter").toString().compare(tag, cs) == 0)
+                    return b;
+        return nullptr;
+    };
+    QAbstractButton* chip = nullptr;
+    QString rest;
+    if (key.isEmpty()) {
+        // the current chip
+    } else if (lower == QLatin1String("all")) {
+        chip = chip_for(QString());
+    } else if (command_rows::split_kind(key, "source", &rest)) {
+        chip = rest.isEmpty() ? nullptr : chip_for(rest);
+        if (!chip)
+            return false;
+    } else if (lower == QLatin1String("upload")) {
+        // The UPLOAD button's file picker (modal): after the link has landed.
+        QMetaObject::invokeMethod(this, [this]() { upload_files(); }, Qt::QueuedConnection);
+        return true;
+    } else {
+        return false;
+    }
+    if (chip && !chip->isChecked())
+        chip->click(); // the chip's click (toggled() filters and saves the state)
+    if (!text.isEmpty()) {
+        search_input_->setText(text); // filters after the search box's own debounce
+        search_input_->setFocus(Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+QList<command::CommandItem> fm_command_rows() {
+    namespace rows = command_rows;
+    const QString where = FileManagerScreen::tr("File Manager");
+    command::CommandItem upload =
+        rows::section(QStringLiteral("file_manager"), QStringLiteral("upload"), FileManagerScreen::tr("Upload files"),
+                      {QStringLiteral("upload"), QStringLiteral("import file"), QStringLiteral("add file"),
+                       QStringLiteral("attach")},
+                      where, FileManagerScreen::tr("Opens the File Manager's file picker"));
+    upload.agent_risk = QString::fromLatin1(command::risk::kFile);
+    return {upload};
+}
+
+void fm_install_commands() {
+    command_rows::install(QStringLiteral("file_manager"), &fm_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(fm_install_commands)
 
 } // namespace fincept::screens

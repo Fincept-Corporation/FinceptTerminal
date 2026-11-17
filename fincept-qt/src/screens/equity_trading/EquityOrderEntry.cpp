@@ -4,12 +4,17 @@
 #include "core/logging/Logger.h"
 #include "screens/equity_trading/BasketOrdersDialog.h"
 #include "screens/equity_trading/EquityTypes.h"
+#include "services/markets/FxRateService.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/OptionsStrategyBuilder.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/PanelHeader.h"
 
 #include <QCheckBox>
+#include <QSignalBlocker>
 #include <QDateTime>
 #include <QFrame>
 #include <QGridLayout>
@@ -32,6 +37,8 @@
 namespace fincept::screens::equity {
 
 using namespace fincept::ui;
+namespace fmt = fincept::ui::formatting;
+namespace fx = fincept::services::fx;
 
 namespace {
 // A quote older than this is flagged STALE in the ticket. Chosen so a normally
@@ -50,23 +57,20 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // ── Header ─────────────────────────────────────────────────────────────────
-    auto* header = new QWidget(this);
-    header->setObjectName("eqOeHeader");
-    header->setFixedHeight(32);
-    auto* h_layout = new QHBoxLayout(header);
-    h_layout->setContentsMargins(10, 0, 10, 0);
-
-    title_label_ = new QLabel(tr("ORDER ENTRY"));
-    title_label_->setObjectName("eqOeTitle");
-    h_layout->addWidget(title_label_);
-    h_layout->addStretch();
-
-    mode_label_ = new QLabel(tr("PAPER"));
+    // The shared panel header + the PAPER / LIVE chip, and a 2 px rule under it in
+    // the state tone (SUCCESS paper, DANGER live): paper vs live is unmistakable
+    // in words, shape (ring / dot) and tone.
+    auto* header = new fincept::ui::PanelHeader(tr("Order ticket"), this);
+    title_label_ = header->title_label();
+    mode_label_ = new QLabel(this);
     mode_label_->setObjectName("eqOeMode");
-    mode_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
-    h_layout->addWidget(mode_label_);
-
+    header->add_control(mode_label_);
     layout->addWidget(header);
+    mode_rule_ = new QFrame(this);
+    mode_rule_->setObjectName("eqOeModeRule");
+    mode_rule_->setFixedHeight(2);
+    layout->addWidget(mode_rule_);
+    apply_mode_tone();
 
     // ── Scrollable content — a tall ticket never clips in the narrow column ──────
     auto* scroll = new QScrollArea(this);
@@ -92,6 +96,33 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         return line;
     };
 
+    // ── Broker banner (hidden until set_broker_notice) ──────────────────────────
+    {
+        auto* box = new QFrame(content);
+        box->setObjectName("eqOeNotice");
+        auto* nl = new QVBoxLayout(box);
+        nl->setContentsMargins(10, 8, 10, 8);
+        nl->setSpacing(5);
+        notice_title_ = new QLabel(box);
+        notice_title_->setWordWrap(true);
+        nl->addWidget(notice_title_);
+        notice_detail_ = new QLabel(box);
+        notice_detail_->setWordWrap(true);
+        notice_detail_->setStyleSheet(
+            QString("background:transparent;border:none;color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
+        nl->addWidget(notice_detail_);
+        auto* open_btn = new QPushButton(tr("OPEN ACCOUNTS"), box);
+        open_btn->setObjectName("eqApiBtn"); // same chrome as the command-bar ACCOUNTS button
+        open_btn->setMinimumHeight(24);
+        open_btn->setCursor(Qt::PointingHandCursor);
+        open_btn->setAccessibleName(tr("Open broker accounts"));
+        connect(open_btn, &QPushButton::clicked, this, &EquityOrderEntry::accounts_requested);
+        nl->addWidget(open_btn, 0, Qt::AlignLeft);
+        notice_box_ = box;
+        notice_box_->hide();
+        form->addWidget(notice_box_);
+    }
+
     // BUY / SELL tabs
     auto* side_row = new QHBoxLayout;
     side_row->setSpacing(0);
@@ -100,7 +131,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     buy_tab_->setObjectName("eqBuyTab");
     buy_tab_->setProperty("active", true);
     buy_tab_->setCursor(Qt::PointingHandCursor);
-    buy_tab_->setFixedHeight(36);
+    buy_tab_->setMinimumHeight(36);
     connect(buy_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(true); });
     side_row->addWidget(buy_tab_, 1);
 
@@ -108,7 +139,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     sell_tab_->setObjectName("eqSellTab");
     sell_tab_->setProperty("active", false);
     sell_tab_->setCursor(Qt::PointingHandCursor);
-    sell_tab_->setFixedHeight(36);
+    sell_tab_->setMinimumHeight(36);
     connect(sell_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(false); });
     side_row->addWidget(sell_tab_, 1);
     form->addLayout(side_row);
@@ -120,7 +151,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     for (int i = 0; i < 4; ++i) {
         type_btns_[i] = new QPushButton(type_labels[i]);
         type_btns_[i]->setObjectName("eqOeTypeBtn");
-        type_btns_[i]->setFixedHeight(26);
+        type_btns_[i]->setMinimumHeight(26);
         type_btns_[i]->setCursor(Qt::PointingHandCursor);
         if (i == 0)
             type_btns_[i]->setProperty("active", true);
@@ -134,6 +165,14 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     symbol_label_->setObjectName("eqOeSymbol");
     symbol_label_->setAlignment(Qt::AlignCenter);
     form->addWidget(symbol_label_);
+
+    // Venue session line (set_session_line) — e.g. "NSE CLOSED · MARKET orders queue".
+    session_label_ = new QLabel(content);
+    session_label_->setObjectName("eqOeSession");
+    session_label_->setAlignment(Qt::AlignCenter);
+    session_label_->setWordWrap(true);
+    session_label_->hide();
+    form->addWidget(session_label_);
 
     // ── Live info: LTP (left) · Balance (right) ─────────────────────────────────
     auto* info_box = new QWidget(content);
@@ -168,11 +207,13 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     product_combo_ = new QComboBox;
     product_combo_->setObjectName("eqOeCombo");
     product_combo_->addItems({tr("Intraday (MIS)"), tr("Delivery (CNC)"), tr("Margin (NRML)")});
-    product_combo_->setFixedHeight(28);
-    // MIS / CNC / NRML change the margin the broker quotes.
+    product_combo_->setMinimumHeight(28);
+    // MIS / CNC / NRML change the margin the broker quotes — and, on brokers that carry
+    // SL / TP only on bracket products, whether the SL / TP boxes may be used at all.
     connect(product_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
         if (margin_timer_)
             margin_timer_->start();
+        apply_sl_tp_availability();
     });
     params->addWidget(product_title_, prow, 0);
     params->addWidget(product_combo_, prow, 1);
@@ -184,11 +225,12 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     exchange_combo_->setObjectName("eqOeCombo");
     // Exchange codes (NSE/BSE/…) are market identifiers — data, not translated.
     exchange_combo_->addItems({"NSE", "BSE", "NYSE", "NASDAQ"});
-    exchange_combo_->setFixedHeight(28);
+    exchange_combo_->setMinimumHeight(28);
     connect(exchange_combo_, &QComboBox::currentTextChanged, this, [this](const QString& ex) {
         current_exchange_ = ex;
         if (symbol_label_)
             symbol_label_->setText(QStringLiteral("%1 · %2").arg(current_symbol_, ex));
+        sync_price_currency(); // NSE INR, NYSE USD, LSE GBp ...
         if (margin_timer_)
             margin_timer_->start(); // margin is per exchange
     });
@@ -201,9 +243,16 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     qty_edit_ = new QLineEdit;
     qty_edit_->setObjectName("eqOeInput");
     qty_edit_->setPlaceholderText("0");
-    qty_edit_->setFixedHeight(28);
+    qty_edit_->setMinimumHeight(28);
     qty_edit_->setAlignment(Qt::AlignRight);
     connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
+    // Enter submits like the button (same validation, send lock and the screen's
+    // confirmation rules); a disabled button (blocked / locked) ignores it.
+    qty_edit_->setProperty("fincept_agent_risk_keys", "Return=order;Enter=order"); // agents: Enter sends the order
+    connect(qty_edit_, &QLineEdit::returnPressed, this, [this]() {
+        if (submit_btn_ && submit_btn_->isEnabled() && submit_btn_->isVisible())
+            submit_btn_->click();
+    });
     params->addWidget(qty_title_, prow, 0);
     params->addWidget(qty_edit_, prow, 1);
     ++prow;
@@ -214,9 +263,14 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     price_edit_->setObjectName("eqOeInput");
     price_edit_->setPlaceholderText(tr("Limit price"));
     price_edit_->setEnabled(false);
-    price_edit_->setFixedHeight(28);
+    price_edit_->setMinimumHeight(28);
     price_edit_->setAlignment(Qt::AlignRight);
     connect(price_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
+    price_edit_->setProperty("fincept_agent_risk_keys", "Return=order;Enter=order"); // agents: Enter sends the order
+    connect(price_edit_, &QLineEdit::returnPressed, this, [this]() {
+        if (submit_btn_ && submit_btn_->isEnabled() && submit_btn_->isVisible())
+            submit_btn_->click();
+    });
     params->addWidget(price_title_, prow, 0);
     params->addWidget(price_edit_, prow, 1);
     ++prow;
@@ -227,7 +281,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     stop_price_edit_->setObjectName("eqOeInput");
     stop_price_edit_->setPlaceholderText(tr("Trigger price"));
     stop_price_edit_->setEnabled(false);
-    stop_price_edit_->setFixedHeight(28);
+    stop_price_edit_->setMinimumHeight(28);
     stop_price_edit_->setAlignment(Qt::AlignRight);
     params->addWidget(trigger_title_, prow, 0);
     params->addWidget(stop_price_edit_, prow, 1);
@@ -246,7 +300,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     advanced_toggle_ = new QPushButton(tr("+ ADVANCED"));
     advanced_toggle_->setObjectName("eqAdvToggle");
     advanced_toggle_->setCursor(Qt::PointingHandCursor);
-    advanced_toggle_->setFixedHeight(22);
+    advanced_toggle_->setMinimumHeight(22);
     form->addWidget(advanced_toggle_);
 
     // SL/TP section
@@ -261,14 +315,14 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     sl_edit_ = new QLineEdit;
     sl_edit_->setObjectName("eqOeInput");
     sl_edit_->setPlaceholderText(tr("Stop Loss"));
-    sl_edit_->setFixedHeight(26);
+    sl_edit_->setMinimumHeight(26);
 
     tp_title_ = new QLabel(tr("TP"));
     tp_title_->setObjectName("eqOeLabel");
     tp_edit_ = new QLineEdit;
     tp_edit_->setObjectName("eqOeInput");
     tp_edit_->setPlaceholderText(tr("Take Profit"));
-    tp_edit_->setFixedHeight(26);
+    tp_edit_->setMinimumHeight(26);
 
     adv_layout->addWidget(sl_title_);
     adv_layout->addWidget(sl_edit_);
@@ -286,7 +340,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strategy_toggle_ = new QPushButton(tr("+ OPTIONS STRATEGY"));
     strategy_toggle_->setObjectName("eqAdvToggle");
     strategy_toggle_->setCursor(Qt::PointingHandCursor);
-    strategy_toggle_->setFixedHeight(22);
+    strategy_toggle_->setMinimumHeight(22);
     form->addWidget(strategy_toggle_);
 
     strategy_section_ = new QWidget(this);
@@ -303,7 +357,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strategy_combo_->setObjectName("eqOeCombo");
     strategy_combo_->addItems({tr("None"), tr("Long Straddle"), tr("Short Straddle"), tr("Long Strangle"),
                                tr("Iron Condor"), tr("Bull Call Spread"), tr("Bear Put Spread")});
-    strategy_combo_->setFixedHeight(26);
+    strategy_combo_->setMinimumHeight(26);
     strat_layout->addWidget(strategy_combo_);
 
     strat_strike_title_ = new QLabel(tr("ATM STRIKE"));
@@ -312,7 +366,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strat_strike_edit_ = new QLineEdit;
     strat_strike_edit_->setObjectName("eqOeInput");
     strat_strike_edit_->setPlaceholderText(tr("e.g. 22500"));
-    strat_strike_edit_->setFixedHeight(26);
+    strat_strike_edit_->setMinimumHeight(26);
     strat_layout->addWidget(strat_strike_edit_);
 
     strat_expiry_title_ = new QLabel(tr("EXPIRY (YYYY-MM-DD)"));
@@ -320,18 +374,21 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strat_layout->addWidget(strat_expiry_title_);
     strat_expiry_edit_ = new QLineEdit;
     strat_expiry_edit_->setObjectName("eqOeInput");
-    strat_expiry_edit_->setPlaceholderText("2025-03-28");
-    strat_expiry_edit_->setFixedHeight(26);
+    strat_expiry_edit_->setPlaceholderText(tr("YYYY-MM-DD"));
+    strat_expiry_edit_->setMinimumHeight(26);
     strat_layout->addWidget(strat_expiry_edit_);
 
-    strat_lot_title_ = new QLabel(tr("LOT SIZE"));
+    // Number of LOTS per leg. The order quantity is lots × the contract's own lot size,
+    // resolved from the instrument master (OptionsStrategyBuilder::to_basket_order).
+    strat_lot_title_ = new QLabel(tr("LOTS"));
     strat_lot_title_->setObjectName("eqOeLabel");
     strat_layout->addWidget(strat_lot_title_);
     strat_lot_edit_ = new QLineEdit;
     strat_lot_edit_->setObjectName("eqOeInput");
     strat_lot_edit_->setText("1");
     strat_lot_edit_->setPlaceholderText("1");
-    strat_lot_edit_->setFixedHeight(26);
+    strat_lot_edit_->setToolTip(tr("Whole number of lots per leg — the quantity sent is lots × the contract lot size"));
+    strat_lot_edit_->setMinimumHeight(26);
     strat_layout->addWidget(strat_lot_edit_);
 
     strat_width_title_ = new QLabel(tr("WIDTH (strangle / condor / spreads)"));
@@ -340,7 +397,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strat_width_edit_ = new QLineEdit;
     strat_width_edit_->setObjectName("eqOeInput");
     strat_width_edit_->setPlaceholderText(tr("e.g. 200"));
-    strat_width_edit_->setFixedHeight(26);
+    strat_width_edit_->setMinimumHeight(26);
     strat_layout->addWidget(strat_width_edit_);
 
     strat_legs_title_ = new QLabel(tr("LEGS"));
@@ -349,14 +406,15 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     strategy_preview_ = new QLabel(tr("Select a strategy"));
     strategy_preview_->setObjectName("eqOeBrokerage");
-    strategy_preview_->setStyleSheet(QString("color: %1; font-size: 11px;").arg(colors::TEXT_SECONDARY()));
+    strategy_preview_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
     strategy_preview_->setWordWrap(true);
     strategy_preview_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     strat_layout->addWidget(strategy_preview_);
 
     place_strategy_btn_ = new QPushButton(tr("PLACE STRATEGY"));
     place_strategy_btn_->setObjectName("eqBuySubmit");
-    place_strategy_btn_->setFixedHeight(30);
+    place_strategy_btn_->setProperty("fincept_agent_risk", "order");
+    place_strategy_btn_->setMinimumHeight(30);
     place_strategy_btn_->setCursor(Qt::PointingHandCursor);
     connect(place_strategy_btn_, &QPushButton::clicked, this, &EquityOrderEntry::on_place_strategy);
     strat_layout->addWidget(place_strategy_btn_);
@@ -388,6 +446,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     cost_label_ = new QLabel(tr("Est: --"));
     cost_label_->setObjectName("eqOeCost");
+    cost_label_->setWordWrap(true); // a second line carries the value in the account currency
     sum_layout->addWidget(cost_label_);
 
     // Required margin (live broker only)
@@ -406,7 +465,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     brokers_btn_->setPopupMode(QToolButton::InstantPopup);
     brokers_btn_->setToolButtonStyle(Qt::ToolButtonTextOnly);
     brokers_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    brokers_btn_->setFixedHeight(24);
+    brokers_btn_->setMinimumHeight(24);
     brokers_btn_->setCursor(Qt::PointingHandCursor);
     brokers_menu_ = new QMenu(brokers_btn_);
     brokers_btn_->setMenu(brokers_menu_);
@@ -417,22 +476,34 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     auto* baskets_btn = new QToolButton;
     baskets_btn->setObjectName("eqBasketsBtn");
     baskets_btn->setText(tr("BASKETS"));
-    baskets_btn->setFixedHeight(24);
+    baskets_btn->setMinimumHeight(24);
     baskets_btn->setCursor(Qt::PointingHandCursor);
     baskets_btn->setStyleSheet(
-        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:10px;font-weight:700;"
+        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                 "padding:2px 10px;}QToolButton:hover{border-color:%4;color:%4;}")
-            .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::TEXT_TERTIARY(), colors::AMBER()));
+            .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::TEXT_SECONDARY(), colors::AMBER()));
     connect(baskets_btn, &QToolButton::clicked, this, [this]() {
         BasketOrdersDialog dlg(this);
         dlg.exec();
+        // Baskets may have been executed on any account — let the screen repaint its
+        // blotter instead of leaving it stale until the next 5-minute poll.
+        emit baskets_closed();
     });
 
-    auto* brokers_row = new QHBoxLayout;
+    brokers_row_ = new QWidget(content);
+    auto* brokers_row = new QHBoxLayout(brokers_row_);
+    brokers_row->setContentsMargins(0, 0, 0, 0);
     brokers_row->setSpacing(4);
     brokers_row->addWidget(brokers_btn_, 1);
     brokers_row->addWidget(baskets_btn);
-    form->addLayout(brokers_row);
+    form->addWidget(brokers_row_);
+
+    // Built-in paper account: what a fill means, right above the button that makes one.
+    sim_note_ = new QLabel(content);
+    sim_note_->setObjectName("eqOeSimNote");
+    sim_note_->setWordWrap(true);
+    sim_note_->hide();
+    form->addWidget(sim_note_);
 
     // Submit row: main submit + broadcast
     auto* submit_row = new QHBoxLayout;
@@ -440,25 +511,28 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     submit_btn_ = new QPushButton(tr("BUY %1").arg(current_symbol_));
     submit_btn_->setObjectName("eqBuySubmit");
-    submit_btn_->setFixedHeight(40);
+    submit_btn_->setProperty("fincept_agent_risk", "order");
+    submit_btn_->setMinimumHeight(40);
     submit_btn_->setCursor(Qt::PointingHandCursor);
     connect(submit_btn_, &QPushButton::clicked, this, &EquityOrderEntry::on_submit);
     submit_row->addWidget(submit_btn_, 3);
 
     broadcast_btn_ = new QPushButton(tr("ALL"));
     broadcast_btn_->setObjectName("eqBroadcastBtn");
-    broadcast_btn_->setFixedHeight(40);
+    broadcast_btn_->setMinimumHeight(40);
     broadcast_btn_->setCursor(Qt::PointingHandCursor);
     broadcast_btn_->setToolTip(tr("Broadcast this order to multiple accounts"));
-    broadcast_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 12px; "
+    broadcast_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: " + fincept::ui::fonts::px(-2) + "px; "
                                           "  border: 1px solid %3; border-radius: 4px; }"
-                                          "QPushButton:hover { background: %3; color: %2; }")
-                                      .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
+                                          "QPushButton:hover { background: %4; color: %2; }")
+                                      .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED(), colors::BG_HOVER()));
     connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
         // The broadcast path fires the SAME order at N accounts, so it must run
         // the SAME validation as the focused submit. It previously checked only
         // the quantity, so a blank limit price sent price=0 as a LIMIT order to
         // every selected broker (and the dialog even labelled it "MKT").
+        if (broker_blocked_)
+            return; // button is disabled; guards a stale click / accelerator
         double qty = 0.0;
         if (!validate_entry(qty))
             return;
@@ -584,13 +658,37 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         });
     }
 
+    // Currency / number-format change: re-format from the values already held (no fetch).
+    fmt::on_format_changed(this, [this]() {
+        render_price_label();
+        render_balance_label();
+        render_margin_label();
+        update_cost_preview();
+        refresh_strategy_preview();
+    });
+    // The Est line's account-currency figure waits for / follows the FX rate.
+    connect(&fincept::services::FxRateService::instance(), &fincept::services::FxRateService::rates_changed, this,
+            [this]() {
+        if (est_converts_)
+            update_cost_preview();
+    });
+
     render_price_label();
 }
 
 void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profile) {
+    set_builtin_mode(false); // a broker ticket: exchange picker, broker rows, live price rules
+    price_digits_ = -1;
+    lot_size_ = 1.0;
+    lot_known_ = false;
+    symbol_display_.clear();
     // Cache product types for order construction
     product_types_ = profile.product_types;
+    // The account (balance, margin) is in the broker's currency; prices in the
+    // selected exchange's (sync_price_currency(), once the combo is rebuilt).
+    balance_currency_ = profile.currency;
     current_currency_ = profile.currency;
+    instrument_ccy_known_ = false;
 
     // Rebuild product combo
     product_combo_->clear();
@@ -609,6 +707,7 @@ void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profil
             exchange_combo_->setCurrentIndex(idx);
         current_exchange_ = profile.default_exchange;
     }
+    sync_price_currency();
 
     // Update brokerage label
     brokerage_label_->setText(profile.brokerage_info.isEmpty() ? "" : tr("Fee: %1").arg(profile.brokerage_info));
@@ -626,9 +725,36 @@ void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profil
     last_price_ms_ = 0;
     price_is_stale_ = false;
     balance_ = 0;
+    balance_set_ = false;
+    render_balance_label(); // the previous account's balance, in its currency, must not stay up
     set_send_locked(false); // a broker switch must never leave the ticket wedged
+    sl_tp_profile_ = profile;
+    apply_sl_tp_availability();
     render_price_label();
     update_cost_preview();
+}
+
+void EquityOrderEntry::apply_sl_tp_availability() {
+    // Local paper honours SL / TP (OrderMatcher's bracket registry); a broker-routed order
+    // only where the adapter transmits them for the selected product. Anywhere else they
+    // used to be dropped silently after the confirm dialog had listed them — disable AND
+    // clear the box so a value can never ride along. (UnifiedTrading also refuses such an
+    // order at the broker boundary.)
+    const trading::ProductType product = selected_product_type();
+    const bool sl_ok = is_paper_ || trading::entry_sl_tp_honoured(sl_tp_profile_, product, true, false);
+    const bool tp_ok = is_paper_ || trading::entry_sl_tp_honoured(sl_tp_profile_, product, false, true);
+    const QString tip = tr("This broker does not accept SL/TP on the entry order for this product — place a "
+                           "separate SL order");
+    auto apply = [&tip](QLineEdit* edit, bool enabled) {
+        if (!edit)
+            return;
+        if (!enabled)
+            edit->clear();
+        edit->setEnabled(enabled);
+        edit->setToolTip(enabled ? QString() : tip);
+    };
+    apply(sl_edit_, sl_ok);
+    apply(tp_edit_, tp_ok);
 }
 
 void EquityOrderEntry::set_buy_side(bool is_buy) {
@@ -640,14 +766,17 @@ void EquityOrderEntry::set_buy_side(bool is_buy) {
     sell_tab_->style()->unpolish(sell_tab_);
     sell_tab_->style()->polish(sell_tab_);
 
-    submit_btn_->setText(is_buy ? tr("BUY %1").arg(current_symbol_) : tr("SELL %1").arg(current_symbol_));
-    submit_btn_->setAccessibleName(is_buy ? tr("Buy %1").arg(current_symbol_) : tr("Sell %1").arg(current_symbol_));
+    const QString shown =
+        symbol_display_.isEmpty() ? current_symbol_ : symbol_display_.section(QStringLiteral(" · "), 0, 0);
+    submit_btn_->setText(is_buy ? tr("BUY %1").arg(shown) : tr("SELL %1").arg(shown));
+    submit_btn_->setAccessibleName(is_buy ? tr("Buy %1").arg(shown) : tr("Sell %1").arg(shown));
     submit_btn_->setObjectName(is_buy ? "eqBuySubmit" : "eqSellSubmit");
     submit_btn_->style()->unpolish(submit_btn_);
     submit_btn_->style()->polish(submit_btn_);
     // Required margin differs by side (and by order type / product / exchange, below).
     if (margin_timer_)
         margin_timer_->start();
+    update_cost_preview(); // "buying power after" applies to a BUY only
 }
 
 void EquityOrderEntry::set_order_type(int idx) {
@@ -664,10 +793,169 @@ void EquityOrderEntry::set_order_type(int idx) {
         margin_timer_->start();
 }
 
-void EquityOrderEntry::set_balance(double balance) {
+void EquityOrderEntry::set_balance(double balance, const QString& currency) {
     balance_ = balance;
-    balance_label_->setText(tr("Bal %1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
+    balance_set_ = true;
+    if (!currency.isEmpty())
+        balance_currency_ = currency;
+    render_balance_label();
     update_cost_preview();
+}
+
+void EquityOrderEntry::render_balance_label() {
+    if (!balance_label_)
+        return;
+    if (!balance_set_) {
+        balance_label_->setText(tr("Bal --"));
+        return;
+    }
+    // Empty currency (unknown) prints the amount without a unit rather than a guessed one.
+    const QString amount = fmt::money(balance_, balance_currency_);
+    balance_label_->setText(builtin_mode_ ? tr("Cash %1").arg(amount) : tr("Bal %1").arg(amount));
+}
+
+void EquityOrderEntry::render_margin_label() {
+    if (!margin_label_ || margin_label_->isHidden())
+        return;
+    // The broker quotes margin in the account's currency (unknown: no unit, never a guess).
+    margin_label_->setText(tr("Margin: %1").arg(fmt::money(margin_total_, balance_currency_)));
+}
+
+namespace {
+fmt::InstrumentFmt ticket_price_fmt(const QString& symbol, const QString& ccy, int digits) {
+    fmt::InstrumentFmt inst = fmt::instrument_for_symbol(symbol, ccy);
+    if (digits >= 0)
+        inst.decimals = digits;
+    return inst;
+}
+} // namespace
+
+QString EquityOrderEntry::fmt_px(double v) const {
+    return fmt::price(v, ticket_price_fmt(current_symbol_, current_currency_, price_digits_));
+}
+
+QString EquityOrderEntry::fmt_px_sym(double v) const {
+    return fmt::price_with_symbol(v, ticket_price_fmt(current_symbol_, current_currency_, price_digits_));
+}
+
+QString EquityOrderEntry::fmt_value(double v) const {
+    return fmt::money(fmt::to_major_units(v, current_currency_), fmt::major_currency(current_currency_));
+}
+
+void EquityOrderEntry::sync_price_currency() {
+    if (instrument_ccy_known_)
+        return; // the instrument named its own currency (an LSE line may quote in USD)
+    // Broker: an unlisted segment (MCX, CDS) is quoted in the account currency. Built-in
+    // paper: no guess — set_instrument_meta() follows with the quote's currency.
+    const QString ccy = exchange_currency(current_exchange_, builtin_mode_ ? QString() : balance_currency_);
+    if (ccy.isEmpty() || ccy == current_currency_)
+        return;
+    current_currency_ = ccy;
+    render_price_label();
+    update_cost_preview();
+}
+
+void EquityOrderEntry::set_builtin_mode(bool on, const QString& account_currency) {
+    builtin_mode_ = on;
+    if (!account_currency.isEmpty())
+        balance_currency_ = account_currency;
+    if (on) {
+        // Products of the simulator: intraday squares off at the venue's close,
+        // delivery carries overnight. No broker exchange list: the instrument's venue.
+        product_types_ = {{tr("Intraday — squared off at the close"), trading::ProductType::Intraday},
+                          {tr("Delivery — carried overnight"), trading::ProductType::Delivery}};
+        {
+            QSignalBlocker block(product_combo_);
+            product_combo_->clear();
+            for (const auto& pt : product_types_)
+                product_combo_->addItem(pt.label);
+            product_combo_->setCurrentIndex(1); // delivery: the safe default for a cash account
+        }
+        brokerage_label_->setText(tr("Simulated: 0.05% fee per fill, no slippage model."));
+        broker_id_.clear(); // never a broker margin call
+        account_id_.clear();
+        margin_label_->hide();
+        sim_note_->setText(tr("Paper account \xE2\x80\x94 fills are SIMULATED at delayed public prices "
+                              "(typically 15 min). No order reaches a broker or an exchange."));
+        balance_ = 0;
+        balance_set_ = false;
+        render_balance_label();
+        current_price_ = 0;
+        last_price_ms_ = 0;
+        price_is_stale_ = false;
+        set_send_locked(false);
+        sl_tp_profile_ = trading::BrokerProfile{};
+        apply_sl_tp_availability();
+    }
+    exchange_title_->setVisible(!on);
+    exchange_combo_->setVisible(!on);
+    brokers_row_->setVisible(!on);
+    broadcast_btn_->setVisible(!on);
+    strategy_toggle_->setVisible(!on);
+    if (on)
+        strategy_section_->setVisible(false);
+    sim_note_->setVisible(on);
+    if (!on)
+        set_price_source(false);
+    render_price_label();
+    update_cost_preview();
+}
+
+void EquityOrderEntry::set_price_source(bool delayed, int delay_min, qint64 printed_ms, const QString& tz_label,
+                                        qint64 max_age_ms) {
+    delayed_price_ = delayed;
+    delay_min_ = delay_min;
+    printed_ms_ = printed_ms;
+    printed_tz_ = tz_label;
+    delayed_max_age_ms_ = max_age_ms;
+    update_stale_state();
+    render_price_label();
+}
+
+void EquityOrderEntry::set_instrument_meta(const QString& currency, int digits, double lot_size, bool lot_known) {
+    if (!currency.isEmpty()) {
+        current_currency_ = currency;
+        instrument_ccy_known_ = true;
+    }
+    price_digits_ = digits;
+    lot_size_ = lot_size > 0.0 ? lot_size : 1.0;
+    lot_known_ = lot_known;
+    qty_edit_->setPlaceholderText(lot_known_ && lot_size_ > 1.0 ? tr("Lot of %1").arg(format_quantity(lot_size_))
+                                                                : QStringLiteral("0"));
+    render_price_label();
+    update_cost_preview();
+}
+
+void EquityOrderEntry::set_symbol_display(const QString& text) {
+    symbol_display_ = text;
+    if (symbol_label_)
+        symbol_label_->setText(text.isEmpty() ? QStringLiteral("%1 · %2").arg(current_symbol_, current_exchange_) : text);
+    const QString shown = text.isEmpty() ? current_symbol_ : text.section(QStringLiteral(" · "), 0, 0);
+    submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(shown) : tr("SELL %1").arg(shown));
+}
+
+void EquityOrderEntry::set_session_line(const QString& text, bool open) {
+    if (!session_label_)
+        return;
+    session_label_->setText(text);
+    session_label_->setVisible(!text.isEmpty());
+    const QString sheet = QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;")
+                              .arg(open ? colors::TEXT_SECONDARY() : colors::WARNING());
+    if (session_label_->styleSheet() != sheet)
+        session_label_->setStyleSheet(sheet);
+}
+
+void EquityOrderEntry::set_trade_block(const QString& reason) {
+    if (reason == trade_block_)
+        return;
+    trade_block_ = reason;
+    set_send_locked(submit_locked_); // re-derive the send controls' enabled state
+    if (!reason.isEmpty()) {
+        status_label_->setText(reason);
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
+    } else {
+        status_label_->clear(); // the previous block reason
+    }
 }
 
 void EquityOrderEntry::set_current_price(double price) {
@@ -679,17 +967,34 @@ void EquityOrderEntry::set_current_price(double price) {
     update_cost_preview();
 }
 
+void EquityOrderEntry::apply_mode_tone() {
+    mode_label_->setText(is_paper_ ? tr("\xE2\x97\x8B PAPER \xC2\xB7 SIMULATED") : tr("\xE2\x97\x8F LIVE \xC2\xB7 REAL ORDERS"));
+    mode_label_->setToolTip(is_paper_ ? tr("Paper: every fill is simulated, nothing reaches a broker")
+                                      : tr("LIVE: orders from this ticket reach the broker"));
+    const QString tone = is_paper_ ? QStringLiteral("paper") : QStringLiteral("live");
+    if (tone == mode_tone_)
+        return;
+    mode_tone_ = tone;
+    for (QWidget* w : {static_cast<QWidget*>(mode_label_), static_cast<QWidget*>(mode_rule_)}) {
+        w->setProperty("mode", tone);
+        w->style()->unpolish(w);
+        w->style()->polish(w);
+    }
+}
+
 void EquityOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
-    mode_label_->setText(is_paper ? tr("PAPER") : tr("LIVE"));
-    mode_label_->setStyleSheet(QString("color: %1;").arg(is_paper ? colors::POSITIVE() : colors::NEGATIVE()));
+    apply_mode_tone();
     if (is_paper)
         margin_label_->hide();
+    apply_sl_tp_availability(); // SL/TP availability depends on paper vs broker routing
 }
 
 void EquityOrderEntry::set_symbol(const QString& symbol) {
     const bool changed = (symbol != current_symbol_);
     current_symbol_ = symbol;
+    if (changed)
+        symbol_display_.clear(); // the caller sets the new symbol's label next
     submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(symbol) : tr("SELL %1").arg(symbol));
     submit_btn_->setAccessibleName(is_buy_side_ ? tr("Buy %1").arg(symbol) : tr("Sell %1").arg(symbol));
     if (symbol_label_)
@@ -701,6 +1006,12 @@ void EquityOrderEntry::set_symbol(const QString& symbol) {
         current_price_ = 0.0;
         last_price_ms_ = 0;
         price_is_stale_ = false;
+        // ... and so does its currency: the venue's until the instrument names its own
+        // (built-in paper: unknown until set_instrument_meta()).
+        instrument_ccy_known_ = false;
+        if (builtin_mode_)
+            current_currency_.clear();
+        sync_price_currency();
         render_price_label();
         update_cost_preview();
         // Same for the broker margin: it was quoted for the previous symbol.
@@ -715,6 +1026,7 @@ void EquityOrderEntry::set_exchange(const QString& exchange) {
     current_exchange_ = exchange;
     if (symbol_label_)
         symbol_label_->setText(QStringLiteral("%1 · %2").arg(current_symbol_, exchange));
+    sync_price_currency();
     for (int i = 0; i < exchange_combo_->count(); ++i) {
         if (exchange_combo_->itemText(i) == exchange) {
             exchange_combo_->setCurrentIndex(i);
@@ -753,6 +1065,11 @@ bool EquityOrderEntry::validate_entry(double& qty_out) {
         return fail(tr("Quantity is not a number (use plain digits, no separators)"));
     if (qty <= 0.0)
         return fail(tr("Enter a valid quantity"));
+    if (lot_known_ && lot_size_ > 1.0) {
+        const double lots = qty / lot_size_;
+        if (std::fabs(lots - std::round(lots)) > 1e-9)
+            return fail(tr("This market trades in lots of %1 — enter a multiple of %1").arg(format_quantity(lot_size_)));
+    }
     qty_out = qty;
 
     // Validate price/trigger for the order types that require them. Without this
@@ -802,7 +1119,8 @@ trading::UnifiedOrder EquityOrderEntry::build_order() const {
 
     trading::UnifiedOrder order;
     order.symbol = current_symbol_;
-    order.exchange = exchange_combo_->currentText();
+    // Built-in paper: the instrument's own venue (no broker exchange picker).
+    order.exchange = builtin_mode_ ? current_exchange_ : exchange_combo_->currentText();
     order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
     order.order_type = otype;
     order.quantity = qty_edit_->text().trimmed().toDouble();
@@ -820,12 +1138,15 @@ trading::UnifiedOrder EquityOrderEntry::build_order() const {
 
 void EquityOrderEntry::set_send_locked(bool locked) {
     submit_locked_ = locked;
+    // A blocking broker banner (or an instrument the account cannot trade) keeps the
+    // controls off even when a result arrives.
+    const bool enabled = !locked && !broker_blocked_ && trade_block_.isEmpty();
     if (submit_btn_)
-        submit_btn_->setEnabled(!locked);
+        submit_btn_->setEnabled(enabled);
     if (broadcast_btn_)
-        broadcast_btn_->setEnabled(!locked);
+        broadcast_btn_->setEnabled(enabled);
     if (place_strategy_btn_)
-        place_strategy_btn_->setEnabled(!locked);
+        place_strategy_btn_->setEnabled(enabled);
     if (!submit_failsafe_)
         return;
     if (locked)
@@ -842,6 +1163,16 @@ void EquityOrderEntry::on_submit() {
     // never wedge.
     if (submit_locked_)
         return;
+    if (broker_blocked_) {
+        status_label_->setText(notice_title_ ? notice_title_->text() : tr("Orders need a broker account"));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+    if (!trade_block_.isEmpty()) {
+        status_label_->setText(trade_block_);
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
+        return;
+    }
 
     double qty = 0.0;
     if (!validate_entry(qty))
@@ -900,7 +1231,7 @@ void EquityOrderEntry::rebuild_brokers_menu() {
 
         auto* cb = new QCheckBox(text, brokers_menu_);
         cb->setChecked(broadcast_ids_.contains(account.account_id));
-        cb->setStyleSheet("QCheckBox{padding:4px 10px;font-size:11px;}");
+        cb->setStyleSheet("QCheckBox{padding:4px 10px;font-size:" + fincept::ui::fonts::px(-3) + "px;}");
         const QString id = account.account_id;
         connect(cb, &QCheckBox::toggled, this, [this, id](bool on) {
             if (on)
@@ -932,16 +1263,20 @@ void EquityOrderEntry::update_brokers_btn() {
                                     : tr("BUY/SELL will fire this order on %1 account(s)").arg(n));
     // Amber accent when armed so a multi-broker submit is never a surprise.
     brokers_btn_->setStyleSheet(
-        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:10px;font-weight:700;"
+        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;"
                 "padding:2px 8px;}QToolButton::menu-indicator{image:none;}")
             .arg(colors::BG_RAISED(), n == 0 ? colors::BORDER_MED() : colors::AMBER(),
-                 n == 0 ? colors::TEXT_TERTIARY() : colors::AMBER()));
+                 n == 0 ? colors::TEXT_SECONDARY() : colors::AMBER()));
 }
 
 void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
     // A placement outcome (or a cancellation) is the signal that the in-flight
     // order is resolved — release the send lock here rather than on a timer.
     set_send_locked(false);
+    show_status_message(msg, success);
+}
+
+void EquityOrderEntry::show_status_message(const QString& msg, bool success) {
     status_label_->setText(msg);
     status_label_->setStyleSheet(QString("color: %1;").arg(success ? colors::POSITIVE() : colors::NEGATIVE()));
     // Clear only if THIS message is still showing: an older result's timer must not wipe a
@@ -952,6 +1287,23 @@ void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
     });
 }
 
+QString EquityOrderEntry::current_exchange() const {
+    if (builtin_mode_)
+        return current_exchange_;
+    return exchange_combo_ ? exchange_combo_->currentText() : current_exchange_;
+}
+
+void EquityOrderEntry::set_account_id(const QString& account_id) {
+    if (account_id == account_id_)
+        return;
+    account_id_ = account_id;
+    // A margin figure quoted for the previous account must not stay on screen.
+    if (margin_label_)
+        margin_label_->hide();
+    if (margin_timer_)
+        margin_timer_->start();
+}
+
 void EquityOrderEntry::set_limit_price(double price) {
     if (!price_edit_ || price <= 0.0)
         return;
@@ -959,10 +1311,14 @@ void EquityOrderEntry::set_limit_price(double price) {
     // disabled and the value would be both invisible and unused.
     if (active_type_ != 1 && active_type_ != 3)
         set_order_type(1); // LMT
-    price_edit_->setText(QString::number(price, 'f', 2));
+    // Plain C-locale digits (the box parses back with toDouble), in the instrument's
+    // price decimals: a 0.0345 or 117.705p level is no longer cut to 2 decimals.
+    price_edit_->setText(
+        QString::number(price, 'f', fmt::price_decimals(price, ticket_price_fmt(current_symbol_, current_currency_,
+                                                                                 price_digits_))));
     update_cost_preview();
     if (status_label_) {
-        status_label_->setText(tr("Limit price %1 taken from market depth").arg(price, 0, 'f', 2));
+        status_label_->setText(tr("Limit price %1 taken from market depth").arg(fmt_px_sym(price)));
         status_label_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
     }
 }
@@ -972,6 +1328,40 @@ void EquityOrderEntry::focus_quantity() {
         return;
     qty_edit_->setFocus(Qt::ShortcutFocusReason);
     qty_edit_->selectAll();
+}
+
+void EquityOrderEntry::focus_side(bool is_buy) {
+    if (buy_tab_ && sell_tab_ && is_buy != is_buy_side_)
+        set_buy_side(is_buy);
+    focus_quantity();
+}
+
+void EquityOrderEntry::set_broker_notice(const QString& title, const QString& detail, bool blocking) {
+    if (!notice_box_)
+        return;
+    const bool show = !title.isEmpty();
+    const bool block = show && blocking;
+    if (show && (notice_box_->isHidden() || block != notice_blocking_style_)) {
+        // Blocking = nothing can be sent (red accent); informational = amber.
+        const QString accent = block ? QString(colors::NEGATIVE()) : QString(colors::WARNING());
+        notice_box_->setStyleSheet(
+            QString("QFrame#eqOeNotice{background:%1;border:1px solid %2;border-left:3px solid %2;"
+                    "border-radius:3px;}")
+                .arg(colors::BG_BASE(), accent));
+        notice_title_->setStyleSheet(QString("background:transparent;border:none;color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;"
+                                             "font-weight:700;letter-spacing:0.5px;")
+                                         .arg(accent));
+        notice_blocking_style_ = block;
+    }
+    notice_title_->setText(title);
+    notice_detail_->setText(detail);
+    notice_detail_->setVisible(!detail.isEmpty());
+    notice_box_->setVisible(show);
+
+    if (block != broker_blocked_) {
+        broker_blocked_ = block;
+        set_send_locked(submit_locked_); // re-derive the send controls' enabled state
+    }
 }
 
 void EquityOrderEntry::showEvent(QShowEvent* event) {
@@ -993,13 +1383,26 @@ void EquityOrderEntry::render_price_label() {
     if (!market_price_label_)
         return;
     if (current_price_ <= 0.0) {
-        market_price_label_->setText(tr("LTP --"));
+        market_price_label_->setText(delayed_price_ ? tr("LTP -- (waiting for a delayed quote)") : tr("LTP --"));
         return;
     }
-    const QString sym = currency_symbol(current_currency_);
-    market_price_label_->setText(price_is_stale_
-                                     ? tr("LTP %1%2  \xe2\x9a\xa0 STALE").arg(sym).arg(current_price_, 0, 'f', 2)
-                                     : tr("LTP %1%2").arg(sym).arg(current_price_, 0, 'f', 2));
+    if (delayed_price_) {
+        // A delayed public price: say so on the number itself, with when it printed.
+        QString when;
+        if (printed_ms_ > 0)
+            when = QDateTime::fromMSecsSinceEpoch(printed_ms_).toString(QStringLiteral("HH:mm"));
+        const QString delay = delay_min_ > 0 ? tr("DELAYED %1m").arg(delay_min_) : tr("DELAYED");
+        QString text = tr("LTP %1 \xC2\xB7 %2").arg(fmt_px_sym(current_price_), delay);
+        if (!when.isEmpty())
+            text += QStringLiteral(" \xC2\xB7 ") + when;
+        if (price_is_stale_)
+            text += tr("  \xe2\x9a\xa0 NOT UPDATING");
+        market_price_label_->setText(text);
+        return;
+    }
+    // In the instrument's own currency and decimals ("$351.71", "117.70p", "¥2,845").
+    const QString px = fmt_px_sym(current_price_);
+    market_price_label_->setText(price_is_stale_ ? tr("LTP %1  \xe2\x9a\xa0 STALE").arg(px) : tr("LTP %1").arg(px));
 }
 
 // Owns the stale flag AND its styling; the stylesheet is only reparsed on the
@@ -1007,20 +1410,27 @@ void EquityOrderEntry::render_price_label() {
 void EquityOrderEntry::update_stale_state() {
     if (!market_price_label_)
         return;
+    // A delayed public quote refreshes about every 30 s; judge it on that cadence.
+    const qint64 limit = delayed_price_ && delayed_max_age_ms_ > 0 ? delayed_max_age_ms_ : kStaleQuoteMs;
     const bool stale = current_price_ > 0.0 && last_price_ms_ > 0 &&
-                       (QDateTime::currentMSecsSinceEpoch() - last_price_ms_) > kStaleQuoteMs;
+                       (QDateTime::currentMSecsSinceEpoch() - last_price_ms_) > limit;
     if (stale == price_is_stale_)
         return; // no churn on the common path
     price_is_stale_ = stale;
     if (stale) {
         market_price_label_->setStyleSheet(QString("color: %1; font-weight:700;").arg(colors::WARNING()));
         market_price_label_->setToolTip(
-            tr("This price has not updated for over %1s — the feed may be down or the market closed. "
-               "Do not treat it as the live price.")
-                .arg(kStaleQuoteMs / 1000));
+            delayed_price_
+                ? tr("No delayed quote has arrived for over %1 min — the public price feed is not updating. MARKET "
+                     "orders are refused until it does.")
+                      .arg(limit / 60000)
+                : tr("This price has not updated for over %1s — the feed may be down or the market closed. "
+                     "Do not treat it as the live price.")
+                      .arg(kStaleQuoteMs / 1000));
     } else {
         market_price_label_->setStyleSheet(QString()); // back to the global sheet
-        market_price_label_->setToolTip(tr("Last traded price"));
+        market_price_label_->setToolTip(delayed_price_ ? tr("Last traded price — delayed public data, not live")
+                                                       : tr("Last traded price"));
     }
     render_price_label();
 }
@@ -1033,11 +1443,53 @@ void EquityOrderEntry::update_cost_preview() {
         if (limit_p > 0)
             price = limit_p;
     }
-    const QString sym = currency_symbol(current_currency_);
-    if (qty > 0 && price > 0)
-        cost_label_->setText(tr("Est: %1%2").arg(sym).arg(qty * price, 0, 'f', 2));
-    else
+    est_converts_ = false;
+    if (!(qty > 0 && price > 0)) {
         cost_label_->setText(tr("Est: --"));
+        cost_label_->setToolTip(QString());
+        return;
+    }
+    // Order value in the price currency, major unit (100 x 117.70p -> £117.70).
+    const double value = qty * price;
+    QString text = tr("Est: %1").arg(fmt_value(value));
+    QString tip;
+    double value_in_account = NAN; // the order value in the account currency, when known
+    // The account (balance, margin, paper cash) is in another currency: show the value
+    // there too, converted at the current rate with the rate and its time. No rate ->
+    // "—", never 1:1.
+    if (!balance_currency_.isEmpty() && !current_currency_.isEmpty() &&
+        fmt::major_currency(current_currency_) != fmt::major_currency(balance_currency_)) {
+        est_converts_ = true;
+        const fmt::ConvertedMoney c = fx::convert_for_display(value, current_currency_, balance_currency_);
+        if (c.ok()) {
+            value_in_account = c.amount;
+            const QString note = fmt::fx_note(c);
+            text += QStringLiteral("\n") + tr("In %1: \xe2\x89\x88 %2").arg(fmt::major_currency(balance_currency_),
+                                                                            fmt::money(c.amount, c.currency));
+            if (!note.isEmpty())
+                text += QStringLiteral(" (%1)").arg(note);
+        } else {
+            text += QStringLiteral("\n") + tr("In %1: %2 (no %3\xe2\x86\x92%1 rate yet)")
+                                               .arg(fmt::major_currency(balance_currency_), fmt::placeholder(),
+                                                    fmt::major_currency(current_currency_));
+        }
+        tip = builtin_mode_ ? tr("Cash is booked in %1 at the FX rate of the fill.").arg(fmt::major_currency(balance_currency_))
+                            : tr("At the current FX rate; the broker converts at its own rate.");
+    } else {
+        // Same currency. Either currency unknown: no "after" line (never assume 1:1).
+        if (!balance_currency_.isEmpty() && !current_currency_.isEmpty())
+            value_in_account = fmt::to_major_units(value, current_currency_);
+    }
+    // Buying power after a BUY, in the account currency. A shortfall is said inline
+    // (the broker / paper engine still decides; nothing is blocked here).
+    if (is_buy_side_ && balance_set_ && std::isfinite(value_in_account) && !balance_currency_.isEmpty()) {
+        const double after = balance_ - value_in_account;
+        text += QStringLiteral("\n") +
+                (after >= 0.0 ? tr("Buying power after: %1").arg(fmt::money(after, balance_currency_))
+                              : tr("\xE2\x9A\xA0 Exceeds buying power by %1").arg(fmt::money(-after, balance_currency_)));
+    }
+    cost_label_->setText(text);
+    cost_label_->setToolTip(tip);
 }
 
 void EquityOrderEntry::set_broker_id(const QString& broker_id) {
@@ -1046,7 +1498,7 @@ void EquityOrderEntry::set_broker_id(const QString& broker_id) {
 
 void EquityOrderEntry::fetch_margin_async() {
     // Only fetch for live mode with a real broker
-    if (is_paper_ || broker_id_.isEmpty())
+    if (is_paper_ || broker_id_.isEmpty() || account_id_.isEmpty())
         return;
 
     const double qty = qty_edit_->text().toDouble();
@@ -1072,17 +1524,22 @@ void EquityOrderEntry::fetch_margin_async() {
     order.product_type = selected_product_type();
 
     const QString bid = broker_id_;
+    const QString acct_id = account_id_; // by value: the focused account may change mid-flight
     QPointer<EquityOrderEntry> self = this;
 
-    (void)QtConcurrent::run([self, bid, order]() {
+    (void)QtConcurrent::run([self, bid, acct_id, order]() {
         auto* broker = trading::BrokerRegistry::instance().get(bid);
         if (!broker) {
             if (self)
                 self->margin_fetching_ = false;
             return;
         }
-        auto creds = broker->load_credentials();
-        if (creds.api_key.isEmpty()) {
+        // The FOCUSED account's credentials ("account.<id>.*", as OrderConfirmDialog
+        // uses). IBroker::load_credentials() reads the legacy per-broker "broker.<id>.*"
+        // keys, which the multi-account app never writes — so the margin line never
+        // appeared for an ACCOUNTS-created account, or showed another login's margin.
+        auto creds = trading::AccountManager::instance().load_credentials(acct_id);
+        if (creds.api_key.isEmpty() || creds.broker_id != bid) {
             if (self)
                 self->margin_fetching_ = false;
             return;
@@ -1094,15 +1551,16 @@ void EquityOrderEntry::fetch_margin_async() {
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, result, order]() {
+            [self, result, order, acct_id]() {
                 if (!self)
                     return;
                 self->margin_fetching_ = false;
-                // The ticket may have changed while the broker call was in flight (symbol,
-                // side, qty, price...). That margin belongs to the OLD ticket — showing it
-                // would quote the wrong requirement, so drop it and fetch for the current one.
+                // The ticket may have changed while the broker call was in flight (account,
+                // symbol, side, qty, price...). That margin belongs to the OLD ticket — showing
+                // it would quote the wrong requirement, so drop it and fetch for the current one.
                 const bool inputs_changed =
-                    self->current_symbol_ != order.symbol || self->exchange_combo_->currentText() != order.exchange ||
+                    self->account_id_ != acct_id || self->current_symbol_ != order.symbol ||
+                    self->exchange_combo_->currentText() != order.exchange ||
                     (self->is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell) != order.side ||
                     self->selected_order_type() != order.order_type ||
                     self->selected_product_type() != order.product_type ||
@@ -1116,10 +1574,10 @@ void EquityOrderEntry::fetch_margin_async() {
                 }
                 if (result.success && result.data) {
                     const auto& m = *result.data;
-                    const QString sym = currency_symbol(self->current_currency_);
-                    self->margin_label_->setText(self->tr("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
-                    self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER()));
+                    self->margin_total_ = m.total; // account currency (BrokerMargin)
+                    self->margin_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px;").arg(colors::AMBER()));
                     self->margin_label_->show();
+                    self->render_margin_label();
                 } else {
                     self->margin_label_->hide();
                 }
@@ -1136,9 +1594,13 @@ bool EquityOrderEntry::build_strategy(trading::OptionsStrategy& out) const {
     const QString underlying = current_symbol_;
     const QString expiry = strat_expiry_edit_->text().trimmed();
     const double atm = strat_strike_edit_->text().toDouble();
-    double lot = strat_lot_edit_->text().toDouble();
-    if (lot <= 0)
-        lot = 1;
+    // LOTS per leg: a whole number >= 1. A blank / garbage / fractional entry is refused
+    // rather than silently becoming 1 lot (to_basket_order multiplies it by the
+    // contract's lot size to get the exchange quantity).
+    bool lot_ok = false;
+    const double lot = strat_lot_edit_->text().trimmed().toDouble(&lot_ok);
+    if (!lot_ok || !std::isfinite(lot) || lot < 1.0 || std::floor(lot) != lot)
+        return false;
     const double width = strat_width_edit_->text().toDouble();
 
     if (expiry.isEmpty() || atm <= 0)
@@ -1191,32 +1653,58 @@ void EquityOrderEntry::refresh_strategy_preview() {
 
     trading::OptionsStrategy strat;
     if (!build_strategy(strat)) {
-        strategy_preview_->setText(tr("Enter expiry, ATM strike (and width where required)."));
+        strategy_preview_->setText(
+            tr("Enter expiry, ATM strike, a whole number of lots (and width where required)."));
         return;
     }
+
+    // Resolve the legs exactly as PLACE STRATEGY will, so the preview shows the real
+    // contracts and the quantity that will be sent (lots × the contract's lot size).
+    trading::BasketOrderRequest basket;
+    QString build_error;
+    const bool resolved = trading::OptionsStrategyBuilder::to_basket_order(strat, selected_product_type(), broker_id_,
+                                                                          basket, build_error);
+    const double lots = strat.legs.isEmpty() ? 0.0 : strat.legs.first().quantity;
+    double contract_lot = 0.0; // contract multiplier, known once the legs resolve
+    if (resolved && !basket.orders.isEmpty() && lots > 0.0)
+        contract_lot = basket.orders.first().quantity / lots;
 
     QStringList lines;
     if (!strat.name.isEmpty())
         lines << strat.name;
-    for (const auto& leg : strat.legs) {
-        // SIDE qty SYMBOL @strike type
-        lines << QString("%1 %2 %3 @%4 %5")
-                     .arg(QString(trading::order_side_str(leg.side)).toUpper())
-                     .arg(leg.quantity, 0, 'f', 0)
-                     .arg(leg.symbol)
-                     .arg(leg.strike, 0, 'f', 0)
-                     .arg(leg.option_type);
+    if (resolved) {
+        // SIDE qty CONTRACT · EXCHANGE (in placement order: SELL legs first)
+        for (const auto& o : basket.orders)
+            lines << QString("%1 %2 %3 · %4")
+                         .arg(QString(trading::order_side_str(o.side)).toUpper(), format_quantity(o.quantity),
+                              o.symbol, o.exchange);
+        if (contract_lot > 0.0)
+            lines << tr("%1 lot(s) × %2 per leg").arg(format_quantity(lots), format_quantity(contract_lot));
+    } else {
+        for (const auto& leg : strat.legs) {
+            // SIDE lots SYMBOL @strike type
+            lines << tr("%1 %2 lot(s) %3 @%4 %5")
+                         .arg(QString(trading::order_side_str(leg.side)).toUpper())
+                         .arg(leg.quantity, 0, 'f', 0)
+                         .arg(leg.symbol)
+                         .arg(leg.strike, 0, 'f', 0)
+                         .arg(leg.option_type);
+        }
+        lines << tr("Quantity unknown — %1").arg(build_error);
     }
 
     QStringList metrics;
-    if (strat.max_profit != 0.0)
-        metrics << QString("Max P: %1").arg(strat.max_profit, 0, 'f', 2);
+    // max_profit from the builder is the gross strike spread × LOTS; only shown once the
+    // contract lot size is known, as spread × lots × lot size.
+    // Max P / Max L are amounts, breakevens are underlying prices — all in the ticket's price currency.
+    if (strat.max_profit != 0.0 && contract_lot > 0.0)
+        metrics << tr("Max P: %1").arg(fmt_value(strat.max_profit * contract_lot));
     if (strat.max_loss != 0.0)
-        metrics << QString("Max L: %1").arg(strat.max_loss, 0, 'f', 2);
+        metrics << tr("Max L: %1").arg(fmt_value(strat.max_loss));
     if (strat.breakeven_lower != 0.0)
-        metrics << QString("BE-: %1").arg(strat.breakeven_lower, 0, 'f', 2);
+        metrics << tr("BE-: %1").arg(fmt_px_sym(strat.breakeven_lower));
     if (strat.breakeven_upper != 0.0)
-        metrics << QString("BE+: %1").arg(strat.breakeven_upper, 0, 'f', 2);
+        metrics << tr("BE+: %1").arg(fmt_px_sym(strat.breakeven_upper));
     if (!metrics.isEmpty())
         lines << metrics.join("  ");
 
@@ -1224,11 +1712,11 @@ void EquityOrderEntry::refresh_strategy_preview() {
 }
 
 void EquityOrderEntry::on_place_strategy() {
-    if (submit_locked_)
-        return; // a placement is already in flight
+    if (submit_locked_ || broker_blocked_)
+        return; // a placement is already in flight / no broker to send to
     trading::OptionsStrategy strat;
     if (!build_strategy(strat)) {
-        status_label_->setText(tr("Select a strategy and enter valid expiry / strike / width"));
+        status_label_->setText(tr("Select a strategy and enter valid expiry / strike / lots / width"));
         status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -1258,9 +1746,9 @@ void EquityOrderEntry::changeEvent(QEvent* event) {
 
 void EquityOrderEntry::retranslateUi() {
     if (title_label_)
-        title_label_->setText(tr("ORDER ENTRY"));
+        title_label_->setText(tr("ORDER TICKET")); // the panel header shows titles upper case
     if (mode_label_)
-        mode_label_->setText(is_paper_ ? tr("PAPER") : tr("LIVE"));
+        apply_mode_tone();
 
     // Side tabs + submit button (reflect current side + symbol)
     if (buy_tab_)
@@ -1302,7 +1790,7 @@ void EquityOrderEntry::retranslateUi() {
     if (strat_expiry_title_)
         strat_expiry_title_->setText(tr("EXPIRY (YYYY-MM-DD)"));
     if (strat_lot_title_)
-        strat_lot_title_->setText(tr("LOT SIZE"));
+        strat_lot_title_->setText(tr("LOTS"));
     if (strat_width_title_)
         strat_width_title_->setText(tr("WIDTH (strangle / condor / spreads)"));
     if (strat_legs_title_)
@@ -1319,6 +1807,11 @@ void EquityOrderEntry::retranslateUi() {
         tp_edit_->setPlaceholderText(tr("Take Profit"));
     if (strat_strike_edit_)
         strat_strike_edit_->setPlaceholderText(tr("e.g. 22500"));
+    if (strat_expiry_edit_)
+        strat_expiry_edit_->setPlaceholderText(tr("YYYY-MM-DD"));
+    if (strat_lot_edit_)
+        strat_lot_edit_->setToolTip(
+            tr("Whole number of lots per leg — the quantity sent is lots × the contract lot size"));
     if (strat_width_edit_)
         strat_width_edit_->setPlaceholderText(tr("e.g. 200"));
 

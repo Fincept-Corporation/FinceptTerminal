@@ -5,6 +5,8 @@
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolRef.h"
 #include "screens/crypto_trading/CryptoTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -48,8 +50,22 @@ inline QColor kRowEven() {
 inline QColor kRowOdd() {
     return QColor(colors::ROW_ALT());
 }
-const QColor kRowPosHint(22, 163, 74, 12);
-const QColor kRowNegHint(220, 38, 38, 12);
+// Faint wash of the gain / loss colour behind a row.
+inline QColor kRowPosHint() {
+    QColor c(colors::POSITIVE());
+    c.setAlpha(12);
+    return c;
+}
+inline QColor kRowNegHint() {
+    QColor c(colors::NEGATIVE());
+    c.setAlpha(12);
+    return c;
+}
+// Width of the fixed Chg% column: 62 px at the default font size, enough for
+// "-00.00%" in the table font (font-size px(-2)) at any size.
+int chg_column_width() {
+    return std::max(62, QFontMetrics(fonts::font(-2)).horizontalAdvance(QStringLiteral("-00.00%")) + 12);
+}
 } // namespace
 
 // ── Constructor ─────────────────────────────────────────────────────────────
@@ -63,7 +79,7 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     // Header
     auto* header_widget = new QWidget(this);
     header_widget->setObjectName("cryptoWatchlistHeader");
-    header_widget->setFixedHeight(30);
+    header_widget->setMinimumHeight(30);
     auto* header_layout = new QHBoxLayout(header_widget);
     header_layout->setContentsMargins(8, 0, 8, 0);
 
@@ -81,7 +97,7 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     filter_edit_ = new QLineEdit;
     filter_edit_->setObjectName("cryptoWatchlistSearch");
     filter_edit_->setPlaceholderText(tr("Search..."));
-    filter_edit_->setFixedHeight(24);
+    filter_edit_->setMinimumHeight(24);
     connect(filter_edit_, &QLineEdit::textChanged, this, &CryptoWatchlist::on_filter_changed);
     layout->addWidget(filter_edit_);
 
@@ -99,7 +115,7 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    table_->setColumnWidth(2, 62);
+    table_->setColumnWidth(2, chg_column_width());
     table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -107,7 +123,23 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     table_->verticalHeader()->hide();
     table_->setShowGrid(false);
     table_->setFocusPolicy(Qt::NoFocus);
-    table_->verticalHeader()->setDefaultSectionSize(22);
+    table_->verticalHeader()->setDefaultSectionSize(table_row_height(-2, 22));
+
+    // Item brushes keep the colours they were given: rebuild them in the new
+    // appearance. The row height and the CHG% width follow the font — re-fitted
+    // once the appearance has settled (geometry work inside theme_changed makes
+    // Qt lay the window out mid-restyle).
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { rebuild_table(); });
+    connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, this, [this]() {
+        table_->verticalHeader()->setDefaultSectionSize(table_row_height(-2, 22));
+        table_->setColumnWidth(2, chg_column_width());
+    });
+    // A currency / number-format change re-renders the held prices (no fetch).
+    fincept::ui::formatting::on_format_changed(this, [this]() { rebuild_table(); });
+    // Each row is priced in its own pair's quote asset (BTC/USDT in USDT, ETH/BTC in BTC).
+    if (auto* price_hdr = table_->horizontalHeaderItem(1))
+        price_hdr->setToolTip(tr("Last price, in each pair's quote asset (BTC/USDT: USDT; ETH/BTC: BTC)"));
 
     connect(table_, &QTableWidget::cellClicked, this, &CryptoWatchlist::on_cell_clicked);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -149,8 +181,11 @@ void CryptoWatchlist::retranslateUi() {
         title_label_->setText(tr("WATCHLIST"));
     if (filter_edit_)
         filter_edit_->setPlaceholderText(tr("Search..."));
-    if (table_)
+    if (table_) {
         table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Price"), tr("%")});
+        if (auto* price_hdr = table_->horizontalHeaderItem(1))
+            price_hdr->setToolTip(tr("Last price, in each pair's quote asset (BTC/USDT: USDT; ETH/BTC: BTC)"));
+    }
 }
 
 void CryptoWatchlist::set_symbols(const QStringList& symbols) {
@@ -169,6 +204,16 @@ void CryptoWatchlist::set_symbols(const QStringList& symbols) {
 
 void CryptoWatchlist::set_active_symbol(const QString& symbol) {
     active_symbol_ = symbol;
+    rebuild_table();
+}
+
+void CryptoWatchlist::set_market_notes(const QHash<QString, QString>& shown_from,
+                                       const QHash<QString, QString>& missing) {
+    {
+        QMutexLocker lock(&mutex_);
+        shown_from_ = shown_from;
+        missing_ = missing;
+    }
     rebuild_table();
 }
 
@@ -229,19 +274,25 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         if (!sym_item || !price_item || !chg_item)
             continue;
 
-        // Magnitude-scaled precision (same as the rest of the screen) — the old
-        // fixed 6 dp rendered a 0.0000085 pair as "0.000009".
-        price_item->setText(format_price_plain(e.price));
+        // In the pair's quote asset, decimals scaled to the magnitude (same as the
+        // rest of the screen) — the old fixed 6 dp rendered 0.0000085 as "0.000009".
+        // A pair shown from a related market keeps rebuild_table()'s "≈" and is
+        // priced in that market's quote asset; a pair with no market stays "n/a".
+        if (!missing_.value(e.symbol).isEmpty())
+            continue;
+        const QString shown_from = shown_from_.value(e.symbol);
+        price_item->setText((shown_from.isEmpty() ? QString() : QStringLiteral("≈")) +
+                            pair_price(e.price, shown_from.isEmpty() ? e.symbol : shown_from));
         price_item->setForeground(kColorPrimary());
 
-        chg_item->setText(QString("%1%").arg(e.change_pct, 0, 'f', 2));
+        chg_item->setText(fincept::ui::formatting::pct(e.change_pct, 2)); // signed: never colour alone
         chg_item->setForeground(e.change_pct >= 0 ? kColorPos() : kColorNeg());
 
         QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
         if (e.change_pct > 0.0)
-            bg = kRowPosHint;
+            bg = kRowPosHint();
         else if (e.change_pct < 0.0)
-            bg = kRowNegHint;
+            bg = kRowNegHint();
 
         sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber() : kColorPrimary());
         for (int c = 0; c < 3; ++c) {
@@ -384,9 +435,9 @@ void CryptoWatchlist::rebuild_table() {
         const auto& e = visible[i];
         QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
         if (e.has_data && e.change_pct > 0.0)
-            bg = kRowPosHint;
+            bg = kRowPosHint();
         else if (e.has_data && e.change_pct < 0.0)
-            bg = kRowNegHint;
+            bg = kRowNegHint();
 
         auto ensure = [&](int col, const QString& text, const QColor& fg,
                           Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -404,13 +455,30 @@ void CryptoWatchlist::rebuild_table() {
         QColor sym_color = (e.symbol == active_symbol_) ? kColorAmber() : kColorPrimary();
         ensure(0, e.symbol, sym_color);
 
-        // Price — adaptive decimal places
+        // Price — adaptive decimal places. A pair this exchange does not list
+        // exactly is either shown from a related market (marked "≈", the market
+        // named in the tooltip) or has no market at all ("n/a").
+        const QString shown_from = shown_from_.value(e.symbol);
+        const QString missing = missing_.value(e.symbol);
         QString price_str = "--";
-        if (e.has_data)
-            price_str = format_price_plain(e.price);
-        ensure(1, price_str, e.has_data ? kColorPrimary() : kColorDim(), Qt::AlignRight | Qt::AlignVCenter);
+        if (!missing.isEmpty())
+            price_str = tr("n/a");
+        else if (e.has_data)
+            price_str = (shown_from.isEmpty() ? QString() : QStringLiteral("≈")) +
+                        pair_price(e.price, shown_from.isEmpty() ? e.symbol : shown_from);
+        ensure(1, price_str, e.has_data && missing.isEmpty() ? kColorPrimary() : kColorDim(),
+               Qt::AlignRight | Qt::AlignVCenter);
+        const QString note = !missing.isEmpty()      ? missing
+                             : !shown_from.isEmpty() ? tr("Showing %1 — %2 is not listed here; orders need %1 "
+                                                          "selected explicitly")
+                                                           .arg(shown_from, e.symbol)
+                                                     : QString();
+        for (int col : {0, 1}) {
+            if (auto* it = table_->item(i, col))
+                it->setToolTip(note);
+        }
 
-        ensure(2, e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
+        ensure(2, e.has_data ? fincept::ui::formatting::pct(e.change_pct, 2) : QString("--"),
                e.has_data ? (e.change_pct >= 0.0 ? kColorPos() : kColorNeg()) : kColorDim(),
                Qt::AlignRight | Qt::AlignVCenter);
     }

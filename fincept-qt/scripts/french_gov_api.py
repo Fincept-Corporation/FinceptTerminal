@@ -74,21 +74,9 @@ def _detect_french(text: str) -> bool:
     # Consider it French if we find enough matches
     return french_matches >= 2
 
-def _translate_french_to_english(text: str) -> str:
-    """
-    Simple translation dictionary for common French terms
-
-    Args:
-        text: French text to translate
-
-    Returns:
-        English translated text
-    """
-    if not text or not isinstance(text, str):
-        return text
-
-    # Simple translation dictionary
-    translations = {
+# Word-for-word dictionary of common French terms (keys lower case). It renders single terms and
+# names ("Région", "Données") but not sentences: see _full_translation.
+_FR_EN = {
         # Geographic terms
         'région': 'region',
         'régions': 'regions',
@@ -211,13 +199,57 @@ def _translate_french_to_english(text: str) -> str:
         'degrés': 'degrees'
     }
 
+
+def _translate_french_to_english(text: str) -> str:
+    """
+    Simple translation dictionary for common French terms
+
+    Args:
+        text: French text to translate
+
+    Returns:
+        English translated text
+    """
+    if not text or not isinstance(text, str):
+        return text
+
     translated_text = text
-    for french, english in translations.items():
+    for french, english in _FR_EN.items():
         # Use word boundaries to avoid partial matches
         pattern = r'\b' + re.escape(french) + r'\b'
         translated_text = re.sub(pattern, english, translated_text, flags=re.IGNORECASE)
 
     return translated_text
+
+
+_WORD = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?")
+
+
+def _full_translation(text: str) -> Optional[str]:
+    """English for `text` only when the dictionary knows EVERY word of it (acronyms and numbers
+    pass through) and the result differs from the original; otherwise None.
+
+    A catalogue title such as "Taux de chômage par région" translated word for word came out as
+    "rate de unemployment par region" — half French, half English, and shown as the title. Such
+    text is left in French (the original is the title) and gets no English version at all."""
+    if not text or not isinstance(text, str):
+        return None
+    for word in _WORD.findall(text):
+        if word.lower() not in _FR_EN and not (len(word) >= 2 and word.isupper()):
+            return None
+    english = _translate_french_to_english(text)
+    if english[:1].islower() and text[:1].isupper():
+        english = english[0].upper() + english[1:]
+    return english if english.strip().lower() != text.strip().lower() else None
+
+
+def _with_english(record: Dict[str, Any], **texts: str) -> Dict[str, Any]:
+    """Adds "<field>_en" for each original text that has a full English translation."""
+    for field, original in texts.items():
+        english = _full_translation(original)
+        if english:
+            record[field + "_en"] = english
+    return record
 
 def _make_request(url: str, headers: Optional[Dict[str, str]] = None,
                   timeout: int = 30, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -551,14 +583,12 @@ def search_data_services(query: Optional[str] = None, page: int = 1,
                     original_title = ds.get("title", "")
                     original_desc = ds.get("description", "")
 
-                    translated_title = _translate_french_to_english(original_title)
-                    translated_desc = _translate_french_to_english(original_desc)
-
+                    # As published; "*_en" only for a full translation (see search_datasets).
                     enhanced_ds = {
                         "id": ds.get("id"),
-                        "title": translated_title,
+                        "title": original_title,
                         "original_title": original_title,
-                        "description": translated_desc,
+                        "description": original_desc,
                         "original_description": original_desc,
                         "url": ds.get("url"),
                         "owner": ds.get("owner", {}).get("name") if ds.get("owner") else None,
@@ -568,7 +598,8 @@ def search_data_services(query: Optional[str] = None, page: int = 1,
                         "followers": ds.get("followers", 0),
                         "views": ds.get("views", 0)
                     }
-                    enhanced_data.append(enhanced_ds)
+                    enhanced_data.append(_with_english(enhanced_ds, title=original_title,
+                                                       description=original_desc))
 
                 result["data"] = enhanced_data
                 result["metadata"]["pagination"] = {
@@ -623,14 +654,13 @@ def search_datasets(query: Optional[str] = None, page: int = 1,
                     original_title = dataset.get("title", "")
                     original_desc = dataset.get("description", "")
 
-                    translated_title = _translate_french_to_english(original_title)
-                    translated_desc = _translate_french_to_english(original_desc)
-
+                    # The title / description as published (French); "title_en" /
+                    # "description_en" only when a full translation exists (_full_translation).
                     enhanced_dataset = {
                         "id": dataset.get("id"),
-                        "title": translated_title,
+                        "title": original_title,
                         "original_title": original_title,
-                        "description": translated_desc,
+                        "description": original_desc,
                         "original_description": original_desc,
                         "url": dataset.get("page"),
                         "owner": dataset.get("owner", {}).get("name") if dataset.get("owner") else None,
@@ -645,7 +675,8 @@ def search_datasets(query: Optional[str] = None, page: int = 1,
                         "license": dataset.get("license"),
                         "resources_count": len(dataset.get("resources", []))
                     }
-                    enhanced_data.append(enhanced_dataset)
+                    enhanced_data.append(_with_english(enhanced_dataset, title=original_title,
+                                                       description=original_desc))
 
                 result["data"] = enhanced_data
                 result["metadata"]["pagination"] = {
@@ -895,7 +926,7 @@ def search_company(siret: Optional[str] = None, siren: Optional[str] = None,
             return {
                 "data": {},
                 "metadata": {},
-                "error": "ENTREPRISE_API_KEY environment variable is required for this endpoint"
+                "error": "This endpoint needs ENTREPRISE_API_KEY: save it in Settings > Credentials"
             }
 
         if not siret and not siren:

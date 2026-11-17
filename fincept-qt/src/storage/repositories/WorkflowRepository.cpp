@@ -8,6 +8,27 @@
 
 namespace fincept {
 
+namespace {
+/// A node's stored JSON column as an object. Damaged JSON loads as empty (the
+/// node then runs with defaults / no credentials), so it is an ERROR — with the
+/// ids only, never the column (it can hold credentials).
+QJsonObject wf_node_json(const QString& json, const QString& workflow_id, const QString& node_id,
+                         const char* column) {
+    if (json.trimmed().isEmpty())
+        return {};
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        LOG_ERROR("WorkflowRepo", logf("Workflow node JSON is invalid", {{"workflow", workflow_id},
+                                                                        {"node", node_id},
+                                                                        {"field", column},
+                                                                        {"parse_error", err.errorString()}}));
+        return {};
+    }
+    return doc.object();
+}
+} // namespace
+
 WorkflowRepository& WorkflowRepository::instance() {
     static WorkflowRepository s;
     return s;
@@ -93,7 +114,7 @@ Result<void> WorkflowRepository::save(const workflow::WorkflowDef& wf) {
     if (auto cr = db().commit(); cr.is_err())
         return cr;
 
-    LOG_INFO("WorkflowRepo",
+    LOG_DEBUG("WorkflowRepo",
              QString("Saved workflow: %1 (%2 nodes, %3 edges)").arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
     SyncOutbox::record_unique("workflow", wf.id, "upsert");
     return Result<void>::ok();
@@ -149,8 +170,8 @@ Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
         nd.type_version = nq.value(3).toInt();
         nd.x = nq.value(4).toDouble();
         nd.y = nq.value(5).toDouble();
-        nd.parameters = QJsonDocument::fromJson(nq.value(6).toString().toUtf8()).object();
-        nd.credentials = QJsonDocument::fromJson(nq.value(7).toString().toUtf8()).object();
+        nd.parameters = wf_node_json(nq.value(6).toString(), id, nd.id, "parameters");
+        nd.credentials = wf_node_json(nq.value(7).toString(), id, nd.id, "credentials");
         nd.disabled = nq.value(8).toBool();
         nd.continue_on_fail = nq.value(9).toBool();
         nd.retry_on_fail = nq.value(10).toBool();
@@ -177,7 +198,7 @@ Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
         wf.edges.append(ed);
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         "WorkflowRepo",
         QString("Loaded workflow: %1 (%2 nodes, %3 edges)").arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
     return Result<workflow::WorkflowDef>::ok(std::move(wf));

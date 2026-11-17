@@ -16,7 +16,7 @@ namespace fincept {
 ///   - Hotkey binding (KeyConfigManager — Phase 4 Track B).
 ///   - Command bar / palette parser (Phase 9).
 ///   - Help / cheat-sheet view (Phase 9).
-///   - Telemetry log (Phase 10).
+///   - Usage report: failed invocations are counted by id (UsageReporter).
 ///   - Macros + replay (post-v1).
 ///
 /// Phase 0 ships the **skeleton only**: register_action / find / match /

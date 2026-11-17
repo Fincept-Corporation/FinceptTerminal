@@ -1,6 +1,8 @@
 #pragma once
 #include "auth/AuthTypes.h"
 
+#include <QByteArray>
+#include <QMap>
 #include <QObject>
 
 #include <functional>
@@ -27,6 +29,10 @@ class AuthApi : public QObject {
     void login(const LoginRequest& req, Callback cb, const QObject* context = nullptr);
     void register_user(const RegisterRequest& req, Callback cb, const QObject* context = nullptr);
     void verify_otp(const VerifyOtpRequest& req, Callback cb, const QObject* context = nullptr);
+    /// POST /user/resend-otp {"email"} — a new signup verification code for an
+    /// account that is not verified yet. Always the same neutral success message
+    /// (also when nothing was sent: unknown / verified address, resend cooldown).
+    void resend_otp(const QString& email, Callback cb, const QObject* context = nullptr);
     void forgot_password(const ForgotPasswordRequest& req, Callback cb, const QObject* context = nullptr);
     void reset_password(const ResetPasswordRequest& req, Callback cb, const QObject* context = nullptr);
     void verify_mfa(const QString& email, const QString& otp, Callback cb, const QObject* context = nullptr);
@@ -38,7 +44,22 @@ class AuthApi : public QObject {
     // Authenticated (uses api_key stored on HttpClient)
     void logout(Callback cb, const QObject* context = nullptr);
     void session_pulse(Callback cb, const QObject* context = nullptr);
-    void get_user_profile(Callback cb, const QObject* context = nullptr);
+    /// GET /user/profile. With `if_none_match` (the ETag of an earlier answer for
+    /// the same key) an unchanged profile comes back as success with
+    /// status_code 304 and empty data — keep the cached one. Every answer carries
+    /// the response's etag and poll_interval_ms (ApiResponse).
+    void get_user_profile(Callback cb, const QObject* context = nullptr, const QString& if_none_match = {});
+
+    /// GET /user/profile with the API key ONLY (no X-Session-Token, whatever
+    /// HttpClient holds): a 401 here means the key itself is refused, never a
+    /// stale session. Used by session recovery.
+    void validate_api_key(Callback cb, const QObject* context = nullptr);
+
+    /// GET /user/session-pulse with `session_token` as X-Session-Token (instead of
+    /// whatever HttpClient holds). 200 = the token is still this account's;
+    /// 401 = it was replaced (signed in elsewhere / password reset). Used to
+    /// check a saved token at startup before putting it on HttpClient.
+    void check_session_token(const QString& session_token, Callback cb, const QObject* context = nullptr);
 
     // Subscription / payment
     void get_subscription_plans(Callback cb, const QObject* context = nullptr);
@@ -48,7 +69,7 @@ class AuthApi : public QObject {
     AuthApi() = default;
 
     void request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb,
-                 const QObject* context = nullptr);
+                 const QObject* context = nullptr, const QMap<QByteArray, QByteArray>& extra_headers = {});
 };
 
 } // namespace fincept::auth

@@ -27,7 +27,9 @@ class ExecutionResultsPanel : public QWidget {
     /// A node was launched — show it as RUNNING until its result arrives.
     void add_node_running(const QString& node_id, const QString& node_label);
     /// `node_label` is the node's display name; when empty the card falls back to a short id.
-    void add_node_result(const NodeExecutionResult& result, const QString& node_label = {});
+    /// `node_type` picks the headline numbers / layout of the rendered output.
+    void add_node_result(const NodeExecutionResult& result, const QString& node_label = {},
+                         const QString& node_type = {});
     void set_finished(const WorkflowExecutionResult& result);
 
   protected:

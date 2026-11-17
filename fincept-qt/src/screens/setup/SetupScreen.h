@@ -6,11 +6,13 @@
 // with real progress, live per-stage detail and elapsed time, the machine
 // download rate, and the Enterprise showcase in the right column.
 //
-// First run installs only the ESSENTIALS (runtime + yfinance/pandas/NumPy,
-// about a minute) and opens the terminal automatically the moment they are in.
-// The full and trading rows are shown as OPTIONAL — installed later from
-// Settings → Python Env, or on demand. The user can also skip setup entirely,
-// or move on while it finishes in the background.
+// First run installs the ESSENTIALS (runtime + yfinance/pandas/NumPy, about a
+// minute) and then asks: complete the setup now (the full analytics and trading
+// libraries, shown as OPTIONAL until then) or open the terminal with the
+// essentials and install the rest later from Settings → Python Env. The
+// terminal is never opened without the user choosing to: it opens on its own
+// only once everything the user asked for is installed. The user can also skip
+// setup entirely, or move on while an install finishes in the background.
 //
 // Internationalised: every string flows through tr(); retranslateUi() rebuilds
 // the static texts and render() the state-dependent ones.
@@ -48,10 +50,10 @@ class SetupScreen : public QWidget {
     explicit SetupScreen(QWidget* parent = nullptr);
 
   signals:
-    /// Hand off to the main window. Emitted automatically shortly after the
-    /// essentials are installed ("core ready"), by LAUNCH TERMINAL, by "Skip for
-    /// now" / "Continue without Python", and by "finish in the background".
-    /// Fires at most once.
+    /// Hand off to the main window. Emitted by LAUNCH TERMINAL / "Not now —
+    /// launch terminal", by "Skip for now" / "Continue without Python", by
+    /// "finish in the background", and automatically shortly after a run that
+    /// leaves nothing more to choose (the full set is installed). Fires at most once.
     void launch_requested();
 
   protected:
@@ -70,7 +72,7 @@ class SetupScreen : public QWidget {
         QProgressBar* bar = nullptr;
         QLabel* detail = nullptr; // elided live line; full text in the tooltip
     };
-    enum class PrimaryAction { Begin, Wait, Launch, Retry };
+    enum class PrimaryAction { Begin, Wait, Launch, Retry, InstallFull };
     enum class LinkAction { None, RetryFailed, ContinueLimited, SkipSetup, ContinueInBackground };
 
     void build_ui();
@@ -81,7 +83,7 @@ class SetupScreen : public QWidget {
     void render();
     void render_buttons(bool has_run, bool running, bool succeeded, bool core_ready, bool full_scope,
                         const QString& error);
-    /// Launch shortly after the essentials are in (or after a full success). Once.
+    /// Launch shortly after a run that installed everything. Once.
     void schedule_auto_launch();
     /// Tick timer + network meter run only while a setup run is active and the window is visible.
     void sync_activity();
@@ -108,6 +110,7 @@ class SetupScreen : public QWidget {
     fincept::ui::SpeedSparkline* sparkline_ = nullptr;
     QPlainTextEdit* error_box_ = nullptr;
     QPushButton* primary_btn_ = nullptr;
+    QPushButton* later_btn_ = nullptr; // "not now": shown only while the full setup is on offer
     QPushButton* quit_btn_ = nullptr;
     QPushButton* link_btn_ = nullptr;
     QLabel* note_lbl_ = nullptr;
@@ -120,6 +123,7 @@ class SetupScreen : public QWidget {
     LinkAction link_action_ = LinkAction::None;
     bool launched_ = false;
     bool auto_launch_scheduled_ = false;
+    bool full_chosen_ = false; // COMPLETE FULL SETUP was clicked in this window
     bool net_running_ = false;
 };
 

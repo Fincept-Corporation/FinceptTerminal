@@ -22,6 +22,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_ICICI_WS = "IciciWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_icici_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_ICICI_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_ICICI_WS, key, 1)) {
+        LOG_WARN(TAG_ICICI_WS, "ICICI WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_ICICI_WS, "ICICI WS still disconnected");
+    }
+}
+
 namespace {
 
 // Breeze stock-token exchange prefix. The same number appears in inbound ticks'
@@ -79,7 +94,7 @@ void IciciDirectWebSocket::open() {
     sio_connected_ = false;
     // Engine.IO v4 over WebSocket; auth is sent later in the SIO CONNECT packet.
     const QString url = QStringLiteral("wss://livestream.icicidirect.com/socket.io/?EIO=4&transport=websocket");
-    LOG_INFO(TAG_ICICI_WS, "Connecting to ICICI Breeze Socket.IO");
+    LOG_DEBUG(TAG_ICICI_WS, "Connecting to ICICI Breeze Socket.IO");
     ws_->connect_to(url);
     start_health_check();
 }
@@ -161,7 +176,7 @@ void IciciDirectWebSocket::send_join(const QVector<qint64>& tokens) {
         toks.append(stock_token_for(t));
     const QJsonArray event{QStringLiteral("join"), toks};
     ws_->send(QStringLiteral("42") + QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
-    LOG_INFO(TAG_ICICI_WS, QString("Subscribed %1 tokens").arg(tokens.size()));
+    LOG_DEBUG(TAG_ICICI_WS, QString("Subscribed %1 tokens").arg(tokens.size()));
 }
 
 void IciciDirectWebSocket::send_leave(const QVector<qint64>& tokens) {
@@ -179,11 +194,11 @@ void IciciDirectWebSocket::send_leave(const QVector<qint64>& tokens) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void IciciDirectWebSocket::on_ws_connected() {
-    LOG_INFO(TAG_ICICI_WS, "WebSocket transport open — awaiting Engine.IO handshake");
+    LOG_DEBUG(TAG_ICICI_WS, "WebSocket transport open — awaiting Engine.IO handshake");
 }
 
 void IciciDirectWebSocket::on_ws_disconnected() {
-    LOG_WARN(TAG_ICICI_WS, "Disconnected");
+    log_icici_stream_state(this, false);
     sio_connected_ = false;
     emit disconnected();
 }
@@ -215,8 +230,9 @@ void IciciDirectWebSocket::handle_engineio(const QString& packet) {
             const QString sio_rest = rest.mid(1);
             switch (sio_type.toLatin1()) {
                 case '0': // CONNECT ack — namespace joined.
-                    LOG_INFO(TAG_ICICI_WS, "Socket.IO connected");
+                    LOG_DEBUG(TAG_ICICI_WS, "Socket.IO connected");
                     sio_connected_ = true;
+                    log_icici_stream_state(this, true);
                     emit connected();
                     if (!subscribed_tokens_.isEmpty())
                         send_join(QVector<qint64>(subscribed_tokens_.begin(), subscribed_tokens_.end()));

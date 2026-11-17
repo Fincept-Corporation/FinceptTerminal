@@ -1,31 +1,31 @@
 """
-Fetch mark price and index price for liquidation calculations.
+Fetch the mark / index price of a contract — a one-shot wrapper over the exchange daemon's own `fetch_mark_price`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
+
 Usage: python fetch_mark_price.py <exchange_id> <symbol>
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 3:
-        output_error("Usage: fetch_mark_price.py <exchange_id> <symbol>", "INVALID_ARGS")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
 
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2]
+USAGE = "fetch_mark_price.py <exchange_id> <symbol>"
 
-    exchange = make_exchange(exchange_id)
-    exchange.options["defaultType"] = "swap"
 
+def main(argv):
+    if len(argv) < 3:
+        return D.cli_usage_error(USAGE)
     try:
-        rate = exchange.fetch_funding_rate(symbol)
-        output_success({
-            "symbol": symbol,
-            "mark_price": rate.get("markPrice"),
-            "index_price": rate.get("indexPrice"),
-            "timestamp": rate.get("timestamp"),
-        })
-    except Exception as e:
-        output_error(f"Mark price not available: {e}", "NOT_SUPPORTED")
+        args = {"symbol": argv[2]}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("fetch_mark_price", argv[1], args)[0]
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

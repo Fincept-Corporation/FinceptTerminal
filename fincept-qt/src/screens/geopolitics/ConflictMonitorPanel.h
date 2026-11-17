@@ -6,13 +6,19 @@
 #include <QEvent>
 #include <QLabel>
 #include <QPushButton>
+#include <QSet>
 #include <QTableWidget>
+#include <QVariantMap>
 #include <QVBoxLayout>
 #include <QWidget>
 
+class QStackedWidget;
+
 namespace fincept::ui {
+class AutoLoadPane;
+class EmptyState;
 class WorldMapWidget;
-}
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
@@ -25,6 +31,29 @@ class ConflictMonitorPanel : public QWidget {
     /// `fit_map` re-frames the map around the new pins; pass false for background
     /// refreshes so the user's pan/zoom survives.
     void set_events(const QVector<fincept::services::geo::NewsEvent>& events, bool fit_map = true);
+
+    /// Map camera, basemap and layers — persisted with the screen state.
+    QVariantMap map_view_state() const;
+    void restore_map_view_state(const QVariantMap& state);
+    /// Event categories hidden from the map (legend toggles). The table and the
+    /// statistics keep every event.
+    void set_hidden_categories(const QSet<QString>& categories);
+    const QSet<QString>& hidden_categories() const { return hidden_categories_; }
+    /// Why the map has no events (signed out, no credits, request failed); empty clears it.
+    void set_map_message(const QString& text);
+
+    /// The area under the map: the shared AutoLoadPane (Manual — events cost
+    /// credits) around the events table. The screen wires its start / render /
+    /// preview; the pane shows the remembered page with its "as of", the
+    /// preview of a paid load, a skeleton while loading, or the failure + RETRY.
+    fincept::ui::AutoLoadPane* events_pane() const { return events_pane_; }
+    /// Shown inside the pane's content when a loaded page has no events.
+    fincept::ui::EmptyState* no_match_state() const { return no_match_state_; }
+    bool has_events() const { return !events_.isEmpty(); }
+
+  signals:
+    /// The map view (pan / zoom / basemap) changed and settled.
+    void map_view_changed();
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -48,8 +77,14 @@ class ConflictMonitorPanel : public QWidget {
     // Map
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;
     QComboBox* map_type_combo_ = nullptr; // basemap selector in the map toolbar
+    QVector<fincept::services::geo::NewsEvent> events_; // the page on screen (map re-filters it)
+    QSet<QString> hidden_categories_;
+    QString map_message_; // set by the screen (errors); a local "nothing mapped" note otherwise
 
     QTableWidget* events_table_ = nullptr;
+    fincept::ui::AutoLoadPane* events_pane_ = nullptr;
+    QStackedWidget* table_stack_ = nullptr; // pane content: 0 table, 1 no-match state
+    fincept::ui::EmptyState* no_match_state_ = nullptr;
 
     // Overview tiles
     QLabel* stat_total_ = nullptr;

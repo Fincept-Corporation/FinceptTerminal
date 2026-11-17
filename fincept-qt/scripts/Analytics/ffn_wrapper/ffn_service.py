@@ -24,10 +24,18 @@ import pandas as pd
 import numpy as np
 
 try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(_script_dir)))
+    import fincept_json
+
+_FFN_IMPORT_ERROR = None
+try:
     import ffn
     FFN_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     FFN_AVAILABLE = False
+    _FFN_IMPORT_ERROR = f"ffn is not installed in this Python environment ({e}); it belongs to venv-numpy1"
 
 # Import local module after path fix
 try:
@@ -35,11 +43,22 @@ try:
 except ImportError as e:
     # Fallback: define minimal classes if import fails
     FFN_AVAILABLE = False
+    _FFN_IMPORT_ERROR = _FFN_IMPORT_ERROR or f"ffn analytics module failed to import ({e})"
+
+
+def _errmsg(e: Exception) -> str:
+    """A non-empty, plain error message (str() of some exceptions is empty)."""
+    text = str(e).strip()
+    return f"{type(e).__name__}: {text}" if text else f"{type(e).__name__} (invalid or empty input)"
 
 
 def parse_prices_json(prices_json: str) -> pd.DataFrame:
     """Parse JSON price data into DataFrame"""
-    data = json.loads(prices_json)
+    if prices_json is None or (isinstance(prices_json, str) and not prices_json.strip()):
+        raise ValueError("prices is required: a JSON string {date: price} or {symbol: {date: price}}")
+    data = json.loads(prices_json) if isinstance(prices_json, str) else prices_json
+    if not data:
+        raise ValueError("prices is empty")
 
     if isinstance(data, dict):
         # Could be {date: price} or {symbol: {date: price}}
@@ -133,7 +152,12 @@ def serialize_result(data: Any) -> str:
         # Return as-is for other types
         return obj
 
-    return json.dumps(convert(data), indent=2)
+    # fincept_json: one line, and NaN / +-Infinity (e.g. a Sortino or Calmar ratio of a
+    # series that never fell) become null instead of bare tokens that void the payload.
+    payload = convert(data)
+    if isinstance(payload, dict) and payload.get("success") is False and not payload.get("error"):
+        payload["error"] = "operation failed without a message"
+    return fincept_json.dumps(payload)
 
 
 # ============================================================================
@@ -153,7 +177,7 @@ def check_status() -> Dict[str, Any]:
 def calculate_performance(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate comprehensive performance statistics"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -174,13 +198,13 @@ def calculate_performance(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def calculate_drawdowns(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate drawdown analysis with details"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -216,13 +240,13 @@ def calculate_drawdowns(params: Dict[str, Any]) -> Dict[str, Any]:
             "drawdown_series": {str(k): float(v) for k, v in dd_series.tail(100).items()}
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def calculate_rolling_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate rolling performance metrics"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -249,13 +273,13 @@ def calculate_rolling_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
             "metrics": result
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def monthly_returns(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate monthly returns table"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -282,13 +306,13 @@ def monthly_returns(params: Dict[str, Any]) -> Dict[str, Any]:
             "years": list(monthly.index.astype(str))
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def rebase_prices(params: Dict[str, Any]) -> Dict[str, Any]:
     """Rebase prices to a starting value"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -308,13 +332,13 @@ def rebase_prices(params: Dict[str, Any]) -> Dict[str, Any]:
             "rebased_prices": result
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def compare_assets(params: Dict[str, Any]) -> Dict[str, Any]:
     """Compare multiple assets performance"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -348,13 +372,13 @@ def compare_assets(params: Dict[str, Any]) -> Dict[str, Any]:
             "benchmark": benchmark
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def risk_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate risk metrics"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -453,13 +477,13 @@ def risk_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
             "annual_vol": annual_vol
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate optimal portfolio weights using various methods"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -482,6 +506,7 @@ def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
         # Calculate weights based on method
         weights = None
         method_name = ""
+        fallback_reason = None
 
         if method == 'equal':
             # Equal weight
@@ -506,9 +531,10 @@ def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 method_name = "Equal Risk Contribution (ERC)"
             except Exception as e:
-                # Fallback to inverse volatility if ERC fails
+                # Fallback to inverse volatility if ERC fails -- and say so.
                 weights = ffn.calc_inv_vol_weights(returns)
                 method_name = "Inverse Volatility (ERC fallback)"
+                fallback_reason = f"ERC optimisation failed ({_errmsg(e)}); inverse-volatility weights are shown instead"
 
         elif method == 'mean_var':
             # Mean-Variance optimization (Maximum Sharpe)
@@ -521,9 +547,10 @@ def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 method_name = "Mean-Variance (Max Sharpe)"
             except Exception as e:
-                # Fallback to inverse volatility if mean-var fails
+                # Fallback to inverse volatility if mean-var fails -- and say so.
                 weights = ffn.calc_inv_vol_weights(returns)
                 method_name = "Inverse Volatility (Mean-Var fallback)"
+                fallback_reason = f"mean-variance optimisation failed ({_errmsg(e)}); inverse-volatility weights are shown instead"
 
         else:
             return {"success": False, "error": f"Unknown optimization method: {method}"}
@@ -550,23 +577,28 @@ def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
             'calmar_ratio': float(ffn.calc_calmar_ratio(portfolio_prices)) if ffn.calc_calmar_ratio(portfolio_prices) is not None else None,
         }
 
-        # Calculate individual asset contributions
+        # Euler risk decomposition on the (annualised) sample covariance:
+        #   marginal_i = (S w)_i / sigma_p,  contribution_i = w_i * (S w)_i / (w' S w)
+        # The contributions are fractions of portfolio variance and sum to 1. (The old
+        # "simplified" w_i^2 * vol_i / vol_p ignored correlations and did not sum to 1.)
         asset_contributions = {}
-        total_portfolio_vol = portfolio_returns.std() * np.sqrt(252)
+        cov_ann = returns[list(prices.columns)].cov().to_numpy(dtype=float) * 252
+        w_vec = np.asarray(weights, dtype=float)
+        port_var = float(w_vec @ cov_ann @ w_vec)
+        port_vol = float(np.sqrt(port_var)) if port_var > 0 else 0.0
+        sigma_w = cov_ann @ w_vec
 
         for i, col in enumerate(prices.columns):
             asset_return = returns[col]
-            asset_weight = weights[i]
-
-            # Marginal contribution to volatility (simplified)
+            asset_weight = w_vec[i]
             asset_vol = asset_return.std() * np.sqrt(252)
-            contribution = asset_weight * asset_vol / total_portfolio_vol if total_portfolio_vol > 0 else 0
 
             asset_contributions[col] = {
                 'weight': float(asset_weight),
                 'volatility': float(asset_vol),
                 'return': float(asset_return.mean() * 252),  # Annualized
-                'risk_contribution': float(contribution * asset_weight)
+                'marginal_risk': float(sigma_w[i] / port_vol) if port_vol > 0 else None,
+                'risk_contribution': float(asset_weight * sigma_w[i] / port_var) if port_var > 0 else None,
             }
 
         # Calculate correlation matrix
@@ -574,24 +606,29 @@ def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
         correlation_dict = {col: {str(idx): float(val) for idx, val in correlation[col].items()}
                           for col in correlation.columns}
 
-        return {
+        out = {
             "success": True,
             "method": method_name,
             "weights": weights_dict,
             "portfolio_stats": portfolio_stats,
             "asset_contributions": asset_contributions,
+            "risk_contribution_definition": "share of portfolio variance, w_i (S w)_i / (w' S w); sums to 1",
             "correlation_matrix": correlation_dict,
             "portfolio_prices": {str(k): float(v) for k, v in portfolio_prices.tail(252).items()}
         }
+        if fallback_reason:
+            out["fallback"] = True
+            out["warning"] = fallback_reason
+        return out
 
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def benchmark_comparison(params: Dict[str, Any]) -> Dict[str, Any]:
     """Compare portfolio/asset performance against a benchmark"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -726,13 +763,13 @@ def benchmark_comparison(params: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 def full_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
     """Full portfolio analysis combining all metrics"""
     if not FFN_AVAILABLE:
-        return {"success": False, "error": "FFN library not available"}
+        return {"success": False, "error": _FFN_IMPORT_ERROR or "ffn is not available"}
 
     try:
         prices = parse_prices_json(params['prices'])
@@ -842,7 +879,7 @@ def full_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _errmsg(e)}
 
 
 # ============================================================================
@@ -884,7 +921,7 @@ def main(args: list) -> str:
         return serialize_result(result)
 
     except Exception as e:
-        return serialize_result({"success": False, "error": str(e)})
+        return serialize_result({"success": False, "error": _errmsg(e)})
 
 
 if __name__ == "__main__":

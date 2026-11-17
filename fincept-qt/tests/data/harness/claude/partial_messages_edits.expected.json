@@ -1,0 +1,103 @@
+{
+  "parser": "claude",
+  "events": [
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "thinking",
+      "partial": true,
+      "ref": "msg_01A:0"
+    },
+    {
+      "kind": "thinking",
+      "ref": "msg_01A:0"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg_01A:1"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg_01A:1"
+    },
+    {
+      "kind": "text",
+      "ref": "msg_01A:1"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "toolu_01E"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "toolu_01E",
+      "error": false
+    },
+    {
+      "kind": "file_change",
+      "ref": "toolu_01E"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg_01B:0"
+    },
+    {
+      "kind": "text",
+      "ref": "msg_01B:0"
+    },
+    {
+      "kind": "tool_call",
+      "ref": "toolu_01W"
+    },
+    {
+      "kind": "tool_result",
+      "ref": "toolu_01W",
+      "error": true
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg_01C:0"
+    },
+    {
+      "kind": "text",
+      "partial": true,
+      "ref": "msg_01C:0"
+    },
+    {
+      "kind": "status"
+    },
+    {
+      "kind": "text",
+      "ref": "msg_01C:0"
+    },
+    {
+      "kind": "final"
+    },
+    {
+      "kind": "usage"
+    }
+  ],
+  "session_id": "5c1d2f0e-0000-4000-8000-00000000c1a0",
+  "input_tokens": 2130,
+  "output_tokens": 75,
+  "cached_tokens": 2000,
+  "final_text": "Done.",
+  "saw_result": true,
+  "result_is_error": false,
+  "stop_reason": "end_turn",
+  "tool_calls": 2,
+  "rate_limit_status": "allowed_warning",
+  "rate_limit_resets_at_ms": 1794945600000,
+  "file_changes": [
+    [
+      "update",
+      "/work/run/README.md"
+    ]
+  ],
+  "input": "partial_messages_edits.jsonl"
+}

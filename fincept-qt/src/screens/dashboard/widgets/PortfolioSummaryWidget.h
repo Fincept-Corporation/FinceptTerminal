@@ -1,119 +1,52 @@
 #pragma once
-#include "screens/dashboard/widgets/BaseWidget.h"
-#include "screens/portfolio/PortfolioTypes.h"
-#include "services/markets/MarketDataService.h"
+#include "screens/dashboard/widgets/PortfolioTileBase.h"
 
-#include <QGridLayout>
-#include <QHash>
-#include <QLabel>
-#include <QScrollArea>
-#include <QVBoxLayout>
+class QButtonGroup;
+class QLabel;
+class QTimer;
+
+namespace fincept::ui {
+class DataTable;
+class DonutChart;
+class KpiStrip;
+} // namespace fincept::ui
 
 namespace fincept::screens::widgets {
 
-/// Portfolio Summary Widget — reads from the v006 multi-portfolio store
-/// (`portfolios` + `portfolio_assets`) shared with the Portfolio screen, so
-/// holdings added/sold in the Portfolio tab show up here automatically. A
-/// gear icon in the title bar lets the user pick which portfolio this tile
-/// displays; the choice is persisted via the dashboard canvas's config
-/// round-trip. Live quotes still come through DataHub `market:quote:<sym>`
-/// subscriptions, one per holding, so P&L updates in real time.
-class PortfolioSummaryWidget : public BaseWidget {
+/// Portfolio summary tile — the selected portfolio as PortfolioService values
+/// it (PortfolioService::load_summary → summary_loaded): every total in the
+/// portfolio's base currency (holdings converted at spot FX by the service),
+/// value, day P&L, unrealised P&L, gainers / losers, an allocation donut by
+/// sector or by holding, and the largest holdings with weight bars. When the
+/// service could not price or convert every holding the tile says which ones
+/// the totals leave out. Config: {"portfolio_id": "<id>", "alloc": "sector"|"holding"}.
+class PortfolioSummaryWidget : public PortfolioTileBase {
     Q_OBJECT
   public:
-    explicit PortfolioSummaryWidget(QWidget* parent = nullptr);
+    explicit PortfolioSummaryWidget(const QJsonObject& cfg = {}, QWidget* parent = nullptr);
 
-    struct Holding {
-        QString symbol;
-        double shares = 0;
-        double avg_cost = 0;
-    };
-
-    // ── BaseWidget config hooks ─────────────────────────────────────────────
     QJsonObject config() const override;
     void apply_config(const QJsonObject& cfg) override;
 
   protected:
-    void on_theme_changed() override;
+    void on_portfolio_selected() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void on_theme_changed() override;
     void retranslateUi() override;
-    QDialog* make_config_dialog(QWidget* parent) override;
 
   private:
-    void apply_styles();
+    void render();
 
-    /// Resolve which portfolio to display, then load its assets. Picks the
-    /// first available portfolio when `selected_portfolio_id_` is empty or
-    /// no longer exists. Renders the empty-state when zero portfolios.
-    void load_holdings();
-
-    /// Re-subscribe to `market:quote:<sym>` for every holding. Drops old
-    /// subscriptions first — holdings set may have changed since last call.
-    void hub_resubscribe(const QVector<Holding>& holdings);
-    void hub_unsubscribe_all();
-
-    /// Rebuild quotes vector from `row_cache_` in `last_holdings_` order
-    /// and re-render.
-    void rebuild_from_cache();
-
-    void render(const QVector<Holding>& holdings, const QVector<services::QuoteData>& quotes);
-
-    /// Render the "no portfolios / no holdings" placeholder + zero out the
-    /// summary metric cards. Idempotent.
-    void render_empty(const QString& message);
-
-    /// Pull the current list of portfolios from `PortfolioRepository` and
-    /// cache it for the picker dialog. Cheap (a single SELECT).
-    void refresh_portfolio_cache();
-
-    // ── Selected portfolio ─────────────────────────────────────────────────
-    QString selected_portfolio_id_;
-    QString selected_portfolio_name_;
-    QString selected_portfolio_currency_ = QStringLiteral("USD"); // the picked portfolio's own currency
-    QVector<portfolio::Portfolio> portfolio_cache_;
-
-    // ── Summary labels ──────────────────────────────────────────────────────
-    QLabel* total_value_lbl_ = nullptr;
-    QLabel* day_pnl_lbl_ = nullptr;
-    QLabel* total_pnl_lbl_ = nullptr;
-    QLabel* num_holdings_lbl_ = nullptr;
-
-    // ── Holdings list layout ────────────────────────────────────────────────
-    QVBoxLayout* list_layout_ = nullptr;
-    /// Owner of `list_layout_` — carries the single stylesheet that styles
-    /// every holdings row via object-name selectors (P7).
-    QWidget* list_widget_ = nullptr;
-    /// "No portfolios / no holdings" message; lives in the list for the
-    /// widget's lifetime and is only shown by render_empty().
-    QLabel* empty_lbl_ = nullptr;
-
-    /// Holding rows, created on first use and refilled in place on every
-    /// render (extra rows are hidden). A delivery burst used to delete and
-    /// re-create every row widget (~6 per holding).
-    struct PsRow {
-        QWidget* row = nullptr;
-        QLabel* sym = nullptr;
-        QLabel* shares = nullptr;
-        QLabel* price = nullptr;
-        QLabel* value = nullptr;
-        QLabel* pnl = nullptr;
-    };
-    QVector<PsRow> rows_;
-    PsRow make_row(int index);
-
-    // ── Theme-tracked widgets ──────────────────────────────────────────────
-    QWidget* summary_card_ = nullptr;
-    QWidget* header_row_ = nullptr;
-    QScrollArea* scroll_area_ = nullptr;
-    QLabel* portfolio_name_lbl_ = nullptr;
-
-    // ── Cached for theme-change re-render ──────────────────────────────────
-    QVector<Holding> last_holdings_;
-    QVector<services::QuoteData> last_quotes_;
-
-    QHash<QString, services::QuoteData> row_cache_;
-    bool hub_active_ = false;
+    ui::KpiStrip* kpis_ = nullptr;
+    ui::DonutChart* donut_ = nullptr;
+    ui::DataTable* table_ = nullptr;
+    QButtonGroup* alloc_mode_ = nullptr;
+    QLabel* footer_ = nullptr;
+    QTimer* refresh_timer_ = nullptr;
+    portfolio::PortfolioSummary summary_;
+    bool have_summary_ = false;
+    bool by_holding_ = false;
 };
 
 } // namespace fincept::screens::widgets

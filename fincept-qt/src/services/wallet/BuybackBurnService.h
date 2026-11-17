@@ -42,9 +42,8 @@ class BuybackBurnService : public QObject, public fincept::datahub::Producer {
     int max_requests_per_sec() const override { return 3; }
 
   private:
-    /// Resolve the configured Fincept treasury endpoint, or empty string.
-    /// When empty, the service uses `publish_mock_*` paths instead of HTTP.
-    QString resolve_endpoint() const;
+    // The configured Fincept treasury endpoint is read in refresh(): absent → the
+    // `publish_mock_*` paths; stored but unreadable → publish_error, never mock data.
 
     /// Per-topic-family fetch handlers. Each builds a GET against
     /// `<endpoint>/<path>`, parses the JSON response, and calls

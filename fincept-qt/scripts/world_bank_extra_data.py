@@ -7,15 +7,17 @@ import sys
 import json
 import os
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('WORLD_BANK_API_KEY', '')
 BASE_URL = "https://api.worldbank.org/v2"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# The World Bank API often takes 10-20 s per uncached query and sometimes stalls for minutes:
+# no read retries (they multiplied the timeout), a bounded timeout, and the indicators of the
+# multi-indicator commands are fetched concurrently.
+session = fc.http_session()
+TIMEOUT = (8, 30)
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
@@ -25,23 +27,37 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     params["format"] = "json"
     params["per_page"] = params.get("per_page", 500)
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
         data = response.json()
-        if isinstance(data, list) and len(data) == 2:
-            return {"metadata": data[0], "data": data[1]}
-        return data
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error("World Bank API", e)}
+    except ValueError:
+        return {"error": "World Bank API returned a response that is not JSON"}
+    # Errors come back as HTTP 200 with [{"message": [{"id", "key", "value"}]}].
+    if isinstance(data, list) and data and isinstance(data[0], dict) and "message" in data[0]:
+        msg = (data[0].get("message") or [{}])[0]
+        return {"error": f"World Bank API: {msg.get('value') or msg.get('key') or 'request rejected'}"}
+    if isinstance(data, list) and len(data) == 2:
+        rows = data[1]
+        # The API sends the year as text ("2023"): a number at the source ("2023Q1" stays text).
+        for r in rows if isinstance(rows, list) else []:
+            if isinstance(r, dict):
+                r["date"] = fc.number(r.get("date"))
+        return {"metadata": data[0], "data": rows}
+    return data
+
+
+def _indicator(country: str, code: str, date: str) -> Any:
+    params = {"date": date}
+    if code.startswith("GOV_WGI_"):
+        params["source"] = 3  # Worldwide Governance Indicators
+    return _make_request(f"country/{country.upper()}/indicator/{code}", params)
 
 
 CLIMATE_INDICATORS = {
-    "co2_emissions": "EN.ATM.CO2E.PC",
-    "renewable_energy": "EG.RNW.TOTL.ZS",
+    "co2_emissions": "EN.GHG.CO2.PC.CE.AR5",
+    "renewable_energy": "EG.FEC.RNEW.ZS",
     "forest_area": "AG.LND.FRST.ZS",
     "access_clean_fuels": "EG.CFT.ACCS.ZS",
     "electricity_access": "EG.ELC.ACCS.ZS",
@@ -51,7 +67,7 @@ POVERTY_INDICATORS = {
     "poverty_headcount": "SI.POV.DDAY",
     "gini": "SI.POV.GINI",
     "poverty_gap": "SI.POV.GAPS",
-    "bottom_40_income": "SI.DST.FRST.40",
+    "bottom_20_income": "SI.DST.FRST.20",
 }
 
 GENDER_INDICATORS = {
@@ -69,13 +85,14 @@ EDUCATION_INDICATORS = {
     "govt_education_spend": "SE.XPD.TOTL.GD.ZS",
 }
 
+# Worldwide Governance Indicators (source 3); the old WDI ids (RL.EST, ...) were archived.
 GOVERNANCE_INDICATORS = {
-    "rule_of_law": "RL.EST",
-    "control_of_corruption": "CC.EST",
-    "government_effectiveness": "GE.EST",
-    "regulatory_quality": "RQ.EST",
-    "voice_accountability": "VA.EST",
-    "political_stability": "PV.EST",
+    "rule_of_law": "GOV_WGI_RL.EST",
+    "control_of_corruption": "GOV_WGI_CC.EST",
+    "government_effectiveness": "GOV_WGI_GE.EST",
+    "regulatory_quality": "GOV_WGI_RQ.EST",
+    "voice_accountability": "GOV_WGI_VA.EST",
+    "political_stability": "GOV_WGI_PV.EST",
 }
 
 HEALTH_INDICATORS = {
@@ -95,11 +112,7 @@ def get_climate_indicators(country: str = "US", indicator: str = "co2_emissions"
 
 
 def get_poverty_data(country: str = "US", year: str = "2023") -> Any:
-    results = {}
-    for name, code in POVERTY_INDICATORS.items():
-        data = _make_request(f"country/{country.upper()}/indicator/{code}", {"date": f"2000:{year}"})
-        results[name] = data
-    return results
+    return fc.parallel_map(lambda code: _indicator(country, code, f"2000:{year}"), POVERTY_INDICATORS)
 
 
 def get_gender_indicators(country: str = "US", indicator: str = "female_labor_force", year: str = "2023") -> Any:
@@ -115,11 +128,7 @@ def get_education_data(country: str = "US", indicator: str = "primary_enrollment
 
 
 def get_governance_indicators(country: str = "US", year: str = "2023") -> Any:
-    results = {}
-    for name, code in GOVERNANCE_INDICATORS.items():
-        data = _make_request(f"country/{country.upper()}/indicator/{code}", {"date": f"2000:{year}"})
-        results[name] = data
-    return results
+    return fc.parallel_map(lambda code: _indicator(country, code, f"2000:{year}"), GOVERNANCE_INDICATORS)
 
 
 def get_health_indicators(country: str = "US", indicator: str = "life_expectancy", year: str = "2023") -> Any:

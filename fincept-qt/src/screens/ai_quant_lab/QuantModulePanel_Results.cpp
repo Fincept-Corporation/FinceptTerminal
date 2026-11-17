@@ -8,16 +8,23 @@
 //
 // Part of the partial-class split of QuantModulePanel.cpp.
 
+#include "core/agent/AgentRiskMarkers.h"
 #include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
+#include "screens/ai_quant_lab/QuantModulePanel_ResultCharts.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/KpiStrip.h"
+#include "ui/widgets/StatTile.h"
 
 #include <QAreaSeries>
 #include <QChart>
@@ -34,6 +41,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLineSeries>
+#include <QLocale>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QRegularExpression>
@@ -55,13 +64,113 @@ using namespace fincept::services::quant;
 using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
+using namespace fincept::screens::quant_charts;
+
+namespace {
+
+/// BUILD FROM YAHOO / UPDATE TO TODAY results of the dataset bar (QuantModulePanel.cpp):
+/// what was written, what Yahoo was asked for, and what was skipped.
+void render_qlib_dataset_result(QVBoxLayout* out, QWidget* parent, const QString& accent, const QString& command,
+                                const QJsonObject& p) {
+    const QLocale loc;
+    auto num = [&loc](const QJsonValue& v) { return loc.toString(v.toInt()); };
+    auto note = [out, parent, &accent](const QString& text) {
+        auto* lbl = new QLabel(text, parent);
+        lbl->setWordWrap(true);
+        lbl->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        lbl->setStyleSheet(QString("color:%1; font-size:" + ui::fonts::px(-4) +
+                                   "px; padding:6px 10px; background:%2; border-left:3px solid %3;")
+                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), accent));
+        out->addWidget(lbl);
+    };
+    const QString ok_color = ui::colors::SUCCESS();
+    const QString warn_color = ui::colors::WARNING();
+
+    if (command == QLatin1String("build_dataset")) {
+        const QJsonArray skipped = p.value("skipped").toArray();
+        const QJsonArray late = p.value("late_start").toArray();
+        out->addWidget(gs_section_header(QuantModulePanel::tr("DATASET BUILT  |  %1").arg(p.value("dataset_id").toString()),
+                                         accent));
+        out->addWidget(gs_card_row(
+            {gs_make_card(QuantModulePanel::tr("RANGE"),
+                          QuantModulePanel::tr("%1 → %2").arg(p.value("calendar_start").toString(),
+                                                              p.value("calendar_end").toString()),
+                          parent),
+             gs_make_card(QuantModulePanel::tr("TRADING DAYS"), num(p.value("trading_days")), parent),
+             gs_make_card(QuantModulePanel::tr("NAMES"),
+                          QuantModulePanel::tr("%1 + %2").arg(num(p.value("members")), p.value("benchmark").toString()),
+                          parent),
+             gs_make_card(QuantModulePanel::tr("SIZE"),
+                          QuantModulePanel::tr("%1 MB").arg(p.value("size_bytes").toDouble() / 1e6, 0, 'f', 1), parent)},
+            parent));
+        out->addWidget(gs_card_row(
+            {gs_make_card(QuantModulePanel::tr("YAHOO REQUESTS"), num(p.value("requests")), parent),
+             gs_make_card(QuantModulePanel::tr("FROM CACHE"), num(p.value("from_cache")), parent),
+             gs_make_card(QuantModulePanel::tr("TIME"),
+                          QuantModulePanel::tr("%1 s").arg(p.value("seconds").toDouble(), 0, 'f', 0), parent),
+             gs_make_card(QuantModulePanel::tr("SKIPPED"), QString::number(skipped.size()), parent,
+                          skipped.isEmpty() ? ok_color : warn_color)},
+            parent));
+        if (!skipped.isEmpty()) {
+            QStringList items;
+            for (const auto& v : skipped)
+                items << QuantModulePanel::tr("%1 (%2)").arg(v.toObject().value("ticker").toString(),
+                                                            v.toObject().value("reason").toString().left(80));
+            note(QuantModulePanel::tr("Skipped: %1").arg(items.join(QStringLiteral("; "))));
+        }
+        if (!late.isEmpty()) {
+            QStringList items;
+            for (const auto& v : late)
+                items << QuantModulePanel::tr("%1 from %2").arg(v.toObject().value("ticker").toString(),
+                                                               v.toObject().value("first_day").toString());
+            note(QuantModulePanel::tr("Listed later than the start: %1").arg(items.join(QStringLiteral(", "))));
+        }
+        note(QuantModulePanel::tr("Stored in %1").arg(p.value("path").toString()));
+        return;
+    }
+
+    // update_dataset: one entry per dataset; the bar updates one at a time.
+    const QJsonObject u = p.value("updates").toArray().first().toObject();
+    const bool current = u.value("already_up_to_date").toBool();
+    const QJsonArray rescaled = u.value("rescaled").toArray();
+    out->addWidget(gs_section_header(QuantModulePanel::tr("DATASET UPDATE  |  %1").arg(u.value("dataset_id").toString()),
+                                     accent));
+    out->addWidget(gs_card_row(
+        {gs_make_card(QuantModulePanel::tr("STATUS"),
+                      current ? QuantModulePanel::tr("UP TO DATE") : QuantModulePanel::tr("UPDATED"), parent, ok_color),
+         gs_make_card(QuantModulePanel::tr("PREVIOUS END"), u.value("previous_end").toString(), parent),
+         gs_make_card(QuantModulePanel::tr("NEW END"), u.value("calendar_end").toString(), parent),
+         gs_make_card(QuantModulePanel::tr("NEW DAYS"), num(u.value("new_trading_days")), parent)},
+        parent));
+    out->addWidget(gs_card_row(
+        {gs_make_card(QuantModulePanel::tr("YAHOO REQUESTS"), num(u.value("requests")), parent),
+         gs_make_card(QuantModulePanel::tr("RE-ADJUSTED"), QString::number(rescaled.size()), parent),
+         gs_make_card(QuantModulePanel::tr("LAST SESSION"), u.value("latest_session").toString(), parent),
+         gs_make_card(QuantModulePanel::tr("TIME"),
+                      QuantModulePanel::tr("%1 s").arg(p.value("seconds").toDouble(), 0, 'f', 0), parent)},
+        parent));
+    if (!rescaled.isEmpty()) {
+        QStringList items;
+        for (const auto& v : rescaled)
+            items << QuantModulePanel::tr("%1 ×%2").arg(v.toObject().value("ticker").toString())
+                         .arg(v.toObject().value("ratio").toDouble(), 0, 'f', 5);
+        note(QuantModulePanel::tr("Adjusted history rescaled after a dividend or split since the last update: %1")
+                 .arg(items.join(QStringLiteral(", "))));
+    }
+    if (current)
+        note(QuantModulePanel::tr("Nothing to download: the dataset already ends on the last completed US session "
+                                  "(%1). Today's bar is added after the 17:00 New York close.")
+                 .arg(u.value("latest_session").toString()));
+}
+
+} // namespace
 
 void QuantModulePanel::display_result(const QJsonObject& payload) {
     clear_results();
 
     auto* header = new QLabel(tr("RESULTS"));
     header->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2; letter-spacing:1px;")
-                              .arg(module_.color.name())
+                              .arg(ui::colors::legible(module_.color))
                               .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(header);
 
@@ -96,8 +205,55 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
         t->setSortingEnabled(false);
         t->horizontalHeader()->setStretchLastSection(true);
         t->verticalHeader()->setVisible(false);
-        t->setMaximumHeight(qMin(rows * 26 + 32, 420));
+        t->setMaximumHeight(qMin(rows * row_px(26) + row_px(32), 420));
         return t;
+    };
+    // A numeric cell sorts by its value; anything else by its text.
+    auto make_cell = [&cell_text](const QJsonValue& v) -> QTableWidgetItem* {
+        if (v.isDouble())
+            return num_item(cell_text(v), v.toDouble());
+        return new QTableWidgetItem(cell_text(v));
+    };
+    // Rows of objects that carry an x (date / index / step ...) and numeric columns are a
+    // series: draw up to four numeric columns over the whole array above the table.
+    auto add_rows_chart = [this](const QJsonArray& arr, const QStringList& cols, const QString& title) {
+        static const QStringList kXKeys = {QStringLiteral("date"),  QStringLiteral("datetime"),
+                                           QStringLiteral("time"),  QStringLiteral("timestamp"),
+                                           QStringLiteral("index"), QStringLiteral("step"),
+                                           QStringLiteral("epoch"), QStringLiteral("end_index"),
+                                           QStringLiteral("period"), QStringLiteral("window")};
+        if (arr.size() < 3)
+            return;
+        QString x_key;
+        for (const auto& k : kXKeys) {
+            if (cols.contains(k)) {
+                x_key = k;
+                break;
+            }
+        }
+        if (x_key.isEmpty())
+            return;
+        const QJsonObject first = arr.first().toObject();
+        QStringList y_keys;
+        for (const auto& c : cols) {
+            if (c != x_key && first.value(c).isDouble() && y_keys.size() < 4)
+                y_keys << c;
+        }
+        if (y_keys.isEmpty())
+            return;
+        const XAxis x = qc_x_axis(arr, {x_key});
+        QcChartSpec spec;
+        spec.title = title;
+        spec.x_time = x.time;
+        spec.xs = x.xs;
+        spec.fmt = qc_fmt_auto();
+        for (const auto& k : y_keys) {
+            QcLine l;
+            l.name = k;
+            l.ys = qc_column(arr, k);
+            spec.lines.append(l);
+        }
+        results_layout_->addWidget(qc_series_chart(spec, this));
     };
     auto add_kv_table = [&](const QJsonObject& obj) {
         QStringList keys;
@@ -119,106 +275,128 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
 
     add_kv_table(payload);
 
-    for (auto it = payload.begin(); it != payload.end(); ++it) {
-        const QString title = pretty_key(it.key());
-        if (it.value().isObject()) {
-            const QJsonObject obj = it.value().toObject();
-            if (obj.isEmpty())
-                continue;
-            results_layout_->addWidget(gs_section_header(title, module_.color.name()));
-            add_kv_table(obj);
-            QStringList nested;
-            for (auto n = obj.begin(); n != obj.end(); ++n)
-                if (n.value().isObject() || n.value().isArray())
-                    nested << pretty_key(n.key());
-            if (!nested.isEmpty()) {
-                auto* note = new QLabel(tr("Nested fields (see raw JSON): %1").arg(nested.join(QStringLiteral(", "))));
-                note->setWordWrap(true);
-                results_layout_->addWidget(note);
-            }
-            continue;
-        }
-        if (!it.value().isArray())
-            continue;
-        const QJsonArray arr = it.value().toArray();
-        if (arr.isEmpty()) {
-            results_layout_->addWidget(gs_section_header(tr("%1  |  empty").arg(title), module_.color.name()));
-            continue;
-        }
-        if (arr.first().isObject()) {
-            // Column set = union of keys over the shown rows, in first-seen order.
-            QStringList cols;
-            const int shown = qMin(static_cast<int>(arr.size()), kMaxRows);
-            for (int r = 0; r < shown && cols.size() < kMaxCols; ++r) {
-                const QJsonObject row = arr.at(r).toObject();
-                for (auto c = row.begin(); c != row.end() && cols.size() < kMaxCols; ++c)
-                    if (!cols.contains(c.key()))
-                        cols << c.key();
-            }
-            const QString count = shown < arr.size() ? tr("first %1 of %2 rows").arg(shown).arg(arr.size())
-                                                     : tr("%n row(s)", "", static_cast<int>(arr.size()));
-            results_layout_->addWidget(
-                gs_section_header(QStringLiteral("%1  |  %2").arg(title, count), module_.color.name()));
-            QStringList headers;
-            for (const auto& c : cols)
-                headers << pretty_key(c);
-            auto* table = make_table(shown, headers);
-            for (int r = 0; r < shown; ++r) {
-                const QJsonObject row = arr.at(r).toObject();
-                for (int c = 0; c < cols.size(); ++c) {
-                    const QJsonValue v = row.value(cols[c]);
-                    auto* item = new QTableWidgetItem(cell_text(v));
-                    if (v.isDouble())
-                        item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    table->setItem(r, c, item);
+    // Objects and arrays, recursively (nested objects two levels deep get their own
+    // key / value section; deeper ones are listed and stay in the raw JSON).
+    std::function<void(const QJsonObject&, const QString&, int)> render_members;
+    render_members = [&](const QJsonObject& container, const QString& prefix, int depth) {
+        for (auto it = container.begin(); it != container.end(); ++it) {
+            const QString title = prefix.isEmpty() ? pretty_key(it.key()) : prefix + QStringLiteral(" › ") + pretty_key(it.key());
+            if (it.value().isObject()) {
+                const QJsonObject obj = it.value().toObject();
+                if (obj.isEmpty())
+                    continue;
+                results_layout_->addWidget(gs_section_header(title, ui::colors::legible(module_.color)));
+                add_kv_table(obj);
+                if (depth < 2) {
+                    render_members(obj, title, depth + 1);
+                    continue;
                 }
+                QStringList nested;
+                for (auto n = obj.begin(); n != obj.end(); ++n)
+                    if (n.value().isObject() || n.value().isArray())
+                        nested << pretty_key(n.key());
+                if (!nested.isEmpty()) {
+                    auto* note = new QLabel(tr("Nested fields (see raw JSON): %1").arg(nested.join(QStringLiteral(", "))));
+                    note->setWordWrap(true);
+                    results_layout_->addWidget(note);
+                }
+                continue;
             }
-            table->resizeColumnsToContents();
-            results_layout_->addWidget(table);
-            continue;
-        }
-        // Scalar array: numeric → summary statistics; otherwise a joined list.
-        bool numeric = true;
-        double mn = 0.0, mx = 0.0, sum = 0.0;
-        int n_num = 0;
-        for (const auto& v : arr) {
-            if (!v.isDouble()) {
-                numeric = false;
-                break;
+            if (!it.value().isArray())
+                continue;
+            const QJsonArray arr = it.value().toArray();
+            if (arr.isEmpty()) {
+                results_layout_->addWidget(gs_section_header(tr("%1  |  empty").arg(title), ui::colors::legible(module_.color)));
+                continue;
             }
-            const double x = v.toDouble();
-            mn = n_num == 0 ? x : qMin(mn, x);
-            mx = n_num == 0 ? x : qMax(mx, x);
-            sum += x;
-            ++n_num;
-        }
-        if (numeric && n_num > 0) {
-            results_layout_->addWidget(gs_section_header(
-                tr("%1  |  series of %2 values").arg(title).arg(n_num), module_.color.name()));
-            auto* table = make_table(1, {tr("Count"), tr("First"), tr("Last"), tr("Min"), tr("Max"), tr("Mean")});
-            const QStringList cells = {QString::number(n_num), format_val(arr.first()), format_val(arr.last()),
-                                       format_val(QJsonValue(mn)), format_val(QJsonValue(mx)),
-                                       format_val(QJsonValue(sum / n_num))};
-            for (int c = 0; c < cells.size(); ++c) {
-                auto* item = new QTableWidgetItem(cells[c]);
-                item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                table->setItem(0, c, item);
+            if (arr.first().isObject()) {
+                // Column set = union of keys over the shown rows, in first-seen order.
+                QStringList cols;
+                const int shown = qMin(static_cast<int>(arr.size()), kMaxRows);
+                for (int r = 0; r < shown && cols.size() < kMaxCols; ++r) {
+                    const QJsonObject row = arr.at(r).toObject();
+                    for (auto c = row.begin(); c != row.end() && cols.size() < kMaxCols; ++c)
+                        if (!cols.contains(c.key()))
+                            cols << c.key();
+                }
+                const QString count = shown < arr.size() ? tr("first %1 of %2 rows").arg(shown).arg(arr.size())
+                                                         : tr("%n row(s)", "", static_cast<int>(arr.size()));
+                results_layout_->addWidget(
+                    gs_section_header(QStringLiteral("%1  |  %2").arg(title, count), ui::colors::legible(module_.color)));
+                add_rows_chart(arr, cols, title);
+                QStringList headers;
+                for (const auto& c : cols)
+                    headers << pretty_key(c);
+                auto* table = make_table(shown, headers);
+                for (int r = 0; r < shown; ++r) {
+                    const QJsonObject row = arr.at(r).toObject();
+                    for (int c = 0; c < cols.size(); ++c)
+                        table->setItem(r, c, make_cell(row.value(cols[c])));
+                }
+                table->resizeColumnsToContents();
+                finish_table(table);
+                results_layout_->addWidget(table);
+                continue;
             }
-            results_layout_->addWidget(table);
-        } else {
-            QStringList parts;
-            for (int i = 0; i < arr.size() && i < kMaxRows; ++i)
-                parts << cell_text(arr.at(i));
-            results_layout_->addWidget(
-                gs_section_header(tr("%1  |  %n item(s)", "", static_cast<int>(arr.size())).arg(title),
-                                  module_.color.name()));
-            auto* list = new QLabel(parts.join(QStringLiteral(", ")) +
-                                    (arr.size() > kMaxRows ? tr(" … (+%1 more)").arg(arr.size() - kMaxRows) : QString()));
-            list->setWordWrap(true);
-            list->setTextInteractionFlags(Qt::TextSelectableByMouse);
-            results_layout_->addWidget(list);
+            // Scalar array: numeric → summary statistics; otherwise a joined list.
+            bool numeric = true;
+            double mn = 0.0, mx = 0.0, sum = 0.0;
+            int n_num = 0;
+            for (const auto& v : arr) {
+                if (!v.isDouble()) {
+                    numeric = false;
+                    break;
+                }
+                const double x = v.toDouble();
+                mn = n_num == 0 ? x : qMin(mn, x);
+                mx = n_num == 0 ? x : qMax(mx, x);
+                sum += x;
+                ++n_num;
+            }
+            if (numeric && n_num > 0) {
+                results_layout_->addWidget(gs_section_header(
+                    tr("%1  |  series of %2 values").arg(title).arg(n_num), ui::colors::legible(module_.color)));
+                // The whole series as a line (by position), with the summary row below it.
+                if (n_num >= 3) {
+                    QcChartSpec spec;
+                    spec.xs = qc_x_positions(arr.size()).xs;
+                    spec.fmt = qc_fmt_auto();
+                    spec.x_label = [](double v) {
+                        return QStringLiteral("#%1").arg(static_cast<qlonglong>(std::llround(v)));
+                    };
+                    QcLine l;
+                    l.name = title;
+                    l.ys = qc_values(arr);
+                    l.color = ui::ChartColorRole::Accent;
+                    spec.lines.append(l);
+                    results_layout_->addWidget(qc_series_chart(spec, this));
+                }
+                auto* table = make_table(1, {tr("Count"), tr("First"), tr("Last"), tr("Min"), tr("Max"), tr("Mean")});
+                const QStringList cells = {QString::number(n_num), format_val(arr.first()), format_val(arr.last()),
+                                           format_val(QJsonValue(mn)), format_val(QJsonValue(mx)),
+                                           format_val(QJsonValue(sum / n_num))};
+                for (int c = 0; c < cells.size(); ++c) {
+                    auto* item = new QTableWidgetItem(cells[c]);
+                    item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    table->setItem(0, c, item);
+                }
+                results_layout_->addWidget(table);
+            } else {
+                QStringList parts;
+                for (int i = 0; i < arr.size() && i < kMaxRows; ++i)
+                    parts << cell_text(arr.at(i));
+                results_layout_->addWidget(
+                    gs_section_header(tr("%1  |  %n item(s)", "", static_cast<int>(arr.size())).arg(title),
+                                      ui::colors::legible(module_.color)));
+                auto* list = new QLabel(parts.join(QStringLiteral(", ")) +
+                                        (arr.size() > kMaxRows ? tr(" … (+%1 more)").arg(arr.size() - kMaxRows) : QString()));
+                list->setWordWrap(true);
+                list->setTextInteractionFlags(Qt::TextSelectableByMouse);
+                results_layout_->addWidget(list);
+            }
         }
-    }
+    };
+    render_members(payload, QString(), 0);
 
     // Raw JSON — collapsed by default; for checking exact values / bug reports.
     auto* raw = new QTextEdit;
@@ -229,7 +407,7 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
     raw->hide();
     auto* raw_toggle = new QPushButton(tr("SHOW RAW JSON"));
     raw_toggle->setCursor(Qt::PointingHandCursor);
-    raw_toggle->setFixedHeight(24);
+    raw_toggle->setMinimumHeight(24);
     raw_toggle->setObjectName(QStringLiteral("quantQuietButton")); // styled by refresh_theme()
     connect(raw_toggle, &QPushButton::clicked, this, [raw, raw_toggle]() {
         raw->setVisible(!raw->isVisible());
@@ -242,13 +420,14 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
     // Export button — saves raw JSON to File Manager
     auto* export_btn = new QPushButton(tr("EXPORT RESULTS"));
     export_btn->setCursor(Qt::PointingHandCursor);
-    export_btn->setFixedHeight(28);
+    export_btn->setMinimumHeight(28);
     export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
                                       "font-size:%3px; font-family:%4; padding:0 12px; }"
-                                      "QPushButton:hover { color:%1; background:rgba(255,255,255,0.05); }")
-                                  .arg(module_.color.name(), ui::colors::BORDER_DIM())
-                                  .arg(ui::fonts::SMALL)
-                                  .arg(ui::fonts::DATA_FAMILY));
+                                      "QPushButton:hover { color:%1; background:%5; }")
+                                  .arg(ui::colors::legible(module_.color), ui::colors::BORDER_DIM())
+                                  .arg(ui::fonts::px(-1))
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::colors::overlay(0.05)));
     QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
         QString safe_name = module_.label;
@@ -268,7 +447,8 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
                 status_label_->setText(tr("Exported to File Manager: %1").arg(stored_name));
         } else {
             // A failed export used to do nothing at all.
-            LOG_WARN("AIQuantLab", "Export failed: " + f.errorString());
+            LOG_WARN("AIQuantLab", fincept::logf("Result export could not be written",
+                                                 {{"path", fincept::log_path(dest)}, {"error", f.errorString()}}));
             if (status_label_)
                 status_label_->setText(tr("Export failed: %1").arg(f.errorString()));
         }
@@ -281,44 +461,505 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
 // ── Signal handlers ──────────────────────────────────────────────────────────
 
 void QuantModulePanel::on_result(const QString& module_id, const QString& command, const QJsonObject& payload) {
+    // Untagged replies only: every view's run is tagged and answered through on_request_finished().
+    // What is left: the dataset bar (probe, BUILD, UPDATE), the RD-Agent tasks (status, monitor,
+    // results, stop / resume, log viewer, MCP) and the live events of a rolling retrain.
     if (module_id != module_.id)
         return;
+    // The dataset bar's probe (QuantModulePanel.cpp) answers on this signal too; the bar handles it.
+    if (command == QLatin1String("dataset_info") || command == QLatin1String("list_datasets"))
+        return;
+    // The saved models / pipelines behind the id combos (QuantModulePanel_AutoLoad.cpp).
+    if (apply_saved_ids(command, payload))
+        return;
 
-    // A result that carries a "warning" (trained on synthetic data, a benchmark that failed to
-    // resolve, an ensemble that is only a definition) has to say so where the user reads it --
-    // the card renderers below never looked at the key. Runs after whichever renderer handles
-    // the payload, and puts the banner above the cards. get_data renders its own warning card.
-    const auto warning_banner = qScopeGuard([this, &payload, &command]() {
-        const bool sample = sample_input_pending_;
-        sample_input_pending_ = false;
-        if (!results_layout_)
+    // BUILD FROM YAHOO / UPDATE TO TODAY from the dataset bar: what was written, as a notice over
+    // the result pane (the tab's own result stays on screen).
+    if (command == QLatin1String("build_dataset") || command == QLatin1String("update_dataset")) {
+        if (!pane_)
             return;
-        const QString warning = payload.value("warning").toString().trimmed();
-        if (!warning.isEmpty() && command != "get_data") {
-            auto* banner = gs_section_header(QString::fromUtf8("⚠ ") + warning, ui::colors::WARNING());
-            banner->setWordWrap(true);
-            results_layout_->insertWidget(0, banner);
+        if (!payload.value("success").toBool()) {
+            display_error(payload.value("error").toString(tr("The dataset command failed")));
+            return;
         }
-        // Results computed on LOAD SYNTHETIC SAMPLE data look exactly like real
-        // ones; say so above them, every time.
-        if (sample) {
-            auto* banner = gs_section_header(tr("SAMPLE INPUT — computed on generated (synthetic) data from LOAD "
-                                                "SYNTHETIC SAMPLE, not on market data. Replace the inputs with "
-                                                "your own series for a real analysis."),
-                                             ui::colors::WARNING());
-            banner->setWordWrap(true);
-            results_layout_->insertWidget(0, banner);
+        QString summary;
+        if (command == QLatin1String("build_dataset")) {
+            summary = tr("Dataset %1 built: %2 → %3, %4 names, %5 skipped.")
+                          .arg(payload.value("dataset_id").toString(), payload.value("calendar_start").toString(),
+                               payload.value("calendar_end").toString())
+                          .arg(QLocale().toString(payload.value("members").toInt()))
+                          .arg(payload.value("skipped").toArray().size());
+        } else {
+            const QJsonObject u = payload.value("updates").toArray().first().toObject();
+            summary = u.value("already_up_to_date").toBool()
+                          ? tr("Dataset %1 is up to date (last session %2).")
+                                .arg(u.value("dataset_id").toString(), u.value("latest_session").toString())
+                          : tr("Dataset %1 updated to %2 (%3 new days).")
+                                .arg(u.value("dataset_id").toString(), u.value("calendar_end").toString())
+                                .arg(QLocale().toString(u.value("new_trading_days").toInt()));
         }
-    });
-
-    // RL Trading: training finished → re-enable button, keep progress/logs visible so
-    // the user can inspect the run. The card-based renderer below paints into
-    // the bottom results pane (in addition to the bespoke log/progress widgets).
-    if (module_id == "rl_trading" && command == "train" && rl_train_button_) {
-        rl_train_button_->setEnabled(true);
-        if (rl_progress_bar_)
-            rl_progress_bar_->setValue(100);
+        pane_->set_notice(summary, ui::EmptyState::Tone::Success, tr("OK"));
+        return;
     }
+
+    if (module_id == QLatin1String("deep_agent") && command != QLatin1String("execute_task")) {
+
+        // RD-Agent branches. The RD-Agent tab has its own status strip ("Checking...", "Refreshing
+        // task list...") that the buttons set when they fire a request; nothing ever cleared it, so
+        // it read "Checking..." forever. And display_error() paints into the Deep Analysis tab's
+        // results pane, which is on the other page of the outer QTabWidget -- a failed RD-Agent call
+        // showed the user nothing. Route both to this tab.
+        auto rd_status = [this](const QString& text) {
+            status_label_->setText(text);
+            if (auto* lbl = findChild<QLabel*>(QStringLiteral("rdStatusTxt")))
+                lbl->setText(text);
+        };
+        auto rd_fail = [this, &rd_status](const QString& text) {
+            rd_status(text);
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(text);
+        };
+        // Structured RD-Agent results (task status, factors, models) go into the host under
+        // the message pane: a KPI strip and a sortable table. Returns the emptied layout.
+        auto rd_results = [this]() -> QVBoxLayout* {
+            auto* host = findChild<QWidget*>(QStringLiteral("rdResultsHost"));
+            auto* vl = host ? qobject_cast<QVBoxLayout*>(host->layout()) : nullptr;
+            if (!vl)
+                return nullptr;
+            while (vl->count() > 0) {
+                auto* item = vl->takeAt(0);
+                if (item->widget())
+                    item->widget()->deleteLater();
+                delete item;
+            }
+            host->show();
+            return vl;
+        };
+        using Tone = ui::StatTile::Tone;
+        auto rd_tile = [](ui::KpiStrip* strip, const QString& label, const QString& value, Tone tone = Tone::Neutral,
+                          const QString& sub = {}) {
+            auto* t = strip->add_tile(label);
+            t->set_value(value);
+            t->set_tone(tone);
+            if (!sub.isEmpty())
+                t->set_sub_label(sub);
+            return t;
+        };
+        auto rd_num = [](const QJsonValue& v, int dec) {
+            return v.isNull() || v.isUndefined() ? QString::fromUtf8("—") : QLocale().toString(v.toDouble(), 'f', dec);
+        };
+        // # / NAME / IC / SHARPE (/ DESCRIPTION) — numeric columns sort by value, coloured by sign.
+        auto rd_table = [this](const QJsonArray& rows, const QString& name_key, const QString& name_fallback,
+                               const QStringList& num_keys, const QStringList& headers, bool with_desc) {
+            auto* t = new QTableWidget(rows.size(), headers.size(), this);
+            t->setHorizontalHeaderLabels(headers);
+            t->verticalHeader()->setVisible(false);
+            t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            t->setSelectionBehavior(QAbstractItemView::SelectRows);
+            // Filled with fixed columns, sized once afterwards (never ResizeToContents while filling).
+            t->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+            t->horizontalHeader()->setStretchLastSection(true);
+            t->setStyleSheet(table_ss());
+            t->setMaximumHeight(qMin(static_cast<int>(rows.size()) * row_px(24) + row_px(32), row_px(280)));
+            for (int i = 0; i < rows.size(); ++i) {
+                const QJsonObject o = rows[i].toObject();
+                auto* idx = num_item(QString::number(i + 1), i + 1);
+                idx->setTextAlignment(Qt::AlignCenter);
+                t->setItem(i, 0, idx);
+                t->setItem(i, 1, new QTableWidgetItem(o.value(name_key).toString(name_fallback)));
+                for (int c = 0; c < num_keys.size(); ++c) {
+                    const QJsonValue v = o.value(num_keys[c]);
+                    if (v.isNull() || v.isUndefined()) {
+                        auto* na = new QTableWidgetItem(QString::fromUtf8("—"));
+                        na->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                        t->setItem(i, 2 + c, na);
+                    } else {
+                        const double d = v.toDouble();
+                        t->setItem(i, 2 + c, num_item(QString::number(d, 'f', num_keys[c] == QLatin1String("ic") ? 4 : 3), d,
+                                                        gs_pos_neg_color(d)));
+                    }
+                }
+                if (with_desc) {
+                    const QString desc = o.value("description").toString();
+                    auto* di = new QTableWidgetItem(desc);
+                    di->setToolTip(desc);
+                    t->setItem(i, 2 + num_keys.size(), di);
+                }
+                t->setRowHeight(i, row_px(24));
+            }
+            t->resizeColumnsToContents();
+            finish_table(t);
+            return t;
+        };
+
+        // ── RD-Agent: check_status ────────────────────────────────────────────────
+        if (command == "check_status") {
+            auto ver = payload["rdagent_version"].toString("?");
+            auto avail = payload["availability"].toObject();
+            QStringList flags;
+            for (auto it = avail.begin(); it != avail.end(); ++it)
+                if (it.value().toBool())
+                    flags << it.key();
+            rd_status(tr("rdagent %1 — %2").arg(ver, flags.join(", ")));
+            return;
+        }
+
+        // ── RD-Agent: task started (factor_mining / model_optimization / quant_research) ──
+        if (command == "start_factor_mining" || command == "start_model_optimization" ||
+            command == "start_quant_research") {
+            if (!payload["success"].toBool()) {
+                rd_fail(payload["error"].toString(tr("Unknown error")));
+                return;
+            }
+            auto task_id = payload["task_id"].toString();
+            auto est = payload["estimated_time"].toString();
+            rd_status(tr("Task %1 started").arg(task_id));
+            // Follow it where it is shown: the Task Monitor (the last sub-tab).
+            if (auto* sub = findChild<QTabWidget*>(QStringLiteral("rdSubTabs")))
+                sub->setCurrentIndex(sub->count() - 1);
+            // Populate the monitor right away (in-memory listing); its result arms
+            // the auto-refresh while the task runs.
+            AIQuantLabService::instance().rd_agent_list_tasks({});
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(
+                    tr("Task started: %1\nEstimated time: %2\n\nUse Task Monitor → REFRESH to track progress.")
+                        .arg(task_id, est));
+            return;
+        }
+
+        // ── RD-Agent: list_tasks ──────────────────────────────────────────────────
+        if (command == "list_tasks" && rd_task_table_) {
+            auto tasks = payload["tasks"].toArray();
+            // Keep the user's selection across the rebuild — the monitor now
+            // auto-refreshes every 5 s while a task runs.
+            QString selected_id;
+            if (const int cur = rd_task_table_->currentRow(); cur >= 0 && rd_task_table_->item(cur, 0))
+                selected_id = rd_task_table_->item(cur, 0)->text();
+            bool any_running = false;
+            // No task this session: the designed empty state instead of a bare header.
+            const bool none = tasks.isEmpty();
+            rd_task_table_->setVisible(!none);
+            if (rd_agent_output_)
+                rd_agent_output_->setVisible(!none);
+            if (auto* empty = findChild<QWidget*>(QStringLiteral("rdTasksEmpty")))
+                empty->setVisible(none);
+            rd_task_table_->setRowCount(0);
+            for (const auto& t : tasks) {
+                auto obj = t.toObject();
+                int row = rd_task_table_->rowCount();
+                rd_task_table_->insertRow(row);
+                rd_task_table_->setItem(row, 0, new QTableWidgetItem(obj["task_id"].toString()));
+                rd_task_table_->setItem(row, 1, new QTableWidgetItem(obj["type"].toString()));
+                auto status_str = obj["status"].toString();
+                any_running = any_running || status_str == QLatin1String("running");
+                auto* status_item = new QTableWidgetItem(status_str);
+                // A state (with its word): SUCCESS / DANGER, not the P&L direction colours.
+                if (status_str == "running")
+                    status_item->setForeground(QColor(ui::colors::WARNING()));
+                else if (status_str == "completed")
+                    status_item->setForeground(QColor(ui::colors::SUCCESS()));
+                else if (status_str == "failed" || status_str == "stopped")
+                    status_item->setForeground(QColor(ui::colors::DANGER()));
+                rd_task_table_->setItem(row, 2, status_item);
+                rd_task_table_->setItem(
+                    row, 3, new QTableWidgetItem(QString::number(obj["progress"].toDouble() * 100, 'f', 0) + "%"));
+                auto ic = obj["best_ic"];
+                rd_task_table_->setItem(row, 4,
+                                        new QTableWidgetItem(ic.isNull() ? "-" : QString::number(ic.toDouble(), 'f', 4)));
+                rd_task_table_->setItem(row, 5, new QTableWidgetItem(obj["elapsed_time"].toString("-")));
+                if (!selected_id.isEmpty() && obj["task_id"].toString() == selected_id)
+                    rd_task_table_->setCurrentCell(row, 0);
+            }
+            if (auto* poll = findChild<QTimer*>(QStringLiteral("rdTaskPollTimer"))) {
+                poll->setProperty("rdActive", any_running);
+                if (any_running && rd_task_table_->isVisible()) {
+                    if (!poll->isActive())
+                        poll->start();
+                } else {
+                    poll->stop();
+                }
+            }
+            rd_status(any_running ? tr("%1 task(s) · auto-refreshing every 5 s").arg(tasks.size())
+                                  : tr("%1 task(s)").arg(tasks.size()));
+            return;
+        }
+
+        // ── RD-Agent: get_task_status ─────────────────────────────────────────────
+        if (command == "get_task_status") {
+            if (!payload["success"].toBool()) {
+                rd_fail(payload["error"].toString(tr("Unknown error")));
+                return;
+            }
+            auto task_id = payload["task_id"].toString();
+            auto progress = payload["progress"].toDouble() * 100;
+            auto step = payload["current_step"].toString();
+            auto ic = payload["best_ic"];
+            rd_status(tr("Task %1 — %2% — %3").arg(task_id).arg(progress, 0, 'f', 0).arg(step));
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(tr("Task %1 — status below.").arg(task_id));
+            if (auto* vl = rd_results()) {
+                const QString st = payload["status"].toString();
+                const Tone st_tone = st == QLatin1String("completed") ? Tone::Positive
+                                     : st == QLatin1String("running") ? Tone::Warning
+                                     : (st == QLatin1String("failed") || st == QLatin1String("stopped")) ? Tone::Negative
+                                                                                                         : Tone::Neutral;
+                auto* strip = new ui::KpiStrip(this);
+                rd_tile(strip, tr("TASK"), task_id);
+                rd_tile(strip, tr("STATUS"), st.toUpper(), st_tone);
+                rd_tile(strip, tr("PROGRESS"), QLocale().toString(progress, 'f', 0) + QLatin1Char('%'), Tone::Neutral);
+                rd_tile(strip, tr("STEP"), step.isEmpty() ? QString::fromUtf8("—") : step);
+                rd_tile(strip, tr("BEST IC"), rd_num(ic, 4),
+                        ic.isNull() || ic.isUndefined() ? Tone::Neutral
+                        : ic.toDouble() > 0.03         ? Tone::Positive
+                        : ic.toDouble() < 0            ? Tone::Negative
+                                                       : Tone::Neutral);
+                rd_tile(strip, tr("ELAPSED"), payload["elapsed_time"].toString("-"));
+                vl->addWidget(strip);
+            }
+            return;
+        }
+
+        // ── RD-Agent: get_discovered_factors ──────────────────────────────────────
+        if (command == "get_discovered_factors" && rd_agent_output_) {
+            if (!payload["success"].toBool()) {
+                rd_fail(payload["error"].toString(tr("Unknown error")));
+                return;
+            }
+            auto factors = payload["factors"].toArray();
+            auto best_ic = payload["best_ic"];
+            double best_sharpe = std::numeric_limits<double>::quiet_NaN();
+            for (const auto& f : factors) {
+                const QJsonValue s = f.toObject().value("sharpe");
+                if (s.isDouble() && (!std::isfinite(best_sharpe) || s.toDouble() > best_sharpe))
+                    best_sharpe = s.toDouble();
+            }
+            rd_agent_output_->setPlainText(tr("Discovered factors: %1 — sortable table below (click a header).")
+                                               .arg(factors.size()));
+            if (auto* vl = rd_results()) {
+                auto* strip = new ui::KpiStrip(this);
+                rd_tile(strip, tr("FACTORS"), QLocale().toString(static_cast<int>(factors.size())),
+                        factors.isEmpty() ? Tone::Warning : Tone::Neutral);
+                rd_tile(strip, tr("BEST IC"), rd_num(best_ic, 4),
+                        !best_ic.isDouble()           ? Tone::Neutral
+                        : best_ic.toDouble() > 0.03 ? Tone::Positive
+                        : best_ic.toDouble() < 0    ? Tone::Negative
+                                                    : Tone::Neutral,
+                        tr("> 0.03 is useful"));
+                rd_tile(strip, tr("BEST SHARPE"),
+                        std::isfinite(best_sharpe) ? QLocale().toString(best_sharpe, 'f', 3) : QString::fromUtf8("—"),
+                        !std::isfinite(best_sharpe) ? Tone::Neutral
+                        : best_sharpe > 1.0         ? Tone::Positive
+                        : best_sharpe < 0           ? Tone::Negative
+                                                    : Tone::Neutral);
+                vl->addWidget(strip);
+                if (!factors.isEmpty())
+                    vl->addWidget(rd_table(factors, QStringLiteral("name"), tr("Factor"),
+                                           {QStringLiteral("ic"), QStringLiteral("sharpe")},
+                                           {tr("#"), tr("Name"), tr("IC"), tr("Sharpe"), tr("Description")}, true));
+            }
+            rd_status(tr("Found %1 factor(s)").arg(factors.size()));
+            return;
+        }
+
+        // ── RD-Agent: get_optimized_model ─────────────────────────────────────────
+        if (command == "get_optimized_model" && rd_agent_output_) {
+            if (!payload["success"].toBool()) {
+                rd_fail(payload["error"].toString(tr("Unknown error")));
+                return;
+            }
+            auto models = payload["models"].toArray();
+            double best_sharpe = std::numeric_limits<double>::quiet_NaN();
+            double best_ic = std::numeric_limits<double>::quiet_NaN();
+            for (const auto& m : models) {
+                const QJsonObject o = m.toObject();
+                if (o.value("sharpe").isDouble() && (!std::isfinite(best_sharpe) || o.value("sharpe").toDouble() > best_sharpe))
+                    best_sharpe = o.value("sharpe").toDouble();
+                if (o.value("ic").isDouble() && (!std::isfinite(best_ic) || o.value("ic").toDouble() > best_ic))
+                    best_ic = o.value("ic").toDouble();
+            }
+            rd_agent_output_->setPlainText(tr("Optimized models: %1 — sortable table below (click a header).")
+                                               .arg(models.size()));
+            if (auto* vl = rd_results()) {
+                auto* strip = new ui::KpiStrip(this);
+                rd_tile(strip, tr("MODELS"), QLocale().toString(static_cast<int>(models.size())),
+                        models.isEmpty() ? Tone::Warning : Tone::Neutral);
+                rd_tile(strip, tr("BEST SHARPE"),
+                        std::isfinite(best_sharpe) ? QLocale().toString(best_sharpe, 'f', 3) : QString::fromUtf8("—"),
+                        !std::isfinite(best_sharpe) ? Tone::Neutral
+                        : best_sharpe > 1.0         ? Tone::Positive
+                        : best_sharpe < 0           ? Tone::Negative
+                                                    : Tone::Neutral);
+                rd_tile(strip, tr("BEST IC"),
+                        std::isfinite(best_ic) ? QLocale().toString(best_ic, 'f', 4) : QString::fromUtf8("—"),
+                        !std::isfinite(best_ic) ? Tone::Neutral
+                        : best_ic > 0.03        ? Tone::Positive
+                        : best_ic < 0           ? Tone::Negative
+                                                : Tone::Neutral);
+                vl->addWidget(strip);
+                if (!models.isEmpty())
+                    vl->addWidget(rd_table(models, QStringLiteral("model_id"), tr("Model"),
+                                           {QStringLiteral("sharpe"), QStringLiteral("ic")},
+                                           {tr("#"), tr("Model"), tr("Sharpe"), tr("IC")}, false));
+            }
+            rd_status(tr("%1 optimized model(s)").arg(models.size()));
+            return;
+        }
+
+        // ── RD-Agent: stop_task / resume_task ────────────────────────────────────
+        if (command == "stop_task" || command == "resume_task") {
+            // A refused stop / resume ("Task not found", "No checkpoint found") comes back as
+            // success:false with the reason in "error", not in "message".
+            if (!payload["success"].toBool(true)) {
+                rd_fail(payload["error"].toString(tr("Unknown error")));
+                return;
+            }
+            rd_status(payload["message"].toString(command));
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(payload["message"].toString());
+            return;
+        }
+
+        // ── RD-Agent: start_ui ───────────────────────────────────────────────────
+        if (command == "start_ui") {
+            auto url = payload["url"].toString();
+            if (!url.isEmpty()) {
+                rd_status(tr("Log viewer: %1").arg(url));
+                QDesktopServices::openUrl(QUrl(url));
+            } else {
+                rd_fail(payload["error"].toString(tr("The log viewer did not report a URL.")));
+            }
+            return;
+        }
+
+        // ── RD-Agent: start_mcp_server ────────────────────────────────────────────
+        if (command == "start_mcp_server") {
+            if (!payload["success"].toBool()) {
+                rd_status(tr("MCP server failed"));
+                if (rd_agent_output_)
+                    rd_agent_output_->setPlainText(
+                        tr("MCP server failed to start:\n%1\n\nInstall: %2")
+                            .arg(payload["error"].toString())
+                            .arg(payload["install"].toString("pip install 'mcp[cli]' 'pydantic-ai[mcp]' yfinance")));
+                return;
+            }
+            auto url = payload["url"].toString();
+            auto port = payload["port"].toInt();
+            auto tools = payload["tools"].toArray();
+            QStringList tool_names;
+            for (const auto& t : tools)
+                tool_names << t.toString();
+            rd_status(tr("MCP ready on port %1").arg(port));
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(tr("MCP tool server running at %1\n\nAvailable tools:\n  %2\n\n"
+                                                  "Tick 'Use Fincept MCP tools' before starting a task to give\n"
+                                                  "RD-Agent loops access to these tools.")
+                                                   .arg(url, tool_names.join("\n  ")));
+            return;
+        }
+
+        // ── RD-Agent: mcp_status ─────────────────────────────────────────────────
+        if (command == "mcp_status") {
+            auto avail = payload["mcp_server_available"].toBool();
+            auto pai_mcp = payload["pydantic_ai_mcp"].toBool();
+            auto ports = payload["running_ports"].toArray();
+            QString info = tr("MCP server available: %1\npydantic-ai MCP: %2\nRunning ports: %3")
+                               .arg(avail ? tr("yes") : tr("no"))
+                               .arg(pai_mcp ? tr("yes") : tr("no"))
+                               .arg(ports.isEmpty() ? tr("none") : [&]() {
+                                   QStringList ps;
+                                   for (const auto& p : ports)
+                                       ps << QString::number(p.toInt());
+                                   return ps.join(", ");
+                               }());
+            rd_status(avail ? tr("MCP available") : tr("MCP not installed"));
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(info);
+            return;
+        }
+        return;
+    }
+
+    // ── Rolling Retraining: the live events of a retrain (the progress bar and log of the
+    // Execute Retrain tab). Its outcome is the view's result (tagged); a run started from a
+    // schedule card's Run Now goes through the same view.
+    if (module_id == QLatin1String("rolling_retraining")) {
+        // ── Streaming events from retrain command ────────────────────────────
+        const QString event = payload["event"].toString();
+        if (!event.isEmpty()) {
+            auto* pb = this->findChild<QProgressBar*>("rr_progress");
+            auto* log = this->findChild<QTextEdit*>("rr_log");
+
+            if (event == "start") {
+                const int total = payload["total_windows"].toInt();
+                if (pb) {
+                    pb->setRange(0, total);
+                    pb->setValue(0);
+                    pb->setFormat(tr("0 / %v windows"));
+                }
+                if (log)
+                    log->append(
+                        tr("Starting retrain: %1  |  %2 windows").arg(payload["model_id"].toString()).arg(total));
+                status_label_->setText(
+                    tr("Retraining %1 — 0/%2 windows").arg(payload["model_id"].toString()).arg(total));
+            } else if (event == "window") {
+                const int idx = payload["index"].toInt();
+                const int total = payload["total"].toInt();
+                if (pb) {
+                    pb->setValue(idx);
+                    pb->setFormat(tr("%1 / %2 windows").arg(idx).arg(total));
+                }
+                if (log)
+                    log->append(tr("  Window %1/%2  train→%3  test %4→%5")
+                                    .arg(idx)
+                                    .arg(total)
+                                    .arg(payload["train_end"].toString().left(10))
+                                    .arg(payload["test_start"].toString().left(10))
+                                    .arg(payload["test_end"].toString().left(10)));
+                status_label_->setText(tr("Window %1/%2").arg(idx).arg(total));
+            } else if (event == "ensemble") {
+                if (log)
+                    log->append(QString("  %1").arg(payload["message"].toString()));
+                status_label_->setText(tr("Combining rolling results..."));
+            } else if (event == "done") {
+                const int total = payload["windows_trained"].toInt();
+                if (pb) {
+                    pb->setValue(total);
+                    pb->setFormat(tr("Complete"));
+                }
+                if (log)
+                    log->append(tr("\nDone — %1 windows in %2s  |  Experiment: %3")
+                                    .arg(total)
+                                    .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1)
+                                    .arg(payload["exp_name"].toString()));
+                status_label_->setText(tr("Retrain complete — %1 windows in %2s")
+                                           .arg(total)
+                                           .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1));
+                set_retrain_busy(this, false);
+            } else if (event == "error") {
+                set_retrain_busy(this, false);
+                if (pb) {
+                    pb->setFormat(tr("Failed"));
+                }
+                if (log)
+                    log->append(tr("\nError: %1").arg(payload["error"].toString()));
+                // (the Execute view's run fails with this message: its error page shows it)
+            }
+            return;
+        }
+        if (command == QLatin1String("delete") && payload.value("success").toBool()) {
+            invalidate_view(QStringLiteral("configs"));
+            return;
+        }
+    }
+    LOG_DEBUG("AIQuantLab", QStringLiteral("[%1/%2] untagged reply not shown").arg(module_id, command));
+}
+
+void QuantModulePanel::render_result(const QString& command, const QJsonObject& payload) {
+    // Every view's result, drawn into the result pane's content (results_layout_). Called by the
+    // pane's render (a fresh or a remembered result), so it must not depend on panel state that
+    // only exists after a run.
+    const QString& module_id = module_.id;
+
     if (module_id == "rl_trading") {
         display_rl_trading_result(command, payload);
         return;
@@ -420,265 +1061,36 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── LangGraph deep analysis result ───────────────────────────────────────
     if (command == "execute_task") {
-        for (auto* b : findChildren<QPushButton*>(QStringLiteral("quantRunButton")))
-            if (b->property("deepRun").toBool())
-                b->setEnabled(true);
-        if (!payload["success"].toBool()) {
-            const QString err = payload["error"].toString(tr("Unknown error"));
-            // agent_output_ still says "Running multi-agent analysis..." — replace
-            // it, or the failure (painted in the pane below) reads as in-progress.
-            if (agent_output_)
-                agent_output_->setPlainText(tr("Deep analysis failed:\n\n%1").arg(err));
-            display_error(err);
-            return;
-        }
-        auto text = payload["result"].toString();
-        if (text.isEmpty())
-            text = QJsonDocument(payload).toJson(QJsonDocument::Indented);
-        if (agent_output_)
-            agent_output_->setPlainText(text);
-        auto tid = payload["thread_id"].toString();
-        status_label_->setText(tid.isEmpty() ? tr("Done") : tr("Done — thread: %1").arg(tid));
-        return;
-    }
-
-    // RD-Agent branches. The RD-Agent tab has its own status strip ("Checking...", "Refreshing
-    // task list...") that the buttons set when they fire a request; nothing ever cleared it, so
-    // it read "Checking..." forever. And display_error() paints into the Deep Analysis tab's
-    // results pane, which is on the other page of the outer QTabWidget -- a failed RD-Agent call
-    // showed the user nothing. Route both to this tab.
-    auto rd_status = [this](const QString& text) {
-        status_label_->setText(text);
-        if (auto* lbl = findChild<QLabel*>(QStringLiteral("rdStatusTxt")))
-            lbl->setText(text);
-    };
-    auto rd_fail = [this, &rd_status](const QString& text) {
-        rd_status(text);
-        if (rd_agent_output_)
-            rd_agent_output_->setPlainText(text);
-    };
-
-    // ── RD-Agent: check_status ────────────────────────────────────────────────
-    if (command == "check_status") {
-        auto ver = payload["rdagent_version"].toString("?");
-        auto avail = payload["availability"].toObject();
-        QStringList flags;
-        for (auto it = avail.begin(); it != avail.end(); ++it)
-            if (it.value().toBool())
-                flags << it.key();
-        rd_status(tr("rdagent %1 — %2").arg(ver, flags.join(", ")));
-        return;
-    }
-
-    // ── RD-Agent: task started (factor_mining / model_optimization / quant_research) ──
-    if (command == "start_factor_mining" || command == "start_model_optimization" ||
-        command == "start_quant_research") {
-        if (!payload["success"].toBool()) {
-            rd_fail(payload["error"].toString(tr("Unknown error")));
-            return;
-        }
-        auto task_id = payload["task_id"].toString();
-        auto est = payload["estimated_time"].toString();
-        rd_status(tr("Task %1 started").arg(task_id));
-        // Populate the monitor right away (in-memory listing); its result arms
-        // the auto-refresh while the task runs.
-        AIQuantLabService::instance().rd_agent_list_tasks({});
-        if (rd_agent_output_)
-            rd_agent_output_->setPlainText(
-                tr("Task started: %1\nEstimated time: %2\n\nUse Task Monitor → REFRESH to track progress.")
-                    .arg(task_id, est));
-        return;
-    }
-
-    // ── RD-Agent: list_tasks ──────────────────────────────────────────────────
-    if (command == "list_tasks" && rd_task_table_) {
-        auto tasks = payload["tasks"].toArray();
-        // Keep the user's selection across the rebuild — the monitor now
-        // auto-refreshes every 5 s while a task runs.
-        QString selected_id;
-        if (const int cur = rd_task_table_->currentRow(); cur >= 0 && rd_task_table_->item(cur, 0))
-            selected_id = rd_task_table_->item(cur, 0)->text();
-        bool any_running = false;
-        rd_task_table_->setRowCount(0);
-        for (const auto& t : tasks) {
-            auto obj = t.toObject();
-            int row = rd_task_table_->rowCount();
-            rd_task_table_->insertRow(row);
-            rd_task_table_->setItem(row, 0, new QTableWidgetItem(obj["task_id"].toString()));
-            rd_task_table_->setItem(row, 1, new QTableWidgetItem(obj["type"].toString()));
-            auto status_str = obj["status"].toString();
-            any_running = any_running || status_str == QLatin1String("running");
-            auto* status_item = new QTableWidgetItem(status_str);
-            if (status_str == "running")
-                status_item->setForeground(QColor("" + QString(ui::colors::WARNING()) + ""));
-            else if (status_str == "completed")
-                status_item->setForeground(QColor("" + QString(ui::colors::POSITIVE()) + ""));
-            else if (status_str == "failed" || status_str == "stopped")
-                status_item->setForeground(QColor("" + QString(ui::colors::NEGATIVE()) + ""));
-            rd_task_table_->setItem(row, 2, status_item);
-            rd_task_table_->setItem(
-                row, 3, new QTableWidgetItem(QString::number(obj["progress"].toDouble() * 100, 'f', 0) + "%"));
-            auto ic = obj["best_ic"];
-            rd_task_table_->setItem(row, 4,
-                                    new QTableWidgetItem(ic.isNull() ? "-" : QString::number(ic.toDouble(), 'f', 4)));
-            rd_task_table_->setItem(row, 5, new QTableWidgetItem(obj["elapsed_time"].toString("-")));
-            if (!selected_id.isEmpty() && obj["task_id"].toString() == selected_id)
-                rd_task_table_->setCurrentCell(row, 0);
-        }
-        if (auto* poll = findChild<QTimer*>(QStringLiteral("rdTaskPollTimer"))) {
-            poll->setProperty("rdActive", any_running);
-            if (any_running && rd_task_table_->isVisible()) {
-                if (!poll->isActive())
-                    poll->start();
-            } else {
-                poll->stop();
-            }
-        }
-        rd_status(any_running ? tr("%1 task(s) · auto-refreshing every 5 s").arg(tasks.size())
-                              : tr("%1 task(s)").arg(tasks.size()));
-        return;
-    }
-
-    // ── RD-Agent: get_task_status ─────────────────────────────────────────────
-    if (command == "get_task_status") {
-        if (!payload["success"].toBool()) {
-            rd_fail(payload["error"].toString(tr("Unknown error")));
-            return;
-        }
-        auto task_id = payload["task_id"].toString();
-        auto progress = payload["progress"].toDouble() * 100;
-        auto step = payload["current_step"].toString();
-        auto ic = payload["best_ic"];
-        rd_status(tr("Task %1 — %2% — %3").arg(task_id).arg(progress, 0, 'f', 0).arg(step));
-        if (rd_agent_output_) {
-            rd_agent_output_->setPlainText(
-                tr("Task ID:    %1\nStatus:     %2\nProgress:   %3%\nStep:       %4\nBest IC:    %5\nElapsed:    %6")
-                    .arg(task_id, payload["status"].toString())
-                    .arg(progress, 0, 'f', 0)
-                    .arg(step)
-                    .arg(ic.isNull() ? tr("N/A") : QString::number(ic.toDouble(), 'f', 4))
-                    .arg(payload["elapsed_time"].toString("-")));
-        }
-        return;
-    }
-
-    // ── RD-Agent: get_discovered_factors ──────────────────────────────────────
-    if (command == "get_discovered_factors" && rd_agent_output_) {
-        if (!payload["success"].toBool()) {
-            rd_fail(payload["error"].toString(tr("Unknown error")));
-            return;
-        }
-        auto factors = payload["factors"].toArray();
-        auto best_ic = payload["best_ic"];
-        QString out = tr("Discovered Factors: %1  |  Best IC: %2\n\n")
-                          .arg(factors.size())
-                          .arg(best_ic.isNull() ? tr("N/A") : QString::number(best_ic.toDouble(), 'f', 4));
-        int idx = 1;
-        for (const auto& f : factors) {
-            auto obj = f.toObject();
-            out += tr("[%1] %2\n  IC: %3  Sharpe: %4\n  %5\n\n")
-                       .arg(idx++)
-                       .arg(obj["name"].toString(tr("Factor")))
-                       .arg(obj["ic"].isNull() ? tr("N/A") : QString::number(obj["ic"].toDouble(), 'f', 4))
-                       .arg(obj["sharpe"].isNull() ? tr("N/A") : QString::number(obj["sharpe"].toDouble(), 'f', 3))
-                       .arg(obj["description"].toString());
-        }
-        rd_agent_output_->setPlainText(out);
-        rd_status(tr("Found %1 factor(s)").arg(factors.size()));
-        return;
-    }
-
-    // ── RD-Agent: get_optimized_model ─────────────────────────────────────────
-    if (command == "get_optimized_model" && rd_agent_output_) {
-        if (!payload["success"].toBool()) {
-            rd_fail(payload["error"].toString(tr("Unknown error")));
-            return;
-        }
-        auto models = payload["models"].toArray();
-        QString out = tr("Optimized Models: %1\n\n").arg(models.size());
-        int idx = 1;
-        for (const auto& m : models) {
-            auto obj = m.toObject();
-            out += tr("[%1] %2\n  Sharpe: %3  IC: %4\n")
-                       .arg(idx++)
-                       .arg(obj["model_id"].toString(tr("Model")))
-                       .arg(obj["sharpe"].isNull() ? tr("N/A") : QString::number(obj["sharpe"].toDouble(), 'f', 3))
-                       .arg(obj["ic"].isNull() ? tr("N/A") : QString::number(obj["ic"].toDouble(), 'f', 4));
-        }
-        rd_agent_output_->setPlainText(out);
-        rd_status(tr("%1 optimized model(s)").arg(models.size()));
-        return;
-    }
-
-    // ── RD-Agent: stop_task / resume_task ────────────────────────────────────
-    if (command == "stop_task" || command == "resume_task") {
-        // A refused stop / resume ("Task not found", "No checkpoint found") comes back as
-        // success:false with the reason in "error", not in "message".
+        clear_results();
         if (!payload["success"].toBool(true)) {
-            rd_fail(payload["error"].toString(tr("Unknown error")));
+            display_error(payload["error"].toString(tr("Unknown error")));
             return;
         }
-        rd_status(payload["message"].toString(command));
-        if (rd_agent_output_)
-            rd_agent_output_->setPlainText(payload["message"].toString());
-        return;
-    }
-
-    // ── RD-Agent: start_ui ───────────────────────────────────────────────────
-    if (command == "start_ui") {
-        auto url = payload["url"].toString();
-        if (!url.isEmpty()) {
-            rd_status(tr("Log viewer: %1").arg(url));
-            QDesktopServices::openUrl(QUrl(url));
-        } else {
-            rd_fail(payload["error"].toString(tr("The log viewer did not report a URL.")));
-        }
-        return;
-    }
-
-    // ── RD-Agent: start_mcp_server ────────────────────────────────────────────
-    if (command == "start_mcp_server") {
-        if (!payload["success"].toBool()) {
-            rd_status(tr("MCP server failed"));
-            if (rd_agent_output_)
-                rd_agent_output_->setPlainText(
-                    tr("MCP server failed to start:\n%1\n\nInstall: %2")
-                        .arg(payload["error"].toString())
-                        .arg(payload["install"].toString("pip install 'mcp[cli]' 'pydantic-ai[mcp]' yfinance")));
+        // The report is LLM Markdown (headings, bullets, bold, tables): rendered into the result
+        // pane, the source kept on the label so refresh_theme() re-renders it in a new theme.
+        // No report text: the response laid out structurally instead.
+        const QString text = payload["result"].toString();
+        const QString tid = payload["thread_id"].toString();
+        const QString accent = ui::colors::legible(module_.color);
+        results_layout_->addWidget(
+            gs_section_header(tid.isEmpty() ? tr("DEEP ANALYSIS REPORT")
+                                            : tr("DEEP ANALYSIS REPORT  |  THREAD %1").arg(tid.left(24)),
+                              accent));
+        if (text.trimmed().isEmpty()) {
+            display_result(payload);
             return;
         }
-        auto url = payload["url"].toString();
-        auto port = payload["port"].toInt();
-        auto tools = payload["tools"].toArray();
-        QStringList tool_names;
-        for (const auto& t : tools)
-            tool_names << t.toString();
-        rd_status(tr("MCP ready on port %1").arg(port));
-        if (rd_agent_output_)
-            rd_agent_output_->setPlainText(tr("MCP tool server running at %1\n\nAvailable tools:\n  %2\n\n"
-                                              "Enable 'enable_mcp: true' in factor/model/quant research params\n"
-                                              "to give RD-Agent loops access to these tools.")
-                                               .arg(url, tool_names.join("\n  ")));
-        return;
-    }
-
-    // ── RD-Agent: mcp_status ─────────────────────────────────────────────────
-    if (command == "mcp_status") {
-        auto avail = payload["mcp_server_available"].toBool();
-        auto pai_mcp = payload["pydantic_ai_mcp"].toBool();
-        auto ports = payload["running_ports"].toArray();
-        QString info = tr("MCP server available: %1\npydantic-ai MCP: %2\nRunning ports: %3")
-                           .arg(avail ? tr("yes") : tr("no"))
-                           .arg(pai_mcp ? tr("yes") : tr("no"))
-                           .arg(ports.isEmpty() ? tr("none") : [&]() {
-                               QStringList ps;
-                               for (const auto& p : ports)
-                                   ps << QString::number(p.toInt());
-                               return ps.join(", ");
-                           }());
-        rd_status(avail ? tr("MCP available") : tr("MCP not installed"));
-        if (rd_agent_output_)
-            rd_agent_output_->setPlainText(info);
+        auto* report = new QLabel(result_host_);
+        report->setObjectName(QStringLiteral("quantMarkdownReport"));
+        report->setProperty("quantMarkdown", text);
+        report->setTextFormat(Qt::RichText);
+        report->setWordWrap(true);
+        report->setOpenExternalLinks(true);
+        report->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        report->setStyleSheet(QString("QLabel#quantMarkdownReport { background:%1; border:1px solid %2; padding:12px; }")
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        report->setText(ui::MarkdownRenderer::render(text));
+        results_layout_->addWidget(report);
         return;
     }
 
@@ -710,10 +1122,18 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             display_error(payload["error"].toString());
             return;
         }
-        // HFT paints into fixed in-tab cards rather than the results pane, so
-        // nothing else clears a previously shown error banner — do it here or a
-        // stale red box sits under a successful run forever.
+        // HFT paints into fixed in-tab cards; the result pane under the tabs carries the
+        // snapshot's headline (analyze) or what the last section run computed.
         clear_results();
+        if (command != QLatin1String("analyze")) {
+            const QString what = command == QLatin1String("fetch_orderbook") ? tr("ORDER BOOK")
+                                 : command == QLatin1String("market_making") ? tr("MARKET-MAKING QUOTES")
+                                 : command == QLatin1String("toxic_flow")    ? tr("TOXIC FLOW")
+                                                                             : tr("SLIPPAGE ESTIMATE");
+            results_layout_->addWidget(gs_section_header(
+                tr("%1  |  %2 — see the cards above").arg(what, payload["symbol"].toString()),
+                ui::colors::legible(module_.color)));
+        }
 
         // Helper: find a named child label in this panel and set its text
         auto set_card = [this](const QString& name, const QString& text, const QString& color = {}) {
@@ -724,7 +1144,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             if (!color.isEmpty())
                 lbl->setStyleSheet(
                     QString(
-                        "color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
+                        "color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent;")
                         .arg(color));
         };
 
@@ -747,11 +1167,27 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 auto* si = new QTableWidgetItem(QString::number(size, 'g', 5));
                 si->setForeground(QColor(QString(ui::colors::TEXT_PRIMARY())));
                 auto* ci = new QTableWidgetItem(QString::number(cumulative, 'g', 6));
-                ci->setForeground(QColor(QString(ui::colors::TEXT_TERTIARY())));
+                ci->setForeground(QColor(QString(ui::colors::TEXT_SECONDARY())));
                 tbl->setItem(i, 0, pi);
                 tbl->setItem(i, 1, si);
                 tbl->setItem(i, 2, ci);
-                tbl->setRowHeight(i, 22);
+                tbl->setRowHeight(i, row_px(22));
+            }
+        };
+
+        // Helper: the slippage FILLS table (single estimate and full analysis both fill it;
+        // an empty array clears it so a failed estimate does not leave the previous fills).
+        auto fill_slip_table = [this](const QJsonArray& fills) {
+            auto* tbl = this->findChild<QTableWidget*>("hft_slip_table");
+            if (!tbl)
+                return;
+            tbl->setRowCount(fills.size());
+            for (int i = 0; i < fills.size(); ++i) {
+                const auto f = fills[i].toObject();
+                tbl->setItem(i, 0, new QTableWidgetItem(QString::number(f["price"].toDouble(), 'f', 4)));
+                tbl->setItem(i, 1, new QTableWidgetItem(QString::number(f["quantity"].toDouble(), 'g', 6)));
+                tbl->setItem(i, 2, new QTableWidgetItem(QString::number(f["cost"].toDouble(), 'f', 4)));
+                tbl->setRowHeight(i, row_px(20));
             }
         };
 
@@ -867,18 +1303,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             set_card("hft_slip_viable", viable ? tr("VIABLE") : tr("HIGH SLIP"),
                      viable ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
 
-            // Populate fills table
-            if (auto* tbl = this->findChild<QTableWidget*>("hft_slip_table")) {
-                const auto fills = sl["fills"].toArray();
-                tbl->setRowCount(fills.size());
-                for (int i = 0; i < fills.size(); ++i) {
-                    const auto f = fills[i].toObject();
-                    tbl->setItem(i, 0, new QTableWidgetItem(QString::number(f["price"].toDouble(), 'f', 4)));
-                    tbl->setItem(i, 1, new QTableWidgetItem(QString::number(f["quantity"].toDouble(), 'g', 6)));
-                    tbl->setItem(i, 2, new QTableWidgetItem(QString::number(f["cost"].toDouble(), 'f', 4)));
-                    tbl->setRowHeight(i, 20);
-                }
-            }
+            fill_slip_table(sl["fills"].toArray());
             status_label_->setText(tr("Avg fill: %1  |  Slippage: %2 bps  |  %3")
                                        .arg(avg_p, 0, 'f', 4)
                                        .arg(sl_bps, 0, 'f', 4)
@@ -951,17 +1376,22 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 set_card("hft_tox_class", tf["classification"].toString());
                 set_card("hft_tox_action", QString(tf["action"].toString()).replace('_', ' '));
             }
-            if (payload.contains("slippage") && !sub_error(payload["slippage"].toObject(), tr("Slippage"),
-                                                            {"hft_slip_avgp", "hft_slip_bps", "hft_slip_cost",
-                                                             "hft_slip_fills", "hft_slip_viable"})) {
-                const auto sl = payload["slippage"].toObject();
-                set_card("hft_slip_avgp", QString::number(sl["average_price"].toDouble(), 'f', 4));
-                set_card("hft_slip_bps", QString::number(sl["slippage_bps"].toDouble(), 'f', 4) + tr(" bps"));
-                set_card("hft_slip_cost", QString::number(sl["total_cost"].toDouble(), 'f', 4));
-                set_card("hft_slip_fills", QString::number(sl["fill_count"].toInt()));
-                const bool v = sl["viable"].toBool();
-                set_card("hft_slip_viable", v ? tr("VIABLE") : tr("HIGH SLIP"),
-                         v ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
+            if (payload.contains("slippage")) {
+                if (sub_error(payload["slippage"].toObject(), tr("Slippage"),
+                              {"hft_slip_avgp", "hft_slip_bps", "hft_slip_cost", "hft_slip_fills",
+                               "hft_slip_viable"})) {
+                    fill_slip_table(QJsonArray()); // no fills for this run: drop the previous estimate's rows
+                } else {
+                    const auto sl = payload["slippage"].toObject();
+                    set_card("hft_slip_avgp", QString::number(sl["average_price"].toDouble(), 'f', 4));
+                    set_card("hft_slip_bps", QString::number(sl["slippage_bps"].toDouble(), 'f', 4) + tr(" bps"));
+                    set_card("hft_slip_cost", QString::number(sl["total_cost"].toDouble(), 'f', 4));
+                    set_card("hft_slip_fills", QString::number(sl["fill_count"].toInt()));
+                    const bool v = sl["viable"].toBool();
+                    set_card("hft_slip_viable", v ? tr("VIABLE") : tr("HIGH SLIP"),
+                             v ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
+                    fill_slip_table(sl["fills"].toArray());
+                }
             }
             if (auto* lat_lbl = this->findChild<QLabel*>("hftLatency"))
                 lat_lbl->setText(tr("LATENCY  %1 ms").arg(payload["latency_ms"].toDouble(), 0, 'f', 1));
@@ -971,6 +1401,51 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     ? tr("Full analysis complete — %1 @ %2")
                           .arg(payload["symbol"].toString(), payload["timestamp"].toString().left(19))
                     : tr("Analysis incomplete — %1").arg(partial_errors.join("  |  ")));
+
+            // The headline of the snapshot under the tabs (the tabs hold the detail): what was
+            // read, from where, and what could not be computed.
+            const QJsonObject bm = payload["book_metrics"].toObject();
+            const QJsonObject tf = payload["toxic_flow"].toObject();
+            const QJsonObject sl = payload["slippage"].toObject();
+            results_layout_->addWidget(gs_section_header(
+                tr("SNAPSHOT  |  %1 ON %2").arg(payload["symbol"].toString(), payload["exchange"].toString().toUpper()),
+                ui::colors::legible(module_.color)));
+            auto* strip = new ui::KpiStrip(result_host_);
+            using HTone = ui::StatTile::Tone;
+            auto tile = [strip](const QString& label, const QString& value, HTone tone) {
+                auto* t = strip->add_tile(label);
+                t->set_value(value);
+                t->set_tone(tone);
+            };
+            const QString dash = QString::fromUtf8("—");
+            tile(tr("MID"), bm.contains("mid_price") ? QString::number(bm["mid_price"].toDouble(), 'f', 4) : dash,
+                 HTone::Neutral);
+            tile(tr("SPREAD"), bm.contains("spread_bps") ? tr("%1 bps").arg(bm["spread_bps"].toDouble(), 0, 'f', 3) : dash,
+                 HTone::Neutral);
+            const QString pres = bm["pressure"].toString();
+            tile(tr("PRESSURE"), pres.isEmpty() ? dash : pres,
+                 pres == QLatin1String("BUY") ? HTone::Positive : pres == QLatin1String("SELL") ? HTone::Negative
+                                                                                                : HTone::Neutral);
+            tile(tr("TOXICITY"),
+                 tf.contains("toxicity_score") && !tf.contains("error")
+                     ? tr("%1 · %2").arg(tf["toxicity_score"].toDouble(), 0, 'f', 1).arg(tf["classification"].toString())
+                     : dash,
+                 tf["toxicity_score"].toDouble() > 60 ? HTone::Warning : HTone::Neutral);
+            tile(tr("SLIPPAGE"),
+                 sl.contains("slippage_bps") && !sl.contains("error")
+                     ? tr("%1 bps").arg(sl["slippage_bps"].toDouble(), 0, 'f', 2)
+                     : dash,
+                 HTone::Neutral);
+            tile(tr("LATENCY"), tr("%1 ms").arg(payload["latency_ms"].toDouble(), 0, 'f', 0), HTone::Neutral);
+            results_layout_->addWidget(strip);
+            if (!partial_errors.isEmpty()) {
+                auto* note = new QLabel(tr("Not computed: %1").arg(partial_errors.join(QStringLiteral(" · "))),
+                                        result_host_);
+                note->setWordWrap(true);
+                note->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;")
+                                        .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::px(-3)));
+                results_layout_->addWidget(note);
+            }
             return;
         }
 
@@ -980,72 +1455,30 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── Rolling Retraining ───────────────────────────────────────────────────
     if (module_id == "rolling_retraining") {
-        // ── Streaming events from retrain command ────────────────────────────
-        const QString event = payload["event"].toString();
-        if (!event.isEmpty()) {
-            auto* pb = this->findChild<QProgressBar*>("rr_progress");
-            auto* log = this->findChild<QTextEdit*>("rr_log");
-
-            if (event == "start") {
-                const int total = payload["total_windows"].toInt();
-                if (pb) {
-                    pb->setRange(0, total);
-                    pb->setValue(0);
-                    pb->setFormat(tr("0 / %v windows"));
-                }
-                if (log)
-                    log->append(
-                        tr("Starting retrain: %1  |  %2 windows").arg(payload["model_id"].toString()).arg(total));
-                status_label_->setText(
-                    tr("Retraining %1 — 0/%2 windows").arg(payload["model_id"].toString()).arg(total));
-            } else if (event == "window") {
-                const int idx = payload["index"].toInt();
-                const int total = payload["total"].toInt();
-                if (pb) {
-                    pb->setValue(idx);
-                    pb->setFormat(tr("%1 / %2 windows").arg(idx).arg(total));
-                }
-                if (log)
-                    log->append(tr("  Window %1/%2  train→%3  test %4→%5")
-                                    .arg(idx)
-                                    .arg(total)
-                                    .arg(payload["train_end"].toString().left(10))
-                                    .arg(payload["test_start"].toString().left(10))
-                                    .arg(payload["test_end"].toString().left(10)));
-                status_label_->setText(tr("Window %1/%2").arg(idx).arg(total));
-            } else if (event == "ensemble") {
-                if (log)
-                    log->append(QString("  %1").arg(payload["message"].toString()));
-                status_label_->setText(tr("Combining rolling results..."));
-            } else if (event == "done") {
-                const int total = payload["windows_trained"].toInt();
-                if (pb) {
-                    pb->setValue(total);
-                    pb->setFormat(tr("Complete"));
-                }
-                if (log)
-                    log->append(tr("\nDone — %1 windows in %2s  |  Experiment: %3")
-                                    .arg(total)
-                                    .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1)
-                                    .arg(payload["exp_name"].toString()));
-                status_label_->setText(tr("Retrain complete — %1 windows in %2s")
-                                           .arg(total)
-                                           .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1));
-                set_retrain_busy(this, false);
-            } else if (event == "error") {
-                set_retrain_busy(this, false);
-                if (pb) {
-                    pb->setFormat(tr("Failed"));
-                }
-                if (log)
-                    log->append(tr("\nError: %1").arg(payload["error"].toString()));
-                display_error(payload["error"].toString());
-            }
+        // The outcome of a retrain (its "done" event): what was trained, in how long.
+        if (command == QLatin1String("retrain") && payload.value("event").toString() == QLatin1String("done")) {
+            clear_results();
+            const QString accent = ui::colors::legible(module_.color);
+            results_layout_->addWidget(gs_section_header(
+                tr("ROLLING RETRAIN  |  %1").arg(payload["model_id"].toString(payload["exp_name"].toString())), accent));
+            results_layout_->addWidget(gs_card_row(
+                {gs_make_card(tr("WINDOWS TRAINED"), QString::number(payload["windows_trained"].toInt()), this,
+                              ui::colors::SUCCESS()),
+                 gs_make_card(tr("TIME"), tr("%1 s").arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1), this),
+                 gs_make_card(tr("EXPERIMENT"), payload["exp_name"].toString(QStringLiteral("—")), this)},
+                this));
             return;
         }
-
         // ── Non-streaming responses ──────────────────────────────────────────
         if (!payload["success"].toBool()) {
+            if (command == "retrain") {
+                // A retrain refused before it started (unknown model id, Qlib missing,
+                // config gone) is terminal too: release the launch buttons, or they stay
+                // disabled for the rest of the session.
+                set_retrain_busy(this, false);
+                if (auto* pb = this->findChild<QProgressBar*>("rr_progress"))
+                    pb->setFormat(tr("Failed"));
+            }
             display_error(payload["error"].toString());
             return;
         }
@@ -1053,22 +1486,37 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         if (command == "list") {
             auto schedules = payload["schedules"].toObject();
-            // Find the cards container and repopulate it
-            auto* cards_w = this->findChild<QWidget*>("rr_cards_container");
-            if (cards_w) {
-                auto* cards_vl = qobject_cast<QVBoxLayout*>(cards_w->layout());
-                // Remove old cards (keep the trailing stretch)
-                while (cards_vl->count() > 1)
-                    delete cards_vl->takeAt(0)->widget();
-
-                if (schedules.isEmpty()) {
-                    auto* empty = new QLabel(
-                        tr("No schedules configured yet.\nUse the Create Schedule tab to add one."), cards_w);
-                    empty->setAlignment(Qt::AlignCenter);
-                    empty->setStyleSheet(
-                        QString("color:%1; font-size:12px; padding:24px;").arg(ui::colors::TEXT_SECONDARY()));
-                    cards_vl->insertWidget(0, empty);
-                } else {
+            if (schedules.isEmpty()) {
+                // Nothing saved yet: say what a config is and where to make one.
+                auto* es = ui::EmptyState::create(
+                    ui::EmptyState::no_data_spec(tr("No retrain configs yet"),
+                                                 tr("A config names the model and the rolling windows it is "
+                                                    "retrained on. Create one, then run it from here."),
+                                                 tr("CREATE CONFIG")),
+                    result_host_);
+                es->set_compact(true);
+                es->set_alignment(Qt::AlignTop);
+                connect(es, &ui::EmptyState::primary_clicked, this, [this]() {
+                    if (current_view() != QLatin1String("create")) {
+                        open_view(QStringLiteral("create"));
+                        return;
+                    }
+                    for (auto* b : findChildren<QPushButton*>())
+                        if (b->property("rrCreateButton").toBool() && b->isEnabled()) {
+                            b->click();
+                            break;
+                        }
+                });
+                results_layout_->addWidget(es);
+                status_label_->setText(tr("No retrain configs"));
+                return;
+            }
+            results_layout_->addWidget(gs_section_header(
+                tr("RETRAIN CONFIGS  |  %n saved", "", static_cast<int>(schedules.size())),
+                ui::colors::legible(module_.color)));
+            QWidget* cards_w = result_host_;
+            {
+                {
                     int i = 0;
                     for (auto it = schedules.begin(); it != schedules.end(); ++it, ++i) {
                         const QString mid = it.key();
@@ -1079,7 +1527,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                         card->setStyleSheet(
                             QString("QWidget{background:%1;border:1px solid %2;border-radius:6px;}"
                                     "QWidget:hover{border-color:%3;}")
-                                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(), module_.color.name()));
+                                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(), ui::colors::legible(module_.color)));
 
                         auto* cvl = new QVBoxLayout(card);
                         cvl->setContentsMargins(12, 10, 12, 10);
@@ -1092,34 +1540,42 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                         thl->setContentsMargins(0, 0, 0, 0);
 
                         auto* id_lbl = new QLabel(mid, top);
-                        id_lbl->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;"
+                        id_lbl->setStyleSheet(QString("color:%1;font-weight:700;font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                                       "background:transparent;border:none;")
                                                   .arg(ui::colors::TEXT_PRIMARY()));
                         thl->addWidget(id_lbl);
                         thl->addStretch();
 
                         const QString status = obj["last_status"].toString(tr("pending"));
-                        const QString badge_color = (status == "completed") ? "#22c55e"
-                                                    : (status == "failed")  ? "#ef4444"
-                                                                            : "#f59e0b";
+                        // A state, not a direction: SUCCESS / DANGER, with the word beside it.
+                        const QString badge_color = (status == "completed") ? ui::colors::SUCCESS()
+                                                    : (status == "failed")  ? ui::colors::DANGER()
+                                                                            : ui::colors::WARNING();
                         auto* badge = new QLabel(status.toUpper(), top);
                         badge->setStyleSheet(QString("color:%1;background:transparent;border:none;"
-                                                     "font-size:10px;font-weight:700;")
+                                                     "font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;")
                                                  .arg(badge_color));
                         thl->addWidget(badge);
                         cvl->addWidget(top);
 
-                        // Details row
-                        const QString freq = obj["frequency"].toString(obj["freq"].toString());
-                        const QString window = QString::number(obj["window"].toInt());
-                        const QString next = obj["next_run"].toString("-").left(16).replace("T", "  ");
+                        // Details row. No frequency / next run: nothing runs a config on a
+                        // timer (retrains start only from Run Now / EXECUTE RETRAIN NOW).
+                        QString window = tr("from config");
+                        if (obj.contains("train_start")) { // created since the window is applied
+                            if (obj["window"].isDouble())
+                                window = tr("%1 trading days").arg(obj["window"].toInt());
+                            else if (!obj["train_start"].toString().isEmpty())
+                                window = tr("template, from %1").arg(obj["train_start"].toString());
+                        } else if (obj["template_generated"].toBool()) {
+                            window = tr("template, from 2010-01-01"); // older configs ignored the window
+                        }
                         const QString last = obj["last_run"].isNull()
                                                  ? tr("Never")
                                                  : obj["last_run"].toString().left(16).replace("T", "  ");
-                        auto* detail = new QLabel(
-                            tr("Freq: %1  |  Window: %2 days  |  Next: %3  |  Last: %4").arg(freq, window, next, last),
-                            card);
-                        detail->setStyleSheet(QString("color:%1;font-size:11px;"
+                        auto* detail = new QLabel(tr("Window: %1  |  Step: %2  |  Last: %3")
+                                                      .arg(window, QString::number(obj["step"].toInt(20)), last),
+                                                  card);
+                        detail->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                                       "background:transparent;border:none;")
                                                   .arg(ui::colors::TEXT_SECONDARY()));
                         cvl->addWidget(detail);
@@ -1134,42 +1590,61 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                         auto* run_btn = new QPushButton(tr("Run Now"), acts);
                         run_btn->setProperty("rrRetrain", true);
                         run_btn->setEnabled(!this->property("rrBusy").toBool());
-                        run_btn->setStyleSheet(
-                            QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
-                                    "border-radius:3px;font-size:10px;font-weight:700;padding:3px 10px;}"
-                                    "QPushButton:hover{background:%3;}")
-                                .arg(module_.color.name(), "#000000", module_.color.lighter(115).name()));
+                        const QString run_shape = QStringLiteral(
+                            "border:1px solid transparent; border-radius:3px; font-weight:700; padding:3px 10px;");
+                        run_btn->setProperty(kAccentShapeProp, run_shape);
+                        run_btn->setProperty(kAccentFontProp, -4);
+                        run_btn->setStyleSheet(accent_button_ss(module_.color, run_shape, -4));
                         connect(run_btn, &QPushButton::clicked, this, [this, mid]() {
-                            if (auto* pb = this->findChild<QProgressBar*>("rr_progress")) {
-                                pb->setValue(0);
-                                pb->setFormat(tr("Starting..."));
-                            }
-                            if (auto* log = this->findChild<QTextEdit*>("rr_log"))
-                                log->clear();
-                            status_label_->setText(tr("Retraining %1...").arg(mid));
-                            set_retrain_busy(this, true); // re-enabled by the run's done / error event
-                            QJsonObject p;
-                            p["model_id"] = mid;
-                            AIQuantLabService::instance().rolling_execute_retrain(p);
+                            // The Execute Retrain view runs it: its progress bar, log and result.
+                            open_view(QStringLiteral("execute"));
+                            if (QLineEdit* id = text_inputs_.value(QStringLiteral("rr_exec_id")))
+                                id->setText(mid);
+                            for (auto* b : findChildren<QPushButton*>())
+                                if (b->property("rrExecButton").toBool() && b->isEnabled()) {
+                                    b->click();
+                                    break;
+                                }
                         });
                         ahl->addWidget(run_btn);
 
                         auto* del_btn = new QPushButton(tr("Delete"), acts);
+                        del_btn->setProperty("fincept_agent_risk", "delete");
                         del_btn->setStyleSheet(
-                            QString("QPushButton{background:transparent;color:#ef4444;border:1px solid #ef4444;"
-                                    "border-radius:3px;font-size:10px;font-weight:700;padding:3px 10px;}"
-                                    "QPushButton:hover{background:#7f1d1d;}"));
+                            QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
+                                    "border-radius:3px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;padding:3px 10px;}"
+                                    "QPushButton:hover{background:%2;}")
+                                .arg(ui::colors::DANGER(), ui::colors::NEGATIVE_BG()));
                         connect(del_btn, &QPushButton::clicked, this, [this, mid]() {
-                            status_label_->setText(tr("Deleting %1...").arg(mid));
-                            QJsonObject p;
-                            p["model_id"] = mid;
-                            AIQuantLabService::instance().rolling_delete_schedule(p);
+                            // Removed from the saved configs at once: ask first, naming it.
+                            auto* box = new QMessageBox(
+                                QMessageBox::Warning, tr("Delete retrain config"),
+                                tr("Delete the retrain config \"%1\"?\n\nIts saved settings (window, step, last "
+                                   "run) are removed, with the YAML config this lab generated for it. Your own "
+                                   "config files and trained models are not touched.")
+                                    .arg(mid),
+                                QMessageBox::NoButton, this);
+                            box->setAttribute(Qt::WA_DeleteOnClose);
+                            auto* confirm = box->addButton(tr("Delete config"), QMessageBox::DestructiveRole);
+                            confirm->setProperty(fincept::core::agent::kAgentRiskProperty, "delete"); // as Delete
+                            QPushButton* cancel = box->addButton(QMessageBox::Cancel);
+                            box->setDefaultButton(cancel);
+                            box->setEscapeButton(cancel);
+                            connect(box, &QMessageBox::buttonClicked, this, [this, mid, confirm](QAbstractButton* b) {
+                                if (b != confirm)
+                                    return;
+                                status_label_->setText(tr("Deleting %1...").arg(mid));
+                                QJsonObject p;
+                                p["model_id"] = mid;
+                                AIQuantLabService::instance().rolling_delete_schedule(p);
+                            });
+                            box->open();
                         });
                         ahl->addWidget(del_btn);
                         ahl->addStretch();
                         cvl->addWidget(acts);
 
-                        cards_vl->insertWidget(i, card);
+                        results_layout_->addWidget(card);
                     }
                 }
             }
@@ -1184,15 +1659,35 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     ? tr("\nBuilt-in LightGBM+Alpha158 template generated at:\n%1").arg(payload["conf_path"].toString())
                     : "";
             clear_results();
-            auto* lbl = new QLabel(tr("Schedule created: %1\nFreq: %2  |  Window: %3 days  |  Next: %4%5")
-                                       .arg(payload["model_id"].toString(), sched["frequency"].toString(),
-                                            QString::number(sched["window"].toInt()),
-                                            sched["next_run"].toString().left(16).replace("T", "  "), tmpl),
+            QString window = tr("from config");
+            if (sched["window"].isDouble())
+                window = tr("%1 trading days (training from %2)")
+                             .arg(sched["window"].toInt())
+                             .arg(sched["train_start"].toString());
+            else if (!sched["train_start"].toString().isEmpty())
+                window = tr("template default (training from %1)").arg(sched["train_start"].toString());
+            QString note = payload["note"].toString();
+            if (!note.isEmpty())
+                note.prepend(QLatin1Char('\n'));
+            // The generated template's segments follow the chosen dataset's calendar.
+            const QJsonObject seg = payload["segments"].toObject();
+            if (!seg.isEmpty()) {
+                auto span = [&seg](const char* key) {
+                    const QJsonArray a = seg.value(QLatin1String(key)).toArray();
+                    return QStringLiteral("%1 → %2").arg(a.at(0).toString(), a.at(1).toString());
+                };
+                note += tr("\nDataset %1 (%2)  |  train %3  |  valid %4  |  test %5")
+                            .arg(payload["dataset_id"].toString(), sched["market"].toString(), span("train"),
+                                 span("valid"), span("test"));
+            }
+            auto* lbl = new QLabel(tr("Retrain config created: %1\nWindow: %2  |  Step: %3%4%5")
+                                       .arg(payload["model_id"].toString(), window,
+                                            QString::number(sched["step"].toInt(20)), tmpl, note),
                                    this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
-            status_label_->setText(tr("Schedule created — switch to Schedules tab to view"));
+            status_label_->setText(tr("Retrain config created — switch to the Retrain Configs tab to view"));
             return;
         }
 
@@ -1206,7 +1701,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                                        .arg(payload["step"].toInt())
                                        .arg(payload["horizon"].toInt()),
                                    this);
-            hdr->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;").arg(ui::colors::TEXT_PRIMARY()));
+            hdr->setStyleSheet(QString("color:%1;font-weight:700;font-size:" + fincept::ui::fonts::px(-1) + "px;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(hdr);
 
             // Table of windows. Sized from the returned array, not from
@@ -1224,8 +1719,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             int row = 0;
             for (const auto& v : windows) {
                 auto obj = v.toObject();
-                auto item = [&](const QString& s) {
-                    auto* it = new QTableWidgetItem(s.left(10));
+                // Dates are cut to yyyy-MM-dd; the composed "start → end" cell must not be,
+                // or the test END date was cut off.
+                auto item = [&](const QString& s, bool truncate = true) {
+                    auto* it = new QTableWidgetItem(truncate ? s.left(10) : s);
                     it->setTextAlignment(Qt::AlignCenter);
                     return it;
                 };
@@ -1234,7 +1731,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 tbl->setItem(row, 2, item(obj["train_end"].toString()));
                 tbl->setItem(row, 3,
                              item(QString("%1 → %2").arg(obj["test_start"].toString().left(10),
-                                                         obj["test_end"].toString().left(10))));
+                                                         obj["test_end"].toString().left(10)),
+                                  false));
                 ++row;
             }
             tbl->setMaximumHeight(220);

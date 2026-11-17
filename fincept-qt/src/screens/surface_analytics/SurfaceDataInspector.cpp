@@ -1,11 +1,15 @@
 #include "SurfaceDataInspector.h"
+#include "core/logging/Logger.h"
 
 #include "ui/theme/Theme.h"
 
 #include <QAbstractItemView>
 #include <QDateTime>
 #include <QDialog>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -25,7 +29,7 @@ using namespace fincept::ui;
 namespace {
 
 QString section_header_qss() {
-    return QString("background:%1; color:%2; font-size:9px; font-weight:bold; "
+    return QString("background:%1; color:%2; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; "
                    "padding:4px 8px; border-bottom:1px solid %3;")
         .arg(colors::BG_SURFACE())
         .arg(colors::TEXT_SECONDARY())
@@ -34,11 +38,11 @@ QString section_header_qss() {
 
 QString table_qss() {
     return QString("QTableView { background:%1; color:%2; gridline-color:%3; "
-                   "border:none; font-size:10px; font-family:Consolas; "
+                   "border:none; font-size:" + fincept::ui::fonts::px(-4) + "px; "
                    "selection-background-color:%4; selection-color:%5; }"
                    "QHeaderView::section { background:%6; color:%7; padding:3px 6px; "
                    "border:none; border-right:1px solid %3; border-bottom:1px solid %3; "
-                   "font-size:9px; font-weight:bold; }")
+                   "font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:bold; }")
         .arg(colors::BG_BASE())
         .arg(colors::TEXT_PRIMARY())
         .arg(colors::BORDER_DIM())
@@ -50,7 +54,7 @@ QString table_qss() {
 
 QString tab_qss() {
     return QString("QTabBar::tab { background:%1; color:%2; padding:4px 12px; "
-                   "border:1px solid %3; border-bottom:none; font-size:9px; }"
+                   "border:1px solid %3; border-bottom:none; font-size:" + fincept::ui::fonts::px(-5) + "px; }"
                    "QTabBar::tab:selected { background:%4; color:%5; }")
         .arg(colors::BG_BASE())
         .arg(colors::TEXT_DIM())
@@ -61,12 +65,13 @@ QString tab_qss() {
 
 QString small_btn_qss() {
     return QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
-                   "padding:3px 10px; font-size:9px; border-radius:2px; }"
-                   "QPushButton:hover { background:%3; color:%4; }")
+                   "padding:3px 10px; font-size:" + fincept::ui::fonts::px(-5) + "px; border-radius:2px; }"
+                   "QPushButton:hover { background:%5; color:%4; }")
         .arg(colors::BG_RAISED())
         .arg(colors::TEXT_SECONDARY())
         .arg(colors::BORDER_MED())
-        .arg(colors::TEXT_PRIMARY());
+        .arg(colors::TEXT_PRIMARY())
+        .arg(colors::BG_HOVER());
 }
 
 } // namespace
@@ -117,7 +122,7 @@ void SurfaceDataInspector::setup_ui() {
     table_view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_view_->setSortingEnabled(true);
     table_view_->verticalHeader()->setVisible(false);
-    table_view_->verticalHeader()->setDefaultSectionSize(18);
+    table_view_->verticalHeader()->setDefaultSectionSize(std::max(18, QFontMetrics(fonts::font(-4)).height() + 4));
     col1_layout->addWidget(table_view_, 1);
 
     outer->addWidget(col1, 6);
@@ -144,12 +149,12 @@ void SurfaceDataInspector::setup_ui() {
         auto* row = new QHBoxLayout();
         row->setSpacing(6);
         auto* k = new QLabel(key, lin_body);
-        k->setStyleSheet(QString("color:%1; font-size:9px; font-family:Consolas;").arg(colors::TEXT_DIM()));
+        k->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::TEXT_DIM()));
         k->setMinimumWidth(72);
         key_out = k;
         row->addWidget(k);
         target = new QLabel("—", lin_body);
-        target->setStyleSheet(QString("color:%1; font-size:10px; font-family:Consolas;").arg(colors::TEXT_PRIMARY()));
+        target->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(colors::TEXT_PRIMARY()));
         target->setWordWrap(true);
         row->addWidget(target, 1);
         lin_l->addLayout(row);
@@ -187,17 +192,17 @@ void SurfaceDataInspector::setup_ui() {
     auto* dot_row = new QHBoxLayout();
     dot_row->setSpacing(6);
     status_dot_ = new QLabel("●", status_body);
-    status_dot_->setStyleSheet(QString("color:%1; font-size:14px;").arg(colors::TEXT_DIM()));
+    status_dot_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(0) + "px;").arg(colors::TEXT_DIM()));
     dot_row->addWidget(status_dot_);
     status_label_ = new QLabel(tr("Idle"), status_body);
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(colors::TEXT_PRIMARY()));
+    status_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(colors::TEXT_PRIMARY()));
     dot_row->addWidget(status_label_, 1);
     status_l->addLayout(dot_row);
 
     error_label_ = new QLabel("", status_body);
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:Consolas;").arg(colors::NEGATIVE()));
+    error_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px;").arg(colors::DANGER()));
     status_l->addWidget(error_label_);
 
     view_raw_btn_ = new QPushButton(tr("VIEW RAW RESPONSE"), status_body);
@@ -278,7 +283,7 @@ void SurfaceDataInspector::set_lineage(const QString& dataset, const QString& sc
 void SurfaceDataInspector::set_status(const QString& message, bool ok) {
     QString stamp = QDateTime::currentDateTime().toString("hh:mm:ss");
     status_label_->setText(QString("[%1] %2").arg(stamp).arg(message));
-    status_dot_->setStyleSheet(QString("color:%1; font-size:14px;").arg(ok ? colors::POSITIVE() : colors::NEGATIVE()));
+    status_dot_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(0) + "px;").arg(ok ? colors::SUCCESS() : colors::DANGER()));
     if (ok)
         error_label_->setText("");
 }
@@ -286,7 +291,7 @@ void SurfaceDataInspector::set_status(const QString& message, bool ok) {
 void SurfaceDataInspector::set_error(const QString& error) {
     error_label_->setText(error);
     if (!error.isEmpty()) {
-        status_dot_->setStyleSheet(QString("color:%1; font-size:14px;").arg(colors::NEGATIVE()));
+        status_dot_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(0) + "px;").arg(colors::DANGER()));
     }
 }
 
@@ -301,7 +306,7 @@ void SurfaceDataInspector::on_view_raw_clicked() {
     auto* lay = new QVBoxLayout(&dlg);
     auto* edit = new QPlainTextEdit(&dlg);
     edit->setReadOnly(true);
-    edit->setStyleSheet(QString("background:%1; color:%2; font-family:Consolas; font-size:10px;")
+    edit->setStyleSheet(QString("background:%1; color:%2; font-size:" + fincept::ui::fonts::px(-4) + "px;")
                             .arg(colors::BG_BASE())
                             .arg(colors::TEXT_PRIMARY()));
     edit->setPlainText(raw_output_.isEmpty() ? tr("(no response captured yet)") : raw_output_);
@@ -326,8 +331,12 @@ void SurfaceDataInspector::on_export_csv_clicked() {
     if (path.isEmpty())
         return;
     QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        LOG_WARN("SurfaceDataInspector",
+                 QString("CSV export failed path=%1 error=\"%2\"").arg(fincept::log_path(path), f.errorString()));
+        set_status(tr("Could not save %1: %2").arg(QFileInfo(path).fileName(), f.errorString()), false);
         return;
+    }
     QTextStream out(&f);
     out << snap.headers.join(",") << "\n";
     for (const auto& r : snap.rows)

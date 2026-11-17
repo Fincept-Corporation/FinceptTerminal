@@ -86,7 +86,9 @@ static QVector<ConnectorConfig> cloud_configs() {
          true,
          {{"keyId", "Application Key ID", FieldType::Text, "your-key-id", true, "", {}},
           {"applicationKey", "Application Key", FieldType::Password, "", true, "", {}},
-          {"bucketId", "Bucket ID", FieldType::Text, "bucket-id", true, "", {}}}},
+          {"bucketId", "Bucket ID", FieldType::Text, "bucket-id", false, "", {}},
+          {"bucketName", "Bucket Name", FieldType::Text, "my-bucket", true, "", {}},
+          {"s3Endpoint", "S3 Endpoint", FieldType::Url, "https://s3.us-west-004.backblazeb2.com", true, "", {}}}},
 
         {"wasabi",
          "Wasabi",

@@ -1,21 +1,29 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
-#include "services/markets/MarketDataService.h"
-#include "ui/tables/DataTable.h"
+#include "screens/dashboard/widgets/DashboardScreens.h"
+#include "services/markets/MarketDataTypes.h"
 
 #include <QHash>
-#include <QPushButton>
+#include <QJsonObject>
 
-#include <algorithm>
+class QButtonGroup;
+class QLabel;
+class QTimer;
+
+namespace fincept::ui {
+class DataTable;
+}
 
 namespace fincept::screens::widgets {
 
-/// Gainers / losers ranked within a symbol UNIVERSE (configurable via the gear
-/// icon; default MarketDataService::mover_symbols()). It is not a whole-market
-/// scan — the tile says "among N tracked" so it never reads like one.
+/// Top movers tile — GAINERS / LOSERS / MOST ACTIVE.
 ///
-/// Subscribes to `market:quote:<sym>` on the DataHub for the universe. The row
-/// cache is re-sorted into `all_quotes_` on every delivery burst.
+/// Default ("region" universe): the user's MarketProfile region large caps from
+/// the Yahoo screener (ScreenerService, sorted server-side), refreshed every
+/// 5 minutes while visible. "List" universe (legacy {"symbols": [...]} configs
+/// keep it): the tile's own symbols ranked from their live quotes. The number of
+/// rows follows the tile height. Config: {"universe": "region"|"list",
+/// "symbols": [...], "tab": 0..2}.
 class TopMoversWidget : public BaseWidget {
     Q_OBJECT
   public:
@@ -25,34 +33,46 @@ class TopMoversWidget : public BaseWidget {
     void apply_config(const QJsonObject& cfg) override;
 
   protected:
-    void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
+    void on_theme_changed() override;
     void retranslateUi() override;
+    void on_topic_errors_changed() override;
     QDialog* make_config_dialog(QWidget* parent) override;
 
   private:
-    void apply_styles();
-    void refresh_data();
-    void show_tab(bool gainers);
-
-    void hub_subscribe_all();
-    void hub_unsubscribe_all();
-    /// Recompute `all_quotes_` from `row_cache_`, sort, and redraw the tab.
-    void rebuild_from_cache();
+    struct Row {
+        QString symbol;
+        QString name;
+        QString currency;
+        double price = services::kMarketDataAbsent;
+        double change_pct = services::kMarketDataAbsent;
+        double volume = services::kMarketDataAbsent;
+        double rel_volume = services::kMarketDataAbsent;
+        double market_cap = services::kMarketDataAbsent;
+        QString mcap_currency;
+    };
+    void run_screen(bool force);
+    void apply_result(const services::ScreenerResult& r);
+    void subscribe_list();
+    void render();
+    int visible_rows() const;
+    void update_title();
+    dash_screens::MoverKind kind() const;
 
     ui::DataTable* table_ = nullptr;
-    QLabel* universe_label_ = nullptr; ///< "ranked among N tracked" / empty-state line
-    QPushButton* gainers_btn_ = nullptr;
-    QPushButton* losers_btn_ = nullptr;
-    QVector<services::QuoteData> all_quotes_;
-    bool showing_gainers_ = true;
-    /// Guards the tab-button stylesheet reparse — show_tab() runs on every
-    /// hub delivery but the button CSS only changes with tab/theme.
-    bool tab_style_applied_ = false;
+    QButtonGroup* tabs_ = nullptr;
+    QLabel* footer_ = nullptr;
+    QTimer* refresh_timer_ = nullptr;
 
-    QHash<QString, services::QuoteData> row_cache_;
+    bool list_mode_ = false;
+    QString region_pin_; ///< config "market_region" (RegionPin.h); "" = follow the selector
     QStringList symbols_;
+    int tab_ = 0;
+    QString pending_key_;
+    QVector<Row> rows_;
+    QHash<QString, services::QuoteData> quotes_;
     bool hub_active_ = false;
 };
 

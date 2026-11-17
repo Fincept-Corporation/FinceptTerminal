@@ -3,465 +3,414 @@
 
 #include "algo_engine/ScanMonitor.h"
 #include "core/logging/Logger.h"
-#include "storage/repositories/ScanEventRepository.h"
-#include "storage/repositories/ScanWatchRepository.h"
+#include "screens/algo_trading/AlertsView.h"
+#include "services/algo_trading/AlgoRuleLogic.h"
 #include "trading/AccountManager.h"
-#include "ui/theme/Theme.h"
+#include "ui/widgets/algo/RuleTableEditor.h"
+#include "ui/widgets/algo/SymbolChipInput.h"
 
+#include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDateTime>
 #include <QHBoxLayout>
-#include <QHeaderView>
-#include <QInputDialog>
 #include <QJsonObject>
+#include <QLayout>
+#include <QLineEdit>
 #include <QMessageBox>
-#include <QScrollArea>
+#include <QPointer>
+#include <QSpinBox>
+#include <QTimer>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 
-#include <functional>
-
-namespace {
-
-inline QString kMonoFont() {
-    return QString("font-family: %1;").arg(fincept::ui::fonts::DATA_FAMILY);
-}
-inline QString kLabelStyle() {
-    return QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; %3"
-                   " background:transparent; border:none;")
-        .arg(fincept::ui::colors::TEXT_SECONDARY())
-        .arg(fincept::ui::fonts::TINY)
-        .arg(kMonoFont());
-}
-inline QString kSectionLabel() {
-    return QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; %3"
-                   " background:transparent; border:none;")
-        .arg(fincept::ui::colors::AMBER())
-        .arg(fincept::ui::fonts::TINY)
-        .arg(kMonoFont());
-}
-inline QString kComboStyle() {
-    return QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:4px 8px;"
-                   " font-size:%4px; %5 } QComboBox::drop-down { border:none; }"
-                   "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
-                   " selection-background-color:%6; %5 }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
-        .arg(fincept::ui::fonts::SMALL)
-        .arg(kMonoFont())
-        .arg(fincept::ui::colors::BG_HOVER());
-}
-inline QString kSpinStyle() {
-    return QString("QSpinBox { background:%1; color:%2; border:1px solid %3; padding:4px 8px;"
-                   " font-size:%4px; %5 } QSpinBox::up-button,QSpinBox::down-button { width:14px; }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
-        .arg(fincept::ui::fonts::SMALL)
-        .arg(kMonoFont());
-}
-inline QString kEditStyle() {
-    return QString("QTextEdit,QLineEdit { background:%1; border:1px solid %2; color:%3; padding:6px;"
-                   " font-size:%4px; %5 } QTextEdit:focus,QLineEdit:focus { border-color:%6; }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM(), fincept::ui::colors::TEXT_PRIMARY())
-        .arg(fincept::ui::fonts::SMALL)
-        .arg(kMonoFont())
-        .arg(fincept::ui::colors::BORDER_BRIGHT());
-}
-
-} // namespace
+#include <memory>
 
 namespace fincept::screens {
 
 using namespace fincept::services::algo;
+namespace kit = fincept::screens::algo_kit;
+namespace algo_rules = fincept::services::algo::rules;
 
-static fincept::ScanWatch watch_from_form(fincept::ui::algo::ConditionSection* section,
-                                          fincept::ui::algo::SymbolChipInput* symbols_input, QComboBox* timeframe,
-                                          QComboBox* data_source, QComboBox* account, QSpinBox* interval,
-                                          QSpinBox* cooldown, QCheckBox* providers, const QString& name) {
+namespace {
+
+/// "AAPL, MSFT, NVDA, TSLA +3"
+QString apl_symbols_text(const QStringList& symbols) {
+    constexpr int kShown = 4;
+    if (symbols.size() <= kShown)
+        return symbols.join(QStringLiteral(", "));
+    return symbols.mid(0, kShown).join(QStringLiteral(", ")) + QStringLiteral(" +%1").arg(symbols.size() - kShown);
+}
+
+} // namespace
+
+AlertsPanel::AlertsPanel(QWidget* parent) : QWidget(parent) {
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    view_ = new AlertsView(this);
+    root->addWidget(view_);
+
+    // The symbol chip input lives in the composer's slot (it talks to the quote service,
+    // which the view stays free of).
+    symbols_input_ = new fincept::ui::algo::SymbolChipInput(view_->symbols_slot());
+    symbols_input_->setAccessibleName(tr("Symbols to watch"));
+    view_->symbols_slot()->layout()->addWidget(symbols_input_);
+    connect(symbols_input_, &fincept::ui::algo::SymbolChipInput::price_resolved, this,
+            [this](const QString& s, double px) { prefill_close_from_price(s, px); });
+
+    connect(view_, &AlertsView::save_requested, this, &AlertsPanel::on_save_watch);
+    connect(view_, &AlertsView::new_requested, this, &AlertsPanel::new_watch);
+    connect(view_, &AlertsView::refresh_requested, this, &AlertsPanel::on_refresh_watches);
+    connect(view_, &AlertsView::retry_watches_requested, this, &AlertsPanel::on_refresh_watches);
+    connect(view_, &AlertsView::retry_history_requested, this, &AlertsPanel::refresh_history);
+    connect(view_, &AlertsView::open_scanner_requested, this, &AlertsPanel::open_scanner_requested);
+    connect(view_, &AlertsView::quick_symbols_requested, this,
+            [this](const QStringList& syms) { symbols_input_->set_symbols(syms); });
+    connect(view_, &AlertsView::edit_requested, this, [this](const QString& id) {
+        const auto it = watches_.constFind(id);
+        if (it != watches_.constEnd())
+            load_watch(it.value());
+    });
+    connect(view_, &AlertsView::test_requested, this,
+            [](const QString& id) { fincept::algo::ScanMonitor::instance().test_fire(id, QString()); });
+    connect(view_, &AlertsView::active_toggle_requested, this, &AlertsPanel::set_active);
+    connect(view_, &AlertsView::delete_requested, this, &AlertsPanel::request_delete);
+
+    // Status changes and fires (incl. TEST and universe-scan matches, recorded before the
+    // signal) refresh the tables — coalesced, and only while the tab is shown.
+    refresh_timer_ = new QTimer(this);
+    refresh_timer_->setSingleShot(true);
+    refresh_timer_->setInterval(250);
+    connect(refresh_timer_, &QTimer::timeout, this, [this]() {
+        if (refresh_history_only_)
+            refresh_history();
+        else
+            on_refresh_watches();
+        refresh_history_only_ = true;
+    });
+    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::watch_status_changed, this,
+            [this](const QString&, const QString&) { schedule_refresh(false); });
+    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::watch_fired, this,
+            [this](const QString&, const QString&, const QString&) { schedule_refresh(true); });
+    LOG_DEBUG("AlgoTrading", "AlertsPanel constructed");
+}
+
+// ── Reads (worker thread) ───────────────────────────────────────────────────
+
+void AlertsPanel::schedule_refresh(bool history_only) {
+    if (!isVisible()) {
+        dirty_ = true; // read on the next show
+        return;
+    }
+    if (!history_only)
+        refresh_history_only_ = false;
+    refresh_timer_->start();
+}
+
+void AlertsPanel::on_refresh_watches() {
+    const quint64 seq = ++watches_seq_;
+    const quint64 hseq = ++history_seq_;
+    view_->set_loading();
+    QPointer<AlertsPanel> self = this;
+    (void)QtConcurrent::run([self, seq, hseq]() {
+        QVector<fincept::ScanWatch> watches;
+        QString werr;
+        auto w = fincept::ScanWatchRepository::instance().list_all();
+        if (w.is_err())
+            werr = QString::fromStdString(w.error());
+        else
+            watches = w.value();
+        QVector<fincept::ScanWatchEvent> events;
+        QString herr;
+        auto h = fincept::ScanEventRepository::instance().recent(50);
+        if (h.is_err())
+            herr = QString::fromStdString(h.error());
+        else
+            events = h.value();
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, seq, hseq, watches, werr, events, herr]() {
+                if (!self)
+                    return;
+                if (seq == self->watches_seq_)
+                    self->apply_watches(watches, werr);
+                if (hseq == self->history_seq_)
+                    self->apply_history(events, herr);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void AlertsPanel::refresh_history() {
+    const quint64 hseq = ++history_seq_;
+    QPointer<AlertsPanel> self = this;
+    (void)QtConcurrent::run([self, hseq]() {
+        QVector<fincept::ScanWatchEvent> events;
+        QString herr;
+        auto h = fincept::ScanEventRepository::instance().recent(50);
+        if (h.is_err())
+            herr = QString::fromStdString(h.error());
+        else
+            events = h.value();
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, hseq, events, herr]() {
+                if (self && hseq == self->history_seq_)
+                    self->apply_history(events, herr);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void AlertsPanel::apply_watches(const QVector<fincept::ScanWatch>& watches, const QString& error) {
+    if (!error.isEmpty()) {
+        LOG_WARN("AlgoTrading", QString("Live watches could not be read error=\"%1\"").arg(error));
+        view_->set_watches_error(error);
+        return;
+    }
+    watches_.clear();
+    QVector<AlertsWatchRow> rows;
+    rows.reserve(watches.size());
+    for (const auto& w : watches) {
+        watches_.insert(w.id, w);
+        AlertsWatchRow r;
+        r.id = w.id;
+        r.name = w.name;
+        r.symbols_text = w.symbols.isEmpty() && !w.universe.isEmpty() ? w.universe : apl_symbols_text(w.symbols);
+        r.symbol_count = static_cast<int>(w.symbols.size());
+        r.timeframe = w.timeframe;
+        r.rule_text = algo_rules::rules_sentence(w.conditions, w.logic, algo_rules::Side::Alert);
+        r.status = w.status;
+        r.data_source = w.data_source;
+        r.active = w.active;
+        r.interval_sec = w.interval_sec;
+        r.last_eval_at = w.last_eval_at;
+        r.last_fired_at = w.last_fired_at;
+        rows.append(r);
+    }
+    view_->set_watches(rows);
+    view_->set_as_of(QDateTime::currentDateTime());
+}
+
+void AlertsPanel::apply_history(const QVector<fincept::ScanWatchEvent>& events, const QString& error) {
+    if (!error.isEmpty()) {
+        LOG_WARN("AlgoTrading", QString("Alert history could not be read error=\"%1\"").arg(error));
+        view_->set_history_error(error);
+        return;
+    }
+    QVector<AlertsFiredRow> rows;
+    rows.reserve(events.size());
+    for (const auto& e : events) {
+        AlertsFiredRow r;
+        r.id = e.id.isEmpty() ? QStringLiteral("%1|%2|%3").arg(e.watch_id).arg(e.fired_at).arg(e.symbol) : e.id;
+        r.fired_at = e.fired_at;
+        r.symbol = e.symbol;
+        r.detail = e.detail;
+        // A deleted watch keeps its fired alerts: it is then named by nothing (shown "—").
+        r.watch_name = watches_.value(e.watch_id).name;
+        rows.append(r);
+    }
+    view_->set_history(rows);
+}
+
+// ── Writes (worker thread, ScanMonitor on the GUI thread) ───────────────────
+
+void AlertsPanel::run_write(std::function<QString()> work, std::function<void(const QString&)> done) {
+    QPointer<AlertsPanel> self = this;
+    (void)QtConcurrent::run([self, work = std::move(work), done = std::move(done)]() {
+        const QString err = work();
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, err, done]() {
+                if (self)
+                    done(err);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+fincept::ScanWatch AlertsPanel::watch_from_form(const QString& name) const {
     fincept::ScanWatch w;
     w.name = name;
-    w.conditions = section->conditions();
-    w.logic = section->combined_logic();
-    w.symbols = symbols_input->symbols();
-    w.timeframe = timeframe->currentText();
+    w.conditions = view_->rules()->conditions();
+    w.logic = view_->rules()->combined_logic();
+    w.symbols = symbols_input_->symbols();
+    w.timeframe = view_->timeframe_combo()->currentText();
     w.lookback_days = algo_default_lookback_days(w.timeframe); // auto — no UI field
-    w.data_source = data_source->currentData().toString();
-    w.account_id = account->currentData().toString();
+    w.data_source = view_->data_source_combo()->currentData().toString();
+    w.account_id = view_->account_combo()->isEnabled() ? view_->account_combo()->currentData().toString() : QString();
     if (!w.account_id.isEmpty())
         w.broker_id = fincept::trading::AccountManager::instance().get_account(w.account_id).broker_id;
     w.mode = QStringLiteral("poll");
-    w.interval_sec = interval->value();
-    w.cooldown_min = cooldown->value();
+    w.interval_sec = view_->interval_spin()->value();
+    w.cooldown_min = view_->cooldown_spin()->value();
     QJsonObject actions;
     actions["toast"] = true;
-    actions["providers"] = providers->isChecked();
+    actions["providers"] = view_->providers_check()->isChecked();
     w.actions = actions;
     w.active = true;
     return w;
 }
 
-AlertsPanel::AlertsPanel(QWidget* parent) : QWidget(parent) {
-    build_ui();
-    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::watch_status_changed, this,
-            [this](const QString&, const QString&) { on_refresh_watches(); });
-    on_refresh_watches();
-    refresh_history();
-    LOG_INFO("AlgoTrading", "AlertsPanel constructed");
-}
-
-void AlertsPanel::build_ui() {
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(fincept::ui::colors::BG_BASE()));
-    auto* vl = new QVBoxLayout(content);
-    vl->setContentsMargins(16, 12, 16, 12);
-    vl->setSpacing(8);
-
-    cond_title_ = new QLabel(tr("ALERT CONDITIONS"), content);
-    cond_title_->setStyleSheet(kSectionLabel());
-    vl->addWidget(cond_title_);
-    section_ = new fincept::ui::algo::ConditionSection(fincept::ui::algo::ConditionSection::Type::Entry, content);
-    vl->addWidget(section_);
-
-    sym_title_ = new QLabel(tr("SYMBOLS & FEED"), content);
-    sym_title_->setStyleSheet(kSectionLabel());
-    vl->addWidget(sym_title_);
-
-    symbols_input_ = new fincept::ui::algo::SymbolChipInput(content);
-    symbols_input_->setMinimumHeight(54);
-    vl->addWidget(symbols_input_);
-    connect(symbols_input_, &fincept::ui::algo::SymbolChipInput::price_resolved, this,
-            [this](const QString& s, double px) { prefill_close_from_price(s, px); });
-
-    auto* quick = new QHBoxLayout;
-    auto* nifty = new QPushButton("NIFTY 50", content);
-    nifty->setCursor(Qt::PointingHandCursor);
-    nifty->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                                 " font-size:%4px; font-weight:700; %5 padding:2px 10px; }"
-                                 "QPushButton:hover { background:%6; color:%7; }")
-                             .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_SECONDARY(),
-                                  fincept::ui::colors::BORDER_DIM())
-                             .arg(fincept::ui::fonts::TINY)
-                             .arg(kMonoFont())
-                             .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::TEXT_PRIMARY()));
-    connect(nifty, &QPushButton::clicked, this, [this]() { symbols_input_->set_symbols(nifty50_symbols()); });
-    auto* bn = new QPushButton("BANK NIFTY", content);
-    bn->setCursor(Qt::PointingHandCursor);
-    bn->setStyleSheet(nifty->styleSheet());
-    connect(bn, &QPushButton::clicked, this, [this]() { symbols_input_->set_symbols(bank_nifty_symbols()); });
-    quick->addWidget(nifty);
-    quick->addWidget(bn);
-    quick->addStretch();
-    vl->addLayout(quick);
-
-    auto* grid = new QHBoxLayout;
-    auto* col1 = new QVBoxLayout;
-    auto* col2 = new QVBoxLayout;
-
-    tf_lbl_ = new QLabel(tr("TIMEFRAME"), content);
-    tf_lbl_->setStyleSheet(kLabelStyle());
-    timeframe_combo_ = new QComboBox(content);
-    timeframe_combo_->addItems(algo_timeframes());
-    timeframe_combo_->setCurrentIndex(algo_timeframes().indexOf("1m"));
-    timeframe_combo_->setStyleSheet(kComboStyle());
-    col1->addWidget(tf_lbl_);
-    col1->addWidget(timeframe_combo_);
-
-    ds_lbl_ = new QLabel(tr("DATA SOURCE"), content);
-    ds_lbl_->setStyleSheet(kLabelStyle());
-    data_source_combo_ = new QComboBox(content);
-    data_source_combo_->addItem(tr("Broker Only"), "Broker");
-    data_source_combo_->addItem(tr("Auto (Broker → YFinance)"), "Auto");
-    data_source_combo_->addItem(tr("YFinance Only"), "YFinance");
-    data_source_combo_->setStyleSheet(kComboStyle());
-    col1->addWidget(ds_lbl_);
-    col1->addWidget(data_source_combo_);
-
-    acct_lbl_ = new QLabel(tr("BROKER ACCOUNT"), content);
-    acct_lbl_->setStyleSheet(kLabelStyle());
-    account_combo_ = new QComboBox(content);
-    account_combo_->addItem(tr("None (use YFinance fallback)"), "");
-    for (const auto& acct : fincept::trading::AccountManager::instance().list_accounts())
-        account_combo_->addItem(QString("%1 (%2)").arg(acct.display_name, acct.broker_id), acct.account_id);
-    account_combo_->setStyleSheet(kComboStyle());
-    col1->addWidget(acct_lbl_);
-    col1->addWidget(account_combo_);
-    connect(data_source_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
-        const bool show = data_source_combo_->currentData().toString() != "YFinance";
-        account_combo_->setVisible(show);
-        acct_lbl_->setVisible(show);
-    });
-
-    iv_lbl_ = new QLabel(tr("POLL INTERVAL (SEC)"), content);
-    iv_lbl_->setStyleSheet(kLabelStyle());
-    interval_spin_ = new QSpinBox(content);
-    interval_spin_->setRange(30, 86400);
-    interval_spin_->setValue(60);
-    interval_spin_->setStyleSheet(kSpinStyle());
-    col2->addWidget(iv_lbl_);
-    col2->addWidget(interval_spin_);
-
-    cd_lbl_ = new QLabel(tr("COOLDOWN (MIN)"), content);
-    cd_lbl_->setStyleSheet(kLabelStyle());
-    cooldown_spin_ = new QSpinBox(content);
-    cooldown_spin_->setRange(0, 1440);
-    cooldown_spin_->setValue(15);
-    cooldown_spin_->setStyleSheet(kSpinStyle());
-    col2->addWidget(cd_lbl_);
-    col2->addWidget(cooldown_spin_);
-
-    providers_chk_ = new QCheckBox(tr("Send to external providers"), content);
-    providers_chk_->setStyleSheet(kLabelStyle());
-    col2->addWidget(providers_chk_);
-    col2->addStretch();
-
-    grid->addLayout(col1, 1);
-    grid->addLayout(col2, 1);
-    vl->addLayout(grid);
-
-    name_lbl_ = new QLabel(tr("WATCH NAME"), content);
-    name_lbl_->setStyleSheet(kLabelStyle());
-    name_edit_ = new QLineEdit(content);
-    name_edit_->setStyleSheet(kEditStyle());
-    name_edit_->setPlaceholderText(tr("My Volume Watch"));
-    vl->addWidget(name_lbl_);
-    vl->addWidget(name_edit_);
-
-    save_btn_ = new QPushButton(tr("SAVE WATCH"), content);
-    save_btn_->setCursor(Qt::PointingHandCursor);
-    save_btn_->setFixedHeight(36);
-    save_btn_->setStyleSheet(
-        QString("QPushButton { background:rgba(255,196,0,0.1); color:#FFC400;"
-                " border:1px solid #FFC400; font-size:%1px; font-weight:700; %2 padding:6px 24px; }"
-                "QPushButton:hover { background:#FFC400; color:%3; }")
-            .arg(fincept::ui::fonts::DATA)
-            .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_BASE()));
-    connect(save_btn_, &QPushButton::clicked, this, &AlertsPanel::on_save_watch);
-    vl->addWidget(save_btn_);
-
-    status_label_ = new QLabel("", content);
-    status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(kLabelStyle());
-    vl->addWidget(status_label_);
-
-    watches_title_ = new QLabel(tr("LIVE WATCHES"), content);
-    watches_title_->setStyleSheet(kSectionLabel());
-    vl->addWidget(watches_title_);
-
-    watches_table_ = new QTableWidget(0, 5, content);
-    watches_table_->setHorizontalHeaderLabels({tr("NAME"), tr("SYMBOLS"), tr("STATUS"), tr("ACTIVE"), tr("ACTIONS")});
-    watches_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    watches_table_->setColumnWidth(0, 140);
-    watches_table_->setColumnWidth(2, 90);
-    watches_table_->setColumnWidth(3, 70);
-    watches_table_->setColumnWidth(4, 130);
-    watches_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    watches_table_->verticalHeader()->setVisible(false);
-    watches_table_->setMinimumHeight(160);
-    watches_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; border:1px solid %2;"
-                " gridline-color:%2; font-size:%3px; font-family:%4; color:%5; }"
-                "QHeaderView::section { background:%6; color:%7; font-size:%3px; font-weight:700;"
-                " font-family:%4; padding:4px 8px; border:none; border-bottom:1px solid %2; }")
-            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_DIM())
-            .arg(fincept::ui::fonts::SMALL)
-            .arg(fincept::ui::fonts::DATA_FAMILY)
-            .arg(fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BG_RAISED(),
-                 fincept::ui::colors::TEXT_TERTIARY()) +
-        QString("QPushButton#apRowBtn { background: transparent; color: %1; border: 1px solid %2;"
-                " font-size: %3px; font-weight: 700; %4 padding: 1px 8px; }"
-                "QPushButton#apRowBtn:hover { color: %5; border-color: %5; }"
-                "QPushButton#apRowDelete { background: transparent; color: %6; border: 1px solid %6;"
-                " font-size: %3px; font-weight: 700; %4 padding: 1px 8px; }"
-                "QPushButton#apRowDelete:hover { background: rgba(220,38,38,0.12); }")
-            .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
-            .arg(fincept::ui::fonts::TINY)
-            .arg(kMonoFont())
-            .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::NEGATIVE()));
-    vl->addWidget(watches_table_);
-
-    auto* hist_divider = new QFrame(content);
-    hist_divider->setFrameShape(QFrame::HLine);
-    hist_divider->setFixedHeight(1);
-    hist_divider->setStyleSheet(QString("background:%1; border:none;").arg(fincept::ui::colors::BORDER_DIM()));
-    vl->addSpacing(10);
-    vl->addWidget(hist_divider);
-    vl->addSpacing(10);
-
-    history_title_ = new QLabel(tr("ALERT HISTORY"), content);
-    history_title_->setStyleSheet(kSectionLabel());
-    vl->addWidget(history_title_);
-    history_table_ = new QTableWidget(0, 3, content);
-    history_table_->setHorizontalHeaderLabels({tr("TIME"), tr("SYMBOL"), tr("DETAIL")});
-    history_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    history_table_->setColumnWidth(0, 150);
-    history_table_->setColumnWidth(1, 120);
-    history_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    history_table_->verticalHeader()->setVisible(false);
-    history_table_->setMinimumHeight(120);
-    history_table_->setStyleSheet(watches_table_->styleSheet());
-    vl->addWidget(history_table_);
-
-    vl->addStretch();
-
-    scroll->setWidget(content);
-    root->addWidget(scroll);
-}
-
 void AlertsPanel::on_save_watch() {
-    if (section_->conditions().isEmpty()) {
-        status_label_->setText(tr("Add at least one condition before saving a watch."));
+    if (view_->rules()->conditions().isEmpty()) {
+        view_->set_message(tr("Add at least one rule before saving a watch."), kit::Tone::Danger);
         return;
     }
-    QString name = name_edit_->text().trimmed();
+    for (const auto& issue : view_->rules()->issues()) {
+        if (!issue.blocking)
+            continue;
+        const QString where = issue.child >= 0 ? QStringLiteral("%1.%2").arg(issue.index + 1).arg(issue.child + 1)
+                                               : QString::number(issue.index + 1);
+        view_->set_message(tr("Rule %1: %2").arg(where, issue.reason), kit::Tone::Danger);
+        return;
+    }
+    QString name = view_->name_edit()->text().trimmed();
     if (name.isEmpty())
-        name = tr("Watch %1").arg(watches_table_->rowCount() + 1);
-    auto w = watch_from_form(section_, symbols_input_, timeframe_combo_, data_source_combo_, account_combo_,
-                             interval_spin_, cooldown_spin_, providers_chk_, name);
+        name = tr("Watch %1").arg(watches_.size() + 1);
+    fincept::ScanWatch w = watch_from_form(name);
     if (w.symbols.isEmpty()) {
-        status_label_->setText(tr("Enter at least one symbol."));
+        view_->set_message(tr("Enter at least one symbol."), kit::Tone::Danger);
         return;
     }
-    // DATA SOURCE defaults to "Broker Only" and the account to "None": that pair can never
-    // fetch a candle, so the watch would sit "watching" forever without ever evaluating.
+    // DATA SOURCE "Broker only" with no account can never fetch a candle: the watch would
+    // sit "watching" forever without ever evaluating.
     if (w.data_source == QLatin1String("Broker") && w.account_id.isEmpty()) {
-        status_label_->setText(
-            tr("Data source is 'Broker Only' but no broker account is selected — pick an account, or switch the "
-               "data source to Auto / YFinance."));
+        view_->set_message(tr("Data source is 'Broker only' but no broker account is selected — pick an account, or "
+                              "switch the data source to Auto / Yahoo."),
+                           kit::Tone::Danger);
         return;
     }
-    // Editing an existing watch → UPDATE in place + restart its monitor.
     if (!editing_id_.isEmpty()) {
+        // Editing an existing watch → UPDATE in place + restart its monitor.
         w.id = editing_id_;
-        auto r = fincept::ScanWatchRepository::instance().update(w);
-        if (r.is_err()) {
-            status_label_->setText(tr("Update failed: %1").arg(QString::fromStdString(r.error())));
-            return;
-        }
-        fincept::algo::ScanMonitor::instance().reload(editing_id_);
-        status_label_->setText(tr("Watch '%1' updated and re-watching.").arg(name));
-        editing_id_.clear();
-        save_btn_->setText(tr("SAVE WATCH"));
-        name_edit_->clear();
-        on_refresh_watches();
+        const QString id = editing_id_;
+        view_->set_message(tr("Updating '%1'…").arg(name), kit::Tone::Dim);
+        run_write(
+            [w]() {
+                auto r = fincept::ScanWatchRepository::instance().update(w);
+                return r.is_err() ? QString::fromStdString(r.error()) : QString();
+            },
+            [this, id, name](const QString& err) {
+                if (!err.isEmpty()) {
+                    view_->set_message(tr("Update failed: %1").arg(err), kit::Tone::Danger);
+                    return;
+                }
+                fincept::algo::ScanMonitor::instance().reload(id);
+                if (editing_id_ == id) {
+                    editing_id_.clear();
+                    view_->set_editing(QString());
+                    view_->name_edit()->clear();
+                }
+                view_->set_message(tr("Watch '%1' updated and re-watching.").arg(name), kit::Tone::Ok);
+                on_refresh_watches();
+            });
         return;
     }
-    auto r = fincept::ScanWatchRepository::instance().create(w);
-    if (r.is_err()) {
-        status_label_->setText(tr("Save failed: %1").arg(QString::fromStdString(r.error())));
-        return;
-    }
-    fincept::algo::ScanMonitor::instance().reload(r.value().id);
-    status_label_->setText(tr("Watch '%1' saved and monitoring.").arg(name));
-    name_edit_->clear();
-    on_refresh_watches();
-}
-
-void AlertsPanel::load_watch(const fincept::ScanWatch& w) {
-    section_->set_conditions(w.conditions, w.logic);
-    symbols_input_->set_symbols(w.symbols);
-    if (int i = timeframe_combo_->findText(w.timeframe); i >= 0)
-        timeframe_combo_->setCurrentIndex(i);
-    if (int i = data_source_combo_->findData(w.data_source); i >= 0)
-        data_source_combo_->setCurrentIndex(i);
-    if (int i = account_combo_->findData(w.account_id); i >= 0)
-        account_combo_->setCurrentIndex(i);
-    interval_spin_->setValue(w.interval_sec);
-    cooldown_spin_->setValue(w.cooldown_min);
-    providers_chk_->setChecked(w.actions.value("providers").toBool(false));
-    name_edit_->setText(w.name);
-    editing_id_ = w.id;
-    save_btn_->setText(tr("UPDATE WATCH"));
-    status_label_->setText(tr("Editing '%1' — change conditions/symbols and press UPDATE WATCH.").arg(w.name));
-}
-
-void AlertsPanel::on_refresh_watches() {
-    watches_table_->setRowCount(0);
-    watches_table_->setColumnWidth(4, 200); // fit Edit / Test / Delete
-    auto r = fincept::ScanWatchRepository::instance().list_all();
-    if (r.is_err())
-        return;
-    for (const auto& w : r.value()) {
-        const int row = watches_table_->rowCount();
-        watches_table_->insertRow(row);
-        watches_table_->setItem(row, 0, new QTableWidgetItem(w.name));
-        watches_table_->setItem(row, 1, new QTableWidgetItem(w.symbols.join(", ")));
-        watches_table_->setItem(row, 2, new QTableWidgetItem(w.status));
-        auto* active = new QCheckBox(watches_table_);
-        active->setChecked(w.active);
-        const QString id = w.id;
-        connect(active, &QCheckBox::toggled, this, [id](bool on) {
-            fincept::ScanWatchRepository::instance().set_active(id, on);
-            fincept::algo::ScanMonitor::instance().reload(id);
-        });
-        watches_table_->setCellWidget(row, 3, active);
-        auto* cell = new QWidget(watches_table_);
-        auto* hl = new QHBoxLayout(cell);
-        hl->setContentsMargins(2, 0, 2, 0);
-        // Object names only — the skins live on the table's stylesheet (P7) and
-        // give these three the terminal look instead of the platform default.
-        auto* edit = new QPushButton(tr("Edit"), cell);
-        edit->setObjectName(QStringLiteral("apRowBtn"));
-        edit->setAccessibleName(tr("Edit watch %1").arg(w.name));
-        connect(edit, &QPushButton::clicked, this, [this, w]() { load_watch(w); });
-        auto* test = new QPushButton(tr("Test"), cell);
-        test->setObjectName(QStringLiteral("apRowBtn"));
-        test->setAccessibleName(tr("Fire a test alert for watch %1").arg(w.name));
-        connect(test, &QPushButton::clicked, this,
-                [id]() { fincept::algo::ScanMonitor::instance().test_fire(id, QString()); });
-        auto* del = new QPushButton(tr("Delete"), cell);
-        del->setObjectName(QStringLiteral("apRowDelete"));
-        del->setAccessibleName(tr("Delete watch %1").arg(w.name));
-        const QString wname = w.name;
-        connect(del, &QPushButton::clicked, this, [this, id, wname]() {
-            // Deleting a watch stops a live monitor and drops its config with no
-            // recovery path — confirm first.
-            const auto ans = QMessageBox::question(
-                this, tr("Delete Watch"),
-                tr("Delete watch \"%1\"?\n\nIt stops monitoring immediately. Its alert history is kept.").arg(wname),
-                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (ans != QMessageBox::Yes)
+    view_->set_message(tr("Saving '%1'…").arg(name), kit::Tone::Dim);
+    auto created = std::make_shared<QString>();
+    run_write(
+        [w, created]() {
+            auto r = fincept::ScanWatchRepository::instance().create(w);
+            if (r.is_err())
+                return QString::fromStdString(r.error());
+            *created = r.value().id;
+            return QString();
+        },
+        [this, created, name](const QString& err) {
+            if (!err.isEmpty()) {
+                view_->set_message(tr("Save failed: %1").arg(err), kit::Tone::Danger);
                 return;
-            fincept::algo::ScanMonitor::instance().stop_watch(id);
-            fincept::ScanWatchRepository::instance().remove(id);
-            // Editing state can't survive its own row being deleted.
-            if (editing_id_ == id) {
-                editing_id_.clear();
-                save_btn_->setText(tr("SAVE WATCH"));
-                status_label_->setText(tr("The watch being edited was deleted — this is now a new watch."));
             }
-            // Keep the fired history: deleting a live watch must NOT erase its
-            // already-triggered events from ALERT HISTORY.
+            fincept::algo::ScanMonitor::instance().reload(*created);
+            view_->set_message(tr("Watch '%1' saved and monitoring.").arg(name), kit::Tone::Ok);
+            view_->name_edit()->clear();
             on_refresh_watches();
         });
-        hl->addWidget(edit);
-        hl->addWidget(test);
-        hl->addWidget(del);
-        watches_table_->setCellWidget(row, 4, cell);
-    }
-    refresh_history();
 }
 
-void AlertsPanel::refresh_history() {
-    history_table_->setRowCount(0);
-    auto r = fincept::ScanEventRepository::instance().recent(50);
-    if (r.is_err())
+void AlertsPanel::set_active(const QString& id, bool on) {
+    run_write(
+        [id, on]() {
+            auto r = fincept::ScanWatchRepository::instance().set_active(id, on);
+            return r.is_err() ? QString::fromStdString(r.error()) : QString();
+        },
+        [this, id](const QString& err) {
+            if (!err.isEmpty()) {
+                view_->set_message(tr("Could not change the watch: %1").arg(err), kit::Tone::Danger);
+                return;
+            }
+            fincept::algo::ScanMonitor::instance().reload(id);
+            on_refresh_watches();
+        });
+}
+
+void AlertsPanel::request_delete(const QString& id) {
+    const QString wname = watches_.value(id).name;
+    // Deleting a watch stops a live monitor and drops its configuration with no recovery
+    // path — confirm first.
+    const auto ans = QMessageBox::question(
+        this, tr("Delete Watch"),
+        tr("Delete watch \"%1\"?\n\nIt stops monitoring immediately. Its alert history is kept.").arg(wname),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (ans != QMessageBox::Yes)
         return;
-    for (const auto& e : r.value()) {
-        const int row = history_table_->rowCount();
-        history_table_->insertRow(row);
-        history_table_->setItem(
-            row, 0, new QTableWidgetItem(QDateTime::fromMSecsSinceEpoch(e.fired_at).toString("yyyy-MM-dd HH:mm:ss")));
-        history_table_->setItem(row, 1, new QTableWidgetItem(e.symbol));
-        history_table_->setItem(row, 2, new QTableWidgetItem(e.detail));
+    fincept::algo::ScanMonitor::instance().stop_watch(id);
+    // Editing state can't survive its own row being deleted.
+    if (editing_id_ == id) {
+        editing_id_.clear();
+        view_->set_editing(QString());
+        view_->set_message(tr("The watch being edited was deleted — this is now a new watch."), kit::Tone::Warn);
     }
+    run_write(
+        [id]() {
+            // The fired history is kept: deleting a live watch must NOT erase its events.
+            auto r = fincept::ScanWatchRepository::instance().remove(id);
+            return r.is_err() ? QString::fromStdString(r.error()) : QString();
+        },
+        [this](const QString& err) {
+            if (!err.isEmpty())
+                view_->set_message(tr("Delete failed: %1").arg(err), kit::Tone::Danger);
+            on_refresh_watches();
+        });
+}
+
+// ── Composer ────────────────────────────────────────────────────────────────
+
+void AlertsPanel::load_watch(const fincept::ScanWatch& w) {
+    view_->rules()->set_conditions(w.conditions, w.logic);
+    symbols_input_->set_symbols(w.symbols);
+    if (int i = view_->timeframe_combo()->findText(w.timeframe); i >= 0)
+        view_->timeframe_combo()->setCurrentIndex(i);
+    if (int i = view_->data_source_combo()->findData(w.data_source); i >= 0)
+        view_->data_source_combo()->setCurrentIndex(i);
+    if (int i = view_->account_combo()->findData(w.account_id); i >= 0)
+        view_->account_combo()->setCurrentIndex(i);
+    view_->interval_spin()->setValue(w.interval_sec);
+    view_->cooldown_spin()->setValue(w.cooldown_min);
+    view_->providers_check()->setChecked(w.actions.value("providers").toBool(false));
+    view_->name_edit()->setText(w.name);
+    editing_id_ = w.id;
+    view_->set_editing(w.name);
+    view_->set_message(tr("Editing '%1' — change rules / symbols and press UPDATE WATCH (NEW starts over).").arg(w.name),
+                       kit::Tone::Info);
+}
+
+void AlertsPanel::new_watch() {
+    editing_id_.clear();
+    view_->set_editing(QString());
+    view_->name_edit()->clear();
+    view_->rules()->clear_all();
+    symbols_input_->clear();
+    view_->set_message(QString());
+    view_->rules()->focus_first();
 }
 
 void AlertsPanel::prefill_close_from_price(const QString& /*symbol*/, double price) {
     if (price <= 0)
         return;
-    QJsonArray conds = section_->conditions();
+    QJsonArray conds = view_->rules()->conditions();
     bool changed = false;
     std::function<void(QJsonArray&)> walk = [&](QJsonArray& arr) {
         for (int i = 0; i < arr.size(); ++i) {
@@ -481,61 +430,45 @@ void AlertsPanel::prefill_close_from_price(const QString& /*symbol*/, double pri
     };
     walk(conds);
     if (changed)
-        section_->set_conditions(conds, section_->combined_logic());
+        view_->rules()->set_conditions(conds, view_->rules()->combined_logic());
 }
 
 void AlertsPanel::prefill(const QJsonArray& conditions, const QString& logic, const QStringList& symbols,
                           const QString& timeframe, const QString& data_source, const QString& account_id) {
-    section_->set_conditions(conditions, logic);
+    view_->rules()->set_conditions(conditions, logic);
     symbols_input_->set_symbols(symbols);
-    if (int i = timeframe_combo_->findText(timeframe); i >= 0)
-        timeframe_combo_->setCurrentIndex(i);
-    if (int i = data_source_combo_->findData(data_source); i >= 0)
-        data_source_combo_->setCurrentIndex(i);
-    if (int i = account_combo_->findData(account_id); i >= 0)
-        account_combo_->setCurrentIndex(i);
+    if (int i = view_->timeframe_combo()->findText(timeframe); i >= 0)
+        view_->timeframe_combo()->setCurrentIndex(i);
+    if (int i = view_->data_source_combo()->findData(data_source); i >= 0)
+        view_->data_source_combo()->setCurrentIndex(i);
+    if (int i = view_->account_combo()->findData(account_id); i >= 0)
+        view_->account_combo()->setCurrentIndex(i);
     editing_id_.clear();
-    save_btn_->setText(tr("SAVE WATCH"));
-    status_label_->setText(tr("Pre-filled from Scanner — name it and SAVE WATCH."));
+    view_->set_editing(QString());
+    view_->set_message(tr("Pre-filled from Scanner — name it and SAVE WATCH."), kit::Tone::Info);
 }
 
 void AlertsPanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    // ALERT HISTORY only refreshed on construction and on watch_status_changed,
-    // so alerts that fired while another tab was open never appeared until the
-    // next status change. Re-read on entry (cheap: two capped SELECTs, no timer).
+    // Re-read on entry: alerts that fired while another tab was open appear now (two
+    // capped SELECTs on a worker, no timer).
+    dirty_ = false;
     on_refresh_watches();
+    populate_accounts(); // a broker connected after this tab was built
 }
 
 void AlertsPanel::changeEvent(QEvent* e) {
     if (e->type() == QEvent::LanguageChange)
-        retranslateUi();
+        populate_accounts(); // the "none" row is translated
     QWidget::changeEvent(e);
 }
 
-void AlertsPanel::retranslateUi() {
-    if (cond_title_)
-        cond_title_->setText(tr("ALERT CONDITIONS"));
-    if (sym_title_)
-        sym_title_->setText(tr("SYMBOLS & FEED"));
-    if (tf_lbl_)
-        tf_lbl_->setText(tr("TIMEFRAME"));
-    if (ds_lbl_)
-        ds_lbl_->setText(tr("DATA SOURCE"));
-    if (acct_lbl_)
-        acct_lbl_->setText(tr("BROKER ACCOUNT"));
-    if (iv_lbl_)
-        iv_lbl_->setText(tr("POLL INTERVAL (SEC)"));
-    if (cd_lbl_)
-        cd_lbl_->setText(tr("COOLDOWN (MIN)"));
-    if (name_lbl_)
-        name_lbl_->setText(tr("WATCH NAME"));
-    if (providers_chk_)
-        providers_chk_->setText(tr("Send to external providers"));
-    if (save_btn_)
-        save_btn_->setText(tr("SAVE WATCH"));
-    if (watches_title_)
-        watches_title_->setText(tr("LIVE WATCHES"));
+void AlertsPanel::populate_accounts() {
+    QVector<QPair<QString, QString>> rows;
+    rows.append({tr("None (Yahoo fallback)"), QString()});
+    for (const auto& acct : fincept::trading::AccountManager::instance().list_accounts())
+        rows.append({QStringLiteral("%1 (%2)").arg(acct.display_name, acct.broker_id), acct.account_id});
+    view_->set_accounts(rows);
 }
 
 } // namespace fincept::screens

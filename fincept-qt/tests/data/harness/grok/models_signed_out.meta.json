@@ -1,0 +1,10 @@
+{
+  "harness_version": "1.0.41",
+  "date": "2026-11-17",
+  "command": "grok models",
+  "source": "recorded",
+  "url": "",
+  "exit_code": 0,
+  "stream": "stdout",
+  "note": "Exact stdout bytes; stderr was empty. Signed out, Windows."
+}

@@ -21,9 +21,12 @@
 #include "core/session/ScreenStateManager.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/common/CommandRows.h"
 #include "services/markets/MarketDataService.h"
+#include "services/options/FreeOptionChainService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -41,6 +44,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
+#include <iterator>
 
 namespace fincept::surface {
 
@@ -62,8 +66,9 @@ float surface_live_spot(const QHash<QString, float>& cache, const QString& sym) 
     if (it != cache.constEnd() && it.value() > 0.0f)
         return it.value();
     // Best-effort hub lookup; if no quote published yet, returns invalid QVariant.
+    // An index root ("SPX") is quoted under its Yahoo ticker ("^SPX").
     auto& hub = fincept::datahub::DataHub::instance();
-    QVariant v = hub.peek(QString("market:quote:%1").arg(sym));
+    QVariant v = hub.peek(QString("market:quote:%1").arg(surface_quote_symbol(sym)));
     if (v.isValid()) {
         if (v.canConvert<fincept::services::QuoteData>()) {
             auto q = v.value<fincept::services::QuoteData>();
@@ -101,8 +106,11 @@ void SurfaceAnalyticsScreen::resubscribe_spot() {
     const QString sym = current_symbol_or_default();
     if (sym.isEmpty())
         return;
-    const QString topic = QString("market:quote:%1").arg(sym);
-    spot_symbol_ = sym;
+    // spot_symbol_ is the quoted symbol (an index root "SPX" is quoted as "^SPX");
+    // spot_cache_ stays keyed by the panel's symbol.
+    const QString quoted = surface_quote_symbol(sym);
+    const QString topic = QString("market:quote:%1").arg(quoted);
+    spot_symbol_ = quoted;
     QPointer<SurfaceAnalyticsScreen> self = this;
     hub.subscribe(this, topic, [self, sym](const QVariant& v) {
         if (!self)
@@ -142,8 +150,8 @@ void SurfaceAnalyticsScreen::sync_synthetic_badge() {
     const bool synthetic = !real_data_charts_.contains(static_cast<int>(active_chart_));
     if (control_panel_)
         control_panel_->mark_synthetic(synthetic);
-    if (demo_banner_)
-        demo_banner_->setVisible(synthetic);
+    update_source_banner();
+    schedule_free_chain(); // an option surface still on sample data loads the delayed chain
 }
 
 void SurfaceAnalyticsScreen::refresh_provider_status() {
@@ -208,6 +216,8 @@ void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
     load_dataset_list();
     load_dataset_range_for_active_capability();
     resubscribe_spot();
+    update_source_banner();
+    schedule_free_chain();
 }
 
 void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
@@ -216,6 +226,13 @@ void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     disconnect(&svc, nullptr, this, nullptr);
     fincept::datahub::DataHub::instance().unsubscribe(this);
     spot_symbol_.clear();
+    // Leaving the screen cancels the automatic delayed-chain load (the next show restarts it).
+    if (free_req_ != 0) {
+        fincept::services::options::FreeOptionChainService::instance().cancel(free_req_);
+        free_req_ = 0;
+    }
+    free_loading_symbol_.clear();
+    release_free_gate();
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────
@@ -238,9 +255,7 @@ void SurfaceAnalyticsScreen::retranslateUi() {
         btn_table_->setText(tr("TABLE"));
     if (btn_line_)
         btn_line_->setText(tr("LINE"));
-    if (demo_banner_)
-        demo_banner_->setText(tr("SAMPLE DATA — synthetic values, not a live market surface. "
-                                 "Do not trade or quote from this."));
+    update_source_banner();
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -270,13 +285,29 @@ void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
     const int cat = state.value("category", 0).toInt();
     if (cat != active_category_)
         on_category_clicked(cat);
+    // The surface itself ("chart" was saved but never restored: every visit reset to the
+    // category's first surface).
+    if (state.contains("chart")) {
+        const auto cats = get_surface_categories();
+        const auto want = static_cast<ChartType>(state.value("chart").toInt());
+        if (active_category_ >= 0 && active_category_ < (int)cats.size()) {
+            const auto& types = cats[active_category_].types;
+            for (int i = 0; i < (int)types.size(); ++i)
+                if (types[i] == want && want != active_chart_) {
+                    on_surface_clicked(active_category_, i);
+                    break;
+                }
+        }
+    }
     if (state.contains("view_mode")) {
         view_mode_ = static_cast<ViewMode>(state.value("view_mode", 0).toInt());
         apply_view_mode_buttons();
     }
     if (control_panel_) {
         SurfaceControlsState cs = control_panel_->state();
-        cs.symbol = state.value("symbol", cs.symbol).toString();
+        // The remembered underlying; a caret index from older sessions ("^SPX") is the
+        // plain root the option sources list ("SPX").
+        cs.symbol = surface_us_chain_symbol(state.value("symbol", cs.symbol).toString());
         cs.dataset = state.value("dataset", cs.dataset).toString();
         QString sd = state.value("start_date").toString();
         QString ed = state.value("end_date").toString();
@@ -305,9 +336,11 @@ void SurfaceAnalyticsScreen::on_group_symbol_changed(const fincept::SymbolRef& r
     // Push the linked symbol into the control panel; demo data + chart rebuild
     // happen via on_control_symbol_changed.
     SurfaceControlsState cs = control_panel_->state();
-    if (cs.symbol.compare(ref.symbol, Qt::CaseInsensitive) == 0)
+    // A linked Yahoo index ("^GSPC") is the option root the surfaces take ("SPX").
+    const QString linked = surface_us_chain_symbol(ref.symbol);
+    if (linked.isEmpty() || cs.symbol.compare(linked, Qt::CaseInsensitive) == 0)
         return;
-    cs.symbol = ref.symbol.toUpper();
+    cs.symbol = linked;
     control_panel_->apply_state(cs);
     applying_group_symbol_ = true;
     on_control_symbol_changed(cs.symbol);
@@ -320,7 +353,207 @@ fincept::SymbolRef SurfaceAnalyticsScreen::current_symbol() const {
     QString s = control_panel_->state().symbol;
     if (s.isEmpty())
         return {};
+    if (surface_is_us_index_root(s)) {
+        // An index root ("SPX") is the Yahoo index the other screens read ("^SPX").
+        fincept::SymbolRef ref;
+        ref.symbol = surface_link_symbol(s);
+        ref.asset_class = QStringLiteral("index");
+        ref.exchange = QStringLiteral("US");
+        return ref;
+    }
     return fincept::SymbolRef::equity(s);
 }
+
+// ── ISectionLinked ───────────────────────────────────────────────────────────
+
+namespace {
+
+// Link ids of get_surface_categories(), in its order.
+const char* const kSurfLinkCategories[] = {"equity_deriv", "fixed_income", "fx",  "credit",
+                                           "commodities",  "risk",         "macro"};
+
+struct SurfLinkSurface {
+    const char* id;
+    ChartType type;
+};
+
+// Link ids of the 35 surfaces ("surface:<id>").
+const SurfLinkSurface kSurfLinkSurfaces[] = {
+    {"vol", ChartType::Volatility},
+    {"delta", ChartType::DeltaSurface},
+    {"gamma", ChartType::GammaSurface},
+    {"vega", ChartType::VegaSurface},
+    {"theta", ChartType::ThetaSurface},
+    {"skew", ChartType::SkewSurface},
+    {"local_vol", ChartType::LocalVolSurface},
+    {"yield_curve", ChartType::YieldCurve},
+    {"swaption_vol", ChartType::SwaptionVol},
+    {"cap_floor", ChartType::CapFloorVol},
+    {"bond_spread", ChartType::BondSpread},
+    {"ois_basis", ChartType::OISBasis},
+    {"real_yield", ChartType::RealYield},
+    {"forward_rate", ChartType::ForwardRate},
+    {"fx_vol", ChartType::FXVol},
+    {"fx_forward", ChartType::FXForwardPoints},
+    {"xccy_basis", ChartType::CrossCurrencyBasis},
+    {"cds_spread", ChartType::CDSSpread},
+    {"transition", ChartType::CreditTransition},
+    {"recovery", ChartType::RecoveryRate},
+    {"commodity_forward", ChartType::CommodityForward},
+    {"commodity_vol", ChartType::CommodityVol},
+    {"crack_spread", ChartType::CrackSpread},
+    {"contango", ChartType::ContangoBackwardation},
+    {"correlation", ChartType::Correlation},
+    {"pca", ChartType::PCA},
+    {"var", ChartType::VaR},
+    {"stress_test", ChartType::StressTestPnL},
+    {"factor_exposure", ChartType::FactorExposure},
+    {"liquidity", ChartType::LiquidityHeatmap},
+    {"drawdown", ChartType::Drawdown},
+    {"beta", ChartType::BetaSurface},
+    {"implied_dividend", ChartType::ImpliedDividend},
+    {"inflation", ChartType::InflationExpectations},
+    {"policy_path", ChartType::MonetaryPolicyPath},
+};
+
+} // namespace
+
+bool SurfaceAnalyticsScreen::open_section(const QString& section, const QString& focus) {
+    namespace rows = fincept::screens::command_rows;
+    QString key = section.trimmed();
+    if (!key.isEmpty()) {
+        const auto cats = get_surface_categories();
+        int cat = -1;
+        int surf = -1;
+        QString rest;
+        QString surface_id;
+        if (rows::split_kind(key, "surface", &rest)) {
+            surface_id = rest;
+        } else {
+            if (rows::split_kind(key, "category", &rest))
+                key = rest;
+            const qsizetype slash = key.indexOf(QLatin1Char('/'));
+            if (slash >= 0) {
+                surface_id = key.mid(slash + 1).trimmed();
+                key = key.left(slash).trimmed();
+            }
+            for (int i = 0; i < (int)std::size(kSurfLinkCategories) && i < (int)cats.size(); ++i)
+                if (key.compare(QLatin1String(kSurfLinkCategories[i]), Qt::CaseInsensitive) == 0)
+                    cat = i;
+            if (cat < 0)
+                return false;
+        }
+        if (!surface_id.isEmpty()) {
+            const SurfLinkSurface* found = nullptr;
+            for (const SurfLinkSurface& s : kSurfLinkSurfaces)
+                if (surface_id.compare(QLatin1String(s.id), Qt::CaseInsensitive) == 0)
+                    found = &s;
+            if (!found)
+                return false;
+            int in_cat = -1;
+            int in_index = -1;
+            for (int c = 0; c < (int)cats.size() && in_cat < 0; ++c)
+                for (int i = 0; i < (int)cats[c].types.size(); ++i)
+                    if (cats[c].types[i] == found->type) {
+                        in_cat = c;
+                        in_index = i;
+                        break;
+                    }
+            if (in_cat < 0 || (cat >= 0 && cat != in_cat))
+                return false; // "<category>/<surface>" naming a surface of another category
+            cat = in_cat;
+            surf = in_index;
+        }
+        // The category / surface buttons' click paths (as restore_state() drives them).
+        if (cat != active_category_)
+            on_category_clicked(cat);
+        if (surf >= 0 && cats[cat].types[surf] != active_chart_)
+            on_surface_clicked(cat, surf);
+    }
+    const QString symbol = focus.trimmed();
+    if (!symbol.isEmpty())
+        on_group_symbol_changed(fincept::SymbolRef::equity(symbol)); // the linked-symbol path
+    return true;
+}
+
+// ── Search box rows (core/command/CommandRegistry.h; screens/common/CommandRows.h) ──
+namespace {
+
+struct SurfLinkRow {
+    const char* section;
+    const char* title;
+    const char* keywords;
+};
+
+const SurfLinkRow kSurfLinkRows[] = {
+    // Categories (the seed's "surface_analytics.<category>" rows are replaced)
+    {"equity_deriv", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Equity derivative surfaces"),
+     "options surfaces, vol surface, greeks, skew, implied volatility"},
+    {"fixed_income", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Fixed income surfaces"),
+     "rates, yield curve, swaptions, bonds, interest rates"},
+    {"fx", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "FX surfaces"),
+     "currency volatility, fx options, forward points, cross currency basis"},
+    {"credit", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Credit surfaces"),
+     "credit spreads, cds, default, rating transitions"},
+    {"commodities", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Commodity surfaces"),
+     "futures curve, commodity volatility, oil, crack spread"},
+    {"risk", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Risk surfaces"),
+     "correlation, pca, var, stress test, drawdown, beta, factor exposure"},
+    {"macro", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Macro surfaces"),
+     "inflation expectations, monetary policy, rate path"},
+    // Surfaces a beginner looks for by name
+    {"surface:vol", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Volatility surface"),
+     "vol surface, implied volatility, iv surface, 3d volatility"},
+    {"surface:skew", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Volatility skew"),
+     "skew, smile, volatility smile, put skew"},
+    {"surface:local_vol", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Local volatility surface"),
+     "local vol, dupire"},
+    {"surface:yield_curve", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Yield curve surface"),
+     "yield curve, term structure, treasury curve, rates over time"},
+    {"surface:swaption_vol", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Swaption volatility cube"),
+     "swaption, swaption vol, rates volatility"},
+    {"surface:fx_vol", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "FX volatility surface"),
+     "fx vol, currency options, eurusd volatility"},
+    {"surface:cds_spread", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "CDS spread surface"),
+     "cds, credit default swap, credit spread curve"},
+    {"surface:commodity_forward", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Commodity futures curve"),
+     "futures curve, forward curve, oil futures, term structure"},
+    {"surface:contango", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Contango & backwardation"),
+     "contango, backwardation, roll yield"},
+    {"surface:correlation", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Correlation matrix"),
+     "correlation, correlation heatmap, co-movement"},
+    {"surface:pca", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "PCA factor surface"),
+     "pca, principal components, factors"},
+    {"surface:var", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Value at risk surface"),
+     "var, value at risk, tail risk"},
+    {"surface:stress_test", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Stress test P&L"),
+     "stress test, scenario, shocks, pnl"},
+    {"surface:inflation", QT_TRANSLATE_NOOP("fincept::surface::SurfaceAnalyticsScreen", "Inflation expectations"),
+     "inflation, breakevens, cpi expectations"},
+};
+
+QList<command::CommandItem> surf_command_rows() {
+    namespace rows = fincept::screens::command_rows;
+    const QString where = SurfaceAnalyticsScreen::tr("Surface Analytics");
+    QList<command::CommandItem> out;
+    for (const SurfLinkRow& r : kSurfLinkRows) {
+        QStringList keywords;
+        for (const QString& w : QString::fromLatin1(r.keywords).split(QLatin1Char(','), Qt::SkipEmptyParts))
+            keywords.append(w.trimmed());
+        keywords << QStringLiteral("surface") << QStringLiteral("3d");
+        out.append(rows::section(QStringLiteral("surface_analytics"), QString::fromLatin1(r.section),
+                                 QCoreApplication::translate("fincept::surface::SurfaceAnalyticsScreen", r.title),
+                                 keywords, where));
+    }
+    return out;
+}
+
+void surf_install_commands() {
+    fincept::screens::command_rows::install(QStringLiteral("surface_analytics"), &surf_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(surf_install_commands)
 
 } // namespace fincept::surface

@@ -15,7 +15,7 @@ void SupportResistanceLayer::compute(const QVector<CandleData>& candles) {
         HorizontalLevel level;
         level.price = c.price;
         level.label = QStringLiteral("S/R %1 (%2x)").arg(c.price, 0, 'f', 2).arg(c.touches);
-        level.color = QColor("#808080");
+        level.tone = HorizontalLevelTone::Muted;
         level.style = Qt::DashLine;
         levels.append(level);
     }

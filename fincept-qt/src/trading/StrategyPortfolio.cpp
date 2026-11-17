@@ -49,7 +49,11 @@ QString legs_to_json_str(const QVector<OptionsLeg>& legs) {
 
 QVector<OptionsLeg> legs_from_json_str(const QString& s) {
     QVector<OptionsLeg> out;
-    const QJsonArray arr = QJsonDocument::fromJson(s.toUtf8()).array();
+    QJsonParseError parse_error;
+    const QJsonArray arr = QJsonDocument::fromJson(s.toUtf8(), &parse_error).array();
+    if (parse_error.error != QJsonParseError::NoError && !s.isEmpty())
+        LOG_WARN(kLog, logf("Saved strategy legs are not valid JSON", {{"chars", s.size()},
+                                                                      {"error", parse_error.errorString()}}));
     out.reserve(arr.size());
     for (const auto& v : arr)
         out.append(leg_from_json(v.toObject()));
@@ -90,7 +94,7 @@ QString StrategyPortfolio::save(const SavedStrategy& in) {
         "notes=excluded.notes, legs_json=excluded.legs_json",
         {s.id, s.name, s.underlying, s.notes, legs_to_json_str(s.legs), s.created_at});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("save failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Strategy could not be saved", {{"id", s.id}, {"error", QString::fromStdString(r.error())}}));
         return {};
     }
     LOG_INFO(kLog, QString("Saved strategy '%1' (%2, %3 legs)").arg(s.name, s.id).arg(s.legs.size()));
@@ -104,7 +108,7 @@ bool StrategyPortfolio::update(const SavedStrategy& s) {
         "UPDATE saved_strategies SET name=?, underlying=?, notes=?, legs_json=? WHERE id=?",
         {s.name, s.underlying, s.notes, legs_to_json_str(s.legs), s.id});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("update failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Strategy could not be updated", {{"id", s.id}, {"error", QString::fromStdString(r.error())}}));
         return false;
     }
     return r.value().numRowsAffected() > 0;
@@ -115,7 +119,7 @@ bool StrategyPortfolio::remove(const QString& id) {
         return false;
     auto r = Database::instance().execute("DELETE FROM saved_strategies WHERE id=?", {id});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("remove failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Strategy could not be removed", {{"id", id}, {"error", QString::fromStdString(r.error())}}));
         return false;
     }
     return r.value().numRowsAffected() > 0;
@@ -123,8 +127,10 @@ bool StrategyPortfolio::remove(const QString& id) {
 
 std::optional<SavedStrategy> StrategyPortfolio::get(const QString& id) const {
     auto r = Database::instance().execute("SELECT * FROM saved_strategies WHERE id=?", {id});
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN(kLog, logf("Saved strategy could not be read", {{"id", id}, {"error", QString::fromStdString(r.error())}}));
         return std::nullopt;
+    }
     auto& q = r.value();
     if (!q.next())
         return std::nullopt;
@@ -134,8 +140,10 @@ std::optional<SavedStrategy> StrategyPortfolio::get(const QString& id) const {
 QVector<SavedStrategy> StrategyPortfolio::list() const {
     QVector<SavedStrategy> out;
     auto r = Database::instance().execute("SELECT * FROM saved_strategies ORDER BY created_at DESC");
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN(kLog, logf("Saved strategies could not be listed", {{"error", QString::fromStdString(r.error())}}));
         return out;
+    }
     auto& q = r.value();
     while (q.next())
         out.append(map_row(q));
@@ -149,8 +157,13 @@ int qty_freeze_limit(const QString& symbol, const QString& exchange) {
         return 0;
     auto r = Database::instance().execute("SELECT freeze_qty FROM qty_freeze WHERE symbol=? AND exchange=?",
                                           {symbol, exchange});
-    if (r.is_err())
+    if (r.is_err()) {
+        // Fails open (no freeze check for this order): say so.
+        LOG_WARN_RL(kLog, QStringLiteral("qty_freeze_read"), 60000,
+                    logf("Quantity-freeze limit could not be read, treating as none",
+                         {{"symbol", symbol}, {"exchange", exchange}, {"error", QString::fromStdString(r.error())}}));
         return 0;
+    }
     auto& q = r.value();
     if (!q.next())
         return 0;
@@ -165,6 +178,9 @@ bool set_qty_freeze_limit(const QString& symbol, const QString& exchange, int fr
     if (freeze_qty <= 0) {
         auto r =
             Database::instance().execute("DELETE FROM qty_freeze WHERE symbol=? AND exchange=?", {symbol, exchange});
+        if (r.is_err())
+            LOG_ERROR(kLog, logf("Quantity-freeze limit could not be cleared",
+                                 {{"symbol", symbol}, {"exchange", exchange}, {"error", QString::fromStdString(r.error())}}));
         return r.is_ok();
     }
 
@@ -172,7 +188,8 @@ bool set_qty_freeze_limit(const QString& symbol, const QString& exchange, int fr
                                           "ON CONFLICT(symbol, exchange) DO UPDATE SET freeze_qty=excluded.freeze_qty",
                                           {symbol, exchange, freeze_qty});
     if (r.is_err()) {
-        LOG_ERROR(kLog, QString("set_qty_freeze_limit failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kLog, logf("Quantity-freeze limit could not be saved",
+                             {{"symbol", symbol}, {"exchange", exchange}, {"error", QString::fromStdString(r.error())}}));
         return false;
     }
     return true;

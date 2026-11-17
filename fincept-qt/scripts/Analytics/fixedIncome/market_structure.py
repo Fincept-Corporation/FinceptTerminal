@@ -24,11 +24,34 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 from enum import Enum
 from datetime import date, timedelta
-import numpy as np
 import logging
+import os
+import sys
 
-logging.basicConfig(level=logging.INFO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fi_common as fc  # noqa: E402
+from fi_common import FIError, num  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
+_SEGMENT_ALIASES = {
+    'govt': 'government', 'sovereign': 'government', 'treasury': 'government', 'treasuries': 'government',
+    'ig': 'corporate_ig', 'investment_grade': 'corporate_ig', 'corporate_investment_grade': 'corporate_ig',
+    'hy': 'corporate_hy', 'high_yield': 'corporate_hy', 'junk': 'corporate_hy', 'corporate_high_yield': 'corporate_hy',
+    'muni': 'municipal', 'munis': 'municipal',
+    'mbs': 'mbs_abs', 'abs': 'mbs_abs', 'securitized': 'mbs_abs', 'mortgage_backed': 'mbs_abs',
+    'asset_backed': 'mbs_abs', 'mm': 'money_market',
+}
+
+_INDEX_CATEGORIES = {
+    'broad_market': 'broad_market_indexes', 'aggregate': 'broad_market_indexes', 'broad': 'broad_market_indexes',
+    'government': 'government_indexes', 'treasury': 'government_indexes',
+    'corporate': 'corporate_indexes', 'high_yield': 'corporate_indexes',
+    'securitized': 'securitized_indexes', 'mbs': 'securitized_indexes',
+    'municipal': 'municipal_indexes', 'muni': 'municipal_indexes',
+    'international': 'international_indexes', 'emerging': 'international_indexes',
+    'construction': 'index_construction_considerations', 'usage': 'using_indexes',
+}
 
 
 class MarketSegment(Enum):
@@ -201,24 +224,38 @@ class MarketStructureAnalyzer:
             }
         }
 
-        if segment:
+        if segment and segment.lower() != 'all':
             segment_lower = segment.lower().replace(' ', '_').replace('-', '_')
+            if segment_lower in ('corporate', 'corporates'):
+                return {'segment': segment, 'details': {'corporate_ig': segments['corporate_ig'],
+                                                        'corporate_hy': segments['corporate_hy']}}
+            segment_lower = _SEGMENT_ALIASES.get(segment_lower, segment_lower)
             if segment_lower in segments:
                 return {'segment': segment, 'details': segments[segment_lower]}
-            else:
-                return {'error': f'Unknown segment: {segment}', 'available': list(segments.keys())}
+            raise FIError(f'Unknown segment: {segment}. Available: {", ".join(segments)} (or corporate / all)')
 
         return {'market_segments': segments}
 
     def describe_fixed_income_indexes(
         self,
+        index_category: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Describe types and characteristics of fixed income indexes.
-
-        Returns:
-            Dictionary with index information
+        Describe types and characteristics of fixed income indexes (all, or one category:
+        broad_market/aggregate, government, corporate, securitized, municipal, international,
+        construction, usage).
         """
+        indexes = self._index_catalog()
+        if index_category and index_category.lower() != 'all':
+            key = index_category.lower().replace(' ', '_').replace('-', '_')
+            key = _INDEX_CATEGORIES.get(key, key)
+            if key not in indexes:
+                raise FIError(f'Unknown index_category: {index_category}. Available: '
+                              f'{", ".join(sorted(set(_INDEX_CATEGORIES)))} or all')
+            return {'index_category': index_category, 'details': indexes[key]}
+        return indexes
+
+    def _index_catalog(self) -> Dict[str, Any]:
         indexes = {
             'broad_market_indexes': {
                 'bloomberg_aggregate': {
@@ -511,42 +548,59 @@ class MarketStructureAnalyzer:
         Returns:
             Dictionary with repo calculations
         """
+        if collateral_value <= 0:
+            raise FIError('collateral_value must be > 0')
+        if not 0 <= haircut < 1:
+            raise FIError('haircut must be >= 0 and < 1 (decimal, e.g. 0.02)')
+        if term_days <= 0:
+            raise FIError('term_days must be > 0')
+
         # Cash received (collateral less haircut)
         cash_received = collateral_value * (1 - haircut)
 
-        # Repurchase price
+        # Repurchase price (money-market ACT/360 interest)
         interest = cash_received * repo_rate * (term_days / 360)
         repurchase_price = cash_received + interest
 
         # Implied margin/equity
         margin = collateral_value - cash_received
 
-        # Leverage ratio
-        leverage = collateral_value / margin if margin > 0 else float('inf')
+        # Leverage ratio (collateral per unit of own equity) - undefined with no haircut
+        leverage = collateral_value / margin if margin > 0 else None
 
-        return {
+        # 5% collateral drop: collateral needed to keep the haircut on the loan vs what is left
+        new_value = collateral_value * 0.95
+        required_collateral = cash_received / (1 - haircut)
+        deficit = required_collateral - new_value
+
+        out = {
             'transaction_summary': {
                 'collateral_market_value': round(collateral_value, 2),
-                'haircut': f'{haircut * 100}%',
+                'haircut': f'{haircut * 100:g}%',
                 'cash_received': round(cash_received, 2),
-                'repo_rate': f'{repo_rate * 100}%',
+                'repo_rate': f'{repo_rate * 100:g}%',
                 'term_days': term_days,
                 'interest_cost': round(interest, 2),
-                'repurchase_price': round(repurchase_price, 2)
+                'repurchase_price': round(repurchase_price, 2),
+                'day_count': 'ACT/360'
             },
             'risk_metrics': {
                 'margin_equity': round(margin, 2),
-                'leverage_ratio': round(leverage, 2),
+                'leverage_ratio': round(leverage, 2) if leverage is not None else None,
                 'margin_call_trigger': 'If collateral value falls, margin call may occur'
             },
             'example_scenario': {
                 'if_collateral_drops_5pct': {
-                    'new_value': round(collateral_value * 0.95, 2),
-                    'margin_deficit': round(collateral_value * 0.95 - cash_received - margin, 2),
+                    'new_value': round(new_value, 2),
+                    'required_collateral_at_haircut': round(required_collateral, 2),
+                    'margin_deficit': round(deficit, 2),
                     'action': 'Borrower must post additional collateral or cash'
                 }
             }
         }
+        if leverage is None:
+            out['risk_metrics']['leverage_note'] = 'undefined: haircut is 0 (no borrower equity)'
+        return out
 
     def compare_ig_vs_hy_funding(
         self,
@@ -644,60 +698,48 @@ def run_market_structure_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         if analysis_type == 'market_segments':
-            return analyzer.describe_market_segments(
-                segment=params.get('segment')
-            )
+            return analyzer.describe_market_segments(segment=fc.text(params, 'segment', None))
 
         elif analysis_type == 'indexes':
-            return analyzer.describe_fixed_income_indexes()
+            return analyzer.describe_fixed_income_indexes(
+                index_category=fc.text(params, 'index_category', None))
 
         elif analysis_type == 'primary_secondary':
             return analyzer.compare_primary_secondary_markets()
 
         elif analysis_type == 'short_term_funding':
             return analyzer.analyze_short_term_funding(
-                funding_type=params.get('funding_type')
-            )
+                funding_type=fc.text(params, 'funding_type', None, aliases=('instrument',)))
 
         elif analysis_type == 'repo_mechanics':
+            p = dict(params)
+            details = params.get('details')
+            if isinstance(details, dict):  # older nested form {"details": {...}}
+                for k, v in details.items():
+                    p.setdefault(k, v)
             return analyzer.analyze_repo_mechanics(
-                collateral_value=params.get('collateral_value', 1000000),
-                haircut=params.get('haircut', 0.02),
-                repo_rate=params.get('repo_rate', 0.05),
-                term_days=params.get('term_days', 1)
-            )
+                collateral_value=num(p, 'collateral_value', 1000000),
+                haircut=num(p, 'haircut', 0.02),
+                repo_rate=num(p, 'repo_rate', 0.05),
+                term_days=num(p, 'term_days', 1, integer=True))
 
         elif analysis_type == 'ig_vs_hy':
             return analyzer.compare_ig_vs_hy_funding()
 
         else:
-            return {'error': f'Unknown analysis type: {analysis_type}'}
+            return {'error': f'Unknown analysis type: {analysis_type}', 'analysis_types': list(ANALYSIS_TYPES)}
 
-    except Exception as e:
-        logger.error(f"Market structure analysis error: {str(e)}")
+    except FIError as e:
         return {'error': str(e)}
+    except Exception as e:
+        logger.error(f"Market structure analysis error: {e}")
+        return {'error': str(e) or type(e).__name__}
+
+
+ANALYSIS_TYPES = ('market_segments', 'indexes', 'primary_secondary', 'short_term_funding', 'repo_mechanics',
+                  'ig_vs_hy')
 
 
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) > 1:
-        try:
-            params = json.loads(sys.argv[1])
-            result = run_market_structure_analysis(params)
-            print(json.dumps(result, indent=2))
-        except json.JSONDecodeError as e:
-            print(json.dumps({'error': f'Invalid JSON: {str(e)}'}))
-    else:
-        # Demo
-        print("Market Structure Demo:")
-
-        analyzer = MarketStructureAnalyzer()
-
-        # Repo mechanics
-        result = analyzer.analyze_repo_mechanics(
-            collateral_value=1000000, haircut=0.02, repo_rate=0.05, term_days=7
-        )
-        print(f"\nRepo: Borrow ${result['transaction_summary']['cash_received']:,.0f} against $1M collateral")
-        print(f"Repurchase at ${result['transaction_summary']['repurchase_price']:,.0f}")
+    fc.import_fincept_json()
+    fc.emit_usage_or_run(sys.argv, run_market_structure_analysis, ANALYSIS_TYPES, 'market_structure')

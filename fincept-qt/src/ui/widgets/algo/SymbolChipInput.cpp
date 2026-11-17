@@ -5,7 +5,9 @@
 #include "trading/AccountManager.h"
 #include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentService.h"
-#include "ui/theme/Theme.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/widgets/FlowLayout.h"
 
 #include <QAbstractItemView>
 #include <QCompleter>
@@ -17,74 +19,16 @@
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStringListModel>
-#include <QStyle>
 #include <QTimer>
 
 namespace fincept::ui::algo {
 
-// ── Minimal flow layout (wraps children to new rows) — standard Qt example ──
-class FlowLayout : public QLayout {
-  public:
-    explicit FlowLayout(QWidget* parent, int margin = 4, int hspace = 4, int vspace = 4)
-        : QLayout(parent), hspace_(hspace), vspace_(vspace) {
-        setContentsMargins(margin, margin, margin, margin);
-    }
-    ~FlowLayout() override {
-        QLayoutItem* it;
-        while ((it = takeAt(0)))
-            delete it;
-    }
-    void addItem(QLayoutItem* item) override { items_.append(item); }
-    int count() const override { return items_.size(); }
-    QLayoutItem* itemAt(int i) const override { return items_.value(i); }
-    QLayoutItem* takeAt(int i) override { return (i >= 0 && i < items_.size()) ? items_.takeAt(i) : nullptr; }
-    Qt::Orientations expandingDirections() const override { return {}; }
-    bool hasHeightForWidth() const override { return true; }
-    int heightForWidth(int w) const override { return do_layout(QRect(0, 0, w, 0), true); }
-    void setGeometry(const QRect& r) override {
-        QLayout::setGeometry(r);
-        do_layout(r, false);
-    }
-    QSize sizeHint() const override { return minimumSize(); }
-    QSize minimumSize() const override {
-        QSize s;
-        for (auto* it : items_)
-            s = s.expandedTo(it->minimumSize());
-        const QMargins m = contentsMargins();
-        s += QSize(m.left() + m.right(), m.top() + m.bottom());
-        return s;
-    }
-
-  private:
-    int do_layout(const QRect& rect, bool test) const {
-        const QMargins m = contentsMargins();
-        QRect eff = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom());
-        int x = eff.x(), y = eff.y(), line_h = 0;
-        for (auto* it : items_) {
-            const QSize sz = it->sizeHint();
-            int next_x = x + sz.width() + hspace_;
-            if (next_x - hspace_ > eff.right() && line_h > 0) {
-                x = eff.x();
-                y += line_h + vspace_;
-                next_x = x + sz.width() + hspace_;
-                line_h = 0;
-            }
-            if (!test)
-                it->setGeometry(QRect(QPoint(x, y), sz));
-            x = next_x;
-            line_h = qMax(line_h, sz.height());
-        }
-        return y + line_h - rect.y() + m.bottom();
-    }
-    QList<QLayoutItem*> items_;
-    int hspace_, vspace_;
-};
-
 namespace {
-QStringList loaded_broker_ids() {
+QStringList sym_chip_loaded_broker_ids() {
     QStringList ids;
     for (const auto& a : fincept::trading::AccountManager::instance().list_accounts())
         if (!ids.contains(a.broker_id) && fincept::trading::InstrumentService::instance().is_loaded(a.broker_id))
@@ -99,22 +43,51 @@ constexpr const char* kSymChipDebounceName = "symChipSearchDebounce";
 QTimer* sym_chip_debounce_timer(const QObject* owner) {
     return owner->findChild<QTimer*>(QLatin1String(kSymChipDebounceName), Qt::FindDirectChildrenOnly);
 }
+
+// A chip's "SYMBOL  price" text from the quote kept on its label (properties "px",
+// "pxCcy", "pxDigits", "pxMoney"): the price in the instrument's own currency; an index
+// level or FX rate has no unit. Nothing before the quote has arrived.
+void sym_chip_render_price(QLabel* lbl, const QString& symbol) {
+    namespace fmt = fincept::ui::formatting;
+    const QVariant px = lbl->property("px");
+    if (!px.isValid())
+        return;
+    fmt::InstrumentFmt inst = fmt::instrument_for_symbol(symbol, lbl->property("pxCcy").toString());
+    const int digits = lbl->property("pxDigits").toInt();
+    if (digits >= 0)
+        inst.decimals = digits;
+    const double v = px.toDouble();
+    const QString price = lbl->property("pxMoney").toBool() ? fmt::price_with_symbol(v, inst) : fmt::price(v, inst);
+    lbl->setText(QStringLiteral("%1  %2").arg(symbol, price));
+}
+
+// Show only canonical alphabetic exchanges (NSE/BSE/NFO…); hide broker numeric
+// segment codes that would otherwise render as a meaningless "· 1".
+QString sym_chip_pretty_exchange(const QString& ex) {
+    const QString e = ex.trimmed().toUpper();
+    if (e.endsWith(QStringLiteral("_INDEX")))
+        return e.left(e.size() - 6) + QStringLiteral(" IDX");
+    static const QStringList known = {"NSE", "BSE", "NFO", "BFO", "MCX", "CDS", "BCD", "NCDEX"};
+    return known.contains(e) ? e : QString();
+}
 } // namespace
 
 SymbolChipInput::SymbolChipInput(QWidget* parent) : QFrame(parent) {
-    setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; }")
-                      .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
-    flow_ = new FlowLayout(this, 6, 4, 4);
+    // Styled by the Algo kit's root stylesheet (a bordered #algoPanel box): no own sheet.
+    setObjectName(QStringLiteral("algoPanel"));
+    setAttribute(Qt::WA_StyledBackground, true);
+    setAccessibleName(tr("Symbols"));
+    flow_ = new fincept::ui::FlowLayout(this);
+    flow_->setContentsMargins(6, 4, 6, 4);
+    flow_->set_compact_hint(true); // sizeHint == minimum: the box grows by lines, never wider than its host
 
     edit_ = new QLineEdit(this);
     edit_->setFrame(false);
     edit_->setPlaceholderText(tr("type a ticker…"));
-    edit_->setMinimumWidth(120);
-    edit_->setStyleSheet(
-        QString("QLineEdit { background:transparent; border:none; color:%1; font-family:%2; font-size:%3px; }")
-            .arg(fincept::ui::colors::TEXT_PRIMARY())
-            .arg(QString(fincept::ui::fonts::DATA_FAMILY))
-            .arg(fincept::ui::fonts::SMALL));
+    edit_->setAccessibleName(tr("Add symbol"));
+    edit_->setToolTip(tr("Type a ticker or name; Enter / Tab / comma adds it, Backspace in an empty field removes "
+                         "the last symbol"));
+    edit_->setMinimumWidth(QFontMetrics(edit_->font()).averageCharWidth() * 16);
     edit_->installEventFilter(this);
     flow_->addWidget(edit_);
 
@@ -125,26 +98,12 @@ SymbolChipInput::SymbolChipInput(QWidget* parent) : QFrame(parent) {
     completer_->setMaxVisibleItems(8);
     edit_->setCompleter(completer_);
 
-    // The completer popup is a separate top-level QListView that no global
-    // stylesheet covers — without this it renders transparent and the controls
-    // behind it bleed through. Give it an opaque, themed look + click-to-add.
+    // The completer popup is a child window of the line edit, so the screen's root
+    // stylesheet reaches it by object name (#algoList): opaque, themed, readable rows.
     if (auto* popup = completer_->popup()) {
-        popup->setObjectName("symChipCompleterPopup");
+        popup->setObjectName(QStringLiteral("algoList"));
         popup->setTextElideMode(Qt::ElideNone); // show full label, never "…"
         popup->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        popup->setStyleSheet(
-            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
-                    " font-family:%4; font-size:%5px; padding:3px; }"
-                    "QListView::item { padding:5px 10px; border:none; border-radius:2px; }"
-                    "QListView::item:hover { background:%6; }"
-                    "QListView::item:selected { background:%6; color:%7; }"
-                    "QScrollBar:vertical { background:%1; width:8px; margin:0; }"
-                    "QScrollBar::handle:vertical { background:%3; border-radius:4px; min-height:20px; }"
-                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
-                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
-                .arg(fincept::ui::fonts::SMALL)
-                .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::AMBER()));
         connect(popup, &QAbstractItemView::clicked, this,
                 [this](const QModelIndex& idx) { commit_label(idx.data().toString()); });
     }
@@ -175,16 +134,12 @@ SymbolChipInput::SymbolChipInput(QWidget* parent) : QFrame(parent) {
     connect(edit_, &QLineEdit::returnPressed, this, [this]() { commit_text(edit_->text()); });
     connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
             [this](const QString& label) { commit_label(label); });
-}
-
-// Show only canonical alphabetic exchanges (NSE/BSE/NFO…); hide broker numeric
-// segment codes that would otherwise render as a meaningless "· 1".
-static QString pretty_exchange(const QString& ex) {
-    const QString e = ex.trimmed().toUpper();
-    if (e.endsWith(QStringLiteral("_INDEX")))
-        return e.left(e.size() - 6) + QStringLiteral(" IDX");
-    static const QStringList known = {"NSE", "BSE", "NFO", "BFO", "MCX", "CDS", "BCD", "NCDEX"};
-    return known.contains(e) ? e : QString();
+    // Currency / number format changed: re-render the chip prices from their kept quotes.
+    fincept::ui::formatting::on_format_changed(this, [this]() {
+        for (int i = 0; i < chips_.size() && i < symbols_.size(); ++i)
+            if (auto* lbl = chips_[i]->findChild<QLabel*>())
+                sym_chip_render_price(lbl, symbols_[i]);
+    });
 }
 
 void SymbolChipInput::on_text_changed(const QString& text) {
@@ -194,7 +149,8 @@ void SymbolChipInput::on_text_changed(const QString& text) {
         sugg_map_.clear();
         return;
     }
-    const auto results = fincept::trading::InstrumentService::instance().search_all(q, "", loaded_broker_ids(), 16);
+    const auto results =
+        fincept::trading::InstrumentService::instance().search_all(q, "", sym_chip_loaded_broker_ids(), 16);
     QStringList labels;
     sugg_map_.clear();
     for (const auto& r : results) {
@@ -202,7 +158,7 @@ void SymbolChipInput::on_text_changed(const QString& text) {
         // symbol; remember the real symbol so a pick commits the right ticker.
         const QString friendly =
             fincept::trading::norm::display_name(r.name, r.instrument_type, r.expiry, r.strike, r.symbol);
-        const QString ex = pretty_exchange(r.exchange);
+        const QString ex = sym_chip_pretty_exchange(r.exchange);
         const QString label = ex.isEmpty() ? friendly : QStringLiteral("%1   ·   %2").arg(friendly, ex);
         if (sugg_map_.contains(label))
             continue; // collapse identical labels across brokers
@@ -212,13 +168,14 @@ void SymbolChipInput::on_text_changed(const QString& text) {
     model_->setStringList(labels);
 
     // Widen the popup to fit the longest label so nothing is truncated (the
-    // popup otherwise inherits the narrow line-edit width).
+    // popup otherwise inherits the narrow line-edit width); bounds from the font.
     if (auto* popup = completer_->popup()) {
         const QFontMetrics fm(edit_->font());
         int w = 0;
         for (const auto& l : labels)
             w = qMax(w, fm.horizontalAdvance(l));
-        popup->setMinimumWidth(qBound(220, w + 56, 560));
+        const int avg = qMax(5, fm.averageCharWidth());
+        popup->setMinimumWidth(qBound(avg * 28, w + avg * 7, avg * 70));
     }
 }
 
@@ -305,44 +262,41 @@ void SymbolChipInput::commit_label(const QString& label) {
 }
 
 void SymbolChipInput::add_chip(const QString& symbol) {
-    if (symbol.isEmpty() || symbols_.contains(symbol))
+    if (!insert_chip(symbol))
         return;
+    emit symbols_changed();
+    fetch_price(symbol);
+    edit_->setFocus();
+}
+
+bool SymbolChipInput::insert_chip(const QString& symbol) {
+    if (symbol.isEmpty() || symbols_.contains(symbol))
+        return false;
     symbols_ << symbol;
 
-    auto* chip = new QFrame(this);
-    chip->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:3px; }")
-                            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::AMBER()));
+    // A transparent holder: the framed chip label (#algoChip) and its remove link.
+    auto* chip = new QWidget(this);
     auto* hl = new QHBoxLayout(chip);
-    hl->setContentsMargins(6, 2, 4, 2);
-    hl->setSpacing(4);
+    hl->setContentsMargins(0, 0, 0, 0);
+    hl->setSpacing(0);
+    // The holder's only label (quotes find it with findChild<QLabel*>()).
     auto* lbl = new QLabel(symbol, chip);
-    lbl->setObjectName("sym");
-    lbl->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; border:none; background:transparent;")
-            .arg(fincept::ui::colors::TEXT_PRIMARY())
-            .arg(QString(fincept::ui::fonts::DATA_FAMILY))
-            .arg(fincept::ui::fonts::SMALL));
-    auto* x = new QPushButton("✕", chip);
+    lbl->setObjectName(QStringLiteral("algoChip"));
+    lbl->setAccessibleName(symbol);
+    auto* x = new QPushButton(QStringLiteral("✕"), chip);
+    x->setObjectName(QStringLiteral("algoLink"));
     x->setCursor(Qt::PointingHandCursor);
-    x->setFixedSize(16, 16);
-    x->setStyleSheet(QString("QPushButton { color:%1; border:none; background:transparent; font-size:%2px; }"
-                             "QPushButton:hover { color:%3; }")
-                         .arg(fincept::ui::colors::TEXT_TERTIARY())
-                         .arg(fincept::ui::fonts::TINY)
-                         .arg(fincept::ui::colors::NEGATIVE()));
+    x->setFocusPolicy(Qt::NoFocus); // Backspace in the field removes chips from the keyboard
+    x->setToolTip(tr("Remove %1").arg(symbol));
+    x->setAccessibleName(tr("Remove %1").arg(symbol));
     connect(x, &QPushButton::clicked, this, [this, symbol]() { remove_chip(symbol); });
     hl->addWidget(lbl);
     hl->addWidget(x);
 
     // insert the chip BEFORE the trailing edit_
-    flow_->removeWidget(edit_);
-    flow_->addWidget(chip);
-    flow_->addWidget(edit_);
+    flow_->insert_widget(flow_->indexOf(edit_), chip);
     chips_ << chip;
-
-    emit symbols_changed();
-    fetch_price(symbol);
-    edit_->setFocus();
+    return true;
 }
 
 void SymbolChipInput::remove_chip(const QString& symbol) {
@@ -357,18 +311,39 @@ void SymbolChipInput::remove_chip(const QString& symbol) {
 }
 
 void SymbolChipInput::fetch_price(const QString& symbol) {
+    fetch_prices({symbol});
+}
+
+void SymbolChipInput::fetch_prices(const QStringList& symbols) {
+    if (symbols.isEmpty())
+        return;
     // Namespace is fincept::services (not fincept::services::markets).
     // QuoteCallback = std::function<void(bool, QVector<QuoteData>)> — by value, not const-ref.
+    QPointer<SymbolChipInput> self(this); // the quotes can land after the input is gone
     fincept::services::MarketDataService::instance().fetch_quotes(
-        {symbol}, [this, symbol](bool ok, QVector<fincept::services::QuoteData> quotes) {
-            if (!ok || quotes.isEmpty())
+        symbols, [self, symbols](bool ok, QVector<fincept::services::QuoteData> quotes) {
+            if (!self || !ok || quotes.isEmpty())
                 return;
-            const double px = quotes.first().price;
-            const int i = symbols_.indexOf(symbol);
-            if (i >= 0 && i < chips_.size())
-                if (auto* lbl = chips_[i]->findChild<QLabel*>("sym"))
-                    lbl->setText(QString("%1  %2").arg(symbol, QString::number(px, 'f', 2)));
-            emit price_resolved(symbol, px);
+            for (int k = 0; k < quotes.size(); ++k) {
+                const auto& q = quotes[k];
+                // A single request answers for its symbol whatever the feed calls it.
+                const QString symbol = symbols.size() == 1 ? symbols.first() : q.symbol.trimmed().toUpper();
+                const double px = q.price;
+                const int i = self->symbols_.indexOf(symbol);
+                if (i < 0)
+                    continue;
+                if (i < self->chips_.size())
+                    if (auto* lbl = self->chips_[i]->findChild<QLabel*>()) {
+                        // Kept on the label so a format change can re-render it.
+                        lbl->setProperty("px", px);
+                        lbl->setProperty("pxCcy", q.currency);
+                        lbl->setProperty("pxDigits", q.price_digits);
+                        lbl->setProperty("pxMoney", !q.currency.isEmpty() &&
+                                                        fincept::ui::formatting::is_money_quote(q.quote_type, symbol));
+                        sym_chip_render_price(lbl, symbol);
+                    }
+                emit self->price_resolved(symbol, px);
+            }
         });
 }
 
@@ -377,9 +352,22 @@ QStringList SymbolChipInput::symbols() const {
 }
 
 void SymbolChipInput::set_symbols(const QStringList& syms) {
-    clear();
-    for (const auto& s : syms)
-        add_chip(s.trimmed().toUpper());
+    // One symbols_changed() and one quote request for the whole list, and no focus
+    // grab (a list loaded on a tab's first show must not move the keyboard focus).
+    for (auto* c : chips_) {
+        flow_->removeWidget(c);
+        c->deleteLater();
+    }
+    chips_.clear();
+    symbols_.clear();
+    QStringList added;
+    for (const auto& s : syms) {
+        const QString sym = s.trimmed().toUpper();
+        if (insert_chip(sym))
+            added << sym;
+    }
+    emit symbols_changed();
+    fetch_prices(added);
 }
 
 void SymbolChipInput::clear() {

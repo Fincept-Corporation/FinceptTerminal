@@ -151,12 +151,13 @@ def portfolio_downside_risk(returns: Series, threshold: float = 0.0,
         periods_per_year: Periods per year
 
     Returns:
-        Annualized downside deviation
+        Annualized downside deviation:
+        sqrt(mean over all periods of min(r - threshold, 0)^2) * sqrt(periods_per_year)
     """
-    below = returns[returns < threshold]
-    if len(below) < 2:
-        return 0.0
-    return float(below.std() * np.sqrt(periods_per_year))
+    arr = np.asarray(returns.dropna(), dtype=float)
+    if len(arr) == 0:
+        return float("nan")
+    return float(np.sqrt(np.mean(np.minimum(arr - threshold, 0.0) ** 2)) * np.sqrt(periods_per_year))
 
 
 def portfolio_realized_var(returns: Series, w: int = None) -> Union[Series, float]:
@@ -178,7 +179,8 @@ def portfolio_realized_var(returns: Series, w: int = None) -> Union[Series, floa
 
 def portfolio_semi_variance(returns: Series, threshold: float = 0.0) -> float:
     """
-    Semi-variance (variance of returns below threshold).
+    Semi-variance below a target: mean over ALL periods of min(r - threshold, 0)^2
+    (the square of the per-period downside deviation).
 
     Args:
         returns: Portfolio returns
@@ -187,8 +189,10 @@ def portfolio_semi_variance(returns: Series, threshold: float = 0.0) -> float:
     Returns:
         Semi-variance
     """
-    below = returns[returns < threshold]
-    return float(below.var()) if len(below) > 1 else 0.0
+    arr = np.asarray(returns.dropna(), dtype=float)
+    if len(arr) == 0:
+        return float("nan")
+    return float(np.mean(np.minimum(arr - threshold, 0.0) ** 2))
 
 
 # =============================================================================
@@ -244,9 +248,14 @@ def portfolio_max_recovery_period(returns: Series) -> int:
         returns: Portfolio returns
 
     Returns:
-        Max recovery period in periods
+        Periods from a drawdown's trough to the first new high, maximised over
+        drawdowns that recovered; None if none recovered.
     """
-    return portfolio_drawdown_length(returns)
+    try:
+        from gs_quant_wrapper.ts_risk_measures import max_recovery_period
+    except ImportError:  # run as a plain script from this directory
+        from ts_risk_measures import max_recovery_period
+    return max_recovery_period(returns)
 
 
 # =============================================================================
@@ -264,7 +273,7 @@ def portfolio_sharpe_ratio(returns: Series, risk_free_rate: float = 0.0,
     excess = returns - rf_daily
     ann_excess = excess.mean() * periods_per_year
     ann_vol = returns.std() * np.sqrt(periods_per_year)
-    return float(ann_excess / ann_vol) if ann_vol != 0 else 0.0
+    return float(ann_excess / ann_vol) if ann_vol != 0 else float('nan')
 
 
 def portfolio_sortino_ratio(returns: Series, risk_free_rate: float = 0.0,
@@ -285,7 +294,7 @@ def portfolio_sortino_ratio(returns: Series, risk_free_rate: float = 0.0,
     ann_excess = excess.mean() * periods_per_year
 
     dd = portfolio_downside_risk(returns, rf_daily, periods_per_year)
-    return float(ann_excess / dd) if dd != 0 else 0.0
+    return float(ann_excess / dd) if dd != 0 else float('nan')
 
 
 def portfolio_calmar_ratio(returns: Series, periods_per_year: int = 252) -> float:
@@ -301,7 +310,7 @@ def portfolio_calmar_ratio(returns: Series, periods_per_year: int = 252) -> floa
     """
     ann_ret = _annualize_return(returns, periods_per_year)
     max_dd = abs(portfolio_max_drawdown(returns))
-    return float(ann_ret / max_dd) if max_dd != 0 else 0.0
+    return float(ann_ret / max_dd) if max_dd != 0 else float('nan')
 
 
 def portfolio_treynor_measure(returns: Series, benchmark: Series,
@@ -323,7 +332,7 @@ def portfolio_treynor_measure(returns: Series, benchmark: Series,
     beta_val = p.cov(b) / b.var() if b.var() != 0 else 0.0
 
     ann_excess = (p.mean() - risk_free_rate / periods_per_year) * periods_per_year
-    return float(ann_excess / beta_val) if beta_val != 0 else 0.0
+    return float(ann_excess / beta_val) if beta_val != 0 else float('nan')
 
 
 def portfolio_modigliani_ratio(returns: Series, benchmark: Series,
@@ -365,7 +374,7 @@ def portfolio_jensen_alpha_bear(returns: Series, benchmark: Series,
     """Jensen's alpha in bear markets (benchmark return < 0)."""
     p, b = _filter_market(returns, benchmark, 'bear')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     return portfolio_alpha(p, b, risk_free_rate, periods_per_year)
 
 
@@ -375,7 +384,7 @@ def portfolio_jensen_alpha_bull(returns: Series, benchmark: Series,
     """Jensen's alpha in bull markets (benchmark return > 0)."""
     p, b = _filter_market(returns, benchmark, 'bull')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     return portfolio_alpha(p, b, risk_free_rate, periods_per_year)
 
 
@@ -406,7 +415,7 @@ def portfolio_tracking_error_bear(returns: Series, benchmark: Series,
     """Tracking error in bear markets."""
     p, b = _filter_market(returns, benchmark, 'bear')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     return float((p - b).std() * np.sqrt(periods_per_year))
 
 
@@ -415,7 +424,7 @@ def portfolio_tracking_error_bull(returns: Series, benchmark: Series,
     """Tracking error in bull markets."""
     p, b = _filter_market(returns, benchmark, 'bull')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     return float((p - b).std() * np.sqrt(periods_per_year))
 
 
@@ -436,7 +445,7 @@ def portfolio_information_ratio(returns: Series, benchmark: Series,
     active = p - b
     ann_active = active.mean() * periods_per_year
     te = active.std() * np.sqrt(periods_per_year)
-    return float(ann_active / te) if te != 0 else 0.0
+    return float(ann_active / te) if te != 0 else float('nan')
 
 
 def portfolio_information_ratio_bear(returns: Series, benchmark: Series,
@@ -444,11 +453,11 @@ def portfolio_information_ratio_bear(returns: Series, benchmark: Series,
     """Information ratio in bear markets."""
     p, b = _filter_market(returns, benchmark, 'bear')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     active = p - b
     ann_active = active.mean() * periods_per_year
     te = active.std() * np.sqrt(periods_per_year)
-    return float(ann_active / te) if te != 0 else 0.0
+    return float(ann_active / te) if te != 0 else float('nan')
 
 
 def portfolio_information_ratio_bull(returns: Series, benchmark: Series,
@@ -456,11 +465,11 @@ def portfolio_information_ratio_bull(returns: Series, benchmark: Series,
     """Information ratio in bull markets."""
     p, b = _filter_market(returns, benchmark, 'bull')
     if len(p) < 5:
-        return 0.0
+        return float('nan')  # too few observations: undefined
     active = p - b
     ann_active = active.mean() * periods_per_year
     te = active.std() * np.sqrt(periods_per_year)
-    return float(ann_active / te) if te != 0 else 0.0
+    return float(ann_active / te) if te != 0 else float('nan')
 
 
 # =============================================================================
@@ -487,13 +496,13 @@ def portfolio_capture_ratio(returns: Series, benchmark: Series) -> Dict[str, flo
 
     up_p = p[up_mask].mean()
     up_b = b[up_mask].mean()
-    up_capture = (up_p / up_b * 100) if up_b != 0 else 0.0
+    up_capture = (up_p / up_b * 100) if up_b != 0 else float('nan')
 
     down_p = p[down_mask].mean()
     down_b = b[down_mask].mean()
-    down_capture = (down_p / down_b * 100) if down_b != 0 else 0.0
+    down_capture = (down_p / down_b * 100) if down_b != 0 else float('nan')
 
-    capture_ratio = (up_capture / down_capture) if down_capture != 0 else 0.0
+    capture_ratio = (up_capture / down_capture) if down_capture != 0 else float('nan')
 
     return {
         'up_capture': float(up_capture),

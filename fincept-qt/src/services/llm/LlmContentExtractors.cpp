@@ -293,4 +293,47 @@ std::vector<TextToolCall> extract_text_tool_calls(const QString& content, QStrin
     return calls;
 }
 
+bool looks_like_unfinished_intent(const QString& content) {
+    const QString text = content.trimmed();
+    if (text.isEmpty() || text.size() > 420)
+        return false;
+    // A question to the user is a real end of turn (a missing symbol, a choice to make).
+    if (text.contains(QLatin1Char('?')))
+        return false;
+    // A reply that already carries a result is an answer, however it is phrased.
+    if (text.contains(QLatin1Char('|')) || text.contains(QStringLiteral("\n- ")) ||
+        text.contains(QStringLiteral("\n* ")) || text.contains(QStringLiteral("\n1. ")))
+        return false;
+    int digits = 0;
+    for (const QChar c : text)
+        if (c.isDigit())
+            ++digits;
+    if (digits > 12)
+        return false;
+
+    // "I'll …", "Let me …", "I'm going to …", "Now I will …", "Searching for …" —
+    // the model narrating its next step instead of taking it. (\x{2019} = typographic apostrophe.)
+    static const QRegularExpression rx_intent(
+        QStringLiteral("^(?:(?:ok(?:ay)?|sure|alright|right|got it|great|first|next|now|then|so)[,.!:]?\\s+)*"
+                       "(?:i\\s*['\\x{2019}]?\\s*ll\\b|i\\s+will\\b|i\\s+am\\s+going\\s+to\\b|"
+                       "i\\s*['\\x{2019}]\\s*m\\s+going\\s+to\\b|i\\s+need\\s+to\\b|i\\s+should\\b|"
+                       "i\\s+can\\s+(?:look|check|search|fetch|pull|run|get|find)\\b|"
+                       "let\\s+me\\b|let\\s*['\\x{2019}]\\s*s\\b|allow\\s+me\\b|one\\s+moment\\b|hold\\s+on\\b|"
+                       "(?:searching|looking|checking|fetching|pulling|running|retrieving|gathering|loading|trying|"
+                       "querying|opening|reading|calling|working)\\b)"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    if (rx_intent.match(text).hasMatch())
+        return true;
+
+    // "… failed. I'll try a different script." — the intent is the LAST sentence.
+    static const QRegularExpression rx_split(QStringLiteral("(?<=[.!:;])\\s+|\\n+"));
+    const QStringList sentences = text.split(rx_split, Qt::SkipEmptyParts);
+    if (sentences.size() > 1 && rx_intent.match(sentences.last().trimmed()).hasMatch())
+        return true;
+
+    // A reply that just trails off: "Here is what I found:" / "Looking into it…"
+    return text.endsWith(QLatin1Char(':')) || text.endsWith(QStringLiteral("...")) || text.endsWith(QChar(0x2026));
+}
+
 } // namespace fincept::ai_chat

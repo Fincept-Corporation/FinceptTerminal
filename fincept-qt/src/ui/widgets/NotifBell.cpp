@@ -8,7 +8,7 @@ namespace fincept::ui {
 
 NotifBell::NotifBell(QWidget* parent) : QPushButton(parent) {
     setFlat(true);
-    setFixedHeight(20);
+    setMinimumHeight(20); // one text line; grows with a large base font
     setCursor(Qt::PointingHandCursor);
     update_label();
 
@@ -30,7 +30,7 @@ void NotifBell::update_label() {
 
     setText(text);
     setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: none; "
-                          "font-size: 11px; font-weight: %2; padding: 0 4px; }"
+                          "font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: %2; padding: 0 4px; }"
                           "QPushButton:hover { color: %3; }")
                       .arg(color, unread_ > 0 ? "bold" : "normal", QString(ui::colors::AMBER())));
 }

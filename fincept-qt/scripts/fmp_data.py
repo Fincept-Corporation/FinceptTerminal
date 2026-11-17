@@ -5,11 +5,15 @@
 import sys
 import json
 import requests
-import pandas as pd
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta
 import traceback
 import os
+
+import fincept_connector as fc
+import fincept_json
+
+SERVICE = "Financial Modeling Prep"
 
 
 class FMPError:
@@ -30,13 +34,24 @@ class FMPError:
         }
 
 
+def _first_error(results: Dict[str, Any]) -> Optional[str]:
+    """The first sub-request error message in a dict of endpoint results, or None."""
+    for r in results.values():
+        err = r.get("error") if isinstance(r, dict) else None
+        if isinstance(err, dict):
+            err = err.get("error")
+        if err:
+            return str(err)
+    return None
+
+
 class FMPDataWrapper:
     """Modular FMP data wrapper with fault-tolerant endpoints"""
 
     def __init__(self, api_key: Optional[str] = None):
         self.base_url = "https://financialmodelingprep.com/api/v3"
         self.api_key = api_key or os.environ.get('FMP_API_KEY', '')
-        self.session = requests.Session()
+        self.session = fc.http_session()
         self.session.headers.update({
             'User-Agent': 'Fincept-Terminal/1.0'
         })
@@ -79,9 +94,10 @@ class FMPDataWrapper:
             return data
 
         except requests.exceptions.RequestException as e:
-            raise Exception(f"HTTP request failed: {str(e)}")
-        except json.JSONDecodeError as e:
-            raise Exception(f"JSON decode error: {str(e)}")
+            # Never str(e): the URL it contains carries the apikey.
+            raise Exception(fc.request_error(SERVICE, e, "FMP_API_KEY", self.api_key))
+        except ValueError:
+            raise Exception(f"{SERVICE} returned a response that is not JSON")
 
     def _build_url(self, endpoint: str, params: Dict[str, Any] = None) -> str:
         """Build API URL with parameters"""
@@ -107,6 +123,7 @@ class FMPDataWrapper:
 
             symbol_list = [s.strip() for s in symbols.split(",")]
             results = []
+            errors = []
 
             for symbol in symbol_list:
                 try:
@@ -119,11 +136,13 @@ class FMPDataWrapper:
                         results.append(data)
 
                 except Exception as e:
-                    # Continue with other symbols if one fails
+                    # Continue with other symbols if one fails, but keep the reason
+                    errors.append(str(e))
                     continue
 
             if not results:
-                return {"error": FMPError("equity_quote", f"No data found for symbols: {symbols}").to_dict()}
+                reason = errors[0] if errors else f"No data found for symbols: {symbols}"
+                return {"error": FMPError("equity_quote", reason).to_dict()}
 
             return {
                 "success": True,
@@ -672,7 +691,8 @@ class FMPDataWrapper:
             )
 
             if not has_data:
-                return {"error": FMPError("company_overview", f"No data found for symbol: {symbol}").to_dict()}
+                reason = _first_error(results) or f"No data found for symbol: {symbol}"
+                return {"error": FMPError("company_overview", reason).to_dict()}
 
             return {
                 "success": True,
@@ -718,7 +738,8 @@ class FMPDataWrapper:
             )
 
             if not has_data:
-                return {"error": FMPError("financial_statements", f"No financial statements found for symbol: {symbol}").to_dict()}
+                reason = _first_error(results) or f"No financial statements found for symbol: {symbol}"
+                return {"error": FMPError("financial_statements", reason).to_dict()}
 
             return {
                 "success": True,
@@ -746,7 +767,7 @@ def main(args=None):
         args = sys.argv[1:]  # Skip script name
 
     if len(args) < 1:
-        print(json.dumps({
+        return fincept_json.dumps({
             "error": "Usage: python fmp_data.py <command> [args...]",
             "commands": [
                 "equity_quote [symbols]",
@@ -772,11 +793,14 @@ def main(args=None):
                 "financial_statements [symbol] [period] [limit]"
             ],
             "note": "FMP API key required. Set FMP_API_KEY environment variable or pass to wrapper constructor."
-        }))
-        return json.dumps({"error": "No command provided"})
+        })
 
     command = args[0]
     wrapper = FMPDataWrapper()
+    if not wrapper.api_key:
+        # Every FMP endpoint needs the key; without it each command used to end in "No data found".
+        return fincept_json.dumps(fc.missing_key(SERVICE, "https://site.financialmodelingprep.com/developer/docs",
+                                                 "FMP_API_KEY", what="a free API key"))
 
     try:
         if command == "equity_quote":
@@ -881,12 +905,16 @@ def main(args=None):
         else:
             result = {"error": FMPError(command, f"Unknown command: {command}").to_dict()}
 
-        # Return JSON string for host consumption
-        return json.dumps(result, indent=2)
-
     except Exception as e:
-        error_result = {"error": FMPError(command, str(e)).to_dict()}
-        return json.dumps(error_result, indent=2)
+        result = {"error": FMPError(command, str(e)).to_dict()}
+
+    # Host convention: {"error": "<plain message>"} - lift the FMPError message to the top level.
+    err = result.get("error") if isinstance(result, dict) else None
+    if isinstance(err, dict):
+        result = {"error": fc.scrub(err.get("error") or "Unknown FMP error", wrapper.api_key),
+                  "endpoint": err.get("endpoint"), "status_code": err.get("status_code")}
+    # Return JSON string for host consumption (one line, NaN-safe)
+    return fincept_json.dumps(result)
 
 
 if __name__ == "__main__":

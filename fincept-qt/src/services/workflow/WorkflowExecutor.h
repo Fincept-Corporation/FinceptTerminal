@@ -51,6 +51,11 @@ class WorkflowExecutor : public QObject {
     /// PAPER run such tools refuse orders themselves; in LIVE they are listed in the
     /// confirmation and must be named on the node.
     static bool mcp_tool_moves_money(const QString& tool);
+    /// True when a failed node of this type may be re-run under its "Retry on fail"
+    /// setting. Never for nodes that can place or change orders or move money
+    /// (trading.*, MCP tool calls, agents, sub-workflows): a "failed" one may
+    /// already have acted.
+    static bool is_retryable_type(const QString& type);
     /// Node ids forming one cycle of `adjacency` (first id repeated at the end is omitted);
     /// empty when the graph is acyclic.
     static QStringList find_cycle(const QHash<QString, QVector<QString>>& adjacency);
@@ -59,6 +64,13 @@ class WorkflowExecutor : public QObject {
     /// params["_run_token"] and poll this — from any thread — before each order: it
     /// turns false as soon as the run is stopped, aborted or finished.
     static bool is_run_active(const QString& run_token);
+
+    /// The executor whose node's execute function is running right now, on this (the
+    /// GUI) thread — the object that owns that node's run; null outside a node launch.
+    /// Read it synchronously inside execute: a node that answers later passes it as the
+    /// context of its async request (HttpClient's `context`), so the answer is dropped
+    /// once the run's executor has been destroyed (a finished, stopped or abandoned run).
+    static WorkflowExecutor* launching_executor();
 
     /// Start executing a workflow. Non-blocking — progress via signals.
     void execute(const WorkflowDef& workflow);
@@ -133,13 +145,20 @@ class WorkflowExecutor : public QObject {
     void on_node_done(const QString& node_id, bool success, const QJsonValue& output, const QString& error,
                       int duration_ms = 0);
 
+    /// A failed node gets another attempt: its Retry on fail is set, attempts are
+    /// left (max_tries counts the first run), its type is retryable and the run
+    /// is not stopping.
+    bool should_retry(const QString& node_id) const;
+
     /// Collect input data for a node from its upstream nodes' outputs.
     QVector<QJsonValue> collect_inputs(const QString& node_id) const;
 
     /// The node's parameters with {{ ... }} templates in its plain-text ("string")
     /// parameters resolved against the upstream data. Parameters without a template
     /// marker (all of them, in nearly every workflow) are passed through untouched.
-    QJsonObject resolved_parameters(const NodeDef& node, const NodeTypeDef& type, const QVector<QJsonValue>& inputs) const;
+    /// `missing` (optional) receives the placeholders that had no value in the input.
+    QJsonObject resolved_parameters(const NodeDef& node, const NodeTypeDef& type, const QVector<QJsonValue>& inputs,
+                                    QStringList* missing = nullptr) const;
 
     /// Emit execution_finished with aggregated results.
     void finish_execution();
@@ -181,6 +200,7 @@ class WorkflowExecutor : public QObject {
     QString abort_reason_;
     QSet<QString> in_flight_; // ids of nodes launched but not yet reported back
     QSet<QString> skipped_roots_; // disabled nodes with no inputs — complete as "skipped", never run
+    QHash<QString, int> retries_; // node id -> retries already made in this run
 
     // Node data
     QHash<QString, NodeExecutionResult> results_;

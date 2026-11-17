@@ -35,7 +35,11 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        body = response.json()
+        # The DataMapper pivot {"values": {INDICATOR: {COUNTRY: {YEAR: v}}}} also as a table
+        if isinstance(body, dict) and isinstance(body.get("values"), dict):
+            body["data"] = _observations(body)
+        return body
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
@@ -44,15 +48,45 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
+def _observations(payload: Any) -> List[Dict]:
+    """{"values": {INDICATOR: {COUNTRY: {YEAR: value}}}} -> [{indicator, country, year, value}]."""
+    rows = []
+    for indicator, by_country in ((payload or {}).get("values") or {}).items():
+        for country, by_year in (by_country or {}).items():
+            for year, value in (by_year or {}).items():
+                rows.append({"indicator": indicator, "country": country,
+                             "year": int(year) if str(year).isdigit() else year, "value": value})
+    return rows
+
+
+def _combined(results: Dict[str, Any]) -> Dict[str, Any]:
+    """Per-key DataMapper answers plus all their observations as one table under "data"."""
+    rows = []
+    for key, res in results.items():
+        for r in (res.get("data") or []) if isinstance(res, dict) else []:
+            rows.append(dict(r, series=key))
+    results["data"] = rows
+    return results
+
+
 def _fetch_indicator(indicator_code: str, country: str = None,
                      start_year: str = None, end_year: str = None) -> Any:
     endpoint = f"indicators/{indicator_code}"
     if country:
         endpoint = f"{endpoint}/{country}"
-    params = {}
-    if start_year:
-        params["periods"] = f"{start_year}:{end_year or start_year}"
-    return _make_request(endpoint, params)
+    # "periods" is not a DataMapper parameter: with it the API answers without any values. The year
+    # range is applied to the rows below instead.
+    res = _make_request(endpoint, {})
+    # The DataMapper answers with every country and year whatever the path and periods ask for
+    # (checked 2026-11-17): the table keeps only what was asked.
+    if isinstance(res, dict) and isinstance(res.get("data"), list):
+        wanted = {c.strip().upper() for c in str(country or "").replace("/", ",").split(",") if c.strip()}
+        lo = int(start_year) if str(start_year or "").isdigit() else None
+        hi = int(end_year or start_year) if str(end_year or start_year or "").isdigit() else None
+        res["data"] = [r for r in res["data"]
+                       if (not wanted or str(r["country"]).upper() in wanted)
+                       and (lo is None or not isinstance(r["year"], int) or lo <= r["year"] <= (hi or lo))]
+    return res
 
 
 def get_government_debt(country: str = None, start_year: str = None, end_year: str = None) -> Any:
@@ -71,7 +105,7 @@ def get_total_debt(country: str = None, year: str = None) -> Any:
     results = {}
     for key in ["government_gross", "corporate_debt", "household_debt", "total_private_debt"]:
         results[key] = _fetch_indicator(DEBT_INDICATORS[key], country, year, year)
-    return results
+    return _combined(results)
 
 
 def get_debt_service_ratio(country: str = None, year: str = None) -> Any:
@@ -82,7 +116,7 @@ def get_debt_trends(country: str = None) -> Any:
     results = {}
     for key in ["government_gross", "government_net", "government_balance", "primary_balance"]:
         results[key] = _fetch_indicator(DEBT_INDICATORS[key], country)
-    return results
+    return _combined(results)
 
 
 def main(args=None):

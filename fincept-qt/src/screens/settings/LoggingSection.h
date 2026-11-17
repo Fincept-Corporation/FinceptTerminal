@@ -1,6 +1,7 @@
 #pragma once
 // LoggingSection.h — global log level, JSON output mode, log file path,
-// and per-tag level overrides for fincept::Logger.
+// per-tag level overrides for fincept::Logger, the environment override in
+// force, and "Copy diagnostics (redacted)" for support requests.
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -28,11 +29,17 @@ class LoggingSection : public QWidget {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
+    /// Installation summary + the last 200 warnings / errors, every part
+    /// already scrubbed (no paths, addresses, keys or tokens). GUI thread;
+    /// reads only in-memory state.
+    QString diagnostics_text() const;
+
     QComboBox* log_global_level_ = nullptr;
     QWidget* log_tag_list_ = nullptr; // VBox container for tag rows
     QVBoxLayout* log_tag_layout_ = nullptr;
     QCheckBox* log_json_mode_ = nullptr;
     QLabel* log_path_label_ = nullptr;
+    QLabel* override_lbl_ = nullptr; // FINCEPT_LOG_LEVEL / FINCEPT_LOG_TAGS in force; hidden when none
 
     // Static text widgets cached for retranslateUi.
     QLabel* section_title_ = nullptr;
@@ -47,6 +54,9 @@ class LoggingSection : public QWidget {
     QPushButton* copy_path_btn_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
+    QLabel* diag_title_ = nullptr;
+    QLabel* diag_desc_ = nullptr;
+    QPushButton* copy_diag_btn_ = nullptr;
 };
 
 } // namespace fincept::screens

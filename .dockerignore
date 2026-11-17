@@ -21,6 +21,7 @@ package.json
 package-lock.json
 funding.json
 updates.json
+updates.json.sig
 fincept_icon.ico
 setup.sh
 Dockerfile

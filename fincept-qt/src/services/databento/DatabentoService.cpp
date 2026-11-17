@@ -132,12 +132,57 @@ DatabentoService::DatabentoService() {}
 // in sync regardless of which screen entered the key.
 static constexpr const char* DATABENTO_ENV_KEY = "DATABENTO_API_KEY";
 
+namespace databento_key_detail {
+
+/// The stored key as the service uses it: the canonical slot first, the legacy one only
+/// when the canonical slot was READ and holds nothing. A slot that could not be read is
+/// never taken for "no key" (secure storage busy, damaged row, key unavailable): `error`
+/// is set instead and nothing may be written or sent on its strength.
+struct DbKeyRead {
+    QString key;
+    bool canonical_empty = false; ///< the canonical slot was read and holds no key
+    QString error;                ///< plain-language reason when a deciding slot is unreadable
+};
+
+DbKeyRead db_read_key(const char* legacy_slot) {
+    DbKeyRead out;
+    auto& store = SecureStorage::instance();
+    QString failed_slot;
+    const SecretRead canonical = store.read(QString::fromLatin1(DATABENTO_ENV_KEY));
+    if (canonical.failed()) {
+        out.error = canonical.reason();
+        failed_slot = QString::fromLatin1(DATABENTO_ENV_KEY);
+    } else if (canonical.found() && !canonical.value.isEmpty()) {
+        out.key = canonical.value;
+    } else {
+        out.canonical_empty = true;
+        const SecretRead legacy = store.read(QString::fromLatin1(legacy_slot));
+        if (legacy.failed()) {
+            out.error = legacy.reason();
+            failed_slot = QString::fromLatin1(legacy_slot);
+        } else if (legacy.found()) {
+            out.key = legacy.value;
+        }
+    }
+    // One line when the key starts failing and one when it reads again (the store logs
+    // the read error itself, per key); the key name only, never its value.
+    const bool failing = !out.error.isEmpty();
+    LOG_TRANSITION("Databento", QStringLiteral("api_key_read"), failing, failing ? LogLevel::Warn : LogLevel::Info,
+                   failing ? logf("Databento API key could not be read; requests are not sent and nothing is "
+                                  "written over it",
+                                  {{"key", failed_slot}})
+                           : QStringLiteral("Databento API key readable again"));
+    return out;
+}
+
+} // namespace databento_key_detail
+
 bool DatabentoService::has_api_key() const {
-    auto r = SecureStorage::instance().retrieve(SECURE_KEY);
-    if (r.is_ok() && !r.value().isEmpty())
-        return true;
-    auto r2 = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
-    return r2.is_ok() && !r2.value().isEmpty();
+    // A key that cannot be read is not "no key": report it as present so callers take
+    // the fetch path, where run_script() refuses with "could not read the stored
+    // Databento API key" — instead of telling the user to enter a key they already have.
+    const auto k = databento_key_detail::db_read_key(SECURE_KEY);
+    return !k.error.isEmpty() || !k.key.isEmpty();
 }
 
 void DatabentoService::set_api_key(const QString& key) {
@@ -152,11 +197,8 @@ QString DatabentoService::api_key() const {
     // PythonRunner injects into the script's environment. The legacy slot is only
     // written by set_api_key() (which mirrors to both), so after the user rotates the
     // key in Settings it is the stale one — preferring it kept sending the old key.
-    auto r2 = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
-    if (r2.is_ok() && !r2.value().isEmpty())
-        return r2.value();
-    auto r = SecureStorage::instance().retrieve(SECURE_KEY);
-    return r.is_ok() ? r.value() : QString{};
+    // An unreadable canonical slot yields no key (not the possibly stale legacy one).
+    return databento_key_detail::db_read_key(SECURE_KEY).key;
 }
 
 void DatabentoService::clear_api_key() {
@@ -168,7 +210,14 @@ void DatabentoService::clear_api_key() {
 // Python script expects:  databento_provider.py <command> <json_args>
 // where json_args is a JSON object with api_key and other parameters.
 void DatabentoService::run_script(const QStringList& args, std::function<void(bool, const QJsonObject&)> cb) {
-    QString key = api_key();
+    const auto stored = databento_key_detail::db_read_key(SECURE_KEY);
+    if (!stored.error.isEmpty()) {
+        cb(false, {{"error", tr("Could not read the stored Databento API key: %1. Nothing was sent; "
+                                "try again in a moment.")
+                                 .arg(stored.error)}});
+        return;
+    }
+    QString key = stored.key;
     if (key.isEmpty()) {
         cb(false, {{"error", "No Databento API key configured"}});
         return;
@@ -187,11 +236,13 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
     // "api_key" entry in argv, where any local process can read it from the process
     // list (and where it sat for the lifetime of every request). A key that exists only
     // in the legacy slot is copied to the canonical one first so the injection finds it.
-    {
-        const auto canonical = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
-        if (!canonical.is_ok() || canonical.value().isEmpty())
-            SecureStorage::instance().store(DATABENTO_ENV_KEY, key);
-    }
+    // DECISION: that copy is an automatic migration, so it happens ONLY when the canonical
+    // slot was read and is definitely empty (stored.canonical_empty). It never runs on a
+    // read error — an unreadable canonical key is not overwritten by the legacy (possibly
+    // stale) one; run_script() refused above instead. Replacing an unreadable key is left
+    // to an explicit user action: entering a new key in Settings (set_api_key()).
+    if (stored.canonical_empty)
+        SecureStorage::instance().store(DATABENTO_ENV_KEY, key);
 
     QJsonObject json_args;
 
@@ -254,7 +305,7 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
 // ── OHLCV fetch (correlation, PCA, drawdown, beta surfaces) ─────────────────
 void DatabentoService::fetch_ohlcv(const QStringList& symbols, int days) {
     emit fetch_started("Fetching OHLCV data for " + QString::number(symbols.size()) + " symbols...");
-    LOG_INFO("Databento", "fetch_ohlcv symbols=" + symbols.join(",") + " days=" + QString::number(days));
+    LOG_DEBUG("Databento", "fetch_ohlcv symbols=" + symbols.join(",") + " days=" + QString::number(days));
 
     QPointer<DatabentoService> self = this;
     QStringList args = {"historical_ohlcv", "symbols", symbols.join(","), "days", QString::number(days)};
@@ -281,7 +332,7 @@ void DatabentoService::fetch_ohlcv(const QStringList& symbols, int days) {
         }
         self->cached_ohlcv_ = res;
         self->last_fetch_time_ = QDateTime::currentDateTime();
-        LOG_INFO("Databento", "OHLCV ready, symbols=" + QString::number(res.data.size()));
+        LOG_DEBUG("Databento", "OHLCV ready, symbols=" + QString::number(res.data.size()));
         emit self->ohlcv_ready(res);
     });
 }
@@ -289,7 +340,7 @@ void DatabentoService::fetch_ohlcv(const QStringList& symbols, int days) {
 // ── Options surface fetch ─────────────────────────────────────────────────
 void DatabentoService::fetch_options_surface(const QString& symbol, float spot) {
     emit fetch_started("Fetching options chain for " + symbol + "...");
-    LOG_INFO("Databento", "fetch_options_surface symbol=" + symbol);
+    LOG_DEBUG("Databento", "fetch_options_surface symbol=" + symbol);
 
     QPointer<DatabentoService> self = this;
     QStringList args = {"options_chain", "symbol", symbol, "spot", QString::number((double)spot, 'f', 2)};
@@ -315,7 +366,7 @@ void DatabentoService::fetch_options_surface(const QString& symbol, float spot) 
         res.skew = parse_skew(j, symbol.toStdString());
         self->cached_vol_ = res;
         self->last_fetch_time_ = QDateTime::currentDateTime();
-        LOG_INFO("Databento", "Vol surface ready for " + symbol);
+        LOG_DEBUG("Databento", "Vol surface ready for " + symbol);
         emit self->vol_surface_ready(res);
     });
 }
@@ -323,7 +374,7 @@ void DatabentoService::fetch_options_surface(const QString& symbol, float spot) 
 // ── Futures term structure ─────────────────────────────────────────────────
 void DatabentoService::fetch_futures_term_structure(const QStringList& commodities) {
     emit fetch_started("Fetching futures term structure...");
-    LOG_INFO("Databento", "fetch_futures_term_structure");
+    LOG_DEBUG("Databento", "fetch_futures_term_structure");
 
     QPointer<DatabentoService> self = this;
     QStringList args = {"futures_term_structure", "root_symbol", commodities.join(","), "num_contracts",
@@ -346,7 +397,7 @@ void DatabentoService::fetch_futures_term_structure(const QStringList& commoditi
         res.contango = parse_contango(j);
         self->cached_futures_ = res;
         self->last_fetch_time_ = QDateTime::currentDateTime();
-        LOG_INFO("Databento", "Futures term structure ready");
+        LOG_DEBUG("Databento", "Futures term structure ready");
         emit self->futures_ready(res);
     });
 }

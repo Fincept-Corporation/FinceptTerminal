@@ -67,7 +67,7 @@ void OISnapshotter::ensure_registered_with_hub() {
     run_housekeeping();
 
     registered_ = true;
-    LOG_INFO("OISnapshotter", QString("Registered with DataHub (oi:history:*) — flush every %1s, retention %2d")
+    LOG_DEBUG("OISnapshotter", QString("Registered with DataHub (oi:history:*) — flush every %1s, retention %2d")
                                   .arg(kFlushIntervalMs / 1000)
                                   .arg(kRetentionDays));
 }
@@ -180,7 +180,7 @@ void OISnapshotter::run_housekeeping() {
     }
     const int n = r.value();
     if (n > 0)
-        LOG_INFO("OISnapshotter", QString("Pruned %1 oi_snapshots rows older than %2 days").arg(n).arg(kRetentionDays));
+        LOG_DEBUG("OISnapshotter", QString("Pruned %1 oi_snapshots rows older than %2 days").arg(n).arg(kRetentionDays));
 }
 
 bool OISnapshotter::parse_history_topic(const QString& topic, QString& broker, qint64& token, QString& window) {

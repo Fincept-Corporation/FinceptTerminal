@@ -1,4 +1,6 @@
 #pragma once
+#include "ui/widgets/ThemeHelpers.h"
+
 #include <QStringList>
 #include <QTableWidget>
 #include <QVector>
@@ -17,13 +19,16 @@ class DataTable : public QTableWidget {
     void clear_data();
     void set_column_widths(const QVector<int>& widths);
 
-    // Color a specific cell
+    // Color a specific cell. A theme token value follows later theme changes.
     void set_cell_color(int row, int col, const QString& color);
 
     /// Set a numeric sort key on a cell without changing its display text.
     /// Call after add_row() for columns that should sort numerically
     /// (price, change, volume, etc.).
     void set_cell_numeric(int row, int col, double value);
+
+  private:
+    ThemeRecolor recolor_; // item brushes across theme changes
 };
 
 } // namespace fincept::ui

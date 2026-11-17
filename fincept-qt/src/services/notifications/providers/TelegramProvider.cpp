@@ -1,8 +1,10 @@
 ﻿#include "services/notifications/providers/TelegramProvider.h"
 
-#include "network/http/HttpClient.h"
+#include "services/notifications/providers/ProviderHttp.h"
 
 #include <QJsonObject>
+
+#include <utility>
 
 namespace fincept::notifications {
 
@@ -47,14 +49,13 @@ void TelegramProvider::send(const NotificationRequest& req, std::function<void(b
                        .arg(level_tag, req.title.toHtmlEscaped(), req.message.toHtmlEscaped(),
                             req.timestamp.toString("yyyy-MM-dd hh:mm:ss"));
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const bool ok = res.value().object().value("ok").toBool();
-        cb(ok, ok ? QString{} : res.value().object().value("description").toString());
-    });
+    // Bot API: {"ok":false,"description":…} is a failure even inside a 2xx. The
+    // URL carries the bot token: errors reach the caller scrubbed.
+    DeliveryRequest request;
+    request.service = DeliveryService::Telegram;
+    request.url = url;
+    request.json = body;
+    send_delivery(request, std::move(cb));
 }
 
 } // namespace fincept::notifications

@@ -105,7 +105,7 @@ QVector<Instrument> parse_upstox(const QByteArray& json) {
         out.append(inst);
     }
 
-    LOG_INFO("UpstoxSource", QString("Parsed %1 Upstox instruments").arg(out.size()));
+    LOG_DEBUG("UpstoxSource", QString("Parsed %1 Upstox instruments").arg(out.size()));
     return out;
 }
 

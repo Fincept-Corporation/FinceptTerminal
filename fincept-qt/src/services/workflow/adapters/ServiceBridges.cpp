@@ -12,6 +12,7 @@
 #include "services/workflow/RiskManager.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "services/workflow/adapters/TradingBridgeLogic.h"
+#include "services/workflow/adapters/WorkflowDbQuery.h"
 #include "storage/repositories/WorkflowRepository.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
@@ -21,9 +22,11 @@
 #include "trading/ExchangeSession.h"
 #include "trading/ExchangeSessionManager.h"
 #include "trading/OrderThreadPool.h"
+#include "trading/PaperMarkService.h"
 #include "trading/PaperTrading.h"
 #include "trading/TradingTypes.h"
 #include "trading/UnifiedTrading.h"
+#include "ui/formatting/NumberFormat.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -120,6 +123,28 @@ static bool gate_or_queue(const QString& account_id, const fincept::trading::Uni
     return true;
 }
 
+// UnifiedOrder::source of an order a workflow node creates: "workflow:<id>" (the
+// executor passes the workflow's id as _workflow_id to every trading.* node). Entry /
+// add orders carry it into UnifiedTrading's approval rule (Semi-Auto -> queued, like
+// gate_or_queue). Risk-reducing orders (close position, trailing stop, flatten) carry
+// bridge_exit_order_source() instead. Paper orders carry them too (audit only).
+static QString bridge_order_source(const QJsonObject& params) {
+    const QString id = params.value(QStringLiteral("_workflow_id")).toString().trimmed();
+    return id.isEmpty() ? QStringLiteral("workflow") : QStringLiteral("workflow:") + id;
+}
+
+namespace {
+// UnifiedOrder::source of a risk-reducing order a workflow node creates (close position,
+// trailing stop, smart-order flatten): "workflow_exit:<id>". UnifiedTrading places it
+// without approval only after verifying, at submission, that it reduces an open position
+// of the account (opposite side, quantity <= the position); otherwise the approval rule
+// treats it like "workflow:<id>" (Semi-Auto -> queued) — trading/OrderApprovalRule.h.
+QString bridge_exit_order_source(const QJsonObject& params) {
+    const QString id = params.value(QStringLiteral("_workflow_id")).toString().trimmed();
+    return id.isEmpty() ? QStringLiteral("workflow_exit") : QStringLiteral("workflow_exit:") + id;
+}
+} // namespace
+
 // ── Market Data Bridge ─────────────────────────────────────────────────
 
 void wire_market_data_bridges(NodeRegistry& registry) {
@@ -176,7 +201,7 @@ void wire_market_data_bridges(NodeRegistry& registry) {
     // Remaining market nodes (depth, stats, fundamentals, economics) are wired
     // in MarketDataNodes.cpp directly — no stub overwrite needed here.
 
-    LOG_INFO("ServiceBridges", "Market data bridges wired");
+    LOG_DEBUG("ServiceBridges", "Market data bridges wired");
 }
 
 // ── Trading Bridge ─────────────────────────────────────────────────────
@@ -196,8 +221,20 @@ static QString ensure_paper_portfolio() {
     auto existing = pt_find_portfolio("workflow_default", "");
     if (existing.has_value())
         return existing->id;
-    auto p = pt_create_portfolio("workflow_default", 1000000.0, "USD");
+    // A new book's cash is in the user's display currency (Settings > Currency &
+    // Number Format); orders in other currencies convert at a real rate.
+    auto p = pt_create_portfolio("workflow_default", 1000000.0, fincept::ui::formatting::display_currency());
     return p.id;
+}
+
+// A paper order of the workflow paper portfolio, by id (the paper engine has no by-id accessor).
+static std::optional<fincept::trading::PtOrder> wfb_find_paper_order(const QString& order_id) {
+    using namespace fincept::trading;
+    for (const auto& o : pt_get_orders(ensure_paper_portfolio())) {
+        if (o.id == order_id)
+            return o;
+    }
+    return std::nullopt;
 }
 
 // Resolve an account_id for a trading node: prefer the explicit account_id param,
@@ -211,17 +248,16 @@ static QString resolve_account_id(const QString& account_id_param, const QString
     return find_account_for_broker(broker_id);
 }
 
-// Map a product param string ("MIS"/"CNC"/"NRML" or "intraday"/"delivery"/...) to ProductType.
+// Map a node's product param ("delivery"/"intraday"/"margin"/"mtf", or "CNC"/"MIS"/"NRML"/...)
+// to ProductType with the trading layer's own mapping, product_from_broker_str() — the one the
+// equity trading screen and the broker close paths use. Blank = the node default, Delivery.
+// A position's product as the BROKER reports it must go through IBroker::product_from_wire()
+// instead (Angel One's "MARGIN" is MTF).
 static fincept::trading::ProductType parse_product(const QString& p) {
     using namespace fincept::trading;
-    QString s = p.toLower();
-    if (s == "mis" || s == "intraday")
-        return ProductType::Intraday;
-    if (s == "nrml" || s == "margin")
-        return ProductType::Margin;
-    if (s == "mtf")
-        return ProductType::MTF;
-    return ProductType::Delivery; // "cnc" / "delivery" / default
+    if (p.trimmed().isEmpty())
+        return ProductType::Delivery;
+    return product_from_broker_str(p);
 }
 
 // The open position a close / protective-stop node acts on: exact symbol match
@@ -274,8 +310,27 @@ void wire_trading_bridges(NodeRegistry& registry) {
             QString order_type_str = params.value("order_type").toString("market");
             double qty = params.value("quantity").toDouble(1);
             double price = params.value("price").toDouble(0);
+            const double stop_price = params.value("stop_price").toDouble(0);
             QString validity = params.value("validity").toString("DAY");
             bool paper = (mode == "paper");
+
+            // Refuse an order that cannot be what the node says, before anything is sent. A stop
+            // order used to go out with trigger 0 (live) or always fail (paper), and an unknown
+            // order type was sent live as a MARKET order.
+            const bool is_stop = order_type_str == "stop" || order_type_str == "stop_limit";
+            const bool needs_limit = order_type_str == "limit" || order_type_str == "stop_limit";
+            if (!is_stop && !needs_limit && order_type_str != "market") {
+                cb(false, {}, QString("Unknown order type '%1' — use market, limit, stop or stop_limit").arg(order_type_str));
+                return;
+            }
+            if (is_stop && !(stop_price > 0)) {
+                cb(false, {}, QString("Trigger Price is required for %1 orders").arg(order_type_str));
+                return;
+            }
+            if (needs_limit && !(price > 0)) {
+                cb(false, {}, QString("Limit Price is required for %1 orders").arg(order_type_str));
+                return;
+            }
 
             AuditLogger::instance().log(
                 AuditAction::OrderPlaced, {}, {}, symbol,
@@ -296,8 +351,25 @@ void wire_trading_bridges(NodeRegistry& registry) {
                         return;
                     }
                     QString portfolio_id = ensure_paper_portfolio();
-                    std::optional<double> opt_price = price > 0 ? std::optional(price) : std::nullopt;
-                    auto pt_order = pt_place_order(portfolio_id, symbol, side, order_type_str, qty, opt_price);
+                    // A plain stop is a stop-MARKET order: no limit price, only the trigger.
+                    std::optional<double> opt_price =
+                        (price > 0 && order_type_str != "stop") ? std::optional(price) : std::nullopt;
+                    std::optional<double> opt_stop = is_stop ? std::optional(stop_price) : std::nullopt;
+                    // The product goes with the order (it used to be dropped, so every workflow
+                    // paper position was intraday/MIS — auto-squared at the close — whatever
+                    // Product Type said, and never a holding).
+                    const QString paper_product = QString::fromLatin1(product_to_broker_str(parse_product(product_str)));
+                    // Cash is booked in the workflow book's currency at the per-symbol
+                    // factor: a symbol priced in another currency needs a real rate
+                    // first — never 1:1.
+                    QString fx_reason;
+                    if (!trading::PaperMarkService::prepare_symbol_fx(portfolio_id, symbol, exchange, &fx_reason)) {
+                        cb(false, {}, fx_reason);
+                        return;
+                    }
+                    auto pt_order = pt_place_order(portfolio_id, symbol, side, order_type_str, qty, opt_price, opt_stop,
+                                                   /*reduce_only=*/false, exchange, paper_product,
+                                                   bridge_order_source(params));
 
                     if (order_type_str == "market")
                         pt_fill_order(pt_order.id, ref_price);
@@ -313,13 +385,18 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     out["mode"] = "paper";
                     cb(true, out, {});
                 } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges", logf("Workflow paper order failed", {{"symbol", symbol},
+                                                                                     {"side", side},
+                                                                                     {"qty", qty},
+                                                                                     {"error", ex.what()}}));
                     cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
                 }
                 return;
             }
 
+            const QString order_source = bridge_order_source(params);
             (void)QtConcurrent::run(&order_thread_pool(), [cb, symbol, exchange, side, product_str, order_type_str, qty,
-                                                           price, validity, broker]() {
+                                                           price, stop_price, validity, broker, order_source]() {
                 QString account_id = find_account_for_broker(broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -339,16 +416,13 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 else
                     order.order_type = OrderType::Market;
                 order.quantity = qty;
-                order.price = price;
+                // SL-M (stop) carries only the trigger; SL (stop_limit) carries both.
+                order.price = order_type_str == "stop" ? 0.0 : price;
+                if (order_type_str == "stop" || order_type_str == "stop_limit")
+                    order.stop_price = stop_price;
                 order.validity = validity;
-                if (product_str == "intraday")
-                    order.product_type = ProductType::Intraday;
-                else if (product_str == "margin")
-                    order.product_type = ProductType::Margin;
-                else if (product_str == "mtf")
-                    order.product_type = ProductType::MTF;
-                else
-                    order.product_type = ProductType::Delivery;
+                order.product_type = parse_product(product_str);
+                order.source = order_source;
 
                 if (gate_or_queue(account_id, order, cb))
                     return;
@@ -443,12 +517,33 @@ void wire_trading_bridges(NodeRegistry& registry) {
             }
 
             if (mode == "paper") {
-                pt_cancel_order(order_id);
-                QJsonObject out;
-                out["order_id"] = order_id;
-                out["status"] = "cancelled";
-                out["mode"] = "paper";
-                cb(true, out, {});
+                // Look the order up first: pt_cancel_order() is silent for an unknown id and for
+                // an order that is no longer resting, and the node reported "cancelled" for both.
+                try {
+                    const std::optional<PtOrder> order = wfb_find_paper_order(order_id);
+                    if (!order) {
+                        cb(false, {}, QString("No paper order %1 in the workflow paper portfolio").arg(order_id));
+                        return;
+                    }
+                    if (order->status != "pending" && order->status != "partial") {
+                        cb(false, {}, QString("Paper order %1 is %2 — nothing to cancel").arg(order_id, order->status));
+                        return;
+                    }
+                    pt_cancel_order(order_id);
+                    QJsonObject out;
+                    out["order_id"] = order_id;
+                    out["symbol"] = order->symbol;
+                    out["side"] = order->side;
+                    out["cancelled_quantity"] = order->quantity - order->filled_qty;
+                    out["filled_qty"] = order->filled_qty;
+                    out["status"] = "cancelled";
+                    out["mode"] = "paper";
+                    cb(true, out, {});
+                } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges",
+                              logf("Workflow paper cancel failed", {{"order_id", order_id}, {"error", ex.what()}}));
+                    cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
+                }
                 return;
             }
 
@@ -490,15 +585,94 @@ void wire_trading_bridges(NodeRegistry& registry) {
             }
 
             if (mode == "paper") {
-                QJsonObject out;
-                out["order_id"] = order_id;
-                out["status"] = "modified";
-                out["mode"] = "paper";
-                if (new_qty > 0)
-                    out["new_quantity"] = new_qty;
-                if (new_price > 0)
-                    out["new_price"] = new_price;
-                cb(true, out, {});
+                // The paper engine has no modify: cancel the resting order and place its
+                // replacement with the new quantity / price (same symbol, side and type). This
+                // used to answer "modified" and change nothing.
+                if (!(new_qty > 0) && !(new_price > 0)) {
+                    cb(false, {}, "Set New Quantity or New Price to modify the order");
+                    return;
+                }
+                try {
+                    const std::optional<PtOrder> order = wfb_find_paper_order(order_id);
+                    if (!order) {
+                        cb(false, {}, QString("No paper order %1 in the workflow paper portfolio").arg(order_id));
+                        return;
+                    }
+                    if (order->status != "pending") {
+                        cb(false, {},
+                           QString("Paper order %1 is %2 — only a pending order can be modified").arg(order_id, order->status));
+                        return;
+                    }
+                    const double qty = new_qty > 0 ? new_qty : order->quantity;
+                    std::optional<double> price = order->price;
+                    if (new_price > 0) {
+                        if (order->order_type == "stop") {
+                            cb(false, {}, "A stop (market) order has no limit price to modify");
+                            return;
+                        }
+                        price = new_price;
+                    }
+                    // The replacement blocks margin at the per-symbol factor: check the
+                    // rate BEFORE the original is cancelled, so a missing rate leaves it intact.
+                    if (QString fx_reason; !trading::PaperMarkService::prepare_symbol_fx(order->portfolio_id, order->symbol,
+                                                                                order->exchange, &fx_reason)) {
+                        cb(false, {}, fx_reason);
+                        return;
+                    }
+                    pt_cancel_order(order->id);
+                    PtOrder replacement;
+                    try {
+                        replacement = pt_place_order(order->portfolio_id, order->symbol, order->side, order->order_type,
+                                                     qty, price, order->stop_price, order->reduce_only, order->exchange,
+                                                     order->product);
+                    } catch (const std::exception& ex) {
+                        // Put the original back so a refused modify does not silently drop the order.
+                        QString restored;
+                        try {
+                            restored = pt_place_order(order->portfolio_id, order->symbol, order->side,
+                                                      order->order_type, order->quantity, order->price,
+                                                      order->stop_price, order->reduce_only, order->exchange,
+                                                      order->product)
+                                           .id;
+                        } catch (const std::exception& restore_ex) {
+                            LOG_ERROR("ServiceBridges",
+                                      logf("Paper modify refused and the original order could not be restored",
+                                           {{"order_id", order_id},
+                                            {"symbol", order->symbol},
+                                            {"reason", ex.what()},
+                                            {"error", restore_ex.what()}}));
+                        }
+                        if (!restored.isEmpty())
+                            LOG_WARN("ServiceBridges", logf("Paper modify refused, original order re-placed",
+                                                            {{"order_id", order_id},
+                                                             {"new_order_id", restored},
+                                                             {"symbol", order->symbol},
+                                                             {"reason", ex.what()}}));
+                        cb(false, {},
+                           restored.isEmpty()
+                               ? QString("Paper modify refused (%1); the original order %2 was cancelled")
+                                     .arg(ex.what(), order_id)
+                               : QString("Paper modify refused (%1); the original order was re-placed as %2")
+                                     .arg(ex.what(), restored));
+                        return;
+                    }
+                    QJsonObject out;
+                    out["order_id"] = replacement.id;
+                    out["replaced_order_id"] = order_id;
+                    out["symbol"] = replacement.symbol;
+                    out["side"] = replacement.side;
+                    out["quantity"] = replacement.quantity;
+                    if (replacement.price)
+                        out["price"] = *replacement.price;
+                    out["status"] = "modified";
+                    out["note"] = "Paper modify = cancel + replace: the order has a new id";
+                    out["mode"] = "paper";
+                    cb(true, out, {});
+                } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges",
+                              logf("Workflow paper modify failed", {{"order_id", order_id}, {"error", ex.what()}}));
+                    cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
+                }
                 return;
             }
 
@@ -538,9 +712,21 @@ void wire_trading_bridges(NodeRegistry& registry) {
 
             if (mode == "paper") {
                 QString portfolio_id = ensure_paper_portfolio();
-                auto orders = pt_get_orders(portfolio_id, status_filter == "all" ? "" : status_filter);
+                // Filter in C++ with the paper engine's own statuses: "open" was passed straight
+                // to SQL ("AND status = 'open'") and matched nothing — resting paper orders are
+                // "pending" / "partial".
+                auto orders = pt_get_orders(portfolio_id);
                 QJsonArray arr;
                 for (const auto& o : orders) {
+                    if (status_filter == "open" && o.status != "pending" && o.status != "partial")
+                        continue;
+                    if (status_filter == "filled" && o.status != "filled")
+                        continue;
+                    if (status_filter == "cancelled" && o.status != "cancelled" && o.status != "rejected")
+                        continue;
+                    if (status_filter != "all" && status_filter != "open" && status_filter != "filled" &&
+                        status_filter != "cancelled" && o.status != status_filter)
+                        continue;
                     QJsonObject obj;
                     obj["order_id"] = o.id;
                     obj["symbol"] = o.symbol;
@@ -687,7 +873,35 @@ void wire_trading_bridges(NodeRegistry& registry) {
             QString broker = params.value("broker").toString("fyers");
 
             if (mode == "paper") {
-                cb(true, QJsonArray{}, {});
+                // Delivery (CNC) paper positions are the holdings, as on the Equity Trading
+                // screen. This used to return an empty list whatever the paper book held.
+                try {
+                    QJsonArray arr;
+                    for (const auto& p : pt_get_positions(ensure_paper_portfolio())) {
+                        if (!product_is_delivery(p.product))
+                            continue;
+                        const double ltp = p.current_price > 0.0 ? p.current_price : p.entry_price;
+                        const double invested = p.entry_price * p.quantity;
+                        const double current = ltp * p.quantity;
+                        const double pnl = p.side.compare("short", Qt::CaseInsensitive) == 0 ? invested - current
+                                                                                              : current - invested;
+                        QJsonObject obj;
+                        obj["symbol"] = p.symbol;
+                        obj["quantity"] = p.quantity;
+                        obj["avg_price"] = p.entry_price;
+                        obj["ltp"] = ltp;
+                        obj["pnl"] = pnl;
+                        obj["pnl_pct"] = invested > 0.0 ? pnl / invested * 100.0 : 0.0;
+                        obj["invested_value"] = invested;
+                        obj["current_value"] = current;
+                        obj["mode"] = "paper";
+                        arr.append(obj);
+                    }
+                    cb(true, arr, {});
+                } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges", logf("Workflow paper holdings read failed", {{"error", ex.what()}}));
+                    cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
+                }
                 return;
             }
 
@@ -739,12 +953,42 @@ void wire_trading_bridges(NodeRegistry& registry) {
             QString broker = params.value("broker").toString("fyers");
 
             if (mode == "paper") {
-                QJsonObject out;
-                out["available_balance"] = 1000000.0;
-                out["used_margin"] = 0.0;
-                out["total_balance"] = 1000000.0;
-                out["broker"] = "paper";
-                cb(true, out, {});
+                // The workflow paper portfolio's real funds (computed as the Equity Trading
+                // screen's paper funds card does) — not a constant 1,000,000.
+                try {
+                    const QString portfolio_id = ensure_paper_portfolio();
+                    const PtPortfolio portfolio = pt_get_portfolio(portfolio_id);
+                    double used_margin = 0.0, intraday_unrealized = 0.0;
+                    double holdings_value = 0.0, holdings_unrealized = 0.0;
+                    for (const auto& p : pt_get_positions(portfolio_id)) {
+                        if (product_is_delivery(p.product)) {
+                            const double ltp = p.current_price > 0.0 ? p.current_price : p.entry_price;
+                            const double invested = p.entry_price * p.quantity;
+                            const double current = ltp * p.quantity;
+                            holdings_value += current;
+                            holdings_unrealized += p.side.compare("short", Qt::CaseInsensitive) == 0
+                                                       ? invested - current
+                                                       : current - invested;
+                        } else {
+                            used_margin += p.held_margin;
+                            intraday_unrealized += p.unrealized_pnl;
+                        }
+                    }
+                    QJsonObject out;
+                    out["available_balance"] = portfolio.balance;
+                    out["used_margin"] = used_margin;
+                    out["holdings_value"] = holdings_value;
+                    out["unrealized_pnl"] = intraday_unrealized + holdings_unrealized;
+                    out["total_balance"] = portfolio.balance + used_margin + holdings_value + intraday_unrealized;
+                    out["opening_balance"] = portfolio.initial_balance;
+                    out["currency"] = portfolio.currency;
+                    out["broker"] = "paper";
+                    out["mode"] = "paper";
+                    cb(true, out, {});
+                } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges", logf("Workflow paper balance read failed", {{"error", ex.what()}}));
+                    cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
+                }
                 return;
             }
 
@@ -817,8 +1061,17 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     const double close_qty = bridge_logic::close_quantity(qty, found->quantity);
                     const QString close_side = found->side == QLatin1String("short") ? "buy" : "sell";
                     const double px = found->current_price > 0 ? found->current_price : found->entry_price;
+                    // Realized P&L is booked at the per-symbol factor (unset after a
+                    // restart): the exit rule — never 1:1 (trading::PaperMarkService::prepare_close_fx).
+                    QString fx_reason;
+                    if (!trading::PaperMarkService::prepare_close_fx(portfolio_id, found->symbol, QString(),
+                                                            trading::PaperMarkService::kCloseFxWaitMs, &fx_reason)) {
+                        cb(false, {}, fx_reason);
+                        return;
+                    }
                     auto order = pt_place_order(portfolio_id, found->symbol, close_side, "market", close_qty, std::nullopt,
-                                                std::nullopt, /*reduce_only=*/true);
+                                                std::nullopt, /*reduce_only=*/true, QString(), QString(),
+                                                bridge_exit_order_source(params)); // paper: audit provenance only
                     pt_fill_order(order.id, px);
                     QJsonObject out;
                     out["symbol"] = found->symbol;
@@ -831,12 +1084,16 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     out["mode"] = "paper";
                     cb(true, out, {});
                 } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges", logf("Workflow paper close failed",
+                                                     {{"symbol", symbol}, {"qty", qty}, {"error", ex.what()}}));
                     cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
                 }
                 return;
             }
 
-            (void)QtConcurrent::run(&order_thread_pool(), [cb, symbol, exchange, product_str, qty, broker]() {
+            const QString exit_source = bridge_exit_order_source(params);
+            (void)QtConcurrent::run(&order_thread_pool(), [cb, symbol, exchange, product_str, qty, broker,
+                                                           exit_source]() {
                 QString account_id = find_account_for_broker(broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -876,10 +1133,14 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 order.order_type = OrderType::Market;
                 order.quantity = close_qty;
                 order.validity = "DAY";
-                order.product_type = parse_product(pos.product_type.isEmpty() ? product_str : pos.product_type);
+                // The position's product as THIS broker means it (as the equity screen's close does).
+                order.product_type = pos.product_type.isEmpty() ? parse_product(product_str)
+                                                                : ibk->product_from_wire(pos.product_type);
+                // Risk-reducing: "workflow_exit:<id>". UnifiedTrading places it without
+                // approval only after re-reading the account's positions and verifying it
+                // reduces one; otherwise it is treated like an entry (Semi-Auto: queued).
+                order.source = exit_source;
 
-                // Risk-reducing op — always immediate, never gated for
-                // approval (see ActionCenter::immediate_ops).
                 auto response = UnifiedTrading::instance().place_order(account_id, order);
                 QJsonObject out;
                 out["symbol"] = symbol;
@@ -943,7 +1204,9 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            (void)QtConcurrent::run(&order_thread_pool(), [cb, symbol, exchange, side, qty, entry, sl, tp, broker]() {
+            const QString order_source = bridge_order_source(params);
+            (void)QtConcurrent::run(&order_thread_pool(), [cb, symbol, exchange, side, qty, entry, sl, tp, broker,
+                                                           order_source]() {
                 QString account_id = find_account_for_broker(broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -961,6 +1224,7 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 order.take_profit = tp;
                 order.product_type = ProductType::BracketOrder;
                 order.validity = "DAY";
+                order.source = order_source; // an entry order: under the approval rule
 
                 if (gate_or_queue(account_id, order, cb))
                     return;
@@ -1034,7 +1298,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     const double stop_qty = bridge_logic::close_quantity(qty, found->quantity);
                     const QString stop_side = direction > 0 ? "sell" : "buy";
                     auto order = pt_place_order(portfolio_id, found->symbol, stop_side, "stop", stop_qty, std::nullopt,
-                                                stop, /*reduce_only=*/true);
+                                                stop, /*reduce_only=*/true, QString(), QString(),
+                                                bridge_exit_order_source(params)); // paper: audit provenance only
                     QJsonObject out;
                     out["order_id"] = order.id;
                     out["symbol"] = found->symbol;
@@ -1049,13 +1314,17 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     out["mode"] = "paper";
                     cb(true, out, {});
                 } catch (const std::exception& ex) {
+                    LOG_ERROR("ServiceBridges",
+                              logf("Workflow paper stop order failed", {{"symbol", symbol}, {"error", ex.what()}}));
                     cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
                 }
                 return;
             }
 
             QThreadPool* const pool = &order_thread_pool();
-            (void)QtConcurrent::run(pool, [cb, symbol, exchange, product_str, trail_type, trail_value, qty, broker]() {
+            const QString exit_source = bridge_exit_order_source(params);
+            (void)QtConcurrent::run(pool, [cb, symbol, exchange, product_str, trail_type, trail_value, qty, broker,
+                                           exit_source]() {
                 QString account_id = find_account_for_broker(broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -1110,10 +1379,14 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 order.quantity = bridge_logic::close_quantity(qty, held);
                 order.stop_price = stop;
                 order.validity = "DAY";
-                order.product_type = parse_product(pos.product_type.isEmpty() ? product_str : pos.product_type);
+                // The position's product as THIS broker means it (as the equity screen's close does).
+                order.product_type = pos.product_type.isEmpty() ? parse_product(product_str)
+                                                                : ibk->product_from_wire(pos.product_type);
+                // Protective stop: "workflow_exit:<id>". UnifiedTrading places it without
+                // approval only after re-reading the account's positions and verifying it
+                // reduces one; otherwise it is treated like an entry (Semi-Auto: queued).
+                order.source = exit_source;
 
-                // Protective stop — risk-reducing, always immediate, never gated
-                // for approval (see ActionCenter::immediate_ops).
                 auto response = UnifiedTrading::instance().place_order(account_id, order);
                 QJsonObject out;
                 out["order_id"] = response.order_id;
@@ -1188,8 +1461,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
 
             // Sleeps interval_sec between tranches (minutes by default), so it
             // lives on the blocking-jobs pool, never the global or order pool.
+            const QString order_source = bridge_order_source(params);
             (void)QtConcurrent::run(&blocking_thread_pool(), [cb, symbol, exchange, product_str, side, per_tranche,
-                                                              remainder, tranches, interval_sec, broker, run_token]() {
+                                                              remainder, tranches, interval_sec, broker, run_token,
+                                                              order_source]() {
                 QString account_id = find_account_for_broker(broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -1207,12 +1482,9 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     gate_order.order_type = OrderType::Market;
                     gate_order.quantity = per_tranche * tranches + remainder;
                     gate_order.validity = "DAY";
-                    if (product_str == "intraday")
-                        gate_order.product_type = ProductType::Intraday;
-                    else if (product_str == "margin")
-                        gate_order.product_type = ProductType::Margin;
-                    else
-                        gate_order.product_type = ProductType::Delivery;
+                    // Same mapping as Place Order: "mtf" used to fall through to Delivery.
+                    gate_order.product_type = parse_product(product_str);
+                    gate_order.source = order_source;
                     if (gate_or_queue(account_id, gate_order, cb))
                         return;
                 }
@@ -1242,12 +1514,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     order.order_type = OrderType::Market;
                     order.quantity = q;
                     order.validity = "DAY";
-                    if (product_str == "intraday")
-                        order.product_type = ProductType::Intraday;
-                    else if (product_str == "margin")
-                        order.product_type = ProductType::Margin;
-                    else
-                        order.product_type = ProductType::Delivery;
+                    order.product_type = parse_product(product_str);
+                    order.source = order_source;
 
                     auto response = UnifiedTrading::instance().place_order(account_id, order);
                     QJsonObject r;
@@ -1340,12 +1608,13 @@ void wire_trading_bridges(NodeRegistry& registry) {
             QString broker = params.value("broker").toString("fyers");
             QString symbol = params.value("symbol").toString();
             QString product = params.value("product").toString();
+            const QString exchange = params.value("exchange").toString().trimmed();
             if (symbol.isEmpty()) {
                 cb(false, {}, "Symbol is required");
                 return;
             }
 
-            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, product]() {
+            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, product, exchange]() {
                 QString account_id = resolve_account_id(account_id_param, broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -1365,11 +1634,38 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     return;
                 }
 
+                // Exact, normalised symbol match on OPEN rows only (as the close / stop bridges
+                // match). A substring match let "RELIANCE" return RELIANCEPP or a RELIANCE
+                // option, "NIFTY" any NIFTY contract, and a closed (quantity 0) row win.
+                // Product is a filter, read as this broker means it; Exchange narrows several
+                // hits (it is not a hard filter: the select always holds a value, NSE by default).
+                QVector<BrokerPosition> open;
                 for (const auto& p : result.data.value()) {
-                    if (!p.symbol.contains(symbol, Qt::CaseInsensitive))
+                    if (bridge_logic::position_direction(p.quantity, p.side) == 0 ||
+                        !bridge_logic::symbols_match(p.symbol, symbol))
                         continue;
-                    if (!product.isEmpty() && !p.product_type.contains(product, Qt::CaseInsensitive))
+                    if (!product.isEmpty() && ibk->product_from_wire(p.product_type) != parse_product(product))
                         continue;
+                    open.append(p);
+                }
+                if (open.size() > 1 && !exchange.isEmpty()) {
+                    QVector<BrokerPosition> same_venue;
+                    for (const auto& p : open) {
+                        if (p.exchange.compare(exchange, Qt::CaseInsensitive) == 0)
+                            same_venue.append(p);
+                    }
+                    if (!same_venue.isEmpty())
+                        open = same_venue;
+                }
+                if (open.size() > 1) {
+                    cb(false, {},
+                       QString("%1 has %2 open positions in different products — set Product to choose one")
+                           .arg(symbol)
+                           .arg(open.size()));
+                    return;
+                }
+                if (open.size() == 1) {
+                    const BrokerPosition& p = open.first();
                     QJsonObject out;
                     out["symbol"] = p.symbol;
                     out["exchange"] = p.exchange;
@@ -1384,7 +1680,7 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     return;
                 }
 
-                // No matching position — return a flat (zero) position rather than error.
+                // No open position — return a flat (zero) position rather than error.
                 QJsonObject out;
                 out["symbol"] = symbol;
                 out["quantity"] = 0.0;
@@ -1413,8 +1709,15 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 return;
             }
 
+            // A non-zero target opens / adjusts a position: "workflow:<id>" (approval rule —
+            // queued on a Semi-Auto account). A flatten (target 0, no quantity) is risk-reducing:
+            // "workflow_exit:<id>" — UnifiedTrading places it without approval as the engine's
+            // own close path (it sizes the order from the live position), like Close Position.
+            const QString order_source =
+                position_size != 0.0 ? bridge_order_source(params) : bridge_exit_order_source(params);
             (void)QtConcurrent::run(&order_thread_pool(), [cb, account_id_param, broker, symbol, exchange,
-                                                           position_size, order_type_str, price, product]() {
+                                                           position_size, order_type_str, price, product,
+                                                           order_source]() {
                 QString account_id = resolve_account_id(account_id_param, broker);
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
@@ -1429,6 +1732,7 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 so.order_type = (order_type_str == "limit") ? OrderType::Limit : OrderType::Market;
                 so.price = price;
                 so.product_type = parse_product(product);
+                so.source = order_source;
 
                 auto resp = UnifiedTrading::instance().place_smart_order(account_id, so);
                 if (!resp.success || !resp.data.has_value()) {
@@ -1556,7 +1860,7 @@ void wire_trading_bridges(NodeRegistry& registry) {
         };
     }
 
-    LOG_INFO("ServiceBridges", "Trading bridges wired (17 nodes)");
+    LOG_DEBUG("ServiceBridges", "Trading bridges wired (17 nodes)");
 }
 
 // ── Agent Bridge ───────────────────────────────────────────────────────
@@ -1565,7 +1869,7 @@ void wire_agent_bridges(NodeRegistry& /*registry*/) {
     // agent.run and agent.tool_picker have real executors from AgentNodes.cpp.
     // agent.single/agent.multi/agent.mediator are legacy stubs — leave their
     // executors to the fallback pass-through in wire_all_bridges if still null.
-    LOG_INFO("ServiceBridges", "Agent bridges wired");
+    LOG_DEBUG("ServiceBridges", "Agent bridges wired");
 }
 
 // ── Wire All ───────────────────────────────────────────────────────────
@@ -1596,38 +1900,46 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 }
             }
 
+            // A user-entered URL can answer with megabytes: the large forms parse the body on
+            // HttpClient's worker, never on the GUI thread. The answer is delivered to the run
+            // that launched this node (its executor) and dropped once that run is gone. Every
+            // result is what post() / get() gave: a non-JSON 2xx is still a failure carrying
+            // the parse text, an HTTP error still "HTTP_<status>: <message>". Outside a run
+            // (no executor) the client itself is the context, as before.
+            const QObject* run_context = WorkflowExecutor::launching_executor();
             auto& http = HttpClient::instance();
             if (method == "POST") {
                 QJsonObject body = params.value("body").toObject();
                 if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
                     body = inputs[0].toObject();
-                http.post(url, body, [cb, url](Result<QJsonDocument> result) {
+                // timeout 0: the client-wide transfer timeout, as post() has.
+                http.post_large(url, body, 0, [cb, url](Result<QJsonDocument> result) {
                     if (result.is_err()) {
                         cb(false, {}, QString::fromStdString(result.error()));
                         return;
                     }
+                    // No status_code: HttpClient's JSON callback does not carry it (a constant 200
+                    // was reported here); any non-2xx reply already arrives as a failure.
                     QJsonObject out;
                     out["url"] = url;
-                    out["status_code"] = 200;
                     out["data"] = result.value().isObject() ? QJsonValue(result.value().object())
                                                             : QJsonValue(result.value().array());
                     cb(true, out, {});
-                });
+                }, run_context);
             } else {
-                http.get(url, [cb, url](Result<QJsonDocument> result) {
+                http.get_large(url, [cb, url](Result<QJsonDocument> result) {
                     if (result.is_err()) {
                         cb(false, {}, QString::fromStdString(result.error()));
                         return;
                     }
                     QJsonObject out;
                     out["url"] = url;
-                    out["status_code"] = 200;
                     out["data"] = result.value().isObject() ? QJsonValue(result.value().object())
                                                             : QJsonValue(result.value().array());
                     cb(true, out, {});
-                });
+                }, run_context);
             }
-            LOG_DEBUG("UtilityBridge", QString("HTTP %1 %2").arg(method, url));
+            LOG_DEBUG("UtilityBridge", QString("HTTP %1 %2").arg(method, log_url(QUrl(url))));
         };
     }
 
@@ -1733,7 +2045,10 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                                                                                  : QJsonDocument(inputs[0].toArray()))
                                                   .toJson(QJsonDocument::Indented));
                 }
-                file.write(content.toUtf8());
+                if (const QByteArray bytes_out = content.toUtf8(); file.write(bytes_out) != bytes_out.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(path)},
+                                                                                           {"bytes", bytes_out.size()},
+                                                                                           {"error", file.errorString()}}));
                 QJsonObject out;
                 out["path"] = path;
                 out["operation"] = operation;
@@ -1793,10 +2108,18 @@ static void wire_utility_bridges(NodeRegistry& registry) {
             if (format == "json") {
                 QJsonDocument doc =
                     inputs[0].isObject() ? QJsonDocument(inputs[0].toObject()) : QJsonDocument(inputs[0].toArray());
-                file.write(doc.toJson(QJsonDocument::Indented));
+                if (const QByteArray bytes_out = doc.toJson(QJsonDocument::Indented);
+                    file.write(bytes_out) != bytes_out.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(path)},
+                                                                                           {"bytes", bytes_out.size()},
+                                                                                           {"error", file.errorString()}}));
             } else {
                 // CSV from an array of objects
-                file.write(bridge_csv_from_rows(inputs[0].toArray()).toUtf8());
+                if (const QByteArray bytes_out = bridge_csv_from_rows(inputs[0].toArray()).toUtf8();
+                    file.write(bytes_out) != bytes_out.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(path)},
+                                                                                           {"bytes", bytes_out.size()},
+                                                                                           {"error", file.errorString()}}));
             }
             file.close();
 
@@ -1858,7 +2181,10 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                     cb(false, {}, "Cannot open file for writing: " + file.errorString());
                     return;
                 }
-                file.write(bytes);
+                if (file.write(bytes) != bytes.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(path)},
+                                                                                           {"bytes", bytes.size()},
+                                                                                           {"error", file.errorString()}}));
                 file.close();
 
                 QJsonObject out;
@@ -1902,7 +2228,10 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                     cb(false, {}, "Cannot write decompressed file: " + out_file.errorString());
                     return;
                 }
-                out_file.write(decompressed);
+                if (out_file.write(decompressed) != decompressed.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(out_path)},
+                                                                                           {"bytes", decompressed.size()},
+                                                                                           {"error", out_file.errorString()}}));
 
                 QJsonObject out;
                 out["input_path"] = path;
@@ -1920,7 +2249,10 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                     cb(false, {}, "Cannot write compressed file: " + out_file.errorString());
                     return;
                 }
-                out_file.write(compressed);
+                if (out_file.write(compressed) != compressed.size())
+                    LOG_ERROR("ServiceBridges", logf("Workflow file node could not write", {{"path", log_path(out_path)},
+                                                                                           {"bytes", compressed.size()},
+                                                                                           {"error", out_file.errorString()}}));
 
                 QJsonObject out;
                 out["input_path"] = path;
@@ -1957,21 +2289,94 @@ static void wire_utility_bridges(NodeRegistry& registry) {
             }
 
             QString selector = params.value("selector").toString();
-            QString attr = params.value("attribute").toString("text");
+            const QString attr = params.value("attribute").toString("text").trimmed();
 
-            // Basic tag extraction — match tags by element name from selector
-            // e.g. selector "div" extracts all <div>...</div> content
-            QString tag_name = selector.section('.', 0, 0).section('#', 0, 0).trimmed();
-            if (tag_name.isEmpty())
-                tag_name = "div";
+            // The element the selector targets is its LAST compound ("div.price > span" ->
+            // span), with its tag, .class and #id filters. The old code kept only the tag
+            // name before the first '.' / '#' ("div.price > span" returned every <div>) and
+            // ignored Attribute. Ancestor parts of a selector are not checked.
+            QString compound;
+            {
+                static const QRegularExpression comb_re(QStringLiteral(R"([\s>+~]+)"));
+                const QStringList parts = selector.trimmed().split(comb_re, Qt::SkipEmptyParts);
+                compound = parts.isEmpty() ? QString() : parts.last();
+            }
+            QString tag;
+            QString id;
+            QStringList classes;
+            static const QRegularExpression tok_re(QStringLiteral(R"(([.#]?)([A-Za-z0-9_-]+))"));
+            for (auto tit = tok_re.globalMatch(compound); tit.hasNext();) {
+                const auto t = tit.next();
+                if (t.captured(1) == QLatin1String("."))
+                    classes << t.captured(2);
+                else if (t.captured(1) == QLatin1String("#"))
+                    id = t.captured(2);
+                else if (tag.isEmpty())
+                    tag = t.captured(2);
+            }
+            if (tag.isEmpty() && classes.isEmpty() && id.isEmpty()) {
+                cb(false, {}, "Set a selector: a tag (span), .class, #id or tag.class");
+                return;
+            }
 
-            QRegularExpression re(QString("<%1[^>]*>(.*?)</%1>").arg(QRegularExpression::escape(tag_name)),
-                                  QRegularExpression::DotMatchesEverythingOption);
-            auto it = re.globalMatch(html);
+            auto attr_value = [](const QString& attrs, const QString& name) -> std::optional<QString> {
+                const QRegularExpression a_re(
+                    QString(R"re((?:^|\s)%1\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))re").arg(QRegularExpression::escape(name)),
+                    QRegularExpression::CaseInsensitiveOption);
+                const auto m = a_re.match(attrs);
+                if (!m.hasMatch())
+                    return std::nullopt;
+                for (int g = 1; g <= 3; ++g) {
+                    if (m.capturedStart(g) >= 0)
+                        return m.captured(g);
+                }
+                return QString();
+            };
+            auto passes_filters = [&](const QString& attrs) {
+                if (!id.isEmpty() && attr_value(attrs, QStringLiteral("id")).value_or(QString()) != id)
+                    return false;
+                if (!classes.isEmpty()) {
+                    static const QRegularExpression ws_re(QStringLiteral("\\s+"));
+                    const QStringList have =
+                        attr_value(attrs, QStringLiteral("class")).value_or(QString()).split(ws_re, Qt::SkipEmptyParts);
+                    for (const QString& c : classes) {
+                        if (!have.contains(c))
+                            return false;
+                    }
+                }
+                return true;
+            };
+
+            // "text" = inner text, "html" = inner HTML, anything else = that attribute's value.
+            const bool want_attr =
+                !attr.isEmpty() && attr.compare("text", Qt::CaseInsensitive) != 0 && attr.compare("html", Qt::CaseInsensitive) != 0;
+            const QString tag_pat = tag.isEmpty() ? QStringLiteral("[A-Za-z][A-Za-z0-9-]*") : QRegularExpression::escape(tag);
+            const QRegularExpression open_re(QString("<(%1)(\\s[^>]*)?/?>").arg(tag_pat),
+                                             QRegularExpression::CaseInsensitiveOption);
+            static const QRegularExpression strip_tags_re(QStringLiteral("<[^>]*>"));
             QJsonArray results;
-            while (it.hasNext()) {
-                auto m = it.next();
-                results.append(m.captured(1).trimmed());
+            for (auto it = open_re.globalMatch(html); it.hasNext();) {
+                const auto m = it.next();
+                const QString attrs = m.captured(2);
+                if (!passes_filters(attrs))
+                    continue;
+                if (want_attr) {
+                    if (const auto v = attr_value(attrs, attr))
+                        results.append(*v);
+                    continue;
+                }
+                // Content up to the first closing tag of the same name (same-name nesting is
+                // not balanced — this is a regex reader, not a DOM).
+                const qsizetype content_start = m.capturedEnd(0);
+                const QRegularExpression close_re(QString("</%1\\s*>").arg(QRegularExpression::escape(m.captured(1))),
+                                                  QRegularExpression::CaseInsensitiveOption);
+                const auto cm = close_re.match(html, content_start);
+                if (!cm.hasMatch())
+                    continue;
+                QString inner = html.mid(content_start, cm.capturedStart(0) - content_start);
+                if (attr.compare("html", Qt::CaseInsensitive) != 0)
+                    inner = inner.remove(strip_tags_re).simplified();
+                results.append(inner.trimmed());
             }
 
             QJsonObject out;
@@ -2132,117 +2537,44 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            // "select" must really be read-only: the statement text used to run whatever it
-            // contained regardless of the chosen operation.
-            if (op == "select") {
-                const QString first = query.trimmed().section(QRegularExpression("\\s+"), 0, 0).toUpper();
-                if (first != "SELECT" && first != "WITH" && first != "PRAGMA" && first != "EXPLAIN") {
-                    cb(false, {}, "The Select operation only runs SELECT queries — use Insert / Update / Delete / Raw "
-                                  "for other statements");
-                    return;
-                }
-            }
-
-            QSqlDatabase db;
-            QString conn_name;
+            // The policy, the private per-run connection and the masking live in
+            // WorkflowDbQuery.h: the application's database is read-only for workflows
+            // (SQL console guard + SQLITE_OPEN_READONLY + query_only, secrets masked);
+            // "select" is read-only on any file; nothing reuses the app's connections.
+            const QString app_db_path = fincept::Database::instance().path();
+            QString db_path;
+            db_node::Source source = db_node::Source::AppDatabase;
             if (db_source == "custom") {
-                QString db_path;
-                if (!inputs.isEmpty() && inputs[0].isObject())
+                // The node's Database File first, else an upstream {"database_path"}. (The SQL
+                // text used to be tried as a file path as a last resort.)
+                db_path = params.value("database_path").toString().trimmed();
+                if (db_path.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
                     db_path = inputs[0].toObject().value("database_path").toString();
-                if (db_path.isEmpty())
-                    db_path = params.value("query").toString(); // fallback: maybe path in query for raw ops
                 if (db_path.isEmpty() || !QFile::exists(db_path)) {
-                    cb(false, {}, "Custom database path is required (pass {\"database_path\": \"...\"} as input)");
+                    cb(false, {},
+                       db_path.isEmpty() ? QString("Choose the Database File for a custom database")
+                                         : QString("Database file not found: %1").arg(db_path));
                     return;
                 }
-                conn_name = "workflow_custom_" + QString::number(qHash(db_path));
-                if (QSqlDatabase::contains(conn_name)) {
-                    db = QSqlDatabase::database(conn_name);
-                } else {
-                    db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
-                    db.setDatabaseName(db_path);
-                }
-                if (!db.isOpen() && !db.open()) {
-                    cb(false, {}, "Cannot open database: " + db.lastError().text());
-                    return;
-                }
+                // Pointing "custom" at fincept.db itself gets the application-database rules.
+                if (!db_node::same_file(db_path, app_db_path))
+                    source = db_node::Source::CustomFile;
             } else {
-                // Writing to the application's own database from a workflow (it holds credentials,
-                // settings and every saved workflow) is not allowed; reading is.
-                if (op != "select") {
-                    cb(false, {}, "A workflow cannot modify the application's own database — set Database to "
-                                  "\"custom\" and use a database file");
-                    return;
-                }
-                // QSqlDatabase::database() is the Qt *default* connection, which the app never opens
-                // (it uses a named one), so "local" always failed with "No database connection".
-                db = fincept::Database::instance().connection();
-                if (!db.isOpen()) {
+                if (app_db_path.isEmpty()) {
                     cb(false, {}, "No database connection available");
                     return;
                 }
+                db_path = app_db_path;
             }
 
-            QSqlQuery q(db);
-
-            if (op == "insert" || op == "update" || op == "delete") {
-                if (!q.exec(query)) {
-                    cb(false, {}, "SQL error: " + q.lastError().text());
-                    return;
-                }
-                QJsonObject out;
-                out["query"] = query;
-                out["operation"] = op;
-                out["rows_affected"] = q.numRowsAffected();
-                cb(true, out, {});
-                return;
-            }
-
-            if (op == "raw") {
-                if (!q.exec(query)) {
-                    cb(false, {}, "SQL error: " + q.lastError().text());
-                    return;
-                }
-                QJsonObject out;
-                out["query"] = query;
-                out["operation"] = "raw";
-                out["success"] = true;
-                out["rows_affected"] = q.numRowsAffected();
-                cb(true, out, {});
-                return;
-            }
-
-            // select (default)
-            if (!q.exec(query)) {
-                cb(false, {}, "SQL error: " + q.lastError().text());
-                return;
-            }
-
-            QJsonArray rows;
-            QSqlRecord rec = q.record();
-            while (q.next()) {
-                QJsonObject row;
-                for (int i = 0; i < rec.count(); ++i) {
-                    QVariant val = q.value(i);
-                    if (val.typeId() == QMetaType::Double || val.typeId() == QMetaType::Int ||
-                        val.typeId() == QMetaType::LongLong)
-                        row[rec.fieldName(i)] = val.toDouble();
-                    else if (val.typeId() == QMetaType::Bool)
-                        row[rec.fieldName(i)] = val.toBool();
-                    else if (val.isNull())
-                        row[rec.fieldName(i)] = QJsonValue::Null;
-                    else
-                        row[rec.fieldName(i)] = val.toString();
-                }
-                rows.append(row);
-            }
-
-            QJsonObject out;
-            out["query"] = query;
-            out["operation"] = op;
-            out["row_count"] = rows.size();
-            out["rows"] = rows;
-            cb(true, out, {});
+            // Off the GUI thread; the connection is created, used and removed on the
+            // worker. The executor accepts the callback from any thread.
+            (void)QtConcurrent::run([cb, op, query, db_path, source]() {
+                const db_node::Outcome r = db_node::run(db_path, source, op, query);
+                if (!r.log_detail.isEmpty())
+                    LOG_WARN("WorkflowDbNode", QString("%1 — %2").arg(r.error, r.log_detail));
+                cb(r.ok, r.ok ? QJsonValue(r.output) : QJsonValue(), r.error);
+            });
         };
     }
 
@@ -2293,24 +2625,31 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 }
 
                 QByteArray data = reply->readAll();
-                QJsonDocument doc = QJsonDocument::fromJson(data);
-
-                QJsonObject out;
-                out["url"] = state->url;
-                out["method"] = state->method;
-                out["status_code"] = status;
-                if (!doc.isNull())
-                    out["data"] = doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array());
-                else
-                    out["data"] = QString::fromUtf8(data);
 
                 // Include response headers
                 QJsonObject resp_headers;
                 for (const auto& pair : reply->rawHeaderPairs())
                     resp_headers[QString::fromUtf8(pair.first)] = QString::fromUtf8(pair.second);
-                out["headers"] = resp_headers;
 
-                state->cb(true, out, {});
+                // The body of a user-entered URL can be megabytes: it is parsed (and the
+                // output built — the same output) on a worker, never on the GUI thread. The
+                // executor accepts the callback from any thread, and drops it once the run
+                // is gone. This is also the HTTP Request node's PUT / DELETE / headers path.
+                (void)QtConcurrent::run([state, data = std::move(data), status, resp_headers]() {
+                    QJsonDocument doc = QJsonDocument::fromJson(data);
+
+                    QJsonObject out;
+                    out["url"] = state->url;
+                    out["method"] = state->method;
+                    out["status_code"] = status;
+                    if (!doc.isNull())
+                        out["data"] = doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array());
+                    else
+                        out["data"] = QString::fromUtf8(data);
+                    out["headers"] = resp_headers;
+
+                    state->cb(true, out, {});
+                });
             });
         };
 
@@ -2393,6 +2732,9 @@ static void wire_utility_bridges(NodeRegistry& registry) {
             int page_w = printer.pageLayout().paintRectPixels(dpi).width();
             int margin = dpi / 2; // 0.5 inch margin
             int y = margin;
+
+            // The PDF is a printed document, not terminal UI: white paper, dark
+            // ink and its own document fonts and point sizes, whatever the theme.
 
             // Title
             QFont title_font("Segoe UI", 18, QFont::Bold);
@@ -2514,6 +2856,8 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 QString::fromUtf8(data.isObject() ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
                                                   : QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact));
 
+            // The chart is an exported PNG file with its own fixed colour scheme;
+            // it is not drawn by the terminal and does not follow the theme.
             QString code = QString(R"PY(
 import json, os, sys
 try:
@@ -2724,10 +3068,10 @@ print(json.dumps({"path": path, "chart_type": chart_type, "size": os.path.getsiz
                              });
             exec->execute(sub);
         };
-        LOG_INFO("ServiceBridges", "control.execute_workflow bridge wired");
+        LOG_DEBUG("ServiceBridges", "control.execute_workflow bridge wired");
     }
 
-    LOG_INFO("ServiceBridges", "Utility bridges wired");
+    LOG_DEBUG("ServiceBridges", "Utility bridges wired");
 }
 
 static void wire_mcp_bridges(NodeRegistry& registry) {
@@ -2794,7 +3138,7 @@ static void wire_mcp_bridges(NodeRegistry& registry) {
         });
     };
 
-    LOG_INFO("ServiceBridges", "MCP bridge wired");
+    LOG_DEBUG("ServiceBridges", "MCP bridge wired");
 }
 
 void wire_all_bridges(NodeRegistry& registry) {
@@ -2820,7 +3164,7 @@ void wire_all_bridges(NodeRegistry& registry) {
         }
     }
 
-    LOG_INFO("ServiceBridges", QString("All bridges wired (%1 pass-through fallbacks)").arg(wired_count));
+    LOG_DEBUG("ServiceBridges", QString("All bridges wired (%1 pass-through fallbacks)").arg(wired_count));
 }
 
 } // namespace fincept::workflow

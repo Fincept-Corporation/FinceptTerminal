@@ -1,21 +1,27 @@
-// EquityWatchlist.cpp — compact watchlist with live quote updates
+// EquityWatchlist.cpp — dense, sortable quote list with live quote updates
 #include "screens/equity_trading/EquityWatchlist.h"
 
-#include "core/events/EventBus.h"
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolRef.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/equity_trading/EquityTypes.h"
-#include "trading/AccountManager.h"
-#include "trading/BrokerRegistry.h"
-#include "trading/instruments/InstrumentNormalize.h"
-#include "trading/instruments/InstrumentService.h"
+#include "services/markets/MarketDataService.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/tables/SparklineDelegate.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/PanelHeader.h"
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QDateTime>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QKeyEvent>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMutexLocker>
@@ -24,32 +30,28 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
 namespace fincept::screens::equity {
+
+namespace fmt = fincept::ui::formatting;
 
 namespace {
 
-// Distinct broker ids for every connected (active) account, with the focused
-// broker first so its matches sort to the top of unified search. Falls back to
-// just the focused broker when no accounts are enumerated.
-QStringList connected_broker_ids(const QString& active) {
-    QStringList ids;
-    if (!active.isEmpty())
-        ids << active;
-    for (const auto& a : trading::AccountManager::instance().active_accounts()) {
-        if (!a.broker_id.isEmpty() && !ids.contains(a.broker_id))
-            ids << a.broker_id;
-    }
-    return ids;
-}
+// File-local helpers carry an eqwl_ prefix (unity-build safety).
+constexpr int eqwl_kKeySelectDelayMs = 140;
+// A good quote older than this (no update since) reads as stale in the row.
+constexpr qint64 eqwl_kStaleMs = 5 * 60 * 1000;
 
-// True if at least one of the connected brokers has its instrument catalog loaded.
-bool any_loaded(const QStringList& ids) {
-    for (const QString& id : ids)
-        if (trading::InstrumentService::instance().is_loaded(id))
-            return true;
-    return false;
+QString eqwl_arrow(double v) {
+    if (v > 0.0)
+        return QStringLiteral("\xE2\x96\xB2 "); // ▲
+    if (v < 0.0)
+        return QStringLiteral("\xE2\x96\xBC "); // ▼
+    return QStringLiteral("  ");
 }
-
 } // namespace
 
 EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
@@ -59,216 +61,192 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Header — named-watchlist switcher (combo) + manage menu + symbol count
-    auto* header = new QWidget(this);
-    header->setObjectName("eqWatchlistHeader");
-    header->setFixedHeight(30);
-    auto* h_layout = new QHBoxLayout(header);
-    h_layout->setContentsMargins(6, 2, 6, 2);
-    h_layout->setSpacing(4);
+    // Header — the shared panel header: WATCHLIST + symbol count, then the
+    // named-watchlist switcher (combo) and its manage menu as controls.
+    auto* header = new fincept::ui::PanelHeader(tr("Watchlist"), this);
 
     wl_combo_ = new QComboBox;
     wl_combo_->setObjectName("eqWatchlistCombo");
     wl_combo_->setToolTip(tr("Active watchlist"));
-    wl_combo_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    wl_combo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    wl_combo_->setMinimumContentsLength(8);
     connect(wl_combo_, qOverload<int>(&QComboBox::activated), this, &EquityWatchlist::on_watchlist_combo_activated);
-    h_layout->addWidget(wl_combo_, 1);
+    header->add_control(wl_combo_, 1);
 
     wl_menu_btn_ = new QToolButton;
     wl_menu_btn_->setObjectName("eqWatchlistMenuBtn");
-    wl_menu_btn_->setText(QStringLiteral("+"));
+    wl_menu_btn_->setText(QStringLiteral("\xE2\x8B\xAF")); // ⋯
     wl_menu_btn_->setCursor(Qt::PointingHandCursor);
     wl_menu_btn_->setAutoRaise(true);
     wl_menu_btn_->setToolTip(tr("New / Rename / Delete watchlist"));
     connect(wl_menu_btn_, &QToolButton::clicked, this, &EquityWatchlist::on_watchlist_menu);
-    h_layout->addWidget(wl_menu_btn_);
+    header->add_control(wl_menu_btn_);
 
-    count_label_ = new QLabel("0");
-    count_label_->setObjectName("eqWatchlistCount");
-    h_layout->addWidget(count_label_);
-
+    // Symbol count: the header's badge (dim, after the title).
+    header->set_badge(QStringLiteral("0"));
+    count_label_ = header->badge_label();
     layout->addWidget(header);
 
-    // Search / filter
+    // Add (shared symbol search: any instrument, any market) + filter, one row each.
+    auto* add_row = new QWidget(this);
+    auto* add_layout = new QHBoxLayout(add_row);
+    add_layout->setContentsMargins(4, 2, 4, 2);
+    add_layout->setSpacing(3);
+    add_box_ = make_symbol_box(SymbolBoxRole::WatchlistAdd, add_row);
+    add_box_->setObjectName("eqWatchlistAddBox");
+    add_layout->addWidget(add_box_, 1);
+    layout->addWidget(add_row);
+    connect(add_box_, &SymbolBox::instrument_picked, this,
+            [this](const fincept::core::instrument::Instrument& inst) { emit instrument_added(inst); });
+    // Multi entry / a pasted list: every resolved instrument is added.
+    connect(add_box_, &SymbolBox::instruments_picked, this,
+            [this](const QVector<fincept::core::instrument::Instrument>& list) {
+                for (const auto& inst : list)
+                    emit instrument_added(inst);
+            });
+    connect(add_box_, &SymbolBox::text_committed_raw, this, [this](const QString& text) {
+        // Raw text (no instrument resolved): the screen decides (broker master lookup).
+        emit symbol_added(text.trimmed().toUpper());
+    });
+    connect(add_box_, &SymbolBox::unresolved, this, [this](const QStringList& texts, const QString& message) {
+        emit add_unresolved(texts.join(QStringLiteral(", ")), message);
+    });
+
     filter_edit_ = new QLineEdit;
     filter_edit_->setObjectName("eqWatchlistSearch");
-    filter_edit_->setPlaceholderText(tr("Filter..."));
-    filter_edit_->setFixedHeight(26);
+    filter_edit_->setPlaceholderText(tr("Filter rows..."));
+    filter_edit_->setClearButtonEnabled(true);
     connect(filter_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_filter_changed);
     layout->addWidget(filter_edit_);
 
-    // Add-symbol row
-    auto* add_row = new QWidget(this);
-    add_row->setFixedHeight(28);
-    auto* add_layout = new QHBoxLayout(add_row);
-    add_layout->setContentsMargins(4, 1, 4, 1);
-    add_layout->setSpacing(3);
-
-    add_edit_ = new QLineEdit;
-    add_edit_->setObjectName("eqWatchlistAddEdit");
-    add_edit_->setPlaceholderText(tr("Add symbol..."));
-    add_edit_->setFixedHeight(22);
-    connect(add_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_add_text_changed);
-    connect(add_edit_, &QLineEdit::returnPressed, this, &EquityWatchlist::on_add_symbol_entered);
-
-    // Completer backed by InstrumentService::search_all(). The model already holds
-    // server-side-filtered results, so use UnfilteredPopupCompletion — otherwise
-    // the completer re-filters them against the typed text and hides name-based
-    // matches (e.g. typing "infosys" finds symbol "INFY", whose display string
-    // doesn't contain "infosys", so a MatchContains filter would drop it).
-    // Parent the completer to the edit and the model to the completer so teardown
-    // frees the completer (and its internal QCompletionModel) before the source
-    // model — avoiding a QCompletionModel::filter crash on a half-destroyed model.
-    completer_ = new QCompleter(add_edit_);
-    completer_model_ = new QStringListModel(completer_);
-    completer_->setModel(completer_model_);
-    completer_->setCaseSensitivity(Qt::CaseInsensitive);
-    completer_->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
-    completer_->setMaxVisibleItems(8);
-    add_edit_->setCompleter(completer_);
-
-    // Style the completer's popup explicitly. It is a separate top-level QListView
-    // that no global stylesheet rule covers, so without this it renders with a
-    // transparent background and the watchlist behind it shows through. (The combo
-    // popups, e.g. #eqOeCombo QAbstractItemView, are styled the same way.)
-    if (auto* popup = completer_->popup()) {
-        popup->setObjectName("eqWatchlistCompleterPopup");
-        popup->setStyleSheet(QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
-                                     " font-family:%4; font-size:%5px; }"
-                                     "QListView::item { padding:4px 8px; border:none; }"
-                                     "QListView::item:selected { background:%6; color:%2; }")
-                                 .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
-                                      fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
-                                 .arg(fincept::ui::fonts::SMALL)
-                                 .arg(fincept::ui::colors::BG_HOVER()));
-    }
-
-    // Picking a suggestion (mouse click, Enter, or Arrow+Enter) must add the
-    // symbol — not merely paste "SYMBOL  ·  EXCH  ·  Broker" into the edit, which
-    // is all QCompleter does by default. Wire activated() to add + clear. This
-    // slot is connected after setCompleter(), so it runs after QCompleter's own
-    // text insertion; clearing here leaves the edit empty, so a trailing
-    // returnPressed becomes a harmless no-op (no double add).
-    // Resolve a picked label back to the real symbol: friendly-name map first
-    // (clean F&O label), else the legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL" parse.
-    auto resolve = [this](const QString& choice) -> QString {
-        QString sym = add_suggestion_map_.value(choice);
-        if (sym.isEmpty()) {
-            sym = choice.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
-            if (sym.contains(':'))
-                sym = sym.section(':', 1);
-        }
-        return sym;
-    };
-    connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
-            [this, resolve](const QString& choice) {
-                const QString sym = resolve(choice);
-                if (sym.isEmpty())
-                    return;
-                add_symbol(sym);
-                add_edit_->clear();
-            });
-    // A single mouse-click on a suggestion must add it — QCompleter::activated is
-    // unreliable on click for a per-keystroke model, so wire the popup's clicked()
-    // directly. add_symbol() dedups, so the two paths can never double-add.
-    if (auto* popup = completer_->popup()) {
-        connect(popup, &QAbstractItemView::clicked, this, [this, resolve](const QModelIndex& idx) {
-            const QString sym = resolve(idx.data(Qt::DisplayRole).toString());
-            if (sym.isEmpty())
-                return;
-            add_symbol(sym);
-            add_edit_->clear();
-        });
-    }
-
-    add_btn_ = new QPushButton("+");
-    add_btn_->setObjectName("eqWatchlistAddBtn");
-    add_btn_->setFixedSize(22, 22);
-    add_btn_->setCursor(Qt::PointingHandCursor);
-    connect(add_btn_, &QPushButton::clicked, this, &EquityWatchlist::on_add_symbol_entered);
-
-    add_layout->addWidget(add_edit_, 1);
-    add_layout->addWidget(add_btn_);
-    layout->addWidget(add_row);
+    // Source-level notice (set_feed_notice).
+    notice_box_ = new QWidget(this);
+    notice_box_->setObjectName("eqWatchlistNotice");
+    notice_box_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* notice_layout = new QVBoxLayout(notice_box_);
+    notice_layout->setContentsMargins(8, 6, 8, 6);
+    notice_layout->setSpacing(2);
+    notice_title_ = new QLabel(notice_box_);
+    notice_title_->setObjectName("eqWatchlistNoticeTitle");
+    notice_title_->setWordWrap(true);
+    notice_layout->addWidget(notice_title_);
+    notice_detail_ = new QLabel(notice_box_);
+    notice_detail_->setObjectName("eqWatchlistNoticeDetail");
+    notice_detail_->setWordWrap(true);
+    notice_detail_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    notice_layout->addWidget(notice_detail_);
+    notice_box_->setStyleSheet(
+        QString("QWidget#eqWatchlistNotice{background:%1;border:none;border-bottom:1px solid %2;}"
+                "QLabel#eqWatchlistNoticeTitle{color:%3;background:transparent;font-weight:700;font-size:" +
+                fincept::ui::fonts::px(-3) +
+                "px;}"
+                "QLabel#eqWatchlistNoticeDetail{color:%4;background:transparent;font-size:" +
+                fincept::ui::fonts::px(-4) + "px;}")
+            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::BORDER_DIM(), fincept::ui::colors::WARNING(),
+                 fincept::ui::colors::TEXT_SECONDARY()));
+    notice_box_->hide();
+    layout->addWidget(notice_box_);
 
     // Table
     table_ = new QTableWidget;
     table_->setObjectName("eqWatchlistTable");
-    // Pin the monospace data font explicitly (like every other terminal table).
-    // The global `*{font-family}` rule is the lowest-specificity selector and
-    // item-view delegates don't reliably honour it for cell text, so without this
-    // the LTP/CHG numbers fall back to a proportional font and render uneven.
     table_->setStyleSheet(
         QString("QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
                 " font-size:%4px; font-family:%5; }"
-                "QTableWidget::item { padding:1px 4px; border:none; }"
+                "QTableWidget::item { padding:1px 2px; border:none; }"
                 "QTableWidget::item:selected { background:%6; color:%2; }"
                 "QHeaderView::section { background:%7; color:%8; font-size:%4px; font-weight:700;"
-                " font-family:%5; border:none; border-bottom:1px solid %3; padding:2px 4px; }")
+                " font-family:%5; border:none; border-bottom:1px solid %3; padding:2px 2px; }")
             .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::SMALL)
             .arg(fincept::ui::fonts::DATA_FAMILY(), fincept::ui::colors::BG_HOVER(), fincept::ui::colors::BG_RAISED(),
-                 fincept::ui::colors::TEXT_TERTIARY()));
-    table_->setColumnCount(3);
-    table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
+                 fincept::ui::colors::TEXT_SECONDARY()));
+    table_->setColumnCount(ColCount);
+    table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%"), tr("TREND")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setShowGrid(false);
-    table_->setFocusPolicy(Qt::NoFocus);
-    // SYMBOL (col 0) is the SOLE stretch column so it claims all leftover width and
-    // shows full names; LTP/CHG stay fixed and compact. stretchLastSection must be
-    // OFF — with it on, the last column (CHG%) overrides its fixed width and steals
-    // room from SYMBOL, which is what truncated the names.
+    table_->setFocusPolicy(Qt::StrongFocus); // arrow keys move, Enter / selection opens the symbol
+    // Fixed sections sized by fit_columns() — never resize-to-contents (GUI stalls).
     table_->horizontalHeader()->setStretchLastSection(false);
-    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    // LTP/CHG auto-size to their widest value (+ header) so neither ever elides —
-    // a fixed 64px proved too tight once the data font resolved to Menlo, cutting
-    // "+12.34%" down to "+1.1…". ResizeToContents recomputes on each data change;
-    // SYMBOL (the Stretch column) still absorbs all leftover width.
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setMinimumSectionSize(40);
-    table_->verticalHeader()->setDefaultSectionSize(24);
+    for (int c = 0; c < ColCount; ++c)
+        table_->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
+    table_->horizontalHeader()->setMinimumSectionSize(0);
+    table_->horizontalHeader()->setSectionsClickable(true);
+    table_->horizontalHeader()->setSortIndicatorShown(false);
+    connect(table_->horizontalHeader(), &QHeaderView::sectionClicked, this, &EquityWatchlist::on_header_clicked);
+    table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table_->viewport()->installEventFilter(this);
+    table_->installEventFilter(this);
+    table_->verticalHeader()->setDefaultSectionSize(table_row_height(-1, 24));
+    auto* spark = new fincept::ui::SparklineDelegate(table_);
+    spark->set_width_chars(8);
+    table_->setItemDelegateForColumn(ColTrend, spark);
+
+    connect(&fincept::ui::ThemeManager::instance(), &fincept::ui::ThemeManager::theme_changed, this,
+            [this](const fincept::ui::ThemeTokens&) { retheme_items(table_); });
+    connect(&fincept::ui::ThemeManager::instance(), &fincept::ui::ThemeManager::appearance_settled, this, [this]() {
+        table_->verticalHeader()->setDefaultSectionSize(table_row_height(-1, 24));
+        schedule_fit();
+    });
+    // Currency / number-format change: re-format every row from the quotes held (no fetch).
+    fmt::on_format_changed(this, [this]() {
+        QMutexLocker lock(&mutex_);
+        for (int i = 0; i < entries_.size() && i < table_->rowCount(); ++i)
+            render_row(i, entries_[i]);
+        schedule_fit();
+    });
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table_, &QTableWidget::customContextMenuRequested, this, &EquityWatchlist::on_table_context_menu);
+    // Keyboard navigation: a row reached with the arrow keys opens after a short pause.
+    key_select_timer_ = new QTimer(this);
+    key_select_timer_->setSingleShot(true);
+    key_select_timer_->setInterval(eqwl_kKeySelectDelayMs);
+    connect(key_select_timer_, &QTimer::timeout, this, [this]() {
+        if (!pending_key_select_.isEmpty() && pending_key_select_ != active_symbol_) {
+            const QString sym = pending_key_select_;
+            set_active_symbol(sym);
+            emit symbol_selected(sym);
+        }
+        pending_key_select_.clear();
+    });
+    connect(table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int prev_row, int) {
+        if (row >= 0 && row != prev_row && table_->hasFocus())
+            select_row_by_keyboard(row);
+    });
     layout->addWidget(table_, 1);
 
-    // Accessibility — the watchlist is the primary symbol-selection surface.
     setAccessibleName(tr("Watchlist"));
     wl_combo_->setAccessibleName(tr("Active watchlist"));
     wl_menu_btn_->setAccessibleName(tr("Watchlist actions"));
     filter_edit_->setAccessibleName(tr("Filter watchlist"));
-    add_edit_->setAccessibleName(tr("Add symbol to watchlist"));
-    add_btn_->setAccessibleName(tr("Add symbol"));
+    add_box_->setAccessibleName(tr("Add symbol to watchlist"));
     count_label_->setAccessibleName(tr("Symbol count"));
     table_->setAccessibleName(tr("Watchlist symbols"));
     setTabOrder(wl_combo_, wl_menu_btn_);
-    setTabOrder(wl_menu_btn_, filter_edit_);
-    setTabOrder(filter_edit_, add_edit_);
-    setTabOrder(add_edit_, add_btn_);
+    setTabOrder(wl_menu_btn_, add_box_);
+    setTabOrder(add_box_, filter_edit_);
+    setTabOrder(filter_edit_, table_);
 
-    // Drag-out: hold-and-drag a symbol row to ship the ticker to any drop
-    // target — drop it on the pushpin bar at the top to pin + broadcast it,
-    // matching the standalone Watchlist tab (WatchlistScreen). The provider
-    // reads the row under the cursor at drag-start (the mouse press selects it
-    // first), so it always ships the row actually grabbed. Group is None: the
-    // pushpin chip owns the broadcast group, so the source group is irrelevant
-    // for the drag-to-pin flow.
+    // Drag-out: hold-and-drag a row to ship the instrument to any drop target.
     symbol_dnd::installDragSource(table_->viewport(), [this]() -> SymbolRef {
         if (!table_)
             return {};
         const int r = table_->currentRow();
         if (r < 0)
             return {};
-        auto* item = table_->item(r, 0);
+        auto* item = table_->item(r, ColSymbol);
         if (!item)
             return {};
         const QString sym = item->data(Qt::UserRole).toString();
-        return sym.isEmpty() ? SymbolRef{} : SymbolRef::equity(sym);
+        if (sym.isEmpty())
+            return {};
+        const auto info = info_.value(sym);
+        return SymbolRef::equity(info.market_key.isEmpty() ? sym : info.market_key);
     });
 }
 
@@ -300,6 +278,7 @@ void EquityWatchlist::on_watchlist_menu() {
     QAction* new_act = menu.addAction(tr("New watchlist…"));
     QAction* rename_act = menu.addAction(tr("Rename…"));
     QAction* delete_act = menu.addAction(tr("Delete"));
+    delete_act->setProperty("fincept_agent_risk", "delete");
 
     const int idx = wl_combo_ ? wl_combo_->currentIndex() : -1;
     const QString cur_id = (idx >= 0) ? wl_combo_->itemData(idx).toString() : QString();
@@ -335,66 +314,240 @@ void EquityWatchlist::on_table_context_menu(const QPoint& pos) {
     const int row = table_->rowAt(pos.y());
     if (row < 0)
         return;
-    auto* item = table_->item(row, 0);
+    auto* item = table_->item(row, ColSymbol);
     if (!item)
         return;
     const QString sym = item->data(Qt::UserRole).toString();
     if (sym.isEmpty())
         return;
+    const QString label = symbol_text(sym);
 
     QMenu menu(this);
-    // Hand the ticker to other screens (nav.open_symbol). A watchlist row carries no
-    // exchange of its own, so the focused broker's default exchange picks the Yahoo suffix
-    // (RELIANCE -> RELIANCE.NS); derivative contracts have no research page and get no entry.
-    QString exchange;
-    if (auto* broker = trading::BrokerRegistry::instance().get(broker_id_))
-        exchange = broker->profile().default_exchange;
-    const QString ticker = research_ticker_for(sym, exchange);
-    QAction* research_act = nullptr;
-    QAction* news_act = nullptr;
-    if (!ticker.isEmpty()) {
-        research_act = menu.addAction(tr("Open %1 in Equity Research").arg(sym));
-        news_act = menu.addAction(tr("News for %1").arg(sym));
-        menu.addSeparator();
+    QAction* buy_act = menu.addAction(tr("Buy %1…").arg(label));
+    QAction* sell_act = menu.addAction(tr("Sell %1…").arg(label));
+    const RowInfo info = info_.value(sym);
+    if (!info.blocked_reason.isEmpty()) {
+        buy_act->setEnabled(false);
+        sell_act->setEnabled(false);
+        buy_act->setToolTip(info.blocked_reason);
     }
-    QAction* remove_act = menu.addAction(tr("Remove %1").arg(sym));
+    QAction* chart_act = menu.addAction(tr("Show chart"));
+    menu.addSeparator();
+    QAction* research_act = menu.addAction(tr("Open in Equity Research"));
+    QAction* news_act = menu.addAction(tr("News for %1").arg(label));
+    QAction* alert_act = menu.addAction(tr("Add price alert…"));
+    const bool has_public = !info.market_key.isEmpty();
+    research_act->setEnabled(has_public);
+    alert_act->setEnabled(has_public);
+    menu.addSeparator();
+    QAction* remove_act = menu.addAction(tr("Remove %1").arg(label));
+    remove_act->setProperty("fincept_agent_risk", "delete");
     QAction* chosen = menu.exec(table_->viewport()->mapToGlobal(pos));
     if (!chosen)
         return;
     if (chosen == remove_act) {
         emit symbol_removed(sym);
+    } else if (chosen == buy_act || chosen == sell_act) {
+        emit trade_requested(sym, chosen == buy_act);
+    } else if (chosen == chart_act) {
+        set_active_symbol(sym);
+        emit symbol_selected(sym);
     } else if (chosen == research_act) {
-        EventBus::instance().publish("nav.open_symbol", {{"screen_id", QStringLiteral("equity_research")},
-                                                         {"symbol", ticker},
-                                                         {"exchange", exchange}});
+        emit research_requested(sym);
     } else if (chosen == news_act) {
-        EventBus::instance().publish("nav.open_symbol",
-                                     {{"screen_id", QStringLiteral("news")}, {"symbol", sym}, {"exchange", exchange}});
+        emit news_requested(sym);
+    } else if (chosen == alert_act) {
+        emit alert_requested(sym);
     }
 }
 
 void EquityWatchlist::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
+    if (event->type() == QEvent::LanguageChange || event->type() == QEvent::FontChange)
+        schedule_fit();
     QWidget::changeEvent(event);
 }
 
+void EquityWatchlist::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    visible_ = true;
+    subscribe_sparklines();
+}
+
+void EquityWatchlist::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    visible_ = false;
+    unsubscribe_sparklines(); // nothing polls for a hidden list
+}
+
+bool EquityWatchlist::eventFilter(QObject* obj, QEvent* event) {
+    if (table_ && obj == table_->viewport() && event->type() == QEvent::Resize)
+        fit_columns(); // synchronously: a dragged splitter never paints a stale layout
+    if (table_ && obj == table_ && event->type() == QEvent::KeyPress) {
+        auto* ke = static_cast<QKeyEvent*>(event);
+        const int row = table_->currentRow();
+        if (row >= 0) {
+            const QString sym = table_->item(row, ColSymbol) ? table_->item(row, ColSymbol)->data(Qt::UserRole).toString()
+                                                             : QString();
+            if ((ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) && !sym.isEmpty()) {
+                key_select_timer_->stop();
+                set_active_symbol(sym);
+                emit symbol_selected(sym);
+                return true;
+            }
+            if (ke->key() == Qt::Key_Delete && !sym.isEmpty()) {
+                emit symbol_removed(sym);
+                return true;
+            }
+            if (ke->key() == Qt::Key_B && ke->modifiers() == Qt::NoModifier && !sym.isEmpty()) {
+                emit trade_requested(sym, true);
+                return true;
+            }
+            if (ke->key() == Qt::Key_S && ke->modifiers() == Qt::NoModifier && !sym.isEmpty()) {
+                emit trade_requested(sym, false);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
+void EquityWatchlist::select_row_by_keyboard(int row) {
+    auto* item = table_->item(row, ColSymbol);
+    if (!item)
+        return;
+    pending_key_select_ = item->data(Qt::UserRole).toString();
+    key_select_timer_->start();
+}
+
+EquityWatchlist::ColumnNeeds EquityWatchlist::column_needs(bool price_floor) const {
+    auto* hh = table_->horizontalHeader();
+    const QAbstractItemView* view = table_;
+    auto need = [&](int c) { return std::max(hh->sectionSizeHint(c), view->sizeHintForColumn(c)); };
+    ColumnNeeds n{need(ColSymbol), need(ColLtp), need(ColChg)};
+    if (price_floor) {
+        const QFontMetrics fm(table_->font());
+        const int chrome = 12;
+        n.ltp = std::max(n.ltp, chrome + fm.horizontalAdvance(QStringLiteral("00000.00")));
+        n.chg = std::max(n.chg, chrome + fm.horizontalAdvance(QStringLiteral("\xE2\x96\xB2 +00.00%")));
+    }
+    return n;
+}
+
+int EquityWatchlist::content_width() const {
+    table_->ensurePolished();
+    const ColumnNeeds n = column_needs(/*price_floor=*/true);
+    const QScrollBar* vbar = table_->verticalScrollBar();
+    const int bar = vbar ? vbar->sizeHint().width() : 0;
+    const int trend = QFontMetrics(table_->font()).averageCharWidth() * 7;
+    return n.symbol + n.ltp + n.chg + trend + bar + 2 * table_->frameWidth();
+}
+
+void EquityWatchlist::schedule_fit() {
+    if (fit_pending_)
+        return;
+    fit_pending_ = true;
+    QTimer::singleShot(0, this, [this]() { fit_columns(); });
+}
+
+void EquityWatchlist::fit_columns() {
+    fit_pending_ = false;
+    if (!table_ || table_->columnCount() < ColCount)
+        return;
+    qsizetype ltp_len = 0;
+    qsizetype chg_len = 0;
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        if (const QTableWidgetItem* it = table_->item(r, ColLtp))
+            ltp_len = std::max(ltp_len, it->text().size());
+        if (const QTableWidgetItem* it = table_->item(r, ColChg))
+            chg_len = std::max(chg_len, it->text().size());
+    }
+    fitted_ltp_len_ = ltp_len;
+    fitted_chg_len_ = chg_len;
+
+    const int avail = table_->viewport()->width();
+    if (avail <= 0)
+        return;
+    const ColumnNeeds n = column_needs(/*price_floor=*/false);
+    int sym = n.symbol;
+    int ltp = n.ltp;
+    int chg = n.chg;
+    const int min_trend = QFontMetrics(table_->font()).averageCharWidth() * 6;
+    int trend = 0;
+    int spare = avail - sym - ltp - chg;
+    if (spare >= min_trend) {
+        // The trend line takes what is left beyond a little air for the numbers.
+        trend = spare;
+    } else if (spare >= 0) {
+        ltp += spare / 2;
+        chg += spare - spare / 2;
+    } else {
+        // Narrower than the content: prices stay whole, the ticker is cut (elided).
+        sym = std::max(24, avail - ltp - chg);
+    }
+    table_->setColumnWidth(ColSymbol, sym);
+    table_->setColumnWidth(ColLtp, ltp);
+    table_->setColumnWidth(ColChg, chg);
+    table_->setColumnWidth(ColTrend, trend);
+    table_->setColumnHidden(ColTrend, trend <= 0);
+}
+
 void EquityWatchlist::retranslateUi() {
-    if (title_label_)
-        title_label_->setText(tr("WATCHLIST"));
     if (filter_edit_)
-        filter_edit_->setPlaceholderText(tr("Filter..."));
-    if (add_edit_)
-        add_edit_->setPlaceholderText(tr("Add symbol..."));
+        filter_edit_->setPlaceholderText(tr("Filter rows..."));
     if (table_)
-        table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
+        table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%"), tr("TREND")});
+}
+
+QString EquityWatchlist::symbol_text(const QString& symbol) const {
+    const auto it = info_.constFind(symbol);
+    if (it == info_.constEnd() || it->display.isEmpty())
+        return symbol;
+    return it->venue.isEmpty() ? it->display : it->display + QStringLiteral(" \xC2\xB7 ") + it->venue;
+}
+
+QString EquityWatchlist::price_text(const QString& symbol, double v) const {
+    const auto it = info_.constFind(symbol);
+    if (it == info_.constEnd()) {
+        fmt::InstrumentFmt inst;
+        inst.decimals = 2;
+        return fmt::price(v, inst);
+    }
+    // The column mixes venues (NSE, NASDAQ, LSE ...): each price names its own currency
+    // ("₹2,450.10", "$351.71", "117.70p"). An index level or FX rate gets no unit.
+    const QString key = it->market_key.isEmpty() ? symbol : it->market_key;
+    fmt::InstrumentFmt inst = fmt::instrument_for_symbol(key, it->currency);
+    inst.decimals = it->digits;
+    const bool money = !it->currency.isEmpty() && fmt::is_money_quote(QString(), key) &&
+                       it->venue != QLatin1String("FX");
+    return money ? fmt::price_with_symbol(v, inst) : fmt::price(v, inst);
+}
+
+QString EquityWatchlist::short_reason(const QString& error) {
+    const QString e = error.toLower();
+    if (e.contains(QLatin1String("not tradable")) || e.contains(QLatin1String("not traded")))
+        return tr("not on broker");
+    if (e.contains(QLatin1String("not found")) || e.contains(QLatin1String("delisted")) ||
+        e.contains(QLatin1String("unknown")))
+        return tr("not found");
+    if (e.contains(QLatin1String("rate")) || e.contains(QLatin1String("429")) || e.contains(QLatin1String("too many")))
+        return tr("rate-limited");
+    if (e.contains(QLatin1String("time")) || e.contains(QLatin1String("answer")) || e.contains(QLatin1String("retry")))
+        return tr("retrying");
+    if (e.contains(QLatin1String("no public")) || e.contains(QLatin1String("derivative")) ||
+        e.contains(QLatin1String("index with no")))
+        return tr("no public data");
+    if (e.contains(QLatin1String("network")) || e.contains(QLatin1String("offline")) ||
+        e.contains(QLatin1String("connect")))
+        return tr("offline");
+    return tr("no quote");
 }
 
 void EquityWatchlist::set_symbols(const QStringList& symbols) {
     QMutexLocker lock(&mutex_);
-    // The list is re-set whenever the watchlist OR the position/holding union changes,
-    // and a re-set used to blank every row to "--" until its next tick. Carry the
-    // last-known quote forward for symbols that survive (P11: never blank a stale row).
+    // Carry the last-known quote forward for symbols that survive a re-set
+    // (the list is re-set whenever the watchlist or the held-symbol union changes).
     QHash<QString, WatchlistEntry> previous;
     previous.reserve(entries_.size());
     for (const auto& e : entries_)
@@ -410,95 +563,268 @@ void EquityWatchlist::set_symbols(const QStringList& symbols) {
         entries_.append(e);
     }
     count_label_->setText(QString::number(entries_.size()));
+    sort_entries();
     rebuild_table();
+    if (visible_)
+        subscribe_sparklines();
+}
+
+void EquityWatchlist::set_row_info(const QHash<QString, RowInfo>& info) {
+    QMutexLocker lock(&mutex_);
+    info_ = info;
+    for (int i = 0; i < entries_.size() && i < table_->rowCount(); ++i)
+        render_row(i, entries_[i]);
+    schedule_fit();
+    if (visible_)
+        subscribe_sparklines();
 }
 
 void EquityWatchlist::update_quote(const trading::BrokerQuote& quote) {
     QMutexLocker lock(&mutex_);
-
-    // Update the cached entry for this symbol. Bail early if we don't track it —
-    // position symbols stream quotes too but may not be in the active watchlist.
-    // O(1): this runs for every broker tick (it used to scan entries_ and then
-    // every table row, converting each row's stored symbol to a string).
     const auto found = row_of_.constFind(quote.symbol);
     if (found == row_of_.constEnd())
         return;
-    const int index = found.value();
-    WatchlistEntry* entry = &entries_[index];
+    WatchlistEntry* entry = &entries_[found.value()];
+    const bool was_special = !entry->error.isEmpty() || !entry->has_data ||
+                             (entry->updated_ms > 0 &&
+                              QDateTime::currentMSecsSinceEpoch() - entry->updated_ms > eqwl_kStaleMs);
     entry->ltp = quote.ltp;
     entry->change_pct = quote.change_pct;
     entry->volume = quote.volume;
     entry->has_data = true;
+    entry->error.clear();
+    entry->updated_ms = QDateTime::currentMSecsSinceEpoch();
 
-    // Repaint only this symbol's row. setText / setForeground are no-ops when the
-    // value is unchanged (Qt early-returns), so identical ticks cost nothing.
-    int row = index;
-    auto* sym_item = table_->item(row, 0);
-    if (!sym_item || sym_item->data(Qt::UserRole).toString() != quote.symbol) {
-        // Not expected (rows mirror entries_), but never paint the wrong row.
-        row = -1;
-        for (int r = 0; r < table_->rowCount(); ++r) {
-            auto* it = table_->item(r, 0);
-            if (it && it->data(Qt::UserRole).toString() == quote.symbol) {
-                row = r;
-                break;
-            }
-        }
-        if (row < 0)
-            return;
+    const int row = row_for(quote.symbol);
+    if (row < 0)
+        return;
+    if (was_special) {
+        render_row(row, *entry); // one-off: colours, tooltips and markers back to normal
+        return;
     }
-    if (auto* ltp_item = table_->item(row, 1))
-        ltp_item->setText(QString::number(entry->ltp, 'f', 2));
-    if (auto* chg_item = table_->item(row, 2)) {
-        chg_item->setText(QString("%1%2%").arg(entry->change_pct >= 0 ? "+" : "").arg(entry->change_pct, 0, 'f', 2));
-        chg_item->setForeground(entry->change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                                       : QColor(fincept::ui::colors::NEGATIVE()));
+    if (auto* ltp_item = table_->item(row, ColLtp)) {
+        ltp_item->setText(price_text(entry->symbol, entry->ltp));
+        if (ltp_item->text().size() > fitted_ltp_len_)
+            schedule_fit();
     }
+    if (auto* chg_item = table_->item(row, ColChg)) {
+        chg_item->setText(eqwl_arrow(entry->change_pct) + fmt::pct(entry->change_pct, 2, true));
+        chg_item->setData(Qt::UserRole, entry->change_pct);
+        chg_item->setForeground(QColor(entry->change_pct > 0.0   ? fincept::ui::colors::POSITIVE()
+                                       : entry->change_pct < 0.0 ? fincept::ui::colors::NEGATIVE()
+                                                                 : fincept::ui::colors::TEXT_SECONDARY()));
+        if (chg_item->text().size() > fitted_chg_len_)
+            schedule_fit();
+    }
+}
+
+int EquityWatchlist::row_for(const QString& symbol) const {
+    const auto found = row_of_.constFind(symbol);
+    if (found != row_of_.constEnd()) {
+        auto* it = table_->item(found.value(), ColSymbol);
+        if (it && it->data(Qt::UserRole).toString() == symbol)
+            return found.value();
+    }
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* it = table_->item(r, ColSymbol);
+        if (it && it->data(Qt::UserRole).toString() == symbol)
+            return r;
+    }
+    return -1;
+}
+
+void EquityWatchlist::render_row(int row, const WatchlistEntry& e) {
+    namespace c = fincept::ui::colors;
+    auto* sym_item = table_->item(row, ColSymbol);
+    auto* ltp_item = table_->item(row, ColLtp);
+    auto* chg_item = table_->item(row, ColChg);
+    auto* trend_item = table_->item(row, ColTrend);
+    if (!sym_item || !ltp_item || !chg_item)
+        return;
+    const RowInfo info = info_.value(e.symbol);
+    sym_item->setText(symbol_text(e.symbol));
+
+    const bool failed = !e.error.isEmpty();
+    const bool stale = e.has_data && (failed || (e.updated_ms > 0 &&
+                                                 QDateTime::currentMSecsSinceEpoch() - e.updated_ms > eqwl_kStaleMs));
+    QString tip;
+    if (e.has_data) {
+        // A price we have: shown, greyed with a clock marker when it is no longer updating.
+        ltp_item->setText(price_text(e.symbol, e.ltp) + (stale ? QStringLiteral(" \xE2\x8F\xB1") : QString()));
+        ltp_item->setForeground(QColor(stale ? c::TEXT_TERTIARY() : c::TEXT_PRIMARY()));
+        chg_item->setText(eqwl_arrow(e.change_pct) + fmt::pct(e.change_pct, 2, true));
+        chg_item->setForeground(QColor(stale            ? c::TEXT_TERTIARY()
+                                       : e.change_pct > 0 ? c::POSITIVE()
+                                       : e.change_pct < 0 ? c::NEGATIVE()
+                                                          : c::TEXT_SECONDARY()));
+        if (failed)
+            tip = tr("%1 is not updating: %2\nShowing the last price received.").arg(symbol_text(e.symbol), e.error);
+        else if (stale)
+            tip = tr("%1: no update for over %2 minutes — showing the last price received.")
+                      .arg(symbol_text(e.symbol))
+                      .arg(eqwl_kStaleMs / 60000);
+    } else if (failed || !info.blocked_reason.isEmpty()) {
+        // No price at all: say why, in the row (never a bare "ERR").
+        const QString reason = failed ? short_reason(e.error) : tr("not on broker");
+        ltp_item->setText(reason);
+        ltp_item->setForeground(QColor(c::WARNING()));
+        chg_item->setText(fmt::placeholder());
+        chg_item->setForeground(QColor(c::TEXT_TERTIARY()));
+        tip = failed ? tr("%1: no quote. %2").arg(symbol_text(e.symbol), e.error) : info.blocked_reason;
+    } else {
+        // Loading: the first quote has not arrived yet.
+        ltp_item->setText(QStringLiteral("\xC2\xB7\xC2\xB7\xC2\xB7"));
+        ltp_item->setForeground(QColor(c::TEXT_TERTIARY()));
+        chg_item->setText(QString());
+        chg_item->setForeground(QColor(c::TEXT_TERTIARY()));
+        tip = tr("%1: waiting for the first quote").arg(symbol_text(e.symbol));
+    }
+    sym_item->setForeground(QColor(!info.blocked_reason.isEmpty() ? c::TEXT_TERTIARY()
+                                   : failed && !e.has_data        ? c::TEXT_SECONDARY()
+                                                                  : c::TEXT_PRIMARY()));
+    QString full_tip = info.tooltip.isEmpty() ? QString() : info.tooltip;
+    if (!info.blocked_reason.isEmpty() && !full_tip.contains(info.blocked_reason))
+        full_tip += (full_tip.isEmpty() ? QString() : QStringLiteral("\n")) + info.blocked_reason;
+    if (!tip.isEmpty())
+        full_tip += (full_tip.isEmpty() ? QString() : QStringLiteral("\n")) + tip;
+    sym_item->setToolTip(full_tip);
+    ltp_item->setToolTip(full_tip);
+    chg_item->setToolTip(full_tip);
+    ltp_item->setData(Qt::UserRole, e.has_data ? e.ltp : 0.0);
+    chg_item->setData(Qt::UserRole, e.has_data ? e.change_pct : 0.0);
+    if (trend_item) {
+        const auto spark = sparks_.constFind(info.market_key);
+        if (spark != sparks_.constEnd())
+            trend_item->setData(fincept::ui::SparklineDelegate::kDefaultRole, QVariant::fromValue(spark.value()));
+        else
+            trend_item->setData(fincept::ui::SparklineDelegate::kDefaultRole, QVariant());
+    }
+    if (ltp_item->text().size() > fitted_ltp_len_ || chg_item->text().size() > fitted_chg_len_)
+        schedule_fit();
+}
+
+void EquityWatchlist::set_quote_error(const QString& symbol, const QString& reason) {
+    QMutexLocker lock(&mutex_);
+    const auto found = row_of_.constFind(symbol);
+    if (found == row_of_.constEnd())
+        return;
+    WatchlistEntry& e = entries_[found.value()];
+    if (e.error == reason)
+        return; // repeated failure (every retry reports it) — nothing to repaint
+    e.error = reason;
+    const int row = row_for(symbol);
+    if (row >= 0)
+        render_row(row, e);
+}
+
+void EquityWatchlist::clear_quotes() {
+    QMutexLocker lock(&mutex_);
+    for (auto& e : entries_) {
+        e.ltp = 0.0;
+        e.change_pct = 0.0;
+        e.volume = 0.0;
+        e.has_data = false;
+        e.error.clear();
+        e.updated_ms = 0;
+    }
+    for (int i = 0; i < entries_.size() && i < table_->rowCount(); ++i)
+        render_row(i, entries_[i]);
+}
+
+void EquityWatchlist::set_feed_notice(const QString& title, const QString& detail) {
+    const bool show = !title.isEmpty();
+    if (show == notice_box_->isVisibleTo(this) && notice_title_->text() == title && notice_detail_->text() == detail)
+        return;
+    notice_title_->setText(title);
+    notice_detail_->setText(detail);
+    notice_detail_->setVisible(!detail.isEmpty());
+    notice_box_->setAccessibleName(show ? title : QString());
+    notice_box_->setVisible(show);
 }
 
 void EquityWatchlist::set_active_symbol(const QString& symbol) {
     active_symbol_ = symbol;
     for (int row = 0; row < table_->rowCount(); ++row) {
-        auto* item = table_->item(row, 0);
+        auto* item = table_->item(row, ColSymbol);
         if (!item)
             continue;
         const bool active = item->data(Qt::UserRole).toString() == symbol;
-        for (int col = 0; col < 3; ++col) {
-            auto* cell = table_->item(row, col);
-            if (cell) {
+        for (int col = 0; col < ColCount; ++col) {
+            if (auto* cell = table_->item(row, col))
                 cell->setBackground(active ? QColor(fincept::ui::colors::BG_HOVER())
                                            : QColor(fincept::ui::colors::BG_BASE()));
-            }
         }
     }
 }
 
 void EquityWatchlist::on_cell_clicked(int row, int /*col*/) {
-    auto* item = table_->item(row, 0);
-    if (item) {
-        const QString symbol = item->data(Qt::UserRole).toString();
-        if (!symbol.isEmpty()) {
-            set_active_symbol(symbol);
-            emit symbol_selected(symbol);
-        }
-    }
+    auto* item = table_->item(row, ColSymbol);
+    if (!item)
+        return;
+    const QString symbol = item->data(Qt::UserRole).toString();
+    if (symbol.isEmpty())
+        return;
+    key_select_timer_->stop();
+    set_active_symbol(symbol);
+    emit symbol_selected(symbol);
 }
 
 void EquityWatchlist::on_filter_changed(const QString& text) {
     const QString filter = text.trimmed().toUpper();
     for (int row = 0; row < table_->rowCount(); ++row) {
-        auto* item = table_->item(row, 0);
+        auto* item = table_->item(row, ColSymbol);
         if (!item)
             continue;
-        const bool match = filter.isEmpty() || item->data(Qt::UserRole).toString().contains(filter);
+        const bool match = filter.isEmpty() || item->data(Qt::UserRole).toString().toUpper().contains(filter) ||
+                           item->text().toUpper().contains(filter) || item->toolTip().toUpper().contains(filter);
         table_->setRowHidden(row, !match);
+    }
+    schedule_fit();
+}
+
+void EquityWatchlist::on_header_clicked(int section) {
+    if (section == ColTrend)
+        return;
+    // Click cycles: ascending → descending → list order.
+    if (sort_col_ != section) {
+        sort_col_ = section;
+        sort_desc_ = (section != ColSymbol); // numbers: biggest first
+    } else if (sort_desc_ == (section != ColSymbol)) {
+        sort_desc_ = !sort_desc_;
+    } else {
+        sort_col_ = -1;
+    }
+    auto* hh = table_->horizontalHeader();
+    hh->setSortIndicatorShown(sort_col_ >= 0);
+    if (sort_col_ >= 0)
+        hh->setSortIndicator(sort_col_, sort_desc_ ? Qt::DescendingOrder : Qt::AscendingOrder);
+    {
+        QMutexLocker lock(&mutex_);
+        sort_entries();
+        rebuild_table();
     }
 }
 
+void EquityWatchlist::sort_entries() {
+    if (sort_col_ < 0)
+        return; // list order as given
+    const bool desc = sort_desc_;
+    const int col = sort_col_;
+    std::stable_sort(entries_.begin(), entries_.end(), [this, col, desc](const WatchlistEntry& a, const WatchlistEntry& b) {
+        // Rows without data always sink to the bottom.
+        if (col != ColSymbol && a.has_data != b.has_data)
+            return a.has_data;
+        if (col == ColSymbol) {
+            const int cmp = QString::compare(symbol_text(a.symbol), symbol_text(b.symbol), Qt::CaseInsensitive);
+            return desc ? cmp > 0 : cmp < 0;
+        }
+        const double va = col == ColLtp ? a.ltp : a.change_pct;
+        const double vb = col == ColLtp ? b.ltp : b.change_pct;
+        return desc ? va > vb : va < vb;
+    });
+}
+
 void EquityWatchlist::rebuild_table() {
-    // Preserve the scroll offset — the list is rebuilt whenever the watchlist or
-    // the position/holding union changes, which happens while the user is
-    // scrolling through it.
     const int scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
     row_of_.clear();
     row_of_.reserve(entries_.size());
@@ -509,34 +835,73 @@ void EquityWatchlist::rebuild_table() {
         if (!row_of_.contains(e.symbol))
             row_of_.insert(e.symbol, i);
 
-        auto* sym_item = new QTableWidgetItem(e.symbol);
+        auto* sym_item = new QTableWidgetItem(symbol_text(e.symbol));
         sym_item->setData(Qt::UserRole, e.symbol);
-        sym_item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
-        table_->setItem(i, 0, sym_item);
-
-        auto* ltp_item = new QTableWidgetItem(e.has_data ? QString::number(e.ltp, 'f', 2) : "--");
+        table_->setItem(i, ColSymbol, sym_item);
+        auto* ltp_item = new QTableWidgetItem;
         ltp_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        ltp_item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
-        table_->setItem(i, 1, ltp_item);
-
-        auto* chg_item = new QTableWidgetItem(
-            e.has_data ? QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2) : "--");
+        table_->setItem(i, ColLtp, ltp_item);
+        auto* chg_item = new QTableWidgetItem;
         chg_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                                  : QColor(fincept::ui::colors::NEGATIVE()));
-        table_->setItem(i, 2, chg_item);
+        table_->setItem(i, ColChg, chg_item);
+        table_->setItem(i, ColTrend, new QTableWidgetItem);
+        render_row(i, e);
     }
     table_->setUpdatesEnabled(true);
-
-    // The rebuild dropped both the active-row highlight and any live filter —
-    // the charted symbol appeared unselected and a filtered list silently
-    // re-showed every row. Re-apply both here so rebuild_table() is idempotent.
     if (!active_symbol_.isEmpty())
         set_active_symbol(active_symbol_);
     if (filter_edit_ && !filter_edit_->text().trimmed().isEmpty())
         on_filter_changed(filter_edit_->text());
     if (table_->verticalScrollBar())
         table_->verticalScrollBar()->setValue(qMin(scroll, table_->verticalScrollBar()->maximum()));
+    fit_columns();
+}
+
+void EquityWatchlist::subscribe_sparklines() {
+    auto& hub = datahub::DataHub::instance();
+    QSet<QString> want;
+    for (const auto& e : entries_) {
+        const QString key = info_.value(e.symbol).market_key;
+        if (!key.isEmpty())
+            want.insert(key);
+    }
+    for (auto it = spark_subs_.begin(); it != spark_subs_.end();) {
+        if (!want.contains(*it)) {
+            hub.unsubscribe(this, fincept::services::MarketDataService::sparkline_topic(*it));
+            it = spark_subs_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (const QString& key : want) {
+        if (spark_subs_.contains(key))
+            continue;
+        spark_subs_.insert(key);
+        hub.subscribe(this, fincept::services::MarketDataService::sparkline_topic(key), [this, key](const QVariant& v) {
+            if (!v.canConvert<QVector<double>>())
+                return;
+            on_sparkline(key, v.value<QVector<double>>());
+        });
+    }
+}
+
+void EquityWatchlist::unsubscribe_sparklines() {
+    auto& hub = datahub::DataHub::instance();
+    for (const QString& key : std::as_const(spark_subs_))
+        hub.unsubscribe(this, fincept::services::MarketDataService::sparkline_topic(key));
+    spark_subs_.clear();
+}
+
+void EquityWatchlist::on_sparkline(const QString& market_key, const QVector<double>& closes) {
+    sparks_.insert(market_key, closes);
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* sym_item = table_->item(r, ColSymbol);
+        auto* trend_item = table_->item(r, ColTrend);
+        if (!sym_item || !trend_item)
+            continue;
+        if (info_.value(sym_item->data(Qt::UserRole).toString()).market_key == market_key)
+            trend_item->setData(fincept::ui::SparklineDelegate::kDefaultRole, QVariant::fromValue(closes));
+    }
 }
 
 void EquityWatchlist::set_broker_id(const QString& broker_id) {
@@ -544,89 +909,16 @@ void EquityWatchlist::set_broker_id(const QString& broker_id) {
 }
 
 void EquityWatchlist::add_symbol(const QString& symbol) {
-    if (symbol.trimmed().isEmpty())
+    const QString sym = symbol.trimmed();
+    if (sym.isEmpty())
         return;
-    const QString sym = symbol.trimmed().toUpper();
     {
         QMutexLocker lock(&mutex_);
         for (const auto& e : entries_)
             if (e.symbol == sym)
-                return; // already in watchlist
-        WatchlistEntry entry;
-        entry.symbol = sym;
-        entries_.append(entry);
-        count_label_->setText(QString::number(entries_.size()));
-        rebuild_table();
+                return; // already in the watchlist
     }
     emit symbol_added(sym);
-}
-
-void EquityWatchlist::on_add_symbol_entered() {
-    const QString raw = add_edit_->text().trimmed();
-    if (raw.isEmpty())
-        return;
-
-    // A picked friendly label resolves to the real symbol via the map; otherwise
-    // treat the text as typed input (legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL").
-    QString sym = add_suggestion_map_.value(raw);
-    if (sym.isEmpty()) {
-        sym = raw.toUpper().section(QStringLiteral("  ·  "), 0, 0).trimmed();
-        if (sym.contains(':'))
-            sym = sym.section(':', 1);
-    }
-
-    // Validate against every connected broker (not just the focused one) so a
-    // symbol that only one connected broker carries is still accepted.
-    const QStringList ids = connected_broker_ids(broker_id_);
-    if (any_loaded(ids)) {
-        auto results = trading::InstrumentService::instance().search_all(sym, "", ids, 1);
-        if (results.isEmpty()) {
-            // Not found — flash the edit red briefly to signal invalid
-            add_edit_->setStyleSheet(QString("border: 1px solid %1;").arg(fincept::ui::colors::NEGATIVE()));
-            QTimer::singleShot(800, add_edit_, [this]() { add_edit_->setStyleSheet(""); });
-            return;
-        }
-        sym = results.first().symbol;
-    }
-
-    add_symbol(sym);
-    add_edit_->clear();
-}
-
-void EquityWatchlist::on_add_text_changed(const QString& text) {
-    if (text.trimmed().length() < 2)
-        return;
-    const QStringList ids = connected_broker_ids(broker_id_);
-    if (ids.isEmpty())
-        return;
-
-    // Unified search across all connected brokers — one row per (broker,
-    // instrument). search_all hits the SQLite catalog directly, so we do NOT
-    // gate on the in-memory cache (is_loaded) here: as soon as a broker's
-    // master is in the DB the symbols are searchable, even if the in-memory
-    // cache rebuild hasn't landed yet. The symbol stays the leading token (so
-    // prefix completion on the typed text still works); exchange + broker follow.
-    const QString query = text.trimmed().toUpper();
-    auto results = trading::InstrumentService::instance().search_all(query, "", ids, 24);
-    QStringList suggestions;
-    suggestions.reserve(results.size());
-    add_suggestion_map_.clear();
-    for (const auto& inst : results) {
-        // Clean F&O label instead of the raw symbol; remember the real symbol.
-        const QString friendly =
-            trading::norm::display_name(inst.name, inst.instrument_type, inst.expiry, inst.strike, inst.symbol);
-        const QString label = QStringLiteral("%1  ·  %2").arg(friendly, inst.exchange);
-        if (add_suggestion_map_.contains(label))
-            continue; // collapse identical labels across brokers
-        add_suggestion_map_.insert(label, inst.symbol);
-        suggestions.append(label);
-    }
-    completer_model_->setStringList(suggestions);
-    // Force the popup to refresh against the just-updated model (otherwise the
-    // completer can filter against the previous, stale/empty model for this
-    // keystroke and show nothing).
-    if (!suggestions.isEmpty())
-        completer_->complete();
 }
 
 } // namespace fincept::screens::equity

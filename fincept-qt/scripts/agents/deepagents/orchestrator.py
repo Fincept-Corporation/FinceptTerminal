@@ -21,10 +21,29 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Fincept hosted LLM endpoint
-_FINCEPT_LLM_URL   = "https://api.fincept.in/research/llm"
-_FINCEPT_LLM_ASYNC = "https://api.fincept.in/research/llm/async"
-_DEFAULT_TIMEOUT   = 120  # seconds
+# Fincept hosted LLM endpoint. Contract (apiback research.py):
+#   POST /research/llm/async  {prompt,max_tokens} -> {"success","task_id","message"}   (no result here)
+#   GET  /research/llm/status/{task_id}            -> {"status": processing|completed|failed,
+#                                                      "data": {"response": "...", ...}, "error": ...}
+#   POST /research/llm        {prompt,max_tokens} -> {"success","message","data": {"response": "...", ...}}
+# Auth is the X-API-Key header only; "Authorization: Bearer" is never accepted and every 401 counts
+# toward the server's per-IP auto-block, so a rejected key must stop the run, not be retried.
+_FINCEPT_LLM_URL    = "https://api.fincept.in/research/llm"
+_FINCEPT_LLM_ASYNC  = "https://api.fincept.in/research/llm/async"
+_FINCEPT_LLM_STATUS = "https://api.fincept.in/research/llm/status/"
+_DEFAULT_TIMEOUT    = 120  # seconds, one HTTP exchange
+_TASK_TIMEOUT       = 300  # seconds, one async task (submit -> completed)
+_POLL_INTERVAL      = 3.0  # seconds; the endpoint asks for 3-5 s
+_MIN_SUBMIT_GAP     = 1.2  # seconds; the server allows 1 LLM request/second per user
+_RETRY_STATUSES     = (429, 502, 503, 504)
+
+# The prompt-loop fallback can only talk to the Fincept LLM. Any other provider's key must never be
+# sent to api.fincept.in.
+FINCEPT_PROVIDER = "fincept"
+
+
+class FinceptLLMError(RuntimeError):
+    """A Fincept LLM call failed with a reason worth showing to the user."""
 
 # System prompts for each specialist role
 SUBAGENT_PROMPTS: dict[str, str] = {
@@ -75,11 +94,14 @@ class FinceptOrchestrator:
     Produces the same output schema as the deepagents library path.
     """
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key
+    def __init__(self, api_key: str | None = None, provider: str = FINCEPT_PROVIDER):
+        self.provider = (provider or "").lower().strip()
+        # Only a Fincept key is ever attached; for any other provider nothing is sent (see execute()).
+        self.api_key = api_key if self.provider == FINCEPT_PROVIDER else None
         self._session = requests.Session()
-        if api_key:
-            self._session.headers.update({"Authorization": f"Bearer {api_key}"})
+        if self.api_key:
+            self._session.headers.update({"X-API-Key": self.api_key})
+        self._last_submit = 0.0
 
     # ------------------------------------------------------------------
     # Public API — cli.py execute_task (non-tool-calling LLM fallback)
@@ -96,6 +118,17 @@ class FinceptOrchestrator:
 
         Returns dict with: success, result, todos, files, error
         """
+        if self.provider != FINCEPT_PROVIDER:
+            shown = self.provider or "none"
+            return self._failure(
+                f"LLM provider '{shown}' does not support tool calling, and the fallback agent runs only "
+                f"on the Fincept LLM. Choose a tool-calling provider or Fincept for AI Quant Lab."
+            )
+        if not self.api_key:
+            return self._failure(
+                "No Fincept API key for the Fincept LLM. Sign in to Fincept (or set the key on the "
+                "Fincept LLM profile) and run the agent again."
+            )
         try:
             plan = self._create_plan(task, agent_type, subagent_names)
             todos = []
@@ -136,17 +169,21 @@ class FinceptOrchestrator:
 
         except Exception as exc:
             logger.error("Orchestrator execute failed: %s", exc)
-            return {
-                "success": False,
-                "result":  "",
-                "todos":   [],
-                "files":   {},
-                "error":   str(exc),
-            }
+            return self._failure(str(exc))
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _failure(error: str) -> dict[str, Any]:
+        return {
+            "success": False,
+            "result":  "",
+            "todos":   [],
+            "files":   {},
+            "error":   error,
+        }
 
     def _create_plan(
         self,
@@ -253,38 +290,97 @@ class FinceptOrchestrator:
         return self._call_llm(prompt, max_tokens=3000)
 
     def _call_llm(self, prompt: str, max_tokens: int = 1000) -> str:
-        """Call the Fincept LLM endpoint with retry on async failure."""
+        """Return the Fincept LLM's text for `prompt`.
+
+        Submits to /research/llm/async and polls /research/llm/status/{task_id}
+        (long generations outlive a synchronous gateway request). The sync
+        /research/llm route is used only when the async route is absent.
+        """
         payload = {
             "prompt":     prompt,
             "max_tokens": max_tokens,
         }
-
-        # Try async endpoint first
         try:
-            resp = self._session.post(
-                _FINCEPT_LLM_ASYNC,
-                json=payload,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("success") and data.get("result"):
-                return data["result"]
-        except requests.RequestException as exc:
-            logger.warning("Async LLM endpoint failed: %s — falling back to sync", exc)
-
-        # Fall back to sync endpoint
-        try:
-            resp = self._session.post(
-                _FINCEPT_LLM_URL,
-                json=payload,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            result = data.get("result") or data.get("response") or data.get("text", "")
-            if not result:
-                raise ValueError(f"Empty response from LLM: {data}")
-            return result
+            self._respect_rate_limit()
+            resp = self._request("POST", _FINCEPT_LLM_ASYNC, json=payload)
+            if resp.status_code in (404, 405):
+                logger.warning("Async LLM endpoint unavailable (HTTP %s), using %s",
+                               resp.status_code, _FINCEPT_LLM_URL)
+                return self._call_sync(payload)
+            if resp.status_code != 200:
+                self._raise_for(resp)
+            body = resp.json()
+            task_id = body.get("task_id") if isinstance(body, dict) else None
+            if not task_id:
+                raise FinceptLLMError(f"Fincept LLM did not return a task id: {str(body)[:200]}")
+            return self._poll(task_id)
         except requests.RequestException as exc:
             raise RuntimeError(f"LLM call failed: {exc}") from exc
+
+    def _call_sync(self, payload: dict[str, Any]) -> str:
+        self._respect_rate_limit()
+        resp = self._request("POST", _FINCEPT_LLM_URL, json=payload)
+        if resp.status_code != 200:
+            self._raise_for(resp)
+        body = resp.json()
+        return self._response_text(body.get("data") if isinstance(body, dict) else None)
+
+    def _poll(self, task_id: str) -> str:
+        deadline = time.monotonic() + _TASK_TIMEOUT
+        while True:
+            time.sleep(_POLL_INTERVAL)
+            try:
+                resp = self._request("GET", _FINCEPT_LLM_STATUS + task_id)
+            except requests.RequestException as exc:  # transient: keep polling until the deadline
+                logger.warning("Polling LLM task %s failed: %s", task_id, exc)
+                resp = None
+            if resp is not None:
+                if resp.status_code != 200:
+                    self._raise_for(resp)
+                body = resp.json()
+                status = body.get("status") if isinstance(body, dict) else None
+                if status == "completed":
+                    return self._response_text(body.get("data"))
+                if status == "failed":
+                    raise FinceptLLMError(f"Fincept LLM task failed: {body.get('error') or 'no reason given'}")
+            if time.monotonic() > deadline:
+                raise FinceptLLMError(f"Fincept LLM task did not finish within {_TASK_TIMEOUT} s")
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        """One exchange; 429/502/503/504 are retried twice with a growing wait. Never retries a 401."""
+        resp = None
+        for attempt in range(3):
+            resp = self._session.request(method, url, timeout=_DEFAULT_TIMEOUT, **kwargs)
+            if resp.status_code not in _RETRY_STATUSES:
+                return resp
+            if attempt < 2:
+                time.sleep(3.0 * (attempt + 1))
+        return resp
+
+    def _respect_rate_limit(self) -> None:
+        wait = _MIN_SUBMIT_GAP - (time.monotonic() - self._last_submit)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_submit = time.monotonic()
+
+    @staticmethod
+    def _response_text(data: Any) -> str:
+        text = data.get("response") if isinstance(data, dict) else None
+        if not text:
+            raise FinceptLLMError(f"Empty response from the Fincept LLM: {str(data)[:200]}")
+        return text
+
+    @staticmethod
+    def _raise_for(resp: requests.Response) -> None:
+        """Raise with the server's own message ({"message": str | {"message": str}})."""
+        try:
+            body = resp.json()
+        except ValueError:
+            body = None
+        msg = body.get("message") if isinstance(body, dict) else None
+        if isinstance(msg, dict):
+            msg = msg.get("message")
+        msg = str(msg or (resp.text or "")[:300] or resp.reason)
+        if resp.status_code == 401:
+            raise FinceptLLMError(f"Fincept API rejected the API key (HTTP 401: {msg}). Sign in again.")
+        raise FinceptLLMError(f"Fincept LLM request failed (HTTP {resp.status_code}): {msg}")

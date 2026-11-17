@@ -15,7 +15,13 @@ class VwapLayer : public SeriesLayer {
     void attach(QGraphicsScene* scene, QChart* chart) override;
     void detach(QGraphicsScene* scene, QChart* chart) override;
 
+  protected:
+    QColor default_color() const override;
+    void refresh_theme_colors() override;
+
   private:
+    QColor band_color(int sigma) const;
+
     bool show_bands_;
     QLineSeries* upper_1_ = nullptr;
     QLineSeries* lower_1_ = nullptr;

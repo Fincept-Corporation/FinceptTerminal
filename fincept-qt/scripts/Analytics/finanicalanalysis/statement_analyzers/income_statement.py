@@ -20,17 +20,16 @@ OUTPUT:
   - Comparative analysis and benchmarking results
   - Investment recommendations and insights
 
-PARAMETERS:
-  - analysis_period: Financial analysis period (default: 3 years)
-  - industry_benchmark: Industry for comparative analysis (default: 'auto')
-  - quality_threshold: Minimum financial quality score (default: 0.7)
-  - growth_assumption: Growth rate assumption (default: 0.05)
-  - currency: Reporting currency (default: 'USD')
+CONVENTIONS:
+  - A metric whose inputs are not reported is returned as "not available" (value
+    None) instead of being computed from 0.
+  - Ratios that mix a flow with a balance (DSO, accruals) use the average of the
+    opening and closing balance when a prior period is supplied, else the ending
+    balance; the methodology string says which.
 """
 
 
 import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
@@ -110,6 +109,10 @@ class RevenueQualityAssessment:
     quality_indicators: List[str] = field(default_factory=list)
 
 
+NON_RECURRING_KEYS = ('discontinued_operations', 'extraordinary_items', 'restructuring_charges',
+                      'impairment_losses', 'gains_losses_disposals', 'unusual_items')
+
+
 class IncomeStatementAnalyzer(BaseAnalyzer):
     """
     Comprehensive income statement analyzer implementing CFA Institute standards.
@@ -140,9 +143,26 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         self.quality_thresholds.update({
             'revenue_growth_volatility': {'low': 0.1, 'moderate': 0.2, 'high': 0.4},
             'earnings_persistence': {'high': 0.8, 'moderate': 0.6, 'low': 0.4},
-            'accruals_ratio': {'good': 0.05, 'moderate': 0.1, 'poor': 0.2},
+            # Signed accruals / average total assets
+            'accruals_ratio': {'good': 0.05, 'moderate': 0.10},
             'non_recurring_frequency': {'rare': 0.1, 'occasional': 0.2, 'frequent': 0.4}
         })
+
+    # ------------------------------------------------------------------ helpers
+
+    @staticmethod
+    def _eps(income: Dict[str, float], kind: str) -> Optional[float]:
+        """Reported EPS, else net income / weighted shares; None when neither is possible."""
+        eps = income.get(f'{kind}_eps')
+        if eps is not None:
+            return eps
+        shares = income.get(f'shares_outstanding_{kind}')
+        ni = income.get('net_income')
+        if ni is not None and shares and shares > 0:
+            return ni / shares
+        return None
+
+    # ------------------------------------------------------------------ analyze
 
     def analyze(self, statements: FinancialStatements,
                 comparative_data: Optional[List[FinancialStatements]] = None,
@@ -152,7 +172,7 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
 
         Args:
             statements: Current period financial statements
-            comparative_data: Historical financial statements for trend analysis
+            comparative_data: Historical financial statements (oldest first)
             industry_data: Industry benchmarks and peer data
 
         Returns:
@@ -160,35 +180,17 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         """
         results = []
 
-        # Validate data sufficiency
         required_fields = ['revenue', 'net_income', 'operating_income']
         is_sufficient, missing_fields = self.validate_data_sufficiency(statements, required_fields)
+        if not is_sufficient and self.logger:
+            self.logger.warning(f"Insufficient data for complete analysis. Missing: {missing_fields}")
 
-        if not is_sufficient:
-            if self.logger:
-                self.logger.warning(f"Insufficient data for complete analysis. Missing: {missing_fields}")
-
-        # Core profitability analysis
         results.extend(self._analyze_profitability_ratios(statements, industry_data))
-
-        # Revenue analysis
         results.extend(self._analyze_revenue_recognition(statements, comparative_data))
-
-        # Expense analysis
         results.extend(self._analyze_expense_recognition(statements, comparative_data))
-
-        # EPS analysis
-        eps_results = self._analyze_earnings_per_share(statements, comparative_data)
-        if eps_results:
-            results.extend(eps_results)
-
-        # Non-recurring items analysis
+        results.extend(self._analyze_earnings_per_share(statements, comparative_data))
         results.extend(self._analyze_non_recurring_items(statements, comparative_data))
-
-        # Income quality assessment
         results.extend(self._assess_income_quality(statements, comparative_data))
-
-        # Common-size analysis
         results.extend(self._perform_common_size_analysis(statements, comparative_data))
 
         return results
@@ -198,16 +200,24 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         """Analyze core profitability ratios"""
         results = []
         income = statements.income_statement
+        revenue = income.get('revenue')
+
+        if revenue is None or revenue <= 0:
+            results.append(self.unavailable(
+                AnalysisType.PROFITABILITY, "Profit Margins",
+                "revenue not reported" if revenue is None else "revenue is zero or negative",
+                "Margin = line item / Revenue"))
+            return results
 
         # Gross Profit Margin
-        revenue = income.get('revenue', 0)
-        cogs = income.get('cost_of_sales', 0)
-
-        if revenue > 0:
-            gross_margin = self.safe_divide(revenue - cogs, revenue)
-            benchmark = self.profitability_benchmarks.get('gross_margin', {})
-            risk_level = self.assess_risk_level(gross_margin, benchmark, higher_is_better=True)
-
+        gross_profit = self.gross_profit(income)
+        if gross_profit is None:
+            results.append(self.unavailable(AnalysisType.PROFITABILITY, "Gross Profit Margin",
+                                            "neither cost of sales nor gross profit reported",
+                                            "(Revenue - Cost of Sales) / Revenue"))
+        else:
+            gross_margin = gross_profit / revenue
+            risk_level = self.assess_risk_level(gross_margin, self.profitability_benchmarks['gross_margin'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="Gross Profit Margin",
@@ -222,12 +232,10 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
             ))
 
         # Operating Profit Margin
-        operating_income = income.get('operating_income', 0)
-        if revenue > 0 and operating_income is not None:
-            operating_margin = self.safe_divide(operating_income, revenue)
-            benchmark = self.profitability_benchmarks.get('operating_margin', {})
-            risk_level = self.assess_risk_level(operating_margin, benchmark, higher_is_better=True)
-
+        if 'operating_income' in income:
+            operating_margin = income['operating_income'] / revenue
+            risk_level = self.assess_risk_level(operating_margin,
+                                                self.profitability_benchmarks['operating_margin'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="Operating Profit Margin",
@@ -240,14 +248,14 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 methodology="Operating Income / Revenue",
                 limitations=["Excludes non-operating income and expenses"]
             ))
+        else:
+            results.append(self.unavailable(AnalysisType.PROFITABILITY, "Operating Profit Margin",
+                                            "operating income not reported", "Operating Income / Revenue"))
 
         # Net Profit Margin
-        net_income = income.get('net_income', 0)
-        if revenue > 0:
-            net_margin = self.safe_divide(net_income, revenue)
-            benchmark = self.profitability_benchmarks.get('net_margin', {})
-            risk_level = self.assess_risk_level(net_margin, benchmark, higher_is_better=True)
-
+        if 'net_income' in income:
+            net_margin = income['net_income'] / revenue
+            risk_level = self.assess_risk_level(net_margin, self.profitability_benchmarks['net_margin'], True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="Net Profit Margin",
@@ -260,22 +268,27 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 methodology="Net Income / Revenue",
                 limitations=["May include non-recurring items affecting comparability"]
             ))
+        else:
+            results.append(self.unavailable(AnalysisType.PROFITABILITY, "Net Profit Margin",
+                                            "net income not reported", "Net Income / Revenue"))
 
-        # EBITDA Margin (if calculable)
-        ebitda = self._calculate_ebitda(statements)
-        if ebitda is not None and revenue > 0:
-            ebitda_margin = self.safe_divide(ebitda, revenue)
-
+        # EBITDA Margin
+        ebitda, reason = self._calculate_ebitda_with_reason(statements)
+        if ebitda is None:
+            results.append(self.unavailable(AnalysisType.PROFITABILITY, "EBITDA Margin", reason,
+                                            "(Operating Income + Depreciation + Amortization) / Revenue"))
+        else:
+            ebitda_margin = ebitda / revenue
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="EBITDA Margin",
                 value=ebitda_margin,
                 interpretation=f"EBITDA margin of {self.format_percentage(ebitda_margin)} shows operational profitability before financing and accounting decisions",
                 risk_level=self.assess_risk_level(ebitda_margin,
-                                                  self.profitability_benchmarks.get('operating_margin', {}),
-                                                  higher_is_better=True),
+                                                  self.profitability_benchmarks['operating_margin'], True),
                 methodology="(Operating Income + Depreciation + Amortization) / Revenue",
-                limitations=["Does not reflect capital expenditure requirements or working capital needs"]
+                limitations=["Does not reflect capital expenditure requirements or working capital needs",
+                             "If 'depreciation' already includes amortization, do not also supply 'amortization'"]
             ))
 
         return results
@@ -286,18 +299,21 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         """Analyze revenue recognition and quality"""
         results = []
         income = statements.income_statement
-        revenue = income.get('revenue', 0)
+        revenue = income.get('revenue')
 
-        if revenue <= 0:
+        if revenue is None or revenue <= 0:
             return results
 
         # Revenue growth analysis
-        if comparative_data and len(comparative_data) > 0:
-            prev_revenue = comparative_data[-1].income_statement.get('revenue', 0)
-            if prev_revenue > 0:
-                revenue_growth = (revenue / prev_revenue) - 1
-
-                # Assess revenue growth quality
+        if comparative_data:
+            prev_revenue = self.prior_value(comparative_data, 'income_statement', 'revenue')
+            revenue_growth = self.growth(revenue, prev_revenue)
+            if revenue_growth is None:
+                results.append(self.unavailable(
+                    AnalysisType.QUALITY, "Revenue Growth Rate",
+                    "prior-period revenue not reported or not positive",
+                    "(Current Revenue - Previous Revenue) / Previous Revenue"))
+            else:
                 if revenue_growth > 0.2:
                     growth_quality = "Strong revenue growth - monitor sustainability"
                 elif revenue_growth > 0.1:
@@ -319,14 +335,10 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                     limitations=["Single period comparison may not reflect underlying trends"]
                 ))
 
-        # Revenue recognition quality indicators
-        balance_sheet = statements.balance_sheet
-        accounts_receivable = balance_sheet.get('accounts_receivable', 0)
-
-        if accounts_receivable > 0 and revenue > 0:
-            # Days Sales Outstanding
-            dso = (accounts_receivable / revenue) * 365
-
+        # Days Sales Outstanding
+        avg_ar, basis = self.average_balance(statements, comparative_data, 'accounts_receivable')
+        if avg_ar is not None and avg_ar >= 0:
+            dso = avg_ar / revenue * 365
             dso_interpretation = "Normal collection period" if dso <= 45 else "Extended collection period - monitor credit quality" if dso <= 90 else "Very long collection period - potential collection issues"
             dso_risk = RiskLevel.LOW if dso <= 45 else RiskLevel.MODERATE if dso <= 90 else RiskLevel.HIGH
 
@@ -336,11 +348,10 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 value=dso,
                 interpretation=dso_interpretation,
                 risk_level=dso_risk,
-                methodology="(Accounts Receivable / Revenue) × 365",
+                methodology=f"Accounts Receivable ({self.basis_note(basis)}) / Revenue x 365",
                 limitations=["May vary by industry and seasonality"]
             ))
 
-        # Check for potential revenue manipulation indicators
         revenue_quality_issues = self._identify_revenue_quality_issues(statements, comparative_data)
         if revenue_quality_issues:
             results.append(AnalysisResult(
@@ -360,43 +371,48 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         """Analyze expense recognition patterns and quality"""
         results = []
         income = statements.income_statement
+        revenue = income.get('revenue')
+        operating_income = income.get('operating_income')
 
-        # Operating leverage analysis
-        revenue = income.get('revenue', 0)
-        operating_income = income.get('operating_income', 0)
+        # Degree of operating leverage = %change EBIT / %change revenue
+        if comparative_data and revenue is not None and operating_income is not None:
+            prev_revenue = self.prior_value(comparative_data, 'income_statement', 'revenue')
+            prev_oi = self.prior_value(comparative_data, 'income_statement', 'operating_income')
+            revenue_change = self.growth(revenue, prev_revenue)
+            # Direction-correct change even when prior operating income was a loss
+            operating_change = self.change_over_abs_base(operating_income, prev_oi)
 
-        if comparative_data and len(comparative_data) > 0 and revenue > 0:
-            prev_statements = comparative_data[-1]
-            prev_revenue = prev_statements.income_statement.get('revenue', 0)
-            prev_operating_income = prev_statements.income_statement.get('operating_income', 0)
+            if revenue_change is None or operating_change is None:
+                results.append(self.unavailable(
+                    AnalysisType.PROFITABILITY, "Operating Leverage",
+                    "prior-period revenue (positive) and operating income (non-zero) are required",
+                    "% Change in Operating Income / % Change in Revenue"))
+            elif abs(revenue_change) < 0.005:
+                results.append(self.unavailable(
+                    AnalysisType.PROFITABILITY, "Operating Leverage",
+                    "revenue changed by less than 0.5%, the ratio is not meaningful",
+                    "% Change in Operating Income / % Change in Revenue"))
+            else:
+                operating_leverage = operating_change / revenue_change
+                leverage_interpretation = "High operating leverage - earnings sensitive to revenue changes" if abs(
+                    operating_leverage) > 2 else "Moderate operating leverage" if abs(
+                    operating_leverage) > 1 else "Low operating leverage"
 
-            if prev_revenue > 0 and prev_operating_income != 0:
-                revenue_change = (revenue / prev_revenue) - 1
-                operating_change = (operating_income / prev_operating_income) - 1 if prev_operating_income != 0 else 0
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.PROFITABILITY,
+                    metric_name="Operating Leverage",
+                    value=operating_leverage,
+                    interpretation=leverage_interpretation,
+                    risk_level=RiskLevel.HIGH if abs(operating_leverage) > 3 else RiskLevel.MODERATE,
+                    methodology="% Change in Operating Income (over |prior|) / % Change in Revenue",
+                    limitations=["Single period calculation may not reflect long-term leverage"]
+                ))
 
-                if revenue_change != 0:
-                    operating_leverage = operating_change / revenue_change
-
-                    leverage_interpretation = "High operating leverage - earnings sensitive to revenue changes" if abs(
-                        operating_leverage) > 2 else "Moderate operating leverage" if abs(
-                        operating_leverage) > 1 else "Low operating leverage"
-
-                    results.append(AnalysisResult(
-                        analysis_type=AnalysisType.PROFITABILITY,
-                        metric_name="Operating Leverage",
-                        value=operating_leverage,
-                        interpretation=leverage_interpretation,
-                        risk_level=RiskLevel.HIGH if abs(operating_leverage) > 3 else RiskLevel.MODERATE,
-                        methodology="% Change in Operating Income / % Change in Revenue",
-                        limitations=["Single period calculation may not reflect long-term leverage"]
-                    ))
-
-        # Expense ratios analysis
-        if revenue > 0:
+        if revenue is not None and revenue > 0:
             # R&D Intensity
-            rd_expenses = income.get('rd_expenses', 0)
-            if rd_expenses > 0:
-                rd_intensity = self.safe_divide(rd_expenses, revenue)
+            rd_expenses = income.get('rd_expenses')
+            if rd_expenses is not None and rd_expenses > 0:
+                rd_intensity = rd_expenses / revenue
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.ACTIVITY,
                     metric_name="R&D Intensity",
@@ -407,12 +423,9 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 ))
 
             # SG&A Efficiency
-            selling_expenses = income.get('selling_expenses', 0)
-            admin_expenses = income.get('administrative_expenses', 0)
-            sga_total = selling_expenses + admin_expenses
-
-            if sga_total > 0:
-                sga_ratio = self.safe_divide(sga_total, revenue)
+            sga_total = self.sga(income)
+            if sga_total is not None and sga_total > 0:
+                sga_ratio = sga_total / revenue
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.ACTIVITY,
                     metric_name="SG&A Ratio",
@@ -431,28 +444,19 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         results = []
         income = statements.income_statement
 
-        # Extract EPS data
-        basic_eps = income.get('basic_eps')
-        diluted_eps = income.get('diluted_eps')
-        basic_shares = income.get('shares_outstanding_basic')
-        diluted_shares = income.get('shares_outstanding_diluted')
-        net_income = income.get('net_income', 0)
-
-        # Calculate EPS if not provided
-        if not basic_eps and basic_shares and basic_shares > 0:
-            basic_eps = self.safe_divide(net_income, basic_shares)
-
-        if not diluted_eps and diluted_shares and diluted_shares > 0:
-            diluted_eps = self.safe_divide(net_income, diluted_shares)
+        basic_eps = self._eps(income, 'basic')
+        diluted_eps = self._eps(income, 'diluted')
+        basic_src = "reported" if 'basic_eps' in income else "Net Income / Weighted Average Basic Shares"
+        diluted_src = "reported" if 'diluted_eps' in income else "Net Income / Weighted Average Diluted Shares"
 
         if basic_eps is not None:
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="Basic EPS",
                 value=basic_eps,
-                interpretation=f"Basic earnings per share of ${basic_eps:.2f}",
+                interpretation=f"Basic earnings per share of {basic_eps:.2f}",
                 risk_level=RiskLevel.LOW if basic_eps > 0 else RiskLevel.HIGH,
-                methodology="Net Income / Weighted Average Basic Shares Outstanding"
+                methodology=f"Net Income / Weighted Average Basic Shares Outstanding ({basic_src})"
             ))
 
         if diluted_eps is not None:
@@ -460,16 +464,19 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 analysis_type=AnalysisType.PROFITABILITY,
                 metric_name="Diluted EPS",
                 value=diluted_eps,
-                interpretation=f"Diluted earnings per share of ${diluted_eps:.2f}",
+                interpretation=f"Diluted earnings per share of {diluted_eps:.2f}",
                 risk_level=RiskLevel.LOW if diluted_eps > 0 else RiskLevel.HIGH,
-                methodology="Net Income (adjusted for dilutive securities) / Weighted Average Diluted Shares Outstanding"
+                methodology=f"Net Income (adjusted for dilutive securities) / Weighted Average Diluted Shares ({diluted_src})"
             ))
 
         # Dilution analysis
-        if basic_eps and diluted_eps and basic_eps != 0:
-            dilution_effect = (basic_eps - diluted_eps) / basic_eps
+        if basic_eps is not None and diluted_eps is not None and basic_eps != 0:
+            dilution_effect = (basic_eps - diluted_eps) / abs(basic_eps)
 
-            if dilution_effect > 0.05:
+            if basic_eps < 0:
+                dilution_interpretation = "Net loss: potential shares are anti-dilutive, diluted EPS normally equals basic EPS"
+                dilution_risk = RiskLevel.LOW
+            elif dilution_effect > 0.05:
                 dilution_interpretation = "Significant dilution from potential securities conversions"
                 dilution_risk = RiskLevel.MODERATE
             elif dilution_effect > 0.02:
@@ -485,35 +492,43 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                 value=dilution_effect,
                 interpretation=dilution_interpretation,
                 risk_level=dilution_risk,
-                methodology="(Basic EPS - Diluted EPS) / Basic EPS"
+                methodology="(Basic EPS - Diluted EPS) / |Basic EPS|"
             ))
 
         # EPS growth analysis
         if comparative_data and basic_eps is not None:
             eps_values = []
             periods = []
-
-            # Collect historical EPS
             for i, past_statements in enumerate(comparative_data):
-                past_eps = past_statements.income_statement.get('basic_eps')
+                past_eps = self._eps(past_statements.income_statement, 'basic')
                 if past_eps is not None:
                     eps_values.append(past_eps)
                     periods.append(f"Period-{len(comparative_data) - i}")
-
             eps_values.append(basic_eps)
             periods.append("Current")
 
             if len(eps_values) > 1:
                 eps_trend = self.calculate_trend(eps_values, periods)
-
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.PROFITABILITY,
-                    metric_name="EPS Growth Trend",
-                    value=eps_trend.growth_rate or 0,
-                    interpretation=eps_trend.trend_analysis,
-                    risk_level=RiskLevel.LOW if eps_trend.growth_rate and eps_trend.growth_rate > 0 else RiskLevel.HIGH,
-                    methodology="Compound Annual Growth Rate of Basic EPS"
-                ))
+                if eps_trend.growth_rate is None:
+                    results.append(AnalysisResult(
+                        analysis_type=AnalysisType.PROFITABILITY,
+                        metric_name="EPS Growth Trend",
+                        value=None,
+                        interpretation=(f"Not available: growth rate is not defined when EPS is zero or negative "
+                                        f"at either end of the window (EPS {eps_values[0]:.2f} -> {eps_values[-1]:.2f}); "
+                                        f"trend: {eps_trend.trend_analysis}"),
+                        risk_level=None,
+                        methodology="Compound Annual Growth Rate of Basic EPS"
+                    ))
+                else:
+                    results.append(AnalysisResult(
+                        analysis_type=AnalysisType.PROFITABILITY,
+                        metric_name="EPS Growth Trend",
+                        value=eps_trend.growth_rate,
+                        interpretation=eps_trend.trend_analysis,
+                        risk_level=RiskLevel.LOW if eps_trend.growth_rate > 0 else RiskLevel.HIGH,
+                        methodology=f"Compound Annual Growth Rate of Basic EPS over {len(eps_values) - 1} periods"
+                    ))
 
         return results
 
@@ -524,46 +539,36 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         results = []
         income = statements.income_statement
 
-        # Identify non-recurring items
-        non_recurring_items = {
-            'discontinued_operations': income.get('discontinued_operations', 0),
-            'extraordinary_items': income.get('extraordinary_items', 0),
-            'restructuring_charges': income.get('restructuring_charges', 0),
-            'impairment_losses': income.get('impairment_losses', 0),
-            'gains_losses_disposals': income.get('gains_losses_disposals', 0)
-        }
+        reported = {k: income[k] for k in NON_RECURRING_KEYS if k in income}
+        if not reported:
+            return results
 
-        total_non_recurring = sum(abs(value) for value in non_recurring_items.values())
-        net_income = income.get('net_income', 0)
+        total_non_recurring = sum(abs(v) for v in reported.values())
+        net_income = income.get('net_income')
 
-        if total_non_recurring > 0:
-            # Impact on earnings
-            if net_income != 0:
-                non_recurring_impact = total_non_recurring / abs(net_income)
+        if total_non_recurring > 0 and net_income:
+            non_recurring_impact = total_non_recurring / abs(net_income)
+            impact_interpretation = "Significant non-recurring items affecting earnings comparability" if non_recurring_impact > 0.1 else "Moderate non-recurring items impact" if non_recurring_impact > 0.05 else "Minor non-recurring items impact"
 
-                impact_interpretation = "Significant non-recurring items affecting earnings comparability" if non_recurring_impact > 0.1 else "Moderate non-recurring items impact" if non_recurring_impact > 0.05 else "Minor non-recurring items impact"
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.QUALITY,
+                metric_name="Non-Recurring Items Impact",
+                value=non_recurring_impact,
+                interpretation=impact_interpretation,
+                risk_level=RiskLevel.HIGH if non_recurring_impact > 0.2 else RiskLevel.MODERATE if non_recurring_impact > 0.1 else RiskLevel.LOW,
+                methodology="Sum of |non-recurring items| / |Net Income| (items: " + ", ".join(reported) + ")",
+                limitations=["Adjustment may be needed for normalized earnings analysis"]
+            ))
 
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.QUALITY,
-                    metric_name="Non-Recurring Items Impact",
-                    value=non_recurring_impact,
-                    interpretation=impact_interpretation,
-                    risk_level=RiskLevel.HIGH if non_recurring_impact > 0.2 else RiskLevel.MODERATE if non_recurring_impact > 0.1 else RiskLevel.LOW,
-                    methodology="Total Non-Recurring Items / |Net Income|",
-                    limitations=["Adjustment may be needed for normalized earnings analysis"]
-                ))
-
-            # Frequency analysis
-            if comparative_data:
-                historical_non_recurring = []
-                for past_statements in comparative_data:
-                    past_income = past_statements.income_statement
-                    past_non_recurring = sum(abs(past_income.get(item, 0)) for item in non_recurring_items.keys())
-                    historical_non_recurring.append(past_non_recurring)
-
-                non_recurring_frequency = sum(1 for x in historical_non_recurring if x > 0) / len(
-                    historical_non_recurring)
-
+        if comparative_data and total_non_recurring > 0:
+            history = []
+            for past_statements in comparative_data:
+                past_income = past_statements.income_statement
+                past_reported = [abs(past_income[k]) for k in NON_RECURRING_KEYS if k in past_income]
+                if past_reported:
+                    history.append(sum(past_reported))
+            if history:
+                non_recurring_frequency = sum(1 for x in history if x > 0) / len(history)
                 frequency_interpretation = "Frequent non-recurring items - may indicate operational issues" if non_recurring_frequency > 0.5 else "Occasional non-recurring items" if non_recurring_frequency > 0.2 else "Rare non-recurring items"
 
                 results.append(AnalysisResult(
@@ -572,7 +577,7 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                     value=non_recurring_frequency,
                     interpretation=frequency_interpretation,
                     risk_level=RiskLevel.HIGH if non_recurring_frequency > 0.6 else RiskLevel.MODERATE if non_recurring_frequency > 0.3 else RiskLevel.LOW,
-                    methodology="Number of periods with non-recurring items / Total periods"
+                    methodology="Prior periods with non-recurring items / prior periods that report them"
                 ))
 
         return results
@@ -581,51 +586,68 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                                comparative_data: Optional[List[FinancialStatements]] = None) -> List[AnalysisResult]:
         """Comprehensive income quality assessment"""
         results = []
+        net_income = statements.income_statement.get('net_income')
 
-        # Earnings persistence analysis
-        if comparative_data and len(comparative_data) >= 2:
-            net_incomes = []
-            for past_statements in comparative_data:
-                past_income = past_statements.income_statement.get('net_income', 0)
-                net_incomes.append(past_income)
+        # Earnings volatility (needs current + at least two prior periods)
+        if comparative_data and len(comparative_data) >= 2 and net_income is not None:
+            net_incomes = [p.income_statement['net_income'] for p in comparative_data
+                           if 'net_income' in p.income_statement]
+            net_incomes.append(net_income)
+            if len(net_incomes) >= 3:
+                mean_income = float(np.mean(net_incomes))
+                if mean_income == 0:
+                    results.append(self.unavailable(AnalysisType.QUALITY, "Earnings Volatility",
+                                                    "mean net income over the window is zero",
+                                                    "Standard Deviation of Net Income / |Mean Net Income|"))
+                else:
+                    earnings_volatility = float(np.std(net_incomes)) / abs(mean_income)
+                    volatility_interpretation = "High earnings volatility - low predictability" if earnings_volatility > 0.3 else "Moderate earnings volatility" if earnings_volatility > 0.15 else "Low earnings volatility - stable earnings"
 
-            current_income = statements.income_statement.get('net_income', 0)
-            net_incomes.append(current_income)
+                    results.append(AnalysisResult(
+                        analysis_type=AnalysisType.QUALITY,
+                        metric_name="Earnings Volatility",
+                        value=earnings_volatility,
+                        interpretation=volatility_interpretation,
+                        risk_level=RiskLevel.HIGH if earnings_volatility > 0.4 else RiskLevel.MODERATE if earnings_volatility > 0.2 else RiskLevel.LOW,
+                        methodology=f"Standard Deviation of Net Income / |Mean Net Income| over {len(net_incomes)} periods"
+                    ))
 
-            # Calculate earnings volatility
-            if len(net_incomes) > 1:
-                mean_income = np.mean(net_incomes)
-                std_income = np.std(net_incomes)
-                earnings_volatility = std_income / abs(mean_income) if mean_income != 0 else 0
-
-                volatility_interpretation = "High earnings volatility - low predictability" if earnings_volatility > 0.3 else "Moderate earnings volatility" if earnings_volatility > 0.15 else "Low earnings volatility - stable earnings"
-
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.QUALITY,
-                    metric_name="Earnings Volatility",
-                    value=earnings_volatility,
-                    interpretation=volatility_interpretation,
-                    risk_level=RiskLevel.HIGH if earnings_volatility > 0.4 else RiskLevel.MODERATE if earnings_volatility > 0.2 else RiskLevel.LOW,
-                    methodology="Standard Deviation of Net Income / |Mean Net Income|"
-                ))
-
-        # Accruals quality (if cash flow data available)
-        cash_flow = statements.cash_flow
-        operating_cash_flow = cash_flow.get('operating_cash_flow')
-        net_income = statements.income_statement.get('net_income', 0)
-
-        if operating_cash_flow is not None and net_income != 0:
-            accruals_ratio = abs(net_income - operating_cash_flow) / abs(net_income)
-
-            accruals_interpretation = "High accruals - potential earnings manipulation risk" if accruals_ratio > 0.2 else "Moderate accruals level" if accruals_ratio > 0.1 else "Low accruals - high earnings quality"
+        # Accruals ratio, cash-flow approach (Sloan 1996): (NI - CFO) / average total assets.
+        # Signed: negative accruals (cash flow above earnings) are a sign of quality, not a concern.
+        operating_cash_flow = statements.cash_flow.get('operating_cash_flow')
+        avg_assets, basis = self.average_balance(statements, comparative_data, 'total_assets')
+        methodology = f"(Net Income - Operating Cash Flow) / Total Assets ({self.basis_note(basis)})"
+        if net_income is None or operating_cash_flow is None or avg_assets is None:
+            missing = [n for n, v in (('net income', net_income), ('operating cash flow', operating_cash_flow),
+                                      ('total assets', avg_assets)) if v is None]
+            results.append(self.unavailable(AnalysisType.QUALITY, "Accruals Ratio",
+                                            f"{', '.join(missing)} not reported", methodology))
+        elif avg_assets <= 0:
+            results.append(self.unavailable(AnalysisType.QUALITY, "Accruals Ratio",
+                                            "total assets are not positive", methodology))
+        else:
+            accruals_ratio = (net_income - operating_cash_flow) / avg_assets
+            t = self.quality_thresholds['accruals_ratio']
+            if accruals_ratio <= 0:
+                accruals_interpretation = "Negative accruals - operating cash flow exceeds earnings (high earnings quality)"
+                accruals_risk = RiskLevel.LOW
+            elif accruals_ratio <= t['good']:
+                accruals_interpretation = "Low accruals - earnings largely backed by cash flow"
+                accruals_risk = RiskLevel.LOW
+            elif accruals_ratio <= t['moderate']:
+                accruals_interpretation = "Moderate accruals - earnings run ahead of cash flow"
+                accruals_risk = RiskLevel.MODERATE
+            else:
+                accruals_interpretation = "High accruals - earnings well above cash flow, potential earnings manipulation risk"
+                accruals_risk = RiskLevel.HIGH
 
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Accruals Ratio",
                 value=accruals_ratio,
                 interpretation=accruals_interpretation,
-                risk_level=RiskLevel.HIGH if accruals_ratio > 0.3 else RiskLevel.MODERATE if accruals_ratio > 0.15 else RiskLevel.LOW,
-                methodology="|Net Income - Operating Cash Flow| / |Net Income|",
+                risk_level=accruals_risk,
+                methodology=methodology,
                 limitations=["High accruals may be justified by business model or growth phase"]
             ))
 
@@ -637,23 +659,22 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         """Perform common-size income statement analysis"""
         results = []
         income = statements.income_statement
-        revenue = income.get('revenue', 0)
+        revenue = income.get('revenue')
 
-        if revenue == 0:
+        if revenue is None or revenue <= 0:
             return results
 
-        # Calculate common-size percentages for key items
         common_size_items = {
-            'Cost of Sales': income.get('cost_of_sales', 0),
-            'Operating Expenses': income.get('operating_expenses', 0),
-            'Interest Expense': income.get('interest_expense', 0),
-            'Tax Expense': income.get('tax_expense', 0)
+            'Cost of Sales': 'cost_of_sales',
+            'Operating Expenses': 'operating_expenses',
+            'Interest Expense': 'interest_expense',
+            'Tax Expense': 'tax_expense',
         }
 
-        for item_name, item_value in common_size_items.items():
-            if item_value != 0:
-                common_size_pct = self.safe_divide(item_value, revenue)
-
+        for item_name, key in common_size_items.items():
+            item_value = income.get(key)
+            if item_value is not None and item_value != 0:
+                common_size_pct = item_value / revenue
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.ACTIVITY,
                     metric_name=f"{item_name} as % of Revenue",
@@ -665,18 +686,19 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
 
         return results
 
-    def _calculate_ebitda(self, statements: FinancialStatements) -> Optional[float]:
-        """Calculate EBITDA from available data"""
+    def _calculate_ebitda_with_reason(self, statements: FinancialStatements) -> Tuple[Optional[float], str]:
         income = statements.income_statement
+        if 'operating_income' not in income:
+            return None, "operating income not reported"
+        depreciation = income.get('depreciation', statements.cash_flow.get('depreciation_cf'))
+        if depreciation is None:
+            return None, "depreciation not reported (EBITDA would equal EBIT)"
+        amortization = income.get('amortization', 0.0)
+        return income['operating_income'] + abs(depreciation) + amortization, ""
 
-        operating_income = income.get('operating_income')
-        depreciation = income.get('depreciation', 0)
-        amortization = income.get('amortization', 0)
-
-        if operating_income is not None:
-            return operating_income + depreciation + amortization
-
-        return None
+    def _calculate_ebitda(self, statements: FinancialStatements) -> Optional[float]:
+        """EBITDA = operating income + D&A; None when either input is missing."""
+        return self._calculate_ebitda_with_reason(statements)[0]
 
     def _identify_revenue_quality_issues(self, statements: FinancialStatements,
                                          comparative_data: Optional[List[FinancialStatements]] = None) -> List[str]:
@@ -686,118 +708,114 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
         income = statements.income_statement
         balance_sheet = statements.balance_sheet
 
-        revenue = income.get('revenue', 0)
-        accounts_receivable = balance_sheet.get('accounts_receivable', 0)
+        revenue = income.get('revenue')
+        accounts_receivable = balance_sheet.get('accounts_receivable')
 
-        # Red flag: Accounts receivable growing faster than revenue
-        if comparative_data and len(comparative_data) > 0:
-            prev_statements = comparative_data[-1]
-            prev_revenue = prev_statements.income_statement.get('revenue', 0)
-            prev_receivables = prev_statements.balance_sheet.get('accounts_receivable', 0)
-
-            if prev_revenue > 0 and prev_receivables > 0:
-                revenue_growth = (revenue / prev_revenue) - 1 if prev_revenue > 0 else 0
-                receivables_growth = (accounts_receivable / prev_receivables) - 1 if prev_receivables > 0 else 0
-
-                if receivables_growth > revenue_growth + 0.1:  # 10% threshold
+        # Accounts receivable growing faster than revenue
+        if comparative_data and revenue is not None and accounts_receivable is not None:
+            revenue_growth = self.growth(revenue, self.prior_value(comparative_data, 'income_statement', 'revenue'))
+            receivables_growth = self.growth(accounts_receivable,
+                                             self.prior_value(comparative_data, 'balance_sheet', 'accounts_receivable'))
+            if revenue_growth is not None and receivables_growth is not None:
+                if receivables_growth > revenue_growth + 0.1:
                     quality_issues.append("Accounts receivable growing significantly faster than revenue")
 
-        # Red flag: Very high Days Sales Outstanding
-        if revenue > 0 and accounts_receivable > 0:
+        # Very high Days Sales Outstanding (ending balance)
+        if revenue and revenue > 0 and accounts_receivable and accounts_receivable > 0:
             dso = (accounts_receivable / revenue) * 365
-            if dso > 120:  # Industry-dependent threshold
+            if dso > 120:
                 quality_issues.append(f"Very high Days Sales Outstanding ({dso:.0f} days)")
 
-        # Red flag: Revenue recognition timing issues (quarter-end spikes)
-        # This would require quarterly data to detect properly
-
-        # Red flag: Related party transactions (would need notes data)
-        notes = statements.notes
-        if any('related_party' in key.lower() for key in notes.keys()):
-            quality_issues.append("Related party revenue transactions require scrutiny")
+        # Related party transactions disclosed with a non-zero amount
+        for key, value in statements.notes.items():
+            if 'related_party' in key and isinstance(value, (int, float)) and value > 0:
+                quality_issues.append("Related party revenue transactions require scrutiny")
+                break
 
         return quality_issues
 
-    def get_key_metrics(self, statements: FinancialStatements) -> Dict[str, float]:
-        """Return key income statement metrics"""
+    def get_key_metrics(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]] = None,
+                        unavailable: Optional[Dict[str, str]] = None) -> Dict[str, float]:
+        """Key income statement metrics. Metrics whose inputs are missing are omitted;
+        pass a dict as `unavailable` to receive the reason for each omission."""
         income = statements.income_statement
-        revenue = income.get('revenue', 0)
-
+        revenue = income.get('revenue')
         metrics = {}
+        skipped = unavailable if unavailable is not None else {}
 
-        if revenue > 0:
-            metrics['gross_profit_margin'] = self.safe_divide(
-                revenue - income.get('cost_of_sales', 0), revenue)
-            metrics['operating_profit_margin'] = self.safe_divide(
-                income.get('operating_income', 0), revenue)
-            metrics['net_profit_margin'] = self.safe_divide(
-                income.get('net_income', 0), revenue)
-
-            ebitda = self._calculate_ebitda(statements)
+        if revenue is not None and revenue > 0:
+            gp = self.gross_profit(income)
+            if gp is not None:
+                metrics['gross_profit_margin'] = gp / revenue
+            else:
+                skipped['gross_profit_margin'] = "cost of sales / gross profit not reported"
+            if 'operating_income' in income:
+                metrics['operating_profit_margin'] = income['operating_income'] / revenue
+            else:
+                skipped['operating_profit_margin'] = "operating income not reported"
+            if 'net_income' in income:
+                metrics['net_profit_margin'] = income['net_income'] / revenue
+            else:
+                skipped['net_profit_margin'] = "net income not reported"
+            ebitda, reason = self._calculate_ebitda_with_reason(statements)
             if ebitda is not None:
-                metrics['ebitda_margin'] = self.safe_divide(ebitda, revenue)
+                metrics['ebitda_margin'] = ebitda / revenue
+            else:
+                skipped['ebitda_margin'] = reason
+        else:
+            for k in ('gross_profit_margin', 'operating_profit_margin', 'net_profit_margin', 'ebitda_margin'):
+                skipped[k] = "revenue not reported or not positive"
 
-        metrics['basic_eps'] = income.get('basic_eps', 0)
-        metrics['diluted_eps'] = income.get('diluted_eps', 0)
+        for kind in ('basic', 'diluted'):
+            eps = self._eps(income, kind)
+            if eps is not None:
+                metrics[f'{kind}_eps'] = eps
+            else:
+                skipped[f'{kind}_eps'] = f"{kind} EPS not reported and net income / {kind} shares not available"
 
-        # Tax rate
-        pretax_income = income.get('pretax_income', 0)
-        tax_expense = income.get('tax_expense', 0)
-        if pretax_income != 0:
-            metrics['effective_tax_rate'] = self.safe_divide(tax_expense, pretax_income)
+        pretax_income = income.get('pretax_income')
+        tax_expense = income.get('tax_expense')
+        if pretax_income is not None and tax_expense is not None and pretax_income > 0:
+            metrics['effective_tax_rate'] = tax_expense / pretax_income
+        else:
+            skipped['effective_tax_rate'] = ("pre-tax income or tax expense not reported"
+                                             if pretax_income is None or tax_expense is None
+                                             else "pre-tax income is zero or negative")
 
         return metrics
 
     def create_eps_analysis(self, statements: FinancialStatements,
                             comparative_data: Optional[List[FinancialStatements]] = None) -> EPSAnalysis:
-        """Create comprehensive EPS analysis object"""
+        """Create comprehensive EPS analysis object (None for anything not computable)."""
         income = statements.income_statement
 
-        basic_eps = income.get('basic_eps', 0)
-        diluted_eps = income.get('diluted_eps', 0)
-        basic_shares = income.get('shares_outstanding_basic', 0)
-        diluted_shares = income.get('shares_outstanding_diluted', 0)
+        basic_eps = self._eps(income, 'basic')
+        diluted_eps = self._eps(income, 'diluted')
+        basic_shares = income.get('shares_outstanding_basic')
+        diluted_shares = income.get('shares_outstanding_diluted')
 
-        # Calculate dilution effect
-        dilution_effect = 0
-        if basic_eps != 0 and diluted_eps != 0:
-            dilution_effect = (basic_eps - diluted_eps) / basic_eps
+        dilution_effect = None
+        if basic_eps and diluted_eps is not None:
+            dilution_effect = (basic_eps - diluted_eps) / abs(basic_eps)
 
-        # Assess EPS quality
         eps_quality = IncomeQualityIndicator.HIGH_QUALITY
-        if dilution_effect > 0.1:
+        if dilution_effect is not None and dilution_effect > 0.1:
             eps_quality = IncomeQualityIndicator.MODERATE_QUALITY
 
-        # Check for antidilutive securities
-        antidilutive_securities = diluted_shares < basic_shares if basic_shares > 0 else False
+        antidilutive_securities = (diluted_shares < basic_shares
+                                   if basic_shares and diluted_shares is not None else False)
 
-        # Calculate EPS growth and volatility if historical data available
         eps_growth_rate = None
         eps_volatility = None
-
-        if comparative_data and len(comparative_data) > 0:
-            eps_values = []
-            for past_statements in comparative_data:
-                past_eps = past_statements.income_statement.get('basic_eps')
-                if past_eps is not None:
-                    eps_values.append(past_eps)
-
-            if eps_values and basic_eps is not None:
-                eps_values.append(basic_eps)
-
-                if len(eps_values) > 1:
-                    # Growth rate calculation
-                    if eps_values[0] != 0:
-                        if len(eps_values) == 2:
-                            eps_growth_rate = (eps_values[-1] / eps_values[0]) - 1
-                        else:
-                            n_periods = len(eps_values) - 1
-                            eps_growth_rate = (eps_values[-1] / eps_values[0]) ** (1 / n_periods) - 1
-
-                    # Volatility calculation
-                    mean_eps = np.mean(eps_values)
-                    std_eps = np.std(eps_values)
-                    eps_volatility = std_eps / abs(mean_eps) if mean_eps != 0 else 0
+        if comparative_data and basic_eps is not None:
+            eps_values = [e for e in (self._eps(p.income_statement, 'basic') for p in comparative_data)
+                          if e is not None]
+            eps_values.append(basic_eps)
+            if len(eps_values) > 1:
+                eps_growth_rate = self.cagr(eps_values[0], eps_values[-1], len(eps_values) - 1)
+                mean_eps = float(np.mean(eps_values))
+                eps_volatility = float(np.std(eps_values)) / abs(mean_eps) if mean_eps != 0 else None
 
         return EPSAnalysis(
             basic_eps=basic_eps,
@@ -816,46 +834,26 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
                                         List[FinancialStatements]] = None) -> NonRecurringItemsAnalysis:
         """Create detailed non-recurring items analysis"""
         income = statements.income_statement
+        items = {k: income.get(k, 0.0) for k in NON_RECURRING_KEYS}
+        total_non_recurring = sum(abs(x) for x in items.values())
 
-        # Extract non-recurring items
-        discontinued_operations = income.get('discontinued_operations', 0)
-        unusual_items = income.get('unusual_items', 0)
-        extraordinary_items = income.get('extraordinary_items', 0)
-        restructuring_charges = income.get('restructuring_charges', 0)
-        impairment_losses = income.get('impairment_losses', 0)
-        gains_losses_disposals = income.get('gains_losses_disposals', 0)
+        net_income = income.get('net_income')
+        impact_on_core_earnings = total_non_recurring / abs(net_income) if net_income else None
 
-        total_non_recurring = sum(abs(x) for x in [
-            discontinued_operations, unusual_items, extraordinary_items,
-            restructuring_charges, impairment_losses, gains_losses_disposals
-        ])
-
-        # Calculate impact on core earnings
-        net_income = income.get('net_income', 0)
-        impact_on_core_earnings = total_non_recurring / abs(net_income) if net_income != 0 else 0
-
-        # Frequency analysis
         frequency_analysis = "Single period analysis"
         persistence_assessment = "Cannot assess without historical data"
 
         if comparative_data:
             periods_with_non_recurring = 0
             total_periods = len(comparative_data) + 1
-
             for past_statements in comparative_data:
                 past_income = past_statements.income_statement
-                past_non_recurring = sum(abs(past_income.get(item, 0)) for item in [
-                    'discontinued_operations', 'unusual_items', 'extraordinary_items',
-                    'restructuring_charges', 'impairment_losses', 'gains_losses_disposals'
-                ])
-                if past_non_recurring > 0:
+                if sum(abs(past_income.get(k, 0.0)) for k in NON_RECURRING_KEYS) > 0:
                     periods_with_non_recurring += 1
-
             if total_non_recurring > 0:
                 periods_with_non_recurring += 1
 
             frequency_rate = periods_with_non_recurring / total_periods
-
             if frequency_rate > 0.6:
                 frequency_analysis = "Frequent non-recurring items - may indicate operational issues"
                 persistence_assessment = "High persistence - items may be recurring in nature"
@@ -868,12 +866,12 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
 
         return NonRecurringItemsAnalysis(
             total_non_recurring=total_non_recurring,
-            discontinued_operations=discontinued_operations,
-            unusual_items=unusual_items,
-            extraordinary_items=extraordinary_items,
-            restructuring_charges=restructuring_charges,
-            impairment_losses=impairment_losses,
-            gains_losses_disposals=gains_losses_disposals,
+            discontinued_operations=items['discontinued_operations'],
+            unusual_items=items['unusual_items'],
+            extraordinary_items=items['extraordinary_items'],
+            restructuring_charges=items['restructuring_charges'],
+            impairment_losses=items['impairment_losses'],
+            gains_losses_disposals=items['gains_losses_disposals'],
             impact_on_core_earnings=impact_on_core_earnings,
             frequency_analysis=frequency_analysis,
             persistence_assessment=persistence_assessment
@@ -882,78 +880,65 @@ class IncomeStatementAnalyzer(BaseAnalyzer):
     def assess_revenue_quality(self, statements: FinancialStatements,
                                comparative_data: Optional[
                                    List[FinancialStatements]] = None) -> RevenueQualityAssessment:
-        """Comprehensive revenue quality assessment"""
+        """Comprehensive revenue quality assessment (None for anything not computable)."""
         income = statements.income_statement
         balance_sheet = statements.balance_sheet
 
-        revenue = income.get('revenue', 0)
-        accounts_receivable = balance_sheet.get('accounts_receivable', 0)
+        revenue = income.get('revenue')
+        accounts_receivable = balance_sheet.get('accounts_receivable')
 
-        # Initialize metrics
-        revenue_growth_rate = 0
-        revenue_volatility = 0
-        seasonality_factor = 0
-        revenue_concentration = 0  # Would need segment data
-        days_sales_outstanding = 0
+        revenue_growth_rate = None
+        revenue_volatility = None
+        days_sales_outstanding = None
 
-        # Calculate DSO
-        if revenue > 0 and accounts_receivable >= 0:
+        if revenue and revenue > 0 and accounts_receivable is not None:
             days_sales_outstanding = (accounts_receivable / revenue) * 365
 
-        # Calculate growth and volatility if historical data available
-        if comparative_data and len(comparative_data) > 0:
-            revenue_values = []
-            for past_statements in comparative_data:
-                past_revenue = past_statements.income_statement.get('revenue', 0)
-                revenue_values.append(past_revenue)
-
+        if comparative_data and revenue is not None:
+            revenue_values = [p.income_statement['revenue'] for p in comparative_data
+                              if 'revenue' in p.income_statement]
             revenue_values.append(revenue)
-
             if len(revenue_values) > 1:
-                # Growth rate
-                if revenue_values[0] > 0:
-                    if len(revenue_values) == 2:
-                        revenue_growth_rate = (revenue_values[-1] / revenue_values[0]) - 1
-                    else:
-                        n_periods = len(revenue_values) - 1
-                        revenue_growth_rate = (revenue_values[-1] / revenue_values[0]) ** (1 / n_periods) - 1
+                revenue_growth_rate = self.cagr(revenue_values[0], revenue_values[-1], len(revenue_values) - 1)
+                mean_revenue = float(np.mean(revenue_values))
+                revenue_volatility = float(np.std(revenue_values)) / mean_revenue if mean_revenue > 0 else None
 
-                # Volatility
-                mean_revenue = np.mean(revenue_values)
-                std_revenue = np.std(revenue_values)
-                revenue_volatility = std_revenue / mean_revenue if mean_revenue > 0 else 0
-
-        # Quality indicators
         quality_indicators = []
         recognition_issues = []
 
-        if days_sales_outstanding <= 45:
-            quality_indicators.append("Healthy collection period")
-        elif days_sales_outstanding > 90:
-            recognition_issues.append("Extended collection period may indicate quality issues")
+        if days_sales_outstanding is not None:
+            if days_sales_outstanding <= 45:
+                quality_indicators.append("Healthy collection period")
+            elif days_sales_outstanding > 90:
+                recognition_issues.append("Extended collection period may indicate quality issues")
 
-        if revenue_growth_rate > 0:
-            quality_indicators.append("Positive revenue growth")
-        elif revenue_growth_rate < -0.1:
-            recognition_issues.append("Significant revenue decline")
+        if revenue_growth_rate is not None:
+            if revenue_growth_rate > 0:
+                quality_indicators.append("Positive revenue growth")
+            elif revenue_growth_rate < -0.1:
+                recognition_issues.append("Significant revenue decline")
 
-        if revenue_volatility < 0.1:
-            quality_indicators.append("Stable revenue pattern")
-        elif revenue_volatility > 0.3:
-            recognition_issues.append("High revenue volatility")
+        if revenue_volatility is not None:
+            if revenue_volatility < 0.1:
+                quality_indicators.append("Stable revenue pattern")
+            elif revenue_volatility > 0.3:
+                recognition_issues.append("High revenue volatility")
 
-        # Calculate overall quality score
-        quality_score = 100
-        quality_score -= len(recognition_issues) * 20
-        quality_score -= max(0, (days_sales_outstanding - 45) / 10 * 5)  # Penalize high DSO
-        quality_score -= max(0, revenue_volatility * 100)  # Penalize volatility
-        quality_score = max(0, min(100, quality_score))
+        quality_score = None
+        if days_sales_outstanding is not None or revenue_volatility is not None:
+            quality_score = 100.0
+            quality_score -= len(recognition_issues) * 20
+            if days_sales_outstanding is not None:
+                quality_score -= max(0.0, (days_sales_outstanding - 45) / 10 * 5)
+            if revenue_volatility is not None:
+                quality_score -= max(0.0, revenue_volatility * 100)
+            quality_score = max(0.0, min(100.0, quality_score))
 
         return RevenueQualityAssessment(
             revenue_growth_rate=revenue_growth_rate,
             revenue_volatility=revenue_volatility,
-            seasonality_factor=seasonality_factor,
-            revenue_concentration=revenue_concentration,
+            seasonality_factor=None,      # needs quarterly data
+            revenue_concentration=None,   # needs segment data
             days_sales_outstanding=days_sales_outstanding,
             revenue_quality_score=quality_score,
             recognition_issues=recognition_issues,

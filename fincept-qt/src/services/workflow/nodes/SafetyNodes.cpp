@@ -1,6 +1,8 @@
 #include "services/workflow/nodes/SafetyNodes.h"
 
+#include "services/markets/FxRateService.h"
 #include "services/workflow/NodeRegistry.h"
+#include "ui/formatting/NumberFormat.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -8,6 +10,7 @@
 #include <QTimeZone>
 
 #include <cmath>
+#include <optional>
 
 namespace fincept::workflow {
 
@@ -20,8 +23,40 @@ bool has_number(const QJsonObject& obj, const char* key) {
     return v.isDouble() && std::isfinite(v.toDouble());
 }
 
+// The currency of the payload's amounts: its "currency" (else "price_currency")
+// field as produced (minor units allowed: "GBp"); empty when the payload says none.
+QString payload_currency(const QJsonObject& obj) {
+    QString c = obj.value(QStringLiteral("currency")).toString().trimmed();
+    if (c.isEmpty())
+        c = obj.value(QStringLiteral("price_currency")).toString().trimmed();
+    return c;
+}
+
+// `amount` (in `from`) expressed in the limit's currency `to`. Either code empty or
+// the same: unchanged (an unstated currency is taken to be the limit's — the
+// meaning before limits had one). Otherwise the FX service's rate; nullopt with
+// `why` when there is none — a limit is never compared at 1:1.
+std::optional<double> in_limit_currency(double amount, const QString& from, const QString& to, QString* why) {
+    const QString limit = to.trimmed().toUpper();
+    if (from.isEmpty() || limit.isEmpty() || from == limit)
+        return amount;
+    const auto c = services::FxRateService::instance().convert_for_display(amount, from, limit);
+    if (!c.ok()) {
+        if (why)
+            *why = QStringLiteral("no %1 to %2 exchange rate is available yet (it is being fetched)").arg(from, limit);
+        return std::nullopt;
+    }
+    return c.amount;
+}
+
+QString money_text(double v, const QString& ccy) {
+    return fincept::ui::formatting::money(v, ccy);
+}
+
 } // namespace safety_nodes_detail
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_safety_nodes(NodeRegistry& registry) {
 
     // ── Risk Check ────────────────────────────────────────────────
@@ -119,12 +154,15 @@ void register_safety_nodes(NodeRegistry& registry) {
             },
         .parameters =
             {
-                {"daily_limit", "Daily Loss Limit", "number", 1000, {}, "$ amount"},
-                {"weekly_limit", "Weekly Loss Limit", "number", 5000, {}, "$ amount"},
+                {"daily_limit", "Daily Loss Limit", "number", 1000, {}, "Amount in the limits currency"},
+                {"weekly_limit", "Weekly Loss Limit", "number", 5000, {}, "Amount in the limits currency"},
+                {"limits_currency", "Limits Currency", "string", "", {},
+                 "ISO code of the limits (USD, INR, EUR); empty = the currency of the incoming P&L"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
+                namespace snd = safety_nodes_detail;
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 QJsonObject obj = data.isObject() ? data.toObject() : QJsonObject{};
 
@@ -132,22 +170,28 @@ void register_safety_nodes(NodeRegistry& registry) {
                 double weekly_limit = params.value("weekly_limit").toDouble(5000);
                 double daily_pnl = obj.value("daily_pnl").toDouble(0);
                 double weekly_pnl = obj.value("weekly_pnl").toDouble(0);
+                // P&L in the payload's currency, limits in theirs: compared in the limits'.
+                const QString data_ccy = snd::payload_currency(obj);
+                const QString limit_ccy = params.value("limits_currency").toString().trimmed().toUpper();
+                const QString unit = limit_ccy.isEmpty() ? data_ccy : limit_ccy;
 
                 QStringList failures;
                 // Fail closed: with neither P&L figure in the payload the old gate compared
                 // 0 against the limits and always passed.
-                if (!safety_nodes_detail::has_number(obj, "daily_pnl") &&
-                    !safety_nodes_detail::has_number(obj, "weekly_pnl"))
+                if (!snd::has_number(obj, "daily_pnl") && !snd::has_number(obj, "weekly_pnl"))
                     failures << QStringLiteral("Cannot verify loss limits — upstream data has no daily_pnl or "
                                                "weekly_pnl");
-                if (-daily_pnl > daily_limit)
-                    failures << QString("Daily loss $%1 exceeds limit $%2")
-                                    .arg(-daily_pnl, 0, 'f', 2)
-                                    .arg(daily_limit, 0, 'f', 2);
-                if (-weekly_pnl > weekly_limit)
-                    failures << QString("Weekly loss $%1 exceeds limit $%2")
-                                    .arg(-weekly_pnl, 0, 'f', 2)
-                                    .arg(weekly_limit, 0, 'f', 2);
+                QString why;
+                const auto daily = snd::in_limit_currency(daily_pnl, data_ccy, limit_ccy, &why);
+                const auto weekly = snd::in_limit_currency(weekly_pnl, data_ccy, limit_ccy, &why);
+                if (!daily || !weekly)
+                    failures << QString("Cannot verify loss limits in %1 — %2").arg(limit_ccy, why);
+                if (daily && -*daily > daily_limit)
+                    failures << QString("Daily loss %1 exceeds limit %2")
+                                    .arg(snd::money_text(-*daily, unit), snd::money_text(daily_limit, unit));
+                if (weekly && -*weekly > weekly_limit)
+                    failures << QString("Weekly loss %1 exceeds limit %2")
+                                    .arg(snd::money_text(-*weekly, unit), snd::money_text(weekly_limit, unit));
 
                 bool passed = failures.isEmpty();
                 obj["loss_limit_passed"] = passed;
@@ -181,11 +225,14 @@ void register_safety_nodes(NodeRegistry& registry) {
         .parameters =
             {
                 {"max_shares", "Max Shares", "number", 1000, {}, ""},
-                {"max_value", "Max Value ($)", "number", 50000, {}, ""},
+                {"max_value", "Max Value", "number", 50000, {}, "Amount in the limits currency"},
+                {"limits_currency", "Limits Currency", "string", "", {},
+                 "ISO code of Max Value (USD, INR, EUR); empty = the currency the price is quoted in"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
+                namespace snd = safety_nodes_detail;
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 QJsonObject obj = data.isObject() ? data.toObject() : QJsonObject{};
 
@@ -193,17 +240,24 @@ void register_safety_nodes(NodeRegistry& registry) {
                 double max_value = params.value("max_value").toDouble(50000);
                 double quantity = obj.value("quantity").toDouble(0);
                 double price = obj.value("price").toDouble(0);
-                double trade_val = quantity * price;
+                double trade_val = quantity * price; // in the price's currency as quoted (pence for GBp)
+                const QString data_ccy = snd::payload_currency(obj);
+                const QString limit_ccy = params.value("limits_currency").toString().trimmed().toUpper();
+                const QString unit = limit_ccy.isEmpty() ? data_ccy : limit_ccy;
 
                 QStringList failures;
                 if (quantity <= 0)
                     failures << QStringLiteral("Cannot verify position size — upstream data has no quantity");
                 if (quantity > max_shares)
                     failures << QString("Quantity %1 exceeds max %2").arg(quantity).arg(max_shares);
-                if (price > 0 && trade_val > max_value)
-                    failures << QString("Trade value $%1 exceeds max $%2")
-                                    .arg(trade_val, 0, 'f', 2)
-                                    .arg(max_value, 0, 'f', 2);
+                if (price > 0) {
+                    QString why;
+                    if (const auto v = snd::in_limit_currency(trade_val, data_ccy, limit_ccy, &why); !v)
+                        failures << QString("Cannot verify the max value in %1 — %2").arg(limit_ccy, why);
+                    else if (*v > max_value)
+                        failures << QString("Trade value %1 exceeds max %2")
+                                        .arg(snd::money_text(*v, unit), snd::money_text(max_value, unit));
+                }
 
                 bool passed = failures.isEmpty();
                 obj["size_limit_passed"] = passed;
@@ -316,8 +370,9 @@ void register_safety_nodes(NodeRegistry& registry) {
             },
         .parameters =
             {
+                // The gate checks the drawdown figure it is handed; a "Window" select was
+                // offered here but never read, so it was removed.
                 {"max_drawdown_pct", "Max Drawdown %", "number", 10.0, {}, ""},
-                {"window", "Window", "select", "daily", {"daily", "weekly", "monthly", "ytd"}, ""},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
@@ -367,8 +422,8 @@ void register_safety_nodes(NodeRegistry& registry) {
             },
         .parameters =
             {
+                // Checks the correlation it is handed (no "Lookback Days": it was never read).
                 {"max_correlation", "Max Correlation", "number", 0.8, {}, "0-1 threshold"},
-                {"lookback_days", "Lookback Days", "number", 90, {}, ""},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,

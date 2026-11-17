@@ -124,7 +124,7 @@ QVector<Instrument> parse_fivepaisa(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("FivePaisaSource", QString("Parsed %1 FivePaisa instruments").arg(out.size()));
+    LOG_DEBUG("FivePaisaSource", QString("Parsed %1 FivePaisa instruments").arg(out.size()));
     return out;
 }
 

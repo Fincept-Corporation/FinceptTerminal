@@ -6,11 +6,13 @@ Main analytics engine for FFN-based financial performance analysis.
 Provides comprehensive performance statistics, risk metrics, and portfolio analysis.
 """
 
+from __future__ import annotations  # `-> go.Figure` annotations stay unevaluated
+
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+# Plotting libraries are imported inside the plot_* methods only: nothing the
+# service calls draws anything, and importing matplotlib + plotly on every run cost
+# time (and made a missing plotting package break the whole service).
 import warnings
 from typing import Dict, List, Optional, Union, Tuple, Any
 from dataclasses import dataclass, field
@@ -21,6 +23,35 @@ import json
 import ffn
 
 warnings.filterwarnings('ignore')
+
+
+def _period_to_date_return(prices, period: str) -> Optional[float]:
+    """Month-to-date / year-to-date simple return of a dated price series.
+
+    Base = last observation strictly before the first calendar day of the last
+    observation's month (or year). None without a DatetimeIndex or when the
+    series starts inside the current period (no base price).
+    """
+    try:
+        if prices is None or not isinstance(prices.index, pd.DatetimeIndex):
+            return None
+        s = prices.dropna()
+        if len(s) < 2:
+            return None
+        last_ts = s.index[-1]
+        if period == "month":
+            start = pd.Timestamp(year=last_ts.year, month=last_ts.month, day=1)
+        else:
+            start = pd.Timestamp(year=last_ts.year, month=1, day=1)
+        if last_ts.tzinfo is not None:
+            start = start.tz_localize(last_ts.tzinfo)
+        base = s[s.index < start]
+        if base.empty or float(base.iloc[-1]) == 0.0:
+            return None
+        value = float(s.iloc[-1]) / float(base.iloc[-1]) - 1.0
+        return value if np.isfinite(value) else None
+    except Exception:
+        return None
 
 
 @dataclass
@@ -193,12 +224,22 @@ class FFNAnalyticsEngine:
         except Exception:
             self.performance_stats = None
 
+        # A series whose returns do not vary has no defined Sharpe / Sortino: ffn divides
+        # by a floating-point residue (~1e-18) and reports ~1e14. Null them instead.
+        flat = False
+        try:
+            if returns is not None and len(returns) > 1:
+                sd = float(returns.std())
+                flat = (not np.isfinite(sd)) or sd <= 1e-12 * max(1.0, abs(float(returns.mean())))
+        except Exception:
+            flat = False
+
         # Extract key metrics with safe handling - each wrapped in try-except
         metrics = {
             'total_return': safe_call(ffn.calc_total_return, prices),
             'cagr': safe_call(ffn.calc_cagr, prices),
-            'sharpe_ratio': safe_call(ffn.calc_sharpe, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
-            'sortino_ratio': safe_call(ffn.calc_sortino_ratio, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
+            'sharpe_ratio': None if flat else safe_call(ffn.calc_sharpe, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
+            'sortino_ratio': None if flat else safe_call(ffn.calc_sortino_ratio, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
             'max_drawdown': safe_call(ffn.calc_max_drawdown, prices),
             'calmar_ratio': safe_call(ffn.calc_calmar_ratio, prices),
             'volatility': safe_float(returns.std() * np.sqrt(self.config.annualization_factor)) if returns is not None and len(returns) > 0 else None,
@@ -206,8 +247,10 @@ class FFNAnalyticsEngine:
             'daily_vol': safe_float(returns.std()) if returns is not None and len(returns) > 0 else None,
             'best_day': safe_float(returns.max()) if returns is not None and len(returns) > 0 else None,
             'worst_day': safe_float(returns.min()) if returns is not None and len(returns) > 0 else None,
-            'mtd': None,  # Skip MTD/YTD calculations - they often cause issues with small datasets
-            'ytd': None,
+            # Last price vs the last price before the current month / year began;
+            # null when the history does not reach back past that boundary.
+            'mtd': _period_to_date_return(prices, "month"),
+            'ytd': _period_to_date_return(prices, "year"),
         }
 
         return metrics
@@ -421,6 +464,8 @@ class FFNAnalyticsEngine:
         if prices is None:
             raise ValueError("No price data loaded. Call load_data() first.")
 
+        import plotly.graph_objects as go
+
         # Rebase for visualization
         rebased = ffn.rebase(prices, self.config.rebase_value)
 
@@ -469,6 +514,8 @@ class FFNAnalyticsEngine:
 
         if prices is None:
             raise ValueError("No price data loaded. Call load_data() first.")
+
+        import plotly.graph_objects as go
 
         dd_series = ffn.to_drawdown_series(prices)
 

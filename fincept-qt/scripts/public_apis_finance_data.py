@@ -71,28 +71,35 @@ def get_hnb_rates(date: str = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 def get_mnb_rates(date: str = None) -> Any:
-    url = "https://api.mnb.hu/arfolyamok.asmx"
-    soap_body = f"""<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://www.mnb.hu/webservices/">
-  <soap:Body><web:GetCurrentExchangeRates/></soap:Body>
-</soap:Envelope>"""
-    try:
-        headers = {"Content-Type": "text/xml; charset=utf-8", "SOAPAction": "http://www.mnb.hu/webservices/MNBArfolyamServiceSoap/GetCurrentExchangeRates"}
-        response = session.post(url, data=soap_body, headers=headers, timeout=30)
-        return {"raw_xml": response.text[:2000], "status": response.status_code}
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    """MNB official HUF rates - today's, or one day's (YYYY-MM-DD) - one row per currency.
+
+    Uses mnb_data.py's SOAP client: the api.mnb.hu host this used to call does not exist."""
+    from mnb_data import MNBWrapper
+
+    w = MNBWrapper()
+    res = w.get_range(date, date) if date else w.get_today()
+    if not isinstance(res, dict) or res.get("success") is False or "error" in res:
+        return res
+    data = res.get("data")
+    if isinstance(res.get("rates"), dict):  # today: {CCY: rate} next to its per-currency rows
+        rows = [{"date": res.get("date"), "currency": k, "rate": v} for k, v in res["rates"].items()]
+    elif isinstance(data, dict):
+        rows = [{"date": res.get("date"), "currency": k, "rate": v} for k, v in data.items()]
+    else:  # range: [{date, CCY: rate, ...}]
+        rows = [{"date": r.get("date"), "currency": k, "rate": v}
+                for r in (data or []) for k, v in r.items() if k != "date"]
+    if not rows:
+        return {"error": f"MNB published no rates for {date}" if date else "MNB returned no rates",
+                "code": "no_data"}
+    return {"data": rows, "count": len(rows), "unit": "HUF per 1 unit of currency",
+            "source": "Magyar Nemzeti Bank"}
 
 def get_boi_rates() -> Any:
-    url = "https://www.bankofisrael.org.il/api/current-exchange-rates"
-    try:
-        response = session.get(url, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+    """Bank of Israel representative rates, one row per currency (boi_data.py's PublicApi client;
+    the www.bankofisrael.org.il host this used to call does not exist)."""
+    from boi_data import BOIWrapper
+
+    return BOIWrapper().get_exchange_rates_today()
 
 def main(args=None):
     if args is None:

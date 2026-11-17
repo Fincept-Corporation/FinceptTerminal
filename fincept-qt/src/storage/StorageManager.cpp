@@ -1,14 +1,14 @@
 #include "storage/StorageManager.h"
 
 #include "core/config/AppPaths.h"
+#include "core/config/AppSettings.h"
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
-#include "storage/workspace/WorkspaceDb.h"
+#include "storage/sync/SyncOutbox.h"
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -40,7 +40,7 @@ int StorageManager::count_table(const QString& table, const QString& where) cons
 
     auto r = db.execute(sql, {});
     if (r.is_err())
-        return 0;
+        return 0; // the failing statement is logged by Database::execute
     auto& q = r.value();
     return q.next() ? q.value(0).toInt() : 0;
 }
@@ -92,7 +92,7 @@ Result<void> StorageManager::delete_cascade(const QStringList& tables) {
 
     auto c = db.commit();
     if (c.is_err()) {
-        db.rollback();
+        db.rollback(); // the COMMIT failure is logged by Database::commit
         return c;
     }
     return Result<void>::ok();
@@ -499,17 +499,31 @@ qint64 StorageManager::log_files_size() const {
 }
 
 Result<void> StorageManager::clear_log_files() {
-    LOG_INFO("StorageManager", "Clearing log files");
     QDir dir(AppPaths::logs());
     if (!dir.exists())
         return Result<void>::ok();
 
+    // Kept: the live fincept.log (the logger's writer thread holds it open, and
+    // truncating it underneath leaves a run of zero bytes on Windows) and the
+    // audit trail (audit.log and its rotations — it rotates by itself and is
+    // never cleared from here). Everything else is a closed file: the size parts
+    // of this session (.1-.3), earlier sessions (.prev*), the UI stall log.
+    int removed = 0;
+    int failed = 0;
     for (const auto& fi : dir.entryInfoList(QDir::Files)) {
-        QFile f(fi.absoluteFilePath());
-        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-            f.close();
+        const QString name = fi.fileName();
+        if (name == QLatin1String("fincept.log") || name.startsWith(QLatin1String("audit.log")))
+            continue;
+        if (QFile::remove(fi.absoluteFilePath()))
+            ++removed;
+        else
+            ++failed;
     }
+    LOG_INFO("StorageManager", logf("Log files cleared", {{"removed", removed}, {"failed", failed},
+                                                         {"kept", "fincept.log,audit.log"}}));
     emit category_cleared("log_files");
+    if (failed > 0)
+        return Result<void>::err(QStringLiteral("%1 log file(s) could not be deleted (in use?)").arg(failed).toStdString());
     return Result<void>::ok();
 }
 
@@ -541,10 +555,6 @@ Result<void> StorageManager::clear_workspace_files() {
 namespace {
 // Retention windows. Deliberately generous — these tables exist for forensics.
 constexpr int kAuditLogRetentionDays = 90;
-constexpr int kTelemetryRetentionDays = 30;
-// A push that has failed this many times is never going to succeed; the row is
-// dead-lettered rather than retried forever. `bump_attempt` has no other bound.
-constexpr int kOutboxMaxAttempts = 20;
 } // namespace
 
 int StorageManager::prune_main_db(const QString& table, const QString& where, const QVariantList& params) {
@@ -567,14 +577,14 @@ int StorageManager::prune_main_db(const QString& table, const QString& where, co
 }
 
 void StorageManager::prune_off_thread() {
-    // prune_all() issues four bulk DELETEs across three databases. Deferring it
+    // prune_all() issues three bulk DELETEs across two databases. Deferring it
     // with singleShot() moved it off the *startup* path but left it on the UI
     // thread (P1) — and worse, it takes a write lock on the main DB, so any
     // screen doing a synchronous read in its showEvent stalls behind it until
     // busy_timeout. That is what made the alpha_arena screen miss an 8s
     // construction deadline in the smoke walk: it was waiting on this prune.
     //
-    // Safe to run on a worker now: Database/CacheDatabase/WorkspaceDb all hand
+    // Safe to run on a worker now: Database/CacheDatabase both hand
     // out per-thread connections (this release's fix), so the prune gets its own
     // handle instead of borrowing the main thread's.
     // Never start a sweep during teardown. The databases this touches are
@@ -605,19 +615,21 @@ Result<void> StorageManager::prune_all() {
                                                               .arg(kAuditLogRetentionDays));
     if (audit > 0) {
         total += audit;
-        LOG_INFO("StorageManager", QString("Retention: removed %1 workflow_audit_log rows older than %2 days")
+        LOG_DEBUG("StorageManager", QString("Retention: removed %1 workflow_audit_log rows older than %2 days")
                                        .arg(audit)
                                        .arg(kAuditLogRetentionDays));
     }
 
     // sync_outbox — rows leave only via mark_done(); a permanently failing push
-    // was retried forever with no ceiling.
-    const int outbox = prune_main_db("sync_outbox", "attempts > ?", {kOutboxMaxAttempts});
+    // was retried forever with no ceiling. Past SyncOutbox::kMaxPushAttempts a
+    // push is never going to succeed (pending_all() already stops returning the
+    // row; this deletes it).
+    const int outbox = prune_main_db("sync_outbox", "attempts > ?", {SyncOutbox::kMaxPushAttempts});
     if (outbox > 0) {
         total += outbox;
         LOG_WARN("StorageManager", QString("Retention: dead-lettered %1 sync_outbox rows past %2 push attempts")
                                        .arg(outbox)
-                                       .arg(kOutboxMaxAttempts));
+                                       .arg(SyncOutbox::kMaxPushAttempts));
     }
 
     // unified_cache (cache.db) — was swept once at startup only, so a terminal
@@ -628,34 +640,13 @@ Result<void> StorageManager::prune_all() {
             const int expired = cdb.sweep_expired();
             if (expired > 0) {
                 total += expired;
-                LOG_INFO("StorageManager", QString("Retention: removed %1 expired unified_cache rows").arg(expired));
+                LOG_DEBUG("StorageManager", QString("Retention: removed %1 expired unified_cache rows").arg(expired));
             }
-        }
-    }
-
-    // telemetry_events (workspace.db) — one row per action.invoke, no reader.
-    {
-        auto& wdb = WorkspaceDb::instance();
-        if (wdb.is_open()) {
-            const qint64 cutoff_ms =
-                QDateTime::currentMSecsSinceEpoch() - static_cast<qint64>(kTelemetryRetentionDays) * 86400LL * 1000LL;
-            auto r = wdb.execute("DELETE FROM telemetry_events WHERE ts_ms < ?", {cutoff_ms});
-            if (r.is_ok()) {
-                const int removed = r.value().numRowsAffected();
-                if (removed > 0) {
-                    total += removed;
-                    LOG_INFO("StorageManager", QString("Retention: removed %1 telemetry_events rows older than %2 days")
-                                                   .arg(removed)
-                                                   .arg(kTelemetryRetentionDays));
-                }
-            }
-            // A missing telemetry_events table just means telemetry never wrote
-            // this session — nothing to report.
         }
     }
 
     if (total > 0)
-        LOG_INFO("StorageManager", QString("Retention sweep removed %1 rows in total").arg(total));
+        LOG_DEBUG("StorageManager", QString("Retention sweep removed %1 rows in total").arg(total));
     return Result<void>::ok();
 }
 
@@ -674,7 +665,7 @@ void StorageManager::start_retention_sweeper(int interval_ms) {
 
     // Join the worker before the app tears the databases down. Without this the
     // sweep is an unowned QtConcurrent task that keeps using Database /
-    // CacheDatabase / WorkspaceDb while TerminalShell::shutdown() closes them —
+    // CacheDatabase while the app closes them —
     // an access violation during static destruction, i.e. after the crash
     // handler is gone, so it produces no dump and no log line.
     if (auto* app = QCoreApplication::instance()) {
@@ -688,12 +679,15 @@ void StorageManager::start_retention_sweeper(int interval_ms) {
         });
     }
 
-    LOG_INFO("StorageManager", QString("Retention sweeper started (every %1 min)").arg(interval_ms / 60000));
+    LOG_DEBUG("StorageManager", QString("Retention sweeper started (every %1 min)").arg(interval_ms / 60000));
 }
 
 Result<void> StorageManager::clear_qsettings() {
     LOG_INFO("StorageManager", "Clearing QSettings (window geometry, perspectives, UI state)");
-    QSettings settings("Fincept", "FinceptTerminal");
+    // This data folder's own store only (core/config/AppSettings.h) — never the
+    // shared legacy Fincept/FinceptTerminal one, which the private build also
+    // uses, nor (from an overridden data folder) the default folder's store.
+    QSettings settings = app_settings::open();
     settings.clear();
     settings.sync();
     emit category_cleared("qsettings");

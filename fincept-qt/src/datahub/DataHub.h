@@ -16,6 +16,7 @@
 #include <QVariant>
 #include <QVector>
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 
@@ -33,7 +34,9 @@ struct TopicStats {
     int total_errors = 0;
     bool in_flight = false; ///< producer has an outstanding refresh()
     bool push_only = false;
-    QString last_error; ///< most recent error string, empty if none or cleared
+    QString last_error;        ///< most recent error string, empty if none or cleared
+    int error_streak = 0;      ///< consecutive failed refreshes since the last successful publish
+    qint64 retry_after_ms = 0; ///< wall-clock ms before which the hub won't refetch (0 = no backoff)
 };
 
 /// In-process pub/sub data layer. See DATAHUB_ARCHITECTURE.md §4.
@@ -89,10 +92,21 @@ class DataHub : public QObject {
     // to the data subscribe API: auto-cleanup on destroyed().
 
     /// Receive `publish_error()` events for a single concrete topic.
+    ///
+    /// If the topic is currently in error state (its last refresh failed and
+    /// nothing has been published since), `slot` also receives that current
+    /// error once, queued to the owner's thread (next event-loop turn, never
+    /// from inside this call) — the same way `subscribe()` delivers a cached
+    /// value. The replay is skipped if, when it runs, the topic has recovered,
+    /// failed again (the live event covers that), or has a refetch in flight
+    /// (e.g. the caller's own `request(topic, true)`: its outcome is
+    /// delivered live instead).
     QMetaObject::Connection subscribe_errors(QObject* owner, const QString& topic,
                                              std::function<void(const QString& error)> slot);
 
     /// Receive `publish_error()` events for every topic matching `pattern`.
+    /// Like `subscribe_errors()`, replays the current error of every
+    /// already-known matching topic that is in error state.
     QMetaObject::Connection
     subscribe_pattern_errors(QObject* owner, const QString& pattern,
                              std::function<void(const QString& topic, const QString& error)> slot);
@@ -112,11 +126,37 @@ class DataHub : public QObject {
     void publish(const QString& topic, const QVariant& value, std::chrono::milliseconds ttl);
 
     /// Signal that a refresh() for `topic` has failed. Clears the
-    /// `in_flight` flag so the scheduler can retry on the next pass and
-    /// emits `topic_error(topic, error)` so subscribers can surface the
-    /// failure in the UI. Does NOT update the cached value — last-known-
+    /// `in_flight` flag, notifies `subscribe_errors` / `subscribe_pattern_errors`
+    /// slots and emits `topic_error(topic, error)` so subscribers can surface
+    /// the failure in the UI. Does NOT update the cached value — last-known-
     /// good stays visible. Thread-safe; marshals to the hub thread.
+    ///
+    /// Error backoff: each consecutive failure pushes the topic's next
+    /// automatic refetch out along a ladder (2 s, 5 s, 15 s, 60 s, then
+    /// 300 s; ±10 % jitter). Until it expires neither the scheduler, a
+    /// non-forced `request()`, nor a new subscriber's cold-start fetch will
+    /// re-request the topic. A successful `publish()` or a user-initiated
+    /// `request(..., force=true)` resets it.
     void publish_error(const QString& topic, const QString& error);
+
+    /// As above, with a producer hint for errors that will not clear by
+    /// retrying soon. The topic is not refetched automatically for at least
+    /// `retry_after` (the ladder still applies if it is longer). Use
+    /// `kNegativeCacheRetry` for "symbol not found / delisted"; a shorter
+    /// hint suits an upstream rate limit. A non-positive hint behaves like
+    /// the two-argument overload.
+    void publish_error(const QString& topic, const QString& error, std::chrono::milliseconds retry_after);
+
+    /// Retry hint for long-lived errors (unknown symbol, delisted
+    /// instrument): negative-cache the topic for ~15 minutes.
+    static constexpr std::chrono::milliseconds kNegativeCacheRetry{15 * 60 * 1000};
+
+    /// Forget the error backoff of every known topic matching `pattern`
+    /// (`*`-suffix wildcard), so failed topics are retried on the next
+    /// scheduler pass. For producers whose upstream has just recovered
+    /// (e.g. Python finished installing). The stored error is kept until the
+    /// next successful publish. Thread-safe.
+    void clear_backoff(const QString& pattern);
 
     // ── Registration ────────────────────────────────────────────────────────
 
@@ -156,6 +196,12 @@ class DataHub : public QObject {
     /// button can refetch even inside the interval gate). Per-producer
     /// `max_requests_per_sec()` is still honoured — rage-clicking can't
     /// hammer upstream.
+    ///
+    /// `force=true` is treated as user-initiated: it also bypasses and resets
+    /// the topic's error backoff (see `publish_error`). `force=false`
+    /// requests for a topic that is backing off are dropped. Do not call
+    /// `request(..., true)` from an error slot or a timer — that defeats the
+    /// backoff.
     void request(const QString& topic, bool force = false);
     void request(const QStringList& topics, bool force = false);
 
@@ -174,6 +220,20 @@ class DataHub : public QObject {
     /// Convenience: ms since the last publish, or -1 if never published.
     /// Compare against the topic's TTL to decide "fresh / stale / dead".
     qint64 age_ms(const QString& topic) const;
+
+    /// The topic's current error — the last `publish_error()` text if its
+    /// most recent refresh failed and nothing has been published since —
+    /// or an empty string. Cheap O(1) lookup.
+    QString last_error(const QString& topic) const;
+
+    /// Automatic fetches not made because nobody could see the topic: a
+    /// `pause_when_inactive` topic is neither refreshed by the scheduler nor
+    /// cold-started by subscribe() while every live subscriber is a hidden
+    /// widget or one in a minimised window (non-widget owners — services,
+    /// stores — always count as watching). Counted once per freshness window
+    /// of each skipped topic, i.e. roughly the fetches that did not happen.
+    /// Cumulative since start; thread-safe.
+    quint64 hidden_skip_count() const { return hidden_skip_count_.load(std::memory_order_relaxed); }
 
     QVector<TopicStats> stats() const;
 
@@ -239,6 +299,10 @@ class DataHub : public QObject {
         TopicPolicy policy;
         bool policy_explicit = false; ///< set_policy() was called
         QString last_error;           ///< most recent error string; cleared on successful publish
+        // Error backoff — see publish_error(). Both reset on a successful
+        // publish and on a user-initiated request(force=true).
+        int error_streak = 0;      ///< consecutive failures (publish_error or refresh timeout)
+        qint64 retry_after_ms = 0; ///< no automatic refetch before this wall-clock ms
         // Coalesce state — non-zero policy.coalesce_within_ms only.
         bool coalesce_pending = false; ///< a deferred publish is armed
         QVariant coalesce_latest;      ///< most recent value inside window
@@ -248,6 +312,9 @@ class DataHub : public QObject {
         // ttl_override_ms > 0, in which case the override is applied
         // ONLY for the current publish's freshness window.
         int ttl_override_ms = 0;
+        /// Last time an automatic fetch was skipped for want of a visible
+        /// subscriber (see hidden_skip_count()); 0 = never.
+        qint64 hidden_skip_ms = 0;
     };
 
     struct ErrorSub {
@@ -259,6 +326,17 @@ class DataHub : public QObject {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
     void deliver_initial_value(QObject* owner, const QString& topic, const std::function<void(const QVariant&)>& slot);
+    /// Error-side counterpart of deliver_initial_value(): queue the current
+    /// error of each topic in `errors` (topic -> (error, last_error_ms)) to
+    /// the owner's thread. Exactly one of the two slots is set. Caller has
+    /// released mutex_.
+    void deliver_initial_errors(QObject* owner, const QHash<QString, QPair<QString, qint64>>& errors,
+                                const std::function<void(const QString&)>& single_slot,
+                                const std::function<void(const QString&, const QString&)>& pattern_slot);
+    /// request() body. `user_initiated` resets the error backoff; otherwise
+    /// a topic inside its backoff window is skipped even when `force` is set
+    /// (the subscribe() cold-start path uses force without user intent).
+    void request_impl(const QStringList& topics, bool force, bool user_initiated);
     void on_owner_destroyed(QObject* owner);
     Producer* find_producer(const QString& topic) const;
     TopicPolicy resolve_policy(const QString& topic) const;
@@ -300,6 +378,17 @@ class DataHub : public QObject {
     bool has_live_subscribers(const QString& topic) const;
     /// Erase idle, long-stale, unsubscribed TopicStates. Caller holds mutex_.
     void sweep_idle_topics(qint64 now);
+
+    // ── Fetch gating for topics nobody can see ──────────────────────────────
+    /// True if a live concrete or wildcard subscriber of `topic` is "visible
+    /// for work": a widget that is shown and whose window is not minimised,
+    /// or any non-widget owner. Widgets are only inspected on their own
+    /// thread (elsewhere they count as visible). Caller holds mutex_.
+    bool has_visible_subscriber(const QString& topic) const;
+    /// Count `st`'s skipped fetch in hidden_skip_count_, at most once per
+    /// freshness window. Caller holds mutex_.
+    void note_hidden_skip(TopicState& st, qint64 now);
+    std::atomic<quint64> hidden_skip_count_{0};
 
     /// A topic is only evictable once it is this many freshness windows
     /// stale. Generous on purpose — the point is to release payloads nobody

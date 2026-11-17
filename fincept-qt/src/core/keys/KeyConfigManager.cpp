@@ -148,7 +148,9 @@ KeyConfigManager::KeyConfigManager() {
     defaults_[KeyAction::MoveWindowToMonitor8] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_8);
     defaults_[KeyAction::MoveWindowToMonitor9] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_9);
 
-    // Phase 6 — Component Browser
+    // Search: focuses the header search box (builtin action frame.browse_components). The storage
+    // key "key.browse_components" is kept so saved rebindings survive. The Component Browser dialog
+    // has its own action (frame.component_browser) with no default key and no entry here.
     defaults_[KeyAction::BrowseComponents] = QKeySequence(Qt::CTRL | Qt::Key_K);
 
     // Phase 11 — Always-on-top window toggle. Ctrl+Shift+T is un-used by any
@@ -294,7 +296,7 @@ QString KeyConfigManager::display_name(KeyAction a) const {
             return "Move Window to Monitor 9";
 
         case KeyAction::BrowseComponents:
-            return "Browse Components";
+            return "Search"; // Ctrl+K focuses the header search box
         case KeyAction::ToggleAlwaysOnTop:
             return "Toggle Always-on-Top";
         case KeyAction::LockNow:

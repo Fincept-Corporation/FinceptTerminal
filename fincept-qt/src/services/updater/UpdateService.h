@@ -1,147 +1,143 @@
 #pragma once
 
+#include "services/updater/UpdateTypes.h"
+
 #include <QByteArray>
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
+#include <QTimer>
 
 class QNetworkReply;
-class QWidget;
 
 namespace fincept::services {
 
-/// Cross-platform auto-update service.
+namespace updater {
+class UpdateDownloader;
+class UpdateInstaller;
+} // namespace updater
+
+/// In-app updater: finds a newer GitHub release, and on the user's say-so
+/// downloads it, verifies it and replaces the running installation in place,
+/// then restarts into the new version.
 ///
-/// Downloads a JSON manifest, compares the running app version with the
-/// manifest's per-platform/per-arch `latest-version`, and — if newer — fetches
-/// the installer, verifies its sha256, and launches it.
+/// No widgets here. The service is a state machine (updater::UpdateStage) that
+/// reports through signals; ui::UpdateDialog (src/ui/widgets/UpdateDialog.h)
+/// is the window that shows it.
 ///
-/// Manifest schema (see updates.json):
-/// {
-///   "updates": {
-///     "windows-x64":  { "latest-version": "4.1.0", "download-url": "...", "sha256": "...", "open-url": "...",
-///     "changelog": "..." }, "windows-arm64":{ ... }, "linux-x64":    { ... }, "macos-arm64":  { ... }, "macos-x64": {
-///     ... }, "macos-universal": { ... }
-///   }
-/// }
+///   check_for_updates()            Idle/UpToDate/Failed → Checking → UpToDate | Available | Failed
+///   start_update()                 Available → Downloading → Verifying → Installing → Restarting | Failed
+///   cancel()                       Downloading → Available
 ///
-/// Platforms where auto-install isn't possible (unsigned / no installer) fall
-/// back to revealing the downloaded file to the user.
+/// Checks run on every start of the terminal (the app shell calls
+/// check_for_updates() once its first window is up) and again every few hours
+/// while it stays open.
+///
+/// Trust: the manifest (updates.json, see UpdateManifest.h) is fetched over
+/// TLS from the latest GitHub release and must carry a valid Ed25519 signature
+/// under the pinned key; the release file must match the manifest's sha256;
+/// on Windows and macOS the file's code signature is checked as well.
 class UpdateService : public QObject {
     Q_OBJECT
 
   public:
     static UpdateService& instance();
 
-    /// Trigger an update check.
-    /// - silent=true  → no dialog when already up to date or manifest unreachable.
-    /// - silent=false → show result either way (used by "Check for Updates" menu).
-    void check_for_updates(bool silent = true);
+    /// Start a check. `user_initiated` only affects reporting: a background
+    /// check that finds nothing (or cannot reach the server) ends quietly in
+    /// UpToDate / Idle, a user-initiated one ends in UpToDate / Failed so the
+    /// window can say so. Ignored while a check or an update is running —
+    /// except that a user-initiated call promotes a running background check.
+    void check_for_updates(bool user_initiated = false);
 
-    /// Whether an update was found after the last check.
-    bool update_available() const { return update_available_; }
+    /// Download and install the release found by the last check. Only valid in
+    /// stage Available (or Failed after a failed update attempt — retry).
+    void start_update();
 
-    /// Latest version string from the manifest (empty until first successful check).
-    QString latest_version() const { return latest_version_; }
+    /// Abort a running download. No effect in other stages (verification and
+    /// installation are not interruptible).
+    void cancel();
 
-    /// Changelog text from the manifest.
-    QString changelog() const { return changelog_; }
+    updater::UpdateStage stage() const { return stage_; }
+    /// The newer release (valid from stage Available onwards).
+    const updater::UpdateInfo& info() const { return info_; }
+    /// One line saying what is happening right now (translated).
+    QString status_text() const { return status_text_; }
+    /// Why the last check or update failed (translated). Empty unless Failed.
+    QString error_text() const { return error_text_; }
+    /// True when the failure happened during an update (retry = start_update)
+    /// rather than during a check (retry = check_for_updates).
+    bool failed_during_update() const { return failed_during_update_; }
 
-    /// Override the manifest URL (default: GitHub raw updates.json).
-    /// The detached signature is always fetched from `<manifest_url> + ".sig"`.
-    void set_manifest_url(const QString& url) { manifest_url_ = url; }
+    /// A newer release is known (any stage from Available onwards, including
+    /// Failed after an update attempt).
+    bool update_available() const { return !info_.version.isEmpty(); }
+    QString latest_version() const { return info_.version; }
 
-    /// Parent widget for dialogs (defaults to QApplication::activeWindow()).
-    void set_dialog_parent(QWidget* parent) { dialog_parent_ = parent; }
+    /// Whether this installation can be updated in place. When false the
+    /// window offers the release page instead, with blocked_reason().
+    bool can_self_update() const;
+    QString blocked_reason() const;
+
+    /// False in a development build (version is not "X.Y.Z") — checks are
+    /// skipped there.
+    static bool update_checks_available();
+
+    static QString releases_page_url();
+
+    /// If the previous run of the terminal ended in an update, returns what
+    /// happened and forgets it: `to_version` is the version that update was
+    /// meant to install; `succeeded` is whether the running version is that
+    /// one. Returns false when there is nothing to report.
+    static bool take_last_update_result(QString& to_version, bool& succeeded);
 
   signals:
-    /// Emitted after every check, regardless of result.
+    void stage_changed(fincept::services::updater::UpdateStage stage);
+    /// Download progress; `total` is 0 when unknown.
+    void progress_changed(qint64 received, qint64 total);
+    void status_text_changed(const QString& text);
+    /// After every check. `update_found` is true when a newer release exists.
     void check_finished(bool update_found);
-
-    /// Emitted after a successful verified download, before launch.
-    void download_finished(const QString& filepath);
-
-  private slots:
-    void on_manifest_reply_finished();
-    void on_signature_reply_finished();
-    void on_download_reply_finished();
-    void on_download_progress(qint64 received, qint64 total);
+    /// The update continues outside the terminal (see UpdateInstaller::handed_off).
+    void handed_off(const QString& message);
+    /// The update is staged and the application must close now. The app shell
+    /// connects this to its normal quit path (saving the session first).
+    void restart_requested();
 
   private:
     explicit UpdateService(QObject* parent = nullptr);
 
-    /// Parse + act on a manifest whose detached signature has already been
-    /// verified. Never call this with unverified bytes.
-    void process_verified_manifest(const QByteArray& body);
+    void fetch_manifest(int source_index);
+    void on_manifest_reply(QNetworkReply* reply, int source_index);
+    void on_signature_reply(QNetworkReply* reply, int source_index, const QByteArray& manifest);
+    void manifest_source_failed(int source_index, const QString& log_reason, const QString& user_reason);
+    void process_verified_manifest(const QByteArray& manifest);
 
-    /// True iff `signature` (base64 or hex, 64 raw bytes) is a valid Ed25519
-    /// signature over `manifest` under UPDATE_SIGNING_PUBLIC_KEY_HEX.
-    static bool verify_manifest_signature(const QByteArray& manifest, const QByteArray& signature);
+    void begin_install(const QString& package_path);
+    void set_stage(updater::UpdateStage stage, const QString& status_text = {});
+    void set_status(const QString& text);
+    void fail_check(const QString& user_message);
+    void fail_update(const QString& user_message);
+    void write_pending_marker() const;
 
-    /// Raw 32-byte signing public key, or an empty QByteArray when no key is
-    /// pinned (or the pinned value is malformed) — in which case auto-update is
-    /// refused outright.
-    static QByteArray signing_public_key();
-
-    /// Return the lookup key for the current runtime (e.g. "windows-x64").
-    /// Returns empty string if the platform/arch combination isn't supported.
-    static QString current_platform_key();
-
-    /// Strict semver parse: "1.2.3" → {1,2,3}. Returns false for anything else
-    /// (dev builds, tags, suffixes). Used to both validate the running version
-    /// and the manifest version.
-    static bool parse_version(const QString& s, int& major, int& minor, int& patch);
-
-    /// Returns true iff `remote` is strictly newer than `local`.
-    static bool is_newer(const QString& local, const QString& remote);
-
-    void start_download(const QString& url, const QString& expected_sha256);
-    void launch_installer(const QString& path);
-    void reveal_in_file_manager(const QString& path);
-    void finish_check(bool update_found);
-    void show_error(const QString& text);
-    QWidget* dialog_parent();
-
-    static constexpr const char* DEFAULT_MANIFEST_URL =
-        "https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/updates.json";
-
-    // ── Update-manifest signing key ─────────────────────────────────────────
-    // Raw Ed25519 public key, 32 bytes as 64 lowercase hex characters.
-    //
-    // WHY: `download-url` and `sha256` both come out of the same updates.json
-    // on raw.githubusercontent.com. The sha256 check proves the installer
-    // matches what the manifest claimed — it says nothing about whether the
-    // manifest is ours. Anyone who can push to `main`, or who takes over that
-    // account, otherwise gets code execution on every installation at next
-    // launch, because the verified installer is auto-launched via
-    // startDetached and silent checks fire at startup.
-    //
-    // A detached signature over the manifest bytes fixes that: the private key
-    // never touches CI or the repo, so a repo compromise alone cannot produce a
-    // manifest this binary will accept.
-    //
-    // EMPTY = auto-update is DISABLED (fail closed). See the signing runbook in
-    // UpdateService.cpp for how to generate the keypair and produce
-    // updates.json.sig.
-    static constexpr const char* UPDATE_SIGNING_PUBLIC_KEY_HEX = "";
+    QStringList manifest_urls() const;
+    static QString pending_marker_path();
+    static QString download_dir();
 
     QNetworkAccessManager net_;
-    QByteArray pending_manifest_body_;
-    QString manifest_url_ = DEFAULT_MANIFEST_URL;
-    QString latest_version_;
-    QString changelog_;
-    QString pending_download_url_;
-    QString pending_expected_sha256_;
-    QString pending_local_path_;
-    QPointer<QWidget> dialog_parent_;
-    bool update_available_ = false;
-    bool silent_ = true;
-    bool in_progress_ = false;
-    /// Silent auto-checks skip themselves after the first one per process run
-    /// so multiple login/unlock code paths don't fire repeated checks. A
-    /// user-initiated check (silent=false) always runs regardless.
-    bool silent_check_done_ = false;
+    QTimer recheck_timer_;
+    QPointer<updater::UpdateDownloader> downloader_;
+    QPointer<updater::UpdateInstaller> installer_;
+
+    updater::UpdateStage stage_ = updater::UpdateStage::Idle;
+    updater::UpdateInfo info_;
+    QString status_text_;
+    QString error_text_;
+    bool user_initiated_ = false;
+    bool failed_during_update_ = false;
+    bool every_source_404_ = true; ///< this check: every update source answered "nothing published" so far
 };
 
 } // namespace fincept::services

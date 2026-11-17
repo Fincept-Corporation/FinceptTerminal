@@ -1,5 +1,6 @@
 #include "storage/cache/CacheManager.h"
 
+#include "core/logging/Logger.h"
 #include "storage/sqlite/CacheDatabase.h"
 
 #include <QSqlQuery>
@@ -60,8 +61,12 @@ QVariant CacheManager::get(const QString& key) const {
         return {};
 
     auto r = cdb.execute("SELECT value FROM unified_cache WHERE key = ? AND expires_at > datetime('now')", {key});
-    if (r.is_err())
+    if (r.is_err()) {
+        // Served as a miss (the caller fetches afresh); DEBUG, as a busy cache
+        // database would otherwise write a line per lookup.
+        LOG_DEBUG("CacheManager", logf("Cache read failed", {{"error", QString::fromStdString(r.error())}}));
         return {};
+    }
 
     QSqlQuery q = std::move(r.value());
     if (!q.next())

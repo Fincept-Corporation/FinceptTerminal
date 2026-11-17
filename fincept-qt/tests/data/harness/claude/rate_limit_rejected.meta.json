@@ -1,0 +1,8 @@
+{
+  "harness_version": "2.1.325",
+  "date": "2026-11-17",
+  "command": "claude -p --output-format stream-json --verbose …",
+  "source": "docs",
+  "url": "https://code.claude.com/docs/en/headless",
+  "note": "Transcribed from documented event shapes (system/init, rate_limit_event, system/api_retry, result error); not a recording."
+}

@@ -42,8 +42,6 @@ PARAMETERS:
 from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
 from .core import EconomicsBase, ValidationError, CalculationError, DataError
 
 
@@ -206,20 +204,33 @@ class SpotForwardAnalyzer(EconomicsBase):
 class ArbitrageDetector(EconomicsBase):
     """Triangular arbitrage detection and profit calculation"""
 
+    # Quote convention: the pair 'A/B' is the price of 1 A in units of B (EUR/USD 1.10 = 1.10 USD
+    # per EUR). Its bid is what a dealer pays in B for 1 A, its ask what a dealer charges.
     def detect_triangular_arbitrage(self, currency_quotes: Dict[str, Dict[str, Decimal]],
                                     base_currency: str = None) -> Dict[str, Any]:
-        """Detect triangular arbitrage opportunities"""
+        """Detect triangular arbitrage opportunities from pair-keyed quotes
+        {'EUR/USD': {'bid': .., 'ask': ..}, 'USD/JPY': {...}, 'JPY/EUR': {...}}. Each leg can be
+        quoted either way round (X/Y or Y/X)."""
         base = base_currency or self.base_currency
 
+        quotes = {}
+        for pair, q in currency_quotes.items():
+            parts = str(pair).upper().split('/')
+            if len(parts) != 2 or not all(parts):
+                raise ValidationError(f"Currency pair must look like 'EUR/USD', got {pair!r}")
+            bid, ask = self.to_decimal(q['bid']), self.to_decimal(q['ask'])
+            if bid <= 0 or ask <= 0 or bid > ask:
+                raise ValidationError(f"{pair}: need 0 < bid <= ask, got bid {bid}, ask {ask}")
+            quotes[(parts[0], parts[1])] = {'bid': bid, 'ask': ask}
+
         opportunities = []
-        currencies = list(currency_quotes.keys())
+        currencies = sorted({c for pair in quotes for c in pair})
 
         # Check all possible triangular combinations
         for i, curr1 in enumerate(currencies):
             for j, curr2 in enumerate(currencies[i + 1:], i + 1):
-                for k, curr3 in enumerate(currencies[j + 1:], j + 1):
-                    # Check triangular arbitrage for this combination
-                    opportunity = self._check_triangle(curr1, curr2, curr3, currency_quotes)
+                for curr3 in currencies[j + 1:]:
+                    opportunity = self._check_triangle(curr1, curr2, curr3, quotes)
                     if opportunity['arbitrage_exists']:
                         opportunities.append(opportunity)
 
@@ -227,73 +238,69 @@ class ArbitrageDetector(EconomicsBase):
             'opportunities': opportunities,
             'total_opportunities': len(opportunities),
             'base_currency': base,
-            'quotes_analyzed': len(currencies),
+            'currencies_analyzed': currencies,
+            'quotes_analyzed': len(quotes),
             'timestamp': datetime.now().isoformat()
         }
 
-    def _check_triangle(self, curr1: str, curr2: str, curr3: str,
-                        quotes: Dict[str, Dict[str, Decimal]]) -> Dict[str, Any]:
-        """Check specific triangular arbitrage opportunity"""
-        try:
-            # Get bid/ask rates for all pairs
-            pair1 = f"{curr1}/{curr2}"
-            pair2 = f"{curr2}/{curr3}"
-            pair3 = f"{curr3}/{curr1}"
+    def _conversion_rate(self, src: str, dst: str, quotes: Dict) -> Optional[Decimal]:
+        """Units of dst received for 1 unit of src, paying the spread:
+        via src/dst you SELL src at its bid; via dst/src you BUY dst at its ask (1/ask)."""
+        if (src, dst) in quotes:
+            return quotes[(src, dst)]['bid']
+        if (dst, src) in quotes:
+            return self.to_decimal(1) / quotes[(dst, src)]['ask']
+        return None
 
-            # Forward path: curr1 -> curr2 -> curr3 -> curr1
-            if pair1 in quotes and pair2 in quotes and pair3 in quotes:
-                rate1 = quotes[pair1]['ask']  # Buy curr2 with curr1
-                rate2 = quotes[pair2]['ask']  # Buy curr3 with curr2
-                rate3 = quotes[pair3]['bid']  # Sell curr1 for curr3
+    def _check_triangle(self, curr1: str, curr2: str, curr3: str, quotes: Dict) -> Dict[str, Any]:
+        """Check one triangle both ways round: curr1->curr2->curr3->curr1 and the reverse."""
+        legs_fwd = [(curr1, curr2), (curr2, curr3), (curr3, curr1)]
+        legs_rev = [(curr1, curr3), (curr3, curr2), (curr2, curr1)]
+        rates_fwd = [self._conversion_rate(a, b, quotes) for a, b in legs_fwd]
+        rates_rev = [self._conversion_rate(a, b, quotes) for a, b in legs_rev]
+        if any(r is None for r in rates_fwd + rates_rev):
+            return {'currencies': [curr1, curr2, curr3], 'arbitrage_exists': False,
+                    'reason': 'not all three legs are quoted'}
 
-                forward_result = rate1 * rate2 * rate3
-
-                # Reverse path: curr1 -> curr3 -> curr2 -> curr1
-                rate1_rev = quotes[pair3]['ask']  # Buy curr3 with curr1
-                rate2_rev = self.to_decimal(1) / quotes[pair2]['bid']  # Buy curr2 with curr3
-                rate3_rev = self.to_decimal(1) / quotes[pair1]['bid']  # Buy curr1 with curr2
-
-                reverse_result = rate1_rev * rate2_rev * rate3_rev
-
-                # Check for arbitrage
-                arbitrage_forward = forward_result > self.to_decimal(1)
-                arbitrage_reverse = reverse_result > self.to_decimal(1)
-
-                if arbitrage_forward or arbitrage_reverse:
-                    best_path = 'forward' if forward_result > reverse_result else 'reverse'
-                    profit_factor = max(forward_result, reverse_result)
-
-                    return {
-                        'currencies': [curr1, curr2, curr3],
-                        'arbitrage_exists': True,
-                        'best_path': best_path,
-                        'profit_factor': profit_factor,
-                        'profit_percentage': (profit_factor - self.to_decimal(1)) * self.to_decimal(100),
-                        'forward_result': forward_result,
-                        'reverse_result': reverse_result
-                    }
-
+        forward_result = rates_fwd[0] * rates_fwd[1] * rates_fwd[2]
+        reverse_result = rates_rev[0] * rates_rev[1] * rates_rev[2]
+        one = self.to_decimal(1)
+        if forward_result > one or reverse_result > one:
+            best_path = 'forward' if forward_result >= reverse_result else 'reverse'
+            profit_factor = max(forward_result, reverse_result)
+            path = legs_fwd if best_path == 'forward' else legs_rev
             return {
                 'currencies': [curr1, curr2, curr3],
-                'arbitrage_exists': False,
-                'profit_factor': self.to_decimal(0),
-                'profit_percentage': self.to_decimal(0)
+                'arbitrage_exists': True,
+                'best_path': best_path,
+                'path': ' -> '.join([path[0][0]] + [b for _, b in path]),
+                'profit_factor': profit_factor,
+                'profit_percentage': (profit_factor - one) * self.to_decimal(100),
+                'forward_result': forward_result,
+                'reverse_result': reverse_result
             }
-
-        except Exception as e:
-            raise CalculationError(f"Error calculating triangular arbitrage: {e}")
+        return {
+            'currencies': [curr1, curr2, curr3],
+            'arbitrage_exists': False,
+            'forward_result': forward_result,
+            'reverse_result': reverse_result,
+            'profit_factor': max(forward_result, reverse_result),
+            'profit_percentage': self.to_decimal(0)
+        }
 
     def calculate_arbitrage_profit(self, opportunity: Dict[str, Any],
-                                   investment_amount: Decimal) -> Dict[str, Decimal]:
-        """Calculate profit from arbitrage opportunity"""
+                                   investment_amount: Decimal,
+                                   transaction_cost_rate: Decimal = None) -> Dict[str, Decimal]:
+        """Profit from an arbitrage opportunity. The profit factor already pays the bid/ask spread
+        on every leg; transaction_cost_rate (per exchange, default 0) is for costs ON TOP of it
+        (commissions, fees)."""
         if not opportunity['arbitrage_exists']:
             raise ValidationError("No arbitrage opportunity exists")
 
-        profit_factor = opportunity['profit_factor']
+        profit_factor = self.to_decimal(opportunity['profit_factor'])
         gross_profit = investment_amount * (profit_factor - self.to_decimal(1))
 
-        # Estimate transaction costs (typical 0.1% per transaction)
-        transaction_cost_rate = self.to_decimal(0.001)
+        transaction_cost_rate = self.to_decimal(transaction_cost_rate or 0)
         num_transactions = self.to_decimal(3)  # Three currency exchanges
         transaction_costs = investment_amount * transaction_cost_rate * num_transactions
 
@@ -320,7 +327,8 @@ class ArbitrageDetector(EconomicsBase):
         elif 'opportunity' in kwargs and 'investment_amount' in kwargs:
             return self.calculate_arbitrage_profit(
                 kwargs['opportunity'],
-                self.to_decimal(kwargs['investment_amount'])
+                self.to_decimal(kwargs['investment_amount']),
+                kwargs.get('transaction_cost_rate')
             )
         else:
             raise ValidationError("Missing required parameters for arbitrage calculation")
@@ -460,8 +468,13 @@ class CarryTradeAnalyzer(EconomicsBase):
                                      target_currency_rate: Decimal,
                                      exchange_rate_change: Decimal,
                                      time_period: Decimal,
-                                     leverage: Decimal = None) -> Dict[str, Any]:
-        """Calculate carry trade returns"""
+                                     leverage: Decimal = None,
+                                     fx_volatility: Decimal = None) -> Dict[str, Any]:
+        """Carry trade return. exchange_rate_change = change of the target currency against the
+        funding currency over the period (+ = target appreciated), as a decimal. Rates are annual
+        decimals; time_period in years; fx_volatility = annualised FX volatility (decimal)."""
+        if time_period <= 0:
+            raise ValidationError("time_period must be positive (years)")
         leverage = leverage or self.to_decimal(1)
 
         # Interest rate differential
@@ -480,9 +493,7 @@ class CarryTradeAnalyzer(EconomicsBase):
         leveraged_return = total_return * leverage
 
         # Risk assessment
-        sharpe_ratio = self._calculate_carry_trade_sharpe(
-            rate_differential, exchange_rate_change, time_period
-        )
+        sharpe_ratio = self._calculate_carry_trade_sharpe(total_return, time_period, fx_volatility)
 
         return {
             'funding_rate': funding_currency_rate,
@@ -494,24 +505,26 @@ class CarryTradeAnalyzer(EconomicsBase):
             'leverage': leverage,
             'leveraged_return': leveraged_return,
             'annualized_return': leveraged_return / time_period,
+            'annualized_return_method': 'simple: leveraged_return / time_period',
             'time_period': time_period,
             'sharpe_ratio': sharpe_ratio,
+            'sharpe_ratio_basis': ('annualised (total_return / years) / fx_volatility; ex post, leverage-'
+                                   'invariant' if sharpe_ratio is not None
+                                   else 'needs fx_volatility (annualised FX volatility)'),
             'risk_level': self._assess_carry_trade_risk(rate_differential, leverage)
         }
 
-    def _calculate_carry_trade_sharpe(self, rate_diff: Decimal, fx_change: Decimal,
-                                      time_period: Decimal) -> Decimal:
-        """Simplified Sharpe ratio calculation for carry trade"""
-        # Assume historical volatility of 10% for FX
-        assumed_volatility = self.to_decimal(0.10)
-
-        expected_return = rate_diff * time_period
-        risk_free_rate = self.to_decimal(0.02)  # Assume 2% risk-free rate
-
-        excess_return = expected_return - (risk_free_rate * time_period)
-        sharpe = excess_return / (assumed_volatility * (time_period ** self.to_decimal(0.5)))
-
-        return sharpe
+    def _calculate_carry_trade_sharpe(self, total_return: Decimal, time_period: Decimal,
+                                      fx_volatility: Optional[Decimal]) -> Optional[Decimal]:
+        """Annualised Sharpe ratio of the (self-financed) carry trade. The funding leg already pays
+        the funding rate, so the excess return IS differential + FX change: no risk-free rate is
+        subtracted again. Leverage scales return and risk alike and cancels. None without a
+        volatility input (no assumed figure)."""
+        if fx_volatility is None:
+            return None
+        if fx_volatility <= 0:
+            raise ValidationError("fx_volatility must be positive")
+        return (total_return / time_period) / fx_volatility
 
     def _assess_carry_trade_risk(self, rate_differential: Decimal, leverage: Decimal) -> str:
         """Assess carry trade risk level"""
@@ -534,8 +547,9 @@ class CarryTradeAnalyzer(EconomicsBase):
         # Actual violation
         uip_violation = actual_fx_change - uip_predicted_change
 
-        # Carry trade profit from UIP violation
-        carry_profit = rate_differential * time_period + uip_violation
+        # Carry trade profit = interest differential earned + FX change of the target currency
+        # (which equals the UIP violation: under UIP the two cancel and the profit is zero).
+        carry_profit = rate_differential * time_period + actual_fx_change
 
         return {
             'rate_differential': rate_differential,
@@ -556,7 +570,8 @@ class CarryTradeAnalyzer(EconomicsBase):
                 self.to_decimal(kwargs['target_rate']),
                 self.to_decimal(kwargs['fx_change']),
                 self.to_decimal(kwargs['time_period']),
-                self.to_decimal(kwargs.get('leverage', 1))
+                self.to_decimal(kwargs.get('leverage', 1)),
+                self.to_decimal(kwargs['fx_volatility']) if kwargs.get('fx_volatility') is not None else None
             )
         elif calculation_type == 'uip_violation':
             return self.carry_trade_uip_violation(

@@ -1,0 +1,23 @@
+Fixtures for tests/tst_deriv_analytics.cpp (Derivatives tab chain / curve parsers).
+
+Recorded once on 2026-11-17 (about 02:45 UTC) with the terminal's own script
+scripts/derivatives/deriv_market.py, run natively with the bundled analytics Python
+environment (venv-numpy2). They are the script's OUTPUT (the compact format the C++
+parser reads), trimmed so the tests stay small:
+
+  spy_chain_cboe_sample.json   `deriv_market.py chain SPY` (source: Cboe delayed quotes,
+                               cdn.cboe.com). Quote time 2026-11-16 16:00 America/New_York,
+                               spot 740.29. Trimmed to 3 expiries (2026-11-20, 2026-12-18,
+                               2027-02-19) and strikes within +/-12 % of spot: 602 of 12,082
+                               contracts. The full reply was 842 KB.
+  aapl_chain_yahoo_sample.json `deriv_market.py chain AAPL --source yahoo --max-expiries 2`
+                               (fallback source: Yahoo Finance via yfinance). Trimmed to the
+                               first expiry and strikes within +/-6 % of spot (33 contracts);
+                               "partial" kept to exercise the partial-load notice.
+  chain_no_options.json        `deriv_market.py chain ZZZZQ` (Cboe HTTP 403, Yahoo: no options).
+  treasury_curve_sample.json   `deriv_market.py treasury_curve` (U.S. Treasury daily par yield
+                               curve CSV, home.treasury.gov; public domain), curve of 2026-11-16.
+
+Values are delayed market data as published by the sources at that time; they are used only
+as parser and analytics inputs. Re-record with the same commands and the trim tool if the
+script's output format changes.

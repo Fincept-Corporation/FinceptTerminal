@@ -1,175 +1,104 @@
 """
 AKShare Company Information API
 Fetches detailed company information for stocks
+
+Usage: python akshare_company_info.py <cn_basic|cn_profile|hk_profile> symbol=<code>
+Output: one JSON line {"success": true, "data": {field: value}} or {"success": false, "error": ...}
 """
 
 import sys
-import json
+
 import akshare as ak
 import pandas as pd
-from datetime import datetime
+
+from akshare_screen_args import XUEQIU_LOGIN, missing_param, run_cli, safe_call, screen_values, unavailable
+
+
+def _first_row(df):
+    """The profile functions return a one-row table: that row as {field: value}."""
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return None
+    return df.iloc[0].to_dict()
+
+
+def _profile(fetch, symbol):
+    """{"success", "data": {field: value}} for one company, an explicit empty result, or the error."""
+    holder = {}
+
+    def call():
+        holder["data"] = fetch(symbol)
+
+    failed = safe_call(call)
+    if "data" not in holder:
+        return failed
+    if not holder["data"]:
+        return {"success": True, "data": [], "count": 0}
+    return {"success": True, "data": holder["data"]}
+
 
 def get_cn_basic_info(symbol):
-    """Get basic info for Chinese A-share stock"""
-    try:
-        df = ak.stock_individual_info_em(symbol=symbol)
-        # Convert to dict with proper key-value pairs
-        result = {}
-        for _, row in df.iterrows():
-            key = str(row['item'])
-            value = row['value']
-            result[key] = value
+    """Basic info of a Chinese A-share (EastMoney): its item/value table as {item: value}"""
+    def fetch(code):
+        df = ak.stock_individual_info_em(symbol=code)
+        if isinstance(df, pd.DataFrame) and {"item", "value"} <= set(df.columns):
+            return {str(row["item"]): row["value"] for _, row in df.iterrows()}
+        return _first_row(df)
+    return _profile(fetch, symbol)
 
-        return {
-            "success": True,
-            "data": result,
-            "timestamp": int(datetime.now().timestamp())
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": int(datetime.now().timestamp())
-        }
 
 def get_cn_profile(symbol):
-    """Get detailed profile for Chinese A-share stock"""
-    try:
-        df = ak.stock_profile_cninfo(symbol=symbol)
-        if df.empty:
-            return {
-                "success": False,
-                "error": "No data found",
-                "timestamp": int(datetime.now().timestamp())
-            }
+    """Detailed profile of a Chinese A-share (CNINFO)"""
+    return _profile(lambda code: _first_row(ak.stock_profile_cninfo(symbol=code)), symbol)
 
-        # Convert first row to dict
-        result = df.iloc[0].to_dict()
-
-        return {
-            "success": True,
-            "data": result,
-            "timestamp": int(datetime.now().timestamp())
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": int(datetime.now().timestamp())
-        }
 
 def get_hk_profile(symbol):
-    """Get profile for Hong Kong stock"""
-    try:
-        df = ak.stock_hk_company_profile_em(symbol=symbol)
-        if df.empty:
-            return {
-                "success": False,
-                "error": "No data found",
-                "timestamp": int(datetime.now().timestamp())
-            }
+    """Profile of a Hong Kong stock (EastMoney)"""
+    return _profile(lambda code: _first_row(ak.stock_hk_company_profile_em(symbol=code)), symbol)
 
-        # Convert first row to dict
-        result = df.iloc[0].to_dict()
 
-        return {
-            "success": True,
-            "data": result,
-            "timestamp": int(datetime.now().timestamp())
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": int(datetime.now().timestamp())
-        }
+ENDPOINTS = {"cn_basic": get_cn_basic_info, "cn_profile": get_cn_profile, "hk_profile": get_hk_profile}
 
-def get_us_info(symbol):
-    """Get info for US stock (from Xueqiu - may require token)"""
-    try:
-        df = ak.stock_individual_basic_info_us_xq(symbol=symbol)
-        if df.empty:
-            return {
-                "success": False,
-                "error": "No data found",
-                "timestamp": int(datetime.now().timestamp())
-            }
+# US profiles came from Xueqiu, which now needs a login token the screen cannot supply (upstream code
+# 400016). No longer listed; a stale saved selection gets this answer.
+RETIRED = {"us_info": XUEQIU_LOGIN.format("us_info")}
 
-        # Convert first row to dict
-        result = df.iloc[0].to_dict()
-
-        return {
-            "success": True,
-            "data": result,
-            "timestamp": int(datetime.now().timestamp())
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": int(datetime.now().timestamp())
-        }
 
 def get_all_endpoints():
     """Get list of all available endpoints"""
-    endpoints = ["cn_basic", "cn_profile", "hk_profile", "us_info"]
     return {
         "success": True,
         "data": {
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
+            "available_endpoints": list(ENDPOINTS),
+            "total_count": len(ENDPOINTS),
             "categories": {
                 "CN Stocks": ["cn_basic", "cn_profile"],
                 "HK Stocks": ["hk_profile"],
-                "US Stocks": ["us_info"]
             },
-            "timestamp": int(datetime.now().timestamp())
         },
-        "count": len(endpoints),
-        "timestamp": int(datetime.now().timestamp())
+        "count": len(ENDPOINTS),
     }
 
+
 def main():
-    # Reconfigure stdout to UTF-8
-    if sys.platform == 'win32':
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    def handler():
+        if len(sys.argv) < 2:
+            return {"success": False, "error": "Missing endpoint parameter", "error_type": "usage"}
+        endpoint = sys.argv[1]
+        if endpoint == "get_all_endpoints":
+            return get_all_endpoints()
+        if endpoint in RETIRED:
+            return unavailable(RETIRED[endpoint])
+        if endpoint not in ENDPOINTS:
+            return {"success": False, "error": f"Unknown endpoint: {endpoint}"}
+        # The screens send symbol=<code>; a bare positional code (manual CLI use) is accepted too.
+        symbol = screen_values(sys.argv[2:]).get("symbol", "")
+        if not symbol:
+            return missing_param(endpoint, ["symbol"])
+        return ENDPOINTS[endpoint](symbol)
 
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "success": False,
-            "error": "Missing endpoint parameter"
-        }))
-        sys.exit(1)
+    # One JSON line on stdout through fincept_json (NaN -> null); akshare's own prints go to stderr.
+    return run_cli(handler, ascii=True)
 
-    endpoint = sys.argv[1]
-
-    # Handle get_all_endpoints without symbol
-    if endpoint == "get_all_endpoints":
-        result = get_all_endpoints()
-    elif len(sys.argv) < 3:
-        print(json.dumps({
-            "success": False,
-            "error": "Missing symbol parameter"
-        }))
-        sys.exit(1)
-    else:
-        symbol = sys.argv[2]
-        if endpoint == "cn_basic":
-            result = get_cn_basic_info(symbol)
-        elif endpoint == "cn_profile":
-            result = get_cn_profile(symbol)
-        elif endpoint == "hk_profile":
-            result = get_hk_profile(symbol)
-        elif endpoint == "us_info":
-            result = get_us_info(symbol)
-        else:
-            result = {
-                "success": False,
-                "error": f"Unknown endpoint: {endpoint}"
-            }
-
-    print(json.dumps(result, ensure_ascii=True, default=str))
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

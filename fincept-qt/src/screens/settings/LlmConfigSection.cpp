@@ -16,6 +16,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QFormLayout>
 #include <QFrame>
@@ -34,6 +35,9 @@
 namespace fincept::screens {
 
 [[maybe_unused]] static constexpr const char* TAG = "LlmConfigSection";
+
+/// The TERMINAL AI tab (agent harnesses as model provider) — LlmConfigSection_Harness.cpp.
+QWidget* build_llm_terminal_ai_tab(QWidget* parent);
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = fincept::ai_chat::ProviderCatalog::known_providers();
 
@@ -69,6 +73,22 @@ LlmConfigSection::LlmConfigSection(QWidget* parent) : QWidget(parent) {
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
         setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+        // List item colours are brushes on the items, which no stylesheet pass
+        // reaches; Qt::UserRole + 1 marks the active provider / default profile.
+        if (provider_list_) {
+            for (int i = 0; i < provider_list_->count(); ++i) {
+                auto* item = provider_list_->item(i);
+                item->setForeground(QColor(item->data(Qt::UserRole + 1).toBool() ? ui::colors::AMBER()
+                                                                                 : ui::colors::TEXT_SECONDARY()));
+            }
+        }
+        if (profile_list_) {
+            for (int i = 0; i < profile_list_->count(); ++i) {
+                auto* item = profile_list_->item(i);
+                if (item->data(Qt::UserRole + 1).toBool())
+                    item->setForeground(QColor(ui::colors::AMBER()));
+            }
+        }
     });
     setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
 
@@ -120,6 +140,7 @@ void LlmConfigSection::build_ui() {
                                QString(ui::colors::TEXT_PRIMARY()) + ";}");
     tab_widget_->addTab(build_providers_tab(), tr("PROVIDERS"));
     tab_widget_->addTab(build_profiles_tab(), tr("PROFILES"));
+    tab_widget_->addTab(build_llm_terminal_ai_tab(this), tr("TERMINAL AI"));
     root->addWidget(tab_widget_, 1);
 }
 
@@ -151,6 +172,8 @@ void LlmConfigSection::retranslateUi() {
     if (tab_widget_) {
         tab_widget_->setTabText(0, tr("PROVIDERS"));
         tab_widget_->setTabText(1, tr("PROFILES"));
+        if (tab_widget_->count() > 2)
+            tab_widget_->setTabText(2, tr("TERMINAL AI"));
     }
 
     // ── Providers tab ─────────────────────────────────────────────────────────
@@ -188,7 +211,7 @@ void LlmConfigSection::retranslateUi() {
                "data, manage watchlists, etc."));
     }
     if (save_btn_)
-        save_btn_->setText(tr("Save & Set Active"));
+        save_btn_->setText(fincept::ui::literal_ampersands(tr("Save & Set Active")));
     if (test_btn_)
         test_btn_->setText(tr("Test Connection"));
 

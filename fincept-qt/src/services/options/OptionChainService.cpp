@@ -196,8 +196,8 @@ void OptionChainService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("option:tick:*"), tick_pol);
 
     hub_registered_ = true;
-    LOG_INFO("OptionChain",
-             "Registered with DataHub (option:chain:*, option:tick:*, option:atm_iv:*, fno:pcr:*, fno:max_pain:*)");
+    LOG_DEBUG("OptionChain",
+              "Registered with DataHub (option:chain:*, option:tick:*, option:atm_iv:*, fno:pcr:*, fno:max_pain:*)");
 }
 
 QStringList OptionChainService::topic_patterns() const {
@@ -367,13 +367,14 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
     }
 
     const QString topic = chain_topic(broker_id, underlying, expiry);
-    LOG_INFO("OptionChain", QString("refresh_chain: broker='%1' underlying='%2' expiry='%3' topic='%4'")
-                                .arg(broker_id, underlying, expiry, topic));
+    LOG_DEBUG("OptionChain", QString("refresh_chain: broker='%1' underlying='%2' expiry='%3' topic='%4'")
+                                 .arg(broker_id, underlying, expiry, topic));
 
     auto& reg = BrokerRegistry::instance();
     IBroker* broker = reg.get(broker_id);
     if (!broker) {
-        LOG_ERROR("OptionChain", QString("refresh_chain: broker '%1' not in registry").arg(broker_id));
+        LOG_ERROR("OptionChain", logf("Option chain refresh failed, broker not registered",
+                                      {{"broker", broker_id}, {"topic", topic}}));
         in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic, "broker not registered: " + broker_id);
         return;
@@ -381,8 +382,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
 
     QVector<Instrument> instruments =
         InstrumentService::instance().find_options_for_underlying(broker_id, underlying, expiry, "NFO");
-    LOG_INFO("OptionChain",
-             QString("refresh_chain: find_options_for_underlying → %1 instruments").arg(instruments.size()));
+    LOG_DEBUG("OptionChain",
+              QString("refresh_chain: find_options_for_underlying → %1 instruments").arg(instruments.size()));
     if (instruments.isEmpty()) {
         in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic,
@@ -429,7 +430,6 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
     }
     if (creds.access_token.isEmpty() && !accounts.isEmpty())
         creds = fincept::trading::AccountManager::instance().load_credentials(accounts.first().account_id);
-    LOG_INFO("OptionChain", QString("refresh_chain: credentials loaded, token_len=%1").arg(creds.access_token.size()));
 
     QPointer<OptionChainService> self = this;
     (void)QtConcurrent::run([self, broker, creds, quote_syms, instruments, broker_id, underlying, expiry, topic,
@@ -447,14 +447,17 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 self->in_flight_.remove(topic);
 
                 if (!resp.success || !resp.data.has_value()) {
-                    LOG_ERROR("OptionChain", QString("get_quotes failed: %1").arg(resp.error));
+                    LOG_TRANSITION("OptionChain", topic, 1, LogLevel::Warn,
+                                   logf("Option chain quotes failed", {{"topic", topic}, {"error", resp.error}}));
                     fincept::datahub::DataHub::instance().publish_error(topic, resp.error);
                     emit self->chain_failed(topic, resp.error);
                     return;
                 }
 
-                LOG_INFO("OptionChain",
-                         QString("get_quotes returned %1 quotes for %2").arg(resp.data->size()).arg(topic));
+                LOG_TRANSITION("OptionChain", topic, 0, LogLevel::Info,
+                               logf("Option chain quotes recovered", {{"topic", topic}}));
+                LOG_DEBUG("OptionChain",
+                          QString("get_quotes returned %1 quotes for %2").arg(resp.data->size()).arg(topic));
 
                 // Build a quick lookup from "EXCH:brsymbol" → BrokerQuote.
                 QHash<QString, BrokerQuote> by_sym;
@@ -477,8 +480,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                         spot_chg_pct = it->change_pct;
                     }
                 }
-                LOG_INFO("OptionChain",
-                         QString("spot=%1 (underlying_sym='%2', fut_sym='%3')").arg(spot).arg(underlying_sym, fut_sym));
+                LOG_DEBUG("OptionChain",
+                          QString("spot=%1 (underlying_sym='%2', fut_sym='%3')").arg(spot).arg(underlying_sym, fut_sym));
                 if (spot > 0)
                     self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
 
@@ -555,7 +558,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 self->publish_per_leg_ticks(chain);
                 self->last_chain_ = chain;
                 emit self->chain_published(chain);
-                LOG_INFO("OptionChain", QString("Published %1 strikes for %2/%3/%4 (spot=%5, ATM=%6, PCR=%7)")
+                LOG_DEBUG("OptionChain", QString("Published %1 strikes for %2/%3/%4 (spot=%5, ATM=%6, PCR=%7)")
                                             .arg(chain.rows.size())
                                             .arg(broker_id, underlying, expiry)
                                             .arg(spot, 0, 'f', 2)
@@ -666,6 +669,18 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
             chain.max_pain = compute_max_pain(chain.rows);
             for (auto& row : chain.rows)
                 row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
+            // No open interest from the feed (statistics schema unavailable): PCR is
+            // already 0 ("--"), but max pain over all-zero OI is an arbitrary strike —
+            // report it as unavailable (0 → "--") instead of a confident number.
+            const bool oi_available = j.value(QStringLiteral("oi_available")).toBool(true) &&
+                                      (chain.total_ce_oi + chain.total_pe_oi) > 0;
+            if (!oi_available) {
+                chain.max_pain = 0;
+                chain.pcr = 0;
+                LOG_WARN("OptionChain", QString("Databento %1/%2: no open interest available — PCR / max pain "
+                                                "shown as unavailable")
+                                            .arg(underlying, expiry));
+            }
 
             auto& hub = fincept::datahub::DataHub::instance();
             hub.publish(topic, QVariant::fromValue(chain));
@@ -676,7 +691,7 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
             self->publish_per_leg_ticks(chain);
             self->last_chain_ = chain;
             emit self->chain_published(chain);
-            LOG_INFO("OptionChain", QString("Published %1 strikes from Databento for %2/%3 (spot=%4, ATM=%5)")
+            LOG_DEBUG("OptionChain", QString("Published %1 strikes from Databento for %2/%3 (spot=%4, ATM=%5)")
                                         .arg(chain.rows.size())
                                         .arg(underlying, expiry)
                                         .arg(spot, 0, 'f', 2)
@@ -692,7 +707,7 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
 void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QString& underlying,
                                              const QString& expiry) {
     const QString topic = chain_topic(broker_id, underlying, expiry);
-    LOG_INFO("OptionChain", QString("refresh_chain_fyers: %1/%2/%3").arg(broker_id, underlying, expiry));
+    LOG_DEBUG("OptionChain", QString("refresh_chain_fyers: %1/%2/%3").arg(broker_id, underlying, expiry));
 
     // Map underlying to Fyers API symbol
     static const QHash<QString, QString> kIndexMap = {
@@ -760,7 +775,8 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
 
                 if (!resp.success || resp.json.value("s").toString() != "ok") {
                     const QString err = resp.success ? resp.json.value("message").toString("API error") : resp.error;
-                    LOG_ERROR("OptionChain", QString("Fyers option chain failed: %1").arg(err));
+                    LOG_TRANSITION("OptionChain", topic, 1, LogLevel::Warn,
+                                   logf("Option chain quotes failed", {{"topic", topic}, {"error", err}}));
                     fincept::datahub::DataHub::instance().publish_error(topic, err);
                     emit self->chain_failed(topic, err);
                     return;
@@ -768,7 +784,9 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
 
                 auto data = resp.json.value("data").toObject();
                 auto arr = data.value("optionsChain").toArray();
-                LOG_INFO("OptionChain", QString("Fyers option chain: %1 entries").arg(arr.size()));
+                LOG_TRANSITION("OptionChain", topic, 0, LogLevel::Info,
+                               logf("Option chain quotes recovered", {{"topic", topic}}));
+                LOG_DEBUG("OptionChain", QString("Fyers option chain: %1 entries").arg(arr.size()));
 
                 double spot = 0, spot_chg = 0, spot_chg_pct = 0;
                 static const QSet<QString> kIdx = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"};
@@ -909,7 +927,7 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
                 // While it stays fresh this REST path is suppressed in refresh().
                 self->maybe_start_ws_stream(chain, topic);
 
-                LOG_INFO("OptionChain", QString("Fyers chain: %1 strikes, spot=%2, ATM=%3, PCR=%4, OI CE=%5 PE=%6")
+                LOG_DEBUG("OptionChain", QString("Fyers chain: %1 strikes, spot=%2, ATM=%3, PCR=%4, OI CE=%5 PE=%6")
                                             .arg(chain.rows.size())
                                             .arg(spot, 0, 'f', 2)
                                             .arg(chain.atm_strike, 0, 'f', 0)
@@ -963,7 +981,7 @@ double OptionChainService::risk_free_rate() {
     bool ok = false;
     const double v = r.value().toDouble(&ok);
     risk_free_rate_ = (ok && v > 0 && v < 0.5) ? v : kDefaultRiskFreeRate;
-    LOG_INFO("OptionChain", QString("Risk-free rate r=%1").arg(risk_free_rate_, 0, 'f', 4));
+    LOG_DEBUG("OptionChain", QString("Risk-free rate r=%1").arg(risk_free_rate_, 0, 'f', 4));
     return risk_free_rate_;
 }
 
@@ -1199,7 +1217,7 @@ void OptionChainService::on_ws_quote(const QString& account_id, const QString& s
     static qint64 s_last_ws_log_ms = 0;
     if (now - s_last_ws_log_ms > 5'000) {
         s_last_ws_log_ms = now;
-        LOG_INFO(
+        LOG_DEBUG(
             "OptionChain",
             QString("WS tick live: %1 ltp=%2 oi=%3 → token %4").arg(symbol).arg(q.ltp, 0, 'f', 2).arg(q.oi).arg(token));
     }

@@ -31,6 +31,8 @@ class FiiDiiChart : public QChartView {
 
   private:
     void retranslateUi();
+    /// Re-apply the theme's colours and font to the chart, bars and axes.
+    void refresh_theme();
 
     QChart* chart_ = nullptr;
     QBarSeries* series_ = nullptr;

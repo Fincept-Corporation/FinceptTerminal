@@ -1,8 +1,11 @@
 #include "screens/crypto_center/panels/TreasuryPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "services/wallet/WalletTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
@@ -10,12 +13,13 @@
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QStyle>
 #include <QUrl>
 #include <QVBoxLayout>
+
+namespace cc_fmt = fincept::ui::formatting;
 
 namespace fincept::screens::panels {
 
@@ -24,31 +28,18 @@ namespace {
 constexpr const char* kTopicReserves = "treasury:reserves";
 constexpr const char* kTopicRunway = "treasury:runway";
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
-QString format_usd(double v, int dp = 0) {
-    if (v <= 0.0)
-        return QStringLiteral("$0");
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', dp));
-}
-
+// The treasury endpoint publishes Fincept's reserves, total and opex in USD:
+// shown in USD as published, never converted (USDC reserves keep their own code).
 QString format_usd_compact(double v) {
-    if (v <= 0.0)
-        return QStringLiteral("$0");
-    if (v >= 1e9)
-        return QStringLiteral("$%1B").arg(QLocale::system().toString(v / 1e9, 'f', 2));
-    if (v >= 1e6)
-        return QStringLiteral("$%1M").arg(QLocale::system().toString(v / 1e6, 'f', 2));
-    if (v >= 1e3)
-        return QStringLiteral("$%1k").arg(QLocale::system().toString(v / 1e3, 'f', 1));
-    return format_usd(v, 0);
+    return cc_fmt::money(v > 0.0 ? v : 0.0, QStringLiteral("USD"), cc_fmt::Compact::FromSettings);
 }
 
+/// A SOL amount: a quantity of the token, never money.
 QString format_sol(quint64 lamports) {
     const double sol = static_cast<double>(lamports) / 1e9;
-    return QLocale::system().toString(sol, 'f', 2);
+    return cc_fmt::number(sol, 2);
 }
 
 } // namespace
@@ -60,6 +51,17 @@ TreasuryPanel::TreasuryPanel(QWidget* parent) : QWidget(parent) {
 
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this, &TreasuryPanel::on_topic_error);
+    // A number-format / currency change re-renders the figures on screen from the hub's last
+    // values (no new request).
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!has_data_)
+            return;
+        auto& h = fincept::datahub::DataHub::instance();
+        if (const QVariant v = h.peek_raw(QString::fromLatin1(kTopicReserves)); v.isValid())
+            on_reserves_update(v);
+        if (const QVariant v = h.peek_raw(QString::fromLatin1(kTopicRunway)); v.isValid())
+            on_runway_update(v);
+    });
 }
 
 TreasuryPanel::~TreasuryPanel() = default;
@@ -78,7 +80,7 @@ void TreasuryPanel::build_ui() {
     hl->setSpacing(8);
     title_ = new QLabel(tr("TREASURY"), head);
     title_->setObjectName(QStringLiteral("treasuryTitle"));
-    status_pill_ = new QLabel(tr("LIVE"), head);
+    status_pill_ = new QLabel(tr("LOADING"), head); // LIVE/DEMO once a value arrives
     status_pill_->setObjectName(QStringLiteral("treasuryPill"));
     hl->addWidget(title_);
     hl->addStretch();
@@ -150,34 +152,34 @@ void TreasuryPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#treasuryPanel { background:%1; }"
+    const QString ss = QString("QWidget#treasuryPanel { background:%1; }"
                                       "QWidget#treasuryHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#treasuryTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#treasuryTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
                                       "QLabel#treasuryPill { color:%7; background:%8; border:1px solid %3;"
-                                      "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
+                                      "  font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
-                                      "QLabel#treasuryPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
+                                      "QLabel#treasuryPillDemo { color:%4; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
+                                      "  border:1px solid %11; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
                                       "QWidget#treasuryBody { background:%1; }"
-                                      "QLabel#treasuryCaption { color:%6; font-family:%5; font-size:9px;"
+                                      "QLabel#treasuryCaption { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#treasuryValue { color:%7; font-family:%5; font-size:12px;"
+                                      "QLabel#treasuryValue { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                                       "  background:transparent; }"
-                                      "QLabel#treasuryValueAmber { color:%4; font-family:%5; font-size:13px;"
+                                      "QLabel#treasuryValueAmber { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                       "  font-weight:700; background:transparent; }"
 
-                                      "QPushButton#treasuryMultisig { color:%4; font-family:%5; font-size:11px;"
+                                      "QPushButton#treasuryMultisig { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  text-decoration:underline; background:transparent; border:none;"
                                       "  padding:0; text-align:right; }"
                                       "QPushButton#treasuryMultisig:hover { color:%10; }"
 
-                                      "QFrame#treasuryErrorStrip { background:rgba(220,38,38,0.10);"
+                                      "QFrame#treasuryErrorStrip { background:" + ui::colors::alpha(DANGER, 0.10) + ";"
                                       "  border:1px solid %9; }"
-                                      "QLabel#treasuryErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                                      "QLabel#treasuryErrorIcon { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                       "  font-weight:700; background:transparent; }"
-                                      "QLabel#treasuryErrorText { color:%9; font-family:%5; font-size:11px;"
+                                      "QLabel#treasuryErrorText { color:%9; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  background:transparent; }")
                            .arg(BG_BASE(),                  // %1
                                 BG_SURFACE(),               // %2
@@ -187,13 +189,13 @@ void TreasuryPanel::apply_theme() {
                                 TEXT_TERTIARY(),            // %6
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
-                                NEGATIVE())                 // %9
+                                DANGER())                   // %9
                            // One arg per marker, in ascending marker order —
                            // QString::arg fills the LOWEST marker present, so a
                            // spare arg shifts every later colour by one and
                            // warns "Argument missing" for the overflow.
                            .arg(BORDER_BRIGHT(),            // %10
-                                QStringLiteral("#78350f")); // %11 darker amber
+                                AMBER_DIM());               // %11 darker amber
 
     setStyleSheet(ss);
 }
@@ -246,9 +248,12 @@ void TreasuryPanel::on_reserves_update(const QVariant& v) {
         return;
     const auto r = v.value<fincept::wallet::TreasuryReserves>();
     reserves_is_mock_ = r.is_mock;
+    has_data_ = true;
     update_demo_chip();
 
-    usdc_value_->setText(format_usd_compact(r.usdc_amount));
+    // USDC is a stablecoin — its own currency, not "$".
+    usdc_value_->setText(
+        cc_fmt::money(r.usdc_amount > 0.0 ? r.usdc_amount : 0.0, QStringLiteral("USDC"), cc_fmt::Compact::FromSettings));
     // sol_usd_price is 0 when no SOL quote has reached the hub yet. Rendering
     // that as "(0 USD)" and a total that silently omits the SOL leg understates
     // reserves with full confidence — flag it instead.
@@ -275,6 +280,7 @@ void TreasuryPanel::on_runway_update(const QVariant& v) {
         return;
     const auto w = v.value<fincept::wallet::TreasuryRunway>();
     runway_is_mock_ = w.is_mock;
+    has_data_ = true;
     update_demo_chip();
 
     if (w.months <= 0.0) {
@@ -283,9 +289,10 @@ void TreasuryPanel::on_runway_update(const QVariant& v) {
                                                          : QStringLiteral("—"));
         return;
     }
-    runway_value_->setText(QStringLiteral("%1 months  ($%2/mo)")
-                               .arg(QLocale::system().toString(w.months, 'f', 0))
-                               .arg(QLocale::system().toString(w.monthly_opex_usd, 'f', 0)));
+    runway_value_->setText(
+        tr("%1 months  (%2/mo)")
+            .arg(cc_fmt::number(w.months, 0),
+                 cc_fmt::money(w.monthly_opex_usd, QStringLiteral("USD"), cc_fmt::Compact::None, 0)));
 }
 
 void TreasuryPanel::on_topic_error(const QString& topic, const QString& error) {
@@ -293,6 +300,8 @@ void TreasuryPanel::on_topic_error(const QString& topic, const QString& error) {
         return;
     }
     show_error_strip(tr("Treasury feed error: %1").arg(error));
+    feed_failed_ = true;
+    update_demo_chip(); // OFFLINE when nothing has arrived yet
 }
 
 void TreasuryPanel::on_multisig_clicked() {
@@ -328,7 +337,14 @@ void TreasuryPanel::clear_error_strip() {
 
 void TreasuryPanel::update_demo_chip() {
     const bool any_mock = reserves_is_mock_ || runway_is_mock_;
-    if (any_mock) {
+    if (!has_data_) {
+        // Nothing received yet: a LIVE badge over a column of dashes would vouch
+        // for data that does not exist.
+        status_pill_->setText(feed_failed_ ? tr("OFFLINE") : tr("LOADING"));
+        status_pill_->setObjectName(QStringLiteral("treasuryPill"));
+        if (title_)
+            title_->setText(tr("TREASURY"));
+    } else if (any_mock) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("treasuryPillDemo"));
         // A fabricated reserve figure presented like a real one is the single

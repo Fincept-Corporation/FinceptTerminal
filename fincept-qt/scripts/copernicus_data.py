@@ -37,7 +37,7 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 
 def _check_api_key() -> Optional[Dict]:
     if not API_KEY:
-        return {"error": "COPERNICUS_API_KEY environment variable not set"}
+        return {"error": "COPERNICUS_API_KEY is not set: save it in Settings > Credentials"}
     return None
 
 

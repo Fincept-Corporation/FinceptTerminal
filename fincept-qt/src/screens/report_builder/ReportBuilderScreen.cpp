@@ -1,505 +1,512 @@
-// ReportBuilderScreen.cpp — view onto ReportBuilderService.
-//
-// Core lifecycle: ctor, build_ui via build_toolbar, show/hide events,
-// save_state/restore_state. Other concerns:
-//   - ReportBuilderScreen_Components.cpp — panel toggles + component CRUD + service events
-//   - ReportBuilderScreen_Dialogs.cpp    — Recent/Template/Theme/Metadata + file actions
-//
-// All document state (components, metadata, theme, undo, autosave, recent
-// files) lives in the service. The screen renders that state, forwards user
-// gestures to the service, and observes service signals so LLM/MCP-driven
-// mutations appear live on the canvas.
+// ReportBuilderScreen.cpp — view onto ReportBuilderService: construction, toolbar,
+// pages, lifecycle and saved state. See the header for the split.
 
 #include "screens/report_builder/ReportBuilderScreen.h"
 
+#include "core/report/ReportBinding.h"
+#include "core/report/ReportVariables.h"
 #include "core/session/ScreenStateManager.h"
-#include "datahub/DataHub.h"
-#include "datahub/DataHubMetaTypes.h"
+#include "screens/report_builder/ReportAiPanel.h"
+#include "screens/report_builder/ReportExportJob.h"
+#include "screens/report_builder/ReportLibraryPage.h"
 #include "services/cloud/CloudSyncEngine.h"
-#include "services/file_manager/FileManagerService.h"
-#include "services/markets/MarketDataService.h"
 #include "services/report_builder/ReportBuilderService.h"
+#include "services/report_builder/ReportChartCache.h"
+#include "services/report_builder/ReportDataBinder.h"
+#include "services/report_builder/ReportInbox.h"
+#include "services/report_builder/ReportLibrary.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
-#include <QComboBox>
-#include <QDateTime>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QFileDialog>
-#include <QFormLayout>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QListWidgetItem>
-#include <QMessageBox>
-#include <QPageLayout>
-#include <QPageSize>
-#include <QPainter>
+#include <QMenu>
 #include <QPointer>
-#include <QPrintPreviewDialog>
-#include <QPrinter>
+#include <QProgressBar>
+#include <QPropertyAnimation>
 #include <QPushButton>
-#include <QScopedValueRollback>
 #include <QShortcut>
-#include <QTextDocument>
-#include <QTextFrame>
+#include <QSplitter>
+#include <QStackedWidget>
+#include <QTimer>
+#include <QToolButton>
+#include <QUndoStack>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
 namespace rep = ::fincept::report;
 using Service = ::fincept::services::ReportBuilderService;
+using Binder = ::fincept::services::ReportDataBinder;
 
-// Tracks the most recently constructed Report Builder screen so MCP tools
-// can find a live instance without walking the widget tree. Cleared in the
-// destructor. QPointer auto-nulls if Qt deletes the widget another way.
-static QPointer<ReportBuilderScreen> s_current_screen;
+// Tracks the most recently constructed Report Builder screen so automation can find a
+// live instance without walking the widget tree. QPointer auto-nulls on deletion.
+static QPointer<ReportBuilderScreen> s_rb_current_screen;
 
 ReportBuilderScreen* ReportBuilderScreen::current() {
-    return s_current_screen.data();
+    return s_rb_current_screen.data();
+}
+
+void ReportBuilderScreen::open_when_ready(const QString& path) {
+    if (path.isEmpty())
+        return;
+    Service::OpenRequest req;
+    req.file_path = path;
+    Service::instance().request_open(req);
 }
 
 ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
-    s_current_screen = this;
-    setStyleSheet(QString("background: %1;").arg(ui::colors::DARK()));
+    s_rb_current_screen = this;
+    setObjectName(QStringLiteral("rbScreen"));
+    // Selector-scoped, set before any child exists.
+    setStyleSheet(
+        QStringLiteral(
+            "#rbScreen { background: %1; }"
+            "#rbToolbar { background: %2; border-bottom: 1px solid %3; }"
+            "#rbToolbar QLabel { background: transparent; color: %4; font-size: %5px; }"
+            "#rbToolbar QLabel[rbRole=\"brand\"] { color: %6; font-weight: bold; font-size: %5px; }"
+            "#rbToolbar QPushButton, #rbToolbar QToolButton { background: transparent; color: %7; border: 1px solid %3;"
+            " padding: 3px 9px; font-size: %8px; }"
+            "#rbToolbar QPushButton:hover, #rbToolbar QToolButton:hover { background: %9; color: %6; border-color: %6; }"
+            "#rbToolbar QPushButton:disabled, #rbToolbar QToolButton:disabled { color: %4; }"
+            "#rbToolbar QPushButton:checked { background: %6; color: %10; border-color: %6; }"
+            "#rbToolbar QPushButton[rbRole=\"primary\"], #rbToolbar QToolButton[rbRole=\"primary\"] { color: %6;"
+            " font-weight: bold; }"
+            "#rbToolbar QFrame[rbRole=\"sep\"] { background: %3; border: none; }"
+            "#rbNotice { background: %11; border-bottom: 1px solid %3; }"
+            "#rbNotice QLabel { background: transparent; color: %7; font-size: %8px; }"
+            "#rbNotice QLabel[rbTone=\"warn\"] { color: %12; }"
+            "#rbNotice QLabel[rbTone=\"bad\"] { color: %13; }"
+            "#rbNotice QLabel[rbTone=\"ok\"] { color: %14; }"
+            "#rbNotice QPushButton { background: transparent; color: %6; border: 1px solid %6; padding: 2px 10px;"
+            " font-size: %8px; font-weight: bold; }"
+            "#rbNotice QPushButton[rbRole=\"close\"] { color: %4; border: none; font-weight: normal; }"
+            "#rbExportBar { background: %11; border-bottom: 1px solid %3; }"
+            "#rbExportBar QLabel { background: transparent; color: %7; font-size: %8px; }"
+            "#rbExportBar QProgressBar { background: %1; border: 1px solid %3; height: 8px; text-align: center; }"
+            "#rbExportBar QProgressBar::chunk { background: %6; }"
+            "#rbExportBar QPushButton { background: transparent; color: %7; border: 1px solid %3; padding: 2px 10px;"
+            " font-size: %8px; }"
+            "QSplitter#rbSplitter::handle { background: %3; }"
+            "QSplitter#rbRightSplit::handle { background: %3; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::HEADER(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(),
+                 ui::fonts::px(0), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(), ui::fonts::px(-1),
+                 ui::colors::BG_HOVER())
+            .arg(ui::colors::TEXT_ON_ACCENT(), ui::colors::BG_RAISED(), ui::colors::WARNING(), ui::colors::DANGER(),
+                 ui::colors::SUCCESS()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
-
     vl->addWidget(build_toolbar());
 
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER()));
-    vl->addWidget(sep);
-
-    splitter_ = new QSplitter(Qt::Horizontal);
-    splitter_->setHandleWidth(1);
-    splitter_->setStyleSheet(QString("QSplitter::handle { background: %1; }"
-                                     "QSplitter::handle:hover { background: %2; }")
-                                 .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
-
-    comp_toolbar_ = new ComponentToolbar;
-    canvas_ = new DocumentCanvas;
-    properties_ = new PropertiesPanel;
-
-    splitter_->addWidget(comp_toolbar_);
-    splitter_->addWidget(canvas_);
-    splitter_->addWidget(properties_);
-    splitter_->setSizes({240, 700, 280});
-
-    vl->addWidget(splitter_, 1);
-
-    // ── Component toolbar wiring ─────────────────────────────────────────
-    connect(comp_toolbar_, &ComponentToolbar::new_report_requested, this, &ReportBuilderScreen::on_new);
-    connect(comp_toolbar_, &ComponentToolbar::open_report_requested, this, &ReportBuilderScreen::on_open);
-    connect(comp_toolbar_, &ComponentToolbar::recent_reports_requested, this, &ReportBuilderScreen::show_recent_dialog);
-    connect(comp_toolbar_, &ComponentToolbar::templates_requested, this, &ReportBuilderScreen::show_template_dialog);
-    connect(comp_toolbar_, &ComponentToolbar::theme_requested, this, &ReportBuilderScreen::show_theme_dialog);
-    connect(comp_toolbar_, &ComponentToolbar::metadata_requested, this, &ReportBuilderScreen::show_metadata_dialog);
-
-    connect(comp_toolbar_, &ComponentToolbar::font_changed, this,
-            [this](const QString& family, int size, bool bold, bool italic) {
-                QTextCharFormat fmt;
-                fmt.setFontFamilies({family});
-                fmt.setFontPointSize(size);
-                fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
-                fmt.setFontItalic(italic);
-                if (canvas_->text_edit())
-                    canvas_->text_edit()->mergeCurrentCharFormat(fmt);
-            });
-
-    connect(comp_toolbar_, &ComponentToolbar::add_component, this, &ReportBuilderScreen::add_component);
-    connect(comp_toolbar_, &ComponentToolbar::structure_selected, this, &ReportBuilderScreen::select_component);
-    connect(comp_toolbar_, &ComponentToolbar::delete_item, this, &ReportBuilderScreen::remove_component_at);
-    connect(comp_toolbar_, &ComponentToolbar::duplicate, this, &ReportBuilderScreen::duplicate_at);
-    connect(comp_toolbar_, &ComponentToolbar::move_up, this, &ReportBuilderScreen::move_up_at);
-    connect(comp_toolbar_, &ComponentToolbar::move_down, this, &ReportBuilderScreen::move_down_at);
-
-    // ── Properties panel wiring ───────────────────────────────────────────
-    connect(properties_, &PropertiesPanel::content_changed, this, [this](int idx, const QString& content) {
-        const auto comps = Service::instance().components();
-        if (idx < 0 || idx >= comps.size())
-            return;
-        // The edit came FROM the panel — keep its widgets (see props_editing_).
-        QScopedValueRollback<bool> editing(props_editing_, true);
-        Service::instance().update_component(comps[idx].id, content, comps[idx].config);
+    // Export progress strip (hidden until an export runs).
+    export_bar_ = new QWidget(this);
+    export_bar_->setObjectName(QStringLiteral("rbExportBar"));
+    export_bar_->setAttribute(Qt::WA_StyledBackground);
+    auto* el = new QHBoxLayout(export_bar_);
+    el->setContentsMargins(10, 4, 10, 4);
+    el->setSpacing(10);
+    export_lbl_ = new QLabel(export_bar_);
+    el->addWidget(export_lbl_, 1);
+    export_progress_ = new QProgressBar(export_bar_);
+    export_progress_->setRange(0, 100);
+    export_progress_->setTextVisible(false);
+    export_progress_->setMaximumWidth(260);
+    el->addWidget(export_progress_, 1);
+    export_cancel_ = new QPushButton(tr("Cancel"), export_bar_);
+    el->addWidget(export_cancel_);
+    vl->addWidget(export_bar_);
+    export_bar_->hide();
+    connect(export_cancel_, &QPushButton::clicked, this, [this]() {
+        if (export_job_)
+            export_job_->cancel();
     });
 
-    connect(properties_, &PropertiesPanel::config_changed, this,
-            [this](int idx, const QString& key, const QString& val) {
-                auto& svc = Service::instance();
-                auto comps = svc.components();
-                if (idx < 0 || idx >= comps.size())
-                    return;
-                const int comp_id = comps[idx].id;
-                const QString comp_type = comps[idx].type;
-
-                // ── stats_block: fetch real fundamentals via get_info ─────
-                if (comp_type == "stats_block" && key == "fetch_ticker") {
-                    QString sym = val;
-                    auto loading_cfg = comps[idx].config;
-                    loading_cfg["fetch_ticker"] = "";
-                    loading_cfg["data"] = "(Loading " + sym + "...)";
-                    svc.update_component(comp_id, comps[idx].content, loading_cfg);
-
-                    QPointer<ReportBuilderScreen> self = this;
-                    fincept::services::MarketDataService::instance().fetch_info(
-                        sym, [self, comp_id, sym](bool ok, fincept::services::InfoData info) {
-                            if (!self)
-                                return;
-                            QMetaObject::invokeMethod(
-                                self,
-                                [self, comp_id, sym, ok, info]() {
-                                    if (!self)
-                                        return;
-                                    auto& s = Service::instance();
-                                    int idx2 = s.index_of(comp_id);
-                                    if (idx2 < 0)
-                                        return;
-                                    auto comps2 = s.components();
-                                    QStringList lines;
-                                    auto fmt_dbl = [](double v, int dec = 2) -> QString {
-                                        return v != 0 ? QString::number(v, 'f', dec) : "—";
-                                    };
-                                    auto fmt_pct = [](double v) -> QString {
-                                        return v != 0 ? QString::number(v * 100, 'f', 2) + "%" : "—";
-                                    };
-                                    auto fmt_mcap = [](double v) -> QString {
-                                        if (v <= 0)
-                                            return QString("—");
-                                        if (v >= 1e12)
-                                            return QString::number(v / 1e12, 'f', 2) + "T";
-                                        if (v >= 1e9)
-                                            return QString::number(v / 1e9, 'f', 2) + "B";
-                                        if (v >= 1e6)
-                                            return QString::number(v / 1e6, 'f', 2) + "M";
-                                        return QString::number(v, 'f', 0);
-                                    };
-                                    auto fmt_vol = [](double v) -> QString {
-                                        if (v <= 0)
-                                            return QString("—");
-                                        if (v >= 1e9)
-                                            return QString::number(v / 1e9, 'f', 2) + "B";
-                                        if (v >= 1e6)
-                                            return QString::number(v / 1e6, 'f', 2) + "M";
-                                        if (v >= 1e3)
-                                            return QString::number(v / 1e3, 'f', 1) + "K";
-                                        return QString::number(v, 'f', 0);
-                                    };
-
-                                    if (!ok) {
-                                        lines << "Error: Could not fetch data for " + sym;
-                                    } else {
-                                        if (!info.name.isEmpty())
-                                            lines << "Company: " + info.name;
-                                        if (!info.currency.isEmpty())
-                                            lines << "Currency: " + info.currency;
-                                        if (!info.sector.isEmpty())
-                                            lines << "Sector: " + info.sector;
-                                        if (!info.industry.isEmpty())
-                                            lines << "Industry: " + info.industry;
-                                        if (!info.country.isEmpty())
-                                            lines << "Country: " + info.country;
-                                        lines << "Market Cap: " + fmt_mcap(info.market_cap);
-                                        lines << "P/E Ratio: " + fmt_dbl(info.pe_ratio);
-                                        lines << "Forward P/E: " + fmt_dbl(info.forward_pe);
-                                        lines << "Price/Book: " + fmt_dbl(info.price_to_book);
-                                        lines << "Dividend Yield: " + fmt_pct(info.dividend_yield);
-                                        lines << "Beta: " + fmt_dbl(info.beta);
-                                        lines << "52W High: " + fmt_dbl(info.week52_high);
-                                        lines << "52W Low: " + fmt_dbl(info.week52_low);
-                                        lines << "Avg Volume: " + fmt_vol(info.avg_volume);
-                                        lines << "ROE: " + fmt_pct(info.roe);
-                                        lines << "Profit Margin: " + fmt_pct(info.profit_margin);
-                                        if (info.debt_to_equity != 0)
-                                            lines << "Debt/Equity: " + fmt_dbl(info.debt_to_equity);
-                                        if (info.current_ratio != 0)
-                                            lines << "Current Ratio: " + fmt_dbl(info.current_ratio);
-                                        if (info.eps != 0)
-                                            lines << "Rev/Share: " + fmt_dbl(info.eps);
-                                        // Fundamentals go stale too — date the block.
-                                        lines << "As of: " +
-                                                     QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm t");
-                                    }
-                                    auto cfg = comps2[idx2].config;
-                                    cfg["data"] = lines.join("\n");
-                                    cfg["fetch_ticker"] = "";
-                                    s.update_component(comp_id, comps2[idx2].content, cfg);
-                                },
-                                Qt::QueuedConnection);
-                        });
-                    return;
-                }
-
-                // ── chart: hub-driven 6mo/1d history fetch ─────────────────
-                if (comp_type == "chart" && key == "fetch_history") {
-                    QString sym = val;
-                    auto cfg = comps[idx].config;
-                    cfg["fetch_history"] = "";
-                    cfg["data"] = "";
-                    svc.update_component(comp_id, comps[idx].content, cfg);
-
-                    const QString topic = QStringLiteral("market:history:") + sym + QStringLiteral(":6mo:1d");
-                    auto& hub = fincept::datahub::DataHub::instance();
-                    QPointer<ReportBuilderScreen> self = this;
-
-                    auto apply = [self, comp_id, sym](const QVector<fincept::services::HistoryPoint>& history) {
-                        if (!self)
-                            return;
-                        auto& s = Service::instance();
-                        int idx2 = s.index_of(comp_id);
-                        if (idx2 < 0)
-                            return;
-                        auto comps2 = s.components();
-                        if (history.isEmpty()) {
-                            auto cfg2 = comps2[idx2].config;
-                            cfg2["data"] = "";
-                            s.update_component(comp_id, comps2[idx2].content, cfg2);
-                            return;
-                        }
-                        QStringList pts, lbls;
-                        int step = qMax(1, history.size() / 20);
-                        for (int i = 0; i < history.size(); i += step) {
-                            const auto& pt = history[i];
-                            pts << QString::number(pt.close, 'f', 2);
-                            QDateTime dt = QDateTime::fromSecsSinceEpoch(pt.timestamp);
-                            lbls << dt.toString("MMM d");
-                        }
-                        if ((history.size() - 1) % step != 0) {
-                            pts << QString::number(history.last().close, 'f', 2);
-                            lbls << QDateTime::fromSecsSinceEpoch(history.last().timestamp).toString("MMM d");
-                        }
-                        auto cfg2 = comps2[idx2].config;
-                        cfg2["data"] = pts.join(",");
-                        cfg2["labels"] = lbls.join(",");
-                        cfg2.remove("sample"); // real data now
-                        cfg2["as_of"] = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm t");
-                        if (cfg2.value("title").isEmpty() || cfg2.value("title") == "Chart")
-                            cfg2["title"] = sym + " (6mo)";
-                        s.update_component(comp_id, comps2[idx2].content, cfg2);
-                    };
-
-                    QVariant cached = hub.peek(topic);
-                    if (cached.isValid() && cached.canConvert<QVector<fincept::services::HistoryPoint>>()) {
-                        apply(cached.value<QVector<fincept::services::HistoryPoint>>());
-                        return;
-                    }
-
-                    hub.subscribe<QVector<fincept::services::HistoryPoint>>(
-                        this, topic, [self, topic, apply](const QVector<fincept::services::HistoryPoint>& history) {
-                            if (!self)
-                                return;
-                            apply(history);
-                            fincept::datahub::DataHub::instance().unsubscribe(self, topic);
-                        });
-                    hub.request(topic, /*force=*/true);
-                    return;
-                }
-
-                // ── market_data: fresh, time-stamped quote ────────────────
-                if (comp_type == "market_data" && key == "status" && val == "loading") {
-                    const QString sym = comps[idx].config.value("symbol", "");
-                    if (!sym.isEmpty())
-                        fetch_quote(sym);
-                    return;
-                }
-
-                // Generic single-key config patch. The panel's own editor already shows
-                // this value, so don't rebuild the panel around it (see props_editing_).
-                QMap<QString, QString> patch;
-                patch[key] = val;
-                // Editing a template chart's numbers makes them the user's own data.
-                if (comp_type == "chart" && (key == "data" || key == "labels"))
-                    patch["sample"] = "";
-                QScopedValueRollback<bool> editing(props_editing_, true);
-                svc.patch_component(comp_id, nullptr, patch);
-            });
-
-    connect(properties_, &PropertiesPanel::duplicate_requested, this, &ReportBuilderScreen::duplicate_at);
-    connect(properties_, &PropertiesPanel::delete_requested, this, &ReportBuilderScreen::remove_component_at);
-
-    // ── Canvas drag-and-drop ──────────────────────────────────────────────
-    connect(canvas_, &DocumentCanvas::image_dropped, this, [this](const QString& path) {
-        auto& svc = Service::instance();
-        auto comps = svc.components();
-        // If selected component is an image, update its path.
-        int sel_idx = (selected_id_ > 0) ? svc.index_of(selected_id_) : -1;
-        if (sel_idx >= 0 && comps[sel_idx].type == "image") {
-            auto cfg = comps[sel_idx].config;
-            cfg["path"] = path;
-            cfg["clipboard"] = "";
-            svc.update_component(comps[sel_idx].id, comps[sel_idx].content, cfg);
-        } else {
-            rep::ReportComponent comp;
-            comp.type = "image";
-            comp.config["path"] = path;
-            comp.config["width"] = "400";
-            comp.config["align"] = "left";
-            int at = (sel_idx >= 0) ? sel_idx + 1 : -1;
-            int new_id = svc.add_component(comp, at);
-            selected_id_ = new_id;
-            select_component(svc.index_of(new_id));
-        }
+    // Notice strip (new blocks from other tabs, stale data, saves, exports).
+    notice_bar_ = new QWidget(this);
+    notice_bar_->setObjectName(QStringLiteral("rbNotice"));
+    notice_bar_->setAttribute(Qt::WA_StyledBackground);
+    auto* nl = new QHBoxLayout(notice_bar_);
+    nl->setContentsMargins(10, 4, 6, 4);
+    nl->setSpacing(10);
+    notice_lbl_ = new QLabel(notice_bar_);
+    notice_lbl_->setWordWrap(true);
+    nl->addWidget(notice_lbl_, 1);
+    notice_action_ = new QPushButton(notice_bar_);
+    nl->addWidget(notice_action_);
+    notice_close_ = new QPushButton(QStringLiteral("✕"), notice_bar_);
+    notice_close_->setProperty("rbRole", QStringLiteral("close"));
+    notice_close_->setToolTip(tr("Dismiss"));
+    nl->addWidget(notice_close_);
+    vl->addWidget(notice_bar_);
+    notice_bar_->hide();
+    connect(notice_action_, &QPushButton::clicked, this, &ReportBuilderScreen::on_notice_action);
+    connect(notice_close_, &QPushButton::clicked, this, [this]() {
+        if (notice_kind_ == NoticeKind::Inbox)
+            Service::instance().mark_inbox_seen();
+        clear_notice();
     });
 
-    // ── Service signals → screen ──────────────────────────────────────────
-    connect(&Service::instance(), &Service::component_added, this, &ReportBuilderScreen::on_component_added);
-    connect(&Service::instance(), &Service::component_updated, this, &ReportBuilderScreen::on_component_updated);
-    connect(&Service::instance(), &Service::component_removed, this, &ReportBuilderScreen::on_component_removed);
-    connect(&Service::instance(), &Service::component_moved, this, &ReportBuilderScreen::on_component_moved);
-    connect(&Service::instance(), &Service::metadata_changed, this, &ReportBuilderScreen::on_metadata_changed);
-    connect(&Service::instance(), &Service::theme_changed, this, &ReportBuilderScreen::on_theme_changed);
-    connect(&Service::instance(), &Service::document_changed, this, &ReportBuilderScreen::on_document_changed);
-    connect(&Service::instance(), &Service::document_loaded, this, &ReportBuilderScreen::on_document_loaded);
+    pages_ = new QStackedWidget(this);
+    library_page_ = new ReportLibraryPage(pages_);
+    pages_->addWidget(library_page_);
+    editor_page_ = build_editor_page();
+    pages_->addWidget(editor_page_);
+    vl->addWidget(pages_, 1);
 
-    // First render — pull whatever the service already holds (autosave restore,
-    // earlier LLM mutations while the screen wasn't open, etc.).
-    rebind_from_service();
+    refresh_timer_ = new QTimer(this);
+    refresh_timer_->setSingleShot(true);
+    refresh_timer_->setInterval(0); // a burst of service signals renders once
+    connect(refresh_timer_, &QTimer::timeout, this, &ReportBuilderScreen::do_refresh);
+
+    wire_services();
+    retranslateUi();
+
+    // Chart image cache: capped size, plus the PNGs older builds left in the temp folder.
+    // Once per session, off the GUI thread.
+    static bool s_rb_cache_trimmed = false;
+    if (!s_rb_cache_trimmed) {
+        s_rb_cache_trimmed = true;
+        (void)QtConcurrent::run([]() { services::ReportChartCache::trim(); });
+    }
 }
 
 ReportBuilderScreen::~ReportBuilderScreen() {
-    if (s_current_screen == this)
-        s_current_screen.clear();
+    if (export_job_)
+        export_job_->cancel();
+    if (s_rb_current_screen == this)
+        s_rb_current_screen.clear();
 }
 
-// ── Top toolbar ──────────────────────────────────────────────────────────────
+QWidget* ReportBuilderScreen::build_editor_page() {
+    auto* page = new QWidget(pages_);
+    auto* l = new QVBoxLayout(page);
+    l->setContentsMargins(0, 0, 0, 0);
+    l->setSpacing(0);
+    splitter_ = new QSplitter(Qt::Horizontal, page);
+    splitter_->setObjectName(QStringLiteral("rbSplitter"));
+    splitter_->setHandleWidth(1);
+    splitter_->setChildrenCollapsible(false);
+    comp_toolbar_ = new ComponentToolbar(splitter_);
+    canvas_ = new DocumentCanvas(splitter_);
+    // Right column: the properties, and under them the AI proposal panel when it is in use.
+    right_split_ = new QSplitter(Qt::Vertical, splitter_);
+    right_split_->setObjectName(QStringLiteral("rbRightSplit"));
+    right_split_->setHandleWidth(1);
+    right_split_->setChildrenCollapsible(false);
+    properties_ = new PropertiesPanel(right_split_);
+    ai_panel_ = new ReportAiPanel(right_split_);
+    right_split_->addWidget(properties_);
+    right_split_->addWidget(ai_panel_);
+    ai_panel_->setVisible(false);
+    splitter_->addWidget(comp_toolbar_);
+    splitter_->addWidget(canvas_);
+    splitter_->addWidget(right_split_);
+    splitter_->setStretchFactor(0, 0);
+    splitter_->setStretchFactor(1, 1);
+    splitter_->setStretchFactor(2, 0);
+    splitter_->setSizes({comp_toolbar_->preferred_width(), 700, properties_->preferred_width()});
+    l->addWidget(splitter_, 1);
+    // Screen-only notes under data blocks: refreshing / failed.
+    canvas_->set_note_provider([](int id) {
+        rb::BlockNote n;
+        const auto st = Binder::instance().state(id);
+        if (st.state == Binder::State::Loading || st.state == Binder::State::Queued) {
+            n.kind = rb::BlockNote::Kind::Loading;
+        } else if (st.state == Binder::State::Failed) {
+            n.kind = rb::BlockNote::Kind::Failed;
+            n.text = st.message;
+        }
+        return n;
+    });
+    return page;
+}
+
+// ── Toolbar ─────────────────────────────────────────────────────────────────
 
 QWidget* ReportBuilderScreen::build_toolbar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(36);
-    bar->setStyleSheet(QString("background: %1;").arg(ui::colors::HEADER()));
-
+    toolbar_ = bar;
+    bar->setObjectName(QStringLiteral("rbToolbar"));
+    bar->setAttribute(Qt::WA_StyledBackground);
+    bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(8, 0, 8, 0);
+    hl->setContentsMargins(8, 4, 8, 4);
     hl->setSpacing(6);
 
-    auto make_panel_toggle = [&](const char* glyph, const QString& tooltip, const char* shortcut) {
-        auto* b = new QPushButton(glyph);
-        b->setFixedSize(26, 26);
+    auto sep = [bar, hl]() {
+        auto* f = new QFrame(bar); // a real 1-px rule (it used to be a disabled "|" button)
+        f->setFixedWidth(1);
+        f->setProperty("rbRole", QStringLiteral("sep"));
+        hl->addWidget(f);
+    };
+    auto btn = [bar, hl](const QString& text) {
+        auto* b = new QPushButton(text, bar);
         b->setCursor(Qt::PointingHandCursor);
-        b->setToolTip(tooltip);
-        if (shortcut)
-            b->setShortcut(QKeySequence(shortcut));
-        b->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                 "border-radius:0px;font-size:14px;font-weight:700;padding:0;}"
-                                 "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
-                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
-                                  ui::colors::AMBER()));
         hl->addWidget(b);
         return b;
     };
 
-    left_toggle_btn_ = make_panel_toggle("‹", tr("Collapse components panel  (Ctrl+B)"), "Ctrl+B");
-    connect(left_toggle_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_toggle_left);
-
-    toolbar_title_ = new QLabel(tr("REPORT BUILDER"));
-    toolbar_title_->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
+    left_toggle_btn_ = btn(QStringLiteral("‹"));
+    connect(left_toggle_btn_, &QPushButton::clicked, this, [this]() { apply_left_collapsed(!left_collapsed_, true); });
+    toolbar_title_ = new QLabel(tr("REPORT BUILDER"), bar);
+    toolbar_title_->setProperty("rbRole", QStringLiteral("brand"));
     hl->addWidget(toolbar_title_);
+    doc_title_ = new QLabel(bar);
+    doc_title_->setTextFormat(Qt::PlainText);
+    doc_title_->setMinimumWidth(40);
+    doc_title_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); // elides instead of widening the bar
+    hl->addWidget(doc_title_, 1);
 
-    hl->addStretch();
-
-    auto make_btn = [&](const QString& text) {
-        auto* b = new QPushButton(text);
-        b->setFixedHeight(26);
-        hl->addWidget(b);
-        return b;
-    };
+    library_btn_ = btn(tr("Library"));
+    connect(library_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::show_library);
+    sep();
 
     auto* undo_stack = Service::instance().undo_stack();
-
-    undo_btn_ = make_btn(tr("Undo"));
+    undo_btn_ = btn(tr("Undo"));
     undo_btn_->setEnabled(undo_stack->canUndo());
     connect(undo_stack, &QUndoStack::canUndoChanged, undo_btn_, &QPushButton::setEnabled);
     connect(undo_btn_, &QPushButton::clicked, undo_stack, &QUndoStack::undo);
-
-    redo_btn_ = make_btn(tr("Redo"));
+    redo_btn_ = btn(tr("Redo"));
     redo_btn_->setEnabled(undo_stack->canRedo());
     connect(undo_stack, &QUndoStack::canRedoChanged, redo_btn_, &QPushButton::setEnabled);
     connect(redo_btn_, &QPushButton::clicked, undo_stack, &QUndoStack::redo);
+    sep();
 
-    make_btn("|")->setEnabled(false);
-
-    open_btn_ = make_btn(tr("Open"));
+    open_btn_ = btn(tr("Open"));
     connect(open_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_open);
+    save_btn_ = new QToolButton(bar);
+    save_btn_->setPopupMode(QToolButton::MenuButtonPopup);
+    save_btn_->setCursor(Qt::PointingHandCursor);
+    auto* save_menu = new QMenu(save_btn_);
+    QAction* save_as = save_menu->addAction(tr("Save As…  (Ctrl+Shift+S)"));
+    QAction* save_tpl = save_menu->addAction(tr("Save as template…"));
+    save_btn_->setMenu(save_menu);
+    hl->addWidget(save_btn_);
+    connect(save_btn_, &QToolButton::clicked, this, &ReportBuilderScreen::on_save);
+    connect(save_as, &QAction::triggered, this, &ReportBuilderScreen::on_save_as);
+    connect(save_tpl, &QAction::triggered, this, &ReportBuilderScreen::show_save_template_dialog);
 
-    save_btn_ = make_btn(tr("Save"));
-    connect(save_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_save);
+    refresh_data_btn_ = btn(tr("Refresh Data"));
+    connect(refresh_data_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::refresh_all_data);
+    sep();
 
-    refresh_data_btn_ = make_btn(tr("Refresh Data"));
-    refresh_data_btn_->setToolTip(tr("Fetch fresh quotes for every market-data block (stamped with the time)"));
-    connect(refresh_data_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::refresh_live_data);
+    preview_btn_ = btn(tr("Print view"));
+    preview_btn_->setCheckable(true);
+    connect(preview_btn_, &QPushButton::toggled, this, [this](bool on) {
+        canvas_->set_preview_mode(on);
+        canvas_->set_selected_id(on ? 0 : selected_id_, false);
+    });
+    export_btn_ = new QToolButton(bar);
+    export_btn_->setPopupMode(QToolButton::MenuButtonPopup);
+    export_btn_->setProperty("rbRole", QStringLiteral("primary"));
+    export_btn_->setCursor(Qt::PointingHandCursor);
+    auto* export_menu = new QMenu(export_btn_);
+    QAction* odt = export_menu->addAction(tr("Export Word document (.odt — opens in Word and LibreOffice)…"));
+    QAction* md = export_menu->addAction(tr("Export Markdown (.md + pictures folder)…"));
+    QAction* html = export_menu->addAction(tr("Export HTML (self-contained web page)…"));
+    export_menu->addSeparator();
+    QAction* schedule = export_menu->addAction(tr("Schedule regeneration…"));
+    export_btn_->setMenu(export_menu);
+    hl->addWidget(export_btn_);
+    connect(export_btn_, &QToolButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
+    connect(odt, &QAction::triggered, this, [this]() { on_export(ReportExportJob::Format::Odt); });
+    connect(md, &QAction::triggered, this, [this]() { on_export(ReportExportJob::Format::Markdown); });
+    connect(html, &QAction::triggered, this, &ReportBuilderScreen::on_export_html);
+    connect(schedule, &QAction::triggered, this, &ReportBuilderScreen::show_schedule_dialog);
 
-    pdf_btn_ = make_btn(tr("Export PDF"));
-    pdf_btn_->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::AMBER()));
-    connect(pdf_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
+    right_toggle_btn_ = btn(QStringLiteral("›"));
+    connect(right_toggle_btn_, &QPushButton::clicked, this, [this]() { apply_right_collapsed(!right_collapsed_, true); });
 
-    html_btn_ = make_btn(tr("Export HTML"));
-    html_btn_->setToolTip(tr("Self-contained web page: charts and images embedded"));
-    connect(html_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_html);
-
-    preview_btn_ = make_btn(tr("Preview"));
-    connect(preview_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_preview);
-
-    right_toggle_btn_ = make_panel_toggle("›", tr("Collapse properties panel  (Ctrl+Shift+B)"), "Ctrl+Shift+B");
-    connect(right_toggle_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_toggle_right);
-
-    // ── Standard document shortcuts ───────────────────────────────────────────
-    // Undo/Redo were toolbar-only; Save/Open/New/Print had no key bindings at
-    // all, which is surprising for a document editor.
-    auto add_sc = [this](QKeySequence::StandardKey key, auto fn) {
-        auto* sc = new QShortcut(QKeySequence(key), this);
+    // ── Shortcuts (while the tab has focus) ─────────────────────────────────
+    auto add_sc = [this](const QKeySequence& key, auto fn) {
+        auto* sc = new QShortcut(key, this);
         sc->setContext(Qt::WidgetWithChildrenShortcut);
         connect(sc, &QShortcut::activated, this, fn);
     };
-    add_sc(QKeySequence::Save, [this]() { on_save(); });
-    add_sc(QKeySequence::Open, [this]() { on_open(); });
-    add_sc(QKeySequence::New, [this]() { on_new(); });
-    add_sc(QKeySequence::Print, [this]() { on_preview(); });
-    {
-        auto* undo_sc = new QShortcut(QKeySequence(QKeySequence::Undo), this);
-        undo_sc->setContext(Qt::WidgetWithChildrenShortcut);
-        connect(undo_sc, &QShortcut::activated, undo_stack, &QUndoStack::undo);
-        auto* redo_sc = new QShortcut(QKeySequence(QKeySequence::Redo), this);
-        redo_sc->setContext(Qt::WidgetWithChildrenShortcut);
-        connect(redo_sc, &QShortcut::activated, undo_stack, &QUndoStack::redo);
-    }
-
-    // ── Accessibility ─────────────────────────────────────────────────────────
-    undo_btn_->setAccessibleName(tr("Undo last change"));
-    redo_btn_->setAccessibleName(tr("Redo last change"));
-    open_btn_->setAccessibleName(tr("Open a saved report"));
-    save_btn_->setAccessibleName(tr("Save this report"));
-    pdf_btn_->setAccessibleName(tr("Export this report as PDF"));
-    preview_btn_->setAccessibleName(tr("Print preview"));
-    save_btn_->setToolTip(tr("Save  (Ctrl+S)"));
-    open_btn_->setToolTip(tr("Open  (Ctrl+O)"));
-    preview_btn_->setToolTip(tr("Preview  (Ctrl+P)"));
+    add_sc(QKeySequence(QKeySequence::Save), [this]() { on_save(); });
+    add_sc(QKeySequence(QStringLiteral("Ctrl+Shift+S")), [this]() { on_save_as(); });
+    add_sc(QKeySequence(QKeySequence::Open), [this]() { on_open(); });
+    add_sc(QKeySequence(QKeySequence::New), [this]() { on_new(); });
+    add_sc(QKeySequence(QKeySequence::Print), [this]() { preview_btn_->toggle(); });
+    add_sc(QKeySequence(QKeySequence::Undo), [undo_stack]() { undo_stack->undo(); });
+    add_sc(QKeySequence(QKeySequence::Redo), [undo_stack]() { undo_stack->redo(); });
+    add_sc(QKeySequence(QStringLiteral("F5")), [this]() { refresh_all_data(); });
+    add_sc(QKeySequence(QStringLiteral("Ctrl+B")), [this]() { apply_left_collapsed(!left_collapsed_, true); });
+    add_sc(QKeySequence(QStringLiteral("Ctrl+Shift+B")), [this]() { apply_right_collapsed(!right_collapsed_, true); });
 
     return bar;
 }
 
-// ── Side-panel collapse ──────────────────────────────────────────────────────
+void ReportBuilderScreen::retranslateUi() {
+    toolbar_title_->setText(tr("REPORT BUILDER"));
+    library_btn_->setText(tr("Library"));
+    library_btn_->setToolTip(tr("All your reports and templates"));
+    undo_btn_->setText(tr("Undo"));
+    undo_btn_->setToolTip(tr("Undo  (Ctrl+Z)"));
+    redo_btn_->setText(tr("Redo"));
+    redo_btn_->setToolTip(tr("Redo  (Ctrl+Y)"));
+    open_btn_->setText(tr("Open"));
+    open_btn_->setToolTip(tr("Open a .fincept file  (Ctrl+O)"));
+    save_btn_->setText(tr("Save"));
+    save_btn_->setToolTip(tr("Save to the library — and to its file when it has one  (Ctrl+S)"));
+    preview_btn_->setText(tr("Print view"));
+    preview_btn_->setToolTip(tr("Show the pages exactly as they export: no hints, no selection  (Ctrl+P)"));
+    export_btn_->setText(tr("Export PDF"));
+    export_btn_->setToolTip(tr("Export a PDF (arrow: Word .odt, Markdown, HTML, schedule)"));
+    update_refresh_button();
+    left_toggle_btn_->setToolTip(left_collapsed_ ? tr("Show the blocks panel  (Ctrl+B)") : tr("Hide the blocks panel  (Ctrl+B)"));
+    right_toggle_btn_->setToolTip(right_collapsed_ ? tr("Show the properties panel  (Ctrl+Shift+B)")
+                                                   : tr("Hide the properties panel  (Ctrl+Shift+B)"));
+    export_cancel_->setText(tr("Cancel"));
+    update_title();
+}
+
+void ReportBuilderScreen::update_title() {
+    if (!doc_title_)
+        return;
+    auto& svc = Service::instance();
+    const QString text = rep::vars::display_title(svc.metadata());
+    const QString file = svc.current_file();
+    QString state;
+    if (library_saving_ && (svc.library_id() > 0 || !svc.components().isEmpty()))
+        state = tr("saving…");
+    else if (svc.library_id() > 0)
+        state = tr("saved in the library");
+    else if (svc.components().isEmpty())
+        state = tr("new");
+    else
+        state = tr("not saved yet");
+    if (!file.isEmpty())
+        state += QStringLiteral(" · ") + QFileInfo(file).fileName() + (svc.file_dirty() ? QStringLiteral(" *") : QString());
+    doc_title_->setText(QStringLiteral("%1   ·  %2").arg(text, state));
+    doc_title_->setToolTip(file.isEmpty() ? text : text + QLatin1Char('\n') + file);
+}
+
+// ── Pages ───────────────────────────────────────────────────────────────────
+
+void ReportBuilderScreen::show_library() {
+    auto& svc = Service::instance();
+    properties_->flush_pending();
+    library_page_->set_current(svc.library_id(), svc.metadata().title, static_cast<int>(svc.components().size()));
+    pages_->setCurrentWidget(library_page_);
+    library_btn_->setEnabled(false);
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+void ReportBuilderScreen::show_editor() {
+    pages_->setCurrentWidget(editor_page_);
+    library_btn_->setEnabled(true);
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+// ── Side panels ─────────────────────────────────────────────────────────────
+
+void ReportBuilderScreen::apply_left_collapsed(bool collapsed, bool animate) {
+    left_collapsed_ = collapsed;
+    const int target = collapsed ? 0 : comp_toolbar_->preferred_width();
+    if (!left_anim_) {
+        left_anim_ = new QPropertyAnimation(comp_toolbar_, "maximumWidth", this);
+        left_anim_->setDuration(180);
+        left_anim_->setEasingCurve(QEasingCurve::OutCubic);
+    }
+    left_anim_->stop();
+    if (animate) {
+        left_anim_->setStartValue(comp_toolbar_->maximumWidth());
+        left_anim_->setEndValue(target);
+        left_anim_->start();
+    } else {
+        comp_toolbar_->setMaximumWidth(target);
+    }
+    left_toggle_btn_->setText(collapsed ? QStringLiteral("›") : QStringLiteral("‹"));
+    left_toggle_btn_->setToolTip(collapsed ? tr("Show the blocks panel  (Ctrl+B)") : tr("Hide the blocks panel  (Ctrl+B)"));
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+void ReportBuilderScreen::apply_right_collapsed(bool collapsed, bool animate) {
+    right_collapsed_ = collapsed;
+    const int target = collapsed ? 0 : properties_->preferred_width();
+    if (!right_anim_) {
+        right_anim_ = new QPropertyAnimation(right_split_, "maximumWidth", this);
+        right_anim_->setDuration(180);
+        right_anim_->setEasingCurve(QEasingCurve::OutCubic);
+    }
+    right_anim_->stop();
+    if (animate) {
+        right_anim_->setStartValue(right_split_->maximumWidth());
+        right_anim_->setEndValue(target);
+        right_anim_->start();
+    } else {
+        right_split_->setMaximumWidth(target);
+    }
+    right_toggle_btn_->setText(collapsed ? QStringLiteral("‹") : QStringLiteral("›"));
+    right_toggle_btn_->setToolTip(collapsed ? tr("Show the properties panel  (Ctrl+Shift+B)")
+                                            : tr("Hide the properties panel  (Ctrl+Shift+B)"));
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+void ReportBuilderScreen::refit_panels() {
+    // Widths follow the UI font (run once the appearance has settled).
+    if (!left_collapsed_)
+        comp_toolbar_->setMaximumWidth(comp_toolbar_->preferred_width());
+    if (!right_collapsed_)
+        right_split_->setMaximumWidth(properties_->preferred_width());
+    fit_toolbar();
+}
+
+void ReportBuilderScreen::fit_toolbar() {
+    // On a narrow window / large UI font the brand label gives way first, so every action
+    // keeps its full text (the document title already elides).
+    if (!toolbar_ || !toolbar_title_)
+        return;
+    const int brand = toolbar_title_->sizeHint().width() + 6;
+    const int need = toolbar_->sizeHint().width() + (toolbar_title_->isVisible() ? 0 : brand);
+    const bool show_brand = width() >= need;
+    if (toolbar_title_->isVisible() != show_brand)
+        toolbar_title_->setVisible(show_brand);
+}
+
+void ReportBuilderScreen::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    fit_toolbar();
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
 
 void ReportBuilderScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    // The service runs autosave continuously. We just rebind from current
-    // service state in case mutations happened while the screen was hidden.
-    rebind_from_service();
+    auto& svc = Service::instance();
+    if (!started_) {
+        started_ = true;
+        // Never a blank tab: an empty, unsaved report opens on the library / start page.
+        if (svc.components().isEmpty() && svc.library_id() <= 0)
+            show_library();
+        else
+            show_editor();
+        do_refresh();
+        check_stale_notice();
+    } else if (hidden_dirty_) {
+        do_refresh();
+    }
+    handle_open_request();
+    check_inbox_notice();
+    if (Service::instance().has_library_conflict())
+        show_conflict_dialog();
     // Rate-gated pull of cloud reports on screen entry (no-op when sync is off).
-    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("report"));
+    services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("report"));
 }
 
 void ReportBuilderScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    properties_->flush_pending();
+    // Leaving the tab: the library copy should not wait for the idle timer.
+    Service::instance().save_to_library();
 }
-
-// ── Live language switch ─────────────────────────────────────────────────────
 
 void ReportBuilderScreen::changeEvent(QEvent* e) {
     if (e->type() == QEvent::LanguageChange)
@@ -507,60 +514,67 @@ void ReportBuilderScreen::changeEvent(QEvent* e) {
     QWidget::changeEvent(e);
 }
 
-void ReportBuilderScreen::retranslateUi() {
-    if (toolbar_title_)
-        toolbar_title_->setText(tr("REPORT BUILDER"));
-    if (undo_btn_)
-        undo_btn_->setText(tr("Undo"));
-    if (redo_btn_)
-        redo_btn_->setText(tr("Redo"));
-    if (open_btn_)
-        open_btn_->setText(tr("Open"));
-    if (save_btn_)
-        save_btn_->setText(tr("Save"));
-    if (pdf_btn_)
-        pdf_btn_->setText(tr("Export PDF"));
-    if (html_btn_) {
-        html_btn_->setText(tr("Export HTML"));
-        html_btn_->setToolTip(tr("Self-contained web page: charts and images embedded"));
-    }
-    if (refresh_data_btn_) {
-        refresh_data_btn_->setText(tr("Refresh Data"));
-        refresh_data_btn_->setToolTip(tr("Fetch fresh quotes for every market-data block (stamped with the time)"));
-    }
-    if (preview_btn_)
-        preview_btn_->setText(tr("Preview"));
-    // Re-apply the panel-toggle tooltips for the current collapse state.
-    if (left_toggle_btn_)
-        left_toggle_btn_->setToolTip(left_collapsed_ ? tr("Expand components panel  (Ctrl+B)")
-                                                     : tr("Collapse components panel  (Ctrl+B)"));
-    if (right_toggle_btn_)
-        right_toggle_btn_->setToolTip(right_collapsed_ ? tr("Expand properties panel  (Ctrl+Shift+B)")
-                                                       : tr("Collapse properties panel  (Ctrl+Shift+B)"));
-    // The properties panel rebuilds itself from its cached copy of the component, which is
-    // no longer refreshed on every edit (see props_editing_) — re-sync it from the service
-    // so a language switch can't resurrect stale text.
-    rebind_from_service();
-}
-
-// ── IStatefulScreen ──────────────────────────────────────────────────────────
+// ── IStatefulScreen ─────────────────────────────────────────────────────────
 
 QVariantMap ReportBuilderScreen::save_state() const {
     return {
         {"selected_id", selected_id_},
         {"left_collapsed", left_collapsed_},
         {"right_collapsed", right_collapsed_},
+        {"page", pages_ && pages_->currentWidget() == library_page_ ? QStringLiteral("library") : QStringLiteral("editor")},
     };
 }
 
 void ReportBuilderScreen::restore_state(const QVariantMap& state) {
-    if (state.contains("selected_id"))
-        selected_id_ = state.value("selected_id").toInt(0);
+    if (state.contains("selected_id")) {
+        const int id = state.value("selected_id").toInt(0);
+        if (Service::instance().index_of(id) >= 0)
+            selected_id_ = id;
+    }
     if (state.contains("left_collapsed"))
         apply_left_collapsed(state.value("left_collapsed").toBool(), /*animate=*/false);
     if (state.contains("right_collapsed"))
         apply_right_collapsed(state.value("right_collapsed").toBool(), /*animate=*/false);
-    rebind_from_service();
+    if (state.value("page").toString() == QLatin1String("library")) {
+        started_ = true;
+        show_library();
+    } else if (state.contains("page") && !Service::instance().components().isEmpty()) {
+        started_ = true;
+        show_editor();
+    }
+    schedule_refresh();
+}
+
+// ── ISectionLinked ──────────────────────────────────────────────────────────
+
+bool ReportBuilderScreen::open_section(const QString& section, const QString& focus) {
+    // The toolbar's own paths: LIBRARY (show_library), the editor (show_editor), NEW (on_new) and
+    // the library's OPEN (open_library_report). Validated before anything changes.
+    const QString key = section.trimmed().toLower();
+    qint64 report_id = 0;
+    bool ok = false;
+    if (key.startsWith(QLatin1String("report:"))) {
+        report_id = key.mid(7).trimmed().toLongLong(&ok);
+        if (!ok || report_id <= 0)
+            return false;
+    } else if (!key.isEmpty() && key != QLatin1String("library") && key != QLatin1String("editor") &&
+               key != QLatin1String("new")) {
+        return false;
+    }
+    if (report_id <= 0 && key != QLatin1String("new")) {
+        const qint64 id = focus.trimmed().toLongLong(&ok);
+        if (ok && id > 0)
+            report_id = id;
+    }
+    if (report_id > 0)
+        open_library_report(report_id, 0);
+    else if (key == QLatin1String("new"))
+        on_new();
+    else if (key == QLatin1String("library"))
+        show_library();
+    else if (key == QLatin1String("editor"))
+        show_editor();
+    return true;
 }
 
 } // namespace fincept::screens

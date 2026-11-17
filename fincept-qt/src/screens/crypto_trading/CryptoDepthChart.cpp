@@ -2,8 +2,12 @@
 #include "screens/crypto_trading/CryptoDepthChart.h"
 
 #include "screens/crypto_trading/CryptoTypes.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QFontMetrics>
 #include <QMutexLocker>
 #include <QPainter>
 #include <QPainterPath>
@@ -57,6 +61,21 @@ CryptoDepthChart::CryptoDepthChart(QWidget* parent) : QWidget(parent) {
     repaint_timer_->setSingleShot(true);
     repaint_timer_->setInterval(100); // max 10fps — depth chart changes slowly
     connect(repaint_timer_, &QTimer::timeout, this, [this]() { update(); });
+
+    // A currency / number-format change repaints the held book (no fetch).
+    fincept::ui::formatting::on_format_changed(this, [this]() {
+        cache_dirty_ = true;
+        update();
+    });
+}
+
+void CryptoDepthChart::set_price_market(const QString& market) {
+    if (market == price_market_)
+        return;
+    price_market_ = market;
+    cache_dirty_ = true;
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
 void CryptoDepthChart::showEvent(QShowEvent* e) {
@@ -79,6 +98,14 @@ void CryptoDepthChart::changeEvent(QEvent* event) {
         update();
     }
     QWidget::changeEvent(event);
+}
+
+void CryptoDepthChart::set_status_text(const QString& text) {
+    if (text == status_text_)
+        return;
+    status_text_ = text;
+    cache_dirty_ = true;
+    update();
 }
 
 void CryptoDepthChart::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
@@ -126,8 +153,9 @@ void CryptoDepthChart::rebuild_cache() {
     if (bids.isEmpty() && asks.isEmpty()) {
         QPainter p(&cache_);
         p.setPen(kTextDim());
-        p.setFont(QFont("Consolas", 10));
-        p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, tr("Waiting for order book data..."));
+        p.setFont(ui::fonts::font(-1));
+        p.drawText(QRect(8, 0, std::max(0, w - 16), h), Qt::AlignCenter | Qt::TextWordWrap,
+                   status_text_.isEmpty() ? tr("Waiting for the order book…") : status_text_);
         cache_dirty_ = false;
         return;
     }
@@ -135,12 +163,16 @@ void CryptoDepthChart::rebuild_cache() {
     QPainter p(&cache_);
     // Antialiasing disabled for performance — depth chart has many line segments
     // and the visual difference is negligible at typical widget sizes (P9)
-    p.setFont(QFont("Consolas", 8));
+    const QFont axis_font = ui::fonts::font(-3);
+    p.setFont(axis_font);
 
-    const int margin_l = 50;
+    // Margins and label boxes grow with the axis font so the labels never clip.
+    const QFontMetrics fm(axis_font);
+    const int label_h = std::max(16, fm.height());
+    const int margin_l = std::max(50, fm.horizontalAdvance(QStringLiteral("999.9K")) + 8);
     const int margin_r = 10;
     const int margin_t = 10;
-    const int margin_b = 20;
+    const int margin_b = std::max(20, label_h + 4);
     const int plot_w = w - margin_l - margin_r;
     const int plot_h = h - margin_t - margin_b;
 
@@ -236,28 +268,34 @@ void CryptoDepthChart::rebuild_cache() {
         p.drawLine(x_mid, margin_t, x_mid, margin_t + plot_h);
     }
 
-    // Volume axis labels
+    // Volume axis labels: cumulative base-asset quantity (not money), abbreviated
+    // per the user's compact-number scheme.
+    namespace fmt = fincept::ui::formatting;
     p.setPen(kTextDim());
     for (int i = 0; i <= 4; ++i) {
         const double vol = max_vol * (4 - i) / 4;
         const int y = margin_t + plot_h * i / 4;
-        QString label;
-        if (vol >= 1e6)
-            label = QString("%1M").arg(vol / 1e6, 0, 'f', 1);
-        else if (vol >= 1e3)
-            label = QString("%1K").arg(vol / 1e3, 0, 'f', 1);
-        else
-            label = QString::number(vol, 'f', 1);
-        p.drawText(QRect(0, y - 8, margin_l - 4, 16), Qt::AlignRight | Qt::AlignVCenter, label);
+        const QString label = vol >= 1e3 ? fmt::compact(vol, fmt::Compact::FromSettings, QString(), 1)
+                                         : fmt::number(vol, 1);
+        p.drawText(QRect(0, y - label_h / 2, margin_l - 4, label_h), Qt::AlignRight | Qt::AlignVCenter, label);
     }
 
-    // Price axis labels (bottom). `'f', 0` printed five identical "0" ticks
-    // for any pair trading below $1 — which is most of the long tail — so the
-    // x axis carried no information at all there.
+    // Price axis labels (bottom), in the quote asset's decimals — a fixed 0 dp
+    // printed five identical "0" ticks for any pair trading below 1 unit, which
+    // is most of the long tail. The unit is named once, top centre (the depth is
+    // lowest around the mid price, so the curves leave that spot free).
+    const int price_label_w = std::max(80, fm.horizontalAdvance(pair_price(max_price, price_market_)) + 8);
     for (int i = 0; i <= 4; ++i) {
         const double price = min_price + (max_price - min_price) * i / 4;
         const int x = map_x(price);
-        p.drawText(QRect(x - 40, margin_t + plot_h + 2, 80, 16), Qt::AlignCenter, format_price_plain(price));
+        p.drawText(QRect(x - price_label_w / 2, margin_t + plot_h + 2, price_label_w, label_h), Qt::AlignCenter,
+                   pair_price(price, price_market_));
+    }
+    const QString quote = pair_quote_ccy(price_market_);
+    if (!quote.isEmpty()) {
+        const QString unit = fmt::currency_unit(quote);
+        p.drawText(QRect(margin_l, margin_t, std::max(0, plot_w), label_h), Qt::AlignHCenter | Qt::AlignVCenter,
+                   tr("Price (%1)").arg(unit));
     }
 
     cache_dirty_ = false;

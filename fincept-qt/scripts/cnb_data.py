@@ -75,6 +75,13 @@ FIXING_CURRENCIES = [
 # Error container
 # ---------------------------------------------------------------------------
 
+def _per_currency(rates, date=""):
+    """{CODE: rate, "date": ...} -> [{date, currency, rate}]: a snapshot as a row per currency."""
+    rates = rates or {}
+    d = rates.get("date", date) or date
+    return [{"date": d, "currency": k, "rate": v} for k, v in rates.items() if k != "date"]
+
+
 class CNBError:
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
         self.endpoint    = endpoint
@@ -174,7 +181,8 @@ class CNBWrapper:
             return {
                 "success":   True,
                 "date":      rates[0].get("validFor", rate_date) if rates else rate_date,
-                "data":      rows[0] if rows else {},
+                "data":      _per_currency(rows[0] if rows else {}),
+                "rates":     {k: v for k, v in (rows[0] if rows else {}).items() if k != "date"},
                 "all_rates": rates,
                 "count":     len(rates),
                 "note":      "CZK per 1 unit of foreign currency (adjusted for amount)",
@@ -242,17 +250,43 @@ class CNBWrapper:
         except Exception as e:
             return CNBError("exrates/monthly-averages-year", str(e)).to_dict()
 
+    @staticmethod
+    def _date_first(rec: Any, key: str, rename: bool) -> Any:
+        """Give a record a leading "date" column taken from `key` (dropping `key` when renaming)."""
+        if not isinstance(rec, dict) or key not in rec:
+            return rec
+        out: Dict[str, Any] = {"date": rec[key]}
+        out.update({k: v for k, v in rec.items() if k != "date" and not (rename and k == key)})
+        return out
+
+    def _normalise_dates(self, result: Dict[str, Any], key: str, rename: bool) -> Dict[str, Any]:
+        """
+        CNB names its date "validFor" (CZEONIA) or "tradeDate" (operations). Consumers recognise a
+        series by its "date" column (newest-first ordering, stat cards), so expose one.
+        """
+        data = result.get("data")
+        if not result.get("success") or not isinstance(data, dict):
+            return result
+        for holder, val in list(data.items()):
+            if isinstance(val, list):
+                data[holder] = [self._date_first(r, key, rename) for r in val]
+            elif isinstance(val, dict):
+                data[holder] = self._date_first(val, key, rename)
+        return result
+
     def get_czeonia(self, rate_date: Optional[str] = None) -> Dict[str, Any]:
         """CZEONIA overnight rate (latest or specific date)."""
         params = {}
         if rate_date:
             params["date"] = rate_date
-        return self._safe("czeonia/daily", "czeonia/daily", params)
+        return self._normalise_dates(self._safe("czeonia/daily", "czeonia/daily", params),
+                                     "validFor", rename=True)
 
     def get_czeonia_year(self, year: Optional[int] = None) -> Dict[str, Any]:
         """CZEONIA for full year."""
         y = year or datetime.now(timezone.utc).year
-        return self._safe("czeonia/daily-year", "czeonia/daily-year", {"year": y})
+        return self._normalise_dates(self._safe("czeonia/daily-year", "czeonia/daily-year", {"year": y}),
+                                     "validFor", rename=True)
 
     def get_pribor(self, rate_date: Optional[str] = None) -> Dict[str, Any]:
         """PRIBOR fixing — all tenors (1D to 12M)."""
@@ -314,7 +348,9 @@ class CNBWrapper:
         params = {}
         if trade_date:
             params["date"] = trade_date
-        return self._safe("omo/daily", "omo/daily", params)
+        # Keep tradeDate (settlement / maturity dates sit next to it); add "date" in front.
+        return self._normalise_dates(self._safe("omo/daily", "omo/daily", params),
+                                     "tradeDate", rename=False)
 
     def get_forward_rates(self, rate_date: Optional[str] = None) -> Dict[str, Any]:
         """Forward exchange rates (EUR/CZK, USD/CZK)."""
@@ -343,7 +379,8 @@ class CNBWrapper:
             r = call()
             results[name] = {
                 "success": r.get("success"),
-                "data":    r.get("data"),
+                # the fixing stays a {CODE: rate} map here (the snapshot's own "data" is now rows)
+                "data":    r.get("rates", r.get("data")),
             }
         return {
             "success":   True,

@@ -408,41 +408,243 @@ class BacktestingProviderBase(ABC):
 # Utility Functions
 # ============================================================================
 
+_PROCESS_T0 = __import__('time').time()
+
+# Keys whose VALUE is a data map: its own keys are names chosen by the user or the data
+# (strategy parameter ids, symbols) and must reach the screen unchanged - camel-casing them
+# turned a parameter 'fast_period' into 'fastPeriod', which the strategy then did not know (B7).
+_PROTECTED_MAP_KEYS = frozenset({
+    'parameters', 'bestParameters', 'best_parameters', 'bestParams', 'best_params', 'params',
+    'paramRanges', 'param_ranges', 'paramGrid', 'param_grid', 'parameterSensitivity',
+    'parameter_sensitivity', 'parameterSpread', 'parameter_spread', 'paramStability',
+    'param_stability', 'priceData', 'price_data', 'strategyParams', 'strategy_params',
+    'symbolProvenance', 'perSymbol', 'per_symbol',
+})
+
+
 def snake_to_camel(snake_str: str) -> str:
-    """Convert snake_case to camelCase"""
+    """Convert snake_case to camelCase ('fast_period' -> 'fastPeriod'; camelCase is unchanged)."""
+    if '_' not in snake_str:
+        return snake_str
     components = snake_str.split('_')
     return components[0] + ''.join(x.title() for x in components[1:])
 
 
-def convert_keys_to_camel(data: Any) -> Any:
-    """Recursively convert dictionary keys from snake_case to camelCase"""
+def convert_keys_to_camel(data: Any, _protected: bool = False) -> Any:
+    """Recursively convert FIELD names from snake_case to camelCase.
+
+    Idempotent. The keys of data maps (see _PROTECTED_MAP_KEYS: parameters, priceData ...) are
+    left as they are; values inside them are still converted."""
     if isinstance(data, dict):
-        return {snake_to_camel(k): convert_keys_to_camel(v) for k, v in data.items()}
-    elif isinstance(data, list):
+        out = {}
+        for k, v in data.items():
+            nk = k if (_protected or not isinstance(k, str)) else snake_to_camel(k)
+            out[nk] = convert_keys_to_camel(v, _protected=isinstance(k, str) and k in _PROTECTED_MAP_KEYS
+                                            and isinstance(v, dict))
+        return out
+    if isinstance(data, list):
         return [convert_keys_to_camel(item) for item in data]
-    else:
-        return data
+    return data
 
 
 def _sanitize_for_json(obj):
-    """Recursively replace NaN/Infinity with None so json.dumps produces valid JSON."""
+    """Recursively replace NaN/Infinity with None (kept for callers; json_response does more)."""
+    return to_jsonable(obj)
+
+
+def to_jsonable(obj: Any) -> Any:
+    """Strict conversion for the stdout JSON (B6): numpy ints / floats / bools -> numbers / bools
+    (NaN and +-Infinity -> null), arrays and Series -> lists, Timestamps / datetimes / dates ->
+    ISO strings ('YYYY-MM-DD' at midnight, else 'YYYY-MM-DD HH:MM:SS'), NaT -> null, Decimal ->
+    float, sets and tuples -> lists, Path -> str, Enum -> value, dataclasses -> dicts. dict keys
+    become strings (Timestamps as dates)."""
     import math
-    if isinstance(obj, float):
-        if math.isnan(obj) or math.isinf(obj):
-            return None
+    import sys as _sys
+    if obj is None or isinstance(obj, (str, bool)):
         return obj
+    if isinstance(obj, int):
+        return int(obj)
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    np_ = _sys.modules.get('numpy')
+    if np_ is not None:
+        if isinstance(obj, np_.bool_):
+            return bool(obj)
+        if isinstance(obj, np_.integer):
+            return int(obj)
+        if isinstance(obj, np_.floating):
+            f = float(obj)
+            return f if math.isfinite(f) else None
+        if isinstance(obj, np_.ndarray):
+            return [to_jsonable(v) for v in obj.tolist()]
+        if isinstance(obj, np_.datetime64):
+            if np_.isnat(obj):
+                return None
+            obj = __import__('pandas').Timestamp(obj)
+    pd_ = _sys.modules.get('pandas')
+    if pd_ is not None:
+        if obj is pd_.NaT or obj is getattr(pd_, 'NA', object()):
+            return None
+        if isinstance(obj, pd_.Timestamp):
+            return _iso(obj)
+        if isinstance(obj, pd_.Timedelta):
+            return obj.total_seconds()
+        if isinstance(obj, (pd_.Series, pd_.Index)):
+            return [to_jsonable(v) for v in obj.tolist()]
+        if isinstance(obj, pd_.DataFrame):
+            return to_jsonable(obj.to_dict(orient='records'))
+    import datetime as _dt
+    if isinstance(obj, _dt.datetime):
+        return _iso(obj)
+    if isinstance(obj, _dt.date):
+        return obj.isoformat()
     if isinstance(obj, dict):
-        return {k: _sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitize_for_json(v) for v in obj]
+        return {(_key(k)): to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set, frozenset)):
+        return [to_jsonable(v) for v in obj]
+    from decimal import Decimal
+    if isinstance(obj, Decimal):
+        return float(obj) if obj.is_finite() else None
+    import enum
+    if isinstance(obj, enum.Enum):
+        return to_jsonable(obj.value)
+    import dataclasses
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return to_jsonable(dataclasses.asdict(obj))
+    from pathlib import PurePath
+    if isinstance(obj, PurePath):
+        return str(obj)
+    return obj
+
+
+def _iso(ts) -> str:
+    if getattr(ts, 'tzinfo', None) is not None:
+        ts = ts.replace(tzinfo=None)
+    if ts.hour == 0 and ts.minute == 0 and ts.second == 0 and getattr(ts, 'microsecond', 0) == 0:
+        return ts.strftime('%Y-%m-%d')
+    return ts.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _key(k) -> str:
+    if isinstance(k, str):
+        return k
+    v = to_jsonable(k)
+    return v if isinstance(v, str) else str(v)
+
+
+def _last_resort(o):
+    import sys as _sys
+    print(f'[json] {type(o).__name__} serialised as text', file=_sys.stderr)
+    return str(o)
+
+
+ERROR_CODES = ('DATA', 'INPUT', 'ENGINE', 'MISSING_PACKAGE', 'CANCELLED', 'TIMEOUT', 'INTERNAL')
+
+
+def classify_error(message: str, exc: Optional[BaseException] = None) -> str:
+    """Contract R2 errorCode for a failure message / exception."""
+    name = type(exc).__name__ if exc is not None else ''
+    m = (message or '').lower()
+    if 'cancelled by user' in m or name == 'CancelledError':
+        return 'CANCELLED'
+    if name in ('ModuleNotFoundError', 'ImportError') or 'no module named' in m or 'is not installed' in m:
+        return 'MISSING_PACKAGE'
+    if name in ('SyntheticDataRefused', 'PriceDataError') or any(s in m for s in (
+            'could not be loaded', 'market data', 'no symbol', 'no bars', 'no data', 'yahoo', 'not enough data',
+            'insufficient data', 'synthetic', 'price data', 'rate-limit', 'delisted')):
+        return 'DATA'
+    if 'timed out' in m or name == 'TimeoutError':
+        return 'TIMEOUT'
+    if name in ('ValueError', 'KeyError', 'TypeError') and exc is not None and not m.startswith('traceback'):
+        return 'INPUT'
+    if any(s in m for s in ('unknown command', 'unknown strategy', 'required', 'invalid', 'must be', 'no parameter',
+                            'expected', 'unsupported', 'choose one of', 'too few', 'too large', 'needs at least')):
+        return 'INPUT'
+    return 'ENGINE'
+
+
+def error_envelope(message: str, code: Optional[str] = None, *, exc: Optional[BaseException] = None,
+                   traceback_text: Optional[str] = None, logs: Optional[List[str]] = None,
+                   symbol: Optional[str] = None, **extra) -> Dict[str, Any]:
+    """The contract R2 failure envelope: one plain sentence + errorCode + details."""
+    msg, tb = _split_traceback(str(message or 'The command failed.'))
+    out = {'success': False, 'error': msg, 'errorCode': code or classify_error(msg, exc),
+           'details': {'traceback': traceback_text or tb, 'logs': list(logs or []), 'symbol': symbol}}
+    out.update(extra)
+    return out
+
+
+def _split_traceback(message: str):
+    """'... Traceback (most recent call last): ...' -> (plain last line, traceback text)."""
+    if 'Traceback (most recent call last)' not in message:
+        return message.strip(), None
+    head, _, tb = message.partition('Traceback (most recent call last)')
+    tb = 'Traceback (most recent call last)' + tb
+    last = [ln.strip() for ln in tb.strip().splitlines() if ln.strip()]
+    plain = head.strip().rstrip(':').strip() or (last[-1] if last else 'The command failed.')
+    return plain, tb
+
+
+def normalize_envelope(obj: Any) -> Any:
+    """Contract R2: a failure is {'success': False, 'error', 'errorCode', 'details'} at the top
+    level - also when an engine returned {'success': True, 'data': {'success': False, ...}}."""
+    if not isinstance(obj, dict):
+        return obj
+    if obj.get('success') is True and isinstance(obj.get('data'), dict) and obj['data'].get('success') is False:
+        inner = obj['data']
+        env = error_envelope(inner.get('error') or inner.get('message') or 'The command failed.',
+                             inner.get('errorCode'),
+                             logs=inner.get('logs') if isinstance(inner.get('logs'), list) else None)
+        for k in ('cancelled', 'timedOut'):
+            if k in inner:
+                env[k] = inner[k]
+        return env
+    if obj.get('success') is False:
+        msg = obj.get('error') or obj.get('message') or 'The command failed.'
+        plain, tb = _split_traceback(str(msg))
+        out = dict(obj)
+        out['error'] = plain
+        out.setdefault('errorCode', 'CANCELLED' if obj.get('cancelled') else classify_error(plain))
+        det = out.get('details') if isinstance(out.get('details'), dict) else {}
+        det.setdefault('traceback', tb or obj.get('traceback'))
+        det.setdefault('logs', obj.get('logs') if isinstance(obj.get('logs'), list) else [])
+        det.setdefault('symbol', obj.get('symbol'))
+        out['details'] = det
+        return out
     return obj
 
 
 def json_response(data: Any) -> str:
-    """Convert data to JSON string for stdout output with camelCase keys"""
-    camel_data = convert_keys_to_camel(data)
-    sanitized = _sanitize_for_json(camel_data)
-    return json.dumps(sanitized, default=str, ensure_ascii=False)
+    """The single stdout line: camelCase field names (data-map keys untouched), strict JSON
+    (NaN / Infinity -> null, numpy / pandas values converted, never `indent`), failures in the
+    contract envelope. Uses scripts/fincept_json.py as the final boundary."""
+    payload = data
+    inner = payload.get('data') if isinstance(payload, dict) else None
+    already_v2 = isinstance(inner, dict) and inner.get('schemaVersion') == 2
+    if not already_v2:
+        payload = convert_keys_to_camel(payload)
+    payload = normalize_envelope(to_jsonable(payload))
+    try:
+        from base.progress import ensure_scripts_on_path
+        ensure_scripts_on_path()
+        import fincept_json
+        return fincept_json.dumps(payload, default=_last_resort, separators=(',', ':'))
+    except ImportError:
+        return json.dumps(payload, default=_last_resort, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+
+
+def emit_response(data: Any) -> str:
+    """Print json_response(data) as the one stdout line (flushed) and return it."""
+    import sys as _sys
+    text = json_response(data)
+    out = _sys.stdout
+    try:
+        out.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+    out.write(text + '\n')
+    out.flush()
+    return text
 
 
 def parse_json_input(json_str: str) -> Dict[str, Any]:
@@ -486,16 +688,11 @@ def check_cancelled(request) -> None:
     `except Exception` handlers that would swallow a normal exception.
     """
     import os as _os
-    import sys as _sys
     path = request.get('cancelFile') if isinstance(request, dict) else None
     if not path or not _os.path.exists(path):
         return
-    try:
-        out = _sys.__stdout__
-        out.write(json.dumps({'success': False, 'error': 'Cancelled by user', 'cancelled': True}) + '\n')
-        out.flush()
-    finally:
-        _os._exit(3)
+    from base.progress import cancel_exit
+    cancel_exit()
 
 
 class SyntheticDataRefused(RuntimeError):
@@ -524,45 +721,13 @@ def refuse_synthetic(symbols, reason) -> None:
 
 
 def periods_per_year(index) -> float:
-    """Bars per year implied by a datetime index (used to annualise Sharpe/vol/CAGR).
-
-    daily-like spacing: 252 when the index has weekend gaps (equities), 365 when it
-    does not (crypto/FX 24x7); weekly 52; monthly 12; intraday: observed bars per
-    calendar year spanned.
-    """
+    """Bars per year implied by a datetime index (annualisation basis). Delegates to
+    base.metrics.infer_periods_per_year: 252 for daily bars without weekend dates, 365 with
+    them (24x7 markets), 52 weekly, 12 monthly, intraday = bars per session day x 252 / 365.
+    (B17: a short Mon-Thu daily series used to read 365, two bars 252 regardless.)"""
     try:
-        import numpy as np
-        import pandas as pd
-        if not isinstance(index, pd.DatetimeIndex):
-            index = pd.DatetimeIndex(pd.to_datetime(list(index)))
-        n = len(index)
-        if n < 3:
-            return 252.0
-        secs = index.asi8.astype('float64')
-        unit = str(index.dtype)
-        if 'ns' in unit:
-            secs = secs / 1e9
-        elif 'us' in unit:
-            secs = secs / 1e6
-        elif 'ms' in unit:
-            secs = secs / 1e3
-        deltas = np.diff(secs)
-        deltas = deltas[deltas > 0]
-        if len(deltas) == 0:
-            return 252.0
-        med = float(np.median(deltas))
-        if med < 1.0:
-            return 252.0
-        if med >= 25 * 86400:
-            return 12.0
-        if med >= 6 * 86400:
-            return 52.0
-        if med >= 20 * 3600:
-            return 252.0 if bool(np.any(deltas > 1.5 * 86400)) else 365.0
-        span_years = float(secs[-1] - secs[0]) / (365.25 * 86400.0)
-        if span_years <= 0:
-            return 252.0
-        return float(max(1.0, (n - 1) / span_years))
+        from base.metrics import infer_periods_per_year
+        return float(infer_periods_per_year(index))
     except Exception:
         return 252.0
 
@@ -572,12 +737,12 @@ def describe_annualization(ppy: float) -> str:
     if abs(ppy - 252.0) < 0.5:
         return '252 bars/year (daily equity bars)'
     if abs(ppy - 365.0) < 0.5:
-        return '365 bars/year (daily bars, 7-day market)'
+        return '365 bars/year (daily bars including weekends: 24x7 market or mixed calendar)'
     if abs(ppy - 52.0) < 0.5:
         return '52 bars/year (weekly bars)'
     if abs(ppy - 12.0) < 0.5:
         return '12 bars/year (monthly bars)'
-    return f'{ppy:,.0f} bars/year (measured from the intraday bar spacing)'
+    return f'{ppy:,.0f} bars/year (intraday: bars per session x sessions per year)'
 
 
 _SURVIVORSHIP_NOTE = (
@@ -593,7 +758,9 @@ def build_assumptions(engine: str, execution: str, request: Dict[str, Any], *,
                       annualization: Optional[str] = None,
                       data_source: Optional[str] = None,
                       ignored: Optional[List[str]] = None,
-                      notes: Optional[List[str]] = None) -> Dict[str, Any]:
+                      notes: Optional[List[str]] = None,
+                      fill_model: Optional[Dict[str, Any]] = None,
+                      not_modelled: Optional[List[str]] = None) -> Dict[str, Any]:
     """The `assumptions` block every backtest result carries.
 
     It states how the numbers were produced so a reader can judge them: when
@@ -622,7 +789,69 @@ def build_assumptions(engine: str, execution: str, request: Dict[str, Any], *,
         out['ignored_settings'] = list(ignored)
     if notes:
         out['notes'] = list(notes)
+    if fill_model:
+        out['fill_model'] = dict(fill_model)
+    if not_modelled is not None:
+        out['not_modelled'] = list(not_modelled)
     return out
+
+
+NOT_MODELLED_VOCABULARY = ('bid/ask spread', 'market impact', 'partial fills', 'volume limits', 'borrow cost',
+                           'margin calls', 'cash interest', 'dividend withholding', 'FX conversion',
+                           'trading halts', 'delisted symbols')
+
+
+def capabilities_payload(engine: str, library: Optional[str], library_version: Optional[str], *,
+                         installed: bool = True, commands: Optional[List[str]] = None,
+                         fill_model: Optional[Dict[str, Any]] = None,
+                         commission_models: Optional[List[str]] = None,
+                         slippage_models: Optional[List[str]] = None, short_selling: bool = False,
+                         leverage: bool = False, multi_symbol: bool = False, intraday: bool = False,
+                         sizing_methods: Optional[List[str]] = None, stops: bool = False,
+                         monte_carlo_methods: Optional[List[str]] = None,
+                         optimize_methods: Optional[List[str]] = None,
+                         walk_forward_modes: Optional[List[str]] = None,
+                         not_modelled: Optional[List[str]] = None,
+                         engine_implementation: Optional[str] = None,
+                         fill_timings: Optional[List[str]] = None,
+                         intervals: Optional[List[str]] = None,
+                         request_keys: Optional[Dict[str, Any]] = None,
+                         cost_presets: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Contract GET_CAPABILITIES data (camelCase at source).
+
+    Optional blocks (emitted when given; the rebuilt screen reads them to enable / disable inputs):
+      fillTimings  fill timings the engine executes (subset of next_open / next_close / same_close)
+      intervals    bar intervals it accepts
+      requestKeys  {'honoured': [request keys applied as sent], 'ignored': [request keys accepted but not
+                   applied - each also produces an IGNORED_SETTING warning when set], 'notes': {key: text}}
+      costPresets  base.costs presets accepted in costModel.preset
+    """
+    extra: Dict[str, Any] = {}
+    if fill_timings is not None:
+        extra['fillTimings'] = list(fill_timings)
+    if intervals is not None:
+        extra['intervals'] = list(intervals)
+    if request_keys is not None:
+        extra['requestKeys'] = {'honoured': list(request_keys.get('honoured') or []),
+                                'ignored': list(request_keys.get('ignored') or []),
+                                'notes': dict(request_keys.get('notes') or {})}
+    if cost_presets is not None:
+        extra['costPresets'] = list(cost_presets)
+    return {
+        **extra,
+        'schemaVersion': 2, 'engine': engine, 'engineImplementation': engine_implementation,
+        'library': library, 'libraryVersion': library_version, 'installed': bool(installed),
+        'commands': list(commands or []), 'fillModel': fill_model,
+        'commissionModels': list(commission_models or ['pct_notional']),
+        'slippageModels': list(slippage_models or ['pct_price']), 'shortSelling': bool(short_selling),
+        'leverage': bool(leverage), 'multiSymbol': bool(multi_symbol), 'intraday': bool(intraday),
+        'sizingMethods': list(sizing_methods or ['percent']), 'stops': bool(stops),
+        'monteCarloMethods': list(monte_carlo_methods or ['trade_bootstrap', 'trade_shuffle', 'returns_bootstrap',
+                                                          'block_bootstrap']),
+        'optimizeMethods': list(optimize_methods or ['grid', 'random']),
+        'walkForwardModes': list(walk_forward_modes or ['rolling', 'anchored']),
+        'notModelled': list(not_modelled if not_modelled is not None else NOT_MODELLED_VOCABULARY),
+    }
 
 
 def ignored_request_settings(request: Dict[str, Any], supported: List[str]) -> List[str]:

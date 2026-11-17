@@ -8,53 +8,93 @@ streams {"event": "progress" | "log", ...} lines before it:
   train '{"ticker": "AAPL", "algorithm": "PPO", "episodes": 10, "start_date": "2024-01-01", "end_date": "2025-12-31"}'
       Trains on the first 80% of the daily bars, evaluates out of sample on the rest
       against buy-and-hold and saves the model; the result carries its model_path.
-  evaluate '{"model_path": "<from train>", "ticker": "AAPL", "start_date": "2026-01-01", "end_date": "2026-06-30", "n_episodes": 10}'
-      Replays a saved model over a window (default: the last 365 days) against buy-and-hold.
-      algorithm and ticker default to the parts of the file name train writes.
+      "timesteps" is the number of environment steps actually trained (on-policy
+      algorithms collect whole rollouts, so it can exceed "requested_timesteps").
+  evaluate '{"model_path": "<from train>", "ticker": "AAPL", "start_date": "2026-01-01", "end_date": "2026-06-30", "n_episodes": 1}'
+      Replays a saved model over a window against buy-and-hold. Default window: from the
+      day after the model's training data ended up to today (out of sample).
+      algorithm and ticker default to the model's sidecar / file name.
   list_algorithms
 """
 
+import os
+
+# Native thread pools (OpenMP / MKL / OpenBLAS, torch) size themselves to every core by
+# default. On a 48-core host one SAC run spun ~770 % CPU and starved itself; on a laptop
+# it starves the terminal. Must run before numpy / torch are imported; a value the user
+# set in the environment wins.
+_MAX_THREADS = min(4, os.cpu_count() or 1)
+for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(_v, str(_MAX_THREADS))
+
 import json
 import sys
-import os
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import fincept_json
+
 import numpy as np
 import pandas as pd
 
-# Qlib RL imports with availability check
-RL_AVAILABLE = False
+# Qlib RL -- loaded on demand. `import qlib.rl` costs seconds of cold start and only
+# `initialize` / `list_algorithms` use it; train / evaluate run on Stable-Baselines3.
+RL_AVAILABLE = None   # unknown until _load_qlib_rl()
 RL_ERROR = None
 
-try:
-    import qlib
-    from qlib.rl import Interpreter
-    from qlib.rl.order_execution import SingleAssetOrderExecutionSimple
-    from qlib.rl.reward import Reward
-    from qlib.rl.simulator import InitialStateType, Simulator
-    from qlib.rl.trainer import Trainer
-    from qlib.rl.utils import LogLevel, LogWriter
-    from qlib.data import D
-    from qlib.config import REG_CN, REG_US
-    RL_AVAILABLE = True
-except ImportError as e:
-    RL_ERROR = str(e)
+
+def _load_qlib_rl() -> bool:
+    global RL_AVAILABLE, RL_ERROR, qlib, REG_CN, REG_US
+    if RL_AVAILABLE is None:
+        try:
+            import qlib
+            from qlib.rl import Interpreter  # noqa: F401
+            from qlib.config import REG_CN, REG_US
+            RL_AVAILABLE = True
+        except Exception as e:  # ImportError, or a broken optional dependency
+            RL_AVAILABLE = False
+            RL_ERROR = str(e)
+    return RL_AVAILABLE
+
 
 # Gym/Stable-Baselines3 for RL algorithms
 STABLE_BASELINES_AVAILABLE = False
 gym = None
 try:
     import gymnasium as gym
+    import torch
     from stable_baselines3 import PPO, DQN, A2C, SAC, TD3
-    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-    from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
-    from stable_baselines3.common.monitor import Monitor
+    from stable_baselines3.common.callbacks import BaseCallback
     STABLE_BASELINES_AVAILABLE = True
+    torch.set_num_threads(_MAX_THREADS)
+    try:
+        torch.set_num_interop_threads(_MAX_THREADS)
+    except RuntimeError:  # already set (only allowed once per process)
+        pass
 except ImportError:
     pass
+
+
+# Layout of the observation vector (see TradingEnvironment._get_observation). Version 2
+# made every input scale-free (exposure instead of a share count, volume vs its 20-day
+# mean, bands / ATR relative to price) and filled bb/atr/adx/obv, which version 1 left
+# at a constant 0. A model trained on version 1 has the same (20,) shape but reads
+# different inputs, so `evaluate` refuses it (see the sidecar written by `train`).
+OBS_VERSION = 2
+OBS_DIM = 20
+
+# Loss keys SB3 records, in preference order: PPO/DQN "train/loss", SAC/TD3
+# "train/critic_loss", A2C "train/value_loss".
+_LOSS_KEYS = ("train/loss", "train/critic_loss", "train/value_loss")
+
+
+def _emit_event(obj: Dict[str, Any]) -> None:
+    """One streamed NDJSON line (progress / log) the C++ service reads as it arrives."""
+    print(fincept_json.dumps(obj), flush=True)
 
 
 if STABLE_BASELINES_AVAILABLE:
@@ -66,37 +106,63 @@ if STABLE_BASELINES_AVAILABLE:
             self.total_timesteps = int(total_timesteps)
             self.report_every = max(1, int(report_every))
             self.last_report = 0
+            self.last_loss = None
 
-        def _on_step(self) -> bool:
-            if self.num_timesteps - self.last_report < self.report_every:
-                return True
-            self.last_report = self.num_timesteps
-            reward_mean = 0.0
-            loss = 0.0
+        def _capture_loss(self) -> None:
+            # SB3 clears logger.name_to_value on every dump, so a value read only at
+            # report time was almost always gone (PPO "loss" was always 0.0). Keep the
+            # latest one seen instead.
+            try:
+                values = self.model.logger.name_to_value
+                for key in _LOSS_KEYS:
+                    if key in values:
+                        self.last_loss = float(values[key])
+                        return
+            except Exception:
+                pass
+
+        def _on_rollout_start(self) -> None:
+            self._capture_loss()
+
+        def _emit(self) -> None:
+            reward_mean = None
             try:
                 buf = getattr(self.model, "ep_info_buffer", None)
                 if buf:
                     rewards = [ep["r"] for ep in buf if "r" in ep]
                     if rewards:
                         reward_mean = float(sum(rewards) / len(rewards))
-                loss = float(self.logger.name_to_value.get("train/loss", 0.0))
             except Exception:
                 pass
-            print(json.dumps({
+            step = int(self.num_timesteps)
+            _emit_event({
                 "event": "progress",
-                "step": int(self.num_timesteps),
-                "total": self.total_timesteps,
+                "step": step,
+                # On-policy rollouts can run past the requested count; never report
+                # a step beyond the total (the progress bar went past 100 %).
+                "total": max(self.total_timesteps, step),
                 "reward_mean": reward_mean,
-                "loss": loss,
-            }), flush=True)
+                "loss": self.last_loss,
+            })
+
+        def _on_step(self) -> bool:
+            self._capture_loss()
+            if self.num_timesteps - self.last_report < self.report_every:
+                return True
+            self.last_report = self.num_timesteps
+            self._emit()
             return True
+
+        def _on_training_end(self) -> None:
+            self._capture_loss()
+            self._emit()
 else:
     ProgressCallback = None  # type: ignore
 
 
 class TradingEnvironment(gym.Env if gym else object):
     """
-    Custom Gym environment for trading using Qlib data
+    Custom Gym environment for trading on daily bars
     Supports continuous and discrete action spaces
     """
 
@@ -109,7 +175,8 @@ class TradingEnvironment(gym.Env if gym else object):
         Initialize trading environment
 
         Args:
-            market_data: DataFrame with OHLCV data
+            market_data: DataFrame with OHLCV data plus the indicator columns
+                         _download_market_data adds
             initial_cash: Starting capital
             commission: Trading commission rate
             action_space_type: 'continuous' or 'discrete'
@@ -126,17 +193,18 @@ class TradingEnvironment(gym.Env if gym else object):
         first_close = float(market_data['close'].iloc[0]) if len(market_data) else 100.0
         self.price_scale = first_close if first_close > 0 else 100.0
 
-        # State space: [cash, holdings, price, volume, technical indicators]
+        # State space: see OBS_VERSION / _get_observation
         self.observation_space = gym.spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(20,),
+            shape=(OBS_DIM,),
             dtype=np.float32
         )
 
         # Action space
         if action_space_type == 'continuous':
-            # Continuous: position size from -1 (full short) to +1 (full long)
+            # Continuous: target fraction of portfolio value held in the asset
+            # (long-only: <= 0 means flat, 1 = fully invested)
             self.action_space = gym.spaces.Box(
                 low=-1.0,
                 high=1.0,
@@ -162,18 +230,20 @@ class TradingEnvironment(gym.Env if gym else object):
         return self._get_observation(), {}
 
     def _get_observation(self) -> np.ndarray:
-        """Get current state observation"""
+        """Current state, every element scale-free (OBS_VERSION 2)."""
         if self.current_step >= len(self.market_data):
-            return np.zeros(20, dtype=np.float32)
+            return np.zeros(OBS_DIM, dtype=np.float32)
 
         row = self.market_data.iloc[self.current_step]
+        close = float(row.get('close', 0.0))
+        portfolio_now = self.cash + self.holdings * close
+        exposure = (self.holdings * close / portfolio_now) if portfolio_now > 0 else 0.0
 
-        # Normalize state features
         obs = np.array([
             self.cash / self.initial_cash,
-            self.holdings,
-            row.get('close', 0) / self.price_scale,  # Normalized price
-            row.get('volume', 0) / 1e6,  # Normalized volume
+            exposure,                                   # fraction of the portfolio in the asset
+            close / self.price_scale,                   # price relative to the first bar
+            row.get('volume_ratio', 1.0),               # volume / its 20-day mean
             row.get('open', 0) / self.price_scale,
             row.get('high', 0) / self.price_scale,
             row.get('low', 0) / self.price_scale,
@@ -181,23 +251,25 @@ class TradingEnvironment(gym.Env if gym else object):
             row.get('returns', 0),
             row.get('volatility', 0),
             row.get('rsi', 50) / 100,
-            row.get('macd', 0),
+            row.get('macd', 0),                         # relative to price
             row.get('signal', 0),
-            row.get('bb_upper', 0) / self.price_scale,
-            row.get('bb_lower', 0) / self.price_scale,
-            row.get('atr', 0),
+            row.get('bb_upper', 0),                     # upper band / close - 1
+            row.get('bb_lower', 0),                     # lower band / close - 1
+            row.get('atr', 0),                          # ATR / close
             row.get('adx', 0) / 100,
-            row.get('obv', 0) / 1e9,
-            self.portfolio_value / self.initial_cash,
+            row.get('obv', 0),                          # 20-day OBV change / 20-day volume, in [-1, 1]
+            portfolio_now / self.initial_cash,
             float(self.current_step) / len(self.market_data)
         ], dtype=np.float32)
 
-        return obs
+        return np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0)
 
     def step(self, action):
         """Execute one step in the environment"""
         if self.current_step >= len(self.market_data) - 1:
-            return self._get_observation(), 0.0, True, False, {}
+            return self._get_observation(), 0.0, True, False, {
+                'portfolio_value': self.portfolio_value, 'cash': self.cash,
+                'holdings': self.holdings, 'step': self.current_step}
 
         current_price = self.market_data.iloc[self.current_step].get('close', 0)
 
@@ -269,7 +341,7 @@ class TradingEnvironment(gym.Env if gym else object):
     def render(self):
         """Render environment state"""
         print(f"Step: {self.current_step}, Portfolio: ${self.portfolio_value:.2f}, "
-              f"Cash: ${self.cash:.2f}, Holdings: {self.holdings:.4f}")
+              f"Cash: ${self.cash:.2f}, Holdings: {self.holdings:.4f}", file=sys.stderr)
 
 
 class RLTradingAgent:
@@ -289,13 +361,20 @@ class RLTradingAgent:
         self.training_history = []
 
     def initialize_qlib(self,
-                       provider_uri: str = "~/.qlib/qlib_data/cn_data",
+                       provider_uri: Optional[str] = None,
                        region: str = "cn"):
-        """Initialize Qlib"""
-        if not RL_AVAILABLE:
+        """Initialize Qlib. Without a provider_uri: the public qlib CN dataset
+        (qlib_datasets.public_dataset_dir)."""
+        if not _load_qlib_rl():
             return {'success': False, 'error': f'Qlib RL not available: {RL_ERROR}'}
 
         try:
+            if not provider_uri:
+                _here = os.path.dirname(os.path.abspath(__file__))
+                if _here not in sys.path:
+                    sys.path.insert(1, _here)
+                import qlib_datasets
+                provider_uri = str(qlib_datasets.public_dataset_dir("cn"))
             if region == "cn":
                 qlib.init(provider_uri=provider_uri, region=REG_CN)
             else:
@@ -307,11 +386,20 @@ class RLTradingAgent:
             return {'success': False, 'error': str(e)}
 
     @staticmethod
-    def _download_market_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """Daily OHLCV from Yahoo Finance plus the indicator columns the env observes."""
-        import yfinance as yf
+    def _download_market_data(ticker: str, start_date: str, end_date: str,
+                              warmup_days: int = 120) -> pd.DataFrame:
+        """Daily OHLCV from Yahoo Finance plus the indicator columns the env observes.
 
-        raw = yf.download(ticker, start=start_date, end=end_date, auto_adjust=True, progress=False)
+        `warmup_days` of extra history before start_date feed the rolling indicators
+        and are then dropped, so the returned frame starts at start_date.
+        """
+        import fincept_yahoo as fy  # the shared bar cache (one long download per symbol)
+
+        try:
+            fetch_start = (pd.Timestamp(start_date) - pd.Timedelta(days=int(warmup_days))).date().isoformat()
+        except Exception:
+            raise ValueError(f"start_date must be YYYY-MM-DD, got {start_date!r}")
+        raw = fy.download(ticker, start=fetch_start, end=end_date, auto_adjust=True)
         if raw is None or raw.empty:
             raise ValueError(f"No price data returned for '{ticker}' between {start_date} and {end_date}")
         if isinstance(raw.columns, pd.MultiIndex):
@@ -319,8 +407,8 @@ class RLTradingAgent:
         df = raw.rename(columns=str.lower)[['open', 'high', 'low', 'close', 'volume']].astype(float)
         df = df.dropna()
 
-        close = df['close']
-        df['vwap'] = (df['high'] + df['low'] + close) / 3.0
+        close, high, low, volume = df['close'], df['high'], df['low'], df['volume']
+        df['vwap'] = (high + low + close) / 3.0
         df['returns'] = close.pct_change()
         df['volatility'] = df['returns'].rolling(20).std()
         delta = close.diff()
@@ -330,10 +418,41 @@ class RLTradingAgent:
         macd = close.ewm(span=12, adjust=False).mean() - close.ewm(span=26, adjust=False).mean()
         df['macd'] = macd / close                      # relative to price so it is scale-free
         df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+
+        # Bollinger bands (20, 2) as distance from the close.
+        mid = close.rolling(20).mean()
+        sd = close.rolling(20).std()
+        df['bb_upper'] = (mid + 2 * sd) / close - 1.0
+        df['bb_lower'] = (mid - 2 * sd) / close - 1.0
+
+        # Wilder ATR(14) relative to price, and ADX(14).
+        prev_close = close.shift(1)
+        true_range = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+        atr = true_range.ewm(alpha=1 / 14, adjust=False).mean()
+        df['atr'] = atr / close
+        up_move = high.diff()
+        down_move = -low.diff()
+        plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=df.index)
+        minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=df.index)
+        plus_di = 100 * plus_dm.ewm(alpha=1 / 14, adjust=False).mean() / (atr + 1e-12)
+        minus_di = 100 * minus_dm.ewm(alpha=1 / 14, adjust=False).mean() / (atr + 1e-12)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-12)
+        df['adx'] = dx.ewm(alpha=1 / 14, adjust=False).mean()
+        # The first 2 x 14 bars of ADX are still converging.
+        df.loc[df.index[:28], 'adx'] = np.nan
+
+        # On-balance volume as its 20-day change over the 20-day traded volume: in [-1, 1]
+        # (+1 = every day of the last 20 closed up). The raw OBV is a cumulative share
+        # count in the billions.
+        obv = (np.sign(delta).fillna(0.0) * volume).cumsum()
+        df['obv'] = (obv - obv.shift(20)) / (volume.rolling(20).sum() + 1e-12)
+        df['volume_ratio'] = volume / (volume.rolling(20).mean() + 1e-12)
+
         df = df.dropna()
+        df = df[df.index >= pd.Timestamp(start_date)]
         if len(df) < 60:
-            raise ValueError(f"Only {len(df)} usable daily bars for '{ticker}'; need at least 60 -- "
-                             "widen the date range")
+            raise ValueError(f"Only {len(df)} usable daily bars for '{ticker}' between {start_date} and "
+                             f"{end_date}; need at least 60 -- widen the date range")
         return df
 
     def create_trading_env(self,
@@ -424,6 +543,15 @@ class RLTradingAgent:
                 return {'success': False, 'error': f'Unknown algorithm: {algorithm}'}
 
             AlgoClass = algo_map[algorithm]
+            total_timesteps = max(1, int(total_timesteps))
+
+            if algorithm == 'PPO':
+                # PPO's default rollout (2048 steps) is longer than the ~400 training bars
+                # of a two-year window: a 2-episode run trained 2048 steps and reported
+                # 766. One rollout per pass over the data instead, in whole mini-batches.
+                bars = len(self.env.market_data)
+                kwargs.setdefault('n_steps', max(64, min(2048, (bars // 64) * 64)))
+                kwargs.setdefault('batch_size', 64)
 
             # Create model with verbose=0 so SB3 doesn't emit its own rollout tables.
             # Our ProgressCallback is the single source of structured progress events;
@@ -436,28 +564,38 @@ class RLTradingAgent:
                 **kwargs
             )
 
+            # On-policy algorithms train in whole rollouts and stop at the first rollout
+            # boundary at or after the count they are given: hand them the nearest whole
+            # number of rollouts (at least one), so the run, the progress total and the
+            # reported timesteps agree.
+            learn_timesteps = total_timesteps
+            if algorithm in ('PPO', 'A2C'):
+                rollout = int(self.model.n_steps) * int(self.model.n_envs)
+                learn_timesteps = max(1, int(round(total_timesteps / rollout))) * rollout
+
             # Report roughly 200 progress ticks regardless of run length.
-            report_every = max(256, total_timesteps // 200)
-            callback = ProgressCallback(total_timesteps, report_every) if ProgressCallback else None
+            report_every = max(256, learn_timesteps // 200)
+            callback = ProgressCallback(learn_timesteps, report_every) if ProgressCallback else None
 
             # Train
-            self.model.learn(total_timesteps=total_timesteps, callback=callback)
+            self.model.learn(total_timesteps=learn_timesteps, callback=callback)
 
             return {
                 'success': True,
                 'algorithm': algorithm,
-                'timesteps': total_timesteps,
-                'message': f'{algorithm} agent trained successfully'
+                'timesteps': int(self.model.num_timesteps),
+                'requested_timesteps': total_timesteps,
+                'message': f'{algorithm} agent trained for {int(self.model.num_timesteps)} steps'
             }
         except Exception as e:
             # Emit an error log event so the UI log console sees it live,
             # in addition to the final result payload.
             try:
-                print(json.dumps({
+                _emit_event({
                     "event": "log",
                     "level": "error",
                     "msg": f"train_agent exception: {e}",
-                }), flush=True)
+                })
             except Exception:
                 pass
             return {'success': False, 'error': str(e)}
@@ -534,39 +672,26 @@ class RLTradingAgent:
             'success': True,
             'algorithms': algorithms,
             'stable_baselines_available': STABLE_BASELINES_AVAILABLE,
-            'qlib_rl_available': RL_AVAILABLE
+            'qlib_rl_available': _load_qlib_rl()
         }
 
 
-def _json_safe(obj):
-    """Replace NaN / +-Infinity with None before json.dumps.
-
-    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
-    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
-    """
-    if isinstance(obj, float):
-        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
-    if isinstance(obj, dict):
-        return {k: _json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_json_safe(v) for v in obj]
-    return obj
-
-
 _RL_ALGORITHMS = ('PPO', 'DQN', 'A2C', 'SAC', 'TD3')
+
+
+def _sidecar_path(model_path: Path) -> Path:
+    """<model>.json next to <model>.zip: what `evaluate` needs to know about a saved model."""
+    return model_path.with_suffix('.json')
 
 
 def _evaluate_saved_model(agent: RLTradingAgent, params: Dict[str, Any]) -> Dict[str, Any]:
     """`evaluate`: replay a model saved by `train` over daily bars, next to buy-and-hold.
 
     A fresh process has no agent in memory, so this loads the file `train` reported as
-    model_path (named <ALGO>_<TICKER>_<YYYYmmdd>_<HHMMSS>.zip -- algorithm and ticker
-    default to those parts) and evaluates it on start_date..end_date (default: the last
-    365 days). Pick a window after the training period for an out-of-sample score.
+    model_path (named <ALGO>_<TICKER>_<YYYYmmdd>_<HHMMSS>.zip, with a <same>.json sidecar)
+    and evaluates it on start_date..end_date. Default window: from the day after the
+    model's training data ended up to today, i.e. out of sample.
     """
-    from datetime import date, timedelta
-    from pathlib import Path
-
     if not isinstance(params, dict):
         return {'success': False, 'error': 'evaluate takes a JSON object, e.g. {"model_path": "..."}'}
     if not STABLE_BASELINES_AVAILABLE:
@@ -578,12 +703,29 @@ def _evaluate_saved_model(agent: RLTradingAgent, params: Dict[str, Any]) -> Dict
     if not model_path.is_file():
         return {'success': False, 'error': f'Model file not found: {model_path}'}
 
+    # The sidecar records the observation layout the model was trained on. Models saved
+    # before OBS_VERSION 2 have none: their inputs differ (share count instead of
+    # exposure, constant-zero indicators), so replaying them would produce numbers
+    # that mean nothing.
+    meta = {}
+    sidecar = _sidecar_path(model_path)
+    if sidecar.is_file():
+        try:
+            meta = json.loads(sidecar.read_text(encoding='utf-8'))
+        except Exception:
+            meta = {}
+    if int(meta.get('obs_version') or 0) != OBS_VERSION:
+        return {'success': False,
+                'error': f'{model_path.name} was trained with an older observation layout (or not by this '
+                         f'module) -- retrain it with TRAIN RL AGENT, then evaluate the new model.'}
+
     name_parts = model_path.stem.split('_')
-    algorithm = str(params.get('algorithm') or name_parts[0]).upper()
+    algorithm = str(params.get('algorithm') or meta.get('algorithm') or name_parts[0]).upper()
     if algorithm not in _RL_ALGORITHMS:
         return {'success': False,
                 'error': f"Unknown algorithm '{algorithm}' -- pass 'algorithm' ({', '.join(_RL_ALGORITHMS)})"}
-    ticker = str(params.get('ticker') or ('_'.join(name_parts[1:-2]) if len(name_parts) >= 4 else '')).strip()
+    ticker = str(params.get('ticker') or meta.get('ticker') or
+                 ('_'.join(name_parts[1:-2]) if len(name_parts) >= 4 else '')).strip().upper()
     if not ticker:
         return {'success': False, 'error': "evaluate needs 'ticker' (the model file name does not carry one)"}
 
@@ -591,9 +733,23 @@ def _evaluate_saved_model(agent: RLTradingAgent, params: Dict[str, Any]) -> Dict
     if not loaded.get('success'):
         return {'success': False,
                 'error': f"Could not load {model_path.name} as {algorithm}: {loaded.get('error')}"}
+    obs_shape = tuple(getattr(agent.model.observation_space, 'shape', ()) or ())
+    if obs_shape != (OBS_DIM,):
+        return {'success': False,
+                'error': f'{model_path.name} expects observations of shape {obs_shape}, this environment '
+                         f'produces ({OBS_DIM},) -- retrain the model.'}
 
+    train_end = (meta.get('train_period') or [None, None])[-1]
     end_date = str(params.get('end_date') or date.today().isoformat())
-    start_date = str(params.get('start_date') or (date.today() - timedelta(days=365)).isoformat())
+    if params.get('start_date'):
+        start_date = str(params['start_date'])
+    elif train_end:
+        start_date = (pd.Timestamp(train_end) + pd.Timedelta(days=1)).date().isoformat()
+    else:
+        start_date = (date.today() - timedelta(days=365)).isoformat()
+    if pd.Timestamp(start_date) >= pd.Timestamp(end_date):
+        return {'success': False, 'error': f'start_date {start_date} must be before end_date {end_date}'}
+
     market_data = agent._download_market_data(ticker, start_date, end_date)
     # The environment's action space must be the one the model was trained with
     # (train builds a discrete env for DQN, a continuous one otherwise).
@@ -601,17 +757,22 @@ def _evaluate_saved_model(agent: RLTradingAgent, params: Dict[str, Any]) -> Dict
     agent.eval_env = TradingEnvironment(market_data=market_data,
                                         initial_cash=float(params.get('initial_capital', 100000)),
                                         action_space_type='discrete' if discrete else 'continuous')
-    result = agent.evaluate_agent(max(1, int(params.get('n_episodes', 10))))
+    result = agent.evaluate_agent(max(1, int(params.get('n_episodes', 1))))
     if result.get('success'):
         close = market_data['close']
+        first_bar = str(market_data.index[0].date())
         result.update({
             'algorithm': algorithm,
             'ticker': ticker,
             'model_path': str(model_path),
-            'period': [str(market_data.index[0].date()), str(market_data.index[-1].date())],
+            'period': [first_bar, str(market_data.index[-1].date())],
             'bars': int(len(market_data)),
             'buy_hold_return_pct': float((close.iloc[-1] / close.iloc[0] - 1) * 100),
+            'train_period': meta.get('train_period'),
         })
+        if train_end and pd.Timestamp(first_bar) <= pd.Timestamp(train_end):
+            result['warning'] = (f'The evaluation window starts on {first_bar}, inside the training data '
+                                 f'(which ran to {train_end}): this part of the result is in-sample.')
     return result
 
 
@@ -621,7 +782,7 @@ def _dispatch(command: str, agent: RLTradingAgent) -> Dict[str, Any]:
         result = agent.get_available_algorithms()
 
     elif command == 'initialize':
-        provider_uri = sys.argv[2] if len(sys.argv) > 2 else "~/.qlib/qlib_data/cn_data"
+        provider_uri = sys.argv[2] if len(sys.argv) > 2 else None   # None: the public CN dataset
         region = sys.argv[3] if len(sys.argv) > 3 else "cn"
         result = agent.initialize_qlib(provider_uri, region)
 
@@ -643,7 +804,6 @@ def _dispatch(command: str, agent: RLTradingAgent) -> Dict[str, Any]:
         env_params.setdefault('tickers', 'AAPL')
         env_params.setdefault('initial_cash', 100000)
         # Default window: the last two years of daily bars (it was a fixed 2022-2024).
-        from datetime import date, timedelta
         env_params.setdefault('end_date', date.today().isoformat())
         env_params.setdefault('start_date', (date.today() - timedelta(days=730)).isoformat())
         # DQN only supports a discrete action space; the continuous env made
@@ -662,18 +822,30 @@ def _dispatch(command: str, agent: RLTradingAgent) -> Dict[str, Any]:
             if result.get('success'):
                 # Out-of-sample evaluation + persistence, in the same process: nothing
                 # survives the process otherwise, so "evaluate" could never find a model.
-                evaluation = agent.evaluate_agent(5)
+                # The policy and the replay are deterministic, so one episode is the result.
+                evaluation = agent.evaluate_agent(1)
                 if evaluation.get('success'):
                     evaluation['buy_hold_return_pct'] = agent.buy_hold_return_pct
                     result['evaluation'] = evaluation
                 result['data'] = agent.data_info
                 try:
-                    from pathlib import Path
-                    models_dir = Path.home() / '.fincept' / 'rl_models'
-                    models_dir.mkdir(parents=True, exist_ok=True)
+                    # <data root>/script-data/rl_models (the ~/.fincept/rl_models of
+                    # releases is copied in once, never moved).
+                    import fincept_paths
+                    models_dir = fincept_paths.user_data_dir('rl_models', legacy='rl_models')
                     model_path = models_dir / (f"{algorithm}_{agent.ticker}_"
                                                f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip")
                     agent.model.save(str(model_path))
+                    _sidecar_path(model_path).write_text(json.dumps({
+                        'obs_version': OBS_VERSION,
+                        'algorithm': algorithm,
+                        'ticker': agent.ticker,
+                        'action_space': env_params.get('action_space_type'),
+                        'train_period': agent.data_info.get('train_period'),
+                        'test_period': agent.data_info.get('test_period'),
+                        'timesteps': result.get('timesteps'),
+                        'saved_at': datetime.now().isoformat(timespec='seconds'),
+                    }), encoding='utf-8')
                     result['model_path'] = str(model_path)
                 except Exception as e:
                     result['model_save_error'] = str(e)
@@ -691,10 +863,11 @@ def _dispatch(command: str, agent: RLTradingAgent) -> Dict[str, Any]:
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
-        print(json.dumps({
+        print(fincept_json.dumps({
+            'event': 'result',
             'success': False,
             'error': 'Usage: python qlib_rl.py <command> [args...]'
-        }))
+        }), flush=True)
         return
 
     command = sys.argv[1]
@@ -703,6 +876,8 @@ def main():
     try:
         result = _dispatch(command, RLTradingAgent())
     except Exception as exc:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         result = {'success': False, 'error': f'{command}: {exc}'}
 
     # Emit final result as a single-line "result" event so the C++ service can parse
@@ -710,7 +885,7 @@ def main():
     # ProgressCallback during training.
     payload = {"event": "result"}
     payload.update(result)
-    print(json.dumps(_json_safe(payload)), flush=True)
+    print(fincept_json.dumps(payload), flush=True)
 
 
 if __name__ == '__main__':

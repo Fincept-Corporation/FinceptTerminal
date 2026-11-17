@@ -6,6 +6,7 @@
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
 #include "services/notifications/NotificationService.h"
+#include "services/notifications/providers/BaseProvider.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
@@ -39,6 +40,10 @@ namespace {
 /// not the user's values, and set() is an INSERT OR REPLACE.
 constexpr const char* kNotifProviderReadFailedProp = "fincept_notif_provider_read_failed";
 constexpr const char* kNotifTriggersReadFailedProp = "fincept_notif_triggers_read_failed";
+/// QStringList on body_frame: fields whose stored secret is damaged (SecretRead
+/// Corrupt — it can never be read). Such a provider saves only once each of them
+/// was entered again; an empty box never erases the stored row.
+constexpr const char* kNotifDamagedSecretsProp = "fincept_notif_damaged_secrets";
 
 struct FieldDef {
     QString key;
@@ -82,7 +87,7 @@ const QVector<ProviderDef>& provider_defs() {
          "Email",
          "",
          {{"smtp_host", "SMTP Host", "smtp.gmail.com"},
-          {"smtp_port", "Port", "587"},
+          {"smtp_port", "Port", "587 (STARTTLS) or 465 (SSL)"},
           {"smtp_user", "Username", "you@gmail.com"},
           {"smtp_pass", "Password", "App password", true},
           {"to_addr", "To Address", "recipient@example.com"},
@@ -122,7 +127,10 @@ const QVector<ProviderDef>& provider_defs() {
           {"channel", "Channel", "#town-square (optional)"},
           {"username", "Username", "Fincept (optional)"}}},
         {"teams", "MS Teams", "", {{"webhook_url", "Webhook URL", "https://outlook.office.com/webhook/..."}}},
-        {"webhook", "Webhook", "", {{"url", "URL", "https://your-endpoint.com/notify"}, {"method", "Method", "POST"}}},
+        {"webhook",
+         "Webhook",
+         "",
+         {{"url", "URL", "https://your-endpoint.com/notify"}, {"method", "Method", "POST or PUT (default POST)"}}},
         {"pagerduty", "PagerDuty", "", {{"routing_key", "Routing Key", "32-character integration key", true}}},
         {"opsgenie", "Opsgenie", "", {{"api_key", "API Key", "Your Opsgenie API key", true}}},
         {"sms",
@@ -165,14 +173,34 @@ void notif_store_secret(SettingsRepository& repo, const QString& setting_key, co
         repo.set(setting_key, QString{}, category);
         return;
     }
-    const auto st = SecureStorage::instance().store(handle, value);
+    // Blank the plaintext row only once the encrypted copy was written AND read back equal.
+    const auto st = SecureStorage::instance().store_verified(handle, value);
     if (st.is_ok()) {
         repo.set(setting_key, QString{}, category);
     } else {
-        LOG_WARN("Settings", QString("SecureStorage unavailable for '%1' — keeping the value in settings: %2")
-                                 .arg(setting_key, QString::fromStdString(st.error())));
+        LOG_WARN("Settings", logf("Notification credential kept in settings, secure storage write not confirmed",
+                                  {{"key", setting_key}, {"error", QString::fromStdString(st.error())}}));
         repo.set(setting_key, value, category);
+        // Reads prefer a stored copy: the value the user just replaced must not shadow it.
+        SecureStorage::instance().remove(handle);
     }
+}
+
+const ProviderDef* notif_find_def(const QString& provider_id) {
+    for (const auto& d : provider_defs())
+        if (d.id == provider_id)
+            return &d;
+    return nullptr;
+}
+
+/// The provider's status line in `color`; the stylesheet is set only when it changes.
+void notif_set_status(QLabel* label, const QString& text, const QString& color) {
+    if (!label)
+        return;
+    const QString ss = QStringLiteral("color:%1;background:transparent;").arg(color);
+    if (label->styleSheet() != ss)
+        label->setStyleSheet(ss);
+    label->setText(text);
 }
 
 /// Returns an error message when `value` is unusable for `field_key`; empty when OK
@@ -185,6 +213,13 @@ QString notif_validate_field(const QString& field_key, const QString& value) {
         const int port = value.toInt(&ok);
         if (!ok || port < 1 || port > 65535)
             return QCoreApplication::translate("NotificationsSection", "must be a number between 1 and 65535");
+    }
+    // Webhook method: the provider sends POST or PUT only — anything else (GET,
+    // PATCH, a typo) used to go out as POST without a word.
+    if (field_key == QLatin1String("method")) {
+        const QString m = value.toUpper();
+        if (m != QLatin1String("POST") && m != QLatin1String("PUT"))
+            return QCoreApplication::translate("NotificationsSection", "must be POST or PUT");
     }
     if (field_key == QLatin1String("webhook_url") || field_key == QLatin1String("url") ||
         field_key == QLatin1String("server_url")) {
@@ -320,14 +355,26 @@ void NotificationsSection::build_ui() {
         thl->setSpacing(8);
 
         pw.test_btn = new QPushButton(tr("Test Send"));
-        pw.test_btn->setFixedWidth(100);
+        pw.test_btn->setProperty("fincept_agent_risk", "spend"); // agents: sends a real message through the provider
+        pw.test_btn->setMinimumWidth(100);
+        pw.test_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         pw.test_btn->setStyleSheet(btn_secondary_ss());
 
         pw.status_lbl = new QLabel;
         pw.status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        pw.status_lbl->setWordWrap(true); // a read problem is a sentence; never widen the page
+
+        // RETRY: read this provider's stored settings again (only while they could not be read).
+        pw.retry_btn = new QPushButton(tr("Retry"), test_row);
+        pw.retry_btn->setProperty("fincept_agent_risk", "spend"); // agents: re-sends a real message through the provider
+        pw.retry_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        pw.retry_btn->setStyleSheet(btn_secondary_ss());
+        pw.retry_btn->setVisible(false);
+        connect(pw.retry_btn, &QPushButton::clicked, this, [this, pid]() { reload_provider(pid); });
 
         thl->addWidget(pw.test_btn);
         thl->addWidget(pw.status_lbl, 1);
+        thl->addWidget(pw.retry_btn);
         thl->addStretch();
         bvl->addWidget(test_row);
 
@@ -480,14 +527,18 @@ void NotificationsSection::build_ui() {
 
     // Save
     save_btn_ = new QPushButton(tr("Save All Providers"));
-    save_btn_->setFixedWidth(200);
+    save_btn_->setProperty("fincept_agent_risk", "account"); // agents: stores notification-provider credentials
+    save_btn_->setMinimumWidth(200);
+    save_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto b = [](bool v) { return v ? "1" : "0"; };
         if (property(kNotifTriggersReadFailedProp).toBool()) {
-            LOG_WARN("Settings", "Skipping alert-trigger save — the stored triggers could not be read, so the "
-                                 "checkboxes on screen are defaults, not the user's values");
+            LOG_WARN("Settings", logf("Alert triggers not saved: the stored triggers could not be read, so the "
+                                      "checkboxes show defaults",
+                                      {{"section", "notifications.triggers"},
+                                       {"error", "read failed at load (logged then)"}}));
         } else {
             repo.set("notifications.inapp", b(trigger_inapp_->isChecked()), "notifications");
             repo.set("notifications.price_alerts", b(trigger_price_->isChecked()), "notifications");
@@ -576,65 +627,118 @@ void NotificationsSection::reload() {
 
     setProperty(kNotifTriggersReadFailedProp, triggers_read_failed);
 
-    for (const auto& def : provider_defs()) {
-        if (!provider_widgets_.contains(def.id))
+    for (const auto& def : provider_defs())
+        reload_provider(def.id);
+}
+
+void NotificationsSection::reload_provider(const QString& provider_id) {
+    const ProviderDef* def = notif_find_def(provider_id);
+    if (!def || !provider_widgets_.contains(provider_id))
+        return;
+    auto& repo = SettingsRepository::instance();
+    const ProviderWidgets pw = provider_widgets_.value(provider_id);
+    const QString cat = QString("notif_%1").arg(provider_id);
+    bool settings_read_failed = false; ///< a plain settings row could not be read
+    QString secret_reason;             ///< SecureStorage could not answer (busy, key unavailable …)
+    QString damaged_reason;            ///< …or a stored secret is damaged (never readable again)
+    QStringList damaged;               ///< fields with a damaged stored secret
+    QStringList damaged_labels;
+
+    if (pw.enabled) {
+        auto r = repo.get(cat + ".enabled");
+        if (r.is_err()) {
+            LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored value untouched: %2")
+                                      .arg(cat + ".enabled", QString::fromStdString(r.error())));
+            settings_read_failed = true;
+        } else {
+            pw.enabled->setChecked(r.value() == "1");
+        }
+    }
+
+    for (const auto& fd : def->fields) {
+        QLineEdit* edit = pw.fields.value(fd.key, nullptr);
+        if (!edit)
             continue;
-        const auto& pw = provider_widgets_[def.id];
-        const QString cat = QString("notif_%1").arg(def.id);
-        bool provider_read_failed = false;
-
-        if (pw.enabled) {
-            auto r = repo.get(cat + ".enabled");
-            if (r.is_err()) {
-                LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored value untouched: %2")
-                                          .arg(cat + ".enabled", QString::fromStdString(r.error())));
-                provider_read_failed = true;
-            } else {
-                pw.enabled->setChecked(r.value() == "1");
-            }
-        }
-
-        for (const auto& fd : def.fields) {
-            if (!pw.fields.contains(fd.key))
+        // Secrets live in SecureStorage (see notif_field_is_secret); the
+        // plaintext settings row is only a legacy fallback that the next
+        // save blanks. Without this the fields render empty once migrated.
+        if (notif_field_is_secret(provider_id, fd)) {
+            // Tri-state (SecretRead.h): found / nothing stored / could not read.
+            const SecretRead sr = SecureStorage::instance().read(notif_secret_handle(cat + "." + fd.key));
+            if (sr.found() && !sr.value.isEmpty()) {
+                edit->setText(sr.value);
                 continue;
-            // Secrets live in SecureStorage (see notif_field_is_secret); the
-            // plaintext settings row is only a legacy fallback that the next
-            // save blanks. Without this the fields render empty once migrated.
-            if (notif_field_is_secret(def.id, fd)) {
-                const auto sr = SecureStorage::instance().retrieve(notif_secret_handle(cat + "." + fd.key));
-                if (sr.is_ok() && !sr.value().isEmpty()) {
-                    if (pw.fields[fd.key])
-                        pw.fields[fd.key]->setText(sr.value());
-                    continue;
+            }
+            if (sr.failed()) {
+                // The secret may exist: never "not set". The box stays empty (it is
+                // not the stored value) and the provider is not saved over it.
+                edit->clear();
+                if (sr.error == SecretRead::Error::Corrupt) {
+                    damaged << fd.key;
+                    damaged_labels << tr(fd.label.toUtf8().constData());
+                    damaged_reason = sr.reason();
+                } else if (secret_reason.isEmpty()) {
+                    secret_reason = sr.reason();
                 }
-            }
-            auto r = repo.get(cat + "." + fd.key);
-            if (r.is_err()) {
-                // These fields are credentials — webhook URLs, bot tokens, SMTP
-                // passwords. Leave the box empty rather than pretending it is
-                // the stored value, and disarm the save path below so neither
-                // Save nor Test Send can write the blank over the real secret.
-                LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored credential "
-                                              "untouched: %2")
-                                          .arg(cat + "." + fd.key, QString::fromStdString(r.error())));
-                provider_read_failed = true;
                 continue;
             }
-            if (pw.fields[fd.key])
-                pw.fields[fd.key]->setText(r.value());
+            // Nothing stored: the legacy plaintext row (if any) below.
         }
+        auto r = repo.get(cat + "." + fd.key);
+        if (r.is_err()) {
+            // These fields are credentials — webhook URLs, bot tokens, SMTP
+            // passwords. Leave the box empty rather than pretending it is
+            // the stored value, and disarm the save path below so neither
+            // Save nor Test Send can write the blank over the real secret.
+            LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored credential "
+                                          "untouched: %2")
+                                      .arg(cat + "." + fd.key, QString::fromStdString(r.error())));
+            edit->clear();
+            settings_read_failed = true;
+            continue;
+        }
+        edit->setText(r.value());
+    }
 
-        // The guard lives on the provider's own widget so save_provider_fields()
-        // — which only receives the ProviderWidgets struct — can see it.
-        if (pw.body_frame)
-            pw.body_frame->setProperty(kNotifProviderReadFailedProp, provider_read_failed);
-        if (pw.test_btn)
-            pw.test_btn->setEnabled(!provider_read_failed);
-        if (provider_read_failed && pw.status_lbl)
-            pw.status_lbl->setText(tr("Could not read this provider's saved settings — saving is disabled so the "
-                                      "blank fields cannot overwrite them. Reopen Settings to retry."));
-        else if (pw.status_lbl)
-            pw.status_lbl->clear();
+    // The guards live on the provider's own widget so save_provider_fields()
+    // — which only receives the ProviderWidgets struct — can see them.
+    const bool blocked = settings_read_failed || !secret_reason.isEmpty();
+    if (pw.body_frame) {
+        pw.body_frame->setProperty(kNotifProviderReadFailedProp, blocked);
+        pw.body_frame->setProperty(kNotifDamagedSecretsProp, damaged);
+    }
+    if (pw.test_btn)
+        pw.test_btn->setEnabled(!blocked);
+    if (pw.retry_btn)
+        pw.retry_btn->setVisible(blocked);
+    if (settings_read_failed)
+        notif_set_status(pw.status_lbl,
+                         tr("Could not read this provider's saved settings — saving is disabled so the blank fields "
+                            "cannot overwrite them."),
+                         ui::colors::WARNING());
+    else if (!secret_reason.isEmpty())
+        notif_set_status(pw.status_lbl,
+                         tr("Could not read secure storage: %1. Saving this provider is disabled until it can be "
+                            "read.")
+                             .arg(secret_reason),
+                         ui::colors::WARNING());
+    else if (!damaged.isEmpty())
+        notif_set_status(pw.status_lbl,
+                         tr("Could not read secure storage: %1 (%2). Enter it again to replace it; until then the "
+                            "stored value is kept.")
+                             .arg(damaged_reason, damaged_labels.join(QStringLiteral(", "))),
+                         ui::colors::WARNING());
+    else
+        notif_set_status(pw.status_lbl, QString(), ui::colors::TEXT_SECONDARY());
+
+    // The provider itself (NotificationService) may have failed to read the same
+    // secret earlier (BaseProvider::has_unreadable_secret): it reads again now
+    // that it can, instead of staying "not configured".
+    if (!blocked && damaged.isEmpty()) {
+        auto* provider =
+            dynamic_cast<notifications::BaseProvider*>(notifications::NotificationService::instance().provider(provider_id));
+        if (provider && provider->has_unreadable_secret())
+            provider->load_config();
     }
 }
 
@@ -697,6 +801,8 @@ void NotificationsSection::retranslateUi() {
         const auto& pw = provider_widgets_[def.id];
         if (pw.test_btn)
             pw.test_btn->setText(tr("Test Send"));
+        if (pw.retry_btn)
+            pw.retry_btn->setText(tr("Retry"));
         for (const auto& fd : def.fields) {
             if (auto* lbl = pw.field_labels.value(fd.key, nullptr))
                 lbl->setText(tr(fd.label.toUtf8().constData()));
@@ -713,15 +819,23 @@ bool NotificationsSection::save_provider_fields(const QString& provider_id, cons
         return false;
     }
 
-    const ProviderDef* def = nullptr;
-    for (const auto& d : provider_defs()) {
-        if (d.id == provider_id) {
-            def = &d;
-            break;
-        }
-    }
+    const ProviderDef* def = notif_find_def(provider_id);
     if (!def)
         return false;
+
+    // A damaged stored secret is replaced only by a value the user entered again;
+    // an empty box never erases it (nor is anything else of the provider written).
+    const QStringList damaged =
+        pw.body_frame ? pw.body_frame->property(kNotifDamagedSecretsProp).toStringList() : QStringList();
+    for (const QString& key : damaged) {
+        const QLineEdit* edit = pw.fields.value(key, nullptr);
+        if (!edit || edit->text().trimmed().isEmpty()) {
+            LOG_WARN("Settings", logf("Notification provider not saved: a damaged stored credential was not entered "
+                                      "again",
+                                      {{"provider", provider_id}, {"field", key}}));
+            return false;
+        }
+    }
 
     // Validate everything before writing anything, so a bad port or URL never
     // leaves the provider half-saved.
@@ -754,6 +868,8 @@ bool NotificationsSection::save_provider_fields(const QString& provider_id, cons
         else
             repo.set(setting_key, value, cat);
     }
+    if (!damaged.isEmpty())
+        reload_provider(provider_id); // the damaged rows were replaced: read them back
     return true;
 }
 

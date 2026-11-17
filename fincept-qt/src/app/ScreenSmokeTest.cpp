@@ -6,15 +6,84 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QEventLoop>
+#include <QPixmap>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QWidget>
 
+#include <algorithm>
 #include <cstdio>
 
 namespace fincept {
 
 namespace {
+
+// ── First-open timing (FINCEPT_SMOKE_TIMING=1) ───────────────────────────────
+// One line per screen on stderr and in the log:
+//   [SmokeTiming] <id> factory=<ms> navigate=<ms> paint=<ms> maxblock=<ms> busy=<ms> widgets=<n>
+// factory  — the screen's constructor alone (DockScreenRouter::materialize_screen)
+// navigate — the whole synchronous navigate(): construction + show/polish + layout
+// paint    — from the start of navigate() until the event-loop pass that
+//            painted the screen for the first time has returned
+// maxblock — longest single event-loop pass after navigate() returned, within
+//            the settle window (first paint, deferred singleShot init, …)
+// busy     — total of the passes >= 16 ms in that window
+// Every number is GUI-thread time the user waits through on first open.
+constexpr int kTimingSettleMs = 1500;
+
+/// Notes the first paint of a widget or of anything inside it.
+class PaintProbe : public QObject {
+  public:
+    QPointer<QWidget> target;
+    bool painted = false;
+
+  protected:
+    bool eventFilter(QObject* obj, QEvent* ev) override {
+        if (!painted && ev->type() == QEvent::Paint && target && obj->isWidgetType()) {
+            auto* w = static_cast<QWidget*>(obj);
+            if (w == target || target->isAncestorOf(w))
+                painted = true;
+        }
+        return false;
+    }
+};
+
+struct ScreenTiming {
+    qint64 navigate_ms = 0;
+    qint64 paint_ms = -1;
+    qint64 max_block_ms = 0;
+    qint64 busy_ms = 0;
+};
+
+/// Runs the settle window after navigate() and fills the paint/block numbers.
+/// `since_nav` started when navigate() was called.
+void measure_settle(QWidget* screen, const QElapsedTimer& since_nav, ScreenTiming* out) {
+    PaintProbe probe;
+    probe.target = screen;
+    qApp->installEventFilter(&probe);
+    QElapsedTimer settle;
+    settle.start();
+    while (settle.elapsed() < kTimingSettleMs) {
+        QElapsedTimer pass;
+        pass.start();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        const qint64 d = pass.elapsed();
+        out->max_block_ms = std::max(out->max_block_ms, d);
+        if (d >= 16)
+            out->busy_ms += d;
+        if (probe.painted && out->paint_ms < 0)
+            out->paint_ms = since_nav.elapsed();
+    }
+    qApp->removeEventFilter(&probe);
+}
+
+bool timing_enabled() {
+    return qEnvironmentVariableIntValue("FINCEPT_SMOKE_TIMING") == 1;
+}
+
 // Pump the event loop for `ms` so showEvent, deferred singleShot(100) init, and
 // lazy web-view / chart construction actually run before we judge the screen.
 // We do NOT wait for data fetches to finish — only for the widget tree to build.
@@ -69,7 +138,16 @@ int run_screen_smoke_test(DockScreenRouter* router) {
     // than no test, so detect the condition and say exactly what is wrong.
     //
     // Deliberately NOT auto-unlocking: a test harness must not learn to bypass
-    // an authentication gate.
+    // an authentication gate. A timing run (FINCEPT_SMOKE_TIMING=1) measures a
+    // signed-in terminal, so it waits for a person — or a driver typing the PIN
+    // into the lock screen — to unlock it.
+    if (timing_enabled()) {
+        QElapsedTimer unlock_wait;
+        unlock_wait.start();
+        while (auth::InactivityGuard::instance().is_terminal_locked() && unlock_wait.elapsed() < 120000)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        spin(3000); // let the unlock's own layout restore / first screen settle
+    }
     if (auth::InactivityGuard::instance().is_terminal_locked()) {
         std::fprintf(stderr,
                      "[Smoke] FAIL: terminal is PIN-locked — navigate() is suppressed, so no screen can be\n"
@@ -88,6 +166,7 @@ int run_screen_smoke_test(DockScreenRouter* router) {
     std::fflush(stderr);
     LOG_INFO("Smoke", QString("Screen smoke test: %1 screens").arg(ids.size()));
 
+    const bool timing = timing_enabled();
     QStringList failures;
     for (const QString& id : ids) {
         // Breadcrumb BEFORE construction so a hard process abort (e.g. a missing
@@ -100,7 +179,11 @@ int run_screen_smoke_test(DockScreenRouter* router) {
         // one, so panels don't accumulate (non-exclusive navigation re-layouts an
         // ever-growing set → O(n^2) and a multi-minute walk). We only need each
         // screen open long enough to construct + fire showEvent.
+        QElapsedTimer since_nav;
+        since_nav.start();
         router->navigate(id, /*exclusive=*/true);
+        ScreenTiming timing_row;
+        timing_row.navigate_ms = since_nav.elapsed();
         const int waited_ms = wait_for_construction(router, id);
 
         if (!router->screen_widget(id)) {
@@ -111,8 +194,30 @@ int run_screen_smoke_test(DockScreenRouter* router) {
             continue;
         }
 
-        // Let showEvent-driven child construction run before moving on.
-        spin(kSettleMs);
+        if (timing) {
+            QWidget* screen = router->screen_widget(id);
+            measure_settle(screen, since_nav, &timing_row);
+            const QString line =
+                QStringLiteral("%1 factory=%2 navigate=%3 paint=%4 maxblock=%5 busy=%6 widgets=%7")
+                    .arg(id)
+                    .arg(screen->property("_fincept_factory_ms").toLongLong())
+                    .arg(timing_row.navigate_ms)
+                    .arg(timing_row.paint_ms)
+                    .arg(timing_row.max_block_ms)
+                    .arg(timing_row.busy_ms)
+                    .arg(screen->findChildren<QWidget*>().size());
+            std::fprintf(stderr, "[SmokeTiming] %s\n", qUtf8Printable(line));
+            std::fflush(stderr);
+            LOG_INFO("SmokeTiming", line);
+            // FINCEPT_SMOKE_SHOTS=<dir>: a picture of the window per screen, for
+            // checking that a change still renders the screen as before.
+            const QString shots = qEnvironmentVariable("FINCEPT_SMOKE_SHOTS");
+            if (!shots.isEmpty())
+                screen->window()->grab().save(shots + QLatin1Char('/') + id + QStringLiteral(".png"));
+        } else {
+            // Let showEvent-driven child construction run before moving on.
+            spin(kSettleMs);
+        }
 
         // Surface slow screens without failing them — a screen that needs seconds
         // to build is a real finding, just not this test's verdict to make.

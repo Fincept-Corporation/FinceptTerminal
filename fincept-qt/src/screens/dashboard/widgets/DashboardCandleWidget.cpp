@@ -1,257 +1,173 @@
 #include "screens/dashboard/widgets/DashboardCandleWidget.h"
 
+#include "core/market/MarketProfile.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/SymbolListDialog.h"
+#include "ui/charts/CandleChart.h"
+#include "ui/formatting/DateFormat.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
-#include <QDateTime>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QFontMetrics>
-#include <QFormLayout>
-#include <QLineEdit>
-#include <QPainter>
+#include <QButtonGroup>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
 
 #include <algorithm>
 
 namespace fincept::screens::widgets {
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  CandleCanvas — QPainter candlestick chart (candles + price axis + time axis)
-// ══════════════════════════════════════════════════════════════════════════════
-
-CandleCanvas::CandleCanvas(QWidget* parent) : QWidget(parent) {
-    setMinimumHeight(120);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-}
-
-void CandleCanvas::set_candles(const QVector<services::HistoryPoint>& candles) {
-    candles_ = candles;
-    dirty_ = true;
-    update();
-}
-
-void CandleCanvas::clear() {
-    candles_.clear();
-    dirty_ = true;
-    update();
-}
-
-void CandleCanvas::refresh_theme() {
-    // The pixmap is painted with token colours at build time; without this it
-    // kept the previous theme until the tile happened to be resized.
-    dirty_ = true;
-    update();
-}
-
-void CandleCanvas::resizeEvent(QResizeEvent* e) {
-    QWidget::resizeEvent(e);
-    dirty_ = true;
-}
-
-void CandleCanvas::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange) {
-        dirty_ = true;
-        update();
-    }
-    QWidget::changeEvent(event);
-}
-
-void CandleCanvas::paintEvent(QPaintEvent*) {
-    if (dirty_) {
-        rebuild_cache();
-        dirty_ = false;
-    }
-    QPainter p(this);
-    p.drawPixmap(0, 0, cache_);
-}
-
-void CandleCanvas::rebuild_cache() {
-    const int W = width();
-    const int H = height();
-    if (W <= 0 || H <= 0)
-        return;
-
-    cache_ = QPixmap(W, H);
-    cache_.fill(QColor(ui::colors::BG_BASE()));
-
-    QPainter p(&cache_);
-    p.setRenderHint(QPainter::Antialiasing, false);
-
-    const int total = candles_.size();
-    if (total == 0) {
-        p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
-        p.setFont(QFont("Consolas", 10));
-        p.drawText(cache_.rect(), Qt::AlignCenter, tr("Waiting for data..."));
-        return;
-    }
-
-    const int start = qMax(0, total - MAX_VISIBLE);
-    const int count = total - start;
-
-    // Price range over the visible window.
-    double lo = 1e18, hi = 0.0;
-    for (int i = start; i < total; ++i) {
-        lo = std::min(lo, candles_[i].low);
-        hi = std::max(hi, candles_[i].high);
-    }
-    if (lo >= hi)
-        return;
-
-    const double margin = (hi - lo) * 0.06;
-    lo -= margin;
-    hi += margin;
-
-    const int plot_w = W - PRICE_AXIS_W;
-    const int plot_h = H - TIME_AXIS_H;
-    if (plot_w <= 0 || plot_h <= 0)
-        return;
-
-    auto py = [&](double price) -> int { return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h); };
-
-    // Grid lines.
-    p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine));
-    for (int g = 1; g < 6; ++g) {
-        int gy = plot_h * g / 6;
-        p.drawLine(0, gy, plot_w, gy);
-    }
-
-    // Candles.
-    const double slot_w = static_cast<double>(plot_w) / count;
-    const int body_w = qMax(1, static_cast<int>(slot_w * 0.65));
-    const int half = body_w / 2;
-
-    const QColor bull_color(ui::colors::POSITIVE.get());
-    const QColor bear_color(ui::colors::NEGATIVE.get());
-    // Wicks were two hardcoded hex literals that ignored the active theme.
-    // Derive them from the body colours instead (DESIGN_SYSTEM §2: no colour
-    // outside the token set).
-    const QColor wick_bull = bull_color.darker(115);
-    const QColor wick_bear = bear_color.darker(115);
-
-    for (int i = 0; i < count; ++i) {
-        const auto& c = candles_[start + i];
-        const int cx = static_cast<int>((i + 0.5) * slot_w);
-        const bool bull = c.close >= c.open;
-        const QColor& col = bull ? bull_color : bear_color;
-        const QColor& wcol = bull ? wick_bull : wick_bear;
-
-        const int open_y = py(c.open);
-        const int close_y = py(c.close);
-        const int high_y = py(c.high);
-        const int low_y = py(c.low);
-
-        const int body_top = std::min(open_y, close_y);
-        const int body_bot = std::max(open_y, close_y);
-        const int body_h = qMax(1, body_bot - body_top);
-
-        p.setPen(QPen(wcol, 1));
-        p.drawLine(cx, high_y, cx, body_top);
-        p.drawLine(cx, body_bot, cx, low_y);
-
-        p.fillRect(cx - half, body_top, body_w, body_h, col);
-    }
-
-    // Price axis (right).
-    p.setPen(QPen(QColor(ui::colors::BORDER_DIM.get()), 1));
-    p.drawLine(plot_w, 0, plot_w, plot_h);
-
-    QFont lbl_font("Consolas", 8);
-    p.setFont(lbl_font);
-    QFontMetrics fm(lbl_font);
-    p.setPen(QColor(ui::colors::TEXT_SECONDARY.get()));
-
-    const bool is_large = hi > 1000;
-    for (int g = 0; g <= 6; ++g) {
-        double price = lo + (hi - lo) * g / 6.0;
-        int gy = py(price);
-        QString txt = is_large ? QString::number(price, 'f', 0) : QString::number(price, 'f', 2);
-        p.drawText(plot_w + 4, gy + fm.ascent() / 2, txt);
-    }
-
-    // Time axis (bottom).
-    p.setPen(QPen(QColor(ui::colors::BORDER_DIM.get()), 1));
-    p.drawLine(0, plot_h, plot_w, plot_h);
-
-    p.setPen(QColor(ui::colors::TEXT_SECONDARY.get()));
-    const qint64 span_sec = candles_.last().timestamp - candles_.first().timestamp;
-    const int label_step = qMax(1, count / 6);
-
-    for (int i = 0; i < count; i += label_step) {
-        const auto& c = candles_[start + i];
-        QDateTime dt = QDateTime::fromSecsSinceEpoch(c.timestamp);
-        QString label = span_sec > 365LL * 86400 ? dt.toString("MMM yy") : dt.toString("dd MMM");
-
-        int lx = static_cast<int>((i + 0.5) * slot_w);
-        int tw = fm.horizontalAdvance(label);
-        if (lx - tw / 2 > 0 && lx + tw / 2 < plot_w)
-            p.drawText(lx - tw / 2, plot_h + TIME_AXIS_H - 4, label);
-    }
-
-    // Last close reference line.
-    double last_close = candles_.last().close;
-    int ly = py(last_close);
-    p.setPen(QPen(QColor(ui::colors::AMBER.get()), 1, Qt::DashLine));
-    p.drawLine(0, ly, plot_w, ly);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  DashboardCandleWidget
-// ══════════════════════════════════════════════════════════════════════════════
-
 namespace {
-QString normalize_symbol(const QString& s) {
-    const QString t = s.trimmed().toUpper();
-    return t.isEmpty() ? QStringLiteral("AAPL") : t;
+
+namespace dc_fmt = fincept::ui::formatting;
+using fincept::services::MarketDataService;
+
+struct DcTimeframe {
+    const char* label;
+    const char* period;
+    const char* interval;
+    const char* description;
+};
+constexpr DcTimeframe kDcTimeframes[] = {
+    {"1D", "1d", "5m", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "1 day, 5-minute bars")},
+    {"5D", "5d", "15m", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "5 days, 15-minute bars")},
+    {"1M", "1mo", "1h", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "1 month, hourly bars")},
+    {"6M", "6mo", "1d", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "6 months, daily bars")},
+    {"1Y", "1y", "1d", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "1 year, daily bars")},
+    {"5Y", "5y", "1wk", QT_TRANSLATE_NOOP("fincept::screens::widgets::DashboardCandleWidget", "5 years, weekly bars")},
+};
+constexpr int kDcTfCount = int(sizeof(kDcTimeframes) / sizeof(kDcTimeframes[0]));
+
+QString dc_default_symbol() {
+    const auto& p = core::market::MarketProfileStore::instance().current();
+    return p.movers.isEmpty() ? QStringLiteral("AAPL") : p.movers.first();
 }
+
+QString dc_normalize(const QString& s) {
+    const QString t = s.trimmed().toUpper();
+    return t.isEmpty() ? dc_default_symbol() : t;
+}
+
 } // namespace
 
 DashboardCandleWidget::DashboardCandleWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget(tr("CANDLE \xc2\xb7 %1").arg(normalize_symbol(cfg.value("symbol").toString())), parent),
-      symbol_(normalize_symbol(cfg.value("symbol").toString())) {
+    : BaseWidget(QString(), parent), symbol_(dc_normalize(cfg.value("symbol").toString())) {
     auto* vl = content_layout();
-    vl->setContentsMargins(6, 4, 6, 4);
-    vl->setSpacing(0);
+    vl->setContentsMargins(4, 2, 4, 2);
+    vl->setSpacing(2);
 
-    canvas_ = new CandleCanvas(this);
-    vl->addWidget(canvas_, 1);
+    auto* bar = new QWidget(this);
+    bar->setObjectName("dcBar");
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(2, 1, 2, 1);
+    hl->setSpacing(2);
+    tfs_ = new QButtonGroup(this);
+    for (int i = 0; i < kDcTfCount; ++i) {
+        auto* b = new QPushButton(QString::fromLatin1(kDcTimeframes[i].label), bar);
+        b->setObjectName("dcTf");
+        b->setCheckable(true);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setToolTip(tr(kDcTimeframes[i].description));
+        tfs_->addButton(b, i);
+        hl->addWidget(b);
+    }
+    hl->addStretch();
+    vl->addWidget(bar);
+    connect(tfs_, &QButtonGroup::idClicked, this, [this](int id) {
+        if (id == tf_)
+            return;
+        tf_ = id;
+        chart_->clear();
+        update_title();
+        if (isVisible()) {
+            set_loading(true);
+            hub_resubscribe();
+        } else {
+            untrack_topics();
+        }
+        emit config_changed(config());
+    });
+
+    chart_ = new ui::CandleChart(this);
+    chart_->set_show_volume(true);
+    chart_->set_price_formatter([this](double v) {
+        auto inst = dc_fmt::instrument_for_symbol(symbol_, currency_);
+        if (price_digits_ >= 0)
+            inst.decimals = price_digits_;
+        return dc_fmt::price(v, inst);
+    });
+    chart_->set_volume_formatter([](double v) { return dc_fmt::volume(v); });
+    vl->addWidget(chart_, 1);
+
+    footer_ = new QLabel(this);
+    vl->addWidget(footer_);
+
     enable_symbol_link(/*follows=*/true);
-    link_symbol(canvas_, symbol_); // double-click the chart -> Equity Research
-
+    link_symbol(footer_, symbol_);
     set_configurable(true);
     connect(this, &BaseWidget::refresh_requested, this, &DashboardCandleWidget::refresh_data);
 
+    const QString tf = cfg.value("tf").toString(QStringLiteral("1Y"));
+    for (int i = 0; i < kDcTfCount; ++i)
+        if (tf == QLatin1String(kDcTimeframes[i].label))
+            tf_ = i;
+    if (auto* b = tfs_->button(tf_))
+        b->setChecked(true);
+    update_title();
+    on_theme_changed();
     set_loading(true);
 }
 
+void DashboardCandleWidget::update_title() {
+    set_title(tr("CANDLES · %1 · %2").arg(symbol_, QString::fromLatin1(kDcTimeframes[tf_].label)));
+    chart_->set_export_name(symbol_ + QStringLiteral("_") + QString::fromLatin1(kDcTimeframes[tf_].label));
+    footer_->setText(tr("%1 · %2 · double-click to open in Equity Research")
+                         .arg(symbol_, tr(kDcTimeframes[tf_].description)));
+}
+
 QString DashboardCandleWidget::history_topic() const {
-    return QStringLiteral("market:history:") + symbol_ + QStringLiteral(":1y:1d");
+    return MarketDataService::history_topic(symbol_, QString::fromLatin1(kDcTimeframes[tf_].period),
+                                            QString::fromLatin1(kDcTimeframes[tf_].interval));
 }
 
 QJsonObject DashboardCandleWidget::config() const {
     QJsonObject o;
     o.insert("symbol", symbol_);
+    o.insert("tf", QString::fromLatin1(kDcTimeframes[tf_].label));
     return o;
 }
 
 void DashboardCandleWidget::apply_config(const QJsonObject& cfg) {
-    const QString next = normalize_symbol(cfg.value("symbol").toString());
-    if (next == symbol_)
+    const QString next = dc_normalize(cfg.value("symbol").toString(symbol_));
+    int tf = tf_;
+    const QString tfs = cfg.value("tf").toString();
+    for (int i = 0; i < kDcTfCount; ++i)
+        if (tfs == QLatin1String(kDcTimeframes[i].label))
+            tf = i;
+    if (next == symbol_ && tf == tf_)
         return;
     symbol_ = next;
-    set_title(tr("CANDLE \xc2\xb7 %1").arg(symbol_));
-    link_symbol(canvas_, symbol_);
-    canvas_->clear();
+    tf_ = tf;
+    if (auto* b = tfs_->button(tf_))
+        b->setChecked(true);
+    currency_.clear();
+    price_digits_ = -1;
+    link_symbol(footer_, symbol_);
+    chart_->clear();
+    update_title();
     if (isVisible()) {
         set_loading(true);
         hub_resubscribe();
+    } else {
+        untrack_topics(); // the old symbol's chart / error no longer describe this tile
     }
 }
 
 void DashboardCandleWidget::on_linked_symbol(const SymbolRef& ref) {
-    if (normalize_symbol(ref.symbol) == symbol_)
+    if (dc_normalize(ref.symbol) == symbol_)
         return;
-    QJsonObject cfg;
+    QJsonObject cfg = config();
     cfg.insert("symbol", ref.symbol);
     apply_config(cfg);
     emit config_changed(config()); // the tile comes back on the linked symbol
@@ -262,32 +178,31 @@ SymbolRef DashboardCandleWidget::linked_symbol() const {
 }
 
 QDialog* DashboardCandleWidget::make_config_dialog(QWidget* parent) {
-    auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle(tr("Configure \xe2\x80\x94 Candle Chart"));
-    auto* form = new QFormLayout(dlg);
-
-    auto* edit = new QLineEdit(dlg);
-    edit->setText(symbol_);
-    edit->setPlaceholderText(tr("e.g. AAPL"));
-    form->addRow(tr("Symbol"), edit);
-
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
-    form->addRow(buttons);
-
-    connect(buttons, &QDialogButtonBox::accepted, dlg, [this, dlg, edit]() {
-        QJsonObject cfg;
-        cfg.insert("symbol", normalize_symbol(edit->text()));
+    auto* dlg = new SymbolListDialog(tr("Configure — Candle Chart"), {{symbol_, {}, {}}}, {}, parent, 1);
+    connect(dlg, &QDialog::accepted, this, [this, dlg]() {
+        const auto list = dlg->entries();
+        if (list.isEmpty())
+            return;
+        QJsonObject cfg = config();
+        cfg.insert("symbol", dc_normalize(list.first().symbol));
         apply_config(cfg);
-        emit config_changed(cfg);
-        dlg->accept();
+        emit config_changed(config());
     });
-    connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     return dlg;
 }
 
 void DashboardCandleWidget::on_theme_changed() {
-    if (canvas_)
-        canvas_->refresh_theme();
+    if (auto* bar = findChild<QWidget*>(QStringLiteral("dcBar")))
+        set_css_cached(bar, QString("QWidget#dcBar{background:transparent;}"
+                                   "QPushButton#dcTf{background:%1;color:%2;border:1px solid %3;padding:0 7px;"
+                                   "font-size:%4px;font-weight:bold;}"
+                                   "QPushButton#dcTf:checked{background:%5;color:%6;border-color:%6;}")
+                               .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
+                               .arg(ui::fonts::px(-4))
+                               .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER()));
+    set_css_cached(footer_, QString("color:%1;font-size:%2px;background:transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::fonts::px(-4)));
 }
 
 void DashboardCandleWidget::showEvent(QShowEvent* e) {
@@ -298,30 +213,61 @@ void DashboardCandleWidget::showEvent(QShowEvent* e) {
 
 void DashboardCandleWidget::hideEvent(QHideEvent* e) {
     BaseWidget::hideEvent(e);
-    if (hub_active_) {
-        datahub::DataHub::instance().unsubscribe(this);
-        hub_active_ = false;
-    }
+    hub_active_ = false;
+}
+
+void DashboardCandleWidget::refresh_data() {
+    datahub::DataHub::instance().request(
+        QStringList{history_topic(), MarketDataService::quote_topic(symbol_)}, /*force=*/true);
 }
 
 void DashboardCandleWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    hub.subscribe<QVector<services::HistoryPoint>>(this, history_topic(),
-                                                   [this](const QVector<services::HistoryPoint>& pts) {
-                                                       set_loading(false);
-                                                       canvas_->set_candles(pts);
-                                                   });
+    const QString topic = history_topic();
+    // Producer errors: with no chart yet the reason replaces the spinner; once
+    // candles are up a failed refresh keeps them and only marks the tile STALE.
+    track_topics({topic});
+    hub.subscribe<QVector<services::HistoryPoint>>(
+        this, topic, [this, topic](const QVector<services::HistoryPoint>& pts) {
+            if (pts.isEmpty()) {
+                note_topic_error(topic, tr("No price history for %1 (%2).")
+                                            .arg(symbol_, tr(kDcTimeframes[tf_].description)));
+                return;
+            }
+            QVector<ui::CandleChart::Bar> bars;
+            bars.reserve(pts.size());
+            for (const auto& p : pts) {
+                if (!(p.close > 0) || !(p.high > 0) || !(p.low > 0) || !(p.open > 0))
+                    continue;
+                bars.append({double(p.timestamp) * 1000.0, p.open, p.high, p.low, p.close, double(p.volume)});
+            }
+            note_topic_value(topic);
+            set_loading(false);
+            chart_->set_bars(bars);
+            chart_->set_default_visible_bars(std::max(30, int(bars.size())));
+            chart_->reset_view();
+        });
+    // The quote supplies the currency and decimals for the price axis.
+    hub.subscribe(this, MarketDataService::quote_topic(symbol_), [this](const QVariant& v) {
+        if (!v.canConvert<services::QuoteData>())
+            return;
+        const auto q = v.value<services::QuoteData>();
+        if (q.currency != currency_ || q.price_digits != price_digits_) {
+            currency_ = q.currency;
+            price_digits_ = q.price_digits;
+            chart_->update();
+        }
+    });
     hub_active_ = true;
-}
-
-void DashboardCandleWidget::refresh_data() {
-    datahub::DataHub::instance().request(history_topic(), /*force=*/true);
 }
 
 void DashboardCandleWidget::retranslateUi() {
     BaseWidget::retranslateUi();
-    set_title(tr("CANDLE \xc2\xb7 %1").arg(symbol_));
+    for (int i = 0; i < kDcTfCount; ++i)
+        if (auto* b = tfs_->button(i))
+            b->setToolTip(tr(kDcTimeframes[i].description));
+    update_title();
 }
 
 } // namespace fincept::screens::widgets

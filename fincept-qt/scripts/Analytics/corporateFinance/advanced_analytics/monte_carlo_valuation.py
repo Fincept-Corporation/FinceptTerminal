@@ -1,8 +1,16 @@
 """Monte Carlo Simulation for M&A Valuation
 
-CLI: python monte_carlo_valuation.py run <json>   (Advanced Analytics tab) — keys base_valuation, rev_growth_mean,
-rev_growth_std, margin_mean, margin_std, discount_rate (fractions), simulations; returns the simulated DCF value
-distribution (mean, median, std, p5..p95, probability_positive). Native form: monte_carlo <json>.
+CLI: python monte_carlo_valuation.py run <json>   (Advanced Analytics tab) — keys base_valuation (required: the
+central valuation to simulate around), rev_growth_mean, rev_growth_std, margin_mean, margin_std, discount_rate
+(fractions), simulations; returns the simulated value distribution (mean, median, std, p5..p95,
+probability_positive) and a 2,000-point random sample of the simulated values ("samples") for a histogram.
+Native form: monte_carlo <json>.
+
+The base valuation is the central case: each simulated path runs the same 5-year DCF as the base case with its
+own draws of cash-flow growth, EBITDA margin, terminal growth and discount rate, and the value is the base
+valuation times (path DCF / base-case DCF). So the spread comes only from the uncertainty entered, and the median
+sits near the base valuation. (The previous service path used base_valuation x margin as a first-year cash flow,
+so a 1.0bn base returned a 6.8bn mean.)
 """
 import os
 import sys
@@ -282,6 +290,59 @@ class MonteCarloValuation:
             'potential_loss_pct': ((deal_value - var_value) / deal_value * 100) if deal_value > 0 else 0
         }
 
+def simulate_around_base(base_valuation: float, growth_mean: float, growth_std: float, margin_mean: float,
+                         margin_std: float, discount_rate: float, simulations: int, years: int = 5,
+                         sample_points: int = 2000, seed: Optional[int] = None) -> Dict[str, Any]:
+    """Distribution of the business value around `base_valuation` (see the module docstring). Vectorised."""
+    rng = np.random.default_rng(seed)
+    n = int(simulations)
+    tg_mean = min(growth_mean * 0.3, 0.03)
+    tg_std = growth_std * 0.5
+    wacc_std = discount_rate * 0.1
+
+    def dcf(growth, margin, tg, wacc):
+        # growth: (n, years); margin, tg, wacc: (n,). Cash flow index 1.0 x margin in year 0.
+        path = np.cumprod(1.0 + growth, axis=1) * margin[:, None]
+        disc = (1.0 + wacc)[:, None] ** np.arange(1, years + 1)[None, :]
+        pv = (path / disc).sum(axis=1)
+        tv = path[:, -1] * (1.0 + tg) / (wacc - tg)
+        return pv + tv / (1.0 + wacc) ** years
+
+    base_case = dcf(np.full((1, years), growth_mean), np.array([margin_mean]),
+                    np.array([min(tg_mean, discount_rate - 0.01)]), np.array([discount_rate]))[0]
+    growth = rng.normal(growth_mean, growth_std, size=(n, years))
+    margin = np.clip(rng.normal(margin_mean, margin_std, size=n), 0.0, None)
+    wacc = np.clip(rng.normal(discount_rate, wacc_std, size=n), 0.02, 0.40)
+    tg = np.clip(rng.normal(tg_mean, tg_std, size=n), -0.02, 0.06)
+    tg = np.minimum(tg, wacc - 0.01)   # keep the Gordon growth denominator positive
+    values = base_valuation * dcf(growth, margin, tg, wacc) / base_case
+
+    pick = values if n <= sample_points else rng.choice(values, size=sample_points, replace=False)
+    return {
+        'mean': float(np.mean(values)),
+        'median': float(np.median(values)),
+        'std': float(np.std(values)),
+        'p5': float(np.percentile(values, 5)),
+        'p25': float(np.percentile(values, 25)),
+        'p75': float(np.percentile(values, 75)),
+        'p95': float(np.percentile(values, 95)),
+        'probability_positive': float(np.mean(values > 0) * 100.0),
+        'probability_above_base': float(np.mean(values > base_valuation) * 100.0),
+        'num_simulations': n,
+        'base_valuation': base_valuation,
+        'discount_rate_pct': discount_rate * 100,
+        'input_assumptions': {
+            'fcf_growth_mean': growth_mean * 100, 'fcf_growth_std': growth_std * 100,
+            'margin_mean': margin_mean * 100, 'margin_std': margin_std * 100,
+            'terminal_growth_mean': tg_mean * 100, 'terminal_growth_std': tg_std * 100,
+            'wacc_mean': discount_rate * 100, 'wacc_std': wacc_std * 100,
+        },
+        'model_note': "Base valuation is the central case; the spread comes from the growth, margin and "
+                      "discount-rate uncertainty entered (5-year DCF, terminal growth tied to growth).",
+        'samples': [float(v) for v in np.sort(pick)],
+    }
+
+
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----
 # The Qt MAAnalyticsService calls `monte_carlo_valuation.py run <flat-params-json>` (argv length 3). The native form
 # is `monte_carlo <json>` with slightly different key names, so a service-style call is translated here and then
@@ -328,7 +389,9 @@ def main():
             # Accept either JSON dict or positional args
             try:
                 params = json.loads(sys.argv[2])
-                base_valuation = float(params.get('base_valuation', params.get('base_value', 1000000000)))
+                if not isinstance(params, dict):
+                    raise TypeError("not a JSON object")
+                base_valuation = params.get('base_valuation', params.get('base_value'))
                 revenue_growth_mean = float(params.get('revenue_growth_mean', params.get('growth_mean', 0.05)))
                 revenue_growth_std = float(params.get('revenue_growth_std', params.get('growth_std', params.get('volatility', 0.15))))
                 margin_mean = float(params.get('margin_mean', 0.15))
@@ -346,6 +409,16 @@ def main():
                 discount_rate = float(sys.argv[7])
                 simulations = int(sys.argv[8])
 
+            try:
+                base_valuation = float(base_valuation) if base_valuation is not None else 0.0
+            except (TypeError, ValueError):
+                base_valuation = 0.0
+            if not base_valuation > 0:
+                print(json.dumps({"success": False, "missing_inputs": ["base_valuation"],
+                                  "error": "Enter the base valuation - the central value of the business to "
+                                           "simulate around (for example your DCF enterprise value)."}))
+                sys.exit(1)
+
             # Normalize: frontend sends percentages (15, 5), Python needs fractions (0.15, 0.05)
             if revenue_growth_mean > 1:
                 revenue_growth_mean = revenue_growth_mean / 100.0
@@ -357,40 +430,15 @@ def main():
                 margin_std = margin_std / 100.0
             if discount_rate > 1:
                 discount_rate = discount_rate / 100.0
+            if not margin_mean > 0:
+                print(json.dumps({"success": False, "missing_inputs": ["margin_mean"],
+                                  "error": "Enter a positive EBITDA margin mean: the simulated cash flows scale "
+                                           "with it."}))
+                sys.exit(1)
+            simulations = max(100, min(int(simulations), 100_000))
 
-            mc = MonteCarloValuation(num_simulations=simulations)
-
-            # Use DCF-based Monte Carlo: simulate enterprise value distribution
-            # Build base FCF from base_valuation * margin_mean, grow at revenue_growth_mean
-            base_fcf = [base_valuation * margin_mean * ((1 + revenue_growth_mean) ** i) for i in range(5)]
-            analysis_dcf = mc.simulate_dcf_valuation(
-                base_fcf=base_fcf,
-                fcf_growth_mean=revenue_growth_mean,
-                fcf_growth_std=revenue_growth_std,
-                terminal_growth_mean=min(revenue_growth_mean * 0.3, 0.03),
-                terminal_growth_std=revenue_growth_std * 0.5,
-                wacc_mean=discount_rate,
-                wacc_std=discount_rate * 0.1,
-            )
-
-            vs = analysis_dcf.get('valuation_statistics', {})
-
-            # Normalize to flat structure that frontend expects
-            analysis = {
-                'mean': vs.get('mean', 0),
-                'median': vs.get('median', 0),
-                'std': vs.get('std', 0),
-                'p5': vs.get('percentile_5', 0),
-                'p25': vs.get('percentile_25', 0),
-                'p75': vs.get('percentile_75', 0),
-                'p95': vs.get('percentile_95', 0),
-                # share of simulated values above zero (negative when a draw has WACC below terminal growth)
-                'probability_positive': analysis_dcf.get('probability_positive'),
-                'num_simulations': simulations,
-                'input_assumptions': analysis_dcf.get('input_assumptions', {}),
-                'base_valuation': base_valuation,
-                'discount_rate_pct': discount_rate * 100,
-            }
+            analysis = simulate_around_base(base_valuation, revenue_growth_mean, revenue_growth_std, margin_mean,
+                                            margin_std, discount_rate, simulations)
 
             result = {"success": True, "data": analysis}
             print(fincept_json.dumps(result))

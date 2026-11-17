@@ -31,6 +31,9 @@ class PortfolioOrderPanel : public QWidget {
   private:
     void build_ui();
     void update_display();
+    /// Price / quantity / market value text of holding_ (no styling: also the
+    /// format-change re-render).
+    void render_values();
     void apply_side_styles();
     void retranslateUi();
 
@@ -51,7 +54,7 @@ class PortfolioOrderPanel : public QWidget {
     QLabel* mv_label_ = nullptr;
 
     QString side_ = "BUY";
-    QString currency_ = "USD";
+    QString currency_; ///< portfolio base currency; empty (no unit printed) until set_currency()
     /// Value copy, deliberately NOT the caller's pointer. set_holding() used to
     /// store the raw `HoldingWithQuote*` returned by PortfolioScreen::
     /// find_holding(), which points into PortfolioSummary::holdings — that

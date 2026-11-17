@@ -50,7 +50,7 @@ static const QList<QPair<QString, QString>> kEconomies = {
 };
 
 // Common GDP/National Accounts indicators (codes verified against the live KIDB DF_NA dataflow)
-static const QList<QPair<QString, QString>> kGdpIndicators = {
+static const QList<QPair<QString, QString>> kAdbGdpIndicators = {
     {"GDP, current prices (NGDP_XDC)", "NGDP_XDC"},
     {"GDP, constant prices (NGDP_R_XDC)", "NGDP_R_XDC"},
     {"GDP growth, % annual (NGDP_R_PTX_PS)", "NGDP_R_PTX_PS"},
@@ -72,10 +72,7 @@ AdbPanel::AdbPanel(QWidget* parent) : EconPanelBase(kAdbSourceId, kAdbColor, par
 }
 
 void AdbPanel::activate() {
-    show_empty(tr("Select an economy and data category, then click FETCH\n"
-                  "Source: Asian Development Bank — Key Indicators Database (KIDB), SDMX\n"
-                  "Free, no API key required. Values are in the economy's own currency unless\n"
-                  "the indicator code says otherwise (…_XDC = domestic currency, …_PT = percent)"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -90,21 +87,21 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
     economy_combo_ = new QComboBox;
     for (const auto& e : kEconomies)
         economy_combo_->addItem(e.first, e.second);
-    economy_combo_->setFixedHeight(26);
+    economy_combo_->setMinimumHeight(26);
     economy_combo_->setMinimumWidth(165);
 
     category_combo_ = new QComboBox;
     for (const auto& c : kAdbCategories)
         category_combo_->addItem(c.label);
-    category_combo_->setFixedHeight(26);
+    category_combo_->setMinimumHeight(26);
     category_combo_->setMinimumWidth(185);
     connect(category_combo_, &QComboBox::currentIndexChanged, this, &AdbPanel::on_category_changed);
 
     indicator_input_ = new QLineEdit;
     indicator_input_->setPlaceholderText(kAdbCategories[0].indicator_hint);
     indicator_input_->setText(kAdbCategories[0].default_indicator);
-    indicator_input_->setFixedHeight(26);
-    indicator_input_->setFixedWidth(130);
+    indicator_input_->setMinimumHeight(26);
+    set_text_width(indicator_input_, 130);
     indicator_input_->setAccessibleName(tr("ADB indicator code"));
     // The curated KIDB indicator list existed but was never surfaced anywhere —
     // expose it as an inline completer (code and human label both match) so the
@@ -112,7 +109,7 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
     {
         QStringList completions;
         QString tips;
-        for (const auto& gi : kGdpIndicators) {
+        for (const auto& gi : kAdbGdpIndicators) {
             completions << gi.second;
             tips += gi.first + "\n";
         }
@@ -126,13 +123,13 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
 
     start_input_ = new QLineEdit;
     start_input_->setPlaceholderText(tr("Start year"));
-    start_input_->setFixedHeight(26);
-    start_input_->setFixedWidth(70);
+    start_input_->setMinimumHeight(26);
+    set_text_width(start_input_, 70);
 
     end_input_ = new QLineEdit;
     end_input_->setPlaceholderText(tr("End year"));
-    end_input_->setFixedHeight(26);
-    end_input_->setFixedWidth(70);
+    end_input_->setMinimumHeight(26);
+    set_text_width(end_input_, 70);
 
     thl->addWidget(economy_lbl_ = make_lbl(tr("ECONOMY")));
     thl->addWidget(economy_combo_);
@@ -177,6 +174,12 @@ void AdbPanel::on_fetch() {
         return;
     }
 
+    // START / END are positional script arguments: END cannot be sent alone (it used to be dropped
+    // silently).
+    if (start.isEmpty() && !end.isEmpty()) {
+        show_empty(tr("Enter a START period to use END"));
+        return;
+    }
     QStringList args;
     args << economy;
     if (cat.uses_indicator)
@@ -187,8 +190,8 @@ void AdbPanel::on_fetch() {
         args << end;
 
     show_loading(tr("Fetching ADB %1 for %2…").arg(cat.label, economy));
-    services::EconomicsService::instance().execute(kAdbSourceId, kAdbScript, cat.command, args,
-                                                   "adb_" + cat.command + "_" + economy + "_" + indicator);
+    execute_query(kAdbSourceId, kAdbScript, cat.command, args,
+                  "adb_" + cat.command + "_" + economy + "_" + indicator);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -252,7 +255,7 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     set_stats_visible(!multi);
     display(rows, title);
-    LOG_INFO("AdbPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("AdbPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

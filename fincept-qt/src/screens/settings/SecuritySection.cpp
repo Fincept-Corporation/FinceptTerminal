@@ -137,7 +137,9 @@ void SecuritySection::build_ui() {
     vl->addSpacing(4);
 
     sec_change_pin_btn_ = new QPushButton(tr("Change PIN"));
-    sec_change_pin_btn_->setFixedWidth(140);
+    sec_change_pin_btn_->setProperty("fincept_agent_risk", "account"); // agents: changes the PIN
+    sec_change_pin_btn_->setMinimumWidth(140);
+    sec_change_pin_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     sec_change_pin_btn_->setStyleSheet(btn_secondary_ss());
     vl->addWidget(sec_change_pin_btn_);
 
@@ -181,21 +183,23 @@ void SecuritySection::build_ui() {
     sec_pin_error_ = new QLabel;
     sec_pin_error_->setWordWrap(true);
     sec_pin_error_->setStyleSheet(
-        QString("color:%1;background:rgba(220,38,38,0.08);border:1px solid %2;padding:6px 8px;")
-            .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_DIM()));
+        QString("color:%1;background:%3;border:1px solid %2;padding:6px 8px;")
+            .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_DIM(), ui::colors::NEGATIVE_BG()));
     sec_pin_error_->hide();
     cpfl->addWidget(sec_pin_error_);
 
     sec_pin_success_ = new QLabel;
     sec_pin_success_->setWordWrap(true);
     sec_pin_success_->setStyleSheet(
-        QString("color:%1;background:rgba(22,163,74,0.08);border:1px solid %2;padding:6px 8px;")
-            .arg(ui::colors::POSITIVE(), ui::colors::POSITIVE_DIM()));
+        QString("color:%1;background:%3;border:1px solid %2;padding:6px 8px;")
+            .arg(ui::colors::POSITIVE(), ui::colors::POSITIVE_DIM(), ui::colors::POSITIVE_BG()));
     sec_pin_success_->hide();
     cpfl->addWidget(sec_pin_success_);
 
     save_pin_btn_ = new QPushButton(tr("Update PIN"));
-    save_pin_btn_->setFixedWidth(140);
+    save_pin_btn_->setProperty("fincept_agent_risk", "account"); // agents: sets / changes the PIN
+    save_pin_btn_->setMinimumWidth(140);
+    save_pin_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     save_pin_btn_->setStyleSheet(btn_primary_ss());
     cpfl->addWidget(save_pin_btn_);
 
@@ -229,6 +233,8 @@ void SecuritySection::build_ui() {
     // Save PIN — all validation in PinManager::change_pin so wrong-current-PIN
     // correctly feeds the shared lockout counter; UI only checks new == confirm.
     connect(save_pin_btn_, &QPushButton::clicked, this, [this]() {
+        if (pin_change_busy_)
+            return; // one change at a time — a second Enter would be a second counted attempt
         sec_pin_error_->hide();
         sec_pin_success_->hide();
 
@@ -256,28 +262,35 @@ void SecuritySection::build_ui() {
             return;
         }
 
-        auto result = pm.change_pin(current, new_pin);
-        if (result.is_err()) {
-            if (pm.is_locked_out()) {
-                int secs = pm.lockout_remaining_seconds();
-                sec_pin_error_->setText(tr("Too many failed attempts — locked for %1s").arg(secs));
-            } else {
-                sec_pin_error_->setText(QString::fromStdString(result.error()));
+        // Verifying the current PIN and hashing the new one are deliberately slow
+        // key derivations; they run off the UI thread while the form shows a busy
+        // state. The result lands here once PinManager has accounted the attempt.
+        set_pin_change_busy(true);
+        pm.change_pin_async(current, new_pin, this, [this](const auto& result) {
+            set_pin_change_busy(false);
+            auto& pm = auth::PinManager::instance();
+            if (result.is_err()) {
+                if (pm.is_locked_out()) {
+                    int secs = pm.lockout_remaining_seconds();
+                    sec_pin_error_->setText(tr("Too many failed attempts — locked for %1s").arg(secs));
+                } else {
+                    sec_pin_error_->setText(QString::fromStdString(result.error()));
+                }
+                sec_pin_error_->show();
+                sec_current_pin_->clear();
+                sec_current_pin_->setFocus();
+                return;
             }
-            sec_pin_error_->show();
+
+            sec_pin_success_->setText(tr("PIN updated successfully"));
+            sec_pin_success_->show();
             sec_current_pin_->clear();
-            sec_current_pin_->setFocus();
-            return;
-        }
+            sec_new_pin_->clear();
+            sec_confirm_pin_->clear();
+            reload();
 
-        sec_pin_success_->setText(tr("PIN updated successfully"));
-        sec_pin_success_->show();
-        sec_current_pin_->clear();
-        sec_new_pin_->clear();
-        sec_confirm_pin_->clear();
-        reload();
-
-        LOG_INFO("Settings", "PIN changed via Security settings");
+            LOG_INFO("Settings", "PIN changed via Security settings");
+        });
     });
 
     vl->addSpacing(8);
@@ -291,6 +304,7 @@ void SecuritySection::build_ui() {
     vl->addSpacing(4);
 
     sec_autolock_toggle_ = new QCheckBox(tr("Enable auto-lock on inactivity"));
+    sec_autolock_toggle_->setProperty("fincept_agent_risk", "account"); // agents: changes the terminal lock
     sec_autolock_toggle_->setChecked(true);
     sec_autolock_toggle_->setStyleSheet(check_ss());
     auto* row_autolock =
@@ -327,12 +341,15 @@ void SecuritySection::build_ui() {
 
     // ── SAVE ──────────────────────────────────────────────────────────────────
     save_btn_ = new QPushButton(tr("Save Security Settings"));
-    save_btn_->setFixedWidth(200);
+    save_btn_->setProperty("fincept_agent_risk", "account"); // agents: changes security settings
+    save_btn_->setMinimumWidth(200);
+    save_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
         if (property(kSecurityReadFailedProp).toBool()) {
-            LOG_WARN("Settings", "Refusing to save security settings — the stored values could not be read, so the "
-                                 "widgets on screen are defaults rather than the user's settings");
+            LOG_WARN("Settings", logf("Security settings not saved: the stored values could not be read, so the "
+                                      "widgets show defaults",
+                                      {{"section", "security"}, {"error", "read failed at load (logged then)"}}));
             return;
         }
 
@@ -430,20 +447,21 @@ void SecuritySection::build_ui() {
 
     audit_note_ = new QLabel(tr("Recent security events (PIN setup, failed unlocks, inactivity locks)."));
     audit_note_->setWordWrap(true);
-    audit_note_->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(ui::colors::TEXT_DIM()));
+    audit_note_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-2) + "px;background:transparent;").arg(ui::colors::TEXT_DIM()));
     vl->addWidget(audit_note_);
 
     sec_audit_list_ = new QListWidget;
     sec_audit_list_->setFixedHeight(180);
     sec_audit_list_->setStyleSheet(
         QString("QListWidget { background:%1; color:%2; border:1px solid %3;"
-                "font-family:'Consolas','Courier New',monospace; font-size:12px; }"
+                "font-size:" + fincept::ui::fonts::px(-2) + "px; }"
                 "QListWidget::item { padding:2px 6px; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
     vl->addWidget(sec_audit_list_);
 
     refresh_audit_btn_ = new QPushButton(tr("Refresh"));
-    refresh_audit_btn_->setFixedWidth(140);
+    refresh_audit_btn_->setMinimumWidth(140);
+    refresh_audit_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     refresh_audit_btn_->setStyleSheet(btn_secondary_ss());
     connect(refresh_audit_btn_, &QPushButton::clicked, this, [this]() { refresh_audit_log(); });
     vl->addWidget(refresh_audit_btn_);
@@ -451,6 +469,22 @@ void SecuritySection::build_ui() {
     vl->addStretch();
     scroll->setWidget(page);
     root->addWidget(scroll);
+}
+
+void SecuritySection::set_pin_change_busy(bool busy) {
+    pin_change_busy_ = busy;
+    for (QLineEdit* f : {sec_current_pin_, sec_new_pin_, sec_confirm_pin_}) {
+        if (f)
+            f->setEnabled(!busy);
+    }
+    if (save_pin_btn_) {
+        save_pin_btn_->setText(busy ? tr("Verifying…") : tr("Update PIN"));
+        save_pin_btn_->setEnabled(!busy);
+    }
+    if (busy)
+        setCursor(Qt::BusyCursor);
+    else
+        unsetCursor();
 }
 
 void SecuritySection::refresh_audit_log() {
@@ -544,7 +578,7 @@ void SecuritySection::retranslateUi() {
         sec_change_pin_btn_->setText(sec_change_pin_form_ && sec_change_pin_form_->isVisible() ? tr("Cancel")
                                                                                                : tr("Change PIN"));
     if (save_pin_btn_)
-        save_pin_btn_->setText(tr("Update PIN"));
+        save_pin_btn_->setText(pin_change_busy_ ? tr("Verifying…") : tr("Update PIN"));
     if (save_btn_)
         save_btn_->setText(tr("Save Security Settings"));
     if (refresh_audit_btn_)

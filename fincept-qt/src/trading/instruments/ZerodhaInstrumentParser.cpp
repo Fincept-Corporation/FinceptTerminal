@@ -205,7 +205,7 @@ QVector<Instrument> ZerodhaInstrumentParser::parse(const QByteArray& csv_data) {
         ++row;
     }
 
-    LOG_INFO("ZerodhaParser", QString("Parsed %1 instruments").arg(results.size()));
+    LOG_DEBUG("ZerodhaParser", QString("Parsed %1 instruments").arg(results.size()));
     return results;
 }
 

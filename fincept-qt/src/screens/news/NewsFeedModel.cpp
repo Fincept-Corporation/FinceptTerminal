@@ -2,20 +2,114 @@
 
 #include "core/logging/Logger.h"
 #include "services/news/NewsService.h"
+#include "ui/formatting/DateFormat.h"
+#include "ui/theme/ThemeManager.h"
 
+#include <QDateTime>
 #include <QStringList>
 
+#include <algorithm>
+#include <cmath>
+
 namespace fincept::screens {
+
+namespace {
+
+/// Short label of a market-impact event for the narrow feed column.
+QString nfm_event_label(const QString& event_type) {
+    if (event_type == QLatin1String("EARNINGS"))
+        return QStringLiteral("EARN");
+    if (event_type == QLatin1String("CORPORATE"))
+        return QStringLiteral("CORP");
+    if (event_type == QLatin1String("POLICY"))
+        return QStringLiteral("POL");
+    return event_type; // RATES, M&A, RATING, MACRO, LEGAL
+}
+
+} // namespace
 
 NewsFeedModel::NewsFeedModel(QObject* parent) : QAbstractListModel(parent) {
     qRegisterMetaType<services::NewsArticle>("NewsArticle");
     qRegisterMetaType<services::NewsCluster>("NewsCluster");
+
+    // The pre-formatted rows hold colour strings taken from the theme; refresh
+    // them (colours only — the rows themselves are unchanged) when it changes.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        const int n = std::min(static_cast<int>(formatted_rows_.size()), static_cast<int>(articles_.size()));
+        if (n == 0)
+            return;
+        for (int i = 0; i < n; ++i) {
+            const auto& a = articles_[i];
+            FormattedRow& fr = formatted_rows_[i];
+            if (!fr.threat_color.isEmpty())
+                fr.threat_color = services::threat_level_color(a.threat.level);
+            fr.priority_color = services::priority_color(a.priority);
+        }
+        if (view_mode_ == "WIRE")
+            emit dataChanged(index(0), index(n - 1), {ThreatColorRole, PriorityColorRole});
+    });
 }
 
 int NewsFeedModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid())
         return 0;
     return view_mode_ == "WIRE" ? articles_.size() : clusters_.size();
+}
+
+QString NewsFeedModel::earnings_badge_for(const services::NewsArticle& a) const {
+    if (earnings_days_.isEmpty())
+        return {};
+    int best = -1;
+    for (const auto& t : a.tickers) {
+        const auto it = earnings_days_.constFind(t.toUpper());
+        if (it != earnings_days_.constEnd() && (best < 0 || it.value() < best))
+            best = it.value();
+    }
+    if (best < 0)
+        return {};
+    return best == 0 ? tr("ER today") : tr("ER %1d").arg(best);
+}
+
+QString NewsFeedModel::tooltip_for(const services::NewsArticle& a, int duplicates) const {
+    namespace fmt = ui::formatting;
+    QStringList lines;
+    lines << a.headline.toHtmlEscaped();
+    QString meta = a.source.toHtmlEscaped();
+    if (a.undated) {
+        meta += QStringLiteral(" · ") + tr("undated — the feed gives no publication time");
+    } else if (a.sort_ts > 0) {
+        const QDateTime dt = QDateTime::fromSecsSinceEpoch(a.sort_ts);
+        meta += QStringLiteral(" · ") + fmt::date_time(dt) + QLatin1Char(' ') + fmt::zone_label(dt) +
+                QStringLiteral(" (") + fmt::relative(static_cast<qint64>(a.sort_ts)) + QLatin1Char(')');
+    }
+    if (!a.lang.isEmpty())
+        meta += QStringLiteral(" · ") + a.lang.toUpper();
+    if (!a.region.isEmpty())
+        meta += QStringLiteral(" · ") + a.region;
+    lines << meta;
+    if (a.sentiment_scored)
+        lines << tr("Tone %1 (%2)")
+                     .arg(QString::number(a.sentiment_score, 'f', 2), services::sentiment_string(a.sentiment));
+    else
+        lines << tr("Tone not scored (%1)").arg(a.lang.isEmpty() ? tr("unknown language") : a.lang.toUpper());
+    QString impact = tr("Market impact %1").arg(services::impact_string(a.impact));
+    if (!a.event_type.isEmpty())
+        impact += QStringLiteral(" · ") + a.event_type;
+    lines << impact;
+    if (!a.tickers.isEmpty()) {
+        QStringList tags;
+        for (int i = 0; i < a.tickers.size(); ++i) {
+            const double c = i < a.ticker_confidence.size() ? a.ticker_confidence[i] : -1.0;
+            tags << (c >= 0 ? QStringLiteral("%1 %2%").arg(a.tickers[i]).arg(std::lround(c * 100))
+                            : a.tickers[i]);
+        }
+        lines << tr("Tickers: %1").arg(tags.join(QStringLiteral(", ")).toHtmlEscaped());
+    }
+    if (!a.unverified_tickers.isEmpty())
+        lines << tr("Unverified: %1").arg(a.unverified_tickers.join(QStringLiteral(", ")).toHtmlEscaped());
+    if (duplicates > 0)
+        lines << tr("Also carried by %n other source(s)", "", duplicates);
+    return QStringLiteral("<qt>") + lines.join(QStringLiteral("<br>")) + QStringLiteral("</qt>");
 }
 
 QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
@@ -32,6 +126,8 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
         switch (role) {
             case Qt::DisplayRole:
                 return article.headline;
+            case Qt::ToolTipRole:
+                return tooltip_for(article, duplicate_counts_.value(article.id));
             case ArticleRole:
                 return QVariant::fromValue(article);
             case ViewModeRole:
@@ -54,6 +150,10 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
                 return geo_article_ids_.contains(article.id);
             case PulsePhaseRole:
                 return (!seen_ids_.contains(article.id)) ? pulse_phase_ : -1;
+            case DuplicateCountRole:
+                return duplicate_counts_.value(article.id);
+            case EarningsBadgeRole:
+                return earnings_badge_for(article);
             // Pre-formatted display strings — no allocation in paint()
             case FormattedSourceRole:
                 return row < formatted_rows_.size() ? formatted_rows_[row].source : QVariant{};
@@ -67,6 +167,8 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
                 return row < formatted_rows_.size() ? formatted_rows_[row].threat_color : QVariant{};
             case PriorityColorRole:
                 return row < formatted_rows_.size() ? formatted_rows_[row].priority_color : QVariant{};
+            case EventLabelRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].event : QVariant{};
             default:
                 return {};
         }
@@ -80,6 +182,8 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
     switch (role) {
         case Qt::DisplayRole:
             return cluster.lead_article.headline;
+        case Qt::ToolTipRole:
+            return tooltip_for(cluster.lead_article, std::max(0, cluster.source_count - 1));
         case ClusterRole:
             return QVariant::fromValue(cluster);
         case ArticleRole:
@@ -94,10 +198,23 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
             return cluster.lead_article.id == selected_id_;
         case SourceTierRole:
             return cluster.tier;
+        case HasGeoRole:
+            return geo_article_ids_.contains(cluster.lead_article.id);
+        case EarningsBadgeRole:
+            return earnings_badge_for(cluster.lead_article);
         case VelocityTextRole:
-            if (cluster.velocity == "rising" && cluster.source_count > 1)
-                return tr("+%1 src").arg(cluster.source_count);
+            if (cluster.velocity == "rising")
+                return cluster.source_count > 1 ? tr("RISING +%1 src").arg(cluster.source_count) : tr("RISING");
+            if (cluster.velocity == "falling")
+                return tr("FADING");
             return QString();
+        case CardHeightRole: {
+            // "Also:" line only when other sources exist.
+            QSet<QString> sources;
+            for (const auto& a : cluster.articles)
+                sources.insert(a.source);
+            return sources.size() > 1 ? 1 : 0;
+        }
         default:
             return {};
     }
@@ -119,18 +236,21 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
 
         // Pre-format once — avoids allocation in paint() on every frame
         FormattedRow fr;
-        fr.source = a.source.left(10).toUpper();
+        fr.source = a.source.toUpper();
         fr.lang = (a.lang.isEmpty() || a.lang == "en") ? QString() : a.lang.toUpper();
         const bool show_threat =
             a.threat.level != services::ThreatLevel::INFO && a.threat.level != services::ThreatLevel::LOW;
         fr.threat = show_threat ? services::threat_level_string(a.threat.level).left(4) : QString();
         fr.threat_color = show_threat ? services::threat_level_color(a.threat.level) : QString();
         fr.priority_color = services::priority_color(a.priority);
+        fr.event = nfm_event_label(a.event_type);
 
-        // Pre-join tickers: "$AAPL $MSFT" (up to 2)
+        // Pre-join tickers: "$AAPL $MSFT" (up to 2; the tooltip lists all)
         QStringList ticker_parts;
         for (int t = 0; t < std::min(2, static_cast<int>(a.tickers.size())); ++t)
             ticker_parts << ('$' + a.tickers[t]);
+        if (a.tickers.size() > 2)
+            ticker_parts << QStringLiteral("+%1").arg(a.tickers.size() - 2);
         fr.tickers = ticker_parts.join(' ');
 
         formatted_rows_.append(std::move(fr));
@@ -210,17 +330,28 @@ void NewsFeedModel::set_monitor_matches(const QMap<QString, QVector<services::Ne
         emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {MonitorColorRole});
 }
 
-void NewsFeedModel::mark_all_seen() {
+QStringList NewsFeedModel::mark_all_seen() {
+    QStringList newly;
     if (view_mode_ == "WIRE") {
         for (const auto& a : std::as_const(articles_))
-            seen_ids_.insert(a.id);
+            if (!seen_ids_.contains(a.id)) {
+                seen_ids_.insert(a.id);
+                newly.append(a.id);
+            }
     } else {
-        for (const auto& c : std::as_const(clusters_))
-            seen_ids_.insert(c.lead_article.id);
+        for (const auto& c : std::as_const(clusters_)) {
+            // A story is read as a whole: every member of the cluster.
+            for (const auto& a : c.articles)
+                if (!seen_ids_.contains(a.id)) {
+                    seen_ids_.insert(a.id);
+                    newly.append(a.id);
+                }
+        }
     }
     unseen_count_ = 0;
     if (rowCount() > 0)
-        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsNewRole});
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsNewRole, PulsePhaseRole});
+    return newly;
 }
 
 void NewsFeedModel::mark_seen(const QString& article_id) {
@@ -239,6 +370,20 @@ void NewsFeedModel::mark_seen(const QString& article_id) {
 
 int NewsFeedModel::unseen_count() const {
     return unseen_count_; // O(1) — maintained incrementally
+}
+
+void NewsFeedModel::set_duplicate_counts(const QHash<QString, int>& counts) {
+    duplicate_counts_ = counts;
+    if (view_mode_ == "WIRE" && rowCount() > 0)
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {DuplicateCountRole, Qt::ToolTipRole});
+}
+
+void NewsFeedModel::set_earnings_days(const QHash<QString, int>& days) {
+    if (days == earnings_days_)
+        return;
+    earnings_days_ = days;
+    if (rowCount() > 0)
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {EarningsBadgeRole});
 }
 
 QModelIndex NewsFeedModel::index_for_article(const QString& article_id) const {

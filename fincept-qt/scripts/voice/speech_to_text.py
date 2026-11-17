@@ -17,6 +17,8 @@ import sys
 import signal
 import time
 
+GOOGLE_TIMEOUT_S = 10  # per recognition request
+
 
 def emit(obj: dict) -> None:
     """Write a JSON line to stdout and flush immediately."""
@@ -37,8 +39,15 @@ def main() -> None:
     # wrapper is enough.
     try:
         import sounddevice as sd
-    except ImportError:
-        emit({"fatal": "sounddevice not installed — run: pip install sounddevice"})
+    except ImportError as e:
+        emit({"fatal": f"sounddevice not installed — run: pip install sounddevice ({e})"})
+        sys.exit(1)
+    except OSError as e:
+        # The Linux sounddevice wheel does not bundle PortAudio: a missing
+        # libportaudio raises OSError at import, which used to escape as a bare
+        # traceback with no {"fatal"} line.
+        emit({"fatal": f"Audio input unavailable: {e}. On Linux install the PortAudio library "
+                       f"(libportaudio2)."})
         sys.exit(1)
 
     SAMPLE_RATE  = 16000
@@ -101,6 +110,9 @@ def main() -> None:
         signal.signal(signal.SIGTERM, on_signal)
 
     recognizer = sr.Recognizer()
+    # Seconds for the Google request. The library default (None) let a stalled
+    # connection block the loop forever while the UI still showed "listening".
+    recognizer.operation_timeout = GOOGLE_TIMEOUT_S
     recognizer.energy_threshold = 300
     recognizer.dynamic_energy_threshold = True
     recognizer.pause_threshold = 0.8
@@ -147,6 +159,10 @@ def main() -> None:
             pass
         except sr.RequestError as e:
             emit({"error": f"Google API request failed: {e}"})
+        except TimeoutError:
+            # operation_timeout hit while reading the reply (the library wraps
+            # only the connect phase in RequestError). Not the microphone's fault.
+            emit({"error": f"Google speech recognition did not answer within {GOOGLE_TIMEOUT_S} s"})
         except KeyboardInterrupt:
             break
         except Exception as e:

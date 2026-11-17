@@ -206,8 +206,23 @@ QString WalletActivityProducer::pubkey_from_topic(const QString& topic) {
 }
 
 void WalletActivityProducer::refresh(const QStringList& topics) {
-    auto helius_key_res = SecureStorage::instance().retrieve(QString::fromLatin1(api::kHeliusKeyName));
-    const QString helius_key = (helius_key_res.is_ok()) ? helius_key_res.value() : QString();
+    const SecretRead helius_key_res = SecureStorage::instance().read(QString::fromLatin1(api::kHeliusKeyName));
+    // A Helius key that is stored but cannot be read is not "no key": the plain-RPC
+    // fallback would quietly drop the parsed history the user configured. Report it
+    // on the topics (ActivityTab shows it; the hub retries on its schedule).
+    const bool unreadable = helius_key_res.failed();
+    LOG_TRANSITION("WalletActivity", QStringLiteral("helius_key_read"), unreadable,
+                   unreadable ? LogLevel::Warn : LogLevel::Info,
+                   unreadable ? logf("Stored Helius API key could not be read; activity not fetched",
+                                     {{"key", api::kHeliusKeyName}, {"kind", helius_key_res.error_name()}})
+                              : QStringLiteral("Stored Helius API key readable again"));
+    if (unreadable) {
+        const QString err = tr("Could not read the stored Helius API key: %1.").arg(helius_key_res.reason());
+        for (const auto& topic : topics)
+            fincept::datahub::DataHub::instance().publish_error(topic, err);
+        return;
+    }
+    const QString helius_key = helius_key_res.found() ? helius_key_res.value : QString();
     for (const auto& topic : topics) {
         const auto pubkey = pubkey_from_topic(topic);
         if (pubkey.isEmpty()) {

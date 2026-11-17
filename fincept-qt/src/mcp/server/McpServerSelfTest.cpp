@@ -237,6 +237,8 @@ int run_mcp_server_selftest() {
         rep.check(r.ok && r.status == 200 && o.value(QStringLiteral("ok")).toBool() &&
                       o.value(QStringLiteral("name")).toString() == QLatin1String("fincept-terminal"),
                   QStringLiteral("GET /health answers without a token"), QString::number(r.status));
+        rep.check(o.value(QStringLiteral("edition")).toString() == QLatin1String(edition::kId),
+                  QStringLiteral("GET /health says which edition answers"), o.value(QStringLiteral("edition")).toString());
     }
 
     // ── initialize / notifications ──
@@ -258,6 +260,11 @@ int run_mcp_server_selftest() {
                       res.value(QStringLiteral("capabilities")).toObject().contains(QStringLiteral("resources")) &&
                       !res.value(QStringLiteral("instructions")).toString().isEmpty(),
                   QStringLiteral("initialize negotiates 2025-06-18 and describes the server"));
+        rep.check(res.value(QStringLiteral("serverInfo")).toObject().value(QStringLiteral("edition")).toString() ==
+                      QLatin1String(edition::kId),
+                  QStringLiteral("initialize serverInfo carries the edition id"));
+        rep.check(!r.http.headers.value("mcp-session-id").isEmpty(),
+                  QStringLiteral("initialize issues an Mcp-Session-Id (optional for the client)"));
         const RpcReply older = rpc(port, token,
                                    QJsonDocument(request(QStringLiteral("initialize"), 2,
                                                          {{QStringLiteral("protocolVersion"),
@@ -512,6 +519,52 @@ int run_mcp_server_selftest() {
         rep.check(origin.status == 403, QStringLiteral("cross-site Origin → 403"), QString::number(origin.status));
     }
 
+    // ── run-scoped tokens (in-app harness calls) ──
+    {
+        const QByteArray ping = to_json_bytes(request(QStringLiteral("ping"), 61));
+        RunTokenPolicy policy;
+        policy.scope = RunToolScope::NoNavigation;
+        policy.label = QStringLiteral("selftest");
+        const QString run = server.begin_run(policy, 60 * 1000);
+        rep.check(!run.isEmpty() && run != token && server.run_token_policy(run).has_value(),
+                  QStringLiteral("begin_run() mints a live token distinct from the long-lived one"));
+        const HttpReply ok = http_request(port, "POST", "/mcp", auth_headers(run), ping);
+        rep.check(ok.status == 200, QStringLiteral("a run token is accepted"), QString::number(ok.status));
+        const RpcReply list = rpc(port, run, QJsonDocument(request(QStringLiteral("tools/list"), 62)));
+        QStringList names;
+        for (const QJsonValue& t :
+             list.doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("tools")).toArray())
+            names << t.toObject().value(QStringLiteral("name")).toString();
+        rep.check(!names.isEmpty() && !names.contains(QStringLiteral("ui_open")) &&
+                      !names.contains(QStringLiteral("ui_workspace")) && names.contains(QStringLiteral("ui_overview")),
+                  QStringLiteral("a NoNavigation run token never sees ui_open / ui_workspace"), names.join(','));
+        const QJsonObject nav = call_tool(port, run, QStringLiteral("ui_open"), QJsonObject{}, 63)
+                                    .value(QStringLiteral("result"))
+                                    .toObject();
+        rep.check(nav.value(QStringLiteral("isError")).toBool() &&
+                      first_text(nav).contains(QStringLiteral("not available in this conversation")),
+                  QStringLiteral("a NoNavigation run token cannot call ui_open (refused server-side)"),
+                  clip(first_text(nav)));
+        bool denied_logged = false;
+        for (const ExternalCallRecord& r : server.recent_activity())
+            denied_logged = denied_logged || (r.tool == QLatin1String("ui_open") && r.denied);
+        rep.check(denied_logged, QStringLiteral("the refused navigation call is logged as denied"));
+        server.end_run(run);
+        const HttpReply ended = http_request(port, "POST", "/mcp", auth_headers(run), ping);
+        rep.check(ended.status == 401, QStringLiteral("an ended run token → 401"), QString::number(ended.status));
+        const QString short_lived = server.begin_run(RunTokenPolicy{}, 1000);
+        pump_until([]() { return false; }, 1300);
+        const HttpReply expired = http_request(port, "POST", "/mcp", auth_headers(short_lived), ping);
+        rep.check(expired.status == 401 && !server.run_token_policy(short_lived).has_value(),
+                  QStringLiteral("an expired run token → 401"), QString::number(expired.status));
+        const HttpReply still = http_request(port, "POST", "/mcp", auth_headers(token), ping);
+        rep.check(still.status == 200, QStringLiteral("the long-lived token keeps working beside run tokens"),
+                  QString::number(still.status));
+        const RpcReply full = rpc(port, token, QJsonDocument(request(QStringLiteral("tools/list"), 64)));
+        rep.check(full.http.body.contains("\"ui_open\""),
+                  QStringLiteral("the long-lived token still lists navigation tools"));
+    }
+
     // ── batch ──
     {
         const QJsonArray batch{request(QStringLiteral("ping"), 21),
@@ -542,8 +595,15 @@ int run_mcp_server_selftest() {
         const RpcReply unknown = rpc(port, token, QJsonDocument(request(QStringLiteral("no/such/method"), 31)));
         rep.check(error_code(unknown.doc) == -32601, QStringLiteral("unknown method → -32601"));
         const HttpReply get = http_request(port, "GET", "/mcp", auth_headers(token));
-        rep.check(get.status == 405 && get.headers.value("allow") == "POST", QStringLiteral("GET /mcp → 405 + Allow: POST"),
-                  QString::number(get.status));
+        rep.check(get.status == 405 && get.headers.value("allow").startsWith("POST"),
+                  QStringLiteral("GET /mcp → 405 + Allow: POST, DELETE"), QString::number(get.status));
+        // MCP 2026-07-28 probe → plain 400, so a dual-era client falls back to initialize.
+        HeaderList modern = auth_headers(token);
+        modern.append(qMakePair(QByteArrayLiteral("MCP-Protocol-Version"), QByteArrayLiteral("2026-07-28")));
+        const HttpReply probe = http_request(port, "POST", "/mcp", modern,
+                                             to_json_bytes(request(QStringLiteral("server/discover"), 32)));
+        rep.check(probe.status == 400, QStringLiteral("a 2026-07-28 probe → 400 (legacy fallback)"),
+                  QString::number(probe.status));
         const HttpReply missing = http_request(port, "GET", "/nope", {});
         rep.check(missing.status == 404, QStringLiteral("unknown path → 404"), QString::number(missing.status));
     }
@@ -600,7 +660,7 @@ int run_mcp_server_selftest() {
                                         .object()
                                         .value(QStringLiteral("mcpServers"))
                                         .toObject()
-                                        .value(QStringLiteral("fincept_terminal"))
+                                        .value(QString::fromLatin1(edition::kMcpServerName))
                                         .toObject();
         rep.check(generic.value(QStringLiteral("url")).toString() == url &&
                       generic.value(QStringLiteral("headers")).toObject().value(QStringLiteral("Authorization")).toString() ==
@@ -609,11 +669,11 @@ int run_mcp_server_selftest() {
         const QJsonObject env_cfg = server.claude_mcp_config_env()
                                         .value(QStringLiteral("mcpServers"))
                                         .toObject()
-                                        .value(QStringLiteral("fincept"))
+                                        .value(QString::fromLatin1(edition::kMcpServerName))
                                         .toObject();
         rep.check(env_cfg.value(QStringLiteral("headers")).toObject().value(QStringLiteral("Authorization")).toString() ==
-                      QLatin1String("Bearer ${FINCEPT_MCP_TOKEN}"),
-                  QStringLiteral("claude_mcp_config_env() uses ${FINCEPT_MCP_TOKEN} expansion"));
+                      QStringLiteral("Bearer ${%1}").arg(QString::fromLatin1(edition::kMcpTokenEnvVar)),
+                  QStringLiteral("claude_mcp_config_env() uses ${FINCEPT_COMMUNITY_MCP_TOKEN} expansion"));
         rep.check(server.codex_config_toml().contains(QStringLiteral("url = \"") + url + QLatin1Char('"')) &&
                       server.codex_config_toml().contains(QStringLiteral("tool_timeout_sec")) &&
                       server.codex_config_overrides().size() == 6,
@@ -622,7 +682,7 @@ int run_mcp_server_selftest() {
                                        .object()
                                        .value(QStringLiteral("mcpServers"))
                                        .toObject()
-                                       .value(QStringLiteral("fincept_terminal"))
+                                       .value(QString::fromLatin1(edition::kMcpServerName))
                                        .toObject();
         rep.check(gemini.value(QStringLiteral("httpUrl")).toString() == url &&
                       server.gemini_add_command().contains(url),
@@ -631,11 +691,21 @@ int run_mcp_server_selftest() {
                                        .object()
                                        .value(QStringLiteral("servers"))
                                        .toObject()
-                                       .value(QStringLiteral("fincept_terminal"))
+                                       .value(QString::fromLatin1(edition::kMcpServerName))
                                        .toObject();
         rep.check(vscode.value(QStringLiteral("url")).toString() == url &&
                       vscode.value(QStringLiteral("type")).toString() == QLatin1String("http"),
                   QStringLiteral("vscode_json() uses the servers/type=http shape"));
+    }
+
+    // ── the other edition's ports are never ours ──
+    {
+        const quint16 before = server.configured_port();
+        server.set_configured_port(edition::kPrivateMcpPorts[0]); // refused before anything is persisted
+        const QString refused = QString::number(edition::kPrivateMcpPorts[0]);
+        rep.check(server.configured_port() == before && server.last_error().contains(refused),
+                  QStringLiteral("port %1 (the private build's) is refused as this server's port").arg(refused),
+                  server.last_error());
     }
 
     server.stop();

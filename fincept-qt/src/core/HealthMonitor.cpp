@@ -112,6 +112,8 @@ HealthStatus::Check HealthMonitor::check_broker_connections() const {
             c.detail = QString("%1/%2 connected; issues: %3").arg(connected).arg(considered).arg(problems.join(", "));
         }
     } catch (...) {
+        // The detail goes to the health report; a probe that keeps throwing logs every 5 minutes.
+        LOG_WARN_RL(HM_TAG, c.name, 300000, logf("Health probe threw", {{"probe", c.name}}));
         c.ok = false;
         c.detail = "Exception while reading broker connection states";
     }
@@ -150,6 +152,7 @@ HealthStatus::Check HealthMonitor::check_websocket_streams() const {
                 QString("%1 stream(s) active but %2 live account(s) expect one").arg(active_streams).arg(expected);
         }
     } catch (...) {
+        LOG_WARN_RL(HM_TAG, c.name, 300000, logf("Health probe threw", {{"probe", c.name}}));
         c.ok = false;
         c.detail = "Exception while reading data stream manager state";
     }
@@ -170,6 +173,7 @@ HealthStatus::Check HealthMonitor::check_python_pool() const {
         c.detail = available ? "Python interpreter available (pool active/queued counts not exposed)"
                              : "Python interpreter not available";
     } catch (...) {
+        LOG_WARN_RL(HM_TAG, c.name, 300000, logf("Health probe threw", {{"probe", c.name}}));
         c.ok = false;
         c.detail = "Exception while querying Python runner";
     }
@@ -209,6 +213,7 @@ HealthStatus::Check HealthMonitor::check_datahub() const {
             c.detail = QString("%1 topic(s), %2 in error state: %3").arg(topic_count).arg(errored).arg(sample);
         }
     } catch (...) {
+        LOG_WARN_RL(HM_TAG, c.name, 300000, logf("Health probe threw", {{"probe", c.name}}));
         c.ok = false;
         c.detail = "Exception while reading DataHub stats";
     }

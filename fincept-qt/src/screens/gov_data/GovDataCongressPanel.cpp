@@ -3,8 +3,15 @@
 
 #include "core/logging/Logger.h"
 #include "screens/gov_data/GovDataProviderPanel.h"
+#include "screens/gov_data/GovTableModel.h"
 #include "services/gov_data/GovDataService.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/InputMemory.h"
+#include "ui/widgets/LoadingSkeleton.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QDate>
 #include <QEvent>
@@ -18,40 +25,58 @@
 namespace fincept::screens {
 
 using namespace fincept::ui;
+namespace fmt = fincept::ui::formatting;
 
-static const QString kGovDataCongressColor = "#8B5CF6";
-static const QString kGovDataCongressScript = "congress_gov_data.py";
+namespace {
 
-// ── Congress-specific extra styles (QSpinBox, QComboBox, QTextBrowser) ──────
+// Congress.gov identity colour as it reads on the dark theme; always drawn through colors::legible().
+const QString kGovDataCongressColor = QStringLiteral("#8B5CF6");
+const QString kGovDataCongressScript = QStringLiteral("congress_gov_data.py");
+const QString kGovCongressPrefix = QStringLiteral("gov.congress");
+constexpr int kGovCongressMaxAgeS = 6 * 3600;
 
-static QString congress_extra_qss() {
+QString congress_extra_qss() {
     const auto& t = ThemeManager::instance().tokens();
     QString s;
-    s += QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                 "  font-size:11px; padding:2px 6px; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim);
     s += "QSpinBox::up-button, QSpinBox::down-button { width:14px; }";
-    s += QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                 "  font-size:11px; padding:2px 6px; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim);
-    s += "QComboBox::drop-down { border:none; }";
-    s += QString("QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }")
-             .arg(t.bg_raised, t.text_primary, t.border_dim);
-    s += QString("QTextBrowser { background:%1; color:%2; border:none; padding:16px; font-size:12px; }")
-             .arg(t.bg_base, t.text_primary);
+    s += QString("QTextBrowser { background:%1; color:%2; border:none; padding:16px; font-size:%3px; }")
+             .arg(t.bg_base, t.text_primary)
+             .arg(fonts::px(-2));
     return s;
 }
+
+/// The sitting Congress: the 1st met in 1789 and a new one starts every two years (2025-2026 -> 119th).
+int congress_current() {
+    return (QDate::currentDate().year() - 1789) / 2 + 1;
+}
+
+} // namespace
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss()));
+    setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss())); // once, before children
     build_ui();
     retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataCongressPanel::on_result);
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss())); });
+    // Item brushes and the detail document carry colours: redo them once the appearance settled.
+    connect(&ThemeManager::instance(), &ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
+
+    // The Congress, bill type and tab come back with the panel.
+    memory_ = new InputMemory(QStringLiteral("gov_data"), QStringLiteral("us_congress"), this);
+    memory_->track(QStringLiteral("congress"), congress_num_);
+    memory_->track(QStringLiteral("bill_type"), bill_type_combo_);
+    memory_->track(QStringLiteral("tab_summary"), summary_btn_);
+    memory_->restore();
+    current_view_ = summary_btn_->isChecked() ? SummaryView : Bills;
+    go(view_key(current_view_), false); // loads when the pane is first shown (key permitting)
+}
+
+void GovDataCongressPanel::refresh_theme() {
+    // The bills model reads its ink at paint time; the small summary table has item brushes.
+    recolor_column(summary_table_, 0, colors::legible_color(QColor(kGovDataCongressColor)));
+    render_bill_detail();
 }
 
 void GovDataCongressPanel::changeEvent(QEvent* event) {
@@ -69,65 +94,90 @@ void GovDataCongressPanel::build_ui() {
     root->setSpacing(0);
 
     root->addWidget(build_toolbar());
+    build_pane(this);
+    root->addWidget(pane_, 1);
+}
 
-    content_stack_ = new QStackedWidget;
+void GovDataCongressPanel::build_pane(QWidget* parent) {
+    pane_ = gov::make_pane(parent, QStringLiteral("gov_data/us_congress"), as_of_label_);
+    // Congress.gov needs a free key: without it the pane shows "Needs a Congress.gov API key" with
+    // OPEN SETTINGS > CREDENTIALS; once it is saved, the default list loads on the next show.
+    pane_->set_requirements({Requirement::python(),
+                             Requirement::api_key(QStringLiteral("CONGRESS_GOV_API_KEY"), QStringLiteral("Congress.gov"))});
+    content_stack_ = new QStackedWidget(pane_->content_parent());
 
-    // ── Page 0: Bills table (headers set in retranslateUi) ──
-    bills_table_ = new QTableWidget;
-    bills_table_->setColumnCount(6);
+    // Bills table: CONGRESS | TYPE | NUMBER | TITLE | LATEST ACTION | DATE (headers set in retranslateUi)
+    const auto field = [](const char* key) {
+        return [k = QString::fromLatin1(key)](const QJsonObject& r) { return r.value(k).toString(); };
+    };
+    bills_model_ = gov::make_model(kGovDataCongressColor, this);
+    bills_model_->set_columns({
+        {.text = [](const QJsonObject& r) { return QString::number(r.value(QStringLiteral("congress")).toInt()); }},
+        {.text = [](const QJsonObject& r) { return r.value(QStringLiteral("type")).toString().toUpper(); },
+         .ink = GovTableModel::Ink::Accent},
+        {.text = field("number")},
+        {.text = field("title"), .tooltip = field("title")},
+        {.text = [](const QJsonObject& r) {
+             const QString action = r.value(QStringLiteral("action")).toString();
+             return action.isEmpty() ? fmt::placeholder() : action;
+         },
+         .tooltip = field("action")},
+        {.text = field("date")},
+    });
+    bills_table_ = gov::make_table_view(content_stack_, bills_model_);
     bills_table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     bills_table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     for (int c : {0, 1, 2, 5})
         bills_table_->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
     bills_table_->setColumnWidth(0, 80);
-    bills_table_->setColumnWidth(1, 60);
-    bills_table_->setColumnWidth(2, 70);
+    bills_table_->setColumnWidth(1, 70);
+    bills_table_->setColumnWidth(2, 80);
     bills_table_->setColumnWidth(5, 100);
-    configure_table(bills_table_);
-    connect(bills_table_, &QTableWidget::cellDoubleClicked, this, &GovDataCongressPanel::on_bill_clicked);
+    connect(bills_table_, &QTableView::doubleClicked, this, [this](const QModelIndex& i) { on_bill_clicked(i.row()); });
     content_stack_->addWidget(bills_table_);
 
-    // ── Page 1: Bill detail ──
-    detail_browser_ = new QTextBrowser;
+    // Bill detail
+    detail_browser_ = new QTextBrowser(content_stack_);
     detail_browser_->setOpenExternalLinks(true);
     content_stack_->addWidget(detail_browser_);
 
-    // ── Page 2: Summary table (headers set in retranslateUi) ──
-    summary_table_ = new QTableWidget;
+    // Summary table (headers set in retranslateUi)
+    summary_table_ = new QTableWidget(content_stack_);
     summary_table_->setColumnCount(2);
     summary_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    summary_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    summary_table_->verticalHeader()->setVisible(false);
-    summary_table_->setAlternatingRowColors(true);
-    summary_table_->setShowGrid(true);
+    configure_table(summary_table_);
+    summary_table_->viewport()->setCursor(Qt::ArrowCursor);
     content_stack_->addWidget(summary_table_);
 
-    // ── Page 3: Status ──
-    auto* status_page = new QWidget(this);
-    status_page->setObjectName("govStatusPage");
-    auto* svl = new QVBoxLayout(status_page);
-    svl->setAlignment(Qt::AlignCenter);
-    status_label_ = new QLabel;
-    status_label_->setObjectName("govStatusMsg");
-    status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setWordWrap(true);
-    svl->addWidget(status_label_);
-    content_stack_->addWidget(status_page);
+    no_data_page_ = gov::make_no_data_page(content_stack_);
+    connect(no_data_page_, &EmptyState::primary_clicked, this, [this]() {
+        // "ALL TYPES": the filter emptied the list; otherwise reload.
+        if (current_view_ == Bills && !bill_type_combo_->currentData().toString().isEmpty()) {
+            bill_type_combo_->setCurrentIndex(0);
+            go(view_key(Bills), true);
+            return;
+        }
+        pane_->run();
+    });
+    content_stack_->addWidget(no_data_page_);
 
-    root->addWidget(content_stack_, 1);
+    pane_->set_content(content_stack_);
+    pane_->set_start([this](quint64 run) { start_run(run); });
+    pane_->set_cancel([this](quint64 run) { gov::cancel_token(tokens_, run); });
+    pane_->set_render([this](const QJsonValue& p, const QDateTime&, bool) { render(p); });
 }
 
 QWidget* GovDataCongressPanel::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("govPanelToolbar");
-    bar->setFixedHeight(36);
+    bar->setMinimumHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
     // Back button (text set in retranslateUi)
-    back_btn_ = new QPushButton;
+    back_btn_ = new QPushButton(bar);
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -137,14 +187,14 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     hl->addSpacing(4);
 
     // View tabs (text set in retranslateUi)
-    bills_btn_ = new QPushButton;
+    bills_btn_ = new QPushButton(bar);
     bills_btn_->setObjectName("govTabBtn");
     bills_btn_->setCheckable(true);
     bills_btn_->setChecked(true);
     bills_btn_->setCursor(Qt::PointingHandCursor);
     connect(bills_btn_, &QPushButton::clicked, this, [this]() { on_view_changed(Bills); });
 
-    summary_btn_ = new QPushButton;
+    summary_btn_ = new QPushButton(bar);
     summary_btn_->setObjectName("govTabBtn");
     summary_btn_->setCheckable(true);
     summary_btn_->setCursor(Qt::PointingHandCursor);
@@ -154,50 +204,46 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     hl->addWidget(summary_btn_);
     hl->addSpacing(14);
 
-    // Filter labels (text set in retranslateUi)
-    auto lbl_style =
-        QString("color:%1; font-size:9px; font-weight:700; background:transparent;").arg(colors::TEXT_TERTIARY());
-    congress_lbl_ = new QLabel;
-    congress_lbl_->setStyleSheet(lbl_style);
+    // Filter labels (text set in retranslateUi) — styled by the panel sheet (#govFilterLabel)
+    congress_lbl_ = new QLabel(bar);
+    congress_lbl_->setObjectName("govFilterLabel");
     hl->addWidget(congress_lbl_);
 
-    congress_num_ = new QSpinBox;
+    congress_num_ = new QSpinBox(bar);
     congress_num_->setRange(1, 200);
-    // Default to the sitting Congress: the 1st met in 1789 and a new one starts every two years
-    // (2025-2026 -> 119th). A hard-coded 118 listed a finished Congress.
-    congress_num_->setValue((QDate::currentDate().year() - 1789) / 2 + 1);
-    congress_num_->setFixedHeight(26);
+    congress_num_->setValue(congress_current());
+    congress_num_->setMinimumHeight(26);
     hl->addWidget(congress_num_);
 
     hl->addSpacing(10);
 
-    type_lbl_ = new QLabel;
-    type_lbl_->setStyleSheet(lbl_style);
+    type_lbl_ = new QLabel(bar);
+    type_lbl_->setObjectName("govFilterLabel");
     hl->addWidget(type_lbl_);
 
     // Bill type — display text set in retranslateUi, user data is the API key.
-    bill_type_combo_ = new QComboBox;
-    bill_type_combo_->addItem(QString(), "");
-    bill_type_combo_->addItem(QString(), "hr");
-    bill_type_combo_->addItem(QString(), "s");
-    bill_type_combo_->addItem(QString(), "hjres");
-    bill_type_combo_->addItem(QString(), "sjres");
-    bill_type_combo_->addItem(QString(), "hconres");
-    bill_type_combo_->addItem(QString(), "sconres");
-    bill_type_combo_->addItem(QString(), "hres");
-    bill_type_combo_->addItem(QString(), "sres");
-    bill_type_combo_->setFixedHeight(26);
+    bill_type_combo_ = new QComboBox(bar);
+    for (const char* code : {"", "hr", "s", "hjres", "sjres", "hconres", "sconres", "hres", "sres"})
+        bill_type_combo_->addItem(QString(), QString::fromLatin1(code));
+    bill_type_combo_->setMinimumHeight(26);
     hl->addWidget(bill_type_combo_);
 
     hl->addStretch(1);
+    info_label_ = new QLabel(bar);
+    info_label_->setObjectName("govBreadcrumbText");
+    hl->addWidget(info_label_);
+    hl->addSpacing(8);
+    as_of_label_ = gov::make_as_of_label(bar);
+    hl->addWidget(as_of_label_);
+    hl->addSpacing(8);
 
-    fetch_btn_ = new QPushButton;
+    fetch_btn_ = new QPushButton(bar);
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataCongressPanel::on_fetch_bills);
     hl->addWidget(fetch_btn_);
 
-    export_btn_ = new QPushButton;
+    export_btn_ = new QPushButton(bar);
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataCongressPanel::on_export_csv);
@@ -240,192 +286,281 @@ void GovDataCongressPanel::retranslateUi() {
             bill_type_combo_->setCurrentIndex(idx);
     }
 
-    if (bills_table_)
-        bills_table_->setHorizontalHeaderLabels(
-            {tr("CONGRESS"), tr("TYPE"), tr("NUMBER"), tr("TITLE"), tr("LATEST ACTION"), tr("DATE")});
+    if (bills_model_)
+        bills_model_->set_headers({tr("CONGRESS"), tr("TYPE"), tr("NUMBER"), tr("TITLE"), tr("LATEST ACTION"), tr("DATE")});
     if (summary_table_)
         summary_table_->setHorizontalHeaderLabels({tr("BILL TYPE"), tr("COUNT")});
 }
 
-// ── Actions ──────────────────────────────────────────────────────────────────
+// ── Views and runs ───────────────────────────────────────────────────────────
+
+QString GovDataCongressPanel::view_key(View v) const {
+    const QString congress = QString::number(congress_num_->value());
+    if (v == SummaryView)
+        return QStringLiteral("summary|") + congress;
+    return QStringLiteral("bills|") + congress + QLatin1Char('|') + bill_type_combo_->currentData().toString();
+}
+
+GovDataCongressPanel::View GovDataCongressPanel::view_of(const QString& key) {
+    if (key.startsWith(QLatin1String("summary|")))
+        return SummaryView;
+    if (key.startsWith(QLatin1String("bill|")))
+        return BillDetail;
+    return Bills;
+}
+
+void GovDataCongressPanel::go(const QString& key, bool user, bool force) {
+    current_view_ = view_of(key);
+    if (current_view_ == Bills)
+        last_list_view_ = key;
+    // New bills and actions land on session days: a remembered view older than 6 h refreshes quietly.
+    pane_->set_view_max_age(key, kGovCongressMaxAgeS);
+    pane_->set_view_skeleton(key, current_view_ == BillDetail    ? LoadingSkeleton::Shape::Text
+                                  : current_view_ == SummaryView ? LoadingSkeleton::Shape::List
+                                                                 : LoadingSkeleton::Shape::Table);
+    pane_->set_loading_text(current_view_ == Bills         ? tr("Loading bills from Congress.gov…")
+                            : current_view_ == SummaryView ? tr("Counting bills by type…")
+                                                           : tr("Loading the bill…"));
+    pane_->set_view(key);
+    update_toolbar_state();
+    // Without the key the pane shows its needs-setup page: FETCH must not spawn a script that can
+    // only answer "API key not configured".
+    if (!check_requirements({Requirement::api_key(QStringLiteral("CONGRESS_GOV_API_KEY"), QStringLiteral("Congress.gov"))})
+             .ok) {
+        pane_->recheck_requirements();
+        return;
+    }
+    const bool running_here = pane_->is_running() && pane_->running_view() == key;
+    if (force || (user && !pane_->has_result() && !running_here))
+        pane_->run();
+}
 
 void GovDataCongressPanel::load_initial_data() {
-    show_loading(tr("Select BILLS or SUMMARY and click FETCH"));
+    if (pane_->view().isEmpty())
+        go(view_key(current_view_), false);
 }
 
 void GovDataCongressPanel::on_view_changed(int index) {
-    auto view = static_cast<View>(index);
-    bills_btn_->setChecked(view == Bills);
-    summary_btn_->setChecked(view == SummaryView);
-    back_btn_->setVisible(false);
-    current_view_ = view;
+    go(view_key(static_cast<View>(index)), true);
 }
 
 void GovDataCongressPanel::on_fetch_bills() {
-    int congress = congress_num_->value();
-    QString bill_type = bill_type_combo_->currentData().toString();
-
-    if (current_view_ == SummaryView) {
-        show_loading(tr("Loading Congress summary…"));
-        services::GovDataService::instance().execute(kGovDataCongressScript, "summary", {QString::number(congress)},
-                                                     "gov_congress_summary");
-    } else {
-        show_loading(tr("Loading bills…"));
-        QStringList args;
-        args << QString::number(congress);
-        if (!bill_type.isEmpty())
-            args << bill_type;
-        services::GovDataService::instance().execute(kGovDataCongressScript, "congress_bills", args,
-                                                     "gov_congress_bills");
-    }
+    // FETCH reloads the tab on screen (the bill detail's list when a bill is open).
+    go(view_key(current_view_ == SummaryView ? SummaryView : Bills), true, true);
 }
 
 void GovDataCongressPanel::on_bill_clicked(int row) {
-    auto* type_item = bills_table_->item(row, 1);
-    auto* num_item = bills_table_->item(row, 2);
-    auto* cong_item = bills_table_->item(row, 0);
-    if (!type_item || !num_item || !cong_item)
+    const QJsonObject bill = bills_model_->row(row);
+    const QString type = bill.value(QStringLiteral("type")).toString();
+    const QString number = bill.value(QStringLiteral("number")).toString();
+    if (bill.isEmpty() || type.isEmpty() || number.isEmpty())
         return;
-
-    QString bill_type = type_item->data(Qt::UserRole).toString();
-    QString bill_num = num_item->text();
-    int congress = cong_item->text().toInt();
-
-    show_loading(tr("Loading bill detail…"));
-    back_btn_->setVisible(true);
-    services::GovDataService::instance().execute(kGovDataCongressScript, "bill_info",
-                                                 {QString::number(congress), bill_type.toLower(), bill_num},
-                                                 "gov_congress_detail");
+    const QString key = QStringLiteral("bill|") + QString::number(bill.value(QStringLiteral("congress")).toInt()) +
+                        QLatin1Char('|') + type.toLower() + QLatin1Char('|') + number;
+    go(key, true);
 }
 
 void GovDataCongressPanel::on_back_to_list() {
-    back_btn_->setVisible(false);
-    content_stack_->setCurrentIndex(Bills);
-    current_view_ = Bills;
+    go(last_list_view_.isEmpty() ? view_key(Bills) : last_list_view_, true);
+}
+
+void GovDataCongressPanel::start_run(quint64 run) {
+    const QString key = pane_->view();
+    const QStringList parts = key.split(QLatin1Char('|'));
+    QString command;
+    QStringList args;
+    switch (view_of(key)) {
+        case Bills:
+            command = QStringLiteral("congress_bills");
+            args << parts.value(1);
+            if (!parts.value(2).isEmpty())
+                args << parts.value(2);
+            break;
+        case SummaryView:
+            command = QStringLiteral("summary");
+            args << parts.value(1);
+            break;
+        case BillDetail:
+            command = QStringLiteral("bill_info");
+            args << parts.value(1) << parts.value(2) << parts.value(3);
+            break;
+    }
+    const auto token = gov::start_token(tokens_, run);
+    services::GovDataService::instance().execute(kGovDataCongressScript, command, args,
+                                                 gov::request_id(kGovCongressPrefix, run), token);
 }
 
 void GovDataCongressPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
-    if (!request_id.startsWith("gov_congress_"))
+    const quint64 run = gov::run_of(request_id, kGovCongressPrefix);
+    if (run == 0)
         return;
+    tokens_.remove(run);
+    if (!pane_->is_current(run))
+        return; // superseded, cancelled, or its view was left
+    const QString key = pane_->running_view();
     if (!result.success) {
-        show_error(result.error);
+        if (result.error_code == QLatin1String("no_data") && view_of(key) != BillDetail) {
+            pane_->deliver(run, gov::list_payload(view_of(key) == SummaryView ? QStringLiteral("summary")
+                                                                              : QStringLiteral("bills"),
+                                                  QJsonArray()));
+            return;
+        }
+        // A rejected key (the script's "auth_failed", or its wording) -> invalid_key: the "rejected the
+        // API key" page with OPEN SETTINGS > CREDENTIALS on CONGRESS_GOV_API_KEY and RETRY.
+        gov::fail_pane(pane_, run, result, QStringLiteral("Congress.gov"));
         return;
     }
+    // Shaped on the shaping thread (bill lists, the bill detail's HTML); dropped when superseded.
+    const QStringList labels{tr("Type:"), tr("Congress:"), tr("Status:")};
+    gov::shape_async(
+        this, [view = view_of(key), data = result.data, labels]() { return shape(view, data, labels); },
+        [this, run](const QJsonObject& payload) {
+            if (pane_->is_current(run))
+                pane_->deliver(run, payload);
+        });
+}
 
-    if (request_id.contains("bills")) {
-        populate_bills(result.data);
-        content_stack_->setCurrentIndex(Bills);
-    } else if (request_id.contains("detail")) {
-        populate_bill_detail(result.data);
-        content_stack_->setCurrentIndex(BillDetail);
-    } else if (request_id.contains("summary")) {
-        populate_summary(result.data);
-        content_stack_->setCurrentIndex(SummaryView);
+QJsonObject GovDataCongressPanel::shape(View view, const QJsonObject& data, const QStringList& labels) {
+    switch (view) {
+        case Bills: {
+            QJsonArray rows;
+            for (const QJsonValue& v : data.value("bills").toArray()) {
+                const QJsonObject b = v.toObject();
+                // Numbers may arrive as JSON numbers or as numeric strings ("3076"): read both.
+                QString title = gov::text(b.value("title"));
+                if (title.length() > 160)
+                    title = title.left(160) + QStringLiteral("…");
+                QString date = gov::text(b.value("latest_action_date"));
+                if (date.isEmpty())
+                    date = gov::text(b.value("update_date"));
+                rows.append(QJsonObject{{"congress", gov::integer(b.value("congress"), 0)},
+                                        {"type", gov::text(b.value("bill_type"))},
+                                        {"number", gov::text(b.value("bill_number"))},
+                                        {"title", title},
+                                        {"action", gov::text(b.value("latest_action"))},
+                                        {"date", date.left(10)}});
+            }
+            return gov::list_payload(QStringLiteral("bills"), rows);
+        }
+        case SummaryView: {
+            QJsonArray rows;
+            const QJsonObject types = data.value("bill_types").toObject();
+            for (auto it = types.begin(); it != types.end(); ++it)
+                rows.append(QJsonObject{{"type", it.key()},
+                                        {"count", gov::integer(it.value().toObject().value("count"), 0)}});
+            return gov::list_payload(QStringLiteral("summary"), rows);
+        }
+        case BillDetail: {
+            QString md = data.value("markdown_content").toString();
+            if (md.isEmpty()) {
+                const QJsonObject bill = data.value("bill_data").toObject();
+                md = "# " + bill.value("title").toString() + "\n\n";
+                md += "**" + labels.value(0) + "** " + bill.value("type").toString() + "\n\n";
+                md += "**" + labels.value(1) + "** " + QString::number(bill.value("congress").toInt()) + "\n\n";
+                md += "**" + labels.value(2) + "** " + bill.value("latestAction").toObject().value("text").toString() +
+                      "\n\n";
+            }
+            static const QRegularExpression kH1(QStringLiteral("^# (.+)$"), QRegularExpression::MultilineOption);
+            static const QRegularExpression kH2(QStringLiteral("^## (.+)$"), QRegularExpression::MultilineOption);
+            static const QRegularExpression kBold(QStringLiteral("\\*\\*(.+?)\\*\\*"));
+            QString html = md.toHtmlEscaped();
+            html.replace("\n\n", "<br><br>");
+            html.replace(kH1, "<h2 style='color:@ACCENT@;font-weight:700;'>\\1</h2>");
+            html.replace(kH2, "<h3 style='color:@ACCENT@;'>\\1</h3>");
+            html.replace(kBold, "<b>\\1</b>");
+            return QJsonObject{{"kind", "bill"}, {"html", html}};
+        }
+    }
+    return {};
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+
+void GovDataCongressPanel::render(const QJsonValue& payload) {
+    const QJsonObject p = payload.toObject();
+    const QString kind = p.value("kind").toString();
+    if (kind == QLatin1String("bill")) {
+        detail_body_ = p.value("html").toString();
+        render_bill_detail();
+        content_stack_->setCurrentWidget(detail_browser_);
+        info_label_->clear();
+        return;
+    }
+    const QJsonArray rows = p.value("rows").toArray();
+    if (rows.isEmpty()) {
+        info_label_->clear();
+        const bool filtered = kind == QLatin1String("bills") && !bill_type_combo_->currentData().toString().isEmpty();
+        EmptyState::Spec spec = EmptyState::no_data_spec(
+            tr("No bills for Congress %1").arg(congress_num_->value()),
+            filtered ? tr("No bill of this type has been introduced yet.")
+                     : tr("Congress.gov listed nothing for this Congress."),
+            filtered ? tr("ALL TYPES") : tr("RELOAD"));
+        spec.glyph = QStringLiteral("∅");
+        gov::show_no_data(content_stack_, no_data_page_, spec);
+        return;
+    }
+    if (kind == QLatin1String("bills")) {
+        populate_bills(rows);
+        content_stack_->setCurrentWidget(bills_table_);
+        info_label_->setText(tr("%1 bills").arg(fmt::quantity(rows.size())));
+        bills_table_->setToolTip(tr("Double-click a bill for its detail"));
+    } else {
+        populate_summary(p);
+        content_stack_->setCurrentWidget(summary_table_);
+        info_label_->clear();
     }
 }
 
-// ── Populate ─────────────────────────────────────────────────────────────────
-
-void GovDataCongressPanel::populate_bills(const QJsonObject& json) {
-    const QJsonArray bills = json["bills"].toArray();
-    bills_table_->setRowCount(0);
-    bills_table_->setRowCount(bills.size());
-
-    for (int i = 0; i < bills.size(); ++i) {
-        const auto b = bills[i].toObject();
-
-        bills_table_->setItem(i, 0, new QTableWidgetItem(QString::number(b["congress"].toInt())));
-
-        auto* type_item = new QTableWidgetItem(b["bill_type"].toString().toUpper());
-        type_item->setForeground(QColor(kGovDataCongressColor));
-        type_item->setData(Qt::UserRole, b["bill_type"].toString());
-        bills_table_->setItem(i, 1, type_item);
-
-        // Congress.gov v3 sends bill numbers as strings ("3076"); toInt() on those gave 0, so every row
-        // showed 0 and a row click asked bill_info for bill 0. Accept a JSON number too.
-        const QJsonValue bill_number = b["bill_number"];
-        bills_table_->setItem(i, 2,
-                              new QTableWidgetItem(bill_number.isDouble() ? QString::number(bill_number.toInteger())
-                                                                          : bill_number.toString()));
-
-        QString title = b["title"].toString();
-        if (title.length() > 120)
-            title = title.left(120) + "…";
-        bills_table_->setItem(i, 3, new QTableWidgetItem(title));
-
-        const QString action = b["latest_action"].toString();
-        bills_table_->setItem(i, 4, new QTableWidgetItem(action.isEmpty() ? QStringLiteral("—") : action));
-
-        QString date = b["latest_action_date"].toString();
-        if (date.isEmpty())
-            date = b["update_date"].toString();
-        if (date.length() > 10)
-            date = date.left(10);
-        bills_table_->setItem(i, 5, new QTableWidgetItem(date));
-    }
-    LOG_INFO("GovCongress", QString("Loaded %1 bills").arg(bills.size()));
+void GovDataCongressPanel::populate_bills(const QJsonArray& bills) {
+    gov::show_rows(bills_table_, bills_model_, bills); // a model reset: cells are formatted when shown
+    LOG_DEBUG("GovCongress", QString("Loaded %1 bills").arg(bills.size()));
 }
 
-void GovDataCongressPanel::populate_bill_detail(const QJsonObject& json) {
-    QString md = json["markdown_content"].toString();
-    if (md.isEmpty()) {
-        auto bill = json["bill_data"].toObject();
-        md = "# " + bill["title"].toString() + "\n\n";
-        md += "**" + tr("Type:") + "** " + bill["type"].toString() + "\n\n";
-        md += "**" + tr("Congress:") + "** " + QString::number(bill["congress"].toInt()) + "\n\n";
-        md += "**" + tr("Status:") + "** " + bill["latestAction"].toObject()["text"].toString() + "\n\n";
-    }
-
-    QString html = md;
-    html.replace("\n\n", "<br><br>");
-    html.replace(QRegularExpression("^# (.+)$", QRegularExpression::MultilineOption),
-                 "<h2 style='color:" + kGovDataCongressColor + ";font-weight:700;'>\\1</h2>");
-    html.replace(QRegularExpression("^## (.+)$", QRegularExpression::MultilineOption),
-                 "<h3 style='color:" + kGovDataCongressColor + ";'>\\1</h3>");
-    html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
-
+void GovDataCongressPanel::render_bill_detail() {
+    if (detail_body_.isEmpty())
+        return;
+    // The document inherits the application font; colours and size come from the active theme.
     const auto& tk = ThemeManager::instance().tokens();
-    detail_browser_->setHtml(QString("<html><body style='background:%1; color:%2; font-family:%3,monospace;"
-                                     " font-size:12px; padding:16px;'>")
-                                 .arg(tk.bg_base, tk.text_primary, tk.font_family) +
-                             html + "</body></html>");
-    back_btn_->setVisible(true);
-    current_view_ = BillDetail;
+    QString body = detail_body_;
+    body.replace(QStringLiteral("@ACCENT@"), colors::legible(QColor(kGovDataCongressColor)));
+    detail_browser_->setHtml(QString("<html><body style='background:%1; color:%2; padding:16px; font-size:%3px;'>")
+                                 .arg(tk.bg_base, tk.text_primary)
+                                 .arg(fonts::px(-2)) +
+                             body + "</body></html>");
 }
 
-void GovDataCongressPanel::populate_summary(const QJsonObject& json) {
-    auto bill_types = json["bill_types"].toObject();
-    summary_table_->setRowCount(0);
-    summary_table_->setRowCount(bill_types.size());
-
-    int row = 0;
-    for (auto it = bill_types.begin(); it != bill_types.end(); ++it, ++row) {
-        auto* name_item = new QTableWidgetItem(it.key().toUpper());
-        name_item->setForeground(QColor(kGovDataCongressColor));
+void GovDataCongressPanel::populate_summary(const QJsonObject& payload) {
+    const QJsonArray rows = payload.value("rows").toArray();
+    const QColor accent = colors::legible_color(QColor(kGovDataCongressColor));
+    gov::TableFill fill(summary_table_, int(rows.size()));
+    for (int row = 0; row < rows.size(); ++row) {
+        const QJsonObject r = rows[row].toObject();
+        auto* name_item = new QTableWidgetItem(r.value("type").toString().toUpper());
+        name_item->setForeground(accent);
         summary_table_->setItem(row, 0, name_item);
-        summary_table_->setItem(row, 1, new QTableWidgetItem(QString::number(it.value().toObject()["count"].toInt())));
+        auto* count_item = new QTableWidgetItem(fmt::quantity(r.value("count").toInt()));
+        count_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        summary_table_->setItem(row, 1, count_item);
     }
-    LOG_INFO("GovCongress", "Summary loaded");
+    LOG_DEBUG("GovCongress", "Summary loaded");
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-void GovDataCongressPanel::show_loading(const QString& message) {
-    status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataCongressColor));
-    status_label_->setText(message);
-    content_stack_->setCurrentIndex(3);
-}
-
-void GovDataCongressPanel::show_error(const QString& message) {
-    status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText(tr("Error: %1").arg(message));
-    content_stack_->setCurrentIndex(3);
+void GovDataCongressPanel::update_toolbar_state() {
+    bills_btn_->setChecked(current_view_ == Bills);
+    summary_btn_->setChecked(current_view_ == SummaryView);
+    back_btn_->setVisible(current_view_ == BillDetail);
+    bill_type_combo_->setEnabled(current_view_ != SummaryView);
+    type_lbl_->setEnabled(current_view_ != SummaryView);
 }
 
 void GovDataCongressPanel::on_export_csv() {
-    QTableWidget* table = (current_view_ == SummaryView) ? summary_table_ : bills_table_;
-    export_table_to_csv(table, "congress_data.csv", this);
+    QWidget* page = content_stack_->currentWidget();
+    if (page == summary_table_)
+        export_table_to_csv(summary_table_, "congress_summary.csv", this);
+    else if (page == bills_table_)
+        export_table_to_csv(bills_table_, "congress_bills.csv", this);
 }
 
 } // namespace fincept::screens

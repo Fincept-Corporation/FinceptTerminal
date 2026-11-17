@@ -8,6 +8,7 @@ of truth for those paths — no other module should compose them by hand.
 
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -29,19 +30,23 @@ def base_dir() -> str:
     """
     Root directory for all finagent persona state.
 
-    Overridable via FINAGENT_DATA_DIR env var. Otherwise defaults to
-    <LOCALAPPDATA>/com.fincept.terminal/finagent on Windows, or
-    $XDG_DATA_HOME/com.fincept.terminal/finagent (~/.local/share fallback)
-    elsewhere.
+    Overridable via FINAGENT_DATA_DIR env var (the terminal always sets it to
+    <FINCEPT_DATA_DIR>/finagent). Otherwise <FINCEPT_DATA_DIR>/finagent, then
+    <the edition's default data root>/finagent (fincept_paths.data_root(): the
+    folder the terminal itself uses) — never com.fincept.terminal, the folder a
+    separate private build of Fincept Terminal uses.
     """
     env = os.getenv("FINAGENT_DATA_DIR")
     if env:
         return str(Path(env).expanduser())
-    if os.name == "nt":
-        root = os.getenv("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return str(Path(root) / "com.fincept.terminal" / "finagent")
-    xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return str(Path(xdg) / "com.fincept.terminal" / "finagent")
+    data_dir = os.getenv("FINCEPT_DATA_DIR", "").strip()
+    if data_dir:
+        return str(Path(data_dir).expanduser() / "finagent")
+    scripts_root = str(Path(__file__).resolve().parents[2])  # finagent_core -> agents -> scripts
+    if scripts_root not in sys.path:
+        sys.path.append(scripts_root)
+    import fincept_paths
+    return str(fincept_paths.data_root() / "finagent")
 
 
 def persona_dir(user_id: str, agent_id: str) -> str:

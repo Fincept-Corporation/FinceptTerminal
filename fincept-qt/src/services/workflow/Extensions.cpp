@@ -1,5 +1,7 @@
 #include "services/workflow/Extensions.h"
 
+#include "ui/formatting/NumberFormat.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -202,15 +204,15 @@ double clamp(double v, double lo, double hi) {
 }
 
 QString format_currency(double v, const QString& currency) {
-    QString sign = v < 0 ? "-" : "";
-    double abs_v = std::abs(v);
-    if (currency == "USD" || currency == "$")
-        return sign + "$" + QString::number(abs_v, 'f', 2);
-    if (currency == "EUR")
-        return sign + QString::number(abs_v, 'f', 2) + " EUR";
-    if (currency == "INR")
-        return sign + "Rs." + QString::number(abs_v, 'f', 2);
-    return sign + QString::number(abs_v, 'f', 2) + " " + currency;
+    // The app's one money formatter: the user's symbol style, locale, grouping and
+    // negative style. "$" (older workflows) means USD; no code = the user's display
+    // currency (Settings > Currency & Number Format).
+    QString code = currency.trimmed();
+    if (code == QLatin1String("$"))
+        code = QStringLiteral("USD");
+    if (code.isEmpty())
+        code = fincept::ui::formatting::display_currency();
+    return fincept::ui::formatting::money(v, code);
 }
 
 QString format_percent(double v, int decimals) {
@@ -340,7 +342,7 @@ QJsonValue call_extension(const QString& method, const QJsonValue& target, const
         if (method == "abs")
             return NumberExt::abs(v);
         if (method == "formatCurrency")
-            return NumberExt::format_currency(v, arg.toString("USD"));
+            return NumberExt::format_currency(v, arg.toString()); // no code: the display currency
         if (method == "formatPercent")
             return NumberExt::format_percent(v, arg.toInt(2));
     }

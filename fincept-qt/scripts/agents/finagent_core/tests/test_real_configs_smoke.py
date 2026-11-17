@@ -12,15 +12,25 @@ from finagent_core.core_agent import CoreAgent
 
 
 CONFIGS = [
-    "agents/TraderInvestorsAgent/configs/agent_definitions.json",
-    "agents/GeopoliticsAgents/configs/agent_definitions.json",
-    "agents/EconomicAgents/configs/agent_definitions.json",
+    "TraderInvestorsAgent/configs/agent_definitions.json",
+    "GeopoliticsAgents/configs/agent_definitions.json",
+    "EconomicAgents/configs/agent_definitions.json",
 ]
 
 
 def _scripts_agents_dir() -> Path:
-    # tests live in finagent_core/tests/; agents/ is sibling of finagent_core.
+    # tests live in scripts/agents/finagent_core/tests/; the persona groups are
+    # siblings of finagent_core under scripts/agents/. (The entries used to start
+    # with "agents/", which resolved to scripts/agents/agents/... — every file
+    # was missing, the parameter set was empty and the test never ran.)
     return Path(__file__).resolve().parents[2]
+
+
+def test_persona_configs_found():
+    """Guard against the path drifting again: an empty parameter set is a skip,
+    not a failure, so assert the files are really there."""
+    missing = [rel for rel in CONFIGS if not (_scripts_agents_dir() / rel).exists()]
+    assert not missing, f"persona config files not found: {missing}"
 
 
 def _load_all_personas():

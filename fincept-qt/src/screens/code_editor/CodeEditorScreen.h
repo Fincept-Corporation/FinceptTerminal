@@ -1,339 +1,270 @@
 // src/screens/code_editor/CodeEditorScreen.h
-// Fincept Notebook — two-view workspace (Library + Editor) on the Obsidian
-// design system. Library lists prebuilt finance notebooks as cards; the editor
-// runs responsive notebook cells with markdown rendering and collapsible output.
+// The Code tab — a research-notebook workstation in the terminal's house style:
+//
+//   COMMAND BAR   notebook name, file / run / kernel commands, find, kernel badge
+//   RAIL          LIBRARY | OUTLINE | VARIABLES (collapsible, width remembered)
+//   EDITOR        the cells (or, with no notebook open, the start view)
+//   INSPECTOR     HELP | OUTPUT | HISTORY (optional, built on first use)
+//   STATUS BAR    kernel · environment · last run · cells · cursor · saved · path
+//
+// Cells run in one persistent kernel per notebook (services::NotebookKernel): the
+// variables of one cell are there for the next, as in Jupyter. Opening a notebook
+// shows its saved outputs and never runs anything; running is always a user action.
+//
+// Pieces: NotebookDocument (model, .ipynb, exports), CodeEditorScreen_Cells (cell
+// and editor widgets), NotebookOutputs (tables / figures / errors), NotebookStyle
+// (the one stylesheet, icons, palettes), NotebookCommandBar, the shared
+// ui::ScreenStatusBar (bottom bar), CodeEditorScreen_Library (rail library + start view), CodeEditorScreen_Navigator
+// (outline + variables), NotebookInspector.
 #pragma once
 
+#include "screens/code_editor/CodeEditorScreen_Cells.h"
+#include "screens/code_editor/CodeEditorScreen_Library.h"
+#include "screens/code_editor/NotebookCommandBar.h"
+#include "screens/code_editor/NotebookDocument.h"
+#include "screens/code_editor/NotebookInspector.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
-#include <QComboBox>
-#include <QEvent>
+#include <QDateTime>
 #include <QHash>
-#include <QGridLayout>
-#include <QHideEvent>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QPlainTextEdit>
-#include <QPushButton>
-#include <QResizeEvent>
-#include <QScrollArea>
-#include <QShowEvent>
-#include <QSplitter>
-#include <QStackedWidget>
-#include <QTextBrowser>
-#include <QTextEdit>
-#include <QVBoxLayout>
+#include <QSet>
 #include <QVector>
 #include <QWidget>
 
+class QKeyEvent;
+class QPushButton;
+class QScrollArea;
+class QSplitter;
+class QStackedWidget;
+class QTimer;
+class QVBoxLayout;
+
+namespace fincept::services {
+class NotebookKernel;
+}
+
+namespace fincept::ui {
+class ScreenStatusBar;
+}
+
 namespace fincept::screens {
 
-// -- Cell data ----------------------------------------------------------------
+class NotebookOutlinePanel;
+class NotebookVariablesPanel;
 
-struct CellOutput {
-    QString type;       // "stream", "error", "execute_result"
-    QString text;       // stdout/stderr/result text
-    QString name;       // "stdout" or "stderr"
-    QString error_name; // for errors
-    QString error_value;
-    QStringList traceback;
-};
-
-struct NotebookCell {
-    QString id;
-    QString cell_type; // "code" or "markdown"
-    QString title;     // optional custom name for sidebar navigator
-    QString source;
-    QVector<CellOutput> outputs;
-    int execution_count = 0;
-    bool running = false;
-};
-
-// -- Code editor with line numbers --------------------------------------------
-
-class CodeTextEdit : public QTextEdit {
-    Q_OBJECT
-  public:
-    explicit CodeTextEdit(QWidget* parent = nullptr);
-
-  signals:
-    void run_shortcut(); // Ctrl+Enter
-    void run_and_next(); // Shift+Enter
-
-  protected:
-    void keyPressEvent(QKeyEvent* event) override;
-};
-
-// -- Cell widget --------------------------------------------------------------
-
-class CellWidget : public QWidget {
-    Q_OBJECT
-  public:
-    explicit CellWidget(const NotebookCell& cell, int index, QWidget* parent = nullptr);
-
-    void set_cell_data(const NotebookCell& cell);
-    NotebookCell cell_data() const;
-    void set_running(bool running);
-    void set_outputs(const QVector<CellOutput>& outputs, int exec_count);
-    void set_selected(bool selected);
-    void set_index(int index);
-    /// Keep the widget's copy of the custom cell name in step with a rename —
-    /// cell_data() reads it back, so without this a rename was overwritten by the
-    /// stale title on the next sync/save.
-    void set_title(const QString& title) { title_ = title; }
-    QString cell_id() const { return cell_id_; }
-    /// Live run: clear the old output and show a streaming pane.
-    void begin_stream();
-    /// Append streamed stdout/stderr text to the live pane.
-    void append_stream(const QString& text, bool is_stderr);
-    /// Show the run time next to the output header ("OUT [3] · 1.24 s").
-    void set_elapsed(qint64 ms);
-
-  signals:
-    void run_requested(const QString& cell_id);
-    void run_and_advance(const QString& cell_id);
-    void delete_requested(const QString& cell_id);
-    void move_up_requested(const QString& cell_id);
-    void move_down_requested(const QString& cell_id);
-    void toggle_type_requested(const QString& cell_id);
-    void cell_clicked(const QString& cell_id);
-    void insert_below_requested(const QString& cell_id);
-
-  protected:
-    void enterEvent(QEnterEvent* event) override;
-    void leaveEvent(QEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void changeEvent(QEvent* event) override;
-    void showEvent(QShowEvent* event) override;
-    /// Watches md_preview_ so a click on the rendered markdown drops back into
-    /// the source editor. The filter was installed but never implemented, so
-    /// the preview was a dead end for mouse users.
-    bool eventFilter(QObject* watched, QEvent* event) override;
-
-  private:
-    void build_ui();
-    void update_gutter();
-    void adjust_editor_height();
-    void render_markdown();
-    void retranslateUi();
-
-    QString cell_id_;
-    QString cell_type_;
-    int execution_count_ = 0;
-    int index_ = 0;
-    bool running_ = false;
-    bool selected_ = false;
-    bool hovered_ = false;
-    bool output_collapsed_ = false;
-    bool md_editing_ = false;
-    bool adjusting_height_ = false; // guards adjust_editor_height re-entrancy
-    QString title_;
-
-    // Gutter
-    QWidget* gutter_ = nullptr;
-    QLabel* gutter_number_ = nullptr;
-    QLabel* gutter_type_ = nullptr;
-
-    // Editor area
-    QWidget* editor_container_ = nullptr;
-    CodeTextEdit* editor_ = nullptr;
-    QTextBrowser* md_preview_ = nullptr; // rendered markdown view
-
-    // Hover toolbar
-    QWidget* toolbar_ = nullptr;
-    QPushButton* run_btn_ = nullptr;
-    QPushButton* type_btn_ = nullptr;
-    QPushButton* up_btn_ = nullptr;
-    QPushButton* dn_btn_ = nullptr;
-    QPushButton* del_btn_ = nullptr;
-
-    // Output area
-    QWidget* output_area_ = nullptr;
-    QVBoxLayout* output_layout_ = nullptr;
-    QPushButton* output_toggle_ = nullptr;
-    QWidget* output_content_ = nullptr;
-    QVBoxLayout* output_content_layout_ = nullptr;
-
-    // Insert hint
-    QWidget* insert_hint_ = nullptr;
-
-    // Streaming output while the cell runs
-    QPlainTextEdit* live_out_ = nullptr;
-};
-
-// -- Sidebar cell navigator ---------------------------------------------------
-
-class CellNavigator : public QWidget {
-    Q_OBJECT
-  public:
-    explicit CellNavigator(QWidget* parent = nullptr);
-    void rebuild(const QVector<NotebookCell>& cells, const QString& selected_id);
-
-  signals:
-    void cell_selected(const QString& cell_id);
-    void rename_requested(const QString& cell_id);
-
-  protected:
-    void changeEvent(QEvent* event) override;
-
-  private:
-    void retranslateUi();
-
-    QListWidget* list_ = nullptr;
-    QLabel* header_title_ = nullptr;
-    // Cached so rebuild() can re-render after a language change.
-    QVector<NotebookCell> last_cells_;
-    QString last_selected_id_;
-};
-
-// -- Main screen --------------------------------------------------------------
-
-class CodeEditorScreen : public QWidget, public IStatefulScreen {
+class CodeEditorScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit CodeEditorScreen(QWidget* parent = nullptr);
+    ~CodeEditorScreen() override;
 
-    /// Load a notebook (.ipynb) from disk into the editor and switch to the
-    /// editor view. Public entry point used by the File Manager and the
-    /// Library "OPEN" action. Returns true if the file was loaded.
+    /// Open a notebook (.ipynb) — the File Manager's and the Library's entry
+    /// point. Asks about unsaved changes first. True if the file was loaded.
     bool open_notebook_path(const QString& path);
+
+    /// ISectionLinked — "new" (NEW button) | "template:<catalog id>" (the template's OPEN) |
+    /// "notebook:<absolute .ipynb path or File Manager id>" (opened, nothing runs) |
+    /// "library" | "outline" | "variables" (rail tabs). Opening asks about unsaved changes first.
+    bool open_section(const QString& section, const QString& focus) override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return "code_editor"; }
     int state_version() const override { return 1; }
+    void flush_pending_state() override;
 
   protected:
-    void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
-
-  private slots:
-    void on_add_cell();
-    void on_run_cell(const QString& cell_id);
-    void on_run_and_advance(const QString& cell_id);
-    void on_run_all();
-    void on_delete_cell(const QString& cell_id);
-    void on_move_cell_up(const QString& cell_id);
-    void on_move_cell_down(const QString& cell_id);
-    void on_toggle_cell_type(const QString& cell_id);
-    void on_new_notebook();
-    void on_open_notebook();
-    void on_save_notebook();
-    void on_select_cell(const QString& cell_id);
-    void on_insert_below(const QString& cell_id);
-    void on_clear_outputs();
-    void on_toggle_sidebar();
-    void on_rename_cell(const QString& cell_id);
-    /// Interrupt every running cell and drop the RUN ALL queue (STOP / Esc).
-    void on_stop_all();
-
-    // Header / Library
-    void on_view_changed(int index); // 0 = Library, 1 = Editor
-    void on_library_search(const QString& text);
-    void on_open_library_entry(int catalog_index);
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
+    enum class Mode { Command, Edit };
+    enum class AfterRun { Stay, Advance, Insert };
+
+    // ── Building ─────────────────────────────────────────────────────────────
     void build_ui();
-    QWidget* build_header();
-    QWidget* build_editor_page();
-    QWidget* build_library_page(); // CodeEditorScreen_Library.cpp
-    void populate_library();       // CodeEditorScreen_Library.cpp
-    void relayout_library_cards(); // CodeEditorScreen_Library.cpp
-    void set_view(int index);
-    bool load_notebook_from_path(const QString& path);
-    QWidget* build_toolbar();
-    QWidget* build_status_bar();
-    void retranslateUi();
-    void rebuild_cells();
+    QWidget* build_rail();
+    void show_rail_tab(int tab);
+    void ensure_inspector();
+    void set_rail_visible(bool on);
+    void set_inspector_visible(bool on);
+    void apply_splitter_sizes();
+    void bind_shortcuts();
 
-    /// Copy every live CellWidget's editor text back into cells_. Anything that
-    /// tears down and re-creates the cell widgets must call this first or the
-    /// user's in-progress typing is silently discarded.
-    void sync_cells_from_widgets();
-    /// Canonical string used to detect unsaved edits (type + source per cell).
-    QString notebook_fingerprint() const;
-    /// True if the notebook has no unsaved changes, or the user agreed to
-    /// discard them. `action` names the operation in the prompt.
-    bool confirm_discard_changes(const QString& action);
-    void add_cell_after(const QString& after_id, const QString& type);
-    int find_cell_index(const QString& cell_id) const;
-    CellWidget* find_cell_widget(const QString& cell_id) const;
-    QString new_cell_id() const;
-    void update_status();
-    void update_navigator();
-    void advance_to_next(const QString& current_id);
+    // ── Notebook lifecycle ───────────────────────────────────────────────────
+    bool load_path(const QString& path, QString* error);
+    void set_document(const notebook::NotebookDoc& doc, const QString& path);
+    void new_notebook();
+    void close_notebook();
+    void open_dialog();
+    void open_template(int catalog_index);
+    void recover_unsaved();
+    bool save();
+    bool save_as();
+    bool write_to(const QString& path, bool quiet);
+    void export_python();
+    void export_html();
+    bool confirm_discard(const QString& action);
+    QString default_save_dir() const;
+    QString suggested_base_name() const;
+    QString working_dir() const;
 
-    // Notebook data
-    QVector<NotebookCell> cells_;
-    int execution_counter_ = 0;
-    QString notebook_path_;
-    /// Fingerprint at the last new/open/save — compared against the live one to
-    /// detect unsaved edits.
-    QString clean_fingerprint_;
-    /// Running cells: cell id → NotebookLibraryService run id (for STOP).
-    QHash<QString, QString> active_runs_;
-    /// RUN ALL runs cells one at a time, top to bottom, and stops at the first
-    /// error (Jupyter semantics); these are the cells still to run.
-    QStringList run_queue_;
-    void run_next_queued();
-    /// Kernel ("numpy2" | "numpy1") and per-cell time limit, persisted.
-    QString kernel_ = QStringLiteral("numpy2");
+    // ── Cells ────────────────────────────────────────────────────────────────
+    CellWidget* create_cell_widget(const notebook::NotebookCell& cell);
+    void build_cell_widgets();
+    void build_more_cells(quint64 generation);
+    void ensure_all_built();
+    void clear_cell_widgets();
+    int index_of(const QString& id) const;
+    CellWidget* widget_at(int index) const;
+    void sync_sources();
+    void mark_changed();
+    void update_dirty();
+    void select_cell(int index, Mode mode, bool scroll = true, bool take_focus = true);
+    void scroll_to(CellWidget* w);
+    void insert_cell(int index, notebook::NotebookCell::Type type, const QString& source, Mode mode);
+    void delete_cell(int index);
+    void undo_delete();
+    void move_cell(int index, int delta);
+    void set_cell_type(int index, notebook::NotebookCell::Type type);
+    void copy_cell(int index, bool cut);
+    void paste_cells(int index);
+    void rename_cell(int index);
+    void clear_outputs(int index); ///< -1 = every cell
+    void toggle_output(int index);
+    void toggle_input(int index);
+    void show_cell_menu(const QString& id, const QPoint& global_pos);
+    void on_cell_action(const QString& id, CellWidget::Action action);
+    void on_cell_activated(const QString& id, bool edit);
+    void on_run_key(const QString& id, CodeTextEdit::RunKey key);
+    bool handle_command_key(QKeyEvent* e);
+    void set_line_numbers(bool on);
+    void insert_snippet(NotebookCommandBar::Cmd cmd);
+    QString ask_symbol();
+
+    // ── Running ──────────────────────────────────────────────────────────────
+    void run_cells(const QStringList& ids);
+    void run_selected(AfterRun after);
+    void run_all();
+    void run_above();
+    void run_below();
+    void start_next();
+    void interrupt();
+    void restart_kernel(bool confirm, bool run_all_after);
+    void abort_queue(const QString& why);
+    void on_exec_stream(const QString& token, const QString& text, bool is_stderr);
+    void on_exec_event(const QString& token, const QJsonObject& event);
+    void on_exec_finished(const QString& token, const QString& status, qint64 elapsed_ms, bool truncated,
+                          bool kernel_lost);
+    void on_kernel_reply(const QJsonObject& event);
+    void set_environment(const QString& env);
+
+    // ── Panels, bars, find, help ─────────────────────────────────────────────
+    void on_command(NotebookCommandBar::Cmd cmd);
+    void refresh_kernel_badge();
+    void refresh_status();
+    void refresh_title();
+    void refresh_outline();
+    void refresh_save_state();
+    void refresh_start_view();
+    void request_help(const QString& symbol);
+    void on_completion_requested(const QString& id, const QString& prefix);
+    void run_find(bool restart, bool backwards);
+    void clear_find();
+    void add_recent(const QString& path);
+    void autosave_tick();
+    QString recovery_path() const;
+    bool write_recovery();
+    void on_theme_refresh();
+    void on_appearance_settled();
+    void retranslate();
+    void persist();
+
+    // ── Data ─────────────────────────────────────────────────────────────────
+    notebook::NotebookDoc doc_;
+    QString path_;
+    QString clean_fp_;
+    bool open_ = false;
+    bool dirty_ = false;
+    bool outputs_dirty_ = false; ///< outputs changed since the last save (not a prompt, but autosaved)
+    QVector<CellWidget*> cells_; ///< widgets of doc_.cells[0 .. cells_.size()) (built in batches)
+    quint64 build_gen_ = 0;
+    int selected_ = -1;
+    Mode mode_ = Mode::Command;
+
+    services::NotebookKernel* kernel_ = nullptr;
+    QStringList queue_;
+    QString running_id_;
+    QString running_token_;
+    QVector<notebook::CellOutput> running_outputs_;
+    quint64 run_seq_ = 0;
+    int exec_counter_ = 0;
+    QString last_run_text_;
+    QString last_run_tone_;
+    QVector<NotebookRunRecord> runs_;
+    QJsonArray variables_;
+    int variables_total_ = 0;
+
+    struct Deleted {
+        notebook::NotebookCell cell;
+        int index = 0;
+    };
+    QVector<Deleted> deleted_;
+    QVector<notebook::NotebookCell> clipboard_;
+    int pending_key_ = 0;
+    qint64 pending_key_at_ = 0;
+    quint64 req_seq_ = 0;
+    QHash<QString, QPair<QString, QString>> completion_requests_; ///< request id -> (cell id, prefix)
+    QString help_request_;
+    QString last_help_symbol_;
+    QString preview_request_;
+
+    QString find_text_;
+    QVector<QPair<int, int>> find_hits_; ///< (cell index, position)
+    int find_pos_ = -1;
+
+    bool rail_visible_ = true;
+    int rail_tab_ = 0;
+    bool inspector_visible_ = false;
+    int inspector_tab_ = 0;
+    int rail_width_ = 0;
+    int inspector_width_ = 0;
+    bool autosave_ = true;
+    bool line_numbers_ = true;
     int timeout_s_ = 1800;
+    QVector<RecentNotebook> recent_;
+    QDateTime saved_at_;
+    QDateTime autosaved_at_;
+    QString save_error_;
+    bool theme_refresh_pending_ = false;
 
-    // UI
+    // ── Widgets ──────────────────────────────────────────────────────────────
+    NotebookCommandBar* cmd_ = nullptr;
+    fincept::ui::ScreenStatusBar* status_ = nullptr;
     QSplitter* splitter_ = nullptr;
-    CellNavigator* navigator_ = nullptr;
-    QScrollArea* scroll_area_ = nullptr;
-    QWidget* cells_container_ = nullptr;
+    QWidget* rail_ = nullptr;
+    QPushButton* rail_tabs_[3] = {nullptr, nullptr, nullptr};
+    QStackedWidget* rail_stack_ = nullptr;
+    QWidget* rail_pages_[3] = {nullptr, nullptr, nullptr};
+    NotebookLibraryPanel* library_ = nullptr;
+    NotebookOutlinePanel* outline_ = nullptr;
+    NotebookVariablesPanel* variables_panel_ = nullptr;
+    QStackedWidget* center_ = nullptr;
+    NotebookStartView* start_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QWidget* canvas_ = nullptr;
     QVBoxLayout* cells_layout_ = nullptr;
-    QLabel* status_label_ = nullptr;
-    QLabel* kernel_label_ = nullptr;
-    QString selected_cell_id_;
-    bool sidebar_visible_ = true;
-
-    // Toolbar / status-bar text widgets (cached for retranslateUi)
-    QPushButton* btn_new_ = nullptr;
-    QPushButton* btn_open_ = nullptr;
-    QPushButton* btn_save_ = nullptr;
-    QPushButton* btn_add_cell_ = nullptr;
-    QPushButton* btn_clear_out_ = nullptr;
-    QPushButton* btn_run_all_ = nullptr;
-    QPushButton* btn_sidebar_ = nullptr;
-    QPushButton* btn_stop_ = nullptr;
-    QComboBox* kernel_combo_ = nullptr;
-    QComboBox* timeout_combo_ = nullptr;
-    QLabel* shortcuts_label_ = nullptr;
-
-    // Tracks whether the kernel is busy so retranslateUi can re-render the badge.
-    bool kernel_busy_ = false;
-    void refresh_kernel_label();
-
-    // ── Header + two-view stack ──────────────────────────────────────────────
-    QStackedWidget* view_stack_ = nullptr;
-    int active_view_ = 0; // 0 = Library, 1 = Editor
-    QLabel* header_title_ = nullptr;
-    QVector<QPushButton*> view_btns_; // [LIBRARY, EDITOR]
-    QLineEdit* lib_search_input_ = nullptr;
-    QPushButton* header_new_btn_ = nullptr;
-
-    // ── Library view ─────────────────────────────────────────────────────────
-    QWidget* library_page_ = nullptr;
-    QLabel* lib_toolbar_lbl_ = nullptr;
-    QLabel* lib_count_lbl_ = nullptr;
-    QScrollArea* lib_scroll_ = nullptr;
-    QWidget* cards_container_ = nullptr;
-    QGridLayout* cards_layout_ = nullptr;
-    QVector<QPushButton*> cat_chips_;
-    QVector<QPushButton*> diff_chips_;
-    QString lib_category_filter_ = "All";
-    QString lib_difficulty_filter_ = "All";
-    QString lib_search_text_;
-    int lib_columns_ = 0; // last computed column count (re-flow guard)
+    QWidget* footer_ = nullptr;
+    QPushButton* add_code_ = nullptr;
+    QPushButton* add_text_ = nullptr;
+    NotebookInspector* inspector_ = nullptr;
+    QTimer* tick_timer_ = nullptr;
+    QTimer* autosave_timer_ = nullptr;
+    QTimer* dirty_timer_ = nullptr;
+    QTimer* help_timer_ = nullptr;
+    QTimer* find_timer_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -111,7 +111,8 @@ class VariableAnnuityAnalyzer(AlternativeInvestmentBase):
         - VA converts gains to ORDINARY INCOME (higher rate)
         - High fees eat tax deferral benefit
         """
-        initial = Decimal('10000')
+        # The investor's own premium (a fixed 10,000 used to be compared whatever was entered).
+        initial = Decimal(str(self.premium)) if self.premium else Decimal('10000')
 
         # Variable Annuity path
         total_fees = self.mortality_expense_fee + self.investment_mgmt_fee + self.admin_fee
@@ -135,6 +136,7 @@ class VariableAnnuityAnalyzer(AlternativeInvestmentBase):
         return {
             'time_horizon_years': years,
             'gross_annual_return': float(gross_return),
+            'amount_invested': float(initial),
             'variable_annuity': {
                 'annual_fees': float(total_fees),
                 'net_return': float(va_net_return),

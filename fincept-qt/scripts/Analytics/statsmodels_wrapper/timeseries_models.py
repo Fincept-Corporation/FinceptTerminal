@@ -1,9 +1,41 @@
+import math
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Union, Any, Tuple
 import json
 import statsmodels.api as sm
 from statsmodels.tsa.api import ARIMA, SARIMAX, VARMAX, AutoReg, ARDL, ExponentialSmoothing, Holt, SimpleExpSmoothing, STL, STLForecast, DynamicFactor, UnobservedComponents, MarkovRegression, MarkovAutoregression, VECM
+
+
+def _json_safe(obj):
+    """Plain-Python copy of obj that json.dumps accepts: numpy/pandas values converted, NaN/inf -> None."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, pd.DataFrame):
+        return [_json_safe(row) for row in obj.values.tolist()]
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return [_json_safe(v) for v in obj.tolist()]
+    if isinstance(obj, np.ndarray):
+        return _json_safe(obj.tolist())
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if math.isfinite(obj) else None
+    return obj
+
+
+def _holtwinters_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Holt-Winters results.params is a dict {name: value}; keep names AND values.
+
+    Values that do not apply to the fitted model (e.g. damping_trend without a damped trend)
+    are NaN in statsmodels and become null.
+    """
+    return _json_safe(dict(params))
+
 
 def fit_arima(
     data: Union[List, np.ndarray, pd.Series],
@@ -20,14 +52,14 @@ def fit_arima(
 
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
         'hqic': float(results.hqic),
-        'resid': results.resid.tolist() if hasattr(results.resid, 'tolist') else list(results.resid),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+        'resid': results.resid,
+        'fittedvalues': results.fittedvalues
+    })
 
 def forecast_arima(
     data: Union[List, np.ndarray, pd.Series],
@@ -41,11 +73,11 @@ def forecast_arima(
     results = model.fit()
     forecast = results.forecast(steps=steps)
 
-    return {
-        'forecast': forecast.tolist() if hasattr(forecast, 'tolist') else list(forecast),
+    return _json_safe({
+        'forecast': np.asarray(forecast),
         'aic': float(results.aic),
         'bic': float(results.bic)
-    }
+    })
 
 def fit_sarimax(
     data: Union[List, np.ndarray, pd.Series],
@@ -59,14 +91,14 @@ def fit_sarimax(
     model = SARIMAX(data, order=order, seasonal_order=seasonal_order, exog=exog)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
         'hqic': float(results.hqic),
-        'resid': results.resid.tolist() if hasattr(results.resid, 'tolist') else list(results.resid),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+        'resid': results.resid,
+        'fittedvalues': results.fittedvalues
+    })
 
 def fit_varmax(
     data: Union[np.ndarray, pd.DataFrame],
@@ -79,13 +111,13 @@ def fit_varmax(
     model = VARMAX(data, order=order, trend=trend)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
         'hqic': float(results.hqic),
-        'resid': results.resid.values.tolist() if hasattr(results.resid, 'values') else results.resid.tolist()
-    }
+        'resid': np.asarray(results.resid)
+    })
 
 def fit_autoreg(
     data: Union[List, np.ndarray, pd.Series],
@@ -98,14 +130,14 @@ def fit_autoreg(
     model = AutoReg(data, lags=lags, trend=trend)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
         'hqic': float(results.hqic),
-        'resid': results.resid.tolist() if hasattr(results.resid, 'tolist') else list(results.resid),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+        'resid': results.resid,
+        'fittedvalues': results.fittedvalues
+    })
 
 def fit_ardl(
     endog: Union[List, np.ndarray, pd.Series],
@@ -123,12 +155,12 @@ def fit_ardl(
     model = ARDL(endog, lags=lags, exog=exog, order=order)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
-        'resid': results.resid.tolist() if hasattr(results.resid, 'tolist') else list(results.resid)
-    }
+        'resid': results.resid
+    })
 
 def fit_exponential_smoothing(
     data: Union[List, np.ndarray, pd.Series],
@@ -136,19 +168,20 @@ def fit_exponential_smoothing(
     seasonal: Optional[str] = None,
     seasonal_periods: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Fit Exponential Smoothing model"""
+    """Fit Exponential Smoothing model. params is {name: value}."""
     data = pd.Series(data) if not isinstance(data, pd.Series) else data
 
-    model = ExponentialSmoothing(data, trend=trend, seasonal=seasonal, seasonal_periods=seasonal_periods)
+    model = ExponentialSmoothing(data, trend=trend, seasonal=seasonal, seasonal_periods=seasonal_periods,
+                                 initialization_method='estimated')
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': _holtwinters_params(results.params),
         'aic': float(results.aic),
         'bic': float(results.bic),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues),
-        'level': results.level.tolist() if hasattr(results.level, 'tolist') else list(results.level)
-    }
+        'fittedvalues': results.fittedvalues,
+        'level': results.level
+    })
 
 def stl_decompose(
     data: Union[List, np.ndarray, pd.Series],
@@ -161,11 +194,11 @@ def stl_decompose(
     stl = STL(data, period=period, seasonal=seasonal)
     result = stl.fit()
 
-    return {
-        'trend': result.trend.tolist() if hasattr(result.trend, 'tolist') else list(result.trend),
-        'seasonal': result.seasonal.tolist() if hasattr(result.seasonal, 'tolist') else list(result.seasonal),
-        'resid': result.resid.tolist() if hasattr(result.resid, 'tolist') else list(result.resid)
-    }
+    return _json_safe({
+        'trend': result.trend,
+        'seasonal': result.seasonal,
+        'resid': result.resid
+    })
 
 def fit_dynamic_factor(
     data: Union[np.ndarray, pd.DataFrame],
@@ -178,13 +211,13 @@ def fit_dynamic_factor(
     model = DynamicFactor(data, k_factors=k_factors, factor_order=factor_order)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
         'hqic': float(results.hqic),
-        'factors': results.factors.filtered.values.tolist() if hasattr(results.factors.filtered, 'values') else results.factors.filtered.tolist()
-    }
+        'factors': np.asarray(results.factors.filtered)
+    })
 
 def fit_unobserved_components(
     data: Union[List, np.ndarray, pd.Series],
@@ -198,12 +231,12 @@ def fit_unobserved_components(
     model = UnobservedComponents(data, level=level, trend=trend, seasonal=seasonal)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
-        'level': results.level.filtered.tolist() if hasattr(results.level.filtered, 'tolist') else list(results.level.filtered)
-    }
+        'level': np.asarray(results.level.filtered)
+    })
 
 def fit_markov_regression(
     data: Union[List, np.ndarray, pd.Series],
@@ -216,12 +249,12 @@ def fit_markov_regression(
     model = MarkovRegression(data, k_regimes=k_regimes, order=order, switching_variance=True)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic),
-        'smoothed_marginal_probabilities': results.smoothed_marginal_probabilities.values.tolist() if hasattr(results.smoothed_marginal_probabilities, 'values') else results.smoothed_marginal_probabilities.tolist()
-    }
+        'smoothed_marginal_probabilities': np.asarray(results.smoothed_marginal_probabilities)
+    })
 
 def fit_vecm(
     data: Union[np.ndarray, pd.DataFrame],
@@ -229,53 +262,64 @@ def fit_vecm(
     coint_rank: int = 1,
     deterministic: str = 'ci'
 ) -> Dict[str, Any]:
-    """Fit Vector Error Correction Model"""
+    """Fit Vector Error Correction Model.
+
+    VECMResults has no params/aic/bic/hqic; it reports the loading matrix alpha (neqs x rank),
+    cointegrating vectors beta (neqs x rank), short-run coefficients gamma
+    (neqs x neqs*k_ar_diff), deterministic terms outside (det_coef) and inside
+    (det_coef_coint) the cointegration relation, and the log-likelihood.
+    """
     data = pd.DataFrame(data) if not isinstance(data, pd.DataFrame) else data
 
     model = VECM(data, k_ar_diff=k_ar_diff, coint_rank=coint_rank, deterministic=deterministic)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else [p.tolist() for p in results.params],
-        'aic': float(results.aic),
-        'bic': float(results.bic),
-        'hqic': float(results.hqic),
-        'alpha': results.alpha.tolist() if hasattr(results.alpha, 'tolist') else [[float(x) for x in row] for row in results.alpha],
-        'beta': results.beta.tolist() if hasattr(results.beta, 'tolist') else [[float(x) for x in row] for row in results.beta]
-    }
+    return _json_safe({
+        'alpha': np.asarray(results.alpha),
+        'beta': np.asarray(results.beta),
+        'gamma': np.asarray(results.gamma),
+        'det_coef': np.asarray(results.det_coef),
+        'det_coef_coint': np.asarray(results.det_coef_coint),
+        'llf': float(results.llf),
+        'coint_rank': int(results.coint_rank),
+        'k_ar_diff': int(k_ar_diff),
+        'nobs': int(results.nobs)
+    })
 
 def fit_holt(
     data: Union[List, np.ndarray, pd.Series],
     exponential: bool = False,
     damped_trend: bool = False
 ) -> Dict[str, Any]:
-    """Fit Holt exponential smoothing"""
+    """Fit Holt exponential smoothing. params is {name: value}."""
     data = pd.Series(data) if not isinstance(data, pd.Series) else data
 
-    model = Holt(data, exponential=exponential, damped_trend=damped_trend)
+    # statsmodels >= 0.15 requires an explicit initialization method for Holt
+    model = Holt(data, exponential=exponential, damped_trend=damped_trend, initialization_method='estimated')
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': _holtwinters_params(results.params),
         'aic': float(results.aic),
         'bic': float(results.bic),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+        'fittedvalues': results.fittedvalues
+    })
 
 def fit_simple_exp_smoothing(
     data: Union[List, np.ndarray, pd.Series]
 ) -> Dict[str, Any]:
-    """Fit Simple Exponential Smoothing"""
+    """Fit Simple Exponential Smoothing. params is {name: value}."""
     data = pd.Series(data) if not isinstance(data, pd.Series) else data
 
-    model = SimpleExpSmoothing(data)
+    # statsmodels >= 0.15 requires an explicit initialization method for SimpleExpSmoothing
+    model = SimpleExpSmoothing(data, initialization_method='estimated')
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': _holtwinters_params(results.params),
         'aic': float(results.aic),
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+        'fittedvalues': results.fittedvalues
+    })
 
 def fit_markov_autoregression(
     data: Union[List, np.ndarray, pd.Series],
@@ -288,27 +332,64 @@ def fit_markov_autoregression(
     model = MarkovAutoregression(data, k_regimes=k_regimes, order=order, switching_variance=True)
     results = model.fit()
 
-    return {
-        'params': results.params.tolist() if hasattr(results.params, 'tolist') else list(results.params),
+    return _json_safe({
+        'params': results.params,
         'aic': float(results.aic),
         'bic': float(results.bic)
+    })
+
+def _stl_forecast_model(model):
+    """(model class, default model_kwargs) for stl_forecast's model argument (a class or a name)."""
+    if not isinstance(model, str):
+        return model, {}
+    from statsmodels.tsa.exponential_smoothing.ets import ETSModel
+    named = {
+        'arima': (ARIMA, {'order': (1, 1, 0)}),
+        'autoreg': (AutoReg, {'lags': 1}),
+        'ar': (AutoReg, {'lags': 1}),
+        'ets': (ETSModel, {'error': 'add', 'trend': 'add'}),
     }
+    key = model.strip().lower()
+    if key not in named:
+        raise ValueError(f"Unknown stl_forecast model {model!r}; use one of {sorted(named)} or a model class")
+    return named[key]
 
 def stl_forecast(
     data: Union[List, np.ndarray, pd.Series],
-    model,
+    model: Union[str, type] = 'arima',
     period: int = 12,
-    seasonal: int = 7
+    seasonal: int = 7,
+    steps: int = 10,
+    model_kwargs: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """STL with forecasting model"""
+    """STL decomposition + a forecasting model on the seasonally adjusted series.
+
+    model: a statsmodels model class (e.g. ARIMA) or a name: 'arima' (default order (1, 1, 0)),
+    'autoreg'/'ar' (lags=1) or 'ets' (additive error and trend). model_kwargs override the defaults.
+    fittedvalues are in-sample predictions on the original scale (model fit + STL seasonal),
+    one per observation (null where the model has no fitted value, e.g. AutoReg's first lags).
+    """
     data = pd.Series(data) if not isinstance(data, pd.Series) else data
 
-    stlf = STLForecast(data, model, period=period, seasonal=seasonal)
+    model_cls, kwargs = _stl_forecast_model(model)
+    kwargs = {**kwargs, **(model_kwargs or {})}
+
+    stlf = STLForecast(data, model_cls, model_kwargs=kwargs, period=period, seasonal=seasonal)
     results = stlf.fit()
 
-    return {
-        'fittedvalues': results.fittedvalues.tolist() if hasattr(results.fittedvalues, 'tolist') else list(results.fittedvalues)
-    }
+    seasonal_comp = pd.Series(np.asarray(results.result.seasonal), index=data.index)
+    fitted = results.model_result.fittedvalues
+    if not isinstance(fitted, pd.Series):
+        fitted = np.asarray(fitted)
+        fitted = pd.Series(fitted, index=data.index[len(data) - len(fitted):])
+    fitted = fitted.reindex(data.index) + seasonal_comp
+
+    return _json_safe({
+        'fittedvalues': fitted,
+        'forecast': np.asarray(results.forecast(steps)),
+        'trend': np.asarray(results.result.trend),
+        'seasonal': seasonal_comp
+    })
 
 def main():
     print("Testing statsmodels timeseries models wrapper")

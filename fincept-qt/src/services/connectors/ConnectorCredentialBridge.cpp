@@ -41,9 +41,15 @@ constexpr ConnBridgeEntry kConnBridgeTable[] = {
     {"newsapi", {"apiKey", "NEWSAPI_KEY"}},                 // managed key
 };
 
-bool conn_bridge_env_key_empty(const QString& env_key) {
-    const auto r = SecureStorage::instance().retrieve(env_key);
-    return !(r.is_ok() && !r.value().trimmed().isEmpty()); // value discarded immediately
+enum class ConnBridgeSlot { Empty, Filled, Unreadable };
+
+/// Whether the env-key slot may be filled. A slot that could not be read is NOT
+/// empty: writing there could overwrite a key the user saved (SecretRead.h).
+ConnBridgeSlot conn_bridge_slot_state(const QString& env_key) {
+    const SecretRead r = SecureStorage::instance().read(env_key); // value discarded immediately
+    if (r.failed())
+        return ConnBridgeSlot::Unreadable;
+    return r.found() && !r.value.trimmed().isEmpty() ? ConnBridgeSlot::Filled : ConnBridgeSlot::Empty;
 }
 
 } // namespace
@@ -71,7 +77,14 @@ QStringList bridge_connection_credentials(const QString& provider, const QString
         if (value.isEmpty())
             continue;
         const QString env_key = QString::fromLatin1(m.env_key);
-        if (!conn_bridge_env_key_empty(env_key)) {
+        const ConnBridgeSlot slot = conn_bridge_slot_state(env_key);
+        if (slot == ConnBridgeSlot::Unreadable) {
+            LOG_WARN(kConnBridgeTag, logf("Connection key not copied: secure storage could not be read; tried again at "
+                                          "the next save",
+                                          {{"provider", provider}, {"env_key", env_key}}));
+            continue;
+        }
+        if (slot == ConnBridgeSlot::Filled) {
             LOG_DEBUG(kConnBridgeTag,
                       QString("%1 already set — connection key for %2 not copied").arg(env_key, provider));
             continue;

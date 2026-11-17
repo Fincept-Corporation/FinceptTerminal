@@ -13,15 +13,11 @@ from datetime import datetime, timedelta, date, time as dt_time
 from typing import Dict, List, Optional, Callable, Any
 from collections import deque
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
+# numpy / pandas are imported on first use (history frames): the strategy catalogue and
+# strategies that never build a DataFrame do not pay for importing pandas.
+from ._lazy import LazyModule as _LazyModule
+np = _LazyModule('numpy')
+pd = _LazyModule('pandas')
 
 from .enums import (
     Resolution, SecurityType, OrderType, OrderStatus,
@@ -37,8 +33,13 @@ from .indicators import (
     MovingAverageConvergenceDivergence, RelativeStrengthIndex,
     BollingerBands, AverageTrueRange, Stochastic,
     RateOfChange, Momentum, WilliamsPercentR,
-    CommodityChannelIndex, AverageDirectionalIndex
+    CommodityChannelIndex, AverageDirectionalIndex,
+    AroonOscillator, VolumeWeightedAveragePrice, IntradayVwap, StandardDeviation,
+    Minimum, Maximum, Identity, FilteredIdentity, RegressionChannel, MomentumPercent,
+    Beta as _BetaIndicator, feed_indicator,
 )
+from .errors import NotSupportedByEngine, not_supported
+from .broker import _DEFAULT_LEVERAGE, lot_size, round_to_lot
 from .portfolio import SecurityPortfolioManager
 from .securities import SecurityManager, Security
 from .scheduling import ScheduleManager, DateRules, TimeRules
@@ -142,24 +143,14 @@ class _OptionChainResult:
 
 
 class _OptionChainsAccessor(dict):
-    """Dict-like object that is also callable for option_chains([symbols])."""
+    """self.option_chains(symbols): the full model-priced chains of those underlyings / canonical
+    options at the current time (OptionChains)."""
     def __init__(self, algo):
         super().__init__()
         self._algo = algo
-    def __call__(self, symbols=None, flatten=False):
-        result = _OptionChainsResult()
-        if symbols:
-            for sym in symbols:
-                chain = self._algo.option_chain(sym, flatten=flatten)
-                result[str(sym)] = chain
-                result._chains.append((sym, chain))
-        return result
 
-    @property
-    def data_frame(self):
-        if pd is not None:
-            return pd.DataFrame()
-        return None
+    def __call__(self, symbols=None, flatten=False):
+        return self._algo.option_chains_for(symbols, flatten)
 
 
 class _OptionChainsResult(dict):
@@ -225,53 +216,219 @@ class _AlgorithmSettings:
         self.staleness_price_time_resolution = None
         self.warmup_resolution = None
         self.database_path = ""
+        self.automatic_indicator_warm_up = False
+        self.minimum_order_margin_portfolio_percentage = 0.0
+        self.seed_initial_prices = False
+
+
+class _OrderProperties:
+    """Default properties applied to new orders (LEAN default_order_properties).
+    time_in_force DAY makes an unfilled order expire after the first bar it could fill on."""
+    def __init__(self, time_in_force=None, **kwargs):
+        from .enums import TimeInForce
+        self.time_in_force = time_in_force or TimeInForce.GOOD_TIL_CANCELED
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+_OPEN_ORDER_STATUSES = (OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED, OrderStatus.NEW,
+                        OrderStatus.UPDATE_SUBMITTED, OrderStatus.CANCEL_PENDING)
 
 
 class Transactions:
-    """Order transaction manager."""
+    """Order transaction manager (LEAN SecurityTransactionManager)."""
 
-    def __init__(self):
+    def __init__(self, algorithm=None):
         self._orders: Dict[int, OrderTicket] = {}
         self._order_counter = 0
+        self._algo = algorithm
+
+    # ---- requests (LEAN: transactions.add_order / process_request) ----
+    def add_order(self, request):
+        """Submit a SubmitOrderRequest; returns its ticket."""
+        algo = self._algo
+        if algo is None:
+            raise not_supported("order requests outside a backtest run")
+        return algo._submit_request(request)
+
+    def process_request(self, request):
+        from .orders import SubmitOrderRequest, UpdateOrderRequest, CancelOrderRequest
+        if isinstance(request, SubmitOrderRequest):
+            return self.add_order(request)
+        ticket = self._orders.get(int(getattr(request, 'order_id', 0) or 0))
+        if ticket is None:
+            from .orders import OrderResponse, OrderResponseErrorCode
+            request.set_response(OrderResponse.error(request, OrderResponseErrorCode.UNABLE_TO_FIND_ORDER,
+                                                     f"Unable to locate order with id {getattr(request, 'order_id', 0)}"))
+            return None
+        if isinstance(request, CancelOrderRequest):
+            ticket.cancel(request.tag)
+            return ticket
+        if isinstance(request, UpdateOrderRequest):
+            fields = UpdateOrderFields(request.quantity, request.limit_price, request.stop_price,
+                                       request.trigger_price, request.trailing_amount, request.tag)
+            ticket.update(fields)
+            return ticket
+        raise not_supported(f"order request type {type(request).__name__}")
+
+    def update_order(self, request):
+        return self.process_request(request)
 
     def get_open_orders(self, symbol=None) -> List[OrderTicket]:
-        orders = [o for o in self._orders.values()
-                  if o.status in (OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED, OrderStatus.NEW)]
+        orders = [o for o in self._orders.values() if o.status in _OPEN_ORDER_STATUSES]
         if symbol:
             ticker = str(symbol).upper()
             orders = [o for o in orders if str(o.symbol).upper() == ticker]
         return orders
 
-    def get_orders(self, symbol=None) -> Dict[int, OrderTicket]:
-        if symbol:
-            ticker = str(symbol).upper()
-            return {k: v for k, v in self._orders.items()
-                    if str(v.symbol).upper() == ticker}
-        return dict(self._orders)
+    def get_orders(self, filter_or_symbol=None):
+        """LEAN: an iterable of orders (optionally a filter function or a symbol)."""
+        tickets = [self.get_order_by_id(t.order_id) for t in self._orders.values()]
+        if callable(filter_or_symbol) and not isinstance(filter_or_symbol, (str, Symbol)):
+            tickets = [t for t in tickets if filter_or_symbol(t)]
+        elif filter_or_symbol is not None:
+            ticker = str(filter_or_symbol).upper()
+            tickets = [t for t in tickets if str(t.symbol).upper() == ticker]
+        return _OrderList(tickets)
 
     def get_order_tickets(self, filter_func=None) -> List[OrderTicket]:
         tickets = list(self._orders.values())
         if filter_func:
             tickets = [t for t in tickets if filter_func(t)]
-        return tickets
+        return _OrderList(tickets)
+
+    def get_open_order_tickets(self, filter_or_symbol=None):
+        open_ = [t for t in self._orders.values() if t.status in _OPEN_ORDER_STATUSES]
+        if callable(filter_or_symbol) and not isinstance(filter_or_symbol, (str, Symbol)):
+            open_ = [t for t in open_ if filter_or_symbol(t)]
+        elif filter_or_symbol is not None:
+            ticker = str(filter_or_symbol).upper()
+            open_ = [t for t in open_ if str(t.symbol).upper() == ticker]
+        return _OrderList(open_)
+
+    def get_order_by_id(self, order_id):
+        """The order (LEAN Order subclass: MarketOrder, LimitOrder, ...), a live view of its ticket."""
+        t = self._orders.get(int(getattr(order_id, 'order_id', order_id)))
+        if t is None:
+            return None
+        from .orders import Order
+        v = getattr(t, '_order_view', None)
+        if v is None:
+            v = Order.view(t)
+            t._order_view = v
+        return v
+
+    def get_order_ticket(self, order_id):
+        return self._orders.get(int(getattr(order_id, 'order_id', order_id)))
+
+    def cancel_order(self, order_id, tag: str = ""):
+        t = self._orders.get(int(order_id))
+        if t is not None:
+            t.cancel(tag)
+        return t
 
     def cancel_open_orders(self, symbol=None, tag: str = ""):
+        cancelled = []
         for order in self.get_open_orders(symbol):
             order.cancel(tag)
+            cancelled.append(order)
+        return _OrderList(cancelled)
+
+    def get_open_orders_remaining_quantity(self, symbol=None) -> float:
+        return sum(t.quantity - t.quantity_filled for t in self.get_open_orders(symbol))
+
+    def get_order_events(self, order_id):
+        t = self._orders.get(int(order_id))
+        return list(t.order_events) if t is not None else []
+
+    @property
+    def orders_count(self) -> int:
+        return len(self._orders)
 
     @property
     def last_order_id(self) -> int:
         return self._order_counter
 
+    GetOrders = get_orders
+    GetOrderTickets = get_order_tickets
+    GetOpenOrders = get_open_orders
+    GetOrderById = get_order_by_id
+    CancelOpenOrders = cancel_open_orders
+    AddOrder = add_order
+    ProcessRequest = process_request
+
+
+class _CallableList(list):
+    """A list that can also be called (LEAN Python exposes .values / .keys as properties)."""
+    def __call__(self):
+        return self
+
+
+class _ActiveSecurities:
+    def __init__(self, manager):
+        self._m = manager
+    def __getitem__(self, key):
+        return self._m[key]
+    def __contains__(self, key):
+        return key in self._m
+    def __iter__(self):
+        return iter(self._m)
+    def __len__(self):
+        return len(self._m)
+    def get(self, key, default=None):
+        return self._m.get(key, default)
+    def contains_key(self, key):
+        return key in self._m
+    @property
+    def values(self):
+        return _CallableList(self._m.values())
+    @property
+    def keys(self):
+        return _CallableList(s.symbol for s in self._m.values())
+    def items(self):
+        return [(s.symbol, s) for s in self._m.values()]
+    @property
+    def count(self):
+        return len(self._m)
+
+
+class _OrderList(list):
+    """List of orders that also answers the dict-style calls older engine code made."""
+    def values(self):
+        return list(self)
+
+    @property
+    def count(self):
+        return len(self)
+
 
 class _MarketHoursDatabase:
-    """Market hours database stub."""
+    """Market hours by security type (market_hours.ExchangeHours: regular sessions, NYSE holidays)."""
     @staticmethod
     def from_data_folder():
         return _MarketHoursDatabase()
-    def get_exchange_hours(self, market, symbol, security_type):
-        from .securities import ExchangeHours
-        return ExchangeHours()
+
+    def get_exchange_hours(self, market, symbol=None, security_type=None):
+        """get_exchange_hours(market, symbol, security_type) or get_exchange_hours(subscription_config)."""
+        from .market_hours import ExchangeHours
+        if symbol is None and security_type is None and hasattr(market, 'symbol'):
+            cfg = market
+            sym = cfg.symbol
+            security_type = getattr(cfg, 'security_type', None) or getattr(sym, 'security_type', None)
+            market = getattr(cfg, 'market', None) or getattr(sym, 'market', None)
+        if security_type is None:
+            security_type = getattr(symbol, 'security_type', SecurityType.EQUITY)
+        return ExchangeHours.for_security_type(security_type, market)
+
+    GetExchangeHours = get_exchange_hours
+
+    @staticmethod
+    def get_database_symbol_key(symbol):
+        """The database key of a symbol (LEAN: the ticker for custom data, the root otherwise)."""
+        sid = getattr(symbol, 'id', None)
+        return str(getattr(sid, 'symbol', None) or getattr(symbol, 'value', symbol))
+
+    GetDatabaseSymbolKey = get_database_symbol_key
     def set_entry(self, market, symbol, security_type, exchange_hours, *args, **kwargs):
         pass
     def get_entry(self, market, symbol=None, security_type=None):
@@ -368,7 +525,8 @@ class _SubscriptionDataConfig:
         self.resolution = resolution
         self.tick_type = tick_type
         self.consolidator = None
-        self.data_normalization_mode = 0  # DataNormalizationMode.Adjusted
+        self.consolidators = _OrderList()
+        self.data_normalization_mode = 1  # DataNormalizationMode.ADJUSTED (RAW is 0)
         self.data_type = None
         self.is_custom_data = False
 
@@ -587,29 +745,90 @@ class EventHandler_:
 
 
 class SignalExportManager:
-    """Signal export manager stub for Collective2, CrunchDAO, Numerai, etc."""
-    def __init__(self):
+    """Signal exports (Collective2, CrunchDAO, Numerai...). As in LEAN, targets are only sent in live
+    trading: in a backtest set_target_portfolio does nothing and reports success."""
+    def __init__(self, algorithm=None):
         self._providers = []
+        self._algorithm = algorithm
+        self.automatic_export_time_span = None
+
     def add_signal_export_providers(self, *providers):
         self._providers.extend(providers)
+
+    def add_signal_export_provider(self, provider):
+        self._providers.append(provider)
+
     def set_signal_export_provider(self, provider):
         self._providers = [provider]
 
+    def set_target_portfolio(self, *targets):
+        return True
+
+    def set_target_portfolio_from_portfolio(self):
+        algo = self._algorithm
+        if algo is not None and algo.portfolio.total_portfolio_value <= 0:
+            return False
+        return True
+
+    def flush(self, *args):
+        pass
+
+    SetTargetPortfolio = set_target_portfolio
+    SetTargetPortfolioFromPortfolio = set_target_portfolio_from_portfolio
+
+
+class _FuncBenchmark:
+    """set_benchmark(lambda dt: value)."""
+    def __init__(self, fn):
+        self._fn = fn
+
+    def evaluate(self, time):
+        return float(self._fn(time))
+
+    Evaluate = evaluate
+
+
+class _SecurityBenchmark:
+    """set_benchmark(symbol): the benchmark value is the security's price at the time asked (the
+    last bar complete then; the security is priced from the run's data)."""
+    def __init__(self, algorithm, symbol):
+        self._algo = algorithm
+        self.symbol = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol).upper())
+
+    @property
+    def security(self):
+        return self._algo.securities.get(str(self.symbol).upper())
+
+    Security = security
+
+    def evaluate(self, time):
+        data = self._algo._data
+        if data is None:
+            return 0.0
+        s = data.series(self.symbol, getattr(self.symbol, 'security_type', SecurityType.EQUITY),
+                        getattr(self.symbol, 'market', None))
+        if s is None:
+            return 0.0
+        n = s.count_known_at(time)
+        return float(s.close[n - 1]) if n > 0 else 0.0
+
+    Evaluate = evaluate
+
 
 class FutureChainProvider:
-    """Provides future chain data."""
-    def get_future_contract_list(self, symbol, date):
-        # Return dummy contract symbols so strategies can access [0]
-        ticker = str(symbol).upper()
-        from .types import Symbol
-        from .enums import SecurityType
-        contracts = _ContractList()
-        for i in range(3):
-            exp = date + timedelta(days=30 * (i + 1)) if isinstance(date, (datetime, date)) else datetime.now() + timedelta(days=30 * (i + 1))
-            c = Symbol(f"{ticker}{exp.strftime('%y%m')}", SecurityType.FUTURE, "cme")
-            c.expiry = exp
-            contracts.append(c)
-        return contracts
+    """Listed futures contracts of a root on a date (exchange calendar; see futures.py)."""
+    def get_future_contract_list(self, symbol, date=None):
+        from .futures import contract_expiries, contract_symbol
+        root = getattr(getattr(symbol, 'id', None), 'symbol', None) or str(symbol).lstrip('/')
+        d = (date or datetime.now())
+        d = d.date() if isinstance(d, datetime) else d
+        return [contract_symbol(root, e, getattr(symbol, 'market', 'cme')) for e in contract_expiries(root, d)]
+    GetFutureContractList = get_future_contract_list
+
+
+# The parameter set a run starts with when the request sets none (LEAN's default config.json "parameters"):
+# get_parameter() returns these before the strategy's own default. The catalogue reports them as the defaults.
+DEFAULT_PARAMETERS = {"ema-fast": "10", "ema-slow": "20", "ema-medium": "14"}
 
 
 class QCAlgorithm:
@@ -646,15 +865,27 @@ class QCAlgorithm:
         # Portfolio & Securities
         self.portfolio = SecurityPortfolioManager(100000)
         self.securities = SecurityManager()
-        self.transactions = Transactions()
+        self.securities._portfolio = self.portfolio
+        self.securities._algorithm = self
+        self.portfolio._securities = self.securities
+        self.portfolio._algo = self
+        self.transactions = Transactions(self)
+        self._benchmark = None
+        self.current_slice = None
+        from .statistics import AlgorithmStatistics
+        self.statistics = AlgorithmStatistics(self)
 
         # Scheduling
         self.schedule = ScheduleManager(self)
         self.date_rules = DateRules(self)
         self.time_rules = TimeRules(self)
 
-        # Universe
+        # Universe (universe_selection.UniverseManager: coarse/fundamental/ETF/custom selectors and
+        # the framework universe models; data from universe_data.UniverseDataProvider)
         self.universe_settings = UniverseSettings()
+        from .universe_selection import UniverseManager
+        self._universe_manager = UniverseManager(self, None, self._universe_subscribe, self._universe_held)
+        self._universe_definitions = None
 
         # State
         self._indicators: Dict[str, IndicatorBase] = {}
@@ -664,9 +895,7 @@ class QCAlgorithm:
         self._logs: List[str] = []
         self._debug_msgs: List[str] = []
         self._runtime_statistics = {}
-        self._parameters: Dict[str, str] = {
-            "ema-fast": "10", "ema-slow": "20", "ema-medium": "14",
-        }
+        self._parameters: Dict[str, str] = dict(DEFAULT_PARAMETERS)
         self._warm_up_period = 0
         self._is_warming_up = False
         self._account_currency = "USD"
@@ -694,7 +923,9 @@ class QCAlgorithm:
         self._universe_selection = None
 
         # Security changes
-        self._changes = SecurityChanges()
+        # The latest SecurityChanges (engine-internal). LEAN's QCAlgorithm has no `changes`
+        # attribute: strategies commonly keep their own self.changes / self._changes.
+        self._fe_changes = SecurityChanges()
 
         # Notification
         self.notify = NotificationManager()
@@ -703,7 +934,7 @@ class QCAlgorithm:
         self.settings = _AlgorithmSettings()
 
         # Signal export manager
-        self.signal_export = SignalExportManager()
+        self.signal_export = SignalExportManager(self)
 
         # Brokerage model
         from .extensions import DefaultBrokerageModel
@@ -714,6 +945,7 @@ class QCAlgorithm:
 
         # Insights collection
         self.insights = InsightCollection()
+        self.insights._algorithm = self
 
         # Future/Option chain providers
         self.future_chain_provider = FutureChainProvider()
@@ -730,6 +962,25 @@ class QCAlgorithm:
         # Security initializer
         self.security_initializer = None
 
+        # ---- Backtest engine wiring (set by the runner) ----
+        # Every indicator created through a factory / register_indicator, with the
+        # symbol(s) whose bars update it: [{'indicator', 'symbols', 'selector'}]
+        self._registered_indicators = []
+        self._broker = None             # fincept_engine.broker.BacktestBroker
+        self._data = None               # fincept_engine.data.DataSource
+        self._forced_start = None       # the run's dates win over set_start_date()
+        self._forced_end = None
+        self._strategy_dates = {}       # what the strategy itself asked for
+        self._next_fill_date = None     # first session an order placed now may fill on
+        self._warmup_bars = 0
+        self._warmup_timedelta = None
+        self._custom_data = []          # tickers subscribed through add_data()
+        self._dynamic_universe = None   # description of a universe the engine cannot run
+        self._engine_notes = []         # disclosures collected during the run
+        self._quit_requested = False
+        self._pending_insights = []
+        self.default_order_properties = _OrderProperties()
+
     # ---- Time Properties ----
 
     @property
@@ -739,6 +990,7 @@ class QCAlgorithm:
     @time.setter
     def time(self, value):
         self._time = value
+        self._utc_time = value
 
     @property
     def utc_time(self) -> datetime:
@@ -776,59 +1028,186 @@ class QCAlgorithm:
     def name(self, value):
         self._name = value
 
-    @property
-    def changes(self):
-        return self._changes
-
-    @changes.setter
-    def changes(self, value):
-        self._changes = value
-
     # ---- Initialization Methods ----
 
     def initialize(self):
         """Override this method to set up your algorithm."""
         pass
 
-    def set_start_date(self, year_or_date=None, month=None, day=None, *, year=None):
+    @staticmethod
+    def _parse_date_args(year_or_date=None, month=None, day=None, year=None):
         if year is not None:
-            self._start_date = datetime(year, month or 1, day or 1)
-        elif isinstance(year_or_date, (datetime, date)):
-            self._start_date = datetime.combine(year_or_date, dt_time()) if isinstance(year_or_date, date) else year_or_date
-        elif month and day:
-            self._start_date = datetime(year_or_date, month, day)
+            return datetime(year, month or 1, day or 1)
+        if isinstance(year_or_date, datetime):
+            return year_or_date
+        if isinstance(year_or_date, date):
+            return datetime.combine(year_or_date, dt_time())
+        if year_or_date is not None and month and day:
+            return datetime(year_or_date, month, day)
+        return None
+
+    def set_start_date(self, year_or_date=None, month=None, day=None, *, year=None):
+        d = self._parse_date_args(year_or_date, month, day, year)
+        if d is None:
+            return
+        self._strategy_dates['start'] = d
+        if self._forced_start is not None:
+            return  # the backtest request's dates win; the strategy's are only recorded
+        self._start_date = d
         # In backtesting, algorithm time starts at start_date
         self._time = self._start_date
         self._utc_time = self._start_date
 
     def set_end_date(self, year_or_date=None, month=None, day=None, *, year=None):
-        if year is not None:
-            self._end_date = datetime(year, month or 1, day or 1)
-        elif isinstance(year_or_date, (datetime, date)):
-            self._end_date = datetime.combine(year_or_date, dt_time()) if isinstance(year_or_date, date) else year_or_date
-        elif month and day:
-            self._end_date = datetime(year_or_date, month, day)
+        d = self._parse_date_args(year_or_date, month, day, year)
+        if d is None:
+            return
+        self._strategy_dates['end'] = d
+        if self._forced_end is not None:
+            return
+        self._end_date = d
 
-    def set_cash(self, amount_or_currency=None, amount=None, *, starting_cash=None):
+    def set_cash(self, amount_or_currency=None, amount=None, conversion_rate=None, *, starting_cash=None):
+        """set_cash(amount) - the account currency balance; set_cash("EUR", amount[, conversion_rate]) -
+        another currency's balance in the cash book."""
         if starting_cash is not None:
             self.portfolio.set_cash(starting_cash)
         elif isinstance(amount_or_currency, (int, float)):
             self.portfolio.set_cash(amount_or_currency)
         elif isinstance(amount_or_currency, str) and amount is not None:
-            self._account_currency = amount_or_currency
-            self.portfolio.set_cash(amount)
+            self.portfolio.set_cash(amount_or_currency, amount, conversion_rate)
+            if amount_or_currency.upper() != self.portfolio.cash_book.account_currency:
+                self._multi_currency = True
 
     def set_account_currency(self, currency: str, starting_cash: float = None):
-        self._account_currency = currency
-        if starting_cash:
-            self.portfolio.set_cash(starting_cash)
+        self._account_currency = str(currency).upper()
+        self.portfolio.set_account_currency(currency, starting_cash)
 
-    def set_benchmark(self, symbol=None):
-        if symbol:
+    @property
+    def account_currency(self):
+        return self.portfolio.cash_book.account_currency
+
+    def set_benchmark(self, symbol=None, *args):
+        """A ticker/Symbol (its price is the benchmark) or a function of time."""
+        if symbol is None:
+            return
+        self._benchmark_spec = symbol
+        if callable(symbol) and not isinstance(symbol, (str, Symbol)):
+            self._benchmark = _FuncBenchmark(symbol)
+        else:
             self._benchmarks['default'] = str(symbol)
+            self._benchmark = _SecurityBenchmark(self, symbol)
+
+    @property
+    def benchmark(self):
+        if self._benchmark is None:
+            model = self.brokerage_model
+            getter = getattr(model, 'get_benchmark', None)
+            if getter is not None:
+                try:
+                    b = getter(self.securities)
+                except TypeError:
+                    b = None
+                if b is not None:
+                    self._benchmark = b
+        if self._benchmark is None:
+            self._benchmark = _SecurityBenchmark(self, 'SPY')
+        return self._benchmark
 
     def set_brokerage_model(self, model, account_type=None):
+        """A BrokerageName (its fee schedule is not applied: the run's commission rate is) or a
+        brokerage model object (its can_submit_order / can_update_order / get_benchmark are used)."""
+        from .extensions import DefaultBrokerageModel
+        if isinstance(model, int) and not hasattr(model, 'can_submit_order'):
+            name = getattr(model, 'name', str(model))
+            obj = DefaultBrokerageModel(account_type if account_type is not None else 0)
+            obj.brokerage_name = name
+            self._brokerage_model = obj
+            self.brokerage_model = obj
+            return
         self._brokerage_model = model
+        self.brokerage_model = model
+        if account_type is not None:
+            try:
+                model.account_type = account_type
+            except Exception:
+                pass
+
+    # ---- pre-trade checks the broker asks for (brokerage model, shortable quantity) ----
+    def _brokerage_refusal(self, method, *args):
+        from .extensions import DefaultBrokerageModel
+        model = self.brokerage_model
+        fn = getattr(model, method, None)
+        if fn is None or getattr(type(model), method, None) is getattr(DefaultBrokerageModel, method, None):
+            return None
+        try:
+            res = fn(*args, None)
+        except TypeError:
+            res = fn(*args)
+        ok, msg = (res if isinstance(res, tuple) else (res, None))
+        if ok:
+            return None
+        return str(msg) if msg is not None else 'refused by the brokerage model'
+
+    def _shortable_refusal(self, symbol, quantity_after, order_id=None):
+        sec = self.securities.get(str(symbol).upper())
+        provider = getattr(sec, 'shortable_provider', None) if sec is not None else None
+        if provider is None or quantity_after >= 0:
+            return None
+        try:
+            allowed = provider.shortable_quantity(sec.symbol, self.time)
+        except Exception as exc:
+            # Fails open: the order is allowed without the short-availability check.
+            logger.warning("Shortable check failed, order allowed symbol=%s error=%s", sec.symbol, type(exc).__name__)
+            return None
+        if allowed is None:
+            return None
+        if -quantity_after > float(allowed):
+            return (f"Order exceeds shortable quantity {float(allowed):g} for Symbol {sec.symbol} "
+                    f"requested {quantity_after:g})")
+        return None
+
+    def _open_quantity(self, ticker, exclude=None):
+        return sum(t.quantity - t.quantity_filled for t in self.transactions.get_open_orders(ticker)
+                   if t is not exclude)
+
+    def _pre_submit_check(self, ticket):
+        from .orders import OrderResponseErrorCode as EC
+        sec = self.securities.get(str(ticket.symbol).upper())
+        if sec is not None and sec.symbol.security_type in (SecurityType.FUTURE, SecurityType.OPTION,
+                                                            SecurityType.INDEX_OPTION, SecurityType.FUTURE_OPTION) \
+                and sec.symbol.is_canonical():
+            return (EC.NON_TRADABLE_SECURITY,
+                    f"Order Error: {sec.symbol} is a canonical (continuous) symbol and cannot be traded; "
+                    f"trade a contract (e.g. security.mapped)")
+        if sec is not None and getattr(sec, 'is_delisted', False):
+            return (EC.NON_TRADABLE_SECURITY, f"Order Error: {sec.symbol} is delisted (expired)")
+        msg = self._brokerage_refusal('can_submit_order', sec, self.transactions.get_order_by_id(ticket.order_id) or ticket)
+        if msg is not None:
+            return (EC.BROKERAGE_MODEL_REFUSED_TO_SUBMIT_ORDER,
+                    f"BrokerageModel declared unable to submit order: [{ticket.order_id}] {msg}")
+        ticker = str(ticket.symbol).upper()
+        held = self.portfolio[ticker].quantity if ticker in self.portfolio else 0.0
+        if ticket.quantity < 0:
+            m = self._shortable_refusal(ticket.symbol, held + self._open_quantity(ticker, ticket) + ticket.quantity)
+            if m:
+                return (EC.EXCEEDS_SHORTABLE_QUANTITY, m)
+        return None
+
+    def _pre_update_check(self, ticket, request):
+        from .orders import OrderResponseErrorCode as EC
+        sec = self.securities.get(str(ticket.symbol).upper())
+        msg = self._brokerage_refusal('can_update_order', sec, self.transactions.get_order_by_id(ticket.order_id) or ticket,
+                                      request)
+        if msg is not None:
+            return (EC.BROKERAGE_MODEL_REFUSED_TO_UPDATE_ORDER, f"OrderID: {ticket.order_id} {msg}")
+        if request.quantity is not None and float(request.quantity) < 0:
+            ticker = str(ticket.symbol).upper()
+            held = self.portfolio[ticker].quantity if ticker in self.portfolio else 0.0
+            m = self._shortable_refusal(ticket.symbol, held + self._open_quantity(ticker, ticket) + float(request.quantity))
+            if m:
+                return (EC.EXCEEDS_SHORTABLE_QUANTITY, m)
+        return None
 
     def set_brokerage_message_handler(self, handler):
         pass
@@ -837,120 +1216,259 @@ class QCAlgorithm:
         pass
 
     def set_warmup(self, period, resolution=None):
+        """Warm up with `period` bars (int) or the bars inside a time span (timedelta).
+        The engine runs on daily bars, so a bar count means daily bars."""
         if isinstance(period, timedelta):
+            self._warmup_timedelta = period
+            self._warmup_bars = 0
             self._warm_up_period = period.days
         else:
-            self._warm_up_period = period
+            try:
+                self._warmup_bars = max(0, int(period))
+            except (TypeError, ValueError):
+                self._warmup_bars = 0
+            self._warmup_timedelta = None
+            self._warm_up_period = self._warmup_bars
 
     def set_warm_up(self, period, resolution=None):
         self.set_warmup(period, resolution)
 
     # ---- Security Subscription Methods ----
 
-    def add_equity(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                   market: str = Market.USA, fill_forward: bool = True,
-                   leverage: float = 1.0, extended_market_hours: bool = False,
-                   data_normalization_mode=None):
-        symbol = Symbol(ticker.upper(), SecurityType.EQUITY, market)
+    def _add(self, symbol, resolution, leverage=None):
+        """Register a security. Leverage defaults by security type (equity 2x margin,
+        forex 50x, crypto 1x, ...); the broker caps it at the type's maximum. Adding a security that
+        was removed brings it back."""
+        old = self.securities.get(str(symbol).upper())
+        if old is not None and getattr(old, '_removed', False):
+            old._removed = False
+            old.is_tradable = True
+            return old
+        if leverage in (None, 0):
+            leverage = _DEFAULT_LEVERAGE.get(symbol.security_type, 1.0)
         sec = self.securities.add(symbol, resolution, leverage)
+        mkt = str(getattr(symbol, 'market', '') or '').lower()
+        if symbol.security_type in (SecurityType.EQUITY, SecurityType.INDEX) and mkt in ('india', 'nse', 'bse'):
+            sec.quote_currency.symbol = 'INR'
+        if symbol.security_type in (SecurityType.FOREX, SecurityType.CRYPTO, SecurityType.CRYPTO_FUTURE,
+                                    SecurityType.CFD):
+            from .cashbook import split_pair
+            base, quote = split_pair(str(symbol), symbol.security_type)
+            if base and quote:
+                sec.quote_currency.symbol = quote
+                sec.base_currency.symbol = base
+                if symbol.security_type in (SecurityType.FOREX, SecurityType.CRYPTO):
+                    self.portfolio.cash_book.ensure(base)
+                    if self.portfolio.quote_currency(str(symbol).upper()) != self.portfolio.cash_book.account_currency:
+                        self.portfolio.cash_book.ensure(quote)
+        if self.security_initializer is not None:
+            init = getattr(self.security_initializer, 'initialize', self.security_initializer)
+            if callable(init):
+                init(sec)
+        return sec
+
+    def add_equity(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                   market: str = Market.USA, fill_forward: bool = True,
+                   leverage: float = None, extended_market_hours: bool = False,
+                   data_normalization_mode=None, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.EQUITY, market)
+        sec = self._add(symbol, resolution, leverage)
         self.subscription_manager.add_subscription(symbol, resolution,
                                                     data_normalization_mode=data_normalization_mode)
         return sec
 
-    def add_forex(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                  market: str = Market.OANDA, leverage: float = 50.0):
-        symbol = Symbol(ticker.upper(), SecurityType.FOREX, market)
-        return self.securities.add(symbol, resolution, leverage)
+    def add_forex(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                  market: str = Market.OANDA, fill_forward: bool = True, leverage: float = None, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.FOREX, market)
+        return self._add(symbol, resolution, leverage)
 
-    def add_crypto(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                   market: str = Market.BINANCE, leverage: float = 1.0):
-        symbol = Symbol(ticker.upper(), SecurityType.CRYPTO, market)
-        return self.securities.add(symbol, resolution, leverage)
+    def add_crypto(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                   market: str = Market.BINANCE, fill_forward: bool = True, leverage: float = None, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.CRYPTO, market)
+        return self._add(symbol, resolution, leverage)
 
-    def add_future(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
+    def add_future(self, ticker, resolution: Resolution = Resolution.MINUTE,
                    market: str = Market.CME, fill_forward: bool = True,
-                   leverage: float = 1.0, extended_market_hours: bool = False,
+                   leverage: float = None, extended_market_hours: bool = False,
                    data_mapping_mode=None, data_normalization_mode=None,
-                   contract_depth_offset: int = 0):
-        symbol = Symbol(ticker.upper(), SecurityType.FUTURE, market)
-        return self.securities.add(symbol, resolution, leverage)
-
-    def add_option(self, underlying: str, resolution: Resolution = Resolution.MINUTE,
-                   market: str = Market.USA, fill_forward: bool = True,
-                   leverage: float = 1.0):
-        symbol = Symbol(underlying.upper(), SecurityType.OPTION, market)
-        sec = self.securities.add(symbol, resolution, leverage)
-        sec._option_chain_provider = OptionChainProvider()
+                   contract_depth_offset: int = 0, **kwargs):
+        """A continuous future ('/ES'): priced from Yahoo's continuous series, mapped to one contract
+        (security.mapped) by data_mapping_mode / contract_depth_offset; set_filter adds a contract
+        universe (slice.future_chains). See futures.py."""
+        if isinstance(resolution, str) and not isinstance(market, str):
+            resolution, market = Resolution.MINUTE, resolution
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol.create(str(ticker).upper(), SecurityType.FUTURE,
+                                                                          market or Market.CME)
+        sec = self._add(symbol, resolution, leverage)
+        sec._data_mapping_mode = data_mapping_mode
+        sec._contract_depth_offset = int(contract_depth_offset or 0)
+        sec._data_normalization_mode = data_normalization_mode
+        sec._extended_market_hours = bool(extended_market_hours)
+        self.subscription_manager.add_subscription(symbol, resolution, data_normalization_mode=data_normalization_mode)
         return sec
 
-    def add_index(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                  market: str = Market.USA, fill_forward: bool = True):
-        symbol = Symbol(ticker.upper(), SecurityType.INDEX, market)
-        return self.securities.add(symbol, resolution)
+    # ---- options (model-priced: see options.py / option_model.py) ----
 
-    def add_index_option(self, underlying, resolution: Resolution = Resolution.MINUTE,
-                         market: str = Market.USA):
-        symbol = Symbol(str(underlying).upper(), SecurityType.INDEX_OPTION, market)
-        return self.securities.add(symbol, resolution)
+    def _add_option_canonical(self, canonical, resolution, leverage=None):
+        sec = self._add(canonical, resolution, leverage if leverage not in (None, 0) else 1.0)
+        from .options import canonical_multiplier
+        sec.symbol_properties.contract_multiplier = canonical_multiplier(canonical)
+        u = canonical.underlying
+        if u is not None and str(u).upper() not in self.securities and u.security_type != SecurityType.FUTURE:
+            self._add(u, resolution, None)
+        if u is not None and str(u).upper() in self.securities:
+            sec.underlying = self.securities[str(u).upper()]
+        mgr = getattr(self, '_option_manager', None)
+        if mgr is not None and getattr(mgr, '_session', None) is not None:
+            mgr.used = True
+            mgr._prepare_security(mgr._session, sec)
+        return sec
 
-    def add_index_option_contract(self, contract, resolution=None):
-        if hasattr(contract, 'symbol'):
-            symbol = contract.symbol  # _OptionContract
-        elif isinstance(contract, Symbol):
-            symbol = contract
+    def add_option(self, underlying, resolution: Resolution = Resolution.MINUTE,
+                   market: str = Market.USA, fill_forward: bool = True,
+                   leverage: float = 1.0, **kwargs):
+        """The option chain of an equity (or index) underlying; the underlying is subscribed too."""
+        if isinstance(resolution, str) and not isinstance(market, str):
+            resolution, market = Resolution.MINUTE, resolution
+        if isinstance(underlying, Symbol):
+            if underlying.security_type in (SecurityType.OPTION, SecurityType.INDEX_OPTION) and underlying.is_canonical():
+                return self._add_option_canonical(underlying, resolution, leverage)
+            u = underlying
         else:
-            symbol = Symbol(str(contract).upper(), SecurityType.INDEX_OPTION, Market.USA)
-        return self.securities.add(symbol, resolution or Resolution.MINUTE)
+            key = str(underlying).upper()
+            u = self.securities[key].symbol if key in self.securities else Symbol(key, SecurityType.EQUITY,
+                                                                                    market or Market.USA)
+        if u.security_type == SecurityType.INDEX:
+            return self.add_index_option(u, None, resolution, market)
+        target = kwargs.get('target_option')
+        args = ([target] if target else []) + [market or Market.USA]
+        return self._add_option_canonical(Symbol.create_canonical_option(u, *args), resolution, leverage)
+
+    def add_index(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                  market: str = Market.USA, fill_forward: bool = True, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.INDEX, market)
+        return self._add(symbol, resolution, None)
+
+    def add_index_option(self, underlying, target_option=None, resolution: Resolution = Resolution.MINUTE,
+                         market: str = Market.USA, fill_forward: bool = True, **kwargs):
+        """add_index_option(index[, target_option e.g. "SPXW"][, resolution][, market])."""
+        if not isinstance(target_option, str) and target_option is not None:
+            target_option, resolution = None, target_option
+        if isinstance(resolution, str) and resolution not in ('usa',):
+            target_option, resolution = resolution, Resolution.MINUTE
+        u = underlying if isinstance(underlying, Symbol) else Symbol(str(underlying).upper(), SecurityType.INDEX,
+                                                                      market or Market.USA)
+        if u.security_type != SecurityType.INDEX:
+            u = Symbol(u.value, SecurityType.INDEX, market or Market.USA)
+        if str(u).upper() not in self.securities:
+            self.add_index(u, resolution if isinstance(resolution, Resolution) else Resolution.MINUTE, market)
+        args = ([target_option] if target_option else []) + [market or Market.USA]
+        return self._add_option_canonical(Symbol.create_canonical_option(u, *args), resolution)
+
+    def _add_option_contract(self, contract, resolution=None, kind=SecurityType.OPTION):
+        symbol = contract if isinstance(contract, Symbol) else getattr(contract, 'symbol', None)
+        if not isinstance(symbol, Symbol):
+            raise ValueError(f"An option contract Symbol is required, got {contract!r}")
+        from .options import canonical_multiplier
+        sec = self._add(symbol, resolution or Resolution.MINUTE, 1.0)
+        sec.symbol_properties.contract_multiplier = canonical_multiplier(symbol)
+        u = symbol.underlying
+        if u is not None and str(u).upper() not in self.securities:
+            if u.security_type == SecurityType.FUTURE:
+                self.add_future_contract(u, resolution)
+            else:
+                self._add(u, resolution or Resolution.MINUTE, None)
+        if u is not None:
+            sec.underlying = self.securities.get(str(u).upper())
+        mgr = getattr(self, '_option_manager', None)
+        if mgr is None and getattr(self, '_session', None) is not None:
+            mgr = self._ensure_option_manager()
+        if mgr is not None and getattr(mgr, '_session', None) is not None:
+            mgr.used = True
+            mgr._prepare_security(mgr._session, sec)
+        return sec
+
+    def add_index_option_contract(self, contract, resolution=None, fill_forward=True):
+        return self._add_option_contract(contract, resolution, SecurityType.INDEX_OPTION)
 
     def add_future_contract(self, contract, resolution=None, fill_forward=True,
-                            leverage=1.0, extended_market_hours=False):
-        if isinstance(contract, Symbol):
-            symbol = contract
-        else:
-            symbol = Symbol(str(contract).upper(), SecurityType.FUTURE, Market.CME)
-        return self.securities.add(symbol, resolution or Resolution.MINUTE)
+                            leverage=None, extended_market_hours=False):
+        """One futures contract (a Symbol from the chain or Symbol.create_future)."""
+        symbol = getattr(contract, 'symbol', contract) if not isinstance(contract, Symbol) else contract
+        if not isinstance(symbol, Symbol):
+            raise ValueError(f"add_future_contract needs a contract Symbol, got {contract!r}")
+        sec = self._add(symbol, resolution or Resolution.MINUTE, leverage)
+        self._ensure_futures_manager().configure(sec)
+        return sec
+
+    def _ensure_futures_manager(self):
+        """The run's FuturesManager; created on first use so that contracts added in initialize() are
+        priced already there (option chains on a futures contract, history)."""
+        mgr = getattr(self, '_futures_manager', None)
+        if mgr is None:
+            from .futures import FuturesManager
+            mgr = self._futures_manager = FuturesManager()
+            session = getattr(self, '_session', None)
+            if session is not None:
+                mgr.after_initialize(session)
+                session.extensions.append(mgr)
+            elif self._data is not None:
+                from types import SimpleNamespace
+                early = SimpleNamespace(data=self._data, algo=self)
+                self._data.register_provider(mgr.is_contract, lambda sym, _s=early: mgr._contract_series(_s, sym))
+        return mgr
 
     def add_future_option(self, symbol, option_filter=None):
-        sym = Symbol(str(symbol).upper(), SecurityType.FUTURE_OPTION, Market.CME)
-        return self.securities.add(sym, Resolution.MINUTE)
+        """Options on a future: on a contract Symbol, that contract's options; on a continuous
+        future, the options of the contracts its chain selects (Black-76, see option_model.py)."""
+        fut = symbol if isinstance(symbol, Symbol) else Symbol.create(str(symbol), SecurityType.FUTURE, Market.CME)
+        canonical = Symbol.create_canonical_option(fut, getattr(fut, 'market', Market.CME))
+        sec = self._add_option_canonical(canonical, Resolution.MINUTE)
+        if option_filter is not None:
+            sec.set_filter(option_filter)
+        self._future_option_roots = getattr(self, '_future_option_roots', []) + [sec]
+        return sec
 
-    def add_future_option_contract(self, contract, resolution=None):
-        if hasattr(contract, 'symbol'):
-            symbol = contract.symbol
-        elif isinstance(contract, Symbol):
-            symbol = contract
-        else:
-            symbol = Symbol(str(contract).upper(), SecurityType.FUTURE_OPTION, Market.CME)
-        return self.securities.add(symbol, resolution or Resolution.MINUTE)
+    def add_future_option_contract(self, contract, resolution=None, fill_forward=True):
+        return self._add_option_contract(contract, resolution, SecurityType.FUTURE_OPTION)
 
-    def add_option_contract(self, contract, resolution=None):
-        if hasattr(contract, 'symbol'):
-            symbol = contract.symbol
-        elif isinstance(contract, Symbol):
-            symbol = contract
-        else:
-            symbol = Symbol(str(contract).upper(), SecurityType.OPTION, Market.USA)
-        return self.securities.add(symbol, resolution or Resolution.MINUTE)
+    def add_option_contract(self, contract, resolution=None, fill_forward=True, leverage=None, *args, **kwargs):
+        return self._add_option_contract(contract, resolution, SecurityType.OPTION)
 
-    def add_cfd(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                market: str = Market.OANDA, leverage: float = 1.0):
-        symbol = Symbol(ticker.upper(), SecurityType.CFD, market)
-        return self.securities.add(symbol, resolution, leverage)
+    def exercise_option(self, option_symbol, quantity, asynchronous=False, tag="", order_properties=None):
+        """Exercise `quantity` of a long American option position now (settled at the current
+        underlying price, like an expiry exercise)."""
+        mgr = self._ensure_option_manager()
+        mgr.exercise(mgr._session, option_symbol, quantity)
+        return None
 
-    def add_crypto_future(self, ticker: str, resolution: Resolution = Resolution.MINUTE,
-                          market: str = Market.BINANCE):
-        symbol = Symbol(ticker.upper(), SecurityType.CRYPTO_FUTURE, market)
-        return self.securities.add(symbol, resolution)
+    def add_cfd(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                market: str = Market.OANDA, fill_forward: bool = True, leverage: float = None, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.CFD, market)
+        return self._add(symbol, resolution, leverage)
+
+    def add_crypto_future(self, ticker, resolution: Resolution = Resolution.MINUTE,
+                          market: str = Market.BINANCE, fill_forward: bool = True, leverage: float = None, **kwargs):
+        symbol = ticker if isinstance(ticker, Symbol) else Symbol(str(ticker).upper(), SecurityType.CRYPTO_FUTURE, market)
+        return self._add(symbol, resolution, leverage)
 
     def add_security(self, security_type, ticker=None, resolution=Resolution.MINUTE,
-                     market=Market.USA, fill_forward=True, leverage=1.0,
-                     extended_market_hours=False):
+                     market=None, fill_forward=True, leverage=None,
+                     extended_market_hours=False, **kwargs):
+        if isinstance(security_type, Symbol) and ticker is None:
+            sym = security_type
+            return self._add(sym, resolution, leverage)
         if ticker is None:
             # security_type might actually be a symbol/ticker string
             ticker = str(security_type)
             security_type = SecurityType.EQUITY
-        symbol = Symbol(str(ticker).upper(), security_type, market)
-        return self.securities.add(symbol, resolution, leverage)
+        if security_type == SecurityType.FUTURE:
+            return self.add_future(ticker, resolution, market or Market.CME, fill_forward, leverage, extended_market_hours)
+        if security_type in (SecurityType.OPTION, SecurityType.INDEX_OPTION):
+            return self.add_option(ticker, resolution, market or Market.USA) if security_type == SecurityType.OPTION \
+                else self.add_index_option(ticker, resolution, market or Market.USA)
+        symbol = Symbol(str(ticker).upper(), security_type, market or Market.USA)
+        return self._add(symbol, resolution, leverage)
 
     def add_data(self, data_type, ticker, *args, resolution=None, properties=None,
                  leverage=1.0, fill_forward=True, **kwargs):
@@ -990,6 +1508,12 @@ class QCAlgorithm:
             if underlying_symbol:
                 symbol._underlying = underlying_symbol
         sec = self.securities.add(symbol, res or Resolution.DAILY, leverage)
+        # Read by custom_data.CustomDataManager with the type's own get_source / reader.
+        if not isinstance(data_type, type) or not hasattr(data_type, 'reader'):
+            self._custom_data.append(f"{getattr(data_type, '__name__', str(data_type))}:{symbol}")
+        else:
+            self._custom_subscriptions = getattr(self, '_custom_subscriptions', {})
+            self._custom_subscriptions[str(symbol).upper()] = (data_type, sec)
         if sym_properties is not None:
             sec.symbol_properties = sym_properties
         if exchange_hours is not None:
@@ -1000,23 +1524,24 @@ class QCAlgorithm:
         config.type = data_type
         config.is_custom_data = True
         sec.subscriptions = [config]
-        # Add cache & data accessors
-        sec.cache = type('SecurityCache', (), {
-            '_data': {},
-            'add_data': lambda self, data: None,
-            'add_data_list': lambda self, data_list, data_type, from_subscription=False: None,
-            'get_data': lambda self: {},
-        })()
-        sec.data = type('DynamicSecurityData', (), {
-            'get': lambda self, data_type=None: None,
-            'get_all': lambda self, data_type=None: [],
-            'has_data': lambda self, data_type=None: False,
-            '__getattr__': lambda self, name: None,
-        })()
         return sec
 
-    def remove_security(self, symbol):
-        return self.securities.remove(symbol)
+    def remove_security(self, symbol, tag=None):
+        """Cancel the security's open orders, liquidate its position and remove it from the algorithm's
+        universe (LEAN). The security object stays known (prices, history) until it is added again."""
+        key = str(symbol).upper()
+        sec = self.securities.get(key)
+        if sec is None:
+            return False
+        if self._broker is not None:
+            self._broker.cancel_open(key, 'Removed')
+            h = self.portfolio[key] if key in self.portfolio else None
+            if h is not None and h.quantity and not self._is_warming_up:
+                self.market_order(sec.symbol, -h.quantity, tag=tag or 'Liquidated')
+        sec.is_tradable = False
+        sec._removed = True
+        self._removed_securities = getattr(self, '_removed_securities', []) + [key]
+        return True
 
     # ---- Data Methods ----
 
@@ -1064,963 +1589,797 @@ class QCAlgorithm:
         """Get historical data. Returns a callable & subscriptable object."""
         return _HistoryAccessor(self)
 
-    def _history_impl(self, *args, **kwargs):
-        """Internal history implementation.
-        Generates synthetic historical data with correct row counts.
-        Accepts: history(symbol, periods, resolution), history(type, symbols, periods, resolution),
-                 history(symbols, start, end, resolution, ...), history(type, ticker_str, periods/timedelta, resolution), etc.
-        """
-        if pd is None:
+    # Data types history() cannot serve, and why.
+    _HISTORY_UNSUPPORTED = {
+        'QuoteBar': ("quote (bid/ask) bar history", "Only daily OHLCV trade bars are available."),
+        'Tick': ("tick data", "The engine runs on daily bars."),
+        'OpenInterest': ("open-interest data", ""),
+        'Dividend': ("dividend events", "Prices are split- and dividend-adjusted; corporate-action events are not delivered."),
+        'Split': ("split events", "Prices are split- and dividend-adjusted; corporate-action events are not delivered."),
+        'Delisting': ("delisting events", ""),
+        'SymbolChangedEvent': ("symbol-changed events", ""),
+        'MarginInterestRate': ("margin interest rate data", ""),
+        'ETFConstituentData': ("ETF constituent data", ""),
+    }
+
+    def _history_symbols(self, arg):
+        """Normalise the symbol argument of history() to a list of Symbol/str."""
+        if arg is None:
             return []
+        if isinstance(arg, (Symbol, str)):
+            return [arg]
+        if isinstance(arg, dict):
+            return list(arg.keys())
+        try:
+            return [x.symbol if hasattr(x, 'symbol') and not isinstance(x, (Symbol, str)) else x for x in arg]
+        except TypeError:
+            return [arg]
 
-        flatten = kwargs.get('flatten', False)
+    def _history_impl(self, *args, **kwargs):
+        """history() served from the run's real daily bars (fincept_engine.data).
 
-        # Parse arguments to determine: data_type, symbols, period/count, resolution
-        first = args[0] if args else None
-        is_fundamental = False
-        is_custom_data = False
-        custom_data_type = None
-        is_universe = False
+        Accepts the LEAN forms: history(symbol(s), periods[, resolution]),
+        history(symbol(s), timedelta[, resolution]), history(symbol(s), start, end[, resolution]),
+        history(TradeBar, symbol(s), ...), self.history[TradeBar](...). Only bars that are
+        complete at the algorithm's current time are returned (no look-ahead). Fundamental,
+        universe, tick, quote, corporate-action and custom data are refused with a clear
+        error - they used to be invented.
+        """
+        typed = kwargs.pop('_typed_data_type', None)
+        force_res = kwargs.pop('_force_resolution', None)
+        kwargs.pop('flatten', None)
+        args = list(args)
 
-        # Check for custom data type or fundamental type as first arg
-        if isinstance(first, type):
-            name = getattr(first, '__name__', '')
-            if name in ('Fundamental', 'FundamentalData') or 'Fundamental' in name:
-                is_fundamental = True
-            elif first is not None and name not in ('Symbol',):
-                is_custom_data = True
-                custom_data_type = first
-        elif isinstance(first, _UniverseReference):
-            is_universe = True
-            is_fundamental = True
+        data_type = None
+        if args and isinstance(args[0], type):
+            data_type = args.pop(0)
+        elif args and (isinstance(args[0], _UniverseReference) or type(args[0]).__name__.endswith('Universe')
+                       or hasattr(args[0], 'select_symbols')):
+            raise not_supported("universe history (constituent or fundamental data)")
+        if typed is not None:
+            data_type = typed
+        want_objects = typed is not None
+        cdm = getattr(self, '_custom_manager', None)
+        if data_type is not None and cdm is not None and isinstance(data_type, type) and hasattr(data_type, 'reader'):
+            return self._custom_history(cdm, data_type, args, kwargs, want_objects=typed is not None)
+        if data_type is not None:
+            name = getattr(data_type, '__name__', str(data_type))
+            if 'Fundamental' in name:
+                raise not_supported("historical fundamental data (history of Fundamental objects)",
+                                    "Fundamentals come from a current Yahoo Finance snapshot; there is no history of them.")
+            if name in self._HISTORY_UNSUPPORTED:
+                raise not_supported(*self._HISTORY_UNSUPPORTED[name])
+            if name not in ('TradeBar', 'BaseData', 'IBaseDataBar', 'IBaseData'):
+                raise not_supported(f"custom data history ({name})")
+        if force_res is not None and int(force_res) == int(Resolution.TICK):
+            raise not_supported("tick data", "The engine runs on daily bars.")
+        if self._data is None:
+            raise not_supported("history() outside a backtest run")
 
-        # Also check _typed_data_type from self.history[Type]() accessor
-        _typed_dt = kwargs.get('_typed_data_type', None)
-        if _typed_dt is not None and not is_fundamental:
-            _typed_name = getattr(_typed_dt, '__name__', '')
-            if _typed_name in ('Fundamental', 'FundamentalData') or 'Fundamental' in _typed_name:
-                is_fundamental = True
-                is_universe = True
-
-        _typed_fundamental = _typed_dt is not None and is_fundamental
-        if is_fundamental or is_universe:
-            # Parse symbols, count, period from remaining args
-            # When _typed_dt triggered is_fundamental, first arg is NOT a type — include all args
-            if _typed_fundamental:
-                remaining = args
-            else:
-                remaining = args[1:] if len(args) > 1 else ()
-            sym_list = []
-            num_dates = 2  # default
-            period_td = None
-            for a in remaining:
-                if isinstance(a, (list, tuple)):
-                    sym_list = [str(s) for s in a]
-                elif isinstance(a, int) and not isinstance(a, bool):
-                    num_dates = a
-                elif isinstance(a, timedelta):
-                    period_td = a
-                    num_dates = max(1, a.days) if a.days > 0 else 2
-
-            is_etf_universe = isinstance(first, _UniverseReference) and getattr(first, '_is_etf', False)
-            is_custom_universe = isinstance(first, _UniverseReference) and first.data_type is not None and hasattr(first.data_type, 'reader')
-
-            if not sym_list:
-                sym_list = list(self.securities.keys()) if hasattr(self, 'securities') else ['SPY']
-            now = self._time or self._start_date or datetime.now()
-
-            if is_custom_universe:
-                # Custom PythonData universe (e.g., DropboxBaseData)
-                # Generate synthetic universe selection data with 'symbols' column
-                tuples = []
-                data_rows = []
-                for i in range(num_dates):
-                    d = now - timedelta(days=(num_dates - i))
-                    tuples.append(d)
-                    # 5 symbols per date
-                    data_rows.append({
-                        'symbols': ['SPY', 'AAPL', 'MSFT', 'GOOG', 'AMZN'],
-                        'Symbols': ['SPY', 'AAPL', 'MSFT', 'GOOG', 'AMZN'],
-                    })
-                idx = pd.Index(tuples, name='time')
-                df = pd.DataFrame(data_rows, index=idx)
-                return _HistoryDataFrame(df)
-
-            if is_etf_universe:
-                # ETF constituent universe → generate 250 constituents per date
-                tuples = []
-                data_rows = []
-                etf_tickers = [f"ETF{i:04d}" for i in range(250)]
-                for i in range(num_dates):
-                    d = now - timedelta(days=(num_dates - i))
-                    for ticker in etf_tickers:
-                        tuples.append((d, ticker))
-                        data_rows.append({
-                            'value': 100.0, 'price': 100.0,
-                            'weight': 0.004, 'shares_held': 1000,
-                            'market_value': 100000.0,
-                        })
-                idx = pd.MultiIndex.from_tuples(tuples, names=['time', 'ticker'])
-                df = pd.DataFrame(data_rows, index=idx)
-                return _HistoryDataFrame(df)
-
-            # Case C: Typed fundamental accessor → return list of _DataDictionary with Fundamental objects
-            if _typed_fundamental and sym_list:
-                from .algorithm_imports import Fundamental as _Fundamental
-                result = []
-                sym_objs = []
-                for s in sym_list:
-                    # Try to find the original Symbol object
-                    for a in args:
-                        if isinstance(a, (list, tuple)):
-                            for item in a:
-                                if isinstance(item, Symbol) and str(item).upper() == s:
-                                    sym_objs.append(item)
-                                    break
-                            else:
-                                sym_objs.append(Symbol(s))
-                            break
-                    else:
-                        sym_objs.append(Symbol(s))
-
-                for i in range(num_dates):
-                    dd = _DataDictionary()
-                    for sym_obj in sym_objs:
-                        fundamentals_list = []
-                        for j in range(7001):
-                            f = _Fundamental(
-                                symbol=Symbol(f"SYM{j:05d}"),
-                                price=100.0 + j * 0.01,
-                                end_time=now - timedelta(days=(num_dates - i)),
-                                dollar_volume=1e8,
-                                volume=1000000,
-                                market_cap=1e10,
-                                has_fundamental_data=True,
-                            )
-                            fundamentals_list.append(f)
-                        dd[sym_obj] = fundamentals_list
-                    result.append(dd)
-                return result
-
-            # Fundamental universe data
-            # For flatten=True: generate 7001 tickers per date
-            # The strategy expects df.loc[date].shape[0] > 7000
-            tickers_per_date = 7001 if flatten else max(len(sym_list), 1)
-            if tickers_per_date > 100:
-                # Generate synthetic universe tickers
-                universe_tickers = [f"SYM{i:05d}" for i in range(tickers_per_date)]
-            else:
-                universe_tickers = sym_list
-
-            tuples = []
-            base_price = 100.0
-            if flatten:
-                # For flatten mode: (time, ticker) MultiIndex so df.loc[date] works
-                for i in range(num_dates):
-                    d = now - timedelta(days=(num_dates - i))
-                    for j, ticker in enumerate(universe_tickers):
-                        tuples.append((d, ticker))
-            else:
-                for i in range(num_dates):
-                    d = now - timedelta(days=(num_dates - i))
-                    for j, ticker in enumerate(universe_tickers):
-                        tuples.append((ticker, d))
-
-            # Create earningreports with unique time provider per row
-            def _make_er(t):
-                class _ER:
-                    def __init__(self, time):
-                        self._time_provider = type('TP', (), {'get_utc_now': lambda self: time})()
-                return _ER(t)
-
-            total = len(tuples)
-            er_list = [_make_er(now - timedelta(days=(num_dates - (i // max(1, len(universe_tickers)))))) for i in range(total)]
-
-            idx_names = ['time', 'ticker'] if flatten else ['ticker', 'time']
-            idx = pd.MultiIndex.from_tuples(tuples, names=idx_names) if tuples else pd.MultiIndex.from_tuples([], names=idx_names)
-            data = {
-                'value': [base_price + (i % 100) * 0.1 for i in range(total)],
-                'price': [base_price + (i % 100) * 0.1 for i in range(total)],
-                'dollar_volume': [1e8] * total,
-                'volume': [1e6] * total,
-                'market_cap': [1e10] * total,
-                'earningreports': er_list,
-            }
-            df = pd.DataFrame(data, index=idx)
-            return _HistoryDataFrame(df)
-
-        # --- Parse symbols, period/count, resolution from args ---
-        symbols_arg = None
-        _symbols_passed_as_list = False  # Track if symbols were originally passed as a list/tuple
-        period_arg = None
-        count_arg = None
-        resolution_arg = None
-        start_time = None
-        end_time = None
-        custom_ticker = None
-        _original_symbol_arg = None  # Preserve the original Symbol object if passed
-        extra_args = list(args)
-
-        # If first arg was a custom data type, shift it out
-        if is_custom_data:
-            extra_args = extra_args[1:]
-            # Next arg could be ticker string, symbol, or list of symbols/tickers
-            if extra_args:
-                next_arg = extra_args[0]
-                if isinstance(next_arg, str):
-                    custom_ticker = next_arg.upper()
-                    extra_args = extra_args[1:]
-                elif isinstance(next_arg, Symbol):
-                    custom_ticker = str(next_arg).upper()
-                    _original_symbol_arg = next_arg
-                    extra_args = extra_args[1:]
-                elif isinstance(next_arg, (list, tuple)):
-                    symbols_arg = next_arg
-                    _symbols_passed_as_list = True
-                    extra_args = extra_args[1:]
-                elif callable(next_arg) and hasattr(next_arg, 'keys'):
-                    # dict_keys
-                    symbols_arg = list(next_arg)
-                    _symbols_passed_as_list = True
-                    extra_args = extra_args[1:]
-                elif hasattr(next_arg, '__iter__') and not isinstance(next_arg, (str, int, float)):
-                    symbols_arg = list(next_arg)
-                    _symbols_passed_as_list = True
-                    extra_args = extra_args[1:]
-
-        # Parse remaining args in order
-        for a in extra_args:
-            if isinstance(a, Symbol):
-                if symbols_arg is None:
-                    symbols_arg = [a]
-                else:
-                    symbols_arg.append(a)
-            elif isinstance(a, (list, tuple)):
-                symbols_arg = a
-                _symbols_passed_as_list = True
-            elif isinstance(a, str) and symbols_arg is None:
-                symbols_arg = [a]
-            elif isinstance(a, datetime) and start_time is None:
-                start_time = a
-            elif isinstance(a, datetime) and start_time is not None and end_time is None:
-                end_time = a
+        # ---- arguments ----
+        symbols = None
+        count = period = start = end = resolution = None
+        if 'symbol' in kwargs or 'symbols' in kwargs:
+            symbols = self._history_symbols(kwargs.pop('symbol', None) or kwargs.pop('symbols', None))
+        for key in ('periods', 'bar_count'):
+            if key in kwargs:
+                count = kwargs.pop(key)
+        if 'start' in kwargs:
+            start = kwargs.pop('start')
+        if 'end' in kwargs:
+            end = kwargs.pop('end')
+        if 'resolution' in kwargs:
+            resolution = kwargs.pop('resolution')
+        depth = kwargs.pop('contract_depth_offset', None)
+        mmode = kwargs.pop('data_mapping_mode', None)
+        for a in args:
+            if type(a).__name__ == 'DataMappingMode':
+                mmode = a
+        dnm = kwargs.pop('data_normalization_mode', None)
+        for a in args:
+            if type(a).__name__ == 'DataNormalizationMode':
+                dnm = a
+        if dnm is not None and int(dnm) not in (1, 3):  # ADJUSTED / TOTAL_RETURN serve adjusted bars
+            want = 'raw' if int(dnm) == 0 else ('split_adjusted' if int(dnm) == 2 else None)
+            syms0 = kwargs.get('symbol') or (args[0] if args and not isinstance(args[0], (int, timedelta, datetime)) else None)
+            have = self._data.mode_of(syms0) if (self._data is not None and syms0 is not None and
+                                                 not isinstance(syms0, (list, tuple))) else 'adjusted'
+            if want is None or want != have:
+                raise not_supported(f"history in {getattr(dnm, 'name', dnm)} price mode",
+                                    "History is served in the price mode the security is subscribed with.")
+        for a in args:
+            if isinstance(a, bool) or a is None or type(a).__name__ in ('DataNormalizationMode', 'DataMappingMode'):
+                continue
+            if isinstance(a, Resolution):
+                resolution = a
+            elif isinstance(a, int):
+                count = a
             elif isinstance(a, timedelta):
-                period_arg = a
-            elif isinstance(a, int) and not isinstance(a, bool):
-                # Check if this is a Resolution enum value
-                is_resolution_enum = hasattr(a, 'name') and hasattr(a, 'value') and type(a).__name__ == 'Resolution'
-                if is_resolution_enum:
-                    resolution_arg = a
-                elif count_arg is None:
-                    count_arg = a
+                period = a
+            elif isinstance(a, (datetime, date)):
+                d = a if isinstance(a, datetime) else datetime.combine(a, dt_time())
+                if start is None:
+                    start = d
                 else:
-                    resolution_arg = a
-            elif hasattr(a, '__iter__') and not isinstance(a, (str, int, float, timedelta, datetime)):
-                if symbols_arg is None:
-                    symbols_arg = list(a)
+                    end = d
+            elif symbols is None and not isinstance(a, float):
+                symbols = self._history_symbols(a)
+        if symbols is None or len(symbols) == 0:
+            symbols = [sec.symbol for sec in self.securities.values()]
+        if resolution is not None and int(resolution) != int(Resolution.DAILY):
+            note = "history() requests at intraday resolution were served from daily bars"
+            if note not in self._engine_notes:
+                self._engine_notes.append(note)
 
-        # Default resolution
-        if resolution_arg is None:
-            resolution_arg = Resolution.DAILY
-
-        # Determine number of rows to generate
-        num_rows = 0
-        now = self._time or datetime.now()
-        if count_arg is not None:
-            num_rows = count_arg
-        elif period_arg is not None:
-            if resolution_arg == Resolution.MINUTE:
-                num_rows = int(period_arg.total_seconds() / 60) * 390 // (24 * 60)
-                if num_rows == 0:
-                    num_rows = int(period_arg.total_seconds() / 60)
-                if period_arg.days >= 1:
-                    num_rows = period_arg.days * 390
-            elif resolution_arg == Resolution.DAILY:
-                num_rows = int(period_arg.days * 250 / 365) if period_arg.days > 1 else 1
-            elif resolution_arg == Resolution.HOUR:
-                num_rows = int(period_arg.total_seconds() / 3600) * 7
-            elif resolution_arg == Resolution.TICK:
-                num_rows = max(100, int(period_arg.total_seconds()))
+        now = self._time
+        rows, objs = [], []
+        expiries = {}                 # row number -> futures expiry (futures history has an expiry level)
+        multi = len(symbols) > 1
+        all_futures = all(getattr(s if isinstance(s, Symbol) else getattr(self.securities.get(str(s).upper()), 'symbol', None),
+                                  'security_type', None) == SecurityType.FUTURE for s in symbols)
+        for sym in symbols:
+            key = str(sym).upper()
+            sec = self.securities.get(key)
+            sym_obj = sym if isinstance(sym, Symbol) else (sec.symbol if sec is not None else Symbol(key))
+            st = getattr(sym_obj, 'security_type', SecurityType.EQUITY)
+            if st in (SecurityType.OPTION, SecurityType.INDEX_OPTION, SecurityType.FUTURE_OPTION):
+                raise not_supported("option price history")
+            mapped_of = None
+            if st == SecurityType.FUTURE and sym_obj.is_canonical():
+                mapped_of = self._continuous_mapping(sym_obj, sec, depth, mmode)
+            if mapped_of is not None and (depth is not None or mmode is not None):
+                series = self._continuous_series(sym_obj, mapped_of)
             else:
-                num_rows = max(1, period_arg.days)
-        elif start_time is not None and end_time is not None:
-            delta = end_time - start_time
-            if resolution_arg == Resolution.MINUTE:
-                # Trading day has 390 minutes regular, 960 extended+fill_forward
-                fill_forward = kwargs.get(4, args[4] if len(args) > 4 else True) if len(args) > 4 else True
-                extended = kwargs.get(5, args[5] if len(args) > 5 else False) if len(args) > 5 else False
-                # Approximate: use provided args directly
-                # Parse from positional: history([syms], start, end, resolution, fill_forward, extended)
-                ff = True
-                ext = False
-                pos_args = list(args)
-                if is_custom_data:
-                    pos_args = list(args)[1:]
-                # Count non-symbol/list args after the symbol list
-                non_sym_idx = 0
-                for i, a in enumerate(pos_args):
-                    if isinstance(a, (list, tuple, str)):
-                        non_sym_idx = i + 1
-                        continue
-                    break
-                bool_args = [a for a in pos_args[non_sym_idx:] if isinstance(a, bool)]
-                if len(bool_args) >= 2:
-                    ff = bool_args[0]
-                    ext = bool_args[1]
-                elif len(bool_args) == 1:
-                    ff = bool_args[0]
-                if ext and ff:
-                    num_rows = 960
-                elif ext and not ff:
-                    num_rows = 828
-                else:
-                    num_rows = 390
-            elif resolution_arg == Resolution.DAILY:
-                num_rows = int(delta.days * 250 / 365)
+                series = self._data.series(sym_obj, st, getattr(sym_obj, 'market', None))
+            if series is None:
+                continue
+            n_known = series.count_known_at(now)
+            if count is not None:
+                lo, hi = max(0, n_known - int(count)), n_known
+            elif period is not None:
+                cutoff = now - period
+                lo = n_known
+                while lo > 0 and series._ends[lo - 1] > cutoff:
+                    lo -= 1
+                hi = n_known
+            elif start is not None:
+                s0 = datetime(start.year, start.month, start.day)
+                e0 = end if end is not None else now
+                e0 = datetime(e0.year, e0.month, e0.day)
+                lo = next((i for i, d in enumerate(series.dates) if d >= s0), len(series))
+                hi = min(n_known, next((i for i, d in enumerate(series.dates) if d > e0), len(series)))
             else:
-                num_rows = max(1, delta.days)
+                lo, hi = max(0, n_known - 1), n_known
+            for i in range(lo, max(lo, hi)):
+                t_end = series._ends[i]
+                if want_objects:
+                    bar = TradeBar(time=series.dates[i], symbol=sym_obj, open=series.open[i],
+                                   high=series.high[i], low=series.low[i], close=series.close[i],
+                                   volume=series.volume[i])
+                    bar.end_time = t_end
+                    bar.period = timedelta(days=1)
+                    objs.append((t_end, sym_obj, bar))
+                else:
+                    if st == SecurityType.FUTURE and all_futures:
+                        if mapped_of is not None:
+                            m = mapped_of(series.dates[i].date())
+                            expiries[len(rows)] = m.id.date if m is not None else None
+                        else:
+                            expiries[len(rows)] = sym_obj.id.date
+                    rows.append((key, t_end, series.open[i], series.high[i], series.low[i],
+                                 series.close[i], series.volume[i]))
+
+        if want_objects:
+            if not multi:
+                return [b for _, _, b in objs]
+            by_time = {}
+            for t, so, b in objs:
+                by_time.setdefault(t, _DataDictionary())[so] = b
+            return [by_time[t] for t in sorted(by_time)]
+        if pd is None:
+            raise not_supported("pandas history frames (pandas is not installed)")
+        cols = ['open', 'high', 'low', 'close', 'volume']
+        if rows:
+            # Build the (symbol, time) index from levels + codes: MultiIndex.from_tuples
+            # factorises every call and made history() ~10x slower.
+            syms = list(dict.fromkeys(r[0] for r in rows))
+            times = sorted({r[1] for r in rows})
+            spos = {s: i for i, s in enumerate(syms)}
+            tpos = {t: i for i, t in enumerate(times)}
+            if expiries and len(expiries) == len(rows):
+                # futures: LEAN's (expiry, symbol, time) index
+                idx = pd.MultiIndex.from_arrays(
+                    [pd.DatetimeIndex([expiries[k] for k in range(len(rows))]), [r[0] for r in rows],
+                     pd.DatetimeIndex([r[1] for r in rows])], names=['expiry', 'symbol', 'time'])
+            else:
+                idx = pd.MultiIndex(levels=[syms, pd.DatetimeIndex(times)],
+                                    codes=[[spos[r[0]] for r in rows], [tpos[r[1]] for r in rows]],
+                                    names=['symbol', 'time'], verify_integrity=False)
+            df = pd.DataFrame([r[2:] for r in rows], index=idx, columns=cols, dtype=float)
         else:
-            num_rows = 14  # default fallback
-
-        if num_rows <= 0:
-            num_rows = 1
-
-        # Determine symbol list
-        sym_names = []
-        if custom_ticker:
-            sym_names = [custom_ticker]
-        elif symbols_arg:
-            sym_names = [str(s).upper() for s in symbols_arg]
-        else:
-            sym_names = list(self.securities.keys())[:1] if self.securities else ['SPY']
-
-        # --- PythonData subclass with reader() → call reader to generate proper typed objects ---
-        typed_data_type = kwargs.get('_typed_data_type', None)
-        if typed_data_type is not None and hasattr(typed_data_type, 'reader'):
-            # This is a typed history request: self.history[SomeType](...)
-            # Try to use the type's reader() to generate properly typed instances
-            try:
-                instance = typed_data_type()
-                # Only proceed if the type has a custom reader (not the base PythonData.reader)
-                if type(instance).reader is not PythonData.reader:
-                    sym_name = sym_names[0] if sym_names else 'SPY'
-                    sym = Symbol(sym_name)
-                    config = _SubscriptionDataConfig(sym, resolution_arg or Resolution.DAILY)
-                    config.symbol = sym
-                    is_multi_sym = _symbols_passed_as_list
-                    single_results = []
-                    base_time = now - timedelta(hours=num_rows)
-                    for s in (sym_names if sym_names else ['SPY']):
-                        s_sym = Symbol(s)
-                        config.symbol = s_sym
-                        for i in range(num_rows):
-                            t = base_time + timedelta(hours=i)
-                            p = 100.0 + i * 0.01
-                            csv_line = f"{t.strftime('%Y-%m-%d %H:%M:%S')},{p-0.5},{p+1},{p-1},{p},1000000"
-                            obj = instance.reader(config, csv_line, t, False)
-                            if obj is not None:
-                                if is_multi_sym:
-                                    # Multi-symbol: wrap in a dict-like DataDictionary
-                                    dd = _DataDictionary()
-                                    dd[s_sym] = obj
-                                    single_results.append(dd)
-                                else:
-                                    single_results.append(obj)
-                    if single_results:
-                        return single_results
-            except Exception:
-                pass  # Fall through to standard generation
-
-        # --- Type-aware data generation ---
-        # Check if custom_data_type is a known auxiliary type
-        type_name = getattr(custom_data_type, '__name__', '') if custom_data_type else ''
-
-        if type_name == 'Dividend':
-            # Generate dividend history with 'distribution' column
-            # Approx 4-6 dividends per year per symbol
-            per_sym = max(1, num_rows)
-            if count_arg and count_arg <= 365:
-                per_sym = max(1, count_arg // 60)  # ~1 dividend per 60 days
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                for i in range(per_sym):
-                    d = now - timedelta(days=(per_sym - i) * 90)
-                    tuples.append((sym, d))
-                    data_rows.append({
-                        'distribution': 0.5 + i * 0.05,
-                        'reference_price': 100.0 + i,
-                        'value': 0.5 + i * 0.05,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        if type_name == 'Split':
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                # Splits are rare: ~1 per 180 trading days
-                if count_arg is not None:
-                    per_sym = max(1, count_arg // 180)
-                elif start_time and end_time:
-                    range_days = (end_time - start_time).days
-                    per_sym = max(1, range_days // 180)
-                else:
-                    per_sym = 2
-                for i in range(per_sym):
-                    d = now - timedelta(days=(per_sym - i) * 180)
-                    tuples.append((sym, d))
-                    data_rows.append({
-                        'splitfactor': 2.0,
-                        'reference_price': 100.0,
-                        'value': 0.5,
-                        'type': 1,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        if type_name in ('Tick',):
-            # Generate tick data with proper columns
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                for i in range(num_rows):
-                    d = now - timedelta(seconds=(num_rows - i))
-                    tuples.append((sym, d))
-                    p = 100.0 + i * 0.01
-                    data_rows.append({
-                        'askprice': p + 0.01,
-                        'asksize': 100.0,
-                        'bidprice': p - 0.01,
-                        'bidsize': 100.0,
-                        'exchange': 'ARCA',
-                        'lastprice': p,
-                        'quantity': 50.0,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        if type_name in ('MarginInterestRate',):
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                # Margin interest rates: ~1 per 8 hours = 3 per day
-                if count_arg is not None:
-                    per_sym = max(1, count_arg // 9)  # ~1 rate per 9 hours
-                elif start_time and end_time:
-                    range_hours = (end_time - start_time).total_seconds() / 3600
-                    per_sym = max(1, int(range_hours / 9))
-                else:
-                    per_sym = 8
-                for i in range(per_sym):
-                    d = now - timedelta(hours=(per_sym - i) * 9)
-                    tuples.append((sym, d))
-                    data_rows.append({
-                        'interestrate': 0.001 + i * 0.0001,
-                        'value': 0.001 + i * 0.0001,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        if type_name in ('Delisting',):
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                # Always generate WARNING + DELISTED pair
-                if start_time and end_time:
-                    d1 = start_time + timedelta(days=1)
-                    d2 = end_time - timedelta(days=1)
-                else:
-                    d1 = now - timedelta(days=2)
-                    d2 = now - timedelta(days=1)
-                tuples.append((sym, d1))
-                data_rows.append({'type': 0, 'value': 0.0})  # WARNING
-                tuples.append((sym, d2))
-                data_rows.append({'type': 1, 'value': 0.0})  # DELISTED
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        if type_name in ('SymbolChangedEvent',):
-            # Known historical symbol change events for specific tickers
-            _known_events = {
-                'SPWR': [
-                    (datetime(2008, 9, 30), 'SPWR', 'SPWRA'),
-                    (datetime(2011, 11, 17), 'SPWRA', 'SPWR'),
-                ],
-            }
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                # Check for known events first
-                if sym in _known_events and start_time and end_time:
-                    events = [(d, old, new) for d, old, new in _known_events[sym]
-                              if start_time <= d <= end_time]
-                    for d, old, new in events:
-                        tuples.append((sym, d))
-                        data_rows.append({'oldsymbol': old, 'newsymbol': new, 'type': 0, 'value': 0.0})
-                    if events:
-                        continue  # Skip generic generation for this symbol
-                sym_obj = None
-                # Try to find the original Symbol object from various sources
-                if _original_symbol_arg is not None and str(_original_symbol_arg).upper() == sym:
-                    sym_obj = _original_symbol_arg
-                if sym_obj is None and symbols_arg:
-                    for s in symbols_arg:
-                        if isinstance(s, Symbol) and str(s).upper() == sym:
-                            sym_obj = s
-                            break
-                if sym_obj is None:
-                    for a in args:
-                        if isinstance(a, Symbol) and str(a).upper() == sym:
-                            sym_obj = a
-                            break
-                # Check if the symbol is a future
-                is_future = False
-                if sym_obj and getattr(sym_obj, 'security_type', None) == SecurityType.FUTURE:
-                    is_future = True
-                elif sym in self.securities and getattr(self.securities[sym].symbol, 'security_type', None) == SecurityType.FUTURE:
-                    is_future = True
-                # For continuous futures: ~2 rolls per year (quarterly); for equities: ~2 over entire range
-                if start_time and end_time:
-                    range_days = (end_time - start_time).days
-                    range_years = max(1, range_days / 365.0)
-                    if is_future:
-                        per_sym = max(1, int(range_years * 1.8))  # ~1.8 per year
-                    else:
-                        per_sym = 2  # Equity remaps are rare
-                    event_start = start_time
-                elif count_arg is not None:
-                    if is_future:
-                        per_sym = max(1, count_arg // 60)
-                    else:
-                        per_sym = 2
-                    event_start = now - timedelta(days=count_arg)
-                else:
-                    per_sym = 2
-                    event_start = now - timedelta(days=365 * 2)
-                interval = max(1, ((end_time or now) - event_start).days // max(1, per_sym))
-                for i in range(per_sym):
-                    d = event_start + timedelta(days=interval * (i + 1))
-                    tuples.append((sym, d))
-                    data_rows.append({
-                        'oldsymbol': sym if i % 2 == 0 else f'{sym}A',
-                        'newsymbol': f'{sym}A' if i % 2 == 0 else sym,
-                        'type': 0,
-                        'value': 0.0,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        # Check if this is an option universe history request
-        # When the symbol is an option type and flatten=True, return option chain data
-        _is_option_sym = False
-        if sym_names and len(sym_names) == 1:
-            s_name = sym_names[0]
-            sec = self.securities.get(s_name)
-            if sec:
-                st = getattr(sec.symbol, 'security_type', None) if hasattr(sec, 'symbol') else None
-                if st in (SecurityType.OPTION, SecurityType.INDEX_OPTION, SecurityType.FUTURE_OPTION):
-                    _is_option_sym = True
-
-        if _is_option_sym and flatten:
-            from .enums import OptionRight
-            sym_name = sym_names[0]
-            sec = self.securities[sym_name]
-            sym_obj = sec.symbol if hasattr(sec, 'symbol') else Symbol(sym_name)
-            tuples = []
-            data_rows = []
-            for i in range(num_rows):
-                d = now - timedelta(days=(num_rows - i))
-                # Get option contracts for this date using the provider
-                contracts = list(self.option_chain_provider.get_option_contract_list(sym_obj, d))
-                for contract_sym in contracts:
-                    tuples.append((d, contract_sym))
-                    strike = getattr(contract_sym, 'strike_price', 100.0)
-                    data_rows.append({
-                        'close': strike, 'open': strike - 0.5,
-                        'high': strike + 1.0, 'low': strike - 1.0,
-                        'volume': 100000.0, 'value': strike,
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['time', 'symbol'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        # Generate standard synthetic OHLCV data
-        base_price = 100.0
-        is_multi = len(sym_names) > 1
-
-        if is_multi:
-            tuples = []
-            data_rows = []
-            for sym in sym_names:
-                for i in range(num_rows):
-                    d = now - timedelta(days=(num_rows - i))
-                    tuples.append((sym, d))
-                    p = base_price + i * 0.01
-                    data_rows.append({
-                        'open': p - 0.5, 'high': p + 1.0, 'low': p - 1.0,
-                        'close': p, 'volume': 1000000.0, 'value': p
-                    })
-            idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-            df = pd.DataFrame(data_rows, index=idx)
-            return _HistoryDataFrame(df)
-
-        # Single symbol — use MultiIndex (symbol, time) so .unstack(0) works
-        sym = sym_names[0] if sym_names else 'SPY'
-        tuples = []
-        data_rows = []
-        for i in range(num_rows):
-            d = now - timedelta(days=(num_rows - i))
-            tuples.append((sym, d))
-            p = base_price + i * 0.01
-            data_rows.append({
-                'open': p - 0.5, 'high': p + 1.0, 'low': p - 1.0,
-                'close': p, 'volume': 1000000.0, 'value': p
-            })
-        idx = pd.MultiIndex.from_tuples(tuples, names=['symbol', 'time'])
-        df = pd.DataFrame(data_rows, index=idx)
+            df = pd.DataFrame(columns=cols,
+                              index=pd.MultiIndex.from_tuples([], names=['symbol', 'time']))
         return _HistoryDataFrame(df)
 
+    def _continuous_mapping(self, canonical, sec, depth=None, mode=None):
+        """day -> the contract a continuous future maps to (its own mapping settings unless overridden)."""
+        from types import SimpleNamespace
+        mgr = self._ensure_futures_manager()
+        ns = SimpleNamespace(
+            symbol=canonical,
+            _data_mapping_mode=mode if mode is not None else getattr(sec, '_data_mapping_mode', None),
+            _contract_depth_offset=int(depth) if depth is not None else int(getattr(sec, '_contract_depth_offset', 0) or 0))
+        cache = {}
+
+        def mapped(day):
+            if day not in cache:
+                try:
+                    cache[day] = mgr._mapped_for(ns, day)
+                except Exception:
+                    cache[day] = None
+            return cache[day]
+        return mapped
+
+    def _continuous_series(self, canonical, mapped):
+        """Daily bars of a continuous future built from the contract it maps to each day (derived
+        contract prices, futures.py) - history(..., contract_depth_offset= / data_mapping_mode=)."""
+        from .data import BarSeries
+        base = self._data.series(canonical, SecurityType.FUTURE, getattr(canonical, 'market', None))
+        if base is None:
+            return None
+        dates, o, h, l, c, v = [], [], [], [], [], []
+        cache = {}
+        for d in base.dates:
+            m = mapped(d.date())
+            if m is None:
+                continue
+            k = str(m)
+            if k not in cache:
+                cache[k] = self._data.series(m, SecurityType.FUTURE, getattr(m, 'market', None))
+            s = cache[k]
+            i = s.index_of_date(d) if s is not None else None
+            if i is None:
+                continue
+            dates.append(d)
+            o.append(s.open[i]); h.append(s.high[i]); l.append(s.low[i]); c.append(s.close[i]); v.append(s.volume[i])
+        if not dates:
+            return None
+        return BarSeries.from_columns(str(canonical).upper(), f"{base.yahoo} (mapped contracts)", dates, o, h, l, c, v)
+
+    def _custom_history(self, cdm, data_type, args, kwargs, want_objects):
+        """history(CustomType, symbol(s), periods | timedelta | start, end): the custom points known now."""
+        syms = kwargs.pop('symbol', None) or kwargs.pop('symbols', None)
+        count = period = start = None
+        for a in args:
+            if isinstance(a, bool) or a is None:
+                continue
+            if isinstance(a, (Symbol, str)) and syms is None:
+                syms = a
+            elif isinstance(a, (list, tuple)) and syms is None:
+                syms = list(a)
+            elif isinstance(a, int):
+                count = a
+            elif isinstance(a, timedelta):
+                period = a
+            elif isinstance(a, (datetime, date)) and start is None:
+                start = a if isinstance(a, datetime) else datetime.combine(a, dt_time())
+        if syms is None:
+            syms = list(cdm.feeds.keys())
+        syms = syms if isinstance(syms, (list, tuple)) else [syms]
+        now = self._time
+        if period is not None:
+            start = now - period
+        out = []
+        for s in syms:
+            out.extend(cdm.history(str(s).upper(), now, count, start))
+        if want_objects:
+            return out
+        import pandas as _pd
+        rows, idx = [], []
+        for p in out:
+            d = dict(getattr(p, '_data', {}) or {})
+            d['value'] = getattr(p, 'value', 0.0)
+            rows.append({str(k).lower(): v for k, v in d.items()})
+            idx.append((str(getattr(p, 'symbol', '')).upper(), getattr(p, 'end_time', None) or p.time))
+        if not rows:
+            return _HistoryDataFrame(_pd.DataFrame())
+        mi = _pd.MultiIndex.from_tuples(idx, names=['symbol', 'time'])
+        return _HistoryDataFrame(_pd.DataFrame(rows, index=mi))
+
     # ---- Order Methods ----
+    # In a backtest every order goes to the broker (fincept_engine.broker): it is checked
+    # against buying power and filled on a LATER bar (next open for market orders), with the
+    # run's commission and slippage. Without a broker (no runner) orders are refused.
 
     def _next_order_id(self) -> int:
         self.transactions._order_counter += 1
         return self.transactions._order_counter
 
-    def market_order(self, symbol, quantity, asynchronous=False, tag="",
-                     order_properties=None):
+    def _make_ticket(self, symbol, quantity, order_type, tag="", limit_price=0, stop_price=0,
+                     order_properties=None, trigger_price=0, trailing_amount=0, trailing_as_percentage=False,
+                     request=None):
+        from .orders import SubmitOrderRequest
         oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.MARKET, tag=tag)
-        self.transactions._orders[oid] = ticket
-
-        # Simulate immediate fill for backtesting
-        price = self.securities[str(symbol)].price if str(symbol) in self.securities else 0
-        if price > 0:
-            ticket.average_fill_price = price
-            ticket.quantity_filled = quantity
-            ticket.status = OrderStatus.FILLED
-            self.portfolio.process_fill(str(symbol), quantity, price)
-
-            event = OrderEvent(oid, sym, OrderStatus.FILLED, price, quantity)
-            self.on_order_event(event)
-
-        return ticket
-
-    def limit_order(self, symbol, quantity, limit_price, tag="", order_properties=None):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.LIMIT,
-                             limit_price=limit_price, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def stop_market_order(self, symbol, quantity, stop_price, tag="", order_properties=None):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.STOP_MARKET,
-                             stop_price=stop_price, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def stop_limit_order(self, symbol, quantity, stop_price, limit_price, tag="", order_properties=None):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.STOP_LIMIT,
-                             limit_price=limit_price, stop_price=stop_price, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def trailing_stop_order(self, symbol, quantity, trailing_amount=None,
-                            trailing_as_percentage=False, tag="", order_properties=None):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.TRAILING_STOP, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def market_on_open_order(self, symbol, quantity, tag=""):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.MARKET_ON_OPEN, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def market_on_close_order(self, symbol, quantity, tag=""):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.MARKET_ON_CLOSE, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def limit_if_touched_order(self, symbol, quantity, trigger_price, limit_price, tag=""):
-        oid = self._next_order_id()
-        sym = Symbol(str(symbol).upper()) if not isinstance(symbol, Symbol) else symbol
-        ticket = OrderTicket(oid, sym, quantity, OrderType.LIMIT_IF_TOUCHED,
-                             limit_price=limit_price, stop_price=trigger_price, tag=tag)
-        self.transactions._orders[oid] = ticket
-        return ticket
-
-    def buy(self, symbol, quantity):
-        return self.market_order(symbol, abs(quantity))
-
-    def sell(self, symbol, quantity):
-        return self.market_order(symbol, -abs(quantity))
-
-    def order(self, symbol, quantity, **kwargs):
-        return self.market_order(symbol, quantity, **kwargs)
-
-    def set_holdings(self, symbol_or_targets, percentage=None, liquidate_existing=False,
-                     tag="", order_properties=None):
-        """Set portfolio to target percentage allocation."""
-        if isinstance(symbol_or_targets, list):
-            # List of PortfolioTarget
-            if liquidate_existing:
-                self.liquidate(tag=tag)
-            for target in symbol_or_targets:
-                sym = target.symbol if hasattr(target, 'symbol') else target
-                pct = target.quantity if hasattr(target, 'quantity') else percentage
-                self._set_holdings_single(str(sym), pct, tag)
-            return
-
-        if percentage is not None:
-            if liquidate_existing:
-                self.liquidate(tag=tag)
-            self._set_holdings_single(str(symbol_or_targets), percentage, tag)
-
-    def _set_holdings_single(self, ticker: str, percentage: float, tag: str = ""):
-        ticker = ticker.upper()
-        price = self.securities[ticker].price if ticker in self.securities else 0
-        if price == 0:
-            return
-
-        portfolio_value = self.portfolio.total_portfolio_value
-        target_value = portfolio_value * percentage
-        current_holding = self.portfolio[ticker].quantity
-        current_value = current_holding * price
-        diff_value = target_value - current_value
-
-        if abs(diff_value) < price:
-            return
-
-        quantity = int(diff_value / price)
-        if quantity != 0:
-            self.market_order(ticker, quantity, tag=tag)
-
-    def liquidate(self, symbol=None, tag="", order_properties=None):
-        """Liquidate all or specific holdings."""
-        if symbol:
-            ticker = str(symbol).upper()
-            qty = self.portfolio[ticker].quantity
-            if qty != 0:
-                self.market_order(ticker, -qty, tag=tag)
+        if isinstance(symbol, Symbol):
+            sym = symbol
         else:
-            for ticker, holding in list(self.portfolio.items()):
-                if holding.quantity != 0:
-                    self.market_order(ticker, -holding.quantity, tag=tag)
+            sec = self.securities.get(str(symbol).upper())
+            sym = sec.symbol if sec is not None else Symbol(str(symbol).upper())
+        ticket = OrderTicket(oid, sym, float(quantity), order_type,
+                             limit_price=limit_price or 0, stop_price=stop_price or 0, tag=tag or "",
+                             trigger_price=trigger_price or 0, trailing_amount=trailing_amount or 0,
+                             trailing_as_percentage=trailing_as_percentage)
+        props = order_properties or self.default_order_properties
+        ticket.properties = props
+        ticket.time_in_force = getattr(props, 'time_in_force', None)
+        ticket.time = self._time
+        if request is None:
+            request = SubmitOrderRequest(order_type, sym.security_type, sym, float(quantity), stop_price or 0,
+                                         limit_price or 0, trigger_price or 0, trailing_amount or 0,
+                                         bool(trailing_as_percentage), self._utc_time, tag or "", props)
+        request.order_id = oid
+        ticket.submit_request = request
+        self.transactions._orders[oid] = ticket
+        return ticket
+
+    def _submit(self, symbol, quantity, order_type, tag="", limit_price=0, stop_price=0,
+                order_properties=None, trigger_price=0, trailing_amount=0, trailing_as_percentage=False,
+                request=None):
+        key = str(symbol).upper()
+        if key not in self.securities._securities and key in self.securities:
+            self.securities[key]          # a chain contract: subscribed on demand
+        if key not in self.securities._securities:
+            # LEAN raises for an order on a security the algorithm never added.
+            raise Exception(f"This asset symbol ({str(symbol).upper()} 0) was not found in your security list. "
+                            f"Please add this security or check it exists before using it with "
+                            f"'Securities.ContainsKey(\"{str(symbol).upper()}\")'")
+        ticket = self._make_ticket(symbol, quantity, order_type, tag, limit_price, stop_price,
+                                   order_properties, trigger_price, trailing_amount, trailing_as_percentage,
+                                   request)
+        if self._broker is None:
+            raise not_supported("order placement outside a backtest run")
+        return self._broker.submit(ticket)
+
+    def _forget_order(self, ticket):
+        """A request refused by a pre-order check is not an order (LEAN): drop it from the book."""
+        oid = ticket.order_id
+        if self.transactions._orders.get(oid) is ticket:
+            del self.transactions._orders[oid]
+            if self.transactions._order_counter == oid:
+                self.transactions._order_counter -= 1
+
+    def _submit_request(self, request):
+        """transactions.add_order(SubmitOrderRequest)."""
+        sym = request.symbol
+        key = str(sym).upper()
+        if key in self.securities:
+            sym = self.securities[key].symbol
+        return self._submit(sym, request.quantity, request.order_type, request.tag, request.limit_price,
+                            request.stop_price, request.order_properties, request.trigger_price,
+                            request.trailing_amount, request.trailing_as_percentage, request)
+
+    def market_order(self, symbol, quantity, asynchronous=False, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.MARKET, tag, order_properties=order_properties)
+
+    def limit_order(self, symbol, quantity, limit_price, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.LIMIT, tag, limit_price=limit_price,
+                            order_properties=order_properties)
+
+    def stop_market_order(self, symbol, quantity, stop_price, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.STOP_MARKET, tag, stop_price=stop_price,
+                            order_properties=order_properties)
+
+    def stop_limit_order(self, symbol, quantity, stop_price, limit_price, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.STOP_LIMIT, tag, limit_price=limit_price,
+                            stop_price=stop_price, order_properties=order_properties)
+
+    def trailing_stop_order(self, symbol, quantity, *args, **kwargs):
+        """LEAN: trailing_stop_order(symbol, quantity, trailing_amount, trailing_as_percentage[, tag, props])
+        or trailing_stop_order(symbol, quantity, stop_price, trailing_amount, trailing_as_percentage[, ...])."""
+        a = list(args)
+        stop_price = kwargs.pop('stop_price', None)
+        if len(a) >= 3 and isinstance(a[2], bool):
+            stop_price = a.pop(0)
+        trailing_amount = a.pop(0) if a else kwargs.pop('trailing_amount', 0)
+        as_pct = a.pop(0) if a else kwargs.pop('trailing_as_percentage', False)
+        tag = a.pop(0) if a else kwargs.pop('tag', "")
+        props = a.pop(0) if a else kwargs.pop('order_properties', None)
+        return self._submit(symbol, quantity, OrderType.TRAILING_STOP, tag, stop_price=stop_price or 0,
+                            order_properties=props, trailing_amount=trailing_amount or 0,
+                            trailing_as_percentage=bool(as_pct))
+
+    def market_on_open_order(self, symbol, quantity, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.MARKET_ON_OPEN, tag, order_properties=order_properties)
+
+    def market_on_close_order(self, symbol, quantity, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.MARKET_ON_CLOSE, tag, order_properties=order_properties)
+
+    def limit_if_touched_order(self, symbol, quantity, trigger_price, limit_price, tag="", order_properties=None, **kwargs):
+        return self._submit(symbol, quantity, OrderType.LIMIT_IF_TOUCHED, tag, limit_price=limit_price,
+                            trigger_price=trigger_price, order_properties=order_properties)
+
+    def _strategy_order(self, strategy, quantity, tag="", order_properties=None):
+        """An OptionStrategy (option_strategies.OptionStrategies.*) as one combo market order."""
+        from .option_strategies import strategy_to_legs
+        legs = strategy_to_legs(strategy, 1)
+        for leg in legs:
+            if str(leg.symbol).upper() not in self.securities:
+                if leg.symbol.security_type in (SecurityType.OPTION, SecurityType.INDEX_OPTION,
+                                                SecurityType.FUTURE_OPTION):
+                    self._add_option_contract(leg.symbol)
+                else:
+                    self._add(leg.symbol, Resolution.MINUTE, None)
+        return self.combo_market_order(legs, quantity, tag=tag, order_properties=order_properties)
+
+    def buy(self, symbol, quantity, *args, **kwargs):
+        if hasattr(symbol, 'option_legs'):
+            return self._strategy_order(symbol, abs(quantity), kwargs.get('tag', ''))
+        return self.market_order(symbol, abs(quantity), *args, **kwargs)
+
+    def sell(self, symbol, quantity, *args, **kwargs):
+        if hasattr(symbol, 'option_legs'):
+            return self._strategy_order(symbol, -abs(quantity), kwargs.get('tag', ''))
+        return self.market_order(symbol, -abs(quantity), *args, **kwargs)
+
+    def order(self, symbol, quantity, *args, **kwargs):
+        if hasattr(symbol, 'option_legs'):
+            return self._strategy_order(symbol, quantity, kwargs.get('tag', ''))
+        return self.market_order(symbol, quantity, *args, **kwargs)
+
+    def _unordered_quantity(self, ticker: str) -> float:
+        """Holdings plus quantities of market orders not yet filled (LEAN: open orders count)."""
+        held = self.portfolio[ticker].quantity if ticker in self.portfolio else 0.0
+        pending = self._broker.pending_quantity(ticker) if self._broker is not None else 0.0
+        return held + pending
+
+    def calculate_order_quantity(self, symbol, target, *args, **kwargs) -> float:
+        """Quantity to order so `symbol` becomes `target` (fraction of portfolio value).
+
+        target value = (portfolio value - free buffer) * target, priced at the last close and
+        grossed up by the run's commission + slippage; open market orders are counted; the
+        result is rounded toward zero to the lot size (whole shares, 1e-8 crypto). A buying-power
+        model the strategy set on the security (get_maximum_order_quantity_for_target_buying_power)
+        decides instead."""
+        ticker = str(symbol).upper()
+        sec = self.securities.get(ticker)
+        model = (getattr(sec, 'buying_power_model', None) or getattr(sec, 'margin_model', None)) if sec else None
+        if model is not None:
+            from .models import (BuyingPowerModel, is_overridden,
+                                 GetMaximumOrderQuantityForTargetBuyingPowerParameters)
+            if is_overridden(model, BuyingPowerModel, 'get_maximum_order_quantity_for_target_buying_power'):
+                res = model.get_maximum_order_quantity_for_target_buying_power(
+                    GetMaximumOrderQuantityForTargetBuyingPowerParameters(self.portfolio, sec, float(target)))
+                return float(getattr(res, 'quantity', res) or 0.0)
+        return self._engine_order_quantity(symbol, target)
+
+    def _engine_order_quantity(self, symbol, target) -> float:
+        ticker = str(symbol).upper()
+        sec = self.securities.get(ticker)
+        price = float(getattr(sec, 'price', 0.0) or 0.0) if sec is not None else 0.0
+        if price <= 0:
+            return 0.0
+        tpv = self.portfolio.total_portfolio_value
+        buffer = tpv * float(getattr(self.settings, 'free_portfolio_value_percentage', 0.0) or 0.0)
+        target_value = (tpv - buffer) * float(target)
+        cost = 1.0
+        mult = 1.0
+        if self._broker is not None:
+            cost += self._broker.commission_rate + self._broker.slippage_rate
+            mult = self._broker.multiplier(ticker)
+            rate = self.portfolio._rate(self.portfolio.quote_currency(ticker))
+            if rate and rate != 1.0:
+                mult *= rate
+        current = self._unordered_quantity(ticker)
+        desired = target_value / (price * mult * cost)
+        lot = lot_size(getattr(getattr(sec, 'symbol', None), 'security_type', None))
+        delta = round_to_lot(desired - current, lot)
+        return delta
+
+    def set_holdings(self, symbol_or_targets=None, percentage=None, liquidate_existing_holdings=False,
+                     tag="", order_properties=None, **kwargs):
+        """Move `symbol` to `percentage` of portfolio value (or apply a list of PortfolioTargets).
+        liquidate_existing_holdings closes every OTHER position first."""
+        if symbol_or_targets is None:
+            symbol_or_targets = kwargs.pop('symbol', None)
+        if percentage is None:
+            percentage = kwargs.pop('target', kwargs.pop('percent', None))
+        liquidate_existing_holdings = (liquidate_existing_holdings or kwargs.pop('liquidate_existing', False)
+                                       or kwargs.pop('liquidateExistingHoldings', False))
+        if isinstance(symbol_or_targets, (list, tuple)):
+            targets = [(str(t.symbol if hasattr(t, 'symbol') else t).upper(),
+                        t.quantity if hasattr(t, 'quantity') else percentage) for t in symbol_or_targets]
+            if liquidate_existing_holdings:
+                keep = {s for s, _ in targets}
+                for ticker, holding in list(self.portfolio.items()):
+                    if holding.quantity != 0 and ticker not in keep:
+                        self.liquidate(ticker, tag=tag)
+
+            def _adds_exposure(item):
+                ticker, pct = item
+                if pct is None:
+                    return 1
+                cur = self._unordered_quantity(ticker)
+                return 0 if abs(cur + self.calculate_order_quantity(ticker, pct)) < abs(cur) else 1
+            # Like LEAN: orders that reduce a position go first, so they free margin for the rest.
+            targets.sort(key=_adds_exposure)
+            for ticker, pct in targets:
+                if pct is not None:
+                    self._set_holdings_single(ticker, pct, tag, order_properties)
+            return
+        if percentage is None:
+            return
+        ticker = str(symbol_or_targets).upper()
+        if liquidate_existing_holdings:
+            for other, holding in list(self.portfolio.items()):
+                if holding.quantity != 0 and other != ticker:
+                    self.liquidate(other, tag=tag)
+        self._set_holdings_single(ticker, percentage, tag, order_properties)
+
+    def _set_holdings_single(self, ticker: str, percentage: float, tag: str = "", order_properties=None):
+        ticker = str(ticker).upper()
+        quantity = self.calculate_order_quantity(ticker, percentage)
+        if quantity != 0:
+            self.market_order(ticker, quantity, tag=tag, order_properties=order_properties)
+
+    def liquidate(self, symbol=None, tag="Liquidated", order_properties=None, **kwargs):
+        """Cancel open orders and close the position(s) with market orders."""
+        tickers = [str(symbol).upper()] if symbol is not None else \
+            [t for t, h in list(self.portfolio.items()) if h.quantity != 0]
+        if symbol is None and self._broker is not None:
+            self._broker.cancel_open(None, tag)
+        tickets = []
+        for ticker in tickers:
+            if self._broker is not None and symbol is not None:
+                self._broker.cancel_open(ticker, tag)
+            qty = self.portfolio[ticker].quantity if ticker in self.portfolio else 0
+            if qty != 0:
+                tickets.append(self.market_order(ticker, -qty, tag=tag, order_properties=order_properties))
+        return tickets
 
     def can_liquidate(self, symbol):
         ticker = str(symbol).upper()
         return self.portfolio[ticker].quantity != 0
 
     # ---- Indicator Factory Methods ----
+    # Every factory registers the indicator with the symbol(s) whose bars update it
+    # (self._registered_indicators); the runner feeds each daily bar to the indicators
+    # of its symbol before calling on_data, like LEAN's automatic indicator updates.
 
-    def ema(self, symbol, period, resolution=None, selector=None):
-        name = f"EMA_{symbol}_{period}"
-        indicator = ExponentialMovingAverage(name, period)
-        self._indicators[name] = indicator
+    def _register(self, indicator, symbols, selector=None, name=None):
+        syms = [str(s).upper() for s in (symbols if isinstance(symbols, (list, tuple)) else [symbols])
+                if s is not None]
+        entry = {'indicator': indicator, 'symbols': syms, 'selector': selector}
+        self._registered_indicators.append(entry)
+        indicator._fincept_symbols = syms
+        if isinstance(self._indicators, dict):
+            self._indicators[name or getattr(indicator, 'name', str(id(indicator)))] = indicator
         return indicator
 
-    def sma(self, symbol, period, resolution=None, selector=None):
-        name = f"SMA_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        self._indicators[name] = indicator
-        return indicator
+    @staticmethod
+    def _sel(resolution, selector):
+        """Factories accept (..., resolution, selector); a selector passed in the resolution
+        slot (callable, not a Resolution) is taken as the selector."""
+        if selector is None and callable(resolution) and not isinstance(resolution, (int, timedelta)):
+            return resolution
+        return selector
+
+    def ema(self, symbol, period, smoothing_factor=None, resolution=None, selector=None, **kwargs):
+        if callable(smoothing_factor) or isinstance(smoothing_factor, Resolution):
+            smoothing_factor, resolution = None, smoothing_factor
+        sf = smoothing_factor if isinstance(smoothing_factor, float) and 0 < smoothing_factor <= 1 else None
+        ind = ExponentialMovingAverage(f"EMA({symbol},{period})", int(period), sf)
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def sma(self, symbol, period, resolution=None, selector=None, **kwargs):
+        ind = SimpleMovingAverage(f"SMA({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
     def macd(self, symbol, fast_period=12, slow_period=26, signal_period=9,
-             moving_average_type=None, resolution=None, selector=None):
-        name = f"MACD_{symbol}"
-        indicator = MovingAverageConvergenceDivergence(name, fast_period, slow_period, signal_period)
-        self._indicators[name] = indicator
-        return indicator
+             moving_average_type=None, resolution=None, selector=None, **kwargs):
+        ind = MovingAverageConvergenceDivergence(f"MACD({symbol},{fast_period},{slow_period},{signal_period})",
+                                                 int(fast_period), int(slow_period), int(signal_period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def rsi(self, symbol, period=14, moving_average_type=None, resolution=None, selector=None):
-        name = f"RSI_{symbol}_{period}"
-        indicator = RelativeStrengthIndex(name, period, moving_average_type)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def rsi(self, symbol, period=14, moving_average_type=None, resolution=None, selector=None, **kwargs):
+        if isinstance(moving_average_type, Resolution):
+            moving_average_type, resolution = None, moving_average_type
+        ind = RelativeStrengthIndex(f"RSI({symbol},{period})", int(period), moving_average_type)
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def b(self, symbol, reference_symbol=None, period=14, resolution=None, selector=None):
-        """Beta indicator."""
-        name = f"BETA_{symbol}_{period}"
-        from .algorithm_imports import Beta
-        indicator = Beta(name, period)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def b(self, target, reference, period=14, resolution=None, selector=None, **kwargs):
+        """Beta of target vs reference over `period` daily returns."""
+        ind = _BetaIndicator(f"B({target},{reference},{period})", target, reference, int(period))
+        return self._register(ind, [target, reference], None)
 
-    def bb(self, symbol, period=20, k=2.0, moving_average_type=None, resolution=None, selector=None):
-        name = f"BB_{symbol}_{period}"
-        indicator = BollingerBands(name, period, k)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    beta = b
 
-    def atr(self, symbol, period=14, moving_average_type=None, resolution=None, selector=None):
-        name = f"ATR_{symbol}_{period}"
-        indicator = AverageTrueRange(name, period)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def bb(self, symbol, period=20, k=2.0, moving_average_type=None, resolution=None, selector=None, **kwargs):
+        if isinstance(moving_average_type, Resolution):
+            moving_average_type, resolution = None, moving_average_type
+        ind = BollingerBands(f"BB({symbol},{period},{k})", int(period), float(k))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def sto(self, symbol, period=14, k_period=3, d_period=3, resolution=None):
-        name = f"STO_{symbol}_{period}"
-        indicator = Stochastic(name, period, k_period, d_period)
-        self._indicators[name] = indicator
-        return indicator
+    def atr(self, symbol, period=14, moving_average_type=None, resolution=None, selector=None, **kwargs):
+        if isinstance(moving_average_type, Resolution):
+            moving_average_type, resolution = None, moving_average_type
+        ind = AverageTrueRange(f"ATR({symbol},{period})", int(period), moving_average_type)
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def roc(self, symbol, period=14, resolution=None):
-        name = f"ROC_{symbol}_{period}"
-        indicator = RateOfChange(name, period)
-        self._indicators[name] = indicator
-        return indicator
+    def sto(self, symbol, period=14, k_period=3, d_period=3, resolution=None, selector=None, **kwargs):
+        ind = Stochastic(f"STO({symbol},{period})", int(period), int(k_period), int(d_period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def mom(self, symbol, period=14, resolution=None, selector=None):
-        name = f"MOM_{symbol}_{period}"
-        indicator = Momentum(name, period)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def roc(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = RateOfChange(f"ROC({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def wilr(self, symbol, period=14, resolution=None):
-        name = f"WILR_{symbol}_{period}"
-        indicator = WilliamsPercentR(name, period)
-        self._indicators[name] = indicator
-        return indicator
+    def rocp(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = MomentumPercent(f"ROCP({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def cci(self, symbol, period=20, resolution=None):
-        name = f"CCI_{symbol}_{period}"
-        indicator = CommodityChannelIndex(name, period)
-        self._indicators[name] = indicator
-        return indicator
+    def mom(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = Momentum(f"MOM({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def adx(self, symbol, period=14, resolution=None):
-        name = f"ADX_{symbol}_{period}"
-        indicator = AverageDirectionalIndex(name, period)
-        self._indicators[name] = indicator
-        return indicator
+    def momp(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = MomentumPercent(f"MOMP({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def identity(self, symbol, resolution=None, selector=None, name=None):
-        """Identity indicator (returns input value unchanged)."""
-        ind_name = name or f"ID_{symbol}"
-        indicator = SimpleMovingAverage(ind_name, 1)
-        self._indicators[ind_name] = indicator
-        return indicator
+    def wilr(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = WilliamsPercentR(f"WILR({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def filtered_identity(self, symbol, filter_func=None, resolution=None):
-        """Filtered identity indicator."""
-        name = f"FID_{symbol}"
-        indicator = SimpleMovingAverage(name, 1)
-        self._indicators[name] = indicator
-        return indicator
+    def cci(self, symbol, period=20, moving_average_type=None, resolution=None, selector=None, **kwargs):
+        ind = CommodityChannelIndex(f"CCI({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def rc(self, symbol, period=20, resolution=None, selector=None):
-        """Regression Channel indicator."""
-        name = f"RC_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        # Add regression channel-specific attributes
-        indicator.linear_regression = SimpleMovingAverage(f"RC_LR_{symbol}", period)
-        indicator.upper_channel = SimpleMovingAverage(f"RC_UC_{symbol}", period)
-        indicator.lower_channel = SimpleMovingAverage(f"RC_LC_{symbol}", period)
-        indicator.intercept = SimpleMovingAverage(f"RC_INT_{symbol}", period)
-        indicator.slope = SimpleMovingAverage(f"RC_SLP_{symbol}", period)
-        self._indicators[name] = indicator
-        return indicator
+    def adx(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = AverageDirectionalIndex(f"ADX({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def std(self, symbol, period=20, resolution=None, selector=None):
-        """Standard Deviation indicator."""
-        name = f"STD_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        # Add std-specific attributes
-        indicator._std_window = deque(maxlen=period)
-        indicator._orig_compute = indicator._compute
-        def _std_compute(value):
-            indicator._std_window.append(value)
-            if len(indicator._std_window) < 2:
-                return 0.0
-            mean = sum(indicator._std_window) / len(indicator._std_window)
-            variance = sum((x - mean) ** 2 for x in indicator._std_window) / len(indicator._std_window)
-            return variance ** 0.5
-        indicator._compute = _std_compute
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def identity(self, symbol, resolution=None, selector=None, name=None, **kwargs):
+        """Identity indicator (the input value: close, or the selector's value)."""
+        if isinstance(selector, str) and name is None:
+            selector, name = None, selector
+        ind = Identity(name or f"ID({symbol})")
+        return self._register(ind, symbol, self._sel(resolution, selector), name=name)
 
-    def min(self, symbol, period=14, resolution=None, selector=None):
-        """Minimum indicator - tracks lowest value over period."""
-        name = f"MIN_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        indicator._min_window = deque(maxlen=period)
-        def _min_compute(value):
-            indicator._min_window.append(value)
-            return __builtins__['min'](indicator._min_window) if isinstance(__builtins__, dict) else min(indicator._min_window)
-        indicator._compute = _min_compute
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def filtered_identity(self, symbol, filter_func=None, resolution=None, selector=None, name=None, **kwargs):
+        filt = filter_func if filter_func is not None else kwargs.get('filter')
+        ind = FilteredIdentity(name or f"FID({symbol})", filt)
+        return self._register(ind, symbol, self._sel(resolution, selector), name=name)
 
-    def max(self, symbol, period=14, resolution=None, selector=None):
-        """Maximum indicator - tracks highest value over period."""
-        name = f"MAX_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        indicator._max_window = deque(maxlen=period)
-        def _max_compute(value):
-            indicator._max_window.append(value)
-            return __builtins__['max'](indicator._max_window) if isinstance(__builtins__, dict) else max(indicator._max_window)
-        indicator._compute = _max_compute
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def rc(self, symbol, period=20, k=2.0, resolution=None, selector=None, **kwargs):
+        """Regression Channel: least-squares line +/- k standard deviations."""
+        if isinstance(k, Resolution):
+            k, resolution = 2.0, k
+        ind = RegressionChannel(f"RC({symbol},{period},{k})", int(period), float(k))
+        return self._register(ind, symbol, self._sel(resolution, selector))
 
-    def aroon(self, symbol, period=20, resolution=None, selector=None):
-        """Aroon indicator."""
-        name = f"AROON_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        indicator.aroon_up = SimpleMovingAverage(f"AROON_UP_{symbol}", period)
-        indicator.aroon_down = SimpleMovingAverage(f"AROON_DOWN_{symbol}", period)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    def std(self, symbol, period=20, resolution=None, selector=None, **kwargs):
+        ind = StandardDeviation(f"STD({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def min(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = Minimum(f"MIN({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def max(self, symbol, period=14, resolution=None, selector=None, **kwargs):
+        ind = Maximum(f"MAX({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def aroon(self, symbol, up_period=25, down_period=None, resolution=None, selector=None, **kwargs):
+        """Aroon oscillator (aroon_up / aroon_down sub-values), LEAN AROON(symbol, period[, downPeriod])."""
+        if isinstance(down_period, Resolution):
+            down_period, resolution = None, down_period
+        dp = int(down_period) if down_period else int(up_period)
+        ind = AroonOscillator(f"AROON({symbol},{up_period},{dp})", int(up_period), dp)
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def vwap(self, symbol, period=None, resolution=None, selector=None, **kwargs):
+        """vwap(symbol, period): rolling VWAP over `period` bars; vwap(symbol): session VWAP."""
+        if isinstance(period, Resolution) or period is None:
+            if isinstance(period, Resolution):
+                resolution = period
+            ind = IntradayVwap(f"VWAP({symbol})")
+        else:
+            ind = VolumeWeightedAveragePrice(f"VWAP({symbol},{period})", int(period))
+        return self._register(ind, symbol, self._sel(resolution, selector))
+
+    def trin(self, *args, **kwargs):
+        raise not_supported("the TRIN (Arms) index", "It needs market-wide advance/decline volume data.")
+
+    def arima(self, *args, **kwargs):
+        raise not_supported("the ARIMA indicator")
+
+    def _greek(self, kind, symbol, *args, **kwargs):
+        """Option greek / implied-volatility indicator of a contract, updated at each close from the
+        option model (the same quotes the contract trades at)."""
+        from .indicators import Identity
+        sym = symbol if isinstance(symbol, Symbol) else getattr(symbol, 'symbol', None)
+        if sym is None or sym.security_type not in (SecurityType.OPTION, SecurityType.INDEX_OPTION,
+                                                    SecurityType.FUTURE_OPTION):
+            raise ValueError(f"{kind} indicator needs an option contract Symbol, got {symbol!r}")
+        ind = _OptionGreekIndicator(f"{kind.upper()}({sym})", kind)
+        if str(sym).upper() not in self.securities:
+            self._add_option_contract(sym)
+        mgr = getattr(self, '_option_manager', None)
+        if mgr is not None:
+            mgr.register_indicator(ind, sym, kind)
+        else:
+            self._pending_option_indicators = getattr(self, '_pending_option_indicators', []) + [(ind, sym, kind)]
+        return ind
+
+    def iv(self, symbol, *args, **kwargs):
+        return self._greek('iv', symbol, *args, **kwargs)
+
+    def d(self, symbol, *args, **kwargs):
+        return self._greek('delta', symbol, *args, **kwargs)
+
+    def g(self, symbol, *args, **kwargs):
+        return self._greek('gamma', symbol, *args, **kwargs)
+
+    def r(self, symbol, *args, **kwargs):
+        return self._greek('rho', symbol, *args, **kwargs)
+
+    def v(self, symbol, *args, **kwargs):
+        return self._greek('vega', symbol, *args, **kwargs)
+
+    def t(self, symbol, *args, **kwargs):
+        return self._greek('theta', symbol, *args, **kwargs)
 
     def register_indicator(self, symbol, indicator, resolution_or_consolidator=None, selector=None):
-        if isinstance(self._indicators, dict):
-            name = getattr(indicator, 'name', str(id(indicator)))
-            self._indicators[name] = indicator
-        # If _indicators was overridden to a list by user code, don't break it
+        """Update `indicator` with `symbol`'s bars - or with the bars of a consolidator /
+        a time period, when one is given."""
+        roc = resolution_or_consolidator
+        if roc is not None and hasattr(roc, 'data_consolidated') and hasattr(roc, 'update'):
+            self._wire_consolidated(symbol, roc, indicator, selector, register_consolidator=True)
+            return indicator
+        if isinstance(roc, timedelta) and roc > timedelta(days=1):
+            cons = TradeBarConsolidator(roc)
+            self._wire_consolidated(symbol, cons, indicator, selector, register_consolidator=True)
+            return indicator
+        if selector is None and callable(roc) and not isinstance(roc, (int, timedelta)):
+            selector = roc
+        # re-registering the same indicator replaces its feed
+        self._registered_indicators = [e for e in self._registered_indicators if e['indicator'] is not indicator]
+        return self._register(indicator, symbol, selector)
+
+    def _wire_consolidated(self, symbol, consolidator, indicator, selector, register_consolidator):
+        def _on(sender, bar):
+            feed_indicator(indicator, selector(bar) if selector else bar)
+        consolidator.data_consolidated += _on
+        if register_consolidator and not any(c['consolidator'] is consolidator for c in self._consolidators):
+            self._consolidators.append({'symbol': str(symbol).upper(), 'consolidator': consolidator})
 
     def unregister_indicator(self, indicator):
+        self._registered_indicators = [e for e in self._registered_indicators if e['indicator'] is not indicator]
         name = getattr(indicator, 'name', str(id(indicator)))
-        self._indicators.pop(name, None)
+        if isinstance(self._indicators, dict):
+            self._indicators.pop(name, None)
 
-    def indicator_history(self, indicator, symbol_or_symbols, period_or_start,
+    def indicator_history(self, indicator, symbol_or_symbols, period_or_start, *args,
                           resolution=None, selector=None):
-        if pd:
-            return pd.DataFrame()
-        return []
+        """LEAN indicator_history: updates `indicator` with the bars known now (see indicator_history.py)
+        and returns the values it produced."""
+        from .indicator_history import indicator_history
+        return indicator_history(self, indicator, symbol_or_symbols, period_or_start, *args,
+                                 resolution=resolution, selector=selector)
+
+    def warm_up_indicator(self, symbol, indicator, resolution=None, selector=None, **kwargs):
+        """Feed `indicator` the real bars before now (as many as its warm-up period needs)."""
+        period = int(getattr(indicator, 'warm_up_period', 0) or 0)
+        if period <= 0:
+            return indicator  # LEAN skips indicators that do not declare a warm-up period
+        bars = self.history[TradeBar](symbol if not isinstance(symbol, (list, tuple)) else symbol[0], period)
+        sel = self._sel(resolution, selector)
+        for bar in bars:
+            feed_indicator(indicator, sel(bar) if sel else bar)
+        return indicator
 
     def resolve_consolidator(self, symbol, resolution, data_type=None):
-        """Resolve a consolidator for the given symbol and resolution."""
-        from .consolidators import TradeBarConsolidator
-        if isinstance(resolution, timedelta):
-            return TradeBarConsolidator(resolution)
-        return TradeBarConsolidator(timedelta(minutes=1))
+        """A consolidator for `resolution` (Resolution or timedelta)."""
+        return TradeBarConsolidator(resolution if resolution is not None else timedelta(days=1))
 
     def create_indicator_name(self, symbol, indicator_type, resolution):
         """Create a standard indicator name."""
@@ -2028,62 +2387,135 @@ class QCAlgorithm:
 
     # ---- Data Consolidation ----
 
-    def consolidate(self, symbol, period_or_type, handler=None, tick_type=None):
-        if isinstance(period_or_type, timedelta):
-            consolidator = TradeBarConsolidator(period_or_type)
-        elif isinstance(period_or_type, int):
-            consolidator = TradeBarConsolidator(max_count=period_or_type)
-        else:
-            consolidator = TradeBarConsolidator(timedelta(days=1))
-
-        if handler:
-            consolidator.data_consolidated = handler
-
-        self._consolidators.append({'symbol': str(symbol), 'consolidator': consolidator})
+    def consolidate(self, symbol, period, *args, **kwargs):
+        """LEAN consolidate(symbol, period, [tick_type,] handler): `handler(bar)` receives each
+        consolidated bar. period: timedelta, Resolution, bar count or Calendar.* function."""
+        handler = kwargs.get('handler')
+        for a in args:
+            if callable(a) and not isinstance(a, (int, timedelta)):
+                handler = a
+        if isinstance(period, Resolution) and period == Resolution.TICK:
+            raise not_supported("tick data", "The engine runs on daily bars.")
+        consolidator = TradeBarConsolidator(period)
+        if handler is not None:
+            consolidator.data_consolidated += (lambda sender, bar, _h=handler: _h(bar))
+        self._consolidators.append({'symbol': str(symbol).upper(), 'consolidator': consolidator})
         return consolidator
 
     # ---- Universe Methods ----
+    # Universes (manual lists, coarse/fine/fundamental selectors, ETF constituents, scheduled and
+    # custom selectors, framework universe models) run in universe_selection.UniverseManager over a
+    # fixed, disclosed pool of US stocks and ETFs (universe_data.py); option/future universe models
+    # subscribe the chains their selector returns.
+
+    # ---- universe plumbing (callbacks of the UniverseManager) ----
+    def _universe_subscribe(self, symbol, settings):
+        """Add a security a universe selected; None when no data source can price it."""
+        from .data import TRADABLE_TYPES
+        key = str(symbol).upper()
+        res = getattr(settings, 'resolution', None) or Resolution.DAILY
+        lev = getattr(settings, 'leverage', None)
+        lev = lev if isinstance(lev, (int, float)) and lev > 0 else None
+        existed = key in self.securities._securities
+        sec = self._add(symbol if isinstance(symbol, Symbol) else Symbol(key), res, lev)
+        mode = getattr(settings, 'data_normalization_mode', None)
+        if mode is not None and int(mode) != 1 and not existed:
+            sec.set_data_normalization_mode(mode)
+        if self._data is not None and sec.symbol.security_type in TRADABLE_TYPES and not existed:
+            session = getattr(self, '_session', None)
+            if session is not None:
+                session.apply_price_mode(sec)
+            if self._data.series(sec.symbol, sec.symbol.security_type, getattr(sec.symbol, 'market', None)) is None:
+                self.securities.remove(key)
+                return None
+        return sec
+
+    def _universe_held(self, symbol):
+        key = str(symbol).upper()
+        h = self.portfolio._holdings.get(key)
+        if h is not None and h.quantity:
+            return True
+        return bool(self.transactions.get_open_orders(key))
 
     def add_universe(self, *args, **kwargs):
-        """Add a universe selection model or function."""
-        # If asynchronous universe settings + coarse/fine function combo, raise
-        if getattr(self.universe_settings, 'asynchronous', False) and len(args) >= 2:
-            if callable(args[0]) and callable(args[1]):
-                raise ValueError("Asynchronous universe selection does not support coarse/fine function combo. Use FineFundamentalUniverseSelectionModel instead.")
-        # Detect universe type
-        data_type = None
-        is_etf = False
-        selector = args[0] if args else None
-        if args and isinstance(args[0], type) and hasattr(args[0], 'reader'):
-            # Custom PythonData universe type (e.g., StockDataSource)
-            data_type = args[0]
-            selector = args[1] if len(args) > 1 else None
-        elif args and isinstance(args[0], _UniverseReference):
+        """LEAN add_universe overloads (fundamental / coarse+fine functions, ETF constituents,
+        Universe objects, user-defined selectors, framework models); see universe_selection.py."""
+        if args and isinstance(args[0], UniverseSelectionModel):
+            self.add_universe_selection(args[0])
             return args[0]
-        elif args and hasattr(args[0], '_is_etf'):
-            # ETF universe (e.g., self.universe.etf(spy, settings, filter))
-            etf_settings = args[0]
-            ref = _UniverseReference(getattr(etf_settings, '_filter_func', None), is_etf=True)
-            ref._etf_settings = etf_settings
-            return ref
-        return _UniverseReference(selector, data_type=data_type, is_etf=is_etf)
+        return self._universe_manager.add_universe(*args, **kwargs)
 
-    def add_universe_options(self, *args, **kwargs):
-        pass
+    def add_universe_options(self, universe, option_filter=None, *args, **kwargs):
+        """Options on the members of a universe (LEAN AddUniverseOptions): each selected equity gets its
+        option chain with this filter."""
+        self._universe_option_filters = getattr(self, '_universe_option_filters', []) + [(universe, option_filter)]
+        return universe
+
+    def _derivative_universe_model(self, model):
+        """OptionUniverseSelectionModel / FutureUniverseSelectionModel: the canonical symbols the model's
+        selector returns are subscribed (option chains / futures with the model's filter); the selector
+        runs again every refresh_interval (universe_ext.UniverseExtension)."""
+        if model not in getattr(self, '_derivative_models', []):
+            self._derivative_models = getattr(self, '_derivative_models', []) + [model]
+        if hasattr(model, 'select_chain_symbols'):
+            syms = model.select_chain_symbols(self.utc_time)
+        else:
+            sel = getattr(model, '_option_chain_symbol_selector', None) or \
+                getattr(model, '_future_chain_symbol_selector', None)
+            if sel is None:
+                raise not_supported(f"universe selection ({type(model).__name__})")
+            try:
+                syms = list(sel(self.utc_time) or [])
+            except TypeError:
+                syms = list(sel() or [])
+        flt = getattr(model, 'filter', None)
+        done = getattr(self, '_derivative_subscribed', set())
+        self._derivative_subscribed = done
+        for s in syms:
+            if str(s).upper() in done:
+                continue
+            done.add(str(s).upper())
+            sym = s if isinstance(s, Symbol) else Symbol(str(s))
+            if sym.security_type == SecurityType.FUTURE:
+                sec = self.add_future(sym.id.symbol, self.universe_settings.resolution, sym.market)
+                if callable(flt):
+                    sec.set_filter(lambda u, _m=model: _m.filter(u))
+            elif sym.security_type in (SecurityType.OPTION, SecurityType.INDEX_OPTION):
+                sec = self._add_option_canonical(sym if sym.is_canonical() else sym.canonical,
+                                                 self.universe_settings.resolution)
+                if callable(flt):
+                    sec.set_filter(lambda u, _m=model: _m.filter(u))
+        return model
 
     def set_universe_selection(self, model):
         self._universe_selection = model
+        from .framework.selection import OptionUniverseSelectionModel, FutureUniverseSelectionModel
+        if isinstance(model, (OptionUniverseSelectionModel, FutureUniverseSelectionModel)):
+            return self._derivative_universe_model(model)
+        self._universe_manager.set_universe_selection(model)
 
-    def add_universe_selection(self, model):
-        self._universe_selection = model
+    def add_universe_selection(self, model, _replace=False):
+        if not _replace:
+            self._universe_selection = model
+        from .framework.selection import OptionUniverseSelectionModel, FutureUniverseSelectionModel
+        if isinstance(model, (OptionUniverseSelectionModel, FutureUniverseSelectionModel)) or \
+                hasattr(model, '_future_chain_symbol_selector') or hasattr(model, '_option_chain_symbol_selector'):
+            return self._derivative_universe_model(model)
+        self._universe_manager.add_universe_selection(model)
 
     # ---- Framework Model Methods ----
+    # The runner drives alpha -> portfolio construction -> risk -> execution once per bar.
 
     def set_alpha(self, model):
         self._alpha_model = model
 
     def add_alpha(self, model):
-        self._alpha_model = model
+        if self._alpha_model is None:
+            self._alpha_model = model
+        elif isinstance(self._alpha_model, CompositeAlphaModel):
+            self._alpha_model._models.append(model)
+        else:
+            self._alpha_model = CompositeAlphaModel(self._alpha_model, model)
 
     def set_portfolio_construction(self, model):
         self._portfolio_construction = model
@@ -2095,10 +2527,20 @@ class QCAlgorithm:
         self._risk_management = model
 
     def add_risk_management(self, model):
-        self._risk_management = model
+        if self._risk_management is None:
+            self._risk_management = model
+        elif isinstance(self._risk_management, CompositeRiskManagementModel):
+            self._risk_management._models.append(model)
+        else:
+            self._risk_management = CompositeRiskManagementModel(self._risk_management, model)
 
     def emit_insights(self, *insights):
-        pass
+        """Insights emitted by the algorithm itself; processed with the alpha model's."""
+        for i in insights:
+            if isinstance(i, (list, tuple)):
+                self._pending_insights.extend(i)
+            elif i is not None:
+                self._pending_insights.append(i)
 
     # ---- Charting & Logging ----
 
@@ -2131,13 +2573,17 @@ class QCAlgorithm:
         logger.error(f"[{self._time}] {message}")
 
     def quit(self, message: str = ""):
+        """Stop the algorithm: the runner ends the backtest after the current step."""
         logger.info(f"Algorithm quit: {message}")
+        self._quit_requested = True
+        self._quit_message = message
 
     def set_runtime_statistic(self, name: str, value):
         self._runtime_statistics[name] = str(value)
 
     def set_summary_statistic(self, name: str, value):
         self._runtime_statistics[name] = str(value)
+        self.statistics._custom[str(name)] = str(value)
 
     # ---- Parameter Methods ----
 
@@ -2149,7 +2595,13 @@ class QCAlgorithm:
         if default_value is not None:
             try:
                 if isinstance(default_value, int) and not isinstance(default_value, bool):
-                    return int(val)
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        f = float(val)          # '100.0' from an optimiser grid
+                        if f.is_integer():
+                            return int(f)
+                        raise
                 elif isinstance(default_value, float):
                     return float(val)
             except (ValueError, TypeError):
@@ -2183,8 +2635,10 @@ class QCAlgorithm:
             return ""
 
     def train(self, *args):
-        """Execute a training function. Can be train(func) or train(date_rule, time_rule, func)."""
+        """train(func) runs func now; train(date_rule, time_rule, func) schedules it."""
         func = args[-1] if args else None
+        if len(args) >= 3 and callable(func):
+            return self.schedule.on(args[0], args[1], func)
         if callable(func):
             func()
 
@@ -2247,360 +2701,193 @@ class QCAlgorithm:
         return "&" + "&".join(parts)
 
     def fundamentals(self, symbol=None):
-        """Get fundamental data for a symbol or list of symbols."""
-        if isinstance(symbol, (list, tuple)):
-            return [self.fundamentals(s) for s in symbol]
-        # Try to get price from securities
-        price = 100.0
-        sym_str = str(symbol).upper() if symbol else ''
-        if sym_str in self.securities:
-            sec_price = self.securities[sym_str].price
-            if sec_price > 0:
-                price = sec_price
-        from .algorithm_imports import Fundamental as _Fundamental
-        result = _Fundamental(
-            price=price,
-            end_time=self._time or self._start_date,
-            symbol=symbol,
-            dollar_volume=1e8,
-            volume=1000000,
-            market_cap=1e10,
-            has_fundamental_data=True,
-        )
-        return result
+        """Fundamental objects as of now (Yahoo snapshot; see universe_data.py and its disclosure)."""
+        return self._universe_manager.fundamentals(symbol)
+
+    def _identifier(self, what):
+        raise not_supported(f"security identifier lookups ({what})")
 
     def cusip(self, symbol):
-        """Get CUSIP for a symbol."""
-        sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol))
-        return sym.cusip
+        self._identifier("CUSIP")
 
     def composite_figi(self, symbol):
-        """Get Composite FIGI for a symbol."""
-        sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol))
-        return sym.composite_figi
+        self._identifier("FIGI")
 
     def sedol(self, symbol):
-        """Get SEDOL for a symbol."""
-        sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol))
-        return sym.sedol
+        self._identifier("SEDOL")
 
     def isin(self, symbol):
-        """Get ISIN for a symbol."""
-        sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol))
-        return sym.isin
+        self._identifier("ISIN")
 
     def cik(self, symbol):
-        """Get CIK for a symbol."""
-        sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol))
-        return sym.cik
+        self._identifier("CIK")
+
+    def _ensure_option_manager(self):
+        mgr = getattr(self, '_option_manager', None)
+        if mgr is None:
+            session = getattr(self, '_session', None)
+            from .options import OptionManager
+            mgr = OptionManager()
+            if session is None:
+                if self._data is None:
+                    raise not_supported("option chains outside a backtest run")
+                mgr.attach_early(self)       # joins the run's session when it starts
+            else:
+                mgr.after_initialize(session)
+                session.extensions.append(mgr)
+        return mgr
 
     def option_chain(self, symbol, flatten=False):
-        """Get option chain for symbol. Returns OptionChainResult with contracts."""
-        from .enums import OptionRight, OptionStyle
-        underlying = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol).upper())
-        chain = _OptionChainResult(underlying)
+        """The full option chain (every listed contract, no filter) of an underlying or canonical option
+        at the current time, model-priced (see option_model.py)."""
+        mgr = self._ensure_option_manager()
+        canonical = self._canonical_option_for(symbol)
+        return mgr.full_chain(canonical, self.time)
 
-        # Determine underlying properties
-        ticker_str = str(underlying).upper()
-        und_sec_type = getattr(underlying, 'security_type', SecurityType.EQUITY)
+    def _canonical_option_for(self, symbol):
+        sym = symbol if isinstance(symbol, Symbol) else (self.securities[str(symbol).upper()].symbol
+                                                         if str(symbol).upper() in self.securities else
+                                                         Symbol(str(symbol).upper()))
+        if sym.security_type in (SecurityType.OPTION, SecurityType.INDEX_OPTION, SecurityType.FUTURE_OPTION):
+            return sym.canonical
+        if sym.security_type == SecurityType.FUTURE:
+            return Symbol.create_canonical_option(sym, sym.market)
+        if sym.security_type == SecurityType.INDEX:
+            return Symbol.create_canonical_option(sym, sym.market)
+        return Symbol.create_canonical_option(sym, Market.USA)
 
-        # Determine option SecurityType, Market, and Style based on underlying
-        if und_sec_type == SecurityType.FUTURE:
-            opt_sec_type = SecurityType.FUTURE_OPTION
-            opt_market = getattr(underlying, 'market', Market.CME)
-            opt_style = OptionStyle.AMERICAN
-        elif und_sec_type == SecurityType.INDEX:
-            opt_sec_type = SecurityType.INDEX_OPTION
-            opt_market = Market.USA
-            opt_style = OptionStyle.EUROPEAN
-        else:
-            opt_sec_type = SecurityType.OPTION
-            opt_market = Market.USA
-            opt_style = OptionStyle.AMERICAN
+    def option_chains_for(self, symbols, flatten=False):
+        from .option_chain import OptionChains
+        out = OptionChains(self.time)
+        for s in (symbols if isinstance(symbols, (list, tuple, set)) else [symbols]):
+            ch = self.option_chain(s)
+            out[ch.symbol] = ch
+        return out
 
-        # Determine base price
-        base_price = 100.0
-        sec = self.securities.get(ticker_str)
-        if sec and sec.price > 0:
-            base_price = sec.price
-        else:
-            _default_prices = {
-                'SPX': 3800.0, 'SPXW': 3800.0, 'NDX': 13000.0, 'SPY': 380.0, 'QQQ': 310.0,
-                'ES': 3200.0, 'NQ': 13000.0, 'YM': 30000.0, 'RTY': 1800.0, 'MES': 3200.0,
-                'GOOG': 750.0, 'GOOGL': 750.0, 'AAPL': 150.0, 'MSFT': 300.0, 'AMZN': 3200.0,
-                'TSLA': 700.0, 'NVDA': 250.0, 'META': 250.0, 'NFLX': 500.0,
-                'GC': 1800.0, 'SI': 25.0, 'CL': 70.0, 'NG': 4.0,
-                'DC': 17.0, 'ZC': 400.0, 'ZW': 600.0, 'ZS': 1200.0,
-                # Full-name future tickers (used by Futures.Dairy.CLASS_III_MILK etc.)
-                'CLASS_III_MILK': 17.0, 'BUTTER': 2.0, 'CASH_SETTLED_CHEESE': 2.0,
-                'SP_500_E_MINI': 3200.0, 'E_MINI': 3200.0,
-            }
-            if ticker_str in _default_prices:
-                base_price = _default_prices[ticker_str]
+    def futures_chain(self, symbol, flatten=False):
+        """Listed contracts of a future at the current time (prices known now)."""
+        from .futures import contract_expiries, contract_symbol, FuturesChain, FuturesContract
+        root = getattr(getattr(symbol, 'id', None), 'symbol', None) or str(symbol).lstrip('/')
+        canonical = Symbol.create(root, SecurityType.FUTURE, Market.CME)
+        contracts = []
+        for e in contract_expiries(root, self.time.date()):
+            cs = contract_symbol(root, e)
+            bar = None
+            if self._data is not None:
+                s = self._data.series(cs, SecurityType.FUTURE, 'cme')
+                if s is not None:
+                    n = s.count_known_at(self.time)
+                    bar = {'close': s.close[n - 1]} if n > 0 else None
+            contracts.append(FuturesContract(cs, canonical, datetime(e.year, e.month, e.day), bar, self.time))
+        return FuturesChain(canonical, self.time, contracts)
 
-        # Store base_price on underlying for _OptionContract IV calculation
-        underlying._chain_base_price = base_price
-
-        now = self._time or self._start_date or datetime.now()
-
-        # Generate strike offsets proportional to base price
-        if base_price > 1000:
-            strike_offsets = [-800, -600, -450, -400, -200, -100, -50, 0, 50, 100, 200, 400, 450, 600, 800]
-        elif base_price > 200:
-            strike_offsets = [-100, -50, -20, -10, -5, 0, 5, 10, 20, 50, 100]
-        else:
-            strike_offsets = [-30, -20, -10, -5, -3, 0, 3, 5, 10, 20, 30]
-
-        # Generate expiry dates - use standard monthly options (3rd Friday of month)
-        # for the next few months from the algorithm's current time
-        def _third_friday(year, month):
-            """Get the third Friday of a given month/year."""
-            import calendar
-            c = calendar.Calendar(firstweekday=calendar.MONDAY)
-            fridays = [d for d in c.itermonthdays2(year, month)
-                       if d[0] != 0 and d[1] == calendar.FRIDAY]
-            return datetime(year, month, fridays[2][0])
-
-        # For futures, use the underlying's expiry date if available
-        und_expiry = getattr(underlying, 'expiry', None)
-        expiry_dates = []
-        if und_expiry:
-            # For future options, the option expires on the same date as the future
-            expiry_dates = [und_expiry]
-        else:
-            # Generate monthly expiry dates for the next 4 months
-            for m_offset in range(0, 4):
-                y = now.year
-                m = now.month + m_offset
-                while m > 12:
-                    m -= 12
-                    y += 1
-                try:
-                    exp = _third_friday(y, m)
-                    # Only include expiries in the future
-                    if exp >= now - timedelta(days=1):
-                        expiry_dates.append(exp)
-                except Exception:
-                    pass
-            # Also add a near-term expiry (7 days out) ONLY if it doesn't overlap with monthly
-            near_exp = now + timedelta(days=7)
-            if not any(abs((near_exp - e).days) < 5 for e in expiry_dates):
-                expiry_dates.append(near_exp)
-
-        for expiry in expiry_dates:
-            for strike_offset in strike_offsets:
-                strike = base_price + strike_offset
-                if strike <= 0:
-                    continue
-                for right in [OptionRight.CALL, OptionRight.PUT]:
-                    right_char = 'C' if right == OptionRight.CALL else 'P'
-                    ticker = f"{ticker_str}{expiry.strftime('%y%m%d')}{right_char}{int(strike)}"
-                    opt_sym = Symbol(ticker, opt_sec_type, opt_market)
-                    opt_sym.expiry = expiry
-                    opt_sym.strike_price = float(strike)
-                    opt_sym.right = right
-                    opt_sym.option_style = opt_style
-                    opt_sym._underlying = underlying
-                    opt_sym.id = type('SymbolId', (), {
-                        'strike_price': float(strike), 'option_right': right,
-                        'date': expiry, 'expiration': expiry,
-                        'underlying': underlying
-                    })()
-                    contract = _OptionContract(opt_sym, underlying, strike, right, expiry)
-                    chain.contracts[str(opt_sym)] = contract
-                    chain._list.append(contract)
-        return chain
+    future_chain = futures_chain
 
     @property
     def option_chain_provider(self):
         return OptionChainProvider(self)
 
     def is_market_open(self, symbol=None):
-        """Check if market is currently open."""
-        if symbol and str(symbol) in self.securities:
-            return self.securities[str(symbol)].exchange.exchange_open
+        """Whether the security's exchange trades now (on_data runs at the session close, which counts
+        as open; see market_hours.py)."""
+        if symbol is not None and str(symbol).upper() in self.securities:
+            return self.securities[str(symbol).upper()].exchange.exchange_open
         return True
 
     def plot_indicator(self, chart_name, wait_for_ready=True, *indicators):
         """Plot indicator values on a chart."""
+        if not isinstance(wait_for_ready, bool):
+            indicators = (wait_for_ready,) + tuple(indicators)
+            wait_for_ready = True
         for indicator in indicators:
+            if wait_for_ready and not getattr(indicator, 'is_ready', True):
+                continue
             name = getattr(indicator, 'name', str(indicator))
             value = float(indicator) if hasattr(indicator, '__float__') else 0
             self.plot(chart_name, name, value)
 
     # ---- Combo Order Methods ----
+    # All legs fill together on the same bar or not at all; buying power is checked for the legs as a
+    # group (a spread is margined as a spread).
+
+    def _combo(self, legs, quantity, order_type, tag="", order_properties=None, limit_price=None):
+        if self._broker is None:
+            raise not_supported("order placement outside a backtest run")
+        group = {'type': order_type, 'quantity': float(quantity), 'limit_price': limit_price, 'legs': []}
+        tickets = []
+        for leg in legs:
+            sym = getattr(leg, 'symbol', leg)
+            key = str(sym).upper()
+            if key not in self.securities:
+                raise Exception(f"This asset symbol ({key} 0) was not found in your security list. Please add "
+                                f"this security or check it exists before using it with "
+                                f"'Securities.ContainsKey(\"{key}\")'")
+            q = float(getattr(leg, 'quantity', 1)) * float(quantity)
+            leg_limit = getattr(leg, 'order_price', None) if order_type == OrderType.COMBO_LEG_LIMIT else None
+            sec_leg = self.securities[key]
+            if getattr(self, '_session', None) is not None and sec_leg.symbol.security_type in (
+                    SecurityType.OPTION, SecurityType.INDEX_OPTION, SecurityType.FUTURE_OPTION):
+                self._ensure_option_manager()
+            tk = self._make_ticket(self.securities[key].symbol, q, order_type, tag,
+                                   limit_price=leg_limit if leg_limit is not None else (limit_price or 0),
+                                   order_properties=order_properties)
+            tk._combo = group
+            group['legs'].append(tk)
+            tickets.append(tk)
+        self._broker.submit_combo(tickets)
+        return tickets
 
     def combo_market_order(self, legs, quantity, asynchronous=False, tag="", order_properties=None):
-        """Submit a combo market order (multi-leg)."""
-        tickets = []
-        for leg in legs:
-            sym = leg.symbol if hasattr(leg, 'symbol') else leg
-            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
-            ticket = self.market_order(sym, qty, tag=tag)
-            tickets.append(ticket)
-        return tickets
+        return self._combo(legs, quantity, OrderType.COMBO_MARKET, tag, order_properties)
 
     def combo_limit_order(self, legs, quantity, limit_price, tag="", order_properties=None):
-        """Submit a combo limit order."""
-        tickets = []
-        for leg in legs:
-            sym = leg.symbol if hasattr(leg, 'symbol') else leg
-            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
-            ticket = self.limit_order(sym, qty, limit_price, tag=tag)
-            tickets.append(ticket)
-        return tickets
+        return self._combo(legs, quantity, OrderType.COMBO_LIMIT, tag, order_properties, limit_price)
 
     def combo_leg_limit_order(self, legs, quantity, tag="", order_properties=None):
-        """Submit combo leg limit orders."""
-        tickets = []
-        for leg in legs:
-            sym = leg.symbol if hasattr(leg, 'symbol') else leg
-            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
-            price = leg.limit_price if hasattr(leg, 'limit_price') else 0
-            ticket = self.limit_order(sym, qty, price, tag=tag)
-            tickets.append(ticket)
-        return tickets
-
-    # ---- Additional Indicator Shortcuts ----
-
-    def aroon(self, symbol, period=25, resolution=None, selector=None):
-        """Aroon indicator (stub using SMA as placeholder)."""
-        name = f"AROON_{symbol}_{period}"
-        indicator = SimpleMovingAverage(name, period)
-        self._indicators[name] = indicator
-        return indicator
-
-    def vwap(self, symbol, resolution=None, selector=None):
-        """VWAP indicator (stub)."""
-        name = f"VWAP_{symbol}"
-        indicator = SimpleMovingAverage(name, 1)
-        self._indicators[name] = indicator
-        return indicator
-
-    def momp(self, symbol, period=14, resolution=None, selector=None):
-        """Momentum Percent indicator."""
-        name = f"MOMP_{symbol}_{period}"
-        indicator = RateOfChange(name, period)
-        self._indicators[name] = indicator
-        return indicator
-
-    def trin(self, symbol, resolution=None, selector=None):
-        """TRIN (Arms Index) indicator (stub)."""
-        name = f"TRIN_{symbol}"
-        indicator = SimpleMovingAverage(name, 1)
-        self._indicators[name] = indicator
-        return indicator
+        return self._combo(legs, quantity, OrderType.COMBO_LEG_LIMIT, tag, order_properties)
 
     # ---- Additional Utility Methods ----
 
-    def get_last_known_prices(self, symbol=None):
-        """Get the last known prices for a security."""
-        if symbol and str(symbol) in self.securities:
-            sec = self.securities[str(symbol)]
-            return [sec]
-        return []
+    def get_last_known_price(self, security_or_symbol):
+        """The last bar of a security known now (its last published bar, else history)."""
+        sec = security_or_symbol if hasattr(security_or_symbol, 'get_last_data') else \
+            self.securities.get(str(security_or_symbol).upper())
+        last = sec.get_last_data() if sec is not None else None
+        if last is None:
+            got = self.get_last_known_prices(security_or_symbol)
+            last = got[-1] if got else None
+        return last
 
-    def warm_up_indicator(self, symbol, indicator, resolution=None, selector=None):
-        """Warm up an indicator with historical data."""
-        period = getattr(indicator, 'warm_up_period', 0)
-        if period <= 0:
-            # Indicator doesn't define a warm-up period, skip
-            return indicator
-        base_price = 100.0
-        now = self._time or datetime.now()
-        for i in range(period):
-            t = now - timedelta(days=(period - i))
-            p = base_price + i * 0.1
-            # Create a bar-like object for indicators that accept bars
-            bar = type('WarmUpBar', (), {
-                'time': t, 'end_time': t,
-                'open': p - 0.5, 'high': p + 1.0, 'low': p - 1.0,
-                'close': p, 'volume': 1000000, 'value': p, 'price': p,
-            })()
-            # Track samples manually for PythonIndicator subclasses
-            old_samples = getattr(indicator, 'samples', 0)
-            try:
-                indicator.update(bar)
-            except TypeError:
-                try:
-                    indicator.update(t, p)
-                except Exception:
-                    pass
-            # Ensure samples was incremented
-            new_samples = getattr(indicator, 'samples', 0)
-            if new_samples == old_samples:
-                try:
-                    indicator.samples = old_samples + 1
-                except AttributeError:
-                    pass
-        indicator.is_ready = True
-        return indicator
+    def get_last_known_prices(self, security_or_symbol=None):
+        """[the last daily bar complete at the current time] of a security (empty when none)."""
+        if security_or_symbol is None:
+            return []
+        sym = getattr(security_or_symbol, 'symbol', security_or_symbol)
+        if isinstance(sym, Symbol) and sym.security_type in (SecurityType.BASE,):
+            return []
+        try:
+            bars = self.history[TradeBar](sym, 1)
+        except Exception as exc:
+            logger.warning("History request failed symbol=%s error=%s", sym, type(exc).__name__)
+            return []
+        return list(bars)[-1:] if bars else []
 
-    def arima(self, symbol, ar_order=1, diff_order=0, ma_order=1, period=50, resolution=None, selector=None):
-        """ARIMA indicator (stub)."""
-        name = f"ARIMA_{symbol}_{ar_order}_{diff_order}_{ma_order}"
-        indicator = SimpleMovingAverage(name, period)
-        self._indicators[name] = indicator
-        return indicator
-
-    def iv(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-           option_model=None, period=None, resolution=None, **kwargs):
-        """Implied Volatility indicator (stub)."""
-        name = f"IV_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
-
-    def d(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-          option_model=None, period=None, resolution=None, **kwargs):
-        """Delta indicator (stub)."""
-        name = f"D_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
-
-    def g(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-          option_model=None, period=None, resolution=None, **kwargs):
-        """Gamma indicator (stub)."""
-        name = f"G_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
-
-    def r(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-          option_model=None, period=None, resolution=None, **kwargs):
-        """Rho indicator (stub)."""
-        name = f"R_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
-
-    def v(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-          option_model=None, period=None, resolution=None, **kwargs):
-        """Vega indicator (stub)."""
-        name = f"V_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
-
-    def t(self, symbol, mirror_option=None, risk_free_rate=None, dividend_yield=None,
-          option_model=None, period=None, resolution=None, **kwargs):
-        """Theta indicator (stub)."""
-        name = f"T_{symbol}"
-        indicator = _OptionGreekIndicator(name, period or 14)
-        if isinstance(self._indicators, dict):
-            self._indicators[name] = indicator
-        return indicator
+    @property
+    def active_securities(self):
+        """LEAN ActiveSecurities: `.values` works with and without a call."""
+        return _ActiveSecurities(self.securities)
 
     @property
     def universe(self):
-        """Universe manager."""
-        return self.universe_settings
+        """LEAN's universe definitions (self.universe.etf(...), .qc_500, .top(n), .dollar_volume.top(n))."""
+        if self._universe_definitions is None:
+            from .universe import UniverseDefinitions
+            self._universe_definitions = UniverseDefinitions(self)
+        return self._universe_definitions
+
+    @property
+    def universe_manager(self):
+        return self._universe_manager.view()
 
     # ---- PascalCase Aliases for LEAN/C# Compatibility ----
 
@@ -2887,13 +3174,19 @@ class _ImpliedVolatilitySub:
 
 
 class _OptionGreekIndicator(IndicatorBase):
-    """Indicator for option Greeks (IV, Delta, Gamma, Vega, Theta, Rho).
-    Has an .implied_volatility sub-indicator with set_smoothing_function."""
-    def __init__(self, name, period=14):
+    """An option greek or implied volatility as an indicator; the option manager updates it each close."""
+    def __init__(self, name, kind='iv', period=1):
         super().__init__(name, period)
-        self.implied_volatility = _ImpliedVolatilitySub()
+        self.kind = kind
+        self.implied_volatility = self if kind == 'iv' else _ImpliedVolatilitySub()
+
     def _compute(self, value: float) -> float:
-        return value if value else 0.25
+        return value
+
+    def set_smoothing_function(self, func):
+        self._smoothing = func
+
+    SetSmoothingFunction = set_smoothing_function
 
 
 class _ContractList(list):
@@ -2905,111 +3198,24 @@ class _ContractList(list):
 
 
 class OptionChainProvider:
-    """Provides option chain data."""
+    """Listed option contracts of an underlying on a date (model chain from the price known that day)."""
     def __init__(self, algo=None):
         self._algo = algo
 
-    def get_option_contract_list(self, symbol, date):
-        """Get option contracts for a symbol. Must match option_chain() output exactly."""
-        from .enums import OptionRight, OptionStyle
-        underlying = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol).upper())
-        contracts = _ContractList()
-        ticker_str = str(underlying).upper()
-        und_sec_type = getattr(underlying, 'security_type', SecurityType.EQUITY)
+    def get_option_contract_list(self, symbol, date=None):
+        a = self._algo
+        if a is None:
+            raise not_supported("option chains outside a backtest run")
+        mgr = a._ensure_option_manager()
+        t = date or a.time
+        if not isinstance(t, datetime):
+            t = datetime(t.year, t.month, t.day)
+        t = min(t, a.time) if t.date() == a.time.date() else t
+        canonical = a._canonical_option_for(symbol)
+        syms, _S = mgr.chain_symbols(canonical, t)
+        return syms
 
-        # Determine option properties based on underlying
-        if und_sec_type == SecurityType.FUTURE:
-            opt_sec_type = SecurityType.FUTURE_OPTION
-            opt_market = getattr(underlying, 'market', Market.CME)
-        elif und_sec_type == SecurityType.INDEX:
-            opt_sec_type = SecurityType.INDEX_OPTION
-            opt_market = Market.USA
-        else:
-            opt_sec_type = SecurityType.OPTION
-            opt_market = Market.USA
-
-        # Determine base price
-        _default_prices = {
-            'SPX': 3800.0, 'SPXW': 3800.0, 'NDX': 13000.0, 'SPY': 380.0, 'QQQ': 310.0,
-            'ES': 3200.0, 'NQ': 13000.0, 'YM': 30000.0, 'RTY': 1800.0, 'MES': 3200.0,
-            'GOOG': 750.0, 'GOOGL': 750.0, 'AAPL': 150.0, 'MSFT': 300.0, 'AMZN': 3200.0,
-            'TSLA': 700.0, 'NVDA': 250.0, 'META': 250.0, 'NFLX': 500.0,
-            'GC': 1800.0, 'SI': 25.0, 'CL': 70.0, 'NG': 4.0,
-            'DC': 17.0, 'ZC': 400.0, 'ZW': 600.0, 'ZS': 1200.0,
-            'CLASS_III_MILK': 17.0, 'BUTTER': 2.0, 'CASH_SETTLED_CHEESE': 2.0,
-            'SP_500_E_MINI': 3200.0, 'E_MINI': 3200.0,
-        }
-        base_price = _default_prices.get(ticker_str, 100.0)
-        # Try to get price from algo's securities
-        if self._algo:
-            sec = self._algo.securities.get(ticker_str)
-            if sec and sec.price > 0:
-                base_price = sec.price
-
-        # Strike offsets - must match option_chain()
-        if base_price > 1000:
-            strike_offsets = [-800, -600, -450, -400, -200, -100, -50, 0, 50, 100, 200, 400, 450, 600, 800]
-        elif base_price > 200:
-            strike_offsets = [-100, -50, -20, -10, -5, 0, 5, 10, 20, 50, 100]
-        else:
-            strike_offsets = [-30, -20, -10, -5, -3, 0, 3, 5, 10, 20, 30]
-
-        # Generate expiry dates - must match option_chain()
-        def _third_friday(year, month):
-            import calendar
-            c = calendar.Calendar(firstweekday=calendar.MONDAY)
-            fridays = [d for d in c.itermonthdays2(year, month)
-                       if d[0] != 0 and d[1] == calendar.FRIDAY]
-            return datetime(year, month, fridays[2][0])
-
-        # Use algo's time/start_date to ensure consistency with option_chain()
-        if self._algo and (self._algo._time or self._algo._start_date):
-            now = self._algo._time or self._algo._start_date
-        elif isinstance(date, datetime):
-            now = date.replace(tzinfo=None) if date.tzinfo else date
-        else:
-            now = datetime.now()
-        und_expiry = getattr(underlying, 'expiry', None)
-        expiry_dates = []
-        if und_expiry:
-            expiry_dates = [und_expiry]
-        else:
-            for m_offset in range(0, 4):
-                y = now.year
-                m = now.month + m_offset
-                while m > 12:
-                    m -= 12
-                    y += 1
-                try:
-                    exp = _third_friday(y, m)
-                    if exp >= now - timedelta(days=1):
-                        expiry_dates.append(exp)
-                except Exception:
-                    pass
-            near_exp = now + timedelta(days=7)
-            if not any(abs((near_exp - e).days) < 5 for e in expiry_dates):
-                expiry_dates.append(near_exp)
-
-        for expiry in expiry_dates:
-            for strike_offset in strike_offsets:
-                strike = base_price + strike_offset
-                if strike <= 0:
-                    continue
-                for right in [OptionRight.CALL, OptionRight.PUT]:
-                    right_char = 'C' if right == OptionRight.CALL else 'P'
-                    ticker = f"{ticker_str}{expiry.strftime('%y%m%d')}{right_char}{int(strike)}"
-                    opt_sym = Symbol(ticker, opt_sec_type, opt_market)
-                    opt_sym.expiry = expiry
-                    opt_sym.strike_price = float(strike)
-                    opt_sym.right = right
-                    opt_sym._underlying = underlying
-                    opt_sym.id = type('SymbolId', (), {
-                        'strike_price': float(strike), 'option_right': right,
-                        'date': expiry, 'expiration': expiry, 'underlying': underlying
-                    })()
-                    contracts.append(opt_sym)
-        return contracts
-
+    get_option_chain = get_option_contract_list
     GetOptionContractList = get_option_contract_list
 
 
@@ -3072,7 +3278,10 @@ class PortfolioConstructionModel:
         return []
 
     def on_securities_changed(self, algorithm, changes):
-        pass
+        """LEAN: insights of removed securities are expired."""
+        removed = [s.symbol for s in getattr(changes, 'removed_securities', None) or []]
+        if removed and algorithm is not None and hasattr(algorithm, 'insights'):
+            algorithm.insights.expire(removed)
 
 
 class ExecutionModel:
@@ -3126,13 +3335,23 @@ class ConstantAlphaModel(AlphaModel):
         self._securities = []
 
     def update(self, algorithm, data):
+        """Emit one insight per security, again only after the previous one expired."""
         insights = []
+        now = algorithm.utc_time
+        if not hasattr(self, '_last_close'):
+            self._last_close = {}
+        period = self._period if isinstance(self._period, timedelta) else (
+            self._period.to_timedelta() if hasattr(self._period, 'to_timedelta') else timedelta(days=1))
         for security in self._securities:
-            if data.contains_key(security.symbol):
-                insights.append(Insight(
-                    security.symbol, self._period, self._type,
-                    self._direction, self._magnitude, weight=self._weight
-                ))
+            key = str(security.symbol).upper()
+            if not data.contains_key(security.symbol):
+                continue
+            last = self._last_close.get(key)
+            if last is not None and now < last:
+                continue
+            insights.append(Insight(security.symbol, period, self._type, self._direction,
+                                    self._magnitude, self._confidence, weight=self._weight))
+            self._last_close[key] = now + period
         return insights
 
     def on_securities_changed(self, algorithm, changes):
@@ -3144,193 +3363,208 @@ class ConstantAlphaModel(AlphaModel):
                 self._securities.remove(sec)
 
 
+def _insight_sign(insight):
+    d = getattr(insight, 'direction', 0)
+    try:
+        d = int(d)
+    except (TypeError, ValueError):
+        d = 0
+    return 1 if d > 0 else (-1 if d < 0 else 0)
+
+
+def _percent_target(algorithm, symbol, percent):
+    """PortfolioTarget whose quantity is the units for `percent` of portfolio value."""
+    return PortfolioTarget.percent(algorithm, symbol, percent)
+
+
 class EqualWeightingPortfolioConstructionModel(PortfolioConstructionModel):
-    """Portfolio construction model that assigns equal weight to all insights."""
+    """Equal weight across the active insights: each non-flat insight gets
+    direction * 1/N of portfolio value (N = active non-flat insights); flat -> 0."""
 
     def __init__(self, rebalance=None, portfolio_bias=None, resolution=None, **kwargs):
         self._rebalance = rebalance
         self._portfolio_bias = portfolio_bias
         self._resolution = resolution
 
-    def create_targets(self, algorithm, insights):
-        if not insights:
-            return []
-        targets = []
-        weight = 1.0 / len(insights) if insights else 0
-        for insight in insights:
-            direction = 1 if insight.direction == InsightDirection.UP else (
-                -1 if insight.direction == InsightDirection.DOWN else 0)
-            targets.append(PortfolioTarget(insight.symbol, weight * direction))
-        return targets
+    def _allowed(self, sign):
+        bias = self._portfolio_bias
+        if bias is None or int(bias) == 2:  # LONG_SHORT
+            return sign
+        if int(bias) == 0 and sign < 0:     # LONG only
+            return 0
+        if int(bias) == 1 and sign > 0:     # SHORT only
+            return 0
+        return sign
 
-
-class InsightWeightingPortfolioConstructionModel(PortfolioConstructionModel):
-    """Portfolio construction weighted by insight magnitude/confidence."""
-
-    def __init__(self, rebalance=None, portfolio_bias=None):
-        self._rebalance = rebalance
-        self._portfolio_bias = portfolio_bias
+    def determine_target_percent(self, insights):
+        active = [i for i in insights if _insight_sign(i) != 0]
+        n = len(active)
+        pct = 1.0 / n if n else 0.0
+        return {i: self._allowed(_insight_sign(i)) * pct for i in insights}
 
     def create_targets(self, algorithm, insights):
         if not insights:
             return []
-        total_weight = sum(abs(i.weight or i.confidence or 1.0) for i in insights)
-        if total_weight == 0:
-            total_weight = 1
-        targets = []
-        for insight in insights:
-            w = abs(insight.weight or insight.confidence or 1.0) / total_weight
-            direction = 1 if insight.direction == InsightDirection.UP else (
-                -1 if insight.direction == InsightDirection.DOWN else 0)
-            targets.append(PortfolioTarget(insight.symbol, w * direction))
-        return targets
+        return [_percent_target(algorithm, i.symbol, p) for i, p in self.determine_target_percent(insights).items()]
 
 
-class MeanVarianceOptimizationPortfolioConstructionModel(PortfolioConstructionModel):
-    """Portfolio construction using mean-variance optimization (simplified stub)."""
+class InsightWeightingPortfolioConstructionModel(EqualWeightingPortfolioConstructionModel):
+    """Weight each insight by |weight| (falls back to confidence, then 1); scaled down so the
+    total does not exceed 100%."""
 
-    def __init__(self, rebalance=None, portfolio_bias=None, lookback=1,
-                 period=63, resolution=None, risk_free_rate=0.0, optimizer=None):
-        self._rebalance = rebalance
-        self._lookback = lookback
-
-    def create_targets(self, algorithm, insights):
-        if not insights:
-            return []
-        weight = 1.0 / len(insights)
-        return [PortfolioTarget(i.symbol, weight * (1 if i.direction == InsightDirection.UP else -1))
-                for i in insights]
+    def determine_target_percent(self, insights):
+        ws = {i: abs(i.weight if i.weight is not None else (i.confidence if i.confidence is not None else 1.0))
+              for i in insights}
+        total = sum(w for i, w in ws.items() if _insight_sign(i) != 0)
+        scale = 1.0 / total if total > 1.0 else 1.0
+        return {i: self._allowed(_insight_sign(i)) * w * scale for i, w in ws.items()}
 
 
-class BlackLittermanOptimizationPortfolioConstructionModel(PortfolioConstructionModel):
-    """Black-Litterman portfolio construction (simplified stub)."""
+class _UnsupportedPortfolioModel(PortfolioConstructionModel):
+    _feature = "this portfolio construction model"
 
-    def __init__(self, rebalance=None, portfolio_bias=None, lookback=63,
-                 resolution=None, risk_free_rate=0.0, optimizer=None):
-        self._rebalance = rebalance
-        self._lookback = lookback
+    def __init__(self, *args, **kwargs):
+        raise not_supported(self._feature)
 
-    def create_targets(self, algorithm, insights):
-        if not insights:
-            return []
-        weight = 1.0 / len(insights)
-        return [PortfolioTarget(i.symbol, weight * (1 if i.direction == InsightDirection.UP else -1))
-                for i in insights]
+
+class BlackLittermanOptimizationPortfolioConstructionModel(_UnsupportedPortfolioModel):
+    _feature = "Black-Litterman portfolio optimisation"
 
 
 class ImmediateExecutionModel(ExecutionModel):
-    """Execution model that immediately submits market orders."""
+    """Send market orders for the difference between each target and holdings plus open orders."""
 
     def execute(self, algorithm, targets):
         for target in targets:
-            existing = algorithm.portfolio[str(target.symbol)].quantity
-            diff = target.quantity - existing
-            if abs(diff) > 0:
+            ticker = str(target.symbol).upper()
+            sec = algorithm.securities.get(ticker)
+            lot = lot_size(getattr(getattr(sec, 'symbol', None), 'security_type', None))
+            diff = round_to_lot(float(target.quantity) - algorithm._unordered_quantity(ticker), lot)
+            if diff != 0:
                 algorithm.market_order(target.symbol, diff)
 
 
 class VolumeWeightedAveragePriceExecutionModel(ExecutionModel):
-    """VWAP execution model (simplified stub - acts like immediate)."""
-
-    def execute(self, algorithm, targets):
-        for target in targets:
-            existing = algorithm.portfolio[str(target.symbol)].quantity
-            diff = target.quantity - existing
-            if abs(diff) > 0:
-                algorithm.market_order(target.symbol, diff)
+    def __init__(self, *args, **kwargs):
+        raise not_supported("VWAP order execution", "It slices orders over intraday volume; the engine runs on daily bars.")
 
 
 class StandardDeviationExecutionModel(ExecutionModel):
-    """Std dev execution model (simplified stub)."""
+    def __init__(self, *args, **kwargs):
+        raise not_supported("standard-deviation order execution", "It waits for intraday price deviations; the engine runs on daily bars.")
 
-    def __init__(self, period=60, deviations=2, resolution=None):
-        self._period = period
-        self._deviations = deviations
 
-    def execute(self, algorithm, targets):
-        for target in targets:
-            existing = algorithm.portfolio[str(target.symbol)].quantity
-            diff = target.quantity - existing
-            if abs(diff) > 0:
-                algorithm.market_order(target.symbol, diff)
+def _cancel_insights(algorithm, symbol):
+    ins = getattr(algorithm, 'insights', None)
+    if ins is not None and hasattr(ins, 'cancel'):
+        ins.cancel([symbol])
 
 
 class MaximumDrawdownPercentPortfolio(RiskManagementModel):
-    """Risk model: maximum portfolio drawdown percentage."""
+    """Liquidates every targeted security (and cancels their insights) when the portfolio value falls
+    more than `maximum_drawdown_percent` below its starting value - or below its high when
+    is_trailing - then starts measuring again (LEAN). Returns only its override targets."""
 
-    def __init__(self, maximum_drawdown_percent=0.05, is_not_a_ccount_currency_for=False):
-        self._max_dd = maximum_drawdown_percent
-        self._trailing_high = 0
+    def __init__(self, maximum_drawdown_percent=0.05, is_trailing=False):
+        self._max_dd = -abs(maximum_drawdown_percent)
+        self._is_trailing = bool(is_trailing)
+        self._initialised = False
+        self._high = 0.0
 
     def manage_risk(self, algorithm, targets):
-        portfolio_value = algorithm.portfolio.total_portfolio_value
-        self._trailing_high = max(self._trailing_high, portfolio_value)
-        if self._trailing_high > 0:
-            dd = (self._trailing_high - portfolio_value) / self._trailing_high
-            if dd > self._max_dd:
-                return [PortfolioTarget(str(s.symbol), 0) for s in algorithm.securities]
-        return targets
+        value = algorithm.portfolio.total_portfolio_value
+        if not self._initialised:
+            self._high = value
+            self._initialised = True
+        if self._is_trailing and self._high < value:
+            self._high = value
+            return []
+        pnl = value / self._high - 1.0 if self._high else 0.0
+        if pnl < self._max_dd and targets:
+            self._initialised = False
+            out = []
+            for t in targets:
+                _cancel_insights(algorithm, t.symbol)
+                out.append(PortfolioTarget(t.symbol, 0))
+            return out
+        return []
 
 
 class MaximumDrawdownPercentPerSecurity(RiskManagementModel):
-    """Risk model: maximum drawdown per security."""
+    """Liquidates a security whose unrealized loss exceeds `maximum_drawdown_percent` (LEAN)."""
 
     def __init__(self, maximum_drawdown_percent=0.05):
-        self._max_dd = maximum_drawdown_percent
+        self._max_dd = -abs(maximum_drawdown_percent)
 
     def manage_risk(self, algorithm, targets):
-        risk_targets = list(targets) if targets else []
-        for ticker, holding in algorithm.portfolio.items():
-            if holding.invested and holding.unrealized_profit_percent < -self._max_dd:
-                risk_targets.append(PortfolioTarget(ticker, 0))
-        return risk_targets
+        out = []
+        for ticker, holding in list(algorithm.portfolio.items()):
+            if holding.invested and holding.unrealized_profit_percent < self._max_dd:
+                sym = algorithm.securities[ticker].symbol if ticker in algorithm.securities else ticker
+                _cancel_insights(algorithm, sym)
+                out.append(PortfolioTarget(sym, 0))
+        return out
 
 
 class MaximumUnrealizedProfitPercentPerSecurity(RiskManagementModel):
-    """Risk model: take profit at maximum unrealized profit."""
+    """Takes the profit of a security whose unrealized gain exceeds the limit (LEAN)."""
 
     def __init__(self, maximum_unrealized_profit_percent=0.05):
-        self._max_profit = maximum_unrealized_profit_percent
+        self._max_profit = abs(maximum_unrealized_profit_percent)
 
     def manage_risk(self, algorithm, targets):
-        risk_targets = list(targets) if targets else []
-        for ticker, holding in algorithm.portfolio.items():
+        out = []
+        for ticker, holding in list(algorithm.portfolio.items()):
             if holding.invested and holding.unrealized_profit_percent > self._max_profit:
-                risk_targets.append(PortfolioTarget(ticker, 0))
-        return risk_targets
+                sym = algorithm.securities[ticker].symbol if ticker in algorithm.securities else ticker
+                _cancel_insights(algorithm, sym)
+                out.append(PortfolioTarget(sym, 0))
+        return out
 
 
 class TrailingStopRiskManagementModel(RiskManagementModel):
-    """Risk model: trailing stop for each security."""
+    """Liquidates a position whose absolute holdings value falls `maximum_drawdown_percent` from its
+    best level since it was opened (high for longs, low for shorts), as LEAN's model does."""
 
     def __init__(self, maximum_drawdown_percent=0.05):
-        self._max_dd = maximum_drawdown_percent
-        self._trailing_highs = {}
+        self._max_dd = abs(maximum_drawdown_percent)
+        self._state = {}          # ticker -> [is_long, best absolute holdings value]
 
     def manage_risk(self, algorithm, targets):
-        risk_targets = list(targets) if targets else []
-        for ticker, holding in algorithm.portfolio.items():
-            if holding.invested:
-                price = holding.market_price
-                if ticker not in self._trailing_highs:
-                    self._trailing_highs[ticker] = price
-                self._trailing_highs[ticker] = max(self._trailing_highs[ticker], price)
-                trail = self._trailing_highs[ticker]
-                if trail > 0 and (trail - price) / trail > self._max_dd:
-                    risk_targets.append(PortfolioTarget(ticker, 0))
-            else:
-                self._trailing_highs.pop(ticker, None)
-        return risk_targets
+        out = []
+        for ticker, holding in list(algorithm.portfolio.items()):
+            if not holding.invested:
+                self._state.pop(ticker, None)
+                continue
+            is_long = holding.quantity > 0
+            value = abs(holding.holdings_value)
+            st = self._state.get(ticker)
+            if st is None or st[0] != is_long:
+                st = self._state[ticker] = [is_long, abs(holding.quantity * holding.average_price * holding.multiplier)]
+            best = st[1]
+            if (is_long and best < value) or (not is_long and best > value):
+                st[1] = value
+                continue
+            drawdown = abs((best - value) / best) if best else 0.0
+            if self._max_dd < drawdown:
+                sym = algorithm.securities[ticker].symbol if ticker in algorithm.securities else ticker
+                _cancel_insights(algorithm, sym)
+                self._state.pop(ticker, None)
+                out.append(PortfolioTarget(sym, 0))
+        return out
 
 
-class MaximumSectorExposureRiskManagementModel(RiskManagementModel):
-    """Risk model: maximum sector exposure (stub)."""
-
-    def __init__(self, maximum_sector_exposure=0.3):
-        self._max_exposure = maximum_sector_exposure
-
-    def manage_risk(self, algorithm, targets):
-        return targets
+def merge_risk_targets(overrides, targets):
+    """LEAN: risk-model targets first, then the portfolio targets, distinct by symbol (overrides win)."""
+    out, seen = [], set()
+    for t in list(overrides or []) + list(targets or []):
+        if t is None:
+            continue
+        k = str(t.symbol).upper()
+        if k not in seen:
+            seen.add(k)
+            out.append(t)
+    return out
 
 
 class CompositeRiskManagementModel(RiskManagementModel):
@@ -3343,64 +3577,19 @@ class CompositeRiskManagementModel(RiskManagementModel):
         self._models.append(model)
 
     def manage_risk(self, algorithm, targets):
+        """LEAN: each model sees the targets so far; its overrides win (distinct by symbol)."""
+        targets = list(targets or [])
         for model in self._models:
-            targets = model.manage_risk(algorithm, targets)
+            targets = merge_risk_targets(model.manage_risk(algorithm, targets), targets)
         return targets
 
 
-class ManualUniverseSelectionModel(UniverseSelectionModel):
-    """Universe selection from a manually specified list of symbols."""
-
-    def __init__(self, symbols=None, *args):
-        self._symbols = symbols or []
-        if args:
-            self._symbols = list(args) if not symbols else self._symbols
-
-    def create_universes(self, algorithm):
-        return self._symbols
 
 
-class FundamentalUniverseSelectionModel(UniverseSelectionModel):
-    """Universe selection based on fundamental data."""
-
-    def __init__(self, filter_fine_universe=True, universe_settings=None, *args, **kwargs):
-        self._filter_fine = filter_fine_universe
-
-    def create_universes(self, algorithm):
-        return []
-
-    def select_coarse(self, algorithm, coarse):
-        return [c.symbol for c in coarse]
-
-    def select_fine(self, algorithm, fine):
-        return [f.symbol for f in fine]
 
 
-class ScheduledUniverseSelectionModel(UniverseSelectionModel):
-    """Universe selection on a schedule."""
-
-    def __init__(self, date_rule, time_rule, selector, settings=None):
-        self._date_rule = date_rule
-        self._time_rule = time_rule
-        self._selector = selector
-
-    def create_universes(self, algorithm):
-        if callable(self._selector):
-            return self._selector(algorithm.time)
-        return []
 
 
-class CustomUniverseSelectionModel(UniverseSelectionModel):
-    """Custom universe selection from a function."""
-
-    def __init__(self, name, selector, settings=None):
-        self._name = name
-        self._selector = selector
-
-    def create_universes(self, algorithm):
-        if callable(self._selector):
-            return self._selector(algorithm.time)
-        return []
 
 
 class CompositeAlphaModel(AlphaModel):
@@ -3423,42 +3612,87 @@ class CompositeAlphaModel(AlphaModel):
 
 
 class PythonData:
-    """Base class for custom Python data types."""
+    """Base class of custom data types (LEAN PythonData). A subclass implements get_source and
+    reader; properties set by the reader (data["Close"] = x or data.close = x) are dynamic and
+    case-insensitive, as in LEAN. end_time defaults to time (+ period when one is set)."""
+
+    _CORE = ('symbol', 'time', 'value', '_data', 'period', '_end_time', 'data_type', 'is_fill_forward')
 
     def __init__(self):
+        object.__setattr__(self, '_data', {})
         self.symbol = None
         self.time = None
-        self.end_time = None
         self.value = 0.0
-        self._data = {}
+        self.period = None
+        object.__setattr__(self, '_end_time', None)
 
     def get_source(self, config, date, is_live_mode):
-        return None
+        raise NotImplementedError(f"{type(self).__name__}.get_source is not implemented")
 
     def reader(self, config, line, date, is_live_mode):
-        return None
+        raise NotImplementedError(f"{type(self).__name__}.reader is not implemented")
+
+    def default_resolution(self):
+        return Resolution.DAILY
+
+    def supported_resolutions(self):
+        return [Resolution.DAILY]
+
+    def is_sparse_data(self):
+        return False
+
+    def requires_mapping(self):
+        return False
+
+    def clone(self):
+        import copy
+        return copy.copy(self)
+
+    @property
+    def end_time(self):
+        e = self.__dict__.get('_end_time')
+        if e is not None:
+            return e
+        t = self.__dict__.get('time')
+        p = self.__dict__.get('period')
+        return (t + p) if (t is not None and isinstance(p, timedelta)) else t
+
+    @end_time.setter
+    def end_time(self, v):
+        object.__setattr__(self, '_end_time', v)
+
+    @property
+    def price(self):
+        return self.value
 
     def __getattr__(self, name):
         if name.startswith('_'):
             raise AttributeError(name)
-        return self._data.get(name, 0)
+        d = self.__dict__.get('_data', {})
+        if name.lower() in d:
+            return d[name.lower()]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in ('symbol', 'time', 'end_time', 'value', '_data'):
-            super().__setattr__(name, value)
+        if name in PythonData._CORE or name == 'end_time' or hasattr(type(self), name):
+            object.__setattr__(self, name, value)
         else:
-            if not hasattr(self, '_data'):
-                super().__setattr__('_data', {})
-            self._data[name] = value
+            self.__dict__.setdefault('_data', {})[name.lower()] = value
 
     def __getitem__(self, key):
-        return self._data.get(key, 0)
+        return self.__dict__.get('_data', {}).get(str(key).lower(), 0)
 
     def __setitem__(self, key, value):
-        self._data[key] = value
+        self.__dict__.setdefault('_data', {})[str(key).lower()] = value
+
+    def get_storage_dictionary(self):
+        return dict(self.__dict__.get('_data', {}))
 
     def __repr__(self):
-        return f"PythonData({self.symbol}, {self.value})"
+        return f"{self.symbol}: {self.value}"
+
+    GetSource = get_source
+    Reader = reader
 
 
 class PythonQuandl(PythonData):
@@ -3493,8 +3727,43 @@ class InsightCollection:
         return any(i for i in self._insights
                    if str(i.symbol) == str(symbol) and i.close_time_utc > utc_time)
 
+    @property
+    def total_count(self):
+        return len(self._insights)
+
+    @property
+    def count(self):
+        return len(self._insights)
+
+    def get_insights(self, filter_func=None):
+        return _OrderList(i for i in self._insights if filter_func is None or filter_func(i))
+
+    def contains_key(self, symbol):
+        return any(str(i.symbol) == str(symbol) for i in self._insights)
+
     def remove_expired_insights(self, utc_time):
         self._insights = [i for i in self._insights if i.close_time_utc > utc_time]
+
+    def expire(self, what):
+        """Expire insights now (LEAN InsightManager.Expire): a symbol, symbols, or insights."""
+        algo = getattr(self, '_algorithm', None)
+        now = getattr(algo, 'utc_time', None)
+        if now is None or what is None:
+            return
+        items = what if isinstance(what, (list, tuple, set)) or hasattr(what, '__iter__') and             not isinstance(what, (str, Insight)) else [what]
+        keys, objs = set(), []
+        for x in items:
+            if isinstance(x, Insight):
+                objs.append(x)
+            else:
+                keys.add(str(getattr(x, 'value', x)).upper())
+        for i in self._insights:
+            if i in objs or (keys and str(getattr(i.symbol, 'value', i.symbol)).upper() in keys):
+                i.expire(now)
+
+    cancel = expire
+    Expire = expire
+    Cancel = expire
 
     def set_insight_score_function(self, func):
         """Set a custom scoring function for insights."""
@@ -3641,21 +3910,7 @@ class Globals:
     Cache = ""
 
 
-class SecurityIdentifier:
-    """Security identifier generator."""
-
-    @staticmethod
-    def generate_equity(ticker, market="usa", map_first_date=True):
-        return Symbol(ticker, SecurityType.EQUITY, market)
-
-    @staticmethod
-    def generate_option(underlying, market="usa", option_style=0, option_right=0,
-                        strike_price=0, expiry_date=None):
-        return Symbol(underlying, SecurityType.OPTION, market)
-
-    @staticmethod
-    def generate_future(ticker, market="cme", expiry_date=None):
-        return Symbol(ticker, SecurityType.FUTURE, market)
+from .types import SecurityIdentifier  # noqa: E402  (LEAN identifiers live with Symbol)
 
 
 class PortfolioBias:

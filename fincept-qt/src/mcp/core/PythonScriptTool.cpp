@@ -403,15 +403,33 @@ std::shared_ptr<const ScriptIndex> script_index() {
     QMutexLocker lock(&mutex);
     if (!cached || cached->scripts_dir != dir) {
         cached = build_index(dir);
-        LOG_INFO(kPyToolTag,
-                 QStringLiteral("Indexed %1 runnable scripts under %2").arg(cached->scripts.size()).arg(dir));
+        LOG_DEBUG(kPyToolTag,
+                  QStringLiteral("Indexed %1 runnable scripts under %2").arg(cached->scripts.size()).arg(log_path(dir)));
     }
     return cached;
 }
 
 const ScriptInfo* find_script(const ScriptIndex& index, const QString& key) {
-    const auto it = index.by_key_lower.constFind(key.toLower());
-    return it == index.by_key_lower.constEnd() ? nullptr : &index.scripts[it.value()];
+    const QString wanted = key.toLower();
+    const auto it = index.by_key_lower.constFind(wanted);
+    if (it != index.by_key_lower.constEnd())
+        return &index.scripts[it.value()];
+    // The bare file name of a script that lives in a folder ("lbo_model" for
+    // "Analytics/corporateFinance/lbo/lbo_model"), or a path given with a different
+    // leading folder: accepted when exactly ONE script has that name — a caller that
+    // remembers the name should not lose a round to the folder.
+    const QString base = wanted.section(QLatin1Char('/'), -1);
+    if (base.isEmpty())
+        return nullptr;
+    const ScriptInfo* only = nullptr;
+    for (const ScriptInfo& s : index.scripts) {
+        if (s.key.section(QLatin1Char('/'), -1).compare(base, Qt::CaseInsensitive) != 0)
+            continue;
+        if (only)
+            return nullptr; // ambiguous: the caller must say which
+        only = &s;
+    }
+    return only;
 }
 
 // ── Search ───────────────────────────────────────────────────────────────────
@@ -746,8 +764,8 @@ ToolResult do_info(const QJsonObject& args) {
     QStringList asks;
     for (const QString& c : s->commands) {
         bool money = false;
-        if (classify(s->key, {c}, s->runs_code, &money) == ScriptRisk::Sensitive && money)
-            asks << c;
+        if (classify(s->key, {c}, s->runs_code, &money) == ScriptRisk::Sensitive)
+            asks << (money ? c + QStringLiteral(" (live order)") : c);
     }
     QStringList lines;
     lines << QStringLiteral("script: %1   (scripts/%2, %3 KB)")
@@ -768,7 +786,7 @@ ToolResult do_info(const QJsonObject& args) {
                           ? QStringLiteral("sensitive — the user is asked to approve each run")
                           : QStringLiteral("normal"));
     if (risk == ScriptRisk::Normal && !asks.isEmpty())
-        lines << QStringLiteral("asks the user first for: %1 (orders / money moves)")
+        lines << QStringLiteral("asks the user first, run by run, for: %1")
                      .arg(asks.join(QStringLiteral(", ")));
     if (s->runs_code)
         lines << QStringLiteral("runs code it is given (exec/eval) — every run asks the user first");
@@ -833,130 +851,7 @@ std::optional<ToolResult> collect_finished(const QString& job_id) {
 
 } // namespace pyscript_detail
 
-using namespace pyscript_detail;
-
-QString normalize_script_key(const QString& raw, QString* error) {
-    auto fail = [error](const QString& why) {
-        if (error)
-            *error = why;
-        return QString();
-    };
-    QString s = raw.trimmed();
-    s.replace(QLatin1Char('\\'), QLatin1Char('/'));
-    if (s.isEmpty())
-        return fail(QStringLiteral("`script` is required — find one with python(action=\"search\")."));
-    if (s.startsWith(QLatin1String("scripts/")))
-        s = s.mid(8);
-    if (s.endsWith(QLatin1String(".py"), Qt::CaseInsensitive))
-        s.chop(3);
-    static const QRegularExpression allowed(QStringLiteral("^[A-Za-z0-9_][A-Za-z0-9_\\-./]{0,199}$"));
-    if (!allowed.match(s).hasMatch() || s.contains(QLatin1String("//")) || s.endsWith(QLatin1Char('/')))
-        return fail(QStringLiteral("\"%1\" is not a script name. Use a name from python(action=\"search\"), e.g. "
-                                   "\"fred_data\" or \"Analytics/corporateFinance/lbo/lbo_model\".")
-                        .arg(raw.left(120)));
-    for (const QString& part : s.split(QLatin1Char('/'))) {
-        if (part.isEmpty() || part == QLatin1String(".") || part == QLatin1String("..") ||
-            part.startsWith(QLatin1Char('.')))
-            return fail(QStringLiteral("\"%1\" must be a plain path inside the scripts folder.").arg(raw.left(120)));
-    }
-    return s;
-}
-
-namespace {
-
-/// The words that name what a call DOES: the first argument, the value after an
-/// --action / --command / --operation flag (or `--action=x`), and the
-/// action / command / operation keys of a JSON-object argument. Commands hidden
-/// in any of those places used to be classified as "normal".
-QStringList command_words(const QStringList& args) {
-    static const QStringList kFlags = {QStringLiteral("action"),    QStringLiteral("command"), QStringLiteral("cmd"),
-                                       QStringLiteral("operation"), QStringLiteral("op"),      QStringLiteral("method"),
-                                       QStringLiteral("mode"),      QStringLiteral("side")};
-    QStringList out;
-    auto add = [&out](QString w) {
-        w = w.trimmed().toLower();
-        while (w.startsWith(QLatin1Char('-')))
-            w.remove(0, 1);
-        if (!w.isEmpty() && w.size() <= 80 && !out.contains(w))
-            out << w;
-    };
-    if (!args.isEmpty())
-        add(args.first());
-    for (int i = 0; i < args.size(); ++i) {
-        const QString a = args.at(i).trimmed();
-        if (a.startsWith(QLatin1Char('-'))) {
-            QString flag = a;
-            while (flag.startsWith(QLatin1Char('-')))
-                flag.remove(0, 1);
-            const qsizetype eq = flag.indexOf(QLatin1Char('='));
-            const QString name = (eq >= 0 ? flag.left(eq) : flag).toLower();
-            if (kFlags.contains(name)) {
-                if (eq >= 0)
-                    add(flag.mid(eq + 1));
-                else if (i + 1 < args.size())
-                    add(args.at(i + 1));
-            }
-        } else if (a.startsWith(QLatin1Char('{'))) {
-            const QJsonObject o = QJsonDocument::fromJson(a.toUtf8()).object();
-            for (const QString& k : kFlags) {
-                if (o.value(k).isString())
-                    add(o.value(k).toString());
-            }
-        }
-    }
-    return out;
-}
-
-} // namespace
-
-ScriptRisk classify(const QString& key, const QStringList& args, bool runs_code, bool* moves_money) {
-    if (moves_money)
-        *moves_money = false;
-    const QString lower = key.toLower();
-    const QString base = lower.section(QLatin1Char('/'), -1);
-    // Never from here: arbitrary code, maintenance/packaging tools, tests.
-    if (base == QLatin1String("notebook_cell_runner") || lower.startsWith(QLatin1String("agents/_tools/")) ||
-        lower.startsWith(QLatin1String("i18n/")) || lower.contains(QLatin1String("/tests/")) ||
-        lower.startsWith(QLatin1String("tests/")) || base.startsWith(QLatin1String("test_")) ||
-        base.endsWith(QLatin1String("_test")) || base.startsWith(QLatin1Char('_')))
-        return ScriptRisk::Blocked;
-
-    // Ask first: exchange credentials and orders, LLM agent runners (spend the
-    // user's model credits), live strategy runners, microphone / speaker.
-    // Ask first for order / money-moving / destructive commands on any script.
-    // (Checked before the folder rules so `moves_money` is set for exchange/ too.)
-    // `\b` used to end order_rx, and '_' is a word character, so
-    // place_orders_batch / cancel_order_batch slipped through as "normal".
-    static const QRegularExpression order_rx(QStringLiteral(
-        R"(^(place|submit|create|cancel|modify|amend|edit|update|decrease|increase|close|exit|execute|send|new|replace)[_\-]?(order|orders|trade|trades|position|positions|bet|bets)(?:[_\-]|$))"));
-    static const QRegularExpression cancel_all_rx(
-        QStringLiteral(R"(^cancel[_\-]?(all|market|markets|everything)(?:[_\-]|$))"));
-    static const QRegularExpression money_rx(QStringLiteral(
-        R"(^(buy|sell|short|cover|withdraw|transfer|deposit|send|sign|swap|redeem|stake|unstake|bridge|mint|burn|delete|remove|drop|purge|wipe|reset|upload|publish|post)([_\-]|$))"));
-    bool money = false;
-    for (const QString& cmd : command_words(args)) {
-        if (order_rx.match(cmd).hasMatch() || cancel_all_rx.match(cmd).hasMatch() || money_rx.match(cmd).hasMatch()) {
-            money = true;
-            break;
-        }
-    }
-    if (moves_money)
-        *moves_money = money || lower.startsWith(QLatin1String("exchange/"));
-    if (money)
-        return ScriptRisk::Sensitive;
-
-    if (lower.startsWith(QLatin1String("exchange/")) || lower.startsWith(QLatin1String("agents/")) ||
-        lower.startsWith(QLatin1String("voice/")) ||
-        (lower.startsWith(QLatin1String("strategies/")) && lower.contains(QLatin1String("live"))) ||
-        lower.contains(QLatin1String("wallet")) || lower.contains(QLatin1String("broker")))
-        return ScriptRisk::Sensitive;
-
-    // Arbitrary code (a strategy's `code`, an expression) runs with every stored
-    // credential in the environment; reads and writes any file the user can.
-    if (runs_code || base == QLatin1String("spreadsheet"))
-        return ScriptRisk::Sensitive;
-    return ScriptRisk::Normal;
-}
+// normalize_script_key, classify, gate_run: PythonScriptPolicy.cpp.
 
 } // namespace python_scripts
 
@@ -1049,7 +944,10 @@ ToolDef make_python_tool() {
         "valuation, portfolio, derivatives, risk, backtesting, ML). action=search finds scripts by words; "
         "info shows one script's commands, options and docs; run starts it (returns the result, or a job_id when it "
         "runs longer than wait_s); status waits for a job and returns its result; cancel stops it. Sensitive scripts "
-        "(exchange orders, agents) ask the user first.");
+        "(exchange orders, agents) ask the user first. `args` is a JSON array of strings, one per command-line "
+        "argument, e.g. script=\"yfinance_data\", args=[\"batch_quotes\",\"^GSPC\",\"^DJI\",\"^IXIC\"]. Common ones need "
+        "no search: yfinance_data [quote SYM] / [batch_quotes SYM…] / [historical_period SYM 6mo 1d] / [news SYM 10] / "
+        "[info SYM]; screener_data [predefined day_gainers|day_losers|most_actives 15].");
     t.input_schema = ToolSchemaBuilder()
                          .string("action", "search | info | run | status | cancel")
                          .required()
@@ -1060,7 +958,8 @@ ToolDef make_python_tool() {
                          .integer("limit", "search: most results (default 15)")
                          .between(1, 40)
                          .string("script", "info/run: script name from search, e.g. fred_data")
-                         .array("args", "run: command-line arguments (first is usually the command)",
+                         .array("args", "run: command-line arguments as a JSON array of strings, e.g. "
+                                        "[\"quote\",\"AAPL\"] (first is usually the command)",
                                 QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}})
                          .integer("timeout_s", "run: kill after this many seconds (default: the script's own budget)")
                          .between(kMinTimeoutSeconds, kMaxTimeoutSeconds)
@@ -1188,7 +1087,28 @@ ToolDef make_python_tool() {
             return;
         }
 
-        const QStringList argv = to_argv(args.value(QStringLiteral("args")).toArray(), &error);
+        // The arguments as the caller meant them. Models that have only seen "args" send
+        // every shape there is; each of these used to fail the run or pass one glued
+        // argument to the script:
+        //   ["quote AAPL"]          one string holding the whole command line → split like a shell
+        //   [["quote", "AAPL"]]     a list wrapped in a list → the inner list
+        //   "quote AAPL" / {…} / 5  (already made a list by the argument validator)
+        QJsonArray arg_list = args.value(QStringLiteral("args")).toArray();
+        if (arg_list.size() == 1 && arg_list.first().isArray())
+            arg_list = arg_list.first().toArray();
+        if (arg_list.size() == 1 && arg_list.first().isString()) {
+            const QString only = arg_list.first().toString().trimmed();
+            static const QRegularExpression rx_space(QStringLiteral("\\s"));
+            if (only.contains(rx_space) && !only.startsWith(QLatin1Char('{')) && !only.startsWith(QLatin1Char('['))) {
+                const QStringList parts = QProcess::splitCommand(only);
+                if (parts.size() > 1) {
+                    arg_list = QJsonArray();
+                    for (const QString& part : parts)
+                        arg_list.append(part);
+                }
+            }
+        }
+        const QStringList argv = to_argv(arg_list, &error);
         if (!error.isEmpty()) {
             resolve(ToolResult::fail(error));
             return;
@@ -1207,30 +1127,29 @@ ToolDef make_python_tool() {
             return;
         }
 
-        // Commands passed on stdin as JSON ({"action": "place_order", …}) count too.
-        QStringList classify_args = argv;
-        if (stdin_data.trimmed().startsWith('{'))
-            classify_args << QString::fromUtf8(stdin_data.left(qsizetype{64} * 1024));
-        bool moves_money = false;
-        const ScriptRisk risk = classify(found->key, classify_args, found->runs_code, &moves_money);
-        if (risk == ScriptRisk::Blocked) {
-            resolve(
-                ToolResult::fail(QStringLiteral("\"%1\" cannot be run from here (arbitrary-code, maintenance or test "
-                                                "script).")
-                                     .arg(found->key)));
+        // Refuse, ask (with what) or run: decided in one place (PythonScriptPolicy.cpp,
+        // unit-tested). Commands passed on stdin as JSON count too.
+        RunCall run_call;
+        run_call.key = found->key;
+        run_call.summary = found->summary;
+        run_call.argv = argv;
+        run_call.stdin_data = stdin_data;
+        run_call.runs_code = found->runs_code;
+        // A PAPER run (a paper-only run token): read on the calling thread, like origin.
+        run_call.paper_run = ScopedPaperRun::active();
+        run_call.origin = origin;
+        run_call.client_id = ScopedCallClient::client_id(); // the calling thread's caller
+        run_call.run_id = ScopedCallClient::run_id();
+        const RunGate gate = gate_run(run_call);
+        if (!gate.refusal.isEmpty()) {
+            if (gate.risk == ScriptRisk::Sensitive)
+                LOG_INFO(kPyToolTag, QStringLiteral("Python run refused in a PAPER run script=%1 kind=%2")
+                                         .arg(found->key, gate.moves_money ? QStringLiteral("order")
+                                                                           : QStringLiteral("code")));
+            resolve(ToolResult::fail(gate.refusal));
             return;
         }
-        if (risk == ScriptRisk::Sensitive && ScopedPaperRun::active()) {
-            // A PAPER workflow run (read on the calling thread, like origin): a script
-            // that needs the user's approval — orders, money moves, agents — is refused
-            // outright rather than offered for approval.
-            resolve(
-                ToolResult::fail(QStringLiteral("Refused: \"%1\" needs the user's approval (it can place orders, move "
-                                                "money or act on its own), and this workflow runs in PAPER mode. Arm "
-                                                "LIVE in the workflow's SAVE & RUN to allow it.")
-                                     .arg(found->key)));
-            return;
-        }
+        const ScriptRisk risk = gate.risk;
         if (!python::PythonRunner::instance().is_available()) {
             resolve(ToolResult::fail(QStringLiteral("Python is not set up yet — the user can set it up in Settings › "
                                                     "Python Env.")));
@@ -1268,20 +1187,9 @@ ToolDef make_python_tool() {
         const ScriptInfo script = *found; // copy: the index may be replaced
 
         if (risk == ScriptRisk::Sensitive) {
-            ToolApprovalRequest req;
-            req.client = origin;
-            req.tool = QStringLiteral("python: ") + script.key;
-            req.description = script.summary.isEmpty()
-                                  ? QStringLiteral("Run the bundled script %1").arg(script.key)
-                                  : QStringLiteral("Run the bundled script %1 — %2").arg(script.key, script.summary);
-            QJsonArray shown_args;
-            for (const QString& a : argv)
-                shown_args.append(a.left(400));
-            req.args = QJsonObject{{QStringLiteral("script"), script.key}, {QStringLiteral("args"), shown_args}};
-            req.destructive = true;
-            // Any order / money command, not only exchange/ scripts: no blanket
-            // 15-minute grant is offered for those (Polymarket, Kalshi …).
-            req.live_trading = moves_money;
+            // Kind order (LIVE, straight to the venue) or code; the script, its
+            // arguments and input as they will run, scrubbed; the caller's ids.
+            const ToolApprovalRequest req = gate.request;
             // The approval must fit inside this call's budget. A verdict that came
             // after the watchdog had already answered "timed out" used to start the
             // script anyway — an order the agent was told never ran, and retried.

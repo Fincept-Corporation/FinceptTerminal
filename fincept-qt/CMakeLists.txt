@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.5.2 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.5.3 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -670,10 +670,18 @@ endif()
 # NOTE: FINCEPT_HAS_QXLSX compile definition is applied to FinceptTerminal
 # after add_executable() — see the target_compile_definitions block below.
 
-# ── Auto-update service ─────────────────────────────────────────────────────
-# The updater is implemented in-tree (src/services/updater/UpdateService.cpp)
-# using Qt6::Network directly — no third-party dependency. See the class
-# docstring for the manifest schema.
+# ── In-app updater ──────────────────────────────────────────────────────────
+# src/services/updater: finds a newer GitHub release (signed updates.json),
+# downloads the release file for this installation and replaces the
+# installation in place. Qt6::Network only — no third-party dependency. The
+# step that applies the update is per platform (UpdateInstaller.h).
+if(WIN32)
+    set(_FINCEPT_UPDATER_PLATFORM_SOURCES src/services/updater/UpdateInstaller_win.cpp)
+elseif(APPLE)
+    set(_FINCEPT_UPDATER_PLATFORM_SOURCES src/services/updater/UpdateInstaller_mac.cpp)
+else()
+    set(_FINCEPT_UPDATER_PLATFORM_SOURCES src/services/updater/UpdateInstaller_linux.cpp)
+endif()
 
 # ── md4c (fast CommonMark markdown parser → HTML) ────────────────────────────
 FetchContent_Declare(
@@ -785,7 +793,14 @@ set(ADS_VERSION "4.5.0" CACHE STRING "" FORCE)   # skip git_describe() in qtads 
 # qtads src/CMakeLists.txt does include(Versioning) unconditionally but only adds
 # cmake/modules to CMAKE_MODULE_PATH inside the if(NOT ADS_VERSION) branch.
 # Pre-set the path so the include succeeds regardless of which branch ran.
-# The _deps layout is stable: FetchContent always unpacks to <binary_dir>/_deps/<name_lower>-src.
+# FetchContent unpacks to <binary_dir>/_deps/<name_lower>-src — unless the
+# source is supplied with FETCHCONTENT_SOURCE_DIR_QTADS, which is how every
+# offline build provides it (the Flatpak manifest, distro packaging). Only the
+# _deps path used to be listed, so those builds stopped at configure with
+# "include could not find requested file: Versioning".
+if(FETCHCONTENT_SOURCE_DIR_QTADS)
+    list(APPEND CMAKE_MODULE_PATH "${FETCHCONTENT_SOURCE_DIR_QTADS}/cmake/modules")
+endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/_deps/qtads-src/cmake/modules")
 FetchContent_MakeAvailable(QtADS)
 # ADS target name is version-stamped: qtadvanceddocking-qt6
@@ -838,8 +853,22 @@ set(CORE_SOURCES
     src/core/actions/builtin_actions.cpp
     src/core/config/AppConfig.cpp
     src/core/config/AppPaths.cpp
+    # Exchange sessions / calendars and instrument currency (Qt Core only).
+    src/core/market/MarketSessions.cpp
+    src/core/market/InstrumentCurrency.cpp
+    src/core/market/MarketProfile.cpp
+    # Symbol system core: instrument record, normaliser, venue table, ranking (Qt Core only).
+    src/core/instrument/SymbolInput.cpp
+    src/core/instrument/VenueSymbols.cpp
+    src/core/instrument/InstrumentRank.cpp
+    # Report Builder worker-thread exports: ZIP writer, .odt and Markdown (Qt Core + zlib).
+    src/core/report/ReportZipWriter.cpp
+    src/core/report/ReportOdtWriter.cpp
+    src/core/report/ReportMarkdownWriter.cpp
     src/core/config/ProfileManager.cpp
     src/core/logging/Logger.cpp
+    # "An AI agent is operating the terminal" marker for the order path (Qt Core only).
+    src/core/agent/AgentActionScope.cpp
     src/core/events/EventBus.cpp
     src/core/HealthMonitor.cpp
     src/core/layout/LayoutTypes.cpp
@@ -854,10 +883,14 @@ set(CORE_SOURCES
     src/core/profile/ProfilePaths.cpp
     src/core/screen/MonitorTopology.cpp
     src/core/screen/MonitorWatcher.cpp
-    src/core/telemetry/TelemetryProvider.cpp
-    src/core/telemetry/LocalTelemetrySink.cpp
-    src/core/telemetry/CloudTelemetryProvider.cpp
+    src/core/telemetry/ClientInfo.cpp
+    src/core/telemetry/UsageReporter.cpp
+    src/core/telemetry/UsageScrub.cpp
     src/core/debug/StressLoad.cpp
+    src/core/debug/UiStallMonitor.cpp
+    src/core/process/ProcessTree.cpp
+    # Programs of the user's system from inside the Flatpak sandbox (flatpak-spawn --host).
+    src/core/process/HostExec.cpp
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
     src/core/i18n/LanguageManager.cpp
@@ -910,6 +943,7 @@ set(STORAGE_SOURCES
     # Core databases
     src/storage/sqlite/Database.cpp
     src/storage/sqlite/CacheDatabase.cpp
+    src/storage/sqlite/SqliteSupport.cpp
 
     # Workspace persistence (Phase 2 — multi-window refactor)
     src/storage/workspace/WorkspaceDb.cpp
@@ -933,8 +967,9 @@ set(STORAGE_SOURCES
     src/storage/cache/CacheManager.cpp
     src/storage/cache/TabSessionStore.cpp
 
-    # Secure storage (unchanged)
+    # Secure storage: facade (tri-state reads) + the SQLite / AES-256-GCM backend
     src/storage/secure/SecureStorage.cpp
+    src/storage/secure/SecureStorageSqlite.cpp
 
     # Repositories
     src/storage/repositories/SettingsRepository.cpp
@@ -951,6 +986,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/NewsAnalyticsRepository.cpp
     src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/FeedSubscriptionRepository.cpp
     src/storage/repositories/FeedItemRepository.cpp
@@ -1033,6 +1069,36 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v051_drop_duplicate_indexes.cpp
     src/storage/sqlite/migrations/v052_coding_agents.cpp
     src/storage/sqlite/migrations/v053_instrument_indexes.cpp
+    src/storage/sqlite/migrations/v054_watchlist_v2.cpp
+    src/storage/sqlite/migrations/v055_portfolio_ledger.cpp
+    src/storage/sqlite/migrations/v056_backtest_runs.cpp
+    src/storage/sqlite/migrations/v057_algo_monitoring.cpp
+    src/storage/sqlite/migrations/v058_news_analytics.cpp
+    src/storage/sqlite/migrations/v059_agent_task_runs.cpp
+    src/storage/sqlite/migrations/v060_symbol_master.cpp
+    src/storage/sqlite/migrations/v061_harness_runs.cpp
+    # Data Sources health + Data Mapping v2 (specs, revisions, outputs).
+    src/storage/sqlite/migrations/v062_data_sources_v2.cpp
+    # Chat Mode WP5 / WP6: run artefacts, task templates, schedules (v062 is another package's).
+    src/storage/sqlite/migrations/v063_agent_run_library.cpp
+    # M&A saved cases + Alt Investments fund book / holdings / DD checklists (one migration, both tabs).
+    src/storage/sqlite/migrations/v064_ma_alt_workbench.cpp
+    # Derivatives position book + saved strategies, and its repository (used off the GUI thread only).
+    src/storage/sqlite/migrations/v065_deriv_book.cpp
+    src/storage/repositories/DerivBookRepository.cpp
+    # Notes board: status / order / review rows, named boards, wall layout (v065 is Derivatives').
+    src/storage/sqlite/migrations/v066_notes_board.cpp
+    src/storage/repositories/NoteBoardRepository.cpp
+    # Symbol system WP2: the local instrument index (repository, bundled seed, async service).
+    src/storage/repositories/SymbolMasterRepository.cpp
+    src/services/instruments/SymbolSeed.cpp
+    src/services/instruments/InstrumentIndex.cpp
+    # Symbol system WP3: the resolver / search service and the backend-master sync.
+    src/services/instruments/InstrumentResolver.cpp
+    src/services/instruments/InstrumentResolverIndex.cpp
+    src/services/instruments/InstrumentResolverSources.cpp
+    src/services/instruments/BackendSymbolSearch.cpp
+    src/services/instruments/InstrumentSync.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -1045,6 +1111,7 @@ set(STORAGE_SOURCES
 
 # Python runner
 set(PYTHON_SOURCES
+    src/python/PythonEnvRelocation.cpp
     src/python/PythonRunner.cpp
     src/python/PythonSetupManager.cpp
     src/python/PythonWorker.cpp
@@ -1061,11 +1128,18 @@ set(LLM_SERVICE_SOURCES
     src/services/llm/LlmToolLoop.cpp
     src/services/llm/ModelCatalog.cpp
     src/services/llm/ProviderCatalog.cpp
+    # Model-list parse / shaping (pure; runs on a worker for fetch_models)
+    src/services/llm/ModelListParse.cpp
+    # ModelRouter: which model answers each AI feature (rule in ModelRouter.cpp,
+    # live singleton in ModelRouter_Live.cpp; Q_OBJECT header found by AUTOMOC),
+    # and LlmService's harness route.
+    src/services/llm/ModelRouter.cpp
+    src/services/llm/ModelRouter_Live.cpp
+    src/services/llm/LlmHarnessBridge.cpp
 )
 
 # AI Chat screen — UI for chatting with the LLM service
 set(AI_CHAT_SCREEN_SOURCES
-    src/screens/ai_chat/ChatBubbleFactory.cpp
     # AiChatScreen split; see header.
     src/screens/ai_chat/AiChatScreen.cpp
     src/screens/ai_chat/AiChatScreen_Layout.cpp
@@ -1073,6 +1147,14 @@ set(AI_CHAT_SCREEN_SOURCES
     src/screens/ai_chat/AiChatScreen_Messaging.cpp
     src/screens/ai_chat/AiChatScreen_Tools.cpp
     src/screens/ai_chat/AiChatBubble.cpp
+    src/screens/ai_chat/AiChatTypes.cpp
+    src/screens/ai_chat/AiChatStyle.cpp
+    src/screens/ai_chat/AiChatTranscript.cpp
+    src/screens/ai_chat/AiChatTranscript_Blocks.cpp
+    src/screens/ai_chat/AiChatSessionRail.cpp
+    src/screens/ai_chat/AiChatContextRail.cpp
+    src/screens/ai_chat/AiChatComposer.cpp
+    src/screens/ai_chat/AiChatStartPage.cpp
     src/screens/ai_chat/ChatBubbleController.cpp
 )
 
@@ -1095,9 +1177,13 @@ set(MCP_SOURCES
     # External-agent MCP server (Claude Code / Codex / Cursor over Streamable
     # HTTP) — see src/mcp/server/McpHttpServer.h
     src/mcp/server/McpHttpServer.cpp
-    src/mcp/server/McpHttpServer_Http.cpp
     src/mcp/server/McpHttpServer_Rpc.cpp
     src/mcp/server/McpHttpServer_Tools.cpp
+    src/mcp/server/McpWire.cpp
+    src/mcp/server/McpClientProfile.cpp
+    src/mcp/server/McpServerEngine.cpp
+    src/mcp/server/McpServerSelfCheck.cpp
+    src/mcp/server/ApprovalPolicy.cpp
     src/mcp/server/ToolApprovalDialog.cpp
     src/mcp/server/McpServerSelfTest.cpp
 
@@ -1106,11 +1192,26 @@ set(MCP_SOURCES
     src/mcp/core/CoreTools.cpp
     src/mcp/core/CoreApproval.cpp
     src/mcp/core/PythonScriptTool.cpp
+    src/mcp/core/PythonScriptPolicy.cpp
     src/mcp/core/UiModel.cpp
     src/mcp/core/UiObserve.cpp
     src/mcp/core/UiAct.cpp
     src/mcp/core/UiNavigate.cpp
+    src/mcp/core/UiRefs.cpp
+    src/mcp/core/UiItemViews.cpp
+    src/mcp/core/UiWeb.cpp
+    src/mcp/core/UiScreenshot.cpp
+    src/mcp/core/UiHostTerminal.cpp
+    src/mcp/core/UiRisk.cpp
+    src/mcp/core/UiActTarget.cpp
+    src/mcp/core/UiActEdit.cpp
+    src/mcp/core/UiActRisk.cpp
+    src/mcp/core/UiActWeb.cpp
+    src/mcp/core/UiActDiff.cpp
+    src/mcp/core/CoreToolCatalog.cpp
     src/mcp/core/CoreToolsSelfTest.cpp
+    src/mcp/core/ReportTool.cpp
+    src/mcp/core/ReportToolBackend.cpp
 )
 
 # Trading
@@ -1132,6 +1233,7 @@ set(TRADING_SOURCES
     src/trading/OptionsStrategyBuilder.cpp
     src/trading/StrategyPortfolio.cpp
     src/trading/OrderValidator.cpp
+    src/trading/OrderRiskGate.cpp
     src/trading/LatencyTracker.cpp
     src/trading/TradingNotificationBridge.cpp
     src/trading/AccountManager.cpp
@@ -1237,6 +1339,9 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/RealtimeScanRunner.cpp
     src/algo_engine/UniverseScanSelftest.cpp
     src/algo_engine/BacktestEngine.cpp
+    src/algo_engine/ExecutionModel.cpp
+    src/algo_engine/PerformanceMetrics.cpp
+    src/algo_engine/AlgoMarket.cpp
     src/algo_engine/fno/FnoAlgoTypes.cpp
     src/algo_engine/fno/FnoAlgoSelftest.cpp
     src/algo_engine/fno/FnoLegResolver.cpp
@@ -1261,6 +1366,7 @@ set(SERVICE_SOURCES
     src/services/cloud/NewsFeedCloudAdapter.cpp
     src/services/cloud/NotebookCloudAdapter.cpp
     src/services/akshare/AkShareService.cpp
+    src/services/akshare/AkShareDecode.cpp
     src/services/alpha_arena/ArenaStore.cpp
     src/services/alpha_arena/ArenaIndicators.cpp
     src/services/alpha_arena/ArenaDecisionParser.cpp
@@ -1269,6 +1375,7 @@ set(SERVICE_SOURCES
     src/services/alpha_arena/ArenaModelRegistry.cpp
     src/services/alpha_arena/ArenaPrompts.cpp
     src/services/alpha_arena/ArenaLlmClient.cpp
+    src/services/alpha_arena/HarnessArenaClient.cpp
     src/services/alpha_arena/ArenaMarketData.cpp
     src/services/alpha_arena/ArenaEngine.cpp
     src/services/alpha_arena/HyperliquidLiveVenue.cpp
@@ -1276,10 +1383,19 @@ set(SERVICE_SOURCES
     src/services/alpha_arena/ArenaMarketDataIface.h
     src/services/alpha_arena/ArenaSelftest.cpp
     src/services/asia_markets/AsiaMarketsService.cpp
+    src/services/asia_markets/AsiaMarketsDecode.cpp
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
     src/services/markets/MarketDataService.cpp
+    src/services/markets/MarketDataParsing.cpp
+    src/services/markets/MarketPerformance.cpp
+    src/services/markets/FxRateService.cpp
+    src/services/markets/FxRateMath.cpp
+    src/services/markets/WatchlistAlertService.cpp
+    src/services/markets/RiskCompositeService.cpp
     src/services/markets/MarketSearchService.cpp
+    src/services/fincept_data/FinceptDataParse.cpp
+    src/services/fincept_data/FinceptDataService.cpp
     src/services/options/OptionChainService.cpp
     src/services/options/OISnapshotter.cpp
     src/services/options/StrategyTemplates.cpp
@@ -1287,11 +1403,30 @@ set(SERVICE_SOURCES
     src/services/options/StrategyAnalytics.cpp
     src/services/options/DerivativesPricing.cpp
     src/services/options/FiiDiiService.cpp
+    # Derivatives tab (D1-D6): pure pricing / vol / strategy / scenario / rates maths, the
+    # free delayed option chain and the free curves service (scripts/derivatives/deriv_market.py).
+    src/services/options/OptionModels.cpp
+    src/services/options/ExoticPricing.cpp
+    src/services/options/VolSurface.cpp
+    src/services/options/StrategyMath.cpp
+    src/services/options/ScenarioMath.cpp
+    src/services/options/RatesMath.cpp
+    src/services/options/DerivMarketData.cpp
+    src/services/options/FreeOptionChainService.cpp
+    src/services/options/CurveDataService.cpp
+    # Derivatives D7 / D8: CDS credit maths, the position book's valuation and its store.
+    src/services/options/CreditMath.cpp
+    src/services/options/BookMath.cpp
+    src/services/options/DerivBookStore.cpp
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/data_normalization/DataMappingTestClient.cpp
     src/core/services/Services.cpp
     # NewsService split; see NewsService.cpp header.
     src/services/news/NewsService.cpp
+    src/services/news/NewsLanguage.cpp
+    src/services/news/NewsTickerTagger.cpp
+    src/services/news/NewsAnalytics.cpp
+    src/services/news/NewsSymbolDirectory.cpp
     src/services/news/NewsService_LiveFeed.cpp
     src/services/news/NewsService_Parsing.cpp
     src/services/news/NewsService_Classification.cpp
@@ -1302,6 +1437,7 @@ set(SERVICE_SOURCES
     src/services/news/NewsNlpEngine.cpp
     src/services/news/VaderSentiment.cpp
     resources/vader/vader.qrc
+    resources/fonts/fonts.qrc
     src/services/news/NewsCorrelationService.cpp
     src/services/news/NewsSignalDetector.cpp
     src/services/news/RssFeedProbeService.cpp
@@ -1312,8 +1448,11 @@ set(SERVICE_SOURCES
     src/services/feeds/FeedSelfTest.cpp
     src/services/databento/DatabentoService.cpp
     src/services/dbnomics/DBnomicsService.cpp
+    src/services/dbnomics/DBnomicsDecode.cpp
     src/services/gov_data/GovDataService.cpp
+    src/services/gov_data/GovDataDecode.cpp
     src/services/equity/EquityResearchService.cpp
+    src/services/equity/EquityTechnicalMath.cpp
     src/services/equity/EquityResearchService_Ext.cpp
     src/services/equity/EquityValuationModels.cpp
     src/services/equity/SecFilingsService.cpp
@@ -1322,6 +1461,13 @@ set(SERVICE_SOURCES
     src/services/equity/MarketSentimentSupport.cpp
     src/services/equity/TechnicalIndicators.cpp
     src/services/ma_analytics/MAAnalyticsService.cpp
+    src/services/ma_analytics/MaCaseStore.cpp
+    # Company snapshot for a symbol (X5: Yahoo + SEC company facts) and the Alt Investments services.
+    src/services/company_snapshot/CompanySnapshotService.cpp
+    src/services/alt_investments/AltInvestmentsService.cpp
+    src/services/alt_investments/AltDdStore.cpp
+    src/services/alt_investments/AltHoldingStore.cpp
+    src/services/alt_investments/AltFundStore.cpp
     src/services/geopolitics/GeopoliticsService.cpp
     src/services/maritime/MaritimeService.cpp
     src/services/maritime/PortsCatalog.cpp
@@ -1329,9 +1475,21 @@ set(SERVICE_SOURCES
     src/services/ai_quant_lab/AIQuantLabService.cpp
     src/services/backtesting/BacktestingService.cpp
     src/services/backtesting/BacktestBrokerData.cpp
+    src/services/backtesting/BacktestRunStore.cpp
+    src/services/backtesting/BacktestRunProtocol.cpp
+    src/services/backtesting/BacktestRequest.cpp
+    src/services/backtesting/BacktestResultModel.cpp
+    src/services/backtesting/BacktestExportText.cpp
     src/services/algo_trading/AlgoTradingService.cpp
+    src/services/algo_trading/AlgoMonitorStore.cpp
+    src/services/algo_trading/AlgoUniverses.cpp
+    src/services/algo_trading/AlgoRuleLogic.cpp
     # PortfolioService split; see header comment.
     src/services/portfolio/PortfolioService.cpp
+    src/services/portfolio/PortfolioLots.cpp
+    src/services/portfolio/PortfolioPerformance.cpp
+    src/services/portfolio/PortfolioValuation.cpp
+    src/services/portfolio/PortfolioAllocation.cpp
     src/services/portfolio/PortfolioService_Summary.cpp
     src/services/portfolio/PortfolioService_Metrics.cpp
     src/services/portfolio/PortfolioService_ImportExport.cpp
@@ -1339,6 +1497,7 @@ set(SERVICE_SOURCES
     src/services/quantlib/QuantLibClient.cpp
     src/services/quantlib/QuantLibAccess.cpp
     src/services/economics/EconomicsService.cpp
+    src/services/economics/EconomicsDecode.cpp
     src/services/economics/MacroCalendarService.cpp
     src/services/economics/FinceptMacroService.cpp
     # Fincept API health probe (DataHub producer, system:health) and the
@@ -1349,6 +1508,21 @@ set(SERVICE_SOURCES
     src/services/connectors/ConnectorCatalog.cpp
     src/services/connectors/ConnectorService.cpp
     src/services/connectors/ConnectorCredentialBridge.cpp
+    src/services/connectors/ConnectorEnvelope.cpp
+    src/services/connectors/ConnectorArgs.cpp
+    # Data Sources connections (tabular model, drivers, real tests) + Data Mapping v2 engine.
+    src/services/data_sources/TabularData.cpp
+    src/services/data_sources/SourceError.cpp
+    src/services/data_sources/TableParsers.cpp
+    src/services/data_sources/RequestSigning.cpp
+    src/services/data_sources/ConnectionProfiles.cpp
+    src/services/data_sources/ConnectionDrivers.cpp
+    src/services/data_sources/ConnectionService.cpp
+    src/services/data_sources/ConnectionTransfer.cpp
+    src/services/data_mapping/MappingSpec.cpp
+    src/services/data_mapping/MappingEngine.cpp
+    src/services/data_mapping/MappingRunner.cpp
+    src/services/data_mapping/MappingInbox.cpp
     # AgentService is split across multiple files; see AgentService.cpp header.
     src/services/agents/AgentService.cpp
     src/services/agents/AgentService_Discovery.cpp
@@ -1362,8 +1536,56 @@ set(SERVICE_SOURCES
     src/services/coding_agents/CodingAgentRepository.cpp
     src/services/coding_agents/CodingAgentService.cpp
     src/services/coding_agents/CodingAgentService_Process.cpp
+    # Agent harnesses (Claude Code, Codex, Grok, …): one adapter per CLI, the
+    # shared stream parsers, detection, launch, and HarnessRegistry (Q_OBJECT;
+    # header found by AUTOMOC). Adapters / parsers are Qt Core only.
+    src/services/harness/HarnessDetect.cpp
+    src/services/harness/HarnessHostDetect.cpp
+    src/services/harness/HarnessLaunch.cpp
+    src/services/harness/HarnessRegistry.cpp
+    # Terminal AI answered by a harness: eligibility rule, process pool, the
+    # per-call process runner and the app wiring (HarnessChatBackend).
+    src/services/harness/HarnessEligibility.cpp
+    src/services/harness/HarnessProcessPool.cpp
+    src/services/harness/HarnessChatRun.cpp
+    src/services/harness/HarnessChatBackend.cpp
+    src/services/harness/adapters/AdapterSupport.cpp
+    src/services/harness/adapters/ClaudeAdapter.cpp
+    src/services/harness/adapters/CodexAdapter.cpp
+    src/services/harness/adapters/GrokAdapter.cpp
+    src/services/harness/adapters/CursorAdapter.cpp
+    src/services/harness/adapters/CopilotAdapter.cpp
+    src/services/harness/adapters/GeminiAdapter.cpp
+    src/services/harness/adapters/QwenAdapter.cpp
+    src/services/harness/parsers/StreamParserSupport.cpp
+    src/services/harness/parsers/AcpUpdateParser.cpp
+    src/services/harness/parsers/PlainTextParser.cpp
+    src/services/harness/parsers/GeminiStreamParser.cpp
+    src/services/harness/parsers/CursorStreamParser.cpp
+    # Chat Mode run engine — long-running agentic tasks (runs, steps, events,
+    # artefacts, schedules); see TaskRunService.h. IRunExecutor.h is a
+    # header-only Q_OBJECT interface, listed so AUTOMOC scans it.
+    src/services/agent_tasks/IRunExecutor.h
+    src/services/agent_tasks/TaskRunTypes.cpp
+    src/services/agent_tasks/CloudSseMapping.cpp
+    src/services/agent_tasks/TaskRunStore.cpp
+    src/services/agent_tasks/TaskRunService.cpp
+    src/services/agent_tasks/CloudAgentClient.cpp
+    src/services/agent_tasks/CloudTurnExecutor.cpp
+    src/services/agent_tasks/CloudTurnDriver.cpp
+    src/services/agent_tasks/CloudPlanExecutor.cpp
+    src/services/agent_tasks/LocalAgenticExecutor.cpp
+    src/services/agent_tasks/LocalAgentEngine.cpp
+    src/services/agent_tasks/HarnessRunExecutor.cpp
+    src/services/agent_tasks/ArtefactService.cpp
+    src/services/agent_tasks/ArtefactLogic.cpp
+    src/services/agent_tasks/RunTemplates.cpp
+    src/services/agent_tasks/RunTemplateLibrary.cpp
+    src/services/agent_tasks/ScheduleLogic.cpp
+    src/services/agent_tasks/TaskRunScheduler.cpp
     src/services/file_manager/FileManagerService.cpp
     src/services/notebooks/NotebookLibraryService.cpp
+    src/services/notebooks/NotebookKernel.cpp
 
     # Wallet (Phase 1 — Solana wallet identity + balance display)
     src/services/wallet/Ed25519Verifier.cpp
@@ -1392,6 +1614,7 @@ set(SERVICE_SOURCES
     src/services/wallet/RealYieldService.cpp
     # Billing (Phase 3 — tier service driving cross-screen gating)
     src/services/billing/TierService.cpp
+    src/services/billing/PlanAccess.cpp
     src/services/sectors/SectorResolver.cpp
     src/services/screener/ScreenerService.cpp
     src/services/workflow/NodeRegistry.cpp
@@ -1469,6 +1692,9 @@ set(SERVICE_SOURCES
     src/services/notifications/providers/PagerDutyProvider.cpp
     src/services/notifications/providers/OpsgenieProvider.cpp
     src/services/notifications/providers/SMSProvider.cpp
+    # delivered / failed decision (pure) + the providers' one HTTP send path
+    src/services/notifications/providers/DeliveryOutcome.cpp
+    src/services/notifications/providers/ProviderHttp.cpp
 )
 
 # UI framework
@@ -1476,6 +1702,9 @@ set(UI_SOURCES
     src/ui/markdown/MarkdownRenderer.cpp
     src/ui/theme/Theme.cpp
     src/ui/theme/ThemeManager.cpp
+    src/ui/theme/ThemeRestyle.cpp
+    src/ui/theme/ThemePalettes.cpp
+    src/ui/theme/ChartStyle.cpp
     src/ui/theme/StyleSheets.cpp
     src/ui/widgets/Card.cpp
     src/ui/widgets/GroupBadge.cpp
@@ -1488,6 +1717,9 @@ set(UI_SOURCES
     src/ui/widgets/PaginationBar.cpp
     src/ui/widgets/GeometricBackground.cpp
     src/ui/widgets/WorldMapWidget.cpp
+    src/ui/widgets/map/GeoBaseMap.cpp
+    src/ui/widgets/map/ImageryTiles.cpp
+    resources/maps/maps.qrc
     src/ui/widgets/LoadingOverlay.cpp
     src/ui/widgets/ConfettiOverlay.cpp
     src/ui/widgets/SpeedSparkline.cpp
@@ -1495,7 +1727,20 @@ set(UI_SOURCES
     src/ui/widgets/PythonSetupBanner.cpp
     src/ui/widgets/LanguageSwitcher.cpp
     src/ui/widgets/EnterprisePromo.cpp
+    src/ui/widgets/PlanHint.cpp
+    src/ui/widgets/ProAnalytics.cpp
+    src/ui/widgets/UpdateDialog.cpp
     src/ui/tables/DataTable.cpp
+    # Central number / currency / date formatter (locale, per-instrument
+    # decimals, lakh-crore, display timezone).
+    src/ui/formatting/FormatSettings.cpp
+    src/ui/formatting/FormatSettingsStore.cpp
+    src/ui/formatting/CurrencyTable.cpp
+    src/ui/formatting/NumberFormat.cpp
+    src/ui/formatting/DateFormat.cpp
+    src/ui/formatting/FormatWidgets.cpp
+    src/ui/formatting/CurrencyOverrideModel.cpp
+    src/ui/formatting/FormatSettingsPanel.cpp
     # Selftest for the header-only LiveTableModel/LiveTableDelegate. Also the
     # only TU that includes them, so it is their compile check — a header with
     # no includer is never compiled and can rot unnoticed.
@@ -1515,16 +1760,81 @@ set(UI_SOURCES
     src/ui/charts/layers/SupportResistanceLayer.cpp
     src/ui/charts/layers/PivotLayer.cpp
     src/ui/charts/KLineChartWidget.cpp
+    # Shared painted chart widgets (theme-driven, HiDPI, hover tooltips).
+    src/ui/charts/Treemap.cpp
+    src/ui/charts/HeatmapGrid.cpp
+    src/ui/charts/MatrixHeatmap.cpp
+    src/ui/charts/MonthlyReturnsHeatmap.cpp
+    src/ui/charts/DistributionChart.cpp
+    src/ui/charts/FanChart.cpp
+    src/ui/charts/RangeBar.cpp
+    src/ui/charts/Gauge.cpp
+    src/ui/charts/DonutChart.cpp
+    src/ui/charts/BarChart.cpp
+    # Shared time-series chart kit.
+    src/ui/charts/ChartAxisTicks.cpp
+    src/ui/charts/ChartKit.cpp
+    src/ui/charts/ChartExport.cpp
+    src/ui/charts/Sparkline.cpp
+    src/ui/charts/TimeSeriesChart.cpp
+    src/ui/charts/TsChartPaint.cpp
+    src/ui/charts/CandleChart.cpp
+    src/ui/charts/ChartKitSelftest.cpp
+    src/ui/tables/SparklineDelegate.cpp
+    src/ui/tables/FlashCellDelegate.cpp
+    src/ui/widgets/StatTile.cpp
+    src/ui/widgets/KpiStrip.cpp
+    # Shared dense-screen bars (Notes first; Markets / Code / Backtesting next): command bar, status bar.
+    src/ui/widgets/ScreenCommandBar.cpp
+    src/ui/widgets/ScreenStatusBar.cpp
+    # Shared wrapping flow layout and typed-key sort / filter proxy (replace the per-screen copies).
+    src/ui/widgets/FlowLayout.cpp
+    src/ui/widgets/KeySortProxy.cpp
+    # Shared analytics result renderer (QuantLib / M&A / Alt Investments panes).
+    src/ui/widgets/ResultLayout.cpp
+    src/ui/widgets/ResultView.cpp
+    # Editable data grid with paste / CSV import (Alt Investments cash flows, M&A, Report Builder).
+    src/ui/widgets/DataGridEditor.cpp
+    # Shared two-axis sensitivity grid (X2: DCF, LBO, accretion, real estate, Derivatives scenarios).
+    src/ui/widgets/SensitivityTable.cpp
+    # Shared loading / empty states (skeleton blocks, designed empty + preview state).
+    src/ui/widgets/EmptyState.cpp
+    src/ui/widgets/ModelBadge.cpp
+    src/ui/widgets/LoadingSkeleton.cpp
+    src/ui/widgets/AutoLoadPane.cpp
+    src/ui/widgets/AutoLoadPolicy.cpp
+    src/ui/widgets/AutoLoadGate.cpp
+    src/ui/widgets/Requirements.cpp
+    src/ui/widgets/RequirementsLive.cpp
+    src/ui/widgets/InputMemory.cpp
+    # Shared "Add to Report" action (Report Builder X1: any tab -> ReportInbox).
+    src/ui/widgets/report/AddToReportButton.cpp
+    # Named-scenario grid (X3: derivatives stress presets, allocation stress, case compare).
+    src/ui/widgets/ScenarioGrid.cpp
+    src/ui/tables/RangeBarDelegate.cpp
+    src/ui/tables/BarCellDelegate.cpp
     src/ui/navigation/FKeyBar.cpp
     src/ui/navigation/StatusBar.cpp
     src/ui/navigation/ToolBar.cpp
-    # CommandBar split; see CommandBar.cpp header.
+    # Header search box (CommandBar.h) + its pieces; public row registry in src/core/command.
     src/ui/navigation/CommandBar.cpp
-    src/ui/navigation/CommandBar_Input.cpp
-    src/ui/navigation/CommandBar_Suggestions.cpp
-    src/ui/navigation/CommandBar_Assets.cpp
+    src/ui/navigation/search/SearchActions.cpp
+    src/ui/navigation/search/SearchController.cpp
+    src/ui/navigation/search/SearchDelegate.cpp
+    src/ui/navigation/search/SearchField.cpp
+    src/ui/navigation/search/SearchInstruments.cpp
+    src/ui/navigation/search/SearchModel.cpp
+    src/ui/navigation/search/SearchPopup.cpp
+    src/ui/navigation/search/SearchSources.cpp
+    src/core/command/CommandRegistry.cpp
+    src/core/command/CommandRank.cpp
+    src/core/command/CommandPhrase.cpp
+    src/core/command/CommandUsage.cpp
+    src/core/command/CommandIndex.cpp
+    src/core/command/CommandSeed.cpp
     src/ui/navigation/DockToolBar.cpp
     src/ui/navigation/DockStatusBar.cpp
+    src/ui/navigation/KeyRouting.cpp
     src/ui/debug/DebugOverlay.cpp
     src/ui/command/CommandParser.cpp
     src/ui/command/SuggestionIndex.cpp
@@ -1543,15 +1853,16 @@ set(UI_SOURCES
     src/ui/widgets/NotifPanel.cpp
 
     # Algo Trading visual strategy builder widgets
-    src/ui/widgets/algo/ConditionBlock.cpp
-    src/ui/widgets/algo/OperandEditor.cpp
-    src/ui/widgets/algo/GroupBlock.cpp
     src/ui/widgets/algo/BacktestReportPanel.cpp
-    src/ui/widgets/algo/ConditionSection.cpp
+    src/ui/widgets/algo/ExecutionCostPanel.cpp
     src/ui/widgets/algo/RiskManagementPanel.cpp
-    src/ui/widgets/algo/SymbolSearchCombo.cpp
     src/ui/widgets/algo/SymbolChipInput.cpp
     src/ui/widgets/algo/FnoLegRuleEditor.cpp
+    src/ui/widgets/algo/RuleTableEditor.cpp
+
+    # Symbol system WP4: the one symbol picker (search box + result pop-up)
+    src/ui/widgets/symbol/SymbolPickerPopup.cpp
+    src/ui/widgets/symbol/SymbolSearchBox.cpp
 )
 
 # Screens
@@ -1574,6 +1885,7 @@ set(SCREEN_SOURCES
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/LlmConfigSection_Providers.cpp
     src/screens/settings/LlmConfigSection_Profiles.cpp
+    src/screens/settings/LlmConfigSection_Harness.cpp
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/AgentConnectSection.cpp
     src/screens/settings/LoggingSection.cpp
@@ -1602,6 +1914,23 @@ set(SCREEN_SOURCES
     src/screens/chat_mode/ChatAgentPanel.cpp
     src/screens/chat_mode/ChatModeScreen.cpp
     src/screens/chat_mode/TerminalToolBridge.cpp
+    src/screens/chat_mode/ComposerContextBar.cpp
+    src/screens/chat_mode/RunListPanel.cpp
+    src/screens/chat_mode/RunPlanPanel.cpp
+    src/screens/chat_mode/RunActivityView.cpp
+    src/screens/chat_mode/RunStatusBar.cpp
+    src/screens/chat_mode/RunArtefactsPanel.cpp
+    src/screens/chat_mode/ToolResultCard.cpp
+    src/screens/chat_mode/NewRunDialog.cpp
+    src/screens/chat_mode/RunSchedulesDialog.cpp
+    src/screens/chat_mode/RunRequestForm.cpp
+    src/screens/chat_mode/ChatMarkdown.cpp
+    src/screens/chat_mode/TranscriptBlocks.cpp
+    src/screens/chat_mode/TranscriptView.cpp
+    src/screens/chat_mode/ChatComposer.cpp
+    src/screens/chat_mode/ChatStartPage.cpp
+    src/screens/chat_mode/ChatModeLeftRail.cpp
+    src/screens/chat_mode/ChatContextPage.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/launchpad/LaunchpadScreen.cpp
     src/screens/launchpad/OnboardingTour.cpp
@@ -1613,14 +1942,44 @@ set(SCREEN_SOURCES
     src/screens/info/HelpScreen.cpp
     src/screens/file_manager/FileManagerScreen.cpp
     src/screens/relationship_map/RelationshipMapScreen.cpp
+    src/screens/relationship_map/RelationshipMapScreen_Detail.cpp
     src/screens/relationship_map/RelationshipGraphScene.cpp
+    src/screens/relationship_map/RelationshipGraphModel.cpp
+    src/screens/relationship_map/RelationshipGraphLayout.cpp
+    src/screens/relationship_map/RelationshipLinkedViews.cpp
+    src/screens/relationship_map/RelationshipMapCharts.cpp
     src/services/relationship_map/RelationshipMapService.cpp
+    src/services/relationship_map/RelationshipMapParse.cpp
     src/services/report_builder/ReportBuilderService.cpp
     src/services/report_builder/ReportBuilderTemplates.cpp
+    # Report Builder RB-2 / RB-4 / RB-5: data binder, library, send-to-report inbox, Files sync
+    src/services/report_builder/ReportDataBinder.cpp
+    src/services/report_builder/ReportLibrary.cpp
+    src/services/report_builder/ReportInbox.cpp
+    src/services/report_builder/ReportFileSync.cpp
+    # Report Builder RB-3 / RB-7 / RB-8: off-thread charts, picture sync, AI drafting,
+    # scheduled regeneration
+    src/services/report_builder/ReportChartRenderer.cpp
+    src/services/report_builder/ReportChartCache.cpp
+    src/services/report_builder/ReportAssets.cpp
+    src/services/report_builder/ReportAiSession.cpp
+    src/services/report_builder/ReportAiLlmBackend.cpp
+    src/services/report_builder/ReportRegenerator.cpp
+    src/services/report_builder/ReportScheduler.cpp
     src/screens/markets/MarketsScreen.cpp
     src/screens/markets/MarketPanel.cpp
     src/screens/markets/MarketPanelStore.cpp
     src/screens/markets/MarketPanelEditor.cpp
+    src/screens/markets/MarketColumns.cpp
+    src/screens/markets/MarketsQuoteStore.cpp
+    src/screens/markets/MarketPanelModel.cpp
+    src/screens/markets/MarketPanelView.cpp
+    src/screens/markets/MarketsScreen_Layout.cpp
+    src/screens/markets/MarketsCommandBar.cpp
+    src/screens/markets/MarketsPulseRibbon.cpp
+    src/screens/markets/MarketsDetailPane.cpp
+    src/screens/markets/MarketsOverviewViews.cpp
+    src/screens/markets/MarketsSymbolEntry.cpp
     src/screens/dashboard/DashboardScreen.cpp
     src/screens/dashboard/DashboardToolBar.cpp
     src/screens/dashboard/DashboardStatusBar.cpp
@@ -1636,6 +1995,14 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/BaseWidget.cpp
     src/screens/dashboard/widgets/LoadingOverlay.cpp
     src/screens/dashboard/widgets/QuoteTableWidget.cpp
+    src/screens/dashboard/widgets/QuoteGrid.cpp
+    src/screens/dashboard/widgets/SymbolListDialog.cpp
+    src/screens/dashboard/widgets/PortfolioTileBase.cpp
+    src/screens/dashboard/widgets/PortfolioPerformanceWidget.cpp
+    src/screens/dashboard/widgets/PortfolioRiskWidget.cpp
+    src/screens/dashboard/widgets/WorldClockWidget.cpp
+    src/screens/dashboard/widgets/DataApiTiles.cpp
+    src/screens/dashboard/widgets/MarketGridTiles.cpp
     src/screens/dashboard/widgets/TopMoversWidget.cpp
     src/screens/dashboard/widgets/NewsWidget.cpp
     src/screens/dashboard/widgets/SectorHeatmapWidget.cpp
@@ -1682,7 +2049,15 @@ set(SCREEN_SOURCES
     src/screens/report_builder/ComponentToolbar.cpp
     src/screens/report_builder/DocumentCanvas.cpp
     src/screens/report_builder/PropertiesPanel.cpp
+    src/screens/report_builder/ReportRenderer.cpp
+    src/screens/report_builder/ReportExportJob.cpp
+    src/screens/report_builder/ReportLibraryPage.cpp
+    src/screens/report_builder/ReportBuilderScreen_Tools.cpp
+    src/screens/report_builder/ReportChartObject.cpp
+    src/screens/report_builder/ReportNumberStyle.cpp
+    src/screens/report_builder/ReportAiPanel.cpp
     src/screens/news/NewsScreen.cpp
+    src/screens/news/NewsAnalyticsPanel.cpp
     src/screens/news/NewsCommandBar.cpp
     src/screens/news/NewsSidePanel.cpp
     src/screens/news/NewsFeedPanel.cpp
@@ -1708,6 +2083,9 @@ set(SCREEN_SOURCES
     src/screens/crypto_trading/CryptoDepthChart.cpp
     # EquityTradingScreen split; see header comment.
     src/screens/equity_trading/EquityTradingScreen.cpp
+    src/screens/equity_trading/EquityTradingScreen_Paper.cpp
+    src/screens/equity_trading/EquitySymbolBox.cpp
+    src/screens/equity_trading/EquityQuoteSnapshot.cpp
     src/screens/equity_trading/EquityTradingScreen_Streams.cpp
     src/screens/equity_trading/EquityTradingScreen_Handlers.cpp
     src/screens/equity_trading/EquityTradingScreen_Watchlists.cpp
@@ -1719,6 +2097,10 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/equity_trading/EquityPublicFeed.cpp
+    src/screens/equity_trading/EquityWorkspace.cpp
+    src/screens/equity_trading/EquityCommandBar.cpp
+    src/screens/equity_trading/EquityStyle.cpp
     src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
@@ -1736,18 +2118,17 @@ set(SCREEN_SOURCES
     # Action Center — pending-orders popover + status-bar badge (queued approvals).
     src/screens/action_center/PendingOrdersPanel.cpp
     src/screens/action_center/PendingOrdersBadge.cpp
-    # DataSourcesScreen split; see DataSourcesScreen.cpp header.
+    # Data Sources workspace (three panes); see DataSourcesScreen.h.
     src/screens/data_sources/DataSourcesScreen.cpp
-    src/screens/data_sources/DataSourcesScreen_Layout.cpp
-    src/screens/data_sources/DataSourcesScreen_Tables.cpp
-    src/screens/data_sources/DataSourcesScreen_Handlers.cpp
+    src/screens/data_sources/DataSourcesModels.cpp
+    src/screens/data_sources/DataWorkspace.cpp
+    src/screens/data_sources/ConnectionForm.cpp
+    src/screens/data_sources/ConnectionDetailView.cpp
+    src/screens/data_sources/CatalogConnectorView.cpp
+    src/screens/data_sources/ConnectorParamForm.cpp
     src/screens/data_sources/DataSourcesHelpers.cpp
-    src/screens/data_sources/ConnectionConfigDialog.cpp
-    src/screens/data_sources/ConnectionTester.cpp
     src/screens/data_sources/ImportExportConnections.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
-    src/screens/data_sources/ConnectorCatalogPanel.cpp
-    src/screens/data_sources/ConnectorCatalogModels.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
     src/screens/data_sources/connectors/NoSqlDatabases.cpp
     src/screens/data_sources/connectors/TimeSeriesDatabases.cpp
@@ -1759,7 +2140,26 @@ set(SCREEN_SOURCES
     src/screens/data_sources/connectors/AlternativeData.cpp
     src/screens/data_sources/connectors/OpenBanking.cpp
     src/screens/notes/NotesScreen.cpp
+    src/screens/notes/NotesScreen_Data.cpp
+    src/screens/notes/NotesScreen_Actions.cpp
+    src/screens/notes/NotesStore.cpp
+    src/screens/notes/NotesModels.cpp
+    src/screens/notes/NotesEditor.cpp
+    src/screens/notes/NotesCardPainter.cpp
+    src/screens/notes/NotesBoardModel.cpp
+    src/screens/notes/NotesBoardView.cpp
+    src/screens/notes/NotesWallView.cpp
+    src/screens/notes/NotesDetailPane.cpp
     src/screens/watchlist/WatchlistScreen.cpp
+    src/screens/watchlist/WatchlistColumns.cpp
+    src/screens/watchlist/WatchlistModel.cpp
+    src/screens/watchlist/WatchlistView.cpp
+    src/screens/watchlist/WatchlistDetailPane.cpp
+    src/screens/watchlist/WatchlistAnalyticsViews.cpp
+    src/screens/watchlist/WatchlistAlertDialog.cpp
+    src/screens/watchlist/WatchlistImportExport.cpp
+    src/screens/watchlist/WatchlistScreen_Data.cpp
+    src/screens/watchlist/WatchlistScreen_Actions.cpp
     src/screens/watchlist/WatchlistColumnPrefs.cpp
     src/screens/surface_analytics/SurfaceDemoData.cpp
     src/screens/surface_analytics/SurfaceCsvImporter.cpp
@@ -1784,6 +2184,10 @@ set(SCREEN_SOURCES
     src/screens/code_editor/CodeEditorScreen_Cells.cpp
     src/screens/code_editor/CodeEditorScreen_Navigator.cpp
     src/screens/code_editor/CodeEditorScreen_Library.cpp
+    src/screens/code_editor/NotebookDocument.cpp
+    src/screens/code_editor/NotebookOutputs.cpp
+    src/screens/code_editor/NotebookCommandBar.cpp
+    src/screens/code_editor/NotebookInspector.cpp
 
     # Excel Spreadsheet
     src/screens/excel/ExcelScreen.cpp
@@ -1793,6 +2197,8 @@ set(SCREEN_SOURCES
     # Government Data
     src/screens/gov_data/GovDataScreen.cpp
     src/screens/gov_data/GovDataProviderPanel.cpp
+    src/screens/gov_data/GovDataShape.cpp
+    src/screens/gov_data/GovTableModel.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
     src/screens/gov_data/GovDataCongressPanel.cpp
     src/screens/gov_data/GovDataFrancePanel.cpp
@@ -1802,6 +2208,18 @@ set(SCREEN_SOURCES
 
     # Derivatives Pricing
     src/screens/derivatives/DerivativesScreen.cpp
+    src/screens/derivatives/DerivCommon.cpp
+    src/screens/derivatives/DerivPricerPage.cpp
+    src/screens/derivatives/DerivPricerCompute.cpp
+    src/screens/derivatives/DerivChainModel.cpp
+    src/screens/derivatives/DerivChainPage.cpp
+    src/screens/derivatives/DerivStrategyPage.cpp
+    src/screens/derivatives/DerivScenarioPage.cpp
+    src/screens/derivatives/DerivCurvesPage.cpp
+    src/screens/derivatives/DerivCreditPage.cpp
+    src/screens/derivatives/DerivBookPage.cpp
+    # Header-only Q_OBJECT class (signals, no .cpp): listed so AUTOMOC runs moc on it.
+    src/screens/derivatives/DerivContext.h
 
     # F&O / Options (Sensibull-style tab)
     src/screens/fno/FnoScreen.cpp
@@ -1869,14 +2287,36 @@ set(SCREEN_SOURCES
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
     src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
     src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AutoLoad.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Series.cpp
 
-    # Backtesting (partial-class split across logical sub-files; see
-    # BacktestingScreen.cpp header comment for the layout).
+    # Backtesting (shell + one file per sub-tab; see the BacktestingScreen.cpp header comment).
     src/screens/backtesting/BacktestingScreen.cpp
-    src/screens/backtesting/BacktestingScreen_Layout.cpp
-    src/screens/backtesting/BacktestingScreen_Commands.cpp
-    src/screens/backtesting/BacktestingScreen_Strategies.cpp
-    src/screens/backtesting/BacktestingScreen_Results.cpp
+    src/screens/backtesting/BacktestResultData.cpp
+    src/screens/backtesting/BacktestCharts.cpp
+    src/screens/backtesting/BtTabKit.cpp
+    src/screens/backtesting/BtRunController.cpp
+    src/screens/backtesting/BtSetupPanel.cpp
+    src/screens/backtesting/BtAnalysisTabs.cpp
+    src/screens/backtesting/BtOverviewView.cpp
+    src/screens/backtesting/BtPerformanceView.cpp
+    src/screens/backtesting/BtRiskView.cpp
+    src/screens/backtesting/BtTradesView.cpp
+    src/screens/backtesting/BtExposureView.cpp
+    src/screens/backtesting/BtCostsView.cpp
+    src/screens/backtesting/BtAssumptionsView.cpp
+    src/screens/backtesting/BtOptimizeView.cpp
+    src/screens/backtesting/BtWalkForwardView.cpp
+    src/screens/backtesting/BtMonteCarloView.cpp
+    src/screens/backtesting/BtCompareView.cpp
+    src/screens/backtesting/BtRunsTab.cpp
+    src/screens/backtesting/BtCompareTab.cpp
+    src/screens/backtesting/BtResearchTab.cpp
+    # Header-only Q_OBJECT declarations (their classes are defined in the .cpp files above):
+    # listed so AUTOMOC runs moc on them.
+    src/screens/backtesting/BtRunViews.h
+    src/screens/backtesting/BtAnalysisViews.h
+    src/screens/backtesting/BtWorkbenchTabs.h
 
     # Algo Trading
     src/screens/algo_trading/AlgoTradingScreen.cpp
@@ -1886,17 +2326,24 @@ set(SCREEN_SOURCES
     src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
+    src/screens/algo_trading/DeploymentLogDialog.cpp
+    src/screens/algo_trading/StrategyOptimizeDialog.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
+    src/screens/algo_trading/AlgoTabKit.cpp
+    src/screens/algo_trading/AlertsView.cpp
+    src/screens/algo_trading/DeploymentsView.cpp
+    src/screens/algo_trading/StrategyLibraryView.cpp
+    src/screens/algo_trading/ScannerView.cpp
+    src/screens/algo_trading/UniverseView.cpp
 
     # Data Mapping (partial-class split; see DataMappingScreen.cpp header).
     src/screens/data_mapping/DataMappingScreen.cpp
-    src/screens/data_mapping/DataMappingScreen_Data.cpp
-    src/screens/data_mapping/DataMappingScreen_Layout.cpp
-    src/screens/data_mapping/DataMappingScreen_Operations.cpp
+    src/screens/data_mapping/MappingModels.cpp
 
     # Economics
     src/screens/economics/EconomicsScreen.cpp
     src/screens/economics/panels/EconPanelBase.cpp
+    src/screens/economics/panels/EconTableAnalysis.cpp
     src/screens/economics/panels/WorldBankPanel.cpp
     src/screens/economics/panels/ImfPanel.cpp
     src/screens/economics/panels/FredPanel.cpp
@@ -1929,6 +2376,7 @@ set(SCREEN_SOURCES
     src/screens/economics/panels/UnescoPanel.cpp
     src/screens/economics/panels/BeaPanel.cpp
     src/screens/economics/panels/FinceptMacroPanel.cpp
+    src/screens/economics/panels/MarketModelsPanel.cpp
 
     # Polymarket / Prediction Markets
     src/screens/polymarket/PolymarketScreen.cpp
@@ -1956,27 +2404,41 @@ set(SCREEN_SOURCES
     # Alternative Investments — partial-class split; see header.
     src/screens/alt_investments/AltInvestmentsScreen.cpp
     src/screens/alt_investments/AltInvestmentsScreen_Layout.cpp
+    src/screens/alt_investments/AltInvestmentsScreen_Forms.cpp
     src/screens/alt_investments/AltInvestmentsScreen_Analysis.cpp
+    src/screens/alt_investments/AltInvestmentsScreen_Live.cpp
+    src/screens/alt_investments/AltWorkbenchKit.cpp
+    src/screens/alt_investments/AltPrivateMarketsPanel.cpp
+    src/screens/alt_investments/AltRealEstatePanel.cpp
+    src/screens/alt_investments/AltFundAnalyticsPanel.cpp
+    src/screens/alt_investments/AltAllocationPanel.cpp
+    src/screens/alt_investments/AltDueDiligencePanel.cpp
 
     # MCP Servers — partial-class split; see header.
     src/screens/mcp_servers/McpServersScreen.cpp
     src/screens/mcp_servers/McpServersScreen_Layout.cpp
     src/screens/mcp_servers/McpServersScreen_Actions.cpp
 
-    # Agent Workbench — local Claude Code / Codex runs (RUN/RUNS/SCHEDULES/CONNECT)
-    src/screens/agent_workbench/AgentWorkbenchScreen.cpp
-    src/screens/agent_workbench/AgentRunPanel.cpp
-    src/screens/agent_workbench/AgentTranscriptView.cpp
-    src/screens/agent_workbench/AgentRunsPanel.cpp
-    src/screens/agent_workbench/AgentSchedulesPanel.cpp
-    src/screens/agent_workbench/AgentWorkbenchTemplates.cpp
-    src/screens/agent_workbench/AgentWorkbenchCommon.cpp
+    # Agent runs of the AGENTS screen (agent_config; the Agent Workbench was merged
+    # into it — "agent_workbench" is a screen alias). HarnessRunOptionsWidget /
+    # HarnessListWidget are shared with Settings › AI Agents.
+    src/screens/agent_config/AgentRunComposer.cpp
+    src/screens/agent_config/AgentRunPanel.cpp
+    src/screens/agent_config/AgentTranscriptView.cpp
+    src/screens/agent_config/AgentRunsPanel.cpp
+    src/screens/agent_config/AgentSchedulesPanel.cpp
+    src/screens/agent_config/AgentPromptTemplates.cpp
+    src/screens/agent_config/AgentRunCommon.cpp
+    src/screens/agent_config/AgentRunFilesView.cpp
+    src/screens/agent_config/HarnessRunOptionsWidget.cpp
+    src/screens/agent_config/HarnessListWidget.cpp
 
     # QuantLib Suite — endpoint catalogs split out; see header comment.
     src/screens/quantlib/QuantLibScreen.cpp
     src/screens/quantlib/QuantLibScreen_Data.cpp
     src/screens/quantlib/QuantLibParamForm.cpp
     src/screens/quantlib/QuantLibResultView.cpp
+    src/screens/quantlib/QuantLibGuide.cpp
 
     # M&A Analytics
     src/screens/ma_analytics/MAAnalyticsScreen.cpp
@@ -1989,13 +2451,34 @@ set(SCREEN_SOURCES
     src/screens/ma_analytics/MAIndustryPanel.cpp
     src/screens/ma_analytics/MAAdvancedPanel.cpp
     src/screens/ma_analytics/MAComparisonPanel.cpp
+    src/screens/ma_analytics/MaDealsModel.cpp
+    src/screens/ma_analytics/MaDealsWorkspace.cpp
+    src/screens/ma_analytics/MaDealGrid.cpp
+    src/screens/ma_analytics/MaFootballField.cpp
+    src/screens/ma_analytics/MaFootballFieldTab.cpp
+    src/screens/ma_analytics/MaResultExport.cpp
+    src/screens/ma_analytics/MaResultFormat.cpp
+    src/screens/ma_analytics/MaCompanyPrefill.cpp
+    src/screens/ma_analytics/MaResultActions.cpp
+    src/screens/ma_analytics/MaSensitivityWidgets.cpp
+    src/screens/ma_analytics/MaCases.cpp
 
     # Equity Research (7 tabs)
     src/screens/equity_research/EquityResearchScreen.cpp
+    src/screens/equity_research/EquityStatementModel.cpp
+    src/screens/equity_research/EquityResearchUi.cpp
+    src/screens/equity_research/EquityValuationTab_Dcf.cpp
+    src/screens/equity_research/EquityDividendsTab.cpp
+    src/screens/equity_research/EquityEarningsTab.cpp
     src/screens/equity_research/EquityOverviewTab.cpp
     src/screens/equity_research/EquityFinancialsTab.cpp
-    src/screens/equity_research/EquityFinancialsTab_Views.cpp
-    src/screens/equity_research/EquityFinancialsTab_Populate.cpp
+    src/screens/equity_research/EquityFinancialsView.cpp
+    src/screens/equity_research/EquityFinancialsCommon.cpp
+    src/screens/equity_research/EquityFinancialsAnalytics.cpp
+    src/screens/equity_research/EquityFinancialsCharts.cpp
+    src/screens/equity_research/EquityFinancialsOverview.cpp
+    src/screens/equity_research/EquityFinancialsStatements.cpp
+    src/screens/equity_research/EquityFinancialsRatios.cpp
     src/screens/equity_research/EquityFilingsTab.cpp
     src/screens/equity_research/EquityResearchLinks.cpp
     src/screens/equity_research/EquityAnalysisTab.cpp
@@ -2003,11 +2486,23 @@ set(SCREEN_SOURCES
     src/screens/equity_research/EquityValuationTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
+    src/screens/equity_research/EquityDataTab.cpp
+    src/screens/equity_research/EquityOptionsTab.cpp
+    src/screens/equity_research/EquityAnalystTab.cpp
+    src/screens/equity_research/EquityOwnershipTab.cpp
+    src/screens/calendars/CalendarsScreen.cpp
+    src/screens/calendars/CalendarPanel.cpp
     src/screens/equity_research/EquityNewsTab.cpp
     src/screens/equity_research/EquitySentimentTab.cpp
 
     # Portfolio — PortfolioScreen split; see header.
     src/screens/portfolio/PortfolioScreen.cpp
+    src/screens/portfolio/PortfolioLedgerDialogs.cpp
+    src/screens/portfolio/PortfolioScreen_Ledger.cpp
+    src/screens/portfolio/views/TaxLotsView.cpp
+    src/screens/portfolio/views/IncomeView.cpp
+    src/screens/portfolio/views/StressTestPanel.cpp
+    src/screens/portfolio/views/RiskWhatIfPanel.cpp
     src/screens/portfolio/PortfolioScreen_Layout.cpp
     src/screens/portfolio/PortfolioScreen_Handlers.cpp
     src/screens/portfolio/PortfolioCommandBar.cpp
@@ -2034,6 +2529,9 @@ set(SCREEN_SOURCES
     src/screens/portfolio/PortfolioFFNView.cpp
     src/screens/portfolio/PortfolioInsightsPanel.cpp
     src/screens/agent_config/AgentConfigScreen.cpp
+    src/screens/agent_config/AgentConfigScreen_Inspector.cpp
+    src/screens/agent_config/AgentConfigScreen_Actions.cpp
+    src/screens/agent_config/AgentRail.cpp
     src/screens/agent_config/AgentsViewPanel.cpp
     src/screens/agent_config/SystemViewPanel.cpp
     src/screens/agent_config/CreateAgentPanel.cpp
@@ -2091,6 +2589,8 @@ set(SCREEN_SOURCES
 set(APP_SOURCES
     src/app/main.cpp
     src/app/InstanceLock.cpp
+    src/app/LegacyRootAdoption.cpp
+    src/app/EditionRootDecision.cpp
     src/app/ScreenSmokeTest.cpp
     # WindowFrame is split across multiple files; see WindowFrame.cpp header
     # comment for the layout. All variants stay outside unity build (see
@@ -2107,6 +2607,7 @@ set(APP_SOURCES
     src/app/DockScreenRouter_Materialize.cpp
     src/app/TerminalShell.cpp
     src/app/MonitorPickerDialog.cpp
+    src/app/SecureStoreBlockedView.cpp
 )
 
 # All screen files compiled individually — they have local statics/functions that
@@ -2116,6 +2617,9 @@ set_source_files_properties(
     src/screens/about/AboutScreen.cpp
     src/screens/agent_config/AgentChatPanel.cpp
     src/screens/agent_config/AgentConfigScreen.cpp
+    src/screens/agent_config/AgentConfigScreen_Inspector.cpp
+    src/screens/agent_config/AgentConfigScreen_Actions.cpp
+    src/screens/agent_config/AgentRail.cpp
     src/screens/agent_config/AgentsViewPanel.cpp
     src/screens/agent_config/CreateAgentPanel.cpp
     src/screens/agent_config/PlannerViewPanel.cpp
@@ -2132,8 +2636,15 @@ set_source_files_properties(
     src/screens/ai_chat/AiChatScreen_Messaging.cpp
     src/screens/ai_chat/AiChatScreen_Tools.cpp
     src/screens/ai_chat/AiChatBubble.cpp
+    src/screens/ai_chat/AiChatTypes.cpp
+    src/screens/ai_chat/AiChatStyle.cpp
+    src/screens/ai_chat/AiChatTranscript.cpp
+    src/screens/ai_chat/AiChatTranscript_Blocks.cpp
+    src/screens/ai_chat/AiChatSessionRail.cpp
+    src/screens/ai_chat/AiChatContextRail.cpp
+    src/screens/ai_chat/AiChatComposer.cpp
+    src/screens/ai_chat/AiChatStartPage.cpp
     src/screens/ai_chat/ChatBubbleController.cpp
-    src/screens/ai_chat/ChatBubbleFactory.cpp
     src/screens/ai_quant_lab/AIQuantLabScreen.cpp
     src/screens/ai_quant_lab/QuantModulePanel.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Results.cpp
@@ -2156,15 +2667,25 @@ set_source_files_properties(
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
     src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
     src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AutoLoad.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Series.cpp
     src/screens/akshare/AkShareScreen.cpp
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
+    src/screens/algo_trading/DeploymentLogDialog.cpp
+    src/screens/algo_trading/StrategyOptimizeDialog.cpp
     src/screens/algo_trading/ScannerPanel.cpp
     src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
+    src/screens/algo_trading/AlgoTabKit.cpp
+    src/screens/algo_trading/AlertsView.cpp
+    src/screens/algo_trading/DeploymentsView.cpp
+    src/screens/algo_trading/StrategyLibraryView.cpp
+    src/screens/algo_trading/ScannerView.cpp
+    src/screens/algo_trading/UniverseView.cpp
     src/screens/alpha_arena/AlphaArenaScreen.cpp
     src/screens/alpha_arena/EquityCurveWidget.cpp
     src/screens/alpha_arena/LeaderboardCards.cpp
@@ -2173,7 +2694,15 @@ set_source_files_properties(
     src/screens/alpha_arena/panels/LiveModeGateDialog.cpp
     src/screens/alt_investments/AltInvestmentsScreen.cpp
     src/screens/alt_investments/AltInvestmentsScreen_Layout.cpp
+    src/screens/alt_investments/AltInvestmentsScreen_Forms.cpp
     src/screens/alt_investments/AltInvestmentsScreen_Analysis.cpp
+    src/screens/alt_investments/AltInvestmentsScreen_Live.cpp
+    src/screens/alt_investments/AltWorkbenchKit.cpp
+    src/screens/alt_investments/AltPrivateMarketsPanel.cpp
+    src/screens/alt_investments/AltRealEstatePanel.cpp
+    src/screens/alt_investments/AltFundAnalyticsPanel.cpp
+    src/screens/alt_investments/AltAllocationPanel.cpp
+    src/screens/alt_investments/AltDueDiligencePanel.cpp
     src/screens/asia_markets/AsiaMarketsScreen.cpp
     src/screens/auth/ForgotPasswordScreen.cpp
     src/screens/auth/LockScreen.cpp
@@ -2181,15 +2710,36 @@ set_source_files_properties(
     src/screens/auth/PricingScreen.cpp
     src/screens/auth/RegisterScreen.cpp
     src/screens/backtesting/BacktestingScreen.cpp
-    src/screens/backtesting/BacktestingScreen_Layout.cpp
-    src/screens/backtesting/BacktestingScreen_Commands.cpp
-    src/screens/backtesting/BacktestingScreen_Strategies.cpp
-    src/screens/backtesting/BacktestingScreen_Results.cpp
+    src/screens/backtesting/BacktestResultData.cpp
+    src/screens/backtesting/BacktestCharts.cpp
+    src/screens/backtesting/BtTabKit.cpp
+    src/screens/backtesting/BtRunController.cpp
+    src/screens/backtesting/BtSetupPanel.cpp
+    src/screens/backtesting/BtAnalysisTabs.cpp
+    src/screens/backtesting/BtOverviewView.cpp
+    src/screens/backtesting/BtPerformanceView.cpp
+    src/screens/backtesting/BtRiskView.cpp
+    src/screens/backtesting/BtTradesView.cpp
+    src/screens/backtesting/BtExposureView.cpp
+    src/screens/backtesting/BtCostsView.cpp
+    src/screens/backtesting/BtAssumptionsView.cpp
+    src/screens/backtesting/BtOptimizeView.cpp
+    src/screens/backtesting/BtWalkForwardView.cpp
+    src/screens/backtesting/BtMonteCarloView.cpp
+    src/screens/backtesting/BtCompareView.cpp
+    src/screens/backtesting/BtRunsTab.cpp
+    src/screens/backtesting/BtCompareTab.cpp
+    src/screens/backtesting/BtResearchTab.cpp
     src/screens/code_editor/CodeEditorScreen.cpp
     src/screens/code_editor/CodeEditorScreen_Cells.cpp
     src/screens/code_editor/CodeEditorScreen_Navigator.cpp
     src/screens/code_editor/CodeEditorScreen_Library.cpp
+    src/screens/code_editor/NotebookDocument.cpp
+    src/screens/code_editor/NotebookOutputs.cpp
+    src/screens/code_editor/NotebookCommandBar.cpp
+    src/screens/code_editor/NotebookInspector.cpp
     src/services/notebooks/NotebookLibraryService.cpp
+    src/services/notebooks/NotebookKernel.cpp
     # Added 2026-10: kept out of unity batches so adding them does not
     # re-batch (and possibly collide) every later service file.
     src/services/connectivity/ConnectivityService.cpp
@@ -2209,6 +2759,9 @@ set_source_files_properties(
     src/screens/crypto_trading/CryptoDepthChart.cpp
     # EquityTradingScreen split; see header comment.
     src/screens/equity_trading/EquityTradingScreen.cpp
+    src/screens/equity_trading/EquityTradingScreen_Paper.cpp
+    src/screens/equity_trading/EquitySymbolBox.cpp
+    src/screens/equity_trading/EquityQuoteSnapshot.cpp
     src/screens/equity_trading/EquityTradingScreen_Streams.cpp
     src/screens/equity_trading/EquityTradingScreen_Handlers.cpp
     src/screens/equity_trading/EquityTradingScreen_Watchlists.cpp
@@ -2220,6 +2773,10 @@ set_source_files_properties(
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/equity_trading/EquityPublicFeed.cpp
+    src/screens/equity_trading/EquityWorkspace.cpp
+    src/screens/equity_trading/EquityCommandBar.cpp
+    src/screens/equity_trading/EquityStyle.cpp
     src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
@@ -2237,18 +2794,17 @@ set_source_files_properties(
     # Action Center — pending-orders popover + status-bar badge (queued approvals).
     src/screens/action_center/PendingOrdersPanel.cpp
     src/screens/action_center/PendingOrdersBadge.cpp
-    # DataSourcesScreen split; see DataSourcesScreen.cpp header.
+    # Data Sources workspace (three panes); see DataSourcesScreen.h.
     src/screens/data_sources/DataSourcesScreen.cpp
-    src/screens/data_sources/DataSourcesScreen_Layout.cpp
-    src/screens/data_sources/DataSourcesScreen_Tables.cpp
-    src/screens/data_sources/DataSourcesScreen_Handlers.cpp
+    src/screens/data_sources/DataSourcesModels.cpp
+    src/screens/data_sources/DataWorkspace.cpp
+    src/screens/data_sources/ConnectionForm.cpp
+    src/screens/data_sources/ConnectionDetailView.cpp
+    src/screens/data_sources/CatalogConnectorView.cpp
+    src/screens/data_sources/ConnectorParamForm.cpp
     src/screens/data_sources/DataSourcesHelpers.cpp
-    src/screens/data_sources/ConnectionConfigDialog.cpp
-    src/screens/data_sources/ConnectionTester.cpp
     src/screens/data_sources/ImportExportConnections.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
-    src/screens/data_sources/ConnectorCatalogPanel.cpp
-    src/screens/data_sources/ConnectorCatalogModels.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
     src/screens/data_sources/connectors/NoSqlDatabases.cpp
     src/screens/data_sources/connectors/TimeSeriesDatabases.cpp
@@ -2292,6 +2848,14 @@ set_source_files_properties(
     src/screens/dashboard/widgets/TradeTapeWidget.cpp
     src/screens/dashboard/widgets/NewsCategoryWidget.cpp
     src/screens/dashboard/widgets/QuoteTableWidget.cpp
+    src/screens/dashboard/widgets/QuoteGrid.cpp
+    src/screens/dashboard/widgets/SymbolListDialog.cpp
+    src/screens/dashboard/widgets/PortfolioTileBase.cpp
+    src/screens/dashboard/widgets/PortfolioPerformanceWidget.cpp
+    src/screens/dashboard/widgets/PortfolioRiskWidget.cpp
+    src/screens/dashboard/widgets/WorldClockWidget.cpp
+    src/screens/dashboard/widgets/DataApiTiles.cpp
+    src/screens/dashboard/widgets/MarketGridTiles.cpp
     src/screens/dashboard/widgets/RiskMetricsWidget.cpp
     src/screens/dashboard/widgets/ScreenerWidget.cpp
     src/screens/dashboard/widgets/SectorHeatmapWidget.cpp
@@ -2316,9 +2880,7 @@ set_source_files_properties(
     src/screens/dashboard/widgets/FiiDiiFlowsWidget.cpp
     src/screens/dashboard/widgets/KalshiPricesWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
-    src/screens/data_mapping/DataMappingScreen_Data.cpp
-    src/screens/data_mapping/DataMappingScreen_Layout.cpp
-    src/screens/data_mapping/DataMappingScreen_Operations.cpp
+    src/screens/data_mapping/MappingModels.cpp
     src/screens/crypto_center/CryptoCenterScreen.cpp
     src/screens/crypto_center/HoldingsBar.cpp
     src/screens/crypto_center/WalletActionConfirmDialog.cpp
@@ -2348,6 +2910,16 @@ set_source_files_properties(
     src/screens/docs/DocsScreen_Pages_Trading.cpp
     src/screens/docs/DocsScreen_Pages_Data.cpp
     src/screens/derivatives/DerivativesScreen.cpp
+    src/screens/derivatives/DerivCommon.cpp
+    src/screens/derivatives/DerivPricerPage.cpp
+    src/screens/derivatives/DerivPricerCompute.cpp
+    src/screens/derivatives/DerivChainModel.cpp
+    src/screens/derivatives/DerivChainPage.cpp
+    src/screens/derivatives/DerivStrategyPage.cpp
+    src/screens/derivatives/DerivScenarioPage.cpp
+    src/screens/derivatives/DerivCurvesPage.cpp
+    src/screens/derivatives/DerivCreditPage.cpp
+    src/screens/derivatives/DerivBookPage.cpp
     src/screens/fno/FnoScreen.cpp
     src/screens/fno/FnoHeaderBar.cpp
     src/screens/fno/OptionChainModel.cpp
@@ -2375,11 +2947,29 @@ set_source_files_properties(
     src/screens/equity_research/EquityAnalysisTab.cpp
     src/screens/equity_research/EquityFilingsTab.cpp
     src/screens/equity_research/EquityFinancialsTab.cpp
+    src/screens/equity_research/EquityFinancialsView.cpp
+    src/screens/equity_research/EquityFinancialsCommon.cpp
+    src/screens/equity_research/EquityFinancialsAnalytics.cpp
+    src/screens/equity_research/EquityFinancialsCharts.cpp
+    src/screens/equity_research/EquityFinancialsOverview.cpp
+    src/screens/equity_research/EquityFinancialsStatements.cpp
+    src/screens/equity_research/EquityFinancialsRatios.cpp
     src/screens/equity_research/EquityNewsTab.cpp
     src/screens/equity_research/EquityResearchLinks.cpp
     src/screens/equity_research/EquityOverviewTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
+    src/screens/equity_research/EquityDataTab.cpp
+    src/screens/equity_research/EquityOptionsTab.cpp
+    src/screens/equity_research/EquityAnalystTab.cpp
+    src/screens/equity_research/EquityOwnershipTab.cpp
+    src/screens/calendars/CalendarsScreen.cpp
+    src/screens/calendars/CalendarPanel.cpp
     src/screens/equity_research/EquityResearchScreen.cpp
+    src/screens/equity_research/EquityStatementModel.cpp
+    src/screens/equity_research/EquityResearchUi.cpp
+    src/screens/equity_research/EquityValuationTab_Dcf.cpp
+    src/screens/equity_research/EquityDividendsTab.cpp
+    src/screens/equity_research/EquityEarningsTab.cpp
     src/screens/equity_research/EquitySentimentTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
     src/screens/excel/ExcelScreen.cpp
@@ -2393,6 +2983,8 @@ set_source_files_properties(
     src/screens/geopolitics/TradeAnalysisPanel.cpp
     src/screens/gov_data/GovDataCongressPanel.cpp
     src/screens/gov_data/GovDataProviderPanel.cpp
+    src/screens/gov_data/GovDataShape.cpp
+    src/screens/gov_data/GovTableModel.cpp
     src/screens/gov_data/GovDataScreen.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
     src/screens/gov_data/GovDataFrancePanel.cpp
@@ -2414,6 +3006,17 @@ set_source_files_properties(
     src/screens/ma_analytics/MAIndustryPanel.cpp
     src/screens/ma_analytics/MAAdvancedPanel.cpp
     src/screens/ma_analytics/MAComparisonPanel.cpp
+    src/screens/ma_analytics/MaDealsModel.cpp
+    src/screens/ma_analytics/MaDealsWorkspace.cpp
+    src/screens/ma_analytics/MaDealGrid.cpp
+    src/screens/ma_analytics/MaFootballField.cpp
+    src/screens/ma_analytics/MaFootballFieldTab.cpp
+    src/screens/ma_analytics/MaResultExport.cpp
+    src/screens/ma_analytics/MaResultFormat.cpp
+    src/screens/ma_analytics/MaCompanyPrefill.cpp
+    src/screens/ma_analytics/MaResultActions.cpp
+    src/screens/ma_analytics/MaSensitivityWidgets.cpp
+    src/screens/ma_analytics/MaCases.cpp
     src/screens/maritime/MaritimeScreen.cpp
     src/screens/maritime/MaritimeScreen_Layout.cpp
     src/screens/maritime/MaritimeScreen_Handlers.cpp
@@ -2421,22 +3024,36 @@ set_source_files_properties(
     src/screens/markets/MarketPanelStore.cpp
     src/screens/markets/MarketPanelEditor.cpp
     src/screens/markets/MarketsScreen.cpp
+    src/screens/markets/MarketColumns.cpp
+    src/screens/markets/MarketsQuoteStore.cpp
+    src/screens/markets/MarketPanelModel.cpp
+    src/screens/markets/MarketPanelView.cpp
+    src/screens/markets/MarketsScreen_Layout.cpp
+    src/screens/markets/MarketsCommandBar.cpp
+    src/screens/markets/MarketsPulseRibbon.cpp
+    src/screens/markets/MarketsDetailPane.cpp
+    src/screens/markets/MarketsOverviewViews.cpp
+    src/screens/markets/MarketsSymbolEntry.cpp
     src/screens/mcp_servers/McpServersScreen.cpp
     src/screens/mcp_servers/McpServersScreen_Layout.cpp
     src/screens/mcp_servers/McpServersScreen_Actions.cpp
-    src/screens/agent_workbench/AgentWorkbenchScreen.cpp
-    src/screens/agent_workbench/AgentRunPanel.cpp
-    src/screens/agent_workbench/AgentTranscriptView.cpp
-    src/screens/agent_workbench/AgentRunsPanel.cpp
-    src/screens/agent_workbench/AgentSchedulesPanel.cpp
-    src/screens/agent_workbench/AgentWorkbenchTemplates.cpp
-    src/screens/agent_workbench/AgentWorkbenchCommon.cpp
+    src/screens/agent_config/AgentRunComposer.cpp
+    src/screens/agent_config/AgentRunPanel.cpp
+    src/screens/agent_config/AgentTranscriptView.cpp
+    src/screens/agent_config/AgentRunsPanel.cpp
+    src/screens/agent_config/AgentSchedulesPanel.cpp
+    src/screens/agent_config/AgentPromptTemplates.cpp
+    src/screens/agent_config/AgentRunCommon.cpp
+    src/screens/agent_config/AgentRunFilesView.cpp
+    src/screens/agent_config/HarnessRunOptionsWidget.cpp
+    src/screens/agent_config/HarnessListWidget.cpp
     src/screens/news/NewsCommandBar.cpp
     src/screens/news/NewsDetailPanel.cpp
     src/screens/news/NewsFeedDelegate.cpp
     src/screens/news/NewsFeedModel.cpp
     src/screens/news/NewsFeedPanel.cpp
     src/screens/news/NewsScreen.cpp
+    src/screens/news/NewsAnalyticsPanel.cpp
     src/screens/news/NewsSidePanel.cpp
     src/screens/news/NewsTickerStrip.cpp
     src/screens/news/dialogs/RssFeedManagerDialog.cpp
@@ -2456,6 +3073,16 @@ set_source_files_properties(
     src/screens/node_editor/toolbar/DeployDialog.cpp
     src/screens/node_editor/toolbar/NodeEditorToolbar.cpp
     src/screens/notes/NotesScreen.cpp
+    src/screens/notes/NotesScreen_Data.cpp
+    src/screens/notes/NotesScreen_Actions.cpp
+    src/screens/notes/NotesStore.cpp
+    src/screens/notes/NotesModels.cpp
+    src/screens/notes/NotesEditor.cpp
+    src/screens/notes/NotesCardPainter.cpp
+    src/screens/notes/NotesBoardModel.cpp
+    src/screens/notes/NotesBoardView.cpp
+    src/screens/notes/NotesWallView.cpp
+    src/screens/notes/NotesDetailPane.cpp
     src/screens/portfolio/PortfolioInsightsPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp
     src/screens/portfolio/PortfolioCommandBar.cpp
@@ -2466,6 +3093,12 @@ set_source_files_properties(
     src/screens/portfolio/PortfolioOrderPanel.cpp
     src/screens/portfolio/PortfolioPerfChart.cpp
     src/screens/portfolio/PortfolioScreen.cpp
+    src/screens/portfolio/PortfolioLedgerDialogs.cpp
+    src/screens/portfolio/PortfolioScreen_Ledger.cpp
+    src/screens/portfolio/views/TaxLotsView.cpp
+    src/screens/portfolio/views/IncomeView.cpp
+    src/screens/portfolio/views/StressTestPanel.cpp
+    src/screens/portfolio/views/RiskWhatIfPanel.cpp
     src/screens/portfolio/PortfolioScreen_Layout.cpp
     src/screens/portfolio/PortfolioScreen_Handlers.cpp
     src/screens/portfolio/PortfolioTxnPanel.cpp
@@ -2485,12 +3118,24 @@ set_source_files_properties(
     src/screens/profile/ProfileScreen.cpp
     src/screens/relationship_map/RelationshipGraphScene.cpp
     src/screens/relationship_map/RelationshipMapScreen.cpp
+    src/screens/relationship_map/RelationshipMapScreen_Detail.cpp
+    src/screens/relationship_map/RelationshipGraphModel.cpp
+    src/screens/relationship_map/RelationshipGraphLayout.cpp
+    src/screens/relationship_map/RelationshipLinkedViews.cpp
+    src/screens/relationship_map/RelationshipMapCharts.cpp
     src/screens/report_builder/ComponentToolbar.cpp
     src/screens/report_builder/DocumentCanvas.cpp
     src/screens/report_builder/PropertiesPanel.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/report_builder/ReportBuilderScreen_Components.cpp
     src/screens/report_builder/ReportBuilderScreen_Dialogs.cpp
+    src/screens/report_builder/ReportRenderer.cpp
+    src/screens/report_builder/ReportExportJob.cpp
+    src/screens/report_builder/ReportLibraryPage.cpp
+    src/screens/report_builder/ReportBuilderScreen_Tools.cpp
+    src/screens/report_builder/ReportChartObject.cpp
+    src/screens/report_builder/ReportNumberStyle.cpp
+    src/screens/report_builder/ReportAiPanel.cpp
     src/screens/settings/AppearanceSection.cpp
     src/screens/settings/CredentialsSection.cpp
     src/screens/settings/DataSourcesSection.cpp
@@ -2500,6 +3145,7 @@ set_source_files_properties(
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/LlmConfigSection_Providers.cpp
     src/screens/settings/LlmConfigSection_Profiles.cpp
+    src/screens/settings/LlmConfigSection_Harness.cpp
     src/screens/settings/LoggingSection.cpp
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/AgentConnectSection.cpp
@@ -2528,6 +3174,15 @@ set_source_files_properties(
     src/screens/surface_analytics/SurfaceTableWidget.cpp
     src/screens/trade_viz/TradeVizScreen.cpp
     src/screens/watchlist/WatchlistScreen.cpp
+    src/screens/watchlist/WatchlistColumns.cpp
+    src/screens/watchlist/WatchlistModel.cpp
+    src/screens/watchlist/WatchlistView.cpp
+    src/screens/watchlist/WatchlistDetailPane.cpp
+    src/screens/watchlist/WatchlistAnalyticsViews.cpp
+    src/screens/watchlist/WatchlistAlertDialog.cpp
+    src/screens/watchlist/WatchlistImportExport.cpp
+    src/screens/watchlist/WatchlistScreen_Data.cpp
+    src/screens/watchlist/WatchlistScreen_Actions.cpp
     src/screens/watchlist/WatchlistColumnPrefs.cpp
     # Storage repositories — each defines kCols in namespace fincept
     src/storage/repositories/AgentConfigRepository.cpp
@@ -2539,6 +3194,7 @@ set_source_files_properties(
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/NewsAnalyticsRepository.cpp
     src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
@@ -2602,6 +3258,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v046_fno_algo.cpp
     src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
     src/storage/sqlite/migrations/v048_instruments_exchange_unique.cpp
+    src/storage/sqlite/migrations/v049_order_baskets.cpp
     src/storage/sqlite/migrations/v050_alpha_arena_rewrite.cpp
     # v051: excluded from unity too. Not because it collides (its helper is
     # deliberately named sql_v051), but because a file that JOINS a unity batch
@@ -2612,6 +3269,45 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v052_coding_agents.cpp
     # v053: same reasoning as v051.
     src/storage/sqlite/migrations/v053_instrument_indexes.cpp
+    src/storage/sqlite/migrations/v054_watchlist_v2.cpp
+    src/storage/sqlite/migrations/v055_portfolio_ledger.cpp
+    src/storage/sqlite/migrations/v056_backtest_runs.cpp
+    src/storage/sqlite/migrations/v057_algo_monitoring.cpp
+    src/storage/sqlite/migrations/v058_news_analytics.cpp
+    # Symbol system WP2 (v060 + instrument index): file-scope helpers are uniquely named,
+    # but new files joining a unity batch would re-batch every source after them.
+    src/storage/sqlite/migrations/v060_symbol_master.cpp
+    # Agent Workbench WP2 (v061, harness runs): same reasoning as v051.
+    src/storage/sqlite/migrations/v061_harness_runs.cpp
+    # Data Sources / Data Mapping v2 (v062 + services): uniquely named file-scope helpers, kept out of
+    # unity batches so they never re-batch the sources after them.
+    src/storage/sqlite/migrations/v062_data_sources_v2.cpp
+    src/services/connectors/ConnectorEnvelope.cpp
+    src/services/connectors/ConnectorArgs.cpp
+    src/services/data_sources/TabularData.cpp
+    src/services/data_sources/SourceError.cpp
+    src/services/data_sources/TableParsers.cpp
+    src/services/data_sources/RequestSigning.cpp
+    src/services/data_sources/ConnectionProfiles.cpp
+    src/services/data_sources/ConnectionDrivers.cpp
+    src/services/data_sources/ConnectionService.cpp
+    src/services/data_sources/ConnectionTransfer.cpp
+    src/services/data_mapping/MappingSpec.cpp
+    src/services/data_mapping/MappingEngine.cpp
+    src/services/data_mapping/MappingRunner.cpp
+    src/services/data_mapping/MappingInbox.cpp
+    src/storage/repositories/SymbolMasterRepository.cpp
+    src/services/instruments/SymbolSeed.cpp
+    src/services/instruments/InstrumentIndex.cpp
+    # Symbol system WP3 / WP4 (resolver, sync, picker widget): same reasoning as WP2;
+    # InstrumentResolverSources.cpp also registers the resolver's sources at static init.
+    src/services/instruments/InstrumentResolver.cpp
+    src/services/instruments/InstrumentResolverIndex.cpp
+    src/services/instruments/InstrumentResolverSources.cpp
+    src/services/instruments/BackendSymbolSearch.cpp
+    src/services/instruments/InstrumentSync.cpp
+    src/ui/widgets/symbol/SymbolPickerPopup.cpp
+    src/ui/widgets/symbol/SymbolSearchBox.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2633,6 +3329,7 @@ set_source_files_properties(
     src/screens/quantlib/QuantLibScreen_Data.cpp
     src/screens/quantlib/QuantLibParamForm.cpp
     src/screens/quantlib/QuantLibResultView.cpp
+    src/screens/quantlib/QuantLibGuide.cpp
     src/trading/brokers/BrokerHttp.cpp
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
@@ -2679,6 +3376,13 @@ set_source_files_properties(
     src/app/DockScreenRouter_PanelOps.cpp
     src/app/DockScreenRouter_Materialize.cpp
     src/app/TerminalShell.cpp
+    src/app/SecureStoreBlockedView.cpp
+    # Includes <windows.h> + <dpapi.h> on Windows: never batch it with other files.
+    src/storage/secure/SecureStorageSqlite.cpp
+    # Includes <windows.h> + <tlhelp32.h> on Windows (job objects).
+    src/core/process/ProcessTree.cpp
+    # POSIX / xattr headers on Linux; kept out of the batches like ProcessTree.
+    src/core/process/HostExec.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2694,6 +3398,7 @@ set_source_files_properties(
     src/services/alpha_arena/ArenaModelRegistry.cpp
     src/services/alpha_arena/ArenaPrompts.cpp
     src/services/alpha_arena/ArenaLlmClient.cpp
+    src/services/alpha_arena/HarnessArenaClient.cpp
     src/services/alpha_arena/ArenaMarketData.cpp
     src/services/alpha_arena/ArenaEngine.cpp
     src/services/alpha_arena/HyperliquidLiveVenue.cpp
@@ -2719,19 +3424,39 @@ set_source_files_properties(
     src/mcp/ProviderToolFormatSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
     src/mcp/server/McpHttpServer.cpp
-    src/mcp/server/McpHttpServer_Http.cpp
     src/mcp/server/McpHttpServer_Rpc.cpp
     src/mcp/server/McpHttpServer_Tools.cpp
+    src/mcp/server/McpWire.cpp
+    src/mcp/server/McpClientProfile.cpp
+    src/mcp/server/McpServerEngine.cpp
+    src/mcp/server/McpServerSelfCheck.cpp
+    src/mcp/server/ApprovalPolicy.cpp
     src/mcp/server/ToolApprovalDialog.cpp
     src/mcp/server/McpServerSelfTest.cpp
     src/mcp/core/CoreTools.cpp
     src/mcp/core/CoreApproval.cpp
     src/mcp/core/PythonScriptTool.cpp
+    src/mcp/core/PythonScriptPolicy.cpp
     src/mcp/core/UiModel.cpp
     src/mcp/core/UiObserve.cpp
     src/mcp/core/UiAct.cpp
     src/mcp/core/UiNavigate.cpp
+    src/mcp/core/UiRefs.cpp
+    src/mcp/core/UiItemViews.cpp
+    src/mcp/core/UiWeb.cpp
+    src/mcp/core/UiScreenshot.cpp
+    src/mcp/core/UiHostTerminal.cpp
+    src/mcp/core/UiRisk.cpp
+    src/mcp/core/UiActTarget.cpp
+    src/mcp/core/UiActEdit.cpp
+    src/mcp/core/UiActRisk.cpp
+    src/mcp/core/UiActWeb.cpp
+    src/mcp/core/UiActDiff.cpp
+    src/mcp/core/CoreToolCatalog.cpp
+    src/core/agent/AgentActionScope.cpp
     src/mcp/core/CoreToolsSelfTest.cpp
+    src/mcp/core/ReportTool.cpp
+    src/mcp/core/ReportToolBackend.cpp
     src/algo_engine/fno/FnoAlgoSelftest.cpp
     src/algo_engine/fno/FnoLegResolver.cpp
     src/trading/PaperTradingSelftest.cpp
@@ -2792,9 +3517,25 @@ set_source_files_properties(
     # Dedicated order executors (perf). Kept out of unity batches so adding it
     # does not re-batch the sources after it.
     src/trading/OrderThreadPool.cpp
+    src/trading/OrderRiskGate.cpp
     src/trading/StrategyPortfolio.cpp
     src/trading/OptionsStrategyBuilder.cpp
     src/services/options/DerivativesPricing.cpp
+    # Derivatives maths / data: anonymous-namespace constants (kInvSqrt2 ...) like OptionPricing.cpp's
+    src/services/options/OptionModels.cpp
+    src/services/options/ExoticPricing.cpp
+    src/services/options/VolSurface.cpp
+    src/services/options/StrategyMath.cpp
+    src/services/options/ScenarioMath.cpp
+    src/services/options/RatesMath.cpp
+    src/services/options/DerivMarketData.cpp
+    src/services/options/FreeOptionChainService.cpp
+    src/services/options/CurveDataService.cpp
+    src/services/options/CreditMath.cpp
+    src/services/options/BookMath.cpp
+    src/services/options/DerivBookStore.cpp
+    src/storage/sqlite/migrations/v065_deriv_book.cpp
+    src/storage/repositories/DerivBookRepository.cpp
     src/services/news/NewsNlpEngine.cpp
     src/services/news/VaderSentiment.cpp
     # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
@@ -2813,6 +3554,9 @@ set_source_files_properties(
     src/network/websocket/WebSocketClient.cpp
     src/storage/workspace/WorkspaceFwspImporter.cpp
     src/app/InstanceLock.cpp
+    src/app/LegacyRootAdoption.cpp
+    src/app/EditionRootDecision.cpp
+    src/python/PythonEnvRelocation.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2826,6 +3570,77 @@ set_source_files_properties(
     src/services/coding_agents/CodingAgentRepository.cpp
     src/services/coding_agents/CodingAgentService.cpp
     src/services/coding_agents/CodingAgentService_Process.cpp
+    src/services/harness/HarnessDetect.cpp
+    src/services/harness/HarnessHostDetect.cpp
+    src/services/harness/HarnessLaunch.cpp
+    src/services/harness/HarnessRegistry.cpp
+    src/services/harness/adapters/AdapterSupport.cpp
+    src/services/harness/adapters/ClaudeAdapter.cpp
+    src/services/harness/adapters/CodexAdapter.cpp
+    src/services/harness/adapters/GrokAdapter.cpp
+    src/services/harness/adapters/CursorAdapter.cpp
+    src/services/harness/adapters/CopilotAdapter.cpp
+    src/services/harness/adapters/GeminiAdapter.cpp
+    src/services/harness/adapters/QwenAdapter.cpp
+    src/services/harness/parsers/StreamParserSupport.cpp
+    src/services/harness/parsers/AcpUpdateParser.cpp
+    src/services/harness/parsers/PlainTextParser.cpp
+    src/services/harness/parsers/GeminiStreamParser.cpp
+    src/services/harness/parsers/CursorStreamParser.cpp
+    # Terminal AI through a harness (WP6/WP7): same reasons — Win32 job API via
+    # HarnessLaunch, and new files must not re-batch the sources after them.
+    src/services/harness/HarnessEligibility.cpp
+    src/services/harness/HarnessProcessPool.cpp
+    src/services/harness/HarnessChatRun.cpp
+    src/services/harness/HarnessChatBackend.cpp
+    src/services/llm/ModelRouter.cpp
+    src/services/llm/ModelRouter_Live.cpp
+    src/services/llm/LlmHarnessBridge.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Chat Mode run engine (services/agent_tasks), its migration and the Chat Mode
+# workspace widgets: file-scope helpers are uniquely named, but new files joining
+# a unity batch would re-batch every source after them — keep them out, like v052.
+set_source_files_properties(
+    src/storage/sqlite/migrations/v059_agent_task_runs.cpp
+    src/storage/sqlite/migrations/v063_agent_run_library.cpp
+    src/services/agent_tasks/TaskRunTypes.cpp
+    src/services/agent_tasks/CloudSseMapping.cpp
+    src/services/agent_tasks/TaskRunStore.cpp
+    src/services/agent_tasks/TaskRunService.cpp
+    src/services/agent_tasks/CloudAgentClient.cpp
+    src/services/agent_tasks/CloudTurnExecutor.cpp
+    src/services/agent_tasks/CloudTurnDriver.cpp
+    src/services/agent_tasks/CloudPlanExecutor.cpp
+    src/services/agent_tasks/LocalAgenticExecutor.cpp
+    src/services/agent_tasks/LocalAgentEngine.cpp
+    src/services/agent_tasks/HarnessRunExecutor.cpp
+    src/services/agent_tasks/ArtefactService.cpp
+    src/services/agent_tasks/ArtefactLogic.cpp
+    src/services/agent_tasks/RunTemplates.cpp
+    src/services/agent_tasks/RunTemplateLibrary.cpp
+    src/services/agent_tasks/ScheduleLogic.cpp
+    src/services/agent_tasks/TaskRunScheduler.cpp
+    src/screens/chat_mode/ComposerContextBar.cpp
+    src/screens/chat_mode/RunListPanel.cpp
+    src/screens/chat_mode/RunPlanPanel.cpp
+    src/screens/chat_mode/RunActivityView.cpp
+    src/screens/chat_mode/RunStatusBar.cpp
+    src/screens/chat_mode/RunArtefactsPanel.cpp
+    src/screens/chat_mode/ToolResultCard.cpp
+    src/screens/chat_mode/NewRunDialog.cpp
+    src/screens/chat_mode/RunSchedulesDialog.cpp
+    src/screens/chat_mode/RunRequestForm.cpp
+    src/screens/chat_mode/ChatMessagePanel.cpp
+    src/screens/chat_mode/ChatSessionPanel.cpp
+    src/screens/chat_mode/ChatMarkdown.cpp
+    src/screens/chat_mode/TranscriptBlocks.cpp
+    src/screens/chat_mode/TranscriptView.cpp
+    src/screens/chat_mode/ChatComposer.cpp
+    src/screens/chat_mode/ChatStartPage.cpp
+    src/screens/chat_mode/ChatModeLeftRail.cpp
+    src/screens/chat_mode/ChatContextPage.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2852,6 +3667,112 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
+# Result renderer: file-scope helpers and using-declarations in fincept::ui;
+# kept out of unity so they cannot clash with a batch neighbour (and joining a
+# batch would re-batch every UI source after them).
+set_source_files_properties(
+    src/ui/widgets/ResultLayout.cpp
+    src/ui/widgets/ResultView.cpp
+    src/ui/widgets/DataGridEditor.cpp
+    src/ui/widgets/EmptyState.cpp
+    src/ui/widgets/ModelBadge.cpp
+    src/ui/widgets/LoadingSkeleton.cpp
+    src/ui/widgets/AutoLoadPane.cpp
+    src/ui/widgets/AutoLoadPolicy.cpp
+    src/ui/widgets/AutoLoadGate.cpp
+    src/ui/widgets/Requirements.cpp
+    src/ui/widgets/RequirementsLive.cpp
+    src/ui/widgets/InputMemory.cpp
+    src/ui/widgets/ScenarioGrid.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Report Builder services (data binder, library, send-to-report inbox, Files sync, charts,
+# assets, AI drafting, schedules), its worker-thread export writers and the shared "Add to
+# Report" widget: file-scope helpers are uniquely prefixed (rdb_, rl_, ri_, rfs_, rcr_, rcc_,
+# ras_, rg_, rs_, rzw_, odt_, rmd_, atr_), but new files joining a unity batch would re-batch every source after
+# them — keep them out, like the Chat Mode services. (The new Report Builder screen files
+# are in the screens block above.)
+set_source_files_properties(
+    src/services/report_builder/ReportDataBinder.cpp
+    src/services/report_builder/ReportLibrary.cpp
+    src/services/report_builder/ReportInbox.cpp
+    src/services/report_builder/ReportFileSync.cpp
+    src/services/report_builder/ReportChartRenderer.cpp
+    src/services/report_builder/ReportChartCache.cpp
+    src/services/report_builder/ReportAssets.cpp
+    src/services/report_builder/ReportAiSession.cpp
+    src/services/report_builder/ReportAiLlmBackend.cpp
+    src/services/report_builder/ReportRegenerator.cpp
+    src/services/report_builder/ReportScheduler.cpp
+    src/core/report/ReportZipWriter.cpp
+    src/core/report/ReportOdtWriter.cpp
+    src/core/report/ReportMarkdownWriter.cpp
+    src/ui/widgets/report/AddToReportButton.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# M&A Analytics / Alternative Investments workbench (MA-3..MA-9, A3..A10) shared pieces: the
+# two-axis sensitivity grid (X2), the company snapshot service (X5), the Alt services and stores and
+# their migration. File-scope helpers are uniquely prefixed (sens_, snap_, alt_svc_, alt_dd_,
+# alt_hold_, v064), but new files joining a unity batch would re-batch every source after them.
+set_source_files_properties(
+    src/ui/widgets/SensitivityTable.cpp
+    src/services/company_snapshot/CompanySnapshotService.cpp
+    src/services/alt_investments/AltInvestmentsService.cpp
+    src/services/alt_investments/AltDdStore.cpp
+    src/services/alt_investments/AltHoldingStore.cpp
+    src/services/alt_investments/AltFundStore.cpp
+    src/services/ma_analytics/MaCaseStore.cpp
+    src/storage/sqlite/migrations/v064_ma_alt_workbench.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Notes board storage (v066 + its repository) and the shared dense-screen bars (ui::ScreenCommandBar,
+# ui::ScreenStatusBar). File-scope helpers are uniquely prefixed (nbr_, v066, cb_, sbar_), but new files
+# joining a unity batch would re-batch every source after them.
+set_source_files_properties(
+    src/storage/sqlite/migrations/v066_notes_board.cpp
+    src/storage/repositories/NoteBoardRepository.cpp
+    src/ui/widgets/ScreenCommandBar.cpp
+    src/ui/widgets/ScreenStatusBar.cpp
+    # ui::FlowLayout / ui::KeySortProxy (file-scope helpers prefixed ksp_): kept out for the same reason.
+    src/ui/widgets/FlowLayout.cpp
+    src/ui/widgets/KeySortProxy.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Header search box (ui/navigation/search) and the command registry (core/command). File-scope helpers
+# are uniquely prefixed (sd_, sa_, si_, ss_, sc_, cb_, crk_, cph_, cs_, creg_, rl_), but new files joining
+# a unity batch would re-batch every source after them.
+set_source_files_properties(
+    src/ui/navigation/CommandBar.cpp
+    src/ui/navigation/search/SearchActions.cpp
+    src/ui/navigation/search/SearchController.cpp
+    src/ui/navigation/search/SearchDelegate.cpp
+    src/ui/navigation/search/SearchField.cpp
+    src/ui/navigation/search/SearchInstruments.cpp
+    src/ui/navigation/search/SearchModel.cpp
+    src/ui/navigation/search/SearchPopup.cpp
+    src/ui/navigation/search/SearchSources.cpp
+    src/core/command/CommandRegistry.cpp
+    src/core/command/CommandRank.cpp
+    src/core/command/CommandPhrase.cpp
+    src/core/command/CommandUsage.cpp
+    src/core/command/CommandIndex.cpp
+    src/core/command/CommandSeed.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Notification delivery decision + send path, LLM model-list parse. File-scope helpers are uniquely
+# prefixed (delivery_), but new files joining a unity batch would re-batch every source after them.
+set_source_files_properties(
+    src/services/notifications/providers/DeliveryOutcome.cpp
+    src/services/notifications/providers/ProviderHttp.cpp
+    src/services/llm/ModelListParse.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
 # Storage repositories: each defines kCols — safe to batch in groups of 3
 set_source_files_properties(
     src/storage/repositories/AgentConfigRepository.cpp
@@ -2863,6 +3784,7 @@ set_source_files_properties(
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/NewsAnalyticsRepository.cpp
     src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
@@ -2878,6 +3800,100 @@ set_source_files_properties(
     src/storage/repositories/DataMappingRepository.cpp
     PROPERTIES UNITY_BUILD_BATCH_SIZE 3
 )
+
+# ── Edition identity ──────────────────────────────────────────────────────────
+# Every per-user / machine-wide name this build gives the OS derives from
+# FINCEPT_EDITION_ID: the data root, the QSettings store (registry key / .conf /
+# plist), the single-instance key, the desktop entry, icon and AppStream id, the
+# macOS bundle id and the installer's Start Menu folder. src/core/config/
+# EditionIdentity.h receives the same values as compile definitions, and the
+# packaging files are checked against them below, so code and packaging cannot
+# drift. A separate private build of Fincept Terminal uses com.fincept.terminal,
+# Fincept/FinceptTerminal and fincept-terminal(.desktop); releases of this
+# terminal used them too, which made the two corrupt each other's data. None of
+# the derived names can equal those, and none depends on the version.
+set(FINCEPT_EDITION_ID "community" CACHE STRING
+    "Edition id: names this build's data root, settings store, desktop entry and bundle id")
+if(NOT FINCEPT_EDITION_ID MATCHES "^[a-z][a-z0-9]*$")
+    message(FATAL_ERROR "FINCEPT_EDITION_ID='${FINCEPT_EDITION_ID}' must be lower-case letters and digits, "
+                        "starting with a letter")
+endif()
+string(SUBSTRING "${FINCEPT_EDITION_ID}" 0 1 _fincept_ed_head)
+string(SUBSTRING "${FINCEPT_EDITION_ID}" 1 -1 _fincept_ed_tail)
+string(TOUPPER "${_fincept_ed_head}" _fincept_ed_head)
+set(FINCEPT_EDITION_CAMEL "${_fincept_ed_head}${_fincept_ed_tail}")                  # Community
+set(FINCEPT_EDITION_DATA_DIR_NAME "com.fincept.terminal.${FINCEPT_EDITION_ID}")      # data root folder
+# Not "Fincept": the private build's uninstaller deletes HKCU\Software\Fincept
+# and ~/.cache/Fincept recursively.
+set(FINCEPT_EDITION_SETTINGS_ORG "Fincept${FINCEPT_EDITION_CAMEL}")                  # QSettings organization
+set(FINCEPT_EDITION_SETTINGS_APP "FinceptTerminal${FINCEPT_EDITION_CAMEL}")          # QSettings app, WM_CLASS
+set(FINCEPT_EDITION_DESKTOP_ID "fincept-terminal-${FINCEPT_EDITION_ID}")             # .desktop / icon / app_id
+set(FINCEPT_EDITION_BUNDLE_ID "com.fincept.terminal.${FINCEPT_EDITION_ID}")          # macOS, AppStream, IFW
+# The Flatpak app id is already published (release .flatpak bundles); changing
+# it would strand every installed user's sandbox data. It stays, and the
+# sandbox (one per app id) plus the edition data root inside it isolate it.
+set(FINCEPT_EDITION_FLATPAK_ID "in.fincept.FinceptTerminal")
+set(FINCEPT_EDITION_SHORTCUT_NAME "Fincept Terminal ${FINCEPT_EDITION_CAMEL}")       # Start Menu folder / desktop link
+set(FINCEPT_EDITION_APP_BUNDLE_NAME "${FINCEPT_EDITION_SHORTCUT_NAME}")               # macOS .app name in the DMG
+# The private build's .deb is "fincept-terminal" in /opt/fincept-terminal with
+# /usr/bin/fincept-terminal: one shared package name made dpkg replace either
+# edition with the other.
+set(FINCEPT_EDITION_LINUX_PACKAGE "fincept-terminal-${FINCEPT_EDITION_ID}")          # .deb name, /usr/bin launcher
+set(FINCEPT_EDITION_LINUX_PREFIX "/opt/${FINCEPT_EDITION_LINUX_PACKAGE}")            # .deb install prefix
+set(FINCEPT_EDITION_TEMP_PREFIX "fincept-${FINCEPT_EDITION_ID}")                     # instance socket, boot log, screenshots
+set(FINCEPT_EDITION_MCP_SERVER_NAME "fincept_${FINCEPT_EDITION_ID}")                 # MCP client config entry
+foreach(_fincept_shared "com.fincept.terminal" "Fincept" "FinceptTerminal" "fincept-terminal"
+                        "/opt/fincept-terminal" "fincept" "fincept_terminal" "Fincept Terminal")
+    foreach(_fincept_name FINCEPT_EDITION_DATA_DIR_NAME FINCEPT_EDITION_SETTINGS_ORG FINCEPT_EDITION_SETTINGS_APP
+                          FINCEPT_EDITION_DESKTOP_ID FINCEPT_EDITION_BUNDLE_ID FINCEPT_EDITION_APP_BUNDLE_NAME
+                          FINCEPT_EDITION_LINUX_PACKAGE FINCEPT_EDITION_LINUX_PREFIX FINCEPT_EDITION_TEMP_PREFIX
+                          FINCEPT_EDITION_MCP_SERVER_NAME)
+        if("${${_fincept_name}}" STREQUAL "${_fincept_shared}")
+            message(FATAL_ERROR "${_fincept_name}='${${_fincept_name}}' is a name the private build uses")
+        endif()
+    endforeach()
+endforeach()
+# Static packaging files that must carry the derived names (fail at configure
+# time instead of shipping a desktop entry or installer that points elsewhere).
+foreach(_fincept_check
+        "packaging/linux/fincept-terminal.desktop|StartupWMClass=${FINCEPT_EDITION_SETTINGS_APP}"
+        "packaging/linux/fincept-terminal.desktop|Icon=${FINCEPT_EDITION_DESKTOP_ID}"
+        "packaging/linux/fincept-terminal.appdata.xml|<id>${FINCEPT_EDITION_BUNDLE_ID}</id>"
+        "packaging/linux/fincept-terminal.appdata.xml|${FINCEPT_EDITION_DESKTOP_ID}.desktop</launchable>"
+        "packaging/flatpak/in.fincept.FinceptTerminal.desktop|StartupWMClass=${FINCEPT_EDITION_SETTINGS_APP}"
+        "packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs|${FINCEPT_EDITION_DESKTOP_ID}.desktop"
+        "packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs|${FINCEPT_EDITION_SHORTCUT_NAME}.lnk"
+        "packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs|${FINCEPT_EDITION_DATA_DIR_NAME}"
+        "packaging/uninstall/uninstall.sh|PKG_NAME=\"${FINCEPT_EDITION_LINUX_PACKAGE}\""
+        "packaging/uninstall/uninstall.sh|APP_ID=\"${FINCEPT_EDITION_BUNDLE_ID}\""
+        "packaging/uninstall/uninstall.sh|MAC_APP_NAME=\"${FINCEPT_EDITION_APP_BUNDLE_NAME}.app\""
+        "scripts/fincept_paths.py|EDITION_DATA_DIR_NAME = \"${FINCEPT_EDITION_DATA_DIR_NAME}\""
+        # Release pipeline files live beside fincept-qt/ and are checked only
+        # when present (a Flatpak or tarball build may carry fincept-qt/ alone).
+        "?../.github/workflows/release.yml|PREFIX=\"${FINCEPT_EDITION_LINUX_PREFIX}\""
+        "?../.github/workflows/release.yml|LAUNCHER=\"${FINCEPT_EDITION_LINUX_PACKAGE}\""
+        "?../.github/workflows/release.yml|Package: ${FINCEPT_EDITION_LINUX_PACKAGE}"
+        "?../.github/workflows/release.yml|/usr/bin/${FINCEPT_EDITION_LINUX_PACKAGE}"
+        "?../.github/workflows/release.yml|${FINCEPT_EDITION_APP_BUNDLE_NAME}.app")
+    string(REPLACE "|" ";" _fincept_check "${_fincept_check}")
+    list(GET _fincept_check 0 _fincept_file)
+    list(GET _fincept_check 1 _fincept_text)
+    if(_fincept_file MATCHES "^\\?")
+        string(SUBSTRING "${_fincept_file}" 1 -1 _fincept_file)
+        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_fincept_file}")
+            continue()
+        endif()
+    endif()
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${_fincept_file}" _fincept_content)
+    string(FIND "${_fincept_content}" "${_fincept_text}" _fincept_at)
+    if(_fincept_at EQUAL -1)
+        message(FATAL_ERROR "Edition identity: ${_fincept_file} does not contain '${_fincept_text}' "
+                            "(FINCEPT_EDITION_ID=${FINCEPT_EDITION_ID}) — update the packaging file")
+    endif()
+endforeach()
+message(STATUS "Edition: ${FINCEPT_EDITION_ID} (data root ${FINCEPT_EDITION_DATA_DIR_NAME}, "
+               "settings ${FINCEPT_EDITION_SETTINGS_ORG}/${FINCEPT_EDITION_SETTINGS_APP}, "
+               "desktop id ${FINCEPT_EDITION_DESKTOP_ID}, bundle id ${FINCEPT_EDITION_BUNDLE_ID})")
 
 # ── Executable ────────────────────────────────────────────────────────────────
 # WIN32     — suppress console window on Windows
@@ -2926,6 +3942,11 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
     ${SCREEN_SOURCES}
     ${APP_SOURCES}
     src/services/updater/UpdateService.cpp
+    src/services/updater/UpdateManifest.cpp
+    src/services/updater/InstallContext.cpp
+    src/services/updater/UpdateDownloader.cpp
+    src/services/updater/UpdateInstaller.cpp
+    ${_FINCEPT_UPDATER_PLATFORM_SOURCES}
     ${_FINCEPT_PLATFORM_SOURCES}
 )
 
@@ -2986,7 +4007,7 @@ qt6_add_lupdate(FinceptTerminal
 # ── macOS bundle properties ───────────────────────────────────────────────────
 if(APPLE)
     set_target_properties(FinceptTerminal PROPERTIES
-        MACOSX_BUNDLE_GUI_IDENTIFIER    "com.fincept.terminal"
+        MACOSX_BUNDLE_GUI_IDENTIFIER    "${FINCEPT_EDITION_BUNDLE_ID}"
         MACOSX_BUNDLE_BUNDLE_NAME       "Fincept Terminal"
         MACOSX_BUNDLE_BUNDLE_VERSION    "${CMAKE_PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${CMAKE_PROJECT_VERSION}"
@@ -3273,6 +4294,16 @@ if(WIN32)
 else()
     target_link_libraries(FinceptTerminal PRIVATE ZLIB::ZLIB)
 endif()
+
+# Live theme / font switching rewrites the stylesheet of every existing widget.
+# With the QtWidgets private headers it does so without a style recalculation
+# per widget (one for the whole application instead) — see
+# src/ui/theme/ThemeRestyle.cpp. Without them it falls back to the public API,
+# which is correct but several times slower.
+if(TARGET Qt6::WidgetsPrivate)
+    target_link_libraries(FinceptTerminal PRIVATE Qt6::WidgetsPrivate)
+    target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_HAS_WIDGETS_PRIVATE=1)
+endif()
 # SecureStorage stores credentials as SQLite + AES-256-GCM (OpenSSL) on every
 # platform. The row key is a random DEK wrapped by a platform key: DPAPI on
 # Windows (crypt32, below), PBKDF2 over the machine seed elsewhere. See
@@ -3282,7 +4313,14 @@ endif()
 # src/core/crash/CrashHandler.cpp); crypt32 for the DPAPI
 # CryptProtectData/CryptUnprotectData pair that wraps the SecureStorage DEK.
 if(WIN32)
-    target_link_libraries(FinceptTerminal PRIVATE dbghelp crypt32)
+    # wintrust: Authenticode check of a downloaded installer (UpdateInstaller_win.cpp).
+    target_link_libraries(FinceptTerminal PRIVATE dbghelp crypt32 wintrust)
+    # A linker map next to the executable: lets the module+offset frames in
+    # <logs>/ui_stalls.log (src/core/debug/UiStallMonitor.cpp) be resolved to
+    # function names without shipping a PDB.
+    if(MSVC)
+        target_link_options(FinceptTerminal PRIVATE /MAP:$<TARGET_FILE_DIR:FinceptTerminal>/FinceptTerminal.map)
+    endif()
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only
@@ -3335,6 +4373,33 @@ endif()
 # always matches the project() VERSION declared at the top of this file.
 target_compile_definitions(FinceptTerminal PRIVATE
     FINCEPT_VERSION_STRING="${CMAKE_PROJECT_VERSION}")
+
+# ── Edition identity → code (see "Edition identity" above; EditionIdentity.h) ──
+target_compile_definitions(FinceptTerminal PRIVATE
+    FINCEPT_EDITION_ID="${FINCEPT_EDITION_ID}"
+    FINCEPT_EDITION_DATA_DIR_NAME="${FINCEPT_EDITION_DATA_DIR_NAME}"
+    FINCEPT_EDITION_SETTINGS_ORG="${FINCEPT_EDITION_SETTINGS_ORG}"
+    FINCEPT_EDITION_SETTINGS_APP="${FINCEPT_EDITION_SETTINGS_APP}"
+    FINCEPT_EDITION_DESKTOP_ID="${FINCEPT_EDITION_DESKTOP_ID}"
+    FINCEPT_EDITION_FLATPAK_ID="${FINCEPT_EDITION_FLATPAK_ID}"
+    FINCEPT_EDITION_BUNDLE_ID="${FINCEPT_EDITION_BUNDLE_ID}"
+    FINCEPT_EDITION_LINUX_PACKAGE="${FINCEPT_EDITION_LINUX_PACKAGE}"
+    FINCEPT_EDITION_LINUX_PREFIX="${FINCEPT_EDITION_LINUX_PREFIX}"
+    FINCEPT_EDITION_TEMP_PREFIX="${FINCEPT_EDITION_TEMP_PREFIX}"
+    FINCEPT_EDITION_MCP_SERVER_NAME="${FINCEPT_EDITION_MCP_SERVER_NAME}")
+
+# ── Database lineage ──────────────────────────────────────────────────────────
+# Names this build's own database file, <data>/fincept.<lineage>.db. It is used
+# only when the shared fincept.db was written by a different or newer build (the
+# user chooses "Use a separate database for this version"), and afterwards in
+# preference to fincept.db. Builds that number their migrations independently
+# must use different lineages. Letters, digits, '-' and '_' only.
+set(FINCEPT_DB_LINEAGE "community" CACHE STRING "Database lineage: names this build's separate fincept.<lineage>.db")
+if(NOT FINCEPT_DB_LINEAGE MATCHES "^[A-Za-z0-9_-]+$")
+    message(FATAL_ERROR "FINCEPT_DB_LINEAGE='${FINCEPT_DB_LINEAGE}' must contain only letters, digits, '-' and '_'")
+endif()
+target_compile_definitions(FinceptTerminal PRIVATE
+    FINCEPT_DB_LINEAGE="${FINCEPT_DB_LINEAGE}")
 
 # ── Optional feature compile definitions (applied after add_executable) ──────
 if(FINCEPT_HAS_PRIVATE_HEADERS)
@@ -3611,10 +4676,14 @@ elseif(FINCEPT_DOWNLOAD_YTDLP)
 
     if(_ytdlp_need_download)
         message(STATUS "yt-dlp: downloading ${FINCEPT_YTDLP_VERSION} (${FINCEPT_YTDLP_ASSET})...")
+        # No EXPECTED_HASH here: with it, a failed transfer is a hard configure
+        # error ("file DOWNLOAD cannot compute hash on failed download") that
+        # STATUS cannot intercept, so every build without network access —
+        # the Flatpak sandbox, distro build farms — died at this line and the
+        # warning below was unreachable. The hash is checked by hand instead.
         file(DOWNLOAD
             "${FINCEPT_YTDLP_URL}"
             "${FINCEPT_YTDLP_DL_FILE}"
-            EXPECTED_HASH "SHA256=${FINCEPT_YTDLP_SHA256}"
             SHOW_PROGRESS
             STATUS _ytdlp_dl_status
             TLS_VERIFY ON)
@@ -3624,6 +4693,16 @@ elseif(FINCEPT_DOWNLOAD_YTDLP)
             # Drop the partial file so a retry doesn't see a bad cache.
             file(REMOVE "${FINCEPT_YTDLP_DL_FILE}")
             message(WARNING "yt-dlp download failed (${_ytdlp_dl_msg}). Video playback will be unavailable.")
+        else()
+            file(SHA256 "${FINCEPT_YTDLP_DL_FILE}" _ytdlp_dl_hash)
+            if(NOT _ytdlp_dl_hash STREQUAL "${FINCEPT_YTDLP_SHA256}")
+                # Never bundle a binary that is not the pinned one.
+                file(REMOVE "${FINCEPT_YTDLP_DL_FILE}")
+                message(WARNING
+                    "yt-dlp download does not match the pinned SHA-256 "
+                    "(got ${_ytdlp_dl_hash}, expected ${FINCEPT_YTDLP_SHA256}) — discarded. "
+                    "Video playback will be unavailable.")
+            endif()
         endif()
     endif()
 
@@ -3667,8 +4746,8 @@ else()
 endif()
 
 # ── Install rules ─────────────────────────────────────────────────────────────
-# Used by: cmake --install build --prefix /usr
-# Required for AppImage, .deb, .rpm, and system-wide installation on Linux.
+# Used by: cmake --install build --prefix /usr (Linux: the Flatpak build and
+# source installs; the release .deb is assembled by .github/workflows/release.yml).
 
 if(WIN32)
     # Windows: install exe + all DLLs beside it (windeployqt already copies them)
@@ -3703,6 +4782,11 @@ if(WIN32)
             "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.cmd"
             "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.ps1"
             DESTINATION "." COMPONENT core)
+    # Edition marker beside the exe. The private build installs a
+    # FinceptTerminal.exe too; uninstall.ps1 only removes a folder that carries
+    # this edition's marker.
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fincept-edition.txt" "${FINCEPT_EDITION_ID}\n")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fincept-edition.txt" DESTINATION "." COMPONENT core)
 
 elseif(APPLE)
     if(FINCEPT_BUILD_INSTALLER)
@@ -3747,38 +4831,7 @@ elseif(APPLE)
                 DESTINATION "FinceptTerminal.app/Contents/Resources" COMPONENT core)
     endif()
 
-elseif(FINCEPT_BUILD_INSTALLER AND FINCEPT_IFW_PAYLOAD)
-    # ── Linux IFW installer path (relocatable, self-contained) ───────────────
-    # Ship the tree that linuxdeploy already produced (app binary + bundled Qt
-    # libs + plugins), so the installed app runs from ANY chosen TargetDir.
-    # The binary's rpath ($ORIGIN/../lib, set by linuxdeploy) plus the staged
-    # qt.conf resolve Qt's libraries and plugins relative to the install dir —
-    # no system Qt, no LD_LIBRARY_PATH, no fixed prefix. IFW does not bundle
-    # dependencies itself, so CI sets FINCEPT_IFW_PAYLOAD to the linuxdeploy
-    # AppDir's usr/ directory.
-    install(DIRECTORY "${FINCEPT_IFW_PAYLOAD}/"
-            DESTINATION "."
-            USE_SOURCE_PERMISSIONS
-            COMPONENT core)
-    # qt.conf next to the binary so Qt finds the bundled plugins/libs at any
-    # install location (an IFW install has no AppRun launcher to set env vars).
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/qt.conf"
-            DESTINATION "bin" COMPONENT core)
-    # Complete uninstaller (app + all user data); see packaging/uninstall/README.md.
-    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.sh"
-            DESTINATION "." COMPONENT core)
-    # NOTE: scripts/, resources/, and requirements live INSIDE the linuxdeploy
-    # AppDir payload already (staged into usr/bin/ by the CI AppImage step), so
-    # they are captured by the install(DIRECTORY) above — no separate scripts
-    # component here (it is Windows-only; see the IFW component config below).
-
 else()
-    if(FINCEPT_BUILD_INSTALLER AND NOT FINCEPT_IFW_PAYLOAD)
-        message(WARNING
-            "FINCEPT_BUILD_INSTALLER is ON for Linux but FINCEPT_IFW_PAYLOAD is unset — "
-            "the IFW .run would ship WITHOUT bundled Qt and fail to launch. "
-            "Set -DFINCEPT_IFW_PAYLOAD=<linuxdeploy-AppDir>/usr, or build the AppImage instead.")
-    endif()
     # Linux: FHS-compliant layout. Architecture-neutral — works for x86_64
     # and aarch64 (ARM64) without changes; CMake just installs the binary
     # produced for the target arch into share/fincept-terminal/. To build for
@@ -3835,7 +4888,7 @@ else()
 
     # Remaining runtime-read assets, resolved via AppPaths::bundled_resource()
     # (which searches <exe_dir>/../share/fincept-terminal/resources/). Without
-    # these the .deb/.rpm had no KLineChart page (blank Equity charts), no
+    # these an FHS install had no KLineChart page (blank Equity charts), no
     # wallet connect/swap pages and an empty Component Browser.
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/component_catalog.json"
             DESTINATION "share/fincept-terminal/resources" COMPONENT core)
@@ -3849,19 +4902,23 @@ else()
     if(EXISTS "${_ICON_PNG}")
         install(FILES "${_ICON_PNG}"
                 DESTINATION "share/icons/hicolor/256x256/apps"
-                RENAME "fincept-terminal.png" COMPONENT core)
+                RENAME "${FINCEPT_EDITION_DESKTOP_ID}.png" COMPONENT core)
     else()
         message(STATUS "Linux icon not found at ${_ICON_PNG} — "
                        "convert resources/fincept.ico to fincept.png for proper desktop integration")
     endif()
 
-    # .desktop file
+    # .desktop file — installed under the edition's desktop id, which is also the
+    # Wayland app_id main.cpp sets (EditionIdentity.h). The source file keeps its
+    # name; the private build installs its own fincept-terminal.desktop.
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.desktop"
-            DESTINATION "share/applications" COMPONENT core)
+            DESTINATION "share/applications"
+            RENAME "${FINCEPT_EDITION_DESKTOP_ID}.desktop" COMPONENT core)
 
-    # AppStream metadata
+    # AppStream metadata (component id ${FINCEPT_EDITION_BUNDLE_ID})
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.appdata.xml"
-            DESTINATION "share/metainfo" COMPONENT core)
+            DESTINATION "share/metainfo"
+            RENAME "${FINCEPT_EDITION_DESKTOP_ID}.appdata.xml" COMPONENT core)
 
     # Complete uninstaller (app + all user data); see packaging/uninstall/README.md.
     install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.sh"
@@ -3884,19 +4941,18 @@ endif()
 #   cd build && cpack -G IFW -C Release
 #
 # Requires: Qt Installer Framework (binarycreator on PATH or in Qt install)
-# Output:   FinceptTerminal-<ver>-<platform>-setup.exe/.run/.app
+# Output:   FinceptTerminal-<ver>-<platform>-setup.exe/.app
+#
+# Windows and macOS only. Linux ships the Flatpak and a .deb, both built by
+# .github/workflows/release.yml; the Linux IFW wizard, the AppImage and the
+# .rpm are discontinued.
 
-option(FINCEPT_BUILD_INSTALLER "Generate QtIFW installer via CPack" OFF)
-
-# Path to a pre-deployed, self-contained payload that the IFW installer should
-# package on macOS/Linux. QtIFW does NOT bundle dependencies itself — the OS
-# deploy tools must run first (windeployqt on Windows, macdeployqt on macOS,
-# linuxdeploy on Linux). On Linux, set this to the linuxdeploy AppDir's usr/
-# directory so the .run ships bundled Qt and is relocatable. Unused on Windows
-# (windeployqt output is captured directly below) and on macOS (the signed
-# .app is copied via ditto in the install rule above).
-set(FINCEPT_IFW_PAYLOAD "" CACHE PATH
-    "Pre-deployed payload dir for the IFW installer (Linux: linuxdeploy AppDir/usr)")
+option(FINCEPT_BUILD_INSTALLER "Generate QtIFW installer via CPack (Windows / macOS)" OFF)
+if(FINCEPT_BUILD_INSTALLER AND UNIX AND NOT APPLE)
+    message(FATAL_ERROR
+        "FINCEPT_BUILD_INSTALLER is Windows / macOS only. Linux packages (Flatpak, .deb) are "
+        "built by .github/workflows/release.yml (manual run: only = deb | flatpak).")
+endif()
 
 if(FINCEPT_BUILD_INSTALLER)
 
@@ -3995,52 +5051,8 @@ if(FINCEPT_BUILD_INSTALLER)
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
 
     # ── Generators ────────────────────────────────────────────────────────────
-    # Default: IFW everywhere. On Linux, additionally produce native package
-    # formats if the corresponding tools are present on PATH.
+    # IFW only (Windows / macOS; refused on Linux above).
     set(CPACK_GENERATOR "IFW")
-    if(UNIX AND NOT APPLE)
-        find_program(_FINCEPT_DPKG_EXE dpkg)
-        find_program(_FINCEPT_RPMBUILD_EXE rpmbuild)
-        if(_FINCEPT_DPKG_EXE)
-            list(APPEND CPACK_GENERATOR "DEB")
-            set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Fincept Corporation <support@fincept.in>")
-            set(CPACK_DEBIAN_PACKAGE_SECTION "misc")
-            set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-            set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${CPACK_PACKAGE_HOMEPAGE_URL}")
-            set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-            # Hard runtime deps: glibc 2.31+ (Ubuntu 22.04 baseline), libsecret
-            # for credential storage, fontconfig for Qt text rendering.
-            set(CPACK_DEBIAN_PACKAGE_DEPENDS
-                "libc6 (>= 2.31), libsecret-1-0, libfontconfig1, libxkbcommon0, libdbus-1-3")
-            # CPack DEB cannot generate arm64 from inside an x86_64 build host;
-            # CPACK_DEBIAN_ARCHITECTURE follows CMAKE_SYSTEM_PROCESSOR.
-            if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-                set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
-            else()
-                set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
-            endif()
-            message(STATUS "CPack: DEB generator enabled (${CPACK_DEBIAN_PACKAGE_ARCHITECTURE})")
-        endif()
-        if(_FINCEPT_RPMBUILD_EXE)
-            list(APPEND CPACK_GENERATOR "RPM")
-            set(CPACK_RPM_PACKAGE_LICENSE "AGPL-3.0-or-later")
-            set(CPACK_RPM_PACKAGE_GROUP "Applications/Productivity")
-            set(CPACK_RPM_PACKAGE_URL "${CPACK_PACKAGE_HOMEPAGE_URL}")
-            set(CPACK_RPM_PACKAGE_REQUIRES
-                "glibc >= 2.31, libsecret, fontconfig, libxkbcommon, dbus-libs")
-            set(CPACK_RPM_PACKAGE_AUTOREQPROV ON)
-            if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-                set(CPACK_RPM_PACKAGE_ARCHITECTURE "aarch64")
-            else()
-                set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
-            endif()
-            message(STATUS "CPack: RPM generator enabled (${CPACK_RPM_PACKAGE_ARCHITECTURE})")
-        endif()
-        if(NOT _FINCEPT_DPKG_EXE AND NOT _FINCEPT_RPMBUILD_EXE)
-            message(STATUS "CPack: only IFW generator enabled — install dpkg-dev / rpm-build "
-                           "for native .deb/.rpm output")
-        endif()
-    endif()
 
     # ── QtIFW tool discovery ─────────────────────────────────────────────────
     find_program(BINARYCREATOR_EXE binarycreator
@@ -4062,9 +5074,12 @@ if(FINCEPT_BUILD_INSTALLER)
 
     # ── CPackIFW installer configuration ─────────────────────────────────────
     set(CPACK_IFW_PACKAGE_TITLE "Fincept Terminal")
-    set(CPACK_IFW_PACKAGE_NAME "com.fincept.terminal")
+    # Installer id and Start Menu folder are the edition's: the private build's
+    # installer uses com.fincept.terminal and Start Menu\Fincept\Fincept Terminal.lnk,
+    # and either would overwrite (and on uninstall delete) the other's shortcuts.
+    set(CPACK_IFW_PACKAGE_NAME "${FINCEPT_EDITION_BUNDLE_ID}")
     set(CPACK_IFW_PACKAGE_PUBLISHER "Fincept Corporation")
-    set(CPACK_IFW_PACKAGE_START_MENU_DIRECTORY "Fincept")
+    set(CPACK_IFW_PACKAGE_START_MENU_DIRECTORY "${FINCEPT_EDITION_SHORTCUT_NAME}")
     set(CPACK_IFW_PACKAGE_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
     set(CPACK_IFW_PACKAGE_MAINTENANCE_TOOL_NAME "FinceptMaintenanceTool")
@@ -4088,24 +5103,23 @@ if(FINCEPT_BUILD_INSTALLER)
     # wizard's Target Directory page lets the user pick any path (the page is
     # shown interactively now that controlscript.qs guards its auto-advance
     # with isCommandLineInstance()).
+    # Every default carries the edition name. The private build installs to
+    # %LOCALAPPDATA%\Programs\FinceptTerminal, /Applications/FinceptTerminal,
+    # ~/FinceptTerminal and /opt/FinceptTerminal, and its older releases (and this
+    # terminal's) to C:\Program Files\FinceptTerminal, which its updater moves.
+    # An existing install keeps its folder: the in-app update passes TargetDir.
     if(WIN32)
-        set(CPACK_IFW_TARGET_DIRECTORY "@ApplicationsDirX64@/FinceptTerminal")
-    elseif(APPLE)
-        set(CPACK_IFW_TARGET_DIRECTORY "/Applications/FinceptTerminal")
+        set(CPACK_IFW_TARGET_DIRECTORY "@ApplicationsDirX64@/${FINCEPT_EDITION_SETTINGS_APP}")
     else()
-        # Default to the user's home so no root is required; the installer only
-        # escalates (and uses AdminTargetDir) if the chosen path isn't writable.
-        # The app is relocatable, so any custom path works either way.
-        set(CPACK_IFW_TARGET_DIRECTORY "@HomeDir@/FinceptTerminal")
-        set(CPACK_IFW_ADMIN_TARGET_DIRECTORY "/opt/FinceptTerminal")
+        set(CPACK_IFW_TARGET_DIRECTORY "/Applications/${FINCEPT_EDITION_SETTINGS_APP}")
     endif()
 
     # Output file naming — arch-aware so the auto-updater manifest can point
     # at predictable, stable URLs. Scheme:
     #   FinceptTerminal-<version>-<platform>-<arch>-setup
-    # Platform: windows | linux | macos
+    # Platform: windows | macos
     # Arch:     x64 | arm64
-    # The CPack IFW generator appends .exe on Windows, .app on macOS, .run on Linux.
+    # The CPack IFW generator appends .exe on Windows, .app on macOS.
     if(WIN32)
         # CMAKE_SYSTEM_PROCESSOR on Windows is "AMD64" for x64 and "ARM64" for arm64.
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
@@ -4115,7 +5129,7 @@ if(FINCEPT_BUILD_INSTALLER)
         endif()
         set(CPACK_PACKAGE_FILE_NAME
             "FinceptTerminal-${CMAKE_PROJECT_VERSION}-windows-${_FINCEPT_PKG_ARCH}-setup")
-    elseif(APPLE)
+    else()
         # On macOS CMAKE_OSX_ARCHITECTURES is the authoritative source
         # (it drives the actual binary slice). Fall back to host processor.
         if(CMAKE_OSX_ARCHITECTURES)
@@ -4134,14 +5148,6 @@ if(FINCEPT_BUILD_INSTALLER)
         endif()
         set(CPACK_PACKAGE_FILE_NAME
             "FinceptTerminal-${CMAKE_PROJECT_VERSION}-macos-${_FINCEPT_PKG_ARCH}-setup")
-    else()
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-            set(_FINCEPT_PKG_ARCH "arm64")
-        else()
-            set(_FINCEPT_PKG_ARCH "x64")
-        endif()
-        set(CPACK_PACKAGE_FILE_NAME
-            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-linux-${_FINCEPT_PKG_ARCH}-setup")
     endif()
     message(STATUS "  Installer filename: ${CPACK_PACKAGE_FILE_NAME}")
 
@@ -4155,14 +5161,19 @@ if(FINCEPT_BUILD_INSTALLER)
         DESCRIPTION  "Core application executable and Qt runtime libraries"
         REQUIRED)
 
-    # Scripts are a separate, optional component on Windows only. On macOS they
-    # ship inside the signed .app bundle, and on Linux inside the linuxdeploy
-    # AppDir payload — both captured by the `core` component on those platforms.
+    # Scripts are a separate component on Windows only. On macOS they ship
+    # inside the signed .app bundle, captured by the `core` component.
+    #
+    # REQUIRED + FORCED_INSTALLATION (below): the scripts are not optional at
+    # runtime. Every market quote, chart and fundamentals request runs through
+    # scripts/yfinance_data.py, so an install with this box unticked started
+    # fine and then showed empty data screens with nothing to explain why.
     if(WIN32)
         cpack_add_component(scripts
             DISPLAY_NAME "Python Analytics Scripts"
             DESCRIPTION  "1300+ Python analytics scripts (equity, derivatives, portfolio, quant)"
-            DEPENDS core)
+            DEPENDS core
+            REQUIRED)
     endif()
 
     # ── CPackIFW component configuration ─────────────────────────────────────
@@ -4181,36 +5192,8 @@ if(FINCEPT_BUILD_INSTALLER)
             VERSION "${CMAKE_PROJECT_VERSION}"
             SORTING_PRIORITY 50
             DEFAULT TRUE
+            FORCED_INSTALLATION
             DEPENDS "com.fincept.terminal.core")
-    endif()
-
-    # ── Linux: AppImage helper target ────────────────────────────────────────
-    # `linuxdeploy` + `linuxdeploy-plugin-qt` are external tools; we don't
-    # install them ourselves. If found on PATH, expose `make appimage` (or
-    # `cmake --build . --target appimage`) so CI can produce a single-file
-    # portable AppImage. Distro-agnostic; runs on glibc 2.31+ targets.
-    if(UNIX AND NOT APPLE)
-        find_program(_FINCEPT_LINUXDEPLOY linuxdeploy)
-        find_program(_FINCEPT_LINUXDEPLOY_QT linuxdeploy-plugin-qt)
-        if(_FINCEPT_LINUXDEPLOY AND _FINCEPT_LINUXDEPLOY_QT)
-            add_custom_target(appimage
-                COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
-                    --prefix "${CMAKE_BINARY_DIR}/AppDir/usr"
-                COMMAND ${CMAKE_COMMAND} -E env
-                    QMAKE=${_fincept_qt_prefix}/bin/qmake
-                    "${_FINCEPT_LINUXDEPLOY}"
-                    --appdir "${CMAKE_BINARY_DIR}/AppDir"
-                    --plugin qt
-                    --output appimage
-                    --desktop-file "${CMAKE_BINARY_DIR}/AppDir/usr/share/applications/fincept-terminal.desktop"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-                COMMENT "Building FinceptTerminal AppImage..."
-                VERBATIM)
-            message(STATUS "AppImage target available — run `cmake --build . --target appimage`")
-        else()
-            message(STATUS "linuxdeploy / linuxdeploy-plugin-qt not on PATH — "
-                           "AppImage target unavailable. See https://github.com/linuxdeploy")
-        endif()
     endif()
 
 endif() # FINCEPT_BUILD_INSTALLER

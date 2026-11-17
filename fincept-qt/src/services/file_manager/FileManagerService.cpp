@@ -43,7 +43,7 @@ FileManagerService& FileManagerService::instance() {
 FileManagerService::FileManagerService(QObject* parent) : QObject(parent) {
     QDir().mkpath(storage_dir());
     files_cache_ = read_metadata();
-    LOG_INFO(kFileManagerTag, QString("Loaded %1 managed files").arg(files_cache_.size()));
+    LOG_DEBUG(kFileManagerTag, QString("Loaded %1 managed files").arg(files_cache_.size()));
 }
 
 // ── Paths ────────────────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     QFileInfo info(source_path);
     if (!info.isFile()) {
         // exists() is also true for directories, which QFile::copy cannot import.
-        LOG_WARN(kFileManagerTag, "import_file: source is not a file: " + source_path);
+        LOG_WARN(kFileManagerTag, logf("File import refused, source is not a file", {{"path", log_path(source_path)}}));
         return {};
     }
 
@@ -208,7 +208,8 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     QString dest = full_path(stored_name);
 
     if (!QFile::copy(source_path, dest)) {
-        LOG_ERROR(kFileManagerTag, "import_file: copy failed: " + source_path + " -> " + dest);
+        LOG_ERROR(kFileManagerTag, logf("File import failed, copy into managed storage failed",
+                                        {{"path", log_path(source_path)}, {"dest", log_path(dest)}}));
         return {};
     }
 
@@ -226,7 +227,7 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     files_cache_.append(to_json(f));
     write_metadata(files_cache_);
 
-    LOG_INFO(kFileManagerTag, QString("Imported '%1' (id=%2, screen=%3)").arg(f.original_name, id, source_screen));
+    LOG_DEBUG(kFileManagerTag, QString("Imported '%1' (id=%2, screen=%3)").arg(f.original_name, id, source_screen));
     emit file_added(id);
     emit files_changed();
     return id;
@@ -255,7 +256,7 @@ QString FileManagerService::register_file(const QString& stored_name, const QStr
     files_cache_.append(to_json(f));
     write_metadata(files_cache_);
 
-    LOG_INFO(kFileManagerTag, QString("Registered '%1' (id=%2, screen=%3)").arg(original_name, id, source_screen));
+    LOG_DEBUG(kFileManagerTag, QString("Registered '%1' (id=%2, screen=%3)").arg(original_name, id, source_screen));
     emit file_added(id);
     emit files_changed();
     return id;
@@ -294,7 +295,8 @@ bool FileManagerService::remove_file(const QString& id) {
         const QString stored = obj["name"].toString();
         const QString on_disk = full_path(stored);
         if (!on_disk.isEmpty() && QFile::exists(on_disk) && !QFile::remove(on_disk)) {
-            LOG_WARN(kFileManagerTag, "remove_file: could not delete " + on_disk);
+            LOG_WARN(kFileManagerTag,
+                     logf("File could not be deleted, it may be open in another program", {{"path", log_path(on_disk)}}));
             return false;
         }
 
@@ -306,7 +308,7 @@ bool FileManagerService::remove_file(const QString& id) {
         emit files_changed();
         return true;
     }
-    LOG_WARN(kFileManagerTag, "remove_file: id not found: " + id);
+    LOG_WARN(kFileManagerTag, logf("File removal refused, unknown file id", {{"id", id}}));
     return false;
 }
 

@@ -21,6 +21,10 @@ struct OhlcvCandle {
     double close = 0;
     double volume = 0;
     bool is_closed = false;
+    // Exchange trading date of the bar as yyyymmdd (0 = unknown). Stamped by the
+    // data layer (CandleDataFetcher / CandleAggregator via AlgoMarket) so
+    // session-anchored indicators (VWAP) and day buckets use exchange time.
+    int session_date = 0;
 };
 
 // ── Timeframe ───────────────────────────────────────────────────────────────
@@ -147,9 +151,10 @@ struct AlgoPosition {
     double quantity = 0;
     double entry_price = 0;
     int64_t entry_time = 0;
-    double unrealized_pnl = 0;
+    double unrealized_pnl = 0; // mark-to-market, net of the entry fees already paid
     double highest_since_entry = 0;
     double lowest_since_entry = 0;
+    double entry_fees = 0; // fees of the entry fill (estimated from the cost model for live)
 };
 
 // One leg of an open multi-leg F&O basket position (P3).
@@ -168,11 +173,15 @@ struct AlgoLegPosition {
 // ── Risk ────────────────────────────────────────────────────────────────────
 
 struct RiskState {
-    double daily_pnl = 0;
-    double max_drawdown = 0;
-    double peak_equity = 0;
+    double daily_pnl = 0;     // realized net P&L of the current trading day
+    double max_drawdown = 0;  // deepest fall of realized + unrealized P&L from its peak
+    double peak_equity = 0;   // running peak of realized + unrealized P&L
     bool paused_by_loss_limit = false;
     int64_t day_start_epoch = 0;
+    int day_key = 0;                 // exchange trading date (yyyymmdd) the daily figures belong to
+    bool halted_by_drawdown = false; // max-drawdown limit hit: latched until a manual resume
+    int trades_today = 0;            // entries filled on day_key
+    QString halt_reason;
 };
 
 // ── Trade record ────────────────────────────────────────────────────────────
@@ -194,6 +203,12 @@ struct AlgoTradeRecord {
     // the single-symbol equity path.
     QString leg_symbol;
     int leg_index = -1;
+    // Costs: `pnl` is NET of fees. Fees are the paper simulator's or, for live
+    // fills, ESTIMATED from the deployment's cost model (brokers do not report them).
+    double fees = 0;
+    double gross_pnl = 0;
+    double ref_price = 0; // signal reference price (fill slippage = price - ref_price)
+    QString mode;         // paper | live
 };
 
 // ── Metrics ─────────────────────────────────────────────────────────────────
@@ -212,6 +227,11 @@ struct AlgoMetrics {
     double current_position_entry = 0;
     int64_t last_signal_time = 0;
     int64_t last_trade_time = 0;
+    double total_fees = 0; // fees deducted from total_pnl (estimated for live)
+    double daily_pnl = 0;  // realized net P&L of the current exchange trading day
+    int trades_today = 0;
+    bool risk_halted = false; // entries halted by a risk limit
+    QString halt_reason;
 };
 
 // ── Order signal ────────────────────────────────────────────────────────────
@@ -224,6 +244,10 @@ struct AlgoOrderLeg {
     QString side; // BUY | SELL
     double quantity = 0;
     double price = 0; // limit price; 0 = market
+    // Contract identity, carried through to the open AlgoLegPosition so a PUT
+    // leg is marked from the chain's PE side (and persists as a put).
+    bool is_call = true;
+    double strike = 0;
 };
 
 struct AlgoOrderSignal {
@@ -263,8 +287,12 @@ struct AlgoLiveSnapshot {
     double current_price = 0;
     int64_t last_update_ms = 0;
     AlgoMetrics metrics;
-    QVector<AlgoConditionStatus> conditions; // entry rows then exit rows
-    QString note;                            // short activity line, e.g. "entry not met"
+    // Entry rows then exit rows, ALWAYS every leaf of both groups (stable rows).
+    // Bar strategies: the values of the last CLOSED-bar evaluation (what the engine
+    // decided on), stamped `conditions_as_of_ms`; live strategies: this tick.
+    QVector<AlgoConditionStatus> conditions;
+    int64_t conditions_as_of_ms = 0;
+    QString note; // short activity line, e.g. "entry not met"
 };
 
 } // namespace fincept::algo

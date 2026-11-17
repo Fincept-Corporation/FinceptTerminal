@@ -7,6 +7,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
@@ -14,23 +15,26 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace fincept::screens::widgets {
 
 // ── Preset channels ─────────────────────────────────────────────────────────
 
+// Each channel's marker colour is the categorical chart colour at its index
+// (see apply_styles()).
 struct PresetChannel {
     const char* name;
     const char* stream_url;
     const char* description;
-    const char* accent;
 };
 
 static const PresetChannel kPresets[] = {
-    {"Bloomberg TV", "https://www.youtube.com/watch?v=iEpJwprxDdk", "Global business & markets", "#9D4EDD"},
-    {"CNBC Live", "https://www.youtube.com/watch?v=rGgBsS3cm7E", "US market coverage", "#2563eb"},
-    {"Yahoo Finance", "https://www.youtube.com/@YahooFinance/live", "Market analysis", "#16a34a"},
-    {"NDTV Profit", "https://www.youtube.com/watch?v=kf8tVmwfUHI", "India business & markets", "#0891b2"},
-    {"Al Jazeera", "https://www.youtube.com/watch?v=gCNeDWCI0vo", "World news & finance", "#d97706"},
+    {"Bloomberg TV", "https://www.youtube.com/watch?v=iEpJwprxDdk", "Global business & markets"},
+    {"CNBC Live", "https://www.youtube.com/watch?v=rGgBsS3cm7E", "US market coverage"},
+    {"Yahoo Finance", "https://www.youtube.com/@YahooFinance/live", "Market analysis"},
+    {"NDTV Profit", "https://www.youtube.com/watch?v=kf8tVmwfUHI", "India business & markets"},
+    {"Al Jazeera", "https://www.youtube.com/watch?v=gCNeDWCI0vo", "World news & finance"},
 };
 
 static constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
@@ -86,13 +90,13 @@ void VideoPlayerWidget::build_channel_list() {
         rl->setSpacing(8);
 
         auto* dot = new QLabel;
+        dot->setObjectName(QStringLiteral("vpChannelDot"));
         dot->setFixedSize(6, 6);
-        dot->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ch.accent));
         rl->addWidget(dot);
 
         auto* play = new QLabel(QChar(0x25B6));
-        play->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ch.accent));
-        rl->addWidget(play);
+        play->setObjectName(QStringLiteral("vpChannelPlay"));
+        rl->addWidget(play); // dot / play colours: apply_styles()
 
         auto* name = new QLabel(ch.name);
         channel_name_labels_.append(name);
@@ -176,13 +180,38 @@ void VideoPlayerWidget::build_player_view() {
     // Status overlay (loading / error)
     status_label_ = new QLabel;
     status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setFixedHeight(20);
+    status_label_->setMinimumHeight(20); // grows with a large base font
     status_label_->hide();
     vl->addWidget(status_label_);
 
+#ifdef HAS_QT_MULTIMEDIA
+    // Playback failures used to leave a black player with "▶ <channel>" and no
+    // word: a dead link, an unsupported stream, a geo-block or an expired signed
+    // URL all looked like "still loading". Surface the player's own reason.
+    connect(player_, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString& msg) {
+        if (error == QMediaPlayer::NoError)
+            return;
+        status_label_->setText(
+            tr("Playback failed: %1").arg(msg.trimmed().isEmpty() ? tr("Unknown error") : msg.trimmed().left(120)));
+        status_label_->show();
+    });
+    connect(player_, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::InvalidMedia) {
+            // errorOccurred usually carries a more specific reason — keep it.
+            if (status_label_->isHidden()) {
+                status_label_->setText(tr("Stream unavailable — the link may be dead or blocked in your region."));
+                status_label_->show();
+            }
+        } else if (status == QMediaPlayer::EndOfMedia) {
+            status_label_->setText(tr("Stream ended."));
+            status_label_->show();
+        }
+    });
+#endif
+
     // Control bar
     controls_ = new QWidget(this);
-    controls_->setFixedHeight(28);
+    controls_->setMinimumHeight(28); // grows with a large base font
 
     auto* cl = new QHBoxLayout(controls_);
     cl->setContentsMargins(8, 0, 8, 0);
@@ -193,7 +222,7 @@ void VideoPlayerWidget::build_player_view() {
 
     stop_btn_ = new QPushButton(QString(QChar(0x25A0)) + " " + tr("STOP"));
     stop_btn_->setCursor(Qt::PointingHandCursor);
-    stop_btn_->setFixedHeight(20);
+    stop_btn_->setMinimumHeight(20);
     connect(stop_btn_, &QPushButton::clicked, this, &VideoPlayerWidget::stop_playback);
     cl->addWidget(stop_btn_);
 
@@ -422,76 +451,84 @@ void VideoPlayerWidget::set_loading(bool loading) {
 
 void VideoPlayerWidget::apply_styles() {
     // Channel list page
-    scroll_->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+    set_css_cached(scroll_, QString("QScrollArea { border: none; background: transparent; }"
                                    "QScrollBar:vertical { width: 5px; background: transparent; }"
                                    "QScrollBar::handle:vertical { background: %1; border-radius: 2px; }"
                                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                                .arg(ui::colors::BORDER_MED()));
 
-    channel_header_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; "
+    set_css_cached(channel_header_, QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; "
                                            "background: transparent; padding: 2px 0;")
                                        .arg(ui::colors::TEXT_TERTIARY()));
 
     for (int i = 0; i < channel_rows_.size() && i < kPresetCount; ++i) {
-        const auto& ch = kPresets[i];
-        channel_rows_[i]->setStyleSheet(
+        const QString accent = ui::colors::chart_color(i).name();
+        set_css_cached(channel_rows_[i], 
             QString("QPushButton { background: %1; border: 1px solid %2; border-radius: 2px; "
                     "text-align: left; padding: 0 8px; }"
                     "QPushButton:hover { background: %3; border-color: %4; }")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), ch.accent));
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), accent));
+        if (auto* dot = channel_rows_[i]->findChild<QLabel*>(QStringLiteral("vpChannelDot")))
+            set_css_cached(dot, QString("background: %1; border-radius: 3px;").arg(accent));
+        if (auto* play = channel_rows_[i]->findChild<QLabel*>(QStringLiteral("vpChannelPlay")))
+            set_css_cached(play, 
+                QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; background: transparent;").arg(accent));
     }
     for (auto* lbl : channel_name_labels_) {
-        lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+        set_css_cached(lbl, QString("color: %1; font-size: " + fincept::ui::fonts::px(-4) + "px; font-weight: bold; background: transparent;")
                                .arg(ui::colors::TEXT_PRIMARY()));
     }
     for (auto* lbl : channel_desc_labels_) {
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        set_css_cached(lbl, 
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
     }
 
-    channel_sep_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+    set_css_cached(channel_sep_, QString("background: %1;").arg(ui::colors::BORDER_DIM()));
 
-    custom_header_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; "
+    set_css_cached(custom_header_, QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; letter-spacing: 0.5px; "
                                           "background: transparent;")
                                       .arg(ui::colors::TEXT_TERTIARY()));
 
-    url_input_->setStyleSheet(
+    set_css_cached(url_input_, 
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-                "border-radius: 2px; padding: 4px 8px; font-size: 10px; }"
+                "border-radius: 2px; padding: 4px 8px; font-size: " + fincept::ui::fonts::px(-4) + "px; }"
                 "QLineEdit:focus { border-color: %4; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
 
-    play_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; border-radius: 2px; "
-                                     "font-size: 9px; font-weight: bold; padding: 5px; }"
+    set_css_cached(play_btn_, QString("QPushButton { background: %1; color: %2; border: none; border-radius: 2px; "
+                                     "font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; padding: 5px; }"
                                      "QPushButton:hover { background: %3; }")
                                  .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM()));
+    // 50 px at the default font, wider when the label needs it.
+    play_btn_->setFixedWidth(
+        std::max(50, QFontMetrics(ui::fonts::font(-5, QFont::Bold)).horizontalAdvance(play_btn_->text()) + 12));
 
-    helper_label_->setStyleSheet(
-        QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_DIM()));
+    set_css_cached(helper_label_, 
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(ui::colors::TEXT_DIM()));
 
     // Player page
 #ifdef HAS_QT_MULTIMEDIA
-    video_widget_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
+    set_css_cached(video_widget_, QString("background: %1;").arg(ui::colors::BG_BASE()));
 #else
     if (status_label_placeholder_)
-        status_label_placeholder_->setStyleSheet(QString("color: %1; font-size: 11px; background: %2;")
+        set_css_cached(status_label_placeholder_, QString("color: %1; font-size: " + fincept::ui::fonts::px(-3) + "px; background: %2;")
                                                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_BASE()));
 #endif
 
-    status_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: %2; padding: 0 8px;")
+    set_css_cached(status_label_, QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; background: %2; padding: 0 8px;")
                                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED()));
 
-    controls_->setStyleSheet(
+    set_css_cached(controls_, 
         QString("background: %1; border-top: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
-    now_playing_->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
+    set_css_cached(now_playing_, 
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
 
-    stop_btn_->setStyleSheet(QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
-                                     "font-size: 9px; font-weight: bold; padding: 0 10px; border-radius: 2px; }"
+    set_css_cached(stop_btn_, QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
+                                     "font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: bold; padding: 0 10px; border-radius: 2px; }"
                                      "QPushButton:hover { background: %4; color: %5; }")
                                  .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(),
-                                      ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+                                      ui::colors::DANGER(), ui::colors::TEXT_ON_ACCENT()));
 }
 
 void VideoPlayerWidget::on_theme_changed() {

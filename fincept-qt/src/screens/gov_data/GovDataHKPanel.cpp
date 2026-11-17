@@ -1,13 +1,19 @@
 // src/screens/gov_data/GovDataHKPanel.cpp
 // Hong Kong data.gov.hk panel
 // Categories use publishers command (normalized string array).
-// HK category_datasets may return empty — fall back to datasets_list + client-side filter.
+// HK category_datasets may return empty — the no-data page offers the full dataset list.
 #include "screens/gov_data/GovDataHKPanel.h"
 
 #include "core/logging/Logger.h"
 #include "screens/gov_data/GovDataProviderPanel.h"
+#include "screens/gov_data/GovTableModel.h"
 #include "services/gov_data/GovDataService.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/InputMemory.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QDesktopServices>
 #include <QEvent>
@@ -15,28 +21,41 @@
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QScrollArea>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QVariantMap>
 
 namespace fincept::screens {
 namespace {
-static constexpr const char* kGovDataHKScript = "data_gov_hk_api.py";
-static constexpr const char* kGovDataHKColor = "#F43F5E";
+const QString kGovDataHKScript = QStringLiteral("data_gov_hk_api.py");
+const QString kGovHKPrefix = QStringLiteral("gov.hk");
+// data.gov.hk identity colour as it reads on the dark theme; always drawn through colors::legible().
+constexpr const char* kGovDataHKColor = "#F43F5E";
+constexpr int kGovHKRefMaxAgeS = 24 * 3600; // categories, a dataset's resources
+constexpr int kGovHKDataMaxAgeS = 6 * 3600; // dataset lists, the name list behind the filter
+constexpr int kGovHKListRows = 100;
 } // namespace
 
 using namespace fincept::ui;
+namespace fmt = fincept::ui::formatting;
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataHKPanel::GovDataHKPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(make_gov_panel_style(kGovDataHKColor));
+    setStyleSheet(make_gov_panel_style(kGovDataHKColor)); // once, before children
     build_ui();
     retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataHKPanel::on_result);
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(make_gov_panel_style(kGovDataHKColor)); });
+    // The tables are models whose ink is read from the live theme: no recolour walk on a theme change.
+
+    // The filter term and the page on screen (category, dataset) come back with the panel.
+    memory_ = new InputMemory(QStringLiteral("gov_data"), QStringLiteral("hk"), this);
+    memory_->track(QStringLiteral("filter"), search_input_);
+    memory_->restore();
+    const QString first_view = restore_navigation();
+
+    go(first_view.isEmpty() ? QStringLiteral("categories") : first_view, false); // loads when first shown
 }
 
 void GovDataHKPanel::changeEvent(QEvent* event) {
@@ -58,94 +77,150 @@ void GovDataHKPanel::build_ui() {
     // Breadcrumb bar
     breadcrumb_ = new QWidget(this);
     breadcrumb_->setObjectName("govBreadcrumb");
-    breadcrumb_->setFixedHeight(24);
+    breadcrumb_->setMinimumHeight(24);
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
-    breadcrumb_label_ = new QLabel;
+    breadcrumb_label_ = new QLabel(breadcrumb_);
     breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
-    row_count_label_ = new QLabel;
+    as_of_label_ = gov::make_as_of_label(breadcrumb_);
+    bcl->addWidget(as_of_label_);
+    bcl->addSpacing(12);
+    row_count_label_ = new QLabel(breadcrumb_);
     row_count_label_->setObjectName("govBreadcrumbActive");
     bcl->addWidget(row_count_label_);
     root->addWidget(breadcrumb_);
 
-    // Content stack
-    content_stack_ = new QStackedWidget;
+    build_pane(this);
+    root->addWidget(pane_, 1);
+}
 
-    // Page 0 — Categories table (1 col, no dataset count — always -1 from HK API; header set in retranslateUi)
-    categories_table_ = new QTableWidget;
-    categories_table_->setColumnCount(1);
+void GovDataHKPanel::build_pane(QWidget* parent) {
+    pane_ = gov::make_pane(parent, QStringLiteral("gov_data/hk"), as_of_label_);
+    content_stack_ = new QStackedWidget(pane_->content_parent());
+
+    using Ink = GovTableModel::Ink;
+    const QString color = QString::fromLatin1(kGovDataHKColor);
+    const auto field = [](const char* key) {
+        return [k = QString::fromLatin1(key)](const QJsonObject& r) { return r.value(k).toString(); };
+    };
+    const auto field_or_dash = [](const char* key) {
+        return [k = QString::fromLatin1(key)](const QJsonObject& r) {
+            const QString s = r.value(k).toString();
+            return s.isEmpty() ? fmt::placeholder() : s;
+        };
+    };
+
+    // Categories table (no dataset count — always -1 from the HK API; header set in retranslateUi)
+    categories_model_ = gov::make_model(color, this);
+    categories_model_->set_columns({{.text = field("name"), .ink = Ink::Accent}});
+    categories_table_ = gov::make_table_view(content_stack_, categories_model_);
     categories_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    configure_table(categories_table_);
-    connect(categories_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_category_clicked);
-    content_stack_->addWidget(categories_table_); // index 0
+    connect(categories_table_, &QTableView::doubleClicked, this,
+            [this](const QModelIndex& i) { on_category_clicked(i.row()); });
+    content_stack_->addWidget(categories_table_);
 
-    // Page 1 — Datasets table (headers set in retranslateUi)
-    datasets_table_ = new QTableWidget;
-    datasets_table_->setColumnCount(3);
+    // Datasets table: TITLE | RESOURCES | MODIFIED (headers set in retranslateUi)
+    datasets_model_ = gov::make_model(color, this);
+    datasets_model_->set_columns({
+        {.text = field("title"), .tooltip = &gov::dataset_tooltip},
+        {.text = [](const QJsonObject& r) {
+             const int files = r.value(QStringLiteral("files")).toInt(-1);
+             return files > 0 ? fmt::quantity(files) : fmt::placeholder();
+         },
+         .align = Qt::AlignCenter,
+         .ink = Ink::Accent},
+        {.text = field_or_dash("modified")},
+    });
+    datasets_table_ = gov::make_table_view(content_stack_, datasets_model_);
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     datasets_table_->setColumnWidth(1, 90);
     datasets_table_->setColumnWidth(2, 110);
-    configure_table(datasets_table_);
-    connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_dataset_clicked);
-    content_stack_->addWidget(datasets_table_); // index 1
+    connect(datasets_table_, &QTableView::doubleClicked, this,
+            [this](const QModelIndex& i) { on_dataset_clicked(i.row()); });
+    content_stack_->addWidget(datasets_table_);
 
-    // Page 2 — Resources table (headers set in retranslateUi)
-    resources_table_ = new QTableWidget;
-    resources_table_->setColumnCount(3);
+    // Resources table: NAME | FORMAT | OPEN (headers set in retranslateUi); the third column opens
+    // the file (a click; a double-click or Enter on the row too). Without a URL it shows the date.
+    const auto open_text = [](const QJsonObject& r) {
+        if (!r.value(QStringLiteral("url")).toString().isEmpty())
+            return GovDataHKPanel::tr("↗ OPEN");
+        const QString modified = r.value(QStringLiteral("modified")).toString();
+        return modified.isEmpty() ? fmt::placeholder() : modified;
+    };
+    const auto has_url = [](const QJsonObject& r) { return !r.value(QStringLiteral("url")).toString().isEmpty(); };
+    resources_model_ = gov::make_model(color, this);
+    resources_model_->set_columns({
+        {.text = field("name")},
+        {.text = field_or_dash("format"), .align = Qt::AlignCenter, .ink = Ink::Accent},
+        {.text = open_text,
+         .tooltip = field("url"),
+         .align = Qt::AlignCenter,
+         .ink = Ink::Accent,
+         .ink_if = has_url,
+         .export_text = [open_text, has_url](const QJsonObject& r) {
+             return has_url(r) ? r.value(QStringLiteral("url")).toString() : open_text(r);
+         }},
+    });
+    resources_table_ = gov::make_table_view(content_stack_, resources_model_);
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     resources_table_->setColumnWidth(1, 80);
     resources_table_->setColumnWidth(2, 110);
-    configure_table(resources_table_);
+    const auto open_resource = [this](int row) {
+        const QString url = resources_model_->row(row).value(QStringLiteral("url")).toString();
+        if (!url.isEmpty())
+            QDesktopServices::openUrl(QUrl(url));
+    };
+    connect(resources_table_, &QTableView::clicked, this, [open_resource](const QModelIndex& i) {
+        if (i.column() == 2)
+            open_resource(i.row());
+    });
+    connect(resources_table_, &QTableView::activated, this, [open_resource](const QModelIndex& i) {
+        if (i.column() != 2) // the OPEN cell already opened on the click
+            open_resource(i.row());
+    });
+    content_stack_->addWidget(resources_table_);
 
-    // OPEN button column
-    connect(
-        resources_table_, &QTableWidget::cellClicked, this,
-        [this](int row, int col) {
-            if (col != 2)
-                return;
-            auto* item = resources_table_->item(row, 2);
-            if (!item)
-                return;
-            QString url = item->data(Qt::UserRole).toString();
-            if (!url.isEmpty())
-                QDesktopServices::openUrl(QUrl(url));
-        },
-        Qt::UniqueConnection);
+    no_data_page_ = gov::make_no_data_page(content_stack_);
+    connect(no_data_page_, &EmptyState::primary_clicked, this, [this]() {
+        switch (kind_of(pane_->view())) {
+            case Kind::Categories:
+            case Kind::All:
+                pane_->run();
+                break;
+            case Kind::Category:
+            case Kind::Filter:
+                go(QStringLiteral("all"), true);
+                break;
+            case Kind::Resources:
+                on_back();
+                break;
+        }
+    });
+    content_stack_->addWidget(no_data_page_);
 
-    content_stack_->addWidget(resources_table_); // index 2
-
-    // Page 3 — Status
-    auto* status_page = new QWidget(this);
-    status_page->setObjectName("govStatusPage");
-    auto* svl = new QVBoxLayout(status_page);
-    svl->setAlignment(Qt::AlignCenter);
-    status_label_ = new QLabel;
-    status_label_->setObjectName("govStatusMsg");
-    status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setWordWrap(true);
-    svl->addWidget(status_label_);
-    content_stack_->addWidget(status_page); // index 3
-
-    root->addWidget(content_stack_, 1);
+    pane_->set_content(content_stack_);
+    pane_->set_start([this](quint64 run) { start_run(run); });
+    pane_->set_cancel([this](quint64 run) { gov::cancel_token(tokens_, run); });
+    pane_->set_render([this](const QJsonValue& p, const QDateTime&, bool) { render(p); });
 }
 
 QWidget* GovDataHKPanel::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("govPanelToolbar");
-    bar->setFixedHeight(36);
+    bar->setMinimumHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    back_btn_ = new QPushButton;
+    back_btn_ = new QPushButton(bar);
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -154,31 +229,33 @@ QWidget* GovDataHKPanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    categories_btn_ = new QPushButton;
+    categories_btn_ = new QPushButton(bar);
     categories_btn_->setObjectName("govTabBtn");
     categories_btn_->setCheckable(true);
     categories_btn_->setChecked(true);
     categories_btn_->setCursor(Qt::PointingHandCursor);
-    connect(categories_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Categories); });
+    connect(categories_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(0); });
     hl->addWidget(categories_btn_);
 
-    datasets_btn_ = new QPushButton;
+    datasets_btn_ = new QPushButton(bar);
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
-    connect(datasets_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Datasets); });
+    connect(datasets_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(1); });
     hl->addWidget(datasets_btn_);
 
     hl->addSpacing(10);
 
-    search_input_ = new QLineEdit;
+    search_input_ = new QLineEdit(bar);
     search_input_->setObjectName("govSearch");
-    search_input_->setFixedWidth(210);
-    search_input_->setFixedHeight(26);
+    search_input_->setMinimumWidth(140);
+    search_input_->setMaximumWidth(320);
+    search_input_->setMinimumHeight(26);
+    search_input_->setClearButtonEnabled(true);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataHKPanel::on_fetch);
-    hl->addWidget(search_input_);
+    hl->addWidget(search_input_, 1);
 
-    fetch_btn_ = new QPushButton;
+    fetch_btn_ = new QPushButton(bar);
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_fetch);
@@ -186,7 +263,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton;
+    export_btn_ = new QPushButton(bar);
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_export_csv);
@@ -209,385 +286,409 @@ void GovDataHKPanel::retranslateUi() {
     if (export_btn_)
         export_btn_->setText(tr("CSV"));
     if (search_input_)
-        search_input_->setPlaceholderText(tr("Filter datasets…"));
+        search_input_->setPlaceholderText(tr("Filter datasets by name…"));
 
-    if (categories_table_)
-        categories_table_->setHorizontalHeaderLabels({tr("CATEGORY")});
-    if (datasets_table_)
-        datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("RESOURCES"), tr("MODIFIED")});
-    if (resources_table_)
-        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("FORMAT"), tr("MODIFIED")});
+    if (categories_model_)
+        categories_model_->set_headers({tr("CATEGORY")});
+    if (datasets_model_)
+        datasets_model_->set_headers({tr("TITLE"), tr("RESOURCES"), tr("MODIFIED")});
+    if (resources_model_)
+        resources_model_->set_headers({tr("NAME"), tr("FORMAT"), tr("OPEN")});
+    if (pane_)
+        update_breadcrumb();
 }
 
-// ── Public slot ───────────────────────────────────────────────────────────────
+// ── Views and runs ────────────────────────────────────────────────────────────
+
+GovDataHKPanel::Kind GovDataHKPanel::kind_of(const QString& key) {
+    if (key.startsWith(QLatin1String("cat:")))
+        return Kind::Category;
+    if (key == QLatin1String("all"))
+        return Kind::All;
+    if (key.startsWith(QLatin1String("filter:")))
+        return Kind::Filter;
+    if (key.startsWith(QLatin1String("res:")))
+        return Kind::Resources;
+    return Kind::Categories;
+}
+
+QString GovDataHKPanel::arg_of(const QString& key) {
+    const qsizetype colon = key.indexOf(QLatin1Char(':'));
+    return colon < 0 ? QString() : key.mid(colon + 1);
+}
+
+bool GovDataHKPanel::valid_view(const QString& key) {
+    switch (kind_of(key)) {
+        case Kind::Categories:
+            return key == QLatin1String("categories");
+        case Kind::All:
+            return true;
+        case Kind::Category:
+        case Kind::Filter:
+        case Kind::Resources:
+            return !arg_of(key).isEmpty();
+    }
+    return false;
+}
+
+QString GovDataHKPanel::restore_navigation() {
+    if (!memory_)
+        return {};
+    const QVariantMap labels = memory_->value(QStringLiteral("labels")).toMap();
+    for (auto it = labels.constBegin(); it != labels.constEnd(); ++it) {
+        const QString label = it.value().toString();
+        if (!it.key().isEmpty() && !label.isEmpty())
+            labels_.insert(it.key(), label);
+    }
+    const QString list = memory_->value(QStringLiteral("list")).toString();
+    const Kind list_kind = kind_of(list);
+    if (valid_view(list) && (list_kind == Kind::Category || list_kind == Kind::All || list_kind == Kind::Filter))
+        last_list_view_ = list;
+    const QString view = memory_->value(QStringLiteral("view")).toString();
+    return valid_view(view) ? view : QString();
+}
+
+void GovDataHKPanel::remember_navigation() {
+    const QString key = pane_ ? pane_->view() : QString();
+    if (!memory_ || !valid_view(key))
+        return;
+    memory_->set_value(QStringLiteral("view"), key);
+    memory_->set_value(QStringLiteral("list"), last_list_view_.isEmpty() ? QVariant() : QVariant(last_list_view_));
+    QVariantMap labels; // only the names the remembered pages need (breadcrumb, captions)
+    for (const QString& k : {key, last_list_view_}) {
+        const QString label = labels_.value(k);
+        if (!k.isEmpty() && !label.isEmpty())
+            labels.insert(k, label);
+    }
+    memory_->set_value(QStringLiteral("labels"), labels.isEmpty() ? QVariant() : QVariant(labels));
+}
+
+void GovDataHKPanel::go(const QString& key, bool user, bool force) {
+    const Kind kind = kind_of(key);
+    const QString arg = arg_of(key);
+    if (kind == Kind::Category || kind == Kind::All || kind == Kind::Filter)
+        last_list_view_ = key;
+    pane_->set_view_max_age(key, kind == Kind::Categories || kind == Kind::Resources ? kGovHKRefMaxAgeS
+                                                                                    : kGovHKDataMaxAgeS);
+    pane_->set_view_skeleton(key, kind == Kind::Categories ? LoadingSkeleton::Shape::List
+                                                           : LoadingSkeleton::Shape::Table);
+    switch (kind) {
+        case Kind::Categories:
+            pane_->set_loading_text(tr("Loading categories from data.gov.hk…"));
+            break;
+        case Kind::Category:
+            pane_->set_loading_text(tr("Loading datasets for \"%1\"…").arg(labels_.value(key, arg)));
+            break;
+        case Kind::All:
+            pane_->set_loading_text(tr("Loading the data.gov.hk dataset list…"));
+            break;
+        case Kind::Filter:
+            pane_->set_loading_text(tr("Matching dataset names against \"%1\"…").arg(arg));
+            break;
+        case Kind::Resources:
+            pane_->set_loading_text(tr("Loading resources…"));
+            break;
+    }
+    pane_->set_view(key);
+    update_toolbar_state();
+    update_breadcrumb();
+    const bool running_here = pane_->is_running() && pane_->running_view() == key;
+    if (force || (user && !pane_->has_result() && !running_here))
+        pane_->run();
+    remember_navigation();
+}
 
 void GovDataHKPanel::load_initial_data() {
-    show_loading(tr("Loading categories from data.gov.hk…"));
-    services::GovDataService::instance().execute(kGovDataHKScript, "publishers", {}, "hk_categories");
+    if (pane_->view().isEmpty())
+        go(QStringLiteral("categories"), false);
 }
 
-// ── Toolbar actions ───────────────────────────────────────────────────────────
-
 void GovDataHKPanel::on_tab_changed(int tab_index) {
-    auto view = static_cast<View>(tab_index);
-    categories_btn_->setChecked(view == Categories);
-    datasets_btn_->setChecked(view == Datasets);
-
-    current_view_ = view;
-
-    if (view == Categories) {
-        if (current_categories_.isEmpty())
-            load_initial_data();
-        else {
-            content_stack_->setCurrentIndex(Categories);
-            row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
-        }
-        update_breadcrumb(tr("Categories"));
-    } else if (view == Datasets) {
-        if (current_datasets_.isEmpty())
-            show_status(tr("Double-click a category to load datasets, "
-                           "or type a filter term above and click FETCH."));
-        else {
-            content_stack_->setCurrentIndex(Datasets);
-            row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
-        }
-        update_breadcrumb(tr("Datasets"));
+    if (tab_index == 0) {
+        go(QStringLiteral("categories"), true);
+        return;
     }
-
-    update_toolbar_state();
+    // DATASETS: the last dataset list, else the first category's datasets, else the full list.
+    if (!last_list_view_.isEmpty()) {
+        go(last_list_view_, true);
+        return;
+    }
+    const QJsonObject first = categories_.isEmpty() ? QJsonObject() : categories_.first().toObject();
+    const QString id = first.value("id").toString();
+    if (!id.isEmpty()) {
+        const QString key = QStringLiteral("cat:") + id;
+        labels_.insert(key, first.value("name").toString(id));
+        go(key, true);
+    } else {
+        go(QStringLiteral("all"), true);
+    }
 }
 
 void GovDataHKPanel::on_fetch() {
-    QString query = search_input_->text().trimmed();
-
-    // If user typed something, run datasets_list and filter client-side
-    // (HK has no text search endpoint)
-    if (!query.isEmpty()) {
-        if (all_dataset_names_.isEmpty()) {
-            show_loading(tr("Loading full dataset list for filtering…"));
-            // Store query so we can filter after datasets_list returns
-            services::GovDataService::instance().execute(kGovDataHKScript, "datasets_list", {}, "hk_datasets_list");
-        } else {
-            filter_datasets_list(query);
-        }
-        return;
-    }
-
-    // No query — go back to categories
-    if (current_categories_.isEmpty())
-        load_initial_data();
-    else {
-        current_view_ = Categories;
-        categories_btn_->setChecked(true);
-        datasets_btn_->setChecked(false);
-        content_stack_->setCurrentIndex(Categories);
-        update_breadcrumb(tr("Categories"));
-        row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
-        update_toolbar_state();
-    }
-}
-
-void GovDataHKPanel::filter_datasets_list(const QString& query) {
-    QJsonArray filtered;
-    QString lower = query.toLower();
-    for (const auto& v : all_dataset_names_) {
-        QString name = v.isString() ? v.toString() : v.toObject()["name"].toString();
-        if (name.toLower().contains(lower)) {
-            // Build a minimal dataset object for populate_datasets
-            QJsonObject obj;
-            obj["title"] = name;
-            obj["id"] = name;
-            obj["num_resources"] = 0;
-            obj["metadata_modified"] = "";
-            filtered.append(obj);
-        }
-    }
-
-    if (filtered.isEmpty()) {
-        show_status(tr("No datasets matched \"%1\" in the HK catalogue.\n"
-                       "HK DATA — Categories may have limited datasets")
-                        .arg(query));
-        return;
-    }
-
-    current_datasets_ = filtered;
-    populate_datasets(filtered);
-    current_view_ = Datasets;
-    categories_btn_->setChecked(false);
-    datasets_btn_->setChecked(true);
-    content_stack_->setCurrentIndex(Datasets);
-    update_breadcrumb(tr("Datasets  ›  Filter: \"%1\"").arg(query));
-    row_count_label_->setText(tr("%1 matched").arg(filtered.size()));
-    update_toolbar_state();
+    const QString query = search_input_->text().trimmed();
+    if (!query.isEmpty())
+        go(QStringLiteral("filter:") + query, true, true);
+    else
+        pane_->run(); // reload what is on screen
 }
 
 void GovDataHKPanel::on_category_clicked(int row) {
-    auto* item = categories_table_->item(row, 0);
-    if (!item)
+    const QJsonObject cat = categories_model_->row(row);
+    const QString id = cat.value(QStringLiteral("id")).toString();
+    if (id.isEmpty())
         return;
-    selected_category_id_ = item->data(Qt::UserRole).toString();
-    selected_category_name_ = item->text();
-
-    show_loading(tr("Loading datasets for \"%1\"…").arg(selected_category_name_));
-    services::GovDataService::instance().execute(kGovDataHKScript, "datasets", {selected_category_id_, "100"},
-                                                 "hk_datasets");
+    const QString key = QStringLiteral("cat:") + id;
+    labels_.insert(key, cat.value(QStringLiteral("name")).toString());
+    go(key, true);
 }
 
 void GovDataHKPanel::on_dataset_clicked(int row) {
-    auto* item = datasets_table_->item(row, 0);
-    if (!item)
+    const QJsonObject dataset = datasets_model_->row(row);
+    const QString id = dataset.value(QStringLiteral("id")).toString();
+    if (id.isEmpty())
         return;
-    selected_dataset_id_ = item->data(Qt::UserRole).toString();
-    if (selected_dataset_id_.isEmpty())
-        return;
-
-    show_loading(tr("Loading resources…"));
-    services::GovDataService::instance().execute(kGovDataHKScript, "resources", {selected_dataset_id_}, "hk_resources");
+    const QString key = QStringLiteral("res:") + id;
+    labels_.insert(key, dataset.value(QStringLiteral("title")).toString());
+    go(key, true);
 }
 
 void GovDataHKPanel::on_back() {
-    if (current_view_ == Resources) {
-        content_stack_->setCurrentIndex(Datasets);
-        current_view_ = Datasets;
-        row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
-        update_breadcrumb(tr("Datasets  ›  %1").arg(selected_category_name_));
-    } else if (current_view_ == Datasets) {
-        content_stack_->setCurrentIndex(Categories);
-        current_view_ = Categories;
-        categories_btn_->setChecked(true);
-        datasets_btn_->setChecked(false);
-        selected_category_id_.clear();
-        selected_category_name_.clear();
-        row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
-        update_breadcrumb(tr("Categories"));
+    const Kind kind = kind_of(pane_->view());
+    if (kind == Kind::Resources && !last_list_view_.isEmpty())
+        go(last_list_view_, true);
+    else
+        go(QStringLiteral("categories"), true);
+}
+
+QJsonArray GovDataHKPanel::filter_names(const QJsonArray& names, const QString& term) {
+    QJsonArray matches;
+    for (const QJsonValue& v : names) {
+        const QString name = v.isObject() ? gov::text(v.toObject().value(QStringLiteral("name"))) : gov::text(v);
+        if (name.contains(term, Qt::CaseInsensitive))
+            matches.append(name);
     }
-    update_toolbar_state();
+    return matches;
 }
 
-void GovDataHKPanel::update_toolbar_state() {
-    back_btn_->setVisible(current_view_ == Datasets || current_view_ == Resources);
+QJsonObject GovDataHKPanel::shape(const QString& key, const QJsonObject& data) {
+    int total = -1;
+    const QJsonArray rows = gov::list_rows(data, &total);
+    switch (kind_of(key)) {
+        case Kind::Categories: {
+            QJsonArray cats;
+            for (const QJsonValue& v : rows) {
+                const QJsonObject o = v.toObject();
+                QString name = gov::text(o.value(QStringLiteral("display_name")));
+                if (name.isEmpty())
+                    name = gov::text(o.value(QStringLiteral("name")));
+                const QString id = gov::text(o.value(QStringLiteral("id"))).isEmpty()
+                                       ? gov::text(o.value(QStringLiteral("name")))
+                                       : gov::text(o.value(QStringLiteral("id")));
+                cats.append(QJsonObject{{QStringLiteral("name"), name.isEmpty() ? id : name}, {QStringLiteral("id"), id}});
+            }
+            return gov::list_payload(QStringLiteral("categories"), cats);
+        }
+        case Kind::Category:
+        case Kind::All:
+            return gov::list_payload(QStringLiteral("datasets"), gov::compact_datasets(rows), total);
+        case Kind::Filter:
+            // `rows` is the full name list (every data.gov.hk dataset): matched here, off the GUI thread.
+            return gov::list_payload(QStringLiteral("datasets"), gov::compact_datasets(filter_names(rows, arg_of(key))));
+        case Kind::Resources:
+            return gov::list_payload(QStringLiteral("resources"), gov::compact_resources(rows));
+    }
+    return {};
 }
 
-void GovDataHKPanel::update_breadcrumb(const QString& text) {
-    breadcrumb_label_->setText(text);
+void GovDataHKPanel::deliver_shaped(quint64 run, std::function<QJsonObject()> shaper) {
+    gov::shape_async(this, std::move(shaper), [this, run](const QJsonObject& payload) {
+        if (pane_->is_current(run)) // superseded, cancelled or its view left meanwhile: dropped
+            pane_->deliver(run, payload);
+    });
 }
 
-// ── Result handler ────────────────────────────────────────────────────────────
+void GovDataHKPanel::start_run(quint64 run) {
+    const QString key = pane_->view();
+    const QString arg = arg_of(key);
+    QString command;
+    QStringList args;
+    switch (kind_of(key)) {
+        case Kind::Categories:
+            command = QStringLiteral("publishers");
+            break;
+        case Kind::Category:
+            command = QStringLiteral("datasets");
+            args << arg << QString::number(kGovHKListRows);
+            break;
+        case Kind::All:
+            command = QStringLiteral("datasets_list");
+            args << QString::number(kGovHKListRows);
+            break;
+        case Kind::Filter:
+            // The name list is fetched once; later filters are matched against it (on the shaping thread).
+            if (!all_dataset_names_.isEmpty()) {
+                deliver_shaped(run, [names = all_dataset_names_, term = arg]() {
+                    return gov::list_payload(QStringLiteral("datasets"), gov::compact_datasets(filter_names(names, term)));
+                });
+                return;
+            }
+            command = QStringLiteral("datasets_list");
+            break;
+        case Kind::Resources:
+            command = QStringLiteral("resources");
+            args << arg;
+            break;
+    }
+    const auto token = gov::start_token(tokens_, run);
+    services::GovDataService::instance().execute(kGovDataHKScript, command, args, gov::request_id(kGovHKPrefix, run),
+                                                 token);
+}
 
 void GovDataHKPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
-    if (!request_id.startsWith("hk_"))
+    const quint64 run = gov::run_of(request_id, kGovHKPrefix);
+    if (run == 0)
         return;
-
+    tokens_.remove(run);
+    if (!pane_->is_current(run))
+        return; // superseded, cancelled, or its view was left
+    const QString key = pane_->running_view();
     if (!result.success) {
-        show_error(result.error);
-        return;
-    }
-
-    QJsonArray payload = result.data["data"].toArray();
-
-    if (request_id == "hk_categories") {
-        current_categories_ = payload;
-        populate_categories(payload);
-        current_view_ = Categories;
-        categories_btn_->setChecked(true);
-        datasets_btn_->setChecked(false);
-        content_stack_->setCurrentIndex(Categories);
-        update_breadcrumb(tr("Categories"));
-        row_count_label_->setText(tr("%1 categories").arg(payload.size()));
-
-    } else if (request_id == "hk_datasets") {
-        if (payload.isEmpty()) {
-            // HK category_datasets frequently returns empty — show note
-            show_status(tr("HK DATA — Categories may have limited datasets\n\n"
-                           "No datasets found for \"%1\".\n"
-                           "Try searching by name using the search box above.")
-                            .arg(selected_category_name_));
-            LOG_WARN("GovHK", "Category " + selected_category_id_ + " returned 0 datasets");
+        if (result.error_code == QLatin1String("no_data") && kind_of(key) != Kind::Filter) {
+            const QString kind = kind_of(key) == Kind::Categories  ? QStringLiteral("categories")
+                                 : kind_of(key) == Kind::Resources ? QStringLiteral("resources")
+                                                                   : QStringLiteral("datasets");
+            pane_->deliver(run, gov::list_payload(kind, QJsonArray())); // an empty list: the no-data page
             return;
         }
-        current_datasets_ = payload;
-        populate_datasets(payload);
-        current_view_ = Datasets;
-        categories_btn_->setChecked(false);
-        datasets_btn_->setChecked(true);
-        content_stack_->setCurrentIndex(Datasets);
-
-        int total = result.data["metadata"].toObject()["total_count"].toInt(0);
-        if (total == 0)
-            total = payload.size();
-        update_breadcrumb(tr("Datasets  ›  %1").arg(selected_category_name_));
-        row_count_label_->setText(tr("Showing %1 of %2").arg(payload.size()).arg(total));
-
-    } else if (request_id == "hk_datasets_list") {
-        // Full dataset name list for client-side search
-        all_dataset_names_ = payload;
-        QString query = search_input_->text().trimmed();
-        if (!query.isEmpty())
-            filter_datasets_list(query);
-        else
-            show_status(tr("Dataset list loaded. Type a search term and click FETCH."));
-
-    } else if (request_id == "hk_resources") {
-        current_resources_ = payload;
-        populate_resources(payload);
-        current_view_ = Resources;
-        content_stack_->setCurrentIndex(Resources);
-        update_breadcrumb(tr("Datasets  ›  Resources"));
-        row_count_label_->setText(tr("%1 files").arg(payload.size()));
+        gov::fail_pane(pane_, run, result, QStringLiteral("data.gov.hk"));
+        return;
     }
-
-    update_toolbar_state();
+    if (kind_of(key) == Kind::Filter)
+        all_dataset_names_ = gov::list_rows(result.data); // the full name list for later filters (shared, no copy)
+    // The answer (a category's datasets is 2.5 MB of JSON) is shaped on the shaping thread.
+    deliver_shaped(run, [key, data = result.data]() { return shape(key, data); });
 }
 
-// ── Populate tables ───────────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────────────────────
+
+void GovDataHKPanel::render(const QJsonValue& payload) {
+    const QJsonObject p = payload.toObject();
+    const QString kind = p.value("kind").toString();
+    const QJsonArray rows = p.value("rows").toArray();
+    const QString key = pane_->view();
+    if (kind == QLatin1String("categories"))
+        categories_ = rows;
+    if (rows.isEmpty()) {
+        row_count_label_->clear();
+        show_no_data(kind_of(key), arg_of(key));
+        return;
+    }
+    if (kind == QLatin1String("categories")) {
+        populate_categories(rows);
+        content_stack_->setCurrentWidget(categories_table_);
+        row_count_label_->setText(tr("%1 categories").arg(fmt::quantity(rows.size())));
+    } else if (kind == QLatin1String("datasets")) {
+        populate_datasets(rows);
+        content_stack_->setCurrentWidget(datasets_table_);
+        const int total = p.value("total").toInt(int(rows.size()));
+        row_count_label_->setText(total > rows.size() ? tr("Showing %1 of %2").arg(fmt::quantity(rows.size()),
+                                                                                     fmt::quantity(total))
+                                                      : tr("%1 datasets").arg(fmt::quantity(rows.size())));
+    } else if (kind == QLatin1String("resources")) {
+        populate_resources(rows);
+        content_stack_->setCurrentWidget(resources_table_);
+        row_count_label_->setText(tr("%1 files").arg(fmt::quantity(rows.size())));
+    }
+}
+
+void GovDataHKPanel::show_no_data(Kind kind, const QString& arg) {
+    EmptyState::Spec spec;
+    switch (kind) {
+        case Kind::Categories:
+            spec = EmptyState::no_data_spec(tr("No categories listed"),
+                                            tr("data.gov.hk returned an empty list. Try again later."), tr("RELOAD"));
+            break;
+        case Kind::Category:
+            spec = EmptyState::no_data_spec(tr("No datasets in \"%1\"").arg(labels_.value(pane_->view(), arg)),
+                                            tr("data.gov.hk lists few datasets under some categories."),
+                                            tr("SHOW ALL DATASETS"));
+            break;
+        case Kind::All:
+            spec = EmptyState::no_data_spec(tr("No datasets listed"), tr("data.gov.hk returned an empty list."),
+                                            tr("RELOAD"));
+            break;
+        case Kind::Filter:
+            spec = EmptyState::no_data_spec(tr("No dataset name contains \"%1\"").arg(arg),
+                                            tr("The filter matches dataset names (English, lower case)."),
+                                            tr("SHOW ALL DATASETS"));
+            break;
+        case Kind::Resources:
+            spec = EmptyState::no_data_spec(tr("No files in this dataset"),
+                                            tr("The dataset lists no downloadable resources."), tr("BACK"));
+            break;
+    }
+    spec.glyph = QStringLiteral("∅");
+    gov::show_no_data(content_stack_, no_data_page_, spec);
+}
+
+// ── Toolbar / breadcrumb ──────────────────────────────────────────────────────
+
+void GovDataHKPanel::update_toolbar_state() {
+    const Kind kind = kind_of(pane_->view());
+    categories_btn_->setChecked(kind == Kind::Categories);
+    datasets_btn_->setChecked(kind != Kind::Categories);
+    back_btn_->setVisible(kind != Kind::Categories);
+}
+
+void GovDataHKPanel::update_breadcrumb() {
+    const QString key = pane_->view();
+    const QString arg = arg_of(key);
+    switch (kind_of(key)) {
+        case Kind::Categories:
+            breadcrumb_label_->setText(tr("Categories"));
+            break;
+        case Kind::Category:
+            breadcrumb_label_->setText(tr("Datasets  ›  %1").arg(labels_.value(key, arg)));
+            break;
+        case Kind::All:
+            breadcrumb_label_->setText(tr("Datasets  ›  all"));
+            break;
+        case Kind::Filter:
+            breadcrumb_label_->setText(tr("Datasets  ›  Filter: \"%1\"").arg(arg));
+            break;
+        case Kind::Resources:
+            breadcrumb_label_->setText(tr("Datasets  ›  Resources  ›  %1").arg(labels_.value(key).left(80)));
+            break;
+    }
+}
+
+// ── Populate tables (model resets: no per-row work on the GUI thread) ─────────
 
 void GovDataHKPanel::populate_categories(const QJsonArray& json) {
-    categories_table_->setRowCount(0);
-    categories_table_->setRowCount(json.size());
-
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
-        QString name = obj["display_name"].toString();
-        if (name.isEmpty())
-            name = obj["name"].toString();
-        if (name.isEmpty())
-            name = obj["id"].toString();
-
-        auto* name_item = new QTableWidgetItem(name);
-        name_item->setForeground(QColor(kGovDataHKColor));
-        name_item->setData(Qt::UserRole,
-                           obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
-        categories_table_->setItem(i, 0, name_item);
-    }
-
-    LOG_INFO("GovHK", QString("Populated %1 categories").arg(json.size()));
+    gov::show_rows(categories_table_, categories_model_, json);
+    LOG_DEBUG("GovHK", QString("Populated %1 categories").arg(json.size()));
 }
 
 void GovDataHKPanel::populate_datasets(const QJsonArray& json) {
-    datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(json.size());
-
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
-        QString title = obj["title"].toString();
-        if (title.isEmpty())
-            title = obj["name"].toString();
-
-        auto* title_item = new QTableWidgetItem(title);
-        title_item->setData(Qt::UserRole,
-                            obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
-        datasets_table_->setItem(i, 0, title_item);
-
-        int num_res = obj["num_resources"].toInt(0);
-        // Also count from inline resources array if num_resources missing
-        if (num_res == 0 && obj.contains("resources"))
-            num_res = obj["resources"].toArray().size();
-        auto* res_item = new QTableWidgetItem(num_res > 0 ? QString::number(num_res) : "—");
-        res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kGovDataHKColor));
-        datasets_table_->setItem(i, 1, res_item);
-
-        QString modified = obj["metadata_modified"].toString();
-        if (modified.length() > 10)
-            modified = modified.left(10);
-        datasets_table_->setItem(i, 2, new QTableWidgetItem(modified));
-    }
-
-    LOG_INFO("GovHK", QString("Populated %1 datasets").arg(json.size()));
+    gov::show_rows(datasets_table_, datasets_model_, json);
+    LOG_DEBUG("GovHK", QString("Populated %1 datasets").arg(json.size()));
 }
 
 void GovDataHKPanel::populate_resources(const QJsonArray& json) {
-    resources_table_->setRowCount(0);
-    resources_table_->setRowCount(json.size());
-
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
-        QString name = obj["name"].toString();
-        if (name.isEmpty())
-            name = obj["id"].toString();
-        resources_table_->setItem(i, 0, new QTableWidgetItem(name));
-
-        QString format = obj["format"].toString().toUpper();
-        auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kGovDataHKColor));
-        fmt_item->setTextAlignment(Qt::AlignCenter);
-        resources_table_->setItem(i, 1, fmt_item);
-
-        QString modified = obj["last_modified"].toString();
-        if (modified.length() > 10)
-            modified = modified.left(10);
-        QString url = obj["url"].toString();
-        auto* mod_item = new QTableWidgetItem(modified.isEmpty() ? "—" : modified);
-        mod_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) {
-            mod_item->setText(tr("↗ OPEN"));
-            mod_item->setForeground(QColor(kGovDataHKColor));
-            mod_item->setTextAlignment(Qt::AlignCenter);
-        }
-        resources_table_->setItem(i, 2, mod_item);
-    }
-
-    LOG_INFO("GovHK", QString("Populated %1 resources").arg(json.size()));
-}
-
-// ── Status helpers ────────────────────────────────────────────────────────────
-
-void GovDataHKPanel::show_loading(const QString& message) {
-    status_label_->setStyleSheet(QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataHKColor));
-    status_label_->setText(message);
-    content_stack_->setCurrentIndex(Status);
-}
-
-void GovDataHKPanel::show_error(const QString& message) {
-    status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText(tr("Error: %1").arg(message));
-    content_stack_->setCurrentIndex(Status);
-    LOG_ERROR("GovHK", message);
-}
-
-void GovDataHKPanel::show_status(const QString& message, bool is_error) {
-    status_label_->setStyleSheet(
-        is_error ? QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE())
-                 : QString("color:%1; font-size:12px; background:transparent;").arg(colors::TEXT_SECONDARY()));
-    status_label_->setText(message);
-    content_stack_->setCurrentIndex(Status);
+    gov::show_rows(resources_table_, resources_model_, json);
+    LOG_DEBUG("GovHK", QString("Populated %1 resources").arg(json.size()));
 }
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 
 void GovDataHKPanel::on_export_csv() {
-    QTableWidget* table = nullptr;
-    QString def_name;
-
-    switch (current_view_) {
-        case Categories:
-            if (categories_table_->rowCount() > 0) {
-                table = categories_table_;
-                def_name = "hk_categories.csv";
-            }
-            break;
-        case Datasets:
-            if (datasets_table_->rowCount() > 0) {
-                table = datasets_table_;
-                def_name = "hk_datasets.csv";
-            }
-            break;
-        case Resources:
-            if (resources_table_->rowCount() > 0) {
-                table = resources_table_;
-                def_name = "hk_resources.csv";
-            }
-            break;
-        default:
-            break;
-    }
-    if (!table)
-        return;
-
-    export_table_to_csv(table, def_name, this);
+    QWidget* page = content_stack_->currentWidget();
+    if (page == categories_table_)
+        export_table_to_csv(categories_table_, "hk_categories.csv", this);
+    else if (page == datasets_table_)
+        export_table_to_csv(datasets_table_, "hk_datasets.csv", this);
+    else if (page == resources_table_)
+        export_table_to_csv(resources_table_, "hk_resources.csv", this);
 }
 
 } // namespace fincept::screens

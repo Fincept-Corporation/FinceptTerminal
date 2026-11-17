@@ -30,11 +30,23 @@ struct GridItem {
     QJsonObject config; // per-instance widget config (broker, account, symbol, …)
 };
 
+/// Row heights of the two dashboard densities. Compact is what every template
+/// (and the fresh-profile default) loads in; the toolbar's COMPACT button
+/// switches a layout between the two.
+inline constexpr int kGridRowCompact = 40;
+inline constexpr int kGridRowComfortable = 60;
+
 struct GridLayout {
     QVector<GridItem> items;
     int cols = 12;
-    int row_h = 60; // px per row
-    int margin = 4; // px gap between tiles
+    int row_h = kGridRowComfortable; // px per row
+    int margin = 4;                  // px gap between tiles
+    /// Template the layout was created from ("" = none / unknown).
+    QString template_id;
+    /// True while the layout is exactly what a template or a saved named layout
+    /// produced (no tile added, removed, moved, resized or reconfigured since),
+    /// so replacing it loses nothing the user made.
+    bool pristine = false;
 };
 
 // ── Pure math helpers ─────────────────────────────────────────────────────────
@@ -80,6 +92,10 @@ inline bool cells_overlap(const GridCell& a, const GridCell& b) {
 }
 
 /// Vertical compaction — pack all items upward. Takes FIRST (lowest) valid y.
+/// An item that collides with an already placed one at its own row and above
+/// (a column fold or a clamp can leave two items on the same cells) moves DOWN
+/// to the first free row instead of keeping the overlap: the old loop left it
+/// where it was, so two tiles were drawn on top of each other.
 inline QVector<GridItem> compact_vertical(QVector<GridItem> items) {
     std::stable_sort(items.begin(), items.end(), [](const GridItem& a, const GridItem& b) {
         return a.cell.y != b.cell.y ? a.cell.y < b.cell.y : a.cell.x < b.cell.x;
@@ -88,31 +104,74 @@ inline QVector<GridItem> compact_vertical(QVector<GridItem> items) {
     QVector<GridItem> placed;
     placed.reserve(items.size());
 
+    const auto fits_at = [&placed](const GridItem& item, int y) {
+        GridCell candidate = item.cell;
+        candidate.y = y;
+        for (const auto& p : placed) {
+            if (p.instance_id != item.instance_id && cells_overlap(candidate, p.cell))
+                return false;
+        }
+        return true;
+    };
+
     for (auto item : items) {
         if (item.is_static) {
             placed.append(item);
             continue;
         }
-        int best_y = item.cell.y;
+        int best_y = -1;
         for (int try_y = 0; try_y <= item.cell.y; ++try_y) {
-            GridCell candidate = item.cell;
-            candidate.y = try_y;
-            bool fits = true;
-            for (const auto& p : placed) {
-                if (p.instance_id != item.instance_id && cells_overlap(candidate, p.cell)) {
-                    fits = false;
-                    break;
-                }
-            }
-            if (fits) {
+            if (fits_at(item, try_y)) {
                 best_y = try_y;
                 break;
             }
+        }
+        if (best_y < 0) {
+            best_y = item.cell.y + 1;
+            while (best_y < item.cell.y + 2000 && !fits_at(item, best_y))
+                ++best_y;
         }
         item.cell.y = best_y;
         placed.append(item);
     }
     return placed;
+}
+
+/// Re-map a layout designed for `from_cols` columns onto `to_cols` columns by
+/// scaling every tile's left and right edge (rounded to the nearest column).
+/// Tiles that shared an edge still share it and a row of tiles that spanned
+/// the full width still does, so a filled layout stays filled — no gaps and no
+/// overlaps — when the panel narrows (12 -> 9 / 6) or widens again. Clamping
+/// x / w instead (the old fold) piled the right-hand tiles onto their
+/// neighbours. A width never drops below one column (min_w is not enforced:
+/// it would push a tile out of its row and open a gap — the column pitch in
+/// pixels is about the same at every fold, so a folded tile is narrower, not
+/// smaller than its minimum would allow on a wide screen). Any collision that
+/// rounding causes is resolved by compact_vertical().
+inline QVector<GridItem> fold_items_to_cols(QVector<GridItem> items, int from_cols, int to_cols) {
+    if (from_cols <= 0 || to_cols <= 0)
+        return items;
+    if (from_cols != to_cols) {
+        const auto edge = [from_cols, to_cols](int e) {
+            return static_cast<int>(std::floor(double(e) * to_cols / from_cols + 0.5));
+        };
+        for (auto& item : items) {
+            const int x0 = std::clamp(item.cell.x, 0, from_cols);
+            const int x1 = std::clamp(item.cell.x + item.cell.w, x0, from_cols);
+            int nx = std::clamp(edge(x0), 0, to_cols - 1);
+            const int nw = std::clamp(edge(x1) - nx, 1, to_cols);
+            nx = std::clamp(nx, 0, to_cols - nw);
+            item.cell.x = nx;
+            item.cell.w = nw;
+            item.cell.min_w = std::clamp(item.cell.min_w, 1, to_cols);
+        }
+    } else {
+        for (auto& item : items) {
+            item.cell.w = std::clamp(item.cell.w, 1, to_cols);
+            item.cell.x = std::clamp(item.cell.x, 0, to_cols - item.cell.w);
+        }
+    }
+    return compact_vertical(items);
 }
 
 /// Find first available position for a widget of size (w, h).

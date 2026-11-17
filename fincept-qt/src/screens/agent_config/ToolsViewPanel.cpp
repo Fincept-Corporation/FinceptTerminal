@@ -7,6 +7,8 @@
 #include "storage/repositories/AgentConfigRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EmptyState.h"
+#include "ui/widgets/LoadingSkeleton.h"
 
 #include <QApplication>
 #include <QButtonGroup>
@@ -19,6 +21,7 @@
 #include <QJsonObject>
 #include <QShowEvent>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -32,46 +35,46 @@ static QString panel_style(const QString& border_side = "right") {
 }
 
 static QString section_title_style() {
-    return QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER());
+    return QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER());
 }
 
 static QString badge_style(const QString& color = ui::colors::CYAN) {
-    return QString("color:%1;font-size:10px;background:%2;padding:1px 6px;"
+    return QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;background:%2;padding:1px 6px;"
                    "border-radius:2px;font-weight:600;")
         .arg(color, ui::colors::BG_RAISED());
 }
 
 static QString list_style() {
-    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
+    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                    "QListWidget::item{padding:5px 8px;border-bottom:1px solid %2;}"
-                   "QListWidget::item:selected{background:%4;color:%3;}"
+                   "QListWidget::item:selected{background:%4;color:%6;}"
                    "QListWidget::item:hover{background:%5;}")
         .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM(),
-             ui::colors::BG_HOVER());
+             ui::colors::BG_HOVER(), ui::colors::TEXT_ON_ACCENT());
 }
 
 static QString tree_style() {
-    return QString("QTreeWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
+    return QString("QTreeWidget{background:%1;border:1px solid %2;color:%3;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                    "QTreeWidget::item{padding:4px 6px;}"
-                   "QTreeWidget::item:selected{background:%4;color:%3;}"
+                   "QTreeWidget::item:selected{background:%4;color:%6;}"
                    "QTreeWidget::item:hover{background:%5;}"
                    "QTreeWidget::branch{background:%1;}")
         .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM(),
-             ui::colors::BG_HOVER());
+             ui::colors::BG_HOVER(), ui::colors::TEXT_ON_ACCENT());
 }
 
 static QString btn_primary_style() {
     return QString("QPushButton{background:%1;color:%2;border:none;padding:7px;"
-                   "font-size:11px;font-weight:700;letter-spacing:1px;}"
+                   "font-size:" + fincept::ui::fonts::px(-3) + "px;font-weight:700;letter-spacing:1px;}"
                    "QPushButton:hover{background:%3;}"
                    "QPushButton:disabled{background:%4;color:%5;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::AMBER_DIM(), ui::colors::BG_RAISED(),
+             ui::colors::TEXT_TERTIARY());
 }
 
 static QString btn_secondary_style() {
     return QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                   "padding:5px 10px;font-size:10px;font-weight:600;}"
+                   "padding:5px 10px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;}"
                    "QPushButton:hover{background:%3;color:%4;}"
                    "QPushButton:disabled{color:%5;border-color:%6;}")
         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(),
@@ -80,20 +83,20 @@ static QString btn_secondary_style() {
 
 static QString btn_danger_style() {
     return QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                   "padding:5px 10px;font-size:10px;font-weight:600;}"
+                   "padding:5px 10px;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:600;}"
                    "QPushButton:hover{background:%1;color:%2;}")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
+        .arg(ui::colors::DANGER(), ui::colors::TEXT_ON_ACCENT());
 }
 
 static QString input_style() {
     return QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
-                   "padding:6px 10px;font-size:12px;}"
+                   "padding:6px 10px;font-size:" + fincept::ui::fonts::px(-2) + "px;}"
                    "QLineEdit:focus{border-color:%4;}")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER());
 }
 
 static QString radio_style() {
-    return QString("QRadioButton{color:%1;font-size:11px;spacing:6px;}"
+    return QString("QRadioButton{color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;spacing:6px;}"
                    "QRadioButton::indicator{width:12px;height:12px;border:1px solid %2;"
                    "background:%3;}"
                    "QRadioButton::indicator:checked{background:%4;border-color:%4;}")
@@ -102,18 +105,18 @@ static QString radio_style() {
 
 static QString combo_style() {
     return QString("QComboBox{background:%1;color:%2;border:1px solid %3;"
-                   "padding:5px 8px;font-size:11px;}"
+                   "padding:5px 8px;font-size:" + fincept::ui::fonts::px(-3) + "px;}"
                    "QComboBox:focus{border-color:%4;}"
                    "QComboBox::drop-down{border:none;width:20px;}"
                    "QComboBox QAbstractItemView{background:%1;color:%2;"
-                   "border:1px solid %3;selection-background-color:%5;}")
+                   "border:1px solid %3;selection-background-color:%5;selection-color:%6;}")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
-             ui::colors::AMBER_DIM());
+             ui::colors::AMBER_DIM(), ui::colors::TEXT_ON_ACCENT());
 }
 
 static QString textedit_style() {
     return QString("QTextEdit{background:%1;color:%2;border:1px solid %3;"
-                   "font-size:12px;padding:4px;}"
+                   "font-size:" + fincept::ui::fonts::px(-2) + "px;padding:4px;}"
                    "QScrollBar:vertical{background:%1;width:6px;}"
                    "QScrollBar::handle:vertical{background:%3;}")
         .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM());
@@ -138,8 +141,9 @@ ToolsViewPanel::ToolsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("ToolsViewPanel");
     build_ui();
     setup_connections();
+    // Tree items carry their colours as item brushes: rebuild the tree.
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { update(); });
+            [this](const ui::ThemeTokens&) { filter_tools(search_edit_->text()); });
 
     // Seed from cache immediately so the combo is populated without waiting
     // for the agents_discovered signal (handles lazy construction race).
@@ -206,7 +210,7 @@ QWidget* ToolsViewPanel::build_left_panel() {
     vl->addWidget(target_combo_);
 
     target_status_ = new QLabel(tr("No target selected"));
-    target_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    target_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
     target_status_->setWordWrap(true);
     vl->addWidget(target_status_);
 
@@ -276,7 +280,7 @@ QWidget* ToolsViewPanel::build_center_panel() {
     header->addStretch();
 
     assigned_hint_ = new QLabel(tr("● = already assigned"));
-    assigned_hint_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    assigned_hint_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     header->addWidget(assigned_hint_);
     vl->addLayout(header);
 
@@ -287,13 +291,21 @@ QWidget* ToolsViewPanel::build_center_panel() {
     search_edit_->setClearButtonEnabled(true);
     vl->addWidget(search_edit_);
 
-    // ── Tree ─────────────────────────────────────────────────────────────────
-    tool_tree_ = new QTreeWidget;
+    // ── Tree (with its loading / error / no-match states) ─────────────────────
+    tree_stack_ = new QStackedWidget(panel);
+    tree_loading_ = new ui::LoadingSkeleton(ui::LoadingSkeleton::Shape::Table, tree_stack_);
+    tree_loading_->set_message(tr("Loading the tool catalogue…"));
+    tree_state_ = new ui::EmptyState(tree_stack_);
+    tool_tree_ = new QTreeWidget(tree_stack_);
     tool_tree_->setHeaderHidden(true);
     tool_tree_->setRootIsDecorated(true);
     tool_tree_->setStyleSheet(tree_style());
     tool_tree_->setUniformRowHeights(true);
-    vl->addWidget(tool_tree_, 1);
+    tree_stack_->addWidget(tree_loading_);
+    tree_stack_->addWidget(tree_state_);
+    tree_stack_->addWidget(tool_tree_);
+    tree_stack_->setCurrentWidget(tree_loading_);
+    vl->addWidget(tree_stack_, 1);
 
     // ── Buttons ───────────────────────────────────────────────────────────────
     auto* btn_row = new QHBoxLayout;
@@ -332,7 +344,7 @@ QWidget* ToolsViewPanel::build_right_panel() {
 
     detail_name_ = new QLabel(tr("Select a tool"));
     detail_name_->setStyleSheet(
-        QString("color:%1;font-size:13px;font-weight:700;padding:2px 0;").arg(ui::colors::TEXT_PRIMARY()));
+        QString("color:%1;font-size:" + fincept::ui::fonts::px(-1) + "px;font-weight:700;padding:2px 0;").arg(ui::colors::TEXT_PRIMARY()));
     detail_name_->setWordWrap(true);
     vl->addWidget(detail_name_);
 
@@ -385,6 +397,17 @@ void ToolsViewPanel::setup_connections() {
     auto& svc = services::AgentService::instance();
 
     connect(&svc, &services::AgentService::tools_loaded, this, &ToolsViewPanel::populate_tools);
+    // A failed listing used to leave the tree blank for good: say why, offer RETRY.
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& context, const QString& msg) {
+        if (context == QLatin1String("list_tools"))
+            show_tree_error(msg);
+    });
+    connect(tree_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+        if (tree_state_is_error_)
+            request_tools();
+        else
+            search_edit_->clear(); // "no tools match": CLEAR SEARCH
+    });
 
     connect(&svc, &services::AgentService::agents_discovered, this, [this](const QVector<services::AgentInfo>& agents) {
         agent_configs_ = agents;
@@ -469,14 +492,37 @@ void ToolsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (!data_loaded_) {
         data_loaded_ = true;
-        services::AgentService::instance().list_tools();
+        request_tools();
         services::AgentService::instance().discover_agents();
     }
+}
+
+void ToolsViewPanel::request_tools() {
+    if (!tools_received_)
+        show_tree_loading();
+    services::AgentService::instance().list_tools(); // free: a local Python listing, cached 10 min
+}
+
+void ToolsViewPanel::show_tree_loading() {
+    tree_state_is_error_ = false;
+    tree_stack_->setCurrentWidget(tree_loading_);
+}
+
+void ToolsViewPanel::show_tree_error(const QString& message) {
+    if (tools_received_)
+        return; // a refresh failed: the list on screen stays
+    tree_state_is_error_ = true;
+    tree_state_->apply(ui::EmptyState::error_spec(
+        message.trimmed().isEmpty() ? tr("The agent runtime did not return its tool list.") : message.trimmed(),
+        tr("Could not load the tools"), tr("RETRY")));
+    tree_stack_->setCurrentWidget(tree_state_);
 }
 
 // ── Populate tools ────────────────────────────────────────────────────────────
 
 void ToolsViewPanel::populate_tools(const services::AgentToolsInfo& info) {
+    tools_received_ = true;
+    tree_state_is_error_ = false;
     all_tools_ = info;
     // Flatten once — the MCP dedupe check below is O(1) against this set
     // instead of re-walking every category array per MCP tool per keystroke.
@@ -514,7 +560,7 @@ void ToolsViewPanel::filter_tools(const QString& query) {
 
             auto* child = new QTreeWidgetItem({display});
             child->setForeground(0,
-                                 QColor(assigned.contains(name) ? ui::colors::POSITIVE() : ui::colors::TEXT_PRIMARY()));
+                                 QColor(assigned.contains(name) ? ui::colors::SUCCESS() : ui::colors::TEXT_PRIMARY()));
             child->setToolTip(0, name);
             matching.append(child);
         }
@@ -549,7 +595,7 @@ void ToolsViewPanel::filter_tools(const QString& query) {
 
             auto* child = new QTreeWidgetItem({display});
             child->setForeground(
-                0, QColor(assigned.contains(tool.name) ? ui::colors::POSITIVE() : ui::colors::TEXT_PRIMARY()));
+                0, QColor(assigned.contains(tool.name) ? ui::colors::SUCCESS() : ui::colors::TEXT_PRIMARY()));
             child->setToolTip(0, tool.description.isEmpty() ? tool.name : tool.description);
             by_cat[cat].append(child);
         }
@@ -567,6 +613,47 @@ void ToolsViewPanel::filter_tools(const QString& query) {
     }
 
     total_count_->setText(QString::number(total));
+
+    // Which page the tree area shows (the list is only known after the first answer).
+    if (tools_received_) {
+        if (total == 0) {
+            tree_state_is_error_ = false;
+            const ui::EmptyState::Spec spec =
+                q.isEmpty() ? ui::EmptyState::no_data_spec(tr("No tools available"),
+                                                           tr("The agent runtime and the terminal's MCP servers "
+                                                              "listed no tools."))
+                            : ui::EmptyState::no_data_spec(tr("No tools match \"%1\"").arg(query.trimmed()),
+                                                           tr("Try part of the name, e.g. \"price\" or \"news\"."),
+                                                           tr("CLEAR SEARCH"));
+            // Only when it changes (this also runs on a theme change, where nothing may be re-laid out).
+            if (tree_stack_->currentWidget() != tree_state_ || tree_state_->title() != spec.title)
+                tree_state_->apply(spec);
+            tree_stack_->setCurrentWidget(tree_state_);
+        } else {
+            tree_stack_->setCurrentWidget(tool_tree_);
+        }
+    }
+
+    // The detail pane never says "Select a tool" while tools are listed: keep
+    // the tool shown if it is still in the list, else show the first one.
+    QTreeWidgetItem* pick = nullptr;
+    for (int c = 0; c < tool_tree_->topLevelItemCount() && !pick; ++c) {
+        QTreeWidgetItem* cat_item = tool_tree_->topLevelItem(c);
+        for (int i = 0; i < cat_item->childCount(); ++i) {
+            QTreeWidgetItem* leaf = cat_item->child(i);
+            if (current_tool_.isEmpty() || leaf->text(0).split(' ').first() == current_tool_) {
+                pick = leaf;
+                break;
+            }
+        }
+    }
+    if (!pick && tool_tree_->topLevelItemCount() > 0 && tool_tree_->topLevelItem(0)->childCount() > 0)
+        pick = tool_tree_->topLevelItem(0)->child(0);
+    if (pick) {
+        if (pick->parent())
+            pick->parent()->setExpanded(true);
+        tool_tree_->setCurrentItem(pick); // -> show_tool_detail
+    }
 }
 
 // ── Load assign targets ───────────────────────────────────────────────────────
@@ -626,7 +713,10 @@ void ToolsViewPanel::show_tool_detail(const QString& tool_name) {
                     QString type = p.value("type").toString("string");
                     QString desc = p.value("description").toString();
                     bool required = req.contains(QJsonValue(it.key()));
-                    lines << QString("%1%2  %3  %4").arg(it.key()).arg(required ? "*" : "").arg(type).arg(desc);
+                    // One multi-argument call: names and descriptions come from an outside tool's
+                    // schema and may contain "%2"-style text a chained .arg() would fill in.
+                    lines << QString("%1%2  %3  %4")
+                                 .arg(it.key(), required ? QStringLiteral("*") : QString(), type, desc);
                 }
                 params_text = lines.join("\n");
             } else {
@@ -772,7 +862,7 @@ void ToolsViewPanel::assign_to_target() {
         const QString msg = tr("✓ %1 tool(s) added to %2").arg(selected_tools_.size()).arg(name);
         target_status_->setText(msg);
         target_status_->setStyleSheet(
-            QString("color:%1;font-size:11px;padding:2px 0;font-weight:600;").arg(ui::colors::POSITIVE()));
+            QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;padding:2px 0;font-weight:600;").arg(ui::colors::SUCCESS()));
         LOG_INFO("ToolsViewPanel", msg);
 
         // Notify other panels to reload this agent's tool list immediately
@@ -788,12 +878,12 @@ void ToolsViewPanel::assign_to_target() {
                     tr("Target: %1 (%2)")
                         .arg(target_combo_->currentText(), radio_agent_->isChecked() ? tr("Agent") : tr("Team")));
                 target_status_->setStyleSheet(
-                    QString("color:%1;font-size:11px;padding:2px 0;").arg(ui::colors::TEXT_SECONDARY()));
+                    QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;padding:2px 0;").arg(ui::colors::TEXT_SECONDARY()));
             }
         });
     } else {
         target_status_->setText(tr("Error saving to %1").arg(name));
-        target_status_->setStyleSheet(QString("color:%1;font-size:11px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+        target_status_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;padding:2px 0;").arg(ui::colors::DANGER()));
     }
 }
 

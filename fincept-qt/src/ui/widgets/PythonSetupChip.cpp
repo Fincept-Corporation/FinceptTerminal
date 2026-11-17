@@ -48,7 +48,7 @@ PythonSetupChip::PythonSetupChip(QWidget* parent) : QWidget(parent) {
     bar_->setObjectName(QStringLiteral("pySetupChipBar"));
     bar_->setRange(0, 100);
     bar_->setTextVisible(false);
-    bar_->setFixedSize(56, 4);
+    bar_->setFixedSize(56, 4); // a thin bar beside the text, no text of its own
     hl->addWidget(bar_, 0, Qt::AlignVCenter);
 
     auto& setup = python::PythonSetupManager::instance();
@@ -78,7 +78,7 @@ void PythonSetupChip::refresh_theme() {
                 "#pySetupChip[chipState=\"offer\"] #pySetupChipText { text-decoration:underline; }"
                 "#pySetupChipBar { background:%4; border:1px solid %5; }"
                 "#pySetupChipBar::chunk { background:%1; }")
-            .arg(colors::AMBER(), colors::NEGATIVE(), colors::POSITIVE(), colors::BG_RAISED(), colors::BORDER_DIM()));
+            .arg(colors::AMBER(), colors::DANGER(), colors::SUCCESS(), colors::BG_RAISED(), colors::BORDER_MED()));
 }
 
 void PythonSetupChip::set_mode(Mode mode) {

@@ -1,5 +1,6 @@
 #pragma once
 #include "core/symbol/IGroupLinked.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/markets/MarketDataService.h"
 #include "services/screener/ScreenerService.h"
@@ -29,7 +30,15 @@ namespace fincept::screens {
 
 class ScreenerCriteriaBuilder;
 class ScreenerResultsModel;
-class ScreenerSortProxy;
+} // namespace fincept::screens
+
+namespace fincept::ui {
+class EmptyState;
+class KeySortProxy;
+class LoadingSkeleton;
+} // namespace fincept::ui
+
+namespace fincept::screens {
 
 /// Equity screener over the Yahoo Finance screener API.
 ///
@@ -41,11 +50,18 @@ class ScreenerSortProxy;
 /// Data paths: ScreenerService for screens, catalogue, saved screens and watchlists; the DataHub
 /// (`market:quote:*`, subscribed only while the basket is shown and visible) for the live basket.
 /// The screen itself never runs Python, HTTP or SQL.
-class ScreenerScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
+class ScreenerScreen : public QWidget, public IStatefulScreen, public IGroupLinked, public ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit ScreenerScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — "basket" (live large-cap basket) | "predefined:<id>" / "pre:<id>" / a bare
+    /// predefined id (most_actives, day_gainers … — the catalogue's, or scripts/screener_data.py
+    /// PREDEFINED before it has loaded) | "saved:<name>" (a saved screen). The screens list's click
+    /// path (activate_view: a screen runs as on a click); before the catalogue has loaded the link
+    /// replaces the remembered view. focus = results filter text (the header search box).
+    bool open_section(const QString& section, const QString& focus) override;
 
     // IGroupLinked: the selected row is this screen's symbol, so linked panels follow it.
     void set_group(SymbolGroup g) override { link_group_ = g; }
@@ -90,7 +106,16 @@ class ScreenerScreen : public QWidget, public IStatefulScreen, public IGroupLink
     void on_results_ready(const services::ScreenerResult& r);
     void on_run_failed(const QString& key, const QString& error);
     void show_result(const services::ScreenerResult& r, const QString& failure);
-    void show_message(const QString& text, bool offer_retry);
+    // Results area without rows — the shared state widgets, never a bare line of text:
+    /// A table skeleton with what is happening ("Running Most Actives…").
+    void show_loading(const QString& caption);
+    /// A failure page: plain reason + RETRY (re-runs the screen, or reloads the catalogue).
+    void show_failure(const QString& title, const QString& reason);
+    /// Nothing to list: what happened and the action that fills it (empty = none).
+    enum class EmptyAction { None, FirstPage, NewScreen, Retry };
+    void show_empty(const QString& title, const QString& message, EmptyAction action = EmptyAction::None);
+    void on_retry();
+    ui::EmptyState* state_page();
     void set_running(bool running);
     void set_status(const QString& text, const QString& tooltip = {}, bool warn = false);
     void update_actions();
@@ -153,12 +178,12 @@ class ScreenerScreen : public QWidget, public IStatefulScreen, public IGroupLink
     QLabel* page_lbl_ = nullptr;
     QStackedWidget* stack_ = nullptr;
     QTableView* table_ = nullptr;
-    QWidget* message_page_ = nullptr;
-    QLabel* message_lbl_ = nullptr;
-    QPushButton* retry_btn_ = nullptr;
+    ui::LoadingSkeleton* skeleton_page_ = nullptr; ///< while a screen / the catalogue loads
+    ui::EmptyState* state_page_ = nullptr;         ///< failure / no matches (created on first use)
+    EmptyAction empty_action_ = EmptyAction::None;  ///< what the state page's primary button does
     QLabel* status_lbl_ = nullptr;
     ScreenerResultsModel* model_ = nullptr;
-    ScreenerSortProxy* proxy_ = nullptr;
+    ui::KeySortProxy* proxy_ = nullptr; ///< SortRole keys, missing values last both ways
 
     // Run state
     Source source_ = Source::None;

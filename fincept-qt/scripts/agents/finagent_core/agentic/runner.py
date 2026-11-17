@@ -19,6 +19,7 @@ Control signalling protocol (between subprocesses):
     it updates the status to `paused` / `cancelled`, emits the matching
     event, and returns.
 """
+import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from finagent_core.agentic.archival_memory import ArchivalMemoryStore
@@ -27,6 +28,9 @@ from finagent_core.agentic.reflector import Reflector, ReflectorDecision
 from finagent_core.agentic.reflexion_store import ReflexionStore
 from finagent_core.agentic.skill_library import SkillLibrary
 from finagent_core.task_state import ResumableTaskRunner
+
+# stderr only (main.py routes logging there) — stdout is the JSON result channel.
+logger = logging.getLogger(__name__)
 
 EventEmitter = Callable[[str, Dict[str, Any]], None]
 
@@ -179,6 +183,7 @@ class AgenticRunner(ResumableTaskRunner):
         # Resume scenario: pre-pay the steps_used counter so we don't grant a
         # fresh budget every time the user clicks Resume.
         self._budget.steps_used = len(completed_steps)
+        running_step: Optional[int] = None  # global index of the step in flight
         try:
             if saved_plan and saved_plan.get("steps"):
                 plan = saved_plan
@@ -254,7 +259,9 @@ class AgenticRunner(ResumableTaskRunner):
                     {"task_id": task_id, "step_index": global_idx, "step": effective_step,
                      "budget": self._budget.snapshot()},
                 )
+                running_step = global_idx
                 step_result = self._execute_step(effective_step, query, config, global_idx, all_results)
+                running_step = None
                 self._budget.record_step()
                 self.state_mgr.save_checkpoint(task_id, global_idx, step_result)
                 all_results.append(step_result)
@@ -281,8 +288,9 @@ class AgenticRunner(ResumableTaskRunner):
                             decision=decision.decision, reason=decision.reason,
                             replan_hint=decision.replan_hint, question=decision.question,
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("Reflection could not be saved task=%s step=%s error=%s",
+                                       task_id, global_idx, type(exc).__name__)
                     self._emit(
                         "reflection",
                         {"task_id": task_id, "step_index": global_idx,
@@ -352,8 +360,11 @@ class AgenticRunner(ResumableTaskRunner):
 
         except Exception as e:
             self.state_mgr.fail_task(task_id, str(e))
-            self._emit("error", {"task_id": task_id, "error": str(e)})
-            return {"success": False, "task_id": task_id, "error": str(e)}
+            event: Dict[str, Any] = {"task_id": task_id, "error": str(e)}
+            if running_step is not None:
+                event["step_index"] = running_step
+            self._emit("error", event)
+            return {"success": False, **event}
 
     # ── Reflexion: cross-task lessons ────────────────────────────────────────
 
@@ -412,9 +423,9 @@ class AgenticRunner(ResumableTaskRunner):
                 content=content, user_id=user_id, memory_type="task_outcome",
                 metadata={"query": query},
             )
-        except Exception:
+        except Exception as exc:
             # Archival is best-effort; never break the success path.
-            pass
+            logger.warning("Task outcome could not be archived error=%s", type(exc).__name__)
 
     # ── Skill library: retrieval + distillation ──────────────────────────────
 
@@ -442,8 +453,8 @@ class AgenticRunner(ResumableTaskRunner):
         for sid in self._retrieved_skill_ids:
             try:
                 self._skills.record_use(sid)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Skill usage could not be recorded skill=%s error=%s", sid, type(exc).__name__)
         self._retrieved_skill_ids = []
 
     def _try_distill_skill(
@@ -579,8 +590,9 @@ class AgenticRunner(ResumableTaskRunner):
             if self._budget is not None:
                 try:
                     self._budget.record_llm_call(prompt, response)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("LLM call could not be recorded in the budget task=%s error=%s",
+                                   task_id, type(exc).__name__)
 
             parsed = self._parse_distill_json(raw)
             if not parsed or not parsed.get("is_reusable"):
@@ -619,8 +631,98 @@ class AgenticRunner(ResumableTaskRunner):
             import json as _json
             return _json.loads(text)
         except Exception:
+            # Never the answer text itself — its size only.
+            logger.warning("Model answer is not valid JSON, using fallback chars=%d", len(text))
             return None
 
+
+    # ── Re-plan helper ───────────────────────────────────────────────────────
+
+    def _replan(
+        self,
+        original_query: str,
+        config: Dict[str, Any],
+        prior_results: List[Dict[str, Any]],
+        replan_hint: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Ask the planner for a NEW plan covering only the remaining work,
+        threading the reflector's critique into the prompt so the planner can
+        course-correct. Falls back to the trivial single-step plan on error.
+        """
+        prior_summary = "\n".join(
+            f"- {r.get('description', '')}: {(r.get('response') or '')[:200]}"
+            for r in prior_results[-5:]
+        ) or "(none)"
+        annotated = (
+            f"{original_query}\n\n"
+            f"[REPLAN] Previously completed {len(prior_results)} step(s):\n"
+            f"{prior_summary}\n\n"
+            f"Critique from reviewer: {replan_hint or '(no hint)'}\n\n"
+            f"Plan ONLY the remaining steps."
+        )
+        return self._plan_steps(annotated, config)
+
+    # ── Step execution override — records token usage against BudgetGuard ────
+
+    def _execute_step(
+        self,
+        step: Dict[str, Any],
+        original_query: str,
+        config: Dict[str, Any],
+        step_index: int,
+        prior_results: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Overrides ResumableTaskRunner._execute_step to record token usage. The
+        base method builds a step_prompt and calls CoreAgent.run; we mirror
+        that exactly here so we can capture the prompt and Agno response object
+        for BudgetGuard accounting. Keeping the prompt format identical to the
+        base avoids semantic drift.
+        """
+        from finagent_core.core_agent import CoreAgent
+
+        context_parts = []
+        for j, r in enumerate(prior_results):
+            if isinstance(r, dict) and r.get("response"):
+                context_parts.append(f"Step {j+1} result: {r['response'][:500]}")
+        context = "\n".join(context_parts)
+
+        step_cfg = step.get("config") or {}
+        step_desc = step.get("name") or step_cfg.get("query") or original_query
+        step_query = step_cfg.get("query") or step_desc
+
+        step_prompt = (
+            f"Original goal: {original_query}\n\n"
+            f"Prior steps completed:\n{context if context else '(none)'}\n\n"
+            f"Current step {step_index + 1}: {step_desc}\n{step_query}\n\n"
+            f"Execute this step thoroughly using available tools."
+        )
+
+        agent = CoreAgent(api_keys=self.api_keys)
+        response = agent.run(step_prompt, config)
+
+        # Best-effort token accounting (records nothing if response.metrics absent).
+        if self._budget is not None:
+            try:
+                self._budget.record_llm_call(step_prompt, response)
+            except Exception as exc:
+                logger.warning("LLM call could not be recorded in the budget step=%s error=%s",
+                               step_index, type(exc).__name__)
+
+        # A failed run (no model configured, bad key, provider down) raises
+        # RunFailed, which ends the task with an "error" event. Its content
+        # used to become the step's "response", the reflector saw a parse
+        # error and continued, and the task ended "done" with that text.
+        from finagent_core.run_errors import content_or_raise
+        content = content_or_raise(response, agent.get_response_content)
+
+        return {
+            "step": step_index + 1,
+            "id": step.get("id", f"step_{step_index + 1}"),
+            "description": step_desc,
+            "response": content,
+        }
 
 # ── Module-level helpers: structural reusability + templating ────────────────
 # Kept at module scope (not on the class) so they're independently testable
@@ -754,84 +856,3 @@ def _derive_skill_name(plan: Dict[str, Any]) -> str:
     name = (plan.get("name") or "skill").lower()
     name = _re.sub(r"[^a-z0-9]+", "-", name).strip("-")
     return (name or "skill")[:60]
-
-    # ── Re-plan helper ───────────────────────────────────────────────────────
-
-    def _replan(
-        self,
-        original_query: str,
-        config: Dict[str, Any],
-        prior_results: List[Dict[str, Any]],
-        replan_hint: Optional[str],
-    ) -> Dict[str, Any]:
-        """
-        Ask the planner for a NEW plan covering only the remaining work,
-        threading the reflector's critique into the prompt so the planner can
-        course-correct. Falls back to the trivial single-step plan on error.
-        """
-        prior_summary = "\n".join(
-            f"- {r.get('description', '')}: {(r.get('response') or '')[:200]}"
-            for r in prior_results[-5:]
-        ) or "(none)"
-        annotated = (
-            f"{original_query}\n\n"
-            f"[REPLAN] Previously completed {len(prior_results)} step(s):\n"
-            f"{prior_summary}\n\n"
-            f"Critique from reviewer: {replan_hint or '(no hint)'}\n\n"
-            f"Plan ONLY the remaining steps."
-        )
-        return self._plan_steps(annotated, config)
-
-    # ── Step execution override — records token usage against BudgetGuard ────
-
-    def _execute_step(
-        self,
-        step: Dict[str, Any],
-        original_query: str,
-        config: Dict[str, Any],
-        step_index: int,
-        prior_results: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        """
-        Overrides ResumableTaskRunner._execute_step to record token usage. The
-        base method builds a step_prompt and calls CoreAgent.run; we mirror
-        that exactly here so we can capture the prompt and Agno response object
-        for BudgetGuard accounting. Keeping the prompt format identical to the
-        base avoids semantic drift.
-        """
-        from finagent_core.core_agent import CoreAgent
-
-        context_parts = []
-        for j, r in enumerate(prior_results):
-            if isinstance(r, dict) and r.get("response"):
-                context_parts.append(f"Step {j+1} result: {r['response'][:500]}")
-        context = "\n".join(context_parts)
-
-        step_cfg = step.get("config") or {}
-        step_desc = step.get("name") or step_cfg.get("query") or original_query
-        step_query = step_cfg.get("query") or step_desc
-
-        step_prompt = (
-            f"Original goal: {original_query}\n\n"
-            f"Prior steps completed:\n{context if context else '(none)'}\n\n"
-            f"Current step {step_index + 1}: {step_desc}\n{step_query}\n\n"
-            f"Execute this step thoroughly using available tools."
-        )
-
-        agent = CoreAgent(api_keys=self.api_keys)
-        response = agent.run(step_prompt, config)
-        content = agent.get_response_content(response)
-
-        # Best-effort token accounting (records nothing if response.metrics absent).
-        if self._budget is not None:
-            try:
-                self._budget.record_llm_call(step_prompt, response)
-            except Exception:
-                pass
-
-        return {
-            "step": step_index + 1,
-            "id": step.get("id", f"step_{step_index + 1}"),
-            "description": step_desc,
-            "response": content,
-        }

@@ -3,7 +3,10 @@
 // ?request_token=...&status=success in the query string.
 //
 // Binds 127.0.0.1:preferred_port. If that port is busy, binds to an ephemeral
-// port and exposes it via port().
+// port and exposes it via port() — unless the caller asks for the fixed port
+// only (a broker redirect registered as http://127.0.0.1:<port>/ can never reach
+// another port): then start() fails at once, without arming the timeout, and
+// bind_error() / bind_error_text() say why.
 //
 // Owned by the dialog for the duration of one browser-login attempt.
 //
@@ -29,16 +32,27 @@ namespace fincept::trading::auth {
 class RedirectServer : public QObject {
     Q_OBJECT
   public:
+    /// Why the last start() could not bind its port.
+    enum class BindError { None, PortInUse, PortBlocked, Other };
+
     explicit RedirectServer(QObject* parent = nullptr);
     ~RedirectServer() override;
 
     // Starts listening. Returns true on success. Updates port() on ephemeral fallback.
     // timeout_seconds triggers timeout() if no request arrives in that window.
+    // fixed_port_only: never fall back to an ephemeral port; a busy preferred
+    // port fails start() immediately (no listener, no timer).
     // Also mints a fresh state() nonce for this attempt.
-    bool start(quint16 preferred_port = 5010, int timeout_seconds = 120);
+    bool start(quint16 preferred_port = 5010, int timeout_seconds = 120, bool fixed_port_only = false);
     void stop();
 
     quint16 port() const { return port_; }
+
+    /// BindError::None after a successful start().
+    BindError bind_error() const { return bind_error_; }
+    /// Plain, translated sentence for the last bind failure, naming the port and
+    /// the likely cause; empty after a successful start().
+    QString bind_error_text() const;
 
     /// Per-attempt CSRF nonce. Append it to the provider's authorize URL as
     /// `state=<value>`; OAuth providers echo it back on the redirect.
@@ -62,6 +76,8 @@ class RedirectServer : public QObject {
     QTcpServer* server_ = nullptr;
     QTimer* timeout_timer_ = nullptr;
     quint16 port_ = 0;
+    quint16 failed_port_ = 0;
+    BindError bind_error_ = BindError::None;
     QString state_;
     bool require_state_ = false;
 };

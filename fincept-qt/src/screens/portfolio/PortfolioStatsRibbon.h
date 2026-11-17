@@ -2,79 +2,71 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QWidget>
 
 #include <optional>
 
-class QGridLayout;
+class QComboBox;
+class QLabel;
+
+namespace fincept::ui {
+class KpiStrip;
+class StatTile;
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
-/// Stats ribbon — the 72px row beneath the command bar.
+/// Stats ribbon — the KPI row beneath the command bar.
 ///
-/// Composition (left → right, separated by 1px BORDER_DIM hairlines):
-///   [PORTFOLIO VALUE]  [UNREALIZED P&L]  [TODAY]  [RISK & POSITIONING (2×3 chip grid)]
+///   [PERIOD ▾] NAV (sparkline) · TODAY · RETURN <period> vs benchmark · UNREALISED P&L
+///   (price / FX split) · REALISED + INCOME · CASH · VOLATILITY · SHARPE · BETA · MAX DD
 ///
-/// Designed for unequal cell weights — the first three cells stack a small
-/// label, a hero value, and a sub-line; the fourth cell hosts a 2×3 grid of
-/// chips (Sharpe, Beta, MDD, Conc, Vol30, Risk). One source of truth for
-/// portfolio-level KPIs; the command bar above no longer duplicates them.
+/// Window-aware: the period selector picks the ComputedMetrics window the return
+/// and risk tiles describe (window_changed() asks the owner to compute it). Every
+/// figure is in the portfolio's base currency; an incomplete valuation is shown on
+/// the NAV tile (warning tone + what is missing) instead of a silently low total.
 class PortfolioStatsRibbon : public QWidget {
     Q_OBJECT
   public:
     explicit PortfolioStatsRibbon(QWidget* parent = nullptr);
 
     void set_summary(const portfolio::PortfolioSummary& summary);
+    /// Metrics for window() — others are ignored.
     void set_metrics(const portfolio::ComputedMetrics& metrics);
+    portfolio::PerfWindow window() const { return window_; }
     void refresh_theme();
+
+  signals:
+    void window_changed(fincept::portfolio::PerfWindow window);
 
   protected:
     void changeEvent(QEvent* event) override;
 
   private:
+    void build_ui();
     void retranslateUi();
+    void render_summary();
+    void render_metrics();
+    void set_risk_loading();
+    QString window_label() const;
 
-    // A "hero" cell — small label, big value, smaller sub line.
-    struct HeroCell {
-        QWidget* container = nullptr;
-        QLabel* label = nullptr;
-        QLabel* value = nullptr;
-        QLabel* sub = nullptr;
-    };
+    QLabel* period_label_ = nullptr;
+    QComboBox* period_cb_ = nullptr;
+    ui::KpiStrip* strip_ = nullptr;
+    ui::StatTile* nav_ = nullptr;
+    ui::StatTile* day_ = nullptr;
+    ui::StatTile* ret_ = nullptr;
+    ui::StatTile* upnl_ = nullptr;
+    ui::StatTile* real_ = nullptr;
+    ui::StatTile* cash_ = nullptr;
+    ui::StatTile* vol_ = nullptr;
+    ui::StatTile* sharpe_ = nullptr;
+    ui::StatTile* beta_ = nullptr;
+    ui::StatTile* mdd_ = nullptr;
 
-    // A grid chip — two-column "LABEL    value" line.
-    struct GridChip {
-        QLabel* label = nullptr;
-        QLabel* value = nullptr;
-    };
-
-    QWidget* build_hero(HeroCell& cell, const QString& label_text, int value_px);
-    QWidget* build_risk_grid();
-    GridChip add_grid_chip(QGridLayout* g, int row, int col, const QString& label_text);
-    void apply_hero_value_color(HeroCell& c, const char* color, int value_px);
-    /// Explains what SHARPE/CONC/BETA/VOL/MDD/RISK actually measure.
-    void apply_chip_tooltips();
-
-    // Cells
-    HeroCell value_cell_; // PORTFOLIO VALUE
-    HeroCell pnl_cell_;   // UNREALIZED P&L
-    HeroCell day_cell_;   // TODAY
-    QWidget* risk_cell_ = nullptr;
-    QLabel* risk_header_ = nullptr;
-
-    // Risk-grid chips
-    GridChip sharpe_;
-    GridChip conc_;
-    GridChip beta_;
-    GridChip vol_;
-    GridChip mdd_;
-    GridChip risk_;
-
-    // Cached state for re-rendering dynamic sub-line on language change.
-    std::optional<portfolio::PortfolioSummary> last_summary_;
-    portfolio::ComputedMetrics last_metrics_; // drives the basis-aware tooltips
+    portfolio::PerfWindow window_ = portfolio::PerfWindow::YTD;
+    std::optional<portfolio::PortfolioSummary> summary_;
+    std::optional<portfolio::ComputedMetrics> metrics_; // for window_ and summary_'s portfolio
 };
 
 } // namespace fincept::screens

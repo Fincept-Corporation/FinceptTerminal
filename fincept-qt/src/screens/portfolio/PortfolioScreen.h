@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/portfolio/PortfolioTypes.h"
 
@@ -16,6 +17,7 @@
 
 class QLabel;
 class QLineEdit;
+class QPushButton;
 
 namespace fincept::screens {
 
@@ -32,11 +34,17 @@ class PortfolioDetailWrapper;
 class PortfolioFFNView;
 class PortfolioInsightsPanel;
 
-class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
+class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLinked, public ISectionLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit PortfolioScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — the detail tabs "sectors" "perf_risk" "optimization" "quantstats" "reports"
+    /// "indices" "risk" "tax_lots" "income" "planning" "economics", "positions" (the main view),
+    /// "new" (the CREATE NEW dialog; nothing is created without its OK) and "portfolio:<id>" (selects
+    /// it as the list does). focus = a held symbol: that holding is selected.
+    bool open_section(const QString& section, const QString& focus) override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
@@ -80,6 +88,9 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
   private:
     void build_ui();
     void refresh_theme();
+    /// Re-applies the font-derived fixed sizes of the screen's own chrome
+    /// (empty-state cards, POSITIONS header badges). Defined in PortfolioScreen_Layout.cpp.
+    void apply_font_sizes();
     void retranslateUi();
     QWidget* build_empty_state();
     QWidget* build_loading_state();
@@ -95,6 +106,29 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void edit_transaction_by_id(const QString& transaction_id);
     void delete_transaction_by_id(const QString& transaction_id);
     void export_ledger_csv();
+    /// Filter the POSITIONS blotter to `sector` (empty = all) and show the filter in its header.
+    void apply_sector_filter(const QString& sector);
+    /// compute_metrics for the whole history (charts, detail views) and, when it differs,
+    /// for the stats ribbon's period.
+    void request_metrics();
+    /// Full ledger of the selected portfolio into the transaction panel (no row cap).
+    void reload_transactions();
+    /// Ledger dialogs (PortfolioScreen_Ledger.cpp).
+    void open_buy_dialog(const QString& preset_symbol);
+    void open_sell_dialog(const QString& symbol);
+    void open_dividend_dialog();
+    void open_cash_dialog();
+    void open_split_dialog();
+    void open_settings_dialog();
+    /// Market info (sector, country, 52-week range, yield) for the blotter / income views.
+    void refresh_allocation();
+    /// The FFN view, created (and added to the content stack) on first use.
+    PortfolioFFNView* ensure_ffn_view();
+    /// Warning box with the technical reason (raw database error) under "Show Details…".
+    void show_failure(const QString& title, const QString& message, const QString& details);
+    /// The portfolio list could not be read: the start page says so (translated, the raw
+    /// reason in a tooltip) and its CREATE / IMPORT / DEMO cards are disabled. Empty = readable.
+    void set_storage_failure(const QString& message, const QString& details);
 
     // Sub-widgets
     PortfolioCommandBar* command_bar_ = nullptr;
@@ -148,6 +182,8 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QLabel* positions_count_label_ = nullptr;
     QLabel* positions_title_label_ = nullptr;
     QLineEdit* positions_filter_edit_ = nullptr;
+    QPushButton* sector_filter_btn_ = nullptr; // "<sector> ✕" chip; visible while a sector filter is active
+    QString sector_filter_;                    // active sector filter on the blotter ("" = none)
 
     // Empty / loading state labels — kept for retranslateUi.
     QLabel* empty_title_label_ = nullptr;
@@ -161,6 +197,9 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     CtaCardLabels empty_demo_card_;
     QLabel* loading_label_ = nullptr;
     QPropertyAnimation* loading_anim_ = nullptr;
+    QLabel* storage_error_label_ = nullptr; ///< start page: database cannot be read (hidden otherwise)
+    QString storage_error_message_;
+    QString storage_error_details_;
 
     // Symbol-group link (None when unlinked).
     SymbolGroup link_group_ = SymbolGroup::None;

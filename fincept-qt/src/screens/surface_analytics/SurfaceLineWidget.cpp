@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QFontMetrics>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -41,6 +42,7 @@ void SurfaceLineWidget::set_curve(const QString& title, const std::vector<float>
     s.x_values = x_values;
     s.y_values = y_values;
     s.color = line_color;
+    s.slot = line_color.isValid() ? -1 : 0;
     title_ = title;
     x_labels_ = x_labels;
     x_axis_title_ = x_axis_title;
@@ -107,7 +109,16 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
         return;
     }
 
-    QRectF plot(60, 30, width() - 80, height() - 70);
+    // Margins fit the text: 60 / 30 / 20 / 40 px at the default font size.
+    const QFontMetrics fm(p.font());
+    const int lh = fm.height();
+    int y_label_w = 0;
+    for (int i = 0; i <= 4; ++i)
+        y_label_w = std::max(y_label_w, fm.horizontalAdvance(QString::number(y_min_ + i / 4.0f * (y_max_ - y_min_), 'f', 2)));
+    const int left = std::max(60, y_label_w + lh + 10);
+    const int top = std::max(30, lh + 12);
+    const int bottom = std::max(40, 2 * lh + 8);
+    QRectF plot(left, top, width() - left - 20, height() - top - bottom);
 
     // ── Frame ───────────────────────────────────────────────────────────────
     p.setPen(QPen(QColor(colors::BORDER_DIM()), 1));
@@ -123,7 +134,8 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
         p.setPen(grid);
         p.drawLine(QPointF(plot.left(), py), QPointF(plot.right(), py));
         p.setPen(QColor(colors::TEXT_DIM()));
-        p.drawText(QRectF(0, py - 8, 55, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(v, 'f', 2));
+        p.drawText(QRectF(0, py - lh / 2.0, left - 5, lh), Qt::AlignRight | Qt::AlignVCenter,
+                   QString::number(v, 'f', 2));
     }
 
     // ── X tick labels ───────────────────────────────────────────────────────
@@ -140,13 +152,20 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
             label = QString::number(v, 'f', 1);
         }
         p.setPen(QColor(colors::TEXT_DIM()));
-        p.drawText(QRectF(px - 40, plot.bottom() + 4, 80, 16), Qt::AlignCenter, label);
+        const qreal tick_w = std::max(80, fm.horizontalAdvance(label) + 8);
+        p.drawText(QRectF(px - tick_w / 2, plot.bottom() + 4, tick_w, lh), Qt::AlignCenter, label);
     }
+
+    // Series colour: its categorical chart slot, or its own colour made legible.
+    auto series_color = [](const Series& s) {
+        return s.slot >= 0 ? colors::chart_color(s.slot) : colors::legible_color(s.color);
+    };
 
     // ── Curve(s) ────────────────────────────────────────────────────────────
     for (const auto& s : series_) {
         if (s.x_values.empty() || s.y_values.size() != s.x_values.size())
             continue;
+        const QColor col = series_color(s);
         QPainterPath path;
         for (size_t i = 0; i < s.x_values.size(); ++i) {
             QPointF pt = data_to_pixel(s.x_values[i], s.y_values[i], plot);
@@ -155,11 +174,11 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
             else
                 path.lineTo(pt);
         }
-        p.setPen(QPen(s.color, 2));
+        p.setPen(QPen(col, 2));
         p.drawPath(path);
 
         // Markers at each point
-        p.setBrush(s.color);
+        p.setBrush(col);
         for (size_t i = 0; i < s.x_values.size(); ++i) {
             QPointF pt = data_to_pixel(s.x_values[i], s.y_values[i], plot);
             p.drawEllipse(pt, 2.5, 2.5);
@@ -172,30 +191,36 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
     QFont f = p.font();
     f.setBold(true);
     p.setFont(f);
-    p.drawText(QRectF(0, 4, width(), 22), Qt::AlignCenter, title_);
+    p.drawText(QRectF(0, 4, width(), std::max(22, lh + 6)), Qt::AlignCenter, title_);
     f.setBold(false);
     p.setFont(f);
 
     p.setPen(QColor(colors::TEXT_SECONDARY()));
     if (!x_axis_title_.isEmpty())
-        p.drawText(QRectF(plot.left(), plot.bottom() + 22, plot.width(), 16), Qt::AlignCenter, x_axis_title_);
+        p.drawText(QRectF(plot.left(), plot.bottom() + 6 + lh, plot.width(), lh), Qt::AlignCenter, x_axis_title_);
     if (!y_axis_title_.isEmpty()) {
         p.save();
-        p.translate(14, plot.center().y());
+        p.translate(lh / 2.0 + 6, plot.center().y());
         p.rotate(-90);
-        p.drawText(QRectF(-100, -8, 200, 16), Qt::AlignCenter, y_axis_title_);
+        const qreal title_w = std::max(200.0, plot.height());
+        p.drawText(QRectF(-title_w / 2, -lh / 2.0, title_w, lh), Qt::AlignCenter, y_axis_title_);
         p.restore();
     }
 
     // ── Legend (only if >1 series) ──────────────────────────────────────────
     if (series_.size() > 1) {
+        int name_w = 90;
+        for (const auto& s : series_)
+            name_w = std::max(name_w, fm.horizontalAdvance(s.name) + 4);
+        const int row_h = std::max(16, lh);
         int y = (int)plot.top() + 4;
         for (const auto& s : series_) {
-            p.setPen(QPen(s.color, 2));
-            p.drawLine(QPointF(plot.right() - 110, y + 6), QPointF(plot.right() - 95, y + 6));
+            p.setPen(QPen(series_color(s), 2));
+            p.drawLine(QPointF(plot.right() - name_w - 20, y + row_h / 2.0),
+                       QPointF(plot.right() - name_w - 5, y + row_h / 2.0));
             p.setPen(QColor(colors::TEXT_SECONDARY()));
-            p.drawText(QRectF(plot.right() - 90, y, 90, 14), Qt::AlignLeft | Qt::AlignVCenter, s.name);
-            y += 16;
+            p.drawText(QRectF(plot.right() - name_w, y, name_w, row_h), Qt::AlignLeft | Qt::AlignVCenter, s.name);
+            y += row_h;
         }
     }
 }

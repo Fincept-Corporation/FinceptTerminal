@@ -46,8 +46,9 @@ def get_latest_8k(ticker: str) -> Dict[str, Any]:
                 "form": latest.form,
                 "company": latest.company if hasattr(latest, 'company') else ticker,
                 "cik": latest.cik if hasattr(latest, 'cik') else None,
+                # (the Filing object itself used to be returned as "filing" and reached the
+                # host as its Python repr string; nothing reads it, so it is gone)
                 "items": latest.items if hasattr(latest, 'items') else [],
-                "filing": latest
             }
         }
     except Exception as e:

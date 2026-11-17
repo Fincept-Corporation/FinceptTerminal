@@ -7,11 +7,17 @@
 #include "core/symbol/SymbolDragSource.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/common/CommandRows.h"
 #include "screens/equity_research/EquityAnalysisTab.h"
+#include "screens/equity_research/EquityAnalystTab.h"
+#include "screens/equity_research/EquityDividendsTab.h"
+#include "screens/equity_research/EquityEarningsTab.h"
 #include "screens/equity_research/EquityFilingsTab.h"
 #include "screens/equity_research/EquityFinancialsTab.h"
 #include "screens/equity_research/EquityNewsTab.h"
+#include "screens/equity_research/EquityOptionsTab.h"
 #include "screens/equity_research/EquityOverviewTab.h"
+#include "screens/equity_research/EquityOwnershipTab.h"
 #include "screens/equity_research/EquityPeersTab.h"
 #include "screens/equity_research/EquityResearchFormat.h"
 #include "screens/equity_research/EquityResearchLinks.h"
@@ -23,11 +29,13 @@
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QEvent>
@@ -43,6 +51,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QStyle>
 #include <QTabBar>
 #include <QTextStream>
@@ -104,6 +113,11 @@ static const ResearchTabSpec kResearchTabs[] = {
     {"news", QT_TRANSLATE_NOOP("EquityResearchScreen", "News")},
     {"sentiment", QT_TRANSLATE_NOOP("EquityResearchScreen", "Sentiment")},
     {"valuation", QT_TRANSLATE_NOOP("EquityResearchScreen", "Valuation")},
+    {"dividends", QT_TRANSLATE_NOOP("EquityResearchScreen", "Dividends")},
+    {"earnings", QT_TRANSLATE_NOOP("EquityResearchScreen", "Earnings")},
+    {"options", QT_TRANSLATE_NOOP("EquityResearchScreen", "Options")},
+    {"analyst", QT_TRANSLATE_NOOP("EquityResearchScreen", "Analyst")},
+    {"ownership", QT_TRANSLATE_NOOP("EquityResearchScreen", "Ownership")},
 };
 static const char* const kLegacyTabOrder[] = {"overview", "financials", "analysis",  "technicals",
                                               "peers",    "news",       "sentiment", "valuation"};
@@ -112,6 +126,20 @@ static constexpr const char* kResearchTabKeyProp = "er_tab_key";
 static void er_repolish(QWidget* w) {
     w->style()->unpolish(w);
     w->style()->polish(w);
+}
+
+// Header text for a failed quote — short enough for the quote bar; the full reason goes in
+// the tooltip. `code` is LoadFailure::code.
+static QString er_short_failure(const QString& code) {
+    if (code == QLatin1String("not_found"))
+        return EquityResearchScreen::tr("Not found");
+    if (code == QLatin1String("rate_limited"))
+        return EquityResearchScreen::tr("Rate limited");
+    if (code == QLatin1String("network"))
+        return EquityResearchScreen::tr("Network error");
+    if (code == QLatin1String("no_data"))
+        return EquityResearchScreen::tr("No data");
+    return EquityResearchScreen::tr("Unavailable");
 }
 
 // CSV number: fixed-point, trailing zeros trimmed — QTextStream's default 6 significant
@@ -141,7 +169,8 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     refresh_timer_->setInterval(30 * 1000);
     connect(refresh_timer_, &QTimer::timeout, this, [this]() {
         // Quote only — re-running info/candles every 30 s reset the Overview chart period.
-        if (!current_symbol_.isEmpty())
+        // A symbol Yahoo said it does not have is not polled again.
+        if (!current_symbol_.isEmpty() && !symbol_not_found_)
             services::equity::EquityResearchService::instance().load_quote_only(current_symbol_);
     });
 
@@ -151,14 +180,11 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     // Financials feed the Valuation tab (DCF / scoring models).
     connect(&svc, &services::equity::EquityResearchService::financials_loaded, this,
             &EquityResearchScreen::on_financials_loaded);
-    // Reset the quote bar off "Loading…" when the quote fetch fails. error_occurred carries no
-    // symbol, so only act while the current symbol is still waiting for its first quote — a late
-    // failure for a symbol the user already left must not replace a good price.
-    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (ctx == "Quote" && price_label_ && price_label_->text() == tr("Loading…"))
-                    price_label_->setText(tr("Unavailable"));
-            });
+    // Failures carry their symbol: a late one for a symbol the user already left is dropped, a
+    // failed 30 s poll only marks the price on screen stale, and a "not found" starts a lookup
+    // of what the user typed.
+    connect(&svc, &services::equity::EquityResearchService::load_failed, this,
+            [this](const services::equity::LoadFailure& failure) { on_load_failed(failure); });
 
     // Keep the BUY/SELL buttons in sync as broker accounts connect/disconnect or are added/removed.
     auto& am = trading::AccountManager::instance();
@@ -231,7 +257,10 @@ void EquityResearchScreen::build_ui() {
     vl->addWidget(build_title_bar());
     vl->addWidget(build_quote_bar());
 
-    tab_widget_ = new QTabWidget;
+    // Created under its final parent: it used to be built parentless, all fourteen tabs
+    // inside it, and then moved into the screen by vl->addWidget() — a move re-styles the
+    // whole moved subtree (~0.4 s of the open stall).
+    tab_widget_ = new QTabWidget(this);
     tab_widget_->setDocumentMode(true);
     // Don't let the style elide tab labels (the macOS style truncates "OVERVIEW"→"OVERVI…").
     tab_widget_->tabBar()->setElideMode(Qt::ElideNone);
@@ -242,26 +271,86 @@ void EquityResearchScreen::build_ui() {
         QTabBar::tab {
             background:%2; color:%3; padding:8px 18px;
             border:0; border-bottom:2px solid transparent;
-            font-size:12px; text-transform:uppercase; letter-spacing:1px;
+            font-size:)" + fincept::ui::fonts::px(-2) + R"(px; text-transform:uppercase; letter-spacing:1px;
         }
         QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }
         QTabBar::tab:hover    { color:%5; }
+        QTabBar::scroller { width:44px; }
+        QTabBar QToolButton { background:%6; color:%5; border:1px solid %7; }
+        QTabBar QToolButton:hover { border-color:%4; }
     )")
                                    .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
-                                        ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+                                        ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+                                        ui::colors::BORDER_MED()));
 
-    overview_tab_ = new EquityOverviewTab;
-    financials_tab_ = new EquityFinancialsTab;
-    filings_tab_ = new EquityFilingsTab;
-    analysis_tab_ = new EquityAnalysisTab;
-    technicals_tab_ = new EquityTechnicalsTab;
-    peers_tab_ = new EquityPeersTab;
-    news_tab_ = new EquityNewsTab;
-    sentiment_tab_ = new EquitySentimentTab;
-    valuation_tab_ = new EquityValuationTab;
+    // Pages are created directly in the tab widget's page stack, so addTab() below does not
+    // move (and re-style) a built tab. Without the stack (never expected) addTab reparents.
+    QWidget* page_parent = tab_widget_->findChild<QStackedWidget*>(QStringLiteral("qt_tabwidget_stackedwidget"),
+                                                                  Qt::FindDirectChildrenOnly);
+    if (!page_parent)
+        page_parent = tab_widget_;
 
-    QWidget* const tabs[] = {overview_tab_, financials_tab_, filings_tab_,   analysis_tab_, technicals_tab_,
-                             peers_tab_,    news_tab_,       sentiment_tab_, valuation_tab_};
+    // Built up front: the tabs that carry saved state (Peers, News) and the two opened most.
+    overview_tab_ = new EquityOverviewTab(page_parent);
+    financials_tab_ = new EquityFinancialsTab(page_parent);
+    peers_tab_ = new EquityPeersTab(page_parent);
+    news_tab_ = new EquityNewsTab(page_parent);
+
+    // The rest only load data once shown (activate_tab), and until then hold no state — except
+    // Valuation, which is handed the current symbol's info + statements (on_info_loaded /
+    // on_financials_loaded); built later, it gets the latest of each at construction. They are
+    // now also BUILT on first show: each gets an empty page; materialize_tab() builds the tab
+    // inside it.
+    auto deferred = [this, page_parent](std::function<QWidget*(QWidget*)> make) -> QWidget* {
+        auto* page = new QWidget(page_parent);
+        auto* lay = new QVBoxLayout(page);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(0);
+        lazy_tabs_.insert(page, LazyTab{std::move(make), nullptr});
+        return page;
+    };
+    // A "did you mean" suggestion on a /data tab researches that symbol here (same tab stays open).
+    auto wire_data_tab = [this](EquityDataTab* t) {
+        connect(t, &EquityDataTab::research_requested, this, [this](const QString& symbol) { load_symbol(symbol); });
+    };
+
+    QWidget* const tabs[] = {
+        overview_tab_,
+        financials_tab_,
+        deferred([this](QWidget* p) -> QWidget* { return filings_tab_ = new EquityFilingsTab(p); }),
+        deferred([this](QWidget* p) -> QWidget* { return analysis_tab_ = new EquityAnalysisTab(p); }),
+        deferred([this](QWidget* p) -> QWidget* { return technicals_tab_ = new EquityTechnicalsTab(p); }),
+        peers_tab_,
+        news_tab_,
+        deferred([this](QWidget* p) -> QWidget* { return sentiment_tab_ = new EquitySentimentTab(p); }),
+        deferred([this](QWidget* p) -> QWidget* {
+            valuation_tab_ = new EquityValuationTab(p);
+            // What the screen pushed for the current symbol while the tab did not exist (it
+            // only keeps the current symbol's: older ones the tab's set_symbol() would drop).
+            if (!last_info_.symbol.isEmpty() && last_info_.symbol == current_symbol_)
+                valuation_tab_->set_stock_info(last_info_);
+            if (!last_financials_.symbol.isEmpty() && last_financials_.symbol == current_symbol_)
+                valuation_tab_->set_financials(last_financials_);
+            return valuation_tab_;
+        }),
+        deferred([this](QWidget* p) -> QWidget* { return dividends_tab_ = new EquityDividendsTab(p); }),
+        deferred([this](QWidget* p) -> QWidget* { return earnings_tab_ = new EquityEarningsTab(p); }),
+        deferred([this, wire_data_tab](QWidget* p) -> QWidget* {
+            options_tab_ = new EquityOptionsTab(p);
+            wire_data_tab(options_tab_);
+            return options_tab_;
+        }),
+        deferred([this, wire_data_tab](QWidget* p) -> QWidget* {
+            analyst_tab_ = new EquityAnalystTab(p);
+            wire_data_tab(analyst_tab_);
+            return analyst_tab_;
+        }),
+        deferred([this, wire_data_tab](QWidget* p) -> QWidget* {
+            ownership_tab_ = new EquityOwnershipTab(p);
+            wire_data_tab(ownership_tab_);
+            return ownership_tab_;
+        }),
+    };
     static_assert(std::size(tabs) == std::size(kResearchTabs), "tab table out of sync");
     for (size_t i = 0; i < std::size(tabs); ++i) {
         tabs[i]->setProperty(kResearchTabKeyProp, QString::fromLatin1(kResearchTabs[i].key));
@@ -281,29 +370,32 @@ void EquityResearchScreen::build_ui() {
 
 QWidget* EquityResearchScreen::build_title_bar() {
     auto* container = new QWidget(this);
-    container->setFixedHeight(48);
+    // 48px at the default font size; grows with larger fonts instead of clipping its controls.
+    container->setMinimumHeight(48);
+    container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     // `*` keeps the bar's background/border on every child (the original bare-declaration
     // look); the named rules below style the individual controls — one stylesheet for the bar.
     container->setStyleSheet(
         QString("* { background:%1; border-bottom:1px solid %2; }"
-                "QLabel#erTitle { color:%5; font-size:14px; font-weight:700; letter-spacing:2px; }"
-                "QLabel#erSymbol { color:%4; font-size:14px; font-weight:600; }"
-                "QLabel#erHint { color:%9; font-size:12px; }"
+                "QLabel#erTitle { color:%5; font-size:" + fincept::ui::fonts::px(0) + "px; font-weight:700; letter-spacing:2px; }"
+                "QLabel#erSymbol { color:%4; font-size:" + fincept::ui::fonts::px(0) + "px; font-weight:600; }"
+                "QLabel#erHint { color:%9; font-size:" + fincept::ui::fonts::px(-2) + "px; }"
                 "QLineEdit#equitySymbolEdit { background:%3; color:%4; border:1px solid %2; padding:2px 8px;"
-                " font-size:12px; font-weight:600; }"
+                " font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:600; }"
                 "QLineEdit#equitySymbolEdit:focus { border-color:%5; }"
                 "QPushButton#equityAmberBtn { background:transparent; color:%5; border:1px solid %6;"
                 " padding:0 10px; font-size:%7px; font-family:%8; font-weight:700; letter-spacing:0.5px; }"
-                "QPushButton#equityAmberBtn:hover { background:%5; color:%3; }"
+                "QPushButton#equityAmberBtn:hover { background:%5; color:%12; }"
                 "QPushButton#erBuy, QPushButton#erSell { background:transparent; padding:0 14px; font-size:%7px;"
                 " font-family:%8; font-weight:700; letter-spacing:1px; }"
-                "QPushButton#erBuy { color:%10; border:1px solid %10; } QPushButton#erBuy:hover { background:%10; color:%3; }"
-                "QPushButton#erSell { color:%11; border:1px solid %11; } QPushButton#erSell:hover { background:%11; color:%3; }")
+                "QPushButton#erBuy { color:%10; border:1px solid %10; } QPushButton#erBuy:hover { background:%10; color:%12; }"
+                "QPushButton#erSell { color:%11; border:1px solid %11; } QPushButton#erSell:hover { background:%11; color:%12; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
                  ui::colors::AMBER(), ui::colors::AMBER_DIM())
             .arg(ui::fonts::TINY)
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE()));
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE(),
+                 ui::colors::TEXT_ON_ACCENT()));
 
     auto* hl = new QHBoxLayout(container);
     hl->setContentsMargins(16, 8, 16, 8);
@@ -322,8 +414,10 @@ QWidget* EquityResearchScreen::build_title_bar() {
 
     // Type a ticker and press Enter to research it (Esc clears).
     auto* symbol_edit = new QLineEdit(container);
+    symbol_edit_ = symbol_edit;
     symbol_edit->setObjectName(QStringLiteral("equitySymbolEdit"));
-    symbol_edit->setFixedSize(130, 26);
+    symbol_edit->setFixedWidth(130);
+    symbol_edit->setMinimumHeight(26);
     symbol_edit->setClearButtonEnabled(true);
     connect(symbol_edit, &QLineEdit::returnPressed, this, [this, symbol_edit]() {
         const QString sym = symbol_edit->text().trimmed().toUpper();
@@ -334,13 +428,23 @@ QWidget* EquityResearchScreen::build_title_bar() {
     });
     hl->addWidget(symbol_edit);
 
+    // DID YOU MEAN? ▾ — shown only after a typed symbol was not found and Yahoo suggested
+    // alternatives; opens them as a menu (same look as WATCHLIST / OPEN IN).
+    suggest_btn_ = new QPushButton(container);
+    suggest_btn_->setObjectName(QStringLiteral("equityAmberBtn"));
+    suggest_btn_->setCursor(Qt::PointingHandCursor);
+    suggest_btn_->setMinimumHeight(24);
+    suggest_btn_->setVisible(false);
+    connect(suggest_btn_, &QPushButton::clicked, this, [this]() { show_candidates_menu(suggest_btn_); });
+    hl->addWidget(suggest_btn_);
+
     // BUY / SELL — visible only when a usable broker trades this market; opens the SAME order
     // ticket the Equity Trading tab uses (see on_trade_clicked()).
     auto make_trade_btn = [&](const char* object_name) -> QPushButton* {
         auto* b = new QPushButton(container);
         b->setObjectName(QLatin1String(object_name));
         b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(24);
+        b->setMinimumHeight(24);
         b->setVisible(false);
         hl->addWidget(b);
         return b;
@@ -354,7 +458,7 @@ QWidget* EquityResearchScreen::build_title_bar() {
         auto* b = new QPushButton(container);
         b->setObjectName(QStringLiteral("equityAmberBtn"));
         b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(24);
+        b->setMinimumHeight(24);
         hl->addWidget(b);
         return b;
     };
@@ -388,25 +492,31 @@ QWidget* EquityResearchScreen::build_title_bar() {
     open_in_btn_ = make_amber_btn();
     connect(open_in_btn_, &QPushButton::clicked, this, [this]() { show_open_in_menu(open_in_btn_); });
 
-    hl->addStretch();
     hint_label_ = new QLabel(container);
     hint_label_->setObjectName(QStringLiteral("erHint"));
-    hl->addWidget(hint_label_);
+    // The hint takes whatever width is left and never sets a minimum: at its natural width
+    // it held the whole screen at ~1,250 px, so a 1,100 px window clipped every sub-tab.
+    hint_label_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    hint_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    hl->addWidget(hint_label_, 1);
     return container;
 }
 
 QWidget* EquityResearchScreen::build_quote_bar() {
-    auto* bar = new QFrame;
+    auto* bar = new QFrame(this); // under its final parent: no re-style when the layout takes it
     bar->setObjectName(QStringLiteral("erQuoteBar"));
     bar->setFixedHeight(44);
     // One stylesheet; the change label's colour flips through its "tone" property instead of a
     // fresh setStyleSheet() on every quote — a CSS re-parse per tick while a broker stream runs.
     bar->setStyleSheet(QString("QFrame#erQuoteBar { background:%1; border-bottom:1px solid %2; }"
-                               "QFrame#erQuoteBar QLabel { background:transparent; border:0; font-size:13px;"
+                               "QFrame#erQuoteBar QLabel { background:transparent; border:0; font-size:" + fincept::ui::fonts::px(-1) + "px;"
                                " font-weight:600; color:%3; }"
                                "QLabel#erQuoteSym { color:%4; } QLabel#erQuotePrice { color:%5; }"
                                "QLabel#erQuoteChange[tone=\"up\"] { color:%6; }"
-                               "QLabel#erQuoteChange[tone=\"down\"] { color:%7; }")
+                               "QLabel#erQuoteChange[tone=\"down\"] { color:%7; }"
+                               // no price for this symbol / last price kept after a failed refresh
+                               "QLabel#erQuotePrice[tone=\"error\"] { color:%7; }"
+                               "QLabel#erQuotePrice[tone=\"stale\"] { color:%3; }")
                            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(),
                                 ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
                                 ui::colors::NEGATIVE()));
@@ -439,8 +549,11 @@ void EquityResearchScreen::show_open_in_menu(QWidget* anchor) {
     QMenu menu(this);
     connect(menu.addAction(tr("Price chart (Overview)")), &QAction::triggered, this,
             [this]() { tab_widget_->setCurrentWidget(overview_tab_); });
-    connect(menu.addAction(tr("SEC filings")), &QAction::triggered, this,
-            [this]() { tab_widget_->setCurrentWidget(filings_tab_); });
+    // The Filings tab may not be built yet: switch to its page (on_tab_changed builds it).
+    connect(menu.addAction(tr("SEC filings")), &QAction::triggered, this, [this]() {
+        if (QWidget* page = tab_page("filings"))
+            tab_widget_->setCurrentWidget(page);
+    });
     menu.addSeparator();
     equity_links::add_open_in_actions(&menu, this, sym);
     menu.addSeparator();
@@ -469,31 +582,26 @@ void EquityResearchScreen::on_info_loaded(services::equity::StockInfo info) {
     if (currency_changed && last_quote_.symbol == current_symbol_)
         update_quote_bar(last_quote_);
 
+    last_info_ = info;
+    update_info_labels(info);
+    if (valuation_tab_)
+        valuation_tab_->set_stock_info(info);
+}
+
+void EquityResearchScreen::update_info_labels(const services::equity::StockInfo& info) {
     if (mktcap_label_) {
-        mktcap_label_->setText(info.market_cap > 0
-                                   ? tr("MKT CAP: %1%2").arg(equity_fmt::currency_symbol(info.currency),
-                                                             equity_fmt::large(info.market_cap))
-                                   : tr("MKT CAP: %1").arg(equity_fmt::dash()));
+        // Yahoo reports market cap in the quote's MAJOR currency (pounds for a pence quote).
+        mktcap_label_->setText(tr("MKT CAP: %1")
+                                   .arg(info.market_cap > 0 ? equity_fmt::money(info.market_cap, info.currency)
+                                                            : equity_fmt::dash()));
     }
     if (rec_label_) {
-        const QString key = info.recommendation_key.toLower();
-        QString text;
-        if (key == QLatin1String("strong_buy"))
-            text = tr("STRONG BUY");
-        else if (key == QLatin1String("buy"))
-            text = tr("BUY");
-        else if (key == QLatin1String("hold") || key == QLatin1String("neutral"))
-            text = tr("HOLD");
-        else if (key == QLatin1String("underperform") || key == QLatin1String("sell"))
-            text = tr("SELL");
-        else if (key == QLatin1String("strong_sell"))
-            text = tr("STRONG SELL");
+        // Shared with the Overview tab's badge (equity_fmt::recommendation).
+        const QString text = equity_fmt::recommendation(info.recommendation_key).text;
         rec_label_->setText(tr("REC: %1").arg(text.isEmpty() ? equity_fmt::dash() : text));
         rec_label_->setToolTip(info.analyst_count > 0 ? tr("Consensus of %n analyst(s)", "", info.analyst_count)
                                                       : QString());
     }
-    if (valuation_tab_)
-        valuation_tab_->set_stock_info(info);
 }
 
 void EquityResearchScreen::on_tab_changed(int index) {
@@ -501,7 +609,42 @@ void EquityResearchScreen::on_tab_changed(int index) {
     activate_tab(tab_widget_->widget(index));
 }
 
+QWidget* EquityResearchScreen::materialize_tab(QWidget* page) {
+    auto it = lazy_tabs_.find(page);
+    if (it == lazy_tabs_.end())
+        return page; // built up front: the page is the tab
+    if (!it->content) {
+        // Built directly inside its page (no move into a styled parent afterwards).
+        const std::function<QWidget*(QWidget*)> make = it->make;
+        QWidget* tab = make(page);
+        it = lazy_tabs_.find(page); // nothing should touch lazy_tabs_ meanwhile; stay safe
+        if (it == lazy_tabs_.end() || !tab)
+            return page;
+        it->content = tab;
+        if (QLayout* lay = page->layout())
+            lay->addWidget(tab);
+        tab->show(); // a child added to an already visible page is not shown by itself
+    }
+    return it->content;
+}
+
+QWidget* EquityResearchScreen::tab_page(const char* key) const {
+    if (!tab_widget_)
+        return nullptr;
+    const QString k = QString::fromLatin1(key);
+    for (int i = 0; i < tab_widget_->count(); ++i) {
+        QWidget* w = tab_widget_->widget(i);
+        if (w && w->property(kResearchTabKeyProp).toString() == k)
+            return w;
+    }
+    return nullptr;
+}
+
 void EquityResearchScreen::activate_tab(QWidget* tab) {
+    // A deferred tab is built when its page is first shown — with or without a symbol, so the
+    // page is never blank. From here on `tab` is the tab itself, not its page.
+    if (tab)
+        tab = materialize_tab(tab);
     if (current_symbol_.isEmpty() || !tab)
         return;
     const QString& s = current_symbol_;
@@ -523,17 +666,46 @@ void EquityResearchScreen::activate_tab(QWidget* tab) {
         sentiment_tab_->set_symbol(s);
     else if (tab == valuation_tab_)
         valuation_tab_->set_symbol(s);
+    else if (tab == options_tab_)
+        options_tab_->set_symbol(s);
+    else if (tab == analyst_tab_)
+        analyst_tab_->set_symbol(s);
+    else if (tab == ownership_tab_)
+        ownership_tab_->set_symbol(s);
+    else if (tab == dividends_tab_)
+        dividends_tab_->set_symbol(s);
+    else if (tab == earnings_tab_)
+        earnings_tab_->set_symbol(s);
 }
 
-void EquityResearchScreen::load_symbol(const QString& symbol, bool publish_to_group) {
+void EquityResearchScreen::load_symbol(const QString& requested, bool publish_to_group, bool allow_resolve) {
+    // Text resolved earlier this session (RELIANCE → RELIANCE.NS) goes straight to its Yahoo
+    // form: no doomed fetch first, and no new lookup when a linked panel echoes the bare form.
+    QString symbol = requested;
+    QString resolved_from;
+    if (const auto it = resolved_aliases_.constFind(requested); it != resolved_aliases_.constEnd()) {
+        resolved_from = requested;
+        symbol = it.value();
+    }
     if (symbol.isEmpty() || symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
     last_price_ = 0.0; // stale until the new symbol's quote arrives
 
+    ++load_seq_; // any lookup still running belongs to the previous entry
+    resolve_allowed_ = allow_resolve;
+    resolve_tried_for_.clear();
+    symbol_not_found_ = false;
+    resolved_from_ = resolved_from;
+    not_found_candidates_.clear();
+    if (suggest_btn_)
+        suggest_btn_->setVisible(false);
+    update_hint();
+
     symbol_label_->setText(symbol);
     sym_label_->setText(symbol);
     price_label_->setText(tr("Loading…"));
+    set_price_tone(QString(), QString());
     reset_quote_bar(); // don't leave the previous symbol's change/volume/H-L/mkt-cap on show
     current_currency_.clear();
     update_trade_buttons(); // a new symbol may (un)hide BUY/SELL
@@ -551,9 +723,146 @@ void EquityResearchScreen::load_symbol(const QString& symbol, bool publish_to_gr
     if (isVisible())
         hub_subscribe_broker_quote();
 
+    // A resolved symbol is a translated form (like the ".NS" mapping in
+    // on_group_symbol_changed): the group keeps the text the user typed.
     if (publish_to_group && link_group_ != SymbolGroup::None)
-        SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(symbol), this);
+        SymbolContext::instance().set_group_symbol(
+            link_group_, SymbolRef::equity(resolved_from.isEmpty() ? symbol : resolved_from), this);
     ScreenStateManager::instance().notify_changed(this);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Failures + symbol resolution
+// ═══════════════════════════════════════════════════════════════════════════════
+void EquityResearchScreen::on_load_failed(const services::equity::LoadFailure& f) {
+    if (f.symbol != current_symbol_)
+        return; // a late failure for a symbol the user already left
+    const bool have_quote = last_quote_.symbol == current_symbol_;
+
+    if (f.leg == QLatin1String("Quote") && price_label_) {
+        if (have_quote) {
+            // A background poll failed while a good price is on screen: keep it, mark it stale.
+            set_price_tone(QStringLiteral("stale"),
+                           tr("Quote refresh failed at %1 — showing the last price.\n%2")
+                               .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")), f.message));
+        } else if (!symbol_not_found_) {
+            price_label_->setText(er_short_failure(f.code));
+            set_price_tone(QStringLiteral("error"), f.message);
+        }
+    }
+
+    // Resolve what the user typed: once per load, never for a resolved reload, never once a
+    // quote proved the symbol exists, and never for a transport failure (the lookup would
+    // fail the same way).
+    if (!resolve_allowed_ || resolve_tried_for_ == current_symbol_ || have_quote)
+        return;
+    if (f.leg != QLatin1String("Quote") && f.leg != QLatin1String("Info") && f.leg != QLatin1String("Historical"))
+        return;
+    const bool not_found = f.code == QLatin1String("not_found");
+    const bool transport = f.code == QLatin1String("network") || f.code == QLatin1String("rate_limited");
+    const bool bare = !current_symbol_.contains(QLatin1Char('.')); // no exchange suffix
+    if (not_found || (f.leg == QLatin1String("Quote") && bare && !transport))
+        start_resolve(current_symbol_);
+}
+
+void EquityResearchScreen::start_resolve(const QString& query) {
+    resolve_tried_for_ = query;
+    const quint64 seq = load_seq_;
+    if (hint_label_)
+        hint_label_->setText(tr("Looking up “%1” on Yahoo Finance…").arg(query));
+    QPointer<EquityResearchScreen> self = this;
+    services::equity::EquityResearchService::instance().resolve_symbol(
+        query, [self, seq, query](bool ok, services::equity::SymbolResolution res, QString error) {
+            Q_UNUSED(error); // the load failure already on screen says what went wrong
+            if (!self)
+                return;
+            // The user entered another symbol while this ran — the answer is for nothing on screen.
+            if (seq != self->load_seq_ || self->current_symbol_ != query)
+                return;
+            self->update_hint();
+            if (!ok)
+                return; // the lookup itself failed: keep the load error that is showing
+            if (self->last_quote_.symbol == query)
+                return; // a quote for the typed symbol arrived meanwhile — it exists as typed
+            if (res.found && res.resolved_symbol.compare(query, Qt::CaseInsensitive) != 0) {
+                // RELIANCE → RELIANCE.NS: reload transparently under the Yahoo symbol. The alias
+                // makes load_symbol() swap it in (and record where it came from for the header).
+                self->resolved_aliases_.insert(query, res.resolved_symbol);
+                self->load_symbol(query, /*publish_to_group=*/false, /*allow_resolve=*/false);
+                return;
+            }
+            if (res.found)
+                return; // Yahoo knows it exactly as typed: the failure was something else
+            self->show_symbol_not_found(res);
+        });
+}
+
+void EquityResearchScreen::show_symbol_not_found(const services::equity::SymbolResolution& res) {
+    const QString& query = res.query;
+    symbol_not_found_ = true;
+    not_found_candidates_.clear();
+    for (const auto& c : res.candidates) {
+        if (c.symbol.compare(query, Qt::CaseInsensitive) == 0)
+            continue;
+        QString text = c.symbol;
+        if (!c.name.isEmpty())
+            text += QStringLiteral("  —  ") + c.name;
+        if (!c.exchange.isEmpty())
+            text += QStringLiteral("  (") + c.exchange + QLatin1Char(')');
+        not_found_candidates_.append({c.symbol, text});
+    }
+
+    price_label_->setText(tr("Symbol not found"));
+    QString tip = not_found_candidates_.isEmpty()
+                      ? tr("Yahoo Finance has no listing for “%1”. Try the Yahoo form, e.g. RELIANCE.NS or BRK-B.")
+                            .arg(query)
+                      : tr("Yahoo Finance has no listing for “%1”. Pick a suggestion from DID YOU MEAN? ▾").arg(query);
+    if (!res.message.isEmpty())
+        tip += QLatin1Char('\n') + res.message;
+    set_price_tone(QStringLiteral("error"), tip);
+    if (suggest_btn_)
+        suggest_btn_->setVisible(!not_found_candidates_.isEmpty());
+
+    // The user is still at the symbol box (pressed Enter and has not started typing again):
+    // open the suggestions for them. Otherwise the button waits until they look.
+    if (!not_found_candidates_.isEmpty() && isVisible() && window()->isActiveWindow() && symbol_edit_ &&
+        symbol_edit_->hasFocus() && symbol_edit_->text().isEmpty())
+        show_candidates_menu(symbol_edit_);
+}
+
+void EquityResearchScreen::show_candidates_menu(QWidget* anchor) {
+    if (not_found_candidates_.isEmpty() || !anchor)
+        return;
+    // Heap + popup(): this can open from an async callback, where exec()'s nested loop is unwelcome.
+    auto* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    for (const auto& c : not_found_candidates_) {
+        const QString sym = c.first;
+        connect(menu->addAction(c.second), &QAction::triggered, this, [this, sym]() { load_symbol(sym); });
+    }
+    menu->popup(anchor->mapToGlobal(QPoint(0, anchor->height())));
+}
+
+void EquityResearchScreen::set_price_tone(const QString& tone, const QString& tooltip) {
+    if (!price_label_)
+        return;
+    price_label_->setToolTip(tooltip);
+    if (price_label_->property("tone").toString() != tone) {
+        price_label_->setProperty("tone", tone);
+        er_repolish(price_label_);
+    }
+}
+
+void EquityResearchScreen::update_hint() {
+    if (!hint_label_)
+        return;
+    if (!resolved_from_.isEmpty()) {
+        hint_label_->setText(tr("“%1” resolved to %2").arg(resolved_from_, current_symbol_));
+        hint_label_->setToolTip(tr("Yahoo Finance lists “%1” as %2").arg(resolved_from_, current_symbol_));
+    } else {
+        hint_label_->setText(tr("Use /stock, /fund, /index... in command bar to search"));
+        hint_label_->setToolTip(QString());
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -599,20 +908,27 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
         last_price_ = q.price;
     last_quote_ = q;
 
-    const QString ccy = current_currency_.isEmpty() ? QStringLiteral("USD") : current_currency_;
+    // The instrument's own currency as quoted (GBp → "116.95p", JPY → "¥3,418"); no symbol
+    // until the info names it, rather than a "$" that may be wrong.
+    const QString ccy = current_currency_;
     const QString kDash = equity_fmt::dash();
 
     sym_label_->setText(q.symbol);
-    price_label_->setText(q.price > 0.0 ? equity_fmt::price(q.price, ccy, q.price < 1.0 ? 4 : 2) : kDash);
+    price_label_->setText(q.price > 0.0 ? equity_fmt::price(q.price, ccy) : kDash);
+    set_price_tone(QString(), QString()); // a fresh quote clears any stale / error marking
 
     if (q.price > 0.0) {
+        // An unchanged price (RELIANCE.NS before the open: 0.00, 0.00%) is neither up nor
+        // down: no arrow and no direction colour — it used to read "▲0.00%" in green.
+        const bool flat = q.change == 0.0 && q.change_pct == 0.0;
         const bool up = q.change >= 0.0;
-        change_label_->setText(QString("%1%2  %3%4%")
-                                   .arg(up ? "+" : "-")
-                                   .arg(std::fabs(q.change), 0, 'f', q.price < 1.0 ? 4 : 2)
-                                   .arg(up ? "\xe2\x96\xb2" : "\xe2\x96\xbc") // ▲ / ▼
-                                   .arg(std::fabs(q.change_pct), 0, 'f', 2));
-        const QString tone = up ? QStringLiteral("up") : QStringLiteral("down");
+        ui::formatting::InstrumentFmt inst;
+        inst.currency = ccy;
+        change_label_->setText(QStringLiteral("%1  %2%3")
+                                   .arg(ui::formatting::price_change(q.change, q.price, inst),
+                                        flat ? QString() : up ? QStringLiteral("▲") : QStringLiteral("▼"),
+                                        ui::formatting::pct(std::fabs(q.change_pct), 2, false)));
+        const QString tone = flat ? QStringLiteral("flat") : up ? QStringLiteral("up") : QStringLiteral("down");
         if (change_label_->property("tone").toString() != tone) {
             change_label_->setProperty("tone", tone);
             er_repolish(change_label_);
@@ -621,17 +937,16 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
         change_label_->setText(kDash);
     }
 
-    auto fmt_vol = [](double v) -> QString {
-        if (v >= 1e9)
-            return QString("%1B").arg(v / 1e9, 0, 'f', 1);
-        if (v >= 1e6)
-            return QString("%1M").arg(v / 1e6, 0, 'f', 1);
-        if (v >= 1e3)
-            return QString("%1K").arg(v / 1e3, 0, 'f', 0);
-        return QString::number(static_cast<qint64>(v));
-    };
+    update_quote_details(q);
+}
+
+void EquityResearchScreen::update_quote_details(const services::equity::QuoteData& q) {
+    if (!vol_label_ || !hl_label_)
+        return;
+    const QString ccy = current_currency_;
+    const QString kDash = equity_fmt::dash();
     // Zero = the source sent nothing (halted/thin instruments, indices) — a dash, not "VOL: 0".
-    vol_label_->setText(tr("VOL: %1").arg(q.volume > 0.0 ? fmt_vol(q.volume) : kDash));
+    vol_label_->setText(tr("VOL: %1").arg(q.volume > 0.0 ? ui::formatting::volume(q.volume) : kDash));
     hl_label_->setText(q.high > 0.0 && q.low > 0.0
                            ? tr("H:%1  L:%2").arg(equity_fmt::price(q.high, ccy), equity_fmt::price(q.low, ccy))
                            : tr("H/L: %1").arg(kDash));
@@ -640,6 +955,7 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
 void EquityResearchScreen::reset_quote_bar() {
     const QString dash = equity_fmt::dash();
     last_quote_ = {};
+    last_info_ = {};
     if (change_label_) {
         change_label_->setText(dash);
         if (!change_label_->property("tone").toString().isEmpty()) {
@@ -672,8 +988,8 @@ void EquityResearchScreen::on_download_csv_clicked() {
     dlg->setWindowTitle(tr("Download Price Data — %1").arg(symbol));
     dlg->setModal(true);
     dlg->setMinimumWidth(380);
-    dlg->setStyleSheet(QString("QLabel#erCsvNote { color:%1; font-size:10px; }"
-                               "QLabel#erCsvStatus { color:%2; font-size:11px; }"
+    dlg->setStyleSheet(QString("QLabel#erCsvNote { color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; }"
+                               "QLabel#erCsvStatus { color:%2; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                                "QLabel#erCsvStatus[tone=\"error\"] { color:%3; }")
                            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_SECONDARY(), ui::colors::NEGATIVE()));
 
@@ -842,14 +1158,26 @@ void EquityResearchScreen::retranslateUi() {
         open_in_btn_->setText(tr("OPEN IN ▾"));
         open_in_btn_->setToolTip(tr("Send this symbol to Equity Trading, News, Backtesting or a watchlist"));
     }
-    if (hint_label_)
-        hint_label_->setText(tr("Use /stock, /fund, /index... in command bar to search"));
+    if (suggest_btn_) {
+        suggest_btn_->setText(tr("DID YOU MEAN? ▾"));
+        suggest_btn_->setToolTip(tr("Yahoo Finance listings that match what you typed"));
+    }
+    update_hint();
 
-    if (vol_label_)
-        vol_label_->setText(tr("VOL: %1").arg(equity_fmt::dash()));
-    if (hl_label_)
-        hl_label_->setText(tr("H/L: %1").arg(equity_fmt::dash()));
-    if (mktcap_label_)
+    // Re-render the loaded symbol's VOL / H-L / MKT CAP / REC in the new language — they used
+    // to be blanked to "—" (MKT CAP until the symbol was reloaded). Dashes only when nothing
+    // is loaded for the current symbol.
+    if (!current_symbol_.isEmpty() && last_quote_.symbol == current_symbol_) {
+        update_quote_details(last_quote_);
+    } else {
+        if (vol_label_)
+            vol_label_->setText(tr("VOL: %1").arg(equity_fmt::dash()));
+        if (hl_label_)
+            hl_label_->setText(tr("H/L: %1").arg(equity_fmt::dash()));
+    }
+    if (!current_symbol_.isEmpty() && last_info_.symbol == current_symbol_)
+        update_info_labels(last_info_);
+    else if (mktcap_label_)
         mktcap_label_->setText(tr("MKT CAP: %1").arg(equity_fmt::dash()));
 
     if (tab_widget_) {
@@ -970,6 +1298,7 @@ void EquityResearchScreen::on_financials_loaded(services::equity::FinancialsData
     // (Altman/Piotroski/Beneish) with the wrong company's numbers.
     if (data.symbol != current_symbol_)
         return;
+    last_financials_ = data; // for a Valuation tab built later (materialize_tab)
     if (valuation_tab_)
         valuation_tab_->set_financials(data);
 }
@@ -1022,5 +1351,126 @@ void EquityResearchScreen::on_trade_clicked(bool is_buy) {
                                                               {"is_buy", is_buy},
                                                               {"price", last_price_}});
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Deep links (ISectionLinked) + the search box's rows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A Financials part ("income", "balance_sheet", "cash flow" …) as EquityFinancialsTab::show_section
+/// names it; empty when it is none of them.
+static QString er_fin_part(const QString& text) {
+    QString k = text.trimmed().toLower();
+    k.replace(QLatin1Char(' '), QLatin1Char('_'));
+    k.replace(QLatin1Char('-'), QLatin1Char('_'));
+    if (k == QLatin1String("overview") || k == QLatin1String("summary"))
+        return QStringLiteral("overview");
+    if (k == QLatin1String("income") || k == QLatin1String("income_statement") || k == QLatin1String("p&l"))
+        return QStringLiteral("income");
+    if (k == QLatin1String("balance") || k == QLatin1String("balance_sheet"))
+        return QStringLiteral("balance");
+    if (k == QLatin1String("cashflow") || k == QLatin1String("cash_flow") || k == QLatin1String("cash_flow_statement"))
+        return QStringLiteral("cashflow");
+    if (k == QLatin1String("ratios"))
+        return QStringLiteral("ratios");
+    if (k == QLatin1String("peers"))
+        return QStringLiteral("peers");
+    return {};
+}
+
+bool EquityResearchScreen::open_section(const QString& section, const QString& focus) {
+    QString key = section.trimmed().toLower();
+    if (key.isEmpty())
+        return true; // symbols arrive through nav.open_symbol (IGroupLinked)
+    if (key.startsWith(QLatin1String("tab:")))
+        key = key.mid(4);
+    QString part;
+    int cut = key.indexOf(QLatin1Char('/'));
+    if (cut < 0)
+        cut = key.indexOf(QLatin1Char(':'));
+    if (cut >= 0) {
+        part = er_fin_part(key.mid(cut + 1));
+        key = key.left(cut);
+        if (part.isEmpty() || key != QLatin1String("financials"))
+            return false; // an unknown part: nothing changes
+    } else if (key == QLatin1String("financials")) {
+        part = er_fin_part(focus); // optional; anything else is ignored
+    }
+    const QByteArray k = key.toLatin1();
+    QWidget* page = tab_page(k.constData());
+    if (!page || !tab_widget_)
+        return false;
+    tab_widget_->setCurrentWidget(page); // currentChanged -> on_tab_changed: as a click
+    if (!part.isEmpty() && financials_tab_)
+        financials_tab_->show_section(part);
+    return true;
+}
+
+namespace {
+
+QList<command::CommandItem> er_command_rows() {
+    namespace rows = command_rows;
+    const QString screen = QStringLiteral("equity_research");
+    const QString where = EquityResearchScreen::tr("Equity Research");
+    struct Row {
+        const char* section;
+        const char* title;
+        const char* keywords;
+    };
+    static const Row kRows[] = {
+        {"overview", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Company overview"),
+         "overview, chart, quote, profile, company"},
+        {"financials", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Financial statements"),
+         "financials, fundamentals, statements, annual report"},
+        {"filings", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Company filings"),
+         "filings, sec, 10-k, 10-q, 8-k, edgar, annual report"},
+        {"analysis", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Fundamental analysis"),
+         "analysis, ratios, quality, scores, piotroski, altman"},
+        {"technicals", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Technical analysis"),
+         "technicals, indicators, rsi, macd, moving averages, signals"},
+        {"peers", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Peer comparison"),
+         "peers, comparables, comps, compare companies, competitors"},
+        {"news", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Company news"),
+         "news, headlines, stock news"},
+        {"sentiment", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Stock sentiment"),
+         "sentiment, social, mood, bullish, bearish"},
+        {"valuation", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Stock valuation (DCF)"),
+         "valuation, dcf, discounted cash flow, fair value, intrinsic value"},
+        {"dividends", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Dividends"),
+         "dividends, dividend yield, payout, ex-dividend"},
+        {"earnings", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Earnings history"),
+         "earnings, eps, surprises, estimates, quarterly results"},
+        {"options", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Stock options chain"),
+         "options, option chain, calls, puts, implied volatility"},
+        {"analyst", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Analyst ratings"),
+         "analyst, ratings, price targets, recommendations, upgrades, downgrades"},
+        {"ownership", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Ownership"),
+         "ownership, institutional holders, insiders, insider trading, major holders"},
+        {"financials/income", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Income statement"),
+         "income statement, p&l, profit and loss, revenue, net income, financials"},
+        {"financials/balance", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Balance sheet"),
+         "balance sheet, assets, liabilities, equity, debt, financials"},
+        {"financials/cashflow", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Cash flow statement"),
+         "cash flow, free cash flow, fcf, operating cash flow, capex, financials"},
+        {"financials/ratios", QT_TRANSLATE_NOOP("fincept::screens::EquityResearchScreen", "Financial ratios"),
+         "ratios, margins, roe, roic, leverage, liquidity, financials"},
+    };
+    QList<command::CommandItem> out;
+    for (const Row& r : kRows) {
+        QStringList kw = QString::fromLatin1(r.keywords).split(QStringLiteral(", "), Qt::SkipEmptyParts);
+        kw << QStringLiteral("research") << QStringLiteral("stock");
+        out.append(rows::section(screen, QString::fromLatin1(r.section),
+                                 QCoreApplication::translate("fincept::screens::EquityResearchScreen", r.title), kw,
+                                 where));
+    }
+    return out;
+}
+
+void er_install_commands() {
+    command_rows::install(QStringLiteral("equity_research"), &er_command_rows);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(er_install_commands)
 
 } // namespace fincept::screens

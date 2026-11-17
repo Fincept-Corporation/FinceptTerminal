@@ -4,6 +4,8 @@
 // (2026-06-10); update HERE when adding a provider.
 #include "services/llm/ProviderCatalog.h"
 
+#include "ui/theme/ThemeTokens.h"
+
 #include <QHash>
 #include <QRegularExpression>
 
@@ -26,7 +28,25 @@ bool ProviderCatalog::is_blocked(const QString& provider, const QString& base_ur
     return base_url.toLower().contains(QStringLiteral("atlascloud"));
 }
 
+bool ProviderCatalog::is_harness(const QString& provider) {
+    return provider.startsWith(QLatin1String("harness:"), Qt::CaseInsensitive) && provider.size() > 8;
+}
+
+QString ProviderCatalog::harness_id(const QString& provider) {
+    return is_harness(provider) ? provider.mid(8).toLower() : QString();
+}
+
 QString ProviderCatalog::display_name(const QString& provider_id) {
+    if (is_harness(provider_id)) {
+        // The registry's descriptor is the source of the full name; this is the
+        // short form for lists that only have the provider string.
+        static const QHash<QString, QString> kHarnessNames = {
+            {"claude", "Claude Code"}, {"codex", "Codex"},           {"grok", "Grok"},          {"cursor", "Cursor"},
+            {"copilot", "GitHub Copilot"}, {"gemini", "Gemini CLI"}, {"qwen", "Qwen Code"},
+        };
+        const QString id = harness_id(provider_id);
+        return kHarnessNames.value(id, id) + QStringLiteral(" (harness)");
+    }
     static const QHash<QString, QString> kNames = {
         {"openai", "OpenAI"},
         {"anthropic", "Anthropic"},
@@ -166,26 +186,34 @@ QStringList ProviderCatalog::fallback_models(const QString& provider) {
 
 bool ProviderCatalog::requires_api_key(const QString& provider) {
     const QString p = provider.toLower();
-    return p != "ollama" && p != "fincept";
+    // A harness authenticates with the user's own CLI setup, never a key stored here.
+    return p != "ollama" && p != "fincept" && !is_harness(p);
 }
 
 bool ProviderCatalog::is_openai_compatible(const QString& provider) {
     const QString p = provider.toLower();
-    return p != "anthropic" && p != "gemini" && p != "google" && p != "fincept";
+    return p != "anthropic" && p != "gemini" && p != "google" && p != "fincept" && !is_harness(p);
 }
 
+// Third-party brand colours, written for the dark theme. They are stored with
+// arena agents, so they are fixed values; screens draw them through
+// ui::colors::legible() / tint().
 QString ProviderCatalog::brand_color(const QString& provider) {
     static const QHash<QString, QString> kColors = {
         {"openai", "#10A37F"},       {"anthropic", "#D97757"},  {"gemini", "#4285F4"},  {"groq", "#F55036"},
         {"deepseek", "#4D6BFE"},     {"openrouter", "#8B5CF6"}, {"minimax", "#FF4D6A"}, {"kimi", "#16D9C4"},
         {"ollama", "#9CA3AF"},       {"xai", "#E7E9EA"},        {"fincept", "#FF8800"}, {"astraflow", "#38BDF8"},
         {"astraflow_cn", "#38BDF8"}, {"aihubmix", "#F59E0B"},
+        // Harnesses carry their vendor's colour.
+        {"harness:claude", "#D97757"}, {"harness:codex", "#10A37F"},
     };
     const auto it = kColors.find(provider.toLower());
     if (it != kColors.end())
         return it.value();
-    static const QStringList kPalette = {"#E879F9", "#A3E635", "#FB7185", "#60A5FA", "#FBBF24"};
-    return kPalette[static_cast<qsizetype>(qHash(provider.toLower()) % static_cast<size_t>(kPalette.size()))];
+    // Unknown provider: one of the dark preset's categorical chart colours
+    // (fixed values, never the active theme's), picked by name.
+    const auto& palette = ui::THEME_OBSIDIAN.chart_palette;
+    return QString::fromLatin1(palette[static_cast<size_t>(qHash(provider.toLower()) % palette.size())]);
 }
 
 // Recursion is depth-1 by construction: it only fires for aggregators whose

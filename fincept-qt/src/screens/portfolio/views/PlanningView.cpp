@@ -3,6 +3,9 @@
 
 #include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "ui/charts/FanChart.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QAbstractItemView>
@@ -51,10 +54,68 @@ double planning_annuity_factor(double r, int n) {
         return 0.0;
     return std::abs(r) > 1e-12 ? (std::pow(1.0 + r, n) - 1.0) / r : static_cast<double>(n);
 }
+
+/// Width of the calculators' input panels: 320px at the default font size,
+/// growing in proportion to it so the labels and fields keep fitting.
+int input_panel_width() {
+    return std::max(320, 320 * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx);
+}
+
+/// Restyles only when the text changes: the results re-render on a format change,
+/// which must not restyle anything.
+void planning_set_css(QWidget* w, const QString& css) {
+    if (w && w->styleSheet() != css)
+        w->setStyleSheet(css);
+}
+
+/// A whole-unit amount in the portfolio currency, for the calculators' sentences.
+QString planning_money(double v, const QString& ccy) {
+    return ui::formatting::money(v, ccy, ui::formatting::Compact::None, 0);
+}
 } // namespace
 
 PlanningView::PlanningView(QWidget* parent) : QWidget(parent) {
     build_ui();
+    bind_money_affixes(); // display currency until a portfolio is loaded
+    // Panel widths and result colours follow the appearance: once a change has settled.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
+    // Currency / number format changed: re-format the results from the inputs and
+    // data already held (the simulations are seeded, so the figures stay put).
+    ui::formatting::on_format_changed(this, [this]() {
+        if (has_data_) {
+            recalculate();
+            recalculate_goals();
+            recalculate_savings();
+        } else {
+            refresh_goals_list();
+        }
+    });
+}
+
+void PlanningView::bind_money_affixes() {
+    namespace fmt = ui::formatting;
+    for (QDoubleSpinBox* sb : {annual_expense_, monthly_contrib_, goal_target_, goal_monthly_, sav_income_}) {
+        if (!sb)
+            continue;
+        // bind_currency_affix() adds a binding per call: drop the previous currency's
+        // first, so a portfolio switch leaves exactly one (the spin box is its context).
+        QObject::disconnect(&fmt::FormatSettings::instance(), &fmt::FormatSettings::changed, sb, nullptr);
+        fmt::bind_currency_affix(sb, currency_);
+    }
+}
+
+void PlanningView::refresh_theme() {
+    for (auto* panel : findChildren<QWidget*>(QStringLiteral("planInputPanel")))
+        panel->setFixedWidth(input_panel_width());
+    // The tables' item colours and the Monte Carlo lines' rich text carry their
+    // colours: recompute them (the simulation is seeded, so the figures stay put).
+    if (has_data_) {
+        recalculate();
+        recalculate_goals();
+        recalculate_savings();
+    } else {
+        refresh_goals_list();
+    }
 }
 
 void PlanningView::build_ui() {
@@ -71,7 +132,7 @@ void PlanningView::build_ui() {
     tabs_->tabBar()->setUsesScrollButtons(false);
     tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
                                  "QTabBar::tab { background:%2; color:%3; padding:6px 16px; border:0;"
-                                 "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
+                                 "  border-bottom:2px solid transparent; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700;"
                                  "  letter-spacing:0.5px; min-width:72px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
@@ -93,22 +154,23 @@ QWidget* PlanningView::build_retirement_tab() {
 
     // Left: inputs
     auto* input_panel = new QWidget(this);
-    input_panel->setFixedWidth(320);
+    input_panel->setObjectName(QStringLiteral("planInputPanel"));
+    input_panel->setFixedWidth(input_panel_width());
     input_panel->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* input_layout = new QVBoxLayout(input_panel);
     input_layout->setContentsMargins(16, 12, 16, 12);
     input_layout->setSpacing(8);
 
     input_title_ = new QLabel(tr("RETIREMENT CALCULATOR"));
     input_title_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     input_layout->addWidget(input_title_);
 
     retire_assump_note_ = new QLabel;
     retire_assump_note_->setWordWrap(true);
     retire_assump_note_->setStyleSheet(
-        QString("color:%1; font-size:9px; padding:2px 0 4px 0;").arg(ui::colors::CYAN()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; padding:2px 0 4px 0;").arg(ui::colors::CYAN()));
     input_layout->addWidget(retire_assump_note_);
 
     auto* form = new QFormLayout;
@@ -116,14 +178,14 @@ QWidget* PlanningView::build_retirement_tab() {
     form->setLabelAlignment(Qt::AlignRight);
 
     auto style_spin = [](QDoubleSpinBox* sb) {
-        sb->setFixedHeight(26);
+        sb->setMinimumHeight(26);
         sb->setStyleSheet(
             QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                    "  padding:0 8px; font-size:11px; }"
+                    "  padding:0 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                     "QDoubleSpinBox:focus { border-color:%4; }")
                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     };
-    auto label_style = QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_SECONDARY());
+    auto label_style = QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_SECONDARY());
 
     current_age_ = new QDoubleSpinBox;
     current_age_->setRange(18, 100);
@@ -146,7 +208,6 @@ QWidget* PlanningView::build_retirement_tab() {
     annual_expense_ = new QDoubleSpinBox;
     annual_expense_->setRange(0, 10000000);
     annual_expense_->setValue(60000);
-    annual_expense_->setPrefix("$ ");
     annual_expense_->setDecimals(0);
     style_spin(annual_expense_);
     l_annual_expense_ = new QLabel(tr("Annual Expense:"));
@@ -156,7 +217,6 @@ QWidget* PlanningView::build_retirement_tab() {
     monthly_contrib_ = new QDoubleSpinBox;
     monthly_contrib_->setRange(0, 1000000);
     monthly_contrib_->setValue(2000);
-    monthly_contrib_->setPrefix("$ ");
     monthly_contrib_->setDecimals(0);
     style_spin(monthly_contrib_);
     l_monthly_contrib_ = new QLabel(tr("Monthly Savings:"));
@@ -197,12 +257,12 @@ QWidget* PlanningView::build_retirement_tab() {
     input_layout->addLayout(form);
 
     calc_btn_ = new QPushButton(tr("CALCULATE"));
-    calc_btn_->setFixedHeight(28);
+    calc_btn_->setMinimumHeight(28);
     calc_btn_->setCursor(Qt::PointingHandCursor);
     calc_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none; font-size:10px; font-weight:700; }"
+        QString("QPushButton { background:%1; color:%3; border:none; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::AMBER(), ui::colors::WARNING()));
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::TEXT_ON_ACCENT()));
     connect(calc_btn_, &QPushButton::clicked, this, &PlanningView::recalculate);
     input_layout->addWidget(calc_btn_);
     input_layout->addStretch();
@@ -217,7 +277,7 @@ QWidget* PlanningView::build_retirement_tab() {
 
     res_title_ = new QLabel(tr("PROJECTION RESULTS"));
     res_title_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     res_layout->addWidget(res_title_);
 
     auto* grid = new QGridLayout;
@@ -227,18 +287,18 @@ QWidget* PlanningView::build_retirement_tab() {
                         const char* color) {
         auto* card = new QWidget(this);
         card->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
 
         title_label = new QLabel(label);
-        title_label->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+        title_label->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-6) + "px; font-weight:700; letter-spacing:0.5px;")
                                        .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(title_label);
 
         val_label = new QLabel("--");
-        val_label->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(color));
+        val_label->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:700;").arg(color));
         cl->addWidget(val_label);
 
         grid->addWidget(card, r, c);
@@ -255,31 +315,38 @@ QWidget* PlanningView::build_retirement_tab() {
     retire_mc_label_ = new QLabel;
     retire_mc_label_->setWordWrap(true);
     retire_mc_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; padding:8px 12px 0 12px; background:transparent;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; padding:8px 12px 0 12px; background:transparent;")
             .arg(ui::colors::TEXT_PRIMARY()));
     res_layout->addWidget(retire_mc_label_);
+
+    // The simulated paths as a percentile fan, year by year (was one sentence).
+    retire_fan_ = new ui::FanChart(this);
+    retire_fan_->setMinimumHeight(std::max(180, ui::fonts::font_px(0) * 13));
+    retire_fan_->set_x_formatter([](double x) { return PlanningView::tr("Year %1").arg(ui::formatting::number(x, 0)); });
+    retire_fan_->set_state(ui::PaintedChart::Empty, tr("Set the inputs to simulate the plan."));
+    res_layout->addWidget(retire_fan_, 1);
 
     // Drawdown/VaR stress line (real metrics).
     retire_stress_label_ = new QLabel;
     retire_stress_label_->setWordWrap(true);
     retire_stress_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; padding:2px 12px 0 12px; background:transparent;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; padding:2px 12px 0 12px; background:transparent;")
             .arg(ui::colors::NEGATIVE()));
     res_layout->addWidget(retire_stress_label_);
 
     status_label_ = new QLabel;
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
+    status_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
     res_layout->addWidget(status_label_);
 
     // Cross-link: optimize the portfolio for the return this plan needs.
     retire_optimize_btn_ = new QPushButton(tr("⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL"));
     retire_optimize_btn_->setCursor(Qt::PointingHandCursor);
-    retire_optimize_btn_->setFixedHeight(28);
+    retire_optimize_btn_->setMinimumHeight(28);
     retire_optimize_btn_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %1; font-size:10px;"
-                "  font-weight:700; letter-spacing:1px; } QPushButton:hover { background:%2; color:#000; }")
-            .arg(ui::colors::CYAN(), ui::colors::CYAN()));
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1; font-size:" + fincept::ui::fonts::px(-4) + "px;"
+                "  font-weight:700; letter-spacing:1px; } QPushButton:hover { background:%2; color:%3; }")
+            .arg(ui::colors::CYAN(), ui::colors::CYAN(), ui::colors::TEXT_ON_ACCENT()));
     connect(retire_optimize_btn_, &QPushButton::clicked, this, [this]() {
         // Annualised return the plan needs to exactly hit the target; hand it to
         // the Optimization tab so the user can build a portfolio that targets it.
@@ -315,27 +382,28 @@ QWidget* PlanningView::build_goals_tab() {
     layout->setSpacing(24);
 
     auto style_spin = [](QDoubleSpinBox* sb) {
-        sb->setFixedHeight(26);
+        sb->setMinimumHeight(26);
         sb->setStyleSheet(
             QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                    "  padding:0 8px; font-size:11px; }"
+                    "  padding:0 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                     "QDoubleSpinBox:focus { border-color:%4; }")
                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     };
-    const QString label_style = QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_SECONDARY());
+    const QString label_style = QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_SECONDARY());
 
     // ── Left: inputs ──────────────────────────────────────────────────────────
     auto* input_panel = new QWidget(this);
-    input_panel->setFixedWidth(320);
+    input_panel->setObjectName(QStringLiteral("planInputPanel"));
+    input_panel->setFixedWidth(input_panel_width());
     input_panel->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* input_layout = new QVBoxLayout(input_panel);
     input_layout->setContentsMargins(16, 12, 16, 12);
     input_layout->setSpacing(8);
 
     goals_title_ = new QLabel(tr("GOAL-BASED PLANNING"));
     goals_title_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     input_layout->addWidget(goals_title_);
 
     auto* form = new QFormLayout;
@@ -343,9 +411,9 @@ QWidget* PlanningView::build_goals_tab() {
     form->setLabelAlignment(Qt::AlignRight);
 
     goal_name_ = new QLineEdit(tr("House Down Payment"));
-    goal_name_->setFixedHeight(26);
+    goal_name_->setMinimumHeight(26);
     goal_name_->setStyleSheet(
-        QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:11px; }"
+        QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                 "QLineEdit:focus { border-color:%4; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     l_goal_name_ = new QLabel(tr("Goal:"));
@@ -355,7 +423,6 @@ QWidget* PlanningView::build_goals_tab() {
     goal_target_ = new QDoubleSpinBox;
     goal_target_->setRange(0, 1000000000);
     goal_target_->setValue(100000);
-    goal_target_->setPrefix("$ ");
     goal_target_->setDecimals(0);
     style_spin(goal_target_);
     l_goal_target_ = new QLabel(tr("Target Amount:"));
@@ -384,7 +451,6 @@ QWidget* PlanningView::build_goals_tab() {
     goal_monthly_ = new QDoubleSpinBox;
     goal_monthly_->setRange(0, 1000000);
     goal_monthly_->setValue(1000);
-    goal_monthly_->setPrefix("$ ");
     goal_monthly_->setDecimals(0);
     style_spin(goal_monthly_);
     l_goal_monthly_ = new QLabel(tr("Monthly Saving:"));
@@ -404,12 +470,12 @@ QWidget* PlanningView::build_goals_tab() {
     input_layout->addLayout(form);
 
     goals_calc_btn_ = new QPushButton(tr("ADD / UPDATE GOAL"));
-    goals_calc_btn_->setFixedHeight(28);
+    goals_calc_btn_->setMinimumHeight(28);
     goals_calc_btn_->setCursor(Qt::PointingHandCursor);
     goals_calc_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none; font-size:10px; font-weight:700; }"
+        QString("QPushButton { background:%1; color:%3; border:none; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::AMBER(), ui::colors::WARNING()));
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::TEXT_ON_ACCENT()));
     connect(goals_calc_btn_, &QPushButton::clicked, this, [this]() {
         recalculate_goals();  // refresh the projection cards for the typed goal
         add_or_update_goal(); // and persist it into the saved list
@@ -427,7 +493,7 @@ QWidget* PlanningView::build_goals_tab() {
 
     goals_res_title_ = new QLabel(tr("GOAL PROJECTION"));
     goals_res_title_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     res_layout->addWidget(goals_res_title_);
 
     auto* grid = new QGridLayout;
@@ -436,16 +502,16 @@ QWidget* PlanningView::build_goals_tab() {
                         const char* color) {
         auto* card = new QWidget(this);
         card->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
         title_label = new QLabel(label);
-        title_label->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+        title_label->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-6) + "px; font-weight:700; letter-spacing:0.5px;")
                                        .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(title_label);
         val_label = new QLabel("--");
-        val_label->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(color));
+        val_label->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:700;").arg(color));
         cl->addWidget(val_label);
         grid->addWidget(card, r, c);
     };
@@ -458,19 +524,19 @@ QWidget* PlanningView::build_goals_tab() {
     goal_mc_label_ = new QLabel;
     goal_mc_label_->setWordWrap(true);
     goal_mc_label_->setTextFormat(Qt::RichText);
-    goal_mc_label_->setStyleSheet(QString("color:%1; font-size:11px; padding:0 12px;").arg(ui::colors::TEXT_PRIMARY()));
+    goal_mc_label_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; padding:0 12px;").arg(ui::colors::TEXT_PRIMARY()));
     res_layout->addWidget(goal_mc_label_);
 
     goal_status_label_ = new QLabel;
     goal_status_label_->setWordWrap(true);
     goal_status_label_->setStyleSheet(
-        QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
     res_layout->addWidget(goal_status_label_);
 
     // ── Saved goals list (per-portfolio, with funding %) ─────────────────────
     auto* saved_title = new QLabel(tr("SAVED GOALS"));
     saved_title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; padding:0 0 0 12px;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1px; padding:0 0 0 12px;")
             .arg(ui::colors::TEXT_TERTIARY()));
     res_layout->addWidget(saved_title);
 
@@ -483,8 +549,8 @@ QWidget* PlanningView::build_goals_tab() {
     goals_list_->setSelectionBehavior(QAbstractItemView::SelectRows);
     goals_list_->setSelectionMode(QAbstractItemView::SingleSelection);
     goals_list_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; border:1px solid %3; gridline-color:%3; font-size:11px; }"
-                "QHeaderView::section { background:%4; color:%5; border:0; padding:5px; font-size:9px;"
+        QString("QTableWidget { background:%1; color:%2; border:1px solid %3; gridline-color:%3; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
+                "QHeaderView::section { background:%4; color:%5; border:0; padding:5px; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                 "  font-weight:700; letter-spacing:0.5px; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(),
                  ui::colors::TEXT_SECONDARY()));
@@ -508,12 +574,13 @@ QWidget* PlanningView::build_goals_tab() {
     res_layout->addWidget(goals_list_, 1);
 
     goal_remove_btn_ = new QPushButton(tr("REMOVE SELECTED GOAL"));
-    goal_remove_btn_->setFixedHeight(24);
+    goal_remove_btn_->setProperty("fincept_agent_risk", "delete");
+    goal_remove_btn_->setMinimumHeight(24);
     goal_remove_btn_->setCursor(Qt::PointingHandCursor);
     goal_remove_btn_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; font-size:9px;"
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                 "  font-weight:700; } QPushButton:hover { color:%3; border-color:%3; }")
-            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
     connect(goal_remove_btn_, &QPushButton::clicked, this, &PlanningView::remove_selected_goal);
     res_layout->addWidget(goal_remove_btn_);
 
@@ -528,38 +595,39 @@ QWidget* PlanningView::build_savings_tab() {
     layout->setSpacing(24);
 
     auto style_spin = [](QDoubleSpinBox* sb) {
-        sb->setFixedHeight(26);
+        sb->setMinimumHeight(26);
         sb->setStyleSheet(
             QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                    "  padding:0 8px; font-size:11px; }"
+                    "  padding:0 8px; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                     "QDoubleSpinBox:focus { border-color:%4; }")
                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     };
-    const QString label_style = QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_SECONDARY());
+    const QString label_style = QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_SECONDARY());
 
     // ── Left: inputs ──────────────────────────────────────────────────────────
     auto* input_panel = new QWidget(this);
-    input_panel->setFixedWidth(320);
+    input_panel->setObjectName(QStringLiteral("planInputPanel"));
+    input_panel->setFixedWidth(input_panel_width());
     input_panel->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* input_layout = new QVBoxLayout(input_panel);
     input_layout->setContentsMargins(16, 12, 16, 12);
     input_layout->setSpacing(8);
 
     savings_title_ = new QLabel(tr("SAVINGS RATE ANALYSIS"));
     savings_title_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     input_layout->addWidget(savings_title_);
 
     savings_desc_ = new QLabel(tr("Projects wealth accumulation across a range of savings rates, "
                                   "starting from your current portfolio value."));
     savings_desc_->setWordWrap(true);
-    savings_desc_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    savings_desc_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-4) + "px;").arg(ui::colors::TEXT_TERTIARY()));
     input_layout->addWidget(savings_desc_);
 
     sav_assump_note_ = new QLabel;
     sav_assump_note_->setWordWrap(true);
-    sav_assump_note_->setStyleSheet(QString("color:%1; font-size:9px; padding:2px 0;").arg(ui::colors::CYAN()));
+    sav_assump_note_->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; padding:2px 0;").arg(ui::colors::CYAN()));
     input_layout->addWidget(sav_assump_note_);
 
     auto* form = new QFormLayout;
@@ -569,7 +637,6 @@ QWidget* PlanningView::build_savings_tab() {
     sav_income_ = new QDoubleSpinBox;
     sav_income_->setRange(0, 100000000);
     sav_income_->setValue(120000);
-    sav_income_->setPrefix("$ ");
     sav_income_->setDecimals(0);
     style_spin(sav_income_);
     l_sav_income_ = new QLabel(tr("Annual Income:"));
@@ -608,12 +675,12 @@ QWidget* PlanningView::build_savings_tab() {
     input_layout->addLayout(form);
 
     savings_calc_btn_ = new QPushButton(tr("CALCULATE"));
-    savings_calc_btn_->setFixedHeight(28);
+    savings_calc_btn_->setMinimumHeight(28);
     savings_calc_btn_->setCursor(Qt::PointingHandCursor);
     savings_calc_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none; font-size:10px; font-weight:700; }"
+        QString("QPushButton { background:%1; color:%3; border:none; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::AMBER(), ui::colors::WARNING()));
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::TEXT_ON_ACCENT()));
     connect(savings_calc_btn_, &QPushButton::clicked, this, &PlanningView::recalculate_savings);
     input_layout->addWidget(savings_calc_btn_);
     input_layout->addStretch();
@@ -628,7 +695,7 @@ QWidget* PlanningView::build_savings_tab() {
 
     savings_res_title_ = new QLabel(tr("WEALTH BY SAVINGS RATE"));
     savings_res_title_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     res_layout->addWidget(savings_res_title_);
 
     savings_table_ = new QTableWidget;
@@ -640,8 +707,8 @@ QWidget* PlanningView::build_savings_tab() {
     savings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     savings_table_->setSelectionMode(QAbstractItemView::NoSelection);
     savings_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; border:1px solid %3; gridline-color:%3; font-size:11px; }"
-                "QHeaderView::section { background:%4; color:%5; border:0; padding:6px; font-size:9px;"
+        QString("QTableWidget { background:%1; color:%2; border:1px solid %3; gridline-color:%3; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
+                "QHeaderView::section { background:%4; color:%5; border:0; padding:6px; font-size:" + fincept::ui::fonts::px(-5) + "px;"
                 "  font-weight:700; letter-spacing:0.5px; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(),
                  ui::colors::TEXT_SECONDARY()));
@@ -650,7 +717,7 @@ QWidget* PlanningView::build_savings_tab() {
     savings_status_label_ = new QLabel;
     savings_status_label_->setWordWrap(true);
     savings_status_label_->setStyleSheet(
-        QString("color:%1; font-size:12px; padding:8px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:8px;").arg(ui::colors::TEXT_SECONDARY()));
     res_layout->addWidget(savings_status_label_);
 
     layout->addWidget(results, 1);
@@ -683,41 +750,42 @@ void PlanningView::recalculate_goals() {
 
     const double progress = (target > 1e-6) ? (projected / target * 100.0) : 0.0;
 
-    goal_target_value_label_->setText(QString("%1 %2").arg(currency_, QString::number(target, 'f', 0)));
-    goal_projected_label_->setText(QString("%1 %2").arg(currency_, QString::number(projected, 'f', 0)));
-    goal_required_label_->setText(QString("%1 %2").arg(currency_, QString::number(required_monthly, 'f', 0)));
-    goal_progress_label_->setText(QString("%1%").arg(QString::number(std::min(progress, 999.0), 'f', 0)));
+    goal_target_value_label_->setText(ui::formatting::money(target, currency_, ui::formatting::Compact::None, 0));
+    goal_projected_label_->setText(ui::formatting::money(projected, currency_, ui::formatting::Compact::None, 0));
+    goal_required_label_->setText(ui::formatting::money(required_monthly, currency_, ui::formatting::Compact::None, 0));
+    goal_progress_label_->setText(QString("%1%").arg(ui::formatting::number(std::min(progress, 999.0), 0)));
 
     const bool on_track = projected >= target;
     const char* col = on_track ? ui::colors::POSITIVE : ui::colors::WARNING;
-    goal_progress_label_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(col));
+    planning_set_css(goal_progress_label_,
+                     QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:700;").arg(col));
 
     const QString name = goal_name_->text().trimmed().isEmpty() ? tr("this goal") : goal_name_->text().trimmed();
     if (on_track) {
-        goal_status_label_->setText(tr("✓ On track for %1. Saving %2 %3/month reaches %2 %4 in %5 years — "
-                                       "%6% of the %2 %7 target.")
+        goal_status_label_->setText(tr("✓ On track for %1. Saving %2/month reaches %3 in %4 years — "
+                                       "%5% of the %6 target.")
                                         .arg(name)
-                                        .arg(currency_)
-                                        .arg(QString::number(monthly, 'f', 0))
-                                        .arg(QString::number(projected, 'f', 0))
+                                        .arg(planning_money(monthly, currency_))
+                                        .arg(planning_money(projected, currency_))
                                         .arg(years)
-                                        .arg(QString::number(progress, 'f', 0))
-                                        .arg(QString::number(target, 'f', 0)));
-        goal_status_label_->setStyleSheet(
-            QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
+                                        .arg(ui::formatting::number(progress, 0))
+                                        .arg(planning_money(target, currency_)));
+        planning_set_css(goal_status_label_, QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) +
+                                                     "px; padding:12px;")
+                                                 .arg(ui::colors::POSITIVE()));
     } else {
-        goal_status_label_->setText(tr("⚠ Short of %1. At %2 %3/month you reach %2 %4 (%5%). "
-                                       "Save %2 %6/month to hit the %2 %7 target in %8 years.")
+        goal_status_label_->setText(tr("⚠ Short of %1. At %2/month you reach %3 (%4%). "
+                                       "Save %5/month to hit the %6 target in %7 years.")
                                         .arg(name)
-                                        .arg(currency_)
-                                        .arg(QString::number(monthly, 'f', 0))
-                                        .arg(QString::number(projected, 'f', 0))
-                                        .arg(QString::number(progress, 'f', 0))
-                                        .arg(QString::number(required_monthly, 'f', 0))
-                                        .arg(QString::number(target, 'f', 0))
+                                        .arg(planning_money(monthly, currency_))
+                                        .arg(planning_money(projected, currency_))
+                                        .arg(ui::formatting::number(progress, 0))
+                                        .arg(planning_money(required_monthly, currency_))
+                                        .arg(planning_money(target, currency_))
                                         .arg(years));
-        goal_status_label_->setStyleSheet(
-            QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::WARNING()));
+        planning_set_css(goal_status_label_, QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) +
+                                                     "px; padding:12px;")
+                                                 .arg(ui::colors::WARNING()));
     }
 
     // Monte Carlo probability of hitting this goal, calibrated to portfolio vol.
@@ -731,13 +799,12 @@ void PlanningView::recalculate_goals() {
             // NOTE: QString::arg() has no "%%" escape (that is printf/asprintf).
             // "%2%%" rendered a literal double percent sign — use "%2%".
             goal_mc_label_->setText(tr("Monte Carlo: <b><span style='color:%1'>%2% chance</span></b> of reaching "
-                                       "%3 %4 — likely %3 %5 – %3 %6.")
+                                       "%3 — likely %4 – %5.")
                                         .arg(pc)
-                                        .arg(QString::number(mc.success_prob * 100, 'f', 0))
-                                        .arg(currency_)
-                                        .arg(QString::number(target, 'f', 0))
-                                        .arg(QString::number(mc.p5, 'f', 0))
-                                        .arg(QString::number(mc.p95, 'f', 0)));
+                                        .arg(ui::formatting::number(mc.success_prob * 100, 0))
+                                        .arg(planning_money(target, currency_).toHtmlEscaped())
+                                        .arg(planning_money(mc.p5, currency_).toHtmlEscaped())
+                                        .arg(planning_money(mc.p95, currency_).toHtmlEscaped()));
         }
     }
 
@@ -793,45 +860,41 @@ void PlanningView::recalculate_savings() {
 
         savings_table_->setItem(
             i, 0,
-            make_item(QString("%1%%2").arg(QString::number(rate, 'f', 0), is_base ? tr("  (current)") : QString())));
+            make_item(QString("%1%%2").arg(ui::formatting::number(rate, 0), is_base ? tr("  (current)") : QString())));
         savings_table_->setItem(i, 1,
-                                make_item(QString("%1 %2").arg(currency_, QString::number(annual_saved, 'f', 0))));
-        savings_table_->setItem(i, 2, make_item(QString("%1 %2").arg(currency_, QString::number(wealth, 'f', 0))));
+                                make_item(ui::formatting::money(annual_saved, currency_, ui::formatting::Compact::None, 0)));
+        savings_table_->setItem(i, 2, make_item(ui::formatting::money(wealth, currency_, ui::formatting::Compact::None, 0)));
         const char* dcol = diff > 0   ? ui::colors::POSITIVE
                            : diff < 0 ? ui::colors::NEGATIVE
                                       : ui::colors::TEXT_TERTIARY();
-        savings_table_->setItem(i, 3,
-                                make_item(is_base ? QStringLiteral("—")
-                                                  : QString("%1%2 %3").arg(diff >= 0 ? "+" : "-", currency_,
-                                                                           QString::number(std::abs(diff), 'f', 0)),
-                                          dcol));
+        savings_table_->setItem(
+            i, 3,
+            make_item(is_base ? ui::formatting::placeholder()
+                              : ui::formatting::signed_money(diff, currency_, ui::formatting::Compact::None, 0),
+                      dcol));
     }
 
     const auto [base_annual, base_proj] = project(base_rate);
-    savings_status_label_->setText(tr("At a %1% savings rate you set aside %2 %3/year and project %2 %4 "
-                                      "after %5 years (%6% annual return, starting from %2 %7).")
-                                       .arg(QString::number(base_rate, 'f', 0))
-                                       .arg(currency_)
-                                       .arg(QString::number(base_annual, 'f', 0))
-                                       .arg(QString::number(base_proj, 'f', 0))
+    savings_status_label_->setText(tr("At a %1% savings rate you set aside %2/year and project %3 "
+                                      "after %4 years (%5% annual return, starting from %6).")
+                                       .arg(ui::formatting::number(base_rate, 0))
+                                       .arg(planning_money(base_annual, currency_))
+                                       .arg(planning_money(base_proj, currency_))
                                        .arg(years)
-                                       .arg(QString::number(sav_return_->value(), 'f', 1))
-                                       .arg(QString::number(start_capital, 'f', 0)));
+                                       .arg(ui::formatting::number(sav_return_->value(), 1))
+                                       .arg(planning_money(start_capital, currency_)));
 }
 
 void PlanningView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
+    const bool ccy_changed = currency != currency_;
     currency_ = currency;
     has_data_ = true;
 
-    // Money inputs must reflect the portfolio's own currency, not a hardcoded
-    // "$". Result labels in this view already use currency_ (e.g. "INR 60000"),
-    // so prefix the spin boxes with the same currency code to stay consistent.
-    const QString prefix = (currency_.isEmpty() ? QStringLiteral("USD") : currency_) + " ";
-    for (QDoubleSpinBox* sb : {annual_expense_, monthly_contrib_, goal_target_, goal_monthly_, sav_income_}) {
-        if (sb)
-            sb->setPrefix(prefix);
-    }
+    // The money inputs carry the portfolio's own currency unit, placed like the
+    // results beside them ("$ 60,000", "60.000 €").
+    if (ccy_changed)
+        bind_money_affixes();
 
     load_goals();
     recalculate();
@@ -880,8 +943,8 @@ void PlanningView::recompute_assumptions() {
     const QString note = have_history_
                              ? tr("◉ Calibrated to your portfolio: %1% annualised time-weighted return, %2% "
                                   "volatility (from %3 periods of history). Edit any field to override.")
-                                   .arg(QString::number(hist_cagr_ * 100, 'f', 1))
-                                   .arg(QString::number(hist_vol_ * 100, 'f', 1))
+                                   .arg(ui::formatting::number(hist_cagr_ * 100, 1))
+                                   .arg(ui::formatting::number(hist_vol_ * 100, 1))
                                    .arg(periods)
                              : tr("○ Not enough portfolio history yet to calibrate — using your typed assumptions. "
                                   "Estimates improve as daily snapshots accumulate.");
@@ -925,6 +988,8 @@ PlanningView::McResult PlanningView::monte_carlo(double start, double monthly, i
     const double annual_contrib = monthly * 12.0;
     QVector<double> ends;
     ends.reserve(kSims);
+    // Balance of every path at the end of every year, for the percentile fan.
+    QVector<QVector<double>> by_year(years + 1, QVector<double>(kSims, start));
     int success = 0;
     for (int sim = 0; sim < kSims; ++sim) {
         double bal = start;
@@ -932,6 +997,7 @@ PlanningView::McResult PlanningView::monte_carlo(double start, double monthly, i
             bal = bal * std::exp(nd(gen)) + annual_contrib;
             if (bal < 0.0)
                 bal = 0.0;
+            by_year[y + 1][sim] = bal;
         }
         ends.append(bal);
         if (bal >= target)
@@ -942,6 +1008,16 @@ PlanningView::McResult PlanningView::monte_carlo(double start, double monthly, i
     r.p5 = pct(0.05);
     r.p50 = pct(0.50);
     r.p95 = pct(0.95);
+    for (auto& col : by_year) {
+        std::sort(col.begin(), col.end());
+        auto q = [&col](double p) { return col[std::clamp(static_cast<int>(p * col.size()), 0, int(col.size()) - 1)]; };
+        r.y_p5.append(q(0.05));
+        r.y_p25.append(q(0.25));
+        r.y_p50.append(q(0.50));
+        r.y_p75.append(q(0.75));
+        r.y_p95.append(q(0.95));
+    }
+    r.paths = kSims;
     r.success_prob = static_cast<double>(success) / kSims;
     r.valid = true;
     return r;
@@ -991,8 +1067,14 @@ void PlanningView::save_goals() {
     if (pid.isEmpty())
         return;
     if (property(kGoalsReadFailedProp).toBool()) {
-        LOG_WARN("Planning", "Skipping goal save — the stored goals could not be read, so the list on screen is "
-                             "empty rather than the user's goals");
+        // The read error itself was logged when the view loaded; say what the store answers now.
+        const auto probe = SettingsRepository::instance().get(QStringLiteral("pi.goals.") + pid);
+        LOG_WARN("Planning", logf("Skipping goal save — the stored goals could not be read, so the list on screen is "
+                                  "empty rather than the user's goals",
+                                  {{"portfolio", pid},
+                                   {"key", QStringLiteral("pi.goals.") + pid},
+                                   {"error", probe.is_err() ? QString::fromStdString(probe.error())
+                                                            : QStringLiteral("read failed when the view loaded")}}));
         QMessageBox::warning(this, tr("Goals Not Saved"),
                              tr("Your saved goals could not be read from the database, so this change was not "
                                 "saved — nothing stored was overwritten. Reopen this view to retry."));
@@ -1038,12 +1120,12 @@ void PlanningView::refresh_goals_list() {
         };
         goals_list_->setItem(i, 0, item(g.name.isEmpty() ? tr("(unnamed)") : g.name, ui::colors::TEXT_PRIMARY));
         goals_list_->setItem(i, 1,
-                             item(QString("%1 %2").arg(currency_, QString::number(g.target, 'f', 0)),
+                             item(ui::formatting::money(g.target, currency_, ui::formatting::Compact::None, 0),
                                   ui::colors::TEXT_SECONDARY, Qt::AlignRight));
         goals_list_->setItem(
-            i, 2, item(QString("%1%").arg(QString::number(funded_now, 'f', 0)), ui::colors::CYAN, Qt::AlignRight));
+            i, 2, item(QString("%1%").arg(ui::formatting::number(funded_now, 0)), ui::colors::CYAN, Qt::AlignRight));
         goals_list_->setItem(i, 3,
-                             item(QString("%1%").arg(QString::number(std::min(proj_pct, 999.0), 'f', 0)),
+                             item(QString("%1%").arg(ui::formatting::number(std::min(proj_pct, 999.0), 0)),
                                   on_track ? ui::colors::POSITIVE : ui::colors::WARNING, Qt::AlignRight));
     }
 }
@@ -1219,23 +1301,24 @@ void PlanningView::recalculate() {
     double projected = fv_portfolio + fv_contrib;
     double gap = projected - target;
 
-    years_label_->setText(QString::number(years, 'f', 0));
-    target_label_->setText(QString("%1 %2").arg(currency_, QString::number(target, 'f', 0)));
-    projected_label_->setText(QString("%1 %2").arg(currency_, QString::number(projected, 'f', 0)));
+    years_label_->setText(ui::formatting::number(years, 0));
+    target_label_->setText(ui::formatting::money(target, currency_, ui::formatting::Compact::None, 0));
+    projected_label_->setText(ui::formatting::money(projected, currency_, ui::formatting::Compact::None, 0));
 
     const char* gap_color = gap >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    gap_label_->setText(
-        QString("%1%2 %3").arg(gap >= 0 ? "+" : "").arg(currency_).arg(QString::number(std::abs(gap), 'f', 0)));
-    gap_label_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(gap_color));
+    // Same money format as the tiles beside it ("+€765,393", not "+EUR 765,393").
+    gap_label_->setText(ui::formatting::signed_money(gap, currency_, ui::formatting::Compact::None, 0));
+    planning_set_css(gap_label_,
+                     QString("color:%1; font-size:" + fincept::ui::fonts::px(4) + "px; font-weight:700;").arg(gap_color));
 
     if (gap >= 0) {
-        status_label_->setText(tr("\u2713 On track! Your projected retirement fund of %1 %2 "
-                                  "exceeds your target of %1 %3 by %1 %4.")
-                                   .arg(currency_)
-                                   .arg(QString::number(projected, 'f', 0))
-                                   .arg(QString::number(target, 'f', 0))
-                                   .arg(QString::number(gap, 'f', 0)));
-        status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
+        status_label_->setText(tr("\u2713 On track! Your projected retirement fund of %1 "
+                                  "exceeds your target of %2 by %3.")
+                                   .arg(planning_money(projected, currency_))
+                                   .arg(planning_money(target, currency_))
+                                   .arg(planning_money(gap, currency_)));
+        planning_set_css(status_label_, QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:12px;")
+                                            .arg(ui::colors::POSITIVE()));
     } else {
         // Annuity factor. Guard both degenerate inputs: a zero real return
         // (expected return == inflation, a perfectly plausible entry) made the
@@ -1243,12 +1326,12 @@ void PlanningView::recalculate() {
         // current age) made it 0 as well.
         const double annuity_factor = planning_annuity_factor(monthly_rate, months);
         const double needed_monthly = annuity_factor > 1e-9 ? (-gap) / annuity_factor : 0.0;
-        status_label_->setText(tr("\u26A0 Shortfall of %1 %2. Consider increasing monthly savings "
-                                  "by %1 %3 to close the gap.")
-                                   .arg(currency_)
-                                   .arg(QString::number(std::abs(gap), 'f', 0))
-                                   .arg(QString::number(needed_monthly, 'f', 0)));
-        status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::WARNING()));
+        status_label_->setText(tr("\u26A0 Shortfall of %1. Consider increasing monthly savings "
+                                  "by %2 to close the gap.")
+                                   .arg(planning_money(std::abs(gap), currency_))
+                                   .arg(planning_money(needed_monthly, currency_)));
+        planning_set_css(status_label_, QString("color:%1; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:12px;")
+                                            .arg(ui::colors::WARNING()));
     }
 
     // \u2500\u2500 Monte Carlo (probabilistic, calibrated to portfolio vol)
@@ -1260,18 +1343,33 @@ void PlanningView::recalculate() {
             const char* pc = mc.success_prob >= 0.75  ? ui::colors::POSITIVE
                              : mc.success_prob >= 0.5 ? ui::colors::WARNING
                                                       : ui::colors::NEGATIVE;
+            const auto m0 = [this](double v) {
+                return ui::formatting::money(v, currency_, ui::formatting::Compact::None, 0).toHtmlEscaped();
+            };
             retire_mc_label_->setText(
-                tr("Monte Carlo (2000 runs, %1% vol): <b><span style='color:%2'>%3% chance</span></b> "
-                   "of reaching your target. Likely range %4 %5 \u2013 %6 %7 (median %4 %8).")
-                    .arg(QString::number(vol * 100, 'f', 0))
-                    .arg(pc)
-                    .arg(QString::number(mc.success_prob * 100, 'f', 0))
-                    .arg(currency_)
-                    .arg(QString::number(mc.p5, 'f', 0))
-                    .arg(currency_)
-                    .arg(QString::number(mc.p95, 'f', 0))
-                    .arg(QString::number(mc.p50, 'f', 0)));
+                tr("Monte Carlo (%1 paths, %2 volatility%3): <b><span style='color:%4'>%5 chance</span></b> of "
+                   "reaching your target. 90 % of outcomes between %6 and %7 (median %8).")
+                    .arg(ui::formatting::number(mc.paths, 0), ui::formatting::pct(vol * 100, 0, false),
+                         have_history_ ? tr(", from the portfolio's history") : tr(", assumed \u2014 no history yet"), pc,
+                         ui::formatting::pct(mc.success_prob * 100, 0, false), m0(mc.p5), m0(mc.p95), m0(mc.p50)));
             retire_mc_label_->setTextFormat(Qt::RichText);
+            if (retire_fan_) {
+                QVector<double> xs;
+                for (int y = 0; y < mc.y_p50.size(); ++y)
+                    xs.append(y);
+                retire_fan_->set_fan(xs, {ui::FanBand{5, 95, mc.y_p5, mc.y_p95}, ui::FanBand{25, 75, mc.y_p25, mc.y_p75}},
+                                     mc.y_p50);
+                retire_fan_->clear_reference_lines();
+                if (target > 0)
+                    retire_fan_->add_reference_line(target, tr("Target"));
+                const QString ccy = currency_;
+                retire_fan_->set_value_formatter(
+                    [ccy](double v) { return ui::formatting::money(v, ccy, ui::formatting::Compact::FromSettings); });
+                retire_fan_->set_state(ui::PaintedChart::Ready);
+            }
+        } else if (retire_fan_) {
+            retire_fan_->clear();
+            retire_fan_->set_state(ui::PaintedChart::Empty, tr("Set the inputs to simulate the plan."));
         }
     }
 
@@ -1286,13 +1384,12 @@ void PlanningView::recalculate() {
         // been measured and the 30% was an assumption.
         retire_stress_label_->setText(
             (have_dd ? tr("Stress: a %1% drawdown (your historical max) near retirement would cut the projection to "
-                          "%2 %3 \u2014 %4% of target.")
+                          "%2 \u2014 %3% of target.")
                      : tr("Stress: an assumed %1% drawdown (no measured history yet) near retirement would cut the "
-                          "projection to %2 %3 \u2014 %4% of target."))
-                .arg(QString::number(dd_pct, 'f', 0))
-                .arg(currency_)
-                .arg(QString::number(shocked, 'f', 0))
-                .arg(QString::number(shocked_funded, 'f', 0)));
+                          "projection to %2 \u2014 %3% of target."))
+                .arg(ui::formatting::number(dd_pct, 0))
+                .arg(planning_money(shocked, currency_))
+                .arg(ui::formatting::number(shocked_funded, 0)));
     }
 }
 

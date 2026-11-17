@@ -30,7 +30,6 @@ PARAMETERS:
 
 
 import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
@@ -169,84 +168,46 @@ class InventoryAnalyzer(BaseAnalyzer):
     def analyze(self, statements: FinancialStatements,
                 comparative_data: Optional[List[FinancialStatements]] = None,
                 industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
-        """
-        Comprehensive inventory analysis
-
-        Args:
-            statements: Current period financial statements
-            comparative_data: Historical financial statements for trend analysis
-            industry_data: Industry benchmarks and peer data
-
-        Returns:
-            List of analysis results covering all inventory aspects
-        """
+        """Comprehensive inventory analysis"""
         results = []
-
-        # Check if inventory analysis is applicable
-        inventory = statements.balance_sheet.get('inventory', 0)
-        if inventory <= 0:
-            results.append(AnalysisResult(
-                analysis_type=AnalysisType.ACTIVITY,
-                metric_name="Inventory Analysis",
-                value=0.0,
-                interpretation="No inventory reported - inventory analysis not applicable",
-                risk_level=RiskLevel.LOW,
-                methodology="Balance sheet inventory examination"
-            ))
+        inventory = statements.balance_sheet.get('inventory')
+        if inventory is None or inventory <= 0:
+            results.append(self.unavailable(
+                AnalysisType.ACTIVITY, "Inventory Analysis",
+                "inventory not reported" if inventory is None else "no inventory carried - analysis not applicable",
+                "Balance sheet inventory examination"))
             return results
 
-        # Core inventory efficiency analysis
         results.extend(self._analyze_inventory_efficiency(statements, comparative_data, industry_data))
-
-        # Inventory valuation analysis
         results.extend(self._analyze_inventory_valuation(statements, comparative_data))
-
-        # Lower of cost and NRV analysis
         results.extend(self._analyze_lower_cost_nrv(statements, comparative_data))
-
-        # Inflation/deflation impact analysis
         results.extend(self._analyze_inflation_impact(statements, comparative_data, industry_data))
-
-        # Inventory composition analysis
         results.extend(self._analyze_inventory_composition(statements))
-
-        # Disclosure quality assessment
         results.extend(self._assess_inventory_disclosures(statements))
-
         return results
 
     def _analyze_inventory_efficiency(self, statements: FinancialStatements,
                                       comparative_data: Optional[List[FinancialStatements]] = None,
                                       industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
-        """Analyze inventory efficiency and turnover metrics"""
+        """Inventory turnover, DIO, inventory/sales, inventory vs sales growth"""
         results = []
-
         balance_sheet = statements.balance_sheet
         income_statement = statements.income_statement
 
-        inventory = balance_sheet.get('inventory', 0)
-        cost_of_sales = income_statement.get('cost_of_sales', 0)
-        revenue = income_statement.get('revenue', 0)
+        inventory = balance_sheet['inventory']
+        cost_of_sales = income_statement.get('cost_of_sales')
+        revenue = income_statement.get('revenue')
+        industry_type = str(industry_data.get('type', 'general')).lower() if isinstance(industry_data, dict) else 'general'
 
-        # Calculate average inventory if historical data available
-        avg_inventory = inventory
-        if comparative_data and len(comparative_data) > 0:
-            prev_inventory = comparative_data[-1].balance_sheet.get('inventory', 0)
-            if prev_inventory > 0:
-                avg_inventory = (inventory + prev_inventory) / 2
+        def bench(name):
+            table = self.inventory_benchmarks[name]
+            return table.get(industry_type, table['general'])
 
-        # Inventory Turnover Ratio
-        if avg_inventory > 0 and cost_of_sales > 0:
-            inventory_turnover = self.safe_divide(cost_of_sales, avg_inventory)
+        avg_inventory, basis = self.average_balance(statements, comparative_data, 'inventory')
 
-            # Get appropriate benchmark
-            industry_type = industry_data.get('type', 'general') if industry_data else 'general'
-            benchmark = self.inventory_benchmarks['inventory_turnover'].get(industry_type,
-                                                                            self.inventory_benchmarks[
-                                                                                'inventory_turnover']['general'])
-
-            risk_level = self.assess_risk_level(inventory_turnover, benchmark, higher_is_better=True)
-
+        if cost_of_sales is not None and cost_of_sales > 0:
+            inventory_turnover = cost_of_sales / avg_inventory
+            risk_level = self.assess_risk_level(inventory_turnover, bench('inventory_turnover'), higher_is_better=True)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.ACTIVITY,
                 metric_name="Inventory Turnover",
@@ -256,23 +217,12 @@ class InventoryAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(inventory_turnover, industry_data.get(
                     'inventory_turnover') if industry_data else None),
-                methodology="Cost of Goods Sold / Average Inventory",
+                methodology=f"Cost of Sales / Inventory ({self.basis_note(basis)})",
                 limitations=["Seasonality may affect single-period calculations"]
             ))
 
-        # Days Inventory Outstanding (DIO)
-        if avg_inventory > 0 and cost_of_sales > 0:
-            daily_cogs = cost_of_sales / 365
-            days_inventory = self.safe_divide(avg_inventory, daily_cogs)
-
-            # Get appropriate benchmark
-            benchmark = self.inventory_benchmarks['days_inventory_outstanding'].get(industry_type,
-                                                                                    self.inventory_benchmarks[
-                                                                                        'days_inventory_outstanding'][
-                                                                                        'general'])
-
-            risk_level = self.assess_risk_level(days_inventory, benchmark, higher_is_better=False)
-
+            days_inventory = avg_inventory / cost_of_sales * 365
+            risk_level = self.assess_risk_level(days_inventory, bench('days_inventory_outstanding'), higher_is_better=False)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.ACTIVITY,
                 metric_name="Days Inventory Outstanding",
@@ -281,20 +231,16 @@ class InventoryAnalyzer(BaseAnalyzer):
                 risk_level=risk_level,
                 benchmark_comparison=self.compare_to_industry(days_inventory, industry_data.get(
                     'days_inventory') if industry_data else None),
-                methodology="(Average Inventory / COGS) × 365",
+                methodology=f"Inventory ({self.basis_note(basis)}) / Cost of Sales x 365",
                 limitations=["Does not account for seasonal inventory patterns"]
             ))
+        else:
+            results.append(self.unavailable(AnalysisType.ACTIVITY, "Inventory Turnover",
+                                            "cost of sales not reported", "Cost of Sales / Average Inventory"))
 
-        # Inventory to Sales Ratio
-        if revenue > 0:
-            inventory_to_sales = self.safe_divide(inventory, revenue)
-
-            benchmark = self.inventory_benchmarks['inventory_to_sales'].get(industry_type,
-                                                                            self.inventory_benchmarks[
-                                                                                'inventory_to_sales']['general'])
-
-            risk_level = self.assess_risk_level(inventory_to_sales, benchmark, higher_is_better=False)
-
+        if revenue is not None and revenue > 0:
+            inventory_to_sales = inventory / revenue
+            risk_level = self.assess_risk_level(inventory_to_sales, bench('inventory_to_sales'), higher_is_better=False)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.ACTIVITY,
                 metric_name="Inventory to Sales Ratio",
@@ -305,403 +251,306 @@ class InventoryAnalyzer(BaseAnalyzer):
                 limitations=["Point-in-time measure may not reflect average levels"]
             ))
 
-        # Inventory growth analysis
-        if comparative_data and len(comparative_data) > 0:
-            prev_inventory = comparative_data[-1].balance_sheet.get('inventory', 0)
-            prev_revenue = comparative_data[-1].income_statement.get('revenue', 0)
-
-            if prev_inventory > 0:
-                inventory_growth = (inventory / prev_inventory) - 1
-
-                if prev_revenue > 0:
-                    revenue_growth = (revenue / prev_revenue) - 1
-
-                    # Compare inventory growth to sales growth
-                    if abs(revenue_growth) > 0.01:  # Avoid division by very small numbers
-                        growth_comparison = inventory_growth - revenue_growth
-
-                        if growth_comparison > 0.1:
-                            growth_interpretation = "Inventory growing faster than sales - potential build-up"
-                            growth_risk = RiskLevel.MODERATE
-                        elif growth_comparison < -0.1:
-                            growth_interpretation = "Inventory growing slower than sales - improving efficiency"
-                            growth_risk = RiskLevel.LOW
-                        else:
-                            growth_interpretation = "Inventory growth aligned with sales growth"
-                            growth_risk = RiskLevel.LOW
-
-                        results.append(AnalysisResult(
-                            analysis_type=AnalysisType.ACTIVITY,
-                            metric_name="Inventory vs Sales Growth",
-                            value=growth_comparison,
-                            interpretation=growth_interpretation,
-                            risk_level=growth_risk,
-                            methodology="Inventory Growth Rate - Revenue Growth Rate",
-                            limitations=["Single period comparison - trend analysis preferred"]
-                        ))
+        if comparative_data:
+            inventory_growth = self.growth(inventory, self.prior_value(comparative_data, 'balance_sheet', 'inventory'))
+            revenue_growth = self.growth(revenue, self.prior_value(comparative_data, 'income_statement', 'revenue'))
+            if inventory_growth is not None and revenue_growth is not None:
+                growth_comparison = inventory_growth - revenue_growth
+                if growth_comparison > 0.1:
+                    growth_interpretation, growth_risk = "Inventory growing faster than sales - potential build-up", RiskLevel.MODERATE
+                elif growth_comparison < -0.1:
+                    growth_interpretation, growth_risk = "Inventory growing slower than sales - improving efficiency", RiskLevel.LOW
+                else:
+                    growth_interpretation, growth_risk = "Inventory growth aligned with sales growth", RiskLevel.LOW
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.ACTIVITY,
+                    metric_name="Inventory vs Sales Growth",
+                    value=growth_comparison,
+                    interpretation=growth_interpretation,
+                    risk_level=growth_risk,
+                    methodology="Inventory Growth Rate - Revenue Growth Rate",
+                    limitations=["Single period comparison - trend analysis preferred"]
+                ))
 
         return results
 
     def _analyze_inventory_valuation(self, statements: FinancialStatements,
                                      comparative_data: Optional[List[FinancialStatements]] = None) -> List[
         AnalysisResult]:
-        """Analyze inventory valuation methods and their impact"""
+        """LIFO reserve and inventory method"""
         results = []
-
         notes = statements.notes
-        balance_sheet = statements.balance_sheet
+        inventory = statements.balance_sheet['inventory']
 
-        inventory = balance_sheet.get('inventory', 0)
-
-        # Check for LIFO reserve disclosure
-        lifo_reserve = notes.get('lifo_reserve', 0)
-
-        if lifo_reserve > 0:
-            # LIFO Reserve Analysis
-            lifo_reserve_ratio = self.safe_divide(lifo_reserve, inventory)
-
-            reserve_interpretation = "Significant LIFO reserve indicates substantial inflation impact" if lifo_reserve_ratio > 0.2 else "Moderate LIFO reserve" if lifo_reserve_ratio > 0.1 else "Small LIFO reserve impact"
-            reserve_risk = RiskLevel.MODERATE if lifo_reserve_ratio > 0.3 else RiskLevel.LOW
-
+        lifo_reserve = self.note_number(notes, 'lifo_reserve')
+        if lifo_reserve is not None and lifo_reserve > 0:
+            lifo_reserve_ratio = lifo_reserve / inventory
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="LIFO Reserve Ratio",
                 value=lifo_reserve_ratio,
-                interpretation=reserve_interpretation,
-                risk_level=reserve_risk,
-                methodology="LIFO Reserve / Total Inventory",
+                interpretation=(f"FIFO inventory would be {self.format_percentage(lifo_reserve_ratio)} higher than the "
+                                f"reported LIFO amount ({inventory + lifo_reserve:,.0f} vs {inventory:,.0f}); "
+                                + ("significant cumulative inflation effect" if lifo_reserve_ratio > 0.2
+                                   else "moderate LIFO reserve" if lifo_reserve_ratio > 0.1 else "small LIFO reserve")),
+                risk_level=RiskLevel.MODERATE if lifo_reserve_ratio > 0.3 else RiskLevel.LOW,
+                methodology="LIFO Reserve / LIFO Inventory; FIFO inventory = LIFO inventory + LIFO reserve",
                 limitations=["LIFO reserve represents cumulative impact over multiple periods"]
             ))
 
-            # FIFO-equivalent inventory value
-            fifo_equivalent_inventory = inventory + lifo_reserve
-            fifo_adjustment_ratio = self.safe_divide(lifo_reserve, inventory)
-
-            results.append(AnalysisResult(
-                analysis_type=AnalysisType.QUALITY,
-                metric_name="FIFO Equivalent Adjustment",
-                value=fifo_adjustment_ratio,
-                interpretation=f"FIFO inventory would be {self.format_percentage(fifo_adjustment_ratio)} higher than LIFO",
-                risk_level=RiskLevel.LOW,
-                methodology="LIFO Reserve / LIFO Inventory",
-                limitations=["Adjustment provides approximate FIFO equivalent"]
-            ))
-
-        # Inventory method impact analysis
-        cost_method = notes.get('inventory_method', 'unknown')
-        if cost_method != 'unknown':
-            method_risk_assessment = self._assess_method_appropriateness(cost_method, statements)
-
+        cost_method = self.note_text(notes, 'inventory_method')
+        if cost_method:
+            assessment = self._assess_method_appropriateness(cost_method, statements)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Inventory Method Assessment",
-                value=1.0,
-                interpretation=f"Company uses {cost_method} method - {method_risk_assessment['assessment']}",
-                risk_level=method_risk_assessment['risk'],
+                value=None,
+                interpretation=f"Company uses {cost_method.upper()} - {assessment['assessment']}",
+                risk_level=assessment['risk'],
                 methodology="Qualitative assessment of inventory method appropriateness",
-                limitations=method_risk_assessment['limitations']
+                limitations=assessment['limitations'],
+                label=cost_method
             ))
 
         return results
 
     def _analyze_lower_cost_nrv(self, statements: FinancialStatements,
                                 comparative_data: Optional[List[FinancialStatements]] = None) -> List[AnalysisResult]:
-        """Analyze lower of cost and net realizable value measurements"""
+        """Lower of cost and net realizable value"""
         results = []
-
-        balance_sheet = statements.balance_sheet
         notes = statements.notes
+        inventory = statements.balance_sheet['inventory']
 
-        inventory = balance_sheet.get('inventory', 0)
-        inventory_writedown = notes.get('inventory_writedown', 0)
-        inventory_reserve = notes.get('inventory_obsolescence_reserve', 0)
-
-        # Inventory writedown analysis
-        if inventory_writedown > 0:
-            writedown_ratio = self.safe_divide(inventory_writedown, inventory + inventory_writedown)
-
-            writedown_interpretation = "Significant inventory writedown indicates valuation issues" if writedown_ratio > 0.05 else "Moderate inventory adjustment" if writedown_ratio > 0.02 else "Minor inventory writedown"
-            writedown_risk = RiskLevel.HIGH if writedown_ratio > 0.1 else RiskLevel.MODERATE if writedown_ratio > 0.05 else RiskLevel.LOW
-
+        inventory_writedown = self.note_number(notes, 'inventory_writedown')
+        if inventory_writedown and inventory_writedown > 0:
+            writedown_ratio = inventory_writedown / (inventory + inventory_writedown)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Inventory Writedown Impact",
                 value=writedown_ratio,
-                interpretation=writedown_interpretation,
-                risk_level=writedown_risk,
+                interpretation=("Significant inventory writedown indicates valuation issues" if writedown_ratio > 0.05
+                                else "Moderate inventory adjustment" if writedown_ratio > 0.02 else "Minor inventory writedown"),
+                risk_level=RiskLevel.HIGH if writedown_ratio > 0.1 else RiskLevel.MODERATE if writedown_ratio > 0.05 else RiskLevel.LOW,
                 methodology="Inventory Writedown / (Inventory + Writedown)",
                 limitations=["Writedowns may indicate obsolescence or market decline"]
             ))
 
-        # Obsolescence reserve analysis
-        if inventory_reserve > 0:
-            reserve_ratio = self.safe_divide(inventory_reserve, inventory + inventory_reserve)
-
-            reserve_interpretation = "High obsolescence reserve suggests inventory quality concerns" if reserve_ratio > 0.1 else "Moderate obsolescence provision" if reserve_ratio > 0.05 else "Conservative obsolescence reserve"
-            reserve_risk = RiskLevel.MODERATE if reserve_ratio > 0.15 else RiskLevel.LOW
-
+        inventory_reserve = self.note_number(notes, 'inventory_obsolescence_reserve')
+        if inventory_reserve and inventory_reserve > 0:
+            reserve_ratio = inventory_reserve / (inventory + inventory_reserve)
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="Obsolescence Reserve Ratio",
                 value=reserve_ratio,
-                interpretation=reserve_interpretation,
-                risk_level=reserve_risk,
+                interpretation=("High obsolescence reserve suggests inventory quality concerns" if reserve_ratio > 0.1
+                                else "Moderate obsolescence provision" if reserve_ratio > 0.05 else "Conservative obsolescence reserve"),
+                risk_level=RiskLevel.MODERATE if reserve_ratio > 0.15 else RiskLevel.LOW,
                 methodology="Obsolescence Reserve / (Inventory + Reserve)",
                 limitations=["Reserve adequacy depends on inventory composition and age"]
             ))
 
-        # NRV compliance assessment
         results.extend(self._assess_nrv_compliance(statements, comparative_data))
-
         return results
 
     def _analyze_inflation_impact(self, statements: FinancialStatements,
                                   comparative_data: Optional[List[FinancialStatements]] = None,
                                   industry_data: Optional[Dict] = None) -> List[AnalysisResult]:
-        """Analyze impact of inflation/deflation on inventory and ratios"""
+        """LIFO-to-FIFO conversion of COGS and gross margin (CFA):
+        FIFO COGS = LIFO COGS - (ending LIFO reserve - beginning LIFO reserve)."""
         results = []
-
         notes = statements.notes
         income_statement = statements.income_statement
+        cost_method = self.note_text(notes, 'inventory_method')
+        lifo_reserve = self.note_number(notes, 'lifo_reserve')
 
-        # Determine economic environment
-        inflation_rate = industry_data.get('inflation_rate', 0) if industry_data else 0
-        economic_environment = self._determine_economic_environment(inflation_rate)
+        revenue = income_statement.get('revenue')
+        cost_of_sales = income_statement.get('cost_of_sales')
+        uses_lifo = cost_method == 'lifo' or (lifo_reserve is not None and lifo_reserve > 0)
 
-        cost_method = notes.get('inventory_method', 'unknown')
-        lifo_reserve = notes.get('lifo_reserve', 0)
+        if uses_lifo and revenue and revenue > 0 and cost_of_sales is not None:
+            reserve_change = self._lifo_reserve_change(statements, comparative_data)
+            if reserve_change is None:
+                results.append(self.unavailable(
+                    AnalysisType.QUALITY, "FIFO-Equivalent Gross Margin Impact",
+                    "the change in LIFO reserve is needed (prior-period lifo_reserve in history or notes.prior_lifo_reserve)",
+                    "FIFO COGS = LIFO COGS - change in LIFO reserve"))
+            else:
+                fifo_cogs = cost_of_sales - reserve_change
+                margin_impact = (revenue - fifo_cogs) / revenue - (revenue - cost_of_sales) / revenue
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.QUALITY,
+                    metric_name="FIFO-Equivalent Gross Margin Impact",
+                    value=margin_impact,
+                    interpretation=(f"Under FIFO, cost of sales would be {fifo_cogs:,.0f} instead of {cost_of_sales:,.0f}, "
+                                    f"gross margin {self.format_percentage(abs(margin_impact))} "
+                                    f"{'higher' if margin_impact > 0 else 'lower' if margin_impact < 0 else 'unchanged'}"),
+                    risk_level=RiskLevel.MODERATE if abs(margin_impact) > 0.05 else RiskLevel.LOW,
+                    methodology="FIFO gross margin - LIFO gross margin, FIFO COGS = LIFO COGS - change in LIFO reserve",
+                    limitations=["Ignores the tax effect of the LIFO/FIFO difference on net income"]
+                ))
 
-        if economic_environment != EconomicEnvironment.STABLE and cost_method in ['fifo', 'lifo']:
-            # Inflation impact on COGS and margins
-            revenue = income_statement.get('revenue', 0)
-            cost_of_sales = income_statement.get('cost_of_sales', 0)
-
-            if revenue > 0 and cost_of_sales > 0:
-                current_gross_margin = self.safe_divide(revenue - cost_of_sales, revenue)
-
-                # Estimate impact of different methods
-                if cost_method == 'lifo' and lifo_reserve > 0:
-                    # Estimate FIFO COGS
-                    estimated_fifo_cogs = cost_of_sales - lifo_reserve  # Simplified estimation
-                    estimated_fifo_margin = self.safe_divide(revenue - estimated_fifo_cogs, revenue)
-
-                    margin_impact = estimated_fifo_margin - current_gross_margin
-
-                    results.append(AnalysisResult(
-                        analysis_type=AnalysisType.QUALITY,
-                        metric_name="Inflation Method Impact",
-                        value=margin_impact,
-                        interpretation=f"FIFO would result in {self.format_percentage(abs(margin_impact))} {'higher' if margin_impact > 0 else 'lower'} gross margin",
-                        risk_level=RiskLevel.MODERATE if abs(margin_impact) > 0.05 else RiskLevel.LOW,
-                        methodology="Estimated FIFO margin - Current LIFO margin",
-                        limitations=["Estimation based on LIFO reserve approximation"]
-                    ))
-
-                # Tax implications
-                if economic_environment == EconomicEnvironment.INFLATIONARY:
-                    tax_preferred_method = "LIFO" if cost_method == 'lifo' else "LIFO (not used)"
-                    tax_impact_description = "LIFO provides tax benefits in inflationary environment" if cost_method == 'lifo' else "FIFO results in higher taxable income during inflation"
-
-                    results.append(AnalysisResult(
-                        analysis_type=AnalysisType.QUALITY,
-                        metric_name="Tax Method Efficiency",
-                        value=1.0 if cost_method == 'lifo' else 0.0,
-                        interpretation=tax_impact_description,
-                        risk_level=RiskLevel.LOW if cost_method == 'lifo' else RiskLevel.MODERATE,
-                        methodology="Qualitative assessment of method choice in inflationary environment"
-                    ))
+        inflation_rate = industry_data.get('inflation_rate') if industry_data else None
+        if isinstance(inflation_rate, (int, float)) and cost_method in ('fifo', 'lifo'):
+            environment = self._determine_economic_environment(float(inflation_rate))
+            if environment == EconomicEnvironment.INFLATIONARY:
+                results.append(AnalysisResult(
+                    analysis_type=AnalysisType.QUALITY,
+                    metric_name="Tax Method Efficiency",
+                    value=None,
+                    interpretation=("LIFO lowers taxable income when prices rise" if cost_method == 'lifo'
+                                    else "FIFO results in higher taxable income during inflation (LIFO not permitted under IFRS)"),
+                    risk_level=RiskLevel.LOW if cost_method == 'lifo' else RiskLevel.MODERATE,
+                    methodology="Qualitative assessment of method choice in an inflationary environment",
+                    label=cost_method
+                ))
 
         return results
 
     def _analyze_inventory_composition(self, statements: FinancialStatements) -> List[AnalysisResult]:
-        """Analyze inventory composition and mix"""
+        """Raw materials / WIP / finished goods mix (note disclosures)"""
         results = []
-
         notes = statements.notes
-        balance_sheet = statements.balance_sheet
+        total_inventory = statements.balance_sheet['inventory']
 
-        total_inventory = balance_sheet.get('inventory', 0)
-
-        # Analyze inventory components if disclosed
-        inventory_components = {
-            'raw_materials': notes.get('raw_materials_inventory', 0),
-            'work_in_process': notes.get('wip_inventory', 0),
-            'finished_goods': notes.get('finished_goods_inventory', 0)
+        components = {
+            'raw_materials': self.note_number(notes, 'raw_materials_inventory'),
+            'work_in_process': self.note_number(notes, 'wip_inventory'),
+            'finished_goods': self.note_number(notes, 'finished_goods_inventory'),
         }
+        components = {k: v for k, v in components.items() if v is not None}
+        total_components = sum(components.values())
+        if not components or total_components <= 0 or abs(total_components - total_inventory) / total_inventory >= 0.1:
+            return results
 
-        total_components = sum(inventory_components.values())
-
-        if total_components > 0 and abs(total_components - total_inventory) / total_inventory < 0.1:
-            # Composition analysis
-            for component, value in inventory_components.items():
-                if value > 0:
-                    component_ratio = self.safe_divide(value, total_inventory)
-
-                    component_name = component.replace('_', ' ').title()
-
-                    results.append(AnalysisResult(
-                        analysis_type=AnalysisType.ACTIVITY,
-                        metric_name=f"{component_name} Composition",
-                        value=component_ratio,
-                        interpretation=f"{component_name} represents {self.format_percentage(component_ratio)} of total inventory",
-                        risk_level=RiskLevel.LOW,
-                        methodology=f"{component_name} / Total Inventory"
-                    ))
-
-            # Risk assessment based on composition
-            raw_materials_ratio = inventory_components['raw_materials'] / total_inventory
-            wip_ratio = inventory_components['work_in_process'] / total_inventory
-            finished_goods_ratio = inventory_components['finished_goods'] / total_inventory
-
-            if wip_ratio > 0.5:
+        for component, value in components.items():
+            if value > 0:
+                component_ratio = value / total_inventory
+                component_name = component.replace('_', ' ').title()
                 results.append(AnalysisResult(
-                    analysis_type=AnalysisType.QUALITY,
-                    metric_name="Inventory Composition Risk",
-                    value=wip_ratio,
-                    interpretation="High work-in-process ratio may indicate production inefficiencies",
-                    risk_level=RiskLevel.MODERATE,
-                    methodology="Qualitative assessment of inventory composition"
+                    analysis_type=AnalysisType.ACTIVITY,
+                    metric_name=f"{component_name} Composition",
+                    value=component_ratio,
+                    interpretation=f"{component_name} represents {self.format_percentage(component_ratio)} of total inventory",
+                    risk_level=RiskLevel.LOW,
+                    methodology=f"{component_name} / Total Inventory"
                 ))
-            elif finished_goods_ratio > 0.7:
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.QUALITY,
-                    metric_name="Inventory Composition Risk",
-                    value=finished_goods_ratio,
-                    interpretation="High finished goods ratio may indicate demand forecasting issues",
-                    risk_level=RiskLevel.MODERATE,
-                    methodology="Qualitative assessment of inventory composition"
-                ))
+
+        wip_ratio = components.get('work_in_process', 0.0) / total_inventory
+        finished_goods_ratio = components.get('finished_goods', 0.0) / total_inventory
+        if wip_ratio > 0.5:
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.QUALITY,
+                metric_name="Inventory Composition Risk",
+                value=wip_ratio,
+                interpretation="High work-in-process ratio may indicate production inefficiencies",
+                risk_level=RiskLevel.MODERATE,
+                methodology="Work in Process / Total Inventory"
+            ))
+        elif finished_goods_ratio > 0.7:
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.QUALITY,
+                metric_name="Inventory Composition Risk",
+                value=finished_goods_ratio,
+                interpretation="High finished goods ratio may indicate demand forecasting issues",
+                risk_level=RiskLevel.MODERATE,
+                methodology="Finished Goods / Total Inventory"
+            ))
 
         return results
 
     def _assess_inventory_disclosures(self, statements: FinancialStatements) -> List[AnalysisResult]:
-        """Assess quality and completeness of inventory disclosures"""
+        """Disclosure completeness - only assessed when inventory notes were supplied at all"""
         results = []
-
         notes = statements.notes
+        inventory_keys = [k for k in notes if 'inventory' in k or 'lifo' in k or 'nrv' in k or 'obsolescence' in k]
+        if not inventory_keys:
+            return results
 
-        # Required disclosure checklist
         required_disclosures = {
             'inventory_method': 'Accounting policy for inventory valuation',
             'inventory_composition': 'Breakdown of inventory components',
-            'writedown_policy': 'Policy for inventory writedowns',
-            'obsolescence_assessment': 'Obsolescence evaluation methodology'
+            'writedown': 'Inventory writedowns',
+            'obsolescence': 'Obsolescence evaluation',
         }
-
+        composition_keys = ('raw_materials_inventory', 'wip_inventory', 'finished_goods_inventory')
         disclosure_score = 0
         missing_disclosures = []
-
-        for disclosure_key, description in required_disclosures.items():
-            if any(disclosure_key in key.lower() for key in notes.keys()):
+        for key, description in required_disclosures.items():
+            present = (any(k in notes for k in composition_keys) if key == 'inventory_composition'
+                       else any(key in k for k in notes))
+            if present:
                 disclosure_score += 25
             else:
                 missing_disclosures.append(description)
-
-        disclosure_interpretation = "Comprehensive inventory disclosures" if disclosure_score > 75 else "Adequate inventory disclosures" if disclosure_score > 50 else "Limited inventory disclosures"
-        disclosure_risk = RiskLevel.LOW if disclosure_score > 75 else RiskLevel.MODERATE if disclosure_score > 50 else RiskLevel.HIGH
 
         results.append(AnalysisResult(
             analysis_type=AnalysisType.QUALITY,
             metric_name="Inventory Disclosure Quality",
             value=disclosure_score,
-            interpretation=disclosure_interpretation,
-            risk_level=disclosure_risk,
-            methodology="Assessment of required inventory disclosure completeness",
-            limitations=missing_disclosures if missing_disclosures else [
-                "Disclosure quality assessment based on available notes"]
+            interpretation=("Comprehensive inventory disclosures" if disclosure_score > 75
+                            else "Adequate inventory disclosures" if disclosure_score > 50 else "Limited inventory disclosures"),
+            risk_level=RiskLevel.LOW if disclosure_score > 75 else RiskLevel.MODERATE if disclosure_score > 50 else RiskLevel.HIGH,
+            methodology="Share of the four standard inventory disclosures present in the supplied notes",
+            limitations=[f"Missing: {m}" for m in missing_disclosures] or None
         ))
-
         return results
 
     def _assess_method_appropriateness(self, method: str, statements: FinancialStatements) -> Dict[
         str, Union[str, RiskLevel, List[str]]]:
         """Assess appropriateness of inventory method choice"""
+        business_type = self.note_text(statements.notes, 'business_description')
+        method = (method or '').lower()
 
-        notes = statements.notes
-
-        # Industry and business considerations
-        business_type = notes.get('business_description', '').lower()
-
-        if method.lower() == 'fifo':
+        if method == 'fifo':
             if 'perishable' in business_type or 'food' in business_type:
-                return {
-                    'assessment': 'FIFO appropriate for perishable goods business',
-                    'risk': RiskLevel.LOW,
-                    'limitations': ['FIFO reflects physical flow for perishables']
-                }
-            else:
-                return {
-                    'assessment': 'FIFO provides current cost basis for inventory',
-                    'risk': RiskLevel.LOW,
-                    'limitations': ['FIFO may overstate profits during inflation']
-                }
-
-        elif method.lower() == 'lifo':
-            return {
-                'assessment': 'LIFO provides tax benefits in inflationary periods',
-                'risk': RiskLevel.LOW,
-                'limitations': ['LIFO may understate inventory values', 'Not permitted under IFRS']
-            }
-
-        elif method.lower() == 'weighted_average':
-            return {
-                'assessment': 'Weighted average smooths cost fluctuations',
-                'risk': RiskLevel.LOW,
-                'limitations': ['May not reflect specific cost identification']
-            }
-
-        else:
-            return {
-                'assessment': 'Method appropriateness cannot be assessed',
-                'risk': RiskLevel.MODERATE,
-                'limitations': ['Insufficient information on inventory method']
-            }
+                return {'assessment': 'FIFO appropriate for perishable goods business', 'risk': RiskLevel.LOW,
+                        'limitations': ['FIFO reflects physical flow for perishables']}
+            return {'assessment': 'FIFO provides current cost basis for inventory', 'risk': RiskLevel.LOW,
+                    'limitations': ['FIFO may overstate profits during inflation']}
+        if method == 'lifo':
+            limitations = ['LIFO may understate inventory values']
+            if statements.company_info.reporting_standard == ReportingStandard.IFRS:
+                return {'assessment': 'LIFO is not permitted under IFRS - check the reporting standard',
+                        'risk': RiskLevel.HIGH, 'limitations': limitations}
+            return {'assessment': 'LIFO provides tax benefits in inflationary periods', 'risk': RiskLevel.LOW,
+                    'limitations': limitations + ['Not permitted under IFRS']}
+        if method in ('weighted_average', 'weighted average', 'average', 'avco'):
+            return {'assessment': 'Weighted average smooths cost fluctuations', 'risk': RiskLevel.LOW,
+                    'limitations': ['May not reflect specific cost identification']}
+        return {'assessment': 'Method appropriateness cannot be assessed', 'risk': RiskLevel.MODERATE,
+                'limitations': ['Unrecognised inventory method']}
 
     def _assess_nrv_compliance(self, statements: FinancialStatements,
                                comparative_data: Optional[List[FinancialStatements]] = None) -> List[AnalysisResult]:
-        """Assess compliance with lower of cost and NRV requirements"""
+        """NRV write-downs (only when disclosed)"""
         results = []
-
         notes = statements.notes
-        income_statement = statements.income_statement
+        nrv_writedowns = self.note_number(notes, 'nrv_writedowns') or 0.0
+        inventory_impairment = statements.income_statement.get('inventory_impairment', 0.0)
+        total_writedowns = abs(nrv_writedowns) + abs(inventory_impairment)
 
-        # Look for NRV-related disclosures
-        nrv_writedowns = notes.get('nrv_writedowns', 0)
-        inventory_impairment = income_statement.get('inventory_impairment', 0)
-
-        if nrv_writedowns > 0 or inventory_impairment > 0:
-            total_writedowns = nrv_writedowns + inventory_impairment
-
+        if total_writedowns > 0:
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="NRV Writedown Activity",
                 value=total_writedowns,
-                interpretation=f"NRV writedowns of ${total_writedowns:,.0f} indicate active impairment monitoring",
-                risk_level=RiskLevel.MODERATE if total_writedowns > 0 else RiskLevel.LOW,
+                interpretation=f"NRV writedowns of {total_writedowns:,.0f} recognised in the period",
+                risk_level=RiskLevel.MODERATE,
                 methodology="Sum of NRV writedowns and inventory impairments",
                 limitations=["Writedowns may indicate market deterioration or obsolescence"]
             ))
 
-        # Assess NRV methodology disclosure
-        nrv_policy = notes.get('nrv_methodology', '')
-        if nrv_policy:
+        if 'nrv_methodology' in notes:
+            disclosed = bool(self.note_text(notes, 'nrv_methodology'))
             results.append(AnalysisResult(
                 analysis_type=AnalysisType.QUALITY,
                 metric_name="NRV Methodology Disclosure",
-                value=1.0,
-                interpretation="Company discloses NRV assessment methodology",
-                risk_level=RiskLevel.LOW,
-                methodology="Qualitative assessment of NRV disclosure quality"
-            ))
-        else:
-            results.append(AnalysisResult(
-                analysis_type=AnalysisType.QUALITY,
-                metric_name="NRV Methodology Disclosure",
-                value=0.0,
-                interpretation="Limited disclosure of NRV assessment methodology",
-                risk_level=RiskLevel.MODERATE,
-                methodology="Qualitative assessment of NRV disclosure quality",
-                limitations=["Lack of NRV methodology disclosure reduces transparency"]
+                value=None,
+                interpretation=("Company discloses its NRV assessment methodology" if disclosed
+                                else "NRV methodology note supplied but empty"),
+                risk_level=RiskLevel.LOW if disclosed else RiskLevel.MODERATE,
+                methodology="Qualitative assessment of NRV disclosure",
+                label="disclosed" if disclosed else "not_disclosed"
             ))
 
         return results
@@ -715,95 +564,67 @@ class InventoryAnalyzer(BaseAnalyzer):
         else:
             return EconomicEnvironment.STABLE
 
-    def get_key_metrics(self, statements: FinancialStatements) -> Dict[str, float]:
-        """Return key inventory metrics"""
-
-        balance_sheet = statements.balance_sheet
-        income_statement = statements.income_statement
-
-        inventory = balance_sheet.get('inventory', 0)
-        cost_of_sales = income_statement.get('cost_of_sales', 0)
-        revenue = income_statement.get('revenue', 0)
-
+    def get_key_metrics(self, statements: FinancialStatements,
+                        comparative_data: Optional[List[FinancialStatements]] = None,
+                        unavailable: Optional[Dict[str, str]] = None) -> Dict[str, float]:
+        """Key inventory metrics (average inventory when history is supplied)"""
+        inventory = statements.balance_sheet.get('inventory')
+        cost_of_sales = statements.income_statement.get('cost_of_sales')
+        revenue = statements.income_statement.get('revenue')
         metrics = {}
 
-        # Core inventory metrics
-        if inventory > 0:
+        if inventory is not None and inventory > 0:
             metrics['inventory_value'] = inventory
-
-            if cost_of_sales > 0:
-                metrics['inventory_turnover'] = self.safe_divide(cost_of_sales, inventory)
-                metrics['days_inventory_outstanding'] = self.safe_divide(inventory * 365, cost_of_sales)
-
-            if revenue > 0:
-                metrics['inventory_to_sales'] = self.safe_divide(inventory, revenue)
-
-        # LIFO reserve metrics
-        notes = statements.notes
-        lifo_reserve = notes.get('lifo_reserve', 0)
-        if lifo_reserve > 0:
-            metrics['lifo_reserve'] = lifo_reserve
-            metrics['lifo_reserve_ratio'] = self.safe_divide(lifo_reserve, inventory)
+            avg_inventory, _ = self.average_balance(statements, comparative_data, 'inventory')
+            if cost_of_sales and cost_of_sales > 0:
+                metrics['inventory_turnover'] = cost_of_sales / avg_inventory
+                metrics['days_inventory_outstanding'] = avg_inventory / cost_of_sales * 365
+            if revenue and revenue > 0:
+                metrics['inventory_to_sales'] = inventory / revenue
+            lifo_reserve = self.note_number(statements.notes, 'lifo_reserve')
+            if lifo_reserve and lifo_reserve > 0:
+                metrics['lifo_reserve'] = lifo_reserve
+                metrics['lifo_reserve_ratio'] = lifo_reserve / inventory
 
         return metrics
 
     def create_inventory_efficiency_analysis(self, statements: FinancialStatements,
                                              comparative_data: Optional[
                                                  List[FinancialStatements]] = None) -> InventoryEfficiencyAnalysis:
-        """Create comprehensive inventory efficiency analysis object"""
+        """Inventory efficiency object (None where not computable)"""
+        inventory = statements.balance_sheet.get('inventory')
+        cost_of_sales = statements.income_statement.get('cost_of_sales')
+        revenue = statements.income_statement.get('revenue')
 
-        balance_sheet = statements.balance_sheet
-        income_statement = statements.income_statement
+        avg_inventory, _ = self.average_balance(statements, comparative_data, 'inventory')
+        inventory_turnover = cost_of_sales / avg_inventory if cost_of_sales and avg_inventory else None
+        days_inventory_outstanding = avg_inventory / cost_of_sales * 365 if cost_of_sales and avg_inventory else None
+        inventory_to_sales_ratio = inventory / revenue if inventory is not None and revenue else None
+        inventory_growth_rate = self.growth(inventory, self.prior_value(comparative_data, 'balance_sheet', 'inventory'))
 
-        inventory = balance_sheet.get('inventory', 0)
-        cost_of_sales = income_statement.get('cost_of_sales', 0)
-        revenue = income_statement.get('revenue', 0)
-
-        # Calculate average inventory
-        avg_inventory = inventory
-        if comparative_data and len(comparative_data) > 0:
-            prev_inventory = comparative_data[-1].balance_sheet.get('inventory', 0)
-            if prev_inventory > 0:
-                avg_inventory = (inventory + prev_inventory) / 2
-
-        # Core efficiency metrics
-        inventory_turnover = self.safe_divide(cost_of_sales, avg_inventory)
-        days_inventory_outstanding = self.safe_divide(avg_inventory * 365, cost_of_sales) if cost_of_sales > 0 else 0
-        inventory_to_sales_ratio = self.safe_divide(inventory, revenue)
-
-        # Growth rate calculation
-        inventory_growth_rate = 0
-        if comparative_data and len(comparative_data) > 0:
-            prev_inventory = comparative_data[-1].balance_sheet.get('inventory', 0)
-            if prev_inventory > 0:
-                inventory_growth_rate = (inventory / prev_inventory) - 1
-
-        # Trend analysis
         turnover_trend = TrendDirection.STABLE
         if comparative_data and len(comparative_data) >= 2:
             turnover_values = []
-            for past_statements in comparative_data:
-                past_inventory = past_statements.balance_sheet.get('inventory', 0)
-                past_cogs = past_statements.income_statement.get('cost_of_sales', 0)
-                if past_inventory > 0 and past_cogs > 0:
-                    turnover_values.append(past_cogs / past_inventory)
-
+            for p in list(comparative_data) + [statements]:
+                inv = p.balance_sheet.get('inventory')
+                cogs = p.income_statement.get('cost_of_sales')
+                if inv and inv > 0 and cogs and cogs > 0:
+                    turnover_values.append(cogs / inv)
             if len(turnover_values) >= 2:
                 if turnover_values[-1] > turnover_values[0] * 1.05:
                     turnover_trend = TrendDirection.IMPROVING
                 elif turnover_values[-1] < turnover_values[0] * 0.95:
                     turnover_trend = TrendDirection.DETERIORATING
 
-        # Efficiency score calculation
-        efficiency_score = 100
-        if inventory_turnover < 4:
-            efficiency_score -= 20
-        if days_inventory_outstanding > 90:
-            efficiency_score -= 15
-        if inventory_to_sales_ratio > 0.25:
-            efficiency_score -= 10
-
-        efficiency_score = max(0, efficiency_score)
+        efficiency_score = None
+        if inventory_turnover is not None:
+            efficiency_score = 100
+            if inventory_turnover < 4:
+                efficiency_score -= 20
+            if days_inventory_outstanding is not None and days_inventory_outstanding > 90:
+                efficiency_score -= 15
+            if inventory_to_sales_ratio is not None and inventory_to_sales_ratio > 0.25:
+                efficiency_score -= 10
 
         return InventoryEfficiencyAnalysis(
             inventory_turnover=inventory_turnover,
@@ -815,62 +636,46 @@ class InventoryAnalyzer(BaseAnalyzer):
         )
 
     def create_inventory_valuation_analysis(self, statements: FinancialStatements) -> InventoryValuationAnalysis:
-        """Create comprehensive inventory valuation analysis object"""
-
-        balance_sheet = statements.balance_sheet
+        """Inventory valuation object"""
         notes = statements.notes
+        inventory = statements.balance_sheet.get('inventory', 0.0)
+        cost_method_str = self.note_text(notes, 'inventory_method', 'unknown')
 
-        inventory = balance_sheet.get('inventory', 0)
-        cost_method_str = notes.get('inventory_method', 'unknown')
-
-        # Determine cost method
-        cost_method = InventoryMethod.FIFO  # default
-        if 'lifo' in cost_method_str.lower():
+        if 'lifo' in cost_method_str:
             cost_method = InventoryMethod.LIFO
-        elif 'weighted' in cost_method_str.lower() or 'average' in cost_method_str.lower():
+        elif 'weighted' in cost_method_str or 'average' in cost_method_str:
             cost_method = InventoryMethod.WEIGHTED_AVERAGE
-        elif 'specific' in cost_method_str.lower():
+        elif 'specific' in cost_method_str:
             cost_method = InventoryMethod.SPECIFIC_IDENTIFICATION
+        elif 'fifo' in cost_method_str:
+            cost_method = InventoryMethod.FIFO
+        else:
+            cost_method = None
 
-        # Valuation components
-        inventory_reserve = notes.get('inventory_obsolescence_reserve', 0)
-        lifo_reserve = notes.get('lifo_reserve', 0)
+        inventory_reserve = self.note_number(notes, 'inventory_obsolescence_reserve', 0.0)
+        lifo_reserve = self.note_number(notes, 'lifo_reserve')
 
-        # Estimate NRV and lower of cost/NRV
-        net_realizable_value = inventory  # Would need market data for actual calculation
-        lower_of_cost_nrv = inventory - inventory_reserve
+        fifo_equivalent_value = inventory + lifo_reserve if cost_method == InventoryMethod.LIFO and lifo_reserve else None
 
-        # FIFO/LIFO equivalent calculations
-        fifo_equivalent_value = None
-        lifo_equivalent_value = None
-
-        if cost_method == InventoryMethod.LIFO and lifo_reserve > 0:
-            fifo_equivalent_value = inventory + lifo_reserve
-        elif cost_method == InventoryMethod.FIFO and lifo_reserve > 0:
-            lifo_equivalent_value = inventory - lifo_reserve
-
-        # Quality assessment
         quality_score = 100
         obsolescence_indicators = []
         valuation_concerns = []
-
-        if inventory_reserve > 0:
-            reserve_ratio = inventory_reserve / (inventory + inventory_reserve)
-            if reserve_ratio > 0.1:
-                quality_score -= 20
-                obsolescence_indicators.append("High obsolescence reserve")
-
+        if inventory_reserve > 0 and inventory_reserve / (inventory + inventory_reserve) > 0.1:
+            quality_score -= 20
+            obsolescence_indicators.append("High obsolescence reserve")
         if cost_method == InventoryMethod.LIFO:
             valuation_concerns.append("LIFO may understate current inventory values")
+        if cost_method is None:
+            valuation_concerns.append("Inventory method not disclosed")
 
         return InventoryValuationAnalysis(
             cost_method=cost_method,
             current_inventory_value=inventory,
             inventory_reserve=inventory_reserve,
-            net_realizable_value=net_realizable_value,
-            lower_of_cost_nrv=lower_of_cost_nrv,
+            net_realizable_value=None,  # needs selling prices and costs to complete
+            lower_of_cost_nrv=None,
             fifo_equivalent_value=fifo_equivalent_value,
-            lifo_equivalent_value=lifo_equivalent_value,
+            lifo_equivalent_value=None,
             lifo_reserve=lifo_reserve,
             inventory_quality_score=quality_score,
             obsolescence_indicators=obsolescence_indicators,
@@ -878,49 +683,30 @@ class InventoryAnalyzer(BaseAnalyzer):
         )
 
     def create_inflation_impact_analysis(self, statements: FinancialStatements,
-                                         inflation_rate: float = 0.0) -> InflationImpactAnalysis:
-        """Create inflation impact analysis object"""
-
-        income_statement = statements.income_statement
+                                         inflation_rate: float = 0.0,
+                                         comparative_data: Optional[List[FinancialStatements]] = None
+                                         ) -> InflationImpactAnalysis:
+        """LIFO-to-FIFO impact object; FIFO COGS = LIFO COGS - change in LIFO reserve."""
         notes = statements.notes
-
         economic_environment = self._determine_economic_environment(inflation_rate)
-        cost_method = notes.get('inventory_method', 'unknown')
-        lifo_reserve = notes.get('lifo_reserve', 0)
+        cost_method = self.note_text(notes, 'inventory_method')
+        lifo_reserve = self.note_number(notes, 'lifo_reserve')
+        revenue = statements.income_statement.get('revenue')
+        cost_of_sales = statements.income_statement.get('cost_of_sales')
 
-        revenue = income_statement.get('revenue', 0)
-        cost_of_sales = income_statement.get('cost_of_sales', 0)
-
-        # Initialize impact metrics
-        fifo_impact_on_cogs = 0
-        fifo_impact_on_gross_margin = 0
-        fifo_impact_on_inventory_value = 0
-
-        lifo_impact_on_cogs = 0
-        lifo_impact_on_gross_margin = 0
-        lifo_impact_on_inventory_value = 0
-
+        fifo_impact_on_cogs = fifo_impact_on_gross_margin = fifo_impact_on_inventory_value = None
         tax_advantage_method = "No significant difference"
 
-        # Calculate impacts if using LIFO and LIFO reserve available
-        if cost_method.lower() == 'lifo' and lifo_reserve > 0 and revenue > 0:
-            current_gross_margin = (revenue - cost_of_sales) / revenue
-
-            # Estimate FIFO COGS (simplified)
-            estimated_fifo_cogs = cost_of_sales - lifo_reserve
-            estimated_fifo_gross_margin = (revenue - estimated_fifo_cogs) / revenue
-
-            fifo_impact_on_cogs = estimated_fifo_cogs - cost_of_sales
-            fifo_impact_on_gross_margin = estimated_fifo_gross_margin - current_gross_margin
+        if cost_method == 'lifo' and lifo_reserve is not None:
             fifo_impact_on_inventory_value = lifo_reserve
-
+            reserve_change = self._lifo_reserve_change(statements, comparative_data)
+            if reserve_change is not None and revenue and revenue > 0 and cost_of_sales is not None:
+                fifo_impact_on_cogs = -reserve_change
+                fifo_impact_on_gross_margin = reserve_change / revenue
             if economic_environment == EconomicEnvironment.INFLATIONARY:
                 tax_advantage_method = "LIFO provides tax advantage"
-
-        elif cost_method.lower() == 'fifo' and inflation_rate > 0.02:
-            # FIFO in inflationary environment
-            if economic_environment == EconomicEnvironment.INFLATIONARY:
-                tax_advantage_method = "LIFO would provide tax advantage (not used)"
+        elif cost_method == 'fifo' and economic_environment == EconomicEnvironment.INFLATIONARY:
+            tax_advantage_method = "LIFO would provide tax advantage (not used)"
 
         return InflationImpactAnalysis(
             economic_environment=economic_environment,
@@ -928,9 +714,9 @@ class InventoryAnalyzer(BaseAnalyzer):
             fifo_impact_on_cogs=fifo_impact_on_cogs,
             fifo_impact_on_gross_margin=fifo_impact_on_gross_margin,
             fifo_impact_on_inventory_value=fifo_impact_on_inventory_value,
-            lifo_impact_on_cogs=lifo_impact_on_cogs,
-            lifo_impact_on_gross_margin=lifo_impact_on_gross_margin,
-            lifo_impact_on_inventory_value=lifo_impact_on_inventory_value,
+            lifo_impact_on_cogs=None,
+            lifo_impact_on_gross_margin=None,
+            lifo_impact_on_inventory_value=None,
             tax_advantage_method=tax_advantage_method
         )
 
@@ -975,3 +761,21 @@ class InventoryAnalyzer(BaseAnalyzer):
             trends['inventory_turnover'] = self.calculate_trend(turnover_values, periods)
 
         return trends
+
+    def _lifo_reserve_change(self, statements: FinancialStatements,
+                             comparative_data: Optional[List[FinancialStatements]]) -> Optional[float]:
+        """Change in LIFO reserve over the period: notes.lifo_reserve_change, else current
+        lifo_reserve minus the prior period's (from history or notes.prior_lifo_reserve)."""
+        notes = statements.notes
+        change = self.note_number(notes, 'lifo_reserve_change')
+        if change is not None:
+            return change
+        current = self.note_number(notes, 'lifo_reserve')
+        prior = None
+        if comparative_data:
+            prior = self.note_number(comparative_data[-1].notes, 'lifo_reserve')
+        if prior is None:
+            prior = self.note_number(notes, 'prior_lifo_reserve')
+        if current is None or prior is None:
+            return None
+        return current - prior

@@ -7,15 +7,15 @@ import sys
 import json
 import os
 import requests
+import fincept_connector as fc
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('OC_API_KEY', '')
 BASE_URL = "https://api.opencorporates.com/v0.4"
+SERVICE = "OpenCorporates"
+KEY_ENV = "OC_API_KEY"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 JURISDICTIONS = {
     "us_de": "Delaware, USA",
@@ -66,21 +66,26 @@ JURISDICTIONS = {
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every API call needs a token (HTTP 401 without one); only `jurisdictions` is offline.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://opencorporates.com/api_accounts/new", KEY_ENV)
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
-    if API_KEY:
-        params["api_token"] = API_KEY
+    params["api_token"] = API_KEY
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    if not isinstance(data, dict):
+        return {"error": f"Unexpected {SERVICE} response"}
+    if isinstance(data.get("error"), dict):  # {"error": {"message": ...}} with HTTP 200
+        return {"error": f"{SERVICE}: {fc.scrub(data['error'].get('message') or data['error'], API_KEY)}"}
+    return data
 
 
 def _extract_company(company: Dict) -> Dict:
@@ -230,6 +235,9 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
+    if command in ("search", "search_officers") and len(args) > 3 and not args[3].isdigit():
+        print(json.dumps({"error": f"limit must be a number, got '{args[3]}'"}))
+        return
     if command == "search":
         query = args[1] if len(args) > 1 else ""
         if not query:

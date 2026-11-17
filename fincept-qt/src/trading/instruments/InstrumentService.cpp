@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "storage/sqlite/Database.h"
+#include "storage/sqlite/SqliteSupport.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/DhanInstrumentParser.h"
 #include "trading/instruments/FyersInstrumentParser.h"
@@ -36,7 +37,6 @@
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
-#include <QUuid>
 #include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
@@ -194,7 +194,7 @@ static QVector<Instrument> parse_angel_master_json(const QByteArray& json_data) 
         out.append(std::move(inst));
     }
 
-    LOG_INFO("InstrumentService", QString("Parsed %1 AngelOne instruments").arg(out.size()));
+    LOG_DEBUG("InstrumentService", QString("Parsed %1 AngelOne instruments").arg(out.size()));
     return out;
 }
 
@@ -232,6 +232,55 @@ void ensure_builtin_sources_registered() {
     Q_UNUSED(registered);
 }
 
+/// Every instrument row of one broker, read on the CALLING thread's own connection
+/// (Database::connection(): the main connection on the GUI thread, a per-thread
+/// clone with the app's PRAGMAs on a worker), forward-only so 100k+ rows are not
+/// cached twice. Replaces two ad-hoc per-call connections that applied no
+/// PRAGMA at all. Call it off the GUI thread.
+QVector<Instrument> inst_load_broker_rows(const QString& broker_id, const char* who) {
+    QVector<Instrument> all;
+    QSqlDatabase conn = fincept::Database::instance().connection();
+    if (!conn.isOpen()) {
+        LOG_ERROR("InstrumentService", QString("%1: no database connection for %2").arg(QLatin1String(who), broker_id));
+        return all;
+    }
+    QSqlQuery q(conn);
+    q.setForwardOnly(true);
+    // broker_token (column 13) must be selected: map_row_static() reads it by index.
+    if (!q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
+                   "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
+                   "tick_size, broker_id, broker_token FROM instruments WHERE broker_id = ?")) {
+        LOG_ERROR("InstrumentService",
+                  QString("%1: prepare failed for %2: %3").arg(QLatin1String(who), broker_id, q.lastError().text()));
+        return all;
+    }
+    q.addBindValue(broker_id);
+    if (!q.exec()) {
+        LOG_ERROR("InstrumentService",
+                  QString("%1: query failed for %2: %3").arg(QLatin1String(who), broker_id, q.lastError().text()));
+        return all;
+    }
+    while (q.next())
+        all.append(InstrumentRepository::map_row_static(q));
+    return all;
+}
+
+/// The downloaders block their thread for up to minutes (a nested QEventLoop per
+/// request, or BrokerHttp's synchronous GET). They are only reached from
+/// do_refresh() on a QtConcurrent worker; if a future caller runs one on the GUI
+/// thread, refuse loudly instead of freezing the UI.
+bool inst_refuse_on_gui_thread(const char* what) {
+    const auto* app = QCoreApplication::instance();
+    if (app && QThread::currentThread() == app->thread()) {
+        LOG_ERROR("InstrumentService",
+                  QString("%1 was called on the GUI thread and refused: it blocks for up to minutes. "
+                          "Call it from a worker thread (InstrumentService::force_refresh does).")
+                      .arg(QLatin1String(what)));
+        return true;
+    }
+    return false;
+}
+
 } // namespace
 
 InstrumentService& InstrumentService::instance() {
@@ -261,8 +310,8 @@ void InstrumentService::refresh(const QString& broker_id, const BrokerCredential
                 // and every lookup fails. refresh() is called from the UI thread
                 // (ChainSubTab + EquityTradingScreen callbacks) and a broker
                 // master is 100k+ rows, so the load goes through the async twin
-                // — it opens its own worker-thread connection and rebuilds the
-                // cache back on this thread (§P1).
+                // — it reads on the worker thread's own connection and swaps the
+                // cache in back on this thread (§P1).
                 load_from_db_async(broker_id, {});
                 return;
             }
@@ -337,50 +386,19 @@ void InstrumentService::load_from_db_async(const QString& broker_id, std::functi
     // Fast path: if already loaded, fire callback immediately on UI thread.
     if (is_loaded(broker_id)) {
         int n = cached_count(broker_id);
-        LOG_INFO("InstrumentService",
-                 QString("load_from_db_async: %1 already loaded (%2 instruments)").arg(broker_id).arg(n));
+        LOG_DEBUG("InstrumentService",
+                  QString("load_from_db_async: %1 already loaded (%2 instruments)").arg(broker_id).arg(n));
         if (callback)
             callback(n);
         return;
     }
 
-    LOG_INFO("InstrumentService", QString("load_from_db_async: starting background load for %1").arg(broker_id));
-
     QPointer<InstrumentService> self = this;
-    QString db_path = fincept::Database::instance().path(); // read path on UI thread before going async
 
-    (void)QtConcurrent::run([self, broker_id, db_path, callback]() {
-        // Each worker thread needs its own named QSqlDatabase connection.
-        const QString conn_name = "inst_async_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
-        QVector<Instrument> all;
-
-        {
-            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
-            db.setDatabaseName(db_path);
-            if (!db.open()) {
-                LOG_ERROR(
-                    "InstrumentService",
-                    QString("load_from_db_async: failed to open DB for %1: %2").arg(broker_id, db.lastError().text()));
-            } else {
-                // Single query for all exchanges — faster than 9 per-exchange queries.
-                QSqlQuery q(db);
-                q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
-                          "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
-                          "tick_size, broker_id, broker_token "
-                          "FROM instruments WHERE broker_id = ?");
-                q.addBindValue(broker_id);
-                if (q.exec()) {
-                    while (q.next())
-                        all.append(InstrumentRepository::map_row_static(q));
-                } else {
-                    LOG_ERROR(
-                        "InstrumentService",
-                        QString("load_from_db_async: query failed for %1: %2").arg(broker_id, q.lastError().text()));
-                }
-                db.close();
-            }
-        }
-        QSqlDatabase::removeDatabase(conn_name);
+    (void)QtConcurrent::run([self, broker_id, callback]() {
+        // The worker's own connection (Database::connection() clones one per
+        // thread); single query for all exchanges.
+        QVector<Instrument> all = inst_load_broker_rows(broker_id, "load_from_db_async");
 
         if (!self)
             return;
@@ -396,14 +414,22 @@ void InstrumentService::load_from_db_async(const QString& broker_id, std::functi
             [self, broker_id, snapshot = std::move(snapshot), count, callback]() mutable {
                 if (!self)
                     return;
+                // State per broker: an empty store (a broker never connected — the usual
+                // case for most of the ~17 brokers warmed at start) is written once per
+                // broker, and the start-up burst is folded into one line + a count.
+                const QString state_key = QStringLiteral("db_empty|") + broker_id;
                 if (snapshot) {
                     self->install_cache(broker_id, std::move(snapshot));
+                    if (Logger::instance().transition_possible(0))
+                        Logger::instance().transition("InstrumentService", state_key, 0);
                     LOG_INFO("InstrumentService",
-                             QString("load_from_db_async: loaded %1 instruments for %2").arg(count).arg(broker_id));
+                             logf("Instruments loaded from DB", {{"broker", broker_id}, {"count", count}}));
+                } else if (Logger::instance().transition("InstrumentService", state_key, 1)) {
+                    LOG_INFO_RL("InstrumentService", QStringLiteral("db_empty"), 10000,
+                                logf("No instruments stored for a broker yet; they download when it is connected",
+                                     {{"broker", broker_id}}));
                 } else {
-                    LOG_WARN(
-                        "InstrumentService",
-                        QString("load_from_db_async: no instruments found in DB for %1 — run refresh").arg(broker_id));
+                    LOG_DEBUG("InstrumentService", logf("No instruments in DB", {{"broker", broker_id}}));
                 }
                 if (callback)
                     callback(count);
@@ -413,42 +439,14 @@ void InstrumentService::load_from_db_async(const QString& broker_id, std::functi
 }
 
 void InstrumentService::load_from_db_worker(const QString& broker_id) {
-    // Synchronous DB load safe to call from a QtConcurrent worker thread. Opens a
-    // private named connection (never touches the shared main-thread connection)
-    // then build_cache (mutex-guarded). No-op if already loaded.
+    // Synchronous DB load for a caller that is already off the UI thread (charts /
+    // backtests / algos). Reads on this thread's own connection
+    // (Database::connection()), then build_cache (mutex-guarded). No-op if loaded.
+    // broker_token is part of the row (inst_load_broker_rows): a cache warmed here
+    // once lost every broker-native key (e.g. Upstox "NSE_EQ|INE…").
     if (is_loaded(broker_id))
         return;
-    const QString db_path = fincept::Database::instance().path();
-    const QString conn_name = "inst_sync_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
-    QVector<Instrument> all;
-    {
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
-        db.setDatabaseName(db_path);
-        if (db.open()) {
-            QSqlQuery q(db);
-            // broker_token (column 13) must be selected: map_row_static() reads it by
-            // index, and the async loader above selects it. Omitting it here meant a
-            // cache warmed by a worker thread (charts / backtests / algos) silently
-            // lost every broker-native key (e.g. Upstox "NSE_EQ|INE…").
-            q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
-                      "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
-                      "tick_size, broker_id, broker_token FROM instruments WHERE broker_id = ?");
-            q.addBindValue(broker_id);
-            if (q.exec()) {
-                while (q.next())
-                    all.append(InstrumentRepository::map_row_static(q));
-            } else {
-                LOG_ERROR("InstrumentService",
-                          QString("load_from_db_worker: query failed for %1: %2").arg(broker_id, q.lastError().text()));
-            }
-            db.close();
-        } else {
-            LOG_ERROR(
-                "InstrumentService",
-                QString("load_from_db_worker: failed to open DB for %1: %2").arg(broker_id, db.lastError().text()));
-        }
-    }
-    QSqlDatabase::removeDatabase(conn_name);
+    const QVector<Instrument> all = inst_load_broker_rows(broker_id, "load_from_db_worker");
     if (!all.isEmpty())
         build_cache(broker_id, all);
 }
@@ -651,7 +649,7 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
         if (d.isValid())
             by_date.insert(d, inst.expiry);
     }
-    LOG_INFO("InstrumentService", QString("list_expiries('%1','%2','%3'): matched=%4 empty_expiry=%5 parsed=%6")
+    LOG_DEBUG("InstrumentService", QString("list_expiries('%1','%2','%3'): matched=%4 empty_expiry=%5 parsed=%6")
                                       .arg(broker_id, underlying, exchange)
                                       .arg(match_count)
                                       .arg(empty_expiry)
@@ -956,7 +954,7 @@ void InstrumentService::search_cache(const Cache& cache, const QString& q, const
 }
 
 void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredentials& creds) {
-    LOG_INFO("InstrumentService", "Downloading instruments for " + broker_id);
+    LOG_DEBUG("InstrumentService", "Downloading instruments for " + broker_id);
 
     const InstrumentSource* src = SymbolResolver::instance().find(broker_id);
     if (!src || !src->download || !src->parse) {
@@ -1004,23 +1002,35 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         return;
     }
 
-    // The DB write MUST happen on the main thread — QSqlDatabase connections are
-    // not thread-safe (Qt docs: use only from owning thread). The in-memory
-    // snapshot is built here on the worker; the main thread only swaps it in.
-    int count = instruments.size();
+    // Persist HERE, on the worker. replace_all() deletes and re-inserts the whole
+    // broker master (100k+ rows) in one transaction; posting it to the main thread
+    // (the old "connections are not thread-safe" rule predates Database's
+    // per-thread connections) froze the UI for the whole import. Database::
+    // connection() gives this pool thread its own connection, and replace_all's
+    // BEGIN/DELETE/INSERT/COMMIT all run on it. The in-memory snapshot is built
+    // here too; the main thread only swaps the pointer in and emits.
+    const int count = instruments.size();
     CachePtr snapshot = build_cache_snapshot(instruments);
+    const auto persisted = InstrumentRepository::instance().replace_all(broker_id, instruments);
+    instruments = {};
+    QString persist_error;
+    if (persisted.is_err()) {
+        LOG_ERROR("InstrumentService", QString("Saving %1 instruments failed: %2")
+                                           .arg(broker_id, QString::fromStdString(persisted.error())));
+        persist_error = QStringLiteral("The instrument list could not be saved. ") +
+                        fincept::db::user_message(
+                            fincept::db::classify_text(QString::fromStdString(persisted.error())),
+                            QStringLiteral("The terminal database"));
+    }
     QMetaObject::invokeMethod(
         this,
-        [this, broker_id, instruments, count, snapshot]() mutable {
-            // Persist to DB (main thread — safe)
-            auto r = InstrumentRepository::instance().replace_all(broker_id, instruments);
-            if (r.is_err()) {
-                QString err = QString::fromStdString(r.error());
+        [this, broker_id, count, snapshot = std::move(snapshot), persist_error]() mutable {
+            if (!persist_error.isEmpty()) {
                 {
                     QMutexLocker lock(&mutex_);
                     refreshing_.remove(broker_id);
                 }
-                emit refresh_failed(broker_id, err);
+                emit refresh_failed(broker_id, persist_error);
                 return;
             }
             // Swap in the in-memory cache built on the worker.
@@ -1038,6 +1048,8 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
 QByteArray InstrumentService::download_zerodha_csv(const BrokerCredentials& creds) {
     // GET https://api.kite.trade/instruments  (no auth required — public endpoint)
     // Returns raw CSV text, ~8MB
+    if (inst_refuse_on_gui_thread("download_zerodha_csv"))
+        return {};
     QMap<QString, QString> headers = {
         {"X-Kite-Version", "3"},
         {"Authorization", "token " + creds.api_key + ":" + creds.access_token},
@@ -1054,6 +1066,9 @@ QByteArray InstrumentService::download_angel_master_json() {
     // Public endpoint — ~8MB JSON. Uses its own QNAM to avoid blocking BrokerHttp's
     // mutex (which would starve all concurrent quote/history API calls for 10-20s).
     static const QString kUrl = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json";
+    // The nested event loop below is only safe off the GUI thread (do_refresh's worker).
+    if (inst_refuse_on_gui_thread("download_angel_master_json"))
+        return {};
 
     // Heap-allocate QNAM with deleteLater + DeferredDelete drain. A stack
     // QNAM here would leak Qt's macOS CFSocket-notifier teardown onto the
@@ -1095,7 +1110,7 @@ QByteArray InstrumentService::download_angel_master_json() {
 
     QByteArray data = reply->readAll();
     drain();
-    LOG_INFO("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
+    LOG_DEBUG("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
     return data;
 }
 
@@ -1104,6 +1119,9 @@ QByteArray InstrumentService::download_groww_csv() {
     // Own QNAM (not BrokerHttp) because the download dominates the shared client's
     // mutex for 10-30s on slow links and would starve concurrent quote/order calls.
     static const QString kUrl = "https://growwapi-assets.groww.in/instruments/instrument.csv";
+    // The nested event loop below is only safe off the GUI thread (do_refresh's worker).
+    if (inst_refuse_on_gui_thread("download_groww_csv"))
+        return {};
 
     auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
@@ -1142,7 +1160,7 @@ QByteArray InstrumentService::download_groww_csv() {
 
     QByteArray data = reply->readAll();
     drain();
-    LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
+    LOG_DEBUG("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
     return data;
 }
 
@@ -1151,6 +1169,9 @@ QByteArray InstrumentService::download_dhan_csv() {
     // Own QNAM (not BrokerHttp) so the long download doesn't starve concurrent
     // quote/order calls — same rationale as download_groww_csv.
     static const QString kUrl = "https://images.dhan.co/api-data/api-scrip-master.csv";
+    // The nested event loop below is only safe off the GUI thread (do_refresh's worker).
+    if (inst_refuse_on_gui_thread("download_dhan_csv"))
+        return {};
 
     auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
@@ -1189,7 +1210,7 @@ QByteArray InstrumentService::download_dhan_csv() {
 
     QByteArray data = reply->readAll();
     drain();
-    LOG_INFO("InstrumentService", QString("Downloaded Dhan scrip master: %1 bytes").arg(data.size()));
+    LOG_DEBUG("InstrumentService", QString("Downloaded Dhan scrip master: %1 bytes").arg(data.size()));
     return data;
 }
 
@@ -1201,6 +1222,9 @@ QByteArray InstrumentService::download_icici_csv() {
     // Own QNAM (not BrokerHttp) for the same reason as download_dhan_csv: a long
     // download must not starve concurrent quote/order calls.
     static const QString kUrl = "https://traderweb.icicidirect.com/Content/File/txtFile/ScripFile/StockScriptNew.csv";
+    // The nested event loop below is only safe off the GUI thread (do_refresh's worker).
+    if (inst_refuse_on_gui_thread("download_icici_csv"))
+        return {};
 
     auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
@@ -1239,7 +1263,7 @@ QByteArray InstrumentService::download_icici_csv() {
 
     QByteArray data = reply->readAll();
     drain();
-    LOG_INFO("InstrumentService", QString("Downloaded ICICI security master: %1 bytes").arg(data.size()));
+    LOG_DEBUG("InstrumentService", QString("Downloaded ICICI security master: %1 bytes").arg(data.size()));
     return data;
 }
 
@@ -1250,6 +1274,9 @@ QByteArray InstrumentService::download_fyers_json() {
         "https://public.fyers.in/sym_details/BSE_CM_sym_master.json",
         "https://public.fyers.in/sym_details/MCX_COM_sym_master.json",
     };
+    // The nested event loops below are only safe off the GUI thread (do_refresh's worker).
+    if (inst_refuse_on_gui_thread("download_fyers_json"))
+        return {};
 
     QJsonObject merged;
     auto* nam = new QNetworkAccessManager;

@@ -33,7 +33,7 @@ void PolymarketCommandBar::apply_accent() {
     const QString accent_border = accent_css_rgba(presentation_.accent, 0.50);
 
     const QString css =
-        QStringLiteral("#polyCommandBar {"
+        QString("#polyCommandBar {"
                        "  background: %1;"
                        "  border-bottom: 1px solid %2;"
                        "}"
@@ -42,7 +42,7 @@ void PolymarketCommandBar::apply_accent() {
                        "  background: %3;"
                        "  color: %4;"
                        "  border: 1px solid %5;"
-                       "  font-size: 10px;"
+                       "  font-size: " + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight: 700;"
                        "  padding: 3px 8px;"
                        "  min-width: 110px;"
@@ -50,7 +50,7 @@ void PolymarketCommandBar::apply_accent() {
                        "QComboBox#polyExchangeCombo::drop-down { border: none; width: 18px; }"
                        "QComboBox#polyExchangeCombo QAbstractItemView {"
                        "  background: %3; color: %4; border: 1px solid %5;"
-                       "  selection-background-color: %6;"
+                       "  selection-background-color: %6; selection-color: %4;"
                        "}"
                        // Separator
                        "#polyCmdSep { background: %2; }"
@@ -60,7 +60,7 @@ void PolymarketCommandBar::apply_accent() {
                        "  color: %7;"
                        "  border: none;"
                        "  border-bottom: 2px solid transparent;"
-                       "  font-size: 10px;"
+                       "  font-size: " + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight: 700;"
                        "  padding: 0 14px;"
                        "  letter-spacing: 0.5px;"
@@ -72,7 +72,7 @@ void PolymarketCommandBar::apply_accent() {
                        "  background: transparent;"
                        "  color: %7;"
                        "  border: 1px solid %5;"
-                       "  font-size: 9px;"
+                       "  font-size: " + fincept::ui::fonts::px(-5) + "px;"
                        "  font-weight: 600;"
                        "  padding: 2px 10px;"
                        "  letter-spacing: 0.3px;"
@@ -85,7 +85,7 @@ void PolymarketCommandBar::apply_accent() {
                        "  color: %4;"
                        "  border: 1px solid %5;"
                        "  padding: 4px 10px;"
-                       "  font-size: 10px;"
+                       "  font-size: " + fincept::ui::fonts::px(-4) + "px;"
                        "}"
                        "#polySearchInput:focus { border-color: %8; }"
                        // Sort
@@ -94,7 +94,7 @@ void PolymarketCommandBar::apply_accent() {
                        "  color: %7;"
                        "  border: 1px solid %5;"
                        "  padding: 3px 6px;"
-                       "  font-size: 9px;"
+                       "  font-size: " + fincept::ui::fonts::px(-5) + "px;"
                        "  font-weight: 600;"
                        "}"
                        "QComboBox#polySortCombo::drop-down { border: none; width: 14px; }"
@@ -107,21 +107,21 @@ void PolymarketCommandBar::apply_accent() {
                        "  color: %7;"
                        "  border: 1px solid %5;"
                        "  padding: 3px 10px;"
-                       "  font-size: 9px;"
+                       "  font-size: " + fincept::ui::fonts::px(-5) + "px;"
                        "  font-weight: 700;"
                        "}"
                        "#polyRefreshBtn:hover { color: %4; border-color: %9; }"
                        "#polyRefreshBtn:disabled { color: %10; }"
                        // WS indicator
-                       "#polyWsIndicator { font-size: 9px; font-weight: 700; padding: 2px 8px; }"
+                       "#polyWsIndicator { font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: 700; padding: 2px 8px; }"
                        // Count label
-                       "#polyCountLabel { color: %7; font-size: 9px; background: transparent; padding: 0 4px; }"
+                       "#polyCountLabel { color: %7; font-size: " + fincept::ui::fonts::px(-5) + "px; background: transparent; padding: 0 4px; }"
                        // Account chip
                        "#polyAccountChip {"
                        "  background: transparent;"
                        "  color: %7;"
                        "  border: 1px solid %5;"
-                       "  font-size: 9px;"
+                       "  font-size: " + fincept::ui::fonts::px(-5) + "px;"
                        "  font-weight: 700;"
                        "  padding: 3px 10px;"
                        "}"
@@ -137,7 +137,10 @@ void PolymarketCommandBar::apply_accent() {
             .arg(colors::BORDER_BRIGHT())  // %9
             .arg(colors::TEXT_DIM());      // %10
 
-    setStyleSheet(css);
+    // Only when the text changed: re-run on every presentation / appearance change,
+    // and a re-set sheet re-polishes the whole bar.
+    if (styleSheet() != css)
+        setStyleSheet(css);
 }
 
 void PolymarketCommandBar::build_ui() {
@@ -149,7 +152,7 @@ void PolymarketCommandBar::build_ui() {
     exchange_combo_ = new QComboBox;
     exchange_combo_->setObjectName("polyExchangeCombo");
     exchange_combo_->setToolTip(tr("Switch prediction market exchange"));
-    exchange_combo_->setFixedHeight(26);
+    exchange_combo_->setMinimumHeight(26);
     connect(exchange_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx < 0)
             return;
@@ -164,10 +167,15 @@ void PolymarketCommandBar::build_ui() {
     // ── Account chip ──────────────────────────────────────────────────────
     account_chip_ = new QPushButton(tr("CONNECT"), this);
     account_chip_->setObjectName("polyAccountChip");
-    account_chip_->setFixedHeight(26);
+    account_chip_->setMinimumHeight(26);
     account_chip_->setCursor(Qt::PointingHandCursor);
     account_chip_->setToolTip(tr("Connect a trading account"));
-    connect(account_chip_, &QPushButton::clicked, this, &PolymarketCommandBar::account_clicked);
+    connect(account_chip_, &QPushButton::clicked, this, [this]() {
+        if (!account_read_error_.isEmpty())
+            emit account_retry_clicked();
+        else
+            emit account_clicked();
+    });
     hl->addWidget(account_chip_);
 
     // ── Left separator ────────────────────────────────────────────────────
@@ -196,7 +204,12 @@ void PolymarketCommandBar::build_ui() {
 
     // ── Category row ──────────────────────────────────────────────────────
     category_container_ = new QWidget(this);
-    category_container_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    // Ignored, not Expanding: the chip row takes whatever width is left and never widens the
+    // bar. With a dozen chips its minimum width pushed the whole screen past a 1600 px window
+    // (sideways scroll bar, search box and sort control off-screen). fit_category_chips() hides
+    // the chips that do not fit.
+    category_container_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    category_container_->installEventFilter(this);
     auto* ccl = new QHBoxLayout(category_container_);
     ccl->setContentsMargins(0, 0, 0, 0);
     ccl->setSpacing(4);
@@ -208,7 +221,8 @@ void PolymarketCommandBar::build_ui() {
     search_input_ = new QLineEdit;
     search_input_->setObjectName("polySearchInput");
     search_input_->setPlaceholderText(tr("Search markets..."));
-    search_input_->setFixedSize(170, 26);
+    search_input_->setFixedWidth(170);
+    search_input_->setMinimumHeight(26);
     connect(search_input_, &QLineEdit::returnPressed, this,
             [this]() { emit search_submitted(search_input_->text().trimmed()); });
     hl->addWidget(search_input_);
@@ -219,7 +233,7 @@ void PolymarketCommandBar::build_ui() {
     sort_combo_ = new QComboBox;
     sort_combo_->setObjectName("polySortCombo");
     sort_combo_->addItems({tr("VOLUME"), tr("LIQUIDITY"), tr("DATE")});
-    sort_combo_->setFixedSize(88, 26);
+    sort_combo_->setMinimumSize(88, 26);
     connect(sort_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx >= 0 && idx < SORT_KEYS.size())
             emit sort_changed(SORT_KEYS[idx]);
@@ -238,7 +252,7 @@ void PolymarketCommandBar::build_ui() {
     // ── Refresh ───────────────────────────────────────────────────────────
     refresh_btn_ = new QPushButton(tr("↻"));
     refresh_btn_->setObjectName("polyRefreshBtn");
-    refresh_btn_->setFixedSize(28, 26);
+    refresh_btn_->setMinimumSize(28, 26);
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setToolTip(tr("Refresh"));
     connect(refresh_btn_, &QPushButton::clicked, this, &PolymarketCommandBar::refresh_clicked);
@@ -249,7 +263,7 @@ void PolymarketCommandBar::build_ui() {
     // ── WS indicator ──────────────────────────────────────────────────────
     ws_indicator_ = new QLabel;
     ws_indicator_->setObjectName("polyWsIndicator");
-    ws_indicator_->setFixedWidth(52);
+    ws_indicator_->setMinimumWidth(52);
     set_ws_status(false);
     hl->addWidget(ws_indicator_);
 }
@@ -270,7 +284,8 @@ void PolymarketCommandBar::set_presentation(const ExchangePresentation& p) {
             active_view_ = presentation_.default_view;
         rebuild_view_pills();
     }
-    if (category_mode_changed)
+    // The series combo's selection tint is built from the accent.
+    if (category_mode_changed || (accent_changed && category_combo_))
         rebuild_categories();
 }
 
@@ -323,13 +338,14 @@ void PolymarketCommandBar::rebuild_categories() {
         category_combo_ = new QComboBox;
         category_combo_->setEditable(true);
         category_combo_->setInsertPolicy(QComboBox::NoInsert);
-        category_combo_->setFixedSize(190, 26);
+        category_combo_->setFixedWidth(190);
+        category_combo_->setMinimumHeight(26);
         category_combo_->setStyleSheet(
             QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
-                    "padding: 3px 8px; font-size: 9px; font-weight: 600; }"
+                    "padding: 3px 8px; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: 600; }"
                     "QComboBox::drop-down { border: none; width: 14px; }"
                     "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; "
-                    "selection-background-color: rgba(%4,%5,%6,0.2); }")
+                    "selection-background-color: rgba(%4,%5,%6,0.2); selection-color: %2; }")
                 .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_MED())
                 .arg(presentation_.accent.red())
                 .arg(presentation_.accent.green())
@@ -356,7 +372,7 @@ void PolymarketCommandBar::rebuild_categories() {
     // Chip row (Polymarket default) — compact pills
     auto* all_btn = new QPushButton(tr("ALL"));
     all_btn->setObjectName("polyCatBtn");
-    all_btn->setFixedHeight(22);
+    all_btn->setMinimumHeight(22);
     all_btn->setCursor(Qt::PointingHandCursor);
     all_btn->setProperty("active", active_category_ == "ALL");
     connect(all_btn, &QPushButton::clicked, this, [this]() { emit category_changed("ALL"); });
@@ -367,13 +383,43 @@ void PolymarketCommandBar::rebuild_categories() {
         const QString& slug = current_tags_[i];
         auto* btn = new QPushButton(slug.toUpper());
         btn->setObjectName("polyCatBtn");
-        btn->setFixedHeight(22);
+        btn->setMinimumHeight(22);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", active_category_ == slug);
         connect(btn, &QPushButton::clicked, this, [this, slug]() { emit category_changed(slug); });
         layout->addWidget(btn);
     }
     layout->addStretch(1);
+    fit_category_chips();
+}
+
+void PolymarketCommandBar::fit_category_chips() {
+    if (fitting_chips_ || !category_container_ || category_combo_)
+        return;
+    auto* layout = qobject_cast<QHBoxLayout*>(category_container_->layout());
+    if (!layout)
+        return;
+    fitting_chips_ = true;
+    const int avail = category_container_->width();
+    int x = 0;
+    for (int i = 0; i < layout->count(); ++i) {
+        QWidget* chip = layout->itemAt(i)->widget();
+        if (!chip)
+            continue;
+        x += chip->sizeHint().width();
+        // The first chip (ALL) always stays, so the row is never empty.
+        const bool fits = i == 0 || x <= avail;
+        if (chip->isHidden() == fits)
+            chip->setVisible(fits);
+        x += layout->spacing();
+    }
+    fitting_chips_ = false;
+}
+
+bool PolymarketCommandBar::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == category_container_ && event->type() == QEvent::Resize)
+        fit_category_chips();
+    return QWidget::eventFilter(watched, event);
 }
 
 // ── Active-state tracking ───────────────────────────────────────────────────
@@ -432,14 +478,14 @@ void PolymarketCommandBar::set_ws_status(bool connected) {
     if (connected) {
         ws_indicator_->setText(tr("● LIVE"));
         ws_indicator_->setStyleSheet(
-            QString("color: %1; background: rgba(22,163,74,0.15); font-size: 9px; "
-                    "font-weight: 700; padding: 2px 8px; border: 1px solid rgba(22,163,74,0.40);")
-                .arg(colors::POSITIVE()));
+            QString("color: %1; background: %2; font-size: " + fincept::ui::fonts::px(-5) + "px; "
+                    "font-weight: 700; padding: 2px 8px; border: 1px solid %3;")
+                .arg(colors::SUCCESS(), colors::alpha(colors::SUCCESS, 0.15), colors::alpha(colors::SUCCESS, 0.40)));
     } else {
         ws_indicator_->setText(tr("○ OFF"));
-        ws_indicator_->setStyleSheet(QString("color: %1; background: transparent; font-size: 9px; "
+        ws_indicator_->setStyleSheet(QString("color: %1; background: transparent; font-size: " + fincept::ui::fonts::px(-5) + "px; "
                                              "font-weight: 700; padding: 2px 8px; border: 1px solid %2;")
-                                         .arg(colors::TEXT_DIM(), colors::BORDER_DIM()));
+                                         .arg(colors::TEXT_TERTIARY(), colors::BORDER_DIM()));
     }
 }
 
@@ -452,21 +498,45 @@ void PolymarketCommandBar::set_account_status(bool connected, const QString& lab
         return;
     account_connected_ = connected;
     account_label_ = label;
+    if (!account_read_error_.isEmpty()) {
+        // Unreadable is neither "connected" nor "no account": say so, click retries.
+        account_chip_->setText(tr("⚠ UNREADABLE · RETRY"));
+        account_chip_->setToolTip(account_read_error_ + QLatin1Char('\n') +
+                                  tr("Nothing was changed. Click to read the stored account again."));
+        account_chip_->setStyleSheet(QString("#polyAccountChip { background: %2; color: %1; "
+                                             "border: 1px solid %3; font-size: %5px; "
+                                             "font-weight: 700; padding: 3px 10px; }"
+                                             "#polyAccountChip:hover { background: %4; }")
+                                         .arg(colors::WARNING(), colors::alpha(colors::WARNING, 0.12),
+                                              colors::alpha(colors::WARNING, 0.40), colors::alpha(colors::WARNING, 0.22))
+                                         .arg(fincept::ui::fonts::px(-5)));
+        return;
+    }
+    account_chip_->setToolTip(connected ? tr("Trading account connected — click to manage it")
+                                        : tr("Connect a trading account"));
     if (connected) {
         account_chip_->setText(QString("✓ %1").arg(label.isEmpty() ? tr("Account") : label));
-        account_chip_->setStyleSheet(QString("#polyAccountChip { background: rgba(22,163,74,0.12); color: %1; "
-                                             "border: 1px solid rgba(22,163,74,0.40); font-size: 9px; "
+        account_chip_->setStyleSheet(QString("#polyAccountChip { background: %2; color: %1; "
+                                             "border: 1px solid %3; font-size: " + fincept::ui::fonts::px(-5) + "px; "
                                              "font-weight: 700; padding: 3px 10px; }"
-                                             "#polyAccountChip:hover { background: rgba(22,163,74,0.22); }")
-                                         .arg(colors::POSITIVE()));
+                                             "#polyAccountChip:hover { background: %4; }")
+                                         .arg(colors::SUCCESS(), colors::alpha(colors::SUCCESS, 0.12),
+                                              colors::alpha(colors::SUCCESS, 0.40), colors::alpha(colors::SUCCESS, 0.22)));
     } else {
         account_chip_->setText(tr("CONNECT"));
         account_chip_->setStyleSheet(
             QString("#polyAccountChip { background: transparent; color: %1; "
-                    "border: 1px solid %2; font-size: 9px; font-weight: 700; padding: 3px 10px; }"
+                    "border: 1px solid %2; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: 700; padding: 3px 10px; }"
                     "#polyAccountChip:hover { color: %3; border-color: %4; }")
-                .arg(colors::TEXT_DIM(), colors::BORDER_DIM(), colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT()));
+                .arg(colors::TEXT_SECONDARY(), colors::BORDER_MED(), colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT()));
     }
+}
+
+void PolymarketCommandBar::set_account_unreadable(const QString& reason) {
+    if (reason == account_read_error_)
+        return;
+    account_read_error_ = reason;
+    set_account_status(account_connected_, account_label_);
 }
 
 void PolymarketCommandBar::changeEvent(QEvent* event) {
@@ -478,8 +548,6 @@ void PolymarketCommandBar::changeEvent(QEvent* event) {
 void PolymarketCommandBar::retranslateUi() {
     if (exchange_combo_)
         exchange_combo_->setToolTip(tr("Switch prediction market exchange"));
-    if (account_chip_)
-        account_chip_->setToolTip(tr("Connect a trading account"));
     if (search_input_)
         search_input_->setPlaceholderText(tr("Search markets..."));
     if (refresh_btn_)

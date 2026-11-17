@@ -1,0 +1,3 @@
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s9","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Partial ans"}}}}
+{"jsonrpc":"2.0","id":5,"method":"session/request_permission","params":{"sessionId":"s9","toolCall":{"toolCallId":"c1"},"options":[]}}
+{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Internal error","data":{"details":"model overloaded"}}}

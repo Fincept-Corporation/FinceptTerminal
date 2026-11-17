@@ -121,6 +121,71 @@
       "requires": "pandas + numpy",
       "summary": "Estimate a hedge ratio by least squares, build the spread z-score, and generate mean-reversion entry/exit signals with a simple P&L.",
       "file": "quant_pairs_trading_zscore.ipynb"
+    },
+    {
+      "id": "markets-price-history",
+      "title": "Prices, Returns & Drawdowns",
+      "category": "Markets",
+      "difficulty": "Beginner",
+      "est_minutes": 10,
+      "requires": "pandas + yfinance",
+      "summary": "Download real daily prices for any symbol, chart them with 50/200-day moving averages, study the return distribution and drawdowns, and summarise CAGR, volatility, Sharpe and max drawdown.",
+      "file": "markets_price_history.ipynb",
+      "tags": ["prices", "returns", "drawdown", "moving-average"],
+      "featured": true,
+      "network": true
+    },
+    {
+      "id": "portfolio-returns-risk",
+      "title": "Portfolio Returns & Risk vs a Benchmark",
+      "category": "Portfolio",
+      "difficulty": "Intermediate",
+      "est_minutes": 15,
+      "requires": "pandas + yfinance",
+      "summary": "Weight a basket of real tickers, grow $10,000 against SPY, and measure return, volatility, Sharpe, beta, max drawdown, tracking error, correlations and rolling volatility.",
+      "file": "portfolio_returns_risk.ipynb",
+      "tags": ["portfolio", "risk", "beta", "correlation", "benchmark"],
+      "featured": true,
+      "network": true
+    },
+    {
+      "id": "quant-factor-regression",
+      "title": "Factor Regression with ETF Proxies",
+      "category": "Quant",
+      "difficulty": "Hard",
+      "est_minutes": 25,
+      "requires": "statsmodels + yfinance",
+      "summary": "Explain a stock's returns with market, size, value and momentum factors built from ETFs, using OLS with Newey-West errors, plus a rolling 126-day market beta.",
+      "file": "quant_factor_regression.ipynb",
+      "tags": ["factors", "regression", "beta", "statsmodels"],
+      "featured": true,
+      "network": true
+    },
+    {
+      "id": "trading-trend-backtest",
+      "title": "Trend-Following Backtest on Real Prices",
+      "category": "Trading",
+      "difficulty": "Intermediate",
+      "est_minutes": 20,
+      "requires": "pandas + yfinance",
+      "summary": "Backtest a 50/200-day moving-average crossover on real prices with next-day execution and per-trade costs, compare it with buy & hold, and list every trade.",
+      "file": "trading_trend_backtest.ipynb",
+      "tags": ["backtest", "trend", "moving-average", "costs"],
+      "featured": true,
+      "network": true
+    },
+    {
+      "id": "data-connectors-quickstart",
+      "title": "Data Connectors from a Notebook",
+      "category": "Data",
+      "difficulty": "Beginner",
+      "est_minutes": 10,
+      "requires": "pandas + fincept_connector",
+      "summary": "Call the terminal's data connectors from Python: live quotes and price history from Yahoo, FX rates and crypto from keyless sources, error handling, and the connector catalogue.",
+      "file": "data_connectors_quickstart.ipynb",
+      "tags": ["connectors", "quotes", "fx", "crypto"],
+      "featured": true,
+      "network": true
     }
   ]
 }

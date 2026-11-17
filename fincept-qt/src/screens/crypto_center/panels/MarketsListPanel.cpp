@@ -1,10 +1,14 @@
 #include "screens/crypto_center/panels/MarketsListPanel.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "services/prediction/PredictionExchangeAdapter.h"
 #include "services/prediction/PredictionExchangeRegistry.h"
 #include "services/prediction/fincept_internal/FinceptInternalAdapter.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -13,7 +17,6 @@
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QShowEvent>
 #include <QStyle>
 #include <QTableWidget>
@@ -22,32 +25,28 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+namespace cc_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::panels {
 
 namespace {
 
 namespace pr = fincept::services::prediction;
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
+/// Traded volume, abbreviated per the user's compact-number setting.
 QString format_volume(double v) {
-    if (v >= 1e9)
-        return QStringLiteral("%1B").arg(QLocale::system().toString(v / 1e9, 'f', 1));
-    if (v >= 1e6)
-        return QStringLiteral("%1M").arg(QLocale::system().toString(v / 1e6, 'f', 1));
-    if (v >= 1e3)
-        return QStringLiteral("%1k").arg(QLocale::system().toString(v / 1e3, 'f', 0));
-    return QLocale::system().toString(v, 'f', 0);
+    return cc_fmt::volume(v, cc_fmt::Compact::FromSettings);
 }
 
-QString format_price(double p) {
+/// A YES / NO price: a probability 0–1, not money.
+QString mlp_format_price(double p) {
     if (p < 0.0)
         p = 0.0;
     if (p > 1.0)
         p = 1.0;
-    return QStringLiteral("%1").arg(QLocale::system().toString(p, 'f', 2));
+    return cc_fmt::number(p, 2);
 }
 
 pr::fincept_internal::FinceptInternalAdapter* fincept_adapter() {
@@ -61,6 +60,11 @@ MarketsListPanel::MarketsListPanel(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("marketsListPanel"));
     build_ui();
     apply_theme();
+    // A number-format change re-renders the volumes / prices of the list on screen.
+    cc_fmt::on_format_changed(this, [this]() {
+        if (!shown_markets_.isEmpty())
+            rebuild_table(shown_markets_);
+    });
 }
 
 MarketsListPanel::~MarketsListPanel() = default;
@@ -103,8 +107,10 @@ void MarketsListPanel::build_ui() {
 
     auto* h = table_->horizontalHeader();
     h->setSectionResizeMode(0, QHeaderView::Stretch);
+    // Interactive, fitted once after each fill (rebuild_table) — a ResizeToContents
+    // header re-measures the column on every cell written.
     for (int i = 1; i <= 4; ++i) {
-        h->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+        h->setSectionResizeMode(i, QHeaderView::Interactive);
     }
 
     connect(table_, &QTableWidget::cellDoubleClicked, this, &MarketsListPanel::on_row_double_clicked);
@@ -124,35 +130,35 @@ void MarketsListPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral("QWidget#marketsListPanel { background:%1; }"
+    const QString ss = QString("QWidget#marketsListPanel { background:%1; }"
                                       "QWidget#marketsListHead { background:%2; border-bottom:1px solid %3; }"
-                                      "QLabel#marketsListTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "QLabel#marketsListTitle { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#marketsListStatusLive { color:%6; font-family:%5; font-size:10px;"
+                                      "QLabel#marketsListStatusLive { color:%6; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#marketsListStatusDemo { color:%4; font-family:%5; font-size:10px;"
-                                      "  font-weight:700; letter-spacing:1.2px; background:rgba(217,119,6,0.10);"
+                                      "QLabel#marketsListStatusDemo { color:%4; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:" + ui::colors::alpha(AMBER, 0.10) + ";"
                                       "  border:1px solid %4; padding:2px 8px; }"
-                                      "QLabel#marketsListStatusError { color:%8; font-family:%5; font-size:10px;"
+                                      "QLabel#marketsListStatusError { color:%8; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
                                       "QTableWidget#marketsListTable { background:%1; color:%9;"
-                                      "  font-family:%5; font-size:11px; gridline-color:%3; border:none; }"
+                                      "  font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; gridline-color:%3; border:none; }"
                                       "QTableWidget#marketsListTable::item { padding:6px 10px; }"
-                                      "QTableWidget#marketsListTable::item:selected { background:rgba(217,119,6,0.10);"
+                                      "QTableWidget#marketsListTable::item:selected { background:" + ui::colors::alpha(AMBER, 0.10) + ";"
                                       "  color:%4; }"
                                       "QHeaderView::section { background:%2; color:%7; font-family:%5;"
-                                      "  font-size:10px; font-weight:700; letter-spacing:1.2px; padding:6px 10px;"
+                                      "  font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1.2px; padding:6px 10px;"
                                       "  border:none; border-bottom:1px solid %3; }"
-                                      "QLabel#marketsListFooter { color:%7; font-family:%5; font-size:10px;"
+                                      "QLabel#marketsListFooter { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                                       "  background:transparent; }")
                            .arg(BG_BASE(),       // %1
                                 BG_SURFACE(),    // %2 (panel chrome bg lives outside; this matches table header)
                                 BORDER_DIM(),    // %3
                                 AMBER(),         // %4
                                 font,            // %5
-                                POSITIVE(),      // %6
+                                SUCCESS(),       // %6
                                 TEXT_TERTIARY(), // %7
-                                NEGATIVE(),      // %8
+                                DANGER(),        // %8
                                 TEXT_PRIMARY()); // %9
 
     setStyleSheet(ss);
@@ -166,7 +172,9 @@ void MarketsListPanel::showEvent(QShowEvent* e) {
         return;
     auto* adapter = fincept_adapter();
     if (!adapter) {
-        set_status_error(tr("FinceptInternalAdapter not registered"));
+        set_status_error(tr("FinceptInternalAdapter not registered"), QStringLiteral("adapter"));
+        if (table_->rowCount() == 0)
+            show_state_page(true, tr("The Fincept markets service is not available in this build."));
         return;
     }
     set_status_demo(adapter->is_demo_mode());
@@ -228,16 +236,50 @@ void MarketsListPanel::on_markets_ready(const QVector<pr::PredictionMarket>& mar
     if (auto* adapter = fincept_adapter())
         set_status_demo(adapter->is_demo_mode());
     status_pill_->setToolTip(QString());
+    shown_markets_ = markets;
     rebuild_table(markets);
     if (markets.isEmpty()) {
         footer_note_->setText(tr("No markets are listed yet."));
         footer_note_->show();
+        show_state_page(false, tr("Prediction markets that settle in $FNCPT appear here once they are listed."));
+    } else {
+        hide_state_page();
     }
 }
 
 void MarketsListPanel::on_error(const QString& context, const QString& message) {
-    Q_UNUSED(context);
-    set_status_error(message);
+    set_status_error(message, context);
+    // Rows already on screen stay (the pill says ERROR, its tooltip why); with none,
+    // an error page with RETRY instead of a bare header.
+    if (table_->rowCount() == 0)
+        show_state_page(true, message);
+}
+
+void MarketsListPanel::request_markets() {
+    auto* adapter = fincept_adapter();
+    if (!adapter || !subscribed_)
+        return; // not shown / not available: showEvent lists them
+    adapter->list_markets({}, {}, /*limit=*/50, /*offset=*/0);
+}
+
+void MarketsListPanel::show_state_page(bool error, const QString& message) {
+    if (!state_page_) {
+        state_page_ = new ui::EmptyState(this);
+        state_page_->set_compact(true);
+        if (auto* root = qobject_cast<QVBoxLayout*>(layout()))
+            root->insertWidget(root->indexOf(table_) + 1, state_page_, 1);
+        connect(state_page_, &ui::EmptyState::primary_clicked, this, &MarketsListPanel::request_markets);
+    }
+    state_page_->apply(error ? ui::EmptyState::error_spec(message, tr("Markets unavailable"))
+                             : ui::EmptyState::no_data_spec(tr("No markets listed yet"), message));
+    table_->hide();
+    state_page_->show();
+}
+
+void MarketsListPanel::hide_state_page() {
+    if (state_page_)
+        state_page_->hide();
+    table_->show();
 }
 
 void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
@@ -247,7 +289,7 @@ void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
     const auto market_id = item->data(Qt::UserRole).toString();
     if (market_id.isEmpty())
         return;
-    LOG_INFO("MarketsListPanel", QString("market double-clicked: %1").arg(market_id));
+    LOG_DEBUG("MarketsListPanel", QString("market double-clicked: %1").arg(market_id));
     // The order-entry panel is part of Phase 4 polish and has no UI yet. Say so
     // on screen — a double-click that silently does nothing reads as a broken
     // row. (The log line above keeps the seam testable.)
@@ -275,16 +317,19 @@ void MarketsListPanel::set_status_demo(bool demo) {
     status_pill_->style()->polish(status_pill_);
 }
 
-void MarketsListPanel::set_status_error(const QString& message) {
+void MarketsListPanel::set_status_error(const QString& message, const QString& operation) {
     status_pill_->setText(tr("ERROR"));
     status_pill_->setObjectName(QStringLiteral("marketsListStatusError"));
     status_pill_->setToolTip(message);
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);
-    LOG_WARN("MarketsListPanel", QString("error: %1").arg(message));
+    LOG_WARN("MarketsListPanel",
+             logf("Fincept markets request failed",
+                  {{"operation", operation.isEmpty() ? QStringLiteral("list_markets") : operation}, {"error", message}}));
 }
 
 void MarketsListPanel::rebuild_table(const QVector<pr::PredictionMarket>& markets) {
+    table_->setUpdatesEnabled(false);
     table_->setRowCount(markets.size());
     const QDate today = QDate::currentDate();
     int row = 0;
@@ -300,8 +345,8 @@ void MarketsListPanel::rebuild_table(const QVector<pr::PredictionMarket>& market
         const double yes = m.outcomes.size() >= 1 ? m.outcomes[0].price : 0.0;
         const double no = m.outcomes.size() >= 2 ? m.outcomes[1].price : (1.0 - yes);
 
-        auto* yes_item = new QTableWidgetItem(format_price(yes));
-        auto* no_item = new QTableWidgetItem(format_price(no));
+        auto* yes_item = new QTableWidgetItem(mlp_format_price(yes));
+        auto* no_item = new QTableWidgetItem(mlp_format_price(no));
         auto* vol_item = new QTableWidgetItem(format_volume(m.volume));
         yes_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         no_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -325,6 +370,12 @@ void MarketsListPanel::rebuild_table(const QVector<pr::PredictionMarket>& market
         }
         ++row;
     }
+    // Filled: fit YES / NO / VOL / EXPIRES once (MARKET stretches).
+    if (!markets.isEmpty()) {
+        for (int c = 1; c <= 4; ++c)
+            table_->resizeColumnToContents(c);
+    }
+    table_->setUpdatesEnabled(true);
 }
 
 } // namespace fincept::screens::panels

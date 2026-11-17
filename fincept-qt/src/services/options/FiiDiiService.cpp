@@ -109,7 +109,7 @@ void FiiDiiService::ensure_registered_with_hub() {
     hub.set_policy(kTopic, pol);
 
     registered_ = true;
-    LOG_INFO("FiiDii", "Registered with DataHub (fno:fii_dii:daily)");
+    LOG_DEBUG("FiiDii", "Registered with DataHub (fno:fii_dii:daily)");
 }
 
 QStringList FiiDiiService::topic_patterns() const {
@@ -127,7 +127,7 @@ void FiiDiiService::refresh(const QStringList& topics) {
 
 void FiiDiiService::kick_off_refresh() {
     in_flight_ = true;
-    LOG_INFO("FiiDii", "Fetching FII/DII data from blissquants.com");
+    LOG_DEBUG("FiiDii", "Fetching FII/DII data from blissquants.com");
 
     auto* nam = new QNetworkAccessManager(this);
     QUrl url(kUrl);
@@ -157,7 +157,15 @@ void FiiDiiService::kick_off_refresh() {
 
         const QString html = QString::fromUtf8(reply->readAll());
         QVector<FiiDiiDay> fresh = parse_html(html);
-        LOG_INFO("FiiDii", QString("Parsed %1 rows from blissquants").arg(fresh.size()));
+        LOG_DEBUG("FiiDii", QString("Parsed %1 rows from blissquants").arg(fresh.size()));
+        // The page answering 200 with no table (e.g. a script-rendered shell) is a dead
+        // source, not "no new data": the cached window is still published below so it
+        // stays visible with its real dates, then flagged as an error so the tab says
+        // the source is unavailable instead of presenting the cache as current.
+        const bool source_empty = fresh.isEmpty();
+        if (source_empty)
+            LOG_WARN("FiiDii", QString("Source returned no FII/DII rows (%1 bytes) — showing cached data only")
+                                   .arg(html.size()));
 
         if (!fresh.isEmpty()) {
             auto upr = fincept::FiiDiiRepository::instance().upsert_batch(fresh);
@@ -179,9 +187,14 @@ void FiiDiiService::kick_off_refresh() {
 
         fincept::datahub::DataHub::instance().publish(kTopic, QVariant::fromValue(rows));
         emit self->published(rows);
-        LOG_INFO("FiiDii", QString("Published %1 days (latest: %2)")
+        LOG_DEBUG("FiiDii", QString("Published %1 days (latest: %2)")
                                .arg(rows.size())
                                .arg(rows.isEmpty() ? QString("—") : rows.last().date_iso));
+        if (source_empty) {
+            const QString err = QStringLiteral("source unavailable — the FII/DII page returned no data rows");
+            fincept::datahub::DataHub::instance().publish_error(kTopic, err);
+            emit self->failed(err);
+        }
     });
 }
 

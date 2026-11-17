@@ -33,23 +33,14 @@ MultiStrikeOIChart::MultiStrikeOIChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
 
     chart_ = new QChart();
-    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
-    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
     chart_->setTitle(tr("Open Interest by Strike"));
-    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
-    QFont title_font = chart_->titleFont();
-    title_font.setPointSize(9);
-    title_font.setBold(true);
-    chart_->setTitleFont(title_font);
     chart_->legend()->setVisible(false);
     setChart(chart_);
 
     ce_set_ = new QBarSet(tr("CE OI"));
     pe_set_ = new QBarSet(tr("PE OI"));
-    ce_set_->setColor(with_alpha(colors::POSITIVE(), kBarAlpha));
-    pe_set_->setColor(with_alpha(colors::NEGATIVE(), kBarAlpha));
     ce_set_->setBorderColor(Qt::transparent);
     pe_set_->setBorderColor(Qt::transparent);
 
@@ -64,15 +55,8 @@ MultiStrikeOIChart::MultiStrikeOIChart(QWidget* parent) : QChartView(parent) {
     chart_->addSeries(pe_series_);
 
     axis_y_ = new QBarCategoryAxis();
-    axis_y_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_y_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_y_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
-
     axis_x_ = new QValueAxis();
     axis_x_->setLabelFormat("%.0f");
-    axis_x_->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
-    axis_x_->setGridLineColor(QColor(colors::BORDER_DIM()));
-    axis_x_->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
 
     chart_->addAxis(axis_y_, Qt::AlignLeft);
     chart_->addAxis(axis_x_, Qt::AlignBottom);
@@ -80,6 +64,28 @@ MultiStrikeOIChart::MultiStrikeOIChart(QWidget* parent) : QChartView(parent) {
     ce_series_->attachAxis(axis_x_);
     pe_series_->attachAxis(axis_y_);
     pe_series_->attachAxis(axis_x_);
+
+    refresh_theme();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
+}
+
+void MultiStrikeOIChart::refresh_theme() {
+    chart_->setBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
+    chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
+    chart_->setTitleFont(fonts::font(-2, QFont::Bold));
+
+    ce_set_->setColor(with_alpha(colors::POSITIVE(), kBarAlpha));
+    pe_set_->setColor(with_alpha(colors::NEGATIVE(), kBarAlpha));
+
+    const QFont label_font = fonts::font(-3);
+    for (QAbstractAxis* axis : {static_cast<QAbstractAxis*>(axis_y_), static_cast<QAbstractAxis*>(axis_x_)}) {
+        axis->setLabelsColor(QColor(colors::TEXT_SECONDARY()));
+        axis->setLabelsFont(label_font);
+        axis->setGridLineColor(QColor(colors::BORDER_DIM()));
+        axis->setLinePen(QPen(QColor(colors::BORDER_DIM()), 1));
+    }
 }
 
 void MultiStrikeOIChart::set_chain(const OptionChain& chain) {

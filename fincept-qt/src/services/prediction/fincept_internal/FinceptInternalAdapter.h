@@ -82,8 +82,10 @@ class FinceptInternalAdapter : public PredictionExchangeAdapter {
     bool is_demo_mode() const;
 
   private:
-    /// Resolve the endpoint from SecureStorage. Empty string → demo mode.
-    QString resolve_endpoint() const;
+    /// Resolve the endpoint from SecureStorage. Empty string → demo mode — unless
+    /// `read_error` is set: the endpoint is stored but unreadable, which is neither
+    /// demo mode nor a usable endpoint (requests then report that sentence).
+    QString resolve_endpoint(QString* read_error = nullptr) const;
 
     /// Mock-mode emitters — emit the curated dataset described in plan §4.2.
     /// All three return synchronously via QTimer::singleShot(0) so signal

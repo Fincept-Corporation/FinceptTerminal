@@ -28,6 +28,8 @@ class PolymarketLeaderboard : public QWidget {
 
   private:
     void retranslateUi();
+    /// Re-colour the item foregrounds (PnL sign, empty-state text) after a theme change.
+    void refresh_theme();
     /// Render a single full-width row carrying `message`. Used when no
     /// leaderboard data is available so the panel never shows a bare grid.
     void show_empty_state(const QString& message);

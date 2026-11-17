@@ -2,69 +2,57 @@
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
 
-#include <QComboBox>
 #include <QEvent>
-#include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QTableWidget>
-#include <QVBoxLayout>
+#include <QString>
+#include <QVector>
 #include <QWidget>
 
 namespace fincept::screens {
 
-/// Strategy list — compact paginated table of DSL strategies loaded from the
-/// algo_strategies DB table (curated library + user-created). Per-row EDIT opens
-/// the Builder pre-filled; DEPLOY and DELETE act on the strategy.
+class StrategyLibraryView;
+
+/// MY STRATEGIES — the controller of StrategyLibraryView: loads the library
+/// (AlgoTradingService), aggregates the paper / live deployments per strategy
+/// (AlgoEngine), and runs the row actions: OPEN (edit_requested → the Builder),
+/// BACKTEST (symbol + period prompt → backtest_requested), DEPLOY (PAPER) (the
+/// deploy dialog; nothing starts until it is confirmed), DUPLICATE (a saved copy),
+/// EXPORT (a JSON file) and DELETE (after a confirmation).
 class StrategyListPanel : public QWidget {
     Q_OBJECT
   public:
     explicit StrategyListPanel(QWidget* parent = nullptr);
 
+    /// Select a strategy's row (a deep link): at once when listed, else after the next load.
+    /// Only selects — OPEN / BACKTEST / DEPLOY stay the user's.
+    void select_strategy(const QString& strategy_id);
+
   signals:
     void edit_requested(fincept::services::algo::AlgoStrategy strategy);
     void backtest_requested(fincept::services::algo::AlgoStrategy strategy, QString symbol, QString start_date,
                             QString end_date);
-
-  private slots:
-    void on_strategies_loaded(QVector<fincept::services::algo::AlgoStrategy> strategies);
-    void on_sort_changed(int index);
-    void on_error(const QString& context, const QString& msg);
-    void on_filter_changed(const QString& text);
-    void on_edit_clicked(int row);
-    void on_backtest_clicked(int row);
-    void on_deploy_clicked(int row);
-    void on_delete_clicked(int row);
-    void go_to_page(int page);
+    // Emitted after a deployment was started from this list (parent jumps to the Dashboard).
+    void deployed();
+    /// The "no strategies yet" state's OPEN BUILDER (the screen switches to the Builder).
+    void open_builder_requested();
 
   protected:
     void changeEvent(QEvent* event) override;
 
   private:
-    void build_ui();
     void connect_service();
-    void render_page();
-    void update_pagination_controls();
-    /// Sort `filtered_` by the sort combo's current selection. Called after every
-    /// rebuild of `filtered_` so the sort survives search/category changes.
-    void apply_sort();
-    void retranslateUi();
+    void on_strategies_loaded(const QVector<fincept::services::algo::AlgoStrategy>& strategies);
+    void on_action(const QString& action, const QString& strategy_id);
+    bool find_strategy(const QString& id, fincept::services::algo::AlgoStrategy* out) const;
+    void prompt_backtest(const fincept::services::algo::AlgoStrategy& strategy);
+    void deploy(const fincept::services::algo::AlgoStrategy& strategy);
+    void duplicate(const fincept::services::algo::AlgoStrategy& strategy);
+    void export_json(const fincept::services::algo::AlgoStrategy& strategy);
+    void confirm_delete(const fincept::services::algo::AlgoStrategy& strategy);
 
-    static constexpr int kPageSize = 50;
-
-    QLineEdit* search_edit_ = nullptr;
-    QLabel* sort_caption_ = nullptr;
-    QLabel* count_label_ = nullptr;
-    QComboBox* sort_combo_ = nullptr;
-    QComboBox* cat_combo_ = nullptr;
-    QTableWidget* table_ = nullptr;
-    QLabel* page_label_ = nullptr;
-    QPushButton* prev_btn_ = nullptr;
-    QPushButton* next_btn_ = nullptr;
-
+    StrategyLibraryView* view_ = nullptr;
     QVector<fincept::services::algo::AlgoStrategy> strategies_; // full list
-    QVector<fincept::services::algo::AlgoStrategy> filtered_;   // after search/sort
-    int current_page_ = 0;                                      // 0-based
+    QString select_after_load_; ///< a copy just saved: selected once the list reloads
+    QString link_select_;       ///< a deep-linked strategy: selected once the list (re)loads
 };
 
 } // namespace fincept::screens

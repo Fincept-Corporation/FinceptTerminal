@@ -288,6 +288,34 @@ int run_core_tools_selftest() {
     tally.check(text_of(r3).contains(QStringLiteral("Refreshed 1")),
                 QStringLiteral("the answer reports the new status text"));
 
+    // ── Incremental snapshots and observe steps in a batch ───────────────────
+    const QString snap_before = text_of(run([&](ui::Reply r) { ui::ui_snapshot(target, std::move(r)); }));
+    const QString snap_id = snap_before.section(QStringLiteral("snap "), 1, 1).section(QLatin1Char('\n'), 0, 0).trimmed();
+    ToolResult batch = run([&](ui::Reply r) {
+        ui::ui_act(QJsonObject{{QStringLiteral("steps"),
+                                QJsonArray{QJsonObject{{QStringLiteral("action"), QStringLiteral("click")},
+                                                       {QStringLiteral("name"), QStringLiteral("Refresh")},
+                                                       {QStringLiteral("role"), QStringLiteral("button")}},
+                                           QJsonObject{{QStringLiteral("action"), QStringLiteral("wait")},
+                                                       {QStringLiteral("until"), QStringLiteral("text")},
+                                                       {QStringLiteral("text"), QStringLiteral("Refreshed 2")}},
+                                           QJsonObject{{QStringLiteral("action"), QStringLiteral("read")},
+                                                       {QStringLiteral("ref"), table_ref},
+                                                       {QStringLiteral("limit"), 1}}}},
+                               {QStringLiteral("target"), dref}},
+                   origin, std::move(r));
+    });
+    tally.check(batch.success && text_of(batch).contains(QStringLiteral("2. wait")) &&
+                    text_of(batch).contains(QStringLiteral("3. read")) && text_of(batch).contains(QStringLiteral("AAPL")),
+                QStringLiteral("one batch clicks, waits for the result and reads the table"), text_of(batch));
+    const QString since = text_of(run([&](ui::Reply r) {
+        ui::ui_snapshot(QJsonObject{{QStringLiteral("target"), dref}, {QStringLiteral("since"), snap_id}},
+                        std::move(r));
+    }));
+    tally.check(!snap_id.isEmpty() && since.contains(QStringLiteral("changes since")) &&
+                    since.contains(QStringLiteral("Refreshed 2")) && since.size() < snap_before.size(),
+                QStringLiteral("since= lists only what changed"), since.left(200));
+
     // ── Reading ──────────────────────────────────────────────────────────────
     ToolResult rd = run([&](ui::Reply r) {
         ui::ui_read(QJsonObject{{QStringLiteral("ref"), table_ref}, {QStringLiteral("query"), QStringLiteral("msft")}},
@@ -439,9 +467,11 @@ int run_core_tools_selftest() {
     const QStringList syms{QStringLiteral("AAPL"), QStringLiteral("MSFT"), QStringLiteral("NVDA"),
                            QStringLiteral("TSLA")};
     int cancels[4] = {0, 0, 0, 0};
+    // A neutral list first (a row "Cancel" there is just a button); the same
+    // button on an order row is judged as cancelling that order (below).
     for (int r = 0; r < 4; ++r) {
         blotter->setItem(r, 0, new QTableWidgetItem(syms[r]));
-        blotter->setItem(r, 1, new QTableWidgetItem(r % 2 ? QStringLiteral("SELL") : QStringLiteral("BUY")));
+        blotter->setItem(r, 1, new QTableWidgetItem(r % 2 ? QStringLiteral("B") : QStringLiteral("A")));
         for (int c = 2; c < 13; ++c)
             blotter->setItem(r, c, new QTableWidgetItem(QString::number(r * 100 + c)));
         auto* cancel = new QPushButton(QStringLiteral("Cancel"));
@@ -490,6 +520,21 @@ int run_core_tools_selftest() {
     });
     tally.check(cell_click.success && cancels[3] == 1 && cancels[0] + cancels[1] + cancels[2] == 0,
                 QStringLiteral("clicking that ref presses the button in that row"), text_of(cell_click));
+    // The order path: the same row button on a SELL row cancels an order — the
+    // user is asked (declined here) and nothing happens.
+    blotter->item(3, 1)->setText(QStringLiteral("SELL"));
+    QTimer::singleShot(600, qApp, []() { ToolApprovalDialog::deny_all_pending(); });
+    ToolResult order_cancel = run(
+        [&](ui::Reply r) {
+            ui::ui_act(
+                QJsonObject{{QStringLiteral("action"), QStringLiteral("click")}, {QStringLiteral("ref"), tsla_cancel}},
+                origin, std::move(r));
+        },
+        20000);
+    tally.check(!order_cancel.success && cancels[3] == 1 && text_of(order_cancel).startsWith(QStringLiteral("denied:")),
+                QStringLiteral("a Cancel button on an order row asks the user (declined: nothing happens)"),
+                text_of(order_cancel));
+    blotter->item(3, 1)->setText(QStringLiteral("B"));
 
     // The rows were listed (r0 AAPL … r3 TSLA); now the view re-sorts.
     blotter->sortItems(0, Qt::DescendingOrder); // TSLA, NVDA, MSFT, AAPL

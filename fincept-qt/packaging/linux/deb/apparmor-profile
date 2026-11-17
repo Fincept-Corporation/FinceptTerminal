@@ -1,0 +1,24 @@
+# AppArmor profile of Fincept Terminal Community (.deb). The package's postinst
+# copies it to /etc/apparmor.d/fincept-terminal-community where AppArmor 4 can
+# compile it (Ubuntu 24.04+, Debian 13+) and postrm removes it.
+#
+# Ubuntu restricts unprivileged user namespaces; QtWebEngine's Chromium sandbox
+# needs them. As upstream AppArmor's own QtWebEngineProcess profile and the
+# vendor packages of Chromium-based apps do, the profiles below confine nothing
+# (flags=(unconfined)) and only allow creating user namespaces, for the
+# terminal and for its WebEngine helper process.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile fincept-terminal-community /opt/fincept-terminal-community/bin/FinceptTerminal flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/fincept-terminal-community>
+}
+
+profile fincept-terminal-community-webengine /opt/fincept-terminal-community/libexec/QtWebEngineProcess flags=(unconfined) {
+  userns,
+
+  include if exists <local/fincept-terminal-community-webengine>
+}

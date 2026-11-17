@@ -43,8 +43,11 @@ QList<AuditEvent> SecurityAuditLog::recent(int limit) {
 
     auto r =
         db.execute("SELECT id, ts, event, detail FROM security_audit_log ORDER BY ts DESC LIMIT ?", {QVariant(limit)});
-    if (r.is_err())
+    if (r.is_err()) {
+        LOG_WARN("SecurityAudit", logf("Security audit log could not be read",
+                                       {{"error", QString::fromStdString(r.error())}}));
         return out;
+    }
 
     auto& q = r.value();
     while (q.next()) {

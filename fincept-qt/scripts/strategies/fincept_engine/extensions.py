@@ -55,6 +55,113 @@ class Time:
     EachTradeableDayInTimeZone = each_tradeable_day_in_time_zone
 
 
+class Expiry:
+    """LEAN Expiry helpers: functions from an insight's generation time to its expiry time."""
+
+    @staticmethod
+    def _add_months(dt, n):
+        import calendar
+        m = dt.month - 1 + n
+        y = dt.year + m // 12
+        m = m % 12 + 1
+        d = min(dt.day, calendar.monthrange(y, m)[1])
+        return dt.replace(year=y, month=m, day=d)
+
+    @staticmethod
+    def ONE_MONTH(dt):
+        return Expiry._add_months(dt, 1)
+
+    @staticmethod
+    def ONE_QUARTER(dt):
+        return Expiry._add_months(dt, 3)
+
+    @staticmethod
+    def ONE_YEAR(dt):
+        return Expiry._add_months(dt, 12)
+
+    @staticmethod
+    def END_OF_DAY(dt):
+        return datetime(dt.year, dt.month, dt.day) + timedelta(days=1)
+
+    @staticmethod
+    def END_OF_WEEK(dt):
+        # .NET DayOfWeek: Sunday = 0 ... Saturday = 6; next Monday at midnight
+        dow = (dt.weekday() + 1) % 7
+        value = 8 - dow
+        if value == 8:
+            value = 1
+        return datetime(dt.year, dt.month, dt.day) + timedelta(days=value)
+
+    @staticmethod
+    def END_OF_MONTH(dt):
+        nxt = Expiry._add_months(dt, 1)
+        return datetime(nxt.year, nxt.month, 1)
+
+    @staticmethod
+    def END_OF_QUARTER(dt):
+        first = (dt.month - 1) // 3 * 3 + 1
+        return Expiry._add_months(datetime(dt.year, first, 1), 3)
+
+    @staticmethod
+    def END_OF_YEAR(dt):
+        return datetime(dt.year + 1, 1, 1)
+
+    OneMonth = ONE_MONTH
+    OneQuarter = ONE_QUARTER
+    OneYear = ONE_YEAR
+    EndOfDay = END_OF_DAY
+    EndOfWeek = END_OF_WEEK
+    EndOfMonth = END_OF_MONTH
+    EndOfQuarter = END_OF_QUARTER
+    EndOfYear = END_OF_YEAR
+
+
+class Math:
+    """C# System.Math (LEAN's AlgorithmImports brings it in)."""
+    PI = math.pi
+    E = math.e
+
+    @staticmethod
+    def _r(x, digits=0):
+        return round(x, digits)
+
+    sin = staticmethod(math.sin)
+    cos = staticmethod(math.cos)
+    tan = staticmethod(math.tan)
+    asin = staticmethod(math.asin)
+    acos = staticmethod(math.acos)
+    atan = staticmethod(math.atan)
+    atan2 = staticmethod(math.atan2)
+    sqrt = staticmethod(math.sqrt)
+    exp = staticmethod(math.exp)
+    log10 = staticmethod(math.log10)
+    floor = staticmethod(math.floor)
+    ceiling = staticmethod(math.ceil)
+    abs = staticmethod(abs)
+    max = staticmethod(max)
+    min = staticmethod(min)
+    pow = staticmethod(math.pow)
+
+    @staticmethod
+    def log(x, base=None):
+        return math.log(x) if base is None else math.log(x, base)
+
+    @staticmethod
+    def round(x, digits=0):
+        return round(x, digits)
+
+    @staticmethod
+    def sign(x):
+        return (x > 0) - (x < 0)
+
+    @staticmethod
+    def truncate(x):
+        return float(int(x))
+
+    Sin, Cos, Tan, Sqrt, Exp, Log, Log10, Floor, Ceiling, Abs, Max, Min, Pow, Round, Sign, Truncate = (
+        sin, cos, tan, sqrt, exp, log, log10, floor, ceiling, abs, max, min, pow, round, sign, truncate)
+
+
 class TimeZones:
     """Common timezone definitions (replaces LEAN's TimeZones)"""
 
@@ -105,7 +212,11 @@ class Extensions:
     @staticmethod
     def to_time_span(minutes: int = 0, hours: int = 0, days: int = 0,
                      seconds: int = 0) -> timedelta:
-        """Convert to timedelta (TimeSpan equivalent)"""
+        """Convert to timedelta (TimeSpan equivalent); Extensions.to_time_span(resolution) is the
+        resolution's bar period (LEAN Resolution.ToTimeSpan)."""
+        if type(minutes).__name__ == 'Resolution':
+            return {0: timedelta(0), 1: timedelta(seconds=1), 2: timedelta(minutes=1),
+                    3: timedelta(hours=1), 4: timedelta(days=1)}[int(minutes)]
         return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
     @staticmethod
@@ -121,18 +232,19 @@ class Extensions:
 
     @staticmethod
     def convert_from_utc(dt: datetime, tz) -> datetime:
-        """Convert UTC datetime to specified timezone"""
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(Extensions._resolve_tz(tz))
+        """UTC -> exchange time. The engine keeps one naive clock (algorithm.utc_time == algorithm.time,
+        New York exchange time), so a naive time is returned unchanged and an aware one is converted and
+        made naive - comparisons with bar times never mix naive and aware datetimes."""
+        if dt is None or dt.tzinfo is None:
+            return dt
+        return dt.astimezone(Extensions._resolve_tz(tz)).replace(tzinfo=None)
 
     @staticmethod
     def convert_to_utc(dt: datetime, tz) -> datetime:
-        """Convert datetime from specified timezone to UTC"""
-        resolved_tz = Extensions._resolve_tz(tz)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=resolved_tz)
-        return dt.astimezone(timezone.utc)
+        """Exchange time -> UTC on the engine's single naive clock (see convert_from_utc)."""
+        if dt is None or dt.tzinfo is None:
+            return dt
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
     @staticmethod
     def read_lines(file_path: str) -> List[str]:
@@ -185,45 +297,70 @@ class Extensions:
 
 
 class IndicatorExtensions:
-    """Extension methods for indicators"""
+    """LEAN IndicatorExtensions: chain and combine indicators.
+
+    of(second, first)      -> `second` is updated with every new value of `first`; returns second
+    sma/ema(indicator, n)  -> an SMA/EMA of the indicator's values
+    over/minus/plus/times  -> composite indicators, recomputed when both inputs have updated
+    """
 
     @staticmethod
-    def sma(indicator: Any, period: int) -> 'SimpleMovingAverageWrapper':
-        """Create an SMA of another indicator's values"""
-        return SimpleMovingAverageWrapper(indicator, period)
+    def _wire(target, source, wait_for_first_to_ready=False):
+        from .indicators import feed_indicator, IndicatorDataPoint
+
+        def _on(sender, point):
+            if wait_for_first_to_ready and not getattr(source, 'is_ready', True):
+                return
+            feed_indicator(target, IndicatorDataPoint(float(point.value), getattr(point, 'time', None)))
+        source.updated += _on
+        return target
 
     @staticmethod
-    def ema(indicator: Any, period: int) -> 'ExponentialMovingAverageWrapper':
-        """Create an EMA of another indicator's values"""
-        return ExponentialMovingAverageWrapper(indicator, period)
+    def of(second: Any, first: Any, wait_for_first_to_ready: bool = False) -> Any:
+        return IndicatorExtensions._wire(second, first, wait_for_first_to_ready)
 
     @staticmethod
-    def of(indicator: Any, selector: Any = None) -> Any:
-        """Chain indicators together"""
-        return indicator
+    def sma(indicator: Any, period: int, wait_for_first_to_ready: bool = False) -> Any:
+        from .indicators import SimpleMovingAverage
+        name = f"SMA{period}_{getattr(indicator, 'name', 'IND')}"
+        return IndicatorExtensions._wire(SimpleMovingAverage(name, int(period)), indicator, wait_for_first_to_ready)
 
     @staticmethod
-    def over(indicator: Any, other: Any, selector: Any = None) -> Any:
-        """Chain indicator over another (e.g., SMA over RSI)"""
-        return indicator
+    def ema(indicator: Any, period: int, smoothing_factor: float = None, wait_for_first_to_ready: bool = False) -> Any:
+        from .indicators import ExponentialMovingAverage
+        name = f"EMA{period}_{getattr(indicator, 'name', 'IND')}"
+        return IndicatorExtensions._wire(ExponentialMovingAverage(name, int(period), smoothing_factor),
+                                         indicator, wait_for_first_to_ready)
 
     @staticmethod
-    def minus(indicator: Any, other: Any) -> Any:
-        """Subtract one indicator from another"""
-        return indicator
+    def _composite(left: Any, right: Any, op, sym: str) -> Any:
+        from .indicators import CompositeIndicator, ConstantIndicator
+        if isinstance(right, (int, float)):
+            right = ConstantIndicator(right)
+        name = f"{getattr(left, 'name', 'L')}{sym}{getattr(right, 'name', 'R')}"
+        return CompositeIndicator(name, left, right, op)
 
     @staticmethod
-    def plus(indicator: Any, other: Any) -> Any:
-        """Add one indicator to another"""
-        return indicator
+    def over(left: Any, right: Any, name: str = None) -> Any:
+        return IndicatorExtensions._composite(left, right, lambda a, b: a / b if b else 0.0, '/')
 
     @staticmethod
-    def times(indicator: Any, factor: float) -> Any:
-        """Multiply indicator by factor"""
-        return indicator
+    def minus(left: Any, right: Any, name: str = None) -> Any:
+        return IndicatorExtensions._composite(left, right, lambda a, b: a - b, '-')
+
+    @staticmethod
+    def plus(left: Any, right: Any, name: str = None) -> Any:
+        return IndicatorExtensions._composite(left, right, lambda a, b: a + b, '+')
+
+    @staticmethod
+    def times(left: Any, right: Any, name: str = None) -> Any:
+        return IndicatorExtensions._composite(left, right, lambda a, b: a * b, '*')
 
     Of = of
     Over = over
+    Minus = minus
+    Plus = plus
+    Times = times
     SMA = sma
     EMA = ema
 
@@ -242,70 +379,6 @@ class _WrapperEventHandler:
     def __call__(self, *args, **kwargs):
         for h in self._handlers:
             h(*args, **kwargs)
-
-
-class SimpleMovingAverageWrapper:
-    """Wrapper to compute SMA of another indicator"""
-
-    def __init__(self, source: Any, period: int):
-        self.source = source
-        self.period = period
-        self._values: List[float] = []
-        self._current = 0.0
-        self.is_ready = False
-        self.updated = _WrapperEventHandler()
-
-    def update(self, value: float) -> bool:
-        """Update with new value"""
-        self._values.append(value)
-        if len(self._values) > self.period:
-            self._values.pop(0)
-        if len(self._values) >= self.period:
-            self._current = sum(self._values) / len(self._values)
-            self.is_ready = True
-            return True
-        return False
-
-    @property
-    def current(self) -> float:
-        return self._current
-
-    @property
-    def Current(self) -> Any:
-        """LEAN-style property"""
-        class Value:
-            def __init__(self, val):
-                self.Value = val
-        return Value(self._current)
-
-
-class ExponentialMovingAverageWrapper:
-    """Wrapper to compute EMA of another indicator"""
-
-    def __init__(self, source: Any, period: int):
-        self.source = source
-        self.period = period
-        self._current = 0.0
-        self._count = 0
-        self._multiplier = 2.0 / (period + 1)
-        self.is_ready = False
-        self.updated = _WrapperEventHandler()
-
-    def update(self, value: float) -> bool:
-        """Update with new value"""
-        self._count += 1
-        if self._count == 1:
-            self._current = value
-        else:
-            self._current = (value - self._current) * self._multiplier + self._current
-        if self._count >= self.period:
-            self.is_ready = True
-            return True
-        return False
-
-    @property
-    def current(self) -> float:
-        return self._current
 
 
 class BuyingPowerModelExtensions:
@@ -398,52 +471,15 @@ class DefaultBrokerageModel:
         return True
 
 
-class RateOfChangePercent:
-    """Rate of change percentage indicator"""
+from .indicators import MomentumPercent as _MomentumPercent  # noqa: E402
+
+
+class RateOfChangePercent(_MomentumPercent):
+    """ROCP = 100 * (value - value[period ago]) / value[period ago].
+    Accepts RateOfChangePercent(period) and RateOfChangePercent(name, period)."""
 
     def __init__(self, name_or_period=14, period=None):
-        # Support both RateOfChangePercent(14) and RateOfChangePercent("name", 1)
         if isinstance(name_or_period, str):
-            self.name = name_or_period
-            self.period = period if period is not None else 14
+            super().__init__(name_or_period, period if period is not None else 14)
         else:
-            self.period = name_or_period
-            self.name = f"ROCP({self.period})"
-        self._values: List[float] = []
-        self._current = 0.0
-        self.is_ready = False
-        self.updated = _WrapperEventHandler()
-
-    def update(self, time: datetime, value: float) -> bool:
-        """Update indicator with new value"""
-        self._values.append(value)
-        if len(self._values) > self.period + 1:
-            self._values.pop(0)
-
-        if len(self._values) > self.period:
-            old_value = self._values[0]
-            if old_value != 0:
-                self._current = ((value - old_value) / old_value) * 100
-            else:
-                self._current = 0.0
-            self.is_ready = True
-            return True
-        return False
-
-    @property
-    def current(self) -> float:
-        return self._current
-
-    @property
-    def Current(self) -> Any:
-        """LEAN-style property"""
-        class Value:
-            def __init__(self, val):
-                self.Value = val
-        return Value(self._current)
-
-    def reset(self) -> None:
-        """Reset indicator"""
-        self._values.clear()
-        self._current = 0.0
-        self.is_ready = False
+            super().__init__(f"ROCP({name_or_period})", int(name_or_period))

@@ -28,6 +28,11 @@ QString make_state_nonce() {
     const QByteArray raw(reinterpret_cast<const char*>(words), static_cast<qsizetype>(sizeof(words)));
     return QString::fromLatin1(raw.toHex());
 }
+
+// Upper bound on a loopback connection's life. A socket normally frees itself
+// once its reply page is flushed and the connection closes; this only reaps one
+// that never sent a complete request (a browser preconnect) or never reads.
+constexpr int kSocketLingerMs = 60000;
 } // namespace
 
 GoogleDesktopLogin::GoogleDesktopLogin(QObject* parent) : QObject(parent) {}
@@ -84,7 +89,17 @@ void GoogleDesktopLogin::on_new_connection() {
     QTcpSocket* sock = server_->nextPendingConnection();
     if (!sock)
         return;
+    // Detach the socket from the listener: finish_success() → cleanup() deletes
+    // the listener — and every socket it parents — on the next event-loop turn,
+    // which would cut the reply page off mid-write. Detached, the socket frees
+    // itself once disconnectFromHost() has flushed the page and closed, so
+    // send_page() needs no blocking waitForBytesWritten() on the UI thread.
+    sock->setParent(nullptr);
     connect(sock, &QTcpSocket::disconnected, sock, &QObject::deleteLater);
+    QTimer::singleShot(kSocketLingerMs, sock, [sock]() {
+        sock->abort();
+        sock->deleteLater();
+    });
 
     auto buffer = std::make_shared<QByteArray>();
     connect(sock, &QTcpSocket::readyRead, this, [this, sock, buffer]() {
@@ -189,6 +204,10 @@ void GoogleDesktopLogin::finish_success(const QString& code, QTcpSocket* sock) {
     cleanup();
 }
 
+void GoogleDesktopLogin::cancel(const QString& message) {
+    finish_error(message);
+}
+
 void GoogleDesktopLogin::finish_error(const QString& message) {
     if (done_)
         return;
@@ -199,6 +218,8 @@ void GoogleDesktopLogin::finish_error(const QString& message) {
 }
 
 void GoogleDesktopLogin::send_page(QTcpSocket* sock, const QString& title, const QString& body) {
+    // Served to the user's web browser, not drawn by the terminal: the page
+    // keeps its own fixed colours and sizes and does not follow the terminal's theme.
     const QString html =
         QStringLiteral(
             "<!doctype html><html><head><meta charset='utf-8'><title>%1</title>"
@@ -218,9 +239,11 @@ void GoogleDesktopLogin::send_page(QTcpSocket* sock, const QString& title, const
     resp += "Connection: close\r\n\r\n";
     resp += body_bytes;
 
+    // Every caller follows with disconnectFromHost(), which writes whatever is
+    // still pending before it closes — asynchronously, never blocking the UI
+    // thread (the socket is detached from the listener, see on_new_connection).
     sock->write(resp);
     sock->flush();
-    sock->waitForBytesWritten(1000); // tiny local write — ensure the page lands before teardown
 }
 
 void GoogleDesktopLogin::cleanup() {

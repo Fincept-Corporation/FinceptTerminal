@@ -9,16 +9,20 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+
 API_KEY = os.environ.get('OPENEXCHANGERATES_API_KEY', '')
 BASE_URL = "https://openexchangerates.org/api"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+SERVICE = "Open Exchange Rates"
+KEY_ENV = "OPENEXCHANGERATES_API_KEY"
+
+session = fc.http_session()
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://openexchangerates.org/signup/free", KEY_ENV)
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
@@ -27,12 +31,10 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, KEY_ENV, API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
 
 
 def get_latest(base: str = "USD", symbols: str = None) -> Any:

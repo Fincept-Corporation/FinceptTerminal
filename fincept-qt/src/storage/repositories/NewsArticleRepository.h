@@ -1,7 +1,9 @@
 #pragma once
 #include "services/news/NewsService.h"
 #include "storage/repositories/BaseRepository.h"
+#include "storage/repositories/NewsAnalyticsRepository.h"
 
+#include <atomic>
 #include <cstdint>
 
 namespace fincept {
@@ -44,6 +46,21 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
     /// Toggle bookmark state for an article. Returns the new saved state.
     Result<bool> toggle_saved(const QString& id);
 
+    /// Whether one article is bookmarked — a primary-key lookup (the detail
+    /// panel used to load every saved row on each article open).
+    Result<bool> is_saved(const QString& id) const;
+
+    /// Number of bookmarked articles.
+    int saved_count() const;
+
+    /// Hourly article counts per category / region / language (plus the "all"
+    /// total) for articles with sort_ts in [from, to), with the tone sums of the
+    /// scored ones — the volume history news_volume_hourly is filled from.
+    Result<QVector<NewsVolumeRow>> hourly_counts(int64_t from, int64_t to) const;
+
+    /// True once migration v058 added the tone / tag columns (cached).
+    bool has_analytics_columns() const;
+
     /// Return bookmarked articles, newest first. Bounded like load_recent().
     Result<QVector<fincept::services::NewsArticle>> load_saved(int limit = 2000) const;
 
@@ -67,6 +84,13 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
   private:
     NewsArticleRepository() = default;
     static fincept::services::NewsArticle map_row(QSqlQuery& q);
+    /// map_row + the v058 columns (sentiment_score, event_type, ticker_conf,
+    /// unverified_tickers) at indexes 18..21.
+    static fincept::services::NewsArticle map_row_ext(QSqlQuery& q);
+    /// The SELECT column list (with or without the v058 columns), prefixed
+    /// with `alias` + "." when given.
+    QString select_columns(const QString& alias = {}) const;
+    mutable std::atomic<int> analytics_columns_{-1}; // -1 unknown, 0 absent, 1 present
 };
 
 } // namespace fincept

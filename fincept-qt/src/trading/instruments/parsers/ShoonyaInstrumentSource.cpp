@@ -148,7 +148,7 @@ QVector<Instrument> parse_shoonya(const QByteArray& payload) {
         out.append(noren_build(QStringLiteral("shoonya"), r));
     }
 
-    LOG_INFO("ShoonyaSource", QString("Parsed %1 Shoonya instruments").arg(out.size()));
+    LOG_DEBUG("ShoonyaSource", QString("Parsed %1 Shoonya instruments").arg(out.size()));
     return out;
 }
 

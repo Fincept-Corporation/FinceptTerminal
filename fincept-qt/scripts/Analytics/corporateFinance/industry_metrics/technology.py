@@ -459,6 +459,18 @@ def _svc_num(p, *keys, default=None):
     return default
 
 
+def _svc_require(data, sector, keys):
+    """A sector's own inputs are required: never stand in an assumption for a missing one
+    (it would come back as if it were a result)."""
+    import json
+    import sys
+    missing = [k for k in keys if _svc_num(data, k) is None]
+    if missing:
+        print(json.dumps({"success": False,
+                          "error": f"{sector}: {', '.join(missing)} required"}))
+        sys.exit(1)
+
+
 def _service_argv(argv):
     import json
     if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
@@ -471,21 +483,14 @@ def _service_argv(argv):
         return argv
     data = dict(p)
     sector = str(data.pop("sector", "saas"))
-    arr = _svc_num(data, "arr", "revenue", default=0.0)
     if "market" in sector.lower():
-        # Marketplace: GMV follows from revenue and the take rate (assumed 15% when not supplied).
-        take_rate = _svc_num(data, "take_rate", default=0.15)
-        data["take_rate"] = take_rate
-        data.setdefault("revenue", arr)
-        data.setdefault("gmv", arr / take_rate if take_rate > 0 else 0.0)
-        # Net revenue retention (fraction) doubles as the retention proxy (percent) for both sides.
-        nrr = _svc_num(data, "nrr", default=None)
-        if nrr is not None:
-            data.setdefault("demand_side_retention", min(nrr * 100.0, 100.0))
+        # Marketplace inputs: gmv, take_rate (fraction), revenue, liquidity_score,
+        # supply_side_retention / demand_side_retention (percent).
+        _svc_require(data, sector, ("gmv", "take_rate"))
     elif "semi" in sector.lower():
-        data.setdefault("revenue", arr)
-        data.setdefault("r_and_d_pct", 0.20)
-        data.setdefault("design_win_backlog", arr * 1.5)
+        # Semiconductor inputs: revenue, gross_margin, r_and_d_pct (fractions), design_win_backlog,
+        # process_node (nm), fabless.
+        _svc_require(data, sector, ("revenue", "gross_margin", "r_and_d_pct", "design_win_backlog"))
     else:
         # SaaS: the native code wants growth and net retention in percent (gross margin stays a fraction).
         for key in ("growth", "revenue_growth_rate", "nrr", "net_retention_rate"):

@@ -74,11 +74,12 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
             mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             req["tools"] = tools;
-        LOG_INFO(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
-                                      .arg(stream ? "true" : "false", provider_, tools.isEmpty() ? "none" : "attached")
-                                      .arg(tools.size()));
+        LOG_DEBUG(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
+                                       .arg(stream ? "true" : "false", provider_, tools.isEmpty() ? "none" : "attached")
+                                       .arg(tools.size()));
     } else {
-        LOG_WARN(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
+        // Per request, and expected (tools switched off, summary turns, models without tools).
+        LOG_DEBUG(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
                                           "with_tools=%3 tools_effectively_on=%4 ds_reasoner=%5 groq_no_tools=%6")
                                       .arg(stream ? "true" : "false", provider_)
                                       .arg(with_tools ? "true" : "false")

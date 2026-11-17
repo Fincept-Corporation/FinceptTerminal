@@ -9,8 +9,10 @@
 #include "trading/brokers/fyers/FyersBroker.h"
 #include "trading/brokers/metaapi/MetaApiBroker.h"
 #include "trading/brokers/zerodha/ZerodhaBroker.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDialogButtonBox>
@@ -207,23 +209,24 @@ AccountManagementDialog::AccountManagementDialog(QWidget* parent) : QDialog(pare
     setWindowTitle(tr("Manage Broker Accounts"));
     setMinimumSize(700, 480);
     setStyleSheet(QString("QDialog { background: %1; color: %2; }"
-                          "QLabel#fieldLabel { color: %3; font-size: 11px; font-weight: 700; }"
-                          "QLabel#titleLabel { color: %4; font-size: 14px; font-weight: 700; }"
-                          "QLabel#statusLabel { font-size: 11px; }"
+                          "QLabel#fieldLabel { color: %3; font-size: " + fincept::ui::fonts::px(-3) + "px; font-weight: 700; }"
+                          "QLabel#titleLabel { color: %4; font-size: " + fincept::ui::fonts::px(0) + "px; font-weight: 700; }"
+                          "QLabel#statusLabel { font-size: " + fincept::ui::fonts::px(-3) + "px; }"
                           "QLineEdit { background: %5; border: 1px solid %6; color: %2;"
-                          "  padding: 6px; font-size: 12px; border-radius: 2px; }"
+                          "  padding: 6px; font-size: " + fincept::ui::fonts::px(-2) + "px; border-radius: 2px; }"
                           "QLineEdit:focus { border-color: %4; }"
                           "QComboBox { background: %5; border: 1px solid %6; color: %2;"
-                          "  padding: 4px 6px; font-size: 12px; }"
+                          "  padding: 4px 6px; font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                           "QComboBox::drop-down { border: none; }"
                           "QComboBox QAbstractItemView { background: %7; color: %2;"
-                          "  selection-background-color: rgba(217,119,6,0.3); }"
-                          "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }"
-                          "QListWidget { background: %5; border: 1px solid %6; color: %2; font-size: 12px; }"
+                          "  selection-background-color: %8; }"
+                          "QPushButton { padding: 8px 16px; font-weight: 700; font-size: " + fincept::ui::fonts::px(-2) + "px; border-radius: 2px; }"
+                          "QListWidget { background: %5; border: 1px solid %6; color: %2; font-size: " + fincept::ui::fonts::px(-2) + "px; }"
                           "QListWidget::item { padding: 6px 8px; }"
-                          "QListWidget::item:selected { background: rgba(217,119,6,0.2); color: %4; }")
+                          "QListWidget::item:selected { background: %9; color: %4; }")
                       .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY(), colors::AMBER(),
-                           colors::BG_BASE(), colors::BORDER_MED(), colors::BG_RAISED()));
+                           colors::BG_BASE(), colors::BORDER_MED(), colors::BG_RAISED(),
+                           colors::alpha(colors::AMBER, 0.3), colors::alpha(colors::AMBER, 0.2)));
     setup_ui();
     refresh_account_list();
 
@@ -297,14 +300,16 @@ void AccountManagementDialog::setup_ui() {
 
     auto* btn_row = new QHBoxLayout;
     add_btn_ = new QPushButton(tr("+ ADD"));
+    add_btn_->setProperty("fincept_agent_risk", "account");
     add_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; }").arg(colors::AMBER(), colors::BG_BASE()));
+        QString("QPushButton { background: %1; color: %2; }").arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     connect(add_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_add_account);
     btn_row->addWidget(add_btn_);
 
     remove_btn_ = new QPushButton(tr("REMOVE"));
+    remove_btn_->setProperty("fincept_agent_risk", "account");
     remove_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; }").arg(colors::NEGATIVE(), colors::TEXT_PRIMARY()));
+        QString("QPushButton { background: %1; color: %2; }").arg(colors::NEGATIVE(), colors::TEXT_ON_ACCENT()));
     remove_btn_->setEnabled(false);
     connect(remove_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_remove_account);
     btn_row->addWidget(remove_btn_);
@@ -320,7 +325,7 @@ void AccountManagementDialog::setup_ui() {
     auto* empty_layout = new QVBoxLayout(empty_page_);
     empty_label_ = new QLabel(tr("Select an account to configure credentials"));
     empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setStyleSheet(QString("color: %1; font-size: 12px;").arg(colors::TEXT_TERTIARY()));
+    empty_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-2) + "px;").arg(colors::TEXT_TERTIARY()));
     empty_layout->addWidget(empty_label_);
     right_stack_->addWidget(empty_page_);
 
@@ -356,8 +361,9 @@ void AccountManagementDialog::setup_ui() {
     action_row->addWidget(rename_btn_);
 
     connect_btn_ = new QPushButton(tr("CONNECT"));
+    connect_btn_->setProperty("fincept_agent_risk", "account");
     connect_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; }").arg(colors::AMBER(), colors::BG_BASE()));
+        QString("QPushButton { background: %1; color: %2; }").arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     connect(connect_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_account);
     action_row->addWidget(connect_btn_);
     form_layout->addLayout(action_row);
@@ -393,6 +399,7 @@ void AccountManagementDialog::setup_ui() {
     approval_mode_combo_->addItem(tr("Semi-Auto — require approval"), "semi_auto");
     approval_mode_combo_->setEnabled(false); // enabled once an account is selected
     approval_mode_combo_->setAccessibleName(tr("Order approval mode"));
+    approval_mode_combo_->setProperty("fincept_agent_risk", "account"); // Auto = orders without approval
     approval_row->addWidget(approval_mode_combo_, 1);
     right_col->addLayout(approval_row);
 
@@ -402,13 +409,14 @@ void AccountManagementDialog::setup_ui() {
     one_click_cb_ = new QCheckBox(tr("One-click trading"));
     one_click_cb_->setEnabled(false);
     one_click_cb_->setAccessibleName(tr("One-click trading for the selected account"));
+    one_click_cb_->setProperty("fincept_agent_risk", "account");
     right_col->addWidget(one_click_cb_);
     connect(one_click_cb_, &QCheckBox::toggled, this, &AccountManagementDialog::on_one_click_toggled);
 
     // Warn in place whenever orders on this account can leave with no confirmation.
     approval_warning_ = new QLabel;
     approval_warning_->setWordWrap(true);
-    approval_warning_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(colors::NEGATIVE()));
+    approval_warning_->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;font-weight:700;").arg(colors::NEGATIVE()));
     approval_warning_->setVisible(false);
     right_col->addWidget(approval_warning_);
 
@@ -514,6 +522,29 @@ void AccountManagementDialog::open_risk_limits_dialog() {
     intro->setWordWrap(true);
     form->addRow(intro);
 
+    // Currency of the two money limits. "Each account's own currency" keeps one
+    // number per account in that account's currency (what the limits meant before
+    // they had a currency); a chosen currency converts each order's value and the
+    // day's P&L into it at the current rate (no rate: the order is refused, with
+    // the reason).
+    namespace uf = fincept::ui::formatting;
+    auto* limits_ccy = new QComboBox(&dlg);
+    limits_ccy->addItem(tr("Each account's own currency"), QString());
+    QStringList codes{uf::display_currency()};
+    for (const QString& c : uf::known_currency_codes()) {
+        uf::CurrencySpec spec;
+        if (!uf::find_currency(c, &spec) || spec.minor_divisor != 1 || spec.metal || (spec.crypto && !spec.stablecoin))
+            continue;
+        if (!codes.contains(c))
+            codes << c;
+    }
+    if (!cur.limits_currency.isEmpty() && !codes.contains(cur.limits_currency))
+        codes << cur.limits_currency;
+    for (const QString& c : codes)
+        limits_ccy->addItem(QStringLiteral("%1 — %2").arg(c, uf::currency_name(c)), c);
+    limits_ccy->setCurrentIndex(std::max(0, limits_ccy->findData(cur.limits_currency)));
+    form->addRow(tr("Limits currency"), limits_ccy);
+
     auto make_money = [&dlg](double v) {
         auto* s = new QDoubleSpinBox(&dlg);
         s->setRange(0.0, 1.0e12);
@@ -524,7 +555,8 @@ void AccountManagementDialog::open_risk_limits_dialog() {
         return s;
     };
     auto* max_value = make_money(cur.max_order_value);
-    form->addRow(tr("Max order value"), max_value);
+    auto* max_value_label = new QLabel(&dlg);
+    form->addRow(max_value_label, max_value);
     auto* max_qty = new QDoubleSpinBox(&dlg);
     max_qty->setRange(0.0, 1.0e9);
     max_qty->setDecimals(0);
@@ -535,7 +567,17 @@ void AccountManagementDialog::open_risk_limits_dialog() {
     auto* daily_loss = make_money(cur.daily_loss_limit);
     daily_loss->setToolTip(tr("Once today's position P&L on an account is at or below minus this amount, only "
                               "position-reducing orders are accepted."));
-    form->addRow(tr("Daily loss limit"), daily_loss);
+    auto* daily_loss_label = new QLabel(&dlg);
+    form->addRow(daily_loss_label, daily_loss);
+    // The money rows name their unit: the chosen currency, or "each account's".
+    auto relabel = [limits_ccy, max_value_label, daily_loss_label]() {
+        const QString c = limits_ccy->currentData().toString();
+        const QString unit = c.isEmpty() ? tr("account currency") : fincept::ui::formatting::currency_unit(c);
+        max_value_label->setText(tr("Max order value (%1)").arg(unit));
+        daily_loss_label->setText(tr("Daily loss limit (%1)").arg(unit));
+    };
+    relabel();
+    connect(limits_ccy, &QComboBox::currentIndexChanged, &dlg, [relabel](int) { relabel(); });
     auto* blocked = new QLineEdit(cur.blocked_symbols.join(QStringLiteral(", ")), &dlg);
     blocked->setPlaceholderText(tr("e.g. YESBANK, NSE:IDEA"));
     form->addRow(tr("Blocked symbols"), blocked);
@@ -546,6 +588,7 @@ void AccountManagementDialog::open_risk_limits_dialog() {
     form->addRow(sanity);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Save)->setProperty("fincept_agent_risk", "account"); // pre-trade risk limits
     connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     form->addRow(buttons);
@@ -557,6 +600,7 @@ void AccountManagementDialog::open_risk_limits_dialog() {
     s.max_order_quantity = max_qty->value();
     s.daily_loss_limit = daily_loss->value();
     s.sanity_checks = sanity->isChecked();
+    s.limits_currency = limits_ccy->currentData().toString();
     for (const QString& part : blocked->text().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
         const QString t = part.trimmed().toUpper();
         if (!t.isEmpty())
@@ -798,8 +842,77 @@ void AccountManagementDialog::build_credential_form(const trading::BrokerProfile
     }
 }
 
+QLabel* AccountManagementDialog::cred_status_label_for(const QString& account_id) const {
+    const QString broker_id = AccountManager::instance().get_account(account_id).broker_id;
+    if (broker_id == QStringLiteral("zerodha") && z_status_)
+        return z_status_;
+    if (broker_id == QStringLiteral("fyers") && f_status_)
+        return f_status_;
+    if (broker_id == QStringLiteral("metatrader4") && mt4_status_)
+        return mt4_status_;
+    return form_status_;
+}
+
+void AccountManagementDialog::show_cred_read_error(QLabel* status, const QString& read_error) {
+    if (!status)
+        return;
+    status->setText(tr("Could not read the stored credential — try again"));
+    status->setToolTip(read_error + QStringLiteral("\n") +
+                       tr("Nothing is saved for this account until the stored credential reads again, or every field "
+                          "is entered anew."));
+    status->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+}
+
+bool AccountManagementDialog::cred_save_allowed(QLabel* status, bool full_entry) {
+    if (cred_read_error_.isEmpty() || cred_read_error_account_ != selected_account_id_)
+        return true;
+    if (full_entry) {
+        // Every field typed anew: what is saved replaces the unreadable record whole.
+        cred_read_error_.clear();
+        cred_read_error_account_.clear();
+        if (status)
+            status->setToolTip(QString());
+        return true;
+    }
+    QString read_error;
+    (void)AccountManager::instance().load_credentials(selected_account_id_, &read_error);
+    if (read_error.isEmpty()) {
+        // Readable again: show the stored values instead of saving a partial form.
+        load_saved_credentials(selected_account_id_);
+        if (status) {
+            status->setText(tr("Stored credentials read again and filled in — check them, then connect"));
+            status->setToolTip(QString());
+            status->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
+        }
+        return false;
+    }
+    cred_read_error_ = read_error;
+    show_cred_read_error(status, read_error);
+    return false;
+}
+
 void AccountManagementDialog::load_saved_credentials(const QString& account_id) {
-    auto creds = AccountManager::instance().load_credentials(account_id);
+    QString read_error;
+    auto creds = AccountManager::instance().load_credentials(account_id, &read_error);
+    if (!read_error.isEmpty()) {
+        // A stored field could not be read: what did read is a partial set. Fill
+        // nothing (and clear what a previously shown account left in the reused
+        // forms), so Connect cannot save blanks over the unreadable fields.
+        cred_read_error_ = read_error;
+        cred_read_error_account_ = account_id;
+        for (QLineEdit* e : {z_api_key_, z_api_secret_, z_user_id_, z_password_, z_totp_secret_, f_client_id_,
+                             f_api_secret_, mt4_meta_token_, mt4_login_, mt4_server_})
+            if (e)
+                e->clear();
+        for (auto* f : cred_fields_)
+            f->clear();
+        show_cred_read_error(cred_status_label_for(account_id), read_error);
+        return;
+    }
+    if (cred_read_error_account_ == account_id) {
+        cred_read_error_.clear();
+        cred_read_error_account_.clear();
+    }
 
     // Zerodha branch — populate the dedicated form.
     if (creds.broker_id == QStringLiteral("zerodha") && z_api_key_) {
@@ -998,6 +1111,15 @@ void AccountManagementDialog::on_connect_account() {
     creds.additional_data = ex.additional_data;
     QString auth_code = ex.auth_code;
 
+    // A successful connect saves the form's values as the account's record. While the
+    // stored record could not be read the form was left empty: only a full re-entry
+    // (every field filled) may replace it.
+    bool full_entry = !cred_fields_.isEmpty();
+    for (const QLineEdit* f : cred_fields_)
+        full_entry = full_entry && !f->text().trimmed().isEmpty();
+    if (!cred_save_allowed(form_status_, full_entry))
+        return;
+
     // Attempt token exchange asynchronously — exchange_token() makes a blocking
     // HTTP call (BrokerHttp::execute uses QEventLoop), so running it on the UI
     // thread freezes the entire terminal until the request completes. Offload
@@ -1154,7 +1276,7 @@ void AccountManagementDialog::build_zerodha_form() {
         l->setWordWrap(true);
         l->setTextFormat(Qt::RichText);
         l->setOpenExternalLinks(true);
-        l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+        l->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
     add_step(tr("1. Create a Kite Connect app at <a "
@@ -1196,7 +1318,7 @@ void AccountManagementDialog::build_zerodha_form() {
         lay->addWidget(out);
         if (!hint.isEmpty()) {
             auto* h = new QLabel(hint);
-            h->setStyleSheet(QString("color:%1;font-size:10px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
+            h->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
             lay->addWidget(h);
         }
     };
@@ -1224,12 +1346,13 @@ void AccountManagementDialog::build_zerodha_form() {
     bv->setContentsMargins(0, 0, 0, 0);
     bv->setSpacing(6);
     z_browser_btn_ = new QPushButton(tr("Open Kite login in browser"));
+    z_browser_btn_->setProperty("fincept_agent_risk", "account");
     z_browser_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
-                                      .arg(colors::AMBER(), colors::BG_BASE()));
+                                      .arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     bv->addWidget(z_browser_btn_);
     z_manual_toggle_ = new QPushButton(tr("Redirect didn't work? Paste request_token manually"));
     z_manual_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
-                                            "border:none;padding:4px 0;font-size:11px;")
+                                            "border:none;padding:4px 0;font-size:" + fincept::ui::fonts::px(-3) + "px;")
                                         .arg(colors::TEXT_SECONDARY()));
     bv->addWidget(z_manual_toggle_);
     z_manual_panel_ = new QWidget;
@@ -1239,6 +1362,7 @@ void AccountManagementDialog::build_zerodha_form() {
     z_manual_token_ = make_field(tr("Paste request_token here"), false);
     mv->addWidget(z_manual_token_);
     z_manual_connect_btn_ = new QPushButton(tr("Connect with pasted token"));
+    z_manual_connect_btn_->setProperty("fincept_agent_risk", "account");
     z_manual_connect_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; }").arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     mv->addWidget(z_manual_connect_btn_);
@@ -1262,8 +1386,9 @@ void AccountManagementDialog::build_zerodha_form() {
         QString("QPushButton { background: %1; color: %2; }").arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     btn_row->addWidget(z_rename_btn_);
     z_connect_btn_ = new QPushButton(tr("CONNECT"));
+    z_connect_btn_->setProperty("fincept_agent_risk", "account");
     z_connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 8px 24px; }")
-                                      .arg(colors::AMBER(), colors::BG_BASE()));
+                                      .arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     btn_row->addWidget(z_connect_btn_);
     v->addLayout(btn_row);
 
@@ -1287,7 +1412,14 @@ void AccountManagementDialog::on_zerodha_mode_changed() {
     z_connect_btn_->setVisible(totp);
 }
 
-void AccountManagementDialog::persist_zerodha_creds_before_auth() {
+bool AccountManagementDialog::persist_zerodha_creds_before_auth() {
+    // The stored record holds all five fields: only a full re-entry may replace an
+    // unreadable one (the browser / paste flows need just key + secret to log in).
+    const bool full_entry = !z_api_key_->text().trimmed().isEmpty() && !z_api_secret_->text().isEmpty() &&
+                            !z_user_id_->text().trimmed().isEmpty() && !z_password_->text().isEmpty() &&
+                            !z_totp_secret_->text().trimmed().isEmpty();
+    if (!cred_save_allowed(z_status_, full_entry))
+        return false;
     BrokerCredentials creds;
     creds.broker_id = "zerodha";
     creds.api_key = z_api_key_->text().trimmed();
@@ -1300,6 +1432,7 @@ void AccountManagementDialog::persist_zerodha_creds_before_auth() {
     creds.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
 
     AccountManager::instance().save_credentials(selected_account_id_, creds);
+    return true;
 }
 
 void AccountManagementDialog::on_connect_zerodha_totp() {
@@ -1338,7 +1471,8 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
     }
 
     // BUG 1 FIX: persist immediately so failure doesn't wipe the form.
-    persist_zerodha_creds_before_auth();
+    if (!persist_zerodha_creds_before_auth())
+        return;
 
     z_status_->setText(tr("Logging in..."));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
@@ -1369,7 +1503,17 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
                 auto& am = AccountManager::instance();
 
                 if (result.success) {
-                    auto creds = am.load_credentials(acct);
+                    QString read_error;
+                    auto creds = am.load_credentials(acct, &read_error);
+                    if (!read_error.isEmpty()) {
+                        // Partial values: saving the merged blob would overwrite what
+                        // could not be read (the TOTP secret). Stop; nothing is saved.
+                        self->z_status_->setText(self->tr("Could not read the stored credential — try again"));
+                        self->z_status_->setToolTip(read_error);
+                        self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+                        self->z_connect_btn_->setEnabled(true);
+                        return;
+                    }
                     creds.access_token = result.access_token;
                     if (!result.user_id.isEmpty())
                         creds.user_id = result.user_id;
@@ -1408,7 +1552,8 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     }
 
     // BUG 1 FIX: persist key+secret now.
-    persist_zerodha_creds_before_auth();
+    if (!persist_zerodha_creds_before_auth())
+        return;
 
     // Tear down any prior server. stop() closes the listening socket
     // synchronously so the fixed redirect port is freed *now*; deleteLater()
@@ -1423,12 +1568,15 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     z_redirect_server_ = new trading::auth::RedirectServer(this);
 
     // Must match the redirect URL shown in the setup steps above (127.0.0.1:5010).
-    // Reject the ephemeral fallback: Kite redirects to the fixed registered URL,
-    // so a random port can never receive the callback — route to manual instead.
+    // Fixed port only: Kite redirects to the fixed registered URL, so a random
+    // port can never receive the callback. A busy port fails here at once (no
+    // listener, no 120 s timer) and routes to the manual paste option.
     constexpr quint16 kZerodhaPort = 5010;
-    if (!z_redirect_server_->start(kZerodhaPort, 120) || z_redirect_server_->port() != kZerodhaPort) {
-        z_status_->setText(tr("Port 5010 busy - use manual paste fallback"));
-        z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+    if (!z_redirect_server_->start(kZerodhaPort, 120, /*fixed_port_only=*/true)) {
+        z_status_->setWordWrap(true);
+        z_status_->setText(z_redirect_server_->bind_error_text());
+        z_status_->setStyleSheet(QString("color:%1;").arg(colors::DANGER()));
+        z_redirect_server_->stop();
         z_redirect_server_->deleteLater();
         z_redirect_server_ = nullptr;
         z_manual_panel_->setVisible(true);
@@ -1490,9 +1638,9 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
     // Accept either a raw token or the full redirect URL (e.g. "https://127.0.0.1/?request_token=...&status=success").
     // NEVER log the pasted text itself — it is (or contains) a live broker
     // request_token, i.e. a credential. Log only its shape (CLAUDE.md P14).
-    LOG_INFO("Zerodha", QString("manual paste input: %1 chars, looks like a URL: %2")
-                            .arg(token.length())
-                            .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
+    // Not even its length (policy B.6): only whether it looks like a URL.
+    LOG_DEBUG("Zerodha", QString("manual paste input, looks like a URL: %1")
+                             .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
     if (token.contains(QStringLiteral("request_token"), Qt::CaseInsensitive)) {
         const QUrl url = token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive)
                              ? QUrl(token)
@@ -1501,13 +1649,14 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
         if (!extracted.isEmpty())
             token = extracted;
     }
-    LOG_INFO("Zerodha", QString("manual paste: extracted a %1-char request_token").arg(token.length()));
+    LOG_DEBUG("Zerodha", "manual paste: request_token extracted");
     if (token.contains(QLatin1Char('/')) || token.contains(QLatin1Char('?')) || token.contains(QLatin1Char('='))) {
         z_status_->setText(tr("Could not find request_token in pasted text"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
-    persist_zerodha_creds_before_auth();
+    if (!persist_zerodha_creds_before_auth())
+        return;
     z_status_->setText(tr("Exchanging token..."));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     exchange_and_store_token_async(api_key, api_secret, token);
@@ -1534,15 +1683,24 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
                 auto& am = AccountManager::instance();
 
                 if (result.success) {
-                    auto creds = am.load_credentials(acct);
-                    creds.access_token = result.access_token;
-                    if (!result.user_id.isEmpty())
-                        creds.user_id = result.user_id;
-                    am.save_credentials(acct, creds);
-                    am.set_connection_state(acct, ConnectionState::Connected, {});
-                    self->z_status_->setText(self->tr("Connected as %1").arg(result.user_id));
-                    self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
-                    emit self->credentials_saved(acct);
+                    QString read_error;
+                    auto creds = am.load_credentials(acct, &read_error);
+                    if (!read_error.isEmpty()) {
+                        // Partial values: saving them back would overwrite what could
+                        // not be read (the TOTP secret). Stop; nothing is saved.
+                        self->z_status_->setText(self->tr("Could not read the stored credential — try again"));
+                        self->z_status_->setToolTip(read_error);
+                        self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+                    } else {
+                        creds.access_token = result.access_token;
+                        if (!result.user_id.isEmpty())
+                            creds.user_id = result.user_id;
+                        am.save_credentials(acct, creds);
+                        am.set_connection_state(acct, ConnectionState::Connected, {});
+                        self->z_status_->setText(self->tr("Connected as %1").arg(result.user_id));
+                        self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
+                        emit self->credentials_saved(acct);
+                    }
                 } else {
                     am.set_connection_state(acct, ConnectionState::Error, result.error);
                     self->z_status_->setText(result.error);
@@ -1599,7 +1757,7 @@ void AccountManagementDialog::build_fyers_form() {
         l->setWordWrap(true);
         l->setTextFormat(Qt::RichText);
         l->setOpenExternalLinks(true);
-        l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+        l->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
     add_step(tr("1. Create an API app at <a href='https://myapi.fyers.in/dashboard/'>myapi.fyers.in/dashboard</a>."));
@@ -1626,7 +1784,7 @@ void AccountManagementDialog::build_fyers_form() {
         lay->addWidget(out);
         if (!hint.isEmpty()) {
             auto* h = new QLabel(hint);
-            h->setStyleSheet(QString("color:%1;font-size:10px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
+            h->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
             lay->addWidget(h);
         }
     };
@@ -1638,14 +1796,15 @@ void AccountManagementDialog::build_fyers_form() {
 
     // Browser login
     f_browser_btn_ = new QPushButton(tr("Open Fyers login in browser"));
+    f_browser_btn_->setProperty("fincept_agent_risk", "account");
     f_browser_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
-                                      .arg(colors::AMBER(), colors::BG_BASE()));
+                                      .arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     v->addWidget(f_browser_btn_);
 
     // Manual paste fallback
     f_manual_toggle_ = new QPushButton(tr("Redirect didn't work? Paste auth_code manually"));
     f_manual_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
-                                            "border:none;padding:4px 0;font-size:11px;")
+                                            "border:none;padding:4px 0;font-size:" + fincept::ui::fonts::px(-3) + "px;")
                                         .arg(colors::TEXT_SECONDARY()));
     v->addWidget(f_manual_toggle_);
 
@@ -1656,6 +1815,7 @@ void AccountManagementDialog::build_fyers_form() {
     f_manual_token_ = make_field(tr("Paste auth_code or full redirect URL here"), false);
     mv->addWidget(f_manual_token_);
     f_manual_connect_btn_ = new QPushButton(tr("Connect with pasted auth code"));
+    f_manual_connect_btn_->setProperty("fincept_agent_risk", "account");
     f_manual_connect_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; }").arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     mv->addWidget(f_manual_connect_btn_);
@@ -1698,7 +1858,10 @@ void AccountManagementDialog::on_connect_fyers_browser() {
         return;
     }
 
-    // Persist credentials before auth so they survive dialog close.
+    // Persist credentials before auth so they survive dialog close. Client ID +
+    // secret are the whole stored record, so both typed in is a full re-entry.
+    if (!cred_save_allowed(f_status_, /*full_entry=*/true))
+        return;
     BrokerCredentials creds;
     creds.broker_id = "fyers";
     creds.api_key = client_id;
@@ -1718,10 +1881,14 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     }
     f_redirect_server_ = new trading::auth::RedirectServer(this);
 
+    // Fixed port only: Fyers redirects to the registered http://127.0.0.1:5011/,
+    // so a busy port fails here at once (no listener, no 120 s timer) and routes
+    // to the manual paste option.
     constexpr quint16 kFyersPort = 5011;
-    if (!f_redirect_server_->start(kFyersPort, 120) || f_redirect_server_->port() != kFyersPort) {
-        f_status_->setText(tr("Port 5011 busy — use manual paste fallback below"));
-        f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+    if (!f_redirect_server_->start(kFyersPort, 120, /*fixed_port_only=*/true)) {
+        f_status_->setWordWrap(true);
+        f_status_->setText(f_redirect_server_->bind_error_text());
+        f_status_->setStyleSheet(QString("color:%1;").arg(colors::DANGER()));
         f_redirect_server_->stop();
         f_redirect_server_->deleteLater();
         f_redirect_server_ = nullptr;
@@ -1784,9 +1951,9 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
         return;
     }
     // The pasted text is a live auth_code — log its shape only, never the value.
-    LOG_INFO("Fyers", QString("manual paste input: %1 chars, looks like a URL: %2")
-                          .arg(token.length())
-                          .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
+    // Not even its length (policy B.6): only whether it looks like a URL.
+    LOG_DEBUG("Fyers", QString("manual paste input, looks like a URL: %1")
+                           .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
     if (token.contains(QStringLiteral("auth_code"), Qt::CaseInsensitive)) {
         const QUrl url = token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive)
                              ? QUrl(token)
@@ -1795,8 +1962,10 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
         if (!extracted.isEmpty())
             token = extracted;
     }
-    LOG_INFO("Fyers", QString("manual paste: extracted a %1-char auth_code").arg(token.length()));
+    LOG_DEBUG("Fyers", "manual paste: auth_code extracted");
 
+    if (!cred_save_allowed(f_status_, /*full_entry=*/true))
+        return;
     BrokerCredentials creds;
     creds.broker_id = "fyers";
     creds.api_key = client_id;
@@ -1827,8 +1996,16 @@ void AccountManagementDialog::fyers_exchange_and_store_token_async(const QString
                     return;
                 auto& am = AccountManager::instance();
 
-                if (result.success) {
-                    auto creds = am.load_credentials(acct);
+                QString read_error;
+                const auto creds_read = result.success ? am.load_credentials(acct, &read_error) : BrokerCredentials{};
+                if (result.success && !read_error.isEmpty()) {
+                    // Partial values: saving the merged blob would overwrite what could
+                    // not be read (additional_data, e.g. a TOTP secret). Nothing is saved.
+                    self->f_status_->setText(self->tr("Could not read the stored credential — try again"));
+                    self->f_status_->setToolTip(read_error);
+                    self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+                } else if (result.success) {
+                    auto creds = creds_read;
                     creds.access_token = result.access_token;
                     creds.refresh_token = result.refresh_token;
                     if (!result.user_id.isEmpty())
@@ -1899,7 +2076,7 @@ void AccountManagementDialog::build_mt4_form() {
         l->setWordWrap(true);
         l->setTextFormat(Qt::RichText);
         l->setOpenExternalLinks(true);
-        l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+        l->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-3) + "px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
     add_step(tr("1. Create a free account at <a href='https://app.metaapi.cloud'>app.metaapi.cloud</a>."));
@@ -1926,16 +2103,21 @@ void AccountManagementDialog::build_mt4_form() {
         lay->addWidget(out);
         if (!hint.isEmpty()) {
             auto* h = new QLabel(hint);
-            h->setStyleSheet(QString("color:%1;font-size:10px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
+            h->setStyleSheet(QString("color:%1;font-size:" + fincept::ui::fonts::px(-4) + "px;margin-bottom:4px;").arg(colors::TEXT_SECONDARY()));
             lay->addWidget(h);
         }
     };
 
     // MetaAPI Token + "Get Token" link
     add_labeled_field(v, tr("METAAPI TOKEN"), mt4_meta_token_, tr("Enter MetaAPI auth token..."), QString(), true);
+    // The translated strings carry the link's original 10px size; it is swapped
+    // for the size relative to the user's font so translations keep matching.
     auto* token_link = new QLabel(tr("<a href='https://app.metaapi.cloud/api-access/generate-token' "
                                      "style='color:%1;font-size:10px;'>Get Token \xe2\x86\x92</a>")
-                                      .arg(colors::AMBER()));
+                                      .arg(colors::AMBER())
+                                      .replace(QStringLiteral("font-size:10px"),
+                                               QStringLiteral("font-size:") + fincept::ui::fonts::px(-4) +
+                                                   QStringLiteral("px")));
     token_link->setTextFormat(Qt::RichText);
     token_link->setOpenExternalLinks(true);
     v->addWidget(token_link);
@@ -1965,9 +2147,10 @@ void AccountManagementDialog::build_mt4_form() {
 
     // Connect button
     mt4_connect_btn_ = new QPushButton(tr("CONNECT MT4 ACCOUNT"));
+    mt4_connect_btn_->setProperty("fincept_agent_risk", "account");
     mt4_connect_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
-            .arg(colors::AMBER(), colors::BG_BASE()));
+            .arg(colors::AMBER(), colors::TEXT_ON_ACCENT()));
     v->addWidget(mt4_connect_btn_);
 
     v->addStretch();
@@ -2003,7 +2186,10 @@ void AccountManagementDialog::on_connect_mt4() {
         return;
     }
 
-    // Persist credentials before provisioning so they survive dialog close
+    // Persist credentials before provisioning so they survive dialog close. Every
+    // field is required above, so this is a full re-entry.
+    if (!cred_save_allowed(mt4_status_, /*full_entry=*/true))
+        return;
     BrokerCredentials creds;
     creds.broker_id = "metatrader4";
     creds.api_key = meta_token;
@@ -2049,8 +2235,16 @@ void AccountManagementDialog::mt4_provision_async(const QString& meta_token, con
                     return;
                 auto& am = AccountManager::instance();
 
-                if (result.success) {
-                    auto creds = am.load_credentials(acct);
+                QString read_error;
+                const auto creds_read = result.success ? am.load_credentials(acct, &read_error) : BrokerCredentials{};
+                if (result.success && !read_error.isEmpty()) {
+                    // Partial values: saving them back would overwrite what could not be
+                    // read. Stop; nothing is saved.
+                    self->mt4_status_->setText(self->tr("Could not read the stored credential — try again"));
+                    self->mt4_status_->setToolTip(read_error);
+                    self->mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+                } else if (result.success) {
+                    auto creds = creds_read;
                     creds.access_token = result.access_token;
                     creds.user_id = result.user_id;
                     if (!result.additional_data.isEmpty())

@@ -1,5 +1,7 @@
 #include "services/news/NewsNlpEngine.h"
 
+#include "services/news/NewsLanguage.h"
+
 #include "services/news/VaderSentiment.h"
 
 #include <QHash>
@@ -1014,6 +1016,14 @@ NewsSentimentResult analyze_sentiment(const QVector<TextItem>& items) {
 QString detect_language(const QString& text) {
     if (text.isEmpty())
         return QStringLiteral("en");
+    // Latin-script languages (fr, de, es, pt, it, nl, sv) are told apart by the
+    // stop-word profiles of news_lang::detect(); everything this function's own
+    // script rule cannot place still reads as "en", as before.
+    {
+        const QString code = news_lang::detect(text).code;
+        if (!code.isEmpty())
+            return code;
+    }
     qsizetype cjk = 0;
     qsizetype kana = 0;
     qsizetype hangul = 0;

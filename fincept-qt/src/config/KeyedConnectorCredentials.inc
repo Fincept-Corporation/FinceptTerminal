@@ -3,8 +3,8 @@
 // 66 API-key env vars used by keyed data connectors (excluding keys PythonRunner manages
 // itself in kManagedCredentialKeys and the hand-maintained entries below).
 // X-macro. Consumer #defines FINCEPT_KEYED_CRED(KEY, NAME) before #include.
-FINCEPT_KEYED_CRED("ACLED_API_KEY", "ACLED")
 FINCEPT_KEYED_CRED("ACLED_EMAIL", "ACLED account email")
+FINCEPT_KEYED_CRED("ACLED_PASSWORD", "ACLED account password (myACLED)")
 FINCEPT_KEYED_CRED("AFRICA_API_KEY", "openAFRICA")
 FINCEPT_KEYED_CRED("AISSTREAM_API_KEY", "Aisstream")
 FINCEPT_KEYED_CRED("CANADA_GOV_API_KEY", "Open Government Canada")
@@ -30,12 +30,12 @@ FINCEPT_KEYED_CRED("FMP_API_KEY", "FMP")
 FINCEPT_KEYED_CRED("GFW_API_KEY", "Global Forest Watch")
 FINCEPT_KEYED_CRED("GITHUB_TOKEN", "Github")
 FINCEPT_KEYED_CRED("GLASSNODE_API_KEY", "Glassnode")
+FINCEPT_KEYED_CRED("GLOBAL_FISHING_WATCH_API_KEY", "Global Fishing Watch")
 FINCEPT_KEYED_CRED("GOVDATA_API_KEY", "GovData.de")
 FINCEPT_KEYED_CRED("GOVINFO_API_KEY", "Govinfo")
 FINCEPT_KEYED_CRED("GTA_API_KEY", "Global Trade Alert")
 FINCEPT_KEYED_CRED("HARVARD_DATAVERSE_TOKEN", "Harvard Dataverse")
 FINCEPT_KEYED_CRED("HUD_API_KEY", "HUD")
-FINCEPT_KEYED_CRED("IEA_API_KEY", "IEA")
 FINCEPT_KEYED_CRED("INTRINIO_API_KEY", "Intrinio")
 FINCEPT_KEYED_CRED("KAGGLE_KEY", "Kaggle")
 FINCEPT_KEYED_CRED("KAGGLE_USERNAME", "Kaggle username")

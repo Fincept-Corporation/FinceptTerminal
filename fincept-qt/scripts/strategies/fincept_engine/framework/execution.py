@@ -7,13 +7,7 @@ from ..algorithm import ExecutionModel
 
 
 class SpreadExecutionModel(ExecutionModel):
-    """Spread-based execution model (stub)."""
-    def __init__(self, accepting_spread_percent=0.005):
-        self._spread = accepting_spread_percent
-
-    def execute(self, algorithm, targets):
-        for target in targets:
-            existing = algorithm.portfolio[str(target.symbol)].quantity
-            diff = target.quantity - existing
-            if abs(diff) > 0:
-                algorithm.market_order(target.symbol, diff)
+    """Needs bid/ask quotes, which the daily bars do not carry."""
+    def __init__(self, *args, **kwargs):
+        from ..errors import not_supported
+        raise not_supported("spread-based order execution", "It needs bid/ask quotes; the engine has daily OHLC bars.")

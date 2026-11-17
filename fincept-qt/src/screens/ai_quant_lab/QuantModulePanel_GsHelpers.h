@@ -8,7 +8,7 @@
 // live in a shared inline-namespace header.
 #pragma once
 
-#include "core/currency/Currency.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
@@ -35,14 +35,14 @@ inline QWidget* gs_make_card(const QString& label, const QString& value, QWidget
     cvl->setContentsMargins(10, 6, 10, 6);
     cvl->setSpacing(2);
     auto* l = new QLabel(label, card);
-    l->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px; background:transparent;")
-                         .arg(ui::colors::TEXT_TERTIARY()));
+    l->setStyleSheet(QString("color:%1; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.5px; background:transparent;")
+                         .arg(ui::colors::TEXT_SECONDARY()));
     auto* v = new QLabel(value, card);
     // Cards carry model IDs, pipeline IDs, model keys and tickers that the next tab asks the user
     // to paste back in (Backtest / Feature Importance / Ensemble / Process Data); make them copyable.
     v->setTextInteractionFlags(Qt::TextSelectableByMouse);
     v->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
+        QString("color:%1; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent;")
             .arg(value_color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY()) : value_color));
     cvl->addWidget(l);
     cvl->addWidget(v);
@@ -64,13 +64,17 @@ inline QString gs_fmt_pct(double v, int decimals = 2) {
     return QString("%1%").arg(v * 100.0, 0, 'f', decimals);
 }
 
+// Calculator / simulation output on an amount the user typed (position value, capital): it is
+// in the currency the input row's label names — the display currency — so it is printed in
+// that one, abbreviated per the user's scheme. Never converted.
 inline QString gs_fmt_money(double v) {
-    // Calculator output — follows the preferred currency.
-    return cur::money(v, /*compact=*/true);
+    namespace qgs_uf = fincept::ui::formatting;
+    return qgs_uf::money(v, qgs_uf::display_currency(), qgs_uf::Compact::FromSettings);
 }
 
 inline QString gs_fmt_signed_money(double v) {
-    return (v >= 0 ? QString("+") : QString("")) + gs_fmt_money(v);
+    namespace qgs_uf = fincept::ui::formatting;
+    return qgs_uf::signed_money(v, qgs_uf::display_currency(), qgs_uf::Compact::FromSettings);
 }
 
 inline QString gs_fmt_num(double v, int decimals = 4) {
@@ -98,10 +102,11 @@ inline QString format_val(const QJsonValue& val) {
         if (!std::isfinite(v))
             return QString::fromUtf8("—");
         const double a = std::abs(v);
+        // Grouped in the user's number locale (Settings), not the OS locale.
         if (a < 1e15 && v == std::floor(v))
-            return QLocale::system().toString(static_cast<qlonglong>(v));
+            return fincept::ui::formatting::number(v, 0);
         if (a >= 1000.0)
-            return QLocale::system().toString(v, 'f', 2);
+            return fincept::ui::formatting::number(v, 2);
         if (a >= 1.0)
             return QString::number(v, 'f', 4);
         return QString::number(v, 'g', 6); // keeps tiny p-values / ICs readable
@@ -114,10 +119,11 @@ inline QString format_val(const QJsonValue& val) {
     return QString::fromUtf8("—");
 }
 
-// Build a section header strip ("RISK METRICS  |  252 obs").
+// Build a section header strip ("RISK METRICS  |  252 obs"). `accent` is a
+// foreground colour readable on BG_RAISED: a token or a ui::colors::legible() value.
 inline QLabel* gs_section_header(const QString& text, const QString& accent) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet(QString("color:%1; font-weight:700; font-size:10px; letter-spacing:1px;"
+    lbl->setStyleSheet(QString("color:%1; font-weight:700; font-size:" + fincept::ui::fonts::px(-4) + "px; letter-spacing:1px;"
                                "padding:6px 10px; background:%2; border-left:3px solid %1;")
                            .arg(accent, ui::colors::BG_RAISED()));
     return lbl;

@@ -1,14 +1,15 @@
 """
-bt (Flexible Portfolio Backtesting) Provider
+"bt" engine of the Fincept backtesting backend (provider: bt_provider.py).
 
-Portfolio-level strategy backtesting with composable algo blocks:
-- Equal-weight, inverse volatility, mean-variance, risk parity
-- Momentum selection and trend following
-- Composable algo pipeline (bt.algos)
+Allocation strategies (equal weight, inverse volatility, mean-variance, minimum variance, risk
+parity, target volatility, momentum top-N / inverse-vol, dual momentum, buy & hold): the bt
+library's algo stack (pmorissette/bt, MIT) decides the target weights; base.simulator executes
+them, or bt.Backtest itself at fillTiming next_close. Signal strategies run on base.simulator.
+Modules: bt_engine (run / optimise / walk-forward), bt_strategies (catalogue + rules, no bt
+import), bt_algos (bt algo stack, decision pass, native execution), bt_evaluate (optimiser
+callback), bt_data (imports the bt library past this package's own name).
 
-Uses bt library (MIT license, v1.1.2+) with ffn for performance stats.
-
-The provider class is intentionally not re-exported here. See backtestingpy
-__init__.py for the rationale (avoids RuntimeWarning when bt_provider is run
-via `python -m`).
+NOTE: this directory is itself named `bt`; nothing here may `import bt` directly - use
+bt_data.import_bt_library(). The provider class is intentionally not re-exported here (avoids
+RuntimeWarning when bt_provider is run via `python -m`).
 """

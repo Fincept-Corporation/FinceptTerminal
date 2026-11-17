@@ -8,8 +8,10 @@ namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
 
-PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(22);
+PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent), accent_(colors::AMBER()) {
+    // At least 22px; taller when the user's font size needs it.
+    setMinimumHeight(22);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setStyleSheet(QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(this);
@@ -18,7 +20,7 @@ PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
 
     // Brand
     brand_label_ = new QLabel("POLYMARKET");
-    brand_label_->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 1.5px; "
+    brand_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; letter-spacing: 1.5px; "
                                         "background: transparent;")
                                     .arg(accent_.name()));
     hl->addWidget(brand_label_);
@@ -33,13 +35,13 @@ PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
     exchange_status_ = new QLabel;
     exchange_status_->setVisible(false);
     exchange_status_->setStyleSheet(
-        QString("color: %1; font-size: 8px; font-weight: 700; background: transparent;").arg(colors::POSITIVE()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; background: transparent;").arg(colors::SUCCESS()));
     hl->addWidget(exchange_status_);
 
     // Next session
     next_session_ = new QLabel;
     next_session_->setStyleSheet(
-        QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(colors::TEXT_TERTIARY()));
     next_session_->setVisible(false);
     hl->addWidget(next_session_);
 
@@ -48,12 +50,12 @@ PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
     // View
     view_label_ = new QLabel("MARKETS");
     view_label_->setStyleSheet(
-        QString("color: %1; font-size: 8px; font-weight: 600; background: transparent;").arg(colors::TEXT_DIM()));
+        QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 600; background: transparent;").arg(colors::TEXT_TERTIARY()));
     hl->addWidget(view_label_);
 
     // Count
     count_label_ = new QLabel;
-    count_label_->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));
+    count_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(colors::TEXT_TERTIARY()));
     hl->addWidget(count_label_);
 
     // Divider
@@ -64,7 +66,7 @@ PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
 
     // Selected market (truncated)
     selected_label_ = new QLabel;
-    selected_label_->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent; "
+    selected_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent; "
                                            "max-width: 360px;")
                                        .arg(accent_.name()));
     hl->addWidget(selected_label_);
@@ -77,7 +79,7 @@ PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
 
     // WS
     ws_label_ = new QLabel;
-    ws_label_->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));
+    ws_label_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(colors::TEXT_TERTIARY()));
     hl->addWidget(ws_label_);
     set_ws_status(false);
 }
@@ -102,21 +104,30 @@ void PolymarketStatusBar::set_ws_status(bool connected) {
     if (connected) {
         ws_label_->setText(tr("● LIVE"));
         ws_label_->setStyleSheet(
-            QString("color: %1; font-size: 8px; font-weight: 700; background: transparent;").arg(colors::POSITIVE()));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; background: transparent;").arg(colors::SUCCESS()));
     } else {
         ws_label_->setText(tr("○ OFF"));
         ws_label_->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));
+            QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; background: transparent;").arg(colors::TEXT_TERTIARY()));
     }
 }
 
 void PolymarketStatusBar::set_brand(const QString& name, const QColor& accent) {
     accent_ = accent;
     brand_label_->setText(name.toUpper());
-    brand_label_->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 1.5px; "
-                                        "background: transparent;")
-                                    .arg(accent_.name()));
-    selected_label_->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;").arg(accent_.name()));
+    // Sheets set only when their text changed: re-run on every presentation /
+    // appearance change (the screen's appearance_settled handler).
+    const QString brand_sheet =
+        QStringLiteral("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 1.5px; background: transparent;")
+            .arg(accent_.name())
+            .arg(fincept::ui::fonts::px(-6));
+    if (brand_label_->styleSheet() != brand_sheet)
+        brand_label_->setStyleSheet(brand_sheet);
+    const QString selected_sheet = QStringLiteral("color: %1; font-size: %2px; background: transparent;")
+                                       .arg(accent_.name())
+                                       .arg(fincept::ui::fonts::px(-6));
+    if (selected_label_->styleSheet() != selected_sheet)
+        selected_label_->setStyleSheet(selected_sheet);
 }
 
 void PolymarketStatusBar::set_exchange_status(const QString& status) {
@@ -125,14 +136,15 @@ void PolymarketStatusBar::set_exchange_status(const QString& status) {
         return;
     }
     const QString upper = status.toUpper();
-    QString color = colors::POSITIVE();
+    // Exchange state, not price direction: status green / caution / status red.
+    QString color = colors::SUCCESS();
     if (upper == QStringLiteral("PAUSED") || upper == QStringLiteral("MAINT"))
-        color = colors::AMBER();
+        color = colors::WARNING();
     else if (upper == QStringLiteral("CLOSED") || upper == QStringLiteral("OFF"))
-        color = colors::NEGATIVE();
+        color = colors::DANGER();
 
     exchange_status_->setText(upper);
-    exchange_status_->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; background: transparent;"
+    exchange_status_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; background: transparent;"
                                             "padding: 0 4px; border: 1px solid %1;")
                                         .arg(color));
     exchange_status_->setVisible(true);

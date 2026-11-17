@@ -697,6 +697,25 @@ def _parse_value(raw: str) -> Optional[float]:
         return None
 
 
+def _iso_date(text: str) -> str:
+    """The IADB's "02 Jan 2024" (or "02/Jan/2024") as ISO "2024-01-02"; anything else unchanged."""
+    for fmt in ("%d %b %Y", "%d/%b/%Y"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return text
+
+
+def _iadb_date(text: Optional[str]) -> Optional[str]:
+    """YYYY-MM-DD -> DD/Mon/YYYY (the IADB's own format); anything else unchanged."""
+    s = (text or "").strip()
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").strftime("%d/%b/%Y")
+    except ValueError:
+        return text
+
+
 def _fetch_csv(
     series_codes: List[str],
     date_from: str,
@@ -738,8 +757,10 @@ def _fetch_csv(
 
     params = {
         "csv.x": "yes",
-        "Datefrom": date_from,
-        "Dateto": date_to,
+        # ISO dates (YYYY-MM-DD, what the CLI documents now) become the IADB's DD/Mon/YYYY;
+        # DD/Mon/YYYY and "now" pass through.
+        "Datefrom": _iadb_date(date_from),
+        "Dateto": _iadb_date(date_to),
         "SeriesCodes": ",".join(series_codes),
         "CSVF": csvf,
         "UsingCodes": "Y",
@@ -848,7 +869,7 @@ def _parse_csv_response(
             # Skip any residual header/separator rows
             if date_val.upper() == "DATE":
                 continue
-            record: Dict[str, Any] = {"date": date_val}
+            record: Dict[str, Any] = {"date": _iso_date(date_val)}
             for i, code in enumerate(col_codes):
                 cell = row[i + 1] if (i + 1) < len(row) else ""
                 record[code] = _parse_value(cell)
@@ -861,7 +882,7 @@ def _parse_csv_response(
             if len(row) < 3 or not row[0].strip():
                 continue
             code = row[0].strip()
-            date_val = row[1].strip()
+            date_val = _iso_date(row[1].strip())
             val = _parse_value(row[2])
             data_records.append({"series_code": code, "date": date_val, "value": val})
 
@@ -1347,7 +1368,7 @@ def main(args: Optional[List[str]] = None) -> None:
             "commands": [
                 "available_categories",
                 "overview",
-                "bank_rate          [--start DD/Mon/YYYY] [--end DD/Mon/YYYY|now]",
+                "bank_rate          [--start YYYY-MM-DD] [--end YYYY-MM-DD|now]",
                 "sonia              [--start ...] [--end ...] [--compounded Y]",
                 "exchange_rates     [--currencies USD,EUR,JPY,...] [--start ...] [--end ...]",
                 "exchange_rate_index [--broad Y] [--start ...] [--end ...]",

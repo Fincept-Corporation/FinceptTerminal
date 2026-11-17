@@ -13,11 +13,21 @@ class CryptoTickerBar : public QWidget {
     explicit CryptoTickerBar(QWidget* parent = nullptr);
 
     void set_symbol(const QString& symbol);
+    /// The market the prices come from (the selected pair, or the market it is
+    /// shown from on this exchange): its quote asset is the prices' unit
+    /// ("UNI/USDT" shown from "UNI/USD" is priced in USD, not USDT).
+    void set_price_market(const QString& market);
     void update_data(double price, double change_pct, double high, double low, double volume, bool ws_connected);
     void update_bid_ask(double bid, double ask, double spread);
     void update_mark_price(double mark_price, double index_price);
 
   private:
+    /// Writes every readout from the last values (format change, market change).
+    void render_from_cache();
+    void render_quote();
+    void render_bid_ask();
+    void render_mark();
+
     QLabel* symbol_label_ = nullptr;
     QLabel* price_label_ = nullptr;
     QLabel* change_label_ = nullptr;
@@ -29,6 +39,24 @@ class CryptoTickerBar : public QWidget {
     QLabel* volume_label_ = nullptr;
     QLabel* mark_price_label_ = nullptr;
     QLabel* index_price_label_ = nullptr;
+
+    // The market whose quote asset prices are in (set_price_market; the symbol
+    // until then).
+    QString price_market_;
+
+    // Last values received, so a format change re-renders without a new tick.
+    double price_ = 0.0;
+    double change_pct_ = 0.0;
+    double high_ = 0.0;
+    double low_ = 0.0;
+    double volume_ = 0.0;
+    double bid_ = 0.0;
+    double ask_ = 0.0;
+    double spread_ = 0.0;
+    double mark_ = 0.0;
+    double index_ = 0.0;
+    bool has_quote_ = false;
+    bool has_bid_ask_ = false;
 
     // State cache — avoid redundant setText calls at ticker rate.
     //

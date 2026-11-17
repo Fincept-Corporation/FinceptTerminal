@@ -8,6 +8,8 @@
 #include <QTimer>
 #include <QWidget>
 
+class QToolButton;
+
 namespace fincept::ui {
 
 class PushpinBar;
@@ -55,13 +57,37 @@ class ToolBar : public QWidget {
     QLabel* branding_label_ = nullptr;
     QLabel* live_dot_ = nullptr;
     QLabel* live_label_ = nullptr;
+    QLabel* live_gap_ = nullptr; ///< the blank gap before the LIVE dot (collapses with it)
     /// Plan badge ("FREE" / "PRO" / legacy tier) → Plans & Pricing. Carries a
     /// "tier" property (free / paid) that the stylesheet outlines for free accounts.
     QPushButton* plan_btn_ = nullptr;
     /// Always-visible ENTERPRISE CTA for Fincept Terminal Enterprise (the private edition).
     QPushButton* upgrade_btn_ = nullptr;
     QPushButton* chat_mode_btn_ = nullptr;
+    /// Next to CHAT: agent runs in progress (INFO) and runs waiting for the user's
+    /// answer / approval (WARNING), from TaskRunService::attention_changed. Hidden at 0.
+    QLabel* chat_runs_badge_ = nullptr;
+    QLabel* chat_attention_badge_ = nullptr;
+    int chat_active_runs_ = 0;
+    int chat_attention_runs_ = 0;
+    void update_chat_badge();
+    /// AI activity pill, right after LIVE: a filled, pulsing "AI WORKING · <step>" while a
+    /// request is in flight (it names the step when the AI is operating the screens), then
+    /// "AI FINISHED" for a few seconds, then hidden. From LlmService::activity_changed.
+    QLabel* ai_status_ = nullptr;
+    QTimer* ai_pulse_timer_ = nullptr;
+    QTimer* ai_done_timer_ = nullptr;
+    int ai_running_ = 0;
+    bool ai_finished_ = false; ///< showing the "finished" state
+    bool ai_pulse_on_ = true;
+    QString ai_step_;
+    void update_ai_status();
     QPushButton* logout_btn_ = nullptr;
+    /// "More" button at the right end, shown when the row is too narrow for
+    /// every item: its menu offers the actions (and account info) that were
+    /// collapsed out of the row.
+    QToolButton* overflow_btn_ = nullptr;
+    bool in_responsive_layout_ = false;
     QTimer* clock_timer_ = nullptr;
     QVector<QLabel*> separators_;
     QLabel* fincept_label_ = nullptr;
@@ -75,7 +101,10 @@ class ToolBar : public QWidget {
     /// pick up the active QTranslator. Called from retranslateUi() so a
     /// LanguageChange event rebuilds menus alongside static labels.
     void rebuild_menus();
+    /// Fit the row to `width` from the items' own size hints (font metrics):
+    /// lower-priority items collapse first, actions go into the overflow menu.
     void apply_responsive_layout(int width);
+    void fill_overflow_menu(QMenu* menu);
 
     QMenu* build_file_menu();
     QMenu* build_navigate_menu();

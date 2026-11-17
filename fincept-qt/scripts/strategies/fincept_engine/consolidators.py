@@ -58,79 +58,123 @@ class ConsolidatorBase:
         pass
 
 
+def _calendar_key(fn, t):
+    """Period key for LEAN Calendar.* consolidation functions (weekly/monthly/...)."""
+    name = getattr(fn, '__name__', '').lower()
+    if 'week' in name:
+        return tuple(t.isocalendar()[:2])
+    if 'quarter' in name:
+        return (t.year, (t.month - 1) // 3)
+    if 'year' in name:
+        return t.year
+    if 'month' in name:
+        return (t.year, t.month)
+    return None
+
+
+def _as_period(p):
+    """Resolution enum -> timedelta; timedelta unchanged; anything else None."""
+    if isinstance(p, timedelta):
+        return p
+    to_td = getattr(p, 'to_timedelta', None)
+    if callable(to_td):
+        try:
+            return to_td()
+        except Exception:
+            return None
+    return None
+
+
 class TradeBarConsolidator(ConsolidatorBase):
-    """Consolidates trade bars into larger period bars."""
+    """Consolidates trade bars into larger bars by time period, bar count or calendar.
+
+    A working bar is emitted as soon as the incoming bar completes its period
+    (bar.time + bar.period reaches the period end), so a 1-day consolidator over
+    daily bars emits every bar, and a weekly one emits on the week's last bar.
+    """
 
     def __init__(self, period=None, max_count: int = None):
         super().__init__()
-        if isinstance(period, timedelta):
-            self._period = period
-            self._max_count = None
-        elif isinstance(period, int):
-            self._period = None
+        self._calendar = None
+        self._period = None
+        self._max_count = max_count
+        if isinstance(period, int) and not hasattr(period, 'to_timedelta'):
             self._max_count = period
-        else:
-            self._period = period
-            self._max_count = max_count
-
+        elif _as_period(period) is not None:
+            self._period = _as_period(period)
+        elif callable(period):
+            self._calendar = period
         self._count = 0
         self._period_start = None
+        self._key = None
+
+    @property
+    def period(self):
+        return self._period
+
+    def _emit(self):
+        bar = self._working_bar
+        self._working_bar = None
+        self._count = 0
+        self._period_start = None
+        self._key = None
+        if bar is None:
+            return
+        self.consolidated = bar
+        if self.data_consolidated:
+            self.data_consolidated(self, bar)
 
     def update(self, bar: TradeBar):
+        bar_period = getattr(bar, 'period', None) or timedelta(0)
+        if self._calendar is not None:
+            key = _calendar_key(self._calendar, bar.time)
+            if self._working_bar is not None and key != self._key:
+                self._emit()
+            if self._working_bar is None:
+                self._key = key
+        elif self._period is not None and self._working_bar is not None:
+            if bar.time >= self._period_start + self._period:
+                self._emit()
+
         if self._working_bar is None:
             self._working_bar = TradeBar(
                 time=bar.time, symbol=bar.symbol,
                 open=bar.open, high=bar.high,
                 low=bar.low, close=bar.close, volume=bar.volume
             )
+            self._working_bar.period = self._period or bar_period
             self._period_start = bar.time
             self._count = 1
         else:
             self._working_bar.high = max(self._working_bar.high, bar.high)
             self._working_bar.low = min(self._working_bar.low, bar.low)
             self._working_bar.close = bar.close
+            self._working_bar.value = bar.close
+            self._working_bar.price = bar.close
             self._working_bar.volume += bar.volume
-            self._working_bar.end_time = bar.time
+            self._working_bar.end_time = getattr(bar, 'end_time', bar.time)
             self._count += 1
 
-        should_emit = False
         if self._max_count and self._count >= self._max_count:
-            should_emit = True
-        elif self._period and self._period_start:
-            if bar.time - self._period_start >= self._period:
-                should_emit = True
+            self._emit()
+        elif self._period is not None:
+            if bar.time + bar_period >= self._period_start + self._period:
+                self._emit()
+        elif self._calendar is not None:
+            # Emit on the period's last weekday; otherwise the next period's first bar emits it.
+            nxt = bar.time + timedelta(days=1)
+            while nxt.weekday() >= 5:
+                nxt += timedelta(days=1)
+            if _calendar_key(self._calendar, nxt) != self._key:
+                self._emit()
 
-        if should_emit:
-            self.consolidated = self._working_bar
-            if self.data_consolidated:
-                self.data_consolidated(self, self._working_bar)
-            self._working_bar = None
-            self._count = 0
-            self._period_start = None
 
+class QuoteBarConsolidator(TradeBarConsolidator):
+    """Quote-bar consolidation. The engine's daily data has no separate bid/ask series
+    (Yahoo FX/crypto bars are mid prices), so this consolidates the same OHLC bars."""
 
-class QuoteBarConsolidator(ConsolidatorBase):
-    """Consolidates quote bars into larger period bars."""
-
-    def __init__(self, period=None):
-        super().__init__()
-        self._period = period if isinstance(period, timedelta) else timedelta(minutes=period or 1)
-        self._period_start = None
-
-    def update(self, bar: QuoteBar):
-        if self._working_bar is None:
-            self._working_bar = bar
-            self._period_start = bar.time
-        else:
-            self._working_bar.close = bar.close
-            self._working_bar.value = bar.value
-
-        if bar.time - self._period_start >= self._period:
-            self.consolidated = self._working_bar
-            if self.data_consolidated:
-                self.data_consolidated(self, self._working_bar)
-            self._working_bar = None
-            self._period_start = None
+    def __init__(self, period=None, max_count: int = None):
+        super().__init__(period, max_count)
 
 
 class RenkoConsolidator(ConsolidatorBase):

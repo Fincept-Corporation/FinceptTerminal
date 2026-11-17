@@ -2,38 +2,28 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
-#include <QChartView>
-#include <QGraphicsLineItem>
-#include <QLabel>
-#include <QPushButton>
+#include <QStringList>
+#include <QVector>
 #include <QWidget>
+
+class QLabel;
+class QPushButton;
+
+namespace fincept::ui {
+class TimeSeriesChart;
+}
 
 namespace fincept::screens {
 
-/// QChartView subclass that draws a vertical crosshair and floating tooltip.
-class CrosshairChartView : public QChartView {
-    Q_OBJECT
-  public:
-    explicit CrosshairChartView(QChart* chart, QWidget* parent = nullptr);
-
-    /// Feed the raw series points so we can snap to the nearest one.
-    void set_series_data(const QVector<QPointF>& pts, const QString& currency);
-
-  protected:
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void leaveEvent(QEvent* event) override;
-
-  private:
-    void update_crosshair(const QPoint& widget_pos);
-    void hide_crosshair();
-
-    QVector<QPointF> pts_;
-    QString currency_;
-    QGraphicsLineItem* v_line_ = nullptr;
-    QLabel* tooltip_ = nullptr;
-};
-
-/// NAV performance chart with period selector and info bar.
+/// Main-view performance panel on the shared TimeSeriesChart (crosshair, zoom,
+/// range presets, export).
+///
+///   VALUE  — NAV in the base currency (deposits / withdrawals included) with the
+///            cost basis as a reference line;
+///   RETURN — the time-weighted return index against the benchmark, both rebased
+///            to the first visible day, so every zoom / preset reads as that
+///            period's flow-adjusted return.
+/// The info line quotes the visible period's TWR, the benchmark's and the NAV.
 class PortfolioPerfChart : public QWidget {
     Q_OBJECT
   public:
@@ -42,11 +32,9 @@ class PortfolioPerfChart : public QWidget {
     void set_summary(const portfolio::PortfolioSummary& summary);
     void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
     void set_currency(const QString& currency);
-    /// Feed real benchmark closes for the overlay. The symbol is shown on the
-    /// toggle button and used to disambiguate currencies in indexed mode.
+    /// Benchmark level in the base currency (ascending dates).
     void set_benchmark_history(const QString& symbol, const QStringList& dates, const QVector<double>& closes);
-    /// Flow-adjusted (time-weighted) return series from PortfolioService. The
-    /// period figure uses it so deposits/withdrawals are not shown as returns.
+    /// Flow-adjusted (time-weighted) return series of the whole history.
     void set_twr_series(const QVector<portfolio::TwrPoint>& series);
     void refresh_theme();
 
@@ -54,52 +42,38 @@ class PortfolioPerfChart : public QWidget {
     void changeEvent(QEvent* event) override;
 
   signals:
-    /// Emitted when the user clicks a period button that requires backfilling
-    /// (e.g. 5Y when only 1Y is cached). Owner can call
-    /// PortfolioService::backfill_history(portfolio_id, period) in response.
+    /// The user picked a range that needs more stored history than exists
+    /// ("1y" / "5y"); the owner calls PortfolioService::backfill_history.
     void backfill_period_requested(QString period);
 
   private:
+    enum class Mode { Value, Return };
     void build_ui();
-    void update_chart();
-    void set_period(const QString& period);
-    void update_period_buttons_enabled();
+    void rebuild_series();
+    void update_info();
+    void set_mode(Mode m);
+    void apply_styles();
     void retranslateUi();
+
     QLabel* title_label_ = nullptr;
-    QColor chart_color() const;
-    /// Convert a UTC ISO date string to ms since epoch (UTC midnight).
-    /// Centralised so portfolio and benchmark series share the same time axis.
-    static qint64 iso_date_to_ms_utc(const QString& iso_date);
+    QPushButton* value_btn_ = nullptr;
+    QPushButton* return_btn_ = nullptr;
+    QPushButton* bench_btn_ = nullptr;
+    QLabel* info_label_ = nullptr;
+    ui::TimeSeriesChart* chart_ = nullptr;
 
-    // Period selector buttons
-    QVector<QPushButton*> period_btns_;
-    QString current_period_ = "1M";
-
-    // Benchmark toggle + indexed-mode toggle
-    QPushButton* benchmark_btn_ = nullptr;
-    QPushButton* indexed_btn_ = nullptr;
-    bool show_benchmark_ = false;
-    bool indexed_mode_ = false; // false = currency value, true = base-100 indexed
-
-    // Info bar
-    QLabel* period_change_label_ = nullptr;
-    QLabel* total_return_label_ = nullptr;
-    QLabel* nav_label_ = nullptr;
-    QLabel* cost_basis_label_ = nullptr;
-
-    // Chart
-    CrosshairChartView* chart_view_ = nullptr;
-
-    // Data
+    Mode mode_ = Mode::Value;
+    bool show_benchmark_ = true;
     portfolio::PortfolioSummary summary_;
     QVector<portfolio::PortfolioSnapshot> snapshots_;
-    QVector<portfolio::TwrPoint> twr_series_;
-    QString currency_ = "USD";
-
-    // Benchmark history — symbol may differ from "SPY" depending on currency
-    QString benchmark_symbol_ = "SPY";
-    QStringList spy_dates_;
-    QVector<double> spy_closes_;
+    QVector<portfolio::TwrPoint> twr_;
+    QString currency_; ///< portfolio base currency; empty (no unit printed) until set_currency()
+    QString bench_symbol_;
+    QStringList bench_dates_;
+    QVector<double> bench_closes_;
+    int nav_series_ = -1;
+    int twr_series_id_ = -1;
+    int bench_series_ = -1;
 };
 
 } // namespace fincept::screens

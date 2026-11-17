@@ -20,6 +20,8 @@ class NewsFeedDelegate : public QStyledItemDelegate {
                         bool hovered) const;
     void paint_cluster_card(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
                             bool hovered) const;
+    /// Re-reads the user's font (family and size) into the cached fonts and metrics.
+    void refresh_fonts();
 
     QFont data_font_;
     QFont bold_font_;

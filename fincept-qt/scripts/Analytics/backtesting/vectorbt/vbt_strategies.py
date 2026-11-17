@@ -1,831 +1,494 @@
 """
-VBT Strategy Library
+Strategy library of the vectorbt engine (23 catalogue strategies).
 
-15+ strategies leveraging VectorBT's vectorized computation:
+Each SIGNAL strategy is a builder(ta, params) -> (entries, exits): boolean numpy arrays over one
+symbol's own bars, decided on each bar's CLOSE (base.simulator fills them at the next open by
+default). Indicators come from vbt_indicators.TA (memoised, causal, NaN during warm-up, so no rule
+fires before its indicators exist). Crossovers are warm-up gated (base.signals): the first bar on
+which both lines exist is not a cross.
 
-Trend Following:
-  1. SMA Crossover
-  2. EMA Crossover
-  3. MACD Crossover
-  4. ADX Trend Filter
-  5. Keltner Channel Breakout
-  6. Triple MA (3 moving averages)
+ALLOCATION strategies (rebalance_periodic) return target weights instead and run in
+base.simulator's weights mode (a real rebalance of one portfolio with shared cash).
 
-Mean Reversion:
-  7. Z-Score Mean Reversion
-  8. Bollinger Band Mean Reversion
-  9. RSI Mean Reversion
-  10. Stochastic Mean Reversion
-
-Momentum:
-  11. Momentum (ROC)
-  12. Dual Momentum (absolute + relative)
-
-Breakout:
-  13. Donchian Channel Breakout
-  14. Volatility Breakout (ATR-based)
-
-Multi-Indicator:
-  15. RSI + MACD Confluence
-  16. MACD + ADX Filter
-  17. Bollinger + RSI Combo
-
-Custom:
-  18. Custom Code (user-provided Python)
+Rules (what each strategy does; levels are inclusive of the catalogue defaults):
+  sma_crossover / ema_crossover  enter when the fast average crosses above the slow one, exit on
+                                 the cross below.
+  macd               MACD line crosses its signal line (above = enter, below = exit).
+  adx_trend          enter while ADX > threshold and +DI > -DI; exit when -DI > +DI with ADX >
+                     threshold, or ADX < 0.7 x threshold (trend gone).
+  keltner_breakout   enter on a close above the upper Keltner band, exit on a close below the middle.
+  triple_ma          enter while EMA fast > medium > slow, exit when fast < medium.
+  mean_reversion     z-score crosses below -z (enter) / above +z/2 (exit).
+  bollinger_bands    enter on a close below the lower band, exit on a close above the upper band.
+  rsi                Wilder RSI crosses below oversold (enter) / above overbought (exit).
+  stochastic         %K crosses above %D while %K < oversold (enter); %K crosses below %D while
+                     %K > overbought (exit).
+  momentum           enter while ROC(lookback) > threshold %, exit while ROC < -threshold %.
+  dual_momentum      enter while short and long ROC > threshold %, exit when the short ROC < -threshold.
+  breakout           Donchian: close above the previous n-bar high (enter) / below the previous
+                     n-bar low (exit).
+  volatility_breakout close > previous close + k x ATR (enter) / < previous close - k x ATR (exit).
+  rsi_macd           enter when the MACD histogram turns positive and the RSI was below oversold
+                     within the last `lookback` bars; exit when RSI > overbought or the histogram
+                     turns negative. (v1 required RSI < oversold and histogram > 0 on the SAME bar,
+                     which never happened on SPY in ten years.)
+  macd_adx           enter while MACD > signal and ADX > threshold, exit when MACD < signal.
+  bollinger_rsi      enter on close < lower band and RSI < oversold; exit on close > upper band or
+                     RSI > overbought.
+  williams_r         enter while %R < oversold, exit while %R > overbought.
+  cci                enter while CCI < lower, exit while CCI > upper.
+  obv_trend          enter while OBV > its n-bar SMA, exit while below.
+  custom_combo       2-3 indicator conditions (comboConfig from the screen) combined with AND / OR
+                     (exit conditions are OR-ed); without a comboConfig: RSI(14) below 35 AND close
+                     above SMA(200) (buy pullbacks in an uptrend), exit on RSI above 70 OR a close
+                     below SMA(200). For sma / ema rows the indicator value is the close's distance
+                     from the average in percent (threshold 0 = above it; v1 compared the average's
+                     price level with the threshold, so "SMA above 0" was always true).
+  buy_and_hold       enter on the first bar, never exit (equal slots across symbols, no rebalance).
+  rebalance_periodic target weights (equal, or the request's `weights`) set every
+                     `rebalancePeriod` bars - or 'weekly' / 'monthly' / 'quarterly' / 'yearly'
+                     (first bar of each calendar period) - and traded to at the next fill.
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import numpy as np
-import pandas as pd
-from typing import Dict, Any, Tuple, Optional
-
-import vbt_indicators as ind
-
-
-def build_strategy_signals(
-    vbt,
-    strategy_type: str,
-    close_series: pd.Series,
-    parameters: Dict[str, Any],
-    high_series: Optional[pd.Series] = None,
-    low_series: Optional[pd.Series] = None,
-    volume_series: Optional[pd.Series] = None,
-) -> Tuple[pd.Series, pd.Series]:
-    """
-    Build entry/exit signals for any strategy type.
-
-    Args:
-        vbt: vectorbt module
-        strategy_type: Strategy identifier string
-        close_series: Close price series
-        parameters: Strategy parameters dict
-        high_series: High prices (optional, approximated if not provided)
-        low_series: Low prices (optional, approximated if not provided)
-        volume_series: Volume data (optional)
-
-    Returns:
-        (entries, exits) tuple of boolean pd.Series
-    """
-    close_np = close_series.values.astype(float)
-    index = close_series.index
-
-    # Approximate OHLC if not provided
-    if high_series is None:
-        high_np = close_np * 1.005
-    else:
-        high_np = high_series.values.astype(float)
-
-    if low_series is None:
-        low_np = close_np * 0.995
-    else:
-        low_np = low_series.values.astype(float)
-
-    volume_np = volume_series.values.astype(float) if volume_series is not None else np.ones(len(close_np))
-
-    # Dispatch to strategy builder
-    strategy_builders = {
-        'sma_crossover': _sma_crossover,
-        'ema_crossover': _ema_crossover,
-        'macd': _macd_strategy,
-        'macd_crossover': _macd_strategy,
-        'rsi': _rsi_strategy,
-        'bollinger_bands': _bollinger_bands,
-        'mean_reversion': _mean_reversion,
-        'momentum': _momentum,
-        'breakout': _breakout,
-        'donchian_breakout': _breakout,
-        'stochastic': _stochastic,
-        'adx_trend': _adx_trend,
-        'keltner_breakout': _keltner_breakout,
-        'triple_ma': _triple_ma,
-        'volatility_breakout': _volatility_breakout,
-        'dual_momentum': _dual_momentum,
-        'rsi_macd': _rsi_macd_confluence,
-        'macd_adx': _macd_adx_filter,
-        'bollinger_rsi': _bollinger_rsi_combo,
-        'williams_r': _williams_r_strategy,
-        'cci': _cci_strategy,
-        'obv_trend': _obv_trend,
-        'custom_combo': _custom_combo,
-        'buy_and_hold': _buy_and_hold,
-        'rebalance_periodic': _rebalance_periodic,
-    }
-
-    builder = strategy_builders.get(strategy_type)
-    if builder is None:
-        raise ValueError(
-            f'Unknown strategy type: {strategy_type}. '
-            f'Available: {", ".join(sorted(strategy_builders.keys()))}'
-        )
-
-    return builder(vbt, close_np, high_np, low_np, volume_np, index, parameters)
-
-
-# ============================================================================
-# Trend Following Strategies
-# ============================================================================
-
-def _sma_crossover(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """SMA Crossover: Fast SMA crosses Slow SMA."""
-    fast_period = int(params.get('fastPeriod', 10))
-    slow_period = int(params.get('slowPeriod', 20))
-
-    fast_ma = ind.calculate_ma(vbt, close, fast_period, ewm=False)
-    slow_ma = ind.calculate_ma(vbt, close, slow_period, ewm=False)
-
-    return ind.generate_crossover_signals(fast_ma, slow_ma, index)
-
-
-def _ema_crossover(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """EMA Crossover: Fast EMA crosses Slow EMA."""
-    fast_period = int(params.get('fastPeriod', 10))
-    slow_period = int(params.get('slowPeriod', 20))
 
-    fast_ma = ind.calculate_ma(vbt, close, fast_period, ewm=True)
-    slow_ma = ind.calculate_ma(vbt, close, slow_period, ewm=True)
+import vbt_indicators as I
+from vbt_indicators import TA, cross_above, cross_below, edge, gt, lt, prev
 
-    return ind.generate_crossover_signals(fast_ma, slow_ma, index)
+Signals = Tuple[np.ndarray, np.ndarray]
 
 
-def _macd_strategy(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """MACD Crossover: MACD line crosses Signal line."""
-    fast = int(params.get('fastPeriod', 12))
-    slow = int(params.get('slowPeriod', 26))
-    signal = int(params.get('signalPeriod', 9))
+def _i(params, key, default, *alts) -> int:
+    for k in (key,) + alts:
+        if k in params and params[k] is not None:
+            try:
+                return int(round(float(params[k])))
+            except (TypeError, ValueError):
+                raise ValueError(f'parameter {k} must be a number, not {params[k]!r}')
+    return int(default)
 
-    macd_data = ind.calculate_macd(vbt, close, fast, slow, signal)
-    return ind.generate_crossover_signals(macd_data['macd'], macd_data['signal'], index)
 
+def _f(params, key, default, *alts) -> float:
+    for k in (key,) + alts:
+        if k in params and params[k] is not None:
+            try:
+                return float(params[k])
+            except (TypeError, ValueError):
+                raise ValueError(f'parameter {k} must be a number, not {params[k]!r}')
+    return float(default)
 
-def _adx_trend(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """ADX Trend: Trade with trend when ADX > threshold."""
-    period = int(params.get('period', 14))
-    threshold = float(params.get('threshold', 25))
 
-    adx_data = ind.calculate_adx(close, high, low, period)
-    adx = adx_data['adx']
-    plus_di = adx_data['plus_di']
-    minus_di = adx_data['minus_di']
+def _pos(name, v) -> int:
+    if v < 1:
+        raise ValueError(f'{name} must be at least 1 (got {v})')
+    return v
 
-    # Entry: ADX > threshold AND +DI > -DI (uptrend)
-    entries = pd.Series((adx > threshold) & (plus_di > minus_di), index=index)
-    # Exit: ADX > threshold AND -DI > +DI (downtrend) OR ADX < threshold (no trend)
-    exits = pd.Series(
-        ((adx > threshold) & (minus_di > plus_di)) | (adx < threshold * 0.7),
-        index=index
-    )
-    return entries, exits
 
+# ════════════════════════════════════════════════════════════════════════════
+# Signal builders
+# ════════════════════════════════════════════════════════════════════════════
 
-def _keltner_breakout(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Keltner Channel Breakout: Enter on upper break, exit on middle cross."""
-    ema_period = int(params.get('emaPeriod', params.get('period', 20)))
-    atr_period = int(params.get('atrPeriod', 10))
-    multiplier = float(params.get('multiplier', 2.0))
+def _sma_crossover(ta: TA, p) -> Signals:
+    f, s = _pos('fastPeriod', _i(p, 'fastPeriod', 10)), _pos('slowPeriod', _i(p, 'slowPeriod', 20))
+    a, b = ta.sma(f), ta.sma(s)
+    return cross_above(a, b), cross_below(a, b)
 
-    keltner = ind.calculate_keltner(high, low, close, ema_period, atr_period, multiplier)
 
-    entries = pd.Series(close > keltner['upper'], index=index)
-    exits = pd.Series(close < keltner['middle'], index=index)
-    return entries, exits
+def _ema_crossover(ta: TA, p) -> Signals:
+    f, s = _pos('fastPeriod', _i(p, 'fastPeriod', 10)), _pos('slowPeriod', _i(p, 'slowPeriod', 20))
+    a, b = ta.ema(f), ta.ema(s)
+    return cross_above(a, b), cross_below(a, b)
 
 
-def _triple_ma(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Triple MA: Fast > Medium > Slow for entry, reverse for exit."""
-    fast = int(params.get('fastPeriod', 5))
-    medium = int(params.get('mediumPeriod', 20))
-    slow = int(params.get('slowPeriod', 50))
+def _macd(ta: TA, p) -> Signals:
+    m = ta.macd(_i(p, 'fastPeriod', 12), _i(p, 'slowPeriod', 26), _i(p, 'signalPeriod', 9))
+    return cross_above(m['macd'], m['signal']), cross_below(m['macd'], m['signal'])
 
-    fast_ma = ind.calculate_ma(vbt, close, fast, ewm=True)
-    med_ma = ind.calculate_ma(vbt, close, medium, ewm=True)
-    slow_ma = ind.calculate_ma(vbt, close, slow, ewm=True)
 
-    # Entry: fast > medium > slow (strong uptrend)
-    entries = pd.Series(
-        (fast_ma > med_ma) & (med_ma > slow_ma),
-        index=index
-    )
-    # Exit: fast < medium (trend weakening)
-    exits = pd.Series(fast_ma < med_ma, index=index)
-    return entries, exits
+def _adx_trend(ta: TA, p) -> Signals:
+    d = ta.adx(_pos('period', _i(p, 'period', 14)))
+    th = _f(p, 'threshold', 25)
+    a, pdi, mdi = d['adx'], d['plus_di'], d['minus_di']
+    ent = gt(a, th) & gt(pdi, mdi)
+    ex = (gt(a, th) & gt(mdi, pdi)) | lt(a, th * 0.7)
+    return ent, ex
 
 
-# ============================================================================
-# Mean Reversion Strategies
-# ============================================================================
+def _keltner_breakout(ta: TA, p) -> Signals:
+    k = ta.keltner(_i(p, 'period', 20, 'emaPeriod'), _i(p, 'atrPeriod', 10), _f(p, 'multiplier', 2.0))
+    return gt(ta.c, k['upper']), lt(ta.c, k['middle'])
 
-def _mean_reversion(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Z-Score Mean Reversion: Buy when oversold, sell when overbought."""
-    period = int(params.get('period', 20))
-    z_threshold = float(params.get('zThreshold', params.get('z_threshold', 2.0)))
 
-    zscore = ind.calculate_zscore(close, period)
-    return ind.generate_mean_reversion_signals(zscore, z_threshold, z_threshold * 0.5, index)
+def _triple_ma(ta: TA, p) -> Signals:
+    f, m, s = ta.ema(_i(p, 'fastPeriod', 5)), ta.ema(_i(p, 'mediumPeriod', 20)), ta.ema(_i(p, 'slowPeriod', 50))
+    return gt(f, m) & gt(m, s), lt(f, m)
 
 
-def _bollinger_bands(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Bollinger Band Mean Reversion: Buy at lower, sell at upper."""
-    period = int(params.get('period', 20))
-    std_dev = float(params.get('stdDev', 2.0))
+def _mean_reversion(ta: TA, p) -> Signals:
+    z = ta.zscore(_pos('period', _i(p, 'period', 20)))
+    th = _f(p, 'zThreshold', 2.0, 'z_threshold')
+    return cross_below(z, -th), cross_above(z, th * 0.5)
 
-    bb = ind.calculate_bbands(vbt, close, period, std_dev)
 
-    entries = pd.Series(close < bb['lower'], index=index)
-    exits = pd.Series(close > bb['upper'], index=index)
-    return entries, exits
+def _bollinger_bands(ta: TA, p) -> Signals:
+    bb = ta.bbands(_pos('period', _i(p, 'period', 20)), _f(p, 'stdDev', 2.0))
+    return lt(ta.c, bb['lower']), gt(ta.c, bb['upper'])
 
 
-def _rsi_strategy(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """RSI Mean Reversion: Buy oversold, sell overbought."""
-    period = int(params.get('period', 14))
-    oversold = float(params.get('oversold', 30))
-    overbought = float(params.get('overbought', 70))
+def _rsi(ta: TA, p) -> Signals:
+    r = ta.rsi(_pos('period', _i(p, 'period', 14)))
+    return cross_below(r, _f(p, 'oversold', 30)), cross_above(r, _f(p, 'overbought', 70))
 
-    rsi = ind.calculate_rsi(vbt, close, period)
-    return ind.generate_threshold_signals(rsi, oversold, overbought, index)
 
+def _stochastic(ta: TA, p) -> Signals:
+    st = ta.stoch(_i(p, 'kPeriod', 14, 'k_period'), _i(p, 'dPeriod', 3, 'd_period'))
+    k, d = st['k'], st['d']
+    return cross_above(k, d) & lt(k, _f(p, 'oversold', 20)), cross_below(k, d) & gt(k, _f(p, 'overbought', 80))
 
-def _stochastic(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Stochastic Oscillator: %K/%D crossover with oversold/overbought zones."""
-    k_period = int(params.get('kPeriod', params.get('k_period', 14)))
-    d_period = int(params.get('dPeriod', params.get('d_period', 3)))
-    oversold = float(params.get('oversold', 20))
-    overbought = float(params.get('overbought', 80))
 
-    stoch = ind.calculate_stoch(vbt, high, low, close, k_period, d_period)
-    k = stoch['k']
-    d = stoch['d']
+def _momentum(ta: TA, p) -> Signals:
+    roc = ta.momentum(_pos('lookback', _i(p, 'lookback', 20, 'period')))
+    th = _f(p, 'threshold', 0.0) / 100.0
+    return gt(roc, th), lt(roc, -th)
 
-    # Entry: %K < oversold AND %K crosses above %D
-    entries = pd.Series((k < oversold) & (k > d), index=index)
-    # Exit: %K > overbought AND %K crosses below %D
-    exits = pd.Series((k > overbought) & (k < d), index=index)
-    return entries, exits
 
-
-# ============================================================================
-# Momentum Strategies
-# ============================================================================
-
-def _momentum(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Momentum (ROC): Buy strong positive momentum, sell on reversal."""
-    lookback = int(params.get('lookback', 20))
-    threshold = float(params.get('threshold', 0.0)) / 100.0
-
-    roc = ind.calculate_momentum(close, lookback)
-
-    entries = pd.Series(roc > threshold, index=index)
-    exits = pd.Series(roc < -threshold, index=index)
-    return entries, exits
-
-
-def _dual_momentum(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    Dual Momentum: Combines absolute and relative momentum.
-
-    Entry: Both short-term and long-term momentum positive
-    Exit: Either momentum turns negative
-    """
-    short_lookback = int(params.get('shortLookback', 20))
-    long_lookback = int(params.get('longLookback', 60))
-    threshold = float(params.get('threshold', 0.0)) / 100.0
-
-    short_mom = ind.calculate_momentum(close, short_lookback)
-    long_mom = ind.calculate_momentum(close, long_lookback)
-
-    # Entry: Both timeframes show positive momentum
-    entries = pd.Series(
-        (short_mom > threshold) & (long_mom > threshold),
-        index=index
-    )
-    # Exit: Short-term momentum reverses
-    exits = pd.Series(short_mom < -threshold, index=index)
-    return entries, exits
-
-
-# ============================================================================
-# Breakout Strategies
-# ============================================================================
-
-def _breakout(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Donchian Channel Breakout: Buy on upper channel break."""
-    period = int(params.get('period', 20))
-
-    donchian = ind.calculate_donchian(close, period)
-
-    entries, exits = ind.generate_breakout_signals(
-        close, donchian['upper'], donchian['lower'], index
-    )
-    return entries, exits
-
-
-def _volatility_breakout(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    Volatility Breakout: Enter when price moves > K * ATR from previous close.
-
-    Popular in Korean/Japanese markets (Larry Williams-style).
-    """
-    period = int(params.get('period', 20))
-    k_mult = float(params.get('kMultiplier', params.get('atr_mult', 1.5)))
-
-    atr = ind.calculate_atr(vbt, high, low, close, period)
-
-    # Entry: Close > prev_close + K * ATR
-    prev_close = np.roll(close, 1)
-    prev_close[0] = close[0]
-    upper_band = prev_close + k_mult * atr
-    lower_band = prev_close - k_mult * atr
-
-    entries = pd.Series(close > upper_band, index=index)
-    exits = pd.Series(close < lower_band, index=index)
-    return entries, exits
-
-
-# ============================================================================
-# Multi-Indicator Strategies
-# ============================================================================
-
-def _rsi_macd_confluence(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    RSI + MACD Confluence: Only trade when both agree.
-
-    Entry: RSI < oversold AND MACD histogram turns positive
-    Exit: RSI > overbought OR MACD histogram turns negative
-    """
-    rsi_period = int(params.get('rsiPeriod', params.get('period', 14)))
-    oversold = float(params.get('oversold', 30))
-    overbought = float(params.get('overbought', 70))
-    fast = int(params.get('fastPeriod', 12))
-    slow = int(params.get('slowPeriod', 26))
-    signal = int(params.get('signalPeriod', 9))
-
-    rsi = ind.calculate_rsi(vbt, close, rsi_period)
-    macd_data = ind.calculate_macd(vbt, close, fast, slow, signal)
-    histogram = macd_data['histogram']
-
-    # Entry: RSI oversold + MACD histogram positive (momentum turning up)
-    entries = pd.Series((rsi < oversold) & (histogram > 0), index=index)
-    # Exit: RSI overbought OR MACD histogram negative
-    exits = pd.Series((rsi > overbought) | (histogram < 0), index=index)
-    return entries, exits
-
-
-def _macd_adx_filter(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    MACD + ADX Filter: MACD crossover only when ADX confirms trend.
-
-    Entry: MACD > Signal AND ADX > threshold
-    Exit: MACD < Signal
-    """
-    fast = int(params.get('fastPeriod', 12))
-    slow = int(params.get('slowPeriod', 26))
-    signal = int(params.get('signalPeriod', 9))
-    adx_period = int(params.get('adxPeriod', 14))
-    adx_threshold = float(params.get('adxThreshold', params.get('threshold', 25)))
-
-    macd_data = ind.calculate_macd(vbt, close, fast, slow, signal)
-    adx_data = ind.calculate_adx(close, high, low, adx_period)
-
-    macd_bullish = macd_data['macd'] > macd_data['signal']
-    trend_strong = adx_data['adx'] > adx_threshold
-
-    entries = pd.Series(macd_bullish & trend_strong, index=index)
-    exits = pd.Series(~macd_bullish, index=index)
-    return entries, exits
-
-
-def _bollinger_rsi_combo(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    Bollinger Bands + RSI Combo: BB mean reversion confirmed by RSI.
-
-    Entry: Price < lower BB AND RSI < oversold
-    Exit: Price > upper BB OR RSI > overbought
-    """
-    bb_period = int(params.get('bbPeriod', params.get('period', 20)))
-    bb_std = float(params.get('stdDev', 2.0))
-    rsi_period = int(params.get('rsiPeriod', 14))
-    oversold = float(params.get('oversold', 30))
-    overbought = float(params.get('overbought', 70))
-
-    bb = ind.calculate_bbands(vbt, close, bb_period, bb_std)
-    rsi = ind.calculate_rsi(vbt, close, rsi_period)
-
-    entries = pd.Series((close < bb['lower']) & (rsi < oversold), index=index)
-    exits = pd.Series((close > bb['upper']) | (rsi > overbought), index=index)
-    return entries, exits
-
-
-# ============================================================================
-# Additional Strategies
-# ============================================================================
-
-def _williams_r_strategy(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Williams %R: Buy oversold, sell overbought."""
-    period = int(params.get('period', 14))
-    oversold = float(params.get('oversold', -80))
-    overbought = float(params.get('overbought', -20))
-
-    wr = ind.calculate_williams_r(high, low, close, period)
-
-    entries = pd.Series(wr < oversold, index=index)
-    exits = pd.Series(wr > overbought, index=index)
-    return entries, exits
-
-
-def _cci_strategy(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """CCI Strategy: Buy on CCI crossing above -100, sell on crossing below +100."""
-    period = int(params.get('period', 20))
-    lower = float(params.get('lower', -100))
-    upper = float(params.get('upper', 100))
-
-    cci = ind.calculate_cci(high, low, close, period)
-
-    entries = pd.Series(cci < lower, index=index)
-    exits = pd.Series(cci > upper, index=index)
-    return entries, exits
-
-
-def _obv_trend(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """
-    OBV Trend: Trade based on OBV trend confirmation.
-
-    Entry: OBV SMA crosses up (volume confirming price trend)
-    Exit: OBV SMA crosses down
-    """
-    period = int(params.get('period', 20))
-
-    obv = ind.calculate_obv(vbt, close, volume)
-    obv_sma = pd.Series(obv).rolling(period).mean().values
-
-    entries = pd.Series(obv > obv_sma, index=index)
-    exits = pd.Series(obv < obv_sma, index=index)
-    return entries, exits
-
-
-# ============================================================================
-# Strategy Catalog (for frontend)
-# ============================================================================
-
-def _compute_indicator_signal(close, high, low, indicator_type, period, condition, threshold):
-    """Compute a boolean signal from an indicator + condition + threshold."""
-    n = len(close)
-    values = np.zeros(n)
-
-    if indicator_type == 'rsi':
-        values = ind.calculate_rsi(None, close, period)
-    elif indicator_type == 'sma':
-        values = ind.calculate_ma(None, close, period, ewm=False)
-    elif indicator_type == 'ema':
-        values = ind.calculate_ma(None, close, period, ewm=True)
-    elif indicator_type == 'macd_hist':
-        fast = ind.calculate_ma(None, close, max(1, period // 2), ewm=True)
-        slow = ind.calculate_ma(None, close, period, ewm=True)
-        signal_line = ind.calculate_ma(None, fast - slow, 9, ewm=True)
-        values = (fast - slow) - signal_line
-    elif indicator_type == 'bbands_pctb':
-        ma = ind.calculate_ma(None, close, period, ewm=False)
-        std = ind.calculate_std(None, close, period)
-        upper = ma + 2.0 * std
-        lower = ma - 2.0 * std
-        band_width = upper - lower
-        band_width = np.where(band_width == 0, 1, band_width)
-        values = (close - lower) / band_width * 100
-    elif indicator_type == 'atr':
-        tr = np.maximum(high - low, np.maximum(np.abs(high - np.roll(close, 1)),
-                                                np.abs(low - np.roll(close, 1))))
-        tr[0] = high[0] - low[0]
-        values = ind.calculate_ma(None, tr, period, ewm=True)
-    elif indicator_type == 'stochastic':
-        for i in range(period, n):
-            h = np.max(high[i - period:i + 1])
-            l = np.min(low[i - period:i + 1])
-            values[i] = ((close[i] - l) / (h - l) * 100) if h != l else 50
-    else:
-        values = ind.calculate_ma(None, close, period, ewm=False)
-
-    if condition == 'above':
-        return values > threshold
-    elif condition == 'below':
-        return values < threshold
-    elif condition == 'cross_up':
-        shifted = np.roll(values, 1)
-        shifted[0] = values[0]
-        return (shifted <= threshold) & (values > threshold)
-    elif condition == 'cross_down':
-        shifted = np.roll(values, 1)
-        shifted[0] = values[0]
-        return (shifted >= threshold) & (values < threshold)
-    else:
-        return values > threshold
-
-
-def _custom_combo(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Custom combo: combine 2-3 indicators with AND/OR logic."""
-    combo = params.get('comboConfig', {})
-    indicators = combo.get('indicators', [])
-    logic = combo.get('logic', 'and')
-
-    if len(indicators) < 2:
-        n = len(close)
-        return pd.Series(np.zeros(n, dtype=bool), index=index), pd.Series(np.zeros(n, dtype=bool), index=index)
-
-    entry_signals = []
-    exit_signals = []
-    for ind_cfg in indicators:
-        entry_signals.append(_compute_indicator_signal(
-            close, high, low,
-            ind_cfg.get('type', 'rsi'), int(ind_cfg.get('period', 14)),
-            ind_cfg.get('condition', 'below'), float(ind_cfg.get('threshold', 30))
-        ))
-        exit_signals.append(_compute_indicator_signal(
-            close, high, low,
-            ind_cfg.get('type', 'rsi'), int(ind_cfg.get('period', 14)),
-            ind_cfg.get('exitCondition', 'above'), float(ind_cfg.get('exitThreshold', 70))
-        ))
-
-    if logic == 'or':
-        entries = entry_signals[0]
-        for s in entry_signals[1:]:
-            entries = entries | s
-    else:
-        entries = entry_signals[0]
-        for s in entry_signals[1:]:
-            entries = entries & s
-
-    exits = exit_signals[0]
-    for s in exit_signals[1:]:
-        exits = exits | s
-
-    return pd.Series(entries, index=index), pd.Series(exits, index=index)
-
-
-def _buy_and_hold(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Buy on bar 1, never sell. For portfolio benchmarking."""
-    n = len(close)
-    entries = np.zeros(n, dtype=bool)
-    exits = np.zeros(n, dtype=bool)
-    entries[0] = True
-    return pd.Series(entries, index=index), pd.Series(exits, index=index)
-
-
-def _rebalance_periodic(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
-    """Periodic rebalance: exit+re-enter every N bars to reset position sizing."""
-    n = len(close)
-    period = int(params.get('rebalancePeriod', 63))  # default ~quarterly (63 trading days)
-
-    entries = np.zeros(n, dtype=bool)
-    exits = np.zeros(n, dtype=bool)
-    entries[0] = True
-    for i in range(period, n, period):
-        exits[i - 1] = True
-        entries[i] = True
-    return pd.Series(entries, index=index), pd.Series(exits, index=index)
-
-
-def get_strategy_catalog() -> list:
-    """
-    Return list of all available strategies with their parameters.
-
-    Used by frontend to populate strategy selection UI.
-    """
-    return [
-        {
-            'type': 'sma_crossover',
-            'name': 'SMA Crossover',
-            'category': 'Trend',
-            'description': 'Fast SMA crosses Slow SMA',
-            'parameters': [
-                {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 10, 'min': 2, 'max': 100},
-                {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 20, 'min': 5, 'max': 200},
-            ],
-        },
-        {
-            'type': 'ema_crossover',
-            'name': 'EMA Crossover',
-            'category': 'Trend',
-            'description': 'Fast EMA crosses Slow EMA',
-            'parameters': [
-                {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 10, 'min': 2, 'max': 100},
-                {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 20, 'min': 5, 'max': 200},
-            ],
-        },
-        {
-            'type': 'macd',
-            'name': 'MACD Crossover',
-            'category': 'Trend',
-            'description': 'MACD line crosses Signal line',
-            'parameters': [
-                {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 12, 'min': 2, 'max': 50},
-                {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 26, 'min': 10, 'max': 100},
-                {'id': 'signalPeriod', 'name': 'Signal Period', 'default': 9, 'min': 2, 'max': 30},
-            ],
-        },
-        {
-            'type': 'adx_trend',
-            'name': 'ADX Trend',
-            'category': 'Trend',
-            'description': 'Trade with trend when ADX confirms strength',
-            'parameters': [
-                {'id': 'period', 'name': 'ADX Period', 'default': 14, 'min': 5, 'max': 50},
-                {'id': 'threshold', 'name': 'ADX Threshold', 'default': 25, 'min': 10, 'max': 50},
-            ],
-        },
-        {
-            'type': 'keltner_breakout',
-            'name': 'Keltner Breakout',
-            'category': 'Trend',
-            'description': 'Keltner Channel upper band breakout',
-            'parameters': [
-                {'id': 'period', 'name': 'EMA Period', 'default': 20, 'min': 5, 'max': 100},
-                {'id': 'atrPeriod', 'name': 'ATR Period', 'default': 10, 'min': 5, 'max': 50},
-                {'id': 'multiplier', 'name': 'Multiplier', 'default': 2.0, 'min': 0.5, 'max': 5.0},
-            ],
-        },
-        {
-            'type': 'triple_ma',
-            'name': 'Triple MA',
-            'category': 'Trend',
-            'description': 'Three moving averages alignment',
-            'parameters': [
-                {'id': 'fastPeriod', 'name': 'Fast', 'default': 5, 'min': 2, 'max': 20},
-                {'id': 'mediumPeriod', 'name': 'Medium', 'default': 20, 'min': 10, 'max': 50},
-                {'id': 'slowPeriod', 'name': 'Slow', 'default': 50, 'min': 30, 'max': 200},
-            ],
-        },
-        {
-            'type': 'mean_reversion',
-            'name': 'Z-Score Mean Reversion',
-            'category': 'Mean Reversion',
-            'description': 'Buy oversold (low Z-score), sell overbought',
-            'parameters': [
-                {'id': 'period', 'name': 'Lookback', 'default': 20, 'min': 5, 'max': 100},
-                {'id': 'zThreshold', 'name': 'Z Threshold', 'default': 2.0, 'min': 0.5, 'max': 4.0},
-            ],
-        },
-        {
-            'type': 'bollinger_bands',
-            'name': 'Bollinger Bands',
-            'category': 'Mean Reversion',
-            'description': 'Buy at lower band, sell at upper band',
-            'parameters': [
-                {'id': 'period', 'name': 'Period', 'default': 20, 'min': 5, 'max': 100},
-                {'id': 'stdDev', 'name': 'Std Dev', 'default': 2.0, 'min': 0.5, 'max': 4.0},
-            ],
-        },
-        {
-            'type': 'rsi',
-            'name': 'RSI',
-            'category': 'Mean Reversion',
-            'description': 'Buy oversold RSI, sell overbought',
-            'parameters': [
-                {'id': 'period', 'name': 'Period', 'default': 14, 'min': 2, 'max': 50},
-                {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 10, 'max': 40},
-                {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 95},
-            ],
-        },
-        {
-            'type': 'stochastic',
-            'name': 'Stochastic',
-            'category': 'Mean Reversion',
-            'description': '%K/%D crossover in oversold/overbought zones',
-            'parameters': [
-                {'id': 'kPeriod', 'name': '%K Period', 'default': 14, 'min': 5, 'max': 30},
-                {'id': 'dPeriod', 'name': '%D Period', 'default': 3, 'min': 2, 'max': 10},
-                {'id': 'oversold', 'name': 'Oversold', 'default': 20, 'min': 5, 'max': 30},
-                {'id': 'overbought', 'name': 'Overbought', 'default': 80, 'min': 70, 'max': 95},
-            ],
-        },
-        {
-            'type': 'momentum',
-            'name': 'Momentum',
-            'category': 'Momentum',
-            'description': 'Buy strong positive ROC, sell on reversal',
-            'parameters': [
-                {'id': 'lookback', 'name': 'Lookback', 'default': 20, 'min': 5, 'max': 100},
-                {'id': 'threshold', 'name': 'Threshold %', 'default': 0, 'min': 0, 'max': 20},
-            ],
-        },
-        {
-            'type': 'dual_momentum',
-            'name': 'Dual Momentum',
-            'category': 'Momentum',
-            'description': 'Both short and long-term momentum must agree',
-            'parameters': [
-                {'id': 'shortLookback', 'name': 'Short Lookback', 'default': 20, 'min': 5, 'max': 60},
-                {'id': 'longLookback', 'name': 'Long Lookback', 'default': 60, 'min': 30, 'max': 200},
-                {'id': 'threshold', 'name': 'Threshold %', 'default': 0, 'min': 0, 'max': 10},
-            ],
-        },
-        {
-            'type': 'breakout',
-            'name': 'Donchian Breakout',
-            'category': 'Breakout',
-            'description': 'Buy on N-bar high breakout, sell on N-bar low',
-            'parameters': [
-                {'id': 'period', 'name': 'Channel Period', 'default': 20, 'min': 5, 'max': 100},
-            ],
-        },
-        {
-            'type': 'volatility_breakout',
-            'name': 'Volatility Breakout',
-            'category': 'Breakout',
-            'description': 'Enter when price moves K*ATR from previous close',
-            'parameters': [
-                {'id': 'period', 'name': 'ATR Period', 'default': 20, 'min': 5, 'max': 50},
-                {'id': 'kMultiplier', 'name': 'K Multiplier', 'default': 1.5, 'min': 0.5, 'max': 4.0},
-            ],
-        },
-        {
-            'type': 'rsi_macd',
-            'name': 'RSI + MACD',
-            'category': 'Multi-Indicator',
-            'description': 'RSI oversold confirmed by MACD momentum',
-            'parameters': [
-                {'id': 'rsiPeriod', 'name': 'RSI Period', 'default': 14, 'min': 5, 'max': 30},
-                {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 15, 'max': 40},
-                {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 90},
-                {'id': 'fastPeriod', 'name': 'MACD Fast', 'default': 12, 'min': 5, 'max': 30},
-                {'id': 'slowPeriod', 'name': 'MACD Slow', 'default': 26, 'min': 15, 'max': 50},
-                {'id': 'signalPeriod', 'name': 'MACD Signal', 'default': 9, 'min': 3, 'max': 20},
-            ],
-        },
-        {
-            'type': 'macd_adx',
-            'name': 'MACD + ADX',
-            'category': 'Multi-Indicator',
-            'description': 'MACD crossover filtered by ADX trend strength',
-            'parameters': [
-                {'id': 'fastPeriod', 'name': 'MACD Fast', 'default': 12, 'min': 5, 'max': 30},
-                {'id': 'slowPeriod', 'name': 'MACD Slow', 'default': 26, 'min': 15, 'max': 50},
-                {'id': 'signalPeriod', 'name': 'MACD Signal', 'default': 9, 'min': 3, 'max': 20},
-                {'id': 'adxPeriod', 'name': 'ADX Period', 'default': 14, 'min': 5, 'max': 30},
-                {'id': 'adxThreshold', 'name': 'ADX Threshold', 'default': 25, 'min': 15, 'max': 50},
-            ],
-        },
-        {
-            'type': 'bollinger_rsi',
-            'name': 'Bollinger + RSI',
-            'category': 'Multi-Indicator',
-            'description': 'Bollinger Band reversion confirmed by RSI',
-            'parameters': [
-                {'id': 'bbPeriod', 'name': 'BB Period', 'default': 20, 'min': 5, 'max': 50},
-                {'id': 'stdDev', 'name': 'Std Dev', 'default': 2.0, 'min': 1.0, 'max': 4.0},
-                {'id': 'rsiPeriod', 'name': 'RSI Period', 'default': 14, 'min': 5, 'max': 30},
-                {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 15, 'max': 40},
-                {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 90},
-            ],
-        },
-        {
-            'type': 'williams_r',
-            'name': 'Williams %R',
-            'category': 'Mean Reversion',
-            'description': 'Williams Percent Range oscillator',
-            'parameters': [
-                {'id': 'period', 'name': 'Period', 'default': 14, 'min': 5, 'max': 50},
-                {'id': 'oversold', 'name': 'Oversold', 'default': -80, 'min': -95, 'max': -60},
-                {'id': 'overbought', 'name': 'Overbought', 'default': -20, 'min': -40, 'max': -5},
-            ],
-        },
-        {
-            'type': 'cci',
-            'name': 'CCI',
-            'category': 'Momentum',
-            'description': 'Commodity Channel Index extremes',
-            'parameters': [
-                {'id': 'period', 'name': 'Period', 'default': 20, 'min': 5, 'max': 50},
-                {'id': 'lower', 'name': 'Lower', 'default': -100, 'min': -200, 'max': -50},
-                {'id': 'upper', 'name': 'Upper', 'default': 100, 'min': 50, 'max': 200},
-            ],
-        },
-        {
-            'type': 'obv_trend',
-            'name': 'OBV Trend',
-            'category': 'Volume',
-            'description': 'On-Balance Volume trend confirmation',
-            'parameters': [
-                {'id': 'period', 'name': 'OBV SMA Period', 'default': 20, 'min': 5, 'max': 100},
-            ],
-        },
-        {
-            'type': 'custom_combo',
-            'name': 'Custom Combo',
-            'category': 'Multi-Indicator',
-            'description': 'Combine 2 indicators with AND/OR logic',
-            'parameters': [],
-        },
-        {
-            'type': 'buy_and_hold',
-            'name': 'Buy & Hold',
-            'category': 'Portfolio',
-            'description': 'Buy on day 1, hold through entire period',
-            'parameters': [],
-        },
-        {
-            'type': 'rebalance_periodic',
-            'name': 'Periodic Rebalance',
-            'category': 'Portfolio',
-            'description': 'Rebalance to target weights at fixed intervals',
-            'parameters': [
-                {'id': 'rebalancePeriod', 'name': 'Rebalance Every (days)', 'default': 63, 'min': 5, 'max': 252, 'step': 1},
-            ],
-        },
-    ]
+def _dual_momentum(ta: TA, p) -> Signals:
+    s = ta.momentum(_pos('shortLookback', _i(p, 'shortLookback', 20)))
+    lg = ta.momentum(_pos('longLookback', _i(p, 'longLookback', 60)))
+    th = _f(p, 'threshold', 0.0) / 100.0
+    return gt(s, th) & gt(lg, th), lt(s, -th)
+
+
+def _breakout(ta: TA, p) -> Signals:
+    dc = ta.donchian(_pos('period', _i(p, 'period', 20)))
+    return gt(ta.c, prev(dc['upper'])), lt(ta.c, prev(dc['lower']))
+
+
+def _volatility_breakout(ta: TA, p) -> Signals:
+    a = ta.atr(_pos('period', _i(p, 'period', 20)))
+    k = _f(p, 'kMultiplier', 1.5, 'atr_mult')
+    pc = prev(ta.c)
+    return gt(ta.c, pc + k * a), lt(ta.c, pc - k * a)
+
+
+def _rsi_macd(ta: TA, p) -> Signals:
+    r = ta.rsi(_pos('rsiPeriod', _i(p, 'rsiPeriod', 14, 'period')))
+    m = ta.macd(_i(p, 'fastPeriod', 12), _i(p, 'slowPeriod', 26), _i(p, 'signalPeriod', 9))
+    look = _pos('lookback', _i(p, 'lookback', 5))
+    os_, ob = _f(p, 'oversold', 30), _f(p, 'overbought', 70)
+    was_oversold = I.rolling_min(np.where(np.isfinite(r), r, np.inf), look) < os_
+    h = m['histogram']
+    return cross_above(h, 0.0) & was_oversold, gt(r, ob) | cross_below(h, 0.0)
+
+
+def _macd_adx(ta: TA, p) -> Signals:
+    m = ta.macd(_i(p, 'fastPeriod', 12), _i(p, 'slowPeriod', 26), _i(p, 'signalPeriod', 9))
+    a = ta.adx(_pos('adxPeriod', _i(p, 'adxPeriod', 14)))['adx']
+    th = _f(p, 'adxThreshold', 25, 'threshold')
+    bull = gt(m['macd'], m['signal'])
+    return bull & gt(a, th), lt(m['macd'], m['signal'])
+
+
+def _bollinger_rsi(ta: TA, p) -> Signals:
+    bb = ta.bbands(_pos('bbPeriod', _i(p, 'bbPeriod', 20, 'period')), _f(p, 'stdDev', 2.0))
+    r = ta.rsi(_pos('rsiPeriod', _i(p, 'rsiPeriod', 14)))
+    return (lt(ta.c, bb['lower']) & lt(r, _f(p, 'oversold', 30)),
+            gt(ta.c, bb['upper']) | gt(r, _f(p, 'overbought', 70)))
+
+
+def _williams_r(ta: TA, p) -> Signals:
+    w = ta.williams_r(_pos('period', _i(p, 'period', 14)))
+    return lt(w, _f(p, 'oversold', -80)), gt(w, _f(p, 'overbought', -20))
+
+
+def _cci(ta: TA, p) -> Signals:
+    c = ta.cci(_pos('period', _i(p, 'period', 20)))
+    return lt(c, _f(p, 'lower', -100)), gt(c, _f(p, 'upper', 100))
+
+
+def _obv_trend(ta: TA, p) -> Signals:
+    n = _pos('period', _i(p, 'period', 20))
+    o = ta.obv()
+    m = ta.memo(('obv_sma', n), lambda: I.sma(o, n))
+    return gt(o, m), lt(o, m)
+
+
+DEFAULT_COMBO = {'logic': 'and', 'indicators': [
+    {'type': 'rsi', 'period': 14, 'condition': 'below', 'threshold': 35, 'exitCondition': 'above', 'exitThreshold': 70},
+    {'type': 'sma', 'period': 200, 'condition': 'above', 'threshold': 0, 'exitCondition': 'below',
+     'exitThreshold': 0},
+]}
+COMBO_TYPES = ('rsi', 'sma', 'ema', 'macd_hist', 'bbands_pctb', 'stochastic', 'atr')
+
+
+def _combo_values(ta: TA, typ: str, n: int) -> np.ndarray:
+    if typ == 'rsi':
+        return ta.rsi(n)
+    if typ in ('sma', 'ema'):
+        ma = ta.sma(n) if typ == 'sma' else ta.ema(n)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return (ta.c / ma - 1.0) * 100.0
+    if typ == 'macd_hist':
+        return ta.macd(max(1, n // 2), max(2, n), 9)['histogram']
+    if typ == 'bbands_pctb':
+        return ta.bbands(n, 2.0)['percent_b'] * 100.0
+    if typ == 'stochastic':
+        return ta.stoch(n, 3)['k']
+    if typ == 'atr':
+        return ta.atr(n)
+    raise ValueError(f'custom combo indicator {typ!r} is not supported; choose one of {", ".join(COMBO_TYPES)}')
+
+
+def _condition(v: np.ndarray, cond: str, th: float) -> np.ndarray:
+    c = str(cond or 'above').lower()
+    if c == 'above':
+        return gt(v, th)
+    if c == 'below':
+        return lt(v, th)
+    if c == 'cross_up':
+        return cross_above(v, th)
+    if c == 'cross_down':
+        return cross_below(v, th)
+    raise ValueError(f'custom combo condition {cond!r} is not one of above, below, cross_up, cross_down')
+
+
+def _custom_combo(ta: TA, p) -> Signals:
+    cfg = p.get('comboConfig') if isinstance(p.get('comboConfig'), dict) else None
+    cfg = cfg or DEFAULT_COMBO
+    rows = [r for r in (cfg.get('indicators') or []) if isinstance(r, dict)]
+    if len(rows) < 1:
+        raise ValueError('custom combo needs at least one indicator row in comboConfig.indicators')
+    logic = str(cfg.get('logic') or 'and').lower()
+    ents, exs = [], []
+    for r in rows:
+        typ = str(r.get('type') or 'rsi').lower()
+        n = _pos('period', int(round(float(r.get('period') or 14))))
+        v = _combo_values(ta, typ, n)
+        ents.append(_condition(v, r.get('condition', 'below'), float(r.get('threshold', 30))))
+        exs.append(_condition(v, r.get('exitCondition', 'above'), float(r.get('exitThreshold', 70))))
+    ent = ents[0].copy()
+    for e in ents[1:]:
+        ent = (ent | e) if logic == 'or' else (ent & e)
+    ex = exs[0].copy()
+    for e in exs[1:]:
+        ex = ex | e
+    return ent, ex
+
+
+def _buy_and_hold(ta: TA, p) -> Signals:
+    ent = np.zeros(ta.n, dtype=bool)
+    ex = np.zeros(ta.n, dtype=bool)
+    if ta.n:
+        ent[0] = True
+    return ent, ex
+
+
+BUILDERS: Dict[str, Callable[[TA, Dict[str, Any]], Signals]] = {
+    'sma_crossover': _sma_crossover, 'ema_crossover': _ema_crossover, 'macd': _macd, 'macd_crossover': _macd,
+    'adx_trend': _adx_trend, 'keltner_breakout': _keltner_breakout, 'triple_ma': _triple_ma,
+    'mean_reversion': _mean_reversion, 'bollinger_bands': _bollinger_bands, 'rsi': _rsi, 'stochastic': _stochastic,
+    'momentum': _momentum, 'dual_momentum': _dual_momentum, 'breakout': _breakout, 'donchian_breakout': _breakout,
+    'volatility_breakout': _volatility_breakout, 'rsi_macd': _rsi_macd, 'macd_adx': _macd_adx,
+    'bollinger_rsi': _bollinger_rsi, 'williams_r': _williams_r, 'cci': _cci, 'obv_trend': _obv_trend,
+    'custom_combo': _custom_combo, 'buy_and_hold': _buy_and_hold,
+}
+ALLOCATION = ('rebalance_periodic',)
+ALIASES = {'equal_weight': 'rebalance_periodic', 'rebalance': 'rebalance_periodic', 'buy_hold': 'buy_and_hold',
+           'buyandhold': 'buy_and_hold', 'sma': 'sma_crossover', 'ema': 'ema_crossover'}
+
+
+def resolve(strategy_type: Any) -> str:
+    s = str(strategy_type or 'sma_crossover').strip().lower()
+    s = ALIASES.get(s, s)
+    if s not in BUILDERS and s not in ALLOCATION:
+        raise ValueError(f'Unknown strategy {strategy_type!r}. Available: '
+                         f'{", ".join(sorted(set(BUILDERS) | set(ALLOCATION)))}.')
+    return s
+
+
+def kind_of(strategy_id: str) -> str:
+    return 'allocation' if strategy_id in ALLOCATION else 'signals'
+
+
+def build_signals(strategy_id: str, ta: TA, params: Dict[str, Any]) -> Signals:
+    e, x = BUILDERS[strategy_id](ta, params or {})
+    return np.asarray(e, dtype=bool), np.asarray(x, dtype=bool)
+
+
+# ── allocation ───────────────────────────────────────────────────────────────
+
+_CAL = {'weekly': 'W', 'week': 'W', 'monthly': 'M', 'month': 'M', 'quarterly': 'Q', 'quarter': 'Q',
+        'yearly': 'Y', 'annual': 'Y', 'annually': 'Y', 'year': 'Y'}
+
+
+def rebalance_bars(dates, period: Any) -> np.ndarray:
+    """Decision bars of a periodic rebalance: every `period` bars from the first bar, or the first
+    bar of each calendar week / month / quarter / year for a named period."""
+    import pandas as pd
+    idx = pd.DatetimeIndex(dates)
+    n = len(idx)
+    flag = np.zeros(n, dtype=bool)
+    if n == 0:
+        return flag
+    if isinstance(period, str) and period.strip().lower() in _CAL:
+        per = idx.to_period(_CAL[period.strip().lower()])
+        flag[0] = True
+        flag[1:] = per[1:] != per[:-1]
+        return flag
+    try:
+        k = int(round(float(period)))
+    except (TypeError, ValueError):
+        raise ValueError(f'rebalancePeriod must be a number of bars or one of weekly, monthly, quarterly, yearly '
+                         f'(got {period!r})')
+    if k < 1:
+        raise ValueError('rebalancePeriod must be at least 1 bar')
+    flag[::k] = True
+    return flag
+
+
+def default_warmup(strategy_id: str, params: Dict[str, Any]) -> int:
+    """Bars the strategy's indicators need before its first possible signal (for provenance and
+    walk-forward warm-up)."""
+    p = params or {}
+    look = [int(round(float(v))) for k, v in p.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
+            and any(w in k.lower() for w in ('period', 'lookback', 'window'))]
+    base = max(look) if look else 0
+    if strategy_id in ('macd', 'macd_crossover', 'rsi_macd', 'macd_adx'):
+        base = _i(p, 'slowPeriod', 26) + _i(p, 'signalPeriod', 9)
+    if strategy_id in ('adx_trend', 'macd_adx'):
+        base = max(base, 2 * _i(p, 'adxPeriod', 14, 'period'))
+    if strategy_id == 'custom_combo':
+        cfg = p.get('comboConfig') if isinstance(p.get('comboConfig'), dict) else DEFAULT_COMBO
+        base = max([int(r.get('period') or 14) for r in cfg.get('indicators') or [{}]] + [0])
+    return int(base)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Catalogue (get_strategies)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _p(pid, name, default, lo, hi, step=1, typ='int', desc=None):
+    d = {'id': pid, 'name': name, 'type': typ, 'default': default, 'min': lo, 'max': hi, 'step': step}
+    if desc:
+        d['description'] = desc
+    return d
+
+
+_FAST_SLOW = [{'lt': ['fastPeriod', 'slowPeriod'], 'message': 'The fast period must be shorter than the slow period.'}]
+
+CATALOG: List[Dict[str, Any]] = [
+    {'type': 'sma_crossover', 'name': 'SMA Crossover', 'category': 'Trend',
+     'description': 'Fast SMA crosses above / below the slow SMA',
+     'parameters': [_p('fastPeriod', 'Fast Period', 10, 2, 100), _p('slowPeriod', 'Slow Period', 20, 5, 200)],
+     'constraints': _FAST_SLOW},
+    {'type': 'ema_crossover', 'name': 'EMA Crossover', 'category': 'Trend',
+     'description': 'Fast EMA crosses above / below the slow EMA',
+     'parameters': [_p('fastPeriod', 'Fast Period', 10, 2, 100), _p('slowPeriod', 'Slow Period', 20, 5, 200)],
+     'constraints': _FAST_SLOW},
+    {'type': 'macd', 'name': 'MACD Crossover', 'category': 'Trend', 'description': 'MACD line crosses its signal line',
+     'parameters': [_p('fastPeriod', 'Fast Period', 12, 2, 50), _p('slowPeriod', 'Slow Period', 26, 10, 100),
+                    _p('signalPeriod', 'Signal Period', 9, 2, 30)], 'constraints': _FAST_SLOW},
+    {'type': 'adx_trend', 'name': 'ADX Trend', 'category': 'Trend',
+     'description': 'Long while ADX > threshold and +DI > -DI; out when -DI leads or ADX < 0.7 x threshold',
+     'parameters': [_p('period', 'ADX Period', 14, 5, 50), _p('threshold', 'ADX Threshold', 25, 10, 50)]},
+    {'type': 'keltner_breakout', 'name': 'Keltner Breakout', 'category': 'Trend',
+     'description': 'Enter on a close above the upper Keltner band, exit below the middle (EMA)',
+     'parameters': [_p('period', 'EMA Period', 20, 5, 100), _p('atrPeriod', 'ATR Period', 10, 5, 50),
+                    _p('multiplier', 'Multiplier', 2.0, 0.5, 5.0, 0.1, 'float')]},
+    {'type': 'triple_ma', 'name': 'Triple MA', 'category': 'Trend',
+     'description': 'Long while EMA fast > medium > slow, exit when fast < medium',
+     'parameters': [_p('fastPeriod', 'Fast', 5, 2, 20), _p('mediumPeriod', 'Medium', 20, 10, 50),
+                    _p('slowPeriod', 'Slow', 50, 30, 200)],
+     'constraints': [{'lt': ['fastPeriod', 'mediumPeriod'], 'message': 'Fast must be shorter than medium.'},
+                     {'lt': ['mediumPeriod', 'slowPeriod'], 'message': 'Medium must be shorter than slow.'}]},
+    {'type': 'mean_reversion', 'name': 'Z-Score Mean Reversion', 'category': 'Mean Reversion',
+     'description': 'Enter when the z-score crosses below -Z, exit when it crosses above +Z/2',
+     'parameters': [_p('period', 'Lookback', 20, 5, 100), _p('zThreshold', 'Z Threshold', 2.0, 0.5, 4.0, 0.1, 'float')]},
+    {'type': 'bollinger_bands', 'name': 'Bollinger Bands', 'category': 'Mean Reversion',
+     'description': 'Enter on a close below the lower band, exit on a close above the upper band',
+     'parameters': [_p('period', 'Period', 20, 5, 100), _p('stdDev', 'Std Dev', 2.0, 0.5, 4.0, 0.1, 'float')]},
+    {'type': 'rsi', 'name': 'RSI', 'category': 'Mean Reversion',
+     'description': 'Wilder RSI crosses below oversold (enter) / above overbought (exit)',
+     'parameters': [_p('period', 'Period', 14, 2, 50), _p('oversold', 'Oversold', 30, 10, 40),
+                    _p('overbought', 'Overbought', 70, 60, 95)],
+     'constraints': [{'lt': ['oversold', 'overbought'], 'message': 'Oversold must be below overbought.'}]},
+    {'type': 'stochastic', 'name': 'Stochastic', 'category': 'Mean Reversion',
+     'description': '%K crosses above %D below the oversold level (enter) / below %D above overbought (exit)',
+     'parameters': [_p('kPeriod', '%K Period', 14, 5, 30), _p('dPeriod', '%D Period', 3, 2, 10),
+                    _p('oversold', 'Oversold', 20, 5, 30), _p('overbought', 'Overbought', 80, 70, 95)]},
+    {'type': 'momentum', 'name': 'Momentum', 'category': 'Momentum',
+     'description': 'Long while the rate of change > threshold %, out while < -threshold %',
+     'parameters': [_p('lookback', 'Lookback', 20, 5, 100), _p('threshold', 'Threshold %', 0.0, 0.0, 20.0, 0.5,
+                                                                'float')]},
+    {'type': 'dual_momentum', 'name': 'Dual Momentum', 'category': 'Momentum',
+     'description': 'Long while short- and long-term momentum are both above the threshold %',
+     'parameters': [_p('shortLookback', 'Short Lookback', 20, 5, 60), _p('longLookback', 'Long Lookback', 60, 30, 200),
+                    _p('threshold', 'Threshold %', 0.0, 0.0, 10.0, 0.5, 'float')],
+     'constraints': [{'lt': ['shortLookback', 'longLookback'], 'message': 'The short lookback must be shorter.'}]},
+    {'type': 'breakout', 'name': 'Donchian Breakout', 'category': 'Breakout',
+     'description': 'Enter on a close above the previous N-bar high, exit below the previous N-bar low',
+     'parameters': [_p('period', 'Channel Period', 20, 5, 100)]},
+    {'type': 'volatility_breakout', 'name': 'Volatility Breakout', 'category': 'Breakout',
+     'description': 'Enter when the close moves K x ATR above the previous close, exit K x ATR below',
+     'parameters': [_p('period', 'ATR Period', 20, 5, 50), _p('kMultiplier', 'K Multiplier', 1.5, 0.5, 4.0, 0.1,
+                                                               'float')]},
+    {'type': 'rsi_macd', 'name': 'RSI + MACD', 'category': 'Multi-Indicator',
+     'description': 'MACD histogram turns positive after RSI was oversold within the lookback; exit on '
+                    'overbought RSI or a negative histogram',
+     'parameters': [_p('rsiPeriod', 'RSI Period', 14, 5, 30), _p('oversold', 'Oversold', 30, 15, 40),
+                    _p('overbought', 'Overbought', 70, 60, 90), _p('fastPeriod', 'MACD Fast', 12, 5, 30),
+                    _p('slowPeriod', 'MACD Slow', 26, 15, 50), _p('signalPeriod', 'MACD Signal', 9, 3, 20),
+                    _p('lookback', 'Oversold Lookback', 5, 1, 30)], 'constraints': _FAST_SLOW},
+    {'type': 'macd_adx', 'name': 'MACD + ADX', 'category': 'Multi-Indicator',
+     'description': 'Long while MACD > signal and ADX > threshold; exit when MACD < signal',
+     'parameters': [_p('fastPeriod', 'MACD Fast', 12, 5, 30), _p('slowPeriod', 'MACD Slow', 26, 15, 50),
+                    _p('signalPeriod', 'MACD Signal', 9, 3, 20), _p('adxPeriod', 'ADX Period', 14, 5, 30),
+                    _p('adxThreshold', 'ADX Threshold', 25, 15, 50)], 'constraints': _FAST_SLOW},
+    {'type': 'bollinger_rsi', 'name': 'Bollinger + RSI', 'category': 'Multi-Indicator',
+     'description': 'Close below the lower band with RSI oversold; exit above the upper band or RSI overbought',
+     'parameters': [_p('bbPeriod', 'BB Period', 20, 5, 50), _p('stdDev', 'Std Dev', 2.0, 1.0, 4.0, 0.1, 'float'),
+                    _p('rsiPeriod', 'RSI Period', 14, 5, 30), _p('oversold', 'Oversold', 30, 15, 40),
+                    _p('overbought', 'Overbought', 70, 60, 90)]},
+    {'type': 'williams_r', 'name': 'Williams %R', 'category': 'Mean Reversion',
+     'description': 'Long while %R < oversold, out while %R > overbought',
+     'parameters': [_p('period', 'Period', 14, 5, 50), _p('oversold', 'Oversold', -80, -95, -60),
+                    _p('overbought', 'Overbought', -20, -40, -5)]},
+    {'type': 'cci', 'name': 'CCI', 'category': 'Momentum',
+     'description': 'Long while CCI < lower, out while CCI > upper',
+     'parameters': [_p('period', 'Period', 20, 5, 50), _p('lower', 'Lower', -100, -200, -50),
+                    _p('upper', 'Upper', 100, 50, 200)]},
+    {'type': 'obv_trend', 'name': 'OBV Trend', 'category': 'Volume',
+     'description': 'Long while on-balance volume is above its N-bar average',
+     'parameters': [_p('period', 'OBV SMA Period', 20, 5, 100)]},
+    {'type': 'custom_combo', 'name': 'Custom Combo', 'category': 'Multi-Indicator',
+     'description': 'Combine 2-3 indicator conditions with AND / OR (default: RSI(14) < 35 and close above '
+                    'SMA(200); exit RSI > 70 or close below SMA(200)). sma / ema rows compare the close\'s % '
+                    'distance from the average with the threshold.', 'parameters': []},
+    {'type': 'buy_and_hold', 'name': 'Buy & Hold', 'category': 'Portfolio',
+     'description': 'Buy on the first bar and hold (several symbols: equal slots, never rebalanced)',
+     'parameters': []},
+    {'type': 'rebalance_periodic', 'name': 'Periodic Rebalance', 'category': 'Portfolio',
+     'description': 'Hold every symbol at its target weight (equal, or the portfolio weights) and rebalance '
+                    'every N bars', 'kind': 'allocation',
+     'parameters': [_p('rebalancePeriod', 'Rebalance Every (bars)', 63, 1, 252)]},
+]
+
+
+def get_strategy_catalog() -> List[Dict[str, Any]]:
+    out = []
+    for s in CATALOG:
+        d = dict(s)
+        d['id'] = s['type']
+        d.setdefault('kind', kind_of(s['type']))
+        # every catalogue entry runs on this engine (no package or symbol-count gate); the screen reads
+        # supported / runnable / reason uniformly across engines (reason is set when either is false)
+        d['runnable'] = True
+        d['supported'] = True
+        d['reason'] = None
+        d['parameters'] = [dict(p) for p in s['parameters']]
+        out.append(d)
+    return out

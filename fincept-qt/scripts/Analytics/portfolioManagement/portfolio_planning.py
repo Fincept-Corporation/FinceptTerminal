@@ -1,47 +1,36 @@
 
-"""Portfolio Portfolio Planning Module
-===============================
+"""Investment Policy Statement (IPS) framework: reference text (IPS template, construction principles, ESG
+approaches) and a retirement savings projection. Much of the IPS machinery is an unfinished skeleton: the
+functions marked _not_available raise NotImplementedError (they call helpers that were never written).
 
-Portfolio planning and strategy development
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Portfolio holdings and transaction history
-  - Asset price data and market returns
-  - Benchmark indices and market data
-  - Investment policy statements and constraints
-  - Risk tolerance and preference parameters
-
-OUTPUT:
-  - Portfolio performance metrics and attribution
-  - Risk analysis and diversification metrics
-  - Rebalancing recommendations and optimization
-  - Portfolio analytics reports and visualizations
-  - Investment strategy recommendations
-
-PARAMETERS:
-  - optimization_method: Portfolio optimization method (default: 'mean_variance')
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
-  - max_weight: Maximum single asset weight (default: 0.10)
-  - benchmark: Portfolio benchmark index (default: 'market_index')
-
-CLI: python portfolio_planning.py <command> <json>   retirement_planning {current_age, retirement_age,
-  current_savings, annual_contribution}; asset_allocation {age, risk_tolerance, time_horizon} (currently
-  fails: AssetAllocationFramework lacks _estimate_correlation_structure).
+CLI (one JSON object on stdout; {"error": ...} and exit 1 on failure). Positional or one JSON object:
+  retirement_planning {"current_age": 35, "retirement_age": 65, "current_savings": 100000,
+                       "annual_contribution": 12000, "expected_return": 0.07, "inflation": 0.03}
+  asset_allocation    not available - returns {"error": ...} pointing to portfolio_management.py
 """
 
-
+import functools
 
 import numpy as np
-import pandas as pd
 from typing import Dict, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 
-from config import AssetClass, MathConstants
+from config import AssetClass, MathConstants, CliError, run_cli
 from portfolio_management import InvestorType, InvestmentObjective, InvestorProfile
+
+
+def _not_available(fn):
+    """Mark a function whose helper methods were never written: calling it raises a clear error
+    instead of an AttributeError from deep inside."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        raise NotImplementedError(
+            f"{fn.__qualname__} is not available: it depends on helper methods that were never written. "
+            "For a strategic allocation use portfolio_management.py comprehensive_management_analysis.")
+    wrapper.not_available = True
+    return wrapper
 
 class ConstraintType(Enum):
     """Types of investment constraints"""
@@ -226,6 +215,7 @@ class ObjectivesFramework:
     """Investment objectives framework and analysis"""
 
     @staticmethod
+    @_not_available
     def analyze_return_objectives(client_profile: InvestorProfile,
                                 financial_data: Dict) -> Dict:
         """Analyze and set return objectives"""
@@ -254,6 +244,7 @@ class ObjectivesFramework:
         }
 
     @staticmethod
+    @_not_available
     def analyze_risk_objectives(client_profile: InvestorProfile,
                               return_objectives: Dict) -> Dict:
         """Analyze and set risk objectives"""
@@ -434,6 +425,7 @@ class ConstraintsAnalysis:
     """Investment constraints analysis and management"""
 
     @staticmethod
+    @_not_available
     def analyze_liquidity_constraints(client_profile: InvestorProfile,
                                     cash_flow_data: Dict) -> Dict:
         """Analyze liquidity requirements and constraints"""
@@ -463,6 +455,7 @@ class ConstraintsAnalysis:
         }
 
     @staticmethod
+    @_not_available
     def analyze_time_horizon_constraints(client_profile: InvestorProfile) -> Dict:
         """Analyze time horizon constraints"""
 
@@ -488,6 +481,7 @@ class ConstraintsAnalysis:
         }
 
     @staticmethod
+    @_not_available
     def analyze_tax_constraints(client_profile: InvestorProfile) -> Dict:
         """Analyze tax considerations and constraints"""
 
@@ -515,6 +509,7 @@ class ConstraintsAnalysis:
         }
 
     @staticmethod
+    @_not_available
     def analyze_legal_regulatory_constraints(client_profile: InvestorProfile) -> Dict:
         """Analyze legal and regulatory constraints"""
 
@@ -599,6 +594,7 @@ class AssetAllocationFramework:
     """Asset allocation specification and framework"""
 
     @staticmethod
+    @_not_available
     def define_asset_classes(investment_universe: Optional[List[str]] = None) -> Dict:
         """Define and specify asset classes for allocation"""
 
@@ -628,6 +624,7 @@ class AssetAllocationFramework:
         }
 
     @staticmethod
+    @_not_available
     def strategic_asset_allocation(client_profile: InvestorProfile,
                                  objectives: Dict,
                                  constraints: Dict,
@@ -788,6 +785,7 @@ class PortfolioConstructionPrinciples:
         }
 
     @staticmethod
+    @_not_available
     def risk_budgeting_approach(total_risk_budget: float,
                                asset_allocation: Dict) -> Dict:
         """Implement risk budgeting approach to portfolio construction"""
@@ -893,6 +891,7 @@ class ESGIntegration:
         }
 
     @staticmethod
+    @_not_available
     def develop_esg_policy(client_profile: InvestorProfile,
                           esg_preferences: Dict) -> Dict:
         """Develop ESG policy for portfolio"""
@@ -978,6 +977,7 @@ class PortfolioPlanning:
         self.construction_principles = PortfolioConstructionPrinciples()
         self.esg_integration = ESGIntegration()
 
+    @_not_available
     def create_comprehensive_ips(self, client_profile: InvestorProfile,
                                 financial_data: Dict,
                                 esg_preferences: Optional[Dict] = None) -> InvestmentPolicyStatement:
@@ -1574,95 +1574,77 @@ class PortfolioPlanning:
 # CLI Interface
 # ============================================================================
 
+_ARGMAP = {"asset_allocation": ["age", "risk_tolerance", "time_horizon"],
+           "retirement_planning": ["current_age", "retirement_age", "current_savings", "annual_contribution",
+                                   "expected_return", "inflation"]}
+
+
+def retirement_projection(current_age: float, retirement_age: float, current_savings: float,
+                          annual_contribution: float, expected_return: float = 0.07,
+                          inflation: float = 0.03, withdrawal_rate: float = 0.04) -> Dict:
+    """Future value of savings plus end-of-year contributions, and the withdrawal-rule income.
+
+    FV = PV (1+r)^n + C ((1+r)^n - 1) / r   (C at each year end; fractional n interpolates)
+    Income is reported in TODAY's money (real balance x withdrawal rate); the nominal figure at
+    retirement is annual_income_4pct_rule_nominal. (The 4 % figure used to be nominal and sat next
+    to the inflation-adjusted balance without saying so.)
+    """
+    years = retirement_age - current_age
+    growth = (1.0 + expected_return) ** years
+    fv_savings = current_savings * growth
+    fv_contrib = (annual_contribution * (growth - 1.0) / expected_return if expected_return != 0
+                  else annual_contribution * years)
+    total = fv_savings + fv_contrib
+    deflator = (1.0 + inflation) ** years
+    real_value = total / deflator
+    income_today = real_value * withdrawal_rate
+    return {
+        "years_to_retirement": years,
+        "projected_savings": total,
+        "inflation_adjusted_value": real_value,
+        "annual_income_4pct_rule": income_today,
+        "monthly_income": income_today / 12,
+        "annual_income_4pct_rule_nominal": total * withdrawal_rate,
+        "currency_basis": {"projected_savings": "nominal, at retirement",
+                           "inflation_adjusted_value": "today's money",
+                           "annual_income_4pct_rule": "today's money (first-year withdrawal)",
+                           "monthly_income": "today's money",
+                           "annual_income_4pct_rule_nominal": "nominal, at retirement"},
+        "assumptions": {"expected_return": expected_return, "inflation": inflation,
+                        "withdrawal_rate": withdrawal_rate,
+                        "contributions": "constant nominal amount at the end of each year"}
+    }
+
+
+def _cmd_retirement_planning(args):
+    current_age = args.get_float(0, "current_age")
+    retirement_age = args.get_float(1, "retirement_age")
+    current_savings = args.get_float(2, "current_savings", 0.0)
+    annual_contribution = args.get_float(3, "annual_contribution", 0.0)
+    expected_return = args.get_float(4, "expected_return", 0.07)
+    inflation = args.get_float(5, "inflation", 0.03)
+    if current_age is None or retirement_age is None:
+        raise CliError("current_age and retirement_age are required")
+    if not 0 <= current_age <= 120 or not 0 <= retirement_age <= 120:
+        raise CliError("ages must be between 0 and 120")
+    if retirement_age <= current_age:
+        raise CliError("retirement_age must be greater than current_age")
+    if current_savings < 0 or annual_contribution < 0:
+        raise CliError("current_savings and annual_contribution must not be negative")
+    if not -0.99 < expected_return < 1.0 or not -0.5 < inflation < 1.0:
+        raise CliError("expected_return and inflation are annual fractions (e.g. 0.07, 0.03)")
+    return retirement_projection(current_age, retirement_age, current_savings, annual_contribution,
+                                 expected_return, inflation)
+
+
+def _cmd_asset_allocation(args):
+    return {"error": "asset_allocation is not available: its allocation framework was never implemented "
+                     "(the age / risk tolerance / time horizon inputs were never used). Use "
+                     "portfolio_management.py comprehensive_management_analysis with "
+                     '{"investor_data": {"type": "individual", "age": ..., "risk_tolerance": ..., '
+                     '"time_horizon": ...}} - its strategic_asset_allocation uses all three.'}
+
+
 if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "No command specified"}))
-        sys.exit(1)
-
-    command = sys.argv[1]
-    # ── Qt bridge: accept (command, single JSON object) and expand into the
-    # positional argv the handlers below expect. No effect on the legacy CLI form.
-    _QT_ARGMAP = {"asset_allocation": [["age", "raw"], ["risk_tolerance", "raw"], ["time_horizon", "raw"]], "retirement_planning": [["current_age", "raw"], ["retirement_age", "raw"], ["current_savings", "raw"], ["annual_contribution", "raw"]]}
-    if len(sys.argv) == 3 and command in _QT_ARGMAP:
-        try:
-            _qp = json.loads(sys.argv[2])
-            if isinstance(_qp, dict) and (not _QT_ARGMAP[command] or _QT_ARGMAP[command][0][0] in _qp):
-                _qav = [sys.argv[0], command]
-                for _qn, _qk in _QT_ARGMAP[command]:
-                    if _qn in _qp and _qp[_qn] is not None:
-                        _qav.append(json.dumps(_qp[_qn]) if _qk == 'json' else str(_qp[_qn]))
-                    else:
-                        _qav.append('null')
-                sys.argv = _qav
-        except Exception:
-            pass
-
-    try:
-        if command == "asset_allocation":
-            age = int(sys.argv[2])
-            risk_tolerance = sys.argv[3]
-            time_horizon = int(sys.argv[4])
-            
-            # Create simple investor profile
-            profile = InvestorProfile(
-                age=age,
-                investment_experience="moderate",
-                risk_tolerance=risk_tolerance,
-                time_horizon_years=time_horizon
-            )
-            
-            planning = PortfolioPlanning()
-            asset_classes = planning.asset_allocation_framework.define_asset_classes()
-            
-            allocation = planning.asset_allocation_framework.strategic_asset_allocation(
-                profile,
-                {"return_objectives": {"target_return": 0.07}, "risk_objectives": {"max_volatility": 0.15}},
-                {"liquidity": {}, "time_horizon": {}, "tax": {}, "legal": {}},
-                asset_classes
-            )
-            
-            print(json.dumps(allocation))
-
-        elif command == "retirement_planning":
-            current_age = int(sys.argv[2])
-            retirement_age = int(sys.argv[3])
-            current_savings = float(sys.argv[4])
-            annual_contribution = float(sys.argv[5])
-            
-            # Simple retirement calculation
-            years_to_retirement = retirement_age - current_age
-            expected_return = 0.07
-            inflation = 0.03
-            
-            # Future value calculation
-            fv = current_savings * ((1 + expected_return) ** years_to_retirement)
-            if expected_return != 0:
-                contrib_fv = annual_contribution * (((1 + expected_return) ** years_to_retirement - 1) / expected_return)
-            else:
-                contrib_fv = annual_contribution * years_to_retirement
-            
-            total_savings = fv + contrib_fv
-            real_value = total_savings / ((1 + inflation) ** years_to_retirement)
-            safe_withdrawal = total_savings * 0.04
-            
-            result = {
-                "years_to_retirement": years_to_retirement,
-                "projected_savings": total_savings,
-                "inflation_adjusted_value": real_value,
-                "annual_income_4pct_rule": safe_withdrawal,
-                "monthly_income": safe_withdrawal / 12
-            }
-            
-            print(json.dumps(result))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}))
-            sys.exit(1)
-
-    except Exception as e:
-        import traceback
-        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
-        sys.exit(1)
+    run_cli({"asset_allocation": _cmd_asset_allocation,
+             "retirement_planning": _cmd_retirement_planning}, _ARGMAP)

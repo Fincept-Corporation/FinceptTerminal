@@ -67,7 +67,6 @@ from .algorithm import (
     ConstantAlphaModel, CompositeAlphaModel,
     EqualWeightingPortfolioConstructionModel,
     InsightWeightingPortfolioConstructionModel,
-    MeanVarianceOptimizationPortfolioConstructionModel,
     BlackLittermanOptimizationPortfolioConstructionModel,
     ImmediateExecutionModel,
     VolumeWeightedAveragePriceExecutionModel,
@@ -76,16 +75,14 @@ from .algorithm import (
     MaximumDrawdownPercentPerSecurity,
     MaximumUnrealizedProfitPercentPerSecurity,
     TrailingStopRiskManagementModel,
-    MaximumSectorExposureRiskManagementModel,
     CompositeRiskManagementModel,
-    ManualUniverseSelectionModel,
-    FundamentalUniverseSelectionModel,
-    ScheduledUniverseSelectionModel,
-    CustomUniverseSelectionModel,
     # Data types
     PythonData, PythonQuandl, InsightCollection,
     Field, Futures, Globals, SecurityIdentifier, PortfolioBias,
 )
+
+from .framework.sector import MaximumSectorExposureRiskManagementModel  # noqa: E402
+from .framework.portfolio_construction import MeanVarianceOptimizationPortfolioConstructionModel  # noqa: E402
 
 # --- Consolidators ---
 from .consolidators import (
@@ -123,5 +120,7 @@ from .framework.portfolio_construction import UnconstrainedMeanVariancePortfolio
 from .framework.execution import SpreadExecutionModel
 from .framework.selection import (
     OptionUniverseSelectionModel, FutureUniverseSelectionModel,
-    ETFConstituentsUniverseSelectionModel, QC500UniverseSelectionModel
+    ETFConstituentsUniverseSelectionModel, QC500UniverseSelectionModel,
+    ManualUniverseSelectionModel, FundamentalUniverseSelectionModel,
+    ScheduledUniverseSelectionModel, CustomUniverseSelectionModel
 )

@@ -36,7 +36,8 @@ static const QList<QPair<QString, QString>> kWbIndicators = {
     {"Government debt (% GDP)", "GC.DOD.TOTL.GD.ZS"},
     {"FDI net inflows (% GDP)", "BX.KLT.DINV.WD.GD.ZS"},
     {"Electric power consumption (kWh/cap)", "EG.USE.ELEC.KH.PC"},
-    {"CO2 emissions (metric tons per cap)", "EN.ATM.CO2E.PC"},
+    // EN.ATM.CO2E.PC was archived by the World Bank ("indicator not found"); its successor:
+    {"CO2 emissions per capita (t CO2e, excl. LULUCF)", "EN.GHG.CO2.PC.CE.AR5"},
     {"Internet users (% population)", "IT.NET.USER.ZS"},
     {"Mobile subscriptions (per 100)", "IT.CEL.SETS.P2"},
     {"Forest area (% land area)", "AG.LND.FRST.ZS"},
@@ -72,6 +73,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSource
     country_search_ = new QLineEdit;
     country_search_->setPlaceholderText(tr("Filter countries…"));
     country_search_->setStyleSheet(search_input_style());
+    mark_local_input(country_search_); // filters the list: not part of the query
     connect(country_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_country_filter);
     lvl->addWidget(country_search_);
 
@@ -88,6 +90,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSource
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
+    mark_local_input(indicator_search_); // filters the list: not part of the query
     connect(indicator_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
@@ -120,8 +123,8 @@ void WorldBankPanel::activate() {
 }
 
 void WorldBankPanel::load_countries() {
+    // The selector list only: it loads beside the query, never in the results pane.
     countries_loaded_ = true;
-    show_loading(tr("Loading countries…"));
     services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "countries", {},
                                                    "wb_countries");
 }
@@ -137,7 +140,7 @@ void WorldBankPanel::build_controls(QHBoxLayout* thl) {
     date_preset_->addItem(tr("20 Years"), 20);
     date_preset_->addItem(tr("50 Years"), 50);
     date_preset_->setCurrentIndex(1);
-    date_preset_->setFixedHeight(26);
+    date_preset_->setMinimumHeight(26);
     thl->addWidget(years_lbl_);
     thl->addWidget(date_preset_);
 }
@@ -145,10 +148,17 @@ void WorldBankPanel::build_controls(QHBoxLayout* thl) {
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
 void WorldBankPanel::on_fetch() {
-    if (selected_country_.isEmpty()) {
-        show_empty(tr("Select a country from the left panel"));
-        return;
+    if (country_list_->count() == 0) {
+        // The country list is still loading: query the remembered country (else the United States)
+        // instead of waiting for it.
+        const QString remembered = pending_input(country_list_).toMap().value(QStringLiteral("d")).toString();
+        if (!remembered.isEmpty())
+            selected_country_ = remembered;
+        if (!countries_loaded_)
+            load_countries();
     }
+    if (selected_country_.isEmpty())
+        selected_country_ = QStringLiteral("US");
     auto* ind_item = indicator_list_->currentItem();
     if (!ind_item) {
         show_empty(tr("Select an indicator from the left panel"));
@@ -160,9 +170,9 @@ void WorldBankPanel::on_fetch() {
     QString range = QString::number(end_year - years) + ":" + QString::number(end_year);
 
     show_loading(tr("Fetching World Bank data…"));
-    services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "indicators",
-                                                   {selected_country_, selected_indicator_, range},
-                                                   "wb_data_" + selected_country_ + "_" + selected_indicator_);
+    execute_query(kWorldBankSourceId, kWorldBankScript, "indicators",
+                  {selected_country_, selected_indicator_, range},
+                  "wb_data_" + selected_country_ + "_" + selected_indicator_);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -172,9 +182,12 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
         return;
     if (!result.success) {
         // A failed country list must stay retryable: activate() only loads it while
-        // countries_loaded_ is false, and an empty list makes the whole panel unusable.
-        if (request_id == "wb_countries")
+        // countries_loaded_ is false. It is a selector list — the results pane is not told.
+        if (request_id == "wb_countries") {
             countries_loaded_ = false;
+            LOG_WARN("WorldBankPanel", logf("Country list failed", {{"error", result.error.left(200)}}));
+            return;
+        }
         show_error(result.error);
         return;
     }
@@ -193,15 +206,17 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
             auto* item = new QListWidgetItem(n, country_list_);
             item->setData(Qt::UserRole, id);
         }
-        // Default select United States, then the country remembered from the last session (if any).
-        const auto hits = country_list_->findItems("United States", Qt::MatchExactly);
-        if (!hits.isEmpty()) {
-            country_list_->setCurrentItem(hits.first());
-            selected_country_ = "US";
+        // Select the country the query used (the remembered one, else the United States) — the
+        // remembered selection is re-applied by reapply_pending_inputs().
+        const QString want = selected_country_.isEmpty() ? QStringLiteral("US") : selected_country_;
+        for (int i = 0; i < country_list_->count(); ++i) {
+            if (country_list_->item(i)->data(Qt::UserRole).toString() == want) {
+                country_list_->setCurrentRow(i);
+                break;
+            }
         }
         reapply_pending_inputs();
-        show_empty(tr("Select a country and indicator, then click FETCH"));
-        LOG_INFO("WorldBankPanel", QString("Loaded %1 countries").arg(arr.size()));
+        LOG_DEBUG("WorldBankPanel", QString("Loaded %1 countries").arg(arr.size()));
         return;
     }
 
@@ -240,7 +255,7 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
         meta.note = code; // the WDI indicator code, for reproducibility
         set_series_meta(meta);
         display(clean, label + " — " + country_name);
-        LOG_INFO("WorldBankPanel", QString("Displayed %1 data points").arg(clean.size()));
+        LOG_DEBUG("WorldBankPanel", QString("Displayed %1 data points").arg(clean.size()));
     }
 }
 

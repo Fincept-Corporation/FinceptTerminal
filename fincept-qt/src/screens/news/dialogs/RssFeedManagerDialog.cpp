@@ -3,6 +3,8 @@
 #include "core/logging/Logger.h"
 #include "screens/news/dialogs/RssFeedEditDialog.h"
 #include "services/news/RssFeedProbeService.h"
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -32,6 +34,9 @@ RssFeedManagerDialog::RssFeedManagerDialog(QWidget* parent) : QDialog(parent) {
     resize(960, 580);
     build_ui();
     reload_table();
+    // Item text colours are brushes, which the stylesheet re-style pass cannot reach.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 void RssFeedManagerDialog::changeEvent(QEvent* event) {
@@ -101,6 +106,7 @@ void RssFeedManagerDialog::build_ui() {
     edit_btn_ = new QPushButton(tr("Edit"), this);
     toggle_btn_ = new QPushButton(tr("Disable"), this);
     delete_btn_ = new QPushButton(tr("Delete"), this);
+    delete_btn_->setProperty("fincept_agent_risk", "delete"); // agents: deletes the feed
     test_btn_ = new QPushButton(tr("Test URL"), this);
     for (auto* b : {add_btn_, edit_btn_, toggle_btn_, delete_btn_, test_btn_}) {
         b->setCursor(Qt::PointingHandCursor);
@@ -135,21 +141,14 @@ void RssFeedManagerDialog::reload_table() {
     for (int i = 0; i < rows_.size(); ++i) {
         const auto& r = rows_[i];
 
-        auto make_item = [&](const QString& text) {
-            auto* it = new QTableWidgetItem(text);
-            if (!r.enabled)
-                it->setForeground(QBrush(QColor(148, 163, 184)));
-            return it;
-        };
+        auto make_item = [&](const QString& text) { return new QTableWidgetItem(text); };
 
         auto* on_item = new QTableWidgetItem(r.enabled ? QStringLiteral("●") : QStringLiteral("○"));
         on_item->setTextAlignment(Qt::AlignCenter);
-        on_item->setForeground(r.enabled ? QBrush(QColor(22, 163, 74)) : QBrush(QColor(148, 163, 184)));
         table_->setItem(i, kColEnabled, on_item);
 
         auto* type_item = new QTableWidgetItem(r.is_builtin ? (r.is_customized ? "DEF*" : "DEF") : "USR");
         type_item->setTextAlignment(Qt::AlignCenter);
-        type_item->setForeground(r.is_builtin ? QBrush(QColor(59, 130, 246)) : QBrush(QColor(217, 119, 6)));
         type_item->setToolTip(
             r.is_builtin ? (r.is_customized ? tr("Built-in feed with user edits") : tr("Built-in default feed"))
                          : tr("User-added feed"));
@@ -164,11 +163,32 @@ void RssFeedManagerDialog::reload_table() {
         tier_item->setTextAlignment(Qt::AlignCenter);
         table_->setItem(i, kColTier, tier_item);
     }
+    refresh_theme();
 
     on_selection_changed();
     const int total = rows_.size();
     const int enabled = std::count_if(rows_.begin(), rows_.end(), [](const auto& r) { return r.enabled; });
     status_label_->setText(tr("%1 feeds (%2 enabled)").arg(total).arg(enabled));
+}
+
+void RssFeedManagerDialog::refresh_theme() {
+    const QBrush muted{QColor(ui::colors::TEXT_TERTIARY())};
+    for (int i = 0; i < rows_.size() && i < table_->rowCount(); ++i) {
+        const auto& r = rows_[i];
+        for (int c = 0; c < table_->columnCount(); ++c) {
+            auto* it = table_->item(i, c);
+            if (!it)
+                continue;
+            if (c == kColEnabled)
+                it->setForeground(r.enabled ? QBrush(QColor(ui::colors::SUCCESS())) : muted);
+            else if (c == kColType)
+                it->setForeground(QBrush(QColor(r.is_builtin ? ui::colors::INFO() : ui::colors::AMBER())));
+            else if (!r.enabled)
+                it->setForeground(muted);
+            else
+                it->setData(Qt::ForegroundRole, QVariant()); // the table's own text colour
+        }
+    }
 }
 
 int RssFeedManagerDialog::selected_row() const {

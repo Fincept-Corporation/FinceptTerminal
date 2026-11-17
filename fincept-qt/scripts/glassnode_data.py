@@ -8,26 +8,29 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
+import fincept_connector as fc
+import fincept_json
+
 API_KEY = os.environ.get('GLASSNODE_API_KEY', '')
 BASE_URL = "https://api.glassnode.com/v1/metrics"
+SERVICE = "Glassnode"
 
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+session = fc.http_session()
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    # Every endpoint needs the key: say so before any network call instead of an upstream 401.
+    if not API_KEY:
+        return fc.missing_key(SERVICE, "https://studio.glassnode.com/settings/api", "GLASSNODE_API_KEY")
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        data = response.json()
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": fc.request_error(SERVICE, e, "GLASSNODE_API_KEY", API_KEY)}
+    except ValueError:
+        return {"error": f"{SERVICE} returned a response that is not JSON"}
+    return data
 
 def get_active_addresses(asset: str = "BTC", since: int = None, until: int = None, interval: str = "24h") -> Any:
     params = {"a": asset, "i": interval, "api_key": API_KEY}
@@ -113,7 +116,7 @@ def main(args=None):
     elif command == "metrics":
         asset = args[1] if len(args) > 1 else "BTC"
         result = get_available_metrics(asset)
-    print(json.dumps(result))
+    print(fincept_json.dumps(result))
 
 if __name__ == "__main__":
     main()

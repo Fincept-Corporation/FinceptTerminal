@@ -64,6 +64,7 @@ class VoiceConfigSection : public QWidget {
 
     // Deepgram-shared credentials
     QLineEdit* api_key_edit_ = nullptr;
+    bool api_key_unreadable_ = false; ///< the stored Deepgram key exists but could not be read: keep it on save
     QPushButton* show_key_btn_ = nullptr;
 
     // Deepgram STT tunables

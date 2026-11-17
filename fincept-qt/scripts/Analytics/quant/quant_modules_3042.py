@@ -33,20 +33,20 @@ import numpy as np
 import pandas as pd
 from typing import Union, Dict, List, Any, Optional, Tuple, Callable
 from scipy import stats
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import Ridge, Lasso, ElasticNet
-from sklearn.svm import SVC, SVR
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.cluster import KMeans, AgglomerativeClustering
-from sklearn.decomposition import PCA
-from sklearn.metrics import classification_report, confusion_matrix, mean_squared_error, r2_score
 import warnings
 
+# scikit-learn is imported inside the machine-learning methods only: the CLI builds this
+# analyzer for every command, and the sampling / time-series commands never need it.
+
 from .base_calculator import BaseCalculator, validate_inputs, timing_decorator
-from .exceptions import handle_calculation_error, DataValidationError
+from .exceptions import handle_calculation_error, DataValidationError, CalculationError
+
+# Forecasting methods offered by generate_forecasts (the CFA Quant panel offers the first six).
+FORECAST_METHODS = ('simple_exponential', 'holt', 'holt_winters', 'arima', 'naive', 'drift',
+                    'linear_trend', 'moving_average')
+
+REGRESSION_MODELS = ('ridge', 'lasso', 'elastic_net', 'svr', 'knn', 'decision_tree', 'random_forest')
+CLASSIFICATION_MODELS = ('logistic', 'ridge', 'svc', 'knn', 'decision_tree', 'random_forest')
 
 
 class AdvancedQuantAnalyzer(BaseCalculator):
@@ -156,8 +156,10 @@ class AdvancedQuantAnalyzer(BaseCalculator):
         data = self._validate_returns(data, "data")
         self._check_data_length(data, min_length=20)
 
-        if test_type not in ['adf', 'kpss', 'pp']:
-            raise DataValidationError(f"Invalid test_type: {test_type}", "test_type")
+        # Phillips-Perron ('pp') used to be accepted here and returned an empty result; statsmodels has
+        # no PP test (it lives in the 'arch' package, which is not installed).
+        if test_type not in ['adf', 'kpss']:
+            raise DataValidationError(f"Invalid test_type: {test_type} (available: adf, kpss)", "test_type")
 
         results = {}
 
@@ -167,23 +169,30 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             adf_result = adfuller(data, autolag='AIC')
 
             results = {
-                'test_statistic': adf_result[0],
-                'p_value': adf_result[1],
-                'critical_values': adf_result[4],
-                'is_stationary': adf_result[1] < 0.05,
+                'test_statistic': float(adf_result[0]),
+                'p_value': float(adf_result[1]),
+                'critical_values': {k: float(v) for k, v in adf_result[4].items()},
+                # A real bool: the panel reads this with QJsonValue::toBool().
+                'is_stationary': bool(adf_result[1] < 0.05),
+                'lags_used': int(adf_result[2]),
                 'null_hypothesis': 'Unit root (non-stationary)'
             }
 
         elif test_type == 'kpss':
             # KPSS test
             from statsmodels.tsa.stattools import kpss
-            kpss_result = kpss(data, regression='c')
+            with warnings.catch_warnings():
+                # statsmodels warns when the statistic is outside its p-value table; the p-value is then
+                # the table bound (0.01 or 0.1), which is what we report.
+                warnings.simplefilter('ignore')
+                kpss_result = kpss(data, regression='c', nlags='auto')
 
             results = {
-                'test_statistic': kpss_result[0],
-                'p_value': kpss_result[1],
-                'critical_values': kpss_result[3],
-                'is_stationary': kpss_result[1] > 0.05,
+                'test_statistic': float(kpss_result[0]),
+                'p_value': float(kpss_result[1]),
+                'critical_values': {k: float(v) for k, v in kpss_result[3].items()},
+                'is_stationary': bool(kpss_result[1] > 0.05),
+                'lags_used': int(kpss_result[2]),
                 'null_hypothesis': 'Stationary'
             }
 
@@ -300,6 +309,107 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             }
         )
 
+    def _forecast_series(self,
+                         series: np.ndarray,
+                         horizon: int,
+                         method: str,
+                         options: Dict[str, Any]) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Point forecasts for the `horizon` steps after the last value of `series`.
+
+        Returns (forecast values, fit details). Raises DataValidationError when the method
+        cannot be fitted to this series - never a placeholder forecast.
+        """
+        n = len(series)
+        info: Dict[str, Any] = {}
+
+        if method == 'naive':
+            values = np.repeat(series[-1], horizon)
+
+        elif method == 'drift':
+            # Random walk with drift: last value plus the average historical change per step.
+            slope = (series[-1] - series[0]) / (n - 1)
+            values = series[-1] + slope * np.arange(1, horizon + 1)
+            info['drift_per_step'] = float(slope)
+
+        elif method == 'simple_exponential':
+            alpha = float(options.get('alpha', 0.3))
+            if not 0.0 < alpha <= 1.0:
+                raise DataValidationError(f"alpha must be in (0, 1], got {alpha}", "alpha")
+            level = series[0]
+            for x in series[1:]:
+                level = alpha * x + (1.0 - alpha) * level
+            values = np.repeat(level, horizon)
+            info['alpha'] = alpha
+
+        elif method == 'linear_trend':
+            t = np.arange(n)
+            slope, intercept = np.polyfit(t, series, 1)
+            values = intercept + slope * np.arange(n, n + horizon)
+            info['slope'] = float(slope)
+            info['intercept'] = float(intercept)
+
+        elif method == 'moving_average':
+            window = max(1, min(5, n // 4))
+            values = np.repeat(np.mean(series[-window:]), horizon)
+            info['window'] = window
+
+        elif method in ('holt', 'holt_winters'):
+            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+            if method == 'holt':
+                model = ExponentialSmoothing(series, trend='add', initialization_method='estimated')
+            else:
+                m = int(options.get('seasonal_periods') or 0)
+                if m < 2:
+                    raise DataValidationError(f"seasonal_periods must be at least 2, got {m}", "seasonal_periods")
+                if n < 2 * m:
+                    raise DataValidationError(
+                        f"holt_winters needs at least two full seasonal cycles ({2 * m} observations at "
+                        f"seasonal_periods={m}) to fit, got {n}. Use a longer period or a smaller "
+                        f"seasonal_periods", "data")
+                seasonal = options.get('seasonal', 'add')
+                if seasonal not in ('add', 'mul'):
+                    raise DataValidationError(f"seasonal must be 'add' or 'mul', got {seasonal}", "seasonal")
+                if seasonal == 'mul' and np.any(series <= 0):
+                    raise DataValidationError("multiplicative seasonality needs strictly positive data", "seasonal")
+                model = ExponentialSmoothing(series, trend='add', seasonal=seasonal, seasonal_periods=m,
+                                             initialization_method='estimated')
+                info['seasonal_periods'] = m
+                info['seasonal'] = seasonal
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')  # optimiser convergence chatter
+                fit = model.fit()
+            values = np.asarray(fit.forecast(horizon), dtype=float)
+            for key in ('smoothing_level', 'smoothing_trend', 'smoothing_seasonal'):
+                val = fit.params.get(key)
+                if val is not None and np.isfinite(val):
+                    info[key] = float(val)
+            info['aic'] = float(fit.aic)
+
+        elif method == 'arima':
+            from statsmodels.tsa.arima.model import ARIMA
+            order = options.get('order') or (1, 1, 1)
+            if not isinstance(order, (list, tuple)) or len(order) != 3:
+                raise DataValidationError("order must be a list of 3 integers (p, d, q)", "order")
+            order = tuple(int(o) for o in order)
+            if n < max(20, sum(order) * 3):
+                raise DataValidationError(
+                    f"ARIMA{order} needs at least {max(20, sum(order) * 3)} observations to fit, got {n}", "data")
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                fit = ARIMA(series, order=order).fit()
+            values = np.asarray(fit.forecast(horizon), dtype=float)
+            info['order'] = list(order)
+            info['aic'] = float(fit.aic)
+
+        else:
+            raise DataValidationError(
+                f"Unknown forecasting method: {method} (available: {', '.join(FORECAST_METHODS)})", "method")
+
+        values = np.asarray(values, dtype=float)
+        if not np.all(np.isfinite(values)):
+            raise CalculationError("the model produced non-finite forecasts for this series", method)
+        return values, info
+
     @validate_inputs
     @timing_decorator
     @handle_calculation_error
@@ -307,62 +417,75 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                            data: Union[List, np.ndarray, pd.Series],
                            horizon: int = 5,
                            method: str = 'simple_exponential',
-                           train_size: float = 0.8) -> Dict[str, Any]:
-        """Generate forecasts using various methods."""
+                           train_size: float = 0.8,
+                           options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Fit `method` on the first `train_size` share of `data` and forecast `horizon` steps.
+
+        `value` is the forecast from the end of the training window (so it can be scored
+        against the held-out tail: mae / rmse / mape). The same method refitted on the full
+        series gives metadata.forecast_out_of_sample - the forecast beyond the last observation.
+        options: alpha (simple_exponential), seasonal_periods / seasonal (holt_winters), order (arima).
+        """
+        options = dict(options or {})
         data = self._validate_returns(data, "data")
         self._check_data_length(data, min_length=20)
 
         horizon = int(self._validate_positive(horizon, "horizon"))
         train_size = self._validate_probability(train_size, "train_size")
+        if method not in FORECAST_METHODS:
+            raise DataValidationError(
+                f"Unknown forecasting method: {method} (available: {', '.join(FORECAST_METHODS)})", "method")
 
         # Split data
         split_point = int(len(data) * train_size)
+        if split_point < 10:
+            raise DataValidationError(
+                f"train_size {train_size} leaves {split_point} training observations; at least 10 are needed",
+                "train_size")
         train_data = data[:split_point]
         test_data = data[split_point:]
 
-        forecasts = {}
+        forecast_values, fit_info = self._forecast_series(train_data, horizon, method, options)
 
-        if method == 'simple_exponential':
-            # Simple exponential smoothing
-            alpha = 0.3  # Smoothing parameter
-            smoothed = [train_data[0]]
-
-            for i in range(1, len(train_data)):
-                smoothed.append(alpha * train_data[i] + (1 - alpha) * smoothed[-1])
-
-            # Forecast
-            forecast_values = [smoothed[-1]] * horizon
-
-        elif method == 'linear_trend':
-            # Linear trend forecasting
-            time_index = np.arange(len(train_data))
-            X = np.column_stack([np.ones(len(time_index)), time_index])
-            coefficients = np.linalg.lstsq(X, train_data, rcond=None)[0]
-
-            intercept, slope = coefficients
-            future_time = np.arange(len(train_data), len(train_data) + horizon)
-            forecast_values = intercept + slope * future_time
-
-        elif method == 'moving_average':
-            # Moving average
-            window = min(5, len(train_data) // 4)
-            last_values = train_data[-window:]
-            forecast_values = [np.mean(last_values)] * horizon
-
-        else:
-            raise DataValidationError(f"Unknown forecasting method: {method}", "method")
-
-        # Calculate accuracy metrics if test data available
-        if len(test_data) > 0:
-            n_compare = min(len(test_data), horizon)
-            mae = np.mean(np.abs(test_data[:n_compare] - forecast_values[:n_compare]))
-            rmse = np.sqrt(np.mean((test_data[:n_compare] - forecast_values[:n_compare]) ** 2))
-            mape = np.mean(np.abs((test_data[:n_compare] - forecast_values[:n_compare]) / test_data[:n_compare])) * 100
+        # Accuracy on the overlap between the forecast and the held-out tail
+        n_compare = min(len(test_data), horizon)
+        if n_compare > 0:
+            actual = test_data[:n_compare]
+            err = actual - forecast_values[:n_compare]
+            mae = float(np.mean(np.abs(err)))
+            rmse = float(np.sqrt(np.mean(err ** 2)))
+            nonzero = actual != 0
+            mape = float(np.mean(np.abs(err[nonzero] / actual[nonzero])) * 100) if nonzero.any() else None
         else:
             mae = rmse = mape = None
 
+        # Forecast beyond the last observation (same method, fitted on the whole series)
+        out_of_sample, out_of_sample_error = None, None
+        if len(test_data) > 0:
+            try:
+                out_of_sample = self._forecast_series(data, horizon, method, options)[0].tolist()
+            except Exception as exc:  # reported, not replaced by a made-up number
+                out_of_sample_error = str(exc)
+        else:
+            out_of_sample = forecast_values.tolist()
+
+        metadata = {
+            'train_data_size': len(train_data),
+            'test_data_size': len(test_data),
+            'n_compared': n_compare,
+            'mae': mae,
+            'rmse': rmse,
+            'mape': mape,
+            'forecast_horizon': horizon,
+            'forecast_origin': 'end_of_training_window',
+            'fit': fit_info,
+            'forecast_out_of_sample': out_of_sample,
+        }
+        if out_of_sample_error:
+            metadata['forecast_out_of_sample_error'] = out_of_sample_error
+
         return self._create_result_dict(
-            value=forecast_values,
+            value=forecast_values.tolist(),
             method=f'forecast_{method}',
             parameters={
                 'data': data.tolist() if hasattr(data, 'tolist') else list(data),
@@ -370,14 +493,7 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 'method': method,
                 'train_size': train_size
             },
-            metadata={
-                'train_data_size': len(train_data),
-                'test_data_size': len(test_data),
-                'mae': mae,
-                'rmse': rmse,
-                'mape': mape,
-                'forecast_horizon': horizon
-            }
+            metadata=metadata
         )
 
     # ========================================
@@ -407,14 +523,17 @@ class AdvancedQuantAnalyzer(BaseCalculator):
 
         if problem_type not in ['regression', 'classification']:
             raise DataValidationError(f"Invalid problem_type: {problem_type}", "problem_type")
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if len(X) < 10:
+            raise DataValidationError(f"Need at least 10 samples, got {len(X)}", "data")
 
-        # Split data
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import (mean_squared_error, r2_score, accuracy_score, precision_score,
+                                     recall_score)
+
+        # Split data (chronological: the test set is the most recent 20 %)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
 
         results = {}
 
@@ -425,31 +544,28 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 else:
                     model = self._get_classification_model(algorithm)
 
-                # Train model
-                if algorithm in ['svm', 'knn']:
-                    model.fit(X_train_scaled, y_train)
-                    y_pred = model.predict(X_test_scaled)
-                else:
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
+                # Scaling (SVR / KNN / logistic ...) is inside the returned pipeline.
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
 
                 # Calculate metrics
                 if problem_type == 'regression':
                     mse = mean_squared_error(y_test, y_pred)
                     r2 = r2_score(y_test, y_pred)
                     results[algorithm] = {
+                        'model': self._estimator_name(model),
                         'mse': mse,
                         'rmse': np.sqrt(mse),
                         'r2_score': r2,
                         'predictions': y_pred.tolist()
                     }
                 else:
-                    from sklearn.metrics import accuracy_score, precision_score, recall_score
                     accuracy = accuracy_score(y_test, y_pred)
-                    precision = precision_score(y_test, y_pred, average='weighted')
-                    recall = recall_score(y_test, y_pred, average='weighted')
+                    precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+                    recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
 
                     results[algorithm] = {
+                        'model': self._estimator_name(model),
                         'accuracy': accuracy,
                         'precision': precision,
                         'recall': recall,
@@ -458,6 +574,25 @@ class AdvancedQuantAnalyzer(BaseCalculator):
 
             except Exception as e:
                 results[algorithm] = {'error': str(e)}
+
+        # Best algorithm among the ones that actually ran (None when every one failed)
+        score_key = 'r2_score' if problem_type == 'regression' else 'accuracy'
+        scored = {k: v[score_key] for k, v in results.items()
+                  if 'error' not in v and v.get(score_key) is not None and np.isfinite(v[score_key])}
+        best_algorithm = max(scored, key=scored.get) if scored else None
+
+        metadata = {
+            'train_size': len(X_train),
+            'test_size': len(X_test),
+            'y_test': y_test.tolist(),
+            'n_features': X.shape[1],
+            'best_algorithm': best_algorithm,
+            'n_failed': sum(1 for v in results.values() if 'error' in v),
+        }
+        if problem_type == 'classification':
+            classes, counts = np.unique(y_test, return_counts=True)
+            # Accuracy of always predicting the most common test class - the bar a classifier must beat.
+            metadata['majority_class_accuracy'] = float(counts.max() / counts.sum()) if len(counts) else None
 
         return self._create_result_dict(
             value=results,
@@ -468,38 +603,84 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 'problem_type': problem_type,
                 'algorithms': algorithms
             },
-            metadata={
-                'train_size': len(X_train),
-                'test_size': len(X_test),
-                'y_test': y_test.tolist(),
-                'n_features': X.shape[1],
-                'best_algorithm': max(results.keys(), key=lambda k: results[k].get(
-                    'r2_score' if problem_type == 'regression' else 'accuracy', -np.inf)) if results else None
-            }
+            metadata=metadata
         )
 
+    @staticmethod
+    def _estimator_name(model) -> str:
+        """Class name of the fitted estimator (the last step of a pipeline / the wrapped regressor)."""
+        est = model
+        if hasattr(est, 'regressor'):  # TransformedTargetRegressor
+            est = est.regressor
+        if hasattr(est, 'steps'):  # Pipeline
+            est = est.steps[-1][1]
+        return type(est).__name__
+
     def _get_regression_model(self, algorithm: str):
-        """Get regression model by algorithm name."""
-        models = {
-            'ridge': Ridge(alpha=1.0, random_state=self.random_seed),
-            'lasso': Lasso(alpha=1.0, random_state=self.random_seed),
-            'elastic_net': ElasticNet(alpha=1.0, random_state=self.random_seed),
-            'svm': SVR(kernel='rbf'),
-            'knn': KNeighborsRegressor(n_neighbors=5),
-            'decision_tree': DecisionTreeRegressor(random_state=self.random_seed),
-            'random_forest': RandomForestRegressor(n_estimators=100, random_state=self.random_seed)
-        }
-        return models.get(algorithm, Ridge(random_state=self.random_seed))
+        """Regression model for `algorithm`; raises DataValidationError for an unknown name."""
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        name = str(algorithm).strip().lower()
+        if name == 'ridge':
+            from sklearn.linear_model import Ridge
+            return Ridge(alpha=1.0, random_state=self.random_seed)
+        if name == 'lasso':
+            from sklearn.linear_model import Lasso
+            return Lasso(alpha=1.0, random_state=self.random_seed)
+        if name == 'elastic_net':
+            from sklearn.linear_model import ElasticNet
+            return ElasticNet(alpha=1.0, random_state=self.random_seed)
+        if name in ('svr', 'svm'):
+            # RBF SVR is scale-sensitive in X *and* y (epsilon / C are in target units), so both are
+            # standardised; predictions come back in the original units.
+            from sklearn.svm import SVR
+            from sklearn.compose import TransformedTargetRegressor
+            return TransformedTargetRegressor(regressor=make_pipeline(StandardScaler(), SVR(kernel='rbf')),
+                                              transformer=StandardScaler())
+        if name == 'knn':
+            from sklearn.neighbors import KNeighborsRegressor
+            return make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=5))
+        if name == 'decision_tree':
+            from sklearn.tree import DecisionTreeRegressor
+            return DecisionTreeRegressor(random_state=self.random_seed)
+        if name == 'random_forest':
+            from sklearn.ensemble import RandomForestRegressor
+            return RandomForestRegressor(n_estimators=100, random_state=self.random_seed)
+        raise DataValidationError(
+            f"Unknown regression model '{algorithm}' (available: {', '.join(REGRESSION_MODELS)})", "model_type")
 
     def _get_classification_model(self, algorithm: str):
-        """Get classification model by algorithm name."""
-        models = {
-            'svm': SVC(kernel='rbf', random_state=self.random_seed),
-            'knn': KNeighborsClassifier(n_neighbors=5),
-            'decision_tree': DecisionTreeClassifier(random_state=self.random_seed),
-            'random_forest': RandomForestClassifier(n_estimators=100, random_state=self.random_seed)
-        }
-        return models.get(algorithm, RandomForestClassifier(random_state=self.random_seed))
+        """Classification model for `algorithm`; raises DataValidationError for an unknown name."""
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        name = str(algorithm).strip().lower()
+        if name in ('logistic', 'logistic_regression'):
+            from sklearn.linear_model import LogisticRegression
+            return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+        if name == 'ridge':
+            from sklearn.linear_model import RidgeClassifier
+            return make_pipeline(StandardScaler(), RidgeClassifier(alpha=1.0))
+        if name in ('svc', 'svm', 'svr'):
+            # 'svr' is accepted because the panel offers one model list for both problem types;
+            # for classification it means the support-vector classifier (reported as model: SVC).
+            from sklearn.svm import SVC
+            return make_pipeline(StandardScaler(), SVC(kernel='rbf', random_state=self.random_seed))
+        if name == 'knn':
+            from sklearn.neighbors import KNeighborsClassifier
+            return make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5))
+        if name == 'decision_tree':
+            from sklearn.tree import DecisionTreeClassifier
+            return DecisionTreeClassifier(random_state=self.random_seed)
+        if name == 'random_forest':
+            from sklearn.ensemble import RandomForestClassifier
+            return RandomForestClassifier(n_estimators=100, random_state=self.random_seed)
+        if name in ('lasso', 'elastic_net'):
+            raise DataValidationError(
+                f"'{algorithm}' is a regression model; for classification use one of: "
+                f"{', '.join(CLASSIFICATION_MODELS)}", "algorithm")
+        raise DataValidationError(
+            f"Unknown classification model '{algorithm}' (available: {', '.join(CLASSIFICATION_MODELS)})",
+            "algorithm")
 
     @validate_inputs
     @timing_decorator
@@ -512,6 +693,15 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             X = X.values
 
         X = self._validate_numeric_input(X, "X")
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if len(X) < 4:
+            raise DataValidationError(f"Need at least 4 samples, got {len(X)}", "X")
+
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.cluster import KMeans, AgglomerativeClustering
+        from sklearn.decomposition import PCA
+        from sklearn.metrics import silhouette_score
 
         # Scale data
         scaler = StandardScaler()
@@ -519,8 +709,16 @@ class AdvancedQuantAnalyzer(BaseCalculator):
 
         results = {}
 
-        for method in methods:
+        for requested in methods:
+            method = str(requested).strip().lower()
+            # The panel offers "agglomerative"; the result key the panel reads is "hierarchical".
+            if method == 'agglomerative':
+                method = 'hierarchical'
             try:
+                if method not in ('pca', 'kmeans', 'hierarchical'):
+                    raise DataValidationError(
+                        f"Unknown method '{requested}' (available: pca, kmeans, hierarchical/agglomerative)",
+                        "methods")
                 if method == 'pca':
                     # Principal Component Analysis
                     pca = PCA()
@@ -542,6 +740,8 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                     inertias = []
                     silhouette_scores = []
                     k_range = range(2, min(11, len(X) // 2))
+                    if len(k_range) == 0:
+                        raise DataValidationError(f"k-means needs at least 6 samples, got {len(X)}", "X")
 
                     for k in k_range:
                         kmeans = KMeans(n_clusters=k, random_state=self.random_seed)
@@ -549,7 +749,6 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                         inertias.append(kmeans.inertia_)
 
                         # Silhouette score
-                        from sklearn.metrics import silhouette_score
                         sil_score = silhouette_score(X_scaled, cluster_labels)
                         silhouette_scores.append(sil_score)
 
@@ -602,76 +801,102 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                                    X: Union[np.ndarray, pd.DataFrame],
                                    y: Union[np.ndarray, pd.Series],
                                    model_type: str = 'random_forest',
-                                   cv_folds: int = 5) -> Dict[str, Any]:
-        """Comprehensive model evaluation with cross-validation."""
+                                   cv_folds: int = 5,
+                                   problem_type: Optional[str] = None,
+                                   holdout_fraction: float = 0.2,
+                                   overfitting_threshold: float = 0.1) -> Dict[str, Any]:
+        """Time-ordered model evaluation: walk-forward CV, a learning curve and a hold-out check.
+
+        * cv_scores: TimeSeriesSplit(cv_folds) over the whole sample - every fold is scored on
+          observations that come after the ones it was trained on.
+        * The last `holdout_fraction` of the sample is a fixed validation set. The learning curve
+          trains on growing shares of the earlier part (train_sizes) and scores each fit on its own
+          training rows (train_scores) and on the hold-out (val_scores).
+        * final_train_score / final_val_score come from the fit on the whole training part;
+          is_overfitting = final_train_score - final_val_score > overfitting_threshold.
+        problem_type: 'regression' / 'classification'; when None it is classification only if y
+        is integer-valued with at most 5 distinct classes.
+        """
+        from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+        from sklearn.metrics import r2_score, accuracy_score
+
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, pd.Series):
             y = y.values
+        X = self._validate_numeric_input(np.asarray(X, dtype=float), "X")
+        y = self._validate_numeric_input(np.asarray(y, dtype=float), "y")
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if len(X) != len(y):
+            raise DataValidationError(f"Length mismatch: X({len(X)}) vs y({len(y)})", "data")
 
         # Determine problem type
-        problem_type = 'classification' if len(np.unique(y)) < 10 else 'regression'
+        if problem_type is None:
+            classes = np.unique(y)
+            integer_valued = bool(np.all(np.mod(y, 1) == 0))
+            problem_type = 'classification' if integer_valued and len(classes) <= 5 else 'regression'
+        elif problem_type not in ('regression', 'classification'):
+            raise DataValidationError(f"Invalid problem_type: {problem_type}", "problem_type")
+
+        cv_folds = int(cv_folds)
+        if cv_folds < 2:
+            raise DataValidationError(f"cv_folds must be at least 2, got {cv_folds}", "cv_folds")
+
+        n = len(X)
+        n_holdout = int(round(n * holdout_fraction))
+        n_train = n - n_holdout
+        min_train = 10
+        if n_holdout < 2 or n_train < min_train:
+            raise DataValidationError(
+                f"Need at least {int(np.ceil((min_train + 2) / (1 - holdout_fraction)))} samples for a "
+                f"{holdout_fraction:.0%} hold-out evaluation, got {n}", "data")
+        if n // (cv_folds + 1) < 2:
+            raise DataValidationError(
+                f"{n} samples are too few for {cv_folds} time-series CV folds (each fold needs at least 2 "
+                f"test samples); use fewer folds or more data", "cv_folds")
 
         # Get model
         if problem_type == 'regression':
             model = self._get_regression_model(model_type)
-            scoring = 'r2'
+            scoring, scorer = 'r2', r2_score
         else:
             model = self._get_classification_model(model_type)
-            scoring = 'accuracy'
+            scoring, scorer = 'accuracy', accuracy_score
 
-        # Cross-validation
-        cv_scores = cross_val_score(model, X, y, cv=cv_folds, scoring=scoring)
+        # Walk-forward cross-validation
+        cv_scores = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cv_folds), scoring=scoring)
 
-        # Learning curves (simplified)
-        train_sizes = np.linspace(0.1, 1.0, 5)
-        train_scores = []
-        val_scores = []
+        # Learning curve on the training part, validated on the fixed hold-out
+        X_fit, y_fit = X[:n_train], y[:n_train]
+        X_val, y_val = X[n_train:], y[n_train:]
+        train_sizes = sorted({min(n_train, max(min_train, int(round(f * n_train))))
+                              for f in (0.2, 0.4, 0.6, 0.8, 1.0)})
+        train_scores, val_scores = [], []
+        for size in train_sizes:
+            try:
+                model.fit(X_fit[:size], y_fit[:size])
+                train_scores.append(float(scorer(y_fit[:size], model.predict(X_fit[:size]))))
+                val_scores.append(float(scorer(y_val, model.predict(X_val))))
+            except Exception as exc:  # e.g. a classification subset that holds a single class
+                if size == n_train:
+                    raise
+                self.logger.debug(f"learning-curve point {size} skipped: {exc}")
+                train_scores.append(None)
+                val_scores.append(None)
 
-        for train_size in train_sizes:
-            n_samples = int(len(X) * train_size)
-            X_subset = X[:n_samples]
-            y_subset = y[:n_samples]
-
-            # Train model
-            model.fit(X_subset, y_subset)
-
-            # Training score
-            train_pred = model.predict(X_subset)
-            if problem_type == 'regression':
-                train_score = r2_score(y_subset, train_pred)
-            else:
-                from sklearn.metrics import accuracy_score
-                train_score = accuracy_score(y_subset, train_pred)
-
-            train_scores.append(train_score)
-
-            # Validation score (using remaining data)
-            if n_samples < len(X):
-                X_val = X[n_samples:]
-                y_val = y[n_samples:]
-                val_pred = model.predict(X_val)
-
-                if problem_type == 'regression':
-                    val_score = r2_score(y_val, val_pred)
-                else:
-                    val_score = accuracy_score(y_val, val_pred)
-            else:
-                val_score = train_score
-
-            val_scores.append(val_score)
-
-        # Overfitting detection
+        # Overfitting detection: the last learning-curve point is the fit on the whole training part
         final_train_score = train_scores[-1]
         final_val_score = val_scores[-1]
         overfitting_score = final_train_score - final_val_score
-        is_overfitting = overfitting_score > 0.1
+        is_overfitting = bool(overfitting_score > overfitting_threshold)
 
         return self._create_result_dict(
             value={
                 'cv_scores': cv_scores.tolist(),
                 'train_scores': train_scores,
-                'val_scores': val_scores
+                'val_scores': val_scores,
+                'train_sizes': train_sizes
             },
             method='model_evaluation',
             parameters={
@@ -680,12 +905,18 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 'problem_type': problem_type
             },
             metadata={
+                'model': self._estimator_name(model),
+                'scoring': scoring,
+                'cv_method': 'time_series_split',
                 'mean_cv_score': np.mean(cv_scores),
                 'std_cv_score': np.std(cv_scores),
                 'overfitting_score': overfitting_score,
+                'overfitting_threshold': overfitting_threshold,
                 'is_overfitting': is_overfitting,
                 'final_train_score': final_train_score,
-                'final_val_score': final_val_score
+                'final_val_score': final_val_score,
+                'train_size': n_train,
+                'holdout_size': n_holdout
             }
         )
 
@@ -865,7 +1096,9 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                     sample = pd.concat(sample_list)[:sample_size]
 
                 else:
-                    continue
+                    raise DataValidationError(
+                        f"Unknown sampling method '{method}' (available: simple, stratified, systematic, cluster)",
+                        "sampling_methods")
 
                 # Calculate sample statistics
                 if len(sample) > 0:
@@ -919,6 +1152,7 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             population_params = {'scale': 1.0}
 
         n_samples = int(self._validate_positive(n_samples, "n_samples"))
+        sample_sizes = self._validate_sample_sizes(sample_sizes)
 
         # Generate population
         if population_dist == 'exponential':
@@ -931,10 +1165,17 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             n = population_params.get('n', 10)
             p = population_params.get('p', 0.5)
             population = np.random.binomial(n=n, p=p, size=10000)
-        else:
-            # Default to normal
+        elif population_dist == 'poisson':
+            # Offered by the panel; it silently ran on a NORMAL population.
+            population = np.random.poisson(lam=population_params.get('lam', 3.0), size=10000)
+        elif population_dist == 'normal':
             population = np.random.normal(loc=population_params.get('loc', 0),
                                           scale=population_params.get('scale', 1), size=10000)
+        else:
+            # An unknown name used to fall through to a normal population under the requested label.
+            raise DataValidationError(
+                f"Unknown population_dist '{population_dist}' (available: exponential, uniform, binomial, "
+                f"poisson, normal)", "population_dist")
 
         population_mean = np.mean(population)
         population_std = np.std(population)
@@ -1081,8 +1322,13 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                     results['permutation'] = {
                         'resampled_statistics': permutation_stats.tolist(),
                         'p_value': p_value,
-                        'significant': p_value < 0.05
+                        'significant': bool(p_value < 0.05)
                     }
+
+                else:
+                    raise DataValidationError(
+                        f"Unknown resampling method '{method}' (available: bootstrap, jackknife, permutation)",
+                        "methods")
 
             except Exception as e:
                 results[method] = {'error': str(e)}
@@ -1116,6 +1362,10 @@ class AdvancedQuantAnalyzer(BaseCalculator):
         population_std = self._validate_positive(population_std, "population_std")
         confidence_level = self._validate_probability(confidence_level, "confidence_level")
         n_simulations = int(self._validate_positive(n_simulations, "n_simulations"))
+        sample_sizes = self._validate_sample_sizes(sample_sizes)
+        if not 0 < confidence_level < 1:
+            raise DataValidationError(f"confidence_level must be strictly between 0 and 1, got {confidence_level}",
+                                      "confidence_level")
 
         alpha = 1 - confidence_level
         z_critical = stats.norm.ppf(1 - alpha / 2)
@@ -1151,7 +1401,8 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 'empirical_moe': z_critical * np.std(sample_means),
                 'coverage_probability': coverage,
                 'mean_squared_error': mse,
-                'relative_error': standard_error / population_mean if population_mean != 0 else np.inf
+                # SE relative to the mean is undefined for a zero mean
+                'relative_error': standard_error / abs(population_mean) if population_mean != 0 else None
             }
 
         # Sample size recommendation
@@ -1175,6 +1426,22 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                 'coverage_target': confidence_level
             }
         )
+
+    @staticmethod
+    def _validate_sample_sizes(sample_sizes) -> List[int]:
+        """A non-empty list of positive integer sample sizes."""
+        if sample_sizes is None or isinstance(sample_sizes, (str, bytes)) or len(sample_sizes) == 0:
+            raise DataValidationError("sample_sizes must be a non-empty list of positive integers", "sample_sizes")
+        sizes = []
+        for s in sample_sizes:
+            try:
+                v = int(s)
+            except (TypeError, ValueError):
+                raise DataValidationError(f"sample size {s!r} is not an integer", "sample_sizes")
+            if v < 1 or v != float(s):
+                raise DataValidationError(f"sample sizes must be positive integers, got {s!r}", "sample_sizes")
+            sizes.append(v)
+        return sizes
 
     # ========================================
     # MAIN CALCULATION DISPATCHER

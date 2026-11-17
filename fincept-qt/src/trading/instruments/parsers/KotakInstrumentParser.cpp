@@ -42,7 +42,10 @@ QByteArray download_kotak(const BrokerCredentials& creds) {
     // access_token packed: trading_token:::trading_sid:::base_url:::portal_token:::server_id
     const QStringList parts = creds.access_token.split(":::");
     if (parts.size() < 4) {
-        LOG_WARN("KotakSource", "Kotak access_token not in packed form — cannot fetch master");
+        // Never the token itself: only how many parts it had.
+        LOG_WARN("KotakSource", logf("Kotak instrument master not fetched: the session token is not in the expected "
+                                     "form; sign in to Kotak again",
+                                     {{"broker", "kotak"}, {"token_parts", static_cast<int>(parts.size())}, {"expected", 4}}));
         return {};
     }
     const QString base_url = parts[2];
@@ -170,7 +173,7 @@ QVector<Instrument> parse_kotak(const QByteArray& payload) {
         out.append(inst);
     }
 
-    LOG_INFO("KotakSource", QString("Parsed %1 Kotak instruments").arg(out.size()));
+    LOG_DEBUG("KotakSource", QString("Parsed %1 Kotak instruments").arg(out.size()));
     return out;
 }
 

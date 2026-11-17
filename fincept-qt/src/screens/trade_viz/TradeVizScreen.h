@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/common/ISectionLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
@@ -18,9 +19,16 @@
 #include <QVector>
 #include <QWidget>
 
+class QStackedWidget;
+
 namespace fincept::services {
 struct EconomicsResult;
 }
+
+namespace fincept::ui {
+class EmptyState;
+class LoadingSkeleton;
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
@@ -39,10 +47,15 @@ struct TradePartner {
 /// reporter's annual merchandise trade by partner from UN Comtrade (via
 /// EconomicsService); a small static US snapshot is shown only until/unless the
 /// live fetch for that selection is unavailable.
-class TradeVizScreen : public QWidget, public IStatefulScreen {
+class TradeVizScreen : public QWidget, public IStatefulScreen, public ISectionLinked {
     Q_OBJECT
   public:
     explicit TradeVizScreen(QWidget* parent = nullptr);
+
+    /// ISectionLinked — "country:<reporter>" (label "CN", name "China" or UN code "156"): picks that
+    /// reporting country in its combo, as the user's pick does (loads its UN Comtrade flows).
+    /// "" + focus = the same with focus as the reporter.
+    bool open_section(const QString& section, const QString& focus) override;
 
     // IStatefulScreen — persists the filter combo selections
     // (country/order/period/year).
@@ -67,7 +80,18 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Fetch the selected country/year (both flows) — a no-op when that dataset is
     // already shown or in flight. Cache-aware: EconomicsService answers repeats locally.
-    void refresh_data();
+    // `automatic` (first show / a selection restored while hidden) passes the app-wide
+    // AutoLoadGate; a country / year the user picks starts at once.
+    void refresh_data(bool automatic = false);
+    /// Starts both flows of loading_key_ (the gate slot, if any, is already held).
+    void issue_fetch(int code, const QString& year);
+    /// Stops the load in flight (EconomicsService::cancel for both flows) and frees the gate.
+    void cancel_fetch();
+    void release_gate();
+    /// Designed states over the chord + table: a failure (plain sentence, RETRY, the raw
+    /// text behind DETAILS) and "no records for this year" (TRY <previous year>).
+    void show_failure(const QString& title, const QString& message, const QString& details);
+    void show_no_records(const QString& title);
     void on_econ_result(const QString& request_id, const fincept::services::EconomicsResult& result);
     // Show `all` (any order) as the current dataset and repaint chord + table.
     // `illustrative` marks the static offline snapshot: labelled above the table
@@ -111,6 +135,11 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     bool illustrative_ = false;            // current dataset is the static snapshot
     QLabel* source_note_ = nullptr;        // provenance line above the partner table
     QString empty_message_;                // chord centre text while partners_ is empty
+    QStackedWidget* body_stack_ = nullptr; // 0 chord + table, 1 loading skeleton, 2 designed state
+    fincept::ui::LoadingSkeleton* loading_ = nullptr;
+    fincept::ui::EmptyState* state_ = nullptr;
+    QString state_action_;                 // what the state's primary button does: "retry" | "prev_year"
+    quint64 gate_ticket_ = 0;              // AutoLoadGate ticket of an automatic load (0 = none)
 
     // ── Timers ───────────────────────────────────────────────────────────────
     QTimer* clock_timer_ = nullptr;

@@ -22,6 +22,12 @@ Setting SettingsRepository::map_row(QSqlQuery& q) {
 Result<void> SettingsRepository::set(const QString& key, const QString& value, const QString& category) {
     auto r =
         exec_write("INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)", {key, value, category});
+    // DEBUG, key and category only: this table also carries internal state written on
+    // every refresh (the session blob, layout state, migration markers), and some values
+    // are secrets. The user-facing "Setting changed" INFO line is AppConfig's and the
+    // Settings sections'.
+    if (r.is_ok())
+        LOG_DEBUG("SettingsRepository", logf("Setting written", {{"key", key}, {"category", category}}));
     if (r.is_ok() && CloudSyncSettings::is_syncable_setting_key(key))
         SyncOutbox::record("setting", key, "upsert");
     return r;

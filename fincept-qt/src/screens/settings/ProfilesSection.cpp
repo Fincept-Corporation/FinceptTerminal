@@ -3,9 +3,11 @@
 #include "screens/settings/ProfilesSection.h"
 
 #include "core/config/ProfileManager.h"
+#include "core/logging/Logger.h"
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/MnemonicText.h"
 
 #include <QCoreApplication>
 #include <QFrame>
@@ -31,6 +33,7 @@ namespace {
 void profiles_relaunch_and_quit(QWidget* parent, const QString& profile) {
     const QString exe = QCoreApplication::applicationFilePath();
     if (!QProcess::startDetached(exe, {"--profile", profile})) {
+        LOG_ERROR("ProfilesSection", logf("Profile switch could not relaunch the app", {{"profile", profile}}));
         QMessageBox::critical(parent, ProfilesSection::tr("Switch Profile"),
                               ProfilesSection::tr("Could not launch Fincept Terminal for profile \"%1\". "
                                                   "The current session stays open.")
@@ -120,11 +123,11 @@ QWidget* ProfilesSection::build_content() {
         if (name == pm.active()) {
             auto* badge = new QLabel(tr("ACTIVE"));
             badge->setStyleSheet(
-                QString("color:%1;font-weight:700;font-size:10px;background:transparent;").arg(ui::colors::AMBER()));
+                QString("color:%1;font-weight:700;font-size:" + fincept::ui::fonts::px(-4) + "px;background:transparent;").arg(ui::colors::AMBER()));
             hl->addWidget(badge);
         } else {
             auto* switch_btn = new QPushButton(tr("Switch"));
-            switch_btn->setFixedWidth(72);
+            switch_btn->setMinimumWidth(72);
             switch_btn->setStyleSheet(btn_secondary_ss());
             switch_btn->setAccessibleName(tr("Switch to profile %1").arg(name));
             connect(switch_btn, &QPushButton::clicked, this, [this, name]() {
@@ -164,7 +167,7 @@ QWidget* ProfilesSection::build_content() {
     name_input->setAccessibleName(tr("New profile name"));
     new_hl->addWidget(name_input, 1);
 
-    auto* create_btn = new QPushButton(tr("Create & Switch"));
+    auto* create_btn = new QPushButton(fincept::ui::literal_ampersands(tr("Create & Switch")));
     create_btn->setStyleSheet(btn_primary_ss());
     create_btn->setAccessibleName(tr("Create profile and switch to it"));
     connect(name_input, &QLineEdit::returnPressed, create_btn, &QPushButton::click);

@@ -10,12 +10,14 @@
 
 namespace fincept::screens::widgets {
 
-/// Quick Trade Widget — symbol lookup + order entry form.
+/// Quick Trade Widget — symbol lookup + order estimate.
 /// Fetches live quote via yfinance on symbol search.
-/// Order submission connects to the trading service (or shows confirmation dialog).
+/// The OPEN BUY / SELL TICKET button hands off to the Equity Trading order
+/// ticket (`equity.open_order_ticket`), which owns account selection,
+/// paper/live routing and the confirmation; this tile never places an order.
 ///
 /// The LOOKUP action re-subscribes to `market:quote:<sym>` on the DataHub;
-/// push updates keep the bid/ask/change labels live without polling.
+/// push updates keep the price/change labels live without polling.
 class QuickTradeWidget : public BaseWidget {
     Q_OBJECT
   public:
@@ -45,6 +47,9 @@ class QuickTradeWidget : public BaseWidget {
     /// Render the current_symbol_ quote card from a QuoteData snapshot.
     void apply_quote(const services::QuoteData& q);
     void hub_unsubscribe_all();
+    /// A fresh tile's symbol: the region's largest tradable stock (the
+    /// stock_quote rule, canvas/WidgetRegistry.cpp), else AAPL.
+    static QString region_default_symbol();
 
     // Symbol lookup bar
     QLineEdit* symbol_input_ = nullptr;
@@ -54,11 +59,9 @@ class QuickTradeWidget : public BaseWidget {
     QLabel* sym_label_ = nullptr;
     QLabel* price_label_ = nullptr;
     QLabel* change_label_ = nullptr;
-    QLabel* bid_label_ = nullptr;
-    QLabel* ask_label_ = nullptr;
 
     // Order form
-    QComboBox* side_combo_ = nullptr; // BUY / SELL / SHORT
+    QComboBox* side_combo_ = nullptr; // BUY / SELL
     QComboBox* order_type_ = nullptr; // MARKET / LIMIT / STOP
     QLineEdit* qty_input_ = nullptr;
     QLineEdit* price_input_ = nullptr; // for LIMIT/STOP
@@ -75,6 +78,8 @@ class QuickTradeWidget : public BaseWidget {
     QLabel* price_lbl_ = nullptr;
 
     bool hub_active_ = false;
+    bool symbol_from_config_ = false; ///< the config named a symbol (else the default is a guess)
+    bool first_show_done_ = false;    ///< the link group's symbol was considered on the first show
 };
 
 } // namespace fincept::screens::widgets

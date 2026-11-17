@@ -1,5 +1,8 @@
 #include "screens/polymarket/PolymarketLeaderboard.h"
 
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -7,18 +10,27 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
+namespace pm_fmt = fincept::ui::formatting;
+
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+// Only the entry type: a using-directive for the whole namespace made PriceHistory (also in
+// services::prediction) ambiguous in the other polymarket files of a unity batch.
+using fincept::services::polymarket::LeaderboardEntry;
 
-static QString fmt_pnl(double v) {
-    QString sign = v >= 0 ? "+" : "";
-    if (qAbs(v) >= 1e6)
-        return sign + QString("$%1M").arg(v / 1e6, 0, 'f', 1);
-    if (qAbs(v) >= 1e3)
-        return sign + QString("$%1K").arg(v / 1e3, 0, 'f', 1);
-    return sign + QString("$%1").arg(v, 0, 'f', 0);
+// The leaderboard is Polymarket's (the only venue with one): PnL and volume are
+// in its settlement currency, USDC — the venue's own figures, never converted.
+static const char* const kLbCurrency = "USDC";
+
+// "USDC 1.5K" / "USDC 22.12M", abbreviated per the user's compact-number setting.
+static QString lb_money_abbrev(double v) {
+    return pm_fmt::money(v, QString::fromLatin1(kLbCurrency), pm_fmt::Compact::FromSettings);
+}
+
+// Signed: "+USDC 900.0K" / "-USDC 1.5K" (a loss used to read "$-1.5K").
+static QString lb_pnl(double v) {
+    return pm_fmt::signed_money(v, QString::fromLatin1(kLbCurrency), pm_fmt::Compact::FromSettings);
 }
 
 PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) {
@@ -33,7 +45,7 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
     auto* hbl = new QHBoxLayout(header_bar);
     hbl->setContentsMargins(12, 0, 8, 0);
     header_ = new QLabel(tr("LEADERBOARD"));
-    header_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; "
+    header_->setStyleSheet(QString("color: %1; font-size: " + fincept::ui::fonts::px(-5) + "px; font-weight: 700; letter-spacing: 0.8px; "
                                    "background: transparent;")
                                .arg(colors::TEXT_SECONDARY()));
     hbl->addWidget(header_);
@@ -41,20 +53,22 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
     vl->addWidget(header_bar);
 
     table_ = new QTableWidget;
-    table_->setColumnCount(5);
-    table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME"), tr("TRADES")});
+    // No TRADES column: the Data API leaderboard has no trade count, so it was a
+    // permanent column of dashes.
+    table_->setColumnCount(4);
+    table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setShowGrid(false);
-    table_->setStyleSheet(QString("QTableWidget { background: %1; color: %2; border: none; font-size: 10px; }"
+    table_->setStyleSheet(QString("QTableWidget { background: %1; color: %2; border: none; font-size: " + fincept::ui::fonts::px(-4) + "px; }"
                                   "QTableWidget::item { padding: 3px 8px; border-bottom: 1px solid %3; }"
                                   "QTableWidget::item:selected { background: %4; color: %2; }"
                                   "QHeaderView::section { background: %5; color: %6; border: none;"
                                   "  border-bottom: 1px solid %3; padding: 5px 8px;"
-                                  "  font-size: 8px; font-weight: 700; letter-spacing: 0.5px; }"
+                                  "  font-size: " + fincept::ui::fonts::px(-6) + "px; font-weight: 700; letter-spacing: 0.5px; }"
                                   "QScrollBar:vertical { background: %1; width: 4px; border: none; }"
                                   "QScrollBar::handle:vertical { background: %3; min-height: 20px; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
@@ -77,6 +91,36 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
     // nothing populates it yet — render an explicit empty state instead of a
     // blank grid that reads as a broken widget.
     show_empty_state(tr("Leaderboard data not available"));
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
+    // A number-format change re-renders the PNL / VOLUME cells from the values they carry (the
+    // rows stay; the sort keys are the same numbers).
+    pm_fmt::on_format_changed(this, [this]() {
+        if (!table_ || table_->columnSpan(0, 0) > 1) // empty-state row
+            return;
+        for (int r = 0; r < table_->rowCount(); ++r) {
+            if (auto* pnl_item = dynamic_cast<ui::NumericTableWidgetItem*>(table_->item(r, 2)))
+                pnl_item->setText(lb_pnl(pnl_item->numeric_value()));
+            if (auto* vol_item = dynamic_cast<ui::NumericTableWidgetItem*>(table_->item(r, 3)))
+                vol_item->setText(lb_money_abbrev(qAbs(vol_item->numeric_value())));
+        }
+    });
+}
+
+void PolymarketLeaderboard::refresh_theme() {
+    if (!table_)
+        return;
+    if (table_->columnSpan(0, 0) > 1) { // empty-state row
+        if (auto* it = table_->item(0, 0))
+            it->setForeground(QColor(colors::TEXT_DIM()));
+        return;
+    }
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        if (auto* pnl_item = table_->item(r, 2))
+            pnl_item->setForeground(
+                QColor(pnl_item->data(Qt::UserRole).toDouble() >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
+    }
 }
 
 void PolymarketLeaderboard::show_empty_state(const QString& message) {
@@ -115,19 +159,16 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
         name_item->setData(Qt::UserRole, e.address);
         table_->setItem(i, 1, name_item);
 
-        auto* pnl_item = new QTableWidgetItem(fmt_pnl(e.pnl));
+        // PNL / VOLUME sort by value (text sorting put "+$900.0K" above "+$22.1M").
+        auto* pnl_item = new ui::NumericTableWidgetItem(lb_pnl(e.pnl), e.pnl);
         pnl_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        pnl_item->setData(Qt::UserRole, e.pnl); // sign re-read by refresh_theme()
         pnl_item->setForeground(QColor(e.pnl >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
         table_->setItem(i, 2, pnl_item);
 
-        auto* vol_item = new QTableWidgetItem(fmt_pnl(e.volume).replace("+", ""));
+        auto* vol_item = new ui::NumericTableWidgetItem(lb_money_abbrev(qAbs(e.volume)), e.volume);
         vol_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 3, vol_item);
-
-        // The Data API leaderboard has no trade count — show a dash, not a column of fake zeros.
-        auto* trades_item = new QTableWidgetItem(e.num_trades > 0 ? QString::number(e.num_trades) : QStringLiteral("—"));
-        trades_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_->setItem(i, 4, trades_item);
     }
 
     table_->resizeColumnsToContents();
@@ -160,7 +201,7 @@ void PolymarketLeaderboard::retranslateUi() {
     if (header_)
         header_->setText(tr("LEADERBOARD"));
     if (table_)
-        table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME"), tr("TRADES")});
+        table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME")});
     // Row data refreshes via set_entries().
 }
 

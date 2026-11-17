@@ -20,8 +20,11 @@ struct NewsTickerMention {
     int count = 0;              ///< articles that mention it
     int bullish = 0;            ///< of which tagged bullish
     int bearish = 0;            ///< of which tagged bearish
-    double net_sentiment = 0.0; ///< mean finance-VADER score of those articles, -1..1
+    double net_sentiment = 0.0; ///< mean finance-VADER score of the SCORED articles, -1..1
     int64_t latest_ts = 0;      ///< newest mention, unix seconds
+    int scored = 0;             ///< articles with a measured tone (net_sentiment is their mean)
+    int previous = -1;          ///< mentions in the previous window of the same length; -1 = unknown
+    QString earnings;           ///< "ER 3d" when the company reports soon
 };
 
 /// Intelligence drawer — slides in from the left over the feed panel.
@@ -42,7 +45,11 @@ class NewsSidePanel : public QWidget {
     void update_locations(const QVector<services::ArticleGeo>& geo);
     void update_signals(const QVector<services::CorrelationSignal>& sigs);
     void update_predictions(const QVector<services::PredictionMarket>& predictions);
+    /// Bookmarks: the newest kSavedPreview, or all of them after "Show all".
     void update_saved(const QVector<services::NewsArticle>& saved);
+    /// Deviations section note when the volume baseline is still being built
+    /// (`observed_hours` of the 24 needed).
+    void update_baseline_status(int observed_hours, int needed_hours);
     /// Most-mentioned tickers in the current feed with their net tone.
     void update_trending(const QVector<NewsTickerMention>& trending);
     /// The user's portfolio holdings that appear in the current feed.
@@ -134,6 +141,14 @@ class NewsSidePanel : public QWidget {
     // Saved / bookmarked articles
     QVBoxLayout* saved_layout_ = nullptr;
     QWidget* saved_section_ = nullptr;
+    QPushButton* saved_more_btn_ = nullptr;
+    QVector<services::NewsArticle> saved_all_;
+    bool saved_show_all_ = false;
+    static constexpr int kSavedPreview = 10;
+    void render_saved();
+
+    QLabel* baseline_note_ = nullptr;
+    QVector<QPair<QString, double>> last_deviations_;
 };
 
 } // namespace fincept::screens

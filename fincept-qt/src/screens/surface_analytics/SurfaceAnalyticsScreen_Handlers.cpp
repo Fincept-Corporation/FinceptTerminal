@@ -129,6 +129,13 @@ void SurfaceAnalyticsScreen::on_refresh() {
         on_fetch_requested();
         return;
     }
+    const bool option_surface = active_chart_ == ChartType::Volatility || active_chart_ == ChartType::DeltaSurface ||
+                                active_chart_ == ChartType::GammaSurface || active_chart_ == ChartType::VegaSurface ||
+                                active_chart_ == ChartType::ThetaSurface || active_chart_ == ChartType::SkewSurface;
+    if (option_surface) {
+        start_free_chain(true); // the delayed public chain, fetched again now
+        return;
+    }
     load_demo_data();
     update_chart();
     update_metrics();
@@ -159,8 +166,12 @@ void SurfaceAnalyticsScreen::on_control_symbol_changed(const QString& sym) {
     // surfaces take a commodity root or a basket, which isn't an equity ticker.
     if (!applying_group_symbol_ && link_group_ != fincept::SymbolGroup::None && !sym.isEmpty() &&
         QString::fromUtf8(capability_for(active_chart_).dataset) == QLatin1String("OPRA.PILLAR")) {
-        fincept::SymbolContext::instance().set_group_symbol(link_group_, fincept::SymbolRef::equity(sym), this);
+        // current_symbol(): an index root links as the Yahoo index ("SPX" -> "^SPX").
+        fincept::SymbolContext::instance().set_group_symbol(link_group_, current_symbol(), this);
     }
+    // The underlying is remembered with the screen state (save_state "symbol"): store
+    // it now, not only when the screen hides.
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void SurfaceAnalyticsScreen::on_fetch_requested() {
@@ -191,7 +202,8 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
         active_chart_ == ChartType::LiquidityHeatmap;
     if (spot_dependent && !has_live_spot(control_panel_->state().symbol)) {
         const QString sym = control_panel_->state().symbol;
-        fincept::datahub::DataHub::instance().request(QString("market:quote:%1").arg(sym), /*force*/ true);
+        fincept::datahub::DataHub::instance().request(QString("market:quote:%1").arg(surface_quote_symbol(sym)),
+                                                      /*force*/ true);
         if (data_inspector_) {
             data_inspector_->set_status(tr("Waiting for a live %1 quote").arg(sym), false);
             data_inspector_->set_error(

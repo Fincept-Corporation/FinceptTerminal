@@ -19,6 +19,12 @@ from typing import Dict, List, Optional, Any
 import math
 import os
 
+try:
+    import fincept_json  # NaN/Infinity-safe JSON boundary shared by the app's scripts
+except ImportError:  # imported from a directory that does not put scripts/ on sys.path
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
 # Check for databento package
 DATABENTO_AVAILABLE = False
 DATABENTO_ERROR = None
@@ -400,17 +406,16 @@ class DatabentoProvider:
 
     def _cache_dir(self) -> str:
         """
-        Per-user disk cache for expensive Databento responses (definitions,
-        OHLCV). Lives under the OS temp dir so it gets cleaned automatically
-        on reboot but persists across app sessions for the day.
+        Disk cache for expensive Databento responses (definitions, OHLCV) in
+        the edition's cache folder (fincept_paths): it persists across app
+        sessions; each entry is used only while younger than its max age.
         """
-        import tempfile
-        d = os.path.join(tempfile.gettempdir(), "fincept_databento_cache")
+        import fincept_paths
         try:
-            os.makedirs(d, exist_ok=True)
+            return str(fincept_paths.cache_dir("databento"))
         except OSError:
-            pass
-        return d
+            # Not creatable: loads find nothing and saves fail silently, as before.
+            return os.path.join(str(fincept_paths.data_root()), "cache", "scripts", "databento")
 
     def _cache_load(self, key: str, max_age_seconds: int = 6 * 3600):
         """Load a cached JSON blob if it exists and is younger than max_age."""
@@ -2586,17 +2591,17 @@ class DatabentoProvider:
 
         Args:
             job_id: The batch job ID
-            output_dir: Directory to save files (default: temp dir)
+            output_dir: Directory to save files (default: the edition's
+                <data root>/script-data/exports/databento)
             filename: Specific filename to download (optional)
 
         Returns:
             Dict with downloaded file paths
         """
         try:
-            import tempfile
-
             if not output_dir:
-                output_dir = tempfile.gettempdir()
+                import fincept_paths
+                output_dir = str(fincept_paths.user_data_dir("exports", "databento"))
 
             downloaded_paths = self.client.batch.download(
                 job_id=job_id,
@@ -3014,6 +3019,22 @@ def compute_implied_volatility(
     return None
 
 
+# Every command name (and alias) main() dispatches; checked before the API key.
+_KNOWN_COMMANDS = frozenset({
+    "test_connection", "historical_ohlcv", "historical_bars", "options_definitions", "definitions",
+    "options_chain", "options_quotes", "local_vol", "implied_dividend", "liquidity_heatmap",
+    "commodity_vol", "crack_spread", "stress_test", "resolve_symbols", "symbology", "list_datasets",
+    "datasets", "get_dataset_info", "dataset_info", "get_cost_estimate", "cost", "list_schemas",
+    "schemas", "list_publishers", "publishers", "dataset_range", "symbol_search", "security_master",
+    "corporate_actions", "adjustment_factors", "order_book", "order_book_snapshot", "list_futures",
+    "futures_contracts", "futures_data", "futures_definitions", "futures_term_structure",
+    "term_structure", "submit_batch_job", "batch_submit", "list_batch_jobs", "batch_jobs",
+    "list_batch_files", "batch_files", "download_batch_job", "batch_download", "trades",
+    "get_trades", "imbalance", "get_imbalance", "statistics", "get_statistics", "status",
+    "get_status", "schema_data", "get_schema_data",
+})
+
+
 def main():
     """CLI entry point for Databento data fetching"""
     available_commands = [
@@ -3076,6 +3097,16 @@ def main():
                 if '=' in arg:
                     k, v = arg.split('=', 1)
                     args[k] = v
+
+    # An unknown command used to be reported as "API key is required" when no key was set.
+    if command not in _KNOWN_COMMANDS:
+        print(fincept_json.dumps({
+            "error": True,
+            "message": f"Unknown command: {command}",
+            "available_commands": available_commands,
+            "timestamp": int(datetime.now().timestamp())
+        }))
+        sys.exit(1)
 
     try:
         # Check databento availability
@@ -3382,7 +3413,9 @@ def main():
                 "timestamp": int(datetime.now().timestamp())
             }
 
-        print(json.dumps(result, default=str))
+        # NaN/Infinity-safe: a single NaN from a Databento frame made the whole payload
+        # invalid JSON (QJsonDocument rejects it).
+        print(fincept_json.dumps(result))
 
     except Exception as e:
         print(json.dumps({

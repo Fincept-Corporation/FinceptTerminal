@@ -21,6 +21,7 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::workflow {
 
@@ -149,6 +150,8 @@ QJsonArray t2_resample(const QJsonArray& rows, const QString& freq, bool ohlc_mo
 
 } // namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_utility_tier2(NodeRegistry& registry) {
     // ── Tier 2: Data & Transformation ──────────────────────────────
 
@@ -277,43 +280,78 @@ void register_utility_tier2(NodeRegistry& registry) {
                     return;
                 }
 
-                QJsonArray arr = data.toArray();
-                // Extract numeric values
-                QVector<double> vals;
-                vals.reserve(arr.size());
-                for (const QJsonValue& v : arr)
-                    vals.append(v.isObject() ? v.toObject().value(field).toDouble() : v.toDouble());
-
-                if (vals.isEmpty()) {
+                const QJsonArray arr = data.toArray();
+                if (arr.isEmpty()) {
                     cb(true, data, {});
                     return;
                 }
 
-                double min_v = *std::min_element(vals.begin(), vals.end());
-                double max_v = *std::max_element(vals.begin(), vals.end());
+                // Numeric value of each row; rows without one (missing / non-numeric field) are
+                // left out of the statistics and get null instead of being counted as 0.
+                QVector<double> vals(arr.size(), 0.0);
+                QVector<bool> has(arr.size(), false);
+                QVector<double> present;
+                present.reserve(arr.size());
+                for (int i = 0; i < arr.size(); ++i) {
+                    const QJsonValue v = arr.at(i);
+                    const QJsonValue x = v.isObject() ? v.toObject().value(field) : v;
+                    bool ok = x.isDouble();
+                    double d = x.toDouble();
+                    if (!ok && x.isString())
+                        d = x.toString().trimmed().toDouble(&ok);
+                    if (ok && std::isfinite(d)) {
+                        vals[i] = d;
+                        has[i] = true;
+                        present.append(d);
+                    }
+                }
+                if (present.isEmpty()) {
+                    cb(false, {},
+                       field.isEmpty() ? QStringLiteral("Normalize found no numeric values — set the Field to normalize")
+                                       : QString("Field '%1' not found in the input rows").arg(field));
+                    return;
+                }
+
+                const double min_v = *std::min_element(present.begin(), present.end());
+                const double max_v = *std::max_element(present.begin(), present.end());
                 double mean_v = 0;
-                for (double d : vals)
+                for (double d : present)
                     mean_v += d;
-                mean_v /= vals.size();
+                mean_v /= present.size();
                 double std_v = 0;
-                for (double d : vals)
+                for (double d : present)
                     std_v += (d - mean_v) * (d - mean_v);
-                std_v = std::sqrt(std_v / vals.size());
+                std_v = std::sqrt(std_v / present.size());
+
+                // Robust scaling: (x - median) / IQR, quartiles by linear interpolation.
+                QVector<double> sorted = present;
+                std::sort(sorted.begin(), sorted.end());
+                auto quantile = [&sorted](double p) {
+                    const double pos = p * (sorted.size() - 1);
+                    const int lo = static_cast<int>(std::floor(pos));
+                    const int hi = qMin(lo + 1, static_cast<int>(sorted.size()) - 1);
+                    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+                };
+                const double median_v = quantile(0.5);
+                const double iqr_v = quantile(0.75) - quantile(0.25);
 
                 QJsonArray out;
                 for (int i = 0; i < arr.size(); ++i) {
-                    double norm = 0;
-                    if (method == "min_max")
-                        norm = (max_v - min_v) > 0 ? (vals[i] - min_v) / (max_v - min_v) : 0;
-                    else if (method == "z_score")
-                        norm = std_v > 0 ? (vals[i] - mean_v) / std_v : 0;
-                    else if (method == "log")
-                        norm = vals[i] > 0 ? std::log(vals[i]) : 0;
-                    else // robust: (x - median) / IQR — approximate with mean/std
-                        norm = std_v > 0 ? (vals[i] - mean_v) / std_v : 0;
+                    QJsonValue norm = QJsonValue::Null;
+                    if (has[i]) {
+                        if (method == "min_max")
+                            norm = (max_v - min_v) > 0 ? (vals[i] - min_v) / (max_v - min_v) : 0.0;
+                        else if (method == "z_score")
+                            norm = std_v > 0 ? (vals[i] - mean_v) / std_v : 0.0;
+                        else if (method == "log")
+                            norm = vals[i] > 0 ? std::log(vals[i]) : 0.0;
+                        else // robust
+                            norm = iqr_v > 0 ? (vals[i] - median_v) / iqr_v : 0.0;
+                    }
 
-                    if (arr[i].isObject()) {
-                        QJsonObject obj = arr[i].toObject();
+                    const QJsonValue row = arr.at(i);
+                    if (row.isObject()) {
+                        QJsonObject obj = row.toObject();
                         obj[field + "_norm"] = norm;
                         out.append(obj);
                     } else {
@@ -343,7 +381,8 @@ void register_utility_tier2(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int window = static_cast<int>(params.value("window").toDouble(20));
+                // Clamped before the int cast: a huge Window Size overflowed the conversion.
+                const int window = static_cast<int>(qBound(0.0, params.value("window").toDouble(20), 1.0e7));
                 QString op = params.value("operation").toString("mean");
                 QString field = params.value("field").toString("close");
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
@@ -352,16 +391,44 @@ void register_utility_tier2(NodeRegistry& registry) {
                     return;
                 }
 
-                QJsonArray arr = data.toArray();
-                QVector<double> vals;
-                vals.reserve(arr.size());
-                for (const QJsonValue& v : arr)
-                    vals.append(v.isObject() ? v.toObject().value(field).toDouble() : v.toDouble());
+                const QJsonArray arr = data.toArray();
+                QVector<double> vals(arr.size(), 0.0);
+                QVector<bool> has(arr.size(), false);
+                for (int i = 0; i < arr.size(); ++i) {
+                    const QJsonValue v = arr.at(i);
+                    const QJsonValue x = v.isObject() ? v.toObject().value(field) : v;
+                    bool ok = x.isDouble();
+                    double d = x.toDouble();
+                    if (!ok && x.isString())
+                        d = x.toString().trimmed().toDouble(&ok);
+                    if (ok && std::isfinite(d)) {
+                        vals[i] = d;
+                        has[i] = true;
+                    }
+                }
 
+                const QString out_key = field + "_" + op + "_" + QString::number(window);
                 QJsonArray out;
                 for (int i = 0; i < arr.size(); ++i) {
-                    int start = qMax(0, i - window + 1);
-                    QVector<double> w = vals.mid(start, i - start + 1);
+                    // A full window of `window` observations, or null: the first window-1 rows
+                    // used to be computed over a shorter window and labelled as the full one,
+                    // and a row without the field counted as 0.
+                    bool complete = i >= window - 1;
+                    for (int k = qMax(0, i - window + 1); complete && k <= i; ++k)
+                        complete = has[k];
+                    if (!complete) {
+                        const QJsonValue row = arr.at(i);
+                        if (row.isObject()) {
+                            QJsonObject obj = row.toObject();
+                            obj[out_key] = QJsonValue::Null;
+                            out.append(obj);
+                        } else {
+                            out.append(QJsonValue::Null);
+                        }
+                        continue;
+                    }
+                    const int start = i - window + 1;
+                    QVector<double> w = vals.mid(start, window);
                     double result = 0;
                     if (op == "sum") {
                         for (double d : w)
@@ -381,15 +448,17 @@ void register_utility_tier2(NodeRegistry& registry) {
                     } else if (op == "median") {
                         QVector<double> s = w;
                         std::sort(s.begin(), s.end());
-                        result = s[s.size() / 2];
+                        const qsizetype mid = s.size() / 2;
+                        // Even window: the average of the two middle values, not the upper one.
+                        result = (s.size() % 2 == 0) ? (s[mid - 1] + s[mid]) / 2.0 : s[mid];
                     } else { // mean
                         for (double d : w)
                             result += d;
                         result /= w.size();
                     }
-                    if (arr[i].isObject()) {
-                        QJsonObject obj = arr[i].toObject();
-                        obj[field + "_" + op + "_" + QString::number(window)] = result;
+                    if (arr.at(i).isObject()) {
+                        QJsonObject obj = arr.at(i).toObject();
+                        obj[out_key] = result;
                         out.append(obj);
                     } else {
                         out.append(result);
@@ -418,7 +487,9 @@ void register_utility_tier2(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int periods = static_cast<int>(params.value("periods").toDouble(1));
+                // Clamped before the int cast: a huge Periods value overflowed the conversion.
+                const int periods =
+                    static_cast<int>(qBound(-1.0e9, params.value("periods").toDouble(1), 1.0e9));
                 QString field = params.value("field").toString();
                 QString fill = params.value("fill").toString("null");
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
@@ -427,29 +498,39 @@ void register_utility_tier2(NodeRegistry& registry) {
                     return;
                 }
 
-                QJsonArray arr = data.toArray();
+                const QJsonArray arr = data.toArray();
                 QJsonArray out;
-                int n = arr.size();
-                for (int i = 0; i < n; ++i) {
-                    int src = i - periods;
+                const qint64 n = arr.size();
+                // Value of source row `r` (0 <= r < n), whole row or one field of it.
+                auto source_value = [&](qint64 r) -> QJsonValue {
+                    const QJsonValue row = arr.at(r);
+                    return field.isEmpty() ? row : row.toObject().value(field);
+                };
+                for (qint64 i = 0; i < n; ++i) {
+                    // A lag (periods > 0) reads an earlier row, a lead (periods < 0) a later one.
+                    const qint64 src = i - periods;
                     QJsonValue lagged;
                     if (src >= 0 && src < n) {
-                        lagged = field.isEmpty() ? arr[src] : QJsonValue(arr[src].toObject().value(field));
+                        lagged = source_value(src);
+                    } else if (fill == "zero") {
+                        lagged = 0.0;
+                    } else if (fill == "forward_fill" || fill == "backward_fill") {
+                        // The gap is filled from the nearest row that exists: the first row for
+                        // the start of a lag, the last row for the end of a lead. The old code
+                        // indexed past the end for a lead (out-of-bounds read) and filled a lag
+                        // with values from the END of the series; "forward_fill" copied the
+                        // previous row whatever Periods was.
+                        lagged = source_value(qBound<qint64>(0, src, n - 1));
                     } else {
-                        if (fill == "zero")
-                            lagged = 0.0;
-                        else if (fill == "forward_fill" && i > 0)
-                            lagged = field.isEmpty() ? arr[i - 1] : QJsonValue(arr[i - 1].toObject().value(field));
-                        else if (fill == "backward_fill" && src + n >= 0)
-                            lagged = field.isEmpty() ? arr[qMax(0, src + n)]
-                                                     : QJsonValue(arr[qMax(0, src + n)].toObject().value(field));
-                        else
-                            lagged = QJsonValue::Null;
+                        lagged = QJsonValue::Null;
                     }
+                    if (lagged.isUndefined())
+                        lagged = QJsonValue::Null; // a row without the field
                     if (field.isEmpty()) {
                         out.append(lagged);
                     } else {
-                        QJsonObject obj = arr[i].isObject() ? arr[i].toObject() : QJsonObject{};
+                        const QJsonValue row = arr.at(i);
+                        QJsonObject obj = row.isObject() ? row.toObject() : QJsonObject{};
                         obj[field + "_lag_" + QString::number(periods)] = lagged;
                         out.append(obj);
                     }
@@ -509,7 +590,11 @@ void register_utility_tier2(NodeRegistry& registry) {
         .type_id = "utility.cache_node",
         .display_name = "Cache",
         .category = "Utilities",
-        .description = "Cache node output with TTL to avoid redundant computation",
+        // The node runs after the node that produced its input, so it cannot skip that work: what
+        // it does is hold the first value seen under a key and hand it back for TTL seconds. The
+        // old auto-generated key was a hash of the input itself, i.e. it always returned exactly
+        // what it was given, so the key is now required.
+        .description = "Hold the first value seen under a Cache Key for TTL seconds (later runs get it back)",
         .icon_text = "#",
         .accent_color = "#808080",
         .version = 1,
@@ -517,8 +602,8 @@ void register_utility_tier2(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"ttl_seconds", "TTL (sec)", "number", 300, {}, "Cache lifetime in seconds"},
-                {"cache_key", "Cache Key", "string", "", {}, "Custom key (auto-generated if empty)"},
+                {"ttl_seconds", "TTL (sec)", "number", 300, {}, "How long the held value is returned"},
+                {"cache_key", "Cache Key", "string", "", {}, "Name the held value is stored under", true},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
@@ -526,15 +611,10 @@ void register_utility_tier2(NodeRegistry& registry) {
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 // TTL in milliseconds, computed in double and clamped (ttl_seconds * 1000 overflowed int).
                 const int ttl_ms = static_cast<int>(qBound(1.0, params.value("ttl_seconds").toDouble(300), 2000000.0) * 1000.0);
-                QString key = params.value("cache_key").toString();
+                const QString key = params.value("cache_key").toString().trimmed();
                 if (key.isEmpty()) {
-                    // Auto-key from a hash of the WHOLE input. The old key was the first 64 characters
-                    // of its JSON, so two different datasets that start alike (rows of the same table)
-                    // shared a key and the second one got the first one's data back.
-                    const QByteArray json = data.isObject()  ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
-                                            : data.isArray() ? QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact)
-                                                             : data.toVariant().toString().toUtf8();
-                    key = QString::fromLatin1(QCryptographicHash::hash(json, QCryptographicHash::Sha1).toHex());
+                    cb(false, {}, "Cache needs a Cache Key — the name the held value is stored under");
+                    return;
                 }
                 // The shared, bounded, TTL-aware WorkflowCache (CacheManager) replaces a private
                 // process-wide hash that never expired anything or shrank.
@@ -642,8 +722,16 @@ void register_utility_tier2(NodeRegistry& registry) {
                 // (={{$input.value > 0}}) matched none of the old regex, so with a non-empty
                 // condition the assertion silently PASSED; non-object input passed too.
                 bool passed = true;
-                if (!condition.trimmed().isEmpty())
-                    passed = ExpressionEngine::evaluate_condition(condition, data);
+                if (!condition.trimmed().isEmpty()) {
+                    // Unsupported syntax is reported as such — it used to read as "the data
+                    // failed the test" with the user's own fail message.
+                    QString error;
+                    passed = ExpressionEngine::evaluate_condition(condition, data, &error);
+                    if (!error.isEmpty()) {
+                        cb(false, {}, error);
+                        return;
+                    }
+                }
                 if (!passed)
                     cb(false, {}, QString("%1 [%2]").arg(message, condition.trimmed()));
                 else

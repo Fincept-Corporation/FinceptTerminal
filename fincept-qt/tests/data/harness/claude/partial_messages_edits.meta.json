@@ -1,0 +1,8 @@
+{
+  "harness_version": "2.1.325",
+  "date": "2026-11-17",
+  "command": "claude -p --output-format stream-json --verbose --include-partial-messages …",
+  "source": "docs",
+  "url": "https://code.claude.com/docs/en/agent-sdk/typescript",
+  "note": "Transcribed from the documented stream-json message types (SDKPartialAssistantMessage = Anthropic stream events, assistant, user tool_result, rate_limit_event, result); not a recording."
+}

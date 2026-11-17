@@ -13,9 +13,14 @@
 #include <QDate>
 #include <QEvent>
 #include <QHash>
+#include <QList>
 #include <QString>
 #include <QStringList>
 #include <QWidget>
+
+namespace fincept::ui {
+class SymbolSearchBox;
+}
 
 class QComboBox;
 class QCompleter;
@@ -74,6 +79,11 @@ class SurfaceControlPanel : public QWidget {
 
     void apply_state(const SurfaceControlsState& s);
 
+    /// Make `symbol` the underlying (a quick-pick chip, the symbol box, the screen's
+    /// BACK TO): the fields follow and symbol_changed / controls_changed are emitted
+    /// when it differs from the current one.
+    void choose_symbol(const QString& symbol);
+
     // Tighten the QDateEdits' min/max bounds (and clamp current values into
     // them) when the screen receives dataset_range metadata. Called once per
     // dataset; subsequent calls are cheap.
@@ -120,6 +130,11 @@ class SurfaceControlPanel : public QWidget {
     QGroupBox* build_lineage_section();
     void apply_capability_visibility();
     void prefill_datasets();
+    /// Option surfaces: the symbol box (US stocks / ETFs / indices) and the starter
+    /// underlyings as chips, under the plain field.
+    void build_option_symbol_picker(QWidget* parent, QVBoxLayout* layout);
+    /// Box text and the checked chip follow state_.symbol.
+    void sync_option_symbol_picker();
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     void retranslateUi();
@@ -159,6 +174,11 @@ class SurfaceControlPanel : public QWidget {
     QStringListModel* symbol_completer_model_ = nullptr;
     QTimer* symbol_search_timer_ = nullptr;
     QString pending_search_query_;
+    // Option surfaces (OPRA underlyings): the terminal's symbol picker + quick picks,
+    // shown instead of symbol_edit_ (which keeps commodity roots / Databento symbols).
+    fincept::ui::SymbolSearchBox* symbol_box_ = nullptr;
+    QWidget* symbol_chips_ = nullptr;
+    QList<QToolButton*> symbol_chip_btns_;
 
     // ── Date range section ─────────────────────────────────────────────────
     QDateEdit* start_edit_ = nullptr;

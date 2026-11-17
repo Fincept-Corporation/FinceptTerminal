@@ -116,6 +116,8 @@ QJsonObject mkt_top_of_book(const QString& symbol, int requested_depth, const QJ
 
 } // anonymous namespace
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_market_data_nodes(NodeRegistry& registry) {
     registry.register_type({
         .type_id = "market.get_quote",
@@ -129,8 +131,9 @@ void register_market_data_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::MarketData}},
         .parameters =
             {
+                // Quotes always come from yfinance_data.py; a "Source" select (alpha_vantage /
+                // polygon / databento) was offered but never read, so it was removed.
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
-                {"source", "Source", "select", "yahoo", {"yahoo", "alpha_vantage", "polygon", "databento"}, ""},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>&,
@@ -724,10 +727,10 @@ void register_market_data_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"symbol", "Symbol", "string", "", {}, "Ticker or leave empty for all"},
-                {"transaction_type", "Type", "select", "all", {"all", "buy", "sell", "exercise"}, ""},
+                // Form 4 transaction details are not parsed, so "Type" and "Min Transaction
+                // Value" filters could not apply and were removed.
+                {"symbol", "Symbol", "string", "", {}, "Ticker symbol"},
                 {"days_back", "Days Back", "number", 30, {}, ""},
-                {"min_value", "Min Transaction Value ($)", "number", 100000, {}, ""},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>&,
@@ -763,7 +766,7 @@ void register_market_data_nodes(NodeRegistry& registry) {
                                      out["data"] = recent;
                                      out["source"] = "SEC EDGAR";
                                      out["note"] = "Form 4 filing index. Transaction details (buy/sell, shares, value) "
-                                                   "are not parsed, so the Type and Min Value filters do not apply.";
+                                                   "are not parsed.";
                                      out["node_type"] = "market.insider_trades";
                                      cb(true, out, {});
                                  });

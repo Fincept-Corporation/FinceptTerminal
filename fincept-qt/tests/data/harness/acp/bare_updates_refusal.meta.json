@@ -1,0 +1,8 @@
+{
+  "harness_version": "",
+  "date": "2026-11-17",
+  "command": "(bare SessionNotification params / bare SessionUpdate lines)",
+  "source": "docs",
+  "url": "https://agentclientprotocol.com/protocol/schema",
+  "note": "Transcribed from the ACP schema; includes an unknown update kind and a non-JSON line on purpose."
+}

@@ -21,15 +21,23 @@
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSession.h"
 #include "trading/ExchangeSessionManager.h"
+#include "trading/ExchangeSession.h"
+#include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
+#include "trading/PaperMarkService.h"
 #include "trading/PaperTrading.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/AutoLoadPane.h"
 
 #include <QCompleter>
 #include <QDateTime>
 #include <QHBoxLayout>
+#include <QJsonValue>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPointer>
+#include <QSet>
 #include <QSplitter>
 #include <QStringListModel>
 #include <QStyle>
@@ -53,6 +61,48 @@ static QVector<PtOrder> crypto_open_paper_orders(const QString& portfolio_id) {
     return r.is_ok() ? r.value() : QVector<PtOrder>{};
 }
 
+// Before the engine may book cash for `symbol` (a resting order filling, an
+// SL / TP closing a position): the pair's FX factor into the paper account's
+// currency, from a real rate. Kept current from FxRateService while a rate is
+// known; without one the factor set earlier this run (from a real rate) is
+// kept; with neither, false — the caller does not match that symbol on this tick
+// (the order keeps resting), so nothing is ever booked at 1:1. Same currency, or
+// a symbol whose quote asset is unknown: true. Worker thread.
+static bool crypto_paper_fx_ready(const QString& portfolio_id, const QString& symbol, const QString& account_ccy) {
+    const QString px_ccy = crypto::pair_quote_ccy(symbol);
+    const QString acct = account_ccy.trimmed().toUpper();
+    if (px_ccy.isEmpty() || acct.isEmpty() || px_ccy == acct)
+        return true;
+    if (const auto f = PaperMarkService::fx_factor(px_ccy, acct)) {
+        pt_set_symbol_fx(portfolio_id, symbol, *f);
+        return true;
+    }
+    return pt_has_symbol_fx(portfolio_id, symbol);
+}
+
+// The distinct quote assets of a paper portfolio's fills, for the TURNOVER tile
+// (the engine sums price × quantity in each fill's own quote asset). Re-read
+// only when the number of fills changes. Worker thread.
+static QStringList crypto_paper_quote_assets(const QString& portfolio_id, qint64 total_trades) {
+    static QMutex mutex;
+    static QHash<QString, QPair<qint64, QStringList>> cache;
+    {
+        QMutexLocker lock(&mutex);
+        const auto it = cache.constFind(portfolio_id);
+        if (it != cache.constEnd() && it->first == total_trades)
+            return it->second;
+    }
+    QStringList quotes;
+    for (const auto& t : pt_get_trades(portfolio_id, -1)) { // -1: every fill (SQLite LIMIT -1)
+        const QString q = crypto::pair_quote_ccy(t.symbol);
+        if (!q.isEmpty() && !quotes.contains(q))
+            quotes << q;
+    }
+    QMutexLocker lock(&mutex);
+    cache.insert(portfolio_id, qMakePair(total_trades, quotes));
+    return quotes;
+}
+
 void CryptoTradingScreen::apply_feed_mode(bool ws_connected) {
     // WS-only mode: no REST polling fallbacks. We keep this method as a
     // logging/state-tracking hook so the WS status pill in the command bar
@@ -65,13 +115,13 @@ void CryptoTradingScreen::apply_feed_mode(bool ws_connected) {
 }
 
 void CryptoTradingScreen::flush_ws_updates() {
-    apply_feed_mode(ExchangeService::instance().is_ws_connected());
+    apply_feed_mode(session()->is_ws_connected());
 
     // Flush primary symbol ticker → header bar + order entry
     if (has_pending_primary_) {
         const auto& t = pending_primary_ticker_;
         ticker_bar_->update_data(t.last, t.percentage, t.high, t.low, t.base_volume,
-                                 ExchangeService::instance().is_ws_connected());
+                                 session()->is_ws_connected());
         if (t.bid > 0 && t.ask > 0)
             ticker_bar_->update_bid_ask(t.bid, t.ask, std::abs(t.ask - t.bid));
         order_entry_->set_current_price(t.last);
@@ -84,6 +134,11 @@ void CryptoTradingScreen::flush_ws_updates() {
         orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
         bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
         has_pending_orderbook_ = false;
+        // First snapshot since the last reset / error: the book replaces its skeleton.
+        if (!ob_feed_reported_ && (!ob.bids.isEmpty() || !ob.asks.isEmpty())) {
+            ob_feed_reported_ = true;
+            ob_pane_->feed_data(QJsonValue(true));
+        }
     }
 
     // Flush buffered candles: keep only the newest update of each bar (in
@@ -143,7 +198,8 @@ void CryptoTradingScreen::flush_ws_updates() {
             if (paper_bookkeeping_in_flight_.compare_exchange_strong(expected, true)) {
                 QPointer<CryptoTradingScreen> self = this;
                 const QString pid = portfolio_id_;
-                (void)QtConcurrent::run([self, pid, batch]() {
+                const QString book_ccy = portfolio_.currency; // the paper account's cash currency
+                (void)QtConcurrent::run([self, pid, book_ccy, batch]() {
                     struct Result {
                         QVector<PtPosition> positions;
                         bool fill_occurred = false;
@@ -151,6 +207,7 @@ void CryptoTradingScreen::flush_ws_updates() {
                         QVector<PtOrder> orders;
                         QVector<PtTrade> trades;
                         PtStats stats;
+                        QStringList quote_assets;
                     };
                     Result r;
                     try {
@@ -163,12 +220,26 @@ void CryptoTradingScreen::flush_ws_updates() {
                             const auto t = pt_get_trades(pid, 1);
                             return t.isEmpty() ? QString() : t.first().id;
                         };
-                        const auto orders_before = resting_orders();
+                        // Symbols the engine may book cash for on this tick (a resting
+                        // order or an open position, i.e. an SL / TP).
+                        const auto open_orders = crypto_open_paper_orders(pid);
+                        QSet<QString> active;
+                        for (const auto& o : open_orders)
+                            active.insert(o.symbol);
+                        for (const auto& p : pt_get_positions(pid))
+                            active.insert(p.symbol);
+                        const auto orders_before = open_orders.size();
                         const QString trade_before = newest_trade_id();
                         for (const auto& ticker : batch) {
                             if (ticker.last <= 0)
                                 continue;
                             pt_update_position_price(pid, ticker.symbol, ticker.last);
+                            // A fill books cash at the pair's FX factor: no real rate
+                            // for a cross-currency pair yet -> do not match it on this
+                            // tick (the order keeps resting; the next tick retries).
+                            if (!active.contains(ticker.symbol) ||
+                                !crypto_paper_fx_ready(pid, ticker.symbol, book_ccy))
+                                continue;
                             PriceData pd;
                             pd.last = ticker.last;
                             pd.bid = ticker.bid;
@@ -184,6 +255,7 @@ void CryptoTradingScreen::flush_ws_updates() {
                             r.orders = crypto_open_paper_orders(pid);
                             r.trades = pt_get_trades(pid, 50);
                             r.stats = pt_get_stats(pid);
+                            r.quote_assets = crypto_paper_quote_assets(pid, r.stats.total_trades);
                         }
                     } catch (...) {
                         if (self)
@@ -198,13 +270,17 @@ void CryptoTradingScreen::flush_ws_updates() {
                             if (!self)
                                 return;
                             self->paper_bookkeeping_in_flight_.store(false);
+                            // Switched to LIVE while this ran: paper rows must not land
+                            // in the live account views.
+                            if (self->trading_mode_ != TradingMode::Paper)
+                                return;
                             self->bottom_panel_->set_positions(r.positions);
                             if (r.fill_occurred) {
                                 self->portfolio_ = r.portfolio;
-                                self->order_entry_->set_balance(r.portfolio.balance);
+                                self->order_entry_->set_balance(r.portfolio.balance, r.portfolio.currency);
                                 self->bottom_panel_->set_orders(r.orders);
-                                self->bottom_panel_->set_trades(r.trades);
-                                self->bottom_panel_->set_stats(r.stats);
+                                self->bottom_panel_->set_trades(r.trades, r.portfolio.currency);
+                                self->bottom_panel_->set_stats(r.stats, r.portfolio.currency, r.quote_assets);
                             }
                         },
                         Qt::QueuedConnection);
@@ -223,11 +299,13 @@ void CryptoTradingScreen::flush_ws_updates() {
 void CryptoTradingScreen::refresh_ticker() {
     if (!initialized_)
         return;
-    auto& es = ExchangeService::instance();
-    const auto cached = es.get_cached_price(selected_symbol_);
+    // This screen's own exchange session — never ExchangeService's process-wide
+    // "current exchange", which another window may have switched.
+    auto* es = session();
+    const auto cached = es->get_cached_price(selected_symbol_);
     if (cached.last > 0) {
         ticker_bar_->update_data(cached.last, cached.percentage, cached.high, cached.low, cached.base_volume,
-                                 es.is_ws_connected());
+                                 es->is_ws_connected());
         if (cached.bid > 0 && cached.ask > 0)
             ticker_bar_->update_bid_ask(cached.bid, cached.ask, std::abs(cached.ask - cached.bid));
         order_entry_->set_current_price(cached.last);
@@ -237,24 +315,24 @@ void CryptoTradingScreen::refresh_ticker() {
     // Cache miss + WS not connected — prime the ticker on a worker so the UI
     // doesn't stay empty waiting for the first WS tick after an exchange
     // switch or cold start. Skip if the WS is live: the tick will arrive.
-    if (es.is_ws_connected())
+    if (es->is_ws_connected())
         return;
     QPointer<CryptoTradingScreen> self = this;
     const QString symbol = selected_symbol_;
-    (void)QtConcurrent::run([self, symbol]() {
+    const QString ex = exchange_id_;
+    (void)QtConcurrent::run([self, symbol, ex]() {
         if (!self)
             return;
-        auto ticker = ExchangeService::instance().fetch_ticker(symbol);
+        auto ticker = ExchangeSessionManager::instance().session(ex)->fetch_ticker(symbol);
         if (!self || ticker.last <= 0)
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, symbol, ticker]() {
-                if (!self || self->selected_symbol_ != symbol)
+            [self, symbol, ex, ticker]() {
+                if (!self || self->selected_symbol_ != symbol || self->exchange_id_ != ex)
                     return;
-                auto& es = ExchangeService::instance();
                 self->ticker_bar_->update_data(ticker.last, ticker.percentage, ticker.high, ticker.low,
-                                               ticker.base_volume, es.is_ws_connected());
+                                               ticker.base_volume, self->session()->is_ws_connected());
                 if (ticker.bid > 0 && ticker.ask > 0)
                     self->ticker_bar_->update_bid_ask(ticker.bid, ticker.ask, std::abs(ticker.ask - ticker.bid));
                 self->order_entry_->set_current_price(ticker.last);
@@ -268,17 +346,22 @@ void CryptoTradingScreen::refresh_orderbook() {
         return;
     QPointer<CryptoTradingScreen> self = this;
     const QString symbol = selected_symbol_; // snapshot on the UI thread — see refresh_ticker()
-    (void)QtConcurrent::run([self, symbol]() {
+    const QString ex = exchange_id_;
+    (void)QtConcurrent::run([self, symbol, ex]() {
         if (!self)
             return;
-        auto ob = ExchangeService::instance().fetch_orderbook(symbol, OB_MAX_DISPLAY_LEVELS);
+        auto ob = ExchangeSessionManager::instance().session(ex)->fetch_orderbook(symbol, OB_MAX_DISPLAY_LEVELS);
         QMetaObject::invokeMethod(
             self,
-            [self, symbol, ob]() {
-                if (!self || self->selected_symbol_ != symbol)
+            [self, symbol, ex, ob]() {
+                if (!self || self->selected_symbol_ != symbol || self->exchange_id_ != ex)
                     return;
                 self->orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
                 self->bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
+                if (!self->ob_feed_reported_ && (!ob.bids.isEmpty() || !ob.asks.isEmpty())) {
+                    self->ob_feed_reported_ = true;
+                    self->ob_pane_->feed_data(QJsonValue(true));
+                }
             },
             Qt::QueuedConnection);
     });
@@ -301,6 +384,7 @@ void CryptoTradingScreen::refresh_portfolio() {
             QVector<PtOrder> orders;
             QVector<PtTrade> trades;
             PtStats stats;
+            QStringList quote_assets;
             bool ok = false;
         };
         Snapshot s;
@@ -310,6 +394,7 @@ void CryptoTradingScreen::refresh_portfolio() {
             s.orders = crypto_open_paper_orders(pid);
             s.trades = pt_get_trades(pid, 50);
             s.stats = pt_get_stats(pid);
+            s.quote_assets = crypto_paper_quote_assets(pid, s.stats.total_trades);
             s.ok = true;
         } catch (...) {
             if (self)
@@ -322,12 +407,14 @@ void CryptoTradingScreen::refresh_portfolio() {
             [self, s]() {
                 if (!self)
                     return;
+                if (self->trading_mode_ != TradingMode::Paper)
+                    return; // switched to LIVE while the read ran — keep paper rows out of live views
                 self->portfolio_ = s.portfolio;
-                self->order_entry_->set_balance(s.portfolio.balance);
+                self->order_entry_->set_balance(s.portfolio.balance, s.portfolio.currency);
                 self->bottom_panel_->set_positions(s.positions);
                 self->bottom_panel_->set_orders(s.orders);
-                self->bottom_panel_->set_trades(s.trades);
-                self->bottom_panel_->set_stats(s.stats);
+                self->bottom_panel_->set_trades(s.trades, s.portfolio.currency);
+                self->bottom_panel_->set_stats(s.stats, s.portfolio.currency, s.quote_assets);
                 // Runs every 1.5 s — diagnostics only (P14).
                 LOG_DEBUG(TAG, QString("Paper portfolio refreshed: %1 positions, %2 open orders, %3 trades, "
                                        "balance=%4")
@@ -345,14 +432,15 @@ void CryptoTradingScreen::refresh_watchlist() {
         return;
     QPointer<CryptoTradingScreen> self = this;
     const QStringList symbols = watchlist_symbols_; // snapshot on the UI thread — see refresh_ticker()
-    (void)QtConcurrent::run([self, symbols]() {
+    const QString ex = exchange_id_;
+    (void)QtConcurrent::run([self, symbols, ex]() {
         if (!self)
             return;
-        auto tickers = ExchangeService::instance().fetch_tickers(symbols);
+        auto tickers = ExchangeSessionManager::instance().session(ex)->fetch_tickers(symbols);
         QMetaObject::invokeMethod(
             self,
-            [self, tickers]() {
-                if (!self)
+            [self, ex, tickers]() {
+                if (!self || self->exchange_id_ != ex)
                     return;
                 self->watchlist_->update_prices(tickers);
             },
@@ -371,25 +459,33 @@ void CryptoTradingScreen::refresh_market_info() {
     // to the bottom panel — cache access is UI-thread-only, no lock needed.
     QPointer<CryptoTradingScreen> self = this;
     const QString symbol = selected_symbol_;
+    const QString ex = exchange_id_;
+    market_info_key_ = ex + QLatin1Char('|') + symbol; // MARKET tab: asked for this pair already
 
-    (void)QtConcurrent::run([self, symbol]() {
+    (void)QtConcurrent::run([self, symbol, ex]() {
         if (!self)
             return;
-        auto fr = ExchangeService::instance().fetch_funding_rate(symbol);
+        auto fr = ExchangeSessionManager::instance().session(ex)->fetch_funding_rate(symbol);
         QMetaObject::invokeMethod(
             self,
-            [self, symbol, fr]() {
+            [self, symbol, ex, fr]() {
                 if (!self)
                     return;
-                if (self->selected_symbol_ != symbol)
+                if (self->selected_symbol_ != symbol || self->exchange_id_ != ex)
                     return; // user switched symbols — discard stale result
-                if (fr.symbol.isEmpty()) {
-                    // Daemon error / venue without funding (spot): keep the readouts at "--"
-                    // rather than publishing a fabricated 0.0000 % / $0 mark, and hide the
-                    // ribbon's mark/index chips.
+                if (fr.symbol.isEmpty() || (fr.mark_price <= 0.0 && fr.funding_rate == 0.0 &&
+                                            fr.next_funding_timestamp <= 0)) {
+                    // Daemon error / venue without funding (spot): no fabricated 0.0000 % /
+                    // $0 mark — hide the ribbon's mark/index chips and let the MARKET tiles
+                    // say why instead of loading forever.
                     self->ticker_bar_->update_mark_price(0.0, 0.0);
+                    self->bottom_panel_->set_funding_unavailable(
+                        self->is_perp_market() ? tr("not reported by %1").arg(ex.toUpper())
+                                               : tr("spot market — no funding"));
                     return;
                 }
+                // Mark / index prices are in the quote asset of the market they come from.
+                self->market_info_cache_.symbol = self->market_.valid() ? self->market_.symbol : symbol;
                 self->market_info_cache_.funding_rate = fr.funding_rate;
                 self->market_info_cache_.mark_price = fr.mark_price;
                 self->market_info_cache_.index_price = fr.index_price;
@@ -401,19 +497,26 @@ void CryptoTradingScreen::refresh_market_info() {
             Qt::QueuedConnection);
     });
 
-    (void)QtConcurrent::run([self, symbol]() {
+    (void)QtConcurrent::run([self, symbol, ex]() {
         if (!self)
             return;
-        auto oi = ExchangeService::instance().fetch_open_interest(symbol);
+        auto oi = ExchangeSessionManager::instance().session(ex)->fetch_open_interest(symbol);
         QMetaObject::invokeMethod(
             self,
-            [self, symbol, oi]() {
+            [self, symbol, ex, oi]() {
                 if (!self)
                     return;
-                if (self->selected_symbol_ != symbol)
+                if (self->selected_symbol_ != symbol || self->exchange_id_ != ex)
                     return; // user switched symbols — discard stale result
-                if (oi.symbol.isEmpty())
-                    return; // daemon error / unsupported — leave "--" instead of a fake $0 OI
+                if (oi.symbol.isEmpty() || oi.open_interest_value <= 0.0) {
+                    // Daemon error / unsupported — say so rather than a fake $0 OI.
+                    self->bottom_panel_->set_open_interest_unavailable(
+                        self->is_perp_market() ? tr("not reported by %1").arg(ex.toUpper())
+                                               : tr("spot market — no open interest"));
+                    return;
+                }
+                // The OI value is in the quote asset of the market it comes from.
+                self->market_info_cache_.symbol = self->market_.valid() ? self->market_.symbol : symbol;
                 self->market_info_cache_.open_interest = oi.open_interest;
                 self->market_info_cache_.open_interest_value = oi.open_interest_value;
                 self->market_info_cache_.has_data = true;

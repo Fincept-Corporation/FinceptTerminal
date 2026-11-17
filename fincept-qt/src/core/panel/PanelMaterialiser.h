@@ -44,7 +44,9 @@ class PanelMaterialiser : public QObject {
 
     void set_max_per_tick(int n);
 
-    static constexpr int kDefaultMaxPerTick = 4;
+    /// One item per tick: an item builds a whole screen (often 100+ ms), and
+    /// four in one tick froze the window for seconds at start-up.
+    static constexpr int kDefaultMaxPerTick = 1;
     static constexpr int kDefaultTickIntervalMs = 16;
 
   signals:

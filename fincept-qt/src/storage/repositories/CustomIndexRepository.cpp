@@ -106,9 +106,15 @@ Result<void> CustomIndexRepository::save_value(const QString& index_id, const QS
 }
 
 Result<QVector<CustomIndexValue>> CustomIndexRepository::get_values(const QString& index_id, int limit) {
-    return query_list_as<CustomIndexValue>("SELECT id, index_id, date, value FROM custom_index_values "
-                                           "WHERE index_id = ? ORDER BY date ASC LIMIT ?",
-                                           {index_id, limit}, std::function<CustomIndexValue(QSqlQuery&)>(map_value));
+    // The MOST RECENT `limit` levels, returned oldest first (what the performance
+    // chart draws). "ORDER BY date ASC LIMIT n" returned the oldest n instead, so a
+    // long-lived index showed its first year forever. SQLite: LIMIT -1 = no limit.
+    return query_list_as<CustomIndexValue>(
+        "SELECT id, index_id, date, value FROM ("
+        "  SELECT id, index_id, date, value FROM custom_index_values"
+        "  WHERE index_id = ? ORDER BY date DESC LIMIT ?"
+        ") ORDER BY date ASC",
+        {index_id, limit > 0 ? limit : -1}, std::function<CustomIndexValue(QSqlQuery&)>(map_value));
 }
 
 double CustomIndexRepository::latest_value(const QString& index_id) {

@@ -1,0 +1,8 @@
+{"sessionId":"sess_x","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}}}
+{"sessionId":"sess_x","update":{"sessionUpdate":"agent_thought_chunk","messageId":"t1","content":{"type":"text","text":"Considering."}}}
+{"sessionUpdate":"agent_message_chunk","messageId":"a1","content":{"type":"text","text":"I can't help with that."}}
+{"sessionUpdate":"session_info_update","title":"Greeting"}
+{"sessionUpdate":"brand_new_update","foo":1}
+warning: something odd happened
+{"sessionUpdate":"notice","severity":"error","title":"Content filtered","description":"The response was blocked."}
+{"stopReason":"refusal"}

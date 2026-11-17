@@ -137,7 +137,16 @@ inline QString tool_progress_label(const QString& display_name, const QJsonObjec
 /// Every call is emitted; collapsing a run of the same tool into "name ×N" is
 /// the consumer's job, because only the consumer can rewrite a line it already
 /// rendered. Suppressing here would have cost the count entirely.
+/// A tool that OPERATES the terminal (opens a screen, works its controls, rearranges panels)
+/// is starting on this thread's chat session. Defined in LlmService.cpp: it raises
+/// LlmService::ui_operating so the Quick Chat bubble can follow a turn that is about to take
+/// the user away from the chat. Any thread.
+void notify_ui_operating();
+
 inline void emit_tool_progress(const QString& display_name, const QJsonObject& args) {
+    if (display_name == QLatin1String("ui_open") || display_name == QLatin1String("ui_act") ||
+        display_name == QLatin1String("ui_workspace") || display_name == QLatin1String("ui_invoke"))
+        notify_ui_operating();
     if (!t_progress_emitter)
         return;
     t_progress_emitter(tool_stream_prefix() + tool_progress_label(display_name, args) + QStringLiteral("\n"));
@@ -148,6 +157,22 @@ inline void emit_tool_progress(const QString& display_name, const QJsonObject& a
 // to scope per-chat state — for example, "did this chat session already start a
 // report?" so the model knows whether to continue or start fresh.
 inline thread_local QString t_chat_session_id;
+
+// Reasoning effort of the in-flight request ("low" | "medium" | "high" | "xhigh" | "max";
+// empty = the server default). Set for the request's worker thread from ChatRoute::effort;
+// the Fincept submit sends it as `effort` (the server maps it to the model's
+// output_config.effort and prices the higher levels).
+inline thread_local QString t_reasoning_effort;
+
+struct ReasoningEffortGuard {
+    QString prev;
+    explicit ReasoningEffortGuard(QString effort) : prev(std::move(t_reasoning_effort)) {
+        t_reasoning_effort = std::move(effort);
+    }
+    ~ReasoningEffortGuard() { t_reasoning_effort = std::move(prev); }
+    ReasoningEffortGuard(const ReasoningEffortGuard&) = delete;
+    ReasoningEffortGuard& operator=(const ReasoningEffortGuard&) = delete;
+};
 
 struct ChatSessionGuard {
     QString prev;

@@ -64,6 +64,8 @@ QStringList NodeRegistry::categories() const {
     return cats;
 }
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void NodeRegistry::register_builtin_nodes() {
     // ── Triggers ───────────────────────────────────────────────────────
     register_type({
@@ -95,29 +97,8 @@ void NodeRegistry::register_builtin_nodes() {
             },
     });
 
-    register_type({
-        .type_id = "trigger.schedule",
-        .display_name = "Schedule Trigger",
-        .category = "Triggers",
-        .description = "Start workflow on a schedule",
-        .icon_text = ">>",
-        .accent_color = "#d97706",
-        .version = 1,
-        .inputs = {},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"cron", "Cron Expression", "string", "*/5 * * * *", {}, "e.g. */5 * * * *"},
-            },
-        .execute =
-            [](const QJsonObject& params, const QVector<QJsonValue>&,
-               std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["cron"] = params.value("cron").toString("*/5 * * * *");
-                out["triggered"] = true;
-                cb(true, out, {});
-            },
-    });
+    // (Schedule Trigger — trigger.schedule — is registered in TriggerNodes.cpp, which holds the
+    // cron parser it needs. It used to be registered here and fired at once on every run.)
 
     // ── Output ─────────────────────────────────────────────────────────
     register_type({
@@ -236,7 +217,14 @@ void NodeRegistry::register_builtin_nodes() {
                     // The old inline parser compared every right-hand side with
                     // QString::toDouble(), so `status == active` read as `0 == 0` and was
                     // TRUE for any string — an If/Else on text always took the true branch.
-                    result = ExpressionEngine::evaluate_condition(cond_str, data);
+                    // A condition in unsupported syntax (arithmetic, '!', parentheses) fails
+                    // the node with the reason instead of silently taking the false branch.
+                    QString error;
+                    result = ExpressionEngine::evaluate_condition(cond_str, data, &error);
+                    if (!error.isEmpty()) {
+                        cb(false, {}, error);
+                        return;
+                    }
                 }
 
                 // Annotate the output with the branch taken
@@ -283,7 +271,8 @@ void NodeRegistry::register_builtin_nodes() {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"language", "Language", "select", "python", {"python", "javascript"}, ""},
+                // Python only: the Code bridge runs PythonRunner and refuses any other language.
+                {"language", "Language", "select", "python", {"python"}, ""},
                 {"code", "Code", "code", "", {}, "# Write your code here"},
             },
         .execute = nullptr, // wired in Phase 3 via PythonRunner

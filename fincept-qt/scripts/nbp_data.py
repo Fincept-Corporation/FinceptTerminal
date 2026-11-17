@@ -56,6 +56,57 @@ EM_CURRENCIES    = ["CNY", "INR", "BRL", "KRW", "TRY", "MXN", "ZAR", "IDR", "MYR
 
 
 # ---------------------------------------------------------------------------
+# Dates — NBP answers 400 "Invalid date range" for an end date that is still in the future in
+# Warsaw, which is what a caller east of Poland sends every night (its local "today").
+# ---------------------------------------------------------------------------
+
+def _warsaw_today() -> date:
+    """Today's date in Warsaw (Europe/Warsaw: CET, CEST in summer)."""
+    now_utc = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        return now_utc.astimezone(ZoneInfo("Europe/Warsaw")).date()
+    except Exception:
+        pass  # no tz database (e.g. Windows without tzdata): apply the EU rule directly
+
+    def last_sunday(year: int, month: int) -> datetime:
+        last_day = datetime(year, month + 1, 1, 1, tzinfo=timezone.utc) - timedelta(days=1)
+        return last_day - timedelta(days=(last_day.weekday() + 1) % 7)
+
+    # Summer time runs from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday
+    # of October.
+    summer = last_sunday(now_utc.year, 3) <= now_utc < last_sunday(now_utc.year, 10)
+    return (now_utc + timedelta(hours=2 if summer else 1)).date()
+
+
+def _clamp_to_warsaw_today(value: Optional[str]) -> Optional[str]:
+    """An ISO date later than today in Warsaw becomes today in Warsaw; anything else is unchanged."""
+    if not value:
+        return value
+    try:
+        d = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return value
+    today = _warsaw_today()
+    return today.isoformat() if d > today else value
+
+
+def _windows(start: str, end: str, max_days: int):
+    """[start, end] (ISO dates) as consecutive (from, to) windows of at most `max_days` days each;
+    a single window when either bound is not an ISO date (the API then judges it)."""
+    try:
+        s, e = date.fromisoformat(str(start)[:10]), date.fromisoformat(str(end)[:10])
+    except ValueError:
+        return [(start, end)]
+    out = []
+    while s <= e:
+        stop = min(e, s + timedelta(days=max_days - 1))
+        out.append((s.isoformat(), stop.isoformat()))
+        s = stop + timedelta(days=1)
+    return out or [(start, end)]
+
+
+# ---------------------------------------------------------------------------
 # Error container
 # ---------------------------------------------------------------------------
 
@@ -107,6 +158,15 @@ class NBPWrapper:
                                 timeout=DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
+
+    def _get_or_none(self, path: str) -> Any:
+        """_get, with None for HTTP 404 (NBP's answer for a window without any publication)."""
+        try:
+            return self._get(path)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            raise
 
     def _safe(self, path: str, label: str,
               extra_fields: Optional[Dict] = None) -> Dict[str, Any]:
@@ -179,7 +239,17 @@ class NBPWrapper:
         """Latest exchange rate table (A=mid, B=exotic, C=bid/ask)."""
         try:
             raw   = self._get(f"exchangerates/tables/{table}/")
-            rows  = self._flatten_table(raw)
+            # One table date: a row per currency ({date, currency, name, mid | bid + ask}), not one
+            # row with a column per currency.
+            rows  = []
+            for entry in (raw if isinstance(raw, list) else [raw]):
+                d = entry.get("effectiveDate") or entry.get("tradingDate", "")
+                for r in entry.get("rates", []):
+                    row = {"date": d, "currency": r.get("code"), "name": r.get("currency")}
+                    for k in ("mid", "bid", "ask"):
+                        if r.get(k) is not None:
+                            row[k] = r[k]
+                    rows.append(row)
             return {
                 "success":   True,
                 "table":     table,
@@ -197,8 +267,17 @@ class NBPWrapper:
     def get_exchange_rates_range(self, start_date: str, end_date: str,
                                  table: str = "A") -> Dict[str, Any]:
         """Exchange rate table for a date range (max ~93 days per request)."""
+        start_date = _clamp_to_warsaw_today(start_date)
+        end_date = _clamp_to_warsaw_today(end_date)
         try:
-            raw  = self._get(f"exchangerates/tables/{table}/{start_date}/{end_date}/")
+            # NBP serves at most 93 days of tables per request: longer ranges are fetched in parts
+            raw = []
+            for s, e in _windows(start_date, end_date, 93):
+                part = self._get_or_none(f"exchangerates/tables/{table}/{s}/{e}/")
+                raw += part if isinstance(part, list) else ([part] if part else [])
+            if not raw:
+                return NBPError(f"tables/{table}/{start_date}/{end_date}",
+                                "No data: NBP published no tables in this range", 404).to_dict()
             rows = self._flatten_table(raw)
             return {
                 "success":    True,
@@ -221,17 +300,32 @@ class NBPWrapper:
                           last_n: Optional[int] = None,
                           table: str = "A") -> Dict[str, Any]:
         """Historical rates for a single currency vs PLN."""
+        start_date = _clamp_to_warsaw_today(start_date)
+        end_date = _clamp_to_warsaw_today(end_date)
         try:
             if last_n:
                 path = f"exchangerates/rates/{table}/{code}/last/{last_n}/"
             elif start_date and end_date:
-                path = f"exchangerates/rates/{table}/{code}/{start_date}/{end_date}/"
+                path = None
+                # NBP serves at most 367 days of one currency per request: fetch longer ranges in parts
+                raw = None
+                for s, e in _windows(start_date, end_date, 367):
+                    part = self._get_or_none(f"exchangerates/rates/{table}/{code}/{s}/{e}/")
+                    if isinstance(part, dict):
+                        if raw is None:
+                            raw = part
+                        else:
+                            raw["rates"] = raw.get("rates", []) + part.get("rates", [])
+                if raw is None:
+                    return NBPError(f"rates/{table}/{code}", "No data: NBP published no rates in this range",
+                                    404).to_dict()
             elif start_date:
                 # single date
                 path = f"exchangerates/rates/{table}/{code}/{start_date}/"
             else:
                 path = f"exchangerates/rates/{table}/{code}/"
-            raw         = self._get(path)
+            if path is not None:
+                raw = self._get(path)
             rows, c     = self._flatten_rates(raw)
             return {
                 "success":     True,
@@ -265,8 +359,9 @@ class NBPWrapper:
     def get_major_currencies(self, last_n: int = 30) -> Dict[str, Any]:
         """Last N observations for major currencies vs PLN."""
         try:
-            end   = date.today().isoformat()
-            start = (date.today() - timedelta(days=last_n * 2)).isoformat()  # buffer for weekends
+            today = _warsaw_today()
+            end   = today.isoformat()
+            start = (today - timedelta(days=last_n * 2)).isoformat()  # buffer for weekends
             raw   = self._get(f"exchangerates/tables/A/{start}/{end}/")
             rows  = self._flatten_table(raw)
             # Filter to major currencies only
@@ -307,7 +402,16 @@ class NBPWrapper:
             ("table_c_today", lambda: self.get_exchange_rates_today("C")),
         ]:
             r = call()
-            latest = r.get("data", [{}])[-1] if r.get("data") else None
+            # "latest" stays one record {date, CODE: rate, ...} (CODE_bid / CODE_ask for table C)
+            latest = None
+            if r.get("data"):
+                latest = {"date": r["data"][0].get("date")}
+                for row in r["data"]:
+                    if "mid" in row:
+                        latest[row["currency"]] = row["mid"]
+                    else:
+                        latest[f"{row['currency']}_bid"] = row.get("bid")
+                        latest[f"{row['currency']}_ask"] = row.get("ask")
             results[name] = {"success": r.get("success"), "count": r.get("count"), "latest": latest}
         return {
             "success":   True,

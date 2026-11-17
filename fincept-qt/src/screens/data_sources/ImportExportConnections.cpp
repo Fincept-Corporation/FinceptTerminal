@@ -1,11 +1,4 @@
-// ImportExportConnections.cpp — JSON import/export and template dump for
-// data-source connections.
-//
-// SECURITY NOTE: a connection's `config` blob holds whatever the connector
-// schema declared — including every FieldType::Password value (DB passwords,
-// API keys, API secrets, private keys, access tokens). Exporting it verbatim
-// writes those secrets to a user-chosen file in plaintext, so export_connections
-// redacts them by default and requires an explicit opt-in to include them.
+// ImportExportConnections.cpp — see ImportExportConnections.h.
 
 #include "screens/data_sources/ImportExportConnections.h"
 
@@ -13,50 +6,64 @@
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourceTypes.h"
 #include "screens/data_sources/DataSourcesHelpers.h"
+#include "services/data_sources/ConnectionTransfer.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/DataSourceRepository.h"
 
-#include <QByteArray>
+#include <QCoreApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
-#include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMap>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
-#include <QSet>
-#include <QStringList>
+#include <QRadioButton>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QUuid>
+#include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens::datasources {
 
-namespace {
-constexpr const char* TAG = "DataSources";
+namespace dsrc = fincept::services::datasources;
 
-/// Keys that are treated as secret when the connector has no registry entry
-/// (imported/unknown providers), matched case-insensitively as substrings.
-bool looks_like_secret_key(const QString& key) {
-    const QString k = key.toLower();
-    return k.contains(QLatin1String("password")) || k.contains(QLatin1String("passwd")) ||
-           k.contains(QLatin1String("secret")) || k.contains(QLatin1String("token")) ||
-           k.contains(QLatin1String("apikey")) || k.contains(QLatin1String("api_key")) ||
-           k.contains(QLatin1String("privatekey")) || k.contains(QLatin1String("private_key")) ||
-           k.contains(QLatin1String("accesskey")) || k.contains(QLatin1String("access_key")) ||
-           k.contains(QLatin1String("credential")) || k.contains(QLatin1String("appkey")) ||
-           k.contains(QLatin1String("connectionstring")) ||
-           // Custom-headers JSON (REST / GraphQL connectors) routinely carries an
-           // Authorization / X-API-Key value; it is a plain Textarea, not a Password field.
-           k == QLatin1String("headers");
+namespace {
+
+constexpr const char* kIeTag = "DataSources";
+constexpr qint64 kIeMaxFileBytes = 32 * 1024 * 1024;
+
+/// Run `work` on a worker thread and `then(result)` on the GUI thread while `ctx` lives.
+template <typename R, typename Work, typename Then>
+void ie_async(QObject* ctx, Work work, Then then) {
+    QPointer<QObject> guard(ctx);
+    (void)QtConcurrent::run([guard, work, then]() {
+        R r = work();
+        QMetaObject::invokeMethod(
+            qApp,
+            [guard, then, r = std::move(r)]() {
+                if (guard)
+                    then(r);
+            },
+            Qt::QueuedConnection);
+    });
 }
 
-/// Coerce the values of an imported / template config to the types the connector form
-/// stores: Number fields as integers and Checkbox fields as booleans. A hand-edited
-/// file naturally writes "5432" and "true"; the config dialog and the connection
-/// tester read ints and bools (a string "true" read back as false).
-void coerce_config_types(QJsonObject& cfg, const ConnectorConfig& connector) {
+QString ie_default_dir() {
+    const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    return docs.isEmpty() ? QDir::homePath() : docs;
+}
+
+/// Number / Checkbox fields stored as the form stores them (a hand-edited file writes "5432", "true").
+void ie_coerce_config_types(QJsonObject& cfg, const ConnectorConfig& connector) {
     for (const auto& field : connector.fields) {
         if (!cfg.contains(field.name) || !cfg.value(field.name).isString())
             continue;
@@ -73,286 +80,365 @@ void coerce_config_types(QJsonObject& cfg, const ConnectorConfig& connector) {
     }
 }
 
-/// Blank out every secret-bearing value in a connection's config object.
-/// Authoritative source is the connector schema (FieldType::Password); the
-/// name heuristic is the fallback for providers not in the registry.
-/// Returns the number of values that were cleared.
-int redact_config(QJsonObject& cfg, const QString& provider) {
-    QSet<QString> secret_fields;
-    if (const auto* connector = find_connector_config(provider)) {
-        for (const auto& field : connector->fields) {
-            if (field.type == FieldType::Password)
-                secret_fields.insert(field.name);
+/// Export choices: leave secrets out, or include them encrypted with a passphrase.
+bool ie_ask_export_options(QWidget* parent, dsrc::ExportOptions* opts) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(QObject::tr("Export connections"));
+    auto* vl = new QVBoxLayout(&dlg);
+    auto* intro = new QLabel(QObject::tr("Connection settings are exported. What about their secrets (passwords, API "
+                                         "keys, tokens, auth headers)?"),
+                             &dlg);
+    intro->setWordWrap(true);
+    vl->addWidget(intro);
+    auto* leave_out = new QRadioButton(QObject::tr("Leave secrets out (recommended) — re-enter them after import"), &dlg);
+    auto* encrypt = new QRadioButton(QObject::tr("Include secrets, encrypted with a passphrase"), &dlg);
+    leave_out->setChecked(true);
+    vl->addWidget(leave_out);
+    vl->addWidget(encrypt);
+    auto* pass = new QLineEdit(&dlg);
+    pass->setEchoMode(QLineEdit::Password);
+    pass->setPlaceholderText(QObject::tr("Passphrase (at least 8 characters)"));
+    auto* pass2 = new QLineEdit(&dlg);
+    pass2->setEchoMode(QLineEdit::Password);
+    pass2->setPlaceholderText(QObject::tr("Repeat the passphrase"));
+    auto* note = new QLabel(QObject::tr("The passphrase is not stored anywhere: without it the secrets in the file "
+                                        "cannot be read — by anyone, including you."),
+                            &dlg);
+    note->setWordWrap(true);
+    auto* error = new QLabel(&dlg);
+    error->setWordWrap(true);
+    vl->addWidget(pass);
+    vl->addWidget(pass2);
+    vl->addWidget(note);
+    vl->addWidget(error);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Ok)->setText(QObject::tr("Export…"));
+    vl->addWidget(buttons);
+    auto sync = [=]() {
+        const bool on = encrypt->isChecked();
+        pass->setEnabled(on);
+        pass2->setEnabled(on);
+        note->setEnabled(on);
+    };
+    sync();
+    QObject::connect(encrypt, &QRadioButton::toggled, &dlg, sync);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, [&]() {
+        if (encrypt->isChecked()) {
+            if (pass->text().size() < 8) {
+                error->setText(QObject::tr("The passphrase needs at least 8 characters."));
+                pass->setFocus();
+                return;
+            }
+            if (pass->text() != pass2->text()) {
+                error->setText(QObject::tr("The two passphrases differ."));
+                pass2->setFocus();
+                return;
+            }
         }
-    }
-
-    int cleared = 0;
-    const QStringList keys = cfg.keys();
-    for (const QString& key : keys) {
-        if (!secret_fields.contains(key) && !looks_like_secret_key(key))
-            continue;
-        if (!cfg.value(key).isString() || cfg.value(key).toString().isEmpty())
-            continue;
-        cfg[key] = QString();
-        ++cleared;
-    }
-    return cleared;
+        dlg.accept();
+    });
+    if (dlg.exec() != QDialog::Accepted)
+        return false;
+    opts->include_secrets = encrypt->isChecked();
+    opts->passphrase = opts->include_secrets ? pass->text() : QString();
+    return true;
 }
 
-/// Count the secret-bearing values a connection would leak if exported raw.
-int count_secrets(const QJsonObject& cfg, const QString& provider) {
-    QJsonObject copy = cfg;
-    return redact_config(copy, provider);
+enum class PassChoice { WithSecrets, WithoutSecrets, Cancel };
+
+PassChoice ie_ask_passphrase(QWidget* parent, const QString& error_text, QString* passphrase) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(QObject::tr("Import connections"));
+    auto* vl = new QVBoxLayout(&dlg);
+    auto* intro = new QLabel(QObject::tr("This file holds encrypted secrets. Enter the passphrase it was exported "
+                                         "with, or import the connections without their secrets."),
+                             &dlg);
+    intro->setWordWrap(true);
+    vl->addWidget(intro);
+    auto* pass = new QLineEdit(&dlg);
+    pass->setEchoMode(QLineEdit::Password);
+    vl->addWidget(pass);
+    if (!error_text.isEmpty()) {
+        auto* err = new QLabel(error_text, &dlg);
+        err->setWordWrap(true);
+        vl->addWidget(err);
+    }
+    auto* buttons = new QDialogButtonBox(&dlg);
+    auto* with = buttons->addButton(QObject::tr("Import with secrets"), QDialogButtonBox::AcceptRole);
+    auto* without = buttons->addButton(QObject::tr("Import without secrets"), QDialogButtonBox::ActionRole);
+    buttons->addButton(QDialogButtonBox::Cancel);
+    vl->addWidget(buttons);
+    PassChoice choice = PassChoice::Cancel;
+    QObject::connect(with, &QPushButton::clicked, &dlg, [&]() {
+        choice = PassChoice::WithSecrets;
+        dlg.accept();
+    });
+    QObject::connect(without, &QPushButton::clicked, &dlg, [&]() {
+        choice = PassChoice::WithoutSecrets;
+        dlg.accept();
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted)
+        return PassChoice::Cancel;
+    *passphrase = pass->text();
+    return choice;
+}
+
+struct ReadOutcome {
+    dsrc::ImportResult result;
+    QByteArray bytes;
+    QString io_error;
+};
+
+struct SaveOutcome {
+    int imported = 0;
+    int skipped = 0;
+    int unknown = 0;
+    QStringList errors;
+};
+
+void ie_confirm_and_save(QWidget* parent, const QString& path, const dsrc::ImportResult& res, TransferDone done) {
+    if (res.connections.isEmpty()) {
+        done(false, 0, QObject::tr("The file has no connections to import."));
+        return;
+    }
+    QString detail = QObject::tr("Import %n connection(s) from %1?", "", int(res.connections.size()))
+                         .arg(QDir::toNativeSeparators(path));
+    if (res.secrets_restored > 0)
+        detail += QStringLiteral("\n") + QObject::tr("%n secret(s) restored.", "", res.secrets_restored);
+    if (res.secrets_missing > 0)
+        detail += QStringLiteral("\n") + QObject::tr("%n secret(s) are not in the file — re-enter them after import.", "",
+                                                     res.secrets_missing);
+    detail += QStringLiteral("\n\n") + QObject::tr("Only import files you created or trust: a connection can point at "
+                                                   "any host.");
+    if (QMessageBox::question(parent, QObject::tr("Import connections"), detail, QMessageBox::Yes | QMessageBox::Cancel,
+                              QMessageBox::Cancel) != QMessageBox::Yes) {
+        done(false, 0, QString());
+        return;
+    }
+    const QVector<dsrc::ImportedConnection> items = res.connections;
+    const int skipped_in_file = res.skipped;
+    ie_async<SaveOutcome>(
+        parent,
+        [items, skipped_in_file]() {
+            SaveOutcome out;
+            out.skipped = skipped_in_file;
+            for (const dsrc::ImportedConnection& ic : items) {
+                const ConnectorConfig* connector = find_connector_config(ic.connection.provider);
+                if (!connector) {
+                    ++out.unknown;
+                    ++out.skipped;
+                    continue;
+                }
+                DataSource ds;
+                ds.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+                ds.alias = connector->id + QLatin1Char('_') + ds.id.left(8);
+                ds.display_name = ic.connection.display_name.isEmpty() ? connector->name : ic.connection.display_name;
+                ds.description = ic.connection.description.isEmpty() ? connector->description : ic.connection.description;
+                ds.type = persistence_type(*connector);
+                ds.provider = connector->id;
+                ds.category = category_str(connector->category);
+                QJsonObject cfg = ic.connection.config;
+                ie_coerce_config_types(cfg, *connector);
+                ds.config = QString::fromUtf8(QJsonDocument(cfg).toJson(QJsonDocument::Compact));
+                ds.enabled = ic.connection.enabled;
+                ds.tags = ic.connection.tags;
+                const auto r = DataSourceRepository::instance().save(ds);
+                if (r.is_ok()) {
+                    ++out.imported;
+                } else {
+                    ++out.skipped;
+                    out.errors << QString::fromStdString(r.error());
+                }
+            }
+            return out;
+        },
+        [done, path](const SaveOutcome& out) {
+            LOG_INFO(kIeTag, QStringLiteral("Import: %1 imported, %2 skipped").arg(out.imported).arg(out.skipped));
+            if (out.imported > 0)
+                fincept::services::FileManagerService::instance().import_file(path, QStringLiteral("data_sources"));
+            QString msg = QObject::tr("Imported %1 connection(s), skipped %2.").arg(out.imported).arg(out.skipped);
+            if (out.unknown > 0)
+                msg += QStringLiteral(" ") + QObject::tr("%1 named a connection type this version does not have.").arg(out.unknown);
+            if (!out.errors.isEmpty())
+                msg += QStringLiteral(" ") + out.errors.first();
+            done(out.imported > 0, out.imported, msg);
+        });
+}
+
+void ie_read_and_continue(QWidget* parent, const QString& path, const QByteArray& bytes, const QString& passphrase,
+                          bool skip_secrets, int attempt, TransferDone done) {
+    ie_async<dsrc::ImportResult>(
+        parent, [bytes, passphrase, skip_secrets]() { return dsrc::read_connections_document(bytes, passphrase, skip_secrets); },
+        [parent, path, bytes, attempt, done](const dsrc::ImportResult& res) {
+            QPointer<QWidget> p(parent);
+            if (!p)
+                return;
+            if (res.needs_passphrase || res.wrong_passphrase) {
+                if (attempt >= 5) {
+                    done(false, 0, QObject::tr("Wrong passphrase — nothing was imported."));
+                    return;
+                }
+                QString pass;
+                const PassChoice c = ie_ask_passphrase(parent, res.wrong_passphrase ? res.error : QString(), &pass);
+                if (c == PassChoice::Cancel) {
+                    done(false, 0, QString());
+                    return;
+                }
+                ie_read_and_continue(parent, path, bytes, pass, c == PassChoice::WithoutSecrets, attempt + 1, done);
+                return;
+            }
+            if (!res.ok) {
+                done(false, 0, res.error);
+                return;
+            }
+            ie_confirm_and_save(parent, path, res, done);
+        });
 }
 
 } // namespace
 
-bool export_connections(QWidget* parent) {
-    const auto all = DataSourceRepository::instance().list_all();
-    if (all.is_err()) {
-        QMessageBox::warning(parent, QObject::tr("Export Connections"),
-                             QObject::tr("Could not read the connection store: %1")
-                                 .arg(QString::fromStdString(all.error())));
-        return false;
-    }
-
-    // How much credential material is actually at risk? Say so explicitly
-    // rather than silently writing keys to a file the user may share.
-    int secret_count = 0;
-    for (const auto& ds : all.value())
-        secret_count += count_secrets(QJsonDocument::fromJson(ds.config.toUtf8()).object(), ds.provider);
-
-    bool include_secrets = false;
-    if (secret_count > 0) {
-        QMessageBox box(parent);
-        box.setIcon(QMessageBox::Warning);
-        box.setWindowTitle(QObject::tr("Export Connections"));
-        box.setText(QObject::tr("%n stored secret(s) (passwords, API keys, tokens) are attached to these connections.",
-                                "", secret_count));
-        box.setInformativeText(
-            QObject::tr("The export file is plain, unencrypted JSON. Anyone who opens it — or any tool that "
-                        "reads your files — sees whatever it contains.\n\n"
-                        "Redacted: connection settings are exported, secret values are blanked out and must "
-                        "be re-entered after import.\n"
-                        "With secrets: the file contains your live credentials."));
-        auto* redacted_btn = box.addButton(QObject::tr("Export Redacted"), QMessageBox::AcceptRole);
-        auto* raw_btn = box.addButton(QObject::tr("Include Secrets"), QMessageBox::DestructiveRole);
-        auto* cancel_btn = box.addButton(QMessageBox::Cancel);
-        box.setDefaultButton(redacted_btn);
-        box.exec();
-        if (box.clickedButton() == cancel_btn)
-            return false;
-        include_secrets = (box.clickedButton() == raw_btn);
-    }
-
-    const QString path =
-        QFileDialog::getSaveFileName(parent, QObject::tr("Export Connections"), "fincept_connections.json",
-                                     QObject::tr("JSON Files (*.json);;All Files (*)"));
+void export_connections(QWidget* parent, TransferDone done) {
+    dsrc::ExportOptions opts;
+    if (!ie_ask_export_options(parent, &opts))
+        return;
+    const QString path = QFileDialog::getSaveFileName(parent, QObject::tr("Export connections"),
+                                                      QDir(ie_default_dir()).filePath(QStringLiteral("fincept_connections.json")),
+                                                      QObject::tr("JSON files (*.json);;All files (*)"));
     if (path.isEmpty())
-        return false;
-
-    QJsonArray arr;
-    int redacted_total = 0;
-    for (const auto& ds : all.value()) {
-        QJsonObject config_obj = QJsonDocument::fromJson(ds.config.toUtf8()).object();
-        if (!include_secrets)
-            redacted_total += redact_config(config_obj, ds.provider);
-
-        QJsonObject obj;
-        obj["id"] = ds.id;
-        obj["alias"] = ds.alias;
-        obj["display_name"] = ds.display_name;
-        obj["description"] = ds.description;
-        obj["type"] = ds.type;
-        obj["provider"] = ds.provider;
-        obj["category"] = ds.category;
-        obj["config"] = config_obj;
-        obj["enabled"] = ds.enabled;
-        obj["tags"] = ds.tags;
-        obj["created_at"] = ds.created_at;
-        obj["updated_at"] = ds.updated_at;
-        obj["secrets_redacted"] = !include_secrets;
-        arr.append(obj);
-    }
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        LOG_ERROR(TAG, QString("Export failed: cannot write to %1").arg(path));
-        QMessageBox::warning(parent, QObject::tr("Export Connections"),
-                             QObject::tr("Could not write to:\n%1\n\n%2").arg(path, file.errorString()));
-        return false;
-    }
-    file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
-    file.close();
-    LOG_INFO(TAG, QString("Exported %1 connections to %2 (%3)")
-                      .arg(arr.size())
-                      .arg(path)
-                      .arg(include_secrets ? "secrets included" : "secrets redacted"));
-
-    // Only index a redacted export in the file manager. A credential-bearing
-    // file must not become discoverable through the file browser or the MCP
-    // file tools that read from the same index.
-    if (!include_secrets)
-        services::FileManagerService::instance().import_file(path, "data_sources");
-
-    QMessageBox::information(
-        parent, QObject::tr("Export Connections"),
-        include_secrets
-            ? QObject::tr("Exported %n connection(s) INCLUDING plaintext secrets to:\n%1\n\n"
-                          "Treat this file as a credential file — do not share or sync it.",
-                          "", static_cast<int>(arr.size()))
-                  .arg(path)
-            : QObject::tr("Exported %n connection(s) to:\n%1\n\n%2 secret value(s) were blanked out and must be "
-                          "re-entered after import.",
-                          "", static_cast<int>(arr.size()))
-                  .arg(path)
-                  .arg(redacted_total));
-    return true;
+        return;
+    struct ExportOutcome {
+        dsrc::ExportResult result;
+        QString error;
+    };
+    ie_async<ExportOutcome>(
+        parent,
+        [opts, path]() {
+            ExportOutcome out;
+            const auto all = DataSourceRepository::instance().list_all();
+            if (all.is_err()) {
+                out.error = QObject::tr("Could not read the connections: %1").arg(QString::fromStdString(all.error()));
+                return out;
+            }
+            QVector<dsrc::TransferConnection> conns;
+            int unreadable = 0;
+            for (const DataSource& ds : all.value()) {
+                dsrc::TransferConnection c;
+                c.id = ds.id;
+                c.alias = ds.alias;
+                c.display_name = ds.display_name;
+                c.description = ds.description;
+                c.type = ds.type;
+                c.provider = ds.provider;
+                c.category = ds.category;
+                c.tags = ds.tags;
+                c.enabled = ds.enabled;
+                c.config = QJsonDocument::fromJson(ds.config.toUtf8()).object();
+                if (const ConnectorConfig* cfg = find_connector_config(ds.provider))
+                    for (const FieldDef& f : cfg->fields)
+                        if (f.type == FieldType::Password)
+                            c.secret_fields << f.name;
+                if (ds.secrets_unreadable)
+                    ++unreadable;
+                conns.append(c);
+            }
+            out.result = dsrc::export_connections_document(conns, opts);
+            if (!out.result.ok) {
+                out.error = out.result.error;
+                return out;
+            }
+            QSaveFile f(path);
+            if (!f.open(QIODevice::WriteOnly) || f.write(out.result.json) != out.result.json.size() || !f.commit()) {
+                out.error = QObject::tr("Could not write %1: %2").arg(QDir::toNativeSeparators(path), f.errorString());
+                return out;
+            }
+            if (unreadable > 0 && opts.include_secrets)
+                out.error = QObject::tr("%n connection(s) were exported without secrets: secure storage could not be "
+                                        "read for them.",
+                                        "", unreadable);
+            return out;
+        },
+        [done, path, opts](const ExportOutcome& out) {
+            if (!out.result.ok) {
+                done(false, 0, out.error);
+                return;
+            }
+            LOG_INFO(kIeTag, QStringLiteral("Exported %1 connection(s) (%2)")
+                                 .arg(out.result.connections)
+                                 .arg(opts.include_secrets ? QStringLiteral("secrets encrypted") : QStringLiteral("secrets left out")));
+            // Only a file without secrets is indexed in the file manager (whose tools read its index).
+            if (!opts.include_secrets)
+                fincept::services::FileManagerService::instance().import_file(path, QStringLiteral("data_sources"));
+            // One .arg() call each: a chained call re-scans the text and would fill a "%3" in the path.
+            QString msg = opts.include_secrets
+                              ? QObject::tr("Exported %1 connection(s) to %2 · %3 secret(s) encrypted with your passphrase.")
+                                    .arg(QString::number(out.result.connections), QDir::toNativeSeparators(path),
+                                         QString::number(out.result.secrets_encrypted))
+                              : QObject::tr("Exported %1 connection(s) to %2 · %3 secret(s) left out.")
+                                    .arg(QString::number(out.result.connections), QDir::toNativeSeparators(path),
+                                         QString::number(out.result.secrets_excluded));
+            if (!out.error.isEmpty())
+                msg += QStringLiteral(" ") + out.error;
+            done(true, out.result.connections, msg);
+        });
 }
 
-bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
-    const QString path = QFileDialog::getOpenFileName(parent, QObject::tr("Import Connections"), "",
-                                                      QObject::tr("JSON Files (*.json);;All Files (*)"));
+void import_connections(QWidget* parent, TransferDone done) {
+    const QString path = QFileDialog::getOpenFileName(parent, QObject::tr("Import connections"), ie_default_dir(),
+                                                      QObject::tr("JSON files (*.json);;All files (*)"));
     if (path.isEmpty())
-        return false;
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        LOG_ERROR(TAG, QString("Import failed: cannot open %1").arg(path));
-        QMessageBox::warning(parent, QObject::tr("Import Connections"),
-                             QObject::tr("Could not open:\n%1\n\n%2").arg(path, file.errorString()));
-        return false;
-    }
-    const QByteArray payload = file.readAll();
-    file.close();
-
-    QJsonParseError parse_err;
-    const auto doc = QJsonDocument::fromJson(payload, &parse_err);
-    if (parse_err.error != QJsonParseError::NoError || !doc.isArray()) {
-        LOG_ERROR(TAG, QString("Import failed: invalid JSON — %1").arg(parse_err.errorString()));
-        // Surface the parser's own message + offset, not a generic "failed".
-        QMessageBox::warning(parent, QObject::tr("Import Connections"),
-                             parse_err.error != QJsonParseError::NoError
-                                 ? QObject::tr("The file is not valid JSON.\n\n%1 (at offset %2)")
-                                       .arg(parse_err.errorString())
-                                       .arg(parse_err.offset)
-                                 : QObject::tr("The file must contain a JSON array of connections."));
-        return false;
-    }
-
-    // An imported connection can point a connector at an arbitrary host and be
-    // marked enabled, which the background reachability poll will then contact.
-    // Ask before writing anything.
-    const auto entries = doc.array();
-    if (QMessageBox::question(parent, QObject::tr("Import Connections"),
-                              QObject::tr("Import %n connection(s) from:\n%1\n\n"
-                                          "Only import files you created or trust — an imported connection can "
-                                          "point a connector at any host.",
-                                          "", static_cast<int>(entries.size()))
-                                  .arg(path),
-                              QMessageBox::Yes | QMessageBox::Cancel,
-                              QMessageBox::Cancel) != QMessageBox::Yes)
-        return false;
-
-    int imported = 0, skipped = 0, needs_secrets = 0, unknown_provider = 0;
-    for (const auto& val : entries) {
-        const auto obj = val.toObject();
-        const QString provider = obj["provider"].toString().trimmed();
-        if (provider.isEmpty()) {
-            ++skipped;
-            continue;
-        }
-        // A provider the registry does not know can never be edited, tested or used
-        // (the Connections table would just list a dead row), so don't create one.
-        const ConnectorConfig* connector = find_connector_config(provider);
-        if (!connector) {
-            LOG_WARN(TAG, QString("Import skipped an entry for unknown connector '%1'").arg(provider));
-            ++unknown_provider;
-            ++skipped;
-            continue;
-        }
-
-        DataSource ds;
-        ds.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        // The alias column is UNIQUE and the file's alias is the one the connection
-        // already has (export) or a fixed "<id>_1" (template): importing the same
-        // file twice, or a template with two entries of one connector, failed every
-        // row on the constraint. Mint it like the config dialog does.
-        ds.alias = connector->id + "_" + ds.id.left(8);
-        ds.display_name = obj["display_name"].toString();
-        ds.description = obj["description"].toString();
-        // The `type` column is CHECK-constrained to 'websocket' | 'rest_api' (the
-        // template wrote the connector id there, which the database rejects), and
-        // `category` is a lookup key — take both from the connector, not the file.
-        ds.type = persistence_type(*connector);
-        ds.provider = connector->id;
-        ds.category = category_str(connector->category);
-        QJsonObject config_obj = obj["config"].toObject();
-        coerce_config_types(config_obj, *connector);
-        ds.config = QJsonDocument(config_obj).toJson(QJsonDocument::Compact);
-        ds.enabled = obj["enabled"].toBool(false);
-        ds.tags = obj["tags"].toString();
-
-        if (obj.value("secrets_redacted").toBool(false))
-            ++needs_secrets;
-
-        if (ds.display_name.isEmpty())
-            ds.display_name = connector->name;
-
-        const auto result = DataSourceRepository::instance().save(ds);
-        if (result.is_ok()) {
-            ++imported;
-        } else {
-            LOG_WARN(TAG, QString("Import: could not save a '%1' entry: %2")
-                              .arg(connector->id, QString::fromStdString(result.error())));
-            ++skipped;
-        }
-    }
-
-    LOG_INFO(TAG, QString("Import complete: %1 imported, %2 skipped").arg(imported).arg(skipped));
-    services::FileManagerService::instance().import_file(path, "data_sources");
-
-    QString summary = QObject::tr("Imported %1 connection(s), skipped %2.").arg(imported).arg(skipped);
-    if (unknown_provider > 0)
-        summary += QObject::tr("\n\n%1 of the skipped entries named a connector this version does not have.")
-                       .arg(unknown_provider);
-    if (needs_secrets > 0)
-        summary += QObject::tr("\n\n%1 of them came from a redacted export — open each one and re-enter its "
-                               "password / API key before use.")
-                       .arg(needs_secrets);
-    QMessageBox::information(parent, QObject::tr("Import Connections"), summary);
-
-    if (imported_out)
-        *imported_out = imported;
-    if (skipped_out)
-        *skipped_out = skipped;
-    return true;
+        return;
+    ie_async<ReadOutcome>(
+        parent,
+        [path]() {
+            ReadOutcome out;
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly)) {
+                out.io_error = QObject::tr("Could not open %1: %2").arg(QDir::toNativeSeparators(path), f.errorString());
+                return out;
+            }
+            if (f.size() > kIeMaxFileBytes) {
+                out.io_error = QObject::tr("%1 is too large for a connections file").arg(QDir::toNativeSeparators(path));
+                return out;
+            }
+            out.bytes = f.readAll();
+            out.result = dsrc::read_connections_document(out.bytes, QString());
+            return out;
+        },
+        [parent, path, done](const ReadOutcome& out) {
+            if (!out.io_error.isEmpty()) {
+                done(false, 0, out.io_error);
+                return;
+            }
+            if (out.result.needs_passphrase) {
+                ie_read_and_continue(parent, path, out.bytes, QString(), false, 0, done);
+                return;
+            }
+            if (!out.result.ok) {
+                done(false, 0, out.result.error);
+                return;
+            }
+            ie_confirm_and_save(parent, path, out.result, done);
+        });
 }
 
 bool download_connector_template(QWidget* parent) {
-    const QString path = QFileDialog::getSaveFileName(parent, QObject::tr("Save Connector Template"),
-                                                      "fincept_connections_template.json",
-                                                      QObject::tr("JSON Files (*.json);;All Files (*)"));
+    const QString path = QFileDialog::getSaveFileName(parent, QObject::tr("Save connection template"),
+                                                      QDir(ie_default_dir()).filePath(QStringLiteral("fincept_connections_template.json")),
+                                                      QObject::tr("JSON files (*.json);;All files (*)"));
     if (path.isEmpty())
         return false;
-
-    const auto& all = ConnectorRegistry::instance().all();
-
-    QMap<QString, QJsonArray> by_category;
-    for (const auto& cfg : all) {
+    QJsonArray out;
+    for (const auto& cfg : ConnectorRegistry::instance().all()) {
         QJsonObject config_obj;
         for (const auto& field : cfg.fields) {
-            // Never seed a secret field with a placeholder that looks like a
-            // real value — leave it empty so the template can't be mistaken
-            // for a filled-in credential file.
+            // Never seed a secret with a placeholder that looks like a real value.
             if (field.type == FieldType::Password) {
                 config_obj[field.name] = QString();
                 continue;
             }
-            QString val = !field.default_value.isEmpty() ? field.default_value
-                                                         : (!field.placeholder.isEmpty() ? field.placeholder : "");
-            // Typed like the form stores them (bool / int): a Checkbox written as the string
-            // "true" is read back as false, and a port as a string is not an integer.
+            const QString val = !field.default_value.isEmpty() ? field.default_value : field.placeholder;
             if (field.type == FieldType::Checkbox) {
                 config_obj[field.name] = (field.default_value == QLatin1String("true"));
                 continue;
@@ -365,49 +451,30 @@ bool download_connector_template(QWidget* parent) {
             }
             config_obj[field.name] = val;
         }
-
         QJsonObject entry;
         entry["provider"] = cfg.id;
         entry["display_name"] = cfg.name;
-        entry["alias"] = cfg.id + "_1";
         entry["description"] = cfg.description;
-        entry["type"] = persistence_type(cfg); // what the connection store accepts, not the connector id
+        entry["type"] = persistence_type(cfg);
         entry["category"] = category_str(cfg.category);
         entry["enabled"] = false;
-        entry["tags"] = "";
+        entry["tags"] = QString();
         entry["config"] = config_obj;
-        entry["_help"] = QString("Fill in the 'config' fields and set 'enabled' to true. "
-                                 "Remove this '_help' key before importing.");
-
-        by_category[category_label(cfg.category)].append(entry);
+        out.append(entry);
     }
-
-    QStringList cat_order = {"Databases",   "APIs",        "Streaming",          "File Sources",   "Cloud Storage",
-                             "Time Series", "Market Data", "Search & Analytics", "Data Warehouses"};
-    QJsonArray out;
-    for (const auto& cat : cat_order) {
-        if (by_category.contains(cat)) {
-            for (const auto& entry : by_category[cat])
-                out.append(entry);
-        }
-    }
-    for (auto it = by_category.begin(); it != by_category.end(); ++it) {
-        if (!cat_order.contains(it.key())) {
-            for (const auto& entry : it.value())
-                out.append(entry);
-        }
-    }
-
-    QFile file(path);
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
-        LOG_ERROR(TAG, QString("Template write failed: %1").arg(path));
-        QMessageBox::warning(parent, QObject::tr("Save Connector Template"),
+        QMessageBox::warning(parent, QObject::tr("Save connection template"),
                              QObject::tr("Could not write to:\n%1\n\n%2").arg(path, file.errorString()));
         return false;
     }
     file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
-    file.close();
-    LOG_INFO(TAG, QString("Template written: %1 connectors to %2").arg(out.size()).arg(path));
+    if (!file.commit()) {
+        QMessageBox::warning(parent, QObject::tr("Save connection template"),
+                             QObject::tr("Could not write to:\n%1\n\n%2").arg(path, file.errorString()));
+        return false;
+    }
+    LOG_INFO(kIeTag, QStringLiteral("Template written: %1 connection types to %2").arg(out.size()).arg(path));
     return true;
 }
 

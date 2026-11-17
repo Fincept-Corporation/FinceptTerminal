@@ -19,7 +19,6 @@
 #include "core/session/SessionManager.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
-#include "screens/agent_workbench/AgentWorkbenchScreen.h"
 #include "screens/ai_chat/AiChatScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
 #include "screens/akshare/AkShareScreen.h"
@@ -33,6 +32,7 @@
 #include "screens/auth/PricingScreen.h"
 #include "screens/auth/RegisterScreen.h"
 #include "screens/backtesting/BacktestingScreen.h"
+#include "screens/calendars/CalendarsScreen.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
 #include "screens/crypto_center/CryptoCenterScreen.h"
@@ -92,18 +92,20 @@
 namespace fincept {
 
 void WindowFrame::setup_auth_screens() {
-    auto* login = new screens::LoginScreen;
-    auto* reg = new screens::RegisterScreen;
-    auto* forgot = new screens::ForgotPasswordScreen;
-    auto* pricing = new screens::PricingScreen;
+    // Every screen is built inside the stack it will live in (moving a finished
+    // screen into a new parent re-computes the stylesheet of all its widgets).
+    auto* login = new screens::LoginScreen(auth_stack_);
+    auto* reg = new screens::RegisterScreen(auth_stack_);
+    auto* forgot = new screens::ForgotPasswordScreen(auth_stack_);
+    auto* pricing = new screens::PricingScreen(auth_stack_);
 
     // Info screens stack (shared between auth and app via master stack index 2)
-    info_stack_ = new QStackedWidget;
-    auto* contact = new screens::ContactScreen;
-    auto* terms = new screens::TermsScreen;
-    auto* privacy = new screens::PrivacyScreen;
-    auto* trademarks = new screens::TrademarksScreen;
-    auto* help = new screens::HelpScreen;
+    info_stack_ = new QStackedWidget(auth_stack_);
+    auto* contact = new screens::ContactScreen(info_stack_);
+    auto* terms = new screens::TermsScreen(info_stack_);
+    auto* privacy = new screens::PrivacyScreen(info_stack_);
+    auto* trademarks = new screens::TrademarksScreen(info_stack_);
+    auto* help = new screens::HelpScreen(info_stack_);
 
     info_stack_->addWidget(contact);    // index 0
     info_stack_->addWidget(terms);      // index 1
@@ -120,6 +122,12 @@ void WindowFrame::setup_auth_screens() {
     // ── Auth navigation ──────────────────────────────────────────────────────
     connect(login, &screens::LoginScreen::navigate_register, this, &WindowFrame::show_register);
     connect(login, &screens::LoginScreen::navigate_forgot_password, this, &WindowFrame::show_forgot_password);
+    // Sign-in refused as "not verified": the email code is entered on the
+    // registration screen's code page, opened for that address.
+    connect(login, &screens::LoginScreen::navigate_verify_email, this, [this, reg](const QString& email) {
+        reg->show_otp_for(email);
+        show_register();
+    });
     connect(reg, &screens::RegisterScreen::navigate_login, this, &WindowFrame::show_login);
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &WindowFrame::show_login);
     // PricingScreen::back_requested is wired in WindowFrame.cpp (leave_pricing).
@@ -177,12 +185,9 @@ void WindowFrame::setup_docking_mode() {
     // Create CDockManager — parent is a plain QWidget wrapper (not QMainWindow)
     // so ADS does NOT call setCentralWidget(). The wrapper goes into master_stack.
     auto* dock_wrapper = new QWidget;
-    {
-        QPalette pal = dock_wrapper->palette();
-        pal.setColor(QPalette::Window, QColor(ui::colors::BG_BASE()));
-        dock_wrapper->setPalette(pal);
-        dock_wrapper->setAutoFillBackground(true);
-    }
+    // Filled with the application palette's Window colour — the theme's base
+    // background, which ThemeManager keeps current across theme switches.
+    dock_wrapper->setAutoFillBackground(true);
     auto* dock_layout = new QVBoxLayout(dock_wrapper);
     dock_layout->setContentsMargins(0, 0, 0, 0);
     dock_layout->setSpacing(0);
@@ -198,8 +203,10 @@ void WindowFrame::setup_docking_mode() {
     // ADS loads its own default.css via setStyleSheet() in its constructor.
     // That CSS uses palette(window)/palette(highlight) — the Windows system
     // gray/blue — which overrides our global QSS. Replace it with our own
-    // theme-matched ADS stylesheet so our colors apply consistently.
-    dock_manager_->setStyleSheet(ui::ThemeManager::instance().build_ads_qss());
+    // theme-matched ADS stylesheet so our colors apply consistently. Marked as
+    // the manager's own sheet: an appearance change rebuilds it (its dock-tab
+    // height follows the font size) instead of translating it.
+    ui::ThemeManager::instance().apply_ads_qss(dock_manager_);
     dock_layout->addWidget(dock_manager_);
 
     // ── Layout mutation watchdog ──────────────────────────────────────────────
@@ -227,70 +234,76 @@ void WindowFrame::setup_docking_mode() {
 }
 
 void WindowFrame::setup_dock_screens() {
-    dock_router_->register_factory("dashboard", []() { return new screens::DashboardScreen; });
-    dock_router_->register_factory("markets", []() { return new screens::MarketsScreen; });
-    dock_router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
-    dock_router_->register_factory("news", []() { return new screens::NewsScreen; });
-    dock_router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });
+    // Each factory builds its screen inside the dock widget's content host
+    // (`parent`) — see DockScreenRouter::ScreenFactory for why that matters.
+    dock_router_->register_factory("dashboard", [](QWidget* parent) { return new screens::DashboardScreen(parent); });
+    dock_router_->register_factory("markets", [](QWidget* parent) { return new screens::MarketsScreen(parent); });
+    dock_router_->register_factory("crypto_trading", [](QWidget* parent) { return new screens::CryptoTradingScreen(parent); });
+    dock_router_->register_factory("news", [](QWidget* parent) { return new screens::NewsScreen(parent); });
+    dock_router_->register_factory("watchlist", [](QWidget* parent) { return new screens::WatchlistScreen(parent); });
 
     // Lazily constructed on first navigation — deferred to avoid startup cost.
-    dock_router_->register_factory("report_builder", []() { return new screens::ReportBuilderScreen; });
-    dock_router_->register_factory("profile", []() { return new screens::ProfileScreen; });
-    dock_router_->register_factory("settings", []() { return new screens::SettingsScreen; });
-    dock_router_->register_factory("about", []() { return new screens::AboutScreen; });
-    dock_router_->register_factory("support", []() { return new screens::SupportScreen; });
-    dock_router_->register_factory("notes", []() { return new screens::NotesScreen; });
+    dock_router_->register_factory("report_builder", [](QWidget* parent) { return new screens::ReportBuilderScreen(parent); });
+    dock_router_->register_factory("profile", [](QWidget* parent) { return new screens::ProfileScreen(parent); });
+    dock_router_->register_factory("settings", [](QWidget* parent) { return new screens::SettingsScreen(parent); });
+    dock_router_->register_factory("about", [](QWidget* parent) { return new screens::AboutScreen(parent); });
+    dock_router_->register_factory("support", [](QWidget* parent) { return new screens::SupportScreen(parent); });
+    dock_router_->register_factory("notes", [](QWidget* parent) { return new screens::NotesScreen(parent); });
 
-    dock_router_->register_factory("portfolio", []() { return new screens::PortfolioScreen; });
-    dock_router_->register_factory("ai_chat", []() { return new screens::AiChatScreen; });
-    dock_router_->register_factory("backtesting", []() { return new screens::BacktestingScreen; });
-    dock_router_->register_factory("algo_trading", []() { return new screens::AlgoTradingScreen; });
-    dock_router_->register_factory("node_editor", []() { return new workflow::NodeEditorScreen; });
-    dock_router_->register_factory("code_editor", []() { return new screens::CodeEditorScreen; });
-    dock_router_->register_factory("ai_quant_lab", []() { return new screens::AIQuantLabScreen; });
-    dock_router_->register_factory("quantlib", []() { return new screens::QuantLibScreen; });
-    dock_router_->register_factory("economics", []() { return new screens::EconomicsScreen; });
-    dock_router_->register_factory("crypto_center", []() { return new screens::CryptoCenterScreen; });
-    dock_router_->register_factory("gov_data", []() { return new screens::GovDataScreen; });
-    dock_router_->register_factory("dbnomics", []() { return new screens::DBnomicsScreen; });
-    dock_router_->register_factory("akshare", []() { return new screens::AkShareScreen; });
-    dock_router_->register_factory("asia_markets", []() { return new screens::AsiaMarketsScreen; });
-    dock_router_->register_factory("relationship_map", []() { return new screens::RelationshipMapScreen; });
-    dock_router_->register_factory("equity_trading", []() { return new screens::EquityTradingScreen; });
-    dock_router_->register_factory("alpha_arena", []() { return new screens::AlphaArenaScreen; });
-    dock_router_->register_factory("polymarket", []() { return new screens::PolymarketScreen; });
-    dock_router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });
-    dock_router_->register_factory("fno", []() { return new screens::fno::FnoScreen; });
-    dock_router_->register_factory("equity_research", []() { return new screens::EquityResearchScreen; });
-    dock_router_->register_factory("screener", []() { return new screens::ScreenerScreen; });
-    dock_router_->register_factory("ma_analytics", []() { return new screens::MAAnalyticsScreen; });
-    dock_router_->register_factory("alt_investments", []() { return new screens::AltInvestmentsScreen; });
-    dock_router_->register_factory("geopolitics", []() { return new screens::GeopoliticsScreen; });
-    dock_router_->register_factory("maritime", []() { return new screens::MaritimeScreen; });
-    dock_router_->register_factory("surface_analytics", []() { return new fincept::surface::SurfaceAnalyticsScreen; });
-    dock_router_->register_factory("agent_config", []() { return new screens::AgentConfigScreen; });
-    dock_router_->register_factory("agent_workbench", []() { return new screens::AgentWorkbenchScreen; });
-    dock_router_->register_factory("mcp_servers", []() { return new screens::McpServersScreen; });
-    dock_router_->register_factory("data_mapping", []() { return new screens::DataMappingScreen; });
-    dock_router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });
-    dock_router_->register_factory("file_manager", [this]() {
-        auto* fm = new screens::FileManagerScreen;
+    dock_router_->register_factory("portfolio", [](QWidget* parent) { return new screens::PortfolioScreen(parent); });
+    dock_router_->register_factory("ai_chat", [](QWidget* parent) { return new screens::AiChatScreen(parent); });
+    dock_router_->register_factory("backtesting", [](QWidget* parent) { return new screens::BacktestingScreen(parent); });
+    dock_router_->register_factory("algo_trading", [](QWidget* parent) { return new screens::AlgoTradingScreen(parent); });
+    dock_router_->register_factory("node_editor", [](QWidget* parent) { return new workflow::NodeEditorScreen(parent); });
+    dock_router_->register_factory("code_editor", [](QWidget* parent) { return new screens::CodeEditorScreen(parent); });
+    dock_router_->register_factory("ai_quant_lab", [](QWidget* parent) { return new screens::AIQuantLabScreen(parent); });
+    dock_router_->register_factory("quantlib", [](QWidget* parent) { return new screens::QuantLibScreen(parent); });
+    dock_router_->register_factory("economics", [](QWidget* parent) { return new screens::EconomicsScreen(parent); });
+    dock_router_->register_factory("crypto_center", [](QWidget* parent) { return new screens::CryptoCenterScreen(parent); });
+    dock_router_->register_factory("gov_data", [](QWidget* parent) { return new screens::GovDataScreen(parent); });
+    dock_router_->register_factory("dbnomics", [](QWidget* parent) { return new screens::DBnomicsScreen(parent); });
+    dock_router_->register_factory("akshare", [](QWidget* parent) { return new screens::AkShareScreen(parent); });
+    dock_router_->register_factory("asia_markets", [](QWidget* parent) { return new screens::AsiaMarketsScreen(parent); });
+    dock_router_->register_factory("relationship_map", [](QWidget* parent) { return new screens::RelationshipMapScreen(parent); });
+    dock_router_->register_factory("equity_trading", [](QWidget* parent) { return new screens::EquityTradingScreen(parent); });
+    dock_router_->register_factory("alpha_arena", [](QWidget* parent) { return new screens::AlphaArenaScreen(parent); });
+    dock_router_->register_factory("polymarket", [](QWidget* parent) { return new screens::PolymarketScreen(parent); });
+    dock_router_->register_factory("derivatives", [](QWidget* parent) { return new screens::DerivativesScreen(parent); });
+    dock_router_->register_factory("fno", [](QWidget* parent) { return new screens::fno::FnoScreen(parent); });
+    dock_router_->register_factory("equity_research", [](QWidget* parent) { return new screens::EquityResearchScreen(parent); });
+    dock_router_->register_factory("screener", [](QWidget* parent) { return new screens::ScreenerScreen(parent); });
+    dock_router_->register_factory("calendars", [](QWidget* parent) { return new screens::CalendarsScreen(parent); });
+    dock_router_->register_factory("ma_analytics", [](QWidget* parent) { return new screens::MAAnalyticsScreen(parent); });
+    dock_router_->register_factory("alt_investments", [](QWidget* parent) { return new screens::AltInvestmentsScreen(parent); });
+    dock_router_->register_factory("geopolitics", [](QWidget* parent) { return new screens::GeopoliticsScreen(parent); });
+    dock_router_->register_factory("maritime", [](QWidget* parent) { return new screens::MaritimeScreen(parent); });
+    dock_router_->register_factory("surface_analytics", [](QWidget* parent) { return new fincept::surface::SurfaceAnalyticsScreen(parent); });
+    // AGENT CONFIG holds the Agent Workbench too: "agent_workbench" is an alias
+    // of it (app/ScreenAliases.h) that opens it on its RUNS section.
+    dock_router_->register_factory("agent_config", [](QWidget* parent) { return new screens::AgentConfigScreen(parent); });
+    dock_router_->register_factory("mcp_servers", [](QWidget* parent) { return new screens::McpServersScreen(parent); });
+    dock_router_->register_factory("data_mapping", [](QWidget* parent) { return new screens::DataMappingScreen(parent); });
+    dock_router_->register_factory("data_sources", [](QWidget* parent) { return new screens::DataSourcesScreen(parent); });
+    dock_router_->register_factory("file_manager", [this](QWidget* parent) {
+        auto* fm = new screens::FileManagerScreen(parent);
         connect(fm, &screens::FileManagerScreen::open_file_in_screen, this,
                 [this](const QString& route_id, const QString& file_path) {
                     dock_router_->navigate(route_id);
                     // Notebooks open into the editor with the file loaded — hand
-                    // the path to the live CodeEditorScreen after it materializes.
+                    // the path to the live CodeEditorScreen once it is materialised
+                    // (at once, or after a build of it already in flight).
                     if (route_id == "code_editor" && !file_path.isEmpty()) {
-                        dock_router_->materialize_now(route_id);
-                        if (auto* nb = qobject_cast<screens::CodeEditorScreen*>(dock_router_->screen_widget(route_id)))
-                            nb->open_notebook_path(file_path);
+                        dock_router_->when_materialised(route_id, [file_path](QWidget* screen) {
+                            if (auto* nb = qobject_cast<screens::CodeEditorScreen*>(screen))
+                                nb->open_notebook_path(file_path);
+                        });
                     }
                 });
         return fm;
     });
-    dock_router_->register_factory("excel", []() { return new screens::ExcelScreen; });
-    dock_router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
-    dock_router_->register_factory("docs", []() { return new screens::DocsScreen; });
+    dock_router_->register_factory("excel", [](QWidget* parent) { return new screens::ExcelScreen(parent); });
+    dock_router_->register_factory("trade_viz", [](QWidget* parent) { return new screens::TradeVizScreen(parent); });
+    dock_router_->register_factory("docs", [](QWidget* parent) { return new screens::DocsScreen(parent); });
 
     // Info/legal pages. setup_auth_screens() above already builds one of each for
     // info_stack_, so an eager register_screen() here would create a SECOND instance
@@ -299,11 +312,11 @@ void WindowFrame::setup_dock_screens() {
     // unshown copy is only a shell — but it is still a pointless one per window.
     // Factories construct the dock copy only when the user actually opens the panel;
     // the auth-stack copies stay the only eager instances.
-    dock_router_->register_factory("contact", []() { return new screens::ContactScreen; });
-    dock_router_->register_factory("terms", []() { return new screens::TermsScreen; });
-    dock_router_->register_factory("privacy", []() { return new screens::PrivacyScreen; });
-    dock_router_->register_factory("trademarks", []() { return new screens::TrademarksScreen; });
-    dock_router_->register_factory("help", []() { return new screens::HelpScreen; });
+    dock_router_->register_factory("contact", [](QWidget* parent) { return new screens::ContactScreen(parent); });
+    dock_router_->register_factory("terms", [](QWidget* parent) { return new screens::TermsScreen(parent); });
+    dock_router_->register_factory("privacy", [](QWidget* parent) { return new screens::PrivacyScreen(parent); });
+    dock_router_->register_factory("trademarks", [](QWidget* parent) { return new screens::TrademarksScreen(parent); });
+    dock_router_->register_factory("help", [](QWidget* parent) { return new screens::HelpScreen(parent); });
 }
 
 } // namespace fincept

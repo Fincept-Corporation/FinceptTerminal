@@ -55,8 +55,7 @@ BisPanel::BisPanel(QWidget* parent) : EconPanelBase(kBisSourceId, kBisColor, par
 }
 
 void BisPanel::activate() {
-    show_empty(tr("Select a dataset and country code, then click FETCH\n"
-                  "BIS data is free — no API key required"));
+    // The results pane shows the remembered result or loads the selection on show.
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -71,25 +70,25 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_ = new QComboBox;
     for (const auto& d : kBisDatasets)
         dataset_combo_->addItem(d.label);
-    dataset_combo_->setFixedHeight(26);
+    dataset_combo_->setMinimumHeight(26);
     dataset_combo_->setMinimumWidth(230);
     connect(dataset_combo_, &QComboBox::currentIndexChanged, this, &BisPanel::on_dataset_changed);
 
     country_input_ = new QLineEdit;
     country_input_->setPlaceholderText(tr("Country code"));
     country_input_->setText("US");
-    country_input_->setFixedHeight(26);
-    country_input_->setFixedWidth(70);
+    country_input_->setMinimumHeight(26);
+    set_text_width(country_input_, 70);
 
     start_input_ = new QLineEdit;
     start_input_->setPlaceholderText(tr("Start year"));
-    start_input_->setFixedHeight(26);
-    start_input_->setFixedWidth(70);
+    start_input_->setMinimumHeight(26);
+    set_text_width(start_input_, 70);
 
     end_input_ = new QLineEdit;
     end_input_->setPlaceholderText(tr("End year"));
-    end_input_->setFixedHeight(26);
-    end_input_->setFixedWidth(70);
+    end_input_->setMinimumHeight(26);
+    set_text_width(end_input_, 70);
 
     thl->addWidget(dataset_lbl_ = make_lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
@@ -130,7 +129,12 @@ void BisPanel::on_fetch() {
         return;
     }
 
-    // CLI: fetch_series <dataflow> <country> [start_year] [end_year]
+    // CLI: fetch_series <dataflow> <country> [start_year] [end_year] — positional, so END cannot be
+    // sent without START (it used to be dropped silently).
+    if (start.isEmpty() && !end.isEmpty()) {
+        show_empty(tr("Enter a START period to use END"));
+        return;
+    }
     QStringList args{ds.flow, country};
     if (!start.isEmpty())
         args << start;
@@ -138,8 +142,8 @@ void BisPanel::on_fetch() {
         args << end;
 
     show_loading(tr("Fetching BIS %1…").arg(ds.label));
-    services::EconomicsService::instance().execute(kBisSourceId, kBisScript, "fetch_series", args,
-                                                   "bis_" + ds.flow + "_" + country);
+    execute_query(kBisSourceId, kBisScript, "fetch_series", args,
+                  "bis_" + ds.flow + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -182,7 +186,7 @@ void BisPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     set_stats_visible(distinct_series.size() <= 1);
     display(rows, title);
-    LOG_INFO("BisPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+    LOG_DEBUG("BisPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

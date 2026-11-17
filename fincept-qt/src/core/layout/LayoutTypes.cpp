@@ -41,6 +41,8 @@ QJsonObject PanelState::to_json() const {
     o["state_blob_b64"] = QString::fromLatin1(state_blob.toBase64());
     o["state_version"] = state_version;
     o["schema_version"] = schema_version;
+    if (!dock_id.isEmpty())
+        o["dock_id"] = dock_id;
     return o;
 }
 
@@ -53,6 +55,7 @@ PanelState PanelState::from_json(const QJsonObject& obj) {
     s.state_blob = QByteArray::fromBase64(obj.value("state_blob_b64").toString().toLatin1());
     s.state_version = obj.value("state_version").toInt();
     s.schema_version = obj.value("schema_version").toInt(kPanelStateVersion);
+    s.dock_id = obj.value("dock_id").toString();
     return s;
 }
 

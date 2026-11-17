@@ -53,7 +53,8 @@ double floor(double v);
 double ceil(double v);
 double abs(double v);
 double clamp(double v, double lo, double hi);
-QString format_currency(double v, const QString& currency = "USD");
+/// fmt::money(v, currency): the user's money format. "$" = USD; empty = the display currency.
+QString format_currency(double v, const QString& currency = QString());
 QString format_percent(double v, int decimals = 2);
 double calculate_return(double old_val, double new_val);
 } // namespace NumberExt

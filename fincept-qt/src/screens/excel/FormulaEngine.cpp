@@ -240,6 +240,48 @@ bool date_serial(const Value& v, double* serial) {
     return true;
 }
 
+bool iso_text_serial(const QString& text, double* serial) {
+    // Whole-text match only: "2024-01-15 note" or "2024-1-5" stay text.
+    static const QRegularExpression kIso(
+        QStringLiteral("^(?:(\\d{4}-\\d{2}-\\d{2})(?:[ T](\\d{2}:\\d{2}:\\d{2}))?|(\\d{2}:\\d{2}:\\d{2}))$"));
+    const QString t = text.trimmed();
+    if (t.size() < 8 || t.size() > 19)
+        return false;
+    const QRegularExpressionMatch m = kIso.match(t);
+    if (!m.hasMatch())
+        return false;
+    double days = 0.0;
+    QString time_part = m.captured(3);
+    if (time_part.isEmpty()) {
+        const QDate d = QDate::fromString(m.captured(1), QStringLiteral("yyyy-MM-dd"));
+        if (!d.isValid())
+            return false;
+        days = static_cast<double>(QDate(1899, 12, 30).daysTo(d));
+        time_part = m.captured(2);
+    }
+    double frac = 0.0;
+    if (!time_part.isEmpty()) {
+        const QTime tm = QTime::fromString(time_part, QStringLiteral("HH:mm:ss"));
+        if (!tm.isValid())
+            return false;
+        frac = tm.msecsSinceStartOfDay() / 86400000.0;
+    }
+    *serial = days + frac;
+    return true;
+}
+
+QString serial_date_text(double serial) {
+    const double whole = std::floor(serial);
+    QDate d = QDate(1899, 12, 30).addDays(static_cast<qint64>(whole));
+    const int msecs = static_cast<int>(std::llround((serial - whole) * 86400000.0));
+    if (msecs >= 86400000)
+        d = d.addDays(1); // rounds up to the next midnight
+    if (msecs <= 0 || msecs >= 86400000)
+        return d.toString(QStringLiteral("yyyy-MM-dd"));
+    return d.toString(QStringLiteral("yyyy-MM-dd")) + QLatin1Char(' ') +
+           QTime::fromMSecsSinceStartOfDay(msecs).toString(QStringLiteral("HH:mm:ss"));
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Tokenizer
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1012,6 +1054,10 @@ bool fe_to_number(const Value& v, double* out, Value* err) {
         case Value::Type::Text:
             if (parse_number(v.text, out))
                 return true;
+            // A date cell ("2024-01-15", how xlsx import writes dates) is its serial, as in
+            // Excel: =B2-A2 is the days between, =A2+30 a later date. It was #VALUE!.
+            if (iso_text_serial(v.text, out))
+                return true;
             *err = Value::err(errors::value(), QStringLiteral("\"%1\" is not a number").arg(v.text.left(40)));
             return false;
         case Value::Type::Error:
@@ -1320,9 +1366,9 @@ class FeEval {
         return a;
     }
 
-    // Aggregate semantics: references contribute only their numbers (text,
-    // booleans and blanks are skipped); literal arguments are coerced. Any
-    // error aborts. Returns false with *err set on error.
+    // Aggregate semantics: references contribute only their numbers and dates
+    // (other text, booleans and blanks are skipped); literal arguments are
+    // coerced. Any error aborts. Returns false with *err set on error.
     bool numbers(const std::vector<FeNodePtr>& args, size_t first, QVector<double>& out, Value* err) {
         for (size_t i = first; i < args.size(); ++i) {
             const FeNode& node = *args[i];
@@ -1333,8 +1379,11 @@ class FeEval {
                         *err = v;
                         return false;
                     }
+                    double serial = 0.0;
                     if (v.is_number())
                         out.push_back(v.number);
+                    else if (v.is_text() && iso_text_serial(v.text, &serial))
+                        out.push_back(serial); // a date cell is a number in Excel (MIN/MAX of dates was 0)
                 }
             } else {
                 const Value v = eval(node);
@@ -1501,8 +1550,11 @@ bool fe_series(FeEval& ev, const FeNode& node, QVector<double>& out, Value* err)
             *err = v;
             return false;
         }
+        double serial = 0.0;
         if (v.is_number())
             out.push_back(v.number);
+        else if (a.is_ref && v.is_text() && iso_text_serial(v.text, &serial))
+            out.push_back(serial); // date cells count, as in numbers()
         else if (!a.is_ref && !v.is_empty()) {
             double d = 0.0;
             if (!fe_to_number(v, &d, err))
@@ -1859,8 +1911,9 @@ const QHash<QString, FeFnDef>& fe_functions() {
                      int n = 0;
                      for (const auto& node : a) {
                          if (node->k == FeNode::K::Ref || node->k == FeNode::K::Range) {
+                             double serial = 0.0;
                              for (const Value& v : ev.expand(*node).values)
-                                 n += v.is_number() ? 1 : 0;
+                                 n += (v.is_number() || (v.is_text() && iso_text_serial(v.text, &serial))) ? 1 : 0;
                          } else {
                              const Value v = ev.eval(*node);
                              double d = 0.0;

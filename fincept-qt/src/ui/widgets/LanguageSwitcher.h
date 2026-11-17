@@ -1,7 +1,7 @@
 #pragma once
 // LanguageSwitcher — compact language picker for pre-login screens.
 //
-// Renders as a small Obsidian-styled button showing the active language's
+// Renders as a small theme-styled button showing the active language's
 // native name with a chevron. Clicking opens a popup menu listing all
 // supported languages; selecting one calls LanguageManager::set_language(),
 // which swaps the QTranslator and posts QEvent::LanguageChange to every

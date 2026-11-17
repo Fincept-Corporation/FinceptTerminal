@@ -3,29 +3,33 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
-#include "screens/portfolio/PortfolioCsv.h"
-#include "screens/portfolio/PortfolioSparkline.h"
+#include "screens/portfolio/PortfolioFormat.h"
 #include "services/markets/MarketDataService.h"
+#include "services/portfolio/PortfolioClassify.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerTopic.h"
+#include "ui/charts/ChartExport.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/tables/BarCellDelegate.h"
+#include "ui/tables/RangeBarDelegate.h"
+#include "ui/tables/SparklineDelegate.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/ThemeHelpers.h"
 
+#include <QAbstractTableModel>
 #include <QAction>
 #include <QClipboard>
 #include <QDate>
-#include <QGuiApplication>
 #include <QEvent>
-#include <QHBoxLayout>
+#include <QGuiApplication>
 #include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLocale>
+#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
-#include <QMetaObject>
-#include <QScrollBar>
+#include <QSet>
+#include <QSortFilterProxyModel>
+#include <QTableView>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -34,59 +38,829 @@
 
 namespace fincept::screens {
 
-// Column source keys (English). Translated at runtime in build_ui() so
-// lupdate can scan the literals here.
-static const char* const kColumnKeys[] = {
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "SYMBOL"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "QTY"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "LAST"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "AVG COST"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "MKT VAL"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "COST BASIS"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L%"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "CHG%"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "DAY P&L"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "TREND"),
-    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "WT%"),
-};
-static constexpr int kColumnCount = sizeof(kColumnKeys) / sizeof(kColumnKeys[0]);
+// ── Columns ──────────────────────────────────────────────────────────────────
 
-// Named column indices — the layout was previously spelled out as bare
-// integers in five places (populate_table, update_row_price,
-// repaint_sparkline_cells, on_header_clicked), which is exactly how the live
-// broker tick ended up writing the last price into the AVG COST column.
-enum Column {
-    kColSymbol = 0,
-    kColQty = 1,
-    kColLast = 2,
-    kColAvgCost = 3,
-    kColMktVal = 4,
-    kColCostBasis = 5,
-    kColPnl = 6,
-    kColPnlPct = 7,
-    kColChgPct = 8,
-    kColDayPnl = 9, // today's move in money: CHG% alone hides which line moved the book
-    kColTrend = 10,
-    kColWeight = 11,
+enum PfBlotterCol {
+    kPbSymbol,
+    kPbName,
+    kPbQty,
+    kPbLast,
+    kPbCcy,
+    kPbFx,
+    kPbAvgCost,
+    kPbValueLocal,
+    kPbValue,
+    kPbCost,
+    kPbPnl,
+    kPbPnlPct,
+    kPbPricePnl,
+    kPbFxPnl,
+    kPbDayPct,
+    kPbDayPnl,
+    kPbTrend,
+    kPbWeight,
+    kPbRiskShare,
+    kPbBeta,
+    kPbVol,
+    kPbCompVar,
+    kPbRealized,
+    kPbDividends,
+    kPbYield,
+    kPbSector,
+    kPbIndustry,
+    kPbAssetClass,
+    kPbCountry,
+    kPbExchange,
+    kPbRange52,
+    kPbStatus,
+    kPbLots,
+    kPbColCount
 };
-static_assert(kColWeight + 1 == kColumnCount, "Column enum and kColumnKeys are out of sync");
 
-PortfolioBlotter::PortfolioBlotter(QWidget* parent) : QWidget(parent) {
-    // Restore persisted page size before building the UI so the combo and
-    // populate_table see the right value on first paint.
-    {
-        auto r = SettingsRepository::instance().get("portfolio.blotter.page_size");
-        if (r.is_ok() && !r.value().isEmpty()) {
-            bool ok = false;
-            const int saved = r.value().toInt(&ok);
-            // Only accept the four sanctioned page sizes — anything else
-            // (corrupted setting, future value) silently falls back to 10.
-            if (ok && (saved == 10 || saved == 20 || saved == 50 || saved == 100))
-                page_size_ = saved;
+struct PfBlotterColDef {
+    const char* key;   // stable settings key
+    const char* title; // translatable header
+    const char* tip;   // translatable header tooltip
+    bool numeric;
+    bool default_visible;
+};
+
+// QT_TRANSLATE_NOOP under the PortfolioBlotter context; tr() resolves them at runtime.
+static const PfBlotterColDef kPbCols[kPbColCount] = {
+    {"symbol", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "SYMBOL"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Ticker. ⚠ = no live price or no FX rate (excluded from totals); ◷ = price from an earlier session."), false, true},
+    {"name", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "NAME"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Instrument name."), false, false},
+    {"qty", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "QTY"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Units held."), true, true},
+    {"last", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "LAST"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Last price in the instrument's quote currency."), true, true},
+    {"ccy", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "CCY"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Quote currency (minor units such as GBp are pence)."), false, false},
+    {"fx", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "FX"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Spot rate: base-currency units per one unit of the holding's currency."), true, false},
+    {"avg_cost", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "AVG COST"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Average cost per unit (fees included when the ledger explains the position), quote currency."), true, true},
+    {"value_local", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "VALUE (LOCAL)"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Market value in the holding's own currency."), true, false},
+    {"value", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "VALUE"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Market value in the portfolio's base currency."), true, true},
+    {"cost", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "COST"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Cost basis in the base currency (trade-date FX when recorded)."), true, false},
+    {"pnl", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Unrealised P&L in the base currency."), true, true},
+    {"pnl_pct", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L %"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Unrealised P&L as % of cost."), true, true},
+    {"price_pnl", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "PRICE P&L"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Part of the unrealised P&L from the price move in its own currency."), true, false},
+    {"fx_pnl", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "FX P&L"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Part of the unrealised P&L from the currency move since purchase (needs trade-date FX)."), true, false},
+    {"day_pct", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "DAY %"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Price change since the previous close."), true, true},
+    {"day_pnl", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "DAY P&L"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Today's change of the position in the base currency."), true, true},
+    {"trend", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "TREND"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Recent closes."), false, true},
+    {"weight", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "WEIGHT"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Share of the valued holdings (cash excluded)."), true, true},
+    {"risk_share", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "RISK SHARE"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Share of the portfolio's variance this holding contributes (ex-ante)."), true, false},
+    {"beta", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "BETA"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Beta vs the portfolio's benchmark (trailing daily returns, base currency)."), true, false},
+    {"vol", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "VOL"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Annualised volatility in the base currency (currency risk included)."), true, false},
+    {"comp_var", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "COMP. VaR"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Component VaR: this holding's part of the parametric portfolio VaR, % of NAV."), true, false},
+    {"realized", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "REALISED"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Realised P&L on this symbol (portfolio lot method), base currency."), true, false},
+    {"dividends", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "DIVIDENDS"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Net dividends received, base currency."), true, false},
+    {"yield", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "YIELD"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Trailing dividend yield reported by the market data source."), true, false},
+    {"sector", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "SECTOR"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Sector."), false, false},
+    {"industry", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "INDUSTRY"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Industry."), false, false},
+    {"asset_class", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "CLASS"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Asset class (from the quote type; * = guessed from the ticker)."), false, false},
+    {"country", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "COUNTRY"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Country of the issuer."), false, false},
+    {"exchange", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "EXCHANGE"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Listing exchange."), false, false},
+    {"range52", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "52W RANGE"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Last price within the 52-week low–high range."), false, false},
+    {"status", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "MARKET"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Market session and the date of the price."), false, false},
+    {"lots", QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "LOTS"), QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "Open tax lots (long-term units in the tooltip)."), true, false},
+};
+
+static constexpr int kPbSortRole = Qt::UserRole + 1;
+static constexpr int kPbTotalRole = Qt::UserRole + 2;
+static constexpr int kPbExportRole = Qt::UserRole + 3;
+static constexpr int kPbSymbolRole = Qt::UserRole + 4;
+
+static constexpr const char* kPbColumnsKey = "portfolio.blotter.columns";
+static constexpr const char* kPbHeaderKey = "portfolio.blotter.header";
+/// The user's own choice for the PRICE P&L / FX P&L columns ("price_pnl=1,fx_pnl=0"),
+/// made in the column menu. Without one they follow the FX P&L split setting.
+static constexpr const char* kPbSplitColsKey = "portfolio.blotter.fx_split_columns";
+
+static QString pb_csv_num(double v, int dp) {
+    return ui::formatting::export_number(v, dp); // NaN -> ""
+}
+
+// ── Model ────────────────────────────────────────────────────────────────────
+
+class PfBlotterModel : public QAbstractTableModel {
+  public:
+    struct Live {
+        double ltp = portfolio::kAbsent;
+        double change_pct = portfolio::kAbsent;
+    };
+
+    explicit PfBlotterModel(QObject* parent) : QAbstractTableModel(parent) {}
+
+    void set_summary(const portfolio::PortfolioSummary& s) {
+        beginResetModel();
+        summary_ = s;
+        has_summary_ = true;
+        live_.clear();
+        update_mixes();
+        endResetModel();
+    }
+    void set_holdings(const QVector<portfolio::HoldingWithQuote>& h) {
+        beginResetModel();
+        summary_.holdings = h;
+        has_summary_ = false; // no totals without a summary
+        live_.clear();
+        update_mixes();
+        endResetModel();
+    }
+    void set_analytics(const portfolio::MarketAnalytics& a) {
+        risk_ = a.holdings;
+        emit_all_changed();
+    }
+    void set_allocation(const portfolio::AllocationReport& r) {
+        attrs_.clear();
+        for (const auto& b : r.breakdowns)
+            for (const auto& slice : b.slices)
+                for (const auto& sym : slice.symbols)
+                    attrs_[sym].insert(static_cast<int>(b.dimension), slice.key);
+        class_guessed_ = QSet<QString>(r.class_guessed.begin(), r.class_guessed.end());
+        emit_all_changed();
+    }
+    void set_info(const QHash<QString, services::InfoData>& info) {
+        info_ = info;
+        emit_all_changed();
+    }
+    void set_spark(const QString& sym, const QVector<double>& closes) {
+        spark_.insert(sym, closes);
+        const int r = row_of(sym);
+        if (r >= 0)
+            emit dataChanged(index(r, kPbTrend), index(r, kPbTrend));
+    }
+    void set_live(const QString& sym, double ltp, double chg_pct) {
+        const int r = row_of(sym);
+        if (r < 0 || !(ltp > 0))
+            return;
+        live_[sym] = Live{ltp, chg_pct};
+        emit dataChanged(index(r, 0), index(r, kPbColCount - 1));
+    }
+
+    int row_of(const QString& sym) const {
+        for (int i = 0; i < summary_.holdings.size(); ++i)
+            if (summary_.holdings[i].symbol == sym)
+                return i;
+        return -1;
+    }
+    const portfolio::PortfolioSummary& summary() const { return summary_; }
+    QString base() const { return pfmt::base_ccy(summary_); }
+    int holding_count() const { return static_cast<int>(summary_.holdings.size()); }
+
+    int rowCount(const QModelIndex& parent = {}) const override {
+        if (parent.isValid())
+            return 0;
+        const int n = holding_count();
+        return n + (has_summary_ && n > 0 ? 1 : 0);
+    }
+    int columnCount(const QModelIndex& parent = {}) const override { return parent.isValid() ? 0 : kPbColCount; }
+
+    QVariant headerData(int section, Qt::Orientation o, int role) const override {
+        if (o != Qt::Horizontal || section < 0 || section >= kPbColCount)
+            return {};
+        if (role == Qt::DisplayRole)
+            return PortfolioBlotter::tr(kPbCols[section].title);
+        if (role == Qt::ToolTipRole)
+            return PortfolioBlotter::tr(kPbCols[section].tip);
+        if (role == Qt::TextAlignmentRole)
+            return QVariant::fromValue(kPbCols[section].numeric ? Qt::AlignRight | Qt::AlignVCenter
+                                                                 : Qt::AlignLeft | Qt::AlignVCenter);
+        return {};
+    }
+
+    QVariant data(const QModelIndex& idx, int role) const override {
+        if (!idx.isValid())
+            return {};
+        const int col = idx.column();
+        if (idx.row() >= holding_count())
+            return total_data(col, role);
+        const auto& h = summary_.holdings[idx.row()];
+        switch (role) {
+            case Qt::DisplayRole:
+                return display(h, col);
+            case kPbSortRole:
+                return sort_value(h, col);
+            case kPbExportRole:
+                return export_value(h, col);
+            case kPbSymbolRole:
+                return h.symbol;
+            case kPbTotalRole:
+                return false;
+            case Qt::TextAlignmentRole:
+                return QVariant::fromValue(kPbCols[col].numeric ? Qt::AlignRight | Qt::AlignVCenter
+                                                                 : Qt::AlignLeft | Qt::AlignVCenter);
+            case Qt::ForegroundRole:
+                return foreground(h, col);
+            case Qt::ToolTipRole:
+                return tooltip(h, col);
+            case ui::SparklineDelegate::kDefaultRole:
+                if (col == kPbTrend) {
+                    const auto it = spark_.constFind(h.symbol);
+                    if (it != spark_.constEnd() && it->size() >= 2)
+                        return QVariant::fromValue(*it);
+                }
+                return {};
+            case ui::RangeBarDelegate::LowRole:
+            case ui::RangeBarDelegate::HighRole:
+            case ui::RangeBarDelegate::ValueRole: {
+                if (col != kPbRange52)
+                    return {};
+                const auto it = info_.constFind(h.symbol);
+                if (it == info_.constEnd())
+                    return {};
+                const double lo = it->week52_low;
+                const double hi = it->week52_high;
+                const double v = last(h);
+                if (!(std::isfinite(lo) && std::isfinite(hi) && hi > lo && lo > 0))
+                    return {};
+                if (role == ui::RangeBarDelegate::LowRole)
+                    return lo;
+                if (role == ui::RangeBarDelegate::HighRole)
+                    return hi;
+                return std::isfinite(v) ? QVariant(v) : QVariant();
+            }
+            default:
+                return {};
         }
     }
+
+  private:
+    void emit_all_changed() {
+        if (rowCount() > 0)
+            emit dataChanged(index(0, 0), index(rowCount() - 1, kPbColCount - 1));
+    }
+
+    /// Currencies of the per-holding columns that are not in the base currency.
+    void update_mixes() {
+        const QString b = base();
+        local_mix_ = ui::formatting::CurrencyMix();
+        prices_need_unit_ = false;
+        for (const auto& h : summary_.holdings) {
+            local_mix_.add(h.currency.isEmpty() ? b : h.currency);
+            const QString q = h.price_currency.isEmpty() ? h.currency : h.price_currency;
+            if (!q.isEmpty() && q != b)
+                prices_need_unit_ = true; // GBp counts: pence are not the base unit
+        }
+    }
+    /// Last / average cost: as quoted, with the unit when the column holds more
+    /// than the base currency (a bare number would not say which currency it is).
+    QString price_cell(double v, const portfolio::HoldingWithQuote& h, const QString& qccy) const {
+        return prices_need_unit_ ? pfmt::price_sym(v, qccy, h.symbol) : pfmt::price(v, qccy, h.symbol);
+    }
+    /// "≈ " on a base-currency figure converted at a stale rate (R3).
+    bool fx_stale(const portfolio::HoldingWithQuote& h) const {
+        return !summary_.fx_stale.isEmpty() && summary_.fx_stale.contains(h.currency, Qt::CaseInsensitive);
+    }
+    static QString approx(bool stale, double v, const QString& text) {
+        return stale && std::isfinite(v) ? QStringLiteral("≈ ") + text : text;
+    }
+
+    // Live-tick aware price / value (ticks only override a priced holding).
+    double last(const portfolio::HoldingWithQuote& h) const {
+        const auto it = live_.constFind(h.symbol);
+        return it != live_.constEnd() && h.priced ? it->ltp : h.current_price;
+    }
+    double value_scale(const portfolio::HoldingWithQuote& h) const {
+        // base value per (quantity × quoted price): captures minor units and spot FX
+        if (!(h.quantity > 0) || !(h.current_price > 0) || !std::isfinite(h.market_value))
+            return portfolio::kAbsent;
+        return h.market_value / (h.quantity * h.current_price);
+    }
+    double value(const portfolio::HoldingWithQuote& h) const {
+        if (!live_.contains(h.symbol))
+            return h.market_value;
+        const double k = value_scale(h);
+        return std::isfinite(k) ? h.quantity * last(h) * k : h.market_value;
+    }
+    double pnl(const portfolio::HoldingWithQuote& h) const {
+        if (!live_.contains(h.symbol))
+            return h.unrealized_pnl;
+        const double v = value(h);
+        return std::isfinite(v) ? v - h.cost_basis : portfolio::kAbsent;
+    }
+    double pnl_pct(const portfolio::HoldingWithQuote& h) const {
+        if (!live_.contains(h.symbol))
+            return h.unrealized_pnl_percent;
+        const double p = pnl(h);
+        return std::isfinite(p) && h.cost_basis > 0 ? p / h.cost_basis * 100.0 : portfolio::kAbsent;
+    }
+    double day_pct(const portfolio::HoldingWithQuote& h) const {
+        const auto it = live_.constFind(h.symbol);
+        return it != live_.constEnd() && std::isfinite(it->change_pct) ? it->change_pct : h.day_change_percent;
+    }
+    double day_pnl(const portfolio::HoldingWithQuote& h) const {
+        const auto it = live_.constFind(h.symbol);
+        if (it == live_.constEnd() || !std::isfinite(it->change_pct) || it->change_pct <= -100.0)
+            return h.day_change_value;
+        const double v = value(h);
+        return std::isfinite(v) ? v - v / (1.0 + it->change_pct / 100.0) : portfolio::kAbsent;
+    }
+    const portfolio::HoldingRisk* risk(const QString& sym) const {
+        const auto it = risk_.constFind(sym);
+        return it == risk_.constEnd() ? nullptr : &*it;
+    }
+    QString attr(const portfolio::HoldingWithQuote& h, portfolio::AllocationDimension d) const {
+        const auto it = attrs_.constFind(h.symbol);
+        if (it != attrs_.constEnd()) {
+            const QString v = it->value(static_cast<int>(d));
+            if (!v.isEmpty())
+                return v;
+        }
+        if (d == portfolio::AllocationDimension::Sector)
+            return h.sector;
+        if (d == portfolio::AllocationDimension::Exchange)
+            return h.exchange;
+        if (d == portfolio::AllocationDimension::AssetClass)
+            return portfolio::asset_class_key(portfolio::classify_asset(h.symbol, h.quote_type, h.name).cls);
+        return {};
+    }
+    double yield(const QString& sym) const {
+        const auto it = info_.constFind(sym);
+        return it == info_.constEnd() ? portfolio::kAbsent : it->dividend_yield;
+    }
+    bool stale(const portfolio::HoldingWithQuote& h) const {
+        return h.priced && !h.as_of.isEmpty() && !summary_.as_of.isEmpty() && h.as_of < summary_.as_of;
+    }
+
+    double numeric(const portfolio::HoldingWithQuote& h, int col) const {
+        const auto* r = risk(h.symbol);
+        switch (col) {
+            case kPbQty:
+                return h.quantity;
+            case kPbLast:
+                return last(h);
+            case kPbFx:
+                return h.fx_rate;
+            case kPbAvgCost:
+                return h.avg_buy_price;
+            case kPbValueLocal:
+                return live_.contains(h.symbol) && std::isfinite(value_scale(h)) && std::isfinite(h.fx_rate) &&
+                               h.fx_rate > 0
+                           ? value(h) / h.fx_rate
+                           : h.market_value_local;
+            case kPbValue:
+                return value(h);
+            case kPbCost:
+                return h.cost_basis;
+            case kPbPnl:
+                return pnl(h);
+            case kPbPnlPct:
+                return pnl_pct(h);
+            case kPbPricePnl:
+                return h.price_pnl;
+            case kPbFxPnl:
+                return h.fx_pnl;
+            case kPbDayPct:
+                return day_pct(h);
+            case kPbDayPnl:
+                return day_pnl(h);
+            case kPbWeight:
+                return h.weight;
+            case kPbRiskShare:
+                return r && r->risk_contribution ? *r->risk_contribution * 100.0 : portfolio::kAbsent;
+            case kPbBeta:
+                return r && r->beta ? *r->beta : portfolio::kAbsent;
+            case kPbVol:
+                return r && r->ann_vol ? *r->ann_vol * 100.0 : portfolio::kAbsent;
+            case kPbCompVar:
+                return r && r->component_var ? *r->component_var * 100.0 : portfolio::kAbsent;
+            case kPbRealized:
+                return h.realized_pnl;
+            case kPbDividends:
+                return h.dividends;
+            case kPbYield: {
+                const double y = yield(h.symbol);
+                return std::isfinite(y) ? y * 100.0 : portfolio::kAbsent;
+            }
+            case kPbRange52: {
+                const auto it = info_.constFind(h.symbol);
+                if (it == info_.constEnd())
+                    return portfolio::kAbsent;
+                const double lo = it->week52_low, hi = it->week52_high, v = last(h);
+                return std::isfinite(lo) && std::isfinite(hi) && hi > lo && std::isfinite(v) ? (v - lo) / (hi - lo)
+                                                                                              : portfolio::kAbsent;
+            }
+            case kPbLots:
+                return h.open_lots;
+            default:
+                return portfolio::kAbsent;
+        }
+    }
+
+    QString text_attr(const portfolio::HoldingWithQuote& h, int col) const {
+        using AD = portfolio::AllocationDimension;
+        switch (col) {
+            case kPbSymbol:
+                return h.symbol;
+            case kPbName:
+                return h.name;
+            case kPbCcy:
+                return h.price_currency.isEmpty() ? h.currency : h.price_currency;
+            case kPbSector:
+                return attr(h, AD::Sector);
+            case kPbIndustry:
+                return attr(h, AD::Industry);
+            case kPbAssetClass:
+                return attr(h, AD::AssetClass);
+            case kPbCountry:
+                return attr(h, AD::Country);
+            case kPbExchange:
+                return attr(h, AD::Exchange);
+            case kPbStatus:
+                return h.market_state;
+            default:
+                return {};
+        }
+    }
+
+    QVariant display(const portfolio::HoldingWithQuote& h, int col) const {
+        const QString base_c = base();
+        const QString qccy = h.price_currency.isEmpty() ? h.currency : h.price_currency;
+        switch (col) {
+            case kPbSymbol: {
+                QString s = h.symbol;
+                if (!h.valued())
+                    s = QStringLiteral("⚠ ") + s;
+                else if (stale(h))
+                    s = QStringLiteral("◷ ") + s;
+                return s;
+            }
+            case kPbName:
+            case kPbSector:
+            case kPbIndustry:
+            case kPbCountry:
+            case kPbExchange: {
+                const QString t = text_attr(h, col);
+                return t.isEmpty() ? pfmt::dash() : t;
+            }
+            case kPbAssetClass: {
+                const QString t = text_attr(h, col);
+                return t.isEmpty() ? pfmt::dash() : (class_guessed_.contains(h.symbol) ? t + QStringLiteral(" *") : t);
+            }
+            case kPbCcy:
+                return qccy.isEmpty() ? pfmt::dash() : qccy;
+            case kPbQty:
+                return pfmt::qty(h.quantity);
+            case kPbLast:
+                return price_cell(last(h), h, qccy);
+            case kPbAvgCost:
+                return price_cell(h.avg_buy_price, h, qccy);
+            case kPbFx: {
+                if (!std::isfinite(h.fx_rate))
+                    return pfmt::dash();
+                ui::formatting::InstrumentFmt fx;
+                fx.fx = true;
+                return ui::formatting::price(h.fx_rate, fx);
+            }
+            case kPbValueLocal:
+                return ui::formatting::money_in_column(numeric(h, col), h.currency.isEmpty() ? base_c : h.currency,
+                                                       local_mix_);
+            case kPbValue:
+                return approx(fx_stale(h), numeric(h, col), pfmt::money(numeric(h, col), base_c));
+            case kPbCost:
+            case kPbDividends:
+                return pfmt::money(numeric(h, col), base_c);
+            case kPbPnl:
+            case kPbPricePnl:
+            case kPbFxPnl:
+            case kPbDayPnl:
+                return approx(fx_stale(h), numeric(h, col), pfmt::smoney(numeric(h, col), base_c));
+            case kPbRealized:
+                return pfmt::smoney(numeric(h, col), base_c);
+            case kPbPnlPct:
+            case kPbDayPct:
+                return pfmt::pct(numeric(h, col));
+            case kPbWeight:
+            case kPbRiskShare:
+                return pfmt::upct(numeric(h, col), 1);
+            case kPbVol:
+            case kPbYield:
+                return pfmt::upct(numeric(h, col), 1);
+            case kPbCompVar:
+                return pfmt::upct(numeric(h, col), 2);
+            case kPbBeta:
+                return pfmt::num(numeric(h, col), 2);
+            case kPbTrend:
+                return spark_.contains(h.symbol) ? QString() : pfmt::dash();
+            case kPbRange52: {
+                const double t = numeric(h, col);
+                return std::isfinite(t) ? QString() : pfmt::dash();
+            }
+            case kPbStatus: {
+                QStringList parts;
+                if (!h.market_state.isEmpty())
+                    parts << h.market_state;
+                if (!h.as_of.isEmpty())
+                    parts << pfmt::date(h.as_of, ui::formatting::DateStyle::Short);
+                return parts.isEmpty() ? pfmt::dash() : parts.join(QStringLiteral(" · "));
+            }
+            case kPbLots:
+                return h.ledger_explained ? QString::number(h.open_lots) : pfmt::dash();
+            default:
+                return {};
+        }
+    }
+
+    QVariant sort_value(const portfolio::HoldingWithQuote& h, int col) const {
+        if (!kPbCols[col].numeric && col != kPbRange52)
+            return text_attr(h, col);
+        return numeric(h, col);
+    }
+
+    QVariant export_value(const portfolio::HoldingWithQuote& h, int col) const {
+        switch (col) {
+            case kPbTrend:
+                return QString();
+            case kPbRange52: {
+                const auto it = info_.constFind(h.symbol);
+                if (it == info_.constEnd())
+                    return QString();
+                return QStringLiteral("%1-%2").arg(pb_csv_num(it->week52_low, 6), pb_csv_num(it->week52_high, 6));
+            }
+            case kPbStatus:
+                return QStringLiteral("%1 %2").arg(h.market_state, h.as_of).trimmed();
+            case kPbQty:
+                return pb_csv_num(h.quantity, 8);
+            case kPbLast:
+            case kPbAvgCost:
+            case kPbFx:
+                return pb_csv_num(numeric(h, col), 8);
+            default:
+                if (kPbCols[col].numeric)
+                    return pb_csv_num(numeric(h, col), 4);
+                return text_attr(h, col);
+        }
+    }
+
+    QVariant foreground(const portfolio::HoldingWithQuote& h, int col) const {
+        switch (col) {
+            case kPbSymbol:
+                if (!h.valued())
+                    return QColor(ui::colors::WARNING());
+                return QColor(ui::colors::CYAN());
+            case kPbPnl:
+            case kPbPnlPct:
+            case kPbPricePnl:
+            case kPbFxPnl:
+            case kPbDayPct:
+            case kPbDayPnl:
+            case kPbRealized:
+                return pfmt::dir_color(numeric(h, col));
+            case kPbName:
+            case kPbCcy:
+            case kPbSector:
+            case kPbIndustry:
+            case kPbAssetClass:
+            case kPbCountry:
+            case kPbExchange:
+            case kPbStatus:
+                return QColor(ui::colors::TEXT_SECONDARY());
+            default: {
+                const QVariant v = sort_value(h, col);
+                if (kPbCols[col].numeric && !std::isfinite(v.toDouble()))
+                    return QColor(ui::colors::TEXT_TERTIARY());
+                return QColor(ui::colors::TEXT_PRIMARY());
+            }
+        }
+    }
+
+    QVariant tooltip(const portfolio::HoldingWithQuote& h, int col) const {
+        if (col == kPbSymbol) {
+            QStringList lines;
+            lines << (h.name.isEmpty() ? h.symbol : QStringLiteral("%1 — %2").arg(h.symbol, h.name));
+            if (!h.priced)
+                lines << PortfolioBlotter::tr("No live price: value, P&L and weight are unknown and the position is "
+                                              "left out of the totals.");
+            else if (!h.fx_ok)
+                lines << PortfolioBlotter::tr("No %1→%2 rate yet: base-currency figures are unknown and the position "
+                                              "is left out of the totals.")
+                             .arg(h.currency, base());
+            if (stale(h))
+                lines << PortfolioBlotter::tr("Price from the %1 session (others are from %2).")
+                             .arg(pfmt::date(h.as_of), pfmt::date(summary_.as_of));
+            if (fx_stale(h))
+                lines << PortfolioBlotter::tr("The %1→%2 rate is stale: base-currency figures (≈) use the last known "
+                                              "rate.")
+                             .arg(h.currency, base());
+            if (!h.ledger_explained)
+                lines << PortfolioBlotter::tr("The ledger does not reproduce this position: cost comes from the stored "
+                                              "average price and realised figures may be partial.");
+            return lines.join(QLatin1Char('\n'));
+        }
+        if (col == kPbLots && h.ledger_explained)
+            return PortfolioBlotter::tr("%1 open lot(s); %2 units held long-term.")
+                .arg(h.open_lots)
+                .arg(pfmt::qty(h.long_term_quantity));
+        if (col == kPbFxPnl && !std::isfinite(h.fx_pnl) && h.valued())
+            return pfmt::fx_pnl_unknown_reason();
+        if (col == kPbPricePnl && !std::isfinite(h.fx_pnl) && h.valued())
+            return PortfolioBlotter::tr("The whole unrealised P&L, currency move included.") + QLatin1Char('\n') +
+                   pfmt::fx_pnl_unknown_reason();
+        if (col == kPbValue || col == kPbPnl) {
+            if (!h.valued())
+                return PortfolioBlotter::tr("Not valued — see the symbol's tooltip.");
+        }
+        if (col == kPbPnl && h.currency.compare(base(), Qt::CaseInsensitive) != 0 && pfmt::fx_split_shown(summary_)) {
+            // Both parts of a foreign holding's P&L (Settings > Currency & Number Format > split).
+            QString t = std::isfinite(h.fx_pnl)
+                            ? PortfolioBlotter::tr("Price move: %1\nFX move (%2→%3 since purchase): %4")
+                                  .arg(pfmt::smoney(h.price_pnl, base()), h.currency, base(),
+                                       pfmt::smoney(h.fx_pnl, base()))
+                            : PortfolioBlotter::tr("FX move: %1").arg(pfmt::dash()) + QLatin1Char('\n') +
+                                  pfmt::fx_pnl_unknown_reason();
+            if (live_.contains(h.symbol))
+                t += QLatin1Char('\n') + PortfolioBlotter::tr("Split as of the last valuation; live ticks move the "
+                                                              "total only.");
+            return t;
+        }
+        return {};
+    }
+
+    QVariant total_data(int col, int role) const {
+        const auto& s = summary_;
+        const QString base_c = base();
+        auto num = [&](int c) -> double {
+            switch (c) {
+                case kPbValue:
+                    return pfmt::holdings_value(s);
+                case kPbCost:
+                    return s.total_cost_basis;
+                case kPbPnl:
+                    return s.total_unrealized_pnl;
+                case kPbPnlPct:
+                    return s.total_unrealized_pnl_percent;
+                case kPbPricePnl:
+                    return s.total_price_pnl;
+                case kPbFxPnl:
+                    return s.total_fx_pnl;
+                case kPbDayPct:
+                    return s.total_day_change_percent;
+                case kPbDayPnl:
+                    return s.total_day_change;
+                case kPbWeight:
+                    return s.valued_positions > 0 ? 100.0 : portfolio::kAbsent;
+                case kPbRealized:
+                    return s.total_realized_pnl;
+                case kPbDividends:
+                    return s.total_dividends;
+                default:
+                    return portfolio::kAbsent;
+            }
+        };
+        switch (role) {
+            case kPbTotalRole:
+                return true;
+            case kPbSortRole:
+                return portfolio::kAbsent;
+            case Qt::FontRole: {
+                QFont f = ui::fonts::font(-1, QFont::Bold);
+                return f;
+            }
+            case Qt::BackgroundRole:
+                return QColor(ui::colors::BG_RAISED());
+            case Qt::TextAlignmentRole:
+                return QVariant::fromValue(kPbCols[col].numeric ? Qt::AlignRight | Qt::AlignVCenter
+                                                                 : Qt::AlignLeft | Qt::AlignVCenter);
+            case Qt::ForegroundRole:
+                if (col == kPbPnl || col == kPbPnlPct || col == kPbPricePnl || col == kPbFxPnl || col == kPbDayPct ||
+                    col == kPbDayPnl || col == kPbRealized)
+                    return pfmt::dir_color(num(col));
+                if (col == kPbSymbol && !s.complete)
+                    return QColor(ui::colors::WARNING());
+                return QColor(ui::colors::TEXT_PRIMARY());
+            case Qt::ToolTipRole: {
+                if (col == kPbSymbol) {
+                    QStringList tip;
+                    tip << (s.complete ? PortfolioBlotter::tr("Totals of every position, in %1.").arg(base_c)
+                                       : pfmt::incomplete_line(s));
+                    if (!s.fx_stale.isEmpty())
+                        tip << pfmt::fx_stale_line(s);
+                    return tip.join(QLatin1Char('\n'));
+                }
+                if (col == kPbFxPnl && !std::isfinite(s.total_fx_pnl) && s.valued_positions > 0)
+                    return PortfolioBlotter::tr("Not every foreign-currency holding has a trade-date FX rate for its "
+                                                "cost, so the total cannot be split.");
+                if ((col == kPbValue || col == kPbPnl) && !s.fx_stale.isEmpty())
+                    return pfmt::fx_stale_line(s);
+                return {};
+            }
+            case kPbExportRole:
+                if (col == kPbSymbol)
+                    return QStringLiteral("TOTAL");
+                return kPbCols[col].numeric ? QVariant(pb_csv_num(num(col), 4)) : QVariant(QString());
+            case Qt::DisplayRole:
+                switch (col) {
+                    case kPbSymbol:
+                        return s.complete ? PortfolioBlotter::tr("TOTAL")
+                                          : PortfolioBlotter::tr("TOTAL (%1/%2 valued)")
+                                                .arg(s.valued_positions)
+                                                .arg(s.total_positions);
+                    case kPbValue:
+                        return approx(!s.fx_stale.isEmpty(), num(col), pfmt::money(num(col), base_c));
+                    case kPbCost:
+                    case kPbDividends:
+                        return pfmt::money(num(col), base_c);
+                    case kPbPnl:
+                    case kPbPricePnl:
+                    case kPbFxPnl:
+                    case kPbDayPnl:
+                        return approx(!s.fx_stale.isEmpty(), num(col), pfmt::smoney(num(col), base_c));
+                    case kPbRealized:
+                        return pfmt::smoney(num(col), base_c);
+                    case kPbPnlPct:
+                    case kPbDayPct:
+                        return pfmt::pct(num(col));
+                    case kPbWeight:
+                        return pfmt::upct(num(col), 1);
+                    default:
+                        return QString();
+                }
+            default:
+                return {};
+        }
+    }
+
+    portfolio::PortfolioSummary summary_;
+    bool has_summary_ = false;
+    QHash<QString, portfolio::HoldingRisk> risk_;
+    QHash<QString, QHash<int, QString>> attrs_; // symbol -> dimension -> key
+    QSet<QString> class_guessed_;
+    QHash<QString, services::InfoData> info_;
+    QHash<QString, QVector<double>> spark_;
+    QHash<QString, Live> live_;
+    ui::formatting::CurrencyMix local_mix_; ///< currencies of VALUE (LOCAL)
+    bool prices_need_unit_ = false;         ///< LAST / AVG COST hold a currency other than the base
+};
+
+// ── Proxy: text + sector filter, NaN-last sort, totals pinned last ───────────
+
+class PfBlotterProxy : public QSortFilterProxyModel {
+  public:
+    explicit PfBlotterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
+        setSortRole(kPbSortRole);
+        setDynamicSortFilter(true);
+    }
+    void set_text(const QString& t) {
+        text_ = t.trimmed().toLower();
+        invalidateFilter();
+    }
+    void set_symbols(const QStringList& syms) {
+        symbols_ = QSet<QString>(syms.begin(), syms.end());
+        invalidateFilter();
+    }
+    bool filtered() const { return !text_.isEmpty() || !symbols_.isEmpty(); }
+
+  protected:
+    bool filterAcceptsRow(int row, const QModelIndex& parent) const override {
+        const QModelIndex i = sourceModel()->index(row, kPbSymbol, parent);
+        if (i.data(kPbTotalRole).toBool())
+            return true;
+        const QString sym = i.data(kPbSymbolRole).toString();
+        if (!symbols_.isEmpty() && !symbols_.contains(sym))
+            return false;
+        if (text_.isEmpty())
+            return true;
+        if (sym.toLower().contains(text_))
+            return true;
+        return sourceModel()->index(row, kPbName, parent).data(Qt::DisplayRole).toString().toLower().contains(text_);
+    }
+    bool lessThan(const QModelIndex& l, const QModelIndex& r) const override {
+        const bool asc = sortOrder() == Qt::AscendingOrder;
+        const bool lt = l.data(kPbTotalRole).toBool();
+        const bool rt = r.data(kPbTotalRole).toBool();
+        if (lt != rt)
+            return asc ? rt : lt;
+        const QVariant a = l.data(kPbSortRole);
+        const QVariant b = r.data(kPbSortRole);
+        if (a.typeId() == QMetaType::Double || b.typeId() == QMetaType::Double) {
+            const double x = a.typeId() == QMetaType::Double ? a.toDouble() : portfolio::kAbsent;
+            const double y = b.typeId() == QMetaType::Double ? b.toDouble() : portfolio::kAbsent;
+            const bool xn = !std::isfinite(x);
+            const bool yn = !std::isfinite(y);
+            if (xn != yn)
+                return asc ? yn : xn; // unknown values always at the bottom
+            if (xn)
+                return false;
+            return x < y;
+        }
+        const QString sa = a.toString();
+        const QString sb = b.toString();
+        if (sa.isEmpty() != sb.isEmpty())
+            return asc ? sb.isEmpty() : sa.isEmpty();
+        return QString::localeAwareCompare(sa, sb) < 0;
+    }
+
+  private:
+    QString text_;
+    QSet<QString> symbols_;
+};
+
+// ── Widget ───────────────────────────────────────────────────────────────────
+
+PortfolioBlotter::PortfolioBlotter(QWidget* parent) : QWidget(parent) {
     build_ui();
+}
+
+PortfolioBlotter::~PortfolioBlotter() {
+    datahub::DataHub::instance().unsubscribe(this);
 }
 
 void PortfolioBlotter::build_ui() {
@@ -94,313 +868,489 @@ void PortfolioBlotter::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    table_ = new QTableWidget(this);
-    table_->setColumnCount(kColumnCount);
-    QStringList headers;
-    headers.reserve(kColumnCount);
-    for (int i = 0; i < kColumnCount; ++i)
-        headers << tr(kColumnKeys[i]);
-    table_->setHorizontalHeaderLabels(headers);
-    table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table_->setShowGrid(false);
-    table_->setAlternatingRowColors(false);
-    table_->verticalHeader()->setVisible(false);
-    table_->setFocusPolicy(Qt::NoFocus);
+    model_ = new PfBlotterModel(this);
+    proxy_ = new PfBlotterProxy(this);
+    proxy_->setSourceModel(model_);
 
-    // Column widths — stretch all columns evenly, no last-section special treatment
-    auto* hdr = table_->horizontalHeader();
-    hdr->setMinimumSectionSize(40);
+    view_ = new QTableView(this);
+    view_->setModel(proxy_);
+    view_->setSortingEnabled(true);
+    view_->sortByColumn(kPbWeight, Qt::DescendingOrder);
+    view_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    view_->setSelectionMode(QAbstractItemView::SingleSelection);
+    view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    view_->setShowGrid(false);
+    view_->setWordWrap(false);
+    view_->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    view_->verticalHeader()->setVisible(false);
+    ui::metrics::follow_row_height(view_, 28);
+
+    auto* hdr = view_->horizontalHeader();
+    hdr->setSectionsMovable(true);
+    hdr->setHighlightSections(false);
+    hdr->setMinimumSectionSize(48);
     hdr->setStretchLastSection(false);
-    hdr->setSortIndicatorShown(false);
-    hdr->setSectionResizeMode(QHeaderView::Stretch);
-
-    // Markers must be contiguous and match the args 1:1 — QString::arg fills the
-    // LOWEST marker present, so the old %5-less numbering pushed AMBER onto
-    // :hover and dropped BG_HOVER with an "Argument missing" warning.
-    table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
-                                  "  font-size:11px; font-family:%3; gridline-color:transparent; }"
-                                  "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
-                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%5; }"
-                                  "QTableWidget::item:hover { background:%6; }"
-                                  "QScrollBar:vertical { width:5px; background:%1; }"
-                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
-                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_HOVER()));
-
-    // Apply the header rule directly on the header widget — the global qApp
-    // stylesheet (ThemeManager.cpp) defines QHeaderView::section with
-    // text_dim color, and Qt resolves header sub-controls from the header's
-    // OWN stylesheet, not the parent QTableWidget's. Setting it on the table
-    // is silently overridden, which is why headers stayed dim grey.
-    //
-    // 1px BORDER_MED bottom rule (was 2px AMBER) — only the CommandBar should
-    // hang off the brand rail; tables get a hairline so they don't compete.
-    // 11px font (was 10px) to match the unified type scale.
-    hdr->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                               "  border-bottom:1px solid %3; border-right:1px solid %4;"
-                               "  padding:5px 8px; font-size:11px; font-weight:700;"
-                               "  letter-spacing:0.5px; }")
-                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
-                                ui::colors::BORDER_DIM()));
-
-    connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
-    connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
-    // Double-click a position -> open it in Equity Research. Rows are paged, so
-    // resolve the symbol through the page slice, never the raw row index.
-    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
-        const auto page = paged_view();
-        if (row >= 0 && row < page.size())
-            emit open_symbol_requested(QStringLiteral("equity_research"), page[row].symbol);
+    hdr->setSectionResizeMode(QHeaderView::Interactive);
+    hdr->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(hdr, &QHeaderView::customContextMenuRequested, this,
+            [this, hdr](const QPoint& p) { show_column_menu(hdr->mapToGlobal(p)); });
+    connect(hdr, &QHeaderView::sectionMoved, this, [this]() { save_columns(); });
+    // Widths are saved when the table is hidden (a drag would otherwise write per pixel).
+    connect(hdr, &QHeaderView::sortIndicatorChanged, this, [this](int section, Qt::SortOrder order) {
+        portfolio::SortColumn c = portfolio::SortColumn::Weight;
+        switch (section) {
+            case kPbSymbol:
+                c = portfolio::SortColumn::Symbol;
+                break;
+            case kPbLast:
+                c = portfolio::SortColumn::Price;
+                break;
+            case kPbDayPct:
+                c = portfolio::SortColumn::Change;
+                break;
+            case kPbPnl:
+                c = portfolio::SortColumn::Pnl;
+                break;
+            case kPbPnlPct:
+                c = portfolio::SortColumn::PnlPct;
+                break;
+            case kPbValue:
+                c = portfolio::SortColumn::MarketValue;
+                break;
+            default:
+                break;
+        }
+        emit sort_changed(c, order == Qt::AscendingOrder ? portfolio::SortDirection::Asc
+                                                         : portfolio::SortDirection::Desc);
     });
 
-    table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(table_, &QTableWidget::customContextMenuRequested, this, &PortfolioBlotter::on_context_menu);
+    // Visual encodings.
+    auto* spark = new ui::SparklineDelegate(view_);
+    view_->setItemDelegateForColumn(kPbTrend, spark);
+    auto* weight_bar = new ui::BarCellDelegate(ui::BarCellDelegate::Mode::Bar, view_);
+    weight_bar->set_value_role(kPbSortRole);
+    view_->setItemDelegateForColumn(kPbWeight, weight_bar);
+    auto* risk_bar = new ui::BarCellDelegate(ui::BarCellDelegate::Mode::Bar, view_);
+    risk_bar->set_value_role(kPbSortRole);
+    view_->setItemDelegateForColumn(kPbRiskShare, risk_bar);
+    auto* range = new ui::RangeBarDelegate(view_);
+    range->set_show_labels(false);
+    view_->setItemDelegateForColumn(kPbRange52, range);
 
-    layout->addWidget(table_, 1);
+    connect(view_, &QTableView::clicked, this, [this](const QModelIndex& idx) {
+        const QString sym = symbol_at_proxy_row(idx.row());
+        if (sym.isEmpty())
+            return;
+        selected_symbol_ = sym;
+        emit symbol_selected(sym);
+    });
+    connect(view_, &QTableView::doubleClicked, this, [this](const QModelIndex& idx) {
+        const QString sym = symbol_at_proxy_row(idx.row());
+        if (!sym.isEmpty())
+            emit open_symbol_requested(QStringLiteral("equity_research"), sym);
+    });
+    view_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(view_, &QTableView::customContextMenuRequested, this, &PortfolioBlotter::on_context_menu);
+    connect(proxy_, &QAbstractItemModel::modelReset, this, [this]() { reselect(); });
+    connect(proxy_, &QAbstractItemModel::layoutChanged, this, [this]() { update_footer(); });
+    connect(proxy_, &QAbstractItemModel::rowsInserted, this, [this]() { update_footer(); });
+    connect(proxy_, &QAbstractItemModel::rowsRemoved, this, [this]() { update_footer(); });
 
-    // Pagination footer sits flush at the bottom of the panel.
-    build_pagination_footer();
+    layout->addWidget(view_, 1);
+
+    footer_ = new QLabel(this);
+    footer_->setObjectName("pfBlotterFooter");
+    footer_->setContentsMargins(12, 3, 12, 3);
     layout->addWidget(footer_);
+
+    // Default visibility, then any saved layout.
+    for (int c = 0; c < kPbColCount; ++c)
+        view_->setColumnHidden(c, !kPbCols[c].default_visible);
+    restore_columns();
+    apply_styles();
+    update_footer();
+
+    // A currency / number-format change re-formats in place (the model formats in
+    // data()); the FX split setting also decides the PRICE / FX P&L columns.
+    ui::formatting::refresh_model_on_format_change(model_);
+    ui::formatting::on_format_changed(this, [this]() {
+        apply_split_columns();
+        update_footer();
+    });
 }
 
-void PortfolioBlotter::build_pagination_footer() {
-    footer_ = new QWidget(this);
-    footer_->setObjectName("pfBlotterFooter");
-    footer_->setFixedHeight(28);
-    footer_->setStyleSheet(QString("#pfBlotterFooter { background:%1; border-top:1px solid %2; }")
-                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-
-    auto* h = new QHBoxLayout(footer_);
-    h->setContentsMargins(12, 0, 10, 0);
-    h->setSpacing(8);
-
-    // ── Left: "Showing X-Y of Z" ─────────────────────────────────────────────
-    footer_status_ = new QLabel(tr("Showing 0 of 0"));
-    footer_status_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    h->addWidget(footer_status_);
-
-    h->addStretch(1);
-
-    // ── Center: nav buttons + page label ─────────────────────────────────────
-    // All four buttons share the same neutral square style. Disabled state
-    // dims to TEXT_DIM and removes hover hint.
-    auto make_nav_btn = [](const QString& glyph, const QString& tip) {
-        auto* b = new QPushButton(glyph);
-        b->setFixedSize(22, 22);
-        b->setCursor(Qt::PointingHandCursor);
-        b->setToolTip(tip);
-        b->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                 "  font-size:11px; font-weight:700; }"
-                                 "QPushButton:hover:enabled { color:%3; border-color:%3; }"
-                                 "QPushButton:disabled { color:%4; border-color:%5; }")
-                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-                                  ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
-        return b;
-    };
-
-    btn_first_ = make_nav_btn(QStringLiteral("«"), tr("First page"));
-    btn_prev_ = make_nav_btn(QStringLiteral("‹"), tr("Previous page"));
-    // Glyph-only buttons are opaque to screen readers.
-    btn_first_->setAccessibleName(tr("First page"));
-    btn_prev_->setAccessibleName(tr("Previous page"));
-    h->addWidget(btn_first_);
-    h->addWidget(btn_prev_);
-
-    footer_page_label_ = new QLabel(tr("Page 1 of 1"));
-    footer_page_label_->setMinimumWidth(80);
-    footer_page_label_->setAlignment(Qt::AlignCenter);
-    footer_page_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-    h->addWidget(footer_page_label_);
-
-    btn_next_ = make_nav_btn(QStringLiteral("›"), tr("Next page"));
-    btn_last_ = make_nav_btn(QStringLiteral("»"), tr("Last page"));
-    btn_next_->setAccessibleName(tr("Next page"));
-    btn_last_->setAccessibleName(tr("Last page"));
-    h->addWidget(btn_next_);
-    h->addWidget(btn_last_);
-
-    h->addStretch(1);
-
-    // ── Right: "Rows: [10 ▾]" ───────────────────────────────────────────────
-    footer_rows_label_ = new QLabel(tr("Rows:"));
-    footer_rows_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    h->addWidget(footer_rows_label_);
-
-    page_size_combo_ = new QComboBox(footer_);
-    page_size_combo_->setFixedHeight(22);
-    page_size_combo_->setCursor(Qt::PointingHandCursor);
-    page_size_combo_->addItem("10", 10);
-    page_size_combo_->addItem("20", 20);
-    page_size_combo_->addItem("50", 50);
-    page_size_combo_->addItem("100", 100);
-    page_size_combo_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                            "  padding:0 6px; font-size:11px; font-weight:700; min-width:48px; }"
-                                            "QComboBox::drop-down { border:none; width:14px; }"
-                                            "QComboBox QAbstractItemView { background:%1; color:%2;"
-                                            "  selection-background-color:%4; selection-color:%5; }")
-                                        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-                                             ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
-    // Set initial selection to the persisted (or default) value.
-    for (int i = 0; i < page_size_combo_->count(); ++i) {
-        if (page_size_combo_->itemData(i).toInt() == page_size_) {
-            QSignalBlocker block(page_size_combo_);
-            page_size_combo_->setCurrentIndex(i);
-            break;
-        }
+void PortfolioBlotter::apply_split_columns() {
+    const bool want = pfmt::fx_split_shown(model_->summary());
+    for (const int c : {static_cast<int>(kPbPricePnl), static_cast<int>(kPbFxPnl)}) {
+        const auto it = split_explicit_.constFind(c);
+        const bool show = it != split_explicit_.constEnd() ? *it : want; // the user's own choice wins
+        if (view_->isColumnHidden(c) != show)
+            continue;
+        view_->setColumnHidden(c, !show);
+        if (show && view_->columnWidth(c) < 40)
+            view_->resizeColumnToContents(c);
     }
-    h->addWidget(page_size_combo_);
+}
 
-    // ── Wiring ───────────────────────────────────────────────────────────────
-    connect(btn_first_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ != 1) {
-            current_page_ = 1;
-            populate_table();
-        }
-    });
-    connect(btn_prev_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ > 1) {
-            --current_page_;
-            populate_table();
-        }
-    });
-    connect(btn_next_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ < total_pages()) {
-            ++current_page_;
-            populate_table();
-        }
-    });
-    connect(btn_last_, &QPushButton::clicked, this, [this]() {
-        const int last = total_pages();
-        if (current_page_ != last) {
-            current_page_ = last;
-            populate_table();
-        }
-    });
-    connect(page_size_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        const int new_size = page_size_combo_->itemData(idx).toInt();
-        if (new_size <= 0 || new_size == page_size_)
-            return;
-        // Preserve the topmost visible row across page-size changes:
-        // figure out which row is at the top right now, then jump to
-        // the page that contains it under the new page size.
-        const int top_row_idx = (current_page_ - 1) * page_size_;
-        page_size_ = new_size;
-        current_page_ = (top_row_idx / page_size_) + 1;
-        SettingsRepository::instance().set("portfolio.blotter.page_size", QString::number(page_size_), "portfolio");
-        populate_table();
-    });
+void PortfolioBlotter::save_split_choice() const {
+    QStringList parts;
+    for (auto it = split_explicit_.constBegin(); it != split_explicit_.constEnd(); ++it)
+        parts << QString::fromLatin1(kPbCols[it.key()].key) + (it.value() ? QStringLiteral("=1") : QStringLiteral("=0"));
+    SettingsRepository::instance().set(kPbSplitColsKey, parts.join(QLatin1Char(',')), "portfolio");
+}
+
+void PortfolioBlotter::apply_styles() {
+    // Runs at the end of build_ui() and again from PortfolioScreen::refresh_theme() right
+    // after construction: re-applying unchanged text re-styled the table for nothing.
+    const auto set_css = [](QWidget* w, const QString& css) {
+        if (w && w->styleSheet() != css)
+            w->setStyleSheet(css);
+    };
+    set_css(view_, QString("QTableView { background:%1; color:%2; border:none; font-size:%7px;"
+                                 "  font-family:%3; gridline-color:transparent; selection-background-color:%5; }"
+                                 "QTableView::item { padding:3px 8px; border-bottom:1px solid %4; }"
+                                 "QTableView::item:selected { background:%5; color:%2; }"
+                                 "QTableView::item:hover { background:%6; }")
+                             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
+                                  ui::colors::BORDER_DIM(), ui::colors::alpha(ui::colors::AMBER, 0.14),
+                                  ui::colors::BG_HOVER(), ui::fonts::px(-1)));
+    set_css(view_->horizontalHeader(),
+        QString("QHeaderView::section { background:%1; color:%2; border:none; border-bottom:1px solid %3;"
+                "  border-right:1px solid %4; padding:4px 8px; font-size:%5px; font-weight:700; letter-spacing:0.5px; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                 ui::colors::BORDER_DIM(), ui::fonts::px(-3)));
+    set_css(footer_, QString("#pfBlotterFooter { background:%1; color:%2; border-top:1px solid %3;"
+                                   "  font-size:%4px; font-weight:600; }")
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(),
+                                    ui::fonts::px(-4)));
+}
+
+void PortfolioBlotter::set_summary(const portfolio::PortfolioSummary& summary) {
+    model_->set_summary(summary);
+    apply_split_columns();
+    if (!columns_restored_ || view_->horizontalHeader()->sectionSize(kPbSymbol) <= 0)
+        view_->resizeColumnsToContents();
+    update_footer();
+    fetch_sparklines();
 }
 
 void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
-    holdings_ = holdings;
-    invalidate_view_cache();
-    populate_table();
-    fetch_sparklines(); // async — repaints sparkline cells when data arrives
+    portfolio::PortfolioSummary s = model_->summary();
+    s.holdings = holdings;
+    set_summary(s);
 }
 
+void PortfolioBlotter::set_analytics(const portfolio::MarketAnalytics& analytics) {
+    model_->set_analytics(analytics);
+}
+
+void PortfolioBlotter::set_allocation(const portfolio::AllocationReport& report) {
+    model_->set_allocation(report);
+}
+
+void PortfolioBlotter::set_market_info(const QHash<QString, services::InfoData>& info) {
+    model_->set_info(info);
+}
+
+int PortfolioBlotter::visible_count() const {
+    int n = 0;
+    for (int r = 0; r < proxy_->rowCount(); ++r)
+        if (!proxy_->index(r, 0).data(kPbTotalRole).toBool())
+            ++n;
+    return n;
+}
+
+void PortfolioBlotter::update_footer() {
+    if (!footer_)
+        return;
+    const int total = model_->holding_count();
+    const int shown = visible_count();
+    QString t = total == 0 ? tr("No positions yet — use BUY to add your first holding.")
+                : proxy_->filtered() ? tr("%1 of %2 positions match the filter").arg(shown).arg(total)
+                                     : tr("%n position(s)", "", total);
+    const auto& s = model_->summary();
+    if (total > 0 && !s.complete)
+        t += QStringLiteral("  ·  ") + tr("⚠ %1 not valued (excluded from totals)").arg(s.total_positions - s.valued_positions);
+    t += QStringLiteral("  ·  ") + tr("values in %1 · right-click the header to choose columns").arg(model_->base());
+    footer_->setText(t);
+}
+
+QString PortfolioBlotter::symbol_at_proxy_row(int row) const {
+    if (row < 0 || row >= proxy_->rowCount())
+        return {};
+    const QModelIndex i = proxy_->index(row, kPbSymbol);
+    if (i.data(kPbTotalRole).toBool())
+        return {};
+    return i.data(kPbSymbolRole).toString();
+}
+
+void PortfolioBlotter::reselect() {
+    update_footer();
+    if (selected_symbol_.isEmpty())
+        return;
+    for (int r = 0; r < proxy_->rowCount(); ++r) {
+        if (symbol_at_proxy_row(r) == selected_symbol_) {
+            view_->selectRow(r);
+            return;
+        }
+    }
+}
+
+void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
+    selected_symbol_ = symbol;
+    for (int r = 0; r < proxy_->rowCount(); ++r) {
+        if (symbol_at_proxy_row(r) == symbol) {
+            view_->selectRow(r);
+            view_->scrollTo(proxy_->index(r, kPbSymbol), QAbstractItemView::EnsureVisible);
+            return;
+        }
+    }
+    view_->clearSelection();
+}
+
+void PortfolioBlotter::set_filter(const QString& text) {
+    proxy_->set_text(text);
+    update_footer();
+}
+
+void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
+    proxy_->set_symbols(symbols);
+    update_footer();
+}
+
+// ── Column chooser / persistence ─────────────────────────────────────────────
+
+void PortfolioBlotter::show_column_menu(const QPoint& global_pos) {
+    QMenu menu(this);
+    menu.setToolTipsVisible(true);
+    auto* title = menu.addAction(tr("Columns"));
+    title->setEnabled(false);
+    menu.addSeparator();
+    for (int c = 0; c < kPbColCount; ++c) {
+        if (c == kPbSymbol)
+            continue; // the row key stays
+        // "&" escaped: a menu reads it as a mnemonic ("P&L" showed as "PL").
+        auto* a = menu.addAction(tr(kPbCols[c].title).replace(QLatin1Char('&'), QLatin1String("&&")));
+        a->setToolTip(tr(kPbCols[c].tip));
+        a->setCheckable(true);
+        a->setChecked(!view_->isColumnHidden(c));
+        connect(a, &QAction::toggled, this, [this, c](bool on) {
+            view_->setColumnHidden(c, !on);
+            if (on && view_->columnWidth(c) < 40)
+                view_->resizeColumnToContents(c);
+            if (c == kPbPricePnl || c == kPbFxPnl) {
+                split_explicit_.insert(c, on); // from now on the user's choice, not the setting, decides
+                save_split_choice();
+            }
+            save_columns();
+        });
+    }
+    menu.addSeparator();
+    connect(menu.addAction(tr("Reset to default columns")), &QAction::triggered, this, [this]() {
+        for (int c = 0; c < kPbColCount; ++c) {
+            view_->setColumnHidden(c, !kPbCols[c].default_visible);
+            const int vis = view_->horizontalHeader()->visualIndex(c);
+            if (vis != c)
+                view_->horizontalHeader()->moveSection(vis, c);
+        }
+        split_explicit_.clear(); // the split columns follow the setting again
+        save_split_choice();
+        apply_split_columns();
+        view_->resizeColumnsToContents();
+        save_columns();
+    });
+    connect(menu.addAction(tr("Export visible columns (CSV)…")), &QAction::triggered, this,
+            &PortfolioBlotter::export_csv);
+    menu.exec(global_pos);
+}
+
+void PortfolioBlotter::save_columns() const {
+    QStringList visible;
+    for (int c = 0; c < kPbColCount; ++c)
+        if (!view_->isColumnHidden(c))
+            visible << QString::fromLatin1(kPbCols[c].key);
+    SettingsRepository::instance().set(kPbColumnsKey, visible.join(QLatin1Char(',')), "portfolio");
+    SettingsRepository::instance().set(kPbHeaderKey,
+                                       QString::fromLatin1(view_->horizontalHeader()->saveState().toBase64()),
+                                       "portfolio");
+}
+
+void PortfolioBlotter::restore_columns() {
+    auto& repo = SettingsRepository::instance();
+    auto hr = repo.get(kPbHeaderKey);
+    if (hr.is_ok() && !hr.value().isEmpty())
+        view_->horizontalHeader()->restoreState(QByteArray::fromBase64(hr.value().toLatin1()));
+    auto cr = repo.get(kPbColumnsKey);
+    if (cr.is_ok() && !cr.value().isEmpty()) {
+        const QStringList keys = cr.value().split(QLatin1Char(','), Qt::SkipEmptyParts);
+        for (int c = 0; c < kPbColCount; ++c)
+            view_->setColumnHidden(c, c != kPbSymbol && !keys.contains(QString::fromLatin1(kPbCols[c].key)));
+        columns_restored_ = true;
+    }
+    view_->setColumnHidden(kPbSymbol, false);
+    split_explicit_.clear();
+    auto sr = repo.get(kPbSplitColsKey);
+    if (sr.is_ok()) {
+        for (const QString& part : sr.value().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+            const QString key = part.section(QLatin1Char('='), 0, 0);
+            const bool on = part.section(QLatin1Char('='), 1, 1) == QLatin1String("1");
+            for (const int c : {static_cast<int>(kPbPricePnl), static_cast<int>(kPbFxPnl)})
+                if (key == QLatin1String(kPbCols[c].key))
+                    split_explicit_.insert(c, on);
+        }
+    }
+    apply_split_columns();
+}
+
+// ── Export ───────────────────────────────────────────────────────────────────
+
+void PortfolioBlotter::export_csv() {
+    if (model_->holding_count() == 0) {
+        QMessageBox::information(this, tr("Export Positions"), tr("There are no positions to export."));
+        return;
+    }
+    auto* hdr = view_->horizontalHeader();
+    QVector<int> cols;
+    for (int v = 0; v < hdr->count(); ++v) {
+        const int c = hdr->logicalIndex(v);
+        if (!view_->isColumnHidden(c) && c != kPbTrend)
+            cols.append(c);
+    }
+    QStringList headers;
+    for (int c : cols) {
+        QString h = QString::fromLatin1(kPbCols[c].key);
+        // Money columns carry their currency in the header so the file is self-describing.
+        if (c == kPbValue || c == kPbCost || c == kPbPnl || c == kPbPricePnl || c == kPbFxPnl || c == kPbDayPnl ||
+            c == kPbRealized || c == kPbDividends)
+            h += QLatin1Char('_') + model_->base();
+        if (c == kPbWeight || c == kPbRiskShare || c == kPbPnlPct || c == kPbDayPct || c == kPbVol || c == kPbYield ||
+            c == kPbCompVar)
+            h += QStringLiteral("_pct");
+        headers << h;
+    }
+    // Prices (LAST, AVG COST) are in the quote currency and VALUE (LOCAL) in its major
+    // currency: name them when the CCY column is not exported (appended, order kept).
+    const bool has_ccy = cols.contains(kPbCcy);
+    const bool add_price_ccy = !has_ccy && (cols.contains(kPbLast) || cols.contains(kPbAvgCost));
+    const bool add_local_ccy = cols.contains(kPbValueLocal);
+    if (add_price_ccy)
+        headers << QString::fromLatin1(kPbCols[kPbCcy].key);
+    if (add_local_ccy)
+        headers << QStringLiteral("value_local_ccy");
+    QVector<QStringList> rows;
+    for (int r = 0; r < proxy_->rowCount(); ++r) {
+        QStringList row;
+        for (int c : cols)
+            row << proxy_->index(r, c).data(kPbExportRole).toString();
+        const QString qccy = proxy_->index(r, kPbCcy).data(kPbExportRole).toString(); // "" on the totals row
+        if (add_price_ccy)
+            row << qccy;
+        if (add_local_ccy)
+            row << (qccy.isEmpty() ? QString() : ui::formatting::major_currency(qccy));
+        rows.append(row);
+    }
+    ui::ChartExport::save_csv(headers, rows,
+                              QStringLiteral("positions_%1").arg(QDate::currentDate().toString(Qt::ISODate)), this);
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+
+void PortfolioBlotter::on_context_menu(const QPoint& pos) {
+    const QModelIndex idx = view_->indexAt(pos);
+    const QString symbol = idx.isValid() ? symbol_at_proxy_row(idx.row()) : QString();
+
+    QMenu menu(this);
+    if (!symbol.isEmpty()) {
+        auto* sym_label = menu.addAction(symbol);
+        sym_label->setEnabled(false);
+        sym_label->setFont(ui::fonts::font(-1, QFont::Bold));
+        menu.addSeparator();
+        connect(menu.addAction(tr("Buy more…")), &QAction::triggered, this, [this, symbol]() { emit buy_requested(symbol); });
+        connect(menu.addAction(tr("Sell…")), &QAction::triggered, this, [this, symbol]() { emit sell_requested(symbol); });
+        connect(menu.addAction(tr("Record split…")), &QAction::triggered, this,
+                [this, symbol]() { emit split_requested(symbol); });
+        menu.addSeparator();
+        QMenu* open_in = menu.addMenu(tr("Open in"));
+        const struct {
+            const char* screen;
+            const char* label;
+        } kTargets[] = {
+            {"equity_research", QT_TR_NOOP("Equity Research")}, {"equity_trading", QT_TR_NOOP("Equity Trading")},
+            {"news", QT_TR_NOOP("News")},                       {"watchlist", QT_TR_NOOP("Watchlist")},
+            {"backtesting", QT_TR_NOOP("Backtesting")},
+        };
+        for (const auto& t : kTargets) {
+            const QString screen = QString::fromLatin1(t.screen);
+            connect(open_in->addAction(tr(t.label)), &QAction::triggered, this,
+                    [this, screen, symbol]() { emit open_symbol_requested(screen, symbol); });
+        }
+        connect(menu.addAction(tr("Copy Symbol")), &QAction::triggered, this,
+                [symbol]() { QGuiApplication::clipboard()->setText(symbol); });
+        menu.addSeparator();
+    }
+    connect(menu.addAction(tr("Choose columns…")), &QAction::triggered, this,
+            [this, pos]() { show_column_menu(view_->viewport()->mapToGlobal(pos)); });
+    connect(menu.addAction(tr("Export visible columns (CSV)…")), &QAction::triggered, this,
+            &PortfolioBlotter::export_csv);
+    if (!symbol.isEmpty()) {
+        menu.addSeparator();
+        auto* edit_act = menu.addAction(tr("Edit Last Transaction…"));
+        auto* delete_act = menu.addAction(tr("Close Position…"));
+        QFont f = menu.font();
+        f.setBold(true);
+        delete_act->setFont(f);
+        connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
+        connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
+    }
+    menu.exec(view_->viewport()->mapToGlobal(pos));
+}
+
+// ── Live data (sparklines, broker ticks) ─────────────────────────────────────
+
 void PortfolioBlotter::fetch_sparklines() {
-    if (holdings_.isEmpty()) {
+    const auto& holdings = model_->summary().holdings;
+    if (holdings.isEmpty()) {
         hub_unsubscribe_all();
         return;
     }
-
-    // Symbols we have never heard about start as pending; ones already loaded
-    // keep their data rather than flashing back to the placeholder each poll.
     QStringList symbols;
-    symbols.reserve(holdings_.size());
-    for (const auto& h : holdings_) {
-        if (!sparkline_state_.contains(h.symbol))
-            sparkline_state_[h.symbol] = SparklineState::Pending;
+    symbols.reserve(holdings.size());
+    for (const auto& h : holdings)
         symbols.append(h.symbol);
-    }
     symbols.sort();
-
-    // D3: subscriptions live exactly as long as the table is visible. While
-    // hidden showEvent() subscribes, so a poll landing off-screen must not.
+    // D3: subscriptions live exactly as long as the table is visible.
     if (!isVisible())
         return;
-
-    // The 60 s portfolio poll hands us the same symbol set every time. The hub
-    // already refreshes subscribed topics on its own cadence, so tearing the
-    // subscriptions down and force-fetching every sparkline again each minute
-    // was pure churn.
     if (hub_active_ && symbols == sub_symbols_)
         return;
-
-    // Holdings changed: force so a newly added row does not wait out min_interval.
     hub_resubscribe_sparklines(/*force_refresh=*/true);
-}
-
-void PortfolioBlotter::repaint_sparkline_cells() {
-    for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, kColSymbol);
-        if (!item)
-            continue;
-        // Use the stashed raw symbol, not the cell text — the two are the same
-        // today but the text is a display string and may gain decoration.
-        const QString sym = item->data(Qt::UserRole).toString().isEmpty() ? item->text()
-                                                                         : item->data(Qt::UserRole).toString();
-        auto* w = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, kColTrend));
-        if (!w)
-            continue;
-
-        const auto state = sparkline_state_.value(sym, SparklineState::Failed);
-        if (state == SparklineState::Loaded && sparkline_cache_.contains(sym)) {
-            const auto& prices = sparkline_cache_[sym];
-            w->set_data(prices);
-            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
-            w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-        } else {
-            QVector<double> dash(6, 0.0);
-            w->set_data(dash);
-            w->set_color(QColor(ui::colors::BORDER_MED()));
-        }
-    }
 }
 
 void PortfolioBlotter::hub_resubscribe_sparklines(bool force_refresh) {
     auto& hub = datahub::DataHub::instance();
-    // Holdings set is dynamic (portfolio edits replace it wholesale). This also
-    // drops the broker-quote subscriptions, which subscribe_broker_quotes()
-    // re-establishes below - before this was fixed every holdings refresh
-    // silently ended the live broker feed until the screen was re-shown.
     hub.unsubscribe(this);
     hub_active_ = false;
     sub_symbols_.clear();
-
-    if (holdings_.isEmpty())
+    const auto& holdings = model_->summary().holdings;
+    if (holdings.isEmpty())
         return;
-
     QStringList topics;
-    topics.reserve(holdings_.size());
-    for (const auto& h : holdings_) {
+    topics.reserve(holdings.size());
+    for (const auto& h : holdings) {
         const QString sym = h.symbol;
         const QString topic = QStringLiteral("market:sparkline:") + sym;
         topics.append(topic);
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<QVector<double>>())
                 return;
-            const auto prices = v.value<QVector<double>>();
-            sparkline_cache_.insert(sym, prices);
-            sparkline_state_[sym] = SparklineState::Loaded;
-            repaint_sparkline_cells();
+            model_->set_spark(sym, v.value<QVector<double>>());
         });
+        sub_symbols_.append(sym);
     }
-    // force_refresh: holdings set changes on portfolio edits; bypass the sparkline
-    // min_interval so the row reflects the new symbol without waiting 30s. A plain
-    // re-show must not force - subscribe() already cold-starts any stale topic.
     if (force_refresh)
         hub.request(topics, /*force=*/true);
     hub_active_ = true;
-    for (const auto& h : holdings_)
-        sub_symbols_.append(h.symbol);
     sub_symbols_.sort();
-
     subscribe_broker_quotes();
 }
 
@@ -414,607 +1364,61 @@ void PortfolioBlotter::hub_unsubscribe_all() {
 
 void PortfolioBlotter::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    // D3: (re)subscribe when the table becomes visible; hideEvent() ends it.
-    if (!hub_active_ && !holdings_.isEmpty())
+    if (!hub_active_ && model_->holding_count() > 0)
         hub_resubscribe_sparklines(/*force_refresh=*/false);
 }
 
 void PortfolioBlotter::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     hub_unsubscribe_all();
+    if (model_->holding_count() > 0) {
+        save_columns();
+        columns_restored_ = true;
+    }
 }
 
 void PortfolioBlotter::hub_resubscribe_broker_quotes(const QString& broker_account_id) {
     if (broker_account_id_ == broker_account_id && hub_active_)
-        return; // already wired for this account - repeated calls must not stack handlers
+        return;
     broker_account_id_ = broker_account_id;
-    // Rebuild every hub subscription for this owner in one place. subscribe()
-    // appends (it never de-duplicates), so adding broker handlers on top of an
-    // existing set - as every screen show used to - multiplied the callbacks.
     if (hub_active_)
         hub_resubscribe_sparklines(/*force_refresh=*/false);
 }
 
 void PortfolioBlotter::subscribe_broker_quotes() {
-    if (broker_account_id_.isEmpty() || holdings_.isEmpty())
+    const auto& holdings = model_->summary().holdings;
+    if (broker_account_id_.isEmpty() || holdings.isEmpty())
         return;
     auto account = trading::AccountManager::instance().get_account(broker_account_id_);
     if (account.broker_id.isEmpty() || account.state != trading::ConnectionState::Connected)
         return;
-
     auto& hub = datahub::DataHub::instance();
     const QString bid = account.broker_id;
     const QString aid = broker_account_id_;
-
-    for (const auto& h : holdings_) {
-        // Indian stocks in yfinance format end with .NS or .BO
+    for (const auto& h : holdings) {
+        // Broker-native ticker: the stored pair when the import recorded one, else
+        // the yfinance symbol without its exchange suffix for NSE / BSE listings.
         QString broker_sym;
         if (h.symbol.endsWith(QStringLiteral(".NS")) || h.symbol.endsWith(QStringLiteral(".BO")))
             broker_sym = h.symbol.left(h.symbol.length() - 3);
         else
-            continue; // not an Indian stock — skip broker subscription
-
+            continue;
         const QString topic = trading::broker_topic(bid, aid, QStringLiteral("quote"), broker_sym);
         const QString yf_sym = h.symbol;
         hub.subscribe(this, topic, [this, yf_sym](const QVariant& v) {
             if (!v.canConvert<trading::BrokerQuote>())
                 return;
             const auto quote = v.value<trading::BrokerQuote>();
-            update_row_price(yf_sym, quote.ltp, quote.change_pct);
+            model_->set_live(yf_sym, quote.ltp, quote.change_pct);
         });
     }
 }
 
-void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, double change_pct) {
-    for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, kColSymbol);
-        if (!item || item->data(Qt::UserRole).toString() != symbol)
-            continue;
-        if (auto* last_item = table_->item(r, kColLast))
-            last_item->setText(format_value(ltp));
-        // Recalculate market value & P&L from holdings data
-        const int idx = r + (current_page_ - 1) * page_size_;
-        const auto& view = visible_view();
-        if (idx >= 0 && idx < view.size()) {
-            const auto& h = view[idx];
-            const double mkt_val = ltp * h.quantity;
-            const double pnl = mkt_val - h.cost_basis;
-            const double pnl_pct = h.cost_basis > 0 ? (pnl / h.cost_basis) * 100.0 : 0.0;
-            const char* pnl_color = pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-            if (auto* mv = table_->item(r, kColMktVal))
-                mv->setText(format_value(mkt_val));
-            if (auto* pnl_item = table_->item(r, kColPnl)) {
-                pnl_item->setText(QString("%1%2").arg(pnl >= 0 ? "+" : "").arg(format_value(pnl)));
-                // Recolour too: a tick that flipped a position from green to
-                // red kept the stale green foreground until the next full poll.
-                pnl_item->setForeground(QColor(pnl_color));
-            }
-            if (auto* pnl_pct_item = table_->item(r, kColPnlPct)) {
-                pnl_pct_item->setText(
-                    QString("%1%2%").arg(pnl_pct >= 0 ? "+" : "").arg(format_value(pnl_pct)));
-                pnl_pct_item->setForeground(QColor(pnl_color));
-            }
-        }
-        if (auto* chg = table_->item(r, kColChgPct)) {
-            // Signed, matching how populate_table renders the same column.
-            chg->setText(QString("%1%2%").arg(change_pct >= 0 ? "+" : "").arg(format_value(change_pct)));
-            chg->setForeground(QColor(change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-        }
-        if (auto* day = table_->item(r, kColDayPnl)) {
-            // Previous close implied by the tick: ltp / (1 + chg%).
-            const int idx = r + (current_page_ - 1) * page_size_;
-            const auto& view = visible_view();
-            if (idx >= 0 && idx < view.size() && change_pct > -100.0) {
-                const double prev = ltp / (1.0 + change_pct / 100.0);
-                const double day_pnl = (ltp - prev) * view[idx].quantity;
-                day->setText(QString("%1%2").arg(day_pnl >= 0 ? "+" : "").arg(format_value(day_pnl)));
-                day->setForeground(QColor(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-            }
-        }
-        break;
-    }
-}
-
-void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
-    const bool changed = symbol != selected_symbol_;
-    selected_symbol_ = symbol;
-    for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, kColSymbol);
-        // Match on the stashed raw symbol (see populate_table) so this keeps
-        // working if the symbol cell ever gains display decoration.
-        if (item && item->data(Qt::UserRole).toString() == symbol) {
-            table_->selectRow(r);
-            return;
-        }
-    }
-    // Not on this page: jump to the page that holds it (a group-linked symbol or
-    // a heatmap click on a row beyond page 1 used to select nothing visible).
-    const auto& view = visible_view();
-    for (int i = 0; i < view.size(); ++i) {
-        // Only on a NEW selection: the 60 s refresh re-asserts the same symbol
-        // and must not yank the user back from a page they paged to.
-        if (changed && view[i].symbol == symbol && page_size_ > 0) {
-            const int page = i / page_size_ + 1;
-            if (page != current_page_) {
-                current_page_ = page;
-                populate_table(); // re-selects selected_symbol_
-                return;
-            }
-            break;
-        }
-    }
-    table_->clearSelection();
-}
-
-void PortfolioBlotter::on_header_clicked(int section) {
-    // Map column index to SortColumn
-    portfolio::SortColumn col;
-    switch (section) {
-        case kColSymbol:
-            col = portfolio::SortColumn::Symbol;
-            break;
-        case kColLast:
-            col = portfolio::SortColumn::Price;
-            break;
-        case kColMktVal:
-            col = portfolio::SortColumn::MarketValue;
-            break;
-        case kColPnl:
-            col = portfolio::SortColumn::Pnl;
-            break;
-        case kColPnlPct:
-            col = portfolio::SortColumn::PnlPct;
-            break;
-        case kColChgPct:
-            col = portfolio::SortColumn::Change;
-            break;
-        case kColWeight:
-            col = portfolio::SortColumn::Weight;
-            break;
-        default:
-            return;
-    }
-
-    if (col == sort_col_) {
-        sort_dir_ = (sort_dir_ == portfolio::SortDirection::Asc) ? portfolio::SortDirection::Desc
-                                                                 : portfolio::SortDirection::Asc;
-    } else {
-        sort_col_ = col;
-        sort_dir_ = portfolio::SortDirection::Desc;
-    }
-
-    emit sort_changed(sort_col_, sort_dir_);
-    // Sorting changes which rows are at the top — jump to page 1 so users
-    // see the new "highest" rows instead of staying on a deep page that may
-    // now contain unrelated content.
-    current_page_ = 1;
-    populate_table();
-}
-
-void PortfolioBlotter::on_row_clicked(int row, int) {
-    // Row index is into the current page slice (paged_view), not sorted_.
-    const auto page = paged_view();
-    if (row >= 0 && row < page.size()) {
-        selected_symbol_ = page[row].symbol;
-        emit symbol_selected(selected_symbol_);
-    }
-}
-
-// ── Pagination helpers ──────────────────────────────────────────────────────
-
-void PortfolioBlotter::invalidate_view_cache() {
-    view_cache_valid_ = false;
-    view_cache_.clear();
-}
-
-const QVector<portfolio::HoldingWithQuote>& PortfolioBlotter::visible_view() const {
-    if (view_cache_valid_)
-        return view_cache_;
-
-    // Apply text filter + sector filter on top of the already-sorted set.
-    QVector<portfolio::HoldingWithQuote> out;
-    out.reserve(sorted_.size());
-    const QString needle = filter_text_.toLower();
-    const bool has_sector = !sector_symbols_.isEmpty();
-
-    QSet<QString> sector_set;
-    if (has_sector) {
-        for (const auto& s : sector_symbols_)
-            sector_set.insert(s.toLower());
-    }
-
-    for (const auto& h : sorted_) {
-        if (!needle.isEmpty() && !h.symbol.toLower().contains(needle))
-            continue;
-        if (has_sector && !sector_set.contains(h.symbol.toLower()))
-            continue;
-        out.append(h);
-    }
-
-    view_cache_ = std::move(out);
-    view_cache_valid_ = true;
-    return view_cache_;
-}
-
-QVector<portfolio::HoldingWithQuote> PortfolioBlotter::paged_view() const {
-    const auto& all = visible_view();
-    if (page_size_ <= 0)
-        return all;
-    const int start = (current_page_ - 1) * page_size_;
-    if (start >= all.size())
-        return {};
-    const int end = std::min<int>(start + page_size_, all.size());
-    return all.mid(start, end - start);
-}
-
-int PortfolioBlotter::total_pages() const {
-    const int total = visible_view().size();
-    if (total == 0 || page_size_ <= 0)
-        return 1;
-    return (total + page_size_ - 1) / page_size_;
-}
-
-void PortfolioBlotter::clamp_current_page() {
-    const int last = total_pages();
-    if (current_page_ < 1)
-        current_page_ = 1;
-    if (current_page_ > last)
-        current_page_ = last;
-}
-
-void PortfolioBlotter::update_pagination_controls() {
-    if (!footer_status_)
-        return;
-
-    const int total = visible_view().size();
-    const int last_page = total_pages();
-    const int start_idx = (total == 0) ? 0 : (current_page_ - 1) * page_size_ + 1;
-    const int end_idx = std::min<int>(current_page_ * page_size_, total);
-
-    if (total == 0) {
-        footer_status_->setText(tr("No positions"));
-    } else {
-        footer_status_->setText(tr("Showing %1-%2 of %3").arg(start_idx).arg(end_idx).arg(total));
-    }
-
-    footer_page_label_->setText(tr("Page %1 of %2").arg(current_page_).arg(last_page));
-
-    btn_first_->setEnabled(current_page_ > 1);
-    btn_prev_->setEnabled(current_page_ > 1);
-    btn_next_->setEnabled(current_page_ < last_page);
-    btn_last_->setEnabled(current_page_ < last_page);
-}
-
-void PortfolioBlotter::populate_table() {
-    // Remember the scroll offset so a background refresh does not yank the
-    // table back to the top while the user is reading a row further down.
-    const int prev_scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
-
-    sorted_ = holdings_;
-    invalidate_view_cache();
-
-    // Sort
-    bool asc = (sort_dir_ == portfolio::SortDirection::Asc);
-    auto cmp = [&](const portfolio::HoldingWithQuote& a, const portfolio::HoldingWithQuote& b) {
-        double va = 0, vb = 0;
-        switch (sort_col_) {
-            case portfolio::SortColumn::Symbol:
-                return asc ? a.symbol < b.symbol : a.symbol > b.symbol;
-            case portfolio::SortColumn::Price:
-                va = a.current_price;
-                vb = b.current_price;
-                break;
-            case portfolio::SortColumn::Change:
-                va = a.day_change_percent;
-                vb = b.day_change_percent;
-                break;
-            case portfolio::SortColumn::Pnl:
-                va = a.unrealized_pnl;
-                vb = b.unrealized_pnl;
-                break;
-            case portfolio::SortColumn::PnlPct:
-                va = a.unrealized_pnl_percent;
-                vb = b.unrealized_pnl_percent;
-                break;
-            case portfolio::SortColumn::Weight:
-                va = a.weight;
-                vb = b.weight;
-                break;
-            case portfolio::SortColumn::MarketValue:
-                va = a.market_value;
-                vb = b.market_value;
-                break;
-        }
-        return asc ? va < vb : va > vb;
-    };
-    std::stable_sort(sorted_.begin(), sorted_.end(), cmp);
-
-    // Compute the current page's row slice — the rest of the function only
-    // populates the visible window. clamp_current_page handles the case where
-    // a filter/sort change shrinks the view below the current page index.
-    clamp_current_page();
-    const auto page_rows = paged_view();
-
-    // Sparklines are pooled per row: they own a cached QPixmap and re-creating
-    // one per row on every 60 s poll threw that cache away. Only rows that are
-    // disappearing release their widget.
-    for (int r = page_rows.size(); r < table_->rowCount(); ++r) {
-        if (auto* w = table_->cellWidget(r, kColTrend)) {
-            table_->removeCellWidget(r, kColTrend);
-            w->deleteLater();
-        }
-    }
-    table_->setRowCount(page_rows.size());
-
-    for (int r = 0; r < page_rows.size(); ++r) {
-        const auto& h = page_rows[r];
-        table_->setRowHeight(r, 28);
-
-        auto set_cell = [&](int col, const QString& text, const char* color = nullptr,
-                            Qt::Alignment align = Qt::AlignRight | Qt::AlignVCenter) {
-            auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(align);
-            // QTableWidgetItem ignores QTableWidget's stylesheet `color` and
-            // falls back to QPalette::Text (which renders as black on Windows).
-            // Always set an explicit foreground.
-            item->setForeground(QColor(color ? color : ui::colors::TEXT_PRIMARY()));
-            table_->setItem(r, col, item);
-        };
-
-        // SYMBOL
-        set_cell(kColSymbol, h.symbol, ui::colors::CYAN, Qt::AlignLeft | Qt::AlignVCenter);
-        // Stash the raw symbol on the cell so live broker-price ticks
-        // (update_row_price) can locate this row — its guard matches col-0
-        // Qt::UserRole, which was never set, so live prices never updated.
-        if (auto* sym_item = table_->item(r, kColSymbol))
-            sym_item->setData(Qt::UserRole, h.symbol);
-
-        // QTY
-        // Sub-unit holdings (e.g. 0.00123 BTC) rounded to "0.00" with 2 decimals.
-        set_cell(kColQty, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0
-                                                   : std::abs(h.quantity) < 1.0        ? 6
-                                                                                       : 2));
-
-        // LAST (price)
-        set_cell(kColLast, format_value(h.current_price));
-
-        // AVG COST
-        set_cell(kColAvgCost, format_value(h.avg_buy_price));
-
-        // MKT VAL
-        set_cell(kColMktVal, format_value(h.market_value), ui::colors::WARNING);
-
-        // COST BASIS
-        set_cell(kColCostBasis, format_value(h.cost_basis));
-
-        // P&L
-        const char* pnl_color = h.unrealized_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        set_cell(kColPnl, QString("%1%2").arg(h.unrealized_pnl >= 0 ? "+" : "").arg(format_value(h.unrealized_pnl)),
-                 pnl_color);
-
-        // P&L%
-        set_cell(
-            kColPnlPct,
-            QString("%1%2%").arg(h.unrealized_pnl_percent >= 0 ? "+" : "").arg(format_value(h.unrealized_pnl_percent)),
-            pnl_color);
-
-        // CHG%
-        const char* chg_color = h.day_change_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        set_cell(kColChgPct,
-                 QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
-                 chg_color);
-
-        // DAY P&L — per-share move × quantity
-        const double day_pnl = h.day_change * h.quantity;
-        set_cell(kColDayPnl, QString("%1%2").arg(day_pnl >= 0 ? "+" : "").arg(format_value(day_pnl)),
-                 day_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
-
-        // TREND — show loaded data, a pending shimmer, or a failure dash.
-        // Reuse the row's existing sparkline widget when there is one.
-        auto* sparkline = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, kColTrend));
-        if (!sparkline) {
-            sparkline = new PortfolioSparkline(0, 0);
-            sparkline->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-            table_->setCellWidget(r, kColTrend, sparkline);
-        }
-        const auto state = sparkline_state_.value(h.symbol, SparklineState::Pending);
-        if (state == SparklineState::Loaded && sparkline_cache_.contains(h.symbol)) {
-            const auto& prices = sparkline_cache_[h.symbol];
-            sparkline->set_data(prices);
-            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : h.day_change >= 0;
-            sparkline->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-        } else if (state == SparklineState::Failed) {
-            // Show flat dash line in muted color to indicate unavailable data
-            QVector<double> dash(6, 0.0);
-            sparkline->set_data(dash);
-            sparkline->set_color(QColor(ui::colors::BORDER_MED()));
-        } else {
-            // Pending: subtle animated-looking flat line in dim color
-            QVector<double> pending(8, h.current_price > 0 ? h.current_price : 1.0);
-            sparkline->set_data(pending);
-            sparkline->set_color(QColor(ui::colors::TEXT_TERTIARY()));
-        }
-
-        // WT%
-        set_cell(kColWeight, QString("%1%").arg(format_value(h.weight, 1)));
-
-        // Highlight selected row
-        if (h.symbol == selected_symbol_) {
-            table_->selectRow(r);
-        }
-    }
-
-    // Empty state — an unexplained blank grid reads as a bug. Distinguish
-    // "portfolio has nothing in it" from "your filter hid everything".
-    table_->clearSpans();
-    if (page_rows.isEmpty()) {
-        table_->setRowCount(1);
-        table_->setRowHeight(0, 40);
-        const bool filtered = !filter_text_.isEmpty() || !sector_symbols_.isEmpty();
-        auto* msg = new QTableWidgetItem(filtered ? tr("No positions match the current filter.")
-                                                  : tr("No positions yet — use BUY to add your first holding."));
-        msg->setTextAlignment(Qt::AlignCenter);
-        msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
-        msg->setFlags(Qt::ItemIsEnabled); // informational, not selectable
-        table_->setItem(0, kColSymbol, msg);
-        table_->setSpan(0, 0, 1, kColumnCount);
-    }
-
-    // Restore the scroll offset (clamped by the scrollbar itself when the row
-    // count shrank).
-    if (table_->verticalScrollBar())
-        table_->verticalScrollBar()->setValue(prev_scroll);
-
-    // Footer status + nav button enabled-state must reflect what we just rendered.
-    update_pagination_controls();
-}
-
-QString PortfolioBlotter::format_value(double v, int dp) const {
-    // Locale-aware: groups thousands so a six-figure market value is readable
-    // and matches PortfolioStatsRibbon / PortfolioStatusBar.
-    return QLocale().toString(v, 'f', dp);
-}
-
-void PortfolioBlotter::set_filter(const QString& text) {
-    const QString needle = text.trimmed().toLower();
-    if (needle == filter_text_)
-        return;
-    filter_text_ = needle;
-    invalidate_view_cache();
-    apply_filter();
-}
-
-void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
-    if (sector_symbols_ == symbols)
-        return;
-    sector_symbols_ = symbols;
-    invalidate_view_cache();
-    apply_filter();
-}
-
-void PortfolioBlotter::apply_filter() {
-    // With pagination, the table only contains the current page slice — there
-    // are no hidden rows to toggle. Filter changes shrink the visible_view, so
-    // jump to page 1 and rebuild. visible_view() inside populate_table re-applies
-    // both filter_text_ and sector_symbols_ from scratch.
-    current_page_ = 1;
-    populate_table();
-}
-
-void PortfolioBlotter::on_context_menu(const QPoint& pos) {
-    const int row = table_->rowAt(pos.y());
-    const auto page = paged_view();
-    if (row < 0 || row >= page.size())
-        return;
-
-    const QString symbol = page[row].symbol;
-
-    QMenu menu(this);
-    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; padding:4px; }"
-                               "QMenu::item { padding:6px 20px 6px 12px; font-size:11px; }"
-                               "QMenu::item:selected { background:%4; color:%5; }"
-                               "QMenu::separator { height:1px; background:%3; margin:3px 0; }")
-                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
-                                ui::colors::AMBER_DIM(), ui::colors::AMBER()));
-
-    auto* sym_label = menu.addAction(symbol);
-    sym_label->setEnabled(false);
-    sym_label->setFont([&] {
-        QFont f;
-        f.setBold(true);
-        f.setPointSize(10);
-        return f;
-    }());
-    menu.addSeparator();
-
-    // Cross-link: hand the ticker to another screen through nav.open_symbol
-    // (the owner publishes it; the target receives it via IGroupLinked).
-    QMenu* open_in = menu.addMenu(tr("Open in"));
-    const struct {
-        const char* screen;
-        const char* label;
-    } kTargets[] = {
-        {"equity_research", QT_TR_NOOP("Equity Research")}, {"equity_trading", QT_TR_NOOP("Equity Trading")},
-        {"news", QT_TR_NOOP("News")},                       {"watchlist", QT_TR_NOOP("Watchlist")},
-        {"backtesting", QT_TR_NOOP("Backtesting")},
-    };
-    for (const auto& t : kTargets) {
-        const QString screen = QString::fromLatin1(t.screen);
-        connect(open_in->addAction(tr(t.label)), &QAction::triggered, this,
-                [this, screen, symbol]() { emit open_symbol_requested(screen, symbol); });
-    }
-    connect(menu.addAction(tr("Copy Symbol")), &QAction::triggered, this,
-            [symbol]() { QGuiApplication::clipboard()->setText(symbol); });
-    menu.addSeparator();
-    connect(menu.addAction(tr("Export Positions (CSV)…")), &QAction::triggered, this, &PortfolioBlotter::export_csv);
-    menu.addSeparator();
-    auto* edit_act = menu.addAction(tr("Edit Transaction"));
-    auto* delete_act = menu.addAction(tr("Close / Delete Position"));
-
-    // Mark the destructive item so it does not read as a peer of "Edit".
-    // The previous attempt used `QMenu::item[data='danger']` — QSS attribute
-    // selectors match Q_PROPERTYs on the styled *widget*, not QAction::setData,
-    // so it matched nothing and the item rendered in the default colour. Two
-    // setIcon(QIcon()) calls next to it were pure no-ops and are gone.
-    delete_act->setFont([&] {
-        QFont f = menu.font();
-        f.setBold(true);
-        return f;
-    }());
-
-    connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
-    connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
-
-    menu.exec(table_->viewport()->mapToGlobal(pos));
-}
-
-void PortfolioBlotter::export_csv() {
-    // The whole filtered + sorted view, not just the visible page.
-    const auto& rows_src = visible_view();
-    if (rows_src.isEmpty()) {
-        QMessageBox::information(this, tr("Export Positions"), tr("There are no positions to export."));
-        return;
-    }
-    QVector<QStringList> rows;
-    rows.reserve(rows_src.size());
-    for (const auto& h : rows_src) {
-        rows.append({h.symbol, h.sector, portfolio_csv::num(h.quantity, 8), portfolio_csv::num(h.current_price, 6),
-                     portfolio_csv::num(h.avg_buy_price, 6), portfolio_csv::num(h.market_value, 2),
-                     portfolio_csv::num(h.cost_basis, 2), portfolio_csv::num(h.unrealized_pnl, 2),
-                     portfolio_csv::num(h.unrealized_pnl_percent, 4), portfolio_csv::num(h.day_change, 6),
-                     portfolio_csv::num(h.day_change_percent, 4), portfolio_csv::num(h.day_change * h.quantity, 2),
-                     portfolio_csv::num(h.weight, 4)});
-    }
-    portfolio_csv::save(this, QStringLiteral("positions_%1.csv").arg(QDate::currentDate().toString(Qt::ISODate)),
-                        {"symbol", "sector", "quantity", "last_price", "avg_cost", "market_value", "cost_basis",
-                         "unrealized_pnl", "unrealized_pnl_pct", "day_change_per_share", "day_change_pct", "day_pnl",
-                         "weight_pct"},
-                        rows);
-}
+// ── Theme / language ─────────────────────────────────────────────────────────
 
 void PortfolioBlotter::refresh_theme() {
-    const QString bsz = QString::number(ui::fonts::font_px(0));
-    const QString hsz = QString::number(ui::fonts::font_px(-2));
-    table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
-                                  "  font-size:" +
-                                  bsz +
-                                  "px; font-family:%3; gridline-color:transparent; }"
-                                  "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
-                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%5; }"
-                                  "QTableWidget::item:hover { background:%6; }"
-                                  "QScrollBar:vertical { width:5px; background:%1; }"
-                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
-                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_HOVER()));
-    // See note in build constructor — header rule must live on the header
-    // widget itself or the global qApp stylesheet wins.
-    table_->horizontalHeader()->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                                                      "  border-bottom:1px solid %3; border-right:1px solid %4;"
-                                                      "  padding:5px 8px; font-size:" +
-                                                      hsz + "px; font-weight:700; letter-spacing:0.5px; }")
-                                                  .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                                                       ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
-    populate_table();
+    apply_styles();
+    view_->viewport()->update();
 }
 
 void PortfolioBlotter::changeEvent(QEvent* event) {
@@ -1024,39 +1428,8 @@ void PortfolioBlotter::changeEvent(QEvent* event) {
 }
 
 void PortfolioBlotter::retranslateUi() {
-    // Column headers — same source-key array used in build_ui().
-    if (table_) {
-        QStringList headers;
-        headers.reserve(kColumnCount);
-        for (int i = 0; i < kColumnCount; ++i)
-            headers << tr(kColumnKeys[i]);
-        table_->setHorizontalHeaderLabels(headers);
-    }
-
-    if (btn_first_) {
-        btn_first_->setToolTip(tr("First page"));
-        btn_first_->setAccessibleName(tr("First page"));
-    }
-    if (btn_prev_) {
-        btn_prev_->setToolTip(tr("Previous page"));
-        btn_prev_->setAccessibleName(tr("Previous page"));
-    }
-    if (btn_next_) {
-        btn_next_->setToolTip(tr("Next page"));
-        btn_next_->setAccessibleName(tr("Next page"));
-    }
-    if (btn_last_) {
-        btn_last_->setToolTip(tr("Last page"));
-        btn_last_->setAccessibleName(tr("Last page"));
-    }
-    if (page_size_combo_)
-        page_size_combo_->setAccessibleName(tr("Rows per page"));
-    if (footer_rows_label_)
-        footer_rows_label_->setText(tr("Rows:"));
-
-    // Footer status + page label hold dynamic strings — re-run the computation
-    // so "Showing %1-%2 of %3" and "Page %1 of %2" pick up the new locale.
-    update_pagination_controls();
+    emit model_->headerDataChanged(Qt::Horizontal, 0, kPbColCount - 1);
+    update_footer();
 }
 
 } // namespace fincept::screens

@@ -7,6 +7,7 @@
 
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -34,11 +35,38 @@ constexpr int kMinSlippageBps = 100; // 1.00%
 constexpr int kSlippageStepBps = 25;
 
 QString settings_font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QString(ui::fonts::DATA_FAMILY);
 }
 
 QString format_bps(int bps) {
     return QStringLiteral("%1.%2%").arg(bps / 100).arg(bps % 100, 2, 10, QChar('0'));
+}
+
+/// Which endpoint is used without a Helius key: the custom `solana.rpc_url`
+/// override when one is stored, else the public RPC. An override that cannot be
+/// read is neither: say so (SolanaRpcClient sends nothing meanwhile).
+QString settings_rpc_without_key() {
+    const SecretRead r = SecureStorage::instance().read(QStringLiteral("solana.rpc_url"));
+    if (r.failed())
+        return QCoreApplication::translate("SettingsTab", "The stored RPC setting could not be read (%1), so no RPC "
+                                                          "request is sent until it can be read again.")
+            .arg(r.reason());
+    if (r.found() && !r.value.isEmpty())
+        return QCoreApplication::translate("SettingsTab", "Your custom RPC endpoint is used.");
+    return QCoreApplication::translate("SettingsTab", "Public RPC will be used.");
+}
+
+/// Status line of the Helius key panel. A key that is stored but cannot be read is
+/// neither "stored" nor "no key": say so (re-read on every show / language change).
+QString settings_helius_status() {
+    const SecretRead r = SecureStorage::instance().read(QString::fromLatin1(kHeliusKey));
+    if (r.failed())
+        return QCoreApplication::translate("SettingsTab", "Could not read the stored key: %1. No RPC request is sent "
+                                                          "meanwhile. SAVE a new key to replace it, or CLEAR it.")
+            .arg(r.reason());
+    if (r.found() && !r.value.isEmpty())
+        return QCoreApplication::translate("SettingsTab", "Stored — input is hidden. Type to replace.");
+    return QCoreApplication::translate("SettingsTab", "No key stored.") + QLatin1Char(' ') + settings_rpc_without_key();
 }
 
 } // namespace
@@ -110,12 +138,12 @@ void SettingsTab::build_ui() {
         mode_poll_button_ = new QPushButton(tr("POLL"), panel);
         mode_poll_button_->setObjectName(QStringLiteral("settingsTabToggle"));
         mode_poll_button_->setCheckable(true);
-        mode_poll_button_->setFixedHeight(28);
+        mode_poll_button_->setMinimumHeight(28);
         mode_poll_button_->setCursor(Qt::PointingHandCursor);
         mode_stream_button_ = new QPushButton(tr("STREAM"), panel);
         mode_stream_button_->setObjectName(QStringLiteral("settingsTabToggle"));
         mode_stream_button_->setCheckable(true);
-        mode_stream_button_->setFixedHeight(28);
+        mode_stream_button_->setMinimumHeight(28);
         mode_stream_button_->setCursor(Qt::PointingHandCursor);
         mode_group_ = new QButtonGroup(this);
         mode_group_->setExclusive(true);
@@ -157,20 +185,22 @@ void SettingsTab::build_ui() {
         helius_input_->setObjectName(QStringLiteral("settingsTabInput"));
         helius_input_->setPlaceholderText(tr("paste API key…"));
         helius_input_->setEchoMode(QLineEdit::Password);
-        helius_input_->setFixedHeight(28);
+        helius_input_->setMinimumHeight(28);
         helius_input_->setAccessibleName(tr("Helius API key"));
         row->addWidget(helius_input_, 1);
 
         helius_save_button_ = new QPushButton(tr("SAVE"), panel);
         helius_save_button_->setObjectName(QStringLiteral("settingsTabButton"));
-        helius_save_button_->setFixedHeight(28);
+        helius_save_button_->setProperty("fincept_agent_risk", "account");
+        helius_save_button_->setMinimumHeight(28);
         helius_save_button_->setCursor(Qt::PointingHandCursor);
         helius_save_button_->setAccessibleName(tr("Save Helius API key"));
         row->addWidget(helius_save_button_);
 
         helius_clear_button_ = new QPushButton(tr("CLEAR"), panel);
         helius_clear_button_->setObjectName(QStringLiteral("settingsTabDangerButton"));
-        helius_clear_button_->setFixedHeight(28);
+        helius_clear_button_->setProperty("fincept_agent_risk", "account");
+        helius_clear_button_->setMinimumHeight(28);
         helius_clear_button_->setCursor(Qt::PointingHandCursor);
         helius_clear_button_->setAccessibleName(tr("Remove stored Helius API key"));
         row->addWidget(helius_clear_button_);
@@ -213,11 +243,11 @@ void SettingsTab::build_ui() {
         slippage_slider_->setTickInterval(kMinSlippageBps);
         slippage_slider_->setTickPosition(QSlider::TicksBelow);
         slippage_slider_->setValue(kDefaultSlippageBps);
-        slippage_slider_->setFixedHeight(28);
+        slippage_slider_->setMinimumHeight(28);
         slippage_slider_->setAccessibleName(tr("Default swap slippage tolerance"));
         slippage_value_ = new QLabel(format_bps(kDefaultSlippageBps), panel);
         slippage_value_->setObjectName(QStringLiteral("settingsTabSliderValue"));
-        slippage_value_->setFixedWidth(64);
+        slippage_value_->setMinimumWidth(64);
         row->addWidget(slippage_slider_, 1);
         row->addWidget(slippage_value_);
         body->addLayout(row);
@@ -263,36 +293,36 @@ void SettingsTab::apply_theme() {
     const QString font = settings_font_stack();
 
     const QString ss =
-        QStringLiteral("QWidget#settingsTab { background:%1; }"
+        QString("QWidget#settingsTab { background:%1; }"
                        "QFrame#settingsTabPanel { background:%2; border:1px solid %3; }"
                        "QWidget#settingsTabPanelHead { background:%4; border-bottom:1px solid %3; }"
-                       "QLabel#settingsTabPanelTitle { color:%5; font-family:%6; font-size:11px;"
+                       "QLabel#settingsTabPanelTitle { color:%5; font-family:%6; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                       "QLabel#settingsTabPanelStatus { color:%7; font-family:%6; font-size:10px;"
+                       "QLabel#settingsTabPanelStatus { color:%7; font-family:%6; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                       "QLabel#settingsTabHint { color:%8; font-family:%6; font-size:11px;"
+                       "QLabel#settingsTabHint { color:%8; font-family:%6; font-size:" + fincept::ui::fonts::px(-3) + "px;"
                        "  background:transparent; }"
 
                        // Inputs
                        "QLineEdit#settingsTabInput { background:%4; color:%9; border:1px solid %3;"
-                       "  font-family:%6; font-size:12px; padding:0 8px; }"
+                       "  font-family:%6; font-size:" + fincept::ui::fonts::px(-2) + "px; padding:0 8px; }"
                        "QLineEdit#settingsTabInput:focus { border-color:%5; }"
 
                        // Buttons
                        "QPushButton#settingsTabButton { background:%4; color:%8; border:1px solid %3;"
-                       "  font-family:%6; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 14px; }"
+                       "  font-family:%6; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:1px; padding:0 14px; }"
                        "QPushButton#settingsTabButton:hover { background:%10; color:%9; border-color:%11; }"
-                       "QPushButton#settingsTabDangerButton { background:rgba(220,38,38,0.10); color:%12;"
-                       "  border:1px solid %13; font-family:%6; font-size:11px; font-weight:700;"
+                       "QPushButton#settingsTabDangerButton { background:" + ui::colors::alpha(DANGER, 0.10) + "; color:%12;"
+                       "  border:1px solid %13; font-family:%6; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700;"
                        "  letter-spacing:1px; padding:0 14px; }"
-                       "QPushButton#settingsTabDangerButton:hover { background:%12; color:%9; }"
+                       "QPushButton#settingsTabDangerButton:hover { background:%12; color:" + QString(TEXT_ON_ACCENT()) + "; }"
 
                        // Toggle
                        "QPushButton#settingsTabToggle { background:transparent; color:%7; border:1px solid %3;"
-                       "  font-family:%6; font-size:10px; font-weight:700; letter-spacing:1.2px;"
+                       "  font-family:%6; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700; letter-spacing:1.2px;"
                        "  padding:0 14px; }"
                        "QPushButton#settingsTabToggle:hover { color:%9; border-color:%11; }"
-                       "QPushButton#settingsTabToggle:checked { background:rgba(217,119,6,0.12);"
+                       "QPushButton#settingsTabToggle:checked { background:" + ui::colors::alpha(AMBER, 0.12) + ";"
                        "  color:%5; border-color:%5; }"
 
                        // Slider
@@ -300,12 +330,12 @@ void SettingsTab::apply_theme() {
                        "  height:6px; border-radius:0; }"
                        "QSlider#settingsTabSlider::handle:horizontal { background:%5; border:1px solid %5;"
                        "  width:14px; margin:-6px 0; }"
-                       "QSlider#settingsTabSlider::sub-page:horizontal { background:rgba(217,119,6,0.30); }"
-                       "QLabel#settingsTabSliderValue { color:%5; font-family:%6; font-size:14px;"
+                       "QSlider#settingsTabSlider::sub-page:horizontal { background:" + ui::colors::alpha(AMBER, 0.30) + "; }"
+                       "QLabel#settingsTabSliderValue { color:%5; font-family:%6; font-size:" + fincept::ui::fonts::px(0) + "px;"
                        "  font-weight:700; background:transparent; }"
 
                        // Checkbox (asset filter)
-                       "QCheckBox#settingsTabCheckbox { color:%9; font-family:%6; font-size:12px;"
+                       "QCheckBox#settingsTabCheckbox { color:%9; font-family:%6; font-size:" + fincept::ui::fonts::px(-2) + "px;"
                        "  background:transparent; spacing:8px; }"
                        "QCheckBox#settingsTabCheckbox::indicator { width:14px; height:14px;"
                        "  border:1px solid %3; background:%4; }"
@@ -322,8 +352,8 @@ void SettingsTab::apply_theme() {
                  TEXT_PRIMARY())             // %9
             .arg(BG_HOVER(),                 // %10
                  BORDER_BRIGHT(),            // %11
-                 NEGATIVE(),                 // %12
-                 QStringLiteral("#7f1d1d")); // %13
+                 DANGER(),                   // %12
+                 ui::colors::tint(DANGER, 0.45)); // %13 darker red
 
     setStyleSheet(ss);
 }
@@ -331,21 +361,22 @@ void SettingsTab::apply_theme() {
 void SettingsTab::load_initial_values() {
     apply_mode_to_buttons(fincept::wallet::WalletService::instance().balance_mode_is_stream());
 
-    auto helius_res = SecureStorage::instance().retrieve(QString::fromLatin1(kHeliusKey));
-    if (helius_res.is_ok() && !helius_res.value().isEmpty()) {
-        helius_status_->setText(tr("Stored — input is hidden. Type to replace."));
-    } else {
-        helius_status_->setText(tr("No key stored. Public RPC will be used."));
-    }
+    helius_status_->setText(settings_helius_status());
 
-    auto slip_res = SecureStorage::instance().retrieve(QString::fromLatin1(kSlippageKey));
+    // An unreadable saved slippage shows the tightest value with a note in the panel
+    // head; nothing is written unless the user moves the slider (SwapPanel uses the
+    // tightest tolerance meanwhile).
+    const SecretRead slip_res = SecureStorage::instance().read(QString::fromLatin1(kSlippageKey));
+    slippage_unreadable_ = slip_res.failed();
     int bps = kDefaultSlippageBps;
-    if (slip_res.is_ok()) {
+    if (slip_res.found()) {
         bool ok = false;
-        const auto v = slip_res.value().toInt(&ok);
+        const auto v = slip_res.value.toInt(&ok);
         if (ok && v > 0 && v <= kMaxSlippageBps)
             bps = v;
     }
+    if (slippage_panel_sub_)
+        slippage_panel_sub_->setText(slippage_unreadable_ ? tr("saved value unreadable") : tr("1% – 5%"));
     // A value persisted by an older build could be below the executable floor
     // (e.g. 10 bps). Clamp before display so the label can't advertise a
     // tolerance the swap path silently widens.
@@ -355,13 +386,21 @@ void SettingsTab::load_initial_values() {
     slippage_slider_->setValue(bps);
     slippage_value_->setText(format_bps(bps));
 
-    // Asset filters: show-unverified toggle.
-    auto unv_res = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
-    const bool show_unverified =
-        unv_res.is_ok() && unv_res.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+    // Asset filters: show-unverified toggle. Unreadable → the box keeps its state
+    // (unchecked = the safe default) with a note; nothing is written.
+    const SecretRead unv_res = SecureStorage::instance().read(QStringLiteral("wallet.show_unverified_tokens"));
     if (show_unverified_checkbox_) {
-        QSignalBlocker cb(show_unverified_checkbox_);
-        show_unverified_checkbox_->setChecked(show_unverified);
+        if (unv_res.failed()) {
+            show_unverified_checkbox_->setToolTip(
+                tr("Could not read the saved setting: %1. Unverified tokens stay hidden until it can be read.")
+                    .arg(unv_res.reason()));
+        } else {
+            show_unverified_checkbox_->setToolTip(QString());
+            const bool show_unverified =
+                unv_res.found() && unv_res.value.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+            QSignalBlocker cb(show_unverified_checkbox_);
+            show_unverified_checkbox_->setChecked(show_unverified);
+        }
     }
 }
 
@@ -387,7 +426,10 @@ void SettingsTab::on_save_helius_key() {
         return;
     }
     helius_input_->clear();
-    helius_status_->setText(tr("Saved. Balances are refreshing through the new key."));
+    // With no wallet connected nothing is refreshing (apply_rpc_change is a no-op then).
+    helius_status_->setText(fincept::wallet::WalletService::instance().is_connected()
+                                ? tr("Saved. Balances are refreshing through the new key.")
+                                : tr("Saved. It is used once a wallet is connected."));
     LOG_INFO("SettingsTab", "Helius key stored");
     apply_rpc_change();
 }
@@ -399,7 +441,7 @@ void SettingsTab::on_clear_helius_key() {
         return;
     }
     helius_input_->clear();
-    helius_status_->setText(tr("Cleared. Public RPC will be used."));
+    helius_status_->setText(tr("Cleared.") + QLatin1Char(' ') + settings_rpc_without_key());
     LOG_INFO("SettingsTab", "Helius key cleared");
     apply_rpc_change();
 }
@@ -424,6 +466,12 @@ void SettingsTab::apply_rpc_change() {
 
 void SettingsTab::on_slippage_changed(int bps) {
     slippage_value_->setText(format_bps(bps));
+    if (slippage_unreadable_) {
+        // The user picked a value: it replaces the unreadable one (stored below / on release).
+        slippage_unreadable_ = false;
+        if (slippage_panel_sub_)
+            slippage_panel_sub_->setText(tr("1% – 5%"));
+    }
     // Mid-drag: only the label tracks the handle. Hammering SecureStorage (an
     // encrypted write) once per step on the UI thread made the slider stutter;
     // sliderReleased persists the final value. Keyboard / wheel changes arrive
@@ -446,12 +494,18 @@ void SettingsTab::showEvent(QShowEvent* e) {
     // same persisted flag as the checkbox here; re-read it so the checkbox does
     // not show a stale state after the user used the table's button.
     if (show_unverified_checkbox_) {
-        auto unv_res = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
-        const bool persisted =
-            unv_res.is_ok() && unv_res.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
-        QSignalBlocker blocker(show_unverified_checkbox_);
-        show_unverified_checkbox_->setChecked(persisted);
+        const SecretRead unv_res = SecureStorage::instance().read(QStringLiteral("wallet.show_unverified_tokens"));
+        if (!unv_res.failed()) { // unreadable: keep what the box shows (not "false")
+            show_unverified_checkbox_->setToolTip(QString());
+            const bool persisted =
+                unv_res.found() && unv_res.value.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+            QSignalBlocker blocker(show_unverified_checkbox_);
+            show_unverified_checkbox_->setChecked(persisted);
+        }
     }
+    // Re-read the key status too: the retry for a key that could not be read.
+    if (helius_status_ && helius_input_ && helius_input_->text().isEmpty())
+        helius_status_->setText(settings_helius_status());
 }
 
 void SettingsTab::changeEvent(QEvent* event) {
@@ -492,20 +546,14 @@ void SettingsTab::retranslateUi() {
         helius_clear_button_->setText(tr("CLEAR"));
     // Re-derive the stored/not-stored status message in the new locale without
     // touching the slider or unsaved input.
-    if (helius_status_) {
-        auto helius_res = SecureStorage::instance().retrieve(QString::fromLatin1(kHeliusKey));
-        if (helius_res.is_ok() && !helius_res.value().isEmpty()) {
-            helius_status_->setText(tr("Stored — input is hidden. Type to replace."));
-        } else {
-            helius_status_->setText(tr("No key stored. Public RPC will be used."));
-        }
-    }
+    if (helius_status_)
+        helius_status_->setText(settings_helius_status());
 
     // Slippage panel
     if (slippage_panel_title_)
         slippage_panel_title_->setText(tr("DEFAULT SLIPPAGE"));
     if (slippage_panel_sub_)
-        slippage_panel_sub_->setText(tr("1% – 5%"));
+        slippage_panel_sub_->setText(slippage_unreadable_ ? tr("saved value unreadable") : tr("1% – 5%"));
     if (slippage_hint_)
         slippage_hint_->setText(tr("Maximum price drift PumpSwap may fill your swap at before it "
                                    "reverts. Applies to every swap on the TRADE tab — there is no "

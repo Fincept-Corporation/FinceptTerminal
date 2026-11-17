@@ -31,6 +31,9 @@ class EquitySentimentTab : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
+    /// Show the loading state and fetch current_symbol_'s sentiment; `force` (REFRESH)
+    /// bypasses the news / technicals caches.
+    void start_fetch(bool force);
     void populate(const fincept::services::equity::EquitySentimentSnapshot& snapshot);
     static void clear_layout(QLayout* layout);
 

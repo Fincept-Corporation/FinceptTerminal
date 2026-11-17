@@ -1,13 +1,39 @@
 #pragma once
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLocale>
 #include <QMap>
 #include <QRegularExpression>
 #include <QString>
+#include <QTimeZone>
 
 namespace fincept::auth {
+
+/// An API timestamp shown in the user's own time zone: "yyyy-MM-dd" or
+/// "yyyy-MM-dd HH:mm" (with_time). The API serialises naive UTC
+/// ("2026-05-01T12:34:56", no offset), which QDateTime would read as LOCAL time,
+/// so an offset-less value is taken as UTC. Empty input gives an em dash; an
+/// unparseable one is shown as sent (date part, 'T' replaced by a space).
+inline QString format_local_stamp(const QString& iso, bool with_time) {
+    if (iso.isEmpty())
+        return QString::fromUtf8("\xe2\x80\x94");
+    QDateTime dt = QDateTime::fromString(iso, Qt::ISODateWithMs);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(iso, Qt::ISODate);
+    if (!dt.isValid()) {
+        QString v = iso.left(with_time ? 16 : 10);
+        v.replace(QLatin1Char('T'), QLatin1Char(' '));
+        return v;
+    }
+    const QString tail = iso.mid(10);
+    const bool has_offset = tail.contains(QLatin1Char('Z')) || tail.contains(QLatin1Char('+')) ||
+                            tail.contains(QLatin1Char('-'));
+    if (!has_offset)
+        dt = QDateTime(dt.date(), dt.time(), QTimeZone::utc());
+    return dt.toLocalTime().toString(with_time ? QStringLiteral("yyyy-MM-dd HH:mm") : QStringLiteral("yyyy-MM-dd"));
+}
 
 /// Credit balances are fractional — one AI call can cost 0.35 credits — so
 /// never truncate them to int (a 349.65 balance used to render as "0" because
@@ -107,7 +133,13 @@ struct ApiResponse {
     bool success = false;
     QJsonObject data;
     QString error;
+    /// 200 for every success except a conditional GET answered 304 (success with
+    /// empty `data`: "unchanged — keep your copy").
     int status_code = 0;
+    /// Response metadata (AuthApi / UserApi fill them; empty / 0 when the
+    /// response did not carry them, and for a transport failure):
+    QString etag{};              ///< ETag, for a later If-None-Match
+    qint64 poll_interval_ms = 0; ///< X-Poll-Interval, bounded (HttpClient::poll_interval_ms)
 };
 
 struct RateLimitInfo {
@@ -133,6 +165,9 @@ struct UserProfile {
     QString username;
     QString email;
     QString account_type = "free";
+    /// Plan in force right now ("free" | "pro" | "enterprise"): a lapsed pass is
+    /// "free" while account_type still says "pro". Empty from an older API.
+    QString effective_plan;
     double credit_balance = 0;
     QString credits_expire_at;
     bool is_verified = false;
@@ -151,6 +186,7 @@ struct UserProfile {
         p.username = obj["username"].toString();
         p.email = obj["email"].toString();
         p.account_type = obj["account_type"].toString("free");
+        p.effective_plan = obj["effective_plan"].toString();
         p.credit_balance = obj["credit_balance"].toDouble();
         p.credits_expire_at = obj["credits_expire_at"].toString();
         p.is_verified = obj["is_verified"].toBool();
@@ -170,6 +206,7 @@ struct UserProfile {
 struct UserSubscription {
     int user_id = 0;
     QString account_type;
+    QString effective_plan; ///< see UserProfile::effective_plan
     double credit_balance = 0;
     QString credits_expire_at;
     QString support_type;
@@ -180,6 +217,7 @@ struct UserSubscription {
         UserSubscription s;
         s.user_id = obj["user_id"].toInt();
         s.account_type = obj["account_type"].toString();
+        s.effective_plan = obj["effective_plan"].toString();
         s.credit_balance = obj["credit_balance"].toDouble();
         s.credits_expire_at = obj["credits_expire_at"].toString();
         s.support_type = obj["support_type"].toString();
@@ -253,20 +291,46 @@ struct SessionData {
         return subscription.account_type.isEmpty() ? user_info.account_type : subscription.account_type;
     }
 
-    /// "pro" is the plan sold today. basic / standard / enterprise are legacy
-    /// paid tiers that existing subscribers — and cached offline sessions —
-    /// still carry until their credits expire, so they must stay paid here.
+    /// The plan the server says is in force right now ("free" | "pro" |
+    /// "enterprise", lower case) — GET /user/profile and /cashfree/subscription
+    /// send it as effective_plan. A pass that has run out is "free" here while
+    /// account_type() still names the paid plan, until the server settles the
+    /// account (next sign-in or billed call). Empty when the API did not send it.
+    QString effective_plan() const {
+        const QString& e = subscription.effective_plan.isEmpty() ? user_info.effective_plan : subscription.effective_plan;
+        return e.trimmed().toLower();
+    }
+
+    /// A paid pass that has lapsed: account_type() still names a paid plan, but
+    /// the server already treats the account as Free (limits, modules).
+    bool pass_lapsed() const {
+        const QString at = account_type().trimmed().toLower();
+        return effective_plan() == QLatin1String("free") && !at.isEmpty() && at != QLatin1String("free");
+    }
+
+    /// Paid entitlements right now. The server's effective_plan decides when it
+    /// is known (a lapsed pass is not paid). Without it (older API, or a cached
+    /// session saved by an older build): "pro" is the plan sold today, and
+    /// basic / standard / enterprise are legacy paid tiers that existing
+    /// subscribers still carry until their credits expire, so they stay paid.
     bool has_paid_plan() const {
+        const QString eff = effective_plan();
+        if (!eff.isEmpty())
+            return eff != QLatin1String("free");
         const QString at = account_type().toLower();
         return at == "basic" || at == "standard" || at == "pro" || at == "enterprise";
     }
 
     /// Plan label for chrome (toolbar badge, profile): "FREE", "PRO", or a
-    /// legacy tier's own name ("BASIC", "STANDARD"). Plan names are product
-    /// names and are not translated.
+    /// legacy tier's own name ("BASIC", "STANDARD"); "PRO (EXPIRED)" once the
+    /// pass has lapsed. Plan names are product names and are not translated.
     QString plan_label() const {
         const QString at = account_type().trimmed();
-        return at.isEmpty() ? QStringLiteral("FREE") : at.toUpper();
+        if (at.isEmpty())
+            return QStringLiteral("FREE");
+        if (pass_lapsed())
+            return QCoreApplication::translate("AuthTypes", "%1 (EXPIRED)").arg(at.toUpper());
+        return at.toUpper();
     }
 
     QJsonObject to_json() const {
@@ -281,6 +345,7 @@ struct SessionData {
         ui["username"] = user_info.username;
         ui["email"] = user_info.email;
         ui["account_type"] = user_info.account_type;
+        ui["effective_plan"] = user_info.effective_plan;
         ui["credit_balance"] = user_info.credit_balance;
         ui["is_verified"] = user_info.is_verified;
         ui["mfa_enabled"] = user_info.mfa_enabled;
@@ -288,6 +353,7 @@ struct SessionData {
 
         QJsonObject sub;
         sub["account_type"] = subscription.account_type;
+        sub["effective_plan"] = subscription.effective_plan;
         sub["credit_balance"] = subscription.credit_balance;
         sub["support_type"] = subscription.support_type;
         obj["subscription"] = sub;
@@ -319,6 +385,7 @@ struct SessionData {
             s.user_info.username = ui["username"].toString();
             s.user_info.email = ui["email"].toString();
             s.user_info.account_type = ui["account_type"].toString("free");
+            s.user_info.effective_plan = ui["effective_plan"].toString();
             s.user_info.credit_balance = ui["credit_balance"].toDouble();
             s.user_info.is_verified = ui["is_verified"].toBool();
             s.user_info.mfa_enabled = ui["mfa_enabled"].toBool();
@@ -334,6 +401,55 @@ struct SessionData {
                 s.user_info.credit_balance = s.subscription.credit_balance;
         }
         return s;
+    }
+};
+
+// ── Refused data topics ──────────────────────────────────────────────────────
+//
+// A Fincept data service whose hub topic was refused — 402 (credits) or
+// 401/403 (signed out / not allowed) — must not re-ask on a timer: waiting
+// fixes none of these. It backs the topic off for hours and keeps one of these
+// to decide when something changed that might fix it:
+//   * any refusal: a sign-in with a different key (or after being signed out);
+//   * a 402: the balance going UP (a top-up or grant) to at least the call's
+//     cost. Billed calls elsewhere only ever lower it, so they never trigger a
+//     retry. The service re-reads the account on a 402 (the session's figure
+//     may be stale-high — spent through a client that reports no balance), so
+//     that correction lands first and a later top-up reads as a rise.
+// The user's explicit refresh lifts the backoff in the hub itself.
+
+struct RefusalLatch {
+    enum class Kind { None, Credits, Access };
+    Kind kind = Kind::None;
+    QString key;               ///< API key in use when refused (empty = signed out)
+    double last_balance = -1;  ///< balance last seen while refused
+
+    bool active() const { return kind != Kind::None; }
+    void refuse(Kind k, const QString& api_key, double balance) {
+        kind = k;
+        key = api_key;
+        last_balance = balance;
+    }
+    void clear() {
+        kind = Kind::None;
+        last_balance = -1;
+    }
+    /// On auth_state_changed. A sign-out forgets the key, so signing back in —
+    /// even to the same account, whose API key does not change — counts.
+    bool release_on_auth(bool signed_in, const QString& api_key) {
+        if (!signed_in) {
+            key.clear();
+            return false;
+        }
+        return active() && !api_key.isEmpty() && api_key != key;
+    }
+    /// On credit_balance_changed; `cost` = credits one call of this service needs.
+    bool release_on_balance(double balance, double cost) {
+        if (kind != Kind::Credits)
+            return false;
+        const bool rose = last_balance >= 0 && balance > last_balance + 0.005;
+        last_balance = balance;
+        return rose && balance + 0.005 >= cost;
     }
 };
 

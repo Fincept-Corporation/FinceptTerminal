@@ -61,16 +61,70 @@ def _csv_delimiter(file_path):
     return "\t" if os.path.splitext(file_path)[1].lower() == ".tsv" else ","
 
 
-def _normalise_rows(data):
-    """Rows to write: a list of lists, or a list of dicts (header row added)."""
-    if data and all(isinstance(r, dict) for r in data):
-        header = []
-        for r in data:
-            for k in r:
-                if k not in header:
-                    header.append(k)
-        return [header] + [[r.get(k) for k in header] for r in data]
-    return [r if isinstance(r, list) else [r] for r in data]
+def _is_dict_rows(data):
+    return bool(data) and all(isinstance(r, dict) for r in data)
+
+
+def _dict_keys(data):
+    keys = []
+    for r in data:
+        for k in r:
+            if k not in keys:
+                keys.append(k)
+    return keys
+
+
+def _is_number_text(v):
+    try:
+        float(str(v).strip().replace(",", ""))
+        return True
+    except ValueError:
+        return False
+
+
+def _is_header_row(row):
+    """A row that looks like column names: at least one cell, every non-empty cell non-numeric
+    text (CSV cells are always strings, so numeric-looking text counts as data)."""
+    cells = [v for v in (row or []) if v not in (None, "")]
+    return bool(cells) and all(isinstance(v, str) and not _is_number_text(v) for v in cells)
+
+
+def _trim(row):
+    row = list(row or [])
+    while row and row[-1] in (None, ""):
+        row.pop()
+    return row
+
+
+def _normalise_rows(data, existing_first_row=None, target_has_rows=False):
+    """
+    Rows to write, plus the header row to rewrite in place (or None).
+
+    Returns (rows, header_update, added_columns).
+      * list rows                          -> as given; nothing else changes.
+      * dict rows into an empty target     -> [header] + value rows (header from the keys).
+      * dict rows appended to a target whose first row is a header
+                                           -> value rows aligned to THAT header's column
+                                              order, no second header row; keys the header
+                                              lacks become new columns at its end
+                                              (header_update is the extended header).
+      * dict rows appended to a target with rows but no header row
+                                           -> value rows only, in first-seen key order.
+    """
+    if not _is_dict_rows(data):
+        return [r if isinstance(r, list) else [r] for r in data], None, []
+    keys = _dict_keys(data)
+    if not target_has_rows:
+        return [keys] + [[r.get(k) for k in keys] for r in data], None, []
+    header = _trim(existing_first_row)
+    if not _is_header_row(header):
+        return [[r.get(k) for k in keys] for r in data], None, []
+    header = ["" if h is None else str(h) for h in header]
+    added = [k for k in keys if str(k) not in header]
+    columns = header + [str(k) for k in added]
+    by_name = {str(k): k for k in keys}
+    rows = [[r.get(by_name[c]) if c in by_name else None for c in columns] for r in data]
+    return rows, (columns if added else None), added
 
 
 def _cell_json(v):
@@ -105,6 +159,13 @@ def _window(rows, r1, c1, r2, c2):
     return out
 
 
+_DEFAULT_SHEET = "Sheet1"  # the workflow node's default Sheet Name
+
+
+def _sheet_not_found(sheet_name, sheetnames):
+    return {"error": "Sheet '%s' not found; sheets: %s" % (sheet_name, list(sheetnames))}
+
+
 def local_read(file_path, sheet_name, range_str):
     parsed = parse_range(range_str)
     r1, c1, r2, c2 = parsed if parsed else (1, 1, 1000, 26)
@@ -116,11 +177,16 @@ def local_read(file_path, sheet_name, range_str):
     # data_only=True returns the values Excel cached for formulas; a workbook
     # saved by a tool that does not calculate stores none (they read as null).
     wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    note = None
     try:
         if sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
-        else:
+        elif not sheet_name or sheet_name == _DEFAULT_SHEET:
+            # The node's untouched default: read the workbook's active sheet, and say so.
             ws = wb.active
+            note = "Sheet '%s' not found; read the active sheet '%s'" % (sheet_name or _DEFAULT_SHEET, ws.title)
+        else:
+            return _sheet_not_found(sheet_name, wb.sheetnames)
         rows = []
         for row in ws.iter_rows(min_row=r1, max_row=r2, min_col=c1, max_col=c2, values_only=True):
             if any(v is not None for v in row):
@@ -128,22 +194,43 @@ def local_read(file_path, sheet_name, range_str):
         used_sheet = ws.title
     finally:
         wb.close()
-    return {"source": "local", "operation": "read", "path": file_path, "sheet": used_sheet,
-            "rows": len(rows), "data": rows}
+    result = {"source": "local", "operation": "read", "path": file_path, "sheet": used_sheet,
+              "rows": len(rows), "data": rows}
+    if note:
+        result["note"] = note
+    return result
+
+
+def _has_values(row):
+    return any(v not in (None, "") for v in (row or []))
+
+
+def _last_used_row(ws):
+    """Last row holding a value (ws.max_row also counts formatted-but-empty rows)."""
+    for r in range(ws.max_row or 0, 0, -1):
+        if any(c.value not in (None, "") for c in ws[r]):
+            return r
+    return 0
 
 
 def local_write(file_path, sheet_name, range_str, data, append=False):
     parsed = parse_range(range_str)
     r1, c1 = (parsed[0], parsed[1]) if parsed else (1, 1)
-    rows_in = _normalise_rows(data)
 
     if _is_csv(file_path):
         # CSV used to be saved through openpyxl — an XLSX zip written into a
         # file named .csv, destroying the original.
         existing = _read_csv_rows(file_path) if os.path.exists(file_path) else []
         if append:
+            while existing and not _has_values(existing[-1]):
+                existing.pop()
+            rows_in, header_update, added = _normalise_rows(
+                data, existing[0] if existing else None, target_has_rows=bool(existing))
+            if header_update:
+                existing[0] = header_update
             start = len(existing)
         else:
+            rows_in, header_update, added = _normalise_rows(data)
             start = r1 - 1
         for ri, row in enumerate(rows_in):
             target = start + ri
@@ -156,8 +243,11 @@ def local_write(file_path, sheet_name, range_str, data, append=False):
                     line.append("")
                 line[col] = val
         _write_csv_rows(file_path, existing)
-        return {"source": "local", "operation": "append" if append else "write",
-                "path": file_path, "rows_written": len(rows_in)}
+        result = {"source": "local", "operation": "append" if append else "write",
+                  "path": file_path, "rows_written": len(rows_in)}
+        if added:
+            result["added_columns"] = added
+        return result
 
     import openpyxl
     if os.path.exists(file_path):
@@ -172,17 +262,29 @@ def local_write(file_path, sheet_name, range_str, data, append=False):
 
     start_row = r1
     start_col = c1
+    added = []
     if append:
-        start_row = (ws.max_row + 1) if ws.max_row and any(c.value is not None for c in ws[ws.max_row]) else 1
+        last = _last_used_row(ws)
+        first_row = [c.value for c in ws[1]] if last else None
+        rows_in, header_update, added = _normalise_rows(data, first_row, target_has_rows=bool(last))
+        if header_update:
+            for ci, name in enumerate(header_update):
+                ws.cell(row=1, column=1 + ci, value=name)
+        start_row = last + 1
         start_col = 1
+    else:
+        rows_in, _, _ = _normalise_rows(data)
 
     for ri, row in enumerate(rows_in):
         for ci, val in enumerate(row):
             ws.cell(row=start_row + ri, column=start_col + ci, value=val)
 
     wb.save(file_path)
-    return {"source": "local", "operation": "append" if append else "write",
-            "path": file_path, "sheet": ws.title, "rows_written": len(rows_in)}
+    result = {"source": "local", "operation": "append" if append else "write",
+              "path": file_path, "sheet": ws.title, "rows_written": len(rows_in)}
+    if added:
+        result["added_columns"] = added
+    return result
 
 
 def local_clear(file_path, sheet_name, range_str):
@@ -198,7 +300,10 @@ def local_clear(file_path, sheet_name, range_str):
 
     import openpyxl
     wb = openpyxl.load_workbook(file_path)
-    ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.active
+    if sheet_name not in wb.sheetnames:
+        # Clearing is destructive: never fall back to a sheet the user did not name.
+        return _sheet_not_found(sheet_name, wb.sheetnames)
+    ws = wb[sheet_name]
     for r in range(r1, r2 + 1):
         for c in range(c1, c2 + 1):
             ws.cell(row=r, column=c).value = None
@@ -243,15 +348,26 @@ def google_write(spreadsheet_id, sheet_name, range_str, data, credentials_path, 
     gc = gspread.service_account(filename=credentials_path)
     sh = gc.open_by_key(spreadsheet_id)
     ws = sh.worksheet(sheet_name)
+    added = []
     if append:
-        result = ws.append_rows(data, value_input_option="USER_ENTERED",
+        # Same header rule as local append: dict rows follow the sheet's existing header
+        # instead of adding a second header row before every batch.
+        first_row = ws.row_values(1) if _is_dict_rows(data) else None
+        rows, header_update, added = _normalise_rows(data, first_row, target_has_rows=bool(first_row))
+        if header_update:
+            ws.update("A1", [header_update], value_input_option="USER_ENTERED")
+        result = ws.append_rows(rows, value_input_option="USER_ENTERED",
                                 insert_data_option="INSERT_ROWS")
-        updated = result.get("updates", {}).get("updatedCells", len(data))
+        updated = result.get("updates", {}).get("updatedCells", len(rows))
     else:
-        result = ws.update(range_str, data, value_input_option="USER_ENTERED")
-        updated = result.get("updatedCells", len(data))
-    return {"source": "google", "operation": "append" if append else "write",
-            "sheet_id": spreadsheet_id, "updated_cells": updated}
+        rows, _, _ = _normalise_rows(data)
+        result = ws.update(range_str, rows, value_input_option="USER_ENTERED")
+        updated = result.get("updatedCells", len(rows))
+    out = {"source": "google", "operation": "append" if append else "write",
+           "sheet_id": spreadsheet_id, "updated_cells": updated}
+    if added:
+        out["added_columns"] = added
+    return out
 
 
 def google_clear(spreadsheet_id, sheet_name, range_str, credentials_path):

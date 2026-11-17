@@ -2,15 +2,16 @@
 
 #include "screens/settings/GeneralSection.h"
 
-#include "core/currency/CurrencyManager.h"
 #include "core/i18n/LanguageManager.h"
 #include "core/logging/Logger.h"
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/Requirements.h"
 
 #include <QLabel>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QSignalBlocker>
@@ -87,7 +88,7 @@ void GeneralSection::build_ui() {
     connect(on_close_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
         const QString val = on_close_combo_->itemData(idx).toString();
         SettingsRepository::instance().set(QString::fromLatin1(kKeyOnClose), val, QStringLiteral("general"));
-        LOG_INFO("Settings", QString("on_last_window_close → %1").arg(val));
+        LOG_INFO("Settings", logf("Setting changed", {{"key", "general.on_last_window_close"}, {"value", val}}));
     });
 
     vl->addSpacing(20);
@@ -118,7 +119,7 @@ void GeneralSection::build_ui() {
         const QString code = language_combo_->itemData(idx).toString();
         if (code.isEmpty())
             return;
-        LOG_INFO("Settings", QString("language → %1").arg(code));
+        LOG_INFO("Settings", logf("Setting changed", {{"key", "general.language"}, {"value", code}}));
         // LanguageManager handles persistence + translator swap + the
         // QEvent::LanguageChange that retranslates every screen.
         i18n::LanguageManager::instance().set_language(code);
@@ -127,35 +128,34 @@ void GeneralSection::build_ui() {
     vl->addSpacing(20);
 
     // ── CURRENCY ────────────────────────────────────────────────────────────
+    // The display currency and every number / money format moved to their own
+    // section (Settings > Currency & Number Format, ui::formatting). The old
+    // choice here ("general.currency") was carried over once at startup by
+    // FormatSettingsStore and is no longer read or written. A pointer stays so
+    // users who look for it here find it.
     currency_title_ = new QLabel(tr("CURRENCY"));
     currency_title_->setStyleSheet(section_title_ss());
     vl->addWidget(currency_title_);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
-    currency_combo_ = new QComboBox;
-    for (const auto& c : currency::CurrencyManager::available())
-        currency_combo_->addItem(QString("%1  %2  (%3)").arg(c.symbol, c.name, c.code), c.code);
-    currency_combo_->setStyleSheet(combo_ss());
-    auto* currency_row = make_row(tr("Display currency"), currency_combo_,
-                                  tr("Changes the currency symbol on calculators and analytics. Live market "
-                                     "data keeps its own currency — values are not converted."));
+    currency_open_btn_ = new QPushButton(tr("OPEN"));
+    currency_open_btn_->setCursor(Qt::PointingHandCursor);
+    currency_open_btn_->setStyleSheet(btn_secondary_ss());
+    auto* currency_row = make_row(tr("Display currency"), currency_open_btn_,
+                                  tr("Currency, symbols, number locale, decimals and lakh / crore are set in "
+                                     "Settings > Currency & Number Format."));
     capture_row_labels(currency_row, &currency_label_, &currency_desc_);
     vl->addWidget(currency_row);
-
-    connect(currency_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        const QString code = currency_combo_->itemData(idx).toString();
-        if (code.isEmpty())
-            return;
-        LOG_INFO("Settings", QString("currency → %1").arg(code));
-        currency::CurrencyManager::instance().set_currency(code);
+    connect(currency_open_btn_, &QPushButton::clicked, this, [this]() {
+        ui::open_setup_link(ui::SetupLink{QStringLiteral("settings"), QStringLiteral("currency_format"), {}}, this);
     });
 
     // Accessibility: the row label is a sibling QLabel, not a buddy, so the
     // combos read as anonymous without an explicit accessible name.
     on_close_combo_->setAccessibleName(tr("On last window close"));
     language_combo_->setAccessibleName(tr("Interface language"));
-    currency_combo_->setAccessibleName(tr("Display currency"));
+    currency_open_btn_->setAccessibleName(tr("Open Currency & Number Format settings"));
 
     vl->addStretch();
 
@@ -180,12 +180,6 @@ void GeneralSection::reload() {
         const int idx = language_combo_->findData(effective);
         QSignalBlocker block(language_combo_);
         language_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
-    }
-    if (currency_combo_) {
-        const QString cur = currency::CurrencyManager::instance().code();
-        const int idx = currency_combo_->findData(cur);
-        QSignalBlocker block(currency_combo_);
-        currency_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
     }
 }
 
@@ -231,8 +225,12 @@ void GeneralSection::retranslateUi() {
     if (currency_label_)
         currency_label_->setText(tr("Display currency"));
     if (currency_desc_)
-        currency_desc_->setText(tr("Changes the currency symbol on calculators and analytics. Live market "
-                                   "data keeps its own currency — values are not converted."));
+        currency_desc_->setText(tr("Currency, symbols, number locale, decimals and lakh / crore are set in "
+                                   "Settings > Currency & Number Format."));
+    if (currency_open_btn_) {
+        currency_open_btn_->setText(tr("OPEN"));
+        currency_open_btn_->setAccessibleName(tr("Open Currency & Number Format settings"));
+    }
 }
 
 } // namespace fincept::screens

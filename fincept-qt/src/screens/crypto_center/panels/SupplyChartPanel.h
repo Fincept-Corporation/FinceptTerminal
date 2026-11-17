@@ -43,6 +43,8 @@ class SupplyChartPanel : public QWidget {
   private:
     void build_ui();
     void apply_theme();
+    /// Series / axis colours and the axis label font, from the active theme.
+    void apply_chart_theme();
     void retranslateUi();
 
     void on_supply_history_update(const QVariant& v);
@@ -73,6 +75,8 @@ class SupplyChartPanel : public QWidget {
     /// demo data. Carried on the points themselves (SupplyHistoryPoint::is_mock)
     /// so the pill can never disagree with the data it sits above.
     bool series_is_mock_ = false;
+    bool has_data_ = false;    // a series has been plotted — pill reads LOADING/OFFLINE until then
+    bool feed_failed_ = false; // a topic error arrived
 };
 
 } // namespace fincept::screens::panels

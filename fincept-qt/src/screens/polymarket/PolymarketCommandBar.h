@@ -50,6 +50,10 @@ class PolymarketCommandBar : public QWidget {
     /// `connected == false` renders "⚪ No account" (clickable CTA);
     /// `connected == true` renders "<label>" in green.
     void set_account_status(bool connected, const QString& label);
+    /// A stored account exists but could not be read (`reason` = the plain
+    /// sentence; empty clears it): the chip says so and a click retries the read
+    /// (account_retry_clicked) instead of opening the connect dialog.
+    void set_account_unreadable(const QString& reason);
 
   signals:
     void view_changed(const QString& view);
@@ -59,8 +63,10 @@ class PolymarketCommandBar : public QWidget {
     void refresh_clicked();
     void exchange_changed(const QString& exchange_id);
     void account_clicked();
+    void account_retry_clicked();
 
   protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -75,6 +81,9 @@ class PolymarketCommandBar : public QWidget {
     QWidget* view_pills_container_ = nullptr;
     QList<QPushButton*> view_btns_;
     QWidget* category_container_ = nullptr;
+    bool fitting_chips_ = false;
+    /// Shows only the category chips that fit the row (see the size-policy note in build_ui).
+    void fit_category_chips();
     QComboBox* category_combo_ = nullptr; // used in CategoryMode::ComboBox
     QLineEdit* search_input_ = nullptr;
     QComboBox* sort_combo_ = nullptr;
@@ -91,6 +100,7 @@ class PolymarketCommandBar : public QWidget {
     bool ws_connected_ = false;
     bool account_connected_ = false;
     QString account_label_;
+    QString account_read_error_; ///< non-empty: the stored account could not be read
 };
 
 } // namespace fincept::screens::polymarket

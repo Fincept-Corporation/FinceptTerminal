@@ -5,7 +5,7 @@
 namespace fincept::ui {
 
 SearchBar::SearchBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(32);
+    setMinimumHeight(32); // grows with the input for a large base font
     setStyleSheet("background: transparent;");
 
     auto* hl = new QHBoxLayout(this);
@@ -15,9 +15,9 @@ SearchBar::SearchBar(QWidget* parent) : QWidget(parent) {
     input_ = new QLineEdit;
     input_->setPlaceholderText(tr("Enter command or search..."));
     input_->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-                                  "padding: 4px 12px; font-size: 13px; } "
+                                  "padding: 4px 12px; font-size: " + fincept::ui::fonts::px(-1) + "px; } "
                                   "QLineEdit:focus { border-color: %4; }")
-                              .arg(colors::PANEL(), colors::WHITE(), colors::BORDER(), colors::ORANGE()));
+                              .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_MED(), colors::AMBER()));
 
     connect(input_, &QLineEdit::returnPressed, this, [this]() { emit search_submitted(input_->text()); });
     connect(input_, &QLineEdit::textChanged, this, &SearchBar::text_changed);

@@ -48,10 +48,13 @@ QString resolve_expiry(const QString& mode, const QString& value, const QStringL
 // (ce_token for CE legs, pe_token for PE legs) and the order quantity is
 // computed as resolved.lots * row.lot_size. The price field is set to the
 // current LTP from the chain (entry reference for the paper simulator / P&L
-// marking). Invalid/FUT legs and legs whose chain row cannot be found are
-// silently skipped.
+// marking), and is_call/strike identify the contract.
+// ALL-OR-NOTHING: if ANY rule leg cannot be resolved (FUT legs, DELTA legs
+// before Greeks exist, a strike/contract missing from the chain, unknown lot
+// size) the result is EMPTY and `error` (when given) names the failing leg —
+// a partial basket is never returned.
 QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services::options::OptionChain& chain,
-                                                        const QJsonArray& strategy_legs);
+                                                        const QJsonArray& strategy_legs, QString* error = nullptr);
 
 // ---------------------------------------------------------------------------
 // build_exit_legs
@@ -88,7 +91,7 @@ QVector<fincept::algo::AlgoLegPosition> leg_positions_from_json(const QJsonArray
 // leg_marks_from_chain
 // ---------------------------------------------------------------------------
 // Map each open leg to its current LTP from a chain snapshot, matched by
-// instrument token (ce_token for calls, pe_token for puts). Returns symbol->ltp
+// instrument token (against both ce_token and pe_token). Returns symbol->ltp
 // for every leg whose contract is found with a positive LTP; legs not present in
 // the snapshot (or with ltp<=0) are omitted so a stale 0 never overwrites a mark.
 QHash<QString, double> leg_marks_from_chain(const QVector<fincept::algo::AlgoLegPosition>& legs,

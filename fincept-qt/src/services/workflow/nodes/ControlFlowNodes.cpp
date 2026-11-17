@@ -8,6 +8,8 @@
 
 namespace fincept::workflow {
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_control_flow_nodes(NodeRegistry& registry) {
     // ── Switch ─────────────────────────────────────────────────────
     registry.register_type({

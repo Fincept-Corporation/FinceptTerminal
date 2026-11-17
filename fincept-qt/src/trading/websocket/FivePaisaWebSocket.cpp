@@ -22,6 +22,21 @@ namespace fincept::trading {
 
 static constexpr const char* TAG_FP_WS = "FivePaisaWS";
 
+// Stream state in the log, once per change: WARN when the stream drops, DEBUG for every
+// further drop while it stays down (failed reconnect attempts), silent reset once it is
+// connected again (AccountDataStream writes "<broker> WS connected").
+static void log_fp_stream_state(const void* stream, bool up) {
+    const QString key = QStringLiteral("stream@") + QString::number(reinterpret_cast<quintptr>(stream), 16);
+    if (up) {
+        if (Logger::instance().transition_possible(0))
+            Logger::instance().transition(TAG_FP_WS, key, 0);
+    } else if (Logger::instance().transition(TAG_FP_WS, key, 1)) {
+        LOG_WARN(TAG_FP_WS, "5Paisa WS disconnected");
+    } else {
+        LOG_DEBUG(TAG_FP_WS, "5Paisa WS still disconnected");
+    }
+}
+
 // 5Paisa redirect-server → feed host. Mirrors WEBSOCKET_URLS in the py source.
 static QString host_for_server(const QString& server) {
     if (server == "A")
@@ -111,7 +126,7 @@ FivePaisaWebSocket::FivePaisaWebSocket(const QString& access_token, const QStrin
 
 void FivePaisaWebSocket::open() {
     QString url = QString("%1?Value1=%2|%3").arg(feed_url_for_token(access_token_), access_token_, client_code_);
-    LOG_INFO(TAG_FP_WS, "Connecting to 5Paisa feed");
+    LOG_DEBUG(TAG_FP_WS, "Connecting to 5Paisa feed");
     ws_->connect_to(url);
     start_health_check();
 }
@@ -181,13 +196,14 @@ void FivePaisaWebSocket::on_data_stall() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void FivePaisaWebSocket::on_connected() {
-    LOG_INFO(TAG_FP_WS, "Connected — resubscribing all scrips");
+    LOG_DEBUG(TAG_FP_WS, "Connected — resubscribing all scrips");
     resubscribe_all();
+    log_fp_stream_state(this, true);
     emit connected();
 }
 
 void FivePaisaWebSocket::on_disconnected() {
-    LOG_WARN(TAG_FP_WS, "Disconnected");
+    log_fp_stream_state(this, false);
     emit disconnected();
 }
 
@@ -245,7 +261,7 @@ void FivePaisaWebSocket::send_subscribe(const QVector<qint64>& tokens, bool subs
     req["MarketFeedData"] = feed_data;
 
     ws_->send(QJsonDocument(req).toJson(QJsonDocument::Compact));
-    LOG_INFO(TAG_FP_WS, QString("%1 %2 scrips").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(tokens.size()));
+    LOG_DEBUG(TAG_FP_WS, QString("%1 %2 scrips").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(tokens.size()));
 }
 
 void FivePaisaWebSocket::resubscribe_all() {

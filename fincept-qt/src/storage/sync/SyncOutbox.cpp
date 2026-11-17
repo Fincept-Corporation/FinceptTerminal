@@ -64,8 +64,11 @@ Result<void> SyncOutbox::record_unique(const QString& entity, const QString& loc
 }
 
 Result<QVector<OutboxRow>> SyncOutbox::pending_all(int limit) {
-    auto r = Database::instance().execute(
-        "SELECT id, entity, local_id, op, payload, attempts FROM sync_outbox ORDER BY id ASC LIMIT ?", {limit});
+    // Dead-lettered rows (see kMaxPushAttempts) are excluded here rather than read
+    // and skipped by the caller, which had to over-read (2000 rows) to fill a pass.
+    auto r = Database::instance().execute("SELECT id, entity, local_id, op, payload, attempts FROM sync_outbox "
+                                          "WHERE attempts <= ? ORDER BY id ASC LIMIT ?",
+                                          {kMaxPushAttempts, limit});
     if (r.is_err())
         return Result<QVector<OutboxRow>>::err(r.error());
 

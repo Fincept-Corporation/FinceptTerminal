@@ -1,11 +1,5 @@
-// AiChatScreen.cpp — Fincept AI Chat, Obsidian design system.
-//
-// Core lifecycle: ctor, refresh_theme, show/hide/resizeEvent, MCP event
-// subscriptions, eventFilter, save_state/restore_state, set_group +
-// on_group_symbol_changed. Other concerns:
-//   - AiChatScreen_Layout.cpp    — build_ui + build_* UI pieces
-//   - AiChatScreen_Sessions.cpp  — session list / sidebar / load_messages
-//   - AiChatScreen_Messaging.cpp — typing / on_send / streaming / bubbles / stats
+// AiChatScreen.cpp — the AI Chat tab: lifecycle, state, keys, breakpoints, overlays,
+// theme and symbol-group linking. See AiChatScreen.h for the split.
 
 #include "screens/ai_chat/AiChatScreen.h"
 
@@ -13,134 +7,95 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
-#include "mcp/McpService.h"
-#include "screens/ai_chat/ChatBubbleFactory.h"
+#include "screens/ai_chat/AiChatComposer.h"
+#include "screens/ai_chat/AiChatContextRail.h"
+#include "screens/ai_chat/AiChatSessionRail.h"
+#include "screens/ai_chat/AiChatStartPage.h"
+#include "screens/ai_chat/AiChatStyle.h"
+#include "screens/ai_chat/AiChatTranscript.h"
 #include "services/llm/LlmService.h"
-#include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ScreenCommandBar.h"
+#include "ui/widgets/ScreenStatusBar.h"
 
-#include <QApplication>
-#include <QClipboard>
-#include <QDateTime>
-#include <QDialog>
-#include <QDialogButtonBox>
 #include <QFile>
-#include <QFileDialog>
 #include <QFileInfo>
-#include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QKeyEvent>
-#include <QLabel>
-#include <QMenu>
-#include <QPalette>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPointer>
-#include <QRandomGenerator>
 #include <QResizeEvent>
-#include <QScrollBar>
 #include <QShowEvent>
-#include <QSizePolicy>
-#include <QTextStream>
+#include <QStyle>
 #include <QTimer>
-#include <QToolButton>
-#include <QtConcurrent/QtConcurrent>
-
-#include <cmath>
-#include <memory>
 
 namespace fincept::screens {
 
-// TAG declared in the split TUs that use it (AiChatScreen_Sessions.cpp etc).
+namespace st = aichat::style;
 
-namespace fnt = fincept::ui::fonts;
-namespace col = fincept::ui::colors;
+namespace {
+// Breakpoints of the three zones (logical px of the screen's width).
+constexpr int kAicWideMin = 1500;
+constexpr int kAicMediumMin = 1100;
+
+// A rail's object name selects its look (docked rail vs drawer): re-polish only on a change.
+void aic_set_look(QWidget* w, const char* name) {
+    if (!w || w->objectName() == QLatin1String(name))
+        return;
+    w->setObjectName(QString::fromLatin1(name));
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+    w->update();
+}
+} // namespace
 
 AiChatScreen::AiChatScreen(QWidget* parent) : QWidget(parent) {
-    typing_timer_ = new QTimer(this);
-    typing_timer_->setInterval(400);
-    connect(typing_timer_, &QTimer::timeout, this, &AiChatScreen::on_typing_indicator_tick);
+    setObjectName(QString::fromLatin1(st::kRoot));
+    setAttribute(Qt::WA_StyledBackground, true);
+    // The one selector sheet for the whole tree, set before any child exists.
+    st::apply_sheet(this);
 
-    // Stop grace period: if a cancelled turn hasn't come back by then it is
-    // stuck inside a tool — stop waiting for it (see detach_stopped_request).
+    // Stop grace period: if a cancelled turn hasn't come back by then it is stuck inside a
+    // tool — stop waiting for it (see detach_stopped_request).
     stop_grace_timer_ = new QTimer(this);
     stop_grace_timer_->setSingleShot(true);
     stop_grace_timer_->setInterval(kStopGraceMs);
     connect(stop_grace_timer_, &QTimer::timeout, this, &AiChatScreen::detach_stopped_request);
 
-    // Background-job status lines in the Tools card. Started by track_job() and
-    // showEvent, stopped in hideEvent and once no tracked job is running (P3).
+    // Background-job status lines. Started by track_job() and showEvent, stopped in
+    // hideEvent and once no tracked job is running.
     job_timer_ = new QTimer(this);
     job_timer_->setInterval(1000);
     connect(job_timer_, &QTimer::timeout, this, &AiChatScreen::refresh_job_lines);
 
+    // Tool steps arrive in bursts (a parallel round = many lines): one repaint per burst.
+    tool_render_timer_ = new QTimer(this);
+    tool_render_timer_->setSingleShot(true);
+    tool_render_timer_->setInterval(st::kStreamFlushMs);
+    connect(tool_render_timer_, &QTimer::timeout, this, [this]() {
+        if (streaming_turn_ != 0)
+            note_symbols_from_tools();
+    });
+
+    load_pins();
+    saved_prompts_ = aichat::load_saved_prompts();
     build_ui();
     load_sessions();
+    refresh_context_ui();
+    update_stats();
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { refresh_theme(); });
+    // Never inside theme_changed (restyling / re-fitting there stalls a theme switch): once
+    // the appearance has settled, and each sheet only when its text changed.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::appearance_settled, this, [this]() { refresh_theme(); });
 }
 
+AiChatScreen::~AiChatScreen() = default;
+
 void AiChatScreen::refresh_theme() {
-    // Root
-    setStyleSheet(QString("background:%1;").arg(col::BG_BASE()));
-
-    // Sidebar
-    if (sidebar_)
-        sidebar_->setStyleSheet(
-            QString("background:%1;border-right:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
-
-    // Chat area
-    if (chat_widget_)
-        chat_widget_->setStyleSheet(QString("background:%1;").arg(col::BG_BASE()));
-    if (messages_container_)
-        messages_container_->setStyleSheet(QString("background:%1;").arg(col::BG_BASE()));
-
-    // Scroll area
-    if (scroll_area_)
-        scroll_area_->setStyleSheet(
-            QString("QScrollArea{background:%1;border:none;}"
-                    "QScrollBar:vertical{background:transparent;width:5px;margin:2px;}"
-                    "QScrollBar::handle:vertical{background:%2;border-radius:0px;min-height:30px;}"
-                    "QScrollBar::handle:vertical:hover{background:%3;}"
-                    "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                .arg(col::BG_BASE(), col::BORDER_MED(), col::BORDER_BRIGHT()));
-
-    // Input box
-    if (input_box_)
-        input_box_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
-                                          "border-radius:0px;padding:8px 14px;font-size:%4px;}"
-                                          "QPlainTextEdit:focus{border-color:%5;}")
-                                      .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_MED())
-                                      .arg(fnt::BODY)
-                                      .arg(col::AMBER()));
-
-    // Send button
-    if (send_btn_)
-        send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;border-radius:0px;"
-                                         "font-size:%3px;font-weight:700;}"
-                                         "QPushButton:hover:enabled{background:%4;}"
-                                         "QPushButton:disabled{background:%5;color:%6;}")
-                                     .arg(col::AMBER(), col::BG_BASE())
-                                     .arg(fnt::SMALL)
-                                     .arg(col::ORANGE(), col::BG_RAISED(), col::TEXT_DIM()));
-
-    // Attach button
-    if (attach_btn_)
-        attach_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                           "border-radius:0px;font-size:20px;font-weight:700;}"
-                                           "QPushButton:hover{background:rgba(217,119,6,0.15);border-color:%3;}")
-                                       .arg(col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER()));
-
-    // Header bar elements
-    if (hdr_session_lbl_)
-        hdr_session_lbl_->setStyleSheet(
-            QString("color:%1;font-size:%2px;font-weight:600;").arg(col::TEXT_PRIMARY()).arg(fnt::BODY));
-    if (hdr_tokens_lbl_)
-        hdr_tokens_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM()).arg(fnt::TINY));
-
-    // Update provider/model stats to pick up new colors
+    st::apply_sheet(this);
+    apply_zones(/*force=*/true); // rail widths follow the font
     update_stats();
 }
 
@@ -150,18 +105,27 @@ void AiChatScreen::showEvent(QShowEvent* e) {
             &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
-    // Phase 7: rehydrate the linked symbol from SymbolContext on every
-    // show. linked_symbol_ isn't part of save_state — link state is
-    // shell-scoped (per-group, not per-panel), so the most recent group
-    // symbol is the source of truth. Without this, a layout reload would
-    // leave linked_symbol_ empty until the publisher next changes it.
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::route_notice, this, &AiChatScreen::on_route_notice,
+            Qt::UniqueConnection);
+    // Rehydrate the linked symbol from SymbolContext on every show: link state is
+    // shell-scoped (per group), so the group's latest symbol is the source of truth.
     if (link_group_ != fincept::SymbolGroup::None) {
         const fincept::SymbolRef rehydrated = fincept::SymbolContext::instance().group_symbol(link_group_);
         if (rehydrated.is_valid())
             linked_symbol_ = rehydrated;
     }
+    if (unread_) {
+        unread_ = false;
+        if (sessions_)
+            sessions_->set_unread(active_session_id_, false);
+    }
+    apply_zones(/*force=*/true);
+    refresh_context_ui();
     update_stats();
     subscribe_mcp_events();
+    load_tool_catalogue();
+    if (status_)
+        status_->start_clock();
     if (!tracked_job_ids_.isEmpty()) {
         refresh_job_lines();
         if (!tracked_job_ids_.isEmpty())
@@ -173,14 +137,18 @@ void AiChatScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     unsubscribe_mcp_events();
     job_timer_->stop();
+    if (status_)
+        status_->stop_clock();
+    close_overlay();
+}
+
+void AiChatScreen::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    apply_zones();
+    place_overlay();
 }
 
 // ── MCP-driven UI sync ──────────────────────────────────────────────────────
-// MCP set_active_llm publishes llm.provider_changed when the LLM or Finagent
-// switches the active provider. We force a LlmService::reload_config() so
-// the next outgoing message uses the new provider. reload_config emits
-// LlmService::config_changed which is already wired (above) to
-// on_provider_changed for the header label refresh.
 
 void AiChatScreen::subscribe_mcp_events() {
     if (!mcp_event_subs_.isEmpty())
@@ -193,26 +161,22 @@ void AiChatScreen::subscribe_mcp_events() {
         QMetaObject::invokeMethod(
             self.data(),
             [self]() {
-                if (!self)
-                    return;
-                ai_chat::LlmService::instance().reload_config();
+                if (self)
+                    ai_chat::LlmService::instance().reload_config();
             },
             Qt::QueuedConnection);
     };
-
     auto on_session_created = [self](const QVariantMap&) {
         if (!self)
             return;
         QMetaObject::invokeMethod(
             self.data(),
             [self]() {
-                if (!self)
-                    return;
-                self->load_sessions();
+                if (self)
+                    self->load_sessions();
             },
             Qt::QueuedConnection);
     };
-
     auto& bus = EventBus::instance();
     mcp_event_subs_.append(bus.subscribe(this, "llm.provider_changed", on_provider_event));
     mcp_event_subs_.append(bus.subscribe(this, "ai_chat.session_created", on_session_created));
@@ -231,193 +195,327 @@ void AiChatScreen::changeEvent(QEvent* event) {
     QWidget::changeEvent(event);
 }
 
-void AiChatScreen::retranslateUi() {
-    // Sidebar
-    if (new_btn_)
-        new_btn_->setToolTip(tr("New Chat  (Ctrl+N / Ctrl+K)"));
-    if (search_edit_)
-        search_edit_->setPlaceholderText(tr("Search sessions..."));
-    if (rename_btn_)
-        rename_btn_->setText(tr("Rename"));
-    if (delete_btn_)
-        delete_btn_->setText(tr("Delete"));
-    if (provider_lbl_)
-        provider_lbl_->setToolTip(tr("Active LLM Provider"));
-    if (model_lbl_)
-        model_lbl_->setToolTip(tr("Active Model — change in Settings > LLM Configuration"));
-    // Sidebar toggle tooltip depends on the collapse state — re-derive.
-    if (sidebar_toggle_btn_)
-        sidebar_toggle_btn_->setToolTip(sidebar_collapsed_ ? tr("Expand sidebar  (Ctrl+B)")
-                                                           : tr("Collapse sidebar  (Ctrl+B)"));
-    // Header
-    if (hdr_model_lbl_)
-        hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
-    if (export_btn_) {
-        export_btn_->setText(tr("Export"));
-        export_btn_->setToolTip(tr("Save or copy this conversation as Markdown"));
+// ── Zones and overlays ──────────────────────────────────────────────────────
+
+void AiChatScreen::apply_zones(bool force) {
+    if (!body_ || !sessions_ || !context_rail_)
+        return;
+    const int w = width();
+    const Zones z = w >= kAicWideMin ? Zones::Wide : w >= kAicMediumMin ? Zones::Medium : Zones::Narrow;
+    if (z == zones_ && !force)
+        return;
+    const bool changed = z != zones_;
+    zones_ = z;
+    if (changed)
+        close_overlay();
+
+    auto* hl = qobject_cast<QHBoxLayout*>(body_->layout());
+    if (!hl)
+        return;
+
+    // Sessions rail: docked (Wide / Medium) unless the user collapsed it; a drawer (Narrow).
+    if (overlay_ != Overlay::Sessions) {
+        if (z == Zones::Narrow) {
+            if (hl->indexOf(sessions_) >= 0)
+                hl->removeWidget(sessions_);
+            sessions_->hide();
+        } else {
+            if (sessions_->parentWidget() != body_)
+                sessions_->setParent(body_);
+            if (hl->indexOf(sessions_) < 0)
+                hl->insertWidget(0, sessions_);
+            aic_set_look(sessions_, st::kRailLeft);
+            sessions_->setFixedWidth(sessions_->preferred_width());
+            sessions_->setVisible(!sidebar_collapsed_);
+        }
     }
-    // Input area
-    if (input_box_)
-        input_box_->setPlaceholderText(tr("Message Fincept AI...  (Enter to send · Shift+Enter for a new line)"));
-    if (attach_btn_)
-        attach_btn_->setToolTip(tr("Attach a file to this message"));
-    if (load_earlier_btn_ && load_earlier_btn_->isVisible())
-        load_earlier_btn_->setText(tr("Show %n earlier message(s)", "", hidden_message_count_));
-    update_model_notice();
-    // Typing label — only refresh while visible (timer will overwrite shortly anyway)
-    if (typing_dots_lbl_ && typing_indicator_ && typing_indicator_->isVisible())
-        typing_dots_lbl_->setText(tr("AI is thinking"));
-    // Re-run the helpers that compose live state strings so their tr() calls
-    // pick up the new language for the current state.
-    // The send button is live while "Stop" is showing, so its enabled state no longer
-    // says whether the composer is idle — the streaming flag does.
-    set_input_enabled(!streaming_);
-    update_stats();
+    // Context rail: full (Wide) or an icon strip.
+    if (overlay_ != Overlay::Context) {
+        const auto mode = z == Zones::Wide ? aichat::AicContextRail::Mode::Full : aichat::AicContextRail::Mode::Icons;
+        if (context_rail_->parentWidget() != body_)
+            context_rail_->setParent(body_);
+        if (hl->indexOf(context_rail_) < 0)
+            hl->addWidget(context_rail_);
+        aic_set_look(context_rail_, st::kRailRight);
+        context_rail_->set_mode(mode);
+        context_rail_->setFixedWidth(context_rail_->preferred_width(mode));
+        context_rail_->show();
+    }
+    if (bar_)
+        bar_->set_action_checked(QStringLiteral("sessions"),
+                                 z == Zones::Narrow ? overlay_ == Overlay::Sessions : !sidebar_collapsed_);
+    update_tab_order();
 }
 
-// ── Build UI ──────────────────────────────────────────────────────────────────
+void AiChatScreen::toggle_sessions() {
+    if (zones_ == Zones::Narrow) {
+        if (overlay_ == Overlay::Sessions)
+            close_overlay();
+        else
+            open_overlay(Overlay::Sessions);
+        return;
+    }
+    sidebar_collapsed_ = !sidebar_collapsed_;
+    apply_zones(/*force=*/true);
+    if (!sidebar_collapsed_)
+        sessions_->focus_list();
+    ScreenStateManager::instance().notify_changed(this);
+}
 
-bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == input_box_ && event->type() == QEvent::KeyPress) {
-        auto* ke = static_cast<QKeyEvent*>(event);
-        if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
-            if (ke->modifiers() & Qt::ShiftModifier)
-                return false;
-            ke->accept();
-            // Enter never doubles as Stop: a user typing the next question
-            // while an answer streams must not cancel it by pressing Enter.
-            if (!streaming_)
-                on_send();
-            return true;
+void AiChatScreen::open_overlay(Overlay which, int section) {
+    Q_UNUSED(section)
+    if (which == Overlay::None || overlay_ == which)
+        return;
+    close_overlay();
+    overlay_ = which;
+    if (!scrim_) {
+        scrim_ = new QWidget(this);
+        scrim_->setObjectName(QStringLiteral("aicScrim"));
+        scrim_->setAttribute(Qt::WA_StyledBackground, true);
+        scrim_->setStyleSheet(QStringLiteral("QWidget#aicScrim{background:%1;}").arg(ui::colors::scrim(0.35)));
+        scrim_->installEventFilter(this);
+    }
+    QWidget* rail = which == Overlay::Sessions ? static_cast<QWidget*>(sessions_) : static_cast<QWidget*>(context_rail_);
+    if (auto* hl = qobject_cast<QHBoxLayout*>(body_->layout()); hl && hl->indexOf(rail) >= 0)
+        hl->removeWidget(rail);
+    rail->setParent(this);
+    aic_set_look(rail, st::kDrawer);
+    if (which == Overlay::Context) {
+        context_rail_->set_mode(aichat::AicContextRail::Mode::Full);
+        context_rail_->setFixedWidth(context_rail_->preferred_width(aichat::AicContextRail::Mode::Full));
+    } else {
+        sessions_->setFixedWidth(sessions_->preferred_width());
+    }
+    place_overlay();
+    scrim_->show();
+    scrim_->raise();
+    rail->show();
+    rail->raise();
+    if (which == Overlay::Sessions)
+        sessions_->focus_list();
+    else
+        context_rail_->setFocus(Qt::PopupFocusReason);
+    if (bar_ && which == Overlay::Sessions)
+        bar_->set_action_checked(QStringLiteral("sessions"), true);
+}
+
+void AiChatScreen::close_overlay() {
+    if (overlay_ == Overlay::None)
+        return;
+    const Overlay was = overlay_;
+    overlay_ = Overlay::None;
+    if (scrim_)
+        scrim_->hide();
+    QWidget* rail = was == Overlay::Sessions ? static_cast<QWidget*>(sessions_) : static_cast<QWidget*>(context_rail_);
+    rail->hide();
+    rail->setParent(body_);
+    apply_zones(/*force=*/true);
+    if (was == Overlay::Sessions && transcript_)
+        transcript_->setFocus(Qt::OtherFocusReason);
+}
+
+void AiChatScreen::place_overlay() {
+    if (overlay_ == Overlay::None || !body_)
+        return;
+    const QRect area(body_->mapTo(this, QPoint(0, 0)), body_->size());
+    if (scrim_)
+        scrim_->setGeometry(area);
+    if (overlay_ == Overlay::Sessions)
+        sessions_->setGeometry(area.left(), area.top(), sessions_->width(), area.height());
+    else
+        context_rail_->setGeometry(area.right() + 1 - context_rail_->width(), area.top(), context_rail_->width(),
+                                   area.height());
+}
+
+void AiChatScreen::update_tab_order() {
+    // sessions → transcript → composer (editor → attach → send)
+    if (!sessions_ || !transcript_ || !composer_)
+        return;
+    QWidget* first = sessions_->isVisible() ? sessions_->list_widget() : nullptr;
+    if (first && sessions_->search_widget() && sessions_->search_widget()->window() == window())
+        setTabOrder(sessions_->search_widget(), first);
+    if (first && first->window() == transcript_->window())
+        setTabOrder(first, transcript_);
+    if (composer_->editor())
+        setTabOrder(transcript_, composer_->editor());
+}
+
+// ── Keys ────────────────────────────────────────────────────────────────────
+
+void AiChatScreen::keyPressEvent(QKeyEvent* e) {
+    if (e->key() == Qt::Key_Escape) {
+        if (overlay_ != Overlay::None) {
+            close_overlay();
+            e->accept();
+            return;
         }
-        // Esc stops the answer that is streaming.
-        if (ke->key() == Qt::Key_Escape && streaming_) {
+        if (streaming_) {
             on_stop_requested();
-            return true;
-        }
-        // Ctrl+R regenerates the newest answer (or retries a failed turn).
-        if (ke->key() == Qt::Key_R && (ke->modifiers() & Qt::ControlModifier)) {
-            on_regenerate();
-            return true;
-        }
-        // Ctrl+N and Ctrl+K both start a new session (Ctrl+K is the convention
-        // most chat clients use; Ctrl+N was already documented in the tooltip).
-        if ((ke->key() == Qt::Key_N || ke->key() == Qt::Key_K) && (ke->modifiers() & Qt::ControlModifier)) {
-            on_new_session();
-            return true;
+            e->accept();
+            return;
         }
     }
-    if (obj == session_list_ && event->type() == QEvent::KeyPress && !streaming_) {
-        auto* ke = static_cast<QKeyEvent*>(event);
-        if (ke->key() == Qt::Key_F2) {
-            on_rename_session();
-            return true;
-        }
-        if (ke->key() == Qt::Key_Delete) {
-            on_delete_session();
-            return true;
-        }
+    QWidget::keyPressEvent(e);
+}
+
+bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == scrim_ && event->type() == QEvent::MouseButtonPress) {
+        close_overlay();
+        return true;
+    }
+    if (bar_ && obj == bar_->command_field()) {
+        // The command field is the session title, edited in place: leaving it without
+        // Enter restores the saved title.
+        if (event->type() == QEvent::FocusOut)
+            QTimer::singleShot(0, this, [this]() {
+                if (bar_ && bar_->command_field() && !bar_->command_field()->hasFocus())
+                    bar_->set_command_text(active_session_title_);
+            });
     }
     return QWidget::eventFilter(obj, event);
 }
 
+// ── State ───────────────────────────────────────────────────────────────────
+
 QVariantMap AiChatScreen::save_state() const {
     QVariantMap s{{"session_id", active_session_id_}};
-
-    if (input_box_)
-        s.insert("draft", input_box_->toPlainText());
-    if (search_edit_)
-        s.insert("search", search_edit_->text());
-    if (scroll_area_ && scroll_area_->verticalScrollBar())
-        s.insert("scroll", scroll_area_->verticalScrollBar()->value());
-    if (!attached_file_path_.isEmpty())
-        s.insert("attached_file", attached_file_path_);
+    if (composer_)
+        s.insert("draft", composer_->text());
+    if (sessions_)
+        s.insert("search", sessions_->search_text());
+    if (transcript_)
+        s.insert("scroll", transcript_->following_tail() ? -1 : transcript_->scroll_position());
+    QStringList paths;
+    for (const auto& f : files_)
+        paths << f.ref;
+    if (!paths.isEmpty())
+        s.insert("attached_files", paths);
     s.insert("sidebar_collapsed", sidebar_collapsed_);
-
+    s.insert("tools_on", tools_on_);
+    s.insert("nav_on", nav_on_);
     return s;
+}
+
+bool AiChatScreen::open_section(const QString& section, const QString& focus) {
+    // The New Chat button (on_new_session) and a click in the session list
+    // (on_session_selected). Validated before anything changes.
+    const QString raw = section.trimmed();
+    const QString key = raw.toLower();
+    if (key == QLatin1String("new")) {
+        on_new_session();
+        return true;
+    }
+    QString sid;
+    if (key.startsWith(QLatin1String("session:"))) {
+        sid = raw.mid(8).trimmed();
+        if (sid.isEmpty())
+            return false;
+    } else if (key.isEmpty() || key == QLatin1String("sessions")) {
+        sid = focus.trimmed();
+        if (sid.isEmpty())
+            return true;
+    } else {
+        return false;
+    }
+    for (const auto& s : std::as_const(sessions_cache_)) {
+        if (s.id != sid)
+            continue;
+        if (active_session_id_ != sid)
+            on_session_selected(sid);
+        return true;
+    }
+    return false; // no such session: nothing changes
 }
 
 void AiChatScreen::restore_state(const QVariantMap& state) {
     const QString sid = state.value("session_id").toString();
-
-    // Session selection — find the matching row and select it.
-    if (!sid.isEmpty()) {
-        for (int i = 0; i < session_list_->count(); ++i) {
-            auto* item = session_list_->item(i);
-            if (item && item->data(Qt::UserRole).toString() == sid) {
-                session_list_->setCurrentRow(i);
-                on_session_selected(i);
+    if (!sid.isEmpty() && sid != active_session_id_) {
+        for (const auto& s : std::as_const(sessions_cache_)) {
+            if (s.id == sid) {
+                on_session_selected(sid);
                 break;
             }
         }
-        // Session not found (may have been deleted) — leave default selection
+        // Session not found (may have been deleted) — leave the default selection.
     }
 
-    // Search box — apply before (or after) session restore; filter text is independent.
     const QString search_text = state.value("search").toString();
-    if (search_edit_ && !search_text.isEmpty())
-        search_edit_->setText(search_text);
+    if (sessions_ && !search_text.isEmpty())
+        sessions_->set_search_text(search_text);
 
-    // Draft composer text — restore what the user was typing.
     const QString draft = state.value("draft").toString();
-    if (input_box_ && !draft.isEmpty())
-        input_box_->setPlainText(draft);
+    if (composer_ && !draft.isEmpty())
+        composer_->set_text(draft);
 
-    // Attached file — restore the badge only if the file still exists on disk.
-    const QString attached = state.value("attached_file").toString();
-    if (!attached.isEmpty() && QFile::exists(attached)) {
-        attached_file_path_ = attached;
-        if (attach_badge_) {
-            attach_badge_->setText(QFileInfo(attached).fileName());
-            attach_badge_->setVisible(true);
-        }
+    // Attached files — restored only while they still exist on disk (metadata only).
+    QStringList paths = state.value("attached_files").toStringList();
+    const QString legacy = state.value("attached_file").toString(); // v2 / v3: one file
+    if (!legacy.isEmpty())
+        paths << legacy;
+    QStringList existing;
+    for (const QString& p : std::as_const(paths))
+        if (!p.isEmpty() && QFile::exists(p))
+            existing << p;
+    if (!existing.isEmpty())
+        add_files(existing);
+
+    if (state.contains("tools_on"))
+        tools_on_ = state.value("tools_on").toBool();
+    if (state.contains("nav_on"))
+        nav_on_ = state.value("nav_on").toBool();
+    if (bar_) {
+        bar_->set_action_checked(QStringLiteral("tools"), tools_on_);
+        bar_->set_action_checked(QStringLiteral("nav"), nav_on_);
+        bar_->set_action_enabled(QStringLiteral("nav"), tools_on_);
+    }
+    if (context_rail_)
+        context_rail_->set_tool_policy(tools_on_, nav_on_);
+
+    if (state.contains("sidebar_collapsed")) {
+        sidebar_collapsed_ = state.value("sidebar_collapsed").toBool();
+        apply_zones(/*force=*/true);
     }
 
-    // Sidebar collapsed state — apply without animation on restore so the
-    // user lands on the previously chosen layout immediately.
-    if (state.contains("sidebar_collapsed"))
-        apply_sidebar_collapsed(state.value("sidebar_collapsed").toBool(), /*animate=*/false);
-
-    // Scroll position — defer until after message_layout has laid out,
-    // otherwise the scrollbar max is still 0.
+    // Scroll position — after the transcript has laid out (-1 / absent = follow the tail).
     const int scroll = state.value("scroll", -1).toInt();
-    if (scroll >= 0 && scroll_area_) {
+    if (scroll >= 0 && transcript_) {
         QPointer<AiChatScreen> self = this;
         QTimer::singleShot(0, this, [self, scroll]() {
-            if (!self || !self->scroll_area_)
-                return;
-            if (auto* bar = self->scroll_area_->verticalScrollBar())
-                bar->setValue(scroll);
+            if (self && self->transcript_)
+                self->transcript_->set_scroll_position(scroll);
         });
     }
 }
 
-// ── IGroupLinked (Phase 7) ─────────────────────────────────────────────────
+// ── IGroupLinked ────────────────────────────────────────────────────────────
 
 void AiChatScreen::set_group(fincept::SymbolGroup g) {
     if (link_group_ == g)
         return;
     link_group_ = g;
-    // Drop the cached symbol when leaving a group — otherwise the next send
-    // would still tag a context the user can't see was inherited.
+    // Drop the cached symbol when leaving a group — the next send must not carry a context
+    // the user can't see was inherited.
     if (g == fincept::SymbolGroup::None) {
         linked_symbol_ = {};
         linked_context_pending_ = false;
     }
+    refresh_context_ui();
 }
 
 void AiChatScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
-    // Consumer-only. Cache the inbound symbol so the next user-typed
-    // message is sent with a "[Context: SYM]" prefix on the wire (see
-    // on_send). UI is intentionally untouched — the bubble shows what
-    // the user typed; the prefix is only on the LLM payload.
+    // Consumer only. The symbol is shown as an attached context item (rail + composer chip,
+    // with DETACH) and goes out as "[Context: SYM (class)]" with the next message only.
     if (!ref.is_valid()) {
         linked_symbol_ = {};
         linked_context_pending_ = false;
-        return;
+    } else {
+        linked_symbol_ = ref;
+        linked_context_pending_ = true;
+        known_symbols_.insert(ref.symbol.toUpper());
+        if (transcript_)
+            transcript_->set_known_symbols(known_symbols_);
     }
-    linked_symbol_ = ref;
-    linked_context_pending_ = true; // tag the next message, once (see on_send)
+    refresh_context_ui();
 }
 
 } // namespace fincept::screens

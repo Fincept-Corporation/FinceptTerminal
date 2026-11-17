@@ -1,14 +1,17 @@
 #include "screens/fno/OrderConfirmDialog.h"
 
 #include "core/logging/Logger.h"
+#include "screens/fno/FnoFormat.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QLocale>
 #include <QMetaObject>
 #include <QPointer>
 #include <QStyle>
@@ -39,10 +42,13 @@ namespace {
 
 constexpr int kMarginFetchTimeoutMs = 5000;
 
-QString fmt_currency(double v) {
+namespace fmt = fincept::ui::formatting;
+
+/// A payoff bound, signed ("+₹1,240" / "-₹820"); "+∞" / "−∞" when unlimited.
+QString ocd_fmt_bound(double v, const QString& ccy) {
     if (!std::isfinite(v))
-        return v > 0 ? QStringLiteral("∞") : QStringLiteral("−∞");
-    return QLocale(QLocale::English).toString(v, 'f', 0);
+        return v > 0 ? QStringLiteral("+∞") : QStringLiteral("−∞");
+    return fno_signed_money(v, ccy);
 }
 
 UnifiedOrder leg_to_unified(const StrategyLeg& leg) {
@@ -63,28 +69,29 @@ UnifiedOrder leg_to_unified(const StrategyLeg& leg) {
 
 OrderConfirmDialog::OrderConfirmDialog(const Strategy& strategy, const OptionChain& chain, double premium,
                                        double max_profit, double max_loss, QWidget* parent)
-    : QDialog(parent), strategy_(strategy), chain_(chain) {
+    : QDialog(parent), strategy_(strategy), chain_(chain), premium_(premium), max_profit_(max_profit),
+      max_loss_(max_loss), ccy_(fno_chain_ccy(chain.broker_id)) {
     setWindowTitle(tr("Confirm Paper Orders"));
     setModal(true);
     resize(680, 520);
     setStyleSheet(QString("QDialog { background:%1; }"
-                          "#confirmTitle { color:%2; font-size:13px; font-weight:700; background:transparent; }"
-                          "#confirmSub { color:%3; font-size:10px; background:transparent; }"
-                          "#confirmKey { color:%3; font-size:9px; font-weight:700; letter-spacing:0.4px; "
+                          "#confirmTitle { color:%2; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+                          "#confirmSub { color:%3; font-size:" + fincept::ui::fonts::px(-4) + "px; background:transparent; }"
+                          "#confirmKey { color:%3; font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; "
                           "               background:transparent; }"
-                          "#confirmValue { color:%2; font-size:13px; font-weight:700; background:transparent; }"
-                          "#confirmValuePos { color:%4; font-size:13px; font-weight:700; background:transparent; }"
-                          "#confirmValueNeg { color:%5; font-size:13px; font-weight:700; background:transparent; }"
-                          "QPushButton#confirmPlace { background:%4; color:%1; border:none; padding:7px 18px; "
-                          "                          font-size:11px; font-weight:700; letter-spacing:0.4px; }"
+                          "#confirmValue { color:%2; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+                          "#confirmValuePos { color:%4; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+                          "#confirmValueNeg { color:%5; font-size:" + fincept::ui::fonts::px(-1) + "px; font-weight:700; background:transparent; }"
+                          "QPushButton#confirmPlace { background:%4; color:%9; border:none; padding:7px 18px; "
+                          "                          font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; letter-spacing:0.4px; }"
                           "QPushButton#confirmPlace:hover { background:%2; }"
                           "QPushButton#confirmCancel { background:%6; color:%2; border:1px solid %7; "
-                          "                            padding:7px 14px; font-size:11px; font-weight:700; }"
+                          "                            padding:7px 14px; font-size:" + fincept::ui::fonts::px(-3) + "px; font-weight:700; }"
                           "QPushButton#confirmCancel:hover { background:%8; }"
                           "QTableWidget { background:%1; color:%2; border:1px solid %7; gridline-color:%7; }"
                           "QHeaderView::section { background:%6; color:%3; border:none; "
                           "                       border-bottom:1px solid %7; padding:5px 8px; "
-                          "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }")
+                          "                       font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:0.4px; }")
                       .arg(colors::BG_BASE(),        // %1
                            colors::TEXT_PRIMARY(),   // %2
                            colors::TEXT_SECONDARY(), // %3
@@ -92,11 +99,56 @@ OrderConfirmDialog::OrderConfirmDialog(const Strategy& strategy, const OptionCha
                            colors::NEGATIVE(),       // %5
                            colors::BG_RAISED(),      // %6
                            colors::BORDER_DIM(),     // %7
-                           colors::BG_HOVER()));     // %8
+                           colors::BG_HOVER(),       // %8
+                           colors::TEXT_ON_ACCENT())); // %9
 
     setup_ui(premium, max_profit, max_loss);
     populate_legs();
     start_margin_fetch();
+    // The leg cells carry their colours as item brushes and the rows are sized
+    // for the font; rebuild them for a new theme or font size.
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this](const ThemeTokens&) {
+        legs_table_->verticalHeader()->setDefaultSectionSize(qMax(24, QFontMetrics(fonts::font()).height() + 8));
+        populate_legs();
+    });
+    // A currency / number-format change re-formats the figures already held.
+    fmt::on_format_changed(this, [this]() {
+        if (legs_table_)
+            legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"),
+                                                    fmt::header(tr("Entry"), ccy_)});
+        populate_legs();
+        render_summary();
+        render_margin();
+    });
+}
+
+void OrderConfirmDialog::render_summary() {
+    if (sub_label_)
+        sub_label_->setText(tr("%1   ·   Expiry %2   ·   Spot %3")
+                                .arg(strategy_.underlying)
+                                .arg(strategy_.expiry)
+                                .arg(fmt::number(chain_.spot, 2)));
+    if (lbl_premium_) {
+        // Dr / Cr are the debit / credit markers of a net premium (not crores).
+        const QString premium = fno_money(std::abs(premium_), ccy_);
+        lbl_premium_->setText(premium_ > 0   ? tr("%1  Dr", "net debit: premium paid").arg(premium)
+                              : premium_ < 0 ? tr("%1  Cr", "net credit: premium received").arg(premium)
+                                             : premium);
+    }
+    if (lbl_max_pnl_)
+        lbl_max_pnl_->setText(
+            QString("%1  /  %2").arg(ocd_fmt_bound(max_profit_, ccy_), ocd_fmt_bound(max_loss_, ccy_)));
+}
+
+void OrderConfirmDialog::render_margin() {
+    if (!margin_ || !lbl_margin_)
+        return;
+    const BasketMargin& margin = *margin_;
+    const double m = margin.final_margin > 0 ? margin.final_margin : margin.initial_margin;
+    // The basket margin the chain's broker quotes, in that broker's (the chain's) currency.
+    lbl_margin_->setText(fno_money(m, ccy_));
+    lbl_margin_->setToolTip(tr("Initial: %1   ·   Final (after netting): %2")
+                                .arg(fno_money(margin.initial_margin, ccy_), fno_money(margin.final_margin, ccy_)));
 }
 
 void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_loss) {
@@ -107,11 +159,7 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     // ── Title ─────────────────────────────────────────────────────────────
     title_label_ = new QLabel(tr("%1  —  paper trade preview").arg(strategy_.name), this);
     title_label_->setObjectName("confirmTitle");
-    sub_label_ = new QLabel(tr("%1   ·   Expiry %2   ·   Spot %3")
-                                .arg(strategy_.underlying)
-                                .arg(strategy_.expiry)
-                                .arg(chain_.spot, 0, 'f', 2),
-                            this);
+    sub_label_ = new QLabel(this); // text: render_summary()
     sub_label_->setObjectName("confirmSub");
     root->addWidget(title_label_);
     root->addWidget(sub_label_);
@@ -120,7 +168,7 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     legs_table_ = new QTableWidget(this);
     legs_table_->setColumnCount(6);
     legs_table_->setHorizontalHeaderLabels(
-        {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), tr("Entry")});
+        {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), fmt::header(tr("Entry"), ccy_)});
     legs_table_->verticalHeader()->setVisible(false);
     legs_table_->setSelectionMode(QAbstractItemView::NoSelection);
     legs_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -128,8 +176,9 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     legs_table_->setFocusPolicy(Qt::NoFocus);
     legs_table_->setAccessibleName(tr("Order legs"));
     legs_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    legs_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    legs_table_->verticalHeader()->setDefaultSectionSize(24);
+    // Symbol column: sized once after the legs are filled (populate_legs), not per row.
+    legs_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
+    legs_table_->verticalHeader()->setDefaultSectionSize(qMax(24, QFontMetrics(fonts::font()).height() + 8));
     root->addWidget(legs_table_, 1);
 
     legs_note_ = new QLabel(this);
@@ -161,11 +210,10 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     summary->addStretch(1);
     root->addLayout(summary);
 
-    lbl_premium_->setText(QString("%1  %2").arg(fmt_currency(std::abs(premium)), premium > 0   ? "Dr"
-                                                                                 : premium < 0 ? "Cr"
-                                                                                               : ""));
     lbl_premium_->setObjectName(premium > 0 ? "confirmValueNeg" : premium < 0 ? "confirmValuePos" : "confirmValue");
-    lbl_max_pnl_->setText(QString("%1  /  %2").arg(fmt_currency(max_profit), fmt_currency(max_loss)));
+    Q_UNUSED(max_profit);
+    Q_UNUSED(max_loss);
+    render_summary(); // premium_ / max_profit_ / max_loss_ hold the figures passed in
     lbl_margin_->setText(tr("Loading…"));
 
     // ── Buttons ───────────────────────────────────────────────────────────
@@ -178,6 +226,7 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     cancel_btn_->setAccessibleName(tr("Cancel without placing orders"));
     place_btn_ = new QPushButton(tr("PLACE PAPER ORDERS"), this);
     place_btn_->setObjectName("confirmPlace");
+    place_btn_->setProperty("fincept_agent_risk", "order");
     place_btn_->setCursor(Qt::PointingHandCursor);
     place_btn_->setAccessibleName(tr("Place the listed legs as paper orders"));
     btn_row->addWidget(cancel_btn_);
@@ -225,16 +274,18 @@ void OrderConfirmDialog::populate_legs() {
         const bool buy = leg.lots >= 0;
         set_cell(0, will_place ? leg.symbol : tr("%1  (skipped)").arg(leg.symbol));
         set_cell(1, buy ? tr("BUY") : tr("SELL"), buy ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE()));
-        set_cell(2, QString::number(std::abs(leg.lots)));
+        set_cell(2, fmt::quantity(std::abs(leg.lots)));
         // Lot size is spelled out: an F&O quantity is meaningless without it,
         // and a leg whose lot size never resolved (0) must be visibly broken
         // rather than quietly submitted as a 1-unit order.
-        set_cell(3, lot_size > 0 ? tr("%1  (×%2)").arg(QString::number(qty), QString::number(lot_size))
+        set_cell(3, lot_size > 0 ? tr("%1  (×%2)").arg(fmt::quantity(double(qty)), fmt::quantity(lot_size))
                                  : tr("— lot size unknown"),
                  lot_size > 0 ? QColor() : QColor(colors::NEGATIVE()));
         set_cell(4, leg.type == InstrumentType::CE ? "CE" : leg.type == InstrumentType::PE ? "PE" : "FUT");
-        set_cell(5, QString::number(leg.entry_price, 'f', 2));
+        // Premium per unit in rupees; the column header names the unit.
+        set_cell(5, fno_price(leg.entry_price, ccy_));
     }
+    legs_table_->resizeColumnToContents(0);
     if (legs_note_) {
         legs_note_->setText(tr("%1 of %2 legs will be placed as market orders at the shown entry premium.")
                                 .arg(placeable)
@@ -317,10 +368,7 @@ void OrderConfirmDialog::start_margin_fetch() {
 void OrderConfirmDialog::on_margin_loaded(bool ok, BasketMargin margin, QString error) {
     if (ok) {
         margin_ = margin;
-        const double m = margin.final_margin > 0 ? margin.final_margin : margin.initial_margin;
-        lbl_margin_->setText(QStringLiteral("₹ ") + fmt_currency(m));
-        lbl_margin_->setToolTip(tr("Initial: ₹ %1   ·   Final (after netting): ₹ %2")
-                                    .arg(fmt_currency(margin.initial_margin), fmt_currency(margin.final_margin)));
+        render_margin();
     } else {
         lbl_margin_->setText("—");
         lbl_margin_->setToolTip(error.isEmpty() ? tr("Margin unavailable") : error);
@@ -338,14 +386,10 @@ void OrderConfirmDialog::retranslateUi() {
     setWindowTitle(tr("Confirm Paper Orders"));
     if (title_label_)
         title_label_->setText(tr("%1  —  paper trade preview").arg(strategy_.name));
-    if (sub_label_)
-        sub_label_->setText(tr("%1   ·   Expiry %2   ·   Spot %3")
-                                .arg(strategy_.underlying)
-                                .arg(strategy_.expiry)
-                                .arg(chain_.spot, 0, 'f', 2));
+    render_summary(); // spot line and the Dr / Cr markers are translated
     if (legs_table_) {
         legs_table_->setHorizontalHeaderLabels(
-            {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), tr("Entry")});
+            {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), fmt::header(tr("Entry"), ccy_)});
         populate_legs(); // re-renders the per-row "(skipped)" / lot-size strings
     }
     if (key_premium_)

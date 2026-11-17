@@ -1,4 +1,5 @@
 #include "screens/crypto_center/panels/HoldingsTable.h"
+#include "screens/crypto_center/CryptoCenterText.h"
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -6,13 +7,15 @@
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
 #include "storage/secure/SecureStorage.h"
+#include "ui/formatting/FormatWidgets.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/tables/BarCellDelegate.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QPushButton>
 #include <QSet>
 #include <QShowEvent>
@@ -21,54 +24,57 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
+
+namespace cc_fmt = fincept::ui::formatting;
 
 namespace fincept::screens::panels {
 
 namespace {
 
-QString font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
+using fincept::screens::crypto_center_text::font_stack; // CryptoCenterText.h (one definition)
 
+/// A token balance: a quantity of that token, never money. Dust below 0.0001
+/// keeps four significant digits instead of reading "0".
 QString format_amount(double v, int max_dp = 4) {
     if (v == 0.0)
         return QStringLiteral("0");
-    if (v < 0.0001)
-        return QLocale::system().toString(v, 'g', 4);
-    return QLocale::system().toString(v, 'f', max_dp);
+    if (v > 0.0 && v < 0.0001)
+        return cc_fmt::quantity(v, std::min(10, int(std::floor(-std::log10(v))) + 4));
+    return cc_fmt::quantity(v, max_dp);
 }
 
-QString format_usd(double v) {
+/// A holding's value in USD — the token price feed is USD, and the column says so.
+QString hlt_format_usd(double v) {
     if (v < 0.0)
         return QStringLiteral("—");
-    if (v >= 1.0 || v == 0.0) {
-        return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 2));
-    }
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 6));
+    return cc_fmt::money_precise(v, QStringLiteral("USD"));
 }
 
-QString format_price(double v) {
+/// A token's spot price: the price feed quotes USD — a price, never converted.
+QString hlt_format_price(double v) {
     if (v <= 0.0)
         return QStringLiteral("—");
-    if (v >= 1.0) {
-        return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 4));
-    }
-    return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 8));
+    return cc_fmt::price_with_symbol(v, cc_fmt::InstrumentFmt{QStringLiteral("USD")});
 }
 
 QString format_pct(double v) {
-    return QStringLiteral("%1%").arg(QLocale::system().toString(v, 'f', 1));
+    return cc_fmt::pct(v, 1, /*signed_=*/false);
 }
+
+/// Role carrying a holding's share of the wallet (0..100) for the % OF PORT bar.
+constexpr int kSharePctRole = Qt::UserRole + 7;
 
 } // namespace
 
 HoldingsTable::HoldingsTable(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("holdingsTable"));
 
-    // Read persisted "show unverified" flag.
-    auto r = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
-    if (r.is_ok()) {
-        show_unverified_ = r.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+    // Read persisted "show unverified" flag. Unreadable → the safe default (hidden)
+    // stays, nothing is written; showEvent() reads it again.
+    const SecretRead r = SecureStorage::instance().read(QStringLiteral("wallet.show_unverified_tokens"));
+    if (r.found()) {
+        show_unverified_ = r.value.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
     }
 
     build_ui();
@@ -80,6 +86,9 @@ HoldingsTable::HoldingsTable(QWidget* parent) : QWidget(parent) {
 
     connect(&fincept::wallet::TokenMetadataService::instance(),
             &fincept::wallet::TokenMetadataService::metadata_changed, this, &HoldingsTable::on_metadata_changed);
+    // A number / currency format change re-renders the rows from the balance and
+    // prices already held (no re-fetch).
+    cc_fmt::on_format_changed(this, [this]() { rebuild_table(); });
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -106,11 +115,17 @@ void HoldingsTable::build_ui() {
     table_->setShowGrid(false);
     table_->setAlternatingRowColors(false);
     table_->setSortingEnabled(false); // we sort manually at refresh
+    // % OF PORT carries a bar under its number, so a wallet that is 96 % one
+    // token reads differently from a balanced one at a glance.
+    auto* share_bar = new ui::BarCellDelegate(ui::BarCellDelegate::Mode::Bar, table_);
+    share_bar->set_range(0.0, 100.0);
+    share_bar->set_value_role(kSharePctRole);
+    table_->setItemDelegateForColumn(4, share_bar);
     root->addWidget(table_, 1);
 
     auto* footer_row = new QWidget(this);
     footer_row->setObjectName(QStringLiteral("holdingsTableFooter"));
-    footer_row->setFixedHeight(30);
+    footer_row->setMinimumHeight(30);
     auto* fl = new QHBoxLayout(footer_row);
     fl->setContentsMargins(12, 0, 12, 0);
     fl->setSpacing(8);
@@ -118,7 +133,7 @@ void HoldingsTable::build_ui() {
     footer_->setObjectName(QStringLiteral("holdingsTableFooterText"));
     show_all_button_ = new QPushButton(show_unverified_ ? tr("Hide unverified") : tr("Show all"), footer_row);
     show_all_button_->setObjectName(QStringLiteral("holdingsTableShowAll"));
-    show_all_button_->setFixedHeight(22);
+    show_all_button_->setMinimumHeight(22);
     show_all_button_->setCursor(Qt::PointingHandCursor);
     fl->addWidget(footer_);
     fl->addStretch(1);
@@ -140,19 +155,19 @@ void HoldingsTable::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
     const QString ss =
-        QStringLiteral("QWidget#holdingsTable { background:%1; }"
+        QString("QWidget#holdingsTable { background:%1; }"
                        "QTableWidget#holdingsTableView { background:%1; color:%2; gridline-color:%3;"
                        "  border:none; selection-background-color:%4; selection-color:%2;"
-                       "  font-family:%5; font-size:11px; }"
+                       "  font-family:%5; font-size:" + fincept::ui::fonts::px(-3) + "px; }"
                        "QTableWidget#holdingsTableView::item { padding:6px 10px; border-bottom:1px solid %3; }"
                        "QHeaderView::section { background:%6; color:%7; padding:6px 10px;"
                        "  border:none; border-bottom:1px solid %3; font-family:%5;"
-                       "  font-size:9px; font-weight:700; letter-spacing:1.4px; }"
+                       "  font-size:" + fincept::ui::fonts::px(-5) + "px; font-weight:700; letter-spacing:1.4px; }"
                        "QWidget#holdingsTableFooter { background:%6; border-top:1px solid %3; }"
-                       "QLabel#holdingsTableFooterText { color:%7; font-family:%5; font-size:10px;"
+                       "QLabel#holdingsTableFooterText { color:%7; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px;"
                        "  background:transparent; }"
                        "QPushButton#holdingsTableShowAll { background:transparent; color:%8;"
-                       "  border:1px solid %3; font-family:%5; font-size:10px; font-weight:700;"
+                       "  border:1px solid %3; font-family:%5; font-size:" + fincept::ui::fonts::px(-4) + "px; font-weight:700;"
                        "  letter-spacing:1.2px; padding:0 10px; }"
                        "QPushButton#holdingsTableShowAll:hover { color:%2; border-color:%9; }")
             .arg(BG_BASE(),        // %1
@@ -335,17 +350,19 @@ void HoldingsTable::rebuild_table() {
         bal->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 1, bal);
         // Column 2: PRICE
-        auto* prc = new QTableWidgetItem(r.usd_price >= 0.0 ? format_price(r.usd_price) : QStringLiteral("—"));
+        auto* prc = new QTableWidgetItem(r.usd_price >= 0.0 ? hlt_format_price(r.usd_price) : QStringLiteral("—"));
         prc->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 2, prc);
         // Column 3: USD VALUE
-        auto* val = new QTableWidgetItem(r.usd_value >= 0.0 ? format_usd(r.usd_value) : QStringLiteral("—"));
+        auto* val = new QTableWidgetItem(r.usd_value >= 0.0 ? hlt_format_usd(r.usd_value) : QStringLiteral("—"));
         val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 3, val);
         // Column 4: % OF PORT
         const double pct = (total > 0.0 && r.usd_value >= 0.0) ? (100.0 * r.usd_value / total) : 0.0;
         auto* pctc = new QTableWidgetItem(r.usd_value >= 0.0 ? format_pct(pct) : QStringLiteral("—"));
         pctc->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        if (r.usd_value >= 0.0)
+            pctc->setData(kSharePctRole, pct); // unpriced rows draw no bar
         table_->setItem(i, 4, pctc);
     }
 
@@ -359,7 +376,7 @@ void HoldingsTable::rebuild_table() {
     }
     if (latest_balance_.sol_lamports > 0)
         ++verified; // SOL is always verified
-    QString footer_text = tr("TOTAL %1  ·  %2 verified").arg(format_usd(total)).arg(verified);
+    QString footer_text = tr("TOTAL %1  ·  %2 verified").arg(hlt_format_usd(total)).arg(verified);
     if (unverified_total > 0) {
         footer_text +=
             tr("  ·  %1 unverified%2").arg(unverified_total).arg(show_unverified_ ? QString() : tr(" hidden"));
@@ -376,8 +393,11 @@ void HoldingsTable::showEvent(QShowEvent* e) {
     // same persisted flag, but this table only read it once in the constructor
     // — toggling it on SETTINGS did nothing until the next app start. Re-sync
     // whenever the table becomes visible (it is hidden while SETTINGS is open).
-    auto flag = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
-    const bool persisted = flag.is_ok() && flag.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+    // A flag that cannot be read keeps the current view (it is not "false").
+    const SecretRead flag = SecureStorage::instance().read(QStringLiteral("wallet.show_unverified_tokens"));
+    const bool persisted = flag.failed() ? show_unverified_
+                                         : flag.found() && flag.value.compare(QStringLiteral("true"),
+                                                                              Qt::CaseInsensitive) == 0;
     if (persisted != show_unverified_) {
         show_unverified_ = persisted;
         show_all_button_->setText(show_unverified_ ? tr("Hide unverified") : tr("Show all"));

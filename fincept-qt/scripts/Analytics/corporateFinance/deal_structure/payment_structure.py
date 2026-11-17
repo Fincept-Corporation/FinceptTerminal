@@ -1,8 +1,9 @@
 """Payment Structure Analysis - Cash vs Stock
 
 CLI: python payment_structure.py analyze <json>  keys purchase_price, cash_pct (0.6 or 60 = 60 % cash),
-     cash_on_hand, new_debt; optional acquirer_shares_outstanding, acquirer_share_price,
-     target_shares_outstanding, target_share_price (defaults 100M @ $50 / 20M @ $30).
+     cash_on_hand, new_debt; optional acquirer_share_price + acquirer_shares_outstanding (new shares issued,
+     dilution, ownership split) and target_shares_outstanding (exchange ratio). Share-based figures are only
+     returned when those inputs are given - there are no default share counts or prices.
      Native form: payment <json> | payment <price> <cash_pct> <acquirer_cash> <debt_capacity>.
 """
 from typing import Dict, Any, Optional, List
@@ -260,6 +261,83 @@ class PaymentStructureAnalyzer:
             'effective_tax_rate': (current_tax / total_consideration * 100) if total_consideration > 0 else 0
         }
 
+def _positive(v) -> Optional[float]:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
+def analyze_payment(purchase_price: float, cash_pct: float, acquirer_cash: float, debt_capacity: float,
+                    acquirer_shares_outstanding: Optional[float] = None,
+                    acquirer_share_price: Optional[float] = None,
+                    target_shares_outstanding: Optional[float] = None) -> Dict[str, Any]:
+    """Cash / stock split of a purchase price. The cash side needs only the price, mix, cash and debt capacity;
+    the stock side (new shares, dilution, ownership, exchange ratio) is computed only from share counts and
+    prices the caller supplies, and listed under `missing_inputs` otherwise."""
+    if purchase_price is None or purchase_price <= 0:
+        raise ValueError("Enter the purchase price (a positive amount).")
+    if not 0 <= cash_pct <= 1:
+        raise ValueError("Cash % must be between 0 and 100.")
+    cash_portion = purchase_price * cash_pct
+    stock_portion = purchase_price - cash_portion
+    use_debt = max(0.0, cash_portion - acquirer_cash)
+    out: Dict[str, Any] = {
+        'payment_type': (PaymentType.ALL_CASH if cash_pct >= 1 else
+                         PaymentType.ALL_STOCK if cash_pct <= 0 else PaymentType.MIXED).value,
+        'purchase_price': purchase_price,
+        'cash_portion': cash_portion,
+        'stock_portion': stock_portion,
+        'cash_percentage': cash_pct * 100.0,
+        'stock_percentage': 100.0 - cash_pct * 100.0,
+        'cash_required': cash_portion,
+        'acquirer_cash_used': min(acquirer_cash, cash_portion),
+        'debt_required': use_debt,
+        'debt_capacity_available': debt_capacity,
+        'debt_feasible': use_debt <= debt_capacity,
+    }
+    acq_shares = _positive(acquirer_shares_outstanding)
+    acq_price = _positive(acquirer_share_price)
+    tgt_shares = _positive(target_shares_outstanding)
+    missing = []
+    if stock_portion > 0:
+        if acq_price is None:
+            missing.append('acquirer_share_price')
+        if acq_shares is None:
+            missing.append('acquirer_shares_outstanding')
+    if stock_portion > 0 and acq_price is not None:
+        new_shares = stock_portion / acq_price
+        out['new_shares_issued'] = new_shares
+        if tgt_shares is not None:
+            out['exchange_ratio'] = new_shares / tgt_shares
+        else:
+            missing.append('target_shares_outstanding')
+        if acq_shares is not None:
+            post = acq_shares + new_shares
+            out['post_deal_shares_outstanding'] = post
+            out['shareholder_dilution'] = new_shares / acq_shares * 100.0
+            out['ownership_split'] = {'acquirer_shareholders': acq_shares / post * 100.0,
+                                      'target_shareholders': new_shares / post * 100.0}
+    elif stock_portion <= 0 and acq_shares is not None:
+        out['post_deal_shares_outstanding'] = acq_shares
+        out['shareholder_dilution'] = 0.0
+    receive = {'cash': cash_portion}
+    if 'new_shares_issued' in out:
+        receive['shares'] = out['new_shares_issued']
+    if 'ownership_split' in out:
+        receive['ownership_pct'] = out['ownership_split']['target_shareholders']
+    out['target_shareholders_receive'] = receive
+    if missing:
+        labels = {'acquirer_share_price': "the acquirer's share price",
+                  'acquirer_shares_outstanding': "the acquirer's shares outstanding",
+                  'target_shares_outstanding': "the target's shares outstanding"}
+        out['missing_inputs'] = missing
+        out['notes'] = ["Share issuance, exchange ratio and dilution need " +
+                        ", ".join(labels[m] for m in missing) + " - enter them to see those figures."]
+    return out
+
+
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----
 # The Qt MAAnalyticsService calls `payment_structure.py analyze <flat-params-json>` (argv length 3). The native form
 # is `payment <json>` with different key names, so a service-style call is translated here and then falls through to
@@ -326,16 +404,18 @@ def main():
                 return value / 100.0 if value > 1 else value
 
             # Accept either JSON dict or positional args
+            share_inputs = {}
             try:
                 params = json.loads(sys.argv[2])
+                if not isinstance(params, dict):
+                    raise TypeError("not a JSON object")
                 total = float(params.get('total_consideration', params.get('purchase_price', 0)))
                 cash_pct = cash_fraction(params.get('cash_pct', params.get('cash_percentage', 0.5)))
                 acquirer_cash = float(params.get('acquirer_cash', total * cash_pct))
                 debt_capacity = float(params.get('debt_capacity', total * 0.5))
-                acq_shares = float(params.get('acquirer_shares_outstanding', 100_000_000))
-                acq_price = float(params.get('acquirer_share_price', 50.0))
-                tgt_shares = float(params.get('target_shares_outstanding', 20_000_000))
-                tgt_price = float(params.get('target_share_price', 30.0))
+                for k in ('acquirer_shares_outstanding', 'acquirer_share_price', 'target_shares_outstanding'):
+                    if params.get(k) is not None:
+                        share_inputs[k] = params.get(k)
             except (json.JSONDecodeError, TypeError, AttributeError):
                 if len(sys.argv) < 6:
                     raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
@@ -343,24 +423,8 @@ def main():
                 cash_pct = cash_fraction(sys.argv[3])
                 acquirer_cash = float(sys.argv[4])
                 debt_capacity = float(sys.argv[5])
-                acq_shares = 100_000_000
-                acq_price = 50.0
-                tgt_shares = 20_000_000
-                tgt_price = 30.0
 
-            analyzer = PaymentStructureAnalyzer(
-                acquirer_shares_outstanding=acq_shares,
-                acquirer_share_price=acq_price,
-                target_shares_outstanding=tgt_shares,
-                target_share_price=tgt_price
-            )
-
-            analysis = analyzer.analyze_mixed_payment(
-                purchase_price=total,
-                cash_percentage=cash_pct * 100.0,  # analyze_mixed_payment takes a percent (0-100)
-                acquirer_cash=acquirer_cash,
-                debt_capacity=debt_capacity
-            )
+            analysis = analyze_payment(total, cash_pct, acquirer_cash, debt_capacity, **share_inputs)
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

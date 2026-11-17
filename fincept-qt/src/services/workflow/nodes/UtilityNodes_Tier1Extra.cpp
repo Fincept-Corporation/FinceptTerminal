@@ -1,7 +1,7 @@
 // src/services/workflow/nodes/UtilityNodes_Tier1Extra.cpp
 //
 // Tier-1 utility nodes: Item Lists, RSS Read, Crypto/Hash, Database,
-// Execute Workflow, Market Event Trigger, Reshape.
+// Execute Workflow, Reshape.
 //
 // Part of the topic-based split of UtilityNodes.cpp.
 
@@ -18,6 +18,8 @@
 
 namespace fincept::workflow {
 
+// accent_color: node-category identity colours, written for the dark theme;
+// the node editor draws them through ui::colors::legible().
 void register_utility_tier1_extra(NodeRegistry& registry) {
     // ── Item Lists ────────────────────────────────────────────────
     registry.register_type({
@@ -218,6 +220,9 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
                 {"operation", "Operation", "select", "select", {"select", "insert", "update", "delete", "raw"}, ""},
                 {"query", "Query", "code", "", {}, "SQL query"},
                 {"database", "Database", "select", "local", {"local", "custom"}, ""},
+                // "custom" had no field for its file — the path was taken from an upstream
+                // {"database_path"} or, failing that, from the SQL text itself.
+                {"database_path", "Database File (custom)", "file_managed", "", {}, "db,sqlite,sqlite3"},
             },
         .execute = nullptr,
     });
@@ -235,41 +240,13 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"workflow_id", "Workflow ID", "string", "", {}, "ID of workflow to execute", true},
+                {"workflow_id", "Workflow", "workflow_select", "", {}, "Saved workflow to run", true},
             },
         .execute = nullptr,
     });
 
-    // ── Market Event Trigger ─────────────────────────────────────
-    registry.register_type({
-        .type_id = "trigger.market_event",
-        .display_name = "Market Event",
-        .category = "Triggers",
-        .description = "Trigger on market events (high volatility, circuit breaker, etc.)",
-        .icon_text = ">>",
-        .accent_color = "#d97706",
-        .version = 1,
-        .inputs = {},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"event_type",
-                 "Event",
-                 "select",
-                 "volatility_spike",
-                 {"volatility_spike", "circuit_breaker", "market_open", "market_close", "earnings_release"},
-                 ""},
-                {"threshold", "Threshold", "number", 2.0, {}, "Event threshold"},
-            },
-        .execute =
-            [](const QJsonObject& params, const QVector<QJsonValue>&,
-               std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["event_type"] = params.value("event_type").toString();
-                out["triggered"] = true;
-                cb(true, out, {});
-            },
-    });
+    // (Market Event Trigger — trigger.market_event — is registered in TriggerNodes.cpp, next to
+    // the session / cron helpers it uses. It used to live here and fired on every run.)
 
     // ── Reshape ────────────────────────────────────────────────────
     registry.register_type({

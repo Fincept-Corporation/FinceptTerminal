@@ -1,9 +1,12 @@
 // src/ui/widgets/LoadingOverlay.cpp
 #include "ui/widgets/LoadingOverlay.h"
 
-#include "ui/theme/ThemeManager.h"
+#include "ui/widgets/LoadingSkeleton.h"
+
+#include "ui/theme/Theme.h"
 
 #include <QEvent>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
@@ -68,7 +71,9 @@ void LoadingOverlay::show_loading(const QString& message) {
     raise();
     show();
     tick_ = 0;
-    anim_timer_->start();
+    // "Enable Animations" off (Settings > Appearance): the bars stay still.
+    if (motion_enabled())
+        anim_timer_->start();
 }
 
 void LoadingOverlay::hide_loading() {
@@ -115,18 +120,12 @@ void LoadingOverlay::paintEvent(QPaintEvent*) {
         QColor text_color = accent_color;
         text_color.setAlpha(200);
         p.setPen(text_color);
-        // Use the app's resolved font (ThemeManager owns the proper
-        // cross-platform fallback chain). QFont(const QString&, …) takes
-        // a single family and fails silently for the CSS-style list
-        // stored in tokens_.font_family — on macOS that fell back to a
-        // proportional system font, which is the "fragmented" look the
-        // user reported. current_font() returns a QFont built via
-        // setFamilies() so Qt resolves the first available monospace.
-        QFont f = ThemeManager::instance().current_font();
-        f.setPixelSize(10);
-        f.setBold(true);
+        // The user's font (ThemeManager owns the cross-platform fallback
+        // chain; a QFont built from the CSS-style family list would fail
+        // silently), 4 px below their base size.
+        const QFont f = fonts::font(-4, QFont::Bold);
         p.setFont(f);
-        QRect text_rect(0, base_y + 14, width(), 24);
+        QRect text_rect(0, base_y + 14, width(), QFontMetrics(f).height() + 4);
         p.drawText(text_rect, Qt::AlignHCenter | Qt::AlignTop, message_);
     }
 

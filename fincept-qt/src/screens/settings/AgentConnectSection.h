@@ -1,25 +1,36 @@
 #pragma once
-// AgentConnectSection.h — Settings › AI Agents (MCP): everything about letting
-// external AI agents (Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code,
-// Claude Desktop …) operate this terminal through its MCP server.
+// AgentConnectSection.h — Settings › AI Agents: the agent harnesses this
+// terminal can drive, and the terminal's MCP server that external agents use.
 //
-//   Server       status, URL, start / stop, start-with-terminal, port, counters
-//   Access token show / copy / regenerate
-//   Permissions  look (always) · operate the UI · run Python scripts · result size
-//   Connect      per-client setup snippet (+ one-click add for Claude Code / Codex)
-//   Tools        the ten core tools agents get
-//   Activity     live log of external tool calls, and the clients seen
+//   AGENT HARNESSES       the shared HarnessListWidget (Claude Code, Codex,
+//                         Grok, …): detected install, version, sign-in, default
+//                         model / effort, API-key policy, path — the SAME widget
+//                         as the Agent Workbench's HARNESSES tab, reading and
+//                         writing harness::HarnessRegistry only
+//   TERMINAL MCP SERVER
+//     Server              status, URL, start / stop, start-with-terminal, port, counters
+//     Access token        show / copy / regenerate
+//     Permissions         look (always) · operate the UI · run Python scripts · result size
+//     Connect             per-client setup: every registered harness that documents
+//                         a way to add an MCP server (one-click ADD where the
+//                         harness can read the token from an environment variable
+//                         — the token never goes on a command line), plus VS Code,
+//                         stdio clients and other HTTP clients
+//     Tools               the ten core tools agents get
+//     Activity            live log of external tool calls, and the clients seen
 //
-// The same widget is the Agent Workbench's CONNECT tab. It styles itself (one
-// object-name stylesheet on its root, re-applied on theme change), so it looks
-// right in either host. Live updates follow visibility (P3): subscriptions and
-// the uptime timer run only while it is shown.
+// The Agent Workbench's CONNECT tab is this widget with Sections::McpServerOnly
+// (its HARNESSES tab shows the harness list). It styles itself with one
+// object-name stylesheet on its root, set once before any child exists — the
+// theme system rewrites it on an appearance change. Live updates follow
+// visibility (P3): subscriptions and the uptime timer run only while shown.
 
 #include "mcp/server/McpHttpServer.h"
 
 #include <QAbstractTableModel>
 #include <QList>
 #include <QMetaObject>
+#include <QStringList>
 #include <QWidget>
 
 class QCheckBox;
@@ -29,10 +40,13 @@ class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
+class QStandardItemModel;
 class QTableView;
 class QTimer;
 
 namespace fincept::screens {
+
+class HarnessListWidget;
 
 /// External tool calls, newest first.
 class McpActivityModel : public QAbstractTableModel {
@@ -58,7 +72,8 @@ class McpActivityModel : public QAbstractTableModel {
 class AgentConnectSection : public QWidget {
     Q_OBJECT
   public:
-    explicit AgentConnectSection(QWidget* parent = nullptr);
+    enum class Sections { All, McpServerOnly };
+    explicit AgentConnectSection(QWidget* parent = nullptr, Sections sections = Sections::All);
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -66,16 +81,22 @@ class AgentConnectSection : public QWidget {
     void changeEvent(QEvent* event) override;
 
   private:
-    enum Client { ClaudeCode = 0, Codex, GeminiCli, Cursor, VsCode, ClaudeDesktop, ClientCount };
-
     void build_ui();
     QWidget* build_server_card(QWidget* parent);
     QWidget* build_token_card(QWidget* parent);
     QWidget* build_permissions_card(QWidget* parent);
     QWidget* build_connect_card(QWidget* parent);
+    /// CHECK CONNECTIONS: mcp::run_mcp_self_check_async — one row per harness
+    /// profile, pass / fail and the plain reason. Talks to the server over
+    /// loopback like each client would; calls no model.
+    QWidget* build_check_card(QWidget* parent);
+    void on_check_connections();
+    void show_check_report(const QStringList& clients, const QStringList& results, const QStringList& details);
+    void retranslate_check_headers();
     QWidget* build_tools_card(QWidget* parent);
     QWidget* build_activity_card(QWidget* parent);
-    void apply_theme();
+    QString style_sheet() const;
+    void fit_rows();
     void retranslate();
 
     void subscribe();
@@ -83,9 +104,16 @@ class AgentConnectSection : public QWidget {
     void refresh_status();
     void refresh_snippet();
     void refresh_clients();
+    void rebuild_client_list();
     void flush_activity();
     QString masked(const QString& text) const;
     static void copy_text(const QString& text);
+    /// "harness:<id>" | "vscode" | "stdio" | "http"
+    QString current_client() const;
+    QString current_harness() const; // empty for the non-harness clients
+    /// The text of the selected client's snippet / config entry; `reveal` = the real token.
+    QString client_command(bool reveal) const;
+    QString client_config(bool reveal) const;
 
     void on_start();
     void on_stop();
@@ -97,10 +125,15 @@ class AgentConnectSection : public QWidget {
     /// The note under the permissions: what still asks first, or the auto-mode warning.
     void update_auto_note();
     void on_register();
-    void on_registration_finished(const QString& agent, bool ok, bool already_exists, const QString& message);
+    void on_registration_finished(const QString& harness_id, bool ok, bool already_exists, const QString& message);
+
+    Sections sections_ = Sections::All;
 
     // Header
     QLabel* title_ = nullptr;
+    QLabel* harness_title_ = nullptr;
+    HarnessListWidget* harness_list_ = nullptr;
+    QLabel* mcp_title_ = nullptr;
     QLabel* intro_ = nullptr;
 
     // Server
@@ -139,6 +172,7 @@ class AgentConnectSection : public QWidget {
     QLabel* connect_title_ = nullptr;
     QLabel* client_lbl_ = nullptr;
     QComboBox* client_combo_ = nullptr;
+    QStringList client_keys_; // combo index -> current_client() key
     QLabel* client_desc_ = nullptr;
     QPlainTextEdit* snippet_ = nullptr;
     QPushButton* copy_snippet_btn_ = nullptr;
@@ -147,6 +181,15 @@ class AgentConnectSection : public QWidget {
     QLabel* second_lbl_ = nullptr;
     QPlainTextEdit* second_snippet_ = nullptr;
     QPushButton* copy_second_btn_ = nullptr;
+
+    // Connection check
+    QLabel* check_title_ = nullptr;
+    QPushButton* check_btn_ = nullptr;
+    QLabel* check_hint_ = nullptr;
+    QTableView* check_table_ = nullptr;
+    QStandardItemModel* check_model_ = nullptr;
+    bool check_running_ = false;
+    bool check_done_ = false; // a report is on screen (the hint then says so)
 
     // Tools
     QLabel* tools_title_ = nullptr;
@@ -165,7 +208,7 @@ class AgentConnectSection : public QWidget {
     QList<mcp::ExternalCallRecord> pending_activity_;
     QList<QMetaObject::Connection> conns_;
     bool show_token_ = false;
-    bool awaiting_registration_ = false;
+    QString awaiting_harness_; // a one-click ADD in flight (empty = none)
 };
 
 } // namespace fincept::screens

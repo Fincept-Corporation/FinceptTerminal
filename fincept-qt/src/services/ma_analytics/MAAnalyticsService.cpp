@@ -7,9 +7,13 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#include <QFutureWatcher>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <algorithm>
 
 namespace fincept::services::ma {
 
@@ -18,6 +22,32 @@ inline void publish_ma_result(bool hub_registered, const QString& context, const
     if (!hub_registered)
         return;
     fincept::datahub::DataHub::instance().publish(QStringLiteral("ma:") + context, QVariant(obj));
+}
+
+const QString kMaDealTracker = QStringLiteral("Analytics/corporateFinance/deal_database/deal_tracker.py");
+const QString kMaDealParser = QStringLiteral("Analytics/corporateFinance/deal_database/deal_parser.py");
+
+/// The `missing_inputs` keys a failed script named in its reply (empty when it named none).
+QStringList ma_missing_inputs(const QString& output) {
+    const QJsonDocument doc = QJsonDocument::fromJson(output.toUtf8());
+    QStringList keys;
+    for (const QJsonValue& v : doc.object().value(QStringLiteral("missing_inputs")).toArray())
+        if (v.isString())
+            keys << v.toString();
+    return keys;
+}
+
+/// Parse a reply off the GUI thread (the deal list and a scan's filing list grow with the database), then
+/// call `done` on `owner`'s thread. Nothing is called if `owner` is gone.
+void ma_parse_reply_async(QObject* owner, QString text, std::function<void(QJsonObject, bool)> done) {
+    auto* watcher = new QFutureWatcher<QJsonDocument>(owner);
+    QObject::connect(watcher, &QFutureWatcher<QJsonDocument>::finished, owner,
+                     [watcher, done = std::move(done)]() {
+                         const QJsonDocument doc = watcher->result();
+                         watcher->deleteLater();
+                         done(doc.object(), doc.isObject());
+                     });
+    watcher->setFuture(QtConcurrent::run([text = std::move(text)]() { return QJsonDocument::fromJson(text.toUtf8()); }));
 }
 } // namespace
 
@@ -30,36 +60,20 @@ MAAnalyticsService& MAAnalyticsService::instance() {
 MAAnalyticsService::MAAnalyticsService(QObject* parent) : QObject(parent) {}
 
 // ── Python helpers ───────────────────────────────────────────────────────────
-void MAAnalyticsService::run_python(const QString& script, const QStringList& args, const QString& context) {
-    QPointer<MAAnalyticsService> self = this;
-    python::PythonRunner::instance().run(script, args, [self, context](python::PythonResult result) {
-        if (!self)
-            return;
-        if (!result.success) {
-            LOG_ERROR("MAAnalytics", QString("Python call failed [%1]: %2").arg(context, result.error));
-            emit self->error_occurred(context, result.error);
-            return;
-        }
-        auto json_str = python::extract_json(result.output);
-        auto doc = QJsonDocument::fromJson(json_str.toUtf8());
-        if (doc.isNull()) {
-            LOG_ERROR("MAAnalytics", QString("Invalid JSON from [%1]").arg(context));
-            emit self->error_occurred(context, "Invalid JSON response from Python");
-            return;
-        }
-        auto obj = doc.object();
-        LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
-        emit self->result_ready(context, obj);
-        publish_ma_result(self->hub_registered_, context, obj);
-    });
-}
-
 void MAAnalyticsService::run_python_json(const QString& script, const QString& command, const QJsonObject& params,
-                                         const QString& context) {
+                                         const QString& context, bool cacheable) {
     auto params_json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     const QString cache_key = "ma:" + context + "_" + command + ":" + QString::fromUtf8(params_json);
 
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    // The newest run of a context supersedes every earlier one: the earlier script is stopped and, should its
+    // reply still arrive (it finished before the cancel landed), the reply is dropped below. Replies carry no
+    // request id of their own, so without this a slow earlier run could be drawn as the result of the newer one.
+    const quint64 seq = ++next_request_id_;
+    if (const auto previous = cancel_tokens_.take(context))
+        previous->store(true);
+    context_seq_.insert(context, seq);
+
+    const QVariant cached = cacheable ? fincept::CacheManager::instance().get(cache_key) : QVariant();
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!doc.isNull()) {
@@ -73,11 +87,37 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
 
     QStringList args = {command, QString::fromUtf8(params_json)};
 
+    // Cancellable (cancel(context)): a default run whose view was left is stopped, not left to finish.
+    auto token = std::make_shared<std::atomic<bool>>(false);
+    cancel_tokens_.insert(context, token);
+    python::PythonRunner::RunOptions opts;
+    opts.cancel_token = token;
+
     QPointer<MAAnalyticsService> self = this;
-    python::PythonRunner::instance().run(script, args, [self, context, cache_key](python::PythonResult result) {
+    python::PythonRunner::instance().run_with_options(script, args, opts, [self, context, cache_key, cacheable, token,
+                                                                           seq](python::PythonResult result) {
         if (!self)
             return;
+        if (self->cancel_tokens_.value(context) == token)
+            self->cancel_tokens_.remove(context);
+        if (self->context_seq_.value(context) != seq) {
+            LOG_DEBUG("MAAnalytics", QString("Superseded reply dropped context=%1").arg(context));
+            return; // a newer run of this analysis was started
+        }
+        if (!result.success && result.error == QLatin1String("Cancelled")) {
+            // cancel(context): the screen stopped a default run whose view was left. Not a failure.
+            LOG_DEBUG("MAAnalytics", QString("Cancelled [%1]").arg(context));
+            emit self->error_occurred(context, result.error);
+            return;
+        }
         if (!result.success) {
+            // A script that names the inputs it needs is asking for them, not failing.
+            const QStringList missing = ma_missing_inputs(result.output);
+            if (!missing.isEmpty()) {
+                LOG_INFO("MAAnalytics", QString("Inputs required [%1]: %2").arg(context, missing.join(',')));
+                emit self->input_required(context, result.error, missing);
+                return;
+            }
             LOG_ERROR("MAAnalytics", QString("Python call failed [%1]: %2").arg(context, result.error));
             emit self->error_occurred(context, result.error);
             return;
@@ -92,18 +132,25 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
         auto obj = doc.object();
 
         // A payload that says it was not successful is still delivered (the panel shows it as an error) but is
-        // never cached, or a transient failure would be replayed for the whole TTL.
+        // never cached, or a transient failure would be replayed for the whole TTL. Neither is a "needs data"
+        // empty state: the user is about to add the data it asks for.
         const QJsonValue success = obj.value(QStringLiteral("success"));
         const bool reported_failure = success.isBool() && !success.toBool();
-        if (!reported_failure) {
+        if (cacheable && !reported_failure && !obj.contains(QStringLiteral("needs_data"))) {
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
                 kResultTtlSec, "ma_analytics");
         }
-        LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
+        LOG_DEBUG("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
         publish_ma_result(self->hub_registered_, context, obj);
     });
+}
+
+void MAAnalyticsService::cancel(const QString& context) {
+    const auto token = cancel_tokens_.take(context);
+    if (token)
+        token->store(true);
 }
 
 // ── Valuation ────────────────────────────────────────────────────────────────
@@ -132,8 +179,10 @@ void MAAnalyticsService::calculate_trading_comps(const QJsonObject& params) {
 }
 
 void MAAnalyticsService::calculate_precedent_transactions(const QJsonObject& params) {
+    // Without pasted comparables the script reads the user's verified deals, which change between runs.
+    const bool own_comps = !params.value(QStringLiteral("comparables")).toArray().isEmpty();
     run_python_json("Analytics/corporateFinance/valuation/precedent_transactions.py", "calculate", params,
-                    "precedent_txns");
+                    "precedent_txns", own_comps);
 }
 
 // ── Merger Analysis ──────────────────────────────────────────────────────────
@@ -183,22 +232,143 @@ void MAAnalyticsService::value_cvr(const QJsonObject& params) {
 }
 
 // ── Deal Database ────────────────────────────────────────────────────────────
-void MAAnalyticsService::scan_filings(int days_back) {
-    run_python("Analytics/corporateFinance/deal_database/deal_tracker.py", {"scan", QString::number(days_back)},
-               "scan_filings");
+quint64 MAAnalyticsService::run_deal_db(const QString& script, const QStringList& args, int timeout_ms,
+                                        std::function<void(quint64, const QJsonObject&)> on_ok) {
+    const quint64 id = ++next_request_id_;
+    python::PythonRunner::RunOptions opts;
+    opts.timeout_ms = timeout_ms;
+    QPointer<MAAnalyticsService> self = this;
+    python::PythonRunner::instance().run_with_options(
+        script, args, opts, [self, id, on_ok = std::move(on_ok)](python::PythonResult result) {
+            if (!self)
+                return;
+            if (!result.success) {
+                LOG_WARN("MAAnalytics", QString("Deal database call %1 failed: %2").arg(id).arg(result.error));
+                emit self->deal_op_failed(id, result.error, ma_missing_inputs(result.output));
+                return;
+            }
+            ma_parse_reply_async(self, result.output, [self, id, on_ok](QJsonObject obj, bool ok) {
+                if (!self)
+                    return;
+                if (!ok) {
+                    emit self->deal_op_failed(id, tr("The deal database answered with something unreadable."), {});
+                    return;
+                }
+                on_ok(id, obj);
+            });
+        });
+    return id;
 }
 
-void MAAnalyticsService::get_all_deals() {
-    run_python("Analytics/corporateFinance/deal_database/deal_tracker.py", {"list"}, "all_deals");
+quint64 MAAnalyticsService::start_deal_scan(int days, int max_filings, const QStringList& forms) {
+    if (scan_request_ != 0)
+        return scan_request_; // one scan at a time: the caller keeps following the running one
+    const quint64 id = ++next_request_id_;
+    scan_request_ = id;
+    scan_cancel_ = std::make_shared<std::atomic<bool>>(false);
+
+    python::PythonRunner::RunOptions opts;
+    opts.timeout_ms = kDealScanTimeoutMs;
+    opts.cancel_token = scan_cancel_;
+    QStringList args = {QStringLiteral("scan"), QString::number(std::clamp(days, 1, 90)),
+                        QString::number(std::clamp(max_filings, 0, 200))};
+    if (!forms.isEmpty())
+        args << forms.join(QLatin1Char(','));
+
+    // Progress lines arrive on the runner's (GUI) thread while the scan runs.
+    auto last_filings = std::make_shared<int>(0);
+    auto throttled = std::make_shared<bool>(false);
+    QPointer<MAAnalyticsService> self = this;
+    auto on_line = [self, id, last_filings, throttled](const QString& line, bool is_stderr) {
+        if (!self || !is_stderr)
+            return;
+        static const QString kPrefix = QStringLiteral("@@PROGRESS ");
+        if (line.startsWith(kPrefix)) {
+            const QJsonObject p = QJsonDocument::fromJson(line.mid(kPrefix.size()).toUtf8()).object();
+            *last_filings = p.value(QStringLiteral("filings")).toInt(*last_filings);
+            emit self->deal_scan_progress(id, p.value(QStringLiteral("message")).toString(),
+                                          p.value(QStringLiteral("done")).toInt(), p.value(QStringLiteral("total")).toInt(),
+                                          *last_filings, p.value(QStringLiteral("deals_created")).toInt());
+        } else if (line.contains(QLatin1String("HTTP 403")) || line.contains(QLatin1String("HTTP 429"))) {
+            *throttled = true;
+        }
+    };
+    LOG_INFO("MAAnalytics", QString("Deal scan %1 started: %2 days, up to %3 filings").arg(id).arg(days).arg(max_filings));
+    python::PythonRunner::instance().run_with_options(
+        kMaDealTracker, args, opts,
+        [self, id, last_filings, throttled](python::PythonResult result) {
+            if (!self)
+                return;
+            self->scan_request_ = 0;
+            self->scan_cancel_.reset();
+            if (!result.success) {
+                const bool cancelled = result.error == QLatin1String("Cancelled");
+                QString message = result.error;
+                if (*throttled)
+                    message = tr("SEC did not answer - try again in a minute.");
+                LOG_INFO("MAAnalytics", QString("Deal scan %1 ended: %2").arg(id).arg(result.error));
+                emit self->deal_scan_failed(id, message, cancelled, *last_filings);
+                return;
+            }
+            ma_parse_reply_async(self, result.output, [self, id, last_filings](QJsonObject obj, bool ok) {
+                if (!self)
+                    return;
+                if (!ok) {
+                    emit self->deal_scan_failed(id, tr("The scan answered with something unreadable."), false,
+                                                *last_filings);
+                    return;
+                }
+                emit self->deal_scan_finished(id, obj.value(QStringLiteral("data")).toObject());
+            });
+        },
+        on_line);
+    return id;
 }
 
-void MAAnalyticsService::search_deals(const QString& query) {
-    run_python("Analytics/corporateFinance/deal_database/deal_tracker.py", {"search", query}, "search_deals");
+void MAAnalyticsService::cancel_deal_scan() {
+    if (scan_cancel_)
+        scan_cancel_->store(true);
 }
 
-void MAAnalyticsService::parse_filing(const QString& accession_or_url, const QString& filing_type) {
-    run_python("Analytics/corporateFinance/deal_database/deal_parser.py", {"parse", accession_or_url, filing_type},
-               "parse_filing");
+quint64 MAAnalyticsService::load_deals() {
+    return run_deal_db(kMaDealTracker, {QStringLiteral("list")}, kDealDbTimeoutMs,
+                       [this](quint64 id, const QJsonObject& obj) {
+                           emit deals_loaded(id, obj.value(QStringLiteral("data")).toArray());
+                       });
+}
+
+quint64 MAAnalyticsService::load_filings() {
+    return run_deal_db(kMaDealTracker, {QStringLiteral("filings"), QStringLiteral("1000")}, kDealDbTimeoutMs,
+                       [this](quint64 id, const QJsonObject& obj) {
+                           emit filings_loaded(id, obj.value(QStringLiteral("data")).toArray());
+                       });
+}
+
+quint64 MAAnalyticsService::save_deal(const QJsonObject& fields) {
+    const QString json = QString::fromUtf8(QJsonDocument(fields).toJson(QJsonDocument::Compact));
+    return run_deal_db(kMaDealTracker, {QStringLiteral("upsert"), json}, kDealDbTimeoutMs,
+                       [this](quint64 id, const QJsonObject& obj) {
+                           emit deal_saved(id, obj.value(QStringLiteral("data")).toObject());
+                       });
+}
+
+quint64 MAAnalyticsService::set_deal_verified(const QString& deal_id, bool verified) {
+    return run_deal_db(kMaDealTracker,
+                       {QStringLiteral("verify"), deal_id, verified ? QStringLiteral("1") : QStringLiteral("0")},
+                       kDealDbTimeoutMs, [this](quint64 id, const QJsonObject& obj) {
+                           emit deal_saved(id, obj.value(QStringLiteral("data")).toObject());
+                       });
+}
+
+quint64 MAAnalyticsService::delete_deal(const QString& deal_id) {
+    return run_deal_db(kMaDealTracker, {QStringLiteral("delete"), deal_id}, kDealDbTimeoutMs,
+                       [this, deal_id](quint64 id, const QJsonObject&) { emit deal_removed(id, deal_id); });
+}
+
+quint64 MAAnalyticsService::extract_deal(const QString& accession, const QString& form) {
+    // One filing: one complete-submission download from SEC (rate-limited) plus local work.
+    return run_deal_db(kMaDealParser, {QStringLiteral("parse"), accession, form}, 2 * 60 * 1000,
+                       [this](quint64 id, const QJsonObject& obj) { emit deal_extracted(id, obj); });
 }
 
 // ── Startup Valuation ────────────────────────────────────────────────────────
@@ -268,8 +438,9 @@ void MAAnalyticsService::run_monte_carlo(const QJsonObject& params) {
 }
 
 void MAAnalyticsService::run_regression(const QJsonObject& params) {
+    const bool own_comps = !params.value(QStringLiteral("comp_data")).toArray().isEmpty();
     run_python_json("Analytics/corporateFinance/advanced_analytics/regression_analysis.py", "run", params,
-                    "regression");
+                    "regression", own_comps);
 }
 
 // ── Deal Comparison ──────────────────────────────────────────────────────────
@@ -333,7 +504,7 @@ void MAAnalyticsService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("ma:*"), policy);
 
     hub_registered_ = true;
-    LOG_INFO("MAAnalyticsService", "Registered with DataHub (ma:*)");
+    LOG_DEBUG("MAAnalyticsService", "Registered with DataHub (ma:*)");
 }
 
 } // namespace fincept::services::ma

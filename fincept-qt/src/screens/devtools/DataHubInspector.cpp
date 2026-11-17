@@ -1,10 +1,12 @@
 #include "screens/devtools/DataHubInspector.h"
 
 #include "datahub/DataHub.h"
+#include "ui/widgets/EmptyState.h"
 
 #include <QDateTime>
 #include <QHeaderView>
 #include <QLineEdit>
+#include <QStackedWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -52,7 +54,11 @@ DataHubInspector::DataHubInspector(QWidget* parent) : QWidget(parent) {
     connect(filter_edit_, &QLineEdit::textChanged, this, [this](const QString&) { refresh(); });
     layout->addWidget(filter_edit_);
 
-    table_ = new QTableWidget(this);
+    // Table, or a compact state when no row is visible (sync_empty_state).
+    stack_ = new QStackedWidget(this);
+    layout->addWidget(stack_, 1);
+
+    table_ = new QTableWidget(stack_);
     table_->setColumnCount(7);
     table_->setHorizontalHeaderLabels({tr("Topic"), tr("Subs"), tr("Publishes"), tr("Last Publish"),
                                        tr("Last Refresh"), tr("Errors"), tr("State")});
@@ -68,7 +74,7 @@ DataHubInspector::DataHubInspector(QWidget* parent) : QWidget(parent) {
     // verticalHeader visible by default; row heights driven by the default
     // size hint avoid per-row measurement.
     table_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    layout->addWidget(table_);
+    stack_->addWidget(table_);
 
     refresh_timer_.setInterval(1000);
     connect(&refresh_timer_, &QTimer::timeout, this, &DataHubInspector::refresh);
@@ -108,6 +114,41 @@ void DataHubInspector::retranslateUi() {
         filter_edit_->setAccessibleName(tr("Filter DataHub topics"));
     }
     // State-column cells are re-rendered (translated) on the next refresh().
+    empty_kind_ = -2; // force the empty state's texts to be re-applied on the next refresh()
+}
+
+void DataHubInspector::sync_empty_state(int total, int visible, const QString& needle) {
+    const int kind = visible > 0 ? -1 : (total == 0 ? 0 : 1);
+    if (kind == empty_kind_ && (kind != 1 || needle == empty_needle_))
+        return; // nothing changed — this runs every second
+    empty_kind_ = kind;
+    empty_needle_ = needle;
+    if (kind == -1) {
+        stack_->setCurrentWidget(table_);
+        return;
+    }
+    if (!empty_state_) {
+        empty_state_ = new ui::EmptyState(stack_);
+        empty_state_->set_compact(true);
+        empty_state_->set_alignment(Qt::AlignTop);
+        stack_->addWidget(empty_state_);
+        connect(empty_state_, &ui::EmptyState::primary_clicked, this, [this]() {
+            if (filter_edit_)
+                filter_edit_->clear(); // → refresh() via textChanged
+        });
+    }
+    if (kind == 0) {
+        empty_state_->apply(ui::EmptyState::no_data_spec(
+            tr("No DataHub topics yet"),
+            tr("Topics appear here as screens subscribe to quotes, series and feeds. Open a market screen and "
+               "come back.")));
+    } else {
+        empty_state_->apply(ui::EmptyState::no_data_spec(tr("No topics match “%1”").arg(needle),
+                                                         tr("%n topic(s) in the hub; none contains this text.",
+                                                            "", total),
+                                                         tr("CLEAR FILTER")));
+    }
+    stack_->setCurrentWidget(empty_state_);
 }
 
 void DataHubInspector::refresh() {
@@ -143,10 +184,14 @@ void DataHubInspector::refresh() {
     auto age_key = [now](qint64 ms) { return ms > 0 ? now - ms : std::numeric_limits<qint64>::max(); };
 
     const QString needle = filter_edit_ ? filter_edit_->text().trimmed() : QString();
+    int visible = 0;
 
     for (int row = 0; row < n; ++row) {
         const auto& s = stats[row];
-        table_->setRowHidden(row, !needle.isEmpty() && !s.topic.contains(needle, Qt::CaseInsensitive));
+        const bool hidden = !needle.isEmpty() && !s.topic.contains(needle, Qt::CaseInsensitive);
+        if (!hidden)
+            ++visible;
+        table_->setRowHidden(row, hidden);
         set_cell(row, kColTopic, s.topic);
         set_cell(row, kColSubs, QString::number(s.subscriber_count), s.subscriber_count, true);
         set_cell(row, kColPublishes, QString::number(s.total_publishes), s.total_publishes, true);
@@ -174,6 +219,7 @@ void DataHubInspector::refresh() {
     if (prev_sort)
         table_->setSortingEnabled(true);
     table_->setUpdatesEnabled(true);
+    sync_empty_state(n, visible, needle);
 }
 
 } // namespace fincept::screens::devtools

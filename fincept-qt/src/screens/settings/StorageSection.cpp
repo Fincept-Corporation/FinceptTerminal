@@ -16,6 +16,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -65,6 +66,12 @@ void storage_set_state(QWidget* w, const char* state) {
 // Every builder below only assigns object names; StorageSection::apply_theme()
 // styles them all from one sheet.
 
+/// `w` px at the default font size, grown in proportion for a larger one — for
+/// widths that line a column of rows up with its header.
+int storage_px(int w) {
+    return qMax(w, w * ui::fonts::font_px(0) / ui::ThemeManager::kDefaultFontPx);
+}
+
 // Obsidian panel with a 34px header bar. title_out (when non-null) receives the
 // header QLabel so its text can be re-applied on a live language switch.
 QFrame* storage_make_panel(const QString& title, QWidget* status_widget = nullptr, QLabel** title_out = nullptr) {
@@ -103,7 +110,7 @@ QWidget* storage_make_body() {
 QWidget* storage_make_data_row(const QString& label_text, QLabel* value_lbl, QLabel** label_out = nullptr) {
     auto* row = new QWidget;
     row->setObjectName(QStringLiteral("storRow"));
-    row->setFixedHeight(26);
+    row->setMinimumHeight(26);
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
@@ -124,7 +131,7 @@ QWidget* storage_make_data_row(const QString& label_text, QLabel* value_lbl, QLa
 QWidget* storage_make_category_row(const QString& name, QLabel* count_lbl, QPushButton* clear_btn, bool alt) {
     auto* row = new QWidget;
     row->setObjectName(alt ? QStringLiteral("storRowAlt") : QStringLiteral("storRowBase"));
-    row->setFixedHeight(26);
+    row->setMinimumHeight(26);
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
@@ -136,11 +143,11 @@ QWidget* storage_make_category_row(const QString& name, QLabel* count_lbl, QPush
     // refresh_storage_stats() finds the count by this object name.
     count_lbl->setObjectName(QStringLiteral("cat_count"));
     count_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    count_lbl->setFixedWidth(70);
+    count_lbl->setFixedWidth(storage_px(70));
     hl->addWidget(count_lbl);
 
     clear_btn->setObjectName(QStringLiteral("storClearBtn"));
-    clear_btn->setFixedSize(56, 20);
+    clear_btn->setFixedSize(storage_px(56), storage_px(20));
     hl->addWidget(clear_btn);
     return row;
 }
@@ -148,7 +155,7 @@ QWidget* storage_make_category_row(const QString& name, QLabel* count_lbl, QPush
 QWidget* storage_make_group_header(const QString& title) {
     auto* row = new QWidget;
     row->setObjectName(QStringLiteral("storGroupHdr"));
-    row->setFixedHeight(26);
+    row->setMinimumHeight(26);
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
     auto* lbl = new QLabel(title);
@@ -161,7 +168,7 @@ QWidget* storage_make_file_action_row(const QString& name, QLabel* size_lbl, QPu
                                       QLabel** label_out = nullptr) {
     auto* row = new QWidget;
     row->setObjectName(alt ? QStringLiteral("storRowAlt") : QStringLiteral("storRowBase"));
-    row->setFixedHeight(26);
+    row->setMinimumHeight(26);
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
@@ -174,11 +181,11 @@ QWidget* storage_make_file_action_row(const QString& name, QLabel* size_lbl, QPu
 
     size_lbl->setObjectName(QStringLiteral("storSizeLabel"));
     size_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    size_lbl->setFixedWidth(80);
+    size_lbl->setFixedWidth(storage_px(80));
     hl->addWidget(size_lbl);
 
     btn->setObjectName(QStringLiteral("storClearBtn"));
-    btn->setFixedSize(56, 20);
+    btn->setFixedSize(storage_px(56), storage_px(20));
     hl->addWidget(btn);
     return row;
 }
@@ -187,17 +194,17 @@ QWidget* storage_make_file_action_row(const QString& name, QLabel* size_lbl, QPu
 QWidget* storage_make_table_header(QLabel*& first, QLabel*& second, int second_width, QLabel*& third) {
     auto* th = new QWidget;
     th->setObjectName(QStringLiteral("storTableHdr"));
-    th->setFixedHeight(26);
+    th->setMinimumHeight(26);
     auto* thl = new QHBoxLayout(th);
     thl->setContentsMargins(12, 0, 12, 0);
     thl->setSpacing(8);
     for (QLabel* l : {first, second, third})
         l->setObjectName(QStringLiteral("storTableHdrCell"));
     thl->addWidget(first, 1);
-    second->setFixedWidth(second_width);
+    second->setFixedWidth(storage_px(second_width));
     second->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     thl->addWidget(second);
-    third->setFixedWidth(56);
+    third->setFixedWidth(storage_px(56));
     third->setAlignment(Qt::AlignCenter);
     thl->addWidget(third);
     return th;
@@ -215,6 +222,16 @@ StorageSection::StorageSection(QWidget* parent) : QWidget(parent) {
 void StorageSection::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     refresh_storage_stats();
+    // The SQL console opens on a result, not an empty grid: the table list of
+    // fincept.db (local, read-only, on a worker). Only while the user has run
+    // nothing and typed nothing.
+    if (sql_table_ && sql_input_ && sql_db_selector_ && !sql_running_ && sql_table_->columnCount() == 0 &&
+        sql_input_->text().trimmed().isEmpty()) {
+        sql_db_selector_->setCurrentIndex(0);
+        sql_input_->setText(QStringLiteral(
+            "SELECT type, name, tbl_name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"));
+        run_sql();
+    }
 }
 
 void StorageSection::apply_theme() {
@@ -244,7 +261,7 @@ void StorageSection::apply_theme() {
             "QWidget#storRowAlt{background:%8;border-bottom:1px solid %3;}"
             "QWidget#storTableHdr,QWidget#storGroupHdr{background:%6;border-bottom:1px solid %3;}"
             "QWidget#storCacheRow{background:%8;border-bottom:1px solid %3;}"
-            "QLabel#storTableHdrCell{color:%5;font-weight:700;}"
+            "QLabel#storTableHdrCell{color:%4;font-weight:700;}"
             "QLabel#storGroupTitle{color:%10;font-weight:700;letter-spacing:0.5px;}"
             "QLabel#storRowLabel{color:%4;font-weight:600;letter-spacing:0.5px;}"
             "QLabel#storRowValue{color:%11;font-weight:700;}"
@@ -253,7 +270,7 @@ void StorageSection::apply_theme() {
             "QLabel#cat_count{color:%12;font-weight:700;}"
             // Stat boxes
             "QFrame#storStatBox{background:%6;border:1px solid %3;}"
-            "QLabel#storStatValue{color:%12;font-size:18px;font-weight:700;}"
+            "QLabel#storStatValue{color:%12;font-size:" + fincept::ui::fonts::px(4) + "px;font-weight:700;}"
             "QLabel#storStatLabel{color:%4;font-weight:700;}")
             .arg(AMBER(), BG_SURFACE(), BORDER_DIM(), TEXT_SECONDARY(), TEXT_DIM(), BG_RAISED(), BG_BASE(),
                  ROW_ALT(), BORDER_MED())
@@ -261,19 +278,19 @@ void StorageSection::apply_theme() {
         QString(
             // Buttons
             "QPushButton#storAmberBtn{background:%1;color:%2;border:1px solid %3;font-weight:700;padding:0 8px;}"
-            "QPushButton#storAmberBtn:hover{background:%2;color:%4;}"
+            "QPushButton#storAmberBtn:hover{background:%2;color:%13;}"
             "QPushButton#storAmberBtn:disabled{background:transparent;color:%5;border-color:%6;}"
             "QPushButton#storClearBtn,QPushButton#storDangerBtn{background:%7;color:%8;border:1px solid %9;"
             "font-weight:700;}"
-            "QPushButton#storClearBtn:hover,QPushButton#storDangerBtn:hover{background:%8;color:%10;}"
+            "QPushButton#storClearBtn:hover,QPushButton#storDangerBtn:hover{background:%8;color:%13;}"
             "QPushButton#storChipBtn{background:%11;color:%12;border:1px solid %6;padding:0 6px;}"
             "QPushButton#storChipBtn:hover{color:%2;border-color:%2;}"
             "QPushButton#storChipBtn:disabled{color:%5;}"
-            "QPushButton#storNukeBtn{background:%8;color:%10;border:2px solid %8;font-weight:700;}"
+            "QPushButton#storNukeBtn{background:%8;color:%13;border:2px solid %8;font-weight:700;}"
             "QPushButton#storNukeBtn:hover{background:%10;color:%4;}")
-            .arg(ACCENT_BG(), AMBER(), AMBER_DIM(), BG_BASE(), TEXT_DIM(), BORDER_DIM(), NEGATIVE_BG(), NEGATIVE(),
+            .arg(ACCENT_BG(), AMBER(), AMBER_DIM(), BG_BASE(), TEXT_TERTIARY(), BORDER_DIM(), NEGATIVE_BG(), NEGATIVE(),
                  NEGATIVE_DIM())
-            .arg(TEXT_PRIMARY(), BG_RAISED(), TEXT_SECONDARY()) +
+            .arg(TEXT_PRIMARY(), BG_RAISED(), TEXT_SECONDARY(), TEXT_ON_ACCENT()) +
         QString(
             // SQL console
             "QLineEdit#storSqlInput{background:%1;color:%2;border:1px solid %3;padding:6px;}"
@@ -301,9 +318,23 @@ void StorageSection::apply_theme() {
                 "QLabel#storDangerTitle{color:%7;font-weight:700;letter-spacing:0.5px;}"
                 "QLabel#storDangerItemTitle{color:%8;font-weight:700;}"
                 "QLabel#storNukeTitle{color:%7;font-weight:700;}")
-            .arg(BG_RAISED(), TEXT_DIM(), BORDER_DIM(), BG_SURFACE(), NEGATIVE_DIM(), NEGATIVE_BG(), NEGATIVE(),
+            .arg(BG_RAISED(), TEXT_SECONDARY(), BORDER_DIM(), BG_SURFACE(), NEGATIVE_DIM(), NEGATIVE_BG(), NEGATIVE(),
                  TEXT_PRIMARY());
     setStyleSheet(sheet);
+
+    // What the sheet does not reach: the result grid's row height (follows the
+    // font size) and the NULL cells' item brush (marked with Qt::UserRole).
+    if (sql_table_) {
+        sql_table_->verticalHeader()->setDefaultSectionSize(qMax(20, QFontMetrics(ui::fonts::font()).height() + 4));
+        const QColor null_color(TEXT_DIM());
+        for (int r = 0; r < sql_table_->rowCount(); ++r) {
+            for (int c = 0; c < sql_table_->columnCount(); ++c) {
+                auto* item = sql_table_->item(r, c);
+                if (item && item->data(Qt::UserRole).toBool())
+                    item->setForeground(null_color);
+            }
+        }
+    }
 }
 
 void StorageSection::build_ui() {
@@ -338,7 +369,8 @@ void StorageSection::build_ui() {
     {
         disk_refresh_btn_ = new QPushButton(tr("Refresh"));
         disk_refresh_btn_->setObjectName(QStringLiteral("storAmberBtn"));
-        disk_refresh_btn_->setFixedSize(70, 22);
+        disk_refresh_btn_->setMinimumSize(70, 22);
+        disk_refresh_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         connect(disk_refresh_btn_, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
 
         auto* panel = storage_make_panel(tr("DISK USAGE"), disk_refresh_btn_, &disk_panel_title_);
@@ -421,6 +453,7 @@ void StorageSection::build_ui() {
 
             auto* count_lbl = new QLabel(QString::number(cat.count));
             auto* clear_btn = new QPushButton(tr("CLR"));
+            clear_btn->setProperty("fincept_agent_risk", "delete"); // agents: clears stored data
 
             QString cat_id = cat.id;
             QString cat_label = cat.label;
@@ -474,6 +507,7 @@ void StorageSection::build_ui() {
                                 const QString& confirm_msg, std::function<Result<void>()> action, bool alt,
                                 QLabel** label_out) {
             auto* btn = new QPushButton(tr("CLR"));
+            btn->setProperty("fincept_agent_risk", "delete"); // agents: clears stored data
             connect(btn, &QPushButton::clicked, this, [this, confirm_title, confirm_msg, action]() {
                 auto answer = QMessageBox::warning(this, confirm_title, confirm_msg,
                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
@@ -496,7 +530,7 @@ void StorageSection::build_ui() {
 
         add_file_row(
             tr("Log Files"), log_sz, tr("Clear Logs"),
-            tr("Clear all application log files?\nCurrent log data will be lost."),
+            tr("Delete the log files of earlier sessions?\nThe current session's log and the audit log are kept."),
             []() {
                 auto r = StorageManager::instance().clear_log_files();
                 if (r.is_ok())
@@ -530,7 +564,7 @@ void StorageSection::build_ui() {
         // Cache subcategories
         auto* cache_row = new QWidget(this);
         cache_row->setObjectName(QStringLiteral("storCacheRow"));
-        cache_row->setFixedHeight(30);
+        cache_row->setMinimumHeight(30);
         auto* chl = new QHBoxLayout(cache_row);
         chl->setContentsMargins(12, 0, 12, 0);
         chl->setSpacing(4);
@@ -541,8 +575,9 @@ void StorageSection::build_ui() {
         static const QStringList kStorageCacheCats = {"market_data", "news", "quotes", "charts", "general"};
         for (const QString& cat : kStorageCacheCats) {
             auto* btn = new QPushButton(cat);
+            btn->setProperty("fincept_agent_risk", "delete"); // agents: clears a cache category
             btn->setObjectName(QStringLiteral("storChipBtn"));
-            btn->setFixedHeight(18);
+            btn->setMinimumHeight(18);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setToolTip(tr("Clear the \"%1\" cache category").arg(cat));
             connect(btn, &QPushButton::clicked, this, [this, cat]() {
@@ -590,7 +625,7 @@ void StorageSection::build_ui() {
         sql_db_selector_->setObjectName(QStringLiteral("storSqlDb"));
         sql_db_selector_->addItem(QStringLiteral("fincept.db"), QStringLiteral("main"));
         sql_db_selector_->addItem(QStringLiteral("cache.db"), QStringLiteral("cache"));
-        sql_db_selector_->setFixedWidth(110);
+        sql_db_selector_->setMinimumWidth(110);
         sql_db_selector_->setAccessibleName(tr("Database to query"));
         irl->addWidget(sql_db_selector_);
 
@@ -602,8 +637,10 @@ void StorageSection::build_ui() {
         irl->addWidget(sql_input_, 1);
 
         sql_exec_btn_ = new QPushButton(tr("RUN"));
+        sql_exec_btn_->setProperty("fincept_agent_risk", "code"); // agents: runs SQL against the terminal's database
         sql_exec_btn_->setObjectName(QStringLiteral("storAmberBtn"));
-        sql_exec_btn_->setFixedSize(56, 28);
+        sql_exec_btn_->setMinimumSize(56, 28);
+        sql_exec_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         sql_exec_btn_->setToolTip(tr("Run the statement (Enter)"));
         irl->addWidget(sql_exec_btn_);
 
@@ -619,7 +656,7 @@ void StorageSection::build_ui() {
         srl->addWidget(sql_status_, 1);
         sql_copy_btn_ = new QPushButton(tr("COPY"));
         sql_copy_btn_->setObjectName(QStringLiteral("storChipBtn"));
-        sql_copy_btn_->setFixedHeight(20);
+        sql_copy_btn_->setMinimumHeight(20);
         sql_copy_btn_->setEnabled(false);
         sql_copy_btn_->setToolTip(tr("Copy the result (masked values stay masked) as tab-separated text"));
         connect(sql_copy_btn_, &QPushButton::clicked, this, &StorageSection::copy_sql_result);
@@ -635,7 +672,7 @@ void StorageSection::build_ui() {
         sql_table_->setWordWrap(false);
         sql_table_->setTextElideMode(Qt::ElideRight);
         sql_table_->verticalHeader()->setVisible(false);
-        sql_table_->verticalHeader()->setDefaultSectionSize(20);
+        sql_table_->verticalHeader()->setDefaultSectionSize(qMax(20, QFontMetrics(ui::fonts::font()).height() + 4));
         sql_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
         sql_table_->horizontalHeader()->setStretchLastSection(true);
         sql_table_->setAccessibleName(tr("Query results"));
@@ -669,7 +706,7 @@ void StorageSection::build_ui() {
         for (const auto& q : kStorageQuickQueries) {
             auto* btn = new QPushButton(QString::fromLatin1(q.label));
             btn->setObjectName(QStringLiteral("storChipBtn"));
-            btn->setFixedHeight(18);
+            btn->setMinimumHeight(18);
             btn->setCursor(Qt::PointingHandCursor);
             const QString sql = QString::fromLatin1(q.sql);
             connect(btn, &QPushButton::clicked, this, [this, sql]() {
@@ -731,8 +768,10 @@ void StorageSection::build_ui() {
         cd_vl->addWidget(clear_cache_desc_);
         cr_hl->addWidget(cache_desc, 1);
         clear_cache_btn_ = new QPushButton(tr("CLEAR CACHE"));
+        clear_cache_btn_->setProperty("fincept_agent_risk", "delete"); // agents: clears the cache
         clear_cache_btn_->setObjectName(QStringLiteral("storDangerBtn"));
-        clear_cache_btn_->setFixedSize(110, 26);
+        clear_cache_btn_->setMinimumSize(110, 26);
+        clear_cache_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         connect(clear_cache_btn_, &QPushButton::clicked, this, [this]() {
             auto answer =
                 QMessageBox::warning(this, tr("Clear All Cache"),
@@ -768,8 +807,10 @@ void StorageSection::build_ui() {
         nd_vl->addWidget(nuke_desc_);
         nr_hl->addWidget(nuke_desc, 1);
         nuke_btn_ = new QPushButton(tr("DELETE ALL"));
+        nuke_btn_->setProperty("fincept_agent_risk", "delete"); // agents: deletes all stored data
         nuke_btn_->setObjectName(QStringLiteral("storNukeBtn"));
-        nuke_btn_->setFixedSize(110, 26);
+        nuke_btn_->setMinimumSize(110, 26);
+        nuke_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         connect(nuke_btn_, &QPushButton::clicked, this, [this]() {
             auto a1 = QMessageBox::critical(this, tr("Clear ALL User Data"),
                                             tr("WARNING: This will permanently delete ALL data:\n\n"
@@ -942,10 +983,12 @@ void StorageSection::show_sql_result(const storage_sql_runner::Result& result) {
         const QVector<bool>& nulls = result.null_cells.at(r);
         for (int c = 0; c < row.size(); ++c) {
             auto* item = new QTableWidgetItem(row.at(c));
-            if (c < nulls.size() && nulls.at(c))
+            if (c < nulls.size() && nulls.at(c)) {
                 item->setForeground(null_color);
-            else if (row.at(c).size() > 40)
+                item->setData(Qt::UserRole, true); // apply_theme() re-colours NULL cells
+            } else if (row.at(c).size() > 40) {
                 item->setToolTip(row.at(c).left(1000));
+            }
             sql_table_->setItem(r, c, item);
         }
     }

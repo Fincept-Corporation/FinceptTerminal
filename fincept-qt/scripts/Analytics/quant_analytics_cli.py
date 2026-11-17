@@ -40,76 +40,23 @@ if quant_dir not in sys.path:
     sys.path.insert(0, quant_dir)
 
 import json
+import re
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional, Union
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, date
 
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(script_dir))
+    import fincept_json
 
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Decimal):
-            return float(obj)
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, np.ndarray):
-            return [self._sanitize_value(x) for x in obj.tolist()]
-        if isinstance(obj, pd.Series):
-            return [self._sanitize_value(x) for x in obj.tolist()]
-        if isinstance(obj, pd.DataFrame):
-            return obj.to_dict('records')
-        if isinstance(obj, (np.int64, np.int32)):
-            return int(obj)
-        if isinstance(obj, (np.float64, np.float32)):
-            return self._sanitize_value(float(obj))
-        if isinstance(obj, (np.bool_, bool)):
-            return bool(obj)
-        if pd.isna(obj):
-            return None
-        return super().default(obj)
-
-    def _sanitize_value(self, val):
-        if isinstance(val, float):
-            if np.isnan(val) or np.isinf(val):
-                return None
-        return val
-
-    def encode(self, obj):
-        return super().encode(self._sanitize_obj(obj))
-
-    def _sanitize_obj(self, obj):
-        if isinstance(obj, dict):
-            return {k: self._sanitize_obj(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._sanitize_obj(x) for x in obj]
-        elif isinstance(obj, tuple):
-            return [self._sanitize_obj(x) for x in obj]
-        elif isinstance(obj, np.ndarray):
-            return [self._sanitize_obj(x) for x in obj.tolist()]
-        elif isinstance(obj, pd.Series):
-            return [self._sanitize_obj(x) for x in obj.tolist()]
-        elif isinstance(obj, pd.DataFrame):
-            records = obj.to_dict('records')
-            return [self._sanitize_obj(r) for r in records]
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        elif isinstance(obj, bool):
-            return obj
-        elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
-            return int(obj)
-        elif isinstance(obj, (np.float64, np.float32, np.float16)):
-            val = float(obj)
-            if np.isnan(val) or np.isinf(val):
-                return None
-            return val
-        elif isinstance(obj, float):
-            if np.isnan(obj) or np.isinf(obj):
-                return None
-            return obj
-        elif pd.isna(obj):
-            return None
-        return obj
+# A ticker: letters/digits plus . - ^ = (AAPL, BRK.B, 0700.HK, ^GSPC, ES=F, EURUSD=X, BTC-USD).
+_TICKER_RE = re.compile(r'^[A-Za-z0-9.\-^=]+$')
+# Holt-Winters season length when the caller gives none: one trading week for daily bars,
+# one year for weekly and monthly bars.
+_DEFAULT_SEASONAL_PERIODS = {'1d': 5, '1wk': 52, '1mo': 12}
 
 
 class CFAQuantEngine:
@@ -157,6 +104,10 @@ class CFAQuantEngine:
             if np.isnan(obj) or np.isinf(obj):
                 return None
             return obj
+        elif isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        elif obj is None or isinstance(obj, (str, int)):
+            return obj
         elif pd.isna(obj):
             return None
         return obj
@@ -165,18 +116,26 @@ class CFAQuantEngine:
         s = s.strip()
         if not s or ',' in s or s.startswith('[') or s.startswith('{'):
             return False
-        # Letters / dot / dash only (e.g. AAPL, BRK.B, TCS.NS, ^GSPC)
-        return all(c.isalpha() or c in '.-^' for c in s)
+        try:
+            float(s)
+            return False  # a lone number is data, not a symbol
+        except ValueError:
+            pass
+        # e.g. AAPL, BRK.B, TCS.NS, ^GSPC, 0700.HK, ES=F, EURUSD=X, BTC-USD
+        return bool(_TICKER_RE.match(s)) and any(c.isalpha() for c in s)
 
     def _fetch_ticker_history(self, ticker: str, period: str = '1y',
                               interval: str = '1d', column: str = 'Close') -> np.ndarray:
         try:
-            import yfinance as yf
+            import fincept_yahoo as fy  # the shared Yahoo layer: bar cache, limiter, back-off
+            fy.yf()
         except ImportError as exc:
             raise ImportError(f"yfinance is required to fetch ticker '{ticker}': {exc}")
 
-        df = yf.download(ticker, period=period, interval=interval,
-                         progress=False, auto_adjust=False)
+        import contextlib
+        with contextlib.redirect_stdout(sys.stderr):  # keep any library chatter out of the JSON stdout
+            # One long download per symbol shared by every script; later calls slice it.
+            df = fy.download(ticker, period=period, interval=interval, auto_adjust=False)
         if df is None or df.empty:
             raise ValueError(f"No data returned for ticker '{ticker}' (period={period})")
 
@@ -211,10 +170,17 @@ class CFAQuantEngine:
             if self._looks_like_ticker(stripped):
                 return self._fetch_ticker_history(stripped, period=period,
                                                   interval=interval, column=column)
-            # 3. CSV numeric values
-            values = [float(x.strip()) for x in stripped.split(',') if x.strip()]
-            if not values:
+            # 3. Numeric values separated by commas (or whitespace / semicolons)
+            tokens = [t for t in re.split(r'[,;\s]+', stripped) if t]
+            if not tokens:
                 raise ValueError("Empty data input")
+            values = []
+            for t in tokens:
+                try:
+                    values.append(float(t))
+                except ValueError:
+                    raise ValueError(f"Could not read '{t}' as a number. Enter one ticker symbol "
+                                     f"(e.g. AAPL, 0700.HK, ES=F) or comma-separated numbers") from None
             return np.array(values)
         elif isinstance(data, list):
             return np.array(data, dtype=float)
@@ -315,11 +281,32 @@ class CFAQuantEngine:
         method = params.get('method', 'simple_exponential')
         train_size = params.get('train_size', 0.8)
 
-        result = self.analyzer.generate_forecasts(data, horizon=horizon, method=method, train_size=train_size)
+        options = {}
+        if params.get('alpha') is not None:
+            options['alpha'] = params['alpha']
+        if params.get('order') is not None:
+            options['order'] = params['order']
+        if params.get('seasonal') is not None:
+            options['seasonal'] = params['seasonal']
+        seasonal_periods = params.get('seasonal_periods')
+        if seasonal_periods is None:
+            seasonal_periods = _DEFAULT_SEASONAL_PERIODS.get(str(params.get('interval', '1d')), 5)
+        options['seasonal_periods'] = seasonal_periods
+
+        result = self.analyzer.generate_forecasts(data, horizon=horizon, method=method, train_size=train_size,
+                                                  options=options)
         return {'success': True, 'analysis_type': 'forecasting', 'result': self._convert_numpy_types(result)}
 
+    @staticmethod
+    def _n_lags(params: Dict[str, Any]) -> int:
+        try:
+            n_lags = int(params.get('n_lags') or 5)
+        except (TypeError, ValueError):
+            raise ValueError(f"n_lags must be an integer, got {params.get('n_lags')!r}") from None
+        return n_lags if n_lags >= 1 else 5
+
     def _create_lag_features(self, data: np.ndarray, n_lags: int = 5) -> tuple:
-        """Create lag features from time series data for ML models."""
+        """Regression features: X = the n_lags previous values, y = the next value."""
         if len(data) < n_lags + 2:
             raise ValueError(f"Need at least {n_lags + 2} data points for lag features, got {len(data)}")
 
@@ -330,35 +317,73 @@ class CFAQuantEngine:
             y.append(data[i])
         return np.array(X), np.array(y)
 
+    def _create_direction_features(self, data: np.ndarray, n_lags: int = 5) -> tuple:
+        """Classification features for a series.
+
+        y = 1 when the next value is higher than the current one, else 0 (flat or down).
+        X = the n_lags previous one-step changes: simple returns for a strictly positive series
+        (prices), plain differences otherwise. Only changes up to the current value are used.
+        """
+        data = np.asarray(data, dtype=float)
+        if len(data) < n_lags + 12:
+            raise ValueError(f"Need at least {n_lags + 12} data points for {n_lags} lagged changes, got {len(data)}")
+        if np.all(data > 0):
+            changes = data[1:] / data[:-1] - 1.0
+            feature_kind = 'lagged simple returns'
+        else:
+            changes = np.diff(data)
+            feature_kind = 'lagged differences'
+        X = np.array([changes[i - n_lags:i] for i in range(n_lags, len(changes))])
+        y = (changes[n_lags:] > 0).astype(int)
+        info = {
+            'features': f'{n_lags} {feature_kind}',
+            'target': '1 if the next value is higher than the current one, else 0',
+        }
+        return X, y, info
+
+    def _ml_inputs(self, params: Dict[str, Any], problem_type: Optional[str]) -> tuple:
+        """(X, y, feature_info) from explicit X/y, or built from the `data` series."""
+        X = params.get('X')
+        y = params.get('y')
+        if X is not None and y is not None:
+            return np.array(X, dtype=float), np.array(y, dtype=float), None
+        data = params.get('data')
+        if data is None:
+            raise ValueError('Either provide X/y arrays or a data time series')
+        data_arr = self._parse_data(data, **self._data_kwargs(params))
+        n_lags = self._n_lags(params)
+        if problem_type == 'classification':
+            return self._create_direction_features(data_arr, n_lags=n_lags)
+        X, y = self._create_lag_features(data_arr, n_lags=n_lags)
+        info = {'features': f'{n_lags} lagged values', 'target': 'the next value'}
+        return X, y, info
+
     def supervised_learning(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        X = params.get('X')
-        y = params.get('y')
-
-        if X is None or y is None:
-            data = params.get('data')
-            if data is not None:
-                data_arr = self._parse_data(data, **self._data_kwargs(params))
-                n_lags = params.get('n_lags')
-                if n_lags is None or n_lags < 1:
-                    n_lags = 5
-                try:
-                    X, y = self._create_lag_features(data_arr, n_lags=n_lags)
-                except ValueError as e:
-                    return {'success': False, 'error': str(e)}
-            else:
-                return {'success': False, 'error': 'Either provide X/y arrays or a data time series'}
-        else:
-            X = np.array(X)
-            y = np.array(y)
-
         problem_type = params.get('problem_type', 'regression')
-        algorithms = params.get('algorithms', ['ridge', 'random_forest'])
+        algorithms = params.get('algorithms') or ['ridge', 'random_forest']
+        if isinstance(algorithms, str):
+            algorithms = [a.strip() for a in algorithms.split(',') if a.strip()]
+
+        try:
+            X, y, feature_info = self._ml_inputs(params, problem_type)
+        except ValueError as e:
+            return {'success': False, 'error': str(e)}
 
         result = self.analyzer.supervised_learning_analysis(X, y, problem_type=problem_type, algorithms=algorithms)
-        return {'success': True, 'analysis_type': 'supervised_learning', 'result': self._convert_numpy_types(result)}
+        result = self._convert_numpy_types(result)
+        if feature_info:
+            result.setdefault('metadata', {}).update(feature_info)
+
+        payload = {'success': True, 'analysis_type': 'supervised_learning', 'result': result}
+        value = result.get('value') or {}
+        failed = {k: v.get('error') for k, v in value.items() if isinstance(v, dict) and 'error' in v}
+        if value and len(failed) == len(value):
+            payload['success'] = False
+            payload['error'] = 'Every algorithm failed: ' + '; '.join(f'{k}: {e}' for k, e in failed.items())
+        return payload
 
     def unsupervised_learning(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if self.analyzer is None:
@@ -370,19 +395,18 @@ class CFAQuantEngine:
             data = params.get('data')
             if data is not None:
                 data_arr = self._parse_data(data, **self._data_kwargs(params))
-                n_lags = params.get('n_lags')
-                if n_lags is None or n_lags < 1:
-                    n_lags = 5
                 try:
-                    X, _ = self._create_lag_features(data_arr, n_lags=n_lags)
+                    X, _ = self._create_lag_features(data_arr, n_lags=self._n_lags(params))
                 except ValueError as e:
                     return {'success': False, 'error': str(e)}
             else:
                 return {'success': False, 'error': 'Either provide X array or a data time series'}
         else:
-            X = np.array(X)
+            X = np.array(X, dtype=float)
 
-        methods = params.get('methods', ['pca', 'kmeans'])
+        methods = params.get('methods') or ['pca', 'kmeans']
+        if isinstance(methods, str):
+            methods = [m.strip() for m in methods.split(',') if m.strip()]
 
         result = self.analyzer.unsupervised_learning_analysis(X, methods=methods)
         return {'success': True, 'analysis_type': 'unsupervised_learning', 'result': self._convert_numpy_types(result)}
@@ -391,31 +415,22 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        X = params.get('X')
-        y = params.get('y')
-
-        if X is None or y is None:
-            data = params.get('data')
-            if data is not None:
-                data_arr = self._parse_data(data, **self._data_kwargs(params))
-                n_lags = params.get('n_lags')
-                if n_lags is None or n_lags < 1:
-                    n_lags = 5
-                try:
-                    X, y = self._create_lag_features(data_arr, n_lags=n_lags)
-                except ValueError as e:
-                    return {'success': False, 'error': str(e)}
-            else:
-                return {'success': False, 'error': 'Either provide X/y arrays or a data time series'}
-        else:
-            X = np.array(X)
-            y = np.array(y)
+        # None = decide from y (regression unless y is integer-valued with <= 5 classes)
+        problem_type = params.get('problem_type')
+        try:
+            X, y, feature_info = self._ml_inputs(params, problem_type)
+        except ValueError as e:
+            return {'success': False, 'error': str(e)}
 
         model_type = params.get('model_type', 'random_forest')
         cv_folds = params.get('cv_folds', 5)
 
-        result = self.analyzer.evaluate_model_performance(X, y, model_type=model_type, cv_folds=cv_folds)
-        return {'success': True, 'analysis_type': 'model_evaluation', 'result': self._convert_numpy_types(result)}
+        result = self.analyzer.evaluate_model_performance(X, y, model_type=model_type, cv_folds=cv_folds,
+                                                          problem_type=problem_type)
+        result = self._convert_numpy_types(result)
+        if feature_info:
+            result.setdefault('metadata', {}).update(feature_info)
+        return {'success': True, 'analysis_type': 'model_evaluation', 'result': result}
 
     def feature_engineering(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if self.analyzer is None:
@@ -517,10 +532,15 @@ class CFAQuantEngine:
         }
 
 
+def _emit(result: Dict[str, Any]) -> None:
+    """The one stdout payload: NaN/Infinity become null (a bare NaN makes the host drop it all)."""
+    print(fincept_json.dumps(result))
+
+
 def main():
     if len(sys.argv) < 2:
-        result = {'success': False, 'error': 'No command provided', 'usage': 'python quant_analytics_cli.py <command> [params_json]'}
-        print(json.dumps(result, cls=DecimalEncoder))
+        _emit({'success': False, 'error': 'No command provided',
+               'usage': 'python quant_analytics_cli.py <command> [params_json]'})
         return
 
     command = sys.argv[1].lower()
@@ -530,8 +550,10 @@ def main():
         try:
             params = json.loads(sys.argv[2])
         except json.JSONDecodeError as e:
-            result = {'success': False, 'error': f'Invalid JSON parameters: {e}'}
-            print(json.dumps(result, cls=DecimalEncoder))
+            _emit({'success': False, 'error': f'Invalid JSON parameters: {e}'})
+            return
+        if not isinstance(params, dict):
+            _emit({'success': False, 'error': 'Parameters must be a JSON object'})
             return
 
     engine = CFAQuantEngine()
@@ -554,26 +576,24 @@ def main():
     }
 
     if command not in command_map:
-        result = {
+        _emit({
             'success': False,
             'error': f'Unknown command: {command}',
             'available_commands': list(command_map.keys())
-        }
-        print(json.dumps(result, cls=DecimalEncoder))
+        })
         return
 
     try:
         result = command_map[command]()
-        print(json.dumps(result, cls=DecimalEncoder))
     except Exception as e:
         import traceback
+        traceback.print_exc(file=sys.stderr)  # diagnostics go to stderr, never into the payload
         result = {
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
+            'error': str(e) or type(e).__name__,
             'command': command
         }
-        print(json.dumps(result, cls=DecimalEncoder))
+    _emit(result)
 
 
 if __name__ == '__main__':

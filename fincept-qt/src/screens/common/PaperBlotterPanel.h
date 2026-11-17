@@ -39,7 +39,7 @@ class PaperBlotterPanel : public QWidget {
     void square_off_all();
     void square_off_one(const QString& account_id, const QString& symbol, const QString& product);
     // Render the header summary; only touches the label stylesheet on a state flip.
-    void update_summary(int open_count, double total_pnl, const QString& glyph);
+    void update_summary(int open_count, double total_pnl, const QString& ccy);
 
     QTabWidget* tabs_ = nullptr;
     QTableWidget* positions_ = nullptr;
@@ -53,8 +53,14 @@ class PaperBlotterPanel : public QWidget {
     bool refresh_armed_ = false;
 
     // Cached summary-label state so a live blotter doesn't reparse the label's
-    // CSS on every tick. -1 = never applied, 0 = neutral, 1 = gain, 2 = loss.
+    // CSS on every tick. -1 = never applied, 0 = neutral, 1 = gain, 2 = loss,
+    // 3 = square-off error.
     int summary_state_ = -1;
+
+    // Last failed Exit / SQUARE OFF ALL, shown in the summary (NEGATIVE); the first
+    // refresh after action_error_until_ms_ (epoch ms) clears it.
+    QString action_error_;
+    qint64 action_error_until_ms_ = 0;
 
     // Last row counts per table — resizeColumnsToContents() is O(rows x cols)
     // text measurement, so only re-run it when the shape actually changed.

@@ -166,7 +166,8 @@ void SecFilingsService::fetch(const QString& symbol, SecSection section, bool fo
                [this, sym, section, fresh_key, lkg_key](bool ok, const QJsonObject& payload, const QString& error) {
                    if (!ok) {
                        LOG_WARN(kSecFilingsServiceTag,
-                                QString("%1 %2 failed: %3").arg(sec_svc_section_tag(section), sym, error));
+                                logf("SEC filings section failed",
+                                     {{"section", sec_svc_section_tag(section)}, {"symbol", sym}, {"error", error}}));
                        emit section_failed(sym, section, error);
                        return;
                    }

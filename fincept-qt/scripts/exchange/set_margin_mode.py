@@ -1,26 +1,32 @@
 """
-Set margin mode (cross/isolated) for a symbol.
-Usage: python set_margin_mode.py <exchange_id> <symbol> <mode>
-Credentials via stdin JSON.
+Set the margin mode of a contract market (changes the account; on some exchanges account-wide) — a one-shot wrapper over the exchange daemon's own `set_margin_mode`
+handler (exchange_daemon.py): the same symbol resolution, checks and reply
+shape as the terminal, so this script cannot drift from it.
+Credentials come as JSON on stdin, never on the command line.
+
+Usage: echo '{"api_key":"...","secret":"..."}' | python set_margin_mode.py <exchange_id> <symbol> <cross|isolated> [leverage]
+Output: one JSON line in the daemon's reply shape —
+  {"id":"cli","success":true,"data":{...}}  or  {"id":"cli","success":false,"error":"...","code":"..."}
 """
+
+import os
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling, parse_credentials_from_stdin
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 4:
-        output_error("Usage: set_margin_mode.py <exchange_id> <symbol> <mode>", "INVALID_ARGS")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import exchange_daemon as D  # noqa: E402
 
-    exchange_id = sys.argv[1]
-    symbol = sys.argv[2]
-    mode = sys.argv[3]  # "cross" or "isolated"
+USAGE = "set_margin_mode.py <exchange_id> <symbol> <cross|isolated> [leverage]"
 
-    creds = parse_credentials_from_stdin()
-    exchange = make_exchange(exchange_id, credentials=creds)
-    exchange.options["defaultType"] = "swap"
 
-    result = exchange.set_margin_mode(mode, symbol)
-    output_success({"symbol": symbol, "margin_mode": mode, "result": result})
+def main(argv):
+    if len(argv) < 4:
+        return D.cli_usage_error(USAGE)
+    try:
+        args = {"symbol": argv[2], "mode": argv[3], **({"leverage": argv[4]} if len(argv) > 4 else {})}
+    except ValueError:
+        return D.cli_usage_error(USAGE)
+    return D.run_cli("set_margin_mode", argv[1], args, D.cli_credentials())[0]
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))
